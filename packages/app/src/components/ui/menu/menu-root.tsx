@@ -2,6 +2,7 @@ import {
   forwardRef,
   useCallback,
   useMemo,
+  useState,
   type PropsWithChildren,
   type ReactElement,
   type ReactNode,
@@ -9,7 +10,7 @@ import {
 } from "react";
 import {
   Pressable,
-  type View,
+  View,
   type PressableProps,
   type PressableStateCallbackType,
   type StyleProp,
@@ -23,13 +24,7 @@ import {
 } from "./menu-context";
 import { isWeb } from "@/constants/platform";
 
-/**
- * Owns one menu's state. Wrap a trigger and a `MenuSurface` in it.
- *
- * The trigger is deliberately not part of this: what opens a menu is the only thing that
- * differs between a dropdown (press) and a context menu (long press or right click), and it is
- * the whole reason those two wrappers still exist.
- */
+/** Owns one menu's state. Wrap a trigger and a `MenuSurface` in it. */
 export function MenuRoot({
   open,
   defaultOpen,
@@ -68,12 +63,15 @@ function assignRef<T>(ref: Ref<T> | undefined, value: T | null): void {
   Object.assign(ref, { current: value });
 }
 
+/** Canonical Browser hover ownership: a plain View wraps the inner Pressable. */
 export const MenuTrigger = forwardRef<View, MenuTriggerProps>(function MenuTrigger(
   { children, disabled, style, accessibilityState, ...props },
   forwardedRef,
 ): ReactElement {
   const ctx = useMenuContext("MenuTrigger");
-
+  const [hovered, setHovered] = useState(false);
+  const handlePointerEnter = useCallback(() => setHovered(true), []);
+  const handlePointerLeave = useCallback(() => setHovered(false), []);
   const handleTriggerRef = useCallback(
     (node: View | null) => {
       assignRef(ctx.triggerRef, node);
@@ -88,21 +86,21 @@ export const MenuTrigger = forwardRef<View, MenuTriggerProps>(function MenuTrigg
   }, [disabled, ctx]);
 
   const pressableStyle = useCallback(
-    ({ pressed, hovered = false }: PressableStateCallbackType & { hovered?: boolean }) => {
+    ({ pressed }: PressableStateCallbackType) => {
       if (typeof style === "function") {
         return style({ pressed, hovered, open: ctx.open });
       }
       return style;
     },
-    [style, ctx.open],
+    [style, hovered, ctx.open],
   );
 
   const renderChildren = useCallback(
-    ({ pressed, hovered = false }: PressableStateCallbackType & { hovered?: boolean }) => {
+    ({ pressed }: PressableStateCallbackType) => {
       const state: MenuTriggerState = { pressed, hovered, open: ctx.open };
       return typeof children === "function" ? children(state) : children;
     },
-    [children, ctx.open],
+    [children, hovered, ctx.open],
   );
   const resolvedAccessibilityState = useMemo(
     () => ({ ...accessibilityState, disabled: Boolean(disabled), expanded: ctx.open }),
@@ -114,17 +112,22 @@ export const MenuTrigger = forwardRef<View, MenuTriggerProps>(function MenuTrigg
   );
 
   return (
-    <Pressable
-      {...props}
-      {...webExpandedState}
+    <View
       ref={handleTriggerRef}
       collapsable={false}
-      disabled={disabled}
-      accessibilityState={resolvedAccessibilityState}
-      onPress={handlePress}
-      style={pressableStyle}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
     >
-      {renderChildren}
-    </Pressable>
+      <Pressable
+        {...props}
+        {...webExpandedState}
+        disabled={disabled}
+        accessibilityState={resolvedAccessibilityState}
+        onPress={handlePress}
+        style={pressableStyle}
+      >
+        {renderChildren}
+      </Pressable>
+    </View>
   );
 });

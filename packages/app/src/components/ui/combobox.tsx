@@ -14,8 +14,6 @@ import {
   Pressable,
   Modal,
   ScrollView,
-  Platform,
-  StatusBar,
   useWindowDimensions,
   type LayoutChangeEvent,
   type PressableStateCallbackType,
@@ -23,9 +21,8 @@ import {
   type ViewStyle,
 } from "react-native";
 import { createPortal } from "react-dom";
-import { useTranslation } from "react-i18next";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { EditingTextInputHandle } from "@/components/ui/text-input";
+import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import {
@@ -234,7 +231,6 @@ export interface ComboboxItemProps {
   selected?: boolean;
   active?: boolean;
   disabled?: boolean;
-  accessibilityLabel?: string;
   /** When true, bumps hover/pressed colors up one surface level (for items on elevated backgrounds). */
   elevated?: boolean;
   onPress: () => void;
@@ -250,7 +246,6 @@ export function ComboboxItem({
   selected,
   active,
   disabled,
-  accessibilityLabel,
   elevated,
   onPress,
   testID,
@@ -291,14 +286,7 @@ export function ComboboxItem({
   );
 
   return (
-    <Pressable
-      testID={testID}
-      disabled={disabled}
-      onPress={onPress}
-      style={itemPressableStyle}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? label}
-    >
+    <Pressable testID={testID} disabled={disabled} onPress={onPress} style={itemPressableStyle}>
       {leadingContent}
       <View style={itemContentStyle}>
         <Text numberOfLines={1} style={styles.comboboxItemLabel}>
@@ -805,13 +793,6 @@ function runIfSubmitSearch(
   }
 }
 
-function computeCollisionPadding(): number {
-  const basePadding = 16;
-  if (Platform.OS !== "android") return basePadding;
-  const statusBarHeight = StatusBar.currentHeight ?? 0;
-  return Math.max(basePadding, statusBarHeight + basePadding);
-}
-
 function scrollDesktopOptionsToEnd(scrollRef: React.RefObject<ScrollView | null>) {
   scrollRef.current?.scrollToEnd({ animated: false });
   requestAnimationFrame(() => {
@@ -929,7 +910,6 @@ interface MobileBodyProps {
   searchable: boolean;
   hasChildren: boolean;
   mobileChildrenScrollEnabled: boolean;
-  mobileChildrenContentContainerStyle: StyleProp<ViewStyle>;
   presentation?: "push" | "replace";
   searchResetKey: number;
   searchPlaceholder: string;
@@ -943,7 +923,6 @@ interface MobileBodyProps {
   handleSelect: (id: string) => void;
   renderOption: RenderOptionFn | undefined;
   children: ReactNode;
-  safeAreaBottom: number;
 }
 
 function MobileComboboxBody(props: MobileBodyProps): ReactElement {
@@ -963,10 +942,6 @@ function MobileComboboxBody(props: MobileBodyProps): ReactElement {
     () => [styles.comboboxTitle, { color: props.titleColor }],
     [props.titleColor],
   );
-  const frameStyle = useMemo(
-    () => [styles.mobileSheetFrame, { paddingBottom: props.safeAreaBottom }],
-    [props.safeAreaBottom],
-  );
 
   const body = props.hasChildren ? (
     props.children
@@ -984,7 +959,6 @@ function MobileComboboxBody(props: MobileBodyProps): ReactElement {
   return (
     <IsolatedBottomSheetModal
       ref={props.bottomSheetRef}
-      contextBridge={null}
       snapPoints={props.snapPoints}
       index={0}
       enableDynamicSizing={false}
@@ -998,46 +972,40 @@ function MobileComboboxBody(props: MobileBodyProps): ReactElement {
       keyboardBlurBehavior="none"
       presentation={props.presentation}
     >
-      <View style={frameStyle}>
-        {props.header ? (
-          <SheetHeaderView header={props.header} onClose={props.onClose} />
-        ) : (
-          <>
-            <View style={styles.bottomSheetHeader}>
-              <Text key={props.titleColor} style={comboboxTitleStyle}>
-                {props.title}
-              </Text>
-            </View>
-            {props.stickyHeader}
-            {!props.hasChildren && props.searchable ? (
-              <SearchInput
-                placeholder={props.searchPlaceholder}
-                onChangeText={props.setSearchQueryWithCallback}
-                onSubmitEditing={props.handleSubmitSearch}
-                autoFocus={false}
-                useBottomSheetInput
-                resetKey={props.searchResetKey}
-              />
-            ) : null}
-          </>
-        )}
-        {props.hasChildren && !props.mobileChildrenScrollEnabled ? (
-          body
-        ) : (
-          <BottomSheetScrollView
-            style={styles.mobileSheetBody}
-            contentContainerStyle={[
-              styles.comboboxScrollContent,
-              props.mobileChildrenContentContainerStyle,
-            ]}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {body}
-          </BottomSheetScrollView>
-        )}
-        {props.footer ? <View style={styles.footer}>{props.footer}</View> : null}
-      </View>
+      {props.header ? (
+        <SheetHeaderView header={props.header} onClose={props.onClose} />
+      ) : (
+        <>
+          <View style={styles.bottomSheetHeader}>
+            <Text key={props.titleColor} style={comboboxTitleStyle}>
+              {props.title}
+            </Text>
+          </View>
+          {props.stickyHeader}
+          {!props.hasChildren && props.searchable ? (
+            <SearchInput
+              placeholder={props.searchPlaceholder}
+              onChangeText={props.setSearchQueryWithCallback}
+              onSubmitEditing={props.handleSubmitSearch}
+              autoFocus={false}
+              useBottomSheetInput
+              resetKey={props.searchResetKey}
+            />
+          ) : null}
+        </>
+      )}
+      {props.hasChildren && !props.mobileChildrenScrollEnabled ? (
+        body
+      ) : (
+        <BottomSheetScrollView
+          contentContainerStyle={styles.comboboxScrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {body}
+        </BottomSheetScrollView>
+      )}
+      {props.footer ? <View style={styles.footer}>{props.footer}</View> : null}
     </IsolatedBottomSheetModal>
   );
 }
@@ -1290,7 +1258,6 @@ export function Combobox({
   header,
   mobileChildrenScrollEnabled = true,
   desktopChildrenScrollEnabled = true,
-  mobileChildrenContentContainerStyle,
   presentation,
   open,
   onOpenChange,
@@ -1312,7 +1279,6 @@ export function Combobox({
   const resolvedTitle = title ?? t("common.actions.select");
   const isMobile = useIsCompactFormFactor();
   const floatingLayer = useOverlayLayer("floating");
-  const safeAreaInsets = useSafeAreaInsets();
   const titleColor = theme.colors.foreground;
   const effectiveOptionsPosition = resolveEffectiveOptionsPosition(isMobile, optionsPosition);
   const isDesktopAboveSearch = resolveIsDesktopAboveSearch(isMobile, effectiveOptionsPosition);
@@ -1352,7 +1318,7 @@ export function Combobox({
 
   useResetSearchOnOpen(isOpen, setSearchQueryWithCallback, bumpSearchResetKey);
 
-  const collisionPadding = useMemo(computeCollisionPadding, []);
+  const collisionPadding = 16;
 
   const middleware = useMemo(
     () =>
@@ -1588,7 +1554,6 @@ export function Combobox({
         searchable={searchable}
         hasChildren={hasChildren}
         mobileChildrenScrollEnabled={mobileChildrenScrollEnabled}
-        mobileChildrenContentContainerStyle={mobileChildrenContentContainerStyle}
         presentation={presentation}
         searchResetKey={searchResetKey}
         searchPlaceholder={effectiveSearchPlaceholder}
@@ -1601,7 +1566,6 @@ export function Combobox({
         emptyText={resolvedEmptyText}
         handleSelect={handleSelect}
         renderOption={renderOption}
-        safeAreaBottom={safeAreaInsets.bottom}
       >
         {children}
       </MobileComboboxBody>
@@ -1647,14 +1611,6 @@ export function Combobox({
 }
 
 const styles = StyleSheet.create((theme) => ({
-  mobileSheetFrame: {
-    flex: 1,
-    minHeight: 0,
-  },
-  mobileSheetBody: {
-    flex: 1,
-    minHeight: 0,
-  },
   searchInputContainer: {
     flexDirection: "row",
     alignItems: "center",

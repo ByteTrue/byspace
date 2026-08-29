@@ -1,7 +1,5 @@
-import * as Localization from "expo-localization";
 import { type ReactNode, useMemo } from "react";
 import { I18nextProvider } from "react-i18next";
-import { isWeb } from "@/constants/platform";
 import { useAppSettings } from "@/hooks/use-settings";
 import { i18n } from "./i18next";
 import { resolveSupportedLocale } from "./locales";
@@ -12,11 +10,13 @@ interface I18nProviderProps {
 }
 
 function getSystemLocales(): string[] {
-  if (isWeb && typeof navigator !== "undefined" && navigator.languages.length > 0) {
+  if (typeof navigator === "undefined") {
+    return [];
+  }
+  if (navigator.languages.length > 0) {
     return [...navigator.languages];
   }
-
-  return Localization.getLocales().map((locale) => locale.languageTag);
+  return navigator.language ? [navigator.language] : [];
 }
 
 export function I18nProvider({ children }: I18nProviderProps) {

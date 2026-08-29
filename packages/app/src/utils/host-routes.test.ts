@@ -17,7 +17,6 @@ import {
   encodeWorkspaceIdForPathSegment,
   isSettingsSectionSlug,
   normalizeHostSectionSlug,
-  normalizeProjectSettingsRouteId,
   parseHostAgentRouteFromPathname,
   parseHostWorkspaceOpenIntentFromPathname,
   parseHostWorkspaceRouteFromPathname,
@@ -46,9 +45,9 @@ describe("workspace route parsing", () => {
     expect(decodeWorkspaceIdFromPathSegment("L3RtcC9yZXBv")).toBe("/tmp/repo");
   });
 
-  it("decodes non-canonical base64url workspace IDs used by older links", () => {
-    expect(decodeWorkspaceIdFromPathSegment("L2hvbWUvdXNlci9kZXYvcGFzZW8")).toBe(
-      "/home/user/dev/paseo",
+  it("decodes non-canonical base64url workspace IDs", () => {
+    expect(decodeWorkspaceIdFromPathSegment("L2hvbWUvdXNlci9kZXYvYnlzcGFjZQ")).toBe(
+      "/home/user/dev/byspace",
     );
   });
 
@@ -186,25 +185,34 @@ describe("workspace route parsing", () => {
 
 describe("projects settings routes", () => {
   it("buildSettingsAddHostRoute opens settings with the add-host flag", () => {
-    expect(buildSettingsAddHostRoute()).toBe("/settings/general?addHost=1");
+    expect(buildSettingsAddHostRoute()).toBe("/settings/preferences?addHost=1");
   });
 
   it("buildSettingsAddHostRoute accepts a repeatable intent id", () => {
-    expect(buildSettingsAddHostRoute("retry 1")).toBe("/settings/general?addHost=retry%201");
+    expect(buildSettingsAddHostRoute("retry 1")).toBe("/settings/preferences?addHost=retry%201");
   });
 
-  it("buildProjectsSettingsRoute scopes the list to a host", () => {
-    expect(buildProjectsSettingsRoute("host a")).toBe("/settings/hosts/host%20a/projects");
+  it("buildProjectsSettingsRoute returns /settings/projects", () => {
+    expect(buildProjectsSettingsRoute()).toBe("/settings/projects");
   });
 
-  it("buildProjectSettingsRoute addresses a host-local project id", () => {
-    expect(buildProjectSettingsRoute("host a", "project/1")).toBe(
-      "/settings/hosts/host%20a/projects/project%2F1",
+  it("buildProjectSettingsRoute encodes a remote project key as a single segment", () => {
+    expect(buildProjectSettingsRoute("remote:github.com/acme/app")).toBe(
+      "/settings/projects/remote%3Agithub.com%2Facme%2Fapp",
     );
   });
 
-  it("keeps route ids opaque", () => {
-    expect(normalizeProjectSettingsRouteId("project%2F1")).toBe("project%2F1");
+  it("buildProjectSettingsRoute encodes a local repo-root key", () => {
+    expect(buildProjectSettingsRoute("/Users/me/dev/byspace")).toBe(
+      "/settings/projects/%2FUsers%2Fme%2Fdev%2Fbyspace",
+    );
+  });
+
+  it("project keys round-trip through decodeURIComponent", () => {
+    const projectKey = "remote:github.com/acme/app";
+    const route = buildProjectSettingsRoute(projectKey);
+    const segment = route.slice("/settings/projects/".length);
+    expect(decodeURIComponent(segment)).toBe(projectKey);
   });
 });
 
@@ -232,6 +240,12 @@ describe("global routes", () => {
     ).toBe("/new?serverId=local&dir=%2Frepo%2Fproject&name=Project&projectId=project-1");
   });
 
+  it("buildNewWorkspaceRoute accepts an aggregate project context", () => {
+    expect(buildNewWorkspaceRoute({ projectKey: "remote:github.com/acme/app" })).toBe(
+      "/new?projectKey=remote%3Agithub.com%2Facme%2Fapp",
+    );
+  });
+
   it("buildNewWorkspaceRoute carries a draft context id", () => {
     expect(
       buildNewWorkspaceRoute({
@@ -246,13 +260,13 @@ describe("global routes", () => {
 describe("host settings section slugs", () => {
   it("keeps current host settings sections", () => {
     expect(normalizeHostSectionSlug("connections")).toBe("connections");
-    expect(normalizeHostSectionSlug("pair-device")).toBe("pair-device");
+    expect(normalizeHostSectionSlug("dictation")).toBe("dictation");
     expect(normalizeHostSectionSlug("agents")).toBe("agents");
-    expect(normalizeHostSectionSlug("metadata")).toBe("metadata");
     expect(normalizeHostSectionSlug("workspaces")).toBe("workspaces");
-    expect(normalizeHostSectionSlug("projects")).toBe("projects");
     expect(normalizeHostSectionSlug("providers")).toBe("providers");
+    expect(normalizeHostSectionSlug("terminals")).toBe("providers");
     expect(normalizeHostSectionSlug("usage")).toBe("usage");
+    expect(normalizeHostSectionSlug("plugins")).toBe("plugins");
     expect(normalizeHostSectionSlug("host")).toBe("host");
   });
 
@@ -263,11 +277,12 @@ describe("host settings section slugs", () => {
 });
 
 describe("settings section slugs", () => {
-  it("includes desktop notification settings", () => {
-    expect(isSettingsSectionSlug("notifications")).toBe(true);
+  it("keeps current app settings sections", () => {
+    expect(isSettingsSectionSlug("preferences")).toBe(true);
+    expect(isSettingsSectionSlug("about")).toBe(true);
   });
 
-  it("no longer treats daemon as a valid app-level settings section", () => {
+  it("does not treat daemon as an app settings section", () => {
     expect(isSettingsSectionSlug("daemon")).toBe(false);
   });
 });

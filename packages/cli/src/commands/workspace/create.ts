@@ -58,7 +58,7 @@ function buildBranchOffSource(options: WorkspaceCreateOptions, source: WorktreeS
   return {
     ...source,
     action: "branch-off" as const,
-    ...(options.newBranch ? { branchName: options.newBranch } : {}),
+    ...(options.newBranch ? { refName: options.newBranch } : {}),
     ...(options.base ? { baseBranch: options.base } : {}),
   };
 }

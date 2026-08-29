@@ -63,7 +63,7 @@ import {
   canAddPullRequestActivityToChat,
 } from "./context-attachment";
 import { ChecksSection, getCheckIdentity } from "./checks-section";
-import { getActivityVerb, getStateLabel } from "./data";
+import { buildPrPaneCheckDetailsRequest, getActivityVerb, getStateLabel } from "./data";
 import type { PrPaneActivity, PrPaneCheck, PrPaneData, PrState } from "./data";
 import type { ForgeSpecificStatusFacts } from "@/git/merge-capability";
 import {
@@ -387,14 +387,13 @@ export function PullRequestPane({
           data.repoName
         ) {
           try {
-            const request = {
+            const request = buildPrPaneCheckDetailsRequest({
               cwd,
+              changeRequestNumber: data.number,
               repoOwner: data.repoOwner,
               repoName: data.repoName,
-              checkRunId: ref.checkRunId,
-              workflowRunId: ref.workflowRunId,
-              changeRequestNumber: data.number,
-            };
+              detailRef: check.detailRef,
+            });
             // COMPAT(githubCheckDetailsRpc): added in v0.1.106, remove after 2026-12-28 once
             // all supported clients use checkout.forge.get_check_details.*.
             const payload = canFetchForgeCheckDetails

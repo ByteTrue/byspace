@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 
 import type {
   AgentLaunchContext,
+  AgentPromptInput,
   AgentSession,
   AgentSessionConfig,
   AgentSlashCommand,
@@ -22,33 +23,13 @@ import {
   codexAppServerTurnInputFromPrompt,
   listCodexSkills,
   mapCodexPatchNotificationToToolCall,
-  mapCodexPlanUpdateToTodo,
   mapCodexPlanToToolCall,
   normalizeCodexOutputSchema,
   toAgentUsage,
 } from "./codex-app-server-agent.js";
-
-describe("mapCodexPlanUpdateToTodo", () => {
-  test("preserves checklist progress without creating a plan card", () => {
-    expect(
-      mapCodexPlanUpdateToTodo([
-        { step: "Inspect", status: "completed" },
-        { step: "Implement", status: "inProgress" },
-        { step: "Verify", status: "pending" },
-      ]),
-    ).toEqual({
-      type: "todo",
-      items: [
-        { id: "0", text: "Inspect", status: "completed", completed: true },
-        { id: "1", text: "Implement", status: "in_progress", completed: false },
-        { id: "2", text: "Verify", status: "pending", completed: false },
-      ],
-    });
-  });
-});
-
 import { CodexAppServerClient } from "./codex/app-server-transport.js";
 import {
+  createCodexAppServerChildProcess,
   createFakeCodexAppServer,
   type FakeCodexAppServer,
   waitForNextPermission,
@@ -151,7 +132,7 @@ async function startPublicSteeringSession(
     commandName: string;
     args?: string;
   } | null>,
-): Promise<{ session: AgentSession; paseoTurnId: string }> {
+): Promise<{ session: AgentSession; bySpaceTurnId: string }> {
   const session = new CodexAppServerAgentSession(
     createConfig({ cwd: "/workspace/project" }),
     null,
@@ -163,7 +144,7 @@ async function startPublicSteeringSession(
   await appServer.waitForTurnStart();
   appServer.startsTurn({ threadId: "thread-1", turnId: "native-A" });
   await new Promise((resolve) => setTimeout(resolve, 0));
-  return { session, paseoTurnId: started.turnId };
+  return { session, bySpaceTurnId: started.turnId };
 }
 
 function deferred<T>() {
@@ -179,13 +160,13 @@ describe("Codex active-turn steering admission", () => {
     const appServer = createFakeCodexAppServer({
       "turn/steer": () => ({ turn: { id: "native-A" } }),
     });
-    const { session, paseoTurnId } = await startPublicSteeringSession(appServer);
+    const { session, bySpaceTurnId } = await startPublicSteeringSession(appServer);
     castInternals<{ emitSyntheticPlanApprovalRequest: (planText: string) => void }>(
       session,
     ).emitSyntheticPlanApprovalRequest("Ship the thing");
 
     await expect(
-      session.steerActiveTurn!("background notification", { expectedTurnId: paseoTurnId }),
+      session.steerActiveTurn!("background notification", { expectedTurnId: bySpaceTurnId }),
     ).resolves.toEqual({ status: "accepted" });
     expect(session.getPendingPermissions()).toHaveLength(1);
 
@@ -199,7 +180,7 @@ describe("Codex active-turn steering admission", () => {
     const appServer = createFakeCodexAppServer({
       "turn/steer": () => ({ turn: { id: "native-A" } }),
     });
-    const { session, paseoTurnId } = await startPublicSteeringSession(appServer);
+    const { session, bySpaceTurnId } = await startPublicSteeringSession(appServer);
     const events: AgentStreamEvent[] = [];
     session.subscribe((event) => events.push(event));
 
@@ -256,7 +237,7 @@ describe("Codex active-turn steering admission", () => {
 
     await expect(
       session.steerActiveTurn!("review this instead", {
-        expectedTurnId: paseoTurnId,
+        expectedTurnId: bySpaceTurnId,
         clearPendingPermissions: true,
       }),
     ).resolves.toEqual({ status: "accepted" });
@@ -292,14 +273,17 @@ describe("Codex active-turn steering admission", () => {
     const commandResolution = deferred<{ commandName: string } | null>();
     const resolverEntered = deferred<void>();
     const appServer = createFakeCodexAppServer();
-    const { session, paseoTurnId } = await startPublicSteeringSession(appServer, async (prompt) => {
-      if (prompt !== "/held") return null;
-      resolverEntered.resolve();
-      return commandResolution.promise;
-    });
+    const { session, bySpaceTurnId } = await startPublicSteeringSession(
+      appServer,
+      async (prompt) => {
+        if (prompt !== "/held") return null;
+        resolverEntered.resolve();
+        return commandResolution.promise;
+      },
+    );
 
     const steer = session.steerActiveTurn!("/held", {
-      expectedTurnId: paseoTurnId,
+      expectedTurnId: bySpaceTurnId,
       clientMessageId: "steer-A",
     });
     await resolverEntered.promise;
@@ -311,7 +295,7 @@ describe("Codex active-turn steering admission", () => {
     commandResolution.resolve(null);
 
     await expect(steer).resolves.toEqual({ status: "unavailable" });
-    expect(startedB.turnId).not.toBe(paseoTurnId);
+    expect(startedB.turnId).not.toBe(bySpaceTurnId);
     expect(appServer.requests().filter((request) => request.method === "turn/steer")).toEqual([]);
     await session.close();
     appServer.assertNoErrors();
@@ -346,9 +330,9 @@ describe("Codex active-turn steering admission", () => {
     const appServer = createFakeCodexAppServer({
       "turn/steer": () => ({ __jsonRpcError: { code, message, ...(data ? { data } : {}) } }),
     });
-    const { session, paseoTurnId } = await startPublicSteeringSession(appServer);
+    const { session, bySpaceTurnId } = await startPublicSteeringSession(appServer);
     const steer = session.steerActiveTurn!("follow up", {
-      expectedTurnId: paseoTurnId,
+      expectedTurnId: bySpaceTurnId,
       clientMessageId: "steer-frame",
     });
     if (expected === "unavailable") {
@@ -366,10 +350,10 @@ describe("Codex active-turn steering admission", () => {
         __jsonRpcError: { code: -32000, message: "connection lost" },
       }),
     });
-    const { session, paseoTurnId } = await startPublicSteeringSession(appServer);
+    const { session, bySpaceTurnId } = await startPublicSteeringSession(appServer);
     await expect(
       session.steerActiveTurn!("follow up", {
-        expectedTurnId: paseoTurnId,
+        expectedTurnId: bySpaceTurnId,
         clientMessageId: "steer-transport",
       }),
     ).rejects.toThrow("connection lost");
@@ -380,9 +364,9 @@ describe("Codex active-turn steering admission", () => {
     const appServer = createFakeCodexAppServer({
       "turn/steer": () => new Promise<void>(() => undefined),
     });
-    const { session, paseoTurnId } = await startPublicSteeringSession(appServer);
+    const { session, bySpaceTurnId } = await startPublicSteeringSession(appServer);
     const steer = session.steerActiveTurn!("follow up", {
-      expectedTurnId: paseoTurnId,
+      expectedTurnId: bySpaceTurnId,
       clientMessageId: "steer-disconnect",
     });
     await appServer.waitForRequest("turn/steer");
@@ -495,7 +479,7 @@ async function runCustomCodexProviderTurn(
     `
 const fs = require("node:fs");
 
-const capturePath = process.env.PASEO_FAKE_CODEX_CAPTURE;
+const capturePath = process.env.BYSPACE_FAKE_CODEX_CAPTURE;
 let buffer = "";
 
 fs.appendFileSync(capturePath, JSON.stringify({
@@ -545,7 +529,7 @@ process.stdin.on("data", (chunk) => {
         env: {
           OPENAI_API_KEY: "sk-custom",
           OPENAI_BASE_URL: baseUrl,
-          PASEO_FAKE_CODEX_CAPTURE: capturedRequestsPath,
+          BYSPACE_FAKE_CODEX_CAPTURE: capturedRequestsPath,
         },
       },
     },
@@ -876,44 +860,6 @@ describe("Codex app-server provider", () => {
     }
   });
 
-  test("preapproves only granted tools on the injected Codex MCP server", async () => {
-    const session = createSession({
-      modeId: undefined,
-      providerOptions: { sandbox_mode: "read-only" },
-      mcpServers: {
-        hub: { type: "http", url: "http://127.0.0.1/hub" },
-      },
-      toolPolicy: {
-        preapproved: [{ kind: "mcp", server: "hub", tool: "finish_execution" }],
-      },
-    });
-    const request = vi.fn(async (method: string) => {
-      if (method === "thread/loaded/list") return { data: ["test-thread"] };
-      if (method === "turn/start") return {};
-      throw new Error(`Unexpected request: ${method}`);
-    });
-    session.activeForegroundTurnId = null;
-    session.client = createStub<CodexClientLike>({ request });
-
-    await session.startTurn("finish");
-
-    const turnStart = request.mock.calls.find(([method]) => method === "turn/start")?.[1];
-    expect(turnStart).toMatchObject({
-      sandboxPolicy: { type: "readOnly" },
-      config: {
-        sandbox_mode: "read-only",
-        mcp_servers: {
-          hub: {
-            enabled_tools: ["finish_execution"],
-            default_tools_approval_mode: "prompt",
-            tools: { finish_execution: { approval_mode: "approve" } },
-          },
-        },
-      },
-    });
-    expect(turnStart).not.toHaveProperty("config.mcp_servers.hub.tools.reply");
-  });
-
   test("passes ephemeral: true to thread/start when constructed as ephemeral", async () => {
     const requests: Array<{ method: string; params: unknown }> = [];
     const fakeClient: CodexClientLike = {
@@ -997,6 +943,16 @@ describe("Codex app-server provider", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  test("rejects pending transport requests when disposed", async () => {
+    const client = new CodexAppServerClient(createCodexAppServerChildProcess(), createTestLogger());
+    const request = client.request("initialize", {});
+    const rejection = expect(request).rejects.toThrow("Codex app-server client is closed");
+
+    await client.dispose();
+
+    await rejection;
   });
 
   test("round-trips server-initiated command approvals through the real app-server transport", async () => {
@@ -1336,7 +1292,7 @@ describe("Codex app-server provider", () => {
     await session.close();
   });
 
-  test("initializes Codex app-server without making Paseo the request originator", async () => {
+  test("initializes Codex app-server without making BySpace the request originator", async () => {
     let initializeParams: unknown;
     const appServer = createFakeCodexAppServer({
       initialize: (params) => {
@@ -1394,7 +1350,7 @@ describe("Codex app-server provider", () => {
     appServer.assertNoErrors();
   });
 
-  test("unarchives Codex when an active Paseo agent resumes an archived thread", async () => {
+  test("unarchives Codex when an active BySpace agent resumes an archived thread", async () => {
     const threadRequests: string[] = [];
     let resumeAttempts = 0;
     const appServer = createFakeCodexAppServer({
@@ -1715,38 +1671,25 @@ describe("Codex app-server provider", () => {
         };
       },
     });
-    const provider = createProviderWithFakeAppServer(appServer);
+    const provider = new CodexAppServerAgentClient(createTestLogger());
+    castInternals<{ goalsEnabledPromise: Promise<boolean> | null }>(provider).goalsEnabledPromise =
+      Promise.resolve(false);
+    castInternals<{ spawnAppServer: () => Promise<ChildProcessWithoutNullStreams> }>(
+      provider,
+    ).spawnAppServer = async () => appServer.child;
 
-    const outcome = await Promise.race([
-      provider
-        .resumeSession({
-          sessionId: "archived-thread-id",
-          metadata: {
-            cwd: "/tmp/codex-question-test",
-            modeId: "auto",
-            model: "gpt-5.4",
-          },
-        })
-        .then(
-          () => "resolved" as const,
-          (error) => {
-            expect(error).toBeInstanceOf(Error);
-            expect((error as Error).message).toContain(
-              "no tool-call found for thread id archived-thread-id",
-            );
-            return "rejected" as const;
-          },
-        ),
-      new Promise<"timed_out">((resolve) => setTimeout(() => resolve("timed_out"), 500)),
-    ]);
-
-    if (outcome === "timed_out") {
-      appServer.child.kill("SIGTERM");
-      throw new Error(`resumeSession timed out; thread requests: ${threadRequests.join(", ")}`);
-    }
+    await expect(
+      provider.resumeSession({
+        sessionId: "archived-thread-id",
+        metadata: {
+          cwd: "/tmp/codex-question-test",
+          modeId: "auto",
+          model: "gpt-5.4",
+        },
+      }),
+    ).rejects.toThrow("no tool-call found for thread id archived-thread-id");
 
     expect(threadRequests).toEqual(["config/read", "thread/loaded/list", "thread/resume"]);
-    expect(outcome).toBe("rejected");
     appServer.assertNoErrors();
   });
 
@@ -1966,9 +1909,9 @@ describe("Codex app-server provider", () => {
               cwd: "/tmp/codex-question-test",
               skills: [
                 {
-                  name: "paseo-implement",
-                  description: "Execute an existing Paseo plan.",
-                  path: "/tmp/skills/paseo-implement/SKILL.md",
+                  name: "byspace-implement",
+                  description: "Execute an existing BySpace plan.",
+                  path: "/tmp/skills/byspace-implement/SKILL.md",
                 },
               ],
               errors: [],
@@ -1988,7 +1931,7 @@ describe("Codex app-server provider", () => {
     session.activeForegroundTurnId = null;
     session.client = createStub<CodexClientLike>({ request });
 
-    await session.startTurn("/paseo-implement in a worktree, remember to use Claude for the UI");
+    await session.startTurn("/byspace-implement in a worktree, remember to use Claude for the UI");
 
     const turnStartCall = request.mock.calls.find(([method]) => method === "turn/start");
     expect(turnStartCall?.[1]).toEqual(
@@ -1996,12 +1939,12 @@ describe("Codex app-server provider", () => {
         input: [
           {
             type: "skill",
-            name: "paseo-implement",
-            path: "/tmp/skills/paseo-implement/SKILL.md",
+            name: "byspace-implement",
+            path: "/tmp/skills/byspace-implement/SKILL.md",
           },
           {
             type: "text",
-            text: "$paseo-implement in a worktree, remember to use Claude for the UI",
+            text: "$byspace-implement in a worktree, remember to use Claude for the UI",
             text_elements: [],
           },
         ],
@@ -2029,20 +1972,20 @@ describe("Codex app-server provider", () => {
   test("deduplicates Codex skill slash commands returned from multiple skill roots", async () => {
     const commands = await listCommandsFromFakeCodex([
       {
-        name: "paseo",
+        name: "byspace",
         description: "Shared orchestration skill.",
-        path: "/Users/test/.agents/skills/paseo/SKILL.md",
+        path: "/Users/test/.agents/skills/byspace/SKILL.md",
       },
       {
-        name: "paseo",
+        name: "byspace",
         description: "Shared orchestration skill.",
-        path: "/Users/test/.codex/skills/paseo/SKILL.md",
+        path: "/Users/test/.codex/skills/byspace/SKILL.md",
       },
     ]);
 
-    expect(commands.filter((command) => command.name === "paseo")).toEqual([
+    expect(commands.filter((command) => command.name === "byspace")).toEqual([
       {
-        name: "paseo",
+        name: "byspace",
         description: "Shared orchestration skill.",
         argumentHint: "",
         kind: "skill",
@@ -2123,7 +2066,7 @@ describe("Codex app-server provider", () => {
           mimeType: "application/github-pr",
           number: 123,
           title: "Fix race in worktree setup",
-          url: "https://github.com/getpaseo/paseo/pull/123",
+          url: "https://github.com/ByteTrue/byspace/pull/123",
           body: "Review body",
           baseRefName: "main",
           headRefName: "fix/worktree-race",
@@ -2165,7 +2108,7 @@ describe("Codex app-server provider", () => {
           mimeType: "application/github-issue",
           number: 456,
           title: "Attachment spacing",
-          url: "https://github.com/getpaseo/paseo/issues/456",
+          url: "https://github.com/ByteTrue/byspace/issues/456",
         },
       ],
       logger,
@@ -2189,7 +2132,7 @@ describe("Codex app-server provider", () => {
           mimeType: "application/github-issue",
           number: 456,
           title: "Attachment spacing",
-          url: "https://github.com/getpaseo/paseo/issues/456",
+          url: "https://github.com/ByteTrue/byspace/issues/456",
         },
       ],
       logger,
@@ -2293,22 +2236,22 @@ describe("Codex app-server provider", () => {
   test("builds app-server env from launch-context env overrides", () => {
     const launchContext: AgentLaunchContext = {
       env: {
-        PASEO_AGENT_ID: "00000000-0000-4000-8000-000000000301",
-        PASEO_TEST_FLAG: "codex-launch-value",
+        BYSPACE_AGENT_ID: "00000000-0000-4000-8000-000000000301",
+        BYSPACE_TEST_FLAG: "codex-launch-value",
       },
     };
     const env = buildCodexAppServerEnv(
       {
         env: {
-          PASEO_AGENT_ID: "runtime-value",
-          PASEO_TEST_FLAG: "runtime-test-value",
+          BYSPACE_AGENT_ID: "runtime-value",
+          BYSPACE_TEST_FLAG: "runtime-test-value",
         },
       },
       launchContext.env,
     );
 
-    expect(env.PASEO_AGENT_ID).toBe(launchContext.env?.PASEO_AGENT_ID);
-    expect(env.PASEO_TEST_FLAG).toBe(launchContext.env?.PASEO_TEST_FLAG);
+    expect(env.BYSPACE_AGENT_ID).toBe(launchContext.env?.BYSPACE_AGENT_ID);
+    expect(env.BYSPACE_TEST_FLAG).toBe(launchContext.env?.BYSPACE_TEST_FLAG);
   });
 
   test("projects request_user_input into a question permission and running timeline tool call", () => {
@@ -2681,7 +2624,7 @@ describe("Codex app-server provider", () => {
         id: "child-mcp-image",
         type: "mcpToolCall",
         status: "completed",
-        server: "paseo",
+        server: "byspace",
         tool: "browser_screenshot",
         arguments: {},
         result: {
@@ -3444,6 +3387,60 @@ describe("Codex app-server provider", () => {
     }
   });
 
+  test("settles a pending interrupt when the session closes before identification", async () => {
+    const interruptedTurns: unknown[] = [];
+    const appServer = createFakeCodexAppServer({
+      "turn/interrupt": async (params) => {
+        interruptedTurns.push(params);
+        return {};
+      },
+    });
+    const session = new CodexAppServerAgentSession(
+      createConfig({ cwd: "/workspace/project" }),
+      null,
+      createTestLogger(),
+      async () => appServer.child,
+    );
+
+    try {
+      await session.startTurn("Close before identification.");
+      const interruptPromise = session.interrupt();
+      await session.close();
+
+      await expect(interruptPromise).resolves.toBeUndefined();
+      expect(interruptedTurns).toEqual([]);
+    } finally {
+      await session.close();
+    }
+  });
+
+  test("settles a pending interrupt when the app-server exits before identification", async () => {
+    const interruptedTurns: unknown[] = [];
+    const appServer = createFakeCodexAppServer({
+      "turn/interrupt": async (params) => {
+        interruptedTurns.push(params);
+        return {};
+      },
+    });
+    const session = new CodexAppServerAgentSession(
+      createConfig({ cwd: "/workspace/project" }),
+      null,
+      createTestLogger(),
+      async () => appServer.child,
+    );
+
+    try {
+      await session.startTurn("Exit before identification.");
+      const interruptPromise = session.interrupt();
+      appServer.child.emit("exit", 17, null);
+
+      await expect(interruptPromise).resolves.toBeUndefined();
+      expect(interruptedTurns).toEqual([]);
+    } finally {
+      await session.close();
+    }
+  });
+
   test("acknowledges interruption before Codex initializes a thread", async () => {
     const appServer = createFakeCodexAppServer();
     const session = new CodexAppServerAgentSession(
@@ -4013,115 +4010,6 @@ describe("Codex app-server provider", () => {
         }),
       },
     ]);
-  });
-
-  test("does not import a parent interaction from child history as another sub-agent", async () => {
-    const appServer = createFakeCodexAppServer({
-      "thread/read": (params) => {
-        const threadId = (params as { threadId?: string }).threadId;
-        if (threadId === "test-thread") {
-          return {
-            thread: {
-              turns: [
-                {
-                  items: [
-                    {
-                      type: "subAgentActivity",
-                      id: "child-started",
-                      kind: "started",
-                      agentThreadId: "child-thread",
-                      agentPath: "/root/child",
-                    },
-                  ],
-                },
-              ],
-            },
-          };
-        }
-        return {
-          thread: {
-            turns: [
-              {
-                items: [
-                  {
-                    type: "subAgentActivity",
-                    id: "parent-interacted",
-                    kind: "interacted",
-                    agentThreadId: "test-thread",
-                    agentPath: "/root",
-                  },
-                ],
-              },
-            ],
-          },
-        };
-      },
-    });
-    const session = new CodexAppServerAgentSession(
-      createConfig({ cwd: "/workspace/project" }),
-      { sessionId: "test-thread" },
-      createTestLogger(),
-      async () => appServer.child,
-    );
-
-    try {
-      await session.connect();
-
-      const providerSubagentIds = new Set<string>();
-      for await (const event of session.streamHistory()) {
-        if (event.type === "provider_subagent" && event.event.type === "upsert") {
-          providerSubagentIds.add(event.event.id);
-        }
-      }
-
-      expect(providerSubagentIds).toEqual(new Set(["child-thread"]));
-      appServer.assertNoErrors();
-    } finally {
-      await session.close();
-    }
-  });
-
-  test("does not register a parent interaction on a child thread as another sub-agent", async () => {
-    const appServer = createFakeCodexAppServer();
-    const session = new CodexAppServerAgentSession(
-      createConfig({ cwd: "/workspace/project" }),
-      null,
-      createTestLogger(),
-      async () => appServer.child,
-    );
-    const providerSubagentIds = new Set<string>();
-    session.subscribe((event) => {
-      if (event.type === "provider_subagent" && event.event.type === "upsert") {
-        providerSubagentIds.add(event.event.id);
-      }
-    });
-
-    try {
-      const resultPromise = session.run("Delegate the investigation.");
-      await appServer.waitForTurnStart();
-
-      const child = waitForProviderSubagent(session, "child-thread");
-      appServer.startsSubAgent({
-        callId: "child-started",
-        threadId: "child-thread",
-        agentPath: "/root/child",
-      });
-      await child;
-      appServer.beginsSubAgentActivity({
-        callId: "parent-interacted",
-        threadId: "thread-1",
-        parentThreadId: "child-thread",
-        kind: "interacted",
-        agentPath: "/root",
-      });
-      appServer.completeTurn();
-      await resultPromise;
-
-      expect(providerSubagentIds).toEqual(new Set(["child-thread"]));
-      appServer.assertNoErrors();
-    } finally {
-      await session.close();
-    }
   });
 
   test("uses Codex turn timestamps for timestamp-less persisted history items", async () => {
@@ -4811,30 +4699,21 @@ describe("Codex app-server provider", () => {
     });
   });
 
-  test("replaces a pending synthetic plan approval when a later plan completes", () => {
-    const session = createSession({
-      featureValues: { plan_mode: true },
-    });
+  test("keeps only the latest synthetic plan approval", () => {
+    const session = createSession({ featureValues: { plan_mode: true } });
 
-    asInternals(session).handleNotification("turn/started", {
-      turn: { id: "turn-plan-first" },
-    });
-    asInternals(session).handleNotification("turn/plan/updated", {
-      plan: [{ step: "Implement the first plan", status: "pending" }],
-    });
-    asInternals(session).handleNotification("turn/completed", {
-      turn: { status: "completed", error: null },
-    });
-
-    asInternals(session).handleNotification("turn/started", {
-      turn: { id: "turn-plan-second" },
-    });
-    asInternals(session).handleNotification("turn/plan/updated", {
-      plan: [{ step: "Implement the revised plan", status: "pending" }],
-    });
-    asInternals(session).handleNotification("turn/completed", {
-      turn: { status: "completed", error: null },
-    });
+    for (const [turnId, step] of [
+      ["turn-plan-first", "Implement the first plan"],
+      ["turn-plan-second", "Implement the revised plan"],
+    ]) {
+      asInternals(session).handleNotification("turn/started", { turn: { id: turnId } });
+      asInternals(session).handleNotification("turn/plan/updated", {
+        plan: [{ step, status: "pending" }],
+      });
+      asInternals(session).handleNotification("turn/completed", {
+        turn: { status: "completed", error: null },
+      });
+    }
 
     expect(session.getPendingPermissions()).toEqual([
       expect.objectContaining({
@@ -4844,13 +4723,8 @@ describe("Codex app-server provider", () => {
     ]);
   });
 
-  test("dismisses a pending synthetic plan approval after a new prompt is accepted", async () => {
-    const session = createSession({
-      featureValues: { plan_mode: true },
-    });
-    const events: AgentStreamEvent[] = [];
-    session.subscribe((event) => events.push(event));
-
+  test("makes an old plan non-actionable before asynchronous prompt setup", async () => {
+    const session = createSession({ featureValues: { plan_mode: true } });
     asInternals(session).handleNotification("turn/started", {
       turn: { id: "turn-plan-pending" },
     });
@@ -4860,48 +4734,7 @@ describe("Codex app-server provider", () => {
     asInternals(session).handleNotification("turn/completed", {
       turn: { status: "completed", error: null },
     });
-    const pendingPlan = session.getPendingPermissions()[0];
-    expect(pendingPlan).toBeDefined();
-
-    session.activeForegroundTurnId = null;
-    session.client = createStub<CodexClientLike>({
-      request: async (method) => {
-        if (method === "thread/loaded/list") return { data: ["test-thread"] };
-        if (method === "turn/start") return {};
-        throw new Error(`Unexpected request: ${method}`);
-      },
-    });
-
-    await session.startTurn("Revise the plan to include tests");
-
-    expect(session.getPendingPermissions()).toEqual([]);
-    expect(events).toContainEqual({
-      type: "permission_resolved",
-      provider: "codex",
-      requestId: pendingPlan!.id,
-      resolution: {
-        behavior: "deny",
-        message: "Dismissed by a new prompt",
-      },
-    });
-  });
-
-  test("makes the old plan non-actionable while a new prompt is being prepared", async () => {
-    const session = createSession({
-      featureValues: { plan_mode: true },
-    });
-
-    asInternals(session).handleNotification("turn/started", {
-      turn: { id: "turn-plan-pending" },
-    });
-    asInternals(session).handleNotification("turn/plan/updated", {
-      plan: [{ step: "Implement the original plan", status: "pending" }],
-    });
-    asInternals(session).handleNotification("turn/completed", {
-      turn: { status: "completed", error: null },
-    });
-    const pendingPlan = session.getPendingPermissions()[0];
-    expect(pendingPlan).toBeDefined();
+    const pendingPlan = session.getPendingPermissions()[0]!;
 
     let continuePromptSetup: (() => void) | undefined;
     let markPromptSetupStarted: (() => void) | undefined;
@@ -4925,100 +4758,14 @@ describe("Codex app-server provider", () => {
 
     const startTurn = session.startTurn("Revise the plan");
     await promptSetupStarted;
-
-    expect(session.getPendingPermissions()).toEqual([]);
     await expect(
-      session.respondToPermission(pendingPlan!.id, {
+      session.respondToPermission(pendingPlan.id, {
         behavior: "allow",
         selectedActionId: "implement",
       }),
-    ).rejects.toThrow(
-      `No pending Codex app-server permission request with id '${pendingPlan!.id}'`,
-    );
-
+    ).rejects.toThrow(`No pending Codex app-server permission request with id '${pendingPlan.id}'`);
     continuePromptSetup?.();
     await startTurn;
-  });
-
-  test("does not dismiss a new plan approval emitted while a prompt is being accepted", async () => {
-    const session = createSession({
-      featureValues: { plan_mode: true },
-    });
-
-    asInternals(session).handleNotification("turn/started", {
-      turn: { id: "turn-plan-pending" },
-    });
-    asInternals(session).handleNotification("turn/plan/updated", {
-      plan: [{ step: "Implement the original plan", status: "pending" }],
-    });
-    asInternals(session).handleNotification("turn/completed", {
-      turn: { status: "completed", error: null },
-    });
-
-    let acceptPrompt: (() => void) | undefined;
-    let markPromptRequested: (() => void) | undefined;
-    const promptRequested = new Promise<void>((resolve) => {
-      markPromptRequested = resolve;
-    });
-    session.activeForegroundTurnId = null;
-    session.client = createStub<CodexClientLike>({
-      request: async (method) => {
-        if (method === "thread/loaded/list") return { data: ["test-thread"] };
-        if (method === "turn/start") {
-          markPromptRequested?.();
-          return await new Promise<void>((resolve) => {
-            acceptPrompt = resolve;
-          });
-        }
-        throw new Error(`Unexpected request: ${method}`);
-      },
-    });
-
-    const startTurn = session.startTurn("Revise the plan");
-    await promptRequested;
-    asInternals(session).handleNotification("turn/plan/updated", {
-      plan: [{ step: "Implement the newer plan", status: "pending" }],
-    });
-    asInternals(session).handleNotification("turn/completed", {
-      turn: { status: "completed", error: null },
-    });
-    acceptPrompt?.();
-    await startTurn;
-
-    expect(session.getPendingPermissions()).toEqual([
-      expect.objectContaining({ input: { plan: "- Implement the newer plan" } }),
-    ]);
-  });
-
-  test("keeps a synthetic plan dismissed when a new prompt is rejected", async () => {
-    const session = createSession({
-      featureValues: { plan_mode: true },
-    });
-
-    asInternals(session).handleNotification("turn/started", {
-      turn: { id: "turn-plan-pending" },
-    });
-    asInternals(session).handleNotification("turn/plan/updated", {
-      plan: [{ step: "Implement the original plan", status: "pending" }],
-    });
-    asInternals(session).handleNotification("turn/completed", {
-      turn: { status: "completed", error: null },
-    });
-    const pendingPlan = session.getPendingPermissions()[0];
-    expect(pendingPlan).toBeDefined();
-
-    session.activeForegroundTurnId = null;
-    session.client = createStub<CodexClientLike>({
-      request: async (method) => {
-        if (method === "thread/loaded/list") return { data: ["test-thread"] };
-        if (method === "turn/start") throw new Error("Prompt rejected");
-        throw new Error(`Unexpected request: ${method}`);
-      },
-    });
-
-    await expect(session.startTurn("Revise the plan")).rejects.toThrow("Prompt rejected");
-
-    expect(session.getPendingPermissions()).toEqual([]);
   });
 
   test("emits imageView paths with spaces as valid assistant markdown images", () => {
@@ -5030,7 +4777,7 @@ describe("Codex app-server provider", () => {
       item: {
         id: "image-view-1",
         type: "imageView",
-        path: "/tmp/paseo image.png",
+        path: "/tmp/byspace image.png",
       },
     });
 
@@ -5041,7 +4788,7 @@ describe("Codex app-server provider", () => {
         turnId: "test-turn",
         item: {
           type: "assistant_message",
-          text: "![Image](file:///tmp/paseo%20image.png)",
+          text: "![Image](file:///tmp/byspace%20image.png)",
         },
       },
     ]);
@@ -5108,7 +4855,7 @@ describe("Codex app-server provider", () => {
     expect(event.item.text).not.toContain("data:image");
     expect(event.item.text).not.toContain(ONE_BY_ONE_PNG_BASE64);
     const source = markdownImageSource(event.item.text);
-    expect(source).toMatch(/paseo-attachments(?:-[^\\/]+)?[\\/].+\.png$/);
+    expect(source).toMatch(/byspace-attachments(?:-[^\\/]+)?[\\/].+\.png$/);
     expect(existsSync(source)).toBe(true);
     rmSync(source, { force: true });
   });
@@ -5152,7 +4899,7 @@ describe("Codex app-server provider", () => {
               id: "mcp-browser-screenshot",
               type: "mcpToolCall",
               status: "completed",
-              server: "paseo",
+              server: "byspace",
               tool: "browser_screenshot",
               arguments: { browserId: "11111111-1111-4111-8111-111111111111" },
               result: {
@@ -5186,7 +4933,7 @@ describe("Codex app-server provider", () => {
           item: {
             type: "tool_call",
             callId: "mcp-browser-screenshot",
-            name: "paseo.browser_screenshot",
+            name: "byspace.browser_screenshot",
             status: "completed",
             error: null,
             detail: {
@@ -5224,7 +4971,7 @@ describe("Codex app-server provider", () => {
       }
       expect(JSON.stringify(events)).not.toContain(ONE_BY_ONE_PNG_BASE64);
       const source = markdownImageSource(imageEvent.item.text);
-      expect(source).toMatch(/paseo-attachments(?:-[^\\/]+)?[\\/].+\.png$/);
+      expect(source).toMatch(/byspace-attachments(?:-[^\\/]+)?[\\/].+\.png$/);
       expect(existsSync(source)).toBe(true);
       rmSync(source, { force: true });
       appServer.assertNoErrors();

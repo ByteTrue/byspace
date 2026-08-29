@@ -17,14 +17,13 @@ import { create } from "zustand";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { HostStatusDotSlot } from "@/components/hosts/host-picker";
 import { isWeb } from "@/constants/platform";
-import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import {
   OverlayLayerProvider,
   useGlobalWebOverlayLayer,
   useWebOverlayRegistration,
 } from "@/lib/overlay-root";
 import { useHosts } from "@/runtime/host-runtime";
-import { orderHostsLocalFirst, type HostProfile } from "@/types/host-connection";
+import type { HostProfile } from "@/types/host-connection";
 import { buildSettingsAddHostRoute } from "@/utils/host-routes";
 
 type HostFilter = (host: HostProfile) => boolean;
@@ -71,14 +70,11 @@ function matchesHostQuery(host: HostProfile, query: string): boolean {
 
 export function useHostChooser() {
   const hosts = useHosts();
-  const localServerId = useLocalDaemonServerId();
   const open = useHostChooserStore((state) => state.open);
 
   return useCallback(
     (input: ChooseHostInput) => {
-      const availableHosts = orderHostsLocalFirst(hosts, localServerId).filter(
-        input.filter ?? (() => true),
-      );
+      const availableHosts = hosts.filter(input.filter ?? (() => true));
 
       if (availableHosts.length === 0) {
         (input.onNoHosts ?? (() => router.push(buildSettingsAddHostRoute(Date.now()))))();
@@ -97,7 +93,7 @@ export function useHostChooser() {
       });
       return true;
     },
-    [hosts, localServerId, open],
+    [hosts, open],
   );
 }
 
@@ -170,11 +166,15 @@ export function HostChooserModal() {
 
   useEffect(() => {
     if (!request) return;
-    inputRef.current?.replaceText("");
     setQuery("");
     setActiveIndex(0);
     const id = setTimeout(() => inputRef.current?.focus(), 0);
     return () => clearTimeout(id);
+  }, [request]);
+
+  useEffect(() => {
+    if (!request) return;
+    inputRef.current?.replaceText("");
   }, [request]);
 
   const handleQueryChange = useCallback((value: string) => {

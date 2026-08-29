@@ -2,9 +2,12 @@ import { fileURLToPath } from "node:url";
 import { fork } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { assertAbsolutePath, isSameOrDescendantPath } from "../server/path-utils.js";
-import type { TerminalState } from "@getpaseo/protocol/messages";
-import type { TerminalActivity, TerminalActivityState } from "@getpaseo/protocol/terminal-activity";
-import { deriveTerminalActivityStatusBucket } from "@getpaseo/protocol/terminal-activity";
+import type { TerminalState } from "@bytetrue/byspace-protocol/messages";
+import type {
+  TerminalActivity,
+  TerminalActivityState,
+} from "@bytetrue/byspace-protocol/terminal-activity";
+import { deriveTerminalActivityStatusBucket } from "@bytetrue/byspace-protocol/terminal-activity";
 import type {
   ClientMessage,
   ServerMessage,
@@ -14,6 +17,7 @@ import type {
   TerminalSession,
   TerminalStateSnapshot,
 } from "./terminal.js";
+import { TerminalOutputBacklog } from "./terminal-output-backlog.js";
 import type { CaptureTerminalLinesResult } from "./terminal-capture.js";
 import type {
   TerminalActivityListener,
@@ -70,6 +74,9 @@ interface WorkerTerminalRecord {
   // in the worker process). Refreshed on every getTerminalState response and on
   // the snapshotReady event that precedes a live-restore replay.
   replayPreamble: string;
+  // The worker streams output here whether or not a client is listening, so this
+  // side can serve the gap a hidden client missed.
+  outputBacklog: TerminalOutputBacklog;
   exitInfo: TerminalExitInfo | null;
   messageListeners: Set<(msg: ServerMessage) => void>;
   exitListeners: Set<(info: TerminalExitInfo) => void>;
@@ -93,6 +100,7 @@ interface WorkerTerminalManagerOptions {
   requestTimeoutMs?: number;
   forkWorker?: () => TerminalWorkerProcess;
   getTerminalActivityUrl?: () => string | null;
+  agentCliToken?: string;
 }
 
 function createActivityToken(): string {
@@ -234,6 +242,7 @@ export function createWorkerTerminalManager(
       state: input.state,
       activity: input.info.activity,
       replayPreamble: "",
+      outputBacklog: new TerminalOutputBacklog(),
       exitInfo: null,
       messageListeners: new Set(),
       exitListeners: new Set(),
@@ -352,6 +361,12 @@ export function createWorkerTerminalManager(
           revision: 0,
         };
       },
+      getOutputSince(revision: number) {
+        return record.outputBacklog.since(revision);
+      },
+      drainHeadlessXterm(): Promise<void> {
+        return Promise.resolve();
+      },
       getReplayPreamble(): string {
         // Refreshed from every getTerminalState response, which the controller fetches
         // before every snapshot replay (legacy + visible-snapshot restore). The one
@@ -428,6 +443,9 @@ export function createWorkerTerminalManager(
     }
     if (message.message.type === "snapshotReady" && message.message.replayPreamble !== undefined) {
       record.replayPreamble = message.message.replayPreamble;
+    }
+    if (message.message.type === "output") {
+      record.outputBacklog.append(message.message.revision, message.message.data);
     }
     for (const listener of Array.from(record.messageListeners)) {
       listener(message.message);
@@ -695,6 +713,12 @@ export function createWorkerTerminalManager(
           type: "createTerminal",
           options: {
             ...options,
+            env: {
+              ...options.env,
+              ...(managerOptions.agentCliToken
+                ? { BYSPACE_CLI_TOKEN: managerOptions.agentCliToken }
+                : {}),
+            },
             id: terminalId,
             activityToken,
             activityUrl: terminalActivityUrl,

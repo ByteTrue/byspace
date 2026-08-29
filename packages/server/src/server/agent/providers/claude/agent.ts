@@ -69,11 +69,7 @@ import {
   formatProviderDiagnosticError,
 } from "../diagnostic-utils.js";
 import { appendOrReplaceGrowingAssistantMessage, runProviderTurn } from "../provider-runner.js";
-import {
-  applyClaudeToolPolicy,
-  ClaudeProviderOptionsSchema,
-  type ClaudeProviderOptions,
-} from "./options.js";
+import { ClaudeProviderOptionsSchema, type ClaudeProviderOptions } from "./options.js";
 import { renderPromptAttachmentAsText } from "../../prompt-attachments.js";
 import { claudeQuery, type ClaudeOptions, type ClaudeQueryFactory } from "./query.js";
 import { realClaudeRewindSdk, revertClaudeConversation, revertClaudeFiles } from "./rewind.js";
@@ -110,8 +106,6 @@ import {
   type AgentSession,
   type AgentSessionConfig,
   type AgentSlashCommand,
-  type SteerActiveTurnOptions,
-  type SteerResult,
   type AgentStreamEvent,
   type AgentTimelineItem,
   type AgentUsage,
@@ -125,6 +119,8 @@ import {
   type ProviderCatalog,
   type ProviderRefreshContext,
   type ResolveAgentDefaultModeInput,
+  type SteerActiveTurnOptions,
+  type SteerResult,
 } from "../../agent-sdk-types.js";
 import { importSessionFromPersistence } from "../../provider-session-import.js";
 import { runProviderRefreshActivity } from "../../provider-refresh-deadline.js";
@@ -161,7 +157,7 @@ export function normalizeClaudeAskUserQuestionRequestInput(
   }
 
   // Claude Code's AskUserQuestion schema says "Other" is host-provided, not a
-  // model-supplied option. Paseo's shared question UI uses allowOther for that
+  // model-supplied option. BySpace's shared question UI uses allowOther for that
   // freeform answer path.
   return {
     ...input,
@@ -201,7 +197,7 @@ export function normalizeClaudeAskUserQuestionUpdatedInput(
 ): AgentMetadata {
   const fallback = isMetadata(fallbackInput) ? fallbackInput : {};
   const base = isMetadata(updatedInput) ? updatedInput : {};
-  // Paseo's shared question UI serializes answers by question header, but Claude's
+  // BySpace's shared question UI serializes answers by question header, but Claude's
   // AskUserQuestion tool expects answer keys to match the full question text. Merge
   // the original request payload back in so provider callbacks that only return
   // `{ answers }` still satisfy Claude's full tool input schema.
@@ -1551,7 +1547,6 @@ export class ClaudeAgentClient implements AgentClient {
     _options: FetchCatalogOptions,
     context?: ProviderRefreshContext,
   ): Promise<ProviderCatalog> {
-    // Claude exposes a global catalog here; cwd/force are intentionally irrelevant.
     let claudeCodeVersion: string | undefined;
     try {
       claudeCodeVersion = await runProviderRefreshActivity(context, "version", () =>
@@ -2091,7 +2086,6 @@ class ClaudeAgentSession implements AgentSession {
 
   constructor(config: ClaudeAgentConfig, options: ClaudeAgentSessionOptions) {
     this.config = config;
-    assertClaudeThinkingOptionSupported(config.model, config.thinkingOptionId);
     this.launchEnv = options.launchEnv;
     this.agentId = options.agentId;
     this.defaults = options.defaults;
@@ -2100,6 +2094,7 @@ class ClaudeAgentSession implements AgentSession {
     this.logger = options.logger.child({ agentId: this.agentId });
     this.queryFactory = options.queryFactory;
     this.resolveBinary = options.resolveBinary;
+    assertClaudeThinkingOptionSupported(config.model, config.thinkingOptionId);
     this.contextUsage = new ClaudeContextUsageState(
       findClaudeModel(this.config.model)?.contextWindowMaxTokens,
     );
@@ -2251,9 +2246,9 @@ class ClaudeAgentSession implements AgentSession {
       if (!this.input) {
         throw new Error("Claude session input stream not initialized");
       }
+      this.startQueryPump();
       this.activeForegroundQuery = this.query;
       this.activeForegroundInput = this.input;
-      this.startQueryPump();
       this.input.push(sdkMessage);
       setTimeout(() => {
         if (this.activeForegroundTurnId === turnId) {
@@ -2424,16 +2419,9 @@ class ClaudeAgentSession implements AgentSession {
   }
 
   private reconcileThinkingOptionForModel(modelId: string | null): void {
-    const thinkingOptionId = this.config.thinkingOptionId;
-    if (thinkingOptionId !== CLAUDE_DISABLED_THINKING_OPTION_ID) {
-      return;
-    }
-
+    if (this.config.thinkingOptionId !== CLAUDE_DISABLED_THINKING_OPTION_ID) return;
     const resolution = resolveClaudeDisabledThinkingForModel(modelId);
-    if (resolution.supported) {
-      return;
-    }
-
+    if (resolution.supported) return;
     this.config.thinkingOptionId = resolution.fallbackThinkingOptionId;
     this.queryRestartNeeded = true;
     this.pushEvent({
@@ -2494,83 +2482,6 @@ class ClaudeAgentSession implements AgentSession {
     return Array.from(this.pendingPermissions.values()).map((entry) => entry.request);
   }
 
-  /**
-   * A denied request is the only record the transcript gets. Plans especially:
-   * the pending card is the only place the plan text lives, so losing it means
-   * the user can no longer read what they just declined.
-   */
-  private recordDeniedPermissionTimeline(
-    request: AgentPermissionRequest,
-    response: Extract<AgentPermissionResponse, { behavior: "deny" }>,
-  ): void {
-    if (request.kind === "tool") {
-      this.pushToolCall(
-        mapClaudeFailedToolCall({
-          name: request.name,
-          callId:
-            (typeof request.metadata?.toolUseId === "string" ? request.metadata.toolUseId : null) ??
-            request.id,
-          input: request.input ?? null,
-          output: null,
-          error: { message: response.message ?? "Permission denied" },
-        }),
-      );
-      return;
-    }
-    if (request.kind === "plan") {
-      let planText: string | null = null;
-      if (typeof request.metadata?.planText === "string") {
-        planText = request.metadata.planText;
-      } else if (typeof request.input?.plan === "string") {
-        planText = request.input.plan;
-      }
-      if (!planText) return;
-      this.pushToolCall({
-        type: "tool_call",
-        name: "plan_approval",
-        callId: request.id,
-        status: "completed",
-        error: null,
-        detail: { type: "plan", text: planText },
-        metadata: {
-          approved: false,
-          actionId: response.selectedActionId ?? "reject",
-        },
-      });
-    }
-  }
-
-  private resolveDeniedPermission(
-    request: AgentPermissionRequest,
-    response: Extract<AgentPermissionResponse, { behavior: "deny" }>,
-  ): PermissionResult {
-    this.recordDeniedPermissionTimeline(request, response);
-    this.pushEvent({
-      type: "permission_resolved",
-      provider: "claude",
-      requestId: request.id,
-      resolution: response,
-    });
-    return {
-      behavior: "deny",
-      message: response.message ?? "Permission request denied",
-      interrupt: response.interrupt,
-    };
-  }
-
-  private denyPendingPermissionsSupersededBySteer(): void {
-    for (const [requestId, pending] of this.pendingPermissions) {
-      this.pendingPermissions.delete(requestId);
-      pending.cleanup?.();
-      pending.resolve(
-        this.resolveDeniedPermission(pending.request, {
-          behavior: "deny",
-          message: STEER_SUPERSEDED_PERMISSION_MESSAGE,
-        }),
-      );
-    }
-  }
-
   async respondToPermission(requestId: string, response: AgentPermissionResponse): Promise<void> {
     const pending = this.pendingPermissions.get(requestId);
     if (!pending) {
@@ -2624,6 +2535,78 @@ class ClaudeAgentSession implements AgentSession {
       requestId,
       resolution: response,
     });
+  }
+
+  private denyPendingPermissionsSupersededBySteer(): void {
+    for (const [requestId, pending] of this.pendingPermissions) {
+      this.pendingPermissions.delete(requestId);
+      pending.cleanup?.();
+      pending.resolve(
+        this.resolveDeniedPermission(pending.request, {
+          behavior: "deny",
+          message: STEER_SUPERSEDED_PERMISSION_MESSAGE,
+        }),
+      );
+    }
+  }
+
+  private resolveDeniedPermission(
+    request: AgentPermissionRequest,
+    response: Extract<AgentPermissionResponse, { behavior: "deny" }>,
+  ): PermissionResult {
+    this.recordDeniedPermissionTimeline(request, response);
+    this.pushEvent({
+      type: "permission_resolved",
+      provider: "claude",
+      requestId: request.id,
+      resolution: response,
+    });
+    return {
+      behavior: "deny",
+      message: response.message ?? "Permission request denied",
+      interrupt: response.interrupt,
+    };
+  }
+
+  private recordDeniedPermissionTimeline(
+    request: AgentPermissionRequest,
+    response: Extract<AgentPermissionResponse, { behavior: "deny" }>,
+  ): void {
+    if (request.kind === "tool") {
+      this.pushToolCall(
+        mapClaudeFailedToolCall({
+          name: request.name,
+          callId:
+            (typeof request.metadata?.toolUseId === "string" ? request.metadata.toolUseId : null) ??
+            request.id,
+          input: request.input ?? null,
+          output: null,
+          error: { message: response.message ?? "Permission denied" },
+        }),
+      );
+      return;
+    }
+    if (request.kind === "plan") {
+      let planText: string | null = null;
+      if (typeof request.metadata?.planText === "string") {
+        planText = request.metadata.planText;
+      } else if (typeof request.input?.plan === "string") {
+        planText = request.input.plan;
+      }
+      if (!planText) return;
+      this.pushToolCall({
+        type: "tool_call",
+        name: "plan_approval",
+        callId: request.id,
+        status: "completed",
+        error: null,
+        detail: { type: "plan", text: planText },
+        metadata: {
+          approved: false,
+          actionId: response.selectedActionId ?? "reject",
+        },
+      });
+    }
   }
 
   describePersistence(): AgentPersistenceHandle | null {
@@ -3199,7 +3182,6 @@ class ClaudeAgentSession implements AgentSession {
       this.config.thinkingOptionId && this.config.thinkingOptionId !== "default"
         ? this.config.thinkingOptionId
         : undefined;
-    assertClaudeThinkingOptionSupported(this.config.model, thinkingOptionId);
     if (thinkingOptionId === CLAUDE_DISABLED_THINKING_OPTION_ID) {
       return { thinking: { type: "disabled" }, effort: undefined, ultracode: false };
     }
@@ -3229,10 +3211,7 @@ class ClaudeAgentSession implements AgentSession {
   private async buildOptions(): Promise<ClaudeOptions> {
     const { thinking, effort, ultracode } = this.resolveThinkingConfig();
     const appendedSystemPrompt = this.buildAppendedSystemPrompt();
-    const providerOptions = applyClaudeToolPolicy(
-      this.config.providerOptions,
-      this.config.toolPolicy,
-    );
+    const providerOptions = this.config.providerOptions;
     const settingsOptions = this.buildSettingsOptions(providerOptions, { ultracode });
     const sdkEnv = this.buildSdkEnv();
     assertClaudeAutoModeEligible(this.currentMode, sdkEnv);
@@ -3549,8 +3528,6 @@ class ClaudeAgentSession implements AgentSession {
     }
     this.notifySubscribers(event);
     this.activeForegroundTurnId = null;
-    this.activeForegroundQuery = null;
-    this.activeForegroundInput = null;
     this.cancelCurrentTurn = null;
     this.activeTurnHasAssistantText = false;
     this.syncTurnState("foreground turn terminal");
@@ -3807,12 +3784,6 @@ class ClaudeAgentSession implements AgentSession {
     );
   }
 
-  /**
-   * Claude keeps talking about the request it was told to kill — the notification for the tool it
-   * just stopped, trailing assistant output. That is not new work, so it must not open a turn: the
-   * only message that would close that turn is the result shouldSuppressStaleResult drops, leaving
-   * the agent stuck reporting "running" forever.
-   */
   private shouldStartAutonomousTurn(message: SDKMessage): boolean {
     if (this.activeForegroundTurnId || this.pendingInterruptAbort) {
       return false;
@@ -3962,8 +3933,6 @@ class ClaudeAgentSession implements AgentSession {
     this.queryRestartNeeded = false;
     this.autonomousTurn = null;
     this.activeForegroundTurnId = null;
-    this.activeForegroundQuery = null;
-    this.activeForegroundInput = null;
     this.syncTurnState("missing resumed conversation");
     return true;
   }
@@ -4032,6 +4001,8 @@ class ClaudeAgentSession implements AgentSession {
       return this.translateSidechainFrameToEvents(message, parentToolUseId);
     }
 
+    this.forgetReadSteer(message);
+
     const events: AgentStreamEvent[] = [];
     this.appendTaskStateEvent(message, events);
 
@@ -4065,8 +4036,6 @@ class ClaudeAgentSession implements AgentSession {
         });
       }
     }
-
-    this.forgetReadSteer(message);
 
     switch (message.type) {
       case "system":
@@ -4708,7 +4677,7 @@ class ClaudeAgentSession implements AgentSession {
    * Effort is reachable only through hooks.
    *
    * It appears nowhere on the message stream — verified by scanning every message type at depth
-   * — and the level Paseo requests is not necessarily the level that runs, because a model that
+   * — and the level BySpace requests is not necessarily the level that runs, because a model that
    * does not support it is silently downgraded. A hook firing inside a subagent reports the
    * active post-downgrade level alongside the subagent's `agent_id`.
    *
@@ -4999,7 +4968,7 @@ class ClaudeAgentSession implements AgentSession {
     }
 
     const items: AgentTimelineItem[] = [];
-    // User SDK entries can arrive as multiple text blocks, but Paseo treats them as one message.
+    // User SDK entries can arrive as multiple text blocks, but BySpace treats them as one message.
     const userTextParts: string[] = [];
     for (const block of content) {
       if (!isClaudeContentChunk(block)) {

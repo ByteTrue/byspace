@@ -1,11 +1,14 @@
-# Example child image that adds agent CLIs to the official Paseo image.
+# Example child image that adds agent CLIs to the locally built BySpace image.
 #
-# Build:
-#   docker build -f docker/Dockerfile.agents.example -t paseo-with-agents .
+# First build the base image from the repository root:
+#   docker build -f docker/base/Dockerfile -t byspace:local .
 #
-# Then set `image: paseo-with-agents` in docker/docker-compose.example.yml.
+# Then build this child image:
+#   docker build -f docker/Dockerfile.agents.example -t byspace-with-agents .
+#
+# Set `image: byspace-with-agents` in your Compose file to use it.
 
-FROM ghcr.io/getpaseo/paseo:latest
+FROM byspace:local
 
 USER root
 RUN npm install -g \
@@ -14,4 +17,4 @@ RUN npm install -g \
   opencode-ai
 
 # Leave the image user as root. The base entrypoint prepares mounted volumes,
-# then drops the daemon and launched agents to the non-root `paseo` user.
+# then drops the daemon and launched agents to the non-root `byspace` user.

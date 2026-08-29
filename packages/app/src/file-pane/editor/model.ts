@@ -1,4 +1,4 @@
-import type { FileVersion, FileWriteResult } from "@getpaseo/protocol/messages";
+import type { FileVersion, FileWriteResult } from "@bytetrue/byspace-protocol/messages";
 
 export type FileEditorStatus = "clean" | "dirty" | "saving" | "conflict" | "error";
 export type FileLineSeparator = "\n" | "\r\n" | "\r";
@@ -59,7 +59,7 @@ const systemClock: FileEditorClock = {
 };
 
 export class FileEditorModel {
-  private readonly session: FileEditorSession;
+  private session: FileEditorSession;
   private readonly clock: FileEditorClock;
   private readonly listeners = new Set<() => void>();
   private snapshot: FileEditorSnapshot;
@@ -102,6 +102,10 @@ export class FileEditorModel {
   };
 
   getSnapshot = (): FileEditorSnapshot => this.snapshot;
+
+  updateSession(session: FileEditorSession): void {
+    this.session = session;
+  }
 
   connectFileObservations(source: FileObservationSource): void {
     this.disconnectFileObservations();

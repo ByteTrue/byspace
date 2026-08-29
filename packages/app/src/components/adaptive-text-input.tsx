@@ -1,7 +1,5 @@
 import React, { forwardRef, useCallback, useEffect, useRef } from "react";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { useIsCompactFormFactor } from "@/constants/layout";
-import { isNative } from "@/constants/platform";
 import { createControlGeometry } from "@/components/ui/control-geometry";
 import {
   EditingTextInput,
@@ -27,9 +25,13 @@ const ThemedTextInput = withUnistyles(EditingTextInput, (theme) => ({
   placeholderTextColor: theme.colors.foregroundMuted,
 }));
 
+/**
+ * Form-field editing surface. The editing surface owns its text; callers seed
+ * it with `initialValue` and remount or bump `resetKey` to force an explicit
+ * replacement via the imperative handle.
+ */
 export const AdaptiveTextInput = forwardRef<EditingTextInputHandle, AdaptiveTextInputProps>(
   function AdaptiveTextInputInner(props, ref) {
-    const isMobile = useIsCompactFormFactor();
     const { initialValue, resetKey, style, onChangeText, ...inputProps } = props;
     const inputRef = useRef<EditingTextInputHandle | null>(null);
     const replacementTextRef = useRef(initialValue ?? "");
@@ -57,7 +59,6 @@ export const AdaptiveTextInput = forwardRef<EditingTextInputHandle, AdaptiveText
         initialValue={initialValue}
         onChangeText={onChangeText}
         style={[styles.outline, style, styles.text]}
-        variant={isMobile && isNative ? "bottom-sheet" : "default"}
       />
     );
   },

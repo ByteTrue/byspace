@@ -1,13 +1,13 @@
 /**
  * Test Daemon Helper
  *
- * Provides utilities for launching real Paseo daemons in E2E tests.
- * Each test gets an isolated daemon on an available local port with its own PASEO_HOME.
+ * Provides utilities for launching real BySpace daemons in E2E tests.
+ * Each test gets an isolated daemon on an available local port with its own BYSPACE_HOME.
  *
  * CRITICAL RULES (from design doc):
- * 1. Port: Use an available ephemeral local port - NEVER use 6767 (production)
+ * 1. Port: Use an available ephemeral local port - NEVER use 6777 (production)
  * 2. Protocol: WebSocket ONLY - daemon has no HTTP endpoints
- * 3. Temp dirs: Create temp directories for PASEO_HOME and agent --cwd
+ * 3. Temp dirs: Create temp directories for BYSPACE_HOME and agent --cwd
  * 4. Model: Always use claude provider with haiku model for fast, cheap tests
  * 5. Cleanup: Kill daemon and remove temp dirs after each test
  */
@@ -16,17 +16,16 @@ import { mkdtemp, rm, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { fileURLToPath } from "url";
 import { ChildProcess, spawn } from "child_process";
 import { getAvailablePort } from "./network.ts";
 
 export interface TestDaemonContext {
-  /** Available local port for test daemon (never 6767) */
+  /** Available local port for test daemon (never 6777) */
   port: number;
   /** WebSocket URL for connecting to daemon */
   wsUrl: string;
-  /** Temp directory for PASEO_HOME */
-  paseoHome: string;
+  /** Temp directory for BYSPACE_HOME */
+  byspaceHome: string;
   /** Temp directory for agent working directory */
   workDir: string;
   /** Running daemon process */
@@ -38,17 +37,16 @@ export interface TestDaemonContext {
 }
 
 const TEST_DAEMON_ENV_DEFAULTS: Record<string, string> = {
-  PASEO_RELAY_ENABLED: "false",
-  PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD: process.env.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD ?? "0",
-  PASEO_DICTATION_ENABLED: process.env.PASEO_DICTATION_ENABLED ?? "0",
-  PASEO_VOICE_MODE_ENABLED: process.env.PASEO_VOICE_MODE_ENABLED ?? "0",
+  BYSPACE_RELAY_ENABLED: "false",
+  BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD: process.env.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD ?? "0",
+  BYSPACE_DICTATION_ENABLED: process.env.BYSPACE_DICTATION_ENABLED ?? "0",
+  BYSPACE_VOICE_MODE_ENABLED: process.env.BYSPACE_VOICE_MODE_ENABLED ?? "0",
 };
 const TEST_DAEMON_HOST = "127.0.0.1";
-const TSX_ENTRY = fileURLToPath(import.meta.resolve("tsx/cli"));
 
 const DEFAULT_OUTPUT_CAPTURE_LIMIT = 256 * 1024;
 const TEST_OUTPUT_CAPTURE_LIMIT = Number.parseInt(
-  process.env.PASEO_TEST_OUTPUT_CAPTURE_BYTES ?? `${DEFAULT_OUTPUT_CAPTURE_LIMIT}`,
+  process.env.BYSPACE_TEST_OUTPUT_CAPTURE_BYTES ?? `${DEFAULT_OUTPUT_CAPTURE_LIMIT}`,
   10,
 );
 
@@ -145,7 +143,7 @@ async function terminateProcessTree(processRef: ChildProcess, timeoutMs: number)
 /**
  * Generate a random port for test daemon
  * Uses range 20000-30000 to avoid conflicts
- * NEVER uses 6767 (user's running daemon)
+ * NEVER uses 6777 (user's running daemon)
  */
 export function getRandomPort(): number {
   return 20000 + Math.floor(Math.random() * 10000);
@@ -154,35 +152,34 @@ export function getRandomPort(): number {
 /**
  * Create isolated temp directories for testing
  */
-export async function createTempDirs(): Promise<{ paseoHome: string; workDir: string }> {
-  const paseoHome = await mkdtemp(join(tmpdir(), "paseo-e2e-home-"));
-  const workDir = await mkdtemp(join(tmpdir(), "paseo-e2e-work-"));
+export async function createTempDirs(): Promise<{ byspaceHome: string; workDir: string }> {
+  const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-e2e-home-"));
+  const workDir = await mkdtemp(join(tmpdir(), "byspace-e2e-work-"));
 
   // Create the agents directory that the daemon expects
-  const agentsDir = join(paseoHome, "agents");
+  const agentsDir = join(byspaceHome, "agents");
   await mkdir(agentsDir, { recursive: true });
 
-  return { paseoHome, workDir };
+  return { byspaceHome, workDir };
 }
 
 /**
- * Wait for daemon to be ready by running `paseo agent ls`
+ * Wait for daemon to be ready by running `byspace agent ls`
  * This connects via WebSocket and ensures the daemon is responsive
  */
-async function probeDaemonReady(port: number, env?: NodeJS.ProcessEnv): Promise<boolean> {
+async function probeDaemonReady(port: number): Promise<boolean> {
   try {
-    const { exitCode } = await runPaseoCli(
+    const { exitCode } = await runBySpaceCli(
       {
         port,
         wsUrl: `ws://${TEST_DAEMON_HOST}:${port}`,
-        paseoHome: "",
+        byspaceHome: "",
         workDir: "",
         process: null,
         isReady: false,
         stop: async () => {},
       },
       ["agent", "ls"],
-      { env },
     );
     return exitCode === 0;
   } catch {
@@ -190,15 +187,11 @@ async function probeDaemonReady(port: number, env?: NodeJS.ProcessEnv): Promise<
   }
 }
 
-async function waitForDaemonReady(
-  port: number,
-  timeout = 30000,
-  env?: NodeJS.ProcessEnv,
-): Promise<void> {
+async function waitForDaemonReady(port: number, timeout = 30000): Promise<void> {
   const deadline = Date.now() + timeout;
 
   async function poll(): Promise<void> {
-    if (await probeDaemonReady(port, env)) return;
+    if (await probeDaemonReady(port)) return;
     if (Date.now() >= deadline) {
       throw new Error(`Daemon failed to become ready on port ${port} within ${timeout}ms`);
     }
@@ -217,19 +210,19 @@ function sleep(ms: number): Promise<void> {
  * Start a test daemon programmatically using the server's bootstrap API
  *
  * This starts the daemon in a separate process using the CLI's daemon start command
- * with isolated PASEO_HOME and PASEO_LISTEN environment variables.
+ * with isolated BYSPACE_HOME and BYSPACE_LISTEN environment variables.
  */
 export async function startTestDaemon(options?: {
   port?: number;
-  paseoHome?: string;
+  byspaceHome?: string;
   workDir?: string;
   timeout?: number;
   env?: NodeJS.ProcessEnv;
 }): Promise<TestDaemonContext> {
   const port = options?.port ?? (await getAvailablePort());
-  const { paseoHome, workDir } =
-    options?.paseoHome && options?.workDir
-      ? { paseoHome: options.paseoHome, workDir: options.workDir }
+  const { byspaceHome, workDir } =
+    options?.byspaceHome && options?.workDir
+      ? { byspaceHome: options.byspaceHome, workDir: options.workDir }
       : await createTempDirs();
   const timeout = options?.timeout ?? 30000;
 
@@ -240,23 +233,19 @@ export async function startTestDaemon(options?: {
   const cliSrcPath = join(cliDir, "src", "index.ts");
 
   // Start daemon process using tsx to run TypeScript directly
-  const daemonProcess = spawn(
-    process.execPath,
-    [TSX_ENTRY, cliSrcPath, "daemon", "start", "--foreground"],
-    {
-      env: {
-        ...process.env,
-        ...TEST_DAEMON_ENV_DEFAULTS,
-        PASEO_HOME: paseoHome,
-        PASEO_LISTEN: `${TEST_DAEMON_HOST}:${port}`,
-        // Force no TTY to prevent QR code output
-        CI: "true",
-        ...options?.env,
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-      detached: process.platform !== "win32",
+  const daemonProcess = spawn("npx", ["tsx", cliSrcPath, "daemon", "start", "--foreground"], {
+    env: {
+      ...process.env,
+      ...TEST_DAEMON_ENV_DEFAULTS,
+      BYSPACE_HOME: byspaceHome,
+      BYSPACE_LISTEN: `${TEST_DAEMON_HOST}:${port}`,
+      // Force no TTY to prevent QR code output
+      CI: "true",
+      ...options?.env,
     },
-  );
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: process.platform !== "win32",
+  });
 
   const stdout = createOutputCapture();
   const stderr = createOutputCapture();
@@ -276,8 +265,8 @@ export async function startTestDaemon(options?: {
 
     // Clean up temp directories
     try {
-      if (existsSync(paseoHome)) {
-        await rm(paseoHome, { recursive: true, force: true });
+      if (existsSync(byspaceHome)) {
+        await rm(byspaceHome, { recursive: true, force: true });
       }
     } catch {
       // Ignore cleanup errors
@@ -310,7 +299,7 @@ export async function startTestDaemon(options?: {
   const ctx: TestDaemonContext = {
     port,
     wsUrl,
-    paseoHome,
+    byspaceHome,
     workDir,
     process: daemonProcess,
     isReady: false,
@@ -319,7 +308,7 @@ export async function startTestDaemon(options?: {
 
   // Wait for daemon to be ready
   try {
-    await waitForDaemonReady(port, timeout, options?.env);
+    await waitForDaemonReady(port, timeout);
     ctx.isReady = true;
   } catch (err) {
     // Daemon failed to start - clean up and rethrow
@@ -335,12 +324,12 @@ export async function startTestDaemon(options?: {
 }
 
 /**
- * Run a paseo CLI command against a test daemon
+ * Run a byspace CLI command against a test daemon
  *
  * This is a helper that sets the correct environment variables
  * to point at the test daemon.
  */
-export async function runPaseoCli(
+export async function runBySpaceCli(
   ctx: TestDaemonContext,
   args: string[],
   options?: {
@@ -356,12 +345,12 @@ export async function runPaseoCli(
   const cliSrcPath = join(cliDir, "src", "index.ts");
 
   return new Promise((resolve, reject) => {
-    const proc = spawn(process.execPath, [TSX_ENTRY, cliSrcPath, ...args], {
+    const proc = spawn("npx", ["tsx", cliSrcPath, ...args], {
       env: {
         ...process.env,
         ...TEST_DAEMON_ENV_DEFAULTS,
-        PASEO_HOST: `${TEST_DAEMON_HOST}:${ctx.port}`,
-        PASEO_HOME: ctx.paseoHome,
+        BYSPACE_HOST: `${TEST_DAEMON_HOST}:${ctx.port}`,
+        BYSPACE_HOME: ctx.byspaceHome,
         ...options?.env,
       },
       cwd,
@@ -384,7 +373,7 @@ export async function runPaseoCli(
       if (proc.pid) {
         signalProcessTree(proc.pid, "SIGKILL");
       }
-      reject(new Error(`CLI command timed out after ${timeout}ms: paseo ${args.join(" ")}`));
+      reject(new Error(`CLI command timed out after ${timeout}ms: byspace ${args.join(" ")}`));
     }, timeout);
 
     proc.on("exit", (code) => {
@@ -414,8 +403,8 @@ export async function createE2ETestContext(options?: {
   env?: NodeJS.ProcessEnv;
 }): Promise<
   TestDaemonContext & {
-    /** Run a paseo CLI command against this daemon */
-    paseo: (
+    /** Run a byspace CLI command against this daemon */
+    byspace: (
       args: string[],
       opts?: { timeout?: number; cwd?: string; env?: NodeJS.ProcessEnv },
     ) => Promise<{
@@ -427,13 +416,13 @@ export async function createE2ETestContext(options?: {
 > {
   const ctx = await startTestDaemon({ timeout: options?.timeout, env: options?.env });
 
-  const paseo = (
+  const byspace = (
     args: string[],
     opts?: { timeout?: number; cwd?: string; env?: NodeJS.ProcessEnv },
-  ) => runPaseoCli(ctx, args, opts);
+  ) => runBySpaceCli(ctx, args, opts);
 
   return {
     ...ctx,
-    paseo,
+    byspace,
   };
 }

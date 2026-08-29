@@ -2,17 +2,12 @@ import type {
   DaemonClient,
   FetchAgentsEntry,
   FetchAgentsOptions,
-} from "@getpaseo/client/internal/daemon-client";
+} from "@bytetrue/byspace-client/internal/daemon-client";
 import {
   deriveAgentStateBucket,
   getWorkspaceStateBucketPriority,
-} from "@getpaseo/protocol/agent-state-bucket";
-import type {
-  Agent,
-  DaemonServerInfo,
-  ProjectDescriptor,
-  WorkspaceDescriptor,
-} from "@/stores/session-store";
+} from "@bytetrue/byspace-protocol/agent-state-bucket";
+import type { Agent, DaemonServerInfo, WorkspaceDescriptor } from "@/stores/session-store";
 import { useSessionStore } from "@/stores/session-store";
 import {
   buildAgentDirectoryState,
@@ -38,7 +33,7 @@ interface LegacyDaemonWorkspaceBackfillInput {
   client: Pick<DaemonClient, "fetchAgents">;
   serverId: string;
   workspaces: ReadonlyMap<unknown, unknown>;
-  projects: ReadonlyMap<unknown, unknown>;
+  emptyProjects: ReadonlyMap<unknown, unknown>;
   isCancelled?: () => boolean;
 }
 
@@ -102,7 +97,7 @@ export async function fetchLegacyDaemonWorkspaceDirectory(input: {
 export async function backfillLegacyDaemonWorkspaceDirectoryIfEmpty(
   input: LegacyDaemonWorkspaceBackfillInput,
 ): Promise<boolean> {
-  if (input.workspaces.size > 0 || input.projects.size > 0) {
+  if (input.workspaces.size > 0 || input.emptyProjects.size > 0) {
     return false;
   }
   const serverInfo = useSessionStore.getState().sessions[input.serverId]?.serverInfo;
@@ -210,23 +205,9 @@ export function replaceLegacyDaemonWorkspaceDirectory(input: {
   const workspaces = buildLegacyWorkspaces(entries);
   const store = useSessionStore.getState();
   store.setWorkspaces(input.serverId, workspaces);
-  store.setProjects(
-    input.serverId,
-    Array.from(workspaces.values(), legacyProjectDescriptorFromWorkspace),
-  );
+  store.setEmptyProjects(input.serverId, []);
   store.setHasHydratedWorkspaces(input.serverId, true);
   return { agents, workspaces };
-}
-
-function legacyProjectDescriptorFromWorkspace(workspace: WorkspaceDescriptor): ProjectDescriptor {
-  return {
-    projectId: workspace.projectId,
-    projectKey: null,
-    projectDisplayName: workspace.projectDisplayName,
-    projectCustomName: workspace.projectCustomName ?? null,
-    projectRootPath: workspace.projectRootPath,
-    projectKind: workspace.projectKind,
-  };
 }
 
 function readFetchAgentsHasMore(
@@ -335,7 +316,7 @@ function createLegacyWorkspace(
       ? {
           currentBranch: checkout.currentBranch,
           remoteUrl: checkout.remoteUrl,
-          isPaseoOwnedWorktree: checkout.isPaseoOwnedWorktree,
+          isBySpaceOwnedWorktree: checkout.isBySpaceOwnedWorktree,
           isDirty: null,
           aheadBehind: null,
           aheadOfOrigin: null,
@@ -353,7 +334,7 @@ function resolveLegacyWorkspaceKind(
   if (!checkout.isGit) {
     return "directory";
   }
-  if (checkout.isPaseoOwnedWorktree) {
+  if (checkout.isBySpaceOwnedWorktree) {
     return "worktree";
   }
   return "checkout";

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type pino from "pino";
-import { createClientChannel, type Transport } from "@getpaseo/relay/e2ee";
-import { exportPublicKey, generateKeyPair } from "@getpaseo/relay";
+import { createClientChannel, type Transport } from "@bytetrue/byspace-relay/e2ee";
+import { exportPublicKey, generateKeyPair } from "@bytetrue/byspace-relay";
 import { startRelayTransport } from "./relay-transport";
 
 function createMockLogger() {
@@ -151,7 +151,7 @@ describe("relay-transport control lifecycle", () => {
     const controller = startRelayTransport({
       logger: logger as unknown as pino.Logger,
       attachSocket: async () => {},
-      relayEndpoint: "relay.paseo.sh:443",
+      relayEndpoint: "byspace-relay.bytetrue.workers.dev:443",
       relayUseTls: true,
       serverId: "srv_test",
       createWebSocket: relay.createWebSocket,
@@ -175,7 +175,7 @@ describe("relay-transport control lifecycle", () => {
     const controller = startRelayTransport({
       logger: logger as unknown as pino.Logger,
       attachSocket: async () => {},
-      relayEndpoint: "relay.paseo.sh:443",
+      relayEndpoint: "byspace-relay.bytetrue.workers.dev:443",
       relayUseTls: true,
       serverId: "srv_test",
       createWebSocket: relay.createWebSocket,
@@ -199,7 +199,7 @@ describe("relay-transport control lifecycle", () => {
     const controller = startRelayTransport({
       logger: logger as unknown as pino.Logger,
       attachSocket: async () => {},
-      relayEndpoint: "relay.paseo.sh:443",
+      relayEndpoint: "byspace-relay.bytetrue.workers.dev:443",
       relayUseTls: true,
       serverId: "srv_test",
       createWebSocket: relay.createWebSocket,
@@ -227,7 +227,7 @@ describe("relay-transport control lifecycle", () => {
     const controller = startRelayTransport({
       logger: logger as unknown as pino.Logger,
       attachSocket,
-      relayEndpoint: "relay.paseo.sh:443",
+      relayEndpoint: "byspace-relay.bytetrue.workers.dev:443",
       relayUseTls: true,
       serverId: "srv_test",
       createWebSocket: relay.createWebSocket,
@@ -265,7 +265,7 @@ describe("relay-transport control lifecycle", () => {
     const controller = startRelayTransport({
       logger: logger as unknown as pino.Logger,
       attachSocket: async (socket) => resolveAttached?.(socket),
-      relayEndpoint: "relay.paseo.sh:443",
+      relayEndpoint: "relay.byspace.test:443",
       relayUseTls: true,
       serverId: "srv_test",
       daemonKeyPair,
@@ -327,6 +327,35 @@ describe("relay-transport control lifecycle", () => {
     dataSocket.completeNextSend();
     await sending;
     expect(completed).toBe(true);
+  });
+
+  test("terminates data sockets whose E2EE handshake never completes", async () => {
+    vi.useFakeTimers();
+    const logger = createMockLogger();
+    const attachSocket = vi.fn();
+    const controller = startRelayTransport({
+      logger: logger as unknown as pino.Logger,
+      attachSocket,
+      relayEndpoint: "relay.byspace.test:443",
+      relayUseTls: true,
+      serverId: "srv_test",
+      daemonKeyPair: generateKeyPair(),
+      createWebSocket: relay.createWebSocket,
+    });
+    controllers.push(controller);
+
+    const control = relay.sockets[0];
+    control.open();
+    control.message(JSON.stringify({ type: "sync", connectionIds: [] }), false);
+    control.message(JSON.stringify({ type: "connected", connectionId: "clt_stalled" }), false);
+    const dataSocket = relay.sockets[1];
+    dataSocket.open();
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(dataSocket.terminateCalls).toBe(1);
+    expect(attachSocket).not.toHaveBeenCalled();
+    expect(hasLogMessage(logger, "warn", "relay_e2ee_handshake_failed")).toBe(true);
   });
 
   test("uses relayUseTls for control and data socket URLs", () => {

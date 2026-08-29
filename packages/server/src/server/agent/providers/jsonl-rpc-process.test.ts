@@ -129,6 +129,28 @@ describe("JsonlRpcProcess", () => {
     }
   });
 
+  test("null timeout waits until the response arrives", async () => {
+    const transport = startProcess();
+
+    try {
+      await expect(
+        transport.request({ type: "echo", value: "slow", delayMs: 80 }, null),
+      ).resolves.toMatchObject({ value: "slow" });
+    } finally {
+      await transport.close();
+    }
+  });
+
+  test("null timeout still rejects when the process is closed", async () => {
+    const transport = startProcess();
+    await transport.request({ type: "echo", value: "ready" });
+    const request = transport.request({ type: "hang" }, null);
+
+    const rejection = expect(request).rejects.toThrow("JSONL RPC process is closed");
+    await transport.close();
+    await rejection;
+  });
+
   test("publishes complete LF-delimited JSON messages", async () => {
     const transport = startProcess();
     const messages: Record<string, unknown>[] = [];
@@ -168,29 +190,6 @@ describe("JsonlRpcProcess", () => {
     } finally {
       await transport.close();
     }
-  });
-
-  test("null timeout waits past short wall-clock limits until the response arrives", async () => {
-    const transport = startProcess();
-
-    try {
-      await expect(
-        transport.request({ type: "echo", value: "slow", delayMs: 80 }, null),
-      ).resolves.toMatchObject({ value: "slow" });
-    } finally {
-      await transport.close();
-    }
-  });
-
-  test("null timeout still rejects when the process is closed", async () => {
-    const transport = startProcess();
-    await transport.request({ type: "echo", value: "ready" });
-    const request = transport.request({ type: "hang" }, null);
-
-    const rejection = expect(request).rejects.toThrow("JSONL RPC process is closed");
-    await transport.close();
-
-    await rejection;
   });
 
   test("rejects pending requests and publishes stderr when the child exits", async () => {

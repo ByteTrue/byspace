@@ -153,9 +153,9 @@ export const OMP_MODES: AgentProviderModeDefinition[] = [
   },
   {
     id: "write",
-    label: "Write Approval",
-    description: "Launches OMP with write approval mode — reads are free, writes require approval.",
-    icon: "ShieldAlert",
+    label: "Write Without Asking",
+    description: "Automatically approves write tools and asks before command execution.",
+    icon: "Shield",
     colorTier: "moderate",
   },
   {

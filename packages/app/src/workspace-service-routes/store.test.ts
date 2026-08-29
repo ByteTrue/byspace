@@ -34,7 +34,7 @@ describe("workspace service route preferences", () => {
 
   it("clears the complete persisted value when one route kind is invalid", async () => {
     const storage = createMemoryStorage({
-      "workspace-service-route-preferences": JSON.stringify({
+      "byspace-workspace-service-route-preferences": JSON.stringify({
         state: { byServerId: { desktop: "direct", broken: "unknown" } },
         version: 1,
       }),
@@ -43,6 +43,6 @@ describe("workspace service route preferences", () => {
     await store.persist.rehydrate();
 
     expect(store.getState().byServerId).toEqual({});
-    expect(storage.values.has("workspace-service-route-preferences")).toBe(false);
+    expect(storage.values.has("byspace-workspace-service-route-preferences")).toBe(false);
   });
 });

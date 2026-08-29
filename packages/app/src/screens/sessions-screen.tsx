@@ -6,6 +6,7 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ChevronLeft } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
+import { AGENT_HISTORY_SEARCH_MAX_LENGTH } from "@bytetrue/byspace-protocol/messages";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -37,7 +38,12 @@ function SessionHostErrorsBanner({
 }): ReactElement {
   return (
     <View style={styles.errorsBannerWrap}>
-      <View style={styles.errorsBanner} testID="sessions-host-errors">
+      <View
+        style={styles.errorsBanner}
+        testID="sessions-host-errors"
+        accessibilityRole="alert"
+        accessibilityLiveRegion="assertive"
+      >
         {errors.map((error) => (
           <Text key={error.serverId} style={styles.errorsBannerText}>
             {t("sessions.hostLoadFailed", { host: error.serverName })}
@@ -162,6 +168,7 @@ function SessionsScreenContent() {
               clearAccessibilityLabel={t("sessions.actions.clearSearch")}
               testID="sessions-search-input"
               clearTestID="sessions-search-clear"
+              maxLength={AGENT_HISTORY_SEARCH_MAX_LENGTH}
             />
           ) : null}
           {showHostFilter ? (

@@ -1,0 +1,15 @@
+{
+  "worktree": {
+    "setup": "go mod download",
+    "x-owner": "platform"
+  },
+  "scripts": {
+    "check": {
+      "command": "go test ./...",
+      "x-timeoutSeconds": 120
+    }
+  },
+  "x-team-dashboard": {
+    "owner": "platform"
+  }
+}

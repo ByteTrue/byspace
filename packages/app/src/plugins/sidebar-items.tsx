@@ -78,7 +78,6 @@ function PluginSidebarItemRow({
       onPress={navigate}
       isActive={isActive}
       testID={`plugin-sidebar-${group.pluginId}-${group.contributionId}`}
-      variant="compact"
     />
   );
 }

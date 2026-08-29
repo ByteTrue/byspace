@@ -1,20 +1,41 @@
-name = "paseo-relay"
-account_id = "10ed39a1dbf316e30abd0c409bed40d6"
+name = "byspace-relay"
+account_id = "835cd580057df97323a7854a8069c5f1"
 main = "src/cloudflare-adapter.ts"
 compatibility_date = "2024-12-01"
 
-routes = [{ pattern = "relay.paseo.sh", custom_domain = true }]
+workers_dev = false
+
+# Routing is release-controlled, not dashboard-controlled: *.workers.dev is blocked in
+# some regions, so each channel is reachable only through its own custom domain and a
+# deploy must (re)assert that binding rather than inherit whatever the dashboard holds.
+routes = [{ pattern = "relay.byspace.cc.cd", custom_domain = true }]
 
 [observability]
 enabled = true
 
-[vars]
-PASEO_RELAY_UPSTREAM = "https://paseo-relay-next.fly.dev"
 
 [[durable_objects.bindings]]
 name = "RELAY"
 class_name = "RelayDurableObject"
 
 [[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RelayDurableObject"]
+
+# Beta channel. Every field below is repeated rather than inherited, because Wrangler does
+# not inherit bindings or migrations into named environments.
+[env.beta]
+name = "byspace-relay-beta"
+workers_dev = false
+routes = [{ pattern = "relay-beta.byspace.cc.cd", custom_domain = true }]
+
+[env.beta.observability]
+enabled = true
+
+[[env.beta.durable_objects.bindings]]
+name = "RELAY"
+class_name = "RelayDurableObject"
+
+[[env.beta.migrations]]
 tag = "v1"
 new_sqlite_classes = ["RelayDurableObject"]

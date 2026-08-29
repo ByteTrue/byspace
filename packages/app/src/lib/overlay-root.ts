@@ -28,19 +28,13 @@ export function getOverlayRoot(): HTMLElement {
   if (!el) {
     el = document.createElement("div");
     el.id = "overlay-root";
+    el.style.position = "fixed";
+    el.style.inset = "0";
+    el.style.pointerEvents = "none";
     document.body.appendChild(el);
   }
-  el.style.position = "fixed";
-  el.style.inset = "0";
-  el.style.pointerEvents = "none";
-  el.style.zIndex = String(WEB_SURFACE_PLANE.overlay);
   return el;
 }
-
-export const WEB_SURFACE_PLANE = {
-  browser: 0,
-  overlay: 1,
-} as const;
 
 export const OVERLAY_Z = {
   floating: 10,
@@ -95,20 +89,12 @@ let webOverlayOrder = 0;
 let webOverlayListenersAttached = false;
 let webOverlayFocusCheckQueued = false;
 
-interface RemoveWebOverlayOptions {
-  restoreFocus?: boolean;
-}
-
 function getTopWebOverlay(): WebOverlayEntry | undefined {
   return webOverlayEntries.reduce<WebOverlayEntry | undefined>((top, entry) => {
     if (!top) return entry;
     const layerDifference = entry.getLayer() - top.getLayer();
     return layerDifference > 0 || (layerDifference === 0 && entry.order > top.order) ? entry : top;
   }, undefined);
-}
-
-export function hasActiveWebOverlay(): boolean {
-  return getTopWebOverlay() !== undefined;
 }
 
 function getFocusableElements(scope: HTMLElement): HTMLElement[] {
@@ -229,6 +215,10 @@ function addWebOverlay(entry: WebOverlayEntry): (options?: RemoveWebOverlayOptio
   };
 }
 
+interface RemoveWebOverlayOptions {
+  restoreFocus?: boolean;
+}
+
 interface WebOverlayRegistration {
   active: boolean;
   layer: number;
@@ -254,7 +244,6 @@ export function useWebOverlayRegistration({
   const capturedRestoreFocusRef = useRef<HTMLElement | null>(null);
   const removeEntryRef = useRef<((options?: RemoveWebOverlayOptions) => void) | null>(null);
   const detachedRemoveEntryRef = useRef<((options?: RemoveWebOverlayOptions) => void) | null>(null);
-  const registeredRef = useRef(false);
   const activeRef = useRef(active);
   const wasActiveRef = useRef(false);
 
@@ -280,19 +269,17 @@ export function useWebOverlayRegistration({
       typeof document !== "undefined";
     if (!shouldRegister) {
       const shouldRestoreFocus = !activeRef.current;
-      if (registeredRef.current || shouldRestoreFocus) {
+      if (removeEntryRef.current || shouldRestoreFocus) {
         removeEntryRef.current?.({ restoreFocus: shouldRestoreFocus });
       }
-      registeredRef.current = false;
+      removeEntryRef.current = null;
       if (shouldRestoreFocus) {
-        removeEntryRef.current = null;
         detachedRemoveEntryRef.current = null;
       }
       return;
     }
-    if (registeredRef.current) return;
+    if (removeEntryRef.current) return;
 
-    detachedRemoveEntryRef.current = null;
     const entry: WebOverlayEntry = {
       id: idRef.current,
       order: ++webOverlayOrder,
@@ -302,7 +289,6 @@ export function useWebOverlayRegistration({
       restoreFocus: capturedRestoreFocusRef.current,
     };
     removeEntryRef.current = addWebOverlay(entry);
-    registeredRef.current = true;
   }, []);
 
   const setScope = useCallback(
@@ -314,7 +300,6 @@ export function useWebOverlayRegistration({
         removeEntry?.({ restoreFocus: false });
         detachedRemoveEntryRef.current = removeEntry;
         removeEntryRef.current = null;
-        registeredRef.current = false;
       }
       // Host refs attach before descendant layout effects and autofocus. Register
       // here so the previous overlay cannot redirect that pending focus.
@@ -330,7 +315,6 @@ export function useWebOverlayRegistration({
       removeEntry?.();
       removeEntryRef.current = null;
       detachedRemoveEntryRef.current = null;
-      registeredRef.current = false;
     };
   }, [active, syncRegistration]);
 

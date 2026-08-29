@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AgentProvider } from "@getpaseo/protocol/agent-types";
+import type { AgentProvider } from "@bytetrue/byspace-protocol/agent-types";
 
 const featureValuesSchema = z.record(z.string(), z.union([z.boolean(), z.string(), z.null()]));
 
@@ -35,7 +35,7 @@ const launchTargetSchema: z.ZodType<LaunchTarget> = z.discriminatedUnion("kind",
 export const FormPreferencesSchema = z.strictObject({
   provider: z.string().optional(),
   providerPreferences: z.record(z.string(), providerPreferencesSchema).optional(),
-  // COMPAT(agentProfileFavoriteMigration): favourites were removed in v0.3.2.
+  // COMPAT(agentProfileFavoriteMigration): favourites were superseded in v0.6.0; remove after 2027-02-21.
   // Keep the legacy payload alive until every capable host has had a chance to
   // import it; ordinary preference writes must not erase it first.
   favoriteModels: z
@@ -47,8 +47,6 @@ export const FormPreferencesSchema = z.strictObject({
     )
     .optional(),
   isolation: z.enum(["local", "worktree"]).optional(),
-  // What the New workspace composer submits to: the chat agent (default) or a
-  // terminal profile. See `@/new-workspace-launch` for resolution/fallback.
   launchTarget: launchTargetSchema.optional(),
 }) satisfies z.ZodType<FormPreferences>;
 

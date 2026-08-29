@@ -71,78 +71,41 @@ describe("draft-store lifecycle", () => {
 });
 
 describe("draft-store normalization", () => {
-  it("preserves plugin resources when hydrating a draft", () => {
-    const attachment = {
-      kind: "plugin_resource" as const,
-      pluginId: "linear",
-      sourceId: "issues",
-      sourceTitle: "Linear issue",
-      sourceIcon: "CircleDot",
-      item: {
-        id: "issue-uuid",
-        identifier: "ENG-123",
-        title: "Plugin attachments",
-        subtitle: "In progress",
-        url: "https://linear.app/acme/issue/ENG-123/plugin-attachments",
-        text: "Linear issue ENG-123: Plugin attachments",
-        resourceType: "issue",
+  it("preserves uploaded-file and workspace-file attachments when hydrating a draft", () => {
+    const attachments = [
+      {
+        kind: "file" as const,
+        attachment: {
+          type: "uploaded_file" as const,
+          id: "upload-1",
+          fileName: "notes.txt",
+          mimeType: "text/plain",
+          size: 12,
+          path: "/tmp/notes.txt",
+        },
       },
-    };
-
-    expect(
-      toDraftInputIfReady({
-        input: { text: "Implement this", attachments: [attachment] },
-        lifecycle: "active",
-        updatedAt: 1,
-        version: 1,
-      }),
-    ).toEqual({ text: "Implement this", attachments: [attachment] });
-  });
-
-  it("preserves uploaded file attachments when hydrating a draft", () => {
-    const attachment = {
-      kind: "file" as const,
-      attachment: {
-        type: "uploaded_file" as const,
-        id: "file-1",
-        fileName: "context.json",
-        mimeType: "application/json",
-        size: 42,
-        path: "/tmp/context.json",
+      {
+        kind: "workspace_file" as const,
+        path: "src/index.ts",
+        selection: { kind: "whole_file" as const },
       },
-    };
+    ];
 
     expect(
       toDraftInputIfReady({
-        input: { text: "Review this", attachments: [attachment] },
+        input: { text: "Review these", attachments },
         lifecycle: "active",
         updatedAt: 1,
         version: 1,
       }),
-    ).toEqual({ text: "Review this", attachments: [attachment] });
-  });
-
-  it("preserves workspace file selections when hydrating a draft", () => {
-    const attachment = {
-      kind: "workspace_file" as const,
-      path: "src/app.ts",
-      selection: { kind: "line_range" as const, startLine: 12, endLine: 24 },
-    };
-
-    expect(
-      toDraftInputIfReady({
-        input: { text: "Review this", attachments: [attachment] },
-        lifecycle: "active",
-        updatedAt: 1,
-        version: 1,
-      }),
-    ).toEqual({ text: "Review this", attachments: [attachment] });
+    ).toEqual({ text: "Review these", attachments });
   });
 
   it("preserves New Workspace picker ownership when hydrating a draft", () => {
     const pickerAttachment = {
       kind: "github_pr" as const,
       owner: "new-workspace-picker" as const,
+      ownerTargetId: "server-a\u0000project-a\u0000/repo-a",
       item: {
         kind: "change_request" as const,
         number: 202,

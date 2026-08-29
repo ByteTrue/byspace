@@ -4,14 +4,8 @@ import type { Logger } from "pino";
 import { spawnProcess } from "../../../utils/spawn.js";
 import { terminateWithTreeKill } from "../../../utils/tree-kill.js";
 
-/** Default wall-clock timeout for control-plane / short RPC calls. */
 export const JSONL_RPC_DEFAULT_TIMEOUT_MS = 30_000;
-/**
- * Pass as `timeoutMs` to wait only for a response, process death, or `close()`.
- * Use for long-running blocking RPCs (e.g. LLM-backed compact).
- */
 export const JSONL_RPC_NO_TIMEOUT = null;
-
 const STDERR_BUFFER_LIMIT = 8192;
 const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 2_000;
 const FORCE_SHUTDOWN_TIMEOUT_MS = 1_000;
@@ -486,10 +480,6 @@ export class JsonlRpcProcess {
   }
 }
 
-/**
- * Schedule a request timeout, or return null when the call should wait
- * indefinitely for a response, process exit, or close().
- */
 function createRequestTimeout(
   timeoutMs: number | null,
   onTimeout: () => void,

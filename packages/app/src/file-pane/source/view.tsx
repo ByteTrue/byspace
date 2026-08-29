@@ -1,1 +1,1 @@
-export { FileSourceView } from "./view.native";
+export { FileSourceView } from "./view.web";

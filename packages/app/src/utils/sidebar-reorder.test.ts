@@ -32,13 +32,34 @@ describe("hasVisibleOrderChanged", () => {
 });
 
 describe("mergeWithRemainder", () => {
-  it("appends non-visible stored keys after reordered visible keys", () => {
+  it("reorders visible keys without moving hidden keys from their slots", () => {
     expect(
       mergeWithRemainder({
         currentOrder: ["a", "x", "b", "y"],
         reorderedVisibleKeys: ["b", "a"],
       }),
-    ).toEqual(["b", "a", "x", "y"]);
+    ).toEqual(["b", "x", "a", "y"]);
+  });
+
+  it("preserves the complete hidden tail when a limited 20-item group is reordered", () => {
+    const currentOrder = Array.from({ length: 25 }, (_, index) => `workspace-${index + 1}`);
+    const reorderedVisibleKeys = [...currentOrder.slice(19, 20), ...currentOrder.slice(0, 19)];
+
+    expect(
+      mergeWithRemainder({
+        currentOrder,
+        reorderedVisibleKeys,
+      }),
+    ).toEqual([currentOrder[19], ...currentOrder.slice(0, 19), ...currentOrder.slice(20)]);
+  });
+
+  it("preserves interleaved quiet workspace positions in an attention-only reorder", () => {
+    expect(
+      mergeWithRemainder({
+        currentOrder: ["quiet-a", "attention-b", "quiet-c", "attention-d"],
+        reorderedVisibleKeys: ["attention-d", "attention-b"],
+      }),
+    ).toEqual(["quiet-a", "attention-d", "quiet-c", "attention-b"]);
   });
 
   it("keeps unknown current keys when no visible keys are reordered", () => {

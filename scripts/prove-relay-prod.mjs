@@ -20,31 +20,44 @@ function parseArgs(argv) {
 
 const args = parseArgs(process.argv);
 
-const serverId = args["server-id"] ?? process.env.PASEO_SERVER_ID;
-const daemonPublicKeyB64 = args["daemon-public-key-b64"] ?? process.env.PASEO_DAEMON_PUBLIC_KEY_B64;
+const serverId = args["server-id"] ?? process.env.BYSPACE_SERVER_ID;
+const daemonPublicKeyB64 =
+  args["daemon-public-key-b64"] ?? process.env.BYSPACE_DAEMON_PUBLIC_KEY_B64;
 const relayEndpoint =
-  args["relay-endpoint"] ?? process.env.PASEO_RELAY_ENDPOINT ?? "relay.paseo.sh:443";
-const baseUrl = args["base-url"] ?? process.env.PASEO_APP_URL ?? "https://app.paseo.sh";
-const timeoutMs = Number(args["timeout-ms"] ?? process.env.PASEO_PROVE_TIMEOUT_MS ?? 60_000);
-const stabilityMs = Number(args["stability-ms"] ?? process.env.PASEO_PROVE_STABILITY_MS ?? 30_000);
+  args["relay-endpoint"] ?? process.env.BYSPACE_RELAY_ENDPOINT ?? "relay.byspace.cc.cd:443";
+const baseUrl = args["base-url"] ?? process.env.BYSPACE_APP_URL ?? "https://app.byspace.cc.cd";
+const expectedVersion = args["expected-version"] ?? process.env.BYSPACE_EXPECTED_VERSION;
+const timeoutMs = Number(args["timeout-ms"] ?? process.env.BYSPACE_PROVE_TIMEOUT_MS ?? 60_000);
+const stabilityMs = Number(
+  args["stability-ms"] ?? process.env.BYSPACE_PROVE_STABILITY_MS ?? 30_000,
+);
 
 if (!serverId || typeof serverId !== "string") {
-  console.error("Missing server ID. Provide --server-id or PASEO_SERVER_ID.");
+  console.error("Missing server ID. Provide --server-id or BYSPACE_SERVER_ID.");
   process.exit(2);
 }
 if (!daemonPublicKeyB64 || typeof daemonPublicKeyB64 !== "string") {
   console.error(
-    "Missing daemon public key. Provide --daemon-public-key-b64 or PASEO_DAEMON_PUBLIC_KEY_B64.",
+    "Missing daemon public key. Provide --daemon-public-key-b64 or BYSPACE_DAEMON_PUBLIC_KEY_B64.",
   );
   process.exit(2);
 }
 
 const nowIso = new Date().toISOString();
+const relayConnectionId = `relay:wss:${relayEndpoint}`;
 const daemon = {
   serverId,
   label: "relay-daemon",
-  connections: [{ id: `relay:${relayEndpoint}`, type: "relay", relayEndpoint, daemonPublicKeyB64 }],
-  preferredConnectionId: `relay:${relayEndpoint}`,
+  connections: [
+    {
+      id: relayConnectionId,
+      type: "relay",
+      relayEndpoint,
+      useTls: true,
+      daemonPublicKeyB64,
+    },
+  ],
+  preferredConnectionId: relayConnectionId,
   createdAt: nowIso,
   updatedAt: nowIso,
 };
@@ -58,22 +71,29 @@ page.on("pageerror", (e) => console.error(`[browser:pageerror] ${e.message}`));
 
 await page.addInitScript(
   (seed) => {
-    localStorage.setItem("@paseo:daemon-registry", JSON.stringify([seed.daemon]));
-    localStorage.removeItem("@paseo:settings");
+    localStorage.setItem("@byspace:daemon-registry", JSON.stringify([seed.daemon]));
+    localStorage.setItem("@byspace:e2e", "1");
+    localStorage.removeItem("@byspace:settings");
   },
   { daemon },
 );
 
-await page.goto(`${baseUrl}/settings`, { waitUntil: "domcontentloaded", timeout: timeoutMs });
+await page.goto(`${baseUrl}/settings/hosts/${encodeURIComponent(serverId)}/host`, {
+  waitUntil: "domcontentloaded",
+  timeout: timeoutMs,
+});
 
-const card = page.getByTestId(`daemon-card-${serverId}`);
-await card.waitFor({ timeout: timeoutMs });
-await card.getByText("Online", { exact: true }).waitFor({ timeout: timeoutMs });
-await card.getByText("Relay", { exact: true }).waitFor({ timeout: timeoutMs });
+const identity = page.getByTestId("host-page-identity");
+await identity.waitFor({ timeout: timeoutMs });
+await identity.getByText("Online", { exact: true }).waitFor({ timeout: timeoutMs });
+await identity.getByText("Relay", { exact: true }).waitFor({ timeout: timeoutMs });
+if (expectedVersion) {
+  await identity.getByText(`v${expectedVersion}`, { exact: true }).waitFor({ timeout: timeoutMs });
+}
 
 // Stability window: ensure it doesn't flap.
 await page.waitForTimeout(stabilityMs);
-await card.getByText("Online", { exact: true }).waitFor({ timeout: 5_000 });
+await identity.getByText("Online", { exact: true }).waitFor({ timeout: 5_000 });
 
 console.log(
   JSON.stringify(

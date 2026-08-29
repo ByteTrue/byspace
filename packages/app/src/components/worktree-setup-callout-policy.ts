@@ -1,4 +1,4 @@
-import type { PaseoConfigRaw } from "@getpaseo/protocol/messages";
+import type { BySpaceConfigRaw } from "@bytetrue/byspace-protocol/messages";
 import { i18n } from "@/i18n/i18next";
 import { buildProjectSettingsRoute } from "@/utils/host-routes";
 
@@ -6,17 +6,23 @@ export interface WorktreeSetupWorkspaceInput {
   projectId: string;
   projectKind: string;
   projectRootPath: string;
+  project?: {
+    projectKey?: string | null;
+    checkout?: {
+      mainRepoRoot?: string | null;
+    } | null;
+  } | null;
 }
 
 export interface ActiveGitWorkspaceProject {
   serverId: string;
-  projectId: string;
+  projectKey: string;
   repoRoot: string;
 }
 
 interface ReadProjectConfigResult {
   ok: boolean;
-  config?: PaseoConfigRaw | null;
+  config?: BySpaceConfigRaw | null;
 }
 
 export interface WorktreeSetupCalloutPolicy {
@@ -33,18 +39,23 @@ export interface WorktreeSetupCalloutPolicy {
 export function selectActiveGitWorkspaceProject(
   serverId: string,
   workspace: WorktreeSetupWorkspaceInput,
+  resolvedProjectKey?: string,
 ): ActiveGitWorkspaceProject | null {
   if (workspace.projectKind !== "git") {
     return null;
   }
 
-  const projectId = workspace.projectId;
-  const repoRoot = workspace.projectRootPath.trim();
-  if (!projectId.trim() || !repoRoot) {
+  const projectKey = (
+    resolvedProjectKey ??
+    workspace.project?.projectKey ??
+    workspace.projectId
+  ).trim();
+  const repoRoot = (workspace.project?.checkout?.mainRepoRoot ?? workspace.projectRootPath).trim();
+  if (!projectKey || !repoRoot) {
     return null;
   }
 
-  return { serverId, projectId, repoRoot };
+  return { serverId, projectKey, repoRoot };
 }
 
 export function shouldShowWorktreeSetupCallout(readResult: ReadProjectConfigResult | undefined) {
@@ -54,7 +65,7 @@ export function shouldShowWorktreeSetupCallout(readResult: ReadProjectConfigResu
 export function buildWorktreeSetupCalloutPolicy(
   project: ActiveGitWorkspaceProject,
 ): WorktreeSetupCalloutPolicy {
-  const calloutKey = `worktree-setup-missing:${project.serverId}:${project.projectId}`;
+  const calloutKey = `worktree-setup-missing:${project.projectKey}`;
 
   return {
     id: calloutKey,
@@ -63,12 +74,12 @@ export function buildWorktreeSetupCalloutPolicy(
     title: i18n.t("sidebar.worktreeSetup.title"),
     description: i18n.t("sidebar.worktreeSetup.description"),
     actionLabel: i18n.t("sidebar.worktreeSetup.openProjectSettings"),
-    projectSettingsRoute: buildProjectSettingsRoute(project.serverId, project.projectId),
-    testID: `worktree-setup-callout-${project.projectId}`,
+    projectSettingsRoute: buildProjectSettingsRoute(project.projectKey),
+    testID: `worktree-setup-callout-${project.projectKey}`,
   };
 }
 
-function hasSetupCommands(config: PaseoConfigRaw): boolean {
+function hasSetupCommands(config: BySpaceConfigRaw): boolean {
   const setup = config.worktree?.setup;
   if (typeof setup === "string") {
     return setup.trim().length > 0;

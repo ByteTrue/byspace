@@ -83,7 +83,7 @@ function createWorkspaceRuntimeSnapshot(
       mainRepoRoot: null,
       currentBranch: "main",
       remoteUrl: "https://github.com/acme/repo.git",
-      isPaseoOwnedWorktree: false,
+      isBySpaceOwnedWorktree: false,
       isDirty: false,
       baseRef: "main",
       aheadBehind: { ahead: 0, behind: 0 },
@@ -138,9 +138,6 @@ function createSessionForWorkspaceGitWatchTests(options?: {
     registerWorkspace: ReturnType<typeof vi.fn>;
     peekSnapshot: ReturnType<typeof vi.fn>;
     getSnapshot: ReturnType<typeof vi.fn>;
-    refresh: ReturnType<typeof vi.fn>;
-    requestWorkingTreeWatch: ReturnType<typeof vi.fn>;
-    scheduleRefreshForCwd: ReturnType<typeof vi.fn>;
     dispose: ReturnType<typeof vi.fn>;
   };
   subscriptions: Array<{
@@ -180,23 +177,16 @@ function createSessionForWorkspaceGitWatchTests(options?: {
     }),
     peekSnapshot: vi.fn((cwd: string) => createWorkspaceRuntimeSnapshot(cwd)),
     getSnapshot: vi.fn(async (cwd: string) => createWorkspaceRuntimeSnapshot(cwd)),
-    refresh: vi.fn(async () => {}),
-    requestWorkingTreeWatch: vi.fn(async (cwd: string) => ({
-      repoRoot: cwd,
-      unsubscribe: vi.fn(),
-    })),
-    scheduleRefreshForCwd: vi.fn(),
     dispose: vi.fn(),
   };
 
   const session = new Session({
     clientId: "test-client",
-    scopes: ["*"],
     onMessage: (message) => emitted.push(message as { type: string; payload: unknown }),
     logger: createStub<pino.Logger>(logger),
     downloadTokenStore: createStub<SessionOptions["downloadTokenStore"]>({}),
-    pushNotifications: createStub<SessionOptions["pushNotifications"]>({}),
-    paseoHome: "/tmp/paseo-test",
+    pushTokenStore: createStub<SessionOptions["pushTokenStore"]>({}),
+    byspaceHome: "/tmp/byspace-test",
     agentManager: createStub<SessionOptions["agentManager"]>({
       subscribe: () => () => {},
       listAgents: () => [],
@@ -207,7 +197,6 @@ function createSessionForWorkspaceGitWatchTests(options?: {
       get: async () => null,
     }),
     projectRegistry: createStub<SessionOptions["projectRegistry"]>({
-      subscribeToMutations: () => () => {},
       initialize: async () => {},
       existsOnDisk: async () => true,
       list: async () => Array.from(projects.values()),
@@ -223,9 +212,9 @@ function createSessionForWorkspaceGitWatchTests(options?: {
       remove: async (projectId: string) => {
         projects.delete(projectId);
       },
+      subscribeToMutations: () => () => {},
     }),
     workspaceRegistry: createStub<SessionOptions["workspaceRegistry"]>({
-      subscribeToMutations: () => () => {},
       initialize: async () => {},
       existsOnDisk: async () => true,
       list: async () => Array.from(workspaces.values()),
@@ -241,6 +230,7 @@ function createSessionForWorkspaceGitWatchTests(options?: {
       remove: async (workspaceId: string) => {
         workspaces.delete(workspaceId);
       },
+      subscribeToMutations: () => () => {},
     }),
     checkoutDiffManager: createStub<SessionOptions["checkoutDiffManager"]>({
       subscribe: async () => ({
@@ -248,8 +238,6 @@ function createSessionForWorkspaceGitWatchTests(options?: {
         unsubscribe: () => {},
       }),
       scheduleRefreshForCwd: () => {},
-      onWorkspaceStateMayHaveChanged: () => {},
-      invalidateForge: () => {},
       getMetrics: () => ({
         checkoutDiffTargetCount: 0,
         checkoutDiffSubscriptionCount: 0,
@@ -267,7 +255,7 @@ function createSessionForWorkspaceGitWatchTests(options?: {
     serviceProxy: options?.serviceProxy,
     scriptRuntimeStore: options?.scriptRuntimeStore,
     onBranchChanged: options?.onBranchChanged,
-    getDaemonTcpPort: () => 6767,
+    getDaemonTcpPort: () => 6777,
   });
 
   asInternals<SessionInternals>(session).listAgentPayloads = async () => [];
@@ -439,7 +427,7 @@ describe("workspace git watch targets", () => {
       behindOfOrigin: 1,
       hasRemote: true,
       remoteUrl: "https://github.com/acme/repo.git",
-      isPaseoOwnedWorktree: false,
+      isBySpaceOwnedWorktree: false,
       error: null,
       requestId: REPO_SUBSCRIPTION_REQUEST_ID,
     });
@@ -456,7 +444,7 @@ describe("workspace git watch targets", () => {
     serviceProxy.registerWorkspaceService({
       port: 4321,
       workspaceId: "ws-10",
-      projectSlug: "paseo",
+      projectSlug: "byspace",
       branchName: "old-branch",
       scriptName: "app",
     });
@@ -490,7 +478,7 @@ describe("workspace git watch targets", () => {
       name: "old-branch",
     });
 
-    await session.syncWorkspaceGitObserversForExternalWorkspaceIds(["ws-10"]);
+    syncGitObserver(session, "/tmp/repo", "ws-10");
 
     subscriptions[0]?.listener(
       createWorkspaceRuntimeSnapshot("/tmp/repo", {
@@ -502,10 +490,11 @@ describe("workspace git watch targets", () => {
 
     expect(serviceProxy.getWorkspaceHealthTargets("ws-10")).toEqual([
       expect.objectContaining({
-        hostname: "app--new-branch--paseo.localhost",
+        hostname: "app--new-branch--byspace.localhost",
         scriptName: "app",
       }),
     ]);
+
     await session.cleanup();
   });
 
@@ -541,7 +530,7 @@ describe("workspace git watch targets", () => {
     await session.cleanup();
   });
 
-  test("archiving a workspace releases its git watch subscription for the directory", async () => {
+  test("archiving a workspace releases its git subscription for the directory", async () => {
     const { session, projects, workspaces, subscriptions } =
       createSessionForWorkspaceGitWatchTests();
     const sessionAny = asInternals<
@@ -774,7 +763,6 @@ describe("workspace git watch targets", () => {
       requestId: "req-pr-cached",
     });
 
-    expect(workspaceGitService.refresh).not.toHaveBeenCalled();
     expect(workspaceGitService.getSnapshot).toHaveBeenCalledWith(REPO_CWD);
     expect(emitted.find((message) => message.type === "checkout_pr_status_response")).toBeDefined();
   });

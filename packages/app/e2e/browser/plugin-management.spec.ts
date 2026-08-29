@@ -1,15 +1,11 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { expect, test, type Page } from "../support/fixtures";
-import { gotoAppShell, openSettings } from "../support/helpers/app";
-import { getServerId } from "../support/helpers/server-id";
-import { connectNewWorkspaceDaemonClient } from "../support/helpers/new-workspace";
-import {
-  expectSettingsHeader,
-  openHostSection,
-  openSettingsHost,
-} from "../support/helpers/settings";
+import { expect, test, type Page } from "../fixtures";
+import { gotoAppShell, openSettings } from "../helpers/app";
+import { getServerId } from "../helpers/server-id";
+import { connectNewWorkspaceDaemonClient } from "../helpers/new-workspace";
+import { expectSettingsHeader, openHostSection, openSettingsHost } from "../helpers/settings";
 
 function observePluginCatalog(page: Page) {
   let responses = 0;
@@ -41,7 +37,7 @@ import { Text } from "react-native";
 export default function contribute(plugin) {
   function Surface() {
     ${renderError ? `throw new Error(${JSON.stringify(renderError)});` : ""}
-    const cleanups = Number(globalThis.sessionStorage?.getItem("paseo-plugin-cleanups") || "0");
+    const cleanups = Number(globalThis.sessionStorage?.getItem("byspace-plugin-cleanups") || "0");
     return <Text>${title} cleanup {cleanups}</Text>;
   }
   plugin.addSurface("main", Surface);
@@ -56,8 +52,8 @@ export default function contribute(plugin) {
   return () => {
     const storage = globalThis.sessionStorage;
     if (storage) {
-      const cleanups = Number(storage.getItem("paseo-plugin-cleanups") || "0");
-      storage.setItem("paseo-plugin-cleanups", String(cleanups + 1));
+      const cleanups = Number(storage.getItem("byspace-plugin-cleanups") || "0");
+      storage.setItem("byspace-plugin-cleanups", String(cleanups + 1));
     }
   };
 }`;
@@ -117,10 +113,13 @@ async function expectContributionRemoved(page: Page, title: string): Promise<voi
 test("installs, reloads, recovers, disables, and removes a trusted local plugin", async ({
   page,
 }) => {
-  const directory = await mkdtemp(path.join(tmpdir(), "paseo-plugin-e2e-"));
-  const client = await connectNewWorkspaceDaemonClient({ ownProjects: false });
+  const directory = await mkdtemp(path.join(tmpdir(), "byspace-plugin-e2e-"));
+  const client = await connectNewWorkspaceDaemonClient();
   const previous = await client.getDaemonConfig();
-  await writeFile(path.join(directory, "paseo-plugin.json"), JSON.stringify({ id: "e2e-plugin" }));
+  await writeFile(
+    path.join(directory, "byspace-plugin.json"),
+    JSON.stringify({ id: "e2e-plugin" }),
+  );
   await writeFile(path.join(directory, "index.tsx"), pluginSource("Plugin v1"));
 
   try {

@@ -1,4 +1,4 @@
-import type { SubscribeCheckoutDiffResponse } from "@getpaseo/protocol/messages";
+import type { SubscribeCheckoutDiffResponse } from "@bytetrue/byspace-protocol/messages";
 
 type ParsedDiffFile = SubscribeCheckoutDiffResponse["payload"]["files"][number];
 

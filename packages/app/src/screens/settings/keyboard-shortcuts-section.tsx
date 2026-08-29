@@ -31,9 +31,6 @@ import {
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { getShortcutOs } from "@/utils/shortcut-platform";
-import { getIsElectronRuntime } from "@/constants/layout";
-import { isNative } from "@/constants/platform";
-import { getDesktopHost } from "@/desktop/host";
 
 const EMPTY_CAPTURED_COMBOS: string[] = [];
 
@@ -331,12 +328,10 @@ export function KeyboardShortcutsSection() {
   const { overrides, hasOverrides, setOverride, clearOverride, removeOverride, resetAll } =
     useKeyboardShortcutOverrides();
   const setCapturingShortcut = useKeyboardShortcutsStore((s) => s.setCapturingShortcut);
-  const capturing = useKeyboardShortcutsStore((s) => s.capturingShortcut);
 
   const isFocused = useIsFocused();
   const isMac = getShortcutOs() === "mac";
-  const isDesktopApp = getIsElectronRuntime();
-  const sections = buildKeyboardShortcutHelpSections({ isMac, isDesktop: isDesktopApp });
+  const sections = buildKeyboardShortcutHelpSections({ isMac, isDesktop: false });
 
   const cancelCapture = useCallback(() => {
     setCapturedCombos([]);
@@ -370,7 +365,6 @@ export function KeyboardShortcutsSection() {
   }, [isFocused, capturingBindingId, cancelCapture]);
 
   useEffect(() => {
-    if (isNative) return;
     if (capturingBindingId === null) return;
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -405,17 +399,6 @@ export function KeyboardShortcutsSection() {
     };
   }, [setCapturingShortcut]);
 
-  // Suppress desktop zoom accelerators while capturing so combos like Cmd+- are
-  // recorded instead of zooming the window. No-op outside Electron.
-  useEffect(() => {
-    if (isNative || !capturing) return;
-    const menu = getDesktopHost()?.menu;
-    void menu?.setCapturingShortcut?.(true);
-    return () => {
-      void menu?.setCapturingShortcut?.(false);
-    };
-  }, [capturing]);
-
   const handleResetAll = useCallback(() => void resetAll(), [resetAll]);
   const handleClearOverride = useCallback(
     (bindingId: string) => void clearOverride(bindingId),
@@ -425,16 +408,6 @@ export function KeyboardShortcutsSection() {
     (bindingId: string) => void removeOverride(bindingId),
     [removeOverride],
   );
-
-  if (isNative) {
-    return (
-      <SettingsSection title={t("settings.sections.shortcuts")}>
-        <View style={[settingsStyles.card, styles.mobileCard]}>
-          <Text style={styles.mobileText}>{t("settings.shortcuts.unavailableOnMobile")}</Text>
-        </View>
-      </SettingsSection>
-    );
-  }
 
   const resetAllButton = hasOverrides ? (
     <Button variant="ghost" size="sm" onPress={handleResetAll}>
@@ -453,13 +426,10 @@ export function KeyboardShortcutsSection() {
           >
             <View style={settingsStyles.card}>
               {section.rows.map(function (row, index) {
-                const platform = { isMac, isDesktop: isDesktopApp };
+                const platform = { isMac, isDesktop: false };
                 const bindingId = getBindingIdForAction(row.id, platform);
                 const displayChord = resolveShortcutKeysForAction(row.id, overrides, platform);
-                // `in`, not a truthiness check: an unassigned shortcut stores
-                // null, and Reset has to stay available to undo it.
                 const hasOverride = bindingId !== null && bindingId in overrides;
-                // A binding authored with `combo: ""` has nothing to reset to.
                 const hasDefault = getDefaultKeysForAction(row.id, platform) !== null;
 
                 return (

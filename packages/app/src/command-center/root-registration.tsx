@@ -13,11 +13,9 @@ import {
   Settings,
 } from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
-import { getIsElectronRuntime } from "@/constants/layout";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
-import { useKeyboardShortcutsAvailable } from "@/keyboard/availability";
 import { resolveShortcutKeysForAction } from "@/keyboard/keyboard-shortcuts";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
@@ -95,23 +93,20 @@ export function CommandCenterRootActions() {
   const keyboardActionDispatcher = useKeyboardActionDispatcher();
   const { t } = useTranslation();
   const { overrides } = useKeyboardShortcutOverrides();
-  const shortcutsAvailable = useKeyboardShortcutsAvailable();
   const openAddProject = useOpenAddProject();
   const settingsRoute = useMemo<Href>(() => buildSettingsRoute(), []);
   const homeRoute = useMemo<Href>(() => buildOpenProjectRoute(), []);
   const sessionsRoute = useMemo<Href>(() => buildSessionsRoute(), []);
   const schedulesRoute = useMemo<Href>(() => buildSchedulesRoute(), []);
   const setShortcutsDialogOpen = useKeyboardShortcutsStore((state) => state.setShortcutsDialogOpen);
-  // Narrow selector on purpose: a whole-store subscription would re-register every root action
-  // each time host filters are reconciled.
   const groupMode = useSidebarViewStore((state) => state.groupMode);
   const setGroupMode = useSidebarViewStore((state) => state.setGroupMode);
   const shortcutPlatform = useMemo(
-    () => ({ isMac: getShortcutOs() === "mac", isDesktop: getIsElectronRuntime() }),
+    () => ({ isMac: getShortcutOs() === "mac", isDesktop: true }),
     [],
   );
-  const actions = useMemo<CommandCenterContribution[]>(() => {
-    const availableActions: CommandCenterContribution[] = [
+  const actions = useMemo<CommandCenterContribution[]>(
+    () => [
       {
         id: "add-project",
         group: "actions",
@@ -227,10 +222,7 @@ export function CommandCenterRootActions() {
             undefined,
         },
       },
-    ];
-
-    if (shortcutsAvailable) {
-      availableActions.push({
+      {
         id: "keyboard-shortcuts",
         group: "actions",
         groupRank: 0,
@@ -247,10 +239,7 @@ export function CommandCenterRootActions() {
             resolveShortcutKeysForAction("show-shortcuts", overrides, shortcutPlatform) ??
             undefined,
         },
-      });
-    }
-
-    availableActions.push(
+      },
       buildGroupingContribution({
         groupMode,
         labels: {
@@ -261,24 +250,22 @@ export function CommandCenterRootActions() {
         icons: { project: FolderIcon, status: CircleDashedIcon },
         setGroupMode,
       }),
-    );
-
-    return availableActions;
-  }, [
-    groupMode,
-    homeRoute,
-    keyboardActionDispatcher,
-    openAddProject,
-    overrides,
-    schedulesRoute,
-    sessionsRoute,
-    setGroupMode,
-    setShortcutsDialogOpen,
-    settingsRoute,
-    shortcutPlatform,
-    shortcutsAvailable,
-    t,
-  ]);
+    ],
+    [
+      groupMode,
+      homeRoute,
+      keyboardActionDispatcher,
+      openAddProject,
+      overrides,
+      schedulesRoute,
+      sessionsRoute,
+      setGroupMode,
+      setShortcutsDialogOpen,
+      settingsRoute,
+      shortcutPlatform,
+      t,
+    ],
+  );
 
   useCommandCenterActions({ sourceId: "root", enabled: true, actions });
   return null;

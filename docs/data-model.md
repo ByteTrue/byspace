@@ -1,38 +1,8 @@
 # Data Model
 
-## Project identity
+BySpace uses **file-based JSON persistence** instead of a traditional database. All data is validated at runtime with Zod schemas. Most stores write atomically (write to temp file, then rename); a few still use plain `writeFile` — see each section. There is no schema-versioning/migration framework — schemas rely on optional fields with defaults for forward compatibility, with a small amount of inline normalization in `persisted-config.ts` for legacy provider/speech entries.
 
-Projects are allocated for the exact root selected by the caller, normalized lexically with `path.resolve` (never `realpath`). New project IDs are opaque `prj_<16 hex>` values. Existing remote-shaped or path-shaped IDs are retained as readable compatibility records and are never rekeyed. An active exact root is idempotent; archived-only matches do not resurrect an old project. Workspace `projectId` is stable membership: reconciliation may update git-derived kind and branch metadata, but never rehomes a workspace or changes a project's root, ID, or default name.
-
-`projectKey` is a persisted, opaque equivalence key used only to group the same logical project
-across hosts. It is separate from the host-local `projectId`; today's producer prefers a normalized
-Git remote and otherwise uses the local project root. Consumers never derive it from live Git.
-Creation persists it with the project, and normal boot reconciliation fills it for
-older records where the field is absent—there is no migration.
-
-`kind` and `projectKey` are mutable metadata, not identity. Workspace reconciliation watches active project roots and
-updates those fields and `updatedAt` when Git facts change, preserving the project's ID, root path,
-names, and workspace foreign keys. Attached workspaces are independently refreshed
-from their own cwd, so an explicit project root never implies a workspace checkout. Empty projects
-are observed too.
-
-The workspace registry model defines placement once: initial directory/worktree construction,
-mutable reconciliation fields, and the persisted-to-wire checkout projection. Its update policy
-preserves `displayName` and `baseBranch`. `WorkspaceProvisioningService` owns the corresponding
-registry writes, so directory opens, agent imports, and worktree creation all enter through that
-service instead of constructing records independently. The workspace record is then the durable
-placement authority: `cwd` is the exact execution directory, while `worktreeRoot` is the backing
-checkout root. They intentionally differ for an exact subproject inside a worktree. Archive,
-restore, branch auto-name, and descriptor flows consume those persisted facts rather than
-rediscovering ownership from a directory that may already be gone. Reconciliation may refresh
-mutable placement facts, but never changes `projectId`, `cwd`, `displayName`, or `baseBranch`.
-Workspace archive runs lifecycle teardown from the exact `cwd` but removes only the backing
-`worktreeRoot` after its last active reference disappears. Worktree recovery recreates that backing
-checkout from `mainRepoRoot`, then restores the relative path from `worktreeRoot` to `cwd`.
-
-Paseo uses **file-based JSON persistence** instead of a traditional database. All data is validated at runtime with Zod schemas. Most stores write atomically (write to temp file, then rename); a few still use plain `writeFile` — see each section. There is no schema-versioning/migration framework — schemas rely on optional fields with defaults for forward compatibility, with a small amount of inline normalization in `persisted-config.ts` for legacy provider/speech entries.
-
-All server-side stores live under `$PASEO_HOME` (defaults to `~/.paseo`).
+All server-side stores live under `$BYSPACE_HOME` (defaults to `~/.byspace`).
 
 ## Store Surface Rules
 
@@ -43,11 +13,12 @@ Store APIs own persistence atomicity and should not make services coordinate raw
 ## Directory layout
 
 ```
-$PASEO_HOME/
+$BYSPACE_HOME/
 ├── config.json                          # Daemon configuration
 ├── server-id                            # Stable daemon identifier (plain text, "srv_<base64url>")
 ├── daemon-keypair.json                  # E2EE keypair for relay (mode 0600)
-├── paseo.pid                            # Daemon PID lock file
+├── remote-web-services.json             # Source mappings and target authorization grants (mode 0600)
+├── byspace.pid                          # Daemon PID lock file
 ├── daemon.log                           # Default log file (path configurable)
 ├── agents/
 │   └── {sanitized-cwd}/
@@ -56,13 +27,10 @@ $PASEO_HOME/
 │   └── {scheduleId}.json                # One file per schedule
 ├── projects/
 │   ├── projects.json                    # Project registry
-│   ├── workspaces.json                  # Workspace registry
-│   ├── workspace-labels.json            # Shared host-local label catalog
-│   ├── workspace-labels.transaction.json # Recoverable catalog/assignment compound commit
-│   └── icons/                           # Host-local custom project icon images
+│   └── workspaces.json                  # Workspace registry
 ├── runtime/
 │   └── managed-processes/
-│       └── {recordId}.json              # Helper processes owned by Paseo; reconciled on daemon bootstrap
+│       └── {recordId}.json              # Helper processes owned by BySpace; reconciled on daemon bootstrap
 └── push-tokens.json                     # Expo push notification tokens
 ```
 
@@ -72,7 +40,7 @@ The `agents/{sanitized-cwd}/` directory name is derived from the agent's `cwd` b
 
 ## 1. Agent Record
 
-**Path:** `$PASEO_HOME/agents/{project-dir}/{agentId}.json`
+**Path:** `$BYSPACE_HOME/agents/{project-dir}/{agentId}.json`
 
 Each agent is stored as a separate JSON file, grouped by project directory.
 
@@ -87,8 +55,8 @@ Each agent is stored as a separate JSON file, grouped by project directory.
 | `lastActivityAt`     | `string?` (ISO 8601)                     | Last activity timestamp                                                                                                                                                                                                                                                                                                                                                             |
 | `lastUserMessageAt`  | `string?` (ISO 8601)                     | Last user message timestamp                                                                                                                                                                                                                                                                                                                                                         |
 | `title`              | `string?`                                | User-visible title                                                                                                                                                                                                                                                                                                                                                                  |
-| `labels`             | `Record<string, string>`                 | Key-value labels (default `{}`). Paseo uses `paseo.parent-agent-id` for parentage and client-scoped `paseo.open-agent-tab.*` labels while managed subagent tabs are open — see [agent-lifecycle.md](./agent-lifecycle.md)                                                                                                                                                           |
-| `lastStatus`         | `AgentStatus`                            | One of: `"initializing"`, `"idle"`, `"running"`, `"error"`, `"closed"`. `closed` means the record is resumable but has no live provider runtime; archive remains represented separately by `archivedAt`.                                                                                                                                                                            |
+| `labels`             | `Record<string, string>`                 | Key-value labels (default `{}`). `byspace.parent-agent-id` is set automatically for `create_agent` subagent relationships — see [agent-lifecycle.md](./agent-lifecycle.md)                                                                                                                                                                                                          |
+| `lastStatus`         | `AgentStatus`                            | One of: `"initializing"`, `"idle"`, `"running"`, `"error"`, `"closed"`                                                                                                                                                                                                                                                                                                              |
 | `lastModeId`         | `string?`                                | Last active mode ID                                                                                                                                                                                                                                                                                                                                                                 |
 | `config`             | `SerializableConfig?`                    | Agent session configuration (see below)                                                                                                                                                                                                                                                                                                                                             |
 | `runtimeInfo`        | `RuntimeInfo?`                           | Live runtime state (see below)                                                                                                                                                                                                                                                                                                                                                      |
@@ -173,7 +141,7 @@ Terminal activity contributes to the workspace status bucket **per `workspaceId`
 
 ## 2. Daemon Configuration
 
-**Path:** `$PASEO_HOME/config.json`
+**Path:** `$BYSPACE_HOME/config.json`
 
 Single file, validated with `PersistedConfigSchema`.
 
@@ -181,47 +149,27 @@ Single file, validated with `PersistedConfigSchema`.
 `{ mode: "all" }`. Installed state is not persisted; the daemon derives it from its three managed
 skill directories and keeps config plus filesystem convergence behind one serialized owner.
 
-`paseo reload` reads and validates this file once inside the daemon. That snapshot drives resolution,
-classification, application, and reload bookkeeping. `DaemonConfigStore` owns applying runtime-safe
-fields and their removal/default semantics; session handlers and the CLI only relay the structured
-result. Normal config patches persist only the requested fields, so launch overrides and resolved
-defaults never leak into the file. Startup-only fields remain compared with the daemon's launch
-snapshot so a mixed edit can apply its live subset and still name the paths that require restart.
-
 ```
 {
   version: 1,
   daemon: {
-    listen: "127.0.0.1:6767",
+    listen: "127.0.0.1:6777",
     hostnames: true | string[],   // legacy alias `allowedHosts` is migrated on load
     trustedProxies: true | string[], // defaults to ["loopback"]; Express proxy names/CIDRs
-    mcp: { enabled: boolean, injectIntoAgents: boolean },
-    git: { maxProcessesPerSecond: number, maxProcessConcurrency: number },
+    mcp: { enabled: boolean, injectIntoAgents: boolean }, // injectIntoAgents is a deprecated, ignored compatibility field
     appendSystemPrompt: string,    // appended to supported provider system/developer prompts
-    terminalProfiles: TerminalProfile[],  // named shell commands; omitted means DEFAULT_TERMINAL_PROFILES
-    agentProfiles: AgentProfile[],        // named agent launch bundles; omitted means none
     cors: { allowedOrigins: string[] },
-    relay: { enabled: boolean, endpoint: string, publicEndpoint: string, useTls: boolean, publicUseTls: boolean }, // new homes materialize enabled: false
+    relay: { enabled: boolean, endpoint: string, publicEndpoint: string, useTls: boolean, publicUseTls: boolean },
     auth: { password: string }    // bcrypt hash, optional
   },
   app: {
     baseUrl: string
   },
   worktrees?: {
-    root?: string            // optional root for new worktrees; defaults to $PASEO_HOME/worktrees
-    servicePorts?: {         // optional dynamic service port allocation policy
-      range?: string         // inclusive range, e.g. "3000-4000"
-      portScript?: string    // executable that receives service/workspace context and prints one TCP port
-    }
+    root?: string            // optional root for new worktrees; defaults to $BYSPACE_HOME/worktrees
   },
   providers: {
-    openai: {
-      apiKey?: string,
-      baseUrl?: string,
-      stt?: { apiKey?: string, baseUrl?: string },
-      tts?: { apiKey?: string, baseUrl?: string }
-    },
-    local: { modelsDir: string }
+    local: { modelsDir?: string }
   },
   agents: {
     skills?: {
@@ -235,11 +183,8 @@ snapshot so a mixed edit can apply its live subset and still name the paths that
       providers: [{ provider, model?, thinkingOptionId? }]
     }
   },
-  pluginsEnabled: boolean,
-  plugins: Record<pluginId, { source: "directory", path: string, enabled?: boolean }>,
   features: {
-    dictation: { enabled, stt: { provider, model, language, confidenceThreshold } },
-    voiceMode: { enabled, llm, stt: { provider, model, language }, turnDetection, tts: { provider, model, voice, speakerId, speed } }
+    dictation: { enabled?: boolean, refineWithAgent?: boolean, stt: { model?: string } }
   },
   log: {
     level, format,
@@ -249,101 +194,53 @@ snapshot so a mixed edit can apply its live subset and still name the paths that
 }
 ```
 
-All fields are optional with sensible defaults.
+All fields are optional. Dictation is local-only and starts unconfigured: the daemon does not
+download a model until a user chooses **Download and use** in that Host's settings. The selected
+model id is stored in `features.dictation.stt.model`; downloaded files live under
+`providers.local.modelsDir` or `$BYSPACE_HOME/models/local-speech`. Selection and model files are
+therefore Host-scoped, not browser-scoped.
 
-### Profile lists
+`agents.metadataGeneration.providers` controls the preferred structured-generation fallback order
+for daemon-side metadata tasks such as commit messages, PR text, branch names, and generated agent
+titles. Entries are tried first in the configured order, then BySpace falls through to dynamically
+discovered defaults and finally the current selection when available.
 
-`terminalProfiles` and `agentProfiles` are both whole-list fields: a config patch replaces the
-array, never merges entries, so a client sends the complete next list on every add, edit, reorder
-and remove. List order is the display order.
+The built-in speech catalog is an allowlist because each entry needs a verified download, checksum, license attribution, and native sherpa-onnx recognizer configuration. It contains `fire-red-asr2-aed-int8` for Mandarin-first quality and `sensevoice-small-int8` for a smaller/faster multilingual option. Dictation language is auto-detected by the selected model. No speech API keys or cloud endpoints are used.
 
-Absent and empty mean different things for terminal profiles — omitting the key falls back to
-`DEFAULT_TERMINAL_PROFILES`, while `[]` means the user removed them all. Agent profiles have no
-defaults, so both mean none.
+`features.dictation.refineWithAgent` defaults false. When enabled, final transcript text uses the same structured-generation provider resolution and non-persisted internal Agent path as titles and Git metadata. Audio is never sent to the provider. Provider failures fall back to the raw transcript, and the composer keeps both raw and refined drafts available until the user edits or sends.
 
-`PersistedConfigSchema` parses strictly, so a daemon that predates a field drops it on write
-rather than storing something it cannot describe. That is why the client gates the agent profiles
-UI on `server_info.features.agentProfiles` instead of letting a save appear to succeed against an
-older daemon.
+Relevant environment overrides are:
 
-### Git process limits
+| Env var                     | Applies to                           |
+| --------------------------- | ------------------------------------ |
+| `BYSPACE_DICTATION_ENABLED` | Enable or disable composer dictation |
+| `BYSPACE_LOCAL_MODELS_DIR`  | Host speech-model storage directory  |
 
-Git process limits are global to one daemon. The start-rate limit defaults to `64` processes per
-second, and the concurrency limit defaults to `8`:
+---
 
-```json
-{
-  "daemon": {
-    "git": {
-      "maxProcessesPerSecond": 64,
-      "maxProcessConcurrency": 8
-    }
-  }
-}
-```
+## Remote Web Services
 
-`maxProcessesPerSecond` limits Git process starts in any one-second interval. The allowance can
-start as a burst; it does not wait for earlier processes to exit. `maxProcessConcurrency` limits
-the number of Git processes that have started but not exited. Every Git command uses both limits,
-including initial workspace reads, filesystem-triggered refreshes, background checks, and explicit
-requests.
+**Path:** `$BYSPACE_HOME/remote-web-services.json` (mode `0600`)
 
-Environment variables override `config.json`:
+Each daemon owns this versioned file. On a source daemon, each mapping stores its stable local name
+and hostname, the target daemon ID and public key, the target loopback port, and its creation
+timestamp. On a target daemon, each authorization grant stores the source daemon public key,
+source-generated mapping ID, and exact loopback port. The source mapping is the authorization
+desired state: when the management UI loads mappings while both daemons are online, the Web app
+idempotently reconciles the exact target grant. This repairs indeterminate create responses and target reconnects. Removal revokes the target
+grant before deleting the source mapping.
 
-| Environment variable                 | Setting                  |
-| ------------------------------------ | ------------------------ |
-| `PASEO_GIT_MAX_PROCESSES_PER_SECOND` | `maxProcessesPerSecond`  |
-| `PASEO_GIT_MAX_PROCESS_CONCURRENCY`  | `maxProcessConcurrency`  |
-| `PASEO_GIT_CONCURRENCY`              | Legacy concurrency alias |
-
-`PASEO_GIT_MAX_PROCESS_CONCURRENCY` wins when it and the legacy alias are both set. Run `paseo reload`
-after changing `config.json`. Environment changes require a daemon restart; the launch environment
-remains authoritative during reload.
-
-`agents.metadataGeneration.providers` controls the preferred structured-generation fallback order for daemon-side metadata tasks such as commit messages, PR text, branch names, and generated agent titles. Entries are tried first in the configured order, then Paseo falls through to dynamically discovered defaults and finally the current selection when available.
-
-Local speech model ids are intentionally narrow: STT uses `parakeet-tdt-0.6b-v2-int8`, TTS uses `kokoro-en-v0_19`, and turn detection uses the bundled Silero VAD model.
-
-Set these to select OpenAI instead of local speech:
-
-| Env var                        | Applies to                      |
-| ------------------------------ | ------------------------------- |
-| `PASEO_VOICE_STT_PROVIDER`     | Voice mode STT provider         |
-| `PASEO_DICTATION_STT_PROVIDER` | Composer dictation STT provider |
-| `PASEO_VOICE_TTS_PROVIDER`     | Voice mode TTS provider         |
-
-OpenAI speech can be configured under `providers.openai`. STT and TTS resolve independently, so they can point at different endpoints:
-
-```json
-{
-  "providers": {
-    "openai": {
-      "stt": {
-        "apiKey": "sk-...",
-        "baseUrl": "https://stt.example.com/v1"
-      },
-      "tts": {
-        "apiKey": "sk-...",
-        "baseUrl": "https://api.openai.com/v1"
-      }
-    }
-  }
-}
-```
-
-`providers.openai.stt` is used for both composer dictation and voice mode speech-to-text; `providers.openai.tts` is used for voice mode text-to-speech. The equivalent env vars are `OPENAI_STT_API_KEY`/`OPENAI_STT_BASE_URL` and `OPENAI_TTS_API_KEY`/`OPENAI_TTS_BASE_URL`. Each feature falls back to `providers.openai.apiKey`/`providers.openai.baseUrl`, then `OPENAI_API_KEY`/`OPENAI_BASE_URL`, when its own fields are unset. These settings apply only to Paseo OpenAI speech features, not to Codex or other OpenAI-backed tools.
-
-Paseo uses these paths under the configured OpenAI base URL:
-
-- dictation STT: `/v1/audio/transcriptions`
-- voice mode STT: `/v1/audio/transcriptions`
-- voice mode TTS: `/v1/audio/speech`
+Relay endpoints and access tokens are runtime configuration and are never persisted here, so
+moving from a daemon-hosted Relay on a development machine to a VPS Relay changes neither mappings
+nor grants. The store validates daemon public keys, serializes mutations, and writes a new snapshot
+before changing in-memory state. Invalid or unreadable files fail startup for this subsystem instead
+of being treated as empty; this prevents a later mutation from silently replacing damaged state.
 
 ---
 
 ## 3. Schedule
 
-**Path:** `$PASEO_HOME/schedules/{id}.json`
+**Path:** `$BYSPACE_HOME/schedules/{id}.json`
 
 One file per schedule. ID is 8 hex characters.
 
@@ -366,13 +263,13 @@ One file per schedule. ID is 8 hex characters.
 
 ### Nested: ScheduleCadence (discriminated union on `type`)
 
-- `{ type: "cron", expression: string, timezone?: string }` — canonical cadence for new writes; absent `timezone` means UTC
-- `{ type: "every", everyMs: number }` — legacy rolling interval, still readable and executable during the compatibility window
+- `{ type: "every", everyMs: number }` — interval in milliseconds
+- `{ type: "cron", expression: string, timezone?: string }` — cron expression; absent `timezone` means UTC, present `timezone` is an IANA time zone used for local wall-clock recurrence
 
 ### Nested: ScheduleTarget (discriminated union on `type`)
 
 - `{ type: "agent", agentId: string }` — send to existing agent
-- `{ type: "new-agent", config: { provider, cwd, modeId?, model?, thinkingOptionId?, title?, providerOptions?, featureValues?, systemPrompt?, mcpServers? } }` — create a new agent
+- `{ type: "new-agent", config: { provider, cwd, modeId?, model?, thinkingOptionId?, title?, approvalPolicy?, sandboxMode?, networkAccess?, webSearch?, extra?, systemPrompt?, mcpServers? } }` — create a new agent
 
 ### Nested: ScheduleRun
 
@@ -389,92 +286,180 @@ One file per schedule. ID is 8 hex characters.
 
 ---
 
+## Removed legacy stores
+
+Chat rooms and Agent loops were removed from the runtime during the v0.4 upstream synchronization. Their structural wire schemas remain temporarily parseable for mixed-version compatibility, but current daemons do not create or read the following files. These record shapes are retained here only as historical reference until the compatibility schemas are removed.
+
+### Legacy Chat record
+
+**Former path:** `$BYSPACE_HOME/chat/rooms.json`
+
+```json
+{
+  "rooms": [ ... ],
+  "messages": [ ... ]
+}
+```
+
+### ChatRoom
+
+| Field       | Type                | Description                         |
+| ----------- | ------------------- | ----------------------------------- |
+| `id`        | `string` (UUID)     |                                     |
+| `name`      | `string`            | Unique room name (case-insensitive) |
+| `purpose`   | `string?`           | Room description                    |
+| `createdAt` | `string` (ISO 8601) |                                     |
+| `updatedAt` | `string` (ISO 8601) | Updated on each new message         |
+
+### ChatMessage
+
+| Field              | Type                | Description                         |
+| ------------------ | ------------------- | ----------------------------------- |
+| `id`               | `string` (UUID)     |                                     |
+| `roomId`           | `string`            | FK to ChatRoom.id                   |
+| `authorAgentId`    | `string`            | Agent ID of the author              |
+| `body`             | `string`            | Message text (supports `@mentions`) |
+| `replyToMessageId` | `string?`           | FK to another ChatMessage.id        |
+| `mentionAgentIds`  | `string[]`          | Extracted `@mention` agent IDs      |
+| `createdAt`        | `string` (ISO 8601) |                                     |
+
+---
+
+### Legacy Loop record
+
+**Former path:** `$BYSPACE_HOME/loops/loops.json`
+
+The removed store contained an array of loop records.
+
+| Field                   | Type                                                | Description                                |
+| ----------------------- | --------------------------------------------------- | ------------------------------------------ |
+| `id`                    | `string`                                            | 8-char UUID prefix                         |
+| `name`                  | `string?`                                           | Human-readable name                        |
+| `prompt`                | `string`                                            | Worker prompt                              |
+| `cwd`                   | `string`                                            | Working directory                          |
+| `provider`              | `string`                                            | Default provider                           |
+| `model`                 | `string?`                                           | Default model                              |
+| `modeId`                | `string?`                                           | Default mode ID                            |
+| `workerProvider`        | `string?`                                           | Override provider for workers              |
+| `workerModel`           | `string?`                                           | Override model for workers                 |
+| `verifierProvider`      | `string?`                                           | Override provider for verifiers            |
+| `verifierModel`         | `string?`                                           | Override model for verifiers               |
+| `verifierModeId`        | `string?`                                           | Override mode ID for verifiers             |
+| `verifyPrompt`          | `string?`                                           | LLM verification prompt                    |
+| `verifyChecks`          | `string[]`                                          | Shell commands to run as checks            |
+| `archive`               | `boolean`                                           | Whether to archive worker agents after use |
+| `sleepMs`               | `number`                                            | Delay between iterations (ms)              |
+| `maxIterations`         | `number?`                                           | Cap on iterations                          |
+| `maxTimeMs`             | `number?`                                           | Total time budget (ms)                     |
+| `status`                | `"running" \| "succeeded" \| "failed" \| "stopped"` |                                            |
+| `createdAt`             | `string` (ISO 8601)                                 |                                            |
+| `updatedAt`             | `string` (ISO 8601)                                 |                                            |
+| `startedAt`             | `string` (ISO 8601)                                 |                                            |
+| `completedAt`           | `string?` (ISO 8601)                                |                                            |
+| `stopRequestedAt`       | `string?` (ISO 8601)                                |                                            |
+| `iterations`            | `LoopIteration[]`                                   |                                            |
+| `logs`                  | `LoopLogEntry[]`                                    |                                            |
+| `nextLogSeq`            | `number`                                            | Monotonic log sequence counter             |
+| `activeIteration`       | `number?`                                           | Currently executing iteration index        |
+| `activeWorkerAgentId`   | `string?`                                           | Currently running worker agent             |
+| `activeVerifierAgentId` | `string?`                                           | Currently running verifier agent           |
+
+### Nested: LoopIteration
+
+| Field               | Type                                                | Description              |
+| ------------------- | --------------------------------------------------- | ------------------------ |
+| `index`             | `number`                                            | 1-based iteration index  |
+| `workerAgentId`     | `string?`                                           | Agent ID of the worker   |
+| `workerStartedAt`   | `string` (ISO 8601)                                 |                          |
+| `workerCompletedAt` | `string?` (ISO 8601)                                |                          |
+| `verifierAgentId`   | `string?`                                           | Agent ID of the verifier |
+| `status`            | `"running" \| "succeeded" \| "failed" \| "stopped"` |                          |
+| `workerOutcome`     | `"completed" \| "failed" \| "canceled"?`            |                          |
+| `failureReason`     | `string?`                                           |                          |
+| `verifyChecks`      | `LoopVerifyCheckResult[]`                           | Shell check results      |
+| `verifyPrompt`      | `LoopVerifyPromptResult?`                           | LLM verification result  |
+
+### Nested: LoopLogEntry
+
+| Field       | Type                                                 |
+| ----------- | ---------------------------------------------------- |
+| `seq`       | `number` (monotonic)                                 |
+| `timestamp` | `string` (ISO 8601)                                  |
+| `iteration` | `number?`                                            |
+| `source`    | `"loop" \| "worker" \| "verifier" \| "verify-check"` |
+| `level`     | `"info" \| "error"`                                  |
+| `text`      | `string`                                             |
+
+### Nested: LoopVerifyCheckResult
+
+| Field         | Type                |
+| ------------- | ------------------- |
+| `command`     | `string`            |
+| `exitCode`    | `number`            |
+| `passed`      | `boolean`           |
+| `stdout`      | `string`            |
+| `stderr`      | `string`            |
+| `startedAt`   | `string` (ISO 8601) |
+| `completedAt` | `string` (ISO 8601) |
+
+### Nested: LoopVerifyPromptResult
+
+| Field             | Type                |
+| ----------------- | ------------------- |
+| `passed`          | `boolean`           |
+| `reason`          | `string`            |
+| `verifierAgentId` | `string?`           |
+| `startedAt`       | `string` (ISO 8601) |
+| `completedAt`     | `string` (ISO 8601) |
+
+---
+
 ## 4. Project Registry
 
-**Path:** `$PASEO_HOME/projects/projects.json`
+**Path:** `$BYSPACE_HOME/projects/projects.json`
 
 Array of project records.
 
-| Field                | Type                        | Description                                                                                                                                |
-| -------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `projectId`          | `string`                    | Host-local primary key; new records use opaque `prj_<16 hex>` IDs                                                                          |
-| `projectKey`         | `string \| null`            | Persisted opaque cross-host grouping key; reconciliation backfills absent values                                                           |
-| `rootPath`           | `string`                    | Exact lexically normalized selected root; never realpathed                                                                                 |
-| `kind`               | `"git" \| "non_git"`        | Mutable Git observation about `rootPath`, never a membership key                                                                           |
-| `displayName`        | `string`                    | Selected-root basename, stable across remote and Git changes                                                                               |
-| `customName`         | `string \| null`            | User-set override layered over `displayName`. Null means "use the derived name".                                                           |
-| `customIconRevision` | `string \| null`            | Identifies the host-local custom icon stored under `projects/icons/`. Null means the icon is discovered by scanning the project directory. |
-| `createdAt`          | `string` (ISO 8601)         |                                                                                                                                            |
-| `updatedAt`          | `string` (ISO 8601)         |                                                                                                                                            |
-| `archivedAt`         | `string \| null` (ISO 8601) | Soft-delete timestamp; required nullable                                                                                                   |
+| Field         | Type                        | Description                                                                      |
+| ------------- | --------------------------- | -------------------------------------------------------------------------------- |
+| `projectId`   | `string`                    | Primary key                                                                      |
+| `rootPath`    | `string`                    | Filesystem root of the project                                                   |
+| `kind`        | `"git" \| "non_git"`        |                                                                                  |
+| `displayName` | `string`                    |                                                                                  |
+| `customName`  | `string \| null`            | User-set override layered over `displayName`. Null means "use the derived name". |
+| `createdAt`   | `string` (ISO 8601)         |                                                                                  |
+| `updatedAt`   | `string` (ISO 8601)         |                                                                                  |
+| `archivedAt`  | `string \| null` (ISO 8601) | Soft-delete timestamp; required nullable                                         |
 
-Uploading a file and pasting a website or image URL are two ways of _acquiring_ the same custom
-icon. The client fetches URL imports and sends their bytes through the upload RPC. The daemon never
-receives or fetches the URL; it validates the uploaded bytes, stores them, and records a new
-`customIconRevision`. Going back to automatic deletes the stored image, as does removing the
-project.
-
-Active exact roots are idempotent using lexical platform-equivalence semantics. Existing legacy
-remote-shaped and path-shaped IDs remain readable, including duplicate roots; reconciliation never
-merges them, transfers names, archives them, or moves workspace foreign keys. An explicit
-workspace `projectId` is authoritative when it names an active project, regardless of cwd
-containment. Archived-only exact-root records are not resurrected by explicit add/open; a fresh
-opaque project is allocated instead. Agent restore is separate and restores the agent's existing
-workspace together with its owning project.
+Active git projects are unique by normalized `rootPath`. Startup reconciliation repairs older bad
+states by moving workspaces from duplicate path-keyed projects onto the canonical project,
+preferring remote-keyed project IDs such as `remote:github.com/owner/repo`, then archiving the
+emptied duplicate.
 
 ---
 
 ## 5. Workspace Registry
 
-**Path:** `$PASEO_HOME/projects/workspaces.json`
+**Path:** `$BYSPACE_HOME/projects/workspaces.json`
 
 Array of workspace records. A workspace is a specific working directory within a project.
 
-| Field                          | Type                                            | Description                                                                                                                                                                                   |
-| ------------------------------ | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `workspaceId`                  | `string`                                        | Opaque stable identifier (`wks_<hex>`), generated independently of the directory. MUST NOT be treated as a path; compare by exact equality. Use the `cwd` field for directory access.         |
-| `projectId`                    | `string`                                        | FK to Project.projectId; the workspace's stable project membership                                                                                                                            |
-| `cwd`                          | `string`                                        | Exact execution directory selected for agents, files, scripts, and setup                                                                                                                      |
-| `kind`                         | `"local_checkout" \| "worktree" \| "directory"` | Mutable checkout classification                                                                                                                                                               |
-| `displayName`                  | `string`                                        | The human name (the generated/derived title). Decoupled from `branch` by construction.                                                                                                        |
-| `title`                        | `string \| null`                                | User-set name override layered over `displayName`. Null means "use `displayName`".                                                                                                            |
-| `branch`                       | `string \| null`                                | The current Git branch for git-backed workspaces. Separate from `displayName`/`title`; a background branch refresh never rewrites the name.                                                   |
-| `worktreeRoot`                 | `string \| null`                                | Backing checkout/worktree root. May differ from `cwd` for exact subprojects and remains persisted after the worktree is deleted so restore can reproduce the placement.                       |
-| `baseBranch`                   | `string \| null`                                | Normalized branch the Paseo worktree was created from; null for directories, local checkouts, and checkout-branch worktrees                                                                   |
-| `isPaseoOwnedWorktree`         | `boolean`                                       | Whether Paseo owns and may remove/recreate the backing `worktreeRoot`                                                                                                                         |
-| `mainRepoRoot`                 | `string \| null`                                | Main repository root for worktree checkouts, independent of both exact `cwd` and backing `worktreeRoot`                                                                                       |
-| `createdAt`                    | `string` (ISO 8601)                             |                                                                                                                                                                                               |
-| `updatedAt`                    | `string` (ISO 8601)                             |                                                                                                                                                                                               |
-| `archivedAt`                   | `string \| null` (ISO 8601)                     | Soft-delete; required nullable                                                                                                                                                                |
-| `autoArchivedChangeRequestUrl` | `string \| null`                                | Change request whose merged state triggered auto-archive. Restore replaces it with the current merged change request, when present, so repeated snapshots cannot archive the workspace again. |
-| `labels`                       | `string[]?`                                     | Normalized display names assigned from this host's shared label catalog. Missing means unlabelled.                                                                                            |
-| `pinnedAt`                     | `string \| null` (ISO 8601)                     | Pinned-to-top-of-sidebar timestamp; null means "not pinned"                                                                                                                                   |
+| Field                          | Type                                            | Description                                                                                                                                                                           |
+| ------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workspaceId`                  | `string`                                        | Opaque stable identifier (`wks_<hex>`), generated independently of the directory. MUST NOT be treated as a path; compare by exact equality. Use the `cwd` field for directory access. |
+| `projectId`                    | `string`                                        | FK to Project.projectId                                                                                                                                                               |
+| `cwd`                          | `string`                                        | Filesystem path                                                                                                                                                                       |
+| `kind`                         | `"local_checkout" \| "worktree" \| "directory"` |                                                                                                                                                                                       |
+| `displayName`                  | `string`                                        | The human name (the generated/derived title). Decoupled from `branch` by construction.                                                                                                |
+| `title`                        | `string \| null`                                | User-set name override layered over `displayName`. Null means "use `displayName`".                                                                                                    |
+| `branch`                       | `string \| null`                                | The worktree's git branch. Separate from `displayName`/`title`; only worktree workspaces set it. A branch rename writes this and never the name.                                      |
+| `createdAt`                    | `string` (ISO 8601)                             |                                                                                                                                                                                       |
+| `updatedAt`                    | `string` (ISO 8601)                             |                                                                                                                                                                                       |
+| `archivedAt`                   | `string \| null` (ISO 8601)                     | Soft-delete; required nullable                                                                                                                                                        |
+| `autoArchivedChangeRequestUrl` | `string \| null`                                | Merged change request whose automatic archive was consumed. Restore updates it to the current merged change request so repeated snapshots do not re-archive the workspace.            |
+| `pinnedAt`                     | `string \| null` (ISO 8601)                     | Pinned-to-top-of-sidebar timestamp; null means "not pinned"                                                                                                                           |
 
-> **Opaque-ID invariant:** `workspaceId` is opaque identity, never a filesystem path. Filesystem and git operations take `cwd`/`workspaceDirectory` only — never the id. A compatibility-only first-materialization bootstrap still groups pre-registry agent records by path and Git remote so existing installs retain their legacy records. That grouping never runs against a live registry, and its keys are not runtime project or workspace identity.
-
-### Workspace label catalog
-
-**Path:** `$PASEO_HOME/projects/workspace-labels.json`
-
-The catalog is shared by every workspace on one host. A definition contains a display name and one
-of the ten identity colour names (`WORKSPACE_LABEL_COLORS` in
-`packages/protocol/src/workspace-labels.ts`); trimmed, collapsed, case-insensitive name identity is
-unique within that file. Definitions have no portable ID or principal owner and remain after their
-last assignment. Editing a label takes a new name, a new colour, or both in one commit, so the two
-fields cannot land half-applied. Workspaces store label names, so a rename and a delete rewrite
-workspace assignments through one serialized compound commit while a recolour is catalog-only; a
-rename onto a name the host already has is refused rather than merged. A prepared
-`workspace-labels.transaction.json` contains both before and after images. The daemon writes the
-catalog and workspace files, then atomically changes the transaction to committed; that phase
-change is the durable commit point. Recovery rolls prepared transactions back before either
-directory is served. A committed marker proves both data files were already written, so recovery
-only loads the current catalog and retries marker cleanup; it never reapplies stale workspace
-after-images over later registry mutations. A request rejected before the commit point therefore
-cannot take effect after restart. If the live daemon cannot determine or restore the durable state,
-the workspace registry freezes every write and later label mutations fail with
-`workspace_label_storage_uncertain` until daemon restart performs recovery. Reads remain available,
-but may reflect the last acknowledged cache until restart. Workspace directory and catalog updates
-publish only after the commit point; publication failure does not roll durable state back.
+> **Opaque-ID invariant:** `workspaceId` is opaque identity, never a filesystem path. Filesystem and git operations take `cwd`/`workspaceDirectory` only — never the id. Path-derived grouping keys (e.g. `deriveWorkspaceDirectoryKey`, used at bootstrap to group agents into a workspace) are directory keys, not workspace identity, and must not be persisted or compared as ids.
 
 `projectId` is still a real FK: workspace records should have a matching project record. Read-only
 history surfaces tolerate transient orphaned workspaces by omitting those rows so one bad FK cannot
@@ -485,7 +470,7 @@ than treating it as valid.
 
 ## 6. Push Token Store
 
-**Path:** `$PASEO_HOME/push-tokens.json`
+**Path:** `$BYSPACE_HOME/push-tokens.json`
 
 ```json
 {
@@ -499,13 +484,13 @@ Simple set of Expo push notification tokens. Loaded with permissive parsing (fil
 
 ## 7. Daemon meta files
 
-These small files are not validated as full Zod schemas but are persisted under `$PASEO_HOME` for daemon identity and runtime coordination.
+These small files are not validated as full Zod schemas but are persisted under `$BYSPACE_HOME` for daemon identity and runtime coordination.
 
 | Path                  | Format                                                         | Notes                                                                             |
 | --------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `server-id`           | Plain text, e.g. `srv_<base64url>`                             | Stable per-`$PASEO_HOME` daemon ID. Overridable via `PASEO_SERVER_ID` env.        |
+| `server-id`           | Plain text, e.g. `srv_<base64url>`                             | Stable per-`$BYSPACE_HOME` daemon ID. Overridable via `BYSPACE_SERVER_ID` env.    |
 | `daemon-keypair.json` | `{ v: 2, publicKeyB64, secretKeyB64 }` (libsodium box keypair) | E2EE relay identity. Written with mode `0600`. Regenerated if file is unreadable. |
-| `paseo.pid`           | JSON `{ pid, startedAt, ... }`                                 | PID lock; prevents two daemons sharing one `$PASEO_HOME`.                         |
+| `byspace.pid`         | JSON `{ pid, startedAt, ... }`                                 | PID lock; prevents two daemons sharing one `$BYSPACE_HOME`.                       |
 | `daemon.log`          | Pino log output                                                | Default location; path/rotation configurable via `log.file` in `config.json`.     |
 
 ---
@@ -519,11 +504,11 @@ These live in React Native `AsyncStorage` or browser `IndexedDB`, not on the dae
 Right-sidebar client state splits on whether it is determined by the directory or owned by the workspace (two workspaces can share one `cwd`). The split is enforced by the cache key, so changing a key changes the sharing semantics — see [architecture.md](architecture.md#right-sidebar-boundary-directory-backed-vs-workspace-owned) for the full table.
 
 - **Directory-backed** (shared by same-`cwd` workspaces): keyed by `(serverId, cwd)`. Git status/diff, GitHub PR status, PR timeline, file preview content. These are TanStack Query caches, not persisted stores.
-- **Workspace-owned** (independent per workspace): keyed by `workspaceId`, with `cwd` used only as a fallback when no `workspaceId` is present. Review draft comments (`@paseo:review-draft-store`), diff-mode overrides (in-memory), workspace composer attachments, and file-explorer nav/expand state. The `workspaceId` part of these keys is **opaque** — never parse it back into a path.
+- **Workspace-owned** (independent per workspace): keyed by `workspaceId`, with `cwd` used only as a fallback when no `workspaceId` is present. Review draft comments (`@byspace:review-draft-store`), diff-mode overrides (in-memory), workspace composer attachments, and file-explorer nav/expand state. The `workspaceId` part of these keys is **opaque** — never parse it back into a path.
 
 ### Draft Store
 
-**AsyncStorage key:** `paseo-drafts` (version 2)
+**AsyncStorage key:** `byspace-drafts` (version 2)
 
 ```typescript
 {
@@ -539,7 +524,7 @@ Right-sidebar client state splits on whether it is determined by the directory o
 
 ### Attachment Store (Web)
 
-**IndexedDB database:** `paseo-attachment-bytes`, object store: `attachments`
+**IndexedDB database:** `byspace-attachment-bytes`, object store: `attachments`
 
 Stores binary attachment blobs keyed by attachment ID.
 

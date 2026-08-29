@@ -59,7 +59,7 @@ export class TerminalOutputCoalescer {
       this.flushTimer = this.timers.setTimeout(() => {
         this.flushTimer = null;
         this.flush();
-      }, this.flushDelayMs);
+      }, this.flushDelayMs - elapsed);
     }
   }
 

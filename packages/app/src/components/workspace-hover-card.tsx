@@ -8,7 +8,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { Dimensions, Text, View } from "react-native";
+import { Dimensions, ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { FadeIn, FadeOut } from "react-native-reanimated";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -19,7 +19,6 @@ import {
   CircleX,
   Copy,
   ExternalLink,
-  FileDiff,
   Folder,
   GitBranch,
   Server,
@@ -29,10 +28,11 @@ import { ForgeBrandIcon } from "@/git/forge-icon";
 import type { Theme } from "@/styles/theme";
 import { DiffStat } from "@/components/diff-stat";
 import { Pressable } from "react-native";
-import type { GestureResponderEvent } from "react-native";
+import type { FocusEvent, GestureResponderEvent } from "react-native";
 import { Portal } from "@gorhom/portal";
 import { useBottomSheetModalInternal } from "@gorhom/bottom-sheet";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
+import type { WorkspaceAgentStatus } from "@/utils/workspace-agent-summary";
 import type { PrHint } from "@/git/use-pr-status-query";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { copyToClipboard } from "@/utils/copy-to-clipboard";
@@ -95,14 +95,12 @@ interface WorkspaceHoverCardProps {
   workspace: SidebarWorkspaceEntry;
   prHint: PrHint | null;
   isDragging: boolean;
-  disabled?: boolean;
 }
 
 export function WorkspaceHoverCard({
   workspace,
   prHint,
   isDragging,
-  disabled = false,
   children,
 }: PropsWithChildren<WorkspaceHoverCardProps>): ReactNode {
   const isCompact = useIsCompactFormFactor();
@@ -112,12 +110,7 @@ export function WorkspaceHoverCard({
   }
 
   return (
-    <WorkspaceHoverCardDesktop
-      workspace={workspace}
-      prHint={prHint}
-      isDragging={isDragging}
-      disabled={disabled}
-    >
+    <WorkspaceHoverCardDesktop workspace={workspace} prHint={prHint} isDragging={isDragging}>
       {children}
     </WorkspaceHoverCardDesktop>
   );
@@ -127,7 +120,6 @@ function WorkspaceHoverCardDesktop({
   workspace,
   prHint,
   isDragging,
-  disabled = false,
   children,
 }: PropsWithChildren<WorkspaceHoverCardProps>): ReactElement {
   const triggerRef = useRef<View>(null);
@@ -135,6 +127,7 @@ function WorkspaceHoverCardDesktop({
   const [open, setOpen] = useState(false);
   const graceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const triggerHoveredRef = useRef(false);
+  const triggerFocusedRef = useRef(false);
 
   const clearGraceTimer = useCallback(() => {
     if (graceTimerRef.current) {
@@ -147,6 +140,7 @@ function WorkspaceHoverCardDesktop({
     if (graceTimerRef.current) return;
     graceTimerRef.current = setTimeout(() => {
       graceTimerRef.current = null;
+      if (triggerHoveredRef.current || triggerFocusedRef.current) return;
       setOpen(false);
     }, HOVER_GRACE_MS);
   }, []);
@@ -154,13 +148,33 @@ function WorkspaceHoverCardDesktop({
   const handleTriggerEnter = useCallback(() => {
     triggerHoveredRef.current = true;
     clearGraceTimer();
-    if (!isDragging && !disabled) {
+    if (!isDragging) {
       setOpen(true);
     }
-  }, [clearGraceTimer, disabled, isDragging]);
+  }, [clearGraceTimer, isDragging]);
 
   const handleTriggerLeave = useCallback(() => {
     triggerHoveredRef.current = false;
+    scheduleClose();
+  }, [scheduleClose]);
+
+  const handleTriggerFocus = useCallback(
+    (event: FocusEvent) => {
+      // On Web a mouse click also focuses the row; only keyboard focus should
+      // pin the card open, otherwise a clicked row keeps it up until blur.
+      const target = (event.nativeEvent as unknown as { target?: Element }).target;
+      if (target?.matches && !target.matches(":focus-visible")) return;
+      triggerFocusedRef.current = true;
+      clearGraceTimer();
+      if (!isDragging) {
+        setOpen(true);
+      }
+    },
+    [clearGraceTimer, isDragging],
+  );
+
+  const handleTriggerBlur = useCallback(() => {
+    triggerFocusedRef.current = false;
     scheduleClose();
   }, [scheduleClose]);
 
@@ -175,13 +189,13 @@ function WorkspaceHoverCardDesktop({
     onLeaveSafeZone: scheduleClose,
   });
 
-  // Close while another row interaction owns attention.
+  // Close when drag starts
   useEffect(() => {
-    if (isDragging || disabled) {
+    if (isDragging) {
       clearGraceTimer();
       setOpen(false);
     }
-  }, [clearGraceTimer, disabled, isDragging]);
+  }, [isDragging, clearGraceTimer]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -196,6 +210,8 @@ function WorkspaceHoverCardDesktop({
       collapsable={false}
       onPointerEnter={handleTriggerEnter}
       onPointerLeave={handleTriggerLeave}
+      onFocus={handleTriggerFocus}
+      onBlur={handleTriggerBlur}
     >
       {children}
       {open ? (
@@ -283,8 +299,8 @@ function WorkspaceHoverCardContent({
           exiting={FadeOut.duration(80)}
           collapsable={false}
           onLayout={handleLayout}
-          accessibilityRole="menu"
-          accessibilityLabel={t("workspace.hoverCard.scriptsAccessibility")}
+          accessibilityRole="summary"
+          accessibilityLabel={t("workspace.hoverCard.detailsAccessibility")}
           testID="workspace-hover-card"
           style={styles.card}
           frameStyle={frameStyle}
@@ -294,16 +310,6 @@ function WorkspaceHoverCardContent({
               {workspace.name}
             </Text>
           </View>
-          {prHint ? <PrBadge hint={prHint} style={styles.cardInfoRow} /> : null}
-          {workspace.diffStat ? (
-            <View style={styles.cardInfoRow}>
-              <ThemedFileDiff size={12} uniProps={foregroundMutedColorMapping} />
-              <DiffStat
-                additions={workspace.diffStat.additions}
-                deletions={workspace.diffStat.deletions}
-              />
-            </View>
-          ) : null}
           <HostRow serverId={workspace.serverId} />
           {workspace.currentBranch ? (
             <CopyableInfoRow
@@ -318,11 +324,24 @@ function WorkspaceHoverCardContent({
             <CopyableInfoRow
               icon={ThemedFolder}
               value={workspace.workspaceDirectoryLabel}
-              copyValue={workspace.workspaceDirectory}
+              copyValue={workspace.workspaceDirectory ?? ""}
               copyLabel={t("workspace.hoverCard.copyPath")}
               testID="hover-card-workspace-cwd"
+              multiline
             />
           ) : null}
+          {prHint || workspace.diffStat ? (
+            <View style={styles.cardMetaRow}>
+              {workspace.diffStat ? (
+                <DiffStat
+                  additions={workspace.diffStat.additions}
+                  deletions={workspace.diffStat.deletions}
+                />
+              ) : null}
+              {prHint ? <PrBadge hint={prHint} /> : null}
+            </View>
+          ) : null}
+          <AgentStatusSection agents={workspace.agentSummary?.agents ?? []} />
           {prHint?.checks && prHint.checks.length > 0 ? (
             <>
               <View style={styles.separator} />
@@ -342,7 +361,6 @@ function WorkspaceHoverCardContent({
 const ThemedGitBranch = withUnistyles(GitBranch);
 const ThemedFolder = withUnistyles(Folder);
 const ThemedServer = withUnistyles(Server);
-const ThemedFileDiff = withUnistyles(FileDiff);
 
 type CardInfoIcon = React.ComponentType<React.ComponentProps<typeof ThemedGitBranch>>;
 
@@ -366,6 +384,63 @@ const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.for
 const successColorMapping = (theme: Theme) => ({ color: theme.colors.statusSuccess });
 const warningColorMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
 const dangerColorMapping = (theme: Theme) => ({ color: theme.colors.statusDanger });
+
+function AgentStatusSection({ agents }: { agents: readonly WorkspaceAgentStatus[] }) {
+  const { t } = useTranslation();
+  const statusLabels: Record<WorkspaceAgentStatus["status"], string> = {
+    needs_input: t("workspace.hoverCard.agentStatus.needsInput"),
+    failed: t("workspace.hoverCard.agentStatus.failed"),
+    attention: t("workspace.hoverCard.agentStatus.attention"),
+    running: t("workspace.hoverCard.agentStatus.running"),
+    done: t("workspace.hoverCard.agentStatus.done"),
+  };
+  if (agents.length === 0) return null;
+  return (
+    <>
+      <View style={styles.separator} />
+      <View style={styles.agentSectionHeader}>
+        <Text style={styles.agentSectionTitle}>{t("workspace.hoverCard.agents")}</Text>
+        <Text style={styles.agentSectionCount}>{agents.length}</Text>
+      </View>
+      <ScrollView
+        style={styles.agentList}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator={agents.length > 5}
+        testID="hover-card-agent-list"
+      >
+        {agents.map((agent) => (
+          <View
+            key={agent.agentId}
+            style={[styles.agentRow, { paddingLeft: 12 + agent.depth * 14 }]}
+          >
+            <AgentStatusIcon status={agent.status} />
+            <Text style={styles.agentTitle} numberOfLines={1}>
+              {agent.title ?? t("workspace.hoverCard.untitledAgent")}
+            </Text>
+            <Text style={styles.agentStatus} numberOfLines={1}>
+              {statusLabels[agent.status]}
+            </Text>
+          </View>
+        ))}
+      </ScrollView>
+    </>
+  );
+}
+
+function AgentStatusIcon({ status }: { status: WorkspaceAgentStatus["status"] }) {
+  if (status === "failed") {
+    return <ThemedCircleX size={12} uniProps={dangerColorMapping} />;
+  }
+  if (status === "done") {
+    return <ThemedCircleCheck size={12} uniProps={successColorMapping} />;
+  }
+  return (
+    <ThemedCircleDot
+      size={12}
+      uniProps={status === "running" ? successColorMapping : warningColorMapping}
+    />
+  );
+}
 
 function InfoRow({
   icon: Icon,
@@ -396,12 +471,14 @@ function CopyableInfoRow({
   copyValue,
   copyLabel,
   testID,
+  multiline = false,
 }: {
   icon: CardInfoIcon;
   value: string;
   copyValue: string;
   copyLabel: string;
   testID: string;
+  multiline?: boolean;
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -448,7 +525,7 @@ function CopyableInfoRow({
         }
         return <Icon size={12} uniProps={iconUniProps} />;
       })()}
-      <Text style={textStyle} numberOfLines={1} testID={testID}>
+      <Text style={textStyle} numberOfLines={multiline ? undefined : 1} testID={testID}>
         {value}
       </Text>
     </Pressable>
@@ -605,6 +682,13 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
   },
+  cardMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: theme.spacing[3],
+    paddingBottom: theme.spacing[2],
+  },
   cardInfoRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -625,6 +709,45 @@ const styles = StyleSheet.create((theme) => ({
   separator: {
     height: 1,
     backgroundColor: theme.colors.border,
+  },
+  agentSectionHeader: {
+    minHeight: 30,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[3],
+    paddingTop: theme.spacing[2],
+  },
+  agentSectionTitle: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+  },
+  agentSectionCount: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  agentList: {
+    maxHeight: 190,
+    paddingBottom: theme.spacing[1],
+  },
+  agentRow: {
+    minHeight: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1.5],
+    paddingRight: theme.spacing[3],
+  },
+  agentTitle: {
+    flex: 1,
+    minWidth: 0,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+  },
+  agentStatus: {
+    maxWidth: 88,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
   },
   listRowHovered: {
     backgroundColor: theme.colors.surface2,

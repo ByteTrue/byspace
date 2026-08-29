@@ -5,8 +5,8 @@ import { i18n as testI18n } from "@/i18n/i18next";
 import React, { type ReactElement } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import type { PluginListItem, PluginLogEntry } from "@getpaseo/protocol/messages";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
+import type { PluginListItem, PluginLogEntry } from "@bytetrue/byspace-protocol/messages";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HostPluginsPage } from "./plugins-page";
 
@@ -31,11 +31,9 @@ vi.mock("@/runtime/host-features", () => ({
 
 vi.mock("@/components/adaptive-modal-sheet", async () => {
   const ReactModule = await vi.importActual<typeof import("react")>("react");
-  const actual = await vi.importActual<typeof import("@/components/adaptive-modal-sheet")>(
-    "@/components/adaptive-modal-sheet",
-  );
+  const { TextInput } = await vi.importActual<typeof import("react-native")>("react-native");
   return {
-    ...actual,
+    AdaptiveTextInput: TextInput,
     AdaptiveModalSheet: ({
       header,
       children,

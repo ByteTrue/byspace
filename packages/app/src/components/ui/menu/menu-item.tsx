@@ -20,7 +20,6 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Theme } from "@/styles/theme";
 import { MenuDepthProvider, useMenuContext } from "./menu-context";
-import { MENU_ITEM_HEIGHT } from "./menu-geometry";
 
 const ThemedCheck = withUnistyles(Check);
 const ThemedCheckCircle = withUnistyles(CheckCircle);
@@ -43,6 +42,7 @@ const successMapping = (theme: Theme) => ({ color: theme.colors.palette.green[50
  * `lineHeight` to the platform and the content outgrows `minHeight`, which then does nothing and
  * the rows drift taller again. On compact, `minHeight` leads instead and the label centres in it.
  */
+const MENU_ITEM_HEIGHT = { xs: 40, md: 28 } as const;
 const MENU_ITEM_LINE_HEIGHT = 18;
 
 /**
@@ -139,13 +139,7 @@ export function menuRowContentInset(theme: Theme): number {
 
 /**
  * A text field on a menu page, drawn as the row it stands in for: same box as a row's fill, same
- * left rail for the text inside it. The form kit's `FormTextInput` carries a screen's geometry
- * (12pt padding, 32pt tall) and lands its text 4pt inside the labels above it, which is exactly
- * the misalignment a menu makes obvious.
- *
- * `AdaptiveTextInput` underneath, so a compact sheet gets `BottomSheetTextInput` and the keyboard
- * moves the sheet rather than covering it. That also means the compact presentation has to be a
- * sheet: `BottomSheetTextInput` outside a sheet has no context to read.
+ * left rail for the text inside it.
  */
 export function MenuTextField({
   initialValue,
@@ -192,7 +186,6 @@ export function MenuTextField({
     </View>
   );
 }
-
 function resolveLeadingContent(input: {
   isPending: boolean | undefined;
   isSuccess: boolean;
@@ -274,6 +267,9 @@ export function MenuItem({
   tooltip,
 }: PropsWithChildren<MenuItemProps>): ReactElement {
   const { selectItem } = useMenuContext("MenuItem");
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+
   const isPending = status === "pending" || loading;
   const isSuccess = status === "success";
   const isDisabled = disabled || isPending || isSuccess;
@@ -294,21 +290,13 @@ export function MenuItem({
     if (isDisabled) return;
     selectItem(onSelect, closeOnSelect);
   }, [isDisabled, selectItem, onSelect, closeOnSelect]);
-
-  // A row that draws a check has to say so as well: a multi-select page is a list of things that
-  // are on or off, and the check is the only thing telling a sighted user which. Rows that answer
-  // no such question stay plain buttons.
-  const accessibilityState = useMemo(
-    () => (selected === undefined ? undefined : { checked: selected }),
-    [selected],
-  );
+  const handlePointerEnter = useCallback(() => setHovered(true), []);
+  const handlePointerLeave = useCallback(() => setHovered(false), []);
+  const handleFocus = useCallback(() => setFocused(true), []);
+  const handleBlur = useCallback(() => setFocused(false), []);
 
   const itemPressableStyle = useCallback(
-    ({
-      pressed,
-      hovered = false,
-      focused = false,
-    }: PressableStateCallbackType & { hovered?: boolean; focused?: boolean }) => [
+    ({ pressed }: PressableStateCallbackType) => [
       styles.item,
       active ? styles.itemActive : null,
       isDisabled ? styles.itemDisabled : null,
@@ -317,7 +305,7 @@ export function MenuItem({
       focused && !isDisabled ? styles.itemHovered : null,
       pressed && !isDisabled ? styles.itemPressed : null,
     ],
-    [active, isDisabled, muted],
+    [active, focused, hovered, isDisabled, muted],
   );
 
   const itemTextStyle = useMemo(
@@ -334,36 +322,50 @@ export function MenuItem({
     [isDisabled],
   );
 
+  // A row that draws a check has to say so as well: a multi-select page is a list of things that
+  // are on or off, and the check is the only thing telling a sighted user which. Rows that answer
+  // no such question stay plain buttons.
+  const accessibilityState = useMemo(
+    () => (selected === undefined ? undefined : { checked: selected }),
+    [selected],
+  );
   const content = (
-    <Pressable
-      testID={testID}
-      accessibilityRole="menuitem"
-      accessibilityState={accessibilityState}
-      aria-checked={selected}
-      tabIndex={-1}
-      dataSet={itemDataSet}
-      disabled={isDisabled}
-      onPress={handleItemPress}
-      style={itemPressableStyle}
+    <View
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
+      collapsable={false}
     >
-      {showSelectedCheck ? (
-        <View style={styles.checkSlot}>
-          {selected ? <ThemedCheck size={16} uniProps={foregroundMapping} /> : null}
-        </View>
-      ) : null}
-      {leadingContent ? <View style={styles.leadingSlot}>{leadingContent}</View> : null}
-      <View style={styles.itemContent}>
-        <Text numberOfLines={1} style={itemTextStyle}>
-          {label}
-        </Text>
-        {description && !isPending && !isSuccess ? (
-          <Text numberOfLines={2} style={styles.itemDescription}>
-            {description}
-          </Text>
+      <Pressable
+        testID={testID}
+        accessibilityRole="menuitem"
+        accessibilityState={accessibilityState}
+        aria-checked={selected}
+        disabled={isDisabled}
+        onPress={handleItemPress}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        dataSet={itemDataSet}
+        style={itemPressableStyle}
+      >
+        {showSelectedCheck ? (
+          <View style={styles.checkSlot}>
+            {selected ? <ThemedCheck size={16} uniProps={foregroundMapping} /> : null}
+          </View>
         ) : null}
-      </View>
-      {trailingContent ? <View style={styles.trailingSlot}>{trailingContent}</View> : null}
-    </Pressable>
+        {leadingContent ? <View style={styles.leadingSlot}>{leadingContent}</View> : null}
+        <View style={styles.itemContent}>
+          <Text numberOfLines={1} style={itemTextStyle}>
+            {label}
+          </Text>
+          {description && !isPending && !isSuccess ? (
+            <Text numberOfLines={2} style={styles.itemDescription}>
+              {description}
+            </Text>
+          ) : null}
+        </View>
+        {trailingContent ? <View style={styles.trailingSlot}>{trailingContent}</View> : null}
+      </Pressable>
+    </View>
   );
 
   if (!tooltip) {
@@ -453,7 +455,7 @@ const styles = StyleSheet.create((theme) => ({
     outlineColor: "transparent",
   },
   // The same box as `item`, filled the way a hovered row is filled, so the field sits in the
-  // column of rows rather than beside it. Every number here is `item`'s: change one, change both.
+  // column of rows rather than beside it.
   field: {
     flexDirection: "row",
     alignItems: "center",

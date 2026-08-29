@@ -17,8 +17,6 @@
  * - provider models opencode lists opencode models
  * - provider models unknown fails with error
  * - provider models --json outputs valid JSON
- * - provider diagnostic shows the daemon's provider diagnostic
- * - provider diagnostic --json returns structured output
  */
 
 import assert from "node:assert";
@@ -27,7 +25,7 @@ import { join } from "node:path";
 import {
   createE2ETestContext,
   createTempDirs,
-  runPaseoCli,
+  runBySpaceCli,
   startTestDaemon,
 } from "./helpers/test-daemon.ts";
 
@@ -44,11 +42,6 @@ interface ProviderListRow {
   label: string;
   status: string;
   enabled: string;
-}
-
-interface ProviderDiagnostic {
-  provider: string;
-  diagnostic: string;
 }
 
 const EXPECTED_CLAUDE_MODELS = [
@@ -140,7 +133,7 @@ async function runProviderModelsJson(provider: string): Promise<ProviderModel[]>
   const transientNeedles = ["transport closed", "timed out", "timeout", "socket", "econn"];
 
   async function attemptRun(attempt: number): Promise<ProviderModel[]> {
-    const result = await ctx.paseo(["provider", "models", provider, "--json"]);
+    const result = await ctx.byspace(["provider", "models", provider, "--json"]);
     if (result.exitCode === 0) {
       return JSON.parse(result.stdout.trim()) as ProviderModel[];
     }
@@ -193,18 +186,17 @@ try {
   // Test 1: provider --help shows subcommands
   {
     console.log("Test 1: provider --help shows subcommands");
-    const result = await ctx.paseo(["provider", "--help"]);
+    const result = await ctx.byspace(["provider", "--help"]);
     assert.strictEqual(result.exitCode, 0, "provider --help should exit 0");
     assert(result.stdout.includes("ls"), "help should mention ls");
     assert(result.stdout.includes("models"), "help should mention models");
-    assert(result.stdout.includes("diagnostic"), "help should mention diagnostic");
     console.log("✓ provider --help shows subcommands\n");
   }
 
   // Test 2: provider ls lists all providers
   {
     console.log("Test 2: provider ls lists all providers");
-    const result = await ctx.paseo(["provider", "ls"]);
+    const result = await ctx.byspace(["provider", "ls"]);
     assert.strictEqual(result.exitCode, 0, "provider ls should exit 0");
     assert(result.stdout.includes("claude"), "output should include claude");
     assert(result.stdout.includes("codex"), "output should include codex");
@@ -223,7 +215,7 @@ try {
   // Test 3: provider ls --json outputs valid JSON
   {
     console.log("Test 3: provider ls --json outputs valid JSON");
-    const result = await ctx.paseo(["provider", "ls", "--json"]);
+    const result = await ctx.byspace(["provider", "ls", "--json"]);
     assert.strictEqual(result.exitCode, 0, "should exit 0");
     const data = JSON.parse(result.stdout.trim());
     assert(Array.isArray(data), "output should be an array");
@@ -256,9 +248,9 @@ try {
   // Test 4: provider ls includes disabled providers
   {
     console.log("Test 4: provider ls includes disabled providers");
-    const { paseoHome, workDir } = await createTempDirs();
+    const { byspaceHome, workDir } = await createTempDirs();
     await writeFile(
-      join(paseoHome, "config.json"),
+      join(byspaceHome, "config.json"),
       JSON.stringify(
         {
           version: 1,
@@ -275,9 +267,9 @@ try {
       ) + "\n",
     );
 
-    const disabledCtx = await startTestDaemon({ paseoHome, workDir, timeout: 120000 });
+    const disabledCtx = await startTestDaemon({ byspaceHome, workDir, timeout: 120000 });
     try {
-      const result = await runPaseoCli(disabledCtx, ["provider", "ls", "--json"]);
+      const result = await runBySpaceCli(disabledCtx, ["provider", "ls", "--json"]);
       assert.strictEqual(result.exitCode, 0, "provider ls should exit 0");
       const data = JSON.parse(result.stdout.trim()) as ProviderListRow[];
       const claude = data.find((p) => p.provider === "claude");
@@ -288,7 +280,7 @@ try {
       assert(opencode, "enabled opencode provider should stay in provider ls");
       assert.strictEqual(opencode.enabled, "Enabled", "enabled provider should report Enabled");
 
-      const modelsResult = await runPaseoCli(disabledCtx, ["provider", "models", "claude"]);
+      const modelsResult = await runBySpaceCli(disabledCtx, ["provider", "models", "claude"]);
       assert.notStrictEqual(
         modelsResult.exitCode,
         0,
@@ -312,7 +304,7 @@ try {
   // Test 5: provider ls --quiet outputs provider names only
   {
     console.log("Test 5: provider ls --quiet outputs provider names only");
-    const result = await ctx.paseo(["provider", "ls", "--quiet"]);
+    const result = await ctx.byspace(["provider", "ls", "--quiet"]);
     assert.strictEqual(result.exitCode, 0, "should exit 0");
     const lines = result.stdout.trim().split("\n");
     assert(lines.length >= 3, `should have at least 3 lines, got ${lines.length}`);
@@ -376,7 +368,7 @@ try {
   // Test 9: provider models unknown fails with error
   {
     console.log("Test 9: provider models unknown fails with error");
-    const result = await ctx.paseo(["provider", "models", "unknown"]);
+    const result = await ctx.byspace(["provider", "models", "unknown"]);
     assert.notStrictEqual(result.exitCode, 0, "should fail for unknown provider");
     const output = result.stdout + result.stderr;
     assert(
@@ -408,7 +400,7 @@ try {
       claudeModelIdsFromJson.length > 0,
       "claude model IDs should be captured from --json output",
     );
-    const result = await ctx.paseo(["provider", "models", "claude", "--quiet"]);
+    const result = await ctx.byspace(["provider", "models", "claude", "--quiet"]);
     assert.strictEqual(result.exitCode, 0, "should exit 0");
     const lines = result.stdout.trim().split("\n").filter(Boolean);
     assert.strictEqual(
@@ -431,39 +423,6 @@ try {
       "captured --json output should include the current Claude everyday model id",
     );
     console.log("✓ provider models --quiet outputs model IDs only\n");
-  }
-
-  // Test 12: provider diagnostic shows the daemon's provider diagnostic
-  {
-    console.log("Test 12: provider diagnostic shows the daemon's provider diagnostic");
-    const result = await ctx.paseo([
-      "provider",
-      "diagnostic",
-      " Claude ",
-      "--host",
-      `127.0.0.1:${ctx.port}`,
-    ]);
-    assert.strictEqual(result.exitCode, 0, "provider diagnostic should exit 0");
-    assert(result.stdout.includes("Claude Code"), "diagnostic should identify the provider");
-    assert(result.stdout.includes("Daemon PATH:"), "diagnostic should include the daemon PATH");
-    assert(result.stdout.includes("Resolved path:"), "diagnostic should include binary resolution");
-    assert(result.stdout.includes("Version:"), "diagnostic should include the provider version");
-    assert(result.stdout.includes("Status:"), "diagnostic should include provider status");
-    console.log("✓ provider diagnostic shows the daemon's provider diagnostic\n");
-  }
-
-  // Test 13: provider diagnostic --json returns structured output
-  {
-    console.log("Test 13: provider diagnostic --json returns structured output");
-    const result = await ctx.paseo(["provider", "diagnostic", "claude", "--json"]);
-    assert.strictEqual(result.exitCode, 0, "provider diagnostic --json should exit 0");
-    const data = JSON.parse(result.stdout.trim()) as ProviderDiagnostic;
-    assert.strictEqual(data.provider, "claude", "JSON should identify the provider");
-    assert(data.diagnostic.includes("Daemon PATH:"), "JSON should include the daemon PATH");
-    assert(data.diagnostic.includes("Resolved path:"), "JSON should include binary resolution");
-    assert(data.diagnostic.includes("Version:"), "JSON should include the provider version");
-    assert(data.diagnostic.includes("Status:"), "JSON should include provider status");
-    console.log("✓ provider diagnostic --json returns structured output\n");
   }
 } finally {
   await ctx.stop();

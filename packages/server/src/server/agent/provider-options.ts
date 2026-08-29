@@ -1,4 +1,4 @@
-import type { ProviderOptions } from "@getpaseo/protocol/agent-types";
+import type { ProviderOptions } from "@bytetrue/byspace-protocol/agent-types";
 import type { z } from "zod";
 
 export interface ProviderOptionIssue {
@@ -18,21 +18,6 @@ export class ProviderOptionsValidationError extends Error {
       .join("; ");
     super(`Invalid providerOptions for '${provider}': ${details}`);
     this.name = "ProviderOptionsValidationError";
-  }
-}
-
-export class ToolPolicyUnsupportedError extends Error {
-  readonly code = "tool_policy_unsupported" as const;
-
-  constructor(
-    readonly provider: string,
-    reason?: string,
-  ) {
-    super(
-      reason ??
-        `Provider '${provider}' cannot preapprove exact MCP tools for unattended execution; select Claude, Codex, or OpenCode`,
-    );
-    this.name = "ToolPolicyUnsupportedError";
   }
 }
 

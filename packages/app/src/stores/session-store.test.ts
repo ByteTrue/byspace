@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import type { WorkspaceDescriptorPayload } from "@getpaseo/protocol/messages";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
+import type { WorkspaceDescriptorPayload } from "@bytetrue/byspace-protocol/messages";
 
 import {
   normalizeWorkspaceDescriptor,
@@ -20,7 +20,6 @@ function createWorkspace(
     id: input.id,
     projectId: input.projectId ?? "project-1",
     projectDisplayName: input.projectDisplayName ?? "Project 1",
-    projectCustomName: input.projectCustomName ?? null,
     projectRootPath: input.projectRootPath ?? "/repo",
     workspaceDirectory: input.workspaceDirectory ?? "/repo",
     projectKind: input.projectKind ?? "git",
@@ -52,6 +51,7 @@ function getTestSessionReferences() {
     sessions: state.sessions,
     session,
     workspaces: session.workspaces,
+    emptyProjects: session.emptyProjects,
   };
 }
 
@@ -79,6 +79,27 @@ function permutations<T>(values: readonly T[]): T[][] {
     ),
   );
 }
+
+describe("server info", () => {
+  it("preserves Remote Web Service capability, relay, and identity fields", () => {
+    initializeTestSession();
+
+    useSessionStore.getState().updateSessionServerInfo("test-server", {
+      serverId: "test-server",
+      hostname: "source",
+      version: "0.5.0",
+      daemonPublicKeyB64: "source-public-key",
+      dataRelay: { configured: true },
+      features: { remoteWebServices: true },
+    });
+
+    expect(useSessionStore.getState().getSession("test-server")?.serverInfo).toMatchObject({
+      daemonPublicKeyB64: "source-public-key",
+      dataRelay: { configured: true },
+      features: { remoteWebServices: true },
+    });
+  });
+});
 
 function taskTexts(tasks: ReadonlyArray<{ text: string }>): string[] {
   return tasks.map((task) => task.text);
@@ -405,9 +426,9 @@ describe("normalizeWorkspaceDescriptor", () => {
       {
         scriptName: "web",
         type: "service" as const,
-        hostname: "web.paseo.localhost",
+        hostname: "web.byspace.localhost",
         port: 3000,
-        proxyUrl: "http://web.paseo.localhost:6767",
+        proxyUrl: "http://web.byspace.localhost:6777",
         lifecycle: "running" as const,
         health: "healthy" as const,
         exitCode: null,
@@ -435,9 +456,9 @@ describe("normalizeWorkspaceDescriptor", () => {
       {
         scriptName: "web",
         type: "service",
-        hostname: "web.paseo.localhost",
+        hostname: "web.byspace.localhost",
         port: 3000,
-        proxyUrl: "http://web.paseo.localhost:6767",
+        proxyUrl: "http://web.byspace.localhost:6777",
         lifecycle: "running",
         health: "healthy",
         exitCode: null,
@@ -565,10 +586,10 @@ describe("normalizeWorkspaceDescriptor", () => {
     expect(missing.statusEnteredAt).toBeNull();
   });
 
-  it("preserves project placement from workspace descriptor payloads", () => {
+  it("normalizes additive grouping identity without changing legacy wire semantics", () => {
     const workspace = normalizeWorkspaceDescriptor({
       id: "1",
-      projectId: "remote:github.com/acme/app",
+      projectId: "prj_a",
       projectDisplayName: "acme/app",
       projectRootPath: "/repo/app",
       workspaceDirectory: "/repo/app",
@@ -582,7 +603,9 @@ describe("normalizeWorkspaceDescriptor", () => {
       diffStat: null,
       scripts: [],
       project: {
-        projectKey: "remote:github.com/acme/app",
+        projectId: "prj_a",
+        projectKey: "prj_a",
+        projectGroupingKey: "remote:github.com/acme/app",
         projectName: "acme/app",
         checkout: {
           cwd: "/repo/app",
@@ -590,14 +613,16 @@ describe("normalizeWorkspaceDescriptor", () => {
           currentBranch: "main",
           remoteUrl: "https://github.com/acme/app.git",
           worktreeRoot: "/repo/app",
-          isPaseoOwnedWorktree: false,
+          isBySpaceOwnedWorktree: false,
           mainRepoRoot: null,
         },
       },
     });
 
     expect(workspace.project).toEqual({
+      projectId: "prj_a",
       projectKey: "remote:github.com/acme/app",
+      projectGroupingKey: "remote:github.com/acme/app",
       projectName: "acme/app",
       checkout: {
         cwd: "/repo/app",
@@ -605,7 +630,7 @@ describe("normalizeWorkspaceDescriptor", () => {
         currentBranch: "main",
         remoteUrl: "https://github.com/acme/app.git",
         worktreeRoot: "/repo/app",
-        isPaseoOwnedWorktree: false,
+        isBySpaceOwnedWorktree: false,
         mainRepoRoot: null,
       },
     });
@@ -628,9 +653,9 @@ describe("mergeWorkspaces", () => {
           {
             scriptName: "web",
             type: "service",
-            hostname: "web.paseo.localhost",
+            hostname: "web.byspace.localhost",
             port: 3000,
-            proxyUrl: "http://web.paseo.localhost:6767",
+            proxyUrl: "http://web.byspace.localhost:6777",
             lifecycle: "running",
             health: "healthy",
             exitCode: null,
@@ -644,9 +669,9 @@ describe("mergeWorkspaces", () => {
       {
         scriptName: "web",
         type: "service",
-        hostname: "web.paseo.localhost",
+        hostname: "web.byspace.localhost",
         port: 3000,
-        proxyUrl: "http://web.paseo.localhost:6767",
+        proxyUrl: "http://web.byspace.localhost:6777",
         lifecycle: "running",
         health: "healthy",
         exitCode: null,
@@ -751,14 +776,56 @@ describe("removeWorkspace", () => {
   });
 });
 
+describe("removeEmptyProject", () => {
+  it("removes an empty project by project id", () => {
+    const store = useSessionStore.getState();
+    initializeTestSession();
+    store.setEmptyProjects("test-server", [
+      {
+        projectId: "project-empty",
+        projectDisplayName: "Empty",
+        projectCustomName: null,
+        projectRootPath: "/repo/empty",
+        projectKind: "git",
+      },
+    ]);
+
+    store.removeEmptyProject("test-server", "project-empty");
+
+    expect(getTestSessionReferences().emptyProjects.has("project-empty")).toBe(false);
+  });
+
+  it("preserves identity when removing a missing empty project", () => {
+    const store = useSessionStore.getState();
+    initializeTestSession();
+    store.setEmptyProjects("test-server", [
+      {
+        projectId: "project-empty",
+        projectDisplayName: "Empty",
+        projectCustomName: null,
+        projectRootPath: "/repo/empty",
+        projectKind: "git",
+      },
+    ]);
+    const before = getTestSessionReferences();
+
+    store.removeEmptyProject("test-server", "project-missing");
+    const after = getTestSessionReferences();
+
+    expect(after.sessions).toBe(before.sessions);
+    expect(after.session).toBe(before.session);
+    expect(after.emptyProjects).toBe(before.emptyProjects);
+  });
+});
+
 describe("patchWorkspaceScripts", () => {
   it("preserves workspace entry identity when scripts are content-equal", () => {
     const script = {
       scriptName: "web",
       type: "service" as const,
-      hostname: "web.paseo.localhost",
+      hostname: "web.byspace.localhost",
       port: 3000,
-      proxyUrl: "http://web.paseo.localhost:6767",
+      proxyUrl: "http://web.byspace.localhost:6777",
       lifecycle: "running" as const,
       health: "healthy" as const,
       exitCode: null,

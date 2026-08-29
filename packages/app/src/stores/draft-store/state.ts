@@ -3,7 +3,6 @@ import {
   type AttachmentMetadata,
   type UserComposerAttachment,
 } from "@/attachments/types";
-import { PluginResourceComposerAttachmentSchema } from "@/plugins/attachments";
 import { z } from "zod";
 
 export const DRAFT_STORE_VERSION = 5;
@@ -40,7 +39,7 @@ export interface DraftStoreState {
 export const AttachmentMetadataSchema = z.strictObject({
   id: z.string(),
   mimeType: z.string(),
-  storageType: z.enum(["web-indexeddb", "desktop-file", "native-file"]),
+  storageType: z.literal("web-indexeddb"),
   storageKey: z.string(),
   fileName: z.string().nullable().optional(),
   byteSize: z.number().nullable().optional(),
@@ -96,11 +95,11 @@ export const UserComposerAttachmentSchema: z.ZodType<UserComposerAttachment> = z
     z.strictObject({ kind: z.literal("forge_issue"), item: IssueItemSchema }),
     z.strictObject({ kind: z.literal("forge_change_request"), item: ChangeRequestItemSchema }),
     z.strictObject({ kind: z.literal("github_issue"), item: IssueItemSchema }),
-    PluginResourceComposerAttachmentSchema,
     z.strictObject({
       kind: z.literal("github_pr"),
       item: ChangeRequestItemSchema,
       owner: z.literal(NEW_WORKSPACE_PICKER_ATTACHMENT_OWNER).optional(),
+      ownerTargetId: z.string().optional(),
     }),
   ],
 );

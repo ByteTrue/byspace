@@ -10,15 +10,15 @@ import {
   deriveAgentStateBucket,
   getWorkspaceStateBucketPriority,
   type WorkspaceStateBucket,
-} from "@getpaseo/protocol/agent-state-bucket";
-import { getParentAgentIdFromLabels } from "@getpaseo/protocol/agent-labels";
+} from "@bytetrue/byspace-protocol/agent-state-bucket";
+import { getParentAgentIdFromLabels } from "@bytetrue/byspace-protocol/agent-labels";
 import { SortablePager } from "./pagination/sortable-pager.js";
 import type { PersistedProjectRecord, PersistedWorkspaceRecord } from "./workspace-registry.js";
 import { resolveProjectDisplayName } from "./workspace-registry.js";
 import {
   deriveTerminalActivityStatusBucket,
   type TerminalActivity,
-} from "@getpaseo/protocol/terminal-activity";
+} from "@bytetrue/byspace-protocol/terminal-activity";
 import type { ProviderSubagentDescriptor } from "./agent/provider-subagents/store.js";
 
 const FETCH_WORKSPACES_SORT_KEYS = [
@@ -140,17 +140,6 @@ export function workspaceIdsOnCheckout(
   return Array.from(workspaces)
     .filter((workspace) => !workspace.archivedAt && resolve(workspace.cwd) === resolvedCwd)
     .map((workspace) => workspace.workspaceId);
-}
-
-export function workspaceIdsForProjects(
-  workspaces: Iterable<PersistedWorkspaceRecord>,
-  projectIds: ReadonlySet<string>,
-): string[] {
-  const workspaceIds = new Set<string>();
-  for (const workspace of workspaces) {
-    if (projectIds.has(workspace.projectId)) workspaceIds.add(workspace.workspaceId);
-  }
-  return Array.from(workspaceIds);
 }
 
 export class WorkspaceDirectory {
@@ -564,15 +553,18 @@ export class WorkspaceDirectory {
       .filter(
         (project) => !project.archivedAt && !projectIdsWithActiveWorkspaces.has(project.projectId),
       )
-      .map((project) => ({
-        projectId: project.projectId,
-        projectKey: project.projectKey ?? undefined,
-        projectDisplayName: resolveProjectDisplayName(project),
-        projectCustomName: project.customName ?? null,
-        projectCustomIconRevision: project.customIconRevision ?? null,
-        projectRootPath: project.rootPath,
-        projectKind: project.kind,
-      }));
+      .map((project) => {
+        const descriptor: WorkspaceProjectDescriptor = {
+          projectId: project.projectId,
+          projectKey: project.projectId,
+          projectDisplayName: resolveProjectDisplayName(project),
+          projectCustomName: project.customName ?? null,
+          projectRootPath: project.rootPath,
+          projectKind: project.kind,
+        };
+        if (project.projectKey) descriptor.projectGroupingKey = project.projectKey;
+        return descriptor;
+      });
   }
 
   async listDescriptors(): Promise<WorkspaceDescriptorPayload[]> {

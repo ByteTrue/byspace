@@ -26,7 +26,6 @@ export {
   type ActionStatus,
   type MenuItemProps,
 } from "./menu-item";
-export { MENU_ITEM_HEIGHT } from "./menu-geometry";
 export {
   useMenuContext,
   useMenuDepth,

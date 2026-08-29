@@ -1,7 +1,7 @@
 export type KeyboardActionScope = "global" | "message-input" | "sidebar" | "workspace";
 
 export type WorkspacePanelTarget = "changes" | "files" | "pull-request";
-export type WorkspacePanelPlacement = "supporting" | "side-pane" | "focused-pane";
+export type WorkspacePanelPlacement = "supporting" | "side-panel" | "focused-pane";
 
 export type KeyboardActionId =
   | "agent.interrupt"
@@ -10,8 +10,6 @@ export type KeyboardActionId =
   | "message-input.dictation-toggle"
   | "message-input.dictation-cancel"
   | "message-input.dictation-confirm"
-  | "message-input.voice-toggle"
-  | "message-input.voice-mute-toggle"
   | "message-input.mode-cycle"
   | "workspace.agent.new"
   | "workspace.tab.menu.open"
@@ -42,9 +40,9 @@ export type KeyboardActionId =
   | "workspace.pane.move-tab.up"
   | "workspace.pane.move-tab.down"
   | "workspace.pane.close"
+  | "workspace.explorer.maximize.toggle"
   | "workspace.focus.toggle"
   | "workspace.terminal.new"
-  | "workspace.browser.new"
   | "sidebar.toggle.right"
   | "sidebar.toggle.both"
   | "workspace.new"
@@ -60,8 +58,6 @@ export type KeyboardActionDefinition =
   | { id: "message-input.dictation-toggle"; scope: KeyboardActionScope }
   | { id: "message-input.dictation-cancel"; scope: KeyboardActionScope }
   | { id: "message-input.dictation-confirm"; scope: KeyboardActionScope }
-  | { id: "message-input.voice-toggle"; scope: KeyboardActionScope }
-  | { id: "message-input.voice-mute-toggle"; scope: KeyboardActionScope }
   | { id: "message-input.mode-cycle"; scope: KeyboardActionScope }
   | { id: "workspace.agent.new"; scope: KeyboardActionScope }
   | { id: "workspace.tab.menu.open"; scope: KeyboardActionScope }
@@ -97,9 +93,9 @@ export type KeyboardActionDefinition =
   | { id: "workspace.pane.move-tab.up"; scope: KeyboardActionScope }
   | { id: "workspace.pane.move-tab.down"; scope: KeyboardActionScope }
   | { id: "workspace.pane.close"; scope: KeyboardActionScope }
+  | { id: "workspace.explorer.maximize.toggle"; scope: KeyboardActionScope }
   | { id: "workspace.focus.toggle"; scope: KeyboardActionScope }
   | { id: "workspace.terminal.new"; scope: KeyboardActionScope }
-  | { id: "workspace.browser.new"; scope: KeyboardActionScope }
   | { id: "sidebar.toggle.right"; scope: KeyboardActionScope }
   | { id: "sidebar.toggle.both"; scope: KeyboardActionScope }
   | { id: "workspace.new"; scope: KeyboardActionScope }

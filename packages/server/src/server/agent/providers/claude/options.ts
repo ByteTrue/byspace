@@ -1,4 +1,4 @@
-import type { ProviderOptions, ToolPolicy } from "@getpaseo/protocol/agent-types";
+import type { ProviderOptions } from "@bytetrue/byspace-protocol/agent-types";
 import { z } from "zod";
 
 const PermissionRulesSchema = z
@@ -88,15 +88,3 @@ export const ClaudeProviderOptionsSchema = z
   .strict() satisfies z.ZodType<ProviderOptions>;
 
 export type ClaudeProviderOptions = z.infer<typeof ClaudeProviderOptionsSchema>;
-
-export function applyClaudeToolPolicy(
-  options: ClaudeProviderOptions,
-  toolPolicy: ToolPolicy | undefined,
-): ClaudeProviderOptions {
-  if (!toolPolicy) return options;
-  const allowedTools = Array.isArray(options.allowedTools)
-    ? options.allowedTools.filter((tool): tool is string => typeof tool === "string")
-    : [];
-  const grants = toolPolicy.preapproved.map((grant) => `mcp__${grant.server}__${grant.tool}`);
-  return { ...options, allowedTools: [...new Set([...allowedTools, ...grants])] };
-}

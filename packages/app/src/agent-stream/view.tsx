@@ -16,7 +16,6 @@ import {
   View,
   Text,
   Pressable,
-  Platform,
   type PressableStateCallbackType,
   type StyleProp,
   type ViewStyle,
@@ -27,7 +26,7 @@ import { useMutation } from "@tanstack/react-query";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { Check, ChevronDown, X } from "lucide-react-native";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
-import { openExplorerSidebarView } from "@/workspace-tabs/explorer-sidebar";
+import { openSidePanelView } from "@/workspace-tabs/side-panel";
 import {
   AssistantMessage,
   SpeakMessage,
@@ -48,18 +47,24 @@ import type {
   AgentCapabilityFlags,
   AgentPermissionAction,
   AgentPermissionResponse,
-} from "@getpaseo/protocol/agent-types";
+} from "@bytetrue/byspace-protocol/agent-types";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
 import { useSessionStore } from "@/stores/session-store";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
 import { useSettings } from "@/hooks/use-settings";
 import type { ToastApi } from "@/components/toast-host";
-import { returnToTimelineTail } from "./timeline-tail-navigation";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import { navigateToTimelineTail } from "./timeline-tail-navigation";
+import { useStreamHistoryWindow } from "./use-stream-history-window";
+import { ChatOutlineRail } from "@/agent-stream/chat-outline/rail";
+import { useChatOutline } from "@/agent-stream/chat-outline/use-chat-outline";
+import { getHostRuntimeStore } from "@/runtime/host-runtime";
+import { planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 import { ToolCallDetailsContent } from "@/components/tool-call-details";
 import { QuestionFormCard } from "@/components/question-form-card";
 import { ToolCallSheetProvider } from "@/components/tool-call-sheet";
+import { AssistantSelectionCopySurface } from "@/assistant-selection-copy/surface";
 import {
   prepareToolCallHistory,
   projectToolCallDetailLevel,
@@ -68,14 +73,10 @@ import { OverviewToolCallGroupView } from "@/tool-calls/detail-level/overview/vi
 import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "./model";
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
 import { type StreamSegmentRenderers, type StreamViewportHandle } from "./strategy";
-import { ChatOutlineRail } from "@/agent-stream/chat-outline/rail";
-import { useChatOutline } from "@/agent-stream/chat-outline/use-chat-outline";
-import { getHostRuntimeStore } from "@/runtime/host-runtime";
-import { planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
 import {
   CompletedTurnFooterRow,
-  TurnFooter,
   TURN_FOOTER_BOTTOM_SPACING,
+  TurnFooter,
   type AssistantTurnForkHandler,
   type InFlightTurnForkHandler,
   type TurnContentStrategy,
@@ -87,7 +88,6 @@ import {
   type BottomAnchorRouteRequest,
 } from "./bottom-anchor-controller";
 import { createAssistantImageOccurrenceKey } from "@/assistant-image/acquisition-cache";
-import { AssistantSelectionCopySurface } from "@/assistant-selection-copy/surface";
 import {
   AssistantFileLinkResolverProvider,
   normalizeInlinePathTarget,
@@ -100,12 +100,10 @@ import {
 } from "@/workspace/file-open";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { useStableEvent } from "@/hooks/use-stable-event";
-import { useForkAgent } from "@/hooks/use-fork-agent";
-import { isWeb } from "@/constants/platform";
 import type { Theme } from "@/styles/theme";
 import { recordRenderProfileReasons } from "@/utils/render-profiler";
 import { useRetainedPanelActive } from "@/components/retained-panel";
-import { useStreamHistoryWindow } from "./use-stream-history-window";
+import { useForkAgent } from "@/hooks/use-fork-agent";
 
 function renderLiveAuxiliaryNode(input: {
   pendingPermissions: ReactNode;
@@ -244,6 +242,7 @@ function renderLiveHeadStreamItem(input: {
 
 export interface AgentStreamViewHandle {
   scrollToBottom(reason?: BottomAnchorLocalRequest["reason"]): void;
+  collapseAll(): void;
   prepareForViewportChange(): void;
 }
 
@@ -265,6 +264,8 @@ export interface AgentStreamViewProps {
   toast?: ToastApi | null;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
   readOnly?: boolean;
+  showScrollToBottomButton?: boolean;
+  onNearBottomChange?: (isNearBottom: boolean) => void;
   historyPagination?: {
     hasOlder: boolean;
     isLoadingOlder: boolean;
@@ -294,11 +295,20 @@ function useRetainedValue<T>(value: T, active: boolean): T {
   }
   return active ? value : retainedRef.current;
 }
+
 const EMPTY_PENDING_MESSAGE_SUBMISSIONS: readonly PendingMessageSubmission[] = [];
 const GROUPED_TOOL_CALL_DETAIL_MAX_HEIGHT = 200;
 
 function resolveBottomOverlayControlOffset(clearance: number | undefined): number {
   return Math.max(16, clearance ?? 0);
+}
+
+function shouldShowScrollToBottomButton(
+  enabled: boolean,
+  isNearBottom: boolean,
+  isTimelineDetached: boolean,
+): boolean {
+  return enabled && (!isNearBottom || isTimelineDetached);
 }
 
 const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamViewProps>(
@@ -319,6 +329,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       toast,
       onOpenWorkspaceFile,
       readOnly = false,
+      showScrollToBottomButton = true,
+      onNearBottomChange,
       historyPagination,
     },
     ref,
@@ -336,7 +348,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const streamRenderStrategy = useMemo(
       () =>
         resolveStreamRenderStrategy({
-          platform: Platform.OS,
           isMobileBreakpoint: isMobile,
         }),
       [isMobile],
@@ -346,6 +357,10 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       new Set(),
     );
     const [expandedToolCallGroupIds, setExpandedToolCallGroupIds] = useState<Set<string>>(
+      new Set(),
+    );
+    const [collapseRevision, setCollapseRevision] = useState(0);
+    const [collapsedReasoningIds, setCollapsedReasoningIds] = useState<ReadonlySet<string>>(
       new Set(),
     );
 
@@ -397,21 +412,20 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           loadOlder: historyPagination.onLoadOlder,
         }
       : agentHistoryPagination;
-    // Keep entry/exit animations off on Android due to RN dispatchDraw crashes
-    // tracked in react-native-reanimated#8422.
-    const shouldDisableEntryExitAnimations = Platform.OS === "android";
-    const scrollIndicatorFadeIn = shouldDisableEntryExitAnimations
-      ? undefined
-      : FadeIn.duration(200);
-    const scrollIndicatorFadeOut = shouldDisableEntryExitAnimations
-      ? undefined
-      : FadeOut.duration(200);
+    const scrollIndicatorFadeIn = FadeIn.duration(200);
+    const scrollIndicatorFadeOut = FadeOut.duration(200);
+    const handleNearBottomChange = useStableEvent((nextIsNearBottom: boolean) => {
+      setIsNearBottom(nextIsNearBottom);
+      onNearBottomChange?.(nextIsNearBottom);
+    });
 
     useEffect(() => {
-      setIsNearBottom(true);
+      handleNearBottomChange(true);
       setExpandedInlineToolCallIds(new Set());
       setExpandedToolCallGroupIds(new Set());
-    }, [agentId]);
+      setCollapseRevision(0);
+      setCollapsedReasoningIds(new Set());
+    }, [agentId, handleNearBottomChange]);
 
     const handleInlinePathPress = useStableEvent(
       (target: InlinePathTarget, disposition: OpenFileDisposition) => {
@@ -457,7 +471,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           setCurrentPath: false,
         });
 
-        openExplorerSidebarView({
+        openSidePanelView({
           isCompact: isMobile,
           workspaceKey: buildWorkspaceTabPersistenceKey({
             serverId: resolvedServerId,
@@ -474,25 +488,20 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     );
 
     const handleToolCallOpenFile = useStableEvent((filePath: string) => {
-      handleInlinePathPress({ raw: filePath, path: filePath }, "preferred");
+      handleInlinePathPress({ raw: filePath, path: filePath }, "side");
     });
 
     const handleForkAssistantTurn: AssistantTurnForkHandler = useStableEvent(
-      async ({ target, boundary }) => {
-        await forkAgent({
+      async ({ target, boundary }) =>
+        forkAgent({
           agentId,
           agent: context,
           workspaceId: context.workspaceId,
           target,
           boundary,
-        });
-      },
+        }),
     );
-
-    // The in-flight turn forks with no boundary at all: `selectForkContextRows`
-    // projects the whole timeline when neither boundary field is given, so the
-    // fork carries everything up to now, including the response still streaming
-    // in front of the user.
+    // Omitting the boundary captures the full timeline snapshot, including the streaming turn.
     const handleForkInFlightTurn: InFlightTurnForkHandler = useStableEvent(async (target) => {
       await forkAgent({
         agentId,
@@ -533,6 +542,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         toolCallDetailLevel,
       ],
     );
+
     const {
       start: historyWindowStart,
       hasLocalHistory,
@@ -541,7 +551,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     } = useStreamHistoryWindow({
       agentId,
       items: projectedToolCalls.tail,
-      loadRemoteOlder,
+      loadRemoteOlder: loadRemoteOlder,
     });
     const isLoadingOlder = remoteIsLoadingOlder;
     const hasOlder = hasLocalHistory || remoteHasOlder;
@@ -553,7 +563,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         activeTurnStartedAt: effectiveTurnPresentation.startedAt,
         tail: projectedToolCalls.tail,
         head: projectedToolCalls.head,
-        platform: isWeb ? "web" : "native",
+        platform: "web",
         isMobileBreakpoint: isMobile,
         historyStart: historyWindowStart,
       });
@@ -611,19 +621,28 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         scrollToBottom(reason = "jump-to-bottom") {
           viewportRef.current?.scrollToBottom(reason);
         },
+        collapseAll() {
+          setExpandedInlineToolCallIds(new Set());
+          setExpandedToolCallGroupIds(new Set());
+          setCollapseRevision((current) => current + 1);
+          setCollapsedReasoningIds(
+            new Set(
+              [...streamLayout.history, ...streamLayout.liveHead]
+                .filter(({ item }) => item.kind === "thought")
+                .map(({ item }) => item.id),
+            ),
+          );
+        },
         prepareForViewportChange() {
           viewportRef.current?.prepareForViewportChange();
         },
       }),
-      [],
+      [streamLayout.history, streamLayout.liveHead],
     );
 
     const scrollToBottom = useCallback(() => {
-      if (!isTimelineDetached) {
-        viewportRef.current?.scrollToBottom("jump-to-bottom");
-        return;
-      }
-      void returnToTimelineTail({
+      void navigateToTimelineTail({
+        isDetached: isTimelineDetached,
         fetchTail: () =>
           getHostRuntimeStore().fetchAgentTimeline(resolvedServerId, agentId, {
             ...planTimelineTailFetch(),
@@ -720,16 +739,17 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           <ToolCallSlot
             itemId={item.id}
             onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
+            key={collapseRevision}
             toolName="thinking"
             args={item.text}
             status={item.status === "ready" ? "completed" : "executing"}
             isLastInSequence={layoutItem.isLastInToolSequence}
-            defaultExpanded={autoExpandReasoning}
+            defaultExpanded={autoExpandReasoning && !collapsedReasoningIds.has(item.id)}
             forceInline={autoExpandReasoning}
           />
         );
       },
-      [autoExpandReasoning, setInlineDetailsExpanded],
+      [autoExpandReasoning, collapsedReasoningIds, collapseRevision, setInlineDetailsExpanded],
     );
 
     const renderSingleToolCallItem = useCallback(
@@ -758,6 +778,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             <ToolCallSlot
               itemId={item.id}
               onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
+              key={collapseRevision}
               toolName={data.name}
               error={data.error}
               status={data.status}
@@ -776,6 +797,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           <ToolCallSlot
             itemId={item.id}
             onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
+            key={collapseRevision}
             toolName={data.toolName}
             args={data.arguments}
             result={data.result}
@@ -786,7 +808,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           />
         );
       },
-      [context.cwd, setInlineDetailsExpanded, handleToolCallOpenFile],
+      [collapseRevision, context.cwd, setInlineDetailsExpanded, handleToolCallOpenFile],
     );
 
     const renderToolCallItem = useCallback(
@@ -1061,7 +1083,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               viewportRef,
               routeBottomAnchorRequest,
               isAuthoritativeHistoryReady,
-              onNearBottomChange: setIsNearBottom,
+              onNearBottomChange: handleNearBottomChange,
               onReadingPositionChange: chatOutline.reportReadingPosition,
               onNearHistoryStart: loadOlder,
               isLoadingOlderHistory: isLoadingOlder,
@@ -1078,7 +1100,11 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             activePrompt={chatOutline.activePrompt}
             onJumpToPrompt={chatOutline.jumpToPrompt}
           />
-          {(!isNearBottom || isTimelineDetached) && (
+          {shouldShowScrollToBottomButton(
+            showScrollToBottomButton,
+            isNearBottom,
+            isTimelineDetached,
+          ) && (
             <View style={scrollToBottomContainerStyle} pointerEvents="box-none">
               <Animated.View entering={scrollIndicatorFadeIn} exiting={scrollIndicatorFadeOut}>
                 <Pressable
@@ -1119,6 +1145,9 @@ function collectAgentProjectPlacementDiffs(
   }
   if (left?.projectName !== right?.projectName) {
     reasons.push("agent.projectPlacement.projectName");
+  }
+  if (left?.projectId !== right?.projectId) {
+    reasons.push("agent.projectPlacement.projectId");
   }
   if (left?.projectKey !== right?.projectKey) {
     reasons.push("agent.projectPlacement.projectKey");
@@ -1212,6 +1241,10 @@ function agentStreamViewPropsEqual(
   if (left.toast !== right.toast) reasons.push("toast");
   if (left.onOpenWorkspaceFile !== right.onOpenWorkspaceFile) reasons.push("onOpenWorkspaceFile");
   if (left.readOnly !== right.readOnly) reasons.push("readOnly");
+  if (left.showScrollToBottomButton !== right.showScrollToBottomButton) {
+    reasons.push("showScrollToBottomButton");
+  }
+  if (left.onNearBottomChange !== right.onNearBottomChange) reasons.push("onNearBottomChange");
   if (!historyPaginationPropsEqual(left.historyPagination, right.historyPagination)) {
     reasons.push("historyPagination");
   }
@@ -1588,6 +1621,7 @@ const stylesheet = StyleSheet.create((theme) => ({
   },
   scrollToBottomContainer: {
     position: "absolute",
+    bottom: 16,
     left: 0,
     right: 0,
     alignItems: "center",

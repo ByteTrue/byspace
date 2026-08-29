@@ -1,4 +1,4 @@
-import type { AgentStreamEventPayload } from "@getpaseo/protocol/messages";
+import type { AgentStreamEventPayload } from "@bytetrue/byspace-protocol/messages";
 import { selectAgentTimelineState, useSessionStore } from "@/stores/session-store";
 import type { AssistantMessageItem, StreamItem, TodoEntry } from "@/types/stream";
 import type { TurnLivenessTransition } from "@/timeline/turn-liveness";
@@ -126,7 +126,6 @@ interface TimelineResponseEntry {
   sourceSeqRanges?: TimelineSeqRange[];
   collapsed?: string[];
   provider: string;
-  turnId?: string;
   item: Record<string, unknown>;
   timestamp: string;
 }
@@ -607,7 +606,9 @@ function acceptIncrementalTimelineUnits(args: {
   }
 
   return {
-    acceptedUnits: timelineUnits,
+    acceptedUnits: timelineUnits.filter((unit) =>
+      unit.sourceSeqRanges.some((range) => range.endSeq > currentCursor.endSeq),
+    ),
     cursor: { ...currentCursor, endSeq: responseEndSeq },
     gapCursor: null,
   };
@@ -1270,7 +1271,6 @@ export function processTimelineResponse(
       type: "timeline",
       provider: entry.provider,
       item: entry.item,
-      ...(entry.turnId ? { turnId: entry.turnId } : {}),
     } as AgentStreamEventPayload,
     timestamp: new Date(entry.timestamp),
   }));
@@ -1547,12 +1547,26 @@ function processTimelineSequencingGate(input: {
         : [],
     };
   }
-  if (decision === "drop_epoch" && seq === 1) {
+  if (decision === "drop_epoch") {
+    if (seq === 1) {
+      return {
+        ...base,
+        nextTimelineCursor: { epoch, startSeq: seq, endSeq: seq },
+        cursorChanged: true,
+        resetLiveTimeline: true,
+      };
+    }
     return {
       ...base,
-      nextTimelineCursor: { epoch, startSeq: seq, endSeq: seq },
-      cursorChanged: true,
-      resetLiveTimeline: true,
+      shouldApplyStreamEvent: false,
+      sideEffects: currentCursor
+        ? [
+            {
+              type: "catch_up",
+              cursor: { epoch: currentCursor.epoch, endSeq: currentCursor.endSeq },
+            },
+          ]
+        : [],
     };
   }
   return {
@@ -1873,6 +1887,10 @@ export function createSessionAgentStreamReducerQueue(
             : {}),
           ...(result.taskSnapshot !== undefined ? { taskSnapshot: result.taskSnapshot } : {}),
         });
+      }
+      const store = useSessionStore.getState();
+      for (const transition of deriveAgentStreamTurnLiveness(events)) {
+        store.applyAgentTurnLiveness(serverId, agentId, transition);
       }
       if (result.cursorChanged && result.cursor) {
         const nextCursor = result.cursor;

@@ -11,7 +11,6 @@ import {
   findMountedWindowStart,
   getWebMountedRecentStreamItems,
   getWebPartialVirtualizationThreshold,
-  shouldAdjustScrollForVirtualRowResize,
   splitWebVirtualizedHistory,
   type IndexedStreamItem,
 } from "./web-virtualization";
@@ -137,8 +136,8 @@ describe("estimateStreamItemHeight", () => {
         {
           id: "att-1",
           mimeType: "image/png",
-          storageType: "desktop-file",
-          storageKey: "/tmp/screenshot.png",
+          storageType: "web-indexeddb",
+          storageKey: "att-1",
           fileName: "screenshot.png",
           byteSize: 1024,
           createdAt: Date.now(),
@@ -169,86 +168,38 @@ describe("estimateStreamItemHeight", () => {
   });
 });
 
-describe("virtual row resize anchoring", () => {
-  it("does not move the viewport when a visible row expands while detached", () => {
-    expect(
-      shouldAdjustScrollForVirtualRowResize({
-        isHistoryStartPrependActive: false,
-        rowStart: 1200,
-        scrollOffset: 1000,
-        remainingDistanceFromBottom: 5000,
-        bottomThreshold: 64,
-      }),
-    ).toBe(false);
-  });
-
-  it("keeps the reading position when a row above the viewport changes size", () => {
-    expect(
-      shouldAdjustScrollForVirtualRowResize({
-        isHistoryStartPrependActive: false,
-        rowStart: 800,
-        scrollOffset: 1000,
-        remainingDistanceFromBottom: 5000,
-        bottomThreshold: 64,
-      }),
-    ).toBe(true);
-  });
-
-  it("leaves history prepend and bottom following to their existing anchors", () => {
-    const baseInput = {
-      rowStart: 800,
-      scrollOffset: 1000,
-      remainingDistanceFromBottom: 5000,
-      bottomThreshold: 64,
-    };
-
-    expect(
-      shouldAdjustScrollForVirtualRowResize({
-        ...baseInput,
-        isHistoryStartPrependActive: true,
-      }),
-    ).toBe(false);
-    expect(
-      shouldAdjustScrollForVirtualRowResize({
-        ...baseInput,
-        isHistoryStartPrependActive: false,
-        remainingDistanceFromBottom: 64,
-      }),
-    ).toBe(false);
-  });
-});
-
 describe("web virtualization test overrides", () => {
   it("uses defaults unless explicit positive integer overrides are present", () => {
     const globalWithOverrides = globalThis as typeof globalThis & {
-      __PASEO_E2E_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD?: unknown;
-      __PASEO_E2E_WEB_MOUNTED_RECENT_STREAM_ITEMS?: unknown;
+      __BYSPACE_E2E_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD?: unknown;
+      __BYSPACE_E2E_WEB_MOUNTED_RECENT_STREAM_ITEMS?: unknown;
     };
-    const previousThreshold = globalWithOverrides.__PASEO_E2E_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD;
-    const previousMounted = globalWithOverrides.__PASEO_E2E_WEB_MOUNTED_RECENT_STREAM_ITEMS;
+    const previousThreshold =
+      globalWithOverrides.__BYSPACE_E2E_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD;
+    const previousMounted = globalWithOverrides.__BYSPACE_E2E_WEB_MOUNTED_RECENT_STREAM_ITEMS;
 
     try {
-      delete globalWithOverrides.__PASEO_E2E_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD;
-      delete globalWithOverrides.__PASEO_E2E_WEB_MOUNTED_RECENT_STREAM_ITEMS;
+      delete globalWithOverrides.__BYSPACE_E2E_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD;
+      delete globalWithOverrides.__BYSPACE_E2E_WEB_MOUNTED_RECENT_STREAM_ITEMS;
       expect(getWebPartialVirtualizationThreshold()).toBe(
         DEFAULT_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD,
       );
       expect(getWebMountedRecentStreamItems()).toBe(DEFAULT_WEB_MOUNTED_RECENT_STREAM_ITEMS);
 
-      globalWithOverrides.__PASEO_E2E_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD = 6;
-      globalWithOverrides.__PASEO_E2E_WEB_MOUNTED_RECENT_STREAM_ITEMS = 4;
+      globalWithOverrides.__BYSPACE_E2E_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD = 6;
+      globalWithOverrides.__BYSPACE_E2E_WEB_MOUNTED_RECENT_STREAM_ITEMS = 4;
       expect(getWebPartialVirtualizationThreshold()).toBe(6);
       expect(getWebMountedRecentStreamItems()).toBe(4);
     } finally {
       if (previousThreshold === undefined) {
-        delete globalWithOverrides.__PASEO_E2E_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD;
+        delete globalWithOverrides.__BYSPACE_E2E_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD;
       } else {
-        globalWithOverrides.__PASEO_E2E_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD = previousThreshold;
+        globalWithOverrides.__BYSPACE_E2E_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD = previousThreshold;
       }
       if (previousMounted === undefined) {
-        delete globalWithOverrides.__PASEO_E2E_WEB_MOUNTED_RECENT_STREAM_ITEMS;
+        delete globalWithOverrides.__BYSPACE_E2E_WEB_MOUNTED_RECENT_STREAM_ITEMS;
       } else {
-        globalWithOverrides.__PASEO_E2E_WEB_MOUNTED_RECENT_STREAM_ITEMS = previousMounted;
+        globalWithOverrides.__BYSPACE_E2E_WEB_MOUNTED_RECENT_STREAM_ITEMS = previousMounted;
       }
     }
   });

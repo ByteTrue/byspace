@@ -7,12 +7,6 @@ export function reconcileReconnectToastState(
   state: ReconnectToastState | undefined,
   connectionStatusStartedAt: number,
 ): ReconnectToastState {
-  if (state?.connectionStatusStartedAt === connectionStatusStartedAt) {
-    return state;
-  }
-
-  return {
-    connectionStatusStartedAt,
-    presented: false,
-  };
+  if (state?.connectionStatusStartedAt === connectionStatusStartedAt) return state;
+  return { connectionStatusStartedAt, presented: false };
 }

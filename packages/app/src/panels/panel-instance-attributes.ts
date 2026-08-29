@@ -13,10 +13,9 @@ export interface PanelInstanceAttributes {
 }
 
 const DEFAULT_ATTRIBUTES: PanelInstanceAttributes = { modified: false };
-const attributesByPanel = new Map<string, PanelInstanceAttributes>();
+let attributesByPanel = new Map<string, PanelInstanceAttributes>();
 const listenersByPanel = new Map<string, Set<() => void>>();
 const allListeners = new Set<() => void>();
-let attributesRevision = 0;
 
 export function buildPanelInstanceKey(identity: PanelInstanceIdentity): string {
   return `${identity.serverId}:${identity.workspaceId}:${identity.tabId}`;
@@ -40,9 +39,10 @@ export function setPanelInstanceAttributes(
   ) {
     return;
   }
-  if (attributes.modified) attributesByPanel.set(key, attributes);
-  else attributesByPanel.delete(key);
-  attributesRevision += 1;
+  const next = new Map(attributesByPanel);
+  if (attributes.modified) next.set(key, attributes);
+  else next.delete(key);
+  attributesByPanel = next;
   for (const listener of listenersByPanel.get(key) ?? []) listener();
   for (const listener of allListeners) listener();
 }
@@ -52,27 +52,30 @@ export function useModifiedPanelTabIds(input: {
   workspaceId: string;
   tabIds: string[];
 }): Set<string> {
-  const revision = useSyncExternalStore(
+  const attributes = useSyncExternalStore(
     useCallback((listener: () => void) => {
       allListeners.add(listener);
       return () => allListeners.delete(listener);
     }, []),
-    () => attributesRevision,
-    () => attributesRevision,
+    () => attributesByPanel,
+    () => attributesByPanel,
   );
-  return useMemo(() => {
-    void revision;
-    return new Set(
-      input.tabIds.filter(
-        (tabId) =>
-          getPanelInstanceAttributes({
-            serverId: input.serverId,
-            workspaceId: input.workspaceId,
-            tabId,
-          }).modified,
+  return useMemo(
+    () =>
+      new Set(
+        input.tabIds.filter(
+          (tabId) =>
+            attributes.get(
+              buildPanelInstanceKey({
+                serverId: input.serverId,
+                workspaceId: input.workspaceId,
+                tabId,
+              }),
+            )?.modified,
+        ),
       ),
-    );
-  }, [input.serverId, input.tabIds, input.workspaceId, revision]);
+    [attributes, input.serverId, input.tabIds, input.workspaceId],
+  );
 }
 
 export function subscribePanelInstanceAttributes(

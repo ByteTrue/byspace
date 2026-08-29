@@ -1,5 +1,5 @@
-import { parseCronExpression } from "@getpaseo/protocol/schedule/cron-expression";
-import type { ScheduleCadence } from "@getpaseo/protocol/schedule/types";
+import { parseCronExpression } from "@bytetrue/byspace-protocol/schedule/cron-expression";
+import type { ScheduleCadence } from "@bytetrue/byspace-protocol/schedule/types";
 
 interface CronDateParts {
   minute: number;
@@ -87,8 +87,6 @@ export function validateScheduleCadence(cadence: ScheduleCadence): void {
 
 export function computeNextRunAt(cadence: ScheduleCadence, after: Date): Date {
   if (cadence.type === "every") {
-    // COMPAT(scheduleEveryMs): execute legacy persisted rolling intervals until the
-    // compatibility floor reaches v0.2.0. Added in v0.2.0; remove after 2027-01-17.
     return new Date(after.getTime() + cadence.everyMs);
   }
 

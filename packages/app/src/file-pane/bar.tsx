@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -7,6 +8,7 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import type { Theme } from "@/styles/theme";
 import { FileConflictAlert, type FileConflictAlertState } from "./conflict-alert";
 import type { FileEditorStatus } from "./editor/model";
+import { FileTreeToggle } from "./tree-toggle";
 
 const ThemedSpinner = withUnistyles(LoadingSpinner);
 const spinnerMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -31,14 +33,30 @@ export function FilePanelBar({
   conflict?: FileConflictAlertState;
 }) {
   const { t } = useTranslation();
-  const previewModes = [
-    {
-      value: "preview" as const,
-      label: t("panels.file.editor.preview"),
-      testID: "file-mode-preview",
-    },
-    { value: "source" as const, label: t("panels.file.editor.source"), testID: "file-mode-source" },
-  ];
+  const editorStatusLabel = editorStatus
+    ? {
+        clean: t("panels.file.editor.saved"),
+        dirty: t("panels.file.editor.unsavedChanges"),
+        saving: t("panels.file.editor.saving"),
+        conflict: t("panels.file.editor.changedOnDisk"),
+        error: t("panels.file.editor.saveFailed"),
+      }[editorStatus]
+    : undefined;
+  const markdownModes = useMemo(
+    () => [
+      {
+        value: "preview" as const,
+        label: t("panels.file.editor.preview"),
+        testID: "file-mode-preview",
+      },
+      {
+        value: "source" as const,
+        label: t("panels.file.editor.source"),
+        testID: "file-mode-source",
+      },
+    ],
+    [t],
+  );
   return (
     <View style={styles.chrome}>
       <PaneContentToolbar testID="file-panel-bar">
@@ -63,7 +81,7 @@ export function FilePanelBar({
             style={styles.status}
             accessibilityLabel={
               editorStatus
-                ? t("panels.file.editor.editorStatus", { status: editorStatus })
+                ? t("panels.file.editor.editorStatus", { status: editorStatusLabel })
                 : undefined
             }
           >
@@ -95,19 +113,20 @@ export function FilePanelBar({
                 style={styles.whisper}
                 accessibilityLabel={t("panels.file.editor.cursor", cursor)}
               >
-                Ln {cursor.line}, Col {cursor.column}
+                {t("panels.file.editor.cursor", cursor)}
               </Text>
             ) : null}
           </View>
           {mode && onModeChange ? (
             <SegmentedControl
-              size="xs"
+              size="sm"
               value={mode}
               onValueChange={onModeChange}
-              testID="file-preview-mode"
-              options={previewModes}
+              testID="file-markdown-mode"
+              options={markdownModes}
             />
           ) : null}
+          <FileTreeToggle />
         </View>
       </PaneContentToolbar>
       {conflict ? <FileConflictAlert state={conflict} /> : null}

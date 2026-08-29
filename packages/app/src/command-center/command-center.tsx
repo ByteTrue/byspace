@@ -14,25 +14,11 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, ChevronRight, Folder, X } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import {
-  BottomSheetBackdrop,
-  BottomSheetFlatList,
-  type BottomSheetFlatListMethods,
-} from "@gorhom/bottom-sheet";
 import { AgentStatusDot } from "@/components/agent-status-dot";
 import { MaterialFileIcon } from "@/components/material-file-icon";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import {
-  EditingTextInput as TextInput,
-  type EditingTextInputHandle,
-} from "@/components/ui/text-input";
 import { Shortcut } from "@/components/ui/shortcut";
-import {
-  IsolatedBottomSheetModal,
-  useIsolatedBottomSheetVisibility,
-} from "@/components/ui/isolated-bottom-sheet-modal";
-import { useIsCompactFormFactor } from "@/constants/layout";
-import { isNative, isWeb } from "@/constants/platform";
+import { isWeb } from "@/constants/platform";
 import { useAggregatedAgents, type AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { useProjects } from "@/hooks/use-projects";
 import {
@@ -58,10 +44,8 @@ import { shortenPath } from "@/utils/shorten-path";
 import { useCommandCenterContributions } from "./provider";
 import {
   buildContributionSections,
-  filterAndRankBuiltInResults,
   joinSubtitleParts,
   moveActiveResultId,
-  PINNED_SECTION_BAND,
   preserveActiveResultId,
   projectCommandCenterRows,
   type CommandCenterAgentResult,
@@ -69,14 +53,14 @@ import {
   type CommandCenterListRow,
   type CommandCenterResult,
   type CommandCenterResultSection,
-  type CommandCenterSearchFields,
   type CommandCenterWorkspaceResult,
 } from "./results";
 import { useWorkspaceFileSearch } from "./workspace-file-search";
+import {
+  EditingTextInput as TextInput,
+  type EditingTextInputHandle,
+} from "@/components/ui/text-input";
 
-const ThemedBottomSheetTextInput = withUnistyles(TextInput, (theme) => ({
-  placeholderTextColor: theme.colors.foregroundMuted,
-}));
 const ThemedTextInput = withUnistyles(TextInput, (theme) => ({
   placeholderTextColor: theme.colors.foregroundMuted,
 }));
@@ -89,7 +73,7 @@ const ThemedX = withUnistyles(X, (theme) => ({ color: theme.colors.foregroundMut
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner, (theme) => ({
   color: theme.colors.foregroundMuted,
 }));
-const COMMAND_CENTER_SNAP_POINTS = ["60%", "90%"];
+const DEFAULT_CATEGORY_RESULT_LIMIT = 5;
 const KEYBOARD_SHOULD_PERSIST_TAPS = "always" as const;
 
 function sortAgents(left: AggregatedAgent, right: AggregatedAgent): number {
@@ -105,59 +89,41 @@ function sortAgents(left: AggregatedAgent, right: AggregatedAgent): number {
   return right.lastActivityAt.getTime() - left.lastActivityAt.getTime();
 }
 
-function compareWorkspacesByTitle(
-  left: CommandCenterWorkspaceResult,
-  right: CommandCenterWorkspaceResult,
-): number {
-  const titleDelta = left.title.localeCompare(right.title, undefined, {
-    numeric: true,
-    sensitivity: "base",
-  });
-  return titleDelta || left.subtitle.localeCompare(right.subtitle);
+function matchesQuery(searchText: string, query: string): boolean {
+  const normalized = query.trim().toLowerCase();
+  return !normalized || searchText.includes(normalized);
 }
 
-/** `cwd` is not rendered, so a path match must never outrank a match on text the user can see. */
-function agentSearchFields(result: CommandCenterAgentResult): CommandCenterSearchFields {
-  return { visible: [result.title, result.subtitle], hidden: [result.agent.cwd] };
+function limitDefaultCategoryResults<Result>(results: Result[], query: string): Result[] {
+  return query.trim() ? results : results.slice(0, DEFAULT_CATEGORY_RESULT_LIMIT);
 }
 
-function workspaceSearchFields(result: CommandCenterWorkspaceResult): CommandCenterSearchFields {
-  return { visible: [result.title, result.subtitle], hidden: [] };
-}
-
-/**
- * Build every pinned row, in its default order. Deliberately not keyed on `query`: none of this
- * work depends on what was typed, and rebuilding it per keystroke means re-running an Intl
- * collation sort over every workspace.
- *
- * The cost is that `formatTimeAgo` is baked into the agent subtitle here, so relative timestamps
- * now refresh when agents or projects change rather than on every keystroke.
- */
-function useBuiltInRows(open: boolean): {
-  workspaces: CommandCenterWorkspaceResult[];
-  agents: CommandCenterAgentResult[];
-} {
+function useBuiltInSections(open: boolean, query: string): CommandCenterResultSection[] {
   const { t } = useTranslation();
   const { agents } = useAggregatedAgents();
   const { projects } = useProjects({ enabled: open });
   const showHost = useHosts().length > 1;
 
   return useMemo(() => {
-    if (!open) return { workspaces: [], agents: [] };
+    if (!open) return [];
     const allWorkspaces: CommandCenterWorkspaceResult[] = [];
     for (const project of projects) {
       for (const host of project.hosts) {
         for (const workspace of host.workspaces) {
           if (workspace.archivingAt) continue;
+          const title = workspace.title ?? workspace.name;
+          const subtitle = joinSubtitleParts([
+            showHost ? host.serverName : null,
+            project.projectName,
+            workspace.currentBranch,
+          ]);
+          const searchText = `${title} ${subtitle}`.toLowerCase();
           allWorkspaces.push({
             kind: "workspace",
             id: `workspace:${host.serverId}:${workspace.id}`,
-            title: workspace.title ?? workspace.name,
-            subtitle: joinSubtitleParts([
-              showHost ? host.serverName : null,
-              project.projectName,
-              workspace.currentBranch,
-            ]),
+            title,
+            subtitle,
+            searchText,
             run: () => {
               clearCommandCenterFocusRestoreElement();
               navigateToWorkspace({ serverId: host.serverId, workspaceId: workspace.id });
@@ -166,66 +132,60 @@ function useBuiltInRows(open: boolean): {
         }
       }
     }
-    allWorkspaces.sort(compareWorkspacesByTitle);
+    allWorkspaces.sort((left, right) => {
+      const titleDelta = left.title.localeCompare(right.title, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+      return titleDelta || left.subtitle.localeCompare(right.subtitle);
+    });
     const workspaceTitleByKey = new Map(
       allWorkspaces.map((workspace) => [workspace.id.slice("workspace:".length), workspace.title]),
     );
-    const agentRows = agents
-      .map<CommandCenterAgentResult>((agent) => {
-        const workspaceTitle = agent.workspaceId
-          ? workspaceTitleByKey.get(`${agent.serverId}:${agent.workspaceId}`)
-          : undefined;
-        return {
-          kind: "agent",
-          id: `agent:${agent.serverId}:${agent.id}`,
-          agent,
-          title: agent.title || t("shell.commandCenter.newAgent"),
-          subtitle: joinSubtitleParts([
+    const workspaces = limitDefaultCategoryResults(
+      allWorkspaces.filter((workspace) => matchesQuery(workspace.searchText, query)),
+      query,
+    );
+    const agentResults = limitDefaultCategoryResults(
+      agents
+        .map<CommandCenterAgentResult>((agent) => {
+          const title = agent.title || t("shell.commandCenter.newAgent");
+          const workspaceTitle = agent.workspaceId
+            ? workspaceTitleByKey.get(`${agent.serverId}:${agent.workspaceId}`)
+            : undefined;
+          const location = workspaceTitle ?? shortenPath(agent.cwd);
+          const subtitle = joinSubtitleParts([
             showHost ? agent.serverLabel : null,
-            workspaceTitle ?? shortenPath(agent.cwd),
+            location,
             formatTimeAgo(agent.lastActivityAt),
-          ]),
-          run: () => {
-            clearCommandCenterFocusRestoreElement();
-            navigateToAgent({ serverId: agent.serverId, agentId: agent.id });
-          },
-        };
-      })
-      .sort((left, right) => sortAgents(left.agent, right.agent));
-    return { workspaces: allWorkspaces, agents: agentRows };
-  }, [agents, open, projects, showHost, t]);
-}
-
-function useBuiltInSections(open: boolean, query: string): CommandCenterResultSection[] {
-  const { t } = useTranslation();
-  const rows = useBuiltInRows(open);
-
-  return useMemo(() => {
-    if (!open) return [];
+          ]);
+          return {
+            kind: "agent",
+            id: `agent:${agent.serverId}:${agent.id}`,
+            agent,
+            title,
+            subtitle,
+            searchText: `${title} ${subtitle} ${agent.cwd}`.toLowerCase(),
+            run: () => {
+              clearCommandCenterFocusRestoreElement();
+              navigateToAgent({ serverId: agent.serverId, agentId: agent.id });
+            },
+          };
+        })
+        .filter((agent) => matchesQuery(agent.searchText, query))
+        .sort((left, right) => sortAgents(left.agent, right.agent)),
+      query,
+    );
     return [
       {
         id: "workspaces",
-        band: PINNED_SECTION_BAND,
         rank: 2,
         title: t("shell.commandCenter.workspaces"),
-        results: filterAndRankBuiltInResults(
-          rows.workspaces,
-          query,
-          workspaceSearchFields,
-          compareWorkspacesByTitle,
-        ),
+        results: workspaces,
       },
-      {
-        id: "agents",
-        band: PINNED_SECTION_BAND,
-        rank: 3,
-        title: t("shell.commandCenter.agents"),
-        results: filterAndRankBuiltInResults(rows.agents, query, agentSearchFields, (left, right) =>
-          sortAgents(left.agent, right.agent),
-        ),
-      },
+      { id: "agents", rank: 3, title: t("shell.commandCenter.agents"), results: agentResults },
     ];
-  }, [open, query, rows, t]);
+  }, [agents, open, projects, query, showHost, t]);
 }
 
 interface CommandCenterState {
@@ -257,7 +217,7 @@ function useCommandCenterState(): CommandCenterState {
   const snapshot = useCommandCenterContributions();
   const inputRef = useRef<EditingTextInputHandle>(null);
   const previousOpenRef = useRef(open);
-  const [query, setQueryState] = useState("");
+  const [query, setQuery] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
   const builtInSections = useBuiltInSections(open, query);
   const {
@@ -276,20 +236,10 @@ function useCommandCenterState(): CommandCenterState {
       filePath: entry.path,
       title: entry.name,
       subtitle: entry.directory,
+      searchText: entry.path.toLowerCase(),
       run: () => openFile(entry.path),
     }));
-    // File rows are matched by the daemon, so they carry no client-side score and cannot be
-    // relevance-compared against the rows that do. Pinning them keeps the section comparator
-    // total: band is decided before any score is read.
-    return [
-      {
-        id: "files",
-        band: PINNED_SECTION_BAND,
-        rank: 4,
-        title: t("shell.commandCenter.files"),
-        results,
-      },
-    ];
+    return [{ id: "files", rank: 4, title: t("shell.commandCenter.files"), results }];
   }, [fileSearchEntries, openFile, t]);
   const contributionSections = useMemo(
     () => buildContributionSections(snapshot.contributions, query),
@@ -305,14 +255,6 @@ function useCommandCenterState(): CommandCenterState {
     [builtInSections, contributionSections, fileSections, scope],
   );
   const resolvedActiveId = preserveActiveResultId(activeId, projection.selectableResults);
-
-  // Editing the query re-ranks everything, so an arrow-key selection made under the previous
-  // query is no longer meaningful. Reset it in the same update as the query rather than in an
-  // effect, so there is no intermediate render holding the stale selection.
-  const setQuery = useCallback((next: string) => {
-    setQueryState(next);
-    setActiveId(null);
-  }, []);
 
   const close = useCallback(() => setOpen(false), [setOpen]);
   const select = useCallback(
@@ -356,7 +298,7 @@ function useCommandCenterState(): CommandCenterState {
       const timer = setTimeout(() => inputRef.current?.focus(), 0);
       return () => clearTimeout(timer);
     }
-    setQueryState("");
+    setQuery("");
     setActiveId(null);
     if (!wasOpen) return;
     const element = takeCommandCenterFocusRestoreElement();
@@ -407,7 +349,7 @@ const ResultRow = memo(function ResultRow({ result, active, onSelect }: ResultRo
       ? [result.title, result.subtitle].filter(Boolean).join(" ")
       : choice?.path.join(" › ");
   const accessibilityState = useMemo(
-    () => (isNative && choice ? { selected: choice.selected } : undefined),
+    () => (choice ? { selected: choice.selected } : undefined),
     [choice],
   );
   const style = useCallback(
@@ -588,18 +530,10 @@ function SectionRow({ row }: { row: Extract<CommandCenterListRow, { kind: "secti
 export function CommandCenter() {
   const { t } = useTranslation();
   const state = useCommandCenterState();
-  const isCompact = useIsCompactFormFactor();
-  const showBottomSheet = isCompact && isNative;
-  const modalLayer = useGlobalWebOverlayLayer("modal", isWeb && state.open && !showBottomSheet);
+  const modalLayer = useGlobalWebOverlayLayer("modal", isWeb && state.open);
   const listRef = useRef<FlatList<CommandCenterListRow>>(null);
-  const bottomSheetListRef = useRef<BottomSheetFlatListMethods>(null);
-  const bottomSheetInputRef = useRef<EditingTextInputHandle>(null);
+
   const scrollMetricsRef = useRef({ offset: 0, visibleLength: 0 });
-  const { sheetRef, handleSheetChange, handleSheetDismiss } = useIsolatedBottomSheetVisibility({
-    visible: state.open,
-    isEnabled: showBottomSheet,
-    onClose: state.close,
-  });
 
   const revealActiveResult = useCallback(() => {
     if (!state.open || !state.activeId) return;
@@ -613,18 +547,10 @@ export function CommandCenter() {
     if (rowTop < offset) nextOffset = rowTop;
     if (rowBottom > offset + visibleLength) nextOffset = rowBottom - visibleLength;
     if (nextOffset === null) return;
-    const ref = showBottomSheet ? bottomSheetListRef.current : listRef.current;
     const boundedOffset = Math.max(0, nextOffset);
     scrollMetricsRef.current.offset = boundedOffset;
-    ref?.scrollToOffset({ offset: boundedOffset, animated: false });
-  }, [
-    showBottomSheet,
-    state.activeId,
-    state.offsets,
-    state.open,
-    state.rowIndexByResultId,
-    state.rows,
-  ]);
+    listRef.current?.scrollToOffset({ offset: boundedOffset, animated: false });
+  }, [state.activeId, state.offsets, state.open, state.rowIndexByResultId, state.rows]);
   useEffect(() => {
     if (!state.open) {
       scrollMetricsRef.current = { offset: 0, visibleLength: 0 };
@@ -642,11 +568,6 @@ export function CommandCenter() {
   const handleListScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     scrollMetricsRef.current.offset = event.nativeEvent.contentOffset.y;
   }, []);
-  useEffect(() => {
-    if (!showBottomSheet || !state.open) return;
-    const timer = setTimeout(() => bottomSheetInputRef.current?.focus(), 300);
-    return () => clearTimeout(timer);
-  }, [showBottomSheet, state.open]);
 
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<CommandCenterListRow>) =>
@@ -707,11 +628,6 @@ export function CommandCenter() {
     onScroll: handleListScroll,
     scrollEventThrottle: 16,
   };
-  const keyPress = useCallback(
-    ({ nativeEvent: { key } }: { nativeEvent: { key: string } }) => state.key(key),
-    [state],
-  );
-  const submit = useCallback(() => state.key("Enter"), [state]);
   const handleWebOverlayKeyDown = useCallback(
     (event: KeyboardEvent) => {
       if (!state.key(event.key)) return false;
@@ -721,70 +637,13 @@ export function CommandCenter() {
     [state],
   );
   const setWebOverlayScope = useWebOverlayRegistration({
-    active: isWeb && state.open && !showBottomSheet,
+    active: isWeb && state.open,
     layer: modalLayer,
     onKeyDown: handleWebOverlayKeyDown,
   });
-  const backdrop = useCallback(
-    (props: React.ComponentProps<typeof BottomSheetBackdrop>) => (
-      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.45} />
-    ),
-    [],
-  );
-
-  if (showBottomSheet) {
-    return (
-      <IsolatedBottomSheetModal
-        ref={sheetRef}
-        contextBridge={null}
-        snapPoints={COMMAND_CENTER_SNAP_POINTS}
-        index={0}
-        enableDynamicSizing={false}
-        onChange={handleSheetChange}
-        onDismiss={handleSheetDismiss}
-        backdropComponent={backdrop}
-        enablePanDownToClose
-        backgroundStyle={styles.sheetBackground}
-        handleIndicatorStyle={styles.sheetHandle}
-        keyboardBehavior="extend"
-        keyboardBlurBehavior="restore"
-        accessible={false}
-      >
-        <View style={[styles.bottomSheetHeader, styles.searchRow]} testID="command-center-header">
-          {state.scope === "files" ? (
-            <ScopeChip label={t("shell.commandCenter.files")} onRemove={state.clearScope} />
-          ) : null}
-          <ThemedBottomSheetTextInput
-            testID="command-center-input"
-            ref={bottomSheetInputRef}
-            initialValue={state.query}
-            variant="bottom-sheet"
-            onChangeText={state.setQuery}
-            onKeyPress={keyPress}
-            onSubmitEditing={submit}
-            placeholder={
-              state.scope === "files"
-                ? t("shell.commandCenter.filePlaceholder")
-                : t("shell.commandCenter.placeholder")
-            }
-            style={[styles.input, styles.growingInput]}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoFocus
-          />
-          <FileSearchLoadingIndicator
-            loading={state.fileSearchLoading}
-            label={t("shell.commandCenter.searchingFiles")}
-          />
-        </View>
-        {fileSearchError}
-        <BottomSheetFlatList ref={bottomSheetListRef} {...commonListProps} />
-      </IsolatedBottomSheetModal>
-    );
-  }
   if (!state.open) return null;
   return (
-    <OverlayLayerProvider layer={isWeb ? modalLayer : 0}>
+    <OverlayLayerProvider layer={modalLayer}>
       <Modal visible transparent animationType="fade" onRequestClose={state.close}>
         <View style={styles.overlay}>
           <Pressable style={styles.backdrop} onPress={state.close} />
@@ -878,12 +737,6 @@ const styles = StyleSheet.create((theme) => ({
     ...theme.shadow.lg,
   },
   header: {
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[3],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  bottomSheetHeader: {
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
     borderBottomWidth: 1,
@@ -993,8 +846,6 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.statusDanger,
     fontSize: theme.fontSize.base,
   },
-  sheetBackground: { backgroundColor: theme.colors.surface0 },
-  sheetHandle: { backgroundColor: theme.colors.palette.zinc[600] },
   titledSection: { height: 32, justifyContent: "flex-end" },
   dividedSection: { height: 49, justifyContent: "flex-end" },
   dividerSection: { height: 17, justifyContent: "flex-end" },

@@ -4,11 +4,13 @@ import {
   type WorkspaceStructure,
   type WorkspaceStructureProject,
 } from "@/projects/workspace-structure";
-import type { DesktopBadgeWorkspaceStatus } from "@/utils/desktop-badge-state";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";
-import type { ProjectDescriptor, WorkspaceDescriptor } from "../session-store";
+import type {
+  EmptyProjectDescriptor,
+  ProjectDescriptor,
+  WorkspaceDescriptor,
+} from "../session-store";
 
-export type { DesktopBadgeWorkspaceStatus } from "@/utils/desktop-badge-state";
 export type { WorkspaceStructure, WorkspaceStructureProject } from "@/projects/workspace-structure";
 
 export interface SessionsSnapshot {
@@ -18,6 +20,7 @@ export interface SessionsSnapshot {
       hasHydratedWorkspaces?: boolean;
       hasWorkspaceDirectorySnapshot?: boolean;
       workspaces: Map<string, WorkspaceDescriptor>;
+      emptyProjects?: Map<string, EmptyProjectDescriptor>;
       projects?: Map<string, ProjectDescriptor>;
     }
   >;
@@ -158,20 +161,27 @@ export function selectWorkspaceStructureProjects(
   const sessions: Array<{
     serverId: string;
     workspaces: Iterable<WorkspaceDescriptor>;
+    emptyProjects: Iterable<EmptyProjectDescriptor>;
     projects: Iterable<ProjectDescriptor>;
   }> = [];
 
   for (const serverId of serverIds) {
     const session = state.sessions[serverId];
     const workspaces = session?.workspaces;
+    const emptyProjects = session?.emptyProjects;
     const projects = session?.projects;
-    if (!projects || projects.size === 0) {
+    if (
+      (!workspaces || workspaces.size === 0) &&
+      (!emptyProjects || emptyProjects.size === 0) &&
+      (!projects || projects.size === 0)
+    ) {
       continue;
     }
     sessions.push({
       serverId,
       workspaces: workspaces?.values() ?? [],
-      projects: projects.values(),
+      emptyProjects: emptyProjects?.values() ?? [],
+      projects: projects?.values() ?? [],
     });
   }
 
@@ -225,11 +235,7 @@ export function selectProject(
 
 export function selectProjectIdForServer(
   state: SessionsSnapshot,
-  input: {
-    sourceServerId: string;
-    projectId: string;
-    targetServerId: string;
-  },
+  input: { sourceServerId: string; projectId: string; targetServerId: string },
 ): string | null {
   if (input.sourceServerId === input.targetServerId) return input.projectId;
   const source = selectProject(state, input.sourceServerId, input.projectId);
@@ -259,7 +265,8 @@ export function composeWorkspaceStructure(input: {
 
   const orderedProjects = applyStoredOrdering({
     items: input.projects.map((project) => {
-      const workspaceOrder = input.workspaceOrderByScope[project.viewKey] ?? EMPTY_WORKSPACE_KEYS;
+      const workspaceOrder =
+        input.workspaceOrderByScope[project.projectKey] ?? EMPTY_WORKSPACE_KEYS;
       return {
         ...project,
         workspaceKeys: applyStoredOrdering({
@@ -270,7 +277,7 @@ export function composeWorkspaceStructure(input: {
       };
     }),
     storedOrder: input.projectOrder,
-    getKey: (project) => project.viewKey,
+    getKey: (project) => project.projectKey,
   });
 
   return { projects: orderedProjects };
@@ -309,8 +316,8 @@ export function selectHasWorkspaces(state: SessionsSnapshot, serverId: string | 
 
 export function selectWorkspaceStatusesForBadges(
   state: SessionsSnapshot,
-): DesktopBadgeWorkspaceStatus[] {
-  const statuses: DesktopBadgeWorkspaceStatus[] = [];
+): WorkspaceDescriptor["status"][] {
+  const statuses: WorkspaceDescriptor["status"][] = [];
   for (const session of Object.values(state.sessions)) {
     for (const workspace of session.workspaces.values()) {
       statuses.push(workspace.status);

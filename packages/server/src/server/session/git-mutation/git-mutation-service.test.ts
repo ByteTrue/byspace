@@ -71,7 +71,7 @@ function initRepo(extraBranch?: string): string {
   const run = (...args: string[]) => execFileSync("git", args, { cwd: dir, stdio: "pipe" });
   run("init", "-b", "main");
   run("config", "user.email", "test@example.com");
-  run("config", "user.name", "Paseo Test");
+  run("config", "user.name", "BySpace Test");
   writeFileSync(join(dir, "README.md"), "hello\n");
   run("add", "-A");
   run("commit", "-m", "init");
@@ -110,10 +110,16 @@ describe("checkoutExistingBranch", () => {
   });
 
   test("rejects when the working tree is dirty", async () => {
-    const { service } = buildService({ resolution: { kind: "local", name: "x" }, isDirty: true });
+    const { service, snapshotCalls } = buildService({
+      resolution: { kind: "local", name: "x" },
+      isDirty: true,
+    });
     await expect(service.checkoutExistingBranch("/tmp/nope", "x")).rejects.toThrow(
       /uncommitted changes/,
     );
+    expect(snapshotCalls).toEqual([
+      { cwd: "/tmp/nope", force: true, reason: "mutation-preflight" },
+    ]);
   });
 
   test("wraps a git-status failure with the inspecting-status message", async () => {

@@ -32,24 +32,19 @@ import {
   shutdownAgentClients,
   type ProviderDefinition,
 } from "./provider-registry.js";
-import { BUILTIN_PROVIDER_IDS } from "@getpaseo/protocol/provider-manifest";
+import { BUILTIN_PROVIDER_IDS } from "@bytetrue/byspace-protocol/provider-manifest";
 import { applyMutableProviderConfigToOverrides } from "../daemon-config-store.js";
 import {
   formatProviderDiagnostic,
   formatProviderDiagnosticError,
 } from "./providers/diagnostic-utils.js";
 import type { MutableDaemonConfig } from "../daemon-config-store.js";
-import type { HubExecutionAgentValidationIssue } from "@getpaseo/protocol/messages";
-import {
-  type AgentConfigurationValidationInput,
-  validateAgentConfigurationAgainstProvider,
-} from "./agent-configuration-validator.js";
 
 const DEFAULT_REFRESH_TIMEOUT_MS = 120_000;
 const MAX_REFRESH_TIMEOUT_MS = 2_147_483_647;
 const DEFAULT_DIAGNOSTIC_TIMEOUT_MS = 120_000;
-const REFRESH_TIMEOUT_ENV_VAR = "PASEO_PROVIDER_REFRESH_TIMEOUT_MS";
-export const GLOBAL_PROVIDER_SNAPSHOT_KEY = "paseo:global";
+const REFRESH_TIMEOUT_ENV_VAR = "BYSPACE_PROVIDER_REFRESH_TIMEOUT_MS";
+export const GLOBAL_PROVIDER_SNAPSHOT_KEY = "byspace:global";
 
 // Provider refresh probes can be slow on cold starts (e.g. Copilot's first
 // `copilot --acp` invocation, OpenCode workspace probes with many MCP servers).
@@ -65,7 +60,6 @@ function resolveRefreshTimeoutMs(option: number | undefined): number {
   }
   const fromEnv = process.env[REFRESH_TIMEOUT_ENV_VAR];
   if (fromEnv) {
-    // Number() handles scientific notation (e.g. "6e4") which parseInt would silently truncate.
     const parsed = Number(fromEnv);
     if (Number.isSafeInteger(parsed) && parsed > 0 && parsed <= MAX_REFRESH_TIMEOUT_MS) {
       return parsed;
@@ -169,7 +163,7 @@ export interface AgentManagerProviderState {
       AgentProvider,
       Pick<
         ProviderDefinition,
-        "enabled" | "derivedFromProviderId" | "validateOptions" | "applyOptions" | "applyToolPolicy"
+        "enabled" | "derivedFromProviderId" | "validateOptions" | "applyOptions"
       >
     >
   >;
@@ -309,7 +303,6 @@ export class ProviderSnapshotManager {
         derivedFromProviderId: definition.derivedFromProviderId,
         validateOptions: definition.validateOptions,
         applyOptions: definition.applyOptions,
-        applyToolPolicy: definition.applyToolPolicy,
       };
       if (definition.enabled) {
         clients[provider] = this.ensureClient(provider, definition);
@@ -352,45 +345,6 @@ export class ProviderSnapshotManager {
       throw new Error(`Provider ${input.provider} is not configured`);
     }
     return entry;
-  }
-
-  async validateAgentConfiguration(
-    input: AgentConfigurationValidationInput,
-  ): Promise<HubExecutionAgentValidationIssue[]> {
-    if (!this.hasProvider(input.provider)) {
-      return [
-        {
-          path: ["provider"],
-          message: `Provider '${input.provider}' is not configured`,
-        },
-      ];
-    }
-
-    const provider = await this.getProvider({
-      provider: input.provider,
-      wait: true,
-    });
-    if (!provider.enabled) {
-      return [{ path: ["provider"], message: `Provider '${input.provider}' is disabled` }];
-    }
-    if (provider.status !== "ready") {
-      return [
-        {
-          path: ["provider"],
-          message:
-            provider.status === "error" && provider.error
-              ? provider.error
-              : `Provider '${input.provider}' is not available`,
-        },
-      ];
-    }
-
-    const definition = this.requireProvider(input.provider);
-    return validateAgentConfigurationAgainstProvider({
-      input,
-      provider,
-      validateOptions: definition.validateOptions,
-    });
   }
 
   async listModels(input: ProviderSnapshotProviderOptions): Promise<AgentModelDefinition[]> {
@@ -939,10 +893,7 @@ export class ProviderSnapshotManager {
           const available = await context.runActivity("availability", () =>
             raceProviderRefreshAbort(context.signal, client.isAvailable(context.signal)),
           );
-          if (!available) {
-            return null;
-          }
-
+          if (!available) return null;
           const catalogOptions = createFetchCatalogOptions(catalogScope, force);
           return await definition.fetchCatalog(catalogOptions, client, context);
         },
@@ -954,12 +905,12 @@ export class ProviderSnapshotManager {
 
       setEntry({
         ...base,
-        defaultModeId:
-          catalog.defaultModeId === undefined ? definition.defaultModeId : catalog.defaultModeId,
         status: "ready",
         enabled: true,
         models: catalog.models,
         modes: catalog.modes,
+        defaultModeId:
+          catalog.defaultModeId === undefined ? definition.defaultModeId : catalog.defaultModeId,
         fetchedAt: new Date().toISOString(),
       });
     } catch (error) {

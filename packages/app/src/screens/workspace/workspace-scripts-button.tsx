@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, type ReactElement } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, type ReactElement } from "react";
 import type { GestureResponderEvent } from "react-native";
 import { Pressable, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
@@ -22,11 +22,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
   useDropdownMenuClose,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { MENU_ITEM_HEIGHT } from "@/components/ui/menu/menu-geometry";
 import { useToast } from "@/contexts/toast-context";
 import { openServiceUrl } from "@/utils/open-service-url";
 import {
@@ -36,8 +36,7 @@ import {
 } from "@/utils/workspace-script-links";
 import type { Theme } from "@/styles/theme";
 import { useWorkspaceServiceRoutePreferencesStore } from "@/workspace-service-routes/store";
-import { buttonControlHeight, HEADER_CONTROL_HEIGHT } from "@/components/ui/control-geometry";
-import { extraMutedIconColorMapping } from "@/components/ui/icon-color";
+import { buttonControlHeight } from "@/components/ui/control-geometry";
 
 type RowActionIcon = "copy" | "open" | "restart" | "start" | "stop" | "terminal";
 
@@ -170,13 +169,13 @@ function routeLabelKey(
   kind: WorkspaceScriptLinkKind,
 ):
   | "workspace.scripts.routes.public"
-  | "workspace.scripts.routes.paseo"
+  | "workspace.scripts.routes.byspace"
   | "workspace.scripts.routes.direct" {
   switch (kind) {
     case "public":
       return "workspace.scripts.routes.public";
-    case "paseo":
-      return "workspace.scripts.routes.paseo";
+    case "byspace":
+      return "workspace.scripts.routes.byspace";
     case "direct":
       return "workspace.scripts.routes.direct";
   }
@@ -495,6 +494,7 @@ function ScriptRow({
       accessibilityLabel={t("workspace.scripts.accessibility.script", {
         scriptName: script.scriptName,
       })}
+      style={styles.scriptItem}
     >
       <View style={styles.scriptHeader}>
         <ScriptIcon size={14} uniProps={iconColorMapping} style={styles.scriptIcon} />
@@ -696,7 +696,7 @@ export function WorkspaceScriptsButton({
                 <Text style={styles.splitButtonText}>{t("workspace.scripts.title")}</Text>
               )}
               {presentation === "split" ? (
-                <ThemedChevronDown size={16} uniProps={extraMutedIconColorMapping} />
+                <ThemedChevronDown size={14} uniProps={mutedColorMapping} />
               ) : null}
             </View>
           </DropdownMenuTrigger>
@@ -706,24 +706,28 @@ export function WorkspaceScriptsButton({
             maxWidth={280}
             testID="workspace-scripts-menu"
           >
-            {scripts.map((script) => (
-              <ScriptRow
-                key={script.scriptName}
-                script={script}
-                liveTerminalIdSet={liveTerminalIdSet}
-                activeConnection={activeConnection}
-                isStartPending={startScriptMutation.isPending}
-                isStopPending={stopScriptMutation.isPending}
-                onStartScript={handleStartScript}
-                onStopScript={handleStopScript}
-                onRestartScript={handleRestartScript}
-                onCopyUrl={handleCopyUrl}
-                preferredRouteKind={preferredRouteKind}
-                onSelectRouteKind={handleSelectRouteKind}
-                onViewTerminal={onViewTerminal}
-                onOpenUrlInBrowserTab={onOpenUrlInBrowserTab}
-              />
-            ))}
+            <View style={styles.scriptList}>
+              {scripts.map((script, index) => (
+                <Fragment key={script.scriptName}>
+                  {index > 0 ? <DropdownMenuSeparator /> : null}
+                  <ScriptRow
+                    script={script}
+                    liveTerminalIdSet={liveTerminalIdSet}
+                    activeConnection={activeConnection}
+                    isStartPending={startScriptMutation.isPending}
+                    isStopPending={stopScriptMutation.isPending}
+                    onStartScript={handleStartScript}
+                    onStopScript={handleStopScript}
+                    onRestartScript={handleRestartScript}
+                    onCopyUrl={handleCopyUrl}
+                    preferredRouteKind={preferredRouteKind}
+                    onSelectRouteKind={handleSelectRouteKind}
+                    onViewTerminal={onViewTerminal}
+                    onOpenUrlInBrowserTab={onOpenUrlInBrowserTab}
+                  />
+                </Fragment>
+              ))}
+            </View>
           </DropdownMenuContent>
         </DropdownMenu>
       </View>
@@ -739,13 +743,10 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   splitButton: {
-    height: {
-      xs: buttonControlHeight.xs,
-      md: HEADER_CONTROL_HEIGHT,
-    },
+    height: buttonControlHeight.xs,
     flexDirection: "row",
     alignItems: "stretch",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.lg,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.borderAccent,
     overflow: "hidden",
@@ -766,10 +767,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface2,
   },
   splitButtonPrimary: {
-    paddingHorizontal: {
-      xs: theme.spacing[3],
-      md: theme.spacing[2],
-    },
+    paddingHorizontal: theme.spacing[3],
     justifyContent: "center",
   },
   splitButtonPrimaryHovered: {
@@ -785,18 +783,21 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: {
-      xs: theme.spacing[1.5],
-      md: theme.spacing[1],
-    },
+    gap: theme.spacing[1.5],
     minHeight: theme.fontSize.base * 1.5,
+  },
+  scriptList: {
+    paddingVertical: theme.spacing[1],
+  },
+  scriptItem: {
+    paddingVertical: 6,
   },
   scriptHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    minHeight: MENU_ITEM_HEIGHT,
+    minHeight: 24,
   },
   scriptIcon: {
     flexShrink: 0,

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
-import type { AgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
+import type { AgentProviderDefinition } from "@bytetrue/byspace-protocol/provider-manifest";
 import type {
   AgentMode,
   AgentModelDefinition,
   AgentProvider,
   ProviderSnapshotEntry,
-} from "@getpaseo/protocol/agent-types";
+} from "@bytetrue/byspace-protocol/agent-types";
 import { useHosts } from "@/runtime/host-runtime";
 import { buildProviderDefinitions } from "@/utils/provider-definitions";
 import {
@@ -331,9 +331,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAg
   const modelSelectorProviders = snapshotModelSelectorProviders;
   const availableModels = snapshotSelectedProviderModels;
   const modeOptions = snapshotSelectedProviderModes;
-  const isModelSelectionLoading =
-    resolution.status === "pending" || snapshotIsLoading || selectedProviderIsLoading;
-  const isAllModelsLoading = isModelSelectionLoading;
+  const isAllModelsLoading = snapshotIsLoading || selectedProviderIsLoading;
 
   const combinedInitialValues = useMemo(
     () => combineInitialValues(initialValues, initialServerId),
@@ -623,7 +621,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions = {}): UseAg
     () => availableThinkingOptionsRaw ?? [],
     [availableThinkingOptionsRaw],
   );
-  const isModelLoading = isModelSelectionLoading;
+  const isModelLoading = snapshotIsLoading || selectedProviderIsLoading;
   const modelError = snapshotError;
 
   const workingDirIsEmpty = !formState.workingDir.trim();

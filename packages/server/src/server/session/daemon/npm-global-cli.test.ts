@@ -1,6 +1,6 @@
 import path from "node:path";
 import { describe, expect, test } from "vitest";
-import { DefaultNpmGlobalPaseoCli } from "./npm-global-cli.js";
+import { DefaultNpmGlobalBySpaceCli } from "./npm-global-cli.js";
 
 interface CommandCall {
   command: string;
@@ -11,14 +11,14 @@ interface CommandCall {
 
 const globalRoot = path.join(path.sep, "global", "lib");
 const globalNodeModules = path.join(globalRoot, "node_modules");
-const cliPackagePath = path.join(globalNodeModules, "@getpaseo", "cli");
+const cliPackagePath = path.join(globalNodeModules, "@bytetrue", "byspace");
 
-function npmGlobalPaseoCliJson(version: string, options?: { linked?: boolean }): string {
+function npmGlobalBySpaceCliJson(version: string, options?: { linked?: boolean }): string {
   return JSON.stringify({
     name: "lib",
     path: globalRoot,
     dependencies: {
-      "@getpaseo/cli": {
+      "@bytetrue/byspace": {
         version,
         path: cliPackagePath,
         link: options?.linked === true,
@@ -27,17 +27,17 @@ function npmGlobalPaseoCliJson(version: string, options?: { linked?: boolean }):
   });
 }
 
-describe("DefaultNpmGlobalPaseoCli", () => {
+describe("DefaultNpmGlobalBySpaceCli", () => {
   test("inspects the npm global cli install with npm -g ls", async () => {
     const calls: CommandCall[] = [];
-    const cli = new DefaultNpmGlobalPaseoCli(async (command, args, options) => {
+    const cli = new DefaultNpmGlobalBySpaceCli(async (command, args, options) => {
       calls.push({
         command,
         args,
         timeout: options?.timeout,
         maxBuffer: options?.maxBuffer,
       });
-      return { exitCode: 0, stdout: npmGlobalPaseoCliJson("0.1.15"), stderr: "" };
+      return { exitCode: 0, stdout: npmGlobalBySpaceCliJson("0.1.15"), stderr: "" };
     });
 
     await expect(cli.inspect()).resolves.toEqual({
@@ -49,16 +49,19 @@ describe("DefaultNpmGlobalPaseoCli", () => {
     expect(calls).toEqual([
       {
         command: "npm",
-        args: ["-g", "ls", "@getpaseo/cli", "--json", "--depth=0", "--long"],
+        args: ["-g", "ls", "@bytetrue/byspace", "--json", "--depth=0", "--long"],
         timeout: 10_000,
         maxBuffer: 10 * 1024 * 1024,
       },
     ]);
   });
 
-  test("runs the global install command for the latest cli", async () => {
+  test.each([
+    ["latest", "@bytetrue/byspace@latest"],
+    ["beta", "@bytetrue/byspace@beta"],
+  ] as const)("runs the global install command for the %s cli", async (distTag, packageSpec) => {
     const calls: CommandCall[] = [];
-    const cli = new DefaultNpmGlobalPaseoCli(async (command, args, options) => {
+    const cli = new DefaultNpmGlobalBySpaceCli(async (command, args, options) => {
       calls.push({
         command,
         args,
@@ -68,7 +71,7 @@ describe("DefaultNpmGlobalPaseoCli", () => {
       return { exitCode: 0, stdout: "changed 42 packages", stderr: "" };
     });
 
-    await expect(cli.installLatest()).resolves.toEqual({
+    await expect(cli.install(distTag)).resolves.toEqual({
       exitCode: 0,
       stdout: "changed 42 packages",
       stderr: "",
@@ -76,15 +79,15 @@ describe("DefaultNpmGlobalPaseoCli", () => {
     expect(calls).toEqual([
       {
         command: "npm",
-        args: ["install", "-g", "@getpaseo/cli@latest"],
-        timeout: 300_000,
+        args: ["install", "-g", "--no-audit", "--no-fund", packageSpec],
+        timeout: 10 * 60 * 1_000,
         maxBuffer: 10 * 1024 * 1024,
       },
     ]);
   });
 
   test("reports missing npm when npm exits without JSON", async () => {
-    const cli = new DefaultNpmGlobalPaseoCli(async () => ({
+    const cli = new DefaultNpmGlobalBySpaceCli(async () => ({
       exitCode: 127,
       stdout: "",
       stderr: "npm: command not found",
@@ -94,14 +97,14 @@ describe("DefaultNpmGlobalPaseoCli", () => {
   });
 
   test("reports missing global cli when npm output has no cli dependency", async () => {
-    const cli = new DefaultNpmGlobalPaseoCli(async () => ({
+    const cli = new DefaultNpmGlobalBySpaceCli(async () => ({
       exitCode: 1,
       stdout: JSON.stringify({ name: "lib", path: globalRoot, dependencies: {} }),
       stderr: "missing",
     }));
 
     await expect(cli.inspect()).rejects.toThrow(
-      "@getpaseo/cli is not installed with npm -g on this host",
+      "@bytetrue/byspace is not installed with npm -g on this host",
     );
   });
 });

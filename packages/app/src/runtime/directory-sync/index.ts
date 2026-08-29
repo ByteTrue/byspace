@@ -2,8 +2,14 @@ import type {
   DaemonClient,
   FetchAgentsEntry,
   FetchAgentsOptions,
-} from "@getpaseo/client/internal/daemon-client";
-import { fetchAgentTimelineOnce } from "@/timeline/fetch-agent-timeline-once";
+} from "@bytetrue/byspace-client/internal/daemon-client";
+import { parseServerInfoStatusPayload } from "@bytetrue/byspace-protocol/messages";
+import {
+  AgentTimelineSyncOwner,
+  type AgentTimelineRequest,
+} from "@/timeline/agent-timeline-sync-owner";
+import type { TimelineDeliveryMode, ViewedTimelineUiBridge } from "@/timeline/viewed-timeline-sync";
+import type { ProjectedTimelineFetchPlan } from "@/timeline/timeline-sync-plan";
 import {
   normalizeProjectDescriptor,
   normalizeWorkspaceDescriptor,
@@ -18,6 +24,7 @@ import {
   shouldUseLegacyDaemonWorkspaceDirectory,
   stampLegacyWorkspaceIds,
 } from "@/workspace/legacy-daemon-workspaces";
+import { workspaceLabels } from "@/workspace-labels";
 import type { AgentDirectoryDelta } from "@/utils/agent-directory-sync";
 import { AgentDirectoryReplica } from "./agent-replica";
 import {
@@ -30,7 +37,6 @@ import {
   type DirectorySourceToken,
   type DirectoryTransaction,
 } from "./transaction";
-import { workspaceLabels } from "@/workspace-labels";
 
 const PAGE_LIMIT = 200;
 const AGENT_SORT: NonNullable<FetchAgentsOptions["sort"]> = [
@@ -85,6 +91,12 @@ export interface DirectoryCheckpointStorage {
   writeDirectoryCheckpoint(serverId: string, checkpoint: unknown): void;
 }
 
+export interface DirectoryConnection {
+  client: DaemonClient | null;
+  status: "online" | "offline";
+  source: DirectorySourceToken;
+}
+
 export interface RefreshAgentDirectoryInput {
   filter?: FetchAgentsOptions["filter"];
   subscribe?: FetchAgentsOptions["subscribe"];
@@ -94,6 +106,11 @@ export interface RefreshAgentDirectoryInput {
 export interface RefreshAgentDirectoryResult {
   agents: Map<string, Agent>;
   subscriptionId: string | null;
+}
+
+// COMPAT(selectiveAgentTimeline): added in v0.1.106, remove after 2027-01-12.
+function getTimelineDeliveryMode(selectiveAgentTimeline?: boolean): TimelineDeliveryMode {
+  return selectiveAgentTimeline ? "selective" : "legacy";
 }
 
 export class DirectorySync {
@@ -107,6 +124,7 @@ export class DirectorySync {
   >();
   private readonly agents: AgentDirectoryReplica;
   private readonly workspaces: WorkspaceDirectoryReplica;
+  private readonly timeline: AgentTimelineSyncOwner;
   private connection: DirectoryConnection = {
     client: null,
     status: "offline",
@@ -127,6 +145,19 @@ export class DirectorySync {
   ) {
     this.agents = new AgentDirectoryReplica(serverId, callbacks.onAgentStoppedRunning);
     this.workspaces = new WorkspaceDirectoryReplica(serverId);
+    this.timeline = new AgentTimelineSyncOwner({
+      serverId,
+      requestPage: (agentId, request) => this.requestTimelinePage(agentId, request),
+      setSubscription: (agentIds) =>
+        this.requireOnline().client.setAgentTimelineSubscription(agentIds),
+      drainQueuedAgentMessage: callbacks.onAgentStoppedRunning,
+      reportError: (error) =>
+        console.warn("[Timeline] synchronization failed", { serverId, error }),
+      schedule: (task, delayMs) => {
+        const timeout = setTimeout(task, delayMs);
+        return () => clearTimeout(timeout);
+      },
+    });
   }
 
   connectionChanged(connection: DirectoryConnection): boolean {
@@ -143,16 +174,31 @@ export class DirectorySync {
     this.unsubscribe?.();
     this.unsubscribe = null;
     workspaceLabels.disconnect(this.serverId);
+    this.timeline.setConnected(false);
     this.connection = connection;
     this.abortPendingSessionWaits();
     if (!connection.client || connection.status !== "online") return true;
     const client = connection.client;
     const source = connection.source;
-    this.workspaceTransactions.begin(source, () => ({
-      workspaces: new Map(),
-      projects: new Map(),
-    }));
+    const serverInfo = client.getLastServerInfoMessage();
+    this.timeline.setDeliveryMode(
+      getTimelineDeliveryMode(serverInfo?.features?.selectiveAgentTimeline),
+    );
     const subscriptions = [
+      client.on("agent_stream", (message) => {
+        if (message.type === "agent_stream" && this.isCurrent(client, source)) {
+          this.timeline.enqueueLive(message.payload);
+        }
+      }),
+      client.on("status", (message) => {
+        if (message.type !== "status" || !this.isCurrent(client, source)) return;
+        const info = parseServerInfoStatusPayload(message.payload);
+        if (info) {
+          this.timeline.setDeliveryMode(
+            getTimelineDeliveryMode(info.features?.selectiveAgentTimeline),
+          );
+        }
+      }),
       client.on("agent_update", (message) => {
         if (message.type !== "agent_update" || !this.isCurrent(client, source)) return;
         const recorded = this.agentTransactions.record(source, message.payload);
@@ -191,6 +237,7 @@ export class DirectorySync {
     this.unsubscribe = () => {
       for (const unsubscribe of subscriptions) unsubscribe();
     };
+    this.timeline.setConnected(true, `${source.clientGeneration}:${source.connectionEpoch}`);
     return true;
   }
 
@@ -200,16 +247,48 @@ export class DirectorySync {
     this.unsubscribe?.();
     this.unsubscribe = null;
     workspaceLabels.disconnect(this.serverId);
+    this.timeline.dispose();
   }
 
-  async fetchTimeline(
+  get timelineUiBridge(): ViewedTimelineUiBridge {
+    return this.timeline.uiBridge;
+  }
+
+  setTimelineActive(active: boolean): void {
+    this.timeline.setActive(active);
+  }
+
+  refreshVisibleTimelines(): void {
+    this.timeline.refreshVisibleTimelines();
+  }
+
+  ensureTimelineCurrent(agentId: string): Promise<void> {
+    return this.timeline.ensureCurrent(agentId);
+  }
+
+  refreshTimeline(
     agentId: string,
-    request: Parameters<DaemonClient["fetchAgentTimeline"]>[1],
   ): Promise<Awaited<ReturnType<DaemonClient["fetchAgentTimeline"]>>> {
-    const { client } = this.requireOnline();
+    return this.timeline.refreshAgent(agentId);
+  }
+
+  fetchTimeline(
+    agentId: string,
+    request: ProjectedTimelineFetchPlan,
+  ): Promise<Awaited<ReturnType<DaemonClient["fetchAgentTimeline"]>>> {
+    return this.timeline.fetchTimeline(agentId, request);
+  }
+
+  private async requestTimelinePage(
+    agentId: string,
+    request: AgentTimelineRequest,
+  ): Promise<Awaited<ReturnType<DaemonClient["fetchAgentTimeline"]>>> {
+    const { client, source } = this.requireOnline();
     const token = this.agents.captureTimeline(agentId);
-    const page = await fetchAgentTimelineOnce(client, agentId, request);
-    if (page.agent) this.agents.submitTimelineAgent(token, page.agent);
+    const page = await client.fetchAgentTimeline(agentId, request);
+    if (page.agent && this.isCurrent(client, source)) {
+      this.agents.submitTimelineAgent(token, page.agent);
+    }
     return page;
   }
 
@@ -557,7 +636,6 @@ export class DirectorySync {
     if (previous?.generation === cursor.generation && previous.afterSeq >= cursor.afterSeq) return;
     this.checkpoints.writeDirectoryCheckpoint(this.serverId, { ...current, [entity]: cursor });
   }
-
   private isCurrent(client: DaemonClient, source: DirectorySourceToken): boolean {
     return (
       this.connection.client === client &&
@@ -633,6 +711,7 @@ function legacyProjectDescriptorFromWorkspace(workspace: WorkspaceDescriptor): P
     projectKey: null,
     projectDisplayName: workspace.projectDisplayName,
     projectCustomName: workspace.projectCustomName ?? null,
+    projectCustomIconRevision: workspace.projectCustomIconRevision ?? null,
     projectRootPath: workspace.projectRootPath,
     projectKind: workspace.projectKind,
   };

@@ -344,7 +344,6 @@ test("interrupt discards a queued steer so it cannot resume the stopped turn", a
     expect.objectContaining({ type: "turn_canceled" }),
   );
 
-  // Nothing is queued any more, so a second interrupt has no steer left to discard.
   query()?.cancelAsyncMessage.mockClear();
   await session.interrupt();
   await waitFor(() => query()?.interrupt.mock.calls.length === 2);
@@ -376,7 +375,6 @@ test("a steer Claude has already read is no longer discardable on interrupt", as
     command_uuid: query()?.prompts[1]?.uuid,
     state: "completed",
   });
-  // Frames are translated in order, so the marker landing proves the lifecycle frame was read.
   query()?.emit({ type: "assistant", message: { content: "STEER_READ" } });
   await consumeUntil(turn, (event) => collectAssistantText([event]).includes("STEER_READ"));
 
@@ -442,9 +440,7 @@ async function startInterruptedToolTurn(sessionId: string): Promise<{
       prompt,
       sessionId,
       async handlePrompt({ promptRecord, query: scripted }) {
-        if (promptRecord.text !== "run the slow tool") {
-          return;
-        }
+        if (promptRecord.text !== "run the slow tool") return;
         scripted.emit({
           type: "assistant",
           message: {
@@ -466,10 +462,7 @@ async function startInterruptedToolTurn(sessionId: string): Promise<{
   }).createSession({ provider: "claude", cwd: process.cwd() });
 
   const observed: AgentStreamEvent[] = [];
-  const unsubscribe = session.subscribe((event) => {
-    observed.push(event);
-  });
-
+  const unsubscribe = session.subscribe((event) => observed.push(event));
   const turn = streamSession(session, "run the slow tool");
   await turn.next();
   await waitFor(() => query?.prompts.length === 1);
@@ -483,11 +476,6 @@ async function startInterruptedToolTurn(sessionId: string): Promise<{
   return { session, query: () => query, observed, canceledIndex, unsubscribe };
 }
 
-/**
- * Claude keeps reporting on the request it was told to kill: the notification for the tool it just
- * stopped, the aborted result, then the tool rejection. None of that is new work, so none of it may
- * put the agent back into a running turn.
- */
 test("trailing output from an interrupted request does not start a turn", async () => {
   const sessionId = "interrupt-window-session";
   const { session, query, observed, canceledIndex, unsubscribe } =
@@ -497,7 +485,6 @@ test("trailing output from an interrupted request does not start a turn", async 
   query()?.emit(buildAbortedResult(sessionId));
   query()?.emit(buildRejectedToolResult(sessionId));
 
-  // Frames are translated in order, so the rejection landing proves the two before it were read.
   await waitFor(() =>
     observed.some(
       (event) =>

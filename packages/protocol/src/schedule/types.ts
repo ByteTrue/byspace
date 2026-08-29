@@ -34,7 +34,20 @@ export const ScheduleTargetSchema = z.discriminatedUnion("type", [
       isolation: z.enum(["local", "worktree"]).optional(),
       title: z.string().trim().min(1).nullable().optional(),
       providerOptions: z.record(z.string(), z.json()).optional(),
+      // COMPAT(providerOptions): added 2026-08-12; remove after 2027-02-12 when the
+      // supported wire floor no longer includes flattened provider configuration.
+      approvalPolicy: z.string().trim().min(1).optional(),
+      sandboxMode: z.string().trim().min(1).optional(),
+      networkAccess: z.boolean().optional(),
+      webSearch: z.boolean().optional(),
       featureValues: z.record(z.string(), z.unknown()).optional(),
+      extra: z
+        .object({
+          codex: z.record(z.string(), z.unknown()).optional(),
+          claude: z.record(z.string(), z.unknown()).optional(),
+        })
+        .partial()
+        .optional(),
       systemPrompt: z.string().optional(),
       mcpServers: z.record(z.string(), z.unknown()).optional(),
     }),

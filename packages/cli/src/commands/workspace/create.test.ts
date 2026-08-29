@@ -22,7 +22,7 @@ describe("workspace create source", () => {
       kind: "worktree",
       cwd: "/tmp/project",
       action: "branch-off",
-      branchName: "feature/auth",
+      refName: "feature/auth",
       worktreeSlug: "feature-auth",
       baseBranch: "main",
     });
@@ -40,7 +40,7 @@ describe("workspace create source", () => {
       kind: "worktree",
       projectId: "project-1",
       action: "branch-off",
-      branchName: "fix-x",
+      refName: "fix-x",
     });
   });
 

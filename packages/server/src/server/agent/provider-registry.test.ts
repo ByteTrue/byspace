@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import type { ToolPolicy } from "@getpaseo/protocol/agent-types";
 
 import { createTestLogger } from "../../test-utils/test-logger.js";
 import type {
@@ -43,11 +42,6 @@ const mockState = vi.hoisted(() => {
         env?: Record<string, string>;
         providerParams?: unknown;
       }>,
-      kimi: [] as Array<{
-        command: string[];
-        env?: Record<string, string>;
-        providerParams?: unknown;
-      }>,
       pi: [] as ConstructorEntry[],
       genericAcp: [] as Array<{
         command: string[];
@@ -66,7 +60,6 @@ const mockState = vi.hoisted(() => {
       this.constructorArgs.copilot = [];
       this.constructorArgs.cursor = [];
       this.constructorArgs.trae = [];
-      this.constructorArgs.kimi = [];
       this.constructorArgs.pi = [];
       this.constructorArgs.genericAcp = [];
       this.isCommandAvailable.mockReset();
@@ -475,59 +468,6 @@ vi.mock("./providers/trae-acp-agent.js", () => ({
   },
 }));
 
-vi.mock("./providers/kimi-acp-agent.js", () => ({
-  KimiACPAgentClient: class KimiACPAgentClient {
-    readonly capabilities = {
-      supportsStreaming: true,
-      supportsSessionPersistence: true,
-      supportsDynamicModes: true,
-      supportsMcpServers: true,
-      supportsReasoningStream: true,
-      supportsToolInvocations: true,
-    };
-    readonly provider = "acp";
-    readonly runtimeSettings?: unknown;
-
-    constructor(options: {
-      command: string[];
-      env?: Record<string, string>;
-      providerParams?: unknown;
-    }) {
-      this.runtimeSettings = {
-        command: {
-          mode: "replace",
-          argv: options.command,
-        },
-        env: options.env,
-      };
-      mockState.constructorArgs.kimi.push({
-        command: options.command,
-        env: options.env,
-        providerParams: options.providerParams,
-      });
-    }
-
-    async createSession(): Promise<never> {
-      throw new Error("not implemented");
-    }
-
-    async resumeSession(): Promise<never> {
-      throw new Error("not implemented");
-    }
-
-    async fetchCatalog(): Promise<ProviderCatalog> {
-      return {
-        models: mockState.runtimeModels.get(this.provider) ?? [],
-        modes: [],
-      };
-    }
-
-    async isAvailable(): Promise<boolean> {
-      return true;
-    }
-  },
-}));
-
 import {
   AGENT_PROVIDER_DEFINITIONS,
   buildProviderRegistry,
@@ -716,76 +656,6 @@ test("new provider extending acp uses GenericACPAgentClient", () => {
   ]);
 });
 
-test("Hub E2E ACP provider applies exact grants for its injected MCP server", () => {
-  const registry = buildProviderRegistry(logger, {
-    providerOverrides: {
-      "hub-e2e": {
-        extends: "acp",
-        label: "Hub E2E",
-        command: ["hub-e2e-agent"],
-      },
-    },
-  });
-  const config = {
-    provider: "hub-e2e",
-    cwd: "/tmp/hub-e2e",
-    mcpServers: { hub: { type: "http" as const, url: "http://127.0.0.1/execution" } },
-  };
-  const toolPolicy = {
-    preapproved: [
-      { kind: "mcp" as const, server: "hub", tool: "reply" },
-      { kind: "mcp" as const, server: "hub", tool: "finish_execution" },
-    ],
-  };
-
-  expect(registry["hub-e2e"].applyToolPolicy(config, toolPolicy)).toEqual({
-    ...config,
-    toolPolicy,
-  });
-});
-
-test.each([
-  { kind: "mcp", server: "hub", tool: "*" },
-  { kind: "mcp", server: "other", tool: "finish_execution" },
-  { kind: "mcp", server: "hub", tool: "" },
-  { kind: "native", server: "hub", tool: "Bash" },
-])("Hub E2E ACP provider rejects unsupported grant $kind:$server:$tool", (grant) => {
-  const registry = buildProviderRegistry(logger, {
-    providerOverrides: {
-      "hub-e2e": {
-        extends: "acp",
-        label: "Hub E2E",
-        command: ["hub-e2e-agent"],
-      },
-    },
-  });
-
-  expect(() =>
-    registry["hub-e2e"].applyToolPolicy({ provider: "hub-e2e", cwd: "/tmp/hub-e2e" }, {
-      preapproved: [grant],
-    } as unknown as ToolPolicy),
-  ).toThrow(/accepts only exact MCP tool grants for the injected 'hub' server/u);
-});
-
-test("ordinary custom ACP providers remain fail-closed for exact MCP grants", () => {
-  const registry = buildProviderRegistry(logger, {
-    providerOverrides: {
-      "my-agent": {
-        extends: "acp",
-        label: "My Agent",
-        command: ["my-agent"],
-      },
-    },
-  });
-
-  expect(() =>
-    registry["my-agent"].applyToolPolicy(
-      { provider: "my-agent", cwd: "/tmp/my-agent" },
-      { preapproved: [{ kind: "mcp", server: "hub", tool: "finish_execution" }] },
-    ),
-  ).toThrow(/cannot preapprove exact MCP tools for unattended execution/u);
-});
-
 test("ACP provider params can disable MCP support", () => {
   const registry = buildProviderRegistry(logger, {
     providerOverrides: {
@@ -914,33 +784,6 @@ test("traecli provider extending acp uses TraeACPAgentClient", () => {
     },
     {
       command: ["traecli", "acp", "serve"],
-      env: undefined,
-      providerParams: undefined,
-    },
-  ]);
-  expect(mockState.constructorArgs.genericAcp).toEqual([]);
-});
-
-test("kimi provider extending acp uses KimiACPAgentClient", () => {
-  const registry = buildProviderRegistry(logger, {
-    providerOverrides: {
-      kimi: {
-        extends: "acp",
-        label: "Kimi Code CLI",
-        command: ["kimi", "acp"],
-      },
-    },
-  });
-
-  expect(registry.kimi.createClient(logger).provider).toBe("kimi");
-  expect(mockState.constructorArgs.kimi).toEqual([
-    {
-      command: ["kimi", "acp"],
-      env: undefined,
-      providerParams: undefined,
-    },
-    {
-      command: ["kimi", "acp"],
       env: undefined,
       providerParams: undefined,
     },
@@ -1734,31 +1577,6 @@ describe("fetchCatalog", () => {
     });
 
     expect(catalog.models.map((model) => model.id)).toEqual(["profile-model", "extra-model"]);
-  });
-
-  test("replacement models still resolve the provider's capability-aware default mode", async () => {
-    const resolveDefaultModeId = vi.fn(async () => "default");
-    const injectedClient = {
-      provider: "codex",
-      capabilities: {},
-      resolveDefaultModeId,
-      isAvailable: vi.fn(async () => true),
-    } satisfies Partial<AgentClient> as AgentClient;
-    const registry = buildProviderRegistry(logger, {
-      providerOverrides: {
-        codex: { models: [{ id: "profile-model", label: "Profile Model" }] },
-      },
-    });
-
-    const catalog = await registry.codex.fetchCatalog(
-      { scope: "workspace", cwd: "/tmp/catalog", force: false },
-      injectedClient,
-    );
-
-    expect(catalog.defaultModeId).toBe("default");
-    expect(resolveDefaultModeId).toHaveBeenCalledWith({
-      config: { provider: "codex", cwd: "/tmp/catalog" },
-    });
   });
 
   test("additionalModels can override replacement model fields", async () => {

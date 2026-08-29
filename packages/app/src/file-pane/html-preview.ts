@@ -1,0 +1,49 @@
+import { createElement, useMemo } from "react";
+import { useTranslation } from "react-i18next";
+
+const HTML_PREVIEW_CSP = [
+  "default-src 'none'",
+  "script-src 'unsafe-inline' 'unsafe-eval' blob:",
+  "style-src 'unsafe-inline'",
+  "img-src data: blob:",
+  "font-src data:",
+  "media-src data: blob:",
+  "connect-src 'none'",
+  "form-action 'none'",
+  "base-uri 'none'",
+  "frame-src 'none'",
+  "object-src 'none'",
+].join("; ");
+
+const CSP_META_TAG = `<meta http-equiv="Content-Security-Policy" content="${HTML_PREVIEW_CSP}">`;
+const BOM = "\uFEFF";
+
+/** Supplies a standards-mode prologue before any untrusted document markup. */
+export function createHtmlPreviewDocument(source: string): string {
+  const sourceWithoutBom = source.startsWith(BOM) ? source.slice(BOM.length) : source;
+  return `<!doctype html>${CSP_META_TAG}${sourceWithoutBom}`;
+}
+
+export function isHtmlPreviewPath(path: string): boolean {
+  return /\.html?$/i.test(path);
+}
+
+const IFRAME_STYLE = {
+  flex: 1,
+  minHeight: 0,
+  border: "none",
+  backgroundColor: "white",
+} as const;
+
+export function FileHtmlPreview({ html, testID }: { html: string; testID?: string }) {
+  const { t } = useTranslation();
+  const document = useMemo(() => createHtmlPreviewDocument(html), [html]);
+  return createElement("iframe", {
+    "data-testid": testID,
+    title: t("panels.file.editor.preview"),
+    srcDoc: document,
+    sandbox: "allow-scripts",
+    referrerPolicy: "no-referrer",
+    style: IFRAME_STYLE,
+  });
+}

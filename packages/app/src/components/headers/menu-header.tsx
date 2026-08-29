@@ -5,12 +5,10 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { PanelLeft } from "lucide-react-native";
 import { ScreenHeader } from "./screen-header";
 import { ScreenTitle } from "./screen-title";
-import { HeaderToggleButton, headerIconSlotStyle } from "./header-toggle-button";
+import { HeaderToggleButton } from "./header-toggle-button";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { getShortcutOs } from "@/utils/shortcut-platform";
-import { useHasWindowChromeObstruction, useOwnsWindowChromeCorner } from "@/utils/desktop-window";
-import { iconButtonChromeGlyphSize } from "@/components/ui/icon-button-chrome";
 
 interface MenuHeaderProps {
   title?: string;
@@ -27,7 +25,7 @@ interface SidebarMenuToggleProps {
 
 const MOBILE_MENU_LINE_WIDTH = 16;
 const MOBILE_MENU_LINE_SHORT_WIDTH = 8;
-const MOBILE_MENU_LINE_HEIGHT = 1.5;
+const MOBILE_MENU_LINE_HEIGHT = 2;
 
 function MobileMenuIcon({ color }: { color: string }) {
   const lineStyle = useMemo(() => [styles.mobileMenuLine, { backgroundColor: color }], [color]);
@@ -85,46 +83,26 @@ function SidebarMenuToggleButton({
       accessibilityLabel={isOpen ? t("shell.menu.close") : t("shell.menu.open")}
       accessibilityState={accessibilityState}
     >
-      {isMobile ? (
-        <MobileMenuIcon
-          color={
-            extraMutedIdleIcon ? theme.colors.foregroundExtraMuted : theme.colors.foregroundMuted
-          }
-        />
-      ) : (
-        <PanelLeft
-          size={iconButtonChromeGlyphSize("large")}
-          strokeWidth={1.5}
-          color={
-            extraMutedIdleIcon ? theme.colors.foregroundExtraMuted : theme.colors.foregroundMuted
-          }
-        />
-      )}
+      {({ hovered, pressed }) => {
+        let color = extraMutedIdleIcon
+          ? theme.colors.foregroundExtraMuted
+          : theme.colors.foregroundMuted;
+        if (hovered || pressed) {
+          color = theme.colors.foreground;
+        }
+        return isMobile ? (
+          <MobileMenuIcon color={color} />
+        ) : (
+          <PanelLeft size={theme.iconSize.md} color={color} />
+        );
+      }}
     </HeaderToggleButton>
   );
 }
 
 export function SidebarMenuToggle({ style, ...props }: SidebarMenuToggleProps = {}) {
   const isMobile = useIsCompactFormFactor();
-  const ownsTopLeft = useOwnsWindowChromeCorner("top-left");
-  const hasTopLeftWindowControls = useHasWindowChromeObstruction("top-left");
   const resolvedStyle = useMemo(() => [styles.leadingToggle, style], [style]);
-  const placeholderStyle = useMemo(
-    () => [headerIconSlotStyle.slot, resolvedStyle],
-    [resolvedStyle],
-  );
-
-  if (!isMobile && !ownsTopLeft) {
-    return null;
-  }
-
-  if (!isMobile && hasTopLeftWindowControls) {
-    return (
-      <View pointerEvents="none" style={placeholderStyle}>
-        <View style={styles.desktopMenuIconSpace} />
-      </View>
-    );
-  }
 
   return <SidebarMenuToggleButton {...props} isMobile={isMobile} resolvedStyle={resolvedStyle} />;
 }
@@ -172,10 +150,6 @@ const styles = StyleSheet.create((theme) => ({
     height: 12,
     justifyContent: "space-between",
     alignItems: "flex-start",
-  },
-  desktopMenuIconSpace: {
-    width: theme.iconSize.md,
-    height: theme.iconSize.md,
   },
   mobileMenuLine: {
     width: MOBILE_MENU_LINE_WIDTH,

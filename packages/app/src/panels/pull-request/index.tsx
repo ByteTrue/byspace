@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { Text, View } from "react-native";
-import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { buildWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 import { useToast } from "@/contexts/toast-context";
 import { useCheckoutGitActionsStore } from "@/git/actions-store";

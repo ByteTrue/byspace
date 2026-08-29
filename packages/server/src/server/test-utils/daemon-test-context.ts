@@ -1,9 +1,9 @@
-import { createTestPaseoDaemon, type TestPaseoDaemon } from "./paseo-daemon.js";
+import { createTestBySpaceDaemon, type TestBySpaceDaemon } from "./byspace-daemon.js";
 import { DaemonClient } from "./daemon-client.js";
 import { createTestAgentClients } from "./fake-agent-client.js";
 
 export interface DaemonTestContext {
-  daemon: TestPaseoDaemon;
+  daemon: TestBySpaceDaemon;
   client: DaemonClient;
   cleanup: () => Promise<void>;
 }
@@ -33,9 +33,9 @@ export interface DaemonTestContext {
  * ```
  */
 export async function createDaemonTestContext(
-  options?: Parameters<typeof createTestPaseoDaemon>[0],
+  options?: Parameters<typeof createTestBySpaceDaemon>[0],
 ): Promise<DaemonTestContext> {
-  const daemon = await createTestPaseoDaemon({
+  const daemon = await createTestBySpaceDaemon({
     agentClients: createTestAgentClients(),
     ...options,
   });

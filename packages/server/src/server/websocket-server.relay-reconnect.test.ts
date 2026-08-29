@@ -15,8 +15,8 @@ import {
   decodeTerminalStreamFrame,
   encodeTerminalStreamFrame,
   TerminalStreamOpcode,
-} from "@getpaseo/protocol/terminal-stream-protocol";
-import { CLIENT_CAPS } from "@getpaseo/protocol/client-capabilities";
+} from "@bytetrue/byspace-protocol/terminal-stream-protocol";
+import { CLIENT_CAPS } from "@bytetrue/byspace-protocol/client-capabilities";
 
 type SocketListener = (...args: unknown[]) => void;
 
@@ -86,12 +86,20 @@ vi.mock("./session.js", () => ({
   Session: sessionMock.MockSession,
 }));
 
-vi.mock("./push/index.js", () => ({
-  createPushNotifications: () => ({
-    renew: () => undefined,
-    revoke: () => undefined,
-    send: async () => undefined,
-  }),
+vi.mock("./push/token-store.js", () => ({
+  PushTokenStore: class {
+    getAllTokens(): string[] {
+      return [];
+    }
+  },
+}));
+
+vi.mock("./push/push-service.js", () => ({
+  PushService: class {
+    async sendPush(): Promise<void> {
+      // no-op
+    }
+  },
 }));
 
 import { z } from "zod";
@@ -220,7 +228,6 @@ function createWorkspaceAutoNameStub(): WorkspaceAutoName {
 function createServer(options?: {
   speechReadiness?: SpeechReadinessSnapshot | null;
   logger?: ReturnType<typeof createLogger>;
-  startPaused?: boolean;
 }) {
   const speechReadiness = options?.speechReadiness ?? null;
   const daemonConfigStore = {
@@ -229,7 +236,7 @@ function createServer(options?: {
   };
   const logger = options?.logger ?? createLogger();
   return new VoiceAssistantWebSocketServer(
-    createStub<HTTPServer>({}),
+    createStub<HTTPServer>({ on: vi.fn() }),
     createStub<pino.Logger>(logger),
     "srv_test",
     createStub<AgentManager>({
@@ -246,10 +253,10 @@ function createServer(options?: {
     }),
     createStub<AgentStorage>({}),
     createStub<DownloadTokenStore>({}),
-    "/tmp/paseo-test",
+    "/tmp/byspace-test",
     createStub<DaemonConfigStore>(daemonConfigStore),
     null,
-    { allowedOrigins: new Set(), startPaused: options?.startPaused },
+    { allowedOrigins: new Set() },
     createWorkspaceAutoNameStub(),
     undefined,
     speechReadiness
@@ -315,58 +322,22 @@ function createReadySpeechReadinessSnapshot(): SpeechReadinessSnapshot {
       retryable: false,
       missingModelIds: [],
     },
-    realtimeVoice: {
-      enabled: true,
-      available: true,
-      reasonCode: "ready",
-      message: "Realtime voice is ready.",
-      retryable: false,
-      missingModelIds: [],
-    },
-    voiceFeature: {
-      enabled: true,
-      available: true,
-      reasonCode: "ready",
-      message: "Voice features are ready.",
-      retryable: false,
-      missingModelIds: [],
-    },
   };
 }
 
 function createDownloadInProgressSpeechReadinessSnapshot(): SpeechReadinessSnapshot {
   return {
     generatedAt: "2026-02-14T00:00:00.000Z",
-    requiredLocalModelIds: ["parakeet-tdt-0.6b-v2-int8"],
-    missingLocalModelIds: ["parakeet-tdt-0.6b-v2-int8"],
-    download: {
-      inProgress: true,
-      error: null,
-    },
+    requiredLocalModelIds: ["fire-red-asr2-aed-int8"],
+    missingLocalModelIds: ["fire-red-asr2-aed-int8"],
+    download: { inProgress: true, error: null },
     dictation: {
       enabled: true,
       available: false,
-      reasonCode: "stt_unavailable",
-      message: "Dictation is unavailable: speech-to-text service is not ready.",
-      retryable: false,
-      missingModelIds: [],
-    },
-    realtimeVoice: {
-      enabled: true,
-      available: false,
-      reasonCode: "stt_unavailable",
-      message: "Realtime voice is unavailable: speech-to-text service is not ready.",
-      retryable: false,
-      missingModelIds: [],
-    },
-    voiceFeature: {
-      enabled: true,
-      available: false,
       reasonCode: "model_download_in_progress",
-      message:
-        "Voice features are unavailable while models download in the background (parakeet-tdt-0.6b-v2-int8).",
+      message: "The selected dictation model is downloading.",
       retryable: true,
-      missingModelIds: ["parakeet-tdt-0.6b-v2-int8"],
+      missingModelIds: ["fire-red-asr2-aed-int8"],
     },
   };
 }
@@ -387,8 +358,8 @@ function createHelloMessage(
 function createDirectRequest() {
   return {
     headers: {
-      host: "localhost:6767",
-      origin: "http://localhost:6767",
+      host: "localhost:6777",
+      origin: "http://localhost:6777",
       "user-agent": "vitest",
     },
     socket: {
@@ -504,39 +475,6 @@ describe("relay external socket reconnect behavior", () => {
     await server.close();
   });
 
-  test("gives every plugin socket an exclusively owned session and cleans it immediately", async () => {
-    const server = createServer();
-    const firstSocket = new MockSocket();
-    const firstAttachment = await server.attachPluginSocket("exclusive", firstSocket);
-    firstSocket.emit("message", JSON.stringify(createHelloMessage("plugin:exclusive")));
-
-    const secondSocket = new MockSocket();
-    const secondAttachment = await server.attachPluginSocket("exclusive", secondSocket);
-    secondSocket.emit("message", JSON.stringify(createHelloMessage("plugin:exclusive")));
-
-    expect(sessionMock.instances).toHaveLength(2);
-    firstSocket.emit("close", 1000, "plugin stopped");
-    await firstAttachment.closed;
-    expect(sessionMock.instances[0]?.cleanup).toHaveBeenCalledOnce();
-    expect(sessionMock.instances[1]?.cleanup).not.toHaveBeenCalled();
-
-    secondSocket.emit("close", 1000, "plugin stopped");
-    await secondAttachment.closed;
-    expect(sessionMock.instances[1]?.cleanup).toHaveBeenCalledOnce();
-    await server.close();
-  });
-
-  test("rejects ordinary sockets that claim the reserved plugin client id", async () => {
-    const server = createServer();
-    const socket = new MockSocket();
-    await server.attachExternalSocket(socket, { transport: "relay" });
-    socket.emit("message", JSON.stringify(createHelloMessage("plugin:not-a-plugin")));
-
-    expect(socket.readyState).toBe(3);
-    expect(sessionMock.instances).toHaveLength(0);
-    await server.close();
-  });
-
   test("passes hello capabilities through to the created session", async () => {
     const server = createServer();
     const socket = new MockSocket();
@@ -587,27 +525,6 @@ describe("relay external socket reconnect behavior", () => {
       heldCleanup.finish();
       await closePromise;
     }
-  });
-
-  test("accepts plugin startup sessions while application sessions remain paused", async () => {
-    const server = createServer({ startPaused: true });
-    const applicationSocket = new MockSocket();
-    await server.attachExternalSocket(applicationSocket, { transport: "relay" });
-    expect(applicationSocket.readyState).toBe(3);
-
-    const pluginSocket = new MockSocket();
-    const attachment = await server.attachPluginSocket("startup", pluginSocket);
-    pluginSocket.emit("message", JSON.stringify(createHelloMessage("plugin:startup")));
-    expect(sessionMock.instances).toHaveLength(1);
-
-    server.beginAcceptingConnections();
-    const readySocket = new MockSocket();
-    await attachRelayAndHello({ server, socket: readySocket, clientId: "ready-client" });
-    expect(sessionMock.instances).toHaveLength(2);
-
-    pluginSocket.emit("close", 1000, "done");
-    await attachment.closed;
-    await server.close();
   });
 
   test("closes pending connection when hello timeout elapses", async () => {
@@ -978,9 +895,8 @@ describe("relay external socket reconnect behavior", () => {
     expect(serverInfo.features?.stableProjectIdentity).toBe(true);
     expect(serverInfo.features?.canonicalSubmittedPrompts).toBe(true);
     expect(serverInfo.features?.providersSnapshotCwd).toBe(true);
-    expect(serverInfo.features?.pluginLogs).toBe(true);
-    expect(serverInfo.features?.["terminal-input-mode-replay"]).toBe(true);
-    expect(serverInfo.features?.["terminal-size-ownership"]).toBe(true);
+    expect(serverInfo.features?.workspaceAgentRename).toBe(true);
+    expect(serverInfo.features?.providerOptions).toBe(true);
     expect(serverInfo.features?.agentTurnIdentity).toBeUndefined();
     await server.close();
   });
@@ -1008,10 +924,8 @@ describe("relay external socket reconnect behavior", () => {
       speechReadiness.dictation.enabled,
     );
     expect(serverInfo.capabilities?.voice?.dictation?.reason).toBe("");
-    expect(serverInfo.capabilities?.voice?.voice?.enabled).toBe(
-      speechReadiness.realtimeVoice.enabled,
-    );
-    expect(serverInfo.capabilities?.voice?.voice?.reason).toBe("");
+    expect(serverInfo.capabilities?.voice?.voice?.enabled).toBe(false);
+    expect(serverInfo.capabilities?.voice?.voice?.reason).toBe("Voice mode has been removed.");
 
     await server.close();
   });
@@ -1034,7 +948,7 @@ describe("relay external socket reconnect behavior", () => {
     const secondEnvelope = sentServerInfoEnvelopes(socket)[1];
     const secondPayload = parseServerInfoStatusPayload(secondEnvelope.message?.payload);
     expect(secondPayload?.capabilities?.voice?.dictation.enabled).toBe(true);
-    expect(secondPayload?.capabilities?.voice?.voice.enabled).toBe(true);
+    expect(secondPayload?.capabilities?.voice?.voice.enabled).toBe(false);
 
     // Same readiness should not produce another server_info broadcast.
     server.publishSpeechReadiness(speechReadiness);
@@ -1058,10 +972,8 @@ describe("relay external socket reconnect behavior", () => {
 
     const envelope = sentServerInfoEnvelopes(socket)[1];
     const payload = parseServerInfoStatusPayload(envelope.message?.payload);
-    expect(payload?.capabilities?.voice?.dictation.enabled).toBe(true);
-    expect(payload?.capabilities?.voice?.voice.enabled).toBe(true);
+    expect(payload?.capabilities?.voice?.voice.enabled).toBe(false);
     expect(payload?.capabilities?.voice?.dictation.reason).toContain("Try again in a few minutes.");
-    expect(payload?.capabilities?.voice?.voice.reason).toContain("Try again in a few minutes.");
 
     await server.close();
   });

@@ -87,8 +87,8 @@ describe("control geometry", () => {
   });
 
   it("derives field padding from content and border without changing the control height", () => {
-    const geometry = createControlGeometry(theme);
     const borderWidth = theme.borderWidth[1];
+    const geometry = createControlGeometry(theme);
 
     expect(geometry.fieldControlSm.minHeight).toBe(32);
     expect(geometry.fieldControlSm.paddingVertical).toBe(5);

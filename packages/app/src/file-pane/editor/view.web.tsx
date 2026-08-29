@@ -1,9 +1,10 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useTranslation } from "react-i18next";
 import { Annotation, Compartment, EditorState, Transaction } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
-import { getLanguageForFile } from "@getpaseo/highlight";
-import { getCM, vim } from "@replit/codemirror-vim";
 import { isRenderedMarkdownFile } from "@/components/file-pane-render-mode";
+import { EditorView } from "@codemirror/view";
+import { getLanguageForFile } from "@bytetrue/byspace-highlight";
+import { getCM, vim } from "@replit/codemirror-vim";
 import type { WorkspaceFileLocation } from "@/workspace/file-open";
 import type { FileEditorModel } from "./model";
 import { editorBaseExtensions, editorTheme, type EditorVisualTheme } from "./extensions.web";
@@ -38,6 +39,7 @@ export function FileEditorView({
   onCursorChange,
   onVimModeChange,
 }: FileEditorViewProps) {
+  const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
@@ -145,7 +147,7 @@ export function FileEditorView({
       ref={hostRef}
       data-pmono=""
       data-testid="file-source-editor"
-      aria-label={`Source editor for ${filename}`}
+      aria-label={t("panels.file.editor.accessibilityLabel", { filename })}
       style={HOST_STYLE}
     />
   );

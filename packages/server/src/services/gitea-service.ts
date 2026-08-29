@@ -1,6 +1,9 @@
 import { z } from "zod";
 import pLimit from "p-limit";
-import { parseGitHubRemoteIdentity, parseGitRemoteLocation } from "@getpaseo/protocol/git-remote";
+import {
+  parseGitHubRemoteIdentity,
+  parseGitRemoteLocation,
+} from "@bytetrue/byspace-protocol/git-remote";
 import { findExecutable } from "../executable-resolution/executable-resolution.js";
 import { runGitCommand } from "../utils/run-git-command.js";
 import { execCommand } from "../utils/spawn.js";
@@ -124,6 +127,7 @@ export interface TeaCommandResult {
 export type TeaCommandRunner = (
   args: string[],
   options: TeaCommandRunnerOptions,
+  executablePath: string,
 ) => Promise<TeaCommandResult>;
 
 export interface CreateGiteaServiceOptions {
@@ -390,8 +394,9 @@ const teaCliRunner = createForgeCliRunner({
 async function runTeaCommand(
   args: string[],
   options: TeaCommandRunnerOptions,
+  executablePath: string,
 ): Promise<TeaCommandResult> {
-  return teaCliRunner.run(args, options);
+  return teaCliRunner.run(args, options, executablePath);
 }
 
 async function defaultResolveCurrentBranch(cwd: string): Promise<string | null> {
@@ -1020,7 +1025,7 @@ function redactTeaArgs(args: string[]): string[] {
 }
 
 /**
- * Probe whether a host is a Gitea instance Paseo can talk to. tea has no
+ * Probe whether a host is a Gitea instance BySpace can talk to. tea has no
  * per-repo auth check (it keeps per-instance logins), so a configured tea login
  * for the host is the signal: it means tea both recognizes the host as Gitea and
  * holds a usable token for it. Mirrors the role of `glab auth status` for GitLab.
@@ -1031,7 +1036,7 @@ export async function probeGiteaHost(host: string): Promise<boolean> {
     return false;
   }
   try {
-    const { stdout } = await execCommand("tea", ["login", "list", "-o", "json"], {
+    const { stdout } = await execCommand(teaPath, ["login", "list", "-o", "json"], {
       envOverlay: TEA_ENV,
       timeout: CLI_AUTH_PROBE_TIMEOUT_MS,
     });
@@ -1089,7 +1094,11 @@ export interface DetectGiteaFamilyOptions {
 }
 
 async function defaultRunTea(args: string[]): Promise<{ stdout: string; stderr: string }> {
-  const { stdout, stderr } = await execCommand("tea", args, {
+  const teaPath = await resolveTeaPath();
+  if (!teaPath) {
+    throw new TeaCliMissingError();
+  }
+  const { stdout, stderr } = await execCommand(teaPath, args, {
     envOverlay: TEA_ENV,
     timeout: GITEA_SOFTWARE_PROBE_TIMEOUT_MS,
   });
@@ -1169,7 +1178,7 @@ const inFlightFamilyProbes = new Map<string, Promise<GiteaFamilySoftware | null>
 
 /**
  * Resolve which Gitea-family forge id a host maps to for the open registry:
- * null when there is no usable `tea` login (Paseo cannot operate the host),
+ * null when there is no usable `tea` login (BySpace cannot operate the host),
  * otherwise the detected software. Concurrent calls for the same host — the
  * gitea and forgejo registrations probing in parallel — share one probe so
  * detection runs once.
@@ -1237,7 +1246,7 @@ export function createGiteaService(options: CreateGiteaServiceOptions = {}): For
       throw new TeaCliMissingError();
     }
     try {
-      const result = await runner(args, runOptions);
+      const result = await runner(args, runOptions, teaPath);
       return result.stdout.trim();
     } catch (error) {
       throw teaCliRunner.normalizeError(error, { args: redactTeaArgs(args), cwd: runOptions.cwd });

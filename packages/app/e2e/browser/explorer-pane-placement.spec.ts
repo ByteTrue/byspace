@@ -5,13 +5,10 @@
 // 2) splitting a tab out of a pane leaves a New tab behind, and the app must stay
 //    interactive in the [agent | New | explorer] state.
 import { expect, type Locator, type Page } from "@playwright/test";
-import { test } from "../support/fixtures";
-import { gotoWorkspace } from "../support/helpers/launcher";
-import { seedWorkspace } from "../support/helpers/seed-client";
-import {
-  openChangesTreePanel,
-  waitForWorkspaceTabsVisible,
-} from "../support/helpers/workspace-tabs";
+import { test } from "../fixtures";
+import { gotoWorkspace } from "../helpers/launcher";
+import { seedWorkspace } from "../helpers/seed-client";
+import { openChangesPanel, waitForWorkspaceTabsVisible } from "../helpers/workspace-tabs";
 
 function visible(page: Page, testId: string): Locator {
   return page.getByTestId(testId).filter({ visible: true });
@@ -25,18 +22,23 @@ function draftTabChip(page: Page): Locator {
   return page.locator('[data-testid^="workspace-tab-draft_"]').filter({ visible: true });
 }
 
-/** The Explorer has its own fixed tab rail, separate from workspace pane rows. */
+/** The explorer pane is the only tab row carrying the Changes tab. */
 function explorerTabRow(page: Page): Locator {
-  return visible(page, "explorer-sidebar-tab-rail");
+  return visible(page, "workspace-tabs-row").filter({
+    has: page.getByTestId("workspace-tab-working_diff"),
+  });
 }
 
 function mainTabRow(page: Page): Locator {
-  return visible(page, "workspace-tabs-row");
+  return visible(page, "workspace-tabs-row").filter({
+    hasNot: page.getByTestId("workspace-tab-working_diff"),
+  });
 }
 
-async function selectExplorerChanges(page: Page): Promise<void> {
-  await openChangesTreePanel(page);
-  await expect(visible(page, "changes-tree-panel").first()).toBeVisible();
+async function focusExplorerPane(page: Page): Promise<void> {
+  await openChangesPanel(page);
+  const changesTab = visible(page, "workspace-tab-working_diff").first();
+  await expect(changesTab).toHaveAttribute("aria-selected", "true");
 }
 
 async function closeSeededDraftInMainPane(page: Page): Promise<void> {
@@ -113,8 +115,8 @@ test.describe("explorer pane tab placement", () => {
         await expect(draftTabChip(page).first()).toBeVisible({ timeout: 30_000 });
       });
 
-      await test.step("select Changes in Explorer", async () => {
-        await selectExplorerChanges(page);
+      await test.step("focus the explorer pane", async () => {
+        await focusExplorerPane(page);
       });
 
       await test.step("an agent appearing now opens in the main pane, not the explorer pane", async () => {
@@ -138,8 +140,11 @@ test.describe("explorer pane tab placement", () => {
         await expect(
           explorerTabRow(page).first().getByTestId(`workspace-tab-agent_${agentId}`),
         ).toHaveCount(0);
-        // The background open must not change the selected Explorer view.
-        await expect(visible(page, "changes-tree-panel").first()).toBeVisible();
+        // The background open must not steal the explorer pane's focus.
+        await expect(visible(page, "workspace-tab-working_diff").first()).toHaveAttribute(
+          "aria-selected",
+          "true",
+        );
       });
 
       await test.step("close the draft; the agent is the main pane's only tab", async () => {
@@ -165,9 +170,8 @@ test.describe("explorer pane tab placement", () => {
           body: await page.screenshot(),
           contentType: "image/png",
         });
-        // The split must have taken: agent pane + New main. Explorer keeps its own rail.
-        await expect(visible(page, "workspace-tabs-row")).toHaveCount(2, { timeout: 10_000 });
-        await expect(explorerTabRow(page)).toHaveCount(1);
+        // The split must have taken: agent pane + New main + explorer = 3 tab rows.
+        await expect(visible(page, "workspace-tabs-row")).toHaveCount(3, { timeout: 10_000 });
         await expect(page.getByTestId("workspace-new-tab-panel")).toBeVisible();
       });
 

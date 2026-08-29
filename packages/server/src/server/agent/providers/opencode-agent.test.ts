@@ -30,7 +30,6 @@ import type {
 // guard: deriving the boundary from OPENCODE_SERVER_STARTUP_TIMEOUT_MS would keep the
 // readiness tests green if that constant were shortened below the required budget.
 const EXPECTED_STARTUP_BUDGET_MS = 30_000;
-const EXPECTED_EVENT_READINESS_BUDGET_MS = 45_000;
 
 function tmpCwd(): string {
   const dir = mkdtempSync(path.join(os.tmpdir(), "opencode-agent-test-"));
@@ -41,23 +40,10 @@ function tmpCwd(): string {
   }
 }
 
-function countEvents(events: AgentStreamEvent[], type: AgentStreamEvent["type"]): number {
-  return events.filter((event) => event.type === type).length;
-}
-
 function countProviderSubagentUpserts(events: AgentStreamEvent[]): number {
   return events.filter(
     (event) => event.type === "provider_subagent" && event.event.type === "upsert",
   ).length;
-}
-
-function pendingPermissionIds(session: {
-  getPendingPermissions(): Array<{ id: string }>;
-}): string[] {
-  return session
-    .getPendingPermissions()
-    .map((request) => request.id)
-    .sort();
 }
 
 function countChildStatuses(
@@ -79,21 +65,11 @@ const TEST_MODEL = "opencode/big-pickle";
 function createDirectEventSource(client: OpencodeClient): OpenCodeEventSource {
   const listeners = new Set<(input: never) => void>();
   const abort = new AbortController();
-  let connected = false;
   void client.global
     .event({ signal: abort.signal, sseMaxRetryAttempts: 0 })
     .then(async ({ stream }) => {
       for await (const event of stream) {
-        const payload = "payload" in event ? event.payload : event;
-        if (!connected && payload.type === "server.connected") {
-          connected = true;
-          continue;
-        }
-        for (const listener of listeners) {
-          listener(
-            ("payload" in event ? event : { directory: "/tmp/test", payload: event }) as never,
-          );
-        }
+        for (const listener of listeners) listener(event as never);
       }
       return undefined;
     });
@@ -196,52 +172,6 @@ function userMessageEvents(params: {
   ];
 }
 
-function assistantMessageEvents({
-  sessionId = "session-1",
-  messageId = "msg_assistant",
-  text = "Hello from OpenCode",
-}: {
-  sessionId?: string;
-  messageId?: string;
-  text?: string;
-} = {}): unknown[] {
-  return [
-    {
-      type: "message.updated",
-      properties: {
-        info: {
-          id: messageId,
-          sessionID: sessionId,
-          role: "assistant",
-        },
-      },
-    },
-    {
-      type: "message.part.delta",
-      properties: {
-        sessionID: sessionId,
-        messageID: messageId,
-        partID: messageId === "msg_assistant" ? "prt_text" : `part_${messageId}`,
-        field: "text",
-        delta: text,
-      },
-    },
-  ];
-}
-
-function assistantTurnEvents(
-  params: {
-    sessionId?: string;
-    messageId?: string;
-    text?: string;
-  } = {},
-): unknown[] {
-  return [
-    ...assistantMessageEvents(params),
-    { type: "session.idle", properties: { sessionID: params.sessionId ?? "session-1" } },
-  ];
-}
-
 async function createParentSession(
   sessionId: string,
   configure?: (openCode: TestOpenCodeClient) => void,
@@ -263,6 +193,38 @@ async function createParentSession(
     cwd: "/workspace/repo",
   });
   return { parent, openCode };
+}
+
+function assistantTurnEvents({
+  sessionId = "session-1",
+  text = "Hello from OpenCode",
+}: {
+  sessionId?: string;
+  text?: string;
+} = {}): unknown[] {
+  return [
+    {
+      type: "message.updated",
+      properties: {
+        info: {
+          id: "msg_assistant",
+          sessionID: sessionId,
+          role: "assistant",
+        },
+      },
+    },
+    {
+      type: "message.part.delta",
+      properties: {
+        sessionID: sessionId,
+        messageID: "msg_assistant",
+        partID: "prt_text",
+        field: "text",
+        delta: text,
+      },
+    },
+    { type: "session.idle", properties: { sessionID: sessionId } },
+  ];
 }
 
 function manualCompactEvents({
@@ -499,7 +461,7 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
       }),
     ]);
     // No modeId configured → no agent field: OpenCode must fall back to its
-    // own default agent instead of Paseo assuming any particular agent exists.
+    // own default agent instead of BySpace assuming any particular agent exists.
     expect(openCodeClient.calls.sessionPromptAsync[0]).not.toHaveProperty("agent");
 
     await session.close();
@@ -646,8 +608,8 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
       ],
     };
     runtime.enqueueClient(openCodeClient);
-    const paseoHome = tmpCwd();
-    const opencodeHome = path.join(paseoHome, "opencode-home");
+    const byspaceHome = tmpCwd();
+    const opencodeHome = path.join(byspaceHome, "opencode-home");
     const client = new OpenCodeAgentClient(logger, undefined, {
       serverManager: runtime,
       createClient: runtime.createClient,
@@ -688,13 +650,13 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
       },
     });
     expect(openCodeClient.calls.providerList).toEqual([{ directory: opencodeHome }]);
-    rmSync(paseoHome, { recursive: true, force: true });
+    rmSync(byspaceHome, { recursive: true, force: true });
   }, 60_000);
 
   test("fetchCatalog releases the acquired server when opencode-home cannot be created", async () => {
     const runtime = new TestOpenCodeHarness();
-    const paseoHome = tmpCwd();
-    const opencodeHome = path.join(paseoHome, "opencode-home");
+    const byspaceHome = tmpCwd();
+    const opencodeHome = path.join(byspaceHome, "opencode-home");
     writeFileSync(opencodeHome, "not a directory");
     const client = new OpenCodeAgentClient(logger, undefined, {
       serverManager: runtime,
@@ -706,7 +668,7 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
 
     expect(runtime.acquisitions).toEqual([{ kind: "current", releaseCount: 1 }]);
     expect(runtime.clientCreations).toEqual([]);
-    rmSync(paseoHome, { recursive: true, force: true });
+    rmSync(byspaceHome, { recursive: true, force: true });
   });
 
   test("fetchCatalog releases the acquired server when opencode-home cannot be resolved", async () => {
@@ -832,8 +794,8 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
     openCodeClient.appAgentsResponse = {
       data: [
         {
-          name: "paseo-test-custom",
-          description: "Custom agent defined for Paseo integration test",
+          name: "byspace-test-custom",
+          description: "Custom agent defined for BySpace integration test",
           mode: "primary",
         },
         { name: "compaction", mode: "subagent" },
@@ -851,12 +813,12 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
 
     const modes = await session.getAvailableModes();
 
-    expect(modes.map((mode) => mode.id)).toEqual(["paseo-test-custom"]);
+    expect(modes.map((mode) => mode.id)).toEqual(["byspace-test-custom"]);
 
-    const custom = modes.find((mode) => mode.id === "paseo-test-custom");
+    const custom = modes.find((mode) => mode.id === "byspace-test-custom");
     expect(custom).toBeDefined();
-    expect(custom!.label).toBe("Paseo-test-custom");
-    expect(custom!.description).toBe("Custom agent defined for Paseo integration test");
+    expect(custom!.label).toBe("Byspace-test-custom");
+    expect(custom!.description).toBe("Custom agent defined for BySpace integration test");
 
     // System agents should not appear as selectable modes
     expect(modes.some((mode) => mode.id === "compaction")).toBe(false);
@@ -1222,7 +1184,7 @@ describe("OpenCode adapter normalization", () => {
         mimeType: "application/github-issue",
         number: 55,
         title: "Improve startup error details",
-        url: "https://github.com/getpaseo/paseo/issues/55",
+        url: "https://github.com/ByteTrue/byspace/issues/55",
         body: "Issue body",
       },
     ]);
@@ -1275,6 +1237,48 @@ describe("OpenCode adapter normalization", () => {
 });
 
 describe("OpenCode adapter startTurn error handling", () => {
+  test("passes native OpenCode permission options without merging legacy tool policy", async () => {
+    const promptAsync = vi.fn(async () => ({ data: {}, error: undefined }));
+    const fakeClient = {
+      global: {
+        event: vi.fn().mockImplementation(async ({ signal }: { signal: AbortSignal }) => ({
+          stream: {
+            async *[Symbol.asyncIterator](): AsyncGenerator<OpenCodeEvent> {
+              yield { type: "server.connected", properties: {} } as OpenCodeEvent;
+              await waitForAbort(signal);
+            },
+          },
+        })),
+      },
+      session: { promptAsync },
+    } as never;
+    const session = new __openCodeInternals.OpenCodeAgentSession(
+      {
+        provider: "opencode",
+        cwd: "/tmp/test",
+        providerOptions: { permission: { bash: "ask", edit: "deny" } },
+      },
+      fakeClient,
+      "ses_unit_test",
+      createTestLogger(),
+    );
+
+    await session.startTurn("edit");
+
+    expect(promptAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        permission: [
+          { permission: "bash", pattern: "*", action: "ask" },
+          { permission: "edit", pattern: "*", action: "deny" },
+        ],
+      }),
+    );
+    expect(promptAsync.mock.calls[0]?.[0].permission).not.toContainEqual(
+      expect.objectContaining({ action: "allow" }),
+    );
+    await session.close();
+  });
+
   test("dynamically adds injected MCP servers without config-backed connect", async () => {
     const runtime = new TestOpenCodeHarness();
     const openCodeClient = new TestOpenCodeClient();
@@ -1290,9 +1294,9 @@ describe("OpenCode adapter startTurn error handling", () => {
         provider: "opencode",
         cwd,
         mcpServers: {
-          paseo: {
+          byspace: {
             type: "http",
-            url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=test-agent",
+            url: "http://127.0.0.1:6777/mcp/agents?callerAgentId=test-agent",
           },
         },
       });
@@ -1302,10 +1306,10 @@ describe("OpenCode adapter startTurn error handling", () => {
       expect(openCodeClient.calls.mcpAdd).toEqual([
         {
           directory: cwd,
-          name: "paseo",
+          name: "byspace",
           config: {
             type: "remote",
-            url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=test-agent",
+            url: "http://127.0.0.1:6777/mcp/agents?callerAgentId=test-agent",
             enabled: true,
           },
         },
@@ -1323,7 +1327,7 @@ describe("OpenCode adapter startTurn error handling", () => {
     const openCodeClient = new TestOpenCodeClient();
     openCodeClient.mcpAddResponse = {
       data: {
-        paseo: {
+        byspace: {
           status: "failed",
           error: "SSE error: Non-200 status code (400)",
         },
@@ -1341,15 +1345,15 @@ describe("OpenCode adapter startTurn error handling", () => {
         provider: "opencode",
         cwd,
         mcpServers: {
-          paseo: {
+          byspace: {
             type: "http",
-            url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=test-agent",
+            url: "http://127.0.0.1:6777/mcp/agents?callerAgentId=test-agent",
           },
         },
       });
 
       await expect(collectTurnEvents(streamSession(session, "hello"))).rejects.toThrow(
-        /Failed to add OpenCode MCP server 'paseo': SSE error/,
+        /Failed to add OpenCode MCP server 'byspace': SSE error/,
       );
 
       await session.close();
@@ -1463,6 +1467,79 @@ describe("OpenCode adapter startTurn error handling", () => {
       "opencode-turn-0",
       "opencode-turn-0",
     ]);
+  });
+
+  test("bounds dispatch readiness at the server startup budget without sending a prompt", async () => {
+    vi.useFakeTimers();
+    const openCode = new TestOpenCodeClient();
+    const session = new __openCodeInternals.OpenCodeAgentSession(
+      { provider: "opencode", cwd: "/workspace/repo" },
+      openCode.asSdkClient(),
+      "ses_readiness_timeout",
+      createTestLogger(),
+      new Map(),
+      {
+        ready: () => new Promise<void>(() => undefined),
+        subscribe: () => () => undefined,
+      },
+    );
+    try {
+      const dispatch = session.startTurn("wait for transport");
+      const rejection = expect(dispatch).rejects.toThrow("OpenCode event stream first record");
+      let settled = false;
+      const markSettled = () => {
+        settled = true;
+      };
+      void dispatch.then(markSettled, markSettled);
+
+      await vi.advanceTimersByTimeAsync(EXPECTED_STARTUP_BUDGET_MS - 1);
+      // Still waiting one tick before the budget: a shorter readiness timeout would have
+      // already failed the dispatch here.
+      expect(settled).toBe(false);
+      expect(openCode.calls.sessionPromptAsync).toHaveLength(0);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await rejection;
+      expect(settled).toBe(true);
+      expect(openCode.calls.sessionPromptAsync).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+      await session.close();
+    }
+  });
+
+  test("dispatches a prompt when the event stream needs more than ten seconds", async () => {
+    vi.useFakeTimers();
+    const openCode = new TestOpenCodeClient();
+    openCode.sessionPromptAsyncEvents = [];
+    const streamReady = createTestDeferred<void>();
+    const session = new __openCodeInternals.OpenCodeAgentSession(
+      { provider: "opencode", cwd: "/workspace/repo" },
+      openCode.asSdkClient(),
+      "ses_readiness_slow_stream",
+      createTestLogger(),
+      new Map(),
+      {
+        ready: () => streamReady.promise,
+        subscribe: () => () => undefined,
+      },
+    );
+    try {
+      const dispatch = session.startTurn("wait for a slow transport");
+      // OpenCode installs with plugins have been observed taking well past ten seconds
+      // to emit their first SSE record.
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(openCode.calls.sessionPromptAsync).toHaveLength(0);
+
+      streamReady.resolve();
+      await dispatch;
+      await vi.advanceTimersByTimeAsync(0);
+      expect(openCode.calls.sessionPromptAsync).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+      streamReady.resolve();
+      await session.close();
+    }
   });
 
   test("unwraps OpenCode global event payloads during a turn", async () => {
@@ -2114,6 +2191,420 @@ describe("OpenCode adapter startTurn error handling", () => {
     }
   });
 
+  test("keeps the turn active when abort fails and allows a confirmed retry", async () => {
+    const { parent: session, openCode } = await createParentSession("ses_unit_test");
+    openCode.sessionPromptAsyncEvents = [];
+    openCode.sessionAbortImplementation = async () => {
+      if (openCode.calls.sessionAbort.length === 1) {
+        throw new Error("abort transport failed");
+      }
+      openCode.emitEvent({
+        type: "session.idle",
+        properties: { sessionID: "ses_unit_test" },
+      });
+      return { data: true };
+    };
+
+    try {
+      await session.startTurn("first");
+      await expect(session.interrupt()).rejects.toThrow("abort transport failed");
+      expect(openCode.calls.sessionPromptAsync).toHaveLength(1);
+      await expect(session.startTurn("too early")).rejects.toThrow(
+        "A foreground turn is already active",
+      );
+
+      await session.interrupt();
+      await session.startTurn("second");
+      expect(openCode.calls.sessionAbort).toHaveLength(2);
+      expect(openCode.calls.sessionPromptAsync).toHaveLength(2);
+    } finally {
+      await session.close();
+    }
+  });
+
+  test("coalesces concurrent interrupts for the same turn", async () => {
+    const abort = createTestDeferred<{ data: true }>();
+    const { parent: session, openCode } = await createParentSession("ses_interrupt_coalesced");
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+    openCode.sessionPromptAsyncEvents = [];
+    openCode.sessionAbortImplementation = () => abort.promise;
+
+    try {
+      await session.startTurn("first");
+      const first = session.interrupt();
+      const second = session.interrupt();
+      expect(second).toBe(first);
+      expect(openCode.calls.sessionAbort).toHaveLength(1);
+
+      openCode.emitEvent({
+        type: "session.idle",
+        properties: { sessionID: "ses_interrupt_coalesced" },
+      });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      abort.reject(new Error("abort transport failed"));
+
+      await expect(first).rejects.toThrow("abort transport failed");
+      await expect(second).rejects.toThrow("abort transport failed");
+      expect(events.some((event) => event.type === "turn_canceled")).toBe(false);
+      expect(events.some((event) => event.type === "turn_completed")).toBe(true);
+    } finally {
+      openCode.sessionAbortImplementation = null;
+      await session.close();
+    }
+  });
+
+  test("does not let a stale interrupt completion clear a later turn", async () => {
+    const firstPrompt = createTestDeferred<{ data?: unknown }>();
+    const firstAbort = createTestDeferred<{ data: true }>();
+    const secondAbort = createTestDeferred<{ data: true }>();
+    const { parent: session, openCode } = await createParentSession("ses_interrupt_generations");
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+    let promptCount = 0;
+    openCode.sessionPromptAsyncEvents = [];
+    openCode.sessionPromptAsyncImplementation = async () => {
+      promptCount += 1;
+      if (promptCount === 1) {
+        return await firstPrompt.promise;
+      }
+      return {};
+    };
+    openCode.sessionAbortImplementation = async () => {
+      return await (openCode.calls.sessionAbort.length === 1
+        ? firstAbort.promise
+        : secondAbort.promise);
+    };
+
+    try {
+      await session.startTurn("first");
+      const staleInterrupt = session.interrupt();
+      firstPrompt.reject(new Error("first prompt failed"));
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      await session.startTurn("second");
+      const currentInterrupt = session.interrupt();
+      expect(openCode.calls.sessionAbort).toHaveLength(2);
+
+      firstAbort.resolve({ data: true });
+      await staleInterrupt;
+      openCode.emitEvent({
+        type: "session.idle",
+        properties: { sessionID: "ses_interrupt_generations" },
+      });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(events.filter((event) => event.type === "turn_canceled")).toHaveLength(0);
+
+      secondAbort.resolve({ data: true });
+      await currentInterrupt;
+      expect(events.filter((event) => event.type === "turn_canceled")).toHaveLength(1);
+    } finally {
+      openCode.sessionPromptAsyncImplementation = null;
+      openCode.sessionAbortImplementation = null;
+      await session.close();
+    }
+  });
+
+  test("does not rewrite a completed turn as canceled when abort later fails", async () => {
+    const abort = createTestDeferred<{ data: true }>();
+    const { parent: session, openCode } = await createParentSession("ses_interrupt_race");
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+    openCode.sessionPromptAsyncEvents = [];
+    openCode.sessionAbortImplementation = () => abort.promise;
+
+    try {
+      await session.startTurn("first");
+      const interrupt = session.interrupt();
+      openCode.emitEvent({
+        type: "session.idle",
+        properties: { sessionID: "ses_interrupt_race" },
+      });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(events.some((event) => event.type === "turn_canceled")).toBe(false);
+      expect(events.some((event) => event.type === "turn_completed")).toBe(false);
+
+      abort.reject(new Error("abort transport failed"));
+      await expect(interrupt).rejects.toThrow("abort transport failed");
+      expect(events.some((event) => event.type === "turn_canceled")).toBe(false);
+      expect(events.some((event) => event.type === "turn_completed")).toBe(true);
+    } finally {
+      openCode.sessionAbortImplementation = null;
+      await session.close();
+    }
+  });
+
+  test("reports a terminal event that races a confirmed abort as canceled", async () => {
+    const abort = createTestDeferred<{ data: true }>();
+    const { parent: session, openCode } = await createParentSession("ses_interrupt_confirmed");
+    const events: AgentStreamEvent[] = [];
+    session.subscribe((event) => events.push(event));
+    openCode.sessionPromptAsyncEvents = [];
+    openCode.sessionAbortImplementation = () => abort.promise;
+
+    try {
+      await session.startTurn("first");
+      const interrupt = session.interrupt();
+      openCode.emitEvent({
+        type: "session.idle",
+        properties: { sessionID: "ses_interrupt_confirmed" },
+      });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      abort.resolve({ data: true });
+      await interrupt;
+      expect(events.some((event) => event.type === "turn_canceled")).toBe(true);
+      expect(events.some((event) => event.type === "turn_completed")).toBe(false);
+    } finally {
+      openCode.sessionAbortImplementation = null;
+      await session.close();
+    }
+  });
+
+  test("does not send a prompt while the previous provider turn is still stopping", async () => {
+    vi.useFakeTimers();
+    const { parent: session, openCode } = await createParentSession("ses_unit_test");
+    openCode.sessionPromptAsyncEvents = [];
+    openCode.sessionStatusResponse = {
+      data: { ses_unit_test: { type: "busy" } },
+    };
+
+    try {
+      await session.startTurn("first");
+      await session.interrupt();
+
+      const secondTurn = expect(session.startTurn("second")).rejects.toThrow(
+        "OpenCode previous turn to stop",
+      );
+      await vi.advanceTimersByTimeAsync(10_000);
+      await secondTurn;
+      expect(openCode.calls.sessionPromptAsync).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+      await session.close();
+    }
+  });
+
+  test("keeps probing provider status while stopping across a permanent disconnect", async () => {
+    const settleAbort = createTestDeferred<void>();
+    const releaseIdle = createTestDeferred<void>();
+    let statusAttempt = 0;
+    const { parent: session, openCode } = await createParentSession(
+      "ses_stop_status_probe_failure",
+      (client) => {
+        client.sessionStatusImplementation = async () => {
+          statusAttempt += 1;
+          if (statusAttempt === 1) throw new Error("provider status unavailable");
+          await releaseIdle.promise;
+          return { data: {} };
+        };
+      },
+    );
+    openCode.sessionPromptAsyncEvents = [];
+    openCode.sessionAbortImplementation = async () => {
+      await settleAbort.promise;
+      return { data: true };
+    };
+
+    try {
+      await session.startTurn("first");
+      const interrupt = session.interrupt();
+      await vi.waitFor(() => expect(openCode.calls.sessionAbort).toHaveLength(1));
+
+      settleAbort.resolve();
+      await interrupt;
+      const replacement = session.startTurn("second");
+      await vi.waitFor(() => expect(openCode.calls.sessionStatus).toHaveLength(1));
+
+      releaseIdle.resolve();
+      await expect(replacement).resolves.toEqual({ turnId: "opencode-turn-1" });
+      expect(openCode.calls.sessionPromptAsync).toHaveLength(2);
+      expect(openCode.calls.sessionStatus.length).toBeGreaterThanOrEqual(2);
+    } finally {
+      settleAbort.resolve();
+      releaseIdle.resolve();
+      await session.close();
+    }
+  }, 15_000);
+
+  test("surfaces an autonomous OpenCode wake as a new parent turn", async () => {
+    const { parent, openCode } = await createParentSession("ses_parent_plugin_wake");
+    const events: AgentStreamEvent[] = [];
+    parent.subscribe((event) => events.push(event));
+
+    try {
+      for (const event of userMessageEvents({
+        sessionId: "ses_parent_plugin_wake",
+        messageId: "msg_plugin_wake",
+        text: "Background tasks complete.",
+      })) {
+        openCode.emitEvent(event);
+      }
+      openCode.emitEvent({
+        type: "session.status",
+        properties: { sessionID: "ses_parent_plugin_wake", status: { type: "busy" } },
+      });
+      for (const event of assistantTurnEvents({
+        sessionId: "ses_parent_plugin_wake",
+        text: "Parent consumed the background result.",
+      })) {
+        openCode.emitEvent(event);
+      }
+
+      await vi.waitFor(() => {
+        expect(turnEventSignatures(events)).toEqual([
+          ["turn_started", "opencode-turn-0"],
+          ["timeline", "opencode-turn-0"],
+          ["timeline", "opencode-turn-0"],
+          ["turn_completed", "opencode-turn-0"],
+        ]);
+      });
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: "timeline",
+          item: expect.objectContaining({
+            type: "assistant_message",
+            text: "Parent consumed the background result.",
+          }),
+        }),
+      );
+    } finally {
+      await parent.close();
+    }
+  });
+
+  test("does not mistake OpenCode session metadata for an autonomous turn", async () => {
+    const { parent, openCode } = await createParentSession("ses_parent_metadata");
+    const events: AgentStreamEvent[] = [];
+    const streamDrained = createTestDeferred<void>();
+    parent.subscribe((event) => {
+      events.push(event);
+      if (event.type === "provider_subagent") {
+        streamDrained.resolve();
+      }
+    });
+
+    try {
+      openCode.emitEvent({
+        type: "session.created",
+        properties: { info: { id: "ses_parent_metadata" } },
+      });
+      openCode.emitEvent({
+        type: "session.idle",
+        properties: { sessionID: "ses_parent_metadata" },
+      });
+      for (const event of assistantTurnEvents({
+        sessionId: "ses_parent_metadata",
+        text: "Autonomous response.",
+      })) {
+        openCode.emitEvent(event);
+      }
+      openCode.emitEvent({
+        type: "session.created",
+        properties: {
+          info: {
+            id: "ses_child_after_parent_metadata",
+            parentID: "ses_parent_metadata",
+            title: "Stream drain marker",
+            directory: "/workspace/repo",
+          },
+        },
+      });
+
+      await streamDrained.promise;
+      expect(
+        turnEventSignatures(events.filter((event) => event.type !== "provider_subagent")),
+      ).toEqual([]);
+    } finally {
+      await parent.close();
+    }
+  });
+
+  test("keeps an autonomous turn active until OpenCode reaches its terminal event", async () => {
+    const { parent, openCode } = await createParentSession("ses_parent_active_wake");
+    const events: AgentStreamEvent[] = [];
+    parent.subscribe((event) => events.push(event));
+
+    try {
+      openCode.emitEvent(
+        userMessageEvents({
+          sessionId: "ses_parent_active_wake",
+          messageId: "msg_autonomous_wake",
+          text: "Autonomous wake",
+        })[0],
+      );
+      await vi.waitFor(() => {
+        expect(events).toEqual([
+          { type: "turn_started", provider: "opencode", turnId: "opencode-turn-0" },
+        ]);
+      });
+
+      await expect(parent.startTurn("Continue from BySpace")).rejects.toThrow(
+        "A foreground turn is already active",
+      );
+      expect(openCode.calls.sessionAbort).toEqual([]);
+      expect(openCode.calls.sessionPromptAsync).toEqual([]);
+    } finally {
+      await parent.close();
+    }
+  });
+
+  test("does not adopt late output from an interrupted BySpace turn", async () => {
+    const { parent, openCode } = await createParentSession("ses_parent_interrupted");
+    openCode.sessionPromptAsyncEvents = [];
+    const events: AgentStreamEvent[] = [];
+    const streamDrained = createTestDeferred<void>();
+    parent.subscribe((event) => {
+      events.push(event);
+      if (event.type === "provider_subagent") {
+        streamDrained.resolve();
+      }
+    });
+
+    try {
+      await parent.startTurn("Start from BySpace");
+      await parent.interrupt();
+
+      for (const event of userMessageEvents({
+        sessionId: "ses_parent_interrupted",
+        messageId: "msg_delayed_interrupted_user",
+        text: "Delayed interrupted prompt",
+      })) {
+        openCode.emitEvent(event);
+      }
+      for (const event of assistantTurnEvents({
+        sessionId: "ses_parent_interrupted",
+        text: "Late interrupted response.",
+      })) {
+        openCode.emitEvent(event);
+      }
+      openCode.emitEvent({
+        type: "session.created",
+        properties: {
+          info: {
+            id: "ses_child_after_interrupted_output",
+            parentID: "ses_parent_interrupted",
+            title: "Stream drain marker",
+            directory: "/workspace/repo",
+          },
+        },
+      });
+
+      await streamDrained.promise;
+      expect(events.filter((event) => event.type !== "provider_subagent")).toEqual([
+        { type: "turn_started", provider: "opencode", turnId: "opencode-turn-0" },
+        {
+          type: "turn_canceled",
+          provider: "opencode",
+          reason: "interrupted",
+          turnId: "opencode-turn-0",
+        },
+      ]);
+    } finally {
+      await parent.close();
+    }
+  });
+
   test("uses OpenCode native steer admission and reconciles the user echo", async () => {
     const { parent: session, openCode } = await createParentSession("ses_native_steer");
     openCode.sessionPromptAsyncEvents = [];
@@ -2147,15 +2638,15 @@ describe("OpenCode adapter startTurn error handling", () => {
     });
     await vi.waitFor(() => {
       let found;
-      for (const e of events) {
+      for (const event of events) {
         if (
-          e.type === "timeline" &&
-          e.item.type === "user_message" &&
-          e.item.text === "steer this turn" &&
-          e.item.messageId === request.messageID &&
-          e.item.clientMessageId === "client-steer-1"
+          event.type === "timeline" &&
+          event.item.type === "user_message" &&
+          event.item.text === "steer this turn" &&
+          event.item.messageId === request.messageID &&
+          event.item.clientMessageId === "client-steer-1"
         ) {
-          found = e;
+          found = event;
           break;
         }
       }
@@ -2223,8 +2714,10 @@ describe("OpenCode adapter startTurn error handling", () => {
     }
     const userMessageTexts = () => {
       const texts: string[] = [];
-      for (const e of events) {
-        if (e.type === "timeline" && e.item.type === "user_message") texts.push(e.item.text);
+      for (const event of events) {
+        if (event.type === "timeline" && event.item.type === "user_message") {
+          texts.push(event.item.text);
+        }
       }
       return texts;
     };
@@ -2273,1587 +2766,6 @@ describe("OpenCode adapter startTurn error handling", () => {
     ).rejects.toThrow("connection lost");
 
     await session.close();
-  });
-
-  test("sends exact Hub MCP permission grants without approving unrelated tools", async () => {
-    const promptAsync = vi.fn(async () => ({ data: {}, error: undefined }));
-    const fakeClient = {
-      global: {
-        event: vi.fn().mockImplementation(async ({ signal }: { signal: AbortSignal }) => ({
-          stream: {
-            async *[Symbol.asyncIterator](): AsyncGenerator<OpenCodeEvent> {
-              yield { type: "server.connected", properties: {} } as OpenCodeEvent;
-              await waitForAbort(signal);
-            },
-          },
-        })),
-      },
-      session: { promptAsync },
-    } as never;
-    const session = new __openCodeInternals.OpenCodeAgentSession(
-      {
-        provider: "opencode",
-        cwd: "/tmp/test",
-        providerOptions: { permission: { bash: "ask", hub_reply: "deny" } },
-        toolPolicy: {
-          preapproved: [{ kind: "mcp", server: "hub", tool: "finish_execution" }],
-        },
-      },
-      fakeClient,
-      "ses_unit_test",
-      createTestLogger(),
-    );
-
-    await session.startTurn("finish");
-
-    expect(promptAsync).toHaveBeenCalledWith(
-      expect.objectContaining({
-        permission: [
-          { permission: "hub_finish_execution", pattern: "*", action: "allow" },
-          { permission: "bash", pattern: "*", action: "ask" },
-          { permission: "hub_reply", pattern: "*", action: "deny" },
-        ],
-      }),
-    );
-    expect(promptAsync.mock.calls[0]?.[0].permission).not.toContainEqual(
-      expect.objectContaining({ permission: "bash", action: "allow" }),
-    );
-    await session.close();
-  });
-
-  test("waits for the stop abort and provider idle before starting the next prompt", async () => {
-    const { parent: session, openCode } = await createParentSession("ses_unit_test");
-    const retryStarted = createTestDeferred<void>();
-    const settleRetry = createTestDeferred<void>();
-    const oldIdleConsumed = createTestDeferred<void>();
-    const replacementCompleted = createTestDeferred<void>();
-    const events: AgentStreamEvent[] = [];
-    openCode.sessionPromptAsyncEvents = [];
-    openCode.sessionAbortImplementation = async () => {
-      if (openCode.calls.sessionAbort.length === 1) {
-        throw new Error("abort transport failed");
-      }
-      retryStarted.resolve();
-      await settleRetry.promise;
-      return { data: true };
-    };
-    session.subscribe((event) => {
-      events.push(event);
-      if (event.type === "provider_subagent") {
-        oldIdleConsumed.resolve();
-      }
-      if (event.type === "turn_completed") {
-        replacementCompleted.resolve();
-      }
-    });
-    try {
-      await session.startTurn("first");
-      const interrupt = session.interrupt();
-      await retryStarted.promise;
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(1);
-
-      openCode.emitEvent({
-        type: "session.idle",
-        properties: { sessionID: "ses_unit_test" },
-      });
-      openCode.emitEvent({
-        type: "session.created",
-        properties: {
-          info: {
-            id: "ses_child_after_old_idle",
-            parentID: "ses_unit_test",
-            title: "Old idle drain marker",
-            directory: "/workspace/repo",
-          },
-        },
-      });
-      await oldIdleConsumed.promise;
-      const replacement = session.startTurn("second");
-      await new Promise<void>((resolve) => setImmediate(resolve));
-
-      expect(openCode.calls.sessionAbort).toHaveLength(2);
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(1);
-
-      settleRetry.resolve();
-      await interrupt;
-      await replacement;
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(2);
-
-      for (const event of assistantTurnEvents({
-        sessionId: "ses_unit_test",
-        text: "Replacement completed safely.",
-      })) {
-        openCode.emitEvent(event);
-      }
-      await replacementCompleted.promise;
-
-      expect(
-        turnEventSignatures(events.filter((event) => event.type !== "provider_subagent")),
-      ).toEqual([
-        ["turn_started", "opencode-turn-0"],
-        ["turn_canceled", "opencode-turn-0"],
-        ["turn_started", "opencode-turn-1"],
-        ["timeline", "opencode-turn-1"],
-        ["turn_completed", "opencode-turn-1"],
-      ]);
-    } finally {
-      settleRetry.resolve();
-      await session.close();
-    }
-  });
-
-  test("streams an autonomous wake after the canceled run reaches its terminal", async () => {
-    const { parent: session, openCode } = await createParentSession("ses_wake_after_terminal");
-    const settleAbort = createTestDeferred<void>();
-    const events: AgentStreamEvent[] = [];
-    openCode.sessionPromptAsyncEvents = [];
-    openCode.sessionAbortImplementation = async () => {
-      await settleAbort.promise;
-      return { data: true };
-    };
-    session.subscribe((event) => events.push(event));
-
-    try {
-      await session.startTurn("first");
-      const interrupt = session.interrupt();
-      await vi.waitFor(() => expect(openCode.calls.sessionAbort).toHaveLength(1));
-
-      for (const event of assistantMessageEvents({
-        sessionId: "ses_wake_after_terminal",
-        messageId: "msg_canceled_assistant",
-        text: "Canceled residue.",
-      })) {
-        openCode.emitEvent(event);
-      }
-      openCode.emitEvent({
-        type: "session.idle",
-        properties: { sessionID: "ses_wake_after_terminal" },
-      });
-      openCode.emitEvent({
-        type: "session.status",
-        properties: {
-          sessionID: "ses_wake_after_terminal",
-          status: { type: "busy" },
-        },
-      });
-      for (const event of userMessageEvents({
-        sessionId: "ses_wake_after_terminal",
-        messageId: "msg_wake_after_terminal",
-        text: "Wake after the canceled terminal",
-      })) {
-        openCode.emitEvent(event);
-      }
-      for (const event of assistantMessageEvents({
-        sessionId: "ses_wake_after_terminal",
-        messageId: "msg_wake_assistant",
-        text: "Wake output streams live.",
-      })) {
-        openCode.emitEvent(event);
-      }
-
-      await vi.waitFor(() =>
-        expect(events).toContainEqual(
-          expect.objectContaining({
-            type: "timeline",
-            turnId: "opencode-turn-1",
-            item: expect.objectContaining({ text: "Wake output streams live." }),
-          }),
-        ),
-      );
-      expect(events).not.toContainEqual(
-        expect.objectContaining({
-          type: "timeline",
-          item: expect.objectContaining({ text: "Canceled residue." }),
-        }),
-      );
-
-      settleAbort.resolve();
-      await interrupt;
-      openCode.emitEvent({
-        type: "session.idle",
-        properties: { sessionID: "ses_wake_after_terminal" },
-      });
-      await vi.waitFor(() =>
-        expect(events).toContainEqual(
-          expect.objectContaining({ type: "turn_completed", turnId: "opencode-turn-1" }),
-        ),
-      );
-      await expect(session.startTurn("after the wake")).resolves.toEqual({
-        turnId: "opencode-turn-2",
-      });
-    } finally {
-      settleAbort.resolve();
-      await session.close();
-    }
-  });
-
-  test("preserves an autonomous wake that arrives after provider idle but before abort settlement", async () => {
-    const { parent: session, openCode } = await createParentSession("ses_deferred_autonomous");
-    const settleAbort = createTestDeferred<void>();
-    const wakeEventsConsumed = createTestDeferred<void>();
-    const events: AgentStreamEvent[] = [];
-    openCode.sessionPromptAsyncEvents = [];
-    openCode.sessionAbortImplementation = async () => {
-      await settleAbort.promise;
-      return { data: true };
-    };
-    session.subscribe((event) => {
-      events.push(event);
-      if (
-        event.type === "provider_subagent" &&
-        event.event.type === "upsert" &&
-        event.event.id === "ses_deferred_wake_drain"
-      ) {
-        wakeEventsConsumed.resolve();
-      }
-    });
-
-    try {
-      await session.startTurn("first");
-      openCode.emitEvent({
-        type: "message.part.updated",
-        properties: {
-          part: {
-            id: "prt_canceled_usage",
-            sessionID: "ses_deferred_autonomous",
-            messageID: "msg_canceled_assistant",
-            type: "step-finish",
-            tokens: { input: 100, output: 20, cache: { read: 50 } },
-          },
-        },
-      });
-      await vi.waitFor(() =>
-        expect(events).toContainEqual(
-          expect.objectContaining({
-            type: "usage_updated",
-            usage: expect.objectContaining({
-              inputTokens: 100,
-              outputTokens: 20,
-              cachedInputTokens: 50,
-            }),
-          }),
-        ),
-      );
-      const interrupt = session.interrupt();
-      await vi.waitFor(() => expect(openCode.calls.sessionAbort).toHaveLength(1));
-      openCode.emitEvent({
-        type: "session.idle",
-        properties: { sessionID: "ses_deferred_autonomous" },
-      });
-      openCode.emitEvent({
-        type: "message.updated",
-        properties: {
-          info: {
-            id: "msg_plugin_wake",
-            sessionID: "ses_deferred_autonomous",
-            role: "user",
-          },
-        },
-      });
-      openCode.emitEvent({
-        type: "session.status",
-        properties: { sessionID: "ses_deferred_autonomous", status: { type: "busy" } },
-      });
-      openCode.emitEvent({
-        type: "message.part.updated",
-        properties: {
-          part: {
-            id: "prt_autonomous_usage",
-            sessionID: "ses_deferred_autonomous",
-            messageID: "msg_autonomous_assistant",
-            type: "step-finish",
-            tokens: { input: 7, output: 3 },
-          },
-        },
-      });
-      for (const event of assistantTurnEvents({
-        sessionId: "ses_deferred_autonomous",
-        text: "Autonomous wake completed.",
-      })) {
-        openCode.emitEvent(event);
-      }
-      openCode.emitEvent({
-        type: "session.created",
-        properties: {
-          info: {
-            id: "ses_deferred_wake_drain",
-            parentID: "ses_deferred_autonomous",
-            title: "Deferred wake drain marker",
-            directory: "/workspace/repo",
-          },
-        },
-      });
-      await wakeEventsConsumed.promise;
-
-      settleAbort.resolve();
-      await interrupt;
-      await new Promise<void>((resolve) => setImmediate(resolve));
-
-      expect(events).toContainEqual({
-        type: "turn_started",
-        provider: "opencode",
-        turnId: "opencode-turn-1",
-      });
-      await vi.waitFor(() =>
-        expect(events).toContainEqual({
-          type: "turn_completed",
-          provider: "opencode",
-          turnId: "opencode-turn-1",
-          usage: expect.objectContaining({
-            inputTokens: 7,
-            outputTokens: 3,
-            contextWindowUsedTokens: 10,
-          }),
-        }),
-      );
-      const autonomousCompletion = events.find(
-        (event) => event.type === "turn_completed" && event.turnId === "opencode-turn-1",
-      );
-      expect(autonomousCompletion?.type).toBe("turn_completed");
-      if (autonomousCompletion?.type === "turn_completed") {
-        expect(autonomousCompletion.usage?.cachedInputTokens).toBeUndefined();
-      }
-      expect(events).toContainEqual(
-        expect.objectContaining({
-          type: "timeline",
-          turnId: "opencode-turn-1",
-          item: expect.objectContaining({
-            type: "assistant_message",
-            text: "Autonomous wake completed.",
-          }),
-        }),
-      );
-      await expect(session.startTurn("after autonomous wake")).resolves.toEqual({
-        turnId: "opencode-turn-2",
-      });
-    } finally {
-      settleAbort.resolve();
-      await session.close();
-    }
-  });
-
-  test("waits for an idle-session abort before starting a prompt", async () => {
-    const { parent: session, openCode } = await createParentSession("ses_idle_abort");
-    const settleAbort = createTestDeferred<void>();
-    openCode.sessionPromptAsyncEvents = [];
-    openCode.sessionAbortImplementation = async () => {
-      await settleAbort.promise;
-      return { data: true };
-    };
-
-    try {
-      const interrupt = session.interrupt();
-      const prompt = session.startTurn("next");
-      await new Promise<void>((resolve) => setImmediate(resolve));
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(0);
-
-      settleAbort.resolve();
-      await interrupt;
-      await prompt;
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(1);
-    } finally {
-      settleAbort.resolve();
-      await session.close();
-    }
-  });
-
-  test("does not acknowledge cancellation when both abort attempts fail", async () => {
-    const { parent: session, openCode } = await createParentSession("ses_failed_idle_abort");
-    const events: AgentStreamEvent[] = [];
-    openCode.sessionPromptAsyncEvents = [];
-    openCode.sessionAbortImplementation = async () => {
-      throw new Error("abort failed");
-    };
-    session.subscribe((event) => events.push(event));
-
-    try {
-      await session.startTurn("still running upstream");
-      await expect(session.interrupt()).rejects.toThrow("abort failed");
-
-      await expect(session.startTurn("unsafe replacement")).rejects.toThrow("abort failed");
-      expect(openCode.calls.sessionAbort).toHaveLength(2);
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(1);
-      expect(events.map((event) => event.type)).toEqual(["turn_started"]);
-    } finally {
-      await session.close();
-    }
-  });
-
-  test("acknowledges the canceled turn when a repeated Stop finally aborts", async () => {
-    const { parent: session, openCode } = await createParentSession("ses_retried_stop");
-    const events: AgentStreamEvent[] = [];
-    openCode.sessionPromptAsyncEvents = [];
-    openCode.sessionAbortImplementation = async () => {
-      if (openCode.calls.sessionAbort.length <= 2) {
-        throw new Error("abort failed");
-      }
-      return { data: true };
-    };
-    session.subscribe((event) => events.push(event));
-
-    try {
-      await session.startTurn("still running upstream");
-      await expect(session.interrupt()).rejects.toThrow("abort failed");
-      expect(events.map((event) => event.type)).toEqual(["turn_started"]);
-
-      await session.interrupt();
-
-      expect(openCode.calls.sessionAbort).toHaveLength(3);
-      expect(events).toContainEqual({
-        type: "turn_canceled",
-        provider: "opencode",
-        reason: "interrupted",
-        turnId: "opencode-turn-0",
-      });
-
-      openCode.emitEvent({
-        type: "session.idle",
-        properties: { sessionID: "ses_retried_stop" },
-      });
-      await expect(session.startTurn("replacement")).resolves.toEqual({
-        turnId: "opencode-turn-1",
-      });
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(2);
-    } finally {
-      await session.close();
-    }
-  });
-
-  test("keeps a waiting replacement behind an abort issued while it waits", async () => {
-    const { parent: session, openCode } = await createParentSession("ses_stop_during_wait");
-    const settleFirstAbort = createTestDeferred<void>();
-    const settleSecondAbort = createTestDeferred<void>();
-    openCode.sessionPromptAsyncEvents = [];
-    openCode.sessionAbortImplementation = async () => {
-      await (openCode.calls.sessionAbort.length === 1
-        ? settleFirstAbort.promise
-        : settleSecondAbort.promise);
-      return { data: true };
-    };
-
-    let replacement: Promise<{ turnId: string }> | undefined;
-    try {
-      await session.startTurn("first");
-      const firstStop = session.interrupt();
-      void firstStop.catch(() => undefined);
-      await vi.waitFor(() => expect(openCode.calls.sessionAbort).toHaveLength(1));
-
-      replacement = session.startTurn("replacement");
-      openCode.emitEvent({
-        type: "session.idle",
-        properties: { sessionID: "ses_stop_during_wait" },
-      });
-
-      const secondStop = session.interrupt();
-      void secondStop.catch(() => undefined);
-      await vi.waitFor(() => expect(openCode.calls.sessionAbort).toHaveLength(2));
-
-      settleFirstAbort.resolve();
-      await firstStop;
-      await new Promise<void>((resolve) => setImmediate(resolve));
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(1);
-
-      settleSecondAbort.resolve();
-      await secondStop;
-      await replacement;
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(2);
-    } finally {
-      settleFirstAbort.resolve();
-      settleSecondAbort.resolve();
-      await replacement?.catch(() => undefined);
-      await session.close();
-    }
-  });
-
-  test("keeps a replacement behind an abort left in flight by an earlier stop", async () => {
-    const { parent: session, openCode } = await createParentSession("ses_carried_abort");
-    const settleFirstAbort = createTestDeferred<void>();
-    openCode.sessionPromptAsyncEvents = [];
-    openCode.sessionAbortImplementation = async () => {
-      if (openCode.calls.sessionAbort.length === 1) {
-        await settleFirstAbort.promise;
-      }
-      return { data: true };
-    };
-    const events: AgentStreamEvent[] = [];
-    session.subscribe((event) => events.push(event));
-
-    let replacement: Promise<{ turnId: string }> | undefined;
-    try {
-      await session.startTurn("first");
-      const firstStop = session.interrupt();
-      void firstStop.catch(() => undefined);
-      await vi.waitFor(() => expect(openCode.calls.sessionAbort).toHaveLength(1));
-
-      openCode.emitEvent({
-        type: "session.idle",
-        properties: { sessionID: "ses_carried_abort" },
-      });
-      openCode.emitEvent({
-        type: "session.status",
-        properties: {
-          sessionID: "ses_carried_abort",
-          status: { type: "busy" },
-        },
-      });
-      for (const event of userMessageEvents({
-        sessionId: "ses_carried_abort",
-        messageId: "msg_wake_between_stops",
-        text: "Autonomous wake between stops",
-      })) {
-        openCode.emitEvent(event);
-      }
-      await vi.waitFor(() =>
-        expect(events).toContainEqual({
-          type: "turn_started",
-          provider: "opencode",
-          turnId: "opencode-turn-1",
-        }),
-      );
-
-      await session.interrupt();
-      expect(openCode.calls.sessionAbort).toHaveLength(2);
-      openCode.emitEvent({
-        type: "session.idle",
-        properties: { sessionID: "ses_carried_abort" },
-      });
-
-      replacement = session.startTurn("replacement");
-      await new Promise<void>((resolve) => setImmediate(resolve));
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(1);
-
-      settleFirstAbort.resolve();
-      await firstStop;
-      await replacement;
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(2);
-    } finally {
-      settleFirstAbort.resolve();
-      await replacement?.catch(() => undefined);
-      await session.close();
-    }
-  });
-
-  test("keeps a replacement behind an earlier Stop's abort that is still in flight", async () => {
-    const { parent: session, openCode } = await createParentSession("ses_overlapping_stops");
-    const settleFirstAbort = createTestDeferred<void>();
-    openCode.sessionPromptAsyncEvents = [];
-    openCode.sessionAbortImplementation = async () => {
-      if (openCode.calls.sessionAbort.length === 1) {
-        await settleFirstAbort.promise;
-      }
-      return { data: true };
-    };
-
-    let replacement: Promise<{ turnId: string }> | undefined;
-    try {
-      await session.startTurn("first");
-      const firstStop = session.interrupt();
-      void firstStop.catch(() => undefined);
-      await vi.waitFor(() => expect(openCode.calls.sessionAbort).toHaveLength(1));
-
-      await session.interrupt();
-      expect(openCode.calls.sessionAbort).toHaveLength(2);
-      openCode.emitEvent({
-        type: "session.idle",
-        properties: { sessionID: "ses_overlapping_stops" },
-      });
-
-      replacement = session.startTurn("replacement");
-      await new Promise<void>((resolve) => setImmediate(resolve));
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(1);
-
-      settleFirstAbort.resolve();
-      await firstStop;
-      await replacement;
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(2);
-    } finally {
-      settleFirstAbort.resolve();
-      await replacement?.catch(() => undefined);
-      await session.close();
-    }
-  });
-
-  test("does not retry an owned abort after the session closes", async () => {
-    const { parent: session, openCode } = await createParentSession("ses_close_pending_abort");
-    const settleOwnedAbort = createTestDeferred<void>();
-    openCode.sessionAbortImplementation = async () => {
-      if (openCode.calls.sessionAbort.length === 1) {
-        await settleOwnedAbort.promise;
-        throw new Error("late abort failure");
-      }
-      return { data: true };
-    };
-
-    const interrupt = session.interrupt();
-    await vi.waitFor(() => expect(openCode.calls.sessionAbort).toHaveLength(1));
-    await session.close();
-    expect(openCode.calls.sessionAbort).toHaveLength(2);
-
-    settleOwnedAbort.resolve();
-    await expect(interrupt).rejects.toThrow("late abort failure");
-    expect(openCode.calls.sessionAbort).toHaveLength(2);
-  });
-
-  test("fails closed when the SDK abort throws before returning a promise", async () => {
-    const openCode = new TestOpenCodeClient();
-    const sdkClient = openCode.asSdkClient();
-    const workingAbort = sdkClient.session.abort;
-    sdkClient.session.abort = (() => {
-      throw new Error("synchronous abort failure");
-    }) as typeof sdkClient.session.abort;
-    const session = new __openCodeInternals.OpenCodeAgentSession(
-      { provider: "opencode", cwd: "/workspace/repo" },
-      sdkClient,
-      "ses_sync_abort_failure",
-      createTestLogger(),
-    );
-
-    try {
-      await expect(session.interrupt()).rejects.toThrow("synchronous abort failure");
-
-      await expect(session.startTurn("unsafe replacement")).rejects.toThrow(
-        "synchronous abort failure",
-      );
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(0);
-    } finally {
-      sdkClient.session.abort = workingAbort;
-      await session.close();
-    }
-  });
-
-  test("fails closed when idle-session abort attempts return SDK errors", async () => {
-    const { parent: session, openCode } = await createParentSession("ses_error_idle_abort");
-    openCode.sessionPromptAsyncEvents = [];
-    openCode.sessionAbortImplementation = async () => ({
-      error: new Error("abort response failed"),
-    });
-
-    try {
-      await expect(session.interrupt()).rejects.toThrow("abort response failed");
-
-      await expect(session.startTurn("unsafe replacement")).rejects.toThrow(
-        "abort response failed",
-      );
-      expect(openCode.calls.sessionAbort).toHaveLength(2);
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(0);
-    } finally {
-      await session.close();
-    }
-  });
-
-  test("does not send a prompt while the previous provider turn is still stopping", async () => {
-    vi.useFakeTimers();
-    const { parent: session, openCode } = await createParentSession("ses_unit_test");
-    openCode.sessionPromptAsyncEvents = [];
-    openCode.sessionStatusResponse = {
-      data: { ses_unit_test: { type: "busy" } },
-    };
-
-    try {
-      await session.startTurn("first");
-      await session.interrupt();
-
-      const secondTurn = expect(session.startTurn("second")).rejects.toThrow(
-        "OpenCode previous turn to stop",
-      );
-      await vi.advanceTimersByTimeAsync(10_000);
-      await secondTurn;
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(1);
-    } finally {
-      vi.useRealTimers();
-      await session.close();
-    }
-  });
-
-  test("settles summarize from provider status after reconnect", async () => {
-    const { parent: session, openCode } = await createParentSession("ses_summarize_recovery");
-    openCode.sessionSummarizeEvents = [];
-    openCode.sessionStatusResponse = { data: {} };
-    const events: AgentStreamEvent[] = [];
-    session.subscribe((event) => events.push(event));
-
-    try {
-      await session.startTurn("/summarize");
-      openCode.emitEvent({ type: "server.connected", properties: {} });
-      await vi.waitFor(() => expect(countEvents(events, "turn_completed")).toBe(1));
-
-      expect(openCode.calls.sessionMessages).toHaveLength(0);
-      expect(events.filter((event) => event.type === "timeline")).toHaveLength(0);
-    } finally {
-      await session.close();
-    }
-  });
-
-  test.each(["status", "messages"] as const)(
-    "retries a failed foreground %s snapshot after one reconnect",
-    async (failedRequest) => {
-      vi.useFakeTimers();
-      const { parent: session, openCode } = await createParentSession(
-        `ses_retry_${failedRequest}_snapshot`,
-      );
-      const events: AgentStreamEvent[] = [];
-      session.subscribe((event) => events.push(event));
-      openCode.sessionPromptAsyncEvents = [];
-      let statusAttempts = 0;
-      let messageAttempts = 0;
-
-      try {
-        await vi.waitFor(() => expect(openCode.calls.sessionChildren).toHaveLength(1));
-        await session.startTurn("recover me");
-        const dispatch = openCode.calls.sessionPromptAsync[0] as { messageID: string };
-        const recoveredMessages = {
-          data: [
-            {
-              info: {
-                id: dispatch.messageID,
-                sessionID: session.id,
-                role: "user",
-              },
-              parts: [],
-            },
-            {
-              info: {
-                id: "msg_recovered_assistant",
-                sessionID: session.id,
-                role: "assistant",
-                time: { created: 1, completed: 2 },
-              },
-              parts: [
-                {
-                  id: "part_recovered_text",
-                  sessionID: session.id,
-                  messageID: "msg_recovered_assistant",
-                  type: "text",
-                  text: "recovered after retry",
-                  time: { start: 1, end: 2 },
-                },
-              ],
-            },
-          ],
-        };
-        openCode.sessionStatusImplementation = async () => {
-          statusAttempts += 1;
-          if (failedRequest === "status" && statusAttempts === 1) {
-            throw new Error("transient status failure");
-          }
-          return { data: {} };
-        };
-        openCode.sessionMessagesImplementation = async () => {
-          messageAttempts += 1;
-          if (failedRequest === "messages" && messageAttempts === 1) {
-            throw new Error("transient messages failure");
-          }
-          return recoveredMessages;
-        };
-
-        openCode.emitEvent({ type: "server.connected", properties: {} });
-        await vi.waitFor(() =>
-          expect(failedRequest === "status" ? statusAttempts : messageAttempts).toBe(1),
-        );
-        await vi.advanceTimersByTimeAsync(100);
-        await vi.waitFor(() => expect(countEvents(events, "turn_completed")).toBe(1));
-
-        expect(events).toContainEqual(
-          expect.objectContaining({
-            type: "timeline",
-            item: expect.objectContaining({
-              type: "assistant_message",
-              text: "recovered after retry",
-            }),
-          }),
-        );
-        expect(countEvents(events, "turn_failed")).toBe(0);
-        expect(failedRequest === "status" ? statusAttempts : messageAttempts).toBe(2);
-        expect(openCode.calls.sessionChildren).toHaveLength(2);
-      } finally {
-        vi.useRealTimers();
-        await session.close();
-      }
-    },
-  );
-
-  test("does not poll a successful snapshot without the active dispatch", async () => {
-    vi.useFakeTimers();
-    const { parent: session, openCode } = await createParentSession("ses_missing_dispatch");
-    const events: AgentStreamEvent[] = [];
-    session.subscribe((event) => events.push(event));
-    openCode.sessionPromptAsyncEvents = [];
-    openCode.sessionStatusResponse = { data: {} };
-    openCode.sessionMessagesResponse = { data: [] };
-
-    try {
-      await session.startTurn("missing dispatch");
-      openCode.emitEvent({ type: "server.connected", properties: {} });
-      await vi.waitFor(() => expect(countEvents(events, "turn_failed")).toBe(1));
-      await vi.advanceTimersByTimeAsync(5_000);
-
-      expect(openCode.calls.sessionStatus).toHaveLength(1);
-      expect(openCode.calls.sessionMessages).toHaveLength(1);
-    } finally {
-      vi.useRealTimers();
-      await session.close();
-    }
-  });
-
-  test("lets live terminal events overtake a failed snapshot retry", async () => {
-    vi.useFakeTimers();
-    const { parent: session, openCode } = await createParentSession("ses_live_overtakes_retry");
-    const events: AgentStreamEvent[] = [];
-    session.subscribe((event) => events.push(event));
-    openCode.sessionPromptAsyncEvents = [];
-    openCode.sessionStatusImplementation = async () => {
-      throw new Error("snapshot unavailable");
-    };
-
-    try {
-      await session.startTurn("keep live ingress moving");
-      openCode.emitEvent({ type: "server.connected", properties: {} });
-      await vi.waitFor(() => expect(openCode.calls.sessionStatus).toHaveLength(1));
-      openCode.emitEvent({ type: "session.idle", properties: { sessionID: session.id } });
-      await vi.waitFor(() => expect(countEvents(events, "turn_completed")).toBe(1));
-      await vi.advanceTimersByTimeAsync(100);
-
-      expect(openCode.calls.sessionStatus).toHaveLength(1);
-      expect(countEvents(events, "turn_failed")).toBe(0);
-    } finally {
-      vi.useRealTimers();
-      await session.close();
-    }
-  });
-
-  test("does not apply a failed snapshot retry to the next turn", async () => {
-    vi.useFakeTimers();
-    const { parent: session, openCode } = await createParentSession("ses_stale_retry");
-    const events: AgentStreamEvent[] = [];
-    const firstCompletion = createTestDeferred<void>();
-    session.subscribe((event) => {
-      events.push(event);
-      if (event.type === "turn_completed") firstCompletion.resolve();
-    });
-    openCode.sessionPromptAsyncEvents = [];
-    let statusAttempts = 0;
-    const firstStatus = createTestDeferred<void>();
-    openCode.sessionStatusImplementation = async () => {
-      statusAttempts += 1;
-      if (statusAttempts === 1) {
-        firstStatus.resolve();
-        throw new Error("snapshot unavailable");
-      }
-      return { data: {} };
-    };
-    openCode.sessionMessagesResponse = { data: [] };
-
-    try {
-      await session.startTurn("first turn");
-      openCode.emitEvent({ type: "server.connected", properties: {} });
-      await firstStatus.promise;
-      openCode.emitEvent({ type: "session.idle", properties: { sessionID: session.id } });
-      await firstCompletion.promise;
-
-      await session.startTurn("second turn");
-      await vi.advanceTimersByTimeAsync(100);
-
-      expect(statusAttempts).toBe(1);
-      expect(countEvents(events, "turn_started")).toBe(2);
-      expect(countEvents(events, "turn_failed")).toBe(0);
-    } finally {
-      vi.useRealTimers();
-      await session.close();
-    }
-  });
-
-  test("abandons a repair when its turn fails during a snapshot read", async () => {
-    vi.useFakeTimers();
-    const { parent: session, openCode } = await createParentSession("ses_replaced_repair");
-    const events: AgentStreamEvent[] = [];
-    session.subscribe((event) => events.push(event));
-    openCode.sessionPromptAsyncEvents = [];
-    const firstDispatch = createTestDeferred<{ data: Record<string, never> }>();
-    let dispatchAttempts = 0;
-    openCode.sessionPromptAsyncImplementation = async () => {
-      dispatchAttempts += 1;
-      return dispatchAttempts === 1 ? firstDispatch.promise : { data: {} };
-    };
-    const retryStatus = createTestDeferred<{ data: Record<string, never> }>();
-    const retryStarted = createTestDeferred<void>();
-    let statusAttempts = 0;
-    openCode.sessionStatusImplementation = async () => {
-      statusAttempts += 1;
-      if (statusAttempts === 1) throw new Error("snapshot unavailable");
-      retryStarted.resolve();
-      return retryStatus.promise;
-    };
-    openCode.sessionMessagesResponse = { data: [] };
-
-    try {
-      await session.startTurn("first turn");
-      openCode.emitEvent({ type: "server.connected", properties: {} });
-      await vi.waitFor(() => expect(statusAttempts).toBe(1));
-      await vi.advanceTimersByTimeAsync(100);
-      await retryStarted.promise;
-
-      firstDispatch.reject(new Error("first dispatch failed"));
-      await vi.waitFor(() => expect(countEvents(events, "turn_failed")).toBe(1));
-      await session.startTurn("second turn");
-      retryStatus.resolve({ data: {} });
-      await vi.advanceTimersByTimeAsync(0);
-
-      expect(openCode.calls.sessionMessages).toHaveLength(0);
-      expect(countEvents(events, "turn_started")).toBe(2);
-      expect(countEvents(events, "turn_failed")).toBe(1);
-    } finally {
-      firstDispatch.resolve({ data: {} });
-      retryStatus.resolve({ data: {} });
-      vi.useRealTimers();
-      await session.close();
-    }
-  });
-
-  test("preserves failed blocking-request snapshots and resolves successful empty ones", async () => {
-    const { parent: session, openCode } = await createParentSession("ses_request_recovery");
-    const events: AgentStreamEvent[] = [];
-    session.subscribe((event) => events.push(event));
-    openCode.emitEvent({
-      type: "permission.asked",
-      properties: {
-        id: "permission-1",
-        sessionID: "ses_request_recovery",
-        permission: "bash",
-        patterns: ["npm test"],
-        metadata: { command: "npm test", cwd: "/workspace/repo" },
-      },
-    });
-    await vi.waitFor(() => expect(session.getPendingPermissions()).toHaveLength(1));
-
-    openCode.permissionListResponse = { error: new Error("snapshot failed") };
-    openCode.emitEvent({ type: "server.connected", properties: {} });
-    await vi.waitFor(() => expect(openCode.calls.permissionList).toHaveLength(1));
-    expect(session.getPendingPermissions()).toHaveLength(1);
-
-    openCode.permissionListResponse = { data: [] };
-    openCode.emitEvent({ type: "server.connected", properties: {} });
-    await vi.waitFor(() => expect(session.getPendingPermissions()).toHaveLength(0));
-    expect(events).toContainEqual(
-      expect.objectContaining({ type: "permission_resolved", requestId: "permission-1" }),
-    );
-    await session.close();
-  });
-
-  test("recovers child status and directory-scoped blocking requests", async () => {
-    const cases = [
-      { name: "same active", directory: "/workspace/repo", status: "running", busy: true },
-      { name: "same completed", directory: "/workspace/repo", status: "completed", busy: false },
-      { name: "cross active", directory: "/workspace/child", status: "running", busy: true },
-      {
-        name: "cross failed",
-        directory: "/workspace/child",
-        status: "failed",
-        busy: false,
-        failed: true,
-      },
-    ] as const;
-
-    for (const recoveryCase of cases) {
-      const suffix = recoveryCase.name.replaceAll(" ", "_");
-      const parentId = `ses_parent_${suffix}`;
-      const childId = `ses_child_${suffix}`;
-      const permissionId = `permission_${suffix}`;
-      const questionId = `question_${suffix}`;
-      const { parent, openCode } = await createParentSession(parentId);
-      const events: AgentStreamEvent[] = [];
-      parent.subscribe((event) => events.push(event));
-      await vi.waitFor(() => expect(openCode.calls.sessionChildren).toHaveLength(1));
-
-      openCode.sessionChildrenResponses = [
-        {
-          data: [
-            {
-              id: childId,
-              parentID: parentId,
-              title: recoveryCase.name,
-              directory: recoveryCase.directory,
-            },
-          ],
-        },
-        { data: [] },
-      ];
-      openCode.sessionStatusImplementation = async (parameters) => ({
-        data:
-          recoveryCase.busy &&
-          (parameters as { directory?: string }).directory === recoveryCase.directory
-            ? { [childId]: { type: "busy" } }
-            : {},
-      });
-      openCode.sessionMessagesResponse = recoveryCase.failed
-        ? {
-            data: [
-              {
-                info: {
-                  id: `message_${suffix}`,
-                  sessionID: childId,
-                  role: "assistant",
-                  error: { name: "ProviderError", data: { message: "child failed" } },
-                },
-                parts: [],
-              },
-            ],
-          }
-        : { data: [] };
-      openCode.permissionListResponse = {
-        data: [
-          {
-            id: permissionId,
-            sessionID: childId,
-            permission: "bash",
-            patterns: ["npm test"],
-            metadata: { command: "npm test" },
-          },
-        ],
-      };
-      openCode.questionListResponse = {
-        data: [
-          {
-            id: questionId,
-            sessionID: childId,
-            questions: [
-              {
-                question: "Continue?",
-                header: "Continue",
-                options: [{ label: "Yes", description: "Continue" }],
-              },
-            ],
-          },
-        ],
-      };
-
-      openCode.emitEvent({ type: "server.connected", properties: {} });
-      await vi.waitFor(() =>
-        expect(countChildStatuses(events, recoveryCase.status, childId)).toBeGreaterThanOrEqual(1),
-      );
-      await vi.waitFor(() =>
-        expect(pendingPermissionIds(parent)).toEqual([permissionId, questionId].sort()),
-      );
-
-      await parent.respondToPermission(permissionId, { behavior: "allow" });
-      await parent.respondToPermission(questionId, {
-        behavior: "allow",
-        updatedInput: { answers: { Continue: "Yes" } },
-      });
-      expect(openCode.calls.permissionReply).toContainEqual(
-        expect.objectContaining({ requestID: permissionId, directory: recoveryCase.directory }),
-      );
-      expect(openCode.calls.questionReply).toContainEqual(
-        expect.objectContaining({ requestID: questionId, directory: recoveryCase.directory }),
-      );
-
-      openCode.permissionListResponse = { error: new Error("permission snapshot failed") };
-      openCode.questionListResponse = { error: new Error("question snapshot failed") };
-      openCode.emitEvent({ type: "server.connected", properties: {} });
-      await vi.waitFor(() => expect(openCode.calls.permissionList.length).toBeGreaterThan(1));
-      expect(parent.getPendingPermissions()).toEqual([]);
-
-      openCode.emitEvent({
-        type: "permission.asked",
-        properties: {
-          id: permissionId,
-          sessionID: childId,
-          permission: "bash",
-          patterns: ["npm test"],
-          metadata: { command: "npm test" },
-        },
-      });
-      openCode.emitEvent({
-        type: "question.asked",
-        properties: {
-          id: questionId,
-          sessionID: childId,
-          questions: [{ question: "Continue?", header: "Continue", options: [] }],
-        },
-      });
-      await vi.waitFor(() => expect(parent.getPendingPermissions()).toHaveLength(2));
-      openCode.emitEvent({ type: "server.connected", properties: {} });
-      await vi.waitFor(() => expect(openCode.calls.permissionList.length).toBeGreaterThan(2));
-      expect(parent.getPendingPermissions()).toHaveLength(2);
-
-      openCode.permissionListResponse = { data: [] };
-      openCode.questionListResponse = { data: [] };
-      openCode.emitEvent({ type: "server.connected", properties: {} });
-      await vi.waitFor(() => expect(parent.getPendingPermissions()).toHaveLength(0));
-      await parent.close();
-    }
-  });
-
-  test("preserves a failed child terminal when its status snapshot fails", async () => {
-    const parentId = "ses_parent_failed_child_status";
-    const childId = "ses_child_failed_status";
-    const { parent, openCode } = await createParentSession(parentId);
-    const events: AgentStreamEvent[] = [];
-    parent.subscribe((event) => events.push(event));
-    await vi.waitFor(() => expect(openCode.calls.sessionChildren).toHaveLength(1));
-    openCode.sessionChildrenResponses = [
-      {
-        data: [
-          {
-            id: childId,
-            parentID: parentId,
-            title: "failed child",
-            directory: "/workspace/child",
-          },
-        ],
-      },
-      { data: [] },
-    ];
-    openCode.sessionStatusImplementation = async () => {
-      throw new Error("child status unavailable");
-    };
-    openCode.sessionMessagesResponse = {
-      data: [
-        {
-          info: {
-            id: "msg_failed_child",
-            sessionID: childId,
-            role: "assistant",
-            time: { created: 1, completed: 2 },
-            error: { name: "ProviderError", data: { message: "child failed" } },
-          },
-          parts: [],
-        },
-      ],
-    };
-
-    openCode.emitEvent({ type: "server.connected", properties: {} });
-    await vi.waitFor(() => expect(countChildStatuses(events, "failed", childId)).toBe(1));
-    const recoveredStatuses = events.flatMap((event) =>
-      event.type === "provider_subagent" &&
-      event.event.type === "upsert" &&
-      event.event.id === childId &&
-      event.event.status
-        ? [event.event.status]
-        : [],
-    );
-    expect(recoveredStatuses.at(-1)).toBe("failed");
-    await parent.close();
-  });
-
-  test("preserves the last child status when both recovery snapshots fail", async () => {
-    const parentId = "ses_parent_unknown_child_recovery";
-    const childId = "ses_child_unknown_recovery";
-    const { parent, openCode } = await createParentSession(parentId);
-    const events: AgentStreamEvent[] = [];
-    parent.subscribe((event) => events.push(event));
-    await vi.waitFor(() => expect(openCode.calls.sessionChildren).toHaveLength(1));
-
-    openCode.emitEvent({
-      type: "session.created",
-      properties: {
-        info: {
-          id: childId,
-          parentID: parentId,
-          title: "completed child",
-          directory: "/workspace/child",
-        },
-      },
-    });
-    openCode.emitEvent({
-      type: "session.idle",
-      properties: { sessionID: childId },
-    });
-    await vi.waitFor(() => expect(countChildStatuses(events, "completed", childId)).toBe(1));
-
-    openCode.sessionChildrenResponses = [
-      {
-        data: [
-          {
-            id: childId,
-            parentID: parentId,
-            title: "completed child",
-            directory: "/workspace/child",
-          },
-        ],
-      },
-      { data: [] },
-    ];
-    openCode.sessionStatusImplementation = async () => {
-      throw new Error("child status unavailable");
-    };
-    openCode.sessionMessagesImplementation = async () => {
-      throw new Error("child messages unavailable");
-    };
-
-    openCode.emitEvent({ type: "server.connected", properties: {} });
-    await vi.waitFor(() => expect(openCode.calls.sessionMessages).toHaveLength(1));
-    const recoveredStatuses = events.flatMap((event) =>
-      event.type === "provider_subagent" &&
-      event.event.type === "upsert" &&
-      event.event.id === childId &&
-      event.event.status
-        ? [event.event.status]
-        : [],
-    );
-    expect(recoveredStatuses).toEqual(["running", "completed"]);
-    await parent.close();
-  });
-
-  test("settles stopping state when the OpenCode process exits", async () => {
-    vi.useFakeTimers();
-    const { parent: session, openCode } = await createParentSession("ses_exit_while_stopping");
-    const events: AgentStreamEvent[] = [];
-    session.subscribe((event) => events.push(event));
-    openCode.sessionPromptAsyncEvents = [];
-
-    try {
-      await session.startTurn("first");
-      await session.interrupt();
-      openCode.emitEvent({ type: "server-exited", error: new Error("OpenCode exited") });
-      await vi.advanceTimersByTimeAsync(0);
-
-      openCode.sessionPromptAsyncEvents = [
-        { type: "session.idle", properties: { sessionID: session.id } },
-      ];
-      const replacement = session.startTurn("second");
-      await vi.advanceTimersByTimeAsync(10_000);
-      await expect(replacement).resolves.toEqual({ turnId: "opencode-turn-1" });
-      expect(countEvents(events, "turn_canceled")).toBe(1);
-    } finally {
-      vi.useRealTimers();
-      await session.close();
-    }
-  });
-
-  test("continues ordered ingress after one event callback rejects", async () => {
-    const { parent: session, openCode } = await createParentSession("ses_ingress_recovery");
-    const events: AgentStreamEvent[] = [];
-    session.subscribe((event) => events.push(event));
-    openCode.emitEvent({ type: "message.part.updated" });
-    await new Promise((resolve) => setImmediate(resolve));
-    openCode.emitEvent({
-      type: "permission.asked",
-      properties: {
-        id: "permission-after-failure",
-        sessionID: "ses_ingress_recovery",
-        permission: "bash",
-        patterns: ["npm test"],
-        metadata: { command: "npm test", cwd: "/workspace/repo" },
-      },
-    });
-
-    await vi.waitFor(() =>
-      expect(session.getPendingPermissions()).toEqual([
-        expect.objectContaining({ id: "permission-after-failure" }),
-      ]),
-    );
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: "permission_requested",
-        request: expect.objectContaining({ id: "permission-after-failure" }),
-      }),
-    );
-    await session.close();
-  });
-
-  test("bounds dispatch readiness without sending a prompt", async () => {
-    vi.useFakeTimers();
-    const openCode = new TestOpenCodeClient();
-    const session = new __openCodeInternals.OpenCodeAgentSession(
-      { provider: "opencode", cwd: "/workspace/repo" },
-      openCode.asSdkClient(),
-      "ses_readiness_timeout",
-      createTestLogger(),
-      new Map(),
-      {
-        ready: () => new Promise<void>(() => undefined),
-        subscribe: () => () => undefined,
-        diagnostics: () => ({
-          attempt: 2,
-          phase: "first-record",
-          elapsedMs: EXPECTED_EVENT_READINESS_BUDGET_MS,
-          lastOutcome: "watchdog",
-        }),
-      },
-    );
-    try {
-      const dispatch = session.startTurn("wait for transport");
-      const rejection = expect(dispatch).rejects.toThrow(
-        "OpenCode server.connected event; your message was not sent. opencode-stream attempt=2 phase=first-record elapsedMs=45000 lastOutcome=watchdog",
-      );
-      let settled = false;
-      void dispatch.then(
-        () => {
-          settled = true;
-          return undefined;
-        },
-        () => {
-          settled = true;
-          return undefined;
-        },
-      );
-
-      await vi.advanceTimersByTimeAsync(EXPECTED_EVENT_READINESS_BUDGET_MS - 1);
-      expect(settled).toBe(false);
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(0);
-
-      await vi.advanceTimersByTimeAsync(1);
-      await rejection;
-      expect(settled).toBe(true);
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(0);
-    } finally {
-      vi.useRealTimers();
-      await session.close();
-    }
-  });
-
-  test("dispatches a prompt when the event stream needs more than ten seconds", async () => {
-    vi.useFakeTimers();
-    const openCode = new TestOpenCodeClient();
-    openCode.sessionPromptAsyncEvents = [];
-    const streamReady = createTestDeferred<void>();
-    const session = new __openCodeInternals.OpenCodeAgentSession(
-      { provider: "opencode", cwd: "/workspace/repo" },
-      openCode.asSdkClient(),
-      "ses_readiness_slow_stream",
-      createTestLogger(),
-      new Map(),
-      {
-        ready: () => streamReady.promise,
-        subscribe: () => () => undefined,
-      },
-    );
-    try {
-      const dispatch = session.startTurn("wait for a slow transport");
-      await vi.advanceTimersByTimeAsync(20_000);
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(0);
-
-      streamReady.resolve();
-      await dispatch;
-      await vi.advanceTimersByTimeAsync(0);
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(1);
-    } finally {
-      vi.useRealTimers();
-      streamReady.resolve();
-      await session.close();
-    }
-  });
-
-  test("allows the shared stream to recover once after its thirty-second watchdog", async () => {
-    vi.useFakeTimers();
-    const openCode = new TestOpenCodeClient();
-    openCode.sessionPromptAsyncEvents = [];
-    const streamReady = createTestDeferred<void>();
-    const session = new __openCodeInternals.OpenCodeAgentSession(
-      { provider: "opencode", cwd: "/workspace/repo" },
-      openCode.asSdkClient(),
-      "ses_readiness_retry",
-      createTestLogger(),
-      new Map(),
-      {
-        ready: () => streamReady.promise,
-        subscribe: () => () => undefined,
-      },
-    );
-    try {
-      const dispatch = session.startTurn("wait for the producer retry");
-      await vi.advanceTimersByTimeAsync(35_000);
-      streamReady.resolve();
-      await dispatch;
-      await vi.advanceTimersByTimeAsync(0);
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(1);
-    } finally {
-      vi.useRealTimers();
-      streamReady.resolve();
-      await session.close();
-    }
-  });
-
-  test("close aborts every in-flight reconciliation request class", async () => {
-    const cases = [
-      "child discovery",
-      "child status",
-      "child messages",
-      "permission snapshot",
-      "question snapshot",
-      "root status",
-      "root messages",
-    ] as const;
-    for (const requestClass of cases) {
-      const { parent: session, openCode } = await createParentSession(
-        `ses_close_${requestClass.replaceAll(" ", "_")}`,
-      );
-      const blocked = createTestDeferred<void>();
-      const waitForRequestAbort = async (_parameters: unknown, options: unknown) => {
-        blocked.resolve();
-        const signal = (options as { signal: AbortSignal }).signal;
-        await new Promise((_, reject) => {
-          if (signal.aborted) reject(signal.reason);
-          else signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-        });
-        return { data: [] };
-      };
-      const child = {
-        id: "ses_child",
-        parentID: session.id,
-        directory: "/workspace/repo",
-        title: "child",
-      };
-      if (requestClass === "child discovery")
-        openCode.sessionChildrenImplementation = waitForRequestAbort;
-      if (requestClass === "child status") {
-        openCode.sessionChildrenResponses = [{ data: [child] }, { data: [] }];
-        openCode.sessionStatusImplementation = waitForRequestAbort;
-      }
-      if (requestClass === "child messages") {
-        openCode.sessionChildrenResponses = [{ data: [child] }, { data: [] }];
-        openCode.sessionMessagesImplementation = waitForRequestAbort;
-      }
-      if (requestClass === "permission snapshot")
-        openCode.permissionListImplementation = waitForRequestAbort;
-      if (requestClass === "question snapshot")
-        openCode.questionListImplementation = waitForRequestAbort;
-      if (requestClass === "root status" || requestClass === "root messages") {
-        openCode.sessionPromptAsyncEvents = [];
-        if (requestClass === "root status")
-          openCode.sessionStatusImplementation = waitForRequestAbort;
-        else {
-          openCode.sessionStatusResponse = { data: { [session.id ?? ""]: { type: "busy" } } };
-          openCode.sessionMessagesImplementation = waitForRequestAbort;
-        }
-        await session.startTurn("keep running");
-      }
-
-      openCode.emitEvent({ type: "server.connected", properties: {} });
-      await Promise.race([
-        blocked.promise,
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error(`request did not start: ${requestClass}`)), 500),
-        ),
-      ]);
-      await expect(session.close()).resolves.toBeUndefined();
-    }
-  });
-
-  test("keeps probing provider status while stopping across a permanent disconnect", async () => {
-    const settleAbort = createTestDeferred<void>();
-    const releaseIdle = createTestDeferred<void>();
-    let statusAttempt = 0;
-    const { parent: session, openCode } = await createParentSession(
-      "ses_stop_status_probe_failure",
-      (client) => {
-        client.sessionStatusImplementation = async () => {
-          statusAttempt += 1;
-          if (statusAttempt === 1) throw new Error("provider status unavailable");
-          await releaseIdle.promise;
-          return { data: {} };
-        };
-      },
-    );
-    openCode.sessionPromptAsyncEvents = [];
-    openCode.sessionAbortImplementation = async () => {
-      await settleAbort.promise;
-      return { data: true };
-    };
-
-    try {
-      await session.startTurn("first");
-      const interrupt = session.interrupt();
-      const replacement = session.startTurn("second");
-      await vi.waitFor(() => expect(openCode.calls.sessionStatus).toHaveLength(1));
-
-      settleAbort.resolve();
-      await interrupt;
-      await new Promise<void>((resolve) => setImmediate(resolve));
-
-      expect(openCode.calls.sessionStatus).toHaveLength(1);
-
-      releaseIdle.resolve();
-      await expect(replacement).resolves.toEqual({ turnId: "opencode-turn-1" });
-      expect(openCode.calls.sessionPromptAsync).toHaveLength(2);
-      expect(openCode.calls.sessionStatus.length).toBeGreaterThanOrEqual(2);
-    } finally {
-      settleAbort.resolve();
-      releaseIdle.resolve();
-      await session.close();
-    }
-  }, 15_000);
-
-  test("backs off stop status observation within the ten second bound", async () => {
-    vi.useFakeTimers();
-    const { parent: session, openCode } = await createParentSession(
-      "ses_stop_backoff",
-      (client) => {
-        client.sessionStatusImplementation = async () => {
-          throw new Error("transport unavailable");
-        };
-      },
-    );
-    openCode.sessionPromptAsyncEvents = [];
-    try {
-      await session.startTurn("first");
-      await session.interrupt();
-      const replacement = session.startTurn("second");
-      const rejection = expect(replacement).rejects.toThrow("OpenCode previous turn to stop");
-      await vi.advanceTimersByTimeAsync(99);
-      expect(openCode.calls.sessionStatus).toHaveLength(0);
-      await vi.advanceTimersByTimeAsync(1);
-      expect(openCode.calls.sessionStatus).toHaveLength(1);
-      await vi.advanceTimersByTimeAsync(199);
-      expect(openCode.calls.sessionStatus).toHaveLength(1);
-      await vi.advanceTimersByTimeAsync(1);
-      expect(openCode.calls.sessionStatus).toHaveLength(2);
-      await vi.advanceTimersByTimeAsync(9_700);
-      await rejection;
-      expect(openCode.calls.sessionStatus.length).toBeLessThanOrEqual(13);
-    } finally {
-      vi.useRealTimers();
-      await session.close();
-    }
-  });
-
-  test("does not reconnect the stop observer while closing", async () => {
-    const firstStreamEnd = createTestDeferred<void>();
-    const streamSignals: AbortSignal[] = [];
-    let subscriptionCount = 0;
-    const { parent: session, openCode } = await createParentSession(
-      "ses_close_while_stopping",
-      (client) => {
-        client.globalEventImplementation = async (options) => {
-          subscriptionCount += 1;
-          const signal = (options as { signal: AbortSignal }).signal;
-          streamSignals.push(signal);
-          return {
-            stream: {
-              async *[Symbol.asyncIterator]() {
-                yield { type: "server.connected", properties: {} };
-                if (subscriptionCount === 1) {
-                  await firstStreamEnd.promise;
-                  return;
-                }
-                await waitForAbort(signal);
-              },
-            },
-          };
-        };
-      },
-    );
-    openCode.sessionPromptAsyncEvents = [];
-
-    try {
-      await session.startTurn("first");
-      await session.interrupt();
-      const replacement = session.startTurn("second");
-      void replacement.catch(() => undefined);
-      firstStreamEnd.resolve();
-      await session.close();
-
-      await expect(replacement).rejects.toThrow("OpenCode session is closed");
-      expect(openCode.calls.globalEvent).toHaveLength(0);
-    } finally {
-      for (const signal of streamSignals) {
-        if (!signal.aborted) {
-          (signal as AbortSignal & { dispatchEvent: (event: Event) => boolean }).dispatchEvent(
-            new Event("abort"),
-          );
-        }
-      }
-    }
   });
 });
 
@@ -4044,7 +2956,7 @@ describe("OpenCode persisted sessions", () => {
     ]);
   });
 
-  test("listImportableSessions scopes upstream rows without hydrating session messages", async () => {
+  test("listImportableSessions returns rows without hydrating session messages", async () => {
     const runtime = new TestOpenCodeHarness();
     const openCodeClient = new TestOpenCodeClient();
     const cwd = "/workspace/repo";
@@ -4286,9 +3198,7 @@ describe("OpenCode persisted sessions", () => {
 });
 
 describe("OpenCode provider subagent contract", () => {
-  async function createAdoptedChildSession(
-    configureChild?: (client: TestOpenCodeClient) => void,
-  ): Promise<{
+  async function createAdoptedChildSession(): Promise<{
     readonly runtime: TestOpenCodeHarness;
     readonly provider: OpenCodeAgentClient;
     readonly parent: Awaited<ReturnType<OpenCodeAgentClient["createSession"]>>;
@@ -4298,7 +3208,6 @@ describe("OpenCode provider subagent contract", () => {
     const runtime = new TestOpenCodeHarness();
     const parentClient = new TestOpenCodeClient();
     const childClient = new TestOpenCodeClient();
-    configureChild?.(childClient);
     parentClient.sessionCreateResponse = { data: { id: "ses_parent_external" } };
     runtime.enqueueClient(parentClient);
     runtime.enqueueClient(childClient);
@@ -4308,7 +3217,7 @@ describe("OpenCode provider subagent contract", () => {
     });
     const parent = await client.createSession(
       { provider: "opencode", cwd: "/workspace/repo" },
-      { env: { PASEO_AGENT_ID: "parent-agent" } },
+      { env: { BYSPACE_AGENT_ID: "parent-agent" } },
     );
 
     parentClient.emitEvent({
@@ -4332,7 +3241,7 @@ describe("OpenCode provider subagent contract", () => {
         metadata: { cwd: "/workspace/repo" },
       },
       undefined,
-      { env: { PASEO_AGENT_ID: "child-agent" } },
+      { env: { BYSPACE_AGENT_ID: "child-agent" } },
     );
     return { runtime, provider: client, parent, child, childClient };
   }
@@ -4377,7 +3286,7 @@ describe("OpenCode provider subagent contract", () => {
     });
     const parent = await client.createSession(
       { provider: "opencode", cwd: "/workspace/repo" },
-      { env: { PASEO_AGENT_ID: "parent-agent" } },
+      { env: { BYSPACE_AGENT_ID: "parent-agent" } },
     );
     const events: AgentStreamEvent[] = [];
     parent.subscribe((event) => events.push(event));
@@ -4403,7 +3312,7 @@ describe("OpenCode provider subagent contract", () => {
         metadata: { cwd: "/workspace/repo" },
       },
       undefined,
-      { env: { PASEO_AGENT_ID: "child-agent" } },
+      { env: { BYSPACE_AGENT_ID: "child-agent" } },
     );
     await child.close();
     await parent.close();
@@ -4419,7 +3328,7 @@ describe("OpenCode provider subagent contract", () => {
       },
     });
     expect(runtime.acquisitions).toEqual([
-      { kind: "dedicated", env: { PASEO_AGENT_ID: "parent-agent" }, releaseCount: 1 },
+      { kind: "dedicated", env: { BYSPACE_AGENT_ID: "parent-agent" }, releaseCount: 1 },
       { kind: "existing", url: runtime.server.url, releaseCount: 1 },
     ]);
     expect(runtime.clientCreations).toEqual([
@@ -4428,7 +3337,7 @@ describe("OpenCode provider subagent contract", () => {
     ]);
   });
 
-  test("synthesizes an autonomous turn for adopted child timeline events", async () => {
+  test("synthesizes a turn for externally driven adopted child timeline events", async () => {
     const { child, childClient, parent } = await createAdoptedChildSession();
     const completed = createTestDeferred<void>();
     const events: AgentStreamEvent[] = [];
@@ -4440,14 +3349,14 @@ describe("OpenCode provider subagent contract", () => {
     });
 
     for (const event of [
-      {
-        type: "session.status",
-        properties: { sessionID: "ses_child_external", status: { type: "busy" } },
-      },
       ...assistantTurnEvents({ sessionId: "ses_child_external", text: "child says hi" }).slice(
         0,
         2,
       ),
+      {
+        type: "session.status",
+        properties: { sessionID: "ses_child_external", status: { type: "busy" } },
+      },
       { type: "session.idle", properties: { sessionID: "ses_child_external" } },
     ]) {
       childClient.emitEvent(event);
@@ -4479,400 +3388,7 @@ describe("OpenCode provider subagent contract", () => {
     );
   });
 
-  test.each(["busy", "retry"] as const)(
-    "reconciles an adopted child that was already %s before attachment",
-    async (runnerStatus) => {
-      const { child, childClient, parent } = await createAdoptedChildSession((client) => {
-        client.sessionStatusResponse = {
-          data: { ses_child_external: { type: runnerStatus } },
-        };
-      });
-      const completed = createTestDeferred<void>();
-      const events: AgentStreamEvent[] = [];
-      try {
-        child.subscribe((event) => {
-          events.push(event);
-          if (event.type === "turn_completed") {
-            completed.resolve();
-          }
-        });
-
-        await vi.waitFor(() => {
-          expect(events).toContainEqual({
-            type: "turn_started",
-            provider: "opencode",
-            turnId: "opencode-turn-0",
-          });
-        });
-        for (const event of assistantTurnEvents({
-          sessionId: "ses_child_external",
-          text: "already-running child says hi",
-        })) {
-          childClient.emitEvent(event);
-        }
-
-        await completed.promise;
-
-        expect(childClient.calls.sessionStatus).toEqual([{ directory: "/workspace/repo" }]);
-        expect(turnEventSignatures(events)).toEqual([
-          ["turn_started", "opencode-turn-0"],
-          ["timeline", "opencode-turn-0"],
-          ["turn_completed", "opencode-turn-0"],
-        ]);
-        expect(events).toContainEqual(
-          expect.objectContaining({
-            type: "timeline",
-            item: expect.objectContaining({ text: "already-running child says hi" }),
-          }),
-        );
-      } finally {
-        await child.close();
-        await parent.close();
-      }
-    },
-  );
-
-  test("ignores a stale busy snapshot after the live stream reaches idle", async () => {
-    const statusStarted = createTestDeferred<void>();
-    const releaseStatus = createTestDeferred<void>();
-    const { child, childClient, parent } = await createAdoptedChildSession((client) => {
-      client.sessionStatusImplementation = async () => {
-        statusStarted.resolve();
-        await releaseStatus.promise;
-        return { data: { ses_child_external: { type: "busy" } } };
-      };
-    });
-    const idleConsumed = createTestDeferred<void>();
-    const events: AgentStreamEvent[] = [];
-    try {
-      child.subscribe((event) => {
-        events.push(event);
-        if (event.type === "provider_subagent") {
-          idleConsumed.resolve();
-        }
-      });
-
-      await statusStarted.promise;
-      childClient.emitEvent({
-        type: "session.idle",
-        properties: { sessionID: "ses_child_external" },
-      });
-      childClient.emitEvent({
-        type: "session.created",
-        properties: {
-          info: {
-            id: "ses_child_idle_drain_marker",
-            parentID: "ses_child_external",
-            title: "Idle drain marker",
-          },
-        },
-      });
-      await idleConsumed.promise;
-
-      releaseStatus.resolve();
-      await new Promise<void>((resolve) => setImmediate(resolve));
-
-      expect(events.some((event) => event.type === "turn_started")).toBe(false);
-    } finally {
-      releaseStatus.resolve();
-      await child.close();
-      await parent.close();
-    }
-  });
-
-  test("uses busy as the autonomous boundary without replaying earlier idle content", async () => {
-    const { parent, openCode } = await createParentSession("ses_parent_plugin_wake");
-    const events: AgentStreamEvent[] = [];
-    parent.subscribe((event) => events.push(event));
-
-    try {
-      for (const event of userMessageEvents({
-        sessionId: "ses_parent_plugin_wake",
-        messageId: "msg_plugin_wake",
-        text: "<system-reminder>All background tasks are complete.</system-reminder>",
-      })) {
-        openCode.emitEvent(event);
-      }
-      openCode.emitEvent({
-        type: "session.created",
-        properties: {
-          info: {
-            id: "ses_plugin_wake_drain_marker",
-            parentID: "ses_parent_plugin_wake",
-            title: "Pre-busy drain marker",
-          },
-        },
-      });
-      await vi.waitFor(() => {
-        expect(events).toContainEqual(expect.objectContaining({ type: "provider_subagent" }));
-      });
-      expect(events.filter((event) => event.type !== "provider_subagent")).toEqual([]);
-      events.length = 0;
-
-      openCode.emitEvent({
-        type: "session.status",
-        properties: { sessionID: "ses_parent_plugin_wake", status: { type: "busy" } },
-      });
-      for (const event of assistantTurnEvents({
-        sessionId: "ses_parent_plugin_wake",
-        text: "Parent consumed the background result.",
-      })) {
-        openCode.emitEvent(event);
-      }
-
-      await vi.waitFor(() => {
-        expect(turnEventSignatures(events)).toEqual([
-          ["turn_started", "opencode-turn-0"],
-          ["timeline", "opencode-turn-0"],
-          ["turn_completed", "opencode-turn-0"],
-        ]);
-      });
-      expect(events).toContainEqual(
-        expect.objectContaining({
-          type: "timeline",
-          item: expect.objectContaining({
-            type: "assistant_message",
-            text: "Parent consumed the background result.",
-          }),
-        }),
-      );
-      expect(events).not.toContainEqual(
-        expect.objectContaining({
-          type: "timeline",
-          item: expect.objectContaining({
-            text: "<system-reminder>All background tasks are complete.</system-reminder>",
-          }),
-        }),
-      );
-    } finally {
-      await parent.close();
-    }
-  });
-
-  test("starts autonomous activity from busy without requiring an initiating message", async () => {
-    const { parent, openCode } = await createParentSession("ses_parent_busy_only");
-    const events: AgentStreamEvent[] = [];
-    parent.subscribe((event) => events.push(event));
-
-    try {
-      openCode.emitEvent({
-        type: "session.status",
-        properties: { sessionID: "ses_parent_busy_only", status: { type: "busy" } },
-      });
-      for (const event of assistantTurnEvents({
-        sessionId: "ses_parent_busy_only",
-        text: "Autonomous response after busy.",
-      })) {
-        openCode.emitEvent(event);
-      }
-
-      await vi.waitFor(() => {
-        expect(turnEventSignatures(events)).toEqual([
-          ["turn_started", "opencode-turn-0"],
-          ["timeline", "opencode-turn-0"],
-          ["turn_completed", "opencode-turn-0"],
-        ]);
-      });
-    } finally {
-      await parent.close();
-    }
-  });
-
-  test("does not mistake OpenCode session metadata for an autonomous turn", async () => {
-    const { parent, openCode } = await createParentSession("ses_parent_metadata");
-    const events: AgentStreamEvent[] = [];
-    const streamDrained = createTestDeferred<void>();
-    parent.subscribe((event) => {
-      events.push(event);
-      if (event.type === "provider_subagent") {
-        streamDrained.resolve();
-      }
-    });
-
-    try {
-      openCode.emitEvent({
-        type: "session.created",
-        properties: { info: { id: "ses_parent_metadata" } },
-      });
-      openCode.emitEvent({
-        type: "session.idle",
-        properties: { sessionID: "ses_parent_metadata" },
-      });
-      for (const event of assistantTurnEvents({
-        sessionId: "ses_parent_metadata",
-        text: "Autonomous response.",
-      })) {
-        openCode.emitEvent(event);
-      }
-      openCode.emitEvent({
-        type: "session.created",
-        properties: {
-          info: {
-            id: "ses_child_after_parent_metadata",
-            parentID: "ses_parent_metadata",
-            title: "Stream drain marker",
-            directory: "/workspace/repo",
-          },
-        },
-      });
-
-      await streamDrained.promise;
-      expect(
-        turnEventSignatures(events.filter((event) => event.type !== "provider_subagent")),
-      ).toEqual([]);
-    } finally {
-      await parent.close();
-    }
-  });
-
-  test("keeps an autonomous turn active until OpenCode reaches its terminal event", async () => {
-    const { parent, openCode } = await createParentSession("ses_parent_active_wake");
-    const events: AgentStreamEvent[] = [];
-    parent.subscribe((event) => events.push(event));
-
-    try {
-      openCode.emitEvent(
-        userMessageEvents({
-          sessionId: "ses_parent_active_wake",
-          messageId: "msg_autonomous_wake",
-          text: "Autonomous wake",
-        })[0],
-      );
-      openCode.emitEvent({
-        type: "session.status",
-        properties: { sessionID: "ses_parent_active_wake", status: { type: "busy" } },
-      });
-      await vi.waitFor(() => {
-        expect(events).toEqual([
-          { type: "turn_started", provider: "opencode", turnId: "opencode-turn-0" },
-        ]);
-      });
-
-      await expect(parent.startTurn("Continue from Paseo")).rejects.toThrow(
-        "A foreground turn is already active",
-      );
-      expect(openCode.calls.sessionAbort).toEqual([]);
-      expect(openCode.calls.sessionPromptAsync).toEqual([]);
-    } finally {
-      await parent.close();
-    }
-  });
-
-  test("does not start a new autonomous turn when post-turn user message updates arrive for an already emitted message", async () => {
-    const { parent, openCode } = await createParentSession("ses_parent_post_turn");
-    openCode.sessionPromptAsyncEvents = [
-      ...userMessageEvents({
-        sessionId: "ses_parent_post_turn",
-        messageId: "msg_user_1",
-        text: "Hello OpenCode",
-      }),
-      ...assistantTurnEvents({
-        sessionId: "ses_parent_post_turn",
-        text: "Response from OpenCode",
-      }),
-    ];
-    const events: AgentStreamEvent[] = [];
-    const streamDrained = createTestDeferred<void>();
-    parent.subscribe((event) => {
-      events.push(event);
-      if (event.type === "provider_subagent") {
-        streamDrained.resolve();
-      }
-    });
-
-    try {
-      await parent.startTurn("Hello OpenCode");
-
-      await vi.waitFor(() => {
-        expect(events).toContainEqual(expect.objectContaining({ type: "turn_completed" }));
-      });
-
-      // Post-turn message update for the same user message ID that already completed
-      openCode.emitEvent({
-        type: "message.updated",
-        properties: {
-          info: { id: "msg_user_1", sessionID: "ses_parent_post_turn", role: "user" },
-        },
-      });
-
-      openCode.emitEvent({
-        type: "session.created",
-        properties: {
-          info: {
-            id: "ses_child_drain_marker",
-            parentID: "ses_parent_post_turn",
-            title: "Stream drain marker",
-            directory: "/workspace/repo",
-          },
-        },
-      });
-
-      await streamDrained.promise;
-
-      // Verify that no new turn_started was emitted after turn_completed
-      const turnStartedCount = events.filter((e) => e.type === "turn_started").length;
-      expect(turnStartedCount).toBe(1);
-    } finally {
-      await parent.close();
-    }
-  });
-  test("does not adopt late output from an interrupted Paseo turn", async () => {
-    const { parent, openCode } = await createParentSession("ses_parent_interrupted");
-    openCode.sessionPromptAsyncEvents = [];
-    const events: AgentStreamEvent[] = [];
-    const streamDrained = createTestDeferred<void>();
-    parent.subscribe((event) => {
-      events.push(event);
-      if (event.type === "provider_subagent") {
-        streamDrained.resolve();
-      }
-    });
-
-    try {
-      await parent.startTurn("Start from Paseo");
-      await parent.interrupt();
-
-      for (const event of userMessageEvents({
-        sessionId: "ses_parent_interrupted",
-        messageId: "msg_delayed_interrupted_user",
-        text: "Delayed interrupted prompt",
-      })) {
-        openCode.emitEvent(event);
-      }
-      for (const event of assistantTurnEvents({
-        sessionId: "ses_parent_interrupted",
-        text: "Late interrupted response.",
-      })) {
-        openCode.emitEvent(event);
-      }
-      openCode.emitEvent({
-        type: "session.created",
-        properties: {
-          info: {
-            id: "ses_child_after_interrupted_output",
-            parentID: "ses_parent_interrupted",
-            title: "Stream drain marker",
-            directory: "/workspace/repo",
-          },
-        },
-      });
-
-      await streamDrained.promise;
-      expect(events.filter((event) => event.type !== "provider_subagent")).toEqual([
-        { type: "turn_started", provider: "opencode", turnId: "opencode-turn-0" },
-        {
-          type: "turn_canceled",
-          provider: "opencode",
-          reason: "interrupted",
-          turnId: "opencode-turn-0",
-        },
-      ]);
-    } finally {
-      await parent.close();
-    }
-  });
-
-  test("synthesizes an autonomous turn for adopted child permissions", async () => {
+  test("synthesizes a turn for externally driven adopted child permissions", async () => {
     const { child, childClient, parent } = await createAdoptedChildSession();
     const completed = createTestDeferred<void>();
     const events: AgentStreamEvent[] = [];
@@ -4883,10 +3399,6 @@ describe("OpenCode provider subagent contract", () => {
       }
     });
 
-    childClient.emitEvent({
-      type: "session.status",
-      properties: { sessionID: "ses_child_external", status: { type: "busy" } },
-    });
     childClient.emitEvent({
       type: "permission.asked",
       properties: {
@@ -4978,13 +3490,6 @@ describe("OpenCode provider subagent contract", () => {
         }),
       );
     });
-    expect(events.some((event) => event.type === "turn_started")).toBe(false);
-    expect(
-      events.find(
-        (event) =>
-          event.type === "permission_requested" && event.request.id === "perm_provider_child",
-      ),
-    ).not.toHaveProperty("turnId");
     expect(
       events.filter(
         (event) =>
@@ -6550,53 +5055,3 @@ function waitForAbort(signal: AbortSignal): Promise<void> {
     signal.addEventListener("abort", () => resolve(), { once: true });
   });
 }
-
-describe("OpenCode snapshot summary false-idle regression", () => {
-  test("user message.updated carrying snapshot diffs does not start a turn", async () => {
-    const runtime = new TestOpenCodeHarness();
-    const openCodeClient = new TestOpenCodeClient();
-    openCodeClient.sessionCreateResponse = { data: { id: "ses_snapshot" } };
-    runtime.enqueueClient(openCodeClient);
-    const client = new OpenCodeAgentClient(createTestLogger(), undefined, {
-      serverManager: runtime,
-      createClient: runtime.createClient,
-    });
-    const session = await client.createSession(
-      { provider: "opencode", cwd: "/workspace/repo" },
-      { env: { PASEO_AGENT_ID: "snapshot-agent" } },
-    );
-    const events: AgentStreamEvent[] = [];
-    session.subscribe((event) => events.push(event));
-
-    // Captured live shape: after the turn goes idle OpenCode writes the filesystem
-    // snapshot diff onto the user message, with no time.end on the message.
-    openCodeClient.emitEvent({
-      type: "message.updated",
-      properties: {
-        info: {
-          id: "msg_snapshot_user",
-          sessionID: "ses_snapshot",
-          role: "user",
-          time: { created: 1000 },
-          summary: {
-            diffs: [{ file: "packages/server/src/thing.ts", additions: 3, deletions: 1 }],
-          },
-        },
-      },
-    });
-    // Drain marker: events are processed in order, so observing this one proves
-    // the snapshot update above was already handled.
-    openCodeClient.emitEvent({
-      type: "session.created",
-      properties: {
-        info: { id: "ses_snapshot_child", parentID: "ses_snapshot", title: "Drain marker" },
-      },
-    });
-    await vi.waitFor(() => {
-      expect(events).toContainEqual(expect.objectContaining({ type: "provider_subagent" }));
-    });
-
-    expect(events.some((event) => event.type === "turn_started")).toBe(false);
-    await session.close();
-  });
-});

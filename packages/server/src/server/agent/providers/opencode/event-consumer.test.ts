@@ -1,15 +1,12 @@
 import { createServer, type ServerResponse } from "node:http";
 import { createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk/v2/client";
-import type { Logger } from "pino";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 
 import {
   OpenCodeEventConsumer,
   type OpenCodeEventConsumerTiming,
   type OpenCodeEventSourceInput,
 } from "./event-consumer.js";
-
-const EXPECTED_STREAM_WATCHDOG_MS = 30_000;
 
 describe("OpenCodeEventConsumer", () => {
   const cleanups: Array<() => Promise<void>> = [];
@@ -36,7 +33,6 @@ describe("OpenCodeEventConsumer", () => {
     consumer = new OpenCodeEventConsumer({
       serverUrl: upstream.url,
       processExit: new Promise<Error>(() => undefined),
-      logger: createRecordingLogger(),
       timing,
     });
     cleanups.push(upstream.close);
@@ -45,14 +41,13 @@ describe("OpenCodeEventConsumer", () => {
     await expect(closePromise).resolves.toBeUndefined();
   });
 
-  test("waits for server.connected and reconnects once after EOF", async () => {
+  test("becomes ready on the first record and reconnects once after EOF", async () => {
     const upstream = await createSseUpstream();
     const timing = new ControlledTiming();
     const processExit = deferred<Error>();
     const consumer = new OpenCodeEventConsumer({
       serverUrl: upstream.url,
       processExit: processExit.promise,
-      logger: createRecordingLogger(),
       timing,
     });
     cleanups.push(async () => {
@@ -64,12 +59,9 @@ describe("OpenCodeEventConsumer", () => {
 
     await upstream.connected(1);
     expect(await promiseState(consumer.ready())).toBe("pending");
-    upstream.send(0, arbitraryRecord("/one"));
-    await eventually(() => expect(inputs).toEqual([arbitraryRecord("/one")]));
-    expect(await promiseState(consumer.ready())).toBe("pending");
     upstream.send(0, connectedRecord("/one"));
     await consumer.ready();
-    expect(inputs).toEqual([arbitraryRecord("/one")]);
+    expect(inputs).toEqual([connectedRecord("/one")]);
 
     upstream.end(0);
     await timing.waiting();
@@ -77,8 +69,12 @@ describe("OpenCodeEventConsumer", () => {
     timing.advanceWait();
     await upstream.connected(2);
     upstream.send(1, connectedRecord("/two"));
-    await eventually(() => expect(inputs).toHaveLength(2));
-    expect(inputs).toEqual([arbitraryRecord("/one"), connectedRecord("/two")]);
+    await eventually(() => expect(inputs).toHaveLength(3));
+    expect(inputs).toEqual([
+      connectedRecord("/one"),
+      { type: "reconnected" },
+      connectedRecord("/two"),
+    ]);
     expect(upstream.requests).toHaveLength(2);
     expect(upstream.requests.map((request) => request.url)).toEqual([
       "/global/event",
@@ -92,7 +88,6 @@ describe("OpenCodeEventConsumer", () => {
     const consumer = new OpenCodeEventConsumer({
       serverUrl: upstream.url,
       processExit: new Promise<Error>(() => undefined),
-      logger: createRecordingLogger(),
       timing,
     });
     cleanups.push(async () => {
@@ -106,57 +101,13 @@ describe("OpenCodeEventConsumer", () => {
     await consumer.ready();
 
     timing.expireWatchdog();
-    expect(timing.watchdogDelays).toEqual([
-      EXPECTED_STREAM_WATCHDOG_MS,
-      EXPECTED_STREAM_WATCHDOG_MS,
-    ]);
+    expect(timing.watchdogDelays).toEqual([30_000, 30_000]);
     await timing.waiting();
     timing.advanceWait();
     await upstream.connected(2);
     upstream.send(1, connectedRecord("/two"));
-    await eventually(() => expect(inputs).toHaveLength(1));
-    expect(inputs[0]).toEqual(connectedRecord("/two"));
-  });
-
-  test("retries a first-record watchdog and exposes the recovery attempt", async () => {
-    const upstream = await createSseUpstream();
-    const timing = new ControlledTiming();
-    const logger = createRecordingLogger();
-    const consumer = new OpenCodeEventConsumer({
-      serverUrl: upstream.url,
-      processExit: new Promise<Error>(() => undefined),
-      logger,
-      timing,
-    });
-    cleanups.push(async () => {
-      await consumer.close();
-      await upstream.close();
-    });
-
-    await upstream.connected(1);
-    timing.expireWatchdog();
-    await timing.waiting();
-    expect(consumer.diagnostics()).toMatchObject({
-      attempt: 1,
-      phase: "first-record",
-      lastOutcome: "watchdog",
-      lastError: "OpenCode event stream first-record watchdog expired",
-    });
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        attempt: 1,
-        phase: "first-record",
-        outcome: "watchdog",
-        everReady: false,
-      }),
-      "OpenCode event stream connection failed; retrying",
-    );
-
-    timing.advanceWait();
-    await upstream.connected(2);
-    upstream.send(1, connectedRecord("/recovered"));
-    await consumer.ready();
-    expect(consumer.diagnostics()).toMatchObject({ attempt: 2, phase: "stream" });
+    await eventually(() => expect(inputs).toHaveLength(3));
+    expect(inputs[1]).toEqual({ type: "reconnected" });
   });
 
   test("publishes one terminal and stops reconnecting on process exit", async () => {
@@ -166,7 +117,6 @@ describe("OpenCodeEventConsumer", () => {
     const consumer = new OpenCodeEventConsumer({
       serverUrl: upstream.url,
       processExit: processExit.promise,
-      logger: createRecordingLogger(),
       timing,
     });
     cleanups.push(async () => {
@@ -180,19 +130,17 @@ describe("OpenCodeEventConsumer", () => {
     await consumer.ready();
 
     processExit.resolve(new Error("process exited"));
-    await eventually(() => expect(inputs).toHaveLength(1));
-    expect(inputs[0]).toMatchObject({ type: "server-exited" });
+    await eventually(() => expect(inputs).toHaveLength(2));
+    expect(inputs[1]).toMatchObject({ type: "server-exited" });
     expect(upstream.requests).toHaveLength(1);
   });
 
   test("backs off repeated zero-record EOFs exponentially up to the cap", async () => {
     const upstream = await createSseUpstream();
     const timing = new ControlledTiming();
-    const logger = createRecordingLogger();
     const consumer = new OpenCodeEventConsumer({
       serverUrl: upstream.url,
       processExit: new Promise<Error>(() => undefined),
-      logger,
       timing,
     });
     cleanups.push(async () => {
@@ -208,18 +156,6 @@ describe("OpenCodeEventConsumer", () => {
     }
 
     expect(timing.waitDelays).toEqual([100, 200, 400, 800, 1_600, 3_200, 5_000, 5_000]);
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        phase: "first-record",
-        outcome: "ended",
-        attempt: 4,
-        consecutiveFailures: 4,
-        elapsedMs: expect.any(Number),
-        retryDelayMs: 800,
-        everReady: false,
-      }),
-      "OpenCode event stream connection failed; retrying",
-    );
   });
 
   test("isolates a throwing subscriber from the shared transport", async () => {
@@ -228,7 +164,6 @@ describe("OpenCodeEventConsumer", () => {
     const consumer = new OpenCodeEventConsumer({
       serverUrl: upstream.url,
       processExit: new Promise<Error>(() => undefined),
-      logger: createRecordingLogger(),
       timing,
     });
     cleanups.push(async () => {
@@ -244,9 +179,7 @@ describe("OpenCodeEventConsumer", () => {
     await upstream.connected(1);
     upstream.send(0, connectedRecord("/one"));
     await consumer.ready();
-    upstream.send(0, arbitraryRecord("/one"));
-    await eventually(() => expect(inputs).toHaveLength(1));
-    expect(inputs).toEqual([arbitraryRecord("/one")]);
+    expect(inputs).toEqual([connectedRecord("/one")]);
   });
 
   test("reconnects after a socket error with a delivered-record backoff reset", async () => {
@@ -255,7 +188,6 @@ describe("OpenCodeEventConsumer", () => {
     const consumer = new OpenCodeEventConsumer({
       serverUrl: upstream.url,
       processExit: new Promise<Error>(() => undefined),
-      logger: createRecordingLogger(),
       timing,
     });
     cleanups.push(async () => {
@@ -277,7 +209,6 @@ describe("OpenCodeEventConsumer", () => {
     const consumer = new OpenCodeEventConsumer({
       serverUrl: upstream.url,
       processExit: new Promise<Error>(() => undefined),
-      logger: createRecordingLogger(),
       timing,
     });
     cleanups.push(async () => {
@@ -305,7 +236,6 @@ describe("OpenCodeEventConsumer", () => {
     const consumer = new OpenCodeEventConsumer({
       serverUrl: upstream.url,
       processExit: new Promise<Error>(() => undefined),
-      logger: createRecordingLogger(),
       createClient: () =>
         ({
           ...realClient,
@@ -327,38 +257,12 @@ describe("OpenCodeEventConsumer", () => {
     expect(requestOptions).toMatchObject({ sseMaxRetryAttempts: 0 });
   });
 
-  test("retains the SDK error behind a zero-record stream", async () => {
-    const upstream = await createSseUpstream();
-    upstream.failNext(1);
-    const timing = new ControlledTiming();
-    const logger = createRecordingLogger();
-    const consumer = new OpenCodeEventConsumer({
-      serverUrl: upstream.url,
-      processExit: new Promise<Error>(() => undefined),
-      logger,
-      timing,
-    });
-    cleanups.push(async () => {
-      await consumer.close();
-      await upstream.close();
-    });
-
-    await timing.waiting();
-    expect(consumer.diagnostics()).toMatchObject({
-      attempt: 1,
-      phase: "first-record",
-      lastOutcome: "error",
-      lastError: "SSE failed: 503 Service Unavailable",
-    });
-  });
-
   test("rejects readiness and publishes terminal when the process exits before a record", async () => {
     const upstream = await createSseUpstream();
     const processExit = deferred<Error>();
     const consumer = new OpenCodeEventConsumer({
       serverUrl: upstream.url,
       processExit: processExit.promise,
-      logger: createRecordingLogger(),
     });
     cleanups.push(async () => {
       await consumer.close();
@@ -379,7 +283,6 @@ describe("OpenCodeEventConsumer", () => {
     const consumer = new OpenCodeEventConsumer({
       serverUrl: upstream.url,
       processExit: new Promise<Error>(() => undefined),
-      logger: createRecordingLogger(),
     });
     cleanups.push(upstream.close);
     const inputs: OpenCodeEventSourceInput[] = [];
@@ -390,7 +293,7 @@ describe("OpenCodeEventConsumer", () => {
 
     await consumer.close();
 
-    expect(inputs).toEqual([]);
+    expect(inputs).toEqual([connectedRecord("/one")]);
   });
 });
 
@@ -430,23 +333,6 @@ class ControlledTiming implements OpenCodeEventConsumerTiming {
 
 function connectedRecord(directory: string) {
   return { directory, payload: { type: "server.connected", properties: {} } };
-}
-
-function createRecordingLogger(): Pick<Logger, "debug" | "warn"> {
-  return {
-    debug: vi.fn() as unknown as Logger["debug"],
-    warn: vi.fn() as unknown as Logger["warn"],
-  };
-}
-
-function arbitraryRecord(directory: string) {
-  return {
-    directory,
-    payload: {
-      type: "session.status",
-      properties: { sessionID: "unrelated", status: { type: "idle" } },
-    },
-  };
 }
 
 async function createSseUpstream() {

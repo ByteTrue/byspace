@@ -4,12 +4,12 @@ import {
   isWorkspaceAttachment,
   workspaceAttachmentToSubmitAttachment,
 } from "@/attachments/workspace-attachment-utils";
-import type { AgentAttachment } from "@getpaseo/protocol/messages";
+import type { AgentAttachment } from "@bytetrue/byspace-protocol/messages";
+import { workspaceFileAttachmentToAgentAttachment } from "@/attachments/workspace-file";
 import {
   buildForgeAttachmentFromSearchItem,
   buildLegacyGitHubAttachmentFromSearchItem,
 } from "@/utils/review-attachments";
-import { workspaceFileAttachmentToAgentAttachment } from "@/attachments/workspace-file";
 import { pluginResourceAttachmentToAgentAttachment } from "@/plugins/attachments";
 
 export type ComposerAttachmentSubmitFormat = "forge" | "legacy-github";
@@ -62,9 +62,6 @@ export function splitComposerAttachmentsForSubmit(
     }
 
     if (isWorkspaceAttachment(attachment)) {
-      if (attachment.kind === "browser_element" && attachment.attachment.screenshot) {
-        images.push(attachment.attachment.screenshot);
-      }
       const workspaceAttachment = workspaceAttachmentToSubmitAttachment(attachment);
       if (workspaceAttachment) {
         agentAttachments.push(workspaceAttachment);

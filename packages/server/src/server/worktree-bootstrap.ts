@@ -6,9 +6,9 @@ import {
   getScriptConfigs,
   getWorktreeTerminalSpecs,
   isServiceScript,
-  paseoConfigParseError,
+  byspaceConfigParseError,
   processCarriageReturns,
-  readPaseoConfig,
+  readBySpaceConfig,
   resolveWorktreeRuntimeEnv,
   runWorktreeSetupCommands,
   WorktreeSetupError,
@@ -30,7 +30,7 @@ import {
   requirePlannedWorkspaceServicePort,
   refreshWorkspaceServicePort,
 } from "./workspace-service-port-registry.js";
-import type { PaseoServicePortAllocation } from "@getpaseo/protocol/paseo-config-schema";
+import type { BySpaceServicePortAllocation } from "@bytetrue/byspace-protocol/byspace-config-schema";
 
 export interface WorktreeBootstrapTerminalResult {
   name: string | null;
@@ -46,12 +46,12 @@ export interface RunAsyncWorktreeBootstrapOptions {
   // workspaceId-scoped archive tear these terminals down.
   workspaceId: string;
   worktree: WorktreeConfig;
-  workspaceCwd?: string;
   shouldBootstrap?: boolean;
   terminalManager: TerminalManager | null;
   appendTimelineItem: (item: AgentTimelineItem) => Promise<boolean>;
   emitLiveTimelineItem?: (item: AgentTimelineItem) => Promise<boolean>;
   logger?: Logger;
+  signal?: AbortSignal;
 }
 
 const MAX_WORKTREE_SETUP_COMMAND_OUTPUT_BYTES = 64 * 1024;
@@ -357,7 +357,7 @@ function buildSetupTimelineItem(input: {
   if (input.status === "running") {
     return {
       type: "tool_call",
-      name: "paseo_worktree_setup",
+      name: "byspace_worktree_setup",
       callId: input.callId,
       status: "running",
       detail,
@@ -368,7 +368,7 @@ function buildSetupTimelineItem(input: {
   if (input.status === "completed") {
     return {
       type: "tool_call",
-      name: "paseo_worktree_setup",
+      name: "byspace_worktree_setup",
       callId: input.callId,
       status: "completed",
       detail,
@@ -378,7 +378,7 @@ function buildSetupTimelineItem(input: {
 
   return {
     type: "tool_call",
-    name: "paseo_worktree_setup",
+    name: "byspace_worktree_setup",
     callId: input.callId,
     status: "failed",
     detail,
@@ -405,7 +405,7 @@ function buildTerminalTimelineItem(input: {
   if (input.status === "running") {
     return {
       type: "tool_call",
-      name: "paseo_worktree_terminals",
+      name: "byspace_worktree_terminals",
       callId: input.callId,
       status: "running",
       detail: {
@@ -420,7 +420,7 @@ function buildTerminalTimelineItem(input: {
   if (input.status === "completed") {
     return {
       type: "tool_call",
-      name: "paseo_worktree_terminals",
+      name: "byspace_worktree_terminals",
       callId: input.callId,
       status: "completed",
       detail: {
@@ -434,7 +434,7 @@ function buildTerminalTimelineItem(input: {
 
   return {
     type: "tool_call",
-    name: "paseo_worktree_terminals",
+    name: "byspace_worktree_terminals",
     callId: input.callId,
     status: "failed",
     detail: {
@@ -448,17 +448,21 @@ function buildTerminalTimelineItem(input: {
 
 async function waitForTerminalBootstrapReadiness(
   terminal: Pick<TerminalSession, "getState" | "subscribe">,
-): Promise<void> {
+  signal?: AbortSignal,
+): Promise<boolean> {
+  if (signal?.aborted) {
+    return false;
+  }
   if (terminalHasOutput(terminal.getState())) {
-    return;
+    return true;
   }
 
-  await new Promise<void>((resolve) => {
-    let pendingResolve: (() => void) | null = resolve;
+  return new Promise<boolean>((resolve) => {
+    let pendingResolve: ((ready: boolean) => void) | null = resolve;
     let timeout: ReturnType<typeof setTimeout> | null = null;
     let unsubscribe: (() => void) | null = null;
 
-    const finish = () => {
+    const finish = (ready: boolean) => {
       if (!pendingResolve) {
         return;
       }
@@ -472,22 +476,25 @@ async function waitForTerminalBootstrapReadiness(
         unsubscribe();
         unsubscribe = null;
       }
-      fn();
+      signal?.removeEventListener("abort", abort);
+      fn(ready);
     };
+    const abort = () => finish(false);
 
+    signal?.addEventListener("abort", abort, { once: true });
     unsubscribe = terminal.subscribe((message) => {
-      if (message.type !== "output") {
-        return;
+      if (message.type === "output") {
+        finish(true);
       }
-      finish();
     });
 
-    if (terminalHasOutput(terminal.getState())) {
-      finish();
-      return;
+    if (signal?.aborted) {
+      finish(false);
+    } else if (terminalHasOutput(terminal.getState())) {
+      finish(true);
+    } else {
+      timeout = setTimeout(() => finish(true), WORKTREE_BOOTSTRAP_TERMINAL_READY_TIMEOUT_MS);
     }
-
-    timeout = setTimeout(finish, WORKTREE_BOOTSTRAP_TERMINAL_READY_TIMEOUT_MS);
   });
 }
 
@@ -502,13 +509,35 @@ function terminalHasOutput(state: ReturnType<TerminalSession["getState"]>): bool
   return false;
 }
 
+function createWorktreeTerminalCleanupError(error: unknown, cleanupError: unknown): AggregateError {
+  return new AggregateError(
+    [error, cleanupError],
+    "Worktree terminal bootstrap and cleanup failed",
+    { cause: cleanupError },
+  );
+}
+
+async function cleanupFailedWorktreeBootstrapTerminal(input: {
+  terminalManager: TerminalManager;
+  terminalId: string;
+  error: unknown;
+  createdTerminalIds: Set<string>;
+}): Promise<void> {
+  input.createdTerminalIds.delete(input.terminalId);
+  try {
+    await input.terminalManager.killTerminalAndWait(input.terminalId);
+  } catch (cleanupError) {
+    input.createdTerminalIds.add(input.terminalId);
+    throw createWorktreeTerminalCleanupError(input.error, cleanupError);
+  }
+}
+
 async function runWorktreeTerminalBootstrap(
   options: RunAsyncWorktreeBootstrapOptions,
   runtimeEnv: WorktreeRuntimeEnv,
 ): Promise<void> {
-  const workspaceCwd = options.workspaceCwd ?? options.worktree.worktreePath;
-  const terminalSpecs = getWorktreeTerminalSpecs(workspaceCwd);
-  if (terminalSpecs.length === 0) {
+  const terminalSpecs = getWorktreeTerminalSpecs(options.worktree.worktreePath);
+  if (terminalSpecs.length === 0 || options.signal?.aborted) {
     return;
   }
 
@@ -522,77 +551,159 @@ async function runWorktreeTerminalBootstrap(
       errorMessage: null,
     }),
   );
-  if (!started) {
+  if (!started || options.signal?.aborted) {
     return;
   }
 
   if (!options.terminalManager) {
-    await options.appendTimelineItem(
-      buildTerminalTimelineItem({
-        callId,
-        status: "failed",
-        worktree: options.worktree,
-        results: [],
-        errorMessage: "Terminal manager not available",
-      }),
-    );
+    if (!options.signal?.aborted) {
+      await options.appendTimelineItem(
+        buildTerminalTimelineItem({
+          callId,
+          status: "failed",
+          worktree: options.worktree,
+          results: [],
+          errorMessage: "Terminal manager not available",
+        }),
+      );
+    }
     return;
   }
 
   const terminalManager = options.terminalManager;
-  const results = await Promise.all(
-    terminalSpecs.map(async (spec): Promise<WorktreeBootstrapTerminalResult> => {
-      try {
-        const terminal = await terminalManager.createTerminal({
-          cwd: workspaceCwd,
-          name: spec.name,
-          env: runtimeEnv,
-          workspaceId: options.workspaceId,
-        });
-        await waitForTerminalBootstrapReadiness(terminal);
-        terminal.send({
-          type: "input",
-          data: `${spec.command}\r`,
-        });
-        return {
-          name: terminal.name ?? spec.name ?? null,
-          command: spec.command,
-          status: "started",
-          terminalId: terminal.id,
-          error: null,
-        };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        options.logger?.warn(
-          { agentId: options.agentId, command: spec.command, err: error },
-          "Failed to bootstrap worktree terminal",
-        );
-        return {
-          name: spec.name ?? null,
-          command: spec.command,
-          status: "failed",
-          terminalId: null,
-          error: message,
-        };
-      }
-    }),
-  );
+  const createdTerminalIds = new Set<string>();
+  const cleanupCreatedTerminals = async () => {
+    const terminalIds = [...createdTerminalIds];
+    await Promise.all(
+      terminalIds.map(async (terminalId) => {
+        createdTerminalIds.delete(terminalId);
+        try {
+          await terminalManager.killTerminalAndWait(terminalId);
+        } catch (error) {
+          createdTerminalIds.add(terminalId);
+          throw error;
+        }
+      }),
+    );
+  };
+  let abortCleanup: Promise<void> = Promise.resolve();
+  const abort = () => {
+    abortCleanup = cleanupCreatedTerminals();
+  };
+  options.signal?.addEventListener("abort", abort, { once: true });
 
-  await options.appendTimelineItem(
-    buildTerminalTimelineItem({
-      callId,
-      status: "completed",
-      worktree: options.worktree,
-      results,
-      errorMessage: null,
-    }),
-  );
+  try {
+    const pendingResults = await Promise.all(
+      terminalSpecs.map(async (spec): Promise<WorktreeBootstrapTerminalResult | null> => {
+        if (options.signal?.aborted) {
+          return null;
+        }
+        let terminal: TerminalSession | null = null;
+        try {
+          terminal = await terminalManager.createTerminal({
+            cwd: options.worktree.worktreePath,
+            name: spec.name,
+            env: runtimeEnv,
+            workspaceId: options.workspaceId,
+          });
+          createdTerminalIds.add(terminal.id);
+          if (options.signal?.aborted) {
+            createdTerminalIds.delete(terminal.id);
+            await terminalManager.killTerminalAndWait(terminal.id);
+            return null;
+          }
+          const ready = await waitForTerminalBootstrapReadiness(terminal, options.signal);
+          if (!ready || options.signal?.aborted) {
+            createdTerminalIds.delete(terminal.id);
+            await terminalManager.killTerminalAndWait(terminal.id);
+            return null;
+          }
+          terminal.send({
+            type: "input",
+            data: `${spec.command}\r`,
+          });
+          if (options.signal?.aborted) {
+            createdTerminalIds.delete(terminal.id);
+            await terminalManager.killTerminalAndWait(terminal.id);
+            return null;
+          }
+          return {
+            name: terminal.name ?? spec.name ?? null,
+            command: spec.command,
+            status: "started",
+            terminalId: terminal.id,
+            error: null,
+          };
+        } catch (error) {
+          if (terminal) {
+            await cleanupFailedWorktreeBootstrapTerminal({
+              terminalManager,
+              terminalId: terminal.id,
+              error,
+              createdTerminalIds,
+            });
+          }
+          if (options.signal?.aborted) {
+            return null;
+          }
+          const message = error instanceof Error ? error.message : String(error);
+          options.logger?.warn(
+            { agentId: options.agentId, command: spec.command, err: error },
+            "Failed to bootstrap worktree terminal",
+          );
+          return {
+            name: spec.name ?? null,
+            command: spec.command,
+            status: "failed",
+            terminalId: null,
+            error: message,
+          };
+        }
+      }),
+    );
+    await abortCleanup;
+    if (options.signal?.aborted) {
+      return;
+    }
+    const results = pendingResults.filter(
+      (result): result is WorktreeBootstrapTerminalResult => result !== null,
+    );
+    const completed = await options.appendTimelineItem(
+      buildTerminalTimelineItem({
+        callId,
+        status: "completed",
+        worktree: options.worktree,
+        results,
+        errorMessage: null,
+      }),
+    );
+    if (!completed) {
+      await cleanupCreatedTerminals();
+    }
+  } catch (error) {
+    try {
+      await cleanupCreatedTerminals();
+    } catch (cleanupError) {
+      options.logger?.warn(
+        { agentId: options.agentId, err: cleanupError },
+        "Failed to clean up worktree bootstrap terminals",
+      );
+      throw createWorktreeTerminalCleanupError(error, cleanupError);
+    }
+    throw error;
+  } finally {
+    options.signal?.removeEventListener("abort", abort);
+    if (options.signal?.aborted) {
+      await abortCleanup;
+      await cleanupCreatedTerminals();
+    }
+  }
 }
 
 export async function runAsyncWorktreeBootstrap(
   options: RunAsyncWorktreeBootstrapOptions,
 ): Promise<void> {
-  if (options.shouldBootstrap === false) {
+  if (options.shouldBootstrap === false || options.signal?.aborted) {
     return;
   }
 
@@ -601,15 +712,17 @@ export async function runAsyncWorktreeBootstrap(
   let runtimeEnv: WorktreeRuntimeEnv | null = null;
   const emitLiveTimelineItem = options.emitLiveTimelineItem;
   const progressAccumulator = createWorktreeSetupProgressAccumulator();
-  const workspaceCwd = options.workspaceCwd ?? options.worktree.worktreePath;
   let liveEmitQueue = Promise.resolve();
 
   const queueLiveRunningEmit = () => {
-    if (!emitLiveTimelineItem) {
+    if (!emitLiveTimelineItem || options.signal?.aborted) {
       return;
     }
     const runningResults = getWorktreeSetupProgressResults(progressAccumulator);
     liveEmitQueue = liveEmitQueue.then(async () => {
+      if (options.signal?.aborted) {
+        return;
+      }
       try {
         await emitLiveTimelineItem(
           buildSetupTimelineItem({
@@ -622,6 +735,9 @@ export async function runAsyncWorktreeBootstrap(
           }),
         );
       } catch (error) {
+        if (options.signal?.aborted) {
+          return;
+        }
         options.logger?.warn(
           { err: error, agentId: options.agentId },
           "Failed to emit live worktree setup timeline update",
@@ -636,22 +752,32 @@ export async function runAsyncWorktreeBootstrap(
       worktreePath: options.worktree.worktreePath,
       branchName: options.worktree.branchName,
     });
+    if (options.signal?.aborted) {
+      return;
+    }
     options.terminalManager?.registerCwdEnv({
-      cwd: workspaceCwd,
+      cwd: options.worktree.worktreePath,
       env: runtimeEnv,
     });
 
     setupResults = await runWorktreeSetupCommands({
-      worktreePath: workspaceCwd,
+      worktreePath: options.worktree.worktreePath,
       branchName: options.worktree.branchName,
       cleanupOnFailure: false,
       runtimeEnv,
+      signal: options.signal,
       onEvent: (event) => {
+        if (options.signal?.aborted) {
+          return;
+        }
         applyWorktreeSetupProgressEvent(progressAccumulator, event);
         queueLiveRunningEmit();
       },
     });
     await liveEmitQueue;
+    if (options.signal?.aborted) {
+      return;
+    }
 
     const completed = await options.appendTimelineItem(
       buildSetupTimelineItem({
@@ -671,6 +797,9 @@ export async function runAsyncWorktreeBootstrap(
       setupResults = error.results;
     }
     await liveEmitQueue;
+    if (options.signal?.aborted) {
+      return;
+    }
     const message = error instanceof Error ? error.message : String(error);
     await options.appendTimelineItem(
       buildSetupTimelineItem({
@@ -685,6 +814,9 @@ export async function runAsyncWorktreeBootstrap(
     return;
   }
 
+  if (options.signal?.aborted) {
+    return;
+  }
   await runWorktreeTerminalBootstrap(options, runtimeEnv);
 }
 
@@ -711,7 +843,7 @@ export interface SpawnWorkspaceScriptOptions {
   serviceProxy: ServiceProxySubsystem;
   runtimeStore: WorkspaceScriptRuntimeStore;
   terminalManager: TerminalManager;
-  globalServicePorts?: PaseoServicePortAllocation;
+  globalServicePorts?: BySpaceServicePortAllocation;
   logger?: Logger;
   onLifecycleChanged?: () => void;
 }
@@ -735,7 +867,7 @@ async function setupServiceScriptRoute(params: {
   serviceProxyPublicBaseUrl: string | null | undefined;
   existingRuntimeEntry: ReturnType<WorkspaceScriptRuntimeStore["get"]>;
   serviceProxy: ServiceProxySubsystem;
-  servicePortAllocation: PaseoServicePortAllocation | undefined;
+  servicePortAllocation: BySpaceServicePortAllocation | undefined;
 }): Promise<ServiceScriptSetupResult> {
   const {
     scriptConfigs,
@@ -878,14 +1010,14 @@ export async function spawnWorkspaceScript(
     logger,
     onLifecycleChanged,
   } = options;
-  const configResult = readPaseoConfig(repoRoot);
+  const configResult = readBySpaceConfig(repoRoot);
   if (!configResult.ok) {
-    throw paseoConfigParseError(configResult);
+    throw byspaceConfigParseError(configResult);
   }
   const scriptConfigs = getScriptConfigs(configResult.config);
   const config = scriptConfigs.get(scriptName);
   if (!config) {
-    throw new Error(`Script '${scriptName}' is not configured in paseo.json`);
+    throw new Error(`Script '${scriptName}' is not configured in byspace.json`);
   }
 
   const serviceScript = isServiceScript(config);

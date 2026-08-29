@@ -3,7 +3,7 @@ import {
   isGitHubHost,
   parseGitHubRemoteUrl,
   parseGitRemoteLocation,
-} from "@getpaseo/protocol/git-remote";
+} from "@bytetrue/byspace-protocol/git-remote";
 import { findExecutable } from "../executable-resolution/executable-resolution.js";
 import { runGitCommand } from "../utils/run-git-command.js";
 import { execCommand } from "../utils/spawn.js";
@@ -617,6 +617,7 @@ interface GitHubServiceDependencies {
    * call routes to the workspace's instance instead of github.com.
    */
   resolveRepoHost: (cwd: string) => Promise<string | null>;
+  resolveRepoSlug: (cwd: string) => Promise<string | null>;
 }
 
 export interface GitHubCommandRunnerOptions {
@@ -632,6 +633,7 @@ export interface GitHubCommandResult {
 export type GitHubCommandRunner = (
   args: string[],
   options: GitHubCommandRunnerOptions,
+  executablePath: string,
 ) => Promise<GitHubCommandResult>;
 
 const DIRECT_PULL_REQUEST_MERGE_STATE_ALLOWLIST = new Set(["CLEAN", "HAS_HOOKS"]);
@@ -695,6 +697,7 @@ interface CreateGitHubServiceOptions {
   resolveGhPath?: () => Promise<string | null>;
   now?: () => number;
   resolveRepoHost?: (cwd: string) => Promise<string | null>;
+  resolveRepoSlug?: (cwd: string) => Promise<string | null>;
 }
 
 type PullRequestCheckRunNode = z.infer<typeof PullRequestCheckRunNodeSchema>;
@@ -740,6 +743,7 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
     resolveGhPath: options.resolveGhPath ?? resolveGhPath,
     now: options.now ?? Date.now,
     resolveRepoHost: options.resolveRepoHost ?? resolveGitHubEnterpriseHost,
+    resolveRepoSlug: options.resolveRepoSlug ?? resolveGitHubSlugFromOrigin,
   };
   // A resolved enterprise host is cached permanently; a null resolution (no
   // host, or the auth probe said no) expires so `gh auth login --hostname`
@@ -844,7 +848,7 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
       ? { ...runOptions, envOverlay: { ...runOptions.envOverlay, GH_HOST: host } }
       : runOptions;
     try {
-      const result = await deps.runner(args, effectiveOptions);
+      const result = await deps.runner(args, effectiveOptions, ghPath);
       return result.stdout.trim();
     } catch (error) {
       throw githubCliRunner.normalizeError(error, {
@@ -1429,7 +1433,7 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
       // transient `gh repo view` failure can't block PR creation on github.com.
       // `gh repo view` is the fallback: it auto-routes to the cwd remote's host
       // (covering GitHub Enterprise Server) and survives a renamed repo.
-      let slug = await resolveGitHubSlugFromOrigin(input.cwd);
+      let slug = await deps.resolveRepoSlug(input.cwd);
       if (!slug) {
         const repoView = await getGitHubRepoView({ cwd: input.cwd, run });
         slug =
@@ -1777,8 +1781,9 @@ const githubCliRunner = createForgeCliRunner({
 async function runGhCommand(
   args: string[],
   options: GitHubCommandRunnerOptions,
+  executablePath: string,
 ): Promise<GitHubCommandResult> {
-  return githubCliRunner.run(args, options);
+  return githubCliRunner.run(args, options, executablePath);
 }
 
 // Anchored to github.com so a pasted URL from an unrelated tracker (a GitLab

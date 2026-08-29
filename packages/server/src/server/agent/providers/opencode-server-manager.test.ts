@@ -59,17 +59,6 @@ describe("OpenCodeServerManager generations", () => {
     await manager.shutdown();
     await new Promise<void>((resolve) => upstream.close(() => resolve()));
   });
-
-  test("uses an explicit base environment for the server process", async () => {
-    const baseEnv = { HOME: "/isolated/home", PATH: "/isolated/bin" };
-    const { manager, runtime } = createTestManager([4091], { baseEnv });
-
-    const acquisition = await manager.acquireCurrent();
-
-    expect(runtime.spawnCalls[0]?.options.baseEnv).toEqual(baseEnv);
-    await acquisition.release();
-  });
-
   test("rotation creates a new current server without killing a referenced old server", async () => {
     const { manager, runtime } = createTestManager([4101, 4102]);
 
@@ -229,7 +218,7 @@ describe("OpenCodeServerManager generations", () => {
   test("acquireExisting keeps a retired dedicated server alive until every reference releases", async () => {
     const { manager, runtime } = createTestManager([4475]);
 
-    const dedicatedAcquisition = await manager.acquireDedicated({ PASEO_AGENT_ID: "parent" });
+    const dedicatedAcquisition = await manager.acquireDedicated({ BYSPACE_AGENT_ID: "parent" });
     const existingAcquisition = manager.acquireExisting(dedicatedAcquisition.server.url);
 
     expect(existingAcquisition?.server.url).toBe("http://127.0.0.1:4475");
@@ -244,7 +233,7 @@ describe("OpenCodeServerManager generations", () => {
   test("acquireExisting returns null for unknown or dead server urls", async () => {
     const { manager, runtime } = createTestManager([4476]);
 
-    const acquisition = await manager.acquireDedicated({ PASEO_AGENT_ID: "parent" });
+    const acquisition = await manager.acquireDedicated({ BYSPACE_AGENT_ID: "parent" });
     const url = acquisition.server.url;
 
     expect(manager.acquireExisting("http://127.0.0.1:9999")).toBe(null);
@@ -267,18 +256,20 @@ describe("OpenCodeServerManager generations", () => {
     expect(runtime.terminatedPorts).toEqual([4502, 4503, 4501]);
   });
 
-  test("final release detaches the terminating generation before a concurrent acquire", async () => {
-    const { manager, runtime } = createTestManager([4551, 4552]);
+  test("acquireCurrent takes a lease before its ready continuation can race final release", async () => {
+    const { manager, runtime } = createTestManager([4551]);
 
     const first = await manager.acquireCurrent();
+    const nextPromise = manager.acquireCurrent();
     const release = first.release();
-    const next = await manager.acquireCurrent();
+    const next = await nextPromise;
 
     await release;
-    expect(next.server.url).toBe("http://127.0.0.1:4552");
-    expect(runtime.terminatedPorts).toEqual([4551]);
+    expect(next.server.url).toBe("http://127.0.0.1:4551");
+    expect(runtime.terminatedPorts).toEqual([]);
 
     await next.release();
+    expect(runtime.terminatedPorts).toEqual([4551]);
   });
 });
 
@@ -396,11 +387,7 @@ describe.runIf(process.platform === "win32")(
 
 function createTestManager(
   ports: number[],
-  options: {
-    autoAnnounce?: boolean;
-    baseEnv?: Record<string, string>;
-    opencodeHomeDir?: string;
-  } = {},
+  options: { autoAnnounce?: boolean; opencodeHomeDir?: string } = {},
 ): {
   manager: OpenCodeServerManager;
   runtime: FakeOpenCodeServerRuntime;
@@ -412,7 +399,6 @@ function createTestManager(
   return {
     manager: new OpenCodeServerManager({
       logger: createTestLogger(),
-      baseEnv: options.baseEnv,
       managedProcesses: runtime.managedProcesses,
       portAllocator: runtime.allocatePort,
       resolveCommandPrefix: runtime.resolveCommandPrefix,

@@ -59,8 +59,10 @@ describe("buildNotificationRoute", () => {
     ).toBe("/h/srv-1/workspace/ws-main?open=agent%3Aagent-1");
   });
 
-  it("does not treat an incomplete notification as an agent URL", () => {
-    expect(buildNotificationRoute({ serverId: "srv-1", agentId: "agent-1" })).toBe("/h/srv-1");
+  it("resolves an older agent notification without a workspace id", () => {
+    expect(buildNotificationRoute({ serverId: "srv-1", agentId: "agent-1" })).toBe(
+      "/h/srv-1/agent/agent-1",
+    );
   });
 
   it("routes to the workspace terminal tab when workspace and terminal ids are present", () => {

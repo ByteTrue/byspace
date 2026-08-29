@@ -1,6 +1,6 @@
-import { createPaseoClient } from "@getpaseo/client";
+import { createBySpaceClient } from "@bytetrue/byspace-client";
 
-const client = createPaseoClient({ url: "ws://127.0.0.1:6767/ws" });
+const client = createBySpaceClient({ url: "ws://127.0.0.1:6777/ws" });
 
 await client.connect();
 

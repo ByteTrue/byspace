@@ -7,25 +7,19 @@ import type { SessionOutboundMessage, StartWorkspaceScriptRequest } from "../../
 import { createServiceProxySubsystem, type ServiceProxySubsystem } from "../../service-proxy.js";
 import type { TerminalManager } from "../../../terminal/terminal-manager.js";
 import type {
-  PersistedProjectRecord,
   PersistedWorkspaceRecord,
   ProjectRegistry,
   WorkspaceRegistry,
 } from "../../workspace-registry.js";
-import { createNoGitWorkspaceRuntimeSnapshot } from "../../test-utils/workspace-git-service-stub.js";
 import { WorkspaceScriptRuntimeStore } from "../../workspace-script-runtime-store.js";
 import type {
   SpawnWorkspaceScriptOptions,
   WorktreeScriptResult,
 } from "../../worktree-bootstrap.js";
-import type { WorkspaceGitService } from "../../workspace-git-service.js";
 import { createWorkspaceScriptsService } from "./workspace-scripts-service.js";
-import { deriveProjectServiceSlug } from "../../workspace-git-metadata.js";
 
-// The production module reads only WorkspaceGitService.{peekSnapshot,getProjectSlug},
-// WorkspaceRegistry.get, and forwards the launcher + opaque managers to the injected
-// spawnWorkspaceScript port. The fakes below implement exactly that slice; the service proxy and
-// runtime store are the real in-memory implementations, and spawning is injected so no process runs.
+// The production module reads only WorkspaceGitService.peekSnapshot and the two registries' get
+// methods, then forwards the launcher and opaque managers to the injected spawn port.
 
 const logger = pino({ level: "silent" });
 
@@ -39,28 +33,24 @@ function fakeWorkspaceRegistry(
   };
 }
 
-function fakeProjectRegistry(record: PersistedProjectRecord | null): Pick<ProjectRegistry, "get"> {
+function fakeProjectRegistry(): Pick<ProjectRegistry, "get"> {
   return {
     async get() {
-      return record;
+      return null;
     },
   };
 }
 
 function fakeGitService() {
-  const snapshot = createNoGitWorkspaceRuntimeSnapshot("/tmp/repo");
-  snapshot.git = {
-    ...snapshot.git,
-    isGit: true,
-    repoRoot: "/tmp/repo",
-    currentBranch: "feature/scripts",
-    remoteUrl: "https://github.com/getpaseo/paseo.git",
-    hasRemote: true,
-  };
-
   return {
     peekSnapshot() {
-      return snapshot;
+      return {
+        git: {
+          isGit: true,
+          remoteUrl: "git@github.com:bytetrue/byspace.git",
+          currentBranch: "feature/scripts",
+        },
+      };
     },
   };
 }
@@ -74,9 +64,7 @@ interface BuildOptions {
   scriptRuntimeStore?: WorkspaceScriptRuntimeStore | null;
   terminalManager?: TerminalManager | null;
   workspace?: PersistedWorkspaceRecord | null;
-  project?: PersistedProjectRecord | null;
   spawnThrows?: string;
-  gitService?: Pick<WorkspaceGitService, "peekSnapshot">;
 }
 
 function buildService(options: BuildOptions = {}) {
@@ -84,7 +72,12 @@ function buildService(options: BuildOptions = {}) {
   const spawnCalls: SpawnWorkspaceScriptOptions[] = [];
   const workspace =
     options.workspace === undefined
-      ? ({ workspaceId: "ws-1", cwd: "/tmp/repo" } as PersistedWorkspaceRecord)
+      ? ({
+          workspaceId: "ws-1",
+          projectId: "project-1",
+          cwd: "/tmp/repo",
+          branch: "feature/scripts",
+        } as PersistedWorkspaceRecord)
       : options.workspace;
 
   const service = createWorkspaceScriptsService({
@@ -99,9 +92,9 @@ function buildService(options: BuildOptions = {}) {
     terminalManager:
       options.terminalManager === undefined ? availableTerminalManager : options.terminalManager,
     workspaceRegistry: fakeWorkspaceRegistry(workspace),
-    projectRegistry: fakeProjectRegistry(options.project ?? null),
-    workspaceGitService: options.gitService ?? fakeGitService(),
-    getDaemonTcpPort: () => 6767,
+    projectRegistry: fakeProjectRegistry(),
+    workspaceGitService: fakeGitService(),
+    getDaemonTcpPort: () => 6777,
     getDaemonTcpHost: () => "127.0.0.1",
     serviceProxyPublicBaseUrl: null,
     resolveScriptHealth: null,
@@ -122,7 +115,7 @@ function buildService(options: BuildOptions = {}) {
     },
   });
 
-  return { service, emitted, spawnCalls };
+  return { service, emitted, spawnCalls, workspace };
 }
 
 const request: StartWorkspaceScriptRequest = {
@@ -143,70 +136,53 @@ afterEach(() => {
 });
 
 describe("buildSnapshot", () => {
-  test("returns no scripts when the service proxy is unavailable", async () => {
-    const { service } = buildService({ serviceProxy: null });
-    expect(
-      service.buildSnapshot({ workspaceId: "ws-1", cwd: "/tmp/repo" } as PersistedWorkspaceRecord),
-    ).toEqual([]);
+  test("returns no scripts when the service proxy is unavailable", () => {
+    const { service, workspace } = buildService({ serviceProxy: null });
+    expect(service.buildSnapshot(workspace as PersistedWorkspaceRecord)).toEqual([]);
   });
 
-  test("returns no scripts when the runtime store is unavailable", async () => {
-    const { service } = buildService({ scriptRuntimeStore: null });
-    expect(
-      service.buildSnapshot({ workspaceId: "ws-1", cwd: "/tmp/repo" } as PersistedWorkspaceRecord),
-    ).toEqual([]);
+  test("returns no scripts when the runtime store is unavailable", () => {
+    const { service, workspace } = buildService({ scriptRuntimeStore: null });
+    expect(service.buildSnapshot(workspace as PersistedWorkspaceRecord)).toEqual([]);
   });
 
-  test("returns no scripts for a workspace without a paseo.json", async () => {
+  test("projects service URLs from the workspace git snapshot", () => {
     const dir = mkdtempSync(join(tmpdir(), "workspace-scripts-"));
     tempDirs.push(dir);
-    const { service } = buildService();
-    expect(
-      service.buildSnapshot({ workspaceId: "ws-1", cwd: dir } as PersistedWorkspaceRecord),
-    ).toEqual([]);
+    writeFileSync(
+      join(dir, "byspace.json"),
+      JSON.stringify({ scripts: { web: { type: "service", command: "npm run web", port: 3000 } } }),
+    );
+    const workspace = {
+      workspaceId: "ws-1",
+      projectId: "project-1",
+      cwd: dir,
+      branch: null,
+    } as PersistedWorkspaceRecord;
+    const { service } = buildService({ workspace });
+
+    expect(service.buildSnapshot(workspace)).toEqual([
+      expect.objectContaining({
+        scriptName: "web",
+        hostname: "web--feature-scripts--byspace.localhost",
+        localProxyUrl: "http://web--feature-scripts--byspace.localhost:6777",
+        publicProxyUrl: null,
+        proxyUrl: "http://web--feature-scripts--byspace.localhost:6777",
+      }),
+    ]);
   });
 
-  test("projects service hostnames without a Git snapshot", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "workspace-scripts-"));
-    tempDirs.push(directory);
-    writeFileSync(
-      join(directory, "paseo.json"),
-      JSON.stringify({ scripts: { app: { type: "service", command: "npm run app", port: 3000 } } }),
-    );
-    const project = {
-      projectId: "prj_no_snapshot",
-      rootPath: directory,
-      kind: "git",
-      displayName: "app",
-      customName: null,
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-      archivedAt: null,
-    } as PersistedProjectRecord;
+  test("returns no scripts for a workspace without a byspace.json", () => {
+    const dir = mkdtempSync(join(tmpdir(), "workspace-scripts-"));
+    tempDirs.push(dir);
     const workspace = {
-      workspaceId: "ws-no-snapshot",
-      projectId: project.projectId,
-      cwd: directory,
-      branch: "feature/persisted",
+      workspaceId: "ws-1",
+      projectId: "project-1",
+      cwd: dir,
+      branch: null,
     } as PersistedWorkspaceRecord;
-    const serviceProxy = createServiceProxySubsystem({ logger });
-    const { service, spawnCalls } = buildService({
-      workspace,
-      project,
-      serviceProxy,
-      gitService: { peekSnapshot: () => undefined },
-    });
-
-    expect(service.buildSnapshot(workspace, project)[0]?.hostname).toBe(
-      serviceProxy.projectWorkspaceService({
-        projectSlug: deriveProjectServiceSlug(project),
-        branchName: workspace.branch,
-        scriptName: "app",
-        daemonPort: 6767,
-      }).hostname,
-    );
-    await service.start({ ...request, workspaceId: workspace.workspaceId });
-    expect(spawnCalls[0]?.branchName).toBe(workspace.branch);
+    const { service } = buildService({ workspace });
+    expect(service.buildSnapshot(workspace)).toEqual([]);
   });
 });
 
@@ -225,7 +201,7 @@ describe("stop", () => {
     const dir = mkdtempSync(join(tmpdir(), "workspace-scripts-"));
     tempDirs.push(dir);
     writeFileSync(
-      join(dir, "paseo.json"),
+      join(dir, "byspace.json"),
       JSON.stringify({ scripts: { web: { type: "service", command: "npm run web", port: 3000 } } }),
     );
     const runtimeStore = new WorkspaceScriptRuntimeStore();
@@ -252,7 +228,12 @@ describe("stop", () => {
       },
     } as unknown as TerminalManager;
     const { service } = buildService({
-      workspace: { workspaceId: "ws-1", cwd: dir } as PersistedWorkspaceRecord,
+      workspace: {
+        workspaceId: "ws-1",
+        projectId: "project-1",
+        cwd: dir,
+        branch: null,
+      } as PersistedWorkspaceRecord,
       scriptRuntimeStore: runtimeStore,
       terminalManager,
     });
@@ -305,6 +286,32 @@ describe("start", () => {
     ]);
   });
 
+  test("reports an error when the workspace is archived", async () => {
+    const { service, emitted, spawnCalls } = buildService({
+      workspace: {
+        workspaceId: "ws-1",
+        projectId: "project-1",
+        cwd: "/tmp/repo",
+        branch: "feature/scripts",
+        archivedAt: "2026-07-29T00:00:00.000Z",
+      } as PersistedWorkspaceRecord,
+    });
+    await service.start(request);
+    expect(spawnCalls).toEqual([]);
+    expect(emitted).toEqual([
+      {
+        type: "start_workspace_script_response",
+        payload: {
+          requestId: "req-1",
+          workspaceId: "ws-1",
+          scriptName: "app",
+          terminalId: null,
+          error: "Workspace is archived: ws-1",
+        },
+      },
+    ]);
+  });
+
   test("spawns the script with resolved git metadata and reports success", async () => {
     const { service, emitted, spawnCalls } = buildService();
     await service.start(request);
@@ -313,10 +320,10 @@ describe("start", () => {
     expect(spawnCalls[0]).toMatchObject({
       repoRoot: "/tmp/repo",
       workspaceId: "ws-1",
-      projectSlug: "paseo",
+      projectSlug: "byspace",
       branchName: "feature/scripts",
       scriptName: "app",
-      daemonPort: 6767,
+      daemonPort: 6777,
       daemonListenHost: "127.0.0.1",
     });
     expect(emitted).toContainEqual({
@@ -333,101 +340,6 @@ describe("start", () => {
         error: null,
       },
     });
-  });
-
-  test("uses the exact project root for a service hostname", async () => {
-    const workspace = {
-      workspaceId: "ws-app",
-      projectId: "prj-app",
-      cwd: "/repo/apps/app",
-    } as PersistedWorkspaceRecord;
-    const project = {
-      projectId: "prj-app",
-      rootPath: "/repo/apps/app",
-      kind: "git",
-      displayName: "app",
-      customName: null,
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-      archivedAt: null,
-    } as PersistedProjectRecord;
-    const { service, spawnCalls } = buildService({ workspace, project });
-
-    await service.start({ ...request, workspaceId: workspace.workspaceId });
-
-    expect(spawnCalls[0]).toMatchObject({
-      projectSlug: deriveProjectServiceSlug(project),
-    });
-  });
-
-  test("keeps same-named service projects distinct", async () => {
-    const projectA = {
-      projectId: "prj-app-a",
-      rootPath: "/repo-a/app",
-      kind: "git",
-      displayName: "app",
-      customName: null,
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-      archivedAt: null,
-    } as PersistedProjectRecord;
-    const projectB = { ...projectA, projectId: "prj-app-b", rootPath: "/repo-b/app" };
-    const workspaceA = {
-      workspaceId: "ws-app-a",
-      projectId: projectA.projectId,
-      cwd: projectA.rootPath,
-    } as PersistedWorkspaceRecord;
-    const workspaceB = {
-      workspaceId: "ws-app-b",
-      projectId: projectB.projectId,
-      cwd: projectB.rootPath,
-    } as PersistedWorkspaceRecord;
-    const first = buildService({ workspace: workspaceA, project: projectA });
-    const second = buildService({ workspace: workspaceB, project: projectB });
-
-    await first.service.start({ ...request, workspaceId: workspaceA.workspaceId });
-    await second.service.start({ ...request, workspaceId: workspaceB.workspaceId });
-
-    expect(first.spawnCalls[0]?.projectSlug).not.toBe(second.spawnCalls[0]?.projectSlug);
-  });
-
-  test("predicts the same service hostname that start registers", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "workspace-scripts-"));
-    tempDirs.push(directory);
-    writeFileSync(
-      join(directory, "paseo.json"),
-      JSON.stringify({ scripts: { app: { type: "service", command: "npm run app", port: 3000 } } }),
-    );
-    const project = {
-      projectId: "prj_hostname",
-      rootPath: directory,
-      kind: "git",
-      displayName: "app",
-      customName: null,
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-      archivedAt: null,
-    } as PersistedProjectRecord;
-    const workspace = {
-      workspaceId: "ws-hostname",
-      projectId: project.projectId,
-      cwd: directory,
-    } as PersistedWorkspaceRecord;
-    const serviceProxy = createServiceProxySubsystem({ logger });
-    const { service, spawnCalls } = buildService({ workspace, project, serviceProxy });
-
-    const snapshot = service.buildSnapshot(workspace, project);
-    await service.start({ ...request, workspaceId: workspace.workspaceId });
-
-    const started = spawnCalls[0]!;
-    expect(snapshot[0]?.hostname).toBe(
-      serviceProxy.projectWorkspaceService({
-        projectSlug: started.projectSlug,
-        branchName: started.branchName,
-        scriptName: started.scriptName,
-        daemonPort: started.daemonPort,
-      }).hostname,
-    );
   });
 
   test("reports the launcher error when spawning fails", async () => {

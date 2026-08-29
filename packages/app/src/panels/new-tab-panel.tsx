@@ -1,15 +1,7 @@
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  type ComponentType,
-  type ReactElement,
-} from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, type ReactElement } from "react";
 import { Pressable, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
-import { Pencil, Plus } from "lucide-react-native";
+import { Pencil, Plus, type LucideIcon } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { TerminalProfileIcon } from "@/components/terminal-profile-icon";
 import { Shortcut } from "@/components/ui/shortcut";
@@ -18,7 +10,7 @@ import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
-import { definePanel, type PanelIconProps } from "@/panels/panel-registry";
+import type { PanelRegistration } from "@/panels/panel-registry";
 import { ICON_SIZE, SPACING, type Theme } from "@/styles/theme";
 import {
   useWorkspaceTabLaunchCatalog,
@@ -37,13 +29,7 @@ const LAUNCHER_MAX_WIDTH = 380;
 const EDIT_PROFILES_HIT_SIZE = ICON_SIZE.xs + SPACING[2];
 const ROW_DATA_SET = { newTabLauncherRow: "true" };
 const ROW_SELECTOR = '[data-new-tab-launcher-row="true"]';
-function LauncherIcon({
-  Icon,
-  color = "",
-}: {
-  Icon: ComponentType<PanelIconProps>;
-  color?: string;
-}) {
+function LauncherIcon({ Icon, color = "" }: { Icon: LucideIcon; color?: string }) {
   return <Icon size={LAUNCHER_ICON_SIZE} color={color} />;
 }
 
@@ -130,19 +116,17 @@ function useNewTabDescriptor() {
 }
 
 const NewTabPanel = memo(function NewTabPanel(): ReactElement {
-  const { host, serverId, tabId } = usePaneContext();
+  const { isSidePanel, serverId, tabId } = usePaneContext();
   const { isInteractive, focusPane } = usePaneFocus();
   const containerRef = useRef<View | null>(null);
   const groups = useWorkspaceTabLaunchCatalog({
     serverId,
-    purpose: host === "explorer" ? "supporting" : "primary",
-    host,
+    purpose: isSidePanel ? "supporting" : "primary",
   });
   const itemsById = useMemo(
     () => new Map(groups.flatMap((group) => group.items).map((item) => [item.id, item])),
     [groups],
   );
-  const handlesWorkspaceShortcuts = isInteractive && host === "main";
 
   useEffect(() => {
     if (!isWeb || !isInteractive) return;
@@ -205,20 +189,12 @@ const NewTabPanel = memo(function NewTabPanel(): ReactElement {
         itemsById.get("terminal")?.launch({ kind: "replace", tabId });
         return true;
       }
-      if (action.id === "workspace.browser.new" || action.id === "workspace.tab.target.browser") {
-        itemsById.get("browser")?.launch({ kind: "replace", tabId });
-        return true;
-      }
       if (action.id === "workspace.tab.target.changes") {
-        const changesItem = itemsById.get("changes") ?? itemsById.get("diff");
-        if (!changesItem) return false;
-        changesItem.launch({ kind: "replace", tabId });
+        itemsById.get("changes")?.launch({ kind: "replace", tabId });
         return true;
       }
       if (action.id === "workspace.tab.target.files") {
-        const filesItem = itemsById.get("files");
-        if (!filesItem) return false;
-        filesItem.launch({ kind: "replace", tabId });
+        itemsById.get("files")?.launch({ kind: "replace", tabId });
         return true;
       }
       return false;
@@ -230,13 +206,11 @@ const NewTabPanel = memo(function NewTabPanel(): ReactElement {
     actions: [
       "workspace.agent.new",
       "workspace.terminal.new",
-      "workspace.browser.new",
       "workspace.tab.target.agent",
-      "workspace.tab.target.browser",
       "workspace.tab.target.changes",
       "workspace.tab.target.files",
     ],
-    enabled: handlesWorkspaceShortcuts,
+    enabled: isInteractive,
     priority: 250,
     handle: handleKeyboardAction,
   });
@@ -269,10 +243,12 @@ const NewTabPanel = memo(function NewTabPanel(): ReactElement {
   );
 });
 
-export const newTabPanelRegistration = definePanel("new_tab", {
+export const newTabPanelRegistration: PanelRegistration<"new_tab"> = {
+  kind: "new_tab",
+  resourceKey: () => "new_tab",
   component: NewTabPanel,
   useDescriptor: useNewTabDescriptor,
-});
+};
 
 const styles = StyleSheet.create((theme) => ({
   container: {
@@ -309,13 +285,18 @@ const styles = StyleSheet.create((theme) => ({
   rowFocused: { borderColor: theme.colors.borderAccent },
   rowPressed: { opacity: 0.85 },
   rowLabel: { flex: 1, color: theme.colors.foreground },
-  // The section header shares the launcher rows' outer rails. The pencil's own
-  // padding is subtracted so its glyph — not its hover box — lands on the right rail.
+  // The rows below establish both rails at `spacing[3] + borderWidth[1]`: their icon
+  // glyphs on the left, their shortcut badges on the right. The label sits on the
+  // first directly; the pencil's own padding is subtracted so its glyph — not its
+  // hover box — lands on the second.
   groupHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 2,
+    paddingLeft: theme.spacing[3] + theme.borderWidth[1],
+    // Optical: the pencil's stroke stops short of its own box, so the box rail
+    // needs a pixel back to put the ink on the rows' trailing rail.
+    paddingRight: theme.spacing[3] + theme.borderWidth[1] + 3,
     marginBottom: theme.spacing[1],
   },
   groupLabel: {

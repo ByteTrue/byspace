@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { AgentModelDefinition, ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
-import type { AgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
+import type {
+  AgentModelDefinition,
+  ProviderSnapshotEntry,
+} from "@bytetrue/byspace-protocol/agent-types";
+import type { AgentProviderDefinition } from "@bytetrue/byspace-protocol/provider-manifest";
 import { i18n } from "@/i18n/i18next";
 import {
   buildProviderQualifiedDescription,
@@ -291,25 +294,6 @@ describe("combined model selector data", () => {
         isLoading: false,
       }),
     ).toBe("Default");
-  });
-
-  it("distinguishes a loading selection from a resolved empty selection", () => {
-    expect(
-      resolveSelectedModelLabel({
-        providers: [],
-        selectedProvider: "",
-        selectedModel: "",
-        isLoading: true,
-      }),
-    ).toBe("Loading...");
-    expect(
-      resolveSelectedModelLabel({
-        providers: [],
-        selectedProvider: "",
-        selectedModel: "",
-        isLoading: false,
-      }),
-    ).toBe("Select model");
   });
 
   it("keeps a stored selected model visible when current snapshot rows no longer offer it", () => {

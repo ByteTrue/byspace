@@ -1,10 +1,5 @@
 import type { OpenCodeServerAcquisition, OpenCodeServerManagerLike } from "./server-manager.js";
 
-const events = {
-  ready: async () => undefined,
-  subscribe: () => () => undefined,
-};
-
 export interface TestOpenCodeServerAcquisition {
   kind: "current" | "new" | "dedicated" | "existing";
   env?: Record<string, string>;
@@ -15,6 +10,12 @@ export interface TestOpenCodeServerAcquisition {
 export class TestOpenCodeServerManager implements OpenCodeServerManagerLike {
   readonly acquisitions: TestOpenCodeServerAcquisition[] = [];
   readonly server = { port: 1234, url: "http://127.0.0.1:1234" };
+  ensureRunningCount = 0;
+
+  async ensureRunning(): Promise<{ port: number; url: string }> {
+    this.ensureRunningCount += 1;
+    return this.server;
+  }
 
   async acquireCurrent(): Promise<OpenCodeServerAcquisition> {
     return this.recordAcquisition({ kind: "current" });
@@ -46,7 +47,7 @@ export class TestOpenCodeServerManager implements OpenCodeServerManagerLike {
     this.acquisitions.push(acquisition);
     return {
       server: this.server,
-      events,
+      events: { ready: async () => undefined, subscribe: () => () => undefined },
       release: async () => {
         acquisition.released = true;
       },

@@ -1,13 +1,11 @@
 import { useCallback, useMemo } from "react";
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import type { AgentProvider, ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import type { AgentProvider, ProviderSnapshotEntry } from "@bytetrue/byspace-protocol/agent-types";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { useReplicaQuery } from "@/data/query";
-import { queryClient as singletonQueryClient } from "@/data/query-client";
 import {
   providerSnapshotCache,
   ProviderSnapshotCacheMissError,
@@ -129,11 +127,10 @@ export function useProvidersSnapshot(
   options: UseProvidersSnapshotOptions = {},
 ): UseProvidersSnapshotResult {
   const { t } = useTranslation();
-  const retainedPanelActive = useRetainedPanelActive();
   const queryClient = useQueryClient();
   const client = useHostRuntimeClient(serverId ?? "");
-  const enabled = (options.enabled ?? true) && retainedPanelActive;
   const isConnected = useHostRuntimeIsConnected(serverId ?? "");
+  const enabled = options.enabled ?? true;
   const cwd = normalizeProvidersSnapshotCwd(options.cwd);
   const supportsSnapshot = useSessionStore(
     (state) => state.sessions[serverId ?? ""]?.serverInfo?.features?.providersSnapshot === true,
@@ -201,18 +198,4 @@ export function useProvidersSnapshot(
     refresh,
     refetchIfStale,
   };
-}
-
-export function prefetchProvidersSnapshot(
-  serverId: string,
-  client: DaemonClient,
-  options: { cwd?: string | null } = {},
-): void {
-  const cwd = normalizeProvidersSnapshotCwd(options.cwd);
-  const queryKey = providersSnapshotQueryKey(serverId, cwd);
-  void singletonQueryClient.prefetchQuery({
-    queryKey,
-    staleTime: Infinity,
-    queryFn: () => fetchProvidersSnapshot({ client, serverId, cwd }),
-  });
 }

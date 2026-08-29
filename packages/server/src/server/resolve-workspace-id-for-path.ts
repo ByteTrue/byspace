@@ -7,8 +7,7 @@ import type { PersistedWorkspaceRecord } from "./workspace-registry.js";
 //
 // Resolves a raw filesystem path to a single workspace id ONLY at the boundary
 // where a client hands the daemon a bare worktree path with no id:
-// archive-by-path (old client / CLI), auto-archive-after-merge, and the MCP
-// `archive_worktree` tool. It is NEVER used to attribute agent status or place
+// archive-by-path (old client / CLI) and auto-archive-after-merge. It is NEVER used to attribute agent status or place
 // agents under a workspace — those are keyed by `workspaceId`, and git facts
 // derive from a workspace's OWN cwd (id → cwd).
 //

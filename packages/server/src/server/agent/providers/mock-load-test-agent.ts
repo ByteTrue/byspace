@@ -31,7 +31,7 @@ import type {
   ToolCallTimelineItem,
 } from "../agent-sdk-types.js";
 import { importSessionFromPersistence } from "../provider-session-import.js";
-import { getAgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
+import { getAgentProviderDefinition } from "@bytetrue/byspace-protocol/provider-manifest";
 
 export const MOCK_LOAD_TEST_PROVIDER_ID = "mock";
 export const MOCK_LOAD_TEST_DEFAULT_MODEL_ID = "five-minute-stream";
@@ -129,17 +129,6 @@ const MODELS: AgentModelDefinition[] = [
     metadata: {
       durationMs: 10_000,
       intervalMs: 5,
-    },
-  },
-  {
-    provider: MOCK_LOAD_TEST_PROVIDER_ID,
-    id: "e2e-fast-stream",
-    label: "E2E fast stream",
-    description: "Short deterministic stream for browser tests.",
-    isSelectable: false,
-    metadata: {
-      durationMs: 2_000,
-      intervalMs: 20,
     },
   },
 ];
@@ -557,7 +546,7 @@ function buildCycleQueue(turnId: string, cycle: number): CycleEvent[] {
   const shellDetail: ToolCallDetail = {
     type: "shell",
     command: "node scripts/simulate-stream-burst.mjs",
-    cwd: "/tmp/paseo-mock-load",
+    cwd: "/tmp/byspace-mock-load",
     output:
       "[burst] tick 1 userIsAtBottom=true\n[burst] tick 2 userIsAtBottom=true\n[burst] drag-start isDragging=true\n[burst] tick 3 suppressed\n[burst] drag-end isDragging=false\n",
     exitCode: 0,
@@ -669,10 +658,8 @@ export class MockLoadTestAgentSession implements AgentSession {
   private pendingPermissions = new Map<string, AgentPermissionRequest>();
   private modeId: string | null;
   private modelId: string | null;
-  private readonly assistantResponse: string | null;
-  private readonly streamingAssistantResponse: string | null;
-  private readonly streamingAssistantIntervalMs: number;
   private readonly rewindError: string | null;
+  private readonly assistantResponse: string | null;
   private remainingPromptRejections: number;
   private remainingSteerFailures: number;
 
@@ -681,25 +668,13 @@ export class MockLoadTestAgentSession implements AgentSession {
     this.logger = options.logger;
     this.modeId = options.config.modeId ?? MOCK_LOAD_TEST_MODE_ID;
     this.modelId = options.config.model ?? MOCK_LOAD_TEST_DEFAULT_MODEL_ID;
-    this.assistantResponse =
-      typeof options.config.featureValues?.mockAssistantResponse === "string"
-        ? options.config.featureValues.mockAssistantResponse
-        : null;
-    this.streamingAssistantResponse =
-      typeof options.config.featureValues?.mockStreamingAssistantResponse === "string"
-        ? options.config.featureValues.mockStreamingAssistantResponse
-        : null;
-    const requestedStreamingInterval =
-      options.config.featureValues?.mockStreamingAssistantIntervalMs;
-    this.streamingAssistantIntervalMs =
-      typeof requestedStreamingInterval === "number" &&
-      Number.isFinite(requestedStreamingInterval) &&
-      requestedStreamingInterval >= 1
-        ? Math.min(requestedStreamingInterval, 1_000)
-        : MOCK_LOAD_TEST_INTERVAL_MS;
     this.rewindError =
       typeof options.config.featureValues?.mockRewindError === "string"
         ? options.config.featureValues.mockRewindError
+        : null;
+    this.assistantResponse =
+      typeof options.config.featureValues?.mockAssistantResponse === "string"
+        ? options.config.featureValues.mockAssistantResponse
         : null;
     const requestedPromptRejections = options.config.featureValues?.mockPromptRejections;
     this.remainingPromptRejections =
@@ -768,10 +743,6 @@ export class MockLoadTestAgentSession implements AgentSession {
         this.scheduleFailedTurn(turn);
       } else if (steeringReplayShape) {
         this.scheduleSteeringReplayTurn(turn, steeringReplayShape);
-      } else if (this.streamingAssistantResponse !== null) {
-        this.scheduleStreamingAssistantTurn(turn, this.streamingAssistantResponse);
-      } else if (this.assistantResponse !== null) {
-        this.scheduleSettledAssistantTurn(turn, this.assistantResponse);
       } else if (structuredBranchName) {
         this.scheduleSettledAssistantTurn(turn, JSON.stringify(structuredBranchName));
       } else if (settledAssistantImageMarkdown) {
@@ -784,6 +755,8 @@ export class MockLoadTestAgentSession implements AgentSession {
         this.scheduleLargePayloadTurn(turn, largePayload);
       } else if (stress) {
         this.scheduleStressTurn(turn, stress);
+      } else if (this.assistantResponse) {
+        this.scheduleSettledAssistantTurn(turn, this.assistantResponse);
       } else {
         this.schedule(turn, 0);
       }
@@ -961,20 +934,6 @@ export class MockLoadTestAgentSession implements AgentSession {
     });
   }
 
-  async steerActiveTurn(
-    _prompt: AgentPromptInput,
-    options: SteerActiveTurnOptions,
-  ): Promise<SteerResult> {
-    if (this.activeTurn?.turnId !== options.expectedTurnId) {
-      return { status: "unavailable" };
-    }
-    if (this.remainingSteerFailures > 0) {
-      this.remainingSteerFailures -= 1;
-      throw new Error("Requested mock steer transport failure");
-    }
-    return { status: "accepted" };
-  }
-
   async close(): Promise<void> {
     await this.interrupt();
     this.listeners.clear();
@@ -1001,6 +960,20 @@ export class MockLoadTestAgentSession implements AgentSession {
     this.modelId = modelId ?? MOCK_LOAD_TEST_DEFAULT_MODEL_ID;
   }
 
+  async steerActiveTurn(
+    _prompt: AgentPromptInput,
+    options: SteerActiveTurnOptions,
+  ): Promise<SteerResult> {
+    if (this.activeTurn?.turnId !== options.expectedTurnId) {
+      return { status: "unavailable" };
+    }
+    if (this.remainingSteerFailures > 0) {
+      this.remainingSteerFailures -= 1;
+      throw new Error("Requested mock steer transport failure");
+    }
+    return { status: "accepted" };
+  }
+
   private schedule(turn: ActiveTurn, delayMs: number): void {
     turn.timer = setTimeout(() => {
       this.tick(turn);
@@ -1018,6 +991,52 @@ export class MockLoadTestAgentSession implements AgentSession {
       provider: this.provider,
       turnId: turn.turnId,
     });
+  }
+
+  private scheduleSteeringReplayTurn(turn: ActiveTurn, shape: SteeringReplayShape): void {
+    turn.timer = setTimeout(() => {
+      if (this.activeTurn !== turn) return;
+      this.clearTurnTimer(turn);
+      this.emitTurnStarted(turn);
+      if (shape === "codex") {
+        this.emitTimeline(turn.turnId, {
+          type: "assistant_message",
+          text: "Running the foreground command.",
+          messageId: turn.assistantMessageId,
+        });
+      }
+      const callId = `${turn.turnId}:steering-replay-shell`;
+      const detail: ToolCallDetail = {
+        type: "shell",
+        command: "sleep 5",
+        cwd: "/tmp/byspace-mock-load",
+      };
+      this.emitTimeline(
+        turn.turnId,
+        createToolCall({ callId, name: "bash", status: "running", detail }),
+      );
+      turn.timer = setTimeout(() => {
+        if (this.activeTurn !== turn) return;
+        this.clearTurnTimer(turn);
+        this.emitTimeline(
+          turn.turnId,
+          createToolCall({
+            callId,
+            name: "bash",
+            status: "completed",
+            detail: { ...detail, output: "", exitCode: 0 },
+          }),
+        );
+        this.emitTimeline(turn.turnId, {
+          type: "assistant_message",
+          text: "Foreground command completed after steering.",
+          messageId: turn.assistantMessageId,
+        });
+        this.finishTurnWithText(turn, "Foreground command completed after steering.");
+      }, 5_000);
+      turn.timer.unref?.();
+    }, 0);
+    turn.timer.unref?.();
   }
 
   private failConfiguredRewind(): void {
@@ -1072,52 +1091,6 @@ export class MockLoadTestAgentSession implements AgentSession {
     turn.timer.unref?.();
   }
 
-  private scheduleSteeringReplayTurn(turn: ActiveTurn, shape: SteeringReplayShape): void {
-    turn.timer = setTimeout(() => {
-      if (this.activeTurn !== turn) return;
-      this.clearTurnTimer(turn);
-      this.emitTurnStarted(turn);
-      if (shape === "codex") {
-        this.emitTimeline(turn.turnId, {
-          type: "assistant_message",
-          text: "Running the foreground command.",
-          messageId: turn.assistantMessageId,
-        });
-      }
-      const callId = `${turn.turnId}:steering-replay-shell`;
-      const detail: ToolCallDetail = {
-        type: "shell",
-        command: "sleep 5",
-        cwd: "/tmp/paseo-mock-load",
-      };
-      this.emitTimeline(
-        turn.turnId,
-        createToolCall({ callId, name: "bash", status: "running", detail }),
-      );
-      turn.timer = setTimeout(() => {
-        if (this.activeTurn !== turn) return;
-        this.clearTurnTimer(turn);
-        this.emitTimeline(
-          turn.turnId,
-          createToolCall({
-            callId,
-            name: "bash",
-            status: "completed",
-            detail: { ...detail, output: "", exitCode: 0 },
-          }),
-        );
-        this.emitTimeline(turn.turnId, {
-          type: "assistant_message",
-          text: "Foreground command completed after steering.",
-          messageId: turn.assistantMessageId,
-        });
-        this.finishTurnWithText(turn, "Foreground command completed after steering.");
-      }, 5_000);
-      turn.timer.unref?.();
-    }, 0);
-    turn.timer.unref?.();
-  }
-
   private scheduleStressTurn(turn: ActiveTurn, stress: AgentStreamStressRequest): void {
     turn.timer = setTimeout(() => {
       this.emitStressTurn(turn, stress);
@@ -1146,32 +1119,6 @@ export class MockLoadTestAgentSession implements AgentSession {
     turn.timer = setTimeout(() => {
       this.emitSettledAssistantTurn(turn, finalText);
     }, 0);
-    turn.timer.unref?.();
-  }
-
-  private scheduleStreamingAssistantTurn(turn: ActiveTurn, finalText: string): void {
-    const tokens = tokenize(finalText);
-    const emitNext = () => {
-      if (this.activeTurn !== turn) {
-        return;
-      }
-      this.clearTurnTimer(turn);
-      this.emitTurnStarted(turn);
-      const token = tokens.shift();
-      if (token === undefined) {
-        this.finishTurnWithText(turn, finalText);
-        return;
-      }
-      turn.emittedTokens += 1;
-      this.emitTimeline(turn.turnId, {
-        type: "assistant_message",
-        text: token,
-        messageId: turn.assistantMessageId,
-      });
-      turn.timer = setTimeout(emitNext, this.streamingAssistantIntervalMs);
-      turn.timer.unref?.();
-    };
-    turn.timer = setTimeout(emitNext, 0);
     turn.timer.unref?.();
   }
 

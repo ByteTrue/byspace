@@ -38,12 +38,9 @@ describe("persistence hooks", () => {
           sandbox_mode: "workspace-write",
           sandbox_workspace_write: { writable_roots: ["/tmp/shared"] },
         },
-        toolPolicy: {
-          preapproved: [{ kind: "mcp", server: "paseo", tool: "report_status" }],
-        },
         systemPrompt: "Use speak first.",
         mcpServers: {
-          paseo: {
+          byspace: {
             type: "stdio",
             command: "node",
             args: ["/tmp/bridge.mjs", "--socket", "/tmp/agent.sock"],
@@ -61,12 +58,9 @@ describe("persistence hooks", () => {
         sandbox_mode: "workspace-write",
         sandbox_workspace_write: { writable_roots: ["/tmp/shared"] },
       },
-      toolPolicy: {
-        preapproved: [{ kind: "mcp", server: "paseo", tool: "report_status" }],
-      },
       systemPrompt: "Use speak first.",
       mcpServers: {
-        paseo: {
+        byspace: {
           type: "stdio",
           command: "node",
           args: ["/tmp/bridge.mjs", "--socket", "/tmp/agent.sock"],
@@ -83,7 +77,7 @@ describe("persistence hooks", () => {
         model: "gpt-5.4-mini",
         systemPrompt: "Confirm and speak first.",
         mcpServers: {
-          paseo: {
+          byspace: {
             type: "stdio",
             command: "node",
             args: ["/tmp/bridge.mjs", "--socket", "/tmp/agent.sock"],
@@ -99,7 +93,7 @@ describe("persistence hooks", () => {
       model: "gpt-5.4-mini",
       systemPrompt: "Confirm and speak first.",
       mcpServers: {
-        paseo: {
+        byspace: {
           type: "stdio",
           command: "node",
           args: ["/tmp/bridge.mjs", "--socket", "/tmp/agent.sock"],
@@ -108,15 +102,15 @@ describe("persistence hooks", () => {
     });
   });
 
-  test("buildConfigOverrides drops persisted internal paseo MCP server", () => {
+  test("buildConfigOverrides preserves an explicitly configured BySpace MCP endpoint", () => {
     const record = createRecord({
       config: {
         modeId: "default",
         model: "gpt-5.4-mini",
         mcpServers: {
-          paseo: {
+          byspace: {
             type: "http",
-            url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=stale-agent",
+            url: "http://127.0.0.1:6777/mcp/agents?callerAgentId=configured-agent",
           },
           custom: {
             type: "stdio",
@@ -126,32 +120,27 @@ describe("persistence hooks", () => {
       },
     });
 
-    expect(buildConfigOverrides(record).mcpServers).toEqual({
-      custom: {
-        type: "stdio",
-        command: "custom-mcp",
-      },
-    });
+    expect(buildConfigOverrides(record).mcpServers).toEqual(record.config?.mcpServers);
   });
 
-  test("buildConfigOverrides preserves user-provided paseo MCP server", () => {
+  test("buildConfigOverrides preserves user-provided byspace MCP server", () => {
     const record = createRecord({
       config: {
         modeId: "default",
         model: "gpt-5.4-mini",
         mcpServers: {
-          paseo: {
+          byspace: {
             type: "http",
-            url: "https://example.com/custom-paseo",
+            url: "https://example.com/custom-byspace",
           },
         },
       },
     });
 
     expect(buildConfigOverrides(record).mcpServers).toEqual({
-      paseo: {
+      byspace: {
         type: "http",
-        url: "https://example.com/custom-paseo",
+        url: "https://example.com/custom-byspace",
       },
     });
   });

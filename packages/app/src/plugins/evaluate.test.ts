@@ -77,22 +77,13 @@ describe("evaluatePluginClientBundle", () => {
     );
 
     expect(
-      plugin.workspacePanels.map(({ id, title, icon, context, locations }) => ({
+      plugin.workspacePanels.map(({ id, title, icon, context }) => ({
         id,
         title,
         icon,
         context,
-        locations,
       })),
-    ).toEqual([
-      {
-        id: "review",
-        title: "Review",
-        icon: "Scan",
-        context: "agent",
-        locations: ["workspace"],
-      },
-    ]);
+    ).toEqual([{ id: "review", title: "Review", icon: "Scan", context: "agent" }]);
     expect(
       plugin.commandCenterItems.map(({ id, title, icon, context }) => ({
         id,
@@ -101,47 +92,6 @@ describe("evaluatePluginClientBundle", () => {
         context,
       })),
     ).toEqual([{ id: "open-review", title: "Open review", icon: "Scan", context: "agent" }]);
-  });
-
-  it("normalizes and validates workspace panel locations", () => {
-    const plugin = evaluatePluginClientBundle(
-      "review",
-      bundle(`
-        function ReviewPanel() { return null; }
-        plugin.addWorkspacePanel({
-          id: "review",
-          title: "Review",
-          icon: "Scan",
-          context: "agent",
-          locations: ["workspace", "explorer"],
-          Component: ReviewPanel,
-        });
-      `),
-    );
-    expect(plugin.workspacePanels[0]?.locations).toEqual(["workspace", "explorer"]);
-
-    for (const [locations, message] of [
-      ["[]", "must support at least one location"],
-      ['["sidebar"]', "has invalid location: sidebar"],
-      ['["explorer", "explorer"]', "has duplicate locations"],
-    ] as const) {
-      expect(() =>
-        evaluatePluginClientBundle(
-          "review",
-          bundle(`
-            function ReviewPanel() { return null; }
-            plugin.addWorkspacePanel({
-              id: "review",
-              title: "Review",
-              icon: "Scan",
-              context: "agent",
-              locations: ${locations},
-              Component: ReviewPanel,
-            });
-          `),
-        ),
-      ).toThrow(message);
-    }
   });
 
   it("rejects duplicate workspace panel and Command Center ids", () => {
@@ -290,11 +240,24 @@ describe("evaluatePluginClientBundle", () => {
     ).toThrow("must return a cleanup function");
   });
 
-  it("resolves @getpaseo/plugin/server for shared RPC contracts", () => {
+  it("resolves the public @bytetrue/byspace/plugin SDK specifier", () => {
     const plugin = evaluatePluginClientBundle(
       "example",
       `(function(require) {
-        const { defineRpc, defineAttachmentSource } = require("@getpaseo/plugin/server");
+        const { defineRpc } = require("@bytetrue/byspace/plugin");
+        defineRpc({ name: "example.run", input: {}, output: {} });
+        return { default: function() { return function() {}; } };
+      })`,
+    );
+
+    expect(plugin.id).toBe("example");
+  });
+
+  it("resolves @bytetrue/byspace/plugin/server for shared RPC contracts", () => {
+    const plugin = evaluatePluginClientBundle(
+      "example",
+      `(function(require) {
+        const { defineRpc, defineAttachmentSource } = require("@bytetrue/byspace/plugin/server");
         const search = defineRpc({ name: "issues.search", input: {}, output: {} });
         const module = { exports: {} };
         module.exports.default = function(plugin) {

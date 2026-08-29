@@ -42,51 +42,19 @@ describe("canonical CLI surface", () => {
     expect(help).toContain("--forge <forge>");
   });
 
+  it("exposes agent-owned heartbeat management", () => {
+    const heartbeat = createCli().commands.find((command) => command.name() === "heartbeat");
+    expect(heartbeat?.commands.map((command) => command.name())).toEqual([
+      "create",
+      "update",
+      "delete",
+    ]);
+    expect(heartbeat?.helpInformation()).toContain("Manage this agent's heartbeats");
+  });
+
   it("uses background for execution and reserves detach for ownership", () => {
     const run = createCli().commands.find((command) => command.name() === "run");
     expect(run?.helpInformation()).toContain("--background");
     expect(run?.helpInformation()).not.toContain("--detach");
-  });
-
-  it("offers thinking configuration when running, updating, and scheduling agents", () => {
-    const cli = createCli();
-    const run = cli.commands.find((command) => command.name() === "run");
-    const agent = cli.commands.find((command) => command.name() === "agent");
-    const update = agent?.commands.find((command) => command.name() === "update");
-    const schedule = cli.commands.find((command) => command.name() === "schedule");
-    const scheduleCreate = schedule?.commands.find((command) => command.name() === "create");
-
-    expect(run?.helpInformation()).toContain("--thinking <id>");
-    expect(update?.helpInformation()).toContain("--thinking <id>");
-    expect(scheduleCreate?.helpInformation()).toContain("--thinking <id>");
-  });
-
-  it("offers opening an existing agent in the desktop app", () => {
-    const agent = createCli().commands.find((command) => command.name() === "agent");
-    const open = agent?.commands.find((command) => command.name() === "open");
-
-    expect(open?.helpInformation()).toContain("<agent-id>");
-    expect(open?.helpInformation()).toContain("--server <server-id>");
-  });
-
-  it("offers the complete local plugin lifecycle", () => {
-    const plugin = createCli().commands.find((command) => command.name() === "plugin");
-
-    expect(plugin?.commands.map((command) => command.name())).toEqual([
-      "init",
-      "ls",
-      "logs",
-      "install",
-      "reload",
-      "enable",
-      "disable",
-      "remove",
-    ]);
-    expect(
-      plugin?.commands.find((command) => command.name() === "init")?.helpInformation(),
-    ).toContain("--id <id>");
-    expect(
-      plugin?.commands.find((command) => command.name() === "install")?.helpInformation(),
-    ).toContain("--id <id>");
   });
 });

@@ -2,13 +2,14 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Text, View, type PressableStateCallbackType } from "react-native";
+import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ChevronDown, Monitor, Moon, Sun } from "lucide-react-native";
 import {
   SYNTAX_THEME_OPTIONS,
   type SyntaxThemeId,
   type SyntaxThemeOption,
-} from "@getpaseo/highlight";
+} from "@bytetrue/byspace-highlight";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,7 +20,6 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { useContributedThemes } from "@/appearance/provider";
-import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import {
   MAX_CODE_FONT_SIZE,
   MAX_CONTENT_FONT_SIZE,
@@ -622,12 +622,12 @@ export function AppearanceSection() {
     setUiBaseSizeDraft(value.replace(/[^\d]/g, ""));
   }, []);
 
-  const handleCodeSizeChange = useCallback((value: string) => {
-    setCodeSizeDraft(value.replace(/[^\d]/g, ""));
-  }, []);
-
   const handleContentSizeChange = useCallback((value: string) => {
     setContentSizeDraft(value.replace(/[^\d]/g, ""));
+  }, []);
+
+  const handleCodeSizeChange = useCallback((value: string) => {
+    setCodeSizeDraft(value.replace(/[^\d]/g, ""));
   }, []);
 
   const commitUiBaseSize = useCallback(() => {
@@ -642,18 +642,6 @@ export function AppearanceSection() {
     }
   }, [settings.uiBaseFontSize, uiBaseSizeDraft, updateSettings]);
 
-  const commitCodeSize = useCallback(() => {
-    const parsed = parseClampedFontSize(codeSizeDraft, {
-      min: MIN_CODE_FONT_SIZE,
-      max: MAX_CODE_FONT_SIZE,
-    });
-    const next = parsed ?? settings.codeFontSize;
-    setCodeSizeDraft(String(next));
-    if (next !== settings.codeFontSize) {
-      void updateSettings({ codeFontSize: next });
-    }
-  }, [codeSizeDraft, settings.codeFontSize, updateSettings]);
-
   const commitContentSize = useCallback(() => {
     const parsed = parseClampedFontSize(contentSizeDraft, {
       min: MIN_CONTENT_FONT_SIZE,
@@ -665,6 +653,18 @@ export function AppearanceSection() {
       void updateSettings({ contentFontSize: next });
     }
   }, [contentSizeDraft, settings.contentFontSize, updateSettings]);
+
+  const commitCodeSize = useCallback(() => {
+    const parsed = parseClampedFontSize(codeSizeDraft, {
+      min: MIN_CODE_FONT_SIZE,
+      max: MAX_CODE_FONT_SIZE,
+    });
+    const next = parsed ?? settings.codeFontSize;
+    setCodeSizeDraft(String(next));
+    if (next !== settings.codeFontSize) {
+      void updateSettings({ codeFontSize: next });
+    }
+  }, [codeSizeDraft, settings.codeFontSize, updateSettings]);
 
   // Live-while-typing: the in-progress drafts drive the preview without
   // committing to the global theme. Empty/invalid fields fall back to the
@@ -741,17 +741,19 @@ export function AppearanceSection() {
             onChangeDraft={handleContentSizeChange}
             onCommit={commitContentSize}
           />
-          <FontFamilyRow
-            title={t("settings.appearance.fonts.codeFont")}
-            hint={t("settings.appearance.fonts.codeFontHint")}
-            accessibilityLabel={t("settings.appearance.fonts.codeFontAccessibility")}
-            placeholder={monoFontPlaceholder}
-            value={settings.monoFontFamily}
-            draft={monoFontDraft}
-            withBorder
-            onChangeDraft={setMonoFontDraft}
-            onCommit={commitMonoFontFamily}
-          />
+          {showInterfaceFontFamilyRow ? (
+            <FontFamilyRow
+              title={t("settings.appearance.fonts.codeFont")}
+              hint={t("settings.appearance.fonts.codeFontHint")}
+              accessibilityLabel={t("settings.appearance.fonts.codeFontAccessibility")}
+              placeholder={monoFontPlaceholder}
+              value={settings.monoFontFamily}
+              draft={monoFontDraft}
+              withBorder
+              onChangeDraft={setMonoFontDraft}
+              onCommit={commitMonoFontFamily}
+            />
+          ) : null}
           <FontSizeRow
             title={t("settings.appearance.fonts.codeSize")}
             hint={t("settings.appearance.fonts.codeSizeHint")}

@@ -1,3 +1,4 @@
+import type { BySpaceServicePortAllocation } from "@bytetrue/byspace-protocol/byspace-config-schema";
 import type pino from "pino";
 import type {
   SessionOutboundMessage,
@@ -22,22 +23,12 @@ import type {
 } from "../../worktree-bootstrap.js";
 import {
   buildWorkspaceScriptPayloads,
-  readPaseoConfigForProjection,
+  readBySpaceConfigForProjection,
 } from "../../script-status-projection.js";
 import { deriveProjectServiceSlug, deriveProjectSlug } from "../../workspace-git-metadata.js";
-import type { PaseoServicePortAllocation } from "@getpaseo/protocol/paseo-config-schema";
 
 type WorkspaceScriptsPayload = WorkspaceDescriptorPayload["scripts"];
 
-/**
- * The service-proxy-backed scripts a workspace exposes: build the scripts payload
- * snapshot, emit a script_status_update to clients, and start a script.
- *
- * The workspace descriptor builder, the script-status emission path, and the
- * start-script RPC all funnel through one assembly of buildWorkspaceScriptPayloads'
- * inputs and one "scripts available on this daemon?" guard, instead of duplicating
- * that assembly and guard across the session.
- */
 export interface WorkspaceScriptsService {
   buildSnapshot(
     workspace: PersistedWorkspaceRecord,
@@ -63,7 +54,7 @@ export function createWorkspaceScriptsService(deps: {
   getDaemonTcpHost: (() => string | null) | null;
   serviceProxyPublicBaseUrl: string | null;
   resolveScriptHealth: ((hostname: string) => ScriptHealthState | null) | null;
-  globalServicePorts?: PaseoServicePortAllocation;
+  globalServicePorts?: BySpaceServicePortAllocation;
   logger: pino.Logger;
   emit: (message: SessionOutboundMessage) => void;
   spawnWorkspaceScript: (options: SpawnWorkspaceScriptOptions) => Promise<WorktreeScriptResult>;
@@ -116,7 +107,7 @@ export function createWorkspaceScriptsService(deps: {
     return buildWorkspaceScriptPayloads({
       workspaceId: workspace.workspaceId,
       workspaceDirectory: workspace.cwd,
-      paseoConfig: readPaseoConfigForProjection(workspace.cwd, logger),
+      byspaceConfig: readBySpaceConfigForProjection(workspace.cwd, logger),
       serviceProxy,
       runtimeStore: scriptRuntimeStore,
       daemonPort: getDaemonTcpPort?.() ?? null,
@@ -169,6 +160,9 @@ export function createWorkspaceScriptsService(deps: {
   async function launchProcess(input: { workspaceId: string; scriptName: string }) {
     const available = requireAvailable();
     const workspace = await getWorkspace(input.workspaceId);
+    if (workspace.archivedAt) {
+      throw new Error(`Workspace is archived: ${input.workspaceId}`);
+    }
     const project = await projectRegistry.get(workspace.projectId);
     const gitMetadata = resolveGitMetadata(workspace, project);
     const result = await spawnWorkspaceScript({
@@ -222,7 +216,6 @@ export function createWorkspaceScriptsService(deps: {
       throw new Error(`Terminal for script '${input.scriptName}' is no longer available`);
     }
 
-    // The launcher's terminal exit listener owns route removal and runtime state updates.
     await available.terminalManager.killTerminalAndWait(runtime.terminalId);
 
     const script = buildSnapshot(workspace, project).find(

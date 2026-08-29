@@ -10,7 +10,7 @@ export interface ExplorerTreeRow {
 }
 
 interface FlattenExplorerTreeInput {
-  directories: ReadonlyMap<string, ExplorerDirectory>;
+  directories: ReadonlyMap<string, unknown>;
   expandedPaths: ReadonlySet<string>;
   sortOption: SortOption;
   showHiddenFiles: boolean;
@@ -42,6 +42,19 @@ interface SetExpandedDirectoryPathInput {
   expanded: boolean;
 }
 
+export function normalizeExpandedPaths(value: unknown): string[] {
+  const paths = new Set<string>(["."]);
+  if (!Array.isArray(value)) {
+    return Array.from(paths);
+  }
+  for (const path of value) {
+    if (typeof path === "string" && path.length > 0) {
+      paths.add(path);
+    }
+  }
+  return Array.from(paths);
+}
+
 export function flattenExplorerTree({
   directories,
   expandedPaths,
@@ -49,12 +62,13 @@ export function flattenExplorerTree({
   showHiddenFiles,
 }: FlattenExplorerTreeInput): ExplorerTreeRow[] {
   const root = directories.get(".");
-  if (!root) {
+  if (!isExplorerDirectory(root)) {
     return [];
   }
 
   const rows: ExplorerTreeRow[] = [];
-  const pending = rowsForDirectory(root, 0, sortOption, showHiddenFiles).toReversed();
+  const seenPaths = new Set<string>(["."]);
+  const pending = rowsForDirectory(root, 0, sortOption, showHiddenFiles, seenPaths).toReversed();
 
   while (pending.length > 0) {
     const row = pending.pop();
@@ -68,12 +82,21 @@ export function flattenExplorerTree({
       continue;
     }
     const childDirectory = directories.get(entry.path);
-    if (!childDirectory) {
+    if (!isExplorerDirectory(childDirectory) || childDirectory.path !== entry.path) {
       continue;
     }
-    const childRows = rowsForDirectory(childDirectory, row.depth + 1, sortOption, showHiddenFiles);
+    const childRows = rowsForDirectory(
+      childDirectory,
+      row.depth + 1,
+      sortOption,
+      showHiddenFiles,
+      seenPaths,
+    );
     for (let index = childRows.length - 1; index >= 0; index -= 1) {
-      pending.push(childRows[index]);
+      const childRow = childRows[index];
+      if (childRow) {
+        pending.push(childRow);
+      }
     }
   }
 
@@ -86,6 +109,10 @@ export async function restoreExpandedDirectories({
   showHiddenFiles,
   requestDirectoryListing,
 }: RestoreExpandedDirectoriesInput): Promise<string[]> {
+  if (!isExplorerDirectory(rootDirectory)) {
+    return ["."];
+  }
+
   const restoredPaths = ["."];
   const restoredPathSet = new Set(restoredPaths);
   let parentDirectories = [rootDirectory];
@@ -93,11 +120,10 @@ export async function restoreExpandedDirectories({
   for (let depth = 1; depth <= MAX_AUTO_EXPANDED_DIRECTORY_DEPTH; depth += 1) {
     const pathsToRequest: string[] = [];
     for (const directory of parentDirectories) {
-      const entries = filterVisibleExplorerEntries(directory.entries, showHiddenFiles);
+      const entries = visibleEntries(directory, showHiddenFiles);
       for (const entry of entries) {
-        const isPersistedExpandedDirectory =
-          entry.kind === "directory" && persistedExpandedPaths.has(entry.path);
-        if (isPersistedExpandedDirectory && !restoredPathSet.has(entry.path)) {
+        const shouldRestore = entry.kind === "directory" && persistedExpandedPaths.has(entry.path);
+        if (shouldRestore && !restoredPathSet.has(entry.path)) {
           pathsToRequest.push(entry.path);
           restoredPathSet.add(entry.path);
         }
@@ -108,14 +134,21 @@ export async function restoreExpandedDirectories({
     }
 
     const requestedDirectories = await Promise.all(
-      pathsToRequest.map((path) => requestDirectoryListing(path)),
+      pathsToRequest.map(async (path) => ({
+        path,
+        directory: await requestDirectoryListing(path),
+      })),
     );
     parentDirectories = [];
-    for (const directory of requestedDirectories) {
-      if (!directory) {
+    for (const { path, directory } of requestedDirectories) {
+      if (directory === null) {
+        restoredPaths.push(path);
         continue;
       }
-      restoredPaths.push(directory.path);
+      if (!isExplorerDirectory(directory) || directory.path !== path) {
+        continue;
+      }
+      restoredPaths.push(path);
       parentDirectories.push(directory);
     }
   }
@@ -156,7 +189,7 @@ export function reconcileRestoredExpandedPaths({
     }
   }
 
-  return Array.from(reconciledPaths);
+  return normalizeExpandedPaths(Array.from(reconciledPaths));
 }
 
 export function setExpandedDirectoryPath({
@@ -164,13 +197,13 @@ export function setExpandedDirectoryPath({
   directoryPath,
   expanded,
 }: SetExpandedDirectoryPathInput): string[] {
-  const nextPaths = new Set(currentExpandedPaths);
+  const nextPaths = new Set(normalizeExpandedPaths(currentExpandedPaths));
   if (expanded) {
     nextPaths.add(directoryPath);
   } else {
     nextPaths.delete(directoryPath);
   }
-  return Array.from(nextPaths);
+  return normalizeExpandedPaths(Array.from(nextPaths));
 }
 
 function rowsForDirectory(
@@ -178,26 +211,82 @@ function rowsForDirectory(
   depth: number,
   sortOption: SortOption,
   showHiddenFiles: boolean,
+  seenPaths: Set<string>,
 ): ExplorerTreeRow[] {
-  const visibleEntries = filterVisibleExplorerEntries(directory.entries, showHiddenFiles);
-  const sortedEntries = sortExplorerEntries(visibleEntries, sortOption);
-  return sortedEntries.map((entry) => ({ entry, depth }));
+  const sortedEntries = sortExplorerEntries(visibleEntries(directory, showHiddenFiles), sortOption);
+  const rows: ExplorerTreeRow[] = [];
+  for (const entry of sortedEntries) {
+    if (seenPaths.has(entry.path)) {
+      continue;
+    }
+    seenPaths.add(entry.path);
+    rows.push({ entry, depth });
+  }
+  return rows;
+}
+
+function visibleEntries(directory: ExplorerDirectory, showHiddenFiles: boolean): ExplorerEntry[] {
+  if (!Array.isArray(directory.entries)) {
+    return [];
+  }
+  const validEntries = directory.entries.filter(isExplorerEntry);
+  return filterVisibleExplorerEntries(validEntries, showHiddenFiles);
 }
 
 function sortExplorerEntries(entries: ExplorerEntry[], sortOption: SortOption): ExplorerEntry[] {
   const sorted = [...entries];
-  sorted.sort((a, b) => {
-    if (a.kind !== b.kind) {
-      return a.kind === "directory" ? -1 : 1;
+  sorted.sort((left, right) => {
+    if (left.kind !== right.kind) {
+      return left.kind === "directory" ? -1 : 1;
     }
-    switch (sortOption) {
-      case "name":
-        return a.name.localeCompare(b.name);
-      case "modified":
-        return new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime();
-      case "size":
-        return b.size - a.size;
+    if (sortOption === "modified") {
+      const comparison = timestamp(right.modifiedAt) - timestamp(left.modifiedAt);
+      if (comparison !== 0) {
+        return comparison;
+      }
+    } else if (sortOption === "size") {
+      const comparison = right.size - left.size;
+      if (comparison !== 0) {
+        return comparison;
+      }
     }
+    return left.name.localeCompare(right.name);
   });
   return sorted;
+}
+
+function timestamp(value: string): number {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isExplorerDirectory(value: unknown): value is ExplorerDirectory {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "path" in value &&
+    typeof value.path === "string" &&
+    "entries" in value &&
+    Array.isArray(value.entries)
+  );
+}
+
+function isExplorerEntry(value: unknown): value is ExplorerEntry {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  return (
+    "name" in value &&
+    typeof value.name === "string" &&
+    "path" in value &&
+    typeof value.path === "string" &&
+    value.path.length > 0 &&
+    "kind" in value &&
+    (value.kind === "file" || value.kind === "directory") &&
+    "size" in value &&
+    typeof value.size === "number" &&
+    Number.isFinite(value.size) &&
+    "modifiedAt" in value &&
+    typeof value.modifiedAt === "string"
+  );
 }

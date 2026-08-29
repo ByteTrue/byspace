@@ -89,15 +89,17 @@ import {
 const PI_PROVIDER = "pi";
 const DEFAULT_PI_THINKING_LEVEL: PiThinkingLevel = "medium";
 const PI_BINARY_COMMAND = process.env.PI_COMMAND ?? process.env.PI_ACP_PI_COMMAND ?? "pi";
-const PASEO_PI_TREE_EXTENSION_COMMAND = "paseo_tree";
-const PASEO_PI_CAPTURE_EXTENSION_COMMAND = "paseo_capture_entries";
-const PASEO_PI_ENTRY_CAPTURE_MARKER = "PASEO_ENTRY_CAPTURE";
-const PASEO_PI_SUBMITTED_USER_ENTRY_MARKER = "PASEO_SUBMITTED_USER_ENTRY";
-const PASEO_PI_COMMAND_RESULT_MARKER = "PASEO_COMMAND_RESULT";
+const BYSPACE_PI_TREE_EXTENSION_COMMAND = "byspace_tree";
+const BYSPACE_PI_CAPTURE_EXTENSION_COMMAND = "byspace_capture_entries";
+const BYSPACE_PI_ENTRY_CAPTURE_MARKER = "BYSPACE_ENTRY_CAPTURE";
+const BYSPACE_PI_SUBMITTED_USER_ENTRY_MARKER = "BYSPACE_SUBMITTED_USER_ENTRY";
+const BYSPACE_PI_COMMAND_RESULT_MARKER = "BYSPACE_COMMAND_RESULT";
 const DEFAULT_PI_EXTENSION_RESULT_TIMEOUT_MS = 30_000;
 const QUESTION_RESPONSE_HEADER = "Response";
 const QUESTION_COMMENT_HEADER = "Comment";
 const PI_ASK_USER_FREEFORM_SENTINEL = "✏️ Type custom response...";
+const PI_QUESTIONNAIRE_FREEFORM_LABEL = "Type something.";
+const PI_QUESTIONNAIRE_METADATA = "pi_ask_user_question";
 const COMBINED_ASK_USER_METADATA = "ask_user_select_optional_comment";
 
 export const PiProviderParamsSchema = z
@@ -167,15 +169,14 @@ const PI_THINKING_OPTIONS: ReadonlyArray<{
   id: PiThinkingLevel;
   label: string;
   description: string;
-  isDefault?: boolean;
 }> = [
   { id: "off", label: "Off", description: "No extra reasoning" },
   { id: "minimal", label: "Minimal", description: "Light reasoning" },
   { id: "low", label: "Low", description: "Faster reasoning" },
-  { id: "medium", label: "Medium", description: "Balanced reasoning", isDefault: true },
+  { id: "medium", label: "Medium", description: "Balanced reasoning" },
   { id: "high", label: "High", description: "Deeper reasoning" },
-  { id: "xhigh", label: "XHigh", description: "Very deep reasoning" },
-  { id: "max", label: "Max", description: "Extreme reasoning" },
+  { id: "xhigh", label: "XHigh", description: "Extra high reasoning" },
+  { id: "max", label: "Max", description: "Maximum reasoning" },
 ] as const;
 
 export interface PiRpcAgentClientOptions {
@@ -260,6 +261,12 @@ interface PiCapturedEntry extends PiCapturedUserMessageEntry {
   parentId: string | null;
 }
 
+interface PendingPiUserMessage {
+  text: string;
+  turnId: string | undefined;
+  clientMessageId?: string;
+}
+
 interface PendingExtensionResult {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
@@ -270,6 +277,23 @@ interface ActiveAskUserDialog {
   allowComment: boolean;
   allowFreeform: boolean;
   allowMultiple: boolean;
+}
+
+interface PiQuestionnaireQuestion {
+  question: string;
+  header: string;
+  options: Array<{ label: string; description?: string }>;
+  multiSelect: boolean;
+}
+
+interface ActivePiQuestionnaire {
+  permissionId: string;
+  questions: PiQuestionnaireQuestion[];
+  questionIndex: number;
+  answers: Record<string, string> | null;
+  pendingCustom: string | null;
+  uiRequest: Extract<PiRuntimeEvent, { type: "extension_ui_request" }> | null;
+  cancelled: boolean;
 }
 
 interface PendingCombinedAskUserResponse {
@@ -354,13 +378,49 @@ function parseAutoCompactMode(value: string | undefined): AutoCompactMode {
   return "unknown";
 }
 
-function mapThinkingOption(option: (typeof PI_THINKING_OPTIONS)[number]) {
+function getSupportedPiThinkingOptions(model: PiModel) {
+  if (!model.reasoning) {
+    return undefined;
+  }
+
+  return PI_THINKING_OPTIONS.filter((option) => {
+    const mappedLevel = model.thinkingLevelMap?.[option.id];
+    if (mappedLevel === null) {
+      return false;
+    }
+    if (option.id === "xhigh" || option.id === "max") {
+      return mappedLevel !== undefined;
+    }
+    return true;
+  });
+}
+
+function getDefaultPiThinkingLevel(
+  options: ReturnType<typeof getSupportedPiThinkingOptions>,
+): PiThinkingLevel | undefined {
+  if (!options?.length) {
+    return undefined;
+  }
+
+  const defaultIndex = PI_THINKING_OPTIONS.findIndex(
+    (option) => option.id === DEFAULT_PI_THINKING_LEVEL,
+  );
+  const defaultOrHigher = options.find(
+    (option) => PI_THINKING_OPTIONS.indexOf(option) >= defaultIndex,
+  );
+  return defaultOrHigher?.id ?? options.at(-1)?.id;
+}
+
+function mapThinkingOption(
+  option: (typeof PI_THINKING_OPTIONS)[number],
+  defaultLevel: PiThinkingLevel | undefined,
+) {
   const mappedOption = {
     id: option.id,
     label: option.label,
     description: option.description,
   };
-  if (option.isDefault) {
+  if (option.id === defaultLevel) {
     return {
       ...mappedOption,
       isDefault: true,
@@ -496,7 +556,7 @@ function buildResumeStartInput(input: {
   sessionFile: string;
   launchContext: AgentLaunchContext | undefined;
   mcpConfig: PiMcpConfigFile | null;
-  paseoExtension: PiTempFile | null;
+  byspaceExtension: PiTempFile | null;
 }): PiStartSessionInput {
   return {
     cwd: input.resumeConfig.cwd,
@@ -505,7 +565,7 @@ function buildResumeStartInput(input: {
     model: input.resumeConfig.model,
     thinkingOptionId: normalizePiThinkingOption(input.resumeConfig.thinkingOptionId) ?? undefined,
     mcpConfigPath: input.mcpConfig?.path,
-    extensionPaths: input.paseoExtension ? [input.paseoExtension.path] : undefined,
+    extensionPaths: input.byspaceExtension ? [input.byspaceExtension.path] : undefined,
   };
 }
 
@@ -581,7 +641,7 @@ function createPiMcpConfigFile(
     mcpServers[name] = toPiMcpConfig(serverConfig);
   }
 
-  const dir = mkdtempSync(join(tmpdir(), "paseo-pi-mcp-"));
+  const dir = mkdtempSync(join(tmpdir(), "byspace-pi-mcp-"));
   const filePath = join(dir, "mcp.json");
   const mergedConfig: Record<string, unknown> = { ...globalConfig, mcpServers };
   delete mergedConfig["mcp-servers"];
@@ -595,12 +655,13 @@ function createPiMcpConfigFile(
   };
 }
 
-function createPiPaseoExtensionFile(systemPrompt?: string): PiTempFile {
-  const dir = mkdtempSync(join(tmpdir(), "paseo-pi-extension-"));
-  const filePath = join(dir, "paseo-integration.mjs");
-  writeFileSync(
-    filePath,
-    `
+function createPiBySpaceExtensionFile(systemPrompt?: string): PiTempFile {
+  const dir = mkdtempSync(join(tmpdir(), "byspace-pi-extension-"));
+  const filePath = join(dir, "byspace-integration.mjs");
+  try {
+    writeFileSync(
+      filePath,
+      `
 	function decodePayload(encoded) {
 	  return JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
 	}
@@ -618,6 +679,14 @@ function createPiPaseoExtensionFile(systemPrompt?: string): PiTempFile {
 	    .join("\\n\\n");
 	}
 
+	function toCapturedUserEntry(entry) {
+	  return {
+	    id: entry.id,
+	    parentId: entry.parentId ?? null,
+	    text: readTextContent(entry.message.content),
+	  };
+	}
+
 	function getCapturedUserEntries(ctx) {
 	  return ctx.sessionManager
 	    .getEntries()
@@ -625,17 +694,9 @@ function createPiPaseoExtensionFile(systemPrompt?: string): PiTempFile {
 	    .map(toCapturedUserEntry);
 	}
 
-	function toCapturedUserEntry(entry) {
-	  return {
-	      id: entry.id,
-	      parentId: entry.parentId ?? null,
-	      text: readTextContent(entry.message.content),
-	    };
-	}
-
 	function emitEntryCapture(ctx, reason, requestId) {
 	  ctx.ui.notify(
-	    "${PASEO_PI_ENTRY_CAPTURE_MARKER} " +
+	    "${BYSPACE_PI_ENTRY_CAPTURE_MARKER} " +
 	      JSON.stringify({ reason, requestId, entries: getCapturedUserEntries(ctx) }),
 	    "info",
 	  );
@@ -643,30 +704,25 @@ function createPiPaseoExtensionFile(systemPrompt?: string): PiTempFile {
 
 	function emitCommandResult(ctx, requestId, result) {
 	  ctx.ui.notify(
-	    "${PASEO_PI_COMMAND_RESULT_MARKER} " + JSON.stringify({ requestId, ...result }),
+	    "${BYSPACE_PI_COMMAND_RESULT_MARKER} " + JSON.stringify({ requestId, ...result }),
 	    result.ok ? "info" : "error",
 	  );
 	}
 
-	export default function paseoIntegration(pi) {
+	export default function byspaceIntegration(pi) {
 	  const submittedUserMessages = [];
-
 	  function emitSubmittedUserEntries(ctx) {
 	    const entries = ctx.sessionManager.getEntries();
 	    for (let index = 0; index < submittedUserMessages.length; index += 1) {
 	      const message = submittedUserMessages[index];
-	      // Pi assigns the entry ID after message_end, then persists this same message object.
-	      // Reference equality preserves the exact association even when another extension edits it.
 	      const entry = entries.find(
 	        (candidate) => candidate.type === "message" && candidate.message === message,
 	      );
-	      if (!entry) {
-	        continue;
-	      }
+	      if (!entry) continue;
 	      submittedUserMessages.splice(index, 1);
 	      index -= 1;
 	      ctx.ui.notify(
-	        "${PASEO_PI_SUBMITTED_USER_ENTRY_MARKER} " +
+	        "${BYSPACE_PI_SUBMITTED_USER_ENTRY_MARKER} " +
 	          JSON.stringify({ entry: toCapturedUserEntry(entry) }),
 	        "info",
 	      );
@@ -681,20 +737,16 @@ function createPiPaseoExtensionFile(systemPrompt?: string): PiTempFile {
         : ""
     }
 
-	  pi.on("session_start", async (_event, ctx) => {
-	    emitEntryCapture(ctx, "session_start");
-	  });
-
 	  pi.on("message_end", async (event) => {
-	    if (event.message?.role === "user") {
-	      submittedUserMessages.push(event.message);
-	    }
+	    if (event.message?.role === "user") submittedUserMessages.push(event.message);
 	  });
 
 	  pi.on("message_start", async (event, ctx) => {
-	    if (event.message?.role === "assistant") {
-	      emitSubmittedUserEntries(ctx);
-	    }
+	    if (event.message?.role === "assistant") emitSubmittedUserEntries(ctx);
+	  });
+
+	  pi.on("session_start", async (_event, ctx) => {
+	    emitEntryCapture(ctx, "session_start");
 	  });
 
 	  pi.on("turn_end", async (_event, ctx) => {
@@ -702,16 +754,16 @@ function createPiPaseoExtensionFile(systemPrompt?: string): PiTempFile {
 	    emitEntryCapture(ctx, "turn_end");
 	  });
 
-	  pi.registerCommand("${PASEO_PI_CAPTURE_EXTENSION_COMMAND}", {
-	    description: "Internal Paseo entry capture bridge",
+	  pi.registerCommand("${BYSPACE_PI_CAPTURE_EXTENSION_COMMAND}", {
+	    description: "Internal BySpace entry capture bridge",
 	    handler: async (args, ctx) => {
 	      const payload = decodePayload(args.trim());
 	      emitEntryCapture(ctx, "command", payload.requestId);
 	    },
 	  });
 
-	  pi.registerCommand("${PASEO_PI_TREE_EXTENSION_COMMAND}", {
-	    description: "Internal Paseo tree navigation bridge",
+	  pi.registerCommand("${BYSPACE_PI_TREE_EXTENSION_COMMAND}", {
+	    description: "Internal BySpace tree navigation bridge",
 	    handler: async (args, ctx) => {
 	      const payload = decodePayload(args.trim());
 	      try {
@@ -727,8 +779,12 @@ function createPiPaseoExtensionFile(systemPrompt?: string): PiTempFile {
 	  });
 	}
 `.trimStart(),
-    "utf8",
-  );
+      "utf8",
+    );
+  } catch (error) {
+    rmSync(dir, { recursive: true, force: true });
+    throw error;
+  }
   return {
     path: filePath,
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
@@ -891,6 +947,90 @@ function readActiveAskUserDialog(toolName: string, args: unknown): ActiveAskUser
   };
 }
 
+function isPiQuestionnaireTool(toolName: string): boolean {
+  return toolName === "ask_user_question" || toolName === "question";
+}
+
+function readPiQuestionnaireQuestions(
+  toolName: string,
+  args: unknown,
+): PiQuestionnaireQuestion[] | null {
+  if (!isPiQuestionnaireTool(toolName) || !isRecord(args) || !Array.isArray(args.questions)) {
+    return null;
+  }
+
+  const usedHeaders = new Set<string>();
+  const questions: PiQuestionnaireQuestion[] = [];
+  for (const [index, rawQuestion] of args.questions.entries()) {
+    if (!isRecord(rawQuestion) || typeof rawQuestion.question !== "string") {
+      return null;
+    }
+    const rawOptions = rawQuestion.options;
+    if (!Array.isArray(rawOptions)) {
+      return null;
+    }
+
+    const options: Array<{ label: string; description?: string }> = [];
+    for (const rawOption of rawOptions) {
+      if (!isRecord(rawOption) || typeof rawOption.label !== "string") {
+        return null;
+      }
+      options.push({
+        label: rawOption.label,
+        ...(typeof rawOption.description === "string"
+          ? { description: rawOption.description }
+          : {}),
+      });
+    }
+
+    const baseHeader =
+      typeof rawQuestion.header === "string" && rawQuestion.header.length > 0
+        ? rawQuestion.header
+        : `Question ${index + 1}`;
+    let header = baseHeader;
+    let suffix = 2;
+    while (usedHeaders.has(header)) {
+      header = `${baseHeader} ${suffix}`;
+      suffix += 1;
+    }
+    usedHeaders.add(header);
+    questions.push({
+      question: rawQuestion.question,
+      header,
+      options,
+      multiSelect: rawQuestion.multiSelect === true || rawQuestion.multiple === true,
+    });
+  }
+
+  return questions.length > 0 ? questions : null;
+}
+
+function buildPiQuestionnairePermission(
+  toolCallId: string,
+  questions: PiQuestionnaireQuestion[],
+): AgentPermissionRequest {
+  return {
+    id: `pi-questionnaire:${toolCallId}`,
+    provider: PI_PROVIDER,
+    name: "Pi ask_user_question",
+    kind: "question",
+    title: questions[0]?.question,
+    input: {
+      questions: questions.map((question) => ({
+        question: question.question,
+        header: question.header,
+        options: question.options,
+        multiSelect: question.multiSelect,
+        allowOther: true,
+        ...(question.multiSelect ? { placeholder: "1,3" } : {}),
+      })),
+    },
+    metadata: {
+      piQuestionnaire: PI_QUESTIONNAIRE_METADATA,
+    },
+  };
+}
+
 function isOptionalInputPlaceholder(placeholder: string | undefined): boolean {
   return /\boptional\b|\bskip\b/i.test(placeholder ?? "");
 }
@@ -912,7 +1052,10 @@ function readStringArray(value: unknown): string[] {
 }
 
 function isPiAskUserFreeformOption(option: string): boolean {
-  return option === PI_ASK_USER_FREEFORM_SENTINEL;
+  const normalized = option.replace(/^\d+\.\s*/, "");
+  return (
+    normalized === PI_ASK_USER_FREEFORM_SENTINEL || normalized === PI_QUESTIONNAIRE_FREEFORM_LABEL
+  );
 }
 
 function mapExtensionUiRequestToPermission(
@@ -931,6 +1074,16 @@ function mapExtensionUiRequestToPermission(
           question: optionalString(event.title) ?? "Select an option",
           options: selectOptions,
           allowFreeform: options.allowFreeform === true,
+        });
+      }
+      const freeformSentinel = selectOptions.find(isPiAskUserFreeformOption);
+      if (options.allowFreeform === true || freeformSentinel) {
+        return buildFreeformAskUserQuestionPermission(event, {
+          provider,
+          label,
+          question: optionalString(event.title) ?? "Select an option",
+          options: selectOptions,
+          freeformSentinel: freeformSentinel ?? PI_ASK_USER_FREEFORM_SENTINEL,
         });
       }
       return buildExtensionUiQuestionPermission(event, {
@@ -1060,8 +1213,9 @@ function buildCombinedAskUserQuestionPermission(
     allowFreeform: boolean;
   },
 ): AgentPermissionRequest {
+  const freeformSentinel = input.options.find(isPiAskUserFreeformOption);
   const visibleOptions = input.options.filter((option) => !isPiAskUserFreeformOption(option));
-  const allowOther = input.allowFreeform || visibleOptions.length !== input.options.length;
+  const allowOther = input.allowFreeform || freeformSentinel !== undefined;
   return {
     id: event.id,
     provider: input.provider,
@@ -1093,7 +1247,47 @@ function buildCombinedAskUserQuestionPermission(
       commentHeader: QUESTION_COMMENT_HEADER,
       combinedAskUser: COMBINED_ASK_USER_METADATA,
       selectOptions: visibleOptions,
-      ...(allowOther ? { freeformSentinel: PI_ASK_USER_FREEFORM_SENTINEL } : {}),
+      ...(allowOther
+        ? { freeformSentinel: freeformSentinel ?? PI_ASK_USER_FREEFORM_SENTINEL }
+        : {}),
+    },
+  };
+}
+
+function buildFreeformAskUserQuestionPermission(
+  event: Extract<PiRuntimeEvent, { type: "extension_ui_request" }>,
+  input: {
+    provider: AgentProvider;
+    label: string;
+    question: string;
+    options: string[];
+    freeformSentinel: string;
+  },
+): AgentPermissionRequest {
+  const visibleOptions = input.options.filter((option) => option !== input.freeformSentinel);
+  return {
+    id: event.id,
+    provider: input.provider,
+    name: `${input.label} ${event.method}`,
+    kind: "question",
+    title: input.question,
+    input: {
+      questions: [
+        {
+          question: input.question,
+          header: QUESTION_RESPONSE_HEADER,
+          options: visibleOptions.map((label) => ({ label })),
+          multiSelect: false,
+          allowOther: true,
+        },
+      ],
+    },
+    metadata: {
+      extensionUiMethod: event.method,
+      answerHeader: QUESTION_RESPONSE_HEADER,
+      freeformAskUser: true,
+      selectOptions: visibleOptions,
+      freeformSentinel: input.freeformSentinel,
     },
   };
 }
@@ -1118,6 +1312,45 @@ function firstPermissionAnswer(input: AgentMetadata | undefined): string | null 
 
 function isCombinedAskUserPermission(request: AgentPermissionRequest): boolean {
   return request.metadata?.combinedAskUser === COMBINED_ASK_USER_METADATA;
+}
+
+function isFreeformAskUserPermission(request: AgentPermissionRequest): boolean {
+  return request.metadata?.freeformAskUser === true;
+}
+
+function isPiQuestionnairePermission(request: AgentPermissionRequest): boolean {
+  return request.metadata?.piQuestionnaire === PI_QUESTIONNAIRE_METADATA;
+}
+
+function serializePiQuestionnaireMultiSelection(
+  answer: string,
+  question: PiQuestionnaireQuestion,
+): string {
+  const labels = answer
+    .split(",")
+    .map((label) => label.trim())
+    .filter((label) => label.length > 0);
+  const indices = labels.map((label) =>
+    question.options.findIndex((option) => option.label === label),
+  );
+  if (indices.every((index) => index >= 0)) {
+    return indices.map((index) => String(index + 1)).join(",");
+  }
+  return answer;
+}
+
+function readPermissionAnswers(input: AgentMetadata | undefined): Record<string, string> | null {
+  const answers = isRecord(input?.answers) ? input.answers : null;
+  if (!answers) {
+    return null;
+  }
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(answers)) {
+    if (typeof value === "string") {
+      result[key] = value;
+    }
+  }
+  return result;
 }
 
 function buildCombinedAskUserSelectionResponse(
@@ -1149,6 +1382,31 @@ function buildCombinedAskUserSelectionResponse(
   };
 }
 
+function buildFreeformAskUserSelectionResponse(
+  request: AgentPermissionRequest,
+  response: AgentPermissionResponse,
+): {
+  uiResponse: { value?: string; cancelled?: boolean };
+  pendingResponse: PendingCombinedAskUserResponse | null;
+} {
+  if (response.behavior === "deny") {
+    return { uiResponse: { cancelled: true }, pendingResponse: null };
+  }
+
+  const answer = permissionAnswer(response.updatedInput, QUESTION_RESPONSE_HEADER);
+  if (answer === null) {
+    return { uiResponse: { cancelled: true }, pendingResponse: null };
+  }
+
+  const selectOptions = readStringArray(request.metadata?.selectOptions);
+  const freeformSentinel = optionalString(request.metadata?.freeformSentinel);
+  const isFreeform = Boolean(freeformSentinel) && !selectOptions.includes(answer);
+  return {
+    uiResponse: { value: isFreeform ? freeformSentinel : answer },
+    pendingResponse: isFreeform ? { comment: "", freeform: answer } : null,
+  };
+}
+
 function buildExtensionUiResponse(
   request: AgentPermissionRequest,
   response: AgentPermissionResponse,
@@ -1170,6 +1428,9 @@ function buildExtensionUiResponse(
 }
 
 function mapPiModel(model: PiModel, provider: AgentProvider): AgentModelDefinition {
+  const thinkingOptions = getSupportedPiThinkingOptions(model);
+  const defaultThinkingOptionId = getDefaultPiThinkingLevel(thinkingOptions);
+
   return {
     provider,
     id: `${model.provider}/${model.id}`,
@@ -1179,8 +1440,10 @@ function mapPiModel(model: PiModel, provider: AgentProvider): AgentModelDefiniti
       provider: model.provider,
       modelId: model.id,
     },
-    thinkingOptions: model.reasoning ? PI_THINKING_OPTIONS.map(mapThinkingOption) : undefined,
-    defaultThinkingOptionId: model.reasoning ? DEFAULT_PI_THINKING_LEVEL : undefined,
+    thinkingOptions: thinkingOptions?.map((option) =>
+      mapThinkingOption(option, defaultThinkingOptionId),
+    ),
+    defaultThinkingOptionId,
   };
 }
 
@@ -1201,6 +1464,7 @@ export class PiRpcAgentSession implements AgentSession {
   private readonly activeToolCalls = new Map<string, PiTrackedToolCall>();
   private readonly pendingExtensionUiRequests = new Map<string, AgentPermissionRequest>();
   private activeAskUserDialog: ActiveAskUserDialog | null = null;
+  private activePiQuestionnaire: ActivePiQuestionnaire | null = null;
   private pendingCombinedAskUserResponse: PendingCombinedAskUserResponse | null = null;
   private activeTurnId: string | null = null;
   private activeClientMessageId: string | null = null;
@@ -1216,6 +1480,8 @@ export class PiRpcAgentSession implements AgentSession {
   currentLeafOverrideId: string | null | undefined;
   private readonly capturedUserEntries: PiCapturedEntry[] = [];
   private readonly capturedUserEntriesById = new Map<string, PiCapturedEntry>();
+  private readonly seenUserEntryIds = new Set<string>();
+  private readonly pendingUserMessages: PendingPiUserMessage[] = [];
   private readonly pendingExtensionResults = new Map<string, PendingExtensionResult>();
   private outOfBandCompactionEmit: ((event: AgentStreamEvent) => void) | null = null;
   private outOfBandCompactionStarted = false;
@@ -1412,10 +1678,16 @@ export class PiRpcAgentSession implements AgentSession {
     }
     this.pendingExtensionUiRequests.delete(requestId);
 
-    if (isCombinedAskUserPermission(request)) {
+    if (isPiQuestionnairePermission(request)) {
+      this.acceptPiQuestionnaireResponse(request, response);
+    } else if (isCombinedAskUserPermission(request)) {
       const combined = buildCombinedAskUserSelectionResponse(request, response);
       this.pendingCombinedAskUserResponse = combined.pendingResponse;
       this.runtimeSession.respondToExtensionUiRequest(requestId, combined.uiResponse);
+    } else if (isFreeformAskUserPermission(request)) {
+      const freeform = buildFreeformAskUserSelectionResponse(request, response);
+      this.pendingCombinedAskUserResponse = freeform.pendingResponse;
+      this.runtimeSession.respondToExtensionUiRequest(requestId, freeform.uiResponse);
     } else {
       this.runtimeSession.respondToExtensionUiRequest(
         requestId,
@@ -1493,12 +1765,8 @@ export class PiRpcAgentSession implements AgentSession {
         turnId,
       });
     }
-    if (this.interruptingTurnId === turnId) {
-      this.interruptingTurnId = null;
-    }
-    if (this.interruptedTerminalError?.turnId === turnId) {
-      this.interruptedTerminalError = null;
-    }
+    if (this.interruptingTurnId === turnId) this.interruptingTurnId = null;
+    if (this.interruptedTerminalError?.turnId === turnId) this.interruptedTerminalError = null;
   }
 
   async revertConversation(input: { messageId: string }): Promise<void> {
@@ -1525,7 +1793,7 @@ export class PiRpcAgentSession implements AgentSession {
     const requestId = randomUUID();
     const resultPromise = this.waitForExtensionResult(requestId);
     const payload = Buffer.from(JSON.stringify({ targetId, requestId })).toString("base64url");
-    await this.runtimeSession.prompt(`/${PASEO_PI_TREE_EXTENSION_COMMAND} ${payload}`);
+    await this.runtimeSession.prompt(`/${BYSPACE_PI_TREE_EXTENSION_COMMAND} ${payload}`);
     return await resultPromise;
   }
 
@@ -1581,6 +1849,10 @@ export class PiRpcAgentSession implements AgentSession {
   }
 
   async setModel(modelId: string | null): Promise<void> {
+    if (!modelId?.trim()) {
+      this.config.model = undefined;
+      return;
+    }
     const parsedReference = parseModelReference(modelId);
     if (!parsedReference) {
       return;
@@ -1590,11 +1862,14 @@ export class PiRpcAgentSession implements AgentSession {
     }
 
     const model = await this.runtimeSession.setModel(parsedReference.provider, parsedReference.id);
+    const state = await this.runtimeSession.getState();
     this.state = {
-      ...this.state,
+      ...state,
       model,
     };
+    this.lastKnownThinkingOptionId = state.thinkingLevel;
     this.config.model = `${model.provider}/${model.id}`;
+    this.config.thinkingOptionId = state.thinkingLevel;
   }
 
   async setThinkingOption(thinkingOptionId: string | null): Promise<void> {
@@ -1821,7 +2096,7 @@ export class PiRpcAgentSession implements AgentSession {
     const requestId = randomUUID();
     const resultPromise = this.waitForExtensionResult(requestId);
     const payload = Buffer.from(JSON.stringify({ requestId, reason })).toString("base64url");
-    await this.runtimeSession.prompt(`/${PASEO_PI_CAPTURE_EXTENSION_COMMAND} ${payload}`);
+    await this.runtimeSession.prompt(`/${BYSPACE_PI_CAPTURE_EXTENSION_COMMAND} ${payload}`);
     await resultPromise;
   }
 
@@ -1862,38 +2137,75 @@ export class PiRpcAgentSession implements AgentSession {
   }
 
   private recordCapturedUserEntries(entries: PiCapturedEntry[]): void {
+    const previouslySeenEntryIds = new Set(this.seenUserEntryIds);
     this.capturedUserEntries.splice(0, this.capturedUserEntries.length, ...entries);
     this.capturedUserEntriesById.clear();
     for (const entry of entries) {
       this.capturedUserEntriesById.set(entry.id, entry);
     }
+    this.flushPendingUserMessages(previouslySeenEntryIds);
+    for (const entry of entries) {
+      this.seenUserEntryIds.add(entry.id);
+    }
+  }
+
+  private flushPendingUserMessages(previouslySeenEntryIds: Set<string>): void {
+    for (let index = 0; index < this.pendingUserMessages.length; index += 1) {
+      const pending = this.pendingUserMessages[index]!;
+      const entry = this.capturedUserEntries.find(
+        (candidate) => !previouslySeenEntryIds.has(candidate.id),
+      );
+      if (!entry) {
+        continue;
+      }
+      previouslySeenEntryIds.add(entry.id);
+      this.pendingUserMessages.splice(index, 1);
+      index -= 1;
+      this.emit({
+        type: "timeline",
+        provider: this.provider,
+        turnId: pending.turnId,
+        item: {
+          type: "user_message",
+          text: pending.text,
+          messageId: entry.id,
+          ...(pending.clientMessageId ? { clientMessageId: pending.clientMessageId } : {}),
+        },
+      });
+    }
   }
 
   private handleSubmittedUserEntryMarker(message: string): boolean {
-    const payload = parseExtensionMarkerPayload(message, PASEO_PI_SUBMITTED_USER_ENTRY_MARKER);
-    if (!payload) {
-      return false;
-    }
+    const payload = parseExtensionMarkerPayload(message, BYSPACE_PI_SUBMITTED_USER_ENTRY_MARKER);
+    if (!payload) return false;
     const [entry] = parseCapturedEntries([payload.entry]);
-    if (!entry) {
-      return true;
+    if (!entry) return true;
+
+    const pendingIndex = this.pendingUserMessages.findIndex(
+      (candidate) => candidate.text === entry.text,
+    );
+    const pending =
+      pendingIndex >= 0 ? this.pendingUserMessages.splice(pendingIndex, 1)[0] : undefined;
+    this.capturedUserEntriesById.set(entry.id, entry);
+    this.seenUserEntryIds.add(entry.id);
+    if (pending) {
+      this.emit({
+        type: "timeline",
+        provider: this.provider,
+        turnId: pending.turnId,
+        item: {
+          type: "user_message",
+          text: pending.text,
+          messageId: entry.id,
+          ...(pending.clientMessageId ? { clientMessageId: pending.clientMessageId } : {}),
+        },
+      });
     }
-    this.emit({
-      type: "timeline",
-      provider: this.provider,
-      turnId: this.currentTurnIdForEvent(),
-      item: {
-        type: "user_message",
-        text: entry.text,
-        messageId: entry.id,
-        ...(this.activeClientMessageId ? { clientMessageId: this.activeClientMessageId } : {}),
-      },
-    });
     return true;
   }
 
   private handleEntryCaptureMarker(message: string): boolean {
-    const payload = parseExtensionMarkerPayload(message, PASEO_PI_ENTRY_CAPTURE_MARKER);
+    const payload = parseExtensionMarkerPayload(message, BYSPACE_PI_ENTRY_CAPTURE_MARKER);
     if (!payload) {
       return false;
     }
@@ -1906,7 +2218,7 @@ export class PiRpcAgentSession implements AgentSession {
   }
 
   private handleCommandResultMarker(message: string): boolean {
-    const payload = parseExtensionMarkerPayload(message, PASEO_PI_COMMAND_RESULT_MARKER);
+    const payload = parseExtensionMarkerPayload(message, BYSPACE_PI_COMMAND_RESULT_MARKER);
     if (!payload) {
       return false;
     }
@@ -1922,6 +2234,122 @@ export class PiRpcAgentSession implements AgentSession {
     return true;
   }
 
+  private acceptPiQuestionnaireResponse(
+    request: AgentPermissionRequest,
+    response: AgentPermissionResponse,
+  ): void {
+    const active = this.activePiQuestionnaire;
+    if (!active || active.permissionId !== request.id) {
+      return;
+    }
+
+    if (response.behavior === "deny") {
+      active.cancelled = true;
+      active.answers = null;
+      active.pendingCustom = null;
+    } else {
+      const answers = readPermissionAnswers(response.updatedInput);
+      if (!answers) {
+        active.cancelled = true;
+        active.answers = null;
+      } else {
+        active.answers = answers;
+      }
+    }
+    this.flushPiQuestionnaireResponse();
+  }
+
+  private handlePiQuestionnaireUiRequest(
+    event: Extract<PiRuntimeEvent, { type: "extension_ui_request" }>,
+  ): boolean {
+    const active = this.activePiQuestionnaire;
+    if (!active || (event.method !== "select" && event.method !== "input")) {
+      return false;
+    }
+    active.uiRequest = event;
+    this.flushPiQuestionnaireResponse();
+    return true;
+  }
+
+  private flushPiQuestionnaireResponse(): void {
+    const active = this.activePiQuestionnaire;
+    const event = active?.uiRequest;
+    if (!active || !event) {
+      return;
+    }
+
+    if (active.cancelled) {
+      this.runtimeSession.respondToExtensionUiRequest(event.id, { cancelled: true });
+      active.uiRequest = null;
+      return;
+    }
+
+    if (active.pendingCustom !== null) {
+      if (event.method !== "input") {
+        active.cancelled = true;
+        this.runtimeSession.respondToExtensionUiRequest(event.id, { cancelled: true });
+      } else {
+        this.runtimeSession.respondToExtensionUiRequest(event.id, {
+          value: active.pendingCustom,
+        });
+        active.pendingCustom = null;
+        active.questionIndex += 1;
+      }
+      active.uiRequest = null;
+      return;
+    }
+
+    const answers = active.answers;
+    const question = active.questions[active.questionIndex];
+    if (!answers || !question) {
+      return;
+    }
+
+    const answer = answers[question.header];
+    if (typeof answer !== "string") {
+      active.cancelled = true;
+      this.runtimeSession.respondToExtensionUiRequest(event.id, { cancelled: true });
+      active.uiRequest = null;
+      return;
+    }
+
+    if (event.method === "select") {
+      if (question.multiSelect) {
+        active.cancelled = true;
+        this.runtimeSession.respondToExtensionUiRequest(event.id, { cancelled: true });
+        active.uiRequest = null;
+        return;
+      }
+
+      const optionIndex = question.options.findIndex((option) => option.label === answer);
+      if (optionIndex >= 0) {
+        const eventOptions = readStringArray(event.options);
+        this.runtimeSession.respondToExtensionUiRequest(event.id, {
+          value: eventOptions[optionIndex] ?? answer,
+        });
+        active.questionIndex += 1;
+      } else {
+        const freeformSentinel = readStringArray(event.options).find(isPiAskUserFreeformOption);
+        if (!freeformSentinel) {
+          active.cancelled = true;
+          this.runtimeSession.respondToExtensionUiRequest(event.id, { cancelled: true });
+          active.uiRequest = null;
+          return;
+        }
+        active.pendingCustom = answer;
+        this.runtimeSession.respondToExtensionUiRequest(event.id, { value: freeformSentinel });
+      }
+    } else {
+      this.runtimeSession.respondToExtensionUiRequest(event.id, {
+        value: question.multiSelect
+          ? serializePiQuestionnaireMultiSelection(answer, question)
+          : answer,
+      });
+      active.questionIndex += 1;
+    }
+    active.uiRequest = null;
+  }
+
   private handleExtensionUiRequest(
     event: Extract<PiRuntimeEvent, { type: "extension_ui_request" }>,
   ): void {
@@ -1935,6 +2363,10 @@ export class PiRpcAgentSession implements AgentSession {
         return;
       }
       this.bufferNoTurnOutput(message);
+    }
+
+    if (this.handlePiQuestionnaireUiRequest(event)) {
+      return;
     }
 
     if (this.respondToCombinedAskUserFollowUp(event)) {
@@ -2113,7 +2545,29 @@ export class PiRpcAgentSession implements AgentSession {
         const toolCall = parseToolArgs(event.toolName, event.args);
         this.activeToolCalls.set(event.toolCallId, toolCall);
         this.activeAskUserDialog = readActiveAskUserDialog(event.toolName, event.args);
+        this.activePiQuestionnaire = null;
         this.emitToolCallEvent(event.toolCallId, toolCall, "running", null, null);
+
+        const questionnaireQuestions = readPiQuestionnaireQuestions(event.toolName, event.args);
+        if (questionnaireQuestions) {
+          const request = buildPiQuestionnairePermission(event.toolCallId, questionnaireQuestions);
+          this.activePiQuestionnaire = {
+            permissionId: request.id,
+            questions: questionnaireQuestions,
+            questionIndex: 0,
+            answers: null,
+            pendingCustom: null,
+            uiRequest: null,
+            cancelled: false,
+          };
+          this.pendingExtensionUiRequests.set(request.id, request);
+          this.emit({
+            type: "permission_requested",
+            provider: this.provider,
+            request,
+            turnId: this.currentTurnIdForEvent(),
+          });
+        }
         return;
       }
       case "tool_execution_update": {
@@ -2174,7 +2628,7 @@ export class PiRpcAgentSession implements AgentSession {
     turnId: string | undefined;
   }): void {
     if (event.type === "agent_end") {
-      // COMPAT(piAgentSettled): added in v0.5.0, remove after 2027-02-21 once the Pi
+      // COMPAT(piAgentSettled): added in v0.6.0, remove after 2027-02-24 once the Pi
       // floor emits agent_settled and willRetry.
       if (event.willRetry === undefined) {
         this.completeTurn(turnId, event.messages ?? []);
@@ -2200,6 +2654,12 @@ export class PiRpcAgentSession implements AgentSession {
     if (event.toolName === "ask_user") {
       this.activeAskUserDialog = null;
       this.pendingCombinedAskUserResponse = null;
+    }
+    if (isPiQuestionnaireTool(event.toolName)) {
+      if (this.activePiQuestionnaire) {
+        this.pendingExtensionUiRequests.delete(this.activePiQuestionnaire.permissionId);
+      }
+      this.activePiQuestionnaire = null;
     }
 
     const result = parseToolResult(event.result);
@@ -2243,6 +2703,8 @@ export class PiRpcAgentSession implements AgentSession {
     event: Extract<PiAgentSessionEvent, { type: "message_update" }>,
     turnId: string | undefined,
   ): void {
+    // Pi >= 0.84 strips the cumulative message from message_update (deltas only);
+    // message_start/message_end remain authoritative.
     if (event.message && event.message.role !== "assistant") {
       return;
     }
@@ -2301,6 +2763,19 @@ export class PiRpcAgentSession implements AgentSession {
       this.completeTurn(turnId, []);
       return;
     }
+
+    if (event.message.role !== "user") {
+      return;
+    }
+    const text = getUserMessageText(event.message.content);
+    if (!text) {
+      return;
+    }
+    this.pendingUserMessages.push({
+      text,
+      turnId,
+      ...(this.activeClientMessageId ? { clientMessageId: this.activeClientMessageId } : {}),
+    });
   }
 
   private emitToolCallEvent(
@@ -2420,9 +2895,15 @@ export class PiRpcAgentClient implements AgentClient {
       ...launchContext?.env,
     };
     const mcpConfig = await this.prepareMcpConfig(config.cwd, config.mcpServers, mcpEnv);
-    const paseoExtension = createPiPaseoExtensionFile(
-      composeSystemPromptParts(config.systemPrompt, config.daemonAppendSystemPrompt),
-    );
+    let byspaceExtension: PiTempFile | null = null;
+    try {
+      byspaceExtension = createPiBySpaceExtensionFile(
+        composeSystemPromptParts(config.systemPrompt, config.daemonAppendSystemPrompt),
+      );
+    } catch (error) {
+      mcpConfig?.cleanup();
+      throw error;
+    }
     let runtimeSession: PiRuntimeSession;
     try {
       runtimeSession = await this.runtime.startSession({
@@ -2433,11 +2914,11 @@ export class PiRpcAgentClient implements AgentClient {
         noSession: config.internal === true,
         env: launchContext?.env,
         mcpConfigPath: mcpConfig?.path,
-        extensionPaths: paseoExtension ? [paseoExtension.path] : undefined,
+        extensionPaths: byspaceExtension ? [byspaceExtension.path] : undefined,
       });
     } catch (error) {
       mcpConfig?.cleanup();
-      paseoExtension?.cleanup();
+      byspaceExtension?.cleanup();
       throw error;
     }
     try {
@@ -2446,7 +2927,7 @@ export class PiRpcAgentClient implements AgentClient {
         config,
         initialState: await runtimeSession.getState(),
         capabilities: capabilitiesForSession(mcpConfig !== null),
-        cleanup: combineCleanup([mcpConfig?.cleanup, paseoExtension?.cleanup]),
+        cleanup: combineCleanup([mcpConfig?.cleanup, byspaceExtension?.cleanup]),
         extensionTimeoutMs: this.providerParams.extensionTimeoutMs,
         logger: this.logger,
         usagePollScheduler: this.usagePollScheduler,
@@ -2454,7 +2935,7 @@ export class PiRpcAgentClient implements AgentClient {
     } catch (error) {
       await runtimeSession.close().catch(() => undefined);
       mcpConfig?.cleanup();
-      paseoExtension?.cleanup();
+      byspaceExtension?.cleanup();
       throw error;
     }
   }
@@ -2481,12 +2962,18 @@ export class PiRpcAgentClient implements AgentClient {
       resumeConfig.config.mcpServers,
       mcpEnv,
     );
-    const paseoExtension = createPiPaseoExtensionFile(
-      composeSystemPromptParts(
-        resumeConfig.config.systemPrompt,
-        resumeConfig.config.daemonAppendSystemPrompt,
-      ),
-    );
+    let byspaceExtension: PiTempFile | null = null;
+    try {
+      byspaceExtension = createPiBySpaceExtensionFile(
+        composeSystemPromptParts(
+          resumeConfig.config.systemPrompt,
+          resumeConfig.config.daemonAppendSystemPrompt,
+        ),
+      );
+    } catch (error) {
+      mcpConfig?.cleanup();
+      throw error;
+    }
     let runtimeSession: PiRuntimeSession;
     try {
       runtimeSession = await this.runtime.startSession(
@@ -2495,12 +2982,12 @@ export class PiRpcAgentClient implements AgentClient {
           sessionFile,
           launchContext,
           mcpConfig,
-          paseoExtension,
+          byspaceExtension,
         }),
       );
     } catch (error) {
       mcpConfig?.cleanup();
-      paseoExtension?.cleanup();
+      byspaceExtension?.cleanup();
       throw error;
     }
     try {
@@ -2509,7 +2996,7 @@ export class PiRpcAgentClient implements AgentClient {
         config: resumeConfig.config,
         initialState: await runtimeSession.getState(),
         capabilities: capabilitiesForSession(mcpConfig !== null),
-        cleanup: combineCleanup([mcpConfig?.cleanup, paseoExtension?.cleanup]),
+        cleanup: combineCleanup([mcpConfig?.cleanup, byspaceExtension?.cleanup]),
         extensionTimeoutMs: this.providerParams.extensionTimeoutMs,
         logger: this.logger,
         usagePollScheduler: this.usagePollScheduler,
@@ -2517,7 +3004,7 @@ export class PiRpcAgentClient implements AgentClient {
     } catch (error) {
       await runtimeSession.close().catch(() => undefined);
       mcpConfig?.cleanup();
-      paseoExtension?.cleanup();
+      byspaceExtension?.cleanup();
       throw error;
     }
   }

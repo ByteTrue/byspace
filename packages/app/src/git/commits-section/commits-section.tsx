@@ -3,7 +3,11 @@ import { Pressable, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { useRetainedPanelActive } from "@/components/retained-panel";
-import { useCheckoutCommitsQuery, type CheckoutCommitsQueryResult } from "@/git/use-commits-query";
+import {
+  selectWorkspaceCommits,
+  useCheckoutCommitsQuery,
+  type CheckoutCommitsQueryResult,
+} from "@/git/use-commits-query";
 import { ThemedChevron, chevronColorMapping } from "@/git/themed-chevron";
 import { normalizeBranchOptionName } from "@/utils/branch-suggestions";
 import { CommitRow } from "./commit-row";
@@ -41,7 +45,7 @@ function CommitsSectionContent({
   now,
   onCommitPress,
 }: {
-  query: Exclude<CheckoutCommitsQueryResult, { status: "unsupported" }>;
+  query: Exclude<CheckoutCommitsQueryResult, { status: "update_host" }>;
   now: Date;
   onCommitPress: (sha: string) => void;
 }) {
@@ -56,7 +60,7 @@ function CommitsSectionContent({
   if (query.status !== "loaded") {
     return <CommitsSectionSkeleton />;
   }
-  const workspaceCommits = query.data.commits.filter((commit) => !commit.isOnBase);
+  const workspaceCommits = selectWorkspaceCommits(query.data.commits);
   const baseRef = normalizeBranchOptionName(query.data.baseRef) ?? t("workspace.git.diff.base");
   if (workspaceCommits.length === 0) {
     return (
@@ -97,7 +101,7 @@ export function CommitsSection({
   const query = useCheckoutCommitsQuery({
     serverId,
     cwd,
-    enabled: !collapsed,
+    enabled: !collapsed && isPanelActive,
   });
 
   const handleToggleSection = useCallback(() => {
@@ -120,13 +124,15 @@ export function CommitsSection({
     [collapsed],
   );
 
-  if (query.status === "unsupported") {
-    return null;
+  if (query.status === "update_host") {
+    return (
+      <View style={styles.container} testID="commits-section-update-host">
+        <Text style={styles.updateHostRow}>{t("workspace.git.diff.commits.updateHost")}</Text>
+      </View>
+    );
   }
   const commitCount =
-    query.status === "loaded"
-      ? query.data.commits.filter((commit) => !commit.isOnBase).length
-      : null;
+    query.status === "loaded" ? selectWorkspaceCommits(query.data.commits).length : null;
 
   return (
     <View style={styles.container}>
@@ -210,6 +216,12 @@ const styles = StyleSheet.create((theme) => ({
   noWorkspaceCommitsText: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
+  },
+  updateHostRow: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.foregroundMuted,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[2],
   },
   errorRow: {
     fontSize: theme.fontSize.sm,

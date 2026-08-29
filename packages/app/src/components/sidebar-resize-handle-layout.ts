@@ -5,11 +5,9 @@
  * border — half the strip hangs outside the sidebar's own bounds, which is
  * fine because web hit-testing does not clip to the parent box.
  *
- * Native hit-testing does clip: iOS `hitTest:` returns nil for points outside a
- * view's bounds and Gesture Handler's Android traversal only recurses into
- * children whose ancestors contain the point. A strip hanging outside the
- * sidebar is dead on touch, and what remains is far too small for a finger.
- * So the touch variant sits fully inside the sidebar and is sized for a thumb.
+ * A coarse browser pointer needs a larger target that stays inside the sidebar.
+ * The centered target avoids turning the full-height border into an interactive
+ * strip that competes with vertical sidebar scrolling.
  */
 
 export const POINTER_HANDLE_WIDTH = 10;
@@ -27,6 +25,29 @@ export const SIDEBAR_RESIZE_ACTIVATION_OFFSET = 6;
 export const SIDEBAR_RESIZE_FAIL_OFFSET = 12;
 
 export type SidebarResizeEdge = "left" | "right";
+export type SidebarResizeHandleVariant = "pointer" | "coarse";
+
+export interface SidebarResizePanGestureConfig {
+  activeOffsetX: [number, number];
+  failOffsetY: [number, number];
+}
+
+export function resolveSidebarResizeHandleVariant(
+  platformIsWeb: boolean,
+  finePointer: boolean,
+): SidebarResizeHandleVariant {
+  return platformIsWeb && !finePointer ? "coarse" : "pointer";
+}
+
+export function resolveSidebarResizePanGestureConfig(
+  platformIsWeb: boolean,
+): SidebarResizePanGestureConfig | null {
+  if (!platformIsWeb) return null;
+  return {
+    activeOffsetX: [-SIDEBAR_RESIZE_ACTIVATION_OFFSET, SIDEBAR_RESIZE_ACTIVATION_OFFSET],
+    failOffsetY: [-SIDEBAR_RESIZE_FAIL_OFFSET, SIDEBAR_RESIZE_FAIL_OFFSET],
+  };
+}
 
 export interface SidebarResizeHandleGeometry {
   /**

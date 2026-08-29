@@ -3,18 +3,11 @@ import type { HostProfile } from "@/types/host-connection";
 import { z } from "zod";
 
 export type HostColor = "none" | IdentityColorName;
-
 export const HOST_COLORS: readonly HostColor[] = ["none", ...IDENTITY_COLOR_NAMES];
 
-export type HostBadgeDisplay = "name" | "icon" | "hidden";
+export type HostBadgeDisplay = "auto" | "name" | "icon" | "hidden";
+export const HOST_BADGE_DISPLAYS: readonly HostBadgeDisplay[] = ["auto", "name", "icon", "hidden"];
 
-export const HOST_BADGE_DISPLAYS: readonly HostBadgeDisplay[] = ["name", "icon", "hidden"];
-
-/**
- * Per-device host presentation. `badgeDisplay` is null while the user has not chosen,
- * because the default differs by host (local hides, remote shows) and local-ness is only
- * knowable from a desktop-only async query — never at parse time.
- */
 export interface HostAppearance {
   color: HostColor;
   badgeDisplay: HostBadgeDisplay | null;
@@ -22,30 +15,24 @@ export interface HostAppearance {
 
 export const HostAppearanceSchema: z.ZodType<HostAppearance> = z.strictObject({
   color: z.enum(["none", ...IDENTITY_COLOR_NAMES]),
-  badgeDisplay: z.enum(["name", "icon", "hidden"]).nullable(),
+  badgeDisplay: z.enum(["auto", "name", "icon", "hidden"]).nullable(),
 });
 
 export function defaultHostAppearance(): HostAppearance {
-  return { color: "none", badgeDisplay: null };
+  return { color: "none", badgeDisplay: "auto" };
 }
 
 export function normalizeStoredHostAppearance(value: unknown): HostAppearance {
   const result = HostAppearanceSchema.safeParse(value);
-  return result.success ? result.data : defaultHostAppearance();
+  if (!result.success) return defaultHostAppearance();
+  return {
+    ...result.data,
+    badgeDisplay: result.data.badgeDisplay ?? "auto",
+  };
 }
 
-export function resolveHostBadgeDisplay(input: {
-  appearance: HostAppearance;
-  isLocalHost: boolean;
-  localHostResolutionPending?: boolean;
-}): HostBadgeDisplay | null {
-  if (input.appearance.badgeDisplay) {
-    return input.appearance.badgeDisplay;
-  }
-  if (input.localHostResolutionPending) {
-    return null;
-  }
-  return input.isLocalHost ? "hidden" : "name";
+export function resolveHostBadgeDisplay(input: { appearance: HostAppearance }): HostBadgeDisplay {
+  return input.appearance.badgeDisplay ?? "auto";
 }
 
 export interface HostBadgeModel {
@@ -53,40 +40,44 @@ export interface HostBadgeModel {
   label: string;
   color: HostColor;
   showLabel: boolean;
+  display: HostBadgeDisplay;
 }
 
-export type HostAppearanceSource = Pick<HostProfile, "serverId" | "label" | "appearance">;
+type HostAppearanceSource = Pick<HostProfile, "serverId" | "label" | "appearance">;
 
-/**
- * The sidebar's whole host-badge decision, resolved once per host list. Rows look their
- * badge up by serverId and render whatever they find; a host that should show no badge is
- * simply absent from the map.
- */
 export function selectHostBadges(input: {
   hosts: readonly HostAppearanceSource[];
-  localServerId: string | null;
-  localHostResolutionPending?: boolean;
   enabled: boolean;
 }): ReadonlyMap<string, HostBadgeModel> {
   const badges = new Map<string, HostBadgeModel>();
-  if (!input.enabled) {
-    return badges;
-  }
+  if (!input.enabled) return badges;
+
   for (const host of input.hosts) {
-    const display = resolveHostBadgeDisplay({
-      appearance: host.appearance,
-      isLocalHost: host.serverId === input.localServerId,
-      localHostResolutionPending: input.localHostResolutionPending,
-    });
-    if (display === null || display === "hidden") {
-      continue;
-    }
+    const display = resolveHostBadgeDisplay({ appearance: host.appearance });
+    if (display === "hidden") continue;
     badges.set(host.serverId, {
       serverId: host.serverId,
       label: host.label.trim() || host.serverId,
       color: host.appearance.color,
       showLabel: display === "name",
+      display,
     });
   }
   return badges;
+}
+
+export function resolveWorkspaceHostBadge(input: {
+  badge: HostBadgeModel | null;
+  showAutoLabel: boolean;
+}): HostBadgeModel | null {
+  if (!input.badge) {
+    return null;
+  }
+  if (input.badge.display === "auto") {
+    if (!input.showAutoLabel) {
+      return null;
+    }
+    return { ...input.badge, showLabel: true };
+  }
+  return input.badge;
 }

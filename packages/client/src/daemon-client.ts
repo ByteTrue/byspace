@@ -1,6 +1,6 @@
 import type { z } from "zod";
-import { CLIENT_CAPS, type ClientCapability } from "@getpaseo/protocol/client-capabilities";
-import type { AgentAttentionNotificationPayload } from "@getpaseo/protocol/agent-attention-notification";
+import { CLIENT_CAPS, type ClientCapability } from "@bytetrue/byspace-protocol/client-capabilities";
+import type { AgentAttentionNotificationPayload } from "@bytetrue/byspace-protocol/agent-attention-notification";
 import {
   AgentCreateFailedStatusPayloadSchema,
   AgentCreatedStatusPayloadSchema,
@@ -15,15 +15,15 @@ import {
   SessionInboundMessageSchema,
   type ActiveTurnBehavior,
   type ServerInfoStatusPayload,
-} from "@getpaseo/protocol/messages";
-import { validateWSOutboundMessage } from "@getpaseo/protocol/validation/ws-outbound";
+} from "@bytetrue/byspace-protocol/messages";
+import { validateWSOutboundMessage } from "@bytetrue/byspace-protocol/validation/ws-outbound";
 import type {
   AgentStreamEventPayload,
   AgentSnapshotPayload,
   ProjectPlacementPayload,
   AgentPermissionResolvedMessage,
   CreateAgentRequestMessage,
-  CreatePaseoWorktreeRequest,
+  CreateBySpaceWorktreeRequest,
   FileDownloadTokenResponse,
   FileUploadResponse,
   FileExplorerResponse,
@@ -61,8 +61,8 @@ import type {
   GitHubSearchResponse,
   GitHubSearchRequest,
   DirectorySuggestionsResponse,
-  PaseoWorktreeListResponse,
-  PaseoWorktreeArchiveResponse,
+  BySpaceWorktreeListResponse,
+  BySpaceWorktreeArchiveResponse,
   ProjectIconSource,
   ProjectIconResponse,
   ProjectIconGetResponse,
@@ -87,6 +87,11 @@ import type {
   DaemonGetPairingOfferResponse,
   DaemonConfigReloadResponse,
   DiagnosticsResponse,
+  DaemonOrchestrationSkillsGetStatusResponse,
+  DaemonOrchestrationSkillsSetInstalledResponse,
+  OrchestrationSkillTargetKind,
+  OrchestrationToolCallResponse,
+  OrchestrationToolsListResponse,
   AgentRewindResponseMessage,
   ListTerminalsResponse,
   CreateTerminalResponse,
@@ -99,8 +104,8 @@ import type {
   SessionInboundMessage,
   SessionOutboundMessage,
   SendAgentMessageRequest,
-  PaseoConfigRaw,
-  PaseoConfigRevision,
+  BySpaceConfigRaw,
+  BySpaceConfigRevision,
   WorkspaceCreateRequest,
   WorkspaceRecoveryState,
   PluginListItem,
@@ -108,7 +113,13 @@ import type {
   AgentSkillSelection,
   AgentSkillsStatus,
   AgentSkillsSaveResult,
-} from "@getpaseo/protocol/messages";
+  SpeechModelId,
+  SpeechModelsListResponse,
+  SpeechModelDownloadResponse,
+  SpeechModelSelectResponse,
+  SpeechModelDeleteResponse,
+  DictationRefineResponse,
+} from "@bytetrue/byspace-protocol/messages";
 import type {
   AgentPermissionRequest,
   AgentPermissionResponse,
@@ -116,14 +127,14 @@ import type {
   AgentProviderNotice,
   AgentProvider,
   AgentSessionConfig,
-} from "@getpaseo/protocol/agent-types";
+} from "@bytetrue/byspace-protocol/agent-types";
 import type {
   AgentConfigApply,
   MutableDaemonConfig,
   MutableDaemonConfigPatch,
-} from "@getpaseo/protocol/messages";
-import { isRelayClientWebSocketUrl } from "@getpaseo/protocol/daemon-endpoints";
-import { terminalSubscriptionKey } from "@getpaseo/protocol/terminal-subscription-key";
+} from "@bytetrue/byspace-protocol/messages";
+import { isRelayClientWebSocketUrl } from "@bytetrue/byspace-protocol/daemon-endpoints";
+import { terminalSubscriptionKey } from "@bytetrue/byspace-protocol/terminal-subscription-key";
 import {
   asUint8Array,
   decodeFileTransferFrame,
@@ -132,18 +143,22 @@ import {
   FileTransferOpcode,
   TerminalStreamOpcode,
   type FileTransferFrame,
-} from "@getpaseo/protocol/binary-frames/index";
+} from "@bytetrue/byspace-protocol/binary-frames/index";
+import { createRelayE2eeTransportFactory } from "./daemon-client-relay-e2ee-transport.js";
+import type {
+  DaemonTransport,
+  DaemonTransportFactory,
+  WebSocketFactory,
+} from "./daemon-client-transport-types.js";
 import {
-  createRelayE2eeTransportFactory,
-  createWebSocketTransportFactory,
   decodeMessageData,
-  defaultWebSocketFactory,
   describeTransportClose,
   describeTransportError,
-  type DaemonTransport,
-  type DaemonTransportFactory,
-  type WebSocketFactory,
-} from "./daemon-client-transport.js";
+} from "./daemon-client-transport-utils.js";
+import {
+  createWebSocketTransportFactory,
+  defaultWebSocketFactory,
+} from "./daemon-client-websocket-transport.js";
 import { DaemonClientRuntimeMetrics } from "./daemon-client-runtime-metrics.js";
 import {
   normalizeListProviderModelsPayload,
@@ -151,10 +166,6 @@ import {
   normalizeProvidersSnapshotPayload,
 } from "./compat/normalize-provider-models.js";
 import { TerminalStreamRouter, type TerminalStreamEvent } from "./terminal-stream-router.js";
-import type {
-  BrowserAutomationExecuteRequest,
-  BrowserAutomationExecuteResponse,
-} from "@getpaseo/protocol/browser-automation/rpc-schemas";
 
 export interface Logger {
   debug(obj: object, msg?: string): void;
@@ -200,6 +211,48 @@ function normalizePassword(value: string | undefined): string | null {
   return value.length > 0 ? value : null;
 }
 
+const HTTP_HEADER_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+function normalizeCustomHeaders(
+  headers: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!headers) return undefined;
+
+  const normalized: Record<string, string> = {};
+  const names = new Set<string>();
+  for (const [name, value] of Object.entries(headers)) {
+    if (!HTTP_HEADER_NAME_PATTERN.test(name)) {
+      throw new Error(`Invalid HTTP header name: ${JSON.stringify(name)}`);
+    }
+    if (typeof value !== "string" || /[\r\n]/.test(value)) {
+      throw new Error(`Invalid HTTP header value for ${JSON.stringify(name)}`);
+    }
+
+    const normalizedName = name.toLowerCase();
+    if (names.has(normalizedName)) {
+      throw new Error(`Duplicate HTTP header name: ${JSON.stringify(name)}`);
+    }
+    names.add(normalizedName);
+    normalized[name] = value;
+  }
+
+  return normalized;
+}
+
+function applyAuthoritativeAuthorization(
+  customHeaders: Record<string, string> | undefined,
+  authorization: string | undefined,
+): Record<string, string> {
+  const headers = { ...customHeaders };
+  if (!authorization) return headers;
+
+  for (const name of Object.keys(headers)) {
+    if (name.toLowerCase() === "authorization") delete headers[name];
+  }
+  headers.Authorization = authorization;
+  return headers;
+}
+
 function extractCorrelatedResponseIdentity(input: unknown): CorrelatedResponseIdentity | null {
   if (!input || typeof input !== "object") {
     return null;
@@ -242,7 +295,7 @@ export type {
   DaemonTransportFactory,
   WebSocketFactory,
   WebSocketLike,
-} from "./daemon-client-transport.js";
+} from "./daemon-client-transport-types.js";
 
 export type { TerminalStreamEvent };
 
@@ -263,10 +316,6 @@ export type DaemonEvent =
       type: "workspace_update";
       workspaceId: string;
       payload: Extract<SessionOutboundMessage, { type: "workspace_update" }>["payload"];
-    }
-  | {
-      type: "project.update";
-      payload: Extract<SessionOutboundMessage, { type: "project.update" }>["payload"];
     }
   | {
       type: "workspace_setup_progress";
@@ -301,8 +350,6 @@ export type DaemonEvent =
   | { type: "error"; message: string };
 
 export type DaemonEventHandler = (event: DaemonEvent) => void;
-export type BrowserAutomationExecuteRequestMessage = BrowserAutomationExecuteRequest;
-export type BrowserAutomationExecuteResponseMessage = BrowserAutomationExecuteResponse;
 
 export interface DaemonClientConfig {
   url: string;
@@ -312,6 +359,7 @@ export interface DaemonClientConfig {
   runtimeGeneration?: number | null;
   password?: string;
   authHeader?: string;
+  headers?: Record<string, string>;
   suppressSendErrors?: boolean;
   transportFactory?: DaemonTransportFactory;
   webSocketFactory?: WebSocketFactory;
@@ -328,14 +376,7 @@ export interface DaemonClientConfig {
   };
   runtimeMetricsIntervalMs?: number;
   runtimeMetricsWindowMs?: number;
-  trace?: DaemonClientTrace;
   capabilities?: Partial<Record<ClientCapability, unknown>>;
-}
-
-export interface DaemonClientTrace {
-  isEnabled(): boolean;
-  beginSection(name: string, args?: Record<string, string>): void;
-  endSection(): void;
 }
 
 export interface SendMessageOptions {
@@ -370,15 +411,13 @@ export interface CreateAgentRequestOptions extends AgentConfigOverrides {
   git?: GitSetupOptions;
   worktree?: CreateAgentRequestMessage["worktree"];
   autoArchive?: CreateAgentRequestMessage["autoArchive"];
-  // COMPAT(createAgentWorktree): low-level old callers may still send the
-  // create-agent worktree field. Added in v0.2.0; remove after 2027-01-17.
   worktreeName?: string;
   requestId?: string;
   labels?: Record<string, string>;
 }
 
-export interface CreatePaseoWorktreeInput extends Pick<
-  CreatePaseoWorktreeRequest,
+export interface CreateBySpaceWorktreeInput extends Pick<
+  CreateBySpaceWorktreeRequest,
   | "cwd"
   | "projectId"
   | "worktreeSlug"
@@ -419,11 +458,11 @@ type BranchSuggestionsPayload = BranchSuggestionsResponse["payload"];
 type ForgeSearchPayload = ForgeSearchResponse["payload"];
 type GitHubSearchPayload = GitHubSearchResponse["payload"];
 type DirectorySuggestionsPayload = DirectorySuggestionsResponse["payload"];
-type PaseoWorktreeListPayload = PaseoWorktreeListResponse["payload"];
-type PaseoWorktreeArchivePayload = PaseoWorktreeArchiveResponse["payload"];
-type CreatePaseoWorktreePayload = Extract<
+type BySpaceWorktreeListPayload = BySpaceWorktreeListResponse["payload"];
+type BySpaceWorktreeArchivePayload = BySpaceWorktreeArchiveResponse["payload"];
+type CreateBySpaceWorktreePayload = Extract<
   SessionOutboundMessage,
-  { type: "create_paseo_worktree_response" }
+  { type: "create_byspace_worktree_response" }
 >["payload"];
 type WorkspaceCreatePayload = Extract<
   SessionOutboundMessage,
@@ -478,8 +517,8 @@ type ListCommandsDraftConfig = Pick<
 >;
 export interface WriteProjectConfigInput {
   repoRoot: string;
-  config: PaseoConfigRaw;
-  expectedRevision: PaseoConfigRevision | null;
+  config: BySpaceConfigRaw;
+  expectedRevision: BySpaceConfigRevision | null;
   requestId?: string;
 }
 interface ListCommandsOptions {
@@ -488,10 +527,6 @@ interface ListCommandsOptions {
   draftConfig?: ListCommandsDraftConfig;
 }
 type LegacyListCommandsOptions = Omit<ListCommandsOptions, "agentId">;
-type SetVoiceModePayload = Extract<
-  SessionOutboundMessage,
-  { type: "set_voice_mode_response" }
->["payload"];
 type DictationFinishAcceptedPayload = Extract<
   SessionOutboundMessage,
   { type: "dictation_stream_finish_accepted" }
@@ -712,11 +747,16 @@ export type ProjectListOptions = Omit<ProjectListRequest, "type" | "requestId"> 
 export interface CreateScheduleOptions {
   prompt: string;
   name?: string | null;
-  cadence: {
-    type: "cron";
-    expression: string;
-    timezone?: string;
-  };
+  cadence:
+    | {
+        type: "every";
+        everyMs: number;
+      }
+    | {
+        type: "cron";
+        expression: string;
+        timezone?: string;
+      };
   target:
     | {
         type: "self";
@@ -764,11 +804,16 @@ export interface UpdateScheduleOptions {
   id: string;
   name?: string | null;
   prompt?: string;
-  cadence?: {
-    type: "cron";
-    expression: string;
-    timezone?: string;
-  };
+  cadence?:
+    | {
+        type: "every";
+        everyMs: number;
+      }
+    | {
+        type: "cron";
+        expression: string;
+        timezone?: string;
+      };
   newAgentConfig?: UpdateScheduleNewAgentConfig;
   maxRuns?: number | null;
   expiresAt?: string | null;
@@ -913,7 +958,6 @@ function toTimeoutError(error: unknown, label: string, timeoutMs: number): Error
 const DEFAULT_RECONNECT_BASE_DELAY_MS = 1500;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30000;
 const DEFAULT_SESSION_RPC_TIMEOUT_MS = 60_000;
-const PUSH_TOKEN_REVOCATION_TIMEOUT_MS = 2_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
 const DEFAULT_LIVENESS_TIMEOUT_MS = 5000;
 const LIVENESS_HEARTBEAT_INTERVAL_MS = 10_000;
@@ -988,26 +1032,6 @@ function concatByteChunks(chunks: Uint8Array[], size: number): Uint8Array {
   return bytes;
 }
 
-function getTransportFrameSize(frame: string | Uint8Array | ArrayBuffer): number {
-  if (typeof frame === "string") {
-    return frame.length;
-  }
-  return frame.byteLength;
-}
-
-function describeInboundTransportFrame(
-  frame: unknown,
-  rawBytes: Uint8Array | null,
-): Record<string, string> {
-  if (typeof frame === "string") {
-    return { kind: "text", size: String(frame.length) };
-  }
-  if (rawBytes) {
-    return { kind: "binary", size: String(rawBytes.byteLength) };
-  }
-  return { kind: "unknown", size: "0" };
-}
-
 function hashForLog(value: string): string {
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) {
@@ -1069,6 +1093,7 @@ export class DaemonClient {
   private eventListeners: Set<DaemonEventHandler> = new Set();
   private waiters: Set<Waiter<unknown>> = new Set();
   private checkoutStatusInFlight: Map<string, Promise<CheckoutStatusPayload>> = new Map();
+  private dictationStartCancels = new Map<string, (error: Error) => void>();
   private connectionListeners: Set<(status: ConnectionState) => void> = new Set();
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private connectTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -1110,8 +1135,11 @@ export class DaemonClient {
   private lastLivenessRttMs: number | null = null;
   private consecutiveLivenessFailures = 0;
 
-  constructor(private config: DaemonClientConfig) {
-    this.logger = config.logger ?? consoleLogger;
+  private config: DaemonClientConfig;
+
+  constructor(config: DaemonClientConfig) {
+    this.config = { ...config, headers: normalizeCustomHeaders(config.headers) };
+    this.logger = this.config.logger ?? consoleLogger;
     this.logConnectionPath = isRelayClientWebSocketUrl(this.config.url) ? "relay" : "direct";
     let parsedUrlForLog: URL | null = null;
     try {
@@ -1195,14 +1223,12 @@ export class DaemonClient {
       return;
     }
 
-    const headers: Record<string, string> = {};
     const password = normalizePassword(this.config.password);
-    if (password) {
-      headers.Authorization = `Bearer ${password}`;
-    } else if (this.config.authHeader) {
-      headers.Authorization = this.config.authHeader;
-    }
-    const protocols = password ? [`paseo.bearer.${password}`] : undefined;
+    const headers = applyAuthoritativeAuthorization(
+      this.config.headers,
+      password ? `Bearer ${password}` : this.config.authHeader,
+    );
+    const protocols = password ? [`byspace.bearer.${password}`] : undefined;
 
     try {
       // Reconnect can overlap with browser close/error delivery ordering.
@@ -1508,49 +1534,6 @@ export class DaemonClient {
   // Core Send Helpers
   // ============================================================================
 
-  private beginTraceSection(name: string, args?: Record<string, string>): boolean {
-    const trace = this.config.trace;
-    if (!trace?.isEnabled()) {
-      return false;
-    }
-    trace.beginSection(name, args);
-    return true;
-  }
-
-  private endTraceSection(isOpen: boolean): void {
-    if (isOpen) {
-      this.config.trace?.endSection();
-    }
-  }
-
-  private traceInstant(name: string, args?: Record<string, string>): void {
-    const isOpen = this.beginTraceSection(name, args);
-    this.endTraceSection(isOpen);
-  }
-
-  private sendJsonMessage(envelopeType: string, messageType: string, message: unknown): void {
-    this.traceInstant("paseo.ws.message.outbound", {
-      envelopeType,
-      messageType,
-    });
-    this.sendTransportFrame(JSON.stringify(message));
-  }
-
-  private sendTransportFrame(frame: string | Uint8Array | ArrayBuffer): void {
-    if (!this.transport) {
-      throw new Error("Transport not connected");
-    }
-    const isOpen = this.beginTraceSection("paseo.ws.frame.outbound", {
-      kind: typeof frame === "string" ? "text" : "binary",
-      size: String(getTransportFrameSize(frame)),
-    });
-    try {
-      this.transport.send(frame);
-    } finally {
-      this.endTraceSection(isOpen);
-    }
-  }
-
   /**
    * Send a session message. For fire-and-forget messages (heartbeats, etc.),
    * failures are suppressed if `suppressSendErrors` is configured.
@@ -1565,12 +1548,36 @@ export class DaemonClient {
     }
     const payload = SessionInboundMessageSchema.parse(message);
     try {
-      this.sendJsonMessage("session", payload.type, { type: "session", message: payload });
+      this.transport.send(JSON.stringify({ type: "session", message: payload }));
     } catch (error) {
       if (this.config.suppressSendErrors) {
         return;
       }
       throw error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  private messageUsesProviderOptions(message: SessionInboundMessage): boolean {
+    if (message.type === "create_agent_request") {
+      return message.config.providerOptions !== undefined;
+    }
+    if (message.type === "resume_agent_request") {
+      return message.overrides?.providerOptions !== undefined;
+    }
+    return (
+      message.type === "schedule/create" &&
+      message.target.type === "new-agent" &&
+      message.target.config.providerOptions !== undefined
+    );
+  }
+
+  private assertProviderOptionsSupported(message: SessionInboundMessage): void {
+    // COMPAT(providerOptions): added in v0.5.0-beta.1 on 2026-08-12; remove the gate after 2027-02-12.
+    if (
+      this.messageUsesProviderOptions(message) &&
+      !this.lastServerInfoMessage?.features?.providerOptions
+    ) {
+      throw new Error("Update the host to use provider options.");
     }
   }
 
@@ -1582,11 +1589,7 @@ export class DaemonClient {
       throw new Error(`Transport not connected (status: ${this.connectionState.status})`);
     }
     try {
-      this.traceInstant("paseo.ws.message.outbound", {
-        envelopeType: "binary",
-        messageType: "binary",
-      });
-      this.sendTransportFrame(frame);
+      this.transport.send(frame);
     } catch (error) {
       if (this.config.suppressSendErrors) {
         return;
@@ -1606,8 +1609,9 @@ export class DaemonClient {
 
     // If connected, send immediately
     if (this.transport && status === "connected") {
+      this.assertProviderOptionsSupported(message);
       const payload = SessionInboundMessageSchema.parse(message);
-      this.sendJsonMessage("session", payload.type, { type: "session", message: payload });
+      this.transport.send(JSON.stringify({ type: "session", message: payload }));
       return Promise.resolve();
     }
 
@@ -1640,17 +1644,7 @@ export class DaemonClient {
 
     for (const pending of queue) {
       clearTimeout(pending.timeoutHandle);
-      try {
-        if (this.transport && this.connectionState.status === "connected") {
-          const payload = SessionInboundMessageSchema.parse(pending.message);
-          this.sendJsonMessage("session", payload.type, { type: "session", message: payload });
-          pending.resolve();
-        } else {
-          pending.reject(new Error("Connection lost before message could be sent"));
-        }
-      } catch (error) {
-        pending.reject(error instanceof Error ? error : new Error(String(error)));
-      }
+      void this.sendSessionMessageOrThrow(pending.message).then(pending.resolve, pending.reject);
     }
   }
 
@@ -1797,7 +1791,7 @@ export class DaemonClient {
     }
     const payload = SessionInboundMessageSchema.parse(message);
     try {
-      this.sendJsonMessage("session", payload.type, { type: "session", message: payload });
+      this.transport.send(JSON.stringify({ type: "session", message: payload }));
     } catch (error) {
       throw error instanceof Error ? error : new Error(String(error));
     }
@@ -1875,16 +1869,6 @@ export class DaemonClient {
     this.sendSessionMessage({
       type: "register_push_token",
       token,
-    });
-  }
-
-  async unregisterPushToken(token: string): Promise<void> {
-    const requestId = this.createRequestId();
-    await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "push.unregister.request", token, requestId },
-      responseType: "push.unregister.response",
-      timeout: PUSH_TOKEN_REVOCATION_TIMEOUT_MS,
     });
   }
 
@@ -1982,7 +1966,7 @@ export class DaemonClient {
     this.pingProbe = probe;
 
     try {
-      this.sendJsonMessage("ping", "ping", { type: "ping" });
+      this.transport.send(JSON.stringify({ type: "ping" }));
     } catch (error) {
       this.clearPingProbe();
       const sendError = error instanceof Error ? error : new Error(String(error));
@@ -2357,6 +2341,74 @@ export class DaemonClient {
       requestId,
       message: { type: "workspace.script.stop.request", workspaceId, scriptName },
       responseType: "workspace.script.stop.response",
+    });
+  }
+
+  async listRemoteWebServices(
+    requestId?: string,
+  ): Promise<
+    Extract<SessionOutboundMessage, { type: "remote_web_service.list.response" }>["payload"]
+  > {
+    return this.sendNamespacedCorrelatedSessionRequest<"remote_web_service.list.response">({
+      requestId,
+      message: { type: "remote_web_service.list.request" },
+    });
+  }
+
+  async createRemoteWebService(
+    input: {
+      name: string;
+      target: Extract<
+        SessionInboundMessage,
+        { type: "remote_web_service.create.request" }
+      >["target"];
+    },
+    requestId?: string,
+  ): Promise<
+    Extract<SessionOutboundMessage, { type: "remote_web_service.create.response" }>["payload"]
+  > {
+    return this.sendNamespacedCorrelatedSessionRequest<"remote_web_service.create.response">({
+      requestId,
+      message: { type: "remote_web_service.create.request", ...input },
+    });
+  }
+
+  async removeRemoteWebService(
+    id: string,
+    requestId?: string,
+  ): Promise<
+    Extract<SessionOutboundMessage, { type: "remote_web_service.remove.response" }>["payload"]
+  > {
+    return this.sendNamespacedCorrelatedSessionRequest<"remote_web_service.remove.response">({
+      requestId,
+      message: { type: "remote_web_service.remove.request", id },
+    });
+  }
+
+  async grantRemoteWebService(
+    input: Omit<
+      Extract<SessionInboundMessage, { type: "remote_web_service.grant.request" }>,
+      "type" | "requestId"
+    >,
+    requestId?: string,
+  ): Promise<
+    Extract<SessionOutboundMessage, { type: "remote_web_service.grant.response" }>["payload"]
+  > {
+    return this.sendNamespacedCorrelatedSessionRequest<"remote_web_service.grant.response">({
+      requestId,
+      message: { type: "remote_web_service.grant.request", ...input },
+    });
+  }
+
+  async revokeRemoteWebServiceGrant(
+    serviceId: string,
+    requestId?: string,
+  ): Promise<
+    Extract<SessionOutboundMessage, { type: "remote_web_service.revoke.response" }>["payload"]
+  > {
+    return this.sendNamespacedCorrelatedSessionRequest<"remote_web_service.revoke.response">({
+      requestId,
+      message: { type: "remote_web_service.revoke.request", serviceId },
     });
   }
 
@@ -3248,13 +3300,7 @@ export class DaemonClient {
     return payload.notice ?? null;
   }
 
-  /**
-   * Applies a whole agent-config bundle in one request. Use this instead of
-   * chaining the single-field setters when the values belong together so client
-   * interruption and other mutations cannot interleave between steps. A
-   * provider rejection can still leave earlier steps applied.
-   * Gated on `server_info.features.agentConfigApply`.
-   */
+  /** Apply a whole agent-config bundle in one request. */
   async applyAgentConfig(
     agentId: string,
     config: AgentConfigApply,
@@ -3271,12 +3317,8 @@ export class DaemonClient {
       message,
       options: { skipQueue: true },
       select: (msg) => {
-        if (msg.type !== "agent.config.apply.response") {
-          return null;
-        }
-        if (msg.payload.requestId !== requestId) {
-          return null;
-        }
+        if (msg.type !== "agent.config.apply.response") return null;
+        if (msg.payload.requestId !== requestId) return null;
         return msg.payload;
       },
     });
@@ -3349,7 +3391,7 @@ export class DaemonClient {
     return this.sendRequest({
       requestId: resolvedRequestId,
       message,
-      timeout: 300_000, // 5 minutes — npm update can be slow on remote machines
+      timeout: 11 * 60 * 1_000, // leave a minute for npm to report a ten-minute install timeout
       options: { skipQueue: true },
       select: (msg) => {
         const parsed = DaemonUpdateResponseSchema.safeParse(msg);
@@ -3365,44 +3407,8 @@ export class DaemonClient {
   }
 
   // ============================================================================
-  // Audio / Voice
+  // Dictation
   // ============================================================================
-
-  async setVoiceMode(enabled: boolean, agentId?: string): Promise<SetVoiceModePayload> {
-    const requestId = this.createRequestId();
-    const message = SessionInboundMessageSchema.parse({
-      type: "set_voice_mode",
-      enabled,
-      ...(agentId ? { agentId } : {}),
-      requestId,
-    });
-    const response = await this.sendRequest({
-      requestId,
-      message,
-      select: (msg) => {
-        if (msg.type !== "set_voice_mode_response") {
-          return null;
-        }
-        if (msg.payload.requestId !== requestId) {
-          return null;
-        }
-        return msg.payload;
-      },
-    });
-    if (!response.accepted) {
-      const codeSuffix =
-        typeof response.reasonCode === "string" && response.reasonCode.trim().length > 0
-          ? ` (${response.reasonCode})`
-          : "";
-      throw new Error((response.error ?? "Failed to set voice mode") + codeSuffix);
-    }
-    return response;
-  }
-
-  async sendVoiceAudioChunk(audio: string, format: string, isLast = false): Promise<void> {
-    this.sendSessionMessage({ type: "voice_audio_chunk", audio, format, isLast });
-  }
-
   async startDictationStream(dictationId: string, format: string): Promise<void> {
     const ack = this.waitForWithCancel(
       (msg) => {
@@ -3438,14 +3444,21 @@ export class DaemonClient {
     const errorPromise = streamError.promise.then((payload) => {
       throw new Error(payload.error);
     });
+    const cancelStart = (error: Error) => {
+      ack.cancel(error);
+      streamError.cancel(error);
+    };
+    this.dictationStartCancels.set(dictationId, cancelStart);
 
     const cleanupError = new Error("Cancelled dictation start waiter");
     try {
       this.sendSessionMessageStrict({ type: "dictation_stream_start", dictationId, format });
       await Promise.race([ackPromise, errorPromise]);
     } finally {
-      ack.cancel(cleanupError);
-      streamError.cancel(cleanupError);
+      if (this.dictationStartCancels.get(dictationId) === cancelStart) {
+        this.dictationStartCancels.delete(dictationId);
+      }
+      cancelStart(cleanupError);
       void ackPromise.catch(() => undefined);
       void errorPromise.catch(() => undefined);
     }
@@ -3609,6 +3622,7 @@ export class DaemonClient {
   }
 
   cancelDictationStream(dictationId: string): void {
+    this.dictationStartCancels.get(dictationId)?.(new Error("Dictation start cancelled"));
     this.sendSessionMessageStrict({ type: "dictation_stream_cancel", dictationId });
   }
 
@@ -4107,7 +4121,7 @@ export class DaemonClient {
 
   async stashList(
     cwd: string,
-    options?: { paseoOnly?: boolean },
+    options?: { byspaceOnly?: boolean },
     requestId?: string,
   ): Promise<StashListPayload> {
     return this.sendCorrelatedSessionRequest({
@@ -4115,28 +4129,28 @@ export class DaemonClient {
       message: {
         type: "stash_list_request",
         cwd,
-        paseoOnly: options?.paseoOnly,
+        byspaceOnly: options?.byspaceOnly,
       },
       responseType: "stash_list_response",
     });
   }
 
-  async getPaseoWorktreeList(
+  async getBySpaceWorktreeList(
     input: { cwd?: string; repoRoot?: string },
     requestId?: string,
-  ): Promise<PaseoWorktreeListPayload> {
+  ): Promise<BySpaceWorktreeListPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "paseo_worktree_list_request",
+        type: "byspace_worktree_list_request",
         cwd: input.cwd,
         repoRoot: input.repoRoot,
       },
-      responseType: "paseo_worktree_list_response",
+      responseType: "byspace_worktree_list_response",
     });
   }
 
-  async archivePaseoWorktree(
+  async archiveBySpaceWorktree(
     input: {
       worktreePath?: string;
       repoRoot?: string;
@@ -4145,29 +4159,29 @@ export class DaemonClient {
       scope?: "workspace" | "worktree";
     },
     requestId?: string,
-  ): Promise<PaseoWorktreeArchivePayload> {
+  ): Promise<BySpaceWorktreeArchivePayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "paseo_worktree_archive_request",
+        type: "byspace_worktree_archive_request",
         worktreePath: input.worktreePath,
         repoRoot: input.repoRoot,
         branchName: input.branchName,
         ...(input.workspaceId !== undefined ? { workspaceId: input.workspaceId } : {}),
         ...(input.scope !== undefined ? { scope: input.scope } : {}),
       },
-      responseType: "paseo_worktree_archive_response",
+      responseType: "byspace_worktree_archive_response",
     });
   }
 
-  async createPaseoWorktree(
-    input: CreatePaseoWorktreeInput,
+  async createBySpaceWorktree(
+    input: CreateBySpaceWorktreeInput,
     requestId?: string,
-  ): Promise<CreatePaseoWorktreePayload> {
+  ): Promise<CreateBySpaceWorktreePayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
       message: {
-        type: "create_paseo_worktree_request",
+        type: "create_byspace_worktree_request",
         cwd: input.cwd,
         ...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
         worktreeSlug: input.worktreeSlug,
@@ -4179,7 +4193,7 @@ export class DaemonClient {
         ...(input.checkoutSource !== undefined ? { checkoutSource: input.checkoutSource } : {}),
         ...(input.githubPrNumber !== undefined ? { githubPrNumber: input.githubPrNumber } : {}),
       },
-      responseType: "create_paseo_worktree_response",
+      responseType: "create_byspace_worktree_response",
     });
   }
 
@@ -4541,6 +4555,16 @@ export class DaemonClient {
     });
   }
 
+  async getProjectIcon(
+    projectId: string,
+    requestId?: string,
+  ): Promise<ProjectIconGetResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest<"project.icon.get.response">({
+      requestId,
+      message: { type: "project.icon.get.request", projectId },
+    });
+  }
+
   async requestProjectIcon(
     cwd: string,
     requestId?: string,
@@ -4552,16 +4576,6 @@ export class DaemonClient {
         cwd,
       },
       responseType: "project_icon_response",
-    });
-  }
-
-  async getProjectIcon(
-    projectId: string,
-    requestId?: string,
-  ): Promise<ProjectIconGetResponse["payload"]> {
-    return this.sendNamespacedCorrelatedSessionRequest<"project.icon.get.response">({
-      requestId,
-      message: { type: "project.icon.get.request", projectId },
     });
   }
 
@@ -4647,6 +4661,54 @@ export class DaemonClient {
     return normalizeProvidersSnapshotPayload(payload);
   }
 
+  async listSpeechModels(requestId?: string): Promise<SpeechModelsListResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId,
+      message: { type: "speech.models.list.request" },
+    });
+  }
+
+  async downloadSpeechModel(
+    modelId: SpeechModelId,
+    requestId?: string,
+  ): Promise<SpeechModelDownloadResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId,
+      message: { type: "speech.models.download.request", modelId },
+    });
+  }
+
+  async selectSpeechModel(
+    modelId: SpeechModelId,
+    requestId?: string,
+  ): Promise<SpeechModelSelectResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId,
+      message: { type: "speech.models.select.request", modelId },
+    });
+  }
+
+  async deleteSpeechModel(
+    modelId: SpeechModelId,
+    requestId?: string,
+  ): Promise<SpeechModelDeleteResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId,
+      message: { type: "speech.models.delete.request", modelId },
+    });
+  }
+
+  async refineDictationTranscript(
+    text: string,
+    agentId: string,
+    requestId?: string,
+  ): Promise<DictationRefineResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId,
+      message: { type: "speech.dictation.refine.request", text, agentId },
+    });
+  }
+
   async getDaemonConfig(
     requestId?: string,
   ): Promise<{ requestId: string; config: MutableDaemonConfig }> {
@@ -4670,38 +4732,75 @@ export class DaemonClient {
     });
   }
 
-  async reloadDaemonConfig(requestId?: string): Promise<DaemonConfigReloadResponse["payload"]> {
-    this.requireDaemonConfigReloadSupport();
+  async getOrchestrationSkillsStatus(
+    requestId?: string,
+  ): Promise<DaemonOrchestrationSkillsGetStatusResponse["payload"]> {
     return this.sendNamespacedCorrelatedSessionRequest({
       requestId,
-      message: { type: "daemon.config.reload.request" },
+      message: { type: "daemon.orchestration_skills.get_status.request" },
     });
   }
 
-  async connectHub(hubUrl: string, token: string, requestId?: string) {
-    this.requireHubRelationshipSupport();
-    return this.sendCorrelatedSessionRequest({
+  async setOrchestrationSkillsInstalled(
+    options:
+      | boolean
+      | {
+          installed: boolean;
+          skillNames?: string[];
+          targets?: OrchestrationSkillTargetKind[];
+          requestId?: string;
+        },
+    legacyRequestId?: string,
+  ): Promise<DaemonOrchestrationSkillsSetInstalledResponse["payload"]> {
+    const isBool = typeof options === "boolean";
+    const installed = isBool ? options : options.installed;
+    const skillNames = isBool ? undefined : options.skillNames;
+    const targets = isBool ? undefined : options.targets;
+    const requestId = isBool ? legacyRequestId : (options.requestId ?? legacyRequestId);
+    return this.sendNamespacedCorrelatedSessionRequest({
       requestId,
-      message: { type: "hub.management.daemon.connect.request", hubUrl, token },
-      responseType: "hub.management.daemon.connect.response",
+      message: {
+        type: "daemon.orchestration_skills.set_installed.request",
+        installed,
+        ...(skillNames ? { skillNames } : {}),
+        ...(targets ? { targets } : {}),
+      },
     });
   }
 
-  async getHubStatus(requestId?: string) {
-    this.requireHubRelationshipSupport();
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "hub.management.daemon.get_status.request" },
-      responseType: "hub.management.daemon.get_status.response",
+  async listOrchestrationTools(options?: {
+    callerAgentId?: string;
+    requestId?: string;
+  }): Promise<OrchestrationToolsListResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId: options?.requestId,
+      message: {
+        type: "orchestration.tools.list.request",
+        callerAgentId: options?.callerAgentId,
+      },
     });
   }
 
-  async disconnectHub(force = false, requestId?: string) {
-    this.requireHubRelationshipSupport();
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "hub.management.daemon.disconnect.request", force },
-      responseType: "hub.management.daemon.disconnect.response",
+  async callOrchestrationTool(options: {
+    toolName: string;
+    input?: Record<string, unknown>;
+    callerAgentId?: string;
+    callerCwd?: string;
+    callerWorkspaceId?: string;
+    requestId?: string;
+    timeout?: number;
+  }): Promise<OrchestrationToolCallResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId: options.requestId,
+      message: {
+        type: "orchestration.tools.call.request",
+        callerAgentId: options.callerAgentId,
+        callerCwd: options.callerCwd,
+        callerWorkspaceId: options.callerWorkspaceId,
+        toolName: options.toolName,
+        input: options.input,
+      },
+      timeout: options.timeout,
     });
   }
 
@@ -4715,6 +4814,14 @@ export class DaemonClient {
       },
       responseType: "daemon.get_pairing_offer.response",
       timeout: options?.timeout,
+    });
+  }
+
+  async reloadDaemonConfig(requestId?: string): Promise<DaemonConfigReloadResponse["payload"]> {
+    this.requireDaemonConfigReloadSupport();
+    return this.sendNamespacedCorrelatedSessionRequest({
+      requestId,
+      message: { type: "daemon.config.reload.request" },
     });
   }
 
@@ -4741,8 +4848,163 @@ export class DaemonClient {
     });
   }
 
-  sendBrowserAutomationExecuteResponse(response: BrowserAutomationExecuteResponse): void {
-    this.sendSessionMessageStrict(response);
+  async getPluginCatalog(): Promise<Array<{ id: string; clientBundle: string }>> {
+    const requestId = this.createRequestId();
+    const payload = await this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "plugin.catalog.get.request", requestId },
+      responseType: "plugin.catalog.get.response",
+    });
+    return payload.plugins;
+  }
+
+  async listPlugins(): Promise<PluginListItem[]> {
+    const requestId = this.createRequestId();
+    const payload = await this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "plugin.list.request", requestId },
+      responseType: "plugin.list.response",
+    });
+    return payload.plugins;
+  }
+
+  async getPluginLogs(pluginId: string): Promise<PluginLogEntry[]> {
+    const requestId = this.createRequestId();
+    const payload = await this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "plugin.logs.get.request", requestId, pluginId },
+      responseType: "plugin.logs.get.response",
+    });
+    return payload.entries;
+  }
+
+  async getAgentSkillsStatus(): Promise<AgentSkillsStatus> {
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "agent.skills.get_status.request", requestId },
+      responseType: "agent.skills.get_status.response",
+    });
+  }
+
+  async reconcileAgentSkills(): Promise<AgentSkillsStatus> {
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "agent.skills.reconcile.request", requestId },
+      responseType: "agent.skills.reconcile.response",
+    });
+  }
+
+  async uninstallAgentSkills(): Promise<AgentSkillsStatus> {
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "agent.skills.uninstall.request", requestId },
+      responseType: "agent.skills.uninstall.response",
+    });
+  }
+
+  async saveAgentSkillsSelection(
+    selection: AgentSkillSelection,
+    confirmedRemovals?: readonly string[],
+  ): Promise<AgentSkillsSaveResult> {
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedSessionRequest({
+      message: {
+        type: "agent.skills.save_selection.request",
+        requestId,
+        selection,
+        ...(confirmedRemovals ? { confirmedRemovals: [...confirmedRemovals] } : {}),
+      },
+      responseType: "agent.skills.save_selection.response",
+    });
+  }
+
+  async importLegacyAgentSkillsSelection(selection: AgentSkillSelection): Promise<{
+    imported: boolean;
+    selection: AgentSkillSelection;
+  }> {
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedSessionRequest({
+      message: {
+        type: "agent.skills.import_legacy_selection.request",
+        requestId,
+        selection,
+      },
+      responseType: "agent.skills.import_legacy_selection.response",
+    });
+  }
+
+  async installDirectoryPlugin(path: string, id?: string): Promise<PluginListItem> {
+    const requestId = this.createRequestId();
+    const payload = await this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "plugin.directory.install.request",
+        requestId,
+        path,
+        ...(id ? { id } : {}),
+      },
+      responseType: "plugin.directory.install.response",
+    });
+    return payload.plugin;
+  }
+
+  async inspectDirectoryPlugin(path: string): Promise<{ id: string }> {
+    const requestId = this.createRequestId();
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "plugin.directory.inspect.request", requestId, path },
+      responseType: "plugin.directory.inspect.response",
+    });
+  }
+
+  async reloadPlugin(pluginId: string): Promise<PluginListItem> {
+    return this.managePlugin("reload", pluginId);
+  }
+
+  async enablePlugin(pluginId: string): Promise<PluginListItem> {
+    return this.managePlugin("enable", pluginId);
+  }
+
+  async disablePlugin(pluginId: string): Promise<PluginListItem> {
+    return this.managePlugin("disable", pluginId);
+  }
+
+  async removePlugin(pluginId: string): Promise<void> {
+    const requestId = this.createRequestId();
+    await this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "plugin.remove.request", requestId, pluginId },
+      responseType: "plugin.remove.response",
+    });
+  }
+
+  private async managePlugin(
+    action: "reload" | "enable" | "disable",
+    pluginId: string,
+  ): Promise<PluginListItem> {
+    const requestId = this.createRequestId();
+    const payload = await this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: `plugin.${action}.request`, requestId, pluginId },
+      responseType: `plugin.${action}.response`,
+    });
+    return payload.plugin;
+  }
+
+  async invokePluginRpc(pluginId: string, method: string, input: unknown): Promise<unknown> {
+    const requestId = this.createRequestId();
+    const payload = await this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "plugin.rpc.invoke.request",
+        requestId,
+        pluginId,
+        method,
+        input,
+      },
+      responseType: "plugin.rpc.invoke.response",
+    });
+    return payload.output;
   }
 
   async readProjectConfig(repoRoot: string, requestId?: string): Promise<ReadProjectConfigPayload> {
@@ -4847,160 +5109,6 @@ export class DaemonClient {
       requestId,
       response,
     });
-  }
-
-  async getPluginCatalog(): Promise<Array<{ id: string; clientBundle: string }>> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.catalog.get.request", requestId },
-      responseType: "plugin.catalog.get.response",
-    });
-    return payload.plugins;
-  }
-
-  async listPlugins(): Promise<PluginListItem[]> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.list.request", requestId },
-      responseType: "plugin.list.response",
-    });
-    return payload.plugins;
-  }
-
-  async getPluginLogs(pluginId: string): Promise<PluginLogEntry[]> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.logs.get.request", requestId, pluginId },
-      responseType: "plugin.logs.get.response",
-    });
-    return payload.entries;
-  }
-
-  async getAgentSkillsStatus(): Promise<AgentSkillsStatus> {
-    const requestId = this.createRequestId();
-    return this.sendCorrelatedSessionRequest({
-      message: { type: "agent.skills.get_status.request", requestId },
-      responseType: "agent.skills.get_status.response",
-    });
-  }
-
-  async reconcileAgentSkills(): Promise<AgentSkillsStatus> {
-    const requestId = this.createRequestId();
-    return this.sendCorrelatedSessionRequest({
-      message: { type: "agent.skills.reconcile.request", requestId },
-      responseType: "agent.skills.reconcile.response",
-    });
-  }
-
-  async uninstallAgentSkills(): Promise<AgentSkillsStatus> {
-    const requestId = this.createRequestId();
-    return this.sendCorrelatedSessionRequest({
-      message: { type: "agent.skills.uninstall.request", requestId },
-      responseType: "agent.skills.uninstall.response",
-    });
-  }
-
-  async saveAgentSkillsSelection(
-    selection: AgentSkillSelection,
-    confirmedRemovals?: readonly string[],
-  ): Promise<AgentSkillsSaveResult> {
-    const requestId = this.createRequestId();
-    return this.sendCorrelatedSessionRequest({
-      message: {
-        type: "agent.skills.save_selection.request",
-        requestId,
-        selection,
-        ...(confirmedRemovals ? { confirmedRemovals: [...confirmedRemovals] } : {}),
-      },
-      responseType: "agent.skills.save_selection.response",
-    });
-  }
-
-  async importLegacyAgentSkillsSelection(selection: AgentSkillSelection): Promise<{
-    imported: boolean;
-    selection: AgentSkillSelection;
-  }> {
-    const requestId = this.createRequestId();
-    return this.sendCorrelatedSessionRequest({
-      message: {
-        type: "agent.skills.import_legacy_selection.request",
-        requestId,
-        selection,
-      },
-      responseType: "agent.skills.import_legacy_selection.response",
-    });
-  }
-
-  async installDirectoryPlugin(path: string, id?: string): Promise<PluginListItem> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.directory.install.request", requestId, path, ...(id ? { id } : {}) },
-      responseType: "plugin.directory.install.response",
-    });
-    return payload.plugin;
-  }
-
-  async inspectDirectoryPlugin(path: string): Promise<{ id: string }> {
-    const requestId = this.createRequestId();
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.directory.inspect.request", requestId, path },
-      responseType: "plugin.directory.inspect.response",
-    });
-  }
-
-  async reloadPlugin(pluginId: string): Promise<PluginListItem> {
-    return this.managePlugin("reload", pluginId);
-  }
-
-  async enablePlugin(pluginId: string): Promise<PluginListItem> {
-    return this.managePlugin("enable", pluginId);
-  }
-
-  async disablePlugin(pluginId: string): Promise<PluginListItem> {
-    return this.managePlugin("disable", pluginId);
-  }
-
-  async removePlugin(pluginId: string): Promise<void> {
-    const requestId = this.createRequestId();
-    await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "plugin.remove.request", requestId, pluginId },
-      responseType: "plugin.remove.response",
-    });
-  }
-
-  private async managePlugin(
-    action: "reload" | "enable" | "disable",
-    pluginId: string,
-  ): Promise<PluginListItem> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: `plugin.${action}.request`, requestId, pluginId },
-      responseType: `plugin.${action}.response`,
-    });
-    return payload.plugin;
-  }
-
-  async invokePluginRpc(pluginId: string, method: string, input: unknown): Promise<unknown> {
-    const requestId = this.createRequestId();
-    const payload = await this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "plugin.rpc.invoke.request",
-        requestId,
-        pluginId,
-        method,
-        input,
-      },
-      responseType: "plugin.rpc.invoke.response",
-    });
-    return payload.output;
   }
 
   async respondToPermissionAndWait(
@@ -5517,15 +5625,8 @@ export class DaemonClient {
     return this.lastServerInfoMessage;
   }
 
-  private requireHubRelationshipSupport(): void {
-    // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
-    if (this.lastServerInfoMessage?.features?.hubRelationship !== true) {
-      throw new Error("Update the host to use Hub relationship management.");
-    }
-  }
-
   private requireDaemonConfigReloadSupport(): void {
-    // COMPAT(daemonConfigReload): added in v0.4.0, remove gate after 2027-02-14.
+    // COMPAT(daemonConfigReload): added in v0.7.0, remove gate after 2027-02-25.
     if (this.lastServerInfoMessage?.features?.daemonConfigReload !== true) {
       throw new Error("Update the host to reload daemon configuration.");
     }
@@ -5546,22 +5647,23 @@ export class DaemonClient {
     }
 
     try {
-      this.sendJsonMessage("hello", "hello", {
-        type: "hello",
-        clientId: this.config.clientId,
-        clientType: this.config.clientType ?? "cli",
-        protocolVersion: 1,
-        capabilities: {
-          [CLIENT_CAPS.customModeIcons]: true,
-          [CLIENT_CAPS.reasoningMergeEnum]: true,
-          [CLIENT_CAPS.terminalReflowableSnapshot]: true,
-          [CLIENT_CAPS.providerSubagents]: true,
-          [CLIENT_CAPS.projectUpdates]: true,
-          [CLIENT_CAPS.compactProviderSnapshots]: true,
-          ...this.config.capabilities,
-        },
-        ...(this.config.appVersion ? { appVersion: this.config.appVersion } : {}),
-      });
+      this.transport.send(
+        JSON.stringify({
+          type: "hello",
+          clientId: this.config.clientId,
+          clientType: this.config.clientType ?? "cli",
+          protocolVersion: 1,
+          capabilities: {
+            [CLIENT_CAPS.customModeIcons]: true,
+            [CLIENT_CAPS.reasoningMergeEnum]: true,
+            [CLIENT_CAPS.terminalReflowableSnapshot]: true,
+            [CLIENT_CAPS.providerSubagents]: true,
+            [CLIENT_CAPS.compactProviderSnapshots]: true,
+            ...this.config.capabilities,
+          },
+          ...(this.config.appVersion ? { appVersion: this.config.appVersion } : {}),
+        }),
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to send hello message";
       this.lastErrorValue = message;
@@ -5632,37 +5734,24 @@ export class DaemonClient {
     }
 
     const rawBytes = asUint8Array(rawData);
-    const isOpen = this.beginTraceSection(
-      "paseo.ws.frame.inbound",
-      describeInboundTransportFrame(rawData, rawBytes),
-    );
-    try {
-      if (rawBytes && this.tryHandleBinaryFrame(rawBytes)) {
-        return;
-      }
-      const payload = decodeMessageData(rawData);
-      if (!payload) {
-        return;
-      }
-      this.handleJsonPayload(payload, rawBytes?.byteLength);
-    } finally {
-      this.endTraceSection(isOpen);
+    if (rawBytes && this.tryHandleBinaryFrame(rawBytes)) {
+      return;
     }
+    const payload = decodeMessageData(rawData);
+    if (!payload) {
+      return;
+    }
+    this.handleJsonPayload(payload, rawBytes?.byteLength);
   }
 
   private handleJsonPayload(payload: string, rawBytesLength: number | undefined): void {
     const bytes = rawBytesLength ?? payload.length;
     const startMs = perfNow();
     let parsedJson: unknown;
-    const parseTraceOpen = this.beginTraceSection("paseo.ws.json.parse", {
-      size: String(bytes),
-    });
     try {
       parsedJson = JSON.parse(payload);
     } catch {
       return;
-    } finally {
-      this.endTraceSection(parseTraceOpen);
     }
 
     const parsed = validateWSOutboundMessage(parsedJson);
@@ -5689,19 +5778,11 @@ export class DaemonClient {
     this.consecutiveLivenessFailures = 0;
 
     if (parsed.data.type === "pong") {
-      this.traceInstant("paseo.ws.message.inbound", {
-        envelopeType: "pong",
-        messageType: "pong",
-      });
       this.resolvePingProbe();
       this.runtimeMetrics?.recordMessage("pong", bytes, perfNow() - startMs);
       return;
     }
 
-    this.traceInstant("paseo.ws.message.inbound", {
-      envelopeType: "session",
-      messageType: parsed.data.message.type,
-    });
     this.handleSessionMessage(parsed.data.message);
     const msgType = parsed.data.message.type;
     this.runtimeMetrics?.recordMessage(msgType, bytes, perfNow() - startMs);
@@ -5713,11 +5794,6 @@ export class DaemonClient {
   private tryHandleBinaryFrame(rawBytes: Uint8Array): boolean {
     const fileFrame = decodeFileTransferFrame(rawBytes);
     if (fileFrame) {
-      this.traceInstant("paseo.ws.message.inbound", {
-        envelopeType: "binary",
-        messageType: "file",
-        opcode: String(fileFrame.opcode),
-      });
       this.consecutiveLivenessFailures = 0;
       this.handleFileTransferFrame(fileFrame);
       this.runtimeMetrics?.recordBinaryFrame("other", rawBytes.byteLength, 0);
@@ -5728,11 +5804,6 @@ export class DaemonClient {
     if (!frame) {
       return false;
     }
-    this.traceInstant("paseo.ws.message.inbound", {
-      envelopeType: "binary",
-      messageType: "terminal",
-      opcode: String(frame.opcode),
-    });
     this.consecutiveLivenessFailures = 0;
     const binaryStartMs = perfNow();
     this.terminalStreams.handleFrame(frame);
@@ -5776,7 +5847,7 @@ export class DaemonClient {
     }
 
     if (frame.opcode === FileTransferOpcode.FileChunk) {
-      // COMPAT(fileReadByteBudget): added in v0.5.0, remove after 2027-02-21 once daemon floor >= v0.5.0.
+      // COMPAT(fileReadByteBudget): added in v0.7.0, remove after 2027-02-25 once daemon floor >= v0.7.0.
       // Old daemons stream despite maxBytes; discard before client-side accumulation.
       if (transfer.maxBytes && transfer.size > transfer.maxBytes) {
         return;
@@ -5785,7 +5856,7 @@ export class DaemonClient {
       return;
     }
 
-    // COMPAT(fileReadByteBudget): added in v0.5.0, remove after 2027-02-21 once daemon floor >= v0.5.0.
+    // COMPAT(fileReadByteBudget): added in v0.7.0, remove after 2027-02-25 once daemon floor >= v0.7.0.
     if (transfer.maxBytes && transfer.size > transfer.maxBytes) {
       this.activeBinaryFileTransfers.delete(frame.requestId);
       this.handleSessionMessage({
@@ -6090,8 +6161,6 @@ export class DaemonClient {
           workspaceId: msg.payload.kind === "upsert" ? msg.payload.workspace.id : msg.payload.id,
           payload: msg.payload,
         };
-      case "project.update":
-        return { type: "project.update", payload: msg.payload };
       case "workspace_setup_progress":
         return {
           type: "workspace_setup_progress",

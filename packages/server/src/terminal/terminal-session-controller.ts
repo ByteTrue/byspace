@@ -19,7 +19,7 @@ import {
   decodeTerminalResizePayload,
   encodeTerminalStreamFrame,
   type TerminalStreamFrame,
-} from "@getpaseo/protocol/binary-frames/index";
+} from "@bytetrue/byspace-protocol/binary-frames/index";
 import { TerminalOutputCoalescer } from "./terminal-output-coalescer.js";
 import {
   MAX_CLIENT_BUFFERED_BYTES,
@@ -33,9 +33,9 @@ import {
 } from "./terminal-restore.js";
 import type { TerminalSession } from "./terminal.js";
 import type { TerminalManager, TerminalsChangedEvent } from "./terminal-manager.js";
-import { applyTerminalSize } from "./terminal-size-ownership.js";
-import type { TerminalActivity } from "@getpaseo/protocol/terminal-activity";
-import { terminalSubscriptionKey } from "@getpaseo/protocol/terminal-subscription-key";
+import type { TerminalActivity } from "@bytetrue/byspace-protocol/terminal-activity";
+import { terminalSubscriptionKey } from "@bytetrue/byspace-protocol/terminal-subscription-key";
+import { applyTerminalSize, releaseTerminalSizeOwnership } from "./terminal-size-ownership.js";
 
 const MAX_TERMINAL_STREAM_SLOTS = 256;
 
@@ -145,6 +145,9 @@ export class TerminalSessionController {
   private readonly exitSubscriptions = new Map<string, () => void>();
   private readonly activeStreams = new Map<number, ActiveTerminalStream>();
   private readonly idToSlot = new Map<string, number>();
+  // What this client has actually been sent, kept across unsubscribe so a
+  // Terminal that becomes visible again can be resumed instead of reset.
+  private readonly deliveredRevisions = new Map<string, number>();
   private nextSlot = 0;
 
   constructor(options: TerminalSessionControllerOptions) {
@@ -270,6 +273,7 @@ export class TerminalSessionController {
   }
 
   dispose(): void {
+    releaseTerminalSizeOwnership(this.terminalSizeOwner);
     if (this.unsubscribeTerminalsChanged) {
       this.unsubscribeTerminalsChanged();
       this.unsubscribeTerminalsChanged = null;
@@ -906,6 +910,7 @@ export class TerminalSessionController {
           });
           return;
         }
+        this.markDelivered(activeStream.terminalId, message.revision);
         activeStream.outputCoalescer.handle(message.data);
       },
       { initialSnapshot: resolveTerminalSubscriptionSnapshotMode(options?.restore) },
@@ -940,9 +945,12 @@ export class TerminalSessionController {
     activeStream.snapshotInFlight = true;
     try {
       const restore = activeStream.restore;
-      const snapshotResult = restore
-        ? await this.emitRestoreSnapshot(activeStream, terminalManager, restore)
-        : await this.emitLegacySnapshot(activeStream, terminalManager);
+      const resumeResult = restore?.resume ? this.emitResumedOutput(activeStream, terminal) : null;
+      const snapshotResult =
+        resumeResult ??
+        (restore
+          ? await this.emitRestoreSnapshot(activeStream, terminalManager, restore)
+          : await this.emitLegacySnapshot(activeStream, terminalManager));
       if (!snapshotResult.shouldContinue) {
         return;
       }
@@ -958,6 +966,38 @@ export class TerminalSessionController {
     } finally {
       activeStream.snapshotInFlight = false;
     }
+  }
+
+  /**
+   * Sends only what this client missed, as ordinary output. No restore frame
+   * goes out, so the client never resets and keeps the scrollback it already
+   * had. Returns null when the gap can no longer be served in full — the caller
+   * then falls back to the snapshot path, which is authoritative.
+   */
+  private emitResumedOutput(
+    activeStream: ActiveTerminalStream,
+    terminal: TerminalSession,
+  ): SnapshotSendResult | null {
+    const delivered = this.deliveredRevisions.get(activeStream.terminalId);
+    if (delivered === undefined) {
+      return null;
+    }
+    const resumption = terminal.getOutputSince(delivered);
+    if (!resumption) {
+      return null;
+    }
+    if (resumption.data.length > 0) {
+      activeStream.outputCoalescer.handle(resumption.data);
+    }
+    this.markDelivered(activeStream.terminalId, resumption.revision);
+    return { shouldContinue: true, replayRevision: resumption.revision };
+  }
+
+  private markDelivered(terminalId: string, revision: number | undefined): void {
+    if (revision === undefined) {
+      return;
+    }
+    this.deliveredRevisions.set(terminalId, revision);
   }
 
   private async emitLegacySnapshot(
@@ -981,6 +1021,7 @@ export class TerminalSessionController {
         snapshot,
       }),
     );
+    this.markDelivered(activeStream.terminalId, snapshot.revision);
     // The snapshot frame went out-of-band; keep the replay that follows on the
     // coalescer's trailing path so it doesn't flush back-to-back with it.
     activeStream.outputCoalescer.markFlushed();
@@ -1015,6 +1056,7 @@ export class TerminalSessionController {
         snapshot,
       }),
     );
+    this.markDelivered(activeStream.terminalId, snapshot.revision);
     // The restore frame went out-of-band; keep the replay that follows on the
     // coalescer's trailing path so it doesn't flush back-to-back with it.
     activeStream.outputCoalescer.markFlushed();
@@ -1043,6 +1085,7 @@ export class TerminalSessionController {
       ) {
         continue;
       }
+      this.markDelivered(activeStream.terminalId, output.revision);
       activeStream.outputCoalescer.handle(output.data);
     }
   }
@@ -1079,6 +1122,8 @@ export class TerminalSessionController {
       this.sessionLogger.warn({ err: error }, "Failed to unsubscribe terminal stream");
     }
     if (options?.emitExit) {
+      // The terminal is gone, so there is nothing left to resume into.
+      this.deliveredRevisions.delete(activeStream.terminalId);
       this.emit({
         type: "terminal_stream_exit",
         payload: {

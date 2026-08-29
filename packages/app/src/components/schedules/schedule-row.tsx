@@ -16,14 +16,10 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { settingsStyles } from "@/styles/settings";
 import type { Theme } from "@/styles/theme";
 import type { ScheduleDerivedState } from "@/schedules/schedule-derivation";
-import {
-  formatCadence,
-  formatNextRun,
-  resolveScheduleTitle,
-  scheduleProductName,
-} from "@/utils/schedule-format";
+import { resolveScheduleRowActionVisibility } from "@/schedules/schedule-derivation";
+import { formatCadence, formatNextRun, resolveScheduleTitle } from "@/utils/schedule-format";
 import { formatTimeAgo } from "@/utils/time";
-import type { ScheduleSummary } from "@getpaseo/protocol/schedule/types";
+import type { ScheduleSummary } from "@bytetrue/byspace-protocol/schedule/types";
 
 // Themed lucide wrappers — module-scope so only the icon re-renders on theme
 // change (never call useUnistyles in render). See docs/unistyles.md.
@@ -158,10 +154,10 @@ export function ScheduleRow({
   const handlePointerLeave = useCallback(() => setIsHovered(false), []);
 
   const title = resolveScheduleTitle(schedule);
-  const productName = scheduleProductName(schedule);
   const badge = stateBadge(state);
   const meta = buildMeta(schedule, state, serverName, singleHost ?? false);
-  const canRun = schedule.target.type === "new-agent" && (state === "active" || state === "paused");
+  const canRun = state === "active" || state === "paused";
+  const actionVisibility = resolveScheduleRowActionVisibility(schedule);
 
   const rowStyle = useCallback(
     ({ pressed }: PressableStateCallbackType) => [
@@ -184,7 +180,7 @@ export function ScheduleRow({
         style={rowStyle}
         onPress={onEdit}
         accessibilityRole="button"
-        accessibilityLabel={`Edit ${productName.toLowerCase()} ${title}`}
+        accessibilityLabel={`Edit ${schedule.target.type === "agent" ? "heartbeat" : "schedule"} ${title}`}
         testID={`schedule-row-${schedule.id}`}
       >
         <View style={styles.main}>
@@ -209,6 +205,7 @@ export function ScheduleRow({
           <ScheduleKebabMenu
             schedule={schedule}
             canRun={canRun}
+            actionVisibility={actionVisibility}
             pending={pending}
             onEdit={onEdit}
             onPause={onPause}
@@ -228,66 +225,6 @@ const resumeLeading = <ThemedPlay size={MENU_ICON_SIZE} uniProps={mutedColorMapp
 const runLeading = <ThemedRotateCw size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
 const deleteLeading = <ThemedTrash2 size={MENU_ICON_SIZE} uniProps={destructiveColorMapping} />;
 
-function ScheduleExecutionMenuItems({
-  schedule,
-  canRun,
-  pending,
-  onPause,
-  onResume,
-  onRunNow,
-}: Pick<ScheduleRowProps, "schedule" | "pending" | "onPause" | "onResume" | "onRunNow"> & {
-  canRun: boolean;
-}): ReactElement | null {
-  if (schedule.target.type === "agent") {
-    return null;
-  }
-
-  let cadenceAction: ReactElement;
-  if (schedule.status === "paused") {
-    cadenceAction = (
-      <DropdownMenuItem
-        leading={resumeLeading}
-        disabled={!canRun}
-        status={pending?.resume ? "pending" : "idle"}
-        pendingLabel="Resuming..."
-        onSelect={onResume}
-        testID={`schedule-menu-resume-${schedule.id}`}
-      >
-        Resume schedule
-      </DropdownMenuItem>
-    );
-  } else {
-    cadenceAction = (
-      <DropdownMenuItem
-        leading={pauseLeading}
-        disabled={schedule.status === "completed" || !canRun}
-        status={pending?.pause ? "pending" : "idle"}
-        pendingLabel="Pausing..."
-        onSelect={onPause}
-        testID={`schedule-menu-pause-${schedule.id}`}
-      >
-        Pause schedule
-      </DropdownMenuItem>
-    );
-  }
-
-  return (
-    <>
-      {cadenceAction}
-      <DropdownMenuItem
-        leading={runLeading}
-        disabled={!canRun}
-        status={pending?.runNow ? "pending" : "idle"}
-        pendingLabel="Starting..."
-        onSelect={onRunNow}
-        testID={`schedule-menu-run-${schedule.id}`}
-      >
-        Run now
-      </DropdownMenuItem>
-    </>
-  );
-}
-
 function renderKebabTriggerIcon({ hovered }: { hovered?: boolean }): ReactElement {
   return (
     <ThemedKebab
@@ -300,6 +237,7 @@ function renderKebabTriggerIcon({ hovered }: { hovered?: boolean }): ReactElemen
 function ScheduleKebabMenu({
   schedule,
   canRun,
+  actionVisibility,
   pending,
   onEdit,
   onPause,
@@ -311,16 +249,15 @@ function ScheduleKebabMenu({
   "schedule" | "pending" | "onEdit" | "onPause" | "onResume" | "onRunNow" | "onDelete"
 > & {
   canRun: boolean;
+  actionVisibility: ReturnType<typeof resolveScheduleRowActionVisibility>;
 }): ReactElement {
-  const productName = scheduleProductName(schedule);
-  const productNameLower = productName.toLowerCase();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         hitSlop={8}
         style={kebabTriggerStyle}
         accessibilityRole={isNative ? "button" : undefined}
-        accessibilityLabel={`${productName} actions`}
+        accessibilityLabel="Schedule actions"
         testID={`schedule-kebab-${schedule.id}`}
       >
         {renderKebabTriggerIcon}
@@ -331,16 +268,44 @@ function ScheduleKebabMenu({
           onSelect={onEdit}
           testID={`schedule-menu-edit-${schedule.id}`}
         >
-          Edit {productNameLower}
+          {schedule.target.type === "agent" ? "Edit heartbeat" : "Edit schedule"}
         </DropdownMenuItem>
-        <ScheduleExecutionMenuItems
-          schedule={schedule}
-          canRun={canRun}
-          pending={pending}
-          onPause={onPause}
-          onResume={onResume}
-          onRunNow={onRunNow}
-        />
+        {actionVisibility.resume ? (
+          <DropdownMenuItem
+            leading={resumeLeading}
+            disabled={!canRun}
+            status={pending?.resume ? "pending" : "idle"}
+            pendingLabel="Resuming..."
+            onSelect={onResume}
+            testID={`schedule-menu-resume-${schedule.id}`}
+          >
+            Resume schedule
+          </DropdownMenuItem>
+        ) : null}
+        {actionVisibility.pause ? (
+          <DropdownMenuItem
+            leading={pauseLeading}
+            disabled={schedule.status === "completed" || !canRun}
+            status={pending?.pause ? "pending" : "idle"}
+            pendingLabel="Pausing..."
+            onSelect={onPause}
+            testID={`schedule-menu-pause-${schedule.id}`}
+          >
+            Pause schedule
+          </DropdownMenuItem>
+        ) : null}
+        {actionVisibility.runNow ? (
+          <DropdownMenuItem
+            leading={runLeading}
+            disabled={!canRun}
+            status={pending?.runNow ? "pending" : "idle"}
+            pendingLabel="Starting..."
+            onSelect={onRunNow}
+            testID={`schedule-menu-run-${schedule.id}`}
+          >
+            Run now
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           leading={deleteLeading}
@@ -350,7 +315,7 @@ function ScheduleKebabMenu({
           onSelect={onDelete}
           testID={`schedule-menu-delete-${schedule.id}`}
         >
-          Delete {productNameLower}
+          {schedule.target.type === "agent" ? "Delete heartbeat" : "Delete schedule"}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -384,12 +349,12 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: theme.spacing[3],
   },
   leading: {
     width: PROVIDER_ICON_SIZE,
-    height: 20,
+    height: PROVIDER_ICON_SIZE,
     alignItems: "center",
     justifyContent: "center",
   },

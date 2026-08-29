@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   FileExplorerRequestSchema,
-  PaseoWorktreeArchiveRequestSchema,
+  BySpaceWorktreeArchiveRequestSchema,
   parseServerInfoStatusPayload,
   SessionInboundMessageSchema,
   SessionOutboundMessageSchema,
@@ -41,19 +41,6 @@ function fetchWorkspacesResponse(workspace: Record<string, unknown>) {
   };
 }
 
-describe("project icon message security", () => {
-  test("rejects URL sources at the daemon boundary", () => {
-    const parsed = SessionInboundMessageSchema.safeParse({
-      type: "project.icon.set.request",
-      projectId: "project-1",
-      source: { type: "url", url: "http://127.0.0.1/private" },
-      requestId: "request-1",
-    });
-
-    expect(parsed.success).toBe(false);
-  });
-});
-
 describe("project icon revision compatibility", () => {
   const project = {
     projectId: "project-1",
@@ -75,7 +62,6 @@ describe("project icon revision compatibility", () => {
     ).toEqual({ ...project, projectIconRevision: "automatic:none:v1" });
   });
 });
-
 describe("workspace descriptor message compatibility", () => {
   test("old-shaped fetch_workspaces_response without project still parses", () => {
     const parsed = SessionOutboundMessageSchema.parse(
@@ -102,7 +88,7 @@ describe("workspace descriptor message compatibility", () => {
               currentBranch: "main",
               remoteUrl: "https://github.com/acme/app.git",
               worktreeRoot: "/repo/app",
-              isPaseoOwnedWorktree: false,
+              isBySpaceOwnedWorktree: false,
               mainRepoRoot: null,
             },
           },
@@ -123,7 +109,7 @@ describe("workspace descriptor message compatibility", () => {
         currentBranch: "main",
         remoteUrl: "https://github.com/acme/app.git",
         worktreeRoot: "/repo/app",
-        isPaseoOwnedWorktree: false,
+        isBySpaceOwnedWorktree: false,
         mainRepoRoot: null,
       },
     });
@@ -147,7 +133,7 @@ describe("workspace descriptor message compatibility", () => {
               currentBranch: null,
               remoteUrl: null,
               worktreeRoot: null,
-              isPaseoOwnedWorktree: false,
+              isBySpaceOwnedWorktree: false,
               mainRepoRoot: null,
             },
           },
@@ -274,7 +260,7 @@ describe("diagnostics message contract", () => {
       type: "diagnostics.response",
       payload: {
         requestId: "diag-2",
-        diagnostic: "Paseo diagnostics\n  Status: ok",
+        diagnostic: "BySpace diagnostics\n  Status: ok",
       },
     });
 
@@ -422,10 +408,10 @@ describe("file explorer request compatibility", () => {
   });
 });
 
-describe("paseo worktree archive request compatibility", () => {
+describe("byspace worktree archive request compatibility", () => {
   test("omitted scope defaults to workspace", () => {
-    const parsed = PaseoWorktreeArchiveRequestSchema.parse({
-      type: "paseo_worktree_archive_request",
+    const parsed = BySpaceWorktreeArchiveRequestSchema.parse({
+      type: "byspace_worktree_archive_request",
       worktreePath: "/repo/app",
       requestId: "req-old-scope",
     });
@@ -433,8 +419,8 @@ describe("paseo worktree archive request compatibility", () => {
   });
 
   test("scope worktree parses", () => {
-    const parsed = PaseoWorktreeArchiveRequestSchema.parse({
-      type: "paseo_worktree_archive_request",
+    const parsed = BySpaceWorktreeArchiveRequestSchema.parse({
+      type: "byspace_worktree_archive_request",
       worktreePath: "/repo/app",
       scope: "worktree",
       requestId: "req-worktree-scope",
@@ -443,8 +429,8 @@ describe("paseo worktree archive request compatibility", () => {
   });
 
   test("unknown extra field is still accepted", () => {
-    const parsed = PaseoWorktreeArchiveRequestSchema.parse({
-      type: "paseo_worktree_archive_request",
+    const parsed = BySpaceWorktreeArchiveRequestSchema.parse({
+      type: "byspace_worktree_archive_request",
       worktreePath: "/repo/app",
       requestId: "req-extra",
       extraField: "ignored",

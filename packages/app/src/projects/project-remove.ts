@@ -1,10 +1,10 @@
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 import { useSessionStore } from "@/stores/session-store";
 import { selectHostFeature } from "@/runtime/host-features";
 
 interface ProjectRemoveHost {
   serverId: string;
-  projectId: string;
+  projectId?: string;
 }
 
 export interface ProjectRemoveProject {
@@ -35,14 +35,11 @@ export function getProjectRemoveReadiness(input: {
   const targets: ProjectRemoveTarget[] = [];
 
   for (const host of input.project.hosts) {
-    if (!input.supportsProjectRemove(host.serverId)) {
+    if (!host.projectId || !input.supportsProjectRemove(host.serverId)) {
       unsupportedServerIds.push(host.serverId);
       continue;
     }
-    targets.push({
-      serverId: host.serverId,
-      projectId: host.projectId,
-    });
+    targets.push({ serverId: host.serverId, projectId: host.projectId });
   }
 
   if (unsupportedServerIds.length > 0) {

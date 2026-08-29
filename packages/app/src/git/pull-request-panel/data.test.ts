@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import type {
   CheckoutPrStatusResponse,
   PullRequestTimelineResponse,
-} from "@getpaseo/protocol/messages";
+} from "@bytetrue/byspace-protocol/messages";
 import { isPipelineActiveStatus, mapPipelineStatus } from "@/git/forges/gitlab";
-import { IDENTITY_COLOR_NAMES, identityColor } from "@/styles/identity-colors";
 import {
+  buildPrPaneCheckDetailsRequest,
   deriveAvatarColor,
   formatAge,
   getActivityVerb,
@@ -37,7 +37,7 @@ const githubStatus: CheckoutPrStatus["github"] = {
 const baseStatus: CheckoutPrStatus = {
   forge: "github",
   number: 42,
-  url: "https://github.com/getpaseo/paseo/pull/42",
+  url: "https://github.com/ByteTrue/byspace/pull/42",
   title: "Wire PR pane data",
   state: "open",
   baseRefName: "main",
@@ -68,6 +68,27 @@ function timeline(overrides: Partial<PullRequestTimeline> = {}): PullRequestTime
   return { ...baseTimeline, ...overrides };
 }
 
+describe("buildPrPaneCheckDetailsRequest", () => {
+  it("includes the change request number when requesting check logs", () => {
+    expect(
+      buildPrPaneCheckDetailsRequest({
+        cwd: "/repo",
+        changeRequestNumber: 42,
+        repoOwner: "ByteTrue",
+        repoName: "byspace",
+        detailRef: { checkRunId: 123, workflowRunId: 456 },
+      }),
+    ).toEqual({
+      cwd: "/repo",
+      repoOwner: "ByteTrue",
+      repoName: "byspace",
+      checkRunId: 123,
+      workflowRunId: 456,
+      changeRequestNumber: 42,
+    });
+  });
+});
+
 describe("mapPrPaneData", () => {
   it("returns null when no PR status exists", () => {
     expect(mapPrPaneData(null, baseTimeline)).toBeNull();
@@ -77,7 +98,7 @@ describe("mapPrPaneData", () => {
     const data = mapPrPaneData(
       status({
         number: undefined,
-        url: "https://github.com/getpaseo/paseo/pull/1284",
+        url: "https://github.com/ByteTrue/byspace/pull/1284",
       }),
       timeline({ prNumber: 1284 }),
     );
@@ -87,7 +108,10 @@ describe("mapPrPaneData", () => {
 
   it("returns null when status has no number and no parseable PR URL", () => {
     expect(
-      mapPrPaneData(status({ number: undefined, url: "https://github.com/getpaseo/paseo" }), null),
+      mapPrPaneData(
+        status({ number: undefined, url: "https://github.com/ByteTrue/byspace" }),
+        null,
+      ),
     ).toBeNull();
   });
 
@@ -193,7 +217,7 @@ describe("mapPrPaneData", () => {
           {
             name: "server-tests",
             status: "failure",
-            url: "https://github.com/getpaseo/paseo/actions/runs/456/job/789",
+            url: "https://github.com/ByteTrue/byspace/actions/runs/456/job/789",
             checkRunId: 12345,
             workflowRunId: 456,
           },
@@ -207,7 +231,7 @@ describe("mapPrPaneData", () => {
         provider: "github",
         name: "server-tests",
         status: "failure",
-        url: "https://github.com/getpaseo/paseo/actions/runs/456/job/789",
+        url: "https://github.com/ByteTrue/byspace/actions/runs/456/job/789",
         detailRef: { checkRunId: 12345, workflowRunId: 456 },
       },
     ]);
@@ -276,7 +300,7 @@ describe("mapPrPaneData", () => {
             avatarUrl: "https://avatars.githubusercontent.com/u/3?v=4",
             body: "This should include line context.",
             createdAt: Date.UTC(2026, 0, 1, 11, 0, 0),
-            url: "https://github.com/getpaseo/paseo/pull/42#discussion_r1",
+            url: "https://github.com/ByteTrue/byspace/pull/42#discussion_r1",
             location: {
               path: "packages/app/src/git/pull-request-panel/data.ts",
               line: 24,
@@ -302,7 +326,7 @@ describe("mapPrPaneData", () => {
         avatarUrl: "https://avatars.githubusercontent.com/u/3?v=4",
         body: "This should include line context.",
         age: "1h ago",
-        url: "https://github.com/getpaseo/paseo/pull/42#discussion_r1",
+        url: "https://github.com/ByteTrue/byspace/pull/42#discussion_r1",
         location: {
           path: "packages/app/src/git/pull-request-panel/data.ts",
           line: 24,
@@ -685,11 +709,21 @@ describe("mapPipelineStatus", () => {
 });
 
 describe("deriveAvatarColor", () => {
-  it("returns a shared identity color, matched case-insensitively", () => {
-    const palette = IDENTITY_COLOR_NAMES.map(identityColor);
+  it("returns a deterministic color from the PR pane avatar palette", () => {
+    const palette = [
+      "#8b5cf6",
+      "#f97316",
+      "#0ea5e9",
+      "#10b981",
+      "#ef4444",
+      "#eab308",
+      "#ec4899",
+      "#6366f1",
+    ];
 
+    expect(deriveAvatarColor("alice")).toBe(deriveAvatarColor("alice"));
     expect(palette).toContain(deriveAvatarColor("alice"));
-    expect(deriveAvatarColor("Alice")).toBe(deriveAvatarColor("alice"));
+    expect(palette).toContain(deriveAvatarColor("Alice"));
   });
 });
 

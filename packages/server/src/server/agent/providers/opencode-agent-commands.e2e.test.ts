@@ -37,14 +37,19 @@ describe("opencode agent commands E2E", () => {
     }
   }, 60_000);
 
-  test("listing commands resumes an explicitly closed agent", async () => {
+  test("listing commands resumes an idle-collected agent", async () => {
     const agent = await ctx.client.createAgent({
       ...getFullAccessConfig("opencode"),
       cwd: "/tmp",
-      title: "Closed OpenCode Commands Test Agent",
+      title: "Collected OpenCode Commands Test Agent",
     });
 
-    await ctx.daemon.daemon.agentManager.closeAgent(agent.id);
+    const collection = await ctx.daemon.daemon.agentManager.collectIdleAgents({
+      cutoff: new Date(Date.now() + 1_000),
+      protectedAgentIds: new Set(),
+    });
+    expect(collection.failures).toEqual([]);
+    expect(collection.collected.map((entry) => entry.agentId)).toContain(agent.id);
     expect(ctx.daemon.daemon.agentManager.getAgent(agent.id)).toBeNull();
 
     const result = await ctx.client.listCommands({ agentId: agent.id });
@@ -68,7 +73,7 @@ describe("opencode agent commands E2E", () => {
     const state = await ctx.client.waitForFinish(agent.id, 30_000);
 
     expect(state.status).toBe("idle");
-    expect(state.lastMessage).toContain("PASEO_SKILL_OK");
+    expect(state.lastMessage).toContain("BYSPACE_SKILL_OK");
   }, 30_000);
 
   test("sendMessage executes a slash command with arguments", async () => {
@@ -85,7 +90,7 @@ describe("opencode agent commands E2E", () => {
     const state = await ctx.client.waitForFinish(agent.id, 30_000);
 
     expect(state.status).toBe("idle");
-    expect(state.lastMessage).toContain("PASEO_SKILL_OK");
+    expect(state.lastMessage).toContain("BYSPACE_SKILL_OK");
   }, 30_000);
 
   test("sendMessage keeps unknown slash input as plain prompt text", async () => {

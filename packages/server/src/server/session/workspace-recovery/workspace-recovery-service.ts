@@ -4,11 +4,15 @@ import { createRealpathAwarePathMatcher } from "../../../utils/path.js";
 import { runGitCommand } from "../../../utils/run-git-command.js";
 import {
   createWorktree,
-  isPaseoOwnedWorktreeCwd,
+  isBySpaceOwnedWorktreeCwd,
   mapWorkspaceCwdToWorktree,
-  rollbackCreatedPaseoWorktree,
+  rollbackCreatedBySpaceWorktree,
 } from "../../../utils/worktree.js";
 import { WorktreeRequestError, toWorktreeRequestError } from "../../worktree-errors.js";
+import {
+  type WorkspaceLifecycleCoordinator,
+  workspaceLifecycleCoordinator,
+} from "../../workspace-lifecycle-coordinator.js";
 import {
   resolveWorkspaceDisplayName,
   type PersistedProjectRecord,
@@ -58,14 +62,23 @@ type RecoveryPlan =
 
 type UnavailableRecoveryState = Extract<WorkspaceRecoveryState, { kind: "unavailable" }>;
 
+interface RecreatedWorktreeCompensation {
+  rollback(cause: unknown): Promise<never>;
+}
+
 export function createWorkspaceRecoveryService(deps: {
-  paseoHome: string;
+  byspaceHome: string;
   worktreesRoot?: string;
   getWorkspace: (workspaceId: string) => Promise<PersistedWorkspaceRecord | null>;
   getProject: (projectId: string) => Promise<PersistedProjectRecord | null>;
   isDirectory: (path: string) => Promise<boolean>;
   unarchiveWorkspace: (workspace: PersistedWorkspaceRecord) => Promise<void>;
+  recreateWorktree?: (
+    workspace: PersistedWorkspaceRecord,
+  ) => Promise<RecreatedWorktreeCompensation>;
+  lifecycleCoordinator?: WorkspaceLifecycleCoordinator;
 }): WorkspaceRecoveryService {
+  const lifecycle = deps.lifecycleCoordinator ?? workspaceLifecycleCoordinator;
   async function resolveRecovery(
     workspaceId: string,
   ): Promise<UnavailableRecoveryState | RecoveryPlan> {
@@ -134,29 +147,40 @@ export function createWorkspaceRecoveryService(deps: {
   }
 
   async function inspect(workspaceId: string): Promise<WorkspaceRecoveryState> {
-    const resolved = await resolveRecovery(workspaceId);
-    return resolved.kind === "unavailable" ? resolved : resolved.state;
+    return lifecycle.runExclusive(async () => {
+      const resolved = await resolveRecovery(workspaceId);
+      return resolved.kind === "unavailable" ? resolved : resolved.state;
+    });
   }
 
   async function restore(
     workspaceId: string,
   ): Promise<{ workspaceId: string; action: WorkspaceRecoveryAction }> {
-    const resolved = await resolveRecovery(workspaceId);
-    if (resolved.kind === "unavailable") {
-      throw new Error(resolved.message);
-    }
+    return lifecycle.runExclusive(async () => {
+      const resolved = await resolveRecovery(workspaceId);
+      if (resolved.kind === "unavailable") {
+        throw new Error(resolved.message);
+      }
 
-    if (resolved.kind === "restore") {
-      await recreateArchivedWorktree(resolved.workspace, resolved.sourceRepoRoot);
-    }
-    await deps.unarchiveWorkspace(resolved.workspace);
-    return { workspaceId, action: resolved.kind };
+      const compensation =
+        resolved.kind === "restore"
+          ? await (deps.recreateWorktree?.(resolved.workspace) ??
+              recreateArchivedWorktree(resolved.workspace, resolved.sourceRepoRoot))
+          : null;
+      try {
+        await deps.unarchiveWorkspace(resolved.workspace);
+      } catch (error) {
+        if (compensation) return compensation.rollback(error);
+        throw error;
+      }
+      return { workspaceId, action: resolved.kind };
+    });
   }
 
   async function recreateArchivedWorktree(
     workspace: PersistedWorkspaceRecord,
     sourceRepoRoot: string,
-  ): Promise<void> {
+  ): Promise<RecreatedWorktreeCompensation> {
     const branch = workspace.branch;
     if (!branch) {
       throw new WorktreeRequestError({
@@ -175,8 +199,8 @@ export function createWorkspaceRecoveryService(deps: {
     if (!previousWorktreePath) {
       // COMPAT(worktreeRestoreMissingWorktreeRoot): records created before v0.1.110
       // lack durable backing placement; remove filesystem discovery after 2027-01-17.
-      const ownership = await isPaseoOwnedWorktreeCwd(workspace.cwd, {
-        paseoHome: deps.paseoHome,
+      const ownership = await isBySpaceOwnedWorktreeCwd(workspace.cwd, {
+        byspaceHome: deps.byspaceHome,
         worktreesRoot: deps.worktreesRoot,
       });
       previousWorktreePath = ownership.allowed
@@ -191,7 +215,7 @@ export function createWorkspaceRecoveryService(deps: {
         worktreeSlug: basename(previousWorktreePath),
         source: { kind: "checkout-branch", branchName: branch },
         runSetup: false,
-        paseoHome: deps.paseoHome,
+        byspaceHome: deps.byspaceHome,
         worktreesRoot: deps.worktreesRoot,
       });
       recreatedWorktreePath = result.worktreePath;
@@ -199,6 +223,16 @@ export function createWorkspaceRecoveryService(deps: {
       throw toWorktreeRequestError(error);
     }
 
+    const rollback = (cause: unknown): Promise<never> =>
+      rollbackCreatedBySpaceWorktree(
+        {
+          cwd: sourceRepoRoot,
+          worktreePath: recreatedWorktreePath,
+          byspaceHome: deps.byspaceHome,
+          worktreesBaseRoot: deps.worktreesRoot,
+        },
+        cause,
+      );
     try {
       const recreatedWorkspacePath = mapWorkspaceCwdToWorktree({
         sourceWorktreePath: previousWorktreePath,
@@ -218,17 +252,9 @@ export function createWorkspaceRecoveryService(deps: {
         });
       }
     } catch (error) {
-      return rollbackCreatedPaseoWorktree(
-        {
-          cwd: sourceRepoRoot,
-          worktreePath: recreatedWorktreePath,
-          teardownCwds: [],
-          paseoHome: deps.paseoHome,
-          worktreesBaseRoot: deps.worktreesRoot,
-        },
-        error,
-      );
+      return rollback(error);
     }
+    return { rollback };
   }
 
   return { inspect, restore };

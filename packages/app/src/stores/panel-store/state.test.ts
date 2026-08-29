@@ -116,18 +116,14 @@ describe("panel-store migration", () => {
     expect(state.diffCollapsedFoldersByWorkspace).toEqual({ ws: ["src/app"] });
   });
 
-  it("initializes and preserves collapsed diff file paths by workspace", () => {
-    expect(migratePanelState({}, 14).collapsedFilePathsByWorkspace).toEqual({});
-    expect(
-      migratePanelState({ collapsedFilePathsByWorkspace: { ws: ["src/app.ts"] } }, 14)
-        .collapsedFilePathsByWorkspace,
-    ).toEqual({ ws: ["src/app.ts"] });
-  });
+  it("discards retired collapsed file paths without dropping other persisted state", () => {
+    const state = migratePanelState(
+      { collapsedFilePathsByWorkspace: { ws: ["src/app.ts"] }, sidebarWidth: 340 },
+      14,
+    );
 
-  it("drops the retired per-file diff expansion state", () => {
-    const state = migratePanelState({ diffExpandedPathsByWorkspace: { ws: ["src/app.ts"] } }, 13);
-
-    expect(state.diffExpandedPathsByWorkspace).toBeUndefined();
+    expect(state.collapsedFilePathsByWorkspace).toBeUndefined();
+    expect(state.sidebarWidth).toBe(340);
   });
 
   it("replaces the dead explorer split ratio with the shared tree rail width", () => {

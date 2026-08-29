@@ -14,13 +14,13 @@ export function useOpenProject(
   const normalizedServerId = serverId?.trim() ?? "";
   const client = useHostRuntimeClient(normalizedServerId);
   const isConnected = useHostRuntimeIsConnected(normalizedServerId);
-  const canAddProject = useSessionStore((state) =>
-    normalizedServerId
-      ? state.sessions[normalizedServerId]?.serverInfo?.features?.projectAdd === true &&
-        state.sessions[normalizedServerId]?.serverInfo?.features?.stableProjectIdentity === true
-      : false,
-  );
-  const upsertProject = useSessionStore((state) => state.upsertProject);
+  const canAddProject = useSessionStore((state) => {
+    if (!normalizedServerId) return false;
+    const features = state.sessions[normalizedServerId]?.serverInfo?.features;
+    // COMPAT(stableProjectIdentity): added in v0.2.0, remove gate after 2027-01-23.
+    return features?.projectAdd === true && features.stableProjectIdentity === true;
+  });
+  const addEmptyProject = useSessionStore((state) => state.addEmptyProject);
   const setHasHydratedWorkspaces = useSessionStore((state) => state.setHasHydratedWorkspaces);
 
   return useCallback(
@@ -31,13 +31,13 @@ export function useOpenProject(
         isConnected,
         canAddProject,
         client,
-        upsertProject,
+        addEmptyProject,
         setHasHydratedWorkspaces,
       });
       return result;
     },
     [
-      upsertProject,
+      addEmptyProject,
       canAddProject,
       client,
       isConnected,
@@ -57,7 +57,13 @@ export function useCloneGithubProject(
   const normalizedServerId = serverId?.trim() ?? "";
   const client = useHostRuntimeClient(normalizedServerId);
   const isConnected = useHostRuntimeIsConnected(normalizedServerId);
-  const upsertProject = useSessionStore((state) => state.upsertProject);
+  const canCloneGithubProject = useSessionStore((state) => {
+    if (!normalizedServerId) return false;
+    const features = state.sessions[normalizedServerId]?.serverInfo?.features;
+    // COMPAT(stableProjectIdentity): added in v0.2.0, remove gate after 2027-01-23.
+    return features?.projectGithubClone === true && features.stableProjectIdentity === true;
+  });
+  const addEmptyProject = useSessionStore((state) => state.addEmptyProject);
   const setHasHydratedWorkspaces = useSessionStore((state) => state.setHasHydratedWorkspaces);
 
   return useCallback(
@@ -68,11 +74,19 @@ export function useCloneGithubProject(
         targetDirectory,
         ...(cloneProtocol ? { cloneProtocol } : {}),
         isConnected,
+        canCloneGithubProject,
         client,
-        upsertProject,
+        addEmptyProject,
         setHasHydratedWorkspaces,
       });
     },
-    [client, isConnected, normalizedServerId, setHasHydratedWorkspaces, upsertProject],
+    [
+      addEmptyProject,
+      canCloneGithubProject,
+      client,
+      isConnected,
+      normalizedServerId,
+      setHasHydratedWorkspaces,
+    ],
   );
 }

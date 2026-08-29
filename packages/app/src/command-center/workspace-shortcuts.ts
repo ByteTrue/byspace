@@ -31,7 +31,9 @@ export function resolveWorkspaceCommandCenterShortcuts({
       resolveShortcutKeysForAction("workspace-tab-close-current", overrides, platform) ?? undefined,
     closePane:
       resolveShortcutKeysForAction("workspace-pane-close", overrides, platform) ?? undefined,
-    toggleExplorerSidebar:
+    togglePaneMaximization:
+      resolveShortcutKeysForAction("workspace-explorer-maximize", overrides, platform) ?? undefined,
+    toggleSidePanel:
       resolveShortcutKeysForAction("toggle-right-sidebar", overrides, platform) ?? undefined,
   };
 }

@@ -1,4 +1,4 @@
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 import type { CommandError } from "../../output/index.js";
 import { connectToDaemon } from "../../utils/client.js";
 
@@ -29,7 +29,7 @@ export async function withPluginManagementClient<T>(
   host: string | undefined,
   run: (client: DaemonClient) => Promise<T>,
 ): Promise<T> {
-  // COMPAT(pluginManagement): added in v0.3.1, remove gate after 2027-08-14.
+  // COMPAT(pluginManagement): added in v0.6.0, remove after 2027-02-24.
   return withPluginClient(
     host,
     "pluginManagement",
@@ -42,6 +42,6 @@ export async function withPluginLogsClient<T>(
   host: string | undefined,
   run: (client: DaemonClient) => Promise<T>,
 ): Promise<T> {
-  // COMPAT(pluginLogs): added in v0.4.0, remove gate after 2027-08-16.
+  // COMPAT(pluginLogs): added in v0.6.0, remove after 2027-02-24.
   return withPluginClient(host, "pluginLogs", "Update the host to view plugin logs.", run);
 }

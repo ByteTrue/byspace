@@ -5,13 +5,12 @@ import type { AttachmentMetadata, WorkspaceFileComposerAttachment } from "@/atta
 import { appendWorkspaceFileAttachment } from "@/attachments/workspace-file";
 import {
   garbageCollectAttachments,
+  persistAttachmentFromBlob,
   persistAttachmentFromDataUrl,
-  persistAttachmentFromFileUri,
 } from "@/attachments/service";
 import { collectRetainedAttachmentIds } from "@/attachments/gc-retention";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { useSessionStore, type SessionState } from "@/stores/session-store";
-import { useWorkspaceAttachmentsStore } from "@/attachments/workspace-attachments-store";
 import {
   applyClearDraftRecord,
   collectReferencedAttachmentIdsFromState,
@@ -109,8 +108,10 @@ const migrateLegacyImages: MigrateLegacyImages = async (images) => {
           });
         }
 
-        return await persistAttachmentFromFileUri({
-          uri: entry.uri,
+        const response = await fetch(entry.uri);
+        const blob = await response.blob();
+        return await persistAttachmentFromBlob({
+          blob,
           mimeType: entry.mimeType,
         });
       } catch (error) {
@@ -164,18 +165,6 @@ async function runAttachmentGc(): Promise<void> {
     collectQueuedMessageAttachmentIds(session, referencedIds);
     collectStreamUserImageIds(session.agentStreamTail, referencedIds);
     collectStreamUserImageIds(session.agentStreamHead, referencedIds);
-  }
-
-  // Browser-element screenshots live in the workspace attachment store, not in
-  // drafts, so collect their ids here to keep them from being garbage collected
-  // before the user sends the message.
-  const attachmentsByScope = useWorkspaceAttachmentsStore.getState().attachmentsByScope;
-  for (const attachments of Object.values(attachmentsByScope)) {
-    for (const attachment of attachments) {
-      if (attachment.kind === "browser_element" && attachment.attachment.screenshot) {
-        referencedIds.add(attachment.attachment.screenshot.id);
-      }
-    }
   }
 
   try {
@@ -416,7 +405,7 @@ export const useDraftStore = create<DraftStore>()(
       },
     }),
     {
-      name: "paseo-drafts",
+      name: "byspace-drafts",
       version: DRAFT_STORE_VERSION,
       storage: draftPersistStorage,
       partialize: ({ drafts, createModalDraft }) => ({ drafts, createModalDraft }),

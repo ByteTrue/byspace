@@ -19,6 +19,21 @@ export type ToggleSidebarWorkspacePin = (workspace: PinnableWorkspace) => void;
 // click fire two concurrent, opposite setWorkspacePinned calls for the same workspace.
 const pendingWorkspaceKeys = new Set<string>();
 
+// The in-flight guard is pure so the controller's concurrency contract can be unit-tested
+// without a React renderer: a second toggle for a pending key is a no-op, and the key stays
+// claimed until the mutation settles (success or failure alike).
+export function beginSidebarPinToggle(workspaceKey: string): boolean {
+  if (pendingWorkspaceKeys.has(workspaceKey)) {
+    return false;
+  }
+  pendingWorkspaceKeys.add(workspaceKey);
+  return true;
+}
+
+export function endSidebarPinToggle(workspaceKey: string): void {
+  pendingWorkspaceKeys.delete(workspaceKey);
+}
+
 export function useSidebarWorkspacePinController(): ToggleSidebarWorkspacePin {
   const { t } = useTranslation();
   const toast = useToast();
@@ -42,17 +57,16 @@ export function useSidebarWorkspacePinController(): ToggleSidebarWorkspacePin {
       );
     },
     onSettled: (_data, _error, { workspace }) => {
-      pendingWorkspaceKeys.delete(workspace.workspaceKey);
+      endSidebarPinToggle(workspace.workspaceKey);
     },
   });
   const mutate = mutation.mutate;
 
   return useCallback(
     (workspace: PinnableWorkspace) => {
-      if (pendingWorkspaceKeys.has(workspace.workspaceKey)) {
+      if (!beginSidebarPinToggle(workspace.workspaceKey)) {
         return;
       }
-      pendingWorkspaceKeys.add(workspace.workspaceKey);
       mutate({ workspace, pinned: workspace.pinnedAt == null });
     },
     [mutate],

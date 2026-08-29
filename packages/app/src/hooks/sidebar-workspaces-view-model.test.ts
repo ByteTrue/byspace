@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { Agent, WorkspaceDescriptor } from "@/stores/session-store";
+import type { WorkspaceDescriptor } from "@/stores/session-store";
 import type { WorkspaceStructureProject } from "@/projects/workspace-structure";
-import { buildWorkspaceAgentActivityIndex } from "@/utils/workspace-agent-activity";
+import type { WorkspaceAgentSummary } from "@/utils/workspace-agent-summary";
 import {
   appendMissingOrderKeys,
   applyStoredOrdering,
@@ -10,12 +10,9 @@ import {
   buildSidebarProjectsFromStructure,
   computeSidebarOrderUpdates,
   createSidebarWorkspaceEntry,
-  deriveProjectStatusBucket,
   deriveSidebarLoadingState,
-  shouldShowSidebarHostLabels,
-  type ProjectStatusSession,
+  shouldShowProjectHostLabels,
   type SidebarProjectEntry,
-  type SidebarWorkspacePlacement,
 } from "./sidebar-workspaces-view-model";
 
 function workspaceWithForge(forge: string | undefined, prUrl: string): WorkspaceDescriptor {
@@ -68,27 +65,6 @@ describe("createSidebarWorkspaceEntry forge threading", () => {
   });
 });
 
-describe("createSidebarWorkspaceEntry workspace directory label", () => {
-  it("uses the daemon-provided slug for a Paseo-owned worktree", () => {
-    const descriptor = workspaceWithForge(undefined, "https://github.com/acme/repo/pull/42");
-    descriptor.workspaceDirectory = "/worktrees/feature/packages/app";
-    descriptor.worktreeSlug = "feature";
-
-    const entry = createSidebarWorkspaceEntry({ serverId: "srv", workspace: descriptor });
-
-    expect(entry.workspaceDirectoryLabel).toBe("feature");
-  });
-
-  it("shortens the workspace path when the daemon omits a worktree slug", () => {
-    const descriptor = workspaceWithForge(undefined, "https://github.com/acme/repo/pull/42");
-    descriptor.workspaceDirectory = "/home/alice/external/feature";
-
-    const entry = createSidebarWorkspaceEntry({ serverId: "srv", workspace: descriptor });
-
-    expect(entry.workspaceDirectoryLabel).toBe("~/external/feature");
-  });
-});
-
 interface OrderedItem {
   key: string;
 }
@@ -103,26 +79,20 @@ function project(input: {
   projectKind?: WorkspaceStructureProject["projectKind"];
   iconWorkingDir?: string;
   workspaceKeys: string[];
-  hosts?: Array<
-    Omit<WorkspaceStructureProject["hosts"][number], "projectId"> & { projectId?: string }
-  >;
+  hosts?: WorkspaceStructureProject["hosts"];
 }): WorkspaceStructureProject {
   return {
-    viewKey: input.projectKey,
     projectKey: input.projectKey,
     projectName: input.projectName ?? input.projectKey,
     projectKind: input.projectKind ?? "git",
     iconWorkingDir: input.iconWorkingDir ?? input.projectKey,
-    hosts: Array.from(
-      input.hosts ?? [
-        {
-          serverId: "srv",
-          iconWorkingDir: input.iconWorkingDir ?? input.projectKey,
-          worktreeSupport: "supported" as const,
-        },
-      ],
-      (host) => Object.assign({}, host, { projectId: host.projectId ?? input.projectKey }),
-    ),
+    hosts: input.hosts ?? [
+      {
+        serverId: "srv",
+        iconWorkingDir: input.iconWorkingDir ?? input.projectKey,
+        canCreateWorktree: true,
+      },
+    ],
     workspaceKeys: input.workspaceKeys,
   };
 }
@@ -165,6 +135,68 @@ function workspace(input: {
     scripts: [],
   };
 }
+
+function agentSummary(
+  status: WorkspaceAgentSummary["status"],
+  statusEnteredAt: Date,
+): WorkspaceAgentSummary {
+  return {
+    agents: [],
+    status,
+    needsAttentionCount:
+      status === "needs_input" || status === "failed" || status === "attention" ? 1 : 0,
+    workingCount: status === "running" ? 1 : 0,
+    oldestAttentionAt: null,
+    latestActivityAt: statusEnteredAt,
+    statusEnteredAt,
+  };
+}
+
+describe("createSidebarWorkspaceEntry status rollup", () => {
+  it("preserves a higher-priority daemon status when the agent summary is done", () => {
+    const enteredAt = new Date("2026-07-01T09:00:00.000Z");
+    const descriptor = workspace({
+      id: "workspace",
+      name: "main",
+      projectId: "project",
+      projectDisplayName: "Project",
+      status: "running",
+      statusEnteredAt: enteredAt,
+    });
+
+    const entry = createSidebarWorkspaceEntry({
+      serverId: "srv",
+      workspace: descriptor,
+      workspaceAgentSummaries: new Map([
+        ["workspace", agentSummary("done", new Date("2026-07-01T08:00:00.000Z"))],
+      ]),
+    });
+
+    expect(entry.statusBucket).toBe("running");
+    expect(entry.statusEnteredAt).toBe(enteredAt);
+  });
+
+  it("lets an attention-needing agent outrank a running daemon status", () => {
+    const attentionAt = new Date("2026-07-01T08:00:00.000Z");
+    const descriptor = workspace({
+      id: "workspace",
+      name: "main",
+      projectId: "project",
+      projectDisplayName: "Project",
+      status: "running",
+      statusEnteredAt: new Date("2026-07-01T09:00:00.000Z"),
+    });
+
+    const entry = createSidebarWorkspaceEntry({
+      serverId: "srv",
+      workspace: descriptor,
+      workspaceAgentSummaries: new Map([["workspace", agentSummary("attention", attentionAt)]]),
+    });
+
+    expect(entry.statusBucket).toBe("attention");
+    expect(entry.statusEnteredAt).toBe(attentionAt);
+  });
+});
 
 describe("applyStoredOrdering", () => {
   it("keeps unknown items on the baseline while applying stored order", () => {
@@ -253,7 +285,7 @@ describe("buildSidebarProjectsFromStructure", () => {
       ],
     });
 
-    expect(projects.map((entry) => entry.viewKey)).toEqual(["project-b", "project-a"]);
+    expect(projects.map((entry) => entry.projectKey)).toEqual(["project-b", "project-a"]);
   });
 
   it("preserves the structure hook workspace order", () => {
@@ -274,19 +306,19 @@ describe("buildSidebarProjectsFromStructure", () => {
           projectKey: "project-1",
           hosts: [
             {
-              serverId: "relay:paseo-host",
+              serverId: "relay:byspace-host",
               iconWorkingDir: "/repo/project-1",
-              worktreeSupport: "supported" as const,
+              canCreateWorktree: true,
             },
           ],
-          workspaceKeys: ["relay:paseo-host:ws-main"],
+          workspaceKeys: ["relay:byspace-host:ws-main"],
         }),
       ],
     });
 
     expect(projects[0]?.workspaces[0]).toMatchObject({
-      workspaceKey: "relay:paseo-host:ws-main",
-      serverId: "relay:paseo-host",
+      workspaceKey: "relay:byspace-host:ws-main",
+      serverId: "relay:byspace-host",
       workspaceId: "ws-main",
     });
   });
@@ -297,19 +329,19 @@ describe("shared sidebar workspace model", () => {
     const model = buildSidebarWorkspacePlacementModel({
       projects: [
         project({
-          projectKey: "getpaseo/paseo",
-          projectName: "getpaseo/paseo",
-          iconWorkingDir: "/repo/getpaseo/paseo",
+          projectKey: "ByteTrue/byspace",
+          projectName: "ByteTrue/byspace",
+          iconWorkingDir: "/repo/ByteTrue/byspace",
           hosts: [
             {
               serverId: "host-a",
-              iconWorkingDir: "/repo/getpaseo/paseo",
-              worktreeSupport: "supported" as const,
+              iconWorkingDir: "/repo/ByteTrue/byspace",
+              canCreateWorktree: true,
             },
             {
               serverId: "host-b",
-              iconWorkingDir: "/repo/getpaseo/paseo",
-              worktreeSupport: "supported" as const,
+              iconWorkingDir: "/repo/ByteTrue/byspace",
+              canCreateWorktree: true,
             },
           ],
           workspaceKeys: ["host-a:main", "host-b:feature"],
@@ -321,15 +353,15 @@ describe("shared sidebar workspace model", () => {
       sessions: [
         {
           serverId: "host-a",
-          workspaceAgentActivity: new Map(),
+          workspaceAgentSummaries: new Map(),
           workspaces: new Map([
             [
               "main",
               workspace({
                 id: "main",
                 name: "main",
-                projectId: "getpaseo/paseo",
-                projectDisplayName: "getpaseo/paseo",
+                projectId: "ByteTrue/byspace",
+                projectDisplayName: "ByteTrue/byspace",
                 status: "done",
               }),
             ],
@@ -337,15 +369,15 @@ describe("shared sidebar workspace model", () => {
         },
         {
           serverId: "host-b",
-          workspaceAgentActivity: new Map(),
+          workspaceAgentSummaries: new Map(),
           workspaces: new Map([
             [
               "feature",
               workspace({
                 id: "feature",
                 name: "feature/status-flow",
-                projectId: "getpaseo/paseo",
-                projectDisplayName: "getpaseo/paseo",
+                projectId: "ByteTrue/byspace",
+                projectDisplayName: "ByteTrue/byspace",
                 status: "running",
                 statusEnteredAt: new Date("2026-06-10T00:00:00.000Z"),
               }),
@@ -361,20 +393,10 @@ describe("shared sidebar workspace model", () => {
     ]);
     expect(model.projects).toEqual([
       expect.objectContaining({
-        viewKey: "getpaseo/paseo",
+        projectKey: "ByteTrue/byspace",
         hosts: [
-          {
-            serverId: "host-a",
-            projectId: "getpaseo/paseo",
-            iconWorkingDir: "/repo/getpaseo/paseo",
-            worktreeSupport: "supported" as const,
-          },
-          {
-            serverId: "host-b",
-            projectId: "getpaseo/paseo",
-            iconWorkingDir: "/repo/getpaseo/paseo",
-            worktreeSupport: "supported" as const,
-          },
+          { serverId: "host-a", iconWorkingDir: "/repo/ByteTrue/byspace", canCreateWorktree: true },
+          { serverId: "host-b", iconWorkingDir: "/repo/ByteTrue/byspace", canCreateWorktree: true },
         ],
         workspaces: [
           expect.objectContaining({
@@ -400,7 +422,51 @@ describe("shared sidebar workspace model", () => {
       ["host-a:main", "done", "main"],
       ["host-b:feature", "running", "feature/status-flow"],
     ]);
-    expect(model.projectNamesByViewKey).toEqual(new Map([["getpaseo/paseo", "getpaseo/paseo"]]));
+    expect(model.projectNamesByKey).toEqual(new Map([["ByteTrue/byspace", "ByteTrue/byspace"]]));
+  });
+
+  it("propagates a duplicate clone's resolved placement key into the hydrated row", () => {
+    const sharedProjectKey = "remote:https://github.com/acme/repo";
+    const resolvedProjectKey = "host:host-a:project-a";
+    const rawWorkspace = workspaceWithForge(undefined, "https://github.com/acme/repo/pull/42");
+    rawWorkspace.projectId = "project-a";
+    rawWorkspace.project = {
+      projectKey: sharedProjectKey,
+      projectName: "repo",
+      checkout: {
+        cwd: "/repo",
+        isGit: true,
+        currentBranch: "feature",
+        remoteUrl: "https://github.com/acme/repo",
+        worktreeRoot: "/repo",
+        isBySpaceOwnedWorktree: false,
+        mainRepoRoot: "/repo",
+      },
+    };
+
+    const entries = buildSidebarWorkspaceEntries({
+      placements: [
+        {
+          workspaceKey: "host-a:ws-1",
+          serverId: "host-a",
+          workspaceId: "ws-1",
+          projectKey: resolvedProjectKey,
+          projectName: "repo",
+          projectKind: "git",
+          workspaceKind: "worktree",
+          name: "feature",
+        },
+      ],
+      sessions: [
+        {
+          serverId: "host-a",
+          workspaces: new Map([["ws-1", rawWorkspace]]),
+          workspaceAgentSummaries: new Map(),
+        },
+      ],
+    });
+
+    expect(entries.get("host-a:ws-1")?.projectKey).toBe(resolvedProjectKey);
   });
 
   it("preserves unchanged row identities when another workspace updates", () => {
@@ -424,7 +490,7 @@ describe("shared sidebar workspace model", () => {
       sessions: [
         {
           serverId: "srv",
-          workspaceAgentActivity: new Map(),
+          workspaceAgentSummaries: new Map(),
           workspaces: new Map([
             ["one", one],
             ["two", two],
@@ -437,7 +503,7 @@ describe("shared sidebar workspace model", () => {
       sessions: [
         {
           serverId: "srv",
-          workspaceAgentActivity: new Map(),
+          workspaceAgentSummaries: new Map(),
           workspaces: new Map([
             ["one", one],
             ["two", { ...two, status: "running" }],
@@ -450,107 +516,43 @@ describe("shared sidebar workspace model", () => {
     expect(nextEntries.get("srv:one")).toBe(previousEntries.get("srv:one"));
     expect(nextEntries.get("srv:two")).not.toBe(previousEntries.get("srv:two"));
   });
-
-  it("keeps a structurally disambiguated project key in status entries", () => {
-    const projectKey = "host:srv:project:prj_a";
-    const model = buildSidebarWorkspacePlacementModel({
-      projects: [project({ projectKey, projectName: "Clone A", workspaceKeys: ["srv:clone-a"] })],
-    });
-    const entries = buildSidebarWorkspaceEntries({
-      placements: model.workspaces,
-      sessions: [
-        {
-          serverId: "srv",
-          workspaceAgentActivity: new Map(),
-          workspaces: new Map([
-            [
-              "clone-a",
-              workspace({
-                id: "clone-a",
-                name: "main",
-                projectId: "prj_a",
-                projectDisplayName: "acme/app",
-              }),
-            ],
-          ]),
-        },
-      ],
-    });
-
-    expect(entries.get("srv:clone-a")?.projectViewKey).toBe(projectKey);
-  });
 });
 
-describe("shouldShowSidebarHostLabels", () => {
-  it("is false with no visible projects", () => {
-    expect(shouldShowSidebarHostLabels([])).toBe(false);
+describe("shouldShowProjectHostLabels", () => {
+  it("is false when a project has workspaces on one host", () => {
+    const [projectEntry] = buildSidebarProjectsFromStructure({
+      projects: [project({ projectKey: "project-a", workspaceKeys: ["host-a:ws-1"] })],
+    });
+
+    expect(shouldShowProjectHostLabels(projectEntry)).toBe(false);
   });
 
-  it("is false when every project lives on a single host", () => {
+  it("is false when different projects each have one host", () => {
     const projects = buildSidebarProjectsFromStructure({
       projects: [
-        project({ projectKey: "project-a", workspaceKeys: ["ws-1"] }),
-        project({ projectKey: "project-b", workspaceKeys: ["ws-2"] }),
+        project({ projectKey: "project-a", workspaceKeys: ["host-a:ws-1"] }),
+        project({ projectKey: "project-b", workspaceKeys: ["host-b:ws-2"] }),
       ],
     });
 
-    expect(shouldShowSidebarHostLabels(projects)).toBe(false);
+    expect(projects.every((entry) => !shouldShowProjectHostLabels(entry))).toBe(true);
   });
 
-  it("is true when projects span separate hosts", () => {
-    const projects = buildSidebarProjectsFromStructure({
+  it("is true when one project has workspaces on multiple hosts", () => {
+    const [projectEntry] = buildSidebarProjectsFromStructure({
       projects: [
         project({
-          projectKey: "project-a",
+          projectKey: "ByteTrue/byspace",
           hosts: [
-            {
-              serverId: "host-a",
-              iconWorkingDir: "/repo/project-a",
-              worktreeSupport: "supported" as const,
-            },
-          ],
-          workspaceKeys: ["host-a:ws-1"],
-        }),
-        project({
-          projectKey: "project-b",
-          hosts: [
-            {
-              serverId: "host-b",
-              iconWorkingDir: "/repo/project-b",
-              worktreeSupport: "supported" as const,
-            },
-          ],
-          workspaceKeys: ["host-b:ws-2"],
-        }),
-      ],
-    });
-
-    expect(shouldShowSidebarHostLabels(projects)).toBe(true);
-  });
-
-  it("is true for a single project shared across hosts", () => {
-    const projects = buildSidebarProjectsFromStructure({
-      projects: [
-        project({
-          projectKey: "getpaseo/paseo",
-          hosts: [
-            {
-              serverId: "host-a",
-              iconWorkingDir: "/repo/paseo",
-              worktreeSupport: "supported" as const,
-            },
-            {
-              serverId: "host-b",
-              iconWorkingDir: "/repo/paseo",
-              worktreeSupport: "supported" as const,
-            },
+            { serverId: "host-a", iconWorkingDir: "/repo/byspace", canCreateWorktree: true },
+            { serverId: "host-b", iconWorkingDir: "/repo/byspace", canCreateWorktree: true },
           ],
           workspaceKeys: ["host-a:main", "host-b:feature"],
         }),
       ],
     });
 
-    expect(shouldShowSidebarHostLabels(projects)).toBe(true);
+    expect(shouldShowProjectHostLabels(projectEntry)).toBe(true);
   });
 });
 
@@ -579,8 +581,8 @@ describe("computeSidebarOrderUpdates", () => {
 
     expect(updates.projectOrder).toEqual(["project-a", "project-b"]);
     expect(updates.workspaceOrders).toEqual([
-      { projectViewKey: "project-a", order: ["srv:ws-2", "srv:ws-1"] },
-      { projectViewKey: "project-b", order: ["srv:ws-3"] },
+      { projectKey: "project-a", order: ["srv:ws-2", "srv:ws-1"] },
+      { projectKey: "project-b", order: ["srv:ws-3"] },
     ]);
   });
 
@@ -600,7 +602,7 @@ describe("computeSidebarOrderUpdates", () => {
 
     expect(updates.workspaceOrders).toEqual([
       {
-        projectViewKey: "project-a",
+        projectKey: "project-a",
         order: ["srv:newest", "srv:newer", "srv:old-b", "srv:old-a"],
       },
     ]);
@@ -669,273 +671,23 @@ describe("deriveSidebarLoadingState", () => {
   });
 });
 
-function workspacePlacement(input: {
-  serverId?: string;
-  workspaceId: string;
-  projectViewKey?: string;
-}): SidebarWorkspacePlacement {
-  const serverId = input.serverId ?? "srv";
-  const projectViewKey = input.projectViewKey ?? "project-a";
-  return {
-    workspaceKey: `${serverId}:${input.workspaceId}`,
-    serverId,
-    workspaceId: input.workspaceId,
-    projectViewKey,
-    projectName: projectViewKey,
-    projectKind: "git",
-    workspaceKind: "worktree",
-    name: input.workspaceId,
-  };
-}
+describe("createSidebarWorkspaceEntry workspace directory label", () => {
+  it("shows the workspace path for a BySpace-owned worktree", () => {
+    const descriptor = workspaceWithForge(undefined, "https://github.com/acme/repo/pull/42");
+    descriptor.workspaceDirectory = "/worktrees/feature/packages/app";
+    descriptor.worktreeSlug = "feature";
 
-function agent(input: {
-  id: string;
-  workspaceId: string;
-  status: Agent["status"];
-  updatedAt?: Date;
-  parentAgentId?: string | null;
-  archivedAt?: Date | null;
-}): Agent {
-  return {
-    serverId: "srv",
-    id: input.id,
-    provider: "claude" as Agent["provider"],
-    status: input.status,
-    activeTurn: null,
-    createdAt: new Date(0),
-    updatedAt: input.updatedAt ?? new Date(1_000),
-    lastUserMessageAt: null,
-    lastActivityAt: new Date(1_000),
-    capabilities: {} as Agent["capabilities"],
-    currentModeId: null,
-    availableModes: [],
-    pendingPermissions: [],
-    persistence: null,
-    title: null,
-    cwd: "/repo",
-    workspaceId: input.workspaceId,
-    model: null,
-    parentAgentId: input.parentAgentId ?? null,
-    archivedAt: input.archivedAt ?? null,
-    labels: {},
-  };
-}
+    const entry = createSidebarWorkspaceEntry({ serverId: "srv", workspace: descriptor });
 
-function sessionWith(input: {
-  workspaces: WorkspaceDescriptor[];
-  agents?: Agent[];
-}): ProjectStatusSession {
-  return {
-    workspaces: new Map(input.workspaces.map((entry) => [entry.id, entry])),
-    workspaceAgentActivity: buildWorkspaceAgentActivityIndex(
-      new Map((input.agents ?? []).map((entry) => [entry.id, entry])),
-    ),
-  };
-}
-
-function projectWorkspace(id: string, status: WorkspaceDescriptor["status"]): WorkspaceDescriptor {
-  return workspace({
-    id,
-    name: id,
-    projectId: "project-a",
-    projectDisplayName: "project-a",
-    status,
-  });
-}
-
-describe("deriveProjectStatusBucket", () => {
-  it("is done when the project has no workspaces", () => {
-    expect(deriveProjectStatusBucket({ workspaces: [], sessions: {} })).toBe("done");
+    expect(entry.workspaceDirectoryLabel).toBe("/worktrees/feature/packages/app");
   });
 
-  it("is done when every workspace is done", () => {
-    expect(
-      deriveProjectStatusBucket({
-        workspaces: [
-          workspacePlacement({ workspaceId: "ws-1" }),
-          workspacePlacement({ workspaceId: "ws-2" }),
-        ],
-        sessions: {
-          srv: sessionWith({
-            workspaces: [projectWorkspace("ws-1", "done"), projectWorkspace("ws-2", "done")],
-          }),
-        },
-      }),
-    ).toBe("done");
-  });
+  it("preserves an absolute workspace path", () => {
+    const descriptor = workspaceWithForge(undefined, "https://github.com/acme/repo/pull/42");
+    descriptor.workspaceDirectory = "/home/alice/external/feature";
 
-  it("surfaces the most urgent workspace status in the project", () => {
-    expect(
-      deriveProjectStatusBucket({
-        workspaces: [
-          workspacePlacement({ workspaceId: "ws-1" }),
-          workspacePlacement({ workspaceId: "ws-2" }),
-          workspacePlacement({ workspaceId: "ws-3" }),
-        ],
-        sessions: {
-          srv: sessionWith({
-            workspaces: [
-              projectWorkspace("ws-1", "done"),
-              projectWorkspace("ws-2", "running"),
-              projectWorkspace("ws-3", "needs_input"),
-            ],
-          }),
-        },
-      }),
-    ).toBe("needs_input");
-  });
+    const entry = createSidebarWorkspaceEntry({ serverId: "srv", workspace: descriptor });
 
-  it("keeps a working project on running when a finished workspace also awaits review", () => {
-    expect(
-      deriveProjectStatusBucket({
-        workspaces: [
-          workspacePlacement({ workspaceId: "ws-1" }),
-          workspacePlacement({ workspaceId: "ws-2" }),
-        ],
-        sessions: {
-          srv: sessionWith({
-            workspaces: [
-              projectWorkspace("ws-1", "running"),
-              projectWorkspace("ws-2", "attention"),
-            ],
-          }),
-        },
-      }),
-    ).toBe("running");
-  });
-
-  it("surfaces needs_input over a concurrently running workspace", () => {
-    expect(
-      deriveProjectStatusBucket({
-        workspaces: [
-          workspacePlacement({ workspaceId: "ws-1" }),
-          workspacePlacement({ workspaceId: "ws-2" }),
-        ],
-        sessions: {
-          srv: sessionWith({
-            workspaces: [
-              projectWorkspace("ws-1", "needs_input"),
-              projectWorkspace("ws-2", "running"),
-            ],
-          }),
-        },
-      }),
-    ).toBe("needs_input");
-  });
-
-  it("surfaces failed over a concurrently running workspace", () => {
-    expect(
-      deriveProjectStatusBucket({
-        workspaces: [
-          workspacePlacement({ workspaceId: "ws-1" }),
-          workspacePlacement({ workspaceId: "ws-2" }),
-        ],
-        sessions: {
-          srv: sessionWith({
-            workspaces: [projectWorkspace("ws-1", "failed"), projectWorkspace("ws-2", "running")],
-          }),
-        },
-      }),
-    ).toBe("failed");
-  });
-
-  it("keeps a project on attention when only one workspace awaits review", () => {
-    expect(
-      deriveProjectStatusBucket({
-        workspaces: [
-          workspacePlacement({ workspaceId: "ws-1" }),
-          workspacePlacement({ workspaceId: "ws-2" }),
-        ],
-        sessions: {
-          srv: sessionWith({
-            workspaces: [projectWorkspace("ws-1", "attention"), projectWorkspace("ws-2", "done")],
-          }),
-        },
-      }),
-    ).toBe("attention");
-  });
-
-  it("aggregates across the hosts a project spans", () => {
-    expect(
-      deriveProjectStatusBucket({
-        workspaces: [
-          workspacePlacement({ serverId: "srv", workspaceId: "ws-1" }),
-          workspacePlacement({ serverId: "other", workspaceId: "ws-9" }),
-        ],
-        sessions: {
-          srv: sessionWith({ workspaces: [projectWorkspace("ws-1", "done")] }),
-          other: sessionWith({ workspaces: [projectWorkspace("ws-9", "running")] }),
-        },
-      }),
-    ).toBe("running");
-  });
-
-  it("skips workspaces whose session has not hydrated yet", () => {
-    expect(
-      deriveProjectStatusBucket({
-        workspaces: [
-          workspacePlacement({ workspaceId: "ws-1" }),
-          workspacePlacement({ serverId: "offline", workspaceId: "ws-2" }),
-        ],
-        sessions: {
-          srv: sessionWith({ workspaces: [projectWorkspace("ws-1", "running")] }),
-        },
-      }),
-    ).toBe("running");
-  });
-
-  it("lifts a done workspace when one of its root agents is still working", () => {
-    expect(
-      deriveProjectStatusBucket({
-        workspaces: [workspacePlacement({ workspaceId: "ws-1" })],
-        sessions: {
-          srv: sessionWith({
-            workspaces: [projectWorkspace("ws-1", "done")],
-            agents: [agent({ id: "a1", workspaceId: "ws-1", status: "running" })],
-          }),
-        },
-      }),
-    ).toBe("running");
-  });
-
-  it("ignores archived agents and subagents", () => {
-    expect(
-      deriveProjectStatusBucket({
-        workspaces: [workspacePlacement({ workspaceId: "ws-1" })],
-        sessions: {
-          srv: sessionWith({
-            workspaces: [projectWorkspace("ws-1", "done")],
-            agents: [
-              agent({
-                id: "archived",
-                workspaceId: "ws-1",
-                status: "running",
-                archivedAt: new Date(2_000),
-              }),
-              agent({
-                id: "subagent",
-                workspaceId: "ws-1",
-                status: "running",
-                parentAgentId: "a1",
-              }),
-            ],
-          }),
-        },
-      }),
-    ).toBe("done");
-  });
-
-  it("ignores agents belonging to workspaces outside the project", () => {
-    expect(
-      deriveProjectStatusBucket({
-        workspaces: [workspacePlacement({ workspaceId: "ws-1" })],
-        sessions: {
-          srv: sessionWith({
-            workspaces: [projectWorkspace("ws-1", "done"), projectWorkspace("ws-other", "done")],
-            agents: [agent({ id: "a1", workspaceId: "ws-other", status: "running" })],
-          }),
-        },
-      }),
-    ).toBe("done");
+    expect(entry.workspaceDirectoryLabel).toBe("/home/alice/external/feature");
   });
 });

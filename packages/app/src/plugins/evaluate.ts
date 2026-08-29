@@ -2,7 +2,8 @@ import * as React from "react";
 import * as ReactJsxRuntime from "react/jsx-runtime";
 // eslint-disable-next-line no-restricted-imports -- plugin client runtime injects host ReactNative.
 import * as ReactNative from "react-native";
-// eslint-disable-next-line no-restricted-imports -- plugin bundles receive TanStack's real runtime, not Paseo's query wrappers.
+import { EditingTextInput } from "@/components/ui/text-input";
+// eslint-disable-next-line no-restricted-imports -- plugin bundles receive TanStack's real runtime, not BySpace's query wrappers.
 import * as ReactQuery from "@tanstack/react-query";
 import * as Zod from "zod";
 import {
@@ -14,45 +15,29 @@ import {
   type PluginSurfaceProps,
   type PluginThemeContribution,
   type PluginWorkspacePanelContribution,
-  usePaseo,
+  useBySpace,
   useAgent,
   useWorkspace,
   useRpc,
-} from "@getpaseo/plugin";
-import { createPluginContext, type PluginRegistrationCollector } from "@getpaseo/plugin/host";
+} from "@bytetrue/byspace-plugin";
+import {
+  createPluginContext,
+  type PluginRegistrationCollector,
+} from "@bytetrue/byspace-plugin/host";
 import type { EvaluatedPlugin } from "./types";
 import type { ComponentType } from "react";
 import { resolvePluginIcon } from "./icons";
 import { parsePluginThemeContribution } from "./themes";
 
 const CONTRIBUTION_ID = /^[a-z][a-z0-9-]*$/;
-const PANEL_LOCATIONS = ["workspace", "explorer"] as const;
-
-function normalizePanelLocations(
-  panelId: string,
-  locations: PluginWorkspacePanelContribution["locations"],
-): readonly (typeof PANEL_LOCATIONS)[number][] {
-  if (locations === undefined) return ["workspace"];
-  if (!Array.isArray(locations) || locations.length === 0) {
-    throw new Error(`Workspace panel ${panelId} must support at least one location`);
-  }
-  const normalized = locations.map((location) => {
-    if (!PANEL_LOCATIONS.includes(location as never)) {
-      throw new Error(`Workspace panel ${panelId} has invalid location: ${String(location)}`);
-    }
-    return location;
-  });
-  if (new Set(normalized).size !== normalized.length) {
-    throw new Error(`Workspace panel ${panelId} has duplicate locations`);
-  }
-  return normalized;
-}
 
 function requireId(value: string, label: string): string {
   const id = value.trim();
   if (!CONTRIBUTION_ID.test(id)) throw new Error(`Invalid ${label}: ${value}`);
   return id;
 }
+
+const PluginReactNative = { ...ReactNative, TextInput: EditingTextInput };
 
 export function evaluatePluginClientBundle(id: string, bundle: string): EvaluatedPlugin {
   const collector: PluginRegistrationCollector = {
@@ -109,15 +94,8 @@ export function evaluatePluginClientBundle(id: string, bundle: string): Evaluate
         throw new Error(`Workspace panel ${normalizedId} is not a component`);
       }
       resolvePluginIcon(icon);
-      const locations = normalizePanelLocations(normalizedId, contribution.locations);
       workspacePanelIds.add(normalizedId);
-      collector.workspacePanels.push({
-        ...contribution,
-        id: normalizedId,
-        title,
-        icon,
-        locations,
-      });
+      collector.workspacePanels.push({ ...contribution, id: normalizedId, title, icon });
     },
     addCommandCenterItem(contribution: PluginCommandCenterItemContribution) {
       const normalizedId = requireId(contribution.id, "Command Center item id");
@@ -187,18 +165,18 @@ export function evaluatePluginClientBundle(id: string, bundle: string): Evaluate
   const runtimeRequire = (name: string): unknown => {
     if (name === "react") return React;
     if (name === "react/jsx-runtime") return ReactJsxRuntime;
-    if (name === "react-native") return ReactNative;
-    if (name === "@getpaseo/plugin") {
+    if (name === "react-native") return PluginReactNative;
+    if (name === "@bytetrue/byspace/plugin") {
       return {
         defineAttachmentSource,
         defineRpc,
-        usePaseo,
+        useBySpace,
         useAgent,
         useWorkspace,
         useRpc,
       };
     }
-    if (name === "@getpaseo/plugin/server") {
+    if (name === "@bytetrue/byspace/plugin/server") {
       return { defineAttachmentSource, defineRpc };
     }
     if (name === "@tanstack/react-query") return ReactQuery;
@@ -241,7 +219,7 @@ export function evaluatePluginClientBundle(id: string, bundle: string): Evaluate
     cleanup,
     surfaces: collector.surfaces,
     sidebarItems: collector.sidebarItems,
-    workspacePanels: collector.workspacePanels as EvaluatedPlugin["workspacePanels"],
+    workspacePanels: collector.workspacePanels,
     commandCenterItems: collector.commandCenterItems,
     attachmentSources: collector.attachmentSources,
     themes: collector.themes,

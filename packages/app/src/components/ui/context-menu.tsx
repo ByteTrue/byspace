@@ -1,22 +1,19 @@
 import {
   useCallback,
+  useState,
   type ComponentProps,
   type PropsWithChildren,
   type ReactElement,
   type Ref,
 } from "react";
 import {
-  Platform,
-  StatusBar,
+  Pressable,
   View,
-  type GestureResponderEvent,
   type PressableProps,
   type PressableStateCallbackType,
   type StyleProp,
-  type ViewProps,
   type ViewStyle,
 } from "react-native";
-import { isNative, isWeb } from "@/constants/platform";
 import {
   MenuHint,
   MenuItem,
@@ -28,14 +25,12 @@ import {
   type MenuSurfaceProps,
   type MenuTriggerState,
 } from "@/components/ui/menu";
-import { PressHighlight } from "@/components/ui/press-highlight";
 
 /**
- * A menu opened by a long press or a right click, anchored to the point of the gesture rather
- * than to a trigger box.
+ * A menu opened by a browser context-menu gesture, anchored to the gesture point.
  *
  * Everything below the trigger is the shared menu engine — see `@/components/ui/menu` and
- * docs/menus.md. Only the way it opens is different from `dropdown-menu.tsx`.
+ * docs/menus.md. Only the way it opens differs from `dropdown-menu.tsx`.
  */
 
 export { MenuItem as ContextMenuItem };
@@ -44,10 +39,7 @@ export { MenuSeparator as ContextMenuSeparator };
 export { MenuHint as ContextMenuHint };
 export type { ActionStatus } from "@/components/ui/menu";
 
-/**
- * Context menus use the mobile menu convention by default: long press opens a bottom sheet on a
- * compact layout, while right click opens an anchored popover on a wide layout.
- */
+/** Uses a bottom sheet on compact browser viewports and an anchored popover on wide viewports. */
 export function ContextMenu({
   compactMode = "sheet",
   ...props
@@ -99,12 +91,11 @@ type TriggerStyleProp = StyleProp<ViewStyle> | ((state: MenuTriggerState) => Sty
 
 export function ContextMenuTrigger({
   children,
-  contextOnly = false,
   disabled,
-  highlightStyle,
+  highlightStyle: _highlightStyle,
   style,
   enabled = true,
-  enabledOnMobile = true,
+  enabledOnMobile: _enabledOnMobile = true,
   enabledOnWeb = true,
   longPressDelayMs,
   onContextMenu,
@@ -112,6 +103,7 @@ export function ContextMenuTrigger({
   ...props
 }: PropsWithChildren<
   Omit<PressableProps, "style"> & {
+    /** Retained for call-site compatibility; Browser triggers use the regular pressed style. */
     highlightStyle?: StyleProp<ViewStyle>;
     style?: TriggerStyleProp;
     enabled?: boolean;
@@ -120,29 +112,22 @@ export function ContextMenuTrigger({
     longPressDelayMs?: number;
     onContextMenu?: (event: unknown) => void;
     triggerRef?: Ref<View | null>;
-    contextOnly?: boolean;
   }
 >): ReactElement {
   const ctx = useMenuContext("ContextMenuTrigger");
-
-  const shouldEnableOnThisPlatform = enabled && (isWeb ? enabledOnWeb : enabledOnMobile);
+  const [hovered, setHovered] = useState(false);
+  const shouldEnable = enabled && enabledOnWeb;
 
   const openAtEvent = useCallback(
     (event: unknown) => {
-      if (!shouldEnableOnThisPlatform || disabled) return;
+      if (!shouldEnable || disabled) return;
       const point = coerceEventPoint(event);
       if (!point) return;
 
-      const statusBarHeight = Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
-      ctx.setAnchorRect({
-        x: point.pageX,
-        y: point.pageY + statusBarHeight,
-        width: 0,
-        height: 0,
-      });
+      ctx.setAnchorRect({ x: point.pageX, y: point.pageY, width: 0, height: 0 });
       ctx.setOpen(true);
     },
-    [ctx, disabled, shouldEnableOnThisPlatform],
+    [ctx, disabled, shouldEnable],
   );
 
   const handleRef = useCallback(
@@ -153,22 +138,8 @@ export function ContextMenuTrigger({
     [ctx.triggerRef, triggerRef],
   );
 
-  const propsOnLongPress = props.onLongPress;
-  const handleLongPress = useCallback(
-    (event: GestureResponderEvent) => {
-      if (isWeb) {
-        propsOnLongPress?.(event);
-        return;
-      }
-      openAtEvent(event);
-      propsOnLongPress?.(event);
-    },
-    [propsOnLongPress, openAtEvent],
-  );
-
   const handleContextMenu = useCallback(
     (event: unknown) => {
-      if (isNative) return;
       if (typeof event === "object" && event !== null) {
         const preventDefault = Reflect.get(event, "preventDefault");
         const stopPropagation = Reflect.get(event, "stopPropagation");
@@ -180,50 +151,36 @@ export function ContextMenuTrigger({
     },
     [onContextMenu, openAtEvent],
   );
+  const handlePointerEnter = useCallback(() => setHovered(true), []);
+  const handlePointerLeave = useCallback(() => setHovered(false), []);
 
-  const resolveDynamicStyle = useCallback(
-    ({ pressed, hovered = false }: PressableStateCallbackType & { hovered?: boolean }) => {
+  const pressableStyle = useCallback(
+    ({ pressed }: PressableStateCallbackType) => {
       if (typeof style === "function") {
         return style({ pressed, hovered, open: ctx.open });
       }
       return style;
     },
-    [style, ctx.open],
+    [style, hovered, ctx.open],
   );
 
-  if (contextOnly) {
-    const contextOnlyStyle =
-      typeof style === "function"
-        ? style({ pressed: false, hovered: false, open: ctx.open })
-        : style;
-    return (
-      <View
-        {...(props as ViewProps)}
-        ref={handleRef}
-        collapsable={false}
-        // @ts-ignore - onContextMenu is web-only and not in RN types.
-        onContextMenu={handleContextMenu}
-        style={contextOnlyStyle}
-      >
-        {children}
-      </View>
-    );
-  }
-
   return (
-    <PressHighlight
-      {...props}
+    <View
       ref={handleRef}
       collapsable={false}
-      disabled={disabled}
-      delayLongPress={longPressDelayMs}
-      onLongPress={handleLongPress}
-      // @ts-ignore - onContextMenu is web-only and not in RN types.
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
+      // @ts-ignore - onContextMenu is a browser event and is not in RN's View types.
       onContextMenu={handleContextMenu}
-      style={typeof style === "function" ? resolveDynamicStyle : style}
-      highlightStyle={highlightStyle}
     >
-      {children}
-    </PressHighlight>
+      <Pressable
+        {...props}
+        disabled={disabled}
+        delayLongPress={longPressDelayMs}
+        style={typeof style === "function" ? pressableStyle : style}
+      >
+        {children}
+      </Pressable>
+    </View>
   );
 }

@@ -2,26 +2,16 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   createWorktree as createWorktreePrimitive,
   deriveWorktreeProjectHash,
-  deletePaseoWorktree,
-  isPaseoOwnedWorktreeCwd,
-  mapWorkspaceCwdToWorktree,
+  deleteBySpaceWorktree,
+  isBySpaceOwnedWorktreeCwd,
   slugify,
   type CreateWorktreeOptions,
   type WorktreeConfig,
 } from "./worktree";
 import { execFileSync } from "child_process";
-import {
-  mkdtempSync,
-  mkdirSync,
-  rmSync,
-  existsSync,
-  realpathSync,
-  symlinkSync,
-  writeFileSync,
-} from "fs";
+import { mkdtempSync, mkdirSync, rmSync, existsSync, realpathSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { createRealpathAwarePathMatcher } from "./path";
 
 interface LegacyCreateWorktreeTestOptions {
   branchName: string;
@@ -29,7 +19,7 @@ interface LegacyCreateWorktreeTestOptions {
   baseBranch: string;
   worktreeSlug: string;
   runSetup?: boolean;
-  paseoHome?: string;
+  byspaceHome?: string;
 }
 
 function createLegacyWorktreeForTest(
@@ -48,19 +38,19 @@ function createLegacyWorktreeForTest(
       branchName: options.branchName,
     },
     runSetup: options.runSetup ?? true,
-    paseoHome: options.paseoHome,
+    byspaceHome: options.byspaceHome,
   });
 }
 
-describe("paseo worktree manager", () => {
+describe("byspace worktree manager", () => {
   let tempDir: string;
   let repoDir: string;
-  let paseoHome: string;
+  let byspaceHome: string;
 
   beforeEach(() => {
     tempDir = realpathSync(mkdtempSync(join(tmpdir(), "worktree-manager-test-")));
     repoDir = join(tempDir, "test-repo");
-    paseoHome = join(tempDir, "paseo-home");
+    byspaceHome = join(tempDir, "byspace-home");
 
     mkdirSync(repoDir, { recursive: true });
     execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
@@ -77,13 +67,13 @@ describe("paseo worktree manager", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("treats a worktree as paseo-owned even when its .git admin is missing", async () => {
+  it("treats a worktree as byspace-owned even when its .git admin is missing", async () => {
     const created = await createLegacyWorktreeForTest({
       branchName: "orphan-admin-branch",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "orphan-admin",
-      paseoHome,
+      byspaceHome,
     });
 
     // Simulate a previous archive attempt that removed git's admin dir but left
@@ -94,103 +84,33 @@ describe("paseo worktree manager", () => {
     });
     expect(existsSync(created.worktreePath)).toBe(true);
 
-    const ownership = await isPaseoOwnedWorktreeCwd(created.worktreePath, { paseoHome });
+    const ownership = await isBySpaceOwnedWorktreeCwd(created.worktreePath, { byspaceHome });
     expect(ownership.allowed).toBe(true);
-    await expect(
-      isPaseoOwnedWorktreeCwd(join(created.worktreePath, "packages", "app"), { paseoHome }),
-    ).resolves.toMatchObject({
-      allowed: true,
-      worktreePath: created.worktreePath,
-    });
   });
 
-  it("rejects paths that are not under the paseo worktrees root", async () => {
-    const outsidePath = join(tempDir, "outside-paseo-home");
+  it("rejects paths that are not under the byspace worktrees root", async () => {
+    const outsidePath = join(tempDir, "outside-byspace-home");
     mkdirSync(outsidePath, { recursive: true });
 
-    const ownership = await isPaseoOwnedWorktreeCwd(outsidePath, { paseoHome });
+    const ownership = await isBySpaceOwnedWorktreeCwd(outsidePath, { byspaceHome });
 
     expect(ownership.allowed).toBe(false);
   });
 
-  it("reports the source checkout root separately from Git's common directory", async () => {
-    const created = await createLegacyWorktreeForTest({
-      branchName: "placement-root-branch",
-      cwd: repoDir,
-      baseBranch: "main",
-      worktreeSlug: "placement-root",
-      paseoHome,
-    });
-
-    const ownership = await isPaseoOwnedWorktreeCwd(created.worktreePath, { paseoHome });
-
-    expect(ownership.allowed).toBe(true);
-    expect(createRealpathAwarePathMatcher(repoDir)(ownership.repoRoot ?? "")).toBe(true);
-    expect(createRealpathAwarePathMatcher(created.worktreePath)(ownership.worktreePath ?? "")).toBe(
-      true,
-    );
-  });
-
-  it("maps only root-contained workspace paths into a replacement worktree", () => {
-    const sourceWorktreePath = join(tempDir, "source-worktree");
-    const targetWorktreePath = join(tempDir, "target-worktree");
-    const nestedWorkspaceCwd = join(sourceWorktreePath, "packages", "app");
-
-    expect(
-      mapWorkspaceCwdToWorktree({
-        sourceWorktreePath,
-        workspaceCwd: sourceWorktreePath,
-        targetWorktreePath,
-      }),
-    ).toBe(targetWorktreePath);
-    expect(
-      mapWorkspaceCwdToWorktree({
-        sourceWorktreePath,
-        workspaceCwd: nestedWorkspaceCwd,
-        targetWorktreePath,
-      }),
-    ).toBe(join(targetWorktreePath, "packages", "app"));
-    expect(() =>
-      mapWorkspaceCwdToWorktree({
-        sourceWorktreePath,
-        workspaceCwd: join(tempDir, "outside-worktree"),
-        targetWorktreePath,
-      }),
-    ).toThrow("outside its source worktree");
-  });
-
-  it.skipIf(process.platform === "win32")(
-    "maps a realpath-equivalent source workspace into the matching target subdirectory",
-    () => {
-      const sourceWorktreePath = join(tempDir, "source-worktree");
-      const workspaceCwd = join(sourceWorktreePath, "packages", "app");
-      const sourceAlias = join(tempDir, "source-alias");
-      const targetWorktreePath = join(tempDir, "target-worktree");
-      mkdirSync(workspaceCwd, { recursive: true });
-      symlinkSync(sourceWorktreePath, sourceAlias, "dir");
-
-      expect(
-        mapWorkspaceCwdToWorktree({
-          sourceWorktreePath: sourceAlias,
-          workspaceCwd,
-          targetWorktreePath,
-        }),
-      ).toBe(join(targetWorktreePath, "packages", "app"));
-    },
-  );
-
   it("rejects the worktrees root itself and the per-repo hash dir", async () => {
     const projectHash = await deriveWorktreeProjectHash(repoDir);
-    const worktreesRoot = join(paseoHome, "worktrees");
+    const worktreesRoot = join(byspaceHome, "worktrees");
     const projectHashDir = join(worktreesRoot, projectHash);
     mkdirSync(projectHashDir, { recursive: true });
 
-    await expect(isPaseoOwnedWorktreeCwd(worktreesRoot, { paseoHome })).resolves.toMatchObject({
+    await expect(isBySpaceOwnedWorktreeCwd(worktreesRoot, { byspaceHome })).resolves.toMatchObject({
       allowed: false,
     });
-    await expect(isPaseoOwnedWorktreeCwd(projectHashDir, { paseoHome })).resolves.toMatchObject({
-      allowed: false,
-    });
+    await expect(isBySpaceOwnedWorktreeCwd(projectHashDir, { byspaceHome })).resolves.toMatchObject(
+      {
+        allowed: false,
+      },
+    );
   });
 
   it("deletes a worktree whose .git admin dir has already been removed", async () => {
@@ -199,7 +119,7 @@ describe("paseo worktree manager", () => {
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "orphan-delete",
-      paseoHome,
+      byspaceHome,
     });
 
     rmSync(join(repoDir, ".git", "worktrees", "orphan-delete"), {
@@ -208,10 +128,10 @@ describe("paseo worktree manager", () => {
     });
     expect(existsSync(created.worktreePath)).toBe(true);
 
-    await deletePaseoWorktree({
+    await deleteBySpaceWorktree({
       cwd: repoDir,
       worktreePath: created.worktreePath,
-      paseoHome,
+      byspaceHome,
     });
 
     expect(existsSync(created.worktreePath)).toBe(false);
@@ -223,19 +143,19 @@ describe("paseo worktree manager", () => {
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "idempotent-delete",
-      paseoHome,
+      byspaceHome,
     });
 
-    await deletePaseoWorktree({
+    await deleteBySpaceWorktree({
       cwd: repoDir,
       worktreePath: created.worktreePath,
-      paseoHome,
+      byspaceHome,
     });
     expect(existsSync(created.worktreePath)).toBe(false);
 
     // Second call — nothing left on disk and no admin entry — must not throw.
     await expect(
-      deletePaseoWorktree({ cwd: repoDir, worktreePath: created.worktreePath, paseoHome }),
+      deleteBySpaceWorktree({ cwd: repoDir, worktreePath: created.worktreePath, byspaceHome }),
     ).resolves.toBeUndefined();
   });
 
@@ -245,20 +165,20 @@ describe("paseo worktree manager", () => {
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "no-cwd",
-      paseoHome,
+      byspaceHome,
     });
 
-    const ownership = await isPaseoOwnedWorktreeCwd(created.worktreePath, { paseoHome });
+    const ownership = await isBySpaceOwnedWorktreeCwd(created.worktreePath, { byspaceHome });
     expect(ownership.allowed).toBe(true);
     expect(ownership.worktreeRoot).toBeTruthy();
 
     // Simulate the handler path when git has forgotten about the worktree:
     // caller forwards the path-derived worktreesRoot from the ownership check.
-    await deletePaseoWorktree({
+    await deleteBySpaceWorktree({
       cwd: null,
       worktreePath: created.worktreePath,
       worktreesRoot: ownership.worktreeRoot,
-      paseoHome,
+      byspaceHome,
     });
 
     expect(existsSync(created.worktreePath)).toBe(false);

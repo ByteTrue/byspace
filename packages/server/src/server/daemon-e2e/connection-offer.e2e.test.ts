@@ -8,7 +8,9 @@ import { Writable } from "node:stream";
 import { spawn } from "node:child_process";
 
 import { generateLocalPairingOffer } from "../pairing-offer.js";
-import { createTestPaseoDaemon } from "../test-utils/paseo-daemon.js";
+import { createTestBySpaceDaemon } from "../test-utils/byspace-daemon.js";
+import { DaemonClient } from "../test-utils/daemon-client.js";
+import { loadPersistedConfig } from "../persisted-config.js";
 
 function createCapturingLogger() {
   const lines: string[] = [];
@@ -23,14 +25,14 @@ function createCapturingLogger() {
 }
 
 async function getPairingOfferUrl(args: {
-  paseoHome: string;
+  byspaceHome: string;
   relayEnabled?: boolean;
   relayEndpoint?: string;
   relayPublicEndpoint?: string;
   appBaseUrl?: string;
 }): Promise<string> {
   const pairing = await generateLocalPairingOffer({
-    paseoHome: args.paseoHome,
+    byspaceHome: args.byspaceHome,
     relayEnabled: args.relayEnabled,
     relayEndpoint: args.relayEndpoint,
     relayPublicEndpoint: args.relayPublicEndpoint,
@@ -77,11 +79,11 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
   });
 
   test("emits relay-only offer URL with stable serverId", async () => {
-    process.env.PASEO_PRIMARY_LAN_IP = "192.168.1.12";
+    process.env.BYSPACE_PRIMARY_LAN_IP = "192.168.1.12";
 
     const { logger } = createCapturingLogger();
 
-    const daemon = await createTestPaseoDaemon({
+    const daemon = await createTestBySpaceDaemon({
       listen: "0.0.0.0",
       logger,
       relayEnabled: true,
@@ -89,13 +91,13 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
 
     try {
       const offerUrl = await getPairingOfferUrl({
-        paseoHome: daemon.paseoHome,
+        byspaceHome: daemon.byspaceHome,
         relayEnabled: daemon.config.relayEnabled,
         relayEndpoint: daemon.config.relayEndpoint,
         relayPublicEndpoint: daemon.config.relayPublicEndpoint,
         appBaseUrl: daemon.config.appBaseUrl,
       });
-      expect(offerUrl.startsWith("https://app.paseo.sh/#offer=")).toBe(true);
+      expect(offerUrl.startsWith("https://app.byspace.cc.cd/#offer=")).toBe(true);
 
       const offer = decodeOfferFromFragmentUrl(offerUrl) as {
         v: number;
@@ -108,7 +110,7 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
       expect(typeof offer.serverId).toBe("string");
       expect(offer.serverId.length).toBeGreaterThan(0);
       expect(offer.serverId.startsWith("srv_")).toBe(true);
-      expect(offer.relay.endpoint).toBe("relay.paseo.sh:443");
+      expect(offer.relay.endpoint).toBe("relay.byspace.cc.cd:443");
       expect(typeof offer.daemonPublicKeyB64).toBe("string");
       expect(offer.daemonPublicKeyB64.length).toBeGreaterThan(0);
       expect(() => Buffer.from(offer.daemonPublicKeyB64, "base64")).not.toThrow();
@@ -120,16 +122,16 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
   });
 
   test("persists serverId and daemon keypair across daemon restarts", async () => {
-    process.env.PASEO_PRIMARY_LAN_IP = "192.168.1.12";
+    process.env.BYSPACE_PRIMARY_LAN_IP = "192.168.1.12";
 
-    const tempHomeRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-offer-home-"));
+    const tempHomeRoot = await mkdtemp(path.join(os.tmpdir(), "byspace-offer-home-"));
 
     const { logger: logger1 } = createCapturingLogger();
-    const daemon1 = await createTestPaseoDaemon({
+    const daemon1 = await createTestBySpaceDaemon({
       listen: "0.0.0.0",
       logger: logger1,
       relayEnabled: true,
-      paseoHomeRoot: tempHomeRoot,
+      byspaceHomeRoot: tempHomeRoot,
       cleanup: false,
     });
 
@@ -138,7 +140,7 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
 
     try {
       const offerUrl1 = await getPairingOfferUrl({
-        paseoHome: daemon1.paseoHome,
+        byspaceHome: daemon1.byspaceHome,
         relayEnabled: daemon1.config.relayEnabled,
         relayEndpoint: daemon1.config.relayEndpoint,
         relayPublicEndpoint: daemon1.config.relayPublicEndpoint,
@@ -153,18 +155,18 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
       await daemon1.close();
 
       const { logger: logger2 } = createCapturingLogger();
-      const daemon2 = await createTestPaseoDaemon({
+      const daemon2 = await createTestBySpaceDaemon({
         listen: "0.0.0.0",
         logger: logger2,
         relayEnabled: true,
-        paseoHomeRoot: tempHomeRoot,
+        byspaceHomeRoot: tempHomeRoot,
         cleanup: false,
       });
       staticDir2 = daemon2.staticDir;
 
       try {
         const offerUrl2 = await getPairingOfferUrl({
-          paseoHome: daemon2.paseoHome,
+          byspaceHome: daemon2.byspaceHome,
           relayEnabled: daemon2.config.relayEnabled,
           relayEndpoint: daemon2.config.relayEndpoint,
           relayPublicEndpoint: daemon2.config.relayPublicEndpoint,
@@ -195,77 +197,96 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
     }
   });
 
-  test("respects --no-relay (CLI) by not emitting a pairing offer", async () => {
-    process.env.PASEO_PRIMARY_LAN_IP = "192.168.1.12";
+  test.each([
+    { flag: "--relay", expected: true },
+    { flag: "--no-relay", expected: false },
+  ])(
+    "worker consumes $flag as an immutable launch override",
+    async ({ flag, expected }) => {
+      process.env.BYSPACE_PRIMARY_LAN_IP = "192.168.1.12";
 
-    const tempHome = await mkdtemp(path.join(os.tmpdir(), "paseo-offer-e2e-"));
-    const port = await getAvailablePort();
+      const tempHome = await mkdtemp(path.join(os.tmpdir(), "byspace-offer-e2e-"));
+      const port = await getAvailablePort();
+      const serverRoot = path.resolve(import.meta.dirname, "../../..");
+      const supervisorPath = path.join(serverRoot, "scripts/supervisor-entrypoint.ts");
+      const tsxBin = path.resolve(serverRoot, "../../node_modules/.bin/tsx");
+      const env = {
+        ...process.env,
+        BYSPACE_HOME: tempHome,
+        BYSPACE_LISTEN: `127.0.0.1:${port}`,
+        BYSPACE_RELAY_ENDPOINT: "127.0.0.1:9",
+        BYSPACE_RELAY_USE_TLS: "false",
+        OPENAI_API_KEY: "",
+        BYSPACE_DICTATION_ENABLED: "0",
+        BYSPACE_VOICE_MODE_ENABLED: "0",
+        BYSPACE_LOG_FORMAT: "json",
+      };
+      const stdoutLines: string[] = [];
+      const proc = spawn(tsxBin, [supervisorPath, "--dev", flag], {
+        env,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let client: DaemonClient | null = null;
 
-    const serverRoot = path.resolve(import.meta.dirname, "../../..");
-    const supervisorPath = path.join(serverRoot, "scripts/supervisor-entrypoint.ts");
-    const tsxBin = path.resolve(serverRoot, "../../node_modules/.bin/tsx");
-
-    const env = {
-      ...process.env,
-      PASEO_HOME: tempHome,
-      PASEO_LISTEN: `0.0.0.0:${port}`,
-      OPENAI_API_KEY: "",
-      PASEO_DICTATION_ENABLED: "0",
-      PASEO_VOICE_MODE_ENABLED: "0",
-      PASEO_LOG_FORMAT: "json",
-    };
-
-    const stdoutLines: string[] = [];
-    const proc = spawn(tsxBin, [supervisorPath, "--dev", "--no-relay"], {
-      env,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    try {
-      const sawListeningLog = await new Promise<boolean>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          proc.kill();
-          reject(new Error("timed out waiting for server listening log"));
-        }, 15000);
-
-        const onData = (data: Buffer) => {
-          const text = data.toString("utf8");
-          stdoutLines.push(text);
-          for (const line of text.split("\n")) {
-            if (!line.trim()) continue;
-            try {
-              const parsed = JSON.parse(line) as { msg?: string };
-              if (parsed.msg !== `Server listening on http://0.0.0.0:${port}`) continue;
-              clearTimeout(timeout);
-              resolve(true);
-              return;
-            } catch {
-              // ignore
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error("timed out waiting for server listening log"));
+          }, 15000);
+          const onData = (data: Buffer) => {
+            const text = data.toString("utf8");
+            stdoutLines.push(text);
+            for (const line of text.split("\n")) {
+              if (!line.trim()) continue;
+              try {
+                const parsed = JSON.parse(line) as { msg?: string };
+                if (parsed.msg !== `Server listening on http://127.0.0.1:${port}`) continue;
+                clearTimeout(timeout);
+                resolve();
+                return;
+              } catch {
+                // Ignore non-JSON development output.
+              }
             }
-          }
-        };
+          };
 
-        proc.stdout?.on("data", onData);
-        proc.on("error", (err) => {
-          clearTimeout(timeout);
-          reject(err);
-        });
-        proc.on("exit", (code) => {
-          if (code && code !== 0) {
+          proc.stdout?.on("data", onData);
+          proc.on("error", (error) => {
             clearTimeout(timeout);
-            reject(new Error(`daemon process exited early with code ${code}`));
-          }
+            reject(error);
+          });
+          proc.on("exit", (code) => {
+            if (code !== null && code !== 0) {
+              clearTimeout(timeout);
+              reject(new Error(`daemon process exited early with code ${code}`));
+            }
+          });
         });
-      });
 
-      expect(sawListeningLog).toBe(true);
-    } catch (err) {
-      throw new Error(`failed; stdout so far:\\n${stdoutLines.join("")}\\n\\n${String(err)}`, {
-        cause: err,
-      });
-    } finally {
-      proc.kill();
-      await rm(tempHome, { recursive: true, force: true });
-    }
-  }, 30000);
+        client = new DaemonClient({
+          url: `ws://127.0.0.1:${port}/ws`,
+          appVersion: "0.1.82",
+        });
+        await client.connect();
+
+        expect((await client.getDaemonStatus()).relay?.enabled).toBe(expected);
+        expect((await client.getDaemonConfig()).config.relay?.enabled).toBe(expected);
+        await expect(client.patchDaemonConfig({ relay: { enabled: !expected } })).rejects.toThrow(
+          "Relay is controlled by a daemon launch override",
+        );
+        expect((await client.getDaemonStatus()).relay?.enabled).toBe(expected);
+        expect((await client.getDaemonConfig()).config.relay?.enabled).toBe(expected);
+        expect(loadPersistedConfig(tempHome).daemon?.relay?.enabled).toBe(false);
+      } catch (error) {
+        throw new Error(`failed; stdout so far:\n${stdoutLines.join("")}\n\n${String(error)}`, {
+          cause: error,
+        });
+      } finally {
+        await client?.close().catch(() => undefined);
+        proc.kill();
+        await rm(tempHome, { recursive: true, force: true });
+      }
+    },
+    30000,
+  );
 });

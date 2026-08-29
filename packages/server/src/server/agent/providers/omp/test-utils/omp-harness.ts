@@ -11,7 +11,6 @@ import type {
   AgentStreamEvent,
   AgentTimelineItem,
 } from "../../../agent-sdk-types.js";
-import type { PaseoToolCatalog } from "../../../tools/types.js";
 import {
   OmpAgentClient,
   OmpAgentSession,
@@ -19,10 +18,10 @@ import {
   type OmpProviderIdleScheduler,
 } from "../agent.js";
 import type { OmpUsagePollScheduler } from "../usage-poller.js";
-import type { OmpAgentMessage, OmpRpcSlashCommand } from "../rpc-types.js";
+import type { OmpRpcSlashCommand } from "../rpc-types.js";
 import { FakeOmp } from "./fake-omp.js";
 
-const CWD = "/tmp/paseo-omp-agent-test";
+const CWD = "/tmp/byspace-omp-agent-test";
 
 interface OmpHistoryMessage {
   id: string;
@@ -35,7 +34,7 @@ interface OmpResumeHistory {
 }
 
 async function writeOmpHistory(history: OmpResumeHistory): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "paseo-omp-resume-"));
+  const directory = await mkdtemp(join(tmpdir(), "byspace-omp-resume-"));
   const sessionFile = join(directory, "session.jsonl");
   const entries = [
     { type: "session", id: "session-root", parentId: null },
@@ -90,14 +89,8 @@ export class OmpHarness {
     this.omp.failNextSubagentSubscription("events", error);
   }
 
-  async start(
-    config: Partial<AgentSessionConfig> = {},
-    paseoTools?: PaseoToolCatalog,
-  ): Promise<void> {
-    const session = await this.client.createSession(
-      { provider: "omp", cwd: CWD, ...config },
-      paseoTools ? { paseoTools } : undefined,
-    );
+  async start(config: Partial<AgentSessionConfig> = {}): Promise<void> {
+    const session = await this.client.createSession({ provider: "omp", cwd: CWD, ...config });
     if (!(session instanceof OmpAgentSession)) {
       throw new Error("OMP client returned a non-OMP session");
     }
@@ -142,10 +135,6 @@ export class OmpHarness {
     };
   }
 
-  registeredHostTools() {
-    return this.omp.latestSession().hostToolSetRequests;
-  }
-
   capabilities() {
     return this.client.capabilities;
   }
@@ -166,24 +155,6 @@ export class OmpHarness {
     runtime.queueStateReports(
       providerStatesAfterEnd.map((state) => ({ ...runtime.state, ...state })),
     );
-    runtime.finishTurn();
-    return await run;
-  }
-
-  async runPromptWithCustomMessage(
-    input: string,
-    customMessage: Extract<OmpAgentMessage, { role: "custom" }>,
-    output: string,
-  ): Promise<unknown> {
-    const session = this.requireSession();
-    const promptStarted = this.omp.latestSession().nextPrompt();
-    const run = session.run(input);
-    await promptStarted;
-    const runtime = this.omp.latestSession();
-    runtime.beginTurn();
-    runtime.acceptPrompt(input, "user-1");
-    runtime.emit({ type: "message_end", message: customMessage });
-    runtime.streamAssistantText(output);
     runtime.finishTurn();
     return await run;
   }
@@ -290,60 +261,13 @@ export class OmpHarness {
     const promptStarted = runtime.nextPrompt();
     const completion = session.run(input);
     let isCompleted = false;
-    void completion.then(
-      () => {
-        isCompleted = true;
-        return undefined;
-      },
-      () => {
-        isCompleted = true;
-        return undefined;
-      },
-    );
+    void completion.finally(() => {
+      isCompleted = true;
+    });
     await promptStarted;
     await waitForImmediate();
-    runtime.emit({
-      type: "prompt_result",
-      id: "prompt-local-only",
-      agentInvoked: false,
-    });
+    runtime.emit({ type: "prompt_result", id: "prompt-local-only", agentInvoked: false });
     return { completed: () => isCompleted, completion };
-  }
-
-  async runPromptAfterCorrelatedTrueResult(
-    input: string,
-    output: string,
-  ): Promise<{ completedBeforeTurn: boolean; result: unknown }> {
-    const session = this.requireSession();
-    const runtime = this.omp.latestSession();
-    runtime.promptAck = { requestId: "prompt-invoked", agentInvoked: false };
-    const promptStarted = runtime.nextPrompt();
-    const run = session.run(input);
-    let completed = false;
-    void run.then(
-      () => {
-        completed = true;
-        return undefined;
-      },
-      () => {
-        completed = true;
-        return undefined;
-      },
-    );
-    await promptStarted;
-    runtime.emit({
-      type: "prompt_result",
-      id: "prompt-invoked",
-      agentInvoked: true,
-    });
-    await waitForImmediate();
-    await waitForImmediate();
-    const completedBeforeTurn = completed;
-    runtime.acceptPrompt(input, "user-1");
-    runtime.beginTurn();
-    runtime.streamAssistantText(output);
-    runtime.finishTurn();
-    return { completedBeforeTurn, result: await run };
   }
 
   async runPromptAfterDelayedFalseLocalOnlyResult(
@@ -356,23 +280,12 @@ export class OmpHarness {
     const promptStarted = runtime.nextPrompt();
     const run = session.run(input);
     let completed = false;
-    void run.then(
-      () => {
-        completed = true;
-        return undefined;
-      },
-      () => {
-        completed = true;
-        return undefined;
-      },
-    );
+    void run.finally(() => {
+      completed = true;
+    });
     await promptStarted;
     await waitForImmediate();
-    runtime.emit({
-      type: "prompt_result",
-      id: "prompt-1",
-      agentInvoked: false,
-    });
+    runtime.emit({ type: "prompt_result", id: "prompt-1", agentInvoked: false });
     await waitForImmediate();
     const completedBeforeTurn = completed;
     runtime.acceptPrompt(input, "user-1");
@@ -380,14 +293,6 @@ export class OmpHarness {
     runtime.streamAssistantText(output);
     runtime.finishTurn();
     return { completedBeforeTurn, result: await run };
-  }
-
-  async runAutonomousTurn(output: string): Promise<void> {
-    const runtime = this.omp.latestSession();
-    runtime.beginTurn();
-    runtime.streamAssistantText(output);
-    runtime.finishTurn();
-    await waitForImmediate();
   }
 
   timeline(): AgentTimelineItem[] {
@@ -506,7 +411,6 @@ export class OmpHarness {
 
   async close(): Promise<void> {
     await this.requireSession().close();
-    await waitForImmediate();
   }
 
   isClosed(): boolean {

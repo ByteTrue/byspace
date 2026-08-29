@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Animated, Easing, Platform, Text, ToastAndroid, View } from "react-native";
+import { Animated, Easing, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -20,14 +20,12 @@ export interface ToastShowOptions {
   icon?: ReactNode;
   variant?: ToastVariant;
   durationMs?: number | null;
-  nativeAndroid?: boolean;
   testID?: string;
 }
 
 export interface ToastState {
   id: number;
   content: ReactNode;
-  nativeMessage: string | null;
   icon?: ReactNode;
   variant: ToastVariant;
   durationMs: number | null;
@@ -55,27 +53,17 @@ export function useToastHost(): {
   const idRef = useRef(0);
 
   const show = useCallback((content: ReactNode, options?: ToastShowOptions) => {
-    const nativeMessage = typeof content === "string" ? content.trim() : null;
-    if (!content || nativeMessage === "") {
+    const message = typeof content === "string" ? content.trim() : null;
+    if (!content || message === "") {
       return;
     }
 
     const variant = options?.variant ?? "default";
     const durationMs = options?.durationMs === undefined ? DEFAULT_DURATION_MS : options.durationMs;
-    const nativeAndroid = options?.nativeAndroid ?? false;
-
-    if (Platform.OS === "android" && nativeAndroid && nativeMessage) {
-      const duration =
-        durationMs !== null && durationMs <= 2500 ? ToastAndroid.SHORT : ToastAndroid.LONG;
-      ToastAndroid.showWithGravity(nativeMessage, duration, ToastAndroid.TOP);
-      return;
-    }
-
     idRef.current += 1;
     setToast({
       id: idRef.current,
       content,
-      nativeMessage,
       icon: options?.icon,
       variant,
       durationMs,

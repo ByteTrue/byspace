@@ -1,4 +1,8 @@
-import { TerminalStreamOpcode } from "@getpaseo/protocol/binary-frames/index";
+import {
+  decodeTerminalResizePayload,
+  decodeTerminalStreamFrame,
+  TerminalStreamOpcode,
+} from "@bytetrue/byspace-protocol/binary-frames/index";
 import { describe, expect, test } from "vitest";
 
 import { TerminalStreamRouter, type TerminalStreamEvent } from "./terminal-stream-router.js";
@@ -24,5 +28,26 @@ describe("terminal-stream-router", () => {
         data: payload,
       },
     ]);
+  });
+
+  test("preserves resize update intent in binary frames", () => {
+    const router = new TerminalStreamRouter();
+    router.setSlot("term-1", 7);
+
+    const encoded = router.encodeInput("term-1", {
+      type: "resize",
+      rows: 24,
+      cols: 80,
+      intent: "update",
+    });
+    const frame = decodeTerminalStreamFrame(encoded!);
+
+    expect(frame?.opcode).toBe(TerminalStreamOpcode.Resize);
+    expect(frame?.slot).toBe(7);
+    expect(decodeTerminalResizePayload(frame?.payload ?? new Uint8Array())).toEqual({
+      rows: 24,
+      cols: 80,
+      intent: "update",
+    });
   });
 });

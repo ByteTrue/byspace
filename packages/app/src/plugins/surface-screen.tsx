@@ -1,8 +1,8 @@
 import { router, useLocalSearchParams } from "expo-router";
-import type { PluginSurfaceProps, PluginTheme } from "@getpaseo/plugin";
+import type { PluginSurfaceProps, PluginTheme } from "@bytetrue/byspace-plugin";
 import { ChevronDown, X } from "lucide-react-native";
 import { useCallback, useMemo, useRef, useState, type ComponentType } from "react";
-import { Platform, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { HeaderIconBadge } from "@/components/headers/header-icon-badge";
 import { HeaderToggleButton } from "@/components/headers/header-toggle-button";
@@ -76,8 +76,6 @@ function SurfaceRenderer({
 const ThemedSurfaceRenderer = withUnistyles(SurfaceRenderer);
 
 function resolvePlatform(): PluginSurfaceProps["layout"]["platform"] {
-  if (Platform.OS === "ios") return "ios";
-  if (Platform.OS === "android") return "android";
   return "web";
 }
 

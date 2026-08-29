@@ -2,7 +2,7 @@ import {
   deriveAgentStateBucket,
   type AgentAttentionReason,
   type AgentStateBucketInput,
-} from "@getpaseo/protocol/agent-state-bucket";
+} from "@bytetrue/byspace-protocol/agent-state-bucket";
 
 export type SidebarStateBucket = "needs_input" | "failed" | "running" | "attention" | "done";
 export type SidebarAttentionReason = AgentAttentionReason;
@@ -14,12 +14,7 @@ export function deriveSidebarStateBucket(input: AgentStateBucketInput): SidebarS
 export function isSidebarActiveAgent(input: AgentStateBucketInput): boolean {
   return deriveSidebarStateBucket(input) !== "done";
 }
-
-// Most urgent first, for collapsing a project's workspaces into one badge. This is
-// deliberately NOT STATUS_BUCKET_ORDER below, which ranks "attention" above "running": on a
-// collapsed project row we want an actively-working project to keep showing the loader,
-// so "running" outranks "attention" here. needs_input and failed still win over both;
-// done stays last.
+// Most urgent first when collapsing a project's workspaces into one status badge.
 const STATUS_BUCKET_PRIORITY: readonly SidebarStateBucket[] = [
   "needs_input",
   "failed",
@@ -41,19 +36,13 @@ export const STATUS_BUCKET_ORDER: readonly SidebarStateBucket[] = [
   "done",
 ] as const;
 
-/**
- * Collapses many workspace status buckets into the single most urgent one, so a
- * collapsed project row can stand in for the child rows it hides.
- */
 export function aggregateSidebarStateBuckets(
   buckets: Iterable<SidebarStateBucket>,
 ): SidebarStateBucket {
   let bestRank = STATUS_BUCKET_PRIORITY.length - 1;
   for (const bucket of buckets) {
     const rank = STATUS_BUCKET_PRIORITY.indexOf(bucket);
-    if (rank !== -1 && rank < bestRank) {
-      bestRank = rank;
-    }
+    if (rank !== -1 && rank < bestRank) bestRank = rank;
   }
   return STATUS_BUCKET_PRIORITY[bestRank] ?? "done";
 }

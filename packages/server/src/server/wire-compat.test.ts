@@ -2,22 +2,24 @@ import pino from "pino";
 import { z } from "zod";
 import { describe, expect, test } from "vitest";
 
-import { CLIENT_CAPS } from "@getpaseo/protocol/client-capabilities";
+import { CLIENT_CAPS } from "@bytetrue/byspace-protocol/client-capabilities";
 import {
+  AgentSnapshotPayloadSchema,
   AgentTimelineItemPayloadSchema,
   FetchAgentTimelineResponseMessageSchema,
   SessionInboundMessageSchema,
-  SessionOutboundMessageSchema,
+  ServerInfoStatusPayloadSchema,
   type SessionOutboundMessage,
-} from "@getpaseo/protocol/messages";
+} from "@bytetrue/byspace-protocol/messages";
 import { Session, type SessionOptions } from "./session.js";
-import { DirectorySyncService } from "./directory-sync/index.js";
 import { createProviderSnapshotManagerStub } from "./test-utils/session-stubs.js";
 import type { AgentTimelineRow } from "./agent/agent-manager.js";
+import { handleCreateBySpaceWorktreeRequest } from "./worktree-session.js";
 import { InMemoryAgentTimelineStore } from "./agent/agent-timeline-store.js";
 import type { AgentTimelineFetchOptions } from "./agent/agent-timeline-store-types.js";
-import { handleCreatePaseoWorktreeRequest } from "./worktree-session.js";
+import { DirectorySyncService } from "./directory-sync/index.js";
 import { createPersistedProjectRecord } from "./workspace-registry.js";
+import { SessionOutboundMessageSchema } from "@bytetrue/byspace-protocol/messages";
 
 const LegacyTimelineEntryPayloadSchema = z.object({
   provider: z.enum(["claude", "codex", "opencode"]),
@@ -40,6 +42,41 @@ const LegacyFetchAgentTimelineResponseMessageSchema = z.object({
   payload: FetchAgentTimelineResponseMessageSchema.shape.payload.extend({
     entries: z.array(LegacyTimelineEntryPayloadSchema),
   }),
+});
+
+const LegacySubAgentToolCallSchema = z.object({
+  type: z.literal("tool_call"),
+  callId: z.string(),
+  name: z.string(),
+  status: z.enum(["running", "completed", "failed", "canceled"]),
+  error: z.unknown().nullable(),
+  detail: z.object({
+    type: z.literal("sub_agent"),
+    subAgentType: z.string().optional(),
+    description: z.string().optional(),
+    log: z.string(),
+    // Copied from v0.1.65-beta.3: actions was required even though the UI ignored it.
+    actions: z.array(
+      z.object({
+        index: z.number().int().positive(),
+        toolName: z.string(),
+        summary: z.string().optional(),
+      }),
+    ),
+  }),
+});
+
+const LegacyAgentCapabilityFlagsSchema = z.object({
+  supportsStreaming: z.boolean(),
+  supportsSessionPersistence: z.boolean(),
+  supportsDynamicModes: z.boolean(),
+  supportsMcpServers: z.boolean(),
+  supportsReasoningStream: z.boolean(),
+  supportsToolInvocations: z.boolean(),
+});
+
+const LegacyAgentSnapshotPayloadSchema = AgentSnapshotPayloadSchema.extend({
+  capabilities: LegacyAgentCapabilityFlagsSchema,
 });
 
 interface SessionInternals {
@@ -206,13 +243,12 @@ function createSessionForWireCompatTest(options?: {
 
   const session = new Session({
     clientId: "wire-compat-client",
-    scopes: ["*"],
     clientCapabilities: options?.clientCapabilities ?? null,
     onMessage: (message) => messages.push(message),
     logger: pino({ level: "silent" }),
     downloadTokenStore: {} as SessionOptions["downloadTokenStore"],
-    pushNotifications: {} as SessionOptions["pushNotifications"],
-    paseoHome: "/tmp/paseo-home",
+    pushTokenStore: {} as SessionOptions["pushTokenStore"],
+    byspaceHome: "/tmp/byspace-home",
     agentManager: new InMemoryAgentManager(
       options?.rows ?? rows,
     ) as unknown as SessionOptions["agentManager"],
@@ -260,8 +296,8 @@ function createSessionForWireCompatTest(options?: {
       async resolveRepoRemoteUrl() {
         return null;
       },
-      async getProjectSlug() {
-        return "project";
+      async getWorkspaceGitMetadata() {
+        return null;
       },
     } as unknown as SessionOptions["workspaceGitService"],
     daemonConfigStore:
@@ -312,14 +348,16 @@ describe("wire compatibility", () => {
       projectId: "project-1",
       rootPath: "/tmp/project",
       kind: "git",
-      displayName: "project",
-      customName: "Favorite project",
+      displayName: "Favorite project",
       createdAt: "2026-07-15T00:00:00.000Z",
       updatedAt: "2026-07-15T00:00:00.000Z",
     });
     const legacyMessages: SessionOutboundMessage[] = [];
     const capableMessages: SessionOutboundMessage[] = [];
-    const legacy = createSessionForWireCompatTest({ messages: legacyMessages });
+    const legacy = createSessionForWireCompatTest({
+      clientCapabilities: {},
+      messages: legacyMessages,
+    });
     const capable = createSessionForWireCompatTest({
       clientCapabilities: { [CLIENT_CAPS.projectUpdates]: true },
       messages: capableMessages,
@@ -340,8 +378,9 @@ describe("wire compatibility", () => {
           kind: "upsert",
           project: {
             projectId: "project-1",
+            projectKey: "project-1",
             projectDisplayName: "Favorite project",
-            projectCustomName: "Favorite project",
+            projectCustomName: null,
             projectCustomIconRevision: null,
             projectIconRevision: "automatic:none:v1",
             projectRootPath: "/tmp/project",
@@ -351,7 +390,10 @@ describe("wire compatibility", () => {
       },
       {
         type: "project.update",
-        payload: { kind: "remove", projectId: "project-1" },
+        payload: {
+          kind: "remove",
+          projectId: "project-1",
+        },
       },
     ]);
   });
@@ -399,6 +441,47 @@ describe("wire compatibility", () => {
       },
     });
   });
+  test("server info strips unknown legacy features while accepting former turn identity", () => {
+    const parsed = ServerInfoStatusPayloadSchema.parse({
+      status: "server_info",
+      serverId: "legacy-server",
+      features: {
+        workspaceGithubClone: true,
+        agentTurnIdentity: true,
+      },
+    });
+
+    expect(parsed).toEqual({
+      status: "server_info",
+      serverId: "legacy-server",
+      hostname: null,
+      version: null,
+      features: { agentTurnIdentity: true },
+    });
+  });
+
+  test("assistant timeline message ids are optional on the wire", () => {
+    expect(
+      AgentTimelineItemPayloadSchema.parse({
+        type: "assistant_message",
+        text: "old daemon shape",
+      }),
+    ).toEqual({
+      type: "assistant_message",
+      text: "old daemon shape",
+    });
+    expect(
+      AgentTimelineItemPayloadSchema.parse({
+        type: "assistant_message",
+        text: "new daemon shape",
+        messageId: "msg-1",
+      }),
+    ).toEqual({
+      type: "assistant_message",
+      text: "new daemon shape",
+      messageId: "msg-1",
+    });
+  });
 
   test("downgrades reasoning_merge for clients that do not declare the capability", async () => {
     const response = await emitTimelineResponse();
@@ -417,6 +500,100 @@ describe("wire compatibility", () => {
 
     const currentParsed = FetchAgentTimelineResponseMessageSchema.parse(response);
     expect(currentParsed.payload.entries[0]?.collapsed).toContain("reasoning_merge");
+  });
+
+  test("sub_agent tool-call payload still parses against the v0.1.65-beta.3 schema", () => {
+    const parsed = LegacySubAgentToolCallSchema.parse({
+      type: "tool_call",
+      callId: "call-sub-agent-1",
+      name: "Task",
+      status: "completed",
+      error: null,
+      detail: {
+        type: "sub_agent",
+        subAgentType: "Explore",
+        description: "Inspect repository structure",
+        childSessionId: "child-session-1",
+        log: "[Read] README.md",
+        actions: [],
+      },
+    });
+
+    expect(parsed.detail.actions).toEqual([]);
+  });
+
+  test("old clients parse agent snapshots with rewind capabilities", () => {
+    const parsed = LegacyAgentSnapshotPayloadSchema.parse({
+      id: "agent-1",
+      provider: "claude",
+      cwd: "/tmp/project",
+      model: null,
+      thinkingOptionId: null,
+      effectiveThinkingOptionId: null,
+      createdAt: "2026-05-23T00:00:00.000Z",
+      updatedAt: "2026-05-23T00:00:00.000Z",
+      lastUserMessageAt: null,
+      status: "idle",
+      capabilities: {
+        supportsStreaming: true,
+        supportsSessionPersistence: true,
+        supportsDynamicModes: true,
+        supportsMcpServers: true,
+        supportsReasoningStream: true,
+        supportsToolInvocations: true,
+        supportsRewindConversation: true,
+        supportsRewindFiles: true,
+        supportsRewindBoth: true,
+      },
+      currentModeId: null,
+      availableModes: [],
+      pendingPermissions: [],
+      persistence: null,
+      title: null,
+      labels: {},
+    });
+
+    expect(parsed.capabilities).toEqual({
+      supportsStreaming: true,
+      supportsSessionPersistence: true,
+      supportsDynamicModes: true,
+      supportsMcpServers: true,
+      supportsReasoningStream: true,
+      supportsToolInvocations: true,
+    });
+  });
+
+  test("new clients parse agent snapshots without rewind capabilities", () => {
+    const parsed = AgentSnapshotPayloadSchema.parse({
+      id: "agent-1",
+      provider: "claude",
+      cwd: "/tmp/project",
+      model: null,
+      thinkingOptionId: null,
+      effectiveThinkingOptionId: null,
+      createdAt: "2026-05-23T00:00:00.000Z",
+      updatedAt: "2026-05-23T00:00:00.000Z",
+      lastUserMessageAt: null,
+      status: "idle",
+      capabilities: {
+        supportsStreaming: true,
+        supportsSessionPersistence: true,
+        supportsDynamicModes: true,
+        supportsMcpServers: true,
+        supportsReasoningStream: true,
+        supportsToolInvocations: true,
+      },
+      currentModeId: null,
+      availableModes: [],
+      pendingPermissions: [],
+      persistence: null,
+      title: null,
+      labels: {},
+    });
+
+    expect(parsed.capabilities.supportsRewindConversation).toBe(false);
+    expect(parsed.capabilities.supportsRewindFiles).toBe(false);
+    expect(parsed.capabilities.supportsRewindBoth).toBe(false);
   });
 
   test("carries canonical turn IDs to new clients while legacy schemas ignore them", async () => {
@@ -449,7 +626,7 @@ describe("wire compatibility", () => {
     const workflow = new InMemoryWorktreeWorkflow();
 
     const dependencies = {
-      paseoHome: "/tmp/paseo-home",
+      byspaceHome: "/tmp/byspace-home",
       describeWorkspaceRecord: async () =>
         ({
           id: "ws-1",
@@ -466,11 +643,11 @@ describe("wire compatibility", () => {
         }) as never,
       emit() {},
       sessionLogger: pino({ level: "silent" }),
-      createPaseoWorktreeWorkflow: workflow.create.bind(workflow),
+      createBySpaceWorktreeWorkflow: workflow.create.bind(workflow),
     };
 
     const legacyRequest = SessionInboundMessageSchema.parse({
-      type: "create_paseo_worktree_request",
+      type: "create_byspace_worktree_request",
       requestId: "req-legacy",
       cwd: "/tmp/repo",
       worktreeSlug: "legacy-worktree",
@@ -481,13 +658,13 @@ describe("wire compatibility", () => {
           mimeType: "application/github-issue",
           number: 55,
           title: "Improve startup error details",
-          url: "https://github.com/getpaseo/paseo/issues/55",
+          url: "https://github.com/ByteTrue/byspace/issues/55",
         },
       ],
     });
 
     const newRequest = SessionInboundMessageSchema.parse({
-      type: "create_paseo_worktree_request",
+      type: "create_byspace_worktree_request",
       requestId: "req-new",
       cwd: "/tmp/repo",
       worktreeSlug: "legacy-worktree",
@@ -499,21 +676,21 @@ describe("wire compatibility", () => {
             mimeType: "application/github-issue",
             number: 55,
             title: "Improve startup error details",
-            url: "https://github.com/getpaseo/paseo/issues/55",
+            url: "https://github.com/ByteTrue/byspace/issues/55",
           },
         ],
       },
     });
 
-    if (legacyRequest.type !== "create_paseo_worktree_request") {
+    if (legacyRequest.type !== "create_byspace_worktree_request") {
       throw new Error("Expected legacy worktree request");
     }
-    if (newRequest.type !== "create_paseo_worktree_request") {
+    if (newRequest.type !== "create_byspace_worktree_request") {
       throw new Error("Expected new worktree request");
     }
 
-    await handleCreatePaseoWorktreeRequest(dependencies, legacyRequest);
-    await handleCreatePaseoWorktreeRequest(dependencies, newRequest);
+    await handleCreateBySpaceWorktreeRequest(dependencies, legacyRequest);
+    await handleCreateBySpaceWorktreeRequest(dependencies, newRequest);
 
     expect(workflow.capturedInputs).toHaveLength(2);
     expect(workflow.capturedInputs[0]).toEqual(workflow.capturedInputs[1]);
@@ -528,7 +705,7 @@ describe("wire compatibility", () => {
             mimeType: "application/github-issue",
             number: 55,
             title: "Improve startup error details",
-            url: "https://github.com/getpaseo/paseo/issues/55",
+            url: "https://github.com/ByteTrue/byspace/issues/55",
           },
         ],
       },
@@ -536,7 +713,7 @@ describe("wire compatibility", () => {
       action: undefined,
       githubPrNumber: undefined,
       runSetup: false,
-      paseoHome: "/tmp/paseo-home",
+      byspaceHome: "/tmp/byspace-home",
     });
   });
 });

@@ -1,4 +1,4 @@
-import { useMemo, type ComponentProps, type PropsWithChildren, type ReactNode } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -10,12 +10,10 @@ import {
   Pencil,
   Pin,
   PinOff,
+  Sparkles,
   Tag,
 } from "lucide-react-native";
-import { isWeb } from "@/constants/platform";
-import { getForgePresentation, normalizeForge } from "@/git/forge";
-import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
-import { useAppSettings } from "@/hooks/use-settings";
+import { isNative, isWeb } from "@/constants/platform";
 import type { Theme } from "@/styles/theme";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import {
@@ -25,19 +23,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
 import { Shortcut } from "@/components/ui/shortcut";
-import { OpenInFileManagerMenuItem } from "@/workspace/open-in-file-manager/menu-item";
-import { resolveSidebarWorkspaceAccessibilityLabel } from "@/components/sidebar/sidebar-workspace-title";
-import {
-  workspaceServiceLabelKey,
-  type WorkspaceServiceSummary,
-} from "@/components/sidebar/workspace-meta-row";
 import {
   useWorkspaceLabelMenuPages,
   WORKSPACE_LABEL_PAGE_ID,
@@ -54,18 +40,23 @@ const ThemedCopy = withUnistyles(Copy);
 const ThemedArchive = withUnistyles(Archive);
 const ThemedPencil = withUnistyles(Pencil);
 const ThemedCircleCheck = withUnistyles(CircleCheck);
+const ThemedSparkles = withUnistyles(Sparkles);
 const ThemedPin = withUnistyles(Pin);
 const ThemedPinOff = withUnistyles(PinOff);
 const ThemedTag = withUnistyles(Tag);
 
 const copyLeadingIcon = <ThemedCopy size={14} uniProps={foregroundMutedColorMapping} />;
 const renameLeadingIcon = <ThemedPencil size={14} uniProps={foregroundMutedColorMapping} />;
+const renameWithAgentLeadingIcon = (
+  <ThemedSparkles size={14} uniProps={foregroundMutedColorMapping} />
+);
 const markAsReadLeadingIcon = (
   <ThemedCircleCheck size={14} uniProps={foregroundMutedColorMapping} />
 );
 const archiveLeadingIcon = <ThemedArchive size={14} uniProps={foregroundMutedColorMapping} />;
 const pinLeadingIcon = <ThemedPin size={14} uniProps={foregroundMutedColorMapping} />;
 const unpinLeadingIcon = <ThemedPinOff size={14} uniProps={foregroundMutedColorMapping} />;
+const labelLeadingIcon = <ThemedTag size={14} uniProps={foregroundMutedColorMapping} />;
 
 function renderTriggerIcon({ hovered }: { hovered?: boolean }) {
   return (
@@ -76,7 +67,7 @@ function renderTriggerIcon({ hovered }: { hovered?: boolean }) {
   );
 }
 
-export interface SidebarWorkspaceMenuProps {
+interface SidebarWorkspaceMenuProps {
   workspaceKey: string;
   serverId?: string;
   workspaceId?: string;
@@ -84,154 +75,15 @@ export interface SidebarWorkspaceMenuProps {
   onCopyPath?: () => void;
   onCopyBranchName?: () => void;
   onRename?: () => void;
+  onRenameWithAgent?: () => void;
   onMarkAsRead?: () => void;
+  isPinned?: boolean;
+  onTogglePin?: () => void;
   onArchive: () => void;
   archiveLabel?: string;
   archiveStatus?: "idle" | "pending" | "success";
   archivePendingLabel?: string;
   archiveShortcutKeys?: ShortcutKey[][] | null;
-  isPinned?: boolean;
-  onTogglePin?: () => void;
-  openInFileManagerPath?: string | null;
-  /**
-   * Lifted so the row that reveals the kebab can keep it mounted while its menu is up. See
-   * `useOpenKebabMenuVisibility`.
-   */
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-}
-
-interface SidebarWorkspaceMenuItemsProps extends Omit<
-  SidebarWorkspaceMenuProps,
-  "onArchive" | "open" | "onOpenChange"
-> {
-  onArchive?: () => void;
-}
-
-type MenuSurface = "context" | "dropdown";
-
-function WorkspaceMenuItem({
-  surface,
-  children,
-  ...props
-}: PropsWithChildren<
-  Omit<ComponentProps<typeof DropdownMenuItem>, "children"> & { surface: MenuSurface }
->) {
-  if (surface === "context") {
-    return <ContextMenuItem {...props}>{children}</ContextMenuItem>;
-  }
-  return <DropdownMenuItem {...props}>{children}</DropdownMenuItem>;
-}
-
-function SidebarWorkspaceMenuItems({
-  surface,
-  workspaceKey,
-  serverId,
-  workspaceId,
-  onCopyPath,
-  onCopyBranchName,
-  onRename,
-  onMarkAsRead,
-  onArchive,
-  archiveLabel,
-  archiveStatus,
-  archivePendingLabel,
-  archiveShortcutKeys,
-  isPinned,
-  onTogglePin,
-  openInFileManagerPath,
-}: SidebarWorkspaceMenuItemsProps & { surface: MenuSurface }): ReactNode {
-  const { t } = useTranslation();
-  const archiveTrailing = useMemo(
-    () => (archiveShortcutKeys ? <Shortcut chord={archiveShortcutKeys} /> : null),
-    [archiveShortcutKeys],
-  );
-  const labelLeading = useMemo(
-    () => <ThemedTag size={14} uniProps={foregroundMutedColorMapping} />,
-    [],
-  );
-
-  return (
-    <>
-      {onCopyPath ? (
-        <WorkspaceMenuItem
-          surface={surface}
-          testID={`sidebar-workspace-menu-copy-path-${workspaceKey}`}
-          leading={copyLeadingIcon}
-          onSelect={onCopyPath}
-        >
-          {t("sidebar.workspace.actions.copyPath")}
-        </WorkspaceMenuItem>
-      ) : null}
-      {onCopyBranchName ? (
-        <WorkspaceMenuItem
-          surface={surface}
-          testID={`sidebar-workspace-menu-copy-branch-name-${workspaceKey}`}
-          leading={copyLeadingIcon}
-          onSelect={onCopyBranchName}
-        >
-          {t("sidebar.workspace.actions.copyBranchName")}
-        </WorkspaceMenuItem>
-      ) : null}
-      {onRename ? (
-        <WorkspaceMenuItem
-          surface={surface}
-          testID={`sidebar-workspace-menu-rename-${workspaceKey}`}
-          leading={renameLeadingIcon}
-          onSelect={onRename}
-        >
-          {t("sidebar.workspace.actions.rename")}
-        </WorkspaceMenuItem>
-      ) : null}
-      {onMarkAsRead ? (
-        <WorkspaceMenuItem
-          surface={surface}
-          testID={`sidebar-workspace-menu-mark-as-read-${workspaceKey}`}
-          leading={markAsReadLeadingIcon}
-          onSelect={onMarkAsRead}
-        >
-          Mark as read
-        </WorkspaceMenuItem>
-      ) : null}
-      {onTogglePin ? (
-        <WorkspaceMenuItem
-          surface={surface}
-          testID={`sidebar-workspace-menu-pin-${workspaceKey}`}
-          leading={isPinned ? unpinLeadingIcon : pinLeadingIcon}
-          onSelect={onTogglePin}
-        >
-          {isPinned ? t("sidebar.workspace.actions.unpin") : t("sidebar.workspace.actions.pin")}
-        </WorkspaceMenuItem>
-      ) : null}
-      {serverId && workspaceId ? (
-        <DropdownMenuSubTrigger
-          id={WORKSPACE_LABEL_PAGE_ID}
-          leading={labelLeading}
-          testID={`sidebar-workspace-menu-labels-${workspaceKey}`}
-        >
-          {t("workspaceLabels.title")}
-        </DropdownMenuSubTrigger>
-      ) : null}
-      <OpenInFileManagerMenuItem
-        surface={surface}
-        path={openInFileManagerPath}
-        testID={`sidebar-workspace-menu-open-folder-${workspaceKey}`}
-      />
-      {onArchive ? (
-        <WorkspaceMenuItem
-          surface={surface}
-          testID={`sidebar-workspace-menu-archive-${workspaceKey}`}
-          leading={archiveLeadingIcon}
-          trailing={archiveTrailing}
-          status={archiveStatus}
-          pendingLabel={archivePendingLabel}
-          onSelect={onArchive}
-        >
-          {archiveLabel ?? t("sidebar.workspace.actions.archive")}
-        </WorkspaceMenuItem>
-      ) : null}
-    </>
-  );
 }
 
 export function SidebarWorkspaceMenu({
@@ -242,17 +94,15 @@ export function SidebarWorkspaceMenu({
   onCopyPath,
   onCopyBranchName,
   onRename,
+  onRenameWithAgent,
   onMarkAsRead,
+  isPinned,
+  onTogglePin,
   onArchive,
   archiveLabel,
   archiveStatus,
   archivePendingLabel,
   archiveShortcutKeys,
-  isPinned,
-  onTogglePin,
-  openInFileManagerPath,
-  open,
-  onOpenChange,
 }: SidebarWorkspaceMenuProps) {
   const { t } = useTranslation();
   const workspaceTarget = useMemo<WorkspaceLabelTarget | null>(
@@ -261,8 +111,13 @@ export function SidebarWorkspaceMenu({
     [serverId, workspaceId, workspaceLabels],
   );
   const pages = useWorkspaceLabelMenuPages(workspaceTarget);
+  const archiveTrailing = useMemo(
+    () => (archiveShortcutKeys && !isNative ? <Shortcut chord={archiveShortcutKeys} /> : null),
+    [archiveShortcutKeys],
+  );
+
   return (
-    <DropdownMenu compactMode="sheet" open={open} onOpenChange={onOpenChange}>
+    <DropdownMenu>
       <DropdownMenuTrigger
         hitSlop={8}
         style={triggerStyle}
@@ -272,144 +127,82 @@ export function SidebarWorkspaceMenu({
       >
         {renderTriggerIcon}
       </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        width={260}
-        pages={pages}
-        sheetTitle={t("sidebar.workspace.actions.menu")}
-      >
-        <SidebarWorkspaceMenuItems
-          surface="dropdown"
-          workspaceKey={workspaceKey}
-          serverId={serverId}
-          workspaceId={workspaceId}
-          workspaceLabels={workspaceLabels}
-          onCopyPath={onCopyPath}
-          onCopyBranchName={onCopyBranchName}
-          onRename={onRename}
-          onMarkAsRead={onMarkAsRead}
-          onArchive={onArchive}
-          archiveLabel={archiveLabel}
-          archiveStatus={archiveStatus}
-          archivePendingLabel={archivePendingLabel}
-          archiveShortcutKeys={archiveShortcutKeys}
-          isPinned={isPinned}
-          onTogglePin={onTogglePin}
-          openInFileManagerPath={openInFileManagerPath}
-        />
+      <DropdownMenuContent align="end" width={260} pages={pages}>
+        {onCopyPath ? (
+          <DropdownMenuItem
+            testID={`sidebar-workspace-menu-copy-path-${workspaceKey}`}
+            leading={copyLeadingIcon}
+            onSelect={onCopyPath}
+          >
+            {t("sidebar.workspace.actions.copyPath")}
+          </DropdownMenuItem>
+        ) : null}
+        {onCopyBranchName ? (
+          <DropdownMenuItem
+            testID={`sidebar-workspace-menu-copy-branch-name-${workspaceKey}`}
+            leading={copyLeadingIcon}
+            onSelect={onCopyBranchName}
+          >
+            {t("sidebar.workspace.actions.copyBranchName")}
+          </DropdownMenuItem>
+        ) : null}
+        {onRename ? (
+          <DropdownMenuItem
+            testID={`sidebar-workspace-menu-rename-${workspaceKey}`}
+            leading={renameLeadingIcon}
+            onSelect={onRename}
+          >
+            {t("sidebar.workspace.actions.rename")}
+          </DropdownMenuItem>
+        ) : null}
+        {onRenameWithAgent ? (
+          <DropdownMenuItem
+            testID={`sidebar-workspace-menu-rename-with-agent-${workspaceKey}`}
+            leading={renameWithAgentLeadingIcon}
+            onSelect={onRenameWithAgent}
+          >
+            {t("sidebar.workspace.actions.renameWithAgent")}
+          </DropdownMenuItem>
+        ) : null}
+        {onMarkAsRead ? (
+          <DropdownMenuItem
+            testID={`sidebar-workspace-menu-mark-as-read-${workspaceKey}`}
+            leading={markAsReadLeadingIcon}
+            onSelect={onMarkAsRead}
+          >
+            Mark as read
+          </DropdownMenuItem>
+        ) : null}
+        {onTogglePin ? (
+          <DropdownMenuItem
+            testID={`sidebar-workspace-menu-pin-${workspaceKey}`}
+            leading={isPinned ? unpinLeadingIcon : pinLeadingIcon}
+            onSelect={onTogglePin}
+          >
+            {isPinned ? t("sidebar.workspace.actions.unpin") : t("sidebar.workspace.actions.pin")}
+          </DropdownMenuItem>
+        ) : null}
+        {serverId && workspaceId ? (
+          <DropdownMenuSubTrigger
+            id={WORKSPACE_LABEL_PAGE_ID}
+            leading={labelLeadingIcon}
+            testID={`sidebar-workspace-menu-labels-${workspaceKey}`}
+          >
+            {t("workspaceLabels.title")}
+          </DropdownMenuSubTrigger>
+        ) : null}
+        <DropdownMenuItem
+          testID={`sidebar-workspace-menu-archive-${workspaceKey}`}
+          leading={archiveLeadingIcon}
+          trailing={archiveTrailing}
+          status={archiveStatus}
+          pendingLabel={archivePendingLabel}
+          onSelect={onArchive}
+        >
+          {archiveLabel ?? t("sidebar.workspace.actions.archive")}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-type ContextTriggerProps = Omit<
-  ComponentProps<typeof ContextMenuTrigger>,
-  "children" | "enabledOnMobile" | "highlightStyle"
->;
-
-export function SidebarWorkspaceContextMenu({
-  children,
-  contextMenuOpen,
-  onContextMenuOpenChange,
-  workspace,
-  leadingProjectName,
-  hostBadgeLabel,
-  serviceSummary,
-  workspaceKey,
-  onCopyPath,
-  onCopyBranchName,
-  onRename,
-  onMarkAsRead,
-  onArchive,
-  archiveLabel,
-  archiveStatus,
-  archivePendingLabel,
-  archiveShortcutKeys,
-  isPinned,
-  onTogglePin,
-  openInFileManagerPath,
-  accessibilityLabel,
-  highlightStyle,
-  ...triggerProps
-}: PropsWithChildren<
-  SidebarWorkspaceMenuItemsProps &
-    ContextTriggerProps & {
-      contextMenuOpen: boolean;
-      onContextMenuOpenChange: (open: boolean) => void;
-      workspace: SidebarWorkspaceEntry;
-      leadingProjectName?: string | null;
-      hostBadgeLabel?: string | null;
-      serviceSummary?: WorkspaceServiceSummary | null;
-      highlightStyle: ComponentProps<typeof ContextMenuTrigger>["highlightStyle"];
-    }
->) {
-  const {
-    settings: { workspaceTitleSource },
-  } = useAppSettings();
-  const { t } = useTranslation();
-  const pullRequestLabel = workspace.prHint
-    ? t("workspace.git.pr.accessibility.pullRequest", {
-        number: workspace.prHint.number,
-        context: getForgePresentation(normalizeForge(workspace.prHint.forge)).changeRequestContext,
-      })
-    : null;
-  const rowAccessibilityLabel = resolveSidebarWorkspaceAccessibilityLabel({
-    workspace,
-    workspaceTitleSource,
-    leadingProjectName,
-    hostBadgeLabel,
-    pullRequestLabel,
-    serviceLabel: serviceSummary
-      ? t(workspaceServiceLabelKey(serviceSummary), { name: serviceSummary.name })
-      : null,
-  });
-  const workspaceTarget = useMemo<WorkspaceLabelTarget>(
-    () => ({
-      serverId: workspace.serverId,
-      workspaceId: workspace.workspaceId,
-      labels: workspace.labels ?? [],
-    }),
-    [workspace],
-  );
-  const pages = useWorkspaceLabelMenuPages(workspaceTarget);
-
-  return (
-    <ContextMenu open={contextMenuOpen} onOpenChange={onContextMenuOpenChange}>
-      <ContextMenuTrigger
-        {...triggerProps}
-        enabledOnMobile={false}
-        accessibilityLabel={accessibilityLabel ?? rowAccessibilityLabel}
-        highlightStyle={highlightStyle}
-      >
-        {children}
-      </ContextMenuTrigger>
-      <ContextMenuContent
-        align="start"
-        width={260}
-        testID={`sidebar-workspace-context-menu-${workspaceKey}`}
-        pages={pages}
-      >
-        <SidebarWorkspaceMenuItems
-          surface="context"
-          workspaceKey={workspaceKey}
-          serverId={workspaceTarget.serverId}
-          workspaceId={workspaceTarget.workspaceId}
-          workspaceLabels={workspaceTarget.labels}
-          onCopyPath={onCopyPath}
-          onCopyBranchName={onCopyBranchName}
-          onRename={onRename}
-          onMarkAsRead={onMarkAsRead}
-          onArchive={onArchive}
-          archiveLabel={archiveLabel}
-          archiveStatus={archiveStatus}
-          archivePendingLabel={archivePendingLabel}
-          archiveShortcutKeys={archiveShortcutKeys}
-          isPinned={isPinned}
-          onTogglePin={onTogglePin}
-          openInFileManagerPath={openInFileManagerPath}
-        />
-      </ContextMenuContent>
-    </ContextMenu>
   );
 }
 
@@ -422,9 +215,6 @@ const styles = StyleSheet.create((theme) => ({
     padding: 2,
     borderRadius: 4,
     marginLeft: 2,
-    // MoreVertical paints only around the center of its SVG. Keep the padded hit box, but
-    // pull the painted dots through that unused view-box space onto the trailing-content rail.
-    marginRight: -7,
   },
   triggerHovered: {
     backgroundColor: theme.colors.surface2,

@@ -2,16 +2,15 @@ import { resolve, dirname, basename } from "path";
 import { existsSync, realpathSync } from "fs";
 import { open as openFile, readFile, stat as statFile } from "fs/promises";
 import { TTLCache } from "@isaacs/ttlcache";
-import type { CheckoutCommit, CheckoutCommitFile } from "@getpaseo/protocol/messages";
-import { parseGitHubRemoteIdentity, parseGitRemoteLocation } from "@getpaseo/protocol/git-remote";
-import { maxBase64EncryptedPlaintextByteLength } from "@getpaseo/relay";
+import type { CheckoutCommit, CheckoutCommitFile } from "@bytetrue/byspace-protocol/messages";
+import {
+  parseGitHubRemoteIdentity,
+  parseGitRemoteLocation,
+} from "@bytetrue/byspace-protocol/git-remote";
+import { maxBase64EncryptedPlaintextByteLength } from "@bytetrue/byspace-relay";
 import type { Logger } from "pino";
 import type { ParsedDiffFile } from "../server/utils/diff-highlighter.js";
-import {
-  highlightDiffWithFileContent,
-  parseAndHighlightDiff,
-  parseDiff,
-} from "../server/utils/diff-highlighter.js";
+import { parseAndHighlightDiff } from "../server/utils/diff-highlighter.js";
 import { parseGitHubRepoFromRemote } from "../server/workspace-git-metadata.js";
 import { createGitHubService } from "../services/github-service.js";
 import type {
@@ -28,17 +27,16 @@ import {
 } from "../services/forge-cli-command.js";
 import { parseGitRevParsePath, resolveGitRevParsePath } from "./git-rev-parse-path.js";
 import { runGitCommand } from "./run-git-command.js";
-import { isPaseoOwnedWorktreeCwd, resolvePaseoWorktreesBaseRoot } from "./worktree.js";
+import { isBySpaceOwnedWorktreeCwd, resolveBySpaceWorktreesBaseRoot } from "./worktree.js";
 import {
   branchNameFromRef,
-  getPaseoWorktreeChangeRequestHintForBranch,
-  type PaseoWorktreeMetadata,
-  readPaseoWorktreeMetadata,
-  rebindPaseoWorktreeChangeRequestHint,
+  getBySpaceWorktreeChangeRequestHintForBranch,
+  type BySpaceWorktreeMetadata,
+  readBySpaceWorktreeMetadata,
+  rebindBySpaceWorktreeChangeRequestHint,
 } from "./worktree-metadata.js";
 const READ_ONLY_GIT_ENV = {
   GIT_OPTIONAL_LOCKS: "0",
-  LC_ALL: "C",
 } as const;
 
 /**
@@ -234,7 +232,6 @@ function normalizeBranchSuggestionName(raw: string): string | null {
 interface GitRef {
   name: string;
   committerDate: number;
-  oid: string;
 }
 
 export interface BranchSuggestion {
@@ -242,8 +239,6 @@ export interface BranchSuggestion {
   committerDate: number;
   hasLocal: boolean;
   hasRemote: boolean;
-  localAhead?: number;
-  localBehind?: number;
 }
 
 async function listGitRefs(cwd: string, refPrefix: string): Promise<GitRef[]> {
@@ -251,7 +246,7 @@ async function listGitRefs(cwd: string, refPrefix: string): Promise<GitRef[]> {
     [
       "for-each-ref",
       "--sort=-committerdate",
-      "--format=%(refname)%09%(committerdate:unix)%09%(objectname)",
+      "--format=%(refname)%09%(committerdate:unix)",
       refPrefix,
     ],
     { cwd, envOverlay: READ_ONLY_GIT_ENV },
@@ -261,9 +256,9 @@ async function listGitRefs(cwd: string, refPrefix: string): Promise<GitRef[]> {
     .map((line) => {
       const trimmed = line.trim();
       if (!trimmed) return null;
-      const [name, dateStr, oid] = trimmed.split("\t");
-      if (!name || !oid) return null;
-      return { name, committerDate: Number(dateStr) || 0, oid };
+      const [name, dateStr] = trimmed.split("\t");
+      if (!name) return null;
+      return { name, committerDate: Number(dateStr) || 0 };
     })
     .filter((ref): ref is GitRef => ref !== null);
 }
@@ -272,8 +267,6 @@ interface BranchSuggestionMeta {
   committerDate: number;
   hasLocal: boolean;
   hasRemote: boolean;
-  localOid?: string;
-  remoteOid?: string;
 }
 
 function sortBranchSuggestions(
@@ -312,8 +305,7 @@ export async function listBranchSuggestions(
 
   const requestedLimit = options?.limit ?? 50;
   const limit = Math.max(1, Math.min(200, requestedLimit));
-  const rawQuery = options?.query?.trim().toLowerCase() ?? "";
-  const query = normalizeBranchSuggestionName(rawQuery) ?? rawQuery;
+  const query = options?.query?.trim().toLowerCase() ?? "";
 
   const [localRefs, remoteRefs] = await Promise.all([
     listGitRefs(cwd, "refs/heads"),
@@ -329,8 +321,6 @@ export async function listBranchSuggestions(
     branchMeta.set(normalized, {
       hasLocal: true,
       hasRemote: existing?.hasRemote ?? false,
-      localOid: ref.oid,
-      ...(existing?.remoteOid ? { remoteOid: existing.remoteOid } : {}),
       committerDate: Math.max(ref.committerDate, existing?.committerDate ?? 0),
     });
   }
@@ -343,14 +333,12 @@ export async function listBranchSuggestions(
       branchMeta.set(normalized, {
         hasLocal: false,
         hasRemote: true,
-        remoteOid: ref.oid,
         committerDate: ref.committerDate,
       });
     } else {
       branchMeta.set(normalized, {
         ...existing,
         hasRemote: true,
-        remoteOid: ref.oid,
         committerDate: Math.max(ref.committerDate, existing.committerDate),
       });
     }
@@ -364,46 +352,15 @@ export async function listBranchSuggestions(
   }
 
   const ordered = sortBranchSuggestions(filteredNames, branchMeta, query);
-  return Promise.all(
-    ordered.slice(0, limit).map(async (name): Promise<BranchSuggestion> => {
-      const meta = branchMeta.get(name);
-      const suggestion: BranchSuggestion = {
-        name,
-        committerDate: meta?.committerDate ?? 0,
-        hasLocal: meta?.hasLocal ?? false,
-        hasRemote: meta?.hasRemote ?? false,
-      };
-      if (!suggestion.hasLocal || !suggestion.hasRemote) {
-        return suggestion;
-      }
-      if (meta?.localOid && meta.localOid === meta.remoteOid) {
-        suggestion.localAhead = 0;
-        suggestion.localBehind = 0;
-        return suggestion;
-      }
-
-      try {
-        const { stdout } = await runGitCommand(
-          [
-            "rev-list",
-            "--left-right",
-            "--count",
-            `refs/heads/${name}...refs/remotes/origin/${name}`,
-          ],
-          { cwd, envOverlay: READ_ONLY_GIT_ENV },
-        );
-        const [localAhead, localBehind] = stdout.trim().split(/\s+/).map(Number);
-        if (Number.isFinite(localAhead) && Number.isFinite(localBehind)) {
-          suggestion.localAhead = localAhead;
-          suggestion.localBehind = localBehind;
-        }
-      } catch {
-        // A ref may disappear between listing and comparison. Keep the branch
-        // available without divergence metadata and let creation re-resolve it.
-      }
-      return suggestion;
-    }),
-  );
+  return ordered.slice(0, limit).map((name) => {
+    const meta = branchMeta.get(name);
+    return {
+      name,
+      committerDate: meta?.committerDate ?? 0,
+      hasLocal: meta?.hasLocal ?? false,
+      hasRemote: meta?.hasRemote ?? false,
+    };
+  });
 }
 
 export interface LocalBranchCheckoutResolution {
@@ -603,6 +560,67 @@ async function readGitFileContentAtRef(
   }
 }
 
+interface GitFileAtRefRequest {
+  ref: string;
+  path: string;
+}
+
+async function readGitFileContentsAtRefs(
+  cwd: string,
+  requests: GitFileAtRefRequest[],
+): Promise<Array<string | null>> {
+  if (requests.length === 0) {
+    return [];
+  }
+
+  const fallback = () =>
+    Promise.all(requests.map(({ ref, path }) => readGitFileContentAtRef(cwd, ref, path)));
+  if (requests.some(({ ref, path }) => /[\r\n]/.test(ref) || /[\r\n]/.test(path))) {
+    return fallback();
+  }
+
+  try {
+    const result = await runGitCommand(["cat-file", "--batch"], {
+      cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+      input: `${requests.map(({ ref, path }) => `${ref}:${path}`).join("\n")}\n`,
+    });
+    if (result.truncated) {
+      return fallback();
+    }
+
+    const output = Buffer.from(result.stdout, "utf8");
+    const contents: Array<string | null> = [];
+    let offset = 0;
+    for (const _request of requests) {
+      const headerEnd = output.indexOf(0x0a, offset);
+      if (headerEnd < 0) {
+        return fallback();
+      }
+      const header = output.subarray(offset, headerEnd).toString("utf8");
+      offset = headerEnd + 1;
+      if (header.endsWith(" missing")) {
+        contents.push(null);
+        continue;
+      }
+      const sizeMatch = header.match(/^[0-9a-f]+ blob (\d+)$/);
+      if (!sizeMatch) {
+        return fallback();
+      }
+      const size = Number.parseInt(sizeMatch[1] ?? "", 10);
+      const contentEnd = offset + size;
+      if (contentEnd >= output.length || output[contentEnd] !== 0x0a) {
+        return fallback();
+      }
+      contents.push(output.subarray(offset, contentEnd).toString("utf8"));
+      offset = contentEnd + 1;
+    }
+    return contents;
+  } catch {
+    return fallback();
+  }
+}
+
 async function tryResolveMergeBase(cwd: string, baseRef: string): Promise<string | null> {
   try {
     const { stdout } = await runGitCommand(["merge-base", baseRef, "HEAD"], {
@@ -638,7 +656,7 @@ function buildGitDiffArgs(args: { ignoreWhitespace?: boolean; extra: string[] })
 }
 
 const TRACKED_DIFF_NUMSTAT_MAX_BYTES = 2 * 1024 * 1024; // 2MB
-const TRACKED_DIFF_BATCH_SIZE = 8;
+const TRACKED_DIFF_BATCH_SIZE = 64;
 const EMPTY_TREE_OBJECT_ID = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
 function isUnbornHeadDiffError(error: unknown): boolean {
@@ -731,6 +749,39 @@ async function getTrackedDiffTextForPath(input: {
   };
 }
 
+async function getTrackedDiffTextForPaths(input: {
+  cwd: string;
+  refsForDiff: CheckoutDiffRefs;
+  paths: string[];
+  ignoreWhitespace: boolean;
+}): Promise<{ text: string; truncated: boolean }> {
+  const result = await runGitCommand(
+    buildGitDiffArgs({
+      ignoreWhitespace: input.ignoreWhitespace,
+      extra: [...getCheckoutDiffRefArgs(input.refsForDiff), "--", ...input.paths],
+    }),
+    {
+      cwd: input.cwd,
+      envOverlay: READ_ONLY_GIT_ENV,
+      maxOutputBytes: TOTAL_DIFF_MAX_BYTES,
+    },
+  );
+
+  return { text: result.stdout, truncated: result.truncated };
+}
+
+function trackedDiffBatchFitsPerFileLimit(text: string): boolean {
+  if (text.length === 0) {
+    return true;
+  }
+  if (!text.startsWith("diff --git ")) {
+    return false;
+  }
+  return text
+    .split(/(?=^diff --git )/m)
+    .every((section) => Buffer.byteLength(section, "utf8") <= PER_FILE_DIFF_MAX_BYTES);
+}
+
 export class NotGitRepoError extends Error {
   readonly cwd: string;
   readonly code = "NOT_GIT_REPO";
@@ -781,7 +832,7 @@ export interface CheckoutStatus {
   isGit: false;
 }
 
-export interface CheckoutStatusGitNonPaseo {
+export interface CheckoutStatusGitNonBySpace {
   isGit: true;
   repoRoot: string;
   mainRepoRoot: string | null;
@@ -797,10 +848,10 @@ export interface CheckoutStatusGitNonPaseo {
   behindOfOrigin: number | null;
   hasRemote: boolean;
   remoteUrl: string | null;
-  isPaseoOwnedWorktree: false;
+  isBySpaceOwnedWorktree: false;
 }
 
-export interface CheckoutStatusGitPaseo {
+export interface CheckoutStatusGitBySpace {
   isGit: true;
   repoRoot: string;
   mainRepoRoot: string;
@@ -813,10 +864,10 @@ export interface CheckoutStatusGitPaseo {
   behindOfOrigin: number | null;
   hasRemote: boolean;
   remoteUrl: string | null;
-  isPaseoOwnedWorktree: true;
+  isBySpaceOwnedWorktree: true;
 }
 
-export type CheckoutStatusGit = CheckoutStatusGitNonPaseo | CheckoutStatusGitPaseo;
+export type CheckoutStatusGit = CheckoutStatusGitNonBySpace | CheckoutStatusGitBySpace;
 
 export type CheckoutStatusResult = CheckoutStatus | CheckoutStatusGit;
 
@@ -843,7 +894,7 @@ export interface MergeFromBaseOptions {
 }
 
 export interface CheckoutContext {
-  paseoHome?: string;
+  byspaceHome?: string;
   worktreesRoot?: string;
   logger?: Pick<Logger, "trace" | "warn">;
   facts?: CheckoutSnapshotFacts | null;
@@ -860,7 +911,7 @@ export type CheckoutSnapshotFacts =
       remoteUrl: string | null;
       absoluteGitDir: string | null;
       gitCommonDir: string | null;
-      paseoWorktree: PaseoWorktreeForCwd;
+      byspaceWorktree: BySpaceWorktreeForCwd;
       storedBaseRef: string | null;
       resolvedBaseRef: string | null;
       mainRepoRoot: string | null;
@@ -873,6 +924,13 @@ export type CheckoutSnapshotFacts =
 
 function isNotGitRepositoryError(error: unknown): boolean {
   return error instanceof Error && /not a git repository/i.test(error.message);
+}
+
+function isGitError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return /not a git repository/i.test(error.message) || /git repository/i.test(error.message);
 }
 
 async function requireGitRepo(cwd: string): Promise<void> {
@@ -1015,17 +1073,19 @@ async function getMainRepoRootFromCommonDir(
     envOverlay: READ_ONLY_GIT_ENV,
   });
   const worktrees = parseWorktreeList(worktreeOut);
-  const nonBareNonPaseo = worktrees.filter(
+  const nonBareNonBySpace = worktrees.filter(
     (wt) =>
       !wt.isBare &&
-      !isPaseoWorktreePath(wt.path, {
-        paseoHome: context?.paseoHome,
+      !isBySpaceWorktreePath(wt.path, {
+        byspaceHome: context?.byspaceHome,
         worktreesRoot: context?.worktreesRoot,
       }),
   );
-  const childrenOfBareRepo = nonBareNonPaseo.filter((wt) => isDescendantPath(wt.path, normalized));
+  const childrenOfBareRepo = nonBareNonBySpace.filter((wt) =>
+    isDescendantPath(wt.path, normalized),
+  );
   const mainChild = childrenOfBareRepo.find((wt) => basename(wt.path) === "main");
-  return mainChild?.path ?? childrenOfBareRepo[0]?.path ?? nonBareNonPaseo[0]?.path ?? normalized;
+  return mainChild?.path ?? childrenOfBareRepo[0]?.path ?? nonBareNonBySpace[0]?.path ?? normalized;
 }
 
 export interface GitWorktreeEntry {
@@ -1034,15 +1094,15 @@ export interface GitWorktreeEntry {
   isBare?: boolean;
 }
 
-/** Check whether a path is under Paseo's worktree root. */
-export function isPaseoWorktreePath(
+/** Check whether a path is under BySpace's worktree root. */
+export function isBySpaceWorktreePath(
   p: string,
-  options?: { paseoHome?: string; worktreesRoot?: string },
+  options?: { byspaceHome?: string; worktreesRoot?: string },
 ): boolean {
-  if (options?.worktreesRoot || options?.paseoHome) {
-    return isDescendantPath(p, resolvePaseoWorktreesBaseRoot(options));
+  if (options?.worktreesRoot || options?.byspaceHome) {
+    return isDescendantPath(p, resolveBySpaceWorktreesBaseRoot(options));
   }
-  return /[/\\]\.paseo[/\\]worktrees[/\\]/.test(p);
+  return /[/\\]\.byspace[/\\]worktrees[/\\]/.test(p);
 }
 
 /** True when `child` is strictly inside `parent` (handles both `/` and `\`). */
@@ -1105,9 +1165,21 @@ export async function localBranchExists(cwd: string, branchName: string): Promis
   return doesGitRefExist(cwd, `refs/heads/${branchName}`);
 }
 
+export async function remoteBranchExists(cwd: string, branchName: string): Promise<boolean> {
+  const { stdout } = await runGitCommand(["remote"], {
+    cwd,
+    envOverlay: READ_ONLY_GIT_ENV,
+  });
+  const remotes = stdout.split("\n").filter(Boolean);
+  const matches = await Promise.all(
+    remotes.map((remote) => doesGitRefExist(cwd, `refs/remotes/${remote}/${branchName}`)),
+  );
+  return matches.some(Boolean);
+}
 export async function renameCurrentBranch(
   cwd: string,
   newName: string,
+  expectedBranch?: string,
 ): Promise<{ previousBranch: string | null; currentBranch: string | null }> {
   const worktreeRoot = await requireGitWorktreeRoot(cwd);
 
@@ -1115,61 +1187,67 @@ export async function renameCurrentBranch(
   if (!previousBranch || previousBranch === "HEAD") {
     throw new Error("Cannot rename branch in detached HEAD state");
   }
+  if (expectedBranch && previousBranch !== expectedBranch) {
+    throw new Error(`Current branch changed from ${expectedBranch} to ${previousBranch}`);
+  }
 
-  await runGitCommand(["branch", "-m", newName], {
+  await runGitCommand(["branch", "-m", ...(expectedBranch ? [expectedBranch] : []), newName], {
     cwd,
     timeout: 120_000,
   });
 
   const currentBranch = await getCurrentBranch(cwd);
-  if (currentBranch) {
-    rebindPaseoWorktreeChangeRequestHint(worktreeRoot, previousBranch, currentBranch);
+  if (expectedBranch && currentBranch !== newName) {
+    throw new Error(`Current branch changed while renaming ${expectedBranch}`);
+  }
+  if (currentBranch === newName) {
+    rebindBySpaceWorktreeChangeRequestHint(worktreeRoot, previousBranch, currentBranch);
   }
   return { previousBranch, currentBranch };
 }
 
-type PaseoWorktreeForCwd =
-  | { isPaseoOwnedWorktree: false }
-  | { isPaseoOwnedWorktree: true; worktreeRoot: string };
+type BySpaceWorktreeForCwd =
+  | { isBySpaceOwnedWorktree: false }
+  | { isBySpaceOwnedWorktree: true; worktreeRoot: string };
 
-interface PaseoWorktreeLookupOptions {
+interface BySpaceWorktreeLookupOptions {
   context?: CheckoutContext;
   knownWorktreeRoot?: string | null;
   knownGitCommonDir?: string | null;
 }
 
-async function getPaseoWorktreeForCwd(
+async function getBySpaceWorktreeForCwd(
   cwd: string,
-  options: PaseoWorktreeLookupOptions = {},
-): Promise<PaseoWorktreeForCwd> {
+  options: BySpaceWorktreeLookupOptions = {},
+): Promise<BySpaceWorktreeForCwd> {
   // Fast-path reject: non-worktree paths do not need expensive ownership checks.
   if (!/[\\/]worktrees[\\/]/.test(cwd)) {
-    return { isPaseoOwnedWorktree: false };
+    return { isBySpaceOwnedWorktree: false };
   }
 
-  const ownership = await isPaseoOwnedWorktreeCwd(cwd, {
-    paseoHome: options.context?.paseoHome,
+  const ownership = await isBySpaceOwnedWorktreeCwd(cwd, {
+    byspaceHome: options.context?.byspaceHome,
     worktreesRoot: options.context?.worktreesRoot,
     knownGitCommonDir: options.knownGitCommonDir,
   });
   if (!ownership.allowed) {
-    return { isPaseoOwnedWorktree: false };
+    return { isBySpaceOwnedWorktree: false };
   }
 
   return {
-    isPaseoOwnedWorktree: true,
+    isBySpaceOwnedWorktree: true,
     worktreeRoot: options.knownWorktreeRoot ?? (await getWorktreeRoot(cwd, options.context)) ?? cwd,
   };
 }
 
 // Worktrees created before baseRef existed only stored the stripped name; it resolves
 // local-first, which is the base they were actually cut from.
-function storedBaseRefFromMetadata(metadata: PaseoWorktreeMetadata | null): string | null {
+function storedBaseRefFromMetadata(metadata: BySpaceWorktreeMetadata | null): string | null {
   return metadata?.baseRef ?? metadata?.baseRefName ?? null;
 }
 
-function readPaseoWorktreeBaseRef(worktreeRoot: string): string | null {
-  return storedBaseRefFromMetadata(readPaseoWorktreeMetadata(worktreeRoot));
+function readBySpaceWorktreeBaseRef(worktreeRoot: string): string | null {
+  return storedBaseRefFromMetadata(readBySpaceWorktreeMetadata(worktreeRoot));
 }
 
 async function getStoredBaseRefForCwd(
@@ -1179,12 +1257,12 @@ async function getStoredBaseRefForCwd(
   if (context?.facts?.isGit) {
     return context.facts.storedBaseRef;
   }
-  const paseoWorktree = await getPaseoWorktreeForCwd(cwd, { context });
-  if (!paseoWorktree.isPaseoOwnedWorktree) {
+  const byspaceWorktree = await getBySpaceWorktreeForCwd(cwd, { context });
+  if (!byspaceWorktree.isBySpaceOwnedWorktree) {
     return null;
   }
 
-  return readPaseoWorktreeBaseRef(paseoWorktree.worktreeRoot);
+  return readBySpaceWorktreeBaseRef(byspaceWorktree.worktreeRoot);
 }
 
 async function getResolvedBaseRefForCwd(
@@ -1620,11 +1698,6 @@ async function getAheadBehind(
   return getAheadBehindForComparisonRef(cwd, comparisonBaseRef, currentBranch, context);
 }
 
-export interface UpstreamStatus {
-  ref: string;
-  aheadBehind: AheadBehind;
-}
-
 async function getAheadBehindForComparisonRef(
   cwd: string,
   comparisonRef: string,
@@ -1644,6 +1717,11 @@ async function getAheadBehindForComparisonRef(
   return { ahead, behind };
 }
 
+interface UpstreamStatus {
+  ref: string | null;
+  aheadBehind: AheadBehind;
+}
+
 async function getUpstreamStatus(
   cwd: string,
   currentBranch: string,
@@ -1659,8 +1737,26 @@ async function getUpstreamStatus(
       { cwd, envOverlay: READ_ONLY_GIT_ENV, logger: context?.logger },
     );
     const [ref = "", track = ""] = stdout.trim().split("\0", 2);
-    if (!ref || track === "gone") {
+    if (track === "gone") {
       return null;
+    }
+    if (!ref) {
+      // Preserve BySpace's status for branches pushed without -u without treating that
+      // same-name origin ref as the configured upstream used for new worktrees.
+      const sameNameOriginRef = `refs/remotes/origin/${currentBranch}`;
+      if (!(await doesGitRefExist(cwd, sameNameOriginRef, context))) {
+        return null;
+      }
+      const { stdout: counts } = await runGitCommand(
+        ["rev-list", "--left-right", "--count", `${currentBranch}...${sameNameOriginRef}`],
+        { cwd, envOverlay: READ_ONLY_GIT_ENV, logger: context?.logger },
+      );
+      const [aheadRaw, behindRaw] = counts.trim().split(/\s+/);
+      const ahead = Number.parseInt(aheadRaw ?? "", 10);
+      const behind = Number.parseInt(behindRaw ?? "", 10);
+      return Number.isNaN(ahead) || Number.isNaN(behind)
+        ? null
+        : { ref: null, aheadBehind: { ahead, behind } };
     }
     const ahead = Number.parseInt(track.match(/ahead (\d+)/)?.[1] ?? "0", 10);
     const behind = Number.parseInt(track.match(/behind (\d+)/)?.[1] ?? "0", 10);
@@ -1676,38 +1772,45 @@ interface CheckoutInspectionContext {
   remoteUrl: string | null;
   absoluteGitDir: string | null;
   gitCommonDir: string | null;
-  paseoWorktree: PaseoWorktreeForCwd;
+  byspaceWorktree: BySpaceWorktreeForCwd;
 }
 
 async function inspectCheckoutContext(
   cwd: string,
   context?: CheckoutContext,
 ): Promise<CheckoutInspectionContext | null> {
-  const root = await getWorktreeRoot(cwd, context);
-  if (!root) {
-    return null;
+  try {
+    const root = await getWorktreeRoot(cwd, context);
+    if (!root) {
+      return null;
+    }
+
+    const [currentBranch, remoteUrl, absoluteGitDir, gitCommonDir] = await Promise.all([
+      getCurrentBranch(cwd),
+      getOriginRemoteUrl(cwd),
+      resolveAbsoluteGitDir(cwd),
+      resolveGitCommonDir(cwd),
+    ]);
+    const byspaceWorktree = await getBySpaceWorktreeForCwd(cwd, {
+      context,
+      knownWorktreeRoot: root,
+      knownGitCommonDir: gitCommonDir,
+    });
+
+    return {
+      worktreeRoot: root,
+      currentBranch,
+      remoteUrl,
+      absoluteGitDir,
+      gitCommonDir,
+      byspaceWorktree,
+    };
+  } catch (error) {
+    if (isGitError(error)) {
+      return null;
+    }
+    throw error;
   }
-
-  const [currentBranch, remoteUrl, absoluteGitDir, gitCommonDir] = await Promise.all([
-    getCurrentBranch(cwd),
-    getOriginRemoteUrl(cwd),
-    resolveAbsoluteGitDir(cwd),
-    resolveGitCommonDir(cwd),
-  ]);
-  const paseoWorktree = await getPaseoWorktreeForCwd(cwd, {
-    context,
-    knownWorktreeRoot: root,
-    knownGitCommonDir: gitCommonDir,
-  });
-
-  return {
-    worktreeRoot: root,
-    currentBranch,
-    remoteUrl,
-    absoluteGitDir,
-    gitCommonDir,
-    paseoWorktree,
-  };
 }
 
 function buildPullRequestLookupTargetFromBranchConfig(
@@ -1798,10 +1901,10 @@ function buildPullRequestLookupTargetFromPushConfig(
 }
 
 function buildPullRequestLookupTargetFromMetadata(
-  metadata: PaseoWorktreeMetadata | null,
+  metadata: BySpaceWorktreeMetadata | null,
   currentBranch: string,
 ): PullRequestStatusLookupTarget | null {
-  const target = getPaseoWorktreeChangeRequestHintForBranch(metadata, currentBranch);
+  const target = getBySpaceWorktreeChangeRequestHintForBranch(metadata, currentBranch);
   if (!target) {
     return null;
   }
@@ -1813,6 +1916,7 @@ function buildPullRequestLookupTargetFromMetadata(
 
 function buildInitialPullRequestLookupTarget(input: {
   currentBranch: string | null;
+  metadata: BySpaceWorktreeMetadata | null;
   branchRemoteName: string | null;
   branchMergeRef: string | null;
   branchRemoteUrl: string | null;
@@ -1821,6 +1925,12 @@ function buildInitialPullRequestLookupTarget(input: {
 }): PullRequestStatusLookupTarget | null {
   if (!input.currentBranch) {
     return null;
+  }
+
+  // BySpace worktree metadata owns PR identity. A checkout drift must not fall
+  // through to branch config and silently retarget the workspace.
+  if (input.metadata) {
+    return buildPullRequestLookupTargetFromMetadata(input.metadata, input.currentBranch);
   }
 
   const hasConfiguredBranchTarget = Boolean(
@@ -1837,14 +1947,58 @@ function buildInitialPullRequestLookupTarget(input: {
     });
   }
 
-  return buildPullRequestLookupTargetFromBranchConfig({
-    currentBranch: input.currentBranch,
+  return (
+    buildPullRequestLookupTargetFromMetadata(input.metadata, input.currentBranch) ??
+    buildPullRequestLookupTargetFromBranchConfig({
+      currentBranch: input.currentBranch,
+      branchRemoteName: input.branchRemoteName,
+      branchMergeRef: input.branchMergeRef,
+      branchRemoteUrl: input.branchRemoteUrl,
+      originRemoteUrl: input.originRemoteUrl,
+      resolvedBaseRef: input.resolvedBaseRef,
+    })
+  );
+}
+
+async function resolveFactsPullRequestLookupTarget(input: {
+  cwd: string;
+  inspected: CheckoutInspectionContext;
+  metadata: BySpaceWorktreeMetadata | null;
+  branchRemoteName: string | null;
+  branchMergeRef: string | null;
+  branchRemoteUrl: string | null;
+  resolvedBaseRef: string | null;
+  context?: CheckoutContext;
+}): Promise<PullRequestStatusLookupTarget | null> {
+  const { cwd, inspected, metadata, context } = input;
+  if (inspected.byspaceWorktree.isBySpaceOwnedWorktree) {
+    return buildPullRequestLookupTargetFromMetadata(metadata, inspected.currentBranch ?? "");
+  }
+
+  let target = buildInitialPullRequestLookupTarget({
+    currentBranch: inspected.currentBranch,
+    metadata,
     branchRemoteName: input.branchRemoteName,
     branchMergeRef: input.branchMergeRef,
     branchRemoteUrl: input.branchRemoteUrl,
-    originRemoteUrl: input.originRemoteUrl,
+    originRemoteUrl: inspected.remoteUrl,
     resolvedBaseRef: input.resolvedBaseRef,
   });
+  if (
+    inspected.currentBranch &&
+    target?.headRef === inspected.currentBranch &&
+    !target.headRepositoryOwner
+  ) {
+    target =
+      (await resolvePullRequestLookupTargetFromPushConfig(
+        cwd,
+        inspected.currentBranch,
+        inspected.remoteUrl,
+        input.resolvedBaseRef,
+        context,
+      )) ?? target;
+  }
+  return target;
 }
 
 async function resolvePullRequestLookupTargetFromPushConfig(
@@ -1879,49 +2033,6 @@ async function resolvePullRequestLookupTargetFromPushConfig(
   });
 }
 
-async function resolveFactsPullRequestLookupTarget(input: {
-  cwd: string;
-  inspected: CheckoutInspectionContext;
-  metadata: PaseoWorktreeMetadata | null;
-  branchRemoteName: string | null;
-  branchMergeRef: string | null;
-  branchRemoteUrl: string | null;
-  resolvedBaseRef: string | null;
-  context?: CheckoutContext;
-}): Promise<PullRequestStatusLookupTarget | null> {
-  const { cwd, inspected, metadata, context } = input;
-  const metadataTarget = inspected.currentBranch
-    ? buildPullRequestLookupTargetFromMetadata(metadata, inspected.currentBranch)
-    : null;
-  if (metadataTarget) {
-    return metadataTarget;
-  }
-
-  let target = buildInitialPullRequestLookupTarget({
-    currentBranch: inspected.currentBranch,
-    branchRemoteName: input.branchRemoteName,
-    branchMergeRef: input.branchMergeRef,
-    branchRemoteUrl: input.branchRemoteUrl,
-    originRemoteUrl: inspected.remoteUrl,
-    resolvedBaseRef: input.resolvedBaseRef,
-  });
-  if (
-    inspected.currentBranch &&
-    target?.headRef === inspected.currentBranch &&
-    !target.headRepositoryOwner
-  ) {
-    target =
-      (await resolvePullRequestLookupTargetFromPushConfig(
-        cwd,
-        inspected.currentBranch,
-        inspected.remoteUrl,
-        input.resolvedBaseRef,
-        context,
-      )) ?? target;
-  }
-  return target;
-}
-
 export async function getCheckoutSnapshotFacts(
   cwd: string,
   context?: CheckoutContext,
@@ -1935,10 +2046,10 @@ export async function getCheckoutSnapshotFacts(
     return { isGit: false };
   }
 
-  const paseoWorktreeMetadata = inspected.paseoWorktree.isPaseoOwnedWorktree
-    ? readPaseoWorktreeMetadata(inspected.paseoWorktree.worktreeRoot)
+  const byspaceWorktreeMetadata = inspected.byspaceWorktree.isBySpaceOwnedWorktree
+    ? readBySpaceWorktreeMetadata(inspected.byspaceWorktree.worktreeRoot)
     : null;
-  const storedBaseRef = storedBaseRefFromMetadata(paseoWorktreeMetadata);
+  const storedBaseRef = storedBaseRefFromMetadata(byspaceWorktreeMetadata);
   const resolvedBaseRef = storedBaseRef ?? (await resolveBaseRef(cwd));
   const mainRepoRoot = await getMainRepoRootFromCommonDir(
     cwd,
@@ -1980,13 +2091,14 @@ export async function getCheckoutSnapshotFacts(
   let pullRequestLookupTarget = await resolveFactsPullRequestLookupTarget({
     cwd,
     inspected,
-    metadata: paseoWorktreeMetadata,
+    metadata: byspaceWorktreeMetadata,
     branchRemoteName,
     branchMergeRef,
     branchRemoteUrl,
     resolvedBaseRef,
     context,
   });
+
   pullRequestLookupTarget = await addHeadShaToPullRequestLookupTarget(
     cwd,
     pullRequestLookupTarget,
@@ -2001,7 +2113,7 @@ export async function getCheckoutSnapshotFacts(
     remoteUrl: inspected.remoteUrl,
     absoluteGitDir: inspected.absoluteGitDir,
     gitCommonDir: inspected.gitCommonDir,
-    paseoWorktree: inspected.paseoWorktree,
+    byspaceWorktree: inspected.byspaceWorktree,
     storedBaseRef,
     resolvedBaseRef,
     mainRepoRoot,
@@ -2017,7 +2129,7 @@ const PER_FILE_DIFF_MAX_BYTES = 1024 * 1024; // 1MB
 const TOTAL_DIFF_MAX_BYTES = 2 * 1024 * 1024; // 2MB
 const RELAY_MAX_FRAME_BYTES = 32 * 1024 * 1024;
 const CHECKOUT_DIFF_FRAME_HEADROOM_BYTES = 1024 * 1024;
-// Temporary until diffs load lazily per file. The Paseo relay's 32 MiB frame limit is
+// Temporary until diffs load lazily per file. The Relay's 32 MiB frame limit is
 // binding: string frames are encrypted and base64-encoded. Reserve 1 MiB plaintext for
 // the surrounding WebSocket JSON envelope after inverting that exact wire expansion.
 export const CHECKOUT_DIFF_MAX_STRUCTURED_BYTES =
@@ -2167,7 +2279,7 @@ export async function getCheckoutStatus(
   const worktreeRoot = facts.worktreeRoot;
   const currentBranch = facts.currentBranch;
   const remoteUrl = facts.remoteUrl;
-  const paseoWorktree = facts.paseoWorktree;
+  const byspaceWorktree = facts.byspaceWorktree;
   const isDirty = await isWorkingTreeDirty(cwd, context);
   const hasRemote = remoteUrl !== null;
   const baseRef = facts.resolvedBaseRef;
@@ -2186,7 +2298,7 @@ export async function getCheckoutStatus(
   const aheadOfOrigin = upstreamStatus?.aheadBehind.ahead ?? null;
   const behindOfOrigin = upstreamStatus?.aheadBehind.behind ?? null;
 
-  if (paseoWorktree.isPaseoOwnedWorktree && baseRef) {
+  if (byspaceWorktree.isBySpaceOwnedWorktree && baseRef) {
     return {
       isGit: true,
       repoRoot: worktreeRoot,
@@ -2200,7 +2312,7 @@ export async function getCheckoutStatus(
       behindOfOrigin,
       hasRemote,
       remoteUrl,
-      isPaseoOwnedWorktree: true,
+      isBySpaceOwnedWorktree: true,
     };
   }
 
@@ -2218,7 +2330,7 @@ export async function getCheckoutStatus(
     behindOfOrigin,
     hasRemote,
     remoteUrl,
-    isPaseoOwnedWorktree: false,
+    isBySpaceOwnedWorktree: false,
   };
 }
 
@@ -2490,7 +2602,7 @@ export async function listCheckoutCommits({
     return { baseRef: comparisonBaseRef, commits: [] };
   }
 
-  const unpushedShas = await getUnpushedCommitShas(cwd);
+  const unpushedShas = await getUnpushedCommitShas(cwd, context);
   const workspaceShas = new Set(workspaceRecords.map((record) => record.sha));
 
   const commits = records.map((record) => ({
@@ -2512,12 +2624,13 @@ export async function listCheckoutCommits({
  * parses it into the same {@link ParsedDiffFile} shape the diff subscription
  * emits (so the client can reuse its existing renderer).
  *
- * Compares merge commits to their first parent, matching the linear history shown
- * in the explorer. The text is parsed and highlighted by
- * {@link parseAndHighlightDiff} — the exact parser the diff subscription uses.
- * Returns `null` when the file is absent from the commit or the change is
- * binary-only (no textual hunks). Throws on git failure (e.g. an unknown sha),
- * which the caller maps to a typed checkout error.
+ * Runs `git show <sha> --format= -- <path>` with the sha and path passed as
+ * separate process args (never interpolated into a shell string), and `--format=`
+ * suppresses the commit header so the output is a pure unified diff. The text is
+ * parsed and highlighted by {@link parseAndHighlightDiff} — the exact parser the
+ * diff subscription uses. Returns `null` when the file is absent from the commit
+ * or the change is binary-only (no textual hunks). Throws on git failure (e.g. an
+ * unknown sha), which the caller maps to a typed checkout error.
  */
 export async function getCommitFileDiff({
   cwd,
@@ -2528,13 +2641,10 @@ export async function getCommitFileDiff({
   sha: string;
   path: string;
 }): Promise<ParsedDiffFile | null> {
-  const { stdout } = await runGitCommand(
-    ["show", sha, "--format=", "--diff-merges=first-parent", "--", path],
-    {
-      cwd,
-      envOverlay: READ_ONLY_GIT_ENV,
-    },
-  );
+  const { stdout } = await runGitCommand(["show", sha, "--format=", "--", path], {
+    cwd,
+    envOverlay: READ_ONLY_GIT_ENV,
+  });
 
   if (stdout.trim().length === 0) {
     return null;
@@ -2928,32 +3038,6 @@ interface AppendStructuredTrackedDiffsInput {
   ) => void;
 }
 
-async function buildHighlightedTrackedDiffFile(input: {
-  cwd: string;
-  change: CheckoutFileChange;
-  parsedFile: ParsedDiffFile;
-  refsForDiff: CheckoutDiffRefs;
-}): Promise<ParsedDiffFile> {
-  const { cwd, change, parsedFile, refsForDiff } = input;
-  const refPath = change.oldPath ?? change.path;
-  const [oldFileContent, newFileContent] = await Promise.all([
-    change.isNew ? null : readGitFileContentAtRef(cwd, refsForDiff.baseRef, refPath),
-    refsForDiff.targetRef ? readGitFileContentAtRef(cwd, refsForDiff.targetRef, change.path) : null,
-  ]);
-  const highlightedFile = await highlightDiffWithFileContent(parsedFile, cwd, {
-    oldFileContent,
-    newFileContent,
-  });
-  return {
-    ...highlightedFile,
-    path: change.path,
-    ...(change.oldPath ? { oldPath: change.oldPath } : {}),
-    isNew: change.isNew,
-    isDeleted: change.isDeleted,
-    status: "ok",
-  };
-}
-
 function isWhitespaceOnlyTrackedChange(input: {
   change: CheckoutFileChange;
   stat: FileStat;
@@ -2967,6 +3051,51 @@ function isWhitespaceOnlyTrackedChange(input: {
   );
 }
 
+async function loadTrackedDiffHighlightContents(
+  input: Pick<
+    AppendStructuredTrackedDiffsInput,
+    "cwd" | "trackedChanges" | "trackedPlaceholderByPath" | "trackedDiffText" | "refsForDiff"
+  >,
+): Promise<{
+  oldContentByPath: Map<string, string | null>;
+  newContentByPath: Map<string, string | null>;
+}> {
+  const { cwd, trackedChanges, trackedPlaceholderByPath, trackedDiffText, refsForDiff } = input;
+  const oldContentByPath = new Map<string, string | null>();
+  const newContentByPath = new Map<string, string | null>();
+  if (trackedDiffText.length === 0) {
+    return { oldContentByPath, newContentByPath };
+  }
+
+  const contentRequests: GitFileAtRefRequest[] = [];
+  const contentKeys: Array<{ path: string; side: "old" | "new" }> = [];
+  for (const change of trackedChanges) {
+    if (trackedPlaceholderByPath.has(change.path)) {
+      continue;
+    }
+    if (!change.isNew) {
+      contentRequests.push({ ref: refsForDiff.baseRef, path: change.oldPath ?? change.path });
+      contentKeys.push({ path: change.path, side: "old" });
+    }
+    if (refsForDiff.targetRef && !change.isDeleted) {
+      contentRequests.push({ ref: refsForDiff.targetRef, path: change.path });
+      contentKeys.push({ path: change.path, side: "new" });
+    }
+  }
+
+  const contents = await readGitFileContentsAtRefs(cwd, contentRequests);
+  for (let index = 0; index < contentKeys.length; index += 1) {
+    const key = contentKeys[index];
+    if (key) {
+      (key.side === "old" ? oldContentByPath : newContentByPath).set(
+        key.path,
+        contents[index] ?? null,
+      );
+    }
+  }
+  return { oldContentByPath, newContentByPath };
+}
+
 async function appendStructuredTrackedDiffs(
   input: AppendStructuredTrackedDiffsInput,
 ): Promise<boolean> {
@@ -2976,13 +3105,19 @@ async function appendStructuredTrackedDiffs(
     trackedNumstatByPath,
     trackedPlaceholderByPath,
     trackedDiffText,
-    refsForDiff,
     ignoreWhitespace,
     structured,
     appendTrackedPlaceholderComment,
   } = input;
 
-  const parsedTrackedFiles = trackedDiffText.length > 0 ? parseDiff(trackedDiffText) : [];
+  const { oldContentByPath, newContentByPath } = await loadTrackedDiffHighlightContents(input);
+  const parsedTrackedFiles =
+    trackedDiffText.length > 0
+      ? await parseAndHighlightDiff(trackedDiffText, cwd, {
+          getOldFileContent: async (file) => oldContentByPath.get(file.path) ?? null,
+          getNewFileContent: async (file) => newContentByPath.get(file.path) ?? null,
+        })
+      : [];
   const parsedTrackedByPath = new Map(parsedTrackedFiles.map((file) => [file.path, file]));
 
   for (const change of trackedChanges) {
@@ -3002,12 +3137,14 @@ async function appendStructuredTrackedDiffs(
     const stat = trackedNumstatByPath.get(change.path) ?? null;
     const parsedFile = parsedTrackedByPath.get(change.path);
     if (parsedFile) {
-      const file = await buildHighlightedTrackedDiffFile({
-        cwd,
-        change,
-        parsedFile,
-        refsForDiff,
-      });
+      const file = {
+        ...parsedFile,
+        path: change.path,
+        ...(change.oldPath ? { oldPath: change.oldPath } : {}),
+        isNew: change.isNew,
+        isDeleted: change.isDeleted,
+        status: "ok",
+      } satisfies ParsedDiffFile;
       if (!appendStructuredFile(structured, file)) {
         return false;
       }
@@ -3095,6 +3232,7 @@ async function processUntrackedChange(input: ProcessUntrackedChangeInput): Promi
     parsed[0] ??
     ({
       path: change.path,
+      ...(change.oldPath ? { oldPath: change.oldPath } : {}),
       isNew: change.isNew,
       isDeleted: change.isDeleted,
       additions: stat?.additions ?? 0,
@@ -3105,6 +3243,7 @@ async function processUntrackedChange(input: ProcessUntrackedChangeInput): Promi
   const file = {
     ...parsedFile,
     path: change.path,
+    ...(change.oldPath ? { oldPath: change.oldPath } : {}),
     isNew: change.isNew,
     isDeleted: change.isDeleted,
     status: "ok",
@@ -3153,6 +3292,24 @@ async function processTrackedChanges(
   let trackedDiffBytes = 0;
   for (let start = 0; start < trackedDiffPaths.length; start += TRACKED_DIFF_BATCH_SIZE) {
     const paths = trackedDiffPaths.slice(start, start + TRACKED_DIFF_BATCH_SIZE);
+    const batchDiff = await getTrackedDiffTextForPaths({
+      cwd,
+      refsForDiff,
+      paths,
+      ignoreWhitespace,
+    }).catch(() => null);
+    const batchBytes = batchDiff ? Buffer.byteLength(batchDiff.text, "utf8") : 0;
+    if (
+      batchDiff &&
+      !batchDiff.truncated &&
+      trackedDiffBatchFitsPerFileLimit(batchDiff.text) &&
+      trackedDiffBytes + batchBytes <= TOTAL_DIFF_MAX_BYTES
+    ) {
+      trackedDiffBytes += batchBytes;
+      trackedDiffText += batchDiff.text;
+      continue;
+    }
+
     const trackedDiffs = await Promise.all(
       paths.map((path) =>
         getTrackedDiffTextForPath({
@@ -3498,7 +3655,7 @@ export async function mergeToBase(
     throw new Error("Unable to determine current branch for merge");
   }
   const normalizedBaseRef = resolveMergeTargetBranch(baseRef);
-  const currentWorktreeRoot = (await getWorktreeRoot(cwd, context)) ?? cwd;
+  const currentWorktreeRoot = (await getWorktreeRoot(cwd)) ?? cwd;
   if (normalizedBaseRef === currentBranch) {
     return currentWorktreeRoot;
   }
@@ -4029,7 +4186,7 @@ function getUnavailablePullRequestStatus(
   }
   if (
     facts?.isGit === true &&
-    facts.paseoWorktree.isPaseoOwnedWorktree &&
+    facts.byspaceWorktree.isBySpaceOwnedWorktree &&
     facts.pullRequestLookupTarget === null
   ) {
     return buildPullRequestStatusResult(null, "authenticated");

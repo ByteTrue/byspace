@@ -9,16 +9,19 @@ interface WebTextInputElement extends TextInput {
   removeEventListener(type: "compositionstart" | "compositionend", listener: EventListener): void;
 }
 
+/**
+ * Web editing primitive. The DOM element owns composition: intermediate IME
+ * states never publish to the store, and the final committed text is emitted
+ * once on `compositionend`. This keeps a controlled parent from replaying a
+ * stale value over an in-progress composition (cursor jumps / flicker).
+ */
 export const EditingTextInput = forwardRef<EditingTextInputHandle, EditingTextInputProps>(
   function EditingTextInputWeb(allProps, ref) {
     const {
       initialValue = "",
       onChangeText,
-      onPasteImages: _,
-      onPasteError: __,
-      variant: ___,
-      value: ____,
-      defaultValue: _____,
+      value: _,
+      defaultValue: __,
       ...props
     } = allProps as EditingTextInputProps & { value?: unknown; defaultValue?: unknown };
     const inputRef = useRef<TextInput | null>(null);

@@ -4,7 +4,7 @@ import {
   getOpenProjectFailureReason,
   openProjectDirectly,
 } from "@/hooks/open-project";
-import type { ProjectDescriptor } from "@/stores/session-store";
+import type { EmptyProjectDescriptor as ProjectWithoutWorkspacesDescriptor } from "@/stores/session-store";
 
 const SERVER_ID = "server-1";
 const PROJECT_PATH = "/repo/project";
@@ -20,7 +20,7 @@ function buildProjectPayload() {
 
 interface RecordedProject {
   serverId: string;
-  project: ProjectDescriptor;
+  project: ProjectWithoutWorkspacesDescriptor;
 }
 
 interface RecordedHydrated {
@@ -40,7 +40,7 @@ function createFakeSession() {
   return {
     projects,
     hydrated,
-    upsertProject: (serverId: string, project: ProjectDescriptor) => {
+    addEmptyProject: (serverId: string, project: ProjectWithoutWorkspacesDescriptor) => {
       projects.push({ serverId, project });
     },
     setHasHydratedWorkspaces: (serverId: string, value: boolean) => {
@@ -83,7 +83,7 @@ describe("openProjectDirectly", () => {
           project: projectPayload,
         }),
       },
-      upsertProject: session.upsertProject,
+      addEmptyProject: session.addEmptyProject,
       setHasHydratedWorkspaces: session.setHasHydratedWorkspaces,
     });
 
@@ -93,10 +93,10 @@ describe("openProjectDirectly", () => {
         serverId: SERVER_ID,
         project: {
           projectId: "project-1",
-          projectKey: null,
           projectDisplayName: "project",
           projectCustomName: null,
           projectCustomIconRevision: null,
+          projectKey: null,
           projectKind: "git",
           projectRootPath: PROJECT_PATH,
         },
@@ -119,7 +119,7 @@ describe("openProjectDirectly", () => {
           project: buildProjectPayload(),
         }),
       },
-      upsertProject: session.upsertProject,
+      addEmptyProject: session.addEmptyProject,
       setHasHydratedWorkspaces: session.setHasHydratedWorkspaces,
     });
 
@@ -148,7 +148,7 @@ describe("openProjectDirectly", () => {
           project: null,
         }),
       },
-      upsertProject: session.upsertProject,
+      addEmptyProject: session.addEmptyProject,
       setHasHydratedWorkspaces: session.setHasHydratedWorkspaces,
     });
 
@@ -174,8 +174,9 @@ describe("cloneGithubProjectDirectly", () => {
       targetDirectory: "~/workspace",
       cloneProtocol: "https",
       isConnected: true,
+      canCloneGithubProject: true,
       client: github,
-      upsertProject: session.upsertProject,
+      addEmptyProject: session.addEmptyProject,
       setHasHydratedWorkspaces: session.setHasHydratedWorkspaces,
     });
 
@@ -193,12 +194,36 @@ describe("cloneGithubProjectDirectly", () => {
         project: {
           ...projectPayload,
           projectCustomName: null,
-          projectKey: null,
           projectCustomIconRevision: null,
+          projectKey: null,
         },
       },
     ]);
     expect(session.hydrated).toEqual([{ serverId: SERVER_ID, hydrated: true }]);
+  });
+
+  it("fails before cloning when stable project identity is unavailable", async () => {
+    const session = createFakeSession();
+    const github = createFakeGithubCloneClient(buildProjectPayload());
+
+    const result = await cloneGithubProjectDirectly({
+      serverId: SERVER_ID,
+      repo: "owner/project",
+      targetDirectory: "~/workspace",
+      isConnected: true,
+      canCloneGithubProject: false,
+      client: github,
+      addEmptyProject: session.addEmptyProject,
+      setHasHydratedWorkspaces: session.setHasHydratedWorkspaces,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      errorCode: null,
+      error: "Update the host to clone projects with stable identity.",
+    });
+    expect(github.clones).toEqual([]);
+    expect(session.projects).toEqual([]);
   });
 
   it("does not register a project when cloning fails", async () => {
@@ -211,8 +236,9 @@ describe("cloneGithubProjectDirectly", () => {
       targetDirectory: "~/workspace",
       cloneProtocol: "https",
       isConnected: true,
+      canCloneGithubProject: true,
       client: github,
-      upsertProject: session.upsertProject,
+      addEmptyProject: session.addEmptyProject,
       setHasHydratedWorkspaces: session.setHasHydratedWorkspaces,
     });
 

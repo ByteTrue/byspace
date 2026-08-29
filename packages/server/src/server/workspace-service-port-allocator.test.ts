@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -46,7 +46,7 @@ describe("allocateWorkspaceServicePort", () => {
   });
 
   it("passes service and workspace context to portScript", async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), "workspace-service-port-allocator-"));
+    const tempDir = realpathSync(mkdtempSync(join(tmpdir(), "workspace-service-port-allocator-")));
     tempDirs.push(tempDir);
     const port = await getFreePort();
     const scriptPath = createContextPortScript(tempDir, port);
@@ -114,8 +114,8 @@ describe("allocateWorkspaceServicePort", () => {
   function createContextPortScript(tempDir: string, port: number): string {
     const contents =
       process.platform === "win32"
-        ? `@echo off\r\n<nul set /p "=%CD%" > cwd\r\n<nul set /p "=%~1|%~2|%~3|%~4" > argv\r\n<nul set /p "=%PASEO_SCRIPTNAME%|%PASEO_WORKSPACE_ID%|%PASEO_BRANCH_NAME%|%PASEO_WORKTREE_PATH%" > env\r\necho ${port}\r\n`
-        : `#!/bin/sh\nprintf '%s' "$PWD" > cwd\nprintf '%s|%s|%s|%s' "$1" "$2" "$3" "$4" > argv\nprintf '%s|%s|%s|%s' "$PASEO_SCRIPTNAME" "$PASEO_WORKSPACE_ID" "$PASEO_BRANCH_NAME" "$PASEO_WORKTREE_PATH" > env\nprintf '${port}\\n'\n`;
+        ? `@echo off\r\n<nul set /p "=%CD%" > cwd\r\n<nul set /p "=%~1|%~2|%~3|%~4" > argv\r\n<nul set /p "=%BYSPACE_SCRIPTNAME%|%BYSPACE_WORKSPACE_ID%|%BYSPACE_BRANCH_NAME%|%BYSPACE_WORKTREE_PATH%" > env\r\necho ${port}\r\n`
+        : `#!/bin/sh\nprintf '%s' "$PWD" > cwd\nprintf '%s|%s|%s|%s' "$1" "$2" "$3" "$4" > argv\nprintf '%s|%s|%s|%s' "$BYSPACE_SCRIPTNAME" "$BYSPACE_WORKSPACE_ID" "$BYSPACE_BRANCH_NAME" "$BYSPACE_WORKTREE_PATH" > env\nprintf '${port}\\n'\n`;
     return writePortScript(tempDir, contents);
   }
 

@@ -16,12 +16,12 @@ import {
   type UserModifiedFields,
 } from "./resolve-agent-form";
 import { buildProviderDefinitions } from "@/utils/provider-definitions";
-import type { AgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
+import type { AgentProviderDefinition } from "@bytetrue/byspace-protocol/provider-manifest";
 import type {
   AgentModelDefinition,
   AgentProvider,
   ProviderSnapshotEntry,
-} from "@getpaseo/protocol/agent-types";
+} from "@bytetrue/byspace-protocol/agent-types";
 
 const TEST_CODEX_DEFINITION: AgentProviderDefinition = {
   id: "codex",
@@ -1213,7 +1213,7 @@ describe("resolveAgentForm", () => {
   });
 
   describe("RESET", () => {
-    it("keeps form values but marks them unresolved for the next open", () => {
+    it("resets userModified flags while keeping form state", () => {
       const state = makeState(
         { provider: "codex", modeId: "full-access", model: "gpt-5.3-codex" },
         { provider: true, modeId: true, model: true },
@@ -1223,7 +1223,7 @@ describe("resolveAgentForm", () => {
 
       expect(next.userModified).toEqual(INITIAL_USER_MODIFIED);
       expect(next.form).toEqual(state.form);
-      expect(next.resolution.status).toBe("pending");
+      expect(next.resolution.status).toBe("completed");
     });
   });
 

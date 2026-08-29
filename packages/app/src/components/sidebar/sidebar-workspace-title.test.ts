@@ -34,43 +34,18 @@ describe("resolveSidebarWorkspacePrimaryLabel", () => {
 });
 
 describe("resolveSidebarWorkspaceAccessibilityLabel", () => {
-  it("includes the visible host badge with the workspace title", () => {
-    const label = resolveSidebarWorkspaceAccessibilityLabel({
-      workspace: { name: "Investigate search", currentBranch: "fix/search", statusBucket: "done" },
-      workspaceTitleSource: "title",
-      hostBadgeLabel: "Build host",
-    });
-
-    expect(label).toBe("Investigate search, Build host");
-  });
-
-  it("owns every visual row contributor in one accessible label", () => {
-    const label = resolveSidebarWorkspaceAccessibilityLabel({
-      workspace: {
-        name: "Investigate search",
-        currentBranch: "fix/search",
-        statusBucket: "running",
-      },
-      workspaceTitleSource: "branch",
-      leadingProjectName: "Search project",
-      hostBadgeLabel: "Build host",
-      pullRequestLabel: "Pull request 42",
-      serviceLabel: "Service web running",
-    });
-
-    expect(label).toBe(
-      "Search project, fix/search, Build host, Pull request 42, Service web running, Working",
-    );
-  });
-
-  it("omits the idle status from the workspace label", () => {
-    const label = resolveSidebarWorkspaceAccessibilityLabel({
-      workspace: { name: "Investigate search", currentBranch: "fix/search", statusBucket: "done" },
-      workspaceTitleSource: "title",
-      leadingProjectName: "Search project",
-      hostBadgeLabel: "Build host",
-    });
-
-    expect(label).toBe("Search project, Investigate search, Build host");
+  it("composes the authoritative row label and omits missing metadata", () => {
+    expect(
+      resolveSidebarWorkspaceAccessibilityLabel({
+        workspace: { name: "Investigate search", currentBranch: "fix/search" },
+        workspaceTitleSource: "branch",
+        projectName: "BySpace",
+        hostLabel: "Remote",
+        pullRequestLabel: "Pull request 42",
+        checksLabel: "Checks failed",
+        serviceLabel: null,
+        statusLabel: "Needs attention",
+      }),
+    ).toBe("BySpace, fix/search, Remote, Pull request 42, Checks failed, Needs attention");
   });
 });

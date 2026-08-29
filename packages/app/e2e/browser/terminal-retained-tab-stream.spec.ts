@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
-import { expect, test } from "../support/fixtures";
-import { TerminalE2EHarness } from "../support/helpers/terminal-dsl";
+import { expect, test } from "../fixtures";
+import { TerminalE2EHarness } from "../helpers/terminal-dsl";
 
 interface AttachOverlayProbeWindow extends Window {
   __terminalAttachOverlaySeen?: boolean;

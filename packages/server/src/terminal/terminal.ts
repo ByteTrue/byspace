@@ -6,17 +6,24 @@ import { tmpdir, userInfo } from "node:os";
 import { basename, delimiter, dirname, extname, join, resolve as resolvePath } from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { createExternalProcessEnv } from "../server/paseo-env.js";
+import { createExternalProcessEnv } from "../server/byspace-env.js";
 import { writePrivateFileAtomicSync } from "../server/private-files.js";
 import { findExecutable } from "../executable-resolution/executable-resolution.js";
-import type { TerminalCell, TerminalState } from "@getpaseo/protocol/messages";
-import { TerminalInputModeTracker } from "@getpaseo/protocol/terminal-input-mode";
+import type { TerminalCell, TerminalState } from "@bytetrue/byspace-protocol/messages";
+import { TerminalInputModeTracker } from "@bytetrue/byspace-protocol/terminal-input-mode";
 import { TerminalActivityTracker } from "./activity/terminal-activity-tracker.js";
-import type { TerminalActivity, TerminalActivityState } from "@getpaseo/protocol/terminal-activity";
+import {
+  TerminalOutputBacklog,
+  type TerminalBacklogResumption,
+} from "./terminal-output-backlog.js";
+import type {
+  TerminalActivity,
+  TerminalActivityState,
+} from "@bytetrue/byspace-protocol/terminal-activity";
 
 const { Terminal } = xterm;
 const require = createRequire(import.meta.url);
-const PASEO_CLI_BIN_ENTRY = "@getpaseo/cli/bin/paseo";
+const BYSPACE_CLI_BIN_ENTRY = "@bytetrue/byspace/bin/byspace";
 let nodePtySpawnHelperChecked = false;
 const TERMINAL_TITLE_DEBOUNCE_MS = 150;
 const TERMINAL_EXIT_OUTPUT_LINE_LIMIT = 12;
@@ -87,6 +94,13 @@ export interface TerminalSession {
   getSize(): { rows: number; cols: number };
   getState(): TerminalState;
   getStateSnapshot(options?: TerminalStateSnapshotOptions): TerminalStateSnapshot;
+  /**
+   * The output produced after `revision`, or null when it can no longer be
+   * served in full. A client that kept its own renderer contents takes this
+   * instead of a snapshot; null means it has to be reset from a snapshot.
+   */
+  getOutputSince(revision: number): TerminalBacklogResumption | null;
+  drainHeadlessXterm(): Promise<void>;
   getReplayPreamble(): string;
   getTitle(): string | undefined;
   getActivity(): TerminalActivity | null;
@@ -157,8 +171,8 @@ interface BuildTerminalEnvironmentInput {
   shell: string;
   env: Record<string, string>;
   zshShellIntegrationDir?: string;
-  paseoCliBinDir?: string | null;
-  paseoHookCliPath?: string | null;
+  byspaceCliBinDir?: string | null;
+  byspaceHookCliPath?: string | null;
 }
 
 interface EnsureNodePtySpawnHelperExecutableOptions {
@@ -247,14 +261,7 @@ export function resolveDefaultTerminalShell(
 
 export interface ResolvedTerminalCommand {
   command: string;
-  // `.cmd`/`.bat` targets resolve to a single pre-escaped `cmd.exe` command
-  // line (string) instead of an argv array. node-pty's own array-quoting
-  // (see `argsToCommandLine` in its `windowsPtyAgent.js`) only produces
-  // MSVCRT/CommandLineToArgvW-safe quoting; cmd.exe re-parses that whole
-  // line itself afterwards and needs a different, cmd.exe-metachar-aware
-  // escape. Building that line ourselves and passing it as a string is the
-  // node-pty-documented way to bypass its array quoting for exactly this
-  // case (see the `spawn` jsdoc in node-pty's typings).
+  // Batch shims need a pre-escaped cmd.exe command line so node-pty does not quote it twice.
   args: string[] | string;
 }
 
@@ -264,63 +271,18 @@ export interface ResolveTerminalSpawnCommandOptions {
   resolveExecutable?: (name: string) => Promise<string | null>;
 }
 
-// cmd.exe treats these characters specially even inside a double-quoted
-// argument, unlike a POSIX shell — quoting alone does not neutralize them.
-// Prefixing each with `^`, cmd.exe's own escape character, does. Mirrors the
-// `escape.command` metachar list in the `cross-spawn` npm package (already a
-// dependency of this repo), which solves this exact `.cmd`/`.bat` spawning
-// problem — see http://www.robvanderwoude.com/escapechars.php.
 const CMD_EXE_METACHAR_PATTERN = /([()%!^"`<>&|;, *?])/g;
 
 function escapeCmdExeMetaChars(text: string): string {
   return text.replace(CMD_EXE_METACHAR_PATTERN, "^$1");
 }
 
-/**
- * Escape one argument for safe inclusion in a `cmd.exe /c "..."` command
- * line that is about to invoke a `.cmd`/`.bat` shim.
- *
- * node-pty builds an MSVCRT/`CommandLineToArgvW`-style quoted command line
- * for whatever `command` it is given (double-quote wrap on whitespace,
- * backslash-escape only backslash runs immediately before a quote). That
- * quoting is correct for a normal executable, which parses its own argv via
- * that same convention. It is not correct here: the `command` node-pty
- * launches for a `.cmd`/`.bat` target is `cmd.exe` itself, and cmd.exe
- * re-parses the whole line with its *own* tokenizer before ever handing
- * arguments to the batch script — a tokenizer that treats `&`, `|`, `^`,
- * `%` (environment-variable expansion), `<`, `>` etc. as live syntax even
- * inside double quotes. A prompt containing any of those characters would
- * therefore be interpreted by cmd.exe, not passed through as text — the
- * same class of hazard tracked upstream as Node's CVE-2024-27980
- * ("batBadBadging").
- *
- * The escaping below is the "qntm" algorithm (https://qntm.org/cmd): double
- * every backslash run that immediately precedes a quote (or the end of the
- * argument, since a closing quote is appended next) and escape that quote,
- * wrap the whole argument in quotes, then caret-escape cmd.exe's
- * metacharacters — including the quotes just added, because cmd.exe's own
- * tokenizer runs first and would otherwise treat them as toggling a quoted
- * region. It is the same algorithm `cross-spawn` uses for its `.cmd`/`.bat`
- * auto-shell path (`lib/util/escape.js`). Command shims forward `%*`, which
- * adds a second cmd.exe parse, so metacharacters need a second escape pass to
- * survive as literal argv in the Node process behind an npm-generated shim.
- *
- * cmd.exe has no escape for a literal CR or LF inside a single command
- * line — its parser treats them as command separators regardless of
- * quoting, so passing one through verbatim would let a crafted prompt
- * inject a second, attacker-chosen command after the newline. There is no
- * fidelity-preserving option for that case, so newlines are normalized to
- * spaces before quoting: the target process still receives the full text,
- * just without the original line breaks, instead of cmd.exe splitting the
- * prompt into multiple commands.
- */
 function escapeCmdExeArgument(rawArg: string): string {
   const arg = rawArg.replace(/\r\n|\r|\n/g, " ");
-
   let escaped = arg.replace(/(\\*)"/g, '$1$1\\"');
   escaped = escaped.replace(/(\\*)$/, "$1$1");
   escaped = `"${escaped}"`;
-
+  // npm command shims forward %*, adding a second cmd.exe parse.
   return escapeCmdExeMetaChars(escapeCmdExeMetaChars(escaped));
 }
 
@@ -365,14 +327,6 @@ export async function resolveTerminalSpawnCommand(
   if (extension === ".cmd" || extension === ".bat") {
     const env = options.env ?? process.env;
     const comSpec = env.ComSpec || env.COMSPEC || "C:\\Windows\\System32\\cmd.exe";
-    // Build the `/c` command line ourselves — as a single pre-escaped
-    // string, not an argv array — so node-pty's own array quoting never
-    // runs over these values; see escapeCmdExeArgument for why that
-    // quoting alone is not safe once cmd.exe re-parses the line. `resolved`
-    // gets the same metachar (not quote-wrap) treatment as the args: it
-    // isn't attacker-controlled, but it now sits inside the same joined
-    // command line and needs to survive cmd.exe's tokenizer too (e.g. a
-    // space in the install path).
     const commandLine = [
       "/d",
       "/s",
@@ -389,41 +343,35 @@ export function resolveZshShellIntegrationDir(): string {
   return fileURLToPath(new URL("./shell-integration/zsh", import.meta.url));
 }
 
-function resolveExternalProcessPath(filePath: string): string {
-  return filePath.replace(/\.asar(?=[/\\]|$)/, ".asar.unpacked");
-}
-
-export function resolvePaseoCliBinDir(): string | null {
-  const cliExecutable = resolvePaseoCliExecutablePath();
-  return cliExecutable ? dirname(cliExecutable) : null;
-}
-
-export function resolvePaseoCliExecutablePath(): string | null {
-  const configuredCli = process.env.PASEO_CLI?.trim();
-  if (configuredCli) {
-    return resolvePath(configuredCli);
-  }
-
-  const cliEntrypoint = resolvePaseoCliBinEntrypoint();
+export function resolveBySpaceCliBinDir(): string | null {
+  const cliEntrypoint = resolveBySpaceCliBinEntrypoint();
   if (!cliEntrypoint) {
     return null;
   }
 
-  const externalCliEntrypoint = resolveExternalProcessPath(cliEntrypoint);
-  const npmBinDir = findNpmBinDir(dirname(externalCliEntrypoint));
+  return findNpmBinDir(dirname(cliEntrypoint)) ?? dirname(cliEntrypoint);
+}
+
+export function resolveBySpaceCliExecutablePath(): string | null {
+  const cliEntrypoint = resolveBySpaceCliBinEntrypoint();
+  if (!cliEntrypoint) {
+    return null;
+  }
+
+  const npmBinDir = findNpmBinDir(dirname(cliEntrypoint));
   if (npmBinDir) {
-    const shim = resolvePaseoCliShim(npmBinDir);
+    const shim = resolveBySpaceCliShim(npmBinDir);
     if (shim) {
       return shim;
     }
   }
 
-  return externalCliEntrypoint;
+  return cliEntrypoint;
 }
 
-function resolvePaseoCliBinEntrypoint(): string | null {
+function resolveBySpaceCliBinEntrypoint(): string | null {
   try {
-    return require.resolve(PASEO_CLI_BIN_ENTRY);
+    return require.resolve(BYSPACE_CLI_BIN_ENTRY);
   } catch {
     return null;
   }
@@ -433,7 +381,7 @@ function findNpmBinDir(startPath: string): string | null {
   let current = startPath;
   while (true) {
     const candidate = join(current, "node_modules", ".bin");
-    if (hasPaseoCliShim(candidate)) {
+    if (hasBySpaceCliShim(candidate)) {
       return candidate;
     }
 
@@ -445,12 +393,12 @@ function findNpmBinDir(startPath: string): string | null {
   }
 }
 
-function hasPaseoCliShim(binDir: string): boolean {
-  return resolvePaseoCliShim(binDir) !== null;
+function hasBySpaceCliShim(binDir: string): boolean {
+  return resolveBySpaceCliShim(binDir) !== null;
 }
 
-function resolvePaseoCliShim(binDir: string): string | null {
-  for (const name of paseoCliShimNames()) {
+function resolveBySpaceCliShim(binDir: string): string | null {
+  for (const name of byspaceCliShimNames()) {
     const candidate = join(binDir, name);
     if (existsSync(candidate)) {
       return candidate;
@@ -459,8 +407,8 @@ function resolvePaseoCliShim(binDir: string): string | null {
   return null;
 }
 
-function paseoCliShimNames(): string[] {
-  return process.platform === "win32" ? ["paseo.cmd", "paseo.exe", "paseo"] : ["paseo"];
+function byspaceCliShimNames(): string[] {
+  return process.platform === "win32" ? ["byspace.cmd", "byspace.exe", "byspace"] : ["byspace"];
 }
 
 function resolveZshShellIntegrationRuntimeDir(): string {
@@ -470,21 +418,17 @@ function resolveZshShellIntegrationRuntimeDir(): string {
   } catch {
     // keep fallback
   }
-  return join(tmpdir(), `${username}-paseo-zsh-${process.pid}`);
+  return join(tmpdir(), `${username}-byspace-zsh-${process.pid}`);
 }
 
 function prepareZshShellIntegrationRuntimeDir(sourceDir = resolveZshShellIntegrationDir()): string {
-  const readableSourceDir = resolveExternalProcessPath(sourceDir);
   const runtimeDir = resolveZshShellIntegrationRuntimeDir();
   mkdirSync(runtimeDir, { recursive: true, mode: 0o700 });
   chmodSync(runtimeDir, 0o700);
+  writePrivateFileAtomicSync(join(runtimeDir, ".zshenv"), readFileSync(join(sourceDir, ".zshenv")));
   writePrivateFileAtomicSync(
-    join(runtimeDir, ".zshenv"),
-    readFileSync(join(readableSourceDir, ".zshenv")),
-  );
-  writePrivateFileAtomicSync(
-    join(runtimeDir, "paseo-integration.zsh"),
-    readFileSync(join(readableSourceDir, "paseo-integration.zsh")),
+    join(runtimeDir, "byspace-integration.zsh"),
+    readFileSync(join(sourceDir, "byspace-integration.zsh")),
   );
   return runtimeDir;
 }
@@ -496,13 +440,15 @@ export function buildTerminalEnvironment(
     TERM: "xterm-256color",
     TERM_PROGRAM: "kitty",
   });
-  const envWithAgentHooks = prependPaseoCliToPath(
+  const envWithAgentHooks = prependBySpaceCliToPath(
     baseEnv,
-    input.paseoCliBinDir === undefined ? resolvePaseoCliBinDir() : input.paseoCliBinDir,
+    input.byspaceCliBinDir === undefined ? resolveBySpaceCliBinDir() : input.byspaceCliBinDir,
   );
-  const envWithHookCli = injectPaseoHookCli(
+  const envWithHookCli = injectBySpaceHookCli(
     envWithAgentHooks,
-    input.paseoHookCliPath === undefined ? resolvePaseoCliExecutablePath() : input.paseoHookCliPath,
+    input.byspaceHookCliPath === undefined
+      ? resolveBySpaceCliExecutablePath()
+      : input.byspaceHookCliPath,
   );
 
   if (basename(input.shell) !== "zsh") {
@@ -512,12 +458,12 @@ export function buildTerminalEnvironment(
   const originalZdotdir = envWithHookCli.ZDOTDIR ?? "";
   return {
     ...envWithHookCli,
-    PASEO_ZSH_ZDOTDIR: originalZdotdir,
+    BYSPACE_ZSH_ZDOTDIR: originalZdotdir,
     ZDOTDIR: prepareZshShellIntegrationRuntimeDir(input.zshShellIntegrationDir),
   };
 }
 
-function injectPaseoHookCli(
+function injectBySpaceHookCli(
   env: Record<string, string>,
   cliPath: string | null,
 ): Record<string, string> {
@@ -527,11 +473,11 @@ function injectPaseoHookCli(
 
   return {
     ...env,
-    PASEO_HOOK_CLI: resolvePath(resolveExternalProcessPath(cliPath)),
+    BYSPACE_HOOK_CLI: resolvePath(cliPath),
   };
 }
 
-function prependPaseoCliToPath(
+function prependBySpaceCliToPath(
   env: Record<string, string>,
   cliBinDir: string | null,
 ): Record<string, string> {
@@ -566,6 +512,14 @@ function extractCell(terminal: TerminalType, row: number, col: number): Terminal
   const cell = line.getCell(col);
   if (!cell) {
     return { char: " ", fg: undefined, bg: undefined };
+  }
+
+  // xterm keeps a zero-width placeholder in the column a double-width character spills into.
+  // It must stay in the grid so cells and columns line up, but its char has to be empty: the
+  // wide character already advances the cursor across it, and replaying a space here pushed
+  // the rest of the row one column right for every CJK character on screen.
+  if (cell.getWidth() === 0) {
+    return { char: "", fg: undefined, bg: undefined };
   }
 
   // Color modes from xterm.js: 0=DEFAULT, 1=16 colors (ANSI), 2=256 colors, 3=RGB
@@ -627,36 +581,8 @@ function extractScrollback(
 
   for (let row = startRow; row < scrollbackLines; row++) {
     const rowCells: TerminalCell[] = [];
-    const line = buffer.getLine(row);
     for (let col = 0; col < terminal.cols; col++) {
-      if (line) {
-        const cell = line.getCell(col);
-        if (cell) {
-          const fgModeRaw = cell.getFgColorMode();
-          const bgModeRaw = cell.getBgColorMode();
-          const fgMode = fgModeRaw >> 24;
-          const bgMode = bgModeRaw >> 24;
-          const fg = fgMode !== 0 ? cell.getFgColor() : undefined;
-          const bg = bgMode !== 0 ? cell.getBgColor() : undefined;
-          rowCells.push({
-            char: cell.getChars() || " ",
-            fg,
-            bg,
-            fgMode: fgMode !== 0 ? fgMode : undefined,
-            bgMode: bgMode !== 0 ? bgMode : undefined,
-            bold: cell.isBold() !== 0,
-            italic: cell.isItalic() !== 0,
-            underline: cell.isUnderline() !== 0,
-            dim: cell.isDim() !== 0,
-            inverse: cell.isInverse() !== 0,
-            strikethrough: cell.isStrikethrough() !== 0,
-          });
-        } else {
-          rowCells.push({ char: " ", fg: undefined, bg: undefined });
-        }
-      } else {
-        rowCells.push({ char: " ", fg: undefined, bg: undefined });
-      }
+      rowCells.push(extractCell(terminal, row, col));
     }
     scrollback.push(rowCells);
   }
@@ -921,7 +847,18 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
   let titleDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   let pendingInput = "";
   let inputFlushImmediate: ReturnType<typeof setImmediate> | null = null;
-  let stateRevision = 0;
+  // emitRevision tracks output emission (incremented immediately on PTY data).
+  // snapshotRevision tracks the headless xterm state (incremented when the
+  // headless xterm write callback fires). Output is emitted to listeners
+  // immediately without waiting for the headless xterm, so keystroke echo
+  // isn't serialized behind a backlog of TUI writes. Snapshots use
+  // snapshotRevision to stay consistent with the headless xterm buffer;
+  // drainHeadlessXterm() bridges the gap before on-demand snapshots.
+  let emitRevision = 0;
+  let snapshotRevision = 0;
+  // Lets a client that kept its renderer contents pick up where it stopped
+  // listening instead of being reset to a snapshot.
+  const outputBacklog = new TerminalOutputBacklog();
   const inputModeTracker = new TerminalInputModeTracker();
   const activityTracker = new TerminalActivityTracker();
   const activityChangeListeners = new Set<(transition: TerminalActivityTransition) => void>();
@@ -951,7 +888,7 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
       env: {
         ...env,
         ...activityEnv,
-        PASEO_WORKSPACE_ID: workspaceId,
+        BYSPACE_WORKSPACE_ID: workspaceId,
       },
     }),
   });
@@ -1162,15 +1099,22 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
   }
 
   function writeOutputToHeadless(data: string): void {
+    emitRevision += 1;
+    const currentRevision = emitRevision;
+    outputBacklog.append(currentRevision, data);
+    // Write to headless xterm for snapshot fidelity. The callback updates
+    // snapshotRevision so getStateSnapshot() stays consistent with the buffer.
     terminal.write(data, () => {
-      if (disposed || killed) {
-        return;
-      }
-      stateRevision += 1;
-      for (const listener of listeners) {
-        listener({ type: "output", data, revision: stateRevision });
+      if (!disposed && !killed) {
+        snapshotRevision = currentRevision;
       }
     });
+    // Emit to listeners immediately — do not wait for the headless xterm to
+    // parse the write. This removes the serialization that delayed keystroke
+    // echo behind TUI output backlogs (notably ConPTY + Pi on Windows).
+    for (const listener of listeners) {
+      listener({ type: "output", data, revision: currentRevision });
+    }
   }
 
   // Pipe PTY output to terminal emulator
@@ -1261,8 +1205,14 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
   function getStateSnapshot(snapshotOptions?: TerminalStateSnapshotOptions): TerminalStateSnapshot {
     return {
       state: getState(snapshotOptions),
-      revision: stateRevision,
+      revision: snapshotRevision,
     };
+  }
+
+  function drainHeadlessXterm(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      terminal.write("", () => resolve());
+    });
   }
 
   function getSize(): { rows: number; cols: number } {
@@ -1319,7 +1269,10 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
         flushPendingInput();
         terminal.resize(msg.cols, msg.rows);
         ptyProcess.resize(msg.cols, msg.rows);
-        stateRevision += 1;
+        // Resize affects both headless xterm state and emitted output, so increment
+        // both revision counters to keep snapshots consistent.
+        emitRevision += 1;
+        snapshotRevision += 1;
         break;
       case "mouse":
         // Mouse events can be sent as escape sequences if terminal supports it
@@ -1357,7 +1310,7 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
           // (live restore) can replay it without a separate state fetch.
           listener({
             type: "snapshotReady",
-            revision: stateRevision,
+            revision: snapshotRevision,
             replayPreamble: getReplayPreamble(),
           });
         } else {
@@ -1547,6 +1500,8 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
     getSize,
     getState,
     getStateSnapshot,
+    getOutputSince: (revision: number) => outputBacklog.since(revision),
+    drainHeadlessXterm,
     getReplayPreamble,
     getTitle,
     getActivity,

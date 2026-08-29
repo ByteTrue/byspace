@@ -66,13 +66,13 @@ afterEach(async () => {
 });
 
 githubTest(
-  "shows but does not archive an already-merged PR checked out in another workspace",
+  "does not retarget a never-pushed workspace when its checkout moves onto a merged PR branch",
   async () => {
-    const repository = realpathSync(mkdtempSync(path.join(tmpdir(), "paseo-github-merge-")));
+    const repository = realpathSync(mkdtempSync(path.join(tmpdir(), "byspace-github-merge-")));
     cleanupPaths.add(repository);
     run(repository, "git", ["init", "-b", "main"]);
-    run(repository, "git", ["config", "user.email", "paseo-test@example.com"]);
-    run(repository, "git", ["config", "user.name", "Paseo Test"]);
+    run(repository, "git", ["config", "user.email", "byspace-test@example.com"]);
+    run(repository, "git", ["config", "user.name", "BySpace Test"]);
     writeFileSync(path.join(repository, "README.md"), "producer repro\n");
     run(repository, "git", ["add", "README.md"]);
     run(repository, "git", ["-c", "commit.gpgsign=false", "commit", "-m", "initial"]);
@@ -107,14 +107,14 @@ githubTest(
       worktreeSlug: "merged-feature",
       source: { kind: "branch-off", baseBranch: "main", branchName: "merged-feature" },
       runSetup: false,
-      paseoHome: context.daemon.paseoHome,
+      byspaceHome: context.daemon.byspaceHome,
     });
     const unrelated = await createWorktree({
       cwd: repository,
       worktreeSlug: "never-pushed-unrelated",
       source: { kind: "branch-off", baseBranch: "main", branchName: "never-pushed-unrelated" },
       runSetup: false,
-      paseoHome: context.daemon.paseoHome,
+      byspaceHome: context.daemon.byspaceHome,
     });
     const mergedWorkspace = await context.client.createWorkspace({
       source: { kind: "directory", path: merged.worktreePath },
@@ -154,13 +154,6 @@ githubTest(
       "Producer-level auto-archive reproduction.",
     ]);
 
-    expect((await context.client.checkoutRefresh(merged.worktreePath)).success).toBe(true);
-    expect((await context.client.checkoutPrStatus(merged.worktreePath)).status).toMatchObject({
-      url: pullRequestUrl,
-      state: "open",
-      isMerged: false,
-    });
-
     const beforeMerge = await activeWorkspaceIds(context);
     expect(beforeMerge).toEqual(
       expect.arrayContaining([mergedWorkspace.workspace.id, unrelatedWorkspace.workspace.id]),
@@ -183,17 +176,13 @@ githubTest(
     expect(unrelatedStatus.status).toBeNull();
     expect(await activeWorkspaceIds(context)).toContain(unrelatedWorkspace.workspace.id);
 
-    // The current checkout's PR remains visible, but arriving after its merge is not
-    // a merge transition and must not archive this workspace.
+    // The workspace remains identified by the branch it was created for. Moving the
+    // checkout does not silently retarget its PR association or archive identity.
+    run(merged.worktreePath, "git", ["checkout", "--detach"]);
     run(unrelated.worktreePath, "git", ["checkout", "merged-feature"]);
     expect((await context.client.checkoutRefresh(unrelated.worktreePath)).success).toBe(true);
     const switchedStatus = await context.client.checkoutPrStatus(unrelated.worktreePath);
-    expect(switchedStatus.status).toMatchObject({
-      url: pullRequestUrl,
-      headRefName: "merged-feature",
-      state: "merged",
-      isMerged: true,
-    });
+    expect(switchedStatus.status).toBeNull();
     expect(await activeWorkspaceIds(context)).toContain(unrelatedWorkspace.workspace.id);
   },
   180_000,

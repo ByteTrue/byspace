@@ -17,7 +17,7 @@ interface StoredBlobRecord {
   fileName: string | null;
 }
 
-const DB_NAME = "paseo-attachment-bytes";
+const DB_NAME = "byspace-attachment-bytes";
 const STORE_NAME = "attachments";
 const DB_VERSION = 1;
 
@@ -95,20 +95,10 @@ async function sourceToBlob(input: SaveAttachmentInput): Promise<{ blob: Blob; m
     return { blob, mimeType };
   }
 
-  if (source.kind === "data_url") {
-    const parsed = parseDataUrl(source.dataUrl);
-    const response = await fetch(source.dataUrl);
-    const blob = await response.blob();
-    const mimeType = normalizeMimeType(input.mimeType ?? parsed.mimeType ?? blob.type);
-    return {
-      blob: blob.type === mimeType ? blob : blob.slice(0, blob.size, mimeType),
-      mimeType,
-    };
-  }
-
-  const response = await fetch(source.uri);
+  const parsed = parseDataUrl(source.dataUrl);
+  const response = await fetch(source.dataUrl);
   const blob = await response.blob();
-  const mimeType = normalizeMimeType(input.mimeType ?? blob.type);
+  const mimeType = normalizeMimeType(input.mimeType ?? parsed.mimeType ?? blob.type);
   return {
     blob: blob.type === mimeType ? blob : blob.slice(0, blob.size, mimeType),
     mimeType,

@@ -1,5 +1,5 @@
 declare module "turndown-plugin-gfm" {
   import type TurndownService from "turndown";
 
-  export const gfm: TurndownService.Plugin;
+  export function gfm(service: TurndownService): void;
 }

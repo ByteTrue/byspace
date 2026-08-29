@@ -1,7 +1,7 @@
-import { test, expect, type Page } from "../support/fixtures";
-import { clickNewTerminal, gotoWorkspace } from "../support/helpers/launcher";
-import { renameModalInput, renameModalSubmit } from "../support/helpers/rename";
-import { seedWorkspace, type SeededWorkspace } from "../support/helpers/seed-client";
+import { test, expect, type Page } from "../fixtures";
+import { clickNewTerminal, gotoWorkspace } from "../helpers/launcher";
+import { renameModalInput, renameModalSubmit } from "../helpers/rename";
+import { seedWorkspace, type SeededWorkspace } from "../helpers/seed-client";
 
 async function fetchTerminalTitle(
   workspace: SeededWorkspace,

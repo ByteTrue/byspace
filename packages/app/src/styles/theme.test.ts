@@ -48,7 +48,7 @@ describe("Pure black theme", () => {
     expect(darkPureBlackTheme.colors.terminal.background).toBe("#000000");
   });
 
-  it("uses Paseo's muted green accent", () => {
+  it("uses BySpace's muted green accent", () => {
     expect(darkPureBlackTheme.colors.accent).toBe("#20744A");
     expect(darkPureBlackTheme.colors.accentBright).toBe("#7ccba0");
   });
@@ -75,19 +75,4 @@ describe("Sidebar interaction surfaces", () => {
       expect(theme.colors.surfaceSidebarSelected).toBe(theme.colors.surface2);
     },
   );
-});
-
-describe("Built-in light theme", () => {
-  it("preserves its authored aliases and terminal contrast through the semantic builder", () => {
-    expect(lightTheme.colors).toMatchObject({
-      primary: "#18181b",
-      primaryForeground: "#fafafa",
-      destructiveForeground: "#ffffff",
-      successForeground: "#ffffff",
-      terminal: {
-        black: "#1a1a1e",
-        brightBlack: "#3f3f46",
-      },
-    });
-  });
 });

@@ -1,20 +1,20 @@
 ---
 title: Security
-description: "Security model for Paseo: architecture overview, connection methods, relay encryption, and best practices."
+description: "Security model for BySpace: architecture overview, connection methods, relay encryption, and best practices."
 nav: Security
-order: 5
+order: 4
 category: Getting started
 ---
 
 # Security
 
-Paseo follows a client-server architecture, similar to Docker. The daemon runs on your machine and manages your coding agents. Clients (the mobile app, CLI, or web interface) connect to the daemon to monitor and control those agents.
+BySpace follows a client-server architecture, similar to Docker. The daemon runs on your machine and manages your coding agents. The browser Web app and CLI connect to the daemon to monitor and control those agents.
 
-Your code never leaves your machine. Paseo is a local-first tool that connects directly to your development environment.
+Your code never leaves your machine. BySpace is a local-first tool that connects directly to your development environment.
 
 ## Architecture
 
-The Paseo daemon can run anywhere you want to execute agents: your laptop, a Mac Mini, a VPS, or a Docker container. The daemon listens for connections and manages agent lifecycles.
+The BySpace daemon can run anywhere you want to execute agents: your laptop, a Mac Mini, a VPS, or a Docker container. The daemon listens for connections and manages agent lifecycles.
 
 Clients connect to the daemon over WebSocket. There are two ways to establish this connection:
 
@@ -23,15 +23,13 @@ Clients connect to the daemon over WebSocket. There are two ways to establish th
 
 ## Relay connections (recommended)
 
-The relay is the simplest way to connect from your phone. It requires no VPN setup, no port forwarding, and no firewall configuration. The daemon can stay bound to localhost or a socket file, it connects _outbound_ to the relay, and your phone meets it there. The official relay server is the open-source Elixir service at [getpaseo/paseo-relay](https://github.com/getpaseo/paseo-relay).
-
-Relay is off on new installations. When you pair a device from `paseo`, `paseo daemon pair`, or Paseo Desktop, Paseo asks before enabling it. Choosing not to enable relay leaves the daemon available for direct TCP, Tailscale, or other VPN connections and does not create a pairing QR code. Use `--relay` with the CLI pairing or startup command to opt in without an interactive prompt.
+The relay is the simplest way to connect from your phone. It requires no VPN setup, no port forwarding, and no firewall configuration. The daemon can stay bound to localhost or a socket file, it connects _outbound_ to the relay, and your phone meets it there.
 
 > **The relay is designed to be untrusted.** All traffic between your phone and daemon is end-to-end encrypted. The relay server cannot read your messages, see your code, or modify traffic without detection. Even if the relay is compromised, your data remains protected.
 
 ### How it works
 
-1. The daemon generates a persistent ECDH keypair and stores it in `$PASEO_HOME/daemon-keypair.json`
+1. The daemon generates a persistent ECDH keypair and stores it in `$BYSPACE_HOME/daemon-keypair.json`
 2. When you scan the QR code or click the pairing link, your phone receives the daemon's public key
 3. Your phone sends a handshake message with its own public key. The daemon will not accept any commands until this handshake completes.
 4. Both sides perform a Curve25519 ECDH key exchange to derive a shared key. All subsequent
@@ -52,19 +50,26 @@ The daemon requires a valid cryptographic handshake before processing any comman
 
 The QR code or pairing link is the trust anchor. It contains the daemon's public key, which is required to establish the encrypted connection. Treat it like a password, don't share it publicly.
 
+If you believe a pairing offer has been compromised, restart the daemon to generate a new session ID and rotate the relay pairing.
+
 ## Direct connections
 
-By default, the daemon listens on `127.0.0.1:6767` (localhost only). This is safe for local CLI usage but not reachable from your phone or other devices.
-
-For relay and Tailscale setup instructions, see [Connectivity](/docs/connectivity).
+By default, the daemon listens on `127.0.0.1:6777` (localhost only). This is safe for local CLI usage but not reachable from your phone or other devices.
 
 ### Socket file (CLI only)
 
-For maximum isolation, you can configure the daemon to listen on a Unix socket file instead of a TCP port. This prevents any network access entirely, only processes on the same machine can connect. The CLI supports this mode, but the mobile app and web interface require a network connection.
+For maximum isolation, you can configure the daemon to listen on a Unix socket file instead of a TCP port. This prevents any network access entirely, only processes on the same machine can connect. The CLI supports this mode; the browser Web app requires a network connection.
 
 ### VPN access
 
-Use a VPN such as [Tailscale](https://tailscale.com) when you want a direct connection outside your local network. The VPN encrypts the traffic and keeps the daemon off the public internet. Bind the daemon to its VPN address, set a Paseo password, then add that address as a direct connection in the client.
+If you prefer direct connections over the relay, you can use a VPN like [Tailscale](https://tailscale.com). Tailscale creates a private network between your devices, so you can access your daemon without exposing it to the public internet.
+
+To set this up:
+
+1. Install Tailscale on your machine and phone and join them to the same [tailnet](https://tailscale.com/kb/1136/tailnet)
+2. Configure the daemon to listen on your Tailscale IP (e.g., `100.x.y.z:6777`)
+3. Add your Tailscale hostname to `hostnames` and `cors.allowedOrigins`
+4. Add the daemon as a direct connection in the BySpace Web app using the Tailscale address
 
 ### Binding to 0.0.0.0
 
@@ -74,7 +79,7 @@ Use a VPN such as [Tailscale](https://tailscale.com) when you want a direct conn
 
 **CORS is not a complete security boundary.** It controls which browser origins can make requests, but does not prevent a malicious website from resolving its domain to your local machine (DNS rebinding).
 
-Paseo uses a host allowlist to validate the `Host` header on incoming requests. Requests with unrecognized hosts are rejected.
+BySpace uses a host allowlist to validate the `Host` header on incoming requests. Requests with unrecognized hosts are rejected.
 
 Configure via `daemon.hostnames` in `config.json`:
 
@@ -107,39 +112,29 @@ We still recommend the relay for mobile access, it combines authentication with 
 
 ## Docker self-hosting
 
-The official Docker image runs the daemon and bundled web UI in one container. It binds to `0.0.0.0:6767` inside the container so Docker port publishing and reverse proxies work normally.
+The source-built Docker image runs the daemon and bundled web UI in one container. It binds to `0.0.0.0:6777` inside the container so Docker port publishing and reverse proxies work normally.
 
 For Docker deployments:
 
-- Set `PASEO_PASSWORD` before publishing the port to a LAN, VPN, or public address.
+- Set `BYSPACE_PASSWORD` before publishing the port to a LAN, VPN, or public address.
 - Use HTTPS at your reverse proxy for browser access outside localhost.
-- Set `PASEO_HOSTNAMES` for any DNS names you use to reach the container.
+- Set `BYSPACE_HOSTNAMES` for any DNS names you use to reach the container.
 - Keep `/workspace` mounts scoped to repositories the agents should be able to read and write.
-- Treat `/home/paseo` as sensitive, it can contain daemon state and provider credentials.
+- Treat `/home/byspace` as sensitive, it can contain daemon state and provider credentials.
 
-The image runs the daemon and launched agents as the non-root `paseo` user, but container user isolation is not a substitute for careful mounts. Agents can still access whatever code and credentials you mount into the container.
+The image runs the daemon and launched agents as the non-root `byspace` user, but container user isolation is not a substitute for careful mounts. Agents can still access whatever code and credentials you mount into the container.
 
-See [Docker](/docs/docker) for Compose and reverse proxy examples.
+See the [source-build Docker guide](https://github.com/ByteTrue/byspace/blob/main/docs/docker.md) for Compose and reverse proxy examples.
 
 ## Agent authentication
 
-Paseo wraps agent CLIs (Claude Code, Codex, OpenCode) but does not manage their authentication. Each agent provider handles its own credentials:
+BySpace wraps agent CLIs (Claude Code, Codex, OpenCode) but does not manage their authentication. Each agent provider handles its own credentials:
 
 - **Claude Code**, authenticates via Anthropic's OAuth flow, stored in `~/.claude/`
 - **Codex**, uses your OpenAI API key or OAuth session
 - **OpenCode**, configured via provider-specific API keys
 
-Paseo never stores or transmits provider API keys. Agents run in your user context with your existing credentials.
-
-## Hub identities and credentials
-
-Hub CLI login and daemon enrollment are separate identities. `paseo hub login [origin]` stores a durable organization-scoped human credential in a private file under `PASEO_HOME`, keyed by the normalized Hub origin. A stored credential is never sent to another origin. Protect `PASEO_HOME` as sensitive local state.
-
-Hub CLI credentials are bearer secrets. Remote Hub origins must use HTTPS; cleartext HTTP is accepted only for loopback development origins (`localhost`, `127.0.0.1`, and `[::1]`).
-
-`paseo hub connect [origin]` uses that credential, or an explicit API key, only to request a short-lived one-time enrollment token. The daemon exchanges the token and retains its own independently generated relationship credential. Logging out of the CLI does not silently remove daemon authority. Interactive logout completes any accepted same-origin daemon disconnection before deleting the login. In JSON and noninteractive use, `logout` never prompts or disconnects; pass `--disconnect-daemon` only when automation intends to remove both identities.
-
-`--api-key` and `PASEO_HUB_API_KEY` override stored login without being persisted. Prefer environment or secret-manager injection for automation, and avoid command-line flags when local process listings or shell history are visible to other users.
+BySpace never stores or transmits provider API keys. Agents run in your user context with your existing credentials.
 
 ## Recommendations
 
@@ -149,4 +144,3 @@ Hub CLI credentials are bearer secrets. Remote Hub origins must use HTTPS; clear
 - **Never bind to 0.0.0.0 without a password**, without one, any device on your network can connect
 - **Scope Docker mounts tightly**, agents can access mounted workspaces and provider credentials
 - **Keep your daemon updated**, security improvements are released regularly
-- **Protect the Hub configuration branch**, push access to the `.paseo` bundle controls what that project can reach, see [How Hub works](/docs/hub/concepts)

@@ -1,5 +1,5 @@
-import type { AgentProvider } from "@getpaseo/protocol/agent-types";
-import type { JsonValue } from "@getpaseo/protocol/agent-types";
+import type { AgentProvider } from "@bytetrue/byspace-protocol/agent-types";
+import type { JsonValue } from "@bytetrue/byspace-protocol/agent-types";
 import type { WorkspaceFileTabTarget } from "@/workspace/file-open";
 
 export interface WorkspaceDraftTabSetup {
@@ -17,7 +17,18 @@ export interface WorkspaceWorkingDiffTabTarget {
   focusRequestId?: number;
 }
 
-export type PluginWorkspaceTabTarget =
+export type WorkspaceTabTarget =
+  | { kind: "new_tab" }
+  | { kind: "draft"; draftId: string; setup?: WorkspaceDraftTabSetup }
+  | { kind: "agent"; agentId: string }
+  | { kind: "provider_subagent"; parentAgentId: string; subagentId: string }
+  | { kind: "terminal"; terminalId: string }
+  | { kind: "files" }
+  | { kind: "pull_request" }
+  | WorkspaceFileTabTarget
+  | WorkspaceWorkingDiffTabTarget
+  | { kind: "setup"; workspaceId: string }
+  | { kind: "commit_diff"; sha: string }
   | {
       kind: "plugin";
       pluginId: string;
@@ -32,21 +43,7 @@ export type PluginWorkspaceTabTarget =
       agentId: string;
     };
 
-export type WorkspaceTabTarget =
-  | { kind: "new_tab" }
-  | { kind: "draft"; draftId: string; setup?: WorkspaceDraftTabSetup }
-  | { kind: "agent"; agentId: string }
-  | { kind: "provider_subagent"; parentAgentId: string; subagentId: string }
-  | { kind: "terminal"; terminalId: string }
-  | { kind: "browser"; browserId: string }
-  | { kind: "changes_tree" }
-  | { kind: "files" }
-  | { kind: "pull_request" }
-  | WorkspaceFileTabTarget
-  | WorkspaceWorkingDiffTabTarget
-  | PluginWorkspaceTabTarget
-  | { kind: "setup"; workspaceId: string }
-  | { kind: "commit_diff"; sha: string };
+export type PluginWorkspaceTabTarget = Extract<WorkspaceTabTarget, { kind: "plugin" }>;
 
 export interface WorkspaceTab {
   tabId: string;

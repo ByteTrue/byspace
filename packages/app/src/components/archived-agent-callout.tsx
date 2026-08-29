@@ -2,11 +2,13 @@ import { useCallback, useMemo, useState } from "react";
 import { View, Text } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
-import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FOOTER_HEIGHT, MAX_CONTENT_WIDTH } from "@/constants/layout";
-import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
-import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
+import {
+  getHostRuntimeStore,
+  useHostRuntimeClient,
+  useHostRuntimeIsConnected,
+} from "@/runtime/host-runtime";
 import { Button } from "@/components/ui/button";
 import type { Theme } from "@/styles/theme";
 import { toErrorMessage } from "@/utils/error-messages";
@@ -24,11 +26,9 @@ export function ArchivedAgentCallout({ serverId, agentId }: ArchivedAgentCallout
   const [isUnarchiving, setIsUnarchiving] = useState(false);
   const [unarchiveError, setUnarchiveError] = useState<string | null>(null);
 
-  const { style: keyboardAnimatedStyle } = useKeyboardShiftStyle({ mode: "translate" });
-
   const containerStyle = useMemo(
-    () => [styles.container, { paddingBottom: insets.bottom }, keyboardAnimatedStyle],
-    [insets.bottom, keyboardAnimatedStyle],
+    () => [styles.container, { paddingBottom: insets.bottom }],
+    [insets.bottom],
   );
 
   const handleUnarchive = useCallback(async () => {
@@ -37,14 +37,15 @@ export function ArchivedAgentCallout({ serverId, agentId }: ArchivedAgentCallout
     setUnarchiveError(null);
     try {
       await client.refreshAgent(agentId);
+      await getHostRuntimeStore().refreshAgentTimeline(serverId, agentId);
     } catch (error) {
       setUnarchiveError(toErrorMessage(error));
       setIsUnarchiving(false);
     }
-  }, [client, isConnected, isUnarchiving, agentId]);
+  }, [client, isConnected, isUnarchiving, agentId, serverId]);
 
   return (
-    <Animated.View style={containerStyle}>
+    <View style={containerStyle}>
       <View style={styles.inputAreaContainer}>
         <View style={styles.inputAreaContent}>
           <View style={styles.calloutStack}>
@@ -67,7 +68,7 @@ export function ArchivedAgentCallout({ serverId, agentId }: ArchivedAgentCallout
           </View>
         </View>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 

@@ -93,6 +93,15 @@ describe("ClaudeTaskProtocolSource", () => {
     ]);
   });
 
+  it("does not re-announce a status that already holds", () => {
+    const source = new ClaudeTaskProtocolSource();
+    source.observe(taskStarted());
+    source.observe(taskUpdated("completed"));
+
+    // task_updated and task_notification arrive in the same millisecond on the real wire.
+    expect(source.observe(taskNotification("completed"))).toEqual([]);
+  });
+
   it("keeps a resumed task on its original identity and timeline", () => {
     const source = new ClaudeTaskProtocolSource();
     const initial = source.observe(
@@ -180,15 +189,6 @@ describe("ClaudeTaskProtocolSource", () => {
     ]);
   });
 
-  it("does not re-announce a status that already holds", () => {
-    const source = new ClaudeTaskProtocolSource();
-    source.observe(taskStarted());
-    source.observe(taskUpdated("completed"));
-
-    // task_updated and task_notification arrive in the same millisecond on the real wire.
-    expect(source.observe(taskNotification("completed"))).toEqual([]);
-  });
-
   it("treats a killed or stopped task as canceled, not failed", () => {
     const source = new ClaudeTaskProtocolSource();
     source.observe(taskStarted());
@@ -237,7 +237,7 @@ describe("ClaudeTaskProtocolSource", () => {
         taskStarted({
           task_type: "local_workflow",
           subagent_type: undefined,
-          workflow_name: "paseo-workflow-one-child",
+          workflow_name: "byspace-workflow-one-child",
           description: "Runs one deterministic child and returns its structured result",
           prompt: "export const meta = {};",
         }),
@@ -262,7 +262,7 @@ describe("ClaudeTaskProtocolSource", () => {
   });
 
   it("adds a completed workflow result to its generic timeline", () => {
-    const readWorkflowResult = vi.fn(() => "What Paseo is\nA local-first environment.");
+    const readWorkflowResult = vi.fn(() => "What BySpace is\nA local-first environment.");
     const source = new ClaudeTaskProtocolSource({ readWorkflowResult });
     source.observe(
       taskStarted({ task_type: "local_workflow", subagent_type: undefined, prompt: "SECRET" }),
@@ -274,7 +274,7 @@ describe("ClaudeTaskProtocolSource", () => {
         id: "toolu_01DgLoPMW9",
         item: {
           type: "assistant_message",
-          text: "What Paseo is\nA local-first environment.",
+          text: "What BySpace is\nA local-first environment.",
         },
       },
       { kind: "status", id: "toolu_01DgLoPMW9", status: "completed" },

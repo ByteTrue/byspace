@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parsePcm16Wav } from "@/utils/pcm16-wav";
-import { isElectronRuntime } from "@/desktop/host";
 
 import type {
   DictationAudioSource,
@@ -245,20 +244,13 @@ export function useDictationAudioSource(config: DictationAudioSourceConfig): Dic
         : true;
     const currentOrigin =
       typeof window !== "undefined" && window.location ? window.location.origin : "unknown";
-    const isDesktopApp = isElectronRuntime();
 
     if (missingNavigator) {
       throw new Error("Microphone capture is not supported in this environment");
     }
-    if (!secureContext && !isDesktopApp) {
+    if (!secureContext) {
       throw new Error(
         `Microphone access requires HTTPS or localhost. Current origin: ${currentOrigin}`,
-      );
-    }
-    if (!secureContext && isDesktopApp) {
-      console.warn(
-        "[DictationAudio][Web] Insecure context reported under Desktop; attempting getUserMedia anyway",
-        { currentOrigin },
       );
     }
 

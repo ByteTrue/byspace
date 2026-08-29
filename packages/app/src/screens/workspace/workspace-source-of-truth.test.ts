@@ -15,8 +15,8 @@ import type { WorkspaceDescriptor } from "@/stores/session-store";
 function createWorkspaceDescriptor(input: Partial<WorkspaceDescriptor> = {}): WorkspaceDescriptor {
   return {
     id: "/repo/main",
-    projectId: "remote:github.com/getpaseo/paseo",
-    projectDisplayName: "getpaseo/paseo",
+    projectId: "remote:github.com/ByteTrue/byspace",
+    projectDisplayName: "ByteTrue/byspace",
     projectRootPath: "/repo/main",
     workspaceDirectory: "/repo/main",
     projectKind: "git",
@@ -42,7 +42,7 @@ describe("workspace source of truth consumption", () => {
     });
 
     expect(header.title).toBe("feat/workspace-sot");
-    expect(header.subtitle).toBe("getpaseo/paseo");
+    expect(header.subtitle).toBe("ByteTrue/byspace");
     expect(sidebarWorkspace.name).toBe(header.title);
     expect(sidebarWorkspace.statusBucket).toBe("running");
   });
@@ -104,8 +104,8 @@ describe("workspace source of truth consumption", () => {
     ).toEqual({
       kind: "ready",
       title: "feat/workspace-sot",
-      subtitle: "getpaseo/paseo",
-      isSubtitleDistinct: true,
+      subtitle: "ByteTrue/byspace",
+      shouldShowSubtitle: true,
       isGitCheckout: false,
       currentBranchName: null,
     });
@@ -126,7 +126,7 @@ describe("workspace source of truth consumption", () => {
       kind: "ready",
       title: "notes",
       subtitle: "Local folders",
-      isSubtitleDistinct: true,
+      shouldShowSubtitle: true,
       isGitCheckout: false,
       currentBranchName: null,
     });
@@ -144,8 +144,8 @@ describe("workspace source of truth consumption", () => {
     ).toEqual({
       kind: "ready",
       title: "feat/workspace-sot",
-      subtitle: "getpaseo/paseo",
-      isSubtitleDistinct: true,
+      subtitle: "ByteTrue/byspace",
+      shouldShowSubtitle: true,
       isGitCheckout: true,
       currentBranchName: "feat/workspace-sot",
     });
@@ -169,7 +169,7 @@ describe("workspace source of truth consumption", () => {
       kind: "ready",
       title: "notes",
       subtitle: "notes",
-      isSubtitleDistinct: false,
+      shouldShowSubtitle: false,
       isGitCheckout: false,
       currentBranchName: null,
     });
@@ -184,8 +184,8 @@ describe("workspace source of truth consumption", () => {
     ).toEqual({
       kind: "ready",
       title: "feat/workspace-sot",
-      subtitle: "getpaseo/paseo",
-      isSubtitleDistinct: true,
+      subtitle: "ByteTrue/byspace",
+      shouldShowSubtitle: true,
       isGitCheckout: false,
       currentBranchName: null,
     });

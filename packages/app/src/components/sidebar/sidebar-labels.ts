@@ -1,23 +1,6 @@
-import { workspaceLabelKey } from "@getpaseo/protocol/workspace-labels";
+import { workspaceLabelKey } from "@bytetrue/byspace-protocol/workspace-labels";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import { SIDEBAR_UNLABELLED_LABEL_KEY, type SidebarLabelFilter } from "@/stores/sidebar-view-store";
-import type { StatusBucket, StatusGroup } from "@/hooks/sidebar-status-view-model";
-
-export interface SidebarWorkspaceGroup {
-  key: string;
-  label: string;
-  rows: SidebarWorkspaceEntry[];
-  leading: { kind: "status"; bucket: StatusBucket };
-}
-
-export function statusWorkspaceGroups(groups: readonly StatusGroup[]): SidebarWorkspaceGroup[] {
-  return groups.map((group) => ({
-    key: group.bucket,
-    label: group.label,
-    rows: group.rows,
-    leading: { kind: "status", bucket: group.bucket },
-  }));
-}
 
 /**
  * Applies the Labels page's selection to the sidebar.

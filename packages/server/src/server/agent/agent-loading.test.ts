@@ -22,9 +22,7 @@ test("loads archived records for history and active records with the interactive
   const logger = createTestLogger();
   const storage = new AgentStorage(path.join(root, "agents"), logger);
   const baseClient = createTestAgentClients().codex;
-  if (!baseClient) {
-    throw new Error("expected Codex test client");
-  }
+  if (!baseClient) throw new Error("expected Codex test client");
 
   const resumeOptions: Array<AgentResumeSessionOptions | undefined> = [];
   const client: AgentClient = {
@@ -46,12 +44,7 @@ test("loads archived records for history and active records with the interactive
     fetchCatalog: async (options) => await baseClient.fetchCatalog(options),
     isAvailable: async () => await baseClient.isAvailable(),
   };
-  const manager = new AgentManager({
-    clients: { codex: client },
-    registry: storage,
-    logger,
-  });
-
+  const manager = new AgentManager({ clients: { codex: client }, registry: storage, logger });
   const archivedId = "00000000-0000-4000-8000-000000000301";
   const activeId = "00000000-0000-4000-8000-000000000302";
 
@@ -60,7 +53,6 @@ test("loads archived records for history and active records with the interactive
       workspaceId: "workspace-archived",
     });
     await manager.archiveAgent(archived.id);
-
     const active = await manager.createAgent({ provider: "codex", cwd: root }, activeId, {
       workspaceId: "workspace-active",
     });
@@ -68,7 +60,6 @@ test("loads archived records for history and active records with the interactive
 
     await ensureAgentLoaded(archived.id, { agentManager: manager, agentStorage: storage, logger });
     await ensureAgentLoaded(active.id, { agentManager: manager, agentStorage: storage, logger });
-
     expect(resumeOptions).toEqual([{ purpose: "history" }, undefined]);
   } finally {
     await Promise.all([

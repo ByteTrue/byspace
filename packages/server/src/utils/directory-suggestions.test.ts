@@ -12,8 +12,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { isPlatform } from "../test-utils/platform.js";
-import { startGitCommandMetrics, stopGitCommandMetrics } from "./run-git-command.js";
 import {
+  type DirectorySuggestionDependencies,
   searchDirectoryEntries,
   WORKSPACE_SEARCH_HIDDEN_DIRECTORIES,
 } from "./directory-suggestions.js";
@@ -72,11 +72,6 @@ async function searchRelativeDirectoryEntries(options: {
   });
 }
 
-function initGitRepo(directory: string, ignorePatterns: string): void {
-  execFileSync("git", ["init", "-q"], { cwd: directory });
-  writeFileSync(path.join(directory, ".gitignore"), ignorePatterns);
-}
-
 describe("searchDirectoryEntries", () => {
   let configuredSearchRoot: string;
   let searchRoot: string;
@@ -84,7 +79,7 @@ describe("searchDirectoryEntries", () => {
   beforeEach(() => {
     configuredSearchRoot = mkdtempSync(path.join(tmpdir(), "directory-search-"));
     searchRoot = realpathSync.native(configuredSearchRoot);
-    mkdirSync(path.join(searchRoot, "projects", "paseo-desktop"), { recursive: true });
+    mkdirSync(path.join(searchRoot, "projects", "byspace-desktop"), { recursive: true });
     mkdirSync(path.join(searchRoot, "src", "components"), { recursive: true });
     mkdirSync(path.join(searchRoot, ".hidden", "secret"), { recursive: true });
     writeFileSync(path.join(searchRoot, "src", "components", "message-renderer.tsx"), "");
@@ -113,7 +108,7 @@ describe("searchDirectoryEntries", () => {
     expect({ directories, files }).toEqual({
       directories: [
         {
-          path: path.join(searchRoot, "projects", "paseo-desktop"),
+          path: path.join(searchRoot, "projects", "byspace-desktop"),
           kind: "directory",
         },
       ],
@@ -126,47 +121,133 @@ describe("searchDirectoryEntries", () => {
     });
   });
 
-  it("prunes directories ignored by Git and caches concurrent lookups", async () => {
+  it("filters only bounded candidates in a mixed tracked and ignored large directory", async () => {
     execFileSync("git", ["init", "-q"], { cwd: searchRoot });
-    writeFileSync(path.join(searchRoot, ".gitignore"), "data/\n");
-    mkdirSync(path.join(searchRoot, "data", "matching-ignored-directory"), {
-      recursive: true,
-    });
-    mkdirSync(path.join(searchRoot, "visible", "matching-visible-directory"), {
-      recursive: true,
-    });
-
-    startGitCommandMetrics();
-    const results = await Promise.all([
-      searchDirectoryEntries({
-        root: searchRoot,
-        query: "matching",
-        pathFormat: "relative",
-        includeFiles: false,
-        includeDirectories: true,
-        respectGitIgnore: true,
-      }),
-      searchDirectoryEntries({
-        root: searchRoot,
-        query: "visible",
-        pathFormat: "relative",
-        includeFiles: false,
-        includeDirectories: true,
-        respectGitIgnore: true,
-      }),
-    ]);
-    const gitMetrics = stopGitCommandMetrics();
-
-    expect(results).toEqual([
-      [{ path: "visible/matching-visible-directory", kind: "directory" }],
-      [
-        { path: "visible", kind: "directory" },
-        { path: "visible/matching-visible-directory", kind: "directory" },
-      ],
-    ]);
-    expect(gitMetrics.commands.filter((command) => command.args.includes("ls-files"))).toHaveLength(
-      1,
+    writeFileSync(
+      path.join(searchRoot, ".gitignore"),
+      "candidate-ignored\ncandidate-tracked\nbulk-ignored/\n",
     );
+    mkdirSync(path.join(searchRoot, "candidate-ignored"));
+    mkdirSync(path.join(searchRoot, "candidate-tracked"));
+    mkdirSync(path.join(searchRoot, "candidate-visible"));
+    writeFileSync(path.join(searchRoot, "candidate-tracked", ".keep"), "");
+    execFileSync("git", ["add", "-f", "candidate-tracked/.keep"], { cwd: searchRoot });
+    mkdirSync(path.join(searchRoot, "bulk-ignored"));
+    for (let index = 0; index < 1_000; index += 1) {
+      writeFileSync(path.join(searchRoot, "bulk-ignored", `noise-${index}.txt`), "");
+    }
+
+    await expect(
+      searchDirectoryEntries({
+        root: searchRoot,
+        query: "candidate",
+        pathFormat: "relative",
+        includeFiles: false,
+        includeDirectories: true,
+        respectGitIgnore: true,
+      }),
+    ).resolves.toEqual([
+      { path: "candidate-tracked", kind: "directory" },
+      { path: "candidate-visible", kind: "directory" },
+    ]);
+  });
+
+  it("bounds check-ignore stdin to the current candidate limit", async () => {
+    for (let index = 0; index < 50; index += 1) {
+      mkdirSync(path.join(searchRoot, `candidate-${index.toString().padStart(2, "0")}`));
+    }
+    const inputs: string[] = [];
+    const dependencies: DirectorySuggestionDependencies = {
+      runGitCommand: async (args, options) => {
+        expect(args).toEqual(["check-ignore", "--stdin", "-z"]);
+        inputs.push(options.input ?? "");
+        return { stdout: "", stderr: "", truncated: false, exitCode: 1, signal: null };
+      },
+    };
+
+    const results = await searchDirectoryEntries(
+      {
+        root: searchRoot,
+        query: "candidate",
+        pathFormat: "relative",
+        includeFiles: false,
+        includeDirectories: true,
+        respectGitIgnore: true,
+        limit: 7,
+      },
+      dependencies,
+    );
+
+    expect(results).toHaveLength(7);
+    expect(inputs).toHaveLength(1);
+    expect(inputs[0]?.split("\0").filter(Boolean)).toHaveLength(7);
+  });
+
+  it("keeps suggestions in a non-repository when Git ignore checking is unavailable", async () => {
+    mkdirSync(path.join(searchRoot, "candidate-visible"));
+
+    await expect(
+      searchDirectoryEntries({
+        root: searchRoot,
+        query: "candidate",
+        pathFormat: "relative",
+        includeFiles: false,
+        includeDirectories: true,
+        respectGitIgnore: true,
+      }),
+    ).resolves.toEqual([{ path: "candidate-visible", kind: "directory" }]);
+  });
+
+  it("fails closed when check-ignore errors inside a repository", async () => {
+    execFileSync("git", ["init", "-q"], { cwd: searchRoot });
+    mkdirSync(path.join(searchRoot, "candidate-ignored"));
+    const dependencies: DirectorySuggestionDependencies = {
+      runGitCommand: async () => {
+        throw new Error("check-ignore failed");
+      },
+    };
+
+    await expect(
+      searchDirectoryEntries(
+        {
+          root: searchRoot,
+          query: "candidate",
+          pathFormat: "relative",
+          includeFiles: false,
+          includeDirectories: true,
+          respectGitIgnore: true,
+        },
+        dependencies,
+      ),
+    ).resolves.toEqual([]);
+  });
+
+  it("fails closed when check-ignore output is truncated", async () => {
+    execFileSync("git", ["init", "-q"], { cwd: searchRoot });
+    mkdirSync(path.join(searchRoot, "candidate-ignored"));
+    const dependencies: DirectorySuggestionDependencies = {
+      runGitCommand: async () => ({
+        stdout: "",
+        stderr: "",
+        truncated: true,
+        exitCode: null,
+        signal: "SIGKILL",
+      }),
+    };
+
+    await expect(
+      searchDirectoryEntries(
+        {
+          root: searchRoot,
+          query: "candidate",
+          pathFormat: "relative",
+          includeFiles: false,
+          includeDirectories: true,
+          respectGitIgnore: true,
+        },
+        dependencies,
+      ),
+    ).resolves.toEqual([]);
   });
 
   it("configures raw blank queries independently from explicit root aliases", async () => {
@@ -239,7 +320,7 @@ describe("searchDirectoryEntries", () => {
     const expected = [
       { path: "pso-root", kind: "directory" },
       { path: "nested/pso-global", kind: "directory" },
-      { path: "projects/paseo-desktop", kind: "directory" },
+      { path: "projects/byspace-desktop", kind: "directory" },
     ];
 
     await expect(searchDirectoryEntries({ ...common, query: "~/pso" })).resolves.toEqual(expected);
@@ -270,7 +351,7 @@ describe("searchDirectoryEntries", () => {
       ],
       projectEntries: [
         { path: "projects", kind: "directory" },
-        { path: "projects/paseo-desktop", kind: "directory" },
+        { path: "projects/byspace-desktop", kind: "directory" },
       ],
     });
   });
@@ -314,7 +395,7 @@ describe("searchDirectoryEntries", () => {
 
   it("does not spend the scan budget on excluded entry kinds", async () => {
     const budgetRoot = path.join(searchRoot, "kind-budget");
-    const target = path.join(budgetRoot, "z-projects", "paseo-target");
+    const target = path.join(budgetRoot, "z-projects", "byspace-target");
     mkdirSync(target, { recursive: true });
     for (let index = 0; index < 10; index += 1) {
       writeFileSync(path.join(budgetRoot, `a-noise-${index}.txt`), "");
@@ -323,13 +404,13 @@ describe("searchDirectoryEntries", () => {
     await expect(
       searchDirectoryEntries({
         root: budgetRoot,
-        query: "paseo-target",
+        query: "byspace-target",
         pathFormat: "relative",
         includeFiles: false,
         includeDirectories: true,
         maxEntriesScanned: 2,
       }),
-    ).resolves.toEqual([{ path: "z-projects/paseo-target", kind: "directory" }]);
+    ).resolves.toEqual([{ path: "z-projects/byspace-target", kind: "directory" }]);
   });
 
   it("applies ignored-directory policy to parent-scoped queries", async () => {
@@ -482,7 +563,7 @@ describe("absolute directory-path configuration", () => {
     homeDir = realpathSync.native(homeDir);
     outsideDir = realpathSync.native(outsideDir);
 
-    mkdirSync(path.join(homeDir, "projects", "paseo"), { recursive: true });
+    mkdirSync(path.join(homeDir, "projects", "byspace"), { recursive: true });
     mkdirSync(path.join(homeDir, "projects", "playground"), { recursive: true });
     mkdirSync(path.join(homeDir, "documents", "plans"), { recursive: true });
     mkdirSync(path.join(homeDir, ".hidden", "cache"), { recursive: true });
@@ -511,7 +592,7 @@ describe("absolute directory-path configuration", () => {
 
   it("shares the scan budget fairly between nested sibling branches", async () => {
     const budgetHome = path.join(tempRoot, "nested-budget-home");
-    const projectPath = path.join(budgetHome, "work", "client", "team", "paseo-desktop");
+    const projectPath = path.join(budgetHome, "work", "client", "team", "byspace-desktop");
     mkdirSync(projectPath, { recursive: true });
     for (let index = 0; index < 10; index += 1) {
       mkdirSync(
@@ -522,7 +603,7 @@ describe("absolute directory-path configuration", () => {
 
     const results = await searchAbsoluteDirectoryPaths({
       homeDir: budgetHome,
-      query: "paseo-desktop",
+      query: "byspace-desktop",
       limit: 10,
       maxDirectoriesScanned: 8,
     });
@@ -535,7 +616,7 @@ describe("absolute directory-path configuration", () => {
   it.skipIf(isWindows)("does not let a queued symlink hide the direct project branch", async () => {
     const symlinkHome = path.join(tempRoot, "symlink-budget-home");
     const projectRoot = path.join(symlinkHome, "b-projects", "project-root");
-    const projectPath = path.join(projectRoot, "paseo-desktop");
+    const projectPath = path.join(projectRoot, "byspace-desktop");
     const noisyBranch = path.join(symlinkHome, "a-noisy");
     mkdirSync(projectPath, { recursive: true });
     for (let index = 0; index < 10; index += 1) {
@@ -549,7 +630,7 @@ describe("absolute directory-path configuration", () => {
 
     const results = await searchAbsoluteDirectoryPaths({
       homeDir: symlinkHome,
-      query: "paseo-desktop",
+      query: "byspace-desktop",
       limit: 10,
       maxDirectoriesScanned: 6,
     });
@@ -561,7 +642,7 @@ describe("absolute directory-path configuration", () => {
 
   it.skipIf(isWindows)("follows visible directory symlinks that stay inside home", async () => {
     const symlinkHome = path.join(tempRoot, "internal-symlink-home");
-    const projectPath = path.join(symlinkHome, ".linked", "project-root", "paseo-desktop");
+    const projectPath = path.join(symlinkHome, ".linked", "project-root", "byspace-desktop");
     mkdirSync(projectPath, { recursive: true });
     symlinkSync(path.dirname(projectPath), path.join(symlinkHome, "linked-project"));
 
@@ -580,14 +661,14 @@ describe("absolute directory-path configuration", () => {
     const symlinkHome = path.join(tempRoot, "visible-symlink-home");
     const projectsPath = path.join(symlinkHome, "projects");
     const targetPath = path.join(symlinkHome, "work", "current");
-    const visibleProjectPath = path.join(projectsPath, "paseo");
+    const visibleProjectPath = path.join(projectsPath, "byspace");
     mkdirSync(projectsPath, { recursive: true });
     mkdirSync(targetPath, { recursive: true });
     symlinkSync(targetPath, visibleProjectPath);
 
     const results = await searchAbsoluteDirectoryPaths({
       homeDir: symlinkHome,
-      query: "paseo",
+      query: "byspace",
       limit: 10,
     });
 
@@ -627,8 +708,8 @@ describe("absolute directory-path configuration", () => {
     });
 
     expect(result.map((entry) => realpathSync.native(entry))).toEqual([
-      realpathSync.native(path.join(homeDir, "projects", "paseo")),
       realpathSync.native(path.join(homeDir, "projects", "playground")),
+      realpathSync.native(path.join(homeDir, "projects", "byspace")),
     ]);
   });
 
@@ -688,7 +769,7 @@ describe("relative typed-entry configuration", () => {
     });
     mkdirSync(path.join(workspaceDir, "docs"), { recursive: true });
 
-    writeFileSync(path.join(workspaceDir, "README.md"), "# paseo\n");
+    writeFileSync(path.join(workspaceDir, "README.md"), "# byspace\n");
     writeFileSync(
       path.join(workspaceDir, "src", "components", "chat-input.tsx"),
       "export const ChatInput = null;\n",
@@ -726,7 +807,7 @@ describe("relative typed-entry configuration", () => {
     mkdirSync(path.join(workspaceDir, "packages", "app", "src"), { recursive: true });
     writeFileSync(path.join(workspaceDir, "src", "file.ts"), "");
     writeFileSync(path.join(workspaceDir, "packages", "app", "src", "file.ts"), "");
-    writeFileSync(path.join(workspaceDir, "src", "paseo-config-file.ts"), "");
+    writeFileSync(path.join(workspaceDir, "src", "byspace-config-file.ts"), "");
 
     const basenameResults = await searchRelativeDirectoryEntries({
       cwd: workspaceDir,
@@ -788,13 +869,13 @@ describe("relative typed-entry configuration", () => {
   });
 
   it("suffix mode resolves explicit hidden file paths without broad hidden traversal", async () => {
-    const targetPath = path.join(workspaceDir, ".dev", "paseo-home", "daemon.log");
+    const targetPath = path.join(workspaceDir, ".dev", "byspace-home", "daemon.log");
     mkdirSync(path.dirname(targetPath), { recursive: true });
     writeFileSync(targetPath, "daemon log\n");
 
     const results = await searchRelativeDirectoryEntries({
       cwd: workspaceDir,
-      query: ".dev/paseo-home/daemon.log",
+      query: ".dev/byspace-home/daemon.log",
       limit: 20,
       includeFiles: true,
       includeDirectories: false,
@@ -802,11 +883,12 @@ describe("relative typed-entry configuration", () => {
       maxEntriesScanned: 1,
     });
 
-    expect(results).toEqual([{ path: ".dev/paseo-home/daemon.log", kind: "file" }]);
+    expect(results).toEqual([{ path: ".dev/byspace-home/daemon.log", kind: "file" }]);
   });
 
   it("resolves an exact gitignored path while keeping it out of discovery results", async () => {
-    initGitRepo(workspaceDir, "generated/\n");
+    execFileSync("git", ["init", "-q"], { cwd: workspaceDir });
+    writeFileSync(path.join(workspaceDir, ".gitignore"), "generated/\n");
     mkdirSync(path.join(workspaceDir, "generated"), { recursive: true });
     writeFileSync(path.join(workspaceDir, "generated", "search-notes.md"), "generated notes\n");
 
@@ -917,7 +999,7 @@ describe("relative typed-entry configuration", () => {
       "something",
       "something-else",
       "skills",
-      "paseo-advisor",
+      "byspace-advisor",
       "SKILL.md",
     );
     mkdirSync(path.dirname(targetPath), { recursive: true });
@@ -933,7 +1015,7 @@ describe("relative typed-entry configuration", () => {
 
     expect(results).toEqual([
       {
-        path: "something/something-else/skills/paseo-advisor/SKILL.md",
+        path: "something/something-else/skills/byspace-advisor/SKILL.md",
         kind: "file",
       },
     ]);

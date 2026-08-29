@@ -20,7 +20,7 @@
 }:
 
 buildNpmPackage rec {
-  pname = "paseo";
+  pname = "byspace";
   version = (builtins.fromJSON (builtins.readFile ../package.json)).version;
 
   src = lib.cleanSourceWith {
@@ -30,34 +30,24 @@ buildNpmPackage rec {
         baseName = builtins.baseNameOf path;
         relPath = lib.removePrefix (toString ./..) path;
       in
-      # Exclude non-daemon workspace contents (keep package.json for workspace resolution)
-      !(lib.hasPrefix "/packages/app/android" relPath)
-      && !(lib.hasPrefix "/packages/app/ios" relPath)
-      && !(lib.hasPrefix "/packages/website/src" relPath)
-      && !(lib.hasPrefix "/packages/website/public" relPath)
-      && !(lib.hasPrefix "/packages/desktop/src" relPath)
-      && !(lib.hasPrefix "/packages/desktop/src-tauri" relPath)
-      # Documentation, CI definitions and agent/editor configuration. None of
-      # these reach the build. Excluding them here also matters for the desktop
-      # derivation, which inherits this package's npmDeps: leaving them in makes
-      # a docs-only commit produce a new npm-deps .drv, and so a new desktop
-      # .drv, and so a full rebuild for a byte-identical result.
-      && !(lib.hasPrefix "/docs" relPath)
+      # Documentation, CI definitions and agent/editor configuration do not
+      # reach the build. Keeping them out prevents docs-only changes from
+      # rebuilding an otherwise byte-identical package.
+      !(lib.hasPrefix "/docs" relPath)
       && !(lib.hasPrefix "/.github" relPath)
       && !(lib.hasPrefix "/.agents" relPath)
       && !(lib.hasPrefix "/.claude" relPath)
       && !(lib.hasPrefix "/.codex" relPath)
       && !(lib.hasPrefix "/docker" relPath)
-      # Top-level prose only (README, CHANGELOG, AGENTS...). Deeper markdown is
-      # not necessarily documentation: skills/*/SKILL.md is a runtime file the
-      # daemon's trace script copies into the output.
+      # Exclude only top-level prose. Nested Markdown can be a runtime asset,
+      # including skills/*/SKILL.md copied into the packaged daemon.
       && builtins.match "/[^/]+\\.md" relPath == null
-      # Exclude test fixtures and debug files
+      # Exclude test fixtures and debug files.
       && !(lib.hasSuffix ".test.ts" baseName)
       && !(lib.hasSuffix ".e2e.test.ts" baseName)
       && baseName != "node_modules"
       && baseName != ".git"
-      && baseName != ".paseo"
+      && baseName != ".byspace"
       && baseName != ".DS_Store";
   };
 
@@ -111,42 +101,43 @@ buildNpmPackage rec {
     # assets read at runtime. The trace script is the single source of
     # truth for what the daemon needs at $out — auditable in plain JS, no
     # npm hoisting / .bin / workspace-symlink footguns.
-    mkdir -p $out/lib/paseo
+    mkdir -p $out/lib/byspace
     node scripts/trace-daemon.mjs > daemon-files.txt
 
     while IFS= read -r path; do
       [ -z "$path" ] && continue
-      mkdir -p "$out/lib/paseo/$(dirname "$path")"
-      cp -a "$path" "$out/lib/paseo/$path"
+      mkdir -p "$out/lib/byspace/$(dirname "$path")"
+      cp -a "$path" "$out/lib/byspace/$path"
     done < daemon-files.txt
 
     # Root package.json lets node resolve the workspace layout when the
     # CLI/server bin starts from $out.
-    cp package.json $out/lib/paseo/
+    cp package.json $out/lib/byspace/
 
     # Web UI Assets
-    cp -r packages/server/dist/server/web-ui $out/lib/paseo/packages/server/dist/server/
+    cp -r packages/server/dist/server/web-ui $out/lib/byspace/packages/server/dist/server/
 
     # Create wrapper for the server entry point (for systemd / direct use)
     mkdir -p $out/bin
-    # Keep Paseo's runtime mode separate from NODE_ENV, which belongs to spawned agents.
-    makeWrapper ${nodejs}/bin/node $out/bin/paseo-server \
-      --add-flags "$out/lib/paseo/packages/server/dist/scripts/supervisor-entrypoint.js" \
-      --set PASEO_NODE_ENV production
+    # Keep BySpace's runtime mode separate from NODE_ENV, which belongs to
+    # spawned agents and terminals.
+    makeWrapper ${nodejs}/bin/node $out/bin/byspace-server \
+      --add-flags "$out/lib/byspace/packages/server/dist/scripts/supervisor-entrypoint.js" \
+      --set BYSPACE_NODE_ENV production
 
     # Create wrapper for the CLI
-    makeWrapper ${nodejs}/bin/node $out/bin/paseo \
-      --add-flags "$out/lib/paseo/packages/cli/dist/index.js" \
-      --set NODE_PATH "$out/lib/paseo/node_modules"
+    makeWrapper ${nodejs}/bin/node $out/bin/byspace \
+      --add-flags "$out/lib/byspace/packages/cli/dist/index.js" \
+      --set NODE_PATH "$out/lib/byspace/node_modules"
 
     runHook postInstall
   '';
 
   meta = {
     description = "Self-hosted daemon for Claude Code, Codex, and OpenCode";
-    homepage = "https://github.com/getpaseo/paseo";
+    homepage = "https://github.com/ByteTrue/byspace";
     license = lib.licenses.agpl3Plus;
-    mainProgram = "paseo";
+    mainProgram = "byspace";
     platforms = lib.platforms.linux ++ lib.platforms.darwin;
   };
 }

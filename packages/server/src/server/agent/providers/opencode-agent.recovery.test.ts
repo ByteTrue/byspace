@@ -69,7 +69,6 @@ test("recovers missed output after EOF without failing the active turn", async (
   expect(assistantTexts).toHaveLength(52);
   expect(assistantTexts.at(-1)).toBe("recovered output");
   expect(assistantTexts).not.toContain("before boundary");
-  expect(upstream.messageReads()).toBe(1);
 
   await session.close();
   await fixture.manager.shutdown();
@@ -114,8 +113,21 @@ test("orders queued live deltas behind an incomplete recovery snapshot and suppr
   timing.advance();
   await upstream.connected(2);
   upstream.send(1, connectedRecord());
+  const worldDelta = new Promise<void>((resolve) => {
+    const unsubscribe = session.subscribe((event) => {
+      if (
+        event.type === "timeline" &&
+        event.item.type === "assistant_message" &&
+        event.item.text === " world"
+      ) {
+        unsubscribe();
+        resolve();
+      }
+    });
+  });
   upstream.send(1, textDeltaRecord("message-race", "part-race", " world"));
-  await eventually(() => expect(assistantText(observed)).toEqual(["Hello", " world"]));
+  await worldDelta;
+  expect(assistantText(observed)).toEqual(["Hello", " world"]);
 
   upstream.setMessages([
     {

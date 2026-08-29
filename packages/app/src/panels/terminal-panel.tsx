@@ -4,11 +4,11 @@ import { useTranslation } from "react-i18next";
 import { Terminal } from "lucide-react-native";
 import { Text, View } from "react-native";
 import invariant from "tiny-invariant";
-import type { ListTerminalsResponse } from "@getpaseo/protocol/messages";
-import { deriveTerminalActivityStatusBucket } from "@getpaseo/protocol/terminal-activity";
+import type { ListTerminalsResponse } from "@bytetrue/byspace-protocol/messages";
+import { deriveTerminalActivityStatusBucket } from "@bytetrue/byspace-protocol/terminal-activity";
 import { TerminalPane } from "@/components/terminal-pane";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
-import { definePanel, type PanelDescriptor } from "@/panels/panel-registry";
+import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry";
 import { queryClient } from "@/data/query-client";
 import { buildTerminalsQueryKey } from "@/screens/workspace/terminals/state";
 import { usePanelStore } from "@/stores/panel-store";
@@ -61,14 +61,12 @@ function useTerminalPanelDescriptor(
   );
   const terminal =
     terminalsQuery.data?.terminals.find((entry) => entry.id === target.terminalId) ?? null;
-  const label =
-    trimNonEmpty(terminal?.title ?? terminal?.name ?? null) ??
-    t("workspace.tabs.fallback.terminal");
 
   return {
-    label,
+    label:
+      trimNonEmpty(terminal?.title ?? terminal?.name ?? null) ??
+      t("workspace.tabs.fallback.terminal"),
     subtitle: t("workspace.tabs.fallback.terminal"),
-    tooltip: label,
     titleState: "ready",
     icon: Terminal,
     statusBucket: deriveTerminalActivityStatusBucket(terminal?.activity),
@@ -77,7 +75,7 @@ function useTerminalPanelDescriptor(
 
 function TerminalPanel() {
   const { serverId, workspaceId, target, openFileInWorkspace } = usePaneContext();
-  const { isWorkspaceFocused, isPaneFocused } = usePaneFocus();
+  const { isWorkspaceFocused, isPaneVisible, isPaneFocused } = usePaneFocus();
   const workspaceFields = useWorkspaceFields(serverId, workspaceId, (w) => ({
     workspaceDirectory: w.workspaceDirectory,
     isGitCheckout: w.projectKind === "git",
@@ -93,6 +91,12 @@ function TerminalPanel() {
   }, [isGitCheckout, openCompactFileExplorer, serverId, workspaceDirectory]);
   invariant(target.kind === "terminal", "TerminalPanel requires terminal target");
 
+  // An unfocused workspace keeps its Terminal mounted. Replacing it with a placeholder (the
+  // upstream behavior) tore down xterm, its WebGL renderer and the pane's claim state on every
+  // workspace switch, so coming back rebuilt all of it and churned the column count before
+  // settling. Retention is bounded by the deck's mounted-workspace cap, and an unfocused pane
+  // still owns no daemon stream: that follows `isWorkspaceFocused && isPaneVisible` inside the
+  // pane, not this render.
   if (!workspaceDirectory) {
     return (
       <View style={CENTERED_PADDED_STYLE}>
@@ -107,6 +111,7 @@ function TerminalPanel() {
       cwd={workspaceDirectory}
       terminalId={target.terminalId}
       isWorkspaceFocused={isWorkspaceFocused}
+      isPaneVisible={isPaneVisible}
       isPaneFocused={isPaneFocused}
       onOpenFileExplorer={handleOpenFileExplorer}
       onOpenWorkspaceFile={openFileInWorkspace}
@@ -114,7 +119,9 @@ function TerminalPanel() {
   );
 }
 
-export const terminalPanelRegistration = definePanel("terminal", {
+export const terminalPanelRegistration: PanelRegistration<"terminal"> = {
+  kind: "terminal",
+  resourceKey: (target) => target.terminalId,
   component: TerminalPanel,
   useDescriptor: useTerminalPanelDescriptor,
-});
+};

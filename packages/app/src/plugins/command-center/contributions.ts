@@ -1,22 +1,16 @@
-import { callPluginRpc } from "@getpaseo/plugin/host";
-import type { PluginCommandCapabilities, PluginPanelLocation } from "@getpaseo/plugin";
-import type { PluginClientStateSource } from "@getpaseo/plugin/host";
+import { callPluginRpc } from "@bytetrue/byspace-plugin/host";
+import type { PluginCommandCapabilities } from "@bytetrue/byspace-plugin";
+import type { PluginClientStateSource } from "@bytetrue/byspace-plugin/host";
 import type { CommandCenterContribution } from "@/command-center/contributions";
 import { getCommandCenterIcon } from "@/command-center/icon";
 import { resolvePluginIcon } from "../icons";
-import { resolvePluginPanelOpenLocation } from "../workspace-panels/locations";
 import type { PluginSurfaceRuntime } from "../surface-runtime";
 import type { InstalledPlugin } from "../types";
 
 export interface PluginCommandCenterNavigation {
   openSurface(pluginId: string, surfaceId: string): void;
-  openWorkspacePanel(pluginId: string, panelId: string, location: PluginPanelLocation): void;
-  openAgentPanel(
-    pluginId: string,
-    panelId: string,
-    agentId: string,
-    location: PluginPanelLocation,
-  ): void;
+  openWorkspacePanel(pluginId: string, panelId: string): void;
+  openAgentPanel(pluginId: string, panelId: string, agentId: string): void;
 }
 
 export interface PluginCommandCenterSource {
@@ -35,7 +29,7 @@ function capabilities(
   navigation: PluginCommandCenterNavigation,
 ): PluginCommandCapabilities {
   return {
-    paseo: runtime.paseo,
+    byspace: runtime.byspace,
     rpc: (contract, input) => callPluginRpc(contract, runtime.invoke, input),
     openSurface(surfaceId) {
       if (!plugin.surfaces.some((surface) => surface.id === surfaceId)) {
@@ -71,13 +65,12 @@ export function buildPluginCommandCenterContributions(
               context: "workspace",
               ...common,
               workspace,
-              openPanel(panelId, options) {
+              openPanel(panelId) {
                 const panel = plugin.workspacePanels.find(
                   (candidate) => candidate.id === panelId && candidate.context === "workspace",
                 );
                 if (!panel) throw new Error(`Workspace panel is unavailable: ${panelId}`);
-                const location = resolvePluginPanelOpenLocation(panel, options?.location);
-                source.navigation.openWorkspacePanel(plugin.id, panelId, location);
+                source.navigation.openWorkspacePanel(plugin.id, panelId);
               },
             });
             return;
@@ -89,15 +82,14 @@ export function buildPluginCommandCenterContributions(
             ...common,
             workspace,
             agent,
-            openPanel(panelId, options) {
+            openPanel(panelId) {
               const panel = plugin.workspacePanels.find((candidate) => candidate.id === panelId);
               if (!panel) throw new Error(`Workspace panel is unavailable: ${panelId}`);
-              const location = resolvePluginPanelOpenLocation(panel, options?.location);
               if (panel.context === "workspace") {
-                source.navigation.openWorkspacePanel(plugin.id, panelId, location);
+                source.navigation.openWorkspacePanel(plugin.id, panelId);
                 return;
               }
-              source.navigation.openAgentPanel(plugin.id, panelId, agent.id, location);
+              source.navigation.openAgentPanel(plugin.id, panelId, agent.id);
             },
           });
         } catch (error) {

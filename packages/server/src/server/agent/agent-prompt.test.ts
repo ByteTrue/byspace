@@ -1,16 +1,16 @@
-import { expect, it, test, vi } from "vitest";
-import pino, { type Logger } from "pino";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
+import { expect, it, test, vi } from "vitest";
+import pino, { type Logger } from "pino";
 import { createTestLogger } from "../../test-utils/test-logger.js";
 import { AgentManager } from "./agent-manager.js";
 import { AgentStorage } from "./agent-storage.js";
 import {
   formatSystemNotificationPrompt,
   isSystemInjectedEnvelope,
+  sendPromptToAgent,
   setupFinishNotification,
   waitForAgentRunStartWithTimeout,
 } from "./agent-prompt.js";
@@ -48,8 +48,6 @@ function createCapturedLogger(): CapturedLogger {
 
 interface FinishNotificationScenarioOptions {
   childLastAssistantMessage?: string | null;
-  childParentAgentId?: string | null;
-  requireParentOwnership?: boolean;
   parentPromptError?: Error;
   logger?: Logger;
 }
@@ -89,6 +87,7 @@ function createFinishNotificationScenario(
   Reflect.set(callerAgent, "config", { title: "Caller Agent" });
 
   const agentManager: AgentManager = Object.create(AgentManager.prototype);
+  Reflect.set(agentManager, "waitForAgentClose", async () => undefined);
   Reflect.set(agentManager, "getAgent", (agentId: string) => {
     if (agentId === "child-agent") {
       return childAgent;
@@ -127,12 +126,7 @@ function createFinishNotificationScenario(
   const agentStorage: AgentStorage = Object.create(AgentStorage.prototype);
   Reflect.set(agentStorage, "get", async (agentId: string) => {
     if (agentId === "child-agent") {
-      const parentAgentId =
-        options?.childParentAgentId === undefined ? "caller-agent" : options.childParentAgentId;
-      return {
-        title: "Child Agent",
-        labels: parentAgentId ? { "paseo.parent-agent-id": parentAgentId } : {},
-      };
+      return { title: "Child Agent" };
     }
     return null;
   });
@@ -144,7 +138,6 @@ function createFinishNotificationScenario(
         agentStorage,
         childAgentId: "child-agent",
         callerAgentId: "caller-agent",
-        requireParentOwnership: options?.requireParentOwnership,
         logger: options?.logger ?? createTestLogger(),
       });
     },
@@ -158,7 +151,7 @@ function createFinishNotificationScenario(
         description: "Write the QA sentinel",
         input: {
           file_path: "/tmp/permission-qa.txt",
-          content: "PASEO_PERMISSION_NOTIFY_QA_OK\n",
+          content: "BYSPACE_PERMISSION_NOTIFY_QA_OK\n",
         },
       });
       subscriber?.({
@@ -264,6 +257,50 @@ test("isSystemInjectedEnvelope matches the envelope formatSystemNotificationProm
   expect(isSystemInjectedEnvelope("hello world")).toBe(false);
 });
 
+test("sendPromptToAgent forwards the client message id as run options", async () => {
+  const agent: ManagedAgent = Object.create(null);
+  Reflect.set(agent, "id", "agent-1");
+  Reflect.set(agent, "provider", "codex");
+
+  const streamAgentSpy = vi.fn(() => (async function* noop() {})());
+  const agentManager: AgentManager = Object.create(AgentManager.prototype);
+  Reflect.set(
+    agentManager,
+    "waitForAgentClose",
+    vi.fn(async () => undefined),
+  );
+  Reflect.set(
+    agentManager,
+    "getAgent",
+    vi.fn(() => agent),
+  );
+  Reflect.set(agentManager, "tryRunOutOfBand", vi.fn().mockReturnValue(false));
+  Reflect.set(agentManager, "hasInFlightRun", vi.fn().mockReturnValue(false));
+  Reflect.set(agentManager, "streamAgent", streamAgentSpy);
+
+  const agentStorage: AgentStorage = Object.create(AgentStorage.prototype);
+  Reflect.set(
+    agentStorage,
+    "get",
+    vi.fn(async () => null),
+  );
+
+  await sendPromptToAgent({
+    agentManager,
+    agentStorage,
+    agentId: "agent-1",
+    prompt: "hello",
+    messageId: "msg-client-1",
+    runOptions: { outputSchema: { type: "object" } },
+    logger: createTestLogger(),
+  });
+
+  expect(streamAgentSpy).toHaveBeenCalledWith("agent-1", "hello", {
+    outputSchema: { type: "object" },
+    clientMessageId: "msg-client-1",
+  });
+});
+
 test("finish notifications tell the parent the child's last assistant message", async () => {
   const scenario = createFinishNotificationScenario({
     childLastAssistantMessage: "Implemented the cleanup and all checks pass.",
@@ -333,7 +370,7 @@ test("finish notifications survive permission responses", async () => {
       description: "Write the QA sentinel",
       input: {
         file_path: "/tmp/permission-qa.txt",
-        content: "PASEO_PERMISSION_NOTIFY_QA_OK\n",
+        content: "BYSPACE_PERMISSION_NOTIFY_QA_OK\n",
       },
     },
   });
@@ -407,26 +444,6 @@ test("finish notifications survive repeated permission cycles", async () => {
   expect(
     scenario.parentPrompts().map((prompt) => prompt.match(/(needs permission|finished)\./)?.[1]),
   ).toEqual(["needs permission", "needs permission", "finished"]);
-});
-
-test("detaching a child ends its parent-owned finish notification", async () => {
-  const scenario = createFinishNotificationScenario({
-    childParentAgentId: null,
-    requireParentOwnership: true,
-  });
-  scenario.startWatchingChild();
-  scenario.finishChild();
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(scenario.wasParentPrompted()).toBe(false);
-});
-
-test("follow-up finish notifications do not require a parent relationship", async () => {
-  const scenario = createFinishNotificationScenario({ childParentAgentId: "another-agent" });
-
-  scenario.startWatchingChild();
-  const parentPrompt = await scenario.finishChildAndReadParentPrompt();
-
-  expect(parentPrompt).toContain("Agent child-agent (Child Agent) finished.");
 });
 
 test("finish notifications log a rejected parent prompt without an unhandled rejection", async () => {

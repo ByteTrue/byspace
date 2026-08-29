@@ -1,22 +1,41 @@
 #!/usr/bin/env npx tsx
 
 import assert from "node:assert";
-import { runLocalPaseo } from "./helpers/local-cli.ts";
-import { startTestDaemon } from "./helpers/test-daemon.ts";
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { createTestBySpaceDaemon } from "../../server/src/server/test-utils/byspace-daemon.ts";
+import { runLocalBySpace } from "./helpers/local-cli.ts";
 
 console.log("=== Daemon Status Auth ===\n");
 
-const daemon = await startTestDaemon({
-  env: { PASEO_PASSWORD: "shared-secret" },
+const CORRECT_PASSWORD_HASH = "$2b$12$GMhF7pN4QnMlHOQXOqjd1OitKWPSmAO3FwB0PHzKtcZR/sAMryz76";
+
+const daemon = await createTestBySpaceDaemon({
+  auth: { password: CORRECT_PASSWORD_HASH },
 });
 
 try {
+  await writeFile(
+    join(daemon.byspaceHome, "byspace.pid"),
+    `${JSON.stringify(
+      {
+        pid: process.pid,
+        startedAt: new Date().toISOString(),
+        hostname: "status-auth-test",
+        uid: process.getuid?.(),
+        listen: `0.0.0.0:${daemon.port}`,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
   {
     console.log("Test 1: status reports password requirement without marking daemon unreachable");
-    const result = await runLocalPaseo(["daemon", "status", "--json"], {
-      PASEO_HOME: daemon.paseoHome,
-      PASEO_HOST: "",
-      PASEO_PASSWORD: "",
+    const result = await runLocalBySpace(["daemon", "status", "--json"], {
+      BYSPACE_HOME: daemon.byspaceHome,
+      BYSPACE_HOST: "",
+      BYSPACE_PASSWORD: "",
     });
 
     assert.strictEqual(result.exitCode, 0, "status should still succeed");
@@ -33,10 +52,10 @@ try {
 
   {
     console.log("Test 2: status reports rejected supplied password separately");
-    const result = await runLocalPaseo(["daemon", "status", "--json"], {
-      PASEO_HOME: daemon.paseoHome,
-      PASEO_HOST: "",
-      PASEO_PASSWORD: "wrong-secret",
+    const result = await runLocalBySpace(["daemon", "status", "--json"], {
+      BYSPACE_HOME: daemon.byspaceHome,
+      BYSPACE_HOST: "",
+      BYSPACE_PASSWORD: "wrong-secret",
     });
 
     assert.strictEqual(result.exitCode, 0, "status should still succeed");
@@ -51,10 +70,10 @@ try {
 
   {
     console.log("Test 3: status reaches the same daemon when password is supplied");
-    const result = await runLocalPaseo(["daemon", "status", "--json"], {
-      PASEO_HOME: daemon.paseoHome,
-      PASEO_HOST: "",
-      PASEO_PASSWORD: "shared-secret",
+    const result = await runLocalBySpace(["daemon", "status", "--json"], {
+      BYSPACE_HOME: daemon.byspaceHome,
+      BYSPACE_HOST: "",
+      BYSPACE_PASSWORD: "shared-secret",
     });
 
     assert.strictEqual(result.exitCode, 0, "status should succeed with password");
@@ -67,7 +86,7 @@ try {
     console.log("✓ password-authenticated status remains reachable\n");
   }
 } finally {
-  await daemon.stop();
+  await daemon.close();
 }
 
 console.log("=== Daemon Status Auth Tests Passed ===");

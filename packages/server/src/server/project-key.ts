@@ -1,8 +1,8 @@
 import { resolve, win32 } from "node:path";
-import { isGitHubHost, parseGitRemoteLocation } from "@getpaseo/protocol/git-remote";
+import { isGitHubHost, parseGitRemoteLocation } from "@bytetrue/byspace-protocol/git-remote";
 import { getRealpathAwareRelativePath, normalizePathForIdentity } from "../utils/path.js";
 
-/** Persisted opaque key used to join the same remote across hosts. */
+/** Persisted conservative key used only to group the same project across hosts. */
 export function deriveProjectKey(input: {
   rootPath: string;
   remoteUrl: string | null;
@@ -15,9 +15,10 @@ export function deriveProjectKey(input: {
     ? getRealpathAwareRelativePath(input.worktreeRoot, input.rootPath) || null
     : null;
   if (remote) {
+    const transport = remote.transport === "scp" ? "ssh" : remote.transport;
     const host = remote.port ? `${remote.host}:${remote.port}` : remote.host;
     const path = isGitHubHost(remote.host) ? remote.path.toLowerCase() : remote.path;
-    const remoteKey = `remote:${host}/${path}`;
+    const remoteKey = `remote:${transport}://${host}/${path}`;
     return selectedPath ? `${remoteKey}#subdir:${selectedPath.replaceAll("\\", "/")}` : remoteKey;
   }
 

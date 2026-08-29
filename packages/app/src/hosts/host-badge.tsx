@@ -5,47 +5,33 @@ import { HOST_COLORS, type HostBadgeModel, type HostColor } from "@/hosts/appear
 import { identityForeground } from "@/styles/identity-colors";
 import type { Theme } from "@/styles/theme";
 
-/**
- * The glyph size the badge draws at. Rows that place the badge alongside their own glyphs
- * match this so the line reads as one rank of peers.
- */
 export const HOST_BADGE_ICON_SIZE = 12;
-
 const ThemedServer = withUnistyles(Server);
-
 const mutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-
-// One stable mapping per host color for the life of the module — a fresh `uniProps` identity
-// on every render makes withUnistyles re-subscribe each pass. The scheme is read inside the
-// mapping rather than baked in, so a theme change repaints the glyph without a React render.
-//
-// Glyph and label share one color, so a badge reads as one object rather than a colored icon
-// with an unrelated grey word beside it.
 const HOST_ICON_MAPPINGS: Record<HostColor, (theme: Theme) => { color: string }> = (() => {
-  const byColor = {} as Record<HostColor, (theme: Theme) => { color: string }>;
+  const mappings = {} as Record<HostColor, (theme: Theme) => { color: string }>;
   for (const color of HOST_COLORS) {
-    byColor[color] =
+    mappings[color] =
       color === "none"
         ? mutedMapping
-        : (theme: Theme) => ({ color: identityForeground(color, theme.colorScheme) });
+        : (theme) => ({ color: identityForeground(color, theme.colorScheme) });
   }
-  return byColor;
+  return mappings;
 })();
 
-/**
- * Which machine something lives on, drawn the same way everywhere it appears: a server glyph
- * and, when the host is configured to show one, its name — both in the host's identity color.
- *
- * A hostname is the least interesting thing on any line that carries it and the only one whose
- * length nobody chose, so the badge yields space before its neighbours rather than alongside
- * them — see `flexShrink` below.
- */
-export function HostBadge({ badge }: { badge: HostBadgeModel }) {
+export function HostBadge({
+  badge,
+  accessible = true,
+}: {
+  badge: HostBadgeModel;
+  accessible?: boolean;
+}) {
   return (
     <View
       style={styles.badge}
       testID={`host-badge-${badge.serverId}`}
-      accessibilityLabel={badge.label}
+      accessible={accessible}
+      accessibilityLabel={accessible ? badge.label : undefined}
     >
       <ThemedServer size={HOST_BADGE_ICON_SIZE} uniProps={HOST_ICON_MAPPINGS[badge.color]} />
       {badge.showLabel ? (
@@ -57,13 +43,8 @@ export function HostBadge({ badge }: { badge: HostBadgeModel }) {
   );
 }
 
-// Text has no `color` prop, so the label cannot ride the icon's uniProps mapping — its color
-// has to come from a registered style. One entry per host color, picked at render time; a
-// module-level lookup table would read the style proxies before the persisted theme lands.
 function labelColorStyle(color: HostColor) {
   switch (color) {
-    case "none":
-      return null;
     case "violet":
       return styles.labelViolet;
     case "sky":
@@ -84,6 +65,8 @@ function labelColorStyle(color: HostColor) {
       return styles.labelAmber;
     case "blue":
       return styles.labelBlue;
+    case "none":
+      return null;
   }
 }
 
@@ -93,10 +76,6 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: 3,
     minWidth: 0,
-    // Outweighs a sibling's `flexShrink: 1` by enough that the badge is effectively fully
-    // squeezed before that sibling gives up its first pixel. An equal factor would split the
-    // loss in proportion to length, which hands the most space to the longest hostname —
-    // exactly backwards. The icon has a fixed width, so the badge never disappears outright.
     flexShrink: 100,
   },
   label: {

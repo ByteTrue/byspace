@@ -1,10 +1,11 @@
-import { getErrorMessage } from "@getpaseo/protocol/error-utils";
+import { getErrorMessage } from "@bytetrue/byspace-protocol/error-utils";
+import { resolveBySpaceHostedRelease } from "@bytetrue/byspace-protocol/release-channel";
 import {
   daemonInstallOriginRuntime,
   validateDaemonInstallOrigin,
   type DaemonInstallOriginRuntime,
 } from "./install-origin.js";
-import { npmGlobalPaseoCli, type NpmGlobalPaseoCli } from "./npm-global-cli.js";
+import { npmGlobalBySpaceCli, type NpmGlobalBySpaceCli } from "./npm-global-cli.js";
 
 export type DaemonSelfUpdatePhase = "starting" | "downloading" | "installing" | "complete";
 
@@ -16,7 +17,6 @@ export interface DaemonSelfUpdateResult {
 
 export interface DaemonSelfUpdateInput {
   daemonVersion: string | null;
-  desktopManaged: boolean;
   onProgress: (phase: DaemonSelfUpdatePhase) => void;
   logger: DaemonSelfUpdateLogger;
 }
@@ -27,7 +27,7 @@ export interface DaemonSelfUpdateLogger {
 }
 
 export interface DaemonSelfUpdateRuntime {
-  npm: NpmGlobalPaseoCli;
+  npm: NpmGlobalBySpaceCli;
   installOrigin: DaemonInstallOriginRuntime;
 }
 
@@ -39,12 +39,9 @@ export class DaemonSelfUpdateInProgressError extends Error {
 }
 
 const defaultRuntime: DaemonSelfUpdateRuntime = {
-  npm: npmGlobalPaseoCli,
+  npm: npmGlobalBySpaceCli,
   installOrigin: daemonInstallOriginRuntime,
 };
-
-const DESKTOP_MANAGED_UPDATE_ERROR =
-  "This daemon is managed by Paseo Desktop. Update Paseo Desktop on the host.";
 
 export class DaemonSelfUpdater {
   private inProgress = false;
@@ -52,10 +49,6 @@ export class DaemonSelfUpdater {
   constructor(private readonly runtime: DaemonSelfUpdateRuntime = defaultRuntime) {}
 
   async update(input: DaemonSelfUpdateInput): Promise<DaemonSelfUpdateResult> {
-    if (input.desktopManaged) {
-      return { success: false, error: DESKTOP_MANAGED_UPDATE_ERROR, newVersion: null };
-    }
-
     if (this.inProgress) {
       throw new DaemonSelfUpdateInProgressError();
     }
@@ -63,6 +56,10 @@ export class DaemonSelfUpdater {
     this.inProgress = true;
     try {
       input.onProgress("starting");
+      if (input.daemonVersion === null) {
+        throw new Error("Cannot self-update because the running daemon version is unavailable.");
+      }
+      const npmDistTag = resolveBySpaceHostedRelease(input.daemonVersion).npmDistTag;
       const install = await this.runtime.npm.inspect();
       const unsupportedReason = validateDaemonInstallOrigin(
         install,
@@ -76,7 +73,7 @@ export class DaemonSelfUpdater {
       input.onProgress("downloading");
       input.onProgress("installing");
 
-      const result = await this.runtime.npm.installLatest();
+      const result = await this.runtime.npm.install(npmDistTag);
       if (result.exitCode !== 0) {
         const error =
           result.stderr.trim() || result.stdout.trim() || `npm exited with code ${result.exitCode}`;

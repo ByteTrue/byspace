@@ -3,8 +3,8 @@ import type {
   AgentModelDefinition,
   AgentProvider,
   ProviderSnapshotEntry,
-} from "@getpaseo/protocol/agent-types";
-import type { ScheduleCadence, ScheduleSummary } from "@getpaseo/protocol/schedule/types";
+} from "@bytetrue/byspace-protocol/agent-types";
+import type { ScheduleCadence, ScheduleSummary } from "@bytetrue/byspace-protocol/schedule/types";
 import type { FormPreferences } from "@/create-agent-preferences/preferences";
 import { formatThinkingOptionLabel } from "@/agent-controls/labels";
 import {
@@ -80,6 +80,49 @@ export interface ScheduleFormProjectOption {
 export type ScheduleFormTargetKind = "agent" | "new-agent";
 type CronCadence = Extract<ScheduleCadence, { type: "cron" }>;
 type ProviderResolutionStatus = "idle" | "pending" | "complete";
+
+export interface ScheduleFormFieldVisibility {
+  name: boolean;
+  prompt: boolean;
+  target: boolean;
+  cadence: boolean;
+  maxRuns: boolean;
+}
+
+export interface HeartbeatScheduleUpdate {
+  id: string;
+  cadence: CronCadence;
+}
+
+export function resolveScheduleFormFieldVisibility(
+  targetKind: ScheduleFormTargetKind,
+): ScheduleFormFieldVisibility {
+  const isHeartbeat = targetKind === "agent";
+  return {
+    name: !isHeartbeat,
+    prompt: !isHeartbeat,
+    target: true,
+    cadence: true,
+    maxRuns: !isHeartbeat,
+  };
+}
+
+export function resolveScheduleFormTitle(
+  mode: ScheduleFormSnapshot["mode"],
+  targetKind: ScheduleFormTargetKind,
+): string {
+  if (mode === "edit" && targetKind === "agent") {
+    return "Edit heartbeat";
+  }
+  return mode === "edit" ? "Edit schedule" : "New schedule";
+}
+
+export function buildHeartbeatScheduleUpdate(
+  id: string,
+  cadence: ScheduleCadence | undefined,
+): HeartbeatScheduleUpdate | null {
+  return cadence?.type === "cron" ? { id, cadence } : null;
+}
 
 export interface ScheduleFormState {
   mode: "create" | "edit";
@@ -437,6 +480,17 @@ function formatInitialMaxRuns(schedule: ScheduleFormSnapshot["schedule"]): strin
   return String(schedule.maxRuns);
 }
 
+function resolveInitialCadence(
+  snapshot: ScheduleFormSnapshot,
+  targetKind: ScheduleFormTargetKind,
+): CronCadence {
+  const timezone = snapshot.defaults.timezone ?? DEFAULT_TIMEZONE;
+  if (targetKind === "agent" && snapshot.schedule?.cadence.type === "every") {
+    return { type: "cron", expression: "", timezone };
+  }
+  return normalizeScheduleFormCadence(snapshot.schedule?.cadence ?? DEFAULT_CADENCE, timezone);
+}
+
 function resolveInitialSubmitCadence(
   schedule: ScheduleFormSnapshot["schedule"],
   initialCadence: CronCadence,
@@ -647,10 +701,7 @@ function buildInitialState(snapshot: ScheduleFormSnapshot): ScheduleFormState {
     selectedServerId,
     workingDir,
   });
-  const initialCadence = normalizeScheduleFormCadence(
-    snapshot.schedule?.cadence ?? DEFAULT_CADENCE,
-    snapshot.defaults.timezone ?? DEFAULT_TIMEZONE,
-  );
+  const initialCadence = resolveInitialCadence(snapshot, targetKind);
   const initialModel = config?.model ?? "";
   const initialMode = config?.modeId ?? "";
   const initialThinking = config?.thinkingOptionId ?? "";

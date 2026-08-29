@@ -10,7 +10,7 @@ import { ProjectIconView } from "@/components/project-icon-view";
 import { ICON_SIZE } from "@/styles/theme";
 import { useToast } from "@/contexts/toast-context";
 import { useAgentInputDraft } from "@/composer/draft/input-draft";
-import { useProjectIcon } from "@/projects/icons";
+import { useProjectIconQuery } from "@/hooks/use-project-icon-query";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { normalizeWorkspaceDescriptor, useSessionStore } from "@/stores/session-store";
 import { useWorkspaceSetupStore } from "@/stores/workspace-setup-store";
@@ -25,7 +25,7 @@ import {
 import type {
   CreateAgentRequestOptions,
   DaemonClient,
-} from "@getpaseo/client/internal/daemon-client";
+} from "@bytetrue/byspace-client/internal/daemon-client";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import { requireWorkspaceDirectory } from "@/utils/workspace-directory";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
@@ -94,7 +94,7 @@ async function callWorkspaceCreation({
   input: { cwd: string };
 }) {
   if (creationMethod === "create_worktree") {
-    return connectedClient.createPaseoWorktree({
+    return connectedClient.createBySpaceWorktree({
       cwd: input.cwd,
       worktreeSlug: createNameId(),
     });
@@ -197,7 +197,7 @@ export function WorkspaceSetupDialog() {
     throw new Error(t("workspaceSetup.errors.composerStateRequired"));
   }
 
-  const { icon: projectIcon } = useProjectIcon({
+  const { icon: projectIcon } = useProjectIconQuery({
     serverId,
     cwd: sourceDirectory,
   });
@@ -438,8 +438,7 @@ export function WorkspaceSetupDialog() {
           isSubmitLoading={pendingAction === "chat"}
           blurOnSubmit={true}
           value={chatDraft.text}
-          onChangeText={chatDraft.editText}
-          textReplacementKey={chatDraft.textReplacementKey}
+          onChangeText={chatDraft.setText}
           attachments={chatDraft.attachments}
           onChangeAttachments={chatDraft.setAttachments}
           cwd={sourceDirectory}

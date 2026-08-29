@@ -64,31 +64,21 @@ describe("working diff tab identity", () => {
   };
 
   it("normalizes file focus navigation", () => {
+    expect(normalizeWorkspaceTabTarget(target)).toEqual(target);
     expect(
       normalizeWorkspaceTabTarget({
-        ...target,
+        kind: "working_diff",
         focusPath: " src\\example.ts ",
+        focusRequestId: 1.9,
       }),
     ).toEqual(target);
   });
 
-  it("treats focus as navigation state rather than tab identity", () => {
-    expect(workspaceTabTargetsEqual(target, target)).toBe(true);
-    expect(workspaceTabTargetsEqual(target, { ...target, focusPath: "src/other.ts" })).toBe(false);
-    expect(workspaceTabTargetsEqual(target, { ...target, focusRequestId: 2 })).toBe(false);
-    const workingDiffId = buildDeterministicWorkspaceTabId(target);
-    const otherFocusId = buildDeterministicWorkspaceTabId({
-      ...target,
-      focusPath: "src/other.ts",
-    });
-    const fileId = buildDeterministicWorkspaceTabId({
-      kind: "file",
-      path: target.focusPath,
-    });
-
-    expect(workingDiffId).toBe("working_diff");
-    expect(workingDiffId).toBe(otherFocusId);
-    expect(workingDiffId).not.toBe(fileId);
+  it("keeps one tab identity while treating focus requests as navigation", () => {
+    const nextFocus = { ...target, focusRequestId: 2 };
+    expect(workspaceTabTargetsEqual(target, nextFocus)).toBe(false);
+    expect(buildDeterministicWorkspaceTabId(target)).toBe("working_diff");
+    expect(buildDeterministicWorkspaceTabId(nextFocus)).toBe("working_diff");
   });
 });
 

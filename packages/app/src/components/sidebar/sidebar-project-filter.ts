@@ -14,10 +14,10 @@ import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list"
  */
 export function resolveActiveProjectFilters(
   projectFilters: readonly string[],
-  availableViewKeys: ReadonlySet<string>,
+  availableProjectKeys: ReadonlySet<string>,
 ): readonly string[] {
   if (projectFilters.length === 0) return EMPTY_PROJECT_FILTERS;
-  const matching = projectFilters.filter((viewKey) => availableViewKeys.has(viewKey));
+  const matching = projectFilters.filter((projectKey) => availableProjectKeys.has(projectKey));
   return matching.length > 0 ? matching : EMPTY_PROJECT_FILTERS;
 }
 
@@ -34,7 +34,7 @@ export function filterWorkspacesByProjects(input: {
   const { workspaces, projectFilters } = input;
   if (projectFilters.length === 0) return [...workspaces];
   const included = new Set(projectFilters);
-  return workspaces.filter((workspace) => included.has(workspace.projectViewKey));
+  return workspaces.filter((workspace) => included.has(workspace.projectKey));
 }
 
 const EMPTY_PROJECT_FILTERS: readonly string[] = [];

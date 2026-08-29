@@ -1,6 +1,5 @@
 import { useMemo } from "react";
-import type { CheckoutCommitFile, ParsedDiffFile } from "@getpaseo/protocol/messages";
-import { useRetainedPanelActive } from "@/components/retained-panel";
+import type { CheckoutCommitFile, ParsedDiffFile } from "@bytetrue/byspace-protocol/messages";
 import { useFetchQueries } from "@/data/query";
 import { checkoutCommitFileDiffQueryKey, COMMIT_FILE_DIFF_STALE_TIME } from "@/git/query-keys";
 import { useCheckoutCommitsQuery } from "@/git/use-commits-query";
@@ -58,11 +57,9 @@ export function resolveCommitDiffFiles(
 
 export function useCommitDiffFiles(ctx: CommitDiffFilesContext): CommitDiffFilesResult {
   const { serverId, cwd, sha, enabled = true } = ctx;
-  const retainedPanelActive = useRetainedPanelActive();
-  const queryEnabled = enabled && retainedPanelActive;
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
-  const commitsQuery = useCheckoutCommitsQuery({ serverId, cwd, enabled: queryEnabled });
+  const commitsQuery = useCheckoutCommitsQuery({ serverId, cwd, enabled });
   const commitsData = commitsQuery.status === "loaded" ? commitsQuery.data : null;
   const commitFiles = useMemo(() => {
     if (!sha || !commitsData) {
@@ -72,7 +69,7 @@ export function useCommitDiffFiles(ctx: CommitDiffFilesContext): CommitDiffFiles
   }, [commitsData, sha]);
 
   const fileDiffsEnabled =
-    queryEnabled &&
+    enabled &&
     commitsQuery.status === "loaded" &&
     Boolean(cwd) &&
     Boolean(sha) &&
@@ -94,7 +91,7 @@ export function useCommitDiffFiles(ctx: CommitDiffFilesContext): CommitDiffFiles
   );
   const commitsLoading = commitsQuery.status === "connecting" || commitsQuery.status === "loading";
   const commitsError = commitsQuery.status === "error" ? commitsQuery.error : null;
-  const capabilityMissing = commitsQuery.status === "unsupported";
+  const capabilityMissing = commitsQuery.status === "update_host";
 
   return useMemo<CommitDiffFilesResult>(() => {
     const resolvedByPath = new Map<string, ParsedDiffFile | null | undefined>();

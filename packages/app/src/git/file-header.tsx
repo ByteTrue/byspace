@@ -9,7 +9,7 @@ import { MaterialFileIcon } from "@/components/material-file-icon";
 import {
   treeRowPaddingLeft,
   workspaceTreeRowStyles,
-  WORKSPACE_PANE_TRAILING_GLYPH_RAIL,
+  WORKSPACE_FILE_ROW_TRAILING_PADDING,
   WORKSPACE_FILE_ROW_VERTICAL_PADDING,
   WORKSPACE_TREE_ICON_LABEL_GAP,
   WORKSPACE_TREE_ICON_SIZE,
@@ -32,7 +32,6 @@ export interface FileHeaderProps {
   onActivate?: (path: string) => void;
   onSelect?: (path: string) => void;
   onOpenFile?: (path: string) => void;
-  onOpenToSide?: (path: string) => void;
   onAddToChat?: (path: string) => void;
   onCopyPath?: (path: string) => void;
   onCopyRelativePath?: (path: string) => void;
@@ -120,10 +119,24 @@ function fileChange(file: ParsedDiffFile): "added" | "deleted" | "modified" {
   return "modified";
 }
 
+function documentFileChangeIcon(file: ParsedDiffFile, showsBodyState: boolean) {
+  if (!showsBodyState) return null;
+  if (file.isNew) return <FileChangeIcon change="added" />;
+  if (file.isDeleted) return <FileChangeIcon change="deleted" />;
+  return null;
+}
+
+function treeFileChangeIcon(file: ParsedDiffFile, showsBodyState: boolean) {
+  return showsBodyState ? null : <FileChangeIcon change={fileChange(file)} />;
+}
+
+function fileHeaderRightStyle(showsBodyState: boolean) {
+  return showsBodyState ? styles.right : [styles.right, styles.treeRight];
+}
+
 function FileHeaderMenu({
   file,
   onOpenFile,
-  onOpenToSide,
   onAddToChat,
   onCopyPath,
   onCopyRelativePath,
@@ -135,7 +148,6 @@ function FileHeaderMenu({
   testID,
 }: FileHeaderProps) {
   const openFile = useCallback(() => onOpenFile?.(file.path), [file.path, onOpenFile]);
-  const openToSide = useCallback(() => onOpenToSide?.(file.path), [file.path, onOpenToSide]);
   const addToChat = useCallback(() => onAddToChat?.(file.path), [file.path, onAddToChat]);
   const copyPath = useCallback(() => onCopyPath?.(file.path), [file.path, onCopyPath]);
   const copyRelativePath = useCallback(
@@ -154,7 +166,6 @@ function FileHeaderMenu({
       fileKind="file"
       fileExists={!file.isDeleted}
       onOpenFile={onOpenFile ? openFile : undefined}
-      onOpenToSide={onOpenToSide ? openToSide : undefined}
       onCopyPath={onCopyPath ? copyPath : undefined}
       onCopyRelativePath={onCopyRelativePath ? copyRelativePath : undefined}
       onReveal={onReveal ? reveal : undefined}
@@ -227,7 +238,9 @@ export const FileHeader = memo(function FileHeader({
   );
   const fileName = fileNameForPath(file.path);
   const nameStyle = fileHeaderNameStyle(showsBodyState, hover.isHovered);
-  const changeIcon = <FileChangeIcon change={fileChange(file)} />;
+  const documentChangeIcon = documentFileChangeIcon(file, showsBodyState);
+  const treeChangeIcon = treeFileChangeIcon(file, showsBodyState);
+  const rightStyle = fileHeaderRightStyle(showsBodyState);
   const content = (
     <View
       style={[styles.content, showsBodyState && styles.documentContent]}
@@ -249,14 +262,15 @@ export const FileHeader = memo(function FileHeader({
         ) : (
           <View style={styles.directorySpacer} />
         )}
+        {documentChangeIcon}
       </View>
-      <View style={styles.right}>
+      <View style={rightStyle}>
         <DiffStat
           additions={file.additions}
           deletions={file.deletions}
           testID={testID ? `${testID}-stat` : undefined}
         />
-        {changeIcon}
+        {treeChangeIcon}
       </View>
     </View>
   );
@@ -318,7 +332,7 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     paddingLeft: theme.spacing[3],
-    paddingRight: WORKSPACE_PANE_TRAILING_GLYPH_RAIL,
+    paddingRight: WORKSPACE_FILE_ROW_TRAILING_PADDING,
     paddingVertical: WORKSPACE_FILE_ROW_VERTICAL_PADDING,
     gap: theme.spacing[1],
     minWidth: 0,
@@ -340,11 +354,7 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "space-between",
     userSelect: "none",
   },
-  documentContent: {
-    height: 28,
-    paddingLeft: theme.spacing[3],
-    paddingRight: WORKSPACE_PANE_TRAILING_GLYPH_RAIL,
-  },
+  documentContent: { height: 28, paddingHorizontal: theme.spacing[3] },
   documentActive: { backgroundColor: theme.colors.surface1 },
   documentPressFeedback: { backgroundColor: theme.colors.surface1 },
   left: {
@@ -359,10 +369,11 @@ const styles = StyleSheet.create((theme) => ({
   right: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[2],
+    gap: theme.spacing[1],
     flexShrink: 0,
     userSelect: "none",
   },
+  treeRight: { gap: theme.spacing[2] },
   icon: {
     width: WORKSPACE_TREE_ICON_SIZE,
     height: WORKSPACE_TREE_ICON_SIZE,

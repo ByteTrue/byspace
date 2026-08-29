@@ -1,11 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { View, Text, Pressable } from "react-native";
-import { Gesture } from "react-native-gesture-handler";
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
-import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { X } from "lucide-react-native";
+import type { Theme } from "@/styles/theme";
 import { useTranslation } from "react-i18next";
 import { formatPrTabLabel, PullRequestTabIcon } from "@/git/pull-request-panel";
 import {
@@ -21,24 +19,17 @@ import {
   HEADER_TOP_PADDING_MOBILE,
 } from "@/constants/layout";
 import { ChangesSurface } from "@/git/diff-pane";
-import { changesStateSchema, defaultChangesState, type ChangesState } from "@/panels/changes/state";
 import { FileExplorerPane } from "./file-explorer-pane";
-import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
-import { shouldUseCompactExplorerKeyboardPadding } from "@/hooks/keyboard-shift-policy";
-import { WindowChromeSafeArea } from "@/utils/desktop-window";
-import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { RetainedPanel, RetainedPanelActivity } from "@/components/retained-panel";
 import { useMountedTabSet } from "@/screens/workspace/use-mounted-tab-set";
 import { usePullRequestPanelAvailability } from "@/panels/pull-request-availability";
 import { PullRequestContent } from "@/panels/pull-request";
 import { useAddFileToChat } from "@/panels/use-add-file-to-chat";
-import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
-import {
-  SIDEBAR_RESIZE_ACTIVATION_OFFSET,
-  SIDEBAR_RESIZE_FAIL_OFFSET,
-} from "@/components/sidebar-resize-handle-layout";
-import { resolveExplorerSidebarWidth } from "@/components/explorer-sidebar-layout";
-import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
+
+const ThemedPullRequestTabIcon = withUnistyles(PullRequestTabIcon);
+const ThemedX = withUnistyles(X);
+const foregroundIconProps = (theme: Theme) => ({ color: theme.colors.foreground });
+const mutedIconProps = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 function logExplorerSidebar(_event: string, _details: Record<string, unknown>): void {}
 
@@ -79,7 +70,6 @@ export function CompactExplorerSidebar({
   isGit,
   onOpenFile,
 }: ExplorerSidebarProps) {
-  const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const isOpen = usePanelStore(selectIsCompactFileExplorerOpen);
   const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
@@ -87,11 +77,6 @@ export function CompactExplorerSidebar({
     serverId,
     workspaceRoot,
     isGit,
-  });
-  const usePanelKeyboardPadding = shouldUseCompactExplorerKeyboardPadding({ isGit, explorerTab });
-  const { style: mobileKeyboardInsetStyle } = useKeyboardShiftStyle({
-    mode: "padding",
-    enabled: usePanelKeyboardPadding,
   });
   const { gesture: closeGesture } = useCloseFileExplorerGesture();
 
@@ -110,20 +95,13 @@ export function CompactExplorerSidebar({
 
   const mobileSidebarStyle = useMemo(
     () => [
+      styles.mobileSidebar,
       {
         paddingTop: insets.top + HEADER_TOP_PADDING_MOBILE,
-        paddingBottom: usePanelKeyboardPadding ? 0 : insets.bottom,
-        backgroundColor: theme.colors.surfaceSidebar,
+        paddingBottom: insets.bottom,
       },
-      mobileKeyboardInsetStyle,
     ],
-    [
-      insets.bottom,
-      insets.top,
-      mobileKeyboardInsetStyle,
-      theme.colors.surfaceSidebar,
-      usePanelKeyboardPadding,
-    ],
+    [insets.bottom, insets.top],
   );
 
   return (
@@ -145,118 +123,6 @@ export function CompactExplorerSidebar({
           onOpenFile={onOpenFile}
         />
       </MobilePanelOverlay>
-    </RetainedPanelActivity>
-  );
-}
-
-interface NativeExplorerSidebarDockProps extends ExplorerSidebarProps {
-  persistenceKey: string;
-  containerWidth: number;
-}
-
-export function NativeExplorerSidebarDock({
-  serverId,
-  workspaceId,
-  workspaceRoot,
-  isGit,
-  onOpenFile,
-  persistenceKey,
-  containerWidth,
-}: NativeExplorerSidebarDockProps) {
-  const { theme } = useUnistyles();
-  const insets = useSafeAreaInsets();
-  const isOpen = usePanelStore(selectIsCompactFileExplorerOpen);
-  const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
-  const storedWidth = useWorkspaceLayoutStore(
-    (state) => state.explorerSidebarWidthByWorkspace[persistenceKey],
-  );
-  const resizeExplorerSidebar = useWorkspaceLayoutStore((state) => state.resizeExplorerSidebar);
-  const visibleWidth = resolveExplorerSidebarWidth({
-    requestedWidth: storedWidth,
-    containerWidth,
-  });
-  const resizeWidth = useSharedValue(visibleWidth);
-  const startWidthRef = useRef(visibleWidth);
-  const [resizePressed, setResizePressed] = useState(false);
-  const { explorerTab, handleTabPress } = useExplorerSidebarSharedState({
-    serverId,
-    workspaceRoot,
-    isGit,
-  });
-
-  useEffect(() => {
-    resizeWidth.value = visibleWidth;
-  }, [resizeWidth, visibleWidth]);
-
-  const showResizeGrip = useCallback(() => setResizePressed(true), []);
-  const hideResizeGrip = useCallback(() => setResizePressed(false), []);
-  const commitWidth = useCallback(
-    (width: number) => resizeExplorerSidebar(persistenceKey, width),
-    [persistenceKey, resizeExplorerSidebar],
-  );
-  const resizeGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .enabled(true)
-        .hitSlop({ left: 8, right: 8, top: 0, bottom: 0 })
-        .onBegin(() => scheduleOnRN(showResizeGrip))
-        .activeOffsetX([-SIDEBAR_RESIZE_ACTIVATION_OFFSET, SIDEBAR_RESIZE_ACTIVATION_OFFSET])
-        .failOffsetY([-SIDEBAR_RESIZE_FAIL_OFFSET, SIDEBAR_RESIZE_FAIL_OFFSET])
-        .onStart((event) => {
-          startWidthRef.current = visibleWidth + event.translationX;
-          resizeWidth.value = visibleWidth;
-        })
-        .onUpdate((event) => {
-          resizeWidth.value = resolveExplorerSidebarWidth({
-            requestedWidth: startWidthRef.current - event.translationX,
-            containerWidth,
-          });
-        })
-        .onEnd(() => runOnJS(commitWidth)(resizeWidth.value))
-        .onFinalize(() => scheduleOnRN(hideResizeGrip)),
-    [commitWidth, containerWidth, hideResizeGrip, resizeWidth, showResizeGrip, visibleWidth],
-  );
-  const animatedWidthStyle = useAnimatedStyle(() => ({ width: resizeWidth.value }));
-  const dockStyle = useMemo(
-    () => [
-      styles.nativeDock,
-      {
-        display: isOpen ? ("flex" as const) : ("none" as const),
-        paddingTop: insets.top + HEADER_TOP_PADDING_MOBILE,
-        backgroundColor: theme.colors.surfaceSidebar,
-      },
-      animatedWidthStyle,
-    ],
-    [animatedWidthStyle, insets.top, isOpen, theme.colors.surfaceSidebar],
-  );
-  const dockContentStyle = useMemo(
-    () => [styles.nativeDockContent, { borderLeftColor: theme.colors.border }],
-    [theme.colors.border],
-  );
-
-  return (
-    <RetainedPanelActivity active={isOpen}>
-      <Animated.View style={dockStyle} testID="native-explorer-sidebar-dock">
-        <View style={dockContentStyle}>
-          <SidebarResizeHandle
-            edge="left"
-            gesture={resizeGesture}
-            pressed={resizePressed}
-            testID="native-explorer-sidebar-resize-handle"
-          />
-          <ExplorerSidebarContent
-            activeTab={explorerTab}
-            onTabPress={handleTabPress}
-            onClose={showMobileAgent}
-            serverId={serverId}
-            workspaceId={workspaceId}
-            workspaceRoot={workspaceRoot}
-            isGit={isGit}
-            isOpen={isOpen}
-            onOpenFile={onOpenFile}
-          />
-        </View>
-      </Animated.View>
     </RetainedPanelActivity>
   );
 }
@@ -312,7 +178,6 @@ function ExplorerSidebarContent({
   isOpen,
   onOpenFile,
 }: SidebarContentProps) {
-  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const { prPane, showPullRequest: showPrTab } = usePullRequestPanelAvailability({
     serverId,
@@ -340,19 +205,13 @@ function ExplorerSidebarContent({
   return (
     <View style={styles.sidebarContent} pointerEvents="auto">
       {/* Header with tabs and close button */}
-      <WindowChromeSafeArea
-        placement="inline"
-        horizontalPadding={theme.spacing[2]}
-        style={styles.header}
-        testID="explorer-header"
-      >
-        <TitlebarDragRegion />
+      <View style={styles.header} testID="explorer-header">
         <View style={styles.tabsContainer}>
           {isGit && (
             <ExplorerTabButton
               tab="changes"
               active={resolvedTab === "changes"}
-              label={t("workspace.tabs.explorerSidebar.changes")}
+              label={t("workspace.tabs.sidePanel.changes")}
               onTabPress={onTabPress}
               testID="explorer-tab-changes"
             />
@@ -360,7 +219,7 @@ function ExplorerSidebarContent({
           <ExplorerTabButton
             tab="files"
             active={resolvedTab === "files"}
-            label={t("workspace.tabs.explorerSidebar.files")}
+            label={t("workspace.tabs.sidePanel.files")}
             onTabPress={onTabPress}
             testID="explorer-tab-files"
           />
@@ -372,12 +231,10 @@ function ExplorerSidebarContent({
               onTabPress={onTabPress}
               testID="explorer-tab-pr"
             >
-              <PullRequestTabIcon
+              <ThemedPullRequestTabIcon
                 forge={prPane.forge}
                 size={13}
-                color={
-                  resolvedTab === "pr" ? theme.colors.foreground : theme.colors.foregroundMuted
-                }
+                uniProps={resolvedTab === "pr" ? foregroundIconProps : mutedIconProps}
               />
             </ExplorerTabButton>
           )}
@@ -390,18 +247,18 @@ function ExplorerSidebarContent({
             nativeID="explorer-close"
             accessible
             accessibilityRole="button"
-            accessibilityLabel={t("workspace.tabs.explorerSidebar.close")}
+            accessibilityLabel={t("workspace.tabs.sidePanel.close")}
             hitSlop={8}
           >
             {({ hovered, pressed }) => (
-              <X
+              <ThemedX
                 size={18}
-                color={hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted}
+                uniProps={hovered || pressed ? foregroundIconProps : mutedIconProps}
               />
             )}
           </Pressable>
         </View>
-      </WindowChromeSafeArea>
+      </View>
 
       {/* Content based on active tab */}
       <View style={styles.contentArea} testID="explorer-content-area">
@@ -452,20 +309,15 @@ function ChangedFilesPane({
   "serverId" | "workspaceId" | "workspaceRoot" | "isOpen" | "onOpenFile"
 >) {
   const { addFile, canAddToChat } = useAddFileToChat({ serverId, workspaceId });
-  const [changesState, setChangesState] = useState<ChangesState>(() =>
-    changesStateSchema.parse(defaultChangesState),
-  );
   return (
     <ChangesSurface
       serverId={serverId}
       workspaceId={workspaceId}
       cwd={workspaceRoot}
       enabled={isOpen}
-      modeScope="compact-explorer"
+      host="explorer"
       onOpenFile={onOpenFile}
       onAddToChat={canAddToChat ? addFile : undefined}
-      state={changesState}
-      onStateChange={setChangesState}
     />
   );
 }
@@ -491,17 +343,8 @@ function FilesPane({
 const PrTabContent = PullRequestContent;
 
 const styles = StyleSheet.create((theme) => ({
-  nativeDock: {
-    position: "relative",
-    height: "100%",
-    minHeight: 0,
-    overflow: "hidden",
-  },
-  nativeDockContent: {
-    position: "relative",
-    flex: 1,
-    minHeight: 0,
-    borderLeftWidth: 1,
+  mobileSidebar: {
+    backgroundColor: theme.colors.surfaceSidebar,
   },
   sidebarContent: {
     flex: 1,

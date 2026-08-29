@@ -1,7 +1,7 @@
 import { expect } from "@playwright/test";
-import { test } from "../support/fixtures";
-import { gotoWorkspace } from "../support/helpers/launcher";
-import { seedWorkspace } from "../support/helpers/seed-client";
+import { test } from "../fixtures";
+import { gotoWorkspace } from "../helpers/launcher";
+import { seedWorkspace } from "../helpers/seed-client";
 
 test("a workspace with an existing agent never presents New during startup", async ({ page }) => {
   const workspace = await seedWorkspace({ repoPrefix: "new-tab-startup-agent-" });
@@ -17,11 +17,11 @@ test("a workspace with an existing agent never presents New during startup", asy
 
   try {
     await page.addInitScript(() => {
-      Reflect.set(globalThis, "__paseoSawVisibleNewTab", false);
+      Reflect.set(globalThis, "__byspaceSawVisibleNewTab", false);
       function recordVisibleNewTab() {
         const panel = document.querySelector('[data-testid="workspace-new-tab-panel"]');
         if (panel?.getClientRects().length) {
-          Reflect.set(globalThis, "__paseoSawVisibleNewTab", true);
+          Reflect.set(globalThis, "__byspaceSawVisibleNewTab", true);
         }
       }
       window.addEventListener("DOMContentLoaded", () => {
@@ -40,7 +40,7 @@ test("a workspace with an existing agent never presents New during startup", asy
     await expect(page.getByTestId("workspace-new-tab-panel").filter({ visible: true })).toHaveCount(
       0,
     );
-    expect(await page.evaluate(() => Reflect.get(globalThis, "__paseoSawVisibleNewTab"))).toBe(
+    expect(await page.evaluate(() => Reflect.get(globalThis, "__byspaceSawVisibleNewTab"))).toBe(
       false,
     );
   } finally {

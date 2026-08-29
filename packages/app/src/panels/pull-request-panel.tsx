@@ -5,17 +5,11 @@ import { useTranslation } from "react-i18next";
 import invariant from "tiny-invariant";
 import { formatPrTabLabel } from "@/git/pull-request-panel";
 import { usePaneContext } from "@/panels/pane-context";
-import { definePanel, type PanelPresentation } from "@/panels/panel-registry";
+import type { PanelRegistration } from "@/panels/panel-registry";
 import { PullRequestContent, usePullRequestData } from "@/panels/pull-request";
 import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
 
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
-const pullRequestPanelPresentation = {
-  label: (t) => t("panels.pullRequest.label"),
-  subtitle: (t) => t("panels.pullRequest.subtitle"),
-  tooltip: (t) => t("panels.pullRequest.label"),
-  icon: ThemedGitPullRequest,
-} satisfies PanelPresentation;
 const CENTERED_PADDED_STYLE = {
   flex: 1,
   alignItems: "center",
@@ -31,15 +25,13 @@ function usePullRequestPanelDescriptor(
   const cwd = useWorkspaceDirectory(context.serverId, context.workspaceId) ?? "";
   const prPane = usePullRequestData({ serverId: context.serverId, cwd, timelineEnabled: false });
   const label =
-    prPane.prNumber === null
-      ? pullRequestPanelPresentation.label(t)
-      : formatPrTabLabel(prPane.prNumber);
+    prPane.prNumber === null ? t("panels.pullRequest.label") : formatPrTabLabel(prPane.prNumber);
   return {
     label,
-    subtitle: pullRequestPanelPresentation.subtitle(t),
+    subtitle: t("panels.pullRequest.subtitle"),
     tooltip: label,
     titleState: prPane.isLoading ? ("loading" as const) : ("ready" as const),
-    icon: pullRequestPanelPresentation.icon,
+    icon: ThemedGitPullRequest,
     statusBucket: null,
   };
 }
@@ -62,8 +54,9 @@ function PullRequestPanel() {
   );
 }
 
-export const pullRequestPanelRegistration = definePanel("pull_request", {
+export const pullRequestPanelRegistration: PanelRegistration<"pull_request"> = {
+  kind: "pull_request",
+  resourceKey: () => "pull_request",
   component: PullRequestPanel,
-  presentation: pullRequestPanelPresentation,
   useDescriptor: usePullRequestPanelDescriptor,
-});
+};

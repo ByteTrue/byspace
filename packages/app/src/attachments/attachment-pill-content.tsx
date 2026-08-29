@@ -1,15 +1,8 @@
 import type { ReactNode } from "react";
 import type { TFunction } from "i18next";
-import React from "react";
-import {
-  CircleDot,
-  FileText,
-  GitPullRequest,
-  MessageSquareCode,
-  MousePointer2,
-} from "lucide-react-native";
+import { CircleDot, FileText, GitPullRequest, MessageSquareCode } from "lucide-react-native";
 import { withUnistyles } from "react-native-unistyles";
-import type { AgentAttachment } from "@getpaseo/protocol/messages";
+import type { AgentAttachment } from "@bytetrue/byspace-protocol/messages";
 import type { WorkspaceComposerAttachment } from "@/attachments/types";
 import { getFileTypeLabel } from "@/attachments/file-types";
 import { isPullRequestContextAttachment } from "@/attachments/workspace-attachment-utils";
@@ -87,13 +80,6 @@ export function getAgentAttachmentPillContent(
         subtitle: `Issue #${attachment.number}`,
       };
     case "text":
-      if (attachment.externalResource) {
-        return {
-          icon: attachmentGithubIssueIcon,
-          title: attachment.externalResource.title,
-          subtitle: `${attachment.externalResource.providerLabel} ${attachment.externalResource.identifier}`,
-        };
-      }
       return {
         icon: attachmentFileIcon,
         title: attachment.title ?? t("message.attachments.textAttachment"),
@@ -112,13 +98,6 @@ export function getWorkspaceAttachmentPillContent(
   attachment: WorkspaceComposerAttachment,
   t: TFunction,
 ): AttachmentPillContent {
-  if (attachment.kind === "browser_element") {
-    return {
-      icon: attachmentBrowserIcon,
-      title: attachment.attachment.tag,
-      subtitle: t("composer.attachments.element"),
-    };
-  }
   if (isPullRequestContextAttachment(attachment)) {
     return {
       icon: attachmentFileIcon,
@@ -144,7 +123,6 @@ const ThemedAttachmentFileText = withUnistyles(FileText);
 const ThemedAttachmentGitPullRequest = withUnistyles(GitPullRequest);
 const ThemedAttachmentCircleDot = withUnistyles(CircleDot);
 const ThemedAttachmentMessageSquareCode = withUnistyles(MessageSquareCode);
-const ThemedAttachmentMousePointer = withUnistyles(MousePointer2);
 
 const iconForegroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
@@ -159,7 +137,4 @@ const attachmentGithubIssueIcon = (
 );
 const attachmentFileIcon = (
   <ThemedAttachmentFileText size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
-);
-const attachmentBrowserIcon = (
-  <ThemedAttachmentMousePointer size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
 );

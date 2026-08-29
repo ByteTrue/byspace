@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   getProjectRemoveReadiness,
   removeProjectFromHosts,
@@ -7,79 +7,46 @@ import {
 
 const project: ProjectRemoveProject = {
   hosts: [
-    { serverId: "host-a", projectId: "prj_host_a" },
-    { serverId: "host-b", projectId: "prj_host_b" },
+    { serverId: "host-a", projectId: "prj_a" },
+    { serverId: "host-b", projectId: "prj_b" },
   ],
 };
 
-function createProjectRemoveClient() {
-  const removedProjectKeys: string[] = [];
-  return {
-    removedProjectKeys,
-    client: {
-      async removeProject(projectKey: string): Promise<{ removedWorkspaceIds: string[] }> {
-        removedProjectKeys.push(projectKey);
-        return { removedWorkspaceIds: [] };
-      },
-    },
-  };
-}
-
-describe("project remove policy", () => {
-  it("requires every host to support project removal", () => {
-    const readiness = getProjectRemoveReadiness({
-      project,
-      supportsProjectRemove: (serverId) => serverId === "host-a",
-    });
-
-    expect(readiness).toEqual({
-      kind: "needs_host_update",
-      serverIds: ["host-b"],
-    });
-  });
-
-  it("removes the project from every participating host", async () => {
-    const hostA = createProjectRemoveClient();
-    const hostB = createProjectRemoveClient();
-    const readiness = getProjectRemoveReadiness({
-      project,
-      supportsProjectRemove: () => true,
-    });
-
-    expect(readiness).toEqual({
+describe("project remove", () => {
+  it("requires support and host-local project ids on every host", () => {
+    expect(getProjectRemoveReadiness({ project, supportsProjectRemove: () => true })).toEqual({
       kind: "ready",
       targets: [
-        { serverId: "host-a", projectId: "prj_host_a" },
-        { serverId: "host-b", projectId: "prj_host_b" },
+        { serverId: "host-a", projectId: "prj_a" },
+        { serverId: "host-b", projectId: "prj_b" },
       ],
     });
-
-    const outcome = await removeProjectFromHosts({
-      targets: readiness.kind === "ready" ? readiness.targets : [],
-      getClient: (serverId) => {
-        if (serverId === "host-a") return hostA.client;
-        if (serverId === "host-b") return hostB.client;
-        return null;
-      },
-    });
-
-    expect(outcome).toEqual({ kind: "removed", serverIds: ["host-a", "host-b"] });
-    expect(hostA.removedProjectKeys).toEqual(["prj_host_a"]);
-    expect(hostB.removedProjectKeys).toEqual(["prj_host_b"]);
+    expect(
+      getProjectRemoveReadiness({
+        project,
+        supportsProjectRemove: (serverId) => serverId === "host-a",
+      }),
+    ).toEqual({ kind: "needs_host_update", serverIds: ["host-b"] });
+    expect(
+      getProjectRemoveReadiness({
+        project: { hosts: [{ serverId: "host-a" }] },
+        supportsProjectRemove: () => true,
+      }),
+    ).toEqual({ kind: "needs_host_update", serverIds: ["host-a"] });
   });
 
-  it("reports disconnected hosts before sending any remove request", async () => {
-    const hostA = createProjectRemoveClient();
-
-    const outcome = await removeProjectFromHosts({
+  it("sends each daemon its own project id", async () => {
+    const removeA = vi.fn().mockResolvedValue(undefined);
+    const removeB = vi.fn().mockResolvedValue(undefined);
+    const result = await removeProjectFromHosts({
       targets: [
-        { serverId: "host-a", projectId: "prj_host_a" },
-        { serverId: "host-b", projectId: "prj_host_b" },
+        { serverId: "host-a", projectId: "prj_a" },
+        { serverId: "host-b", projectId: "prj_b" },
       ],
-      getClient: (serverId) => (serverId === "host-a" ? hostA.client : null),
+      getClient: (serverId) => ({ removeProject: serverId === "host-a" ? removeA : removeB }),
     });
-
-    expect(outcome).toEqual({ kind: "host_disconnected", serverIds: ["host-b"] });
-    expect(hostA.removedProjectKeys).toEqual([]);
+    expect(result).toEqual({ kind: "removed", serverIds: ["host-a", "host-b"] });
+    expect(removeA).toHaveBeenCalledWith("prj_a");
+    expect(removeB).toHaveBeenCalledWith("prj_b");
   });
 });

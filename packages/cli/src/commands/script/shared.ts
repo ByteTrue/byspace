@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type { CommandError, CommandOptions } from "../../output/index.js";
 
@@ -13,7 +13,7 @@ export async function connectWorkspaceScriptClient(host?: string): Promise<Daemo
   const daemonHost = getDaemonHost({ host });
   try {
     const client = await connectToDaemon({ host });
-    // COMPAT(workspaceScriptManagement): added in v0.1.105, remove gate after 2027-01-10.
+    // COMPAT(workspaceScriptManagement): added in v0.2.2, remove after 2027-01-29.
     if (!client.getLastServerInfoMessage()?.features?.workspaceScriptManagement) {
       await client.close().catch(() => {});
       throw {
@@ -30,7 +30,7 @@ export async function connectWorkspaceScriptClient(host?: string): Promise<Daemo
     throw {
       code: "DAEMON_NOT_RUNNING",
       message: `Cannot connect to daemon at ${daemonHost}: ${message}`,
-      details: "Start the daemon with: paseo daemon start",
+      details: "Start the daemon with: byspace daemon start",
     } satisfies CommandError;
   }
 }
@@ -44,10 +44,17 @@ export async function resolveWorkspaceScriptWorkspaceId(
   }
 
   const cwd = resolve(options.cwd ?? process.cwd());
-  const payload = await client.fetchWorkspaces({ page: { limit: 200 } });
-  const matches = payload.entries.filter(
-    (workspace) => resolve(workspace.workspaceDirectory) === cwd,
-  );
+  const matches: Array<{ id: string; workspaceDirectory: string }> = [];
+  let cursor: string | undefined;
+  do {
+    const payload = await client.fetchWorkspaces({
+      page: { limit: 200, ...(cursor ? { cursor } : {}) },
+    });
+    matches.push(
+      ...payload.entries.filter((workspace) => resolve(workspace.workspaceDirectory) === cwd),
+    );
+    cursor = payload.pageInfo.nextCursor ?? undefined;
+  } while (cursor);
   if (matches.length === 1) {
     return matches[0]!.id;
   }
@@ -60,8 +67,8 @@ export async function resolveWorkspaceScriptWorkspaceId(
   }
   throw {
     code: "WORKSPACE_NOT_FOUND",
-    message: `No Paseo workspace found for ${cwd}`,
-    details: "Open the directory in Paseo first, or pass --workspace <workspace-id>.",
+    message: `No BySpace workspace found for ${cwd}`,
+    details: "Open the directory in BySpace first, or pass --workspace <workspace-id>.",
   } satisfies CommandError;
 }
 

@@ -61,37 +61,6 @@ function onPiCommand(child: PiChild, handler: (command: Record<string, unknown>)
   });
 }
 
-function replyToCommands(
-  child: PiChild,
-  handler: (command: Record<string, unknown>) => unknown,
-): void {
-  onPiCommand(child, (command) => {
-    try {
-      const result = handler(command);
-      child.stdout.write(
-        `${JSON.stringify({
-          id: command.id,
-          type: "response",
-          command: command.type,
-          success: true,
-          data: result,
-        })}\n`,
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      child.stdout.write(
-        `${JSON.stringify({
-          id: command.id,
-          type: "response",
-          command: command.type,
-          success: false,
-          error: message,
-        })}\n`,
-      );
-    }
-  });
-}
-
 function capturePendingCommand(child: PiChild, type: string): Promise<Record<string, unknown>> {
   return new Promise((resolve) => {
     onPiCommand(child, (command) => {
@@ -116,6 +85,46 @@ function writePiResponse(
       data,
     })}\n`,
   );
+}
+
+function replyToCommands(
+  child: PiChild,
+  handler: (command: Record<string, unknown>) => unknown,
+): void {
+  let buffer = "";
+  child.stdin.on("data", (chunk) => {
+    buffer += chunk.toString();
+    for (;;) {
+      const newlineIndex = buffer.indexOf("\n");
+      if (newlineIndex === -1) break;
+      const line = buffer.slice(0, newlineIndex);
+      buffer = buffer.slice(newlineIndex + 1);
+      const command = JSON.parse(line) as Record<string, unknown>;
+      try {
+        const result = handler(command);
+        child.stdout.write(
+          `${JSON.stringify({
+            id: command.id,
+            type: "response",
+            command: command.type,
+            success: true,
+            data: result,
+          })}\n`,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        child.stdout.write(
+          `${JSON.stringify({
+            id: command.id,
+            type: "response",
+            command: command.type,
+            success: false,
+            error: message,
+          })}\n`,
+        );
+      }
+    }
+  });
 }
 
 describe("PiCliRuntime", () => {
@@ -158,14 +167,14 @@ describe("PiCliRuntime", () => {
 
     await runtime.startSession({
       cwd: "/workspace/project",
-      mcpConfigPath: "/tmp/paseo-pi-mcp/mcp.json",
+      mcpConfigPath: "/tmp/byspace-pi-mcp/mcp.json",
     });
 
     expect(launches).toEqual([
       expect.objectContaining({
         cwd: "/workspace/project",
-        mcpConfigPath: "/tmp/paseo-pi-mcp/mcp.json",
-        argv: ["pi", "--mode", "rpc", "--mcp-config", "/tmp/paseo-pi-mcp/mcp.json"],
+        mcpConfigPath: "/tmp/byspace-pi-mcp/mcp.json",
+        argv: ["pi", "--mode", "rpc", "--mcp-config", "/tmp/byspace-pi-mcp/mcp.json"],
       }),
     ]);
   });

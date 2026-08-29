@@ -1,8 +1,8 @@
 import type { ComponentType, ReactElement, ReactNode, RefObject } from "react";
 import type { StyleProp, ViewStyle } from "react-native";
 import type { StreamItem } from "@/types/stream";
-import { continuesResponse } from "./turn-membership";
 import type { StreamHistoryBoundary, StreamRenderSegments } from "./model";
+import { continuesResponse } from "./turn-membership";
 import type {
   BottomAnchorLocalRequest,
   BottomAnchorRouteRequest,
@@ -85,7 +85,7 @@ export interface StreamRenderInput {
 }
 
 export interface ResolveStreamRenderStrategyInput {
-  platform: string;
+  platform?: "web" | "native";
   isMobileBreakpoint: boolean;
 }
 

@@ -1,21 +1,21 @@
 import path from "node:path";
-import { statSync } from "node:fs";
 
 import type { Logger } from "pino";
 
 import type { StoredAgentRecord } from "./agent/agent-storage.js";
 import type { AgentStorage } from "./agent/agent-storage.js";
-import { classifyDirectoryForProjectMembership } from "./workspace-registry-bootstrap-legacy.js";
-import { generateWorkspaceId } from "./workspace-registry-model.js";
+import {
+  classifyDirectoryForProjectMembership,
+  generateWorkspaceId,
+} from "./workspace-registry-model.js";
 import { backfillWorkspaceIdForLegacyAgents } from "./migrations/backfill-workspace-id.migration.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
+import { pinBySpaceWorktreeBranchIdentityIfMissing } from "../utils/worktree-metadata.js";
 import {
-  createPersistedProjectRecord,
   createPersistedWorkspaceRecord,
   type ProjectRegistry,
   type WorkspaceRegistry,
 } from "./workspace-registry.js";
-import { pinPaseoWorktreeBranchIdentityIfMissing } from "../utils/worktree-metadata.js";
 
 function minIsoDate(left: string | null, right: string | null): string | null {
   if (!left) {
@@ -47,7 +47,7 @@ function resolveAgentUpdatedAt(record: StoredAgentRecord): string {
 
 export async function bootstrapWorkspaceRegistries(options: {
   serverId?: string;
-  paseoHome: string;
+  byspaceHome: string;
   agentStorage: AgentStorage;
   projectRegistry: ProjectRegistry;
   workspaceRegistry: WorkspaceRegistry;
@@ -61,20 +61,20 @@ export async function bootstrapWorkspaceRegistries(options: {
 
   await Promise.all([options.projectRegistry.initialize(), options.workspaceRegistry.initialize()]);
 
-  // COMPAT(worktree-branch-identity): added in v0.4.0 on 2026-08-15; remove after
-  // 2027-02-15. Older worktrees did not pin branch-off/check-out branch identity.
+  // COMPAT(worktree-branch-identity): added in v0.6.0 on 2026-08-24; remove after
+  // 2027-02-24. Older worktrees did not pin branch-off/check-out branch identity.
   // Seed it from the registry value clients already display, never from live Git.
   for (const workspace of await options.workspaceRegistry.list()) {
     if (
       workspace.archivedAt ||
-      !workspace.isPaseoOwnedWorktree ||
+      !workspace.isBySpaceOwnedWorktree ||
       !workspace.worktreeRoot ||
       !workspace.branch
     ) {
       continue;
     }
     try {
-      pinPaseoWorktreeBranchIdentityIfMissing(workspace.worktreeRoot, workspace.branch);
+      pinBySpaceWorktreeBranchIdentityIfMissing(workspace.worktreeRoot, workspace.branch);
     } catch (error) {
       options.logger.warn(
         { err: error, workspaceId: workspace.workspaceId },
@@ -95,17 +95,7 @@ export async function bootstrapWorkspaceRegistries(options: {
     ]),
   );
   const records = await options.agentStorage.list();
-  // A legacy agent can outlive its working directory. Reconciliation treats a
-  // missing directory as absent rather than asking Git about it; bootstrap must
-  // do the same before materializing its first workspace record.
-  const activeRecords = records.filter((record) => {
-    if (record.archivedAt) return false;
-    try {
-      return statSync(record.cwd).isDirectory();
-    } catch {
-      return false;
-    }
-  });
+  const activeRecords = records.filter((record) => !record.archivedAt);
   const recordsByDirectoryKey = new Map<
     string,
     {
@@ -131,9 +121,17 @@ export async function bootstrapWorkspaceRegistries(options: {
     recordsByDirectoryKey.set(directoryKey, existing);
   }
 
-  const projectRanges = new Map<string, { createdAt: string | null; updatedAt: string | null }>();
+  const projectRanges = new Map<
+    string,
+    {
+      membership: ReturnType<typeof classifyDirectoryForProjectMembership>;
+      createdAt: string | null;
+      updatedAt: string | null;
+    }
+  >();
   const workspaceUpsertInputs: {
     workspaceId: string;
+    projectId: string;
     membership: ReturnType<typeof classifyDirectoryForProjectMembership>;
     workspaceCwd: string;
     createdAt: string;
@@ -152,17 +150,26 @@ export async function bootstrapWorkspaceRegistries(options: {
 
     const createdAt = workspaceCreatedAt ?? new Date().toISOString();
     const updatedAt = workspaceUpdatedAt ?? createdAt;
+    const project = await options.projectRegistry.getOrCreateActiveByRoot({
+      rootPath: membership.projectRootPath,
+      kind: membership.projectKind,
+      displayName: membership.projectName,
+      projectKey: membership.projectKey,
+      timestamp: createdAt,
+    });
 
-    const existingProjectRange = projectRanges.get(membership.projectKey) ?? {
+    const existingProjectRange = projectRanges.get(project.projectId) ?? {
+      membership,
       createdAt: null,
       updatedAt: null,
     };
     existingProjectRange.createdAt = minIsoDate(existingProjectRange.createdAt, createdAt);
     existingProjectRange.updatedAt = maxIsoDate(existingProjectRange.updatedAt, updatedAt);
-    projectRanges.set(membership.projectKey, existingProjectRange);
+    projectRanges.set(project.projectId, existingProjectRange);
 
     workspaceUpsertInputs.push({
       workspaceId: existingWorkspaceIdsByCwd.get(workspaceCwd) ?? generateWorkspaceId(),
+      projectId: project.projectId,
       membership,
       workspaceCwd,
       createdAt,
@@ -170,47 +177,40 @@ export async function bootstrapWorkspaceRegistries(options: {
     });
   }
 
-  await Promise.all(
-    workspaceUpsertInputs.flatMap(
-      ({ workspaceId, membership, workspaceCwd, createdAt, updatedAt }) => {
-        const projectRange = projectRanges.get(membership.projectKey) ?? {
-          createdAt: null,
-          updatedAt: null,
-        };
-        return [
-          options.workspaceRegistry.upsert(
-            createPersistedWorkspaceRecord({
-              workspaceId,
-              projectId: membership.projectId,
-              cwd: workspaceCwd,
-              kind: membership.workspaceKind,
-              displayName: membership.workspaceDisplayName,
-              createdAt,
-              updatedAt,
-            }),
-          ),
-          options.projectRegistry.upsert(
-            createPersistedProjectRecord({
-              projectId: membership.projectId,
-              rootPath: membership.projectRootPath,
-              kind: membership.projectKind,
-              displayName: membership.projectName,
-              projectKey: membership.projectKey,
-              createdAt: projectRange.createdAt ?? createdAt,
-              updatedAt: projectRange.updatedAt ?? updatedAt,
-            }),
-          ),
-        ];
-      },
+  await Promise.all([
+    ...workspaceUpsertInputs.map(
+      ({ workspaceId, projectId, membership, workspaceCwd, createdAt, updatedAt }) =>
+        options.workspaceRegistry.upsert(
+          createPersistedWorkspaceRecord({
+            workspaceId,
+            projectId,
+            cwd: workspaceCwd,
+            kind: membership.workspaceKind,
+            displayName: membership.workspaceDisplayName,
+            createdAt,
+            updatedAt,
+          }),
+        ),
     ),
-  );
+    ...[...projectRanges.entries()].map(([projectId, range]) =>
+      options.projectRegistry.update(projectId, (project) => ({
+        ...project,
+        rootPath: range.membership.projectRootPath,
+        kind: range.membership.projectKind,
+        displayName: range.membership.projectName,
+        projectKey: range.membership.projectKey,
+        createdAt: range.createdAt ?? project.createdAt,
+        updatedAt: range.updatedAt ?? range.createdAt ?? project.updatedAt,
+      })),
+    ),
+  ]);
 
   await backfillWorkspaceIdForLegacyAgents(options);
 
   options.logger.info(
     {
-      projectsFile: path.join(options.paseoHome, "projects", "projects.json"),
-      workspacesFile: path.join(options.paseoHome, "projects", "workspaces.json"),
+      projectsFile: path.join(options.byspaceHome, "projects", "projects.json"),
+      workspacesFile: path.join(options.byspaceHome, "projects", "workspaces.json"),
       materializedProjects: projectRanges.size,
       materializedWorkspaces: recordsByDirectoryKey.size,
     },

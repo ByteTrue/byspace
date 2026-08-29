@@ -1,31 +1,24 @@
 import React, { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
 import { TextInput } from "react-native";
-import { BottomSheetTextInput } from "@gorhom/bottom-sheet";
-import PasteInput, {
-  type PastedFile,
-  type PasteTextInputInstance,
-} from "@mattermost/react-native-paste-input";
 import type { EditingTextInputHandle, EditingTextInputProps } from "./types";
 
-type NativeInput = (TextInput | PasteTextInputInstance) & {
-  blur(): void;
-  focus(): void;
-  isFocused(): boolean;
-  clear?(): void;
-  replaceText?(text: string, selection?: { start: number; end: number }): void;
+type NativeInput = TextInput & {
+  getNativeRef?(): unknown;
   setNativeProps?(props: { text?: string; selection?: { start: number; end: number } }): void;
   setSelection?(start: number, end: number): void;
-  getNativeRef?(): unknown;
 };
 
+/**
+ * Shared editing primitive. The platform build (this file) renders a plain
+ * TextInput; the Web build (`./text-input.web`) owns IME composition. The
+ * imperative handle is the only sanctioned way to replace text programmatically
+ * — controlled `value` replay is rejected at the type level.
+ */
 export const EditingTextInput = forwardRef<EditingTextInputHandle, EditingTextInputProps>(
-  function EditingTextInputNative(allProps, ref) {
+  function EditingTextInputImpl(allProps, ref) {
     const {
       initialValue = "",
       onChangeText,
-      onPasteImages,
-      onPasteError,
-      variant = "default",
       value: _,
       defaultValue: __,
       ...props
@@ -41,18 +34,10 @@ export const EditingTextInput = forwardRef<EditingTextInputHandle, EditingTextIn
       getText: () => textRef.current,
       replaceText: (nextText, selection) => {
         textRef.current = nextText;
-        if (inputRef.current?.replaceText) {
-          inputRef.current.replaceText(nextText, selection);
-          return;
-        }
-        if (nextText === "") {
-          inputRef.current?.clear?.();
-        } else {
-          inputRef.current?.setNativeProps?.({
-            text: nextText,
-            ...(selection ? { selection } : {}),
-          });
-        }
+        inputRef.current?.setNativeProps?.({
+          text: nextText,
+          ...(selection ? { selection } : {}),
+        });
         if (selection) inputRef.current?.setSelection?.(selection.start, selection.end);
       },
       getNativeRef: () => inputRef.current?.getNativeRef?.() ?? inputRef.current,
@@ -65,42 +50,11 @@ export const EditingTextInput = forwardRef<EditingTextInputHandle, EditingTextIn
       },
       [onChangeText],
     );
-    const handlePaste = useCallback(
-      (error: string | null | undefined, files: PastedFile[]) => {
-        if (error) {
-          onPasteError?.(error);
-        } else if (files.length > 0) {
-          onPasteImages?.(files);
-        }
-      },
-      [onPasteError, onPasteImages],
-    );
 
-    if (onPasteImages || onPasteError) {
-      return (
-        <PasteInput
-          {...props}
-          ref={inputRef as React.Ref<PasteTextInputInstance>}
-          defaultValue={initialTextRef.current}
-          onChangeText={handleChangeText}
-          onPaste={handlePaste}
-        />
-      );
-    }
-    if (variant === "bottom-sheet") {
-      return (
-        <BottomSheetTextInput
-          {...props}
-          ref={inputRef as unknown as React.Ref<never>}
-          defaultValue={initialTextRef.current}
-          onChangeText={handleChangeText}
-        />
-      );
-    }
     return (
       <TextInput
         {...props}
-        ref={inputRef as React.Ref<TextInput>}
+        ref={inputRef}
         defaultValue={initialTextRef.current}
         onChangeText={handleChangeText}
       />

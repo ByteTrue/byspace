@@ -1,64 +1,57 @@
 import "~/styles.css";
-import { DiscordIcon, GitHubIcon } from "~/components/brand-icons";
-import { useStars } from "~/routes/__root";
 
 export function SiteHeader() {
-  const { stars } = useStars();
   return (
     <header className="flex flex-col items-center gap-4 md:flex-row md:justify-between">
       <a href="/" className="flex items-center gap-3">
-        <img src="/logo.svg" alt="Paseo" className="w-6 h-6" />
-        <span className="text-lg font-medium">Paseo</span>
+        <img src="/logo.svg" alt="BySpace" className="w-7 h-7" />
+        <span className="text-xl font-bold tracking-tight text-white">BySpace</span>
       </a>
-      <div className="flex flex-wrap items-center justify-center gap-4">
+      <div className="flex flex-wrap items-center justify-center gap-6">
         <a
-          href="/blog"
+          href="#features"
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          Blog
+          Features
         </a>
         <a
-          href="/docs"
+          href="#providers"
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          Providers
+        </a>
+        <a
+          href="https://app.byspace.cc.cd/docs"
+          target="_blank"
+          rel="noopener noreferrer"
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           Docs
         </a>
         <a
-          href="/changelog"
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          Changelog
-        </a>
-        <a
-          href="/download"
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          Download
-        </a>
-        <a
-          href="/sponsor"
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          Sponsor
-        </a>
-        <a
-          href="https://discord.gg/jz8T2uahpH"
+          href="https://github.com/ByteTrue/byspace"
           target="_blank"
           rel="noopener noreferrer"
-          aria-label="Discord"
-          className="text-muted-foreground hover:text-foreground transition-colors inline-flex items-center"
+          aria-label="GitHub"
+          className="text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-2"
         >
-          <DiscordIcon width="18" height="18" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="18"
+            height="18"
+            fill="currentColor"
+            viewBox="0 0 256 256"
+          >
+            <path d="M208.31,75.68A59.78,59.78,0,0,0,202.93,28,8,8,0,0,0,196,24a59.75,59.75,0,0,0-48,24H124A59.75,59.75,0,0,0,76,24a8,8,0,0,0-6.93,4,59.78,59.78,0,0,0-5.38,47.68A58.14,58.14,0,0,0,56,104v8a56.06,56.06,0,0,0,48.44,55.47A39.8,39.8,0,0,0,96,192v8H72a24,24,0,0,1-24-24A40,40,0,0,0,8,136a8,8,0,0,0,0,16,24,24,0,0,1,24,24,40,40,0,0,0,40,40H96v16a8,8,0,0,0,16,0V192a24,24,0,0,1,48,0v40a8,8,0,0,0,16,0V192a39.8,39.8,0,0,0-8.44-24.53A56.06,56.06,0,0,0,216,112v-8A58.14,58.14,0,0,0,208.31,75.68ZM200,112a40,40,0,0,1-40,40H112a40,40,0,0,1-40-40v-8a41.74,41.74,0,0,1,6.9-22.48A8,8,0,0,0,80,73.83a43.81,43.81,0,0,1,.79-33.58,43.88,43.88,0,0,1,32.32,20.06A8,8,0,0,0,119.82,64h32.35a8,8,0,0,0,6.72-3.69,43.89,43.89,0,0,1,32.32-20.06A43.81,43.81,0,0,1,192,73.83a8.09,8.09,0,0,0,1.09,7.69A41.77,41.77,0,0,1,200,104Z" />
+          </svg>
+          <span>GitHub</span>
         </a>
         <a
-          href="https://github.com/getpaseo/paseo"
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={stars ? `GitHub, ${stars} stars` : "GitHub"}
-          className="text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5"
+          href="https://app.byspace.cc.cd"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 text-black font-semibold px-3.5 py-1.5 text-xs hover:bg-emerald-400 transition-colors"
         >
-          <GitHubIcon width="18" height="18" />
-          {stars && <span className="text-sm">{stars}</span>}
+          <span>Web Console</span>
+          <span>&rarr;</span>
         </a>
       </div>
     </header>

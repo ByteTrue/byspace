@@ -25,7 +25,6 @@ export default async function setup(project: VitestProject): Promise<() => Promi
     const accept = createHash("sha1")
       .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
       .digest("base64");
-    // This relay-style server deliberately selects no subprotocol.
     socket.write(
       [
         "HTTP/1.1 101 Switching Protocols",
@@ -39,9 +38,7 @@ export default async function setup(project: VitestProject): Promise<() => Promi
     clients.add(socket);
     socket.on("close", () => clients.delete(socket));
     socket.on("error", () => clients.delete(socket));
-    if (head.length > 0) {
-      socket.unshift(head);
-    }
+    if (head.length > 0) socket.unshift(head);
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -65,11 +62,7 @@ export default async function setup(project: VitestProject): Promise<() => Promi
   project.provide("passwordlessRelayUrl", `ws://127.0.0.1:${address.port}/relay`);
 
   return async () => {
-    for (const client of clients) {
-      client.destroy();
-    }
-    await new Promise<void>((resolve) => {
-      server.close(() => resolve());
-    });
+    for (const client of clients) client.destroy();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   };
 }

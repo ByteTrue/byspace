@@ -7,24 +7,18 @@ function normalizeSegment(value: string): string {
   return value.trim();
 }
 
-function normalizeAgentDeepLinkTarget(target: AgentDeepLinkTarget): AgentDeepLinkTarget {
+export function buildAgentDeepLink(target: AgentDeepLinkTarget): string {
   const serverId = normalizeSegment(target.serverId);
   const agentId = normalizeSegment(target.agentId);
   if (!serverId || !agentId) {
     throw new Error("Agent deep links require a server ID and agent ID.");
   }
-  return { serverId, agentId };
+  return `byspace://h/${encodeURIComponent(serverId)}/agent/${encodeURIComponent(agentId)}`;
 }
 
-export function buildAgentDeepLinkRoute(
-  target: AgentDeepLinkTarget,
-): `/h/${string}/agent/${string}` {
-  const { serverId, agentId } = normalizeAgentDeepLinkTarget(target);
-  return `/h/${encodeURIComponent(serverId)}/agent/${encodeURIComponent(agentId)}`;
-}
-
-export function buildAgentDeepLink(target: AgentDeepLinkTarget): string {
-  return `paseo:/${buildAgentDeepLinkRoute(target)}`;
+export function buildAgentDeepLinkRoute(target: AgentDeepLinkTarget): string {
+  const link = new URL(buildAgentDeepLink(target));
+  return `/h${link.pathname}`;
 }
 
 export function parseAgentDeepLink(input: string): AgentDeepLinkTarget | null {
@@ -36,7 +30,7 @@ export function parseAgentDeepLink(input: string): AgentDeepLinkTarget | null {
   }
 
   if (
-    url.protocol !== "paseo:" ||
+    url.protocol !== "byspace:" ||
     url.hostname !== "h" ||
     url.username ||
     url.password ||

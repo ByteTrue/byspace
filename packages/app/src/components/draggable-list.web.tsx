@@ -4,8 +4,7 @@ import {
   DndContext,
   closestCenter,
   KeyboardSensor,
-  MouseSensor,
-  TouchSensor,
+  PointerSensor,
   type Modifier,
   useSensor,
   useSensors,
@@ -147,6 +146,7 @@ function SortableItemInner<T>({
     }),
     [combinedTransform, transition, isDragging],
   );
+
   const stableAttributes = useShallowStableRecord(attributes as unknown as Record<string, unknown>);
   const stableListeners = useStableListenerRecord(
     listeners as unknown as Record<string, unknown> | undefined,
@@ -213,11 +213,8 @@ export function DraggableList<T>({
   const activationConstraints = getDragActivationConstraints(useDragHandle, DRAG_ACTIVATION_CONFIG);
 
   const sensors = useSensors(
-    useSensor(MouseSensor, {
+    useSensor(PointerSensor, {
       activationConstraint: activationConstraints.mouse,
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: activationConstraints.touch,
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,

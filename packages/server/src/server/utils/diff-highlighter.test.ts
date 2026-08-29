@@ -143,7 +143,7 @@ index 1234567..abcdefg 100644
 --- a/config.yaml
 +++ b/config.yaml
 @@ -1,3 +1,3 @@
- app: paseo
+ app: byspace
 -count: 1
 +count: 2
  enabled: true
@@ -165,14 +165,14 @@ index 1234567..abcdefg 100644
 --- a/Counter.svelte
 +++ b/Counter.svelte
 @@ -1,7 +1,7 @@
- <script lang="ts">
+<script lang="ts">
 -  let count: number = 1;
 +  let count: number = 2;
- </script>
+</script>
 
- {#if count > 0}
-   <span class="badge">{count}</span>
- {/if}
+{#if count > 0}
+  <span class="badge">{count}</span>
+{/if}
 `;
 
 describe("parseDiff", () => {

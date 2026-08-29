@@ -64,6 +64,10 @@ const PASSTHROUGH_DISPATCH: Record<string, KeyboardActionDefinition> = {
   "workspace.pane.move-tab.up": { id: "workspace.pane.move-tab.up", scope: "workspace" },
   "workspace.pane.move-tab.down": { id: "workspace.pane.move-tab.down", scope: "workspace" },
   "workspace.pane.close": { id: "workspace.pane.close", scope: "workspace" },
+  "workspace.explorer.maximize.toggle": {
+    id: "workspace.explorer.maximize.toggle",
+    scope: "workspace",
+  },
   "view.toggle.focus": { id: "workspace.focus.toggle", scope: "workspace" },
 };
 
@@ -82,8 +86,6 @@ const MESSAGE_INPUT_DISPATCH: Record<
   "dictation-toggle": { id: "message-input.dictation-toggle", scope: "message-input" },
   "dictation-cancel": { id: "message-input.dictation-cancel", scope: "message-input" },
   "dictation-confirm": { id: "message-input.dictation-confirm", scope: "message-input" },
-  "voice-toggle": { id: "message-input.voice-toggle", scope: "message-input" },
-  "voice-mute-toggle": { id: "message-input.voice-mute-toggle", scope: "message-input" },
   "mode-cycle": { id: "message-input.mode-cycle", scope: "message-input" },
 };
 
@@ -177,13 +179,6 @@ export function routeKeyboardShortcut(
 ): ShortcutAction {
   const passthrough = PASSTHROUGH_DISPATCH[input.action];
   if (passthrough) {
-    if (
-      input.action === "agent.interrupt" &&
-      ctx.pathname.startsWith("/settings") &&
-      !ctx.isMobile
-    ) {
-      return { kind: "navigate-last-workspace" };
-    }
     return dispatch(passthrough);
   }
 

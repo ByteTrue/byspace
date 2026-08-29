@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { readValidatedJson, readValidatedString } from "@/storage/validated-storage";
 
-export const CHANGES_PREFERENCES_STORAGE_KEY = "@paseo:changes-preferences";
+export const CHANGES_PREFERENCES_STORAGE_KEY = "@byspace:changes-preferences";
 export const LEGACY_WRAP_LINES_STORAGE_KEY = "diff-wrap-lines";
 export const CHANGES_PREFERENCES_QUERY_KEY = ["changes-preferences"];
 
@@ -13,7 +13,6 @@ const changesPreferencesSchema = z.strictObject({
   viewMode: z.enum(["flat", "tree"]).optional(),
   wrapLines: z.boolean().optional(),
   hideWhitespace: z.boolean().optional(),
-  inlineDiff: z.boolean().optional(),
   commitsCollapsed: z.boolean().optional(),
 });
 
@@ -22,7 +21,6 @@ export interface ChangesPreferences {
   desktopTreeVisible: boolean;
   wrapLines: boolean;
   hideWhitespace: boolean;
-  inlineDiff: boolean;
   commitsCollapsed: boolean;
 }
 
@@ -31,7 +29,6 @@ export const DEFAULT_CHANGES_PREFERENCES: ChangesPreferences = {
   desktopTreeVisible: false,
   wrapLines: false,
   hideWhitespace: false,
-  inlineDiff: false,
   commitsCollapsed: true,
 };
 

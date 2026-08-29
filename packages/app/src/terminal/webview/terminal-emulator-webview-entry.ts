@@ -1,7 +1,7 @@
 import type { ITheme } from "@xterm/xterm";
 import xtermCss from "@xterm/xterm/css/xterm.css";
-import type { TerminalState } from "@getpaseo/protocol/messages";
-import type { TerminalInputModeState } from "@getpaseo/protocol/terminal-input-mode";
+import type { TerminalState } from "@bytetrue/byspace-protocol/messages";
+import type { TerminalInputModeState } from "@bytetrue/byspace-protocol/terminal-input-mode";
 import type { PendingTerminalModifiers } from "@/utils/terminal-keys";
 import {
   encodeTerminalOutput,
@@ -30,10 +30,9 @@ type InboundMessage =
   | { type: "writeOutput"; streamKey: string; text: string }
   | { type: "restoreOutput"; streamKey: string; text: string }
   | { type: "renderSnapshot"; streamKey: string; state: TerminalState | null }
-  | { type: "paste"; streamKey: string; text: string }
   | { type: "clear"; streamKey: string }
   | { type: "focus"; streamKey: string; forceRefocus?: boolean }
-  | { type: "resize"; streamKey: string; forceClaim: boolean; shouldClaim?: boolean }
+  | { type: "resize"; streamKey: string; shouldClaim?: boolean }
   | { type: "setTheme"; streamKey: string; theme: ITheme }
   | { type: "setScrollback"; streamKey: string; lines: number }
   | { type: "setFont"; streamKey: string; fontFamily?: string; fontSize?: number }
@@ -50,14 +49,7 @@ type OutboundMessage =
   | { type: "bridgeReady" }
   | { type: "rendererReady"; streamKey: string; isReady: boolean }
   | { type: "input"; streamKey: string; data: string }
-  | {
-      type: "resize";
-      streamKey: string;
-      rows: number;
-      cols: number;
-      shouldClaim?: boolean;
-      forceClaim?: boolean;
-    }
+  | { type: "resize"; streamKey: string; rows: number; cols: number; shouldClaim?: boolean }
   | {
       type: "terminalKey";
       streamKey: string;
@@ -91,8 +83,8 @@ declare global {
     ReactNativeWebView?: {
       postMessage?: (data: string) => void;
     };
-    __PASEO_TERMINAL_WEBVIEW_RECEIVE__?: (message: InboundMessage) => void;
-    __PASEO_TERMINAL_WEBVIEW_BLUR__?: () => void;
+    __BYSPACE_TERMINAL_WEBVIEW_RECEIVE__?: (message: InboundMessage) => void;
+    __BYSPACE_TERMINAL_WEBVIEW_BLUR__?: () => void;
   }
 }
 
@@ -100,7 +92,7 @@ const sendToNative = (message: OutboundMessage): void => {
   window.ReactNativeWebView?.postMessage?.(JSON.stringify(message));
 };
 
-const TERMINAL_BACKGROUND_CSS_VAR = "--paseo-terminal-background";
+const TERMINAL_BACKGROUND_CSS_VAR = "--byspace-terminal-background";
 const DEFAULT_TERMINAL_BACKGROUND = "#0b0b0b";
 const TERMINAL_TAP_MOVE_TOLERANCE_PX = 8;
 
@@ -250,9 +242,6 @@ class TerminalWebViewBridge {
       case "renderSnapshot":
         this.runtime?.renderSnapshot({ state: message.state });
         break;
-      case "paste":
-        this.runtime?.paste(message.text);
-        break;
       case "clear":
         this.runtime?.clear();
         break;
@@ -260,10 +249,7 @@ class TerminalWebViewBridge {
         this.runtime?.focus({ forceRefocus: message.forceRefocus });
         break;
       case "resize":
-        this.runtime?.resize({
-          shouldClaim: message.shouldClaim ?? true,
-          forceClaim: message.forceClaim,
-        });
+        this.runtime?.resize({ force: true, shouldClaim: message.shouldClaim !== false });
         break;
     }
   }
@@ -307,15 +293,8 @@ class TerminalWebViewBridge {
     runtime.setCallbacks({
       callbacks: {
         onInput: (data) => sendToNative({ type: "input", streamKey: message.streamKey, data }),
-        onResize: ({ rows, cols, shouldClaim, forceClaim }) =>
-          sendToNative({
-            type: "resize",
-            streamKey: message.streamKey,
-            rows,
-            cols,
-            shouldClaim,
-            forceClaim,
-          }),
+        onResize: ({ rows, cols, shouldClaim }) =>
+          sendToNative({ type: "resize", streamKey: message.streamKey, rows, cols, shouldClaim }),
         onTerminalKey: (input) =>
           sendToNative({ type: "terminalKey", streamKey: message.streamKey, ...input }),
         onPendingModifiersConsumed: () =>
@@ -542,6 +521,6 @@ root.appendChild(host);
 document.body.appendChild(root);
 
 const bridge = new TerminalWebViewBridge(root, host);
-window.__PASEO_TERMINAL_WEBVIEW_RECEIVE__ = bridge.receive;
-window.__PASEO_TERMINAL_WEBVIEW_BLUR__ = bridge.blur;
+window.__BYSPACE_TERMINAL_WEBVIEW_RECEIVE__ = bridge.receive;
+window.__BYSPACE_TERMINAL_WEBVIEW_BLUR__ = bridge.blur;
 sendToNative({ type: "bridgeReady" });

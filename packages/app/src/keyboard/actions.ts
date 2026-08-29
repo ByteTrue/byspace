@@ -12,8 +12,6 @@ export type MessageInputKeyboardActionKind =
   | "dictation-toggle"
   | "dictation-cancel"
   | "dictation-confirm"
-  | "voice-toggle"
-  | "voice-mute-toggle"
   | "mode-cycle";
 
 export type KeyboardActionId =
@@ -38,6 +36,7 @@ export type KeyboardActionId =
   | "workspace.pane.move-tab.up"
   | "workspace.pane.move-tab.down"
   | "workspace.pane.close"
+  | "workspace.explorer.maximize.toggle"
   | "workspace.navigate.index"
   | "workspace.navigate.relative"
   | "sidebar.toggle.left"

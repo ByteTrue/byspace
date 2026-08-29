@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { existsSync } from "node:fs";
 import type { Logger } from "pino";
-import type { ProcessEnvRecord } from "../server/paseo-env.js";
+import type { ProcessEnvRecord } from "../server/byspace-env.js";
 import {
   GitCommandRuntimeMetricsWindow,
   type GitCommandRuntimeMetricsSnapshot,
@@ -19,6 +19,7 @@ import {
   resolveGitProcessPolicy,
   type GitProcessPolicy,
 } from "./git-process-scheduler.js";
+export type { GitProcessPolicy } from "./git-process-scheduler.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 20 * 1024 * 1024; // 20MB
@@ -52,6 +53,7 @@ export interface GitCommandOptions {
   timeout?: number;
   maxOutputBytes?: number;
   acceptExitCodes?: number[];
+  input?: string;
 }
 
 export interface GitCommandResult {
@@ -371,8 +373,14 @@ export function runGitCommand(
           cwd: options.cwd,
           envOverlay,
           shell: false,
-          stdio: ["ignore", "pipe", "pipe"],
+          stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
         });
+        if (options.input !== undefined && child.stdin) {
+          // Git may exit before consuming stdin. Its process exit remains authoritative;
+          // consuming the pipe error prevents a second uncaught EPIPE.
+          child.stdin.on("error", () => {});
+          child.stdin.end(options.input);
+        }
         spawnGitCommandTrace(commandTrace, child.pid);
       } catch (error) {
         rejectSpawnFailure(error);

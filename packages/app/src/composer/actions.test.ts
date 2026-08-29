@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AgentAttachment, ForgeSearchItem } from "@getpaseo/protocol/messages";
+import type { AgentAttachment, ForgeSearchItem } from "@bytetrue/byspace-protocol/messages";
 import type {
   AttachmentMetadata,
   ComposerAttachment,
@@ -52,7 +52,7 @@ const issueItem: ForgeSearchItem = {
   kind: "issue",
   number: 101,
   title: "Fix composer attachments",
-  url: "https://github.com/acme/paseo/issues/101",
+  url: "https://github.com/acme/byspace/issues/101",
   state: "open",
   body: "Issue body",
   labels: ["composer"],
@@ -64,7 +64,7 @@ const prItem: ForgeSearchItem = {
   kind: "change_request",
   number: 202,
   title: "Refactor composer attachments",
-  url: "https://github.com/acme/paseo/pull/202",
+  url: "https://github.com/acme/byspace/pull/202",
   state: "open",
   body: "PR body",
   labels: ["composer"],
@@ -81,7 +81,7 @@ function reviewWorkspaceAttachment(
 ): Extract<WorkspaceComposerAttachment, { kind: "review" }> {
   const attachment: Extract<AgentAttachment, { type: "review" }> = {
     type: "review",
-    mimeType: "application/paseo-review",
+    mimeType: "application/byspace-review",
     cwd: "/repo",
     mode: "uncommitted",
     baseRef: null,
@@ -119,54 +119,18 @@ function reviewWorkspaceAttachment(
   };
 }
 
-function browserElementWorkspaceAttachment(): Extract<
-  WorkspaceComposerAttachment,
-  { kind: "browser_element" }
-> {
-  return {
-    kind: "browser_element",
-    attachment: {
-      url: "https://example.com/page",
-      selector: "button.primary",
-      tag: "button",
-      text: "Save",
-      outerHTML: '<button class="primary">Save</button>',
-      computedStyles: { display: "flex" },
-      boundingRect: { x: 1, y: 2, width: 80, height: 32 },
-      reactSource: null,
-      parentChain: ["form.settings"],
-      children: [],
-      formatted: '<browser-element url="https://example.com/page">button.primary</browser-element>',
-    },
-  };
-}
-
 function createFakePersister(): AttachmentPersister & {
   blobCalls: Array<{ blob: Blob; mimeType: string; fileName: string | null }>;
-  dataUrlCalls: Array<{ dataUrl: string; mimeType: string; fileName: string | null }>;
-  fileUriCalls: Array<{ uri: string; mimeType: string; fileName: string | null }>;
   deletedBatches: AttachmentMetadata[][];
 } {
   const blobCalls: Array<{ blob: Blob; mimeType: string; fileName: string | null }> = [];
-  const dataUrlCalls: Array<{ dataUrl: string; mimeType: string; fileName: string | null }> = [];
-  const fileUriCalls: Array<{ uri: string; mimeType: string; fileName: string | null }> = [];
   const deletedBatches: AttachmentMetadata[][] = [];
   return {
     blobCalls,
-    dataUrlCalls,
-    fileUriCalls,
     deletedBatches,
     persistFromBlob: async ({ blob, mimeType, fileName }) => {
       blobCalls.push({ blob, mimeType, fileName });
       return { ...imageMetadata, id: `blob-${blobCalls.length}` };
-    },
-    persistFromDataUrl: async ({ dataUrl, mimeType, fileName }) => {
-      dataUrlCalls.push({ dataUrl, mimeType, fileName });
-      return { ...imageMetadata, id: `data-url-${dataUrlCalls.length}` };
-    },
-    persistFromFileUri: async ({ uri, mimeType, fileName }) => {
-      fileUriCalls.push({ uri, mimeType, fileName });
-      return { ...imageMetadata, id: `uri-${fileUriCalls.length}` };
     },
     deleteAttachments: (metadata) => {
       deletedBatches.push(metadata);
@@ -179,7 +143,6 @@ interface FakeSendCall {
   text: string;
   options: {
     messageId: string;
-    activeTurnBehavior?: "interrupt" | "steer";
     images: Array<{ data: string; mimeType: string }>;
     attachments: AgentAttachment[];
   };
@@ -363,7 +326,6 @@ describe("pickAndPersistImages", () => {
     });
     expect(result).toEqual([]);
     expect(persister.blobCalls).toEqual([]);
-    expect(persister.fileUriCalls).toEqual([]);
   });
 
   it("persists blob sources via persistFromBlob with the picked mime type and file name", async () => {
@@ -378,90 +340,9 @@ describe("pickAndPersistImages", () => {
     expect(persister.blobCalls).toEqual([{ blob, mimeType: "image/png", fileName: "img-1.png" }]);
     expect(result.map((m) => m.id)).toEqual(["blob-1"]);
   });
-
-  it("persists file_uri sources via persistFromFileUri", async () => {
-    const persister = createFakePersister();
-    const result = await pickAndPersistImages({
-      pickImages: async () => [
-        {
-          source: { kind: "file_uri", uri: "/tmp/x.jpg" },
-          mimeType: "image/jpeg",
-          fileName: null,
-        },
-      ],
-      persister,
-    });
-    expect(persister.fileUriCalls).toEqual([
-      { uri: "/tmp/x.jpg", mimeType: "image/jpeg", fileName: null },
-    ]);
-    expect(result).toHaveLength(1);
-  });
-
-  it("persists data_url sources via persistFromDataUrl", async () => {
-    const persister = createFakePersister();
-    const dataUrl = "data:image/png;base64,AAEC";
-    const result = await pickAndPersistImages({
-      pickImages: async () => [
-        {
-          source: { kind: "data_url", dataUrl },
-          mimeType: "image/png",
-          fileName: "clipboard.png",
-        },
-      ],
-      persister,
-    });
-    expect(persister.dataUrlCalls).toEqual([
-      { dataUrl, mimeType: "image/png", fileName: "clipboard.png" },
-    ]);
-    expect(result).toHaveLength(1);
-  });
 });
 
 describe("dispatchComposerAgentMessage", () => {
-  it("forwards the configured active-turn intent without provider capability checks", async () => {
-    const client = createFakeSendClient();
-    const stream = createFakeStream();
-
-    await dispatchComposerAgentMessage({
-      client,
-      agentId: "agent",
-      text: "steer this turn",
-      attachments: [],
-      encodeImages: async () => [],
-      submission: stream,
-      activeTurnBehavior: "steer",
-    });
-
-    expect(client.calls[0]?.options.activeTurnBehavior).toBe("steer");
-  });
-
-  it("stamps only a steer optimistic row with the daemon active turn ID", async () => {
-    const client = createFakeSendClient();
-    const stream = createFakeStream();
-    await dispatchComposerAgentMessage({
-      client,
-      agentId: "agent",
-      text: "hello",
-      attachments: [],
-      encodeImages: async () => [],
-      submission: stream,
-      activeTurnBehavior: "steer",
-      activeTurnId: "turn-1",
-    });
-    expect(stream.tail.get("agent")?.[0]).toMatchObject({ turnId: "turn-1" });
-    const legacy = createFakeStream();
-    await dispatchComposerAgentMessage({
-      client,
-      agentId: "legacy",
-      text: "hello",
-      attachments: [],
-      encodeImages: async () => [],
-      submission: legacy,
-      activeTurnBehavior: "steer",
-    });
-    expect(legacy.tail.get("legacy")?.[0]?.turnId).toBeUndefined();
-  });
-
   it("removes the submitted prompt when the host rejects it", async () => {
     const rejection = new Error("Host rejected prompt");
     const client = createFakeSendClient({ rejection });
@@ -522,28 +403,6 @@ describe("dispatchComposerAgentMessage", () => {
     ).rejects.toBe(transportError);
   });
 
-  it("surfaces an ambiguous failure even when a concurrent canonical echo was observed", async () => {
-    const transportError = new Error("Connection lost after delivery may have occurred");
-    const client = createFakeSendClient({ rejection: transportError });
-    const submission: MessageSubmissionWriter = {
-      begin: () => {},
-      accept: () => {},
-      reject: () => "accepted",
-    };
-
-    await expect(
-      dispatchComposerAgentMessage({
-        client,
-        agentId: "agent",
-        text: "ambiguous steer",
-        attachments: [],
-        encodeImages: passthroughEncodeImages,
-        submission,
-        activeTurnBehavior: "steer",
-      }),
-    ).rejects.toBe(transportError);
-  });
-
   it("sends text + image data + structured attachments and appends user_message to the tail when head is empty", async () => {
     const client = createFakeSendClient();
     const stream = createFakeStream();
@@ -569,11 +428,11 @@ describe("dispatchComposerAgentMessage", () => {
     expect(call.options.attachments).toEqual([
       {
         type: "forge_change_request",
-        mimeType: "application/paseo-forge-change-request",
+        mimeType: "application/byspace-forge-change-request",
         forge: "github",
         number: 202,
         title: "Refactor composer attachments",
-        url: "https://github.com/acme/paseo/pull/202",
+        url: "https://github.com/acme/byspace/pull/202",
         body: "PR body",
         baseRefName: "main",
         headRefName: "composer-attachments",
@@ -613,7 +472,7 @@ describe("dispatchComposerAgentMessage", () => {
         mimeType: "application/github-pr",
         number: 202,
         title: "Refactor composer attachments",
-        url: "https://github.com/acme/paseo/pull/202",
+        url: "https://github.com/acme/byspace/pull/202",
         body: "PR body",
         baseRefName: "main",
         headRefName: "composer-attachments",
@@ -679,30 +538,6 @@ describe("dispatchComposerAgentMessage", () => {
 
     expect(client.calls[0]?.options.attachments).toEqual([review.attachment]);
     expect(client.calls[0]?.options.images).toEqual([]);
-  });
-
-  it("serializes browser_element workspace attachments as text attachments at the wire boundary", async () => {
-    const client = createFakeSendClient();
-    const stream = createFakeStream();
-    const browserElement = browserElementWorkspaceAttachment();
-
-    await dispatchComposerAgentMessage({
-      client,
-      agentId: "agent",
-      text: "inspect element",
-      attachments: [browserElement],
-      encodeImages: passthroughEncodeImages,
-      submission: stream,
-    });
-
-    expect(client.calls[0]?.options.attachments).toEqual([
-      {
-        type: "text",
-        mimeType: "text/plain",
-        title: "Browser element · button",
-        text: browserElement.attachment.formatted,
-      },
-    ]);
   });
 });
 
@@ -930,35 +765,6 @@ describe("openComposerAttachment", () => {
     });
     expect(externalUrlCalls).toEqual([issueItem.url]);
   });
-
-  it("opens plugin resource URLs through the external url opener", () => {
-    const externalUrlCalls: string[] = [];
-    openComposerAttachment({
-      attachment: {
-        kind: "plugin_resource",
-        pluginId: "linear",
-        sourceId: "issues",
-        sourceTitle: "Linear issue",
-        sourceIcon: "CircleDot",
-        item: {
-          id: "issue-uuid",
-          identifier: "ENG-123",
-          title: "Plugin attachments",
-          url: "https://linear.app/acme/issue/ENG-123/plugin-attachments",
-          text: "Linear issue ENG-123: Plugin attachments",
-          resourceType: "issue",
-        },
-      },
-      setLightboxMetadata: () => {
-        throw new Error("unexpected lightbox call");
-      },
-      openWorkspaceAttachment: () => false,
-      openExternalUrl: (url) => {
-        externalUrlCalls.push(url);
-      },
-    });
-    expect(externalUrlCalls).toEqual(["https://linear.app/acme/issue/ENG-123/plugin-attachments"]);
-  });
 });
 
 describe("toggleGithubAttachment", () => {
@@ -1037,5 +843,15 @@ describe("findGithubItemByOption / isAttachmentSelectedForGithubItem", () => {
     ];
     expect(isAttachmentSelectedForGithubItem(attachments, issueItem)).toBe(true);
     expect(isAttachmentSelectedForGithubItem(attachments, prItem)).toBe(false);
+  });
+
+  it("does not collapse same-number items from different repositories", () => {
+    const otherRepositoryItem = {
+      ...issueItem,
+      url: "https://github.com/other/repository/issues/101",
+    };
+    const attachments: ComposerAttachment[] = [{ kind: "github_issue", item: issueItem }];
+
+    expect(isAttachmentSelectedForGithubItem(attachments, otherRepositoryItem)).toBe(false);
   });
 });

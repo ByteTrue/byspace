@@ -5,17 +5,13 @@ import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
 
 import { getFullAccessConfig } from "./daemon-e2e/agent-configs.js";
-import {
-  createDaemonTestContext,
-  DaemonClient,
-  type DaemonTestContext,
-} from "./test-utils/index.js";
+import { createDaemonTestContext, type DaemonTestContext } from "./test-utils/index.js";
 
 // Model B archive is scoped to a single workspace RECORD (by workspaceId), not
 // to a directory on disk. A directory can back multiple workspaces, so archiving
 // one must never tear down a sibling's agents/terminals, and must never delete a
 // directory another workspace still references. On-disk worktree removal is
-// derived from scope + last-reference + Paseo ownership; there is no caller-
+// derived from scope + last-reference + BySpace ownership; there is no caller-
 // supplied disk flag.
 
 let ctx: DaemonTestContext;
@@ -42,11 +38,11 @@ function createGitRepo(): string {
   const tempRoot = makeTempDir("workspace-archive-repo-");
   const repoDir = path.join(tempRoot, "repo");
   execFileSync("git", ["init", "-b", "main", repoDir], { stdio: "pipe" });
-  execFileSync("git", ["config", "user.email", "test@getpaseo.local"], {
+  execFileSync("git", ["config", "user.email", "test@byspace.local"], {
     cwd: repoDir,
     stdio: "pipe",
   });
-  execFileSync("git", ["config", "user.name", "Paseo Test"], { cwd: repoDir, stdio: "pipe" });
+  execFileSync("git", ["config", "user.name", "BySpace Test"], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "initial"], {
     cwd: repoDir,
     stdio: "pipe",
@@ -87,33 +83,6 @@ async function archivedAgentIds(): Promise<Set<string>> {
 async function terminalIdsForWorkspace(cwd: string, workspaceId: string): Promise<Set<string>> {
   const listed = await ctx.client.listTerminals(cwd, undefined, { workspaceId });
   return new Set(listed.terminals.map((terminal) => terminal.id));
-}
-
-function collectWorkspaceRemovals(client: DaemonClient): {
-  workspaceIds: string[];
-  stop: () => void;
-} {
-  const workspaceIds: string[] = [];
-  const stop = client.on("workspace_update", (message) => {
-    if (message.payload.kind === "remove") {
-      workspaceIds.push(message.payload.id);
-    }
-  });
-  return { workspaceIds, stop };
-}
-
-function collectWorkspaceTitles(client: DaemonClient): {
-  workspaces: Array<{ id: string; name: string; title: string | null }>;
-  stop: () => void;
-} {
-  const workspaces: Array<{ id: string; name: string; title: string | null }> = [];
-  const stop = client.on("workspace_update", (message) => {
-    if (message.payload.kind === "upsert") {
-      const { id, name, title } = message.payload.workspace;
-      workspaces.push({ id, name, title });
-    }
-  });
-  return { workspaces, stop };
 }
 
 test("archiving one of two workspaces sharing a cwd spares the sibling and the directory", async () => {
@@ -192,62 +161,6 @@ test("archiving one of two workspaces sharing a cwd spares the sibling and the d
   await ctx.client.killTerminal(terminalBId);
 }, 60000);
 
-test("archiving a workspace removes it from every subscribed client", async () => {
-  const cwd = makeTempDir("workspace-archive-global-");
-  const workspaceId = await createLocalWorkspace(cwd, "shared workspace");
-  const observer = new DaemonClient({
-    url: `ws://127.0.0.1:${ctx.daemon.port}/ws`,
-    reconnect: { enabled: false },
-  });
-
-  await observer.connect();
-  const initiatingClientRemovals = collectWorkspaceRemovals(ctx.client);
-  const removals = collectWorkspaceRemovals(observer);
-
-  try {
-    await ctx.client.fetchWorkspaces({ subscribe: { subscriptionId: "workspace-initiator" } });
-    await observer.fetchWorkspaces({ subscribe: { subscriptionId: "workspace-observer" } });
-
-    const archive = await ctx.client.archiveWorkspace(workspaceId);
-    await observer.ping({ requestId: "archive-observer-barrier" });
-
-    expect(archive.error).toBe(null);
-    expect(initiatingClientRemovals.workspaceIds).toEqual([workspaceId]);
-    expect(removals.workspaceIds).toEqual([workspaceId]);
-  } finally {
-    initiatingClientRemovals.stop();
-    removals.stop();
-    await observer.close();
-  }
-});
-
-test("renaming a workspace updates every subscribed client", async () => {
-  const cwd = makeTempDir("workspace-rename-global-");
-  const workspaceId = await createLocalWorkspace(cwd, "shared workspace");
-  const observer = new DaemonClient({
-    url: `ws://127.0.0.1:${ctx.daemon.port}/ws`,
-    reconnect: { enabled: false },
-  });
-
-  await observer.connect();
-  const titles = collectWorkspaceTitles(observer);
-
-  try {
-    await observer.fetchWorkspaces({ subscribe: { subscriptionId: "workspace-observer" } });
-
-    const renamed = await ctx.client.setWorkspaceTitle(workspaceId, "Renamed workspace");
-    await observer.ping({ requestId: "rename-observer-barrier" });
-
-    expect(renamed).toEqual({ title: "Renamed workspace" });
-    expect(titles.workspaces).toEqual([
-      { id: workspaceId, name: "Renamed workspace", title: "Renamed workspace" },
-    ]);
-  } finally {
-    titles.stop();
-    await observer.close();
-  }
-});
-
 test("archiving the last reference to a worktree removes it from disk regardless of the disk flag", async () => {
   const repoDir = createGitRepo();
 
@@ -262,7 +175,7 @@ test("archiving the last reference to a worktree removes it from disk regardless
   expect(existsSync(keepDir)).toBe(true);
 
   // Last reference, deleteWorktreeFromDisk omitted (defaults ignored) → dir removed.
-  const keepArchive = await ctx.client.archivePaseoWorktree({ worktreePath: keepDir });
+  const keepArchive = await ctx.client.archiveBySpaceWorktree({ worktreePath: keepDir });
   expect(keepArchive.success).toBe(true);
   await expect
     .poll(async () => (await activeWorkspaceIds()).has(keepWorkspace.id), {
@@ -289,7 +202,7 @@ test("archiving the last reference to a worktree removes it from disk regardless
 
   // Last reference on a fresh worktree still removes the directory without any
   // caller-supplied disk-deletion flag.
-  const deleteArchive = await ctx.client.archivePaseoWorktree({ worktreePath: deleteDir });
+  const deleteArchive = await ctx.client.archiveBySpaceWorktree({ worktreePath: deleteDir });
   expect(deleteArchive.success).toBe(true);
   await expect
     .poll(async () => (await activeWorkspaceIds()).has(deleteWorkspace.id), {
@@ -307,16 +220,16 @@ test.skipIf(process.platform === "win32")(
     const setupStartedPath = path.join(repoDir, "setup-started");
     const stopSetupPath = path.join(repoDir, "stop-setup");
     writeFileSync(
-      path.join(repoDir, "paseo.json"),
+      path.join(repoDir, "byspace.json"),
       JSON.stringify({
         worktree: {
           setup: [
-            `node -e "const fs=require('fs'),path=require('path');const source=process.env.PASEO_SOURCE_CHECKOUT_PATH;const worktree=process.env.PASEO_WORKTREE_PATH;const target=path.join(worktree,'node_modules/react-native-svg/lib/typescript');fs.writeFileSync(path.join(source,'setup-started'),'started');while(!fs.existsSync(path.join(source,'stop-setup'))){try{fs.mkdirSync(target,{recursive:true});fs.writeFileSync(path.join(target,'active'),String(Date.now()))}catch{}}"`,
+            `node -e "const fs=require('fs'),path=require('path');const source=process.env.BYSPACE_SOURCE_CHECKOUT_PATH;const worktree=process.env.BYSPACE_WORKTREE_PATH;const target=path.join(worktree,'node_modules/react-native-svg/lib/typescript');fs.writeFileSync(path.join(source,'setup-started'),'started');while(!fs.existsSync(path.join(source,'stop-setup'))){try{fs.mkdirSync(target,{recursive:true});fs.writeFileSync(path.join(target,'active'),String(Date.now()))}catch{}}"`,
           ],
         },
       }),
     );
-    execFileSync("git", ["add", "paseo.json"], { cwd: repoDir, stdio: "pipe" });
+    execFileSync("git", ["add", "byspace.json"], { cwd: repoDir, stdio: "pipe" });
     execFileSync(
       "git",
       ["-c", "commit.gpgsign=false", "commit", "-m", "add active worktree setup"],
@@ -434,7 +347,7 @@ test("worktree archive targets the explicit workspaceId when a directory backs m
   const localWorkspaceId = await createLocalWorkspace(worktreeDir, "local-sibling");
   expect(localWorkspaceId).not.toBe(worktreeWorkspace.id);
 
-  const archive = await ctx.client.archivePaseoWorktree({
+  const archive = await ctx.client.archiveBySpaceWorktree({
     worktreePath: worktreeDir,
     workspaceId: localWorkspaceId,
   });
@@ -452,7 +365,7 @@ test("worktree archive targets the explicit workspaceId when a directory backs m
   expect(remaining.has(worktreeWorkspace.id)).toBe(true);
   expect(existsSync(worktreeDir)).toBe(true);
 
-  await ctx.client.archivePaseoWorktree({
+  await ctx.client.archiveBySpaceWorktree({
     worktreePath: worktreeDir,
     workspaceId: worktreeWorkspace.id,
   });
@@ -482,7 +395,7 @@ test("keeps the worktree on disk when a sibling workspace still references it", 
 
   // Archive the worktree-backed workspace. It is NOT the last reference, so the
   // directory must survive regardless of the legacy disk flag.
-  const archive = await ctx.client.archivePaseoWorktree({
+  const archive = await ctx.client.archiveBySpaceWorktree({
     worktreePath: worktreeDir,
   });
   expect(archive.success).toBe(true);

@@ -1,7 +1,6 @@
 # Menus
 
-One engine, in `packages/app/src/components/ui/menu/`. `dropdown-menu.tsx` and `context-menu.tsx`
-are wrappers over it and differ only in what opens them — a press, or a long press / right click.
+are wrappers over it and differ only in what opens them — a press or a browser context-menu gesture.
 Import the `DropdownMenu*` or `ContextMenu*` names as before; reach for `@/components/ui/menu`
 directly only when you are building a third trigger shape.
 
@@ -10,8 +9,7 @@ Do not add a third menu implementation. The two that existed were byte-identical
 
 ## Two presentations
 
-`MenuRoot` picks one from form factor, never from platform — a tablet in a narrow split view
-sheets the same way a phone does.
+`MenuRoot` picks one from browser form factor, never from an assumed device class.
 
 | Screen                         | Surface                         | Submenus                                           |
 | ------------------------------ | ------------------------------- | -------------------------------------------------- |
@@ -19,38 +17,11 @@ sheets the same way a phone does.
 | Compact, `compactMode="sheet"` | Bottom sheet                    | The page is replaced in place, with a back header  |
 | Compact, default               | Popover                         | Same as wide                                       |
 
-`compactMode` defaults to `"popover"`, so adopting the sheet is per-menu. That is deliberate:
-flipping every menu in the app to sheets at once is not a change anyone can review. Opt a menu in
-when you have actually looked at it on a phone.
+`compactMode` defaults to `"popover"`, so adopting the sheet is per-menu. Opt a menu in only after
+checking both compact and wide browser layouts.
 
-`ContextMenu` is the exception: it defaults to `compactMode="sheet"` and enables native long press.
-Disable mobile triggering explicitly on draggable rows, where long press belongs to drag instead.
-
-## When the items differ per form factor
-
-A menu whose contents depend on what else is on screen gets one component per surface, not one
-component with `isMobile` branches inside it. The workspace header menu is the example
-(`packages/app/src/screens/workspace/workspace-header-menu.tsx`): compact has no tab strip, so it
-carries new-tab actions, while wide leaves those to the strip's `+` menu and lists workspace
-actions only. Items both surfaces share live in one component that each menu renders, from the same
-callbacks, so the two can't drift.
-
-## Selecting an item on iOS
-
-An item that closes the menu runs its action after a fixed grace period on iOS, not immediately:
-a native presenter launched while UIKit is still tearing down the surface can hang. Both surfaces
-unmount the moment the menu closes, so the wait is a timer rather than the surface's own dismissal
-callback — a callback fired from inside a subtree that is being removed is racing its own removal,
-and it loses. Selections used to be dropped entirely for exactly that reason.
-
-The consequence for callers: an `onSelect` on iOS runs a beat after the press. Don't add a second
-delay on top of it, and don't read state that the same press mutated.
-
-This is why a row inside a menu surface goes through `selectItem` rather than calling its handler
-from its own `Pressable`. `MenuItem` is not the only row shape on the engine — `ComposerTrackRow`
-is another, with its own icons and hover-revealed actions — but both hand the press to the engine
-and take `closeOnSelect` to say whether choosing them ends the surface. A row that owns its press
-outright leaves the surface open behind whatever it opened, and skips the iOS wait.
+`ContextMenu` is the exception: it defaults to `compactMode="sheet"` for context-menu gestures on
+compact browser viewports.
 
 ## Pages
 
@@ -69,32 +40,13 @@ Pages are data rather than nested children because the popover renders them as _
 root surface — a flyout nested inside the root's box would be clipped by its `overflow: hidden`.
 Declaring them separately is what lets one model drive both presentations.
 
-`menu-navigation.ts` holds that model, and it is pure: the open flyout chain and the mobile push
+`menu-navigation.ts` holds that model, and it is pure: the open flyout chain and the compact push
 stack are the same path, so the popover renders every entry in it and the sheet renders only the
 last. Nothing else differs between the two.
 
 Opening a submenu truncates the path to the depth of the trigger that opened it. Without that,
 sliding the pointer across a row of triggers would stack up every flyout it passed instead of
 swapping between them.
-
-## A page that takes input
-
-A menu page can hold a small form — `MenuTextField` is the field for it, drawn as a row's own
-fill so its text lands on the same rail as the labels above it. Two things have to be true for
-that page, and both are set on the page definition rather than discovered later:
-
-- **`hoverIntent: false`.** A branch you skim is opened and closed by the pointer; a form is not.
-  Without this the page opens on a pointer that was only passing through, and dismisses itself —
-  draft and all — the moment your hands move to the keyboard and the mouse drifts off the flyout.
-  While such a page is open, the whole surface stops closing on hover, because the parent flyout
-  leads back to the same dismissal.
-- **The compact presentation has to be a sheet.** `MenuTextField` resolves to
-  `BottomSheetTextInput` on compact native, which reads the sheet's context and has none in a
-  popover.
-
-The sheet keeps `keyboardBehavior="interactive"`. `extend` grows a sheet to its largest snap
-point, and with `enableDynamicSizing` that point is the content's own height — a short page does
-not grow, and the keyboard comes up over the field you are typing into.
 
 ## Hover intent
 
@@ -108,8 +60,7 @@ cancels its own pending close while the pointer is inside it. The grace still ma
 pointer crosses sibling rows on the way down into the flyout.
 
 Hover lives on a plain `View`, never on a `Pressable` — see [hover.md](hover.md), which owns that
-rule. Hover only fires on web, which is exactly where flyouts exist; everywhere else the page
-opens on press.
+rule.
 
 ## Item states
 
@@ -119,9 +70,6 @@ opens on press.
 | ---------- | -------------------------- | ------------------------- |
 | `selected` | This is the chosen value   | A check, and nothing else |
 | `active`   | This row's submenu is open | The fill, and no check    |
-
-`selected` also announces itself as `aria-checked`, so a multi-select page is audible as the list
-of on/off things it is.
 
 A selected row does **not** get a background. A check and a fill are two separate claims about the
 same state, and showing both makes a chosen row compete with the row the pointer is actually on.
@@ -185,9 +133,9 @@ its own.
   both menu contexts through the sheet's `contextBridge`. Providing them around the modal puts
   them on the wrong side of the portal and every item inside throws. Gotcha 7 in
   [floating-panels.md](floating-panels.md).
-- **One overlay per menu.** Submenus render inside their parent's layer and paint no second
-  backdrop, so there is exactly one `Modal` on native no matter how deep the menu goes.
+- **One overlay per menu.** Submenus render inside their parent's Web portal layer and paint no
+  second backdrop.
 - Anchoring, flipping, and edge clamping live in `menu-anchor.ts` and are unit-tested. Fix
   positioning bugs there, not at a call site.
-- Everything else about floating surfaces on Android — Portal/Modal escape, lifecycle gates,
-  status-bar offset, the open flash — is in [floating-panels.md](floating-panels.md).
+- Floating-panel portal escape, lifecycle gates, keyboard behavior, and flash prevention remain
+  governed by [floating-panels.md](floating-panels.md).

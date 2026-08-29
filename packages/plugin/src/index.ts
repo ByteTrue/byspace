@@ -20,8 +20,6 @@ export type {
   PluginGlobalCommandContext,
   PluginHandlerContext,
   PluginHostProps,
-  PluginOpenPanelOptions,
-  PluginPanelLocation,
   PluginTheme,
   PluginSidebarContribution,
   PluginSurfaceContribution,
@@ -33,6 +31,6 @@ export type {
   PluginWorkspacePanelProps,
   PluginWorkspaceSnapshot,
 } from "./contracts.js";
-export { usePaseo } from "./paseo-context.js";
+export { useBySpace } from "./byspace-context.js";
 export { useAgent, useWorkspace } from "./client-state.js";
 export { useRpc } from "./rpc-context.js";

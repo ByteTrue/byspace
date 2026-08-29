@@ -257,6 +257,7 @@ export class CodexAppServerClient {
 
   async dispose(): Promise<void> {
     if (this.disposed) return;
+    this.rejectPendingRequests(new Error("Codex app-server client is closed"));
     this.disposed = true;
     this.unexpectedTerminationHandler = null;
     this.rl.close();
@@ -289,11 +290,7 @@ export class CodexAppServerClient {
     }
     this.disposed = true;
     this.rl.close();
-    for (const pending of this.pending.values()) {
-      clearTimeout(pending.timer);
-      pending.reject(error);
-    }
-    this.pending.clear();
+    this.rejectPendingRequests(error);
     const handler = this.unexpectedTerminationHandler;
     this.unexpectedTerminationHandler = null;
     if (!handler) {
@@ -304,6 +301,14 @@ export class CodexAppServerClient {
     } catch (handlerError) {
       this.logger.warn({ err: handlerError }, "Codex app-server termination handler threw");
     }
+  }
+
+  private rejectPendingRequests(error: Error): void {
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(error);
+    }
+    this.pending.clear();
   }
 
   private writeJsonRpcResponse(response: JsonRpcResponse): void {

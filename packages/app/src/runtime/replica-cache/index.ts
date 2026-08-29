@@ -1,13 +1,14 @@
-import { Buffer } from "buffer";
 import { Keyboard } from "react-native";
+import { Buffer } from "buffer";
 import { z } from "zod";
 import {
   AgentStatusSchema,
   AgentTimelineItemPayloadSchema,
   WorkspaceGitHubRuntimePayloadSchema,
-} from "@getpaseo/protocol/messages";
-import { AgentProviderSchema } from "@getpaseo/protocol/provider-manifest";
+} from "@bytetrue/byspace-protocol/messages";
+import { AgentProviderSchema } from "@bytetrue/byspace-protocol/provider-manifest";
 import {
+  normalizeEmptyProjectDescriptor,
   normalizeProjectDescriptor,
   normalizeWorkspaceDescriptor,
   selectAgentTimelineState,
@@ -22,7 +23,7 @@ import {
 import { isUnreconciledLocalUserMessage, type StreamItem } from "@/types/stream";
 import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 
-const STORAGE_KEY = "@paseo:replica-cache";
+const STORAGE_KEY = "@byspace:replica-cache";
 const CACHE_VERSION = 6;
 const PERSIST_AFTER_USER_INACTIVITY_MS = 5_000;
 const MAX_TIMELINE_ITEMS = 50;
@@ -36,8 +37,6 @@ const TimelinePositionSchema = z.strictObject({
 const TimelineItemBaseShape = {
   id: z.string(),
   timelineCursor: TimelinePositionSchema.optional(),
-  // COMPAT(active-turn-membership): absent on caches written before turn membership.
-  turnId: z.string().optional(),
   timestamp: IsoDateSchema,
 };
 
@@ -127,7 +126,7 @@ const StoredProjectCheckoutSchema = z.union([
     currentBranch: z.null(),
     remoteUrl: z.null(),
     worktreeRoot: z.null(),
-    isPaseoOwnedWorktree: z.literal(false),
+    isBySpaceOwnedWorktree: z.literal(false),
     mainRepoRoot: z.null(),
   }),
   z.strictObject({
@@ -136,7 +135,7 @@ const StoredProjectCheckoutSchema = z.union([
     currentBranch: z.string().nullable(),
     remoteUrl: z.string().nullable(),
     worktreeRoot: z.string(),
-    isPaseoOwnedWorktree: z.literal(false),
+    isBySpaceOwnedWorktree: z.literal(false),
     mainRepoRoot: z.string().nullable(),
   }),
   z.strictObject({
@@ -145,12 +144,14 @@ const StoredProjectCheckoutSchema = z.union([
     currentBranch: z.string().nullable(),
     remoteUrl: z.string().nullable(),
     worktreeRoot: z.string(),
-    isPaseoOwnedWorktree: z.literal(true),
+    isBySpaceOwnedWorktree: z.literal(true),
     mainRepoRoot: z.string(),
   }),
 ]);
 
 const StoredProjectPlacementSchema = z.strictObject({
+  projectId: z.string().optional(),
+  projectGroupingKey: z.string().optional(),
   projectKey: z.string(),
   projectName: z.string(),
   workspaceName: z.string().nullable().optional(),
@@ -213,7 +214,7 @@ const WorkspaceGitRuntimeSchema = z
   .strictObject({
     currentBranch: z.string().nullable().optional(),
     remoteUrl: z.string().nullable().optional(),
-    isPaseoOwnedWorktree: z.boolean().optional(),
+    isBySpaceOwnedWorktree: z.boolean().optional(),
     isDirty: z.boolean().nullable().optional(),
     aheadBehind: z.strictObject({ ahead: z.number(), behind: z.number() }).nullable().optional(),
     aheadOfOrigin: z.number().nullable().optional(),
@@ -332,7 +333,6 @@ function timelineBase(item: StreamItem) {
   return {
     id: item.id,
     ...(item.timelineCursor ? { timelineCursor: item.timelineCursor } : {}),
-    ...(item.turnId ? { turnId: item.turnId } : {}),
     timestamp: item.timestamp.toISOString(),
   };
 }
@@ -407,7 +407,6 @@ function deserializeTimelineItem(item: StoredTimelineItem): StreamItem {
   const base = {
     id: item.id,
     ...(item.timelineCursor ? { timelineCursor: item.timelineCursor } : {}),
-    ...(item.turnId ? { turnId: item.turnId } : {}),
     timestamp: new Date(item.timestamp),
   };
   switch (item.kind) {
@@ -479,7 +478,17 @@ function deserializeTimelineItem(item: StoredTimelineItem): StreamItem {
 }
 
 function serializeProjectPlacement(agent: Agent): StoredAgent["projectPlacement"] {
-  return agent.projectPlacement ?? null;
+  if (!agent.projectPlacement) return null;
+  return {
+    ...(agent.projectPlacement.projectId ? { projectId: agent.projectPlacement.projectId } : {}),
+    ...(agent.projectPlacement.projectGroupingKey
+      ? { projectGroupingKey: agent.projectPlacement.projectGroupingKey }
+      : {}),
+    projectKey: agent.projectPlacement.projectKey,
+    projectName: agent.projectPlacement.projectName,
+    workspaceName: agent.projectPlacement.workspaceName ?? null,
+    checkout: agent.projectPlacement.checkout,
+  };
 }
 
 function serializeAgent(agent: Agent): StoredAgent {
@@ -558,7 +567,7 @@ function serializeWorkspace(workspace: WorkspaceDescriptor): StoredWorkspace {
     projectCustomIconRevision: workspace.projectCustomIconRevision ?? null,
     projectRootPath: workspace.projectRootPath,
     workspaceDirectory: workspace.workspaceDirectory,
-    worktreeSlug: workspace.worktreeSlug,
+    ...(workspace.worktreeSlug ? { worktreeSlug: workspace.worktreeSlug } : {}),
     projectKind: workspace.projectKind,
     workspaceKind: workspace.workspaceKind,
     name: workspace.name,
@@ -568,8 +577,8 @@ function serializeWorkspace(workspace: WorkspaceDescriptor): StoredWorkspace {
     status: workspace.status,
     statusEnteredAt: workspace.statusEnteredAt?.toISOString() ?? null,
     activityAt: null,
-    archivingAt: workspace.archivingAt,
-    diffStat: workspace.diffStat,
+    archivingAt: workspace.archivingAt ?? null,
+    diffStat: workspace.diffStat ?? null,
     scripts: workspace.scripts.map((script) => ({
       scriptName: script.scriptName,
       type: script.type,
@@ -585,7 +594,7 @@ function serializeWorkspace(workspace: WorkspaceDescriptor): StoredWorkspace {
     })),
     gitRuntime: workspace.gitRuntime,
     githubRuntime: workspace.githubRuntime,
-    forge: workspace.forge,
+    ...(workspace.forge ? { forge: workspace.forge } : {}),
   };
 }
 
@@ -594,9 +603,9 @@ function serializeProject(project: ProjectDescriptor): StoredProject {
     projectId: project.projectId,
     ...(project.projectKey ? { projectKey: project.projectKey } : {}),
     projectDisplayName: project.projectDisplayName,
-    projectCustomName: project.projectCustomName,
+    projectCustomName: project.projectCustomName ?? null,
     projectCustomIconRevision: project.projectCustomIconRevision ?? null,
-    projectIconRevision: project.projectIconRevision,
+    ...(project.projectIconRevision ? { projectIconRevision: project.projectIconRevision } : {}),
     projectRootPath: project.projectRootPath,
     projectKind: project.projectKind,
   };
@@ -700,6 +709,11 @@ function deserializeHost(stored: StoredHost): SessionReplica {
   return {
     agents: new Map(agents.map((agent) => [agent.id, agent])),
     workspaces: new Map(workspaces.map((workspace) => [workspace.id, workspace])),
+    emptyProjects: new Map(
+      stored.emptyProjects
+        .map(normalizeEmptyProjectDescriptor)
+        .map((project) => [project.projectId, project]),
+    ),
     projects,
     timeline: deserializeTimeline(stored.timeline),
   };

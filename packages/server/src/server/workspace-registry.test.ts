@@ -151,46 +151,6 @@ describe("workspace registries", () => {
     });
   });
 
-  test("publishes only project mutations that change the persisted lifecycle", async () => {
-    await projectRegistry.initialize();
-    const mutations: Array<{
-      kind: "upsert" | "archive" | "remove";
-      projectId: string;
-      project: ReturnType<typeof createPersistedProjectRecord> | null;
-    }> = [];
-    const unsubscribe = projectRegistry.subscribeToMutations((mutation) => {
-      mutations.push(mutation);
-    });
-    const active = createPersistedProjectRecord({
-      projectId: "project-one",
-      rootPath: "/tmp/project-one",
-      kind: "non_git",
-      displayName: "project-one",
-      createdAt: "2026-03-01T00:00:00.000Z",
-      updatedAt: "2026-03-01T00:00:00.000Z",
-    });
-    const archived = {
-      ...active,
-      updatedAt: "2026-03-02T00:00:00.000Z",
-      archivedAt: "2026-03-02T00:00:00.000Z",
-    };
-
-    await projectRegistry.upsert(active);
-    await projectRegistry.archive(active.projectId, archived.archivedAt);
-    await projectRegistry.archive(active.projectId, "2026-03-03T00:00:00.000Z");
-    await projectRegistry.archive("project-unknown", "2026-03-03T00:00:00.000Z");
-    await projectRegistry.remove(active.projectId);
-    await projectRegistry.remove(active.projectId);
-    await projectRegistry.remove("project-unknown");
-
-    expect(mutations).toEqual([
-      { kind: "upsert", projectId: active.projectId, project: active },
-      { kind: "archive", projectId: active.projectId, project: archived },
-      { kind: "remove", projectId: active.projectId, project: null },
-    ]);
-    unsubscribe();
-  });
-
   test("atomically allocates one opaque project for concurrent exact-root adds", async () => {
     await projectRegistry.initialize();
     const rootPath = path.join(tmpDir, "same-root");
@@ -230,6 +190,7 @@ describe("workspace registries", () => {
       displayName: "new",
       timestamp: "2026-03-01T00:00:00.000Z",
     });
+
     expect((await projectRegistry.get("remote:github.com/acme/repo"))?.rootPath).toBe(
       "/tmp/legacy",
     );
@@ -305,13 +266,13 @@ describe("workspace registries", () => {
   test("reuses an active project for Windows lexical-equivalent root spellings", async () => {
     await projectRegistry.initialize();
     const first = await projectRegistry.getOrCreateActiveByRoot({
-      rootPath: "C:\\Users\\Paseo\\Repo",
+      rootPath: "C:\\Users\\Developer\\Repo",
       kind: "git",
       displayName: "Repo",
       timestamp: "2026-03-01T00:00:00.000Z",
     });
     const second = await projectRegistry.getOrCreateActiveByRoot({
-      rootPath: "c:/users/paseo/repo/.",
+      rootPath: "c:/users/developer/repo/.",
       kind: "git",
       displayName: "Repo",
       timestamp: "2026-03-02T00:00:00.000Z",
@@ -373,6 +334,45 @@ describe("workspace registries", () => {
 
     expect(created.projectId).toBe("prj_fresh");
     expect(await projectRegistry.list()).toHaveLength(2);
+  });
+
+  test("PIN: two checkouts of the same git remote collapse into a single project record", async () => {
+    // Reproduces the situation in #987: two directories that share a git remote
+    // both derive the same projectKey/displayName. Because the registry is keyed
+    // by projectId, the second upsert overwrites the first — so the registry can
+    // only ever hold one record per remote, and there is no way to distinguish
+    // the two checkouts in the UI.
+    await projectRegistry.initialize();
+
+    const remoteKey = "remote:github.com/acme/repo";
+
+    await projectRegistry.upsert(
+      createPersistedProjectRecord({
+        projectId: remoteKey,
+        rootPath: "/home/me/work/repo",
+        kind: "git",
+        displayName: "acme/repo",
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-01T00:00:00.000Z",
+      }),
+    );
+
+    await projectRegistry.upsert(
+      createPersistedProjectRecord({
+        projectId: remoteKey,
+        rootPath: "/home/me/scratch/repo",
+        kind: "git",
+        displayName: "acme/repo",
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-02T00:00:00.000Z",
+      }),
+    );
+
+    const all = await projectRegistry.list();
+    expect(all).toHaveLength(1);
+    expect(all[0]?.displayName).toBe("acme/repo");
+    // Second upsert wins — the first rootPath is lost.
+    expect(all[0]?.rootPath).toBe("/home/me/scratch/repo");
   });
 
   test("project record schema accepts records without customName (legacy on-disk records)", async () => {
@@ -449,56 +449,41 @@ describe("workspace registries", () => {
     expect(await workspaceRegistry.list()).toEqual([]);
   });
 
-  test("refreshes workspace archive timestamps when an archive is repeated", async () => {
+  test("emits workspace mutations with creation context and supports unsubscribe", async () => {
     await workspaceRegistry.initialize();
-    await workspaceRegistry.upsert(
-      createPersistedWorkspaceRecord({
-        workspaceId: "workspace-one",
-        projectId: "project-one",
-        cwd: "/tmp/repo",
-        kind: "local_checkout",
-        displayName: "main",
-        createdAt: "2026-03-01T00:00:00.000Z",
-        updatedAt: "2026-03-01T00:00:00.000Z",
-      }),
-    );
-
-    await workspaceRegistry.archive("workspace-one", "2026-03-02T00:00:00.000Z");
-    await workspaceRegistry.archive("workspace-one", "2026-03-03T00:00:00.000Z");
-
-    expect(await workspaceRegistry.get("workspace-one")).toMatchObject({
-      archivedAt: "2026-03-03T00:00:00.000Z",
-      updatedAt: "2026-03-03T00:00:00.000Z",
-    });
-  });
-
-  test("persists the consumed change request with the workspace archive", async () => {
-    await workspaceRegistry.initialize();
-    await workspaceRegistry.upsert(
-      createPersistedWorkspaceRecord({
-        workspaceId: "workspace-auto-archive",
-        projectId: "project-one",
-        cwd: "/tmp/repo",
-        kind: "worktree",
-        displayName: "feature",
-        createdAt: "2026-03-01T00:00:00.000Z",
-        updatedAt: "2026-03-01T00:00:00.000Z",
-      }),
-    );
-
-    await workspaceRegistry.archive("workspace-auto-archive", "2026-03-02T00:00:00.000Z", {
-      autoArchivedChangeRequestUrl: "https://github.com/acme/repo/pull/123",
+    const mutations: Array<{
+      kind: string;
+      workspaceId: string;
+      expectsInitialAgent?: boolean;
+    }> = [];
+    const unsubscribe = workspaceRegistry.subscribeToMutations((mutation) => {
+      mutations.push({
+        kind: mutation.kind,
+        workspaceId: mutation.workspaceId,
+        ...(mutation.expectsInitialAgent ? { expectsInitialAgent: true } : {}),
+      });
     });
 
-    const reloaded = new FileBackedWorkspaceRegistry(
-      path.join(tmpDir, "projects", "workspaces.json"),
-      logger,
-    );
-    await reloaded.initialize();
-    expect(await reloaded.get("workspace-auto-archive")).toMatchObject({
-      archivedAt: "2026-03-02T00:00:00.000Z",
-      autoArchivedChangeRequestUrl: "https://github.com/acme/repo/pull/123",
+    const workspace = createPersistedWorkspaceRecord({
+      workspaceId: "ws-mutation",
+      projectId: "proj-mutation",
+      cwd: "/tmp/repo",
+      kind: "local_checkout",
+      displayName: "main",
+      createdAt: "2026-03-01T00:00:00.000Z",
+      updatedAt: "2026-03-01T00:00:00.000Z",
     });
+    await workspaceRegistry.upsert(workspace, { expectsInitialAgent: true });
+    await workspaceRegistry.archive(workspace.workspaceId, "2026-03-02T00:00:00.000Z");
+    await workspaceRegistry.remove(workspace.workspaceId);
+    unsubscribe();
+    await workspaceRegistry.upsert(workspace);
+
+    expect(mutations).toEqual([
+      { kind: "upsert", workspaceId: "ws-mutation", expectsInitialAgent: true },
+      { kind: "archive", workspaceId: "ws-mutation" },
+      { kind: "remove", workspaceId: "ws-mutation" },
+    ]);
   });
 
   test("composes concurrent workspace field updates without losing either change", async () => {
@@ -538,4 +523,43 @@ describe("workspace registries", () => {
       pinnedAt: "2026-03-03T00:00:00.000Z",
     });
   });
+});
+
+test("persists the consumed change request with the workspace archive", async () => {
+  const testDir = mkdtempSync(path.join(os.tmpdir(), "workspace-registry-latch-"));
+  const logger = createTestLogger();
+  const workspaceRegistry = new FileBackedWorkspaceRegistry(
+    path.join(testDir, "projects", "workspaces.json"),
+    logger,
+  );
+  try {
+    await workspaceRegistry.initialize();
+    await workspaceRegistry.upsert(
+      createPersistedWorkspaceRecord({
+        workspaceId: "workspace-auto-archive",
+        projectId: "project-one",
+        cwd: "/tmp/repo",
+        kind: "worktree",
+        displayName: "feature",
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-01T00:00:00.000Z",
+      }),
+    );
+
+    await workspaceRegistry.archive("workspace-auto-archive", "2026-03-02T00:00:00.000Z", {
+      autoArchivedChangeRequestUrl: "https://github.com/acme/repo/pull/123",
+    });
+
+    const reloaded = new FileBackedWorkspaceRegistry(
+      path.join(testDir, "projects", "workspaces.json"),
+      logger,
+    );
+    await reloaded.initialize();
+    expect(await reloaded.get("workspace-auto-archive")).toMatchObject({
+      archivedAt: "2026-03-02T00:00:00.000Z",
+      autoArchivedChangeRequestUrl: "https://github.com/acme/repo/pull/123",
+    });
+  } finally {
+    rmSync(testDir, { recursive: true, force: true });
+  }
 });

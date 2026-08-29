@@ -1,5 +1,5 @@
 import type { Logger } from "pino";
-import type { ProviderOptions, ToolPolicy } from "@getpaseo/protocol/agent-types";
+import type { ProviderOptions } from "@bytetrue/byspace-protocol/agent-types";
 import { z } from "zod";
 
 import type {
@@ -51,14 +51,14 @@ import { MockSlowProviderClient } from "./providers/mock-slow-provider.js";
 import { ClaudeProviderOptionsSchema } from "./providers/claude/options.js";
 import { CodexProviderOptionsSchema } from "./providers/codex/options.js";
 import { OpenCodeProviderOptionsSchema } from "./providers/opencode/options.js";
-import { ToolPolicyUnsupportedError, validateProviderOptions } from "./provider-options.js";
+import { validateProviderOptions } from "./provider-options.js";
 import {
   AGENT_PROVIDER_DEFINITIONS,
   BUILTIN_PROVIDER_IDS,
   DEV_AGENT_PROVIDER_DEFINITIONS,
   getAgentProviderDefinition,
   type AgentProviderDefinition,
-} from "@getpaseo/protocol/provider-manifest";
+} from "@bytetrue/byspace-protocol/provider-manifest";
 
 function isNonEmptyStringArray(value: string[]): value is [string, ...string[]] {
   return value.length > 0;
@@ -77,15 +77,10 @@ export interface ProviderDefinition extends AgentProviderDefinition {
    */
   derivedFromProviderId: string | null;
   optionsSchema: z.ZodType<ProviderOptions>;
-  supportsExactMcpPreapproval: boolean;
   validateOptions: (options: ProviderOptions | undefined) => ProviderOptions | undefined;
   applyOptions: (
     config: AgentSessionConfig,
     options: ProviderOptions | undefined,
-  ) => AgentSessionConfig;
-  applyToolPolicy: (
-    config: AgentSessionConfig,
-    toolPolicy: ToolPolicy | undefined,
   ) => AgentSessionConfig;
   createClient: (logger: Logger) => AgentClient;
   resolveCreateConfig: (input: ResolveAgentCreateConfigInput) => ResolveAgentCreateConfigResult;
@@ -143,49 +138,15 @@ interface ResolvedProvider {
 
 interface ProviderContract {
   optionsSchema: z.ZodType<ProviderOptions>;
-  supportsExactMcpPreapproval: boolean;
-  applyToolPolicy?: (provider: string, toolPolicy: ToolPolicy) => ToolPolicy;
 }
 
 const EmptyProviderOptionsSchema: z.ZodType<ProviderOptions> = z.object({}).strict();
-
 const PROVIDER_CONTRACTS: Record<string, ProviderContract> = {
-  claude: { optionsSchema: ClaudeProviderOptionsSchema, supportsExactMcpPreapproval: true },
-  codex: { optionsSchema: CodexProviderOptionsSchema, supportsExactMcpPreapproval: true },
-  opencode: { optionsSchema: OpenCodeProviderOptionsSchema, supportsExactMcpPreapproval: true },
+  claude: { optionsSchema: ClaudeProviderOptionsSchema },
+  codex: { optionsSchema: CodexProviderOptionsSchema },
+  opencode: { optionsSchema: OpenCodeProviderOptionsSchema },
 };
-
-const UNSUPPORTED_PROVIDER_CONTRACT: ProviderContract = {
-  optionsSchema: EmptyProviderOptionsSchema,
-  supportsExactMcpPreapproval: false,
-};
-
-const HUB_E2E_PROVIDER_ID = "hub-e2e";
-const HUB_E2E_MCP_SERVER = "hub";
-const HUB_E2E_TOOL_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/u;
-// The cross-repository Hub harness owns this synthetic provider ID. It exercises the production
-// registry path without extending exact-preapproval support to user-defined ACP providers.
-const HUB_E2E_PROVIDER_CONTRACT: ProviderContract = {
-  optionsSchema: EmptyProviderOptionsSchema,
-  supportsExactMcpPreapproval: true,
-  applyToolPolicy: (provider, toolPolicy) => {
-    for (const grant of toolPolicy.preapproved) {
-      if (
-        grant.kind !== "mcp" ||
-        grant.server !== HUB_E2E_MCP_SERVER ||
-        !HUB_E2E_TOOL_NAME.test(grant.tool)
-      ) {
-        throw new ToolPolicyUnsupportedError(
-          provider,
-          `Provider '${provider}' accepts only exact MCP tool grants for the injected '${HUB_E2E_MCP_SERVER}' server`,
-        );
-      }
-    }
-    return {
-      preapproved: toolPolicy.preapproved.map((grant) => ({ ...grant })),
-    };
-  },
-};
+const EMPTY_PROVIDER_CONTRACT: ProviderContract = { optionsSchema: EmptyProviderOptionsSchema };
 
 const PROVIDER_CLIENT_FACTORIES: Record<string, ProviderClientFactory> = {
   claude: (logger, runtimeSettings) =>
@@ -608,21 +569,9 @@ function createRegistryEntry(
     enabled: resolved.enabled,
     derivedFromProviderId: resolved.derivedFromProviderId,
     optionsSchema: resolved.contract.optionsSchema,
-    supportsExactMcpPreapproval: resolved.contract.supportsExactMcpPreapproval,
     validateOptions: (options) =>
       validateProviderOptions(provider, resolved.contract.optionsSchema, options),
     applyOptions: (config, options) => ({ ...config, providerOptions: options }),
-    applyToolPolicy: (config, toolPolicy) => {
-      if (toolPolicy && !resolved.contract.supportsExactMcpPreapproval) {
-        throw new ToolPolicyUnsupportedError(provider);
-      }
-      return {
-        ...config,
-        toolPolicy: toolPolicy
-          ? (resolved.contract.applyToolPolicy?.(provider, toolPolicy) ?? toolPolicy)
-          : undefined,
-      };
-    },
     createClient: (providerLogger: Logger) =>
       createResolvedProviderClient(providerLogger, provider, resolved),
     resolveCreateConfig: modelClient.resolveCreateConfig ?? resolveDefaultAgentCreateConfig,
@@ -734,7 +683,7 @@ function buildResolvedBuiltinProviders(
           ompRuntime: options.ompRuntime,
           providerParams: override?.params,
         }),
-      contract: PROVIDER_CONTRACTS[definition.id] ?? UNSUPPORTED_PROVIDER_CONTRACT,
+      contract: PROVIDER_CONTRACTS[definition.id] ?? EMPTY_PROVIDER_CONTRACT,
     });
   }
 
@@ -804,10 +753,7 @@ function addDerivedProviders(
           }
           return new GenericACPAgentClient(acpOptions);
         },
-        contract:
-          providerId === HUB_E2E_PROVIDER_ID
-            ? HUB_E2E_PROVIDER_CONTRACT
-            : UNSUPPORTED_PROVIDER_CONTRACT,
+        contract: EMPTY_PROVIDER_CONTRACT,
       });
       continue;
     }

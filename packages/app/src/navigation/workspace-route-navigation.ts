@@ -45,9 +45,9 @@ function findStackWithMountedRouteName(
   }
 
   const candidate = state as {
-    index?: unknown;
     key?: unknown;
     routes?: unknown;
+    index?: unknown;
   };
 
   if (!Array.isArray(candidate.routes)) {

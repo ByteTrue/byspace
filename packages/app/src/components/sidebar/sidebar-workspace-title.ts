@@ -1,6 +1,5 @@
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import type { WorkspaceTitleSource } from "@/hooks/use-settings";
-import { STATUS_BUCKET_LABELS } from "@/hooks/sidebar-status-view-model";
 
 export function resolveSidebarWorkspacePrimaryLabel(input: {
   workspace: Pick<SidebarWorkspaceEntry, "name" | "currentBranch">;
@@ -13,23 +12,25 @@ export function resolveSidebarWorkspacePrimaryLabel(input: {
 }
 
 export function resolveSidebarWorkspaceAccessibilityLabel(input: {
-  workspace: Pick<SidebarWorkspaceEntry, "name" | "currentBranch" | "statusBucket">;
+  workspace: Pick<SidebarWorkspaceEntry, "name" | "currentBranch">;
   workspaceTitleSource: WorkspaceTitleSource;
-  leadingProjectName?: string | null;
-  hostBadgeLabel?: string | null;
+  projectName?: string | null;
+  hostLabel?: string | null;
   pullRequestLabel?: string | null;
+  checksLabel?: string | null;
   serviceLabel?: string | null;
+  statusLabel?: string | null;
 }): string {
   return [
-    input.leadingProjectName,
+    input.projectName,
     resolveSidebarWorkspacePrimaryLabel(input),
-    input.hostBadgeLabel,
+    input.hostLabel,
     input.pullRequestLabel,
+    input.checksLabel,
     input.serviceLabel,
-    input.workspace.statusBucket === "done"
-      ? null
-      : STATUS_BUCKET_LABELS[input.workspace.statusBucket],
+    input.statusLabel,
   ]
-    .filter((label): label is string => Boolean(label))
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value))
     .join(", ");
 }

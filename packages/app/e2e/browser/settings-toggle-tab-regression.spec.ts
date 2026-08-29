@@ -1,28 +1,13 @@
 import { buildHostAgentDetailRoute, buildHostWorkspaceRoute } from "@/utils/host-routes";
-import { expect, test } from "../support/fixtures";
-import { createIdleAgent, openWorkspaceWithAgents } from "../support/helpers/archive-tab";
-import { waitForTabBar, expectAgentTabActive } from "../support/helpers/launcher";
-import { seedWorkspace } from "../support/helpers/seed-client";
-import { getServerId } from "../support/helpers/server-id";
+import { expect, test } from "../fixtures";
+import { createIdleAgent, openWorkspaceWithAgents } from "../helpers/archive-tab";
+import { waitForTabBar, expectAgentTabActive } from "../helpers/launcher";
+import { seedWorkspace } from "../helpers/seed-client";
+import { getServerId } from "../helpers/server-id";
 
 async function pressSettingsToggleShortcut(page: import("@playwright/test").Page) {
   const modifier = process.platform === "darwin" ? "Meta" : "Control";
   await page.keyboard.press(`${modifier}+Comma`);
-}
-
-async function expectSendBehavior(
-  page: import("@playwright/test").Page,
-  expected: "interrupt" | "queue" | "steer",
-) {
-  await expect
-    .poll(async () => {
-      const raw = await page.evaluate(() => localStorage.getItem("@paseo:app-settings"));
-      if (!raw) {
-        return null;
-      }
-      return (JSON.parse(raw) as { sendBehavior?: string }).sendBehavior ?? null;
-    })
-    .toBe(expected);
 }
 
 async function openAgentRouteAndExpectFocused(input: {
@@ -45,9 +30,7 @@ async function openAgentRouteAndExpectFocused(input: {
 test.describe("Settings toggle tab regression", () => {
   test.describe.configure({ timeout: 180_000 });
 
-  test("toggling settings after changing a setting returns to the same workspace tab", async ({
-    page,
-  }) => {
+  test("toggling settings returns to the same workspace tab", async ({ page }) => {
     const serverId = getServerId();
     const workspace = await seedWorkspace({ repoPrefix: "settings-toggle-tab-" });
 
@@ -68,31 +51,7 @@ test.describe("Settings toggle tab regression", () => {
       await expectAgentTabActive(page, secondAgent.id);
 
       await pressSettingsToggleShortcut(page);
-      await expect(page).toHaveURL(/\/settings\/general$/);
-
-      const defaultSendTrigger = page.getByRole("button", {
-        name: "Default send: Steer",
-        exact: true,
-      });
-      await expect(defaultSendTrigger).toBeVisible();
-      await expect(page.getByRole("menuitem", { name: "Queue", exact: true })).toHaveCount(0);
-
-      await defaultSendTrigger.click();
-      await expect(page.getByRole("menuitem", { name: "Steer", exact: true })).toHaveAttribute(
-        "aria-checked",
-        "true",
-      );
-      await page.getByRole("menuitem", { name: "Queue", exact: true }).click();
-      await expectSendBehavior(page, "queue");
-      const queuedDefaultSendTrigger = page.getByRole("button", {
-        name: "Default send: Queue",
-        exact: true,
-      });
-      await expect(queuedDefaultSendTrigger).toBeVisible();
-
-      await queuedDefaultSendTrigger.click();
-      await page.getByRole("menuitem", { name: "Interrupt", exact: true }).click();
-      await expectSendBehavior(page, "interrupt");
+      await expect(page).toHaveURL(/\/settings\/preferences$/);
 
       await pressSettingsToggleShortcut(page);
       await expect(page).toHaveURL(buildHostWorkspaceRoute(serverId, workspace.workspaceId));

@@ -1,5 +1,4 @@
 import type { TextInputProps } from "react-native";
-import type { NativePastedFile } from "@/composer/native-pasted-image";
 
 export interface EditingTextInputHandle {
   focus(): void;
@@ -14,9 +13,7 @@ export interface EditingTextInputProps extends Omit<
   TextInputProps,
   "defaultValue" | "onChangeText" | "value"
 > {
+  /** Seeds the editing surface once. The surface owns subsequent edits; programmatic replacement goes through `replaceText`. */
   initialValue?: string;
   onChangeText?: (text: string) => void;
-  onPasteImages?: (files: readonly NativePastedFile[]) => void;
-  onPasteError?: (message: string) => void;
-  variant?: "default" | "bottom-sheet";
 }

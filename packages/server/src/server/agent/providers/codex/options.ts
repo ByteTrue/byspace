@@ -1,4 +1,4 @@
-import type { ProviderOptions, ToolPolicy } from "@getpaseo/protocol/agent-types";
+import type { ProviderOptions } from "@bytetrue/byspace-protocol/agent-types";
 import { z } from "zod";
 
 const ApprovalPolicySchema = z.union([
@@ -60,32 +60,3 @@ export const CodexProviderOptionsSchema = z
   .strict() satisfies z.ZodType<ProviderOptions>;
 
 export type CodexProviderOptions = z.infer<typeof CodexProviderOptionsSchema>;
-
-export function applyCodexToolPolicy(
-  config: Record<string, unknown>,
-  toolPolicy: ToolPolicy | undefined,
-): Record<string, unknown> {
-  if (!toolPolicy) return config;
-  const mcpServers = readRecord(config.mcp_servers);
-  const grantsByServer = new Map<string, string[]>();
-  for (const grant of toolPolicy.preapproved) {
-    const tools = grantsByServer.get(grant.server) ?? [];
-    tools.push(grant.tool);
-    grantsByServer.set(grant.server, tools);
-  }
-  for (const [server, tools] of grantsByServer) {
-    const serverConfig = readRecord(mcpServers[server]);
-    const approvals = Object.fromEntries(tools.map((tool) => [tool, { approval_mode: "approve" }]));
-    mcpServers[server] = {
-      ...serverConfig,
-      enabled_tools: tools,
-      default_tools_approval_mode: "prompt",
-      tools: approvals,
-    };
-  }
-  return { ...config, mcp_servers: mcpServers };
-}
-
-function readRecord(value: unknown): Record<string, unknown> {
-  return value != null && typeof value === "object" && !Array.isArray(value) ? { ...value } : {};
-}

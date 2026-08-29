@@ -12,3 +12,16 @@ export async function returnToTimelineTail(input: {
     input.onError();
   }
 }
+
+export async function navigateToTimelineTail(input: {
+  isDetached: boolean;
+  fetchTail: () => Promise<unknown>;
+  scrollToBottom: () => void;
+  onError: () => void;
+}): Promise<void> {
+  if (!input.isDetached) {
+    input.scrollToBottom();
+    return;
+  }
+  await returnToTimelineTail(input);
+}

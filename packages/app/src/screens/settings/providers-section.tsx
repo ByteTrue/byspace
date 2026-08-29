@@ -218,6 +218,7 @@ function ProviderRow({
       onPress={handlePress}
       accessibilityRole="button"
       accessibilityLabel={t("settings.providers.providerDetails", { name: def.label })}
+      testID={`provider-row-${def.id}`}
     >
       {({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => (
         <>

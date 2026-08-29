@@ -5,7 +5,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { Session } from "./session.js";
 import type { SessionOptions } from "./session.js";
-import { createTestPaseoDaemon } from "./test-utils/paseo-daemon.js";
+import { createTestBySpaceDaemon } from "./test-utils/byspace-daemon.js";
 import { asInternals, createStub } from "./test-utils/class-mocks.js";
 import { createProviderSnapshotManagerStub } from "./test-utils/session-stubs.js";
 
@@ -25,7 +25,7 @@ describe("snapshot mutation ownership boundary", () => {
   });
 
   test("daemon live mutations write one durable snapshot through the manager-owned path", async () => {
-    const daemonHandle = await createTestPaseoDaemon();
+    const daemonHandle = await createTestBySpaceDaemon();
     const cwd = mkdtempSync(path.join(os.tmpdir(), "snapshot-owner-live-"));
 
     try {
@@ -99,12 +99,11 @@ describe("snapshot mutation ownership boundary", () => {
     const session = asInternals<SessionInternals>(
       new Session({
         clientId: "test-client",
-        scopes: ["*"],
         onMessage,
         logger: createStub<SessionOptions["logger"]>(logger),
         downloadTokenStore: createStub<SessionOptions["downloadTokenStore"]>({}),
-        pushNotifications: createStub<SessionOptions["pushNotifications"]>({}),
-        paseoHome: "/tmp/paseo-test",
+        pushTokenStore: createStub<SessionOptions["pushTokenStore"]>({}),
+        byspaceHome: "/tmp/byspace-test",
         agentManager: createStub<SessionOptions["agentManager"]>({
           subscribe: () => () => {},
           listAgents: () => [],
@@ -119,7 +118,6 @@ describe("snapshot mutation ownership boundary", () => {
           upsert: directStorageWrite,
         }),
         projectRegistry: createStub<SessionOptions["projectRegistry"]>({
-          subscribeToMutations: () => () => {},
           initialize: async () => {},
           existsOnDisk: async () => true,
           list: async () => [],
@@ -127,9 +125,9 @@ describe("snapshot mutation ownership boundary", () => {
           upsert: async () => {},
           archive: async () => {},
           remove: async () => {},
+          subscribeToMutations: () => () => {},
         }),
         workspaceRegistry: createStub<SessionOptions["workspaceRegistry"]>({
-          subscribeToMutations: () => () => {},
           initialize: async () => {},
           existsOnDisk: async () => true,
           list: async () => [],
@@ -137,6 +135,7 @@ describe("snapshot mutation ownership boundary", () => {
           upsert: async () => {},
           archive: async () => {},
           remove: async () => {},
+          subscribeToMutations: () => () => {},
         }),
         createAgentMcpTransport: async () => {
           throw new Error("not used");

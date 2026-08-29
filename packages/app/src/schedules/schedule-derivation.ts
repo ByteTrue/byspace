@@ -1,4 +1,4 @@
-import type { ScheduleSummary } from "@getpaseo/protocol/schedule/types";
+import type { ScheduleSummary } from "@bytetrue/byspace-protocol/schedule/types";
 import { describeScheduleCwd } from "@/schedules/schedule-project-targets";
 
 // Derived from existing fields only — no new protocol state. "active"/"paused"
@@ -93,6 +93,27 @@ function deriveState(input: ResolveScheduleInput): ScheduleDerivedState {
     return "paused";
   }
   return "active";
+}
+
+export interface ScheduleRowActionVisibility {
+  edit: boolean;
+  pause: boolean;
+  resume: boolean;
+  runNow: boolean;
+  delete: boolean;
+}
+
+export function resolveScheduleRowActionVisibility(
+  schedule: ScheduleSummary,
+): ScheduleRowActionVisibility {
+  const isHeartbeat = schedule.target.type === "agent";
+  return {
+    edit: true,
+    pause: !isHeartbeat && schedule.status !== "paused",
+    resume: !isHeartbeat && schedule.status === "paused",
+    runNow: !isHeartbeat,
+    delete: true,
+  };
 }
 
 export function scheduleBucket(state: ScheduleDerivedState): ScheduleBucket {

@@ -10,6 +10,7 @@ import {
   type ScheduleRow,
 } from "../schedule/shared.js";
 import { scheduleSchema } from "../schedule/schema.js";
+import type { ScheduleTarget } from "../schedule/types.js";
 
 interface HeartbeatOptions extends CommandOptions {
   cron?: string;
@@ -33,11 +34,15 @@ const heartbeatDeleteSchema: OutputSchema<HeartbeatDeleteRow> = {
 };
 
 function requireCallerAgentId(): string {
-  const agentId = process.env.PASEO_AGENT_ID?.trim();
+  const agentId = process.env.BYSPACE_AGENT_ID?.trim();
   if (!agentId) {
-    throw new Error("Heartbeat commands must run inside a Paseo agent");
+    throw new Error("Heartbeat commands must run inside a BySpace agent");
   }
   return agentId;
+}
+
+export function isHeartbeatOwnedByAgent(target: ScheduleTarget, agentId: string): boolean {
+  return (target.type === "agent" || target.type === "self") && target.agentId === agentId;
 }
 
 async function requireOwnedHeartbeat(
@@ -49,7 +54,7 @@ async function requireOwnedHeartbeat(
   if (payload.error || !payload.schedule) {
     throw new Error(payload.error ?? `Heartbeat not found: ${id}`);
   }
-  if (payload.schedule.target.type !== "agent" || payload.schedule.target.agentId !== agentId) {
+  if (!isHeartbeatOwnedByAgent(payload.schedule.target, agentId)) {
     throw new Error(`Heartbeat ${id} does not belong to agent ${agentId}`);
   }
 }
@@ -61,9 +66,7 @@ async function runCreateHeartbeat(
 ): Promise<SingleResult<ScheduleRow>> {
   const agentId = requireCallerAgentId();
   const cron = options.cron?.trim();
-  if (!cron) {
-    throw new Error("--cron is required");
-  }
+  if (!cron) throw new Error("--cron is required");
   const { client } = await connectScheduleClient(options.host);
   try {
     const maxRuns = options.maxRuns ? Number.parseInt(options.maxRuns, 10) : undefined;
@@ -102,9 +105,7 @@ async function runUpdateHeartbeat(
 ): Promise<SingleResult<ScheduleRow>> {
   const agentId = requireCallerAgentId();
   const cron = options.cron?.trim();
-  if (!cron) {
-    throw new Error("--cron is required");
-  }
+  if (!cron) throw new Error("--cron is required");
   const { client } = await connectScheduleClient(options.host);
   try {
     await requireOwnedHeartbeat(client, id, agentId);
@@ -137,9 +138,7 @@ async function runDeleteHeartbeat(
   try {
     await requireOwnedHeartbeat(client, id, agentId);
     const payload = await client.scheduleDelete({ id });
-    if (payload.error) {
-      throw new Error(payload.error);
-    }
+    if (payload.error) throw new Error(payload.error);
     return {
       type: "single",
       data: { id: payload.scheduleId, status: "deleted" },

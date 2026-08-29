@@ -1,20 +1,50 @@
 import { describe, expect, test } from "vitest";
 
-import { CheckoutPrStatusSchema } from "@getpaseo/protocol/messages";
+import { CheckoutPrStatusSchema } from "@bytetrue/byspace-protocol/messages";
 import type { WorkspaceGitRuntimeSnapshot } from "../workspace-git-service.js";
 import {
   buildCheckoutPrStatusPayloadFromSnapshot,
+  buildCheckoutStatusPayloadFromSnapshot,
   normalizeCheckoutPrStatusPayload,
 } from "./status-projection.js";
 
 describe("checkout status projection", () => {
+  test("projects the opaque commits version for precise client cache invalidation", () => {
+    const commitsVersion = "startup-1:7";
+    const snapshot = {
+      git: {
+        isGit: true,
+        repoRoot: "/repo",
+        mainRepoRoot: null,
+        currentBranch: "main",
+        commitsVersion,
+        remoteUrl: "https://github.com/ByteTrue/byspace.git",
+        isBySpaceOwnedWorktree: false,
+        isDirty: false,
+        baseRef: "origin/main",
+        aheadBehind: { ahead: 0, behind: 0 },
+        aheadOfOrigin: 0,
+        behindOfOrigin: 0,
+        hasRemote: true,
+      },
+    } as WorkspaceGitRuntimeSnapshot;
+
+    expect(
+      buildCheckoutStatusPayloadFromSnapshot({
+        cwd: "/repo",
+        requestId: "req-head",
+        snapshot,
+      }).commitsVersion,
+    ).toBe(commitsVersion);
+  });
+
   test("includes repository identity fields on the PR status wire payload", () => {
     const payload = normalizeCheckoutPrStatusPayload(
       {
         number: 123,
         repoOwner: "internal-owner",
         repoName: "internal-repo",
-        url: "https://github.com/getpaseo/paseo/pull/123",
+        url: "https://github.com/ByteTrue/byspace/pull/123",
         title: "Ship PR pane",
         state: "open",
         baseRefName: "main",
@@ -26,7 +56,7 @@ describe("checkout status projection", () => {
           {
             name: "typecheck",
             status: "success",
-            url: "https://github.com/getpaseo/paseo/actions/runs/1",
+            url: "https://github.com/ByteTrue/byspace/actions/runs/1",
             workflow: "CI",
             duration: "1m 20s",
           },
@@ -49,9 +79,9 @@ describe("checkout status projection", () => {
     const payload = normalizeCheckoutPrStatusPayload(
       {
         number: 993,
-        repoOwner: "getpaseo",
-        repoName: "paseo",
-        url: "https://github.com/getpaseo/paseo/pull/993",
+        repoOwner: "ByteTrue",
+        repoName: "byspace",
+        url: "https://github.com/ByteTrue/byspace/pull/993",
         title: "Auto-merge UX",
         state: "open",
         baseRefName: "main",
@@ -63,7 +93,7 @@ describe("checkout status projection", () => {
           {
             name: "server tests",
             status: "pending",
-            url: "https://github.com/getpaseo/paseo/actions/runs/993",
+            url: "https://github.com/ByteTrue/byspace/actions/runs/993",
             workflow: "CI",
           },
         ],
@@ -93,7 +123,7 @@ describe("checkout status projection", () => {
 
     expect(payload).toMatchObject({
       forge: "github",
-      projectPath: "getpaseo/paseo",
+      projectPath: "ByteTrue/byspace",
       number: 993,
       mergeable: "MERGEABLE",
       checksStatus: "pending",

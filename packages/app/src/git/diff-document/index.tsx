@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { withUnistyles } from "react-native-unistyles";
-import { RenderProfile } from "@/utils/render-profiler";
 import { createDiffPalette, retainDiffPalette } from "./palette";
 import { DiffSurface } from "./surface";
 import type { DiffDocumentProps, DiffPalette } from "./types";
@@ -48,9 +47,5 @@ const StyledDiffDocument = withUnistyles(ThemedDiffDocument, (theme) => ({
 }));
 
 export function DiffDocument(props: DiffDocumentProps) {
-  return (
-    <RenderProfile id="DiffDocument">
-      <StyledDiffDocument {...props} />
-    </RenderProfile>
-  );
+  return <StyledDiffDocument {...props} />;
 }

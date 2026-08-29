@@ -15,17 +15,16 @@ type RawStartCommandOptions = StartOptions & {
 
 export function startCommand(): Command {
   return new Command("start")
-    .description("Start the local Paseo daemon")
+    .description("Start the local BySpace daemon")
     .option("--listen <listen>", "Listen target (host:port, port, or unix socket path)")
-    .option("--port <port>", "Port to listen on (default: 6767)")
-    .option("--home <path>", "Paseo home directory (default: ~/.paseo)")
+    .option("--port <port>", "Port to listen on (default: 6777)")
+    .option("--home <path>", "BySpace home directory (default: ~/.byspace)")
     .option("--foreground", "Run in foreground (don't daemonize)")
     .option("--relay", "Enable relay connection")
     .option("--no-relay", "Disable relay connection")
     .option("--relay-use-tls", "Use wss:// for the relay connection and pairing offers")
     .option("--no-mcp", "Disable the Agent MCP HTTP endpoint")
-    .option("--no-inject-mcp", "Disable auto-injecting the Paseo MCP into created agents")
-    .option("--web-ui", "Enable the bundled daemon web UI")
+    .option("--web-ui", "Enable the bundled daemon web UI (default)")
     .option("--no-web-ui", "Disable the bundled daemon web UI")
     .option(
       "--hostnames <hosts>",
@@ -51,6 +50,15 @@ export async function runStart(options: StartOptions): Promise<void> {
       const startup = await startLocalDaemonDetached(options);
       console.log(chalk.green(`Daemon starting in background (PID ${startup.pid ?? "unknown"}).`));
       console.log(chalk.dim(`Logs: ${startup.logPath}`));
+      console.log();
+      if (startup.webUiUrl) {
+        console.log(chalk.green("Local Web UI is running."));
+        console.log("Open BySpace using either:");
+        console.log(`  ${chalk.bold("Local:")}  ${chalk.cyan(startup.webUiUrl)}`);
+        console.log(`  ${chalk.bold("Hosted:")} ${chalk.cyan(startup.hostedWebUrl)}`);
+      } else {
+        console.log(`${chalk.bold("Hosted Web:")} ${chalk.cyan(startup.hostedWebUrl)}`);
+      }
     } catch (err) {
       exitWithError(getErrorMessage(err));
     }

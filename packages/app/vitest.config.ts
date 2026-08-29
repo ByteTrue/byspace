@@ -22,7 +22,7 @@ export default defineConfig({
         test: {
           name: "unit",
           environment: "node",
-          include: ["src/**/*.{test,spec}.{ts,tsx}", "native-release-version.test.ts"],
+          include: ["src/**/*.{test,spec}.{ts,tsx}"],
           setupFiles: [path.resolve(__dirname, "vitest.setup.ts")],
           exclude: [...configDefaults.exclude, "e2e/**", "src/**/*.browser.{test,spec}.{ts,tsx}"],
         },
@@ -60,21 +60,6 @@ export default defineConfig({
       },
     },
   },
-  // Reanimated ships one file per platform and picks between them by extension
-  // (`findHostInstance.web.js`). Vite's dependency optimizer does not apply `resolve.extensions`,
-  // so it scans the native files and dies on imports react-native-web has no answer for.
-  // Unbundled, the same imports go through the resolver below and land on the web files.
-  optimizeDeps: {
-    include: ["react/jsx-runtime"],
-    exclude: ["react-native-reanimated"],
-  },
-  // The globals a React Native bundler defines, which esbuild is no longer there to supply for
-  // the package excluded above.
-  define: {
-    "process.env.JEST_WORKER_ID": "undefined",
-    __DEV__: "false",
-    global: "globalThis",
-  },
   resolve: {
     extensions: [
       ".web.mjs",
@@ -93,21 +78,14 @@ export default defineConfig({
     ],
     alias: [
       {
-        find: /^@getpaseo\/relay\/e2ee$/,
+        find: /^@bytetrue\/byspace-relay\/e2ee$/,
         replacement: path.resolve(__dirname, "../relay/src/e2ee.ts"),
       },
       {
-        find: /^@getpaseo\/relay$/,
+        find: /^@bytetrue\/byspace-relay$/,
         replacement: path.resolve(__dirname, "../relay/src/index.ts"),
       },
       { find: "@", replacement: path.resolve(__dirname, "src") },
-      // Must precede the `react-native` alias: a string `find` matches by prefix, so this subpath
-      // would otherwise resolve inside a react-native-web *file* and break the dependency scan.
-      // Reanimated only imports it on the native path, which no test takes.
-      {
-        find: /^react-native\/Libraries\/Renderer\/shims\/ReactFabric$/,
-        replacement: path.resolve(__dirname, "test-stubs/react-native-fabric-shim.ts"),
-      },
       // Point to the ESM build so Vite can transform its imports and apply the
       // react alias below (the CJS build uses require('react') which bypasses
       // Vite alias resolution).
@@ -135,20 +113,6 @@ export default defineConfig({
       {
         find: /^react-native-svg$/,
         replacement: path.resolve(__dirname, "test-stubs/react-native-svg.ts"),
-      },
-      // Both ship untranspiled Flow and fail to parse on import, which takes out any test that
-      // mounts a menu surface.
-      {
-        find: /^react-native-safe-area-context$/,
-        replacement: path.resolve(__dirname, "test-stubs/react-native-safe-area-context.ts"),
-      },
-      {
-        find: /^@gorhom\/bottom-sheet$/,
-        replacement: path.resolve(__dirname, "test-stubs/gorhom-bottom-sheet.ts"),
-      },
-      {
-        find: /^react-native-reanimated\/scripts\/validate-worklets-version$/,
-        replacement: path.resolve(__dirname, "test-stubs/reanimated-validate-worklets-version.ts"),
       },
       {
         find: /^expo-linking$/,

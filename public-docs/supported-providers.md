@@ -1,6 +1,6 @@
 ---
 title: Supported providers
-description: Every coding agent Paseo can launch, natively supported providers and the ACP catalog.
+description: Every coding agent BySpace can launch, natively supported providers and the ACP catalog.
 nav: Supported providers
 order: 21
 category: Providers
@@ -8,16 +8,16 @@ category: Providers
 
 # Supported providers
 
-For the concept and how Paseo manages providers, see [Providers](/docs/providers). To add or configure your own, see [Custom providers](/docs/custom-providers).
+For the concept and how BySpace manages providers, see [Providers](/docs/providers). To add or configure your own, see [Custom providers](/docs/custom-providers).
 
 ## Native support
 
 Work out of the box once the underlying CLI is installed and authenticated.
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Anthropic's coding agent with MCP support, streaming, and deep reasoning.
-- [Codex](/docs/codex). OpenAI's workspace agent with sandbox controls and optional network access.
+- [Codex CLI](https://github.com/openai/codex). OpenAI's workspace agent with sandbox controls and optional network access.
 - [OpenCode](https://opencode.ai/). Open-source coding assistant with multi-provider model support.
-- [Pi](https://pi.dev). Minimal terminal-based coding agent with multi-provider LLM support.
+- [pi](https://github.com/svkozak/pi-acp). Minimal terminal-based coding agent with multi-provider LLM support.
 
 ## ACP catalog
 

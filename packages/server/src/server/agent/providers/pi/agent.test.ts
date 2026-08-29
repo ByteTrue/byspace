@@ -46,7 +46,7 @@ function rewindCapabilities(capabilities: PiRpcAgentSession["capabilities"]) {
 function createConfig(overrides: Partial<AgentSessionConfig> = {}): AgentSessionConfig {
   return {
     provider: "pi",
-    cwd: "/tmp/paseo-pi-rpc-test",
+    cwd: "/tmp/byspace-pi-rpc-test",
     ...overrides,
   };
 }
@@ -83,16 +83,15 @@ function readUtf8File(pathname: string): string {
     closeSync(fd);
   }
 }
+type BySpaceExtensionListener = (event: unknown, context?: unknown) => unknown;
 
-type PaseoExtensionListener = (event: unknown, context?: unknown) => unknown;
-
-async function loadPaseoExtensionListeners(
+async function loadBySpaceExtensionListeners(
   extensionPath: string,
-): Promise<Map<string, PaseoExtensionListener>> {
-  const listeners = new Map<string, PaseoExtensionListener>();
+): Promise<Map<string, BySpaceExtensionListener>> {
+  const listeners = new Map<string, BySpaceExtensionListener>();
   const extension = (await import(pathToFileURL(extensionPath).href)) as {
     default: (piApi: {
-      on: (event: string, listener: PaseoExtensionListener) => void;
+      on: (event: string, listener: BySpaceExtensionListener) => void;
       registerCommand: () => void;
     }) => void;
   };
@@ -103,11 +102,11 @@ async function loadPaseoExtensionListeners(
   return listeners;
 }
 
-async function applyPaseoExtensionSystemPrompt(
+async function applyBySpaceExtensionSystemPrompt(
   extensionPath: string,
   systemPrompt: string,
 ): Promise<string | undefined> {
-  const listeners = await loadPaseoExtensionListeners(extensionPath);
+  const listeners = await loadBySpaceExtensionListeners(extensionPath);
   const result = await listeners.get("before_agent_start")?.({ systemPrompt });
   return (result as { systemPrompt?: string } | undefined)?.systemPrompt;
 }
@@ -242,7 +241,6 @@ class SessionEvents {
         event.type === "usage_updated",
     );
   }
-
   nextTurnCompletion(): Promise<Extract<AgentStreamEvent, { type: "turn_completed" }>> {
     return this.nextEvent(
       (event): event is Extract<AgentStreamEvent, { type: "turn_completed" }> =>
@@ -502,6 +500,278 @@ describe("PiRpcAgentSession", () => {
     expect(session.getPendingPermissions()).toEqual([]);
   });
 
+  test("bridges Pi ask_user_question as one multi-question permission", async () => {
+    const { pi, session, events } = await createSession();
+    const fakeSession = pi.latestSession();
+
+    fakeSession.emit({
+      type: "tool_execution_start",
+      toolCallId: "questionnaire-1",
+      toolName: "ask_user_question",
+      args: {
+        questions: [
+          {
+            question: "Choose a plan?",
+            header: "Plan",
+            options: [
+              { label: "A", description: "first" },
+              { label: "B", description: "second" },
+            ],
+          },
+          {
+            question: "Which checks?",
+            header: "Checks",
+            options: [
+              { label: "Lint", description: "static checks" },
+              { label: "Unit", description: "tests" },
+            ],
+            multiSelect: true,
+          },
+        ],
+      },
+    });
+
+    const permission = await events.nextPermissionRequest();
+    expect(permission.request).toMatchObject({
+      id: "pi-questionnaire:questionnaire-1",
+      name: "Pi ask_user_question",
+      kind: "question",
+      input: {
+        questions: [
+          {
+            question: "Choose a plan?",
+            header: "Plan",
+            options: [
+              { label: "A", description: "first" },
+              { label: "B", description: "second" },
+            ],
+            multiSelect: false,
+            allowOther: true,
+          },
+          {
+            question: "Which checks?",
+            header: "Checks",
+            options: [
+              { label: "Lint", description: "static checks" },
+              { label: "Unit", description: "tests" },
+            ],
+            multiSelect: true,
+            allowOther: true,
+            placeholder: "1,3",
+          },
+        ],
+      },
+      metadata: { piQuestionnaire: "pi_ask_user_question" },
+    });
+
+    fakeSession.emit({
+      type: "extension_ui_request",
+      id: "questionnaire-select-1",
+      method: "select",
+      title: "[Plan] Choose a plan?",
+      options: ["1. A — first", "2. B — second", "3. Type something."],
+    });
+    await session.respondToPermission(permission.request.id, {
+      behavior: "allow",
+      updatedInput: { answers: { Plan: "custom plan", Checks: "Lint" } },
+    });
+
+    expect(fakeSession.extensionUiResponses).toEqual([
+      { id: "questionnaire-select-1", response: { value: "3. Type something." } },
+    ]);
+    expect(session.getPendingPermissions()).toEqual([]);
+
+    fakeSession.emit({
+      type: "extension_ui_request",
+      id: "questionnaire-input-1",
+      method: "input",
+      title: "Type your answer:",
+      placeholder: "",
+    });
+    fakeSession.emit({
+      type: "extension_ui_request",
+      id: "questionnaire-input-2",
+      method: "input",
+      title: "Which checks?",
+      placeholder: "1,3",
+    });
+
+    expect(fakeSession.extensionUiResponses).toEqual([
+      { id: "questionnaire-select-1", response: { value: "3. Type something." } },
+      { id: "questionnaire-input-1", response: { value: "custom plan" } },
+      { id: "questionnaire-input-2", response: { value: "1" } },
+    ]);
+  });
+
+  test("bridges pi-ask-user question as a native multi-select permission", async () => {
+    const { pi, session, events } = await createSession();
+    const fakeSession = pi.latestSession();
+
+    fakeSession.emit({
+      type: "tool_execution_start",
+      toolCallId: "pi-ask-user-1",
+      toolName: "question",
+      args: {
+        questions: [
+          {
+            question: "Which checks?",
+            header: "Checks",
+            options: [
+              { label: "Lint", description: "static checks" },
+              { label: "Unit", description: "tests" },
+            ],
+            multiple: true,
+          },
+        ],
+      },
+    });
+
+    const permission = await events.nextPermissionRequest();
+    expect(permission.request).toMatchObject({
+      id: "pi-questionnaire:pi-ask-user-1",
+      kind: "question",
+      input: {
+        questions: [
+          {
+            question: "Which checks?",
+            header: "Checks",
+            options: [
+              { label: "Lint", description: "static checks" },
+              { label: "Unit", description: "tests" },
+            ],
+            multiSelect: true,
+            allowOther: true,
+            placeholder: "1,3",
+          },
+        ],
+      },
+      metadata: { piQuestionnaire: "pi_ask_user_question" },
+    });
+
+    fakeSession.emit({
+      type: "extension_ui_request",
+      id: "pi-ask-user-input-1",
+      method: "input",
+      title: "Which checks?",
+      placeholder: "1,3",
+    });
+    await session.respondToPermission(permission.request.id, {
+      behavior: "allow",
+      updatedInput: { answers: { Checks: "Lint, Unit" } },
+    });
+
+    expect(fakeSession.extensionUiResponses).toEqual([
+      { id: "pi-ask-user-input-1", response: { value: "1,2" } },
+    ]);
+    expect(session.getPendingPermissions()).toEqual([]);
+  });
+
+  test("cancels the aggregated Pi questionnaire when the form is dismissed", async () => {
+    const { pi, session, events } = await createSession();
+    const fakeSession = pi.latestSession();
+
+    fakeSession.emit({
+      type: "tool_execution_start",
+      toolCallId: "questionnaire-cancel-1",
+      toolName: "ask_user_question",
+      args: {
+        questions: [
+          {
+            question: "Choose one?",
+            header: "Choice",
+            options: [
+              { label: "A", description: "first" },
+              { label: "B", description: "second" },
+            ],
+          },
+        ],
+      },
+    });
+
+    const permission = await events.nextPermissionRequest();
+    await session.respondToPermission(permission.request.id, {
+      behavior: "deny",
+      message: "Dismissed by user",
+    });
+    fakeSession.emit({
+      type: "extension_ui_request",
+      id: "questionnaire-cancel-ui-1",
+      method: "select",
+      title: "Choose one?",
+      options: ["1. A — first", "2. B — second", "3. Type something."],
+    });
+
+    expect(fakeSession.extensionUiResponses).toEqual([
+      { id: "questionnaire-cancel-ui-1", response: { cancelled: true } },
+    ]);
+  });
+
+  test("bridges Pi ask_user freeform responses without losing typed text", async () => {
+    const { pi, session, events } = await createSession();
+    const fakeSession = pi.latestSession();
+
+    fakeSession.emit({
+      type: "tool_execution_start",
+      toolCallId: "ask-user-1",
+      toolName: "ask_user",
+      args: {
+        question: "Pick one",
+        options: ["A"],
+        allowFreeform: true,
+      },
+    });
+    fakeSession.emit({
+      type: "extension_ui_request",
+      id: "ask-user-select-1",
+      method: "select",
+      title: "Pick one",
+      options: ["A", "✏️ Type custom response..."],
+    });
+
+    const permission = await events.nextPermissionRequest();
+    expect(permission.request).toMatchObject({
+      input: {
+        questions: [
+          {
+            options: [{ label: "A" }],
+            allowOther: true,
+          },
+        ],
+      },
+      metadata: {
+        freeformAskUser: true,
+        freeformSentinel: "✏️ Type custom response...",
+      },
+    });
+
+    await session.respondToPermission(permission.request.id, {
+      behavior: "allow",
+      updatedInput: { answers: { Response: "typed answer" } },
+    });
+    expect(fakeSession.extensionUiResponses).toEqual([
+      {
+        id: "ask-user-select-1",
+        response: { value: "✏️ Type custom response..." },
+      },
+    ]);
+
+    fakeSession.emit({
+      type: "extension_ui_request",
+      id: "ask-user-input-1",
+      method: "input",
+      title: "Type your answer:",
+      placeholder: "",
+    });
+
+    expect(fakeSession.extensionUiResponses).toEqual([
+      {
+        id: "ask-user-select-1",
+        response: { value: "✏️ Type custom response..." },
+      },
+      { id: "ask-user-input-1", response: { value: "typed answer" } },
+    ]);
+  });
+
   test("cancels Pi RPC extension UI dialogs when question permission is denied", async () => {
     const { pi, session, events } = await createSession();
     const fakeSession = pi.latestSession();
@@ -689,6 +959,37 @@ describe("PiRpcAgentSession", () => {
     });
   });
 
+  test("streams deltas when Pi >= 0.84 omits message from message_update", async () => {
+    const { pi, session, events } = await createSession();
+    const fakeSession = pi.latestSession();
+
+    await session.startTurn("hello");
+    fakeSession.emit({
+      type: "message_start",
+      message: { role: "assistant", content: [], responseId: "response-1" },
+    });
+    fakeSession.emit({
+      type: "message_update",
+      assistantMessageEvent: { type: "text_delta", delta: "hel" },
+    });
+    fakeSession.emit({
+      type: "message_update",
+      assistantMessageEvent: { type: "thinking_delta", delta: "thinking" },
+    });
+    fakeSession.emit({
+      type: "message_end",
+      message: { role: "assistant", content: [], responseId: "response-1" },
+    });
+    fakeSession.finishTurn();
+
+    await events.nextTurnCompletion();
+
+    expect(events.timelineItems()).toEqual([
+      { type: "assistant_message", text: "hel", messageId: "response-1" },
+      { type: "reasoning", text: "thinking" },
+    ]);
+  });
+
   test("uses a response id that first appears on the assistant update", async () => {
     const { pi, session, events } = await createSession();
     const fakeSession = pi.latestSession();
@@ -711,63 +1012,6 @@ describe("PiRpcAgentSession", () => {
         messageId: "late-response-id",
       },
     ]);
-  });
-
-  test("streams assistant text and reasoning when Pi omits the cumulative message", async () => {
-    const { pi, session, events } = await createSession();
-    const fakeSession = pi.latestSession();
-
-    await session.startTurn("hello");
-    fakeSession.emit({
-      type: "message_start",
-      message: { role: "assistant", content: [], responseId: "response-1" },
-    });
-    fakeSession.emit({
-      type: "message_update",
-      assistantMessageEvent: { type: "text_delta", delta: "hel" },
-    });
-    fakeSession.emit({
-      type: "message_update",
-      assistantMessageEvent: { type: "text_delta", delta: "lo" },
-    });
-    fakeSession.emit({
-      type: "message_update",
-      assistantMessageEvent: { type: "thinking_delta", delta: "thinking" },
-    });
-
-    expect(events.timelineItems()).toEqual([
-      { type: "assistant_message", text: "hel", messageId: "response-1" },
-      { type: "assistant_message", text: "lo", messageId: "response-1" },
-      { type: "reasoning", text: "thinking" },
-    ]);
-  });
-
-  test("generates one message id when Pi omits both message start and the cumulative message", async () => {
-    const { pi, session, events } = await createSession();
-    const fakeSession = pi.latestSession();
-
-    await session.startTurn("hello");
-    fakeSession.emit({
-      type: "message_update",
-      assistantMessageEvent: { type: "text_delta", delta: "hel" },
-    });
-    fakeSession.emit({
-      type: "message_update",
-      assistantMessageEvent: { type: "text_delta", delta: "lo" },
-    });
-
-    const [firstChunk, secondChunk] = events.timelineItems();
-    expect(firstChunk).toMatchObject({
-      type: "assistant_message",
-      text: "hel",
-      messageId: expect.any(String),
-    });
-    const firstMessageId = (firstChunk as { messageId: string }).messageId;
-    expect(secondChunk).toEqual({
-      type: "assistant_message",
-      text: "lo",
-      messageId: firstMessageId,
-    });
   });
 
   test("emits live user messages with submitted Pi tree entry ids", async () => {
@@ -811,7 +1055,6 @@ describe("PiRpcAgentSession", () => {
     });
 
     await events.nextTimelineEvent();
-
     expect(events.timelineItems()).toEqual([
       {
         type: "user_message",
@@ -1132,7 +1375,7 @@ describe("PiRpcAgentSession", () => {
     const session = await client.createSession(createConfig());
     const extensionPath = pi.recordedLaunches[0]?.extensionPaths[0];
     expect(extensionPath).toBeDefined();
-    const listeners = await loadPaseoExtensionListeners(extensionPath!);
+    const listeners = await loadBySpaceExtensionListeners(extensionPath!);
     const submittedMessage = { role: "user", content: "new prompt" };
     const entries: Array<{
       type: string;
@@ -1166,7 +1409,7 @@ describe("PiRpcAgentSession", () => {
     );
 
     expect(notifications).toEqual([
-      'PASEO_SUBMITTED_USER_ENTRY {"entry":{"id":"entry-new","parentId":"entry-old-assistant","text":"new prompt"}}',
+      'BYSPACE_SUBMITTED_USER_ENTRY {"entry":{"id":"entry-new","parentId":"entry-old-assistant","text":"new prompt"}}',
     ]);
 
     await session.close();
@@ -1184,9 +1427,7 @@ describe("PiRpcAgentSession", () => {
     );
 
     const actualLaunch = pi.recordedLaunches[0]!;
-    expect(actualLaunch).toMatchObject({
-      cwd: "/tmp/paseo-pi-rpc-test",
-    });
+    expect(actualLaunch).toMatchObject({ cwd: "/tmp/byspace-pi-rpc-test" });
     expect(actualLaunch.extensionPaths).toHaveLength(1);
     expect(actualLaunch.argv).toEqual([
       "pi",
@@ -1197,11 +1438,9 @@ describe("PiRpcAgentSession", () => {
       "--extension",
       actualLaunch.extensionPaths[0],
     ]);
-
     await expect(
-      applyPaseoExtensionSystemPrompt(actualLaunch.extensionPaths[0]!, "Pi project prompt"),
+      applyBySpaceExtensionSystemPrompt(actualLaunch.extensionPaths[0]!, "Pi project prompt"),
     ).resolves.toBe("Pi project prompt\n\nAgent prompt\n\nDaemon prompt");
-
     await session.close();
   });
 
@@ -1247,7 +1486,7 @@ describe("PiRpcAgentSession", () => {
       actualLaunch.extensionPaths[0],
     ]);
     await expect(
-      applyPaseoExtensionSystemPrompt(actualLaunch.extensionPaths[0]!, "Pi project prompt"),
+      applyBySpaceExtensionSystemPrompt(actualLaunch.extensionPaths[0]!, "Pi project prompt"),
     ).resolves.toBe("Pi project prompt\n\nAgent prompt\n\nDaemon prompt");
   });
 
@@ -1257,10 +1496,42 @@ describe("PiRpcAgentSession", () => {
     fakeSession.setModelResult = { provider: "openrouter", id: "model-a", name: "Model A" };
 
     await session.setModel("openrouter/model-a");
-    await session.setThinkingOption("high");
+    await session.setThinkingOption("max");
 
     expect(fakeSession.setModelRequests).toEqual([{ provider: "openrouter", modelId: "model-a" }]);
-    expect(fakeSession.setThinkingLevelRequests).toEqual(["high"]);
+    expect(fakeSession.setThinkingLevelRequests).toEqual(["max"]);
+  });
+
+  test("syncs Pi-clamped thinking after model updates", async () => {
+    const { pi, session } = await createSession();
+    const fakeSession = pi.latestSession();
+    const model = { provider: "openrouter", id: "model-a", name: "Model A" };
+    fakeSession.setModelResult = model;
+
+    await session.setThinkingOption("max");
+    fakeSession.state = {
+      ...fakeSession.state,
+      model,
+      thinkingLevel: "high",
+    };
+    await session.setModel("openrouter/model-a");
+
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "openrouter/model-a",
+      thinkingOptionId: "high",
+    });
+    expect(session.describePersistence()?.metadata).toMatchObject({
+      model: "openrouter/model-a",
+      thinkingOptionId: "high",
+    });
+
+    await session.setModel(null);
+
+    await expect(session.getRuntimeInfo()).resolves.toMatchObject({
+      model: "openrouter/model-a",
+      thinkingOptionId: "high",
+    });
+    expect(session.describePersistence()?.metadata?.model).toBeUndefined();
   });
 
   test("materializes image prompts as text hints for text-only Pi models", async () => {
@@ -1289,7 +1560,7 @@ describe("PiRpcAgentSession", () => {
       imagePath = prompt.message.match(/\[Image available at: (.+)\]/)?.[1];
       expect(imagePath).toBeTypeOf("string");
       expect(imagePath).toMatch(
-        /paseo-attachments(?:-[^\\/]+)?[\\/](?:[^\\/]+[\\/])?[0-9a-f]{64}\.png$/,
+        /byspace-attachments(?:-[^\\/]+)?[\\/](?:[^\\/]+[\\/])?[0-9a-f]{64}\.png$/,
       );
       expect(existsSync(imagePath!)).toBe(true);
     } finally {
@@ -1633,7 +1904,7 @@ describe("PiRpcAgentSession", () => {
 
 describe("PiRpcAgentClient", () => {
   test("lists JSONL persisted sessions from configured provider params", async () => {
-    const root = mkdtempSync(path.join(tmpdir(), "paseo-pi-sessions-"));
+    const root = mkdtempSync(path.join(tmpdir(), "byspace-pi-sessions-"));
     const cwd = path.join(root, "workspace");
     const otherCwd = path.join(root, "other");
     const sessionsDir = path.join(root, "sessions");
@@ -1694,7 +1965,7 @@ describe("PiRpcAgentClient", () => {
   });
 
   test("lists JSONL persisted sessions from Pi's configured agent directory", async () => {
-    const root = mkdtempSync(path.join(tmpdir(), "paseo-pi-default-sessions-"));
+    const root = mkdtempSync(path.join(tmpdir(), "byspace-pi-default-sessions-"));
     const cwd = path.join(root, "workspace");
     const agentDir = path.join(root, ".pi", "agent");
     const sessionsDir = path.join(agentDir, "sessions");
@@ -1741,7 +2012,7 @@ describe("PiRpcAgentClient", () => {
   });
 
   test("imports JSONL sessions with the recorded model and thinking level", async () => {
-    const root = mkdtempSync(path.join(tmpdir(), "paseo-pi-import-config-"));
+    const root = mkdtempSync(path.join(tmpdir(), "byspace-pi-import-config-"));
     const cwd = path.join(root, "workspace");
     const sessionsDir = path.join(root, "sessions");
     mkdirSync(sessionsDir, { recursive: true });
@@ -1834,15 +2105,43 @@ describe("PiRpcAgentClient", () => {
         name: "google/gemini-2.5-flash-lite",
         reasoning: true,
       },
+      {
+        provider: "bytetrueapi",
+        id: "reasoning-high-max",
+        reasoning: true,
+        thinkingLevelMap: {
+          off: null,
+          minimal: null,
+          low: null,
+          medium: null,
+          high: "high",
+          max: "max",
+        },
+      },
     ];
 
-    await expect(catalogPromise).resolves.toMatchObject({
+    const catalog = await catalogPromise;
+    expect(catalog).toMatchObject({
       models: [
         {
           provider: "pi",
           id: "openrouter/google/gemini-2.5-flash-lite",
           label: "gemini-2.5-flash-lite",
           defaultThinkingOptionId: "medium",
+          thinkingOptions: [
+            { id: "off" },
+            { id: "minimal" },
+            { id: "low" },
+            { id: "medium" },
+            { id: "high" },
+          ],
+        },
+        {
+          provider: "pi",
+          id: "bytetrueapi/reasoning-high-max",
+          label: "reasoning-high-max",
+          defaultThinkingOptionId: "high",
+          thinkingOptions: [{ id: "high" }, { id: "max" }],
         },
       ],
       modes: [],
@@ -1861,7 +2160,7 @@ describe("PiRpcAgentClient", () => {
     expect(pi.recordedLaunches).toHaveLength(0);
   });
 
-  test("maps extension, prompt, and skill commands to Paseo slash commands", async () => {
+  test("maps extension, prompt, and skill commands to BySpace slash commands", async () => {
     const { pi, session } = await createSession();
     pi.latestSession().commands = [
       { name: "review", description: "Review changes", source: "extension" },
@@ -2094,7 +2393,7 @@ describe("PiRpcAgentClient", () => {
   });
 
   test("injects MCP servers without replacing the Pi global MCP config", async () => {
-    const agentDir = mkdtempSync(path.join(tmpdir(), "paseo-pi-agent-"));
+    const agentDir = mkdtempSync(path.join(tmpdir(), "byspace-pi-agent-"));
     onTestFinished(() => rmSync(agentDir, { recursive: true, force: true }));
     writeFileSync(
       path.join(agentDir, "mcp.json"),
@@ -2122,9 +2421,9 @@ describe("PiRpcAgentClient", () => {
     const session = await client.createSession(
       createConfig({
         mcpServers: {
-          paseo: {
+          byspace: {
             type: "http",
-            url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=agent-1",
+            url: "http://127.0.0.1:6777/mcp/agents?callerAgentId=agent-1",
           },
           localSecret: {
             type: "stdio",
@@ -2139,7 +2438,7 @@ describe("PiRpcAgentClient", () => {
 
     expect(pi.recordedLaunches).toHaveLength(2);
     expect(pi.recordedLaunches[0]).toMatchObject({
-      cwd: "/tmp/paseo-pi-rpc-test",
+      cwd: "/tmp/byspace-pi-rpc-test",
       argv: ["pi", "--mode", "rpc"],
     });
     const actualLaunch = pi.recordedLaunches[1]!;
@@ -2169,8 +2468,8 @@ describe("PiRpcAgentClient", () => {
           url: "https://example.com/mcp/brave",
           directTools: ["brave_llm_context"],
         },
-        paseo: {
-          url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=agent-1",
+        byspace: {
+          url: "http://127.0.0.1:6777/mcp/agents?callerAgentId=agent-1",
           auth: false,
           oauth: false,
         },
@@ -2187,7 +2486,7 @@ describe("PiRpcAgentClient", () => {
   });
 
   test("reports the path of a malformed Pi global MCP config", async () => {
-    const agentDir = mkdtempSync(path.join(tmpdir(), "paseo-pi-agent-"));
+    const agentDir = mkdtempSync(path.join(tmpdir(), "byspace-pi-agent-"));
     onTestFinished(() => rmSync(agentDir, { recursive: true, force: true }));
     const configPath = path.join(agentDir, "mcp.json");
     writeFileSync(configPath, "{ invalid");
@@ -2199,7 +2498,7 @@ describe("PiRpcAgentClient", () => {
       client.createSession(
         createConfig({
           mcpServers: {
-            paseo: { type: "http", url: "http://127.0.0.1:6767/mcp/agents" },
+            byspace: { type: "http", url: "http://127.0.0.1:6777/mcp/agents" },
           },
         }),
         { env: { PI_CODING_AGENT_DIR: agentDir } },
@@ -2215,9 +2514,9 @@ describe("PiRpcAgentClient", () => {
     const session = await client.createSession(
       createConfig({
         mcpServers: {
-          paseo: {
+          byspace: {
             type: "http",
-            url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=agent-1",
+            url: "http://127.0.0.1:6777/mcp/agents?callerAgentId=agent-1",
           },
         },
       }),

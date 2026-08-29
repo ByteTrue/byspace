@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "../support/fixtures";
+import { expect, test, type Page } from "../fixtures";
 
 const modifier = process.platform === "darwin" ? "Meta" : "Control";
 

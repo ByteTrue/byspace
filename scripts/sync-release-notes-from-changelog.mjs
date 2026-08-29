@@ -165,13 +165,12 @@ export function syncReleaseNotes(argv = process.argv.slice(2), deps = {}) {
   let notes = targetEntry?.notes ?? null;
 
   if (!notes) {
-    console.log(`No matching changelog section found for ${targetTag}. Skipping.`);
-    return;
+    throw new Error(`No matching changelog section found for ${targetTag}.`);
   }
 
   notes = exposeGitHubContributorMentions(notes);
 
-  const tempDir = mkdtempSync(path.join(tmpdir(), "paseo-release-notes-"));
+  const tempDir = mkdtempSync(path.join(tmpdir(), "byspace-release-notes-"));
   const notesPath = path.join(tempDir, `${targetTag}-notes.md`);
   writeFileSync(notesPath, notes);
 
@@ -182,7 +181,7 @@ export function syncReleaseNotes(argv = process.argv.slice(2), deps = {}) {
     "--repo",
     args.repo,
     "--title",
-    `Paseo ${targetTag}`,
+    `BySpace ${targetTag}`,
     "--notes-file",
     notesPath,
     "--verify-tag",

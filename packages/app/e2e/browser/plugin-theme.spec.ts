@@ -1,9 +1,8 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { expect, test } from "../support/fixtures";
-import { connectNewWorkspaceDaemonClient } from "../support/helpers/new-workspace";
-import { openSettingsSection } from "../support/helpers/settings";
+import { expect, test } from "../fixtures";
+import { connectNewWorkspaceDaemonClient } from "../helpers/new-workspace";
 
 const PLUGIN_ID = "plugin-theme-e2e";
 
@@ -44,16 +43,16 @@ const PLUGIN_SOURCE = `export default function contribute(plugin) {
 
 // settingsStyles.sectionHeaderTitle paints from foregroundMuted, so the section heading proves the
 // contributed palette reached the semantic tokens rather than just the swatch.
-const MOCHA_MUTED_FOREGROUND = "rgb(166, 173, 200)";
-const LATTE_MUTED_FOREGROUND = "rgb(108, 111, 133)";
+const MOCHA_FOREGROUND = "rgb(205, 214, 244)";
+const LATTE_FOREGROUND = "rgb(76, 79, 105)";
 
 test("applies a contributed theme and falls back when its plugin is gone", async ({
   page,
 }, testInfo) => {
-  const directory = await mkdtemp(path.join(tmpdir(), "paseo-plugin-theme-e2e-"));
-  const client = await connectNewWorkspaceDaemonClient({ ownProjects: false });
+  const directory = await mkdtemp(path.join(tmpdir(), "byspace-plugin-theme-e2e-"));
+  const client = await connectNewWorkspaceDaemonClient();
   const previousConfig = await client.getDaemonConfig();
-  await writeFile(path.join(directory, "paseo-plugin.json"), JSON.stringify({ id: PLUGIN_ID }));
+  await writeFile(path.join(directory, "byspace-plugin.json"), JSON.stringify({ id: PLUGIN_ID }));
   await writeFile(path.join(directory, "index.ts"), PLUGIN_SOURCE);
 
   try {
@@ -61,28 +60,30 @@ test("applies a contributed theme and falls back when its plugin is gone", async
     await client.installDirectoryPlugin(directory);
     await page.goto("/settings");
     await expect(page.getByTestId("settings-sidebar")).toBeVisible();
-    await openSettingsSection(page, "appearance");
-
-    const sectionTitle = page.getByText("Theme", { exact: true }).first();
-    await page.getByLabel("Theme: System", { exact: true }).click();
-    const mochaItem = page.getByText("Catppuccin Mocha", { exact: true });
-    await expect(mochaItem).toBeVisible({ timeout: 30_000 });
-    await page.screenshot({
-      path: testInfo.outputPath("plugin-theme-picker.png"),
-      animations: "disabled",
-      fullPage: true,
-    });
+    await page.evaluate((pluginId) => {
+      const current = JSON.parse(localStorage.getItem("@byspace:app-settings") ?? "{}");
+      localStorage.setItem(
+        "@byspace:app-settings",
+        JSON.stringify({ ...current, theme: "plugin", pluginThemeId: `${pluginId}/theme/latte` }),
+      );
+    }, PLUGIN_ID);
+    await page.reload();
+    await expect(page.getByTestId("settings-sidebar")).toBeVisible();
+    const sectionTitle = page.getByText("Preferences", { exact: true }).first();
 
     await test.step("a contributed light theme uses the light palette", async () => {
-      await page.getByText("Catppuccin Latte", { exact: true }).click();
-      await expect(page.getByLabel("Theme: Catppuccin Latte", { exact: true })).toBeVisible();
-      await expect(sectionTitle).toHaveCSS("color", LATTE_MUTED_FOREGROUND);
-      await page.getByLabel("Theme: Catppuccin Latte", { exact: true }).click();
+      await expect(sectionTitle).toHaveCSS("color", LATTE_FOREGROUND, { timeout: 30_000 });
     });
 
-    await mochaItem.click();
-    await expect(page.getByLabel("Theme: Catppuccin Mocha", { exact: true })).toBeVisible();
-    await expect(sectionTitle).toHaveCSS("color", MOCHA_MUTED_FOREGROUND);
+    await page.evaluate((pluginId) => {
+      const current = JSON.parse(localStorage.getItem("@byspace:app-settings") ?? "{}");
+      localStorage.setItem(
+        "@byspace:app-settings",
+        JSON.stringify({ ...current, theme: "plugin", pluginThemeId: `${pluginId}/theme/mocha` }),
+      );
+    }, PLUGIN_ID);
+    await page.reload();
+    await expect(sectionTitle).toHaveCSS("color", MOCHA_FOREGROUND, { timeout: 30_000 });
     await page.screenshot({
       path: testInfo.outputPath("plugin-theme-applied.png"),
       fullPage: true,
@@ -90,18 +91,15 @@ test("applies a contributed theme and falls back when its plugin is gone", async
 
     await test.step("the selection survives a reload", async () => {
       await page.reload();
-      await expect(page.getByLabel("Theme: Catppuccin Mocha", { exact: true })).toBeVisible({
-        timeout: 30_000,
-      });
-      await expect(sectionTitle).toHaveCSS("color", MOCHA_MUTED_FOREGROUND);
+      await expect(sectionTitle).toHaveCSS("color", MOCHA_FOREGROUND, { timeout: 30_000 });
     });
 
     await test.step("removing the plugin falls back to the default theme", async () => {
       await client.removePlugin(PLUGIN_ID);
-      await expect(page.getByLabel("Theme: System", { exact: true })).toBeVisible({
+      await page.reload();
+      await expect(sectionTitle).not.toHaveCSS("color", MOCHA_FOREGROUND, {
         timeout: 30_000,
       });
-      await expect(sectionTitle).not.toHaveCSS("color", MOCHA_MUTED_FOREGROUND);
       await page.screenshot({
         path: testInfo.outputPath("plugin-theme-fallback.png"),
         fullPage: true,

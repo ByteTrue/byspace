@@ -1,16 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Keyboard, ScrollView, StyleSheet as RNStyleSheet, Text, View } from "react-native";
+import { Keyboard, ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import ReanimatedAnimated from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import invariant from "tiny-invariant";
 import { Composer } from "@/composer";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { ComposerImportPill } from "@/composer/draft/import-pill";
-import { COMPOSER_PILL_CLEARANCE } from "@/composer/pill-styles";
 import { AgentStreamView } from "@/agent-stream/view";
 import { composerWorkspaceAttachment } from "@/composer/attachments/workspace";
 import { useAgentInputDraft } from "@/composer/draft/input-draft";
@@ -32,9 +29,9 @@ import {
   shouldAllowEmptyDraftText,
   validateDraftSubmission,
 } from "@/composer/draft/workspace-tab-core";
-import type { AgentCapabilityFlags } from "@getpaseo/protocol/agent-types";
-import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { AgentCapabilityFlags } from "@bytetrue/byspace-protocol/agent-types";
+import type { AgentSnapshotPayload } from "@bytetrue/byspace-protocol/messages";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 import type { WorkspaceComposerAttachment } from "@/attachments/types";
 import {
   useDraftWorkspaceAttachmentScopeKey,
@@ -48,12 +45,9 @@ import {
   useIsCompactFormFactor,
 } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
-import {
-  buildWorkspaceTabPersistenceKey,
-  type WorkspaceDraftTabSetup,
-} from "@/workspace-tabs/model";
-import { openPreferredWorkspaceTarget } from "@/workspace-tabs/open-beside";
-import { useSettings } from "@/hooks/use-settings";
+import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import { openSidePanelView } from "@/workspace-tabs/side-panel";
+import type { WorkspaceDraftTabSetup } from "@/workspace-tabs/model";
 
 const EMPTY_PENDING_PERMISSIONS = new Map();
 const EMPTY_ONLINE_SERVER_IDS: string[] = [];
@@ -382,7 +376,6 @@ export function WorkspaceDraftAgentTab({
   if (!composerState) {
     throw new Error("Workspace draft composer state is required");
   }
-
   const draftProvider = composerState.selectedProvider;
   const draftProviderDefinitions = composerState.providerDefinitions;
   const draftThinkingOptions = composerState.availableThinkingOptions;
@@ -393,9 +386,8 @@ export function WorkspaceDraftAgentTab({
   const draftSetMode = composerState.setModeFromUser;
   const draftFeatures = composerState.agentControls.features;
   const draftOnSetFeature = composerState.agentControls.onSetFeature;
-
   const clearDraftInput = draftInput.clear;
-  const replaceDraftText = draftInput.replaceText;
+  const setDraftText = draftInput.setText;
   const setDraftAttachments = draftInput.setAttachments;
   const pendingAutoSubmit = useWorkspaceDraftSubmissionStore((state) => {
     const pending = state.pendingByDraftId[draftId] ?? null;
@@ -440,7 +432,6 @@ export function WorkspaceDraftAgentTab({
     workspaceId,
   });
   const draftAttachmentScopeKey = useDraftWorkspaceAttachmentScopeKey(draftId);
-  const openInSidePane = useSettings((settings) => settings.openInSidePane);
   const attachmentScopeKeys = useMemo(
     () => [draftAttachmentScopeKey, workspaceAttachmentScopeKey].filter(Boolean),
     [draftAttachmentScopeKey, workspaceAttachmentScopeKey],
@@ -453,15 +444,14 @@ export function WorkspaceDraftAgentTab({
       if (attachment.kind !== "review") {
         return;
       }
-      openPreferredWorkspaceTarget({
+      openSidePanelView({
         isCompact: isCompactFormFactor,
         workspaceKey: buildWorkspaceTabPersistenceKey({ serverId, workspaceId: workspaceId ?? "" }),
-        target: { kind: "working_diff" },
-        source: "changesLinks",
-        preferences: openInSidePane,
+        checkout: { serverId, cwd: attachment.attachment.cwd, isGit: true },
+        view: "changes",
       });
     },
-    [isCompactFormFactor, openInSidePane, serverId, workspaceId],
+    [isCompactFormFactor, serverId, workspaceId],
   );
 
   const {
@@ -530,10 +520,6 @@ export function WorkspaceDraftAgentTab({
       onCreated(result);
     },
   });
-  const turnPresentation = useMemo(
-    () => resolveTurnPresentation(TURN_LIVENESS_IDLE, pendingMessageSubmissions.length > 0),
-    [pendingMessageSubmissions],
-  );
   useAgentControlCommandCenterActions({
     sourceId: `draft:${serverId}:${tabId}`,
     enabled: isPaneFocused && !isSubmitting,
@@ -564,6 +550,11 @@ export function WorkspaceDraftAgentTab({
       },
     },
   });
+
+  const turnPresentation = useMemo(
+    () => resolveTurnPresentation(TURN_LIVENESS_IDLE, pendingMessageSubmissions.length > 0),
+    [pendingMessageSubmissions],
+  );
   const isReadyForPendingAutoSubmit = Boolean(
     pendingAutoSubmit &&
     draftInput.isHydrated &&
@@ -585,7 +576,7 @@ export function WorkspaceDraftAgentTab({
       return;
     }
     autoSubmitKeyRef.current = submitKey;
-    replaceDraftText("");
+    setDraftText("");
     setDraftAttachments([]);
     const preparedAttempt =
       initialCreateAttempt?.clientMessageId === submission.clientMessageId
@@ -602,7 +593,7 @@ export function WorkspaceDraftAgentTab({
           cwd: submission.cwd,
         });
     void createPromise.catch(() => {
-      replaceDraftText(submission.text);
+      setDraftText(submission.text);
       setDraftAttachments(composerWorkspaceAttachment.userAttachmentsOnly(submission.attachments));
       autoSubmitKeyRef.current = null;
     });
@@ -615,7 +606,7 @@ export function WorkspaceDraftAgentTab({
     isReadyForPendingAutoSubmit,
     serverId,
     setDraftAttachments,
-    replaceDraftText,
+    setDraftText,
     workspaceId,
   ]);
 
@@ -625,17 +616,52 @@ export function WorkspaceDraftAgentTab({
     focusInputRef.current = focus;
   }, []);
 
-  const { style: composerKeyboardStyle } = useKeyboardShiftStyle({
-    mode: "translate",
-  });
+  const handleModeSelectWithFocus = useCallback(
+    (modeId: string) => {
+      composerState.setModeFromUser(modeId);
+      focusInputRef.current?.();
+    },
+    [composerState],
+  );
+
+  const handleModelSelectWithFocus = useCallback(
+    (modelId: string) => {
+      composerState.setModelFromUser(modelId);
+      focusInputRef.current?.();
+    },
+    [composerState],
+  );
+
+  const handleProviderAndModelSelectWithFocus = useCallback(
+    (
+      provider: Parameters<typeof composerState.setProviderAndModelFromUser>[0],
+      modelId: string,
+    ) => {
+      composerState.setProviderAndModelFromUser(provider, modelId);
+      focusInputRef.current?.();
+    },
+    [composerState],
+  );
+
+  const handleThinkingOptionSelectWithFocus = useCallback(
+    (optionId: string) => {
+      composerState.setThinkingOptionFromUser(optionId);
+      focusInputRef.current?.();
+    },
+    [composerState],
+  );
+
+  const handleSetFeatureWithFocus = useCallback(
+    (featureId: string, value: unknown) => {
+      composerState.agentControls.onSetFeature?.(featureId, value);
+      focusInputRef.current?.();
+    },
+    [composerState],
+  );
 
   const inputAreaWrapperStyle = useMemo(
-    () => [
-      animatedStaticStyles.inputAreaWrapper,
-      { paddingBottom: insets.bottom },
-      composerKeyboardStyle,
-    ],
-    [insets.bottom, composerKeyboardStyle],
+    () => [styles.inputAreaWrapper, { paddingBottom: insets.bottom }],
+    [insets.bottom],
   );
 
   const handleDropdownCloseFocus = useCallback(() => {
@@ -645,10 +671,24 @@ export function WorkspaceDraftAgentTab({
   const composerAgentControls = useMemo(
     () => ({
       ...composerState.agentControls,
+      onSelectMode: handleModeSelectWithFocus,
+      onSelectModel: handleModelSelectWithFocus,
+      onSelectProviderAndModel: handleProviderAndModelSelectWithFocus,
+      onSelectThinkingOption: handleThinkingOptionSelectWithFocus,
+      onSetFeature: handleSetFeatureWithFocus,
       onDropdownClose: handleDropdownCloseFocus,
       disabled: isSubmitting,
     }),
-    [composerState.agentControls, handleDropdownCloseFocus, isSubmitting],
+    [
+      composerState.agentControls,
+      handleModeSelectWithFocus,
+      handleModelSelectWithFocus,
+      handleProviderAndModelSelectWithFocus,
+      handleThinkingOptionSelectWithFocus,
+      handleSetFeatureWithFocus,
+      handleDropdownCloseFocus,
+      isSubmitting,
+    ],
   );
   return (
     <FileDropZone style={styles.container}>
@@ -679,7 +719,7 @@ export function WorkspaceDraftAgentTab({
         )}
       </View>
 
-      <ReanimatedAnimated.View style={inputAreaWrapperStyle} onLayout={onInputAreaLayout}>
+      <View style={inputAreaWrapperStyle} onLayout={onInputAreaLayout}>
         {importPillPress ? (
           <View style={styles.importPillRow}>
             <View style={styles.importPillContent}>
@@ -691,14 +731,13 @@ export function WorkspaceDraftAgentTab({
           agentId={tabId}
           serverId={serverId}
           workspaceId={workspaceId}
-          externalKeyboardShift
           isPaneFocused={isPaneFocused}
           onSubmitMessage={handleCreateFromInput}
           isSubmitLoading={isSubmitting}
+          isSubmitDisabled={composerState.isModelLoading}
           blurOnSubmit={true}
           value={draftInput.text}
-          onChangeText={draftInput.editText}
-          textReplacementKey={draftInput.textReplacementKey}
+          onChangeText={draftInput.setText}
           attachments={draftInput.attachments}
           attachmentScopeKeys={attachmentScopeKeys}
           onOpenWorkspaceAttachment={handleOpenWorkspaceAttachment}
@@ -712,16 +751,10 @@ export function WorkspaceDraftAgentTab({
           agentControls={composerAgentControls}
           isCompactLayout={isCompactComposerLayout}
         />
-      </ReanimatedAnimated.View>
+      </View>
     </FileDropZone>
   );
 }
-
-const animatedStaticStyles = RNStyleSheet.create({
-  inputAreaWrapper: {
-    width: "100%",
-  },
-});
 
 const styles = StyleSheet.create((theme) => ({
   container: {
@@ -746,17 +779,15 @@ const styles = StyleSheet.create((theme) => ({
   configSection: {
     gap: theme.spacing[3],
   },
+  inputAreaWrapper: {
+    width: "100%",
+    backgroundColor: theme.colors.surface0,
+  },
   importPillRow: {
     width: "100%",
     paddingHorizontal: theme.spacing[4],
-    paddingTop: {
-      xs: COMPOSER_PILL_CLEARANCE.compact,
-      md: COMPOSER_PILL_CLEARANCE.wide,
-    },
-    paddingBottom: {
-      xs: COMPOSER_PILL_CLEARANCE.compact,
-      md: COMPOSER_PILL_CLEARANCE.wide,
-    },
+    paddingTop: theme.spacing[3],
+    paddingBottom: theme.spacing[3],
     alignItems: "center",
   },
   importPillContent: {

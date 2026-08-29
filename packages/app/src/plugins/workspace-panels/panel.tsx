@@ -3,16 +3,16 @@ import type {
   PluginHostProps,
   PluginTheme,
   PluginWorkspacePanelProps,
-} from "@getpaseo/plugin";
-import { PluginClientStateProvider } from "@getpaseo/plugin/host";
+} from "@bytetrue/byspace-plugin";
+import { PluginClientStateProvider } from "@bytetrue/byspace-plugin/host";
 import { CircleAlert } from "lucide-react-native";
 import { useMemo } from "react";
-import { Platform, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import invariant from "tiny-invariant";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { usePaneContext } from "@/panels/pane-context";
-import { definePanel, type PanelDescriptor } from "@/panels/panel-registry";
+import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry";
 import { useHostRuntimeClient, useHosts } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceExists } from "@/stores/session-store-hooks";
@@ -32,8 +32,6 @@ const pluginThemeMapping = (theme: Theme) => ({
 });
 
 function resolvePlatform(): PluginHostProps["layout"]["platform"] {
-  if (Platform.OS === "ios") return "ios";
-  if (Platform.OS === "android") return "android";
   return "web";
 }
 
@@ -143,7 +141,6 @@ function usePluginPanelDescriptor(
     return {
       label: "Plugin unavailable",
       subtitle: target.pluginId,
-      tooltip: "This plugin panel is unavailable",
       titleState: "ready",
       icon: CircleAlert,
       statusBucket: null,
@@ -152,17 +149,20 @@ function usePluginPanelDescriptor(
   return {
     label: panel.title,
     subtitle: target.pluginId,
-    tooltip: panel.title,
     titleState: "ready",
     icon: resolvePluginIcon(panel.icon),
     statusBucket: null,
   };
 }
 
-export const pluginPanelRegistration = definePanel("plugin", {
+export const pluginPanelRegistration: PanelRegistration<"plugin"> = {
+  kind: "plugin",
+  resourceKey: (target) =>
+    `${target.pluginId}:${target.panelId}:${target.context}:${"agentId" in target ? target.agentId : ""}`,
+
   component: PluginPanel,
   useDescriptor: usePluginPanelDescriptor,
-});
+};
 
 const styles = StyleSheet.create((theme) => ({
   unavailable: {

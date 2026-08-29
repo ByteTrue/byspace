@@ -78,11 +78,7 @@ vi.mock("@xterm/xterm", () => ({
   },
 }));
 
-import {
-  createTerminalResizeEvent,
-  encodeTerminalOutput,
-  TerminalEmulatorRuntime,
-} from "./terminal-emulator-runtime";
+import { encodeTerminalOutput, TerminalEmulatorRuntime } from "./terminal-emulator-runtime";
 
 interface StubTerminal {
   write: (data: string | Uint8Array, callback?: () => void) => void;
@@ -96,11 +92,7 @@ interface StubTerminal {
 }
 
 interface RuntimeFitProbe {
-  fitAndEmitResize: (input?: {
-    forceRefresh?: boolean;
-    shouldClaim?: boolean;
-    forceClaim?: boolean;
-  }) => void;
+  fitAndEmitResize: (input?: { force?: boolean; shouldClaim?: boolean }) => void;
 }
 
 function createRuntimeWithTerminal(): {
@@ -181,8 +173,8 @@ describe("terminal-emulator-runtime", () => {
   const originalWindow = (globalThis as { window?: unknown }).window;
 
   beforeEach(() => {
-    (globalThis as { window?: { __paseoTerminal?: unknown } }).window = {
-      __paseoTerminal: undefined,
+    (globalThis as { window?: { __byspaceTerminal?: unknown } }).window = {
+      __byspaceTerminal: undefined,
     };
     terminalConstructorOptions.values = [];
   });
@@ -268,17 +260,13 @@ describe("terminal-emulator-runtime", () => {
     const { runtime, writeCallbacks } = createRuntimeWithTerminal();
     const inputModeChanges: Array<{
       kittyKeyboardFlags: number;
+      bracketedPasteMode: boolean;
       win32InputMode: boolean;
-      bracketedPaste: boolean;
     }> = [];
     runtime.setCallbacks({
       callbacks: {
         onInputModeChange: (state) => {
-          inputModeChanges.push({
-            kittyKeyboardFlags: state.kittyKeyboardFlags,
-            win32InputMode: state.win32InputMode,
-            bracketedPaste: Boolean(state.bracketedPaste),
-          });
+          inputModeChanges.push(state);
         },
       },
     });
@@ -299,7 +287,7 @@ describe("terminal-emulator-runtime", () => {
     // The plain write reports kitty flags synchronously during drain; the snapshot resets
     // them only after its barrier gate (the sentinel write callback) resolves.
     expect(inputModeChanges).toEqual([
-      { kittyKeyboardFlags: 7, win32InputMode: false, bracketedPaste: false },
+      { kittyKeyboardFlags: 7, bracketedPasteMode: false, win32InputMode: false },
     ]);
 
     // The plain write carries no onCommitted, so it registers no callback; writeCallbacks[0]
@@ -307,19 +295,9 @@ describe("terminal-emulator-runtime", () => {
     writeCallbacks[0]?.();
 
     expect(inputModeChanges).toEqual([
-      { kittyKeyboardFlags: 7, win32InputMode: false, bracketedPaste: false },
-      { kittyKeyboardFlags: 0, win32InputMode: false, bracketedPaste: false },
+      { kittyKeyboardFlags: 7, bracketedPasteMode: false, win32InputMode: false },
+      { kittyKeyboardFlags: 0, bracketedPasteMode: false, win32InputMode: false },
     ]);
-  });
-
-  it("exposes the tracked input mode state", () => {
-    const { runtime } = createRuntimeWithTerminal();
-
-    runtime.write({ data: terminalOutput("\x1b[?2004h") });
-
-    expect(runtime.getInputModeState()).toMatchObject({
-      bracketedPaste: true,
-    });
   });
 
   it("commits each drained plain write through its own xterm callback", () => {
@@ -504,29 +482,10 @@ describe("terminal-emulator-runtime", () => {
     (runtime as unknown as RuntimeFitProbe).fitAndEmitResize = fitAndEmitResize;
 
     runtime.resize();
-    runtime.resize({ forceRefresh: true, shouldClaim: false });
+    runtime.resize({ force: true });
 
     expect(fitAndEmitResize).toHaveBeenNthCalledWith(1, undefined);
-    expect(fitAndEmitResize).toHaveBeenNthCalledWith(2, {
-      forceRefresh: true,
-      shouldClaim: false,
-    });
-  });
-
-  it("marks explicit resize claims as forced so another client can reclaim the same size", () => {
-    expect(
-      createTerminalResizeEvent({
-        rows: 34,
-        cols: 181,
-        shouldClaim: true,
-        forceClaim: true,
-      }),
-    ).toEqual({
-      rows: 34,
-      cols: 181,
-      shouldClaim: true,
-      forceClaim: true,
-    });
+    expect(fitAndEmitResize).toHaveBeenNthCalledWith(2, { force: true });
   });
 
   it("updates terminal theme without remounting", () => {
@@ -586,16 +545,14 @@ describe("terminal-emulator-runtime", () => {
       cols: 40,
     };
     (runtime as unknown as { terminal: StubTerminal }).terminal = terminal;
-    (runtime as unknown as RuntimeFitProbe).fitAndEmitResize = fitAndEmitResize;
+    (runtime as unknown as { fitAndEmitResize: (force: boolean) => void }).fitAndEmitResize =
+      fitAndEmitResize;
 
     runtime.setFont({ fontFamily: "  Menlo  ", fontSize: 18 });
 
     expect(terminal.options?.fontFamily).toBe("Menlo");
     expect(terminal.options?.fontSize).toBe(18);
-    expect(fitAndEmitResize).toHaveBeenCalledWith({
-      forceRefresh: true,
-      shouldClaim: false,
-    });
+    expect(fitAndEmitResize).toHaveBeenCalledWith({ force: true });
     expect(refresh).toHaveBeenCalledWith(0, 11);
   });
 
@@ -614,10 +571,7 @@ describe("terminal-emulator-runtime", () => {
       }
     ).handleVisibilityRestore();
 
-    expect(fitAndEmitResize).toHaveBeenCalledWith({
-      forceRefresh: true,
-      shouldClaim: false,
-    });
+    expect(fitAndEmitResize).toHaveBeenCalledWith({ force: true, shouldClaim: false });
   });
 
   it("does not refit while the page is still hidden", () => {

@@ -17,8 +17,11 @@ import type {
   FetchRecentProviderSessionsRequestMessage,
   ImportAgentRequestMessageSchema,
   RecentProviderSessionDescriptorPayload,
-} from "@getpaseo/protocol/messages";
-import { getParentAgentIdFromLabels, PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
+} from "@bytetrue/byspace-protocol/messages";
+import {
+  getParentAgentIdFromLabels,
+  PARENT_AGENT_ID_LABEL,
+} from "@bytetrue/byspace-protocol/agent-labels";
 import { createRealpathAwarePathMatcher } from "../../utils/path.js";
 
 type ImportAgentRequestMessage = z.infer<typeof ImportAgentRequestMessageSchema>;
@@ -334,11 +337,10 @@ async function collectImportedProviderSessions(
   const sessions = new Set<string>();
   const records = await agentStorage.list();
   const storedRecordsById = new Map(records.map((record) => [record.id, record]));
-
   const collect = (
     provider: AgentProvider | StoredAgentRecord["provider"] | string,
     persistence: AgentPersistenceHandle | null | undefined,
-  ) => {
+  ): void => {
     if (!persistence || (providerFilter && !providerFilter.has(provider))) return;
     sessions.add(toProviderSessionHandleKey(provider, persistence.sessionId));
     collectProviderSessionHandleKeys(handles, provider, persistence);

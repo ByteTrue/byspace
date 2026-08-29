@@ -1,0 +1,2 @@
+/docs https://github.com/ByteTrue/byspace/tree/main/public-docs 302
+/docs/* https://github.com/ByteTrue/byspace/blob/main/public-docs/:splat.md 302

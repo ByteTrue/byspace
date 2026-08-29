@@ -1,13 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
-import { test } from "../support/fixtures";
-import { gotoAppShell } from "../support/helpers/app";
-import { openSessions } from "../support/helpers/archive-tab";
-import { createIdleAgent } from "../support/helpers/archive-tab";
-import { addConnectedHostAndReload, addOfflineHostAndReload } from "../support/helpers/hosts";
-import { startIsolatedHostDaemon } from "../support/helpers/isolated-host-daemon";
-import { connectSeedClient, seedWorkspace } from "../support/helpers/seed-client";
-import { getServerId } from "../support/helpers/server-id";
+import { test } from "../fixtures";
+import { gotoAppShell } from "../helpers/app";
+import { createIdleAgent, openSessions } from "../helpers/archive-tab";
+import { addConnectedHostAndReload, addOfflineHostAndReload } from "../helpers/hosts";
+import { startIsolatedHostDaemon } from "../helpers/isolated-host-daemon";
+import { connectSeedClient, seedWorkspace } from "../helpers/seed-client";
+import { getServerId } from "../helpers/server-id";
 // The constants module is plain TypeScript, so the Playwright runner can import
 // it — reaching through the `.tsx` picker would drag React Native into Node.
 import { ALL_HOSTS_OPTION_ID } from "@/components/hosts/host-picker-constants";
@@ -137,9 +136,10 @@ test.describe("History search across hosts", () => {
       // matches that were found, with no word about the host that never
       // answered, is the failure this asserts against.
       await search(page, `${NONCE} bill`);
-      await expect(page.getByTestId("sessions-host-errors")).toContainText(SECONDARY_LABEL, {
-        timeout: 30_000,
-      });
+      const hostErrorAlert = page.getByTestId("sessions-host-errors");
+      await expect(hostErrorAlert).toContainText(SECONDARY_LABEL, { timeout: 30_000 });
+      await expect(hostErrorAlert).toHaveAttribute("role", "alert");
+      await expect(hostErrorAlert).toHaveAttribute("aria-live", "assertive");
       await expectRankedTitles(page, [reachableTitle]);
     } finally {
       await workspace.cleanup().catch(() => undefined);

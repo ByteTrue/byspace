@@ -8,8 +8,8 @@ import type {
   ManagedImportableProviderSession,
 } from "./agent-manager.js";
 import { AgentStorage, type StoredAgentRecord } from "./agent-storage.js";
-import type { FetchRecentProviderSessionsRequestMessage } from "@getpaseo/protocol/messages";
-import { PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
+import type { FetchRecentProviderSessionsRequestMessage } from "@bytetrue/byspace-protocol/messages";
+import { PARENT_AGENT_ID_LABEL } from "@bytetrue/byspace-protocol/agent-labels";
 import type { AgentTimelineItem } from "./agent-sdk-types.js";
 import { createPersistedWorkspaceRecord } from "../workspace-registry.js";
 import type { WorkspaceProvisioningService } from "../session/workspace-provisioning/workspace-provisioning-service.js";
@@ -293,10 +293,7 @@ test("listImportableProviderSessions looks past already-imported rows to fill th
 
   const result = await listImportableProviderSessions({
     request: makeRequest({ cwd, providers: ["claude"], limit: 1 }),
-    agentManager: {
-      listAgents: () => [],
-      listImportableSessions,
-    },
+    agentManager: { listAgents: () => [], listImportableSessions },
     agentStorage: {
       list: async () => [
         {
@@ -317,7 +314,7 @@ test("listImportableProviderSessions looks past already-imported rows to fill th
   expect(result.filteredAlreadyImportedCount).toBe(1);
 });
 
-test("listImportableProviderSessions includes a provider session after its Paseo agent is archived", async () => {
+test("listImportableProviderSessions includes a provider session after its BySpace agent is archived", async () => {
   const cwd = "/tmp/project";
   const archivedSession = makeImportableSession({
     provider: "claude",
@@ -438,7 +435,7 @@ test("listImportableProviderSessions filters out metadata generation sessions", 
 });
 
 test("listImportableProviderSessions keeps realpath-equivalent cwd matches", async () => {
-  const root = mkdtempSync(path.join(tmpdir(), "paseo-import-cwd-"));
+  const root = mkdtempSync(path.join(tmpdir(), "byspace-import-cwd-"));
   const realCwd = path.join(root, "real-project");
   const linkedCwd = path.join(root, "linked-project");
   mkdirSync(realCwd, { recursive: true });

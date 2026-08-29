@@ -10,7 +10,7 @@ interface WorkspaceServiceRoutePreferencesState {
   setPreferredRoute: (serverId: string, kind: WorkspaceScriptLinkKind) => void;
 }
 
-const WorkspaceScriptLinkKindSchema = z.enum(["public", "paseo", "direct"]);
+const WorkspaceScriptLinkKindSchema = z.enum(["public", "byspace", "direct"]);
 const WorkspaceServiceRoutePreferencesSchema = z.strictObject({
   byServerId: z.record(z.string(), WorkspaceScriptLinkKindSchema),
 });
@@ -29,7 +29,7 @@ export function createWorkspaceServiceRoutePreferencesStore(storage: StateStorag
           set((state) => ({ byServerId: { ...state.byServerId, [serverId]: kind } })),
       }),
       {
-        name: "workspace-service-route-preferences",
+        name: "byspace-workspace-service-route-preferences",
         version: 1,
         storage: createValidatedPersistStorage(storage, WorkspaceServiceRoutePreferencesSchema),
         partialize: (state) => ({ byServerId: state.byServerId }),

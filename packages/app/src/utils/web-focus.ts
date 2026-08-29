@@ -1,19 +1,19 @@
 interface FocusWithRetriesOptions {
   focus: () => void;
   isFocused: () => boolean;
-  deferInitialAttempt?: boolean;
   timeoutMs?: number;
   onSuccess?: () => void;
   onTimeout?: () => void;
+  deferInitialAttempt?: boolean;
 }
 
 export function focusWithRetries({
   focus,
   isFocused,
-  deferInitialAttempt = false,
   timeoutMs = 1500,
   onSuccess,
   onTimeout,
+  deferInitialAttempt = false,
 }: FocusWithRetriesOptions): () => void {
   let cancelled = false;
   const deadlineMs = Date.now() + timeoutMs;

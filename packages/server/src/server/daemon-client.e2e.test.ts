@@ -12,10 +12,10 @@ import {
   type DaemonTestContext,
   DaemonClient,
 } from "./test-utils/index.js";
-import { createTestPaseoDaemon } from "./test-utils/paseo-daemon.js";
-import { createTestAgentClients } from "./test-utils/fake-agent-client.js";
+import { createTestBySpaceDaemon } from "./test-utils/byspace-daemon.js";
 import { getFullAccessConfig, getAskModeConfig } from "./daemon-e2e/agent-configs.js";
 import { parsePcm16MonoWav, wordSimilarity } from "./test-utils/dictation-e2e.js";
+import { getSherpaOnnxModelDir } from "./speech/providers/local/sherpa/model-downloader.js";
 import type {
   AgentClient,
   AgentPersistenceHandle,
@@ -25,12 +25,11 @@ import type {
   AgentStreamEvent,
 } from "./agent/agent-sdk-types.js";
 
-const openaiApiKey = process.env.OPENAI_API_KEY ?? null;
-
 const localModelsDir =
-  process.env.PASEO_LOCAL_MODELS_DIR ?? path.join(homedir(), ".paseo", "models", "local-speech");
+  process.env.BYSPACE_LOCAL_MODELS_DIR ??
+  path.join(homedir(), ".byspace", "models", "local-speech");
 const testFileDir = path.dirname(fileURLToPath(import.meta.url));
-const appE2eFixturesDir = path.resolve(testFileDir, "../../../app/e2e/support/fixtures");
+const appE2eFixturesDir = path.resolve(testFileDir, "../../../app/e2e/fixtures");
 
 function fixturePath(fileName: string): string {
   return path.join(appE2eFixturesDir, fileName);
@@ -40,34 +39,18 @@ async function readFixture(fileName: string): Promise<Buffer> {
   return readFile(fixturePath(fileName));
 }
 
-function hasSherpaParakeetModels(modelsDir: string): boolean {
-  return (
-    existsSync(
-      path.join(modelsDir, "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8", "encoder.int8.onnx"),
-    ) &&
-    existsSync(path.join(modelsDir, "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8", "tokens.txt"))
-  );
-}
-
-function hasSherpaKokoroModels(modelsDir: string): boolean {
-  return (
-    existsSync(path.join(modelsDir, "kokoro-en-v0_19", "model.onnx")) &&
-    existsSync(path.join(modelsDir, "kokoro-en-v0_19", "voices.bin")) &&
-    existsSync(path.join(modelsDir, "kokoro-en-v0_19", "tokens.txt"))
-  );
-}
-
-const hasLocalSpeech =
-  hasSherpaParakeetModels(localModelsDir) && hasSherpaKokoroModels(localModelsDir);
-const hasAnySpeech = hasLocalSpeech || Boolean(openaiApiKey);
-const speechTest = hasAnySpeech ? test : test.skip;
+const localSpeechModelDir = getSherpaOnnxModelDir(localModelsDir, "fire-red-asr2-aed-int8");
+const hasLocalSpeech = ["encoder.int8.onnx", "decoder.int8.onnx", "tokens.txt"].every((file) =>
+  existsSync(path.join(localSpeechModelDir, file)),
+);
+const speechTest = hasLocalSpeech ? test : test.skip;
 
 function tmpCwd(): string {
   return mkdtempSync(path.join(tmpdir(), "daemon-client-"));
 }
 
 test("DaemonClient connects to a password-protected daemon", async () => {
-  const daemon = await createTestPaseoDaemon({
+  const daemon = await createTestBySpaceDaemon({
     auth: { password: "$2b$12$GMhF7pN4QnMlHOQXOqjd1OitKWPSmAO3FwB0PHzKtcZR/sAMryz76" },
   });
   const client = new DaemonClient({
@@ -86,7 +69,7 @@ test("DaemonClient connects to a password-protected daemon", async () => {
 });
 
 test("DaemonClient surfaces password auth failures from WebSocket close reasons", async () => {
-  const daemon = await createTestPaseoDaemon({
+  const daemon = await createTestBySpaceDaemon({
     auth: { password: "$2b$12$GMhF7pN4QnMlHOQXOqjd1OitKWPSmAO3FwB0PHzKtcZR/sAMryz76" },
   });
   const missingPasswordClient = new DaemonClient({
@@ -113,7 +96,7 @@ test("DaemonClient surfaces password auth failures from WebSocket close reasons"
 });
 
 test("createAgent without an initial prompt returns an idle snapshot", async () => {
-  const daemon = await createTestPaseoDaemon();
+  const daemon = await createTestBySpaceDaemon();
   const client = new DaemonClient({
     url: `ws://127.0.0.1:${daemon.port}/ws`,
     appVersion: "0.1.82",
@@ -139,7 +122,7 @@ test("createAgent without an initial prompt returns an idle snapshot", async () 
 });
 
 test("DaemonClient uploads file bytes to daemon temp storage", async () => {
-  const daemon = await createTestPaseoDaemon();
+  const daemon = await createTestBySpaceDaemon();
   const client = new DaemonClient({
     url: `ws://127.0.0.1:${daemon.port}/ws`,
     appVersion: "0.1.82",
@@ -165,7 +148,7 @@ test("DaemonClient uploads file bytes to daemon temp storage", async () => {
         fileName: "notes.txt",
         mimeType: "text/plain",
         size: 11,
-        path: path.join(daemon.paseoHome, "uploads", "upload_req-upload-e2e", "notes.txt"),
+        path: path.join(daemon.byspaceHome, "uploads", "upload_req-upload-e2e", "notes.txt"),
       },
       error: null,
     });
@@ -177,7 +160,7 @@ test("DaemonClient uploads file bytes to daemon temp storage", async () => {
 });
 
 test("createAgent with background initialPrompt returns a running snapshot before turn completion", async () => {
-  const daemon = await createTestPaseoDaemon();
+  const daemon = await createTestBySpaceDaemon();
   const client = new DaemonClient({
     url: `ws://127.0.0.1:${daemon.port}/ws`,
     appVersion: "0.1.82",
@@ -316,88 +299,6 @@ class StubAgentClient implements AgentClient {
   }
 }
 
-class RecordingMcpResumeClient implements AgentClient {
-  readonly provider = "codex" as const;
-  readonly capabilities;
-  readonly resumeOverrides: Array<Partial<AgentSessionConfig> | undefined> = [];
-  private readonly inner = createTestAgentClients({ supportsMcpServers: true }).codex;
-
-  constructor() {
-    this.capabilities = this.inner.capabilities;
-  }
-
-  isAvailable() {
-    return this.inner.isAvailable();
-  }
-
-  createSession(config: AgentSessionConfig) {
-    return this.inner.createSession(config);
-  }
-
-  resumeSession(
-    handle: AgentPersistenceHandle,
-    overrides?: Partial<AgentSessionConfig>,
-  ): Promise<AgentSession> {
-    this.resumeOverrides.push(overrides);
-    return this.inner.resumeSession(handle, overrides);
-  }
-
-  fetchCatalog(...args: Parameters<AgentClient["fetchCatalog"]>) {
-    return this.inner.fetchCatalog(...args);
-  }
-}
-
-class UnsupportedMcpResumeSession extends StubAgentSession {
-  closed = false;
-
-  constructor() {
-    super({
-      sessionId: "unsupported-mcp-resume-session",
-      supportsStreaming: false,
-    });
-  }
-
-  override async close(): Promise<void> {
-    this.closed = true;
-  }
-}
-
-class RejectingMcpResumeClient implements AgentClient {
-  readonly provider = "codex" as const;
-  readonly capabilities;
-  readonly nativeArchiveCalls: string[] = [];
-  readonly replacement = new UnsupportedMcpResumeSession();
-  private readonly inner = createTestAgentClients({ supportsMcpServers: true }).codex;
-
-  constructor() {
-    this.capabilities = this.inner.capabilities;
-  }
-
-  isAvailable() {
-    return this.inner.isAvailable();
-  }
-
-  createSession(config: AgentSessionConfig) {
-    return this.inner.createSession(config);
-  }
-
-  async resumeSession(): Promise<AgentSession> {
-    return this.replacement;
-  }
-
-  fetchCatalog(...args: Parameters<AgentClient["fetchCatalog"]>) {
-    return this.inner.fetchCatalog(...args);
-  }
-
-  async archiveNativeSession(): Promise<void> {
-    this.nativeArchiveCalls.push("archive");
-  }
-
-  async unarchiveNativeSession(): Promise<void> {
-    this.nativeArchiveCalls.push("unarchive");
-  }
-}
-
 test("createAgent fails when the initial turn cannot start", async () => {
   const testAgent = new StubAgentClient({
     sessionId: "start-turn-failure-session",
@@ -405,7 +306,7 @@ test("createAgent fails when the initial turn cannot start", async () => {
     startError: "Initial turn failed to start",
   });
 
-  const daemon = await createTestPaseoDaemon({
+  const daemon = await createTestBySpaceDaemon({
     agentClients: { codex: testAgent },
   });
   const client = new DaemonClient({
@@ -443,7 +344,7 @@ function createUninterruptibleClient(): AgentClient {
 
 test("DaemonClient rejects a replacement prompt when cancellation is not acknowledged", async () => {
   const cwd = tmpCwd();
-  const daemon = await createTestPaseoDaemon({
+  const daemon = await createTestBySpaceDaemon({
     agentClients: { codex: createUninterruptibleClient() },
   });
   const client = new DaemonClient({ url: `ws://127.0.0.1:${daemon.port}/ws` });
@@ -465,7 +366,7 @@ test("DaemonClient rejects a replacement prompt when cancellation is not acknowl
 
 test("DaemonClient rejects Stop when cancellation is not acknowledged", async () => {
   const cwd = tmpCwd();
-  const daemon = await createTestPaseoDaemon({
+  const daemon = await createTestBySpaceDaemon({
     agentClients: { codex: createUninterruptibleClient() },
   });
   const client = new DaemonClient({ url: `ws://127.0.0.1:${daemon.port}/ws` });
@@ -660,34 +561,15 @@ class FailingResumeClient extends NonPersistentReloadClient {
 }
 
 function resolveSpeechConfig() {
-  if (hasLocalSpeech) {
-    return {
-      providers: {
-        dictationStt: { provider: "local" as const, explicit: true },
-        voiceStt: { provider: "local" as const, explicit: true },
-        voiceTts: { provider: "local" as const, explicit: true },
-      },
-      local: {
-        modelsDir: localModelsDir,
-        models: {
-          dictationStt: "parakeet-tdt-0.6b-v2-int8",
-          voiceStt: "parakeet-tdt-0.6b-v2-int8",
-          voiceTts: "kokoro-en-v0_19",
-          voiceTtsSpeakerId: 0,
-        },
-      },
-    };
-  }
-  if (openaiApiKey) {
-    return {
-      providers: {
-        dictationStt: { provider: "openai" as const, explicit: true },
-        voiceStt: { provider: "openai" as const, explicit: true },
-        voiceTts: { provider: "openai" as const, explicit: true },
-      },
-    };
-  }
-  return undefined;
+  if (!hasLocalSpeech) return undefined;
+  return {
+    enabled: true,
+    sttLanguage: "auto",
+    local: {
+      modelsDir: localModelsDir,
+      models: { dictationStt: "fire-red-asr2-aed-int8" as const },
+    },
+  };
 }
 
 let ctx: DaemonTestContext;
@@ -697,9 +579,6 @@ beforeAll(async () => {
 
   ctx = await createDaemonTestContext({
     dictationFinalTimeoutMs: 5000,
-    ...(openaiApiKey
-      ? { openai: { stt: { apiKey: openaiApiKey }, tts: { apiKey: openaiApiKey } } }
-      : {}),
     ...(speechConfig ? { speech: speechConfig } : {}),
   });
 }, 60000);
@@ -715,24 +594,11 @@ test("handles session actions", async () => {
   expect(Array.isArray(agents.entries)).toBe(true);
 
   const cwd = tmpCwd();
-  const created = await ctx.client.createAgent({
+  await ctx.client.createAgent({
     config: {
       ...getFullAccessConfig("codex"),
       cwd,
     },
-  });
-
-  await expect(ctx.client.setVoiceMode(true, created.id)).resolves.toMatchObject({
-    enabled: true,
-    agentId: created.id,
-    accepted: true,
-    error: null,
-  });
-  await expect(ctx.client.setVoiceMode(false)).resolves.toMatchObject({
-    enabled: false,
-    agentId: null,
-    accepted: true,
-    error: null,
   });
 
   await ctx.client.deleteAgent(randomUUID());
@@ -943,116 +809,6 @@ test("resume_agent auto-unarchives archived agents", async () => {
   }
 }, 180000);
 
-test("resume_agent rehydrates the newest private MCP config from a redacted persistence handle", async () => {
-  const cwd = tmpCwd();
-  const provider = new RecordingMcpResumeClient();
-  const localCtx = await createDaemonTestContext({
-    agentClients: { codex: provider },
-  });
-  const bearerA = "durable-resume-bearer-a";
-  const bearerB = "durable-resume-bearer-b";
-  const externalMcpA = {
-    hub: {
-      type: "http" as const,
-      url: "https://hub.test/mcp/executions/durable-resume",
-      headers: { Authorization: `Bearer ${bearerA}` },
-    },
-  };
-  const externalMcpB = {
-    hub: {
-      ...externalMcpA.hub,
-      headers: { Authorization: `Bearer ${bearerB}` },
-    },
-  };
-
-  try {
-    const created = await localCtx.client.createAgent({
-      config: {
-        provider: "codex",
-        cwd,
-        mcpServers: externalMcpA,
-      },
-    });
-    const projectedHandle = created.persistence;
-    if (!projectedHandle) {
-      throw new Error("Expected a projected persistence handle");
-    }
-    expect(projectedHandle.metadata).not.toHaveProperty("mcpServers");
-    expect(JSON.stringify(projectedHandle)).not.toContain(bearerA);
-
-    await localCtx.client.archiveAgent(created.id);
-    const resumedWithOverride = await localCtx.client.resumeAgent(projectedHandle, {
-      mcpServers: externalMcpB,
-    });
-    const newestProjectedHandle = resumedWithOverride.persistence;
-    if (!newestProjectedHandle) {
-      throw new Error("Expected a projected persistence handle after resume");
-    }
-    expect(provider.resumeOverrides[0]?.mcpServers?.hub).toEqual(externalMcpB.hub);
-    expect(JSON.stringify(resumedWithOverride)).not.toContain(bearerA);
-    expect(JSON.stringify(resumedWithOverride)).not.toContain(bearerB);
-
-    await localCtx.client.archiveAgent(resumedWithOverride.id);
-    const resumedNewest = await localCtx.client.resumeAgent(newestProjectedHandle);
-
-    expect(provider.resumeOverrides).toHaveLength(2);
-    expect(provider.resumeOverrides[1]?.mcpServers?.hub).toEqual(externalMcpB.hub);
-    expect(provider.resumeOverrides[1]?.mcpServers?.hub).not.toEqual(externalMcpA.hub);
-    expect(resumedNewest.persistence?.metadata).not.toHaveProperty("mcpServers");
-    expect(JSON.stringify(resumedNewest)).not.toContain(bearerA);
-    expect(JSON.stringify(resumedNewest)).not.toContain(bearerB);
-  } finally {
-    await localCtx.cleanup();
-    rmSync(cwd, { recursive: true, force: true });
-  }
-});
-
-test("resume_agent restores archive state when an MCP-capable provider returns an unsupported session", async () => {
-  const cwd = tmpCwd();
-  const provider = new RejectingMcpResumeClient();
-  const localCtx = await createDaemonTestContext({
-    agentClients: { codex: provider },
-  });
-
-  try {
-    const created = await localCtx.client.createAgent({
-      config: {
-        provider: "codex",
-        cwd,
-        mcpServers: {
-          hub: {
-            type: "http",
-            url: "https://hub.test/mcp/executions/rejected-resume",
-            headers: { Authorization: "Bearer rejected-resume-secret" },
-          },
-        },
-      },
-    });
-    const handle = created.persistence;
-    if (!handle) {
-      throw new Error("Expected a projected persistence handle");
-    }
-    const archived = await localCtx.client.archiveAgent(created.id);
-
-    await expect(localCtx.client.resumeAgent(handle)).rejects.toMatchObject({
-      name: "DaemonRpcError",
-      code: "agent_resume_failed",
-      requestType: "resume_agent_request",
-    });
-
-    const archivedAgents = await localCtx.client.fetchAgents({
-      filter: { includeArchived: true },
-    });
-    const original = archivedAgents.entries.find((entry) => entry.agent.id === created.id)?.agent;
-    expect(original?.archivedAt).toBe(archived.archivedAt);
-    expect(provider.nativeArchiveCalls).toEqual(["archive", "unarchive", "archive"]);
-    expect(provider.replacement.closed).toBe(true);
-  } finally {
-    await localCtx.cleanup();
-    rmSync(cwd, { recursive: true, force: true });
-  }
-});
-
 test("update_agent persists unloaded title and labels across auto-unarchive", async () => {
   const cwd = tmpCwd();
   try {
@@ -1090,9 +846,9 @@ test("update_agent persists unloaded title and labels across auto-unarchive", as
 }, 180000);
 
 test("returns home-scoped directory suggestions", async () => {
-  const insideHomeDir = mkdtempSync(path.join(homedir(), "paseo-dir-suggestion-"));
-  const rootBrowseDir = mkdtempSync(path.join(homedir(), "000-paseo-root-browse-"));
-  const outsideHomeDir = mkdtempSync(path.join(tmpdir(), "paseo-dir-suggestion-outside-"));
+  const insideHomeDir = mkdtempSync(path.join(homedir(), "byspace-dir-suggestion-"));
+  const rootBrowseDir = mkdtempSync(path.join(homedir(), "000-byspace-root-browse-"));
+  const outsideHomeDir = mkdtempSync(path.join(tmpdir(), "byspace-dir-suggestion-outside-"));
 
   try {
     const insideQuery = path.basename(insideHomeDir);
@@ -1129,7 +885,7 @@ test("returns home-scoped directory suggestions", async () => {
 }, 30000);
 
 test("returns typed relative suggestions within a requested directory", async () => {
-  const cwd = mkdtempSync(path.join(tmpdir(), "paseo-workspace-suggestion-"));
+  const cwd = mkdtempSync(path.join(tmpdir(), "byspace-workspace-suggestion-"));
   const target = path.join(cwd, "src", "components", "message-renderer.tsx");
 
   try {
@@ -1153,7 +909,7 @@ test("returns typed relative suggestions within a requested directory", async ()
 }, 30000);
 
 test("finds workspace files inside the OpenCode directory", async () => {
-  const cwd = mkdtempSync(path.join(tmpdir(), "paseo-opencode-suggestion-"));
+  const cwd = mkdtempSync(path.join(tmpdir(), "byspace-opencode-suggestion-"));
   const target = path.join(
     cwd,
     ".opencode",
@@ -1189,7 +945,7 @@ test("finds workspace files inside the OpenCode directory", async () => {
 }, 30000);
 
 test("opens an exact gitignored workspace path without offering it as a suggestion", async () => {
-  const cwd = mkdtempSync(path.join(tmpdir(), "paseo-gitignored-suggestion-"));
+  const cwd = mkdtempSync(path.join(tmpdir(), "byspace-gitignored-suggestion-"));
   const target = path.join(cwd, "generated", "notes.md");
 
   try {
@@ -1235,10 +991,7 @@ test("receives server_info on websocket connect", async () => {
   expect(serverInfo).not.toBeNull();
   expect(serverInfo?.serverId.length).toBeGreaterThan(0);
   expect(serverInfo?.features?.["terminal-restore-modes"]).toBe(true);
-  expect(serverInfo?.features?.hubRelationship).toBe(true);
   expect(serverInfo?.features?.commitsList).toBe(true);
-  expect(serverInfo?.features?.commitBaseClassification).toBe(true);
-  expect(serverInfo?.desktopManaged).toBe(false);
   expect(serverInfo?.features?.daemonSelfUpdate).toBe(true);
   expect(serverInfo?.features?.worktreeRestore).toBe(true);
   expect(serverInfo?.features?.workspaceRecovery).toBe(true);
@@ -1246,35 +999,12 @@ test("receives server_info on websocket connect", async () => {
   await client.close();
 }, 15000);
 
-test("a Desktop-managed daemon does not advertise npm self-update", async () => {
-  const daemon = await createTestPaseoDaemon({ desktopManaged: true });
-  const client = new DaemonClient({
-    url: `ws://127.0.0.1:${daemon.port}/ws`,
-    clientId: `cid-desktop-managed-${randomUUID()}`,
-    clientType: "cli",
-  });
-
-  try {
-    await client.connect();
-    const serverInfo = client.getLastServerInfoMessage();
-
-    expect(serverInfo?.desktopManaged).toBe(true);
-    expect(serverInfo?.features?.daemonSelfUpdate).toBe(false);
-  } finally {
-    await client.close();
-    await daemon.close();
-  }
-}, 15000);
-
-test("emits disabled voice capability reasons on fresh daemon startup", async () => {
+test("emits disabled dictation and removed voice capability reasons", async () => {
   const isolatedCtx = await createDaemonTestContext({
     speech: {
-      providers: {
-        dictationStt: { provider: "local", explicit: true, enabled: false },
-        voiceTurnDetection: { provider: "local", explicit: true, enabled: false },
-        voiceStt: { provider: "local", explicit: true, enabled: false },
-        voiceTts: { provider: "local", explicit: true, enabled: false },
-      },
+      enabled: false,
+      sttLanguage: "auto",
+      local: { modelsDir: "/tmp/unused", models: { dictationStt: null } },
     },
   });
 
@@ -1293,7 +1023,7 @@ test("emits disabled voice capability reasons on fresh daemon startup", async ()
     expect(voice?.dictation.enabled).toBe(false);
     expect(voice?.dictation.reason).toBe("Dictation is disabled in daemon config.");
     expect(voice?.voice.enabled).toBe(false);
-    expect(voice?.voice.reason).toBe("Realtime voice is disabled in daemon config.");
+    expect(voice?.voice.reason).toBe("Voice mode has been removed.");
   } finally {
     await client.close().catch(() => undefined);
     await isolatedCtx.cleanup();
@@ -1495,10 +1225,6 @@ test("creates agent and exercises lifecycle", async () => {
   expect(sawAssistantMessage).toBe(true);
   expect(sawRawAssistantMessage).toBe(true);
 
-  await ctx.client.setVoiceMode(false);
-
-  await ctx.client.abortRequest();
-  await ctx.client.audioPlayed("audio-1");
   ctx.client.clearAgentAttention(agent.id);
   await ctx.client.cancelAgent(agent.id);
 
@@ -1681,160 +1407,6 @@ test("exposes raw session events for reachable screens", async () => {
   await ctx.client.deleteAgent(agent.id);
   rmSync(cwd, { recursive: true, force: true });
 }, 120000);
-
-speechTest(
-  "does not process non-voice audio through the voice agent path",
-  async () => {
-    await ctx.client.setVoiceMode(false);
-
-    let sawTranscriptLog = false;
-    let sawAssistantChunk = false;
-    let sawAssistantLog = false;
-
-    const transcriptSeen = waitForSignal(60000, (resolve) => {
-      const unsubscribeChunk = ctx.client.on("assistant_chunk", (message) => {
-        if (message.type !== "assistant_chunk") {
-          return;
-        }
-        if (message.payload.chunk.length > 0) {
-          sawAssistantChunk = true;
-        }
-      });
-
-      const unsubscribeActivity = ctx.client.on("activity_log", (message) => {
-        if (message.type !== "activity_log") {
-          return;
-        }
-        if (message.payload.type === "transcript") {
-          sawTranscriptLog = true;
-          resolve();
-        }
-        if (message.payload.type === "assistant") {
-          sawAssistantLog = true;
-        }
-      });
-
-      return () => {
-        unsubscribeChunk();
-        unsubscribeActivity();
-      };
-    });
-
-    const wav = await readFixture("recording.wav");
-    await ctx.client.sendVoiceAudioChunk(wav.toString("base64"), "audio/wav", true);
-    await transcriptSeen;
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    expect(sawTranscriptLog).toBe(true);
-    expect(sawAssistantChunk).toBe(false);
-    expect(sawAssistantLog).toBe(false);
-  },
-  90000,
-);
-
-speechTest(
-  "voice mode buffers audio until isLast and emits transcription_result",
-  async () => {
-    const voiceCwd = tmpCwd();
-    const voiceAgent = await ctx.client.createAgent({
-      config: {
-        ...getFullAccessConfig("codex"),
-        cwd: voiceCwd,
-      },
-    });
-    await ctx.client.setVoiceMode(true, voiceAgent.id);
-
-    const transcription = waitForSignal(30_000, (resolve) => {
-      const unsubscribe = ctx.client.on("transcription_result", (message) => {
-        if (message.type !== "transcription_result") {
-          return;
-        }
-        resolve(message.payload);
-      });
-      return unsubscribe;
-    });
-
-    const errorSignal = waitForSignal(30_000, (resolve) => {
-      const unsubscribeStatus = ctx.client.on("status", (message) => {
-        if (message.type !== "status") {
-          return;
-        }
-        if (message.payload.status !== "error") {
-          return;
-        }
-        resolve(`status:error ${message.payload.message}`);
-      });
-
-      const unsubscribeLog = ctx.client.on("activity_log", (message) => {
-        if (message.type !== "activity_log") {
-          return;
-        }
-        if (message.payload.type !== "error") {
-          return;
-        }
-        resolve(`activity_log:error ${message.payload.content}`);
-      });
-
-      return () => {
-        unsubscribeStatus();
-        unsubscribeLog();
-      };
-    });
-
-    try {
-      const wav = await readFixture("recording.wav");
-      const { sampleRate, pcm16 } = parsePcm16MonoWav(wav);
-      expect(sampleRate).toBe(16000);
-      const format = "audio/pcm;rate=16000;bits=16";
-
-      const earlyTranscription = waitForSignal(1000, (resolve) => {
-        const unsubscribe = ctx.client.on("transcription_result", (message) => {
-          if (message.type !== "transcription_result") {
-            return;
-          }
-          resolve(message.payload.text);
-        });
-        return unsubscribe;
-      });
-
-      const chunkBytes = 3200; // 100ms @ 16kHz mono PCM16
-      const firstChunk = pcm16.subarray(0, Math.min(chunkBytes, pcm16.length));
-      await ctx.client.sendVoiceAudioChunk(firstChunk.toString("base64"), format, false);
-      await earlyTranscription
-        .then(() => {
-          throw new Error("Expected no transcription_result before isLast=true");
-        })
-        .catch(() => {});
-
-      for (let offset = chunkBytes; offset < pcm16.length; offset += chunkBytes) {
-        const chunk = pcm16.subarray(offset, Math.min(pcm16.length, offset + chunkBytes));
-        const isLast = offset + chunkBytes >= pcm16.length;
-        await ctx.client.sendVoiceAudioChunk(chunk.toString("base64"), format, isLast);
-      }
-
-      const outcome = await Promise.race([
-        transcription.then((payload) => ({ kind: "ok" as const, payload })),
-        errorSignal.then((error) => ({ kind: "error" as const, error })),
-      ]);
-
-      if (outcome.kind === "error") {
-        throw new Error(outcome.error);
-      }
-
-      expect(typeof outcome.payload.text).toBe("string");
-      if (outcome.payload.text.trim().length > 0) {
-        expect(outcome.payload.text.toLowerCase()).toContain("voice note");
-      } else {
-        expect(outcome.payload.isLowConfidence).toBe(true);
-      }
-    } finally {
-      await Promise.allSettled([transcription, errorSignal]);
-      await ctx.client.setVoiceMode(false);
-      rmSync(voiceCwd, { recursive: true, force: true });
-    }
-  },
-  90_000,
-);
 
 speechTest(
   "streams dictation PCM and returns final transcript",

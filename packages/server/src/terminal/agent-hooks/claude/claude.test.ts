@@ -1,19 +1,21 @@
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { isPlatform } from "../../../test-utils/platform.js";
 import { buildTerminalEnvironment } from "../../terminal.js";
-import { buildAgentHookShellCommand } from "../agent-hook-installer.js";
+import { agentHooksAreInstalled, buildAgentHookShellCommand } from "../agent-hook-installer.js";
 import {
   AGENT_HOOK_PROVIDERS,
-  installRegisteredAgentHooks,
-  registeredAgentHooksAreInstalled,
-  uninstallRegisteredAgentHooks,
+  installRegisteredAgentHook,
+  uninstallRegisteredAgentHook,
 } from "../provider-registry.js";
 
 const temporaryDirs: string[] = [];
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../../..");
+
 afterEach(() => {
   while (temporaryDirs.length > 0) {
     const dir = temporaryDirs.pop();
@@ -28,8 +30,8 @@ function createTempDir(prefix: string): string {
 }
 
 function createFakeCliBinDir(): string {
-  const dir = createTempDir("paseo-cli-bin-");
-  writeFileSync(join(dir, "paseo"), "");
+  const dir = createTempDir("byspace-cli-bin-");
+  writeFileSync(join(dir, "byspace"), "");
   return dir;
 }
 
@@ -65,29 +67,29 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 describe("Claude terminal agent hooks", () => {
-  it("installs registered provider hooks idempotently", () => {
-    const configDir = createTempDir("paseo-claude-config-");
+  it("installs Claude hooks idempotently", () => {
+    const configDir = createTempDir("byspace-claude-config-");
     const provider = AGENT_HOOK_PROVIDERS.claude;
     const install = provider.install;
 
-    installRegisteredAgentHooks({ configDir });
-    installRegisteredAgentHooks({ configDir });
+    installRegisteredAgentHook("claude", { configDir });
+    installRegisteredAgentHook("claude", { configDir });
 
     const settings = readSettings(configDir);
     for (const event of provider.events) {
-      const paseoCommands = hookCommands(settings, event.event).filter((command) =>
+      const byspaceCommands = hookCommands(settings, event.event).filter((command) =>
         command.includes(install.hookMarker),
       );
-      expect(paseoCommands).toHaveLength(1);
-      expect(paseoCommands[0]).toBe(
-        `if [ -n "$PASEO_TERMINAL_ID" ]; then "\${PASEO_HOOK_CLI:-paseo}" hooks ${provider.id} ${event.event}; fi`,
+      expect(byspaceCommands).toHaveLength(1);
+      expect(byspaceCommands[0]).toBe(
+        `if [ -n "$BYSPACE_TERMINAL_ID" ]; then "\${BYSPACE_HOOK_CLI:-byspace}" hooks ${provider.id} ${event.event}; fi`,
       );
     }
-    expect(registeredAgentHooksAreInstalled({ configDir })).toBe(true);
+    expect(agentHooksAreInstalled(provider, { configDir })).toBe(true);
   });
 
   it("preserves unrelated user hooks", () => {
-    const configDir = createTempDir("paseo-claude-config-preserve-");
+    const configDir = createTempDir("byspace-claude-config-preserve-");
     writeFileSync(
       join(configDir, "settings.json"),
       `${JSON.stringify(
@@ -107,7 +109,7 @@ describe("Claude terminal agent hooks", () => {
       )}\n`,
     );
 
-    installRegisteredAgentHooks({ configDir });
+    installRegisteredAgentHook("claude", { configDir });
 
     const settings = readSettings(configDir);
     expect(settings.theme).toBe("dark");
@@ -118,8 +120,8 @@ describe("Claude terminal agent hooks", () => {
   });
 
   it("uninstalls only marker-matched hooks", () => {
-    const configDir = createTempDir("paseo-claude-config-uninstall-");
-    installRegisteredAgentHooks({ configDir });
+    const configDir = createTempDir("byspace-claude-config-uninstall-");
+    installRegisteredAgentHook("claude", { configDir });
     const settings = readSettings(configDir);
     settings.hooks = {
       ...settings.hooks,
@@ -133,11 +135,11 @@ describe("Claude terminal agent hooks", () => {
     };
     writeFileSync(join(configDir, "settings.json"), `${JSON.stringify(settings, null, 2)}\n`);
 
-    uninstallRegisteredAgentHooks({ configDir });
+    uninstallRegisteredAgentHook("claude", { configDir });
 
     const nextSettings = readSettings(configDir);
     expect(hookCommands(nextSettings, "Stop")).toEqual(["say still-here"]);
-    expect(registeredAgentHooksAreInstalled({ configDir })).toBe(false);
+    expect(agentHooksAreInstalled(AGENT_HOOK_PROVIDERS.claude, { configDir })).toBe(false);
   });
 
   it("builds a minimal gated hook command", () => {
@@ -145,18 +147,18 @@ describe("Claude terminal agent hooks", () => {
     const command = buildAgentHookShellCommand(provider, provider.events[0]);
 
     expect(command).toBe(
-      'if [ -n "$PASEO_TERMINAL_ID" ]; then "${PASEO_HOOK_CLI:-paseo}" hooks claude UserPromptSubmit; fi',
+      'if [ -n "$BYSPACE_TERMINAL_ID" ]; then "${BYSPACE_HOOK_CLI:-byspace}" hooks claude UserPromptSubmit; fi',
     );
   });
 
   it.skipIf(isPlatform("win32")).each(AGENT_HOOK_PROVIDERS.claude.events)(
-    "$event hook command exits 0 when PASEO_TERMINAL_ID is unset",
+    "$event hook command exits 0 when BYSPACE_TERMINAL_ID is unset",
     (event) => {
       const provider = AGENT_HOOK_PROVIDERS.claude;
       const command = buildAgentHookShellCommand(provider, event);
 
       const result = spawnSync("/bin/sh", ["-c", command], {
-        env: { PATH: process.env.PATH ?? "", PASEO_HOOK_CLI: "paseo" },
+        env: { PATH: process.env.PATH ?? "", BYSPACE_HOOK_CLI: "byspace" },
         stdio: "ignore",
       });
 
@@ -164,37 +166,40 @@ describe("Claude terminal agent hooks", () => {
     },
   );
 
-  it("keeps provider names out of the generic server bootstrap", () => {
-    const source = readFileSync(
-      new URL("../../../server/bootstrap.ts", import.meta.url),
-      "utf8",
-    ).toLowerCase();
+  it("keeps provider names out of generic CLI and bootstrap integration points", () => {
+    const genericFiles = [
+      join(repositoryRoot, "packages", "cli", "src", "commands", "hooks.ts"),
+      join(repositoryRoot, "packages", "server", "src", "server", "bootstrap.ts"),
+    ];
 
-    for (const providerId of Object.keys(AGENT_HOOK_PROVIDERS)) {
-      expect(source).not.toContain(providerId);
+    for (const filePath of genericFiles) {
+      const contents = readFileSync(filePath, "utf8").toLowerCase();
+      for (const providerId of Object.keys(AGENT_HOOK_PROVIDERS)) {
+        expect(contents).not.toMatch(new RegExp(`["']${providerId}["']`));
+      }
     }
   });
 
-  it("prepends the paseo CLI directory and injects the hook CLI path", () => {
+  it("prepends the byspace CLI directory and injects the hook CLI path", () => {
     const cliBinDir = createFakeCliBinDir();
-    const hookCliPath = join(cliBinDir, "paseo");
+    const hookCliPath = join(cliBinDir, "byspace");
 
     const env = buildTerminalEnvironment({
       shell: "/bin/sh",
       env: { PATH: ["/usr/bin", "/bin"].join(delimiter) },
-      paseoCliBinDir: cliBinDir,
-      paseoHookCliPath: hookCliPath,
+      byspaceCliBinDir: cliBinDir,
+      byspaceHookCliPath: hookCliPath,
     });
 
     expect(env.PATH?.split(delimiter)).toEqual([cliBinDir, "/usr/bin", "/bin"]);
-    expect(env.PASEO_HOOK_CLI).toBe(hookCliPath);
+    expect(env.BYSPACE_HOOK_CLI).toBe(hookCliPath);
   });
 
   it("leaves terminal PATH unchanged when the CLI directory cannot be resolved", () => {
     const env = buildTerminalEnvironment({
       shell: "/bin/sh",
       env: { PATH: ["/usr/bin", "/bin"].join(delimiter) },
-      paseoCliBinDir: null,
+      byspaceCliBinDir: null,
     });
 
     expect(env.PATH?.split(delimiter)).toEqual(["/usr/bin", "/bin"]);

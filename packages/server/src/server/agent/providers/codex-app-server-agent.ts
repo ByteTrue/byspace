@@ -4,9 +4,9 @@ import {
   type AgentCapabilityFlags,
   type AgentClient,
   type AgentCreateSessionOptions,
+  type AgentResumeSessionOptions,
   type AgentFeature,
   type AgentLaunchContext,
-  type AgentResumeSessionOptions,
   type AgentMode,
   type AgentModelDefinition,
   type McpServerConfig,
@@ -22,8 +22,6 @@ import {
   type AgentRuntimeInfo,
   type AgentSession,
   type AgentSessionConfig,
-  type SteerActiveTurnOptions,
-  type SteerResult,
   type AgentSlashCommand,
   type AgentStreamEvent,
   type AgentTimelineItem,
@@ -37,6 +35,8 @@ import {
   type ProviderCatalog,
   type ProviderRefreshContext,
   type ResolveAgentDefaultModeInput,
+  type SteerActiveTurnOptions,
+  type SteerResult,
 } from "../agent-sdk-types.js";
 import { importSessionFromPersistence } from "../provider-session-import.js";
 import { runProviderRefreshActivity } from "../provider-refresh-deadline.js";
@@ -104,11 +104,7 @@ import {
   THINKING_APPLIES_NEXT_TURN_NOTICE,
 } from "../provider-notices.js";
 import type { WorkspaceGitService } from "../../workspace-git-service.js";
-import {
-  applyCodexToolPolicy,
-  CodexProviderOptionsSchema,
-  type CodexProviderOptions,
-} from "./codex/options.js";
+import { CodexProviderOptionsSchema, type CodexProviderOptions } from "./codex/options.js";
 
 function assertChildWithPipes(
   child: ChildProcess,
@@ -140,7 +136,7 @@ const INTERRUPT_TIMEOUT_MS = 2_000;
 const CODEX_PROVIDER = "codex" as const;
 // Codex treats most app-server client names as the model-request originator.
 // This reserved Codex name is non-originating, so requests keep Codex's default
-// CLI identity instead of showing up as Paseo in provider usage logs.
+// CLI identity instead of showing up as BySpace in provider usage logs.
 const CODEX_NON_ORIGINATING_APP_SERVER_CLIENT_INFO = {
   name: "codex_app_server_daemon",
   title: "Codex App Server Daemon",
@@ -150,7 +146,7 @@ const ASSISTANT_MESSAGE_BOUNDARY_MARKDOWN = "\n\n---\n\n";
 const MAX_PENDING_SUB_AGENT_THREADS = 32;
 const MAX_PENDING_SUB_AGENT_NOTIFICATIONS_PER_THREAD = 128;
 // COMPAT(codexLegacyCollabAgentToolCall): Codex <0.143 emits this shape. Added in
-// Paseo v0.1.105; remove after 2027-01-09 once the supported Codex floor is >=0.143.
+// BySpace v0.1.105; remove after 2027-01-09 once the supported Codex floor is >=0.143.
 const CODEX_TOOL_THREAD_ITEM_TYPES = new Set([
   "commandExecution",
   "fileChange",
@@ -259,14 +255,14 @@ interface CodexAppServerAgentDeps {
     extends: string;
   };
   customCodexConfig?: Record<string, unknown> | null;
+  resolveSlashCommandInvocation?: (
+    prompt: AgentPromptInput,
+  ) => Promise<{ commandName: string; args?: string } | null>;
   _createCodexClient?: (
     child: ChildProcessWithoutNullStreams,
     logger: Logger,
     getTraceContext: () => CodexAppServerTraceContext,
   ) => CodexAppServerClientLike;
-  resolveSlashCommandInvocation?: (
-    prompt: AgentPromptInput,
-  ) => Promise<{ commandName: string; args?: string } | null>;
 }
 
 interface CodexModePreset {
@@ -2099,7 +2095,6 @@ const TurnCompletedNotificationSchema = z
     threadId: z.string().optional(),
     turn: z
       .object({
-        id: z.string().optional(),
         status: z.string(),
         error: z
           .object({
@@ -3539,7 +3534,7 @@ export class CodexAppServerAgentSession implements AgentSession {
           if (typeof skillRecord?.name !== "string" || typeof skillRecord?.path !== "string")
             continue;
           // Codex skills/list returns disabled skills with enabled:false; omit them from
-          // slash-command surfaces so Paseo matches Codex CLI/TUI behavior.
+          // slash-command surfaces so BySpace matches Codex CLI/TUI behavior.
           // Missing enabled (older binaries) is treated as enabled.
           if (skillRecord.enabled === false) continue;
           if (!skillsByName.has(skillRecord.name)) {
@@ -3754,7 +3749,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     rootRoutes: readonly PersistedSubAgentRoute[],
   ): Promise<void> {
     const queue = rootRoutes.map((route) => ({ route, parentCallId: null as string | null }));
-    const visitedThreadIds = new Set(this.currentThreadId ? [this.currentThreadId] : []);
+    const visitedThreadIds = new Set<string>();
     while (queue.length > 0 && visitedThreadIds.size < 100) {
       const next = queue.shift();
       if (!next || visitedThreadIds.has(next.route.childThreadId)) {
@@ -3834,7 +3829,7 @@ export class CodexAppServerAgentSession implements AgentSession {
         }
         const response = await this.client.request("thread/resume", params);
         this.rememberResolvedSandboxPolicy(response);
-        this.logger.info({ threadId }, "Unarchived Codex thread to restore active Paseo agent");
+        this.logger.info({ threadId }, "Unarchived Codex thread to restore active BySpace agent");
         return;
       }
       this.logger.warn({ error, threadId }, "Failed to resume persisted Codex thread");
@@ -4611,7 +4606,6 @@ export class CodexAppServerAgentSession implements AgentSession {
         model: this.config.model ?? null,
         thinkingOptionId,
         providerOptions: this.config.providerOptions,
-        toolPolicy: this.config.toolPolicy,
         systemPrompt: this.config.systemPrompt,
         mcpServers: this.config.mcpServers,
       },
@@ -5021,8 +5015,7 @@ export class CodexAppServerAgentSession implements AgentSession {
       }
       innerConfig.mcp_servers = mcpServers;
     }
-    const configured = applyCodexToolPolicy(innerConfig, this.config.toolPolicy);
-    return Object.keys(configured).length > 0 ? configured : null;
+    return Object.keys(innerConfig).length > 0 ? innerConfig : null;
   }
 
   private async buildUserInput(prompt: CodexPromptInput): Promise<CodexAppServerUserInput[]> {
@@ -5335,7 +5328,7 @@ export class CodexAppServerAgentSession implements AgentSession {
         : null;
     const childThreadIds = Array.from(
       new Set(agentThreadId ? [...receiverThreadIds, agentThreadId] : receiverThreadIds),
-    ).filter((threadId) => threadId !== this.currentThreadId);
+    );
     for (const receiverThreadId of childThreadIds) {
       this.subAgentCallIdByChildThreadId.set(receiverThreadId, timelineItem.callId);
       state.childThreadIds.add(receiverThreadId);

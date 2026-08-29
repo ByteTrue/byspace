@@ -10,7 +10,6 @@ import {
 import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceExists } from "@/stores/session-store-hooks";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
-import type { PluginPanelLocation } from "@getpaseo/plugin";
 import { normalizeWorkspaceOpaqueId } from "@/utils/workspace-identity";
 import { createPluginClientStateSource } from "../client-state/source";
 import { buildPluginSurfaceRoute, hostIdFromPathname } from "../routes";
@@ -70,24 +69,20 @@ export function PluginCommandCenterActions() {
             buildPluginSurfaceRoute(serverId, pluginId, { kind: "surface", id: surfaceId }),
           );
         },
-        openWorkspacePanel(pluginId, panelId, location) {
+        openWorkspacePanel(pluginId, panelId) {
           if (!workspaceId) throw new Error("No active workspace");
-          const placement = resolvePluginPanelPlacement(workspaceKey, location);
           navigateToWorkspace({
             serverId,
             workspaceId,
             target: { kind: "plugin", pluginId, panelId, context: "workspace" },
-            placement,
           });
         },
-        openAgentPanel(pluginId, panelId, agentId, location) {
+        openAgentPanel(pluginId, panelId, agentId) {
           if (!workspaceId) throw new Error("No active workspace");
-          const placement = resolvePluginPanelPlacement(workspaceKey, location);
           navigateToWorkspace({
             serverId,
             workspaceId,
             target: { kind: "plugin", pluginId, panelId, context: "agent", agentId },
-            placement,
           });
         },
       },
@@ -105,7 +100,6 @@ export function PluginCommandCenterActions() {
     toast,
     workspaceExists,
     workspaceId,
-    workspaceKey,
   ]);
 
   useCommandCenterActions({
@@ -114,12 +108,4 @@ export function PluginCommandCenterActions() {
     actions,
   });
   return null;
-}
-
-function resolvePluginPanelPlacement(workspaceKey: string | null, location: PluginPanelLocation) {
-  if (location !== "explorer") return undefined;
-  if (!workspaceKey) throw new Error("No active workspace");
-  const paneId = useWorkspaceLayoutStore.getState().showExplorerSidebar(workspaceKey);
-  if (!paneId) throw new Error("Explorer is unavailable");
-  return { mode: "pane" as const, paneId };
 }

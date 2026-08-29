@@ -1,4 +1,4 @@
-import { test, expect } from "../support/fixtures";
+import { test, expect } from "../fixtures";
 import type { Locator } from "@playwright/test";
 import {
   gotoWorkspace,
@@ -11,28 +11,24 @@ import {
   countTabsOfKind,
   waitForTabBar,
   pressNewTabShortcut,
-  pressDirectNewTabShortcut,
   getTabTestIds,
   waitForTabWithTitle,
   measureTileTransition,
   sampleTabsDuringTransition,
   expectTabTitleFits,
   terminalSurfaceLocator,
-} from "../support/helpers/launcher";
-import { expectComposerVisible, composerLocator } from "../support/helpers/composer";
-import {
-  expectTerminalSurfaceVisible,
-  setupDeterministicPrompt,
-} from "../support/helpers/terminal-perf";
-import { seedWorkspace, type SeededWorkspace } from "../support/helpers/seed-client";
+} from "../helpers/launcher";
+import { expectComposerVisible, composerLocator } from "../helpers/composer";
+import { expectTerminalSurfaceVisible, setupDeterministicPrompt } from "../helpers/terminal-perf";
+import { seedWorkspace, type SeededWorkspace } from "../helpers/seed-client";
 import {
   expectTerminalOutputContains,
   seedTerminalProfiles,
   type TerminalProfile,
-} from "../support/helpers/new-workspace-launch";
-import { gotoAppShell } from "../support/helpers/app";
-import { waitForSidebarHydration } from "../support/helpers/workspace-ui";
-import { getServerId } from "../support/helpers/server-id";
+} from "../helpers/new-workspace-launch";
+import { gotoAppShell } from "../helpers/app";
+import { waitForSidebarHydration } from "../helpers/workspace-ui";
+import { getServerId } from "../helpers/server-id";
 
 // ─── Shared state ──────────────────────────────────────────────────────────
 
@@ -178,23 +174,19 @@ test.describe("Tab creation", () => {
     const panel = page.getByTestId("workspace-new-tab-panel").filter({ visible: true });
     const agent = panel.getByRole("button", { name: /^Agent/ });
     const terminal = panel.getByRole("button", { name: /^Terminal/ });
-    const diff = panel.getByRole("button", { name: /Diff/ });
+    const changes = panel.getByRole("button", { name: /Changes/ });
+    const files = panel.getByRole("button", { name: /Files/ });
     const shortcutPrefix = process.platform === "darwin" ? /⇧⌘/ : /Ctrl.*Shift/;
     await expect(agent).toContainText(new RegExp(`${shortcutPrefix.source}.*A`));
     await expect(terminal).toContainText(new RegExp(`${shortcutPrefix.source}.*T`));
-    await expect(diff).toContainText(new RegExp(`${shortcutPrefix.source}.*G`));
+    await expect(changes).toContainText(new RegExp(`${shortcutPrefix.source}.*G`));
+    await expect(files).toContainText(new RegExp(`${shortcutPrefix.source}.*E`));
     await expect(agent).toBeFocused();
 
     await page.keyboard.press("ArrowDown");
     await expect(terminal).toBeFocused();
     await page.keyboard.press("ArrowUp");
     await expect(agent).toBeFocused();
-
-    await pressDirectNewTabShortcut(page, "e");
-    await expect(page.getByTestId("workspace-explorer-sidebar")).toBeVisible();
-    await expect(
-      page.getByTestId("file-explorer-tree-scroll").filter({ visible: true }),
-    ).toBeVisible();
 
     await page.locator("body").click({ position: { x: 1, y: 1 } });
     await panel.click({ position: { x: 20, y: 20 } });
@@ -258,7 +250,7 @@ test.describe("Tab creation", () => {
     await expect(editProfiles).toHaveAccessibleName("Edit profiles");
 
     await editProfiles.click();
-    await expect(page).toHaveURL(/\/settings\/hosts\/[^/]+\/terminals$/);
+    await expect(page).toHaveURL(/\/settings\/hosts\/[^/]+\/providers$/);
   });
 
   test("tab bar shows action buttons per pane", async ({ page }) => {

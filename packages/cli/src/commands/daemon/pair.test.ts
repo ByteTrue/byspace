@@ -5,7 +5,7 @@ import { runPairCommand, type PairCommandOutput, type PairingOffer } from "./pai
 const disabledOffer: PairingOffer = { relayEnabled: false, url: null, qr: null };
 const enabledOffer: PairingOffer = {
   relayEnabled: true,
-  url: "https://app.paseo.sh/#offer=test",
+  url: "https://app.byspace.example/#offer=test",
   qr: null,
 };
 
@@ -58,7 +58,7 @@ describe("daemon pair workflow", () => {
 
   test("interactive consent enables relay and prints the refreshed offer", async () => {
     const resolveOffer = vi
-      .fn<(options: { paseoHome: string; enableRelay?: boolean }) => Promise<PairingOffer>>()
+      .fn<(options: { byspaceHome: string; enableRelay?: boolean }) => Promise<PairingOffer>>()
       .mockResolvedValueOnce(disabledOffer)
       .mockResolvedValueOnce(enabledOffer);
     const output = createRecordedOutput();
@@ -118,22 +118,5 @@ describe("daemon pair workflow", () => {
     expect(resolveOffer).toHaveBeenCalledWith(expect.objectContaining({ enableRelay: true }));
     expect(confirmRelay).not.toHaveBeenCalled();
     expect(output.exitCode).toBeUndefined();
-  });
-
-  test("surfaces launch-override rejection", async () => {
-    await expect(
-      runPairCommand(
-        { relay: true },
-        {
-          resolveOffer: async () => {
-            throw new Error("Relay is controlled by a daemon launch override");
-          },
-          confirmRelay: vi.fn(),
-          printDirectGuidance: vi.fn(),
-          isInteractive: () => false,
-          output: createRecordedOutput(),
-        },
-      ),
-    ).rejects.toThrow("launch override");
   });
 });

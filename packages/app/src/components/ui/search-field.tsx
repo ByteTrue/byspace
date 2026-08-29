@@ -1,12 +1,12 @@
 import { useCallback, useRef, useState, type ReactElement } from "react";
 import { Pressable, View } from "react-native";
-import { Search, X } from "lucide-react-native";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import type { Theme } from "@/styles/theme";
 import {
   EditingTextInput as TextInput,
   type EditingTextInputHandle,
 } from "@/components/ui/text-input";
+import { Search, X } from "lucide-react-native";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import type { Theme } from "@/styles/theme";
 
 const ThemedSearch = withUnistyles(Search);
 const ThemedX = withUnistyles(X);
@@ -27,6 +27,8 @@ export interface SearchFieldProps {
   clearAccessibilityLabel: string;
   testID?: string;
   clearTestID?: string;
+  /** Bounds input before it reaches a remote search endpoint. */
+  maxLength?: number;
 }
 
 /**
@@ -44,6 +46,7 @@ export function SearchField({
   clearAccessibilityLabel,
   testID,
   clearTestID,
+  maxLength,
 }: SearchFieldProps): ReactElement {
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<EditingTextInputHandle>(null);
@@ -66,6 +69,7 @@ export function SearchField({
         onBlur={handleBlur}
         placeholder={placeholder}
         accessibilityLabel={accessibilityLabel ?? placeholder}
+        maxLength={maxLength}
         autoCapitalize="none"
         autoCorrect={false}
         returnKeyType="search"

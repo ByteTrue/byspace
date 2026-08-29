@@ -3,7 +3,7 @@ import type {
   DaemonClient,
   FetchAgentHistoryEntry,
   FetchAgentHistoryOptions,
-} from "@getpaseo/client/internal/daemon-client";
+} from "@bytetrue/byspace-client/internal/daemon-client";
 import type { AgentHistoryClient, AgentHistoryHost } from "./use-agent-history";
 import { allAgentHistoryQueryKey } from "./agent-history-query-key";
 
@@ -131,7 +131,7 @@ function historyEntry(input: {
         currentBranch: null,
         remoteUrl: null,
         worktreeRoot: null,
-        isPaseoOwnedWorktree: false,
+        isBySpaceOwnedWorktree: false,
         mainRepoRoot: null,
       },
     },
@@ -645,6 +645,12 @@ describe("fetchAgentHistoryPage", () => {
         ] satisfies AgentHistoryHost[],
         cursorByServerId: null,
       }),
-    ).rejects.toThrow("No connected hosts could load agent history");
+    ).rejects.toMatchObject({
+      message: "No connected hosts could load agent history",
+      hostErrors: [
+        { serverId: "failed-a", serverName: "Failed A" },
+        { serverId: "failed-b", serverName: "Failed B" },
+      ],
+    });
   });
 });

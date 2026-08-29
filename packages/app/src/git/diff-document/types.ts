@@ -1,4 +1,4 @@
-import type { ParsedDiffFile } from "@getpaseo/protocol/messages";
+import type { ParsedDiffFile } from "@bytetrue/byspace-protocol/messages";
 import type { InlineReviewActions } from "@/review";
 import type { ReviewableDiffTarget } from "@/utils/diff-layout";
 
@@ -20,7 +20,6 @@ export interface WorkingDiffMode {
   focusRequestId?: number;
   workspaceFileDragScope?: { serverId: string; workspaceId: string };
   onOpenFile?: (path: string) => void;
-  onOpenToSide?: (path: string) => void;
   onAddToChat?: (path: string) => void;
   onCopyPath?: (path: string) => void;
   onCopyRelativePath?: (path: string) => void;

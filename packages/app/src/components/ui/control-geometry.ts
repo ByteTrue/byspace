@@ -25,7 +25,6 @@ export interface ControlInteractionStyleMap {
 const TIGHT_CONTROL_HEIGHT = 28;
 const COMPACT_CONTROL_HEIGHT = 32;
 const FIELD_CONTROL_HEIGHT = 44;
-export const HEADER_CONTROL_HEIGHT = 26;
 const SEGMENTED_TIGHT_INSET = 2;
 const SEGMENTED_COMPACT_INSET = 2;
 const SEGMENTED_FIELD_INSET = 3;
@@ -116,9 +115,9 @@ export function resolveControlInteractionStyles(
 }
 
 export function createControlGeometry(theme: Theme) {
-  const controlBorderWidth = theme.borderWidth[1];
   const fieldTextSmLineHeight = fieldLineHeight(theme.fontSize.base);
   const fieldTextMdLineHeight = fieldLineHeight(theme.fontSize.base);
+  const controlBorderWidth = theme.borderWidth[1];
   const fieldControlSm = {
     minHeight: CONTROL_HEIGHTS.compact,
     paddingHorizontal: theme.spacing[3],

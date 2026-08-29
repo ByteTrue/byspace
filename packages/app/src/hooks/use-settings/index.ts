@@ -4,13 +4,6 @@ import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-quer
 import { queryClient as appQueryClient } from "@/data/query-client";
 import type { AppLanguage } from "@/i18n/locales";
 import {
-  DEFAULT_DESKTOP_SETTINGS,
-  loadDesktopSettings,
-  migrateLegacyDesktopSettings,
-  useDesktopSettings,
-} from "@/desktop/settings/desktop-settings";
-import { isElectronRuntime } from "@/desktop/host";
-import {
   APP_SETTINGS_KEY,
   APP_SETTINGS_QUERY_KEY,
   DEFAULT_APP_SETTINGS,
@@ -36,15 +29,12 @@ import {
   sanitizeFontFamily,
   saveAppSettings as saveAppSettingsPure,
   type AppSettings,
-  type OpenInSidePanePreferences,
-  type DesktopSettingsBridge,
   type KeyValueStorage,
-  type ReleaseChannel,
   type SendBehavior,
   type ServiceUrlBehavior,
   type Settings,
-  type SidebarWorkspaceTrailing,
   type SettingsDeps,
+  type SidebarWorkspaceTrailing,
   type WorkspaceTitleSource,
 } from "./storage";
 
@@ -72,10 +62,7 @@ export {
 export type {
   AppSettings,
   AppLanguage,
-  OpenInSidePanePreferences,
-  DesktopSettingsBridge,
   KeyValueStorage,
-  ReleaseChannel,
   SendBehavior,
   ServiceUrlBehavior,
   Settings,
@@ -84,30 +71,8 @@ export type {
   WorkspaceTitleSource,
 };
 
-/**
- * Split a `Settings` patch into the part the app owns. The two halves persist to different
- * places (AsyncStorage vs the Electron settings bridge), and the app's half is exactly the
- * key set of `DEFAULT_CLIENT_SETTINGS` — reading the keys off it means a new app setting
- * flows through here without anyone remembering to widen a hand-written list.
- */
-function pickDefinedAppSettings(updates: Partial<Settings>): Partial<AppSettings> {
-  const appUpdates: Partial<AppSettings> = {};
-  for (const key of Object.keys(DEFAULT_CLIENT_SETTINGS) as (keyof AppSettings)[]) {
-    const value = updates[key];
-    if (value !== undefined) {
-      Object.assign(appUpdates, { [key]: value });
-    }
-  }
-  return appUpdates;
-}
-
 const productionDeps: SettingsDeps = {
   storage: AsyncStorage,
-  desktop: {
-    isElectron: isElectronRuntime,
-    loadDesktopSettings,
-    migrateLegacyDesktopSettings,
-  },
 };
 
 export interface UseAppSettingsReturn {
@@ -172,66 +137,14 @@ export function useAppSettings(): UseAppSettingsReturn {
 
 export function useSettings(): UseSettingsReturn;
 export function useSettings<TSelected>(selector: SettingsSelector<TSelected>): TSelected;
+export function useSettings(): UseSettingsReturn;
+export function useSettings<TSelected>(selector: SettingsSelector<TSelected>): TSelected;
 export function useSettings<TSelected>(
   selector?: SettingsSelector<TSelected>,
 ): UseSettingsReturn | TSelected {
   const appSettings = useAppSettings();
-  const desktopSettings = useDesktopSettings();
-
-  const updateSettings = useCallback(
-    async (updates: Partial<Settings>) => {
-      const appUpdates = pickDefinedAppSettings(updates);
-      const promises: Promise<void>[] = [];
-      if (Object.keys(appUpdates).length > 0) {
-        promises.push(appSettings.updateSettings(appUpdates));
-      }
-
-      if (isElectronRuntime()) {
-        const desktopUpdates: Parameters<typeof desktopSettings.updateSettings>[0] = {};
-        if (updates.manageBuiltInDaemon !== undefined) {
-          desktopUpdates.daemon = {
-            manageBuiltInDaemon: updates.manageBuiltInDaemon,
-          };
-        }
-        if (updates.releaseChannel !== undefined) {
-          desktopUpdates.releaseChannel = updates.releaseChannel;
-        }
-        if (Object.keys(desktopUpdates).length > 0) {
-          promises.push(desktopSettings.updateSettings(desktopUpdates));
-        }
-      }
-
-      await Promise.all(promises);
-    },
-    [appSettings, desktopSettings],
-  );
-
-  const resetSettings = useCallback(async () => {
-    const resets: Promise<void>[] = [appSettings.resetSettings()];
-    if (isElectronRuntime()) {
-      resets.push(desktopSettings.updateSettings(DEFAULT_DESKTOP_SETTINGS));
-    }
-    await Promise.all(resets);
-  }, [appSettings, desktopSettings]);
-
-  const settings = {
-    ...DEFAULT_APP_SETTINGS,
-    ...appSettings.settings,
-    manageBuiltInDaemon: desktopSettings.settings.daemon.manageBuiltInDaemon,
-    releaseChannel: desktopSettings.settings.releaseChannel,
-  };
-
-  if (selector) {
-    return selector(settings);
-  }
-
-  return {
-    settings,
-    isLoading: appSettings.isLoading || desktopSettings.isLoading,
-    error: appSettings.error ?? desktopSettings.error,
-    updateSettings,
-    resetSettings,
-  };
+  if (selector) return selector(appSettings.settings);
+  return appSettings;
 }
 
 export async function persistAppSettings(updates: Partial<AppSettings>): Promise<void> {

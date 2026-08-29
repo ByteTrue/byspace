@@ -1,5 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { CheckoutStatusResponse, CheckoutStatusUpdate } from "@getpaseo/protocol/messages";
+import type {
+  CheckoutStatusResponse,
+  CheckoutStatusUpdate,
+} from "@bytetrue/byspace-protocol/messages";
 import equal from "fast-deep-equal/es6";
 import {
   checkoutCommitsQueryKey,
@@ -35,24 +38,6 @@ export async function fetchCheckoutStatus({
   return payload;
 }
 
-export async function ensureCheckoutStatus({
-  queryClient,
-  client,
-  serverId,
-  cwd,
-}: {
-  queryClient: QueryClient;
-  client: CheckoutStatusClient;
-  serverId: string;
-  cwd: string;
-}): Promise<CheckoutStatusPayload> {
-  return await queryClient.fetchQuery({
-    queryKey: checkoutStatusQueryKey(serverId, cwd),
-    queryFn: () => fetchCheckoutStatus({ client, serverId, cwd }),
-    staleTime: Infinity,
-  });
-}
-
 export function applyCheckoutStatusUpdateFromEvent({
   queryClient,
   serverId,
@@ -67,10 +52,15 @@ export function applyCheckoutStatusUpdateFromEvent({
     ? normalizeCheckoutPrStatusPayload(payload.prStatus)
     : undefined;
   const cachePayload = prStatus ? { ...payload, prStatus } : payload;
+  const previousStatus = queryClient.getQueryData<CheckoutStatusPayload>(
+    checkoutStatusQueryKey(serverId, payload.cwd),
+  );
   queryClient.setQueryData(checkoutStatusQueryKey(serverId, payload.cwd), cachePayload);
-  void queryClient.invalidateQueries({
-    queryKey: checkoutCommitsQueryKey(serverId, payload.cwd),
-  });
+  if (hasCheckoutCommitIdentityChanged(previousStatus, cachePayload)) {
+    void queryClient.invalidateQueries({
+      queryKey: checkoutCommitsQueryKey(serverId, payload.cwd),
+    });
+  }
   expireStaleDiffModeOverrides({
     serverId,
     cwd: payload.cwd,
@@ -91,6 +81,24 @@ export function applyCheckoutStatusUpdateFromEvent({
   if (hasPrStatusChanged(previous, prStatus)) {
     void invalidatePrPaneTimelineForCheckout(queryClient, { serverId, cwd: prStatus.cwd });
   }
+}
+
+function hasCheckoutCommitIdentityChanged(
+  previous: CheckoutStatusPayload | undefined,
+  next: CheckoutStatusPayload,
+): boolean {
+  if (!previous || previous.isGit !== next.isGit) {
+    return true;
+  }
+  if (!previous.isGit || !next.isGit) {
+    return false;
+  }
+  if (!previous.commitsVersion || !next.commitsVersion) {
+    // COMPAT(checkoutStatusCommitsVersion): added in v0.2.2; remove this missing-version
+    // fallback after 2027-01-31 when the supported daemon floor is >= v0.2.2.
+    return true;
+  }
+  return previous.commitsVersion !== next.commitsVersion;
 }
 
 // requestId changes on every emission and carries no PR state.

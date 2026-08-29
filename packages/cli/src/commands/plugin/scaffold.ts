@@ -1,9 +1,9 @@
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { PluginIdSchema } from "@getpaseo/protocol/messages";
+import { PluginIdSchema } from "@bytetrue/byspace-protocol/messages";
 
-const SDK_DECLARATIONS = `declare module "@getpaseo/plugin/server" {
-  import type { PaseoApi } from "@getpaseo/client";
+const SDK_DECLARATIONS = `declare module "@bytetrue/byspace/plugin/server" {
+  import type { BySpaceApi } from "@bytetrue/byspace-client";
   import type { ZodType, input as ZodInput, output as ZodOutput } from "zod";
 
   export interface PluginRpcContract<
@@ -39,7 +39,7 @@ const SDK_DECLARATIONS = `declare module "@getpaseo/plugin/server" {
   }
 
   export interface PluginHandlerContext {
-    paseo: PaseoApi;
+    byspace: BySpaceApi;
   }
 
   export function defineRpc<InputSchema extends ZodType, OutputSchema extends ZodType>(definition: {
@@ -56,15 +56,15 @@ const SDK_DECLARATIONS = `declare module "@getpaseo/plugin/server" {
   export const PluginAttachmentSearchPayloadSchema: import("zod").ZodType<PluginAttachmentSearchPayload>;
 }
 
-declare module "@getpaseo/plugin" {
+declare module "@bytetrue/byspace/plugin" {
   import type { ComponentType } from "react";
-  import type { PaseoApi } from "@getpaseo/client";
+  import type { BySpaceApi } from "@bytetrue/byspace-client";
   import type { ZodType, input as ZodInput, output as ZodOutput } from "zod";
   import type {
     PluginAttachmentSourceContribution,
     PluginHandlerContext,
     PluginRpcContract,
-  } from "@getpaseo/plugin/server";
+  } from "@bytetrue/byspace/plugin/server";
 
   export {
     PluginAttachmentItemSchema,
@@ -76,7 +76,7 @@ declare module "@getpaseo/plugin" {
     type PluginAttachmentSourceContribution,
     type PluginHandlerContext,
     type PluginRpcContract,
-  } from "@getpaseo/plugin/server";
+  } from "@bytetrue/byspace/plugin/server";
 
   export interface PluginTheme {
     readonly colors: {
@@ -143,12 +143,9 @@ declare module "@getpaseo/plugin" {
     agentId: string;
   }
 
-  export type PluginPanelLocation = "workspace" | "explorer";
-  export interface PluginOpenPanelOptions { location?: PluginPanelLocation; }
-
   export type PluginWorkspacePanelContribution =
-    | { id: string; title: string; icon: string; locations?: readonly PluginPanelLocation[]; context: "workspace"; Component: ComponentType<PluginWorkspacePanelProps> }
-    | { id: string; title: string; icon: string; locations?: readonly PluginPanelLocation[]; context: "agent"; Component: ComponentType<PluginAgentPanelProps> };
+    | { id: string; title: string; icon: string; context: "workspace"; Component: ComponentType<PluginWorkspacePanelProps> }
+    | { id: string; title: string; icon: string; context: "agent"; Component: ComponentType<PluginAgentPanelProps> };
 
   export interface PluginSidebarContribution {
     id: string;
@@ -181,7 +178,7 @@ declare module "@getpaseo/plugin" {
   }
 
   export interface PluginCommandCapabilities {
-    paseo: PaseoApi;
+    byspace: BySpaceApi;
     rpc<InputSchema extends ZodType, OutputSchema extends ZodType>(
       contract: PluginRpcContract<InputSchema, OutputSchema>,
       input: ZodInput<InputSchema>,
@@ -196,14 +193,14 @@ declare module "@getpaseo/plugin" {
   export interface PluginWorkspaceCommandContext extends PluginCommandCapabilities {
     context: "workspace";
     workspace: PluginWorkspaceSnapshot;
-    openPanel(id: string, options?: PluginOpenPanelOptions): void;
+    openPanel(id: string): void;
   }
 
   export interface PluginAgentCommandContext extends PluginCommandCapabilities {
     context: "agent";
     workspace: PluginWorkspaceSnapshot;
     agent: PluginAgentSnapshot;
-    openPanel(id: string, options?: PluginOpenPanelOptions): void;
+    openPanel(id: string): void;
   }
 
   export type PluginCommandCenterItemContribution =
@@ -234,7 +231,7 @@ declare module "@getpaseo/plugin" {
     contract: PluginRpcContract<InputSchema, OutputSchema>,
   ): (input: ZodInput<InputSchema>) => Promise<ZodOutput<OutputSchema>>;
 
-  export function usePaseo(): PaseoApi;
+  export function useBySpace(): BySpaceApi;
 
   export function useWorkspace<Selection>(
     workspaceId: string,
@@ -264,7 +261,7 @@ const TSCONFIG = {
   include: ["**/*.ts", "**/*.tsx"],
 };
 
-const ENTRY = `import type { PluginContext } from "@getpaseo/plugin";
+const ENTRY = `import type { PluginContext } from "@bytetrue/byspace/plugin";
 import { MainSurface } from "./main.client";
 
 export default function contribute(plugin: PluginContext) {
@@ -273,7 +270,7 @@ export default function contribute(plugin: PluginContext) {
 }
 `;
 
-const CLIENT_SURFACE = `import type { PluginSurfaceProps } from "@getpaseo/plugin";
+const CLIENT_SURFACE = `import type { PluginSurfaceProps } from "@bytetrue/byspace/plugin";
 import React, { useMemo } from "react";
 import { Text, View } from "react-native";
 
@@ -320,7 +317,7 @@ export async function scaffoldPluginDirectory(
     version: "0.0.0",
     scripts: { typecheck: "tsc --noEmit" },
     devDependencies: {
-      "@getpaseo/client": "^0.4.0",
+      "@bytetrue/byspace-client": "^0.6.0",
       "@tanstack/react-query": "^5.90.11",
       "@types/react": "~19.2.0",
       react: "19.1.0",
@@ -330,10 +327,10 @@ export async function scaffoldPluginDirectory(
     },
   };
   const files = new Map<string, string>([
-    ["paseo-plugin.json", `${JSON.stringify({ id }, null, 2)}\n`],
+    ["byspace-plugin.json", `${JSON.stringify({ id }, null, 2)}\n`],
     ["package.json", `${JSON.stringify(packageJson, null, 2)}\n`],
     ["tsconfig.json", `${JSON.stringify(TSCONFIG, null, 2)}\n`],
-    ["paseo-plugin.d.ts", SDK_DECLARATIONS],
+    ["byspace-plugin.d.ts", SDK_DECLARATIONS],
     ["index.ts", ENTRY],
     ["main.client.tsx", CLIENT_SURFACE],
   ]);

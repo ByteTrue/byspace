@@ -1,4 +1,4 @@
-import type { ScheduleSummary } from "@getpaseo/protocol/schedule/types";
+import type { ScheduleSummary } from "@bytetrue/byspace-protocol/schedule/types";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   describeCron,
@@ -6,7 +6,6 @@ import {
   formatCadence,
   formatNextRun,
   isNewAgentSchedule,
-  scheduleProductName,
   partsToEveryMs,
   resolveScheduleTitle,
   validateCron,
@@ -53,11 +52,6 @@ describe("schedule title helpers", () => {
   it("identifies new-agent schedules", () => {
     expect(isNewAgentSchedule(createSchedule({ targetType: "new-agent" }))).toBe(true);
     expect(isNewAgentSchedule(createSchedule({ targetType: "agent" }))).toBe(false);
-  });
-
-  it("labels engine records by product meaning", () => {
-    expect(scheduleProductName(createSchedule({ targetType: "new-agent" }))).toBe("Schedule");
-    expect(scheduleProductName(createSchedule({ targetType: "agent" }))).toBe("Heartbeat");
   });
 
   it("resolves display titles by name, config title, prompt, then fallback", () => {

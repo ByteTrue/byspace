@@ -7,9 +7,8 @@ import type {
 } from "./agent-sdk-types.js";
 import type { AgentManager, ManagedAgent } from "./agent-manager.js";
 import type { AgentStorage } from "./agent-storage.js";
-import { ensureAgentLoaded } from "./agent-loading.js";
-import { getParentAgentIdFromLabels } from "@getpaseo/protocol/agent-labels";
-import type { ActiveTurnBehavior } from "@getpaseo/protocol/messages";
+import { ensureUnarchivedAgentLoaded } from "./agent-loading.js";
+import type { ActiveTurnBehavior } from "@bytetrue/byspace-protocol/messages";
 
 export type AgentUnarchiveController = Pick<AgentManager, "notifyAgentState" | "unarchiveSnapshot">;
 
@@ -167,15 +166,15 @@ export async function unarchiveAgentState(
 }
 
 /**
- * Wrap a body in <paseo-system>…</paseo-system> so the receiving agent
+ * Wrap a body in <byspace-system>…</byspace-system> so the receiving agent
  * recognizes the prompt as system-injected context — not a user turn.
- * Used by chat mentions, schedule fires, and notify-on-finish.
+ * Used by schedule fires and notify-on-finish.
  */
 export function formatSystemNotificationPrompt(reason: string): string {
-  return `<paseo-system>\n${reason}\n</paseo-system>`;
+  return `<byspace-system>\n${reason}\n</byspace-system>`;
 }
 
-const SYSTEM_ENVELOPE_PATTERN = /^<paseo-system>\n[\s\S]*\n<\/paseo-system>$/;
+const SYSTEM_ENVELOPE_PATTERN = /^<byspace-system>\n[\s\S]*\n<\/byspace-system>$/;
 
 export function isSystemInjectedEnvelope(text: string): boolean {
   return SYSTEM_ENVELOPE_PATTERN.test(text);
@@ -194,8 +193,8 @@ export interface SendPromptToAgentParams {
   sessionMode?: string;
   /**
    * Default true. When false, archived agents are skipped instead of being
-   * unarchived. Use false for system-injected prompts (chat mentions,
-   * schedule fires, notify-on-finish).
+   * unarchived. Use false for system-injected prompts (schedule fires
+   * and notify-on-finish).
    */
   unarchive?: boolean;
   /** See {@link StartAgentRunOptions.clearPendingPermissions}. */
@@ -254,11 +253,11 @@ export async function waitForAgentRunStartWithTimeout(
  * mode change) → start run.
  *
  * Every surface that sends a prompt to an agent (Session/WS, MCP, CLI-through-MCP,
- * chat mentions, notify-on-finish) MUST go through this so behavior can never
- * drift between them.
+ * schedules, notify-on-finish) MUST go through this so behavior can never drift
+ * between them.
  *
  * When `unarchive` is false and the agent is archived, the call is a silent
- * no-op (returns the normal turn-start disposition) — the agent is not run.
+ * no-op — the agent is not run.
  */
 export async function sendPromptToAgent(
   params: SendPromptToAgentParams,
@@ -273,7 +272,7 @@ export async function sendPromptToAgent(
     await unarchiveAgentState(params.agentStorage, params.agentManager, params.agentId);
   }
 
-  await ensureAgentLoaded(params.agentId, {
+  await ensureUnarchivedAgentLoaded(params.agentId, {
     agentManager: params.agentManager,
     agentStorage: params.agentStorage,
     logger: params.logger,
@@ -333,7 +332,6 @@ export interface SetupFinishNotificationParams {
   agentStorage: AgentStorage;
   childAgentId: string;
   callerAgentId: string;
-  requireParentOwnership?: boolean;
   logger: Logger;
 }
 
@@ -383,14 +381,7 @@ interface NotifySafelyOptions {
 }
 
 export function setupFinishNotification(params: SetupFinishNotificationParams): void {
-  const {
-    agentManager,
-    agentStorage,
-    childAgentId,
-    callerAgentId,
-    requireParentOwnership = false,
-    logger,
-  } = params;
+  const { agentManager, agentStorage, childAgentId, callerAgentId, logger } = params;
   let hasSeenRunning = false;
   let stopped = false;
   const notifiedPermissionRequestIds = new Set<string>();
@@ -413,9 +404,6 @@ export function setupFinishNotification(params: SetupFinishNotificationParams): 
     }
 
     const record = await agentStorage.get(childAgentId);
-    if (requireParentOwnership && getParentAgentIdFromLabels(record?.labels) !== callerAgentId) {
-      return;
-    }
     const title = record?.title ?? childAgentId;
     const lastAssistantMessage = await agentManager.getLastAssistantMessage(childAgentId);
     const body = formatFinishNotificationBody({

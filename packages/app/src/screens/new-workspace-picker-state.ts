@@ -55,11 +55,52 @@ function isPickerOwnedPrAttachment(attachment: UserComposerAttachment): attachme
   );
 }
 
+export function buildPickerTargetId(input: {
+  serverId: string;
+  projectId: string;
+  sourceDirectory: string;
+}): string {
+  return `${input.serverId}\u0000${input.projectId}\u0000${input.sourceDirectory}`;
+}
+
+export function markPickerOwnedPrAttachment(input: {
+  attachments: UserComposerAttachment[];
+  item: Extract<PickerItem, { kind: "github-pr" }>;
+  targetId: string;
+}): UserComposerAttachment[] {
+  return input.attachments.map((attachment) => {
+    if (
+      !isPrAttachment(attachment) ||
+      attachment.item.number !== input.item.item.number ||
+      attachment.item.url !== input.item.item.url
+    ) {
+      return attachment;
+    }
+    return {
+      kind: "github_pr" as const,
+      item: input.item.item,
+      owner: NEW_WORKSPACE_PICKER_ATTACHMENT_OWNER,
+      ownerTargetId: input.targetId,
+    };
+  });
+}
+
+export function restorePickerPrSelection(
+  attachments: UserComposerAttachment[],
+  targetId: string,
+): Extract<PickerItem, { kind: "github-pr" }> | null {
+  const attachment = attachments
+    .filter(isPickerOwnedPrAttachment)
+    .find((candidate) => candidate.ownerTargetId === targetId);
+  return attachment ? { kind: "github-pr", item: attachment.item } : null;
+}
+
 // Ownership lives on the attachment because drafts outlive this component.
 // The picker owns at most one PR; user-added PRs and issues remain untouched.
 export function syncPickerPrAttachment(input: {
   attachments: UserComposerAttachment[];
   item: PickerItem | null;
+  targetId: string;
 }): UserComposerAttachment[] {
   const nextAttachments = input.attachments.filter(
     (attachment) => !isPickerOwnedPrAttachment(attachment),
@@ -68,7 +109,10 @@ export function syncPickerPrAttachment(input: {
   if (input.item?.kind === "github-pr") {
     const selectedPr = input.item.item;
     const hasExistingPrAttachment = nextAttachments.some(
-      (attachment) => isPrAttachment(attachment) && attachment.item.number === selectedPr.number,
+      (attachment) =>
+        isPrAttachment(attachment) &&
+        attachment.item.number === selectedPr.number &&
+        attachment.item.url === selectedPr.url,
     );
     if (!hasExistingPrAttachment) {
       return [
@@ -77,6 +121,7 @@ export function syncPickerPrAttachment(input: {
           kind: "github_pr",
           item: selectedPr,
           owner: NEW_WORKSPACE_PICKER_ATTACHMENT_OWNER,
+          ownerTargetId: input.targetId,
         },
       ];
     }

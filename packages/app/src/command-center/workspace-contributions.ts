@@ -12,7 +12,6 @@ export interface WorkspaceCommandCenterLabels {
   section: string;
   newAgent: string;
   newTerminal: string;
-  newBrowser: string;
   splitRight: string;
   splitDown: string;
   changes: string;
@@ -40,14 +39,14 @@ export interface WorkspaceCommandCenterLabels {
   moveTabUp: string;
   moveTabDown: string;
   closePane: string;
+  togglePaneMaximization: string;
   toggleFocusMode: string;
-  toggleExplorerSidebar: string;
+  toggleSidePanel: string;
 }
 
 export interface WorkspaceCommandCenterIcons {
   newAgent?: CommandCenterIcon;
   newTerminal?: CommandCenterIcon;
-  newBrowser?: CommandCenterIcon;
   splitRight?: CommandCenterIcon;
   splitDown?: CommandCenterIcon;
   changes?: CommandCenterIcon;
@@ -61,8 +60,9 @@ export interface WorkspaceCommandCenterIcons {
   copy?: CommandCenterIcon;
   focusPane?: CommandCenterIcon;
   moveTab?: CommandCenterIcon;
+  maximize?: CommandCenterIcon;
   focusMode?: CommandCenterIcon;
-  explorerSidebar?: CommandCenterIcon;
+  sidePanel?: CommandCenterIcon;
   git?(action: GitAction): CommandCenterIcon | undefined;
 }
 
@@ -76,8 +76,9 @@ export interface WorkspaceCommandCenterShortcuts {
   nextTab?: ShortcutKey[][];
   closeCurrentTab?: ShortcutKey[][];
   closePane?: ShortcutKey[][];
+  togglePaneMaximization?: ShortcutKey[][];
   toggleFocusMode?: ShortcutKey[][];
-  toggleExplorerSidebar?: ShortcutKey[][];
+  toggleSidePanel?: ShortcutKey[][];
 }
 
 export interface WorkspaceCommandCenterSource {
@@ -195,9 +196,7 @@ function buildPanelContributions(
       }),
     );
     if (!source.capabilities.canSplitPanes) continue;
-    if (panel.target !== "pull-request") continue;
-    const placements = ["side-pane", "focused-pane"] as const;
-    for (const [placementIndex, placement] of placements.entries()) {
+    for (const [placementIndex, placement] of (["side-panel", "focused-pane"] as const).entries()) {
       contributions.push(
         buildQueryAction(source, {
           id: `tab:open:${panel.target}:${placement}`,
@@ -447,6 +446,15 @@ function buildPaneContributions(source: WorkspaceCommandCenterSource): CommandCe
       action: { id: "workspace.pane.close", scope: "workspace" },
     },
     {
+      id: "pane:maximize-toggle",
+      rank: 61,
+      title: source.labels.togglePaneMaximization,
+      keywords: ["pane", "maximize", "restore", "toggle"],
+      icon: source.icons.maximize,
+      shortcutKeys: source.shortcuts.togglePaneMaximization,
+      action: { id: "workspace.explorer.maximize.toggle", scope: "workspace" },
+    },
+    {
       id: "pane:focus-mode-toggle",
       rank: 62,
       title: source.labels.toggleFocusMode,
@@ -488,18 +496,6 @@ function buildCreationContributions(
       action: { id: "workspace.terminal.new", scope: "workspace" },
     }),
   );
-  if (source.capabilities.canOpenBrowserTabs) {
-    contributions.push(
-      buildQueryAction(source, {
-        id: "tab:new-browser",
-        rank: 3,
-        title: source.labels.newBrowser,
-        keywords: ["browser", "web", "preview"],
-        icon: source.icons.newBrowser,
-        action: { id: "workspace.browser.new", scope: "workspace" },
-      }),
-    );
-  }
   return contributions;
 }
 
@@ -512,12 +508,12 @@ export function buildWorkspaceCommandCenterContributions(
     ...buildActiveTabContributions(source),
     ...(source.capabilities.canSplitPanes ? buildPaneContributions(source) : []),
     buildQueryAction(source, {
-      id: "explorer-sidebar:toggle",
+      id: "side-panel:toggle",
       rank: 70,
-      title: source.labels.toggleExplorerSidebar,
-      keywords: ["explorer", "sidebar", "toggle", "show", "hide"],
-      icon: source.icons.explorerSidebar,
-      shortcutKeys: source.shortcuts.toggleExplorerSidebar,
+      title: source.labels.toggleSidePanel,
+      keywords: ["side", "panel", "toggle", "show", "hide"],
+      icon: source.icons.sidePanel,
+      shortcutKeys: source.shortcuts.toggleSidePanel,
       action: { id: "sidebar.toggle.right", scope: "workspace" },
     }),
   ];

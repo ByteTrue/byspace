@@ -30,6 +30,35 @@ describe("renderTerminalSnapshotToAnsi", () => {
     expect(ansi).not.toContain("[?7l");
   });
 
+  it("skips the placeholder cell a double-width character spills into", () => {
+    // The daemon sends the wide character in its own cell and an empty char for the column it
+    // spills into. Emitting a space there shifts the rest of the row one column right for every
+    // wide character, which is how a restored screen of CJK text ended up spaced out.
+    const state: TerminalState = {
+      rows: 1,
+      cols: 6,
+      scrollback: [],
+      grid: [[{ char: "\u4e2d" }, { char: "" }, { char: "\u6587" }, { char: "" }, { char: "a" }]],
+      cursor: { row: 0, col: 5 },
+    };
+
+    expect(renderTerminalSnapshotToAnsi(state)).toContain("\u4e2d\u6587a");
+  });
+
+  it("keeps an old daemon's padded wide-character rows byte for byte", () => {
+    // Old daemons send a space for that column. Nothing may reinterpret it: the client cannot
+    // tell it apart from a real space, and guessing would corrupt legitimate content.
+    const state: TerminalState = {
+      rows: 1,
+      cols: 6,
+      scrollback: [],
+      grid: [[{ char: "\u4e2d" }, { char: " " }, { char: "\u6587" }, { char: " " }, { char: "a" }]],
+      cursor: { row: 0, col: 5 },
+    };
+
+    expect(renderTerminalSnapshotToAnsi(state)).toContain("\u4e2d \u6587 a");
+  });
+
   it("falls back to verbatim per-row replay when wrap flags are absent (old daemon)", () => {
     // No gridWrapped/scrollbackWrapped: the client cannot tell soft-wraps from hard
     // newlines, so it must keep today's exact behaviour rather than guess.

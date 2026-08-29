@@ -1,106 +1,101 @@
-import { buildStatusGroups } from "@/hooks/sidebar-status-view-model";
-import {
-  splitPinnedSidebarGroups,
-  type PinnedSidebarGroups,
-  type PinnedSidebarKeys,
-} from "@/hooks/use-sidebar-pins";
+import type { PinnedSidebarGroups, PinnedSidebarKeys } from "@/hooks/use-sidebar-pins";
+import { splitPinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
 import type {
   SidebarProjectEntry,
   SidebarWorkspaceEntry,
+  SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
-import type { SidebarGroupMode } from "@/stores/sidebar-view-store";
-import {
-  resolveSidebarProjectIconTargets,
-  type SidebarProjectIconTarget,
-} from "@/utils/sidebar-project-row-model";
 import {
   buildSidebarShortcutSections,
   type SidebarShortcutModel,
   type SidebarShortcutSection,
 } from "@/utils/sidebar-shortcuts";
-import { statusWorkspaceGroups, type SidebarWorkspaceGroup } from "./sidebar-labels";
+import { isAgentStatusNeedingAttention } from "@/utils/workspace-agent-summary";
+import { aggregateSidebarStateBuckets } from "@/utils/sidebar-agent-state";
+
+export interface SidebarProjectedProject extends SidebarProjectEntry {
+  needsAttentionCount: number;
+  statusBucket: SidebarWorkspaceEntry["statusBucket"];
+}
 
 export interface SidebarProjection {
+  projects: SidebarProjectedProject[];
   pinnedGroups: PinnedSidebarGroups;
-  workspaceGroups: SidebarWorkspaceGroup[];
-  /**
-   * The project icons this projection needs fetched, keyed by `projectViewKey` — one per project,
-   * whatever the mode groups by. It sits here rather than beside `useProjectIcons` in the list
-   * because it is the same `projects` the rows above are projected from: a mode that renders a
-   * row can only ever ask for an icon this list already covers. It used to be derived in the
-   * list, under a `groupMode === "status"` gate written when status was the only mode that put
-   * icons on rows.
-   */
-  projectIconTargets: SidebarProjectIconTarget[];
+  needsAttentionWorkspaceCount: number;
   shortcutModel: SidebarShortcutModel;
 }
 
-export interface SidebarProjectionInput {
-  projects: SidebarProjectEntry[];
+// Sidebar order is user-managed: the input order (persisted drag order) is
+// authoritative and never reordered by status changes. Attention is surfaced
+// in place (row badges) plus an explicit attention-only filter; when the
+// filter is on, projects without attention workspaces are hidden and projects
+// show only their attention workspaces.
+export function buildSidebarProjection(input: {
+  projects: readonly SidebarProjectEntry[];
+  workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
+  attentionOnly: boolean;
   pinnedKeys: PinnedSidebarKeys;
   pinnedWorkspaceOrder: string[];
-  workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
-  projectNamesByViewKey: Map<string, string>;
-  groupMode: SidebarGroupMode;
   pinnedCollapsed: boolean;
-  collapsedProjectKeys: ReadonlySet<string>;
-  collapsedWorkspaceGroupKeys: ReadonlySet<string>;
-}
+}): SidebarProjection {
+  const needsAttention = (workspace: SidebarWorkspacePlacement): boolean => {
+    const entry = input.workspaceEntriesByKey.get(workspace.workspaceKey);
+    return entry ? isAgentStatusNeedingAttention(entry.statusBucket) : false;
+  };
 
-export function buildSidebarProjection(input: SidebarProjectionInput): SidebarProjection {
-  const pinnedGroups = splitPinnedSidebarGroups({
-    projects: input.projects,
+  // Pinned chats are hoisted out of their project into their own section, so the projected
+  // project list below is always the post-split remainder.
+  const { pinnedChats, unpinnedProjects } = splitPinnedSidebarGroups({
+    projects: [...input.projects],
     keys: input.pinnedKeys,
     pinnedWorkspaceOrder: input.pinnedWorkspaceOrder,
   });
-  const pinnedWorkspaceKeys = new Set(input.pinnedKeys.pinnedWorkspaceKeys);
-  const unpinnedWorkspaces = Array.from(input.workspaceEntriesByKey.values()).filter(
-    (workspace) => !pinnedWorkspaceKeys.has(workspace.workspaceKey),
-  );
-  // One switch decides both what the list groups by and what the keyboard shortcuts walk, so the
-  // two cannot disagree and a new grouping mode is a compile error here rather than a silent
-  // fall-through to the project rows.
-  const workspaceGroups = buildWorkspaceGroups(input, unpinnedWorkspaces);
+  const visiblePinnedChats = input.attentionOnly ? pinnedChats.filter(needsAttention) : pinnedChats;
 
+  let needsAttentionWorkspaceCount = visiblePinnedChats.filter(needsAttention).length;
+  const projectedProjects: SidebarProjectedProject[] = [];
+
+  for (const project of unpinnedProjects) {
+    let attentionCount = 0;
+    const workspaces = project.workspaces.filter((workspace) => {
+      const needsAttentionWorkspace = needsAttention(workspace);
+      if (needsAttentionWorkspace) {
+        attentionCount += 1;
+        return true;
+      }
+      return !input.attentionOnly;
+    });
+    needsAttentionWorkspaceCount += attentionCount;
+    if (input.attentionOnly && attentionCount === 0) {
+      continue;
+    }
+    projectedProjects.push({
+      ...project,
+      workspaces,
+      needsAttentionCount: attentionCount,
+      statusBucket: aggregateSidebarStateBuckets(
+        project.workspaces.flatMap((workspace) => {
+          const bucket = input.workspaceEntriesByKey.get(workspace.workspaceKey)?.statusBucket;
+          return bucket ? [bucket] : [];
+        }),
+      ),
+    });
+  }
+
+  // Shortcut numbers follow the visual order: the Pinned section first, then the projects.
+  // A collapsed Pinned section hands its numbers back to the rows below it.
   const sections: SidebarShortcutSection[] = [];
   if (!input.pinnedCollapsed) {
-    sections.push({ workspaces: pinnedGroups.pinnedChats });
+    sections.push({ workspaces: visiblePinnedChats });
   }
-  if (input.groupMode === "project") {
-    sections.push(
-      ...pinnedGroups.unpinnedProjects.map((project) => ({
-        workspaces: project.workspaces,
-        collapsed: input.collapsedProjectKeys.has(project.viewKey),
-      })),
-    );
-  } else {
-    sections.push(
-      ...workspaceGroups.map((group) => ({
-        workspaces: group.rows,
-        collapsed: input.collapsedWorkspaceGroupKeys.has(group.key),
-      })),
-    );
+  for (const project of projectedProjects) {
+    sections.push({ workspaces: project.workspaces });
   }
 
   return {
-    pinnedGroups,
-    workspaceGroups,
-    projectIconTargets: resolveSidebarProjectIconTargets(input.projects),
+    projects: projectedProjects,
+    pinnedGroups: { pinnedChats: visiblePinnedChats, unpinnedProjects },
+    needsAttentionWorkspaceCount,
     shortcutModel: buildSidebarShortcutSections({ sections }),
   };
-}
-
-/** Project mode keeps its project headers and groups nothing; status mode groups the rows. */
-function buildWorkspaceGroups(
-  input: SidebarProjectionInput,
-  unpinnedWorkspaces: SidebarWorkspaceEntry[],
-): SidebarWorkspaceGroup[] {
-  switch (input.groupMode) {
-    case "project":
-      return [];
-    case "status":
-      return statusWorkspaceGroups(
-        buildStatusGroups(unpinnedWorkspaces, input.projectNamesByViewKey),
-      );
-  }
 }

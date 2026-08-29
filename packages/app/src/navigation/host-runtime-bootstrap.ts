@@ -1,9 +1,4 @@
 import type { ActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
-import type {
-  DaemonStartCondition,
-  DaemonStartResult,
-  StartDaemonIfEnabledInput,
-} from "@/runtime/daemon-start-service";
 import type { Href } from "expo-router";
 import {
   buildHostRootRoute,
@@ -11,82 +6,13 @@ import {
   buildOpenProjectRoute,
 } from "@/utils/host-routes";
 
-export interface HostRuntimeBootstrapStore {
-  boot: () => Promise<void>;
-}
-
-export interface HostRuntimeBootstrapDaemonStartService {
-  startIfEnabled: (input: StartDaemonIfEnabledInput) => Promise<DaemonStartResult>;
-}
-
-export interface StartHostRuntimeBootstrapInput {
-  store: HostRuntimeBootstrapStore;
-  daemonStartService: HostRuntimeBootstrapDaemonStartService;
-  shouldStartDaemon: DaemonStartCondition;
-}
-
-export function startHostRuntimeBootstrap(input: StartHostRuntimeBootstrapInput): void {
-  const registryReady = input.store.boot();
-  void input.daemonStartService.startIfEnabled({
-    shouldStart: async () => {
-      await registryReady;
-      return typeof input.shouldStartDaemon === "boolean"
-        ? input.shouldStartDaemon
-        : input.shouldStartDaemon();
-    },
-  });
-}
-
 const WELCOME_ROUTE: Href = "/welcome";
 
-export type StartupBlocker =
-  | { kind: "none" }
-  | { kind: "managed-daemon-starting" }
-  | { kind: "managed-daemon-error"; message: string };
-
-export interface ResolveStartupBlockerInput {
-  isDesktopRuntime: boolean;
-  anyOnlineHostServerId: string | null;
-  daemonStartIsRunning: boolean;
-  daemonStartError: string | null;
-}
-
-export function resolveStartupBlocker(input: ResolveStartupBlockerInput): StartupBlocker {
-  if (!input.isDesktopRuntime) {
-    return { kind: "none" };
-  }
-
-  if (input.anyOnlineHostServerId) {
-    return { kind: "none" };
-  }
-
-  if (input.daemonStartError) {
-    return { kind: "managed-daemon-error", message: input.daemonStartError };
-  }
-
-  if (input.daemonStartIsRunning) {
-    return { kind: "managed-daemon-starting" };
-  }
-
-  return { kind: "none" };
-}
-
-export function resolveStartupNavigationReady(input: { startupBlocker: StartupBlocker }): boolean {
-  return input.startupBlocker.kind !== "managed-daemon-starting";
-}
-
 export function shouldRunStartupGiveUpTimer(input: {
-  startupBlocker: StartupBlocker;
   anyOnlineHostServerId: string | null;
   hasGivenUpWaitingForHost: boolean;
 }): boolean {
-  if (input.anyOnlineHostServerId) {
-    return false;
-  }
-  if (input.hasGivenUpWaitingForHost) {
-    return false;
-  }
-  return input.startupBlocker.kind === "none";
+  return !input.anyOnlineHostServerId && !input.hasGivenUpWaitingForHost;
 }
 
 export type StartupRegistryStatus = "loading" | "ready";
@@ -104,7 +30,6 @@ export interface HostStartupRouteTarget {
 export type StartupRouteTarget = IndexStartupRouteTarget | HostStartupRouteTarget;
 
 interface ResolveStartupRouteBaseInput {
-  startupBlocker: StartupBlocker;
   hostRegistryStatus: StartupRegistryStatus;
   hosts: readonly { serverId: string }[];
 }
@@ -234,14 +159,10 @@ function isHostStartupRouteInput(
 
 export function resolveStartupRoute(input: ResolveStartupRouteInput): StartupRouteDecision {
   if (isHostStartupRouteInput(input)) {
-    if (input.startupBlocker.kind !== "none" || input.hostRegistryStatus === "loading") {
+    if (input.hostRegistryStatus === "loading") {
       return { kind: "render" };
     }
     return resolveReadyHostStartupRoute(input);
-  }
-
-  if (input.startupBlocker.kind !== "none") {
-    return { kind: "splash" };
   }
 
   if (input.hostRegistryStatus === "loading") {

@@ -9,21 +9,13 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import {
-  Dimensions,
-  Modal,
-  Platform,
-  Pressable,
-  StatusBar,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from "react-native";
-import { Keyframe, runOnJS } from "react-native-reanimated";
+import { Dimensions, Pressable, View, type StyleProp, type ViewStyle } from "react-native";
+import { Keyframe } from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
 import { FloatingScrollView, FloatingSurface } from "@/components/ui/floating";
 import { isWeb } from "@/constants/platform";
 import type { KeyboardFocusScope } from "@/keyboard/actions";
+
 import {
   getOverlayRoot,
   OverlayLayerProvider,
@@ -48,13 +40,8 @@ const contentEntering = new Keyframe({
   100: { opacity: 1, transform: [{ scale: 1 }] },
 }).duration(CONTENT_ENTERING_DURATION_MS);
 
-const contentExiting = new Keyframe({
-  0: { opacity: 1, transform: [{ scale: 1 }] },
-  100: { opacity: 0, transform: [{ scale: 0.97 }] },
-}).duration(100);
-
 function releaseFixedMenuHeight(surfaceNativeID: string): void {
-  if (!isWeb) return;
+  if (typeof document === "undefined") return;
   document.getElementById(surfaceNativeID)?.style.removeProperty("height");
 }
 
@@ -161,17 +148,9 @@ export function useAnchoredPosition({
       setTriggerRect(null);
       return undefined;
     }
-
-    // Capture status bar height synchronously before async measurement, so it cannot change
-    // or read back null between the measure call and its resolution.
-    const statusBarHeight = Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
     let cancelled = false;
-
     void measureElement(anchorRef.current).then((rect) => {
-      if (cancelled) return undefined;
-      // On Android with statusBarTranslucent, measureInWindow returns coordinates relative to
-      // below the status bar while Modal content starts at the screen top.
-      setTriggerRect({ ...rect, y: rect.y + statusBarHeight });
+      if (!cancelled) setTriggerRect(rect);
       return undefined;
     });
 
@@ -184,7 +163,6 @@ export function useAnchoredPosition({
     if (!triggerRect || !visibleContentSize) return;
 
     const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
-    // measureInWindow and Modal both use full-screen coordinates, so the display area starts at 0.
     const result = computePosition({
       triggerRect,
       contentSize: visibleContentSize,
@@ -250,7 +228,6 @@ export interface AnchoredSurfaceProps {
 export function AnchoredSurface({
   open,
   onClose,
-  onExited,
   anchorRect,
   anchorRef,
   side = "bottom",
@@ -319,19 +296,11 @@ export function AnchoredSurface({
         top: position?.y ?? -9999,
         left: fullWidth ? horizontalPadding : (position?.x ?? -9999),
         transformOrigin: getTransformOrigin(actualPlacement, align),
+        // Mount for measurement, but never expose the off-screen sentinel frame.
+        opacity: position ? 1 : 0,
       },
     ];
-  }, [
-    fullWidth,
-    horizontalPadding,
-    width,
-    minWidth,
-    maxWidth,
-    position?.x,
-    position?.y,
-    actualPlacement,
-    align,
-  ]);
+  }, [fullWidth, horizontalPadding, position, width, minWidth, maxWidth, actualPlacement, align]);
 
   const scrollViewportStyle = useMemo(
     () => [visibleContentSize ? { height: visibleContentSize.height } : null],
@@ -379,16 +348,6 @@ export function AnchoredSurface({
         style={styles.content}
         frameStyle={frameStyle}
         entering={contentEntering}
-        exiting={
-          isWeb || !onExited
-            ? undefined
-            : contentExiting.withCallback((finished) => {
-                "worklet";
-                if (finished) {
-                  runOnJS(onExited)();
-                }
-              })
-        }
       >
         {scrollable ? (
           <FloatingScrollView
@@ -407,11 +366,7 @@ export function AnchoredSurface({
   );
 }
 
-/**
- * The full-screen layer every floating menu surface lives in: a web portal into the overlay
- * root, or a transparent Modal on native. Submenus render inside their parent's layer rather
- * than opening another one, so there is exactly one Modal per menu no matter how deep it goes.
- */
+/** The full-screen Web portal containing every surface in one menu. */
 export function MenuOverlay({
   visible,
   onClose,
@@ -469,7 +424,7 @@ export function MenuOverlay({
     [onClose],
   );
   const setWebOverlayScope = useWebOverlayRegistration({
-    active: isWeb && visible,
+    active: visible,
     layer: floatingLayer,
     onKeyDown: handleWebOverlayKeyDown,
     restoreFocusRef,
@@ -485,32 +440,15 @@ export function MenuOverlay({
         }}
         ref={setWebOverlayScope}
         collapsable={false}
-        style={[
-          styles.overlay,
-          isWeb ? styles.overlayWeb : null,
-          isWeb ? { zIndex: floatingLayer } : null,
-        ]}
+        style={[styles.overlay, styles.overlayWeb, { zIndex: floatingLayer }]}
       >
         {children}
       </View>
     </OverlayLayerProvider>
   );
 
-  if (isWeb && typeof document !== "undefined") {
-    return createPortal(overlay, getOverlayRoot());
-  }
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      statusBarTranslucent={Platform.OS === "android"}
-      onRequestClose={onClose}
-    >
-      {overlay}
-    </Modal>
-  );
+  if (typeof document === "undefined") return null;
+  return createPortal(overlay, getOverlayRoot());
 }
 
 const styles = StyleSheet.create((theme) => ({

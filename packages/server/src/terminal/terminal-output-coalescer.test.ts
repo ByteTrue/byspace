@@ -75,6 +75,18 @@ describe("TerminalOutputCoalescer", () => {
     ]);
   });
 
+  test("schedules the trailing flush for the remaining window", () => {
+    const { coalescer, advance, scheduled } = createHarness();
+
+    coalescer.handle("a");
+    advance(3);
+    coalescer.handle("b");
+
+    expect(Array.from(scheduled.values())).toEqual([
+      { callback: expect.any(Function), delayMs: 2 },
+    ]);
+  });
+
   test("flushes immediately again once the window has elapsed", () => {
     const { coalescer, flushes, advance, scheduled } = createHarness();
 

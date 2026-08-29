@@ -7,10 +7,10 @@ import type { ProviderUsage, ProviderUsageBalance } from "../../../server/messag
 import type { ProviderApiFetch, ProviderUsageFetcher } from "../provider.js";
 import {
   ApiNumberSchema,
-  toneFromUsedPct,
-  usedPctOf,
   fetchProviderApi,
+  toneFromUsedPct,
   unavailableUsage,
+  usedPctOf,
 } from "../usage.js";
 
 const GrokUsageResponseSchema = z.object({
@@ -38,32 +38,22 @@ const GrokUsageResponseSchema = z.object({
 interface GrokQuotaProviderOptions {
   logger: Logger;
   fetch?: ProviderApiFetch;
-  /** Override home directory (tests). Production uses os.homedir(). */
   homeDir?: string;
 }
 
-/** Resolve a Grok CLI token from ~/.grok/auth.json (legacy or current nested shape). */
 export function extractGrokTokenFromAuth(auth: unknown): string | null {
   if (auth == null || typeof auth !== "object" || Array.isArray(auth)) return null;
   const record = auth as Record<string, unknown>;
-
   const topLevel = record["access_token"];
-  if (typeof topLevel === "string" && topLevel.length > 0) {
-    return topLevel;
-  }
+  if (typeof topLevel === "string" && topLevel.length > 0) return topLevel;
 
   const entries = Object.entries(record);
   const preferred = entries.filter(([key]) => key.startsWith("https://auth.x.ai::"));
-  const candidates = preferred.length > 0 ? preferred : entries;
-
-  for (const [, value] of candidates) {
+  for (const [, value] of preferred.length > 0 ? preferred : entries) {
     if (value == null || typeof value !== "object" || Array.isArray(value)) continue;
     const nestedKey = (value as Record<string, unknown>)["key"];
-    if (typeof nestedKey === "string" && nestedKey.length > 0) {
-      return nestedKey;
-    }
+    if (typeof nestedKey === "string" && nestedKey.length > 0) return nestedKey;
   }
-
   return null;
 }
 
@@ -106,7 +96,6 @@ export class GrokQuotaProvider implements ProviderUsageFetcher {
 
     const resp = GrokUsageResponseSchema.parse(await res.json());
     const monthlyLimit = resp.config?.monthlyLimit?.val ?? null;
-    // Live CLI billing uses config.used.val; older mocks used usage.creditUsage.
     const creditUsage = resp.config?.used?.val ?? resp.usage?.creditUsage ?? null;
     const balances: ProviderUsageBalance[] = [];
     if (monthlyLimit !== null || creditUsage !== null) {
@@ -138,7 +127,6 @@ export class GrokQuotaProvider implements ProviderUsageFetcher {
   }
 
   private async readGrokToken(): Promise<string | null> {
-    // homeDir override is for tests: Windows os.homedir() ignores $HOME (uses USERPROFILE).
     const path = join(this.homeDir ?? homedir(), ".grok", "auth.json");
     if (!existsSync(path)) return null;
     try {

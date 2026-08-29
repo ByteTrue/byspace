@@ -1,3 +1,6 @@
+import { handleMenuSheetEscape } from "./menu-sheet-keyboard";
+import { useGlobalWebOverlayLayer, useWebOverlayRegistration } from "@/lib/overlay-root";
+import { isWeb } from "@/constants/platform";
 import {
   createContext,
   useCallback,
@@ -69,15 +72,6 @@ export interface MenuPageDefinition {
   id: string;
   title: string;
   content: ReactNode;
-  /**
-   * Whether the pointer opens and closes this page on its own. Default true.
-   *
-   * A page that takes typed input sets this false: hover intent would open it on a pointer that
-   * was only passing through, and then dismiss it — draft and all — the moment the hands moved
-   * to the keyboard and the mouse drifted off the flyout. While such a page is open, the whole
-   * surface stops closing on hover, since its parent leads back to the same dismissal.
-   */
-  hoverIntent?: boolean;
 }
 
 interface MenuSurfaceContextValue {
@@ -219,25 +213,8 @@ function MenuPopoverSurface({
     [menu.path, pages],
   );
 
-  // `hoverIntent: false` takes a page off the pointer entirely — it is not opened by resting on
-  // its trigger, and while it is open nothing on this surface closes on a pointer leaving it.
-  const hoverValue = useMemo<MenuSurfaceContextValue>(() => {
-    const locked = openPages.some(({ page }) => page.hoverIntent === false);
-    return {
-      ...surfaceValue,
-      hoverOpen: (sub) => {
-        if (pages.find((page) => page.id === sub.id)?.hoverIntent === false) return;
-        surfaceValue.hoverOpen(sub);
-      },
-      hoverClose: (depth) => {
-        if (locked) return;
-        surfaceValue.hoverClose(depth);
-      },
-    };
-  }, [openPages, pages, surfaceValue]);
-
   return (
-    <MenuSurfaceContext.Provider value={hoverValue}>
+    <MenuSurfaceContext.Provider value={surfaceValue}>
       <MenuOverlay visible={menu.open} onClose={handleClose} restoreFocusRef={menu.triggerRef}>
         <>
           <AnchoredSurface
@@ -356,6 +333,16 @@ function MenuSheetSurface({
   );
 
   const handleClose = useCallback(() => menu.setOpen(false), [menu]);
+  const modalLayer = useGlobalWebOverlayLayer("modal", isWeb && menu.open);
+  const handleWebOverlayKeyDown = useCallback(
+    (event: KeyboardEvent) => handleMenuSheetEscape(event, handleClose),
+    [handleClose],
+  );
+  const setWebOverlayScope = useWebOverlayRegistration({
+    active: isWeb && menu.open,
+    layer: modalLayer,
+    onKeyDown: handleWebOverlayKeyDown,
+  });
   const { sheetRef, handleSheetChange, handleSheetDismiss } = useIsolatedBottomSheetVisibility({
     visible: menu.open,
     isEnabled: true,
@@ -401,12 +388,7 @@ function MenuSheetSurface({
       onDismiss={handleSheetDismiss}
       backdropComponent={renderBackdrop}
       enablePanDownToClose
-      // `interactive` rather than `extend`, which is what every other sheet in the app uses.
-      // `extend` grows the sheet to its largest snap point, and with `enableDynamicSizing` that
-      // point is the content's own height — so a short page does not grow, the keyboard comes up
-      // over it, and the field you are typing into is behind the keys. `interactive` moves the
-      // sheet up instead, which is the only thing a content-sized sheet can usefully do.
-      keyboardBehavior="interactive"
+      keyboardBehavior="extend"
       keyboardBlurBehavior="restore"
     >
       <BottomSheetScrollView
@@ -416,17 +398,19 @@ function MenuSheetSurface({
         showsVerticalScrollIndicator={false}
         testID={testID ? `${testID}-content` : undefined}
       >
-        {openPage ? (
-          <>
-            <MenuSheetHeader title={openPage.title} onBack={menu.goBack} />
-            <MenuPage depth={depth}>{openPage.content}</MenuPage>
-          </>
-        ) : (
-          <>
-            {sheetTitle ? <MenuSheetHeader title={sheetTitle} onBack={null} /> : null}
-            <MenuPage depth={0}>{children}</MenuPage>
-          </>
-        )}
+        <View ref={setWebOverlayScope}>
+          {openPage ? (
+            <>
+              <MenuSheetHeader title={openPage.title} onBack={menu.goBack} />
+              <MenuPage depth={depth}>{openPage.content}</MenuPage>
+            </>
+          ) : (
+            <>
+              {sheetTitle ? <MenuSheetHeader title={sheetTitle} onBack={null} /> : null}
+              <MenuPage depth={0}>{children}</MenuPage>
+            </>
+          )}
+        </View>
       </BottomSheetScrollView>
     </ThemedBottomSheetModal>
   );

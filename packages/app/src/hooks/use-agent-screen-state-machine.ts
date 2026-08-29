@@ -3,7 +3,7 @@ import type {
   AgentCapabilityFlags,
   AgentFeature,
   AgentProvider,
-} from "@getpaseo/protocol/agent-types";
+} from "@bytetrue/byspace-protocol/agent-types";
 import type { ViewedTimelineStatus } from "@/timeline/viewed-timeline-sync";
 
 export interface AgentScreenAgent {
@@ -25,6 +25,7 @@ export interface AgentScreenAgent {
   features?: readonly AgentFeature[];
   lastError?: string | null;
   projectPlacement?: {
+    projectId?: string;
     projectKey?: string;
     projectName?: string;
     checkout?: {
@@ -81,7 +82,7 @@ export type AgentScreenReadySyncState =
   | { status: "reconnecting" }
   | {
       status: "catching_up";
-      ui: "overlay" | "silent";
+      ui: "overlay" | "indicator" | "silent";
     }
   | { status: "sync_error"; isRetrying: boolean };
 

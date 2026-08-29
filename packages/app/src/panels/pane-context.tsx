@@ -1,22 +1,19 @@
 import React, { createContext, useContext, type ReactNode } from "react";
 import invariant from "tiny-invariant";
-import type { JsonValue } from "@getpaseo/protocol/agent-types";
+import type { JsonValue } from "@bytetrue/byspace-protocol/agent-types";
 import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
-import type { OpenInSidePaneSource } from "@/workspace-tabs/open-beside";
-import type { PaneHost } from "@/panels/panel-manifest";
 
 export interface PaneContextValue {
   serverId: string;
   workspaceId: string;
-  host: PaneHost;
+  /** Whether this pane is the workspace's dedicated Side panel. */
+  isSidePanel: boolean;
   tabId: string;
   target: WorkspaceTabTarget;
   state?: JsonValue;
   fileNavigationRevision?: number;
   openTab: (target: WorkspaceTabTarget) => void;
-  openPreferredTarget: (target: WorkspaceTabTarget, source: OpenInSidePaneSource) => void;
-  openTargetToSide?: (target: WorkspaceTabTarget) => void;
   closeCurrentTab: () => void;
   retargetCurrentTab: (target: WorkspaceTabTarget) => void;
   setCurrentTabState: (state: JsonValue) => void;
@@ -26,6 +23,7 @@ export interface PaneContextValue {
 
 export interface PaneFocusContextValue {
   isWorkspaceFocused: boolean;
+  isPaneVisible: boolean;
   isPaneFocused: boolean;
   isInteractive: boolean;
   focusPane: () => void;
@@ -37,11 +35,13 @@ const noopFocusPane = () => {};
 
 export function createPaneFocusContextValue(input: {
   isWorkspaceFocused: boolean;
+  isPaneVisible?: boolean;
   isPaneFocused: boolean;
   onFocusPane?: () => void;
 }): PaneFocusContextValue {
   return {
     isWorkspaceFocused: input.isWorkspaceFocused,
+    isPaneVisible: input.isPaneVisible ?? true,
     isPaneFocused: input.isPaneFocused,
     isInteractive: input.isWorkspaceFocused && input.isPaneFocused,
     focusPane: input.onFocusPane ?? noopFocusPane,

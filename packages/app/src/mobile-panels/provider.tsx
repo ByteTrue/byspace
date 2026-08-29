@@ -92,8 +92,6 @@ export function MobilePanelsProvider({ children }: { children: ReactNode }) {
   const leftCloseGestureRef = useRef<GestureType | undefined>(undefined);
   const rightOpenGestureRef = useRef<GestureType | undefined>(undefined);
   const rightCloseGestureRef = useRef<GestureType | undefined>(undefined);
-  const [presentedPanels, setPresentedPanels] = useState(getPanelMask(initialSelection.target));
-
   const setOpenGestureBlocked = useCallback(
     (owner: symbol, blocked: boolean) => {
       if (blocked) {
@@ -105,6 +103,7 @@ export function MobilePanelsProvider({ children }: { children: ReactNode }) {
     },
     [openGesturesBlocked],
   );
+  const [presentedPanels, setPresentedPanels] = useState(getPanelMask(initialSelection.target));
 
   const presentPanel = useCallback((panel: MobilePanelView) => {
     const mask = getPanelMask(panel);

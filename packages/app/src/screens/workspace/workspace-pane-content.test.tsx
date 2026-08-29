@@ -55,15 +55,13 @@ const agentTab: WorkspaceTabDescriptor = {
   target: { kind: "agent", agentId: "agent-a" },
 };
 
-function buildContent(tab: WorkspaceTabDescriptor = agentTab, host: "main" | "explorer" = "main") {
+function buildContent(tab: WorkspaceTabDescriptor = agentTab, isSidePanel = false) {
   return buildWorkspacePaneContentModel({
     tab,
     normalizedServerId: "server-a",
     normalizedWorkspaceId: "workspace-a",
-    host,
+    isSidePanel,
     onOpenTab: vi.fn(),
-    onOpenPreferredTarget: vi.fn(),
-    onOpenTargetToSide: vi.fn(),
     onCloseCurrentTab: vi.fn(),
     onRetargetCurrentTab: vi.fn(),
     onSetCurrentTabState: vi.fn(),
@@ -113,19 +111,21 @@ describe("WorkspacePaneContent", () => {
     expect(snapshots[1]?.paneContextValue).toBe(snapshots[0]?.paneContextValue);
     expect(snapshots[0]?.focus).toEqual({
       isWorkspaceFocused: true,
+      isPaneVisible: true,
       isPaneFocused: false,
       isInteractive: false,
       focusPane: expect.any(Function),
     });
     expect(snapshots[1]?.focus).toEqual({
       isWorkspaceFocused: true,
+      isPaneVisible: true,
       isPaneFocused: true,
       isInteractive: true,
       focusPane: expect.any(Function),
     });
   });
 
-  it("exposes the pane host to its content", () => {
+  it("exposes whether the pane is the Side panel to its content", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -133,14 +133,14 @@ describe("WorkspacePaneContent", () => {
     act(() => {
       root?.render(
         <WorkspacePaneContent
-          content={buildContent(agentTab, "explorer")}
+          content={buildContent(agentTab, true)}
           isPaneFocused
           isWorkspaceFocused
         />,
       );
     });
 
-    expect(snapshots[0]?.paneContextValue.host).toBe("explorer");
+    expect(snapshots[0]?.paneContextValue.isSidePanel).toBe(true);
   });
 
   it("keeps pane content mounted when a draft tab is retargeted in place", () => {

@@ -5,7 +5,6 @@ import { Pressable, Text, View, type PressableStateCallbackType } from "react-na
 import { useMutation } from "@tanstack/react-query";
 import { Check, ChevronDown } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { EditorTargetIcon } from "@/components/icons/editor-target-icon";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,20 +14,17 @@ import {
 import { useToast } from "@/contexts/toast-context";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
-import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { resolvePreferredEditorId, usePreferredEditor } from "@/hooks/use-preferred-editor";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { isAbsolutePath } from "@/utils/path";
 import { isWeb } from "@/constants/platform";
-import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-open-targets";
 import { resolveWorkspaceFilePaths, type WorkspaceFileLocation } from "@/workspace/file-open";
 import { planWorkspaceOpenTargets } from "@/workspace/open-target-planner";
 import type { Theme } from "@/styles/theme";
 import { ForgeBrandIcon } from "@/git/forge-icon";
 import { getForgePresentation } from "@/git/forge";
-import { buttonControlHeight, HEADER_CONTROL_HEIGHT } from "@/components/ui/control-geometry";
-import { extraMutedIconColorMapping } from "@/components/ui/icon-button-chrome";
+import { buttonControlHeight } from "@/components/ui/control-geometry";
 
 interface WorkspaceOpenInEditorButtonProps {
   serverId: string;
@@ -45,7 +41,6 @@ interface OpenTarget {
 }
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
-const ThemedEditorTargetIcon = withUnistyles(EditorTargetIcon);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedCheckIcon = withUnistyles(Check);
 
@@ -89,12 +84,7 @@ export function WorkspaceOpenInEditorButton({
   const { t } = useTranslation();
   const toast = useToast();
   const isConnected = useHostRuntimeIsConnected(serverId);
-  const isLocalDaemon = useIsLocalDaemon(serverId);
   const { preferredEditorId, updatePreferredEditor } = usePreferredEditor();
-  const { targets: desktopOpenTargets, isAvailable: isDesktopOpenAvailable } =
-    useDesktopOpenTargets({
-      isLocalExecution: isLocalDaemon,
-    });
 
   const resolvedFile = useMemo(
     () =>
@@ -124,40 +114,18 @@ export function WorkspaceOpenInEditorButton({
         workspaceDirectory: cwd,
         activeFile,
         resolvedActiveFile: resolvedFile,
-        desktopTargets: desktopOpenTargets,
-        canUseDesktopBridge: isDesktopOpenAvailable,
-        isLocalExecution: isLocalDaemon,
         checkoutStatus,
         forge: resolvedForge,
       }).map((target) => {
-        if (target.source === "forge") {
-          const presentation = getForgePresentation(target.forge);
-          return {
-            id: target.id,
-            label: target.label,
-            icon: renderForgeOpenTargetIcon(presentation.icon),
-            onOpen: () => openExternalUrl(target.url),
-          };
-        }
+        const presentation = getForgePresentation(target.forge);
         return {
           id: target.id,
           label: target.label,
-          icon: (
-            <ThemedEditorTargetIcon icon={target.icon} size={16} uniProps={mutedColorMapping} />
-          ),
-          onOpen: () => openDesktopTarget(target.openInput),
+          icon: renderForgeOpenTargetIcon(presentation.icon),
+          onOpen: () => openExternalUrl(target.url),
         };
       }),
-    [
-      activeFile,
-      checkoutStatus,
-      cwd,
-      desktopOpenTargets,
-      resolvedForge,
-      isDesktopOpenAvailable,
-      isLocalDaemon,
-      resolvedFile,
-    ],
+    [activeFile, checkoutStatus, cwd, resolvedFile, resolvedForge],
   );
 
   const targetIds = useMemo(() => targets.map((target) => target.id), [targets]);
@@ -186,11 +154,11 @@ export function WorkspaceOpenInEditorButton({
 
   const primaryPressableStyle = useCallback(
     ({ pressed, hovered = false }: PressableStateCallbackType & { hovered?: boolean }) => [
-      hideLabels ? styles.splitButtonPrimaryIconOnly : styles.splitButtonPrimary,
+      styles.splitButtonPrimary,
       (Boolean(hovered) || pressed) && styles.splitButtonPrimaryHovered,
       openMutation.isPending && styles.splitButtonPrimaryDisabled,
     ],
-    [hideLabels, openMutation.isPending],
+    [openMutation.isPending],
   );
 
   const caretTriggerStyle = useCallback(
@@ -254,7 +222,7 @@ export function WorkspaceOpenInEditorButton({
               accessibilityRole="button"
               accessibilityLabel={t("workspace.git.openInEditor.chooseEditor")}
             >
-              <ThemedChevronDown size={16} uniProps={extraMutedIconColorMapping} />
+              <ThemedChevronDown size={16} uniProps={mutedColorMapping} />
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
@@ -286,31 +254,23 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 0,
   },
   splitButton: {
-    height: {
-      xs: buttonControlHeight.xs,
-      md: HEADER_CONTROL_HEIGHT,
-    },
+    height: buttonControlHeight.xs,
     flexDirection: "row",
     alignItems: "stretch",
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.lg,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.borderAccent,
     overflow: "hidden",
   },
   splitButtonPrimary: {
-    paddingHorizontal: {
-      xs: theme.spacing[3],
-      md: theme.spacing[2],
-    },
+    paddingLeft: theme.spacing[3],
+    paddingRight: theme.spacing[3],
     justifyContent: "center",
     position: "relative",
   },
   splitButtonPrimaryIconOnly: {
-    width: {
-      xs: buttonControlHeight.xs,
-      md: HEADER_CONTROL_HEIGHT,
-    },
-    paddingHorizontal: 0,
+    paddingLeft: theme.spacing[2],
+    paddingRight: theme.spacing[2],
     justifyContent: "center",
     position: "relative",
   },
@@ -337,10 +297,7 @@ const styles = StyleSheet.create((theme) => ({
     transform: [{ scale: 0.8 }],
   },
   splitButtonCaret: {
-    width: {
-      xs: buttonControlHeight.xs,
-      md: HEADER_CONTROL_HEIGHT,
-    },
+    width: 28,
     alignItems: "center",
     justifyContent: "center",
     borderLeftWidth: theme.borderWidth[1],

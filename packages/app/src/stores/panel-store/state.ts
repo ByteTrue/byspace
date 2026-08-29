@@ -140,9 +140,9 @@ export const PanelPersistedStateSchema = z.strictObject({
   explorerTab: ExplorerTabSchema.optional(),
   explorerTabByCheckout: z.record(z.string(), ExplorerTabSchema).optional(),
   expandedPathsByWorkspace: z.record(z.string(), z.array(z.string())).optional(),
-  // Accepted only so migration can discard the former per-file diff expansion state.
   diffExpandedPathsByWorkspace: z.record(z.string(), z.array(z.string())).optional(),
   diffCollapsedFoldersByWorkspace: z.record(z.string(), z.array(z.string())).optional(),
+  // Accepted only so migration can discard the retired per-file expansion state.
   collapsedFilePathsByWorkspace: z.record(z.string(), z.array(z.string())).optional(),
   sidebarWidth: z.number().optional(),
   // Accepted only so migration can discard the former docked explorer sidebar width.
@@ -216,6 +216,7 @@ export function migratePanelState(persistedState: unknown, version: number): Mig
   if (state.desktop) {
     delete state.desktop.fileExplorerOpen;
   }
+  delete state.collapsedFilePathsByWorkspace;
   if (!isExplorerTab(state.explorerTab)) {
     state.explorerTab = "changes";
   }
@@ -233,19 +234,19 @@ export function migratePanelState(persistedState: unknown, version: number): Mig
   ) {
     state.expandedPathsByWorkspace = {};
   }
-  delete state.diffExpandedPathsByWorkspace;
+  if (
+    version < 10 ||
+    typeof state.diffExpandedPathsByWorkspace !== "object" ||
+    !state.diffExpandedPathsByWorkspace
+  ) {
+    state.diffExpandedPathsByWorkspace = {};
+  }
   if (
     version < 12 ||
     typeof state.diffCollapsedFoldersByWorkspace !== "object" ||
     !state.diffCollapsedFoldersByWorkspace
   ) {
     state.diffCollapsedFoldersByWorkspace = {};
-  }
-  if (
-    typeof state.collapsedFilePathsByWorkspace !== "object" ||
-    !state.collapsedFilePathsByWorkspace
-  ) {
-    state.collapsedFilePathsByWorkspace = {};
   }
   if (typeof state.explorerShowHiddenFiles !== "boolean") {
     state.explorerShowHiddenFiles = true;

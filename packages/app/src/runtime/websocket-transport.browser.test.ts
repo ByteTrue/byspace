@@ -1,6 +1,5 @@
-import { inject } from "vitest";
-import { describe, expect, test } from "vitest";
-import { createAppWebSocketFactory } from "./websocket-factory";
+import { describe, expect, inject, test } from "vitest";
+import { defaultWebSocketFactory } from "@bytetrue/byspace-client/internal/daemon-client-websocket-transport";
 
 declare module "vitest" {
   interface ProvidedContext {
@@ -9,10 +8,7 @@ declare module "vitest" {
 }
 
 function openPasswordlessRelayConnection(url: string): Promise<WebSocket> {
-  const socket = createAppWebSocketFactory()(url, {
-    headers: {},
-    protocols: undefined,
-  });
+  const socket = defaultWebSocketFactory(url, { headers: {}, protocols: undefined });
 
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -32,9 +28,8 @@ function openPasswordlessRelayConnection(url: string): Promise<WebSocket> {
 }
 
 describe("browser WebSocket transport", () => {
-  test("opens a passwordless relay-style connection when the server selects no subprotocol", async () => {
+  test("opens a passwordless relay-style connection without a subprotocol", async () => {
     const socket = await openPasswordlessRelayConnection(inject("passwordlessRelayUrl"));
-
     try {
       expect(socket.protocol).toBe("");
     } finally {

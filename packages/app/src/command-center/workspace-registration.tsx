@@ -10,7 +10,7 @@ import {
   Focus,
   GitCompareArrows,
   GitPullRequest,
-  Globe,
+  Maximize2,
   Move,
   PanelRight,
   Pencil,
@@ -20,7 +20,6 @@ import {
   SquareTerminal,
   X,
 } from "lucide-react-native";
-import { getIsElectron } from "@/constants/platform";
 import { supportsDesktopPaneSplits, useIsCompactFormFactor } from "@/constants/layout";
 import { GIT_ACTION_ICONS } from "@/git/action-icons";
 import { useGitActionRunner, useGitActions } from "@/git/use-actions";
@@ -49,7 +48,6 @@ import { resolveWorkspaceCommandCenterShortcuts } from "./workspace-shortcuts";
 const WORKSPACE_COMMAND_CENTER_ICONS = {
   newAgent: getCommandCenterIcon(SquarePen),
   newTerminal: getCommandCenterIcon(SquareTerminal),
-  newBrowser: getCommandCenterIcon(Globe),
   splitRight: getCommandCenterIcon(Columns2),
   splitDown: getCommandCenterIcon(Rows2),
   changes: getCommandCenterIcon(GitCompareArrows),
@@ -63,13 +61,14 @@ const WORKSPACE_COMMAND_CENTER_ICONS = {
   copy: getCommandCenterIcon(Copy),
   focusPane: getCommandCenterIcon(Focus),
   moveTab: getCommandCenterIcon(Move),
+  maximize: getCommandCenterIcon(Maximize2),
   focusMode: getCommandCenterIcon(ArrowDownToLine),
-  explorerSidebar: getCommandCenterIcon(PanelRight),
+  sidePanel: getCommandCenterIcon(PanelRight),
 };
 
 const OPEN_PANEL_LABEL_KEYS = {
   supporting: "shell.commandCenter.open",
-  "side-pane": "shell.commandCenter.openInSidePane",
+  "side-panel": "shell.commandCenter.openInSidePanel",
   "focused-pane": "shell.commandCenter.openInFocusedPane",
 } as const;
 
@@ -82,7 +81,7 @@ function staticIcon(element: ReactElement | undefined): CommandCenterIcon | unde
 }
 
 function resolveWorkspaceShortcuts(overrides: ShortcutOverrides): WorkspaceCommandCenterShortcuts {
-  const platform = { isMac: getShortcutOs() === "mac", isDesktop: getIsElectron() };
+  const platform = { isMac: getShortcutOs() === "mac", isDesktop: true };
   return resolveWorkspaceCommandCenterShortcuts({ overrides, platform });
 }
 
@@ -122,7 +121,6 @@ export function useWorkspaceCommandCenterActions(): void {
           section: t("workspace.header.actions.workspaceActions"),
           newAgent: t("workspace.tabs.actions.newAgent"),
           newTerminal: t("workspace.tabs.actions.newTerminal"),
-          newBrowser: t("workspace.tabs.actions.newBrowser"),
           splitRight: t("workspace.tabs.actions.splitRight"),
           splitDown: t("workspace.tabs.actions.splitDown"),
           changes: t("workspace.tabs.actions.changes"),
@@ -150,8 +148,9 @@ export function useWorkspaceCommandCenterActions(): void {
           moveTabUp: t("settings.shortcuts.help.moveTabUp"),
           moveTabDown: t("settings.shortcuts.help.moveTabDown"),
           closePane: t("settings.shortcuts.help.closePane"),
+          togglePaneMaximization: t("settings.shortcuts.help.toggleExplorerPaneMaximization"),
           toggleFocusMode: t("settings.shortcuts.help.toggleFocusMode"),
-          toggleExplorerSidebar: t("workspace.tabs.explorerSidebar.toggle"),
+          toggleSidePanel: t("workspace.tabs.sidePanel.toggle"),
         },
         icons: {
           ...WORKSPACE_COMMAND_CENTER_ICONS,
@@ -160,7 +159,7 @@ export function useWorkspaceCommandCenterActions(): void {
         shortcuts: resolveWorkspaceShortcuts(overrides),
         capabilities: {
           canSplitPanes: supportsDesktopPaneSplits() && !isCompact,
-          canOpenBrowserTabs: getIsElectron(),
+          canOpenBrowserTabs: false,
           isGit,
         },
         activeTabKind,

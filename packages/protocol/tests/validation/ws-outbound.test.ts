@@ -20,7 +20,7 @@ const require = createRequire(import.meta.url);
 async function compileInlineSchema(sourceSchema: string): Promise<GeneratedSchema> {
   const scratchRoot = resolve(protocolRoot, "../../.tmp");
   await mkdir(scratchRoot, { recursive: true });
-  const tempDir = await mkdtemp(join(scratchRoot, "paseo-zod-aot-"));
+  const tempDir = await mkdtemp(join(scratchRoot, "byspace-zod-aot-"));
 
   try {
     const sourcePath = join(tempDir, "schema.source.js");
@@ -82,6 +82,25 @@ const SourceSchema = z.discriminatedUnion("type", [
     });
   });
 
+  it("falls back to the embedded schema for recursive JSON values", async () => {
+    const schema = await compileInlineSchema(`
+const SourceSchema = z.object({
+  providerOptions: z.record(z.string(), z.json()),
+});
+`);
+    const providerOptions = {
+      features: { multiAgent: true, modes: ["fast", "safe"] },
+      allowedTools: ["Read", "Grep"],
+      nullable: null,
+    };
+
+    expect(schema.safeParse({ providerOptions })).toMatchObject({
+      success: true,
+      data: { providerOptions },
+    });
+    expect(schema.safeParse({ providerOptions: { invalid: undefined } }).success).toBe(false);
+  });
+
   it("routes tool-call-like status unions through the current sequential item union", async () => {
     const schema = await compileInlineSchema(`
 const ToolCallItemSchema = z.discriminatedUnion("status", [
@@ -138,34 +157,6 @@ const SourceSchema = z.object({
     );
   });
 
-  it("accepts project config responses with and without setup commit status", () => {
-    const payload = {
-      requestId: "project-config-read",
-      repoRoot: "/repo",
-      ok: true,
-      config: null,
-      revision: null,
-    };
-    const envelope = (
-      responsePayload: typeof payload & {
-        hasUncommittedWorktreeSetupChanges?: boolean;
-      },
-    ) => ({
-      type: "session",
-      message: {
-        type: "read_project_config_response",
-        payload: responsePayload,
-      },
-    });
-
-    expect(GeneratedWSOutboundMessageSchema.safeParse(envelope(payload)).success).toBe(true);
-    expect(
-      GeneratedWSOutboundMessageSchema.safeParse(
-        envelope({ ...payload, hasUncommittedWorktreeSetupChanges: true }),
-      ).success,
-    ).toBe(true);
-  });
-
   it("accepts a compact provider snapshot envelope", () => {
     const envelope = {
       type: "session",
@@ -193,6 +184,48 @@ const SourceSchema = z.object({
           generatedAt: "2026-08-04T00:00:00.000Z",
           requestId: "provider-snapshot",
         },
+      },
+    };
+
+    expect(GeneratedWSOutboundMessageSchema.safeParse(envelope)).toEqual({
+      success: true,
+      data: envelope,
+    });
+  });
+
+  it("accepts nested provider options in schedule response envelopes", () => {
+    const schedule = {
+      id: "schedule-1",
+      name: null,
+      prompt: "Run the task",
+      cadence: { type: "every", everyMs: 60_000 },
+      target: {
+        type: "new-agent",
+        config: {
+          provider: "codex",
+          cwd: "/tmp/project",
+          providerOptions: {
+            features: { multiAgent: true, modes: ["fast", "safe"] },
+            sandbox: { network: false, writableRoots: ["/tmp/project"] },
+            allowedTools: ["Read", "Grep"],
+            nullable: null,
+          },
+        },
+      },
+      status: "active",
+      createdAt: "2026-08-12T00:00:00.000Z",
+      updatedAt: "2026-08-12T00:00:00.000Z",
+      nextRunAt: null,
+      lastRunAt: null,
+      pausedAt: null,
+      expiresAt: null,
+      maxRuns: null,
+    };
+    const envelope = {
+      type: "session",
+      message: {
+        type: "schedule/list/response",
+        payload: { requestId: "schedule-list", schedules: [schedule], error: null },
       },
     };
 
@@ -318,5 +351,30 @@ const SourceSchema = z.object({
       },
     });
     expect(result.success).toBe(true);
+  });
+  it("accepts orchestration tool response envelopes", () => {
+    const envelope = {
+      type: "session",
+      message: {
+        type: "orchestration.tools.list.response",
+        payload: {
+          requestId: "tools-1",
+          success: true,
+          error: null,
+          tools: [
+            {
+              name: "list_agents",
+              description: "List agents",
+              inputSchema: { type: "object" },
+            },
+          ],
+        },
+      },
+    };
+
+    expect(GeneratedWSOutboundMessageSchema.safeParse(envelope)).toEqual({
+      success: true,
+      data: envelope,
+    });
   });
 });

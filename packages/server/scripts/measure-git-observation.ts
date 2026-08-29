@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -95,8 +95,9 @@ function snapshotCounts(counts: ProducerCounts): ProducerCounts {
 function createTrackedSubscriber(failWorktreeRoot: string | null) {
   const observer = createFileObserver();
   const subscriptions = new Set<FileObserverSubscription>();
+  const resolvedFailWorktreeRoot = failWorktreeRoot ? realpathSync(failWorktreeRoot) : null;
   const subscribe: SubscribeToFileChanges = async (...args) => {
-    if (failWorktreeRoot && path.resolve(args[0]) === failWorktreeRoot) {
+    if (resolvedFailWorktreeRoot && realpathSync(args[0]) === resolvedFailWorktreeRoot) {
       throw new Error("measurement watcher setup failure");
     }
     const subscription = await observer.subscribe(...args);
@@ -114,14 +115,14 @@ function createTrackedSubscriber(failWorktreeRoot: string | null) {
 
 function createMeasuredService(input: {
   repoDir: string;
-  paseoHome: string;
+  byspaceHome: string;
   failWorktreeWatch?: boolean;
 }) {
   const counts: ProducerCounts = { structural: 0, worktree: 0, detailedDiff: 0 };
   const watcher = createTrackedSubscriber(input.failWorktreeWatch ? input.repoDir : null);
   const service = new WorkspaceGitServiceImpl({
     logger: createLogger(),
-    paseoHome: input.paseoHome,
+    byspaceHome: input.byspaceHome,
     deps: {
       subscribe: watcher.subscribe,
       getWorkspaceGitSelfHealPhaseMs: () => 60_000,
@@ -189,9 +190,9 @@ async function closeMeasuredService(input: {
 }
 
 async function main(): Promise<void> {
-  const tempDir = mkdtempSync(path.join(tmpdir(), "paseo-git-observation-measurement-"));
+  const tempDir = mkdtempSync(path.join(tmpdir(), "byspace-git-observation-measurement-"));
   const repoDir = path.join(tempDir, "repo");
-  const paseoHome = path.join(tempDir, "paseo-home");
+  const byspaceHome = path.join(tempDir, "byspace-home");
   const trackedPath = path.join(repoDir, "tracked.txt");
   const ignoredDir = path.join(repoDir, "build");
   mkdirSync(repoDir, { recursive: true });
@@ -200,8 +201,8 @@ async function main(): Promise<void> {
   writeFileSync(path.join(repoDir, ".gitignore"), "build/\n");
   writeFileSync(trackedPath, "base\n");
   runGit(repoDir, ["init", "-b", "main"]);
-  runGit(repoDir, ["config", "user.email", "measurement@paseo.local"]);
-  runGit(repoDir, ["config", "user.name", "Paseo Measurement"]);
+  runGit(repoDir, ["config", "user.email", "measurement@byspace.local"]);
+  runGit(repoDir, ["config", "user.name", "BySpace Measurement"]);
   runGit(repoDir, ["add", ".gitignore", "tracked.txt"]);
   runGit(repoDir, ["commit", "-m", "fixture"]);
   runGit(repoDir, ["checkout", "-b", "feature"]);
@@ -214,7 +215,7 @@ async function main(): Promise<void> {
   let diffManager: CheckoutDiffManager | null = null;
 
   try {
-    healthy = createMeasuredService({ repoDir, paseoHome });
+    healthy = createMeasuredService({ repoDir, byspaceHome });
     let latestSummary: WorkspaceGitRuntimeSnapshot | null = null;
     let latestDiffAdditions = 0;
 
@@ -226,7 +227,7 @@ async function main(): Promise<void> {
     });
     diffManager = new CheckoutDiffManager({
       logger: createLogger(),
-      paseoHome,
+      byspaceHome,
       workspaceGitService: healthy.service,
     });
     const openedDiff = await diffManager.subscribe(
@@ -342,11 +343,12 @@ async function main(): Promise<void> {
     diffManager = null;
     await closeMeasuredService({
       service: healthy.service,
+      observer: healthy.watcher.observer,
       subscriptions: healthy.watcher.subscriptions,
     });
     healthy = null;
 
-    degraded = createMeasuredService({ repoDir, paseoHome, failWorktreeWatch: true });
+    degraded = createMeasuredService({ repoDir, byspaceHome, failWorktreeWatch: true });
     startGitCommandMetrics();
     const degradedBootstrapStartedAtMs = Date.now();
     const degradedBootstrapCounts = snapshotCounts(degraded.counts);
@@ -390,7 +392,7 @@ async function main(): Promise<void> {
       generatedAt: new Date().toISOString(),
       phases,
     };
-    const outputPath = process.env.PASEO_GIT_OBSERVATION_REPORT?.trim();
+    const outputPath = process.env.BYSPACE_GIT_OBSERVATION_REPORT?.trim();
     if (outputPath) {
       await writeFile(path.resolve(outputPath), `${JSON.stringify(report, null, 2)}\n`, "utf8");
     }

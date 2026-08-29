@@ -16,6 +16,7 @@ const discriminatedUnionPath = resolve(
   zodAotRoot,
   "dist/core/codegen/schemas/discriminated-union.js",
 );
+const lazyExtractorPath = resolve(zodAotRoot, "dist/core/extract/extractors/lazy.js");
 
 async function ensureZodAotRuntimeImportExtensionPatch() {
   const emitter = await readFile(emitterPath, "utf8");
@@ -67,9 +68,30 @@ async function ensureZodAotDiscriminatedUnionOutputPatch() {
   await writeFile(discriminatedUnionPath, discriminatedUnionEmitter);
 }
 
+async function ensureZodAotEmbeddedRecursiveSchemaFallbackPatch() {
+  const lazyExtractor = await readFile(lazyExtractorPath, "utf8");
+  const patched = 'return ctx.fallback("lazy");';
+  const recursiveRootCall = 'return { type: "recursiveRef" };';
+  const patchedOccurrences = lazyExtractor.split(patched).length - 1;
+  if (!lazyExtractor.includes(recursiveRootCall)) {
+    if (patchedOccurrences === 2) {
+      return;
+    }
+    throw new Error("zod-aot lazy extractor shape changed; update the recursive schema patch");
+  }
+  if (patchedOccurrences !== 1) {
+    throw new Error("zod-aot lazy fallback shape changed; update the recursive schema patch");
+  }
+
+  // Embedded recursive schemas such as z.json() must fall back to their own runtime
+  // schema. zod-aot otherwise recurses into the enclosing WebSocket envelope validator.
+  await writeFile(lazyExtractorPath, lazyExtractor.replace(recursiveRootCall, patched));
+}
+
 await Promise.all([
   ensureZodAotRuntimeImportExtensionPatch(),
   ensureZodAotDiscriminatedUnionOutputPatch(),
+  ensureZodAotEmbeddedRecursiveSchemaFallbackPatch(),
 ]);
 
 const [{ discoverSchemas }, { compileSchemas }, { generateCompiledFileContent }] =

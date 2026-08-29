@@ -130,27 +130,21 @@ function watchTerminal(session: TerminalSession): void {
   });
   outputCoalescerByTerminalId.set(session.id, outputCoalescer);
 
-  const unsubscribeMessage = session.subscribe(
-    (message) => {
-      if (message.type === "output") {
-        pendingOutputRevision = message.revision;
-        outputCoalescer.handle(message.data);
-        return;
-      }
-      // Non-output messages (snapshot/snapshotReady/titleChange) must not jump
-      // ahead of buffered output: flush the coalescer first, then forward.
-      outputCoalescer.flush();
-      sendToParent({
-        type: "terminalMessage",
-        terminalId: session.id,
-        message,
-      });
-    },
-    // Creation already sends an authoritative state in terminalCreated. A second
-    // asynchronous state snapshot can arrive after the create response and
-    // overwrite a resize issued immediately by the caller.
-    { initialSnapshot: "ready" },
-  );
+  const unsubscribeMessage = session.subscribe((message) => {
+    if (message.type === "output") {
+      pendingOutputRevision = message.revision;
+      outputCoalescer.handle(message.data);
+      return;
+    }
+    // Non-output messages (snapshot/snapshotReady/titleChange) must not jump
+    // ahead of buffered output: flush the coalescer first, then forward.
+    outputCoalescer.flush();
+    sendToParent({
+      type: "terminalMessage",
+      terminalId: session.id,
+      message,
+    });
+  });
   const unsubscribeExit = session.onExit((info) => {
     outputCoalescer.flush();
     clearTerminalSubscriptions(session.id);
@@ -288,11 +282,18 @@ async function handleRequest(message: TerminalWorkerRequest): Promise<void> {
       // snapshot's) the controller's revision dedup wouldn't drop it and the client would
       // see the bytes twice. Flushing first sends them with a revision <= the snapshot's.
       outputCoalescerByTerminalId.get(message.terminalId)?.flush();
+      // Drain the headless xterm so snapshotRevision catches up with emitRevision.
+      // Without this, the snapshot could lag behind already-emitted output and
+      // the controller would replay bytes the client already received.
+      const stateSession = manager.getTerminal(message.terminalId);
+      if (stateSession) {
+        await stateSession.drainHeadlessXterm();
+      }
       sendToParent({
         type: "response",
         requestId: message.requestId,
         ok: true,
-        result: buildTerminalStateResult(manager.getTerminal(message.terminalId), message.options),
+        result: buildTerminalStateResult(stateSession, message.options),
       });
       return;
     }

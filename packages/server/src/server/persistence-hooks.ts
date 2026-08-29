@@ -1,5 +1,4 @@
 import type { AgentManager } from "./agent/agent-manager.js";
-import { stripInternalPaseoMcpServer } from "./agent/runtime-mcp-config.js";
 import type {
   AgentPersistenceHandle,
   AgentProvider,
@@ -63,7 +62,7 @@ export function attachAgentStoragePersistence(
 }
 
 export function buildConfigOverrides(record: StoredAgentRecord): Partial<AgentSessionConfig> {
-  return stripInternalPaseoMcpServer({
+  return {
     provider: record.provider,
     cwd: record.cwd,
     modeId: record.config?.modeId ?? undefined,
@@ -71,10 +70,9 @@ export function buildConfigOverrides(record: StoredAgentRecord): Partial<AgentSe
     thinkingOptionId: record.config?.thinkingOptionId ?? undefined,
     featureValues: record.config?.featureValues ?? undefined,
     providerOptions: record.config?.providerOptions ?? undefined,
-    toolPolicy: record.config?.toolPolicy ?? undefined,
     systemPrompt: record.config?.systemPrompt ?? undefined,
     mcpServers: record.config?.mcpServers ?? undefined,
-  });
+  };
 }
 
 export function buildSessionConfig(
@@ -85,7 +83,7 @@ export function buildSessionConfig(
     return null;
   }
   const overrides = buildConfigOverrides(record);
-  return stripInternalPaseoMcpServer({
+  return {
     provider: record.provider,
     cwd: record.cwd,
     modeId: overrides.modeId,
@@ -93,10 +91,9 @@ export function buildSessionConfig(
     thinkingOptionId: overrides.thinkingOptionId,
     featureValues: overrides.featureValues,
     providerOptions: overrides.providerOptions,
-    toolPolicy: overrides.toolPolicy,
     systemPrompt: overrides.systemPrompt,
     mcpServers: overrides.mcpServers,
-  });
+  };
 }
 
 export function isStoredAgentProviderAvailable(
@@ -112,7 +109,6 @@ export function extractTimestamps(record: StoredAgentRecord): {
   lastUserMessageAt: Date | null;
   labels?: Record<string, string>;
   workspaceId?: string;
-  owner?: StoredAgentRecord["owner"];
 } {
   return {
     createdAt: new Date(record.createdAt),
@@ -120,7 +116,6 @@ export function extractTimestamps(record: StoredAgentRecord): {
     lastUserMessageAt: record.lastUserMessageAt ? new Date(record.lastUserMessageAt) : null,
     labels: record.labels,
     workspaceId: record.workspaceId,
-    owner: record.owner,
   };
 }
 

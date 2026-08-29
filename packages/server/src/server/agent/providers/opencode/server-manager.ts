@@ -21,10 +21,12 @@ import {
   type OpenCodeEventSource,
 } from "./event-consumer.js";
 
-/** Budget for the OpenCode HTTP server to become usable after spawn. */
+/**
+ * Budget for an OpenCode server to become usable after spawn. Plugin-heavy installs
+ * routinely need well over ten seconds on a cold start, so every wait that depends on
+ * the server finishing its boot shares this budget.
+ */
 export const OPENCODE_SERVER_STARTUP_TIMEOUT_MS = 30_000;
-/** One stalled SSE attempt plus enough time for the consumer's retry. */
-export const OPENCODE_EVENT_STREAM_READY_TIMEOUT_MS = 45_000;
 const OPENCODE_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT_MS = 5_000;
 const OPENCODE_SERVER_FORCE_SHUTDOWN_TIMEOUT_MS = 1_000;
 
@@ -64,7 +66,6 @@ export type OpenCodeServerProcessSpawner = (
 
 export interface OpenCodeServerManagerOptions {
   logger: Logger;
-  baseEnv?: SpawnProcessOptions["baseEnv"];
   runtimeSettings?: ProviderRuntimeSettings;
   managedProcesses?: ManagedProcessRegistry;
   terminateProcess?: ProcessTerminator;
@@ -83,7 +84,6 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
   private startPromise: Promise<OpenCodeServerGeneration> | null = null;
   private newServerPromise: Promise<OpenCodeServerGeneration> | null = null;
   private readonly logger: Logger;
-  private readonly baseEnv?: SpawnProcessOptions["baseEnv"];
   private readonly runtimeSettings?: ProviderRuntimeSettings;
   private readonly runtimeSettingsKey: string;
   private readonly managedProcesses?: ManagedProcessRegistry;
@@ -96,7 +96,6 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
 
   constructor(options: OpenCodeServerManagerOptions) {
     this.logger = options.logger;
-    this.baseEnv = options.baseEnv;
     this.runtimeSettings = options.runtimeSettings;
     this.runtimeSettingsKey = JSON.stringify(this.runtimeSettings ?? {});
     this.managedProcesses = options.managedProcesses;
@@ -154,9 +153,21 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
 
   async acquireCurrent(signal?: AbortSignal): Promise<OpenCodeServerAcquisition> {
     signal?.throwIfAborted();
-    const server = await waitForServerAcquisition(this.getCurrentServer(), signal);
+    const current = this.currentServer;
+    const server =
+      !this.newServerPromise && !this.startPromise && current && this.isServerLive(current)
+        ? current
+        : await waitForServerAcquisition(this.getCurrentServer(), signal);
     signal?.throwIfAborted();
-    return this.acquireServer(server);
+    const acquisition = this.acquireServer(server);
+    try {
+      await waitForServerAcquisition(server.ready, signal);
+      signal?.throwIfAborted();
+      return acquisition;
+    } catch (error) {
+      await acquisition.release();
+      throw error;
+    }
   }
 
   async acquireNew(signal?: AbortSignal): Promise<OpenCodeServerAcquisition> {
@@ -262,13 +273,10 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
     }
 
     if (this.startPromise) {
-      const server = await this.startPromise;
-      await server.ready;
-      return server;
+      return await this.startPromise;
     }
 
     if (this.currentServer && !this.currentServer.process.killed) {
-      await this.currentServer.ready;
       return this.currentServer;
     }
 
@@ -284,7 +292,6 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
         this.startPromise = null;
       }
     });
-    await result.ready;
     return result;
   }
 
@@ -321,7 +328,6 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
       ...createProviderEnvSpec({
-        baseEnv: this.baseEnv,
         runtimeSettings: this.runtimeSettings,
         overlays: [launchEnv],
       }),
@@ -343,7 +349,7 @@ export class OpenCodeServerManager implements OpenCodeServerManagerLike {
       refCount: 0,
       retired: false,
       ready: Promise.resolve(),
-      events: this.createEventSource({ serverUrl: url, processExit, logger: this.logger }),
+      events: this.createEventSource({ serverUrl: url, processExit }),
       managedProcessRecord,
     };
     void managedProcessRecord.then((record) => {

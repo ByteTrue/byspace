@@ -43,11 +43,10 @@ export const CLAUDE_MODEL_MANIFEST = [
     contextWindowMaxTokens: 1_000_000,
     effortLevels: CLAUDE_EFFORT_LEVELS.xhigh,
     supportsThinkingDisabled: true,
-    supportsFastMode: true,
   },
   {
     id: "claude-fable-5",
-    // COMPAT(claudeFable5OneMillionId): added in v0.3.0, remove after 2027-02-06 once pre-v0.3.0 app preferences are outside support.
+    // COMPAT(claudeFable5OneMillionId): added in v0.5.0, remove after 2027-02-06 once pre-v0.5.0 app preferences are outside support.
     aliases: ["claude-fable-5[1m]"],
     label: "Fable 5",
     description: "Fable 5 · Most powerful model",
@@ -213,7 +212,7 @@ export function getClaudeManifestModels(claudeCodeVersion?: string): AgentModelD
     if (!("aliases" in model) || !model.aliases) {
       continue;
     }
-    // COMPAT(claudeFable5LegacyCatalogEntry): added in v0.3.0, remove after 2027-02-06 once pre-v0.3.0 apps are outside support.
+    // COMPAT(claudeFable5LegacyCatalogEntry): added in v0.5.0, remove after 2027-02-06 once pre-v0.5.0 apps are outside support.
     for (const alias of model.aliases) {
       definitions.push({
         ...definition,
@@ -264,10 +263,6 @@ export interface ClaudeDisabledThinkingResolution {
   fallbackThinkingOptionId: string | undefined;
 }
 
-/**
- * Resolve the disabled-thinking capability from the curated manifest only. Runtime/provider
- * model aliases intentionally do not inherit this capability.
- */
 export function resolveClaudeDisabledThinkingForModel(
   modelId: string | null | undefined,
 ): ClaudeDisabledThinkingResolution {

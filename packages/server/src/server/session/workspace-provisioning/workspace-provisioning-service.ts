@@ -13,12 +13,16 @@ import {
   type WorkspaceRegistry,
 } from "../../workspace-registry.js";
 import type { WorkspaceGitService } from "../../workspace-git-service.js";
-import type { CreatePaseoWorktreeWorkflowResult } from "../../worktree-session.js";
+import type { CreateBySpaceWorktreeWorkflowResult } from "../../worktree-session.js";
 import { deriveProjectKey } from "../../project-key.js";
 import { areEquivalentPaths, createRealpathAwarePathMatcher } from "../../../utils/path.js";
+import {
+  type WorkspaceLifecycleCoordinator,
+  workspaceLifecycleCoordinator,
+} from "../../workspace-lifecycle-coordinator.js";
 
 export interface ResolveOrCreateWorkspaceIdInput {
-  createdWorktree: CreatePaseoWorktreeWorkflowResult | null;
+  createdWorktree: CreateBySpaceWorktreeWorkflowResult | null;
   requestedWorkspaceId?: string;
   cwd: string;
   initialTitle: string | null;
@@ -68,18 +72,28 @@ export interface WorkspaceProvisioningService {
   ): Promise<PersistedWorkspaceRecord>;
 }
 
-export type WorkspaceProvisioningErrorCode = "unknown_project" | "archived_project";
+export type WorkspaceProvisioningErrorCode =
+  | "unknown_project"
+  | "archived_project"
+  | "directory_not_found";
+
+function provisioningErrorMessage(code: WorkspaceProvisioningErrorCode, target: string): string {
+  switch (code) {
+    case "unknown_project":
+      return `Unknown project: ${target}`;
+    case "archived_project":
+      return `Archived project: ${target}`;
+    case "directory_not_found":
+      return `Directory not found: ${target}`;
+  }
+}
 
 export class WorkspaceProvisioningError extends Error {
   constructor(
     readonly code: WorkspaceProvisioningErrorCode,
-    projectId: string,
+    target: string,
   ) {
-    super(
-      code === "unknown_project"
-        ? `Unknown project: ${projectId}`
-        : `Archived project: ${projectId}`,
-    );
+    super(provisioningErrorMessage(code, target));
     this.name = "WorkspaceProvisioningError";
   }
 }
@@ -89,46 +103,66 @@ export function createWorkspaceProvisioningService(deps: {
   workspaceRegistry: WorkspaceRegistry;
   projectRegistry: ProjectRegistry;
   workspaceGitService: Pick<WorkspaceGitService, "getCheckout" | "getSnapshot" | "peekSnapshot">;
+  isDirectory(path: string): Promise<boolean>;
   logger: Logger;
+  lifecycleCoordinator?: WorkspaceLifecycleCoordinator;
 }): WorkspaceProvisioningService {
-  const { serverId, workspaceRegistry, projectRegistry, workspaceGitService, logger } = deps;
+  const { serverId, workspaceRegistry, projectRegistry, workspaceGitService, isDirectory, logger } =
+    deps;
+  const lifecycle = deps.lifecycleCoordinator ?? workspaceLifecycleCoordinator;
+
+  async function runForDirectory<T>(
+    cwd: string,
+    operation: (normalizedCwd: string) => Promise<T>,
+  ): Promise<T> {
+    return lifecycle.runExclusive(async () => {
+      const normalizedCwd = resolve(cwd);
+      const exists = await isDirectory(normalizedCwd).catch(() => false);
+      if (!exists) {
+        throw new WorkspaceProvisioningError("directory_not_found", normalizedCwd);
+      }
+      return operation(normalizedCwd);
+    });
+  }
 
   async function runInImportWorkspace<T>(
     input: ImportWorkspaceInput,
     operation: (workspace: PersistedWorkspaceRecord) => Promise<T>,
   ): Promise<ImportWorkspaceResult<T>> {
-    if (input.requestedWorkspaceId) {
-      const workspace = await workspaceRegistry.get(input.requestedWorkspaceId);
-      if (!workspace || workspace.archivedAt) {
-        throw new Error(`Workspace not found: ${input.requestedWorkspaceId}`);
+    return lifecycle.runExclusive(async () => {
+      if (input.requestedWorkspaceId) {
+        const workspace = await workspaceRegistry.get(input.requestedWorkspaceId);
+        if (!workspace || workspace.archivedAt) {
+          throw new Error(`Workspace not found: ${input.requestedWorkspaceId}`);
+        }
+        const project = await projectRegistry.get(workspace.projectId);
+        if (!project || project.archivedAt) {
+          throw new Error(`Project not found: ${workspace.projectId}`);
+        }
+        if (!createRealpathAwarePathMatcher(workspace.cwd)(input.cwd)) {
+          throw new Error(`Import cwd does not match workspace: ${workspace.workspaceId}`);
+        }
+        return {
+          value: await operation(workspace),
+          createdWorkspace: null,
+        };
       }
-      const project = await projectRegistry.get(workspace.projectId);
-      if (!project || project.archivedAt) {
-        throw new Error(`Project not found: ${workspace.projectId}`);
-      }
-      if (!createRealpathAwarePathMatcher(workspace.cwd)(input.cwd)) {
-        throw new Error(`Import cwd does not match workspace: ${workspace.workspaceId}`);
-      }
-      return {
-        value: await operation(workspace),
-        createdWorkspace: null,
-      };
-    }
 
-    const projectsBeforeImport = await projectRegistry.list();
-    const workspace = await createWorkspaceForDirectory(input.cwd);
-    const previousProject =
-      projectsBeforeImport.find((project) => project.projectId === workspace.projectId) ?? null;
+      const projectsBeforeImport = await projectRegistry.list();
+      const workspace = await createWorkspaceForDirectoryInternal(input.cwd);
+      const previousProject =
+        projectsBeforeImport.find((project) => project.projectId === workspace.projectId) ?? null;
 
-    try {
-      return {
-        value: await operation(workspace),
-        createdWorkspace: workspace,
-      };
-    } catch (error) {
-      await rollbackFailedImportWorkspace(workspace, previousProject);
-      throw error;
-    }
+      try {
+        return {
+          value: await operation(workspace),
+          createdWorkspace: workspace,
+        };
+      } catch (error) {
+        await rollbackFailedImportWorkspace(workspace, previousProject);
+        throw error;
+      }
+    });
   }
 
   async function rollbackFailedImportWorkspace(
@@ -136,18 +170,20 @@ export function createWorkspaceProvisioningService(deps: {
     previousProject: PersistedProjectRecord | null,
   ): Promise<void> {
     try {
-      await workspaceRegistry.remove(workspace.workspaceId);
-      const projectHasActiveWorkspace = (await workspaceRegistry.list()).some(
-        (candidate) => candidate.projectId === workspace.projectId && !candidate.archivedAt,
-      );
-      if (projectHasActiveWorkspace) {
-        return;
-      }
-      if (previousProject?.archivedAt) {
-        await projectRegistry.upsert(previousProject);
-      } else if (!previousProject) {
-        await projectRegistry.remove(workspace.projectId);
-      }
+      await lifecycle.runExclusive(async () => {
+        await workspaceRegistry.remove(workspace.workspaceId);
+        const projectHasActiveWorkspace = (await workspaceRegistry.list()).some(
+          (candidate) => candidate.projectId === workspace.projectId && !candidate.archivedAt,
+        );
+        if (projectHasActiveWorkspace) {
+          return;
+        }
+        if (previousProject?.archivedAt) {
+          await projectRegistry.upsert(previousProject);
+        } else if (!previousProject) {
+          await projectRegistry.remove(workspace.projectId);
+        }
+      });
     } catch (error) {
       logger.error(
         { err: error, workspaceId: workspace.workspaceId, projectId: workspace.projectId },
@@ -156,7 +192,9 @@ export function createWorkspaceProvisioningService(deps: {
     }
   }
 
-  async function findOrCreateProjectForDirectory(cwd: string): Promise<PersistedProjectRecord> {
+  async function findOrCreateProjectForDirectoryInternal(
+    cwd: string,
+  ): Promise<PersistedProjectRecord> {
     const rootPath = resolve(cwd);
     const checkout = await workspaceGitService.getCheckout(rootPath);
     const timestamp = new Date().toISOString();
@@ -182,7 +220,7 @@ export function createWorkspaceProvisioningService(deps: {
     return project;
   }
 
-  async function createWorkspaceForDirectory(
+  async function createWorkspaceForDirectoryInternal(
     cwd: string,
     title?: string | null,
     projectId?: string,
@@ -193,7 +231,7 @@ export function createWorkspaceProvisioningService(deps: {
     const project = projectId
       ? await refreshProjectKind(await requireActiveProject(projectId), normalizedCwd, checkout)
       : // COMPAT(workspaceCreateMissingProjectId): added in v0.1.107, remove after 2027-01-15.
-        await findOrCreateProjectForDirectory(normalizedCwd);
+        await findOrCreateProjectForDirectoryInternal(normalizedCwd);
     const timestamp = new Date().toISOString();
     const workspace = createPersistedWorkspaceRecord({
       workspaceId: generateWorkspaceId(),
@@ -207,7 +245,7 @@ export function createWorkspaceProvisioningService(deps: {
     return workspace;
   }
 
-  async function createWorkspaceForWorktree(
+  async function createWorkspaceForWorktreeInternal(
     input: CreateWorktreeWorkspaceInput,
   ): Promise<PersistedWorkspaceRecord> {
     const sourceCwd = resolve(input.sourceCwd);
@@ -282,7 +320,9 @@ export function createWorkspaceProvisioningService(deps: {
     return refreshProjectKind(project);
   }
 
-  async function findOrCreateWorkspaceForDirectory(cwd: string): Promise<PersistedWorkspaceRecord> {
+  async function findOrCreateWorkspaceForDirectoryInternal(
+    cwd: string,
+  ): Promise<PersistedWorkspaceRecord> {
     const normalizedCwd = resolve(cwd);
     const workspaces = await workspaceRegistry.list();
     const active = workspaces
@@ -306,9 +346,9 @@ export function createWorkspaceProvisioningService(deps: {
       )[0];
     if (archived) {
       const project = await projectRegistry.get(archived.projectId);
-      if (project && !project.archivedAt) return ensureWorkspaceRecordUnarchived(archived);
+      if (project) return ensureWorkspaceRecordUnarchivedInternal(archived);
     }
-    return createWorkspaceForDirectory(normalizedCwd);
+    return createWorkspaceForDirectoryInternal(normalizedCwd);
   }
 
   async function resolveOrCreateWorkspaceIdForCreateAgent(
@@ -317,9 +357,11 @@ export function createWorkspaceProvisioningService(deps: {
     if (input.createdWorktree) return input.createdWorktree.workspace.workspaceId;
     if (input.requestedWorkspaceId) return input.requestedWorkspaceId;
     return (
-      await createWorkspaceForDirectory(input.cwd, input.initialTitle, undefined, {
-        expectsInitialAgent: true,
-      })
+      await lifecycle.runExclusive(() =>
+        createWorkspaceForDirectoryInternal(input.cwd, input.initialTitle, undefined, {
+          expectsInitialAgent: true,
+        }),
+      )
     ).workspaceId;
   }
 
@@ -339,7 +381,7 @@ export function createWorkspaceProvisioningService(deps: {
       : workspace.autoArchivedChangeRequestUrl;
   }
 
-  async function ensureWorkspaceRecordUnarchived(
+  async function ensureWorkspaceRecordUnarchivedInternal(
     workspace: PersistedWorkspaceRecord,
   ): Promise<PersistedWorkspaceRecord> {
     const project = await projectRegistry.get(workspace.projectId);
@@ -365,6 +407,7 @@ export function createWorkspaceProvisioningService(deps: {
         updatedAt: timestamp,
       };
     }
+    let projectWasUpdated = false;
     if (checkout && (project.archivedAt || workspace.archivedAt)) {
       const projectCheckout = areEquivalentPaths(project.rootPath, workspace.cwd)
         ? checkout
@@ -385,10 +428,25 @@ export function createWorkspaceProvisioningService(deps: {
           archivedAt: null,
           updatedAt: timestamp,
         });
+        projectWasUpdated = true;
       }
     }
     if (!next) return workspace;
-    await workspaceRegistry.upsert(next);
+    try {
+      await workspaceRegistry.upsert(next);
+    } catch (error) {
+      if (projectWasUpdated) {
+        try {
+          await projectRegistry.upsert(project);
+        } catch (compensationError) {
+          logger.error(
+            { err: compensationError, projectId: project.projectId },
+            "Failed to restore project after workspace unarchive failure",
+          );
+        }
+      }
+      throw error;
+    }
     return next;
   }
 
@@ -428,23 +486,25 @@ export function createWorkspaceProvisioningService(deps: {
       serverId,
     });
     if (project.kind === kind && project.projectKey === projectKey) return project;
-    const refreshed = {
-      ...project,
-      kind,
-      projectKey,
-      updatedAt: new Date().toISOString(),
-    };
+    const refreshed = { ...project, kind, projectKey, updatedAt: new Date().toISOString() };
     await projectRegistry.upsert(refreshed);
     return refreshed;
   }
 
   return {
     runInImportWorkspace,
-    findOrCreateWorkspaceForDirectory,
+    findOrCreateWorkspaceForDirectory: (cwd) =>
+      runForDirectory(cwd, findOrCreateWorkspaceForDirectoryInternal),
     resolveOrCreateWorkspaceIdForCreateAgent,
-    createWorkspaceForDirectory,
-    createWorkspaceForWorktree,
-    findOrCreateProjectForDirectory,
-    ensureWorkspaceRecordUnarchived,
+    createWorkspaceForDirectory: (cwd, title, projectId, context) =>
+      runForDirectory(cwd, (normalizedCwd) =>
+        createWorkspaceForDirectoryInternal(normalizedCwd, title, projectId, context),
+      ),
+    createWorkspaceForWorktree: (input) =>
+      lifecycle.runExclusive(() => createWorkspaceForWorktreeInternal(input)),
+    findOrCreateProjectForDirectory: (cwd) =>
+      runForDirectory(cwd, findOrCreateProjectForDirectoryInternal),
+    ensureWorkspaceRecordUnarchived: (workspace) =>
+      lifecycle.runExclusive(() => ensureWorkspaceRecordUnarchivedInternal(workspace)),
   };
 }

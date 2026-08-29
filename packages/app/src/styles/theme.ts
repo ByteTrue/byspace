@@ -1,5 +1,5 @@
 import { Platform } from "react-native";
-import { darkHighlightColors, lightHighlightColors } from "@getpaseo/highlight";
+import { darkHighlightColors, lightHighlightColors } from "@bytetrue/byspace-highlight";
 
 export const baseColors = {
   // Base colors
@@ -214,6 +214,7 @@ export interface LightThemeConfig {
   foreground: string;
   foregroundMuted: string;
   foregroundExtraMuted: string;
+  scrollbarHandle?: string;
   border: string;
   borderAccent: string;
   accent: string;
@@ -256,11 +257,11 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
     surfaceSidebarHover: tint.surface1,
     surfaceSidebarSelected: tint.surface2,
     surfaceWorkspace: tint.surface0,
-    interactionHighlight: "rgba(0, 0, 0, 0.06)",
 
     foreground: tint.foreground,
     foregroundMuted: tint.foregroundMuted,
     foregroundExtraMuted: tint.foregroundExtraMuted,
+    scrollbarHandle: tint.scrollbarHandle ?? tint.foregroundExtraMuted,
 
     border: tint.border,
     borderAccent: tint.borderAccent,
@@ -316,6 +317,7 @@ const lightSemanticColors = buildLightSemanticColors({
   foreground: "#1a1a1e",
   foregroundMuted: "#71717a",
   foregroundExtraMuted: "#a1a1aa",
+  scrollbarHandle: "#3f3f46",
   border: "#e4e4e7",
   borderAccent: "#ececf1",
   accent: "#20744A",
@@ -343,6 +345,7 @@ export interface DarkThemeConfig {
   surfaceSidebar: string;
   foregroundMuted: string;
   foregroundExtraMuted: string;
+  scrollbarHandle?: string;
   border: string;
   borderAccent: string;
   accent: string;
@@ -386,11 +389,11 @@ export function buildDarkSemanticColors(tint: DarkThemeConfig) {
     surfaceSidebarHover: tint.surface1,
     surfaceSidebarSelected: tint.surface2,
     surfaceWorkspace: tint.surface1,
-    interactionHighlight: "rgba(255, 255, 255, 0.08)",
 
     foreground,
     foregroundMuted: tint.foregroundMuted,
     foregroundExtraMuted: tint.foregroundExtraMuted,
+    scrollbarHandle: tint.scrollbarHandle ?? tint.foregroundExtraMuted,
 
     border: tint.border,
     borderAccent: tint.borderAccent,
@@ -440,8 +443,8 @@ export function buildDarkSemanticColors(tint: DarkThemeConfig) {
 // Dark tint definitions
 // ---------------------------------------------------------------------------
 
-// Paseo — subtle teal-green tint (default)
-const paseoDarkColors = buildDarkSemanticColors({
+// BySpace — subtle teal-green tint (default)
+const byspaceDarkColors = buildDarkSemanticColors({
   surface0: "#181B1A",
   surface1: "#1E2120",
   surface2: "#272A29",
@@ -451,6 +454,7 @@ const paseoDarkColors = buildDarkSemanticColors({
   surfaceSidebar: "#141716",
   foregroundMuted: "#A1A5A4",
   foregroundExtraMuted: "#717574",
+  scrollbarHandle: "#717574",
   border: "#252B2A",
   borderAccent: "#2F3534",
   accent: "#20744A",
@@ -471,6 +475,7 @@ const zincDarkColors = buildDarkSemanticColors({
   surfaceSidebar: "#131316",
   foregroundMuted: "#a1a1aa",
   foregroundExtraMuted: "#71717a",
+  scrollbarHandle: "#71717a",
   border: "#27272a",
   borderAccent: "#303036",
   accent: "#e4e4e7",
@@ -492,6 +497,7 @@ const midnightDarkColors = buildDarkSemanticColors({
   surfaceSidebar: "#121420",
   foregroundMuted: "#9a9db0",
   foregroundExtraMuted: "#6b6e82",
+  scrollbarHandle: "#6b6e82",
   border: "#242636",
   borderAccent: "#2e3040",
   accent: "#3b6fcf",
@@ -512,6 +518,7 @@ const claudeDarkColors = buildDarkSemanticColors({
   surfaceSidebar: "#1a1918",
   foregroundMuted: "#ada9a5",
   foregroundExtraMuted: "#78746f",
+  scrollbarHandle: "#78746f",
   border: "#2c2a27",
   borderAccent: "#36332f",
   accent: "#d97757",
@@ -532,6 +539,7 @@ const ghosttyDarkColors = buildDarkSemanticColors({
   surfaceSidebar: "#21252d",
   foregroundMuted: "#c8ccd8",
   foregroundExtraMuted: "#a0a4b2",
+  scrollbarHandle: "#a0a4b2",
   border: "#353a47",
   borderAccent: "#3f4454",
   accent: "#89b4fa",
@@ -688,7 +696,7 @@ export function buildDarkTheme(semanticColors: ReturnType<typeof buildDarkSemant
   } as const;
 }
 
-export const darkTheme = buildDarkTheme(paseoDarkColors);
+export const darkTheme = buildDarkTheme(byspaceDarkColors);
 export const darkZincTheme = buildDarkTheme(zincDarkColors);
 export const darkMidnightTheme = buildDarkTheme(midnightDarkColors);
 export const darkClaudeTheme = buildDarkTheme(claudeDarkColors);
@@ -705,6 +713,7 @@ const pureBlackDarkColors = buildDarkSemanticColors({
   surfaceSidebar: "#000000",
   foregroundMuted: "#a1a1aa",
   foregroundExtraMuted: "#71717a",
+  scrollbarHandle: "#71717a",
   border: "#1c1c1c",
   borderAccent: "#242424",
   accent: "#20744A",

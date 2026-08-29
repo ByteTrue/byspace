@@ -31,6 +31,7 @@ zod-aot is exact-pinned and young enough that compiler patches are treated as pa
 - discriminated-union branch output must propagate `.default()` fields
 - current sequential item routing must accept `tool_call`-like status branches
 - generated runtime imports must keep `.js` extensions for packaged Node ESM
+- embedded recursive schemas such as `z.json()` must fall back to their own runtime schema instead of recursing into the enclosing WebSocket envelope validator
 - the generated WebSocket envelope accepts a minimal valid message and rejects a corrupted one
 
 ## Schema Purity

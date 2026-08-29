@@ -59,19 +59,19 @@ describe("shared tool-call display mapping", () => {
 
   it("builds display model for worktree setup detail", () => {
     const display = buildToolCallDisplayModel({
-      name: "paseo_worktree_setup",
+      name: "byspace_worktree_setup",
       status: "running",
       error: null,
       detail: {
         type: "worktree_setup",
-        worktreePath: "/tmp/repo/.paseo/worktrees/repo/branch",
+        worktreePath: "/tmp/repo/.byspace/worktrees/repo/branch",
         branchName: "feature-branch",
         log: "==> [1/1] Running: npm install\n",
         commands: [
           {
             index: 1,
             command: "npm install",
-            cwd: "/tmp/repo/.paseo/worktrees/repo/branch",
+            cwd: "/tmp/repo/.byspace/worktrees/repo/branch",
             log: "==> [1/1] Running: npm install\n",
             status: "running",
             exitCode: null,
@@ -135,9 +135,9 @@ describe("shared tool-call display mapping", () => {
     });
   });
 
-  it("humanizes Paseo MCP tool names (Claude Code format)", () => {
+  it("humanizes BySpace MCP tool names (Claude Code format)", () => {
     const display = buildToolCallDisplayModel({
-      name: "mcp__paseo__create_agent",
+      name: "mcp__byspace__create_agent",
       status: "running",
       error: null,
       detail: { type: "unknown", input: null, output: null },
@@ -145,9 +145,9 @@ describe("shared tool-call display mapping", () => {
     expect(display.displayName).toBe("Create Agent");
   });
 
-  it("humanizes Paseo MCP tool names (Codex format)", () => {
+  it("humanizes BySpace MCP tool names (Codex format)", () => {
     const display = buildToolCallDisplayModel({
-      name: "paseo.create_agent",
+      name: "byspace.create_agent",
       status: "running",
       error: null,
       detail: { type: "unknown", input: null, output: null },
@@ -155,9 +155,9 @@ describe("shared tool-call display mapping", () => {
     expect(display.displayName).toBe("Create Agent");
   });
 
-  it("humanizes list_agents Paseo tool", () => {
+  it("humanizes list_agents BySpace tool", () => {
     const display = buildToolCallDisplayModel({
-      name: "mcp__paseo__list_agents",
+      name: "mcp__byspace__list_agents",
       status: "running",
       error: null,
       detail: { type: "unknown", input: null, output: null },

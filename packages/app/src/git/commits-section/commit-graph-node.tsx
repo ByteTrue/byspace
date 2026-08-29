@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { ClassifiedCheckoutCommit } from "@/git/use-commits-query";
@@ -13,16 +14,21 @@ export function CommitGraphNode({ commit, isFirst, isLast }: CommitGraphNodeProp
   const railColor = isOnBase ? styles.railBase : styles.railWorkspace;
   const markerColor = isOnBase ? styles.markerBase : styles.markerWorkspace;
 
+  const railStyle = useMemo(
+    () => [styles.rail, railColor, isFirst && styles.railFirst, isLast && styles.railLast],
+    [isFirst, isLast, railColor],
+  );
+  const markerStyle = useMemo(
+    () => [styles.marker, markerColor, !commit.isOnRemote && styles.markerRing],
+    [commit.isOnRemote, markerColor],
+  );
+
   return (
     <View style={styles.container}>
-      {isFirst && isLast ? null : (
-        <View
-          style={[styles.rail, railColor, isFirst && styles.railFirst, isLast && styles.railLast]}
-        />
-      )}
+      {isFirst && isLast ? null : <View style={railStyle} />}
       <View
         testID={commit.isOnRemote ? "commit-dot-remote" : "commit-dot-local"}
-        style={[styles.marker, markerColor, !commit.isOnRemote && styles.markerRing]}
+        style={markerStyle}
       />
     </View>
   );

@@ -13,10 +13,7 @@ For testing rules, see [testing.md](testing.md).
 - **`function` declarations** over arrow function assignments.
 - **`interface`** over `type` when both work.
 - **No `index.ts` barrel files** that only re-export — they create indirection and circular-dep risk. Import from the source.
-
-## Shell scripts
-
-- Bash scripts always use `#!/usr/bin/env bash`. Never hard-code `/bin/bash` or `/usr/bin/bash`; those paths are not portable to environments such as NixOS.
+- **Portable shell entrypoints** — use `#!/usr/bin/env bash` rather than a fixed Bash path so scripts work wherever Bash is installed.
 
 ## Comments and noise
 

@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Text, View, type TextStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import type { HighlightToken } from "@getpaseo/highlight";
+import type { HighlightToken } from "@bytetrue/byspace-highlight";
 import { isWeb } from "@/constants/platform";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { syntaxTokenStyleFor } from "@/styles/syntax-token-styles";
@@ -48,6 +48,12 @@ function resolveSizeOverride(value: number | undefined): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+function buildContentOverride(overrides: PreviewOverrides | undefined): TextStyle {
+  const fontSize = resolveSizeOverride(overrides?.contentFontSize);
+  if (fontSize === undefined) return {};
+  return inlineUnistylesStyle({ fontSize, lineHeight: Math.round(fontSize * 1.4) });
+}
+
 function buildCodeOverride(overrides: PreviewOverrides | undefined): TextStyle {
   if (!overrides) return {};
   const style: TextStyle = {};
@@ -62,12 +68,6 @@ function buildCodeOverride(overrides: PreviewOverrides | undefined): TextStyle {
   }
   // High-churn draft values bypass the Unistyles CSS registry (docs/unistyles.md).
   return inlineUnistylesStyle(style);
-}
-
-function buildContentOverride(overrides: PreviewOverrides | undefined): TextStyle {
-  const fontSize = resolveSizeOverride(overrides?.contentFontSize);
-  if (fontSize === undefined) return {};
-  return inlineUnistylesStyle({ fontSize, lineHeight: Math.round(fontSize * 1.4) });
 }
 
 interface KeyedToken {

@@ -4,7 +4,7 @@ Read this before writing any hover code. Every hover regression we ship is one o
 
 ## The pattern
 
-The canonical implementation lives in `packages/app/src/components/sidebar-workspace-list.tsx`, in the workspace row (around line 1369). When in doubt, open that file and copy the shape.
+The canonical implementation lives in `packages/app/src/components/sidebar-workspace-list.tsx`, in the workspace row. When in doubt, open that file and copy the shape.
 
 ```tsx
 //
@@ -96,32 +96,19 @@ Any gap between A and B (margins between siblings inside the same parent) is par
 
 If A and B genuinely can't share a parent — B portals into a different layer, floats above other content — see [Section: real gaps](#real-gaps-with-floating-panels) below.
 
-### Failure mode 4 — A hover-revealed trigger unmounts its own open menu
+### Failure mode 4 — Mouse-click focus pins the revealed content
 
-A kebab that only exists while its row is hovered opens a menu, and that menu takes the pointer
-off the row: a sheet slides up over it, a popover covers it. The row un-hovers, the trailing
-overlay unmounts, and the trigger goes with it — taking the menu's open state, which lived
-inside the trigger's subtree. The surface itself is already presented in a portal, so nothing
-unmounts it and nothing is left that can close it. On a bottom sheet that means a full-screen
-backdrop swallowing every click until reload.
+If the trigger tracks `onFocus` / `onBlur` (for keyboard users), remember that on Web a mouse click also focuses the inner `Pressable`, and that focus bubbles to the trigger. If focus pins the revealed content open, a clicked row keeps the card up until something else takes focus. Gate the focus handler on `:focus-visible` so only keyboard focus pins; `handleTriggerFocus` in `workspace-hover-card.tsx` is the reference.
 
-Lift the menu's open state to whatever decides to render the trigger, and keep the trigger
-rendered while the menu is up. `useOpenKebabMenuVisibility`
-(`packages/app/src/components/sidebar/use-open-kebab-menu-visibility.ts`) is that shape for the
-sidebar rows: it owns `open`, hands the menu its controlled props, and ORs `open` into the
-row's own `showKebab`.
+## Touch and compact browser fallback
 
-## Native fallback
-
-Hover doesn't exist on touch devices. Anything you hide behind hover must have a non-hover path on native and compact layouts:
+Touch input has no hover. Anything hidden behind hover must remain available in the compact browser layout:
 
 ```tsx
-const showControls = isHovered || isNative || isCompact;
+const showControls = isHovered || isCompact;
 ```
 
-`isNative` and `isCompact` come from `@/constants/platform` and `@/constants/layout`. Don't use `Platform.OS === "ios"` as a proxy.
-
-`onPointerEnter` / `onPointerLeave` are DOM events. They do not fire on native. You do not need to gate them — on native, hover is unreachable anyway and visibility is driven by `isNative` / `isCompact` in your show-the-controls expression above. This is why the workspace row's pointer events are not wrapped in `if (isWeb)`.
+Use `useIsCompactFormFactor()` from `@/constants/layout` to derive `isCompact`. Keep pointer handlers ungated: touch input simply never enters the hovered state, while the compact layout keeps the controls visible.
 
 ## What about `Pressable.onHoverIn` / `onHoverOut`?
 
@@ -148,7 +135,7 @@ Before opening a PR that touches hover:
 - [ ] The hover trigger's bounding box contains every element the user might mouse into while interacting with the feature.
 - [ ] Hovered state does **not** change the trigger's outer geometry (`width`, `height`, `padding`, `borderWidth`, mount/unmount of siblings that shift it). Internal swaps fit inside a fixed `minHeight` / `minWidth`.
 - [ ] Revealed content inside the trigger uses `opacity` + `pointerEvents`, not conditional rendering, if mounting it would reflow the trigger.
-- [ ] Visibility on native and compact layouts works without hover (`isHovered || isNative || isCompact`).
-- [ ] A menu opened from the revealed trigger keeps the trigger rendered while it is open, so losing hover can't strand it.
+- [ ] Visibility in compact browser layouts works without hover (`isHovered || isCompact`).
 - [ ] If the revealed content sits in a separate layer (portal, floating panel), `useHoverSafeZone` is wired up.
+- [ ] If the trigger tracks focus for keyboard users, the handler ignores non-`:focus-visible` focus — a mouse click must never pin the revealed content.
 - [ ] You opened the dev server, hovered the trigger, and slowly moved the mouse along **every** revealed element — including any visible gaps — without losing hover state.

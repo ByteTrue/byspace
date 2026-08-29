@@ -1,5 +1,5 @@
 /**
- * Output format types for the Paseo CLI.
+ * Output format types for the BySpace CLI.
  *
  * This module defines the structured data types used by the output abstraction layer.
  * Commands return CommandResult<T> which contains both data and rendering metadata.
@@ -65,7 +65,7 @@ export interface ListResult<T> {
 }
 
 /** Union type for all command results */
-export type AnyCommandResult<T> = T extends unknown ? SingleResult<T> | ListResult<T> : never;
+export type AnyCommandResult<T> = SingleResult<T> | ListResult<T>;
 
 /** Base interface for command results (deprecated, use SingleResult or ListResult) */
 export type CommandResult<T> = SingleResult<T> | ListResult<T>;

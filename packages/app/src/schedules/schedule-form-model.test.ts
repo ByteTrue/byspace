@@ -2,12 +2,18 @@ import type {
   AgentMode,
   AgentModelDefinition,
   ProviderSnapshotEntry,
-} from "@getpaseo/protocol/agent-types";
-import type { ScheduleSummary } from "@getpaseo/protocol/schedule/types";
+} from "@bytetrue/byspace-protocol/agent-types";
+import type { ScheduleSummary } from "@bytetrue/byspace-protocol/schedule/types";
 import type { FormPreferences } from "@/create-agent-preferences/preferences";
 import { describe, expect, it } from "vitest";
 import { buildProjectOptionId, type ScheduleProjectTarget } from "./schedule-project-targets";
-import { openScheduleForm, type ScheduleFormSnapshot } from "./schedule-form-model";
+import {
+  buildHeartbeatScheduleUpdate,
+  openScheduleForm,
+  resolveScheduleFormFieldVisibility,
+  resolveScheduleFormTitle,
+  type ScheduleFormSnapshot,
+} from "./schedule-form-model";
 
 type TestSchedule = ScheduleSummary & { serverId: string; serverName: string };
 
@@ -69,7 +75,7 @@ function target(input: {
     optionId: buildProjectOptionId(input.serverId, input.projectKey),
     serverId: input.serverId,
     serverName: input.serverId === "host-a" ? "Host A" : "Host B",
-    projectViewKey: input.projectKey,
+    projectKey: input.projectKey,
     projectName: input.projectName,
     cwd: input.cwd,
     isGit: input.isGit ?? true,
@@ -127,26 +133,6 @@ function scheduleOnHost(input: {
     pausedAt: null,
     expiresAt: null,
     maxRuns: 3,
-  };
-}
-
-function heartbeatOnHost(cadence: ScheduleSummary["cadence"]): TestSchedule {
-  return {
-    id: "heartbeat-host-a",
-    serverId: "host-a",
-    serverName: "Host A",
-    name: "Babysit",
-    prompt: "Check status",
-    cadence,
-    target: { type: "agent", agentId: "agent-1" },
-    status: "active",
-    createdAt: "2026-07-01T00:00:00.000Z",
-    updatedAt: "2026-07-01T00:00:00.000Z",
-    nextRunAt: "2026-07-02T00:00:00.000Z",
-    lastRunAt: null,
-    pausedAt: null,
-    expiresAt: null,
-    maxRuns: null,
   };
 }
 
@@ -562,10 +548,20 @@ describe("schedule form model", () => {
     });
   });
 
-  it("requires a cron choice before updating a legacy heartbeat", () => {
+  it("keeps heartbeat editing cadence-only and requires an explicit cron selection", () => {
+    const heartbeat = {
+      ...scheduleOnHost({
+        serverId: "host-a",
+        serverName: "Host A",
+        cwd: "/repo/a",
+        model: "model-a",
+        cadence: { type: "every" as const, everyMs: 90 * 60_000 },
+      }),
+      target: { type: "agent" as const, agentId: "agent-1" },
+    };
     const form = open({
       mode: "edit",
-      schedule: heartbeatOnHost({ type: "every", everyMs: 90 * 60_000 }),
+      schedule: heartbeat,
       defaults: {
         serverId: null,
         projectTargets: PROJECT_TARGETS,
@@ -574,13 +570,36 @@ describe("schedule form model", () => {
       },
     });
 
-    expect(form.getState()).toMatchObject({ targetKind: "agent", canSubmit: false });
-
-    form.setCadence({ type: "cron", expression: "0 9 * * *", timezone: "Europe/Madrid" });
-
+    expect(resolveScheduleFormTitle("edit", form.getState().targetKind)).toBe("Edit heartbeat");
+    expect(resolveScheduleFormFieldVisibility(form.getState().targetKind)).toEqual({
+      name: false,
+      prompt: false,
+      target: true,
+      cadence: true,
+      maxRuns: false,
+    });
     expect(form.getState()).toMatchObject({
-      submitCadence: { type: "cron", expression: "0 9 * * *", timezone: "Europe/Madrid" },
-      canSubmit: true,
+      targetKind: "agent",
+      cadence: { type: "cron", expression: "", timezone: "Europe/Madrid" },
+      submitCadence: undefined,
+      canSubmit: false,
+    });
+    expect(buildHeartbeatScheduleUpdate(heartbeat.id, form.getState().submitCadence)).toBeNull();
+
+    form.setCadence({
+      type: "cron",
+      expression: "*/10 * * * *",
+      timezone: "Europe/Madrid",
+    });
+
+    expect(form.getState().canSubmit).toBe(true);
+    expect(buildHeartbeatScheduleUpdate(heartbeat.id, form.getState().submitCadence)).toEqual({
+      id: heartbeat.id,
+      cadence: {
+        type: "cron",
+        expression: "*/10 * * * *",
+        timezone: "Europe/Madrid",
+      },
     });
   });
 

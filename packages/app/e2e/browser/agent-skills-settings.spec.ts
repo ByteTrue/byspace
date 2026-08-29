@@ -1,5 +1,5 @@
 import { access } from "node:fs/promises";
-import { expect, test as base } from "../support/fixtures";
+import { expect, test as base } from "../fixtures";
 import {
   answerNextRemovalWarning,
   cancelSkillSelection,
@@ -14,8 +14,8 @@ import {
   startAgentSkillsSandbox,
   toggleSkill,
   type AgentSkillsSandbox,
-} from "../support/helpers/agent-skills";
-import { readVerticalGap, waitForSettledPosition } from "../support/helpers/sheet-layout";
+} from "../helpers/agent-skills";
+import { readVerticalGap, waitForSettledPosition } from "../helpers/sheet-layout";
 
 const test = base.extend<{ skills: AgentSkillsSandbox }>({
   // oxlint-disable-next-line no-empty-pattern -- Playwright requires destructuring for fixture dependency discovery.

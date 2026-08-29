@@ -12,10 +12,12 @@ import {
 import type { ComposerAttachment, UserComposerAttachment } from "@/attachments/types";
 import { buildForgeSearchQueryOptions, type ForgeSearchClient } from "@/git/use-forge-search-query";
 import { extractGithubRefs, type GithubRef } from "@/utils/github-refs";
-import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
+import type { ForgeSearchItem } from "@bytetrue/byspace-protocol/messages";
 import { isAttachmentSelectedForGithubItem, toggleGithubAttachment } from "../actions";
 
 const AUTO_ATTACH_DEBOUNCE_MS = 300;
+const forgeClientGenerations = new WeakMap<ForgeSearchClient, number>();
+let nextForgeClientGeneration = 1;
 
 interface ComposerGithubAutoAttachInput {
   text: string;
@@ -36,64 +38,35 @@ interface ComposerGithubAutoAttachResult {
   markGithubAttachmentRemoved: (attachment: ComposerAttachment | undefined) => void;
 }
 
-interface ActiveGithubLookup {
-  invalidate: (keys: readonly string[]) => void;
-  invalidateIrrelevant: (current: ComposerGithubAutoAttachInput) => void;
-  hasPending: (key: string) => boolean;
-}
-
 export function useComposerGithubAutoAttach(
   params: ComposerGithubAutoAttachInput,
 ): ComposerGithubAutoAttachResult {
   const queryClient = useQueryClient();
   const latestRef = useRef(params);
   const removedRefKeysRef = useRef(new Set<string>());
+  const pendingRefKeysRef = useRef(new Map<string, ForgeSearchClient>());
   const presentPullRequestKeysRef = useRef(new Set<string>());
-  const activeLookupsRef = useRef(new Set<ActiveGithubLookup>());
   const previousTargetRef = useRef({ serverId: params.serverId, cwd: params.cwd });
   const [resolvingRefCounts, setResolvingRefCounts] = useState<ReadonlyMap<string, number>>(
     () => new Map(),
   );
 
   latestRef.current = params;
-  const lookupCandidateKey = getLookupCandidateKey(params, removedRefKeysRef.current);
-  const lookupRelevanceKey = getLookupRelevanceKey(params, removedRefKeysRef.current);
-  const presentPullRequestKey = getPresentPullRequestKey(params);
-  const hasClient = params.client !== null;
 
   useEffect(() => {
+    suppressRefsCarriedAcrossTargets({
+      params: latestRef.current,
+      previousTargetRef,
+      removedRefKeys: removedRefKeysRef.current,
+    });
     notifyNewPullRequestRefs({
       params: latestRef.current,
       presentPullRequestKeysRef,
     });
-  }, [presentPullRequestKey]);
-
-  useEffect(() => {
-    const current = latestRef.current;
-    for (const activeLookup of activeLookupsRef.current) {
-      activeLookup.invalidateIrrelevant(current);
-    }
-  }, [
-    lookupRelevanceKey,
-    params.remoteUrl,
-    hasClient,
-    params.isConnected,
-    params.serverId,
-    params.cwd,
-  ]);
-
-  useEffect(() => {
-    const initial = latestRef.current;
-    const removedRefKeys = removedRefKeysRef.current;
-    suppressRefsCarriedAcrossTargets({
-      params: initial,
-      previousTargetRef,
-      removedRefKeys,
-    });
     const refs = refsReadyForLookup({
       params: latestRef.current,
-      removedRefKeys,
-      activeLookups: activeLookupsRef.current,
+      removedRefKeys: removedRefKeysRef.current,
+      pendingRefKeys: pendingRefKeysRef.current,
     });
     if (refs.length === 0) {
       return;
@@ -101,49 +74,36 @@ export function useComposerGithubAutoAttach(
 
     const refKeys = refs.map(githubRefKey);
     setResolvingRefCounts((current) => addKeys(current, refKeys));
-    const unreleasedRefKeys = new Set(refKeys);
-    let lookupStarted = false;
-    let lookup: ActiveGithubLookup | null = null;
-    const releaseResolving = (keys: readonly string[]) => {
-      const keysToRelease = keys.filter((key) => unreleasedRefKeys.delete(key));
-      if (keysToRelease.length === 0) return;
-      clearResolvingKeys(setResolvingRefCounts, keysToRelease);
+    let resolvingReleased = false;
+    const releaseResolving = () => {
+      if (resolvingReleased) return;
+      resolvingReleased = true;
+      clearResolvingKeys(setResolvingRefCounts, refKeys);
     };
 
     const timerId = setTimeout(() => {
-      lookupStarted = true;
-      lookup = attachRefs({
+      void attachRefs({
         refs,
-        initial,
         queryClient,
         latestRef,
-        removedRefKeys,
-        onSettled: (key) => releaseResolving([key]),
-        onComplete: (completedLookup) => activeLookupsRef.current.delete(completedLookup),
-      });
-      activeLookupsRef.current.add(lookup);
+        removedRefKeys: removedRefKeysRef.current,
+        pendingRefKeys: pendingRefKeysRef.current,
+      }).finally(releaseResolving);
     }, AUTO_ATTACH_DEBOUNCE_MS);
 
     return () => {
       clearTimeout(timerId);
-      if (!lookupStarted) {
-        releaseResolving([...unreleasedRefKeys]);
-        return;
-      }
-      const current = latestRef.current;
-      if (didLookupSourceOrderChange(refKeys, current, removedRefKeys)) {
-        lookup?.invalidate(refKeys);
-      } else {
-        lookup?.invalidateIrrelevant(current);
-      }
+      releaseResolving();
     };
   }, [
-    lookupCandidateKey,
+    params.text,
     params.remoteUrl,
-    hasClient,
+    params.attachments,
+    params.client,
     params.isConnected,
     params.serverId,
     params.cwd,
+    params.supportsForgeSearch,
     queryClient,
   ]);
 
@@ -160,73 +120,6 @@ export function useComposerGithubAutoAttach(
       markGithubAttachmentRemoved,
     }),
     [markGithubAttachmentRemoved, resolvingRefCounts.size],
-  );
-}
-
-function getLookupCandidateKey(
-  params: ComposerGithubAutoAttachInput,
-  removedRefKeys: ReadonlySet<string>,
-): string {
-  return getLookupCandidateRefs(params, removedRefKeys).map(githubRefKey).join("|");
-}
-
-function getLookupCandidateRefs(
-  params: ComposerGithubAutoAttachInput,
-  removedRefKeys: ReadonlySet<string>,
-): GithubRef[] {
-  return extractGithubRefs(params.text, params.remoteUrl).filter((ref) => {
-    const key = githubRefKey(ref);
-    return !removedRefKeys.has(key) && !hasGithubAttachment(params.attachments, ref);
-  });
-}
-
-function didLookupSourceOrderChange(
-  originalKeys: readonly string[],
-  current: ComposerGithubAutoAttachInput,
-  removedRefKeys: ReadonlySet<string>,
-): boolean {
-  const currentKeys = getLookupCandidateRefs(current, removedRefKeys).map(githubRefKey);
-  const currentKeySet = new Set(currentKeys);
-  const retainedOriginalKeys = originalKeys.filter((key) => currentKeySet.has(key));
-  return currentKeys.join("|") !== retainedOriginalKeys.join("|");
-}
-
-function getLookupRelevanceKey(
-  params: ComposerGithubAutoAttachInput,
-  removedRefKeys: ReadonlySet<string>,
-): string {
-  return extractGithubRefs(params.text, params.remoteUrl)
-    .map(githubRefKey)
-    .filter((key) => !removedRefKeys.has(key))
-    .sort()
-    .join("|");
-}
-
-function getPresentPullRequestKey(params: ComposerGithubAutoAttachInput): string {
-  return extractGithubRefs(params.text, params.remoteUrl)
-    .filter((ref) => ref.kind === "pull")
-    .map(githubRefKey)
-    .sort()
-    .join("|");
-}
-
-function isLookupContextStillRelevant({
-  ref,
-  initial,
-  current,
-  removedRefKeys,
-}: {
-  ref: GithubRef;
-  initial: ComposerGithubAutoAttachInput;
-  current: ComposerGithubAutoAttachInput;
-  removedRefKeys: ReadonlySet<string>;
-}): boolean {
-  return (
-    current.client !== null &&
-    current.isConnected &&
-    !removedRefKeys.has(githubRefKey(ref)) &&
-    isSameLookupTarget(initial, current) &&
-    isRefStillPresent(ref, current)
   );
 }
 
@@ -301,99 +194,34 @@ function clearResolvingKeys(
   setResolvingRefCounts((current) => removeKeys(current, keys));
 }
 
-function attachRefs({
+async function attachRefs({
   refs,
-  initial,
   queryClient,
   latestRef,
   removedRefKeys,
-  onSettled,
-  onComplete,
+  pendingRefKeys,
 }: {
   refs: GithubRef[];
-  initial: ComposerGithubAutoAttachInput;
   queryClient: QueryClient;
   latestRef: RefObject<ComposerGithubAutoAttachInput>;
   removedRefKeys: Set<string>;
-  onSettled: (key: string) => void;
-  onComplete: (lookup: ActiveGithubLookup) => void;
-}): ActiveGithubLookup {
-  const outcomes = refs.map(() => ({
-    settled: false,
-    item: null as ForgeSearchItem | null,
-  }));
-  let nextOutcomeIndex = 0;
-  let didComplete = false;
-  const drainOutcomes = () => {
-    while (outcomes[nextOutcomeIndex]?.settled) {
-      const item = outcomes[nextOutcomeIndex].item;
-      const ref = refs[nextOutcomeIndex];
-      nextOutcomeIndex += 1;
-      if (item) {
-        latestRef.current.setAttachments((attachments) => {
-          if (
-            removedRefKeys.has(githubRefKey(ref)) ||
-            isAttachmentSelectedForGithubItem(attachments, item)
-          ) {
-            return attachments;
-          }
-          return toggleGithubAttachment(attachments, item);
-        });
-      }
-      if (item?.kind === "change_request") {
-        latestRef.current.onPullRequestAdded?.(item);
-      }
-    }
-    if (!didComplete && nextOutcomeIndex === outcomes.length) {
-      didComplete = true;
-      onComplete(lookup);
-    }
-  };
-  const settleOutcome = (index: number, item: ForgeSearchItem | null): boolean => {
-    if (outcomes[index].settled) return false;
-    outcomes[index] = { settled: true, item };
-    drainOutcomes();
-    return true;
-  };
-
-  refs.forEach((ref, index) => {
+  pendingRefKeys: Map<string, ForgeSearchClient>;
+}): Promise<void> {
+  for (const ref of refs) {
     const key = githubRefKey(ref);
-    void attachRef({ ref, key, queryClient, latestRef, removedRefKeys })
-      .then((item) => settleOutcome(index, item))
-      .finally(() => {
-        onSettled(key);
-      });
-  });
-
-  const lookup: ActiveGithubLookup = {
-    invalidate(keys) {
-      const invalidKeys = new Set(keys);
-      const newlySettledKeys: string[] = [];
-      refs.forEach((ref, index) => {
-        const key = githubRefKey(ref);
-        if (!invalidKeys.has(key) || index < nextOutcomeIndex) return;
-        if (!outcomes[index].settled) newlySettledKeys.push(key);
-        outcomes[index] = { settled: true, item: null };
-      });
-      for (const key of newlySettledKeys) onSettled(key);
-      drainOutcomes();
-    },
-    invalidateIrrelevant(current) {
-      lookup.invalidate(
-        refs.flatMap((ref, index) =>
-          isLookupContextStillRelevant({ ref, initial, current, removedRefKeys }) &&
-          (outcomes[index].settled || !hasGithubAttachment(current.attachments, ref))
-            ? []
-            : [githubRefKey(ref)],
-        ),
-      );
-    },
-    hasPending(key) {
-      const index = refs.findIndex((ref) => githubRefKey(ref) === key);
-      return index >= 0 && !outcomes[index].settled;
-    },
-  };
-  return lookup;
+    const owner = latestRef.current.client;
+    if (!owner || pendingRefKeys.get(key) === owner) {
+      continue;
+    }
+    pendingRefKeys.set(key, owner);
+    try {
+      await attachRef({ ref, key, queryClient, latestRef, removedRefKeys });
+    } finally {
+      if (pendingRefKeys.get(key) === owner) {
+        pendingRefKeys.delete(key);
+      }
+    }
+  }
 }
 
 async function attachRef({
@@ -408,15 +236,15 @@ async function attachRef({
   queryClient: QueryClient;
   latestRef: RefObject<ComposerGithubAutoAttachInput>;
   removedRefKeys: Set<string>;
-}): Promise<ForgeSearchItem | null> {
+}): Promise<void> {
   const snapshot = latestRef.current;
   if (!snapshot.client || !snapshot.isConnected || !isRefStillPresent(ref, snapshot)) {
-    return null;
+    return;
   }
 
   const search = await fetchGithubRefSearch({ ref, snapshot, queryClient });
   if (!search) {
-    return null;
+    return;
   }
   const item = search.items.find((candidate) => githubItemMatchesRef(candidate, ref));
   const current = latestRef.current;
@@ -426,23 +254,31 @@ async function attachRef({
     !isSameLookupTarget(snapshot, current) ||
     !isRefStillPresent(ref, current)
   ) {
-    return null;
+    return;
   }
 
   if (isAttachmentSelectedForGithubItem(current.attachments, item)) {
-    return null;
+    return;
   }
-  return item;
+  current.setAttachments((attachments) => {
+    if (removedRefKeys.has(key) || isAttachmentSelectedForGithubItem(attachments, item)) {
+      return attachments;
+    }
+    return toggleGithubAttachment(attachments, item);
+  });
+  if (item.kind === "change_request") {
+    current.onPullRequestAdded?.(item);
+  }
 }
 
 function refsReadyForLookup({
   params,
   removedRefKeys,
-  activeLookups,
+  pendingRefKeys,
 }: {
   params: ComposerGithubAutoAttachInput;
   removedRefKeys: Set<string>;
-  activeLookups: ReadonlySet<ActiveGithubLookup>;
+  pendingRefKeys: Map<string, ForgeSearchClient>;
 }): GithubRef[] {
   if (!params.client || !params.isConnected || params.cwd.trim().length === 0) {
     return [];
@@ -452,7 +288,7 @@ function refsReadyForLookup({
     const key = githubRefKey(ref);
     return (
       !removedRefKeys.has(key) &&
-      ![...activeLookups].some((lookup) => lookup.hasPending(key)) &&
+      pendingRefKeys.get(key) !== params.client &&
       !hasGithubAttachment(params.attachments, ref)
     );
   });
@@ -472,16 +308,18 @@ async function fetchGithubRefSearch({
   }
 
   try {
-    return await queryClient.fetchQuery(
-      buildForgeSearchQueryOptions({
-        client: snapshot.client,
-        serverId: snapshot.serverId,
-        cwd: snapshot.cwd,
-        query: String(ref.number),
-        supportsForgeSearch: snapshot.supportsForgeSearch,
-        enabled: true,
-      }),
-    );
+    const options = buildForgeSearchQueryOptions({
+      client: snapshot.client,
+      serverId: snapshot.serverId,
+      cwd: snapshot.cwd,
+      query: String(ref.number),
+      supportsForgeSearch: snapshot.supportsForgeSearch,
+      enabled: true,
+    });
+    return await queryClient.fetchQuery({
+      ...options,
+      queryKey: [...options.queryKey, "client", forgeClientGeneration(snapshot.client)],
+    });
   } catch {
     return null;
   }
@@ -504,12 +342,20 @@ function isSameLookupTarget(
   );
 }
 
+function forgeClientGeneration(client: ForgeSearchClient): number {
+  const existing = forgeClientGenerations.get(client);
+  if (existing !== undefined) return existing;
+  const generation = nextForgeClientGeneration++;
+  forgeClientGenerations.set(client, generation);
+  return generation;
+}
+
 function hasGithubAttachment(attachments: UserComposerAttachment[], ref: GithubRef): boolean {
   return attachments.some((attachment) => attachmentKey(attachment) === githubRefKey(ref));
 }
 
 function githubItemMatchesRef(item: ForgeSearchItem, ref: GithubRef): boolean {
-  return item.kind === githubItemKind(ref) && item.number === ref.number;
+  return forgeItemKey(item) === githubRefKey(ref);
 }
 
 function githubItemKind(ref: GithubRef): ForgeSearchItem["kind"] {
@@ -517,7 +363,7 @@ function githubItemKind(ref: GithubRef): ForgeSearchItem["kind"] {
 }
 
 function githubRefKey(ref: GithubRef): string {
-  return `${githubItemKind(ref)}:${ref.number}`;
+  return `${githubItemKind(ref)}:${ref.owner.toLowerCase()}/${ref.repo.toLowerCase()}:${ref.number}`;
 }
 
 function attachmentKey(attachment: ComposerAttachment | undefined): string | null {
@@ -531,5 +377,19 @@ function attachmentKey(attachment: ComposerAttachment | undefined): string | nul
   ) {
     return null;
   }
-  return `${attachment.item.kind}:${attachment.item.number}`;
+  return forgeItemKey(attachment.item);
+}
+
+function forgeItemKey(item: ForgeSearchItem): string {
+  const kind = item.kind;
+  try {
+    const url = new URL(item.url);
+    const match = url.pathname.match(/^\/([^/]+)\/([^/]+)\/(?:pull|issues)\/\d+/u);
+    if (url.hostname.toLowerCase() === "github.com" && match?.[1] && match[2]) {
+      return `${kind}:${match[1].toLowerCase()}/${match[2].toLowerCase()}:${item.number}`;
+    }
+  } catch {
+    // Keep compatibility with non-URL legacy fixture values.
+  }
+  return `${kind}:${item.number}`;
 }

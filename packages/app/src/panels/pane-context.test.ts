@@ -10,6 +10,7 @@ describe("createPaneFocusContextValue", () => {
       }),
     ).toEqual({
       isWorkspaceFocused: true,
+      isPaneVisible: true,
       isPaneFocused: true,
       isInteractive: true,
       focusPane: expect.any(Function),
@@ -21,6 +22,7 @@ describe("createPaneFocusContextValue", () => {
       }),
     ).toEqual({
       isWorkspaceFocused: false,
+      isPaneVisible: true,
       isPaneFocused: true,
       isInteractive: false,
       focusPane: expect.any(Function),

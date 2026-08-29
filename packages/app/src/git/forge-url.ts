@@ -10,8 +10,8 @@
  * both ride the manifest's `cloudHosts` only to canonicalize a cloud SSH alias
  * (e.g. ssh.github.com -> github.com); a self-hosted host is used as-is.
  */
-import { getForgeDefinition } from "@getpaseo/protocol/forge-manifest";
-import { normalizeHost, parseGitRemoteLocation } from "@getpaseo/protocol/git-remote";
+import { getForgeDefinition } from "@bytetrue/byspace-protocol/forge-manifest";
+import { normalizeHost, parseGitRemoteLocation } from "@bytetrue/byspace-protocol/git-remote";
 import { getClientForgeLogicModule } from "@/git/forges";
 
 export interface ForgeBlobUrlInput {
@@ -29,7 +29,6 @@ export interface ForgeBranchTreeUrlInput {
 
 interface ForgeWebLocation {
   host: string;
-  /** Non-default port for a self-hosted http(s) origin, or undefined. */
   port?: string;
   repo: string;
 }
@@ -62,24 +61,22 @@ function resolveForgeWebLocation(
   }
   const cloudHosts = (getForgeDefinition(forge)?.cloudHosts ?? []).map(normalizeHost);
   const isCloudHost = cloudHosts.includes(location.host);
-  const webHost = isCloudHost ? cloudHosts[0] : location.host;
-  // Carry a non-default port only for a self-hosted http(s) origin (e.g.
-  // `:60443`): the web UI shares that origin. An SSH/scp remote's port is not the
-  // web port, and a canonicalized cloud host always serves on the default port.
-  const port =
-    !isCloudHost && (location.transport === "http" || location.transport === "https")
-      ? location.port
-      : undefined;
-  return { host: webHost, port, repo: location.path };
+  return {
+    host: isCloudHost ? cloudHosts[0] : location.host,
+    port:
+      !isCloudHost && (location.transport === "http" || location.transport === "https")
+        ? location.port
+        : undefined,
+    repo: location.path,
+  };
+}
+
+function forgeAuthority(location: ForgeWebLocation): string {
+  return location.port ? `${location.host}:${location.port}` : location.host;
 }
 
 function encodeBranch(branch: string): string {
   return branch.split("/").map(encodeURIComponent).join("/");
-}
-
-/** Host, plus `:port` when the remote pins a non-default port. */
-function forgeAuthority(location: ForgeWebLocation): string {
-  return location.port ? `${location.host}:${location.port}` : location.host;
 }
 
 function normalizeBlobPath(path: string | null | undefined): string | null {

@@ -10,11 +10,7 @@ export async function revalidateSessionAfterResume(input: {
     return false;
   }
 
-  try {
-    input.bumpHistorySyncGeneration(input.serverId);
-    await input.refreshDirectories();
-    return true;
-  } catch {
-    return false;
-  }
+  input.bumpHistorySyncGeneration(input.serverId);
+  await input.refreshDirectories();
+  return true;
 }

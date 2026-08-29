@@ -1,7 +1,7 @@
 # Local plugins
 
 Local plugins contribute daemon RPCs, native app surfaces, workspace panels, Command Center items,
-app themes, and composer attachment sources from one `index.ts`. Paseo executes the server contribution in a
+app themes, and composer attachment sources from one `index.ts`. BySpace executes the server contribution in a
 subprocess and evaluates the client contribution in the app runtime. Plugin code is trusted code;
 this first slice does not sandbox it.
 
@@ -11,13 +11,13 @@ Create a typecheckable plugin project, install its development dependencies, the
 the daemon. `init` only writes the project files; it does not run the package manager.
 
 ```bash
-paseo plugin init /absolute/path/to/my-plugin
+byspace plugin init /absolute/path/to/my-plugin
 cd /absolute/path/to/my-plugin
 npm install
 npm run typecheck
-paseo plugin install /absolute/path/to/my-plugin
-paseo plugin install /absolute/path/to/my-plugin --id another-runtime-id
-paseo plugin ls
+byspace plugin install /absolute/path/to/my-plugin
+byspace plugin install /absolute/path/to/my-plugin --id another-runtime-id
+byspace plugin ls
 ```
 
 The daemon stores directory sources under the root `plugins` object:
@@ -36,7 +36,7 @@ The daemon stores directory sources under the root `plugins` object:
 ```
 
 The plugin system is disabled unless `pluginsEnabled` is `true`. Changing that root field is
-runtime-safe: run `paseo reload` after editing `config.json`. Enabling starts every configured,
+runtime-safe: run `byspace reload` after editing `config.json`. Enabling starts every configured,
 enabled plugin; disabling tears them all down without restarting the daemon. Plugin source entries
 remain lifecycle-owned and do not reload from manual config edits.
 
@@ -44,17 +44,17 @@ The directory contains an identity-only manifest, one entry point, and local typ
 
 ```text
 my-plugin/
-  paseo-plugin.json
+  byspace-plugin.json
   index.ts
   main.client.tsx
-  paseo-plugin.d.ts
+  byspace-plugin.d.ts
   package.json
   tsconfig.json
 ```
 
-Paseo compiles TypeScript and TSX when loading the plugin, so these packages are development dependencies only.
-The generated declaration file supplies `@getpaseo/plugin` and `@getpaseo/plugin/server` types until the
-SDK is distributed as a public package. Regenerate new plugins with the matching Paseo CLI when the
+BySpace compiles TypeScript and TSX when loading the plugin, so these packages are development dependencies only.
+The generated declaration file supplies `@bytetrue/byspace/plugin` and `@bytetrue/byspace/plugin/server` types until the
+SDK is distributed as a public package. Regenerate new plugins with the matching BySpace CLI when the
 SDK contract changes.
 
 ```json
@@ -70,19 +70,19 @@ keys.
 
 Never enable plugins on a user's behalf without explicit permission. Before asking, check the
 target daemon's current `pluginsEnabled` value. State that plugins are trusted, unsandboxed code:
-backend code can access the daemon machine, while client contributions run inside the Paseo app.
+backend code can access the daemon machine, while client contributions run inside the BySpace app.
 
-Source changes are explicit. Run `paseo plugin reload <id>` to stop and fully tear down the old
-plugin before compiling and starting from disk. A failed reload stays failed; Paseo does not restore
+Source changes are explicit. Run `byspace plugin reload <id>` to stop and fully tear down the old
+plugin before compiling and starting from disk. A failed reload stays failed; BySpace does not restore
 the old code. Use `enable`, `disable`, and `remove` to manage one plugin. Remove deletes only its
 configuration, never its source directory. The global `pluginsEnabled` switch remains available.
 
-Server contributions can write to stdout and stderr with normal Node logging. Paseo adds `[paseo]`
+Server contributions can write to stdout and stderr with normal Node logging. BySpace adds `[byspace]`
 entries for loading, ready, stopping, and stopped transitions. Compilation and load failures are
 recorded as stderr entries before a subprocess exists. Inspect the recent in-memory
-tail from the host plugin settings or with `paseo plugin logs <id>`. Reload, disable, and process
+tail from the host plugin settings or with `byspace plugin logs <id>`. Reload, disable, and process
 failure retain the tail; removing the plugin clears it. Daemon restarts do not retain the tail, but
-structured copies remain in `$PASEO_HOME/daemon.log`. Plugin output can contain secrets, so do not
+structured copies remain in `$BYSPACE_HOME/daemon.log`. Plugin output can contain secrets, so do not
 log credentials or tokens.
 
 ## Contribute behavior and UI
@@ -96,15 +96,15 @@ code lives behind filename boundaries:
 | `*.server.ts`  | Node APIs, filesystem and process access, credentials, and handlers. |
 | `*.shared.ts`  | Zod RPC contracts and plain values used by both runtimes.            |
 
-Shared files import contracts from `@getpaseo/plugin/server`. Client files import hooks from
-`@getpaseo/plugin`. Plugin UI runs on desktop and mobile across multiple themes: color every
+Shared files import contracts from `@bytetrue/byspace/plugin/server`. Client files import hooks from
+`@bytetrue/byspace/plugin`. Plugin UI runs on desktop and mobile across multiple themes: color every
 `Text` from `theme.colors.foreground` or `theme.colors.foregroundMuted`, and size layout from
 `layout.compact`. See `public-docs/plugins/reference.md`.
 
-| Module                    | Use it for                                               |
-| ------------------------- | -------------------------------------------------------- |
-| `@getpaseo/plugin`        | hooks and UI types                                       |
-| `@getpaseo/plugin/server` | `defineRpc`, `defineAttachmentSource`, and handler types |
+| Module                            | Use it for                                               |
+| --------------------------------- | -------------------------------------------------------- |
+| `@bytetrue/byspace/plugin`        | hooks and UI types                                       |
+| `@bytetrue/byspace/plugin/server` | `defineRpc`, `defineAttachmentSource`, and handler types |
 
 The compiler removes client registrations and imports from the server entry point, and server
 registrations and imports from the client entry point. Importing a `*.server` module from a client
@@ -113,7 +113,7 @@ such as `StyleSheet.create` belong in `*.client.tsx`; placing them in `index.ts`
 server bundle.
 
 ```ts
-import type { PluginContext } from "@getpaseo/plugin";
+import type { PluginContext } from "@bytetrue/byspace/plugin";
 import { Greeting } from "./greeting.client";
 import { createGreeting } from "./greeting.server";
 import { greetRpc } from "./greeting.shared";
@@ -126,25 +126,25 @@ export default function contribute(plugin: PluginContext) {
 }
 ```
 
-The contribution function must return cleanup. Server cleanup may be async; Paseo waits for it when
+The contribution function must return cleanup. Server cleanup may be async; BySpace waits for it when
 the plugin is reloaded, disabled, removed, disconnected, or shut down. Cleanup is for resources
-created by plugin code. Paseo removes registered contributions, unmounts surfaces, clears query
+created by plugin code. BySpace removes registered contributions, unmounts surfaces, clears query
 state, rejects pending RPCs, closes the plugin's daemon session, and stops the subprocess. Cleanup
 errors are logged and do not interrupt host teardown.
 
-Paseo owns the route, screen header, Lucide icon validation, close action, theme DTO, layout facts,
+BySpace owns the route, screen header, Lucide icon validation, close action, theme DTO, layout facts,
 and render error boundary. The contributed component owns the complete body below the header.
 
 RPC contracts validate inputs and outputs in both the app and plugin subprocess. `useRpc` returns a
 typed async function. Use the host-provided `@tanstack/react-query` for request state and caching;
-Paseo gives each plugin installation its own query client.
+BySpace gives each plugin installation its own query client.
 
-`usePaseo()` and the handler's `{ paseo }` context expose the same `PaseoApi`: workspaces, agents,
+`useBySpace()` and the handler's `{ byspace }` context expose the same `BySpaceApi`: workspaces, agents,
 providers, and daemon config. They do not expose connection lifecycle. A surface borrows the
-selected host's existing connection; switching the screen's host changes both `usePaseo()` and
+selected host's existing connection; switching the screen's host changes both `useBySpace()` and
 `useRpc()` to that host. An offline selected host fails there and never falls through to another
 installation. A server handler owns an IPC-backed daemon session for the life of its subprocess.
-Use plugin RPC for plugin-specific backend behavior that is not a normal Paseo operation.
+Use plugin RPC for plugin-specific backend behavior that is not a normal BySpace operation.
 
 Each subprocess gets an exclusively owned `plugin:<id>` session. That identity is reserved from
 normal clients, never resumes another session, and is cleaned immediately on exit without reconnect
@@ -152,7 +152,7 @@ grace. During daemon startup, plugin sessions may connect while application WebS
 paused; the daemon accepts clients only after configured plugins have settled and the initial
 catalog is complete.
 
-When the same plugin contribution exists on multiple hosts, Paseo shows it once in the sidebar and
+When the same plugin contribution exists on multiple hosts, BySpace shows it once in the sidebar and
 adds a host picker to the screen header. The selected host supplies the bundle, RPC transport, and
 query cache. Plugin code cannot address another host.
 
@@ -165,24 +165,20 @@ RPC. Snapshot DTOs are deeply readonly and frozen at runtime so plugin code cann
 app state or a memoized selection. Panels use one persisted
 `plugin` workspace-tab target, so reload, disable, removal, and restoration resolve through the
 current installed-plugin catalog. A missing contribution renders unavailable inside the tab.
-Panels declare `locations: ["workspace", "explorer"]` to opt into Explorer hosting; omission means
-workspace only. Location controls hosting, not context. An agent panel target keeps its `agentId`
-when moved between hosts. Explorer configuration can create workspace-context panels and remove
-existing agent-context instances, but it cannot create an agent panel without an agent-aware command.
 
-Command Center callbacks use the selected host's existing `PaseoApi` for normal Paseo operations.
+Command Center callbacks use the selected host's existing `BySpaceApi` for normal BySpace operations.
 They use typed plugin RPC only for plugin-specific backend work. Navigation is limited to the
 plugin's registered global surfaces and workspace panels; plugins do not receive Expo Router or
 workspace-layout store access.
 
 ## Contribute composer attachments
 
-Register a declarative attachment source backed by a plugin RPC. Paseo owns the attachment menu,
+Register a declarative attachment source backed by a plugin RPC. BySpace owns the attachment menu,
 search picker, drafts, selected pill, and submission. The plugin returns complete text snapshots;
 credentials and vendor API calls stay in the daemon handler.
 
 ```ts
-import type { PluginContext } from "@getpaseo/plugin";
+import type { PluginContext } from "@bytetrue/byspace/plugin";
 import { search } from "./issues.server";
 import { issues, searchIssues } from "./issues.shared";
 
@@ -200,7 +196,7 @@ drops the optional presentation fields.
 
 ## Contribute a theme
 
-`addTheme` takes a small light or dark palette and a display name. Paseo expands it through the
+`addTheme` takes a small light or dark palette and a display name. BySpace expands it through the
 same semantic builders as the built-in themes, so plugins do not depend on the complete app token
 contract. Unistyles needs every theme name at `StyleSheet.configure` time, so
 `packages/app/src/styles/theme.ts` reserves one light and one dark plugin slot. The appearance

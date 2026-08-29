@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { writeJsonFileAtomic } from "./atomic-file.js";
 import { areEquivalentPaths } from "../utils/path.js";
+import { WorkspaceLifecycleCoordinator } from "./workspace-lifecycle-coordinator.js";
 import {
   generateProjectId,
   type PersistedProjectKind,
@@ -16,7 +17,7 @@ const PersistedProjectRecordSchema = z.object({
   rootPath: z.string(),
   kind: z.enum(["git", "non_git"]),
   displayName: z.string(),
-  // COMPAT(projectKey): added in v0.2.4 on 2026-07-28; remove optional after 2027-01-28.
+  // COMPAT(projectKey): added in v0.2.5, remove optional after 2027-01-31.
   projectKey: z
     .string()
     .nullable()
@@ -29,7 +30,6 @@ const PersistedProjectRecordSchema = z.object({
     .nullable()
     .optional()
     .transform((value) => value ?? null),
-  // Identifies the project's stored custom icon; null means automatic.
   customIconRevision: z
     .string()
     .nullable()
@@ -62,11 +62,6 @@ const PersistedWorkspaceRecordSchema = z.object({
     .nullable()
     .optional()
     .transform((value) => value ?? null),
-  // Exact checkout/worktree root backing cwd. This differs from cwd when the
-  // selected project is a subdirectory inside a repository. Persist it so
-  // archive and recovery do not need the directory to still exist in order to
-  // recover placement.
-  worktreeRoot: z.string().nullable().default(null),
   // The base branch the worktree was created from (normalized like worktree.json's
   // baseRefName). Only worktree workspaces carry a base branch; checkout-branch
   // worktrees and directory/local_checkout workspaces leave it null.
@@ -75,12 +70,21 @@ const PersistedWorkspaceRecordSchema = z.object({
     .nullable()
     .optional()
     .transform((value) => value ?? null),
-  isPaseoOwnedWorktree: z.boolean().default(false),
-  mainRepoRoot: z.string().nullable().default(null),
+  worktreeRoot: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((value) => value ?? null),
+  isBySpaceOwnedWorktree: z.boolean().optional().default(false),
+  mainRepoRoot: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((value) => value ?? null),
   createdAt: z.string(),
   updatedAt: z.string(),
   archivedAt: z.string().nullable(),
-  // COMPAT(autoArchivedChangeRequestUrl): added in v0.2.6, remove optional parsing after 2027-01-31.
+  // COMPAT(autoArchivedChangeRequestUrl): added in v0.4.1, remove optional parsing after 2027-02-08.
   // Records the merged change request whose automatic archive was consumed.
   autoArchivedChangeRequestUrl: z
     .string()
@@ -131,14 +135,13 @@ export interface ProjectRegistry {
     projectKey?: string;
     timestamp: string;
   }): Promise<PersistedProjectRecord>;
-  upsert(record: PersistedProjectRecord): Promise<void>;
   update(
     projectId: string,
-    updater: (record: PersistedProjectRecord) => PersistedProjectRecord,
+    updater: (record: PersistedProjectRecord) => PersistedProjectRecord | null,
   ): Promise<PersistedProjectRecord | null>;
+  upsert(record: PersistedProjectRecord): Promise<void>;
   archive(projectId: string, archivedAt: string): Promise<void>;
   remove(projectId: string): Promise<void>;
-  /** Central lifecycle seam for daemon-global project observers. */
   subscribeToMutations?(listener: (mutation: ProjectMutation) => void | Promise<void>): () => void;
 }
 
@@ -149,7 +152,8 @@ export interface WorkspaceRegistry {
   get(workspaceId: string): Promise<PersistedWorkspaceRecord | null>;
   update(
     workspaceId: string,
-    updater: (record: PersistedWorkspaceRecord) => PersistedWorkspaceRecord,
+    updater: (record: PersistedWorkspaceRecord) => PersistedWorkspaceRecord | null,
+    context?: WorkspaceMutationContext,
   ): Promise<PersistedWorkspaceRecord | null>;
   upsert(record: PersistedWorkspaceRecord, context?: WorkspaceMutationContext): Promise<void>;
   archive(
@@ -158,7 +162,6 @@ export interface WorkspaceRegistry {
     context?: WorkspaceArchiveContext,
   ): Promise<void>;
   remove(workspaceId: string): Promise<void>;
-  /** Central lifecycle seam for daemon-global workspace observers. */
   subscribeToMutations?(
     listener: (mutation: WorkspaceMutation) => void | Promise<void>,
   ): () => void;
@@ -226,11 +229,13 @@ class FileBackedRegistry<TRecord extends RegistryRecord> {
     });
   }
 
-  async update(id: string, updater: (record: TRecord) => TRecord): Promise<TRecord | null> {
+  async update(id: string, updater: (record: TRecord) => TRecord | null): Promise<TRecord | null> {
     return this.mutateCache((records) => {
       const existing = records.get(id);
       if (!existing) return null;
-      const next = this.schema.parse(updater(existing));
+      const candidate = updater(existing);
+      if (!candidate) return null;
+      const next = this.schema.parse(candidate);
       records.set(id, next);
       return next;
     });
@@ -362,14 +367,10 @@ export class FileBackedProjectRegistry
   extends FileBackedRegistry<PersistedProjectRecord>
   implements ProjectRegistry
 {
-  private allocationQueue: Promise<void> = Promise.resolve();
+  private readonly allocationCoordinator = new WorkspaceLifecycleCoordinator();
   private readonly projectIdFactory: () => string;
   private readonly mutationListeners = new Set<
-    (mutation: {
-      kind: "upsert" | "archive" | "remove";
-      projectId: string;
-      project: PersistedProjectRecord | null;
-    }) => void | Promise<void>
+    (mutation: ProjectMutation) => void | Promise<void>
   >();
 
   constructor(
@@ -401,11 +402,7 @@ export class FileBackedProjectRegistry
     projectKey?: string;
     timestamp: string;
   }): Promise<PersistedProjectRecord> {
-    const previous = this.allocationQueue;
-    let release!: () => void;
-    this.allocationQueue = new Promise<void>((resolve) => (release = resolve));
-    await previous;
-    try {
+    return this.allocationCoordinator.runExclusive(async () => {
       const active = (await this.list())
         .filter(
           (project) => !project.archivedAt && areEquivalentPaths(project.rootPath, input.rootPath),
@@ -416,8 +413,9 @@ export class FileBackedProjectRegistry
             left.projectId.localeCompare(right.projectId),
         )[0];
       if (active) {
-        if (active.kind === input.kind && active.projectKey === (input.projectKey ?? null))
+        if (active.kind === input.kind && active.projectKey === (input.projectKey ?? null)) {
           return active;
+        }
         const refreshed = {
           ...active,
           kind: input.kind,
@@ -443,18 +441,10 @@ export class FileBackedProjectRegistry
         await this.upsert(record);
         return record;
       }
-    } finally {
-      release();
-    }
+    });
   }
 
-  subscribeToMutations(
-    listener: (mutation: {
-      kind: "upsert" | "archive" | "remove";
-      projectId: string;
-      project: PersistedProjectRecord | null;
-    }) => void | Promise<void>,
-  ): () => void {
+  subscribeToMutations(listener: (mutation: ProjectMutation) => void | Promise<void>): () => void {
     this.mutationListeners.add(listener);
     return () => this.mutationListeners.delete(listener);
   }
@@ -466,7 +456,7 @@ export class FileBackedProjectRegistry
 
   override async update(
     projectId: string,
-    updater: (record: PersistedProjectRecord) => PersistedProjectRecord,
+    updater: (record: PersistedProjectRecord) => PersistedProjectRecord | null,
   ): Promise<PersistedProjectRecord | null> {
     const project = await super.update(projectId, updater);
     if (!project) return null;
@@ -486,11 +476,7 @@ export class FileBackedProjectRegistry
     await this.notifyMutation({ kind: "remove", projectId, project: null });
   }
 
-  private async notifyMutation(mutation: {
-    kind: "upsert" | "archive" | "remove";
-    projectId: string;
-    project: PersistedProjectRecord | null;
-  }): Promise<void> {
+  private async notifyMutation(mutation: ProjectMutation): Promise<void> {
     await Promise.all([...this.mutationListeners].map((listener) => listener(mutation)));
   }
 }
@@ -532,11 +518,12 @@ export class FileBackedWorkspaceRegistry
 
   override async update(
     workspaceId: string,
-    updater: (record: PersistedWorkspaceRecord) => PersistedWorkspaceRecord,
+    updater: (record: PersistedWorkspaceRecord) => PersistedWorkspaceRecord | null,
+    context?: WorkspaceMutationContext,
   ): Promise<PersistedWorkspaceRecord | null> {
     const workspace = await super.update(workspaceId, updater);
     if (workspace) {
-      await this.notifyMutation({ kind: "upsert", workspaceId, workspace });
+      await this.notifyMutation({ kind: "upsert", workspaceId, workspace, ...context });
     }
     return workspace;
   }
@@ -664,9 +651,9 @@ export function createPersistedWorkspaceRecord(input: {
   displayName: string;
   title?: string | null;
   branch?: string | null;
-  worktreeRoot?: string | null;
   baseBranch?: string | null;
-  isPaseoOwnedWorktree?: boolean;
+  worktreeRoot?: string | null;
+  isBySpaceOwnedWorktree?: boolean;
   mainRepoRoot?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -679,9 +666,9 @@ export function createPersistedWorkspaceRecord(input: {
     ...input,
     title: input.title ?? null,
     branch: input.branch ?? null,
-    worktreeRoot: input.worktreeRoot ?? null,
     baseBranch: input.baseBranch ?? null,
-    isPaseoOwnedWorktree: input.isPaseoOwnedWorktree ?? false,
+    worktreeRoot: input.worktreeRoot ?? null,
+    isBySpaceOwnedWorktree: input.isBySpaceOwnedWorktree ?? false,
     mainRepoRoot: input.mainRepoRoot ?? null,
     archivedAt: input.archivedAt ?? null,
     autoArchivedChangeRequestUrl: input.autoArchivedChangeRequestUrl ?? null,

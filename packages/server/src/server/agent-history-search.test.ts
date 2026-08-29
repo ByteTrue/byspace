@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  AGENT_HISTORY_SEARCH_FIELD_CHARACTER_BUDGET,
   type AgentHistorySearchCandidate,
+  boundAgentHistoryText,
+  compareBoundedAgentHistoryText,
+  createAgentHistorySearchScorer,
   describeAgentHistoryMatches,
   rankAgentHistoryCandidates,
   scoreAgentHistoryCandidate,
@@ -22,7 +26,7 @@ function candidate(input: {
     },
     project: {
       projectKey: "key",
-      projectName: input.projectName ?? "getpaseo/paseo",
+      projectName: input.projectName ?? "ByteTrue/byspace",
       workspaceName: input.workspaceName ?? null,
       checkout: {
         cwd: "/tmp/repo",
@@ -30,7 +34,7 @@ function candidate(input: {
         currentBranch: branch,
         remoteUrl: null,
         worktreeRoot: "/tmp/repo",
-        isPaseoOwnedWorktree: false,
+        isBySpaceOwnedWorktree: false,
         mainRepoRoot: null,
       },
     },
@@ -65,7 +69,7 @@ describe("scoreAgentHistoryCandidate", () => {
 
   it("matches the project name", () => {
     expect(
-      scoreAgentHistoryCandidate("paseo", candidate({ projectName: "getpaseo/paseo" })),
+      scoreAgentHistoryCandidate("byspace", candidate({ projectName: "ByteTrue/byspace" })),
     ).not.toBeNull();
   });
 
@@ -89,24 +93,78 @@ describe("scoreAgentHistoryCandidate", () => {
   it("returns null for a blank query so an empty box never filters", () => {
     expect(scoreAgentHistoryCandidate("   ", candidate({ title: "anything" }))).toBeNull();
   });
+
+  it("matches retained field heads and tails with original highlight offsets", () => {
+    const title = `headmatch${"x".repeat(AGENT_HISTORY_SEARCH_FIELD_CHARACTER_BUDGET)}tailmatch`;
+    const entry = candidate({ title });
+
+    expect(scoreAgentHistoryCandidate("headmatch", entry)).not.toBeNull();
+    expect(scoreAgentHistoryCandidate("tailmatch", entry)).not.toBeNull();
+    expect(describeAgentHistoryMatches("tailmatch", entry)).toEqual([
+      {
+        field: "title",
+        ranges: [{ start: title.length - "tailmatch".length, length: "tailmatch".length }],
+      },
+    ]);
+  });
+
+  it("drops the middle without creating a match across the retained segments", () => {
+    const halfBudget = AGENT_HISTORY_SEARCH_FIELD_CHARACTER_BUDGET / 2;
+    const head = `${"h".repeat(halfBudget - 2)}ab`;
+    const tail = `cd${"t".repeat(halfBudget - 2)}`;
+    const entry = candidate({ title: `${head}middle-only${tail}` });
+
+    expect(scoreAgentHistoryCandidate("middle-only", entry)).toBeNull();
+    expect(scoreAgentHistoryCandidate("abcd", entry)).toBeNull();
+  });
+});
+
+describe("bounded History text", () => {
+  it("bounds title ordering and distinguishes independently allocated oversized tails", () => {
+    const longTitle = (tail: string) =>
+      ["needle", "x".repeat(AGENT_HISTORY_SEARCH_FIELD_CHARACTER_BUDGET * 100), tail].join("");
+    const alpha = longTitle("alpha-tail");
+    const zulu = longTitle("zulu-tail");
+    const boundedAlpha = boundAgentHistoryText(alpha);
+    const boundedZulu = boundAgentHistoryText(zulu);
+
+    expect(boundedAlpha.head.length + (boundedAlpha.tail?.length ?? 0)).toBe(
+      AGENT_HISTORY_SEARCH_FIELD_CHARACTER_BUDGET,
+    );
+    expect(boundedZulu.head.length + (boundedZulu.tail?.length ?? 0)).toBe(
+      AGENT_HISTORY_SEARCH_FIELD_CHARACTER_BUDGET,
+    );
+    expect(boundedAlpha.head).toBe(boundedZulu.head);
+    expect(boundedAlpha.tail).not.toBe(boundedZulu.tail);
+    expect(compareBoundedAgentHistoryText(alpha, zulu)).toBeLessThan(0);
+    expect(compareBoundedAgentHistoryText(alpha, zulu)).toBe(
+      compareBoundedAgentHistoryText(alpha, zulu),
+    );
+  });
 });
 
 describe("rankAgentHistoryCandidates", () => {
   it("drops candidates that do not match", () => {
-    const ranked = rankAgentHistoryCandidates(
-      "stripe",
-      [candidate({ title: "Add Stripe billing" }), candidate({ title: "Fix terminal resize" })],
-      byUpdatedAtDesc,
-    );
+    const ranked = rankAgentHistoryCandidates({
+      scorer: createAgentHistorySearchScorer("stripe"),
+      candidates: [
+        candidate({ title: "Add Stripe billing" }),
+        candidate({ title: "Fix terminal resize" }),
+      ],
+      compareTies: byUpdatedAtDesc,
+    });
     expect(ranked.map((result) => result.candidate.agent.title)).toEqual(["Add Stripe billing"]);
   });
 
   it("ranks a whole-word hit above a hit buried inside a word", () => {
-    const ranked = rankAgentHistoryCandidates(
-      "bill",
-      [candidate({ title: "unbilled usage report" }), candidate({ title: "bill the customer" })],
-      byUpdatedAtDesc,
-    );
+    const ranked = rankAgentHistoryCandidates({
+      scorer: createAgentHistorySearchScorer("bill"),
+      candidates: [
+        candidate({ title: "unbilled usage report" }),
+        candidate({ title: "bill the customer" }),
+      ],
+      compareTies: byUpdatedAtDesc,
+    });
     expect(ranked.map((result) => result.candidate.agent.title)).toEqual([
       "bill the customer",
       "unbilled usage report",
@@ -114,26 +172,33 @@ describe("rankAgentHistoryCandidates", () => {
   });
 
   it("ranks the workspace name above the project name that every session shares", () => {
-    const ranked = rankAgentHistoryCandidates(
-      "paseo",
-      [
-        candidate({ title: "unrelated work", projectName: "getpaseo/paseo" }),
-        candidate({ workspaceName: "paseo", projectName: "getpaseo/paseo" }),
+    const ranked = rankAgentHistoryCandidates({
+      scorer: createAgentHistorySearchScorer("byspace"),
+      candidates: [
+        candidate({ title: "unrelated work", projectName: "ByteTrue/byspace" }),
+        candidate({ workspaceName: "byspace", projectName: "ByteTrue/byspace" }),
       ],
-      byUpdatedAtDesc,
-    );
-    expect(ranked[0].candidate.project.workspaceName).toBe("paseo");
+      compareTies: byUpdatedAtDesc,
+    });
+    expect(ranked[0].candidate.project.workspaceName).toBe("byspace");
+  });
+
+  it("treats regex metacharacters as literal search text", () => {
+    expect(
+      scoreAgentHistoryCandidate("[draft]", candidate({ title: "Fix [draft] state" })),
+    ).not.toBeNull();
+    expect(scoreAgentHistoryCandidate(".*", candidate({ title: "No wildcard here" }))).toBeNull();
   });
 
   it("ranks every exact hit above a typo hit", () => {
-    const ranked = rankAgentHistoryCandidates(
-      "billing",
-      [
+    const ranked = rankAgentHistoryCandidates({
+      scorer: createAgentHistorySearchScorer("billing"),
+      candidates: [
         candidate({ title: "bulling the customer" }),
         candidate({ title: "prorated billing edge cases" }),
       ],
-      byUpdatedAtDesc,
-    );
+      compareTies: byUpdatedAtDesc,
+    });
     expect(ranked.map((result) => result.candidate.agent.title)).toEqual([
       "prorated billing edge cases",
       "bulling the customer",
@@ -141,18 +206,79 @@ describe("rankAgentHistoryCandidates", () => {
   });
 
   it("breaks ties with the caller's ordering", () => {
-    const ranked = rankAgentHistoryCandidates(
-      "stripe",
-      [
+    const ranked = rankAgentHistoryCandidates({
+      scorer: createAgentHistorySearchScorer("stripe"),
+      candidates: [
         candidate({ title: "stripe one", updatedAt: "2026-08-01T00:00:00.000Z" }),
         candidate({ title: "stripe two", updatedAt: "2026-08-06T00:00:00.000Z" }),
       ],
-      byUpdatedAtDesc,
-    );
+      compareTies: byUpdatedAtDesc,
+    });
     expect(ranked.map((result) => result.candidate.agent.title)).toEqual([
       "stripe two",
       "stripe one",
     ]);
+  });
+
+  it("bounds independently allocated fields and caches only bounded segment matches", () => {
+    const scorer = createAgentHistorySearchScorer("needle");
+    const agentCount = 100;
+    const longField = () =>
+      ["needle", "x".repeat(AGENT_HISTORY_SEARCH_FIELD_CHARACTER_BUDGET * 100), "tail"].join("");
+    const candidates = Array.from({ length: agentCount }, () =>
+      candidate({
+        workspaceName: longField(),
+        title: longField(),
+        branch: longField(),
+        projectName: longField(),
+      }),
+    );
+
+    const ranked = rankAgentHistoryCandidates({
+      scorer,
+      candidates,
+      compareTies: byUpdatedAtDesc,
+    });
+    expect(ranked).toHaveLength(agentCount);
+    expect(scorer.work).toEqual({
+      boundedFieldCount: agentCount * 4,
+      extractedCharacterCount: agentCount * 4 * AGENT_HISTORY_SEARCH_FIELD_CHARACTER_BUDGET,
+      matchEvaluationCount: 2,
+    });
+
+    scorer.describeCandidate(ranked[0].candidate);
+    expect(scorer.work).toEqual({
+      boundedFieldCount: (agentCount + 1) * 4,
+      extractedCharacterCount: (agentCount + 1) * 4 * AGENT_HISTORY_SEARCH_FIELD_CHARACTER_BUDGET,
+      matchEvaluationCount: 2,
+    });
+  });
+
+  it("keeps each candidate's tail offset outside the bounded matcher cache", () => {
+    const scorer = createAgentHistorySearchScorer("tailmatch");
+    const longTitle = (middleLength: number) =>
+      `${"h".repeat(AGENT_HISTORY_SEARCH_FIELD_CHARACTER_BUDGET / 2)}${"x".repeat(
+        middleLength,
+      )}${"t".repeat(AGENT_HISTORY_SEARCH_FIELD_CHARACTER_BUDGET / 2 - 9)}tailmatch`;
+    const shorter = candidate({ title: longTitle(10_000) });
+    const longer = candidate({ title: longTitle(20_000) });
+
+    expect(scorer.scoreCandidate(shorter)).not.toBeNull();
+    expect(scorer.scoreCandidate(longer)).not.toBeNull();
+    const matcherWorkAfterRanking = scorer.work.matchEvaluationCount;
+    expect(scorer.describeCandidate(shorter)).toEqual([
+      {
+        field: "title",
+        ranges: [{ start: shorter.agent.title!.length - 9, length: 9 }],
+      },
+    ]);
+    expect(scorer.describeCandidate(longer)).toEqual([
+      {
+        field: "title",
+        ranges: [{ start: longer.agent.title!.length - 9, length: 9 }],
+      },
+    ]);
+    expect(scorer.work.matchEvaluationCount).toBe(matcherWorkAfterRanking);
   });
 });
 

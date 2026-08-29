@@ -6,10 +6,10 @@
 // migration cleared and that the rerouted explorer toggle no longer wrote. The
 // explorer is now one surface per layout, so that flag must not resurrect it.
 import { expect, type Locator, type Page } from "@playwright/test";
-import { test } from "../support/fixtures";
-import { gotoWorkspace } from "../support/helpers/launcher";
-import { seedWorkspace } from "../support/helpers/seed-client";
-import { waitForWorkspaceTabsVisible } from "../support/helpers/workspace-tabs";
+import { test } from "../fixtures";
+import { gotoWorkspace } from "../helpers/launcher";
+import { seedWorkspace } from "../helpers/seed-client";
+import { waitForWorkspaceTabsVisible } from "../helpers/workspace-tabs";
 
 function visible(page: Page, testId: string): Locator {
   return page.getByTestId(testId).filter({ visible: true });
@@ -19,8 +19,14 @@ function readPersistedPanelState(page: Page): Promise<string | null> {
   return page.evaluate(() => localStorage.getItem("panel-state"));
 }
 
-function explorerSidebar(page: Page): Locator {
-  return visible(page, "workspace-explorer-sidebar");
+/** Only the docked sidebar ever rendered `explorer-header` on a wide layout. */
+function dockedSidebar(page: Page): Locator {
+  return visible(page, "explorer-header");
+}
+
+/** The desktop companion surface is a hideable side panel. */
+function sidePanel(page: Page): Locator {
+  return visible(page, "workspace-side-panel");
 }
 
 /** Seed exactly what a pre-pane build wrote after the user opened the sidebar once. */
@@ -59,18 +65,18 @@ test.describe("explorer surface after upgrading from the docked sidebar", () => 
       await gotoWorkspace(page, workspace.workspaceId);
       await waitForWorkspaceTabsVisible(page);
 
-      await test.step("the retired flag does not reveal Explorer", async () => {
-        await expect(explorerSidebar(page)).toHaveCount(0);
+      await test.step("no docked sidebar, on load or after toggling", async () => {
+        await expect(dockedSidebar(page)).toHaveCount(0);
+
         const toggle = visible(page, "workspace-explorer-toggle").first();
         await toggle.click();
-        await expect(explorerSidebar(page)).toHaveCount(1, { timeout: 15_000 });
-        await expect(explorerSidebar(page).getByTestId("explorer-sidebar-tab-files")).toBeVisible();
-        await expect(
-          explorerSidebar(page).getByTestId("explorer-sidebar-tab-changes_tree"),
-        ).toBeVisible();
+        await expect(sidePanel(page)).toHaveCount(1, { timeout: 15_000 });
+        await expect(sidePanel(page).getByTestId("workspace-new-tab-panel")).toBeVisible();
+        await expect(dockedSidebar(page)).toHaveCount(0);
 
         await toggle.click();
-        await expect(explorerSidebar(page)).toHaveCount(0, { timeout: 15_000 });
+        await expect(sidePanel(page)).toHaveCount(0, { timeout: 15_000 });
+        await expect(dockedSidebar(page)).toHaveCount(0);
       });
 
       await test.step("the retired keys are migrated out of storage", async () => {
@@ -96,27 +102,27 @@ test.describe("explorer surface after upgrading from the docked sidebar", () => 
       await gotoWorkspace(page, workspace.workspaceId);
       await waitForWorkspaceTabsVisible(page);
 
-      const agentList = visible(page, "sidebar-sessions");
+      const agentList = visible(page, "sidebar-pages-header");
       const toggle = visible(page, "workspace-explorer-toggle").first();
 
       await test.step("open the explorer so both sides are showing", async () => {
         await toggle.click();
-        await expect(explorerSidebar(page)).toHaveCount(1, { timeout: 15_000 });
-        await expect(explorerSidebar(page).getByTestId("explorer-sidebar-tab-files")).toBeVisible();
+        await expect(sidePanel(page)).toHaveCount(1, { timeout: 15_000 });
+        await expect(sidePanel(page).getByTestId("workspace-new-tab-panel")).toBeVisible();
         await expect(agentList).toHaveCount(1);
       });
 
       await test.step("the shortcut collapses both", async () => {
         await page.keyboard.press(`${modifier}+.`);
-        await expect(explorerSidebar(page)).toHaveCount(0, { timeout: 15_000 });
+        await expect(sidePanel(page)).toHaveCount(0, { timeout: 15_000 });
         await expect(agentList).toHaveCount(0);
       });
 
       await test.step("the shortcut restores both", async () => {
         await page.keyboard.press(`${modifier}+.`);
         await expect(agentList).toHaveCount(1, { timeout: 15_000 });
-        await expect(explorerSidebar(page)).toHaveCount(1, { timeout: 15_000 });
-        await expect(explorerSidebar(page).getByTestId("explorer-sidebar-tab-files")).toBeVisible();
+        await expect(sidePanel(page)).toHaveCount(1, { timeout: 15_000 });
+        await expect(sidePanel(page).getByTestId("workspace-new-tab-panel")).toBeVisible();
       });
     } finally {
       await workspace.cleanup();

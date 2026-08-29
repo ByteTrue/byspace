@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release BySpace Stable"
+  short_description: "Ship or promote the Stable channel"
+  default_prompt: "Use $release-stable to cut or promote and verify the next BySpace Stable release."

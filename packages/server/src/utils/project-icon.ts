@@ -70,7 +70,7 @@ export interface ProjectIcon {
 
 const MAX_ICON_SIZE = 32 * 1024; // 32KB max
 
-export interface ImageDimensions {
+interface ImageDimensions {
   width: number;
   height: number;
 }

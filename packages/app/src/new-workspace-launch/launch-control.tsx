@@ -12,15 +12,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { TerminalProfileIcon } from "@/components/terminal-profile-icon";
+import { ProfileIcon } from "@/workspace-pins/launch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ICON_SIZE } from "@/styles/theme";
 import {
   formatResolvedCommand,
   getTerminalProfileIcon,
   substitutePrompt,
-} from "@getpaseo/protocol/terminal-profiles";
-import type { TerminalProfile } from "@getpaseo/protocol/messages";
+} from "@bytetrue/byspace-protocol/terminal-profiles";
+import type { TerminalProfile } from "@bytetrue/byspace-protocol/messages";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
 import type { Theme } from "@/styles/theme";
 import {
@@ -54,7 +54,7 @@ function LaunchProfileMenuItem({
 }): ReactElement {
   const handleSelect = useCallback(() => onSelect(profile.id), [onSelect, profile.id]);
   const leading = useMemo(
-    () => <TerminalProfileIcon iconKey={getTerminalProfileIcon(profile)} />,
+    () => <ProfileIcon iconKey={getTerminalProfileIcon(profile)} />,
     [profile],
   );
   // What the profile runs before any prompt is typed, so the row says what it
@@ -102,7 +102,7 @@ function TriggerIcon({
     return <ThemedMessageCircle size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
   }
   if (profile) {
-    return <TerminalProfileIcon iconKey={getTerminalProfileIcon(profile)} />;
+    return <ProfileIcon iconKey={getTerminalProfileIcon(profile)} />;
   }
   return <ThemedSquareTerminal size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
 }
@@ -144,7 +144,7 @@ export function LaunchControl({
     [onChange],
   );
   const openProfileSettings = useCallback(() => {
-    router.push(buildSettingsHostSectionRoute(serverId, "terminals"));
+    router.push(buildSettingsHostSectionRoute(serverId, "providers"));
   }, [router, serverId]);
 
   return (

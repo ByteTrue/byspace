@@ -1,4 +1,4 @@
-import type { ProviderOptions, ToolPolicy } from "@getpaseo/protocol/agent-types";
+import type { ProviderOptions } from "@bytetrue/byspace-protocol/agent-types";
 import { z } from "zod";
 
 const PermissionActionSchema = z.enum(["ask", "allow", "deny"]);
@@ -50,20 +50,13 @@ export interface OpenCodePermissionRule {
 
 export function buildOpenCodePermissionRules(
   options: OpenCodeProviderOptions | undefined,
-  toolPolicy: ToolPolicy | undefined,
 ): OpenCodePermissionRule[] | undefined {
-  const grants =
-    toolPolicy?.preapproved.map((grant) => ({
-      permission: `${grant.server}_${grant.tool}`,
-      pattern: "*",
-      action: "allow" as const,
-    })) ?? [];
   const permission = options?.permission;
   if (typeof permission === "string") {
-    return [...grants, { permission: "*", pattern: "*", action: permission }];
+    return [{ permission: "*", pattern: "*", action: permission }];
   }
   if (!permission || typeof permission !== "object" || Array.isArray(permission)) {
-    return grants.length > 0 ? grants : undefined;
+    return undefined;
   }
   const authored = Object.entries(permission).flatMap(([name, rule]) => {
     if (typeof rule === "string") {
@@ -74,5 +67,5 @@ export function buildOpenCodePermissionRules(
       typeof action === "string" ? [{ permission: name, pattern, action }] : [],
     );
   });
-  return [...grants, ...authored];
+  return authored;
 }

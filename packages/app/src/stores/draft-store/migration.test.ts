@@ -82,7 +82,7 @@ function workspaceReviewAttachment(): Extract<ComposerAttachment, { kind: "revie
     commentCount: 1,
     attachment: {
       type: "review",
-      mimeType: "application/paseo-review",
+      mimeType: "application/byspace-review",
       cwd: "/repo",
       mode: "uncommitted",
       baseRef: null,
@@ -127,17 +127,17 @@ describe("draft-store migration", () => {
       },
       createModalDraft: null,
     };
-    backing.values.set("paseo-drafts", JSON.stringify({ state: legacyState, version: 4 }));
+    backing.values.set("byspace-drafts", JSON.stringify({ state: legacyState, version: 4 }));
     const storage = createValidatedPersistStorage(backing, PersistedDraftStoreSchema);
 
-    const stored = await storage.getItem("paseo-drafts");
+    const stored = await storage.getItem("byspace-drafts");
     const migrated = await migratePersistedState(stored?.state, {
       migrateLegacyImages: passThroughMigrateLegacyImages,
       nowMs: 1,
     });
 
     expect(migrated.drafts["draft:unsent"]?.input.text).toBe("do not lose this");
-    expect(backing.values.has("paseo-drafts")).toBe(true);
+    expect(backing.values.has("byspace-drafts")).toBe(true);
   });
 
   it("promotes the newest legacy New Workspace draft into the singleton surface", async () => {
@@ -202,8 +202,8 @@ describe("draft-store migration", () => {
                 {
                   id: "att-1",
                   mimeType: "image/png",
-                  storageType: "desktop-file",
-                  storageKey: "/tmp/att-1.png",
+                  storageType: "web-indexeddb",
+                  storageKey: "att-1",
                   createdAt: 1700000000000,
                   previewUri: "asset://should-not-persist",
                 },
@@ -227,8 +227,8 @@ describe("draft-store migration", () => {
           metadata: {
             id: "att-1",
             mimeType: "image/png",
-            storageType: "desktop-file",
-            storageKey: "/tmp/att-1.png",
+            storageType: "web-indexeddb",
+            storageKey: "att-1",
             createdAt: 1700000000000,
           },
         },
@@ -302,10 +302,10 @@ describe("draft-store migration", () => {
       },
       createModalDraft: null,
     };
-    backing.values.set("paseo-drafts", JSON.stringify({ state: persistedState, version: 4 }));
+    backing.values.set("byspace-drafts", JSON.stringify({ state: persistedState, version: 4 }));
     const storage = createValidatedPersistStorage(backing, PersistedDraftStoreSchema);
 
-    const stored = await storage.getItem("paseo-drafts");
+    const stored = await storage.getItem("byspace-drafts");
     const migrated = await migratePersistedState(stored?.state, {
       migrateLegacyImages: passThroughMigrateLegacyImages,
       nowMs: 1700000000002,
@@ -315,6 +315,6 @@ describe("draft-store migration", () => {
       text: "hello",
       attachments: [],
     });
-    expect(backing.values.has("paseo-drafts")).toBe(true);
+    expect(backing.values.has("byspace-drafts")).toBe(true);
   });
 });

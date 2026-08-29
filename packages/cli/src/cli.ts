@@ -2,18 +2,18 @@ import { Command, Option } from "commander";
 import { createAgentCommand } from "./commands/agent/index.js";
 import { createDaemonCommand } from "./commands/daemon/index.js";
 import { createPermitCommand } from "./commands/permit/index.js";
-import { createProviderCommand } from "./commands/provider/index.js";
 import { createPluginCommand } from "./commands/plugin/index.js";
 import { createProjectCommand } from "./commands/project/index.js";
+import { createProviderCommand } from "./commands/provider/index.js";
 import { createScheduleCommand } from "./commands/schedule/index.js";
 import { createSpeechCommand } from "./commands/speech/index.js";
 import { createScriptCommand } from "./commands/script/index.js";
 import { createTerminalCommand } from "./commands/terminal/index.js";
 import { createWorktreeCommand } from "./commands/worktree/index.js";
 import { createWorkspaceCommand } from "./commands/workspace/index.js";
-import { createHeartbeatCommand } from "./commands/heartbeat/index.js";
-import { createHubCommand } from "./commands/hub/index.js";
+import { createToolCommand } from "./commands/tool/index.js";
 import { createHooksCommand } from "./commands/hooks.js";
+import { createHeartbeatCommand } from "./commands/heartbeat/index.js";
 import { startCommand as daemonStartCommand } from "./commands/daemon/start.js";
 import { runStatusCommand as runDaemonStatusCommand } from "./commands/daemon/status.js";
 import { runRestartCommand as runDaemonRestartCommand } from "./commands/daemon/restart.js";
@@ -51,8 +51,8 @@ export function createCli(): Command {
   const program = new Command();
 
   program
-    .name("paseo")
-    .description("Paseo CLI - control your AI coding agents from the command line")
+    .name("byspace")
+    .description("BySpace CLI - control your AI coding agents from the command line")
     .version(VERSION, "-v, --version", "output the version number")
     // Global output options
     .option("-o, --format <format>", "output format: table, json, yaml", "table")
@@ -75,7 +75,7 @@ export function createCli(): Command {
   addJsonAndDaemonHostOptions(
     program
       .command("clone")
-      .description("Clone a GitHub repo and register it as a Paseo workspace")
+      .description("Clone a GitHub repo and register it as a BySpace workspace")
       .argument("<repo>", "GitHub repo in owner/repo format or a full git remote URL")
       .requiredOption("--dir <path>", "Parent directory to clone into (for example: ~/workspace)"),
   )
@@ -122,21 +122,23 @@ export function createCli(): Command {
   addJsonOption(
     program
       .command("status")
-      .description('Show local daemon status (alias for "paseo daemon status")'),
+      .description('Show local daemon status (alias for "byspace daemon status")'),
   )
-    .option("--home <path>", "Paseo home directory (default: ~/.paseo)")
+    .option("--home <path>", "BySpace home directory (default: ~/.byspace)")
     .action(withOutput(runDaemonStatusCommand));
 
   addJsonAndDaemonHostOptions(
-    program.command("reload").description('Reload daemon config (alias for "paseo daemon reload")'),
+    program
+      .command("reload")
+      .description('Reload daemon config (alias for "byspace daemon reload")'),
   ).action(withOutput(runDaemonReloadCommand));
 
   addJsonOption(
     program
       .command("restart")
-      .description('Restart local daemon (alias for "paseo daemon restart")'),
+      .description('Restart local daemon (alias for "byspace daemon restart")'),
   )
-    .option("--home <path>", "Paseo home directory (default: ~/.paseo)")
+    .option("--home <path>", "BySpace home directory (default: ~/.byspace)")
     .option("--timeout <seconds>", "Wait timeout before force step (default: 15)")
     .option("--force", "Send SIGKILL if graceful stop times out")
     .option(
@@ -144,7 +146,6 @@ export function createCli(): Command {
       "Listen target for restarted daemon (host:port, port, or unix socket)",
     )
     .option("--port <port>", "Port for restarted daemon listen target")
-    .option("--relay", "Enable relay on restarted daemon")
     .option("--no-relay", "Disable relay on restarted daemon")
     .option("--no-mcp", "Disable Agent MCP on restarted daemon")
     .option(
@@ -170,9 +171,6 @@ export function createCli(): Command {
 
   // Daemon commands
   program.addCommand(createDaemonCommand());
-  program.addCommand(createHubCommand());
-
-  // Chat commands
 
   // Terminal commands
   program.addCommand(createTerminalCommand());
@@ -184,12 +182,17 @@ export function createCli(): Command {
   program.addCommand(createScheduleCommand());
   program.addCommand(createHeartbeatCommand());
 
+  // Canonical orchestration tool bridge for skills and terminal agents
+  program.addCommand(createToolCommand());
+
   // Permission commands
   program.addCommand(createPermitCommand());
 
+  // Trusted local plugin commands
+  program.addCommand(createPluginCommand());
+
   // Provider commands
   program.addCommand(createProviderCommand());
-  program.addCommand(createPluginCommand());
 
   // Speech model commands
   program.addCommand(createSpeechCommand());

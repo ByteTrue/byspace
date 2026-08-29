@@ -1,7 +1,14 @@
 import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { TerminalInputModeState } from "@getpaseo/protocol/terminal-input-mode";
-import { encodeTerminalOutput, TerminalEmulatorRuntime } from "./terminal-emulator-runtime";
+import {
+  TerminalInputModeTracker,
+  type TerminalInputModeState,
+} from "@bytetrue/byspace-protocol/terminal-input-mode";
+import {
+  encodeTerminalOutput,
+  TerminalEmulatorRuntime,
+  type TerminalEmulatorRuntimeCallbacks,
+} from "./terminal-emulator-runtime";
 
 vi.mock("@xterm/addon-webgl", () => ({
   WebglAddon: class WebglAddon {
@@ -15,7 +22,6 @@ interface TerminalSize {
   rows: number;
   cols: number;
   shouldClaim: boolean;
-  forceClaim?: boolean;
 }
 
 interface TerminalKeyRecord {
@@ -27,9 +33,10 @@ interface TerminalKeyRecord {
 }
 
 type BrowserTerminal = TerminalSize & {
-  input: (data: string, wasUserInput?: boolean) => void;
   refresh: (start: number, end: number) => void;
   reset: () => void;
+  paste: (text: string) => void;
+  getSelection: () => string;
 };
 
 interface MountedTerminal {
@@ -40,6 +47,7 @@ interface MountedTerminal {
   sizes: TerminalSize[];
   terminalKeys: TerminalKeyRecord[];
   inputModeChanges: TerminalInputModeState[];
+  pasteErrors: string[];
 }
 
 const mountedTerminals: MountedTerminal[] = [];
@@ -50,6 +58,24 @@ function nextFrame(): Promise<void> {
       resolve();
     });
   });
+}
+
+function countClaimEvents(sizes: TerminalSize[]): number {
+  return sizes.filter((size) => size.shouldClaim).length;
+}
+
+async function withoutResizeObserver(run: () => Promise<void>): Promise<void> {
+  const NativeResizeObserver = window.ResizeObserver;
+  window.ResizeObserver = class ResizeObserver {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  };
+  try {
+    await run();
+  } finally {
+    window.ResizeObserver = NativeResizeObserver;
+  }
 }
 
 function terminalOutput(text: string): Uint8Array {
@@ -76,6 +102,8 @@ function createTerminalHost(input: {
   width: number;
   height: number;
   scrollback?: number;
+  callbacks?: TerminalEmulatorRuntimeCallbacks;
+  onRendererReady?: () => void;
 }): MountedTerminal {
   const root = document.createElement("div");
   root.style.width = `${input.width}px`;
@@ -95,6 +123,7 @@ function createTerminalHost(input: {
   const inputs: string[] = [];
   const terminalKeys: TerminalKeyRecord[] = [];
   const inputModeChanges: TerminalInputModeState[] = [];
+  const pasteErrors: string[] = [];
   const runtime = new TerminalEmulatorRuntime();
   runtime.setCallbacks({
     callbacks: {
@@ -110,6 +139,10 @@ function createTerminalHost(input: {
       onInputModeChange: (state) => {
         inputModeChanges.push(state);
       },
+      onPasteError: (reason) => {
+        pasteErrors.push(reason);
+      },
+      ...input.callbacks,
     },
   });
   runtime.mount({
@@ -122,9 +155,19 @@ function createTerminalHost(input: {
       foreground: "#e6e6e6",
       cursor: "#e6e6e6",
     },
+    onRendererReady: input.onRendererReady,
   });
 
-  const mounted = { host, root, runtime, inputs, sizes, terminalKeys, inputModeChanges };
+  const mounted = {
+    host,
+    root,
+    runtime,
+    inputs,
+    sizes,
+    terminalKeys,
+    inputModeChanges,
+    pasteErrors,
+  };
   mountedTerminals.push(mounted);
   return mounted;
 }
@@ -137,25 +180,8 @@ function latestSize(sizes: TerminalSize[]): TerminalSize {
   return size;
 }
 
-function expectNoForcedSameSizeClaim(input: {
-  sizes: TerminalSize[];
-  startIndex: number;
-  baseline: TerminalSize;
-}): void {
-  const forcedSameSizeClaims = input.sizes
-    .slice(input.startIndex)
-    .filter(
-      (size) =>
-        size.rows === input.baseline.rows &&
-        size.cols === input.baseline.cols &&
-        size.shouldClaim &&
-        size.forceClaim,
-    );
-  expect(forcedSameSizeClaims).toEqual([]);
-}
-
 function getBrowserTerminal(): BrowserTerminal {
-  const terminal = window.__paseoTerminal as BrowserTerminal | undefined;
+  const terminal = window.__byspaceTerminal as BrowserTerminal | undefined;
   if (!terminal) {
     throw new Error("Expected xterm to be exposed for browser test inspection");
   }
@@ -165,6 +191,8 @@ function getBrowserTerminal(): BrowserTerminal {
 function dispatchTerminalKey(input: {
   host: HTMLElement;
   key: string;
+  code?: string;
+  keyCode?: number;
   shiftKey?: boolean;
   ctrlKey?: boolean;
   altKey?: boolean;
@@ -175,17 +203,79 @@ function dispatchTerminalKey(input: {
     throw new Error("Expected xterm textarea to be mounted");
   }
   textarea.focus();
-  return textarea.dispatchEvent(
-    new KeyboardEvent("keydown", {
-      key: input.key,
-      shiftKey: input.shiftKey ?? false,
-      ctrlKey: input.ctrlKey ?? false,
-      altKey: input.altKey ?? false,
-      metaKey: input.metaKey ?? false,
+  const event = new KeyboardEvent("keydown", {
+    key: input.key,
+    code: input.code ?? "",
+    shiftKey: input.shiftKey ?? false,
+    ctrlKey: input.ctrlKey ?? false,
+    altKey: input.altKey ?? false,
+    metaKey: input.metaKey ?? false,
+    bubbles: true,
+    cancelable: true,
+  });
+  if (input.keyCode !== undefined) {
+    Object.defineProperty(event, "keyCode", { value: input.keyCode });
+  }
+  return textarea.dispatchEvent(event);
+}
+
+function dispatchTerminalPaste(input: {
+  host: HTMLElement;
+  text?: string;
+  image?: File;
+}): ClipboardEvent {
+  const textarea = input.host.querySelector<HTMLTextAreaElement>("textarea");
+  if (!textarea) {
+    throw new Error("Expected xterm textarea to be mounted");
+  }
+  const clipboardData = new DataTransfer();
+  if (input.text !== undefined) {
+    clipboardData.setData("text/plain", input.text);
+  }
+  if (input.image) {
+    clipboardData.items.add(input.image);
+  }
+  const event = new ClipboardEvent("paste", {
+    bubbles: true,
+    cancelable: true,
+    clipboardData,
+  });
+  textarea.dispatchEvent(event);
+  return event;
+}
+
+function dispatchTerminalTouch(input: {
+  target: HTMLElement;
+  type: "touchstart" | "touchmove" | "touchend";
+  x: number;
+  y: number;
+}): void {
+  const touch = new Touch({
+    identifier: 1,
+    target: input.target,
+    clientX: input.x,
+    clientY: input.y,
+  });
+  input.target.dispatchEvent(
+    new TouchEvent(input.type, {
       bubbles: true,
       cancelable: true,
+      touches: input.type === "touchend" ? [] : [touch],
+      changedTouches: [touch],
     }),
   );
+}
+
+function setNavigatorPlatform(platform: string): () => void {
+  const descriptor = Object.getOwnPropertyDescriptor(navigator, "platform");
+  Object.defineProperty(navigator, "platform", { configurable: true, value: platform });
+  return () => {
+    if (descriptor) {
+      Object.defineProperty(navigator, "platform", descriptor);
+    } else {
+      Reflect.deleteProperty(navigator, "platform");
+    }
+  };
 }
 
 afterEach(() => {
@@ -193,18 +283,40 @@ afterEach(() => {
     mounted.runtime.unmount();
     mounted.root.remove();
   }
+  Reflect.deleteProperty(navigator, "clipboard");
 });
 
 describe("terminal emulator runtime in a real browser", () => {
+  it("keeps the document scroll lock until the last terminal unmounts", async () => {
+    await page.viewport(900, 600);
+    const originalBodyOverflow = document.body.style.overflow;
+
+    const first = createTerminalHost({ width: 720, height: 360 });
+    const second = createTerminalHost({ width: 720, height: 360 });
+    expect(document.body.style.overflow).toBe("hidden");
+
+    // Non-LIFO teardown: the terminal that locked the document first goes away while the
+    // second one is still mounted and still needs the lock.
+    first.runtime.unmount();
+    first.root.remove();
+    expect(document.body.style.overflow).toBe("hidden");
+
+    second.runtime.unmount();
+    second.root.remove();
+    expect(document.body.style.overflow).toBe(originalBodyOverflow);
+
+    mountedTerminals.splice(0);
+  });
+
   it("passes configured scrollback to xterm", async () => {
     await page.viewport(900, 600);
     createTerminalHost({ width: 720, height: 360, scrollback: 42_000 });
 
     await waitFor({
-      predicate: () => window.__paseoTerminal !== undefined,
+      predicate: () => window.__byspaceTerminal !== undefined,
     });
 
-    expect(window.__paseoTerminal?.options.scrollback).toBe(42_000);
+    expect(window.__byspaceTerminal?.options.scrollback).toBe(42_000);
   });
 
   it("updates scrollback on the mounted xterm", async () => {
@@ -212,14 +324,149 @@ describe("terminal emulator runtime in a real browser", () => {
     const mounted = createTerminalHost({ width: 720, height: 360, scrollback: 10_000 });
 
     await waitFor({
-      predicate: () => window.__paseoTerminal !== undefined,
+      predicate: () => window.__byspaceTerminal !== undefined,
     });
-    const terminal = window.__paseoTerminal;
+    const terminal = window.__byspaceTerminal;
 
     mounted.runtime.setScrollback({ lines: 42_000 });
 
-    expect(window.__paseoTerminal).toBe(terminal);
-    expect(window.__paseoTerminal?.options.scrollback).toBe(42_000);
+    expect(window.__byspaceTerminal).toBe(terminal);
+    expect(window.__byspaceTerminal?.options.scrollback).toBe(42_000);
+  });
+
+  it("selects terminal text after a touch long-press and drag", async () => {
+    await page.viewport(390, 844);
+    const mounted = createTerminalHost({ width: 390, height: 500 });
+    const terminal = getBrowserTerminal();
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({
+        data: terminalOutput("\u001b[?1000hcopy this text"),
+        onCommitted: resolve,
+      });
+    });
+
+    const screen = mounted.host.querySelector<HTMLElement>(".xterm-screen");
+    if (!screen) {
+      throw new Error("Expected xterm screen to be mounted");
+    }
+    const bounds = screen.getBoundingClientRect();
+    const cellWidth = bounds.width / terminal.cols;
+    const cellHeight = bounds.height / terminal.rows;
+    const y = bounds.top + cellHeight / 2;
+
+    dispatchTerminalTouch({
+      target: screen,
+      type: "touchstart",
+      x: bounds.left + cellWidth * 1.5,
+      y,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(terminal.getSelection()).toBe("copy");
+    expect(window.__byspaceTerminal?.options.macOptionClickForcesSelection).toBe(false);
+
+    dispatchTerminalTouch({
+      target: screen,
+      type: "touchmove",
+      x: bounds.left + cellWidth * 13.5,
+      y,
+    });
+    await nextFrame();
+    dispatchTerminalTouch({
+      target: screen,
+      type: "touchend",
+      x: bounds.left + cellWidth * 13.5,
+      y,
+    });
+
+    expect(terminal.getSelection()).toBe("copy this text");
+  });
+
+  it("selects complete double-width cells when dragging in either direction", async () => {
+    await page.viewport(390, 844);
+    const mounted = createTerminalHost({ width: 390, height: 500 });
+    const terminal = getBrowserTerminal();
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({ data: terminalOutput("x 你 y"), onCommitted: resolve });
+    });
+
+    const screen = mounted.host.querySelector<HTMLElement>(".xterm-screen");
+    if (!screen) {
+      throw new Error("Expected xterm screen to be mounted");
+    }
+    const bounds = screen.getBoundingClientRect();
+    const cellWidth = bounds.width / terminal.cols;
+    const y = bounds.top + bounds.height / terminal.rows / 2;
+    const longPressAndDrag = async (startColumn: number, endColumn: number): Promise<void> => {
+      dispatchTerminalTouch({
+        target: screen,
+        type: "touchstart",
+        x: bounds.left + cellWidth * (startColumn + 0.5),
+        y,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      dispatchTerminalTouch({
+        target: screen,
+        type: "touchmove",
+        x: bounds.left + cellWidth * (endColumn + 0.5),
+        y,
+      });
+      await nextFrame();
+      dispatchTerminalTouch({
+        target: screen,
+        type: "touchend",
+        x: bounds.left + cellWidth * (endColumn + 0.5),
+        y,
+      });
+    };
+
+    await longPressAndDrag(0, 3);
+    expect(terminal.getSelection()).toBe("x 你");
+
+    await longPressAndDrag(5, 3);
+    expect(terminal.getSelection()).toBe("你 y");
+  });
+
+  it("reports ready only after the post-WebGL renderer has a measurable fit", async () => {
+    await page.viewport(900, 600);
+    let readyCount = 0;
+    const mounted = createTerminalHost({
+      width: 0,
+      height: 360,
+      onRendererReady: () => {
+        readyCount += 1;
+      },
+    });
+
+    await nextFrame();
+    await nextFrame();
+    expect(readyCount).toBe(0);
+
+    mounted.root.style.width = "720px";
+    expect(mounted.runtime.resize({ force: true, shouldClaim: false })).toBe(true);
+    expect(readyCount).toBe(1);
+    expect(latestSize(mounted.sizes).cols).toBeGreaterThan(0);
+  });
+
+  it("reports ready after a hidden renderer swap restores the same geometry", async () => {
+    await page.viewport(900, 600);
+    let readyCount = 0;
+    const mounted = createTerminalHost({
+      width: 720,
+      height: 360,
+      onRendererReady: () => {
+        readyCount += 1;
+      },
+    });
+    const initialSize = latestSize(mounted.sizes);
+    mounted.root.style.width = "0px";
+
+    await nextFrame();
+    expect(readyCount).toBe(0);
+
+    mounted.root.style.width = "720px";
+    expect(mounted.runtime.resize()).toBe(true);
+    expect(latestSize(mounted.sizes)).toEqual(initialSize);
+    expect(readyCount).toBe(1);
   });
 
   it("does not claim PTY ownership from passive mount refits", async () => {
@@ -233,10 +480,10 @@ describe("terminal emulator runtime in a real browser", () => {
     expect(mounted.sizes.filter((size) => size.shouldClaim)).toEqual([]);
 
     const settledSize = latestSize(mounted.sizes);
-    mounted.runtime.resize({ forceClaim: true, shouldClaim: true });
+    mounted.runtime.resize({ force: true, shouldClaim: true });
 
     expect(mounted.sizes.filter((size) => size.shouldClaim)).toEqual([
-      { ...settledSize, shouldClaim: true, forceClaim: true },
+      { ...settledSize, shouldClaim: true },
     ]);
   });
 
@@ -250,7 +497,7 @@ describe("terminal emulator runtime in a real browser", () => {
     mounted.root.style.width = "720px";
     mounted.root.style.height = "360px";
     await nextFrame();
-    mounted.runtime.resize({ forceRefresh: true, shouldClaim: true });
+    mounted.runtime.resize({ force: true });
 
     await waitFor({
       predicate: () => {
@@ -265,90 +512,62 @@ describe("terminal emulator runtime in a real browser", () => {
     expect(grownSize.shouldClaim).toBe(true);
   });
 
-  it("keeps passive container measurements local after another client can claim", async () => {
-    await page.viewport(900, 600);
-    const mounted = createTerminalHost({ width: 360, height: 180 });
-
-    await waitFor({ predicate: () => mounted.sizes.length > 0 });
-    await settleMountRefits();
-    const initialSize = latestSize(mounted.sizes);
-    mounted.sizes.length = 0;
-
-    mounted.root.style.width = "720px";
-    mounted.root.style.height = "360px";
-
-    await waitFor({
-      predicate: () =>
-        mounted.sizes.some((size) => size.cols > initialSize.cols && size.rows > initialSize.rows),
-    });
-
-    expect(mounted.sizes.filter((size) => size.shouldClaim)).toEqual([]);
-  });
-
-  it("keeps visual viewport keyboard refits passive", async () => {
-    await page.viewport(900, 600);
-    const mounted = createTerminalHost({ width: 360, height: 180 });
-
-    await waitFor({ predicate: () => mounted.sizes.length > 0 });
-    await settleMountRefits();
-    mounted.sizes.length = 0;
-
-    mounted.root.style.width = "720px";
-    mounted.root.style.height = "360px";
-    expect(window.visualViewport).not.toBeNull();
-    window.visualViewport?.dispatchEvent(new Event("resize"));
-
-    await waitFor({ predicate: () => mounted.sizes.length > 0 });
-    expect(mounted.sizes.filter((size) => size.shouldClaim)).toEqual([]);
-  });
-
-  it("keeps browser window refits passive", async () => {
-    await page.viewport(900, 600);
-    const mounted = createTerminalHost({ width: 360, height: 180 });
-
-    await waitFor({ predicate: () => mounted.sizes.length > 0 });
-    await settleMountRefits();
-    mounted.sizes.length = 0;
-
-    mounted.root.style.width = "720px";
-    mounted.root.style.height = "360px";
-    window.dispatchEvent(new Event("resize"));
-
-    await waitFor({ predicate: () => mounted.sizes.length > 0 });
-    expect(mounted.sizes.filter((size) => size.shouldClaim)).toEqual([]);
-  });
-
-  it("does not force-claim a same-size resize while forwarding ordinary terminal input", async () => {
+  it("does not emit a duplicate claim when the immediate resize succeeds", async () => {
     await page.viewport(900, 600);
     const mounted = createTerminalHost({ width: 720, height: 360 });
 
     await waitFor({ predicate: () => mounted.sizes.length > 0 });
-    const sizeCount = mounted.sizes.length;
-    const sizeBeforeInput = latestSize(mounted.sizes);
-    const terminal = getBrowserTerminal();
+    const previousEventCount = mounted.sizes.length;
 
-    terminal.input("a", true);
+    mounted.runtime.resizeAfterLayout({ force: true, shouldClaim: true });
+    await nextFrame();
 
-    await waitFor({ predicate: () => mounted.inputs.length > 0 });
+    expect(countClaimEvents(mounted.sizes.slice(previousEventCount))).toBe(1);
+  });
 
-    expect(mounted.inputs.at(-1)).toBe("a");
-    expectNoForcedSameSizeClaim({
-      sizes: mounted.sizes,
-      startIndex: sizeCount,
-      baseline: sizeBeforeInput,
+  it("preserves an explicit claim queued behind a passive hidden-panel refit", async () => {
+    await page.viewport(900, 600);
+    await withoutResizeObserver(async () => {
+      const mounted = createTerminalHost({ width: 720, height: 360 });
+
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+      const previousEventCount = mounted.sizes.length;
+      mounted.root.style.display = "none";
+      mounted.root.style.width = "360px";
+      await nextFrame();
+
+      mounted.runtime.resizeAfterLayout({ force: true, shouldClaim: false });
+      mounted.runtime.resizeAfterLayout({ force: true, shouldClaim: true });
+      mounted.root.style.display = "block";
+      await nextFrame();
+
+      expect(countClaimEvents(mounted.sizes.slice(previousEventCount))).toBe(1);
     });
   });
 
-  it("pastes through xterm's input producer", async () => {
+  it("retries a requested resize after a retained panel becomes measurable", async () => {
     await page.viewport(900, 600);
-    const mounted = createTerminalHost({ width: 720, height: 360 });
+    await withoutResizeObserver(async () => {
+      const mounted = createTerminalHost({ width: 720, height: 360 });
 
-    await waitFor({ predicate: () => mounted.sizes.length > 0 });
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+      const initialSize = latestSize(mounted.sizes);
 
-    mounted.runtime.paste("legacy renderer paste");
+      mounted.root.style.display = "none";
+      mounted.root.style.width = "360px";
+      await nextFrame();
 
-    await waitFor({ predicate: () => mounted.inputs.length > 0 });
-    expect(mounted.inputs).toEqual(["legacy renderer paste"]);
+      mounted.runtime.resizeAfterLayout({ force: true, shouldClaim: false });
+      mounted.root.style.display = "block";
+
+      await waitFor({
+        predicate: () => latestSize(mounted.sizes).cols < initialSize.cols,
+      });
+
+      const restoredSize = latestSize(mounted.sizes);
+      expect(restoredSize.cols).toBeLessThan(initialSize.cols);
+      expect(restoredSize.shouldClaim).toBe(false);
+    });
   });
 
   it("refreshes visible rows on a forced same-size resize", async () => {
@@ -365,7 +584,7 @@ describe("terminal emulator runtime in a real browser", () => {
       originalRefresh(start, end);
     };
 
-    mounted.runtime.resize({ forceRefresh: true, shouldClaim: false });
+    mounted.runtime.resize({ force: true });
 
     await waitFor({ predicate: () => refreshCalls.length > 0 });
     expect(refreshCalls.at(-1)).toEqual([0, terminal.rows - 1]);
@@ -436,32 +655,368 @@ describe("terminal emulator runtime in a real browser", () => {
         meta: false,
       },
     ]);
+  });
 
-    const sizeCount = mounted.sizes.length;
-    const sizeBeforeKey = latestSize(mounted.sizes);
-    mounted.terminalKeys.length = 0;
+  it("forwards Alt+V to the terminal application", async () => {
+    await page.viewport(900, 600);
+    const read = vi.fn(async () => [] as ClipboardItem[]);
+    const onPasteImage = vi.fn(async () => "/tmp/unused.png");
+    const mounted = createTerminalHost({
+      width: 720,
+      height: 360,
+      callbacks: { onPasteImage },
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { read },
+    });
 
+    await waitFor({ predicate: () => mounted.sizes.length > 0 });
+    dispatchTerminalKey({ host: mounted.host, key: "v", code: "KeyV", keyCode: 86, altKey: true });
+
+    await waitFor({ predicate: () => mounted.inputs.length > 0 });
+    expect(mounted.inputs).toEqual(["\x1bv"]);
+    expect(read).not.toHaveBeenCalled();
+    expect(onPasteImage).not.toHaveBeenCalled();
+  });
+
+  it("preserves bracketed paste mode when replaying a snapshot", async () => {
+    await page.viewport(900, 600);
+    const mounted = createTerminalHost({ width: 720, height: 360 });
+
+    await waitFor({ predicate: () => mounted.sizes.length > 0 });
+    const terminal = getBrowserTerminal();
+    const paste = "first line\nsecond line";
+    const bracketedPaste = "\x1b[200~first line\rsecond line\x1b[201~";
+    const authoritativeInputMode = new TerminalInputModeTracker();
+    authoritativeInputMode.feed("\x1b[?2004h");
+
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({ data: terminalOutput("\x1b[?2004h"), onCommitted: resolve });
+    });
+    terminal.paste(paste);
+    await waitFor({ predicate: () => mounted.inputs.length > 0 });
+    expect(mounted.inputs).toEqual([bracketedPaste]);
+
+    mounted.inputs.length = 0;
+    await new Promise<void>((resolve) => {
+      mounted.runtime.renderSnapshot({
+        state: {
+          rows: terminal.rows,
+          cols: terminal.cols,
+          scrollback: [],
+          grid: [[{ char: ">" }]],
+          cursor: { row: 0, col: 1 },
+        },
+        onCommitted: resolve,
+      });
+    });
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({
+        data: terminalOutput(authoritativeInputMode.getPreamble()),
+        onCommitted: resolve,
+      });
+    });
+
+    terminal.paste(paste);
+    await waitFor({ predicate: () => mounted.inputs.length > 0 });
+    expect(mounted.inputs).toEqual([bracketedPaste]);
+  });
+
+  it("does not read the clipboard during keydown for the standard paste shortcut", async () => {
+    await page.viewport(900, 600);
+    const mounted = createTerminalHost({ width: 720, height: 360 });
+    const readText = vi.fn(async () => "/Users/byte/PixPin/image.jpg");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { readText, read: vi.fn(async () => [] as ClipboardItem[]) },
+    });
+
+    await waitFor({ predicate: () => mounted.sizes.length > 0 });
     dispatchTerminalKey({
       host: mounted.host,
-      key: "Enter",
-      shiftKey: true,
+      key: "v",
+      code: "KeyV",
+      keyCode: 86,
+      ...(/Macintosh|Mac OS/i.test(navigator.userAgent) ? { metaKey: true } : { ctrlKey: true }),
     });
     await nextFrame();
 
-    expect(mounted.terminalKeys).toEqual([
+    expect(readText).not.toHaveBeenCalled();
+  });
+
+  it("forces and sanitizes multiline clipboard text on Windows without terminal mode state", async () => {
+    const restorePlatform = setNavigatorPlatform("Win32");
+    try {
+      await page.viewport(900, 600);
+      const mounted = createTerminalHost({ width: 720, height: 360 });
+
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+      const event = dispatchTerminalPaste({
+        host: mounted.host,
+        text: "first line\nsecond\x1b[201~line",
+      });
+
+      await waitFor({ predicate: () => mounted.inputs.length > 0 });
+      expect(event.defaultPrevented).toBe(true);
+      expect(mounted.inputs).toEqual(["\x1b[200~first line\rsecond\u241b[201~line\x1b[201~"]);
+    } finally {
+      restorePlatform();
+    }
+  });
+
+  it("uploads a clipboard image and pastes the daemon path as one bracketed block", async () => {
+    await page.viewport(900, 600);
+    const imageBytes = new Uint8Array([137, 80, 78, 71]);
+    const pastedImages: Array<{
+      bytes: Uint8Array;
+      mimeType: string;
+      fileExtension: string;
+    }> = [];
+    const mounted = createTerminalHost({
+      width: 720,
+      height: 360,
+      callbacks: {
+        onPasteImage: async (image) => {
+          pastedImages.push(image);
+          return "/tmp/clipboard-image.png";
+        },
+      },
+    });
+    const image = new File([imageBytes], "clipboard.png", { type: "image/png" });
+
+    await waitFor({ predicate: () => mounted.sizes.length > 0 });
+    dispatchTerminalPaste({ host: mounted.host, image });
+    await waitFor({ predicate: () => mounted.inputs.length > 0 });
+    expect(pastedImages).toEqual([
       {
-        key: "Enter",
-        ctrl: false,
-        shift: true,
-        alt: false,
-        meta: false,
+        bytes: imageBytes,
+        mimeType: "image/png",
+        fileExtension: "png",
       },
     ]);
-    expectNoForcedSameSizeClaim({
-      sizes: mounted.sizes,
-      startIndex: sizeCount,
-      baseline: sizeBeforeKey,
+    expect(mounted.inputs).toEqual(["\x1b[200~/tmp/clipboard-image.png\x1b[201~"]);
+  });
+
+  it("uses the browser clipboard image for Pi's Windows Alt+V shortcut", async () => {
+    const restorePlatform = setNavigatorPlatform("Win32");
+    try {
+      await page.viewport(900, 600);
+      const onPasteImage = vi.fn(async () => "/tmp/windows-clipboard.png");
+      const mounted = createTerminalHost({
+        width: 720,
+        height: 360,
+        callbacks: { onPasteImage },
+      });
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          read: vi.fn(async () => [
+            {
+              types: ["image/png"],
+              getType: async () => new Blob([new Uint8Array([137, 80, 78, 71])]),
+              presentationStyle: "unspecified" as const,
+            } satisfies ClipboardItem,
+          ]),
+        },
+      });
+
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+      dispatchTerminalKey({ host: mounted.host, key: "v", code: "KeyV", altKey: true });
+
+      await waitFor({ predicate: () => mounted.inputs.length === 1 });
+      expect(onPasteImage).toHaveBeenCalledTimes(1);
+      expect(mounted.inputs).toEqual(["\x1b[200~/tmp/windows-clipboard.png\x1b[201~"]);
+      expect(mounted.terminalKeys).toEqual([]);
+    } finally {
+      restorePlatform();
+    }
+  });
+
+  it("forwards Windows Alt+V when the browser clipboard has no image", async () => {
+    const restorePlatform = setNavigatorPlatform("Win32");
+    try {
+      await page.viewport(900, 600);
+      const mounted = createTerminalHost({
+        width: 720,
+        height: 360,
+        callbacks: { onPasteImage: vi.fn(async () => null) },
+      });
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { read: vi.fn(async () => []) },
+      });
+
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+      dispatchTerminalKey({ host: mounted.host, key: "v", code: "KeyV", altKey: true });
+
+      await waitFor({ predicate: () => mounted.terminalKeys.length === 1 });
+      expect(mounted.terminalKeys).toEqual([
+        { key: "v", ctrl: false, shift: false, alt: true, meta: false },
+      ]);
+      expect(mounted.inputs).toEqual([]);
+    } finally {
+      restorePlatform();
+    }
+  });
+
+  it("reports Windows Alt+V clipboard read failures without forwarding the chord", async () => {
+    const restorePlatform = setNavigatorPlatform("Win32");
+    try {
+      await page.viewport(900, 600);
+      const mounted = createTerminalHost({
+        width: 720,
+        height: 360,
+        callbacks: { onPasteImage: vi.fn(async () => null) },
+      });
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { read: vi.fn(async () => Promise.reject(new Error("clipboard denied"))) },
+      });
+
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+      dispatchTerminalKey({ host: mounted.host, key: "v", code: "KeyV", altKey: true });
+
+      await waitFor({ predicate: () => mounted.pasteErrors.length === 1 });
+      expect(mounted.pasteErrors).toEqual(["clipboard-read-failed"]);
+      expect(mounted.terminalKeys).toEqual([]);
+      expect(mounted.inputs).toEqual([]);
+    } finally {
+      restorePlatform();
+    }
+  });
+
+  it("continues queued image pastes after an upload rejection", async () => {
+    await page.viewport(900, 600);
+    const onPasteImage = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("upload failed"))
+      .mockResolvedValueOnce("/tmp/second.png");
+    const mounted = createTerminalHost({
+      width: 720,
+      height: 360,
+      callbacks: { onPasteImage },
     });
+    const image = new File([new Uint8Array([137, 80, 78, 71])], "clipboard.png", {
+      type: "image/png",
+    });
+
+    await waitFor({ predicate: () => mounted.sizes.length > 0 });
+    dispatchTerminalPaste({ host: mounted.host, image });
+    dispatchTerminalPaste({ host: mounted.host, image });
+
+    await waitFor({ predicate: () => onPasteImage.mock.calls.length === 2 });
+    await waitFor({ predicate: () => mounted.inputs.length === 1 });
+    expect(mounted.pasteErrors).toEqual(["clipboard-read-failed"]);
+    expect(mounted.inputs).toEqual(["\x1b[200~/tmp/second.png\x1b[201~"]);
+  });
+
+  it("does not report a delayed Windows clipboard image failure after unmount", async () => {
+    const restorePlatform = setNavigatorPlatform("Win32");
+    try {
+      await page.viewport(900, 600);
+      let rejectImageRead: (error: Error) => void = () => {};
+      const imageRead = new Promise<Blob>((_resolve, reject) => {
+        rejectImageRead = reject;
+      });
+      const getType = vi.fn(() => imageRead);
+      const mounted = createTerminalHost({
+        width: 720,
+        height: 360,
+        callbacks: { onPasteImage: vi.fn(async () => null) },
+      });
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          read: vi.fn(async () => [
+            {
+              types: ["image/png"],
+              getType,
+              presentationStyle: "unspecified" as const,
+            } satisfies ClipboardItem,
+          ]),
+        },
+      });
+
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+      dispatchTerminalKey({ host: mounted.host, key: "v", code: "KeyV", altKey: true });
+      await waitFor({ predicate: () => getType.mock.calls.length === 1 });
+      mounted.runtime.unmount();
+      rejectImageRead(new Error("clipboard read failed"));
+      await nextFrame();
+
+      expect(mounted.pasteErrors).toEqual([]);
+    } finally {
+      restorePlatform();
+    }
+  });
+
+  it("rejects clipboard images larger than 50MB before reading their bytes", async () => {
+    const restorePlatform = setNavigatorPlatform("Win32");
+    try {
+      await page.viewport(900, 600);
+      const onPasteImage = vi.fn(async () => "/tmp/unused.png");
+      const onPasteError = vi.fn();
+      const mounted = createTerminalHost({
+        width: 720,
+        height: 360,
+        callbacks: { onPasteImage, onPasteError },
+      });
+      const oversizedBlob = { size: 50 * 1024 * 1024 + 1 } as Blob;
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          read: vi.fn(async () => [
+            {
+              types: ["image/png"],
+              getType: async () => oversizedBlob,
+              presentationStyle: "unspecified" as const,
+            } satisfies ClipboardItem,
+          ]),
+        },
+      });
+
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+      dispatchTerminalKey({ host: mounted.host, key: "v", code: "KeyV", altKey: true });
+
+      await waitFor({ predicate: () => onPasteError.mock.calls.length > 0 });
+      expect(onPasteError).toHaveBeenCalledWith("image-too-large");
+      expect(onPasteImage).not.toHaveBeenCalled();
+      expect(mounted.inputs).toEqual([]);
+    } finally {
+      restorePlatform();
+    }
+  });
+
+  it("uploads a clipboard image before text from the same paste event", async () => {
+    await page.viewport(900, 600);
+    const onPasteImage = vi.fn(async () => "/tmp/uploaded.jpg");
+    const mounted = createTerminalHost({
+      width: 720,
+      height: 360,
+      callbacks: { onPasteImage },
+    });
+    const text = "/Users/byte/Library/Application Support/PixPin/Temp/capture.jpg";
+    const bytes = new Uint8Array([137, 80, 78, 71]);
+    const image = new File([bytes], "capture.jpg", {
+      type: "image/jpeg",
+    });
+
+    await waitFor({ predicate: () => mounted.sizes.length > 0 });
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({ data: terminalOutput("\x1b[?2004h"), onCommitted: resolve });
+    });
+    dispatchTerminalPaste({ host: mounted.host, text, image });
+
+    await waitFor({ predicate: () => mounted.inputs.length > 0 });
+    expect(onPasteImage).toHaveBeenCalledTimes(1);
+    expect(onPasteImage).toHaveBeenCalledWith({
+      bytes,
+      fileExtension: "jpg",
+      mimeType: "image/jpeg",
+    });
+    expect(mounted.inputs).toEqual(["\x1b[200~/tmp/uploaded.jpg\x1b[201~"]);
+    expect(mounted.inputs.join("")).not.toContain(text);
   });
 
   it.each([

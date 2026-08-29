@@ -1,6 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
-import { getDesktopHost, type DesktopEditorBridge } from "@/desktop/host";
-
 export type DesktopOpenTargetKind = "editor" | "file-manager";
 export type DesktopOpenTargetIcon =
   | { kind: "image"; dataUrl: string }
@@ -21,55 +18,22 @@ export interface OpenDesktopTargetInput {
   column?: number;
 }
 
-interface AvailableDesktopEditorBridge {
-  listTargets: NonNullable<DesktopEditorBridge["listTargets"]>;
-  openTarget: NonNullable<DesktopEditorBridge["openTarget"]>;
-}
-
-function getDesktopEditorBridge(): AvailableDesktopEditorBridge | null {
-  const bridge = getDesktopHost()?.editor;
-  if (!bridge?.listTargets || !bridge.openTarget) {
-    return null;
-  }
-  return {
-    listTargets: bridge.listTargets,
-    openTarget: bridge.openTarget,
-  };
-}
-
+/** Desktop editor integration is intentionally unavailable in the browser-only client. */
 export function hasDesktopOpenTargetsBridge(): boolean {
-  return getDesktopEditorBridge() !== null;
+  return false;
 }
 
 export async function listDesktopOpenTargets(): Promise<DesktopOpenTarget[]> {
-  const bridge = getDesktopEditorBridge();
-  if (!bridge) {
-    return [];
-  }
-  return await bridge.listTargets();
+  return [];
 }
 
-export async function openDesktopTarget(input: OpenDesktopTargetInput): Promise<void> {
-  const bridge = getDesktopEditorBridge();
-  if (!bridge) {
-    throw new Error("Desktop editor bridge is unavailable");
-  }
-  await bridge.openTarget(input);
+export async function openDesktopTarget(_input: OpenDesktopTargetInput): Promise<void> {
+  throw new Error("Desktop editor integration is unavailable in the browser client");
 }
 
-export function useDesktopOpenTargets(input: { isLocalExecution: boolean }) {
-  const hasBridge = hasDesktopOpenTargetsBridge();
-  const canListTargets = hasBridge && input.isLocalExecution;
-  const query = useQuery({
-    queryKey: ["desktop-open-targets"],
-    enabled: canListTargets,
-    staleTime: 60_000,
-    retry: false,
-    queryFn: listDesktopOpenTargets,
-  });
-
+export function useDesktopOpenTargets(_input: { isLocalExecution: boolean }) {
   return {
-    targets: query.data ?? [],
-    isAvailable: canListTargets,
+    targets: [] as DesktopOpenTarget[],
+    isAvailable: false,
   };
 }

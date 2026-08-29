@@ -18,7 +18,6 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir, userInfo } from "node:os";
 
@@ -253,7 +252,7 @@ function lastNonEmptyLineIsPrompt(state: ReturnType<TerminalSession["getState"]>
 }
 
 function removeZshShellIntegrationRuntimeDir(): void {
-  rmSync(join(tmpdir(), `${userInfo().username || "unknown"}-paseo-zsh-${process.pid}`), {
+  rmSync(join(tmpdir(), `${userInfo().username || "unknown"}-byspace-zsh-${process.pid}`), {
     recursive: true,
     force: true,
   });
@@ -264,28 +263,28 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
     const resolvedEnv = buildTerminalEnvironment({
       shell: "/bin/zsh",
       env: {
-        HOME: "/tmp/paseo-home",
-        ZDOTDIR: "/tmp/paseo-zdotdir",
+        HOME: "/tmp/byspace-home",
+        ZDOTDIR: "/tmp/byspace-zdotdir",
       },
     });
 
     expect(resolvedEnv.TERM).toBe("xterm-256color");
     expect(resolvedEnv.TERM_PROGRAM).toBe("kitty");
-    expect(resolvedEnv.PASEO_ZSH_ZDOTDIR).toBe("/tmp/paseo-zdotdir");
+    expect(resolvedEnv.BYSPACE_ZSH_ZDOTDIR).toBe("/tmp/byspace-zdotdir");
     expect(resolvedEnv.ZDOTDIR).toBe(
-      join(tmpdir(), `${userInfo().username || "unknown"}-paseo-zsh-${process.pid}`),
+      join(tmpdir(), `${userInfo().username || "unknown"}-byspace-zsh-${process.pid}`),
     );
     expect(existsSync(join(resolvedEnv.ZDOTDIR, ".zshenv"))).toBe(true);
-    expect(existsSync(join(resolvedEnv.ZDOTDIR, "paseo-integration.zsh"))).toBe(true);
+    expect(existsSync(join(resolvedEnv.ZDOTDIR, "byspace-integration.zsh"))).toBe(true);
   });
 
   it("reuses zsh shell integration copied from read-only source files", () => {
-    const integrationSourceDir = mkdtempSync(join(tmpdir(), "paseo-zsh-readonly-source-"));
-    const tmpHome = mkdtempSync(join(tmpdir(), "paseo-zsh-readonly-home-"));
+    const integrationSourceDir = mkdtempSync(join(tmpdir(), "byspace-zsh-readonly-source-"));
+    const tmpHome = mkdtempSync(join(tmpdir(), "byspace-zsh-readonly-home-"));
     temporaryDirs.push(integrationSourceDir, tmpHome);
     cpSync(resolveZshShellIntegrationDir(), integrationSourceDir, { recursive: true });
     chmodSync(join(integrationSourceDir, ".zshenv"), 0o444);
-    chmodSync(join(integrationSourceDir, "paseo-integration.zsh"), 0o444);
+    chmodSync(join(integrationSourceDir, "byspace-integration.zsh"), 0o444);
     removeZshShellIntegrationRuntimeDir();
 
     const buildEnvironment = () =>
@@ -383,14 +382,14 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
       temporaryDirs.push(homeDir);
       const realZdotdir = join(homeDir, ".config", "zsh");
       mkdirSync(realZdotdir, { recursive: true });
-      writeFileSync(join(realZdotdir, ".zshenv"), "export PASEO_TEST_REAL_ZDOTDIR=1\n");
+      writeFileSync(join(realZdotdir, ".zshenv"), "export BYSPACE_TEST_REAL_ZDOTDIR=1\n");
 
       const session = trackSession(
         await createTerminal({
           workspaceId: "ws-test",
           cwd: homeDir,
           command: "/bin/zsh",
-          args: ["-c", 'printf \'%s\\n%s\\n\' "${ZDOTDIR-}" "${PASEO_TEST_REAL_ZDOTDIR-}"'],
+          args: ["-c", 'printf \'%s\\n%s\\n\' "${ZDOTDIR-}" "${BYSPACE_TEST_REAL_ZDOTDIR-}"'],
           env: {
             HOME: homeDir,
             ZDOTDIR: realZdotdir,
@@ -610,58 +609,6 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
 
       await waitForTitle(session, (title) => title === "sleep 1");
       await waitForTitle(session, (title) => title === "~/dev/faro", 4000);
-    });
-
-    it.skipIf(!hasZsh)("loads the user's zsh prompt when the integration dir is packaged", () => {
-      const homeDir = mkdtempSync(join(tmpdir(), "terminal-zsh-packaged-home-"));
-      temporaryDirs.push(homeDir);
-      writeFileSync(join(homeDir, ".zshrc"), "PS1='PASEO_CUSTOM_PROMPT> '\n");
-
-      const fakeAppRoot = join(homeDir, "Paseo.app", "Contents", "Resources");
-      const inaccessiblePackagedIntegrationDir = join(
-        fakeAppRoot,
-        "app.asar",
-        "node_modules",
-        "@getpaseo",
-        "server",
-        "dist",
-        "server",
-        "terminal",
-        "shell-integration",
-        "zsh",
-      );
-      const unpackedIntegrationDir = join(
-        fakeAppRoot,
-        "app.asar.unpacked",
-        "node_modules",
-        "@getpaseo",
-        "server",
-        "dist",
-        "server",
-        "terminal",
-        "shell-integration",
-        "zsh",
-      );
-      mkdirSync(unpackedIntegrationDir, { recursive: true });
-      cpSync(resolveZshShellIntegrationDir(), unpackedIntegrationDir, { recursive: true });
-      writeFileSync(join(fakeAppRoot, "app.asar"), "asar archive placeholder");
-
-      const env = buildTerminalEnvironment({
-        shell: "/bin/zsh",
-        env: {
-          HOME: homeDir,
-        },
-        zshShellIntegrationDir: inaccessiblePackagedIntegrationDir,
-      });
-
-      const result = spawnSync("/bin/zsh", ["-i", "-c", "print -r -- ${PROMPT}"], {
-        cwd: homeDir,
-        env,
-        encoding: "utf8",
-      });
-
-      expect(result.status).toBe(0);
-      expect(result.stdout.split(/\r?\n/)).toContain("PASEO_CUSTOM_PROMPT> ");
     });
 
     it.skipIf(!hasZsh)("emits zsh shell integration command completion", async () => {
@@ -895,7 +842,7 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
       unsubscribe();
     });
 
-    it("emits output only after getState reflects the new data", async () => {
+    it("emits output before getState parsing catches up", async () => {
       const session = trackSession(
         await createTerminal({
           workspaceId: "ws-test",
@@ -918,7 +865,9 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
       });
 
       session.send({ type: "input", data: "echo state-after-output\r" });
-      expect(await outputSeenInState).toBe(true);
+      expect(await outputSeenInState).toBe(false);
+      await session.drainHeadlessXterm();
+      expect(getLines(session.getState()).join("\n")).toContain("state-after-output");
     });
 
     it("unsubscribe stops receiving messages", async () => {

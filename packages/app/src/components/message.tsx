@@ -28,7 +28,6 @@ import {
 import type { ComponentType, ReactNode } from "react";
 import type MarkdownIt from "markdown-it";
 import { type ASTNode, type RenderRules } from "react-native-markdown-display";
-import MaskedView from "@react-native-masked-view/masked-view";
 import {
   Circle,
   Info,
@@ -49,23 +48,14 @@ import {
   FileSymlink,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import type { Theme } from "@/styles/theme";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import Animated, {
-  Easing,
-  cancelAnimation,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from "react-native-reanimated";
-import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "react-native-svg";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { MarkdownRenderer, type MarkdownStyles } from "@/components/markdown/renderer";
 import type { TaskActivity, TodoEntry, UserMessageImageAttachment } from "@/types/stream";
-import type { AgentAttachment } from "@getpaseo/protocol/messages";
-import type { ToolCallDetail } from "@getpaseo/protocol/agent-types";
+import type { AgentAttachment } from "@bytetrue/byspace-protocol/messages";
+import type { ToolCallDetail } from "@bytetrue/byspace-protocol/agent-types";
 import { buildToolCallPresentation } from "@/tool-calls/presentation";
 import { resolveToolCallIcon } from "@/utils/tool-call-icon";
 import { getMarkdownListMarker, getMarkdownListSpacing } from "@/utils/markdown-list";
@@ -102,13 +92,12 @@ import {
   AttachmentThumbnail,
 } from "@/components/attachment-pill";
 import { AttachmentLightbox } from "@/components/attachment-lightbox";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 import { isWeb, isNative } from "@/constants/platform";
-import type { AgentCapabilityFlags } from "@getpaseo/protocol/agent-types";
+import type { AgentCapabilityFlags } from "@bytetrue/byspace-protocol/agent-types";
 import { RewindMenu, type RewindMode } from "@/components/rewind/rewind-menu";
 import { useRewindAgentMutation } from "@/components/rewind/use-rewind-agent-mutation";
 import { AssistantForkMenu, type AssistantForkTarget } from "@/components/assistant-fork-menu";
-import { useRetainedPanelActive } from "@/components/retained-panel";
 import {
   markdownCopyDataSet,
   markdownCopyOrderedListDataSet,
@@ -155,8 +144,8 @@ function useDisableOuterSpacing(disableOuterSpacing: boolean | undefined) {
   return disableOuterSpacing ?? contextValue;
 }
 
-const WEB_TOOLCALL_SHIMMER_KEYFRAME_ID = "paseo-toolcall-shimmer-keyframes";
-const WEB_TOOLCALL_SHIMMER_ANIMATION_NAME = "paseo-toolcall-shimmer";
+const WEB_TOOLCALL_SHIMMER_KEYFRAME_ID = "byspace-toolcall-shimmer-keyframes";
+const WEB_TOOLCALL_SHIMMER_ANIMATION_NAME = "byspace-toolcall-shimmer";
 const MARKDOWN_ALLOWED_IMAGE_HANDLERS = [
   "data:image/png;base64",
   "data:image/gif;base64",
@@ -183,10 +172,10 @@ const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destruc
 const WEB_TOOLCALL_SHIMMER_KEYFRAME_CSS = `
   @keyframes ${WEB_TOOLCALL_SHIMMER_ANIMATION_NAME} {
     0% {
-      background-position: var(--paseo-shimmer-start, -200px) 0;
+      background-position: var(--byspace-shimmer-start, -200px) 0;
     }
     100% {
-      background-position: var(--paseo-shimmer-end, 200px) 0;
+      background-position: var(--byspace-shimmer-end, 200px) 0;
     }
   }
 `;
@@ -386,7 +375,6 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
     alignSelf: "flex-end",
     flexDirection: "row",
     alignItems: "center",
-    height: 24,
     gap: theme.spacing[2],
     marginTop: theme.spacing[2],
   },
@@ -894,7 +882,10 @@ function AssistantMarkdownImage({
   );
 }
 
-function getInlineCodeAutoLinkUrl(markdownParser: MarkdownIt, content: string): string | null {
+function getInlineCodeAutoLinkUrl(
+  markdownParser: ReturnType<typeof MarkdownIt>,
+  content: string,
+): string | null {
   const trimmed = content.trim();
   if (!trimmed) {
     return null;
@@ -1047,9 +1038,9 @@ export const TurnCopyButton = memo(function TurnCopyButton({
           ? turnCopyButtonStylesheet.iconHoveredColor.color
           : turnCopyButtonStylesheet.iconColor.color;
         return copied ? (
-          <Check size={ICON_SIZE.sm} color={iconColor} />
+          <Check size={16} color={iconColor} />
         ) : (
-          <Copy size={ICON_SIZE.sm} color={iconColor} />
+          <Copy size={16} color={iconColor} />
         );
       }}
     </Pressable>
@@ -1175,149 +1166,7 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
     alignItems: "center",
     overflow: "hidden",
   },
-  shimmerMaskRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: "100%",
-    height: "100%",
-  },
-  nativeShimmerTrack: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    overflow: "hidden",
-  },
-  nativeShimmerPeak: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    left: 0,
-  },
 }));
-
-interface NativeExpandableBadgeShimmerProps {
-  label: string;
-  secondaryLabel?: string;
-  rowWidth: number;
-  rowHeight: number;
-  peakWidth: number;
-  durationSeconds: number;
-  gradientId: string;
-}
-
-const NativeExpandableBadgeShimmer = memo(function NativeExpandableBadgeShimmer({
-  label,
-  secondaryLabel,
-  rowWidth,
-  rowHeight,
-  peakWidth,
-  durationSeconds,
-  gradientId,
-}: NativeExpandableBadgeShimmerProps) {
-  const isPanelActive = useRetainedPanelActive();
-  const shimmerTranslateX = useSharedValue(0);
-
-  useEffect(() => {
-    if (!isPanelActive) {
-      cancelAnimation(shimmerTranslateX);
-      return;
-    }
-    const startPosition = -peakWidth;
-    const endPosition = rowWidth + peakWidth;
-    shimmerTranslateX.value = startPosition;
-    shimmerTranslateX.value = withRepeat(
-      withTiming(endPosition, {
-        duration: durationSeconds * 1000,
-        easing: Easing.linear,
-      }),
-      -1,
-      false,
-    );
-    return () => {
-      cancelAnimation(shimmerTranslateX);
-    };
-  }, [durationSeconds, isPanelActive, peakWidth, rowWidth, shimmerTranslateX]);
-
-  const nativeShimmerPeakStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: shimmerTranslateX.value }],
-  }));
-
-  const nativeShimmerTrackStyle = useMemo(
-    () => [expandableBadgeStylesheet.nativeShimmerTrack, { width: rowWidth, height: rowHeight }],
-    [rowHeight, rowWidth],
-  );
-
-  const nativeShimmerMaskStyle = useMemo(
-    () => [expandableBadgeStylesheet.shimmerMaskRow, { width: rowWidth, height: rowHeight }],
-    [rowHeight, rowWidth],
-  );
-
-  const nativeLabelMaskStyle = useMemo(
-    () => [expandableBadgeStylesheet.label, { color: "#000000", opacity: 1 }],
-    [],
-  );
-
-  const nativeSecondaryMaskStyle = useMemo(
-    () => [expandableBadgeStylesheet.secondaryLabel, { color: "#000000", opacity: 1 }],
-    [],
-  );
-
-  const nativeShimmerPeakCombinedStyle = useMemo(
-    () => [
-      expandableBadgeStylesheet.nativeShimmerPeak,
-      nativeShimmerPeakStyle,
-      { width: peakWidth, height: rowHeight },
-    ],
-    [nativeShimmerPeakStyle, peakWidth, rowHeight],
-  );
-
-  const maskElement = useMemo(
-    () => (
-      <View pointerEvents="none" style={nativeShimmerMaskStyle}>
-        <Text style={nativeLabelMaskStyle} numberOfLines={1}>
-          {label}
-        </Text>
-        {secondaryLabel ? (
-          <Text style={nativeSecondaryMaskStyle} numberOfLines={1}>
-            {secondaryLabel}
-          </Text>
-        ) : (
-          <View style={expandableBadgeStylesheet.spacer} />
-        )}
-      </View>
-    ),
-    [nativeShimmerMaskStyle, nativeLabelMaskStyle, nativeSecondaryMaskStyle, label, secondaryLabel],
-  );
-
-  return (
-    <View style={expandableBadgeStylesheet.shimmerOverlay} pointerEvents="none">
-      <MaskedView pointerEvents="none" style={nativeShimmerTrackStyle} maskElement={maskElement}>
-        <View pointerEvents="none" style={nativeShimmerTrackStyle}>
-          <Animated.View pointerEvents="none" style={nativeShimmerPeakCombinedStyle}>
-            <NativeShimmerPeakSvg gradientId={gradientId} />
-          </Animated.View>
-        </View>
-      </MaskedView>
-    </View>
-  );
-});
-
-function NativeShimmerPeakSvg({ gradientId }: { gradientId: string }) {
-  return (
-    <Svg width="100%" height="100%" preserveAspectRatio="none">
-      <Defs>
-        <SvgLinearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
-          <Stop offset="0%" stopColor="#ffffff" stopOpacity={0} />
-          <Stop offset="50%" stopColor="#ffffff" stopOpacity={1} />
-          <Stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
-        </SvgLinearGradient>
-      </Defs>
-      <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${gradientId})`} />
-    </Svg>
-  );
-}
 
 interface AssistantMessageBlockContainerProps {
   block: string;
@@ -1462,7 +1311,7 @@ export const AssistantMessage = memo(function AssistantMessage({
 
   const fileLinkActions = useAssistantFileLinkActions();
   const handleMarkdownLinkPress = useStableEvent((url: string) => {
-    fileLinkActions.open({ href: url }, "preferred");
+    fileLinkActions.open({ href: url }, "side");
     // react-native-markdown-display opens the link itself when this returns true.
     // We already handled it above, so return false to avoid duplicate opens.
     return false;
@@ -1657,9 +1506,8 @@ export const AssistantMessage = memo(function AssistantMessage({
       // plain <Text> is not hoisted into a UITextViewChild and is dropped (same
       // root cause as strong/em/s) — so on iOS a hard line break vanished, and
       // a softbreak between words jammed them together ("one\ntwo" -> "onetwo").
-      // Emit the break through MarkdownTextSpan so it composes on iOS. Keep
-      // the resolved break styles: hardbreak is a full-width flex-row child on
-      // Android, and dropping that width joins the surrounding text spans.
+      // Emit the break through MarkdownTextSpan so it composes on iOS; web and
+      // Android keep the same "\n" they rendered before.
       hardbreak: (
         node: ASTNode,
         _children: ReactNode[],
@@ -2338,33 +2186,6 @@ interface ExpandableBadgeProps {
   testID?: string;
 }
 
-interface ExpandableBadgeSecondaryLabelProps {
-  secondaryLabel?: string;
-  secondaryLabelStyle: StyleProp<TextStyle>;
-  shouldMeasureWebShimmer: boolean;
-  onSecondaryLayout: (event: LayoutChangeEvent) => void;
-}
-
-function ExpandableBadgeSecondaryLabel({
-  secondaryLabel,
-  secondaryLabelStyle,
-  shouldMeasureWebShimmer,
-  onSecondaryLayout,
-}: ExpandableBadgeSecondaryLabelProps) {
-  if (!secondaryLabel) {
-    return null;
-  }
-  return (
-    <Text
-      style={secondaryLabelStyle}
-      numberOfLines={1}
-      onLayout={shouldMeasureWebShimmer ? onSecondaryLayout : undefined}
-    >
-      {secondaryLabel}
-    </Text>
-  );
-}
-
 interface ExpandableBadgeWebShimmerOverlayProps {
   label: string;
   secondaryLabel?: string;
@@ -2407,18 +2228,9 @@ interface ExpandableBadgeLabelRowProps {
   labelStyle: StyleProp<TextStyle>;
   secondaryLabel?: string;
   secondaryLabelStyle: StyleProp<TextStyle>;
-  shouldMeasureWebShimmer: boolean;
-  shouldMeasureNativeShimmer: boolean;
-  isWebShimmer: boolean;
-  isNativeShimmer: boolean;
+  isLoading: boolean;
   shimmerLabelTextStyle: StyleProp<TextStyle>;
   shimmerSecondaryTextStyle: StyleProp<TextStyle>;
-  labelRowWidth: number;
-  labelRowHeight: number;
-  nativeShimmerPeakWidth: number;
-  shimmerDuration: number;
-  nativeGradientId: string;
-  onLabelRowLayout: (event: LayoutChangeEvent) => void;
   onLabelLayout: (event: LayoutChangeEvent) => void;
   onSecondaryLayout: (event: LayoutChangeEvent) => void;
   showOpenFileButton: boolean;
@@ -2433,18 +2245,9 @@ function ExpandableBadgeLabelRow({
   labelStyle,
   secondaryLabel,
   secondaryLabelStyle,
-  shouldMeasureWebShimmer,
-  shouldMeasureNativeShimmer,
-  isWebShimmer,
-  isNativeShimmer,
+  isLoading,
   shimmerLabelTextStyle,
   shimmerSecondaryTextStyle,
-  labelRowWidth,
-  labelRowHeight,
-  nativeShimmerPeakWidth,
-  shimmerDuration,
-  nativeGradientId,
-  onLabelRowLayout,
   onLabelLayout,
   onSecondaryLayout,
   showOpenFileButton,
@@ -2455,23 +2258,15 @@ function ExpandableBadgeLabelRow({
 }: ExpandableBadgeLabelRowProps) {
   const { t } = useTranslation();
   return (
-    <View
-      style={expandableBadgeStylesheet.labelRow}
-      onLayout={shouldMeasureNativeShimmer ? onLabelRowLayout : undefined}
-    >
-      <Text
-        style={labelStyle}
-        numberOfLines={1}
-        onLayout={shouldMeasureWebShimmer ? onLabelLayout : undefined}
-      >
+    <View style={expandableBadgeStylesheet.labelRow}>
+      <Text style={labelStyle} numberOfLines={1} onLayout={onLabelLayout}>
         {label}
       </Text>
-      <ExpandableBadgeSecondaryLabel
-        secondaryLabel={secondaryLabel}
-        secondaryLabelStyle={secondaryLabelStyle}
-        shouldMeasureWebShimmer={shouldMeasureWebShimmer}
-        onSecondaryLayout={onSecondaryLayout}
-      />
+      {secondaryLabel ? (
+        <Text style={secondaryLabelStyle} numberOfLines={1} onLayout={onSecondaryLayout}>
+          {secondaryLabel}
+        </Text>
+      ) : null}
       {showOpenFileButton ? (
         <Pressable
           onPress={onOpenFilePress}
@@ -2489,24 +2284,13 @@ function ExpandableBadgeLabelRow({
           />
         </Pressable>
       ) : null}
-      {isWebShimmer ? (
+      {isLoading ? (
         <ExpandableBadgeWebShimmerOverlay
           label={label}
           secondaryLabel={secondaryLabel}
           shimmerLabelTextStyle={shimmerLabelTextStyle}
           shimmerSecondaryTextStyle={shimmerSecondaryTextStyle}
           showOpenFileButton={showOpenFileButton}
-        />
-      ) : null}
-      {isNativeShimmer ? (
-        <NativeExpandableBadgeShimmer
-          label={label}
-          secondaryLabel={secondaryLabel}
-          rowWidth={labelRowWidth}
-          rowHeight={labelRowHeight}
-          peakWidth={nativeShimmerPeakWidth}
-          durationSeconds={shimmerDuration}
-          gradientId={nativeGradientId}
         />
       ) : null}
     </View>
@@ -2584,9 +2368,6 @@ function renderExpandableBadgeIconSlot({
 function computeShimmerMetrics(input: {
   label: string;
   secondaryLabel: string | undefined;
-  isLoading: boolean;
-  labelRowWidth: number;
-  labelRowHeight: number;
   labelOffsetX: number;
   labelWidth: number;
   secondaryOffsetX: number;
@@ -2598,17 +2379,6 @@ function computeShimmerMetrics(input: {
     1,
     Math.min(2.3, 1.25 + totalShimmerChars * 0.008 - shortTextDurationAdjustment),
   );
-  const nativeShimmerPeakWidth = Math.max(
-    32,
-    Math.min(120, input.labelRowWidth > 0 ? input.labelRowWidth * 0.28 : 0),
-  );
-  const isWebShimmer = input.isLoading && isWeb;
-  // React Native Web only observes a node when onLayout exists at mount. Keep
-  // measuring while idle so a retained badge has dimensions when it starts loading.
-  const shouldMeasureWebShimmer = isWeb;
-  const shouldMeasureNativeShimmer = input.isLoading && isNative;
-  const isNativeShimmer =
-    shouldMeasureNativeShimmer && input.labelRowWidth > 0 && input.labelRowHeight > 0;
   const webShimmerSpanStartX = input.labelOffsetX;
   const webShimmerSpanEndX = input.secondaryLabel
     ? input.secondaryOffsetX + input.secondaryWidth
@@ -2619,11 +2389,6 @@ function computeShimmerMetrics(input: {
   const webShimmerTrackEnd = webShimmerSpanEndX;
   return {
     shimmerDuration,
-    nativeShimmerPeakWidth,
-    isWebShimmer,
-    shouldMeasureWebShimmer,
-    shouldMeasureNativeShimmer,
-    isNativeShimmer,
     webShimmerPeakWidth,
     webShimmerTrackStart,
     webShimmerTrackEnd,
@@ -2660,14 +2425,14 @@ const SHIMMER_GRADIENT =
   "linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.45) 24%, #ffffff 40%, #ffffff 60%, rgba(255, 255, 255, 0.45) 76%, rgba(255, 255, 255, 0) 100%)";
 
 function buildShimmerTextStyle(input: {
-  isWebShimmer: boolean;
+  isLoading: boolean;
   webShimmerPeakWidth: number;
   shimmerDuration: number;
   webShimmerTrackStart: number;
   webShimmerTrackEnd: number;
   offsetX: number;
 }): object | null {
-  if (!input.isWebShimmer) return null;
+  if (!input.isLoading) return null;
   return inlineUnistylesStyle({
     opacity: 1,
     color: "transparent",
@@ -2678,8 +2443,8 @@ function buildShimmerTextStyle(input: {
     WebkitBackgroundClip: "text",
     WebkitTextFillColor: "transparent",
     animation: `${WEB_TOOLCALL_SHIMMER_ANIMATION_NAME} ${input.shimmerDuration}s linear infinite`,
-    "--paseo-shimmer-start": `${input.webShimmerTrackStart - input.offsetX}px`,
-    "--paseo-shimmer-end": `${input.webShimmerTrackEnd - input.offsetX}px`,
+    "--byspace-shimmer-start": `${input.webShimmerTrackStart - input.offsetX}px`,
+    "--byspace-shimmer-end": `${input.webShimmerTrackEnd - input.offsetX}px`,
   });
 }
 
@@ -2731,80 +2496,45 @@ export const ExpandableBadge = memo(function ExpandableBadge({
   const handleOpenFileHoverIn = useCallback(() => setIsOpenFileHovered(true), []);
   const handleOpenFileHoverOut = useCallback(() => setIsOpenFileHovered(false), []);
 
-  const nativeGradientIdRef = useRef(
-    `shimmer-gradient-${Math.random().toString(36).substring(2, 9)}`,
-  );
-  const [labelRowWidth, setLabelRowWidth] = useState(0);
-  const [labelRowHeight, setLabelRowHeight] = useState(0);
   const [labelOffsetX, setLabelOffsetX] = useState(0);
   const [labelWidth, setLabelWidth] = useState(0);
   const [secondaryOffsetX, setSecondaryOffsetX] = useState(0);
   const [secondaryWidth, setSecondaryWidth] = useState(0);
 
-  const {
-    shimmerDuration,
-    nativeShimmerPeakWidth,
-    isWebShimmer,
-    shouldMeasureWebShimmer,
-    shouldMeasureNativeShimmer,
-    isNativeShimmer,
-    webShimmerPeakWidth,
-    webShimmerTrackStart,
-    webShimmerTrackEnd,
-  } = computeShimmerMetrics({
-    label,
-    secondaryLabel,
-    isLoading,
-    labelRowWidth,
-    labelRowHeight,
-    labelOffsetX,
-    labelWidth,
-    secondaryOffsetX,
-    secondaryWidth,
-  });
+  const { shimmerDuration, webShimmerPeakWidth, webShimmerTrackStart, webShimmerTrackEnd } =
+    computeShimmerMetrics({
+      label,
+      secondaryLabel,
+      labelOffsetX,
+      labelWidth,
+      secondaryOffsetX,
+      secondaryWidth,
+    });
 
-  const handleLabelRowLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      if (!shouldMeasureNativeShimmer) {
-        return;
-      }
-      const { width, height } = event.nativeEvent.layout;
-      setLabelRowWidth((previous) => (Math.abs(previous - width) > 0.5 ? width : previous));
-      setLabelRowHeight((previous) => (Math.abs(previous - height) > 0.5 ? height : previous));
-    },
-    [shouldMeasureNativeShimmer],
-  );
-
-  const handleLabelLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      if (!shouldMeasureWebShimmer) {
-        return;
-      }
-      const { x, width } = event.nativeEvent.layout;
-      setLabelOffsetX((previous) => (Math.abs(previous - x) > 0.5 ? x : previous));
-      setLabelWidth((previous) => (Math.abs(previous - width) > 0.5 ? width : previous));
-    },
-    [shouldMeasureWebShimmer],
-  );
+  const handleLabelLayout = useCallback((event: LayoutChangeEvent) => {
+    const { x, width } = event.nativeEvent.layout;
+    setLabelOffsetX((previous) => (Math.abs(previous - x) > 0.5 ? x : previous));
+    setLabelWidth((previous) => (Math.abs(previous - width) > 0.5 ? width : previous));
+  }, []);
 
   const handleSecondaryLayout = useCallback(
     (event: LayoutChangeEvent) => {
-      if (!shouldMeasureWebShimmer || !secondaryLabel) {
+      if (!secondaryLabel) {
         return;
       }
       const { x, width } = event.nativeEvent.layout;
       setSecondaryOffsetX((previous) => (Math.abs(previous - x) > 0.5 ? x : previous));
       setSecondaryWidth((previous) => (Math.abs(previous - width) > 0.5 ? width : previous));
     },
-    [shouldMeasureWebShimmer, secondaryLabel],
+    [secondaryLabel],
   );
 
   useEffect(() => {
-    if (!isWebShimmer) {
+    if (!isLoading) {
       return;
     }
     ensureWebToolCallShimmerKeyframes();
-  }, [isWebShimmer]);
+  }, [isLoading]);
 
   useDetailWheelPropagationBlocker({
     detailWrapperRef,
@@ -2814,7 +2544,7 @@ export const ExpandableBadge = memo(function ExpandableBadge({
   const shimmerLabelStyle = useMemo<StyleProp<TextStyle>>(
     () =>
       buildShimmerTextStyle({
-        isWebShimmer,
+        isLoading,
         webShimmerPeakWidth,
         shimmerDuration,
         webShimmerTrackStart,
@@ -2822,7 +2552,7 @@ export const ExpandableBadge = memo(function ExpandableBadge({
         offsetX: labelOffsetX,
       }),
     [
-      isWebShimmer,
+      isLoading,
       webShimmerPeakWidth,
       shimmerDuration,
       webShimmerTrackStart,
@@ -2834,7 +2564,7 @@ export const ExpandableBadge = memo(function ExpandableBadge({
   const shimmerSecondaryStyle = useMemo<StyleProp<TextStyle>>(
     () =>
       buildShimmerTextStyle({
-        isWebShimmer,
+        isLoading,
         webShimmerPeakWidth,
         shimmerDuration,
         webShimmerTrackStart,
@@ -2842,7 +2572,7 @@ export const ExpandableBadge = memo(function ExpandableBadge({
         offsetX: secondaryOffsetX,
       }),
     [
-      isWebShimmer,
+      isLoading,
       webShimmerPeakWidth,
       shimmerDuration,
       webShimmerTrackStart,
@@ -2885,6 +2615,9 @@ export const ExpandableBadge = memo(function ExpandableBadge({
     () => (isInteractive ? { expanded: isExpanded } : undefined),
     [isExpanded, isInteractive],
   );
+  // React Native Web does not emit aria-expanded from Pressable accessibilityState.
+  const ariaExpandedProps =
+    isWeb && isInteractive ? ({ "aria-expanded": isExpanded } as Record<string, boolean>) : null;
 
   const isActive = isHovered || isExpanded;
 
@@ -2961,6 +2694,7 @@ export const ExpandableBadge = memo(function ExpandableBadge({
     >
       <Pressable
         {...pressHandlers}
+        {...ariaExpandedProps}
         disabled={!isInteractive}
         accessibilityState={accessibilityState}
         style={pressableStyle}
@@ -2972,18 +2706,9 @@ export const ExpandableBadge = memo(function ExpandableBadge({
             labelStyle={labelStyle}
             secondaryLabel={secondaryLabel}
             secondaryLabelStyle={secondaryLabelStyle}
-            shouldMeasureWebShimmer={shouldMeasureWebShimmer}
-            shouldMeasureNativeShimmer={shouldMeasureNativeShimmer}
-            isWebShimmer={isWebShimmer}
-            isNativeShimmer={isNativeShimmer}
+            isLoading={isLoading}
             shimmerLabelTextStyle={shimmerLabelTextStyle}
             shimmerSecondaryTextStyle={shimmerSecondaryTextStyle}
-            labelRowWidth={labelRowWidth}
-            labelRowHeight={labelRowHeight}
-            nativeShimmerPeakWidth={nativeShimmerPeakWidth}
-            shimmerDuration={shimmerDuration}
-            nativeGradientId={nativeGradientIdRef.current}
-            onLabelRowLayout={handleLabelRowLayout}
             onLabelLayout={handleLabelLayout}
             onSecondaryLayout={handleSecondaryLayout}
             showOpenFileButton={Boolean(onOpenFile && isHovered)}
@@ -3116,7 +2841,7 @@ export const ToolCall = memo(function ToolCall({
         showLoadingSkeleton: presentation.isLoadingDetails,
       });
     } else {
-      setIsExpanded((prev) => !prev);
+      setIsExpanded((previous) => !previous);
     }
   }, [
     shouldRenderInline,

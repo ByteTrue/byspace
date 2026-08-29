@@ -370,7 +370,7 @@ export function createLoggedNdJsonStream(
 
 // Lets a provider that publishes its slash commands through a vendor-specific
 // ACP extension notification (rather than the standard
-// `available_commands_update` session update) translate that payload into Paseo
+// `available_commands_update` session update) translate that payload into BySpace
 // slash commands, without the generic ACP session/client carrying any vendor
 // knowledge. Return the parsed commands (possibly empty) for a notification this
 // provider owns, or null to ignore notifications it does not handle.
@@ -511,6 +511,11 @@ interface PendingPermission {
 interface PendingUserMessage {
   text: string;
   messageId?: string;
+}
+
+interface SubmittedUserMessageEcho {
+  text: string;
+  turnId: string;
 }
 
 export type SessionStateResponse = NewSessionResponse | LoadSessionResponse | ResumeSessionResponse;
@@ -1198,7 +1203,7 @@ export class ACPAgentClient implements AgentClient {
               this.clientCapabilityMeta,
               this.clientCapabilities,
             ),
-            clientInfo: { name: "Paseo", version: "dev" },
+            clientInfo: { name: "BySpace", version: "dev" },
           }),
           transport.spawnError,
           ...(initializeTimeoutPromise ? [initializeTimeoutPromise] : []),
@@ -1429,7 +1434,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   private readonly subscribers = new Set<(event: AgentStreamEvent) => void>();
   private readonly pendingPermissions = new Map<string, PendingPermission>();
   private pendingUserMessage: PendingUserMessage | null = null;
-  private submittedUserMessageTurnId: string | null = null;
+  private activeSubmittedUserMessage: SubmittedUserMessageEcho | null = null;
   private readonly toolCalls = new Map<string, ACPToolSnapshot>();
   private readonly terminalEntries = new Map<string, TerminalEntry>();
   private readonly persistedHistory: AgentTimelineItem[] = [];
@@ -1518,7 +1523,8 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       this.applySessionState(response);
       await this.applyConfiguredOverrides();
     } catch (error) {
-      await this.closeAfterInitializationFailure(error);
+      await this.cleanupAfterFailedInitialization();
+      throw error;
     }
   }
 
@@ -1531,61 +1537,54 @@ export class ACPAgentSession implements AgentSession, ACPClient {
    */
   async initializeResumedSession(): Promise<void> {
     try {
-      const handle = this.initialHandle;
-      if (!handle) {
-        throw new Error("Resume requested without persistence handle");
-      }
-
-      const spawned = await this.spawnProcess();
-      this.child = spawned.child;
-      this.connection = spawned.connection;
-      this.agentCapabilities = spawned.initialize.agentCapabilities ?? null;
-      this.sessionId = handle.sessionId;
-      this.bootstrapThreadEventPending = true;
-
-      const sessionCapabilities = this.agentCapabilities?.sessionCapabilities;
-      if (this.agentCapabilities?.loadSession) {
-        this.replayingHistory = true;
-        const response = await this.runACPRequest(() =>
-          this.connection!.loadSession({
-            sessionId: handle.sessionId,
-            cwd: this.config.cwd,
-            mcpServers: this.acpMcpServers(),
-          }),
-        );
-        this.deliverTranslatedEvents(this.flushPendingUserMessage());
-        this.replayingHistory = false;
-        this.historyPending = this.persistedHistory.length > 0;
-        this.applySessionState(response);
-      } else if (sessionCapabilities?.resume) {
-        const response = await this.runACPRequest(() =>
-          this.connection!.unstable_resumeSession({
-            sessionId: handle.sessionId,
-            cwd: this.config.cwd,
-            mcpServers: this.acpMcpServers(),
-          }),
-        );
-        this.applySessionState(response);
-      } else {
-        throw new Error(`${this.provider} does not support ACP session resume`);
-      }
-
-      await this.applyConfiguredOverrides();
+      await this.initializeResumedSessionInner();
     } catch (error) {
-      await this.closeAfterInitializationFailure(error);
+      await this.cleanupAfterFailedInitialization();
+      throw error;
     }
   }
 
-  private async closeAfterInitializationFailure(error: unknown): Promise<never> {
-    try {
-      await this.close();
-    } catch (closeError) {
-      this.logger.warn(
-        { err: closeError, initializationError: error },
-        "Failed to close ACP process after session initialization failure",
-      );
+  private async initializeResumedSessionInner(): Promise<void> {
+    const handle = this.initialHandle;
+    if (!handle) {
+      throw new Error("Resume requested without persistence handle");
     }
-    throw error;
+
+    const spawned = await this.spawnProcess();
+    this.child = spawned.child;
+    this.connection = spawned.connection;
+    this.agentCapabilities = spawned.initialize.agentCapabilities ?? null;
+    this.sessionId = handle.sessionId;
+    this.bootstrapThreadEventPending = true;
+
+    const sessionCapabilities = this.agentCapabilities?.sessionCapabilities;
+    if (this.agentCapabilities?.loadSession) {
+      this.replayingHistory = true;
+      const response = await this.runACPRequest(() =>
+        this.connection!.loadSession({
+          sessionId: handle.sessionId,
+          cwd: this.config.cwd,
+          mcpServers: this.acpMcpServers(),
+        }),
+      );
+      this.deliverTranslatedEvents(this.flushPendingUserMessage());
+      this.replayingHistory = false;
+      this.historyPending = this.persistedHistory.length > 0;
+      this.applySessionState(response);
+    } else if (sessionCapabilities?.resume) {
+      const response = await this.runACPRequest(() =>
+        this.connection!.unstable_resumeSession({
+          sessionId: handle.sessionId,
+          cwd: this.config.cwd,
+          mcpServers: this.acpMcpServers(),
+        }),
+      );
+      this.applySessionState(response);
+    } else {
+      throw new Error(`${this.provider} does not support ACP session resume`);
+    }
+
+    await this.applyConfiguredOverrides();
   }
 
   async run(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<AgentRunResult> {
@@ -1624,7 +1623,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     const messageId = options?.clientMessageId ?? randomUUID();
     this.activeForegroundTurnId = turnId;
     this.fallbackAssistantMessageId = null;
-    this.submittedUserMessageTurnId = null;
+    this.activeSubmittedUserMessage = null;
     this.emitBootstrapThreadEvent();
     this.pushEvent({ type: "turn_started", provider: this.provider, turnId });
     this.emitSubmittedUserMessage(prompt, messageId, turnId, options?.clientMessageId);
@@ -2246,7 +2245,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       }
     }
 
-    // Match Zed acp.rs:3189-3220 when Paseo is not handling the request locally.
+    // Match Zed acp.rs:3189-3220 when BySpace is not handling the request locally.
     const requestId = randomUUID();
     let toolSnapshot =
       this.toolCalls.get(params.toolCall.toolCallId) ??
@@ -2471,7 +2470,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     return {};
   }
 
-  private async spawnProcess(): Promise<SpawnedACPProcess> {
+  protected async spawnProcess(): Promise<SpawnedACPProcess> {
     const prefix = await resolveProviderLaunch({
       commandConfig: this.runtimeSettings?.command,
       defaultBinary: this.defaultCommand[0],
@@ -2519,8 +2518,6 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       { logger: this.logger, provider: this.provider },
     );
     const connection = new ClientSideConnection(() => this, stream);
-    // Take ownership before initialize so the outer initialization guard can
-    // close the process even when the ACP handshake itself rejects.
     this.child = child;
     this.connection = connection;
     const initialize = await this.runACPRequest(() =>
@@ -2530,11 +2527,19 @@ export class ACPAgentSession implements AgentSession, ACPClient {
           this.clientCapabilityMeta,
           this.clientCapabilities,
         ),
-        clientInfo: { name: "Paseo", version: "dev" },
+        clientInfo: { name: "BySpace", version: "dev" },
       }),
     );
 
     return { child, connection, initialize };
+  }
+
+  private async cleanupAfterFailedInitialization(): Promise<void> {
+    try {
+      await this.close();
+    } catch (error) {
+      this.logger.warn({ err: error }, "Failed to clean up ACP process after initialization error");
+    }
   }
 
   private async runACPRequest<T>(request: () => Promise<T>): Promise<T> {
@@ -2701,12 +2706,6 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     update: Extract<SessionUpdate, { sessionUpdate: "user_message_chunk" }>,
   ): AgentStreamEvent[] {
     this.fallbackAssistantMessageId = null;
-    if (
-      this.activeForegroundTurnId &&
-      this.submittedUserMessageTurnId === this.activeForegroundTurnId
-    ) {
-      return [];
-    }
 
     const chunkText = contentBlockToText(update.content);
     if (!chunkText) {
@@ -2736,6 +2735,9 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       return [];
     }
     this.pendingUserMessage = null;
+    if (this.isSubmittedUserMessageEcho(pending.text)) {
+      return [];
+    }
     return [
       this.wrapTimeline({
         type: "user_message",
@@ -2909,7 +2911,10 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     if (text.trim().length === 0) {
       return;
     }
-    this.submittedUserMessageTurnId = turnId;
+    this.activeSubmittedUserMessage = {
+      text: toACPContentBlocks(prompt).map(contentBlockToText).join(""),
+      turnId,
+    };
     this.pushEvent({
       type: "timeline",
       provider: this.provider,
@@ -2943,10 +2948,17 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     this.deliverTranslatedEvents(this.flushPendingUserMessage());
     this.activeForegroundTurnId = null;
     this.fallbackAssistantMessageId = null;
-    if (this.submittedUserMessageTurnId === event.turnId) {
-      this.submittedUserMessageTurnId = null;
+    if (this.activeSubmittedUserMessage?.turnId === event.turnId) {
+      this.activeSubmittedUserMessage = null;
     }
     this.pushEvent(event);
+  }
+
+  private isSubmittedUserMessageEcho(text: string): boolean {
+    const active = this.activeSubmittedUserMessage;
+    return Boolean(
+      active && active.turnId === this.activeForegroundTurnId && active.text.startsWith(text),
+    );
   }
 
   private emitBootstrapThreadEvent(): void {

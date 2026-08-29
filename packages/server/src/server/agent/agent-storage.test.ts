@@ -40,7 +40,6 @@ function buildManagedAgentConfig(
     model: configOverrides.model ?? "gpt-5.1",
     thinkingOptionId: configOverrides.thinkingOptionId,
     providerOptions: configOverrides.providerOptions,
-    toolPolicy: configOverrides.toolPolicy,
     systemPrompt: configOverrides.systemPrompt,
     mcpServers: configOverrides.mcpServers,
   };
@@ -162,7 +161,7 @@ describe("AgentStorage", () => {
           systemPrompt: "Be terse and explicit.",
           providerOptions: { allowedTools: ["Read"] },
           mcpServers: {
-            paseo: {
+            byspace: {
               type: "stdio",
               command: "node",
               args: ["/tmp/mcp-stdio-socket-bridge-cli.mjs", "--socket", "/tmp/test.sock"],
@@ -180,7 +179,7 @@ describe("AgentStorage", () => {
     expect(record.config?.model).toBe("gpt-5.1");
     expect(record.config?.systemPrompt).toBe("Be terse and explicit.");
     expect(record.config?.mcpServers).toEqual({
-      paseo: {
+      byspace: {
         type: "stdio",
         command: "node",
         args: ["/tmp/mcp-stdio-socket-bridge-cli.mjs", "--socket", "/tmp/test.sock"],
@@ -357,7 +356,7 @@ describe("AgentStorage", () => {
     expect(record?.lastStatus).toBe("running");
   });
 
-  test("applySnapshot projects metadata after in-flight archival writes", async () => {
+  test("applySnapshot waits for in-flight writes before reading existing title", async () => {
     const agentId = "agent-pending-write";
     await storage.applySnapshot(createManagedAgent({ id: agentId }));
     const initialRecord = await storage.get(agentId);
@@ -385,14 +384,52 @@ describe("AgentStorage", () => {
     storageInternals.cache.set(agentId, {
       ...initialRecord!,
       title: "Generated title",
-      archivedAt: "2025-01-03T00:00:00.000Z",
     });
     releasePendingWrite?.();
 
     await applySnapshotPromise;
     const record = await storage.get(agentId);
     expect(record?.title).toBe("Generated title");
-    expect(record?.archivedAt).toBe("2025-01-03T00:00:00.000Z");
+  });
+
+  test("applySnapshot preserves archivedAt from a concurrent archive update", async () => {
+    const agentId = "agent-concurrent-archive";
+    await storage.applySnapshot(createManagedAgent({ id: agentId }));
+    const initialRecord = await storage.get(agentId);
+    expect(initialRecord).not.toBeNull();
+
+    const storageInternals = storage as unknown as {
+      writeRecord: (record: StoredAgentRecord) => Promise<void>;
+    };
+    const originalWriteRecord = storageInternals.writeRecord.bind(storage);
+    let releaseArchiveWrite!: () => void;
+    const archiveWriteStarted = new Promise<void>((resolveStarted) => {
+      storageInternals.writeRecord = async (record) => {
+        storageInternals.writeRecord = originalWriteRecord;
+        resolveStarted();
+        await new Promise<void>((resolve) => {
+          releaseArchiveWrite = resolve;
+        });
+        await originalWriteRecord(record);
+      };
+    });
+
+    const archivedAt = "2025-01-03T00:00:00.000Z";
+    const archivePromise = storage.upsert({ ...initialRecord!, archivedAt });
+    await archiveWriteStarted;
+
+    const snapshotPromise = storage.applySnapshot(
+      createManagedAgent({
+        id: agentId,
+        lifecycle: "running",
+        updatedAt: new Date("2025-01-02T00:00:00.000Z"),
+      }),
+    );
+    releaseArchiveWrite();
+    await Promise.all([archivePromise, snapshotPromise]);
+
+    const record = await storage.get(agentId);
+    expect(record?.archivedAt).toBe(archivedAt);
   });
 
   test("list returns all agents including internal ones", async () => {
@@ -512,6 +549,17 @@ describe("AgentStorage", () => {
     expect(dirs).toHaveLength(1);
     expect(dirs[0]).not.toContain(":");
     expect(dirs[0]).toBe("D-Users-dev-MyProject");
+  });
+
+  test("beginDelete hides the cached record before asynchronous removal", async () => {
+    const agentId = "agent-delete-fence";
+    await storage.applySnapshot(createManagedAgent({ id: agentId }));
+    expect(await storage.get(agentId)).not.toBeNull();
+
+    storage.beginDelete(agentId);
+
+    expect(await storage.get(agentId)).toBeNull();
+    expect((await storage.list()).some((record) => record.id === agentId)).toBe(false);
   });
 
   test("remove deletes all duplicate record files across project directories", async () => {

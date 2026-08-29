@@ -191,6 +191,7 @@ export const SHORTCUT_HELP_ROW_ORDER: Record<ShortcutSectionId, readonly string[
     "workspace-pane-move-tab-up",
     "workspace-pane-move-tab-down",
     "workspace-pane-close",
+    "workspace-explorer-maximize",
   ],
   layout: ["toggle-left-sidebar", "toggle-right-sidebar", "toggle-both-sidebars", "toggle-focus"],
   "agent-input": [
@@ -231,6 +232,7 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "workspace-pane-move-tab-up": "settings.shortcuts.help.moveTabUp",
   "workspace-pane-move-tab-down": "settings.shortcuts.help.moveTabDown",
   "workspace-pane-close": "settings.shortcuts.help.closePane",
+  "workspace-explorer-maximize": "settings.shortcuts.help.toggleExplorerPaneMaximization",
   "workspace-terminal-new": "settings.shortcuts.help.newTerminal",
   "search-files": "settings.shortcuts.help.searchFiles",
   "toggle-command-center": "settings.shortcuts.help.toggleCommandCenter",
@@ -243,10 +245,8 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "cycle-theme": "settings.shortcuts.help.cycleTheme",
   "focus-message-input": "settings.shortcuts.help.focusMessageInput",
   "cycle-agent-mode": "settings.shortcuts.help.cycleAgentMode",
-  "voice-toggle": "settings.shortcuts.help.toggleVoiceMode",
   "dictation-toggle": "settings.shortcuts.help.startStopDictation",
   "agent-interrupt": "settings.shortcuts.help.interruptAgent",
-  "voice-mute-toggle": "settings.shortcuts.help.muteUnmuteVoiceMode",
 };
 
 const SHORTCUT_HELP_NOTE_KEYS: Record<string, string> = {
@@ -366,22 +366,14 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     action: "workspace.pin",
     combo: "Cmd+Shift+P",
     when: { mac: true, commandCenter: false },
-    help: {
-      id: "pin-workspace",
-      section: "workspaces",
-      label: "Pin chat",
-    },
+    help: { id: "pin-workspace", section: "workspaces", label: "Pin chat" },
   },
   {
     id: "workspace-pin-ctrl-shift-p-non-mac",
     action: "workspace.pin",
     combo: "Ctrl+Shift+P",
     when: { mac: false, commandCenter: false, terminal: false },
-    help: {
-      id: "pin-workspace",
-      section: "workspaces",
-      label: "Pin chat",
-    },
+    help: { id: "pin-workspace", section: "workspaces", label: "Pin chat" },
   },
 
   // --- Tab management ---
@@ -452,7 +444,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     },
   },
   {
-    // Keep the binding id stable so saved overrides from the former Cmd+Shift+C default survive.
     id: "workspace-tab-target-changes-cmd-shift-c-mac",
     action: "workspace.tab.target.changes",
     combo: "Cmd+Shift+G",
@@ -464,7 +455,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     },
   },
   {
-    // Keep the binding id stable so saved overrides from the former Ctrl+Shift+C default survive.
     id: "workspace-tab-target-changes-ctrl-shift-c-non-mac",
     action: "workspace.tab.target.changes",
     combo: "Ctrl+Shift+G",
@@ -835,6 +825,29 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       label: "Close pane",
     },
   },
+  {
+    id: "workspace-explorer-maximize-cmd-shift-m-mac",
+    action: "workspace.explorer.maximize.toggle",
+    combo: "Cmd+Shift+M",
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "workspace-explorer-maximize",
+      section: "tabs-panes",
+      label: "Toggle Explorer pane maximization",
+    },
+  },
+  {
+    id: "workspace-explorer-maximize-ctrl-shift-m-non-mac",
+    action: "workspace.explorer.maximize.toggle",
+    combo: "Ctrl+Shift+M",
+    when: { mac: false, commandCenter: false, terminal: false },
+    help: {
+      id: "workspace-explorer-maximize",
+      section: "tabs-panes",
+      label: "Toggle Explorer pane maximization",
+    },
+  },
+
   // --- New terminal ---
   {
     id: "workspace-terminal-new-cmd-shift-t-mac",
@@ -930,7 +943,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     help: {
       id: "toggle-right-sidebar",
       section: "layout",
-      label: "Toggle Explorer sidebar",
+      label: "Toggle side panel",
     },
   },
   {
@@ -941,7 +954,7 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     help: {
       id: "toggle-right-sidebar",
       section: "layout",
-      label: "Toggle Explorer sidebar",
+      label: "Toggle side panel",
     },
   },
   {
@@ -1086,32 +1099,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     },
   },
   {
-    id: "message-input-voice-toggle-cmd-shift-d-mac",
-    action: "message-input.action",
-    combo: "Cmd+Shift+D",
-    repeat: false,
-    when: { mac: true, commandCenter: false, terminal: false },
-    payload: { type: "message-input", kind: "voice-toggle" },
-    help: {
-      id: "voice-toggle",
-      section: "agent-input",
-      label: "Toggle voice mode",
-    },
-  },
-  {
-    id: "message-input-voice-toggle-ctrl-shift-d-non-mac",
-    action: "message-input.action",
-    combo: "Ctrl+Shift+D",
-    repeat: false,
-    when: { mac: false, commandCenter: false, terminal: false },
-    payload: { type: "message-input", kind: "voice-toggle" },
-    help: {
-      id: "voice-toggle",
-      section: "agent-input",
-      label: "Toggle voice mode",
-    },
-  },
-  {
     id: "message-input-dictation-toggle-cmd-d-mac",
     action: "message-input.action",
     combo: "Cmd+D",
@@ -1154,20 +1141,6 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
     combo: "Enter",
     when: { commandCenter: false, terminal: false },
     payload: { type: "message-input", kind: "dictation-confirm" },
-  },
-
-  {
-    id: "message-input-voice-mute-toggle",
-    action: "message-input.action",
-    combo: "Space",
-    repeat: false,
-    when: { commandCenter: false, focusScope: "other" },
-    payload: { type: "message-input", kind: "voice-mute-toggle" },
-    help: {
-      id: "voice-mute-toggle",
-      section: "agent-input",
-      label: "Mute/unmute voice mode",
-    },
   },
 ];
 

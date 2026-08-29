@@ -86,10 +86,7 @@ describe("sidebar view store", () => {
   it("migrates legacy per-host group modes to the new global mode", () => {
     expect(
       migrateSidebarViewState({
-        groupModeByServerId: {
-          "host-a": "project",
-          "host-b": "status",
-        },
+        groupModeByServerId: { "host-a": "project", "host-b": "status" },
       }),
     ).toEqual({
       groupMode: "status",
@@ -100,12 +97,7 @@ describe("sidebar view store", () => {
   });
 
   it("migrates a pre-v2 single host filter to the multi-host list", () => {
-    expect(
-      migrateSidebarViewState({
-        groupMode: "status",
-        hostFilter: "host-a",
-      }),
-    ).toEqual({
+    expect(migrateSidebarViewState({ groupMode: "status", hostFilter: "host-a" })).toEqual({
       groupMode: "status",
       hostFilters: ["host-a"],
       projectFilters: [],
@@ -113,12 +105,9 @@ describe("sidebar view store", () => {
     });
   });
 
-  it("keeps current persisted sidebar view state during version migration", () => {
+  it("keeps current sidebar view state during version migration", () => {
     expect(
-      migrateSidebarViewState({
-        groupMode: "status",
-        hostFilters: ["host-a", "host-b"],
-      }),
+      migrateSidebarViewState({ groupMode: "status", hostFilters: ["host-a", "host-b"] }),
     ).toEqual({
       groupMode: "status",
       hostFilters: ["host-a", "host-b"],
@@ -131,6 +120,7 @@ describe("sidebar view store", () => {
     useSidebarViewStore.setState({
       groupMode: "status",
       hostFilters: ["host-a"],
+      projectFilters: [],
       labelFilter: { labels: ["urgent", "blocked"] },
     });
 
@@ -139,6 +129,7 @@ describe("sidebar view store", () => {
     expect(useSidebarViewStore.getState()).toMatchObject({
       groupMode: "status",
       hostFilters: ["host-a"],
+      projectFilters: [],
       labelFilter: { labels: [] },
     });
   });
@@ -181,7 +172,7 @@ describe("sidebar view store", () => {
   it("re-keys a persisted label filter through the normalized identity, without duplicates", () => {
     expect(
       migrateSidebarViewState({
-        labelFilter: { labels: [" Urgent ", "BLOCKED", "urgent"], match: "all" },
+        labelFilter: { labels: [" Urgent ", "BLOCKED", "urgent"] },
       }).labelFilter,
     ).toEqual({ labels: ["urgent", "blocked"] });
   });

@@ -2,18 +2,22 @@ import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
+import {
+  BETA_HOSTED_RELEASE,
+  STABLE_HOSTED_RELEASE,
+} from "@bytetrue/byspace-protocol/release-channel";
 
 import { loadConfig, resolveConfigFromPersisted } from "./config.js";
 
 const roots: string[] = [];
 
-async function createPaseoHome(config: unknown): Promise<string> {
-  const root = await mkdtemp(path.join(os.tmpdir(), "paseo-config-relay-"));
+async function createBySpaceHome(config: unknown): Promise<string> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "byspace-config-relay-"));
   roots.push(root);
-  const paseoHome = path.join(root, ".paseo");
-  await mkdir(paseoHome, { recursive: true });
-  await writeFile(path.join(paseoHome, "config.json"), JSON.stringify(config, null, 2));
-  return paseoHome;
+  const byspaceHome = path.join(root, ".byspace");
+  await mkdir(byspaceHome, { recursive: true });
+  await writeFile(path.join(byspaceHome, "config.json"), JSON.stringify(config, null, 2));
+  return byspaceHome;
 }
 
 describe("daemon relay config", () => {
@@ -21,23 +25,17 @@ describe("daemon relay config", () => {
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
   });
 
-  test("preserves implicit relay-on for a legacy config without enabled", async () => {
-    const home = await createPaseoHome({ version: 1, daemon: { relay: {} } });
-    expect(loadConfig(home, { env: {} }).relayEnabled).toBe(true);
-  });
+  test("defaults relay off for a new home and keeps legacy homes enabled", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "byspace-config-relay-"));
+    roots.push(root);
+    const newHome = path.join(root, ".byspace");
+    expect(loadConfig(newHome, { env: {} }).relayEnabled).toBe(false);
 
-  test("keeps explicit persisted relay state and marks it mutable", async () => {
-    const home = await createPaseoHome({
-      version: 1,
-      daemon: { relay: { enabled: false } },
-    });
-    const config = loadConfig(home, { env: {} });
-    expect(config.relayEnabled).toBe(false);
-    expect(config.relayEnabledMutable).toBe(true);
+    const legacyHome = await createBySpaceHome({ version: 1, daemon: {} });
+    expect(loadConfig(legacyHome, { env: {} }).relayEnabled).toBe(true);
   });
-
   test("removing enabled from a modern config keeps relay disabled", async () => {
-    const home = await createPaseoHome({
+    const home = await createBySpaceHome({
       version: 1,
       daemon: { relay: { enabled: false } },
     });
@@ -55,7 +53,7 @@ describe("daemon relay config", () => {
   });
 
   test("legacy configs retain relay-on compatibility when enabled remains absent", async () => {
-    const home = await createPaseoHome({ version: 1, daemon: { relay: {} } });
+    const home = await createBySpaceHome({ version: 1, daemon: { relay: {} } });
     const startup = loadConfig(home, { env: {} });
     const reloaded = resolveConfigFromPersisted(
       home,
@@ -69,31 +67,24 @@ describe("daemon relay config", () => {
     expect(reloaded.relayEnabled).toBe(true);
   });
 
-  test("marks environment relay overrides immutable", async () => {
-    const home = await createPaseoHome({
+  test.each([
+    { label: "environment true", env: { BYSPACE_RELAY_ENABLED: "true" }, expected: true },
+    { label: "environment false", env: { BYSPACE_RELAY_ENABLED: "false" }, expected: false },
+    { label: "CLI true", env: {}, cli: { relayEnabled: true }, expected: true },
+    { label: "CLI false", env: {}, cli: { relayEnabled: false }, expected: false },
+  ])("applies $label as an immutable relay override", async ({ env, cli, expected }) => {
+    const home = await createBySpaceHome({
       version: 1,
-      daemon: { relay: { enabled: false } },
+      daemon: { relay: { enabled: !expected } },
     });
-    const config = loadConfig(home, { env: { PASEO_RELAY_ENABLED: "true" } });
-    expect(config.relayEnabled).toBe(true);
+    const config = loadConfig(home, { env, cli });
+
+    expect(config.relayEnabled).toBe(expected);
     expect(config.relayEnabledMutable).toBe(false);
   });
 
-  test.each(["", "treu"])(
-    "ignores invalid relay override %j without locking config",
-    async (value) => {
-      const home = await createPaseoHome({
-        version: 1,
-        daemon: { relay: { enabled: false } },
-      });
-      const config = loadConfig(home, { env: { PASEO_RELAY_ENABLED: value } });
-      expect(config.relayEnabled).toBe(false);
-      expect(config.relayEnabledMutable).toBe(true);
-    },
-  );
-
   test("loads relay TLS from env, persisted config, and hosted relay fallback", async () => {
-    const persistedHome = await createPaseoHome({
+    const persistedHome = await createBySpaceHome({
       version: 1,
       daemon: {
         relay: {
@@ -104,7 +95,7 @@ describe("daemon relay config", () => {
     });
     expect(loadConfig(persistedHome, { env: {} }).relayUseTls).toBe(true);
 
-    const envHome = await createPaseoHome({
+    const envHome = await createBySpaceHome({
       version: 1,
       daemon: {
         relay: {
@@ -113,39 +104,118 @@ describe("daemon relay config", () => {
         },
       },
     });
-    expect(loadConfig(envHome, { env: { PASEO_RELAY_USE_TLS: "true" } }).relayUseTls).toBe(true);
+    expect(loadConfig(envHome, { env: { BYSPACE_RELAY_USE_TLS: "true" } }).relayUseTls).toBe(true);
 
-    const hostedHome = await createPaseoHome({
+    const hostedHome = await createBySpaceHome({
       version: 1,
       daemon: { relay: {} },
     });
     expect(loadConfig(hostedHome, { env: {} }).relayUseTls).toBe(true);
   });
 
+  test("maps managed stable config to beta infrastructure", async () => {
+    const home = await createBySpaceHome({
+      version: 1,
+      daemon: {
+        relay: {
+          endpoint: STABLE_HOSTED_RELEASE.relayEndpoint,
+          publicEndpoint: BETA_HOSTED_RELEASE.relayEndpoint,
+        },
+        cors: {
+          allowedOrigins: [
+            STABLE_HOSTED_RELEASE.appBaseUrl,
+            BETA_HOSTED_RELEASE.appBaseUrl,
+            "https://custom.example.com",
+          ],
+        },
+      },
+      app: { baseUrl: STABLE_HOSTED_RELEASE.appBaseUrl },
+    });
+
+    const config = loadConfig(home, { env: {}, releaseVersion: "0.2.0-beta.2" });
+
+    expect(config.daemonVersion).toBe("0.2.0-beta.2");
+    expect(config.relayEndpoint).toBe(BETA_HOSTED_RELEASE.relayEndpoint);
+    expect(config.relayPublicEndpoint).toBe(BETA_HOSTED_RELEASE.relayEndpoint);
+    expect(config.relayUseTls).toBe(true);
+    expect(config.relayPublicUseTls).toBe(true);
+    expect(config.appBaseUrl).toBe(BETA_HOSTED_RELEASE.appBaseUrl);
+    expect(config.corsAllowedOrigins).toEqual([
+      BETA_HOSTED_RELEASE.appBaseUrl,
+      "https://custom.example.com",
+    ]);
+  });
+
+  test("maps managed beta config to stable infrastructure", async () => {
+    const home = await createBySpaceHome({
+      version: 1,
+      daemon: { relay: { endpoint: BETA_HOSTED_RELEASE.relayEndpoint } },
+      app: { baseUrl: BETA_HOSTED_RELEASE.appBaseUrl },
+    });
+
+    const config = loadConfig(home, { env: {}, releaseVersion: "0.2.0" });
+
+    expect(config.relayEndpoint).toBe(STABLE_HOSTED_RELEASE.relayEndpoint);
+    expect(config.appBaseUrl).toBe(STABLE_HOSTED_RELEASE.appBaseUrl);
+  });
+
+  test("preserves custom values and adds explicit environment overrides", async () => {
+    const home = await createBySpaceHome({
+      version: 1,
+      daemon: {
+        relay: {
+          endpoint: "persisted-relay.example.com:443",
+          publicEndpoint: "persisted-public.example.com:443",
+        },
+        cors: { allowedOrigins: ["https://persisted.example.com"] },
+      },
+      app: { baseUrl: "https://persisted-app.example.com" },
+    });
+
+    const config = loadConfig(home, {
+      releaseVersion: "0.2.0-beta.2",
+      env: {
+        BYSPACE_RELAY_ENDPOINT: "env-relay.example.com:443",
+        BYSPACE_RELAY_PUBLIC_ENDPOINT: "env-public.example.com:443",
+        BYSPACE_APP_BASE_URL: "https://env-app.example.com",
+        BYSPACE_CORS_ORIGINS:
+          "https://persisted.example.com, https://env.example.com,https://env.example.com",
+      },
+    });
+
+    expect(config.relayEndpoint).toBe("env-relay.example.com:443");
+    expect(config.relayPublicEndpoint).toBe("env-public.example.com:443");
+    expect(config.appBaseUrl).toBe("https://env-app.example.com");
+    expect(config.corsAllowedOrigins).toEqual([
+      "https://persisted.example.com",
+      "https://env.example.com",
+    ]);
+  });
+
   test("relayPublicUseTls falls back to relayUseTls when unset", async () => {
-    const home = await createPaseoHome({ version: 1, daemon: { relay: {} } });
+    const home = await createBySpaceHome({ version: 1, daemon: { relay: {} } });
     // Default: both true (hosted relay)
     expect(loadConfig(home, { env: {} }).relayPublicUseTls).toBe(true);
   });
 
-  test("PASEO_RELAY_PUBLIC_USE_TLS overrides relayUseTls for public side", async () => {
-    const home = await createPaseoHome({ version: 1, daemon: { relay: {} } });
+  test("BYSPACE_RELAY_PUBLIC_USE_TLS overrides relayUseTls for public side", async () => {
+    const home = await createBySpaceHome({ version: 1, daemon: { relay: {} } });
     const config = loadConfig(home, {
-      env: { PASEO_RELAY_USE_TLS: "false", PASEO_RELAY_PUBLIC_USE_TLS: "true" },
+      env: { BYSPACE_RELAY_USE_TLS: "false", BYSPACE_RELAY_PUBLIC_USE_TLS: "true" },
     });
     expect(config.relayUseTls).toBe(false);
     expect(config.relayPublicUseTls).toBe(true);
   });
 
-  test("relayPublicUseTls falls back to relayUseTls when only PASEO_RELAY_USE_TLS is set", async () => {
-    const home = await createPaseoHome({ version: 1, daemon: { relay: {} } });
-    const config = loadConfig(home, { env: { PASEO_RELAY_USE_TLS: "false" } });
+  test("relayPublicUseTls falls back to relayUseTls when only BYSPACE_RELAY_USE_TLS is set", async () => {
+    const home = await createBySpaceHome({ version: 1, daemon: { relay: {} } });
+    const config = loadConfig(home, { env: { BYSPACE_RELAY_USE_TLS: "false" } });
     expect(config.relayUseTls).toBe(false);
     expect(config.relayPublicUseTls).toBe(false);
   });
 
   test("persisted publicUseTls overrides relayUseTls fallback", async () => {
-    const home = await createPaseoHome({
+    const home = await createBySpaceHome({
       version: 1,
       daemon: { relay: { useTls: false, publicUseTls: true } },
     });
@@ -161,7 +231,7 @@ describe("daemon service proxy config", () => {
   });
 
   test("loads public base URL from env before persisted config", async () => {
-    const home = await createPaseoHome({
+    const home = await createBySpaceHome({
       version: 1,
       daemon: {
         serviceProxy: {
@@ -171,7 +241,7 @@ describe("daemon service proxy config", () => {
     });
 
     const config = loadConfig(home, {
-      env: { PASEO_SERVICE_PROXY_PUBLIC_BASE_URL: "https://env.example.com/" },
+      env: { BYSPACE_SERVICE_PROXY_PUBLIC_BASE_URL: "https://env.example.com/" },
     });
 
     expect(config.serviceProxy).toEqual({
@@ -181,7 +251,7 @@ describe("daemon service proxy config", () => {
   });
 
   test("does not synthesize a standalone service listener from enabled true", async () => {
-    const home = await createPaseoHome({
+    const home = await createBySpaceHome({
       version: 1,
       daemon: { serviceProxy: { enabled: true } },
     });
@@ -193,7 +263,7 @@ describe("daemon service proxy config", () => {
   });
 
   test("enabled false suppresses optional service proxy layers only", async () => {
-    const home = await createPaseoHome({
+    const home = await createBySpaceHome({
       version: 1,
       daemon: {
         serviceProxy: {
@@ -210,14 +280,14 @@ describe("daemon service proxy config", () => {
     });
   });
 
-  test("rejects invalid PASEO_SERVICE_PROXY_PUBLIC_BASE_URL values", async () => {
-    const home = await createPaseoHome({ version: 1 });
+  test("rejects invalid BYSPACE_SERVICE_PROXY_PUBLIC_BASE_URL values", async () => {
+    const home = await createBySpaceHome({ version: 1 });
 
     expect(() =>
       loadConfig(home, {
-        env: { PASEO_SERVICE_PROXY_PUBLIC_BASE_URL: "not-a-url" },
+        env: { BYSPACE_SERVICE_PROXY_PUBLIC_BASE_URL: "not-a-url" },
       }),
-    ).toThrow("Invalid PASEO_SERVICE_PROXY_PUBLIC_BASE_URL: not-a-url");
+    ).toThrow("Invalid BYSPACE_SERVICE_PROXY_PUBLIC_BASE_URL: not-a-url");
   });
 });
 
@@ -227,13 +297,13 @@ describe("daemon trusted proxy config", () => {
   });
 
   test("trusts loopback proxies by default", async () => {
-    const home = await createPaseoHome({ version: 1 });
+    const home = await createBySpaceHome({ version: 1 });
 
     expect(loadConfig(home, { env: {} }).trustedProxies).toEqual(["loopback"]);
   });
 
   test("loads trusted proxies from persisted config", async () => {
-    const home = await createPaseoHome({
+    const home = await createBySpaceHome({
       version: 1,
       daemon: {
         trustedProxies: ["loopback", "10.0.0.0/8"],
@@ -243,8 +313,8 @@ describe("daemon trusted proxy config", () => {
     expect(loadConfig(home, { env: {} }).trustedProxies).toEqual(["loopback", "10.0.0.0/8"]);
   });
 
-  test("PASEO_TRUSTED_PROXIES overrides persisted config", async () => {
-    const home = await createPaseoHome({
+  test("BYSPACE_TRUSTED_PROXIES overrides persisted config", async () => {
+    const home = await createBySpaceHome({
       version: 1,
       daemon: {
         trustedProxies: ["loopback"],
@@ -252,22 +322,88 @@ describe("daemon trusted proxy config", () => {
     });
 
     const config = loadConfig(home, {
-      env: { PASEO_TRUSTED_PROXIES: "loopback,172.16.0.0/12" },
+      env: { BYSPACE_TRUSTED_PROXIES: "loopback,172.16.0.0/12" },
     });
 
     expect(config.trustedProxies).toEqual(["loopback", "172.16.0.0/12"]);
   });
 
-  test("PASEO_TRUSTED_PROXIES supports explicit trust-all and trust-none modes", async () => {
-    const trustAllHome = await createPaseoHome({ version: 1 });
+  test("BYSPACE_TRUSTED_PROXIES supports explicit trust-all and trust-none modes", async () => {
+    const trustAllHome = await createBySpaceHome({ version: 1 });
     expect(
-      loadConfig(trustAllHome, { env: { PASEO_TRUSTED_PROXIES: "true" } }).trustedProxies,
+      loadConfig(trustAllHome, { env: { BYSPACE_TRUSTED_PROXIES: "true" } }).trustedProxies,
     ).toBe(true);
 
-    const trustNoneHome = await createPaseoHome({ version: 1 });
+    const trustNoneHome = await createBySpaceHome({ version: 1 });
     expect(
-      loadConfig(trustNoneHome, { env: { PASEO_TRUSTED_PROXIES: "false" } }).trustedProxies,
+      loadConfig(trustNoneHome, { env: { BYSPACE_TRUSTED_PROXIES: "false" } }).trustedProxies,
     ).toEqual([]);
+  });
+});
+
+describe("daemon data relay config", () => {
+  afterEach(async () => {
+    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  });
+
+  test("stays unavailable without an explicit endpoint", async () => {
+    const home = await createBySpaceHome({ version: 1 });
+    const config = loadConfig(home, { env: {} });
+
+    expect(config.dataRelayListen).toBeNull();
+    expect(config.dataRelayEndpoint).toBeNull();
+    expect(config.dataRelayPublicEndpoint).toBeNull();
+    expect(config.dataRelayAccessToken).toBeNull();
+  });
+
+  test("loads separate private and public endpoints from the environment", async () => {
+    const home = await createBySpaceHome({ version: 1 });
+    const config = loadConfig(home, {
+      env: {
+        BYSPACE_DATA_RELAY_ENDPOINT: "relay.internal:8080",
+        BYSPACE_DATA_RELAY_PUBLIC_ENDPOINT: "relay.example.com:443",
+        BYSPACE_DATA_RELAY_USE_TLS: "false",
+        BYSPACE_DATA_RELAY_PUBLIC_USE_TLS: "true",
+        BYSPACE_DATA_RELAY_ACCESS_TOKEN: "secret-token",
+      },
+    });
+
+    expect(config.dataRelayEndpoint).toBe("relay.internal:8080");
+    expect(config.dataRelayPublicEndpoint).toBe("relay.example.com:443");
+    expect(config.dataRelayUseTls).toBe(false);
+    expect(config.dataRelayPublicUseTls).toBe(true);
+    expect(config.dataRelayAccessToken).toBe("secret-token");
+  });
+
+  test("loads a daemon-hosted listener without requiring a client endpoint", async () => {
+    const home = await createBySpaceHome({ version: 1 });
+    const config = loadConfig(home, {
+      env: {
+        BYSPACE_DATA_RELAY_LISTEN: "127.0.0.1:8788",
+        BYSPACE_DATA_RELAY_PUBLIC_ENDPOINT: "relay-home.example.com:443",
+        BYSPACE_DATA_RELAY_ACCESS_TOKEN: "host-token",
+      },
+    });
+
+    expect(config.dataRelayListen).toBe("127.0.0.1:8788");
+    expect(config.dataRelayEndpoint).toBeNull();
+    expect(config.dataRelayPublicEndpoint).toBe("relay-home.example.com:443");
+    expect(config.dataRelayAccessToken).toBe("host-token");
+  });
+
+  test("rejects Data Relay endpoints with a URL scheme or path", async () => {
+    const home = await createBySpaceHome({ version: 1 });
+
+    expect(() =>
+      loadConfig(home, {
+        env: { BYSPACE_DATA_RELAY_ENDPOINT: "relay.example.com:443/ws" },
+      }),
+    ).toThrow("Invalid BYSPACE_DATA_RELAY_ENDPOINT");
+    expect(() =>
+      loadConfig(home, {
+        env: { BYSPACE_DATA_RELAY_PUBLIC_ENDPOINT: "wss://relay.example.com/ws" },
+      }),
+    ).toThrow("Invalid BYSPACE_DATA_RELAY_PUBLIC_ENDPOINT");
   });
 });
 
@@ -276,8 +412,8 @@ describe("daemon worktree root config", () => {
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
   });
 
-  test("resolves relative worktrees.root against PASEO_HOME", async () => {
-    const home = await createPaseoHome({
+  test("resolves relative worktrees.root against BYSPACE_HOME", async () => {
+    const home = await createBySpaceHome({
       version: 1,
       worktrees: { root: "custom-worktrees" },
     });
@@ -286,13 +422,13 @@ describe("daemon worktree root config", () => {
   });
 
   test("keeps absolute worktrees.root absolute", async () => {
-    const home = await createPaseoHome({
+    const home = await createBySpaceHome({
       version: 1,
-      worktrees: { root: path.join(os.tmpdir(), "paseo-custom-worktrees") },
+      worktrees: { root: path.join(os.tmpdir(), "byspace-custom-worktrees") },
     });
 
     expect(loadConfig(home, { env: {} }).worktreesRoot).toBe(
-      path.join(os.tmpdir(), "paseo-custom-worktrees"),
+      path.join(os.tmpdir(), "byspace-custom-worktrees"),
     );
   });
 });

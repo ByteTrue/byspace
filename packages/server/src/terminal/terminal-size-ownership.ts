@@ -7,6 +7,7 @@ interface TerminalSizeRequest {
 }
 
 const terminalSizeOwners = new WeakMap<TerminalSession, object>();
+const terminalsBySizeOwner = new WeakMap<object, Set<TerminalSession>>();
 
 export function applyTerminalSize(
   terminal: TerminalSession,
@@ -19,7 +20,16 @@ export function applyTerminalSize(
   }
 
   if (intent === "claim") {
-    terminalSizeOwners.set(terminal, owner);
+    const previousOwner = terminalSizeOwners.get(terminal);
+    if (previousOwner !== owner) {
+      if (previousOwner) {
+        terminalsBySizeOwner.get(previousOwner)?.delete(terminal);
+      }
+      terminalSizeOwners.set(terminal, owner);
+      const ownedTerminals = terminalsBySizeOwner.get(owner) ?? new Set<TerminalSession>();
+      ownedTerminals.add(terminal);
+      terminalsBySizeOwner.set(owner, ownedTerminals);
+    }
   }
 
   const currentSize = terminal.getSize();
@@ -29,10 +39,23 @@ export function applyTerminalSize(
   return true;
 }
 
+export function releaseTerminalSizeOwnership(owner: object): void {
+  const terminals = terminalsBySizeOwner.get(owner);
+  if (!terminals) {
+    return;
+  }
+  for (const terminal of terminals) {
+    if (terminalSizeOwners.get(terminal) === owner) {
+      terminalSizeOwners.delete(terminal);
+    }
+  }
+  terminalsBySizeOwner.delete(owner);
+}
+
 function resolveTerminalSizeIntent(intent: TerminalSizeRequest["intent"]): "claim" | "update" {
   if (intent) {
     return intent;
   }
-  // COMPAT(terminalSizeOwnership): added in v0.2.6, remove after 2027-02-02 once the client floor sends resize intent.
+  // COMPAT(terminalSizeOwnership): added in v0.5.0, remove after 2027-02-08 once the client floor sends resize intent.
   return "claim";
 }

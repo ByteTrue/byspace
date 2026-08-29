@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import * as pty from "node-pty";
 import { afterEach, describe, expect, it } from "vitest";
-import { createTerminal, resolvePaseoCliBinDir, type TerminalSession } from "../../terminal.js";
-import { installRegisteredAgentHooks } from "../provider-registry.js";
+import { resolveBySpaceCliBinDir } from "../../terminal.js";
+import { installRegisteredAgentHook } from "../provider-registry.js";
 
 interface ActivityPost {
   terminalId: string;
@@ -70,7 +70,7 @@ function readBody(request: IncomingMessage): Promise<string> {
   });
 }
 
-async function createActivityRecorder(onPost?: (post: ActivityPost) => void) {
+async function createActivityRecorder() {
   const posts: ActivityPost[] = [];
   const server = createServer(async (request: IncomingMessage, response: ServerResponse) => {
     if (request.method !== "POST" || request.url !== "/api/terminal-activity") {
@@ -80,9 +80,7 @@ async function createActivityRecorder(onPost?: (post: ActivityPost) => void) {
     }
 
     const body = await readBody(request);
-    const post = JSON.parse(body) as ActivityPost;
-    posts.push(post);
-    onPost?.(post);
+    posts.push(JSON.parse(body) as ActivityPost);
     response.statusCode = 200;
     response.end("ok");
   });
@@ -120,23 +118,6 @@ function statesFor(posts: ActivityPost[], terminalId: string, token: string): st
     .map((post) => post.state);
 }
 
-async function waitForRecordedState(
-  posts: ActivityPost[],
-  terminalId: string,
-  token: string,
-  state: string,
-  timeoutMs: number,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (statesFor(posts, terminalId, token).includes(state)) return;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  throw new Error(
-    `Timed out waiting for ${state}; observed ${statesFor(posts, terminalId, token).join(", ")}`,
-  );
-}
-
 describe.skipIf(!claudeAvailability.available)(
   `real Claude terminal activity hooks (${claudeAvailability.detail})`,
   () => {
@@ -144,14 +125,14 @@ describe.skipIf(!claudeAvailability.available)(
       const recorder = await createActivityRecorder();
       const terminalId = "real-claude-terminal";
       const token = "real-claude-token";
-      const configDir = createTempDir("paseo-real-claude-config-");
-      const cwd = createTempDir("paseo-real-claude-cwd-");
-      const paseoCliBinDir = resolvePaseoCliBinDir();
-      if (!paseoCliBinDir) {
-        throw new Error("Could not resolve paseo CLI bin directory");
+      const configDir = createTempDir("byspace-real-claude-config-");
+      const cwd = createTempDir("byspace-real-claude-cwd-");
+      const byspaceCliBinDir = resolveBySpaceCliBinDir();
+      if (!byspaceCliBinDir) {
+        throw new Error("Could not resolve byspace CLI bin directory");
       }
 
-      installRegisteredAgentHooks({ configDir });
+      installRegisteredAgentHook("claude", { configDir });
 
       try {
         const claude = pty.spawn(
@@ -164,10 +145,10 @@ describe.skipIf(!claudeAvailability.available)(
             cwd,
             env: {
               ...process.env,
-              PASEO_TERMINAL_ID: terminalId,
-              PASEO_ACTIVITY_TOKEN: token,
-              PASEO_TERMINAL_ACTIVITY_URL: recorder.url,
-              PATH: [paseoCliBinDir, process.env.PATH].filter(isString).join(delimiter),
+              BYSPACE_TERMINAL_ID: terminalId,
+              BYSPACE_ACTIVITY_TOKEN: token,
+              BYSPACE_TERMINAL_ACTIVITY_URL: recorder.url,
+              PATH: [byspaceCliBinDir, process.env.PATH].filter(isString).join(delimiter),
             },
           },
         );
@@ -185,57 +166,6 @@ describe.skipIf(!claudeAvailability.available)(
         await recorder.close();
       }
     }, 100_000);
-
-    it("clears activity for an interrupted interactive Claude turn through TerminalSession", async () => {
-      const terminalId = "real-claude-interrupt-terminal";
-      const token = "real-claude-interrupt-token";
-      let session: TerminalSession | null = null;
-      const recorder = await createActivityRecorder((post) => {
-        if (post.terminalId !== terminalId || post.token !== token) return;
-        if (post.state === "running") session?.setActivity("working");
-        if (post.state === "idle") session?.setActivity("idle");
-        if (post.state === "needs-input") session?.setActivity("attention");
-      });
-      const configDir = createTempDir("paseo-real-claude-interrupt-config-");
-      const paseoCliBinDir = resolvePaseoCliBinDir();
-      if (!paseoCliBinDir) {
-        throw new Error("Could not resolve paseo CLI bin directory");
-      }
-
-      installRegisteredAgentHooks({ configDir });
-
-      try {
-        session = await createTerminal({
-          id: terminalId,
-          workspaceId: "real-claude-interrupt-workspace",
-          cwd: process.cwd(),
-          command: "claude",
-          args: ["--settings", join(configDir, "settings.json")],
-          env: {
-            ...process.env,
-            PASEO_TERMINAL_ID: terminalId,
-            PASEO_ACTIVITY_TOKEN: token,
-            PASEO_TERMINAL_ACTIVITY_URL: recorder.url,
-            PATH: [paseoCliBinDir, process.env.PATH].filter(isString).join(delimiter),
-          },
-        });
-
-        await new Promise((resolve) => setTimeout(resolve, 2_000));
-        session.send({
-          type: "input",
-          data: "Write a very long essay about the history of computing.\r",
-        });
-        await waitForRecordedState(recorder.posts, terminalId, token, "running", 20_000);
-        expect(session.getActivity()).toMatchObject({ state: "working" });
-
-        session.send({ type: "input", data: "\x03" });
-
-        expect(session.getActivity()).toBeNull();
-      } finally {
-        session?.kill();
-        await recorder.close();
-      }
-    }, 45_000);
   },
 );
 

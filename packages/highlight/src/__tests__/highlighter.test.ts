@@ -75,6 +75,20 @@ describe("highlightCode", () => {
     expect(stringToken?.style).toBe("string");
   });
 
+  it("highlights TSX code with correct dialect", () => {
+    const code = 'const el = <div className="test">hello</div>;';
+    const result = highlightCode(code, "test.tsx");
+
+    expect(result).toHaveLength(1);
+    const tokens = result[0];
+
+    const constToken = tokens.find((t) => t.text === "const");
+    expect(constToken?.style).toBe("keyword");
+
+    const tagToken = tokens.find((t) => t.text === "div");
+    expect(tagToken).toBeDefined();
+  });
+
   it("highlights Nix code", () => {
     const code = 'let message = "hello"; in message';
     const result = highlightCode(code, "default.nix");
@@ -116,20 +130,6 @@ describe("highlightCode", () => {
 
     expect(result[9].find((t) => t.text === "badge")?.style).toBe("class");
     expect(result[10].find((t) => t.text === "color")?.style).toBe("property");
-  });
-
-  it("highlights TSX code with correct dialect", () => {
-    const code = 'const el = <div className="test">hello</div>;';
-    const result = highlightCode(code, "test.tsx");
-
-    expect(result).toHaveLength(1);
-    const tokens = result[0];
-
-    const constToken = tokens.find((t) => t.text === "const");
-    expect(constToken?.style).toBe("keyword");
-
-    const tagToken = tokens.find((t) => t.text === "div");
-    expect(tagToken).toBeDefined();
   });
 
   it("returns unhighlighted tokens for unsupported extensions", () => {

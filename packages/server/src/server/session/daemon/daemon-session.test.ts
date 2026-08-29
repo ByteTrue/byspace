@@ -1,8 +1,9 @@
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { hostname as osHostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import pino from "pino";
+import { parseConnectionOfferFromUrl } from "@bytetrue/byspace-protocol/connection-offer";
 import {
   DaemonSession,
   type DaemonRuntimeConfig,
@@ -10,7 +11,6 @@ import {
 } from "./daemon-session.js";
 import type { DaemonWebSocketRuntimeDiagnosticSnapshot } from "./diagnostics.js";
 import type { ProviderAvailability } from "../../agent/agent-manager.js";
-import type { HubRelationshipManagement } from "../../hub/relationship-controller.js";
 import type { SessionOutboundMessage } from "../../messages.js";
 import type { DaemonConfigReloadResult } from "../../daemon-config-store.js";
 
@@ -42,7 +42,6 @@ function makeSubsystem(overrides: {
   daemonRuntimeConfig?: DaemonRuntimeConfig;
   listProviderAvailability?: () => Promise<ProviderAvailability[]>;
   getWebSocketRuntimeMetrics?: () => DaemonWebSocketRuntimeDiagnosticSnapshot | null;
-  hubRelationships?: HubRelationshipManagement;
   reloadConfig?: () => DaemonConfigReloadResult;
 }) {
   const emitted: SessionOutboundMessage[] = [];
@@ -51,11 +50,11 @@ function makeSubsystem(overrides: {
     emit: (msg) => emitted.push(msg),
     emitLifecycleIntent: (intent) => restartIntents.push(intent),
   };
-  const paseoHome = makeHome();
+  const byspaceHome = makeHome();
   const subsystem = new DaemonSession({
     host,
     clientId: "client-1",
-    paseoHome,
+    byspaceHome,
     serverId: overrides.serverId,
     daemonVersion: overrides.daemonVersion,
     daemonRuntimeConfig: overrides.daemonRuntimeConfig,
@@ -64,7 +63,6 @@ function makeSubsystem(overrides: {
     listWorkspaces: async () => [],
     listProviderAvailability: overrides.listProviderAvailability ?? (async () => []),
     getWebSocketRuntimeMetrics: overrides.getWebSocketRuntimeMetrics,
-    hubRelationships: overrides.hubRelationships,
     reloadConfig:
       overrides.reloadConfig ??
       (() => ({
@@ -74,7 +72,7 @@ function makeSubsystem(overrides: {
       })),
     logger: pino({ level: "silent" }),
   });
-  return { subsystem, emitted, paseoHome, restartIntents };
+  return { subsystem, emitted, byspaceHome, restartIntents };
 }
 
 describe("DaemonSession", () => {
@@ -129,65 +127,11 @@ describe("DaemonSession", () => {
       },
     ]);
   });
-  test("Hub relationship command failures return correlated RPC errors", async () => {
-    const { subsystem, emitted } = makeSubsystem({
-      hubRelationships: {
-        connect: async () => {
-          throw new Error("Hub rejected enrollment (401)");
-        },
-        status: () => ({
-          state: "not_connected",
-          daemonId: null,
-          hubOrigin: null,
-          scopes: [],
-          connectedAt: null,
-          lastError: null,
-        }),
-        disconnect: async () => {
-          throw new Error("Hub revocation failed (503)");
-        },
-      },
-    });
-
-    await subsystem.handleHubRelationshipRequest({
-      type: "hub.management.daemon.connect.request",
-      requestId: "connect-1",
-      hubUrl: "https://hub.test",
-      token: "token",
-    });
-    await subsystem.handleHubRelationshipRequest({
-      type: "hub.management.daemon.disconnect.request",
-      requestId: "disconnect-1",
-      force: false,
-    });
-
-    expect(emitted).toEqual([
-      {
-        type: "rpc_error",
-        payload: {
-          requestId: "connect-1",
-          requestType: "hub.management.daemon.connect.request",
-          error: "Hub rejected enrollment (401)",
-          code: "handler_error",
-        },
-      },
-      {
-        type: "rpc_error",
-        payload: {
-          requestId: "disconnect-1",
-          requestType: "hub.management.daemon.disconnect.request",
-          error: "Hub revocation failed (503)",
-          code: "handler_error",
-        },
-      },
-    ]);
-  });
-
   test("status reports identity, runtime config, and providers with errors normalized to null", async () => {
     const { subsystem, emitted } = makeSubsystem({
       serverId: "srv-1",
       daemonVersion: "1.2.3",
-      daemonRuntimeConfig: { listen: "127.0.0.1:6767", getRelayConfig: () => null },
+      daemonRuntimeConfig: { listen: "127.0.0.1:6777", relay: null },
       listProviderAvailability: async () => [
         { provider: "claude", available: true, error: null },
         { provider: "codex", available: false, error: "boom" },
@@ -206,7 +150,7 @@ describe("DaemonSession", () => {
           pid: process.pid,
           nodePath: process.execPath,
           startedAt: null,
-          listen: "127.0.0.1:6767",
+          listen: "127.0.0.1:6777",
           relay: null,
           providers: [
             { provider: "claude", available: true, error: null },
@@ -221,7 +165,7 @@ describe("DaemonSession", () => {
     const { subsystem, emitted } = makeSubsystem({
       serverId: "srv-1",
       daemonVersion: "1.2.3",
-      daemonRuntimeConfig: { listen: "127.0.0.1:6767", getRelayConfig: () => null },
+      daemonRuntimeConfig: { listen: "127.0.0.1:6777", relay: null },
       listProviderAvailability: async () => {
         throw new Error("provider listing failed");
       },
@@ -250,14 +194,14 @@ describe("DaemonSession", () => {
   test("pairing offer is empty when relay is disabled", async () => {
     const { subsystem, emitted } = makeSubsystem({
       daemonRuntimeConfig: {
-        listen: "127.0.0.1:6767",
-        getRelayConfig: () => ({
+        listen: "127.0.0.1:6777",
+        relay: {
           enabled: false,
-          endpoint: "relay.paseo.sh:443",
-          publicEndpoint: "relay.paseo.sh:443",
+          endpoint: "byspace-relay.bytetrue.workers.dev:443",
+          publicEndpoint: "byspace-relay.bytetrue.workers.dev:443",
           useTls: true,
           publicUseTls: true,
-        }),
+        },
       },
     });
 
@@ -277,15 +221,15 @@ describe("DaemonSession", () => {
   test("pairing offer mints a real connection URL when relay is enabled", async () => {
     const { subsystem, emitted } = makeSubsystem({
       daemonRuntimeConfig: {
-        listen: "127.0.0.1:6767",
+        listen: "127.0.0.1:6777",
         appBaseUrl: "https://app.example.test",
-        getRelayConfig: () => ({
+        relay: {
           enabled: true,
           endpoint: "relay.example.test:443",
           publicEndpoint: "relay.example.test:443",
           useTls: true,
           publicUseTls: true,
-        }),
+        },
       },
     });
 
@@ -304,60 +248,27 @@ describe("DaemonSession", () => {
     expect(message.payload.relayEnabled).toBe(true);
     expect(message.payload.url.startsWith("https://app.example.test")).toBe(true);
     expect(typeof message.payload.qr).toBe("string");
-  });
-
-  test("pairing offer reads relay state at request time", async () => {
-    let enabled = false;
-    const { subsystem, emitted } = makeSubsystem({
-      daemonRuntimeConfig: {
-        listen: "127.0.0.1:6767",
-        appBaseUrl: "https://app.example.test",
-        getRelayConfig: () => ({
-          enabled,
-          endpoint: "relay.example.test:443",
-          publicEndpoint: "relay.example.test:443",
-          useTls: true,
-          publicUseTls: true,
-        }),
-      },
-    });
-
-    await subsystem.handleGetPairingOfferRequest({
-      type: "daemon.get_pairing_offer.request",
-      requestId: "disabled",
-    });
-    enabled = true;
-    await subsystem.handleGetPairingOfferRequest({
-      type: "daemon.get_pairing_offer.request",
-      requestId: "enabled",
-    });
-
-    const pairingResponses = emitted.filter(
-      (message) => message.type === "daemon.get_pairing_offer.response",
-    );
-    expect(pairingResponses[0]?.payload.relayEnabled).toBe(false);
-    expect(pairingResponses[1]?.payload.relayEnabled).toBe(true);
-    expect(pairingResponses[1]?.payload.url).toContain("#offer=");
+    expect(parseConnectionOfferFromUrl(message.payload.url)?.hostname).toBe(osHostname());
   });
 
   test("diagnostics includes a log tail and redacts connection secrets", async () => {
-    const { subsystem, emitted, paseoHome } = makeSubsystem({
+    const { subsystem, emitted, byspaceHome } = makeSubsystem({
       serverId: "srv-1",
       daemonVersion: "1.2.3",
       daemonRuntimeConfig: {
-        listen: "127.0.0.1:6767",
-        getRelayConfig: () => ({
+        listen: "127.0.0.1:6777",
+        relay: {
           enabled: true,
           endpoint: "relay.secret.test:443",
           publicEndpoint: "relay.secret.test:443",
           useTls: true,
           publicUseTls: true,
-        }),
+        },
       },
     });
     writeFileSync(
-      join(paseoHome, "daemon.log"),
-      "first line\nrelay.secret.test:443 token=super-secret paseo://pairing-secret\n",
+      join(byspaceHome, "daemon.log"),
+      "first line\nrelay.secret.test:443 token=super-secret byspace://pairing-secret\n",
     );
 
     await subsystem.handleDiagnosticsRequest({ type: "diagnostics.request", requestId: "d-1" });
@@ -382,8 +293,8 @@ describe("DaemonSession", () => {
     const originalComSpec = process.env.ComSpec;
     const originalCOMSPEC = process.env.COMSPEC;
     try {
-      process.env.PATH = "/opt/paseo-test/bin:/usr/bin";
-      process.env.SHELL = "/bin/paseo-test-shell";
+      process.env.PATH = "/opt/byspace-test/bin:/usr/bin";
+      process.env.SHELL = "/bin/byspace-test-shell";
       delete process.env.ComSpec;
       delete process.env.COMSPEC;
 
@@ -397,8 +308,8 @@ describe("DaemonSession", () => {
       if (message.type !== "diagnostics.response") {
         throw new Error("expected diagnostics response");
       }
-      expect(message.payload.diagnostic).toContain("PATH: /opt/paseo-test/bin:/usr/bin");
-      expect(message.payload.diagnostic).toContain("Shell: SHELL=/bin/paseo-test-shell");
+      expect(message.payload.diagnostic).toContain("PATH: /opt/byspace-test/bin:/usr/bin");
+      expect(message.payload.diagnostic).toContain("Shell: SHELL=/bin/byspace-test-shell");
     } finally {
       restoreEnv("PATH", originalPath);
       restoreEnv("SHELL", originalShell);
@@ -470,8 +381,6 @@ describe("DaemonSession", () => {
           terminalDirectorySubscriptionCount: 5,
           checkoutDiffTargetCount: 6,
           checkoutDiffSubscriptionCount: 7,
-          checkoutDiffWatcherCount: 8,
-          checkoutDiffFallbackRefreshTargetCount: 9,
         },
         latency: [
           {
@@ -519,9 +428,7 @@ describe("DaemonSession", () => {
       "Latency: diagnostics.request count=2 p50=4ms max=7ms total=11ms",
     );
     expect(message.payload.diagnostic).toContain("Inbound session requests: diagnostics.request=2");
-    expect(message.payload.diagnostic).toContain(
-      "Checkout diff: targets=6, subscriptions=7, watchers=8, fallbackRefreshTargets=9",
-    );
+    expect(message.payload.diagnostic).toContain("Checkout diff: targets=6, subscriptions=7");
     expect(message.payload.diagnostic).toContain("Agent lifecycle: idle=8, running=2");
   });
 });

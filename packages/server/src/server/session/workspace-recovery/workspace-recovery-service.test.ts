@@ -1,45 +1,23 @@
-import { execFileSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { afterEach, describe, expect, test } from "vitest";
-
-import { createWorktree } from "../../../utils/worktree.js";
+import { describe, expect, test } from "vitest";
 import {
   createPersistedProjectRecord,
   createPersistedWorkspaceRecord,
   type PersistedProjectRecord,
   type PersistedWorkspaceRecord,
 } from "../../workspace-registry.js";
+import { WorkspaceLifecycleCoordinator } from "../../workspace-lifecycle-coordinator.js";
 import { createWorkspaceRecoveryService } from "./workspace-recovery-service.js";
 
 const NOW = "2026-07-11T10:12:30.752Z";
-const tempDirectories: string[] = [];
 
-afterEach(() => {
-  for (const directory of tempDirectories.splice(0)) {
-    rmSync(directory, { recursive: true, force: true });
-  }
-});
-
-function createProject(overrides: Partial<PersistedProjectRecord> = {}): PersistedProjectRecord {
+function createProject(): PersistedProjectRecord {
   return createPersistedProjectRecord({
-    projectId: "/project",
-    rootPath: "/project",
+    projectId: "/repo",
+    rootPath: "/repo",
     kind: "git",
-    displayName: "project",
+    displayName: "repo",
     createdAt: NOW,
     updatedAt: NOW,
-    ...overrides,
   });
 }
 
@@ -48,15 +26,12 @@ function createWorkspace(
 ): PersistedWorkspaceRecord {
   return createPersistedWorkspaceRecord({
     workspaceId: "wks_15a1b5630ebaab33",
-    projectId: "/project",
+    projectId: "/repo",
     cwd: "/worktrees/trigger-1525443412986298439",
     kind: "worktree",
     displayName: "diagnose-repro-tdd",
-    title: "TDD reproduction",
+    title: "Codex TDD reproduction",
     branch: "diagnose-repro-tdd",
-    worktreeRoot: "/worktrees/trigger-1525443412986298439",
-    isPaseoOwnedWorktree: true,
-    mainRepoRoot: "/repo",
     createdAt: NOW,
     updatedAt: NOW,
     archivedAt: NOW,
@@ -68,53 +43,69 @@ function createHarness(input?: {
   workspace?: PersistedWorkspaceRecord | null;
   project?: PersistedProjectRecord | null;
   directories?: string[];
-  paseoHome?: string;
-  worktreesRoot?: string;
+  recreate?: (workspace: PersistedWorkspaceRecord) => Promise<void>;
+  rollback?: (workspace: PersistedWorkspaceRecord) => Promise<void>;
+  unarchive?: (workspace: PersistedWorkspaceRecord) => Promise<void>;
+  lifecycleCoordinator?: WorkspaceLifecycleCoordinator;
 }) {
   const workspace = input?.workspace === undefined ? createWorkspace() : input.workspace;
   const project = input?.project === undefined ? createProject() : input.project;
   const directories = new Set(input?.directories ?? ["/repo"]);
   const unarchived: string[] = [];
+  const recreated: string[] = [];
+  const rolledBack: string[] = [];
   const service = createWorkspaceRecoveryService({
-    paseoHome: input?.paseoHome ?? "/paseo-home",
-    worktreesRoot: input?.worktreesRoot ?? "/worktrees",
+    byspaceHome: "/byspace-home",
     getWorkspace: async (workspaceId) =>
       workspace?.workspaceId === workspaceId ? workspace : null,
     getProject: async (projectId) => (project?.projectId === projectId ? project : null),
     isDirectory: async (path) => directories.has(path),
+    recreateWorktree: async (record) => {
+      recreated.push(record.workspaceId);
+      await input?.recreate?.(record);
+      return {
+        rollback: async (cause) => {
+          rolledBack.push(record.workspaceId);
+          await input?.rollback?.(record);
+          throw cause;
+        },
+      };
+    },
     unarchiveWorkspace: async (record) => {
+      await input?.unarchive?.(record);
       unarchived.push(record.workspaceId);
     },
+    lifecycleCoordinator: input?.lifecycleCoordinator,
   });
-  return { service, unarchived };
+  return { service, recreated, rolledBack, unarchived };
 }
 
 describe("workspace recovery", () => {
-  test("describes a missing archived worktree from persisted placement", async () => {
-    const { service, unarchived } = createHarness();
+  test("authoritatively describes the archived missing worktree from the failed cloud run", async () => {
+    const { service, recreated, unarchived } = createHarness();
 
     await expect(service.inspect("wks_15a1b5630ebaab33")).resolves.toEqual({
       kind: "recoverable",
       workspaceId: "wks_15a1b5630ebaab33",
-      workspaceName: "TDD reproduction",
+      workspaceName: "Codex TDD reproduction",
       action: "restore",
       branch: "diagnose-repro-tdd",
     });
+    expect(recreated).toEqual([]);
     expect(unarchived).toEqual([]);
   });
 
-  test("unarchives an archived workspace whose exact directory remains", async () => {
+  test("describes an archived workspace whose directory remains as unarchivable", async () => {
     const workspace = createWorkspace({ kind: "directory", branch: null });
-    const { service, unarchived } = createHarness({
+    const { service } = createHarness({
       workspace,
-      directories: [workspace.cwd],
+      directories: ["/repo", workspace.cwd],
     });
 
-    await expect(service.restore(workspace.workspaceId)).resolves.toEqual({
-      workspaceId: workspace.workspaceId,
+    await expect(service.inspect(workspace.workspaceId)).resolves.toMatchObject({
+      kind: "recoverable",
       action: "unarchive",
     });
-    expect(unarchived).toEqual([workspace.workspaceId]);
   });
 
   test("does not offer recovery for a missing non-worktree directory", async () => {
@@ -129,160 +120,111 @@ describe("workspace recovery", () => {
     });
   });
 
-  test("uses the persisted source repository instead of the owning project to restore an exact subdirectory", async () => {
-    const { tempDir, repoDir } = createGitRepository();
-    const branch = "feature/mixed-project";
-    const sourceSubdirectory = join(repoDir, "packages", "app");
-    mkdirSync(sourceSubdirectory, { recursive: true });
-    writeFileSync(join(sourceSubdirectory, "README.md"), "app\n");
-    execFileSync("git", ["add", "."], { cwd: repoDir, stdio: "pipe" });
-    execFileSync("git", ["commit", "-m", "add app"], { cwd: repoDir, stdio: "pipe" });
-    execFileSync("git", ["branch", branch], { cwd: repoDir, stdio: "pipe" });
-
-    const paseoHome = join(tempDir, "paseo-home");
-    const worktreesRoot = join(tempDir, "worktrees");
-    const created = await createWorktree({
-      cwd: repoDir,
-      worktreeSlug: "mixed-project",
-      source: { kind: "checkout-branch", branchName: branch },
-      runSetup: false,
-      paseoHome,
-      worktreesRoot,
-    });
-    const worktreeRoot = realpathSync(created.worktreePath);
-    const workspaceCwd = join(worktreeRoot, "packages", "app");
-    rmSync(worktreeRoot, { recursive: true, force: true });
-    execFileSync("git", ["worktree", "prune"], { cwd: repoDir, stdio: "pipe" });
-
-    const projectRoot = join(tempDir, "explicit-non-git-project");
-    mkdirSync(projectRoot);
-    const project = createProject({
-      projectId: "explicit-non-git-project",
-      rootPath: projectRoot,
-      kind: "non_git",
-    });
-    const workspace = createWorkspace({
-      workspaceId: "ws-mixed-project-recreate",
-      projectId: project.projectId,
-      cwd: workspaceCwd,
-      branch,
-      worktreeRoot,
-      mainRepoRoot: repoDir,
-    });
-    const unarchived: string[] = [];
-    const service = createWorkspaceRecoveryService({
-      paseoHome,
-      worktreesRoot,
-      getWorkspace: async (workspaceId) =>
-        workspaceId === workspace.workspaceId ? workspace : null,
-      getProject: async (projectId) => (projectId === project.projectId ? project : null),
-      isDirectory: async (path) => existsSync(path) && statSync(path).isDirectory(),
-      unarchiveWorkspace: async (record) => {
-        unarchived.push(record.workspaceId);
+  test("keeps the workspace archived when recreation fails so restore can be retried", async () => {
+    let attempts = 0;
+    const { service, recreated, unarchived } = createHarness({
+      recreate: async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new Error("git branch diagnose-repro-tdd is unavailable");
+        }
       },
     });
 
-    await expect(service.restore(workspace.workspaceId)).resolves.toEqual({
-      workspaceId: workspace.workspaceId,
+    await expect(service.restore("wks_15a1b5630ebaab33")).rejects.toThrow(
+      "git branch diagnose-repro-tdd is unavailable",
+    );
+    expect(unarchived).toEqual([]);
+
+    await expect(service.restore("wks_15a1b5630ebaab33")).resolves.toEqual({
+      workspaceId: "wks_15a1b5630ebaab33",
       action: "restore",
     });
-    expect(existsSync(worktreeRoot)).toBe(true);
-    expect(existsSync(workspaceCwd)).toBe(true);
-    expect(unarchived).toEqual([workspace.workspaceId]);
+    expect(recreated).toEqual(["wks_15a1b5630ebaab33", "wks_15a1b5630ebaab33"]);
+    expect(unarchived).toEqual(["wks_15a1b5630ebaab33"]);
   });
 
-  test("keeps an exact-subdirectory workspace archived when its branch lacks that directory", async () => {
-    const { tempDir, repoDir } = createGitRepository();
-    const branch = "feature/without-subproject";
-    execFileSync("git", ["branch", branch], { cwd: repoDir, stdio: "pipe" });
-    const paseoHome = join(tempDir, "paseo-home");
-    const worktreesRoot = join(tempDir, "worktrees");
-    const created = await createWorktree({
-      cwd: repoDir,
-      worktreeSlug: "without-subproject",
-      source: { kind: "checkout-branch", branchName: branch },
-      runSetup: false,
-      paseoHome,
-      worktreesRoot,
-    });
-    const worktreeRoot = realpathSync(created.worktreePath);
-    const workspaceCwd = join(worktreeRoot, "packages", "app");
-    rmSync(worktreeRoot, { recursive: true, force: true });
-    execFileSync("git", ["worktree", "prune"], { cwd: repoDir, stdio: "pipe" });
-
-    const project = createProject({ rootPath: repoDir });
-    const workspace = createWorkspace({
-      workspaceId: "ws-missing-restored-subdirectory",
-      cwd: workspaceCwd,
-      branch,
-      worktreeRoot,
-      mainRepoRoot: repoDir,
-    });
-    const unarchived: string[] = [];
-    const service = createWorkspaceRecoveryService({
-      paseoHome,
-      worktreesRoot,
-      getWorkspace: async (workspaceId) =>
-        workspaceId === workspace.workspaceId ? workspace : null,
-      getProject: async (projectId) => (projectId === project.projectId ? project : null),
-      isDirectory: async (targetPath) =>
-        existsSync(targetPath) && statSync(targetPath).isDirectory(),
-      unarchiveWorkspace: async (record) => {
-        unarchived.push(record.workspaceId);
+  test("rolls back a recreated worktree when the registry update fails", async () => {
+    let recreatedDirectoryExists = false;
+    const { service, rolledBack, unarchived } = createHarness({
+      recreate: async () => {
+        recreatedDirectoryExists = true;
+      },
+      rollback: async () => {
+        recreatedDirectoryExists = false;
+      },
+      unarchive: async () => {
+        throw new Error("workspace registry write failed");
       },
     });
 
-    await expect(service.restore(workspace.workspaceId)).rejects.toThrow(
-      "Selected project directory is missing from the restored worktree",
+    await expect(service.restore("wks_15a1b5630ebaab33")).rejects.toThrow(
+      "workspace registry write failed",
     );
+
+    expect(recreatedDirectoryExists).toBe(false);
+    expect(rolledBack).toEqual(["wks_15a1b5630ebaab33"]);
     expect(unarchived).toEqual([]);
-    expect(existsSync(worktreeRoot)).toBe(false);
-    expect(
-      execFileSync("git", ["worktree", "list", "--porcelain"], {
-        cwd: repoDir,
-        stdio: "pipe",
-      })
-        .toString()
-        .includes("without-subproject"),
-    ).toBe(false);
   });
 
-  test("keeps the workspace archived when its persisted source repository is missing", async () => {
-    const workspace = createWorkspace({ mainRepoRoot: "/missing-source" });
-    const { service, unarchived } = createHarness({
-      workspace,
-      directories: ["/project"],
+  test("holds the lifecycle barrier from recreation through registry update", async () => {
+    const coordinator = new WorkspaceLifecycleCoordinator();
+    let project: PersistedProjectRecord | null = createProject();
+    let workspace: PersistedWorkspaceRecord | null = createWorkspace();
+    let recreatedDirectoryExists = false;
+    const events: string[] = [];
+    let signalRecreated!: () => void;
+    const recreated = new Promise<void>((resolve) => {
+      signalRecreated = resolve;
+    });
+    let releaseRecreation!: () => void;
+    const recreationGate = new Promise<void>((resolve) => {
+      releaseRecreation = resolve;
+    });
+    const service = createWorkspaceRecoveryService({
+      byspaceHome: "/byspace-home",
+      getWorkspace: async (workspaceId) =>
+        workspace?.workspaceId === workspaceId ? workspace : null,
+      getProject: async (projectId) => (project?.projectId === projectId ? project : null),
+      isDirectory: async (target) => target === "/repo",
+      lifecycleCoordinator: coordinator,
+      recreateWorktree: async () => {
+        events.push("recreate");
+        recreatedDirectoryExists = true;
+        signalRecreated();
+        await recreationGate;
+        return {
+          rollback: async (cause) => {
+            recreatedDirectoryExists = false;
+            throw cause;
+          },
+        };
+      },
+      unarchiveWorkspace: async (record) => {
+        events.push("unarchive");
+        workspace = { ...record, archivedAt: null };
+      },
     });
 
-    await expect(service.inspect(workspace.workspaceId)).resolves.toEqual({
-      kind: "unavailable",
-      workspaceId: workspace.workspaceId,
-      reason: "project_directory_missing",
-      message: "The source repository needed to restore this worktree no longer exists.",
+    const recovery = service.restore("wks_15a1b5630ebaab33");
+    await recreated;
+    const removal = coordinator.runExclusive(async () => {
+      events.push("remove");
+      if (workspace && !workspace.archivedAt) recreatedDirectoryExists = false;
+      workspace = null;
+      project = null;
     });
-    await expect(service.restore(workspace.workspaceId)).rejects.toThrow(
-      "The source repository needed to restore this worktree no longer exists.",
-    );
-    expect(unarchived).toEqual([]);
+    await Promise.resolve();
+
+    expect(events).toEqual(["recreate"]);
+    expect(project).not.toBeNull();
+
+    releaseRecreation();
+    await Promise.all([recovery, removal]);
+
+    expect(events).toEqual(["recreate", "unarchive", "remove"]);
+    expect(project).toBeNull();
+    expect(workspace).toBeNull();
+    expect(recreatedDirectoryExists).toBe(false);
   });
 });
-
-function createGitRepository(): { tempDir: string; repoDir: string } {
-  const tempDir = mkdtempSync(join(tmpdir(), "paseo-workspace-recovery-"));
-  tempDirectories.push(tempDir);
-  const repoDir = join(tempDir, "repo");
-  mkdirSync(repoDir);
-  execFileSync("git", ["init", "-b", "main"], { cwd: repoDir, stdio: "pipe" });
-  execFileSync("git", ["config", "user.email", "test@example.com"], {
-    cwd: repoDir,
-    stdio: "pipe",
-  });
-  execFileSync("git", ["config", "user.name", "Paseo Test"], {
-    cwd: repoDir,
-    stdio: "pipe",
-  });
-  writeFileSync(join(repoDir, "README.md"), "initial\n");
-  execFileSync("git", ["add", "."], { cwd: repoDir, stdio: "pipe" });
-  execFileSync("git", ["commit", "-m", "initial"], { cwd: repoDir, stdio: "pipe" });
-  return { tempDir, repoDir };
-}

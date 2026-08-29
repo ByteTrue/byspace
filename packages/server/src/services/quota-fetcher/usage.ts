@@ -68,14 +68,6 @@ export function windowFromUsedPct(input: {
   return window;
 }
 
-/**
- * The tone scale for anything measured against a known limit, windows and balances alike.
- *
- * Thresholds match `deriveTone` in the app's provider-usage/tone.ts, which is what the
- * client falls back to when a window arrives without a tone. Healthy is "ok" rather than
- * "default" because that is what every provider setting a tone has always sent, and it is
- * what the bars render today below their thresholds.
- */
 export function toneFromUsedPct(usedPct: number | null | undefined): ProviderUsageTone {
   if (typeof usedPct !== "number") return "default";
   if (usedPct > 90) return "danger";
@@ -83,11 +75,6 @@ export function toneFromUsedPct(usedPct: number | null | undefined): ProviderUsa
   return "ok";
 }
 
-/**
- * Tone for a balance with no known limit, where a percentage cannot be computed and the
- * only signal is whether anything is left. Prefer `toneFromUsedPct` when a limit exists:
- * this one stays "ok" until the balance is completely spent.
- */
 export function balanceToneFromRemaining(
   remaining: number | null | undefined,
 ): ProviderUsageBalance["tone"] {
@@ -96,7 +83,6 @@ export function balanceToneFromRemaining(
   return "ok";
 }
 
-/** Percentage of a limit consumed, or null when either side is unknown. */
 export function usedPctOf(
   used: number | null | undefined,
   limit: number | null | undefined,

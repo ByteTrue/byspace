@@ -75,6 +75,39 @@ describe("EncryptedChannel", () => {
     await expect(channel).rejects.toThrow("ready send failed");
   });
 
+  it("bounds messages received while the daemon ready frame is pending", async () => {
+    let completeReadySend: (() => void) | undefined;
+    const daemonKeyPair = generateKeyPair();
+    const clientKeyPair = generateKeyPair();
+    const transport: Transport = {
+      send: () =>
+        new Promise<void>((resolve) => {
+          completeReadySend = resolve;
+        }),
+      close: vi.fn(),
+      onmessage: null,
+      onclose: null,
+      onerror: null,
+    };
+    const channel = createDaemonChannel(transport, daemonKeyPair);
+
+    transport.onmessage?.({
+      data: JSON.stringify({
+        type: "e2ee_hello",
+        key: exportPublicKey(clientKeyPair.publicKey),
+      }),
+      isBinary: false,
+    });
+    await Promise.resolve();
+    for (let index = 0; index < 65; index += 1) {
+      transport.onmessage?.({ data: "queued", isBinary: false });
+    }
+
+    await expect(channel).rejects.toThrow("E2EE handshake message buffer exceeded its limit");
+    expect(transport.close).toHaveBeenCalledWith(1009, "E2EE handshake buffer overflow");
+    completeReadySend?.();
+  });
+
   it("waits for transport send completion", async () => {
     let completeSend: (() => void) | undefined;
     const transport: Transport = {
@@ -110,32 +143,34 @@ describe("EncryptedChannel", () => {
     expect(completed).toBe(true);
   });
 
-  it("establishes encrypted channel between daemon and client", async () => {
+  it("establishes an encrypted channel and exposes both authenticated peers", async () => {
     const [daemonTransport, clientTransport] = createMockTransportPair();
 
-    // Daemon generates keypair (public key goes in QR)
     const daemonKeyPair = generateKeyPair();
     const daemonPubKeyB64 = exportPublicKey(daemonKeyPair.publicKey);
+    const clientKeyPair = generateKeyPair();
+    const clientPubKeyB64 = exportPublicKey(clientKeyPair.publicKey);
 
     let clientOpenedResolve: (() => void) | null = null;
     const clientOpened = new Promise<void>((resolve) => {
       clientOpenedResolve = resolve;
     });
 
-    // Start daemon waiting for client
     const daemonChannelPromise = createDaemonChannel(daemonTransport, daemonKeyPair);
+    const clientChannel = await createClientChannel(
+      clientTransport,
+      daemonPubKeyB64,
+      { onopen: () => clientOpenedResolve?.() },
+      clientKeyPair,
+    );
 
-    // Client connects (scanned QR, got daemon's public key)
-    const clientChannel = await createClientChannel(clientTransport, daemonPubKeyB64, {
-      onopen: () => clientOpenedResolve?.(),
-    });
-
-    // Daemon receives hello and completes handshake
     const daemonChannel = await daemonChannelPromise;
     await clientOpened;
 
     expect(clientChannel.isOpen()).toBe(true);
     expect(daemonChannel.isOpen()).toBe(true);
+    expect(clientChannel.getPeerPublicKeyB64()).toBe(daemonPubKeyB64);
+    expect(daemonChannel.getPeerPublicKeyB64()).toBe(clientPubKeyB64);
   });
 
   it("exchanges encrypted messages bidirectionally", async () => {

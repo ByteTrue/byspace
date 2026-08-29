@@ -1,12 +1,16 @@
+import { useRouter } from "expo-router";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Button } from "@/components/ui/button";
 import {
   View,
   Text,
+  TextInput,
+  Pressable,
   useWindowDimensions,
   NativeSyntheticEvent,
+  TextInputContentSizeChangeEventData,
   TextInputKeyPressEventData,
   TextInputSelectionChangeEventData,
-  type LayoutChangeEvent,
 } from "react-native";
 import {
   useState,
@@ -21,15 +25,19 @@ import {
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
-import { ArrowUp, Mic, MicOff, CornerDownLeft, Plus, Square } from "lucide-react-native";
+import { ArrowUp, Mic, CornerDownLeft, Plus } from "lucide-react-native";
 import { useDictation } from "@/hooks/use-dictation";
-import { DictationOverlay } from "@/components/dictation-controls";
-import { RealtimeVoiceOverlay } from "@/components/realtime-voice-overlay";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type {
+  DictationRefinementMeta,
+  DictationRefinementResult,
+} from "@/hooks/use-dictation.shared";
+import { useDaemonConfig } from "@/hooks/use-daemon-config";
+import { DictationToolbar } from "@/components/dictation-controls";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 import { useSessionStore } from "@/stores/session-store";
-import { useVoiceOptional } from "@/contexts/voice-context";
 import { useToast } from "@/contexts/toast-context";
-import { resolveVoiceUnavailableMessage } from "@/utils/server-info-capabilities";
+import { resolveDictationUnavailableMessage } from "@/utils/server-info-capabilities";
+import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
 import {
   collectImageFilesFromClipboardData,
   filesToImageAttachments,
@@ -45,42 +53,26 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { useDismissKeyboardOnOpen } from "@/components/ui/keyboard-dismiss";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
-import { useIosHardwareKeyboardSubmit } from "@/hooks/use-ios-hardware-keyboard-submit";
 import { formatShortcut, type ShortcutKey } from "@/utils/format-shortcut";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { useComposerKeyboardScope } from "@/composer/keyboard-scope";
-import { RenderProfile } from "@/utils/render-profiler";
-import { useComposerHeight } from "./height";
+import { useComposerHeightMirror } from "./height-mirror";
 import { resolveComposerInputMode, type ComposerInputMode } from "@/composer/input-mode";
-import type { NativePastedFile } from "@/composer/native-pasted-image";
+import { resolveSendTooltipLabel, resolveSubmitAccessibilityLabel } from "./labels";
 import {
-  EditingTextInput,
-  type EditingTextInputHandle as ComposerTextInputHandle,
-  type EditingTextInputProps,
-} from "@/components/ui/text-input";
-
-const ComposerTextInput = withUnistyles(EditingTextInput, (theme) => ({
-  placeholderTextColor: theme.colors.surface4,
-}));
-import {
-  resolveSendTooltipLabel,
-  resolveSubmitAccessibilityLabel,
-  resolveVoiceAccessibilityLabel,
-  resolveVoiceTooltipText,
-} from "./labels";
-import {
-  applyDictationTranscript,
+  applyDictationRefinement,
   computeCanStartDictation,
-  resolveComposerSurfacePresentation,
   runAlternateSendAction,
   runDefaultSendAction,
   runMessageInputKeyboardAction,
-  stopRealtimeVoice,
+  toggleDictationRefinement,
+  type DictationRefinementChoice,
 } from "./state";
 
 const DEFAULT_SEND_KEYS: ShortcutKey[][] = [["Enter"]];
@@ -92,17 +84,6 @@ export interface AttachmentMenuItem {
   onSelect: () => void;
   disabled?: boolean;
   icon?: React.ReactElement | null;
-}
-
-export interface ComposerInputSnapshot {
-  text: string;
-  selection: { start: number; end: number };
-}
-
-export interface ComposerKeyPressEvent {
-  key: string;
-  preventDefault: () => void;
-  input: ComposerInputSnapshot;
 }
 
 export interface MessageInputProps {
@@ -127,7 +108,6 @@ export interface MessageInputProps {
   attachmentMenuItems: AttachmentMenuItem[];
   onAttachButtonRef?: (node: View | null) => void;
   onAddImages?: (images: ImageAttachment[]) => void;
-  onPasteImages?: (files: readonly NativePastedFile[]) => void;
   client: DaemonClient | null;
   /** Dictation start gate from host runtime (socket connected + directory ready). */
   isReadyForDictation?: boolean;
@@ -135,28 +115,29 @@ export interface MessageInputProps {
   autoFocus?: boolean;
   autoFocusKey?: string;
   disabled?: boolean;
+  /** True when this composer's pane is focused. Used to gate global hotkeys and stop dictation when hidden. */
+  isPaneFocused?: boolean;
   /** Content to render on the left side of the composer toolbar (e.g., AgentControls) */
   leftContent?: React.ReactNode;
-  /** Content to render on the right side before the voice button (e.g., context window meter) */
-  beforeVoiceContent?: React.ReactNode;
-  /** Auxiliary content to render on the right side after the voice button. */
+  /** Content to render on the right side before the dictation button. */
+  beforeDictationContent?: React.ReactNode;
+  /** Auxiliary content to render on the right side after the dictation button. */
   rightContent?: React.ReactNode;
   /** Primary action to render when the agent is active and the composer has no sendable content. */
   activeActionContent?: React.ReactNode;
-  voiceServerId?: string;
-  voiceAgentId?: string;
+  serverId?: string;
+  agentId?: string;
   /** When true and there's sendable content, calls onQueue instead of onSubmit */
   isAgentRunning?: boolean;
-  /** Controls what the default send action (Enter, send button, dictation) does when the agent is
-   *  running. "interrupt" and "steer" send immediately, "queue" queues. Required so the default
-   *  lives only in DEFAULT_CLIENT_SETTINGS. */
-  defaultSendBehavior: "interrupt" | "steer" | "queue";
+  /** Controls what the default send action (Enter, send button, dictation) does
+   *  when the agent is running. "interrupt" sends immediately, "queue" queues. */
+  defaultSendBehavior?: "interrupt" | "queue";
   /** Callback for queue button when agent is running */
   onQueue?: (payload: MessagePayload) => void;
   /** Optional handler used when submit button is in loading state. */
   onSubmitLoadingPress?: () => void;
   /** Intercept key press events before default handling. Return true to prevent default. */
-  onKeyPress?: (event: ComposerKeyPressEvent) => boolean;
+  onKeyPress?: (event: { key: string; preventDefault: () => void }) => boolean;
   /** Reports cursor selection updates from the underlying input. */
   onSelectionChange?: (selection: { start: number; end: number }) => void;
   onFocusChange?: (focused: boolean) => void;
@@ -169,8 +150,6 @@ export interface MessageInputProps {
   inputMode?: ComposerInputMode;
   /** Renders `value` as static text on the same surface, for content there is nothing to type into. */
   readOnly?: boolean;
-  /** Changes only when application state must replace native-owned text. */
-  textReplacementKey: string;
   /** Replaces the submit icon with this label, still inside the composer's own toolbar row. */
   submitLabel?: string;
 }
@@ -178,9 +157,6 @@ export interface MessageInputProps {
 export interface MessageInputRef {
   focus: () => void;
   blur: () => void;
-  getText: () => string;
-  getInputSnapshot: () => ComposerInputSnapshot;
-  replaceText: (text: string, selection?: { start: number; end: number }) => void;
   runKeyboardAction: (action: MessageInputKeyboardActionKind) => boolean;
   /**
    * Web-only: return the underlying DOM element for focus assertions/retries.
@@ -194,6 +170,8 @@ const MIN_INPUT_HEIGHT_DESKTOP = 46;
 const DEFAULT_MAX_INPUT_HEIGHT = 160;
 const MAX_INPUT_VIEWPORT_RATIO = 0.5;
 const MIN_INPUT_HEIGHT = isWeb ? MIN_INPUT_HEIGHT_DESKTOP : MIN_INPUT_HEIGHT_MOBILE;
+const ATTACHMENT_SHEET_SNAP_POINTS = ["34%", "45%"];
+
 type WebTextInputKeyPressEvent = NativeSyntheticEvent<
   TextInputKeyPressEventData & {
     metaKey?: boolean;
@@ -253,6 +231,55 @@ function AttachmentMenuList({ items }: { items: AttachmentMenuItem[] }) {
   );
 }
 
+function AttachmentSheetItem({
+  item,
+  onSelect,
+}: {
+  item: AttachmentMenuItem;
+  onSelect: (item: AttachmentMenuItem) => void;
+}) {
+  const handlePress = useCallback(() => {
+    onSelect(item);
+  }, [item, onSelect]);
+  const pressableStyle = useCallback(
+    ({ pressed }: { pressed: boolean }) => [
+      styles.attachmentSheetItem,
+      pressed && styles.attachmentSheetItemPressed,
+      item.disabled && styles.buttonDisabled,
+    ],
+    [item.disabled],
+  );
+
+  return (
+    <Pressable
+      testID={`message-input-attachment-menu-item-${item.id}`}
+      accessibilityRole="button"
+      disabled={item.disabled}
+      onPress={handlePress}
+      style={pressableStyle}
+    >
+      {item.icon ? <View style={styles.attachmentSheetItemIcon}>{item.icon}</View> : null}
+      <Text style={styles.attachmentSheetItemText}>{item.label}</Text>
+    </Pressable>
+  );
+}
+
+function AttachmentSheetList({
+  items,
+  onSelect,
+}: {
+  items: AttachmentMenuItem[];
+  onSelect: (item: AttachmentMenuItem) => void;
+}) {
+  return (
+    <View style={styles.attachmentSheetList}>
+      {items.map((item) => (
+        <AttachmentSheetItem key={item.id} item={item} onSelect={onSelect} />
+      ))}
+    </View>
+  );
+}
+
 function AttachmentDropdown({
   visible,
   isConnected,
@@ -270,10 +297,71 @@ function AttachmentDropdown({
   attachmentMenuItems: AttachmentMenuItem[];
   addAttachmentLabel: string;
 }) {
+  const isCompact = useIsCompactFormFactor();
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  useDismissKeyboardOnOpen(isSheetOpen, isCompact);
+
   const isButtonDisabled = !isConnected || disabled;
+  const attachmentSheetHeader = useMemo<SheetHeader>(
+    () => ({ title: addAttachmentLabel }),
+    [addAttachmentLabel],
+  );
+  const handleOpenSheet = useCallback(() => {
+    if (isButtonDisabled) return;
+    setIsSheetOpen(true);
+  }, [isButtonDisabled]);
+  const handleCloseSheet = useCallback(() => {
+    setIsSheetOpen(false);
+  }, []);
+  const handleSheetItemSelect = useCallback((item: AttachmentMenuItem) => {
+    if (item.disabled) return;
+    setIsSheetOpen(false);
+    item.onSelect();
+  }, []);
+  const mobileAttachButtonStyle = useCallback(
+    (state: { pressed: boolean; hovered?: boolean }) => {
+      if (typeof attachButtonStyle === "function") {
+        return attachButtonStyle({ ...state, hovered: Boolean(state.hovered), open: isSheetOpen });
+      }
+      return attachButtonStyle;
+    },
+    [attachButtonStyle, isSheetOpen],
+  );
+  const renderMobileAttachButtonIcon = useCallback(
+    ({ hovered }: { hovered?: boolean }) => renderAttachButtonIcon({ hovered }),
+    [renderAttachButtonIcon],
+  );
+
   if (!visible) return null;
+
+  if (isCompact) {
+    return (
+      <>
+        <Pressable
+          disabled={isButtonDisabled}
+          accessibilityLabel={addAttachmentLabel}
+          accessibilityRole="button"
+          testID="message-input-attach-button"
+          onPress={handleOpenSheet}
+          style={mobileAttachButtonStyle}
+        >
+          {renderMobileAttachButtonIcon}
+        </Pressable>
+        <AdaptiveModalSheet
+          header={attachmentSheetHeader}
+          visible={isSheetOpen}
+          onClose={handleCloseSheet}
+          snapPoints={ATTACHMENT_SHEET_SNAP_POINTS}
+          testID="message-input-attachment-menu"
+        >
+          <AttachmentSheetList items={attachmentMenuItems} onSelect={handleSheetItemSelect} />
+        </AdaptiveModalSheet>
+      </>
+    );
+  }
+
   return (
-    <DropdownMenu compactMode="sheet">
+    <DropdownMenu>
       <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger
@@ -296,7 +384,6 @@ function AttachmentDropdown({
         offset={8}
         minWidth={220}
         testID="message-input-attachment-menu"
-        sheetTitle={addAttachmentLabel}
       >
         <AttachmentMenuList items={attachmentMenuItems} />
       </DropdownMenuContent>
@@ -304,39 +391,29 @@ function AttachmentDropdown({
   );
 }
 
-function VoiceButtonIcon({
+function DictationButtonIcon({
   hovered,
-  isDictating,
-  isMutedRealtime,
   buttonIconSize,
 }: {
   hovered: boolean;
-  isDictating: boolean;
-  isMutedRealtime: boolean;
   buttonIconSize: number;
 }) {
-  if (isDictating) {
-    return <Square size={buttonIconSize} color="white" fill="white" />;
-  }
   const colorMapping = hovered ? iconForegroundMapping : iconForegroundMutedMapping;
-  if (isMutedRealtime) {
-    return <ThemedMicOff size={buttonIconSize} uniProps={colorMapping} />;
-  }
   return <ThemedMic size={buttonIconSize} uniProps={colorMapping} />;
 }
 
 type ShortcutChord = NonNullable<React.ComponentProps<typeof Shortcut>["chord"]>;
 
-function VoiceTooltipBody({
-  voiceTooltipText,
+function DictationTooltipBody({
+  label,
   shortcut,
 }: {
-  voiceTooltipText: string;
+  label: string;
   shortcut: ShortcutChord | null | undefined;
 }) {
   return (
     <View style={styles.tooltipRow}>
-      <Text style={styles.tooltipText}>{voiceTooltipText}</Text>
+      <Text style={styles.tooltipText}>{label}</Text>
       {shortcut ? <Shortcut chord={shortcut} /> : null}
     </View>
   );
@@ -381,8 +458,7 @@ function SendButtonContent({
 }
 
 interface DesktopKeyPressContext {
-  onKeyPressCallback: ((event: ComposerKeyPressEvent) => boolean) | undefined;
-  input: ComposerKeyPressEvent["input"];
+  onKeyPressCallback: ((event: { key: string; preventDefault: () => void }) => boolean) | undefined;
   submitOnEnter: boolean;
   isAgentRunning: boolean;
   onQueue: ((payload: MessagePayload) => void) | undefined;
@@ -403,7 +479,6 @@ function handleDesktopKeyPressImpl(
     const handled = ctx.onKeyPressCallback({
       key: event.nativeEvent.key,
       preventDefault: () => event.preventDefault(),
-      input: ctx.input,
     });
     if (handled) return;
   }
@@ -426,9 +501,12 @@ function handleDesktopKeyPressImpl(
   ctx.handleDefaultSendAction();
 }
 
-function getTextInputNativeElement(current: ComposerTextInputHandle | null): HTMLElement | null {
+function getTextInputNativeElement(
+  current: TextInput | (TextInput & { getNativeRef?: () => unknown }) | null,
+): HTMLElement | null {
   if (!current) return null;
-  const native = typeof current.getNativeRef === "function" ? current.getNativeRef() : current;
+  const handle = current as TextInput & { getNativeRef?: () => unknown };
+  const native = typeof handle.getNativeRef === "function" ? handle.getNativeRef() : current;
   return native instanceof HTMLElement ? native : null;
 }
 
@@ -437,19 +515,11 @@ interface PasteImagesEffectArgs {
   isConnected: boolean;
   disabled: boolean;
   isDictating: boolean;
-  isRealtimeVoiceForCurrentAgent: boolean;
   onAddImages: ((images: ImageAttachment[]) => void) | undefined;
 }
 
 function usePasteImagesEffect(args: PasteImagesEffectArgs): void {
-  const {
-    getWebTextArea,
-    isConnected,
-    disabled,
-    isDictating,
-    isRealtimeVoiceForCurrentAgent,
-    onAddImages,
-  } = args;
+  const { getWebTextArea, isConnected, disabled, isDictating, onAddImages } = args;
 
   useEffect(() => {
     if (!isWeb || !onAddImages) return;
@@ -470,7 +540,7 @@ function usePasteImagesEffect(args: PasteImagesEffectArgs): void {
 
     let disposed = false;
     const handlePaste = (event: ClipboardEvent) => {
-      if (!isConnected || disabled || isDictating || isRealtimeVoiceForCurrentAgent) return;
+      if (!isConnected || disabled || isDictating) return;
 
       const imageFiles = collectImageFilesFromClipboardData(event.clipboardData);
       if (imageFiles.length === 0) return;
@@ -493,18 +563,13 @@ function usePasteImagesEffect(args: PasteImagesEffectArgs): void {
       disposed = true;
       textarea.removeEventListener?.("paste", handlePaste);
     };
-  }, [
-    disabled,
-    getWebTextArea,
-    isConnected,
-    isDictating,
-    isRealtimeVoiceForCurrentAgent,
-    onAddImages,
-  ]);
+  }, [disabled, getWebTextArea, isConnected, isDictating, onAddImages]);
 }
 
 function useAutoFocusOnWebEffect(
-  textInputRef: React.MutableRefObject<ComposerTextInputHandle | null>,
+  textInputRef: React.MutableRefObject<
+    TextInput | (TextInput & { getNativeRef?: () => unknown }) | null
+  >,
   autoFocus: boolean,
   autoFocusKey: string | undefined,
 ): void {
@@ -517,30 +582,12 @@ function useAutoFocusOnWebEffect(
         const active = typeof document !== "undefined" ? document.activeElement : null;
         return Boolean(element) && active === element;
       },
-      deferInitialAttempt: true,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoFocus, autoFocusKey]);
 }
 
-function MessageInputAutoFocus({
-  enabled,
-  autoFocusKey,
-  textInputRef,
-}: {
-  enabled: boolean;
-  autoFocusKey: string | undefined;
-  textInputRef: React.MutableRefObject<ComposerTextInputHandle | null>;
-}) {
-  const { isActiveComposer } = useComposerKeyboardScope();
-  useAutoFocusOnWebEffect(textInputRef, enabled && isActiveComposer, autoFocusKey);
-  return null;
-}
-
-function MessageInputOverlay({
-  showDictationOverlay,
-  showRealtimeOverlay,
-  voice,
+function MessageInputDictationToolbar({
   dictationVolume,
   dictationDuration,
   isDictating,
@@ -548,63 +595,35 @@ function MessageInputOverlay({
   dictationStatus,
   dictationError,
   onCancelRecording,
-  onAcceptRecording,
-  onAcceptAndSendRecording,
+  onStopRecording,
   onRetryFailedRecording,
   onDiscardFailedRecording,
-  onRealtimeVoiceStop,
 }: {
-  showDictationOverlay: boolean;
-  showRealtimeOverlay: boolean;
-  voice:
-    | {
-        isMuted: boolean;
-        isVoiceSwitching: boolean;
-        toggleMute: () => void;
-      }
-    | null
-    | undefined;
   dictationVolume: number;
   dictationDuration: number;
   isDictating: boolean;
   isDictationProcessing: boolean;
-  dictationStatus: React.ComponentProps<typeof DictationOverlay>["status"];
+  dictationStatus: React.ComponentProps<typeof DictationToolbar>["status"];
   dictationError: string | null;
   onCancelRecording: () => Promise<void>;
-  onAcceptRecording: () => Promise<void>;
-  onAcceptAndSendRecording: () => Promise<void>;
+  onStopRecording: () => Promise<void>;
   onRetryFailedRecording: () => void;
   onDiscardFailedRecording: () => void;
-  onRealtimeVoiceStop: () => void;
 }) {
-  if (showDictationOverlay) {
-    return (
-      <DictationOverlay
-        volume={dictationVolume}
-        duration={dictationDuration}
-        isRecording={isDictating}
-        isProcessing={isDictationProcessing}
-        status={dictationStatus}
-        errorText={dictationStatus === "failed" ? (dictationError ?? undefined) : undefined}
-        onCancel={onCancelRecording}
-        onAccept={onAcceptRecording}
-        onAcceptAndSend={onAcceptAndSendRecording}
-        onRetry={dictationStatus === "failed" ? onRetryFailedRecording : undefined}
-        onDiscard={dictationStatus === "failed" ? onDiscardFailedRecording : undefined}
-      />
-    );
-  }
-  if (showRealtimeOverlay && voice) {
-    return (
-      <RealtimeVoiceOverlay
-        isMuted={voice.isMuted}
-        isSwitching={voice.isVoiceSwitching}
-        onToggleMute={voice.toggleMute}
-        onStop={onRealtimeVoiceStop}
-      />
-    );
-  }
-  return null;
+  return (
+    <DictationToolbar
+      volume={dictationVolume}
+      duration={dictationDuration}
+      isRecording={isDictating}
+      isProcessing={isDictationProcessing}
+      status={dictationStatus}
+      errorText={dictationStatus === "failed" ? (dictationError ?? undefined) : undefined}
+      onCancel={onCancelRecording}
+      onStop={onStopRecording}
+      onRetry={dictationStatus === "failed" ? onRetryFailedRecording : undefined}
+      onDiscard={dictationStatus === "failed" ? onDiscardFailedRecording : undefined}
+    />
+  );
 }
 
 function FocusHint({
@@ -616,8 +635,7 @@ function FocusHint({
   focusInputKeys: ShortcutChord | null | undefined;
   label: string;
 }) {
-  const { isActiveComposer } = useComposerKeyboardScope();
-  if (!isActiveComposer || !visible || !focusInputKeys || !label.trim()) return null;
+  if (!visible || !focusInputKeys || !label.trim()) return null;
   return (
     <Text style={styles.focusHintText} pointerEvents="none">
       {label}
@@ -628,8 +646,8 @@ function FocusHint({
 interface ComposerTextSurfaceProps {
   readOnly: boolean;
   value: string;
-  textInputRef: React.Ref<ComposerTextInputHandle>;
-  textInputStyle: EditingTextInputProps["style"];
+  textInputRef: React.Ref<TextInput>;
+  textInputStyle: React.ComponentProps<typeof ThemedTextInput>["style"];
   readOnlyTextStyle: React.ComponentProps<typeof Text>["style"];
   placeholder: string;
   accessibilityLabel: string;
@@ -639,20 +657,55 @@ interface ComposerTextSurfaceProps {
   editable: boolean;
   scrollEnabled: boolean;
   autoFocus: boolean;
+  onContentSizeChange: (event: NativeSyntheticEvent<TextInputContentSizeChangeEventData>) => void;
   onKeyPress: ((event: WebTextInputKeyPressEvent) => void) | undefined;
   onSelectionChange: (event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => void;
-  onPasteImages: ((files: readonly NativePastedFile[]) => void) | undefined;
-  onPasteError: (message: string) => void;
   focusHintVisible: boolean;
   focusInputKeys: ShortcutChord | null | undefined;
   focusHintLabel: string;
 }
+function useWebImeCompositionDeferral(
+  webTextareaRef: React.RefObject<HTMLElement | null>,
+  onChangeText: (text: string) => void,
+): (text: string) => void {
+  const composingRef = useRef(false);
+  const onChangeTextRef = useRef(onChangeText);
+  onChangeTextRef.current = onChangeText;
 
-/**
- * The composer's content: an editable input, or static text when there is
- * nothing to type. Both sit in the same bordered surface, so read-only is a
- * state of this composer rather than a second one.
- */
+  useEffect(() => {
+    const textarea = webTextareaRef.current as
+      | (HTMLElement & {
+          addEventListener?: (type: string, listener: EventListener) => void;
+          removeEventListener?: (type: string, listener: EventListener) => void;
+        })
+      | null;
+    if (!isWeb || !textarea || typeof textarea.addEventListener !== "function") return;
+
+    const startComposition = () => {
+      composingRef.current = true;
+    };
+    const endComposition = () => {
+      composingRef.current = false;
+      onChangeTextRef.current((textarea as HTMLTextAreaElement).value);
+    };
+
+    textarea.addEventListener("compositionstart", startComposition);
+    textarea.addEventListener("compositionend", endComposition);
+    return () => {
+      textarea.removeEventListener("compositionstart", startComposition);
+      textarea.removeEventListener("compositionend", endComposition);
+    };
+  }, [webTextareaRef]);
+
+  return useCallback(
+    (nextText: string) => {
+      if (composingRef.current) return;
+      onChangeText(nextText);
+    },
+    [onChangeText],
+  );
+}
+
 function ComposerTextSurface(props: ComposerTextSurfaceProps): React.ReactElement {
   if (props.readOnly) {
     return (
@@ -665,23 +718,23 @@ function ComposerTextSurface(props: ComposerTextSurfaceProps): React.ReactElemen
   }
   return (
     <View style={styles.textInputScrollWrapper}>
-      <ComposerTextInput
+      <ThemedTextInput
         ref={props.textInputRef}
         dataSet={COMPOSER_INPUT_DATASET}
-        initialValue={props.value}
+        value={props.value}
         onChangeText={props.onChangeText}
         placeholder={props.placeholder}
+        uniProps={textInputPlaceholderColorMapping}
         accessibilityLabel={props.accessibilityLabel}
         onFocus={props.onFocus}
         onBlur={props.onBlur}
         style={props.textInputStyle}
         multiline
         scrollEnabled={props.scrollEnabled}
+        onContentSizeChange={props.onContentSizeChange}
         editable={props.editable}
         onKeyPress={props.onKeyPress}
         onSelectionChange={props.onSelectionChange}
-        onPasteImages={props.onPasteImages}
-        onPasteError={props.onPasteError}
         autoFocus={props.autoFocus}
       />
       <FocusHint
@@ -693,44 +746,39 @@ function ComposerTextSurface(props: ComposerTextSurfaceProps): React.ReactElemen
   );
 }
 
-function VoiceButtonTooltip({
+function DictationButtonTooltip({
   visible,
-  onVoicePress,
-  isDictationStartEnabled,
-  voiceButtonAccessibilityLabel,
-  voiceButtonStyle,
-  renderVoiceButtonIcon,
-  voiceTooltipText,
-  isRealtimeVoiceForCurrentAgent,
-  voiceMuteToggleKeys,
-  dictationToggleKeys,
+  onPress,
+  enabled,
+  accessibilityLabel,
+  buttonStyle,
+  renderIcon,
+  tooltipText,
+  shortcut,
 }: {
   visible: boolean;
-  onVoicePress: () => void;
-  isDictationStartEnabled: boolean;
-  voiceButtonAccessibilityLabel: string;
-  voiceButtonStyle: React.ComponentProps<typeof TooltipTrigger>["style"];
-  renderVoiceButtonIcon: (input: { hovered?: boolean }) => React.ReactElement;
-  voiceTooltipText: string;
-  isRealtimeVoiceForCurrentAgent: boolean;
-  voiceMuteToggleKeys: ShortcutChord | null | undefined;
-  dictationToggleKeys: ShortcutChord | null | undefined;
+  onPress: () => void;
+  enabled: boolean;
+  accessibilityLabel: string;
+  buttonStyle: React.ComponentProps<typeof TooltipTrigger>["style"];
+  renderIcon: (input: { hovered?: boolean }) => React.ReactElement;
+  tooltipText: string;
+  shortcut: ShortcutChord | null | undefined;
 }) {
-  const shortcut = isRealtimeVoiceForCurrentAgent ? voiceMuteToggleKeys : dictationToggleKeys;
   if (!visible) return null;
   return (
     <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
       <TooltipTrigger
-        onPress={onVoicePress}
-        disabled={!isDictationStartEnabled}
+        onPress={onPress}
+        disabled={!enabled}
         accessibilityRole="button"
-        accessibilityLabel={voiceButtonAccessibilityLabel}
-        style={voiceButtonStyle}
+        accessibilityLabel={accessibilityLabel}
+        style={buttonStyle}
       >
-        {renderVoiceButtonIcon}
+        {renderIcon}
       </TooltipTrigger>
       <TooltipContent side="top" align="center" offset={8}>
-        <VoiceTooltipBody voiceTooltipText={voiceTooltipText} shortcut={shortcut} />
+        <DictationTooltipBody label={tooltipText} shortcut={shortcut} />
       </TooltipContent>
     </Tooltip>
   );
@@ -792,14 +840,111 @@ function SendButtonTooltip({
   );
 }
 
+function DictationRefinementNotice({
+  choice,
+  error,
+  visible,
+  onToggle,
+}: {
+  choice: DictationRefinementChoice | null;
+  error: string | null;
+  visible: boolean;
+  onToggle: () => void;
+}) {
+  const { t } = useTranslation();
+  if (!visible || (!choice && !error)) return null;
+  return (
+    <View
+      accessibilityRole={error ? "alert" : undefined}
+      style={styles.dictationRefinementNotice}
+      testID="dictation-refinement-notice"
+    >
+      <Text
+        style={[
+          styles.dictationRefinementLabel,
+          error ? styles.dictationRefinementError : undefined,
+        ]}
+      >
+        {error
+          ? t("message.dictation.refinementFailed", { error })
+          : t(
+              choice?.showingOriginal
+                ? "message.dictation.originalTranscript"
+                : "message.dictation.aiRefinedTranscript",
+            )}
+      </Text>
+      {choice ? (
+        <Button size="xs" variant="ghost" onPress={onToggle} testID="dictation-refinement-toggle">
+          {t(
+            choice.showingOriginal
+              ? "message.dictation.useAiRefinement"
+              : "message.dictation.useOriginal",
+          )}
+        </Button>
+      ) : null}
+    </View>
+  );
+}
+
+function useDictationRefinementChoice(params: {
+  value: string;
+  valueRef: { current: string };
+  onChangeText: (text: string) => void;
+}) {
+  const { value, valueRef, onChangeText } = params;
+  const [choice, setChoice] = useState<DictationRefinementChoice | null>(null);
+  const [errorNotice, setErrorNotice] = useState<{ draft: string; error: string } | null>(null);
+
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value, valueRef]);
+
+  useEffect(() => {
+    let expectedDraft = errorNotice?.draft;
+    if (choice) {
+      expectedDraft = choice.showingOriginal ? choice.originalDraft : choice.refinedDraft;
+    }
+    if (expectedDraft && valueRef.current !== expectedDraft) {
+      setChoice(null);
+      setErrorNotice(null);
+    }
+  }, [choice, errorNotice, value, valueRef]);
+
+  const applyTranscript = useCallback(
+    (text: string, meta: DictationRefinementMeta) => {
+      if (!text) return;
+      const result = applyDictationRefinement(valueRef.current, text, meta);
+      valueRef.current = result.draft;
+      onChangeText(result.draft);
+      setChoice(result.choice);
+      setErrorNotice(result.error ? { draft: result.draft, error: result.error } : null);
+    },
+    [onChangeText, valueRef],
+  );
+
+  const toggle = useCallback(() => {
+    if (!choice) return;
+    const result = toggleDictationRefinement(valueRef.current, choice);
+    valueRef.current = result.draft;
+    if (result.choice) onChangeText(result.draft);
+    setChoice(result.choice);
+  }, [choice, onChangeText, valueRef]);
+
+  const clear = useCallback(() => {
+    setChoice(null);
+    setErrorNotice(null);
+  }, []);
+  return { choice, error: errorNotice?.error ?? null, applyTranscript, toggle, clear };
+}
+
 type PrimaryActionKind = "send" | "active" | "none";
 
 function hasSendableComposerContent(input: {
-  hasText: boolean;
+  value: string;
   attachments: readonly ComposerAttachment[];
   hasExternalContent: boolean;
 }): boolean {
-  return input.hasText || input.attachments.length > 0 || input.hasExternalContent;
+  return input.value.trim().length > 0 || input.attachments.length > 0 || input.hasExternalContent;
 }
 
 function resolvePrimaryActionKind(input: {
@@ -826,83 +971,23 @@ function PrimaryAction({
   if (kind === "send") return <SendButtonTooltip {...sendButtonProps} />;
   return null;
 }
-interface ToggleRealtimeVoiceContext {
-  voice:
-    | {
-        isVoiceSwitching: boolean;
-        isVoiceModeForAgent: (serverId: string, agentId: string) => boolean;
-        startVoice: (serverId: string, agentId: string) => Promise<unknown>;
-      }
-    | null
-    | undefined;
-  voiceServerId: string | undefined;
-  voiceAgentId: string | undefined;
-  isConnected: boolean;
-  disabled: boolean;
-  isAgentRunning: boolean;
-  handleStopRealtimeVoice: () => Promise<unknown> | void;
-  toast: { error: (msg: string) => void };
-  interruptBeforeVoiceMessage: string;
-}
-
-function toggleRealtimeVoiceImpl(ctx: ToggleRealtimeVoiceContext): void {
-  if (!ctx.voice || !ctx.voiceServerId || !ctx.voiceAgentId || !ctx.isConnected || ctx.disabled) {
-    return;
-  }
-  if (ctx.voice.isVoiceSwitching) return;
-  if (ctx.voice.isVoiceModeForAgent(ctx.voiceServerId, ctx.voiceAgentId)) {
-    void ctx.handleStopRealtimeVoice();
-    return;
-  }
-  if (ctx.isAgentRunning) {
-    ctx.toast.error(ctx.interruptBeforeVoiceMessage);
-    return;
-  }
-  void ctx.voice.startVoice(ctx.voiceServerId, ctx.voiceAgentId).catch((error) => {
-    console.error("[MessageInput] Failed to start realtime voice", error);
-    const message = extractErrorMessage(error);
-    if (message && message.trim().length > 0) {
-      ctx.toast.error(message);
-    }
-  });
-}
 
 interface StartDictationContext {
   dictationUnavailableMessage: string | null | undefined;
   canStartDictation: () => boolean;
-  toast: { error: (msg: string) => void };
+  onUnavailable: () => void;
   startDictation: () => Promise<void>;
 }
 
 async function startDictationIfAvailableImpl(ctx: StartDictationContext): Promise<void> {
   if (ctx.dictationUnavailableMessage) {
-    ctx.toast.error(ctx.dictationUnavailableMessage);
+    ctx.onUnavailable();
     return;
   }
   if (!ctx.canStartDictation()) {
     return;
   }
   await ctx.startDictation();
-}
-
-interface VoicePressContext {
-  isRealtimeVoiceForCurrentAgent: boolean;
-  voice: { toggleMute: () => void } | null | undefined;
-  isDictating: boolean;
-  cancelDictation: () => Promise<void> | void;
-  startDictationIfAvailable: () => Promise<void>;
-}
-
-async function handleVoicePressImpl(ctx: VoicePressContext): Promise<void> {
-  if (ctx.isRealtimeVoiceForCurrentAgent && ctx.voice) {
-    ctx.voice.toggleMute();
-    return;
-  }
-  if (ctx.isDictating) {
-    await ctx.cancelDictation();
-    return;
-  }
-  await ctx.startDictationIfAvailable();
 }
 
 interface SendMessageContext {
@@ -945,7 +1030,7 @@ interface QueueMessageContext {
   attachments: ComposerAttachment[];
   cwd: string;
   onQueue: ((payload: MessagePayload) => void) | undefined;
-  replaceText: (text: string) => void;
+  onChangeText: (text: string) => void;
   onMinimizeHeight: () => void;
 }
 
@@ -954,20 +1039,11 @@ function queueMessageImpl(ctx: QueueMessageContext): void {
   const trimmed = ctx.value.trim();
   if (!trimmed && ctx.attachments.length === 0) return;
   ctx.onQueue({ text: trimmed, attachments: ctx.attachments, cwd: ctx.cwd });
-  ctx.replaceText("");
+  ctx.onChangeText("");
   ctx.onMinimizeHeight();
 }
 
-function computeIsRealtimeVoiceForAgent(
-  voice: { isVoiceModeForAgent: (serverId: string, agentId: string) => boolean } | null | undefined,
-  voiceServerId: string | undefined,
-  voiceAgentId: string | undefined,
-): boolean {
-  if (!voice || !voiceServerId || !voiceAgentId) return false;
-  return voice.isVoiceModeForAgent(voiceServerId, voiceAgentId);
-}
-
-function computeShouldShowDictationOverlay(
+function computeShouldShowDictationToolbar(
   isDictating: boolean,
   isDictationProcessing: boolean,
   dictationStatus: string,
@@ -975,12 +1051,8 @@ function computeShouldShowDictationOverlay(
   return isDictating || isDictationProcessing || dictationStatus === "failed";
 }
 
-function computeIsDictationStartEnabled(
-  isReadyForDictation: boolean | undefined,
-  isConnected: boolean,
-  disabled: boolean,
-): boolean {
-  return (isReadyForDictation ?? isConnected) && !disabled;
+function computeIsDictationStartEnabled(isConnected: boolean, disabled: boolean): boolean {
+  return isConnected && !disabled;
 }
 
 function resolveMaxInputHeight(windowHeight: number): number {
@@ -988,11 +1060,27 @@ function resolveMaxInputHeight(windowHeight: number): number {
   return Math.max(DEFAULT_MAX_INPUT_HEIGHT, Math.floor(windowHeight * MAX_INPUT_VIEWPORT_RATIO));
 }
 
+function computeTextInputHeightStyle(inputHeight: number, maxInputHeight: number) {
+  if (isWeb) {
+    return {
+      height: inputHeight,
+      minHeight: MIN_INPUT_HEIGHT,
+      maxHeight: maxInputHeight,
+    };
+  }
+  return {
+    minHeight: MIN_INPUT_HEIGHT,
+    maxHeight: maxInputHeight,
+  };
+}
+
 function isTextAreaLike(v: unknown): v is TextAreaHandle {
   return typeof v === "object" && v !== null && "scrollHeight" in v;
 }
 
-function getWebTextAreaImpl(current: ComposerTextInputHandle | null): TextAreaHandle | null {
+function getWebTextAreaImpl(
+  current: TextInput | (TextInput & { getNativeRef?: () => unknown }) | null,
+): TextAreaHandle | null {
   if (!current) return null;
   const candidate = current as { getNativeRef?: () => unknown };
   if (typeof candidate.getNativeRef === "function") {
@@ -1003,24 +1091,12 @@ function getWebTextAreaImpl(current: ComposerTextInputHandle | null): TextAreaHa
   return null;
 }
 
-function getComposerInputSnapshot(
-  current: ComposerTextInputHandle | null,
-  fallbackText: string,
-  fallbackSelection: ComposerInputSnapshot["selection"],
-): ComposerInputSnapshot {
-  const text = current?.getText() ?? fallbackText;
-  const textArea = getWebTextAreaImpl(current);
-  const start = textArea?.selectionStart ?? fallbackSelection.start;
-  const end = textArea?.selectionEnd ?? fallbackSelection.end;
-  return { text, selection: { start, end } };
-}
-
 interface SendButtonStateInput {
   disabled: boolean;
   isSubmitDisabled: boolean;
   isSubmitLoading: boolean;
   onSubmitLoadingPress: (() => void) | undefined;
-  defaultSendBehavior: "interrupt" | "steer" | "queue";
+  defaultSendBehavior: "interrupt" | "queue";
   isAgentRunning: boolean;
 }
 
@@ -1056,24 +1132,24 @@ interface ResolvedMessageInputProps {
   attachmentMenuItems: AttachmentMenuItem[];
   onAttachButtonRef: ((node: View | null) => void) | undefined;
   onAddImages: ((images: ImageAttachment[]) => void) | undefined;
-  onPasteImages: ((files: readonly NativePastedFile[]) => void) | undefined;
   client: DaemonClient | null;
   isReadyForDictation: boolean | undefined;
   placeholder: string | undefined;
   autoFocus: boolean;
   autoFocusKey: string | undefined;
   disabled: boolean;
+  isPaneFocused: boolean;
   leftContent: React.ReactNode;
-  beforeVoiceContent: React.ReactNode;
+  beforeDictationContent: React.ReactNode;
   rightContent: React.ReactNode;
   activeActionContent: React.ReactNode;
-  voiceServerId: string | undefined;
-  voiceAgentId: string | undefined;
+  serverId: string | undefined;
+  agentId: string | undefined;
   isAgentRunning: boolean;
-  defaultSendBehavior: "interrupt" | "steer" | "queue";
+  defaultSendBehavior: "interrupt" | "queue";
   onQueue: ((payload: MessagePayload) => void) | undefined;
   onSubmitLoadingPress: (() => void) | undefined;
-  onKeyPressCallback: ((event: ComposerKeyPressEvent) => boolean) | undefined;
+  onKeyPressCallback: ((event: { key: string; preventDefault: () => void }) => boolean) | undefined;
   onSelectionChangeCallback: ((selection: { start: number; end: number }) => void) | undefined;
   onFocusChange: ((focused: boolean) => void) | undefined;
   onHeightChange: ((height: number) => void) | undefined;
@@ -1081,7 +1157,6 @@ interface ResolvedMessageInputProps {
   attachmentSlot: React.ReactNode;
   inputMode: ComposerInputMode;
   readOnly: boolean;
-  textReplacementKey: string;
   submitLabel: string | undefined;
 }
 
@@ -1103,21 +1178,21 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     attachmentMenuItems: props.attachmentMenuItems,
     onAttachButtonRef: props.onAttachButtonRef,
     onAddImages: props.onAddImages,
-    onPasteImages: props.onPasteImages,
     client: props.client,
     isReadyForDictation: props.isReadyForDictation,
     placeholder: props.placeholder,
     autoFocus: props.autoFocus ?? false,
     autoFocusKey: props.autoFocusKey,
     disabled: props.disabled ?? false,
+    isPaneFocused: props.isPaneFocused ?? true,
     leftContent: props.leftContent,
-    beforeVoiceContent: props.beforeVoiceContent,
+    beforeDictationContent: props.beforeDictationContent,
     rightContent: props.rightContent,
     activeActionContent: props.activeActionContent,
-    voiceServerId: props.voiceServerId,
-    voiceAgentId: props.voiceAgentId,
+    serverId: props.serverId,
+    agentId: props.agentId,
     isAgentRunning: props.isAgentRunning ?? false,
-    defaultSendBehavior: props.defaultSendBehavior,
+    defaultSendBehavior: props.defaultSendBehavior ?? "interrupt",
     onQueue: props.onQueue,
     onSubmitLoadingPress: props.onSubmitLoadingPress,
     onKeyPressCallback: props.onKeyPress,
@@ -1128,15 +1203,29 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     attachmentSlot: props.attachmentSlot,
     inputMode: props.inputMode ?? "chat",
     readOnly: props.readOnly ?? false,
-    textReplacementKey: props.textReplacementKey,
     submitLabel: props.submitLabel,
   };
 }
 
-function extractErrorMessage(error: unknown): string | null {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  return null;
+function useDictationTranscriptRefiner(params: {
+  client: DaemonClient | null;
+  agentId: string | undefined;
+  serverId: string | undefined;
+  supported: boolean;
+}): (text: string) => Promise<DictationRefinementResult> {
+  const { config } = useDaemonConfig(params.supported ? (params.serverId ?? null) : null);
+  const enabled = config?.dictation?.refineWithAgent === true;
+
+  return useCallback(
+    async (text: string) => {
+      if (!params.client || !params.agentId || !enabled) {
+        return { text, refined: false };
+      }
+      const response = await params.client.refineDictationTranscript(text, params.agentId);
+      return { text: response.text, refined: response.refined, error: response.error };
+    },
+    [enabled, params.agentId, params.client],
+  );
 }
 
 export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
@@ -1158,19 +1247,19 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       attachmentMenuItems,
       onAttachButtonRef,
       onAddImages,
-      onPasteImages,
       client,
       isReadyForDictation,
       placeholder,
       autoFocus,
       autoFocusKey,
       disabled,
+      isPaneFocused,
       leftContent,
-      beforeVoiceContent,
+      beforeDictationContent,
       rightContent,
       activeActionContent,
-      voiceServerId,
-      voiceAgentId,
+      serverId,
+      agentId,
       isAgentRunning,
       defaultSendBehavior,
       onQueue,
@@ -1183,7 +1272,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       attachmentSlot,
       inputMode,
       readOnly,
-      textReplacementKey,
       submitLabel,
     } = resolveMessageInputProps(props);
     const mode = resolveComposerInputMode(inputMode);
@@ -1193,107 +1281,57 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     const maxInputHeight = resolveMaxInputHeight(windowHeight);
     const buttonIconSize = isWeb ? ICON_SIZE.md : ICON_SIZE.lg;
     const toast = useToast();
-    const voice = useVoiceOptional();
-    const voiceMuteToggleKeys = useShortcutKeys("voice-mute-toggle");
+    const router = useRouter();
     const dictationToggleKeys = useShortcutKeys("dictation-toggle");
     const focusInputKeys = useShortcutKeys("focus-message-input");
+    const [inputHeight, setInputHeight] = useState(MIN_INPUT_HEIGHT);
     const [isInputFocused, setIsInputFocused] = useState(false);
-    // Web text is DOM-owned between deferred draft publications. The action button only needs
-    // this boundary, so publish empty/non-empty transitions without rerendering for every key.
-    const initialHasLiveText = value.trim().length > 0;
-    const [hasLiveText, setHasLiveText] = useState(initialHasLiveText);
-    const hasLiveTextRef = useRef(initialHasLiveText);
     const rootRef = useRef<View | null>(null);
     const inputWrapperRef = useRef<View | null>(null);
-    const textInputRef = useRef<ComposerTextInputHandle | null>(null);
+    const textInputRef = useRef<TextInput | (TextInput & { getNativeRef?: () => unknown }) | null>(
+      null,
+    );
     const isInputFocusedRef = useRef(false);
-    const valueRef = useRef(value);
-    const selectionRef = useRef({ start: value.length, end: value.length });
-    const appliedTextReplacementKeyRef = useRef(textReplacementKey);
-    const webTextareaRef = useRef<HTMLElement | null>(null);
-    const composerHeight = useComposerHeight({
-      value,
-      textareaRef: webTextareaRef,
-      minHeight: MIN_INPUT_HEIGHT,
-      maxHeight: maxInputHeight,
-    });
-    const { style: composerHeightStyle, scrollEnabled: isComposerScrollEnabled } = composerHeight;
-    const measuredComposerHeight = composerHeight.mode === "measured" ? composerHeight : undefined;
-    const updateComposerHeightForText = measuredComposerHeight?.onTextChange;
-    const resetComposerHeight = measuredComposerHeight?.reset;
-
-    const handleComposerLayout = useCallback(
-      (event: LayoutChangeEvent) => onHeightChange?.(event.nativeEvent.layout.height),
-      [onHeightChange],
-    );
-
-    const updateLiveTextPresence = useCallback((text: string) => {
-      const nextHasLiveText = text.trim().length > 0;
-      if (hasLiveTextRef.current === nextHasLiveText) return;
-      hasLiveTextRef.current = nextHasLiveText;
-      setHasLiveText(nextHasLiveText);
-    }, []);
-
-    const replaceText = useCallback(
-      (nextText: string, selection?: { start: number; end: number }) => {
-        updateComposerHeightForText?.(valueRef.current, nextText);
-        valueRef.current = nextText;
-        updateLiveTextPresence(nextText);
-        selectionRef.current = selection ?? { start: nextText.length, end: nextText.length };
-        textInputRef.current?.replaceText(nextText, selection);
-        onChangeText(nextText);
-      },
-      [onChangeText, updateComposerHeightForText, updateLiveTextPresence],
-    );
 
     useImperativeHandle(ref, () => ({
       focus: () => {
         textInputRef.current?.focus();
       },
       blur: () => {
-        textInputRef.current?.blur();
+        textInputRef.current?.blur?.();
       },
-      getText: () => textInputRef.current?.getText() ?? valueRef.current,
-      getInputSnapshot: () =>
-        getComposerInputSnapshot(textInputRef.current, valueRef.current, selectionRef.current),
-      replaceText,
       runKeyboardAction: (action) =>
         runMessageInputKeyboardAction(action, {
           focusInput: () => textInputRef.current?.focus(),
-          isDictationRecording: isDictationActive,
-          markTranscriptForSend: () => {
-            sendAfterTranscriptRef.current = true;
-          },
+          isDictationRecording: isDictationRecordingActive,
+          isDictationActive,
           confirmDictation,
           cancelDictation,
           startDictation: startDictationIfAvailable,
-          toggleRealtimeVoice: handleToggleRealtimeVoiceShortcut,
-          isRealtimeVoiceActive: isRealtimeVoiceForCurrentAgent,
-          toggleRealtimeVoiceMute: () => voice?.toggleMute(),
         }),
       getNativeElement: () => (isWeb ? getTextInputNativeElement(textInputRef.current) : null),
     }));
-    const sendAfterTranscriptRef = useRef(false);
+    const inputHeightRef = useRef(MIN_INPUT_HEIGHT);
+    const valueRef = useRef(value);
+    const {
+      choice: dictationRefinementChoice,
+      error: dictationRefinementError,
+      applyTranscript: handleDictationTranscript,
+      toggle: handleToggleDictationRefinement,
+      clear: clearDictationRefinementChoice,
+    } = useDictationRefinementChoice({ value, valueRef, onChangeText });
     const serverInfo = useSessionStore(
       useCallback(
-        (state) => {
-          if (!voiceServerId) {
-            return null;
-          }
-          return state.sessions[voiceServerId]?.serverInfo ?? null;
-        },
-        [voiceServerId],
+        (state) => (serverId ? (state.sessions[serverId]?.serverInfo ?? null) : null),
+        [serverId],
       ),
     );
-
-    useEffect(() => {
-      if (appliedTextReplacementKeyRef.current === textReplacementKey) return;
-      appliedTextReplacementKeyRef.current = textReplacementKey;
-      updateComposerHeightForText?.(valueRef.current, value);
-      valueRef.current = value;
-      updateLiveTextPresence(value);
-      textInputRef.current?.replaceText(value);
-    }, [textReplacementKey, updateComposerHeightForText, updateLiveTextPresence, value]);
+    const refineDictationTranscript = useDictationTranscriptRefiner({
+      client,
+      agentId,
+      serverId,
+      supported: serverInfo?.features?.dictationRefinement === true,
+    });
 
     useEffect(() => {
       return () => {
@@ -1301,24 +1339,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       };
     }, [onFocusChange]);
 
-    const handleDictationTranscript = useCallback(
-      (text: string, _meta: { requestId: string }) => {
-        const autoSend = sendAfterTranscriptRef.current;
-        sendAfterTranscriptRef.current = false;
-        applyDictationTranscript(text, {
-          value: valueRef.current,
-          defaultSendBehavior,
-          isAgentRunning,
-          onQueue,
-          onSubmit,
-          replaceText,
-          attachments,
-          cwd,
-          autoSend,
-        });
-      },
-      [replaceText, onSubmit, onQueue, attachments, cwd, isAgentRunning, defaultSendBehavior],
-    );
+    useAutoFocusOnWebEffect(textInputRef, autoFocus, autoFocusKey);
 
     const handleDictationError = useCallback(
       (error: Error) => {
@@ -1328,10 +1349,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       [toast],
     );
 
-    const dictationUnavailableMessage = resolveVoiceUnavailableMessage({
-      serverInfo,
-      mode: "dictation",
-    });
+    const dictationUnavailableMessage = resolveDictationUnavailableMessage({ serverInfo });
 
     const canStartDictation = useCallback(
       () =>
@@ -1346,17 +1364,13 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
 
     const canConfirmDictation = useCallback(() => client?.isConnected ?? false, [client]);
     const isConnected = client?.isConnected ?? false;
-    const isDictationStartEnabled = computeIsDictationStartEnabled(
-      isReadyForDictation,
-      isConnected,
-      disabled,
-    );
+    const isDictationStartEnabled = computeIsDictationStartEnabled(isConnected, disabled);
 
     const {
       isRecording: isDictating,
-      isRecordingActive: isDictationActive,
+      isRecordingActive: isDictationRecordingActive,
+      isDictationActive,
       isProcessing: isDictationProcessing,
-      partialTranscript: _dictationPartialTranscript,
       volume: dictationVolume,
       duration: dictationDuration,
       error: dictationError,
@@ -1370,72 +1384,46 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       client,
       onTranscript: handleDictationTranscript,
       onError: handleDictationError,
+      refineTranscript: refineDictationTranscript,
       canStart: canStartDictation,
       canConfirm: canConfirmDictation,
-      enableDuration: true,
     });
 
-    const isRealtimeVoiceForCurrentAgent = computeIsRealtimeVoiceForAgent(
-      voice,
-      voiceServerId,
-      voiceAgentId,
-    );
-    const showDictationOverlay = computeShouldShowDictationOverlay(
+    const showDictationToolbar = computeShouldShowDictationToolbar(
       isDictating,
       isDictationProcessing,
       dictationStatus,
     );
-    const showRealtimeOverlay = isRealtimeVoiceForCurrentAgent;
-    const showOverlay = showDictationOverlay || showRealtimeOverlay;
-    const surfacePresentation = resolveComposerSurfacePresentation(showOverlay);
-
-    useEffect(() => {
-      if (isDictating || isDictationProcessing) {
-        return;
-      }
-      sendAfterTranscriptRef.current = false;
-    }, [dictationStatus, isDictating, isDictationProcessing]);
 
     const startDictationIfAvailable = useCallback(
       () =>
         startDictationIfAvailableImpl({
           dictationUnavailableMessage,
           canStartDictation,
-          toast,
+          onUnavailable: () => {
+            if (dictationUnavailableMessage) {
+              toast.show(dictationUnavailableMessage, {
+                variant: "info",
+                durationMs: 3200,
+                testID: "dictation-model-required-toast",
+              });
+            }
+            if (serverId) router.push(buildSettingsHostSectionRoute(serverId, "dictation"));
+          },
           startDictation,
         }),
-      [canStartDictation, dictationUnavailableMessage, startDictation, toast],
+      [canStartDictation, dictationUnavailableMessage, router, serverId, startDictation, toast],
     );
 
-    const handleVoicePress = useCallback(
-      () =>
-        handleVoicePressImpl({
-          isRealtimeVoiceForCurrentAgent,
-          voice,
-          isDictating,
-          cancelDictation,
-          startDictationIfAvailable,
-        }),
-      [
-        cancelDictation,
-        isDictating,
-        isRealtimeVoiceForCurrentAgent,
-        startDictationIfAvailable,
-        voice,
-      ],
-    );
+    const handleDictationPress = useCallback(() => {
+      void startDictationIfAvailable();
+    }, [startDictationIfAvailable]);
 
     const handleCancelRecording = useCallback(async () => {
       await cancelDictation();
     }, [cancelDictation]);
 
-    const handleAcceptRecording = useCallback(async () => {
-      sendAfterTranscriptRef.current = false;
-      await confirmDictation();
-    }, [confirmDictation]);
-
-    const handleAcceptAndSendRecording = useCallback(async () => {
-      sendAfterTranscriptRef.current = true;
+    const handleStopRecording = useCallback(async () => {
       await confirmDictation();
     }, [confirmDictation]);
 
@@ -1447,91 +1435,48 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       discardFailedDictation();
     }, [discardFailedDictation]);
 
-    const handleStopRealtimeVoice = useCallback(async () => {
-      try {
-        await stopRealtimeVoice({
-          voice,
-          isRealtimeVoiceForCurrentAgent,
-          isAgentRunning,
-          client,
-          voiceAgentId,
-        });
-      } catch (error) {
-        console.error("[MessageInput] Failed to stop realtime voice", error);
-        const message = extractErrorMessage(error);
-        if (message && message.trim().length > 0) {
-          toast.error(message);
-        }
-      }
-    }, [client, isAgentRunning, isRealtimeVoiceForCurrentAgent, toast, voice, voiceAgentId]);
-
-    const handleToggleRealtimeVoiceShortcut = useCallback(() => {
-      toggleRealtimeVoiceImpl({
-        voice,
-        voiceServerId,
-        voiceAgentId,
-        isConnected,
-        disabled,
-        isAgentRunning,
-        handleStopRealtimeVoice,
-        toast,
-        interruptBeforeVoiceMessage: t("composer.voice.interruptBeforeVoice"),
-      });
-    }, [
-      disabled,
-      handleStopRealtimeVoice,
-      isAgentRunning,
-      isConnected,
-      t,
-      toast,
-      voice,
-      voiceAgentId,
-      voiceServerId,
-    ]);
-
     const minimizeInputHeight = useCallback(() => {
-      resetComposerHeight?.();
-    }, [resetComposerHeight]);
+      inputHeightRef.current = MIN_INPUT_HEIGHT;
+      setInputHeight(MIN_INPUT_HEIGHT);
+      onHeightChange?.(MIN_INPUT_HEIGHT);
+    }, [onHeightChange]);
 
-    const handleSendMessage = useCallback(() => {
-      const liveValue = textInputRef.current?.getText() ?? valueRef.current;
-      if (!preserveHeightOnSubmit) {
-        updateLiveTextPresence("");
-      }
-      sendMessageImpl({
-        value: liveValue,
-        attachments,
-        hasExternalContent,
+    const handleSendMessage = useCallback(
+      () =>
+        sendMessageImpl({
+          value: valueRef.current,
+          attachments,
+          hasExternalContent,
+          allowEmptySubmit,
+          cwd,
+          isAgentRunning,
+          onSubmit,
+          onMinimizeHeight: minimizeInputHeight,
+          preserveHeightOnSubmit,
+        }),
+      [
         allowEmptySubmit,
+        attachments,
         cwd,
-        isAgentRunning,
         onSubmit,
-        onMinimizeHeight: minimizeInputHeight,
+        isAgentRunning,
+        hasExternalContent,
+        minimizeInputHeight,
         preserveHeightOnSubmit,
-      });
-    }, [
-      allowEmptySubmit,
-      attachments,
-      cwd,
-      onSubmit,
-      isAgentRunning,
-      hasExternalContent,
-      minimizeInputHeight,
-      preserveHeightOnSubmit,
-      updateLiveTextPresence,
-    ]);
+      ],
+    );
 
     const handleQueueMessage = useCallback(
       () =>
         queueMessageImpl({
-          value: textInputRef.current?.getText() ?? valueRef.current,
+          value: valueRef.current,
           attachments,
           cwd,
           onQueue,
-          replaceText,
+          onChangeText,
           onMinimizeHeight: minimizeInputHeight,
         }),
-      [attachments, cwd, onQueue, replaceText, minimizeInputHeight],
+      [attachments, cwd, onQueue, onChangeText, minimizeInputHeight],
     );
 
     const handleDefaultSendAction = useCallback(() => {
@@ -1559,6 +1504,8 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       [],
     );
 
+    const webTextareaRef = useRef<HTMLElement | null>(null);
+
     useLayoutEffect(() => {
       if (isWeb) {
         webTextareaRef.current = getWebTextArea() as HTMLElement | null;
@@ -1570,15 +1517,44 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       isConnected,
       disabled,
       isDictating,
-      isRealtimeVoiceForCurrentAgent,
       onAddImages,
     });
+
+    const setBoundedInputHeight = useCallback(
+      (nextHeight: number) => {
+        const bounded = Math.max(MIN_INPUT_HEIGHT, Math.min(maxInputHeight, nextHeight));
+        if (Math.abs(inputHeightRef.current - bounded) < 1) return;
+        inputHeightRef.current = bounded;
+        setInputHeight(bounded);
+        onHeightChange?.(bounded);
+      },
+      [maxInputHeight, onHeightChange],
+    );
+
+    useEffect(() => {
+      setBoundedInputHeight(inputHeightRef.current);
+    }, [setBoundedInputHeight]);
+
+    useComposerHeightMirror({
+      value,
+      textareaRef: webTextareaRef,
+      minHeight: MIN_INPUT_HEIGHT,
+      maxHeight: maxInputHeight,
+      onHeight: setBoundedInputHeight,
+    });
+
+    const handleContentSizeChange = useCallback(
+      (event: NativeSyntheticEvent<TextInputContentSizeChangeEventData>) => {
+        if (isWeb) return;
+        setBoundedInputHeight(event.nativeEvent.contentSize.height);
+      },
+      [setBoundedInputHeight],
+    );
 
     const handleSelectionChange = useCallback(
       (event: NativeSyntheticEvent<TextInputSelectionChangeEventData>) => {
         const start = event.nativeEvent.selection?.start ?? 0;
         const end = event.nativeEvent.selection?.end ?? start;
-        selectionRef.current = { start, end };
         onSelectionChangeCallback?.({ start, end });
       },
       [onSelectionChangeCallback],
@@ -1591,11 +1567,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       if (!shouldHandleWebKeyPress) return;
       handleDesktopKeyPressImpl(event, {
         onKeyPressCallback,
-        input: getComposerInputSnapshot(
-          textInputRef.current,
-          valueRef.current,
-          selectionRef.current,
-        ),
         submitOnEnter: shouldSubmitOnEnter,
         isAgentRunning,
         onQueue,
@@ -1609,7 +1580,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
 
     const primaryActionKind = resolvePrimaryActionKind({
       hasSendableContent: hasSendableComposerContent({
-        hasText: hasLiveText,
+        value,
         attachments,
         hasExternalContent,
       }),
@@ -1626,31 +1597,16 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         defaultSendBehavior,
         isAgentRunning,
       });
-    useIosHardwareKeyboardSubmit({
-      isEnabled: isInputFocused && !isSendButtonDisabled,
-      onSubmit: handleDefaultSendAction,
-    });
     const submitAccessibilityLabel = resolveSubmitAccessibilityLabel({
       submitButtonAccessibilityLabel,
       canPressLoadingButton,
       defaultActionQueues,
-      defaultSendBehavior,
       isAgentRunning,
       t,
     });
 
-    const voiceButtonAccessibilityLabel = resolveVoiceAccessibilityLabel({
-      isRealtimeVoiceForCurrentAgent,
-      isMuted: Boolean(voice?.isMuted),
-      isDictating,
-      t,
-    });
-
-    const voiceTooltipText = resolveVoiceTooltipText({
-      isRealtimeVoiceForCurrentAgent,
-      isMuted: Boolean(voice?.isMuted),
-      t,
-    });
+    const dictationButtonAccessibilityLabel = t("composer.voice.startDictation");
+    const dictationTooltipText = dictationButtonAccessibilityLabel;
 
     const sendTooltipLabel = resolveSendTooltipLabel({
       submitButtonAccessibilityLabel,
@@ -1660,12 +1616,16 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
 
     const handleInputChange = useCallback(
       (nextValue: string) => {
-        updateComposerHeightForText?.(valueRef.current, nextValue);
         valueRef.current = nextValue;
-        updateLiveTextPresence(nextValue);
+        clearDictationRefinementChoice();
         onChangeText(nextValue);
       },
-      [onChangeText, updateComposerHeightForText, updateLiveTextPresence],
+      [clearDictationRefinementChoice, onChangeText],
+    );
+
+    const handleComposerInputChange = useWebImeCompositionDeferral(
+      webTextareaRef,
+      handleInputChange,
     );
 
     const handleInputFocus = useCallback(() => {
@@ -1680,14 +1640,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       onFocusChange?.(false);
     }, [onFocusChange]);
 
-    const handlePasteError = useCallback(
-      (message: string) => {
-        console.error("[MessageInput] Native paste failed:", message);
-        toast.error(t("composer.errors.pasteImageFailed"));
-      },
-      [t, toast],
-    );
-
     const attachButtonStyle = useCallback(
       ({ hovered }: { hovered?: boolean }) => [
         styles.attachButton,
@@ -1697,28 +1649,18 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       [isConnected, disabled],
     );
 
-    const voiceButtonStyle = useCallback(
+    const dictationButtonStyle = useCallback(
       ({ hovered }: { hovered?: boolean }) => [
         styles.voiceButton,
-        Boolean(hovered) && !isDictating && styles.iconButtonHovered,
+        Boolean(hovered) && styles.iconButtonHovered,
         !isDictationStartEnabled && styles.buttonDisabled,
-        isDictating && styles.voiceButtonRecording,
       ],
-      [isDictating, isDictationStartEnabled],
+      [isDictationStartEnabled],
     );
 
-    const handleRealtimeVoiceStop = useCallback(() => {
-      void handleStopRealtimeVoice();
-    }, [handleStopRealtimeVoice]);
-
     const inputWrapperCombinedStyle = useMemo(
-      () => [
-        styles.inputWrapper,
-        readOnly && styles.inputWrapperReadOnly,
-        inputWrapperStyle,
-        { opacity: surfacePresentation.input.opacity },
-      ],
-      [inputWrapperStyle, readOnly, surfacePresentation.input.opacity],
+      () => [styles.inputWrapper, readOnly && styles.inputWrapperReadOnly, inputWrapperStyle],
+      [inputWrapperStyle, readOnly],
     );
     // `withUnistyles` maps this component's `style` into a `.hash > *` child
     // rule, which ties on specificity with react-native-web's own
@@ -1726,8 +1668,12 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     // `fontFamily` here is silently dropped while every other property lands.
     // An inline style outranks both classes. See docs/unistyles.md.
     const textInputStyle = useMemo(
-      () => [styles.textInput, mode.isMonospace && styles.textInputMonospace, composerHeightStyle],
-      [composerHeightStyle, mode.isMonospace],
+      () => [
+        styles.textInput,
+        mode.isMonospace && styles.textInputMonospace,
+        computeTextInputHeightStyle(inputHeight, maxInputHeight),
+      ],
+      [inputHeight, maxInputHeight, mode.isMonospace],
     );
     // Static content has no textarea to mirror, so it grows with its own text
     // instead of the measured input height.
@@ -1743,10 +1689,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       ],
       [isSendButtonDisabled, submitLabel],
     );
-    const overlayContainerStyle = useMemo(
-      () => [styles.overlayContainer, { opacity: surfacePresentation.overlay.opacity }],
-      [surfacePresentation.overlay.opacity],
-    );
 
     const renderAttachButtonIcon = useCallback(
       ({ hovered }: { hovered?: boolean }) => (
@@ -1759,140 +1701,120 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       [onAttachButtonRef, buttonIconSize],
     );
 
-    const renderVoiceButtonIcon = useCallback(
+    const renderDictationButtonIcon = useCallback(
       ({ hovered }: { hovered?: boolean }) => (
-        <VoiceButtonIcon
-          hovered={Boolean(hovered)}
-          isDictating={isDictating}
-          isMutedRealtime={Boolean(isRealtimeVoiceForCurrentAgent && voice?.isMuted)}
-          buttonIconSize={buttonIconSize}
-        />
+        <DictationButtonIcon hovered={Boolean(hovered)} buttonIconSize={buttonIconSize} />
       ),
-      [isDictating, isRealtimeVoiceForCurrentAgent, voice?.isMuted, buttonIconSize],
+      [buttonIconSize],
     );
 
     return (
-      <View
-        ref={rootRef}
-        style={styles.container}
-        testID="message-input-root"
-        onLayout={handleComposerLayout}
-      >
-        <MessageInputAutoFocus
-          enabled={autoFocus}
-          autoFocusKey={autoFocusKey}
-          textInputRef={textInputRef}
+      <View ref={rootRef} style={styles.container} testID="message-input-root">
+        <DictationRefinementNotice
+          choice={dictationRefinementChoice}
+          error={dictationRefinementError}
+          visible={!showDictationToolbar}
+          onToggle={handleToggleDictationRefinement}
         />
-        {/* Regular input */}
         <View
           ref={inputWrapperRef}
           style={inputWrapperCombinedStyle}
-          pointerEvents={surfacePresentation.input.pointerEvents}
+          testID="message-input-surface"
         >
           {attachmentSlot}
-          {/* Text input */}
-          <RenderProfile id="ComposerTextSurface">
-            <ComposerTextSurface
-              readOnly={readOnly}
-              value={value}
-              textInputRef={textInputRef}
-              textInputStyle={textInputStyle}
-              readOnlyTextStyle={readOnlyTextStyle}
-              placeholder={placeholder ?? t("composer.placeholders.fallback")}
-              accessibilityLabel={t(mode.accessibilityLabelKey)}
-              onChangeText={handleInputChange}
-              onFocus={handleInputFocus}
-              onBlur={handleInputBlur}
-              editable={!isDictating && !isRealtimeVoiceForCurrentAgent && !disabled}
-              scrollEnabled={isComposerScrollEnabled}
-              autoFocus={false}
-              onKeyPress={shouldHandleWebKeyPress ? handleDesktopKeyPress : undefined}
-              onSelectionChange={handleSelectionChange}
-              onPasteImages={onPasteImages}
-              onPasteError={handlePasteError}
-              focusHintVisible={isWeb && !isInputFocused && !value}
-              focusInputKeys={focusInputKeys}
-              focusHintLabel={t("composer.input.focusHint", {
-                shortcut: focusInputKeys ? formatShortcut(focusInputKeys[0], getShortcutOs()) : "",
-              })}
-            />
-          </RenderProfile>
-
-          {/* Button row */}
-          <View style={styles.buttonRow}>
-            {/* Toolbar left: attachment button + agent controls */}
-            <View style={styles.leftButtonGroup}>
-              <AttachmentDropdown
-                visible={mode.showAttachments}
-                isConnected={isConnected}
-                disabled={disabled}
-                attachButtonStyle={attachButtonStyle}
-                renderAttachButtonIcon={renderAttachButtonIcon}
-                attachmentMenuItems={attachmentMenuItems}
-                addAttachmentLabel={t("composer.input.addAttachment")}
-              />
-              {leftContent}
-            </View>
-
-            {/* Right: voice button, contextual button (realtime/send/cancel) */}
-            <View style={styles.rightButtonGroup}>
-              {beforeVoiceContent}
-              <VoiceButtonTooltip
-                visible={mode.showVoice}
-                onVoicePress={handleVoicePress}
-                isDictationStartEnabled={isDictationStartEnabled}
-                voiceButtonAccessibilityLabel={voiceButtonAccessibilityLabel}
-                voiceButtonStyle={voiceButtonStyle}
-                renderVoiceButtonIcon={renderVoiceButtonIcon}
-                voiceTooltipText={voiceTooltipText}
-                isRealtimeVoiceForCurrentAgent={isRealtimeVoiceForCurrentAgent}
-                voiceMuteToggleKeys={voiceMuteToggleKeys}
-                dictationToggleKeys={dictationToggleKeys}
-              />
-              {rightContent}
-              <PrimaryAction
-                kind={primaryActionKind}
-                activeActionContent={activeActionContent}
-                shouldShow
-                canPressLoadingButton={canPressLoadingButton}
-                onSubmitLoadingPress={onSubmitLoadingPress}
-                onDefaultSendAction={handleDefaultSendAction}
-                isSendButtonDisabled={isSendButtonDisabled}
-                submitAccessibilityLabel={submitAccessibilityLabel}
-                sendButtonCombinedStyle={sendButtonCombinedStyle}
-                isSubmitLoading={isSubmitLoading}
-                submitIcon={submitIcon}
-                submitLabel={submitLabel}
-                submitButtonTestID={submitButtonTestID}
-                buttonIconSize={buttonIconSize}
-                sendKeys={DEFAULT_SEND_KEYS}
-                sendTooltipLabel={sendTooltipLabel}
-              />
-            </View>
-          </View>
-        </View>
-
-        <View
-          style={overlayContainerStyle}
-          pointerEvents={surfacePresentation.overlay.pointerEvents}
-        >
-          <MessageInputOverlay
-            showDictationOverlay={showDictationOverlay}
-            showRealtimeOverlay={showRealtimeOverlay}
-            voice={voice}
-            dictationVolume={dictationVolume}
-            dictationDuration={dictationDuration}
-            isDictating={isDictating}
-            isDictationProcessing={isDictationProcessing}
-            dictationStatus={dictationStatus}
-            dictationError={dictationError}
-            onCancelRecording={handleCancelRecording}
-            onAcceptRecording={handleAcceptRecording}
-            onAcceptAndSendRecording={handleAcceptAndSendRecording}
-            onRetryFailedRecording={handleRetryFailedRecording}
-            onDiscardFailedRecording={handleDiscardFailedRecording}
-            onRealtimeVoiceStop={handleRealtimeVoiceStop}
+          <ComposerTextSurface
+            readOnly={readOnly}
+            value={value}
+            textInputRef={textInputRef}
+            textInputStyle={textInputStyle}
+            readOnlyTextStyle={readOnlyTextStyle}
+            placeholder={placeholder ?? t("composer.placeholders.fallback")}
+            accessibilityLabel={t(mode.accessibilityLabelKey)}
+            onChangeText={handleComposerInputChange}
+            onFocus={handleInputFocus}
+            onBlur={handleInputBlur}
+            editable={!showDictationToolbar && !disabled}
+            scrollEnabled={isWeb ? inputHeight >= maxInputHeight : true}
+            autoFocus={isWeb && autoFocus}
+            onContentSizeChange={handleContentSizeChange}
+            onKeyPress={shouldHandleWebKeyPress ? handleDesktopKeyPress : undefined}
+            onSelectionChange={handleSelectionChange}
+            focusHintVisible={
+              !showDictationToolbar &&
+              !isCompact &&
+              isWeb &&
+              isPaneFocused &&
+              !isInputFocused &&
+              !value
+            }
+            focusInputKeys={focusInputKeys}
+            focusHintLabel={t("composer.input.focusHint", {
+              shortcut: focusInputKeys ? formatShortcut(focusInputKeys[0], getShortcutOs()) : "",
+            })}
           />
+
+          {showDictationToolbar ? (
+            <MessageInputDictationToolbar
+              dictationVolume={dictationVolume}
+              dictationDuration={dictationDuration}
+              isDictating={isDictating}
+              isDictationProcessing={isDictationProcessing}
+              dictationStatus={dictationStatus}
+              dictationError={dictationError}
+              onCancelRecording={handleCancelRecording}
+              onStopRecording={handleStopRecording}
+              onRetryFailedRecording={handleRetryFailedRecording}
+              onDiscardFailedRecording={handleDiscardFailedRecording}
+            />
+          ) : (
+            <View style={styles.buttonRow}>
+              <View style={styles.leftButtonGroup}>
+                <AttachmentDropdown
+                  visible={mode.showAttachments}
+                  isConnected={isConnected}
+                  disabled={disabled}
+                  attachButtonStyle={attachButtonStyle}
+                  renderAttachButtonIcon={renderAttachButtonIcon}
+                  attachmentMenuItems={attachmentMenuItems}
+                  addAttachmentLabel={t("composer.input.addAttachment")}
+                />
+                {leftContent}
+              </View>
+
+              <View style={styles.rightButtonGroup}>
+                {beforeDictationContent}
+                <DictationButtonTooltip
+                  visible={mode.showVoice}
+                  onPress={handleDictationPress}
+                  enabled={isDictationStartEnabled}
+                  accessibilityLabel={dictationButtonAccessibilityLabel}
+                  buttonStyle={dictationButtonStyle}
+                  renderIcon={renderDictationButtonIcon}
+                  tooltipText={dictationTooltipText}
+                  shortcut={dictationToggleKeys}
+                />
+                {rightContent}
+                <PrimaryAction
+                  kind={primaryActionKind}
+                  activeActionContent={activeActionContent}
+                  shouldShow
+                  canPressLoadingButton={canPressLoadingButton}
+                  onSubmitLoadingPress={onSubmitLoadingPress}
+                  onDefaultSendAction={handleDefaultSendAction}
+                  isSendButtonDisabled={isSendButtonDisabled}
+                  submitAccessibilityLabel={submitAccessibilityLabel}
+                  sendButtonCombinedStyle={sendButtonCombinedStyle}
+                  isSubmitLoading={isSubmitLoading}
+                  submitIcon={submitIcon}
+                  submitLabel={submitLabel}
+                  submitButtonTestID={submitButtonTestID}
+                  buttonIconSize={buttonIconSize}
+                  sendKeys={DEFAULT_SEND_KEYS}
+                  sendTooltipLabel={sendTooltipLabel}
+                />
+              </View>
+            </View>
+          )}
         </View>
       </View>
     );
@@ -1926,8 +1848,24 @@ const styles = StyleSheet.create((theme: Theme) => ({
         }
       : {}),
   },
-  // Dotted says "this surface is the same box, but there is nothing to type
-  // into it" without swapping the border colour, which reads as an error state.
+  dictationRefinementNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[2],
+    minHeight: 28,
+    marginBottom: theme.spacing[2],
+    paddingHorizontal: theme.spacing[4],
+  },
+  dictationRefinementLabel: {
+    flex: 1,
+    minWidth: 0,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  dictationRefinementError: {
+    color: theme.colors.statusDanger,
+  },
   inputWrapperReadOnly: {
     borderStyle: "dotted",
   },
@@ -2003,9 +1941,6 @@ const styles = StyleSheet.create((theme: Theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
-  voiceButtonRecording: {
-    backgroundColor: theme.colors.destructive,
-  },
   sendButton: {
     width: 28,
     height: 28,
@@ -2041,27 +1976,43 @@ const styles = StyleSheet.create((theme: Theme) => ({
   buttonDisabled: {
     opacity: 0.5,
   },
-  overlayContainer: {
-    position: "absolute",
-    display: "flex",
+  attachmentSheetList: {
+    gap: theme.spacing[1],
+  },
+  attachmentSheetItem: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    borderRadius: theme.borderRadius.xl,
+  },
+  attachmentSheetItemPressed: {
+    backgroundColor: theme.colors.surface2,
+  },
+  attachmentSheetItemIcon: {
+    width: 20,
     alignItems: "center",
     justifyContent: "center",
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "100%",
-    right: 0,
-    bottom: 0,
+  },
+  attachmentSheetItemText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
+    fontWeight: theme.fontWeight.normal,
   },
 })) as unknown as Record<string, object>;
 
 const ThemedPlus = withUnistyles(Plus);
 const ThemedMic = withUnistyles(Mic);
-const ThemedMicOff = withUnistyles(MicOff);
 const ThemedArrowUp = withUnistyles(ArrowUp);
 const ThemedCornerDownLeft = withUnistyles(CornerDownLeft);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
+const ThemedTextInput = withUnistyles(TextInput);
 
 const iconForegroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const iconForegroundMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const iconAccentForegroundMapping = (theme: Theme) => ({ color: theme.colors.accentForeground });
+const textInputPlaceholderColorMapping = (theme: Theme) => ({
+  placeholderTextColor: theme.colors.surface4,
+});

@@ -2,8 +2,13 @@ import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
+import {
+  BETA_HOSTED_RELEASE,
+  STABLE_HOSTED_RELEASE,
+} from "@bytetrue/byspace-protocol/release-channel";
 
 import {
+  createDefaultPersistedConfig,
   loadPersistedConfig,
   PersistedConfigSchema,
   savePersistedConfig,
@@ -14,12 +19,27 @@ const MODE_MASK = 0o777;
 const PERMISSIVE_FILE_MODE = 0o644;
 
 function createTempHome(): string {
-  return mkdtempSync(path.join(tmpdir(), "paseo-config-"));
+  return mkdtempSync(path.join(tmpdir(), "byspace-config-"));
 }
 
 function modeOf(filePath: string): number {
   return statSync(filePath).mode & MODE_MASK;
 }
+
+describe("createDefaultPersistedConfig", () => {
+  test.each([
+    ["0.2.0", STABLE_HOSTED_RELEASE],
+    ["0.2.0-beta.2", BETA_HOSTED_RELEASE],
+  ])("uses the hosted defaults for %s", (releaseVersion, hostedRelease) => {
+    expect(createDefaultPersistedConfig(releaseVersion)).toMatchObject({
+      daemon: {
+        cors: { allowedOrigins: [hostedRelease.appBaseUrl] },
+        relay: { enabled: false },
+      },
+      app: { baseUrl: hostedRelease.appBaseUrl },
+    });
+  });
+});
 
 describe("PersistedConfigSchema daemon auth config", () => {
   test("accepts optional daemon password hash", () => {
@@ -43,18 +63,6 @@ describe("PersistedConfigSchema daemon append system prompt config", () => {
     });
 
     expect(parsed.daemon?.appendSystemPrompt).toBe("Prefer terse replies.");
-  });
-});
-
-describe("PersistedConfigSchema daemon browser tools config", () => {
-  test("accepts optional browser tools opt-in", () => {
-    const parsed = PersistedConfigSchema.parse({
-      daemon: {
-        browserTools: { enabled: true },
-      },
-    });
-
-    expect(parsed.daemon?.browserTools?.enabled).toBe(true);
   });
 });
 
@@ -119,11 +127,11 @@ describe("PersistedConfigSchema worktrees config", () => {
   test("accepts optional worktree root", () => {
     const parsed = PersistedConfigSchema.parse({
       worktrees: {
-        root: "/mnt/fast/paseo-worktrees",
+        root: "/mnt/fast/byspace-worktrees",
       },
     });
 
-    expect(parsed.worktrees?.root).toBe("/mnt/fast/paseo-worktrees");
+    expect(parsed.worktrees?.root).toBe("/mnt/fast/byspace-worktrees");
   });
 
   test("accepts service port allocation", () => {
@@ -134,30 +142,6 @@ describe("PersistedConfigSchema worktrees config", () => {
     });
 
     expect(parsed.worktrees?.servicePorts).toEqual({ range: "3000-4000" });
-  });
-});
-
-describe("PersistedConfigSchema provider credentials", () => {
-  test("accepts separate OpenAI STT and TTS credentials", () => {
-    const parsed = PersistedConfigSchema.parse({
-      providers: {
-        openai: {
-          stt: {
-            apiKey: " stt-secret ",
-            baseUrl: " https://stt.example.com/v1 ",
-          },
-          tts: {
-            apiKey: " tts-secret ",
-            baseUrl: " https://tts.example.com/v1 ",
-          },
-        },
-      },
-    });
-
-    expect(parsed.providers?.openai?.stt?.apiKey).toBe("stt-secret");
-    expect(parsed.providers?.openai?.stt?.baseUrl).toBe("https://stt.example.com/v1");
-    expect(parsed.providers?.openai?.tts?.apiKey).toBe("tts-secret");
-    expect(parsed.providers?.openai?.tts?.baseUrl).toBe("https://tts.example.com/v1");
   });
 });
 
@@ -625,53 +609,7 @@ describe("PersistedConfigSchema logging config", () => {
   });
 });
 
-describe("PersistedConfigSchema voice mode config", () => {
-  test("accepts a dedicated turn detection provider", () => {
-    const parsed = PersistedConfigSchema.parse({
-      features: {
-        voiceMode: {
-          turnDetection: {
-            provider: "local",
-          },
-        },
-      },
-    });
-
-    expect(parsed.features?.voiceMode?.turnDetection?.provider).toBe("local");
-  });
-
-  test("accepts trimmed STT language fields", () => {
-    const parsed = PersistedConfigSchema.parse({
-      features: {
-        dictation: {
-          stt: {
-            language: " fr ",
-          },
-        },
-        voiceMode: {
-          stt: {
-            language: " de ",
-          },
-        },
-      },
-    });
-
-    expect(parsed.features?.dictation?.stt?.language).toBe("fr");
-    expect(parsed.features?.voiceMode?.stt?.language).toBe("de");
-  });
-});
-
 describe("loadPersistedConfig", () => {
-  test("materializes relay disabled for a new Paseo home", () => {
-    const home = createTempHome();
-    try {
-      const config = loadPersistedConfig(home);
-      expect(config.daemon?.relay?.enabled).toBe(false);
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
-  });
-
   test("accepts the documented config schema marker", () => {
     const home = createTempHome();
     const configPath = path.join(home, "config.json");
@@ -680,10 +618,10 @@ describe("loadPersistedConfig", () => {
         configPath,
         `${JSON.stringify(
           {
-            $schema: "https://paseo.sh/schemas/paseo.config.v1.json",
+            $schema: "https://byspace.pages.dev/schemas/byspace.config.v1.json",
             version: 1,
             daemon: {
-              listen: "127.0.0.1:6767",
+              listen: "127.0.0.1:6777",
               hostnames: ["localhost", ".localhost"],
               mcp: { enabled: true },
             },
@@ -695,7 +633,7 @@ describe("loadPersistedConfig", () => {
 
       const config = loadPersistedConfig(home);
 
-      expect(config.daemon?.listen).toBe("127.0.0.1:6767");
+      expect(config.daemon?.listen).toBe("127.0.0.1:6777");
       expect(config.daemon?.hostnames).toEqual(["localhost", ".localhost"]);
       expect(config.daemon?.mcp?.enabled).toBe(true);
     } finally {
@@ -703,7 +641,7 @@ describe("loadPersistedConfig", () => {
     }
   });
 
-  test("loads a config that still uses the removed providers.openai.voice block", () => {
+  test("loads legacy speech config while discarding removed Voice mode and cloud fields", () => {
     const home = createTempHome();
     const configPath = path.join(home, "config.json");
     try {
@@ -713,10 +651,15 @@ describe("loadPersistedConfig", () => {
           {
             version: 1,
             providers: {
-              openai: {
-                apiKey: "global-key",
-                voice: { apiKey: "voice-key", baseUrl: "https://voice.example.com/v1" },
+              openai: { apiKey: "removed" },
+              local: { modelsDir: "/tmp/models", autoDownload: true },
+            },
+            features: {
+              dictation: {
+                enabled: true,
+                stt: { provider: "openai", model: "fire-red-asr2-aed-int8", language: "zh" },
               },
+              voiceMode: { enabled: true, tts: { provider: "openai" } },
             },
           },
           null,
@@ -726,10 +669,10 @@ describe("loadPersistedConfig", () => {
 
       const config = loadPersistedConfig(home);
 
-      expect(config.providers?.openai?.apiKey).toBe("global-key");
-      expect((config.providers?.openai as Record<string, unknown>)?.voice).toBeUndefined();
-      expect(config.providers?.openai?.stt).toBeUndefined();
-      expect(config.providers?.openai?.tts).toBeUndefined();
+      expect(config.providers).toEqual({ local: { modelsDir: "/tmp/models" } });
+      expect(config.features).toEqual({
+        dictation: { enabled: true, stt: { model: "fire-red-asr2-aed-int8" } },
+      });
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
@@ -767,10 +710,8 @@ describe.skipIf(process.platform === "win32")("persisted config file permissions
     const home = createTempHome();
     try {
       savePersistedConfig(home, {
-        providers: {
-          openai: {
-            apiKey: "secret",
-          },
+        features: {
+          dictation: { stt: { model: "fire-red-asr2-aed-int8" } },
         },
       });
 

@@ -1,164 +1,236 @@
-import { describe, expect, test } from "vitest";
-import type { HostProjectListItem } from "./host-project-model";
+import { describe, expect, it } from "vitest";
+import type { WorkspaceStructureProject } from "@/projects/workspace-structure";
 import {
-  canCreateWorkspaceForHostProject,
-  getHostProjectId,
+  buildHostProjectList,
+  canCreateWorktreeForProjectKind,
   getHostProjectSourceDirectory,
-  getWorktreeSupportForHostProject,
+  getWorkspaceCreationHosts,
   hostProjectFromRoute,
-  hostProjectFromWorkspace,
-  resolveEquivalentHostProjectCandidate,
+  resolveSelectedHostProject,
+  resolveHostProjectWorkspaceIdentity,
+  type HostProjectListItem,
 } from "./host-project-model";
-import { normalizeWorkspaceDescriptor } from "@/stores/session-store";
 
-function project(): HostProjectListItem {
+function structureProject(input: Partial<WorkspaceStructureProject>): WorkspaceStructureProject {
   return {
-    viewKey: "view:acme/app",
-    projectKey: "remote:github.com/acme/app",
-    projectName: "acme/app",
-    projectKind: "git",
-    iconWorkingDir: "/repo/a",
-    hosts: [
+    projectKey: input.projectKey ?? "project-a",
+    projectName: input.projectName ?? "Project A",
+    projectKind: input.projectKind ?? "git",
+    iconWorkingDir: input.iconWorkingDir ?? "/repo/a",
+    hosts: input.hosts ?? [
       {
         serverId: "host-a",
-        projectId: "prj_a",
-        iconWorkingDir: "/repo/a",
-        worktreeSupport: "supported" as const,
-      },
-      {
-        serverId: "host-b",
-        projectId: "prj_b",
-        iconWorkingDir: "/repo/b",
-        worktreeSupport: "supported" as const,
+        iconWorkingDir: input.iconWorkingDir ?? "/repo/a",
+        canCreateWorktree: input.projectKind !== "directory",
       },
     ],
-    workspaceKeys: [],
+    workspaceKeys: input.workspaceKeys ?? ["workspace-a"],
   };
 }
 
-describe("host project lookups", () => {
-  test("resolves equivalent projects without Array.prototype.toSorted", () => {
-    const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, "toSorted");
-    Reflect.deleteProperty(Array.prototype, "toSorted");
-    const first = project();
-    first.viewKey = "view:first";
-    first.projectName = "First";
-    const second = project();
-    second.viewKey = "view:second";
-    second.projectName = "Second";
-    const projects = [second, first];
+function hostProject(input: Partial<HostProjectListItem>): HostProjectListItem {
+  return {
+    projectKey: input.projectKey ?? "project-a",
+    projectName: input.projectName ?? "Project A",
+    projectKind: input.projectKind ?? "git",
+    iconWorkingDir: input.iconWorkingDir ?? "/repo/a",
+    hosts: input.hosts ?? [
+      {
+        serverId: "host-a",
+        iconWorkingDir: input.iconWorkingDir ?? "/repo/a",
+        canCreateWorktree: true,
+      },
+    ],
+    workspaceKeys: input.workspaceKeys ?? ["workspace-a"],
+  };
+}
 
-    try {
-      expect(
-        resolveEquivalentHostProjectCandidate({
-          candidate: first,
-          projects,
-          serverId: "host-a",
-        }),
-      ).toBe(first);
-      expect(projects).toEqual([second, first]);
-    } finally {
-      if (descriptor) Reflect.defineProperty(Array.prototype, "toSorted", descriptor);
-    }
-  });
+const routeProject = hostProject({
+  projectKey: "route-project",
+  projectName: "Route Project",
+  iconWorkingDir: "/repo/route",
+});
 
-  test("returns host-local ids and roots without falling back to the grouping key", () => {
-    expect(getHostProjectId(project(), "host-b")).toBe("prj_b");
-    expect(getHostProjectSourceDirectory(project(), "host-b")).toBe("/repo/b");
-    expect(getHostProjectId(project(), "missing")).toBeNull();
-  });
-
-  test("checks workspace creation against the selected host placement", () => {
+describe("host project list", () => {
+  it("preserves workspace-structure order and project metadata", () => {
     expect(
-      canCreateWorkspaceForHostProject({
-        project: project(),
-        serverId: "host-b",
-        allowAllProjects: false,
+      buildHostProjectList({
+        projects: [
+          structureProject({
+            projectKey: "project-b",
+            projectName: "Project B",
+            projectKind: "directory",
+            iconWorkingDir: "/repo/b",
+            workspaceKeys: ["workspace-b"],
+            hosts: [{ serverId: "host-a", iconWorkingDir: "/repo/b", canCreateWorktree: false }],
+          }),
+          structureProject({
+            projectKey: "project-a",
+            projectName: "Project A",
+            projectKind: "git",
+            iconWorkingDir: "/repo/a",
+            workspaceKeys: ["workspace-a"],
+            hosts: [{ serverId: "host-a", iconWorkingDir: "/repo/a", canCreateWorktree: true }],
+          }),
+        ],
       }),
-    ).toBe(true);
+    ).toEqual([
+      {
+        projectKey: "project-b",
+        projectName: "Project B",
+        projectKind: "directory",
+        iconWorkingDir: "/repo/b",
+        hosts: [{ serverId: "host-a", iconWorkingDir: "/repo/b", canCreateWorktree: false }],
+        workspaceKeys: ["workspace-b"],
+      },
+      {
+        projectKey: "project-a",
+        projectName: "Project A",
+        projectKind: "git",
+        iconWorkingDir: "/repo/a",
+        hosts: [{ serverId: "host-a", iconWorkingDir: "/repo/a", canCreateWorktree: true }],
+        workspaceKeys: ["workspace-a"],
+      },
+    ]);
   });
 
-  test("checks worktree capability against the selected host placement", () => {
-    const groupedProject = project();
-    groupedProject.hosts[1] = {
-      ...groupedProject.hosts[1]!,
-      worktreeSupport: "unsupported" as const,
-    };
-
-    expect(getWorktreeSupportForHostProject({ project: groupedProject, serverId: "host-a" })).toBe(
-      "supported",
-    );
-    expect(getWorktreeSupportForHostProject({ project: groupedProject, serverId: "host-b" })).toBe(
-      "unsupported",
-    );
-    expect(getWorktreeSupportForHostProject({ project: groupedProject, serverId: "missing" })).toBe(
-      "unknown",
-    );
+  it("keeps worktree capability separate from project listability", () => {
+    expect(canCreateWorktreeForProjectKind("git")).toBe(true);
+    expect(canCreateWorktreeForProjectKind("directory")).toBe(false);
   });
 
-  test("marks route placeholder worktree support as unknown", () => {
-    const routeProject = hostProjectFromRoute({
-      serverId: "host-a",
-      projectId: "prj_a",
-      displayName: "App",
-      sourceDirectory: "/repo/a",
+  it("derives eligible creation hosts from each placement capability", () => {
+    const multiHostProject = hostProject({
+      projectKind: "directory",
+      hosts: [
+        { serverId: "host-a", iconWorkingDir: "/repo/a", canCreateWorktree: false },
+        { serverId: "host-b", iconWorkingDir: "/repo/b", canCreateWorktree: false },
+        { serverId: "host-c", iconWorkingDir: "/repo/c", canCreateWorktree: true },
+      ],
     });
-    expect(routeProject).not.toBeNull();
-    expect(routeProject!.projectKind).toBe("unknown");
-    expect(getWorktreeSupportForHostProject({ project: routeProject!, serverId: "host-a" })).toBe(
-      "unknown",
-    );
+
+    expect(
+      getWorkspaceCreationHosts({
+        project: multiHostProject,
+        workspaceMultiplicityByServerId: new Map([
+          ["host-a", false],
+          ["host-b", true],
+          ["host-c", false],
+        ]),
+      }).map((host) => host.serverId),
+    ).toEqual(["host-b", "host-c"]);
   });
 
-  test("builds an unhydrated route project around the routed project id", () => {
+  it("resolves the selected host project source directory", () => {
+    const project = hostProject({
+      hosts: [
+        { serverId: "host-a", iconWorkingDir: "/repo/a", canCreateWorktree: true },
+        { serverId: "host-b", iconWorkingDir: "/repo/b", canCreateWorktree: true },
+      ],
+    });
+
+    expect(getHostProjectSourceDirectory(project, "host-b")).toBe("/repo/b");
+    expect(getHostProjectSourceDirectory(project, "host-c")).toBeNull();
+  });
+
+  it("resolves workspace keys using the longest opaque Host prefix", () => {
+    const project = hostProject({
+      hosts: [
+        { serverId: "relay", iconWorkingDir: "/repo/relay", canCreateWorktree: true },
+        {
+          serverId: "relay:byspace-host",
+          iconWorkingDir: "/repo/byspace",
+          canCreateWorktree: true,
+        },
+      ],
+    });
+
+    expect(resolveHostProjectWorkspaceIdentity(project, "relay:byspace-host:ws-main")).toEqual({
+      serverId: "relay:byspace-host",
+      workspaceId: "ws-main",
+    });
+    expect(resolveHostProjectWorkspaceIdentity(project, "unknown:ws-main")).toBeNull();
+  });
+
+  it("hydrates a host-local route key to the grouped project", () => {
+    const grouped = hostProject({
+      projectKey: "remote:https://github.com/acme/app",
+      hosts: [
+        {
+          serverId: "host-a",
+          projectId: "prj_local_a",
+          iconWorkingDir: "/repo/a",
+          canCreateWorktree: true,
+        },
+        {
+          serverId: "host-b",
+          projectId: "prj_local_b",
+          iconWorkingDir: "/repo/b",
+          canCreateWorktree: true,
+        },
+      ],
+    });
+    const localRoute = hostProjectFromRoute({
+      serverId: "host-b",
+      projectId: "prj_local_b",
+      displayName: "App on B",
+      sourceDirectory: "/repo/b",
+    });
+
+    expect(
+      resolveSelectedHostProject({
+        selectedProjectKey: "prj_local_b",
+        projects: [grouped],
+        routeProject: localRoute,
+      }),
+    ).toBe(grouped);
+  });
+
+  it("keeps a selected route project available before project hydration", () => {
+    expect(
+      resolveSelectedHostProject({
+        selectedProjectKey: routeProject.projectKey,
+        projects: [],
+        routeProject,
+      }),
+    ).toEqual(routeProject);
+  });
+
+  it("preserves opaque aggregate project keys during selection", () => {
+    const opaqueProject = hostProject({ projectKey: " project-a " });
+
+    expect(
+      resolveSelectedHostProject({
+        selectedProjectKey: opaqueProject.projectKey,
+        projects: [opaqueProject],
+        routeProject: null,
+      }),
+    ).toBe(opaqueProject);
+  });
+
+  it("converts route project only when it has a key and source directory", () => {
     expect(
       hostProjectFromRoute({
         serverId: "host-a",
-        projectId: "prj_a",
-        displayName: "App",
+        projectId: "project-a",
+        displayName: "Project A",
         sourceDirectory: "/repo/a",
       }),
-    ).toMatchObject({
-      projectKey: null,
-      hosts: [{ serverId: "host-a", projectId: "prj_a" }],
-    });
-  });
-
-  test("keeps canonical equivalence identity separate from host placement identity", () => {
-    const workspace = normalizeWorkspaceDescriptor({
-      id: "workspace-a",
-      projectId: "project-a",
-      projectDisplayName: "App",
-      projectRootPath: "/repo/app",
-      workspaceDirectory: "/repo/app",
+    ).toEqual({
+      projectKey: "project-a",
+      projectName: "Project A",
       projectKind: "git",
-      workspaceKind: "local_checkout",
-      name: "main",
-      archivingAt: null,
-      status: "done",
-      statusEnteredAt: null,
-      activityAt: null,
-      diffStat: null,
-      scripts: [],
-      project: {
-        projectKey: "remote:github.com/acme/app",
-        projectName: "App",
-        checkout: {
-          cwd: "/repo/app",
-          isGit: true,
-          currentBranch: "main",
-          remoteUrl: "https://github.com/acme/app.git",
-          worktreeRoot: "/repo/app",
-          isPaseoOwnedWorktree: false,
-          mainRepoRoot: null,
+      iconWorkingDir: "/repo/a",
+      hosts: [
+        {
+          serverId: "host-a",
+          projectId: "project-a",
+          iconWorkingDir: "/repo/a",
+          canCreateWorktree: true,
         },
-      },
+      ],
+      workspaceKeys: [],
     });
-
-    expect(hostProjectFromWorkspace({ serverId: "host-a", workspace })).toMatchObject({
-      viewKey: JSON.stringify(["host-a", "project-a"]),
-      projectKey: "remote:github.com/acme/app",
-      hosts: [{ serverId: "host-a", projectId: "project-a" }],
-    });
+    expect(hostProjectFromRoute({ serverId: "host-a", projectId: "project-a" })).toBeNull();
   });
 });

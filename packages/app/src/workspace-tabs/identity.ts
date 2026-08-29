@@ -29,6 +29,10 @@ export function normalizeWorkspaceTabTarget(
       ? { kind: "provider_subagent", parentAgentId, subagentId }
       : null;
   }
+  if (value.kind === "terminal") {
+    const terminalId = trimNonEmpty(value.terminalId);
+    return terminalId ? { kind: "terminal", terminalId } : null;
+  }
   if (value.kind === "file") {
     return normalizeFileTabTarget(value);
   }
@@ -51,11 +55,6 @@ function normalizeSimpleWorkspaceTabTarget(value: WorkspaceTabTarget): Workspace
       const terminalId = trimNonEmpty(value.terminalId);
       return terminalId ? { kind: "terminal", terminalId } : null;
     }
-    case "browser": {
-      const browserId = trimNonEmpty(value.browserId);
-      return browserId ? { kind: "browser", browserId } : null;
-    }
-    case "changes_tree":
     case "files":
     case "pull_request":
       return { kind: value.kind };
@@ -96,13 +95,29 @@ export function normalizeWorkspaceDraftTabSetup(
   };
 }
 
-export function workspaceTabTargetsEqual(
+function workingDiffTargetsEqual(
   left: WorkspaceTabTarget,
   right: WorkspaceTabTarget,
-): boolean {
-  if (left.kind !== right.kind) {
-    return false;
+): boolean | null {
+  if (left.kind !== "working_diff" || right.kind !== "working_diff") {
+    return null;
   }
+  return left.focusPath === right.focusPath && left.focusRequestId === right.focusRequestId;
+}
+
+function pluginTargetsEqual(left: WorkspaceTabTarget, right: WorkspaceTabTarget): boolean | null {
+  if (left.kind !== "plugin" || right.kind !== "plugin") {
+    return null;
+  }
+  return (
+    left.pluginId === right.pluginId &&
+    left.panelId === right.panelId &&
+    left.context === right.context &&
+    (left.context === "workspace" || (right.context === "agent" && left.agentId === right.agentId))
+  );
+}
+
+function sessionTargetsEqual(left: WorkspaceTabTarget, right: WorkspaceTabTarget): boolean | null {
   if (left.kind === "draft" && right.kind === "draft") {
     return left.draftId === right.draftId && workspaceDraftTabSetupsEqual(left.setup, right.setup);
   }
@@ -115,35 +130,32 @@ export function workspaceTabTargetsEqual(
   if (left.kind === "terminal" && right.kind === "terminal") {
     return left.terminalId === right.terminalId;
   }
-  if (left.kind === "plugin" && right.kind === "plugin") {
-    return (
-      left.pluginId === right.pluginId &&
-      left.panelId === right.panelId &&
-      left.context === right.context &&
-      (left.context === "workspace" ||
-        (right.context === "agent" && left.agentId === right.agentId))
-    );
-  }
-  return secondaryWorkspaceTabTargetsEqual(left, right);
+  return null;
 }
 
-function secondaryWorkspaceTabTargetsEqual(
+export function workspaceTabTargetsEqual(
   left: WorkspaceTabTarget,
   right: WorkspaceTabTarget,
 ): boolean {
-  if (left.kind === "browser" && right.kind === "browser") {
-    return left.browserId === right.browserId;
+  if (left.kind !== right.kind) {
+    return false;
+  }
+  const sessionEqual = sessionTargetsEqual(left, right);
+  if (sessionEqual !== null) {
+    return sessionEqual;
+  }
+  const pluginEqual = pluginTargetsEqual(left, right);
+  if (pluginEqual !== null) {
+    return pluginEqual;
   }
   if (left.kind === "file" && right.kind === "file") {
     return workspaceFileLocationsEqual(left, right);
   }
-  if (left.kind === "working_diff" && right.kind === "working_diff") {
-    return left.focusPath === right.focusPath && left.focusRequestId === right.focusRequestId;
+  const workingDiffEqual = workingDiffTargetsEqual(left, right);
+  if (workingDiffEqual !== null) {
+    return workingDiffEqual;
   }
   if (left.kind === "files" && right.kind === "files") {
-    return true;
-  }
-  if (left.kind === "changes_tree" && right.kind === "changes_tree") {
     return true;
   }
   if (left.kind === "pull_request" && right.kind === "pull_request") {
@@ -207,9 +219,6 @@ export function buildDeterministicWorkspaceTabId(target: WorkspaceTabTarget): st
   if (target.kind === "terminal") {
     return `terminal_${target.terminalId}`;
   }
-  if (target.kind === "browser") {
-    return `browser_${target.browserId}`;
-  }
   if (target.kind === "setup") {
     return `setup_${target.workspaceId}`;
   }
@@ -219,7 +228,7 @@ export function buildDeterministicWorkspaceTabId(target: WorkspaceTabTarget): st
   if (target.kind === "working_diff") {
     return "working_diff";
   }
-  if (target.kind === "changes_tree" || target.kind === "files" || target.kind === "pull_request") {
+  if (target.kind === "files" || target.kind === "pull_request") {
     return target.kind;
   }
   if (target.kind === "plugin") {

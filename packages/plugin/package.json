@@ -1,7 +1,8 @@
 {
-  "name": "@getpaseo/plugin",
-  "version": "0.6.1",
-  "description": "Paseo plugin SDK package",
+  "name": "@bytetrue/byspace-plugin",
+  "version": "0.6.0",
+  "private": true,
+  "description": "BySpace plugin SDK package",
   "files": [
     "dist",
     "!dist/**/*.map"
@@ -24,22 +25,19 @@
       "default": "./dist/host.js"
     }
   },
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "clean": "node ../../scripts/clean-package-dist.mjs",
     "build": "tsc -p tsconfig.json --incremental false",
     "build:clean": "npm run clean && npm run build",
     "prepack": "npm run build:clean",
-    "typecheck": "tsgo --noEmit && tsgo -p tsconfig.examples.json --noEmit",
+    "typecheck": "tsgo --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "use-sync-external-store": "^1.6.0"
   },
   "devDependencies": {
-    "@getpaseo/client": "0.6.1",
+    "@bytetrue/byspace-client": "*",
     "@types/node": "^20.9.0",
     "@types/react": "~19.2.0",
     "react": "19.1.0",
@@ -48,7 +46,7 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@getpaseo/client": "0.6.1",
+    "@bytetrue/byspace-client": "*",
     "react": "19.1.0",
     "zod": "^4.4.3"
   }

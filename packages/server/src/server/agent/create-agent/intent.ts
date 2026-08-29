@@ -1,4 +1,4 @@
-import { PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
+import { PARENT_AGENT_ID_LABEL } from "@bytetrue/byspace-protocol/agent-labels";
 
 export interface CreateAgentCaller {
   id: string;
@@ -37,7 +37,6 @@ export async function resolveCreateAgentIntent(input: {
 
   // COMPAT(detachedCreate): legacy callers may still request detached creation.
   // Added in v0.2.0; remove after 2027-01-17 once detached creation is outside the floor.
-  // The delete also strips a parent label injected through input.labels.
   if (input.legacyDetached) {
     delete labels[PARENT_AGENT_ID_LABEL];
   }
@@ -58,6 +57,7 @@ async function resolvePlacement(input: {
     if (!input.caller.workspaceId) {
       throw new Error(`Caller agent ${input.caller.id} has no workspace`);
     }
+    await input.resolveWorkspace(input.caller.workspaceId);
     return { workspaceId: input.caller.workspaceId, cwd: input.caller.cwd };
   }
   return input.createWorkspace();

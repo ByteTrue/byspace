@@ -80,9 +80,9 @@ export async function listOmpImportableSessions(
   const limit = options.limit ?? 20;
   const ranked = await rankSessionFilesByMtime(files);
   const candidateLimit = Math.max(limit * IMPORT_CANDIDATE_OVERSCAN, IMPORT_CANDIDATE_MIN);
-  const candidates = matchesCwd ? ranked : ranked.slice(0, candidateLimit);
   const sessions: ImportableProviderSession[] = [];
 
+  const candidates = matchesCwd ? ranked : ranked.slice(0, candidateLimit);
   for (const entry of candidates) {
     const session = await readOmpImportableSession(entry.file);
     if (!session) continue;

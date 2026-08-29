@@ -117,7 +117,7 @@ export function useFileLink(source: AssistantFileLinkSource): UseFileLinkResult 
   });
 
   const onPress = useStableEvent(() => {
-    open(stableSource, "preferred");
+    open(stableSource, "side");
   });
 
   const target = useMemo(() => {

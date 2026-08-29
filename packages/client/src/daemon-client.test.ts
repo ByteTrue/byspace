@@ -1,18 +1,11 @@
 import { afterEach, expect, expectTypeOf, test, vi } from "vitest";
 import { z } from "zod";
-import {
-  DaemonClient,
-  type DaemonClientTrace,
-  type DaemonTransport,
-  type Logger,
-} from "./daemon-client";
-import { CLIENT_CAPS } from "@getpaseo/protocol/client-capabilities";
-import { BROWSER_AUTOMATION_COMMAND_NAMES } from "@getpaseo/protocol/browser-automation/rpc-schemas";
+import { DaemonClient, type DaemonTransport, type Logger } from "./daemon-client";
 import {
   decodeFileTransferFrame,
   encodeFileTransferFrame,
   FileTransferOpcode,
-} from "@getpaseo/protocol/binary-frames/index";
+} from "@bytetrue/byspace-protocol/binary-frames/index";
 import {
   asUint8Array,
   decodeTerminalResizePayload,
@@ -20,7 +13,7 @@ import {
   encodeTerminalSnapshotPayload,
   encodeTerminalStreamFrame,
   TerminalStreamOpcode,
-} from "@getpaseo/protocol/terminal-stream-protocol";
+} from "@bytetrue/byspace-protocol/terminal-stream-protocol";
 
 expectTypeOf<"getGitDiff" extends keyof DaemonClient ? true : false>().toEqualTypeOf<false>();
 expectTypeOf<
@@ -36,24 +29,6 @@ function createMockLogger() {
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
-  };
-}
-
-interface TraceRecord {
-  phase: "begin" | "end";
-  name?: string;
-  args?: Record<string, string>;
-}
-
-function createTraceRecorder(): { trace: DaemonClientTrace; records: TraceRecord[] } {
-  const records: TraceRecord[] = [];
-  return {
-    trace: {
-      isEnabled: () => true,
-      beginSection: (name, args) => records.push({ phase: "begin", name, args }),
-      endSection: () => records.push({ phase: "end" }),
-    },
-    records,
   };
 }
 
@@ -182,224 +157,6 @@ afterEach(async () => {
   clients.length = 0;
   vi.useRealTimers();
   vi.unstubAllGlobals();
-});
-
-test("traces WebSocket frames, message types, and JSON parse duration", async () => {
-  const mock = createMockTransport();
-  const recorder = createTraceRecorder();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "trace_unit_test",
-    transportFactory: () => mock.transport,
-    reconnect: { enabled: false },
-    trace: recorder.trace,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen({ preserveSent: true });
-  await connectPromise;
-
-  expect(recorder.records).toEqual([
-    {
-      phase: "begin",
-      name: "paseo.ws.message.outbound",
-      args: { envelopeType: "hello", messageType: "hello" },
-    },
-    { phase: "end" },
-    {
-      phase: "begin",
-      name: "paseo.ws.frame.outbound",
-      args: { kind: "text", size: expect.any(String) },
-    },
-    { phase: "end" },
-    {
-      phase: "begin",
-      name: "paseo.ws.frame.inbound",
-      args: { kind: "text", size: expect.any(String) },
-    },
-    {
-      phase: "begin",
-      name: "paseo.ws.json.parse",
-      args: { size: expect.any(String) },
-    },
-    { phase: "end" },
-    {
-      phase: "begin",
-      name: "paseo.ws.message.inbound",
-      args: { envelopeType: "session", messageType: "status" },
-    },
-    { phase: "end" },
-    { phase: "end" },
-  ]);
-});
-
-test("does not infer browser automation capabilities from Electron runtime", async () => {
-  vi.stubGlobal("navigator", {
-    userAgent:
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Paseo/0.1.89 Chrome/146 Electron/41.2.0 Safari/537.36",
-  });
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "electron_unit_test",
-    transportFactory: () => mock.transport,
-    reconnect: { enabled: false },
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen({ preserveSent: true });
-  await connectPromise;
-
-  const hello = z
-    .object({
-      type: z.literal("hello"),
-      capabilities: z.record(z.unknown()),
-    })
-    .parse(JSON.parse(assertStr(mock.sent[0])));
-  expect(hello.capabilities[CLIENT_CAPS.browserHost]).toBeUndefined();
-  expect(hello.capabilities[CLIENT_CAPS.selectiveAgentTimeline]).toBeUndefined();
-});
-
-test("advertises consumer-provided browser automation capabilities", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "browser_capability_unit_test",
-    transportFactory: () => mock.transport,
-    reconnect: { enabled: false },
-    capabilities: {
-      [CLIENT_CAPS.browserHost]: {
-        supportedCommands: [...BROWSER_AUTOMATION_COMMAND_NAMES],
-        hostKind: "desktop app",
-      },
-    },
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen({ preserveSent: true });
-  await connectPromise;
-
-  const hello = z
-    .object({
-      type: z.literal("hello"),
-      capabilities: z.record(z.unknown()),
-    })
-    .parse(JSON.parse(assertStr(mock.sent[0])));
-  expect(hello.capabilities[CLIENT_CAPS.browserHost]).toEqual({
-    supportedCommands: [...BROWSER_AUTOMATION_COMMAND_NAMES],
-    hostKind: "desktop app",
-  });
-});
-
-test("Hub management requires daemon support before dispatching requests", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "hub_feature_gate_unit_test",
-    transportFactory: () => mock.transport,
-    reconnect: { enabled: false },
-  });
-  clients.push(client);
-  const connecting = client.connect();
-  mock.triggerOpen();
-  await connecting;
-
-  await expect(client.getHubStatus()).rejects.toThrow(
-    "Update the host to use Hub relationship management.",
-  );
-  expect(mock.sent).toEqual([]);
-});
-
-test("sets the complete viewed timeline subscription only when the daemon supports it", async () => {
-  const supportedTransport = createMockTransport();
-  const supportedClient = new DaemonClient({
-    url: "ws://test",
-    clientId: "timeline_supported",
-    transportFactory: () => supportedTransport.transport,
-    reconnect: { enabled: false },
-  });
-  const legacyTransport = createMockTransport();
-  const legacyClient = new DaemonClient({
-    url: "ws://test",
-    clientId: "timeline_legacy",
-    transportFactory: () => legacyTransport.transport,
-    reconnect: { enabled: false },
-  });
-  clients.push(supportedClient, legacyClient);
-
-  const supportedConnect = supportedClient.connect();
-  supportedTransport.triggerOpen({ features: { selectiveAgentTimeline: true } });
-  await supportedConnect;
-  const legacyConnect = legacyClient.connect();
-  legacyTransport.triggerOpen();
-  await legacyConnect;
-
-  expect(supportedClient.getLastServerInfoMessage()?.features).toEqual({
-    selectiveAgentTimeline: true,
-  });
-
-  const setPromise = supportedClient.setAgentTimelineSubscription(["agent-b", "agent-a"]);
-  await Promise.resolve();
-  const request = parseSentFrame(supportedTransport.sent[0]);
-  supportedTransport.triggerMessage(
-    wrapSessionMessage({
-      type: "agent.timeline.set_subscription.response",
-      payload: {
-        requestId: request.requestId,
-        agentIds: ["agent-a", "agent-b"],
-      },
-    }),
-  );
-  await setPromise;
-  await legacyClient.setAgentTimelineSubscription(["agent-a"]);
-
-  expect({ request, legacyFrames: legacyTransport.sent }).toEqual({
-    request: {
-      type: "agent.timeline.set_subscription.request",
-      requestId: expect.any(String),
-      agentIds: ["agent-a", "agent-b"],
-    },
-    legacyFrames: [],
-  });
-});
-
-test("normalizes legacy and dedicated agent attention notifications", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "attention_normalization",
-    transportFactory: () => mock.transport,
-    reconnect: { enabled: false },
-  });
-  clients.push(client);
-  const connect = client.connect();
-  mock.triggerOpen();
-  await connect;
-  const notifications: unknown[] = [];
-  client.onAgentAttentionRequired((notification) => notifications.push(notification));
-  const payload = {
-    agentId: "agent-a",
-    reason: "finished",
-    timestamp: "2026-07-12T00:00:00.000Z",
-    shouldNotify: true,
-  } as const;
-
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "agent_stream",
-      payload: {
-        agentId: payload.agentId,
-        timestamp: payload.timestamp,
-        event: { type: "attention_required", provider: "codex", ...payload },
-      },
-    }),
-  );
-  mock.triggerMessage(wrapSessionMessage({ type: "agent_attention_required", payload }));
-
-  expect(notifications).toEqual([payload, payload]);
 });
 
 const noopLogger: Logger = {
@@ -631,7 +388,7 @@ test("dedupes in-flight checkout status requests per agentId", async () => {
         error: null,
         requestId: request.requestId,
         isGit: false,
-        isPaseoOwnedWorktree: false,
+        isBySpaceOwnedWorktree: false,
         repoRoot: null,
         currentBranch: null,
         isDirty: null,
@@ -703,7 +460,51 @@ test("passes password as HTTP bearer header and WebSocket subprotocol", async ()
   expect(transportFactory).toHaveBeenCalledWith({
     url: "ws://test",
     headers: { Authorization: "Bearer shared-secret" },
-    protocols: ["paseo.bearer.shared-secret"],
+    protocols: ["byspace.bearer.shared-secret"],
+  });
+});
+
+test.each([
+  ["an invalid name", { "Bad Header": "value" }, "Invalid HTTP header name"],
+  ["a CR/LF value", { Foo: "first\r\nsecond" }, "Invalid HTTP header value"],
+  ["a case-insensitive duplicate", { Foo: "first", foo: "second" }, "Duplicate HTTP header name"],
+])("rejects custom headers with %s", (_label, headers, expectedError) => {
+  expect(
+    () =>
+      new DaemonClient({
+        url: "ws://test",
+        clientId: "clsk_unit_test",
+        headers,
+        reconnect: { enabled: false },
+      }),
+  ).toThrow(expectedError);
+});
+
+test("merges custom headers and gives password Authorization precedence", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const transportFactory = vi.fn(() => mock.transport);
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    password: "shared-secret",
+    authHeader: "Bearer legacy-secret",
+    headers: { authorization: "Bearer custom-secret", "X-Custom": "custom-value" },
+    logger,
+    reconnect: { enabled: false },
+    transportFactory,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  expect(transportFactory).toHaveBeenCalledWith({
+    url: "ws://test",
+    headers: { Authorization: "Bearer shared-secret", "X-Custom": "custom-value" },
+    protocols: ["byspace.bearer.shared-secret"],
   });
 });
 
@@ -717,12 +518,6 @@ test("advertises client capabilities in hello", async () => {
     logger,
     reconnect: { enabled: false },
     transportFactory: () => mock.transport,
-    capabilities: {
-      browser_host: {
-        supportedCommands: ["list_tabs"],
-        hostKind: "desktop app",
-      },
-    },
   });
   clients.push(client);
 
@@ -739,42 +534,11 @@ test("advertises client capabilities in hello", async () => {
     capabilities: {
       compact_provider_snapshots: true,
       custom_mode_icons: true,
-      project_updates: true,
       provider_subagents: true,
       reasoning_merge_enum: true,
       terminal_reflowable_snapshot: true,
-      browser_host: {
-        supportedCommands: ["list_tabs"],
-        hostKind: "desktop app",
-      },
     },
   });
-});
-
-test("allows callers to disable default client capabilities", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_capability_override_test",
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-    capabilities: {
-      [CLIENT_CAPS.projectUpdates]: false,
-    },
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen({ preserveSent: true });
-  await connectPromise;
-
-  const hello = z
-    .object({
-      type: z.literal("hello"),
-      capabilities: z.record(z.unknown()),
-    })
-    .parse(JSON.parse(assertStr(mock.sent[0])));
-  expect(hello.capabilities[CLIENT_CAPS.projectUpdates]).toBe(false);
 });
 
 test("sends new-agent run options when creating schedules", async () => {
@@ -797,7 +561,7 @@ test("sends new-agent run options when creating schedules", async () => {
   const createPromise = client.scheduleCreate({
     requestId: "request-1",
     prompt: "Run the task",
-    cadence: { type: "cron", expression: "* * * * *" },
+    cadence: { type: "every", everyMs: 60_000 },
     target: {
       type: "new-agent",
       config: {
@@ -815,7 +579,7 @@ test("sends new-agent run options when creating schedules", async () => {
     type: "schedule/create",
     requestId: "request-1",
     prompt: "Run the task",
-    cadence: { type: "cron", expression: "* * * * *" },
+    cadence: { type: "every", everyMs: 60_000 },
     target: {
       type: "new-agent",
       config: {
@@ -883,42 +647,6 @@ test("sends new-agent run options when updating schedules", async () => {
   });
 });
 
-test("sends typed browser automation execute responses", async () => {
-  const logger = createMockLogger();
-  const mock = createMockTransport();
-
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_unit_test",
-    logger,
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen();
-  await connectPromise;
-
-  client.sendBrowserAutomationExecuteResponse({
-    type: "browser.automation.execute.response",
-    payload: {
-      requestId: "req-1",
-      ok: true,
-      result: { command: "list_tabs", tabs: [] },
-    },
-  });
-
-  expect(parseSentFrame(mock.sent[0])).toEqual({
-    type: "browser.automation.execute.response",
-    payload: {
-      requestId: "req-1",
-      ok: true,
-      result: { command: "list_tabs", tabs: [] },
-    },
-  });
-});
-
 test("does not reconnect after close when ensureConnected is called", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -964,59 +692,6 @@ test("keeps the transport connected when a session RPC ping times out", async ()
 
   await expect(client.ping({ timeoutMs: 1 })).rejects.toThrow("Timeout waiting for message");
 
-  expect(client.getConnectionState().status).toBe("connected");
-});
-
-test("waits for the daemon to acknowledge push token revocation", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_push_revocation",
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-  const connectPromise = client.connect();
-  mock.triggerOpen({ features: { pushTokenRevocation: true } });
-  await connectPromise;
-
-  const revocation = client.unregisterPushToken("ExponentPushToken[test-device]");
-  const request = parseSentFrame(mock.sent.at(-1));
-  expect(request).toMatchObject({
-    type: "push.unregister.request",
-    token: "ExponentPushToken[test-device]",
-  });
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "push.unregister.response",
-      payload: { requestId: request.requestId },
-    }),
-  );
-
-  await revocation;
-});
-
-test("bounds the wait for push token revocation", async () => {
-  useHeartbeatClock();
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_push_revocation_timeout",
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-  });
-  clients.push(client);
-  const connectPromise = client.connect();
-  mock.triggerOpen({ features: { pushTokenRevocation: true } });
-  await connectPromise;
-
-  const revocation = client.unregisterPushToken("ExponentPushToken[test-device]");
-  const rejection = expect(revocation).rejects.toThrow("Timeout waiting for message (2000ms)");
-  await vi.advanceTimersByTimeAsync(1_999);
-  expect(client.getConnectionState().status).toBe("connected");
-
-  await vi.advanceTimersByTimeAsync(1);
-  await rejection;
   expect(client.getConnectionState().status).toBe("connected");
 });
 
@@ -1452,7 +1127,6 @@ test("gates config reload on the daemon capability", async () => {
   const connectPromise = client.connect();
   mock.triggerOpen();
   await connectPromise;
-
   await expect(client.reloadDaemonConfig("reload-old-host")).rejects.toThrow(
     "Update the host to reload daemon configuration.",
   );
@@ -1472,7 +1146,6 @@ test("sends and parses daemon config reload", async () => {
   const connectPromise = client.connect();
   mock.triggerOpen({ features: { daemonConfigReload: true } });
   await connectPromise;
-
   const response = client.reloadDaemonConfig("reload-new-host");
   expect(parseSentFrame(mock.sent[0])).toEqual({
     type: "daemon.config.reload.request",
@@ -1489,7 +1162,6 @@ test("sends and parses daemon config reload", async () => {
       },
     }),
   );
-
   await expect(response).resolves.toEqual({
     requestId: "reload-new-host",
     appliedPaths: ["daemon.browserTools.enabled"],
@@ -2350,7 +2022,7 @@ test("uploadFile sends metadata request and file bytes as binary chunks", async 
           fileName: "notes.txt",
           mimeType: "text/plain",
           size: 11,
-          path: "/tmp/paseo-uploads/upload_req-upload/notes.txt",
+          path: "/tmp/byspace-uploads/upload_req-upload/notes.txt",
         },
         error: null,
       },
@@ -2365,7 +2037,7 @@ test("uploadFile sends metadata request and file bytes as binary chunks", async 
       fileName: "notes.txt",
       mimeType: "text/plain",
       size: 11,
-      path: "/tmp/paseo-uploads/upload_req-upload/notes.txt",
+      path: "/tmp/byspace-uploads/upload_req-upload/notes.txt",
     },
     error: null,
   });
@@ -2401,14 +2073,14 @@ test("normalizes workspace_setup_progress into a workspace-scoped daemon event",
         status: "running",
         detail: {
           type: "worktree_setup",
-          worktreePath: "/tmp/project/.paseo/worktrees/feature-a",
+          worktreePath: "/tmp/project/.byspace/worktrees/feature-a",
           branchName: "feature-a",
           log: "phase-one\n",
           commands: [
             {
               index: 1,
               command: "npm install",
-              cwd: "/tmp/project/.paseo/worktrees/feature-a",
+              cwd: "/tmp/project/.byspace/worktrees/feature-a",
               log: "phase-one\n",
               status: "running",
               exitCode: null,
@@ -2428,14 +2100,14 @@ test("normalizes workspace_setup_progress into a workspace-scoped daemon event",
       status: "running",
       detail: {
         type: "worktree_setup",
-        worktreePath: "/tmp/project/.paseo/worktrees/feature-a",
+        worktreePath: "/tmp/project/.byspace/worktrees/feature-a",
         branchName: "feature-a",
         log: "phase-one\n",
         commands: [
           {
             index: 1,
             command: "npm install",
-            cwd: "/tmp/project/.paseo/worktrees/feature-a",
+            cwd: "/tmp/project/.byspace/worktrees/feature-a",
             log: "phase-one\n",
             status: "running",
             exitCode: null,
@@ -2447,7 +2119,94 @@ test("normalizes workspace_setup_progress into a workspace-scoped daemon event",
   });
 });
 
-test("sends create_agent_request with workspace and caller identity", async () => {
+test("rejects providerOptions requests before sending to an older daemon", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_provider_options_old_host",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  await expect(
+    client.createAgent({
+      provider: "claude",
+      cwd: "/tmp/project",
+      providerOptions: { allowedTools: ["Read"] },
+    }),
+  ).rejects.toThrow("Update the host to use provider options.");
+  await expect(
+    client.resumeAgent(
+      { provider: "claude", sessionId: "session-old-host" },
+      { providerOptions: { allowedTools: ["Read"] } },
+    ),
+  ).rejects.toThrow("Update the host to use provider options.");
+  await expect(
+    client.scheduleCreate({
+      prompt: "Run the task",
+      cadence: { type: "every", everyMs: 60_000 },
+      target: {
+        type: "new-agent",
+        config: {
+          provider: "claude",
+          cwd: "/tmp/project",
+          providerOptions: { allowedTools: ["Read"] },
+        },
+      },
+    }),
+  ).rejects.toThrow("Update the host to use provider options.");
+
+  expect(mock.sent).toEqual([]);
+});
+
+test("sends providerOptions when the daemon advertises support", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_provider_options_new_host",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen({ features: { providerOptions: true } });
+  await connectPromise;
+
+  const createPromise = client.createAgent({
+    provider: "claude",
+    cwd: "/tmp/project",
+    providerOptions: { allowedTools: ["Read"] },
+  });
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "create_agent_request",
+    config: { providerOptions: { allowedTools: ["Read"] } },
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "status",
+      payload: {
+        status: "agent_create_failed",
+        requestId: request.requestId,
+        error: "provider options test sentinel",
+      },
+    }),
+  );
+  await expect(createPromise).rejects.toThrow("provider options test sentinel");
+});
+
+test("sends create_agent_request with string workspace ids", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -2466,9 +2225,8 @@ test("sends create_agent_request with workspace and caller identity", async () =
 
   const createPromise = client.createAgent({
     provider: "codex",
-    cwd: "/tmp/project/.paseo/worktrees/feature-a",
+    cwd: "/tmp/project/.byspace/worktrees/feature-a",
     workspaceId: "ws-feature-a",
-    callerAgentId: "parent-agent",
     title: "Compat agent",
     modeId: "default",
   });
@@ -2479,7 +2237,6 @@ test("sends create_agent_request with workspace and caller identity", async () =
     expect.objectContaining({
       type: "create_agent_request",
       workspaceId: "ws-feature-a",
-      callerAgentId: "parent-agent",
     }),
   );
 
@@ -2580,7 +2337,7 @@ test("sends structured attachments with create_agent_request", async () => {
         mimeType: "application/github-pr",
         number: 123,
         title: "Fix race in worktree setup",
-        url: "https://github.com/getpaseo/paseo/pull/123",
+        url: "https://github.com/ByteTrue/byspace/pull/123",
         baseRefName: "main",
         headRefName: "fix/worktree-race",
       },
@@ -2595,7 +2352,7 @@ test("sends structured attachments with create_agent_request", async () => {
       mimeType: "application/github-pr",
       number: 123,
       title: "Fix race in worktree setup",
-      url: "https://github.com/getpaseo/paseo/pull/123",
+      url: "https://github.com/ByteTrue/byspace/pull/123",
       baseRefName: "main",
       headRefName: "fix/worktree-race",
     },
@@ -2729,7 +2486,7 @@ test("omitting create_agent_request worktree base-ref fields preserves legacy wi
   await expect(createPromise).rejects.toThrow("legacy git shape sentinel");
 });
 
-test("sends structured first-agent context attachments with create_paseo_worktree_request", async () => {
+test("sends structured first-agent context attachments with create_byspace_worktree_request", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -2746,7 +2503,7 @@ test("sends structured first-agent context attachments with create_paseo_worktre
   mock.triggerOpen();
   await connectPromise;
 
-  const createPromise = client.createPaseoWorktree({
+  const createPromise = client.createBySpaceWorktree({
     cwd: "/tmp/project",
     worktreeSlug: "review-pr-123",
     firstAgentContext: {
@@ -2756,7 +2513,7 @@ test("sends structured first-agent context attachments with create_paseo_worktre
           mimeType: "application/github-pr",
           number: 123,
           title: "Fix race in worktree setup",
-          url: "https://github.com/getpaseo/paseo/pull/123",
+          url: "https://github.com/ByteTrue/byspace/pull/123",
         },
       ],
     },
@@ -2773,13 +2530,13 @@ test("sends structured first-agent context attachments with create_paseo_worktre
       mimeType: "application/github-pr",
       number: 123,
       title: "Fix race in worktree setup",
-      url: "https://github.com/getpaseo/paseo/pull/123",
+      url: "https://github.com/ByteTrue/byspace/pull/123",
     },
   ]);
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "create_paseo_worktree_response",
+      type: "create_byspace_worktree_response",
       payload: {
         requestId: request.requestId,
         workspace: null,
@@ -2870,12 +2627,12 @@ test("searches GitHub repositories through the dotted RPC", async () => {
   await connectPromise;
 
   const searchPromise = client.searchGithubRepositories(
-    { query: "paseo", limit: 10 },
+    { query: "byspace", limit: 10 },
     "req-repositories",
   );
   expect(parseSentFrame(mock.sent[0])).toEqual({
     type: "workspace.github.search_repositories.request",
-    query: "paseo",
+    query: "byspace",
     limit: 10,
     requestId: "req-repositories",
   });
@@ -2888,13 +2645,13 @@ test("searches GitHub repositories through the dotted RPC", async () => {
         requestId: "req-repositories",
         repositories: [
           {
-            id: "R_paseo",
-            name: "paseo",
-            nameWithOwner: "getpaseo/paseo",
+            id: "R_byspace",
+            name: "byspace",
+            nameWithOwner: "ByteTrue/byspace",
             description: "Development environment in your pocket",
             visibility: "public",
             updatedAt: "2026-07-15T10:00:00Z",
-            cloneUrl: "git@github.com:getpaseo/paseo.git",
+            cloneUrl: "git@github.com:ByteTrue/byspace.git",
           },
         ],
         available: true,
@@ -2908,13 +2665,13 @@ test("searches GitHub repositories through the dotted RPC", async () => {
     requestId: "req-repositories",
     repositories: [
       {
-        id: "R_paseo",
-        name: "paseo",
-        nameWithOwner: "getpaseo/paseo",
+        id: "R_byspace",
+        name: "byspace",
+        nameWithOwner: "ByteTrue/byspace",
         description: "Development environment in your pocket",
         visibility: "public",
         updatedAt: "2026-07-15T10:00:00Z",
-        cloneUrl: "git@github.com:getpaseo/paseo.git",
+        cloneUrl: "git@github.com:ByteTrue/byspace.git",
       },
     ],
     available: true,
@@ -3091,7 +2848,7 @@ test("sends project.remove.request", async () => {
   await expect(removePromise).resolves.toEqual({ removedWorkspaceIds: ["ws-main"] });
 });
 
-test("sends worktree base-ref fields in create_paseo_worktree_request", async () => {
+test("sends worktree base-ref fields in create_byspace_worktree_request", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -3108,7 +2865,7 @@ test("sends worktree base-ref fields in create_paseo_worktree_request", async ()
   mock.triggerOpen();
   await connectPromise;
 
-  const createPromise = client.createPaseoWorktree(
+  const createPromise = client.createBySpaceWorktree(
     {
       cwd: "/tmp/project",
       projectId: "remote:github.com/acme/project",
@@ -3123,7 +2880,7 @@ test("sends worktree base-ref fields in create_paseo_worktree_request", async ()
   expect(mock.sent).toHaveLength(1);
   const request = parseSentFrame(mock.sent[0]);
   expect(request).toEqual({
-    type: "create_paseo_worktree_request",
+    type: "create_byspace_worktree_request",
     cwd: "/tmp/project",
     projectId: "remote:github.com/acme/project",
     worktreeSlug: "review-pr-123",
@@ -3135,7 +2892,7 @@ test("sends worktree base-ref fields in create_paseo_worktree_request", async ()
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "create_paseo_worktree_response",
+      type: "create_byspace_worktree_response",
       payload: {
         requestId: request.requestId,
         workspace: null,
@@ -3153,7 +2910,7 @@ test("sends worktree base-ref fields in create_paseo_worktree_request", async ()
   });
 });
 
-test("omitting create_paseo_worktree_request worktree base-ref fields preserves legacy wire shape", async () => {
+test("omitting create_byspace_worktree_request worktree base-ref fields preserves legacy wire shape", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -3170,7 +2927,7 @@ test("omitting create_paseo_worktree_request worktree base-ref fields preserves 
   mock.triggerOpen();
   await connectPromise;
 
-  const createPromise = client.createPaseoWorktree(
+  const createPromise = client.createBySpaceWorktree(
     {
       cwd: "/tmp/project",
       worktreeSlug: "feature-a",
@@ -3182,7 +2939,7 @@ test("omitting create_paseo_worktree_request worktree base-ref fields preserves 
     JSON.stringify({
       type: "session",
       message: {
-        type: "create_paseo_worktree_request",
+        type: "create_byspace_worktree_request",
         cwd: "/tmp/project",
         worktreeSlug: "feature-a",
         requestId: "req-worktree-legacy",
@@ -3192,7 +2949,7 @@ test("omitting create_paseo_worktree_request worktree base-ref fields preserves 
 
   mock.triggerMessage(
     wrapSessionMessage({
-      type: "create_paseo_worktree_response",
+      type: "create_byspace_worktree_response",
       payload: {
         requestId: "req-worktree-legacy",
         workspace: null,
@@ -3397,7 +3154,7 @@ test("requires non-empty clientId", () => {
 test("requires non-empty clientId for direct connections", () => {
   expect(() => {
     const _client = new DaemonClient({
-      url: "ws://127.0.0.1:6767/ws",
+      url: "ws://127.0.0.1:6777/ws",
       clientId: "   ",
       reconnect: { enabled: false },
     });
@@ -3750,7 +3507,7 @@ test("requests directory suggestions via RPC", async () => {
       message: {
         type: "directory_suggestions_response",
         payload: {
-          directories: ["/Users/test/projects/paseo"],
+          directories: ["/Users/test/projects/byspace"],
           entries: [{ path: "README.md", kind: "file" }],
           error: null,
           requestId: "req-directories",
@@ -3760,7 +3517,7 @@ test("requests directory suggestions via RPC", async () => {
   );
 
   await expect(promise).resolves.toEqual({
-    directories: ["/Users/test/projects/paseo"],
+    directories: ["/Users/test/projects/byspace"],
     entries: [{ path: "README.md", kind: "file" }],
     error: null,
     requestId: "req-directories",
@@ -3953,8 +3710,8 @@ test("requests GitHub check details via namespaced RPC", async () => {
   const promise = client.checkoutGithubGetCheckDetails(
     {
       cwd: "/tmp/project",
-      repoOwner: "getpaseo",
-      repoName: "paseo",
+      repoOwner: "ByteTrue",
+      repoName: "byspace",
       checkRunId: 12345,
       workflowRunId: 456,
     },
@@ -3966,8 +3723,8 @@ test("requests GitHub check details via namespaced RPC", async () => {
   expect(request).toMatchObject({
     type: "checkout.github.get_check_details.request",
     cwd: "/tmp/project",
-    repoOwner: "getpaseo",
-    repoName: "paseo",
+    repoOwner: "ByteTrue",
+    repoName: "byspace",
     checkRunId: 12345,
     workflowRunId: 456,
     requestId: "req-check-details",
@@ -4613,6 +4370,36 @@ test("imports an agent by provider handle id", async () => {
   });
 });
 
+test("cancelling a pending dictation start settles it and allows another start", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const cancelledStart = client.startDictationStream("dict-cancelled", "pcm16");
+  client.cancelDictationStream("dict-cancelled");
+  await expect(cancelledStart).rejects.toThrow("Dictation start cancelled");
+
+  const nextStart = client.startDictationStream("dict-next", "pcm16");
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "dictation_stream_ack",
+      payload: { dictationId: "dict-next", ackSeq: -1 },
+    }),
+  );
+  await expect(nextStart).resolves.toBeUndefined();
+});
+
 test("uses server-provided dictation finish timeout budget", async () => {
   useHeartbeatClock();
   const logger = createMockLogger();
@@ -5240,7 +5027,6 @@ test("sends input and resize frames for the subscribed terminal slot", async () 
     type: "resize",
     rows: 24,
     cols: 80,
-    intent: "update",
   });
 
   const inputFrame = decodeTerminalStreamFrame(asUint8Array(mock.sent[0])!);
@@ -5254,7 +5040,6 @@ test("sends input and resize frames for the subscribed terminal slot", async () 
   expect(decodeTerminalResizePayload(resizeFrame?.payload ?? new Uint8Array())).toEqual({
     rows: 24,
     cols: 80,
-    intent: "update",
   });
 });
 
@@ -6020,4 +5805,49 @@ test("waitForFinish with timeout=0 omits timeoutMs and has no client deadline", 
   } finally {
     vi.useRealTimers();
   }
+});
+
+test("refines a dictation transcript through a correlated request", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const promise = client.refineDictationTranscript(
+    "先检查 src/app.ts 然后运行 2 个测试",
+    "77777777-7777-4777-8777-777777777777",
+  );
+  const request = parseSentFrame(mock.sent[0]);
+  expect(request).toMatchObject({
+    type: "speech.dictation.refine.request",
+    agentId: "77777777-7777-4777-8777-777777777777",
+    text: "先检查 src/app.ts 然后运行 2 个测试",
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "speech.dictation.refine.response",
+      payload: {
+        requestId: request.requestId,
+        text: "先检查 src/app.ts，然后运行 2 个测试。",
+        refined: true,
+      },
+    }),
+  );
+
+  await expect(promise).resolves.toEqual({
+    requestId: request.requestId,
+    text: "先检查 src/app.ts，然后运行 2 个测试。",
+    refined: true,
+  });
 });

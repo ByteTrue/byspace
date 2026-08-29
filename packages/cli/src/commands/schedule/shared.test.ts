@@ -46,7 +46,7 @@ describe("parseScheduleCreateInput cwd/host validation", () => {
   test("host with cwd → uses provided cwd", () => {
     const input = parseScheduleCreateInput({
       ...baseOptions,
-      host: "dev:6767",
+      host: "dev:6777",
       cwd: "/remote/project",
     });
     expect(input.target).toEqual({
@@ -56,7 +56,7 @@ describe("parseScheduleCreateInput cwd/host validation", () => {
   });
 
   test("host without cwd → throws MISSING_CWD", () => {
-    expect(() => parseScheduleCreateInput({ ...baseOptions, host: "dev:6767" })).toThrow(
+    expect(() => parseScheduleCreateInput({ ...baseOptions, host: "dev:6777" })).toThrow(
       expect.objectContaining({
         code: "MISSING_CWD",
         message: expect.stringContaining("--cwd is required when --host is specified"),
@@ -66,7 +66,7 @@ describe("parseScheduleCreateInput cwd/host validation", () => {
 
   test("host with whitespace-only cwd → throws MISSING_CWD", () => {
     expect(() =>
-      parseScheduleCreateInput({ ...baseOptions, host: "dev:6767", cwd: "   " }),
+      parseScheduleCreateInput({ ...baseOptions, host: "dev:6777", cwd: "   " }),
     ).toThrow(expect.objectContaining({ code: "MISSING_CWD" }));
   });
 });
@@ -113,25 +113,6 @@ describe("parseScheduleCreateInput first-run timing", () => {
         message: "--timezone can only be used with --cron",
       }),
     );
-  });
-});
-
-describe("parseScheduleCreateInput thinking", () => {
-  test("sets the thinking option for each scheduled new-agent run", () => {
-    const input = parseScheduleCreateInput({
-      ...baseOptions,
-      cwd: "/project",
-      thinking: "  high  ",
-    });
-
-    expect(input.target).toEqual({
-      type: "new-agent",
-      config: {
-        provider: "claude",
-        cwd: "/project",
-        thinkingOptionId: "high",
-      },
-    });
   });
 });
 
@@ -297,5 +278,21 @@ describe("compileEveryPresetToCron", () => {
 
   test.each(["15minutes", "junk15m", "1h-nope"])("rejects malformed preset %s", (value) => {
     expect(() => compileEveryPresetToCron(value)).toThrow("Invalid duration format");
+  });
+});
+
+describe("schedule thinking", () => {
+  test("includes a trimmed thinking option for new-agent runs", () => {
+    expect(
+      parseScheduleCreateInput({
+        prompt: "Continue",
+        every: "5m",
+        provider: "claude",
+        thinking: " high ",
+      }).target,
+    ).toMatchObject({
+      type: "new-agent",
+      config: { provider: "claude", thinkingOptionId: "high" },
+    });
   });
 });

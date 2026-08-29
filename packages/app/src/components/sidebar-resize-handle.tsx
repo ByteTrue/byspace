@@ -4,6 +4,7 @@ import { GestureDetector, type GestureType } from "react-native-gesture-handler"
 import { StyleSheet } from "react-native-unistyles";
 import {
   resolveSidebarResizeHandleGeometry,
+  resolveSidebarResizeHandleVariant,
   type SidebarResizeEdge,
 } from "@/components/sidebar-resize-handle-layout";
 import { isWeb } from "@/constants/platform";
@@ -31,10 +32,10 @@ function edgeOffsetStyle(edge: SidebarResizeEdge, edgeOffset: number) {
 export function SidebarResizeHandle({ edge, gesture, pressed, testID }: SidebarResizeHandleProps) {
   const finePointer = useHasFinePointer();
 
-  if (finePointer) {
-    return <PointerResizeHandle edge={edge} gesture={gesture} pressed={pressed} testID={testID} />;
+  if (resolveSidebarResizeHandleVariant(isWeb, finePointer) === "coarse") {
+    return <TouchResizeHandle edge={edge} gesture={gesture} pressed={pressed} testID={testID} />;
   }
-  return <TouchResizeHandle edge={edge} gesture={gesture} pressed={pressed} testID={testID} />;
+  return <PointerResizeHandle edge={edge} gesture={gesture} pressed={pressed} testID={testID} />;
 }
 
 function PointerResizeHandle({ edge, gesture, testID }: SidebarResizeHandleProps) {
@@ -163,10 +164,10 @@ const styles = StyleSheet.create((theme) => ({
   },
   leftEdgeGrip: {
     alignSelf: "flex-start",
-    marginLeft: theme.spacing[0.5],
+    marginLeft: theme.spacing[1],
   },
   rightEdgeGrip: {
     alignSelf: "flex-end",
-    marginRight: theme.spacing[0.5],
+    marginRight: theme.spacing[1],
   },
 }));

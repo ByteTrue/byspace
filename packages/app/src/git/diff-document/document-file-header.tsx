@@ -37,7 +37,6 @@ export const DocumentFileHeader = memo(function DocumentFileHeader({
       onActivate={activate}
       onSelect={onSelectPath}
       onOpenFile={working?.onOpenFile}
-      onOpenToSide={working?.onOpenToSide}
       onAddToChat={working?.onAddToChat}
       onCopyPath={working?.onCopyPath}
       onCopyRelativePath={working?.onCopyRelativePath}
@@ -61,7 +60,6 @@ function documentFileHeaderPropsEqual(
     previous.mode.onFilePress === next.mode.onFilePress &&
     previous.mode.workspaceFileDragScope === next.mode.workspaceFileDragScope &&
     previous.mode.onOpenFile === next.mode.onOpenFile &&
-    previous.mode.onOpenToSide === next.mode.onOpenToSide &&
     previous.mode.onAddToChat === next.mode.onAddToChat &&
     previous.mode.onCopyPath === next.mode.onCopyPath &&
     previous.mode.onCopyRelativePath === next.mode.onCopyRelativePath &&

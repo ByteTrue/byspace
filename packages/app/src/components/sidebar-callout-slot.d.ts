@@ -1,1 +1,1 @@
-export * from "./sidebar-callout-slot.native";
+export * from "./sidebar-callout-slot.web";

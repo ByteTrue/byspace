@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CheckoutStatusUpdate } from "@getpaseo/protocol/messages";
+import type { CheckoutStatusUpdate } from "@bytetrue/byspace-protocol/messages";
 import {
   checkoutCommitsQueryKey,
   checkoutPrStatusQueryKey,
@@ -14,7 +14,6 @@ import {
 import { resetReviewDraftStore, useReviewDraftStore } from "@/review/store";
 import {
   applyCheckoutStatusUpdateFromEvent,
-  ensureCheckoutStatus,
   type CheckoutPrStatusPayload,
   type CheckoutStatusPayload,
   fetchCheckoutStatus,
@@ -37,16 +36,17 @@ function checkoutStatus(overrides: Partial<CheckoutStatusPayload> = {}): Checkou
     error: null,
     requestId: "checkout-status-1",
     isGit: true,
-    isPaseoOwnedWorktree: false,
+    isBySpaceOwnedWorktree: false,
     repoRoot: cwd,
     currentBranch: "main",
+    commitsVersion: "version-1",
     isDirty: false,
     baseRef: "origin/main",
     aheadBehind: { ahead: 0, behind: 0 },
     aheadOfOrigin: 0,
     behindOfOrigin: 0,
     hasRemote: true,
-    remoteUrl: "git@github.com:getpaseo/paseo.git",
+    remoteUrl: "git@github.com:ByteTrue/byspace.git",
     ...overrides,
   } as CheckoutStatusPayload;
 }
@@ -56,7 +56,7 @@ function prStatus(overrides: Partial<CheckoutPrStatusPayload> = {}): CheckoutPrS
     cwd,
     status: {
       forge: "github",
-      url: "https://github.com/getpaseo/paseo/pull/42",
+      url: "https://github.com/ByteTrue/byspace/pull/42",
       title: "My PR",
       state: "open",
       baseRefName: "main",
@@ -123,40 +123,6 @@ describe("fetchCheckoutStatus", () => {
   });
 });
 
-describe("ensureCheckoutStatus", () => {
-  it("awaits the canonical checkout-status query and reuses its cached result", async () => {
-    const queryClient = createQueryClient();
-    const fetched = checkoutStatus({ currentBranch: "feature/current" });
-    const client = { getCheckoutStatus: vi.fn(async () => fetched) };
-
-    const first = await ensureCheckoutStatus({ queryClient, client, serverId, cwd });
-    const second = await ensureCheckoutStatus({ queryClient, client, serverId, cwd });
-
-    expect(first).toEqual(fetched);
-    expect(second).toEqual(fetched);
-    expect(client.getCheckoutStatus).toHaveBeenCalledExactlyOnceWith(cwd);
-  });
-
-  it("awaits a refetch when the canonical cached status was invalidated", async () => {
-    const queryClient = createQueryClient();
-    queryClient.setQueryData(
-      checkoutStatusQueryKey(serverId, cwd),
-      checkoutStatus({ currentBranch: "feature/stale" }),
-    );
-    await queryClient.invalidateQueries({
-      queryKey: checkoutStatusQueryKey(serverId, cwd),
-      refetchType: "none",
-    });
-    const fetched = checkoutStatus({ currentBranch: "feature/current" });
-    const client = { getCheckoutStatus: vi.fn(async () => fetched) };
-
-    const result = await ensureCheckoutStatus({ queryClient, client, serverId, cwd });
-
-    expect(result.currentBranch).toBe("feature/current");
-    expect(client.getCheckoutStatus).toHaveBeenCalledExactlyOnceWith(cwd);
-  });
-});
-
 describe("applyCheckoutStatusUpdateFromEvent", () => {
   it("writes the checkout status to the cache using the cwd from the payload", () => {
     const queryClient = createQueryClient();
@@ -171,15 +137,19 @@ describe("applyCheckoutStatusUpdateFromEvent", () => {
     expect(queryClient.getQueryData(checkoutStatusQueryKey(serverId, cwd))).toEqual(pushed);
   });
 
-  it("invalidates recent commits when checkout status is pushed", () => {
+  it("invalidates recent commits when commit identity changes", () => {
     const queryClient = createQueryClient();
+    queryClient.setQueryData(
+      checkoutStatusQueryKey(serverId, cwd),
+      checkoutStatus({ aheadBehind: { ahead: 0, behind: 0 } }),
+    );
     queryClient.setQueryData(checkoutCommitsQueryKey(serverId, cwd), { commits: [] });
     queryClient.setQueryData(checkoutCommitsQueryKey(serverId, "/repo2"), { commits: [] });
 
     applyCheckoutStatusUpdateFromEvent({
       queryClient,
       serverId,
-      message: checkoutStatusUpdate(checkoutStatus()),
+      message: checkoutStatusUpdate(checkoutStatus({ commitsVersion: "version-2" })),
     });
 
     expect(queryClient.getQueryState(checkoutCommitsQueryKey(serverId, cwd))?.isInvalidated).toBe(
@@ -188,6 +158,43 @@ describe("applyCheckoutStatusUpdateFromEvent", () => {
     expect(
       queryClient.getQueryState(checkoutCommitsQueryKey(serverId, "/repo2"))?.isInvalidated,
     ).toBe(false);
+  });
+
+  it("keeps recent commits cached for dirty-only status updates", () => {
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(
+      checkoutStatusQueryKey(serverId, cwd),
+      checkoutStatus({ isDirty: false }),
+    );
+    queryClient.setQueryData(checkoutCommitsQueryKey(serverId, cwd), { commits: [] });
+
+    applyCheckoutStatusUpdateFromEvent({
+      queryClient,
+      serverId,
+      message: checkoutStatusUpdate(checkoutStatus({ isDirty: true })),
+    });
+
+    expect(queryClient.getQueryState(checkoutCommitsQueryKey(serverId, cwd))?.isInvalidated).toBe(
+      false,
+    );
+  });
+
+  it("keeps conservative commit invalidation for old daemons without commitsVersion", () => {
+    const queryClient = createQueryClient();
+    const { commitsVersion: _previousVersion, ...previous } = checkoutStatus({ isDirty: false });
+    const { commitsVersion: _nextVersion, ...next } = checkoutStatus({ isDirty: true });
+    queryClient.setQueryData(checkoutStatusQueryKey(serverId, cwd), previous);
+    queryClient.setQueryData(checkoutCommitsQueryKey(serverId, cwd), { commits: [] });
+
+    applyCheckoutStatusUpdateFromEvent({
+      queryClient,
+      serverId,
+      message: checkoutStatusUpdate(next as CheckoutStatusPayload),
+    });
+
+    expect(queryClient.getQueryState(checkoutCommitsQueryKey(serverId, cwd))?.isInvalidated).toBe(
+      true,
+    );
   });
 
   it("writes the PR status cache when prStatus is present, and skips it otherwise", () => {
@@ -208,6 +215,27 @@ describe("applyCheckoutStatusUpdateFromEvent", () => {
       message: checkoutStatusUpdate(checkoutStatus({ cwd: otherCwd, repoRoot: otherCwd })),
     });
     expect(queryClient.getQueryData(checkoutPrStatusQueryKey(serverId, otherCwd))).toBeUndefined();
+  });
+
+  it("preserves a cached GitLab MR when a git-only update has no PR status", () => {
+    const queryClient = createQueryClient();
+    const gitlabPr = prStatus({
+      forge: "gitlab",
+      status: {
+        ...prStatus().status!,
+        forge: "gitlab",
+        url: "https://gitlab.example.com/group/repo/-/merge_requests/42",
+      },
+    });
+    queryClient.setQueryData(checkoutPrStatusQueryKey(serverId, cwd), gitlabPr);
+
+    applyCheckoutStatusUpdateFromEvent({
+      queryClient,
+      serverId,
+      message: checkoutStatusUpdate(checkoutStatus()),
+    });
+
+    expect(queryClient.getQueryData(checkoutPrStatusQueryKey(serverId, cwd))).toEqual(gitlabPr);
   });
 
   it("normalizes legacy PR auth state at the pushed-cache boundary", () => {

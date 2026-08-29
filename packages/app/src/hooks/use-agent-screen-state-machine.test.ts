@@ -174,7 +174,7 @@ describe("deriveAgentScreenViewState", () => {
     expect(sync.ui).toBe("overlay");
   });
 
-  it("uses silent catching-up state for already-hydrated agents", () => {
+  it("uses an inline indicator for already-hydrated agents", () => {
     const memory = createBaseMemory({
       hasRenderedReady: true,
       lastReadyAgent: createAgent("agent-1"),
@@ -192,7 +192,7 @@ describe("deriveAgentScreenViewState", () => {
     expect(sync.ui).toBe("silent");
   });
 
-  it("keeps hydrated history visible while reconnect revalidation and visibility catch-up overlap", () => {
+  it("keeps hydrated history visible with an inline indicator during catch-up", () => {
     const memory = createBaseMemory({
       hasRenderedReady: true,
       lastReadyAgent: createAgent("agent-1"),
@@ -211,7 +211,7 @@ describe("deriveAgentScreenViewState", () => {
     expect(sync.ui).toBe("silent");
   });
 
-  it("keeps already-hydrated history visible while a newly visible agent catches up", () => {
+  it("keeps already-hydrated history visible with an inline indicator when revisited", () => {
     const memory = createBaseMemory({
       hasRenderedReady: true,
       lastReadyAgent: createAgent("agent-1"),
@@ -315,22 +315,6 @@ describe("deriveAgentScreenViewState", () => {
 
     expect(ready.source).toBe("stale");
     expect(ready.agent.id).toBe("agent-1");
-  });
-
-  it("marks the sync error as retrying while a user-requested retry is in flight", () => {
-    const memory = createBaseMemory({
-      hasRenderedReady: true,
-      lastReadyAgent: createAgent("agent-1"),
-    });
-    const input: AgentScreenMachineInput = {
-      ...createBaseInput(),
-      visibilityCatchUpStatus: "retrying",
-    };
-
-    const result = deriveAgentScreenViewState({ input, memory });
-    const ready = expectReadyState(result.state);
-
-    expect(ready.sync).toEqual({ status: "sync_error", isRetrying: true });
   });
 
   it("returns blocking error before first paint when refresh fails", () => {

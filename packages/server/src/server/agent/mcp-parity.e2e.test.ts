@@ -8,10 +8,9 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { z } from "zod";
 
 import { AGENT_WAIT_TIMEOUT_MS } from "./mcp-shared.js";
-import { createTestPaseoDaemon, type TestPaseoDaemon } from "../test-utils/paseo-daemon.js";
+import { createTestBySpaceDaemon, type TestBySpaceDaemon } from "../test-utils/byspace-daemon.js";
 import { createTestAgentClients } from "../test-utils/fake-agent-client.js";
-import type { AgentClient, AgentProvider, AgentSessionConfig } from "./agent-sdk-types.js";
-import { PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
+import { PARENT_AGENT_ID_LABEL } from "@bytetrue/byspace-protocol/agent-labels";
 
 interface StructuredContent {
   [key: string]: unknown;
@@ -51,19 +50,6 @@ function strArrOptional(val: unknown): string[] | undefined {
   return z.array(z.string()).optional().parse(val);
 }
 
-function formatHostForHttpUrl(host: string): string {
-  return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
-}
-
-function buildExpectedAgentMcpUrl(params: { host: string; port: number; agentId: string }): string {
-  const baseUrl = new URL(
-    "/mcp/agents",
-    `http://${formatHostForHttpUrl(params.host)}:${params.port}`,
-  );
-  baseUrl.searchParams.set("callerAgentId", params.agentId);
-  return baseUrl.toString();
-}
-
 function getStructuredContent(result: McpToolResult): StructuredContent | null {
   if (result.structuredContent && typeof result.structuredContent === "object") {
     return result.structuredContent;
@@ -93,6 +79,14 @@ async function callToolStructured(
   args?: StructuredContent,
 ): Promise<StructuredContent> {
   const result = await client.callTool({ name, args: args ?? {} });
+  if (result.isError) {
+    const item = result.content?.[0];
+    throw new Error(
+      item && typeof item === "object" && "text" in item && typeof item.text === "string"
+        ? item.text
+        : `${name} failed`,
+    );
+  }
   const payload = getStructuredContent(result);
   if (!payload) {
     throw new Error(`${name} returned no structured payload`);
@@ -138,68 +132,12 @@ async function waitFor<T>(options: {
 }
 
 let tempRoot: string;
-let daemonHandle: TestPaseoDaemon;
+let daemonHandle: TestBySpaceDaemon;
 let topLevelClient: McpClient;
 let agentScopedClient: McpClient;
 let parentAgentId: string;
 let parentAgentCwd: string;
 let worktreeRepoCwd: string;
-let launchConfigsByProvider: Record<AgentProvider, AgentSessionConfig[]>;
-
-const seededAgentProfile = {
-  id: "ui-profile",
-  name: "UI work",
-  provider: "claude",
-  model: "claude-test-model",
-  modeId: "bypassPermissions",
-  notes: "Use for UI work: components, layout, design tokens. Not for backend.",
-};
-
-function createRecordingAgentClients(): Record<AgentProvider, AgentClient> {
-  const baseClients = createTestAgentClients();
-  launchConfigsByProvider = {};
-  const wrappedClients: Record<AgentProvider, AgentClient> = {};
-
-  for (const [provider, client] of Object.entries(baseClients)) {
-    const launchConfigs: AgentSessionConfig[] = [];
-    launchConfigsByProvider[provider] = launchConfigs;
-    const wrappedClient: AgentClient = {
-      provider: client.provider,
-      capabilities: client.capabilities,
-      createSession: async (config, launchContext, options) => {
-        launchConfigs.push(config);
-        return await client.createSession(config, launchContext, options);
-      },
-      resumeSession: async (handle, overrides, launchContext) =>
-        await client.resumeSession(handle, overrides, launchContext),
-      fetchCatalog: async (options) => await client.fetchCatalog(options),
-      isAvailable: async () => await client.isAvailable(),
-    };
-    if (client.resolveCreateConfig) {
-      wrappedClient.resolveCreateConfig = (input) => client.resolveCreateConfig!(input);
-    }
-    if (client.isCreateConfigUnattended) {
-      wrappedClient.isCreateConfigUnattended = (input) => client.isCreateConfigUnattended!(input);
-    }
-    if (client.listCommands) {
-      wrappedClient.listCommands = async (config) => await client.listCommands!(config);
-    }
-    if (client.listFeatures) {
-      wrappedClient.listFeatures = async (config) => await client.listFeatures!(config);
-    }
-    if (client.listImportableSessions) {
-      wrappedClient.listImportableSessions = async (options) =>
-        await client.listImportableSessions!(options);
-    }
-    if (client.importSession) {
-      wrappedClient.importSession = async (input, context) =>
-        await client.importSession!(input, context);
-    }
-    wrappedClients[provider] = wrappedClient;
-  }
-
-  return wrappedClients;
-}
 
 async function makeCwd(prefix: string): Promise<string> {
   return await mkdtemp(path.join(tempRoot, `${prefix}-`));
@@ -267,22 +205,14 @@ async function killTerminalIfPresent(terminalId: string | null | undefined): Pro
   }
 }
 
-async function archiveWorktreeIfPresent(params: {
-  cwd: string;
-  worktreePath?: string | null;
-  worktreeSlug?: string | null;
-}): Promise<void> {
-  if (!params.worktreePath && !params.worktreeSlug) {
+async function archiveWorkspaceIfPresent(workspaceId: string | null | undefined): Promise<void> {
+  if (!workspaceId) {
     return;
   }
   try {
     await topLevelClient.callTool({
-      name: "archive_worktree",
-      args: {
-        cwd: params.cwd,
-        ...(params.worktreePath ? { worktreePath: params.worktreePath } : {}),
-        ...(params.worktreeSlug ? { worktreeSlug: params.worktreeSlug } : {}),
-      },
+      name: "archive_workspace",
+      args: { workspaceId },
     });
   } catch {
     // ignore cleanup errors
@@ -294,10 +224,7 @@ beforeAll(async () => {
   parentAgentCwd = await makeCwd("parent-agent-cwd");
   worktreeRepoCwd = await makeCwd("worktree-repo");
 
-  daemonHandle = await createTestPaseoDaemon({
-    agentClients: createRecordingAgentClients(),
-    agentProfiles: [seededAgentProfile],
-  });
+  daemonHandle = await createTestBySpaceDaemon({ agentClients: createTestAgentClients() });
   topLevelClient = await createMcpClient(`http://127.0.0.1:${daemonHandle.port}/mcp/agents`);
 
   const parentPayload = await callToolStructured(topLevelClient, "create_agent", {
@@ -358,49 +285,6 @@ describe("Suite A: Core Fixes", () => {
       agentId = await createChildAgent({ relationship: { kind: "detached" } });
       const snapshot = daemonHandle.daemon.agentManager.getAgent(agentId);
       expect(snapshot?.labels?.[PARENT_AGENT_ID_LABEL]).toBeUndefined();
-    } finally {
-      await archiveAgentIfPresent(agentId);
-    }
-  });
-
-  test("agentManager.createAgent injects paseo MCP using the daemon listen target", async () => {
-    let agentId: string | null = null;
-    try {
-      const listenTarget = daemonHandle.daemon.getListenTarget();
-      expect(listenTarget?.type).toBe("tcp");
-      const cwd = await makeCwd("manager-direct-agent-cwd");
-
-      const snapshot = await daemonHandle.daemon.agentManager.createAgent(
-        {
-          provider: "claude",
-          cwd,
-          title: "Manager direct parity agent",
-          modeId: "bypassPermissions",
-        },
-        undefined,
-        { workspaceId: undefined },
-      );
-      agentId = snapshot.id;
-
-      const expectedUrl = buildExpectedAgentMcpUrl({
-        host: listenTarget!.host,
-        port: listenTarget!.port,
-        agentId,
-      });
-
-      const launchConfig = launchConfigsByProvider.claude
-        ?.toReversed()
-        .find((config) => config.cwd === cwd);
-      expect(launchConfig?.mcpServers).toMatchObject({
-        paseo: {
-          type: "http",
-          url: expectedUrl,
-        },
-      });
-      expect(snapshot.config.mcpServers?.paseo).toBeUndefined();
-
-      const liveAgent = daemonHandle.daemon.agentManager.getAgent(agentId);
-      expect(liveAgent?.config.mcpServers?.paseo).toBeUndefined();
     } finally {
       await archiveAgentIfPresent(agentId);
     }
@@ -649,6 +533,7 @@ describe("Suite C: Schedule Tools", () => {
         cron: "*/5 * * * *",
         name: "Parity schedule list",
         provider: "claude",
+        cwd: parentAgentCwd,
       });
       scheduleId = str(created.id);
 
@@ -675,6 +560,7 @@ describe("Suite C: Schedule Tools", () => {
         cron: "*/5 * * * *",
         name: "Parity provider schedule",
         provider: "codex/gpt-5.4",
+        cwd: parentAgentCwd,
       });
       scheduleId = str(created.id);
       expect(created.target).toMatchObject({
@@ -697,6 +583,7 @@ describe("Suite C: Schedule Tools", () => {
         cron: "*/5 * * * *",
         name: "Parity inspect schedule",
         provider: "claude",
+        cwd: parentAgentCwd,
       });
       scheduleId = str(created.id);
 
@@ -722,6 +609,7 @@ describe("Suite C: Schedule Tools", () => {
         cron: "*/5 * * * *",
         name: "Parity pause schedule",
         provider: "claude",
+        cwd: parentAgentCwd,
       });
       scheduleId = str(created.id);
 
@@ -749,6 +637,7 @@ describe("Suite C: Schedule Tools", () => {
         cron: "*/5 * * * *",
         name: "Parity delete schedule",
         provider: "claude",
+        cwd: parentAgentCwd,
       });
       scheduleId = str(created.id);
 
@@ -837,125 +726,49 @@ describe("Suite D: Provider Tools", () => {
     expect(payload.provider).toBe("claude");
     expect(Array.isArray(payload.models)).toBe(true);
   });
-
-  test("list_profiles returns configured agent profiles, including notes", async () => {
-    const payload = await callToolStructured(topLevelClient, "list_profiles");
-    const profiles = recordArr(payload.profiles);
-    expect(profiles).toEqual([seededAgentProfile]);
-  });
 });
 
-describe("Suite E: Worktree Tools", () => {
-  test("list_worktrees on empty repo", async () => {
-    const payload = await callToolStructured(topLevelClient, "list_worktrees", {
-      cwd: worktreeRepoCwd,
-    });
-    expect(payload.worktrees).toEqual([]);
-  });
+describe("Suite E: Workspace Tools", () => {
+  test("creates, lists, and archives a worktree-isolated workspace", async () => {
+    let workspaceId: string | null = null;
+    const worktreeSlug = `parity-workspace-${Date.now()}`;
 
-  test("create_worktree and list_worktrees", async () => {
-    let worktreePath: string | null = null;
-    const branchName = `parity-create-${Date.now()}`;
     try {
-      const created = await callToolStructured(topLevelClient, "create_worktree", {
-        cwd: worktreeRepoCwd,
-        target: {
-          kind: "branch-off",
-          worktreeSlug: branchName,
-          baseBranch: "main",
-        },
+      const created = await callToolStructured(topLevelClient, "create_workspace", {
+        isolation: "worktree",
+        path: worktreeRepoCwd,
+        worktreeSlug,
+        baseBranch: "main",
       });
-      worktreePath = str(created.worktreePath);
+      workspaceId = str(created.workspaceId);
+      const worktreePath = str(created.cwd);
+      expect(created.isolation).toBe("worktree");
 
-      const listed = await callToolStructured(topLevelClient, "list_worktrees", {
-        cwd: worktreeRepoCwd,
-      });
-      const worktrees = recordArr(listed.worktrees);
-      expect(worktrees).toEqual(
+      const listed = await callToolStructured(topLevelClient, "list_workspaces", {});
+      expect(recordArr(listed.workspaces)).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({
-            path: worktreePath,
-            branchName,
-          }),
+          expect.objectContaining({ workspaceId, cwd: worktreePath, isolation: "worktree" }),
         ]),
       );
+
+      const archived = await callToolStructured(topLevelClient, "archive_workspace", {
+        workspaceId,
+      });
+      expect(archived.workspaceId).toBe(workspaceId);
+      expect(archived.removedDirectory).toBe(true);
+      workspaceId = null;
+
+      const after = await callToolStructured(topLevelClient, "list_workspaces", {});
+      expect(
+        recordArr(after.workspaces).some(
+          (workspace) => workspace.workspaceId === created.workspaceId,
+        ),
+      ).toBe(false);
+      expect(
+        execSync("git worktree list --porcelain", { cwd: worktreeRepoCwd, encoding: "utf8" }),
+      ).not.toContain(worktreePath);
     } finally {
-      await archiveWorktreeIfPresent({ cwd: worktreeRepoCwd, worktreePath });
-    }
-  });
-
-  test("archive_worktree removes worktree", async () => {
-    let worktreePath: string | null = null;
-    const branchName = `parity-archive-${Date.now()}`;
-    try {
-      const created = await callToolStructured(topLevelClient, "create_worktree", {
-        cwd: worktreeRepoCwd,
-        target: {
-          kind: "branch-off",
-          worktreeSlug: branchName,
-          baseBranch: "main",
-        },
-      });
-      worktreePath = str(created.worktreePath);
-
-      await callToolStructured(topLevelClient, "archive_worktree", {
-        cwd: worktreeRepoCwd,
-        worktreePath,
-      });
-      worktreePath = null;
-
-      const listed = await callToolStructured(topLevelClient, "list_worktrees", {
-        cwd: worktreeRepoCwd,
-      });
-      const worktrees = recordArr(listed.worktrees);
-      expect(worktrees.some((worktree) => worktree.path === created.worktreePath)).toBe(false);
-    } finally {
-      await archiveWorktreeIfPresent({ cwd: worktreeRepoCwd, worktreePath });
-    }
-  });
-
-  test("archive_worktree succeeds when caller cwd is inside the archived worktree", async () => {
-    let worktreePath: string | null = null;
-    let worktreeAgentId: string | null = null;
-    let worktreeScopedClient: McpClient | null = null;
-    const branchName = `parity-archive-self-cwd-${Date.now()}`;
-
-    try {
-      const created = await callToolStructured(topLevelClient, "create_worktree", {
-        cwd: worktreeRepoCwd,
-        target: {
-          kind: "branch-off",
-          worktreeSlug: branchName,
-          baseBranch: "main",
-        },
-      });
-      worktreePath = str(created.worktreePath);
-      worktreeAgentId = await createTopLevelAgent({
-        cwd: worktreePath,
-        title: "Worktree scoped parity agent",
-      });
-      worktreeScopedClient = await createMcpClient(
-        `http://127.0.0.1:${daemonHandle.port}/mcp/agents?callerAgentId=${encodeURIComponent(
-          worktreeAgentId,
-        )}`,
-      );
-
-      const archived = await callToolStructured(worktreeScopedClient, "archive_worktree", {
-        worktreePath,
-      });
-      expect(archived).toEqual({ success: true });
-      worktreePath = null;
-      worktreeAgentId = null;
-
-      const listed = await callToolStructured(topLevelClient, "list_worktrees", {
-        cwd: worktreeRepoCwd,
-      });
-      const worktrees = recordArr(listed.worktrees);
-      expect(worktrees.map((worktree) => worktree.path)).not.toContain(created.worktreePath);
-    } finally {
-      await worktreeScopedClient?.close();
-      await archiveAgentIfPresent(worktreeAgentId);
-      await archiveWorktreeIfPresent({ cwd: worktreeRepoCwd, worktreePath });
+      await archiveWorkspaceIfPresent(workspaceId);
     }
   });
 });

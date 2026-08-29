@@ -169,8 +169,8 @@ const CLAUDE_PLACEHOLDER_MODEL_IDS = new Set(["<synthetic>"]);
  * (docs/custom-providers.md) among them. Manifest-only resolution would blank the model for
  * exactly those users.
  *
- * A `[1m]` suffix is preserved where it names its own manifest entry. Models such as Fable 5
- * that only have a 1M entry normalize the retired suffixed spelling to the canonical ID.
+ * Note a `[1m]` suffix is preserved where it names its own manifest entry: a 1M-context variant
+ * is a distinct model with a distinct context window, not a spelling of the 200K one.
  *
  * Returns null for placeholders and empty values, meaning "not observed".
  */

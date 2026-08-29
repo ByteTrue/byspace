@@ -62,7 +62,6 @@ export const agentConfigs = {
     thinkingOptionId: "medium",
     modes: {
       full: "full", // launches omp with yolo approval mode
-      write: "write", // launches omp with write approval mode
       ask: "ask", // launches omp with always-ask approval mode
     },
   },

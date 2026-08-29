@@ -15,84 +15,13 @@ import {
   upsertUserMessage,
   upsertUserMessageAcrossStream,
 } from "./stream";
-import type { AgentProvider, ToolCallDetail } from "@getpaseo/protocol/agent-types";
-import type { AgentStreamEventPayload } from "@getpaseo/protocol/messages";
-import { buildToolCallDisplayModel } from "@getpaseo/protocol/tool-call-display";
+import type { AgentProvider, ToolCallDetail } from "@bytetrue/byspace-protocol/agent-types";
+import type { AgentStreamEventPayload } from "@bytetrue/byspace-protocol/messages";
+import { buildToolCallDisplayModel } from "@bytetrue/byspace-protocol/tool-call-display";
 
 type CanonicalToolStatus = "running" | "completed" | "failed" | "canceled";
 
 describe("user message identity", () => {
-  it("replaces provisional optimistic turn membership with canonical membership", () => {
-    const optimistic = createUserMessage({
-      clientMessageId: "hello-client",
-      text: "hello",
-      timestamp: new Date("2026-08-15T10:00:00Z"),
-      turnId: "turn-a",
-    });
-
-    const result = applyStreamEvent({
-      tail: [optimistic],
-      head: [],
-      event: {
-        type: "timeline",
-        provider: "codex",
-        turnId: "turn-b",
-        item: {
-          type: "user_message",
-          text: "hello",
-          clientMessageId: "hello-client",
-          messageId: "provider-hello",
-        },
-      },
-      timestamp: new Date("2026-08-15T10:00:01Z"),
-    });
-
-    expect(result.tail).toHaveLength(1);
-    expect(result.tail[0]).toEqual(
-      expect.objectContaining({
-        kind: "user_message",
-        clientMessageId: "hello-client",
-        messageId: "provider-hello",
-        turnId: "turn-b",
-      }),
-    );
-  });
-
-  it("clears provisional optimistic turn membership for a legacy canonical row", () => {
-    const optimistic = createUserMessage({
-      clientMessageId: "hello-client",
-      text: "hello",
-      timestamp: new Date("2026-08-15T10:00:00Z"),
-      turnId: "turn-a",
-    });
-
-    const result = applyStreamEvent({
-      tail: [optimistic],
-      head: [],
-      event: {
-        type: "timeline",
-        provider: "codex",
-        item: {
-          type: "user_message",
-          text: "hello",
-          clientMessageId: "hello-client",
-          messageId: "provider-hello",
-        },
-      },
-      timestamp: new Date("2026-08-15T10:00:01Z"),
-    });
-
-    expect(result.tail).toHaveLength(1);
-    expect(result.tail[0]).toEqual(
-      expect.objectContaining({
-        kind: "user_message",
-        clientMessageId: "hello-client",
-        messageId: "provider-hello",
-      }),
-    );
-    expect(result.tail[0]).not.toHaveProperty("turnId");
-  });
-
   it("adds provider identity without replacing local presentation", () => {
     const timestamp = new Date("2026-07-26T10:00:00.000Z");
     const local = createUserMessage({
@@ -1126,7 +1055,7 @@ describe("stream reducer canonical tool calls", () => {
     ]);
   });
 
-  it("terminalizes the loading compaction before a completed turn", () => {
+  it("preserves compaction trigger when completed update replaces loading marker", () => {
     const state = hydrateStreamState([
       {
         event: compactionTimeline("loading", "auto"),
@@ -1135,10 +1064,6 @@ describe("stream reducer canonical tool calls", () => {
       {
         event: compactionTimeline("completed"),
         timestamp: new Date("2025-01-01T10:50:01Z"),
-      },
-      {
-        event: { type: "turn_completed", provider: "codex" },
-        timestamp: new Date("2025-01-01T10:50:02Z"),
       },
     ]);
 
@@ -1149,10 +1074,6 @@ describe("stream reducer canonical tool calls", () => {
     assert.strictEqual(compactions.length, 1);
     assert.strictEqual(compactions[0].status, "completed");
     assert.strictEqual(compactions[0].trigger, "auto");
-    assert.strictEqual(
-      state.some((item) => item.kind === "compaction" && item.status === "loading"),
-      false,
-    );
   });
 
   it("renders Claude TodoWrite as todo_list and suppresses tool call badge", () => {
@@ -1211,8 +1132,8 @@ describe("stream reducer canonical tool calls", () => {
       {
         id: "att-submitted",
         mimeType: "image/jpeg",
-        storageType: "native-file" as const,
-        storageKey: "/tmp/submitted.jpg",
+        storageType: "web-indexeddb" as const,
+        storageKey: "att-optimistic",
         createdAt: Date.now(),
       },
     ];

@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 
 import { act, renderHook } from "@testing-library/react";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
-import { seedSessionWorkspaces } from "@/test/seed-session";
+
 import { useWorkspaceHasDiffStat } from "./workspace-diff-stat";
 
 const SERVER_ID = "diff-stat-pill";
@@ -37,7 +37,7 @@ function setDiffStat(diffStat: WorkspaceDescriptor["diffStat"]): void {
 describe("useWorkspaceHasDiffStat", () => {
   beforeEach(() => {
     useSessionStore.getState().initializeSession(SERVER_ID, null as unknown as DaemonClient);
-    seedSessionWorkspaces(SERVER_ID, new Map([[WORKSPACE_ID, workspace]]));
+    useSessionStore.getState().setWorkspaces(SERVER_ID, new Map([[WORKSPACE_ID, workspace]]));
   });
 
   afterEach(() => {

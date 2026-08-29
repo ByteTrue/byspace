@@ -2,15 +2,16 @@ import { describe, expect, test } from "vitest";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import { filterWorkspacesByProjects, resolveActiveProjectFilters } from "./sidebar-project-filter";
 
-function workspace(workspaceId: string, projectViewKey: string): SidebarWorkspaceEntry {
+function workspace(workspaceId: string, projectKey: string): SidebarWorkspaceEntry {
   return {
     workspaceKey: `host:${workspaceId}`,
     serverId: "host",
     workspaceId,
-    projectViewKey,
-    projectName: projectViewKey,
-    projectRootPath: `/repo/${projectViewKey}`,
-    workspaceDirectory: `/repo/${projectViewKey}/${workspaceId}`,
+    projectKey,
+    projectName: projectKey,
+    agentSummary: null,
+    projectRootPath: `/repo/${projectKey}`,
+    workspaceDirectory: `/repo/${projectKey}/${workspaceId}`,
     workspaceDirectoryLabel: workspaceId,
     projectKind: "git",
     workspaceKind: "worktree",

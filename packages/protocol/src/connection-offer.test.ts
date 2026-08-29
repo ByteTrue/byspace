@@ -20,7 +20,7 @@ describe("connection offer", () => {
       v: 2,
       serverId: "server-123",
       daemonPublicKeyB64: "pubkey",
-      relay: { endpoint: "relay.paseo.sh:443" },
+      relay: { endpoint: "byspace-relay.bytetrue.workers.dev:443" },
     };
 
     expect(decodeOfferFragmentPayload(encodeBase64UrlNoPadUtf8(JSON.stringify(payload)))).toEqual(
@@ -33,11 +33,13 @@ describe("connection offer", () => {
       v: 2,
       serverId: "server-123",
       daemonPublicKeyB64: "pubkey",
-      relay: { endpoint: "relay.paseo.sh:443" },
+      relay: { endpoint: "byspace-relay.bytetrue.workers.dev:443" },
     });
     const encoded = encodeBase64UrlNoPadUtf8(JSON.stringify(offer));
 
-    expect(parseConnectionOfferFromUrl(`https://app.paseo.sh/#offer=${encoded}`)).toEqual(offer);
+    expect(parseConnectionOfferFromUrl(`https://byspace.pages.dev/#offer=${encoded}`)).toEqual(
+      offer,
+    );
   });
 
   it("leaves relay TLS unset when absent", () => {
@@ -65,15 +67,49 @@ describe("connection offer", () => {
     });
     const encoded = encodeBase64UrlNoPadUtf8(JSON.stringify(offer));
 
-    expect(parseConnectionOfferFromUrl(`https://app.paseo.sh/#offer=${encoded}`)).toEqual({
+    expect(parseConnectionOfferFromUrl(`https://byspace.pages.dev/#offer=${encoded}`)).toEqual({
       v: 2,
       serverId: "server-123",
       daemonPublicKeyB64: "pubkey",
       relay: { endpoint: "relay.example.com:443", useTls: true },
     });
   });
+  it("round-trips the daemon hostname in offers", () => {
+    const offer = ConnectionOfferSchema.parse({
+      v: 2,
+      serverId: "server-123",
+      daemonPublicKeyB64: "pubkey",
+      hostname: "mbp",
+      relay: { endpoint: "relay.example.com:443" },
+    });
+    const encoded = encodeBase64UrlNoPadUtf8(JSON.stringify(offer));
+
+    expect(parseConnectionOfferFromUrl(`https://byspace.pages.dev/#offer=${encoded}`)).toEqual({
+      v: 2,
+      serverId: "server-123",
+      daemonPublicKeyB64: "pubkey",
+      hostname: "mbp",
+      relay: { endpoint: "relay.example.com:443" },
+    });
+  });
+
+  it("still parses offers without a hostname", () => {
+    expect(
+      ConnectionOfferSchema.parse({
+        v: 2,
+        serverId: "server-123",
+        daemonPublicKeyB64: "pubkey",
+        relay: { endpoint: "relay.example.com:443" },
+      }),
+    ).toEqual({
+      v: 2,
+      serverId: "server-123",
+      daemonPublicKeyB64: "pubkey",
+      relay: { endpoint: "relay.example.com:443" },
+    });
+  });
 
   it("returns null when the URL has no offer fragment", () => {
-    expect(parseConnectionOfferFromUrl("https://app.paseo.sh/pair")).toBeNull();
+    expect(parseConnectionOfferFromUrl("https://byspace.pages.dev/pair")).toBeNull();
   });
 });

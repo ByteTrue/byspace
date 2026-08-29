@@ -1,26 +1,26 @@
+import { useMemo } from "react";
 import { useWorkspaceStructure } from "@/stores/session-store-hooks";
-import { type HostProjectListItem } from "@/projects/host-project-model";
+import { buildHostProjectList, type HostProjectListItem } from "@/projects/host-project-model";
 
 export {
-  canCreateWorkspaceForHostProject,
+  buildHostProjectList,
   canCreateWorktreeForProjectKind,
-  filterWorkspaceProjectsForHost,
-  getHostProjectSourceDirectory,
   getHostProjectId,
-  getWorktreeSupportForHostProject,
+  getHostProjectSourceDirectory,
+  getWorkspaceCreationHosts,
   hostProjectFromRoute,
-  hostProjectFromWorkspace,
-  resolveHostProjectCandidate,
-  resolveExactHostProjectCandidate,
-  resolveEquivalentHostProjectCandidate,
-  resolveInitialWorkspaceProject,
-  resolveInitialWorktreeProject,
   resolveSelectedHostProject,
+  resolveHostProjectWorkspaceIdentity,
   type HostProjectListItem,
   type HostProjectRouteContext,
 } from "@/projects/host-project-model";
 
 export function useHostProjects(serverIds: string[]): HostProjectListItem[] {
   const workspaceStructure = useWorkspaceStructure(serverIds);
-  return workspaceStructure.projects;
+  return useMemo(() => {
+    if (workspaceStructure.projects.length === 0) {
+      return [];
+    }
+    return buildHostProjectList({ projects: workspaceStructure.projects });
+  }, [workspaceStructure.projects]);
 }

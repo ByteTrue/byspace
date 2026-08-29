@@ -14,139 +14,81 @@ describe("server config", () => {
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
   });
 
-  test("records when the daemon is managed by Paseo Desktop", async () => {
-    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-desktop-managed-"));
-    roots.push(paseoHome);
-
-    const desktopConfig = loadConfig(paseoHome, {
-      env: { PASEO_DESKTOP_MANAGED: "1" },
-    });
-    const standaloneConfig = loadConfig(paseoHome, { env: {} });
-
-    expect(desktopConfig.desktopManaged).toBe(true);
-    expect(standaloneConfig.desktopManaged).toBe(false);
-  });
-
-  test("loads the provider catalog refresh timeout", async () => {
-    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-provider-timeout-"));
-    roots.push(paseoHome);
-    await writeFile(
-      path.join(paseoHome, "config.json"),
-      JSON.stringify({ agents: { catalogRefreshTimeoutMs: 180_000 } }),
-    );
-
-    const config = loadConfig(paseoHome, { env: {} });
-
-    expect(config.providerCatalogRefreshTimeoutMs).toBe(180_000);
-  });
-
   test("resolves reload state from the supplied validated snapshot", async () => {
-    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-snapshot-"));
-    roots.push(paseoHome);
-    const snapshot = loadPersistedConfig(paseoHome);
+    const byspaceHome = await mkdtemp(path.join(os.tmpdir(), "byspace-config-snapshot-"));
+    roots.push(byspaceHome);
+    const snapshot = loadPersistedConfig(byspaceHome);
     await writeFile(
-      path.join(paseoHome, "config.json"),
+      path.join(byspaceHome, "config.json"),
       JSON.stringify({
         ...snapshot,
         daemon: { ...snapshot.daemon, browserTools: { enabled: true } },
       }),
     );
 
-    expect(resolveConfigFromPersisted(paseoHome, snapshot, { env: {} }).browserToolsEnabled).toBe(
+    expect(resolveConfigFromPersisted(byspaceHome, snapshot, { env: {} }).browserToolsEnabled).toBe(
       false,
     );
-    expect(loadConfig(paseoHome, { env: {} }).browserToolsEnabled).toBe(true);
+    expect(loadConfig(byspaceHome, { env: {} }).browserToolsEnabled).toBe(true);
   });
 
   test("records mutable and startup launch overrides by persisted leaf", async () => {
-    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-overrides-"));
-    roots.push(paseoHome);
-    const config = loadConfig(paseoHome, {
+    const byspaceHome = await mkdtemp(path.join(os.tmpdir(), "byspace-config-overrides-"));
+    roots.push(byspaceHome);
+    const config = loadConfig(byspaceHome, {
       env: {
-        PASEO_LISTEN: "127.0.0.1:7000",
-        PASEO_PASSWORD: "secret",
-        PASEO_RELAY_ENDPOINT: "relay.example.test:443",
-        PASEO_TRUSTED_PROXIES: "true",
-        PASEO_WEB_UI_ENABLED: "true",
-        PASEO_LOG_FILE_PATH: "custom.log",
-        PASEO_VOICE_LLM_PROVIDER: "codex",
+        BYSPACE_LISTEN: "127.0.0.1:7000",
+        BYSPACE_PASSWORD: "secret",
+        BYSPACE_RELAY_ENDPOINT: "relay.example.test:443",
+        BYSPACE_DATA_RELAY_ENDPOINT: "data-relay.example.test:443",
+        BYSPACE_TRUSTED_PROXIES: "true",
+        BYSPACE_WEB_UI_ENABLED: "true",
+        BYSPACE_LOG_FILE_PATH: "custom.log",
+        BYSPACE_DICTATION_ENABLED: "1",
       },
       cli: { relayUseTls: false },
     });
 
     expect(config.configReload?.overrideControlledPaths).toEqual([
       "daemon.auth.password",
+      "daemon.dataRelay.endpoint",
       "daemon.listen",
       "daemon.relay.endpoint",
       "daemon.relay.useTls",
       "daemon.trustedProxies",
-      "features.voiceMode.llm.provider",
+      "features.dictation.enabled",
       "features.webUi.enabled",
       "log.file.path",
     ]);
     expect(config.listen).toBe("127.0.0.1:7000");
     expect(config.trustedProxies).toBe(true);
     expect(config.log?.file?.path).toBe("custom.log");
-    expect(config.voiceLlmProvider).toBe("codex");
   });
 
   test.each([
     {
-      name: "local speech providers",
-      providers: { dictation: "local", voiceStt: "local", voiceTts: "local" },
+      name: "dictation and speech overrides",
+      env: {
+        BYSPACE_DICTATION_ENABLED: "1",
+        BYSPACE_DICTATION_LOCAL_STT_MODEL: "sensevoice-small-int8",
+        BYSPACE_LOCAL_MODELS_DIR: "/tmp/models",
+      },
       expected: [
+        "features.dictation.enabled",
         "features.dictation.stt.model",
-        "features.voiceMode.stt.model",
-        "features.voiceMode.tts.model",
+        "providers.local.modelsDir",
       ],
     },
-    {
-      name: "OpenAI speech providers",
-      providers: { dictation: "openai", voiceStt: "openai", voiceTts: "openai" },
-      expected: [
-        "features.dictation.stt.confidenceThreshold",
-        "features.dictation.stt.model",
-        "features.voiceMode.stt.model",
-        "features.voiceMode.tts.model",
-        "features.voiceMode.tts.voice",
-      ],
-    },
-    {
-      name: "mixed local and OpenAI speech providers",
-      providers: { dictation: "local", voiceStt: "openai", voiceTts: "local" },
-      expected: [
-        "features.dictation.stt.confidenceThreshold",
-        "features.dictation.stt.model",
-        "features.voiceMode.stt.model",
-        "features.voiceMode.tts.model",
-      ],
-    },
-  ])("classifies speech overrides for $name", ({ providers, expected }) => {
+  ])("classifies speech overrides for $name", ({ env, expected }) => {
     const config = resolveConfigFromPersisted(
-      "/tmp/paseo-speech-override-classification",
+      "/tmp/byspace-speech-override-classification",
       {
         version: 1,
         features: {
-          dictation: { enabled: true, stt: { provider: providers.dictation } },
-          voiceMode: {
-            enabled: true,
-            stt: { provider: providers.voiceStt },
-            tts: { provider: providers.voiceTts },
-          },
+          dictation: { enabled: true, stt: { model: "sensevoice-small-int8" } },
         },
       },
-      {
-        env: {
-          OPENAI_API_KEY: "test-api-key",
-          PASEO_DICTATION_LOCAL_STT_MODEL: "parakeet-tdt-0.6b-v2-int8",
-          PASEO_VOICE_LOCAL_STT_MODEL: "parakeet-tdt-0.6b-v2-int8",
-          PASEO_VOICE_LOCAL_TTS_MODEL: "kokoro-en-v0_19",
-          STT_CONFIDENCE_THRESHOLD: "0.5",
-          STT_MODEL: "whisper-1",
-          TTS_MODEL: "tts-1",
-          TTS_VOICE: "alloy",
-        },
-      },
+      { env },
     );
 
     expect(config.configReload?.overrideControlledPaths).toEqual(expected);
@@ -164,7 +106,7 @@ describe("server config", () => {
   });
 
   test("resolves bundled web UI path from globally installed compiled modules", async () => {
-    const packageRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-config-compiled-"));
+    const packageRoot = await mkdtemp(path.join(os.tmpdir(), "byspace-config-compiled-"));
     roots.push(packageRoot);
     await mkdir(path.join(packageRoot, "dist", "server", "web-ui"), { recursive: true });
 
@@ -176,7 +118,7 @@ describe("server config", () => {
   });
 
   test("resolves packaged desktop web UI path from resources app-dist", async () => {
-    const packageRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-config-packaged-"));
+    const packageRoot = await mkdtemp(path.join(os.tmpdir(), "byspace-config-packaged-"));
     roots.push(packageRoot);
     await mkdir(path.join(packageRoot, "app-dist"), { recursive: true });
 
@@ -187,8 +129,8 @@ describe("server config", () => {
             packageRoot,
             "app.asar",
             "node_modules",
-            "@getpaseo",
-            "server",
+            "@bytetrue",
+            "byspace-server",
             "dist",
             "server",
             "server",

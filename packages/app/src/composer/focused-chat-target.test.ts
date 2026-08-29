@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { WorkspaceLayout } from "@/stores/workspace-layout-store";
 import { resolveFocusedChatTarget } from "./focused-chat-target";
 
-function layoutWithTarget(
-  target: import("@/workspace-tabs/model").WorkspaceTab["target"],
-): WorkspaceLayout {
+import type { WorkspaceTab } from "@/workspace-tabs/model";
+
+function layoutWithTarget(target: WorkspaceTab["target"]): WorkspaceLayout {
   return {
     root: {
       kind: "pane",

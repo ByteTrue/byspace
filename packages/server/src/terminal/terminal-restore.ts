@@ -1,10 +1,10 @@
-import type { SubscribeTerminalRequest } from "@getpaseo/protocol/messages";
+import type { SubscribeTerminalRequest } from "@bytetrue/byspace-protocol/messages";
 import {
   TerminalStreamOpcode,
   encodeTerminalSnapshotPayload,
   encodeTerminalStreamFrame,
-} from "@getpaseo/protocol/binary-frames/index";
-import { renderTerminalSnapshotToAnsi } from "@getpaseo/protocol/terminal-snapshot";
+} from "@bytetrue/byspace-protocol/binary-frames/index";
+import { renderTerminalSnapshotToAnsi } from "@bytetrue/byspace-protocol/terminal-snapshot";
 import type { TerminalStateSnapshot, TerminalStateSnapshotOptions } from "./terminal.js";
 
 export const MAX_TERMINAL_OUTPUT_FRAME_BYTES = 256 * 1024;
@@ -17,7 +17,9 @@ export const MAX_TERMINAL_OUTPUT_FRAME_BYTES = 256 * 1024;
 export const MAX_CLIENT_BUFFERED_BYTES = 4 * 1024 * 1024;
 
 const DEFAULT_VISIBLE_RESTORE_SCROLLBACK_LINES = 200;
-const MAX_VISIBLE_RESTORE_SCROLLBACK_LINES = 500;
+// The headless xterm retains 1000 lines, so a client may ask for all of them; anything beyond
+// that only pads the replay with blank rows.
+const MAX_VISIBLE_RESTORE_SCROLLBACK_LINES = 1_000;
 
 export type TerminalRestoreOptions = NonNullable<SubscribeTerminalRequest["restore"]>;
 
@@ -34,6 +36,11 @@ export function resolveRestoreAfterOutputOverflow(
 ): TerminalRestoreOptions | undefined {
   if (restore?.mode === "live") {
     return { mode: "visible-snapshot" };
+  }
+  // Overflow means this client is too far behind to be worth replaying to.
+  // Resuming would send it the whole gap, which is what we are escaping.
+  if (restore?.resume) {
+    return { ...restore, resume: false };
   }
   return restore;
 }

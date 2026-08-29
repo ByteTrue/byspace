@@ -1,4 +1,4 @@
-import type { AgentAttachment } from "@getpaseo/protocol/messages";
+import type { AgentAttachment } from "@bytetrue/byspace-protocol/messages";
 import type {
   UserComposerAttachment,
   WorkspaceFileComposerAttachment,
@@ -10,8 +10,25 @@ interface CreateWorkspaceFileAttachmentInput {
   selection?: WorkspaceFileSelection;
 }
 
-function normalizePath(path: string): string {
-  return path.trim().replace(/^\.\//, "");
+function normalizePath(path: string): string | null {
+  if (path.trim() !== path) return null;
+  const candidate = path.replace(/^\.\//, "");
+  if (
+    !candidate ||
+    candidate.startsWith("/") ||
+    candidate.includes("\\") ||
+    /^[A-Za-z]:/.test(candidate) ||
+    Array.from(candidate).some((character) => {
+      const code = character.charCodeAt(0);
+      return code <= 0x1f || code === 0x7f;
+    })
+  ) {
+    return null;
+  }
+  const segments = candidate.split("/");
+  return segments.some((segment) => !segment || segment === "." || segment === "..")
+    ? null
+    : candidate;
 }
 
 export function isWorkspaceFileComposerAttachment(
@@ -24,7 +41,7 @@ export function isWorkspaceFileComposerAttachment(
   if (
     record.kind !== "workspace_file" ||
     typeof record.path !== "string" ||
-    record.path.trim().length === 0
+    normalizePath(record.path) !== record.path
   ) {
     return false;
   }
@@ -51,9 +68,13 @@ export function createWorkspaceFileAttachment({
   path,
   selection = { kind: "whole_file" },
 }: CreateWorkspaceFileAttachmentInput): WorkspaceFileComposerAttachment {
+  const normalizedPath = normalizePath(path);
+  if (!normalizedPath) {
+    throw new Error("Workspace file path must be a canonical relative path");
+  }
   return {
     kind: "workspace_file",
-    path: normalizePath(path),
+    path: normalizedPath,
     selection,
   };
 }
@@ -64,7 +85,7 @@ export function getWorkspaceFileAttachmentKey(attachment: WorkspaceFileComposerA
     selection.kind === "whole_file"
       ? selection.kind
       : `${selection.kind}:${selection.startLine}-${selection.endLine}`;
-  return `${normalizePath(attachment.path)}:${selectionKey}`;
+  return `${normalizePath(attachment.path) ?? attachment.path}:${selectionKey}`;
 }
 
 export function appendWorkspaceFileAttachment(

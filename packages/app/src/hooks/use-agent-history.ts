@@ -2,14 +2,14 @@ import type {
   DaemonClient,
   FetchAgentHistoryOptions,
   FetchAgentHistoryPageInfo,
-} from "@getpaseo/client/internal/daemon-client";
-import type { AgentSearchMatch } from "@getpaseo/protocol/messages";
+} from "@bytetrue/byspace-client/internal/daemon-client";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
+import type { AgentSearchMatch } from "@bytetrue/byspace-protocol/messages";
+import { useSessionStore } from "@/stores/session-store";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { getHostRuntimeStore, isHostRuntimeConnected, useHosts } from "@/runtime/host-runtime";
-import { useSessionStore } from "@/stores/session-store";
 import { buildAgentDirectoryState } from "@/utils/agent-directory-sync";
 import { agentHistoryQueryKey, allAgentHistoryQueryKey } from "./agent-history-query-key";
 
@@ -77,6 +77,13 @@ export interface AgentHistoryHost {
   serverId: string;
   serverLabel: string;
   client: AgentHistoryClient;
+}
+
+export class AgentHistoryBatchError extends Error {
+  constructor(readonly hostErrors: AgentHistoryHostError[]) {
+    super(AGENT_HISTORY_ALL_HOSTS_FAILED_MESSAGE);
+    this.name = "AgentHistoryBatchError";
+  }
 }
 
 interface AgentHistoryBatchPage {
@@ -242,9 +249,6 @@ export async function fetchAgentHistoryBatch(input: {
   const pages = settledPages.flatMap((result) =>
     result.status === "fulfilled" ? [result.value] : [],
   );
-  if (pages.length === 0) {
-    throw new Error(AGENT_HISTORY_ALL_HOSTS_FAILED_MESSAGE);
-  }
   // allSettled preserves order, so a rejection still names the host it came
   // from. Losing that name is what would let the list quietly under-report.
   const hostErrors = settledPages.flatMap((result, index) =>
@@ -257,6 +261,9 @@ export async function fetchAgentHistoryBatch(input: {
         ]
       : [],
   );
+  if (pages.length === 0) {
+    throw new AgentHistoryBatchError(hostErrors);
+  }
 
   const agents = pages.flatMap(({ host, page }) =>
     page.agents.map((agent) => Object.assign({}, agent, { serverLabel: host.serverLabel })),
@@ -388,6 +395,7 @@ export function useAgentHistory(options: {
   });
   const {
     data,
+    error,
     fetchNextPage,
     hasNextPage,
     isError,
@@ -441,9 +449,17 @@ export function useAgentHistory(options: {
       ) as Record<string, AgentSearchMatch[]>,
     [data?.pages],
   );
+  const failedQueryHostErrors = useMemo(
+    () => (error instanceof AgentHistoryBatchError ? error.hostErrors : []),
+    [error],
+  );
   const hostErrors = useMemo(
-    () => collectAgentHistoryHostErrors({ pages: data?.pages ?? [], unreachableHosts }),
-    [data?.pages, unreachableHosts],
+    () =>
+      collectAgentHistoryHostErrors({
+        pages: data?.pages ?? [],
+        unreachableHosts: [...unreachableHosts, ...failedQueryHostErrors],
+      }),
+    [data?.pages, failedQueryHostErrors, unreachableHosts],
   );
 
   return {
@@ -451,7 +467,7 @@ export function useAgentHistory(options: {
     isLoading,
     isInitialLoad,
     isRevalidating,
-    isError,
+    isError: isError || (targetHosts.length === 0 && unreachableHosts.length > 0),
     // Under a query the daemon returns the best matches and no cursor, so the
     // list is complete as far as it goes and "Load more" would be a lie.
     hasMore: search ? false : hasNextPage,

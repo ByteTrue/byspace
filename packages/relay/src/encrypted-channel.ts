@@ -18,6 +18,9 @@ import {
 } from "./crypto.js";
 import { arrayBufferToBase64, base64ToArrayBuffer } from "./base64.js";
 
+const MAX_HANDSHAKE_BUFFERED_MESSAGES = 64;
+const MAX_HANDSHAKE_BUFFERED_BYTES = 1024 * 1024;
+
 export interface Transport {
   send(data: string | ArrayBuffer): void | Promise<void>;
   close(code?: number, reason?: string): void;
@@ -41,6 +44,7 @@ export interface EncryptedChannelEvents {
 type ChannelState = "connecting" | "handshaking" | "open" | "closed";
 
 interface EncryptedChannelOptions {
+  peerPublicKeyB64?: string;
   /**
    * If set, the channel can validate repeated plaintext `{type:"e2ee_hello"}`
    * messages even after it is open.
@@ -155,12 +159,14 @@ export async function createClientChannel(
   transport: Transport,
   daemonPublicKeyB64: string,
   events: EncryptedChannelEvents = {},
+  keyPair: KeyPair = generateKeyPair(),
 ): Promise<EncryptedChannel> {
-  const keyPair = generateKeyPair();
   const daemonPublicKey = importPublicKey(daemonPublicKeyB64);
   const sharedKey = deriveSharedKey(keyPair.secretKey, daemonPublicKey);
 
-  const channel = new EncryptedChannel(transport, sharedKey, events);
+  const channel = new EncryptedChannel(transport, sharedKey, events, {
+    peerPublicKeyB64: daemonPublicKeyB64,
+  });
 
   // Send e2ee_hello with our public key
   const ourPublicKeyB64 = exportPublicKey(keyPair.publicKey);
@@ -231,6 +237,8 @@ export async function createDaemonChannel(
 ): Promise<EncryptedChannel> {
   return new Promise((resolve, reject) => {
     const bufferedMessages: TransportMessage[] = [];
+    let bufferedBytes = 0;
+    let handshakeOverflowError: Error | null = null;
     const shouldIgnorePostHelloPlaintext = (message: TransportMessage): boolean => {
       try {
         if (message.isBinary) return false;
@@ -267,7 +275,19 @@ export async function createDaemonChannel(
         // for the next message (already encrypted) to be misinterpreted as a
         // second hello, causing the handshake to fail.
         const bufferNext = (next: TransportMessage): void => {
+          if (handshakeOverflowError) return;
+          const nextBytes = utf8ByteLength(next.data);
+          if (
+            bufferedMessages.length >= MAX_HANDSHAKE_BUFFERED_MESSAGES ||
+            bufferedBytes + nextBytes > MAX_HANDSHAKE_BUFFERED_BYTES
+          ) {
+            handshakeOverflowError = new Error("E2EE handshake message buffer exceeded its limit");
+            reject(handshakeOverflowError);
+            transport.close(1009, "E2EE handshake buffer overflow");
+            return;
+          }
           bufferedMessages.push(next);
+          bufferedBytes += nextBytes;
         };
         Object.assign(transport, { onmessage: bufferNext });
 
@@ -283,10 +303,12 @@ export async function createDaemonChannel(
               : {}),
           } satisfies E2EEReadyMessage),
         );
+        if (handshakeOverflowError) throw handshakeOverflowError;
 
         const channel = new EncryptedChannel(transport, sharedKey, events, {
           daemonKeyPair,
           binaryCiphertext,
+          peerPublicKeyB64: msg.key,
         });
         channel.setState("open");
         events.onopen?.();
@@ -353,6 +375,10 @@ export class EncryptedChannel {
 
   setState(state: ChannelState): void {
     this.state = state;
+  }
+
+  getPeerPublicKeyB64(): string | null {
+    return this.options.peerPublicKeyB64 ?? null;
   }
 
   private async handleMessage(message: TransportMessage): Promise<void> {

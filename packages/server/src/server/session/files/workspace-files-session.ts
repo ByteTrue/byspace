@@ -1,10 +1,10 @@
 import type pino from "pino";
-import { getErrorMessage } from "@getpaseo/protocol/error-utils";
+import { getErrorMessage } from "@bytetrue/byspace-protocol/error-utils";
 import {
   encodeFileTransferFrame,
   FileTransferOpcode,
   type FileTransferFrame,
-} from "@getpaseo/protocol/binary-frames/index";
+} from "@bytetrue/byspace-protocol/binary-frames/index";
 import type {
   FileDownloadTokenRequest,
   FileEntryCreateRequest,
@@ -12,9 +12,9 @@ import type {
   FileEntryDuplicateRequest,
   FileEntryRenameRequest,
   FileExplorerRequest,
-  FileUploadRequest,
   FileSubscribeRequest,
   FileUnsubscribeRequest,
+  FileUploadRequest,
   FileWriteRequest,
   SessionInboundMessage,
   SessionOutboundMessage,
@@ -50,10 +50,12 @@ export interface WorkspaceFilesSessionHost {
 export interface WorkspaceFilesSessionOptions {
   host: WorkspaceFilesSessionHost;
   downloadTokenStore: DownloadTokenStore;
-  paseoHome: string;
+  byspaceHome: string;
   logger: pino.Logger;
-  fileObserver?: FileObserver;
+  fileObserver?: Pick<FileObserver, "subscribe">;
 }
+
+const MAX_FILE_SUBSCRIPTIONS_PER_SESSION = 128;
 
 /**
  * A client's workspace file-access surface: browsing directories, reading file
@@ -67,29 +69,82 @@ export class WorkspaceFilesSession {
   private readonly downloadTokenStore: DownloadTokenStore;
   private readonly logger: pino.Logger;
   private readonly fileUploads: FileUploadStore;
-  private readonly fileObserver: FileObserver;
+  private readonly fileObserver: Pick<FileObserver, "subscribe">;
   private readonly fileSubscriptions = new Map<string, () => void>();
+  private readonly fileSubscriptionGenerations = new Map<string, number>();
+  private nextFileSubscriptionGeneration = 0;
+  private disposed = false;
 
   constructor(options: WorkspaceFilesSessionOptions) {
     this.host = options.host;
     this.downloadTokenStore = options.downloadTokenStore;
     this.logger = options.logger;
-    this.fileUploads = new FileUploadStore({ paseoHome: options.paseoHome });
+    this.fileUploads = new FileUploadStore({ byspaceHome: options.byspaceHome });
     this.fileObserver = options.fileObserver ?? workspaceFileObserver;
   }
 
   async handleFileSubscribeRequest(request: FileSubscribeRequest): Promise<void> {
+    if (
+      !this.fileSubscriptionGenerations.has(request.subscriptionId) &&
+      this.fileSubscriptionGenerations.size >= MAX_FILE_SUBSCRIPTIONS_PER_SESSION
+    ) {
+      this.host.emit({
+        type: "fs.file.subscribe.response",
+        payload: {
+          subscriptionId: request.subscriptionId,
+          initial: {
+            status: "error",
+            cwd: request.cwd,
+            path: request.path,
+            error: "Too many active file subscriptions",
+          },
+          requestId: request.requestId,
+        },
+      });
+      return;
+    }
+    const generation = ++this.nextFileSubscriptionGeneration;
+    this.fileSubscriptionGenerations.set(request.subscriptionId, generation);
     this.fileSubscriptions.get(request.subscriptionId)?.();
+    this.fileSubscriptions.delete(request.subscriptionId);
     try {
       const subscription = await this.fileObserver.subscribe(
         { cwd: request.cwd, path: request.path },
         (version) => {
+          if (
+            this.disposed ||
+            this.fileSubscriptionGenerations.get(request.subscriptionId) !== generation
+          ) {
+            return;
+          }
           this.host.emit({
             type: "fs.file.update",
             payload: { subscriptionId: request.subscriptionId, version },
           });
         },
       );
+      if (
+        this.disposed ||
+        this.fileSubscriptionGenerations.get(request.subscriptionId) !== generation
+      ) {
+        subscription.unsubscribe();
+        if (!this.disposed) {
+          this.host.emit({
+            type: "fs.file.subscribe.response",
+            payload: {
+              subscriptionId: request.subscriptionId,
+              initial: {
+                status: "error",
+                cwd: request.cwd,
+                path: request.path,
+                error: "File subscription was superseded",
+              },
+              requestId: request.requestId,
+            },
+          });
+        }
+        return;
+      }
       this.fileSubscriptions.set(request.subscriptionId, subscription.unsubscribe);
       this.host.emit({
         type: "fs.file.subscribe.response",
@@ -100,6 +155,13 @@ export class WorkspaceFilesSession {
         },
       });
     } catch (error) {
+      if (
+        this.disposed ||
+        this.fileSubscriptionGenerations.get(request.subscriptionId) !== generation
+      ) {
+        return;
+      }
+      this.fileSubscriptionGenerations.delete(request.subscriptionId);
       this.host.emit({
         type: "fs.file.subscribe.response",
         payload: {
@@ -117,6 +179,7 @@ export class WorkspaceFilesSession {
   }
 
   handleFileUnsubscribeRequest(request: FileUnsubscribeRequest): void {
+    this.fileSubscriptionGenerations.delete(request.subscriptionId);
     this.fileSubscriptions.get(request.subscriptionId)?.();
     this.fileSubscriptions.delete(request.subscriptionId);
     this.host.emit({
@@ -214,6 +277,8 @@ export class WorkspaceFilesSession {
   }
 
   dispose(): void {
+    this.disposed = true;
+    this.fileSubscriptionGenerations.clear();
     for (const unsubscribe of this.fileSubscriptions.values()) unsubscribe();
     this.fileSubscriptions.clear();
   }

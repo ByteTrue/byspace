@@ -9,10 +9,7 @@ import {
 } from "./index.js";
 import type { WorkspaceGitRuntimeSnapshot } from "../workspace-git-service.js";
 
-function createSnapshot(
-  cwd: string,
-  state: "open" | "merged" = "merged",
-): WorkspaceGitRuntimeSnapshot {
+function createSnapshot(cwd: string): WorkspaceGitRuntimeSnapshot {
   return {
     cwd,
     git: {
@@ -21,7 +18,7 @@ function createSnapshot(
       mainRepoRoot: "/repo",
       currentBranch: "feature",
       remoteUrl: "https://github.com/acme/repo.git",
-      isPaseoOwnedWorktree: true,
+      isBySpaceOwnedWorktree: true,
       isDirty: false,
       baseRef: "main",
       aheadBehind: { ahead: 0, behind: 0 },
@@ -35,11 +32,11 @@ function createSnapshot(
       authState: "authenticated",
       pullRequest: {
         url: "https://github.com/acme/repo/pull/12",
-        title: "Feature",
-        state,
+        title: "Merged",
+        state: "merged",
         baseRefName: "main",
         headRefName: "feature",
-        isMerged: state === "merged",
+        isMerged: true,
       },
       error: null,
     },
@@ -50,6 +47,9 @@ test("fans one fresh observation out to every workspace attached to its exact cw
   let onSnapshotUpdated: ((snapshot: WorkspaceGitRuntimeSnapshot) => void) | null = null;
   const eventSnapshot = createSnapshot("/repo/worktree/.");
   const freshSnapshot = createSnapshot("/repo/worktree");
+  if (freshSnapshot.forge.pullRequest) {
+    freshSnapshot.forge.pullRequest.url = "https://github.com/acme/repo/pull/13";
+  }
   const getSnapshot = vi.fn(async () => freshSnapshot);
   const options = {
     logger: { child: () => ({ warn: vi.fn() }) } as unknown as Logger,
@@ -85,7 +85,6 @@ test("fans one fresh observation out to every workspace attached to its exact cw
 
   setupAutoArchiveOnMerge(options, deps);
   if (!onSnapshotUpdated) throw new Error("Snapshot listener was not registered");
-  onSnapshotUpdated(createSnapshot("/repo/worktree/.", "open"));
   onSnapshotUpdated(eventSnapshot);
   await finished;
 
@@ -136,7 +135,6 @@ test("serializes the complete fan-out for duplicate merge events on one cwd", as
 
   setupAutoArchiveOnMerge(options, deps);
   if (!onSnapshotUpdated) throw new Error("Snapshot listener was not registered");
-  onSnapshotUpdated(createSnapshot("/repo/worktree/.", "open"));
   onSnapshotUpdated(snapshot);
   await vi.waitFor(() => expect(archivedWorkspaceIds).toEqual(["workspace-a"]));
 
@@ -173,7 +171,6 @@ test("does not fan out a stale merged event when the fresh observation has no PR
 
   setupAutoArchiveOnMerge(options, { archiveIfSafe, resolvePath: resolve });
   if (!onSnapshotUpdated) throw new Error("Snapshot listener was not registered");
-  onSnapshotUpdated(createSnapshot("/repo/worktree", "open"));
   onSnapshotUpdated(eventSnapshot);
   await vi.waitFor(() => expect(getSnapshot).toHaveBeenCalledTimes(1));
   await Promise.resolve();
@@ -202,7 +199,6 @@ test("logs and skips when the fresh observation cannot be read", async () => {
 
   setupAutoArchiveOnMerge(options, { archiveIfSafe, resolvePath: resolve });
   if (!onSnapshotUpdated) throw new Error("Snapshot listener was not registered");
-  onSnapshotUpdated(createSnapshot("/repo/worktree", "open"));
   onSnapshotUpdated(createSnapshot("/repo/worktree"));
   await vi.waitFor(() =>
     expect(warn).toHaveBeenCalledWith(

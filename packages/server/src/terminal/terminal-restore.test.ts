@@ -3,8 +3,8 @@ import { describe, expect, test } from "vitest";
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
-} from "@getpaseo/protocol/binary-frames/index";
-import type { TerminalCell, TerminalState } from "@getpaseo/protocol/messages";
+} from "@bytetrue/byspace-protocol/binary-frames/index";
+import type { TerminalCell, TerminalState } from "@bytetrue/byspace-protocol/messages";
 import {
   encodeTerminalRestoreFrame,
   resolveRestoreAfterOutputOverflow,
@@ -40,12 +40,19 @@ describe("terminal restore policy", () => {
     expect(resolveTerminalRestoreSnapshotOptions({ mode: "visible-snapshot" })).toEqual({
       scrollbackLines: 200,
     });
+    // The cap matches what the headless xterm retains, so a client may ask for all of it.
     expect(
       resolveTerminalRestoreSnapshotOptions({
         mode: "visible-snapshot",
         scrollbackLines: 999,
       }),
-    ).toEqual({ scrollbackLines: 500 });
+    ).toEqual({ scrollbackLines: 999 });
+    expect(
+      resolveTerminalRestoreSnapshotOptions({
+        mode: "visible-snapshot",
+        scrollbackLines: 5_000,
+      }),
+    ).toEqual({ scrollbackLines: 1_000 });
   });
 
   test("promotes live restore to visible restore after output overflow", () => {

@@ -2,23 +2,17 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { TestInfo } from "@playwright/test";
-import { expect, test, type Page } from "../support/fixtures";
-import { gotoAppShell } from "../support/helpers/app";
-import { openCommandCenter } from "../support/helpers/command-center";
-import { addConnectedHostAndReload } from "../support/helpers/hosts";
-import { startIsolatedHostDaemon } from "../support/helpers/isolated-host-daemon";
-import { buildAgentRoute } from "../support/helpers/mock-agent";
-import { connectNewWorkspaceDaemonClient } from "../support/helpers/new-workspace";
-import { seedWorkspace } from "../support/helpers/seed-client";
-import { getServerId } from "../support/helpers/server-id";
-import {
-  closeMobileAgentSidebar,
-  expectMobileAgentSidebarHidden,
-} from "../support/helpers/sidebar";
-import {
-  switchWorkspaceViaSidebar,
-  waitForWorkspaceInSidebar,
-} from "../support/helpers/workspace-ui";
+import { expect, test, type Page } from "../fixtures";
+import { gotoAppShell } from "../helpers/app";
+import { openCommandCenter } from "../helpers/command-center";
+import { addConnectedHostAndReload } from "../helpers/hosts";
+import { startIsolatedHostDaemon } from "../helpers/isolated-host-daemon";
+import { buildAgentRoute } from "../helpers/mock-agent";
+import { connectNewWorkspaceDaemonClient } from "../helpers/new-workspace";
+import { seedWorkspace } from "../helpers/seed-client";
+import { getServerId } from "../helpers/server-id";
+import { closeMobileAgentSidebar, expectMobileAgentSidebarHidden } from "../helpers/sidebar";
+import { switchWorkspaceViaSidebar, waitForWorkspaceInSidebar } from "../helpers/workspace-ui";
 
 const PLUGIN_ID = "workspace-panel-e2e";
 const WIDE_VIEWPORT = { width: 1280, height: 900 };
@@ -31,7 +25,7 @@ function isSettledWorkspaceUrl(url: URL): boolean {
 function pluginSource(): string {
   return `import React, { useRef } from "react";
 import { Text, View } from "react-native";
-import { useAgent, useWorkspace } from "@getpaseo/plugin";
+import { useAgent, useWorkspace } from "@bytetrue/byspace/plugin";
 
 function WorkspacePanel({ workspaceId, host, layout }) {
   const workspace = useWorkspace(workspaceId, (value) => ({ id: value.id }));
@@ -109,8 +103,8 @@ test.describe("plugin workspace panels and Command Center", () => {
   test("follows workspace, agent, host, compact, and unavailable state", async ({
     page,
   }, testInfo) => {
-    const directory = await mkdtemp(path.join(tmpdir(), "paseo-plugin-workspace-panel-e2e-"));
-    const primaryClient = await connectNewWorkspaceDaemonClient({ ownProjects: false });
+    const directory = await mkdtemp(path.join(tmpdir(), "byspace-plugin-workspace-panel-e2e-"));
+    const primaryClient = await connectNewWorkspaceDaemonClient();
     const previousConfig = await primaryClient.getDaemonConfig();
     const primary = await seedWorkspace({ repoPrefix: "plugin-panel-primary-" });
     const secondaryDaemon = await startIsolatedHostDaemon("plugin-panel-secondary");
@@ -118,7 +112,7 @@ test.describe("plugin workspace panels and Command Center", () => {
       repoPrefix: "plugin-panel-secondary-",
       port: secondaryDaemon.port,
     });
-    await writeFile(path.join(directory, "paseo-plugin.json"), JSON.stringify({ id: PLUGIN_ID }));
+    await writeFile(path.join(directory, "byspace-plugin.json"), JSON.stringify({ id: PLUGIN_ID }));
     await writeFile(path.join(directory, "index.tsx"), pluginSource());
 
     try {

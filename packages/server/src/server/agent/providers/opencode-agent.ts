@@ -39,6 +39,8 @@ import {
   type AgentSession,
   type AgentSessionConfig,
   type AgentSlashCommand,
+  type SteerActiveTurnOptions,
+  type SteerResult,
   type AgentStreamEvent,
   type AgentTimelineItem,
   type AgentUsage,
@@ -52,8 +54,6 @@ import {
   type ResolveAgentCreateConfigResult,
   type McpServerConfig,
   type ProviderCatalog,
-  type SteerActiveTurnOptions,
-  type SteerResult,
   type ToolCallDetail,
   type ToolCallTimelineItem,
 } from "../agent-sdk-types.js";
@@ -76,7 +76,6 @@ import { withTimeout } from "../../../utils/promise-timeout.js";
 import { execCommand } from "../../../utils/spawn.js";
 import { mapOpencodeToolCall } from "./opencode/tool-call-mapper.js";
 import {
-  OPENCODE_EVENT_STREAM_READY_TIMEOUT_MS,
   OpenCodeServerManager,
   OPENCODE_SERVER_STARTUP_TIMEOUT_MS,
   type OpenCodeServerAcquisition,
@@ -84,7 +83,6 @@ import {
 } from "./opencode/server-manager.js";
 import {
   OpenCodeEventConsumer,
-  type OpenCodeEventStreamDiagnostics,
   type OpenCodeEventSource,
   type OpenCodeEventSourceInput,
 } from "./opencode/event-consumer.js";
@@ -113,17 +111,6 @@ import {
   OpenCodeProviderOptionsSchema,
   type OpenCodeProviderOptions,
 } from "./opencode/options.js";
-
-function formatOpenCodeEventStreamDiagnostics(diagnostics: OpenCodeEventStreamDiagnostics): string {
-  return [
-    "opencode-stream",
-    `attempt=${diagnostics.attempt}`,
-    `phase=${diagnostics.phase}`,
-    `elapsedMs=${diagnostics.elapsedMs}`,
-    ...(diagnostics.lastOutcome ? [`lastOutcome=${diagnostics.lastOutcome}`] : []),
-    ...(diagnostics.lastError ? [`lastError=${JSON.stringify(diagnostics.lastError)}`] : []),
-  ].join(" ");
-}
 
 const OPENCODE_CAPABILITIES: AgentCapabilityFlags = {
   supportsStreaming: true,
@@ -1031,12 +1018,6 @@ function buildOpenCodeUserTimelineText(prompt: AgentPromptInput): string {
     .join("\n");
 }
 
-function isOpenCodeDefinitiveSteerRejection(error: unknown, status?: number): boolean {
-  if (status === 404) return true;
-  const message = toDiagnosticErrorMessage(error).toLowerCase();
-  return /session\s+(?:is\s+)?(?:not found|inactive|not active|not running)/.test(message);
-}
-
 async function collectOpenCodeImportableSessionsFromSdk(
   client: Pick<OpencodeClient, "experimental">,
   options?: ListImportableSessionsOptions,
@@ -1076,6 +1057,12 @@ function normalizeOpenCodeSessionTitle(title: string | null | undefined): string
 
 function getOpenCodeSessionTimestamp(session: OpenCodePersistedSession): number {
   return session.time?.updated ?? session.time?.created ?? 0;
+}
+
+function isOpenCodeDefinitiveSteerRejection(error: unknown, status?: number): boolean {
+  if (status === 404) return true;
+  const message = toDiagnosticErrorMessage(error).toLowerCase();
+  return /session\s+(?:is\s+)?(?:not found|inactive|not active|not running)/.test(message);
 }
 
 function resolveOpenCodeReplayTimestamp(params: {
@@ -1383,11 +1370,10 @@ export class OpenCodeAgentClient implements AgentClient {
       OpenCodeServerManager.getInstance(this.logger, runtimeSettings, {
         managedProcesses: deps.managedProcesses,
         resolveHomeDir: deps.resolveHomeDir,
-        createEventSource: ({ serverUrl, processExit, logger: eventLogger }) =>
+        createEventSource: ({ serverUrl, processExit }) =>
           new OpenCodeEventConsumer({
             serverUrl,
             processExit,
-            logger: eventLogger,
             createClient: (baseUrl) => this.createOpenCodeClient({ baseUrl, directory: "" }),
           }),
       });
@@ -1874,15 +1860,15 @@ export interface OpenCodeEventTranslationState {
   }) => void;
 }
 
+interface OpenCodeTraceData {
+  turnId?: string;
+  [key: string]: unknown;
+}
+
 interface OpenCodePendingSteerSubmission {
   providerMessageId: string;
   text: string;
   clientMessageId: string | null;
-}
-
-interface OpenCodeTraceData {
-  turnId?: string;
-  [key: string]: unknown;
 }
 
 type OpenCodeTraceMessage =
@@ -3081,24 +3067,16 @@ function createDeferred<T>(): Deferred<T> {
 type OpenCodeTurnState =
   | { status: "idle" }
   | { status: "running"; turnId: string }
-  | { status: "stopping"; stop: OpenCodeStop };
+  | { status: "stopping"; idle: Deferred<void> };
 
-type OpenCodeRunnerStatus = "idle" | "busy" | "retry";
+interface OpenCodePendingInterruptTerminalEvent {
+  turnId: string;
+  event: NonNullable<ReturnType<typeof toTerminalTurnEvent>>;
+}
 
-/**
- * One in-flight stop of the OpenCode session runner.
- *
- * A stop tracks the run it is stopping: the terminal that run still owes, and
- * the cancellation the caller is still owed. The aborts it issues are tracked by
- * the session instead, because OpenCode's abort is session-scoped rather than
- * turn-scoped and can outlive the stop that issued it. The runner is reusable
- * only once both the terminal and every issued abort have settled.
- */
-interface OpenCodeStop {
-  /** Foreground turn still owed a cancellation acknowledgement; cleared once emitted. */
-  pendingCancellationTurnId: string | null;
-  /** Resolves when the canceled run publishes its authoritative terminal. */
-  readonly terminal: Deferred<void>;
+interface OpenCodeInterruptInFlight {
+  turnId: string;
+  promise: Promise<void>;
 }
 
 function unwrapOpenCodeGlobalEvent(event: unknown): OpenCodeEvent | null {
@@ -3136,28 +3114,15 @@ function getOpenCodeEventSessionId(event: OpenCodeEvent): string | null {
   );
 }
 
-function getOpenCodeRunnerStatusFromEvent(
-  event: OpenCodeEvent,
-  sessionId: string,
-): OpenCodeRunnerStatus | null {
-  if (getOpenCodeEventSessionId(event) !== sessionId) {
-    return null;
-  }
-  if (event.type === "session.status") {
-    return event.properties.status.type;
-  }
-  if (event.type === "session.idle" || event.type === "session.error") {
-    return "idle";
-  }
-  return null;
-}
-
-function isOpenCodeRunnerActive(status: OpenCodeRunnerStatus): boolean {
-  return status === "busy" || status === "retry";
-}
-
 function isOpenCodeTerminalEvent(event: OpenCodeEvent, sessionId: string): boolean {
-  return getOpenCodeRunnerStatusFromEvent(event, sessionId) === "idle";
+  if (event.type === "session.idle" || event.type === "session.error") {
+    return event.properties.sessionID === sessionId;
+  }
+  return (
+    event.type === "session.status" &&
+    event.properties.sessionID === sessionId &&
+    event.properties.status.type === "idle"
+  );
 }
 
 function isOpenCodeProviderInternalEvent(event: AgentStreamEvent): boolean {
@@ -3251,6 +3216,7 @@ class OpenCodeAgentSession implements AgentSession {
   private sessionTotalCostUsd: number | undefined;
   private mcpConfigured = false;
   private mcpSetupPromise: Promise<void> | null = null;
+  /** Tracks the role of each message by ID to distinguish user from assistant messages */
   private messageRoles = new Map<string, OpenCodeMessageRole>();
   private pendingUserMessageText: string | null = null;
   private pendingClientMessageId: string | null = null;
@@ -3261,23 +3227,21 @@ class OpenCodeAgentSession implements AgentSession {
     { messageId: string; emittedText: string; closed: boolean }
   >();
   private activeDispatchMessageId: string | null = null;
+  /** Tracks assistant messages already emitted from structured payloads. */
   private emittedStructuredMessageIds = new Set<string>();
   private compactionSummaryMessageIds = new Set<string>();
   private emittedCompactionPartIds = new Set<string>();
   private suppressAssistantMessagesUntilIdle = { active: false };
+  /** Tracks the type of each part by ID, learned from message.part.updated events. */
   private partTypes = new Map<string, string>();
   private availableModesCache: AgentMode[] | null = null;
   private readonly subscribers = new Set<(event: AgentStreamEvent) => void>();
   private nextTurnOrdinal = 0;
   private turnState: OpenCodeTurnState = { status: "idle" };
-  /**
-   * Settlement of every session-scoped abort issued so far. It outlives the stop
-   * that issued it because a request still in flight can cancel a replacement
-   * run, and a rejection means we never proved the runner stopped.
-   */
-  private abortSettlement: Promise<void> = Promise.resolve();
-  private externalStatusReconciliationStarted = false;
-  private runnerStatusRevision = 0;
+  private interruptingTurnId: string | null = null;
+  private interruptAbortPendingTurnId: string | null = null;
+  private pendingInterruptTerminalEvent: OpenCodePendingInterruptTerminalEvent | null = null;
+  private interruptInFlight: OpenCodeInterruptInFlight | null = null;
   private readonly runningToolCalls = new Map<string, ToolCallTimelineItem>();
   private subAgentsByCallId = new Map<string, OpenCodeSubAgentActivityState>();
   private subAgentCallIdByChildSessionId = new Map<string, string>();
@@ -3324,7 +3288,7 @@ class OpenCodeAgentSession implements AgentSession {
     this.logger = logger.child({ agentId: this.agentId });
     this.modelContextWindowsByModelKey = modelContextWindowsByModelKey;
     this.currentMode = normalizeOpenCodeModeId(config.modeId);
-    this.autoAcceptEnabled = !config.toolPolicy && isOpenCodeAutoAcceptEnabled(config);
+    this.autoAcceptEnabled = isOpenCodeAutoAcceptEnabled(config);
     this.releaseServer = releaseServer ?? null;
     this.persistSession = persistSession;
     this.selectedModelContextWindowMaxTokens = this.resolveConfiguredModelContextWindowMaxTokens(
@@ -3389,34 +3353,75 @@ class OpenCodeAgentSession implements AgentSession {
     });
   }
 
-  async interrupt(): Promise<void> {
+  interrupt(): Promise<void> {
     const turnId = this.activeForegroundTurnId;
-    this.abortController?.abort();
-    const abort = this.issueStop(turnId);
-    // COMPAT(opencodeSlowAbort): OpenCode 1.14.42+ blocks session.abort until
-    // the running tool actually stops, which can be tens of seconds for
-    // long-running tools. Cap the wait so the user-visible cancel lands
-    // quickly while still giving OpenCode a chance to confirm the abort
-    // cleanly. Drop the timeout once upstream returns abort acknowledgement
-    // before tool teardown.
-    const settledAbort = abort.then(
-      () => undefined,
-      (error: unknown) => error,
-    );
-    // Only the cap is tolerated. A settled failure means the runner may still be
-    // going, and the caller must hear about it.
-    const abortFailure = await withTimeout(settledAbort, 2_000, "OpenCode session.abort").catch(
-      (error) => {
-        this.logger.warn(
-          { err: error, sessionId: this.sessionId, turnId },
-          "OpenCode session.abort did not settle within the cancel cap",
-        );
-        return undefined;
-      },
-    );
-    if (abortFailure !== undefined) {
-      throw abortFailure;
+    if (!turnId) return Promise.resolve();
+    if (this.interruptInFlight?.turnId === turnId) {
+      return this.interruptInFlight.promise;
     }
+
+    const promise = this.interruptTurn(turnId).finally(() => {
+      if (this.interruptInFlight?.turnId === turnId) {
+        this.interruptInFlight = null;
+      }
+    });
+    this.interruptInFlight = { turnId, promise };
+    return promise;
+  }
+
+  private async interruptTurn(turnId: string): Promise<void> {
+    this.abortController?.abort();
+    this.interruptingTurnId = turnId;
+    this.interruptAbortPendingTurnId = turnId;
+    this.pendingInterruptTerminalEvent = null;
+    try {
+      // COMPAT(opencodeSlowAbort): OpenCode 1.14.42+ blocks session.abort until
+      // the running tool actually stops, which can be tens of seconds for
+      // long-running tools. Cap the wait so cancel failure remains visible
+      // instead of claiming that the provider stopped. Drop the timeout once
+      // upstream acknowledges abort before tool teardown.
+      await withTimeout(this.abortSession(), 2_000, "OpenCode session.abort");
+    } catch (error) {
+      if (this.interruptAbortPendingTurnId === turnId) {
+        const pendingTerminal = this.takePendingInterruptTerminalEvent(turnId);
+        this.interruptAbortPendingTurnId = null;
+        if (this.activeForegroundTurnId === turnId) {
+          this.interruptingTurnId = null;
+          if (pendingTerminal) {
+            this.finishForegroundTurn(pendingTerminal, turnId);
+          }
+        }
+      }
+      this.logger.warn(
+        { err: error, sessionId: this.sessionId, turnId },
+        "OpenCode session.abort failed",
+      );
+      throw error;
+    }
+    if (this.interruptAbortPendingTurnId !== turnId) {
+      return;
+    }
+    const pendingTerminal = this.takePendingInterruptTerminalEvent(turnId);
+    this.interruptAbortPendingTurnId = null;
+    if (this.activeForegroundTurnId === turnId) {
+      if (pendingTerminal) {
+        this.finishForegroundTurn(
+          { type: "turn_canceled", provider: "opencode", reason: "interrupted" },
+          turnId,
+        );
+      } else {
+        this.beginStoppingTurn(turnId);
+      }
+    }
+  }
+
+  async revertBoth(input: { messageId: string }): Promise<void> {
+    await revertOpenCodeConversationAndFiles({
+      client: this.client,
+      sessionId: this.sessionId,
+      cwd: this.config.cwd,
+      messageId: input.messageId,
+    });
   }
 
   async steerActiveTurn(
@@ -3446,10 +3451,7 @@ class OpenCodeAgentSession implements AgentSession {
       this.config.systemPrompt,
       this.config.daemonAppendSystemPrompt,
     );
-    const permission = buildOpenCodePermissionRules(
-      this.config.providerOptions,
-      this.config.toolPolicy,
-    );
+    const permission = buildOpenCodePermissionRules(this.config.providerOptions);
     const model = this.parseModel(this.config.model);
     const effectiveMode = resolveOpenCodeRuntimeAgentId(this.currentMode);
     const effectiveVariant = this.config.thinkingOptionId ?? undefined;
@@ -3513,96 +3515,70 @@ class OpenCodeAgentSession implements AgentSession {
     }
   }
 
-  async revertBoth(input: { messageId: string }): Promise<void> {
-    await revertOpenCodeConversationAndFiles({
-      client: this.client,
-      sessionId: this.sessionId,
-      cwd: this.config.cwd,
-      messageId: input.messageId,
+  private takePendingInterruptTerminalEvent(
+    turnId: string,
+  ): NonNullable<ReturnType<typeof toTerminalTurnEvent>> | null {
+    const pending = this.pendingInterruptTerminalEvent;
+    if (pending?.turnId !== turnId) {
+      return null;
+    }
+    this.pendingInterruptTerminalEvent = null;
+    return pending.event;
+  }
+
+  private async abortSession(): Promise<void> {
+    const response = await this.client.session.abort({
+      sessionID: this.sessionId,
+      directory: this.config.cwd,
     });
-  }
-
-  private abortSession(turnId: string | null, reason: string): Promise<void> {
-    return this.client.session
-      .abort({
-        sessionID: this.sessionId,
-        directory: this.config.cwd,
-      })
-      .then((response) => {
-        if (response.error) {
-          throw new Error(toDiagnosticErrorMessage(response.error));
-        }
-        return undefined;
-      })
-      .catch((error) => {
-        this.logger.warn(
-          { err: error, sessionId: this.sessionId, turnId, reason },
-          "OpenCode session.abort rejected",
-        );
-        throw error;
-      });
-  }
-
-  /**
-   * Gate every runner-affecting operation on the previous stop. OpenCode runs one
-   * runner per session and aborts it session-wide, so a replacement may start
-   * only once the canceled run published its terminal and our own abort settled.
-   * A failed abort never proved the runner stopped, so it fails closed until the
-   * next Stop issues a fresh one.
-   */
-  private async awaitRunnerQuiescence(): Promise<void> {
-    const providerIdle = this.waitUntilProviderIdle();
-    // A failed abort is decisive on its own, so let it reject this wait without
-    // leaving the still-running observation unhandled.
-    void providerIdle.catch(() => undefined);
-    let observed = this.abortSettlement;
-    await Promise.all([observed, providerIdle]);
-    // Stop can issue a further abort while we waited, and the settlement is
-    // replaced rather than mutated, so drain until what we observed is current.
-    while (this.abortSettlement !== observed) {
-      observed = this.abortSettlement;
-      await observed;
+    if (response.error) {
+      throw new Error(`OpenCode session.abort failed: ${toDiagnosticErrorMessage(response.error)}`);
     }
   }
 
   private async waitUntilProviderIdle(): Promise<void> {
-    if (this.turnState.status !== "stopping") return;
+    if (this.turnState.status !== "stopping") {
+      return;
+    }
+
+    const stopping = this.turnState;
     await withTimeout(
-      this.observeProviderStopBoundary(this.turnState.stop),
+      this.observeProviderStopBoundary(stopping),
       OPENCODE_PENDING_ABORT_START_TIMEOUT_MS,
       "OpenCode previous turn to stop",
     );
   }
 
-  private async observeProviderStopBoundary(stop: OpenCodeStop): Promise<void> {
+  private async observeProviderStopBoundary(
+    stopping: Extract<OpenCodeTurnState, { status: "stopping" }>,
+  ): Promise<void> {
     let delayMs = 100;
-    while (this.isStopping(stop)) {
+    while (this.turnState === stopping) {
+      void this.abortSession().catch((error) => {
+        this.logger.warn(
+          { err: error, sessionId: this.sessionId },
+          "OpenCode session.abort retry rejected while waiting for idle",
+        );
+      });
       const boundary = await Promise.race([
-        stop.terminal.promise.then(() => "terminal" as const),
+        stopping.idle.promise.then(() => "idle" as const),
         waitForOpenCodeStopProbe(delayMs, this.recoveryAbortController.signal).then(
           () => "probe" as const,
         ),
       ]);
-      if (boundary === "terminal") return;
-      await this.reconcileStopWithProviderStatus(stop);
+      if (boundary === "idle") {
+        return;
+      }
+
+      if ((await this.readProviderRunnerStatus().catch(() => null)) === "idle") {
+        this.finishStoppingTurn();
+        return;
+      }
       delayMs = Math.min(delayMs * 2, OPENCODE_STOP_STATUS_MAX_DELAY_MS);
     }
   }
 
-  private async reconcileStopWithProviderStatus(stop: OpenCodeStop): Promise<void> {
-    try {
-      if ((await this.readProviderRunnerStatus()) === "idle") {
-        this.finishStoppingTurn(stop);
-      }
-    } catch (error) {
-      this.logger.warn(
-        { err: error, sessionId: this.sessionId, turnId: stop.pendingCancellationTurnId },
-        "Failed to reconcile the OpenCode stop with provider session status",
-      );
-    }
-  }
-
-  private async readProviderRunnerStatus(): Promise<OpenCodeRunnerStatus> {
+  private async readProviderRunnerStatus(): Promise<"idle" | "busy" | "retry"> {
     const response = await this.client.session.status(
       { directory: this.config.cwd },
       { signal: this.recoveryAbortController.signal },
@@ -3617,12 +3593,9 @@ class OpenCodeAgentSession implements AgentSession {
       throw new Error("OpenCode returned an invalid session status response");
     }
     const status = readOpenCodeRecord(statuses[this.sessionId]);
-    // OpenCode drops idle sessions from the status map entirely.
-    if (!status) {
-      return "idle";
-    }
-    const statusType = readNonEmptyString(status.type);
-    if (statusType !== "idle" && statusType !== "busy" && statusType !== "retry") {
+    const statusType = readNonEmptyString(status?.type);
+    if (!status || statusType === "idle") return "idle";
+    if (statusType !== "busy" && statusType !== "retry") {
       throw new Error(`OpenCode returned an unknown session status '${statusType ?? "missing"}'`);
     }
     return statusType;
@@ -3632,20 +3605,10 @@ class OpenCodeAgentSession implements AgentSession {
     prompt: AgentPromptInput,
     options?: AgentRunOptions,
   ): Promise<{ turnId: string }> {
-    if (this.closed) {
-      throw new Error("OpenCode session is closed");
-    }
     if (this.turnState.status === "running") {
       throw new Error("A foreground turn is already active");
     }
-    try {
-      await this.awaitRunnerQuiescence();
-    } catch (error) {
-      this.rethrowRunnerWaitError(error);
-    }
-    if (this.closed) {
-      throw new Error("OpenCode session is closed");
-    }
+    await this.waitUntilProviderIdle();
     if (this.turnState.status !== "idle") {
       throw new Error("OpenCode is still stopping the previous turn");
     }
@@ -3668,7 +3631,21 @@ class OpenCodeAgentSession implements AgentSession {
     const effectiveVariant = thinkingOptionId ?? undefined;
     const effectiveMode = resolveOpenCodeRuntimeAgentId(this.currentMode);
 
-    await this.awaitEventStreamReady(turnAbortController);
+    try {
+      // The stream cannot deliver its first record before OpenCode finished booting, so
+      // this wait gets the same budget as server startup instead of a shorter one that
+      // fails turns on slow (plugin-heavy or cold) starts.
+      await withTimeout(
+        this.events.ready(),
+        OPENCODE_SERVER_STARTUP_TIMEOUT_MS,
+        "OpenCode event stream first record",
+      );
+    } catch (error) {
+      if (this.abortController === turnAbortController) {
+        this.abortController = null;
+      }
+      throw error;
+    }
 
     const turnId = this.createTurnId();
     this.materializedParts.clear();
@@ -3786,10 +3763,7 @@ class OpenCodeAgentSession implements AgentSession {
             this.config.systemPrompt,
             this.config.daemonAppendSystemPrompt,
           );
-          const permission = buildOpenCodePermissionRules(
-            this.config.providerOptions,
-            this.config.toolPolicy,
-          );
+          const permission = buildOpenCodePermissionRules(this.config.providerOptions);
           const promptResponse = await this.client.session.promptAsync({
             sessionID: this.sessionId,
             directory: this.config.cwd,
@@ -3847,66 +3821,12 @@ class OpenCodeAgentSession implements AgentSession {
 
     return { turnId };
   }
-
-  private async awaitEventStreamReady(turnAbortController: AbortController): Promise<void> {
-    try {
-      await withTimeout(
-        this.events.ready(),
-        OPENCODE_EVENT_STREAM_READY_TIMEOUT_MS,
-        "OpenCode server.connected event",
-      );
-    } catch (error) {
-      if (this.abortController === turnAbortController) this.abortController = null;
-      if (!(error instanceof Error) || error.message !== "OpenCode server.connected event") {
-        throw error;
-      }
-      const diagnostics = this.events.diagnostics?.();
-      if (!diagnostics) throw error;
-      throw new Error(
-        `${error.message}; your message was not sent. ${formatOpenCodeEventStreamDiagnostics(diagnostics)}`,
-        { cause: error },
-      );
-    }
-  }
-
-  private rethrowRunnerWaitError(error: unknown): never {
-    if (this.closed) throw new Error("OpenCode session is closed", { cause: error });
-    throw error;
-  }
   subscribe(callback: (event: AgentStreamEvent) => void): () => void {
     this.subscribers.add(callback);
-    this.startExternalStatusReconciliation();
     this.startChildSessionHydration();
     return () => {
       this.subscribers.delete(callback);
     };
-  }
-
-  private startExternalStatusReconciliation(): void {
-    if (!this.externallyDriven || this.externalStatusReconciliationStarted || this.closed) {
-      return;
-    }
-    this.externalStatusReconciliationStarted = true;
-    void this.reconcileExternalRunnerStatus().catch((error) => {
-      this.logger.warn(
-        { err: error, sessionId: this.sessionId },
-        "Failed to reconcile externally driven OpenCode session status",
-      );
-    });
-  }
-
-  private async reconcileExternalRunnerStatus(): Promise<void> {
-    await this.events.ready();
-    const observedRevision = this.runnerStatusRevision;
-    const runnerStatus = await this.readProviderRunnerStatus();
-    if (
-      this.runnerStatusRevision !== observedRevision ||
-      this.turnState.status !== "idle" ||
-      !isOpenCodeRunnerActive(runnerStatus)
-    ) {
-      return;
-    }
-    this.startAutonomousTurn();
   }
 
   private startChildSessionHydration(): void {
@@ -4156,14 +4076,18 @@ class OpenCodeAgentSession implements AgentSession {
       unregisterOpenCodeChildSessionServerUrl(event.event.id);
       this.childTranslationStates.delete(event.event.id);
       this.childSessionCwds.delete(event.event.id);
-      this.childStatuses.delete(event.event.id);
       this.subagentPresentationByChildId.delete(event.event.id);
+      this.childStatuses.delete(event.event.id);
     }
   }
 
   private async consumeEventSourceInput(input: OpenCodeEventSourceInput): Promise<void> {
-    if (!("payload" in input)) {
-      if (this.turnState.status === "stopping") return this.finishStoppingTurn(this.turnState.stop);
+    if ("type" in input && input.type === "reconnected") {
+      await this.reconcileAfterGap(++this.gapRepairRevision);
+      return;
+    }
+    if ("type" in input && input.type === "server-exited") {
+      if (this.turnState.status === "stopping") return this.finishStoppingTurn();
       const turnId = this.activeForegroundTurnId;
       if (turnId) {
         this.finishForegroundTurn(
@@ -4171,10 +4095,6 @@ class OpenCodeAgentSession implements AgentSession {
           turnId,
         );
       }
-      return;
-    }
-    if (input.payload.type === "server.connected") {
-      await this.reconcileAfterGap(++this.gapRepairRevision);
       return;
     }
     await this.consumeOpenCodeStreamEvent({ rawEvent: input, eventCount: 0 });
@@ -4368,8 +4288,18 @@ class OpenCodeAgentSession implements AgentSession {
     if (!event) {
       return;
     }
-    this.observeRunnerStatusEvent(event);
-    if (this.discardEventWhileStopping(event, eventCount)) {
+    if (
+      this.turnState.status === "stopping" &&
+      getOpenCodeEventSessionId(event) === this.sessionId
+    ) {
+      if (isOpenCodeTerminalEvent(event, this.sessionId)) {
+        this.finishStoppingTurn();
+      }
+      this.traceOpenCode("provider.opencode.event.skip", {
+        n: eventCount,
+        reason: "turn_stopping",
+        type: event.type,
+      });
       return;
     }
     const translated = await this.translateEvent(event);
@@ -4381,7 +4311,7 @@ class OpenCodeAgentSession implements AgentSession {
         foregroundEvents.push(translatedEvent);
       }
     }
-    if (!turnId && this.shouldStartAutonomousTurn(event)) {
+    if (!turnId && this.shouldStartAutonomousTurn(event, foregroundEvents)) {
       turnId = this.startAutonomousTurn();
     }
     if (!turnId) {
@@ -4411,36 +4341,11 @@ class OpenCodeAgentSession implements AgentSession {
       }
       const terminalEvent = toTerminalTurnEvent(e);
       if (terminalEvent) {
-        this.traceOpenCode("provider.opencode.event.terminal", {
-          turnId,
-          type: terminalEvent.type,
-        });
-        this.finishForegroundTurn(terminalEvent, turnId);
+        this.handleTerminalTurnEvent(terminalEvent, turnId);
         return;
       }
       this.notifySubscribers(e, turnId);
     }
-  }
-
-  private discardEventWhileStopping(event: OpenCodeEvent, eventCount: number): boolean {
-    if (
-      this.turnState.status !== "stopping" ||
-      getOpenCodeEventSessionId(event) !== this.sessionId
-    ) {
-      return false;
-    }
-    // Residue of the canceled run must not surface as a new turn. Its terminal
-    // is the authoritative end of the stop, so anything OpenCode publishes
-    // afterwards belongs to a new run by construction and takes the live path.
-    if (isOpenCodeTerminalEvent(event, this.sessionId)) {
-      this.finishStoppingTurn(this.turnState.stop);
-    }
-    this.traceOpenCode("provider.opencode.event.skip", {
-      n: eventCount,
-      reason: "turn_stopping",
-      type: event.type,
-    });
-    return true;
   }
 
   private emitBackgroundPermissionRequests(events: readonly AgentStreamEvent[]): void {
@@ -4451,20 +4356,34 @@ class OpenCodeAgentSession implements AgentSession {
     }
   }
 
-  private observeRunnerStatusEvent(event: OpenCodeEvent): void {
-    if (getOpenCodeRunnerStatusFromEvent(event, this.sessionId) !== null) {
-      this.runnerStatusRevision += 1;
-    }
-  }
-
-  private shouldStartAutonomousTurn(event: OpenCodeEvent): boolean {
+  private shouldStartAutonomousTurn(
+    event: OpenCodeEvent,
+    foregroundEvents: readonly AgentStreamEvent[],
+  ): boolean {
     if (this.turnState.status !== "idle") {
       return false;
     }
-    // Message records are mutable and can be patched after the runner stops.
-    // Only OpenCode's execution status is authoritative for autonomous activity.
-    const runnerStatus = getOpenCodeRunnerStatusFromEvent(event, this.sessionId);
-    return runnerStatus !== null && isOpenCodeRunnerActive(runnerStatus);
+    if (getOpenCodeEventSessionId(event) !== this.sessionId) {
+      return false;
+    }
+    if (event.type === "message.updated" && event.properties.info.role === "user") {
+      if (this.emittedUserMessageIds.has(event.properties.info.id)) {
+        return false;
+      }
+      return true;
+    }
+    if (!this.externallyDriven) {
+      return false;
+    }
+    if (
+      foregroundEvents.some(
+        (foregroundEvent) =>
+          foregroundEvent.type !== "thread_started" && !toTerminalTurnEvent(foregroundEvent),
+      )
+    ) {
+      return true;
+    }
+    return event.type === "session.status" && event.properties.status.type === "busy";
   }
 
   private startAutonomousTurn(): string {
@@ -4483,6 +4402,22 @@ class OpenCodeAgentSession implements AgentSession {
     return turnId;
   }
 
+  private handleTerminalTurnEvent(
+    event: NonNullable<ReturnType<typeof toTerminalTurnEvent>>,
+    turnId: string,
+  ): void {
+    if (this.interruptAbortPendingTurnId === turnId) {
+      this.pendingInterruptTerminalEvent = { turnId, event };
+      return;
+    }
+    const effectiveEvent =
+      this.interruptingTurnId === turnId
+        ? { type: "turn_canceled" as const, provider: "opencode" as const, reason: "interrupted" }
+        : event;
+    this.traceOpenCode("provider.opencode.event.terminal", { turnId, type: effectiveEvent.type });
+    this.finishForegroundTurn(effectiveEvent, turnId);
+  }
+
   private finishForegroundTurn(
     event: Extract<AgentStreamEvent, { type: "turn_completed" | "turn_failed" | "turn_canceled" }>,
     turnId: string,
@@ -4497,6 +4432,15 @@ class OpenCodeAgentSession implements AgentSession {
     if (this.activeForegroundTurnId !== turnId) {
       return;
     }
+    if (this.interruptingTurnId === turnId) {
+      this.interruptingTurnId = null;
+    }
+    if (this.interruptAbortPendingTurnId === turnId) {
+      this.interruptAbortPendingTurnId = null;
+    }
+    if (this.pendingInterruptTerminalEvent?.turnId === turnId) {
+      this.pendingInterruptTerminalEvent = null;
+    }
     if (event.type === "turn_canceled" || event.type === "turn_failed") {
       this.synthesizeInterruptedToolCalls(turnId);
     } else {
@@ -4510,95 +4454,31 @@ class OpenCodeAgentSession implements AgentSession {
     this.notifySubscribers(event, turnId);
   }
 
-  private isStopping(stop: OpenCodeStop): boolean {
-    return this.turnState.status === "stopping" && this.turnState.stop === stop;
-  }
-
-  private issueStop(turnId: string | null): Promise<void> {
-    if (this.turnState.status === "stopping") {
-      // Stop pressed again during a stop retries that same stop. There is one
-      // runner per session, so a second boundary would race the first — and
-      // after a failed abort, a fresh one is both the only proof that can still
-      // acknowledge the canceled turn and the only way out of fail-closed.
-      return this.issueOwnedAbort(this.turnState.stop);
+  private beginStoppingTurn(turnId: string): void {
+    if (this.turnState.status !== "running" || this.turnState.turnId !== turnId) {
+      return;
     }
-    const stop: OpenCodeStop = {
-      pendingCancellationTurnId: turnId,
-      terminal: createDeferred<void>(),
-    };
-    const abort = this.issueOwnedAbort(stop);
-    if (turnId) {
-      this.synthesizeInterruptedToolCalls(turnId);
-      // An idle session has no run to observe, so only abort settlement gates
-      // reuse there. A running one also owes the canceled run's terminal.
-      this.turnState = { status: "stopping", stop };
-    }
+    this.synthesizeInterruptedToolCalls(turnId);
     this.pendingUserMessageText = null;
     this.pendingClientMessageId = null;
     this.pendingSteerSubmissions = [];
     this.abortController = null;
-    return abort;
-  }
-
-  private issueOwnedAbort(stop: OpenCodeStop): Promise<void> {
-    const abort = this.runOwnedAbort(stop.pendingCancellationTurnId);
-    // Abort is session-scoped, so its settlement is too: an older request lands
-    // on the runner whenever the server gets to it, however many stops have come
-    // and gone since. Only the newest abort may hold the gate closed, since
-    // recovering from a failed one is what pressing Stop again is for.
-    const stillInFlight = this.abortSettlement.catch(() => undefined);
-    this.abortSettlement = Promise.all([stillInFlight, abort]).then(() => undefined);
-    void this.abortSettlement.catch(() => undefined);
-    // Cancellation is acknowledged as soon as an owned abort succeeds, or when
-    // the provider publishes the canceled run's terminal.
-    void abort.then(
-      () => this.acknowledgeCancellation(stop),
-      () => undefined,
-    );
-    return abort;
-  }
-
-  private acknowledgeCancellation(stop: OpenCodeStop): void {
-    const turnId = stop.pendingCancellationTurnId;
-    if (!turnId) {
-      return;
-    }
-    stop.pendingCancellationTurnId = null;
+    this.interruptingTurnId = null;
+    this.turnState = { status: "stopping", idle: createDeferred<void>() };
     this.notifySubscribers(
       { type: "turn_canceled", provider: "opencode", reason: "interrupted" },
       turnId,
     );
   }
 
-  /**
-   * Issues the session-scoped abort for one stop, retrying it once. The stop owns
-   * every abort it needs: a detached retry would outlive its own boundary and
-   * cancel whichever run happened to be current when it landed.
-   */
-  private runOwnedAbort(turnId: string | null): Promise<void> {
-    // The turn hop also converts a synchronous SDK throw into a rejection.
-    return Promise.resolve()
-      .then(() => this.abortSession(turnId, "interrupt"))
-      .catch((error) => {
-        if (this.closed) {
-          throw error;
-        }
-        return this.abortSession(turnId, "stop_retry");
-      });
-  }
-
-  private finishStoppingTurn(stop: OpenCodeStop): void {
-    if (!this.isStopping(stop)) {
+  private finishStoppingTurn(): void {
+    if (this.turnState.status !== "stopping") {
       return;
     }
-    // Acknowledge before leaving the stopping state so a successor run adopted
-    // from the very next event cannot start ahead of the cancellation.
-    this.acknowledgeCancellation(stop);
+    const stopping = this.turnState;
     resetOpenCodeTurnTrackingState(this.createTranslationState());
-    const contextWindowMaxTokens = this.resolveSelectedModelContextWindowMaxTokens();
-    this.accumulatedUsage = contextWindowMaxTokens !== undefined ? { contextWindowMaxTokens } : {};
     this.turnState = { status: "idle" };
-    stop.terminal.resolve();
+    stopping.idle.resolve();
   }
 
   private trackToolCall(item: ToolCallTimelineItem): void {
@@ -4837,6 +4717,9 @@ class OpenCodeAgentSession implements AgentSession {
         logger: this.logger,
       });
       await this.deleteProviderSessionIfEphemeral();
+      if (this.turnState.status === "stopping") {
+        this.turnState.idle.resolve();
+      }
       this.turnState = { status: "idle" };
     } finally {
       await this.releaseServer?.();
@@ -5024,6 +4907,7 @@ class OpenCodeAgentSession implements AgentSession {
       cwd: this.config.cwd,
       messageRoles: new Map(),
       emittedUserMessageIds: new Set(),
+      pendingSteerSubmissions: [],
       accumulatedUsage: {},
       materializedParts: new Map(),
       emittedStructuredMessageIds: new Set(),

@@ -1,16 +1,15 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Buffer } from "buffer";
-import type { ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
+import type { ProviderSnapshotEntry } from "@bytetrue/byspace-protocol/agent-types";
 import {
   expandProviderSnapshot,
   type CompactProviderSnapshot,
-} from "@getpaseo/protocol/provider-snapshot-codec";
-import { CompactProviderSnapshotSchema } from "@getpaseo/protocol/messages";
+} from "@bytetrue/byspace-protocol/provider-snapshot-codec";
+import { CompactProviderSnapshotSchema } from "@bytetrue/byspace-protocol/messages";
 import { z } from "zod";
 
 const CACHE_VERSION = 1;
-const CACHE_KEY_PREFIX = "@paseo/provider-snapshot/v1";
-const CACHE_INDEX_KEY = "@paseo/provider-snapshot-index/v1";
+const CACHE_KEY_PREFIX = "@byspace/provider-snapshot/v1";
+const CACHE_INDEX_KEY = "@byspace/provider-snapshot-index/v1";
 const CACHE_INDEX_VERSION = 1;
 const DEFAULT_MAX_CACHE_BYTES = 4 * 1024 * 1024;
 
@@ -22,6 +21,98 @@ interface ProviderSnapshotStorage {
   multiGet(keys: readonly string[]): Promise<ReadonlyArray<readonly [string, string | null]>>;
   multiRemove(keys: readonly string[]): Promise<void>;
 }
+
+const DB_NAME = "byspace-provider-snapshots";
+const STORE_NAME = "snapshots";
+const DB_VERSION = 1;
+
+function openProviderSnapshotDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const indexedDb = globalThis.indexedDB;
+    if (!indexedDb) {
+      reject(new Error("IndexedDB is unavailable in this runtime."));
+      return;
+    }
+    const request = indexedDb.open(DB_NAME, DB_VERSION);
+    request.addEventListener("upgradeneeded", () => {
+      if (!request.result.objectStoreNames.contains(STORE_NAME)) {
+        request.result.createObjectStore(STORE_NAME);
+      }
+    });
+    request.addEventListener("success", () => resolve(request.result));
+    request.addEventListener("error", () => {
+      reject(request.error ?? new Error("Failed to open provider snapshot IndexedDB."));
+    });
+  });
+}
+
+function runProviderSnapshotTx<T>(
+  db: IDBDatabase,
+  mode: IDBTransactionMode,
+  run: (store: IDBObjectStore) => IDBRequest<T>,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, mode);
+    const request = run(transaction.objectStore(STORE_NAME));
+    request.addEventListener("success", () => resolve(request.result));
+    request.addEventListener("error", () => {
+      reject(request.error ?? new Error("Provider snapshot IndexedDB request failed."));
+    });
+    transaction.addEventListener("error", () => {
+      reject(transaction.error ?? new Error("Provider snapshot IndexedDB transaction failed."));
+    });
+  });
+}
+
+const indexedDbProviderSnapshotStorage: ProviderSnapshotStorage = {
+  async getItem(key) {
+    const db = await openProviderSnapshotDb();
+    try {
+      return (
+        (await runProviderSnapshotTx<string | undefined>(db, "readonly", (store) =>
+          store.get(key),
+        )) ?? null
+      );
+    } finally {
+      db.close();
+    }
+  },
+  async setItem(key, value) {
+    const db = await openProviderSnapshotDb();
+    try {
+      await runProviderSnapshotTx(db, "readwrite", (store) => store.put(value, key));
+    } finally {
+      db.close();
+    }
+  },
+  async removeItem(key) {
+    const db = await openProviderSnapshotDb();
+    try {
+      await runProviderSnapshotTx(db, "readwrite", (store) => store.delete(key));
+    } finally {
+      db.close();
+    }
+  },
+  async getAllKeys() {
+    const db = await openProviderSnapshotDb();
+    try {
+      const keys = await runProviderSnapshotTx<IDBValidKey[]>(db, "readonly", (store) =>
+        store.getAllKeys(),
+      );
+      return keys.map(String);
+    } finally {
+      db.close();
+    }
+  },
+  async multiGet(keys) {
+    return await Promise.all(
+      keys.map(async (key) => [key, await indexedDbProviderSnapshotStorage.getItem(key)] as const),
+    );
+  },
+  async multiRemove(keys) {
+    await Promise.all(keys.map((key) => indexedDbProviderSnapshotStorage.removeItem(key)));
+  },
+};
 
 interface ProviderSnapshotCacheOptions {
   maxBytes?: number;
@@ -239,4 +330,4 @@ export function createProviderSnapshotCache(
   };
 }
 
-export const providerSnapshotCache = createProviderSnapshotCache(AsyncStorage);
+export const providerSnapshotCache = createProviderSnapshotCache(indexedDbProviderSnapshotStorage);

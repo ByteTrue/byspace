@@ -1,9 +1,9 @@
 import type { StyleProp, TextStyle } from "react-native";
 import { useMemo } from "react";
 import { View } from "react-native";
+import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { settingsStyles } from "@/styles/settings";
-import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 
 interface SettingsTextAreaProps {
   accessibilityLabel: string;

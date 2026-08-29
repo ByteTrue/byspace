@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import type { PaseoApi } from "@getpaseo/client";
+import type { BySpaceApi } from "@bytetrue/byspace-client";
 import type { ZodType, input as ZodInput, output as ZodOutput } from "zod";
 import type { PluginRpcContract } from "./rpc.js";
 
@@ -63,17 +63,10 @@ export interface PluginAgentSnapshot {
   readonly labels: Readonly<Record<string, string>>;
 }
 
-export type PluginPanelLocation = "workspace" | "explorer";
-
-export interface PluginOpenPanelOptions {
-  location?: PluginPanelLocation;
-}
-
 interface PluginWorkspacePanelBase {
   id: string;
   title: string;
   icon: string;
-  locations?: readonly PluginPanelLocation[];
 }
 
 export interface PluginWorkspacePanelProps extends PluginHostProps {
@@ -137,7 +130,7 @@ export interface PluginAttachmentSourceContribution {
 }
 
 export interface PluginCommandCapabilities {
-  paseo: PaseoApi;
+  byspace: BySpaceApi;
   rpc<InputSchema extends ZodType, OutputSchema extends ZodType>(
     contract: PluginRpcContract<InputSchema, OutputSchema>,
     input: ZodInput<InputSchema>,
@@ -152,14 +145,14 @@ export interface PluginGlobalCommandContext extends PluginCommandCapabilities {
 export interface PluginWorkspaceCommandContext extends PluginCommandCapabilities {
   context: "workspace";
   workspace: PluginWorkspaceSnapshot;
-  openPanel(id: string, options?: PluginOpenPanelOptions): void;
+  openPanel(id: string): void;
 }
 
 export interface PluginAgentCommandContext extends PluginCommandCapabilities {
   context: "agent";
   workspace: PluginWorkspaceSnapshot;
   agent: PluginAgentSnapshot;
-  openPanel(id: string, options?: PluginOpenPanelOptions): void;
+  openPanel(id: string): void;
 }
 
 interface PluginCommandCenterItemBase {
@@ -184,7 +177,7 @@ export type PluginCommandCenterItemContribution =
     });
 
 export interface PluginHandlerContext {
-  paseo: PaseoApi;
+  byspace: BySpaceApi;
 }
 
 export interface PluginContext {

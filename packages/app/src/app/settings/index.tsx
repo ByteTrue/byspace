@@ -9,7 +9,7 @@ export default function SettingsIndexRoute() {
   const isCompactLayout = useIsCompactFormFactor();
 
   if (!isCompactLayout) {
-    return <Redirect href={buildSettingsSectionRoute("general")} />;
+    return <Redirect href={buildSettingsSectionRoute("preferences")} />;
   }
 
   return <SettingsScreen view={ROOT_VIEW} />;

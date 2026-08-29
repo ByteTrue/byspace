@@ -136,9 +136,6 @@ function getCloseButtonTestId(tab: WorkspaceTabDescriptor): string {
   if (tab.target.kind === "draft") {
     return `workspace-draft-close-${tab.target.draftId}`;
   }
-  if (tab.target.kind === "browser") {
-    return `workspace-browser-close-${tab.target.browserId}`;
-  }
   if (tab.target.kind === "setup") {
     return `workspace-setup-close-${encodeWorkspaceIdForPathSegment(tab.target.workspaceId)}`;
   }
@@ -148,15 +145,16 @@ function getCloseButtonTestId(tab: WorkspaceTabDescriptor): string {
   if (tab.target.kind === "commit_diff") {
     return `workspace-commit-diff-close-${encodeFilePathForPathSegment(tab.target.sha)}`;
   }
-  if (tab.target.kind === "working_diff" || tab.target.kind === "changes_tree") {
-    return `workspace-working-diff-close-${encodeFilePathForPathSegment(buildDeterministicWorkspaceTabId(tab.target))}`;
-  }
-  if (tab.target.kind === "files" || tab.target.kind === "pull_request") {
-    return `workspace-${tab.target.kind}-close`;
+  if (tab.target.kind === "working_diff") {
+    return "workspace-working-diff-close";
   }
   if (tab.target.kind === "plugin") {
     return `workspace-plugin-close-${encodeFilePathForPathSegment(buildDeterministicWorkspaceTabId(tab.target))}`;
   }
+  if (tab.target.kind === "files" || tab.target.kind === "pull_request") {
+    return `workspace-${tab.target.kind}-close`;
+  }
+
   if (tab.target.kind === "new_tab") {
     return `workspace-new-tab-close-${tab.tabId}`;
   }

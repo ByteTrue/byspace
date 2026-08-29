@@ -1,21 +1,43 @@
 import { describe, expect, it } from "vitest";
-import { resolveSidebarResizeHandleGeometry } from "./sidebar-resize-handle-layout";
-
-const MIN_TOUCH_TARGET = 24;
+import {
+  resolveSidebarResizeHandleGeometry,
+  resolveSidebarResizeHandleVariant,
+  resolveSidebarResizePanGestureConfig,
+} from "./sidebar-resize-handle-layout";
 
 describe("resolveSidebarResizeHandleGeometry", () => {
-  it("keeps the touch hit area inside the sidebar so native hit-testing reaches it", () => {
-    const geometry = resolveSidebarResizeHandleGeometry(false);
-
-    expect(geometry.edgeOffset).toBeGreaterThanOrEqual(0);
-    expect(geometry.width).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET);
-    expect(geometry.height ?? 0).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET);
+  it("uses the exact upstream 24x88 coarse-browser target inside the sidebar", () => {
+    expect(resolveSidebarResizeHandleGeometry(false)).toEqual({
+      edgeOffset: 0,
+      width: 24,
+      height: 88,
+    });
   });
 
-  it("straddles the border for a fine pointer", () => {
-    const geometry = resolveSidebarResizeHandleGeometry(true);
+  it("uses the exact full-height border target for a fine pointer", () => {
+    expect(resolveSidebarResizeHandleGeometry(true)).toEqual({
+      edgeOffset: -5,
+      width: 10,
+      height: null,
+    });
+  });
+});
 
-    expect(geometry.edgeOffset).toBe(-geometry.width / 2);
-    expect(geometry.height).toBeNull();
+describe("resolveSidebarResizeHandleVariant", () => {
+  it("selects the coarse target only for a coarse Browser pointer", () => {
+    expect(resolveSidebarResizeHandleVariant(true, false)).toBe("coarse");
+    expect(resolveSidebarResizeHandleVariant(true, true)).toBe("pointer");
+    expect(resolveSidebarResizeHandleVariant(false, false)).toBe("pointer");
+    expect(resolveSidebarResizeHandleVariant(false, true)).toBe("pointer");
+  });
+});
+
+describe("resolveSidebarResizePanGestureConfig", () => {
+  it("adds scroll arbitration only on Web", () => {
+    expect(resolveSidebarResizePanGestureConfig(true)).toEqual({
+      activeOffsetX: [-6, 6],
+      failOffsetY: [-12, 12],
+    });
+    expect(resolveSidebarResizePanGestureConfig(false)).toBeNull();
   });
 });

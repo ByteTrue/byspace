@@ -7,12 +7,12 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { LigaturesAddon } from "@xterm/addon-ligatures/lib/addon-ligatures.mjs";
 import { Terminal, type ITheme } from "@xterm/xterm";
-import type { TerminalState } from "@getpaseo/protocol/messages";
+import type { TerminalState } from "@bytetrue/byspace-protocol/messages";
 import {
   type TerminalInputModeState,
   TerminalInputModeTracker,
   terminalInputModeStatesEqual,
-} from "@getpaseo/protocol/terminal-input-mode";
+} from "@bytetrue/byspace-protocol/terminal-input-mode";
 import {
   type PendingTerminalModifiers,
   isAppleHandheldPlatform,
@@ -28,9 +28,16 @@ import {
   type TerminalLocalFileLinkSource,
   type TerminalLocalFileLinkTarget,
 } from "../local-links/terminal-local-link-provider";
-import { resolveTerminalFontFamily, resolveTerminalFontSize } from "./terminal-font";
 
 export type TerminalOutputData = Uint8Array;
+
+export interface TerminalClipboardImage {
+  bytes: Uint8Array;
+  mimeType: string;
+  fileExtension: string;
+}
+
+export type TerminalPasteErrorReason = "clipboard-read-failed" | "image-too-large";
 
 export interface TerminalEmulatorRuntimeMountInput {
   root: HTMLDivElement;
@@ -40,11 +47,12 @@ export interface TerminalEmulatorRuntimeMountInput {
   theme: ITheme;
   fontFamily?: string;
   fontSize?: number;
+  onRendererReady?: () => void;
 }
 
 export interface TerminalEmulatorRuntimeCallbacks {
   onInput?: (data: string) => Promise<void> | void;
-  onResize?: (input: TerminalResizeEvent) => Promise<void> | void;
+  onResize?: (input: { rows: number; cols: number; shouldClaim: boolean }) => Promise<void> | void;
   onTerminalKey?: (input: {
     key: string;
     ctrl: boolean;
@@ -62,33 +70,9 @@ export interface TerminalEmulatorRuntimeCallbacks {
     disposition: "main" | "side",
   ) => Promise<void> | void;
   onInputModeChange?: (state: TerminalInputModeState) => Promise<void> | void;
-}
-
-export interface TerminalResizeEvent {
-  rows: number;
-  cols: number;
-  shouldClaim: boolean;
-  forceClaim?: boolean;
-}
-
-export interface TerminalResizeRequest {
-  forceRefresh?: boolean;
-  shouldClaim?: boolean;
-  forceClaim?: boolean;
-}
-
-export function createTerminalResizeEvent(input: {
-  rows: number;
-  cols: number;
-  shouldClaim: boolean;
-  forceClaim: boolean;
-}): TerminalResizeEvent {
-  return {
-    rows: input.rows,
-    cols: input.cols,
-    shouldClaim: input.shouldClaim,
-    forceClaim: input.shouldClaim && input.forceClaim,
-  };
+  onPasteImage?: (image: TerminalClipboardImage) => Promise<string | null>;
+  onPasteError?: (reason: TerminalPasteErrorReason) => Promise<void> | void;
+  onSelectionChange?: (hasSelection: boolean) => Promise<void> | void;
 }
 
 interface TerminalEmulatorRuntimeDisposables {
@@ -119,7 +103,7 @@ interface TerminalOutputOperation {
 
 declare global {
   interface Window {
-    __paseoTerminal?: Terminal;
+    __byspaceTerminal?: Terminal;
   }
 }
 
@@ -137,11 +121,100 @@ const isAppleHandheld =
   });
 
 const DEFAULT_TOUCH_SCROLL_LINE_HEIGHT_PX = 18;
+const TOUCH_SELECTION_LONG_PRESS_MS = 500;
+const DEFAULT_TERMINAL_FONT_SIZE = 14;
 const FIT_TIMEOUT_DELAYS_MS = [0, 16, 48, 120, 250, 500, 1_000, 2_000];
 const OUTPUT_OPERATION_TIMEOUT_MS = 5_000;
 const EMPTY_TERMINAL_OUTPUT = new Uint8Array(0);
 const RESET_TERMINAL_OUTPUT = new Uint8Array([0x1b, 0x63]);
 const terminalOutputEncoder = new TextEncoder();
+const MAX_TERMINAL_CLIPBOARD_IMAGE_BYTES = 50 * 1024 * 1024;
+const TERMINAL_CLIPBOARD_IMAGE_EXTENSIONS: Readonly<Record<string, string>> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+};
+const TERMINAL_LINE_BREAK_RE = /[\r\n]/;
+const BRACKETED_PASTE_START = "\x1b[200~";
+const BRACKETED_PASTE_END = "\x1b[201~";
+
+interface TerminalClipboardImageSelection {
+  readBlob: () => Promise<Blob>;
+  mimeType: string;
+  fileExtension: string;
+}
+
+function findTerminalClipboardImage(
+  items: readonly ClipboardItem[],
+): TerminalClipboardImageSelection | null {
+  for (const item of items) {
+    const mimeType = item.types.find((type) => TERMINAL_CLIPBOARD_IMAGE_EXTENSIONS[type]);
+    const fileExtension = mimeType ? TERMINAL_CLIPBOARD_IMAGE_EXTENSIONS[mimeType] : undefined;
+    if (mimeType && fileExtension) {
+      return { readBlob: () => item.getType(mimeType), mimeType, fileExtension };
+    }
+  }
+  return null;
+}
+
+function findTerminalClipboardImageFile(
+  items: DataTransferItemList,
+): TerminalClipboardImageSelection | null {
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    const fileExtension = TERMINAL_CLIPBOARD_IMAGE_EXTENSIONS[item.type];
+    if (fileExtension) {
+      const blob = item.getAsFile();
+      if (blob) {
+        return { readBlob: async () => blob, mimeType: item.type, fileExtension };
+      }
+    }
+  }
+  return null;
+}
+
+function isTerminalPasteShortcut(event: KeyboardEvent): boolean {
+  return (
+    event.key.toLowerCase() === "v" &&
+    !event.shiftKey &&
+    !event.altKey &&
+    (isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey)
+  );
+}
+
+function isWindowsPlatform(): boolean {
+  return (
+    /Windows/i.test(navigator.userAgent ?? "") ||
+    /^Win/i.test((navigator as Navigator & { platform?: string }).platform ?? "")
+  );
+}
+
+function pasteTerminalText(
+  terminal: Terminal,
+  text: string,
+  input?: { forceBracketed?: boolean },
+): void {
+  if (!input?.forceBracketed) {
+    terminal.paste(text);
+    return;
+  }
+
+  const normalized = text.replace(/\r?\n/g, "\r").replaceAll("\x1b", "\u241b");
+  terminal.input(`${BRACKETED_PASTE_START}${normalized}${BRACKETED_PASTE_END}`, true);
+}
+
+function isTerminalWindowsImagePasteShortcut(event: KeyboardEvent): boolean {
+  const isWindows = isWindowsPlatform();
+  return (
+    isWindows &&
+    event.key.toLowerCase() === "v" &&
+    event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey
+  );
+}
 
 export function encodeTerminalOutput(text: string): TerminalOutputData {
   return terminalOutputEncoder.encode(text);
@@ -155,6 +228,138 @@ function prependTerminalOutput(
   output.set(prefix, 0);
   output.set(data, prefix.length);
   return output;
+}
+
+const DEFAULT_TERMINAL_FONT_FAMILY = [
+  // Each platform's own default monospace. In a browser, `ui-monospace` is the
+  // only reliable way to get SF Mono on macOS (the "SF Mono" family name is not
+  // web-exposed); it resolves to Cascadia/Consolas on Windows and the system
+  // mono on Linux. Explicit names are extra fallbacks; Nerd Fonts only supply
+  // prompt/TUI glyphs; `monospace` is the last resort.
+  "ui-monospace",
+  "SFMono-Regular",
+  "Menlo",
+  "Monaco",
+  "Consolas",
+  "'Cascadia Mono'",
+  "'DejaVu Sans Mono'",
+  "'Liberation Mono'",
+  "'JetBrainsMono Nerd Font'",
+  "'Symbols Nerd Font'",
+  "monospace",
+].join(", ");
+
+function resolveTerminalFontFamily(fontFamily: string | undefined): string {
+  const trimmed = fontFamily?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : DEFAULT_TERMINAL_FONT_FAMILY;
+}
+
+function resolveTerminalFontSize(fontSize: number | undefined): number {
+  return typeof fontSize === "number" && Number.isFinite(fontSize) && fontSize > 0
+    ? fontSize
+    : DEFAULT_TERMINAL_FONT_SIZE;
+}
+
+function applyRootContainerBoundsStyles(container: HTMLElement | null): () => void {
+  // `html` and `body` belong to the shared document lock below. If a terminal is mounted
+  // directly under one of them, letting this per-instance path snapshot and restore it too
+  // would hand the same styles two owners with different lifetimes.
+  if (!container || container === document.body || container === document.documentElement) {
+    return () => {};
+  }
+  const previousOverflow = container.style.overflow;
+  const previousWidth = container.style.width;
+  const previousHeight = container.style.height;
+  container.style.overflow = "hidden";
+  container.style.width = "100%";
+  container.style.height = "100%";
+  return () => {
+    container.style.overflow = previousOverflow;
+    container.style.width = previousWidth;
+    container.style.height = previousHeight;
+  };
+}
+
+function lockDocumentBoundsStyles(): () => void {
+  const documentElement = document.documentElement;
+  const body = document.body;
+
+  const previousDocumentElementOverflow = documentElement.style.overflow;
+  const previousDocumentElementWidth = documentElement.style.width;
+  const previousDocumentElementHeight = documentElement.style.height;
+  const previousDocumentElementTextSizeAdjust =
+    documentElement.style.getPropertyValue("text-size-adjust");
+  const previousDocumentElementWebkitTextSizeAdjust = documentElement.style.getPropertyValue(
+    "-webkit-text-size-adjust",
+  );
+
+  const previousBodyOverflow = body.style.overflow;
+  const previousBodyWidth = body.style.width;
+  const previousBodyHeight = body.style.height;
+  const previousBodyMargin = body.style.margin;
+  const previousBodyPadding = body.style.padding;
+  const previousBodyTextSizeAdjust = body.style.getPropertyValue("text-size-adjust");
+  const previousBodyWebkitTextSizeAdjust = body.style.getPropertyValue("-webkit-text-size-adjust");
+
+  documentElement.style.overflow = "hidden";
+  documentElement.style.width = "100%";
+  documentElement.style.height = "100%";
+  documentElement.style.setProperty("text-size-adjust", "100%");
+  documentElement.style.setProperty("-webkit-text-size-adjust", "100%");
+
+  body.style.overflow = "hidden";
+  body.style.width = "100%";
+  body.style.height = "100%";
+  body.style.margin = "0";
+  body.style.padding = "0";
+  body.style.setProperty("text-size-adjust", "100%");
+  body.style.setProperty("-webkit-text-size-adjust", "100%");
+
+  return () => {
+    documentElement.style.overflow = previousDocumentElementOverflow;
+    documentElement.style.width = previousDocumentElementWidth;
+    documentElement.style.height = previousDocumentElementHeight;
+    documentElement.style.setProperty("text-size-adjust", previousDocumentElementTextSizeAdjust);
+    documentElement.style.setProperty(
+      "-webkit-text-size-adjust",
+      previousDocumentElementWebkitTextSizeAdjust,
+    );
+
+    body.style.overflow = previousBodyOverflow;
+    body.style.width = previousBodyWidth;
+    body.style.height = previousBodyHeight;
+    body.style.margin = previousBodyMargin;
+    body.style.padding = previousBodyPadding;
+    body.style.setProperty("text-size-adjust", previousBodyTextSizeAdjust);
+    body.style.setProperty("-webkit-text-size-adjust", previousBodyWebkitTextSizeAdjust);
+  };
+}
+
+// `html`/`body` bounds are global, so mounted terminals share one lock instead of each taking
+// its own snapshot. Per-instance snapshots only survive LIFO unmounts: with two terminals
+// mounted, the first to unmount restored a snapshot taken before the lock existed (unlocking
+// the document under the terminal still using it) and the last one restored a snapshot that
+// already contained the lock, leaving the page scroll-locked for good.
+let documentBoundsHolderCount = 0;
+let unlockDocumentBoundsStyles: (() => void) | null = null;
+
+function acquireDocumentBoundsStyles(): () => void {
+  documentBoundsHolderCount += 1;
+  if (!unlockDocumentBoundsStyles) {
+    unlockDocumentBoundsStyles = lockDocumentBoundsStyles();
+  }
+  let released = false;
+  return () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    documentBoundsHolderCount -= 1;
+    if (documentBoundsHolderCount === 0) {
+      unlockDocumentBoundsStyles?.();
+      unlockDocumentBoundsStyles = null;
+    }
+  };
 }
 
 function withOverviewRulerBorderHidden(theme: ITheme): ITheme {
@@ -173,7 +378,9 @@ export class TerminalEmulatorRuntime {
   };
   private terminal: Terminal | null = null;
   private fitAddon: FitAddon | null = null;
-  private fitAndEmitResize: ((input?: TerminalResizeRequest) => void) | null = null;
+  private fitAndEmitResize:
+    | ((input?: { force?: boolean; shouldClaim?: boolean }) => boolean)
+    | null = null;
   private lastSize: { rows: number; cols: number } | null = null;
   private cleanup: (() => void) | null = null;
   private outputOperations: TerminalOutputOperation[] = [];
@@ -193,18 +400,14 @@ export class TerminalEmulatorRuntime {
   private readonly inputModeTracker = new TerminalInputModeTracker();
   private lastInputModeState: TerminalInputModeState = this.inputModeTracker.getState();
   private themeBackgroundElements: HTMLElement[] = [];
+  private clipboardPasteQueue: Promise<void> = Promise.resolve();
 
   private handleVisibilityRestore = (): void => {
     if (typeof document !== "undefined" && document.visibilityState !== "visible") {
       return;
     }
 
-    this.fitAndEmitResize?.({ forceRefresh: true, shouldClaim: false });
-    if (typeof window.requestAnimationFrame === "function") {
-      window.requestAnimationFrame(() => {
-        this.fitAndEmitResize?.({ forceRefresh: true, shouldClaim: false });
-      });
-    }
+    this.resizeAfterLayout({ force: true, shouldClaim: false });
   };
 
   setCallbacks(input: { callbacks: TerminalEmulatorRuntimeCallbacks }): void {
@@ -215,8 +418,88 @@ export class TerminalEmulatorRuntime {
     this.pendingModifiers = input.pendingModifiers;
   }
 
-  getInputModeState(): TerminalInputModeState {
-    return this.inputModeTracker.getState();
+  private queueClipboardPaste(operation: () => Promise<void>): void {
+    const queued = this.clipboardPasteQueue.then(operation);
+    this.clipboardPasteQueue = queued.catch(() => {});
+  }
+
+  private async pasteTerminalClipboardImage(
+    terminal: Terminal,
+    image: TerminalClipboardImageSelection,
+  ): Promise<void> {
+    if (this.terminal !== terminal) {
+      return;
+    }
+
+    try {
+      const blob = await image.readBlob();
+      if (this.terminal !== terminal) {
+        return;
+      }
+      if (blob.size > MAX_TERMINAL_CLIPBOARD_IMAGE_BYTES) {
+        this.callbacks.onPasteError?.("image-too-large");
+        return;
+      }
+
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      if (this.terminal !== terminal) {
+        return;
+      }
+
+      const path = await this.callbacks.onPasteImage?.({
+        bytes,
+        mimeType: image.mimeType,
+        fileExtension: image.fileExtension,
+      });
+      if (this.terminal !== terminal) {
+        return;
+      }
+      if (path) {
+        pasteTerminalText(terminal, path, { forceBracketed: true });
+      }
+    } catch {
+      if (this.terminal === terminal) {
+        this.callbacks.onPasteError?.("clipboard-read-failed");
+      }
+    }
+  }
+
+  private forwardWindowsImagePasteShortcut(terminal: Terminal): void {
+    if (this.terminal !== terminal) {
+      return;
+    }
+    void this.callbacks.onTerminalKey?.({
+      key: "v",
+      ctrl: false,
+      shift: false,
+      alt: true,
+      meta: false,
+    });
+  }
+
+  private async pasteWindowsClipboardImage(terminal: Terminal): Promise<void> {
+    const clipboard = navigator.clipboard;
+    if (!clipboard || typeof clipboard.read !== "function" || !this.callbacks.onPasteImage) {
+      this.forwardWindowsImagePasteShortcut(terminal);
+      return;
+    }
+
+    try {
+      const clipboardItems = await clipboard.read();
+      if (this.terminal !== terminal) {
+        return;
+      }
+      const image = findTerminalClipboardImage(clipboardItems);
+      if (!image) {
+        this.forwardWindowsImagePasteShortcut(terminal);
+        return;
+      }
+      await this.pasteTerminalClipboardImage(terminal, image);
+    } catch {
+      if (this.terminal === terminal) {
+        this.callbacks.onPasteError?.("clipboard-read-failed");
+      }
+    }
   }
 
   mount(input: TerminalEmulatorRuntimeMountInput): void {
@@ -232,11 +515,20 @@ export class TerminalEmulatorRuntime {
       convertEol: false,
       cursorBlink: true,
       cursorStyle: "bar",
+      // Hollow the cursor when the pane is blurred so an idle terminal reads as
+      // inactive (matches Orca), instead of a persistent solid bar.
+      cursorInactiveStyle: "outline",
       fontFamily: resolveTerminalFontFamily(input.fontFamily),
       fontSize: resolveTerminalFontSize(input.fontSize),
       lineHeight: 1.0,
+      // Medium weight renders cleaner than xterm's default regular/bold, closing
+      // the subjective sharpness gap against Orca's 500/700 default.
+      fontWeight: 500,
+      fontWeightBold: 700,
       macOptionIsMeta: true,
-      minimumContrastRatio: 1,
+      // Lift washed-out ANSI bright/low-contrast text to a readable floor
+      // (Orca uses 4.5); 1 left dim agent-CLI output hard to read on some themes.
+      minimumContrastRatio: 4.5,
       rescaleOverlappingGlyphs: true,
       scrollbar: {
         width: 8,
@@ -248,6 +540,13 @@ export class TerminalEmulatorRuntime {
     const unicode11Addon = new Unicode11Addon();
     let webglAddon: WebglAddon | null = null;
     let imageAddon: ImageAddon | null = null;
+    let canSignalRendererReady = false;
+    let didSignalRendererReady = false;
+    const signalRendererReady = (): void => {
+      if (!canSignalRendererReady || didSignalRendererReady) return;
+      didSignalRendererReady = true;
+      input.onRendererReady?.();
+    };
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(unicode11Addon);
     terminal.loadAddon(
@@ -303,7 +602,7 @@ export class TerminalEmulatorRuntime {
       webglAddon = null;
       disposeImageAddon();
       // WebGL and DOM renderers can have different cell dimensions.
-      this.fitAndEmitResize?.({ forceRefresh: true, shouldClaim: false });
+      this.fitAndEmitResize?.({ force: true, shouldClaim: false });
     };
 
     // Browser xterm is a renderer only; it never replies to terminal protocol queries.
@@ -341,10 +640,14 @@ export class TerminalEmulatorRuntime {
         imageAddon = new ImageAddon();
         terminal.loadAddon(imageAddon);
         registerProtocolQuerySuppression();
-        this.fitAndEmitResize?.({ forceRefresh: true, shouldClaim: false });
       } catch {
         disposeWebglRenderer();
       }
+      // WebGL and the DOM renderer use different cell metrics. Do not let the
+      // caller request a restore until the renderer swap has produced a real fit;
+      // otherwise a long replay starts at the transient DOM width and reflows mid-parse.
+      canSignalRendererReady = true;
+      this.fitAndEmitResize?.({ force: true, shouldClaim: false });
     });
 
     const restoreDocumentStyles = this.applyDocumentBoundsStyles({
@@ -356,55 +659,51 @@ export class TerminalEmulatorRuntime {
 
     this.terminal = terminal;
     this.fitAddon = fitAddon;
-    window.__paseoTerminal = terminal;
+    window.__byspaceTerminal = terminal;
 
-    const fitAndEmitResize = (resizeInput?: TerminalResizeRequest): void => {
-      const forceRefresh = resizeInput?.forceRefresh ?? false;
+    const fitAndEmitResize = (resizeInput?: {
+      force?: boolean;
+      shouldClaim?: boolean;
+    }): boolean => {
+      const force = resizeInput?.force ?? false;
       const shouldClaim = resizeInput?.shouldClaim ?? true;
-      const forceClaim = resizeInput?.forceClaim ?? false;
       const currentTerminal = this.terminal;
       const currentFitAddon = this.fitAddon;
       if (!currentTerminal || !currentFitAddon) {
-        return;
+        return false;
       }
 
       if (input.root.offsetWidth === 0 || input.root.offsetHeight === 0) {
-        return;
+        return false;
       }
 
       try {
         currentFitAddon.fit();
       } catch {
-        return;
+        return false;
       }
 
       const nextRows = currentTerminal.rows;
       const nextCols = currentTerminal.cols;
       const previous = this.lastSize;
-      if (
-        !forceRefresh &&
-        !forceClaim &&
-        previous &&
-        previous.rows === nextRows &&
-        previous.cols === nextCols
-      ) {
-        return;
+      if (!force && previous && previous.rows === nextRows && previous.cols === nextCols) {
+        signalRendererReady();
+        return true;
       }
 
       this.lastSize = { rows: nextRows, cols: nextCols };
       this.refreshVisibleRows();
-      this.callbacks.onResize?.(
-        createTerminalResizeEvent({
-          rows: nextRows,
-          cols: nextCols,
-          shouldClaim,
-          forceClaim,
-        }),
-      );
+      this.callbacks.onResize?.({
+        rows: nextRows,
+        cols: nextCols,
+        shouldClaim,
+      });
+      signalRendererReady();
+      return true;
     };
     this.fitAndEmitResize = fitAndEmitResize;
 
-    fitAndEmitResize({ forceRefresh: true, shouldClaim: false });
+    fitAndEmitResize({ force: true, shouldClaim: false });
 
     const inputDisposable = terminal.onData((data) => {
       if (this.suppressInput) {
@@ -412,10 +711,45 @@ export class TerminalEmulatorRuntime {
       }
       this.callbacks.onInput?.(data);
     });
+    const selectionDisposable = terminal.onSelectionChange(() => {
+      this.callbacks.onSelectionChange?.(terminal.hasSelection());
+    });
+
+    const pasteEventHandler = (event: ClipboardEvent): void => {
+      const image = event.clipboardData
+        ? findTerminalClipboardImageFile(event.clipboardData.items)
+        : null;
+      if (image) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.queueClipboardPaste(() => this.pasteTerminalClipboardImage(terminal, image));
+        return;
+      }
+
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      if (text.length > 0) {
+        event.preventDefault();
+        event.stopPropagation();
+        pasteTerminalText(terminal, text, {
+          forceBracketed: isWindowsPlatform() && TERMINAL_LINE_BREAK_RE.test(text),
+        });
+      }
+    };
+    input.host.addEventListener("paste", pasteEventHandler, true);
 
     terminal.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown" || event.isComposing) {
         return true;
+      }
+
+      if (isTerminalPasteShortcut(event)) {
+        return true;
+      }
+
+      if (isTerminalWindowsImagePasteShortcut(event)) {
+        event.preventDefault();
+        this.queueClipboardPaste(() => this.pasteWindowsClipboardImage(terminal));
+        return false;
       }
 
       if (!isMac && event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey) {
@@ -424,18 +758,6 @@ export class TerminalEmulatorRuntime {
         // Ctrl+C: copy selection to clipboard if text is selected, otherwise let xterm send SIGINT
         if (key === "c" && terminal.hasSelection()) {
           void navigator.clipboard.writeText(terminal.getSelection());
-          return false;
-        }
-
-        // Ctrl+V: paste from clipboard into terminal
-        if (key === "v") {
-          event.preventDefault();
-          void navigator.clipboard.readText().then((text) => {
-            if (text) {
-              terminal.paste(text);
-            }
-            return;
-          });
           return false;
         }
 
@@ -489,14 +811,12 @@ export class TerminalEmulatorRuntime {
       terminal,
     });
     const resizeObserver = new ResizeObserver(() => {
-      fitAndEmitResize({ shouldClaim: false });
+      fitAndEmitResize({ shouldClaim: true });
     });
     resizeObserver.observe(input.root);
     resizeObserver.observe(input.host);
 
-    const windowResizeHandler = () => {
-      fitAndEmitResize({ shouldClaim: false });
-    };
+    const windowResizeHandler = () => fitAndEmitResize({ shouldClaim: true });
     window.addEventListener("resize", windowResizeHandler);
     const windowFocusHandler = () => {
       this.handleVisibilityRestore();
@@ -509,25 +829,23 @@ export class TerminalEmulatorRuntime {
     document.addEventListener("visibilitychange", documentVisibilityChangeHandler);
 
     const visualViewport = window.visualViewport;
-    const visualViewportResizeHandler = () => {
-      fitAndEmitResize({ shouldClaim: false });
-    };
+    const visualViewportResizeHandler = () => fitAndEmitResize({ shouldClaim: true });
     visualViewport?.addEventListener("resize", visualViewportResizeHandler);
 
     const fitTimeouts = FIT_TIMEOUT_DELAYS_MS.map((delayMs) =>
       window.setTimeout(() => {
-        fitAndEmitResize({ forceRefresh: true, shouldClaim: false });
+        fitAndEmitResize({ force: true, shouldClaim: false });
       }, delayMs),
     );
 
     const fontSet = document.fonts;
     const fontReadyHandler = () => {
-      fitAndEmitResize({ forceRefresh: true, shouldClaim: false });
+      fitAndEmitResize({ force: true, shouldClaim: false });
     };
     fontSet?.addEventListener?.("loadingdone", fontReadyHandler);
     void fontSet?.ready
       .then(() => {
-        fitAndEmitResize({ forceRefresh: true, shouldClaim: false });
+        fitAndEmitResize({ force: true, shouldClaim: false });
         return;
       })
       .catch(() => {
@@ -535,7 +853,7 @@ export class TerminalEmulatorRuntime {
       });
 
     window.setTimeout(() => {
-      fitAndEmitResize({ forceRefresh: true, shouldClaim: false });
+      fitAndEmitResize({ force: true, shouldClaim: false });
     }, 0);
 
     if (input.initialSnapshot) {
@@ -547,6 +865,8 @@ export class TerminalEmulatorRuntime {
     const disposables: TerminalEmulatorRuntimeDisposables = {
       disposeInput: () => {
         inputDisposable.dispose();
+        selectionDisposable.dispose();
+        input.host.removeEventListener("paste", pasteEventHandler, true);
       },
       disconnectResizeObserver: () => {
         resizeObserver.disconnect();
@@ -637,10 +957,6 @@ export class TerminalEmulatorRuntime {
     this.processOutputQueue();
   }
 
-  paste(text: string): void {
-    this.terminal?.paste(text);
-  }
-
   renderSnapshot(input: { state: TerminalState | null; onCommitted?: () => void }): void {
     if (!input.state) {
       this.clear(input);
@@ -671,8 +987,20 @@ export class TerminalEmulatorRuntime {
     this.processOutputQueue();
   }
 
-  resize(input?: TerminalResizeRequest): void {
-    this.fitAndEmitResize?.(input);
+  resize(input?: { force?: boolean; shouldClaim?: boolean }): boolean {
+    return this.fitAndEmitResize?.(input) ?? false;
+  }
+
+  resizeAfterLayout(input?: { force?: boolean; shouldClaim?: boolean }): void {
+    const terminal = this.terminal;
+    const fitSucceeded = this.resize(input);
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(() => {
+        if (this.terminal === terminal) {
+          this.resize(fitSucceeded && input ? { ...input, force: false } : input);
+        }
+      });
+    }
   }
 
   setTheme(input: { theme: ITheme }): void {
@@ -722,7 +1050,7 @@ export class TerminalEmulatorRuntime {
       return;
     }
 
-    this.fitAndEmitResize?.({ forceRefresh: true, shouldClaim: false });
+    this.fitAndEmitResize?.({ force: true });
     this.refreshVisibleRows();
   }
 
@@ -739,6 +1067,14 @@ export class TerminalEmulatorRuntime {
 
   blur(): void {
     this.terminal?.blur();
+  }
+
+  getSelection(): string {
+    return this.terminal?.getSelection() ?? "";
+  }
+
+  clearSelection(): void {
+    this.terminal?.clearSelection();
   }
 
   private refreshVisibleRows(): void {
@@ -792,14 +1128,15 @@ export class TerminalEmulatorRuntime {
 
     this.cleanup?.();
     this.cleanup = null;
-    if (window.__paseoTerminal === this.terminal) {
-      window.__paseoTerminal = undefined;
+    if (window.__byspaceTerminal === this.terminal) {
+      window.__byspaceTerminal = undefined;
     }
     this.terminal = null;
     this.fitAddon = null;
     this.fitAndEmitResize = null;
     this.lastSize = null;
     this.themeBackgroundElements = [];
+    this.clipboardPasteQueue = Promise.resolve();
     this.suppressInput = false;
     this.inputModeDecoder.decode();
     this.inputModeTracker.reset();
@@ -988,76 +1325,11 @@ export class TerminalEmulatorRuntime {
   }
 
   private applyDocumentBoundsStyles(input: { root: HTMLDivElement }): () => void {
-    const documentElement = document.documentElement;
-    const body = document.body;
-    const rootContainer = input.root.parentElement;
-
-    const previousDocumentElementOverflow = documentElement.style.overflow;
-    const previousDocumentElementWidth = documentElement.style.width;
-    const previousDocumentElementHeight = documentElement.style.height;
-    const previousDocumentElementTextSizeAdjust =
-      documentElement.style.getPropertyValue("text-size-adjust");
-    const previousDocumentElementWebkitTextSizeAdjust = documentElement.style.getPropertyValue(
-      "-webkit-text-size-adjust",
-    );
-
-    const previousBodyOverflow = body.style.overflow;
-    const previousBodyWidth = body.style.width;
-    const previousBodyHeight = body.style.height;
-    const previousBodyMargin = body.style.margin;
-    const previousBodyPadding = body.style.padding;
-    const previousBodyTextSizeAdjust = body.style.getPropertyValue("text-size-adjust");
-    const previousBodyWebkitTextSizeAdjust = body.style.getPropertyValue(
-      "-webkit-text-size-adjust",
-    );
-
-    const previousRootOverflow = rootContainer?.style.overflow ?? "";
-    const previousRootWidth = rootContainer?.style.width ?? "";
-    const previousRootHeight = rootContainer?.style.height ?? "";
-
-    documentElement.style.overflow = "hidden";
-    documentElement.style.width = "100%";
-    documentElement.style.height = "100%";
-    documentElement.style.setProperty("text-size-adjust", "100%");
-    documentElement.style.setProperty("-webkit-text-size-adjust", "100%");
-
-    body.style.overflow = "hidden";
-    body.style.width = "100%";
-    body.style.height = "100%";
-    body.style.margin = "0";
-    body.style.padding = "0";
-    body.style.setProperty("text-size-adjust", "100%");
-    body.style.setProperty("-webkit-text-size-adjust", "100%");
-
-    if (rootContainer) {
-      rootContainer.style.overflow = "hidden";
-      rootContainer.style.width = "100%";
-      rootContainer.style.height = "100%";
-    }
-
+    const restoreRootContainer = applyRootContainerBoundsStyles(input.root.parentElement);
+    const releaseDocumentBounds = acquireDocumentBoundsStyles();
     return () => {
-      documentElement.style.overflow = previousDocumentElementOverflow;
-      documentElement.style.width = previousDocumentElementWidth;
-      documentElement.style.height = previousDocumentElementHeight;
-      documentElement.style.setProperty("text-size-adjust", previousDocumentElementTextSizeAdjust);
-      documentElement.style.setProperty(
-        "-webkit-text-size-adjust",
-        previousDocumentElementWebkitTextSizeAdjust,
-      );
-
-      body.style.overflow = previousBodyOverflow;
-      body.style.width = previousBodyWidth;
-      body.style.height = previousBodyHeight;
-      body.style.margin = previousBodyMargin;
-      body.style.padding = previousBodyPadding;
-      body.style.setProperty("text-size-adjust", previousBodyTextSizeAdjust);
-      body.style.setProperty("-webkit-text-size-adjust", previousBodyWebkitTextSizeAdjust);
-
-      if (rootContainer) {
-        rootContainer.style.overflow = previousRootOverflow;
-        rootContainer.style.width = previousRootWidth;
-        rootContainer.style.height = previousRootHeight;
-      }
+      releaseDocumentBounds();
+      restoreRootContainer();
     };
   }
 
@@ -1101,6 +1373,8 @@ export class TerminalEmulatorRuntime {
     terminal: Terminal;
   }): () => void {
     let touchScrollRemainderPx = 0;
+    let longPressTimer: number | null = null;
+    let selectionAnchor: { startIndex: number; endIndex: number } | null = null;
     const measuredLineHeight =
       input.host.querySelector<HTMLElement>(".xterm-rows > div")?.getBoundingClientRect().height ??
       0;
@@ -1113,22 +1387,96 @@ export class TerminalEmulatorRuntime {
       startY: 0,
       lastX: 0,
       lastY: 0,
-      mode: null as "vertical" | "horizontal" | null,
+      mode: null as "vertical" | "horizontal" | "selection" | null,
+    };
+
+    const clearLongPressTimer = (): void => {
+      if (longPressTimer !== null) {
+        window.clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
+
+    const dispatchSelectionMouseEvent = (
+      type: "mousedown" | "mouseup",
+      x: number,
+      y: number,
+    ): boolean => {
+      const terminalElement = input.terminal.element;
+      if (!terminalElement) {
+        return false;
+      }
+      const ownerDocument = terminalElement.ownerDocument;
+      const MouseEventConstructor = ownerDocument.defaultView?.MouseEvent ?? MouseEvent;
+      const forceSelection = input.terminal.modes.mouseTrackingMode !== "none";
+      const event = new MouseEventConstructor(type, {
+        bubbles: true,
+        cancelable: true,
+        clientX: x,
+        clientY: y,
+        button: 0,
+        buttons: type === "mousedown" ? 1 : 0,
+        detail: type === "mousedown" ? 2 : 0,
+        altKey: forceSelection,
+        shiftKey: forceSelection,
+      });
+      (type === "mousedown" ? terminalElement : ownerDocument).dispatchEvent(event);
+      return true;
+    };
+
+    const getTouchBufferRange = (
+      x: number,
+      y: number,
+    ): { startIndex: number; endIndex: number } | null => {
+      const screen = input.host.querySelector<HTMLElement>(".xterm-screen");
+      const cell = input.terminal.dimensions?.css.cell;
+      if (!screen || !cell || cell.width <= 0 || cell.height <= 0) {
+        return null;
+      }
+      const bounds = screen.getBoundingClientRect();
+      const column = Math.max(
+        0,
+        Math.min(input.terminal.cols - 1, Math.floor((x - bounds.left) / cell.width)),
+      );
+      const viewportRow = Math.max(
+        0,
+        Math.min(input.terminal.rows - 1, Math.floor((y - bounds.top) / cell.height)),
+      );
+      const buffer = input.terminal.buffer.active;
+      const absoluteRow = buffer.viewportY + viewportRow;
+      const line = buffer.getLine(absoluteRow);
+      let startColumn = column;
+      let width = line?.getCell(startColumn)?.getWidth() ?? 1;
+      while (width === 0 && startColumn > 0) {
+        startColumn -= 1;
+        width = line?.getCell(startColumn)?.getWidth() ?? 1;
+      }
+      const rowStartIndex = absoluteRow * input.terminal.cols;
+      return {
+        startIndex: rowStartIndex + startColumn,
+        endIndex: rowStartIndex + Math.min(input.terminal.cols, startColumn + Math.max(1, width)),
+      };
+    };
+
+    const finishActiveTouch = (): void => {
+      clearLongPressTimer();
+      if (activeTouch.mode === "selection") {
+        delete input.root.dataset.terminalTouchSelection;
+      }
+      selectionAnchor = null;
+      touchScrollRemainderPx = 0;
+      activeTouch.identifier = -1;
+      activeTouch.mode = null;
     };
 
     const touchStartHandler = (event: TouchEvent) => {
+      finishActiveTouch();
       if (event.touches.length !== 1) {
-        touchScrollRemainderPx = 0;
-        activeTouch.identifier = -1;
-        activeTouch.mode = null;
         return;
       }
 
       const touch = event.touches[0];
       if (!touch) {
-        touchScrollRemainderPx = 0;
-        activeTouch.identifier = -1;
-        activeTouch.mode = null;
         return;
       }
 
@@ -1137,8 +1485,35 @@ export class TerminalEmulatorRuntime {
       activeTouch.startY = touch.clientY;
       activeTouch.lastX = touch.clientX;
       activeTouch.lastY = touch.clientY;
-      activeTouch.mode = null;
-      touchScrollRemainderPx = 0;
+      longPressTimer = window.setTimeout(() => {
+        longPressTimer = null;
+        if (activeTouch.identifier !== touch.identifier || activeTouch.mode !== null) {
+          return;
+        }
+        const previousMacOptionClickForcesSelection =
+          input.terminal.options.macOptionClickForcesSelection;
+        input.terminal.options.macOptionClickForcesSelection = true;
+        try {
+          if (dispatchSelectionMouseEvent("mousedown", touch.clientX, touch.clientY)) {
+            dispatchSelectionMouseEvent("mouseup", touch.clientX, touch.clientY);
+            const range = input.terminal.getSelectionPosition();
+            const touchRange = getTouchBufferRange(touch.clientX, touch.clientY);
+            if (range) {
+              selectionAnchor = {
+                startIndex: range.start.y * input.terminal.cols + range.start.x,
+                endIndex: range.end.y * input.terminal.cols + range.end.x,
+              };
+            } else {
+              selectionAnchor = touchRange;
+            }
+            activeTouch.mode = "selection";
+            input.root.dataset.terminalTouchSelection = "true";
+          }
+        } finally {
+          input.terminal.options.macOptionClickForcesSelection =
+            previousMacOptionClickForcesSelection;
+        }
+      }, TOUCH_SELECTION_LONG_PRESS_MS);
     };
 
     const touchMoveHandler = (event: TouchEvent) => {
@@ -1153,12 +1528,30 @@ export class TerminalEmulatorRuntime {
         return;
       }
 
+      if (activeTouch.mode === "selection") {
+        activeTouch.lastX = touch.clientX;
+        activeTouch.lastY = touch.clientY;
+        const touchRange = getTouchBufferRange(touch.clientX, touch.clientY);
+        if (selectionAnchor && touchRange) {
+          const startIndex = Math.min(selectionAnchor.startIndex, touchRange.startIndex);
+          const endIndex = Math.max(selectionAnchor.endIndex, touchRange.endIndex);
+          input.terminal.select(
+            startIndex % input.terminal.cols,
+            Math.floor(startIndex / input.terminal.cols),
+            endIndex - startIndex,
+          );
+        }
+        event.preventDefault();
+        return;
+      }
+
       const totalDeltaX = touch.clientX - activeTouch.startX;
       const totalDeltaY = touch.clientY - activeTouch.startY;
       if (activeTouch.mode === null) {
         const absX = Math.abs(totalDeltaX);
         const absY = Math.abs(totalDeltaY);
         if (absX > 8 || absY > 8) {
+          clearLongPressTimer();
           activeTouch.mode = absY >= absX ? "vertical" : "horizontal";
         }
       }
@@ -1186,24 +1579,25 @@ export class TerminalEmulatorRuntime {
         (touch) => touch.identifier === activeTouch.identifier,
       );
       if (activeTouchEnded || event.touches.length === 0) {
-        touchScrollRemainderPx = 0;
-        activeTouch.identifier = -1;
-        activeTouch.mode = null;
+        const wasSelecting = activeTouch.mode === "selection";
+        finishActiveTouch();
+        if (wasSelecting) {
+          event.preventDefault();
+        }
       }
     };
 
     const touchCancelHandler = () => {
-      touchScrollRemainderPx = 0;
-      activeTouch.identifier = -1;
-      activeTouch.mode = null;
+      finishActiveTouch();
     };
 
     input.root.addEventListener("touchstart", touchStartHandler, { passive: true });
     input.root.addEventListener("touchmove", touchMoveHandler, { passive: false });
-    input.root.addEventListener("touchend", touchEndHandler, { passive: true });
+    input.root.addEventListener("touchend", touchEndHandler, { passive: false });
     input.root.addEventListener("touchcancel", touchCancelHandler, { passive: true });
 
     return () => {
+      finishActiveTouch();
       input.root.removeEventListener("touchstart", touchStartHandler);
       input.root.removeEventListener("touchmove", touchMoveHandler);
       input.root.removeEventListener("touchend", touchEndHandler);

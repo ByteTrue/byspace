@@ -132,7 +132,7 @@ async function readCursorTokenFromSqlite(homeDir: string, logger: Logger): Promi
   dbPaths.push(join(homeDir, ".config", "Cursor", "User", "globalStorage", "state.vscdb"));
 
   // Held in a variable so TypeScript skips module resolution: @types/node@20 has no
-  // node:sqlite typings yet, while the runtime (Node 22+ / Electron) provides it.
+  // node:sqlite typings yet, while the Node 22+ runtime provides it.
   const sqliteSpecifier: string = "node:sqlite";
   let sqlite: NodeSqliteModule;
   try {

@@ -16,7 +16,7 @@ interface DiagnosticEntry {
 }
 
 export interface DaemonDiagnosticsOptions {
-  paseoHome: string;
+  byspaceHome: string;
   serverId: string | undefined;
   daemonVersion: string | undefined;
   daemonRuntimeConfig: DaemonRuntimeConfig | undefined;
@@ -35,8 +35,6 @@ interface DiagnosticWebSocketRuntimeMetrics {
   peakInflightRequests: number;
   checkoutDiffTargetCount: number;
   checkoutDiffSubscriptionCount: number;
-  checkoutDiffWatcherCount: number;
-  checkoutDiffFallbackRefreshTargetCount: number;
 }
 
 interface DiagnosticAgentRuntimeMetrics {
@@ -61,7 +59,7 @@ const LOG_TAIL_MAX_BYTES = 64 * 1024;
 
 export async function collectDaemonDiagnostics(options: DaemonDiagnosticsOptions): Promise<string> {
   const sections: string[] = [
-    formatSection("Paseo diagnostics", [
+    formatSection("BySpace diagnostics", [
       { label: "Collected at", value: new Date().toISOString() },
       { label: "Server ID", value: options.serverId ?? "unknown" },
       { label: "Daemon version", value: options.daemonVersion ?? "unknown" },
@@ -122,7 +120,7 @@ function collectProcessEntries(options: DaemonDiagnosticsOptions): DiagnosticEnt
     { label: "PATH", value: getEnvValue("PATH", "Path") ?? "unset" },
     { label: "Shell", value: formatDaemonShell() },
     { label: "Uptime", value: formatDurationMs(process.uptime() * 1000) },
-    { label: "Paseo home", value: options.paseoHome },
+    { label: "BySpace home", value: options.byspaceHome },
     { label: "RSS", value: formatBytes(memory.rss) },
     {
       label: "Heap used",
@@ -133,7 +131,7 @@ function collectProcessEntries(options: DaemonDiagnosticsOptions): DiagnosticEnt
 }
 
 function collectRuntimeConfigEntries(options: DaemonDiagnosticsOptions): DiagnosticEntry[] {
-  const relay = options.daemonRuntimeConfig?.getRelayConfig() ?? null;
+  const relay = options.daemonRuntimeConfig?.relay ?? null;
   return [
     { label: "Listen", value: formatListenKind(options.daemonRuntimeConfig?.listen ?? null) },
     { label: "Relay enabled", value: relay ? String(relay.enabled) : "false" },
@@ -156,11 +154,11 @@ function collectSystemEntries(): DiagnosticEntry[] {
 }
 
 async function collectDiskEntries(options: DaemonDiagnosticsOptions): Promise<DiagnosticEntry[]> {
-  const stats = await statfs(options.paseoHome);
+  const stats = await statfs(options.byspaceHome);
   const freeBytes = stats.bavail * stats.bsize;
   const totalBytes = stats.blocks * stats.bsize;
   return [
-    { label: "Path", value: options.paseoHome },
+    { label: "Path", value: options.byspaceHome },
     { label: "Free", value: `${formatBytes(freeBytes)} / ${formatBytes(totalBytes)}` },
   ];
 }
@@ -293,10 +291,6 @@ function collectWebSocketRuntimeEntries(options: DaemonDiagnosticsOptions): Diag
       value: [
         `targets=${formatNumberMetric(runtime.checkoutDiffTargetCount)}`,
         `subscriptions=${formatNumberMetric(runtime.checkoutDiffSubscriptionCount)}`,
-        `watchers=${formatNumberMetric(runtime.checkoutDiffWatcherCount)}`,
-        `fallbackRefreshTargets=${formatNumberMetric(
-          runtime.checkoutDiffFallbackRefreshTargetCount,
-        )}`,
       ].join(", "),
     },
     {
@@ -413,7 +407,7 @@ async function checkTool(command: string, args: string[]): Promise<string> {
 }
 
 async function safeLogTailSection(options: DaemonDiagnosticsOptions): Promise<string> {
-  const logPath = path.join(options.paseoHome, "daemon.log");
+  const logPath = path.join(options.byspaceHome, "daemon.log");
   try {
     const tail = await tailFile(logPath, LOG_TAIL_LINES, LOG_TAIL_MAX_BYTES);
     return ["Daemon log tail", `  Path: ${logPath}`, tail ? tail : "  No log lines found"].join(
@@ -536,8 +530,8 @@ export function redactDiagnostic(
   let redacted = value;
   const sensitiveValues = [
     options?.daemonRuntimeConfig?.listen,
-    options?.daemonRuntimeConfig?.getRelayConfig()?.endpoint,
-    options?.daemonRuntimeConfig?.getRelayConfig()?.publicEndpoint,
+    options?.daemonRuntimeConfig?.relay?.endpoint,
+    options?.daemonRuntimeConfig?.relay?.publicEndpoint,
   ].filter((item): item is string => Boolean(item));
 
   for (const sensitive of sensitiveValues) {
@@ -545,7 +539,7 @@ export function redactDiagnostic(
   }
 
   return redacted
-    .replace(/paseo:\/\/\S+/gi, "paseo://[redacted]")
+    .replace(/byspace:\/\/\S+/gi, "byspace://[redacted]")
     .replace(
       /([?&](?:password|token|secret|key|publicKey|daemonPublicKeyB64)=)[^&\s"']+/gi,
       "$1[redacted]",

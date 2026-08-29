@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { setImmediate as waitForImmediate } from "node:timers/promises";
 
-import type { PaseoToolCatalog } from "../../tools/types.js";
 import type { OmpNoTurnScheduler, OmpProviderIdleScheduler } from "./agent.js";
 import type { OmpUsagePollScheduler } from "./usage-poller.js";
 import { OmpHarness } from "./test-utils/omp-harness.js";
@@ -34,24 +33,12 @@ class ManualIdleScheduler implements OmpProviderIdleScheduler {
 
 class ManualNoTurnScheduler implements OmpNoTurnScheduler {
   private settleResolve: (() => void) | null = null;
-  private aborted = false;
 
   waitForSettle(signal: AbortSignal): Promise<void> {
-    if (signal.aborted) {
-      this.aborted = true;
-      return Promise.resolve();
-    }
+    if (signal.aborted) return Promise.resolve();
     return new Promise((resolve) => {
       this.settleResolve = resolve;
-      signal.addEventListener(
-        "abort",
-        () => {
-          this.aborted = true;
-          this.settleResolve = null;
-          resolve();
-        },
-        { once: true },
-      );
+      signal.addEventListener("abort", resolve, { once: true });
     });
   }
 
@@ -60,10 +47,6 @@ class ManualNoTurnScheduler implements OmpNoTurnScheduler {
     if (!resolve) throw new Error("OMP has not requested a no-turn settle wait");
     this.settleResolve = null;
     resolve();
-  }
-
-  wasAborted(): boolean {
-    return this.aborted;
   }
 }
 
@@ -89,40 +72,31 @@ class ManualUsagePollScheduler implements OmpUsagePollScheduler {
   }
 }
 
-function createToolCatalog(): PaseoToolCatalog {
-  return {
-    tools: new Map([
-      [
-        "create_agent",
-        {
-          name: "create_agent",
-          description: "Create a Paseo agent.",
-          handler: async () => ({ content: [] }),
-        },
-      ],
-    ]),
-    getTool: () => undefined,
-    executeTool: async () => ({ content: [] }),
-  };
-}
-
 describe("OMP agent client and session", () => {
-  test("owns launch configuration and registers native host tools", async () => {
+  test("owns launch configuration", async () => {
     const omp = new OmpHarness();
-    await omp.start({ modeId: "ask" }, createToolCatalog());
+    await omp.start({ modeId: "ask" });
 
     expect(omp.launchConfiguration()).toEqual({
-      cwd: "/tmp/paseo-omp-agent-test",
+      cwd: "/tmp/byspace-omp-agent-test",
       protocolMode: "rpc-ui",
       modeId: "ask",
       argv: ["omp", "--mode", "rpc-ui", "--approval-mode", "always-ask"],
     });
-    expect(omp.registeredHostTools()).toEqual([
-      [expect.objectContaining({ name: "create_agent" })],
-    ]);
     expect(omp.capabilities()).toMatchObject({
       supportsMcpServers: false,
-      supportsNativePaseoTools: true,
+    });
+  });
+
+  test("launches with write approval mode", async () => {
+    const omp = new OmpHarness();
+    await omp.start({ modeId: "write" });
+
+    expect(omp.launchConfiguration()).toEqual({
+      cwd: "/tmp/byspace-omp-agent-test",
+      protocolMode: "rpc-ui",
+      modeId: "write",
+      argv: ["omp", "--mode", "rpc-ui", "--approval-mode", "write"],
     });
   });
 
@@ -133,21 +107,9 @@ describe("OMP agent client and session", () => {
     expect(omp.launchConfiguration().argv).toEqual(expect.arrayContaining(["--thinking", "max"]));
   });
 
-  test("launches with write approval mode", async () => {
-    const omp = new OmpHarness();
-    await omp.start({ modeId: "write" });
-
-    expect(omp.launchConfiguration()).toEqual({
-      cwd: "/tmp/paseo-omp-agent-test",
-      protocolMode: "rpc-ui",
-      modeId: "write",
-      argv: ["omp", "--mode", "rpc-ui", "--approval-mode", "write"],
-    });
-  });
-
   test("passes --thinking when a thinking option is provided", async () => {
     const omp = new OmpHarness();
-    await omp.start({ modeId: "ask", thinkingOptionId: "xhigh" }, createToolCatalog());
+    await omp.start({ modeId: "ask", thinkingOptionId: "xhigh" });
 
     expect(omp.launchConfiguration().argv).toEqual([
       "omp",
@@ -173,50 +135,6 @@ describe("OMP agent client and session", () => {
     ]);
     expect(omp.eventTypes().slice(0, 2)).toEqual(["turn_started", "timeline"]);
     expect(omp.completedTurnCount()).toBe(1);
-  });
-
-  test("streams OMP advisor messages as distinct tool-call blocks", async () => {
-    const omp = new OmpHarness();
-    await omp.start();
-
-    await omp.runPromptWithCustomMessage(
-      "review this",
-      {
-        role: "custom",
-        content: '<advisory severity="concern">Exercise the failure path.</advisory>',
-        customType: "advisor",
-        id: "advisor-live-1",
-        display: true,
-        details: {
-          notes: [{ note: "Exercise the failure path.", severity: "concern" }],
-        },
-      },
-      "fixed",
-    );
-
-    expect(omp.timeline()).toEqual([
-      { type: "user_message", text: "review this", messageId: "user-1" },
-      {
-        type: "tool_call",
-        callId: "omp-advisor:advisor-live-1",
-        name: "advisor",
-        status: "completed",
-        detail: {
-          type: "plain_text",
-          label: "Advisor · 1 note",
-          text: "[concern] Exercise the failure path.",
-          icon: "brain",
-        },
-        metadata: {
-          synthetic: true,
-          source: "omp_advisor",
-          noteCount: 1,
-          blockerCount: 0,
-        },
-        error: null,
-      },
-      { type: "assistant_message", text: "fixed", messageId: "omp-assistant-1" },
-    ]);
   });
 
   test("completes a streamed assistant turn when agent_end omits messages", async () => {
@@ -356,53 +274,6 @@ describe("OMP agent client and session", () => {
     ]);
   });
 
-  test("renders a live system-notice custom message as a synthetic tool call", async () => {
-    const omp = new OmpHarness();
-    await omp.start();
-
-    await omp.runPrompt("hello OMP", "done");
-    omp
-      .runtime()
-      .acceptCustomMessage(
-        [
-          "<system-notice>",
-          "Background job DocsSmokeTwo has completed.",
-          '<task-result id="DocsSmokeTwo" agent="explore" status="completed" duration="21.6s">',
-          "<output>done</output>",
-          "</task-result>",
-          "</system-notice>",
-        ].join("\n"),
-      );
-    omp.runtime().acceptCustomMessage("plain custom status text");
-
-    expect(omp.timeline().filter((item) => item.type === "tool_call")).toMatchObject([
-      { callId: "omp-notice:DocsSmokeTwo", name: "task_notification", status: "completed" },
-    ]);
-    // Non-notice custom messages still fall through as assistant messages.
-    expect(omp.timeline().filter((item) => item.type === "assistant_message")).toMatchObject([
-      { text: "done" },
-      { text: "plain custom status text" },
-    ]);
-  });
-
-  test("does not complete a queued model turn from OMP's local-only hint", async () => {
-    const omp = new OmpHarness();
-    await omp.start();
-
-    await expect(
-      omp.runPromptAfterFalseLocalOnlyHint("hello OMP", "queued model turn completed"),
-    ).resolves.toMatchObject({ finalText: "queued model turn completed" });
-    expect(omp.completedTurnCount()).toBe(1);
-  });
-
-  test("completes a local-only prompt when no OMP turn begins", async () => {
-    const omp = new OmpHarness();
-    await omp.start();
-
-    await expect(omp.runPromptWithoutTurn("/model")).resolves.toMatchObject({ finalText: "" });
-    expect(omp.completedTurnCount()).toBe(1);
-  });
-
   test("waits for a delayed queued model turn after OMP's local-only result", async () => {
     const omp = new OmpHarness();
     await omp.start();
@@ -411,10 +282,8 @@ describe("OMP agent client and session", () => {
       "hello OMP",
       "delayed queued model turn completed",
     );
-
     expect(completion.completedBeforeTurn).toBe(false);
     expect(completion.result).toMatchObject({ finalText: "delayed queued model turn completed" });
-    expect(omp.completedTurnCount()).toBe(1);
   });
 
   test("completes an async local-only result after the settle window", async () => {
@@ -426,48 +295,16 @@ describe("OMP agent client and session", () => {
     expect(prompt.completed()).toBe(false);
     scheduler.settle();
     await expect(prompt.completion).resolves.toMatchObject({ finalText: "" });
-    expect(omp.completedTurnCount()).toBe(1);
   });
 
-  test("cancels an async local-only settle when the OMP session closes", async () => {
-    const scheduler = new ManualNoTurnScheduler();
-    const omp = new OmpHarness({ noTurnScheduler: scheduler });
-    await omp.start();
-    const prompt = await omp.startPromptWithFalseLocalOnlyResult("local-only");
-
-    await omp.close();
-
-    expect(scheduler.wasAborted()).toBe(true);
-    expect(prompt.completed()).toBe(false);
-    expect(omp.completedTurnCount()).toBe(0);
-  });
-
-  test("preserves a correlated invoked result over a local-only prompt ack", async () => {
+  test("does not complete a queued model turn from OMP's local-only hint", async () => {
     const omp = new OmpHarness();
     await omp.start();
 
-    const completion = await omp.runPromptAfterCorrelatedTrueResult(
-      "hello OMP",
-      "correlated model turn completed",
-    );
-
-    expect(completion.completedBeforeTurn).toBe(false);
-    expect(completion.result).toMatchObject({ finalText: "correlated model turn completed" });
+    await expect(
+      omp.runPromptAfterFalseLocalOnlyHint("hello OMP", "queued model turn completed"),
+    ).resolves.toMatchObject({ finalText: "queued model turn completed" });
     expect(omp.completedTurnCount()).toBe(1);
-  });
-
-  test("completes an autonomous OMP turn without a foreground turn ID", async () => {
-    const omp = new OmpHarness();
-    await omp.start();
-
-    await omp.runAutonomousTurn("autonomous turn completed");
-
-    expect(omp.completedTurnCount()).toBe(1);
-    expect(omp.timeline()).toContainEqual({
-      type: "assistant_message",
-      text: "autonomous turn completed",
-      messageId: "omp-assistant-1",
-    });
   });
 
   test("resumes an OMP session and replays its history", async () => {
@@ -484,7 +321,7 @@ describe("OMP agent client and session", () => {
       cwd: "/workspace/resumed",
       protocolMode: "rpc-ui",
       modeId: "ask",
-      session: expect.stringMatching(/[\\/]paseo-omp-resume-.*[\\/]session\.jsonl$/),
+      session: expect.stringMatching(/[\\/]byspace-omp-resume-.*[\\/]session\.jsonl$/),
       argv: [
         "omp",
         "--mode",
@@ -494,7 +331,7 @@ describe("OMP agent client and session", () => {
         "--thinking",
         "high",
         "--session",
-        expect.stringMatching(/[\\/]paseo-omp-resume-.*[\\/]session\.jsonl$/),
+        expect.stringMatching(/[\\/]byspace-omp-resume-.*[\\/]session\.jsonl$/),
       ],
     });
     await expect(omp.history()).resolves.toEqual([

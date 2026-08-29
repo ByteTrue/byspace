@@ -1,10 +1,10 @@
 # Service Proxy
 
-Paseo proxies HTTP traffic to services running inside your workspaces. Localhost service URLs are always enabled; optional public aliases and a separate service-only listener can be layered on through config.
+BySpace proxies HTTP traffic to services running inside your workspaces. Localhost service URLs are always enabled; optional public aliases and a separate service-only listener can be layered on through config.
 
 ## How it works
 
-When a `paseo.json` script of `"type": "service"` starts, Paseo assigns it a local port and registers a route in the service proxy. Incoming requests whose `Host` header matches the script's generated hostname are forwarded to that port.
+When a `byspace.json` script of `"type": "service"` starts, BySpace assigns it a local port and registers a route in the service proxy. Incoming requests whose `Host` header matches the script's generated hostname are forwarded to that port.
 
 The generated hostname is built from the script name, branch, and project:
 
@@ -24,23 +24,47 @@ If the branch is `main` or `master`, the branch segment is omitted:
 dev--feature-auth--miniweb.localhost
 ```
 
-Local and public routes use one combined leftmost label (`script--branch--project`). This keeps the hostname compatible with normal single-level wildcard DNS and TLS. If the combined label would exceed DNS's 63-character label limit, Paseo truncates it with a deterministic hash suffix to avoid collisions.
+Local and public routes use one combined leftmost label (`script--branch--project`). This keeps the hostname compatible with normal single-level wildcard DNS and TLS. If the combined label would exceed DNS's 63-character label limit, BySpace truncates it with a deterministic hash suffix to avoid collisions.
 
 ## Managing workspace scripts
 
-Configured `paseo.json` scripts can be managed without addressing their backing terminal directly:
+Configured `byspace.json` scripts can be managed without addressing their backing terminal directly:
 
 ```bash
-paseo script ls [--cwd <path> | --workspace <workspace-id>]
-paseo script start <name> [--cwd <path> | --workspace <workspace-id>]
-paseo script stop <name> [--cwd <path> | --workspace <workspace-id>]
+byspace script ls [--cwd <path> | --workspace <workspace-id>]
+byspace script start <name> [--cwd <path> | --workspace <workspace-id>]
+byspace script stop <name> [--cwd <path> | --workspace <workspace-id>]
 ```
 
-The commands return the same script metadata shown by the workspace: lifecycle, service port, proxy URLs, health, exit code, and supervised terminal ID. `stop` terminates the managed terminal rather than only removing the proxy route, so normal script lifecycle cleanup remains authoritative. MCP exposes matching `list_workspace_scripts`, `start_workspace_script`, and `stop_workspace_script` tools; those require an explicit workspace ID.
+The commands return the same script metadata shown by the workspace: lifecycle, service port, proxy URLs, health, exit code, and supervised terminal ID. `stop` terminates the managed terminal rather than only removing the proxy route, so normal script lifecycle cleanup remains authoritative. MCP exposes matching `list_workspace_scripts`, `start_workspace_script`, and `stop_workspace_script` tools; those require an explicit workspace ID. An agent session with restricted cwd authority may only target its own workspace.
+
+## Service port allocation
+
+By default, BySpace asks the operating system for a free port. To constrain allocation globally, add `servicePorts` under `worktrees` in `~/.byspace/config.json`:
+
+```json
+{
+  "worktrees": {
+    "servicePorts": { "range": "3000-3999" }
+  }
+}
+```
+
+A repository can override the global policy with `worktree.servicePorts` in `byspace.json`. Use either an inclusive `range`, or a `portScript` executable that prints one TCP port:
+
+```json
+{
+  "worktree": {
+    "servicePorts": { "portScript": "./scripts/allocate-port" }
+  }
+}
+```
+
+The script runs without a shell from the workspace directory. It receives `scriptName`, `workspaceId`, `branchName`, and workspace path as positional arguments and the same values through `BYSPACE_SCRIPTNAME`, `BYSPACE_WORKSPACE_ID`, `BYSPACE_BRANCH_NAME`, and `BYSPACE_WORKTREE_PATH`. Script execution is capped at 10 seconds and 1 KiB of output. A repository policy takes precedence over the global policy; `portScript` takes precedence over `range` when both are present.
 
 ## Configuration
 
-Add a `serviceProxy` block under `daemon` in `~/.paseo/config.json`:
+Add a `serviceProxy` block under `daemon` in `~/.byspace/config.json`:
 
 ```json
 {
@@ -48,7 +72,7 @@ Add a `serviceProxy` block under `daemon` in `~/.paseo/config.json`:
   "daemon": {
     "serviceProxy": {
       "listen": "0.0.0.0:8080",
-      "publicBaseUrl": "https://paseoapps.my.domain.com"
+      "publicBaseUrl": "https://byspaceapps.my.domain.com"
     }
   }
 }
@@ -63,19 +87,19 @@ Add a `serviceProxy` block under `daemon` in `~/.paseo/config.json`:
 
 ## DNS and reverse proxy setup
 
-For generated URLs to be reachable, you need wildcard DNS pointing to the machine running the Paseo daemon.
+For generated URLs to be reachable, you need wildcard DNS pointing to the machine running the BySpace daemon.
 
-**Example:** to expose services at `https://dev--miniweb.paseoapps.my.domain.com` where the daemon host is `10.1.1.1`:
+**Example:** to expose services at `https://dev--miniweb.byspaceapps.my.domain.com` where the daemon host is `10.1.1.1`:
 
 1. Configure a wildcard DNS record:
 
    ```
-   *.paseoapps.my.domain.com  →  10.1.1.1
+   *.byspaceapps.my.domain.com  →  10.1.1.1
    ```
 
-2. Set `publicBaseUrl` to `https://paseoapps.my.domain.com` in your config.
+2. Set `publicBaseUrl` to `https://byspaceapps.my.domain.com` in your config.
 
-3. If you put a reverse proxy (nginx, Caddy, Traefik, etc.) in front of Paseo, point it at either the daemon listener or the optional service-only listener and ensure it forwards the `Host` header unchanged. The proxy uses the `Host` header to route requests to the correct service — rewriting it will break routing.
+3. If you put a reverse proxy (nginx, Caddy, Traefik, etc.) in front of BySpace, point it at either the daemon listener or the optional service-only listener and ensure it forwards the `Host` header unchanged. The proxy uses the `Host` header to route requests to the correct service — rewriting it will break routing.
 
 Public service URLs expose the workspace service itself. Daemon password authentication protects daemon APIs; it does not protect proxied dev services.
 
@@ -90,14 +114,14 @@ If the same reverse proxy serves the daemon web UI over HTTPS, it must also set 
 }
 ```
 
-`PASEO_TRUSTED_PROXIES` accepts the same comma-separated values, for example `loopback,172.16.0.0/12`. Use `true` only when the final trusted proxy overwrites client-supplied `X-Forwarded-*` headers.
+`BYSPACE_TRUSTED_PROXIES` accepts the same comma-separated values, for example `loopback,172.16.0.0/12`. Use `true` only when the final trusted proxy overwrites client-supplied `X-Forwarded-*` headers.
 
 Nginx example:
 
 ```nginx
 server {
     listen 443 ssl;
-    server_name *.paseoapps.my.domain.com;
+    server_name *.byspaceapps.my.domain.com;
 
     location / {
         proxy_pass http://10.1.1.1:8080;
@@ -109,9 +133,15 @@ server {
 
 Nginx's `$host` drops the port. If you terminate on a non-default port, use `$http_host` instead so the port survives — that is what "forwards the `Host` header unchanged" means here.
 
+## WebSockets
+
+A proxied service keeps its own WebSockets, including the HMR sockets a dev server opens on paths it picks itself (Metro uses `/hot` and `/message`, Vite uses `/ws`). The daemon serves its own protocol socket on `/ws` from the same listener, so ownership is decided before the path: an upgrade addressed to a registered service hostname always goes to that service, and only what no service claimed can reach the daemon socket. An upgrade nobody owns is answered with `400 Bad Request`.
+
+This matters because a rejected HMR handshake is not a degraded experience — dev clients reload the page and try again, so the page reload-loops and never becomes usable.
+
 ## Forwarded headers
 
-Paseo sets these when it forwards a request to a workspace service:
+BySpace sets these when it forwards a request to a workspace service:
 
 | Header              | Value                                                                                                                                   |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -120,13 +150,11 @@ Paseo sets these when it forwards a request to a workspace service:
 | `X-Forwarded-For`   | The immediate peer address. Replaces any existing chain, so behind your own reverse proxy this is the proxy's address, not the client's |
 | `X-Forwarded-Port`  | The port from the `Host` header when it has one, otherwise whatever your proxy already set                                              |
 
-`X-Forwarded-Port` follows the same trust rule as `X-Forwarded-Host`: the authority Paseo observed wins. When the `Host` header carries a port, that port is reported and replaces any inbound `X-Forwarded-Port`, so a client cannot forge one. When `Host` carries no port there is nothing to observe, so a value your reverse proxy set survives untouched — that is the case where nginx's `$host` drops the port and `X-Forwarded-Port` is the only source. Paseo never derives the port from the scheme. Any other `X-Forwarded-*` header your proxy sends is passed through untouched.
-
-Services that build absolute URLs should prefer `Host` or `X-Forwarded-Host`.
+`X-Forwarded-Port` follows the same trust rule as `X-Forwarded-Host`: the authority BySpace observed wins. When the `Host` header carries a port, that port replaces any inbound `X-Forwarded-Port`. When `Host` carries no port there is nothing to derive, so a value your reverse proxy set survives untouched — the case where nginx's `$host` drops the port and `X-Forwarded-Port` is the only source. BySpace never derives the port from the scheme. Services that build absolute URLs should prefer `Host` or `X-Forwarded-Host`.
 
 ### The forwarded authority is not authenticated
 
-Route lookup normalizes the port away before matching a service hostname, so a client can address the daemon with any port in `Host` and still reach the service. That port is what lands in `X-Forwarded-Host` and `X-Forwarded-Port`. Paseo also does not check whether an inbound `X-Forwarded-Port` came from a proxy in `trustedProxies` — when `Host` carries no port, a client-supplied value is passed through.
+Route lookup normalizes the port away before matching a service hostname, so a client can address the daemon with any port in `Host` and still reach the service. That port lands in `X-Forwarded-Host` and `X-Forwarded-Port`. BySpace also does not check whether an inbound `X-Forwarded-Port` came from a proxy in `trustedProxies` — when `Host` carries no port, a client-supplied value is passed through.
 
 Treat the forwarded authority as client-influenced input. A service that builds password reset links, absolute redirects, or cached URLs from it should pin its own public origin in configuration rather than deriving one from request headers. This is not specific to `X-Forwarded-Port`: the `Host` header has always carried a client-chosen port.
 
@@ -134,8 +162,8 @@ Treat the forwarded authority as client-influenced input. A service that builds 
 
 The listen address and public base URL can also be set via environment variables, which take precedence over `config.json`:
 
-| Variable                              | Description                                                               |
-| ------------------------------------- | ------------------------------------------------------------------------- |
-| `PASEO_SERVICE_PROXY_ENABLED`         | Compatibility shim; `false` suppresses optional public/listen layers only |
-| `PASEO_SERVICE_PROXY_LISTEN`          | Starts the optional service-only listener, e.g. `0.0.0.0:8080`            |
-| `PASEO_SERVICE_PROXY_PUBLIC_BASE_URL` | Adds public service aliases and links                                     |
+| Variable                                | Description                                                               |
+| --------------------------------------- | ------------------------------------------------------------------------- |
+| `BYSPACE_SERVICE_PROXY_ENABLED`         | Compatibility shim; `false` suppresses optional public/listen layers only |
+| `BYSPACE_SERVICE_PROXY_LISTEN`          | Starts the optional service-only listener, e.g. `0.0.0.0:8080`            |
+| `BYSPACE_SERVICE_PROXY_PUBLIC_BASE_URL` | Adds public service aliases and links                                     |

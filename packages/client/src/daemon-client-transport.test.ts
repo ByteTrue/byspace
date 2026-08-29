@@ -1,22 +1,52 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, test, vi } from "vitest";
+import { createEncryptedTransport } from "./daemon-client-relay-e2ee-transport.js";
 import {
-  createEncryptedTransport,
-  createWebSocketTransportFactory,
   decodeMessageData,
   describeTransportClose,
   describeTransportError,
   encodeUtf8String,
   extractRelayMessage,
-} from "./daemon-client-transport.js";
+} from "./daemon-client-transport-utils.js";
+import {
+  createWebSocketTransportFactory,
+  defaultWebSocketFactory,
+} from "./daemon-client-websocket-transport.js";
 
 const createClientChannelMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@getpaseo/relay/e2ee", () => ({
+vi.mock("@bytetrue/byspace-relay/e2ee", () => ({
   createClientChannel: createClientChannelMock,
 }));
 
 describe("daemon-client transport helpers", () => {
+  test("defaultWebSocketFactory uses only the standard browser constructor arguments", () => {
+    const constructorSpy = vi.fn();
+    class BrowserWebSocket {
+      readonly readyState = 1;
+
+      constructor(_url: string, _protocols?: string | string[]) {
+        constructorSpy(...arguments);
+      }
+
+      send(): void {}
+      close(): void {}
+    }
+    vi.stubGlobal("WebSocket", BrowserWebSocket);
+
+    defaultWebSocketFactory("ws://relay.example", { headers: { "X-Custom": "relay" } });
+    defaultWebSocketFactory("ws://direct.example", {
+      headers: { "X-Custom": "direct" },
+      protocols: ["byspace.bearer.secret"],
+    });
+
+    expect(constructorSpy).toHaveBeenNthCalledWith(1, "ws://relay.example");
+    expect(constructorSpy).toHaveBeenNthCalledWith(2, "ws://direct.example", [
+      "byspace.bearer.secret",
+    ]);
+    vi.unstubAllGlobals();
+  });
+
   test("createEncryptedTransport closes handshake failures with browser-safe code", async () => {
     createClientChannelMock.mockReset();
     createClientChannelMock.mockRejectedValueOnce(new Error("handshake failed"));
@@ -87,12 +117,12 @@ describe("daemon-client transport helpers", () => {
     createWebSocketTransportFactory(socketFactory)({
       url: "ws://example.test",
       headers: { Authorization: "Bearer shared-secret" },
-      protocols: ["paseo.bearer.shared-secret"],
+      protocols: ["byspace.bearer.shared-secret"],
     });
 
     expect(socketFactory).toHaveBeenCalledWith("ws://example.test", {
       headers: { Authorization: "Bearer shared-secret" },
-      protocols: ["paseo.bearer.shared-secret"],
+      protocols: ["byspace.bearer.shared-secret"],
     });
   });
 

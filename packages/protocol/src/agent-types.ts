@@ -471,16 +471,6 @@ export type JsonValue =
 
 export type ProviderOptions = Record<string, JsonValue>;
 
-export interface McpToolRef {
-  kind: "mcp";
-  server: string;
-  tool: string;
-}
-
-export interface ToolPolicy {
-  preapproved: McpToolRef[];
-}
-
 export interface AgentSessionConfig {
   provider: AgentProvider;
   cwd: string;
@@ -495,7 +485,6 @@ export interface AgentSessionConfig {
   featureValues?: Record<string, unknown>;
   title?: string | null;
   providerOptions?: ProviderOptions;
-  toolPolicy?: ToolPolicy;
   mcpServers?: Record<string, McpServerConfig>;
   /**
    * Internal agents are hidden from listings and don't trigger notifications.

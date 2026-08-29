@@ -26,14 +26,14 @@ afterEach(async () => {
 });
 
 async function createClaudeConfigDir(settings: unknown): Promise<string> {
-  const configDir = await fs.mkdtemp(path.join(os.tmpdir(), "paseo-claude-models-"));
+  const configDir = await fs.mkdtemp(path.join(os.tmpdir(), "byspace-claude-models-"));
   createdClaudeConfigDirs.push(configDir);
   await fs.writeFile(path.join(configDir, "settings.json"), JSON.stringify(settings, null, 2));
   return configDir;
 }
 
 async function createClaudeConfigDirWithRawSettings(settings: string): Promise<string> {
-  const configDir = await fs.mkdtemp(path.join(os.tmpdir(), "paseo-claude-models-"));
+  const configDir = await fs.mkdtemp(path.join(os.tmpdir(), "byspace-claude-models-"));
   createdClaudeConfigDirs.push(configDir);
   await fs.writeFile(path.join(configDir, "settings.json"), settings);
   return configDir;
@@ -164,11 +164,8 @@ describe("getClaudeModels", () => {
   });
 
   it.each([
-    ["claude-opus-5", true, "high"],
-    ["claude-opus-5-20260724", true, "high"],
     ["claude-sonnet-5", true, "high"],
     ["claude-sonnet-5[1m]", true, "high"],
-    ["claude-sonnet-5-20260101", true, "high"],
     ["claude-fable-5", false, "high"],
     ["claude-haiku-4-5", false, undefined],
     ["openrouter/anthropic/claude-opus-4-8", false, undefined],
@@ -251,7 +248,7 @@ describe("ClaudeAgentClient.fetchCatalog", () => {
   });
 
   it("falls back to hardcoded models when settings.json is missing", async () => {
-    const configDir = await fs.mkdtemp(path.join(os.tmpdir(), "paseo-claude-models-"));
+    const configDir = await fs.mkdtemp(path.join(os.tmpdir(), "byspace-claude-models-"));
     createdClaudeConfigDirs.push(configDir);
     vi.stubEnv("CLAUDE_CONFIG_DIR", configDir);
     const client = createCatalogClient();
@@ -496,11 +493,5 @@ describe("claudeManifestModelSupportsFastMode", () => {
     expect(normalizeClaudeManifestModelId("openrouter/anthropic/claude-opus-4-8")).toBeNull();
     expect(claudeManifestModelSupportsFastMode("openrouter/anthropic/claude-opus-4-8")).toBe(false);
     expect(claudeManifestModelSupportsFastMode("claude-opus-4-8-20260101")).toBe(true);
-  });
-
-  it("supports fast mode on Opus 5 but not on other Claude 5 models", () => {
-    expect(claudeManifestModelSupportsFastMode("claude-opus-5")).toBe(true);
-    expect(claudeManifestModelSupportsFastMode("claude-sonnet-5")).toBe(false);
-    expect(claudeManifestModelSupportsFastMode("claude-fable-5")).toBe(false);
   });
 });

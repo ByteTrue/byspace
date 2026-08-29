@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
-import { Platform, type View } from "react-native";
+import type { View } from "react-native";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useDismissKeyboardOnOpen } from "@/components/ui/keyboard-dismiss";
 import {
@@ -23,9 +23,6 @@ export type MenuPresentation = "popover" | "sheet";
 
 /** What a menu does on a compact screen. Wide screens are always a popover. */
 export type MenuCompactMode = "popover" | "sheet";
-
-/** How long UIKit is given to finish removing the menu surface before an action runs. */
-export const IOS_TEARDOWN_GRACE_MS = 250;
 
 export interface MenuContextValue {
   open: boolean;
@@ -135,18 +132,7 @@ export function useMenuState({
       }
 
       setOpen(false);
-      if (!onSelect) return;
-
-      if (Platform.OS === "ios") {
-        // Native presenters such as PHPicker can hang if launched while UIKit is still
-        // tearing down the surface this menu was drawn in. The wait is timed rather than
-        // driven by the surface's own dismissal callback: both surfaces unmount as soon as
-        // the menu closes, so any such callback is racing its own removal and usually loses.
-        setTimeout(onSelect, IOS_TEARDOWN_GRACE_MS);
-        return;
-      }
-
-      onSelect();
+      onSelect?.();
     },
     [setOpen],
   );

@@ -1,1 +1,1 @@
-export { DiffSurface } from "./surface.native";
+export { DiffSurface } from "./surface.web";

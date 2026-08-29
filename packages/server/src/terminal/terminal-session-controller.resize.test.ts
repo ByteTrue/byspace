@@ -1,19 +1,16 @@
 import { describe, expect, test } from "vitest";
-
 import {
   TerminalStreamOpcode,
   encodeTerminalResizePayload,
   type TerminalStreamFrame,
-} from "@getpaseo/protocol/binary-frames/index";
-import type { SessionOutboundMessage, TerminalState } from "@getpaseo/protocol/messages";
+} from "@bytetrue/byspace-protocol/binary-frames/index";
+import type { SessionOutboundMessage, TerminalState } from "@bytetrue/byspace-protocol/messages";
 import type pino from "pino";
-
 import { TerminalSessionController } from "./terminal-session-controller.js";
 import type { TerminalManager } from "./terminal-manager.js";
 import type { TerminalSession } from "./terminal.js";
 
 function createFixture(): {
-  terminal: TerminalSession;
   terminalManager: TerminalManager;
   appliedSizes: string[];
 } {
@@ -46,7 +43,7 @@ function createFixture(): {
     getTerminal: () => terminal,
     getTerminalState: async () => ({ state: state(), revision: 0 }),
   } as unknown as TerminalManager;
-  return { terminal, terminalManager, appliedSizes };
+  return { terminalManager, appliedSizes };
 }
 
 function createController(
@@ -119,5 +116,35 @@ describe("terminal session controller size ownership", () => {
     controllerB.handleBinaryFrame(resizeFrame({ rows: 36, cols: 106, intent: "update" }));
 
     expect(appliedSizes).toEqual(["100x30", "101x31", "103x33", "105x35"]);
+  });
+
+  test("releases a connection's claimed sizes when its controller is disposed", () => {
+    const { terminalManager, appliedSizes } = createFixture();
+    const controllerA = createController(terminalManager);
+    const controllerB = createController(terminalManager);
+
+    controllerA.dispatch({
+      type: "terminal_input",
+      terminalId: "terminal-1",
+      message: { type: "resize", rows: 30, cols: 100, intent: "claim" },
+    });
+    controllerA.dispose();
+    controllerA.dispatch({
+      type: "terminal_input",
+      terminalId: "terminal-1",
+      message: { type: "resize", rows: 31, cols: 101, intent: "update" },
+    });
+    controllerB.dispatch({
+      type: "terminal_input",
+      terminalId: "terminal-1",
+      message: { type: "resize", rows: 32, cols: 102, intent: "update" },
+    });
+    controllerB.dispatch({
+      type: "terminal_input",
+      terminalId: "terminal-1",
+      message: { type: "resize", rows: 33, cols: 103, intent: "claim" },
+    });
+
+    expect(appliedSizes).toEqual(["100x30", "103x33"]);
   });
 });

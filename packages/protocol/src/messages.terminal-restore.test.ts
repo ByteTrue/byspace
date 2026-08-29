@@ -34,6 +34,38 @@ describe("terminal restore schemas", () => {
     }
   });
 
+  test("carries the resume request alongside the fallback mode", () => {
+    expect(
+      SubscribeTerminalRequestSchema.parse({
+        type: "subscribe_terminal_request",
+        terminalId: "term-1",
+        requestId: "req-1",
+        restore: {
+          resume: true,
+          mode: "visible-snapshot",
+          scrollbackLines: 1_000,
+        },
+      }).restore,
+    ).toEqual({ resume: true, mode: "visible-snapshot", scrollbackLines: 1_000 });
+  });
+
+  test("a daemon that does not know a restore field still parses the request", () => {
+    // This is what makes `resume` safe to send unconditionally: a daemon released
+    // before it existed sees an unknown key, not an invalid message. A new `mode`
+    // value would have failed that daemon's enum instead.
+    expect(
+      SubscribeTerminalRequestSchema.parse({
+        type: "subscribe_terminal_request",
+        terminalId: "term-1",
+        requestId: "req-1",
+        restore: {
+          mode: "visible-snapshot",
+          somethingOnlyANewerClientSends: true,
+        },
+      }).restore?.mode,
+    ).toBe("visible-snapshot");
+  });
+
   test("rejects camel-case terminal restore modes", () => {
     expect(() =>
       SubscribeTerminalRequestSchema.parse({
@@ -56,30 +88,6 @@ describe("terminal restore schemas", () => {
           "terminal-restore-modes": true,
         },
       }).features?.["terminal-restore-modes"],
-    ).toBe(true);
-  });
-
-  test("keeps terminal input mode replay metadata optional for older daemons", () => {
-    const parsed = ServerInfoStatusPayloadSchema.parse({
-      status: "server_info",
-      serverId: "server-1",
-      features: {
-        "terminal-restore-modes": true,
-      },
-    });
-
-    expect(parsed.features?.["terminal-input-mode-replay"]).toBeUndefined();
-  });
-
-  test("accepts terminal input mode replay feature metadata", () => {
-    expect(
-      ServerInfoStatusPayloadSchema.parse({
-        status: "server_info",
-        serverId: "server-1",
-        features: {
-          "terminal-input-mode-replay": true,
-        },
-      }).features?.["terminal-input-mode-replay"],
     ).toBe(true);
   });
 });

@@ -1,13 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
-import { test } from "../support/fixtures";
-import { connectSeedClient } from "../support/helpers/seed-client";
-import { createTempGitRepo } from "../support/helpers/workspace";
-import {
-  createIdleAgent,
-  openSessions,
-  resetSeededPageState,
-} from "../support/helpers/archive-tab";
+import { test } from "../fixtures";
+import { connectSeedClient } from "../helpers/seed-client";
+import { createTempGitRepo } from "../helpers/workspace";
+import { createIdleAgent, openSessions, resetSeededPageState } from "../helpers/archive-tab";
 
 const AGENT_ROW = '[data-testid^="agent-row-"]';
 
@@ -70,55 +66,73 @@ test.describe("History search", () => {
     await tempRepo?.cleanup();
   });
 
-  test("searches, ranks, highlights, and clears session history", async ({ page }) => {
+  test("typing narrows history to matching sessions and clearing restores them", async ({
+    page,
+  }) => {
     await resetSeededPageState(page);
     await openSessions(page);
 
-    await test.step("narrows history and restores chronological grouping", async () => {
-      await expectVisibleTitles(page, [TITLES.billing, TITLES.unbilled, TITLES.terminal]);
-      await expect(page.getByText("Today", { exact: true })).toHaveCount(1, {
-        timeout: 30_000,
-      });
+    // Seeded newest-first, and at rest history is chronological.
+    await expectVisibleTitles(page, [TITLES.billing, TITLES.unbilled, TITLES.terminal]);
+    await expect(page.getByText("Today", { exact: true })).toHaveCount(1, { timeout: 30_000 });
 
-      await search(page, `${NONCE} billing`);
-      await expectVisibleTitles(page, [TITLES.billing]);
-      await expect(page.getByText("Today", { exact: true })).toHaveCount(0, {
-        timeout: 30_000,
-      });
+    await search(page, `${NONCE} billing`);
+    await expectVisibleTitles(page, [TITLES.billing]);
 
-      await page.getByTestId("sessions-search-clear").click();
-      await expect(page.getByTestId("sessions-search-input")).toHaveValue("");
-      await expectVisibleTitles(page, [TITLES.billing, TITLES.unbilled, TITLES.terminal]);
-      await expect(page.getByText("Today", { exact: true })).toHaveCount(1, {
-        timeout: 30_000,
-      });
-    });
+    // Ranked results are one flat list — a day heading would claim an order
+    // the list no longer has.
+    await expect(page.getByText("Today", { exact: true })).toHaveCount(0, { timeout: 30_000 });
 
-    await test.step("ranks whole-word matches above substrings", async () => {
-      await search(page, `${NONCE} bill`);
-      await expectVisibleTitles(page, [TITLES.billing, TITLES.unbilled]);
-    });
+    await page.getByTestId("sessions-search-clear").click();
+    await expect(page.getByTestId("sessions-search-input")).toHaveValue("");
+    await expectVisibleTitles(page, [TITLES.billing, TITLES.unbilled, TITLES.terminal]);
+    await expect(page.getByText("Today", { exact: true })).toHaveCount(1, { timeout: 30_000 });
+  });
 
-    await test.step("highlights exact and typo-resolved matches", async () => {
-      await search(page, `${NONCE} billing`);
-      const row = page.locator(AGENT_ROW).filter({ hasText: NONCE }).first();
-      await expect(row.getByText("billing", { exact: true })).toBeVisible({ timeout: 30_000 });
+  test("ranks a whole-word hit above one buried inside a word", async ({ page }) => {
+    await resetSeededPageState(page);
+    await openSessions(page);
 
-      await search(page, `${NONCE} bulling`);
-      await expectVisibleTitles(page, [TITLES.billing]);
-      const typoRow = page.locator(AGENT_ROW).filter({ hasText: NONCE }).first();
-      await expect(typoRow.getByText("billing", { exact: true })).toBeVisible({
-        timeout: 30_000,
-      });
-    });
+    // "bill" starts a word in "billing" and hides inside "unbilled", so the
+    // stronger match leads even though both sessions are equally recent.
+    await search(page, `${NONCE} bill`);
+    await expectVisibleTitles(page, [TITLES.billing, TITLES.unbilled]);
+  });
 
-    await test.step("distinguishes no matches from empty history", async () => {
-      await search(page, `${NONCE} kubernetes`);
-      await expect(page.getByTestId("sessions-empty")).toBeVisible({ timeout: 30_000 });
-      await expect(page.getByText("No sessions match")).toBeVisible({ timeout: 30_000 });
+  test("marks the characters each result matched on", async ({ page }) => {
+    await resetSeededPageState(page);
+    await openSessions(page);
 
-      await page.getByText("Clear search").click();
-      await expectVisibleTitles(page, [TITLES.billing, TITLES.unbilled, TITLES.terminal]);
-    });
+    // The mark is a nested Text run, so the matched slice is its own element.
+    await search(page, `${NONCE} billing`);
+    const row = page.locator(AGENT_ROW).filter({ hasText: NONCE }).first();
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await expect(row.getByText("billing", { exact: true })).toBeVisible({ timeout: 30_000 });
+
+    // A typo has no characters in the text to point at, so the whole word it
+    // resolved to is marked.
+    await search(page, `${NONCE} bulling`);
+    const typoRow = page.locator(AGENT_ROW).filter({ hasText: NONCE }).first();
+    await expect(typoRow.getByText("billing", { exact: true })).toBeVisible({ timeout: 30_000 });
+  });
+
+  test("finds a session through a typo", async ({ page }) => {
+    await resetSeededPageState(page);
+    await openSessions(page);
+
+    await search(page, `${NONCE} bulling`);
+    await expectVisibleTitles(page, [TITLES.billing]);
+  });
+
+  test("says the query found nothing, not that history is empty", async ({ page }) => {
+    await resetSeededPageState(page);
+    await openSessions(page);
+
+    await search(page, `${NONCE} kubernetes`);
+    await expect(page.getByTestId("sessions-empty")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("No sessions match")).toBeVisible({ timeout: 30_000 });
+
+    await page.getByText("Clear search").click();
+    await expectVisibleTitles(page, [TITLES.billing, TITLES.unbilled, TITLES.terminal]);
   });
 });

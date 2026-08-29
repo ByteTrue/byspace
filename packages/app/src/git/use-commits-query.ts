@@ -1,6 +1,5 @@
-import type { CheckoutCommit } from "@getpaseo/protocol/messages";
+import type { CheckoutCommit } from "@bytetrue/byspace-protocol/messages";
 import invariant from "tiny-invariant";
-import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useFetchQuery } from "@/data/query";
 import { checkoutCommitsQueryKey } from "@/git/query-keys";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
@@ -16,17 +15,23 @@ interface UseCheckoutCommitsQueryOptions {
   enabled?: boolean;
 }
 
+export interface ClassifiedCheckoutCommit extends CheckoutCommit {
+  isOnBase: boolean;
+}
+
 export interface CheckoutCommitsData {
   baseRef: string | null;
   commits: ClassifiedCheckoutCommit[];
 }
 
-export interface ClassifiedCheckoutCommit extends CheckoutCommit {
-  isOnBase: boolean;
+export function selectWorkspaceCommits(
+  commits: readonly ClassifiedCheckoutCommit[],
+): ClassifiedCheckoutCommit[] {
+  return commits.filter((commit) => !commit.isOnBase);
 }
 
 export type CheckoutCommitsQueryResult =
-  | { status: "unsupported" }
+  | { status: "update_host" }
   | { status: "idle" }
   | { status: "connecting" }
   | { status: "loading" }
@@ -51,7 +56,7 @@ export function resolveCheckoutCommitsQueryResult({
   error,
 }: ResolveCheckoutCommitsQueryResultInput): CheckoutCommitsQueryResult {
   if (!capabilityPresent) {
-    return { status: "unsupported" };
+    return { status: "update_host" };
   }
   if (data && !isPlaceholderData) {
     return { status: "loaded", data };
@@ -73,21 +78,17 @@ export function useCheckoutCommitsQuery({
   cwd,
   enabled = true,
 }: UseCheckoutCommitsQueryOptions): CheckoutCommitsQueryResult {
-  const retainedPanelActive = useRetainedPanelActive();
-  const queryEnabledByCaller = enabled && retainedPanelActive;
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
-  // COMPAT(commitsList): added in v0.1.110, remove after 2027-01-16.
-  // COMPAT(commitBaseClassification): added in v0.2.0, remove after 2027-01-23.
+  // COMPAT(commitBaseClassification): added in v0.2.0, remove after 2027-01-25.
   // Single capability-detection site; downstream reads a clean load-state union.
-  const capabilityPresent = useSessionStore(
-    (state) =>
-      state.sessions[serverId]?.serverInfo?.features?.commitsList === true &&
-      state.sessions[serverId]?.serverInfo?.features?.commitBaseClassification === true,
-  );
+  const capabilityPresent = useSessionStore((state) => {
+    const features = state.sessions[serverId]?.serverInfo?.features;
+    return features?.commitsList === true && features.commitBaseClassification === true;
+  });
 
   const canFetch = Boolean(cwd) && Boolean(client) && isConnected;
-  const queryEnabled = queryEnabledByCaller && capabilityPresent && canFetch;
+  const queryEnabled = enabled && capabilityPresent && canFetch;
 
   const query = useFetchQuery<CheckoutCommitsData>({
     queryKey: checkoutCommitsQueryKey(serverId, cwd),
@@ -108,7 +109,7 @@ export function useCheckoutCommitsQuery({
   });
 
   return resolveCheckoutCommitsQueryResult({
-    enabled: queryEnabledByCaller,
+    enabled,
     capabilityPresent,
     canFetch,
     data: query.data,

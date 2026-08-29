@@ -6,8 +6,8 @@ import {
   createDaemonChannel,
   type Transport as RelayTransport,
   type KeyPair,
-} from "@getpaseo/relay/e2ee";
-import { buildRelayWebSocketUrl } from "@getpaseo/protocol/daemon-endpoints";
+} from "@bytetrue/byspace-relay/e2ee";
+import { buildRelayWebSocketUrl } from "@bytetrue/byspace-protocol/daemon-endpoints";
 import type { ExternalSocketMetadata } from "./websocket-server.js";
 import { createEncryptedRelaySocket } from "./websocket/encrypted-relay-socket.js";
 
@@ -18,6 +18,7 @@ export interface RelayTransportOptions {
   relayUseTls: boolean;
   serverId: string;
   daemonKeyPair?: KeyPair;
+  relayAccessToken?: string;
   createWebSocket?: RelayWebSocketFactory;
 }
 
@@ -28,6 +29,7 @@ export interface RelayTransportController {
 export interface RelaySocketLike {
   readyState: number;
   bufferedAmount?: number;
+  peerPublicKeyB64?: string | null;
   send: (data: string | Uint8Array | ArrayBuffer, callback?: (error?: Error) => void) => void;
   close: (code?: number, reason?: string) => void;
   terminate?: () => void;
@@ -35,7 +37,7 @@ export interface RelaySocketLike {
   once: (event: "close" | "error", listener: (...args: unknown[]) => void) => void;
 }
 
-interface RelayWebSocketLike extends RelaySocketLike {
+export interface RelayWebSocketLike extends RelaySocketLike {
   terminate: () => void;
   ping: () => void;
   on: (
@@ -56,10 +58,14 @@ type ControlMessage =
 const CONTROL_PING_INTERVAL_MS = 10_000;
 const CONTROL_STALE_TIMEOUT_MS = 30_000;
 const CONTROL_READY_TIMEOUT_MS = 8_000;
+const E2EE_HANDSHAKE_TIMEOUT_MS = 10_000;
 const RELAY_WEBSOCKET_OPTIONS = { handshakeTimeout: 10_000, perMessageDeflate: false } as const;
 
-function createDefaultRelayWebSocket(url: string): RelayWebSocketLike {
-  return new WebSocket(url, RELAY_WEBSOCKET_OPTIONS);
+function createDefaultRelayWebSocket(url: string, relayAccessToken?: string): RelayWebSocketLike {
+  return new WebSocket(url, {
+    ...RELAY_WEBSOCKET_OPTIONS,
+    ...(relayAccessToken ? { headers: { Authorization: `Bearer ${relayAccessToken}` } } : {}),
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -113,9 +119,12 @@ export function startRelayTransport({
   relayUseTls,
   serverId,
   daemonKeyPair,
-  createWebSocket = createDefaultRelayWebSocket,
+  relayAccessToken,
+  createWebSocket,
 }: RelayTransportOptions): RelayTransportController {
   const relayLogger = logger.child({ module: "relay-transport" });
+  const openWebSocket =
+    createWebSocket ?? ((url: string) => createDefaultRelayWebSocket(url, relayAccessToken));
 
   let stopped = false;
   let controlWs: RelayWebSocketLike | null = null;
@@ -169,7 +178,7 @@ export function startRelayTransport({
       serverId,
       role: "server",
     });
-    const socket = createWebSocket(url);
+    const socket = openWebSocket(url);
     controlWs = socket;
     let controlConnected = false;
 
@@ -354,7 +363,7 @@ export function startRelayTransport({
       role: "server",
       connectionId,
     });
-    const socket = createWebSocket(url);
+    const socket = openWebSocket(url);
     dataSockets.set(connectionId, socket);
 
     let attached = false;
@@ -432,7 +441,7 @@ async function attachEncryptedSocket(
       }
       pendingMessages.push(data);
     };
-    const channel = await createDaemonChannel(relayTransport, daemonKeyPair, {
+    const channelPromise = createDaemonChannel(relayTransport, daemonKeyPair, {
       onmessage: emitMessage,
       onclose: (code, reason) => emitter.emit("close", code, reason),
       onerror: (error) => {
@@ -440,9 +449,33 @@ async function attachEncryptedSocket(
         emitter.emit("error", error);
       },
     });
+    const channel = await new Promise<Awaited<ReturnType<typeof createDaemonChannel>>>(
+      (resolve, reject) => {
+        const timeout = setTimeout(() => {
+          socket.terminate();
+          reject(new Error("E2EE handshake timed out"));
+        }, E2EE_HANDSHAKE_TIMEOUT_MS);
+        timeout.unref?.();
+        channelPromise.then(
+          (value) => {
+            clearTimeout(timeout);
+            resolve(value);
+            return undefined;
+          },
+          (error) => {
+            clearTimeout(timeout);
+            reject(error);
+            return undefined;
+          },
+        );
+      },
+    );
+    const peerPublicKeyB64 = channel.getPeerPublicKeyB64();
+    if (!peerPublicKeyB64) throw new Error("E2EE peer identity is unavailable");
     const encryptedSocket = createEncryptedRelaySocket({
       channel,
       emitter,
+      peerPublicKeyB64,
       getTransportBufferedAmount: () => socket.bufferedAmount,
       terminateTransport: () => socket.terminate(),
     });
@@ -462,7 +495,7 @@ async function attachEncryptedSocket(
   }
 }
 
-function createRelayTransportAdapter(
+export function createRelayTransportAdapter(
   socket: RelayWebSocketLike,
   logger: pino.Logger,
 ): RelayTransport {

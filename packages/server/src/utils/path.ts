@@ -58,22 +58,16 @@ export function createRealpathAwarePathMatcher(target: string): (candidate: stri
   };
 }
 
-export function isPathInsideRoot(root: string, candidate: string): boolean {
-  return getRelativePathInsideRoot(root, candidate) !== null;
-}
-
 export function normalizePathForIdentity(value: string): string {
   const canonicalPath = resolveRealpathVariants(value)[0] ?? value;
   return normalizePathForComparison(canonicalPath, looksLikeDefiniteWindowsPath(canonicalPath));
 }
 
-/**
- * Returns the candidate's relative suffix when it is inside root.
- *
- * The suffix is derived from the same lexical path pair used to prove
- * containment. Callers that map an existing filesystem path into a new root
- * must keep those two operations coupled.
- */
+export function isPathInsideRoot(root: string, candidate: string): boolean {
+  return getRelativePathInsideRoot(root, candidate) !== null;
+}
+
+/** Derives the relative suffix from the same path pair that proves containment. */
 export function getRealpathAwareRelativePath(root: string, candidate: string): string | null {
   const rootVariants = collectPathVariants(root);
   const candidateVariants = collectPathVariants(candidate);
@@ -84,7 +78,6 @@ export function getRealpathAwareRelativePath(root: string, candidate: string): s
       if (relativePath !== null) return relativePath;
     }
   }
-
   return null;
 }
 
@@ -95,20 +88,13 @@ export function isRealpathInsideRoot(root: string, candidate: string): boolean {
 function getRelativePathInsideRoot(root: string, candidate: string): string | null {
   const compareAsWindows = shouldCompareAsWindows(root, candidate);
   const platformPath = compareAsWindows ? nodePath.win32 : nodePath.posix;
-  const normalizedRoot = normalizePathForComparison(root, compareAsWindows);
-  const normalizedCandidate = normalizePathForComparison(candidate, compareAsWindows);
-  const comparableRelative = platformPath.relative(normalizedRoot, normalizedCandidate);
+  const normalizedRoot = normalizePath(root, compareAsWindows);
+  const normalizedCandidate = normalizePath(candidate, compareAsWindows);
+  const relative = platformPath.relative(normalizedRoot, normalizedCandidate);
 
-  if (
-    comparableRelative !== "" &&
-    (comparableRelative.startsWith("..") || platformPath.isAbsolute(comparableRelative))
-  ) {
-    return null;
-  }
-
-  const casePreservingRoot = normalizePathPreservingCase(root, compareAsWindows);
-  const casePreservingCandidate = normalizePathPreservingCase(candidate, compareAsWindows);
-  return platformPath.relative(casePreservingRoot, casePreservingCandidate);
+  return relative === "" || (!relative.startsWith("..") && !platformPath.isAbsolute(relative))
+    ? relative
+    : null;
 }
 
 function collectPathVariants(value: string): string[] {
@@ -147,11 +133,11 @@ function looksLikeDefiniteWindowsPath(value: string): boolean {
 }
 
 function normalizePathForComparison(value: string, compareAsWindows: boolean): string {
-  const normalized = normalizePathPreservingCase(value, compareAsWindows);
+  const normalized = normalizePath(value, compareAsWindows);
   return compareAsWindows ? normalized.toLowerCase() : normalized;
 }
 
-function normalizePathPreservingCase(value: string, compareAsWindows: boolean): string {
+function normalizePath(value: string, compareAsWindows: boolean): string {
   const platformPath = compareAsWindows ? nodePath.win32 : nodePath.posix;
   const comparableValue = compareAsWindows ? stripWindowsNamespacePrefix(value) : value;
   const platformNormalized = platformPath.normalize(comparableValue);

@@ -7,15 +7,11 @@ import {
 
 declare global {
   interface Window {
-    ReactNativeWebView?: {
-      postMessage?: (data: string) => void;
-    };
-    __PASEO_MERMAID_RUNTIME_RECEIVE__?: (message: unknown) => void;
+    __BYSPACE_MERMAID_RUNTIME_RECEIVE__?: (message: unknown) => void;
   }
 }
 
 function sendToHost(message: MermaidRuntimeMessage): void {
-  window.ReactNativeWebView?.postMessage?.(JSON.stringify(message));
   if (window.parent !== window) {
     window.parent.postMessage(message, "*");
   }
@@ -62,7 +58,7 @@ let isDrainScheduled = false;
 async function render(message: MermaidRuntimeRenderMessage): Promise<void> {
   try {
     initializeMermaid(message.colorScheme);
-    const { svg } = await mermaid.render(`paseo-mermaid-${message.revision}`, message.source);
+    const { svg } = await mermaid.render(`byspace-mermaid-${message.revision}`, message.source);
     if (message.revision !== latestRevision) {
       return;
     }
@@ -121,7 +117,7 @@ function receiveRender(value: unknown): void {
   }, 0);
 }
 
-window.__PASEO_MERMAID_RUNTIME_RECEIVE__ = receiveRender;
+window.__BYSPACE_MERMAID_RUNTIME_RECEIVE__ = receiveRender;
 window.addEventListener("message", (event) => {
   if (event.source === window.parent) {
     receiveRender(event.data);

@@ -1,18 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ComboboxOption as ComboboxOptionType } from "@/components/ui/combobox";
 import { isWorkspaceArchivePending } from "@/contexts/session-workspace-upserts";
 import {
-  filterWorkspaceProjectsForHost,
-  getHostProjectSourceDirectory,
-  resolveInitialWorkspaceProject,
+  getWorkspaceCreationHosts,
+  resolveSelectedHostProject,
+  resolveHostProjectWorkspaceIdentity,
   type HostProjectListItem,
 } from "@/projects/host-projects";
 import {
-  createManualProjectSelectionContextKey,
-  createProjectSelectionContextKey,
   createProjectSelection,
   reconcileProjectSelection,
-  resolveInitialProjectSelectionSource,
   resolveProjectSelection,
   type ProjectSelection,
   type ProjectSelectionContext,
@@ -21,17 +19,15 @@ import {
 const PROJECT_OPTION_PREFIX = "project:";
 
 interface NewWorkspaceProjectPickerInput {
-  selectedServerId: string;
   projects: HostProjectListItem[];
   routeProject: HostProjectListItem | null;
-  routeProjectContextViewKey: string | null;
-  lastActiveProject: HostProjectListItem | null;
-  allowAllProjects: boolean;
+  routeProjectKey: string | null;
+  workspaceMultiplicityByServerId: ReadonlyMap<string, boolean>;
+  preserveMissingProject: boolean;
 }
 
 interface NewWorkspaceProjectPickerState {
   selectedProject: HostProjectListItem | null;
-  selectedSourceDirectory: string | null;
   projectPickerOptions: ComboboxOptionType[];
   projectByOptionId: Map<string, HostProjectListItem>;
   selectedProjectOptionId: string;
@@ -46,105 +42,64 @@ function projectOptionId(projectId: string): string {
 function computeProjectOptionData(projects: readonly HostProjectListItem[]) {
   const projectByOptionId = new Map<string, HostProjectListItem>();
   const options = projects.map((project) => {
-    const id = projectOptionId(project.viewKey);
+    const id = projectOptionId(project.projectKey);
     projectByOptionId.set(id, project);
     return { id, label: project.projectName };
   });
   return { options, projectByOptionId };
 }
 
-function resolveWorkspaceIdFromProjectWorkspaceKey(input: {
-  selectedServerId: string;
-  workspaceKey: string;
-}): string | null {
-  const prefix = `${input.selectedServerId}:`;
-  return input.workspaceKey.startsWith(prefix) ? input.workspaceKey.slice(prefix.length) : null;
-}
-
-function hasPendingArchiveForProject(input: {
-  selectedServerId: string;
-  project: HostProjectListItem;
-}): boolean {
-  for (const workspaceKey of input.project.workspaceKeys) {
-    const workspaceId = resolveWorkspaceIdFromProjectWorkspaceKey({
-      selectedServerId: input.selectedServerId,
-      workspaceKey,
-    });
-    if (
-      workspaceId &&
-      isWorkspaceArchivePending({ serverId: input.selectedServerId, workspaceId })
-    ) {
-      return true;
-    }
-  }
-
-  return false;
+function hasPendingArchiveForProject(project: HostProjectListItem): boolean {
+  return project.workspaceKeys.some((workspaceKey) => {
+    const identity = resolveHostProjectWorkspaceIdentity(project, workspaceKey);
+    return identity ? isWorkspaceArchivePending(identity) : false;
+  });
 }
 
 export function useNewWorkspaceProjectPicker({
-  selectedServerId,
   projects,
   routeProject,
-  routeProjectContextViewKey,
-  lastActiveProject,
-  allowAllProjects,
+  routeProjectKey,
+  workspaceMultiplicityByServerId,
+  preserveMissingProject,
 }: NewWorkspaceProjectPickerInput): NewWorkspaceProjectPickerState {
+  const { t } = useTranslation();
   const selectableProjects = useMemo(
     () =>
-      filterWorkspaceProjectsForHost({ projects, serverId: selectedServerId, allowAllProjects }),
-    [allowAllProjects, projects, selectedServerId],
+      projects.filter(
+        (project) =>
+          getWorkspaceCreationHosts({ project, workspaceMultiplicityByServerId }).length > 0,
+      ),
+    [projects, workspaceMultiplicityByServerId],
   );
   const initialProject = useMemo(
     () =>
-      resolveInitialWorkspaceProject({
-        routeProject,
-        lastActiveProject,
+      resolveSelectedHostProject({
+        selectedProjectKey: routeProjectKey,
         projects: selectableProjects,
-        serverId: selectedServerId,
-        allowAllProjects,
+        routeProject,
       }),
-    [allowAllProjects, lastActiveProject, routeProject, selectableProjects, selectedServerId],
+    [routeProject, routeProjectKey, selectableProjects],
   );
 
-  const selectionContextKey = createProjectSelectionContextKey({
-    selectedServerId,
-    routeProjectViewKey: routeProjectContextViewKey,
-    allowAllProjects,
-  });
-  const manualSelectionContextKey = createManualProjectSelectionContextKey({
-    routeProjectViewKey: routeProjectContextViewKey,
-  });
+  const selectionContextKey = routeProjectKey ?? "";
   const shouldPreserveMissingProject = useCallback(
     (project: HostProjectListItem) =>
-      hasPendingArchiveForProject({
-        selectedServerId,
-        project,
-      }),
-    [selectedServerId],
+      preserveMissingProject || hasPendingArchiveForProject(project),
+    [preserveMissingProject],
   );
   const selectionContext = useMemo<ProjectSelectionContext>(
     () => ({
       contextKey: selectionContextKey,
-      manualContextKey: manualSelectionContextKey,
-      selectedServerId,
       initialProject,
-      initialProjectSource: resolveInitialProjectSelectionSource({
-        initialProject,
-        routeProject,
-        lastActiveProject,
-      }),
       projects: selectableProjects,
       routeProject,
-      lastActiveProject,
       shouldPreserveMissingProject,
     }),
     [
       initialProject,
-      lastActiveProject,
-      manualSelectionContextKey,
       routeProject,
       selectableProjects,
-      selectedServerId,
       selectionContextKey,
       shouldPreserveMissingProject,
     ],
@@ -167,30 +122,22 @@ export function useNewWorkspaceProjectPicker({
     (id: string) => {
       const project = projectByOptionId.get(id);
       if (!project) return;
-      if (
-        !allowAllProjects &&
-        !project.hosts.some((host) => host.worktreeSupport !== "unsupported")
-      )
-        return;
       setProjectSelection({
-        contextKey: manualSelectionContextKey,
+        contextKey: selectionContextKey,
+        projectKey: project.projectKey,
         project,
-        originProject: project,
         source: "manual",
       });
     },
-    [allowAllProjects, manualSelectionContextKey, projectByOptionId],
+    [projectByOptionId, selectionContextKey],
   );
 
   return {
     selectedProject,
-    selectedSourceDirectory: selectedProject
-      ? getHostProjectSourceDirectory(selectedProject, selectedServerId)
-      : null,
     projectPickerOptions,
     projectByOptionId,
-    selectedProjectOptionId: selectedProject ? projectOptionId(selectedProject.viewKey) : "",
-    projectTriggerLabel: selectedProject?.projectName ?? "Choose project",
+    selectedProjectOptionId: selectedProject ? projectOptionId(selectedProject.projectKey) : "",
+    projectTriggerLabel: selectedProject?.projectName ?? t("newWorkspace.project.choose"),
     handleSelectProjectOption,
   };
 }

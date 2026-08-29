@@ -12,8 +12,8 @@ import {
 import { Text, View } from "react-native";
 import { Brain, Folder, GitBranch } from "lucide-react-native";
 import { StyleSheet } from "react-native-unistyles";
-import type { AgentProvider } from "@getpaseo/protocol/agent-types";
-import type { ScheduleCadence, ScheduleSummary } from "@getpaseo/protocol/schedule/types";
+import type { AgentProvider } from "@bytetrue/byspace-protocol/agent-types";
+import type { ScheduleCadence, ScheduleSummary } from "@bytetrue/byspace-protocol/schedule/types";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { ComboboxItem } from "@/components/ui/combobox";
@@ -53,6 +53,11 @@ import type {
   ScheduleFormModel,
   ScheduleFormSnapshot,
   ScheduleFormState,
+} from "@/schedules/schedule-form-model";
+import {
+  buildHeartbeatScheduleUpdate,
+  resolveScheduleFormFieldVisibility,
+  resolveScheduleFormTitle,
 } from "@/schedules/schedule-form-model";
 import { validateCron } from "@/utils/schedule-format";
 import { toErrorMessage } from "@/utils/error-messages";
@@ -315,13 +320,14 @@ function OpenScheduleFormSheet({
   ]);
 
   const submitAgentTarget = useCallback(async (): Promise<boolean> => {
-    if (!schedule || !state.submitCadence) {
+    if (!schedule) {
       return false;
     }
-    await updateSchedule({
-      id: schedule.id,
-      cadence: state.submitCadence,
-    });
+    const update = buildHeartbeatScheduleUpdate(schedule.id, state.submitCadence);
+    if (!update) {
+      return false;
+    }
+    await updateSchedule(update);
     return true;
   }, [schedule, state.submitCadence, updateSchedule]);
 
@@ -400,12 +406,10 @@ function OpenScheduleFormSheet({
     void handleSubmit();
   }, [handleSubmit]);
 
-  const header = useMemo<SheetHeader>(() => {
-    if (mode !== "edit") {
-      return { title: "New schedule" };
-    }
-    return { title: schedule?.target.type === "agent" ? "Edit heartbeat" : "Edit schedule" };
-  }, [mode, schedule?.target.type]);
+  const header = useMemo<SheetHeader>(
+    () => ({ title: resolveScheduleFormTitle(mode, state.targetKind) }),
+    [mode, state.targetKind],
+  );
 
   const footer = useMemo(
     () => (
@@ -474,78 +478,74 @@ function ScheduleFormFields({
   cadenceError,
   mutationServerId,
 }: ScheduleFormFieldsProps): ReactElement {
-  if (state.targetKind === "agent") {
-    return (
-      <>
-        <ScheduleAgentTargetField label={agentTargetLabel} size={controlSize} />
+  const fields = resolveScheduleFormFieldVisibility(state.targetKind);
+  return (
+    <>
+      {fields.name ? (
+        <Field label="Name">
+          <FormTextInput
+            size={controlSize}
+            testID="schedule-name-input"
+            accessibilityLabel="Schedule name"
+            initialValue={state.name}
+            onChangeText={model.setName}
+            placeholder="Optional"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </Field>
+      ) : null}
+
+      {fields.prompt ? (
+        <Field label="Prompt">
+          <FormTextInput
+            size={controlSize}
+            testID="schedule-prompt-input"
+            accessibilityLabel="Prompt"
+            initialValue={state.prompt}
+            onChangeText={model.setPrompt}
+            placeholder="What should the agent do each run?"
+            style={styles.multilineInput}
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+          />
+        </Field>
+      ) : null}
+
+      {fields.target ? (
+        <ScheduleTargetFields
+          model={model}
+          state={state}
+          providerSnapshot={providerSnapshot}
+          agentTargetLabel={agentTargetLabel}
+          controlSize={controlSize}
+          mutationServerId={mutationServerId}
+        />
+      ) : null}
+
+      {fields.cadence ? (
         <CadenceEditor
           value={state.cadence}
           onChange={model.setCadence}
           error={cadenceError ?? undefined}
           size={controlSize}
         />
-        {state.submitError ? <Text style={styles.submitError}>{state.submitError}</Text> : null}
-      </>
-    );
-  }
+      ) : null}
 
-  return (
-    <>
-      <Field label="Name">
-        <FormTextInput
-          size={controlSize}
-          testID="schedule-name-input"
-          accessibilityLabel="Schedule name"
-          initialValue={state.name}
-          onChangeText={model.setName}
-          placeholder="Optional"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-      </Field>
-
-      <Field label="Prompt">
-        <FormTextInput
-          size={controlSize}
-          testID="schedule-prompt-input"
-          accessibilityLabel="Prompt"
-          initialValue={state.prompt}
-          onChangeText={model.setPrompt}
-          placeholder="What should the agent do each run?"
-          style={styles.multilineInput}
-          multiline
-          numberOfLines={4}
-          textAlignVertical="top"
-        />
-      </Field>
-
-      <ScheduleTargetFields
-        model={model}
-        state={state}
-        providerSnapshot={providerSnapshot}
-        agentTargetLabel={null}
-        controlSize={controlSize}
-        mutationServerId={mutationServerId}
-      />
-
-      <CadenceEditor
-        value={state.cadence}
-        onChange={model.setCadence}
-        error={cadenceError ?? undefined}
-        size={controlSize}
-      />
-
-      <Field label="Max runs">
-        <FormTextInput
-          size={controlSize}
-          testID="schedule-max-runs-input"
-          accessibilityLabel="Max runs"
-          initialValue={state.maxRuns}
-          onChangeText={model.setMaxRuns}
-          placeholder="Unlimited"
-          keyboardType="number-pad"
-        />
-      </Field>
+      {fields.maxRuns ? (
+        <Field label="Max runs">
+          <FormTextInput
+            size={controlSize}
+            testID="schedule-max-runs-input"
+            accessibilityLabel="Max runs"
+            initialValue={state.maxRuns}
+            onChangeText={model.setMaxRuns}
+            placeholder="Unlimited"
+            keyboardType="number-pad"
+          />
+        </Field>
+      ) : null}
 
       {state.submitError ? <Text style={styles.submitError}>{state.submitError}</Text> : null}
     </>

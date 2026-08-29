@@ -1,11 +1,11 @@
 import type pino from "pino";
-import { getErrorMessage } from "@getpaseo/protocol/error-utils";
+import { getErrorMessage } from "@bytetrue/byspace-protocol/error-utils";
 import {
   checkoutResolvedBranch,
   type CheckoutExistingBranchResult,
   type GitMutationRefreshReason,
 } from "../../../utils/checkout-git.js";
-import { runGitCommand } from "../../../utils/run-git-command.js";
+import { execCommand } from "../../../utils/spawn.js";
 import type { WorkspaceGitService } from "../../workspace-git-service.js";
 import { assertSafeGitRef as assertWorktreeSafeGitRef } from "../../worktree-session.js";
 
@@ -54,7 +54,11 @@ export function createGitMutationService(deps: {
 
   async function isWorkingTreeDirty(cwd: string): Promise<boolean> {
     try {
-      const snapshot = await workspaceGitService.getSnapshot(cwd);
+      const snapshot = await workspaceGitService.getSnapshot(cwd, {
+        force: true,
+        includeForge: false,
+        reason: "mutation-preflight",
+      });
       return snapshot.git.isDirty === true;
     } catch (error) {
       throw new Error(`Unable to inspect git status for ${cwd}: ${getErrorMessage(error)}`, {
@@ -118,10 +122,7 @@ export function createGitMutationService(deps: {
       }
 
       await ensureCleanWorkingTree(cwd);
-      await runGitCommand(["checkout", "-b", newBranchName, baseBranch], {
-        cwd,
-        timeout: 120_000,
-      });
+      await execCommand("git", ["checkout", "-b", newBranchName, baseBranch], { cwd });
       await notifyGitMutation(cwd, "create-branch");
     },
 

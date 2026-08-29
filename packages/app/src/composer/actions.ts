@@ -1,5 +1,4 @@
-import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
-import type { ActiveTurnBehavior } from "@getpaseo/protocol/messages";
+import type { ForgeSearchItem } from "@bytetrue/byspace-protocol/messages";
 import type {
   AttachmentMetadata,
   ComposerAttachment,
@@ -30,16 +29,6 @@ export interface AttachmentPersister {
     mimeType: string;
     fileName: string | null;
   }) => Promise<AttachmentMetadata>;
-  persistFromFileUri: (input: {
-    uri: string;
-    mimeType: string;
-    fileName: string | null;
-  }) => Promise<AttachmentMetadata>;
-  persistFromDataUrl: (input: {
-    dataUrl: string;
-    mimeType: string;
-    fileName: string | null;
-  }) => Promise<AttachmentMetadata>;
   deleteAttachments: (metadata: AttachmentMetadata[]) => Promise<void> | void;
 }
 
@@ -49,7 +38,6 @@ export interface ComposerSendClient {
     text: string,
     options: {
       messageId: string;
-      activeTurnBehavior?: ActiveTurnBehavior;
       images: Array<{ data: string; mimeType: string }>;
       attachments: ReturnType<typeof splitComposerAttachmentsForSubmit>["attachments"];
     },
@@ -87,37 +75,18 @@ export interface QueueWriter {
 
 export async function pickAndPersistImages(input: {
   pickImages: () => Promise<PickedImageAttachmentInput[] | null>;
-  persister: Pick<
-    AttachmentPersister,
-    "persistFromBlob" | "persistFromFileUri" | "persistFromDataUrl"
-  >;
+  persister: Pick<AttachmentPersister, "persistFromBlob">;
 }): Promise<AttachmentMetadata[]> {
   const result = await input.pickImages();
   if (!result?.length) return [];
   return await Promise.all(
-    result.map(async (picked) => {
-      const fileName = picked.fileName ?? null;
-      const mimeType = picked.mimeType;
-      if (picked.source.kind === "blob") {
-        return await input.persister.persistFromBlob({
-          blob: picked.source.blob,
-          mimeType,
-          fileName,
-        });
-      }
-      if (picked.source.kind === "data_url") {
-        return await input.persister.persistFromDataUrl({
-          dataUrl: picked.source.dataUrl,
-          mimeType,
-          fileName,
-        });
-      }
-      return await input.persister.persistFromFileUri({
-        uri: picked.source.uri,
-        mimeType,
-        fileName,
-      });
-    }),
+    result.map((picked) =>
+      input.persister.persistFromBlob({
+        blob: picked.source.blob,
+        mimeType: picked.mimeType,
+        fileName: picked.fileName ?? null,
+      }),
+    ),
   );
 }
 
@@ -178,8 +147,6 @@ export interface DispatchComposerAgentMessageInput {
     images: AttachmentMetadata[],
   ) => Promise<Array<{ data: string; mimeType: string }> | undefined>;
   submission: MessageSubmissionWriter;
-  activeTurnBehavior?: ActiveTurnBehavior;
-  activeTurnId?: string;
 }
 
 export async function dispatchComposerAgentMessage(
@@ -195,22 +162,19 @@ export async function dispatchComposerAgentMessage(
     timestamp: new Date(),
     images: wirePayload.images,
     attachments: wirePayload.attachments,
-    ...(input.activeTurnBehavior === "steer" && input.activeTurnId
-      ? { turnId: input.activeTurnId }
-      : {}),
   });
   input.submission.begin(input.agentId, userMessage);
   try {
     const imagesData = await input.encodeImages(wirePayload.images);
     await input.client.sendAgentMessage(input.agentId, input.text, {
       messageId: clientMessageId,
-      ...(input.activeTurnBehavior ? { activeTurnBehavior: input.activeTurnBehavior } : {}),
       images: imagesData ?? [],
       attachments: wirePayload.attachments,
     });
     input.submission.accept(input.agentId, clientMessageId);
   } catch (error) {
-    input.submission.reject(input.agentId, clientMessageId);
+    const outcome = input.submission.reject(input.agentId, clientMessageId);
+    if (outcome === "accepted") return;
     throw error;
   }
 }
@@ -362,14 +326,16 @@ function isForgeAttachment(
   );
 }
 
+function isSameForgeSearchItem(left: ForgeSearchItem, right: ForgeSearchItem): boolean {
+  return left.kind === right.kind && left.number === right.number && left.url === right.url;
+}
+
 export function toggleForgeAttachment(
   current: UserComposerAttachment[],
   item: ForgeSearchItem,
 ): UserComposerAttachment[] {
   const matches = (attachment: UserComposerAttachment) =>
-    isForgeAttachment(attachment) &&
-    attachment.item.kind === item.kind &&
-    attachment.item.number === item.number;
+    isForgeAttachment(attachment) && isSameForgeSearchItem(attachment.item, item);
   if (current.some(matches)) {
     return current.filter((attachment) => !matches(attachment));
   }
@@ -388,10 +354,7 @@ export function toggleGithubAttachmentFromPicker({
   markGithubAttachmentRemoved,
 }: ToggleGithubAttachmentFromPickerInput): UserComposerAttachment[] {
   const existingAttachment = current.find(
-    (attachment) =>
-      isForgeAttachment(attachment) &&
-      attachment.item.kind === item.kind &&
-      attachment.item.number === item.number,
+    (attachment) => isForgeAttachment(attachment) && isSameForgeSearchItem(attachment.item, item),
   );
   if (existingAttachment) {
     markGithubAttachmentRemoved(existingAttachment);
@@ -411,10 +374,7 @@ export function isAttachmentSelectedForGithubItem(
   item: ForgeSearchItem,
 ): boolean {
   return userAttachmentsOnly(current).some(
-    (attachment) =>
-      isForgeAttachment(attachment) &&
-      attachment.item.kind === item.kind &&
-      attachment.item.number === item.number,
+    (attachment) => isForgeAttachment(attachment) && isSameForgeSearchItem(attachment.item, item),
   );
 }
 

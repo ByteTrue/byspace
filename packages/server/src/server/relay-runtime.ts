@@ -1,78 +1,82 @@
 import type pino from "pino";
-import type { KeyPair } from "@getpaseo/relay/e2ee";
+import type { KeyPair } from "@bytetrue/byspace-relay/e2ee";
 import type { ExternalSocketMetadata } from "./websocket-server.js";
-import {
-  startRelayTransport,
-  type RelaySocketLike,
-  type RelayTransportController,
-} from "./relay-transport.js";
+import { startRelayTransport, type RelayTransportController } from "./relay-transport.js";
 
-export interface RelayRuntimeConfig {
-  enabled: boolean;
-  endpoint: string;
-  publicEndpoint: string;
-  useTls: boolean;
-  publicUseTls: boolean;
+interface RelaySocketLike {
+  readyState: number;
+  bufferedAmount?: number;
+  send: (data: string | Uint8Array | ArrayBuffer, callback?: (error?: Error) => void) => void;
+  close: (code?: number, reason?: string) => void;
+  terminate?: () => void;
+  on: (event: "message" | "close" | "error", listener: (...args: unknown[]) => void) => void;
+  once: (event: "close" | "error", listener: (...args: unknown[]) => void) => void;
 }
 
-interface RelayRuntimeOptions {
-  config: RelayRuntimeConfig;
+export interface RelayRuntimeOptions {
   logger: pino.Logger;
-  attachSocket(ws: RelaySocketLike, metadata?: ExternalSocketMetadata): Promise<void>;
+  attachSocket: (ws: RelaySocketLike, metadata?: ExternalSocketMetadata) => Promise<void>;
+  relayEndpoint: string;
+  relayUseTls: boolean;
   serverId: string;
   daemonKeyPair: KeyPair;
+  relayAccessToken?: string;
+  initialEnabled: boolean;
   startTransport?: typeof startRelayTransport;
 }
 
-export interface RelayRuntime {
-  getConfig(): RelayRuntimeConfig;
-  setEnabled(enabled: boolean): void;
-  stop(): Promise<void>;
-}
+export class RelayRuntime {
+  private readonly options: RelayRuntimeOptions;
+  private controller: RelayTransportController | null = null;
+  private desiredEnabled: boolean;
+  private operation: Promise<void> = Promise.resolve();
 
-export function createRelayRuntime(options: RelayRuntimeOptions): RelayRuntime {
-  const startTransport = options.startTransport ?? startRelayTransport;
-  let config = options.config;
-  let transport: RelayTransportController | null = null;
-
-  function start(): void {
-    if (transport) return;
-    transport = startTransport({
-      logger: options.logger,
-      attachSocket: options.attachSocket,
-      relayEndpoint: config.endpoint,
-      relayUseTls: config.useTls,
-      serverId: options.serverId,
-      daemonKeyPair: options.daemonKeyPair,
-    });
+  constructor(options: RelayRuntimeOptions) {
+    this.options = options;
+    this.desiredEnabled = options.initialEnabled;
   }
 
-  function setEnabled(enabled: boolean): void {
-    if (config.enabled === enabled) return;
-    if (enabled) {
-      start();
-      config = { ...config, enabled: true };
+  isEnabled(): boolean {
+    return this.desiredEnabled;
+  }
+
+  start(): Promise<void> {
+    return this.setEnabled(this.desiredEnabled);
+  }
+
+  setEnabled(enabled: boolean): Promise<void> {
+    this.desiredEnabled = enabled;
+    const nextOperation = this.operation.then(() => this.reconcile());
+    this.operation = nextOperation.catch(() => undefined);
+    return nextOperation;
+  }
+
+  stop(): Promise<void> {
+    this.desiredEnabled = false;
+    const nextOperation = this.operation.then(() => this.reconcile());
+    this.operation = nextOperation.catch(() => undefined);
+    return nextOperation;
+  }
+
+  private async reconcile(): Promise<void> {
+    if (!this.desiredEnabled) {
+      const controller = this.controller;
+      this.controller = null;
+      await controller?.stop();
       return;
     }
-    config = { ...config, enabled: false };
-    const current = transport;
-    transport = null;
-    void current?.stop().catch((error) => {
-      options.logger.warn({ err: error }, "Failed to stop relay transport");
+
+    if (this.controller) return;
+
+    const startTransport = this.options.startTransport ?? startRelayTransport;
+    this.controller = startTransport({
+      logger: this.options.logger,
+      attachSocket: this.options.attachSocket,
+      relayEndpoint: this.options.relayEndpoint,
+      relayUseTls: this.options.relayUseTls,
+      serverId: this.options.serverId,
+      daemonKeyPair: this.options.daemonKeyPair,
+      relayAccessToken: this.options.relayAccessToken,
     });
   }
-
-  async function stop(): Promise<void> {
-    const current = transport;
-    transport = null;
-    await current?.stop();
-  }
-
-  if (config.enabled) start();
-
-  return {
-    getConfig: () => config,
-    setEnabled,
-    stop,
-  };
 }

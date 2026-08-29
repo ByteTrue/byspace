@@ -1,17 +1,17 @@
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { DaemonClient } from "@bytetrue/byspace-client/internal/daemon-client";
 import { selectAgentTimelineState, useSessionStore } from "@/stores/session-store";
 import {
   createInitDeferred,
   getInitDeferred,
   getInitKey,
   INIT_TIMEOUT_MS,
-  rejectInitDeferred,
   refreshInitTimeout,
+  rejectInitDeferred,
 } from "@/utils/agent-initialization";
 import { getHostRuntimeStore, type HostRuntimeStore } from "@/runtime/host-runtime";
-import { planTimelineResumeFetch, planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
+import { planTimelineResumeFetch } from "@/timeline/timeline-sync-plan";
 import { i18n } from "@/i18n/i18next";
 
 export type SetAgentInitializing = (agentId: string, initializing: boolean) => void;
@@ -38,7 +38,7 @@ export interface EnsureAgentIsInitializedInput {
   serverId: string;
   agentId: string;
   client: Pick<DaemonClient, "fetchAgentTimeline"> | null;
-  runtime: Pick<HostRuntimeStore, "fetchAgentTimeline">;
+  runtime: Pick<HostRuntimeStore, "ensureAgentTimelineCurrent">;
   setAgentInitializing: SetAgentInitializing;
   hostDisconnectedMessage?: string;
 }
@@ -56,12 +56,8 @@ export function ensureAgentIsInitialized(input: EnsureAgentIsInitializedInput): 
     timeline.status === "synced" ? timeline.range : null,
   );
 
-  const deferred = createInitDeferred(key, timelineRequest.direction);
-  refreshAgentInitializationTimeout({ key, agentId, setAgentInitializing });
-
-  setAgentInitializing(agentId, true);
-
   if (!client) {
+    const deferred = createInitDeferred(key, timelineRequest.direction);
     setAgentInitializing(agentId, false);
     rejectInitDeferred(
       key,
@@ -70,19 +66,14 @@ export function ensureAgentIsInitialized(input: EnsureAgentIsInitializedInput): 
     return deferred.promise;
   }
 
-  input.runtime.fetchAgentTimeline(serverId, agentId, timelineRequest).catch((error) => {
-    setAgentInitializing(agentId, false);
-    rejectInitDeferred(key, error instanceof Error ? error : new Error(String(error)));
-  });
-
-  return deferred.promise;
+  return input.runtime.ensureAgentTimelineCurrent(serverId, agentId);
 }
 
 export interface RefreshAgentInput {
   serverId: string;
   agentId: string;
   client: Pick<DaemonClient, "refreshAgent"> | null;
-  runtime: Pick<HostRuntimeStore, "fetchAgentTimeline">;
+  runtime: Pick<HostRuntimeStore, "refreshAgentTimeline">;
   setAgentInitializing: SetAgentInitializing;
   hostDisconnectedMessage?: string;
 }
@@ -96,7 +87,7 @@ export async function refreshAgent(input: RefreshAgentInput): Promise<void> {
 
   try {
     await client.refreshAgent(agentId);
-    await runtime.fetchAgentTimeline(serverId, agentId, planTimelineTailFetch());
+    await runtime.refreshAgentTimeline(serverId, agentId);
   } catch (error) {
     setAgentInitializing(agentId, false);
     throw error;

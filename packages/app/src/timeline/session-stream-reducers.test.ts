@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentStreamEventPayload } from "@getpaseo/protocol/messages";
+import type { AgentStreamEventPayload } from "@bytetrue/byspace-protocol/messages";
 import {
   createUserMessage,
   hydrateStreamState,
@@ -197,32 +197,6 @@ describe("deriveAgentStreamTurnLiveness", () => {
   });
 });
 
-describe("timeline turn membership compatibility", () => {
-  it("hydrates tagged rows while retaining legacy rows without a turn ID", () => {
-    const hydrated = hydrateStreamState([
-      {
-        event: {
-          type: "timeline",
-          provider: "claude",
-          turnId: "turn-1",
-          item: { type: "user_message", text: "prompt", clientMessageId: "prompt-id" },
-        },
-        timestamp: new Date(1000),
-      },
-      {
-        event: {
-          type: "timeline",
-          provider: "claude",
-          item: { type: "assistant_message", text: "legacy" },
-        },
-        timestamp: new Date(2000),
-      },
-    ]);
-
-    expect(hydrated.map((item) => item.turnId)).toEqual(["turn-1", undefined]);
-  });
-});
-
 describe("detached timeline windows", () => {
   it("does not apply or catch up live events while viewing an older window", () => {
     const currentTail = [makeAssistantItem("older window")];
@@ -311,17 +285,8 @@ describe("processTimelineResponse", () => {
       text: "local prompt",
       timestamp: new Date(1000),
       timelineCursor: { epoch: "epoch-1", seq: 1 },
-      turnId: "turn-1",
     });
-    const hello = createUserMessage({
-      id: "hello",
-      clientMessageId: "hello-client",
-      text: "hello",
-      timestamp: new Date(1500),
-      timelineCursor: { epoch: "epoch-1", seq: 2 },
-      turnId: "turn-1",
-    });
-    const currentTail = [canonical, makeAssistantItem("existing tail", "existing-tail"), hello];
+    const currentTail = [canonical, makeAssistantItem("existing tail", "existing-tail")];
     const currentHead = [makeAssistantItem("existing head", "existing-head")];
 
     const result = processTimelineResponse({
@@ -349,7 +314,6 @@ describe("processTimelineResponse", () => {
         ],
       },
     });
-    expect(result.tail.find((item) => item.id === "hello")?.turnId).toBe("turn-1");
 
     expect(result.commit).toBe("discard");
     expect(result.tail).toBe(currentTail);
@@ -1793,6 +1757,44 @@ describe("processTimelineResponse", () => {
       startSeq: 1,
       endSeq: 3,
     });
+  });
+
+  it("does not replay a fully covered canonical unit from an overlapping page", () => {
+    const currentTail: StreamItem[] = [
+      {
+        kind: "user_message",
+        id: "prompt-1",
+        text: "Prompt",
+        timestamp: new Date(2_000),
+      },
+    ];
+
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail,
+      currentCursor: { epoch: "epoch-1", startSeq: 1, endSeq: 2 },
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "after",
+        epoch: "epoch-1",
+        startCursor: { seq: 2 },
+        endCursor: { seq: 3 },
+        entries: [
+          {
+            ...makeTimelineEntry(2, "Prompt", "user_message"),
+            item: { type: "user_message", text: "Prompt", messageId: "prompt-1" },
+          },
+          makeTimelineEntry(3, "Answer"),
+        ],
+      },
+    });
+
+    expect(
+      [...result.tail, ...result.head]
+        .filter((item) => item.kind === "assistant_message" || item.kind === "user_message")
+        .map((item) => item.text),
+    ).toEqual(["Prompt", "Answer"]);
+    expect(result.cursor).toEqual({ epoch: "epoch-1", startSeq: 1, endSeq: 3 });
   });
 
   it("does not replay an assistant prefix when catch-up completes an earlier tool call", () => {
@@ -3694,7 +3696,7 @@ describe("processAgentStreamEvent", () => {
     expect(result.sideEffects).toEqual([]);
   });
 
-  it("drops timeline event with epoch mismatch", () => {
+  it("requests authoritative repair for an epoch mismatch after seq 1", () => {
     const existingCursor: TimelineCursor = {
       epoch: "epoch-1",
       startSeq: 1,
@@ -3712,7 +3714,9 @@ describe("processAgentStreamEvent", () => {
     expect(result.cursorChanged).toBe(false);
     expect(result.changedTail).toBe(false);
     expect(result.changedHead).toBe(false);
-    expect(result.sideEffects).toEqual([]);
+    expect(result.sideEffects).toEqual([
+      { type: "catch_up", cursor: { epoch: "epoch-1", endSeq: 5 } },
+    ]);
   });
 
   it("resets visible timeline when a new epoch starts at seq 1", () => {
@@ -4017,7 +4021,7 @@ describe("processAgentStreamEvents", () => {
 
   it("keeps Claude image tool-result output before following assistant blocks while text streams", () => {
     const imageMarkdown =
-      "![Image](/tmp/paseo-attachments/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png)";
+      "![Image](/tmp/byspace-attachments/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png)";
     const result = processAgentStreamEvents({
       events: [
         makeStreamReducerEvent(

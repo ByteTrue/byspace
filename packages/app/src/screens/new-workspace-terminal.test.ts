@@ -244,4 +244,30 @@ describe("runCreateTerminalWorkspace", () => {
       name: undefined,
     });
   });
+
+  it("does not navigate or send input when terminal creation fails", async () => {
+    const ensureWorkspace = vi
+      .fn()
+      .mockResolvedValue({ id: "ws-failed", workspaceDirectory: "/repo/ws-failed" });
+    const createTerminal = vi.fn().mockRejectedValue(new Error("terminal failed"));
+    const sendTerminalInput = vi.fn();
+    const { navigate, recorded } = createRecordingNavigate();
+
+    await expect(
+      runCreateTerminalWorkspace({
+        cwd: "/repo",
+        prompt: "npm run dev",
+        profile: null,
+        profileName: undefined,
+        ensureWorkspace,
+        createTerminal,
+        sendTerminalInput,
+        serverId: "server-abc",
+        navigate,
+      }),
+    ).rejects.toThrow("terminal failed");
+
+    expect(sendTerminalInput).not.toHaveBeenCalled();
+    expect(recorded).toEqual([]);
+  });
 });

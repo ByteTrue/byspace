@@ -22,27 +22,23 @@ const visibleHistoryStart: HistoryStartPaginationInput = {
 };
 
 describe("history start pagination", () => {
-  it("treats locally revealed history as progress before remote pagination", () => {
-    const first = evaluateHistoryStartPagination(
-      createArmedHistoryStartPaginationState(),
-      visibleHistoryStart,
-    );
-    const localReveal = evaluateHistoryStartPagination(first.state, {
-      ...visibleHistoryStart,
-      progressKey: "epoch-1:20:local-60",
-    });
-
-    expect(first.shouldLoad).toBe(true);
-    expect(localReveal.state).toEqual({
-      status: "settling",
-      loadedProgressKey: "epoch-1:20:local-60",
-    });
-  });
-  it("waits for user scroll intent before loading", () => {
+  it("loads underfilled initial history only after authoritative anchoring is ready", () => {
     const dormant = createHistoryStartPaginationState();
-    const evaluated = evaluateHistoryStartPagination(dormant, visibleHistoryStart);
 
-    expect(evaluated).toEqual({ state: { status: "dormant" }, shouldLoad: false });
+    expect(
+      evaluateHistoryStartPagination(dormant, { ...visibleHistoryStart, isReady: false }),
+    ).toEqual({ state: dormant, shouldLoad: false });
+    expect(evaluateHistoryStartPagination(dormant, visibleHistoryStart).shouldLoad).toBe(true);
+  });
+
+  it("does not load a scrollable initial page", () => {
+    const dormant = createHistoryStartPaginationState();
+    const evaluated = evaluateHistoryStartPagination(dormant, {
+      ...visibleHistoryStart,
+      distanceFromHistoryStart: 300,
+    });
+
+    expect(evaluated).toEqual({ state: dormant, shouldLoad: false });
   });
 
   it("waits for anchored page geometry before authorizing another page", () => {

@@ -49,7 +49,7 @@ export const ReviewDraftCommentSchema: z.ZodType<ReviewDraftComment> = z.strictO
 export const SerializedReviewDraftStateSchema: z.ZodType<SerializedReviewDraftState> =
   z.strictObject({
     drafts: z.record(z.string(), z.array(ReviewDraftCommentSchema)),
-    // COMPAT(reviewDraftModes): v1 persisted this field; v2 discards it during migration.
+    // COMPAT(reviewDraftModes): v0.6.0 discards the legacy field; remove after 2027-02-21.
     activeModesByScope: z.record(z.string(), z.enum(["uncommitted", "base"])).optional(),
   });
 

@@ -1,7 +1,7 @@
-import type { PaseoAgentHandle, PaseoClient } from "@getpaseo/client";
+import type { BySpaceAgentHandle, BySpaceClient } from "@bytetrue/byspace-client";
 
-export async function reviewInParallel(client: PaseoClient, cwd: string): Promise<string[]> {
-  const agents: PaseoAgentHandle[] = [];
+export async function reviewInParallel(client: BySpaceClient, cwd: string): Promise<string[]> {
+  const agents: BySpaceAgentHandle[] = [];
 
   try {
     agents.push(

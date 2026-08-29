@@ -1,31 +1,26 @@
 import { existsSync } from "node:fs";
 import type pino from "pino";
-
 import { loadSherpaOnnxNode } from "./sherpa-onnx-node-loader.js";
 
-function assertFileExists(filePath: string, label: string): void {
-  if (!existsSync(filePath)) {
-    throw new Error(`Missing ${label}: ${filePath}`);
-  }
-}
-
-export interface SherpaOfflineRecognizerModel {
-  kind: "nemo_transducer";
-  encoder: string;
-  decoder: string;
-  joiner: string;
-  tokens: string;
-}
+export type SherpaOfflineRecognizerModel =
+  | {
+      kind: "fire_red_asr";
+      encoder: string;
+      decoder: string;
+      tokens: string;
+    }
+  | {
+      kind: "sense_voice";
+      model: string;
+      tokens: string;
+      language: "auto";
+      useInverseTextNormalization: 1;
+    };
 
 export interface SherpaOfflineRecognizerConfig {
   model: SherpaOfflineRecognizerModel;
   numThreads?: number;
-  provider?: "cpu";
-  debug?: 0 | 1;
   sampleRate?: number;
-  featureDim?: number;
-  decodingMethod?: "greedy_search";
-  maxActivePaths?: number;
 }
 
 interface SherpaOfflineRecognizerNative {
@@ -42,61 +37,69 @@ interface SherpaOfflineStreamNative {
   free?: () => void;
 }
 
+function requirePath(filePath: string, label: string): void {
+  if (!existsSync(filePath)) throw new Error(`Missing ${label}: ${filePath}`);
+}
+
+type SherpaOfflineNativeModelConfig =
+  | { fireRedAsr: { encoder: string; decoder: string }; tokens: string }
+  | {
+      senseVoice: { model: string; language: "auto"; useInverseTextNormalization: 1 };
+      tokens: string;
+    };
+
+function buildNativeModelConfig(
+  model: SherpaOfflineRecognizerModel,
+): SherpaOfflineNativeModelConfig {
+  requirePath(model.tokens, "tokens");
+  if (model.kind === "fire_red_asr") {
+    requirePath(model.encoder, "encoder");
+    requirePath(model.decoder, "decoder");
+    return {
+      fireRedAsr: { encoder: model.encoder, decoder: model.decoder },
+      tokens: model.tokens,
+    };
+  }
+
+  requirePath(model.model, "model");
+  return {
+    senseVoice: {
+      model: model.model,
+      language: model.language,
+      useInverseTextNormalization: model.useInverseTextNormalization,
+    },
+    tokens: model.tokens,
+  };
+}
+
 export class SherpaOfflineRecognizerEngine {
   public readonly recognizer: SherpaOfflineRecognizerNative;
   public readonly sampleRate: number;
+  public readonly modelKind: SherpaOfflineRecognizerModel["kind"];
   private readonly logger: pino.Logger;
 
   constructor(config: SherpaOfflineRecognizerConfig, logger: pino.Logger) {
-    this.logger = logger.child({
-      module: "speech",
-      provider: "local",
-      component: "offline-recognizer",
-    });
-
-    assertFileExists(config.model.encoder, "offline encoder");
-    assertFileExists(config.model.decoder, "offline decoder");
-    assertFileExists(config.model.joiner, "offline joiner");
-    assertFileExists(config.model.tokens, "tokens");
-
-    const sherpa = loadSherpaOnnxNode();
-
+    this.logger = logger.child({ module: "speech", provider: "local", component: "recognizer" });
+    const { model } = config;
+    const modelConfig = buildNativeModelConfig(model);
     const recognizerConfig = {
-      featConfig: {
-        sampleRate: config.sampleRate ?? 16000,
-        featureDim: config.featureDim ?? 80,
-      },
+      featConfig: { sampleRate: config.sampleRate ?? 16_000, featureDim: 80 },
       modelConfig: {
-        transducer: {
-          encoder: config.model.encoder,
-          decoder: config.model.decoder,
-          joiner: config.model.joiner,
-        },
-        tokens: config.model.tokens,
-        modelType: "nemo_transducer",
-        numThreads: config.numThreads ?? 1,
-        provider: config.provider ?? "cpu",
-        debug: config.debug ?? 0,
+        ...modelConfig,
+        numThreads: config.numThreads ?? 2,
+        provider: "cpu",
+        debug: 0,
       },
-      decodingMethod: config.decodingMethod ?? "greedy_search",
-      maxActivePaths: config.maxActivePaths ?? 4,
+      decodingMethod: "greedy_search",
+      maxActivePaths: 4,
     };
-
-    this.recognizer = new (
-      sherpa as unknown as {
-        OfflineRecognizer: new (config: unknown) => SherpaOfflineRecognizerNative;
-      }
-    ).OfflineRecognizer(recognizerConfig);
-    const sr = this.recognizer?.config?.featConfig?.sampleRate;
-    this.sampleRate =
-      typeof sr === "number" && Number.isFinite(sr) && sr > 0
-        ? sr
-        : recognizerConfig.featConfig.sampleRate;
-
-    this.logger.info(
-      { sampleRate: this.sampleRate, numThreads: recognizerConfig.modelConfig.numThreads },
-      "Sherpa offline recognizer initialized",
-    );
+    const sherpa = loadSherpaOnnxNode() as unknown as {
+      OfflineRecognizer: new (value: unknown) => SherpaOfflineRecognizerNative;
+    };
+    this.recognizer = new sherpa.OfflineRecognizer(recognizerConfig);
+    this.sampleRate = this.recognizer.config?.featConfig?.sampleRate ?? 16_000;
+    this.modelKind = model.kind;
+    this.logger.info({ model: model.kind, sampleRate: this.sampleRate }, "Recognizer initialized");
   }
 
   createStream(): SherpaOfflineStreamNative {
@@ -108,24 +111,15 @@ export class SherpaOfflineRecognizerEngine {
     sampleRate: number,
     samples: Float32Array,
   ): void {
-    if (!stream || typeof stream.acceptWaveform !== "function") {
-      throw new Error("Unexpected sherpa offline stream: missing acceptWaveform()");
-    }
-
-    // sherpa-onnx-node expects: acceptWaveform({ samples, sampleRate })
-    // sherpa-onnx (WASM) expects: acceptWaveform(sampleRate, samples)
-    if (stream.acceptWaveform.length <= 1) {
-      stream.acceptWaveform({ samples, sampleRate });
-    } else {
-      stream.acceptWaveform(sampleRate, samples);
-    }
+    if (stream.acceptWaveform.length <= 1) stream.acceptWaveform({ samples, sampleRate });
+    else stream.acceptWaveform(sampleRate, samples);
   }
 
   free(): void {
     try {
-      this.recognizer?.free?.();
-    } catch (err) {
-      this.logger.warn({ err }, "Failed to free sherpa offline recognizer");
+      this.recognizer.free?.();
+    } catch (error) {
+      this.logger.warn({ err: error }, "Failed to free recognizer");
     }
   }
 }

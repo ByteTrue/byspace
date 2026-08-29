@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { Modal, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import type { StyleProp, ViewStyle } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -15,7 +15,6 @@ import {
 import {
   BottomSheetBackdrop,
   BottomSheetScrollView,
-  KEYBOARD_STATUS,
   useBottomSheetInternal,
   type BottomSheetBackgroundProps,
 } from "@gorhom/bottom-sheet";
@@ -25,12 +24,8 @@ import {
   IsolatedBottomSheetModal,
   useIsolatedBottomSheetVisibility,
 } from "@/components/ui/isolated-bottom-sheet-modal";
-import {
-  getBottomSheetVisibleContentHeight,
-  getCompactSheetSafeAreaPadding,
-} from "@/components/adaptive-modal-sheet-layout";
+import { getCompactSheetSafeAreaPadding } from "@/components/adaptive-modal-sheet-layout";
 import { isWeb } from "@/constants/platform";
-import { useKeyboardVisibility } from "@/hooks/use-keyboard-visibility";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AdaptiveTextInput } from "@/components/adaptive-text-input";
 export { AdaptiveTextInput, type AdaptiveTextInputProps } from "@/components/adaptive-text-input";
@@ -43,8 +38,6 @@ export const SHEET_HORIZONTAL_PADDING_SCALE = 6;
 
 export interface SheetHeaderSearch {
   onChange: (value: string) => void;
-  onFocus?: () => void;
-  onBlur?: () => void;
   resetKey?: string | number;
   placeholder?: string;
   autoFocus?: boolean;
@@ -63,6 +56,7 @@ export interface SheetHeader {
   back?: SheetHeaderBack;
   leading?: ReactNode;
   actions?: ReactNode;
+  tabs?: ReactNode;
   search?: SheetHeaderSearch;
 }
 
@@ -120,6 +114,10 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
   },
+  tabsRow: {
+    paddingHorizontal: theme.spacing[SHEET_HORIZONTAL_PADDING_SCALE],
+    paddingBottom: theme.spacing[3],
+  },
   closeButton: {
     padding: theme.spacing[2],
     borderRadius: theme.borderRadius.lg,
@@ -145,6 +143,10 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
+  },
+  inlineTabsRow: {
+    paddingHorizontal: theme.spacing[3],
+    paddingBottom: theme.spacing[2],
   },
   inlineSearchRow: {
     flexDirection: "row",
@@ -260,15 +262,14 @@ function BottomSheetVisibleContent({ children }: { children: ReactNode }) {
         ? animatedPosition.get()
         : Math.min(animatedPosition.get(), initialDetentPosition);
 
-    const keyboardState = animatedKeyboardState.get();
     return {
-      height: getBottomSheetVisibleContentHeight({
-        containerHeight,
-        contentPosition,
-        handleHeight,
-        keyboardHeight: keyboardState.heightWithinContainer,
-        isKeyboardVisible: keyboardState.status === KEYBOARD_STATUS.SHOWN,
-      }),
+      height: Math.max(
+        0,
+        containerHeight -
+          contentPosition -
+          handleHeight -
+          animatedKeyboardState.get().heightWithinContainer,
+      ),
     };
   }, [animatedDetentsState, animatedKeyboardState, animatedLayoutState, animatedPosition]);
 
@@ -336,7 +337,6 @@ export function SheetHeaderView({
         {header.actions ? <View style={styles.headerActions}>{header.actions}</View> : null}
         {showCloseButton ? (
           <Pressable
-            accessibilityRole="button"
             accessibilityLabel={t("common.actions.close")}
             style={styles.closeButton}
             onPress={onClose}
@@ -350,6 +350,7 @@ export function SheetHeaderView({
           </Pressable>
         ) : null}
       </View>
+      {header.tabs ? <View style={styles.tabsRow}>{header.tabs}</View> : null}
       {search ? (
         <View style={styles.searchRow}>
           <Search size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
@@ -359,8 +360,6 @@ export function SheetHeaderView({
             placeholder={search.placeholder ?? t("common.actions.search")}
             resetKey={search.resetKey}
             onChangeText={handleSearchChange}
-            onFocus={search.onFocus}
-            onBlur={search.onBlur}
             autoCapitalize="none"
             autoCorrect={false}
             autoFocus={search.autoFocus}
@@ -378,7 +377,7 @@ export function InlineHeaderView({ header }: { header: SheetHeader }) {
   const back = header.back;
   const handleBackPress = back?.onPress;
   const hasInlineRow = Boolean(handleBackPress || header.leading || header.actions);
-  if (!hasInlineRow && !header.search) return null;
+  if (!hasInlineRow && !header.tabs && !header.search) return null;
   return (
     <View>
       {hasInlineRow ? (
@@ -409,6 +408,7 @@ export function InlineHeaderView({ header }: { header: SheetHeader }) {
           {header.actions ? <View style={styles.headerActions}>{header.actions}</View> : null}
         </View>
       ) : null}
+      {header.tabs ? <View style={styles.inlineTabsRow}>{header.tabs}</View> : null}
       {header.search ? (
         <View style={styles.inlineSearchRow}>
           <Search size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
@@ -418,8 +418,6 @@ export function InlineHeaderView({ header }: { header: SheetHeader }) {
             placeholder={header.search.placeholder ?? t("common.actions.search")}
             resetKey={header.search.resetKey}
             onChangeText={header.search.onChange}
-            onFocus={header.search.onFocus}
-            onBlur={header.search.onBlur}
             autoCapitalize="none"
             autoCorrect={false}
             autoFocus={header.search.autoFocus}
@@ -446,9 +444,7 @@ export interface AdaptiveModalSheetProps {
   desktopMaxWidth?: number;
   scrollable?: boolean;
   presentation?: "push" | "replace";
-  /** Layout intent for the sheet body, composed over the sheet's own content inset. */
   contentStyle?: StyleProp<ViewStyle>;
-  /** Size compact sheet content to the live snap height instead of its largest snap point. */
   sizeContentToCurrentSnapPoint?: boolean;
 }
 
@@ -472,19 +468,17 @@ export function AdaptiveModalSheet({
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
   const insets = useSafeAreaInsets();
-  const isKeyboardVisible = useKeyboardVisibility();
   const resolvedSnapPoints = useMemo(() => snapPoints ?? ["65%", "90%"], [snapPoints]);
   const compactSafeAreaPadding = useMemo(
     () =>
       getCompactSheetSafeAreaPadding({
         isCompact: isMobile,
-        isKeyboardVisible,
         hasFooter: Boolean(footer),
         baseContentPadding: theme.spacing[SHEET_HORIZONTAL_PADDING_SCALE],
         baseFooterPadding: theme.spacing[3],
         safeAreaBottom: insets.bottom,
       }),
-    [footer, insets.bottom, isKeyboardVisible, isMobile, theme.spacing],
+    [footer, insets.bottom, isMobile, theme.spacing],
   );
   const compactContentStyle = useMemo(
     () => [
@@ -605,12 +599,6 @@ export function AdaptiveModalSheet({
     }, WEB_EXIT_DURATION_MS);
     return () => window.clearTimeout(timeout);
   }, [visible, isMobile, onDismiss, shouldRenderWeb]);
-
-  useEffect(() => {
-    if (isWeb || isMobile || visible || Platform.OS !== "android") return;
-    const timeout = setTimeout(notifyNativeModalDismiss, 0);
-    return () => clearTimeout(timeout);
-  }, [visible, isMobile, notifyNativeModalDismiss]);
 
   if (isMobile) {
     const sheetContent = (

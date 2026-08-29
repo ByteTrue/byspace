@@ -1,31 +1,19 @@
 import {
   normalizeHostPort,
   normalizeLoopbackToLocalhost,
-} from "@getpaseo/protocol/daemon-endpoints";
+} from "@bytetrue/byspace-protocol/daemon-endpoints";
 import {
   DirectTcpHostConnectionSchema,
   type DirectTcpHostConnection,
-} from "@getpaseo/protocol/host-connection-schema";
+} from "@bytetrue/byspace-protocol/host-connection-schema";
 import {
-  type HostAppearance,
   defaultHostAppearance,
   HostAppearanceSchema,
+  type HostAppearance,
 } from "@/hosts/appearance";
 import { z } from "zod";
 
 export { DirectTcpHostConnectionSchema, type DirectTcpHostConnection };
-
-export interface DirectSocketHostConnection {
-  id: string;
-  type: "directSocket";
-  path: string;
-}
-
-export interface DirectPipeHostConnection {
-  id: string;
-  type: "directPipe";
-  path: string;
-}
 
 export interface RelayHostConnection {
   id: string;
@@ -35,11 +23,7 @@ export interface RelayHostConnection {
   daemonPublicKeyB64: string;
 }
 
-export type HostConnection =
-  | DirectTcpHostConnection
-  | DirectSocketHostConnection
-  | DirectPipeHostConnection
-  | RelayHostConnection;
+export type HostConnection = DirectTcpHostConnection | RelayHostConnection;
 
 export type HostLifecycle = Record<string, never>;
 
@@ -63,48 +47,6 @@ export function normalizeHostLabel(value: string | null | undefined, serverId: s
   return trimmed.length > 0 ? trimmed : serverId;
 }
 
-export function orderHostsLocalFirst<T extends { serverId: string }>(
-  hosts: T[],
-  localServerId: string | null,
-): T[] {
-  if (!localServerId) {
-    return hosts;
-  }
-  const localIndex = hosts.findIndex((host) => host.serverId === localServerId);
-  if (localIndex <= 0) {
-    return hosts;
-  }
-  const ordered = hosts.slice();
-  const [local] = ordered.splice(localIndex, 1);
-  if (local) {
-    ordered.unshift(local);
-  }
-  return ordered;
-}
-
-/**
- * Resolves which host a settings host section should target: the picker
- * selection, else the local daemon, else the first connected host.
- *
- * Only a serverId that names a currently connected host is used. Both the
- * selection and the local daemon can name a host that isn't connected (a stale
- * selection, or a local daemon whose id persists in storage while it's stopped);
- * using one would resolve the section to an unknown id and render "host not found".
- */
-export function resolveActiveHostServerId(params: {
-  selectedServerId: string | null;
-  localServerId: string | null;
-  hosts: readonly { serverId: string }[];
-  orderedHosts: readonly { serverId: string }[];
-}): string | null {
-  const { selectedServerId, localServerId, hosts, orderedHosts } = params;
-  const connected = (serverId: string | null): string | null =>
-    serverId && hosts.some((host) => host.serverId === serverId) ? serverId : null;
-  return (
-    connected(selectedServerId) ?? connected(localServerId) ?? orderedHosts[0]?.serverId ?? null
-  );
-}
-
 function hostConnectionEquals(left: HostConnection, right: HostConnection): boolean {
   if (left.type !== right.type || left.id !== right.id) {
     return false;
@@ -116,12 +58,6 @@ function hostConnectionEquals(left: HostConnection, right: HostConnection): bool
       (left.useTls ?? false) === (right.useTls ?? false) &&
       left.password === right.password
     );
-  }
-  if (left.type === "directSocket" && right.type === "directSocket") {
-    return left.path === right.path;
-  }
-  if (left.type === "directPipe" && right.type === "directPipe") {
-    return left.path === right.path;
   }
   if (left.type === "relay" && right.type === "relay") {
     return (
@@ -138,23 +74,14 @@ function hostLifecycleEquals(left: HostLifecycle, right: HostLifecycle): boolean
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function upsertHostConnectionById(
-  connections: HostConnection[],
-  connection: HostConnection,
-): HostConnection[] {
+function dedupeHostConnections(connections: HostConnection[]): HostConnection[] {
   const next: HostConnection[] = [];
-  let replaced = false;
-  for (const existing of connections) {
-    if (existing.id !== connection.id) {
-      next.push(existing);
+  for (const connection of connections) {
+    if (next.some((existing) => hostConnectionEquals(existing, connection))) {
       continue;
     }
-
-    if (replaced) continue;
     next.push(connection);
-    replaced = true;
   }
-  if (!replaced) next.push(connection);
   return next;
 }
 
@@ -200,10 +127,10 @@ export function upsertHostConnectionInProfiles(input: {
 
   const matchedProfiles = matchingIndexes.map((index) => existing[index]);
   const prev = matchedProfiles.find((daemon) => daemon.serverId === serverId) ?? matchedProfiles[0];
-  const nextConnections = upsertHostConnectionById(
-    matchedProfiles.flatMap((daemon) => daemon.connections),
+  const nextConnections = dedupeHostConnections([
+    ...matchedProfiles.flatMap((daemon) => daemon.connections),
     input.connection,
-  );
+  ]);
   const nextLifecycle = prev.lifecycle;
   const nextLabel = prev.label === prev.serverId ? derivedLabel : prev.label;
   const nextPreferredConnectionId =
@@ -256,32 +183,6 @@ export function connectionFromListen(listen: string): HostConnection | null {
     return null;
   }
 
-  if (normalizedListen.startsWith("pipe://")) {
-    const path = normalizedListen.slice("pipe://".length).trim();
-    return path ? { id: `pipe:${path}`, type: "directPipe", path } : null;
-  }
-
-  if (normalizedListen.startsWith("unix://")) {
-    const path = normalizedListen.slice("unix://".length).trim();
-    return path ? { id: `socket:${path}`, type: "directSocket", path } : null;
-  }
-
-  if (normalizedListen.startsWith("\\\\.\\pipe\\")) {
-    return {
-      id: `pipe:${normalizedListen}`,
-      type: "directPipe",
-      path: normalizedListen,
-    };
-  }
-
-  if (normalizedListen.startsWith("/")) {
-    return {
-      id: `socket:${normalizedListen}`,
-      type: "directSocket",
-      path: normalizedListen,
-    };
-  }
-
   try {
     const endpoint = normalizeLoopbackToLocalhost(normalizeHostPort(normalizedListen));
     return {
@@ -301,16 +202,6 @@ const StoredHostConnectionSchema = z.discriminatedUnion("type", [
     endpoint: z.string(),
     useTls: z.boolean().optional(),
     password: z.string().optional(),
-  }),
-  z.strictObject({
-    id: z.string().optional(),
-    type: z.literal("directSocket"),
-    path: z.string(),
-  }),
-  z.strictObject({
-    id: z.string().optional(),
-    type: z.literal("directPipe"),
-    path: z.string(),
   }),
   z.strictObject({
     id: z.string().optional(),
@@ -347,14 +238,6 @@ function normalizeStoredConnection(connection: StoredHostConnection): HostConnec
     } catch {
       return null;
     }
-  }
-  if (connection.type === "directSocket") {
-    const path = connection.path.trim();
-    return path ? { id: `socket:${path}`, type: "directSocket", path } : null;
-  }
-  if (connection.type === "directPipe") {
-    const path = connection.path.trim();
-    return path ? { id: `pipe:${path}`, type: "directPipe", path } : null;
   }
   if (connection.type === "relay") {
     try {

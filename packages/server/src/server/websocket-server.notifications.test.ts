@@ -9,7 +9,7 @@ import type { ScheduleService } from "./schedule/service.js";
 import type { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import { asInternals, createStub } from "./test-utils/class-mocks.js";
 import { createProviderSnapshotManagerStub } from "./test-utils/session-stubs.js";
-import type { PushNotificationSender, PushPayload } from "./push/index.js";
+import type { PushNotificationSender, PushPayload } from "./push/notifications.js";
 import type { WorkspaceAutoName } from "./workspace-auto-name.js";
 
 const WORKSPACE_ID = "workspace-1";
@@ -105,13 +105,13 @@ function createServer(agentManagerOverrides?: Record<string, unknown>) {
   };
 
   const server = new VoiceAssistantWebSocketServer(
-    createStub<HTTPServer>({}),
+    createStub<HTTPServer>({ on: vi.fn() }),
     createStub<pino.Logger>(createLogger()),
     "srv-test",
     createStub<AgentManager>(agentManager),
     createStub<AgentStorage>({}),
     createStub<DownloadTokenStore>({}),
-    "/tmp/paseo-test",
+    "/tmp/byspace-test",
     createStub<DaemonConfigStore>(daemonConfigStore),
     null,
     { allowedOrigins: new Set() },
@@ -189,7 +189,6 @@ function connectClient(
 ) {
   const ws = createOpenSocket();
   asInternals<WebSocketServerInternals>(server).sessions.set(ws, {
-    kind: "trusted",
     session: createSessionWithActivity(activity),
     clientId: "client-test",
     appVersion: null,
@@ -274,10 +273,10 @@ describe("VoiceAssistantWebSocketServer notification payloads", () => {
     expect(getLastAssistantMessage).toHaveBeenCalledWith("agent-2");
   });
 
-  it("routes a hidden stale focused browser tab's notification to the present Electron web client", async () => {
+  it("routes a hidden stale focused browser tab's notification to the present Web client", async () => {
     const { server, pushNotifications } = createServer();
     const nowMs = Date.now();
-    const electronWs = connectClient(server, {
+    const presentWebWs = connectClient(server, {
       deviceType: "web",
       appVisible: false,
       focusedAgentId: "agent-Y",
@@ -296,7 +295,7 @@ describe("VoiceAssistantWebSocketServer notification payloads", () => {
       reason: "finished",
     });
 
-    expect(readAttentionRequiredMessage(electronWs).shouldNotify).toBe(true);
+    expect(readAttentionRequiredMessage(presentWebWs).shouldNotify).toBe(true);
     expect(readAttentionRequiredMessage(firefoxWs).shouldNotify).toBe(false);
     expect(pushNotifications.sent).toEqual([]);
   });

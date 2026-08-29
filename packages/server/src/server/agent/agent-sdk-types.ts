@@ -2,10 +2,8 @@ import type {
   AgentProviderNotice,
   AgentTaskItem,
   ProviderOptions,
-  ToolPolicy,
-} from "@getpaseo/protocol/agent-types";
-import type { AgentAttachment } from "@getpaseo/protocol/messages";
-import type { PaseoToolCatalog } from "./tools/types.js";
+} from "@bytetrue/byspace-protocol/agent-types";
+import type { AgentAttachment } from "@bytetrue/byspace-protocol/messages";
 
 export type { AgentProviderNotice, AgentTaskItem };
 
@@ -184,7 +182,6 @@ export interface AgentCapabilityFlags {
   supportsSessionListing?: boolean;
   supportsDynamicModes: boolean;
   supportsMcpServers: boolean;
-  supportsNativePaseoTools?: boolean;
   supportsReasoningStream: boolean;
   supportsToolInvocations: boolean;
   supportsRewindConversation?: boolean;
@@ -592,7 +589,6 @@ export interface AgentSessionConfig {
   featureValues?: Record<string, unknown>;
   title?: string | null;
   providerOptions?: ProviderOptions;
-  toolPolicy?: ToolPolicy;
   mcpServers?: Record<string, McpServerConfig>;
   /**
    * Internal agents are hidden from listings and don't trigger notifications.
@@ -604,11 +600,6 @@ export interface AgentSessionConfig {
 export interface AgentLaunchContext {
   agentId?: string;
   env?: Record<string, string>;
-  /**
-   * Runtime-only internal Paseo tools. This must never be persisted into
-   * AgentSessionConfig; providers may adapt it to their native tool surface.
-   */
-  paseoTools?: PaseoToolCatalog;
 }
 
 export interface AgentCreateSessionOptions {
@@ -659,7 +650,6 @@ export interface AgentSession {
    * still uncertain.
    */
   interrupt(): Promise<void>;
-  /** Release live runtime resources without archiving or deleting the durable native session. */
   close(): Promise<void>;
   listCommands?(): Promise<AgentSlashCommand[]>;
   setModel?(modelId: string | null): Promise<void>;
@@ -729,8 +719,6 @@ export interface AgentClient {
    * process, separate upstream calls, static modes, or private helpers; callers
    * outside the provider do not get separate runtime model/mode probes.
    * The registry is responsible for merging configured model overrides.
-   * ProviderSnapshotManager supplies a shared context. Providers must pass its
-   * signal downstream and finish resource cleanup before rejecting on abort.
    */
   fetchCatalog(
     options: FetchCatalogOptions,
@@ -757,13 +745,13 @@ export interface AgentClient {
   isAvailable(signal?: AbortSignal): Promise<boolean>;
   getDiagnostic?(): Promise<{ diagnostic: string }>;
   /**
-   * Archive a durable native session (best-effort). Runtime release belongs to AgentSession.close().
-   * Called when Paseo archives an agent so the provider's own UI reflects the same state.
+   * Archive a persisted session in the native provider (best-effort).
+   * Called when BySpace archives an agent so the provider's own UI reflects the same state.
    */
   archiveNativeSession?(handle: AgentPersistenceHandle): Promise<void>;
   /**
-   * Unarchive a durable native session in the provider.
-   * Called before Paseo clears its archived flag so provider resume can succeed.
+   * Unarchive a persisted session in the native provider.
+   * Called before BySpace clears its archived flag so provider resume can succeed.
    */
   unarchiveNativeSession?(handle: AgentPersistenceHandle): Promise<void>;
   /**

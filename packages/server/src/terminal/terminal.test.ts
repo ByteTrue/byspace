@@ -1,19 +1,17 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
+import { renderTerminalSnapshotToAnsi } from "@bytetrue/byspace-protocol/terminal-snapshot";
 import { isPlatform } from "../test-utils/platform.js";
 import {
-  buildTerminalEnvironment,
   createTerminal,
   ensureNodePtySpawnHelperExecutableForCurrentPlatform,
   resolveDefaultTerminalShell,
   resolveTerminalSpawnCommand,
   humanizeProcessTitle,
   normalizeProcessTitle,
-  resolveZshShellIntegrationDir,
   type TerminalSession,
 } from "./terminal.js";
 import {
   chmodSync,
-  cpSync,
   existsSync,
   mkdtempSync,
   mkdirSync,
@@ -22,12 +20,9 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { spawnSync } from "node:child_process";
-import * as pty from "node-pty";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { setImmediate as waitForImmediate, setTimeout as delay } from "node:timers/promises";
-import { stripVTControlCharacters } from "node:util";
+import { setImmediate as waitForImmediate } from "node:timers/promises";
 
 const hasZsh = existsSync("/bin/zsh");
 
@@ -118,52 +113,19 @@ if (isPlatform("win32") && !process.env.ComSpec && !process.env.COMSPEC) {
 const sessions: TerminalSession[] = [];
 const temporaryDirs: string[] = [];
 
-/**
- * `kill()` only signals; the shell exits asynchronously and keeps writing on
- * the way out (zsh drops a history file and a compdump into `$ZDOTDIR`).
- * Deleting its directory before then loses the race as `ENOTEMPTY`: the
- * recursive walk empties the directory, the dying shell recreates a file in it,
- * and the final rmdir fails.
- *
- * Waiting for the exit shrinks that window but does not close it: some of those
- * writes come from processes zsh forked, which outlive the pty and answer to
- * nothing we hold. Retries alone did not close it either.
- *
- * The known post-retry `ENOTEMPTY` race is reported and tolerated because it
- * belongs to a descendant shell outliving the tested terminal. Any other
- * cleanup error still fails the test that owns the directory.
- */
-async function waitForSessionExit(session: TerminalSession): Promise<void> {
-  const exited = new Promise<void>((resolve) => {
-    const dispose = session.onExit(() => {
-      dispose();
-      resolve();
-    });
-    session.kill();
-  });
-  await Promise.race([exited, delay(2_000)]);
-}
-
 afterEach(async () => {
   vi.useRealTimers();
-  await Promise.all(sessions.map(waitForSessionExit));
+  if (isPlatform("win32")) {
+    // Awaiting node-pty teardown can terminate the Vitest worker on Windows.
+    sessions.forEach((session) => session.kill());
+  } else {
+    await Promise.all(sessions.map((session) => session.killAndWait()));
+  }
   sessions.length = 0;
   while (temporaryDirs.length > 0) {
     const dir = temporaryDirs.pop();
     if (dir) {
-      try {
-        rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 25 });
-      } catch (error) {
-        if (
-          typeof error !== "object" ||
-          error === null ||
-          !("code" in error) ||
-          error.code !== "ENOTEMPTY"
-        ) {
-          throw error;
-        }
-        console.warn(`leaving temp dir behind after ENOTEMPTY retries: ${dir}`);
-      }
+      rmSync(dir, { recursive: true, force: true });
     }
   }
 });
@@ -254,33 +216,6 @@ describe("createTerminal", () => {
     expect(resolveExecutable).not.toHaveBeenCalled();
   });
 
-  it.runIf(isPlatform("linux", "darwin"))(
-    "passes an unescaped multi-line prompt through byte-for-byte on POSIX",
-    async () => {
-      // node-pty spawns directly via execve on POSIX (no shell), so a prompt
-      // substituted into `args` is never re-parsed by anything -- it must
-      // reach the target process exactly as typed, including raw newlines,
-      // quotes, and shell metacharacters that would be dangerous under a
-      // shell but are inert here.
-      const nastyPrompt =
-        'fix the bug\nwhere `git commit -m "wip"` fails\nif $HOME contains a & or | char';
-      const resolveExecutable = vi.fn(async () => "/usr/local/bin/claude");
-
-      const resolvedLinux = await resolveTerminalSpawnCommand("claude", [nastyPrompt], {
-        platform: "linux",
-        resolveExecutable,
-      });
-      const resolvedDarwin = await resolveTerminalSpawnCommand("claude", [nastyPrompt], {
-        platform: "darwin",
-        resolveExecutable,
-      });
-
-      expect(resolvedLinux).toEqual({ command: "claude", args: [nastyPrompt] });
-      expect(resolvedDarwin).toEqual({ command: "claude", args: [nastyPrompt] });
-      expect(resolveExecutable).not.toHaveBeenCalled();
-    },
-  );
-
   it("keeps the original command when it cannot be resolved on Windows", async () => {
     const resolved = await resolveTerminalSpawnCommand("claude", [], {
       platform: "win32",
@@ -298,78 +233,31 @@ describe("createTerminal", () => {
       resolveExecutable: async () => "C:\\npm\\claude.cmd",
     });
 
-    // The `.cmd` branch now hands node-pty a single pre-escaped command line
-    // (string) instead of an argv array, so that node-pty's own
-    // MSVCRT-style array quoting never runs a second time over an already
-    // cmd.exe-escaped argument. See escapeCmdExeArgument in terminal.ts.
     expect(resolved).toEqual({
       command: "C:\\Windows\\System32\\cmd.exe",
       args: '/d /s /c "C:\\npm\\claude.cmd ^^^"--foo^^^""',
     });
   });
 
-  describe(".cmd shim argument escaping on Windows", () => {
-    async function resolveCmdShimArgs(promptArg: string): Promise<string> {
-      const resolved = await resolveTerminalSpawnCommand("claude", [promptArg], {
-        platform: "win32",
-        env: { ComSpec: "C:\\Windows\\System32\\cmd.exe" },
-        resolveExecutable: async () => "C:\\npm\\claude.cmd",
-      });
-      // A real narrow rather than a cast: the `.cmd` branch is the one case
-      // that returns a pre-escaped command line instead of argv, so if that
-      // contract ever changes these tests should fail loudly here rather than
-      // assert against a stringified array.
-      const { args } = resolved;
-      if (typeof args !== "string") {
-        throw new Error(`expected a cmd.exe command line, got ${JSON.stringify(args)}`);
-      }
-      return args;
-    }
-
-    // Each expected string is the exact cmd.exe command line the escaping
-    // must produce so a real `cmd.exe /c` invocation reconstructs the
-    // original prompt as a single argv element for the target process
-    // (modulo the documented newline-to-space normalization below).
-    it("neutralizes cmd.exe's own metacharacters instead of letting them execute", async () => {
-      expect(await resolveCmdShimArgs("a & b | c")).toBe(
-        '/d /s /c "C:\\npm\\claude.cmd ^^^"a^^^ ^^^&^^^ b^^^ ^^^|^^^ c^^^""',
-      );
-      expect(await resolveCmdShimArgs("100% done %PATH%")).toBe(
-        '/d /s /c "C:\\npm\\claude.cmd ^^^"100^^^%^^^ done^^^ ^^^%PATH^^^%^^^""',
-      );
-      expect(await resolveCmdShimArgs("a^b")).toBe('/d /s /c "C:\\npm\\claude.cmd ^^^"a^^^^b^^^""');
+  it("escapes Windows batch-shim metacharacters and quotes", async () => {
+    const resolved = await resolveTerminalSpawnCommand("claude", ['say "hello" & %PATH%'], {
+      platform: "win32",
+      env: { ComSpec: "C:\\Windows\\System32\\cmd.exe" },
+      resolveExecutable: async () => "C:\\npm\\claude.cmd",
     });
 
-    it("escapes embedded double quotes and backslash runs preceding them", async () => {
-      expect(await resolveCmdShimArgs('say "hello" now')).toBe(
-        '/d /s /c "C:\\npm\\claude.cmd ^^^"say^^^ \\^^^"hello\\^^^"^^^ now^^^""',
-      );
-      expect(await resolveCmdShimArgs('C:\\path\\ "quoted"')).toBe(
-        '/d /s /c "C:\\npm\\claude.cmd ^^^"C:\\path\\^^^ \\^^^"quoted\\^^^"^^^""',
-      );
+    expect(resolved.args).toBe(
+      '/d /s /c "C:\\npm\\claude.cmd ^^^"say^^^ \\^^^"hello\\^^^"^^^ ^^^&^^^ ^^^%PATH^^^%^^^""',
+    );
+  });
+
+  it("normalizes Windows batch-shim newlines instead of executing them", async () => {
+    const resolved = await resolveTerminalSpawnCommand("claude", ["line one\r\nline two"], {
+      platform: "win32",
+      resolveExecutable: async () => "C:\\npm\\claude.bat",
     });
 
-    // cmd.exe has no way to escape a literal CR/LF inside one command line
-    // -- its parser treats newlines as command separators regardless of
-    // quoting -- so a raw newline is normalized to a space before escaping.
-    // This is a deliberate choice, not an oversight: it avoids the prompt
-    // ever splitting into a second, attacker-controlled cmd.exe command, at
-    // the cost of losing the original line breaks.
-    it("normalizes embedded newlines to spaces instead of letting them split the command", async () => {
-      expect(await resolveCmdShimArgs("line one\nline two")).toBe(
-        '/d /s /c "C:\\npm\\claude.cmd ^^^"line^^^ one^^^ line^^^ two^^^""',
-      );
-      expect(await resolveCmdShimArgs("line one\r\nline two")).toBe(
-        '/d /s /c "C:\\npm\\claude.cmd ^^^"line^^^ one^^^ line^^^ two^^^""',
-      );
-    });
-
-    it("handles a multi-line prompt combining quotes, backslashes, and every cmd.exe metacharacter", async () => {
-      const prompt = 'multi\nline "quoted \\path\\" & piped | percent %VAR% ^caret';
-      expect(await resolveCmdShimArgs(prompt)).toBe(
-        '/d /s /c "C:\\npm\\claude.cmd ^^^"multi^^^ line^^^ \\^^^"quoted^^^ \\path\\\\\\^^^"^^^ ^^^&^^^ piped^^^ ^^^|^^^ percent^^^ ^^^%VAR^^^%^^^ ^^^^caret^^^""',
-      );
-    });
+    expect(resolved.args).toBe('/d /s /c "C:\\npm\\claude.bat ^^^"line^^^ one^^^ line^^^ two^^^""');
   });
 
   it("uses the resolved .exe path directly on Windows", async () => {
@@ -380,35 +268,6 @@ describe("createTerminal", () => {
 
     expect(resolved).toEqual({ command: "C:\\tools\\claude.exe", args: ["--foo"] });
   });
-
-  it.runIf(isPlatform("linux", "darwin"))(
-    "spawns without shell interpretation on POSIX, so argv reaches the child byte-for-byte",
-    async () => {
-      // The composer substitutes {{{prompt}}} directly into `args` before this
-      // ever reaches the daemon, so a raw multi-line prompt containing quotes,
-      // backslashes, and shell metacharacters must arrive at the spawned
-      // process exactly as typed. node-pty's POSIX backend spawns via execve
-      // with no shell, so per-arg escaping is unnecessary there -- this test
-      // proves that end-to-end through createTerminal (not just at the
-      // resolveTerminalSpawnCommand unit level) by reading the argv the
-      // spawned process actually received back out of the pty.
-      const nastyPrompt =
-        'line one\nline two: git commit -m "wip" && echo $HOME | grep ^x > out.txt';
-      const session = trackSession(
-        await createTerminal({
-          workspaceId: "ws-test",
-          cwd: realpathSync(tmpdir()),
-          cols: 500,
-          command: process.execPath,
-          args: ["-e", "process.stdout.write(JSON.stringify(process.argv.slice(1)))", nastyPrompt],
-        }),
-      );
-
-      const state = await waitForState(session, (s) => getRowText(s, 0).startsWith("["));
-
-      expect(JSON.parse(getRowText(state, 0))).toEqual([nastyPrompt]);
-    },
-  );
 
   it("creates a terminal session with an id, name, and cwd", async () => {
     const session = trackSession(
@@ -623,6 +482,84 @@ describe.skipIf(isPlatform("win32"))("send input", () => {
     expect(getRowText(state, 2)).toBe("$");
   });
 
+  it("emits post-subscribe output with monotonic revisions and a drained snapshot that agrees", async () => {
+    // Output is emitted to listeners without waiting for the headless xterm parse
+    // callback; snapshotRevision trails emitRevision in the SAME counter space and
+    // only catches up after drainHeadlessXterm(). This keeps the controller's replay
+    // dedup (revision <= snapshotRevision) correct after the emit/parse decoupling.
+    const session = trackSession(
+      await createTerminal({
+        workspaceId: "ws-test",
+        cwd: "/tmp",
+        shell: "/bin/sh",
+        env: { PS1: "$ " },
+      }),
+    );
+    await waitForLines(session, ["$"]);
+
+    const revisions: number[] = [];
+    session.subscribe((message) => {
+      if (message.type === "output") {
+        expect(typeof message.revision).toBe("number");
+        revisions.push(message.revision as number);
+      }
+    });
+
+    session.send({ type: "input", data: "echo rev-marker\r" });
+    await waitForLines(session, ["$ echo rev-marker", "rev-marker", "$"]);
+
+    expect(revisions.length).toBeGreaterThan(0);
+    for (let i = 1; i < revisions.length; i++) {
+      expect(revisions[i]).toBeGreaterThan(revisions[i - 1]);
+    }
+
+    // Drained snapshot agrees with the last emitted revision and holds the output.
+    const lastEmitted = revisions[revisions.length - 1];
+    await session.drainHeadlessXterm();
+    const snapshot = session.getStateSnapshot();
+    expect(snapshot.revision).toBe(lastEmitted);
+    expect(getLines(snapshot.state).join("\n")).toContain("rev-marker");
+  });
+
+  it("replays double-width characters without a padding space", async () => {
+    const session = trackSession(
+      await createTerminal({
+        workspaceId: "ws-test",
+        cwd: "/tmp",
+        shell: "/bin/sh",
+        env: { PS1: "$ " },
+      }),
+    );
+
+    await waitForLines(session, ["$"]);
+
+    session.send({ type: "input", data: "printf '\u4e2d\u6587ab\\n'\r" });
+    const hasWideLine = (state: ReturnType<TerminalSession["getState"]>): boolean =>
+      getLines(state).some((line) => line === "\u4e2d\u6587ab");
+    await waitForState(session, hasWideLine);
+    await session.drainHeadlessXterm();
+
+    // xterm parks a zero-width placeholder in the column each wide character spills into.
+    // Replaying it as a space used to push the rest of the row right by one column per CJK
+    // character, which is what a restored screen full of Chinese text looked like.
+    expect(renderTerminalSnapshotToAnsi(session.getStateSnapshot().state)).toContain(
+      "\u4e2d\u6587ab",
+    );
+
+    // The same row has to survive scrolling out of the viewport: scrollback used to run its
+    // own copy of the cell extraction, so it kept padding wide characters after the grid was
+    // fixed — the restored screen looked right until the user scrolled up.
+    session.send({ type: "input", data: "for i in $(seq 40); do echo pad-$i; done\r" });
+    const hasScrolledOut = (state: ReturnType<TerminalSession["getState"]>): boolean =>
+      !getLines(state).some((line) => line === "\u4e2d\u6587ab");
+    await waitForState(session, hasScrolledOut);
+    await session.drainHeadlessXterm();
+
+    expect(renderTerminalSnapshotToAnsi(session.getStateSnapshot().state)).toContain(
+      "\u4e2d\u6587ab",
+    );
+  });
+
   it("captures output from pwd in specified cwd", async () => {
     const session = trackSession(
       await createTerminal({
@@ -652,14 +589,14 @@ describe.skipIf(isPlatform("win32"))("terminal title", () => {
     temporaryDirs.push(homeDir);
     const realZdotdir = join(homeDir, ".config", "zsh");
     mkdirSync(realZdotdir, { recursive: true });
-    writeFileSync(join(realZdotdir, ".zshenv"), "export PASEO_TEST_REAL_ZDOTDIR=1\n");
+    writeFileSync(join(realZdotdir, ".zshenv"), "export BYSPACE_TEST_REAL_ZDOTDIR=1\n");
 
     const session = trackSession(
       await createTerminal({
         workspaceId: "ws-test",
         cwd: homeDir,
         command: "/bin/zsh",
-        args: ["-c", 'printf \'%s\\n%s\\n\' "${ZDOTDIR-}" "${PASEO_TEST_REAL_ZDOTDIR-}"'],
+        args: ["-c", 'printf \'%s\\n%s\\n\' "${ZDOTDIR-}" "${BYSPACE_TEST_REAL_ZDOTDIR-}"'],
         env: {
           HOME: homeDir,
           ZDOTDIR: realZdotdir,
@@ -879,58 +816,6 @@ describe.skipIf(isPlatform("win32"))("terminal title", () => {
 
     await waitForTitle(session, (title) => title === "sleep 1");
     await waitForTitle(session, (title) => title === "~/dev/faro", 4000);
-  });
-
-  it.skipIf(!hasZsh)("loads the user's zsh prompt when the integration dir is packaged", () => {
-    const homeDir = mkdtempSync(join(tmpdir(), "terminal-zsh-packaged-home-"));
-    temporaryDirs.push(homeDir);
-    writeFileSync(join(homeDir, ".zshrc"), "PS1='PASEO_CUSTOM_PROMPT> '\n");
-
-    const fakeAppRoot = join(homeDir, "Paseo.app", "Contents", "Resources");
-    const inaccessiblePackagedIntegrationDir = join(
-      fakeAppRoot,
-      "app.asar",
-      "node_modules",
-      "@getpaseo",
-      "server",
-      "dist",
-      "server",
-      "terminal",
-      "shell-integration",
-      "zsh",
-    );
-    const unpackedIntegrationDir = join(
-      fakeAppRoot,
-      "app.asar.unpacked",
-      "node_modules",
-      "@getpaseo",
-      "server",
-      "dist",
-      "server",
-      "terminal",
-      "shell-integration",
-      "zsh",
-    );
-    mkdirSync(unpackedIntegrationDir, { recursive: true });
-    cpSync(resolveZshShellIntegrationDir(), unpackedIntegrationDir, { recursive: true });
-    writeFileSync(join(fakeAppRoot, "app.asar"), "asar archive placeholder");
-
-    const env = buildTerminalEnvironment({
-      shell: "/bin/zsh",
-      env: {
-        HOME: homeDir,
-      },
-      zshShellIntegrationDir: inaccessiblePackagedIntegrationDir,
-    });
-
-    const result = spawnSync("/bin/zsh", ["-i", "-c", "print -r -- ${PROMPT}"], {
-      cwd: homeDir,
-      env,
-      encoding: "utf8",
-    });
-
-    expect(result.status).toBe(0);
-    expect(result.stdout.split(/\r?\n/)).toContain("PASEO_CUSTOM_PROMPT> ");
   });
 
   it.skipIf(!hasZsh)("emits zsh shell integration command completion", async () => {
@@ -1256,91 +1141,5 @@ describe("terminal activity interruption", () => {
     session.send({ type: "input", data });
 
     expect(session.getActivity()).toMatchObject({ state: "working" });
-  });
-});
-
-// The escaping tests above assert the command line we generate. This one runs
-// it: a real cmd.exe launches a real .cmd shim, which echoes the argv it was
-// handed. It is the only check that proves cmd.exe's tokenizer reconstructs
-// the prompt instead of executing part of it, which is the failure the
-// escaping exists to prevent (the CVE-2024-27980 class).
-describe.runIf(isPlatform("win32"))(".cmd shim argv round-trip on Windows", () => {
-  const argvMarker = "__PASEO_ARGV__";
-
-  function writeArgvEchoShim(): { dir: string; cmdPath: string } {
-    const dir = mkdtempSync(join(tmpdir(), "paseo-cmd-shim-"));
-    temporaryDirs.push(dir);
-    const cmdPath = join(dir, "echoargv.cmd");
-    const scriptPath = join(dir, "echoargv.js");
-    writeFileSync(
-      scriptPath,
-      `process.stdout.write(${JSON.stringify(argvMarker)} + JSON.stringify(process.argv.slice(2)) + "\\n");\n`,
-    );
-    writeFileSync(cmdPath, `@echo off\r\n"${process.execPath}" "${scriptPath}" %*\r\n`);
-    return { dir, cmdPath };
-  }
-
-  function runCommandLine(command: string, args: string, cwd: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const terminal = pty.spawn(command, args, { cwd, cols: 500, rows: 30 });
-      let output = "";
-      const dataDisposable = terminal.onData((data) => {
-        output += data;
-      });
-      const timeout = setTimeout(() => {
-        terminal.kill();
-        reject(new Error("Timed out waiting for cmd.exe fixture"));
-      }, 10_000);
-      timeout.unref();
-      terminal.onExit(({ exitCode }) => {
-        clearTimeout(timeout);
-        dataDisposable.dispose();
-        if (exitCode !== 0) {
-          reject(new Error(`cmd.exe fixture exited ${exitCode}: ${output}`));
-          return;
-        }
-        resolve(output);
-      });
-    });
-  }
-
-  async function roundTrip(promptArg: string): Promise<string[]> {
-    const { dir, cmdPath } = writeArgvEchoShim();
-    const resolved = await resolveTerminalSpawnCommand("echoargv", [promptArg], {
-      platform: "win32",
-      env: process.env,
-      resolveExecutable: async () => cmdPath,
-    });
-    if (typeof resolved.args !== "string") {
-      throw new Error(`expected a cmd.exe command line, got ${JSON.stringify(resolved.args)}`);
-    }
-    const output = await runCommandLine(resolved.command, resolved.args, dir);
-    const cleanOutput = stripVTControlCharacters(output);
-    const markerIndex = cleanOutput.lastIndexOf(argvMarker);
-    if (markerIndex === -1) {
-      throw new Error(`expected argv marker, got ${output}`);
-    }
-    const argvJson = cleanOutput.slice(markerIndex + argvMarker.length).split(/\r?\n/, 1)[0];
-    const argv: unknown = JSON.parse(argvJson);
-    if (!Array.isArray(argv) || !argv.every((arg) => typeof arg === "string")) {
-      throw new Error(`expected string argv, got ${output}`);
-    }
-    return argv;
-  }
-
-  it("passes cmd.exe metacharacters through as literal text", async () => {
-    expect(await roundTrip("a & b | c")).toEqual(["a & b | c"]);
-    expect(await roundTrip("100% done %PATH%")).toEqual(["100% done %PATH%"]);
-    expect(await roundTrip("a^b")).toEqual(["a^b"]);
-    expect(await roundTrip('say "hi"')).toEqual(['say "hi"']);
-    expect(await roundTrip("c:\\path\\to\\thing")).toEqual(["c:\\path\\to\\thing"]);
-  });
-
-  it("does not let a metacharacter start a second command", async () => {
-    expect(await roundTrip("safe & echo pwned")).toEqual(["safe & echo pwned"]);
-  });
-
-  it("normalizes newlines to spaces rather than splitting the command", async () => {
-    expect(await roundTrip("first\nsecond")).toEqual(["first second"]);
   });
 });

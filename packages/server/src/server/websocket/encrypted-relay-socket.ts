@@ -11,6 +11,7 @@ export interface EncryptedRelayChannel {
 export interface EncryptedRelaySocket {
   readonly readyState: number;
   readonly bufferedAmount: number;
+  readonly peerPublicKeyB64: string | null;
   send: (data: string | Uint8Array | ArrayBuffer) => void | Promise<void>;
   close: (code?: number, reason?: string) => void;
   terminate: () => void;
@@ -21,10 +22,12 @@ export interface EncryptedRelaySocket {
 export function createEncryptedRelaySocket(params: {
   channel: EncryptedRelayChannel;
   emitter: EventEmitter;
+  peerPublicKeyB64?: string;
   getTransportBufferedAmount: () => number | undefined;
   terminateTransport: () => void;
 }): EncryptedRelaySocket {
-  const { channel, emitter, getTransportBufferedAmount, terminateTransport } = params;
+  const { channel, emitter, peerPublicKeyB64, getTransportBufferedAmount, terminateTransport } =
+    params;
   let readyState = 1;
 
   channel.setState("open");
@@ -52,6 +55,7 @@ export function createEncryptedRelaySocket(params: {
     get bufferedAmount() {
       return getTransportBufferedAmount() ?? 0;
     },
+    peerPublicKeyB64: peerPublicKeyB64 ?? null,
     send: (data) => {
       if (readyState !== 1) {
         return Promise.reject(new Error("Encrypted relay socket is not open"));

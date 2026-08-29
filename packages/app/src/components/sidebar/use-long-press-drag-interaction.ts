@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import { Platform, StatusBar, type GestureResponderEvent } from "react-native";
-import * as Haptics from "expo-haptics";
+import type { GestureResponderEvent } from "react-native";
 import { isWeb as platformIsWeb } from "@/constants/platform";
 import { decideLongPressMove } from "@/utils/sidebar-gesture-arbitration";
 import type { useContextMenu } from "@/components/ui/context-menu";
@@ -36,10 +35,9 @@ export function useLongPressDragInteraction(input: {
     if (!menuController || !touchStartRef.current) {
       return;
     }
-    const statusBarHeight = Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
     menuController.setAnchorRect({
       x: touchStartRef.current.x,
-      y: touchStartRef.current.y + statusBarHeight,
+      y: touchStartRef.current.y,
       width: 0,
       height: 0,
     });
@@ -60,6 +58,7 @@ export function useLongPressDragInteraction(input: {
 
   const armTimers = useCallback(() => {
     clearTimers();
+
     if (platformIsWeb) {
       return;
     }
@@ -87,11 +86,10 @@ export function useLongPressDragInteraction(input: {
       dragArmedRef.current = true;
       dragActivatedRef.current = true;
       didLongPressRef.current = true;
-      void Haptics.selectionAsync().catch(() => {});
       drag();
     }, DRAG_ARM_DELAY_MS);
 
-    if (!menuController) {
+    if (!menuController || platformIsWeb) {
       return;
     }
 
@@ -110,7 +108,6 @@ export function useLongPressDragInteraction(input: {
       if (distance > CONTEXT_MENU_STATIONARY_SLOP_PX) {
         return;
       }
-      void Haptics.selectionAsync().catch(() => {});
       openContextMenuAtStartPoint();
     }, CONTEXT_MENU_DELAY_MS);
   }, [clearTimers, drag, menuController, openContextMenuAtStartPoint]);
@@ -123,7 +120,6 @@ export function useLongPressDragInteraction(input: {
       didStartDragRef.current = true;
       didLongPressRef.current = true;
       clearTimers();
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     },
     [clearTimers],
   );

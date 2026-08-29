@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
@@ -8,7 +8,6 @@ import { getFullAccessConfig } from "./daemon-e2e/agent-configs.js";
 import { createDaemonTestContext, type DaemonTestContext } from "./test-utils/index.js";
 import type { CreateAgentOptions } from "./test-utils/index.js";
 import type { CreateAgentWorktreeTarget } from "./messages.js";
-import { createRealpathAwarePathMatcher } from "../utils/path.js";
 
 let ctx: DaemonTestContext;
 const tempRoots: string[] = [];
@@ -29,11 +28,11 @@ function createGitRepo(): string {
   tempRoots.push(tempRoot);
   const repoDir = path.join(tempRoot, "repo");
   execFileSync("git", ["init", "-b", "main", repoDir], { stdio: "pipe" });
-  execFileSync("git", ["config", "user.email", "test@getpaseo.local"], {
+  execFileSync("git", ["config", "user.email", "test@byspace.local"], {
     cwd: repoDir,
     stdio: "pipe",
   });
-  execFileSync("git", ["config", "user.name", "Paseo Test"], { cwd: repoDir, stdio: "pipe" });
+  execFileSync("git", ["config", "user.name", "BySpace Test"], { cwd: repoDir, stdio: "pipe" });
   writeFileSync(path.join(repoDir, "README.md"), "hello\n");
   execFileSync("git", ["add", "README.md"], { cwd: repoDir, stdio: "pipe" });
   execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "initial"], {
@@ -43,16 +42,25 @@ function createGitRepo(): string {
   return repoDir;
 }
 
-function createGitRepoWithNestedDirectory(): string {
-  const repoDir = createGitRepo();
-  mkdirSync(path.join(repoDir, "packages", "app"), { recursive: true });
-  writeFileSync(path.join(repoDir, "packages", "app", ".gitkeep"), "");
-  execFileSync("git", ["add", "."], { cwd: repoDir, stdio: "pipe" });
-  execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "add nested app"], {
+function configureDelayedSetup(repoDir: string, markerPrefix: string, delayMs = 500) {
+  const startedPath = path.join(repoDir, `${markerPrefix}-started`);
+  const finishedPath = path.join(repoDir, `${markerPrefix}-finished`);
+  writeFileSync(
+    path.join(repoDir, "byspace.json"),
+    JSON.stringify({
+      worktree: {
+        setup: [
+          `node -e "const fs=require('fs'),path=require('path'),source=process.env.BYSPACE_SOURCE_CHECKOUT_PATH;fs.writeFileSync(path.join(source,'${markerPrefix}-started'),'started');setTimeout(()=>fs.writeFileSync(path.join(source,'${markerPrefix}-finished'),'finished'),${delayMs})"`,
+        ],
+      },
+    }),
+  );
+  execFileSync("git", ["add", "byspace.json"], { cwd: repoDir, stdio: "pipe" });
+  execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", `add ${markerPrefix} setup`], {
     cwd: repoDir,
     stdio: "pipe",
   });
-  return repoDir;
+  return { startedPath, finishedPath };
 }
 
 async function expectAgentAbsentFromActiveList(agentId: string): Promise<void> {
@@ -81,7 +89,7 @@ async function expectWorktreePresentInList(repoDir: string, worktreePath: string
   await expect
     .poll(
       async () => {
-        const listed = await ctx.client.getPaseoWorktreeList({ cwd: repoDir });
+        const listed = await ctx.client.getBySpaceWorktreeList({ cwd: repoDir });
         return listed.worktrees.map((worktree) => worktree.worktreePath).includes(worktreePath);
       },
       { timeout: 5000, interval: 100 },
@@ -90,16 +98,15 @@ async function expectWorktreePresentInList(repoDir: string, worktreePath: string
 }
 
 async function expectWorktreeListEmpty(repoDir: string): Promise<void> {
-  const listed = await ctx.client.getPaseoWorktreeList({ cwd: repoDir });
+  const listed = await ctx.client.getBySpaceWorktreeList({ cwd: repoDir });
   expect(listed.worktrees).toEqual([]);
 }
 
 async function createAgentInBranchOffWorktree(options?: {
   autoArchive?: boolean;
   branchName?: string;
-  repoDir?: string;
 }): Promise<{ repoDir: string; agentId: string; worktreePath: string }> {
-  const repoDir = options?.repoDir ?? createGitRepo();
+  const repoDir = createGitRepo();
   const branchName = options?.branchName ?? `agent-lifecycle-${Date.now()}`;
   const created = await ctx.client.createAgent({
     config: {
@@ -119,6 +126,7 @@ async function createAgentInBranchOffWorktree(options?: {
 
 test("create_agent_request creates a worktree and auto-archives both after the first turn", async () => {
   const repoDir = createGitRepo();
+  const setupMarkers = configureDelayedSetup(repoDir, "auto-archive-setup", 5000);
   const worktree: CreateAgentWorktreeTarget = {
     mode: "branch-off",
     newBranch: "agent-lifecycle-dispatch-test",
@@ -140,13 +148,13 @@ test("create_agent_request creates a worktree and auto-archives both after the f
   const created = await ctx.client.createAgent(request);
 
   expect(created.cwd).not.toBe(repoDir);
-  const listedWithWorktree = await ctx.client.getPaseoWorktreeList({ cwd: repoDir });
-  expect(listedWithWorktree.worktrees).toHaveLength(1);
-  const listedWorktree = listedWithWorktree.worktrees[0];
-  expect(listedWorktree?.branchName).toBe("agent-lifecycle-dispatch-test");
-  expect(createRealpathAwarePathMatcher(created.cwd)(listedWorktree?.worktreePath ?? "")).toBe(
-    true,
-  );
+  const listedWithWorktree = await ctx.client.getBySpaceWorktreeList({ cwd: repoDir });
+  expect(listedWithWorktree.worktrees).toEqual([
+    expect.objectContaining({
+      worktreePath: created.cwd,
+      branchName: "agent-lifecycle-dispatch-test",
+    }),
+  ]);
 
   await ctx.client.waitForFinish(created.id, 10000);
 
@@ -154,121 +162,7 @@ test("create_agent_request creates a worktree and auto-archives both after the f
   // last-reference worktree directory is gone.
   await expectAgentAbsentFromActiveList(created.id);
   await expect.poll(() => existsSync(created.cwd), { timeout: 10000, interval: 100 }).toBe(false);
-  // Archived tabs can continue asking for history. These reads must not recreate
-  // the removed workspace observation or compromise the next agent lifecycle.
-  const staleTimelineReads = await Promise.allSettled(
-    Array.from({ length: 10 }, () => ctx.client.fetchAgentTimeline(created.id, { limit: 20 })),
-  );
-  expect(staleTimelineReads.every((result) => result.status === "rejected")).toBe(true);
-  const subsequent = await ctx.client.createAgent({
-    config: { ...getFullAccessConfig("codex"), cwd: repoDir },
-    initialPrompt: "Say done.",
-  });
-  await ctx.client.waitForFinish(subsequent.id, 10_000);
-  await expectAgentPresentInActiveList(subsequent.id);
-}, 30000);
-
-test("create_agent_request auto-archives a nested workspace from an existing Paseo worktree", async () => {
-  const repoDir = createGitRepoWithNestedDirectory();
-  const source = await createAgentInBranchOffWorktree({ branchName: "nested-source", repoDir });
-  await ctx.client.waitForFinish(source.agentId, 10000);
-  const nestedCwd = path.join(source.worktreePath, "packages", "app");
-
-  const created = await ctx.client.createAgent({
-    config: {
-      ...getFullAccessConfig("codex"),
-      cwd: nestedCwd,
-    },
-    worktree: {
-      mode: "branch-off",
-      newBranch: "nested-auto-archive",
-      base: "main",
-    },
-    autoArchive: true,
-    initialPrompt: "Say done.",
-  });
-
-  const createdWorktreeRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
-    cwd: created.cwd,
-    stdio: "pipe",
-  })
-    .toString()
-    .trim();
-  expect(
-    createRealpathAwarePathMatcher(path.join(createdWorktreeRoot, "packages", "app"))(created.cwd),
-  ).toBe(true);
-  await ctx.client.waitForFinish(created.id, 10000);
-
-  await expectAgentAbsentFromActiveList(created.id);
-  await expect
-    .poll(
-      async () => {
-        const workspaces = await ctx.client.fetchWorkspaces();
-        const matchesCreatedWorkspace = createRealpathAwarePathMatcher(created.cwd);
-        return workspaces.entries.some((workspace) =>
-          matchesCreatedWorkspace(workspace.workspaceDirectory),
-        );
-      },
-      { timeout: 10000, interval: 100 },
-    )
-    .toBe(false);
-  await expect.poll(() => existsSync(created.cwd), { timeout: 10000, interval: 100 }).toBe(false);
-  expect(existsSync(source.worktreePath)).toBe(true);
-
-  await ctx.client.archivePaseoWorktree({ worktreePath: source.worktreePath });
-}, 30000);
-
-test("failed nested worktree creation cleans up the created workspace and backing directory", async () => {
-  const repoDir = createGitRepoWithNestedDirectory();
-  const source = await createAgentInBranchOffWorktree({
-    branchName: "nested-failure-source",
-    repoDir,
-  });
-  await ctx.client.waitForFinish(source.agentId, 10000);
-  const nestedCwd = path.join(source.worktreePath, "packages", "app");
-
-  await expect(
-    ctx.client.createAgent({
-      config: { provider: "unknown-provider", cwd: nestedCwd },
-      worktree: {
-        mode: "branch-off",
-        newBranch: "nested-failure-cleanup",
-        base: "main",
-      },
-      initialPrompt: "This agent cannot be created.",
-    }),
-  ).rejects.toThrow();
-
-  await expect
-    .poll(
-      async () => {
-        const listed = await ctx.client.getPaseoWorktreeList({ cwd: source.repoDir });
-        return (
-          listed.worktrees.length === 1 &&
-          createRealpathAwarePathMatcher(source.worktreePath)(
-            listed.worktrees[0]?.worktreePath ?? "",
-          )
-        );
-      },
-      { timeout: 10000, interval: 100 },
-    )
-    .toBe(true);
-  await expect
-    .poll(
-      async () => {
-        const workspaces = await ctx.client.fetchWorkspaces();
-        return (
-          workspaces.entries.length === 1 &&
-          createRealpathAwarePathMatcher(source.worktreePath)(
-            workspaces.entries[0]?.workspaceDirectory ?? "",
-          )
-        );
-      },
-      { timeout: 10000, interval: 100 },
-    )
-    .toBe(true);
-
-  await ctx.client.archivePaseoWorktree({ worktreePath: source.worktreePath });
+  expect(existsSync(setupMarkers.finishedPath)).toBe(false);
 }, 30000);
 
 test("create_agent_request with autoArchive archives only the agent when no worktree was created", async () => {
@@ -287,7 +181,7 @@ test("create_agent_request with autoArchive archives only the agent when no work
   await expectAgentAbsentFromActiveList(created.id);
   const archived = await ctx.client.fetchAgents({ filter: { includeArchived: true } });
   expect(archived.entries.map((entry) => entry.agent.id)).toContain(created.id);
-  const worktrees = await ctx.client.getPaseoWorktreeList({ cwd: repoDir });
+  const worktrees = await ctx.client.getBySpaceWorktreeList({ cwd: repoDir });
   expect(worktrees.worktrees).toEqual([]);
 });
 
@@ -332,14 +226,14 @@ test("create_agent_request with worktree but no autoArchive leaves agent and wor
   await expectAgentPresentInActiveList(created.agentId);
   await expectWorktreePresentInList(created.repoDir, created.worktreePath);
 
-  await ctx.client.archivePaseoWorktree({ worktreePath: created.worktreePath });
+  await ctx.client.archiveBySpaceWorktree({ worktreePath: created.worktreePath });
 });
 
 test("archiving a created worktree removes the directory on last reference", async () => {
   const created = await createAgentInBranchOffWorktree();
 
   await ctx.client.waitForFinish(created.agentId, 10000);
-  await ctx.client.archivePaseoWorktree({ worktreePath: created.worktreePath });
+  await ctx.client.archiveBySpaceWorktree({ worktreePath: created.worktreePath });
 
   await expectAgentAbsentFromActiveList(created.agentId);
   await expectWorktreeListEmpty(created.repoDir);
@@ -364,7 +258,7 @@ test("auto-archiving a created worktree keeps the directory when a sibling works
   await expectWorktreePresentInList(created.repoDir, created.worktreePath);
   expect(existsSync(created.worktreePath)).toBe(true);
 
-  await ctx.client.archivePaseoWorktree({ worktreePath: created.worktreePath });
+  await ctx.client.archiveBySpaceWorktree({ worktreePath: created.worktreePath });
 });
 
 test("create_agent_request rejects legacy git options before creating a worktree", async () => {
@@ -413,3 +307,52 @@ test("create_agent_request fails cleanly when worktree creation cannot resolve t
   await expectActiveAgentListEmpty();
   await expectWorktreeListEmpty(repoDir);
 });
+
+test.skipIf(process.platform === "win32")(
+  "create then immediate archive settles setup before removing the worktree",
+  async () => {
+    const repoDir = createGitRepo();
+    const markers = configureDelayedSetup(repoDir, "immediate-archive-setup");
+    const created = await ctx.client.createAgent({
+      config: { ...getFullAccessConfig("codex"), cwd: repoDir },
+      worktree: { mode: "branch-off", newBranch: "immediate-archive", base: "main" },
+    });
+
+    const archive = await ctx.client.archiveBySpaceWorktree({ worktreePath: created.cwd });
+    const setupHadStartedWhenCleanupFinished = existsSync(markers.startedPath);
+
+    expect(archive.success).toBe(true);
+    expect(existsSync(created.cwd)).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    expect(existsSync(markers.startedPath)).toBe(setupHadStartedWhenCleanupFinished);
+    expect(existsSync(markers.finishedPath)).toBe(false);
+  },
+  30000,
+);
+
+test.skipIf(process.platform === "win32")(
+  "failed create aborts registered setup before cleaning up its worktree",
+  async () => {
+    const repoDir = createGitRepo();
+    const markers = configureDelayedSetup(repoDir, "failed-create-setup");
+
+    await expect(
+      ctx.client.createAgent({
+        config: {
+          ...getFullAccessConfig("codex"),
+          cwd: repoDir,
+          mcpServers: { unsupported: { type: "http", url: "http://127.0.0.1:1" } },
+        },
+        worktree: { mode: "branch-off", newBranch: "failed-create", base: "main" },
+      }),
+    ).rejects.toThrow("does not support MCP servers");
+
+    await expectActiveAgentListEmpty();
+    await expectWorktreeListEmpty(repoDir);
+    const setupHadStartedWhenCleanupFinished = existsSync(markers.startedPath);
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    expect(existsSync(markers.startedPath)).toBe(setupHadStartedWhenCleanupFinished);
+    expect(existsSync(markers.finishedPath)).toBe(false);
+  },
+  30000,
+);

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import type { TerminalSession } from "./terminal.js";
-import { applyTerminalSize } from "./terminal-size-ownership.js";
+import { applyTerminalSize, releaseTerminalSizeOwnership } from "./terminal-size-ownership.js";
 
 function createTerminal(): { terminal: TerminalSession; appliedSizes: string[] } {
   const appliedSizes: string[] = [];
@@ -56,5 +56,25 @@ describe("terminal size ownership", () => {
     applyTerminalSize(terminal, ownerB, { rows: 32, cols: 102, intent: "update" });
 
     expect(appliedSizes).toEqual(["100x30", "102x32"]);
+  });
+
+  test("releases ownership when its connection controller is disposed", () => {
+    const { terminal, appliedSizes } = createTerminal();
+    const disconnectedOwner = {};
+    const nextOwner = {};
+
+    applyTerminalSize(terminal, disconnectedOwner, { rows: 30, cols: 100, intent: "claim" });
+    releaseTerminalSizeOwnership(disconnectedOwner);
+
+    expect(
+      applyTerminalSize(terminal, disconnectedOwner, { rows: 31, cols: 101, intent: "update" }),
+    ).toBe(false);
+    expect(applyTerminalSize(terminal, nextOwner, { rows: 32, cols: 102, intent: "update" })).toBe(
+      false,
+    );
+    expect(applyTerminalSize(terminal, nextOwner, { rows: 33, cols: 103, intent: "claim" })).toBe(
+      true,
+    );
+    expect(appliedSizes).toEqual(["100x30", "103x33"]);
   });
 });

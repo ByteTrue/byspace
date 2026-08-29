@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { WorkspaceDescriptorPayload } from "@getpaseo/protocol/messages";
+import type { WorkspaceDescriptorPayload } from "@bytetrue/byspace-protocol/messages";
 import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import {
-  normalizeProjectDescriptor,
+  normalizeEmptyProjectDescriptor,
   normalizeWorkspaceDescriptor,
   selectAgentTimelineState,
   useSessionStore,
@@ -34,12 +34,12 @@ class MemoryStorage implements ReplicaCacheStorage {
 function workspace(
   id = "workspace-1",
   projectId = "project-1",
-  workspaceDirectory = "/repo/paseo",
+  workspaceDirectory = "/repo/byspace",
 ): WorkspaceDescriptorPayload {
   return {
     id,
     projectId,
-    projectDisplayName: "Paseo",
+    projectDisplayName: "BySpace",
     projectRootPath: workspaceDirectory,
     workspaceDirectory,
     projectKind: "git",
@@ -51,10 +51,11 @@ function workspace(
     archivingAt: null,
     diffStat: null,
     scripts: [],
+    labels: ["backend"],
   };
 }
 
-function agent(id: string, workspaceId = "workspace-1", cwd = "/repo/paseo") {
+function agent(id: string, workspaceId = "workspace-1", cwd = "/repo/byspace") {
   return {
     ...normalizeAgentSnapshot(
       {
@@ -94,7 +95,7 @@ function agent(id: string, workspaceId = "workspace-1", cwd = "/repo/paseo") {
         currentBranch: null,
         remoteUrl: null,
         worktreeRoot: null,
-        isPaseoOwnedWorktree: false as const,
+        isBySpaceOwnedWorktree: false as const,
         mainRepoRoot: null,
       },
     },
@@ -142,27 +143,10 @@ function seedSession(): void {
   store.setAgents(SERVER_ID, new Map([["agent-1", agent("agent-1")]]));
   store.setWorkspaces(
     SERVER_ID,
-    new Map([
-      [
-        "workspace-1",
-        normalizeWorkspaceDescriptor({
-          ...workspace(),
-          workspaceKind: "worktree",
-          worktreeSlug: "owned-worktree",
-          labels: ["backend"],
-        }),
-      ],
-    ]),
+    new Map([["workspace-1", normalizeWorkspaceDescriptor(workspace())]]),
   );
-  store.setProjects(SERVER_ID, [
-    normalizeProjectDescriptor({
-      projectId: "project-1",
-      projectKey: "remote:github.com/getpaseo/paseo",
-      projectDisplayName: "Paseo",
-      projectRootPath: "/repo/paseo",
-      projectKind: "git",
-    }),
-    normalizeProjectDescriptor({
+  store.setEmptyProjects(SERVER_ID, [
+    normalizeEmptyProjectDescriptor({
       projectId: "empty-project",
       projectDisplayName: "Empty project",
       projectRootPath: "/repo/empty",
@@ -283,14 +267,12 @@ describe("ReplicaCache", () => {
     expect(session.client).toBeNull();
     expect(session.hasHydratedAgents).toBe(false);
     expect(session.hasHydratedWorkspaces).toBe(false);
-    expect(session.hasWorkspaceDirectorySnapshot).toBe(true);
     expect(Array.from(session.agents.keys())).toEqual(["agent-1"]);
     expect(Array.from(session.workspaces.keys())).toEqual(["workspace-1"]);
-    expect(Array.from(session.projects.keys())).toEqual(["project-1", "empty-project"]);
+    expect(Array.from(session.emptyProjects.keys())).toEqual([]);
     expect(session.agents.get("agent-1")?.updatedAt).toBeInstanceOf(Date);
-    expect(session.agents.get("agent-1")?.projectPlacement?.checkout.cwd).toBe("/repo/paseo");
+    expect(session.agents.get("agent-1")?.projectPlacement?.checkout.cwd).toBe("/repo/byspace");
     expect(session.workspaces.get("workspace-1")?.statusEnteredAt).toBeInstanceOf(Date);
-    expect(session.workspaces.get("workspace-1")?.worktreeSlug).toBe("owned-worktree");
     // A restored row draws its label chips. The reconnect cursor is current, so nothing re-sends
     // them and a cache that dropped them would leave the sidebar unlabelled until the next edit.
     expect(session.workspaces.get("workspace-1")?.labels).toEqual(["backend"]);
@@ -309,43 +291,6 @@ describe("ReplicaCache", () => {
       older: "available",
       newer: "none",
     });
-  });
-
-  it("restores canonical turn membership without downgrading tagged rows", async () => {
-    const storage = new MemoryStorage();
-    const writer = new ReplicaCache(storage);
-    writer.setHosts([SERVER_ID]);
-    seedSession();
-    const initial: StreamItem = {
-      kind: "user_message",
-      id: "initial",
-      text: "initial",
-      timestamp: new Date(1),
-      turnId: "turn-1",
-    };
-    const hello: StreamItem = {
-      kind: "user_message",
-      id: "hello",
-      text: "hello",
-      timestamp: new Date(2),
-      turnId: "turn-1",
-      clientMessageId: "hello-client",
-      messageId: "hello-client",
-    };
-    useSessionStore
-      .getState()
-      .setAgentStreamTail(
-        SERVER_ID,
-        new Map([["agent-1", [initial, message("assistant", "done"), hello]]]),
-      );
-    await writer.flush();
-    useSessionStore.getState().clearSession(SERVER_ID);
-    const reader = new ReplicaCache(storage);
-    reader.setHosts([SERVER_ID]);
-    await reader.restore();
-    const tail =
-      useSessionStore.getState().sessions[SERVER_ID]?.agentStreamTail.get("agent-1") ?? [];
-    expect(tail.find((item) => item.id === "hello")?.turnId).toBe("turn-1");
   });
 
   it("restores tool calls inside an authoritative cached window", async () => {
@@ -397,6 +342,57 @@ describe("ReplicaCache", () => {
     });
   });
 
+  it("restores workspace change request checks beside the persisted directory", async () => {
+    const githubRuntime = {
+      featuresEnabled: true,
+      pullRequest: {
+        number: 824,
+        url: "https://github.com/blank-dot-page/editor/pull/824",
+        title: "Cut realistic editor typing latency by two thirds",
+        state: "OPEN",
+        baseRefName: "main",
+        headRefName: "perf-editor-typing-latency",
+        isMerged: false,
+        checksStatus: "success" as const,
+        checks: [
+          {
+            name: "Check",
+            status: "success" as const,
+            url: "https://github.com/blank-dot-page/editor/actions/runs/824",
+          },
+        ],
+      },
+      error: null,
+    };
+    const storage = new MemoryStorage();
+    const writer = new ReplicaCache(storage);
+    writer.setHosts([SERVER_ID]);
+    seedSession();
+    useSessionStore.getState().setWorkspaces(
+      SERVER_ID,
+      new Map([
+        [
+          "workspace-1",
+          normalizeWorkspaceDescriptor({
+            ...workspace(),
+            forge: "github",
+            githubRuntime,
+          }),
+        ],
+      ]),
+    );
+    await writer.flush();
+
+    useSessionStore.getState().clearSession(SERVER_ID);
+    const reader = new ReplicaCache(storage);
+    reader.setHosts([SERVER_ID]);
+    await reader.restore();
+
+    expect(
+      useSessionStore.getState().sessions[SERVER_ID]?.workspaces.get("workspace-1")?.githubRuntime,
+    ).toEqual(githubRuntime);
+  });
+
   it("persists the complete directory with only the focused timeline tail", async () => {
     const storage = new MemoryStorage();
     const cache = new ReplicaCache(storage);
@@ -442,11 +438,7 @@ describe("ReplicaCache", () => {
     const timelines = session?.agentStreamTail;
     expect(Array.from(session?.agents.keys() ?? [])).toEqual(["agent-1", "agent-2"]);
     expect(Array.from(session?.workspaces.keys() ?? [])).toEqual(["workspace-1", "workspace-2"]);
-    expect(Array.from(session?.projects.keys() ?? [])).toEqual([
-      "project-1",
-      "project-2",
-      "empty-project",
-    ]);
+    expect(Array.from(session?.emptyProjects.keys() ?? [])).toEqual([]);
     expect(Array.from(timelines?.keys() ?? [])).toEqual(["agent-2"]);
     expect(timelines?.get("agent-2")).toEqual(secondTimeline.slice(-50));
     expect(session?.agentTimelineCursor.has("agent-2")).toBe(false);
@@ -455,7 +447,7 @@ describe("ReplicaCache", () => {
       items: secondTimeline.slice(-50),
     });
 
-    const persisted = JSON.parse(storage.values.get("@paseo:replica-cache") ?? "null") as {
+    const persisted = JSON.parse(storage.values.get("@byspace:replica-cache") ?? "null") as {
       version: number;
       hosts: Array<{ timeline: Record<string, unknown> | null }>;
     };
@@ -466,6 +458,52 @@ describe("ReplicaCache", () => {
       "items",
       "range",
     ]);
+  });
+
+  it("persists monotonic directory cursors with the complete host replica", async () => {
+    const storage = new MemoryStorage();
+    const cache = new ReplicaCache(storage);
+    cache.setHosts([SERVER_ID]);
+    seedSession();
+    await cache.flush();
+
+    cache.writeDirectoryCheckpoint(SERVER_ID, {
+      agents: { generation: "daemon-generation", afterSeq: 7 },
+    });
+    useSessionStore.getState().setAgents(SERVER_ID, (agents) => {
+      const current = agents.get("agent-1");
+      if (!current) throw new Error("Expected seeded agent");
+      return new Map(agents).set("agent-1", { ...current, title: "Updated agent" });
+    });
+    await cache.flush();
+
+    const reader = new ReplicaCache(storage);
+    reader.setHosts([SERVER_ID]);
+    await reader.restore();
+    expect(reader.readDirectoryCheckpoint(SERVER_ID)).toEqual({
+      agents: { generation: "daemon-generation", afterSeq: 7 },
+    });
+  });
+
+  it("restores every registered host directory before any host reconnects", async () => {
+    const storage = new MemoryStorage();
+    const writer = new ReplicaCache(storage);
+    writer.setHosts(LRU_SERVER_IDS);
+    for (const serverId of LRU_SERVER_IDS) seedTimeline(serverId, `cached-${serverId}`);
+    await writer.flush();
+    for (const serverId of LRU_SERVER_IDS) useSessionStore.getState().clearSession(serverId);
+
+    const reader = new ReplicaCache(storage);
+    reader.setHosts(LRU_SERVER_IDS);
+    await reader.restore();
+
+    for (const serverId of LRU_SERVER_IDS) {
+      const session = useSessionStore.getState().sessions[serverId];
+      expect(Array.from(session?.agents.keys() ?? [])).toEqual([`agent-${serverId}`]);
+      expect(Array.from(session?.workspaces.keys() ?? [])).toEqual([`workspace-${serverId}`]);
+      expect(session?.hasHydratedAgents).toBe(false);
+      expect(session?.hasHydratedWorkspaces).toBe(false);
+    }
   });
 
   it("persists reconciled rows without caching unreconciled local presentations", async () => {
@@ -498,110 +536,6 @@ describe("ReplicaCache", () => {
     ]);
   });
 
-  it("persists monotonic directory cursors with the complete host replica", async () => {
-    const storage = new MemoryStorage();
-    const cache = new ReplicaCache(storage);
-    cache.setHosts([SERVER_ID]);
-    seedSession();
-    await cache.flush();
-
-    cache.writeDirectoryCheckpoint(SERVER_ID, {
-      agents: { generation: "daemon-generation", afterSeq: 7 },
-    });
-    useSessionStore.getState().setAgents(SERVER_ID, (agents) => {
-      const current = agents.get("agent-1");
-      if (!current) throw new Error("Expected seeded agent");
-      return new Map(agents).set("agent-1", { ...current, title: "Updated agent" });
-    });
-    await cache.flush();
-
-    const reader = new ReplicaCache(storage);
-    reader.setHosts([SERVER_ID]);
-    await reader.restore();
-    expect(reader.readDirectoryCheckpoint(SERVER_ID)).toEqual({
-      agents: { generation: "daemon-generation", afterSeq: 7 },
-    });
-  });
-
-  it("restores workspace change request checks beside the directory cursor", async () => {
-    const githubRuntime = {
-      featuresEnabled: true,
-      pullRequest: {
-        number: 824,
-        url: "https://github.com/blank-dot-page/editor/pull/824",
-        title: "Cut realistic editor typing latency by two thirds",
-        state: "OPEN",
-        baseRefName: "main",
-        headRefName: "perf-editor-typing-latency",
-        isMerged: false,
-        checksStatus: "success" as const,
-        checks: [
-          {
-            name: "Check",
-            status: "success" as const,
-            url: "https://github.com/blank-dot-page/editor/actions/runs/824",
-          },
-        ],
-      },
-      error: null,
-    };
-    const storage = new MemoryStorage();
-    const writer = new ReplicaCache(storage);
-    writer.setHosts([SERVER_ID]);
-    seedSession();
-    useSessionStore.getState().setWorkspaces(
-      SERVER_ID,
-      new Map([
-        [
-          "workspace-1",
-          normalizeWorkspaceDescriptor({
-            ...workspace(),
-            forge: "github",
-            githubRuntime,
-          }),
-        ],
-      ]),
-    );
-    writer.writeDirectoryCheckpoint(SERVER_ID, {
-      workspaces: { generation: "daemon-generation", afterSeq: 9 },
-    });
-    await writer.flush();
-
-    useSessionStore.getState().clearSession(SERVER_ID);
-    const reader = new ReplicaCache(storage);
-    reader.setHosts([SERVER_ID]);
-    await reader.restore();
-
-    expect(
-      useSessionStore.getState().sessions[SERVER_ID]?.workspaces.get("workspace-1")?.githubRuntime,
-    ).toEqual(githubRuntime);
-    expect(reader.readDirectoryCheckpoint(SERVER_ID)).toEqual({
-      workspaces: { generation: "daemon-generation", afterSeq: 9 },
-    });
-  });
-
-  it("restores every registered host directory before any host reconnects", async () => {
-    const storage = new MemoryStorage();
-    const writer = new ReplicaCache(storage);
-    writer.setHosts(LRU_SERVER_IDS);
-    for (const serverId of LRU_SERVER_IDS) seedTimeline(serverId, `cached-${serverId}`);
-    await writer.flush();
-    for (const serverId of LRU_SERVER_IDS) useSessionStore.getState().clearSession(serverId);
-
-    const reader = new ReplicaCache(storage);
-    reader.setHosts(LRU_SERVER_IDS);
-    await reader.restore();
-
-    for (const serverId of LRU_SERVER_IDS) {
-      const session = useSessionStore.getState().sessions[serverId];
-      expect(Array.from(session?.agents.keys() ?? [])).toEqual([`agent-${serverId}`]);
-      expect(Array.from(session?.workspaces.keys() ?? [])).toEqual([`workspace-${serverId}`]);
-      expect(session?.hasHydratedAgents).toBe(false);
-      expect(session?.hasHydratedWorkspaces).toBe(false);
-      expect(session?.hasWorkspaceDirectorySnapshot).toBe(true);
-    }
-  });
-
   it("evicts the least recently written host when the cache exceeds its byte budget", async () => {
     const storage = new MemoryStorage();
     const cache = new ReplicaCache(storage, { maxBytes: 7_000 });
@@ -629,8 +563,9 @@ describe("ReplicaCache", () => {
 
   it("rejects and clears version 5 cache data before overwriting it on flush", async () => {
     const storage = new MemoryStorage();
+    storage.values.set("@byspace:replica-cache", JSON.stringify({ version: 999, hosts: [] }));
     storage.values.set(
-      "@paseo:replica-cache",
+      "@byspace:replica-cache",
       JSON.stringify({
         version: 5,
         hosts: [
@@ -653,11 +588,11 @@ describe("ReplicaCache", () => {
     cache.setHosts([SERVER_ID]);
 
     await cache.restore();
-    expect(storage.values.has("@paseo:replica-cache")).toBe(false);
+    expect(storage.values.has("@byspace:replica-cache")).toBe(false);
     await cache.flush();
 
     expect(useSessionStore.getState().sessions[SERVER_ID]).toBeUndefined();
-    expect(JSON.parse(storage.values.get("@paseo:replica-cache") ?? "null")).toEqual({
+    expect(JSON.parse(storage.values.get("@byspace:replica-cache") ?? "null")).toEqual({
       version: 6,
       hosts: [],
     });

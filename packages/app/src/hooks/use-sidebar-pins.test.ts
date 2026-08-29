@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   SidebarProjectEntry,
   SidebarWorkspacePlacement,
-} from "@/hooks/sidebar-workspaces-view-model";
+} from "@/hooks/use-sidebar-workspaces-list";
 import { splitPinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
 
 function placement(workspaceKey: string): SidebarWorkspacePlacement {
@@ -10,7 +10,7 @@ function placement(workspaceKey: string): SidebarWorkspacePlacement {
     workspaceKey,
     serverId: "s1",
     workspaceId: workspaceKey,
-    projectViewKey: "p1",
+    projectKey: "p1",
     projectName: "Project 1",
     projectKind: "git",
     workspaceKind: "worktree",
@@ -20,7 +20,7 @@ function placement(workspaceKey: string): SidebarWorkspacePlacement {
 
 function project(projectKey: string, workspaces: SidebarWorkspacePlacement[]): SidebarProjectEntry {
   return {
-    viewKey: projectKey,
+    projectKey,
     projectName: projectKey,
     projectKind: "git",
     iconWorkingDir: "",

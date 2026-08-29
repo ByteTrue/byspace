@@ -1,9 +1,8 @@
 import { router } from "expo-router";
-import type { WorkspaceProjectDescriptorPayload } from "@getpaseo/protocol/messages";
+import type { WorkspaceProjectDescriptorPayload } from "@bytetrue/byspace-protocol/messages";
 import {
   ArrowLeft,
   Folder,
-  FolderOpen,
   FolderPlus,
   Github,
   HardDrive,
@@ -56,7 +55,6 @@ import {
 } from "@/add-project-flow/model";
 import {
   buildAddProjectMethods,
-  addProjectMethodEmptyText,
   buildCloneLocationOptions,
   buildManualGithubRepositoryChoices,
   buildSuggestedParentDirectories,
@@ -70,13 +68,9 @@ import {
   type ProjectPickerOption,
 } from "@/components/project-picker-options";
 import { Shortcut } from "@/components/ui/shortcut";
-import { useKeyboardShortcutsAvailable } from "@/keyboard/availability";
-import { getIsElectronRuntime } from "@/constants/layout";
-import { isNative, isWeb } from "@/constants/platform";
-import { pickDirectory } from "@/desktop/pick-directory";
+import { isWeb } from "@/constants/platform";
 import { useFetchQuery } from "@/data/query";
 import { getOpenProjectFailureReason, registerProjectDescriptor } from "@/hooks/open-project";
-import { useIsLocalDaemon, useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useCloneGithubProject, useOpenProject } from "@/hooks/use-open-project";
 import {
   OverlayLayerProvider,
@@ -162,7 +156,6 @@ function FlowBackButton({ onPress }: { onPress: () => void }) {
 
 function methodIcon(method: AddProjectMethodId): FlowRowOption["icon"] {
   if (method === "github") return Github;
-  if (method === "browse") return FolderOpen;
   if (method === "new-directory") return FolderPlus;
   return Search;
 }
@@ -179,10 +172,9 @@ function progressText(page: AddProjectPage): string {
   return "Adding project...";
 }
 
-function emptyText(page: AddProjectPage, host: AddProjectHost | null): string {
+function emptyText(page: AddProjectPage): string {
   if (page.kind === "host") return "No connected hosts";
   if (page.kind === "github-search") return "Enter a GitHub URL or owner/repo";
-  if (page.kind === "method") return addProjectMethodEmptyText(host);
   return "No matching options";
 }
 
@@ -291,9 +283,6 @@ function FlowRow({ option, active }: { option: FlowRowOption; active: boolean })
 }
 
 function FlowHint({ keys, action }: { keys: string[]; action: string }) {
-  const shortcutsAvailable = useKeyboardShortcutsAvailable();
-  if (!shortcutsAvailable) return null;
-
   return (
     <View style={styles.footerHint}>
       <Shortcut keys={keys} textStyle={styles.footerKeyText} />
@@ -319,7 +308,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   const hostIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
   const connectionStatuses = useHostRuntimeConnectionStatuses(hostIds);
   const projectAddByHost = useHostFeatureMap(hostIds, "projectAdd");
-  // COMPAT(stableProjectIdentity): added in v0.1.109, remove gate after 2027-01-15.
+  // COMPAT(stableProjectIdentity): added in v0.2.0, remove gate after 2027-01-23.
   const stableProjectIdentityByHost = useHostFeatureMap(hostIds, "stableProjectIdentity");
   // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
   const githubCloneByHost = useHostFeatureMap(hostIds, "projectGithubClone");
@@ -327,21 +316,21 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   const githubSearchByHost = useHostFeatureMap(hostIds, "workspaceGithubRepositorySearch");
   // COMPAT(projectCreateDirectory): added in v0.1.108, remove gate after 2027-01-15.
   const createDirectoryByHost = useHostFeatureMap(hostIds, "projectCreateDirectory");
-  const localServerId = useLocalDaemonServerId();
   const availableHosts = useMemo<AddProjectHost[]>(
     () =>
       hosts.flatMap((host) => {
         if (connectionStatuses.get(host.serverId) !== "online") return [];
+        const hasStableProjectIdentity = stableProjectIdentityByHost.get(host.serverId) === true;
         const canAddProject =
-          projectAddByHost.get(host.serverId) === true &&
-          stableProjectIdentityByHost.get(host.serverId) === true;
+          projectAddByHost.get(host.serverId) === true && hasStableProjectIdentity;
         return [
           {
             serverId: host.serverId,
             label: host.label,
             canAddProject,
-            canBrowse: canAddProject && getIsElectronRuntime() && localServerId === host.serverId,
-            canCloneGithubRepositories: githubCloneByHost.get(host.serverId) === true,
+            canBrowse: false,
+            canCloneGithubRepositories:
+              githubCloneByHost.get(host.serverId) === true && hasStableProjectIdentity,
             canSearchGithubRepositories: githubSearchByHost.get(host.serverId) === true,
             canCreateDirectory: createDirectoryByHost.get(host.serverId) === true,
           },
@@ -353,7 +342,6 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
       githubCloneByHost,
       githubSearchByHost,
       hosts,
-      localServerId,
       projectAddByHost,
       stableProjectIdentityByHost,
     ],
@@ -368,18 +356,16 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   const hostId = pageHostId(page);
   const host = hostId ? state.hosts.find((candidate) => candidate.serverId === hostId) : null;
   const client = useHostRuntimeClient(hostId ?? "");
-  const isLocalDaemon = useIsLocalDaemon(hostId ?? "");
   const recommendedPaths = useRecommendedProjectPaths(hostId);
   const openProject = useOpenProject(hostId);
   const cloneGithubProject = useCloneGithubProject(hostId);
-  const upsertProject = useSessionStore((store) => store.upsertProject);
+  const addEmptyProject = useSessionStore((store) => store.addEmptyProject);
   const setHasHydratedWorkspaces = useSessionStore((store) => store.setHasHydratedWorkspaces);
   const inputRef = useRef<EditingTextInputHandle>(null);
-  const submissionInFlightRef = useRef(false);
-  const browseInFlightRef = useRef(false);
-  const query = page.kind === "new-directory-name" || page.kind === "method" ? "" : page.query;
   const pageInputValueRef = useRef(page.kind === "method" ? "" : pageInput(page));
   pageInputValueRef.current = page.kind === "method" ? "" : pageInput(page);
+  const submissionInFlightRef = useRef(false);
+  const query = page.kind === "new-directory-name" || page.kind === "method" ? "" : page.query;
   const [debouncedQuery, setDebouncedQuery] = useState(query);
 
   useEffect(() => {
@@ -394,9 +380,12 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   }, [query]);
 
   useEffect(() => {
-    inputRef.current?.replaceText(pageInputValueRef.current);
     const timer = setTimeout(() => inputRef.current?.focus(), 0);
     return () => clearTimeout(timer);
+  }, [page.kind]);
+
+  useEffect(() => {
+    inputRef.current?.replaceText(pageInputValueRef.current);
   }, [page.kind]);
 
   const searchesDirectories =
@@ -495,35 +484,18 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
     [hostId, openNewWorkspaceForProject, openProject],
   );
 
-  const browse = useCallback(async () => {
-    if (!hostId || !isLocalDaemon || browseInFlightRef.current) return;
-    browseInFlightRef.current = true;
-    try {
-      const path = await pickDirectory();
-      if (path) await openAddedProject(path, "method");
-    } catch {
-      setState((current) =>
-        setPageStatus(current, "method", { error: "Unable to browse for a directory" }),
-      );
-    } finally {
-      browseInFlightRef.current = false;
-    }
-  }, [hostId, isLocalDaemon, openAddedProject]);
-
   const selectMethod = useCallback(
     (method: AddProjectMethodId) => {
       if (!hostId) return;
       if (method === "directory-search") {
         setState((current) => openDirectorySearchPage(current, hostId));
-      } else if (method === "browse") {
-        void browse();
       } else if (method === "github") {
         setState((current) => openGithubSearchPage(current, hostId));
       } else {
         setState((current) => openNewDirectoryParentPage(current, hostId));
       }
     },
-    [browse, hostId],
+    [hostId],
   );
 
   const directoryPaths = useMemo(
@@ -737,7 +709,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
       registerProjectDescriptor({
         serverId: page.hostId,
         project: payload.project,
-        upsertProject,
+        addEmptyProject,
         setHasHydratedWorkspaces,
       });
       openNewWorkspaceForProject(page.hostId, payload.project);
@@ -751,7 +723,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
     } finally {
       submissionInFlightRef.current = false;
     }
-  }, [client, openNewWorkspaceForProject, page, setHasHydratedWorkspaces, upsertProject]);
+  }, [addEmptyProject, client, openNewWorkspaceForProject, page, setHasHydratedWorkspaces]);
 
   const submitActive = useCallback(() => {
     if (page.kind === "new-directory-name") {
@@ -861,23 +833,6 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
                 ) : null}
               </View>
             </View>
-            {page.kind === "method" && isNative ? (
-              // Native hardware-keyboard events need a focused responder even without a visible field.
-              <TextInput
-                ref={inputRef}
-                onKeyPress={handleNativeKeyPress}
-                onSubmitEditing={submitActive}
-                showSoftInputOnFocus={false}
-                caretHidden
-                contextMenuHidden
-                accessible={false}
-                accessibilityElementsHidden
-                importantForAccessibility="no-hide-descendants"
-                pointerEvents="none"
-                style={styles.keyboardCapture}
-                testID="add-project-flow-keyboard-capture"
-              />
-            ) : null}
             {page.kind !== "method" ? (
               <ThemedTextInput
                 ref={inputRef}
@@ -940,7 +895,7 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
             rows.length === 0 &&
             page.kind !== "new-directory-name" ? (
               <Text style={styles.stateText} testID="add-project-flow-empty">
-                {emptyText(page, host ?? null)}
+                {emptyText(page)}
               </Text>
             ) : null}
           </ScrollView>

@@ -15,9 +15,9 @@ import {
   type TextStyle,
   type ViewStyle,
 } from "react-native";
+import type { EditingTextInputHandle } from "@/components/ui/text-input";
 import { StyleSheet } from "react-native-unistyles";
 import { AdaptiveTextInput, type AdaptiveTextInputProps } from "@/components/adaptive-modal-sheet";
-import type { EditingTextInputHandle } from "@/components/ui/text-input";
 import {
   createControlGeometry,
   resolveControlInteractionStyles,

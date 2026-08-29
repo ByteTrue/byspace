@@ -1,4 +1,4 @@
-import type { ProjectPlacementPayload } from "@getpaseo/protocol/messages";
+import type { ProjectPlacementPayload } from "@bytetrue/byspace-protocol/messages";
 import { deriveProjectKey, deriveProjectName } from "@/utils/agent-grouping";
 
 function normalizeWorkingDirectory(cwd: string): string {
@@ -20,15 +20,26 @@ export function deriveProjectPlacementFromCwd(cwd: string): ProjectPlacementPayl
       currentBranch: null,
       remoteUrl: null,
       worktreeRoot: null,
-      isPaseoOwnedWorktree: false,
+      isBySpaceOwnedWorktree: false,
       mainRepoRoot: null,
     },
   };
+}
+
+export function normalizeProjectPlacement(
+  projectPlacement: ProjectPlacementPayload,
+): ProjectPlacementPayload {
+  const projectKey = projectPlacement.projectGroupingKey ?? projectPlacement.projectKey;
+  return projectKey === projectPlacement.projectKey
+    ? projectPlacement
+    : { ...projectPlacement, projectKey };
 }
 
 export function resolveProjectPlacement(input: {
   projectPlacement: ProjectPlacementPayload | null | undefined;
   cwd: string;
 }): ProjectPlacementPayload {
-  return input.projectPlacement ?? deriveProjectPlacementFromCwd(input.cwd);
+  return input.projectPlacement
+    ? normalizeProjectPlacement(input.projectPlacement)
+    : deriveProjectPlacementFromCwd(input.cwd);
 }

@@ -1,7 +1,8 @@
 {
-  "name": "@getpaseo/relay",
-  "version": "0.6.1",
-  "description": "Paseo relay for bridging daemon and client connections",
+  "name": "@bytetrue/byspace-relay",
+  "version": "0.6.0",
+  "private": true,
+  "description": "BySpace relay for bridging daemon and client connections",
   "files": [
     "dist",
     "!dist/**/*.map"
@@ -26,10 +27,13 @@
       "node": "./dist/cloudflare-adapter.js",
       "import": "./src/cloudflare-adapter.ts",
       "default": "./src/cloudflare-adapter.ts"
+    },
+    "./standalone": {
+      "types": "./dist/standalone-adapter.d.ts",
+      "node": "./dist/standalone-adapter.js",
+      "import": "./src/standalone-adapter.ts",
+      "default": "./src/standalone-adapter.ts"
     }
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "scripts": {
     "clean": "node ../../scripts/clean-package-dist.mjs",
@@ -49,6 +53,7 @@
     "@types/node": "^20.9.0",
     "@types/ws": "^8.5.8",
     "typescript": "^5.2.2",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.10",
+    "wrangler": "4.105.0"
   }
 }

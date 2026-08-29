@@ -7,7 +7,7 @@ import { AgentStreamView } from "@/agent-stream/view";
 import { getProviderIcon } from "@/components/provider-icons";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
 import { usePaneContext } from "@/panels/pane-context";
-import { definePanel, type PanelDescriptor } from "@/panels/panel-registry";
+import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry";
 import { useSessionStore } from "@/stores/session-store";
 import {
   providerSubagentKey,
@@ -54,7 +54,6 @@ function useProviderSubagentDescriptor(
     label,
     subtitle:
       subagentType && subagentType !== label ? `${subagentType} · ${providerLabel}` : providerLabel,
-    tooltip: label,
     titleState: descriptor ? "ready" : "loading",
     icon: getProviderIcon(provider),
     statusBucket: descriptor
@@ -86,7 +85,7 @@ function ProviderSubagentPanel() {
   );
   const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
   const serverInfo = useSessionStore((state) => state.sessions[serverId]?.serverInfo ?? null);
-  // COMPAT(providerSubagents): added in v0.2.11, remove after 2027-01-12.
+  // COMPAT(providerSubagents): added in v0.2.1, remove after 2027-01-12.
   const supported = serverInfo?.features?.providerSubagents === true;
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
 
@@ -228,7 +227,9 @@ const styles = StyleSheet.create((theme) => ({
   unsupportedText: { color: theme.colors.foregroundMuted, textAlign: "center" },
 }));
 
-export const providerSubagentPanelRegistration = definePanel("provider_subagent", {
+export const providerSubagentPanelRegistration: PanelRegistration<"provider_subagent"> = {
+  kind: "provider_subagent",
+  resourceKey: (target) => `${target.parentAgentId}:${target.subagentId}`,
   component: ProviderSubagentPanel,
   useDescriptor: useProviderSubagentDescriptor,
-});
+};

@@ -45,6 +45,7 @@ export interface AgentHookConfigFileInstallStrategy<TConfig> extends AgentHookIn
 export interface AgentHookPluginFileInstallStrategy extends AgentHookInstallStrategyBase {
   kind: "plugin-file";
   source: string;
+  legacySources?: readonly string[];
 }
 
 export interface AgentHookConfigFormat<TConfig> {
@@ -89,6 +90,11 @@ export function uninstallAgentHooks<TConfig>(
 ): AgentHookInstallResult {
   if (provider.install.kind === "plugin-file") {
     return uninstallAgentHookPluginFile(provider.install, options);
+  }
+
+  const configPath = resolveAgentHookConfigPath(provider, options);
+  if (!existsSync(configPath)) {
+    return { configPath, changed: false };
   }
 
   const format = provider.install.format;
@@ -137,8 +143,8 @@ export function buildAgentHookShellCommand<TConfig>(
   provider: AgentHookProvider<TConfig>,
   event: AgentHookEventDefinition,
 ): string {
-  const hookCommand = `"\${PASEO_HOOK_CLI:-paseo}" hooks ${shellToken(provider.id)} ${shellToken(event.event)}`;
-  return `if [ -n "$PASEO_TERMINAL_ID" ]; then ${hookCommand}; fi`;
+  const hookCommand = `"\${BYSPACE_HOOK_CLI:-byspace}" hooks ${shellToken(provider.id)} ${shellToken(event.event)}`;
+  return `if [ -n "$BYSPACE_TERMINAL_ID" ]; then ${hookCommand}; fi`;
 }
 
 export function buildAgentHookWindowsCommand<TConfig>(
@@ -146,7 +152,19 @@ export function buildAgentHookWindowsCommand<TConfig>(
   event: AgentHookEventDefinition,
 ): string {
   const hookArgs = `hooks ${windowsToken(provider.id)} ${windowsToken(event.event)}`;
-  return `if defined PASEO_TERMINAL_ID (if defined PASEO_HOOK_CLI ("%PASEO_HOOK_CLI%" ${hookArgs}) else (paseo ${hookArgs})) else (exit /b 0)`;
+  return `if defined BYSPACE_TERMINAL_ID (if defined BYSPACE_HOOK_CLI ("%BYSPACE_HOOK_CLI%" ${hookArgs}) else (byspace ${hookArgs})) else (exit /b 0)`;
+}
+
+function agentHookPluginFileIsOwned(
+  raw: string,
+  install: AgentHookPluginFileInstallStrategy,
+): boolean {
+  return (
+    raw.includes(install.hookMarker) ||
+    install.legacySources?.some(
+      (legacySource) => normalizeRawConfig(legacySource) === normalizeRawConfig(raw),
+    ) === true
+  );
 }
 
 function installAgentHookPluginFile(
@@ -157,12 +175,15 @@ function installAgentHookPluginFile(
   const currentRaw = existsSync(configPath) ? readFileSync(configPath, "utf8") : null;
   const nextRaw = normalizeRawConfig(install.source);
 
-  if (currentRaw === null || normalizeRawConfig(currentRaw) !== nextRaw) {
-    writePrivateFileAtomicSync(configPath, nextRaw);
-    return { configPath, changed: true };
+  if (currentRaw !== null && normalizeRawConfig(currentRaw) === nextRaw) {
+    return { configPath, changed: false };
+  }
+  if (currentRaw !== null && !agentHookPluginFileIsOwned(currentRaw, install)) {
+    throw new Error(`Refusing to overwrite non-BySpace plugin file: ${configPath}`);
   }
 
-  return { configPath, changed: false };
+  writePrivateFileAtomicSync(configPath, nextRaw);
+  return { configPath, changed: true };
 }
 
 function uninstallAgentHookPluginFile(
@@ -171,6 +192,10 @@ function uninstallAgentHookPluginFile(
 ): AgentHookInstallResult {
   const configPath = resolveAgentHookInstallPath(install, options);
   if (!existsSync(configPath)) {
+    return { configPath, changed: false };
+  }
+
+  if (!agentHookPluginFileIsOwned(readFileSync(configPath, "utf8"), install)) {
     return { configPath, changed: false };
   }
 

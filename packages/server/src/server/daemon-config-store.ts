@@ -7,13 +7,17 @@ import { ProviderOverrideSchema } from "./agent/provider-launch-config.js";
 import {
   MutableDaemonConfigSchema,
   MutableDaemonConfigPatchSchema,
-} from "@getpaseo/protocol/messages";
-import type { AgentSkillSelection } from "@getpaseo/protocol/messages";
+} from "@bytetrue/byspace-protocol/messages";
+import type { AgentSkillSelection } from "@bytetrue/byspace-protocol/messages";
 
-export type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@getpaseo/protocol/messages";
+export type {
+  MutableDaemonConfig,
+  MutableDaemonConfigPatch,
+} from "@bytetrue/byspace-protocol/messages";
 
-type MutableDaemonConfig = import("@getpaseo/protocol/messages").MutableDaemonConfig;
-type MutableDaemonConfigPatch = import("@getpaseo/protocol/messages").MutableDaemonConfigPatch;
+type MutableDaemonConfig = import("@bytetrue/byspace-protocol/messages").MutableDaemonConfig;
+type MutableDaemonConfigPatch =
+  import("@bytetrue/byspace-protocol/messages").MutableDaemonConfigPatch;
 type ProviderOverride = import("./agent/provider-launch-config.js").ProviderOverride;
 
 interface SupportedMutableConfigPatch {
@@ -25,12 +29,14 @@ interface SupportedMutableConfigPatch {
   metadataGeneration?: MutableDaemonConfig["metadataGeneration"];
   autoArchiveAfterMerge?: boolean;
   enableTerminalAgentHooks?: boolean;
+  terminalAgentHooks?: MutableDaemonConfig["terminalAgentHooks"];
   appendSystemPrompt?: string;
   terminalProfiles?: MutableDaemonConfig["terminalProfiles"];
   agentProfiles?: MutableDaemonConfig["agentProfiles"];
   skills?: MutableDaemonConfig["skills"];
   pluginsEnabled?: boolean;
   plugins?: MutableDaemonConfig["plugins"];
+  dictation?: MutableDaemonConfig["dictation"];
 }
 
 interface LoggerLike {
@@ -67,6 +73,43 @@ type FieldChangeHandler = (value: unknown) => void;
 interface AppliedFieldChange {
   handler: FieldChangeHandler;
   previousValue: unknown;
+}
+
+const TERMINAL_AGENT_HOOK_PROVIDER_IDS = ["claude", "codex", "opencode", "pi"] as const;
+
+function normalizeTerminalAgentHookPatch(
+  patch: MutableDaemonConfigPatch,
+): MutableDaemonConfigPatch {
+  if (
+    patch.terminalAgentHooks !== undefined ||
+    typeof patch.enableTerminalAgentHooks !== "boolean"
+  ) {
+    return patch;
+  }
+
+  return {
+    ...patch,
+    terminalAgentHooks: Object.fromEntries(
+      TERMINAL_AGENT_HOOK_PROVIDER_IDS.map((providerId) => [
+        providerId,
+        patch.enableTerminalAgentHooks,
+      ]),
+    ),
+  };
+}
+
+function normalizeTerminalAgentHookAggregate(
+  config: MutableDaemonConfig,
+  patch: MutableDaemonConfigPatch,
+): MutableDaemonConfig {
+  if (patch.terminalAgentHooks === undefined) return config;
+
+  return {
+    ...config,
+    enableTerminalAgentHooks: TERMINAL_AGENT_HOOK_PROVIDER_IDS.some(
+      (providerId) => config.terminalAgentHooks?.[providerId] ?? config.enableTerminalAgentHooks,
+    ),
+  };
 }
 
 function getLogger(logger: LoggerLike | undefined): LoggerLike | undefined {
@@ -180,6 +223,7 @@ const RELOADABLE_PATHS = [
   "daemon.git.maxProcessConcurrency",
   "daemon.autoArchiveAfterMerge",
   "daemon.enableTerminalAgentHooks",
+  "daemon.terminalAgentHooks",
   "daemon.appendSystemPrompt",
   "daemon.terminalProfiles",
   "daemon.agentProfiles",
@@ -203,6 +247,7 @@ const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
   ["daemon.git.maxProcessConcurrency", "git.maxProcessConcurrency"],
   ["daemon.autoArchiveAfterMerge", "autoArchiveAfterMerge"],
   ["daemon.enableTerminalAgentHooks", "enableTerminalAgentHooks"],
+  ["daemon.terminalAgentHooks", "terminalAgentHooks"],
   ["daemon.appendSystemPrompt", "appendSystemPrompt"],
   ["daemon.terminalProfiles", "terminalProfiles"],
   ["daemon.agentProfiles", "agentProfiles"],
@@ -269,6 +314,9 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
     ...(patch.enableTerminalAgentHooks !== undefined
       ? { enableTerminalAgentHooks: patch.enableTerminalAgentHooks }
       : {}),
+    ...(patch.terminalAgentHooks !== undefined
+      ? { terminalAgentHooks: patch.terminalAgentHooks }
+      : {}),
     ...(patch.appendSystemPrompt !== undefined
       ? { appendSystemPrompt: patch.appendSystemPrompt }
       : {}),
@@ -276,6 +324,7 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
     ...(patch.agentProfiles !== undefined ? { agentProfiles: patch.agentProfiles } : {}),
     ...(patch.pluginsEnabled !== undefined ? { pluginsEnabled: patch.pluginsEnabled } : {}),
     ...(patch.plugins !== undefined ? { plugins: patch.plugins } : {}),
+    ...(patch.dictation !== undefined ? { dictation: patch.dictation } : {}),
   };
 }
 
@@ -300,18 +349,19 @@ export function applyMutableProviderConfigToOverrides(
 
 export class DaemonConfigStore {
   private current: MutableDaemonConfig;
-  private readonly paseoHome: string;
+  private readonly byspaceHome: string;
   private readonly logger: LoggerLike | undefined;
   private readonly changeListeners = new Set<ConfigListener>();
   private readonly applyListeners = new Set<ConfigApplyListener>();
   private readonly fieldChangeHandlers = new Map<string, Set<FieldChangeHandler>>();
+
   private readonly relayEnabledMutable: boolean;
   private readonly reloadSource: DaemonConfigReloadSource | undefined;
   private readonly startupPersisted: PersistedConfig;
   private lastKnownPersisted: PersistedConfig;
 
   constructor(
-    paseoHome: string,
+    byspaceHome: string,
     initial: MutableDaemonConfig,
     logger?: LoggerLike,
     options: {
@@ -320,7 +370,7 @@ export class DaemonConfigStore {
       startupPersisted?: PersistedConfig;
     } = {},
   ) {
-    this.paseoHome = paseoHome;
+    this.byspaceHome = byspaceHome;
     this.logger = getLogger(logger);
     this.current = MutableDaemonConfigSchema.parse({
       ...initial,
@@ -328,7 +378,8 @@ export class DaemonConfigStore {
     });
     this.relayEnabledMutable = options.relayEnabledMutable ?? true;
     this.reloadSource = options.reloadSource;
-    this.startupPersisted = options.startupPersisted ?? loadPersistedConfig(paseoHome, this.logger);
+    this.startupPersisted =
+      options.startupPersisted ?? loadPersistedConfig(byspaceHome, this.logger);
     this.lastKnownPersisted = this.startupPersisted;
   }
 
@@ -337,7 +388,9 @@ export class DaemonConfigStore {
   }
 
   public patch(partial: MutableDaemonConfigPatch): MutableDaemonConfig {
-    const parsedPatch = pickSupportedPatchFields(MutableDaemonConfigPatchSchema.parse(partial));
+    const parsedPatch = pickSupportedPatchFields(
+      normalizeTerminalAgentHookPatch(MutableDaemonConfigPatchSchema.parse(partial)),
+    );
     return this.applySupportedPatch(parsedPatch);
   }
 
@@ -348,12 +401,15 @@ export class DaemonConfigStore {
   private applySupportedPatch(parsedPatch: SupportedMutableConfigPatch): MutableDaemonConfig {
     if (parsedPatch.relay?.enabled !== undefined && !this.relayEnabledMutable) {
       throw new Error(
-        "Relay is controlled by a daemon launch override. Remove PASEO_RELAY_ENABLED or the relay CLI flag before changing it here.",
+        "Relay is controlled by a daemon launch override. Remove BYSPACE_RELAY_ENABLED or the relay CLI flag before changing it here.",
       );
     }
     const { removeProviders = [], ...configPatch } = parsedPatch;
     const removedProviders = Array.from(new Set(removeProviders));
-    const merged = deepMerge(this.current, configPatch);
+    const merged = normalizeTerminalAgentHookAggregate(
+      deepMerge(this.current, configPatch as Record<string, unknown>),
+      parsedPatch as MutableDaemonConfigPatch,
+    );
     if (parsedPatch.skills?.selection !== undefined) {
       merged.skills = { selection: parsedPatch.skills.selection };
     }
@@ -384,7 +440,7 @@ export class DaemonConfigStore {
       this.applyReplacement(next, { removedProviders });
       this.lastKnownPersisted = knownNext;
     } catch (error) {
-      savePersistedConfig(this.paseoHome, persistedBeforePatch, this.logger);
+      savePersistedConfig(this.byspaceHome, persistedBeforePatch, this.logger);
       throw error;
     }
 
@@ -396,7 +452,7 @@ export class DaemonConfigStore {
       throw new Error("Daemon config reload is unavailable for this daemon instance");
     }
 
-    const persisted = loadPersistedConfig(this.paseoHome, this.logger);
+    const persisted = loadPersistedConfig(this.byspaceHome, this.logger);
     const resolved = this.reloadSource.resolve(persisted);
     // Plugin source changes require the plugin lifecycle operation or a daemon
     // restart. The global switch is independently reloadable.
@@ -550,7 +606,7 @@ export class DaemonConfigStore {
     patch: Omit<SupportedMutableConfigPatch, "removeProviders">,
     removeProviders: readonly string[],
   ): { previous: PersistedConfig; knownNext: PersistedConfig } {
-    const persisted = loadPersistedConfig(this.paseoHome, this.logger);
+    const persisted = loadPersistedConfig(this.byspaceHome, this.logger);
     const merge = (source: PersistedConfig) =>
       mergeMutablePatchIntoPersistedConfig({
         persisted: source,
@@ -560,7 +616,7 @@ export class DaemonConfigStore {
       });
     const nextPersisted = merge(persisted);
     const knownNext = merge(this.lastKnownPersisted);
-    savePersistedConfig(this.paseoHome, nextPersisted, this.logger);
+    savePersistedConfig(this.byspaceHome, nextPersisted, this.logger);
     return { previous: persisted, knownNext };
   }
 }
@@ -580,6 +636,17 @@ function mergeMutablePatchIntoPersistedConfig(params: {
     ...(patch.plugins !== undefined ? { plugins: patch.plugins } : {}),
     ...(daemon ? { daemon } : { daemon: undefined }),
     ...(agents ? { agents } : { agents: undefined }),
+    ...(patch.dictation?.refineWithAgent !== undefined
+      ? {
+          features: {
+            ...persisted.features,
+            dictation: {
+              ...persisted.features?.dictation,
+              refineWithAgent: patch.dictation.refineWithAgent,
+            },
+          },
+        }
+      : {}),
   } as PersistedConfig;
 }
 
@@ -647,6 +714,9 @@ function mergeMutableDaemonPatch(
   }
   if (patch.enableTerminalAgentHooks !== undefined) {
     next.enableTerminalAgentHooks = patch.enableTerminalAgentHooks;
+  }
+  if (patch.terminalAgentHooks !== undefined) {
+    next.terminalAgentHooks = patch.terminalAgentHooks;
   }
   if (patch.appendSystemPrompt !== undefined) next.appendSystemPrompt = patch.appendSystemPrompt;
   if (patch.terminalProfiles !== undefined) next.terminalProfiles = patch.terminalProfiles;

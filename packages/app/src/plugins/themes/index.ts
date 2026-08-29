@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { z } from "zod";
-import type { PluginThemeContribution } from "@getpaseo/plugin";
+import type { PluginThemeContribution } from "@bytetrue/byspace-plugin";
 import { useHostFeatureMap } from "@/runtime/host-features";
 import {
   buildDarkSemanticColors,
@@ -170,7 +170,7 @@ export function usePluginThemeCatalog(): PluginThemeOption[] {
     () => [...new Set(plugins.map((plugin) => plugin.serverId))],
     [plugins],
   );
-  // COMPAT(pluginThemes): added in v0.5.0, remove gate after 2027-08-20.
+  // COMPAT(pluginThemes): added in v0.6.0, remove gate after 2027-02-24.
   const support = useHostFeatureMap(serverIds, "pluginThemes");
   return useMemo(
     () => collectPluginThemes(plugins, supportedThemeHosts(support)),

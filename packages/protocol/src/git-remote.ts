@@ -17,12 +17,7 @@ const DEFAULT_PORT_BY_PROTOCOL: Record<string, string> = {
 export interface GitRemoteLocation {
   transport: "scp" | "ssh" | "http" | "https";
   host: string;
-  /**
-   * Explicit non-default port from the remote (e.g. a self-hosted forge on
-   * `:60443`), or undefined for a default-port or scp-form remote. Kept separate
-   * from `host` so host-identity matching (forge detection, cloud-host checks)
-   * stays port-agnostic; only consumers that reconstruct a URL (web links) use it.
-   */
+  /** Explicit non-default port; default protocol ports and scp form omit it. */
   port?: string;
   path: string;
 }
@@ -56,8 +51,8 @@ export function parseGitRemoteLocation(remoteUrl: string): GitRemoteLocation | n
   const trimmed = remoteUrl.trim();
   if (!trimmed) return null;
 
-  // scp form has no scheme. Testing it first would match `ssh://git@host:22/x`
-  // — `[^@]+` happily eats `ssh://git` — and swallow the port into the path.
+  // Scheme URLs such as ssh://git@host:22/x also resemble scp syntax after
+  // the userinfo, so only consider scp form when no scheme is present.
   const scpLike = trimmed.includes("://") ? null : trimmed.match(/^[^@]+@([^:]+):(.+)$/u);
   if (scpLike) {
     const host = normalizeHost(scpLike[1] ?? "");

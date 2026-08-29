@@ -2,7 +2,6 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { PassThrough } from "node:stream";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import pino from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PluginRuntime } from "./runtime.js";
@@ -11,9 +10,9 @@ import type { PluginSessionSocket } from "./session-socket.js";
 const temporaryDirectories: string[] = [];
 
 async function createPlugin(id: string, source: string): Promise<string> {
-  const directory = await mkdtemp(path.join(tmpdir(), "paseo-plugin-"));
+  const directory = await mkdtemp(path.join(tmpdir(), "byspace-plugin-"));
   temporaryDirectories.push(directory);
-  await writeFile(path.join(directory, "paseo-plugin.json"), JSON.stringify({ id }), "utf8");
+  await writeFile(path.join(directory, "byspace-plugin.json"), JSON.stringify({ id }), "utf8");
   await writeFile(path.join(directory, "index.tsx"), source, "utf8");
   return directory;
 }
@@ -84,7 +83,7 @@ function createTestRuntime(
                   status: "server_info",
                   serverId: "plugin-test",
                   hostname: "plugin-test",
-                  version: "0.4.0",
+                  version: "0.6.0",
                   features: {},
                 },
               },
@@ -119,7 +118,7 @@ function createTrackedSessionHost() {
                   status: "server_info",
                   serverId: "tracked-plugin-test",
                   hostname: "tracked-plugin-test",
-                  version: "0.4.0",
+                  version: "0.6.0",
                   features: {},
                 },
               },
@@ -161,10 +160,10 @@ describe("PluginRuntime", () => {
     expect(
       runtime.getLogs("lifecycle").map(({ stream, message }) => ({ stream, message })),
     ).toEqual([
-      { stream: "stdout", message: "[paseo] Loading plugin" },
-      { stream: "stdout", message: "[paseo] Plugin ready" },
-      { stream: "stdout", message: "[paseo] Stopping plugin" },
-      { stream: "stdout", message: "[paseo] Plugin stopped" },
+      { stream: "stdout", message: "[byspace] Loading plugin" },
+      { stream: "stdout", message: "[byspace] Plugin ready" },
+      { stream: "stdout", message: "[byspace] Stopping plugin" },
+      { stream: "stdout", message: "[byspace] Plugin stopped" },
     ]);
   });
 
@@ -186,7 +185,7 @@ describe("PluginRuntime", () => {
     const logs = runtime.getLogs("output");
     expect(
       logs
-        .filter((entry) => !entry.message.startsWith("[paseo]"))
+        .filter((entry) => !entry.message.startsWith("[byspace]"))
         .map(({ stream, message }) => ({ stream, message })),
     ).toEqual([
       { stream: "stdout", message: "first" },
@@ -308,7 +307,7 @@ describe("PluginRuntime", () => {
     ).toEqual([
       {
         stream: "stdout",
-        message: "[paseo] Loading plugin",
+        message: "[byspace] Loading plugin",
       },
       {
         stream: "stderr",
@@ -361,7 +360,7 @@ describe("PluginRuntime", () => {
   });
 
   it("waits for asynchronous plugin cleanup before stopping", async () => {
-    const cleanupFile = path.join(tmpdir(), `paseo-plugin-cleanup-${Date.now()}`);
+    const cleanupFile = path.join(tmpdir(), `byspace-plugin-cleanup-${Date.now()}`);
     const directory = await createPlugin(
       "async-cleanup",
       `import { writeFile } from "node:fs/promises";
@@ -478,22 +477,6 @@ export default function contribute(plugin: unknown) {
     await runtime.stopAll();
   });
 
-  it("loads the official Linear attachment extension", async () => {
-    const directory = path.resolve(
-      path.dirname(fileURLToPath(import.meta.url)),
-      "../../../../../plugin-examples/linear",
-    );
-    const runtime = createTestRuntime();
-
-    await runtime.startPlugin("linear", directory);
-
-    expect(runtime.catalog().map((plugin) => plugin.id)).toEqual(["linear"]);
-    expect(runtime.catalog()[0]?.clientBundle).toContain("Attach Linear issue");
-    expect(runtime.catalog()[0]?.clientBundle).not.toContain("LINEAR_API_KEY");
-    expect(runtime.catalog()[0]?.clientBundle).not.toContain("api.linear.app");
-    await runtime.stopAll();
-  });
-
   it("loads one index.tsx, exposes its client bundle, and invokes its server RPC", async () => {
     const directory = await createPlugin(
       "hello",
@@ -501,7 +484,7 @@ export default function contribute(plugin: unknown) {
 import { platform } from "node:os";
 import { Text } from "react-native";
 import { z } from "zod";
-import { defineAttachmentSource, defineRpc } from "@getpaseo/plugin";
+import { defineAttachmentSource, defineRpc } from "@bytetrue/byspace/plugin";
 
 const greetRpc = defineRpc({
   name: "greet",
@@ -552,54 +535,26 @@ export default function contribute(plugin: any) {
     expect(catalog[0]?.clientBundle).toContain("Open review");
     expect(catalog[0]?.clientBundle).not.toContain("node:os");
     expect(catalog[0]?.clientBundle).not.toContain("get: () => from[key]");
-    await expect(runtime.invoke("hello", "greet", { name: "Paseo" })).resolves.toMatchObject({
-      message: "Hello, Paseo",
+    await expect(runtime.invoke("hello", "greet", { name: "BySpace" })).resolves.toMatchObject({
+      message: "Hello, BySpace",
     });
     await expect(runtime.invoke("hello", "greet", { name: 7 })).rejects.toThrow();
 
     await runtime.stopAll();
   });
 
-  // COMPAT(plugin-sdk-scope): plugins scaffolded through 0.5.0-beta.1 import the unpublished
-  // @paseo/plugin name. Drop with the specifiers in plugin-sdk-specifiers.ts.
-  it("loads a plugin that imports the pre-rename @paseo/plugin specifier", async () => {
-    const directory = await createPlugin(
-      "legacy-sdk",
-      `import { z } from "zod";
-import { defineRpc } from "@paseo/plugin/server";
-
-const pingRpc = defineRpc({
-  name: "ping",
-  input: z.object({}),
-  output: z.object({ ok: z.boolean() }),
-});
-
-export default function contribute(plugin: any) {
-  plugin.handle(pingRpc, async () => ({ ok: true }));
-  return () => undefined;
-}`,
-    );
-    const runtime = createTestRuntime();
-
-    await runtime.startPlugin("legacy-sdk", directory);
-
-    await expect(runtime.invoke("legacy-sdk", "ping", {})).resolves.toMatchObject({ ok: true });
-
-    await runtime.stopAll();
-  });
-
   it("keeps client and server modules in their target runtime", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "paseo-plugin-"));
+    const directory = await mkdtemp(path.join(tmpdir(), "byspace-plugin-"));
     temporaryDirectories.push(directory);
     await Promise.all([
       writeFile(
-        path.join(directory, "paseo-plugin.json"),
+        path.join(directory, "byspace-plugin.json"),
         JSON.stringify({ id: "split-runtime" }),
         "utf8",
       ),
       writeFile(
         path.join(directory, "index.ts"),
-        `import type { PluginContext } from "@getpaseo/plugin";
+        `import type { PluginContext } from "@bytetrue/byspace/plugin";
 import { Surface } from "./surface.client";
 import { inspectRpc } from "./inspect.shared";
 import { inspectHost } from "./inspect.server";
@@ -625,7 +580,7 @@ export function Surface() {
       ),
       writeFile(
         path.join(directory, "inspect.shared.ts"),
-        `import { defineRpc } from "@getpaseo/plugin/server";
+        `import { defineRpc } from "@bytetrue/byspace/plugin/server";
 import { z } from "zod";
 
 export const inspectRpc = defineRpc({
@@ -661,17 +616,17 @@ export function inspectHost(_input: z.input<typeof inspectRpc.input>) {
   });
 
   it("rejects server imports from client-only modules", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "paseo-plugin-"));
+    const directory = await mkdtemp(path.join(tmpdir(), "byspace-plugin-"));
     temporaryDirectories.push(directory);
     await Promise.all([
       writeFile(
-        path.join(directory, "paseo-plugin.json"),
+        path.join(directory, "byspace-plugin.json"),
         JSON.stringify({ id: "cross-runtime-import" }),
         "utf8",
       ),
       writeFile(
         path.join(directory, "index.ts"),
-        `import type { PluginContext } from "@getpaseo/plugin";
+        `import type { PluginContext } from "@bytetrue/byspace/plugin";
 import { Surface } from "./surface.client";
 
 export default function contribute(plugin: PluginContext) {
@@ -701,17 +656,17 @@ export function Surface() { return readSecret(); }`,
   });
 
   it("rejects client imports from server-only modules", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "paseo-plugin-"));
+    const directory = await mkdtemp(path.join(tmpdir(), "byspace-plugin-"));
     temporaryDirectories.push(directory);
     await Promise.all([
       writeFile(
-        path.join(directory, "paseo-plugin.json"),
+        path.join(directory, "byspace-plugin.json"),
         JSON.stringify({ id: "cross-runtime-import" }),
         "utf8",
       ),
       writeFile(
         path.join(directory, "index.ts"),
-        `import type { PluginContext } from "@getpaseo/plugin";
+        `import type { PluginContext } from "@bytetrue/byspace/plugin";
 import { inspect } from "./inspect.server";
 import { inspectRpc } from "./inspect.shared";
 
@@ -723,7 +678,7 @@ export default function contribute(plugin: PluginContext) {
       ),
       writeFile(
         path.join(directory, "inspect.shared.ts"),
-        `import { defineRpc } from "@getpaseo/plugin";
+        `import { defineRpc } from "@bytetrue/byspace/plugin";
 import { z } from "zod";
 export const inspectRpc = defineRpc({
   name: "inspect",
@@ -756,7 +711,7 @@ export function inspect() { void Surface; return {}; }`,
     const directory = await createPlugin(
       "invalid-output",
       `import { z } from "zod";
-import { defineRpc } from "@getpaseo/plugin";
+import { defineRpc } from "@bytetrue/byspace/plugin";
 const brokenRpc = defineRpc({
   name: "broken",
   input: z.object({}),

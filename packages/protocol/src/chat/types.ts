@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// COMPAT(chatRooms): retained after the v0.3.0 feature removal; remove after 2027-02-09 when mixed-version peers no longer send legacy messages.
+// COMPAT(chatRooms): legacy RPC parsing retained in v0.6.0 after runtime removal; remove after 2027-02-21.
 
 export const ChatRoomSchema = z.object({
   id: z.string(),

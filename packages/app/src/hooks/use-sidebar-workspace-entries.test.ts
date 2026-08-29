@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
-import type { WorkspaceAgentActivity } from "@/utils/workspace-agent-activity";
+import type { WorkspaceAgentSummary } from "@/utils/workspace-agent-summary";
 import {
   areSidebarWorkspaceSessionsEqual,
   selectSidebarWorkspaceSessions,
@@ -11,14 +11,14 @@ function workspaceMap(): Map<string, WorkspaceDescriptor> {
   return new Map();
 }
 
-function activityMap(): Map<string, WorkspaceAgentActivity> {
+function summaryMap(): Map<string, WorkspaceAgentSummary> {
   return new Map();
 }
 
 function sidebarSession(input?: Partial<Omit<SidebarWorkspaceSession, "serverId">>) {
   return {
     workspaces: input?.workspaces ?? workspaceMap(),
-    workspaceAgentActivity: input?.workspaceAgentActivity ?? activityMap(),
+    workspaceAgentSummaries: input?.workspaceAgentSummaries ?? summaryMap(),
   };
 }
 
@@ -41,26 +41,26 @@ describe("sidebar workspace session selection", () => {
       {
         serverId: "host-b",
         workspaces: hostB.workspaces,
-        workspaceAgentActivity: hostB.workspaceAgentActivity,
+        workspaceAgentSummaries: hostB.workspaceAgentSummaries,
       },
       {
         serverId: "host-a",
         workspaces: hostA.workspaces,
-        workspaceAgentActivity: hostA.workspaceAgentActivity,
+        workspaceAgentSummaries: hostA.workspaceAgentSummaries,
       },
     ]);
   });
 
   it("ignores high-frequency session changes outside the sidebar indexes", () => {
     const workspaces = workspaceMap();
-    const workspaceAgentActivity = activityMap();
+    const workspaceAgentSummaries = summaryMap();
 
     const previous = selectSidebarWorkspaceSessions(
-      { "host-a": sidebarSession({ workspaces, workspaceAgentActivity }) },
+      { "host-a": sidebarSession({ workspaces, workspaceAgentSummaries }) },
       ["host-a"],
     );
     const next = selectSidebarWorkspaceSessions(
-      { "host-a": sidebarSession({ workspaces, workspaceAgentActivity }) },
+      { "host-a": sidebarSession({ workspaces, workspaceAgentSummaries }) },
       ["host-a"],
     );
 
@@ -68,14 +68,14 @@ describe("sidebar workspace session selection", () => {
     expect(areSidebarWorkspaceSessionsEqual(previous, next)).toBe(true);
   });
 
-  it("detects changes to a selected workspace or activity index", () => {
-    const workspaceAgentActivity = activityMap();
+  it("detects changes to a selected workspace or agent summary index", () => {
+    const workspaceAgentSummaries = summaryMap();
     const previous = selectSidebarWorkspaceSessions(
-      { "host-a": sidebarSession({ workspaceAgentActivity, workspaces: workspaceMap() }) },
+      { "host-a": sidebarSession({ workspaceAgentSummaries, workspaces: workspaceMap() }) },
       ["host-a"],
     );
     const next = selectSidebarWorkspaceSessions(
-      { "host-a": sidebarSession({ workspaceAgentActivity, workspaces: workspaceMap() }) },
+      { "host-a": sidebarSession({ workspaceAgentSummaries, workspaces: workspaceMap() }) },
       ["host-a"],
     );
 

@@ -89,11 +89,6 @@ function writeCursorAuthJson(homeDir: string, accessToken: string): void {
   writeFileSync(join(dir, "auth.json"), JSON.stringify({ accessToken }));
 }
 
-function writeGrokAuth(home: string, auth: Record<string, unknown>): void {
-  mkdirSync(join(home, ".grok"), { recursive: true });
-  writeFileSync(join(home, ".grok", "auth.json"), JSON.stringify(auth));
-}
-
 function writeMiniMaxConfig(dir: string, payload: Record<string, unknown>): void {
   mkdirSync(join(dir, ".mmx"), { recursive: true });
   writeFileSync(join(dir, ".mmx", "config.json"), JSON.stringify(payload));
@@ -874,7 +869,8 @@ describe("real provider usage fetchers", () => {
           "https://cli-chat-proxy.grok.com/v1/billing",
           () =>
             jsonResponse({
-              config: { monthlyLimit: { val: 0 }, used: { val: 0 } },
+              config: { monthlyLimit: { val: 0 } },
+              usage: { creditUsage: 0 },
             }),
         ],
       ]),
@@ -890,109 +886,6 @@ describe("real provider usage fetchers", () => {
           used: 0,
           remaining: 0,
           limit: 0,
-        }),
-      ],
-    });
-  });
-
-  it("fetches Grok usage from live billing shape (config.used.val)", async () => {
-    process.env["GROK_API_KEY"] = "grok_test_token";
-    fetchApi = mockFetch(
-      new Map([
-        [
-          "https://cli-chat-proxy.grok.com/v1/billing",
-          () =>
-            jsonResponse({
-              config: {
-                monthlyLimit: { val: 150000 },
-                used: { val: 37886 },
-                billingPeriodStart: "2026-07-01T00:00:00+00:00",
-                billingPeriodEnd: "2026-08-01T00:00:00+00:00",
-              },
-            }),
-        ],
-      ]),
-    );
-
-    const grok = findProvider(await service().listUsage(), "grok");
-
-    expect(grok).toMatchObject({
-      status: "available",
-      balances: [
-        expect.objectContaining({
-          id: "monthly_credits",
-          used: 37886,
-          remaining: 112114,
-          limit: 150000,
-          unit: "credits",
-        }),
-      ],
-    });
-  });
-
-  it("fetches Grok usage with nested ~/.grok/auth.json key token", async () => {
-    writeGrokAuth(homeDir, {
-      "https://auth.x.ai::test-user-id": {
-        key: "nested_jwt_token",
-        refresh_token: "rt_nested",
-        expires_at: "2026-08-01T00:00:00Z",
-        user_id: "test-user-id",
-        email: "user@example.com",
-      },
-    });
-
-    let authorization: string | null = null;
-    fetchApi = (async (_url: RequestInfo | URL, init?: RequestInit) => {
-      authorization = (init?.headers as Record<string, string> | undefined)?.Authorization ?? null;
-      return jsonResponse({
-        config: {
-          monthlyLimit: { val: 100 },
-          used: { val: 25 },
-        },
-      });
-    }) as typeof fetch;
-
-    const grok = findProvider(await service().listUsage(), "grok");
-
-    expect(authorization).toBe("Bearer nested_jwt_token");
-    expect(grok).toMatchObject({
-      status: "available",
-      balances: [
-        expect.objectContaining({
-          id: "monthly_credits",
-          used: 25,
-          remaining: 75,
-          limit: 100,
-        }),
-      ],
-    });
-  });
-
-  it("still accepts legacy Grok usage.creditUsage when config.used is absent", async () => {
-    process.env["GROK_API_KEY"] = "grok_test_token";
-    fetchApi = mockFetch(
-      new Map([
-        [
-          "https://cli-chat-proxy.grok.com/v1/billing",
-          () =>
-            jsonResponse({
-              config: { monthlyLimit: { val: 50 } },
-              usage: { creditUsage: 10 },
-            }),
-        ],
-      ]),
-    );
-
-    const grok = findProvider(await service().listUsage(), "grok");
-
-    expect(grok).toMatchObject({
-      status: "available",
-      balances: [
-        expect.objectContaining({
-          id: "monthly_credits",
-          used: 10,
-          remaining: 40,
-          limit: 50,
         }),
       ],
     });
@@ -1270,91 +1163,13 @@ describe("real provider usage fetchers", () => {
   });
 });
 
-// Regression for #2320: providers hardcoded `tone: "ok"`, which suppressed the client's
-// own thresholds (window-bar.tsx reads `window.tone ?? deriveTone(usedPct)`), so a bar
-// stayed green at 99%. Codex escalated to "warning" but could never reach "danger".
-describe("usage bars escalate as they fill", () => {
-  let claudeHome: string;
-  let codexHome: string;
-
-  beforeEach(() => {
-    claudeHome = mkdtempSync(join(tmpdir(), "paseo-tone-claude-"));
-    codexHome = mkdtempSync(join(tmpdir(), "paseo-tone-codex-"));
-  });
-
-  afterEach(() => {
-    rmSync(claudeHome, { recursive: true, force: true });
-    rmSync(codexHome, { recursive: true, force: true });
-  });
-
-  function claudeAt(utilization: number) {
-    writeClaudeCredentials(claudeHome, "at_valid");
-    return new ClaudeQuotaProvider({
-      logger: createLogger(),
-      claudeHome,
-      claudeKeychainReader: async () => null,
-      fetch: mockFetch(
-        new Map([
-          [
-            "https://api.anthropic.com/api/oauth/usage",
-            () =>
-              jsonResponse({
-                seven_day: { utilization, resets_at: "2026-06-04T00:00:00Z" },
-              }),
-          ],
-        ]),
-      ),
-    }).fetchUsage();
-  }
-
-  it.each([
-    [10, "ok"],
-    [75, "warning"],
-    [99, "danger"],
-  ])("a Claude window at %s%% is %s", async (utilization, tone) => {
-    const usage = await claudeAt(utilization);
-    expect(usage.windows).toEqual([expect.objectContaining({ id: "weekly", tone })]);
-  });
-
-  it("a Codex window can reach danger, not just warning", async () => {
-    writeCodexAuth(codexHome, "at_codex");
-    const usage = await new CodexQuotaProvider({
-      logger: createLogger(),
-      codexHome,
-      fetch: mockFetch(
-        new Map([
-          [
-            "https://chatgpt.com/backend-api/wham/usage",
-            () =>
-              jsonResponse(
-                makeCodexResponse({
-                  rate_limit: {
-                    primary_window: { used_percent: 12, reset_at: 1_748_812_800 },
-                    secondary_window: { used_percent: 96, reset_at: 1_749_072_000 },
-                  },
-                }),
-              ),
-          ],
-        ]),
-      ),
-    }).fetchUsage();
-
-    expect(usage.windows).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: "session", tone: "ok" }),
-        expect.objectContaining({ id: "weekly", tone: "danger" }),
-      ]),
-    );
-  });
-});
-
 // Model- and surface-scoped weekly limits arrive in a `limits[]` array rather than the
 // top-level `seven_day_*` keys, which now return null on most accounts.
 describe("ClaudeQuotaProvider scoped weekly limits", () => {
   let claudeHome: string;
 
   beforeEach(() => {
-    claudeHome = mkdtempSync(join(tmpdir(), "paseo-claude-limits-"));
+    claudeHome = mkdtempSync(join(tmpdir(), "byspace-claude-limits-"));
   });
 
   afterEach(() => {
@@ -1505,7 +1320,7 @@ describe("ClaudeQuotaProvider scoped limit reconciliation", () => {
   let claudeHome: string;
 
   beforeEach(() => {
-    claudeHome = mkdtempSync(join(tmpdir(), "paseo-claude-matrix-"));
+    claudeHome = mkdtempSync(join(tmpdir(), "byspace-claude-matrix-"));
   });
 
   afterEach(() => {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import type { FileVersion, FileWriteResult } from "@getpaseo/protocol/messages";
+import type { FileVersion, FileWriteResult } from "@bytetrue/byspace-protocol/messages";
 import {
   FileEditorModel,
   getFileConflictCallout,
@@ -141,6 +141,23 @@ describe("FileEditorModel", () => {
     model.edit("saved");
     await model.save();
     expect(model.getSnapshot()).toMatchObject({ status: "clean", modified: false });
+  });
+
+  test("uses the current daemon session after a reconnect without replacing the buffer", async () => {
+    const { model, session: disconnected } = makeModel();
+    const reconnected = new FileSession(disconnected.file);
+
+    model.updateSession(reconnected);
+    model.edit("saved after reconnect");
+    await model.save();
+
+    expect(disconnected.writes).toEqual([]);
+    expect(reconnected.writes).toEqual([
+      {
+        content: "saved after reconnect",
+        expectedModifiedAt: "2026-07-18T00:00:00.000Z",
+      },
+    ]);
   });
 
   test("adopts a precise revision for otherwise unchanged initial metadata", () => {

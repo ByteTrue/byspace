@@ -162,9 +162,9 @@ describe("resolveWorktreeCreationIntent", () => {
       number: 1790,
       baseRefName: "main",
       headRefName: "daemon-shutdown-diagnostics",
-      headOwnerLogin: "getpaseo",
-      headRepositorySshUrl: "git@github.com:getpaseo/paseo.git",
-      headRepositoryUrl: "https://github.com/getpaseo/paseo",
+      headOwnerLogin: "ByteTrue",
+      headRepositorySshUrl: "git@github.com:ByteTrue/byspace.git",
+      headRepositoryUrl: "https://github.com/ByteTrue/byspace",
       isCrossRepository: false,
     });
 
@@ -189,8 +189,8 @@ describe("resolveWorktreeCreationIntent", () => {
       baseRefName: "main",
       headRefName: "main",
       headOwnerLogin: "therainisme",
-      headRepositorySshUrl: "git@github.com:therainisme/paseo.git",
-      headRepositoryUrl: "https://github.com/therainisme/paseo",
+      headRepositorySshUrl: "git@github.com:therainisme/byspace.git",
+      headRepositoryUrl: "https://github.com/therainisme/byspace",
       isCrossRepository: true,
     });
 
@@ -205,7 +205,7 @@ describe("resolveWorktreeCreationIntent", () => {
       checkoutRefs: [{ remoteName: "origin", remoteRef: "refs/pull/526/head" }],
       headRepositoryOwner: "therainisme",
       localBranchName: "therainisme/main",
-      pushRemoteUrl: "git@github.com:therainisme/paseo.git",
+      pushRemoteUrl: "git@github.com:therainisme/byspace.git",
     });
     expect(deps.headRefLookups).toEqual([]);
   });
@@ -259,6 +259,51 @@ describe("resolveWorktreeCreationIntent", () => {
       trackOriginHead: true,
     });
     expect(deps.headRefLookups).toEqual([]);
+  });
+
+  test("uses the detected GitLab forge when checkout source forge is omitted", async () => {
+    const deps = createResolverHarness({
+      forge: "gitlab",
+      forgeService: {
+        getPullRequestCheckoutTarget: async ({ number }) => ({
+          number,
+          baseRefName: "main",
+          headRefName: "feature/mr-source",
+          headOwnerLogin: null,
+          headRepositorySshUrl: null,
+          headRepositoryUrl: null,
+          isCrossRepository: false,
+        }),
+      },
+    });
+
+    await expect(
+      resolveWorktreeCreationIntent(
+        { action: "checkout", checkoutSource: { kind: "change_request", number: 7 } },
+        repoRoot,
+        deps,
+      ),
+    ).resolves.toMatchObject({
+      kind: "checkout-change-request",
+      forge: "gitlab",
+      changeRequestNumber: 7,
+    });
+  });
+
+  test("uses the detected Gitea forge when checkout source forge is omitted", async () => {
+    const deps = createResolverHarness({ forge: "gitea" });
+
+    await expect(
+      resolveWorktreeCreationIntent(
+        { action: "checkout", checkoutSource: { kind: "change_request", number: 8 } },
+        repoRoot,
+        deps,
+      ),
+    ).resolves.toMatchObject({
+      kind: "checkout-change-request",
+      forge: "gitea",
+      changeRequestNumber: 8,
+    });
   });
 
   test("checks out a cross-repository GitLab MR when the adapter provides a checkout ref", async () => {

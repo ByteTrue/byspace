@@ -1,5 +1,4 @@
 import { Buffer } from "buffer";
-import { buildAgentDeepLinkRoute } from "@getpaseo/protocol/agent-deep-link";
 
 type NullableString = string | null | undefined;
 const BASE64_WORKSPACE_ID_PREFIX = "b64_";
@@ -390,10 +389,7 @@ export function buildHostAgentDetailRoute(serverId: string, agentId: string, wor
   if (!normalizedServerId || !normalizedAgentId) {
     return "/" as const;
   }
-  return buildAgentDeepLinkRoute({
-    serverId: normalizedServerId,
-    agentId: normalizedAgentId,
-  });
+  return `${buildHostRootRoute(normalizedServerId)}/agent/${encodeSegment(normalizedAgentId)}` as const;
 }
 
 export function buildHostRootRoute(serverId: string) {
@@ -437,6 +433,7 @@ interface NewWorkspaceRouteOptions {
   sourceDirectory?: string;
   displayName?: string;
   projectId?: string;
+  projectKey?: string;
   draftId?: string;
 }
 
@@ -454,6 +451,9 @@ function buildNewWorkspaceSearch(options: NewWorkspaceRouteOptions): string {
   }
   if (options.projectId) {
     params.set("projectId", options.projectId);
+  }
+  if (options.projectKey) {
+    params.set("projectKey", options.projectKey);
   }
   if (options.draftId) {
     params.set("draftId", options.draftId);
@@ -489,18 +489,7 @@ export function resolveKnownHostRoute(input: {
   return { kind: "redirect", href: "/welcome" };
 }
 
-export const SETTINGS_SECTION_SLUGS = [
-  "general",
-  "appearance",
-  "layout",
-  "editor",
-  "shortcuts",
-  "integrations",
-  "notifications",
-  "permissions",
-  "diagnostics",
-  "about",
-] as const;
+export const SETTINGS_SECTION_SLUGS = ["preferences", "shortcuts", "permissions", "about"] as const;
 
 export type SettingsSectionSlug = (typeof SETTINGS_SECTION_SLUGS)[number];
 
@@ -509,15 +498,12 @@ export function isSettingsSectionSlug(value: string): value is SettingsSectionSl
 }
 
 export const HOST_SECTION_SLUGS = [
-  "projects",
   "connections",
-  "pair-device",
+  "dictation",
   "agents",
-  "metadata",
   "workspaces",
   "providers",
   "usage",
-  "terminals",
   "plugins",
   "host",
 ] as const;
@@ -526,6 +512,8 @@ export type HostSectionSlug = (typeof HOST_SECTION_SLUGS)[number];
 
 const LEGACY_HOST_SECTION_SLUGS: Record<string, HostSectionSlug> = {
   orchestration: "agents",
+  // COMPAT(terminalsSettingsSection): added in v0.2.0, remove after 2027-01-22.
+  terminals: "providers",
   daemon: "host",
 };
 
@@ -549,7 +537,7 @@ export function buildSettingsSectionRoute(section: SettingsSectionSlug) {
 }
 
 export function buildSettingsAddHostRoute(intentId: string | number = "1") {
-  return `/settings/general?addHost=${encodeURIComponent(String(intentId))}` as const;
+  return `/settings/preferences?addHost=${encodeURIComponent(String(intentId))}` as const;
 }
 
 export function buildSettingsHostRoute(serverId: string) {
@@ -568,22 +556,14 @@ export function buildSettingsHostSectionRoute(serverId: string, section: HostSec
   return `/settings/hosts/${encodeSegment(normalized)}/${section}` as const;
 }
 
-export function buildProjectsSettingsRoute(serverId: string) {
-  const normalized = trimNonEmpty(serverId);
+export function buildProjectsSettingsRoute() {
+  return "/settings/projects" as const;
+}
+
+export function buildProjectSettingsRoute(projectKey: string) {
+  const normalized = trimNonEmpty(projectKey);
   if (!normalized) {
-    throw new Error("buildProjectsSettingsRoute requires a non-empty serverId");
+    throw new Error("buildProjectSettingsRoute requires a non-empty projectKey");
   }
-  return `/settings/hosts/${encodeSegment(normalized)}/projects` as const;
-}
-
-export function buildProjectSettingsRoute(serverId: string, projectId: string) {
-  if (!serverId.trim() || !projectId.trim()) {
-    throw new Error("buildProjectSettingsRoute requires a serverId and projectId");
-  }
-  return `/settings/hosts/${encodeSegment(serverId)}/projects/${encodeSegment(projectId)}` as const;
-}
-
-export function normalizeProjectSettingsRouteId(value: string | string[] | undefined): string {
-  const id = Array.isArray(value) ? value[0] : value;
-  return typeof id === "string" ? id : "";
+  return `/settings/projects/${encodeSegment(normalized)}` as const;
 }

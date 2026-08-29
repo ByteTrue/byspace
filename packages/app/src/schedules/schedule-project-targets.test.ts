@@ -8,7 +8,7 @@ import {
 
 function makeProject(overrides: Partial<ProjectSummary>): ProjectSummary {
   return {
-    viewKey: "proj",
+    projectKey: "proj",
     projectName: "Project",
     hosts: [],
     totalWorkspaceCount: 0,

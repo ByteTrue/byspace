@@ -32,4 +32,15 @@ describe("shouldFocusPaneFromEventTarget", () => {
       } as unknown as EventTarget),
     ).toBe(true);
   });
+
+  it("returns true for contenteditable editors so the first click focuses their pane", () => {
+    expect(
+      shouldFocusPaneFromEventTarget({
+        closest: (selector: string) =>
+          selector.includes("contenteditable")
+            ? ({ tagName: "DIV", contentEditable: "true" } as unknown as Element)
+            : null,
+      } as unknown as EventTarget),
+    ).toBe(true);
+  });
 });

@@ -1,7 +1,9 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { WebSocket } from "ws";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import { createTestPaseoDaemon } from "./test-utils/paseo-daemon.js";
+import { createTestBySpaceDaemon } from "./test-utils/byspace-daemon.js";
 
 const originalEnv = { ...process.env };
 const CORRECT_PASSWORD_HASH = "$2b$12$OLxyuuP9uLK30Uzc4wQX0O6liuU/Q1t5P2b0Ebf36mULvpVK3DRZW";
@@ -39,15 +41,46 @@ async function expectWebSocketCloses(params: {
   });
 }
 
+function waitForWsMessage(
+  ws: WebSocket,
+  predicate: (message: unknown) => boolean,
+): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error("Timed out waiting for WebSocket message")),
+      5000,
+    );
+    const onMessage = (data: WebSocket.RawData) => {
+      const message = JSON.parse(data.toString()) as unknown;
+      if (!predicate(message)) return;
+      clearTimeout(timeout);
+      ws.off("message", onMessage);
+      resolve(message);
+    };
+    ws.on("message", onMessage);
+  });
+}
+
+async function waitForFile(path: string): Promise<string> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try {
+      return await readFile(path, "utf8");
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  }
+  throw new Error(`Timed out waiting for ${path}`);
+}
+
 describe("daemon bearer auth", () => {
   beforeEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
-    process.env = { ...originalEnv, PASEO_SUPERVISED: "0" };
+    process.env = { ...originalEnv, BYSPACE_SUPERVISED: "0" };
   });
 
   test("leaves HTTP and WebSocket open when no password is configured", async () => {
-    const daemonHandle = await createTestPaseoDaemon();
+    const daemonHandle = await createTestBySpaceDaemon();
     try {
       const response = await fetch(`http://127.0.0.1:${daemonHandle.port}/api/status`);
       expect(response.status).toBe(200);
@@ -61,7 +94,7 @@ describe("daemon bearer auth", () => {
   });
 
   test("requires Authorization bearer on protected HTTP routes when password is configured", async () => {
-    const daemonHandle = await createTestPaseoDaemon({
+    const daemonHandle = await createTestBySpaceDaemon({
       auth: { password: CORRECT_PASSWORD_HASH },
     });
     try {
@@ -83,7 +116,7 @@ describe("daemon bearer auth", () => {
   });
 
   test("allows file downloads with only a capability token when password is configured", async () => {
-    const daemonHandle = await createTestPaseoDaemon({
+    const daemonHandle = await createTestBySpaceDaemon({
       auth: { password: CORRECT_PASSWORD_HASH },
     });
     try {
@@ -104,13 +137,13 @@ describe("daemon bearer auth", () => {
   });
 
   test("bypasses bearer auth for preflight and liveness endpoints", async () => {
-    const daemonHandle = await createTestPaseoDaemon({
+    const daemonHandle = await createTestBySpaceDaemon({
       auth: { password: CORRECT_PASSWORD_HASH },
     });
     try {
       const preflight = await fetch(`http://127.0.0.1:${daemonHandle.port}/api/files/download`, {
         method: "OPTIONS",
-        headers: { Origin: "https://app.paseo.sh" },
+        headers: { Origin: "https://byspace.pages.dev" },
       });
       expect(preflight.status).toBe(204);
 
@@ -124,8 +157,75 @@ describe("daemon bearer auth", () => {
     }
   });
 
+  test("allows daemon-minted terminal CLI tokens only for orchestration messages", async () => {
+    const daemonHandle = await createTestBySpaceDaemon({
+      auth: { password: CORRECT_PASSWORD_HASH },
+    });
+    try {
+      const tokenPath = join(daemonHandle.byspaceHome, "agent-cli-token.txt");
+      await daemonHandle.daemon.terminalManager.createTerminal({
+        workspaceId: "auth-test",
+        cwd: daemonHandle.byspaceHome,
+        command: process.execPath,
+        args: [
+          "-e",
+          `require("node:fs").writeFileSync(${JSON.stringify(tokenPath)}, process.env.BYSPACE_CLI_TOKEN)`,
+        ],
+      });
+      const token = await waitForFile(tokenPath);
+      const { ws } = await connectWebSocket({
+        port: daemonHandle.port,
+        protocol: `byspace.bearer.${token}`,
+      });
+      const ready = waitForWsMessage(
+        ws,
+        (message) => (message as { type?: string }).type === "session",
+      );
+      ws.send(
+        JSON.stringify({
+          type: "hello",
+          clientId: "agent-cli-auth-test",
+          clientType: "cli",
+          protocolVersion: 1,
+        }),
+      );
+      await ready;
+
+      const listResponse = waitForWsMessage(
+        ws,
+        (message) =>
+          (message as { type?: string; message?: { type?: string } }).type === "session" &&
+          (message as { message?: { type?: string } }).message?.type ===
+            "orchestration.tools.list.response",
+      );
+      ws.send(
+        JSON.stringify({
+          type: "session",
+          message: {
+            type: "orchestration.tools.list.request",
+            requestId: "list-1",
+          },
+        }),
+      );
+      await expect(listResponse).resolves.toMatchObject({
+        message: { payload: { requestId: "list-1", success: true } },
+      });
+
+      const closed = new Promise<{ code: number; reason: string }>((resolve) => {
+        ws.once("close", (code, reason) => resolve({ code, reason: reason.toString() }));
+      });
+      ws.send(JSON.stringify({ type: "recording_state", isRecording: false }));
+      await expect(closed).resolves.toEqual({
+        code: 1008,
+        reason: "Agent CLI token only permits orchestration requests",
+      });
+    } finally {
+      await daemonHandle.close();
+    }
+  }, 15_000);
+
   test("closes WebSocket connections with readable auth failures when password is configured", async () => {
-    const daemonHandle = await createTestPaseoDaemon({
+    const daemonHandle = await createTestBySpaceDaemon({
       auth: { password: CORRECT_PASSWORD_HASH },
     });
     try {
@@ -136,16 +236,16 @@ describe("daemon bearer auth", () => {
       });
       await expectWebSocketCloses({
         port: daemonHandle.port,
-        protocol: "paseo.bearer.wrong-password",
+        protocol: "byspace.bearer.wrong-password",
         code: 4401,
         reason: "Incorrect password",
       });
 
       const { ws, protocol } = await connectWebSocket({
         port: daemonHandle.port,
-        protocol: "paseo.bearer.correct-password",
+        protocol: "byspace.bearer.correct-password",
       });
-      expect(protocol).toBe("paseo.bearer.correct-password");
+      expect(protocol).toBe("byspace.bearer.correct-password");
       ws.close();
     } finally {
       await daemonHandle.close();

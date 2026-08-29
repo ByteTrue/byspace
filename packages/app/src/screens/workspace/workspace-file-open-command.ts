@@ -11,7 +11,6 @@ import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 interface OpenWorkspaceFileFromExplorerInput {
   filePath: string;
   persistenceKey: string | null;
-  closeExplorerAfterOpen: boolean;
   showMobileAgent: () => void;
   openWorkspaceTabInFocusedPane: (
     workspaceKey: string,
@@ -22,9 +21,7 @@ interface OpenWorkspaceFileFromExplorerInput {
 }
 
 export function openWorkspaceFileFromExplorer(input: OpenWorkspaceFileFromExplorerInput): void {
-  if (input.closeExplorerAfterOpen) {
-    input.showMobileAgent();
-  }
+  input.showMobileAgent();
   if (!input.persistenceKey) {
     return;
   }
