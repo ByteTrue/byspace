@@ -184,13 +184,9 @@ export default {
       autolinkingModuleResolution: true,
     },
     extra: {
-      eas: {
-        projectId: "1ef7eff8-5d3f-4139-ae1b-e0a6579c479e",
-      },
       fdroidBuild: isFdroidBuild,
       profileBuild: isProfileBuild,
       router: {},
     },
-    owner: "bytetrue",
   },
 };

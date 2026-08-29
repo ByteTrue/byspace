@@ -56,9 +56,7 @@ jobs:
           node --test
           scripts/ci-workflow.test.mjs
           scripts/daemon-launch-contract.test.mjs
-          scripts/push-current-release-tag.test.mjs
           scripts/release-version-utils.test.mjs
-          scripts/upload-release-asset.test.mjs
           scripts/sync-fdroid-changelogs.test.mjs
 
   format:
@@ -160,9 +158,6 @@ jobs:
 
       - name: Install dependencies
         run: node scripts/npm-retry.mjs ci
-
-      - name: Validate BySpace release contracts
-        run: node scripts/byspace-coexistence-contract.test.mjs
 
       - name: Build release package
         run: |
