@@ -33,8 +33,6 @@ yarn-error.*
 # local env files
 .env*.local
 .secrets/
-.eas-secrets/
-credentials.json
 
 # typescript
 *.tsbuildinfo

@@ -188,10 +188,7 @@ adb exec-out screencap -p > screenshot.png
 
 ## Release APK
 
-Run `npm run release:android:local` from the repository root. It uses the
-`production-apk` profile with `eas build --local`, so compilation stays on the development
-machine. The script refuses a dirty or non-main source tree, requires green exact-SHA CI,
-uses the local ByteTrue keystore, and verifies the APK before publication.
-
-The Android tag workflow is absent. Follow [release.md](release.md) to upload the verified
-local artifact after the GitHub Release exists.
+Build the release APK on the release development machine with Expo prebuild and Gradle.
+Reuse the generated Android project and Gradle cache for retries. Sign the final APK with
+the long-lived ByteTrue release key, then upload it and its SHA-256 file to the GitHub
+Release.
