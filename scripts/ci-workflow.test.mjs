@@ -118,6 +118,7 @@ test("focused contracts stay inside existing required checks", () => {
 
   assert.match(changes, /scripts\/daemon-launch-contract\.test\.mjs/);
   assert.doesNotMatch(changes, /Install dependencies|npm run build/);
+  assert.doesNotMatch(changes, /byspace-coexistence-contract/);
 
   assert.match(server, /test:hub-cli-contract/);
   assert.match(server, /npm run test --workspace=@getpaseo\/server/);
@@ -129,7 +130,9 @@ test("focused contracts stay inside existing required checks", () => {
   assert.ok(!jobs.has("desktop-browser-bridge"));
 
   assert.match(releasePackage, /^    name: release-package$/m);
+  assert.match(releasePackage, /github\.event_name == 'push'/);
   assert.match(releasePackage, /needs\.changes\.outputs\.full != 'false'/);
+  assert.match(releasePackage, /byspace-coexistence-contract/);
   assert.match(releasePackage, /npm run release:pack:bytetrue/);
   assert.match(releasePackage, /registry\.getpaseo\.invalid/);
   assert.match(releasePackage, /node_modules\/\.bin\/byspace.*--version/);

@@ -54,7 +54,6 @@ jobs:
       - name: Validate CI contracts
         run: >-
           node --test
-          scripts/byspace-coexistence-contract.test.mjs
           scripts/ci-workflow.test.mjs
           scripts/daemon-launch-contract.test.mjs
           scripts/push-current-release-tag.test.mjs
@@ -143,7 +142,7 @@ jobs:
   release-package:
     name: release-package
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.full != 'false' }}
+    if: ${{ !cancelled() && (github.event_name == 'push' || needs.changes.outputs.full != 'false') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -161,6 +160,9 @@ jobs:
 
       - name: Install dependencies
         run: node scripts/npm-retry.mjs ci
+
+      - name: Validate BySpace release contracts
+        run: node scripts/byspace-coexistence-contract.test.mjs
 
       - name: Build release package
         run: |
