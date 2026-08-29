@@ -79,23 +79,13 @@ jobs:
           test -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
 
   build:
-    name: iOS ${{ matrix.arch }}
+    name: iOS unsigned IPA
     needs: [context, gate]
     if: ${{ always() && needs.context.result == 'success' && (needs.context.outputs.publish != 'true' || needs.gate.result == 'success') }}
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-15
     timeout-minutes: 90
     permissions:
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: arm64
-            runner: macos-15
-            build_device: true
-          - arch: x64
-            runner: macos-15-intel
-            build_device: false
     steps:
       - uses: actions/checkout@v4
         with:
@@ -118,43 +108,13 @@ jobs:
       - name: Install CocoaPods dependencies
         working-directory: packages/app/ios
         run: pod install
-      - name: Build unsigned iOS Simulator app
+      - name: Build unsigned iOS device app
         env:
           APP_VARIANT: production
         run: |
           set -euo pipefail
           workspace="$(find packages/app/ios -maxdepth 1 -name '*.xcworkspace' -print -quit)"
           [[ -n "$workspace" ]]
-          xcodebuild \
-            -workspace "$workspace" \
-            -scheme BySpace \
-            -configuration Release \
-            -sdk iphonesimulator \
-            -derivedDataPath "$RUNNER_TEMP/byspace-simulator" \
-            CODE_SIGNING_ALLOWED=NO \
-            ONLY_ACTIVE_ARCH=YES \
-            build
-      - name: Package and verify iOS Simulator app
-        id: simulator
-        run: |
-          set -euo pipefail
-          app="$(find "$RUNNER_TEMP/byspace-simulator/Build/Products" -maxdepth 2 -type d -name 'BySpace.app' -print -quit)"
-          [[ -n "$app" ]]
-          plist="$app/Info.plist"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")" = "com.bytetrue.byspace"
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes:0' "$plist" | grep -Fx byspace
-          asset="$RUNNER_TEMP/BySpace-${{ needs.context.outputs.version }}-ios-simulator-${{ matrix.arch }}.app.zip"
-          ditto -c -k --sequesterRsrc --keepParent "$app" "$asset"
-          (cd "$(dirname "$asset")" && shasum -a 256 "$(basename "$asset")" > "$(basename "$asset").sha256")
-          echo "path=$asset" >> "$GITHUB_OUTPUT"
-          echo "checksum=$asset.sha256" >> "$GITHUB_OUTPUT"
-      - name: Build unsigned iOS device app
-        if: matrix.build_device
-        env:
-          APP_VARIANT: production
-        run: |
-          set -euo pipefail
-          workspace="$(find packages/app/ios -maxdepth 1 -name '*.xcworkspace' -print -quit)"
           xcodebuild \
             -workspace "$workspace" \
             -scheme BySpace \
@@ -166,14 +126,16 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= \
             build
-      - name: Package unsigned IPA
-        if: matrix.build_device
+      - name: Package and verify unsigned IPA
         id: device
         run: |
           set -euo pipefail
           app="$(find "$RUNNER_TEMP/byspace-device/Build/Products" -maxdepth 2 -type d -name 'BySpace.app' -print -quit)"
           [[ -n "$app" ]]
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")" = "com.bytetrue.byspace"
+          plist="$app/Info.plist"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")" = "com.bytetrue.byspace"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes:0' "$plist" | grep -Fx byspace
+          test ! -e "$app/_CodeSignature"
           payload="$RUNNER_TEMP/unsigned-ipa/Payload"
           mkdir -p "$payload"
           ditto "$app" "$payload/BySpace.app"
@@ -184,10 +146,8 @@ jobs:
           echo "checksum=$asset.sha256" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
-          name: byspace-ios-${{ matrix.arch }}
+          name: byspace-ios-unsigned
           path: |
-            ${{ steps.simulator.outputs.path }}
-            ${{ steps.simulator.outputs.checksum }}
             ${{ steps.device.outputs.path }}
             ${{ steps.device.outputs.checksum }}
           if-no-files-found: error
@@ -210,9 +170,8 @@ jobs:
             scripts/upload-release-asset.sh
       - uses: actions/download-artifact@v4
         with:
-          pattern: byspace-ios-*
+          name: byspace-ios-unsigned
           path: dist/ios
-          merge-multiple: true
       - name: Revalidate tag and upload iOS artifacts
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

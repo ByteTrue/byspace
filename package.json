@@ -97,6 +97,7 @@
     "version:sync-internal": "node scripts/sync-workspace-versions.mjs",
     "release:prepare": "npm install --workspaces --include-workspace-root",
     "release:pack:bytetrue": "node scripts/package-bytetrue-baseline.mjs . dist/npm",
+    "release:android:local": "scripts/build-android-apk-local.sh",
     "test:byspace-coexistence": "node scripts/byspace-coexistence-contract.test.mjs",
     "version:all:patch": "node scripts/set-release-version.mjs --mode patch",
     "version:all:minor": "node scripts/set-release-version.mjs --mode minor",
