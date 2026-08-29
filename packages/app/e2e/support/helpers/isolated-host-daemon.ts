@@ -153,9 +153,16 @@ export async function startIsolatedHostDaemon(
       env: withDisabledE2ESpeechEnv({
         ...process.env,
         ...options.environment,
-        BYSPACE_HOME: paseoHome,
+        ...(publishedPackageRoot
+          ? {
+              PASEO_HOME: paseoHome,
+              PASEO_LISTEN: `127.0.0.1:${port}`,
+            }
+          : {
+              BYSPACE_HOME: paseoHome,
+              BYSPACE_LISTEN: `127.0.0.1:${port}`,
+            }),
         PASEO_SERVER_ID: serverId,
-        BYSPACE_LISTEN: `127.0.0.1:${port}`,
         PASEO_CORS_ORIGINS: `http://localhost:${metroPort}`,
         PASEO_RELAY_ENABLED: options.mutableRelay ? undefined : "0",
         PASEO_NODE_ENV: "development",
