@@ -231,7 +231,7 @@ async function ensureLogin(
     initialValue:
       activeOrigin === undefined || activeOrigin === DEFAULT_HUB_ORIGIN ? "hosted" : "custom",
     options: [
-      { value: "hosted", label: "hub.byspace.cc.cd" },
+      { value: "hosted", label: "hub.paseo.sh" },
       { value: "custom", label: "Custom endpoint…" },
     ],
   });
