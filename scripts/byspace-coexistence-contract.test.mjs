@@ -96,6 +96,8 @@ const appConfig = read("packages/app/app.config.js");
 assert.match(appConfig, /packageId: "com\.bytetrue\.byspace"/u);
 assert.match(appConfig, /packageId: "com\.bytetrue\.byspace\.debug"/u);
 assert.match(appConfig, /scheme: "byspace"/u);
+assert.match(appConfig, /slug: "byspace"/u);
+assert.match(appConfig, /projectId: "1ef7eff8-5d3f-4139-ae1b-e0a6579c479e"/u);
 
 const desktopConfig = read("packages/desktop/electron-builder.yml");
 assert.match(desktopConfig, /appId: com\.bytetrue\.byspace\.desktop/u);
@@ -183,7 +185,6 @@ for (const path of dryRunReleaseWorkflows) {
 }
 
 const readonlyJobs = {
-  ".github/workflows/android-apk-release.yml": ["dry-run"],
   ".github/workflows/ios-unsigned-release.yml": ["context", "build"],
   ".github/workflows/npm-release.yml": ["context", "package"],
   ".github/workflows/desktop-release.yml": ["publish-macos", "publish-linux", "publish-windows"],
@@ -200,6 +201,20 @@ for (const [path, jobNames] of Object.entries(readonlyJobs)) {
     );
   }
 }
+
+const androidWorkflow = read(".github/workflows/android-apk-release.yml");
+const androidJobs = loadYaml(androidWorkflow).jobs;
+assert.deepEqual(androidJobs.context.permissions, { actions: "read", contents: "read" });
+assert.deepEqual(androidJobs.build.permissions, { contents: "read" });
+assert.match(androidWorkflow, /test "\$RELEASE_REF" = "main"/u);
+assert.match(androidWorkflow, /EXPO_TOKEN: \$\{\{ secrets\.EXPO_TOKEN \}\}/u);
+assert.equal(easConfig.build["production-apk"].credentialsSource, "local");
+assert.equal(easConfig.build["production-apk"].android.resourceClass, "medium");
+assert.doesNotMatch(
+  JSON.stringify(androidJobs["publish-android-apk"]),
+  /EXPO_TOKEN|ANDROID_RELEASE_KEY/u,
+  "Android publish job must not receive Expo or signing credentials",
+);
 
 const uploadHelper = read("scripts/upload-release-asset.sh");
 assert.match(uploadHelper, /"\$#" -ne 3/u);

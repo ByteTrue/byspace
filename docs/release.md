@@ -118,7 +118,7 @@ A `v*` tag starts these production paths:
 | -------------------------- | ------------------------------------------------------------------------------------------ |
 | `npm-release.yml`          | `@bytetrue/byspace`, plus the identical npm tarball and SHA-256 file on the GitHub Release |
 | `desktop-release.yml`      | unsigned/unnotarized macOS, Windows, and Linux assets plus updater manifests               |
-| `android-apk-release.yml`  | ByteTrue-signed Android APK and signer metadata                                            |
+| `android-apk-release.yml`  | EAS-built, ByteTrue-signed Android APK and signer metadata                                 |
 | `ios-unsigned-release.yml` | iOS Simulator `.app.zip` and unsigned device `.ipa`                                        |
 | `docker.yml`               | `ghcr.io/bytetrue/byspace:<version>`; stable releases also move `latest`                   |
 | `deploy-app.yml`           | Web/PWA deployment to `https://app.byspace.cc.cd`                                          |
@@ -131,15 +131,18 @@ check only.
 ## Dry-run workflows
 
 Android, iOS, npm, and Desktop accept `workflow_dispatch` with `publish=false`. Dry-run
-jobs:
+jobs use read-only source permissions, checkout with `persist-credentials: false`, and
+upload only private workflow artifacts.
 
-- use only `contents: read`
-- checkout with `persist-credentials: false`
-- do not receive OIDC, signing secrets, or production upload credentials
-- upload only private workflow artifacts
+The Android context job first proves that the requested ref is exact current `main` with
+green CI. Its build job then receives the Expo robot token and ByteTrue signing secrets,
+but no repository write permission. EAS uses `credentialsSource: local`, so the production
+keystore is uploaded only for that isolated build and is not saved as an EAS-managed
+remote credential. iOS, npm, and Desktop dry-runs receive no OIDC, signing, or production
+upload credentials.
 
-Android dry-runs use the generated debug keystore. The production Android keystore is
-available only in the gated publish job.
+`production-apk` pins the Free-plan `medium` Android worker. Do not switch to a paid
+resource class during a release.
 
 ## npm package
 
@@ -172,8 +175,10 @@ passes the exact-SHA gate.
 
 ## Signing
 
-- Android release artifacts use the ByteTrue keystore configured in GitHub secrets. The
-  workflow verifies the sole signer certificate before upload.
+- Android release artifacts use EAS Build with the ByteTrue keystore configured in GitHub
+  secrets. EAS receives it as a local credential for one isolated build instead of saving
+  it as a remote credential, and the workflow verifies the sole signer certificate before
+  upload.
 - macOS and Windows artifacts are unsigned. macOS builds disable signing, hardened
   runtime, and notarization.
 - The iOS Simulator archive runs only in the simulator.
@@ -256,6 +261,6 @@ A release is shipped only after every applicable item passes:
 - [ ] the versioned GHCR image resolves and passes its isolated smoke check
 - [ ] `https://app.byspace.cc.cd` serves the released Web/PWA
 - [ ] published release assets match their recorded checksums
-- [ ] no marketing website, Relay, Hub, EAS, or store submission was triggered
+- [ ] no marketing website, Relay, Hub, or store submission was triggered
 
 Report pending workflows as in progress, not shipped.
