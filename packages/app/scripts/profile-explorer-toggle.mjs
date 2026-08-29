@@ -7,12 +7,12 @@ import { chromium } from "playwright";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const appUrl = process.env.PASEO_PROFILE_APP_URL ?? "http://127.0.0.1:8081";
-const daemonPort = Number(process.env.PASEO_PROFILE_DAEMON_PORT ?? 6768);
+const daemonPort = Number(process.env.PASEO_PROFILE_DAEMON_PORT ?? 6778);
 const workspaceCwd = process.env.PASEO_PROFILE_WORKSPACE_CWD ?? repoRoot;
 const workspaceId = process.env.PASEO_PROFILE_WORKSPACE_ID ?? resolvePaseoWorkspaceId();
 const serverId =
   process.env.PASEO_PROFILE_SERVER_ID ??
-  (await readFile(resolve(repoRoot, ".dev/paseo-home/server-id"), "utf8")).trim();
+  (await readFile(resolve(repoRoot, ".dev/byspace-home/server-id"), "utf8")).trim();
 const warmPresses = numberFromEnv("PASEO_PROFILE_WARM_PRESSES", 8);
 const measuredPresses = numberFromEnv("PASEO_PROFILE_MEASURED_PRESSES", 20);
 const burstPresses = numberFromEnv("PASEO_PROFILE_BURST_PRESSES", 20);

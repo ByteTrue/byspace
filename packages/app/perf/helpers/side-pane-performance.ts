@@ -69,9 +69,9 @@ export function resolveProfileTarget(): ProfileTarget {
   const repoRoot = resolve(process.cwd(), "../..");
   const serverId = (
     process.env.PASEO_PROFILE_SERVER_ID ??
-    readFileSync(resolve(repoRoot, ".dev/paseo-home/server-id"), "utf8")
+    readFileSync(resolve(repoRoot, ".dev/byspace-home/server-id"), "utf8")
   ).trim();
-  const requestedName = process.env.PASEO_PROFILE_WORKSPACE_NAME?.trim() || "Paseo";
+  const requestedName = process.env.PASEO_PROFILE_WORKSPACE_NAME?.trim() || "BySpace";
   const requestedWorkspaceId = process.env.PASEO_PROFILE_WORKSPACE_ID?.trim();
   if (requestedWorkspaceId) return { serverId, workspaceId: requestedWorkspaceId };
 

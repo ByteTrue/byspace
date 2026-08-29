@@ -12,6 +12,7 @@ const collisionCriticalPaths = [
   "packages/cli/src/commands/daemon/local-daemon.ts",
   "packages/cli/src/commands/daemon/start.ts",
   "packages/cli/src/utils/client.ts",
+  "packages/cli/src/commands/project/create.ts",
   "packages/cli/src/utils/client-id.ts",
   "packages/cli/src/utils/command-options.ts",
   "packages/protocol/src/daemon-endpoints.ts",
@@ -22,7 +23,7 @@ for (const path of collisionCriticalPaths) {
   const source = read(path);
   assert.doesNotMatch(
     source,
-    /6767|6768|PASEO_HOME|PASEO_LISTEN|paseo\.pid|\.paseo\/daemon/iu,
+    /6767|6768|PASEO_HOME|PASEO_LISTEN|PASEO_HOST(?!NAMES)|paseo\.pid|\.paseo\/daemon/iu,
     path,
   );
 }
@@ -53,6 +54,10 @@ assert.match(serverConfig, /env\.BYSPACE_LISTEN/u);
 const paths = read("packages/server/src/server/paseo-home.ts");
 assert.match(paths, /env\.BYSPACE_HOME/u);
 assert.match(paths, /"~\/\.byspace"/u);
+
+const cliClient = read("packages/cli/src/utils/client.ts");
+assert.match(cliClient, /process\.env\.BYSPACE_HOST/u);
+assert.doesNotMatch(cliClient, /process\.env\.PASEO_HOST/u);
 
 const appConfig = read("packages/app/app.config.js");
 assert.match(appConfig, /packageId: "com\.bytetrue\.byspace"/u);
@@ -107,6 +112,7 @@ for (const path of [
   ".github/workflows/deploy-relay.yml",
   ".github/workflows/deploy-website.yml",
   ".github/workflows/release-notes-sync.yml",
+  ".github/workflows/desktop-rollout.yml",
   "packages/app/.eas/workflows/release-ios-beta.yml",
   "packages/app/.eas/workflows/release-mobile.yml",
   "packages/app/.eas/workflows/resubmit-ios-review.yml",
@@ -156,11 +162,14 @@ for (const path of [
   ".github/workflows/npm-release.yml",
   ".github/workflows/desktop-release.yml",
 ]) {
+  const workflow = read(path);
   assert.match(
-    read(path),
+    workflow,
     /git fetch origin "refs\/tags\/\$[A-Z_]+:refs\/tags\/\$[A-Z_]+" --force/u,
     `${path} must refresh the remote tag immediately before publishing`,
   );
+  assert.match(workflow, /scripts\/upload-release-asset\.sh/u, path);
+  assert.doesNotMatch(workflow, /--clobber/u, `${path} must not overwrite release assets`);
 }
 
 for (const path of [
@@ -174,5 +183,27 @@ for (const path of [
 ]) {
   assert.doesNotMatch(read(path), /paseo\.sh/iu, path);
 }
+
+const releasePackage = JSON.parse(read("package.json"));
+assert.equal(releasePackage.scripts["release:publish"], undefined);
+assert.equal(releasePackage.scripts["release:publish:beta"], undefined);
+for (const name of [
+  "release:beta:patch",
+  "release:beta:minor",
+  "release:beta:next",
+  "release:promote",
+  "release:patch",
+  "release:minor",
+]) {
+  assert.doesNotMatch(releasePackage.scripts[name], /npm publish/u, name);
+}
+assert.match(read("scripts/set-release-version.mjs"), /--no-git-tag-version/u);
+const releasePush = read("scripts/push-current-release-tag.mjs");
+assert.match(releasePush, /"push", "origin", "HEAD:main"/u);
+assert.match(releasePush, /"gh", \[\s*"run",\s*"list"/u);
+assert.ok(
+  releasePush.indexOf('"status",\n  "success"') < releasePush.indexOf('"tag", "-a"'),
+  "release tag must be created only after exact-SHA CI succeeds",
+);
 
 console.log("BySpace coexistence contract OK");

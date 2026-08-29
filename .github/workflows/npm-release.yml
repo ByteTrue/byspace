@@ -152,14 +152,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ needs.context.outputs.sha }}
-          sparse-checkout: .github/release
-      - name: Revalidate remote release tag
-        env:
-          RELEASE_SHA: ${{ needs.context.outputs.sha }}
-          RELEASE_TAG: ${{ needs.context.outputs.tag }}
-        run: |
-          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
-          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$RELEASE_SHA"
+          sparse-checkout: |
+            .github/release
+            scripts/upload-release-asset.sh
       - uses: actions/setup-node@v6
         with:
           node-version: "22.20.0"
@@ -181,6 +176,13 @@ jobs:
             404) echo "published=false" >> "$GITHUB_OUTPUT" ;;
             *) echo "npm registry returned HTTP $status" >&2; exit 1 ;;
           esac
+      - name: Revalidate remote release tag
+        env:
+          RELEASE_SHA: ${{ needs.context.outputs.sha }}
+          RELEASE_TAG: ${{ needs.context.outputs.tag }}
+        run: |
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$RELEASE_SHA"
       - name: Publish beta
         if: ${{ contains(needs.context.outputs.version, '-') && steps.registry.outputs.published != 'true' }}
         run: npm publish "dist/npm/bytetrue-byspace-${{ needs.context.outputs.version }}.tgz" --access public --tag beta --provenance
@@ -220,4 +222,6 @@ jobs:
             [[ "$RELEASE_TAG" == *-* ]] && args+=(--prerelease)
             gh "${args[@]}" || gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
           fi
-          gh release upload "$RELEASE_TAG" "$asset" "$asset.sha256" --clobber --repo "$GITHUB_REPOSITORY"
+          for file in "$asset" "$asset.sha256"; do
+            bash scripts/upload-release-asset.sh "$RELEASE_TAG" "$file"
+          done

@@ -189,7 +189,7 @@ export function resolveDefaultDaemonHosts(env: NodeJS.ProcessEnv = process.env):
 }
 
 function resolveDaemonHostCandidates(options?: ConnectOptions): string[] {
-  const explicitHost = options?.host ?? process.env.PASEO_HOST;
+  const explicitHost = options?.host ?? process.env.BYSPACE_HOST;
   if (explicitHost) {
     return [explicitHost];
   }
@@ -360,7 +360,7 @@ export async function connectToDaemon(options?: ConnectOptions): Promise<DaemonC
   const clientId = await getOrCreateCliClientId();
   const nodeWebSocketFactory = createNodeWebSocketFactory();
 
-  const explicitHost = options?.host ?? process.env.PASEO_HOST;
+  const explicitHost = options?.host ?? process.env.BYSPACE_HOST;
   if (explicitHost?.trim().startsWith("ssh://")) {
     const target = parseSshTransportUri(explicitHost.trim());
     const tunnel = await createSshTunnel(target);

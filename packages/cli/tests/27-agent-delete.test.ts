@@ -31,7 +31,7 @@ async function runCli(args: string[]) {
 }
 
 async function runDelete(args: string[]) {
-  return $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npm --prefix ${repoRoot} run cli -- delete ${args}`.nothrow();
+  return $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npm --prefix ${repoRoot} run cli -- delete ${args}`.nothrow();
 }
 
 try {
@@ -101,17 +101,17 @@ try {
   }
 
   {
-    console.log("Test 7: paseo --help shows delete command");
+    console.log("Test 7: byspace --help shows delete command");
     const result = await runCli(["--help"]);
-    assert.strictEqual(result.exitCode, 0, "paseo --help should exit 0");
+    assert.strictEqual(result.exitCode, 0, "byspace --help should exit 0");
     assert(result.stdout.includes("delete"), "help should mention delete command");
-    console.log("✓ paseo --help shows delete command\n");
+    console.log("✓ byspace --help shows delete command\n");
   }
 
   {
     console.log("Test 8: -q (quiet) flag is accepted with delete");
     const result =
-      await $`PASEO_HOST=localhost:${port} PASEO_HOME=${paseoHome} npm --prefix ${repoRoot} run cli -- -q delete abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npm --prefix ${repoRoot} run cli -- -q delete abc123`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept -q flag");
     assert(!output.includes("error: option"), "should not have option parsing error");

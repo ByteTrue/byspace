@@ -33,11 +33,6 @@ on:
         options:
           - "true"
           - "false"
-      rollout_hours:
-        description: "Linear rollout duration in hours. Use 0 for instant rollout."
-        required: false
-        default: "36"
-        type: string
 
 concurrency:
   group: desktop-release-${{ github.ref }}
@@ -47,7 +42,7 @@ env:
   SOURCE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
   CHECKOUT_REF: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.checkout_ref || github.ref_name) || github.ref_name }}
   SHOULD_PUBLISH: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.publish != 'false' }}
-  ROLLOUT_HOURS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.rollout_hours || '36' }}
+  ROLLOUT_HOURS: "36"
   DESKTOP_PACKAGE_PATH: "packages/desktop"
 
 jobs:
@@ -500,7 +495,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ needs.create-release.outputs.source-sha }}
-          sparse-checkout: package.json
+          sparse-checkout: |
+            package.json
+            scripts/upload-release-asset.sh
       - uses: actions/download-artifact@v4
         with:
           pattern: desktop-release-*
@@ -517,4 +514,6 @@ jobs:
           shopt -s nullglob
           files=(desktop-release/*)
           ((${#files[@]} > 0))
-          gh release upload "$SOURCE_TAG" "${files[@]}" --clobber --repo "${{ github.repository }}"
+          for file in "${files[@]}"; do
+            bash scripts/upload-release-asset.sh "$SOURCE_TAG" "$file"
+          done

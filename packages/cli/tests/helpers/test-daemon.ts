@@ -360,7 +360,7 @@ export async function runPaseoCli(
       env: {
         ...process.env,
         ...TEST_DAEMON_ENV_DEFAULTS,
-        PASEO_HOST: `${TEST_DAEMON_HOST}:${ctx.port}`,
+        BYSPACE_HOST: `${TEST_DAEMON_HOST}:${ctx.port}`,
         BYSPACE_HOME: ctx.paseoHome,
         ...options?.env,
       },

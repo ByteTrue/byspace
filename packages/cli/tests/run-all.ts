@@ -28,6 +28,7 @@ await writeFile(
     "#!/bin/sh",
     'if [ -n "${PASEO_HOME:-}" ]; then export BYSPACE_HOME="$PASEO_HOME"; fi',
     'if [ -n "${PASEO_LISTEN:-}" ]; then export BYSPACE_LISTEN="$PASEO_LISTEN"; fi',
+    'if [ -n "${PASEO_HOST:-}" ]; then export BYSPACE_HOST="$PASEO_HOST"; fi',
     'exec "$BYSPACE_TEST_BIN" "$@"',
     "",
   ].join("\n"),

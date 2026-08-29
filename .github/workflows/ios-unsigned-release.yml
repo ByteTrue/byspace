@@ -207,6 +207,7 @@ jobs:
           ref: ${{ needs.context.outputs.sha }}
           sparse-checkout: |
             .github/release
+            scripts/upload-release-asset.sh
       - uses: actions/download-artifact@v4
         with:
           pattern: byspace-ios-*
@@ -231,4 +232,6 @@ jobs:
           shopt -s nullglob
           files=(dist/ios/*)
           ((${#files[@]} > 0))
-          gh release upload "$RELEASE_TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          for file in "${files[@]}"; do
+            bash scripts/upload-release-asset.sh "$RELEASE_TAG" "$file"
+          done

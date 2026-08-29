@@ -94,14 +94,14 @@ console.log("=== CLI IPC Target Helpers ===\n");
       "localhost:6777",
     ]);
     const previousHome = process.env.BYSPACE_HOME;
-    const previousHost = process.env.PASEO_HOST;
+    const previousHost = process.env.BYSPACE_HOST;
     process.env.BYSPACE_HOME = paseoHome;
-    delete process.env.PASEO_HOST;
+    delete process.env.BYSPACE_HOST;
     assert.strictEqual(getDaemonHost(), "unix:///tmp/byspace-from-pid.sock");
     if (previousHome === undefined) delete process.env.BYSPACE_HOME;
     else process.env.BYSPACE_HOME = previousHome;
-    if (previousHost === undefined) delete process.env.PASEO_HOST;
-    else process.env.PASEO_HOST = previousHost;
+    if (previousHost === undefined) delete process.env.BYSPACE_HOST;
+    else process.env.BYSPACE_HOST = previousHost;
   } finally {
     rmSync(paseoHome, { recursive: true, force: true });
   }
@@ -126,9 +126,12 @@ console.log("=== CLI IPC Target Helpers ===\n");
 }
 
 {
-  console.log("Test 7b: legacy Paseo home and listen variables are ignored");
+  console.log("Test 7b: legacy Paseo home, listen, and host variables are ignored");
   const byspaceHome = mkdtempSync(path.join(os.tmpdir(), "byspace-client-targets-legacy-"));
   const paseoHome = mkdtempSync(path.join(os.tmpdir(), "paseo-client-targets-legacy-"));
+  const previousByspaceHome = process.env.BYSPACE_HOME;
+  const previousByspaceHost = process.env.BYSPACE_HOST;
+  const previousPaseoHost = process.env.PASEO_HOST;
   try {
     writeFileSync(
       path.join(paseoHome, "paseo.pid"),
@@ -142,11 +145,23 @@ console.log("=== CLI IPC Target Helpers ===\n");
       }),
       ["localhost:6777"],
     );
+    process.env.BYSPACE_HOME = byspaceHome;
+    delete process.env.BYSPACE_HOST;
+    process.env.PASEO_HOST = "127.0.0.1:6767";
+    assert.strictEqual(getDaemonHost(), "localhost:6777");
+    process.env.BYSPACE_HOST = "127.0.0.1:7777";
+    assert.strictEqual(getDaemonHost(), "127.0.0.1:7777");
   } finally {
+    if (previousByspaceHome === undefined) delete process.env.BYSPACE_HOME;
+    else process.env.BYSPACE_HOME = previousByspaceHome;
+    if (previousByspaceHost === undefined) delete process.env.BYSPACE_HOST;
+    else process.env.BYSPACE_HOST = previousByspaceHost;
+    if (previousPaseoHost === undefined) delete process.env.PASEO_HOST;
+    else process.env.PASEO_HOST = previousPaseoHost;
     rmSync(byspaceHome, { recursive: true, force: true });
     rmSync(paseoHome, { recursive: true, force: true });
   }
-  console.log("✓ legacy Paseo home and listen variables are ignored\n");
+  console.log("✓ legacy Paseo home, listen, and host variables are ignored\n");
 }
 
 {
