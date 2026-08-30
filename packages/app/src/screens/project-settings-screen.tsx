@@ -87,7 +87,7 @@ const METADATA_PROMPT_FIELDS: Record<MetadataPromptKey, MetadataPromptField> = {
   },
 };
 
-const WORKTREE_DOCS_URL = "https://github.com/ByteTrue/byspace/blob/main/docs/worktrees.md";
+const WORKTREE_DOCS_URL = "https://github.com/ByteTrue/byspace/blob/main/public-docs/worktrees.md";
 
 type ReadProjectConfigData = Awaited<ReturnType<DaemonClient["readProjectConfig"]>>;
 
@@ -364,7 +364,7 @@ function renderContent({
   }
 
   if (readError) {
-    return <ReadFailureCallout kind={readError.code} error={null} onReload={onReload} />;
+    return <ReadFailureCallout kind={readError.code} error={readError} onReload={onReload} />;
   }
 
   if (isHostGone) {
@@ -434,10 +434,19 @@ function resolveReadFailureCopy(input: {
   t: TFunction;
 }): { testID: string; title: string; description: string } {
   if (input.kind === "invalid_project_config") {
+    const isFilenameConflict =
+      typeof input.error === "object" &&
+      input.error !== null &&
+      "reason" in input.error &&
+      input.error.reason === "conflicting_files";
     return {
       testID: "invalid-callout",
       title: input.t("settings.project.readFailures.invalidTitle"),
-      description: input.t("settings.project.readFailures.invalidDescription"),
+      description: isFilenameConflict
+        ? input.t("settings.project.readFailures.conflictingDescription", {
+            legacyFileName: "paseo.json",
+          })
+        : input.t("settings.project.readFailures.invalidDescription"),
     };
   }
   if (input.kind === "project_not_found") {

@@ -1,6 +1,6 @@
 # Ad-hoc daemon testing
 
-Spin up an isolated in-process daemon test harness without touching the main daemon on port 6767.
+Spin up an isolated in-process daemon test harness without touching the main daemon on port 6777.
 
 This is for test code only. Executable daemon processes must start through
 `scripts/supervisor-entrypoint.ts` or `dist/scripts/supervisor-entrypoint.js`;
@@ -17,25 +17,25 @@ import { createPaseoDaemon } from "./bootstrap.js";
 import { DaemonClient } from "./test-utils/daemon-client.js";
 
 const logger = pino({ level: "warn" });
-const paseoHomeRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-test-"));
-const paseoHome = path.join(paseoHomeRoot, ".paseo");
-await mkdir(paseoHome, { recursive: true });
-const staticDir = await mkdtemp(path.join(os.tmpdir(), "paseo-static-"));
+const byspaceHomeRoot = await mkdtemp(path.join(os.tmpdir(), "byspace-test-"));
+const byspaceHome = path.join(byspaceHomeRoot, ".byspace");
+await mkdir(byspaceHome, { recursive: true });
+const staticDir = await mkdtemp(path.join(os.tmpdir(), "byspace-static-"));
 
 const daemon = await createPaseoDaemon(
   {
     listen: "127.0.0.1:0", // OS picks a free port
-    paseoHome,
+    paseoHome: byspaceHome,
     corsAllowedOrigins: [],
     hostnames: true,
     mcpEnabled: false,
     staticDir,
     mcpDebug: false,
     agentClients: {},
-    agentStoragePath: path.join(paseoHome, "agents"),
+    agentStoragePath: path.join(byspaceHome, "agents"),
     relayEnabled: false,
-    relayEndpoint: "relay.paseo.sh:443",
-    appBaseUrl: "https://app.paseo.sh",
+    relayEndpoint: "relay.byspace.cc.cd:443",
+    appBaseUrl: "https://app.byspace.cc.cd",
     // Add custom config here, e.g.:
     // providerOverrides: { ... },
   },
@@ -57,7 +57,7 @@ await client.fetchAgents({ subscribe: { subscriptionId: "test" } });
 
 await client.close();
 await daemon.stop();
-await rm(paseoHomeRoot, { recursive: true, force: true });
+await rm(byspaceHomeRoot, { recursive: true, force: true });
 await rm(staticDir, { recursive: true, force: true });
 ```
 
@@ -156,7 +156,7 @@ try {
 } finally {
   await client.close();
   await daemon.stop().catch(() => undefined);
-  await rm(paseoHomeRoot, { recursive: true, force: true });
+  await rm(byspaceHomeRoot, { recursive: true, force: true });
 }
 ```
 

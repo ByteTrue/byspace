@@ -30,6 +30,7 @@ describe("getOrCreateServerId", () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv };
+    delete process.env.BYSPACE_SERVER_ID;
     delete process.env.PASEO_SERVER_ID;
     home = tmpHome();
   });
@@ -50,14 +51,25 @@ describe("getOrCreateServerId", () => {
     expect(readFileSync(idPath, "utf8").trim()).toBe(first);
   });
 
-  it("respects and persists PASEO_SERVER_ID override", () => {
-    process.env.PASEO_SERVER_ID = "test-daemon-id";
+  it("prefers and persists the BYSPACE_SERVER_ID override", () => {
+    process.env.BYSPACE_SERVER_ID = "byspace-daemon-id";
+    process.env.PASEO_SERVER_ID = "legacy-daemon-id";
     const id = getOrCreateServerId(home);
-    expect(id).toBe("test-daemon-id");
+    expect(id).toBe("byspace-daemon-id");
 
     const idPath = path.join(home, "server-id");
     expect(existsSync(idPath)).toBe(true);
-    expect(readFileSync(idPath, "utf8").trim()).toBe("test-daemon-id");
+    expect(readFileSync(idPath, "utf8").trim()).toBe("byspace-daemon-id");
+  });
+
+  it("accepts and persists the legacy PASEO_SERVER_ID override", () => {
+    process.env.PASEO_SERVER_ID = "legacy-daemon-id";
+    const id = getOrCreateServerId(home);
+    expect(id).toBe("legacy-daemon-id");
+
+    const idPath = path.join(home, "server-id");
+    expect(existsSync(idPath)).toBe(true);
+    expect(readFileSync(idPath, "utf8").trim()).toBe("legacy-daemon-id");
   });
 
   describe.skipIf(process.platform === "win32")("file permissions", () => {

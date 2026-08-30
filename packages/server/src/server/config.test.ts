@@ -101,6 +101,26 @@ describe("server config", () => {
     expect(config.listen).toBe("127.0.0.1:6777");
   });
 
+  test("prefers public BYSPACE environment variables over legacy aliases", async () => {
+    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "byspace-config-env-"));
+    roots.push(paseoHome);
+
+    const config = loadConfig(paseoHome, {
+      env: {
+        BYSPACE_APP_BASE_URL: "https://app.byspace.example",
+        BYSPACE_PASSWORD: "byspace-password",
+        BYSPACE_RELAY_ENDPOINT: "relay.byspace.example:443",
+        PASEO_APP_BASE_URL: "https://legacy.example",
+        PASEO_PASSWORD: "legacy-password",
+        PASEO_RELAY_ENDPOINT: "legacy.example:443",
+      },
+    });
+
+    expect(config.appBaseUrl).toBe("https://app.byspace.example");
+    expect(config.relayEndpoint).toBe("relay.byspace.example:443");
+    expect(config.auth).toBeDefined();
+  });
+
   test.each([
     {
       name: "local speech providers",

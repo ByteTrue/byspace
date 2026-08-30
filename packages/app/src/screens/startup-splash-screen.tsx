@@ -30,7 +30,7 @@ interface StartupSplashScreenProps {
 }
 
 const GITHUB_ISSUE_URL = "https://github.com/ByteTrue/byspace/issues/new";
-const DOCS_URL = "https://github.com/ByteTrue/byspace/tree/main/docs";
+const DOCS_URL = "https://github.com/ByteTrue/byspace/tree/main/public-docs";
 
 const LOGO_SIZE = 96;
 const SHIMMER_PEAK_WIDTH = 120;

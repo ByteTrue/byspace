@@ -82,13 +82,13 @@ Run the BySpace daemon and self-hosted web UI in Docker:
 ```bash
 docker run -d --name byspace \
   -p 6777:6777 \
-  -e PASEO_PASSWORD=change-me \
-  -v "$PWD/byspace-home:/home/byspace/.byspace" \
+  -e BYSPACE_PASSWORD=change-me \
+  -v "$PWD/byspace-home:/home/byspace" \
   -v "$PWD:/workspace" \
   ghcr.io/bytetrue/byspace:0.7.0-beta.2
 ```
 
-Open `http://localhost:6777` after it starts. Extend the base image with the agent CLIs you use, then provide credentials through environment variables or the persistent `/home/byspace/.byspace` volume. See the [Docker documentation](docs/docker.md) for full setup details.
+Open `http://localhost:6777` after it starts. Extend the base image with the agent CLIs you use, then provide credentials through environment variables or the persistent `/home/byspace` volume. See the [Docker documentation](docs/docker.md) for full setup details.
 
 ## CLI
 
@@ -110,17 +110,17 @@ See the [CLI reference](packages/server/README.md) for more.
 
 ## Skills
 
-The upstream Paseo skills remain compatible with BySpace's internal protocol:
+Install the bundled BySpace skills:
 
 ```bash
-npx skills add getpaseo/paseo
+npx skills add ByteTrue/byspace
 ```
 
 Then use them in any agent conversation:
 
-- `/paseo-handoff` — hand off work between agents. I use this to plan with Claude and then handoff to Codex to implement.
-- `/paseo-advisor` — spin up a single agent as an advisor for a second opinion, without delegating the work itself.
-- `/paseo-committee` — form a committee of two contrasting agents to step back, do root cause analysis, and produce a plan.
+- `/byspace-handoff` — hand off work between agents. I use this to plan with Claude and then handoff to Codex to implement.
+- `/byspace-advisor` — spin up a single agent as an advisor for a second opinion, without delegating the work itself.
+- `/byspace-committee` — form a committee of two contrasting agents to step back, do root cause analysis, and produce a plan.
 
 ## Development
 

@@ -60,9 +60,13 @@ async function allocatePortFromScript(options: {
       {
         cwd: options.cwd,
         envOverlay: {
+          BYSPACE_SCRIPTNAME: options.scriptName,
           PASEO_SCRIPTNAME: options.scriptName,
+          BYSPACE_WORKSPACE_ID: options.workspaceId,
           PASEO_WORKSPACE_ID: options.workspaceId,
+          BYSPACE_BRANCH_NAME: options.branchName ?? "",
           PASEO_BRANCH_NAME: options.branchName ?? "",
+          BYSPACE_WORKTREE_PATH: options.cwd,
           PASEO_WORKTREE_PATH: options.cwd,
         },
         timeout: PORT_SCRIPT_TIMEOUT_MS,

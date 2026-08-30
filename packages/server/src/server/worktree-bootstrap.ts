@@ -885,7 +885,7 @@ export async function spawnWorkspaceScript(
   const scriptConfigs = getScriptConfigs(configResult.config);
   const config = scriptConfigs.get(scriptName);
   if (!config) {
-    throw new Error(`Script '${scriptName}' is not configured in paseo.json`);
+    throw new Error(`Script '${scriptName}' is not configured in the project config`);
   }
 
   const serviceScript = isServiceScript(config);

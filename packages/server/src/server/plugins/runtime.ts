@@ -231,9 +231,13 @@ export class PluginRuntime {
     canPublish: () => boolean = () => true,
   ): Promise<void> {
     if (this.plugins.has(pluginId)) throw new Error(`Plugin is already running: ${pluginId}`);
-    this.appendLog(pluginId, "stdout", "[paseo] Loading plugin");
+    this.appendLog(pluginId, "stdout", "[byspace] Loading plugin");
     const loaded = await this.loadDirectoryPlugin(pluginId, configuredPath).catch((error) => {
-      this.appendLog(pluginId, "stderr", `[paseo] Plugin failed to load: ${describeError(error)}`);
+      this.appendLog(
+        pluginId,
+        "stderr",
+        `[byspace] Plugin failed to load: ${describeError(error)}`,
+      );
       throw error;
     });
     if (!canPublish()) {
@@ -241,7 +245,7 @@ export class PluginRuntime {
       throw new Error(`Plugin start cancelled: ${pluginId}`);
     }
     this.plugins.set(pluginId, loaded);
-    this.appendLog(pluginId, "stdout", "[paseo] Plugin ready");
+    this.appendLog(pluginId, "stdout", "[byspace] Plugin ready");
   }
 
   async validatePlugin(configuredPath: string): Promise<void> {
@@ -319,7 +323,7 @@ export class PluginRuntime {
     const entryPath = await resolveEntryPath(directory);
     const bundles = await compilePlugin(entryPath);
     const sessionHost = this.sessionHost;
-    if (!sessionHost) throw new Error("Plugin Paseo session host is not attached");
+    if (!sessionHost) throw new Error("Plugin BySpace session host is not attached");
     const child = this.spawnChild();
     const outputCapture = new PluginOutputCapture(child, (stream, message) => {
       this.appendLog(pluginId, stream, message);
@@ -420,11 +424,11 @@ export class PluginRuntime {
   }
 
   private async stopPlugin(loaded: LoadedPlugin): Promise<void> {
-    this.appendLog(loaded.id, "stdout", "[paseo] Stopping plugin");
+    this.appendLog(loaded.id, "stdout", "[byspace] Stopping plugin");
     if (loaded.child.killed) {
       loaded.sessionSocket.peerClosed();
       await loaded.sessionClosed;
-      this.appendLog(loaded.id, "stdout", "[paseo] Plugin stopped");
+      this.appendLog(loaded.id, "stdout", "[byspace] Plugin stopped");
       return;
     }
     const closed = new Promise<void>((resolve) =>
@@ -438,7 +442,7 @@ export class PluginRuntime {
     await closed;
     loaded.sessionSocket.peerClosed();
     await loaded.sessionClosed;
-    this.appendLog(loaded.id, "stdout", "[paseo] Plugin stopped");
+    this.appendLog(loaded.id, "stdout", "[byspace] Plugin stopped");
   }
 
   private rejectPending(loaded: LoadedPlugin, message: string): void {

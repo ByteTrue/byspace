@@ -4826,7 +4826,9 @@ export class AgentManager {
       agentId,
       env: {
         ...env,
+        BYSPACE_AGENT_ID: agentId,
         PASEO_AGENT_ID: agentId,
+        BYSPACE_AGENT_CWD: cwd,
         PASEO_AGENT_CWD: cwd,
       },
     };

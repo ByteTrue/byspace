@@ -48,7 +48,8 @@ import {
 const DEFAULT_REFRESH_TIMEOUT_MS = 120_000;
 const MAX_REFRESH_TIMEOUT_MS = 2_147_483_647;
 const DEFAULT_DIAGNOSTIC_TIMEOUT_MS = 120_000;
-const PROVIDER_REFRESH_DEADLINE_ENV = "PASEO_PROVIDER_REFRESH_TIMEOUT_MS";
+const BYSPACE_PROVIDER_REFRESH_DEADLINE_ENV = "BYSPACE_PROVIDER_REFRESH_TIMEOUT_MS";
+const PASEO_PROVIDER_REFRESH_DEADLINE_ENV = "PASEO_PROVIDER_REFRESH_TIMEOUT_MS";
 export const GLOBAL_PROVIDER_SNAPSHOT_KEY = "paseo:global";
 
 function validRefreshDeadline(value: unknown): number | undefined {
@@ -63,10 +64,10 @@ function validRefreshDeadline(value: unknown): number | undefined {
 function providerRefreshDeadline(configured: number | undefined): number {
   const explicit = validRefreshDeadline(configured);
   if (explicit !== undefined) return explicit;
-  return (
-    validRefreshDeadline(Number(process.env[PROVIDER_REFRESH_DEADLINE_ENV])) ??
-    DEFAULT_REFRESH_TIMEOUT_MS
-  );
+  const environmentValue =
+    process.env[BYSPACE_PROVIDER_REFRESH_DEADLINE_ENV] ??
+    process.env[PASEO_PROVIDER_REFRESH_DEADLINE_ENV];
+  return validRefreshDeadline(Number(environmentValue)) ?? DEFAULT_REFRESH_TIMEOUT_MS;
 }
 
 function resolveDiagnosticTimeoutMs(option: number | undefined, refreshTimeoutMs: number): number {

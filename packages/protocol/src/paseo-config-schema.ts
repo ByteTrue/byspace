@@ -103,7 +103,10 @@ export const PaseoConfigRevisionSchema = z.object({
 
 export const ProjectConfigRpcErrorSchema = z.discriminatedUnion("code", [
   z.object({ code: z.literal("project_not_found") }),
-  z.object({ code: z.literal("invalid_project_config") }),
+  z.object({
+    code: z.literal("invalid_project_config"),
+    reason: z.literal("conflicting_files").optional(),
+  }),
   z.object({
     code: z.literal("stale_project_config"),
     currentRevision: PaseoConfigRevisionSchema.nullable(),

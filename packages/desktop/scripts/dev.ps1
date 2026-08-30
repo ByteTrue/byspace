@@ -44,7 +44,7 @@ Remove-Item Env:\PASEO_DEV_RUNTIME_FALLBACK_ROOT -ErrorAction SilentlyContinue
 # Allow any origin in dev so Electron on random ports works.
 # SECURITY: wildcard CORS is unsafe in production — only acceptable here because
 # the daemon binds to localhost and this script is never used for production.
-$env:PASEO_CORS_ORIGINS = "*"
+$env:BYSPACE_CORS_ORIGINS = "*"
 
 # Fully isolate the dev instance from a production BySpace install so `npm run dev`
 # works while the installed app is open. Without this the dev build loses the

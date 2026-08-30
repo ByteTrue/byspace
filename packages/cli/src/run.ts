@@ -1,6 +1,7 @@
 import { createCli } from "./cli.js";
 import { classifyInvocation } from "./classify.js";
 import { openDesktopWithProject } from "./commands/open.js";
+import { applyByspaceEnvironment } from "./utils/byspace-env.js";
 
 export interface RunCliOptions {
   cwd?: string;
@@ -36,6 +37,7 @@ export function createCliParseArgv(input: {
 }
 
 export async function runCli(argv: string[], options: RunCliOptions = {}): Promise<number> {
+  applyByspaceEnvironment(process.env);
   const parseArgv = createCliParseArgv({
     argv,
     cwd: options.cwd ?? process.cwd(),

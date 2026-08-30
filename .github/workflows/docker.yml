@@ -194,7 +194,7 @@ jobs:
           cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
           trap cleanup EXIT
           docker run -d --name "$container" --platform linux/amd64 \
-            -e PASEO_PASSWORD=byspace-ci-smoke \
+            -e BYSPACE_PASSWORD=byspace-ci-smoke \
             -p 127.0.0.1::6777 "$image" >/dev/null
           host_port="$(docker port "$container" 6777/tcp | sed 's/.*://')"
           for attempt in {1..60}; do

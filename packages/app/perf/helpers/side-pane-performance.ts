@@ -86,7 +86,7 @@ export function resolveProfileTarget(): ProfileTarget {
     (candidate) => candidate.name === requestedName && candidate.cwd === repoRoot,
   );
   if (!workspace) {
-    throw new Error(`No Paseo workspace named ${requestedName} points at ${repoRoot}`);
+    throw new Error(`No BySpace workspace named ${requestedName} points at ${repoRoot}`);
   }
   return { serverId, workspaceId: workspace.workspaceId };
 }

@@ -1,5 +1,5 @@
 ---
-name: paseo-plugin
+name: byspace-plugin
 description: Build and manage trusted local BySpace plugins. Use when the user asks to create, edit, install, reload, enable, disable, remove, or troubleshoot a BySpace plugin; add a native surface or sidebar item; use BySpace from plugin code; add plugin RPCs; or contribute composer attachments.
 ---
 
@@ -34,9 +34,9 @@ The generated project contains:
 
 ```text
 my-plugin/
-  paseo-plugin.json
+  byspace-plugin.json
   index.tsx
-  paseo-plugin.d.ts
+  byspace-plugin.d.ts
   package.json
   tsconfig.json
 ```

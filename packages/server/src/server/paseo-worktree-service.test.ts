@@ -235,7 +235,7 @@ test("creates a worktree workspace at the selected project subdirectory", async 
   });
 });
 
-test("seeds an uncommitted exact-project config into the mapped worktree directory", async () => {
+test("seeds an uncommitted canonical project config into the mapped worktree directory", async () => {
   const { repoDir, tempDir } = createGitRepo();
   cleanupPaths.push(tempDir);
   const sourceDir = path.join(repoDir, "packages", "app");
@@ -243,7 +243,7 @@ test("seeds an uncommitted exact-project config into the mapped worktree directo
   writeFileSync(path.join(sourceDir, "package.json"), "{}\n");
   commitAll(repoDir, "add subproject");
   const config = JSON.stringify({ worktree: { setup: ["npm install"] } });
-  writeFileSync(path.join(sourceDir, "paseo.json"), config);
+  writeFileSync(path.join(sourceDir, "byspace.json"), config);
 
   const result = await createPaseoWorktree(
     {
@@ -255,8 +255,8 @@ test("seeds an uncommitted exact-project config into the mapped worktree directo
     createDeps(),
   );
 
-  expect(readFileSync(path.join(result.workspace.cwd, "paseo.json"), "utf8")).toBe(config);
-  expect(existsSync(path.join(result.worktree.worktreePath, "paseo.json"))).toBe(false);
+  expect(readFileSync(path.join(result.workspace.cwd, "byspace.json"), "utf8")).toBe(config);
+  expect(existsSync(path.join(result.worktree.worktreePath, "byspace.json"))).toBe(false);
 });
 
 test("does not overwrite a committed exact-project config with source checkout edits", async () => {

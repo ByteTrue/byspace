@@ -10,7 +10,7 @@ category: Hub
 
 Run Hub on your machine, connect it to Slack without a public server, and answer a mention with an agent in your repository. Hub's browser setup hands off to your terminal, and guided setup writes and deploys the workflow for you.
 
-You need [Paseo installed and running](/docs), Node.js, and a Slack workspace where you can create an app.
+You need [BySpace installed and running](/docs), Node.js, and a Slack workspace where you can create an app.
 
 ## 1. Start Hub
 
@@ -39,7 +39,7 @@ GitHub and Discord can wait. Their setup stays available under **Apps**.
 **Connect a daemon** shows one command with this Hub's address already in it:
 
 ```sh
-paseo hub login http://localhost:3000
+byspace hub login http://localhost:3000
 ```
 
 Run it on the machine where your code lives, in the repository the agent should work in. Guided setup records that directory as the workflow's working directory.
@@ -72,7 +72,7 @@ Setup then validates the bundle, writes it, and deploys:
     └── slack-help.yml
 ```
 
-If `.paseo/` already exists, setup asks before replacing it. Declining the daemon connection prints `paseo hub connect <hub>; then paseo hub init` — both commands, because connecting alone does not create the workflow. Declining only the starter workflow prints `paseo hub init`.
+If `.paseo/` already exists, setup asks before replacing it. Declining the daemon connection prints `byspace hub connect <hub>; then byspace hub init` — both commands, because connecting alone does not create the workflow. Declining only the starter workflow prints `byspace hub init`.
 
 ## 5. Mention the bot
 

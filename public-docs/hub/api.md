@@ -9,7 +9,7 @@ category: Hub
 # Hub public API
 
 The Hub public API lets automation operate on projects and daemons in one
-organization. Set the Hub origin in `PASEO_HUB_URL` below, for example
+organization. Set the Hub origin in `BYSPACE_HUB_URL` below, for example
 `https://hub.example.com`.
 
 ## API reference
@@ -21,7 +21,7 @@ These are the canonical reference endpoints for the hosted Paseo Hub. A self-hos
 
 ## Authentication
 
-Run `paseo hub login [origin]` for interactive CLI access. After browser approval, Paseo stores a durable, revocable organization credential under `PASEO_HOME` for that exact origin. Without an explicit origin, the CLI uses `PASEO_HUB_URL`, then the active stored login, then `https://hub.paseo.sh`.
+Run `byspace hub login [origin]` for interactive CLI access. After browser approval, BySpace stores a durable, revocable organization credential under `BYSPACE_HOME` for that exact origin. Without an explicit origin, the CLI uses `BYSPACE_HUB_URL`, then legacy `PASEO_HUB_URL`, then the active stored login, then `https://hub.paseo.sh`.
 
 For automation, create an organization API key from the Hub dashboard under **API keys**. Both credential types are bearer tokens:
 
@@ -48,7 +48,7 @@ Each key has one or more selectable scopes:
 API keys do not grant dashboard access. They cannot manage connections,
 projects, or organization members.
 
-CLI credentials have the current CLI operation scopes and remain revocable independently of daemon relationships. `paseo hub logout` deletes the active local CLI credential; it does not revoke or disconnect the daemon identity.
+CLI credentials have the current CLI operation scopes and remain revocable independently of daemon relationships. `byspace hub logout` deletes the active local CLI credential; it does not revoke or disconnect the daemon identity.
 
 API failures use RFC 9457 problem details. Missing, invalid, or revoked credentials return `401` with `application/problem+json`:
 
@@ -67,7 +67,7 @@ A valid key without the scope required by an endpoint returns `403` in the same 
 
 ## Project list
 
-`GET /api/v1/projects` returns active projects in the bearer credential's organization. `paseo hub projects` renders the projects as a table. With `--json`, it returns `{ "origin": "...", "projects": [...] }` so even an empty result records the resolved Hub.
+`GET /api/v1/projects` returns active projects in the bearer credential's organization. `byspace hub projects` renders the projects as a table. With `--json`, it returns `{ "origin": "...", "projects": [...] }` so even an empty result records the resolved Hub.
 
 ```json
 {
@@ -94,7 +94,7 @@ On success, Hub returns `200`:
 }
 ```
 
-`paseo hub deploy --dry-run` calls this endpoint with the identical locally resolved payload that a deployment would send.
+`byspace hub deploy --dry-run` calls this endpoint with the identical locally resolved payload that a deployment would send.
 
 ## Configuration install
 
@@ -151,13 +151,13 @@ Common responses are `400` for a missing or malformed body, `404` for an inactiv
 Example:
 
 ```bash
-curl --fail-with-body -sS -X POST "$PASEO_HUB_URL/api/v1/configurations/install" \
-  -H "Authorization: Bearer $PASEO_HUB_API_KEY" \
+curl --fail-with-body -sS -X POST "$BYSPACE_HUB_URL/api/v1/configurations/install" \
+  -H "Authorization: Bearer $BYSPACE_HUB_API_KEY" \
   -H "Content-Type: application/json" \
   --data @configuration-install.json
 ```
 
-`paseo hub deploy -p <project>` calls this endpoint with the discovered local bundle. The command uses an exact-origin stored login when flags and environment credentials are absent. See [Deploy from the CLI](/docs/hub/configuration#deploy-from-the-cli).
+`byspace hub deploy -p <project>` calls this endpoint with the discovered local bundle. The command uses an exact-origin stored login when flags and environment credentials are absent. See [Deploy from the CLI](/docs/hub/configuration#deploy-from-the-cli).
 
 ## Manual run dispatch
 
@@ -203,8 +203,8 @@ Common responses are `400` for an invalid request, `403` when the actor is not a
 Example:
 
 ```bash
-curl --fail-with-body -sS -X POST "$PASEO_HUB_URL/api/v1/manual-runs" \
-  -H "Authorization: Bearer $PASEO_HUB_API_KEY" \
+curl --fail-with-body -sS -X POST "$BYSPACE_HUB_URL/api/v1/manual-runs" \
+  -H "Authorization: Bearer $BYSPACE_HUB_API_KEY" \
   -H "Content-Type: application/json" \
   --data '{
     "projectSlug": "my-project",
@@ -239,15 +239,15 @@ No request body is required. On success, Hub returns `201`:
 
 The token expires after 10 minutes and is consumed when the daemon enrolls.
 
-`paseo hub connect [origin]` performs this request with `--api-key`, `PASEO_HUB_API_KEY`, or the matching stored login, then passes the one-time token to the daemon's enrollment operation. The daemon generates and keeps its own relationship credential.
+`byspace hub connect [origin]` performs this request with `--api-key`, `BYSPACE_HUB_API_KEY`, legacy `PASEO_HUB_API_KEY`, or the matching stored login, then passes the one-time token to the daemon's enrollment operation. The daemon generates and keeps its own relationship credential.
 
 ```bash
 curl --fail-with-body -sS -X POST \
-  "$PASEO_HUB_URL/api/v1/daemons/enrollment-tokens" \
-  -H "Authorization: Bearer $PASEO_HUB_API_KEY"
+  "$BYSPACE_HUB_URL/api/v1/daemons/enrollment-tokens" \
+  -H "Authorization: Bearer $BYSPACE_HUB_API_KEY"
 ```
 
-Direct API consumers can pass the returned token to the daemon enrollment protocol. The Paseo CLI intentionally does not accept raw enrollment tokens; `connect` owns the authenticated single-flow exchange.
+Direct API consumers can pass the returned token to the daemon enrollment protocol. The BySpace CLI intentionally does not accept raw enrollment tokens; `connect` owns the authenticated single-flow exchange.
 
 An enrollment token cannot be reused. Revoking the API key immediately rejects
 future API requests and expires any unconsumed enrollment tokens that key

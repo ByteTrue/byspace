@@ -40,18 +40,20 @@ export function resolveSelectedAgentForNewAgent(input: {
 
 function inferMainRepoRootFromPaseoWorktreePath(cwd: string): string | null {
   const normalizedPath = cwd.replace(/\\/g, "/");
-  const marker = "/.paseo/worktrees";
-  const markerIndex = normalizedPath.indexOf(marker);
-  if (markerIndex <= 0) {
-    return null;
+  for (const marker of ["/.byspace/worktrees", "/.paseo/worktrees"]) {
+    const markerIndex = normalizedPath.indexOf(marker);
+    if (markerIndex <= 0) {
+      continue;
+    }
+    const markerEnd = markerIndex + marker.length;
+    const nextChar = normalizedPath[markerEnd];
+    if (nextChar && nextChar !== "/") {
+      continue;
+    }
+    const inferred = cwd.slice(0, markerIndex).replace(/[\\/]+$/, "");
+    return inferred.trim() ? inferred : null;
   }
-  const markerEnd = markerIndex + marker.length;
-  const nextChar = normalizedPath[markerEnd];
-  if (nextChar && nextChar !== "/") {
-    return null;
-  }
-  const inferred = cwd.slice(0, markerIndex).replace(/[\\/]+$/, "");
-  return inferred.trim() ? inferred : null;
+  return null;
 }
 
 export function resolveNewAgentWorkingDir(

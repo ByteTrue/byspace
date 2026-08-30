@@ -25,7 +25,7 @@ A project configuration is one versioned bundle:
 
 ## Generated starter bundle
 
-`paseo hub init`, and the guided setup that interactive `paseo hub login` offers, write two files for the directory you run them in:
+`byspace hub init`, and the guided setup that interactive `byspace hub login` offers, write two files for the directory you run them in:
 
 ```yaml
 # .paseo/hub.yml
@@ -92,9 +92,9 @@ The **Configuration** tab shows the active revision, source files, and latest sy
 Run from the project root:
 
 ```sh
-paseo hub login https://hub.example.com
-paseo hub deploy -p my-project --dry-run
-paseo hub deploy -p my-project
+byspace hub login https://hub.example.com
+byspace hub deploy -p my-project --dry-run
+byspace hub deploy -p my-project
 ```
 
 Both commands discover `.paseo/hub.yml`, every direct `.paseo/workflows/*.yml` file, and each referenced file below `.paseo/workflows/partials/`. Files are sent in deterministic path order through the same bundle request. Dry-run calls server-side validation and does not create or activate a revision.
@@ -104,15 +104,17 @@ The CLI rejects missing resource or workflow files, `.yaml` workflow extensions,
 Origin precedence:
 
 1. `--hub`
-2. `PASEO_HUB_URL`
-3. Active stored login
-4. `https://hub.paseo.sh`
+2. `BYSPACE_HUB_URL`
+3. Legacy `PASEO_HUB_URL`
+4. Active stored login
+5. `https://hub.paseo.sh`
 
 Credential precedence:
 
 1. `--api-key`
-2. `PASEO_HUB_API_KEY`
-3. Stored login for the exact resolved origin
+2. `BYSPACE_HUB_API_KEY`
+3. Legacy `PASEO_HUB_API_KEY`
+4. Stored login for the exact resolved origin
 
 Flags and environment keys are not stored. Endpoint and credential behavior is unchanged between deploy and dry-run.
 

@@ -179,15 +179,19 @@ export async function expectSaveButtonDisabled(page: Page): Promise<void> {
 }
 
 export async function expectUncommittedSetupWarning(page: Page): Promise<void> {
-  const warning = page.getByRole("alert").filter({ hasText: "Commit paseo.json changes" });
-  await expect(warning).toContainText("Commit paseo.json changes");
+  const warning = page
+    .getByRole("alert")
+    .filter({ hasText: "Commit project configuration changes" });
+  await expect(warning).toContainText("Commit project configuration changes");
   await expect(warning).toContainText(
     "New worktrees use the setup script from the base branch you select.",
   );
 }
 
 export async function expectNoUncommittedSetupWarning(page: Page): Promise<void> {
-  const warning = page.getByRole("alert").filter({ hasText: "Commit paseo.json changes" });
+  const warning = page
+    .getByRole("alert")
+    .filter({ hasText: "Commit project configuration changes" });
   await expect(warning).toHaveCount(0);
 }
 

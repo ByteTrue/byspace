@@ -21,14 +21,14 @@ describe("paseo config file substrate", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("returns null config and revision when paseo.json is missing", () => {
+  it("returns null config and revision when byspace.json is missing", () => {
     const result = readPaseoConfigForEdit(tempDir);
 
     expect(result).toEqual({ ok: true, config: null, revision: null });
   });
 
   it("returns invalid_project_config for invalid JSON", () => {
-    writeFileSync(join(tempDir, "paseo.json"), "{ invalid json\n");
+    writeFileSync(join(tempDir, "byspace.json"), "{ invalid json\n");
 
     const result = readPaseoConfigForEdit(tempDir);
 
@@ -40,7 +40,7 @@ describe("paseo config file substrate", () => {
 
   it("preserves raw lifecycle string and array forms with a revision token", () => {
     writeFileSync(
-      join(tempDir, "paseo.json"),
+      join(tempDir, "byspace.json"),
       JSON.stringify({
         worktree: {
           setup: "npm install",
@@ -65,7 +65,7 @@ describe("paseo config file substrate", () => {
 
   it("keeps runtime lifecycle commands normalized for execution", () => {
     writeFileSync(
-      join(tempDir, "paseo.json"),
+      join(tempDir, "byspace.json"),
       JSON.stringify({
         worktree: {
           setup: "npm install",
@@ -79,7 +79,7 @@ describe("paseo config file substrate", () => {
   });
 
   it("writes pretty JSON with a trailing newline when revision matches", () => {
-    writeFileSync(join(tempDir, "paseo.json"), JSON.stringify({ worktree: { setup: "old" } }));
+    writeFileSync(join(tempDir, "byspace.json"), JSON.stringify({ worktree: { setup: "old" } }));
     const expectedRevision = statPaseoConfigPath(tempDir);
 
     const result = writePaseoConfigForEdit({
@@ -93,7 +93,7 @@ describe("paseo config file substrate", () => {
       config: { worktree: { setup: "npm install" } },
       revision: statPaseoConfigPath(tempDir),
     });
-    expect(readFileSync(join(tempDir, "paseo.json"), "utf8")).toBe(
+    expect(readFileSync(join(tempDir, "byspace.json"), "utf8")).toBe(
       '{\n  "worktree": {\n    "setup": "npm install"\n  }\n}\n',
     );
   });
@@ -102,9 +102,9 @@ describe("paseo config file substrate", () => {
   it.skipIf(isPlatform("win32"))(
     "rejects stale writes when the current revision changed before rename",
     () => {
-      writeFileSync(join(tempDir, "paseo.json"), JSON.stringify({ worktree: { setup: "old" } }));
+      writeFileSync(join(tempDir, "byspace.json"), JSON.stringify({ worktree: { setup: "old" } }));
       const expectedRevision = statPaseoConfigPath(tempDir);
-      writeFileSync(join(tempDir, "paseo.json"), JSON.stringify({ worktree: { setup: "new" } }));
+      writeFileSync(join(tempDir, "byspace.json"), JSON.stringify({ worktree: { setup: "new" } }));
       const currentRevision = statPaseoConfigPath(tempDir);
 
       const result = writePaseoConfigForEdit({
@@ -117,7 +117,7 @@ describe("paseo config file substrate", () => {
         ok: false,
         error: { code: "stale_project_config", currentRevision },
       });
-      expect(readFileSync(join(tempDir, "paseo.json"), "utf8")).toBe(
+      expect(readFileSync(join(tempDir, "byspace.json"), "utf8")).toBe(
         JSON.stringify({ worktree: { setup: "new" } }),
       );
     },
@@ -173,7 +173,7 @@ describe("paseo config file substrate", () => {
     });
   });
 
-  it("creates paseo.json when the file is still missing and expected revision is null", () => {
+  it("creates byspace.json when the file is still missing and expected revision is null", () => {
     mkdirSync(join(tempDir, "nested"));
 
     const result = writePaseoConfigForEdit({
@@ -186,6 +186,61 @@ describe("paseo config file substrate", () => {
       ok: true,
       config: { scripts: { dev: { command: "npm run dev" } } },
       revision: statPaseoConfigPath(join(tempDir, "nested")),
+    });
+  });
+
+  it("reads and updates legacy paseo.json in place", () => {
+    const legacyPath = join(tempDir, "paseo.json");
+    writeFileSync(legacyPath, JSON.stringify({ worktree: { setup: "old" } }));
+    const expectedRevision = statPaseoConfigPath(tempDir);
+
+    expect(readPaseoConfigForEdit(tempDir)).toEqual({
+      ok: true,
+      config: { worktree: { setup: "old" } },
+      revision: expectedRevision,
+    });
+    expect(
+      writePaseoConfigForEdit({
+        repoRoot: tempDir,
+        config: { worktree: { setup: "updated" } },
+        expectedRevision,
+      }),
+    ).toEqual({
+      ok: true,
+      config: { worktree: { setup: "updated" } },
+      revision: statPaseoConfigPath(tempDir),
+    });
+    expect(readFileSync(legacyPath, "utf8")).toContain('"setup": "updated"');
+    expect(() => readFileSync(join(tempDir, "byspace.json"), "utf8")).toThrow();
+  });
+
+  it("rejects repositories containing both project config filenames", () => {
+    writeFileSync(join(tempDir, "byspace.json"), "{}");
+    writeFileSync(join(tempDir, "paseo.json"), "{}");
+
+    expect(readPaseoConfigForEdit(tempDir)).toEqual({
+      ok: false,
+      error: { code: "invalid_project_config", reason: "conflicting_files" },
+    });
+    expect(
+      writePaseoConfigForEdit({
+        repoRoot: tempDir,
+        config: {},
+        expectedRevision: null,
+      }),
+    ).toEqual({
+      ok: false,
+      error: { code: "invalid_project_config", reason: "conflicting_files" },
+    });
+  });
+
+  it("does not fall back to legacy paseo.json when byspace.json is invalid", () => {
+    writeFileSync(join(tempDir, "byspace.json"), "{ invalid json");
+    writeFileSync(join(tempDir, "paseo.json"), "{}");
+
+    expect(readPaseoConfigForEdit(tempDir)).toEqual({
+      ok: false,
+      error: { code: "invalid_project_config", reason: "conflicting_files" },
     });
   });
 });

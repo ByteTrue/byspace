@@ -30,7 +30,7 @@ function generateServerId(): string {
  * Stable daemon identifier scoped to a given $BYSPACE_HOME.
  *
  * - Persisted to `$BYSPACE_HOME/server-id`
- * - Can be overridden via `PASEO_SERVER_ID` (useful for tests)
+ * - Can be overridden via `BYSPACE_SERVER_ID` (legacy `PASEO_SERVER_ID` is accepted)
  */
 export function getOrCreateServerId(
   paseoHome: string,
@@ -40,19 +40,21 @@ export function getOrCreateServerId(
   const log = getLogger(options?.logger);
   const serverIdPath = getServerIdPath(paseoHome);
 
-  const envOverride =
-    typeof env.PASEO_SERVER_ID === "string" && env.PASEO_SERVER_ID.trim().length > 0
-      ? env.PASEO_SERVER_ID.trim()
-      : null;
+  let envOverride: string | null = null;
+  if (typeof env.BYSPACE_SERVER_ID === "string" && env.BYSPACE_SERVER_ID.trim().length > 0) {
+    envOverride = env.BYSPACE_SERVER_ID.trim();
+  } else if (typeof env.PASEO_SERVER_ID === "string" && env.PASEO_SERVER_ID.trim().length > 0) {
+    envOverride = env.PASEO_SERVER_ID.trim();
+  }
 
   if (envOverride) {
     // Persist the override for consistent identity across restarts.
     if (!existsSync(serverIdPath)) {
       try {
         writePrivateFileAtomicSync(serverIdPath, `${envOverride}\n`);
-        log?.info({ serverId: envOverride }, "Persisted PASEO_SERVER_ID override");
+        log?.info({ serverId: envOverride }, "Persisted server ID environment override");
       } catch (error) {
-        log?.warn({ error }, "Failed to persist PASEO_SERVER_ID override");
+        log?.warn({ error }, "Failed to persist server ID environment override");
       }
     } else {
       ensurePrivateFile(serverIdPath);

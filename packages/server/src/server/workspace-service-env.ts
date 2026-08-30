@@ -35,6 +35,7 @@ export function buildWorkspaceServiceEnv(
 
   const env: Record<string, string> = {
     HOST: resolveServiceBindHost(options.daemonListenHost),
+    BYSPACE_PORT: String(selfPeer.port),
     PASEO_PORT: String(selfPeer.port),
   };
 
@@ -46,11 +47,13 @@ export function buildWorkspaceServiceEnv(
     serviceProxyPublicBaseUrl: options.serviceProxyPublicBaseUrl,
   });
   if (selfProxyUrl) {
+    env.BYSPACE_URL = selfProxyUrl;
     env.PASEO_URL = selfProxyUrl;
   }
 
   for (const peer of options.peers) {
     const envName = normalizeServiceEnvName(peer.scriptName);
+    env[`BYSPACE_SERVICE_${envName}_PORT`] = String(peer.port);
     env[`PASEO_SERVICE_${envName}_PORT`] = String(peer.port);
 
     const peerProxyUrl = buildServiceProxyUrl({
@@ -61,6 +64,7 @@ export function buildWorkspaceServiceEnv(
       serviceProxyPublicBaseUrl: options.serviceProxyPublicBaseUrl,
     });
     if (peerProxyUrl) {
+      env[`BYSPACE_SERVICE_${envName}_URL`] = peerProxyUrl;
       env[`PASEO_SERVICE_${envName}_URL`] = peerProxyUrl;
     }
   }

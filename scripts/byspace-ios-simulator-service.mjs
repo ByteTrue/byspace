@@ -335,7 +335,7 @@ function simulatorSlug() {
 
 function requiredEnv(name) {
   const value = process.env[name];
-  if (!value) throw new Error(`${name} is required; run this as a Paseo service.`);
+  if (!value) throw new Error(`${name} is required; run this as a BySpace service.`);
   return value;
 }
 

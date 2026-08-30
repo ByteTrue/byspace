@@ -2,12 +2,12 @@
 
 ## Agent Device
 
-Agent Device `.ad` scripts are the primary mobile E2E format. An agent discovers a working flow interactively, saves the successful commands, then the replay runner executes the same typed plan locally or in CI.
+Agent Device `.ad` scripts are the primary mobile E2E format. An agent discovers a working flow interactively, saves the successful commands, then the replay runner executes the same typed plan locally or in CI. The `PASEO_*` variables below configure the test harness; public daemon configuration uses `BYSPACE_*`, with matching `PASEO_*` compatibility fallbacks where supported.
 
 Record a flow while driving the app normally:
 
 ```bash
-agent-device open sh.paseo.debug \
+agent-device open com.bytetrue.byspace.debug \
   --platform ios \
   --session terminal-author \
   --save-script ./packages/app/e2e/mobile/agent-device/terminal.ios.ad
@@ -19,7 +19,7 @@ agent-device close --session terminal-author
 
 `close` writes the script. Keep selectors based on stable app IDs. Keep assertions as `wait`, `get`, `is`, or `find` commands; screenshots are evidence, not assertions.
 
-Run the Paseo mobile suite:
+Run the BySpace mobile suite:
 
 ```bash
 npm run test:e2e:mobile
@@ -133,15 +133,15 @@ For async elements, use `extendedWaitUntil`:
 
 Two reusable flows handle Expo dev client screens after launch:
 
-- `flows/launch.yaml` — handles dev launcher, dismisses dev menu, asserts "Welcome to Paseo"
+- `flows/launch.yaml` — handles dev launcher, dismisses dev menu, asserts "Welcome to BySpace"
 - `flows/dev-client.yaml` — same but without asserting a particular app route
 
 ### Reach the composer
 
-`flows/land-in-chat.yaml` is the canonical "get into a chat" primitive. It `clearState`s, runs `launch.yaml`, taps the welcome screen's direct-connection option, types `127.0.0.1:6767`, submits, and waits for `message-input-root`. Compose any composer-level fixture on top of it:
+`flows/land-in-chat.yaml` is the canonical "get into a chat" primitive. It `clearState`s, runs `launch.yaml`, taps the welcome screen's direct-connection option, types `127.0.0.1:6777`, submits, and waits for `message-input-root`. Compose any composer-level fixture on top of it:
 
 ```yaml
-appId: sh.paseo
+appId: com.bytetrue.byspace
 ---
 - runFlow: flows/land-in-chat.yaml
 # ...your scenario here, starting from a ready composer
@@ -149,7 +149,7 @@ appId: sh.paseo
 
 See `image-picker-repro.yaml` for an example.
 
-**Prefer direct connection over relay pairing for local E2E.** Relay needs a 400+ character pairing URL typed into an input; direct needs `127.0.0.1:6767`. The daemon listens on 6767 and the simulator can reach it directly.
+**Prefer direct connection over relay pairing for local E2E.** Relay needs a 400+ character pairing URL typed into an input; direct needs `127.0.0.1:6777`. The daemon listens on 6777 and the simulator can reach it directly.
 
 ### New Workspace Creation
 
@@ -244,17 +244,17 @@ done
 Voice mode uses the custom `expo-two-way-audio` Android module, so incoming calls and other system audio owners must be tested with emulator/system commands, not a JS-only test. To verify that voice resume handles denied audio focus without crashing:
 
 ```bash
-adb shell am start -n sh.paseo/.MainActivity
-# Start voice mode in an existing composer, then background Paseo with Home.
+adb shell am start -n com.bytetrue.byspace/.MainActivity
+# Start voice mode in an existing composer, then background BySpace with Home.
 adb emu gsm call 5551234
-# Foreground Paseo while the call is still ringing.
+# Foreground BySpace while the call is still ringing.
 ```
 
-Expected result: Paseo does not throw `RuntimeException: Audio focus request failed`; native audio reports an interruption and voice mode stops or pauses coherently.
+Expected result: BySpace does not throw `RuntimeException: Audio focus request failed`; native audio reports an interruption and voice mode stops or pauses coherently.
 
 ### Releasing the audio session when idle
 
-Paseo must not hold the OS audio session once it is neither capturing nor playing, or the user's
+BySpace must not hold the OS audio session once it is neither capturing nor playing, or the user's
 background music stays paused. On iOS this is not just a "while recording" problem: the
 `.playAndRecord`/`.voiceChat` category is non-mixing and survives backgrounding, and iOS re-asserts
 it every time the app returns to the foreground — so one dictation turn kills music for the life of
@@ -267,7 +267,7 @@ also releases on `OnAppEntersBackground`. The native side re-guards on `isRecord
 `speechPlayer.isPlaying`, because the native engine is a singleton shared by multiple JS engine
 wrappers (voice provider + dictation) and only it knows the true state.
 
-This cannot be validated by a JS test — verify on a device: play music, open Paseo, use dictation
+This cannot be validated by a JS test — verify on a device: play music, open BySpace, use dictation
 once, stop, and confirm the music resumes; then background/foreground the app and confirm it keeps
 playing.
 
@@ -364,8 +364,8 @@ APP_VARIANT=development npx expo run:ios --device
 ```
 
 `APP_VARIANT=development` is required. The `ios` npm script does not set it, and `app.config.js` defaults
-to `production` — so a bare `npm run ios` builds `sh.paseo` and collides with the App Store install instead
-of the `sh.paseo.debug` dev client. Ignore prebuild's `--non-interactive is not supported` warning; use
+to `production` — so a bare `npm run ios` builds `com.bytetrue.byspace` and collides with the App Store install instead
+of the `com.bytetrue.byspace.debug` dev client. Ignore prebuild's `--non-interactive is not supported` warning; use
 `CI=1` if you need non-interactive.
 
 ### Signing needs a working Apple ID token in Xcode
@@ -429,7 +429,7 @@ To verify only that native Swift compiles, skip signing entirely — the pods ha
 
 ```bash
 cd packages/app/ios
-xcodebuild -workspace PaseoDebug.xcworkspace -scheme ExpoTwoWayAudio \
+xcodebuild -workspace BySpaceDebug.xcworkspace -scheme ExpoTwoWayAudio \
   -sdk iphoneos -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
 ```
 
@@ -456,4 +456,4 @@ xcrun simctl ui booted appearance dark     # set dark
 xcrun simctl ui booted appearance light    # set light
 ```
 
-Expo dev server logs are in the tmux pane running `npm run dev`. Daemon logs are at `$PASEO_HOME/daemon.log` (see [development.md](development.md)).
+Expo dev server logs are in the tmux pane running `npm run dev`. Daemon logs are at `$BYSPACE_HOME/daemon.log` (see [development.md](development.md)).

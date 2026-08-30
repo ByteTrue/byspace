@@ -97,17 +97,17 @@ byspace --host workstation.local:6777 run "run the full test suite"
 
 ## Skills
 
-上游 Paseo skills 与 BySpace 保留的内部协议兼容：
+安装 BySpace 内置 skills：
 
 ```bash
-npx skills add getpaseo/paseo
+npx skills add ByteTrue/byspace
 ```
 
 然后在任意 agent 对话中使用：
 
-- `/paseo-handoff` — 在 agents 之间交接工作。我会用它先和 Claude 规划，再交给 Codex 实现。
-- `/paseo-advisor` — 启动单个 agent 作为 advisor，提供第二意见，但不把工作委托出去。
-- `/paseo-committee` — 组建两个风格互补的 agents，让它们后退一步做根因分析并产出计划。
+- `/byspace-handoff` — 在 agents 之间交接工作。我会用它先和 Claude 规划，再交给 Codex 实现。
+- `/byspace-advisor` — 启动单个 agent 作为 advisor，提供第二意见，但不把工作委托出去。
+- `/byspace-committee` — 组建两个风格互补的 agents，让它们后退一步做根因分析并产出计划。
 
 ## 开发
 
@@ -149,9 +149,9 @@ npm run typecheck
 自托管 relay 默认使用 `ws://`，除非显式启用 TLS。对于 nginx 后面、监听 443 的 relay，可以这样启动 daemon：
 
 ```bash
-PASEO_RELAY_ENDPOINT=127.0.0.1:8080 \
-PASEO_RELAY_PUBLIC_ENDPOINT=relay.example.com:443 \
-PASEO_RELAY_USE_TLS=true \
+BYSPACE_RELAY_ENDPOINT=127.0.0.1:8080 \
+BYSPACE_RELAY_PUBLIC_ENDPOINT=relay.example.com:443 \
+BYSPACE_RELAY_USE_TLS=true \
 byspace daemon start
 ```
 

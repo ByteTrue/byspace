@@ -22,7 +22,7 @@ echo "  Models:  ${PASEO_LOCAL_MODELS_DIR}"
 echo "  Listen:  ${BYSPACE_LISTEN}"
 echo "══════════════════════════════════════════════════════"
 
-export PASEO_CORS_ORIGINS="${PASEO_CORS_ORIGINS:-*}"
+export BYSPACE_CORS_ORIGINS="${BYSPACE_CORS_ORIGINS:-${PASEO_CORS_ORIGINS:-*}}"
 export PASEO_NODE_INSPECT="${PASEO_NODE_INSPECT:---inspect=0}"
 
 if [ "${PASEO_SKIP_DEV_SERVER_BUILD:-0}" = "1" ]; then
