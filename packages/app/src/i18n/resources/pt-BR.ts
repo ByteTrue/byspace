@@ -2598,13 +2598,15 @@ export const ptBR: TranslationResources = {
         savedToast: "Projeto atualizado",
       },
       readFailures: {
-        invalidTitle: "Não foi possível analisar paseo.json",
+        invalidTitle: "Não foi possível analisar a configuração do projeto",
         invalidDescription: "Corrija o arquivo no disco e recarregue.",
+        conflictingDescription:
+          "byspace.json e o arquivo legado {{legacyFileName}} existem. Mantenha apenas um e recarregue.",
         missingTitle: "Este host não tem este projeto",
         missingSingleHost: "O host selecionado não tem registro deste projeto.",
-        transportTitle: "Não foi possível carregar paseo.json",
+        transportTitle: "Não foi possível carregar a configuração do projeto",
         transportFallback: "O host não respondeu.",
-        failedTitle: "Não foi possível carregar paseo.json",
+        failedTitle: "Não foi possível carregar a configuração do projeto",
         failedDescription: "Recarregue para tentar novamente.",
       },
       worktree: {
@@ -2615,7 +2617,7 @@ export const ptBR: TranslationResources = {
           "Veja a documentação para mais detalhes e as variáveis de ambiente disponíveis para estes comandos",
         setup: "Configuração",
         setupAccessibility: "Comandos de configuração do worktree",
-        uncommittedTitle: "Faça commit das alterações no paseo.json",
+        uncommittedTitle: "Faça commit das alterações na configuração do projeto",
         uncommittedDescription:
           "Novos worktrees usam o script de configuração do branch base selecionado.",
         teardown: "Desmontagem",
@@ -2640,7 +2642,7 @@ export const ptBR: TranslationResources = {
         newScript: "Novo script",
         editScript: "Editar {{name}}",
         runAsService: "Executar como serviço",
-        serviceHint: "O Paseo supervisiona o processo e atribui uma porta via $PASEO_PORT",
+        serviceHint: "O Paseo supervisiona o processo e atribui uma porta via $BYSPACE_PORT",
         actions: {
           add: "Adicionar script",
           edit: "Editar",
@@ -2659,8 +2661,9 @@ export const ptBR: TranslationResources = {
       },
       writeFailures: {
         staleTitle: "Configuração alterada no disco",
-        staleDescription: "Recarregue para buscar o paseo.json mais recente antes de salvar.",
-        failedTitle: "Não foi possível salvar paseo.json",
+        staleDescription:
+          "Recarregue para buscar a configuração mais recente do projeto antes de salvar.",
+        failedTitle: "Não foi possível salvar a configuração do projeto",
         failedDescription: "Tente novamente ou recarregue a versão mais recente do disco.",
       },
       actions: {

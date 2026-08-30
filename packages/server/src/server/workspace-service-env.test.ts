@@ -62,7 +62,7 @@ describe("buildWorkspaceServiceEnv", () => {
         daemonListenHost: null,
         peers: [{ scriptName: "daemon", port: 5173 }],
       }),
-    ).toEqual({
+    ).toMatchObject({
       HOST: "127.0.0.1",
       PASEO_PORT: "5173",
       PASEO_URL: "http://daemon--paseo.localhost:6767",
@@ -81,7 +81,7 @@ describe("buildWorkspaceServiceEnv", () => {
         daemonListenHost: null,
         peers: [{ scriptName: "daemon", port: 5173 }],
       }),
-    ).toEqual({
+    ).toMatchObject({
       HOST: "127.0.0.1",
       PASEO_PORT: "5173",
       PASEO_URL: "http://daemon--feature-x--paseo.localhost:6767",
@@ -114,7 +114,7 @@ describe("buildWorkspaceServiceEnv", () => {
         daemonListenHost: null,
         peers: [{ scriptName: "daemon", port: 5173 }],
       }),
-    ).toEqual({
+    ).toMatchObject({
       HOST: "127.0.0.1",
       PASEO_PORT: "5173",
       PASEO_SERVICE_DAEMON_PORT: "5173",
@@ -134,7 +134,7 @@ describe("buildWorkspaceServiceEnv", () => {
           { scriptName: "web", port: 5173 },
         ],
       }),
-    ).toEqual({
+    ).toMatchObject({
       HOST: "127.0.0.1",
       PASEO_PORT: "5173",
       PASEO_URL: "http://web--feature-x--paseo.localhost:6767",
@@ -163,6 +163,29 @@ describe("buildWorkspaceServiceEnv", () => {
       PASEO_URL: "https://web--feature-x--paseo.services.example.com",
       PASEO_SERVICE_API_URL: "https://api--feature-x--paseo.services.example.com",
       PASEO_SERVICE_WEB_URL: "https://web--feature-x--paseo.services.example.com",
+    });
+  });
+
+  it("publishes BySpace service variables alongside legacy aliases", () => {
+    expect(
+      buildWorkspaceServiceEnv({
+        scriptName: "web",
+        projectSlug: "byspace",
+        branchName: "main",
+        daemonPort: 6777,
+        daemonListenHost: null,
+        peers: [
+          { scriptName: "api", port: 4000 },
+          { scriptName: "web", port: 5173 },
+        ],
+      }),
+    ).toMatchObject({
+      BYSPACE_PORT: "5173",
+      BYSPACE_URL: "http://web--byspace.localhost:6777",
+      BYSPACE_SERVICE_API_PORT: "4000",
+      BYSPACE_SERVICE_API_URL: "http://api--byspace.localhost:6777",
+      BYSPACE_SERVICE_WEB_PORT: "5173",
+      BYSPACE_SERVICE_WEB_URL: "http://web--byspace.localhost:6777",
     });
   });
 

@@ -69,7 +69,7 @@ jobs:
           }
           trap cleanup EXIT
 
-          PASEO_WEB_UI_ENABLED=true ./result/bin/byspace-server --no-relay >"$WRAPPER_LOG" 2>&1 &
+          BYSPACE_WEB_UI_ENABLED=true ./result/bin/byspace-server --no-relay >"$WRAPPER_LOG" 2>&1 &
           DAEMON_PID=$!
 
           deadline=$((SECONDS + 30))

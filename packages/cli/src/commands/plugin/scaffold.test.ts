@@ -31,9 +31,14 @@ describe("plugin scaffold", () => {
         ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
       ),
     ).toEqual([]);
-    expect(JSON.parse(await readFile(path.join(directory, "paseo-plugin.json"), "utf8"))).toEqual({
-      id: "hello-plugin",
-    });
+    expect(JSON.parse(await readFile(path.join(directory, "byspace-plugin.json"), "utf8"))).toEqual(
+      {
+        id: "hello-plugin",
+      },
+    );
+    await expect(readFile(path.join(directory, "byspace-plugin.d.ts"), "utf8")).resolves.toContain(
+      'declare module "@getpaseo/plugin"',
+    );
     await expect(readFile(path.join(directory, "index.ts"), "utf8")).resolves.toContain(
       'from "./main.client"',
     );

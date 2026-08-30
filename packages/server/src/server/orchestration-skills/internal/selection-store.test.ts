@@ -37,16 +37,26 @@ describe("daemon agent skill selection", () => {
 
   it("persists a normalized custom selection under agents.skills.selection", async () => {
     const { root, store } = await createStore();
-    await store.set({ mode: "custom", skills: ["paseo-loop", "paseo", "paseo"] });
+    await store.set({ mode: "custom", skills: ["byspace-loop", "byspace", "byspace"] });
     expect(loadPersistedConfig(root).agents?.skills?.selection).toEqual({
       mode: "custom",
-      skills: ["paseo", "paseo-loop"],
+      skills: ["byspace", "byspace-loop"],
+    });
+  });
+
+  it("maps legacy Paseo skill selections to their BySpace names", async () => {
+    const { store } = await createStore();
+    await store.set({ mode: "custom", skills: ["paseo", "paseo-help", "custom"] });
+
+    expect(await store.get()).toEqual({
+      mode: "custom",
+      skills: ["byspace", "byspace-help", "custom"],
     });
   });
 
   it("replaces a custom selection with all without retaining custom skill names", async () => {
     const { config, root, store } = await createStore();
-    await store.set({ mode: "custom", skills: ["paseo"] });
+    await store.set({ mode: "custom", skills: ["byspace"] });
 
     await store.set({ mode: "all" });
 
@@ -58,7 +68,7 @@ describe("daemon agent skill selection", () => {
     const { config, root, store } = await createStore();
 
     config.patch({
-      skills: { selection: { mode: "custom", skills: ["paseo"] } },
+      skills: { selection: { mode: "custom", skills: ["byspace"] } },
     } as MutableDaemonConfigPatch);
 
     expect(await store.isSet()).toBe(false);

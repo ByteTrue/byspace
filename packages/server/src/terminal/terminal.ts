@@ -525,9 +525,11 @@ function injectPaseoHookCli(
     return env;
   }
 
+  const resolvedPath = resolvePath(resolveExternalProcessPath(cliPath));
   return {
     ...env,
-    PASEO_HOOK_CLI: resolvePath(resolveExternalProcessPath(cliPath)),
+    BYSPACE_HOOK_CLI: resolvedPath,
+    PASEO_HOOK_CLI: resolvedPath,
   };
 }
 
@@ -951,6 +953,7 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
       env: {
         ...env,
         ...activityEnv,
+        BYSPACE_WORKSPACE_ID: workspaceId,
         PASEO_WORKSPACE_ID: workspaceId,
       },
     }),

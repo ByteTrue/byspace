@@ -13,7 +13,8 @@ import { buildSelectableProviderSelectorProviders } from "@/provider-selection/p
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { settingsStyles } from "@/styles/settings";
 
-const METADATA_GENERATION_DOCS_URL = "https://github.com/ByteTrue/byspace";
+const METADATA_GENERATION_DOCS_URL =
+  "https://github.com/ByteTrue/byspace/blob/main/public-docs/metadata-generation.md";
 type SelectionMode = "automatic" | "preferred";
 
 export function MetadataGenerationPage({ serverId }: { serverId: string }) {

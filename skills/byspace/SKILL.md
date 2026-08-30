@@ -1,5 +1,5 @@
 ---
-name: paseo
+name: byspace
 description: BySpace reference for managing projects, workspaces, workspace scripts, agents, schedules, and heartbeats.
 ---
 
@@ -31,7 +31,7 @@ For a local daemon, `project create` defaults to the current directory and resol
 
 ## Workspace scripts
 
-Configured `paseo.json` scripts use the same supervised lifecycle from tools and the CLI.
+Configured `byspace.json` scripts use the same supervised lifecycle from tools and the CLI. Legacy `paseo.json` files remain supported.
 
 **`list_workspace_scripts`** — `{ workspaceId }`. Lists configured scripts with lifecycle, service port, proxy URLs, health, exit code, and terminal ID.
 
@@ -126,4 +126,4 @@ byspace heartbeat create --cron "*/15 * * * *" "check the build"
 
 Discover with `byspace --help` and `byspace <cmd> --help`.
 
-For product questions, setup, logs, version problems, or troubleshooting, use the **paseo-help** skill.
+For product questions, setup, logs, version problems, or troubleshooting, use the **byspace-help** skill.

@@ -1,6 +1,6 @@
 ---
 title: Updates
-description: How Paseo releases work, the difference between stable and beta channels, and how to opt in to earlier updates.
+description: How BySpace releases work, the difference between stable and beta channels, and how to opt in to earlier updates.
 nav: Updates
 order: 5
 category: Getting started
@@ -8,13 +8,13 @@ category: Getting started
 
 # Updates
 
-Paseo ships updates through two channels: **Stable** and **Beta**.
+BySpace ships updates through two channels: **Stable** and **Beta**.
 
 Most releases go out on the stable channel. Betas are release candidates that let you test what's coming next before it rolls out to everyone.
 
 ## Version numbers
 
-Paseo follows [Semantic Versioning](https://semver.org) with prerelease tags.
+BySpace follows [Semantic Versioning](https://semver.org) with prerelease tags.
 
 A stable release looks like this:
 
@@ -44,11 +44,15 @@ The stable channel is the default. Stable desktop releases roll out gradually ov
 
 Stable releases are what most users should run.
 
+The stable Web/PWA is at [app.byspace.cc.cd](https://app.byspace.cc.cd).
+
 ## Beta channel
 
 The beta channel gets every prerelease as soon as it's published, with no rollout delay. When a beta is promoted to stable, beta users receive that stable update immediately too.
 
 Betas are the best way to get fixes and features early. If you hit a bug, report it — beta feedback is what makes stable releases reliable.
+
+The beta Web/PWA is at [app-beta.byspace.cc.cd](https://app-beta.byspace.cc.cd).
 
 ### How to join the beta channel
 
@@ -64,7 +68,7 @@ The app will check for beta updates from then on.
 
 Desktop releases and the CLI are usually available first. App Store and Play Store releases can lag behind because they go through review.
 
-There is no beta channel in the app stores right now — only stable builds are submitted. If you want early Android builds, download the APK from the [GitHub releases page](https://github.com/getpaseo/paseo/releases).
+There is no beta channel in the app stores right now — only stable builds are submitted. If you want early Android builds, download the APK from the [BySpace GitHub releases page](https://github.com/ByteTrue/byspace/releases).
 
 ## What to do if something breaks
 

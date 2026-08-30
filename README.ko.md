@@ -82,13 +82,13 @@ Docker에서 BySpace 데몬과 셀프 호스팅 웹 UI를 실행하세요:
 ```bash
 docker run -d --name byspace \
   -p 6777:6777 \
-  -e PASEO_PASSWORD=change-me \
-  -v "$PWD/byspace-home:/home/byspace/.byspace" \
+  -e BYSPACE_PASSWORD=change-me \
+  -v "$PWD/byspace-home:/home/byspace" \
   -v "$PWD:/workspace" \
   ghcr.io/bytetrue/byspace:0.7.0-beta.2
 ```
 
-컨테이너가 시작되면 `http://localhost:6777`을 여세요. 사용하는 에이전트 CLI를 기본 이미지에 추가한 뒤, 환경 변수나 영구 `/home/byspace/.byspace` 볼륨으로 인증 정보를 설정하세요. 자세한 내용은 [Docker 문서](docs/docker.md)를 참고하세요.
+컨테이너가 시작되면 `http://localhost:6777`을 여세요. 사용하는 에이전트 CLI를 기본 이미지에 추가한 뒤, 환경 변수나 영구 `/home/byspace` 볼륨으로 인증 정보를 설정하세요. 자세한 내용은 [Docker 문서](docs/docker.md)를 참고하세요.
 
 ## CLI
 
@@ -110,17 +110,17 @@ byspace --host workstation.local:6777 run "run the full test suite"
 
 ## 스킬
 
-업스트림 Paseo 스킬은 BySpace가 유지하는 내부 프로토콜과 호환됩니다.
+BySpace에 포함된 스킬을 설치하세요:
 
 ```bash
-npx skills add getpaseo/paseo
+npx skills add ByteTrue/byspace
 ```
 
 그런 다음 어떤 에이전트 대화에서든 아래 명령을 사용할 수 있습니다.
 
-- `/paseo-handoff` — 에이전트 간에 작업을 넘깁니다. Claude로 계획을 세운 뒤 Codex에 구현을 넘길 때 이 기능을 씁니다.
-- `/paseo-advisor` — 작업 자체를 넘기지 않고, 에이전트 하나를 조언자로 띄워 두 번째 의견을 받습니다.
-- `/paseo-committee` — 서로 다른 관점의 에이전트 두 개로 위원회를 구성해, 한 발 물러나 근본 원인을 분석하고 계획을 세웁니다.
+- `/byspace-handoff` — 에이전트 간에 작업을 넘깁니다. Claude로 계획을 세운 뒤 Codex에 구현을 넘길 때 이 기능을 씁니다.
+- `/byspace-advisor` — 작업 자체를 넘기지 않고, 에이전트 하나를 조언자로 띄워 두 번째 의견을 받습니다.
+- `/byspace-committee` — 서로 다른 관점의 에이전트 두 개로 위원회를 구성해, 한 발 물러나 근본 원인을 분석하고 계획을 세웁니다.
 
 ## 개발
 

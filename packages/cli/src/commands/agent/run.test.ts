@@ -7,7 +7,16 @@ import {
 } from "./run";
 
 describe("managed agent caller context", () => {
-  it("propagates a trimmed PASEO_AGENT_ID", () => {
+  it("prefers a trimmed BYSPACE_AGENT_ID over the legacy alias", () => {
+    expect(
+      resolveRunCallerAgentId({
+        BYSPACE_AGENT_ID: "  byspace-parent  ",
+        PASEO_AGENT_ID: "legacy-parent",
+      }),
+    ).toBe("byspace-parent");
+  });
+
+  it("accepts the legacy PASEO_AGENT_ID", () => {
     expect(resolveRunCallerAgentId({ PASEO_AGENT_ID: "  parent-agent  " })).toBe("parent-agent");
   });
 

@@ -14,7 +14,7 @@ Hub authenticates triggers, selects workflows, and dispatches agents. It does no
 external event → Hub → daemon → provider process → cwd, filesystem, network
 ```
 
-The host, provider credentials, filesystem, network, and resulting actions remain under your control. See [Paseo security](/docs/security) for daemon authentication, pairing, and relay boundaries.
+The host, provider credentials, filesystem, network, and resulting actions remain under your control. See [BySpace security](/docs/security) for daemon authentication, pairing, and relay boundaries.
 
 ## Treat requests as untrusted
 

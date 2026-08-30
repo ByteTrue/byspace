@@ -1,6 +1,6 @@
 # Browser Capture Harness
 
-The desktop capture harness is the real-Electron verification path for browser screenshots.
+The desktop capture harness is the real-Electron verification path for browser screenshots. The `PASEO_*` variables below are harness-specific controls; public daemon configuration uses `BYSPACE_*`, with matching `PASEO_*` compatibility fallbacks where supported.
 It validates the compositor behavior that unit tests cannot see:
 
 - the resident automation `<webview>` starts in the production parking state;

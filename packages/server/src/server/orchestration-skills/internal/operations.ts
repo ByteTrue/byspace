@@ -37,10 +37,16 @@ export interface SkillTargets {
 // Names the bundle used to ship. They are never selectable, but every scan still
 // covers them so an older install's copies get cleaned up.
 export const LEGACY_SKILL_NAMES = [
+  "paseo",
+  "paseo-advisor",
   "paseo-chat",
+  "paseo-committee",
   "paseo-epic",
+  "paseo-handoff",
+  "paseo-help",
   "paseo-orchestrate",
   "paseo-orchestrator",
+  "paseo-plugin",
 ] as const;
 
 type SkillFiles = Map<string, string>;
@@ -58,7 +64,7 @@ async function listBundledSkills(sourceDir: string): Promise<string[]> {
     .sort(compareStrings);
 }
 
-/** Every name Paseo owns on disk: what it ships now plus what it used to ship. */
+/** Every name BySpace owns on disk: what it ships now plus what it used to ship. */
 function managedSkillNames(available: readonly string[]): string[] {
   return [...new Set([...available, ...LEGACY_SKILL_NAMES])].sort(compareStrings);
 }

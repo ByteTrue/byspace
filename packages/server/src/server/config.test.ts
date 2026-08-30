@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { loadConfig, resolveBundledWebUiDistDir, resolveConfigFromPersisted } from "./config.js";
-import { loadPersistedConfig } from "./persisted-config.js";
+import { loadPersistedConfig, type PersistedConfig } from "./persisted-config.js";
 
 const roots: string[] = [];
 
@@ -99,6 +99,61 @@ describe("server config", () => {
     });
 
     expect(config.listen).toBe("127.0.0.1:6777");
+  });
+
+  test("prefers public BYSPACE environment variables over legacy aliases", async () => {
+    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "byspace-config-env-"));
+    roots.push(paseoHome);
+
+    const config = loadConfig(paseoHome, {
+      env: {
+        BYSPACE_APP_BASE_URL: "https://app.byspace.example",
+        BYSPACE_PASSWORD: "byspace-password",
+        BYSPACE_RELAY_ENDPOINT: "relay.byspace.example:443",
+        PASEO_APP_BASE_URL: "https://legacy.example",
+        PASEO_PASSWORD: "legacy-password",
+        PASEO_RELAY_ENDPOINT: "legacy.example:443",
+      },
+    });
+
+    expect(config.appBaseUrl).toBe("https://app.byspace.example");
+    expect(config.relayEndpoint).toBe("relay.byspace.example:443");
+    expect(config.auth).toBeDefined();
+  });
+
+  test.each([
+    ["0.7.0", "https://app.byspace.cc.cd"],
+    ["0.7.0-beta.2", "https://app-beta.byspace.cc.cd"],
+  ])("uses the %s release channel app URL", (releaseVersion, expectedAppBaseUrl) => {
+    const persisted = {
+      version: 1,
+      app: { baseUrl: "https://app.byspace.cc.cd" },
+      daemon: { cors: { allowedOrigins: ["https://app.byspace.cc.cd", "http://localhost"] } },
+    } satisfies PersistedConfig;
+
+    const config = resolveConfigFromPersisted("/tmp/byspace", persisted, {
+      env: {},
+      releaseVersion,
+    });
+
+    expect(config.appBaseUrl).toBe(expectedAppBaseUrl);
+    expect(config.corsAllowedOrigins).toEqual([expectedAppBaseUrl, "http://localhost"]);
+  });
+
+  test("preserves a custom app URL across release channels", () => {
+    const persisted = {
+      version: 1,
+      app: { baseUrl: "https://self-hosted.example.com" },
+      daemon: { cors: { allowedOrigins: ["https://self-hosted.example.com"] } },
+    } satisfies PersistedConfig;
+
+    const config = resolveConfigFromPersisted("/tmp/byspace", persisted, {
+      env: {},
+      releaseVersion: "0.7.0-beta.2",
+    });
+
+    expect(config.appBaseUrl).toBe("https://self-hosted.example.com");
+    expect(config.corsAllowedOrigins).toEqual(["https://self-hosted.example.com"]);
   });
 
   test.each([

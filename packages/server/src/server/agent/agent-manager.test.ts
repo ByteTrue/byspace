@@ -2510,6 +2510,8 @@ test("createAgent passes daemon launch env through the provider launch context",
   expect(client.lastLaunchContext).toEqual({
     agentId: snapshot.id,
     env: {
+      BYSPACE_AGENT_ID: snapshot.id,
+      BYSPACE_AGENT_CWD: workdir,
       PASEO_AGENT_ID: snapshot.id,
       PASEO_AGENT_CWD: workdir,
     },
@@ -3477,6 +3479,8 @@ test("resumeAgentFromPersistence keeps metadata config, applies overrides, and p
   expect(client.lastResumeLaunchContext).toEqual({
     agentId: resumed.id,
     env: {
+      BYSPACE_AGENT_ID: resumed.id,
+      BYSPACE_AGENT_CWD: workdir,
       PASEO_AGENT_ID: resumed.id,
       PASEO_AGENT_CWD: workdir,
     },
@@ -3585,6 +3589,8 @@ test("importProviderSession imports the selected session without listing and pub
   expect(client.importLaunchContext).toEqual({
     agentId: imported.id,
     env: {
+      BYSPACE_AGENT_ID: imported.id,
+      BYSPACE_AGENT_CWD: workdir,
       PASEO_AGENT_ID: imported.id,
       PASEO_AGENT_CWD: workdir,
     },
@@ -3688,6 +3694,8 @@ test("reloadAgentSession passes daemon launch env through the provider launch co
   expect(client.lastCreateLaunchContext).toEqual({
     agentId: snapshot.id,
     env: {
+      BYSPACE_AGENT_ID: snapshot.id,
+      BYSPACE_AGENT_CWD: workdir,
       PASEO_AGENT_ID: snapshot.id,
       PASEO_AGENT_CWD: workdir,
     },
@@ -3700,6 +3708,8 @@ test("reloadAgentSession passes daemon launch env through the provider launch co
   expect(client.lastResumeLaunchContext).toEqual({
     agentId: snapshot.id,
     env: {
+      BYSPACE_AGENT_ID: snapshot.id,
+      BYSPACE_AGENT_CWD: workdir,
       PASEO_AGENT_ID: snapshot.id,
       PASEO_AGENT_CWD: workdir,
     },

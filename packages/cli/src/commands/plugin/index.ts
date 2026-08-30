@@ -208,7 +208,7 @@ export function createPluginCommand(): Command {
       .alias("add")
       .description("Install a plugin from a directory or Git repository")
       .argument("<source>", "Host directory, owner/repo shorthand, or Git URL")
-      .option("--id <id>", "Runtime plugin ID (defaults to paseo-plugin.json id)")
+      .option("--id <id>", "Runtime plugin ID (defaults to byspace-plugin.json id)")
       .option("--ref <ref>", "Git branch, tag, or commit")
       .option("--path <path>", "Plugin directory within the repository"),
   ).action(withOutput(install));

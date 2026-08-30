@@ -435,10 +435,10 @@ export async function scaffoldPluginDirectory(
     },
   };
   const files = new Map<string, string>([
-    ["paseo-plugin.json", `${JSON.stringify({ id }, null, 2)}\n`],
+    ["byspace-plugin.json", `${JSON.stringify({ id }, null, 2)}\n`],
     ["package.json", `${JSON.stringify(packageJson, null, 2)}\n`],
     ["tsconfig.json", `${JSON.stringify(TSCONFIG, null, 2)}\n`],
-    ["paseo-plugin.d.ts", SDK_DECLARATIONS],
+    ["byspace-plugin.d.ts", SDK_DECLARATIONS],
     ["index.ts", ENTRY],
     ["main.client.tsx", CLIENT_SURFACE],
   ]);

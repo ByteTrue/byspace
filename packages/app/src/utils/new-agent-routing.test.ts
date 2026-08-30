@@ -12,7 +12,11 @@ describe("resolveNewAgentWorkingDir", () => {
     expect(resolveNewAgentWorkingDir("/repo/path", null)).toBe("/repo/path");
   });
 
-  it("falls back to repo root when checkout metadata is unavailable", () => {
+  it("falls back to repo root for BySpace worktrees without checkout metadata", () => {
+    expect(resolveNewAgentWorkingDir("/repo/.byspace/worktrees/feature", null)).toBe("/repo");
+  });
+
+  it("supports legacy Paseo worktree paths without checkout metadata", () => {
     expect(resolveNewAgentWorkingDir("/repo/.paseo/worktrees/feature", null)).toBe("/repo");
   });
 

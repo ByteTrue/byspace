@@ -1,5 +1,5 @@
 ---
-name: paseo-committee
+name: byspace-committee
 description: Form a committee of two high-reasoning agents to step back, do root cause analysis, and produce a plan. Use when stuck, looping, tunnel-visioning, or facing a hard planning problem.
 user-invocable: true
 ---
@@ -12,7 +12,7 @@ Two agents from contrasting profiles, fresh context, planning a solution in para
 
 ## Prerequisites
 
-Read the **paseo** skill. Call `list_profiles` before choosing committee members. Do not create committee agents until you have read the configured profiles and their `notes`.
+Read the **byspace** skill. Call `list_profiles` before choosing committee members. Do not create committee agents until you have read the configured profiles and their `notes`.
 
 Contrast is the point of a committee, so pick profiles from different provider families when possible. Materialize each profile into `create_agent`.
 

@@ -108,12 +108,16 @@ import { AgentNavigationInbox, parseAgentDeepLinkFromArgv } from "./agent-naviga
 
 const DEV_SERVER_URL = process.env.EXPO_DEV_URL ?? "http://localhost:8081";
 const APP_SCHEME = "byspace";
-const PASEO_DEBUG = process.env.PASEO_DEBUG === "1";
-const DISABLE_SINGLE_INSTANCE_LOCK = process.env.PASEO_DISABLE_SINGLE_INSTANCE_LOCK === "1";
+// COMPAT(byspaceDesktopEnv): prefer public BySpace names while accepting legacy Paseo names.
+const PASEO_DEBUG = (process.env.BYSPACE_DEBUG ?? process.env.PASEO_DEBUG) === "1";
+const DISABLE_SINGLE_INSTANCE_LOCK =
+  (process.env.BYSPACE_DISABLE_SINGLE_INSTANCE_LOCK ??
+    process.env.PASEO_DISABLE_SINGLE_INSTANCE_LOCK) === "1";
 const APP_NAME = process.env.PASEO_TEST_APP_NAME?.trim() || "BySpace";
 const DESKTOP_WINDOW_CHROME_MODE = resolveDesktopWindowChromeMode({
   platform: process.platform,
-  override: process.env.PASEO_DESKTOP_WINDOW_CONTROLS,
+  override:
+    process.env.BYSPACE_DESKTOP_WINDOW_CONTROLS ?? process.env.PASEO_DESKTOP_WINDOW_CONTROLS,
   isPackaged: app.isPackaged,
 });
 const UPDATE_QUIT_DEADLINE_MS = 5_000;
@@ -330,10 +334,12 @@ if (process.platform === "linux" && process.env.APPIMAGE) {
   app.commandLine.appendSwitch("no-sandbox");
 }
 
-// Allow users to pass Chromium flags via PASEO_ELECTRON_FLAGS for debugging
+// Allow users to pass Chromium flags via BYSPACE_ELECTRON_FLAGS for debugging
 // rendering issues (e.g. "--disable-gpu --ozone-platform=x11").
 // Must run before app.whenReady().
-const electronFlags = process.env.PASEO_ELECTRON_FLAGS?.trim();
+const electronFlags = (
+  process.env.BYSPACE_ELECTRON_FLAGS ?? process.env.PASEO_ELECTRON_FLAGS
+)?.trim();
 if (electronFlags) {
   for (const token of electronFlags.split(/\s+/)) {
     const [key, ...rest] = token.replace(/^--/, "").split("=");
@@ -839,7 +845,7 @@ app.on("open-url", (event, url) => {
 
 function setupSingleInstanceLock(): boolean {
   if (DISABLE_SINGLE_INSTANCE_LOCK) {
-    log.info("[single-instance] disabled by PASEO_DISABLE_SINGLE_INSTANCE_LOCK");
+    log.info("[single-instance] disabled by BYSPACE_DISABLE_SINGLE_INSTANCE_LOCK");
     return true;
   }
 

@@ -2,7 +2,7 @@
 
 How assistant text gets from a provider to the screen, and why it is paced on the way. Read this before changing `packages/server/src/server/agent/agent-stream-coalescer.ts`, the reducer queue in `packages/app/src/timeline/session-stream-reducers.ts`, or the reveal in `packages/app/src/hooks/use-revealed-text.ts`.
 
-For terminal output, which is a separate pipeline with separate budgets, see [terminal-performance.md](terminal-performance.md).
+For terminal output, which is a separate pipeline with separate budgets, see [terminal-performance.md](terminal-performance.md). The `PASEO_*` variables below are performance-test controls; public daemon configuration uses `BYSPACE_*`, with matching `PASEO_*` compatibility fallbacks where supported.
 
 ## The pipeline
 

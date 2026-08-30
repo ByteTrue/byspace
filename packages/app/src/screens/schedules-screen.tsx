@@ -322,7 +322,7 @@ function SchedulesEmptyState({
         <Text style={styles.emptyTitle}>No active schedules</Text>
         <Text style={styles.emptyDescription}>Schedules run agents on a cadence.</Text>
         <ExternalLink
-          href="https://github.com/ByteTrue/byspace/blob/main/docs/schedules.md"
+          href="https://github.com/ByteTrue/byspace/blob/main/public-docs/schedules.md"
           label="See docs"
         />
       </View>

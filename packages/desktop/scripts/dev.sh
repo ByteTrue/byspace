@@ -29,7 +29,7 @@ export EXPO_DEV_URL="http://localhost:${EXPO_PORT}"
 DAEMON_ENDPOINT="$(resolve_dev_daemon_endpoint)"
 export PASEO_DAEMON_ENDPOINT="$DAEMON_ENDPOINT"
 
-export PASEO_CORS_ORIGINS="${PASEO_CORS_ORIGINS:-*}"
+export BYSPACE_CORS_ORIGINS="${BYSPACE_CORS_ORIGINS:-${PASEO_CORS_ORIGINS:-*}}"
 
 npm --prefix "$DESKTOP_DIR" run build:main
 

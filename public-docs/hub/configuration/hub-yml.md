@@ -94,13 +94,13 @@ Each agent is one complete provider configuration:
 | ------------------ | -------- | ---------------------------------------------------------------- |
 | `provider`         | yes      | Provider ID.                                                     |
 | `model`            | no       | Provider model ID.                                               |
-| `mode`             | no       | Paseo mode ID.                                                   |
+| `mode`             | no       | BySpace mode ID.                                                 |
 | `thinkingOptionId` | no       | Provider thinking option.                                        |
 | `options`          | no       | JSON-safe provider-native options, preserving names and nesting. |
 
 A named selection preserves the complete object, including structured options. Named agents have no parent, patch, or per-step override.
 
-Hub passes `model`, `mode`, `thinkingOptionId`, and `options` to the Paseo daemon without renaming or flattening provider fields. The selected daemon validates them against its current provider schema; Hub does not translate provider-native options.
+Hub passes `model`, `mode`, `thinkingOptionId`, and `options` to the BySpace daemon without renaming or flattening provider fields. The selected daemon validates them against its current provider schema; Hub does not translate provider-native options.
 
 ## Workflow files
 

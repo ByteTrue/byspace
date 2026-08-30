@@ -17,7 +17,11 @@ import {
   buildStringCommandShellInvocation,
   createStringCommandShellEnv,
 } from "./string-command-shell.js";
-import { readPaseoConfigJson, resolvePaseoConfigPath } from "./paseo-config-file.js";
+import {
+  ConflictingProjectConfigFilesError,
+  readPaseoConfigJson,
+  resolvePaseoConfigPath,
+} from "./paseo-config-file.js";
 export {
   PaseoConfigRawSchema,
   PaseoLifecycleCommandRawSchema,
@@ -59,6 +63,11 @@ export interface WorktreeConfig {
 
 export interface WorktreeRuntimeEnv {
   [key: string]: string;
+  BYSPACE_SOURCE_CHECKOUT_PATH: string;
+  BYSPACE_ROOT_PATH: string;
+  BYSPACE_WORKTREE_PATH: string;
+  BYSPACE_BRANCH_NAME: string;
+  BYSPACE_WORKTREE_PORT: string;
   PASEO_SOURCE_CHECKOUT_PATH: string;
   PASEO_ROOT_PATH: string;
   PASEO_WORKTREE_PATH: string;
@@ -257,13 +266,17 @@ export function readPaseoConfig(repoRoot: string): ReadPaseoConfigResult {
     }
     return { ok: true, config: PaseoConfigSchema.parse(json) };
   } catch (error) {
-    return { ok: false, configPath: resolvePaseoConfigPath(repoRoot), error };
+    const configPath =
+      error instanceof ConflictingProjectConfigFilesError
+        ? error.byspacePath
+        : resolvePaseoConfigPath(repoRoot);
+    return { ok: false, configPath, error };
   }
 }
 
 export function paseoConfigParseError(failure: { configPath: string; error: unknown }): Error {
   const detail = failure.error instanceof Error ? failure.error.message : String(failure.error);
-  return new Error(`Failed to parse paseo.json at ${failure.configPath}: ${detail}`, {
+  return new Error(`Failed to parse project config at ${failure.configPath}: ${detail}`, {
     cause: failure.error,
   });
 }
@@ -640,7 +653,7 @@ export async function runWorktreeSetupCommands(options: {
   signal?: AbortSignal;
   onEvent?: (event: WorktreeSetupCommandProgressEvent) => void;
 }): Promise<WorktreeSetupCommandResult[]> {
-  // Read paseo.json from the worktree (it will have the same content as the source repo)
+  // Read the project config from the worktree (it matches the source repository).
   const setupCommands = getWorktreeSetupCommands(options.worktreePath);
   if (setupCommands.length === 0) {
     return [];
@@ -736,8 +749,13 @@ export async function resolveWorktreeRuntimeEnv(options: {
     // Source checkout path is the original git repo root (shared across worktrees), not the
     // worktree itself. This allows setup scripts to copy local files (e.g. .env) from the
     // source checkout.
+    BYSPACE_SOURCE_CHECKOUT_PATH: repoRootPath,
+    BYSPACE_ROOT_PATH: repoRootPath,
+    BYSPACE_WORKTREE_PATH: options.worktreePath,
+    BYSPACE_BRANCH_NAME: branchName,
+    BYSPACE_WORKTREE_PORT: String(worktreePort),
+    // COMPAT(byspaceWorktreeEnv): keep legacy variables for existing lifecycle scripts.
     PASEO_SOURCE_CHECKOUT_PATH: repoRootPath,
-    // Backward-compatible alias.
     PASEO_ROOT_PATH: repoRootPath,
     PASEO_WORKTREE_PATH: options.worktreePath,
     PASEO_BRANCH_NAME: branchName,
@@ -771,8 +789,13 @@ export async function runWorktreeTeardownCommands(options: {
       // Source checkout path is the original git repo root (shared across worktrees), not the
       // worktree itself. This allows lifecycle scripts to copy or clean resources using paths
       // from the source checkout.
+      BYSPACE_SOURCE_CHECKOUT_PATH: repoRootPath,
+      BYSPACE_ROOT_PATH: repoRootPath,
+      BYSPACE_WORKTREE_PATH: options.worktreePath,
+      BYSPACE_BRANCH_NAME: branchName,
+      ...(worktreePort !== null ? { BYSPACE_WORKTREE_PORT: String(worktreePort) } : {}),
+      // COMPAT(byspaceWorktreeEnv): keep legacy variables for existing lifecycle scripts.
       PASEO_SOURCE_CHECKOUT_PATH: repoRootPath,
-      // Backward-compatible alias.
       PASEO_ROOT_PATH: repoRootPath,
       PASEO_WORKTREE_PATH: options.worktreePath,
       PASEO_BRANCH_NAME: branchName,
@@ -803,8 +826,13 @@ export async function seedPaseoConfigFile(options: {
   sourceCwd: string;
   targetCwd: string;
 }): Promise<void> {
-  const sourceConfigPath = join(options.sourceCwd, "paseo.json");
-  const targetConfigPath = join(options.targetCwd, "paseo.json");
+  const sourceConfigPath = resolvePaseoConfigPath(options.sourceCwd);
+  if (!existsSync(sourceConfigPath)) return;
+
+  const existingTargetConfigPath = resolvePaseoConfigPath(options.targetCwd);
+  if (existsSync(existingTargetConfigPath)) return;
+
+  const targetConfigPath = join(options.targetCwd, basename(sourceConfigPath));
   await copyFile(sourceConfigPath, targetConfigPath, fsConstants.COPYFILE_EXCL).catch((error) => {
     const code = (error as NodeJS.ErrnoException).code;
     if (code !== "EEXIST" && code !== "ENOENT") throw error;

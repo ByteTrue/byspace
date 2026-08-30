@@ -161,10 +161,10 @@ describe("PluginRuntime", () => {
     expect(
       runtime.getLogs("lifecycle").map(({ stream, message }) => ({ stream, message })),
     ).toEqual([
-      { stream: "stdout", message: "[paseo] Loading plugin" },
-      { stream: "stdout", message: "[paseo] Plugin ready" },
-      { stream: "stdout", message: "[paseo] Stopping plugin" },
-      { stream: "stdout", message: "[paseo] Plugin stopped" },
+      { stream: "stdout", message: "[byspace] Loading plugin" },
+      { stream: "stdout", message: "[byspace] Plugin ready" },
+      { stream: "stdout", message: "[byspace] Stopping plugin" },
+      { stream: "stdout", message: "[byspace] Plugin stopped" },
     ]);
   });
 
@@ -186,7 +186,7 @@ describe("PluginRuntime", () => {
     const logs = runtime.getLogs("output");
     expect(
       logs
-        .filter((entry) => !entry.message.startsWith("[paseo]"))
+        .filter((entry) => !entry.message.startsWith("[byspace]"))
         .map(({ stream, message }) => ({ stream, message })),
     ).toEqual([
       { stream: "stdout", message: "first" },
@@ -308,7 +308,7 @@ describe("PluginRuntime", () => {
     ).toEqual([
       {
         stream: "stdout",
-        message: "[paseo] Loading plugin",
+        message: "[byspace] Loading plugin",
       },
       {
         stream: "stderr",

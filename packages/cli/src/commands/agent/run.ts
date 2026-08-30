@@ -533,11 +533,11 @@ export async function resolveExistingRunWorkspace(
 }
 
 // Workspace policy for `byspace run`. Precedence:
-//   1. --workspace <id>            -> run in that existing workspace
-//   2. $PASEO_AGENT_ID             -> daemon resolves the caller's workspace
-//   3. $PASEO_WORKSPACE_ID         -> exported by workspace terminals
-//   4. --new-workspace <kind>      -> mint a new workspace explicitly
-//   5. bare run                    -> mint a new local-backed workspace for cwd
+//   1. --workspace <id>             -> run in that existing workspace
+//   2. $BYSPACE_AGENT_ID            -> daemon resolves the caller's workspace
+//   3. $BYSPACE_WORKSPACE_ID        -> exported by workspace terminals
+//   4. --new-workspace <kind>       -> mint a new workspace explicitly
+//   5. bare run                     -> mint a new local-backed workspace for cwd
 async function resolveRunWorkspace(
   client: ConnectedDaemonClient,
   options: AgentRunOptions,
@@ -554,7 +554,9 @@ async function resolveRunWorkspace(
     return { cwd };
   }
 
-  const ambientWorkspaceId = newWorkspace ? undefined : process.env.PASEO_WORKSPACE_ID?.trim();
+  const ambientWorkspaceId = newWorkspace
+    ? undefined
+    : (process.env.BYSPACE_WORKSPACE_ID ?? process.env.PASEO_WORKSPACE_ID)?.trim();
   if (ambientWorkspaceId) {
     console.error(`Using workspace ${ambientWorkspaceId}`);
     return resolveExistingRunWorkspace(client, ambientWorkspaceId);
@@ -576,7 +578,7 @@ async function resolveRunWorkspace(
   const label = branch ? `${result.workspace.name} (${branch})` : result.workspace.name;
   console.error(`Created workspace ${result.workspace.id} - ${label}`);
   console.error(
-    "Tip: pass --workspace <id> (or set PASEO_WORKSPACE_ID) to run in an existing workspace.",
+    "Tip: pass --workspace <id> (or set BYSPACE_WORKSPACE_ID) to run in an existing workspace.",
   );
   return { id: result.workspace.id, cwd: result.workspace.workspaceDirectory ?? cwd };
 }
@@ -752,7 +754,7 @@ export async function runRunCommand(
 }
 
 export function resolveRunCallerAgentId(
-  env: { PASEO_AGENT_ID?: string } = process.env,
+  env: { BYSPACE_AGENT_ID?: string; PASEO_AGENT_ID?: string } = process.env,
 ): string | undefined {
-  return env.PASEO_AGENT_ID?.trim() || undefined;
+  return env.BYSPACE_AGENT_ID?.trim() || env.PASEO_AGENT_ID?.trim() || undefined;
 }

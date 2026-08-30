@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { deriveProjectDisplayName, deriveRemoteProjectKey, groupAgents } from "./agent-grouping";
+import {
+  deriveProjectDisplayName,
+  deriveProjectKey,
+  deriveRemoteProjectKey,
+  groupAgents,
+} from "./agent-grouping";
 import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
 
 function makeAgent(overrides: Partial<AggregatedAgent> = {}): AggregatedAgent {
@@ -18,6 +23,16 @@ function makeAgent(overrides: Partial<AggregatedAgent> = {}): AggregatedAgent {
     attentionTimestamp: overrides.attentionTimestamp ?? null,
   } as AggregatedAgent;
 }
+
+describe("deriveProjectKey", () => {
+  it("returns the parent repository for BySpace worktrees", () => {
+    expect(deriveProjectKey("/Users/me/repo/.byspace/worktrees/feature-a")).toBe("/Users/me/repo");
+  });
+
+  it("supports legacy Paseo worktree paths", () => {
+    expect(deriveProjectKey("/Users/me/repo/.paseo/worktrees/feature-a")).toBe("/Users/me/repo");
+  });
+});
 
 describe("deriveRemoteProjectKey", () => {
   it("normalizes GitHub SSH and HTTPS to the same key", () => {

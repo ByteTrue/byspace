@@ -97,17 +97,17 @@ byspace --host workstation.local:6777 run "run the full test suite"
 
 ## スキル
 
-上流の Paseo スキルは BySpace が維持する内部プロトコルと互換性があります。
+BySpace に同梱されているスキルをインストールします。
 
 ```bash
-npx skills add getpaseo/paseo
+npx skills add ByteTrue/byspace
 ```
 
 どのエージェントとの会話でも使用できます。
 
-- `/paseo-handoff` — エージェント間で作業を引き継ぎます。私はこれを使って Claude で計画し、Codex に実装を引き継いでいます。
-- `/paseo-advisor` — 単一のエージェントをアドバイザーとして起動し、作業を委任せずにセカンドオピニオンを得ます。
-- `/paseo-committee` — 対照的な2つのエージェントで委員会を構成し、一歩引いた視点で根本原因を分析して計画を作成します。
+- `/byspace-handoff` — エージェント間で作業を引き継ぎます。私はこれを使って Claude で計画し、Codex に実装を引き継いでいます。
+- `/byspace-advisor` — 単一のエージェントをアドバイザーとして起動し、作業を委任せずにセカンドオピニオンを得ます。
+- `/byspace-committee` — 対照的な2つのエージェントで委員会を構成し、一歩引いた視点で根本原因を分析して計画を作成します。
 
 ## 開発
 

@@ -34,6 +34,7 @@
     "profile:workspace-switching": "node ./scripts/profile-workspace-switching.mjs",
     "profile:workspace-tabs": "node ./scripts/profile-workspace-tabs.mjs",
     "deploy:web": "npm run build:web && wrangler pages deploy dist --project-name byspace --branch main",
+    "deploy:web:beta": "npm run build:web && wrangler pages deploy dist --project-name byspace-beta --branch main",
     "build:terminal-webview": "node ./scripts/build-terminal-webview-html.mjs",
     "build:mermaid-runtime": "node ./src/components/markdown/fence/mermaid/build-runtime.mjs"
   },

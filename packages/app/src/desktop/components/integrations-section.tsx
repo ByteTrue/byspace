@@ -11,7 +11,7 @@ import { settingsStyles } from "@/styles/settings";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
 
-const CLI_DOCS_URL = "https://github.com/ByteTrue/byspace";
+const CLI_DOCS_URL = "https://github.com/ByteTrue/byspace/blob/main/public-docs/cli.md";
 
 export function IntegrationsSection() {
   const { t } = useTranslation();
