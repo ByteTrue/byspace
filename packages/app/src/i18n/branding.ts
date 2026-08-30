@@ -6,11 +6,10 @@ export function rebrandResource<T>(value: T): T {
       .replaceAll("paseo-plugin.d.ts", "byspace-plugin.d.ts")
       .replaceAll("paseo-plugin.json", "byspace-plugin.json")
       .replaceAll("paseo.json", "byspace.json")
-      .replaceAll("${PASEO_", "${BYSPACE_")
-      .replaceAll("$PASEO_", "$BYSPACE_")
       .replaceAll("Paseo", "BySpace")
       .replaceAll("__PASEO_API__", "PaseoApi")
-      .replaceAll("__PASEO_HUB__", "Paseo Hub") as T;
+      .replaceAll("__PASEO_HUB__", "Paseo Hub")
+      .replaceAll("PASEO_", "BYSPACE_") as T;
   }
   if (Array.isArray(value)) {
     return value.map(rebrandResource) as T;

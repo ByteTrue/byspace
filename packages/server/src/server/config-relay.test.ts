@@ -210,14 +210,14 @@ describe("daemon service proxy config", () => {
     });
   });
 
-  test("rejects invalid PASEO_SERVICE_PROXY_PUBLIC_BASE_URL values", async () => {
+  test("rejects invalid BYSPACE_SERVICE_PROXY_PUBLIC_BASE_URL values", async () => {
     const home = await createPaseoHome({ version: 1 });
 
     expect(() =>
       loadConfig(home, {
-        env: { PASEO_SERVICE_PROXY_PUBLIC_BASE_URL: "not-a-url" },
+        env: { BYSPACE_SERVICE_PROXY_PUBLIC_BASE_URL: "not-a-url" },
       }),
-    ).toThrow("Invalid PASEO_SERVICE_PROXY_PUBLIC_BASE_URL: not-a-url");
+    ).toThrow("Invalid BYSPACE_SERVICE_PROXY_PUBLIC_BASE_URL: not-a-url");
   });
 });
 

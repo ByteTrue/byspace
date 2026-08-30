@@ -7,6 +7,7 @@ const repoRoot = new URL("../", import.meta.url);
 const ciWorkflowPath = new URL(".github/workflows/ci.yml", repoRoot);
 const dockerWorkflowPath = new URL(".github/workflows/docker.yml", repoRoot);
 const nixWorkflowPath = new URL(".github/workflows/nix.yml", repoRoot);
+const deployAppWorkflowPath = new URL(".github/workflows/deploy-app.yml", repoRoot);
 const filtersPath = new URL(".github/ci-paths.yml", repoRoot);
 const serverTsconfigPath = new URL("packages/server/tsconfig.server.json", repoRoot);
 const desktopPackagePath = new URL("packages/desktop/package.json", repoRoot);
@@ -107,6 +108,19 @@ test("change gating allows superseded workflow runs to cancel", () => {
       "always() keeps jobs alive after concurrency cancellation; use !cancelled() for fail-open gating",
     );
   }
+});
+
+test("Web releases deploy stable and prerelease versions to separate Pages projects", () => {
+  const source = readFileSync(deployAppWorkflowPath, "utf8");
+
+  assert.match(source, /if \[\[ "\$version" == \*-\* \]\]/);
+  assert.match(source, /PAGES_PROJECT=byspace-beta/);
+  assert.match(source, /PAGES_PROJECT=byspace/);
+  assert.match(source, /--project-name "\$PAGES_PROJECT"/);
+  assert.match(source, /--commit-hash "\$EXPECTED_SHA"/);
+  assert.match(source, /CLOUDFLARE_ACCOUNT_ID: \$\{\{ secrets\.CLOUDFLARE_ACCOUNT_ID \}\}/);
+  assert.match(source, /RELEASE_TAG: \$\{\{ github\.ref_name \}\}/);
+  assert.match(source, /git rev-list -n 1 "\$RELEASE_TAG"/);
 });
 
 test("focused contracts stay inside existing required checks", () => {

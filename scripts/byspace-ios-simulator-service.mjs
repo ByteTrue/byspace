@@ -8,16 +8,14 @@ const rootDir = resolvePath(import.meta.dirname, "..");
 const appDir = join(rootDir, "packages/app");
 const appProductName = "BySpaceDebug";
 const appScheme = "byspace";
-const preferredSimulatorType = process.env.PASEO_IOS_DEVICE_TYPE || "iPhone 16 Pro";
-const paseoPort = requiredEnv("PASEO_PORT");
-const worktreePath = process.env.PASEO_WORKTREE_PATH || rootDir;
-const worktreeName = process.env.PASEO_BRANCH_NAME || basename(worktreePath);
+const preferredSimulatorType = byspaceEnv("IOS_DEVICE_TYPE") || "iPhone 16 Pro";
+const paseoPort = requiredByspaceEnv("PORT");
+const worktreePath = byspaceEnv("WORKTREE_PATH") || rootDir;
+const worktreeName = byspaceEnv("BRANCH_NAME") || basename(worktreePath);
 const worktreeHash = createHash("sha1").update(worktreePath).digest("hex").slice(0, 8);
-const simulatorName =
-  process.env.PASEO_IOS_SIMULATOR_NAME || `BySpace ${worktreeName} ${worktreeHash}`;
+const simulatorName = byspaceEnv("IOS_SIMULATOR_NAME") || `BySpace ${worktreeName} ${worktreeHash}`;
 const daemonEndpoint =
-  process.env.PASEO_DEV_DAEMON_ENDPOINT ||
-  `localhost:${process.env.PASEO_SERVICE_DAEMON_PORT || "6778"}`;
+  byspaceEnv("DEV_DAEMON_ENDPOINT") || `localhost:${byspaceEnv("SERVICE_DAEMON_PORT") || "6778"}`;
 
 const env = {
   ...process.env,
@@ -53,7 +51,7 @@ async function main() {
 
   metro = startMetro();
   await waitForUrl(`http://127.0.0.1:${paseoPort}/.sim`);
-  console.log(`iOS preview: ${process.env.PASEO_URL || `http://127.0.0.1:${paseoPort}`}/.sim`);
+  console.log(`iOS preview: ${byspaceEnv("URL") || `http://127.0.0.1:${paseoPort}`}/.sim`);
 
   console.log("Building app dependencies...");
   try {
@@ -333,9 +331,13 @@ function simulatorSlug() {
   return `${simulatorName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "")}-${worktreeHash}`;
 }
 
-function requiredEnv(name) {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is required; run this as a BySpace service.`);
+function byspaceEnv(name) {
+  return process.env[`BYSPACE_${name}`] || process.env[`PASEO_${name}`];
+}
+
+function requiredByspaceEnv(name) {
+  const value = byspaceEnv(name);
+  if (!value) throw new Error(`BYSPACE_${name} is required; run this as a BySpace service.`);
   return value;
 }
 

@@ -44,11 +44,15 @@ The stable channel is the default. Stable desktop releases roll out gradually ov
 
 Stable releases are what most users should run.
 
+The stable Web/PWA is at [app.byspace.cc.cd](https://app.byspace.cc.cd).
+
 ## Beta channel
 
 The beta channel gets every prerelease as soon as it's published, with no rollout delay. When a beta is promoted to stable, beta users receive that stable update immediately too.
 
 Betas are the best way to get fixes and features early. If you hit a bug, report it — beta feedback is what makes stable releases reliable.
+
+The beta Web/PWA is at [app-beta.byspace.cc.cd](https://app-beta.byspace.cc.cd).
 
 ### How to join the beta channel
 

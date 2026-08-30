@@ -19,16 +19,20 @@ import type {
 } from "./agent/provider-launch-config.js";
 import { ProviderOverrideSchema } from "./agent/provider-launch-config.js";
 import { AgentProviderSchema } from "@getpaseo/protocol/provider-manifest";
+import {
+  isBySpaceHostedAppBaseUrl,
+  resolveBySpaceHostedAppBaseUrl,
+} from "@getpaseo/protocol/release-channel";
 import { hashDaemonPassword } from "./auth.js";
 import { resolveSpeechConfig } from "./speech/speech-config-resolver.js";
 import type { RequestedSpeechProviders } from "./speech/speech-types.js";
 import { mergeHostnames, parseHostnamesEnv, type HostnamesConfig } from "./hostnames.js";
 import { resolveGitProcessPolicy } from "../utils/git-process-scheduler.js";
 import { withByspaceEnvironment } from "../utils/byspace-env.js";
+import { resolveDaemonVersion } from "./daemon-version.js";
 
 const DEFAULT_PORT = 6777;
 const DEFAULT_RELAY_ENDPOINT = "relay.byspace.cc.cd:443";
-const DEFAULT_APP_BASE_URL = "https://app.byspace.cc.cd";
 const DEFAULT_TRUSTED_PROXIES = ["loopback"];
 
 interface ResolveBundledWebUiDistDirInput {
@@ -413,14 +417,16 @@ function resolveVoiceLlmConfig(
 function resolveCorsAllowedOrigins(
   env: NodeJS.ProcessEnv,
   persisted: ReturnType<typeof loadPersistedConfig>,
+  hostedAppBaseUrl: string,
 ): string[] {
   const envCorsOrigins = env.PASEO_CORS_ORIGINS
     ? env.PASEO_CORS_ORIGINS.split(",").map((s) => s.trim())
     : [];
-  const persistedCorsOrigins = persisted.daemon?.cors?.allowedOrigins ?? [];
-  return Array.from(
-    new Set([...persistedCorsOrigins, ...envCorsOrigins].filter((s) => s.length > 0)),
+  const configuredOrigins = [...(persisted.daemon?.cors?.allowedOrigins ?? []), ...envCorsOrigins];
+  const resolvedOrigins = configuredOrigins.map((origin) =>
+    isBySpaceHostedAppBaseUrl(origin) ? hostedAppBaseUrl : origin,
   );
+  return Array.from(new Set(resolvedOrigins.filter((origin) => origin.length > 0)));
 }
 
 function parseTrustedProxiesEnv(value: string | undefined): TrustedProxiesConfig | undefined {
@@ -520,10 +526,25 @@ function resolveProfileLists(persisted: ReturnType<typeof loadPersistedConfig>) 
   };
 }
 
+function resolveAppBaseUrl(
+  env: NodeJS.ProcessEnv,
+  persisted: ReturnType<typeof loadPersistedConfig>,
+  hostedAppBaseUrl: string,
+): string {
+  if (env.PASEO_APP_BASE_URL) {
+    return env.PASEO_APP_BASE_URL;
+  }
+  const configuredAppBaseUrl = persisted.app?.baseUrl;
+  return isBySpaceHostedAppBaseUrl(configuredAppBaseUrl)
+    ? hostedAppBaseUrl
+    : (configuredAppBaseUrl ?? hostedAppBaseUrl);
+}
+
 function resolveStaticLoadConfigSettings(
   env: NodeJS.ProcessEnv,
   cli: CliConfigOverrides | undefined,
   persisted: ReturnType<typeof loadPersistedConfig>,
+  hostedAppBaseUrl: string,
 ) {
   return {
     mcpEnabled: cli?.mcpEnabled ?? persisted.daemon?.mcp?.enabled ?? true,
@@ -539,7 +560,7 @@ function resolveStaticLoadConfigSettings(
       cli?.hostnames,
     ]),
     trustedProxies: resolveTrustedProxiesConfig(env, persisted),
-    appBaseUrl: env.PASEO_APP_BASE_URL ?? persisted.app?.baseUrl ?? DEFAULT_APP_BASE_URL,
+    appBaseUrl: resolveAppBaseUrl(env, persisted, hostedAppBaseUrl),
   };
 }
 
@@ -547,6 +568,7 @@ interface ResolveConfigFromPersistedOptions {
   env?: NodeJS.ProcessEnv;
   cli?: CliConfigOverrides;
   relayEnabledFallback?: boolean;
+  releaseVersion?: string;
 }
 
 export function resolveConfigFromPersisted(
@@ -556,6 +578,9 @@ export function resolveConfigFromPersisted(
 ): PaseoDaemonConfig {
   const resolvedOptions = options ?? {};
   const env = withByspaceEnvironment(resolvedOptions.env ?? process.env);
+  const hostedAppBaseUrl = resolveBySpaceHostedAppBaseUrl(
+    resolvedOptions.releaseVersion ?? resolveDaemonVersion(import.meta.url),
+  );
   const cli = resolvedOptions.cli;
   const relayEnabledFallback =
     resolvedOptions.relayEnabledFallback ?? persisted.daemon?.relay?.enabled === undefined;
@@ -572,7 +597,7 @@ export function resolveConfigFromPersisted(
     hostnames,
     trustedProxies,
     appBaseUrl,
-  } = resolveStaticLoadConfigSettings(env, cli, persisted);
+  } = resolveStaticLoadConfigSettings(env, cli, persisted, hostedAppBaseUrl);
 
   const relay = resolveRelayConfig({
     env,
@@ -602,7 +627,7 @@ export function resolveConfigFromPersisted(
     paseoHome,
     desktopManaged: env.PASEO_DESKTOP_MANAGED === "1",
     worktreesRoot: resolveWorktreesRoot(paseoHome, persisted),
-    corsAllowedOrigins: resolveCorsAllowedOrigins(env, persisted),
+    corsAllowedOrigins: resolveCorsAllowedOrigins(env, persisted, hostedAppBaseUrl),
     hostnames,
     trustedProxies,
     mcpEnabled,

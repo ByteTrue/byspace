@@ -3,6 +3,7 @@ import { Command, Option } from "commander";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadPersistedConfig, type PersistedConfig } from "@getpaseo/server";
+import { resolveBySpaceHostedAppBaseUrl } from "@getpaseo/protocol/release-channel";
 import {
   resolveLocalPaseoHome,
   resolveLocalDaemonState,
@@ -18,6 +19,7 @@ import {
   printDirectConnectionGuidance,
   resolveLocalPairingOffer,
 } from "./daemon/pair.js";
+import { resolveCliVersion } from "../version.js";
 
 interface OnboardOptions extends DaemonStartOptions {
   timeout?: string;
@@ -265,11 +267,12 @@ async function waitForDaemonReady(args: {
 
 function printNextSteps(pairingUrl: string | null, paseoHome: string, richUi: boolean): void {
   const daemonLogPath = path.join(paseoHome, "daemon.log");
+  const appBaseUrl = resolveBySpaceHostedAppBaseUrl(resolveCliVersion());
   const nextStepsLines = [
     pairingUrl
       ? "1. Open BySpace and scan the QR code above, or paste the pairing link."
       : "1. Open BySpace and connect to your daemon.",
-    "2. Web app: https://app.byspace.cc.cd",
+    `2. Web app: ${appBaseUrl}`,
     "3. Desktop app: https://github.com/ByteTrue/byspace/releases/latest",
     "4. Docs: https://github.com/ByteTrue/byspace",
     '5. Example: byspace run --output-schema schema.json "extract fields"',

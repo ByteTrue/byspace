@@ -5,11 +5,11 @@ describe("i18n branding", () => {
   it("rebrands BySpace-owned public names recursively", () => {
     expect(
       rebrandResource({
-        product: "Paseo supervises $PASEO_PORT and ${PASEO_URL}",
+        product: "Paseo supervises PASEO_HOME, $PASEO_PORT, and ${PASEO_URL}",
         files: ["paseo.json", "paseo-plugin.json", "paseo-plugin.d.ts"],
       }),
     ).toEqual({
-      product: "BySpace supervises $BYSPACE_PORT and ${BYSPACE_URL}",
+      product: "BySpace supervises BYSPACE_HOME, $BYSPACE_PORT, and ${BYSPACE_URL}",
       files: ["byspace.json", "byspace-plugin.json", "byspace-plugin.d.ts"],
     });
   });

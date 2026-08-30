@@ -170,6 +170,7 @@ import { createRelayRuntime, type RelayRuntime } from "./relay-runtime.js";
 import type { PushNotificationSender } from "./push/index.js";
 import { getOrCreateServerId } from "./server-id.js";
 import { resolveDaemonVersion } from "./daemon-version.js";
+import { resolveBySpaceHostedAppBaseUrl } from "@getpaseo/protocol/release-channel";
 import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
 import type {
   AgentProfile,
@@ -521,7 +522,10 @@ function resolveExpressTrustProxySetting(config: PaseoDaemonConfig): true | stri
   return config.trustedProxies ?? ["loopback"];
 }
 
-function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDaemonConfig {
+function createInitialMutableDaemonConfig(
+  config: PaseoDaemonConfig,
+  defaultAppBaseUrl: string,
+): MutableDaemonConfig {
   const providers = config.providerOverrides ?? {};
 
   const initialConfig: MutableDaemonConfig = {
@@ -534,7 +538,7 @@ function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDae
     cors: { allowedOrigins: config.corsAllowedOrigins },
     trustedProxies: config.trustedProxies ?? ["loopback"],
     git: config.git ?? resolveGitProcessPolicy({ env: process.env }),
-    app: { baseUrl: config.appBaseUrl ?? "https://app.byspace.cc.cd" },
+    app: { baseUrl: config.appBaseUrl ?? defaultAppBaseUrl },
     ...(config.providerCatalogRefreshTimeoutMs !== undefined
       ? { catalogRefreshTimeoutMs: config.providerCatalogRefreshTimeoutMs }
       : {}),
@@ -579,7 +583,8 @@ export async function createPaseoDaemon(
   const bootstrapStart = performance.now();
   const elapsed = () => `${(performance.now() - bootstrapStart).toFixed(0)}ms`;
   const daemonVersion = config.daemonVersion ?? resolveDaemonVersion(import.meta.url);
-  const initialMutableConfig = createInitialMutableDaemonConfig(config);
+  const hostedAppBaseUrl = resolveBySpaceHostedAppBaseUrl(daemonVersion);
+  const initialMutableConfig = createInitialMutableDaemonConfig(config, hostedAppBaseUrl);
   const daemonConfigStore = new DaemonConfigStore(config.paseoHome, initialMutableConfig, logger, {
     relayEnabledMutable: config.relayEnabledMutable ?? true,
     startupPersisted: config.configReload?.startupPersisted,
@@ -589,9 +594,10 @@ export async function createPaseoDaemon(
           env: config.configReload?.env ?? process.env,
           cli: config.configReload?.cli,
           relayEnabledFallback: config.configReload?.relayEnabledFallback,
+          releaseVersion: daemonVersion,
         });
         return {
-          mutable: createInitialMutableDaemonConfig(reloaded),
+          mutable: createInitialMutableDaemonConfig(reloaded, hostedAppBaseUrl),
           overrideControlledPaths: reloaded.configReload?.overrideControlledPaths ?? [],
         };
       },
@@ -658,12 +664,12 @@ export async function createPaseoDaemon(
   const scriptRuntimeStore = new WorkspaceScriptRuntimeStore();
   const workspaceSetupRuntime = new WorkspaceSetupRuntime();
   let configuredHostnames = config.hostnames ?? config.allowedHosts;
-  let appBaseUrl = config.appBaseUrl ?? "https://app.byspace.cc.cd";
+  let appBaseUrl = config.appBaseUrl ?? hostedAppBaseUrl;
   daemonConfigStore.onFieldChange("hostnames", (value) => {
     configuredHostnames = value as HostnamesConfig | undefined;
   });
   daemonConfigStore.onFieldChange("app.baseUrl", (value) => {
-    appBaseUrl = typeof value === "string" ? value : "https://app.byspace.cc.cd";
+    appBaseUrl = typeof value === "string" ? value : hostedAppBaseUrl;
   });
   let wsServer: VoiceAssistantWebSocketServer | null = null;
   let serviceProxyListenTarget: ListenTarget | null = null;

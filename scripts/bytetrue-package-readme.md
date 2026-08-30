@@ -13,4 +13,4 @@ The production daemon defaults to `127.0.0.1:6777` and stores state under `~/.by
 
 - Source: <https://github.com/ByteTrue/byspace>
 - Releases: <https://github.com/ByteTrue/byspace/releases>
-- Web app: <https://app.byspace.cc.cd>
+- Beta Web app: <https://app-beta.byspace.cc.cd>

@@ -4,16 +4,18 @@ Use Node 22.20.0 and npm 10.9.3. Run release commands from a clean `main` checko
 
 ## Published targets
 
-| Target  | Publication path                                         |
-| ------- | -------------------------------------------------------- |
-| npm     | `@bytetrue/byspace` with the `beta` or `latest` dist-tag |
-| Web/PWA | Cloudflare Pages project `byspace`                       |
-| Docker  | `ghcr.io/bytetrue/byspace:<version>`                     |
-| Desktop | GitHub Release artifacts for macOS, Windows, and Linux   |
-| iOS     | One unsigned device IPA on the GitHub Release            |
-| Android | One locally built and signed APK on the GitHub Release   |
+| Target  | Publication path                                               |
+| ------- | -------------------------------------------------------------- |
+| npm     | `@bytetrue/byspace` with the `beta` or `latest` dist-tag       |
+| Web/PWA | Cloudflare Pages (`byspace` stable, `byspace-beta` prerelease) |
+| Docker  | `ghcr.io/bytetrue/byspace:<version>`                           |
+| Desktop | GitHub Release artifacts for macOS, Windows, and Linux         |
+| iOS     | One unsigned device IPA on the GitHub Release                  |
+| Android | One locally built and signed APK on the GitHub Release         |
 
 The iOS IPA requires user re-signing. The Android APK uses the long-lived ByteTrue release key and does not depend on Google Play or EAS.
+
+Stable Web releases deploy to `app.byspace.cc.cd`. Versions with a prerelease suffix deploy to `app-beta.byspace.cc.cd`.
 
 ## Prepare
 
@@ -93,5 +95,5 @@ GITHUB_REPOSITORY=ByteTrue/byspace \
 - Installing the npm tarball or published package provides `byspace`, not `paseo`.
 - The GitHub Release contains Desktop artifacts, one unsigned IPA, the signed APK, and checksums.
 - The Docker image resolves at `ghcr.io/bytetrue/byspace:<version>`.
-- `app.byspace.cc.cd` serves the new Web/PWA build.
+- The matching Web channel serves the new build: `app.byspace.cc.cd` for stable or `app-beta.byspace.cc.cd` for prereleases.
 - The Android APK package, version, and signer match the values checked before tagging.
