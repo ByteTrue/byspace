@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       terminal_performance:
-        description: Run the Windows terminal performance benchmark only
+        description: Run the Windows terminal performance and paste validation only
         required: false
         type: boolean
         default: false
@@ -116,6 +116,7 @@ jobs:
           npm run test:e2e --workspace=@getpaseo/app --
           e2e/browser/terminal-performance.spec.ts
           e2e/browser/terminal-keystroke-stress.spec.ts
+          e2e/browser/terminal-clipboard.spec.ts
           --workers=1 --retries=0 --reporter=line,json
           --output="${{ runner.temp }}/terminal-performance/direct"
 
@@ -127,6 +128,7 @@ jobs:
           npm run test:e2e --workspace=@getpaseo/app --
           e2e/browser/terminal-performance.spec.ts
           e2e/browser/terminal-keystroke-stress.spec.ts
+          e2e/browser/terminal-clipboard.spec.ts
           --workers=1 --retries=0 --reporter=line,json
           --output="${{ runner.temp }}/terminal-performance/relay"
 

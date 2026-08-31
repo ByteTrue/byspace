@@ -74,7 +74,8 @@ path only; it is not a measurement of public Relay round-trip time or Internet q
 Run Direct and Relay serially with one worker and no retries. The existing CI workflow
 contains the opt-in Windows job; dispatch it with the `terminal_performance` boolean set to
 `true` on the exact branch/ref. That job runs the Node benchmark before the browser modes,
-uses bounded artifacts, and has no deployment or secret inputs.
+then checks multiline terminal paste over both transports on the Windows PTY. It uses bounded
+artifacts and has no deployment or secret inputs.
 
 Each browser run writes a Playwright JSON report containing its output and attachments to
 its bounded transport artifact directory. The evidence includes the browser, viewport, OS,

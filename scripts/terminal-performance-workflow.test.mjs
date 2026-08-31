@@ -67,6 +67,7 @@ test("Windows terminal performance is an opt-in CI job with centralized gating",
   assert.match(performance, /run: node --import tsx scripts\/benchmark-terminal-latency\.ts/);
   assert.match(performance, /PASEO_TERMINAL_TRANSPORT: direct/);
   assert.match(performance, /PASEO_TERMINAL_TRANSPORT: relay/);
+  assert.equal(performance.match(/e2e\/browser\/terminal-clipboard\.spec\.ts/g)?.length, 2);
   assert.equal(performance.match(/--reporter=line,json/g)?.length, 2);
   assert.match(
     performance,

@@ -23,7 +23,6 @@ import {
   TerminalEmulatorRuntime,
   type TerminalOutputData,
 } from "../terminal/runtime/terminal-emulator-runtime";
-import { encodeTerminalPaste } from "../terminal/runtime/terminal-paste";
 import type {
   TerminalLocalFileLinkSource,
   TerminalLocalFileLinkTarget,
@@ -230,12 +229,7 @@ export default function TerminalEmulator({
     if (text.length === 0) {
       return;
     }
-    mountCallbacksRef.current.onInput?.(
-      encodeTerminalPaste({
-        text,
-        bracketedPaste: runtimeRef.current?.getInputModeState().bracketedPaste ?? false,
-      }),
-    );
+    runtimeRef.current?.paste(text);
   }, []);
 
   useDOMImperativeHandle(

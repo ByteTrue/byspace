@@ -94,6 +94,7 @@ export function createTerminalResizeEvent(input: {
 
 interface TerminalEmulatorRuntimeDisposables {
   disposeInput: () => void;
+  removePasteListener: () => void;
   disconnectResizeObserver: () => void;
   removeWindowResize: () => void;
   removeWindowFocus: () => void;
@@ -142,7 +143,32 @@ const FIT_TIMEOUT_DELAYS_MS = [0, 16, 48, 120, 250, 500, 1_000, 2_000];
 const OUTPUT_OPERATION_TIMEOUT_MS = 5_000;
 const EMPTY_TERMINAL_OUTPUT = new Uint8Array(0);
 const RESET_TERMINAL_OUTPUT = new Uint8Array([0x1b, 0x63]);
+const TERMINAL_LINE_BREAK_RE = /[\r\n]/;
+const BRACKETED_PASTE_START = "\x1b[200~";
+const BRACKETED_PASTE_END = "\x1b[201~";
 const terminalOutputEncoder = new TextEncoder();
+
+function isWindowsPlatform(): boolean {
+  return (
+    typeof navigator !== "undefined" &&
+    (/Windows/i.test(navigator.userAgent ?? "") ||
+      /^Win/i.test((navigator as Navigator & { platform?: string }).platform ?? ""))
+  );
+}
+
+function pasteTerminalText(
+  terminal: Terminal,
+  text: string,
+  input?: { forceBracketed?: boolean },
+): void {
+  if (!input?.forceBracketed) {
+    terminal.paste(text);
+    return;
+  }
+
+  const normalized = text.replace(/\r?\n/g, "\r").replaceAll("\x1b", "\u241b");
+  terminal.input(`${BRACKETED_PASTE_START}${normalized}${BRACKETED_PASTE_END}`, true);
+}
 
 export function encodeTerminalOutput(text: string): TerminalOutputData {
   return terminalOutputEncoder.encode(text);
@@ -414,6 +440,18 @@ export class TerminalEmulatorRuntime {
       this.callbacks.onInput?.(data);
     });
 
+    const pasteEventHandler = (event: ClipboardEvent): void => {
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      if (!isWindowsPlatform() || !TERMINAL_LINE_BREAK_RE.test(text)) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      pasteTerminalText(terminal, text, { forceBracketed: true });
+    };
+    input.host.addEventListener("paste", pasteEventHandler, true);
+
     terminal.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown" || event.isComposing) {
         return true;
@@ -432,9 +470,12 @@ export class TerminalEmulatorRuntime {
         if (key === "v") {
           event.preventDefault();
           void navigator.clipboard.readText().then((text) => {
-            if (text) {
-              terminal.paste(text);
+            if (this.terminal !== terminal || !text) {
+              return;
             }
+            pasteTerminalText(terminal, text, {
+              forceBracketed: isWindowsPlatform() && TERMINAL_LINE_BREAK_RE.test(text),
+            });
             return;
           });
           return false;
@@ -549,6 +590,9 @@ export class TerminalEmulatorRuntime {
       disposeInput: () => {
         inputDisposable.dispose();
       },
+      removePasteListener: () => {
+        input.host.removeEventListener("paste", pasteEventHandler, true);
+      },
       disconnectResizeObserver: () => {
         resizeObserver.disconnect();
       },
@@ -594,6 +638,7 @@ export class TerminalEmulatorRuntime {
 
     this.cleanup = () => {
       disposables.disposeInput();
+      disposables.removePasteListener();
       disposables.disconnectResizeObserver();
       disposables.removeWindowResize();
       disposables.removeWindowFocus();
@@ -645,7 +690,14 @@ export class TerminalEmulatorRuntime {
   }
 
   paste(text: string): void {
-    this.terminal?.paste(text);
+    const terminal = this.terminal;
+    if (!terminal) {
+      return;
+    }
+
+    pasteTerminalText(terminal, text, {
+      forceBracketed: isWindowsPlatform() && TERMINAL_LINE_BREAK_RE.test(text),
+    });
   }
 
   renderSnapshot(input: { state: TerminalState | null; onCommitted?: () => void }): void {
