@@ -78,7 +78,10 @@ uses bounded artifacts, and has no deployment or secret inputs.
 Each browser run writes a Playwright JSON report containing its output and attachments to
 its bounded transport artifact directory. The evidence includes the browser, viewport, OS,
 architecture, commit, transport topology, stage timings, exact output sequence integrity,
-snapshot/restore observations, rAF gaps, and Long Task observations. A missing, duplicate, or out-of-order
+snapshot/restore observations, rAF gaps, and Long Task observations. Parse integrity once
+from xterm's canonical buffer after the final sentinel; concatenated raw terminal frames are
+not rendered text because Windows ConPTY repaint sequences can repeat or overwrite cells.
+Raw frame traces remain the source for transport latency. A missing, duplicate, or out-of-order
 workload sequence fails the stress test. An rAF gap or Long Task at least 1000 ms fails it.
 The hosted Windows runner supplies evidence for that runner image and browser; it does
 not cover every Windows version, graphics driver, terminal font, or local background load.

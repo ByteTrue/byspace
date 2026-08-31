@@ -12,7 +12,11 @@ import {
   readTerminalPerformanceEnvironment,
   type LatencyStats,
 } from "../support/helpers/terminal-probes";
-import { waitForTerminalContent, waitForTerminalTailText } from "../support/helpers/terminal-perf";
+import {
+  getTerminalBufferText,
+  waitForTerminalContent,
+  waitForTerminalTailText,
+} from "../support/helpers/terminal-perf";
 
 const INPUT_TEXT = buildStressText(600);
 const STRESS_TIMEOUT_MS = 15_000;
@@ -299,17 +303,14 @@ async function measureNodeWorkload(input: {
       STRESS_TIMEOUT_MS,
     );
     await activeAgentLoadPromise;
+    const terminalText = await getTerminalBufferText(input.page, { joinWrappedLines: true });
     const reportOptions = {
       expectedSequenceCount: WORKLOAD_OUTPUT_COUNT,
       expectedOutputPayload: WORKLOAD_OUTPUT_PAYLOAD,
       expectedInputEchoes: inputEchoes,
       expectedOutputDigest: workloadDigest(WORKLOAD_OUTPUT_COUNT, WORKLOAD_OUTPUT_PAYLOAD),
+      terminalText,
     };
-    await waitForWorkloadIntegrity(input.page, {
-      inputText: browserInputText,
-      expectedAgentIds: workloadAgentIds,
-      ...reportOptions,
-    });
     return readTerminalKeystrokeStressReport(input.page, browserInputText, reportOptions);
   } finally {
     await input.harness.killTerminal(terminal.id);
@@ -364,55 +365,6 @@ async function waitForAppAgentStreams(page: Page, expectedAgentIds: string[]): P
   throw new Error(
     `Timed out waiting for browser agent streams: ${JSON.stringify(report.agentStreamAgentIds)}`,
   );
-}
-
-async function waitForWorkloadIntegrity(
-  page: Page,
-  input: {
-    inputText: string;
-    expectedInputEchoes: Array<{ seq: number; nonce: string }>;
-    expectedSequenceCount: number;
-    expectedOutputPayload: string;
-    expectedOutputDigest: string;
-    expectedAgentIds: string[];
-  },
-): Promise<void> {
-  const deadline = Date.now() + STRESS_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    const report = await readTerminalKeystrokeStressReport(page, input.inputText, {
-      expectedSequenceCount: input.expectedSequenceCount,
-      expectedOutputPayload: input.expectedOutputPayload,
-      expectedInputEchoes: input.expectedInputEchoes,
-      expectedOutputDigest: input.expectedOutputDigest,
-    });
-    if (
-      report.outputSequenceCount === input.expectedSequenceCount &&
-      report.outputSequenceMissingCount === 0 &&
-      report.outputSequenceDuplicateCount === 0 &&
-      report.outputSequenceOutOfOrderCount === 0 &&
-      report.outputSequenceMalformedCount === 0 &&
-      report.outputPayloadMismatchCount === 0 &&
-      report.inputEchoCount === input.expectedInputEchoes.length &&
-      report.inputEchoMissingCount === 0 &&
-      report.inputEchoDuplicateCount === 0 &&
-      report.inputEchoOutOfOrderCount === 0 &&
-      report.inputEchoUnexpectedCount === 0 &&
-      report.inputEchoMalformedCount === 0 &&
-      report.outputDoneMarkerCount === 1 &&
-      report.outputDoneDigestValid === true &&
-      input.expectedAgentIds.every((agentId) => report.agentStreamAgentIds.includes(agentId))
-    ) {
-      return;
-    }
-    await page.waitForTimeout(25);
-  }
-  const report = await readTerminalKeystrokeStressReport(page, input.inputText, {
-    expectedSequenceCount: input.expectedSequenceCount,
-    expectedOutputPayload: input.expectedOutputPayload,
-    expectedInputEchoes: input.expectedInputEchoes,
-    expectedOutputDigest: input.expectedOutputDigest,
-  });
-  throw new Error(`Timed out waiting for combined workload integrity: ${JSON.stringify(report)}`);
 }
 
 async function emitRapidAgentStreamUpdates(

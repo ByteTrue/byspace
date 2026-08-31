@@ -352,6 +352,7 @@ export async function installTerminalKeystrokeStressProbe(page: Page): Promise<v
           expectedOutputPayload?: string;
           expectedInputEchoes?: Array<{ seq: number; nonce: string }>;
           expectedOutputDigest?: string;
+          terminalText?: string;
         },
       ) => TerminalKeystrokeStressReport;
     }
@@ -612,7 +613,8 @@ export async function installTerminalKeystrokeStressProbe(page: Page): Promise<v
         const runtimeWriteEnqueued = appEventsOf("runtime-write-enqueued", this.appEvents);
         const runtimeOperationStart = appEventsOf("runtime-operation-start", this.appEvents);
         const runtimeXtermWrite = appEventsOf("runtime-xterm-write", this.appEvents);
-        const terminalText = this.xtermWrites.map((write) => write.text).join("");
+        const terminalText =
+          options?.terminalText ?? this.xtermWrites.map((write) => write.text).join("");
         const sequenceIntegrity = measureSequenceIntegrity(
           terminalText,
           options?.expectedSequenceCount,
@@ -891,6 +893,7 @@ interface TerminalKeystrokeStressProbeWindow {
         expectedOutputPayload?: string;
         expectedInputEchoes?: Array<{ seq: number; nonce: string }>;
         expectedOutputDigest?: string;
+        terminalText?: string;
       },
     ) => TerminalKeystrokeStressReport;
   };
@@ -912,6 +915,7 @@ export async function readTerminalKeystrokeStressReport(
     expectedOutputPayload?: string;
     expectedInputEchoes?: Array<{ seq: number; nonce: string }>;
     expectedOutputDigest?: string;
+    terminalText?: string;
   },
 ): Promise<TerminalKeystrokeStressReport> {
   return page.evaluate(

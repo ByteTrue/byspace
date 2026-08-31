@@ -12,34 +12,49 @@ function buildWorkspaceUrl(workspaceId: string): string {
   return buildHostWorkspaceRoute(getServerId(), workspaceId);
 }
 
-export async function getTerminalBufferText(page: Page): Promise<string> {
-  return page.evaluate(() => {
-    const term = (
-      window as Window & {
-        __paseoTerminal?: {
-          buffer: {
-            active: {
-              length: number;
-              getLine: (i: number) => { translateToString: (trim: boolean) => string } | null;
+export async function getTerminalBufferText(
+  page: Page,
+  options?: { joinWrappedLines?: boolean },
+): Promise<string> {
+  return page.evaluate(
+    ({ joinWrappedLines }) => {
+      const term = (
+        window as Window & {
+          __paseoTerminal?: {
+            buffer: {
+              active: {
+                length: number;
+                getLine: (i: number) => {
+                  isWrapped: boolean;
+                  translateToString: (trim: boolean) => string;
+                } | null;
+              };
             };
+            onWriteParsed: (cb: () => void) => { dispose: () => void };
           };
-          onWriteParsed: (cb: () => void) => { dispose: () => void };
-        };
+        }
+      ).__paseoTerminal;
+      if (!term) {
+        return "";
       }
-    ).__paseoTerminal;
-    if (!term) {
-      return "";
-    }
-    const buf = term.buffer.active;
-    const lines: string[] = [];
-    for (let i = 0; i < buf.length; i++) {
-      const line = buf.getLine(i);
-      if (line) {
-        lines.push(line.translateToString(true));
+      const buf = term.buffer.active;
+      const lines: string[] = [];
+      for (let i = 0; i < buf.length; i++) {
+        const line = buf.getLine(i);
+        if (!line) {
+          continue;
+        }
+        const text = line.translateToString(true);
+        if (joinWrappedLines && line.isWrapped && lines.length > 0) {
+          lines[lines.length - 1] += text;
+        } else {
+          lines.push(text);
+        }
       }
-    }
-    return lines.join("\n");
-  });
+      return lines.join("\n");
+    },
+    { joinWrappedLines: options?.joinWrappedLines ?? false },
+  );
 }
 
 export async function waitForTerminalContent(
