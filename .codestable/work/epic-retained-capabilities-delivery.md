@@ -10,11 +10,16 @@ milestone_commit: authorized
 remote_publish: each-milestone
 commit_strategy: semantic-atomic-per-item
 publish_strategy: epic-plan-pr-then-one-pr-per-wave
-current_wave: 2
+current_wave: 3
 current_item: null
-active_items: []
+active_items:
+  - item: ITEM-08
+    state: dispatched
+    run: workflow feeb6830-beac-41df-be3c-8f4463b2078a / child e4875b1b-c1cc-4f58-915e-6bd13c362620
+    workspace: /Users/zijie/workspace/projects/byspace-worktrees/epic-002-wave3-item08
+    base: 30893a48b3b59e2053a171803974f81975ca8a88
 blocked_by: null
-next_action: 创建并合入 Wave 2 PR；exact-head CI 全绿后推进 Wave 3
+next_action: 等待 ITEM-08 交付并完成 fresh review；随后按完成顺序串行集成
 ---
 
 # Epic Work: 保留能力交付路线
@@ -36,6 +41,9 @@ next_action: 创建并合入 Wave 2 PR；exact-head CI 全绿后推进 Wave 3
 - ITEM-05 已完成 retained renderer 恢复与 revision gap replay：隐藏/返回不 reset，共享 renderer 保留 1,500 行并只补一次 gap；1MB backlog 不连续、终端退出、完整 transport 丢失或 backpressure overflow 均回退权威 snapshot。Protocol 8/8、App 12/12、Server 128/128、Direct/Relay 各 1/1、Build/Typecheck/Lint/Format 全绿；Round 2 review `31a2f709-a9d9-47ec-ad24-421ea8b82986` 为 PASS（0 blocking / 0 important）。
 - ITEM-06 已完成 Windows/ConPTY 多行文本 paste fallback：keyboard、context menu 与 imperative paste 汇入同一 framing 策略，单行/非 Windows 保持 xterm 原路径，reload mode replay 与无 mode fallback 均由真实 PTY byte oracle 覆盖。Reviewer `19112db0-a596-443a-b414-bf6ca9c9cb1f` 为 PASS（0 blocking / 0 important）；exact-head Windows run `33425004246` 在 source milestone `055d0000b` 上 Direct/Relay 各 5/5 全绿。
 - Wave 2 frozen aggregate patch `3ed57574257c38e18d6fcbd98f9ccc7ec95300167e034ce960805d16ab9cbf30` 经 reviewer `91c20656-547e-43b0-b027-f74b57daebec` 审查为 PASS（0 blocking / 0 important）；ITEM-04/05/06 的协议兼容、backlog/reconnect 生命周期、renderer/paste 交互、性能 oracle、CI gating 与文档证据均通过交叉核对。
+- Wave 2 PR #17 的 23 个 required checks 全绿后已合入 `main`，merge commit 为 `30893a48b3b59e2053a171803974f81975ca8a88`；merge-SHA CI run `33429830398` 的已知 Timeline hydration flaky 经本地 20/20 复现通过与单 job rerun 后，最终 20 个检查全绿。
+- Wave 3 从上述绿色 `main` 创建。ITEM-07 已完成最后八行/220 字 Terminal 通知摘要与 fail-open fallback，3-path frozen patch `2fc75d3244235437969691ffc6a0fc1da893c8409e7d6ac4e563789126ca10e2` 经 reviewer `b40c4e19-f593-4e81-8731-fea33d21ac55` 判定 mergeable（0 blocking / 0 important），并由父流程串行集成。
+- ITEM-08 在独立 worktree `epic-002-wave3-item08` 上继续执行 T07 Mobile Session soft keyboard；ITEM-09/10/11 尚未派发，保持最多两个 writer 与完成顺序串行集成约束。
 
 ## Wave 1 · 发布通道路由与远程连接安全
 
@@ -51,8 +59,8 @@ next_action: 创建并合入 Wave 2 PR；exact-head CI 全绿后推进 Wave 3
 
 ## Wave 3 · Terminal 功能与呈现
 
-- [ ] ITEM-07 · TERM-03 · T06
-- [ ] ITEM-08 · TERM-04 · T07
+- [x] ITEM-07 · TERM-03 · T06 · reviewed and integrated
+- [ ] ITEM-08 · TERM-04 · T07 · dispatched
 - [ ] ITEM-09 · TERM-06 · T11
 - [ ] ITEM-10 · TERM-07 · T13/T14/T17
 - [ ] ITEM-11 · TERM-08 · T15/T18
@@ -75,6 +83,7 @@ next_action: 创建并合入 Wave 2 PR；exact-head CI 全绿后推进 Wave 3
 
 ## 活跃委派
 
+- Wave 3 Lane A ITEM-07 writer `d1ff2d41-261d-43a3-a52e-31019afddeb8` 在隔离 worktree `epic-002-wave3-item07` 完成 RED→GREEN；父流程冻结 3-path patch `2fc75d32…0ca10e2`，focused 15/15、全仓 Build/Typecheck/Lint/Format 通过，fresh reviewer `b40c4e19-f593-4e81-8731-fea33d21ac55` 返回 mergeable（0 blocking / 0 important）。Lane B ITEM-08 由 workflow `feeb6830-beac-41df-be3c-8f4463b2078a` / child `e4875b1b-c1cc-4f58-915e-6bd13c362620` 在 `epic-002-wave3-item08` 执行。
 - ITEM-05 唯一 writer lineage 首轮 `1619df3f-b0f3-4fef-8811-3aa52a0ef803`、续跑 `b779914e-c2cd-46cf-9e96-dac86c08791a` 在隔离 worktree `epic-002-wave2-item05` 建立 RED 并完成首轮实现；父流程在 runner settlement 后接管。首轮 reviewer `6fcf9c03-e55c-49dd-b452-bdd67f2490a7` 提出的 stale preamble 与 overflow-resume 两项 important 均经专门 RED 修复；Round 2 `31a2f709-a9d9-47ec-ad24-421ea8b82986` 返回 PASS（0 blocking / 0 important）。最终 21-path manifest 为 `849c36c761f99fb728dca39e494120f59ff695b2310d90378fae34e88b60fe67`。
 - ITEM-06 在隔离 worktree `epic-002-wave2-item06`（base `159a70640`）串行执行；scout workflow `dec0aff1-0930-4a1f-9018-98686354501a` 分别审计当前 runtime/E2E seam 与历史 T10/T12 边界。两个 scout 均确认 T10 已在 tracker/restore preamble，缺口仅为 T12 Windows 多行 framing，且不得整体移植图片 scope；唯一 writer `94da2f9c-f5d0-4a06-babe-8f3eb84cf63d` 完成 RED→GREEN，父流程修正非 Windows listener 与 mode replay 测试保真后冻结 7-path patch `ba654cd7…fa6aa`；reviewer `19112db0-a596-443a-b414-bf6ca9c9cb1f` 返回 PASS（0 blocking / 0 important），source milestone `055d0000b` 经 exact-head Windows run `33425004246` 验证并完成串行集成。
 - Wave 2 aggregate reviewer `91c20656-547e-43b0-b027-f74b57daebec` 审查 base `0d81e9fa3` 至 frozen head `35a0c1341` 的 9 commits / 46 paths，返回 PASS（0 blocking / 0 important）。其 Playwright JSON reporter 环境变量疑问已由锁定版本源码 `node_modules/playwright/lib/reporters/base.js` 核实：当前版本正式读取 `PLAYWRIGHT_JSON_OUTPUT_FILE`，无需改动。
@@ -141,3 +150,5 @@ next_action: 创建并合入 Wave 2 PR；exact-head CI 全绿后推进 Wave 3
 - 2026-09-01：ITEM-06 worker 以 Windows 多行 paste 无 framed input 的 browser timeout 建立 RED；父流程将 context listener 收窄为仅 Windows 多行、补齐非 Windows/单行原路径断言，并令 E2E 显式区分 mode=false fallback 与 reload 后 mode=true replay。最终 browser 30/30、App unit 24/24、Protocol input-mode 9/9、Direct PTY 2/2、本地 Wrangler Relay/E2EE PTY 2/2、CI contract、build、全仓 Typecheck/Lint/Format 均通过；7-path frozen patch `ba654cd73895d39d6a24b26dec16ccf0100dfb09a67994f96df4566e383fa6aa` 进入独立审查。
 - 2026-09-01：ITEM-06 reviewer `19112db0-a596-443a-b414-bf6ca9c9cb1f` 逐入口核对 keyboard/context/imperative paste、真实 PTY byte oracle、mode=false 与 reload mode=true 区分、cleanup 及 CI gating，结论 PASS（0 blocking / 0 important）。语义原子 source milestone `055d0000b17214db79c738af5454c71fdd14fea3` 的 exact-head Windows workflow `33425004246` 全绿：Direct 与本地 Wrangler Relay/E2EE 各 5/5，其中两条 clipboard spec 均在实际 `windows-latest` / ConPTY 上通过；Node L0/L1/L2 各 100/100 echo，Direct/Relay 组合 workload 均保持 1,000/1,000 输出、24/24 echo、有效 digest 与零 duplicate/out-of-order/mismatch。ITEM-06 已串行集成，Wave 2 三项进入 aggregate review。
 - 2026-09-01：Wave 2 aggregate reviewer `91c20656-547e-43b0-b027-f74b57daebec` 对 9 commits / 46 paths 的 frozen patch `3ed57574…b9cbf30` 返回 PASS（0 blocking / 0 important）。报告确认三项交付契约、协议双向兼容、无双投/丢失、无常态 trace 内存增长、Windows paste 单次 framing、真实 PTY/E2EE oracle 和 manual CI isolation 均成立；`PLAYWRIGHT_JSON_OUTPUT_FILE` 疑问已由当前 Playwright 源码核实为正确，其他 minor 均为既有或 report-only residual。Wave 2 可创建 PR。
+- 2026-09-01：Wave 2 PR #17 在 23 个 required checks 全绿后合入 `main`；merge-SHA CI run `33429830398` 经已知 Timeline hydration flaky 单 job rerun后最终全绿。清理 Wave 2 branches，并从 merge commit `30893a48b3b59e2053a171803974f81975ca8a88` 创建 Wave 3 集成分支。
+- 2026-09-01：Wave 3 ITEM-07 frozen patch `2fc75d32…0ca10e2` 经 fresh review 判定 mergeable（0 blocking / 0 important）；父流程完成 15/15 focused、Build、Typecheck、Lint、Format 验证并按并行协议串行集成。ITEM-08 保持独立 writer 继续执行。
