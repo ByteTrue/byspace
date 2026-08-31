@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   ConnectionOfferSchema,
@@ -38,6 +39,57 @@ describe("connection offer", () => {
     const encoded = encodeBase64UrlNoPadUtf8(JSON.stringify(offer));
 
     expect(parseConnectionOfferFromUrl(`https://app.paseo.sh/#offer=${encoded}`)).toEqual(offer);
+  });
+
+  it("round-trips the optional hostname in V2 offers", () => {
+    const payload = {
+      v: 2,
+      serverId: "server-123",
+      daemonPublicKeyB64: "pubkey",
+      relay: { endpoint: "relay.paseo.sh:443" },
+      hostname: "mbp.local",
+    };
+    const encoded = encodeBase64UrlNoPadUtf8(JSON.stringify(payload));
+
+    expect(parseConnectionOfferFromUrl(`https://app.paseo.sh/#offer=${encoded}`)).toEqual(payload);
+  });
+
+  it("accepts old V2 payloads without hostname", () => {
+    const payload = {
+      v: 2,
+      serverId: "server-123",
+      daemonPublicKeyB64: "pubkey",
+      relay: { endpoint: "relay.paseo.sh:443" },
+    };
+    const encoded = encodeBase64UrlNoPadUtf8(JSON.stringify(payload));
+
+    expect(parseConnectionOfferFromUrl(`https://app.paseo.sh/#offer=${encoded}`)).toEqual(payload);
+  });
+
+  it("allows a legacy-shaped client to ignore the new hostname field", () => {
+    const legacySchema = z.object({
+      v: z.literal(2),
+      serverId: z.string().min(1),
+      daemonPublicKeyB64: z.string().min(1),
+      relay: z.object({
+        endpoint: z.string().min(1),
+        useTls: z.boolean().optional(),
+      }),
+    });
+    const payload = {
+      v: 2,
+      serverId: "server-123",
+      daemonPublicKeyB64: "pubkey",
+      relay: { endpoint: "relay.paseo.sh:443" },
+      hostname: "mbp.local",
+    };
+
+    expect(legacySchema.parse(payload)).toEqual({
+      v: 2,
+      serverId: "server-123",
+      daemonPublicKeyB64: "pubkey",
+      relay: { endpoint: "relay.paseo.sh:443" },
+    });
   });
 
   it("leaves relay TLS unset when absent", () => {

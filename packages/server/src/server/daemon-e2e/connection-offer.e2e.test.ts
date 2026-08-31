@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "vitest";
 import pino from "pino";
+import { hostname as getHostname } from "node:os";
 import net from "node:net";
 import path from "node:path";
 import os from "node:os";
@@ -102,6 +103,7 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
         serverId: string;
         daemonPublicKeyB64: string;
         relay: { endpoint: string };
+        hostname: string;
       };
 
       expect(offer.v).toBe(2);
@@ -112,6 +114,7 @@ describe("ConnectionOfferV2 (daemon E2E)", () => {
       expect(typeof offer.daemonPublicKeyB64).toBe("string");
       expect(offer.daemonPublicKeyB64.length).toBeGreaterThan(0);
       expect(() => Buffer.from(offer.daemonPublicKeyB64, "base64")).not.toThrow();
+      expect(offer.hostname).toBe(getHostname());
 
       expect("endpoints" in offer).toBe(false);
     } finally {

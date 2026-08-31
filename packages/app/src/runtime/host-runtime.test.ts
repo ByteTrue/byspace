@@ -3294,7 +3294,7 @@ describe("HostRuntimeStore", () => {
     store.syncHosts([]);
   });
 
-  it("uses the advertised hostname when adding a relay host from a pairing offer", async () => {
+  it("uses a trimmed offer hostname when adding a relay host without an explicit label", async () => {
     const store = new HostRuntimeStore({
       deps: {
         createClient: () => new FakeDaemonClient() as unknown as DaemonClient,
@@ -3307,10 +3307,58 @@ describe("HostRuntimeStore", () => {
       },
     });
 
-    await store.upsertConnectionFromOffer(makeOffer(), "mbp");
+    await store.upsertConnectionFromOffer({
+      ...makeOffer(),
+      hostname: "  mbp.local  ",
+    } as ConnectionOffer);
 
     const pairedHost = store.getHosts().find((host) => host.serverId === "srv_offer");
-    expect(pairedHost?.label).toBe("mbp");
+    expect(pairedHost?.label).toBe("mbp.local");
+
+    store.syncHosts([]);
+  });
+
+  it("falls back to serverId when an old pairing offer has no hostname", async () => {
+    const store = new HostRuntimeStore({
+      deps: {
+        createClient: () => new FakeDaemonClient() as unknown as DaemonClient,
+        connectToDaemon: async ({ host }) => ({
+          client: makeConnectedProbeClient(5) as unknown as DaemonClient,
+          serverId: host.serverId,
+          hostname: host.label ?? null,
+        }),
+        getClientId: async () => "cid_test_runtime",
+      },
+    });
+
+    await store.upsertConnectionFromOffer(makeOffer());
+
+    const pairedHost = store.getHosts().find((host) => host.serverId === "srv_offer");
+    expect(pairedHost?.label).toBe("srv_offer");
+
+    store.syncHosts([]);
+  });
+
+  it("uses an explicit label before the advertised offer hostname", async () => {
+    const store = new HostRuntimeStore({
+      deps: {
+        createClient: () => new FakeDaemonClient() as unknown as DaemonClient,
+        connectToDaemon: async ({ host }) => ({
+          client: makeConnectedProbeClient(5) as unknown as DaemonClient,
+          serverId: host.serverId,
+          hostname: host.label ?? null,
+        }),
+        getClientId: async () => "cid_test_runtime",
+      },
+    });
+
+    await store.upsertConnectionFromOffer(
+      { ...makeOffer(), hostname: "offer-host" } as ConnectionOffer,
+      "probe-host",
+    );
+
+    const pairedHost = store.getHosts().find((host) => host.serverId === "srv_offer");
+    expect(pairedHost?.label).toBe("probe-host");
 
     store.syncHosts([]);
   });
@@ -3408,10 +3456,15 @@ describe("HostRuntimeStore", () => {
       label: "Custom name",
     });
 
-    await store.upsertConnectionFromOffer(makeOffer(), "mbp");
+    await store.upsertConnectionFromOffer(
+      { ...makeOffer(), hostname: "offer-host" } as ConnectionOffer,
+      "probe-host",
+    );
 
     const pairedHost = store.getHosts().find((host) => host.serverId === "srv_offer");
     expect(pairedHost?.label).toBe("Custom name");
+    expect(store.getHosts()).toHaveLength(1);
+    expect(pairedHost?.connections).toHaveLength(1);
 
     store.syncHosts([]);
   });
