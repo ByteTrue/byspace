@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StreamItem } from "@/types/stream";
+import { DEFAULT_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD } from "./web-virtualization";
 import { buildAgentStreamRenderModel } from "./model";
 
 function createTimestamp(seed: number): Date {
@@ -73,6 +74,33 @@ describe("buildAgentStreamRenderModel", () => {
       completedAt: tail[3]?.timestamp,
       durationMs: 1000,
     });
+  });
+
+  it("caps mounted history for a desktop web turn larger than the virtualization threshold", () => {
+    const tail = [userMessage("turn-user", 1)];
+    for (let index = 0; index < DEFAULT_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD + 20; index += 1) {
+      tail.push(assistantMessage(`turn-item-${index}`, index + 2));
+    }
+
+    const model = buildAgentStreamRenderModel({
+      isTurnActive: false,
+      activeTurnStartedAt: null,
+      tail,
+      head: [],
+      platform: "web",
+      isMobileBreakpoint: false,
+    });
+    const segmentedIds = [
+      ...model.segments.historyVirtualized,
+      ...model.segments.historyMounted,
+    ].map((item) => item.id);
+
+    expect(model.segments.historyMounted).toHaveLength(
+      DEFAULT_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD,
+    );
+    expect(model.segments.historyVirtualized).toHaveLength(21);
+    expect(segmentedIds).toEqual(tail.map((item) => item.id));
+    expect(new Set(segmentedIds).size).toBe(tail.length);
   });
 
   it("keeps head separate from committed history on desktop web", () => {

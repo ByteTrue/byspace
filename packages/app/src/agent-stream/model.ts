@@ -85,11 +85,11 @@ function splitOrderedTail(params: {
   isMobileBreakpoint: boolean;
 }): Pick<AgentStreamRenderModel, "history" | "segments"> {
   const { orderedTail, platform, isMobileBreakpoint } = params;
+  const mountedRecentItems = getMountedRecentStreamItems();
+  const virtualizationThreshold = getWebPartialVirtualizationThreshold();
   const shouldSplitHistory =
-    platform === "web" &&
-    !isMobileBreakpoint &&
-    orderedTail.length > getWebPartialVirtualizationThreshold();
-  const cacheKey = `${platform}:${isMobileBreakpoint}:${getMountedRecentStreamItems()}:${shouldSplitHistory}`;
+    platform === "web" && !isMobileBreakpoint && orderedTail.length > virtualizationThreshold;
+  const cacheKey = `${platform}:${isMobileBreakpoint}:${mountedRecentItems}:${virtualizationThreshold}:${shouldSplitHistory}`;
   let cachedByKey = splitHistoryCache.get(orderedTail);
   if (!cachedByKey) {
     cachedByKey = new Map();
@@ -115,13 +115,17 @@ function splitOrderedTail(params: {
 
   const mountedWindowStart = findMountedWindowStart({
     items: orderedTail,
-    minMountedCount: getMountedRecentStreamItems(),
+    minMountedCount: mountedRecentItems,
   });
+  const boundedMountedWindowStart = Math.max(
+    mountedWindowStart,
+    orderedTail.length - virtualizationThreshold,
+  );
   const split = {
     history: orderedTail,
     segments: {
-      historyVirtualized: orderedTail.slice(0, mountedWindowStart),
-      historyMounted: orderedTail.slice(mountedWindowStart),
+      historyVirtualized: orderedTail.slice(0, boundedMountedWindowStart),
+      historyMounted: orderedTail.slice(boundedMountedWindowStart),
       liveHead: EMPTY_STREAM_ITEMS,
     },
   } satisfies Pick<AgentStreamRenderModel, "history" | "segments">;

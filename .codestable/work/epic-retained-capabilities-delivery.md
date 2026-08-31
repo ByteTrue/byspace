@@ -15,11 +15,11 @@ current_item: ITEM-04
 active_items:
   - item: ITEM-04
     state: executing
-    run: Windows evidence correction after CI 33392118839 job 94812205263
+    run: desktop-web oversized-turn virtualization after Windows CI 33395542756
     workspace: /Users/zijie/workspace/projects/byspace
-    base: 0d81e9fa376a2fb98518e94b5080d97440371811
+    base: 80e5b26cf56e7ecb67725d440d76fb85f4df8479
 blocked_by: null
-next_action: 先移除 Windows benchmark 的全 scrollback 轮询观察者效应并复验 Direct/Relay；再以 exact branch ref 重跑 terminal_performance，只有 Windows 固定门槛绿色后才关闭 ITEM-04
+next_action: 通过静态门槛并提交、推送 reviewed virtualization fix，再以 exact branch ref 重跑 Windows terminal_performance；固定门槛绿色后才关闭 ITEM-04
 ---
 
 # Epic Work: 保留能力交付路线
@@ -37,7 +37,7 @@ next_action: 先移除 Windows benchmark 的全 scrollback 轮询观察者效应
 - ITEM-03 已通过 fresh compatibility review（0 blocking / 0 important）、Protocol 8/8、App 69/69、完整 `build:server`、Server E2E 3/3 和集成分支静态门槛；reviewed patch 已完成串行集成。
 - ITEM-03 read-only scout 已完成 optional hostname 的协议/客户端接缝与兼容测试包，没有修改文件。
 - Wave 1 PR #16 已由 reviewed head `db08188e9b0be50d4d966eac0851ab44aa2a5ecb` 合入 `main`，merge commit 为 `0d81e9fa376a2fb98518e94b5080d97440371811`；post-merge exact-SHA CI `33375176914` 与 Docker `33375176920` 均通过。
-- Wave 2 从上述绿色 `main` 创建；ITEM-04 的 Node、Browser Direct 与本地 Wrangler Relay/E2EE 候选均绿色，但 exact-head Windows Direct 组合 workload 触发固定的一秒停顿门槛。Daemon/PTY 与 browser runtime 入队前的分段指标健康；当前先消除 benchmark 全 scrollback 轮询造成的观察者效应，再决定是否需要修改产品热路径。
+- Wave 2 从上述绿色 `main` 创建；ITEM-04 已取得 Node、Browser Direct、本地 Wrangler Relay/E2EE 与两轮 exact-head Windows 证据。去除 scrollback 观察者效应后，Windows 组合 workload 仍因 desktop-web 单个超大 turn 挂载约 1,000 行触发秒级停顿；reviewed hard-cap 修正已进入本地回归，尚未通过 Windows 固定门槛。
 
 ## Wave 1 · 发布通道路由与远程连接安全
 
@@ -77,10 +77,11 @@ next_action: 先移除 Windows benchmark 的全 scrollback 轮询观察者效应
 
 ## 活跃委派
 
-- 当前没有运行中的子 agent；ITEM-04 等待 exact-ref Windows CI。
+- 当前没有运行中的子 agent；ITEM-04 的 desktop-web 超大 turn 修正等待本地 Direct 回归后进入 exact-ref Windows CI。
 - ITEM-04 worker lineage：首轮 `557f41e3-cf60-4bfa-a1f5-f43eb405109a`，round 2 `980c4c05-9d0d-4831-9d99-b9b2369e9d03`，round 3 `5caaae27-606f-461a-a9f4-90dae2b57409`。父流程接管后修复跨平台 fixture、真实 Relay/E2EE、完整性断言、teardown 与 trace 隔离。
 - ITEM-04 independent reviewer `43a46b21-f879-4943-b0eb-4048af658d25` 对 base `0d81e9fa3` 上 20-path frozen manifest 返回 pass：0 blocking / 0 important。集成 Lint 随后发现 Relay readiness helper 的共享 resolver 触发 `promise/no-multiple-resolved`；父流程改为三个独立 Promise 的 race，targeted Lint、App Typecheck 和真实 Relay/E2EE 2/2 通过，同 reviewer 复审该单文件修正仍为 pass。最终 manifest 为 `3eb63d3e…d95df6`。
 - ITEM-04 read-only audit workflow `0d44efcb-871f-4ffd-80c9-516689703922` 与 minimization review 均已完成；没有稳定分段产品 RED 前不得修改 Terminal/Git/Relay/renderer 热路径的边界得到遵守。
+- Windows run `33395542756` 提供稳定 desktop-web renderer RED 后，worker `d9836ea7-92ab-49c2-b52f-4435b610a8ce` 以 TDD 实现超大单 turn hard cap；independent reviewer `aa4c01cd-204f-443c-9350-63f8092245e7` 对冻结 patch `b0f6c892b5068c2c026d3020a860a62eaa750729eb5d5621be7f2552a63af736` 判定 pass（0 blocking / 0 important）。
 
 ## 规划证据
 
@@ -128,3 +129,5 @@ next_action: 先移除 Windows benchmark 的全 scrollback 轮询观察者效应
 - 2026-08-31：初始候选完整内容 manifest 为 `f4d1b56d02086cd07e5e39f1d9f8c339fb35643bee6794b3d40a836990121e96`（20 paths，含 5 个新增文件）；independent reviewer `43a46b21-f879-4943-b0eb-4048af658d25` 判定 pass，0 blocking / 0 important。集成分支完整 Lint 暴露 Relay readiness helper 的 `promise/no-multiple-resolved`，父流程以三路 Promise race 做最小修正；targeted Lint、App Typecheck、真实本地 Relay/E2EE performance 2/2（50,000 行 3.96MB/s，echo p95 10.1ms）与 reviewer 同 lineage 复审均通过。最终 20-path manifest 为 `3eb63d3ef90188bac1ce9f354987e4d2a068e15bf6e6b9e27c549aa144d95df6`；等待 milestone exact-ref Windows CI 后关闭 ITEM-04。
 - 2026-08-31：提交并推送 exact HEAD `97671daa8551fe0fc0551b2909d640af3f22dee8` 后，Windows workflow run `33392118839` 的 job `94812205263` 在 Direct 组合 workload 触发固定 smoothness gate：1,000/1,000 输出与 24/24 输入仍完整有序，但 `rafMaxGapMs=1659.1`、`longTaskMaxMs=1602`，xterm commit p95 `359.4ms`；同一 artifact 中 daemon-only L0/L1/L2 约 2.29MB 均在 `254-270ms` 排空、echo p95 约 `16.5ms`、ping p95 `1ms`。独立 50,000 行样本的 `16.883s` 同时包含每 50ms 全量扫描增长中 xterm scrollback 的观察者开销，因此先把最终标记检测改为仅检查光标附近固定上限的末尾窗口，再重跑 exact-head Windows 门槛；不把未经净化的 `0.03MB/s` 直接归因为产品热路径。
 - 2026-08-31：有界 terminal-tail observer 在本地真实 Direct 与 Wrangler Relay/E2EE 复验通过：两种 transport 均为 3/3，50,000 行分别在 `117ms`（4.80MB/s）和 `110ms`（5.11MB/s）完成；组合 workload 仍完整接收 1,000 输出、24 输入、1,007 Agent events 与约 256KB 单消息，Direct/Relay 最大 Long Task 分别为 `326ms`/`183ms`。该修正只去除测量观察者效应，不降低 workload 或 smoothness 门槛；independent reviewer `6e2dc4da-093a-4c0f-a47b-056e4eb205f4` 判定 pass（0 blocking / 0 important）。下一步以修正后的 exact head 重跑 Windows，若组合 workload 仍红则进入产品 reducer/render 热路径修复。
+- 2026-08-31：修正后 exact-head Windows run `33395542756`（`80e5b26cf56e7ecb67725d440d76fb85f4df8479`）仍 RED：组合 workload 的 1,000 条 Terminal 序列与 1,007 条 Agent 帧均完整到达，但页面实际挂载同一 turn 约 1,000 个 todo activity 行，产生 `rafMaxGapMs=1379.3` / `longTaskMaxMs=1343` 并阻塞最终 sentinel；独立 50,000 行 throughput 为 `18.474s`（仍低于 30s gate），keystroke p95 `5.9ms`，Node L0/L1/L2 正常。由此把组合故障收敛到 desktop-web 超大单 turn 绕过 partial virtualization，而非 wire/daemon/observer；在隔离 worktree `epic-002-item04-web-virtualization` 按 RED contract 修复，并给 throughput case 增补无额外轮询的 runtime trace artifact。
+- 2026-08-31：超大单 turn 修正的 focused model test 10/10、targeted Lint、App Typecheck、Format 与 diff-check 通过；冻结 patch `b0f6c892…af736` 获 independent review pass。集成分支本地真实 Direct browser 回归 3/3：组合 workload 完整接收 1,000 输出、24 输入与 1,007 Agent events，最大 rAF gap `248.2ms`、Long Task `153ms`、0 snapshot/restore；50,000 行 `109ms`（5.15MB/s），keystroke p95 `9.2ms`。下一门槛为修正后 exact-ref Windows Direct/Relay。
