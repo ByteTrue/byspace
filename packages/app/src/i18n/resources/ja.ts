@@ -557,6 +557,8 @@ export const ja: TranslationResources = {
       hostDisconnected: "ホストが接続されていません",
       updateHost: "ネイティブターミナルを使用するにはホストを更新してください。",
       unableToSubscribe: "ターミナルに接続できません",
+      clipboardImageTooLarge: "クリップボードの画像が大きすぎます（最大50 MiB）",
+      clipboardReadFailed: "クリップボードの画像を読み取れませんでした",
     },
     tabs: {
       loading: "読み込み中...",

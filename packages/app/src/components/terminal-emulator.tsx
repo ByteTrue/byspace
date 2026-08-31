@@ -21,7 +21,9 @@ import type { TerminalInputModeState } from "@getpaseo/protocol/terminal-input-m
 import type { PendingTerminalModifiers } from "../utils/terminal-keys";
 import {
   TerminalEmulatorRuntime,
+  type TerminalClipboardImage,
   type TerminalOutputData,
+  type TerminalPasteErrorReason,
 } from "../terminal/runtime/terminal-emulator-runtime";
 import type {
   TerminalLocalFileLinkSource,
@@ -127,6 +129,8 @@ interface TerminalEmulatorProps {
   }) => Promise<void> | void;
   onPendingModifiersConsumed?: () => Promise<void> | void;
   onInputModeChange?: (state: TerminalInputModeState) => Promise<void> | void;
+  onPasteImage?: (image: TerminalClipboardImage) => Promise<string | null>;
+  onPasteError?: (reason: TerminalPasteErrorReason) => Promise<void> | void;
   onSelectionChange?: (hasSelection: boolean) => void;
   onResolveLocalFileLink?: (
     source: TerminalLocalFileLinkSource,
@@ -177,6 +181,8 @@ export default function TerminalEmulator({
   onTerminalKey,
   onPendingModifiersConsumed,
   onInputModeChange,
+  onPasteImage,
+  onPasteError,
   onSelectionChange,
   onResolveLocalFileLink,
   onOpenLocalFileLink,
@@ -208,6 +214,8 @@ export default function TerminalEmulator({
     onTerminalKey,
     onPendingModifiersConsumed,
     onInputModeChange,
+    onPasteImage,
+    onPasteError,
     onSelectionChange,
     onResolveLocalFileLink,
     onOpenLocalFileLink,
@@ -218,6 +226,8 @@ export default function TerminalEmulator({
     onTerminalKey,
     onPendingModifiersConsumed,
     onInputModeChange,
+    onPasteImage,
+    onPasteError,
     onSelectionChange,
     onResolveLocalFileLink,
     onOpenLocalFileLink,
@@ -492,6 +502,8 @@ export default function TerminalEmulator({
         onTerminalKey,
         onPendingModifiersConsumed,
         onInputModeChange,
+        onPasteImage,
+        onPasteError,
         onSelectionChange,
         onResolveLocalFileLink,
         onOpenLocalFileLink,
@@ -501,6 +513,8 @@ export default function TerminalEmulator({
   }, [
     onInput,
     onInputModeChange,
+    onPasteImage,
+    onPasteError,
     onOpenLocalFileLink,
     onPendingModifiersConsumed,
     onResolveLocalFileLink,

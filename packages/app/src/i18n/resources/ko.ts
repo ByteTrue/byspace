@@ -554,6 +554,8 @@ export const ko: TranslationResources = {
       hostDisconnected: "호스트가 연결되어 있지 않습니다",
       updateHost: "기본 터미널 렌더러를 사용하도록 호스트를 업데이트합니다.",
       unableToSubscribe: "터미널을 구독할 수 없습니다",
+      clipboardImageTooLarge: "클립보드 이미지가 너무 큽니다 (최대 50 MiB)",
+      clipboardReadFailed: "클립보드 이미지를 읽지 못했습니다",
     },
     tabs: {
       loading: "불러오는 중...",

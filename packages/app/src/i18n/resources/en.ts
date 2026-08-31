@@ -551,6 +551,8 @@ export const en = {
       hostDisconnected: "Host is not connected",
       updateHost: "Update the host to use the native terminal renderer.",
       unableToSubscribe: "Unable to subscribe to terminal",
+      clipboardImageTooLarge: "Clipboard image is too large (max 50 MiB)",
+      clipboardReadFailed: "Could not read clipboard image",
     },
     tabs: {
       loading: "Loading...",
