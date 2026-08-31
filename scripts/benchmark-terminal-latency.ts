@@ -15,13 +15,14 @@
  * Optional:
  *   BENCH_INCLUDE_L3=1   include the L3 level (L2 + a second noisy terminal)
  *
- * Output: pretty table to stdout + JSON to /tmp/paseo-terminal-bench/<ts>.json
+ * Output: pretty table to stdout + JSON to the platform temp directory under
+ * paseo-terminal-bench/<ts>.json
  *
  * Requires built client/protocol dist (packages/client/dist). Build with:
  *   npm run build:client
  */
 
-import { spawn, execSync, type ChildProcess } from "node:child_process";
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
@@ -29,6 +30,7 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { WebSocket } from "ws";
+import { killProcessTree } from "../packages/app/e2e/support/helpers/spawn-node";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
@@ -180,21 +182,26 @@ async function bootDaemon(): Promise<BootedDaemon> {
     throw new Error(`Refusing to use a reserved daemon port: ${port}`);
   }
   const paseoHome = await mkdtemp(path.join(os.tmpdir(), "byspace-bench-home-"));
-  const tsxBin = execSync("which tsx").toString().trim();
 
-  const child = spawn(tsxBin, ["scripts/supervisor-entrypoint.ts", "--dev"], {
-    cwd: SERVER_DIR,
-    env: {
-      ...process.env,
-      BYSPACE_HOME: paseoHome,
-      PASEO_SERVER_ID: "srv_terminal_bench",
-      BYSPACE_LISTEN: `127.0.0.1:${port}`,
-      PASEO_NODE_ENV: "development",
-      NODE_ENV: "development",
+  const child = spawn(
+    process.execPath,
+    ["--import", "tsx", "--", "scripts/supervisor-entrypoint.ts", "--dev"],
+    {
+      cwd: SERVER_DIR,
+      env: {
+        ...process.env,
+        BYSPACE_HOME: paseoHome,
+        PASEO_SERVER_ID: "srv_terminal_bench",
+        BYSPACE_LISTEN: `127.0.0.1:${port}`,
+        PASEO_NODE_ENV: "development",
+        PASEO_DICTATION_ENABLED: "false",
+        PASEO_VOICE_MODE_ENABLED: "false",
+        NODE_ENV: "development",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: false,
     },
-    stdio: ["ignore", "pipe", "pipe"],
-    detached: false,
-  });
+  );
 
   child.stdout?.on("data", (data: Buffer) => {
     for (const line of data.toString().split("\n")) {
@@ -209,8 +216,17 @@ async function bootDaemon(): Promise<BootedDaemon> {
     }
   });
 
-  await waitForPort(port, child, 30_000);
-  return { child, port, paseoHome, pid: child.pid ?? -1 };
+  try {
+    await waitForPort(port, child, 30_000);
+    return { child, port, paseoHome, pid: child.pid ?? -1 };
+  } catch (error) {
+    try {
+      await killProcessTree(child);
+    } finally {
+      await rm(paseoHome, { recursive: true, force: true }).catch(() => undefined);
+    }
+    throw error;
+  }
 }
 
 async function loadDaemonClientCtor(): Promise<DaemonClientCtor> {
@@ -656,7 +672,10 @@ function printTable(results: LevelResult[]): void {
 
 function getCommitHash(): string {
   try {
-    return execSync("git rev-parse --short HEAD", { cwd: REPO_ROOT }).toString().trim();
+    return execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+    }).trim();
   } catch {
     return "unknown";
   }
@@ -711,7 +730,7 @@ async function main(): Promise<void> {
 
     printTable(results);
 
-    const outDir = "/tmp/paseo-terminal-bench";
+    const outDir = path.join(os.tmpdir(), "paseo-terminal-bench");
     await mkdir(outDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const outPath = path.join(outDir, `${timestamp}.json`);
@@ -741,14 +760,7 @@ async function main(): Promise<void> {
       await client.close().catch(() => undefined);
     }
     if (daemon) {
-      daemon.child.kill("SIGTERM");
-      await Promise.race([
-        new Promise<void>((resolve) => daemon!.child.once("exit", () => resolve())),
-        sleep(5_000),
-      ]);
-      if (daemon.child.exitCode === null && daemon.child.signalCode === null) {
-        daemon.child.kill("SIGKILL");
-      }
+      await killProcessTree(daemon.child);
       await rm(daemon.paseoHome, { recursive: true, force: true }).catch(() => undefined);
     }
     if (workspaceDir) {

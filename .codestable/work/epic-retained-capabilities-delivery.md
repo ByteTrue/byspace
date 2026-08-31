@@ -10,11 +10,16 @@ milestone_commit: authorized
 remote_publish: each-milestone
 commit_strategy: semantic-atomic-per-item
 publish_strategy: epic-plan-pr-then-one-pr-per-wave
-current_wave: 1
-current_item: null
-active_items: []
+current_wave: 2
+current_item: ITEM-04
+active_items:
+  - item: ITEM-04
+    state: ci-verifying
+    run: independent reviewer 43a46b21-f879-4943-b0eb-4048af658d25 passed
+    workspace: /Users/zijie/workspace/projects/byspace
+    base: 0d81e9fa376a2fb98518e94b5080d97440371811
 blocked_by: null
-next_action: 创建 ITEM-03 语义原子 milestone，清理已收割 worktree，并执行 Wave 1 整体 review 与最终验证
+next_action: 提交并推送 reviewed ITEM-04 milestone，随后以 exact branch ref 手动触发 Windows terminal_performance CI；只有 Windows 证据绿色后才关闭 ITEM-04 并进入 ITEM-05
 ---
 
 # Epic Work: 保留能力交付路线
@@ -31,6 +36,8 @@ next_action: 创建 ITEM-03 语义原子 milestone，清理已收割 worktree，
 - ITEM-02 已通过 worker TDD、父流程 Host Runtime 验证、fresh security review 和集成静态门槛；reviewed patch 已以 `fe45b78e6e3819a02422b09566bfa04d7dd8867e` 完成串行集成。
 - ITEM-03 已通过 fresh compatibility review（0 blocking / 0 important）、Protocol 8/8、App 69/69、完整 `build:server`、Server E2E 3/3 和集成分支静态门槛；reviewed patch 已完成串行集成。
 - ITEM-03 read-only scout 已完成 optional hostname 的协议/客户端接缝与兼容测试包，没有修改文件。
+- Wave 1 PR #16 已由 reviewed head `db08188e9b0be50d4d966eac0851ab44aa2a5ecb` 合入 `main`，merge commit 为 `0d81e9fa376a2fb98518e94b5080d97440371811`；post-merge exact-SHA CI `33375176914` 与 Docker `33375176920` 均通过。
+- Wave 2 从上述绿色 `main` 创建；ITEM-04 已形成 measurement-only reviewed candidate：Node L0/L1/L2、Browser Direct 与本地 Wrangler Relay/E2EE 均绿色，连续输出、浏览器输入、Agent streaming、大消息、snapshot/restore 和主线程停顿均有完整性断言；没有稳定产品 RED，因此未修改 Terminal 行为或算法。Windows `workflow_dispatch` 等价证据仍是关闭 ITEM-04 前的最后门槛。
 
 ## Wave 1 · 发布通道路由与远程连接安全
 
@@ -40,7 +47,7 @@ next_action: 创建 ITEM-03 语义原子 milestone，清理已收割 worktree，
 
 ## Wave 2 · Terminal 性能与恢复基础
 
-- [ ] ITEM-04 · TERM-01 · T01/T02/T08/T09/T16
+- [ ] ITEM-04 · TERM-01 · T01/T02/T08/T09/T16 · local-reviewed, Windows CI pending
 - [ ] ITEM-05 · TERM-02 · T03/T04/T05
 - [ ] ITEM-06 · TERM-05 · T10/T12
 
@@ -70,7 +77,10 @@ next_action: 创建 ITEM-03 语义原子 milestone，清理已收割 worktree，
 
 ## 活跃委派
 
-- 无。
+- 当前没有运行中的子 agent；ITEM-04 等待 exact-ref Windows CI。
+- ITEM-04 worker lineage：首轮 `557f41e3-cf60-4bfa-a1f5-f43eb405109a`，round 2 `980c4c05-9d0d-4831-9d99-b9b2369e9d03`，round 3 `5caaae27-606f-461a-a9f4-90dae2b57409`。父流程接管后修复跨平台 fixture、真实 Relay/E2EE、完整性断言、teardown 与 trace 隔离。
+- ITEM-04 independent reviewer `43a46b21-f879-4943-b0eb-4048af658d25` 对 base `0d81e9fa3` 上 20-path frozen manifest 返回 pass：0 blocking / 0 important。集成 Lint 随后发现 Relay readiness helper 的共享 resolver 触发 `promise/no-multiple-resolved`；父流程改为三个独立 Promise 的 race，targeted Lint、App Typecheck 和真实 Relay/E2EE 2/2 通过，同 reviewer 复审该单文件修正仍为 pass。最终 manifest 为 `3eb63d3e…d95df6`。
+- ITEM-04 read-only audit workflow `0d44efcb-871f-4ffd-80c9-516689703922` 与 minimization review 均已完成；没有稳定分段产品 RED 前不得修改 Terminal/Git/Relay/renderer 热路径的边界得到遵守。
 
 ## 规划证据
 
@@ -112,3 +122,7 @@ next_action: 创建 ITEM-03 语义原子 milestone，清理已收割 worktree，
 - 2026-08-31：ITEM-03 worker 交付六文件候选；Protocol 8/8、App Host Runtime 69/69、Server producer smoke、targeted lint/format/diff-check 通过；Server E2E 的错误 TTLCache 与跨 workspace typecheck overlay 由父流程在冻结 diff 后复验。
 - 2026-08-31：父流程在 worktree-local internal package view 中完成完整 `build:server` 与 Server pairing-offer E2E 3/3，清理后 frozen SHA 保持 `ebd95b72…0bed8`；fresh compatibility reviewer `75befb32-2916-4a92-a998-b80e7286ef72` 裁定 `pass`，ITEM-03 进入串行集成。
 - 2026-08-31：ITEM-03 reviewed patch `ebd95b72…0bed8` 收割后经全仓 Format、`build:server`、Typecheck 与 Lint 验证，source bytes 保持一致；ITEM-03 状态推进到 `integrated`，Wave 1 三个 ITEM 全部完成。
+- 2026-08-31：Wave 1 aggregate review 通过（0 blocking / 0 important）；PR #16 exact-head checks 在已知 Timeline E2E flaky 的单 job 重跑后全绿并合入。相同 Timeline 测试已在 exact PR head 以 2 workers、0 retry 连续通过 20/20。Post-merge exact-SHA CI 与 Docker 均通过，Wave 1 分支已清理。
+- 2026-08-31：从绿色 merge commit `0d81e9fa376a2fb98518e94b5080d97440371811` 创建 Wave 2 集成分支；ITEM-04 按 `cs-issue` 先做 Direct/Relay 分段与 Windows 等价证据只读审计，没有测量 RED 前不改 Terminal 热路径。
+- 2026-08-31：ITEM-04 父流程验证 Node L0/L1/L2 echo p95 为 3.44/3.48/3.43ms；Browser Direct 3/3 与本地 Wrangler Relay/E2EE 3/3 均通过。Stress 在两个 transport 下均确认 Terminal 1,000/1,000 输出、24/24 输入、1,007 Agent stream events、约 256KB 单消息、0 snapshot/restore、0 个 >=1s 主线程停顿；Direct/Relay 最大 Long Task 分别为 264ms/199ms。Workflow contracts、focused Vitest、Build、Typecheck、Lint 与 Format 全绿。
+- 2026-08-31：初始候选完整内容 manifest 为 `f4d1b56d02086cd07e5e39f1d9f8c339fb35643bee6794b3d40a836990121e96`（20 paths，含 5 个新增文件）；independent reviewer `43a46b21-f879-4943-b0eb-4048af658d25` 判定 pass，0 blocking / 0 important。集成分支完整 Lint 暴露 Relay readiness helper 的 `promise/no-multiple-resolved`，父流程以三路 Promise race 做最小修正；targeted Lint、App Typecheck、真实本地 Relay/E2EE performance 2/2（50,000 行 3.96MB/s，echo p95 10.1ms）与 reviewer 同 lineage 复审均通过。最终 20-path manifest 为 `3eb63d3ef90188bac1ce9f354987e4d2a068e15bf6e6b9e27c549aa144d95df6`；等待 milestone exact-ref Windows CI 后关闭 ITEM-04。

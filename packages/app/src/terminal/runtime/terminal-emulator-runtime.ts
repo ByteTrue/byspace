@@ -29,6 +29,7 @@ import {
   type TerminalLocalFileLinkTarget,
 } from "../local-links/terminal-local-link-provider";
 import { resolveTerminalFontFamily, resolveTerminalFontSize } from "./terminal-font";
+import { nativePerformanceTrace, traceInstant } from "@/performance/native-trace";
 
 export type TerminalOutputData = Uint8Array;
 
@@ -624,6 +625,12 @@ export class TerminalEmulatorRuntime {
       suppressInput: input.suppressInput ?? false,
       ...(input.onCommitted ? { onCommitted: input.onCommitted } : {}),
     });
+    if (nativePerformanceTrace.isEnabled()) {
+      traceInstant("paseo.terminal.runtime-write-enqueued", {
+        size: String(input.data.byteLength),
+        queueDepth: String(this.outputOperations.length),
+      });
+    }
     this.processOutputQueue();
   }
 
@@ -870,6 +877,12 @@ export class TerminalEmulatorRuntime {
   }
 
   private submitWrite(terminal: Terminal, operation: TerminalOutputOperation): void {
+    const traceEnabled = nativePerformanceTrace.isEnabled();
+    if (traceEnabled) {
+      traceInstant("paseo.terminal.runtime-operation-start", {
+        size: String(operation.data.byteLength),
+      });
+    }
     // Synchronous per-write tracking must run in frame order; doing it here in the drain
     // loop preserves that ordering even though the writes are submitted without waiting.
     const text = this.inputModeDecoder.decode(operation.data, { stream: true });
@@ -881,6 +894,11 @@ export class TerminalEmulatorRuntime {
     const onCommitted = operation.onCommitted;
     if (!onCommitted) {
       try {
+        if (traceEnabled) {
+          traceInstant("paseo.terminal.runtime-xterm-write", {
+            size: String(operation.data.byteLength),
+          });
+        }
         terminal.write(operation.data);
       } catch {
         // Match existing behavior: a failed write still proceeds with no commit callback.
@@ -895,6 +913,11 @@ export class TerminalEmulatorRuntime {
     };
     this.pendingWriteCommits.add(commit);
     try {
+      if (traceEnabled) {
+        traceInstant("paseo.terminal.runtime-xterm-write", {
+          size: String(operation.data.byteLength),
+        });
+      }
       terminal.write(operation.data, commit);
     } catch {
       commit();

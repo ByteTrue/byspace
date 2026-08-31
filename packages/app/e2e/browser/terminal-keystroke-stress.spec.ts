@@ -1,20 +1,29 @@
-import { performance } from "node:perf_hooks";
+import { createHash } from "node:crypto";
+import path from "node:path";
 import type { Page, TestInfo } from "@playwright/test";
 import { test, expect } from "../support/fixtures";
+import { runWorkspaceActionFromCommandCenter } from "../support/helpers/command-center-workspace-actions";
+import { openAgentRoute } from "../support/helpers/mock-agent";
 import { TerminalE2EHarness, type TerminalInstance } from "../support/helpers/terminal-dsl";
 import {
   installTerminalKeystrokeStressProbe,
   readTerminalKeystrokeStressReport,
   resetTerminalKeystrokeStressProbe,
+  readTerminalPerformanceEnvironment,
   type LatencyStats,
 } from "../support/helpers/terminal-probes";
 import { waitForTerminalContent } from "../support/helpers/terminal-perf";
 
 const INPUT_TEXT = buildStressText(600);
-const BIG_DIFF_BYTES = 256_000;
-const SMALL_AGENT_STREAM_UPDATES = 1000;
 const STRESS_TIMEOUT_MS = 15_000;
 const RUN_MANUAL_TERMINAL_PERF = process.env.PASEO_TERMINAL_PERF_E2E === "1";
+const TERMINAL_TRANSPORT = process.env.PASEO_TERMINAL_TRANSPORT === "relay" ? "relay" : "direct";
+const WORKLOAD_FIXTURE = path.resolve(__dirname, "../fixtures/terminal-workload.mjs");
+const WORKLOAD_OUTPUT_COUNT = 1000;
+const WORKLOAD_OUTPUT_PAYLOAD = "x";
+const WORKLOAD_INPUT_COUNT = 24;
+const WORKLOAD_AGENT_STREAM_UPDATE_COUNT = 1000;
+const WORKLOAD_BIG_DIFF_BYTES = 256_000;
 const terminalPerfDescribe = RUN_MANUAL_TERMINAL_PERF ? test.describe : test.describe.skip;
 
 interface DaemonEchoReport {
@@ -41,9 +50,13 @@ terminalPerfDescribe("Terminal keystroke stress", () => {
   test("logs daemon-only and app keystroke echo latency under burst input", async ({
     page,
   }, testInfo) => {
-    test.setTimeout(75_000);
+    test.setTimeout(120_000);
 
-    const daemonTerminal = await harness.createTerminal({ name: "daemon-keystroke-baseline" });
+    const daemonTerminal = await harness.createTerminal({
+      name: "daemon-keystroke-baseline",
+      command: process.execPath,
+      args: [WORKLOAD_FIXTURE, "--mode", "echo"],
+    });
     try {
       const daemonReport = await measureDaemonBurstEcho(harness, daemonTerminal, INPUT_TEXT);
       await attachJson(testInfo, "daemon-keystroke-baseline", daemonReport);
@@ -55,6 +68,11 @@ terminalPerfDescribe("Terminal keystroke stress", () => {
     }
 
     await installTerminalKeystrokeStressProbe(page);
+    await attachJson(
+      testInfo,
+      "environment",
+      await readTerminalPerformanceEnvironment(page, TERMINAL_TRANSPORT),
+    );
     const appBaselineReport = await measureAppBurstEcho({
       page,
       harness,
@@ -67,6 +85,7 @@ terminalPerfDescribe("Terminal keystroke stress", () => {
     expect(appBaselineReport.inputFramePayloadBytes).toBeGreaterThanOrEqual(INPUT_TEXT.length);
     expect(appBaselineReport.outputFramePayloadBytes).toBeGreaterThanOrEqual(INPUT_TEXT.length);
     expect(appBaselineReport.keydownToXtermCommitMs?.count ?? 0).toBeGreaterThan(0);
+    expectFrameBudgets(appBaselineReport);
 
     const appObserveNodeBurstReport = await measureAppObservingNodeBurstEcho({
       page,
@@ -83,41 +102,37 @@ terminalPerfDescribe("Terminal keystroke stress", () => {
       INPUT_TEXT.length,
     );
     expect(appObserveNodeBurstReport.xtermWriteCount).toBeGreaterThan(0);
+    expectFrameBudgets(appObserveNodeBurstReport);
 
-    const appSmallChunksReport = await measureAppBurstEcho({
-      page,
-      harness,
-      terminalName: "app-keystroke-stress-small-agent-chunks",
-      agentStreamUpdateCount: SMALL_AGENT_STREAM_UPDATES,
-    });
-    await attachJson(testInfo, "app-keystroke-stress-small-agent-chunks", appSmallChunksReport);
-    console.log("[terminal-stress-app-small-agent-chunks]", JSON.stringify(appSmallChunksReport));
-
-    expect(appSmallChunksReport.keydownCount).toBeGreaterThanOrEqual(INPUT_TEXT.length);
-    expect(appSmallChunksReport.inputFramePayloadBytes).toBeGreaterThanOrEqual(INPUT_TEXT.length);
-    expect(appSmallChunksReport.outputFramePayloadBytes).toBeGreaterThanOrEqual(INPUT_TEXT.length);
-    expect(appSmallChunksReport.keydownToXtermCommitMs?.count ?? 0).toBeGreaterThan(0);
-    expect(appSmallChunksReport.agentStreamTextMessageCount).toBeGreaterThanOrEqual(
-      SMALL_AGENT_STREAM_UPDATES,
+    const workloadReport = await measureNodeWorkload({ page, harness });
+    await attachJson(testInfo, "node-workload-combined", workloadReport);
+    console.log("[terminal-stress-node-workload-combined]", JSON.stringify(workloadReport));
+    expect(workloadReport.outputSequenceCount).toBe(WORKLOAD_OUTPUT_COUNT);
+    expect(workloadReport.outputSequenceDuplicateCount).toBe(0);
+    expect(workloadReport.outputSequenceOutOfOrderCount).toBe(0);
+    expect(workloadReport.outputSequenceMissingCount).toBe(0);
+    expect(workloadReport.outputSequenceMalformedCount).toBe(0);
+    expect(workloadReport.outputPayloadMismatchCount).toBe(0);
+    expect(workloadReport.inputEchoCount).toBe(WORKLOAD_INPUT_COUNT);
+    expect(workloadReport.inputEchoDuplicateCount).toBe(0);
+    expect(workloadReport.inputEchoOutOfOrderCount).toBe(0);
+    expect(workloadReport.inputEchoMissingCount).toBe(0);
+    expect(workloadReport.inputEchoUnexpectedCount).toBe(0);
+    expect(workloadReport.inputEchoMalformedCount).toBe(0);
+    expect(workloadReport.outputDoneMarkerCount).toBe(1);
+    expect(workloadReport.outputDoneDigestValid).toBe(true);
+    expect(workloadReport.snapshotFrameCount).toBe(0);
+    expect(workloadReport.restoreFrameCount).toBe(0);
+    expect(workloadReport.xtermWriteCount).toBeGreaterThan(0);
+    expect(workloadReport.agentStreamTextMessageCount).toBeGreaterThanOrEqual(
+      WORKLOAD_AGENT_STREAM_UPDATE_COUNT,
     );
-
-    const appBigDiffReport = await measureAppBurstEcho({
-      page,
-      harness,
-      terminalName: "app-keystroke-stress-big-diff",
-      bigDiffBytes: BIG_DIFF_BYTES,
-    });
-    await attachJson(testInfo, "app-keystroke-stress-big-diff", appBigDiffReport);
-    console.log("[terminal-stress-app-big-diff]", JSON.stringify(appBigDiffReport));
-
-    expect(appBigDiffReport.keydownCount).toBeGreaterThanOrEqual(INPUT_TEXT.length);
-    expect(appBigDiffReport.inputFramePayloadBytes).toBeGreaterThanOrEqual(INPUT_TEXT.length);
-    expect(appBigDiffReport.outputFramePayloadBytes).toBeGreaterThanOrEqual(INPUT_TEXT.length);
-    expect(appBigDiffReport.keydownToXtermCommitMs?.count ?? 0).toBeGreaterThan(0);
-    expect(appBigDiffReport.largeAgentStreamTextMessageCount).toBeGreaterThanOrEqual(1);
-    expect(appBigDiffReport.largestAgentStreamTextMessageBytes).toBeGreaterThanOrEqual(
-      BIG_DIFF_BYTES,
+    expect(workloadReport.agentStreamAgentIds.length).toBeGreaterThanOrEqual(1);
+    expect(workloadReport.largeAgentStreamTextMessageCount).toBeGreaterThanOrEqual(1);
+    expect(workloadReport.largestAgentStreamTextMessageBytes).toBeGreaterThanOrEqual(
+      WORKLOAD_BIG_DIFF_BYTES,
     );
+    expectFrameBudgets(workloadReport);
   });
 });
 
@@ -125,63 +140,26 @@ async function measureAppBurstEcho(input: {
   page: Page;
   harness: TerminalE2EHarness;
   terminalName: string;
-  bigDiffBytes?: number;
-  agentStreamUpdateCount?: number;
 }) {
-  const appTerminal = await input.harness.createTerminal({ name: input.terminalName });
+  const appTerminal = await input.harness.createTerminal({
+    name: input.terminalName,
+    command: process.execPath,
+    args: [WORKLOAD_FIXTURE, "--mode", "echo"],
+  });
   try {
     await input.harness.openTerminal(input.page, { terminalId: appTerminal.id });
-    await input.harness.setupPrompt(input.page);
-
-    const agent =
-      input.bigDiffBytes === undefined && input.agentStreamUpdateCount === undefined
-        ? null
-        : await input.harness.client.createAgent({
-            provider: "mock",
-            cwd: input.harness.tempRepo.path,
-            workspaceId: input.harness.workspaceId,
-            title: "Large WebSocket payload",
-            modeId: "load-test",
-          });
-
-    const bigDiffBytes = input.bigDiffBytes;
-    const agentStreamUpdateCount = input.agentStreamUpdateCount;
-    const startAgentLoad =
-      agent === null
-        ? null
-        : () => {
-            if (bigDiffBytes !== undefined) {
-              return emitLargeDiffAgentPayload(input.harness, {
-                agentId: agent.id,
-                bytes: bigDiffBytes,
-              });
-            }
-            if (agentStreamUpdateCount !== undefined) {
-              return emitRapidAgentStreamUpdates(input.harness, {
-                agentId: agent.id,
-                count: agentStreamUpdateCount,
-              });
-            }
-            return Promise.resolve();
-          };
+    await waitForTerminalContent(
+      input.page,
+      (content) => content.includes("WORKLOAD_READY"),
+      STRESS_TIMEOUT_MS,
+    );
 
     const terminal = input.harness.terminalSurface(input.page);
-    await terminal.press("Control+c");
-    await input.page.waitForTimeout(200);
     await resetTerminalKeystrokeStressProbe(input.page);
-
-    const activeAgentLoadPromise = startAgentLoad === null ? Promise.resolve() : startAgentLoad();
 
     await terminal.pressSequentially(INPUT_TEXT, { delay: 0 });
     await waitForAppStressEcho(input.page, INPUT_TEXT);
     await waitForAppProbePayload(input.page, INPUT_TEXT.length);
-    if (input.bigDiffBytes !== undefined) {
-      await waitForLargeAgentStreamMessage(input.page, input.bigDiffBytes);
-    }
-    if (input.agentStreamUpdateCount !== undefined) {
-      await waitForAgentStreamMessages(input.page, input.agentStreamUpdateCount);
-    }
-    await activeAgentLoadPromise;
 
     return readTerminalKeystrokeStressReport(input.page, INPUT_TEXT);
   } finally {
@@ -194,10 +172,18 @@ async function measureAppObservingNodeBurstEcho(input: {
   harness: TerminalE2EHarness;
   terminalName: string;
 }) {
-  const appTerminal = await input.harness.createTerminal({ name: input.terminalName });
+  const appTerminal = await input.harness.createTerminal({
+    name: input.terminalName,
+    command: process.execPath,
+    args: [WORKLOAD_FIXTURE, "--mode", "echo"],
+  });
   try {
     await input.harness.openTerminal(input.page, { terminalId: appTerminal.id });
-    await input.harness.setupPrompt(input.page);
+    await waitForTerminalContent(
+      input.page,
+      (content) => content.includes("WORKLOAD_READY"),
+      STRESS_TIMEOUT_MS,
+    );
 
     await resetTerminalKeystrokeStressProbe(input.page);
 
@@ -215,6 +201,218 @@ async function measureAppObservingNodeBurstEcho(input: {
   } finally {
     await input.harness.killTerminal(appTerminal.id);
   }
+}
+
+async function measureNodeWorkload(input: {
+  page: Page;
+  harness: TerminalE2EHarness;
+}): Promise<
+  ReturnType<typeof readTerminalKeystrokeStressReport> extends Promise<infer T> ? T : never
+> {
+  const tokenPrefix = `WORKLOAD_TOKEN_${Date.now().toString(36)}`;
+  const inputEchoes = Array.from({ length: WORKLOAD_INPUT_COUNT }, (_, seq) => ({
+    seq,
+    nonce: `${tokenPrefix}_nonce_${seq}`,
+  }));
+  const terminal = await input.harness.createTerminal({
+    name: "cross-platform-node-workload-combined",
+    command: process.execPath,
+    args: [
+      WORKLOAD_FIXTURE,
+      "--count",
+      String(WORKLOAD_OUTPUT_COUNT),
+      "--interval-ms",
+      "2",
+      "--token",
+      tokenPrefix,
+    ],
+  });
+  const largePayloadAgentTitle = "Combined terminal large payload";
+  const largePayloadAgent = await input.harness.client.createAgent({
+    provider: "mock",
+    cwd: input.harness.tempRepo.path,
+    workspaceId: input.harness.workspaceId,
+    title: largePayloadAgentTitle,
+    modeId: "load-test",
+  });
+  const tokenText = inputEchoes.map((echo) => `${tokenPrefix}:${echo.seq}:${echo.nonce}`);
+  const browserInputText = ["GO", ...tokenText].join("");
+  const workloadAgentIds = [largePayloadAgent.id];
+  try {
+    await input.harness.openTerminal(input.page, { terminalId: terminal.id });
+    await waitForTerminalContent(
+      input.page,
+      (content) => content.includes("WORKLOAD_READY"),
+      STRESS_TIMEOUT_MS,
+    );
+    await openAgentRoute(input.page, {
+      workspaceId: input.harness.workspaceId,
+      agentId: largePayloadAgent.id,
+    });
+    await expect(
+      input.page.getByRole("button", { name: largePayloadAgentTitle, exact: true }),
+    ).toBeVisible();
+    await runWorkspaceActionFromCommandCenter(input.page, "Split pane right");
+    await input.page.getByTestId(`workspace-tab-terminal_${terminal.id}`).first().click();
+    await runWorkspaceActionFromCommandCenter(input.page, "Move tab right");
+    await expect(input.page.getByRole("textbox", { name: "Message agent..." })).toHaveCount(1);
+    await waitForTerminalContent(
+      input.page,
+      (content) => content.includes("WORKLOAD_READY"),
+      STRESS_TIMEOUT_MS,
+    );
+
+    const terminalSurface = input.harness.terminalSurface(input.page);
+    await terminalSurface.click();
+    await resetTerminalKeystrokeStressProbe(input.page);
+    await Promise.all(
+      workloadAgentIds.map((agentId) =>
+        emitRapidAgentStreamUpdates(input.harness, { agentId, count: 1 }).then(() =>
+          waitForAgentTurn(input.harness, agentId),
+        ),
+      ),
+    );
+    await waitForAppAgentStreams(input.page, workloadAgentIds);
+    await input.page.waitForTimeout(100);
+    await resetTerminalKeystrokeStressProbe(input.page);
+    await terminalSurface.pressSequentially("GO", { delay: 0 });
+    await terminalSurface.press("Enter");
+    await waitForTerminalContent(
+      input.page,
+      (content) => content.includes("OUT:0:"),
+      STRESS_TIMEOUT_MS,
+    );
+
+    const activeAgentLoadPromise = emitCombinedAgentLoad(input.harness, {
+      agentId: largePayloadAgent.id,
+      bigDiffBytes: WORKLOAD_BIG_DIFF_BYTES,
+      streamUpdateCount: WORKLOAD_AGENT_STREAM_UPDATE_COUNT,
+    });
+    for (const text of tokenText) {
+      await terminalSurface.pressSequentially(text, { delay: 0 });
+      await terminalSurface.press("Enter");
+    }
+
+    await waitForTerminalContent(
+      input.page,
+      (content) => content.includes(`WORKLOAD_DONE:${WORKLOAD_OUTPUT_COUNT}:`),
+      STRESS_TIMEOUT_MS,
+    );
+    await activeAgentLoadPromise;
+    const reportOptions = {
+      expectedSequenceCount: WORKLOAD_OUTPUT_COUNT,
+      expectedOutputPayload: WORKLOAD_OUTPUT_PAYLOAD,
+      expectedInputEchoes: inputEchoes,
+      expectedOutputDigest: workloadDigest(WORKLOAD_OUTPUT_COUNT, WORKLOAD_OUTPUT_PAYLOAD),
+    };
+    await waitForWorkloadIntegrity(input.page, {
+      inputText: browserInputText,
+      expectedAgentIds: workloadAgentIds,
+      ...reportOptions,
+    });
+    return readTerminalKeystrokeStressReport(input.page, browserInputText, reportOptions);
+  } finally {
+    await input.harness.killTerminal(terminal.id);
+  }
+}
+
+async function emitCombinedAgentLoad(
+  harness: TerminalE2EHarness,
+  input: {
+    agentId: string;
+    bigDiffBytes: number;
+    streamUpdateCount: number;
+  },
+): Promise<void> {
+  await emitRapidAgentStreamUpdates(harness, {
+    agentId: input.agentId,
+    count: input.streamUpdateCount,
+  });
+  await waitForAgentTurn(harness, input.agentId);
+  await emitLargeDiffAgentPayload(harness, {
+    agentId: input.agentId,
+    bytes: input.bigDiffBytes,
+  });
+  await waitForAgentTurn(harness, input.agentId);
+}
+
+async function waitForAgentTurn(harness: TerminalE2EHarness, agentId: string): Promise<void> {
+  const result = await harness.client.waitForFinish(agentId, STRESS_TIMEOUT_MS);
+  if (result.status !== "idle" || result.final?.lastError) {
+    throw new Error(`Combined terminal workload agent turn failed: ${JSON.stringify(result)}`);
+  }
+}
+
+function workloadDigest(count: number, payload = "x"): string {
+  const digest = createHash("sha256");
+  for (let index = 0; index < count; index += 1) {
+    digest.update(`OUT:${index}:${payload}\n`);
+  }
+  return digest.digest("hex");
+}
+
+async function waitForAppAgentStreams(page: Page, expectedAgentIds: string[]): Promise<void> {
+  const deadline = Date.now() + STRESS_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const report = await readTerminalKeystrokeStressReport(page, "");
+    if (expectedAgentIds.every((agentId) => report.agentStreamAgentIds.includes(agentId))) {
+      return;
+    }
+    await page.waitForTimeout(25);
+  }
+  const report = await readTerminalKeystrokeStressReport(page, "");
+  throw new Error(
+    `Timed out waiting for browser agent streams: ${JSON.stringify(report.agentStreamAgentIds)}`,
+  );
+}
+
+async function waitForWorkloadIntegrity(
+  page: Page,
+  input: {
+    inputText: string;
+    expectedInputEchoes: Array<{ seq: number; nonce: string }>;
+    expectedSequenceCount: number;
+    expectedOutputPayload: string;
+    expectedOutputDigest: string;
+    expectedAgentIds: string[];
+  },
+): Promise<void> {
+  const deadline = Date.now() + STRESS_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const report = await readTerminalKeystrokeStressReport(page, input.inputText, {
+      expectedSequenceCount: input.expectedSequenceCount,
+      expectedOutputPayload: input.expectedOutputPayload,
+      expectedInputEchoes: input.expectedInputEchoes,
+      expectedOutputDigest: input.expectedOutputDigest,
+    });
+    if (
+      report.outputSequenceCount === input.expectedSequenceCount &&
+      report.outputSequenceMissingCount === 0 &&
+      report.outputSequenceDuplicateCount === 0 &&
+      report.outputSequenceOutOfOrderCount === 0 &&
+      report.outputSequenceMalformedCount === 0 &&
+      report.outputPayloadMismatchCount === 0 &&
+      report.inputEchoCount === input.expectedInputEchoes.length &&
+      report.inputEchoMissingCount === 0 &&
+      report.inputEchoDuplicateCount === 0 &&
+      report.inputEchoOutOfOrderCount === 0 &&
+      report.inputEchoUnexpectedCount === 0 &&
+      report.inputEchoMalformedCount === 0 &&
+      report.outputDoneMarkerCount === 1 &&
+      report.outputDoneDigestValid === true &&
+      input.expectedAgentIds.every((agentId) => report.agentStreamAgentIds.includes(agentId))
+    ) {
+      return;
+    }
+    await page.waitForTimeout(25);
+  }
+  const report = await readTerminalKeystrokeStressReport(page, input.inputText, {
+    expectedSequenceCount: input.expectedSequenceCount,
+    expectedOutputPayload: input.expectedOutputPayload,
+    expectedInputEchoes: input.expectedInputEchoes,
+    expectedOutputDigest: input.expectedOutputDigest,
+  });
+  throw new Error(`Timed out waiting for combined workload integrity: ${JSON.stringify(report)}`);
 }
 
 async function emitRapidAgentStreamUpdates(
@@ -261,6 +459,7 @@ async function measureDaemonBurstEcho(
 
   try {
     await new Promise((resolve) => setTimeout(resolve, 250));
+    outputEventCount = 0;
     echoedBytes = 0;
     outputTimesByByte.length = 0;
 
@@ -327,36 +526,6 @@ async function waitForAppProbePayload(page: Page, expectedBytes: number): Promis
   }
 }
 
-async function waitForLargeAgentStreamMessage(page: Page, expectedBytes: number): Promise<void> {
-  const deadline = Date.now() + STRESS_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    const report = await readTerminalKeystrokeStressReport(page, INPUT_TEXT);
-    if (report.largestAgentStreamTextMessageBytes >= expectedBytes) {
-      return;
-    }
-    await page.waitForTimeout(25);
-  }
-  const report = await readTerminalKeystrokeStressReport(page, INPUT_TEXT);
-  throw new Error(
-    `Timed out waiting for large agent_stream message: largest=${report.largestAgentStreamTextMessageBytes}, expected=${expectedBytes}`,
-  );
-}
-
-async function waitForAgentStreamMessages(page: Page, expectedCount: number): Promise<void> {
-  const deadline = Date.now() + STRESS_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    const report = await readTerminalKeystrokeStressReport(page, INPUT_TEXT);
-    if (report.agentStreamTextMessageCount >= expectedCount) {
-      return;
-    }
-    await page.waitForTimeout(25);
-  }
-  const report = await readTerminalKeystrokeStressReport(page, INPUT_TEXT);
-  throw new Error(
-    `Timed out waiting for agent_stream messages: count=${report.agentStreamTextMessageCount}, expected=${expectedCount}`,
-  );
-}
-
 async function attachJson(testInfo: TestInfo, name: string, value: unknown): Promise<void> {
   await testInfo.attach(name, {
     body: JSON.stringify(value, null, 2),
@@ -392,4 +561,9 @@ function summarizeLatency(values: number[]): LatencyStats {
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+function expectFrameBudgets(report: { rafMaxGapMs: number; longTaskMaxMs: number }): void {
+  expect(report.rafMaxGapMs).toBeLessThan(1000);
+  expect(report.longTaskMaxMs).toBeLessThan(1000);
 }

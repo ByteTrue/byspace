@@ -5349,6 +5349,12 @@ export class DaemonClient {
   sendTerminalInput(terminalId: string, message: TerminalInput["message"]): void {
     const frame = this.terminalStreams.encodeInput(terminalId, message);
     if (frame) {
+      if (this.config.trace?.isEnabled()) {
+        this.traceInstant("paseo.terminal.client.input-frame", {
+          opcode: String(frame[0] ?? 0),
+          size: String(Math.max(0, frame.byteLength - 2)),
+        });
+      }
       this.sendBinaryFrame(frame);
       return;
     }
@@ -5752,10 +5758,18 @@ export class DaemonClient {
     this.runtimeMetrics?.recordMessage(msgType, bytes, perfNow() - startMs);
     if (parsed.data.message.type === "agent_stream") {
       this.runtimeMetrics?.recordAgentStream(parsed.data.message.payload);
+      if (this.config.trace?.isEnabled()) {
+        this.traceInstant("paseo.agent.stream.inbound", {
+          agentId: parsed.data.message.payload.agentId,
+          size: String(bytes),
+        });
+      }
     }
   }
 
   private tryHandleBinaryFrame(rawBytes: Uint8Array): boolean {
+    const traceEnabled = this.config.trace?.isEnabled() === true;
+    const receivedAtMs = traceEnabled ? perfNow() : 0;
     const fileFrame = decodeFileTransferFrame(rawBytes);
     if (fileFrame) {
       this.traceInstant("paseo.ws.message.inbound", {
@@ -5773,6 +5787,15 @@ export class DaemonClient {
     if (!frame) {
       return false;
     }
+    if (traceEnabled) {
+      const traceArgs = {
+        opcode: String(frame.opcode),
+        receivedAtMs: String(receivedAtMs),
+        size: String(frame.payload.byteLength),
+      };
+      this.traceInstant("paseo.terminal.client.output-frame", traceArgs);
+      this.traceInstant("paseo.terminal.client.frame-decoded", traceArgs);
+    }
     this.traceInstant("paseo.ws.message.inbound", {
       envelopeType: "binary",
       messageType: "terminal",
@@ -5780,7 +5803,16 @@ export class DaemonClient {
     });
     this.consecutiveLivenessFailures = 0;
     const binaryStartMs = perfNow();
-    this.terminalStreams.handleFrame(frame);
+    const terminalEmitOpen = traceEnabled
+      ? this.beginTraceSection("paseo.terminal.client.terminal-emit", {
+          opcode: String(frame.opcode),
+        })
+      : false;
+    try {
+      this.terminalStreams.handleFrame(frame);
+    } finally {
+      this.endTraceSection(terminalEmitOpen);
+    }
     let frameKind: "output" | "snapshot" | "other" = "other";
     if (frame.opcode === TerminalStreamOpcode.Output) {
       frameKind = "output";

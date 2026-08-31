@@ -60,6 +60,7 @@ import {
 } from "./terminal-resize-debouncer";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
+import { nativePerformanceTrace, traceInstant } from "@/performance/native-trace";
 import {
   applyTerminalRendererReadyChange,
   resolveTerminalStreamTarget,
@@ -505,6 +506,11 @@ export function TerminalPane({
     ({ terminalId: outputTerminalId, data }: { terminalId: string; data: Uint8Array }) => {
       if (terminalIdRef.current !== outputTerminalId) {
         return;
+      }
+      if (nativePerformanceTrace.isEnabled()) {
+        traceInstant("paseo.terminal.stream-controller-to-emulator-write", {
+          size: String(data.byteLength),
+        });
       }
       emulatorRef.current?.writeOutput(data);
     },

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { forkPaseoHomeMetadata, resolvePaseoHomePath } from "./paseo-home-fork";
 import { startIsolatedHostDaemon } from "./isolated-host-daemon";
+import { startLocalWranglerRelay, type LocalWranglerRelay } from "./local-wrangler-relay";
 
 export interface E2EWorker {
   close(): Promise<void>;
@@ -166,11 +167,17 @@ export async function startE2EWorker(
   const editorRecordPath = path.join(paseoHome, "editor-open-records.jsonl");
   const serverId = `srv_e2e_worker_${workerIndex}`;
 
+  let relay: LocalWranglerRelay | null = null;
+  let daemon: Awaited<ReturnType<typeof startIsolatedHostDaemon>> | null = null;
   try {
     await applyMetadataFork(paseoHome, options.forkProviders ?? []);
-    const daemon = await startIsolatedHostDaemon(serverId, {
+    if (process.env.PASEO_TERMINAL_TRANSPORT === "relay") {
+      relay = await startLocalWranglerRelay();
+    }
+    daemon = await startIsolatedHostDaemon(serverId, {
       paseoHome,
       preserveHome,
+      ...(relay ? { mutableRelay: { enabled: true, endpoint: relay.endpoint } } : {}),
       environment: {
         NODE_ENV: "development",
         PATH: `${fakeEditorBin}${path.delimiter}${process.env.PATH ?? ""}`,
@@ -182,20 +189,41 @@ export async function startE2EWorker(
     process.env.E2E_SERVER_ID = daemon.serverId;
     process.env.E2E_PASEO_HOME = daemon.paseoHome;
     process.env.E2E_EDITOR_RECORD_PATH = editorRecordPath;
-    delete process.env.E2E_RELAY_PORT;
-    delete process.env.E2E_RELAY_DAEMON_PUBLIC_KEY;
+    if (relay) {
+      const keypair = JSON.parse(
+        await readFile(path.join(daemon.paseoHome, "daemon-keypair.json"), "utf8"),
+      ) as { publicKeyB64?: unknown };
+      if (typeof keypair.publicKeyB64 !== "string" || keypair.publicKeyB64.length === 0) {
+        throw new Error("Isolated daemon keypair did not contain a public key");
+      }
+      process.env.E2E_RELAY_PORT = String(relay.port);
+      process.env.E2E_RELAY_DAEMON_PUBLIC_KEY = keypair.publicKeyB64;
+    } else {
+      delete process.env.E2E_RELAY_PORT;
+      delete process.env.E2E_RELAY_DAEMON_PUBLIC_KEY;
+    }
 
+    const runningDaemon = daemon;
     console.log(
-      `[e2e] Worker ${workerIndex} daemon started on port ${daemon.port}, home: ${daemon.paseoHome}`,
+      `[e2e] Worker ${workerIndex} daemon started on port ${runningDaemon.port}, home: ${runningDaemon.paseoHome}`,
     );
     return {
       close: async () => {
-        await daemon.close();
-        await rm(fakeEditorBin, { recursive: true, force: true });
-        console.log(`[e2e] Worker ${workerIndex} daemon stopped`);
+        try {
+          await runningDaemon.close();
+        } finally {
+          try {
+            await relay?.close();
+          } finally {
+            await rm(fakeEditorBin, { recursive: true, force: true });
+            console.log(`[e2e] Worker ${workerIndex} daemon stopped`);
+          }
+        }
       },
     };
   } catch (error) {
+    await daemon?.close().catch(() => undefined);
+    await relay?.close().catch(() => undefined);
     await rm(fakeEditorBin, { recursive: true, force: true });
     if (!preserveHome) await rm(paseoHome, { recursive: true, force: true });
     throw error;

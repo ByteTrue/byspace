@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import type { Page } from "@playwright/test";
 
 export interface TerminalRenderProbeSnapshot {
@@ -41,6 +42,7 @@ export interface TerminalKeystrokeStressReport {
   largeTextMessageCount: number;
   largestTextMessageBytes: number;
   agentStreamTextMessageCount: number;
+  agentStreamAgentIds: string[];
   agentStreamTextMessagePayloadBytes: number;
   largeAgentStreamTextMessageCount: number;
   largestAgentStreamTextMessageBytes: number;
@@ -61,15 +63,34 @@ export interface TerminalKeystrokeStressReport {
   appEmulatorWriteToRuntimeEnqueuedMs: LatencyStats | null;
   appRuntimeEnqueuedToOperationStartMs: LatencyStats | null;
   appRuntimeOperationStartToXtermWriteMs: LatencyStats | null;
-  appRuntimeXtermWriteToCommitMs: LatencyStats | null;
   appBinaryReceivedToRuntimeEnqueuedMs: LatencyStats | null;
   appBinaryReceivedToRuntimeOperationStartMs: LatencyStats | null;
-  appBinaryReceivedToXtermCommitMs: LatencyStats | null;
   outputFrameToXtermWriteMs: LatencyStats | null;
+  snapshotFrameCount: number;
+  restoreFrameCount: number;
   xtermWriteDurationMs: LatencyStats | null;
   keydownToXtermCommitMs: LatencyStats | null;
   firstKeydownAt: number | null;
   lastXtermCommitAt: number | null;
+  outputSequenceCount: number;
+  outputSequenceDuplicateCount: number;
+  outputSequenceOutOfOrderCount: number;
+  outputSequenceMissingCount: number;
+  outputSequenceMalformedCount: number;
+  outputPayloadMismatchCount: number;
+  inputEchoCount: number;
+  inputEchoDuplicateCount: number;
+  inputEchoOutOfOrderCount: number;
+  inputEchoMissingCount: number;
+  inputEchoUnexpectedCount: number;
+  inputEchoMalformedCount: number;
+  outputDoneMarkerCount: number;
+  outputDoneDigest: string | null;
+  outputDoneDigestValid: boolean | null;
+  rafMaxGapMs: number;
+  longTaskSupported: boolean;
+  longTaskCount: number;
+  longTaskMaxMs: number;
 }
 
 export interface LatencyStats {
@@ -288,16 +309,6 @@ export function summarizeTerminalRenderProbe(
 
 export async function installTerminalKeystrokeStressProbe(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    interface TimedTextEvent {
-      at: number;
-      text: string;
-      bytes: number;
-    }
-    interface TimedTextMessageEvent {
-      at: number;
-      bytes: number;
-      kind: string | null;
-    }
     interface XtermWriteEvent {
       at: number;
       committedAt: number | null;
@@ -308,74 +319,45 @@ export async function installTerminalKeystrokeStressProbe(page: Page): Promise<v
       type: string;
       at: number;
       bytes?: number;
+      durationMs?: number;
+      opcode?: number;
       queueDepth?: number;
+      receivedAtMs?: number;
+    }
+    interface TraceEvent {
+      name: string;
+      at: number;
+      durationMs: number;
+      args: Record<string, string>;
+    }
+    interface BrowserPerformanceTraceSink {
+      isEnabled: () => boolean;
+      beginSection: (name: string, args?: Record<string, string>) => void;
+      endSection: () => void;
     }
     interface StressProbeState {
       keydowns: Array<{ at: number; key: string }>;
-      inputFrames: TimedTextEvent[];
-      outputFrames: TimedTextEvent[];
-      textMessageFrames: TimedTextMessageEvent[];
       xtermWrites: XtermWriteEvent[];
       appEvents: AppProbeEvent[];
+      traceEvents: TraceEvent[];
+      rafMaxGapMs: number;
+      longTaskSupported: boolean;
+      longTaskCount: number;
+      longTaskMaxMs: number;
       reset: () => void;
-      report: (inputText: string) => TerminalKeystrokeStressReport;
+      report: (
+        inputText: string,
+        options?: {
+          expectedSequenceCount?: number;
+          expectedOutputPayload?: string;
+          expectedInputEchoes?: Array<{ seq: number; nonce: string }>;
+          expectedOutputDigest?: string;
+        },
+      ) => TerminalKeystrokeStressReport;
     }
 
     const INPUT_OPCODE = 0x02;
     const OUTPUT_OPCODE = 0x01;
-    const decoder = new TextDecoder();
-
-    function bytesFrom(data: unknown): Uint8Array | null {
-      if (data instanceof Uint8Array) return data;
-      if (data instanceof ArrayBuffer) return new Uint8Array(data);
-      if (ArrayBuffer.isView(data)) {
-        return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-      }
-      return null;
-    }
-
-    function eventDataBytes(data: unknown): Promise<Uint8Array | null> {
-      const bytes = bytesFrom(data);
-      if (bytes) return Promise.resolve(bytes);
-      if (typeof Blob !== "undefined" && data instanceof Blob) {
-        return data.arrayBuffer().then((buffer) => new Uint8Array(buffer));
-      }
-      return Promise.resolve(null);
-    }
-
-    function frameText(bytes: Uint8Array): string {
-      return decoder.decode(bytes.slice(2));
-    }
-
-    function eventDataText(data: unknown): Promise<string | null> {
-      if (typeof data === "string") {
-        return Promise.resolve(data);
-      }
-      if (typeof Blob !== "undefined" && data instanceof Blob) {
-        return data.text();
-      }
-      return Promise.resolve(null);
-    }
-
-    function textMessageKind(text: string): string | null {
-      try {
-        const parsed = JSON.parse(text) as {
-          type?: unknown;
-          message?: {
-            type?: unknown;
-          };
-        };
-        if (typeof parsed.type !== "string") {
-          return null;
-        }
-        if (typeof parsed.message?.type === "string") {
-          return `${parsed.type}:${parsed.message.type}`;
-        }
-        return parsed.type;
-      } catch {
-        return null;
-      }
-    }
 
     function summarize(values: number[]): LatencyStats | null {
       if (values.length === 0) return null;
@@ -415,6 +397,19 @@ export async function installTerminalKeystrokeStressProbe(page: Page): Promise<v
       return counts;
     }
 
+    const traceAppEventTypes: Record<string, string> = {
+      "paseo.terminal.client.input-frame": "daemon-client-input-frame",
+      "paseo.terminal.client.output-frame": "daemon-client-output-frame",
+      "paseo.terminal.client.frame-decoded": "daemon-client-frame-decoded",
+      "paseo.terminal.client.terminal-emit": "daemon-client-terminal-emit",
+      "paseo.terminal.stream-controller.output": "stream-controller-output",
+      "paseo.terminal.stream-controller.on-output": "stream-controller-on-output",
+      "paseo.terminal.stream-controller-to-emulator-write": "terminal-emulator-write-output",
+      "paseo.terminal.runtime-write-enqueued": "runtime-write-enqueued",
+      "paseo.terminal.runtime-operation-start": "runtime-operation-start",
+      "paseo.terminal.runtime-xterm-write": "runtime-xterm-write",
+    };
+
     function appEventsOf(type: string, events: AppProbeEvent[]): AppProbeEvent[] {
       return events.filter((event) => event.type === type);
     }
@@ -428,44 +423,233 @@ export async function installTerminalKeystrokeStressProbe(page: Page): Promise<v
       return values;
     }
 
+    function latencyFromReceivedAt(from: AppProbeEvent[], to: AppProbeEvent[]): number[] {
+      const count = Math.min(from.length, to.length);
+      const values: number[] = [];
+      for (let index = 0; index < count; index += 1) {
+        const receivedAtMs = from[index].receivedAtMs;
+        if (typeof receivedAtMs === "number") {
+          values.push(to[index].at - receivedAtMs);
+        }
+      }
+      return values;
+    }
+
+    function parseOutputLines(text: string): {
+      parsed: Array<{ sequence: number; payload: string }>;
+      malformedCount: number;
+    } {
+      const lines = [...text.matchAll(/(?:^|[\r\n])(OUT[^\r\n]*)(?=[\r\n]|$)/gu)].map(
+        (match) => match[1] ?? "",
+      );
+      const parsed = lines.flatMap((line) => {
+        const match = /^OUT:(\d+):(.*)$/u.exec(line);
+        return match ? [{ sequence: Number(match[1]), payload: match[2] ?? "" }] : [];
+      });
+      return { parsed, malformedCount: lines.length - parsed.length };
+    }
+
+    function parseInputEchoes(text: string): {
+      parsed: Array<{ seq: number; nonce: string }>;
+      malformedCount: number;
+    } {
+      const lines = [...text.matchAll(/(?:^|[\r\n])(ECHO[^\r\n]*)(?=[\r\n]|$)/gu)].map(
+        (match) => match[1] ?? "",
+      );
+      const parsed = lines.flatMap((line) => {
+        const match = /^ECHO:(\d+):([A-Za-z0-9_-]+)$/u.exec(line);
+        return match ? [{ seq: Number(match[1]), nonce: match[2] ?? "" }] : [];
+      });
+      return { parsed, malformedCount: lines.length - parsed.length };
+    }
+
+    function measureSequenceIntegrity(
+      text: string,
+      expectedCount: number | undefined,
+      expectedPayload: string | undefined,
+    ): Pick<
+      TerminalKeystrokeStressReport,
+      | "outputSequenceCount"
+      | "outputSequenceDuplicateCount"
+      | "outputSequenceOutOfOrderCount"
+      | "outputSequenceMissingCount"
+      | "outputSequenceMalformedCount"
+      | "outputPayloadMismatchCount"
+    > {
+      const output = parseOutputLines(text);
+      const values = output.parsed.map((line) => line.sequence);
+      const uniqueValues = new Set(values);
+      let outOfOrderCount = 0;
+      for (let index = 1; index < values.length; index += 1) {
+        if (values[index] <= values[index - 1]) {
+          outOfOrderCount += 1;
+        }
+      }
+      return {
+        outputSequenceCount: values.length,
+        outputSequenceDuplicateCount: values.length - uniqueValues.size,
+        outputSequenceOutOfOrderCount: outOfOrderCount,
+        outputSequenceMissingCount:
+          expectedCount === undefined
+            ? 0
+            : Array.from({ length: expectedCount }, (_, index) => index).filter(
+                (index) => !uniqueValues.has(index),
+              ).length,
+        outputSequenceMalformedCount: output.malformedCount,
+        outputPayloadMismatchCount:
+          expectedPayload === undefined
+            ? 0
+            : output.parsed.filter((line) => line.payload !== expectedPayload).length,
+      };
+    }
+
+    function measureInputEchoIntegrity(
+      text: string,
+      expectedEchoes: Array<{ seq: number; nonce: string }> | undefined,
+    ): Pick<
+      TerminalKeystrokeStressReport,
+      | "inputEchoCount"
+      | "inputEchoDuplicateCount"
+      | "inputEchoOutOfOrderCount"
+      | "inputEchoMissingCount"
+      | "inputEchoUnexpectedCount"
+      | "inputEchoMalformedCount"
+    > {
+      const input = parseInputEchoes(text);
+      const echoes = input.parsed;
+      const keys = echoes.map((echo) => `${echo.seq}:${echo.nonce}`);
+      const uniqueKeys = new Set(keys);
+      let outOfOrderCount = 0;
+      for (let index = 1; index < echoes.length; index += 1) {
+        if (echoes[index].seq <= echoes[index - 1].seq) {
+          outOfOrderCount += 1;
+        }
+      }
+      const expectedKeys = new Set(
+        expectedEchoes?.map((echo) => `${echo.seq}:${echo.nonce}`) ?? [],
+      );
+      return {
+        inputEchoCount: echoes.length,
+        inputEchoDuplicateCount: keys.length - uniqueKeys.size,
+        inputEchoOutOfOrderCount: outOfOrderCount,
+        inputEchoMissingCount:
+          expectedEchoes?.filter((echo) => !uniqueKeys.has(`${echo.seq}:${echo.nonce}`)).length ??
+          0,
+        inputEchoUnexpectedCount: expectedEchoes
+          ? keys.filter((key) => !expectedKeys.has(key)).length
+          : 0,
+        inputEchoMalformedCount: input.malformedCount,
+      };
+    }
+
+    function measureDoneIntegrity(
+      text: string,
+      expectedSequenceCount: number | undefined,
+      expectedOutputDigest: string | undefined,
+    ): Pick<
+      TerminalKeystrokeStressReport,
+      "outputDoneMarkerCount" | "outputDoneDigest" | "outputDoneDigestValid"
+    > {
+      const markers = [...text.matchAll(/WORKLOAD_DONE:(\d+):([a-f0-9]{64})/gu)];
+      const lastMarker = markers.at(-1);
+      const digest = lastMarker?.[2] ?? null;
+      return {
+        outputDoneMarkerCount: markers.length,
+        outputDoneDigest: digest,
+        outputDoneDigestValid:
+          expectedOutputDigest === undefined
+            ? null
+            : markers.length === 1 &&
+              Number(lastMarker?.[1]) === expectedSequenceCount &&
+              digest === expectedOutputDigest,
+      };
+    }
+
+    const traceStack: Array<{ name: string; at: number; args: Record<string, string> }> = [];
+    let lastRafAt = performance.now();
+    let longTaskObserver: PerformanceObserver | null = null;
     const probe: StressProbeState = {
       keydowns: [],
-      inputFrames: [],
-      outputFrames: [],
-      textMessageFrames: [],
       xtermWrites: [],
       appEvents: [],
+      traceEvents: [],
+      rafMaxGapMs: 0,
+      longTaskSupported: false,
+      longTaskCount: 0,
+      longTaskMaxMs: 0,
       reset() {
         this.keydowns = [];
-        this.inputFrames = [];
-        this.outputFrames = [];
-        this.textMessageFrames = [];
         this.xtermWrites = [];
         this.appEvents = [];
+        this.traceEvents = [];
+        traceStack.length = 0;
+        this.rafMaxGapMs = 0;
+        lastRafAt = performance.now();
+        longTaskObserver?.disconnect();
+        longTaskObserver = null;
+        this.longTaskSupported = false;
+        this.longTaskCount = 0;
+        this.longTaskMaxMs = 0;
+        startLongTaskObserver();
       },
-      report(inputText: string) {
-        const binaryReceived = appEventsOf("daemon-client-binary-received", this.appEvents);
+      report(inputText: string, options) {
+        const inputFrames = appEventsOf("daemon-client-input-frame", this.appEvents).filter(
+          (event) => event.opcode === INPUT_OPCODE,
+        );
+        const outputFrames = appEventsOf("daemon-client-output-frame", this.appEvents);
+        const traceAgentStreams = this.traceEvents.filter(
+          (event) => event.name === "paseo.agent.stream.inbound",
+        );
+        const traceAgentStreamBytes = traceAgentStreams.map(
+          (event) => Number(event.args.size) || 0,
+        );
         const frameDecoded = appEventsOf("daemon-client-frame-decoded", this.appEvents);
+        const decodedOutputFrames = frameDecoded.filter((event) => event.opcode === OUTPUT_OPCODE);
         const terminalEmit = appEventsOf("daemon-client-terminal-emit", this.appEvents);
-        const terminalEmitted = appEventsOf("daemon-client-terminal-emitted", this.appEvents);
         const streamControllerOutput = appEventsOf("stream-controller-output", this.appEvents);
         const streamControllerOnOutput = appEventsOf("stream-controller-on-output", this.appEvents);
         const emulatorWriteOutput = appEventsOf("terminal-emulator-write-output", this.appEvents);
         const runtimeWriteEnqueued = appEventsOf("runtime-write-enqueued", this.appEvents);
         const runtimeOperationStart = appEventsOf("runtime-operation-start", this.appEvents);
         const runtimeXtermWrite = appEventsOf("runtime-xterm-write", this.appEvents);
-        const runtimeXtermCommitted = appEventsOf("runtime-xterm-committed", this.appEvents);
+        const terminalText = this.xtermWrites.map((write) => write.text).join("");
+        const sequenceIntegrity = measureSequenceIntegrity(
+          terminalText,
+          options?.expectedSequenceCount,
+          options?.expectedOutputPayload,
+        );
+        const inputEchoIntegrity = measureInputEchoIntegrity(
+          terminalText,
+          options?.expectedInputEchoes,
+        );
+        const doneIntegrity = measureDoneIntegrity(
+          terminalText,
+          options?.expectedSequenceCount,
+          options?.expectedOutputDigest,
+        );
+        const outputDoneDigestValid =
+          doneIntegrity.outputDoneDigestValid === null
+            ? null
+            : doneIntegrity.outputDoneDigestValid &&
+              sequenceIntegrity.outputSequenceDuplicateCount === 0 &&
+              sequenceIntegrity.outputSequenceOutOfOrderCount === 0 &&
+              sequenceIntegrity.outputSequenceMissingCount === 0 &&
+              sequenceIntegrity.outputSequenceMalformedCount === 0 &&
+              sequenceIntegrity.outputPayloadMismatchCount === 0;
         const keydownToInputFrame = this.keydowns
-          .map((keydown) => firstAtOrAfter(this.inputFrames, keydown.at)?.at ?? null)
-          .filter((at): at is number => at !== null)
-          .map((at, index) => at - this.keydowns[index].at);
-        const inputFrameToOutputFrame = this.inputFrames
+          .map((keydown) => {
+            const frame = firstAtOrAfter(inputFrames, keydown.at);
+            return frame ? frame.at - keydown.at : null;
+          })
+          .filter((value): value is number => value !== null);
+        const inputFrameToOutputFrame = inputFrames
           .map((input) => {
-            const output = firstAtOrAfter(this.outputFrames, input.at);
+            const output = firstAtOrAfter(outputFrames, input.at);
             return output ? output.at - input.at : null;
           })
           .filter((value): value is number => value !== null);
-        const outputFrameToXtermWrite = this.outputFrames
+        const outputFrameToXtermWrite = outputFrames
+          .filter((output) => output.opcode === OUTPUT_OPCODE)
           .map((output) => {
             const write = firstAtOrAfter(this.xtermWrites, output.at);
             return write ? write.at - output.at : null;
@@ -480,38 +664,33 @@ export async function installTerminalKeystrokeStressProbe(page: Page): Promise<v
             return write?.committedAt ? write.committedAt - keydown.at : null;
           })
           .filter((value): value is number => value !== null);
+        const snapshotFrameCount = outputFrames.filter((event) => event.opcode === 0x04).length;
+        const restoreFrameCount = outputFrames.filter((event) => event.opcode === 0x05).length;
 
         return {
           inputTextLength: inputText.length,
           keydownCount: this.keydowns.length,
-          inputFrameCount: this.inputFrames.length,
-          outputFrameCount: this.outputFrames.length,
-          textMessageFrameCount: this.textMessageFrames.length,
-          textMessagePayloadBytes: this.textMessageFrames.reduce(
-            (sum, frame) => sum + frame.bytes,
+          inputFrameCount: inputFrames.length,
+          outputFrameCount: outputFrames.filter((event) => event.opcode === OUTPUT_OPCODE).length,
+          textMessageFrameCount: traceAgentStreams.length,
+          textMessagePayloadBytes: traceAgentStreamBytes.reduce((sum, bytes) => sum + bytes, 0),
+          largeTextMessageCount: traceAgentStreamBytes.filter((bytes) => bytes >= 50_000).length,
+          largestTextMessageBytes: Math.max(0, ...traceAgentStreamBytes),
+          agentStreamTextMessageCount: traceAgentStreams.length,
+          agentStreamAgentIds: [
+            ...new Set(
+              traceAgentStreams
+                .map((event) => event.args.agentId)
+                .filter((agentId): agentId is string => typeof agentId === "string"),
+            ),
+          ],
+          agentStreamTextMessagePayloadBytes: traceAgentStreamBytes.reduce(
+            (sum, bytes) => sum + bytes,
             0,
           ),
-          largeTextMessageCount: this.textMessageFrames.filter((frame) => frame.bytes >= 50_000)
+          largeAgentStreamTextMessageCount: traceAgentStreamBytes.filter((bytes) => bytes >= 50_000)
             .length,
-          largestTextMessageBytes: Math.max(
-            0,
-            ...this.textMessageFrames.map((frame) => frame.bytes),
-          ),
-          agentStreamTextMessageCount: this.textMessageFrames.filter(
-            (frame) => frame.kind === "session:agent_stream",
-          ).length,
-          agentStreamTextMessagePayloadBytes: this.textMessageFrames
-            .filter((frame) => frame.kind === "session:agent_stream")
-            .reduce((sum, frame) => sum + frame.bytes, 0),
-          largeAgentStreamTextMessageCount: this.textMessageFrames.filter(
-            (frame) => frame.kind === "session:agent_stream" && frame.bytes >= 50_000,
-          ).length,
-          largestAgentStreamTextMessageBytes: Math.max(
-            0,
-            ...this.textMessageFrames
-              .filter((frame) => frame.kind === "session:agent_stream")
-              .map((frame) => frame.bytes),
-          ),
+          largestAgentStreamTextMessageBytes: Math.max(0, ...traceAgentStreamBytes),
           appEventCount: this.appEvents.length,
           appEventCounts: countByType(this.appEvents),
           runtimeMaxQueueDepth: Math.max(
@@ -521,16 +700,22 @@ export async function installTerminalKeystrokeStressProbe(page: Page): Promise<v
               .filter((value): value is number => typeof value === "number"),
           ),
           xtermWriteCount: this.xtermWrites.length,
-          inputFramePayloadBytes: this.inputFrames.reduce((sum, frame) => sum + frame.bytes, 0),
-          outputFramePayloadBytes: this.outputFrames.reduce((sum, frame) => sum + frame.bytes, 0),
+          inputFramePayloadBytes: inputFrames.reduce((sum, event) => sum + (event.bytes ?? 0), 0),
+          outputFramePayloadBytes: outputFrames
+            .filter((event) => event.opcode === OUTPUT_OPCODE)
+            .reduce((sum, event) => sum + (event.bytes ?? 0), 0),
+          snapshotFrameCount,
+          restoreFrameCount,
           keydownToInputFrameMs: summarize(keydownToInputFrame),
           inputFrameToOutputFrameMs: summarize(inputFrameToOutputFrame),
           appBinaryReceivedToFrameDecodedMs: summarize(
-            latencyByIndex(binaryReceived, frameDecoded),
+            latencyFromReceivedAt(decodedOutputFrames, decodedOutputFrames),
           ),
           appFrameDecodedToTerminalEmitMs: summarize(latencyByIndex(frameDecoded, terminalEmit)),
           appTerminalEmitListenerDurationMs: summarize(
-            latencyByIndex(terminalEmit, terminalEmitted),
+            terminalEmit
+              .map((event) => event.durationMs)
+              .filter((duration): duration is number => typeof duration === "number"),
           ),
           appTerminalEmitToStreamControllerOutputMs: summarize(
             latencyByIndex(terminalEmit, streamControllerOutput),
@@ -539,7 +724,7 @@ export async function installTerminalKeystrokeStressProbe(page: Page): Promise<v
             latencyByIndex(streamControllerOutput, streamControllerOnOutput),
           ),
           appStreamControllerToEmulatorWriteMs: summarize(
-            latencyByIndex(streamControllerOnOutput, emulatorWriteOutput),
+            latencyByIndex(streamControllerOutput, emulatorWriteOutput),
           ),
           appEmulatorWriteToRuntimeEnqueuedMs: summarize(
             latencyByIndex(emulatorWriteOutput, runtimeWriteEnqueued),
@@ -550,17 +735,11 @@ export async function installTerminalKeystrokeStressProbe(page: Page): Promise<v
           appRuntimeOperationStartToXtermWriteMs: summarize(
             latencyByIndex(runtimeOperationStart, runtimeXtermWrite),
           ),
-          appRuntimeXtermWriteToCommitMs: summarize(
-            latencyByIndex(runtimeXtermWrite, runtimeXtermCommitted),
-          ),
           appBinaryReceivedToRuntimeEnqueuedMs: summarize(
-            latencyByIndex(binaryReceived, runtimeWriteEnqueued),
+            latencyFromReceivedAt(decodedOutputFrames, runtimeWriteEnqueued),
           ),
           appBinaryReceivedToRuntimeOperationStartMs: summarize(
-            latencyByIndex(binaryReceived, runtimeOperationStart),
-          ),
-          appBinaryReceivedToXtermCommitMs: summarize(
-            latencyByIndex(binaryReceived, runtimeXtermCommitted),
+            latencyFromReceivedAt(decodedOutputFrames, runtimeOperationStart),
           ),
           outputFrameToXtermWriteMs: summarize(outputFrameToXtermWrite),
           xtermWriteDurationMs: summarize(xtermWriteDurations),
@@ -570,9 +749,84 @@ export async function installTerminalKeystrokeStressProbe(page: Page): Promise<v
             this.xtermWrites
               .map((write) => write.committedAt)
               .findLast((at): at is number => typeof at === "number") ?? null,
+          ...sequenceIntegrity,
+          ...inputEchoIntegrity,
+          ...doneIntegrity,
+          outputDoneDigestValid,
+          rafMaxGapMs: this.rafMaxGapMs,
+          longTaskSupported: this.longTaskSupported,
+          longTaskCount: this.longTaskCount,
+          longTaskMaxMs: this.longTaskMaxMs,
         };
       },
     };
+
+    const traceSink: BrowserPerformanceTraceSink = {
+      isEnabled: () => true,
+      beginSection(name, args = {}) {
+        traceStack.push({ name, at: performance.now(), args });
+      },
+      endSection() {
+        const started = traceStack.pop();
+        if (!started) {
+          return;
+        }
+        const event: TraceEvent = {
+          name: started.name,
+          at: started.at,
+          durationMs: performance.now() - started.at,
+          args: started.args,
+        };
+        probe.traceEvents.push(event);
+        const type = traceAppEventTypes[event.name];
+        if (type) {
+          const bytes = Number(event.args.size);
+          const opcode = Number(event.args.opcode);
+          const queueDepth = Number(event.args.queueDepth);
+          const receivedAtMs = Number(event.args.receivedAtMs);
+          probe.appEvents.push({
+            type,
+            at: event.at,
+            ...(Number.isFinite(bytes) ? { bytes } : {}),
+            ...(Number.isInteger(opcode) ? { opcode } : {}),
+            ...(Number.isInteger(queueDepth) ? { queueDepth } : {}),
+            ...(Number.isFinite(receivedAtMs) ? { receivedAtMs } : {}),
+            durationMs: event.durationMs,
+          });
+        }
+      },
+    };
+    Object.defineProperty(window, "__paseoPerformanceTrace", {
+      configurable: true,
+      value: traceSink,
+    });
+
+    const observeRaf = () => {
+      const now = performance.now();
+      probe.rafMaxGapMs = Math.max(probe.rafMaxGapMs, now - lastRafAt);
+      lastRafAt = now;
+      requestAnimationFrame(observeRaf);
+    };
+    requestAnimationFrame(observeRaf);
+    function startLongTaskObserver(): void {
+      if (typeof PerformanceObserver === "undefined") {
+        return;
+      }
+      try {
+        longTaskObserver = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            probe.longTaskCount += 1;
+            probe.longTaskMaxMs = Math.max(probe.longTaskMaxMs, entry.duration);
+          }
+        });
+        longTaskObserver.observe({ entryTypes: ["longtask"] });
+        probe.longTaskSupported = true;
+      } catch {
+        longTaskObserver = null;
+        // Long-task entries are optional on browsers without the entry type.
+      }
+    }
+    startLongTaskObserver();
 
     Object.defineProperty(window, "__terminalKeystrokeStressProbe", {
       configurable: true,
@@ -588,61 +842,6 @@ export async function installTerminalKeystrokeStressProbe(page: Page): Promise<v
       },
       true,
     );
-
-    const NativeWebSocket = window.WebSocket;
-    class InstrumentedWebSocket extends NativeWebSocket {
-      constructor(url: string | URL, protocols?: string | string[]) {
-        if (protocols === undefined) {
-          super(url);
-        } else {
-          super(url, protocols);
-        }
-        super.addEventListener("message", (event) => {
-          void eventDataBytes(event.data).then((bytes) => {
-            if (!bytes || bytes.byteLength < 2 || bytes[0] !== OUTPUT_OPCODE) {
-              return;
-            }
-            probe.outputFrames.push({
-              at: performance.now(),
-              text: frameText(bytes),
-              bytes: bytes.byteLength - 2,
-            });
-            return;
-          });
-          void eventDataText(event.data).then((text) => {
-            if (text === null) {
-              return;
-            }
-            probe.textMessageFrames.push({
-              at: performance.now(),
-              bytes: new TextEncoder().encode(text).byteLength,
-              kind: textMessageKind(text),
-            });
-            return;
-          });
-        });
-      }
-
-      send(data: Parameters<WebSocket["send"]>[0]): void {
-        const bytes = bytesFrom(data);
-        if (bytes && bytes.byteLength >= 2 && bytes[0] === INPUT_OPCODE) {
-          probe.inputFrames.push({
-            at: performance.now(),
-            text: frameText(bytes),
-            bytes: bytes.byteLength - 2,
-          });
-        }
-        super.send(data);
-      }
-    }
-
-    Object.defineProperty(InstrumentedWebSocket, "CONNECTING", {
-      value: NativeWebSocket.CONNECTING,
-    });
-    Object.defineProperty(InstrumentedWebSocket, "OPEN", { value: NativeWebSocket.OPEN });
-    Object.defineProperty(InstrumentedWebSocket, "CLOSING", { value: NativeWebSocket.CLOSING });
-    Object.defineProperty(InstrumentedWebSocket, "CLOSED", { value: NativeWebSocket.CLOSED });
-    window.WebSocket = InstrumentedWebSocket as typeof WebSocket;
 
     const existingDescriptor = Object.getOwnPropertyDescriptor(window, "__paseoTerminal");
     const getExisting = () =>
@@ -685,7 +884,15 @@ export async function installTerminalKeystrokeStressProbe(page: Page): Promise<v
 interface TerminalKeystrokeStressProbeWindow {
   __terminalKeystrokeStressProbe: {
     reset: () => void;
-    report: (text: string) => TerminalKeystrokeStressReport;
+    report: (
+      text: string,
+      options?: {
+        expectedSequenceCount?: number;
+        expectedOutputPayload?: string;
+        expectedInputEchoes?: Array<{ seq: number; nonce: string }>;
+        expectedOutputDigest?: string;
+      },
+    ) => TerminalKeystrokeStressReport;
   };
 }
 
@@ -700,12 +907,50 @@ export async function resetTerminalKeystrokeStressProbe(page: Page): Promise<voi
 export async function readTerminalKeystrokeStressReport(
   page: Page,
   inputText: string,
+  options?: {
+    expectedSequenceCount?: number;
+    expectedOutputPayload?: string;
+    expectedInputEchoes?: Array<{ seq: number; nonce: string }>;
+    expectedOutputDigest?: string;
+  },
 ): Promise<TerminalKeystrokeStressReport> {
   return page.evaluate(
-    (text) =>
+    ({ text, reportOptions }) =>
       (
         window as unknown as TerminalKeystrokeStressProbeWindow
-      ).__terminalKeystrokeStressProbe.report(text),
-    inputText,
+      ).__terminalKeystrokeStressProbe.report(text, reportOptions),
+    { text: inputText, reportOptions: options },
   );
+}
+
+function readGitHead(): string {
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  } catch {
+    return "unknown";
+  }
+}
+
+export async function readTerminalPerformanceEnvironment(
+  page: Page,
+  transport: "direct" | "relay",
+): Promise<Record<string, unknown>> {
+  const browser = await page.evaluate(() => ({
+    userAgent: navigator.userAgent,
+    platform: navigator.platform,
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+    devicePixelRatio: window.devicePixelRatio,
+    hardwareConcurrency: navigator.hardwareConcurrency ?? null,
+  }));
+  return {
+    os: process.platform,
+    arch: process.arch,
+    commit: readGitHead(),
+    browser,
+    transport,
+    transportTopology:
+      transport === "relay"
+        ? "local Relay/E2EE (loopback Wrangler endpoint)"
+        : "local Direct daemon WebSocket (loopback)",
+  };
 }
