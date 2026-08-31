@@ -170,6 +170,10 @@ import { createRelayRuntime, type RelayRuntime } from "./relay-runtime.js";
 import type { PushNotificationSender } from "./push/index.js";
 import { getOrCreateServerId } from "./server-id.js";
 import { resolveDaemonVersion } from "./daemon-version.js";
+import {
+  isBySpaceHostedRelayEndpoint,
+  resolveBySpaceHostedRelayEndpoint,
+} from "@getpaseo/protocol/daemon-endpoints";
 import { resolveBySpaceHostedAppBaseUrl } from "@getpaseo/protocol/release-channel";
 import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
 import type {
@@ -584,6 +588,7 @@ export async function createPaseoDaemon(
   const elapsed = () => `${(performance.now() - bootstrapStart).toFixed(0)}ms`;
   const daemonVersion = config.daemonVersion ?? resolveDaemonVersion(import.meta.url);
   const hostedAppBaseUrl = resolveBySpaceHostedAppBaseUrl(daemonVersion);
+  const hostedRelayEndpoint = resolveBySpaceHostedRelayEndpoint(daemonVersion);
   const initialMutableConfig = createInitialMutableDaemonConfig(config, hostedAppBaseUrl);
   const daemonConfigStore = new DaemonConfigStore(config.paseoHome, initialMutableConfig, logger, {
     relayEnabledMutable: config.relayEnabledMutable ?? true,
@@ -1559,9 +1564,9 @@ export async function createPaseoDaemon(
               agentManager.setAppendSystemPrompt(typeof value === "string" ? value : "");
             });
             const relayEnabled = config.relayEnabled ?? true;
-            const relayEndpoint = config.relayEndpoint ?? "relay.byspace.cc.cd:443";
+            const relayEndpoint = config.relayEndpoint ?? hostedRelayEndpoint;
             const relayPublicEndpoint = config.relayPublicEndpoint ?? relayEndpoint;
-            const relayUseTls = config.relayUseTls ?? relayEndpoint === "relay.byspace.cc.cd:443";
+            const relayUseTls = config.relayUseTls ?? isBySpaceHostedRelayEndpoint(relayEndpoint);
             const relayPublicUseTls = config.relayPublicUseTls ?? relayUseTls;
             if (boundListenTarget.type === "tcp") {
               logger.info(

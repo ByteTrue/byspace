@@ -18,6 +18,10 @@ import type {
   ProviderOverride,
 } from "./agent/provider-launch-config.js";
 import { ProviderOverrideSchema } from "./agent/provider-launch-config.js";
+import {
+  isBySpaceHostedRelayEndpoint,
+  resolveBySpaceHostedRelayEndpoint,
+} from "@getpaseo/protocol/daemon-endpoints";
 import { AgentProviderSchema } from "@getpaseo/protocol/provider-manifest";
 import {
   isBySpaceHostedAppBaseUrl,
@@ -32,7 +36,6 @@ import { withByspaceEnvironment } from "../utils/byspace-env.js";
 import { resolveDaemonVersion } from "./daemon-version.js";
 
 const DEFAULT_PORT = 6777;
-const DEFAULT_RELAY_ENDPOINT = "relay.byspace.cc.cd:443";
 const DEFAULT_TRUSTED_PROXIES = ["loopback"];
 
 interface ResolveBundledWebUiDistDirInput {
@@ -265,6 +268,7 @@ interface ResolveRelayInput {
   cliRelayEnabled: boolean | undefined;
   cliRelayUseTls: boolean | undefined;
   enabledFallback: boolean;
+  hostedRelayEndpoint: string;
 }
 
 interface ResolvedRelay {
@@ -292,6 +296,13 @@ function resolveTlsFromEnv(
   return persistedValue ?? fallback;
 }
 
+function resolvePersistedRelayEndpoint(
+  value: string | undefined,
+  hostedRelayEndpoint: string,
+): string | undefined {
+  return isBySpaceHostedRelayEndpoint(value) ? hostedRelayEndpoint : value;
+}
+
 function resolveRelayConfig(input: ResolveRelayInput): ResolvedRelay {
   const environmentEnabled = parseBooleanEnv(input.env.PASEO_RELAY_ENABLED);
   // COMPAT(relayOptInDefault): daemons whose startup config omitted this field
@@ -303,18 +314,24 @@ function resolveRelayConfig(input: ResolveRelayInput): ResolvedRelay {
     input.enabledFallback;
   const endpoint =
     input.env.PASEO_RELAY_ENDPOINT ??
-    input.persisted.daemon?.relay?.endpoint ??
-    DEFAULT_RELAY_ENDPOINT;
+    resolvePersistedRelayEndpoint(
+      input.persisted.daemon?.relay?.endpoint,
+      input.hostedRelayEndpoint,
+    ) ??
+    input.hostedRelayEndpoint;
   const publicEndpoint =
     input.env.PASEO_RELAY_PUBLIC_ENDPOINT ??
-    input.persisted.daemon?.relay?.publicEndpoint ??
+    resolvePersistedRelayEndpoint(
+      input.persisted.daemon?.relay?.publicEndpoint,
+      input.hostedRelayEndpoint,
+    ) ??
     endpoint;
   const useTls =
     input.cliRelayUseTls ??
     resolveTlsFromEnv(
       input.env.PASEO_RELAY_USE_TLS,
       input.persisted.daemon?.relay?.useTls,
-      endpoint === DEFAULT_RELAY_ENDPOINT,
+      isBySpaceHostedRelayEndpoint(endpoint),
     );
   const publicUseTls = resolveTlsFromEnv(
     input.env.PASEO_RELAY_PUBLIC_USE_TLS,
@@ -578,9 +595,9 @@ export function resolveConfigFromPersisted(
 ): PaseoDaemonConfig {
   const resolvedOptions = options ?? {};
   const env = withByspaceEnvironment(resolvedOptions.env ?? process.env);
-  const hostedAppBaseUrl = resolveBySpaceHostedAppBaseUrl(
-    resolvedOptions.releaseVersion ?? resolveDaemonVersion(import.meta.url),
-  );
+  const releaseVersion = resolvedOptions.releaseVersion ?? resolveDaemonVersion(import.meta.url);
+  const hostedAppBaseUrl = resolveBySpaceHostedAppBaseUrl(releaseVersion);
+  const hostedRelayEndpoint = resolveBySpaceHostedRelayEndpoint(releaseVersion);
   const cli = resolvedOptions.cli;
   const relayEnabledFallback =
     resolvedOptions.relayEnabledFallback ?? persisted.daemon?.relay?.enabled === undefined;
@@ -605,6 +622,7 @@ export function resolveConfigFromPersisted(
     cliRelayEnabled: cli?.relayEnabled,
     cliRelayUseTls: cli?.relayUseTls,
     enabledFallback: relayEnabledFallback,
+    hostedRelayEndpoint,
   });
   const serviceProxy = resolveServiceProxyConfig(env, persisted);
   const webUi = resolveWebUiConfig(paseoHome, env, cli, persisted);

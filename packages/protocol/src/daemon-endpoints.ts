@@ -1,3 +1,5 @@
+import { resolveBySpaceReleaseChannel } from "./release-channel.js";
+
 export interface HostPortParts {
   host: string;
   port: number;
@@ -16,7 +18,19 @@ export type RelayRole = "server" | "client";
 export type RelayProtocolVersion = "1" | "2";
 
 export const CURRENT_RELAY_PROTOCOL_VERSION: RelayProtocolVersion = "2";
-export const DEFAULT_RELAY_ENDPOINT = "relay.byspace.cc.cd:443";
+export const STABLE_RELAY_ENDPOINT = "relay.byspace.cc.cd:443";
+export const BETA_RELAY_ENDPOINT = "relay-beta.byspace.cc.cd:443";
+export const DEFAULT_RELAY_ENDPOINT = STABLE_RELAY_ENDPOINT;
+
+export function resolveBySpaceHostedRelayEndpoint(version: string): string {
+  return resolveBySpaceReleaseChannel(version) === "beta"
+    ? BETA_RELAY_ENDPOINT
+    : STABLE_RELAY_ENDPOINT;
+}
+
+export function isBySpaceHostedRelayEndpoint(value: string | undefined): boolean {
+  return value === STABLE_RELAY_ENDPOINT || value === BETA_RELAY_ENDPOINT;
+}
 
 export function normalizeRelayProtocolVersion(
   value: unknown,

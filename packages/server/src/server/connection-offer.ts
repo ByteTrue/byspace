@@ -37,6 +37,7 @@ export async function createConnectionOfferV2(args: {
     serverId: args.serverId,
     daemonPublicKeyB64: args.daemonPublicKeyB64,
     relay: args.relay,
+    hostname: os.hostname(),
   });
 }
 

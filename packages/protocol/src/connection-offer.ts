@@ -14,6 +14,7 @@ export const ConnectionOfferV2Schema = z.object({
     endpoint: z.string().min(1),
     useTls: z.boolean().optional(),
   }),
+  hostname: z.string().min(1).optional(),
 });
 
 export type ConnectionOfferV2 = z.infer<typeof ConnectionOfferV2Schema>;

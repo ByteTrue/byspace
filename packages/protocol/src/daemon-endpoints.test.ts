@@ -7,6 +7,7 @@ import {
   extractHostPortFromWebSocketUrl,
   normalizeRelayProtocolVersion,
   parseConnectionUri,
+  resolveBySpaceHostedRelayEndpoint,
   serializeConnectionUri,
   serializeConnectionUriForStorage,
   shouldUseTlsForDefaultHostedRelay,
@@ -146,6 +147,15 @@ describe("relay websocket URL versioning", () => {
 
   test("rejects unsupported relay versions", () => {
     expect(() => normalizeRelayProtocolVersion("3")).toThrow('Relay version must be "1" or "2"');
+  });
+});
+
+describe("hosted relay release channels", () => {
+  test.each([
+    ["0.7.0", "relay.byspace.cc.cd:443"],
+    ["0.7.0-beta.2", "relay-beta.byspace.cc.cd:443"],
+  ])("uses the %s release channel relay", (version, expectedEndpoint) => {
+    expect(resolveBySpaceHostedRelayEndpoint(version)).toBe(expectedEndpoint);
   });
 });
 

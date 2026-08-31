@@ -1,33 +1,42 @@
 ---
 title: 保留能力交付路线 · Work
 status: approved
+phase: executing
 spec: ../epics/002-o-retained-capabilities-delivery/spec.md
 source_revision: f592e54bf43e5501383224891053d2e0a9dfbf45
-approved_revision: 1e4d1e9a4e45cb674b89559aa49506584e9cc714e232e8d2347cb86a4124e1ea
-item_progression: sequential
+approved_revision: 522c41c499b7c193899e11601816edbe9aa50249e0253da14140679431f3121c
+item_progression: parallel
+milestone_commit: authorized
+remote_publish: each-milestone
 commit_strategy: semantic-atomic-per-item
 publish_strategy: epic-plan-pr-then-one-pr-per-wave
 current_wave: 1
-current_item: ITEM-01
-blocked_by: planning_pr_merge
-next_action: 提交并合入 approved Epic 规划 PR；随后从最新 main 启动 ITEM-01
+current_item: null
+active_items: []
+blocked_by: null
+next_action: 创建 ITEM-03 语义原子 milestone，清理已收割 worktree，并执行 Wave 1 整体 review 与最终验证
 ---
 
 # Epic Work: 保留能力交付路线
 
 ## 当前状态
 
-- Owner 已批准永久 Epic、5 个 Wave、21 个 ITEM 及推荐执行策略。
+- Owner 已批准永久 Epic、5 个 Wave、21 个 ITEM 及推荐执行策略；规划 PR #14 已合入。
 - 34 个保留 ID 已唯一映射到 21 个 ITEM。
 - Fresh design review `a86fc285-9028-4634-85f9-661375af1b24` 返回 `verdict=pass`，无 blocking/important finding；两项 minor 已修正。
-- 执行策略已锁定：sequential ITEM、每 ITEM 语义原子 commit、每 Wave 独立 PR。
-- 当前授权只覆盖规划 PR；合入前仍不得修改 runtime、协议、UI 或基础设施。
+- Wave 1 从 exact-main CI 绿色 commit `5dc678bdefb77e52fe729c00b8034eb89ad7f7de` 开始。
+- Owner 已选择 parallel 推荐方案 A：最多两个 writer，按 worker 完成顺序串行集成。
+- Bounded-parallel contract review 同 lineage round 2 已通过：0 blocking / 0 important；路径级所有权、canonical 集成规则与恢复状态机已生效。
+- ITEM-01 已通过 worker 验证、fresh change review、connection-offer daemon E2E 和集成分支静态门槛，并以 reviewed patch 完成串行集成（`976480bd60c37c43d55e98b17f41b9e62778bdc9`）。
+- ITEM-02 已通过 worker TDD、父流程 Host Runtime 验证、fresh security review 和集成静态门槛；reviewed patch 已以 `fe45b78e6e3819a02422b09566bfa04d7dd8867e` 完成串行集成。
+- ITEM-03 已通过 fresh compatibility review（0 blocking / 0 important）、Protocol 8/8、App 69/69、完整 `build:server`、Server E2E 3/3 和集成分支静态门槛；reviewed patch 已完成串行集成。
+- ITEM-03 read-only scout 已完成 optional hostname 的协议/客户端接缝与兼容测试包，没有修改文件。
 
 ## Wave 1 · 发布通道路由与远程连接安全
 
-- [ ] ITEM-01 · RELEASE-01 · B01
-- [ ] ITEM-02 · RELAY-02 · R03
-- [ ] ITEM-03 · RELAY-01 · R02
+- [x] ITEM-01 · RELEASE-01 · B01 · integrated
+- [x] ITEM-02 · RELAY-02 · R03 · integrated
+- [x] ITEM-03 · RELAY-01 · R02 · integrated
 
 ## Wave 2 · Terminal 性能与恢复基础
 
@@ -59,6 +68,10 @@ next_action: 提交并合入 approved Epic 规划 PR；随后从最新 main 启�
 - [ ] ITEM-20 · WORKSPACE-05 · W14
 - [ ] ITEM-21 · UI-01 · U03/U05
 
+## 活跃委派
+
+- 无。
+
 ## 规划证据
 
 - 起点：PR #13 merge `f592e54bf43e5501383224891053d2e0a9dfbf45`。
@@ -75,8 +88,27 @@ next_action: 提交并合入 approved Epic 规划 PR；随后从最新 main 启�
 4. `publish_strategy = epic-plan-pr-then-one-pr-per-wave`。
 5. 本次批准先提交/合入 Epic 规划；实际实现按 Wave 推进。
 
+## Owner 追加批准
+
+1. `item_progression = parallel`，最多两个 writer。
+2. Worker 交付按完成顺序进入单一串行集成队列。
+3. 只允许永久 Epic 中 Wave 3、Wave 4 与 Wave 5 的具名 lane；超出路径所有权立即 stop-to-serial。
+4. `milestone_commit = authorized`、`remote_publish = each-milestone`、每 ITEM 语义原子 commit 与每 Wave 一个 PR 保持不变。
+
 ## 变更日志
 
 - 2026-08-31：从已验收盘点 Epic 创建 proposed 交付 Epic；尚未实施。
 - 2026-08-31：Fresh design review 通过；明确 W04 六组 Git fixture，并纠正旧矩阵中遗漏 OpenCode hook registry 的事实。
 - 2026-08-31：Owner 批准 Epic 及推荐策略；ITEM-01 进入 queued 状态，等待规划 PR 合入。
+- 2026-08-31：规划 PR #14 合入；CI 修复 PR #15 合入后 exact-main CI `33362367443` 在 `5dc678bdefb77e52fe729c00b8034eb89ad7f7de` 通过。
+- 2026-08-31：从绿色基线创建 Wave 1 集成分支并将 ITEM-01 委派到独立 worktree。
+- 2026-08-31：Owner 选择 parallel 推荐方案 A；按完成顺序串行集成，最多两个 writer，Wave 3/4/5 只使用永久契约中的具名 lane。
+- 2026-08-31：Bounded-parallel contract review 首轮要求补齐结构化 `active_items`、路径级所有权和 canonical 集成/回滚规则。
+- 2026-08-31：同 lineage round 2 通过（0 blocking / 0 important）；机械 minor 已吸收，ITEM-01 进入父流程串行集成。
+- 2026-08-31：ITEM-01 worker `2da13fbf-181a-4a81-84cd-696e764307d8` 与 reviewer `2830ea2b-2be9-4414-b292-5ba50517957b` 完成；reviewed patch `036df3112dbb754078ae10e43b1e7b48f7a438a02a3b66bad28b1b394bf0039a` 经 29 个 Protocol、17 个 Server config、6 个 CLI 与 3 个 connection-offer E2E 验证，集成 Build、Typecheck、Lint 通过。
+- 2026-08-31：从 ITEM-01 milestone `976480bd60c37c43d55e98b17f41b9e62778bdc9` 创建 ITEM-02 writer worktree 与 ITEM-03 detached read-only scout worktree。
+- 2026-08-31：ITEM-02 worker `c2e38a29-ce22-4a0a-99f4-f3b0c937895d` 交付；focused utility 12/12 与 App Typecheck/Lint/Format 通过。父流程确认先前 Host Runtime 收集失败源于从仓库根绕过 App Vitest config；以显式 App config 重跑 `host-runtime.test.ts` 67/67 通过，临时 symlink 已清理且 frozen patch SHA 保持 `0fa84e1b…9497fe`；fresh security reviewer `3cf260f5-f81b-4db9-b28d-590fa705d7c3` 判定 `pass`（0 blocking / 0 important）；集成 Format、Typecheck、Lint 与 source patch 字节一致性通过；语义原子提交为 `fe45b78e6e3819a02422b09566bfa04d7dd8867e`；ITEM-03 scout `af0a1e45-16a7-415a-b2d6-a607ff1f5563` 同时完成只读实现包。
+- 2026-08-31：清理 ITEM-02 worktree 后从 `fe45b78e6e3819a02422b09566bfa04d7dd8867e` 创建 ITEM-03 writer worktree；worker `b7b9a314-7e01-4778-8a9d-f3d7b11977f0` 按 optional append-only 协议演进与 client label precedence 任务包开始执行。
+- 2026-08-31：ITEM-03 worker 交付六文件候选；Protocol 8/8、App Host Runtime 69/69、Server producer smoke、targeted lint/format/diff-check 通过；Server E2E 的错误 TTLCache 与跨 workspace typecheck overlay 由父流程在冻结 diff 后复验。
+- 2026-08-31：父流程在 worktree-local internal package view 中完成完整 `build:server` 与 Server pairing-offer E2E 3/3，清理后 frozen SHA 保持 `ebd95b72…0bed8`；fresh compatibility reviewer `75befb32-2916-4a92-a998-b80e7286ef72` 裁定 `pass`，ITEM-03 进入串行集成。
+- 2026-08-31：ITEM-03 reviewed patch `ebd95b72…0bed8` 收割后经全仓 Format、`build:server`、Typecheck 与 Lint 验证，source bytes 保持一致；ITEM-03 状态推进到 `integrated`，Wave 1 三个 ITEM 全部完成。

@@ -29,7 +29,7 @@ import { resolveAppVersion } from "@/utils/app-version";
 import { ConnectionOfferSchema, type ConnectionOffer } from "@getpaseo/protocol/connection-offer";
 import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
 import { isWeb } from "@/constants/platform";
-import { connectToDaemon } from "@/utils/test-daemon-connection";
+import { assertDirectTcpConnectionAllowed, connectToDaemon } from "@/utils/test-daemon-connection";
 import { getOrCreateClientId } from "@/utils/client-id";
 import { z } from "zod";
 import { readValidatedJson, readValidatedString } from "@/storage/validated-storage";
@@ -539,6 +539,7 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
         });
       }
       if (connection.type === "directTcp") {
+        assertDirectTcpConnectionAllowed(connection);
         return new DaemonClient({
           ...base,
           ...webSocketConfig,
@@ -1820,12 +1821,13 @@ export class HostRuntimeStore {
   async upsertConnectionFromOffer(offer: ConnectionOffer, label?: string): Promise<HostProfile> {
     // COMPAT(oldRelayOfferTls): added in v0.1.73, remove after 2026-11-10.
     const useTls = offer.relay.useTls ?? shouldUseTlsForDefaultHostedRelay(offer.relay.endpoint);
+    const resolvedLabel = label?.trim() || offer.hostname?.trim() || undefined;
     return this.upsertRelayConnection({
       serverId: offer.serverId,
       relayEndpoint: offer.relay.endpoint,
       useTls,
       daemonPublicKeyB64: offer.daemonPublicKeyB64,
-      label,
+      label: resolvedLabel,
     });
   }
 

@@ -1,14 +1,15 @@
 ---
 title: 保留能力交付路线
-status: approved
+status: active
 kind: epic
 owner_decision: approved
-approved_revision: 1e4d1e9a4e45cb674b89559aa49506584e9cc714e232e8d2347cb86a4124e1ea
 approved_at: 2026-08-31T05:01:54Z
+amended_at: 2026-08-31T07:13:41Z
 approval_evidence:
   owner: "“批准 Epic，按推荐策略执行”（2026-08-31）"
-  review: "subagent run a86fc285-9028-4634-85f9-661375af1b24; verdict=pass; 0 blocking/important"
-  verification: "34/34 IDs, 21/21 ITEMs, typecheck, lint, format:check, git diff --check passed"
+  parallel_owner: "“确认”并选择推荐方案 A：按 worker 完成顺序串行集成（2026-08-31）"
+  review: "bounded-parallel contract review lineage 9ebed510-b74e-4eb9-b796-c6fa1d9a29e6 round 1 needs_changes; resumed run 8aea6ea4-463f-42eb-a90c-febe642a68bb round 2 passed with 0 blocking/important"
+  verification: "34/34 ID and 21/21 ITEM coverage preserved; packet 82d4075996b910837e4d370cc3e7478814cbf49847287431843ba4eccf1a5a68 and diff from 5dc678bdefb77e52fe729c00b8034eb89ad7f7de verified"
 source_epic: ../001-o-legacy-cs-requirements-triage/spec.md
 source_revision: f592e54bf43e5501383224891053d2e0a9dfbf45
 created_at: 2026-08-31T04:38:14Z
@@ -36,7 +37,7 @@ created_at: 2026-08-31T04:38:14Z
 - 删除与“不做”条目对应但上游当前仍提供的功能。
 - 重放旧 CodeStable 文档中的实现步骤或整块 cherry-pick reset 前代码。
 - 在本 Epic 规划阶段修改 runtime、协议、UI、Cloudflare Worker 或发布基础设施。
-- 未经单项授权并行启动多个写入型实现任务。
+- 超出本契约具名 lane、文件所有权和最多两个 writer 限制的写入型并行。
 
 ## 不可变范围
 
@@ -70,13 +71,26 @@ W05 不允许扩大为 Project 单一分组、attention 优先排序或其他侧
 
 当前已有强代码证据的条目先验收；若行为已满足，补足必要测试并关闭，不为“看起来像旧实现”而重写。
 
-### 推荐推进与提交策略
+### 推进与提交策略
 
-Owner 首次批准本 Epic 时一并确认：
+Owner 在批准本 Epic 后追加确认有界并行 revision：
 
-- **Item progression：** sequential。一次只激活一个 ITEM；依赖未通过不得启动后继。
+- **Item progression：** parallel。只有硬依赖已集成且处于当前 Wave 的 ITEM 才可激活；最多同时运行两个写入型 worker。
+- **Integration：** worker 交付按完成顺序进入单一集成队列；父流程逐项 review、验证并串行集成，不允许两个 worker 同时写集成分支。
 - **Commit strategy：** 每个 ITEM 至少一个语义原子 commit；协议、daemon、app 为同一能力不可拆时可在同一 ITEM 内共同提交。
-- **Publish strategy：** 本 Epic 规划先独立 PR 合入；实现按 5 个波次分别开 PR，波次通过集成验证并合入后再从最新 `main` 开始下一波。push、PR 和 merge 仍遵守当时的明确授权。
+- **Publish strategy：** 每个 milestone push 到当前 Wave 的同一个 PR 分支；Wave 通过集成验证并合入后，从最新 `main` 开始下一波。
+
+### 有界并行与文件所有权
+
+- 本节未展开的并行调度、集成机制、`active_items` 状态机、blocker 分类与退化规则，以 `cs-epic` skill-local `references/parallel-execution.md` 为准。
+- 每个 writer 使用独立 Git worktree；子 Agent 不得 commit、push、开 PR、merge、发布或修改 `.codestable`。父流程独占集成分支、work cursor 和远端操作。
+- Worker WIP 历史不得进入 Wave PR。父流程只以 patch、squash 到工作树或 `cherry-pick -n` 等不推进主历史的方式收割交付，在集成结果上重跑该 ITEM 的权威验证；失败时恢复到集成前基线，不留下正式 commit。
+- Wave 1 与 Wave 2 保持单 writer；允许只读调查和 review 与实现并行。
+- Wave 3 在 ITEM-06 集成后启用两个 lane。Lane A `ITEM-07 → ITEM-10` 独占 `packages/server/src/terminal/activity/**`、`packages/server/src/terminal/agent-hooks/**`、待新增的 `packages/server/src/terminal/agent-hooks/pi/**`、`packages/server/src/terminal/terminal-capture.ts`、`packages/server/src/server/websocket-server.ts` 中的 Terminal 通知路径、`packages/server/src/server/bootstrap.ts` 的 hook 安装接线、`packages/server/src/server/config.ts`、`packages/server/src/server/persisted-config.ts`、`packages/server/src/server/daemon-config-store.ts` 的 Terminal profile 配置与 `packages/app/src/screens/settings/host-page.tsx` 中的 hook/profile 呈现，以及 `packages/app/src/screens/settings/terminal-profile-edit-modal.tsx`、`packages/app/src/components/terminal-profile-icon.tsx` 和对应测试；Lane B `ITEM-08 → ITEM-09` 独占 `packages/app/src/terminal/**`、`packages/app/src/components/terminal-pane.tsx`、`packages/app/src/components/terminal-copy-paste-actions.tsx`、既有 binary upload 接线及对应测试。两条 lane 完成后才启动 ITEM-11；ITEM-11 可在串行阶段继续修改上述 profile 路径，不构成并发所有权。
+- Wave 4 先串行集成 ITEM-12，再并行 ITEM-13 与 ITEM-14，最后执行 ITEM-15。ITEM-13 独占 `packages/app/src/components/import-session-sheet*`、`packages/client/src/daemon-client.ts` 中的 import API、`packages/protocol/src/messages.ts` 中的 import schema，以及 `packages/server/src/server/agent/provider-session-import.ts`、`agent-manager.ts` 和 provider import adapter；ITEM-14 独占 `packages/server/src/server/workspace-auto-name.ts`、`paseo-worktree-service.ts`、`worktree-branch-name-generator.ts`、`agent/create-agent-title.ts`、`packages/server/src/utils/worktree-metadata.ts` 与 branch rename 接线。任一方需要改动 `session-store`、workspace registry/reconciliation、共享 metadata writer 或对方路径时，立即停止双 lane 并退回父流程串行处理。
+- Wave 5 启用两个 lane。Lane A `ITEM-16 → ITEM-17` 独占 `packages/app/src/git/policy.ts`、`use-actions.tsx`、`branch-switcher-operations.ts`、`packages/app/src/components/branch-switcher.tsx`、`packages/app/src/hooks/use-branch-switcher.ts`，以及必要的 `packages/server/src/server/workspace-git-service.ts`、`packages/server/src/utils/checkout-git.ts`、`packages/client/src/daemon-client.ts` 和 `packages/protocol/src/messages.ts` Git 查询接线；Lane B `ITEM-18 → ITEM-19 → ITEM-20` 独占 `packages/app/src/components/sidebar-workspace-list.tsx`、`packages/app/src/components/sidebar/sidebar-workspace-row*.tsx`、`packages/app/src/components/sidebar/workspace-meta-row/**`、`packages/app/src/components/workspace-hover-card.tsx`、`packages/app/src/hosts/use-host-badges.ts`、`packages/app/src/hooks/use-sidebar-workspaces-list.ts`、`packages/app/src/hooks/sidebar-workspaces-view-model.ts` 及对应测试。两条 lane 完成后才启动 ITEM-21。
+- Lane 可以只读引用另一 lane 的模块；任何超出具名路径的编辑必须先交父流程检查所有权。发现同一文件、共享 type/schema、持久化或状态 owner 的双重声明时，立即停止相关 lane，不做乐观合并；收窄所有权或退回串行后重新 review。
+- Playwright、benchmark、Windows、模拟器、Electron 和 daemon E2E 使用单一验证锁，不与其他重型验证并发。
 
 ## 波次与依赖
 
@@ -88,7 +102,7 @@ Owner 首次批准本 Epic 时一并确认：
 | 4    | Agent、Session 与 Timeline   | ITEM-12–15 | Wave 3 已合入；Timeline 权威路径保持单 owner |
 | 5    | Workspace、侧栏与 Compact UI | ITEM-16–21 | Wave 4 已合入；相关平台 QA 环境可用          |
 
-跨波次默认串行。同一波次中即使没有硬依赖，也按 ITEM 顺序推进，以减少共享文件冲突并保证每项可独立归因。
+跨波次保持串行。同一波次只允许上述具名 lane 并行；每个 ITEM 仍独立归因，集成分支按 worker 完成顺序逐项串行落盘。
 
 ## Wave 1：发布通道路由与远程连接安全
 
@@ -163,7 +177,7 @@ Owner 首次批准本 Epic 时一并确认：
 
 - **Skill：** `cs-feat`
 - **需求：** T07
-- **依赖：** ITEM-07
+- **依赖：** ITEM-06
 - **交付：** Compact Web 支持长按选词、拖动选区与复制，同时保留滚动、点击输入和面板手势。
 - **验收：** Compact Web 真实浏览器完成选词、扩展、复制、滚动和取消选择；native/wide Web 无回归。
 - **约束：** 手势所有权遵守 mobile panel revision 模型；不复制第二套 panel lifecycle。
@@ -172,7 +186,7 @@ Owner 首次批准本 Epic 时一并确认：
 
 - **Skill：** `cs-feat`
 - **需求：** T11
-- **依赖：** ITEM-06
+- **依赖：** ITEM-08
 - **交付：** 使用既有 binary upload 把剪贴板图片写入 daemon 临时文件，并把真实远端路径作为单个 paste block 交给 Terminal/Pi。
 - **验收：** Direct 与 Relay、路径含空格、上传失败、非图片剪贴板、远端 daemon 和 Windows framing 均覆盖；客户端本地路径绝不发送给远端 Agent。
 - **约束：** 不新建平行上传协议；临时文件生命周期和权限必须明确。
@@ -190,7 +204,7 @@ Owner 首次批准本 Epic 时一并确认：
 
 - **Skill：** `cs-issue`
 - **需求：** T15、T18
-- **依赖：** ITEM-08、ITEM-10
+- **依赖：** ITEM-08、ITEM-09、ITEM-10
 - **交付：** 验收字体、字号、高亮、主题默认值和 Manage Terminal Profiles 到当前 Host 的精确导航，仅修复不满足项。
 - **验收：** Web、native、Desktop 的默认/覆盖/系统主题行为以及目标 Host 导航通过；现有满足项不重写。
 - **约束：** 不把 React Native/Unistyles theme proxy 样式提升到 render 外。
@@ -257,7 +271,7 @@ Owner 首次批准本 Epic 时一并确认：
 
 - **Skill：** `cs-feat`
 - **需求：** W05（仅此子目标）
-- **依赖：** ITEM-17
+- **依赖：** ITEM-15
 - **交付：** Workspace hover card 展示该 Workspace 下全部 Agent 的精确状态。
 - **验收：** 多 Agent 混合状态、空列表、状态实时变化、跨 Host 同名 Workspace 和 hover safe-zone 行为通过。
 - **约束：** 不改 Project/Status 分组，不增加 attention 排序；必须复用 canonical hover pattern 与 `useHoverSafeZone`。
@@ -284,7 +298,7 @@ Owner 首次批准本 Epic 时一并确认：
 
 - **Skill：** `cs-feat`
 - **需求：** U03、U05
-- **依赖：** ITEM-20
+- **依赖：** ITEM-17、ITEM-20
 - **交付：** 弱化消息区悬浮控件；compact context 用量进入 composer；折叠工具调用和回到底部进入 pane header。
 - **验收：** Compact Web/native 的可见性、可达性、长 timeline、键盘打开、滚动状态和 wide layout 无回归；真实 UI 证据随 PR 提交。
 - **约束：** 不复制 composer 状态，不新建 compact-only timeline owner，不用平台判断代替 form-factor gate。
