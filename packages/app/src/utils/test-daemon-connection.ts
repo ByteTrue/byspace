@@ -1,11 +1,13 @@
 import { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import type { DaemonClientConfig } from "@getpaseo/client/internal/daemon-client";
 import type { HostConnection } from "@/types/host-connection";
+import { getIsElectron, isWeb } from "@/constants/platform";
 import { getOrCreateClientId } from "./client-id";
 import { resolveAppVersion } from "./app-version";
 import {
   buildDaemonWebSocketUrl,
   buildRelayWebSocketUrl,
+  parseHostPort,
   shouldUseTlsForDefaultHostedRelay,
 } from "./daemon-endpoints";
 import {
@@ -84,6 +86,57 @@ function pickBestReason(reason: string | null, lastError: string | null): string
   return "Unable to connect";
 }
 
+export interface DaemonConnectionBrowserContext {
+  isWeb: boolean;
+  isElectron: boolean;
+  protocol: string | null;
+}
+
+function readBrowserConnectionContext(): DaemonConnectionBrowserContext {
+  if (!isWeb || typeof window === "undefined") {
+    return { isWeb: false, isElectron: false, protocol: null };
+  }
+  return {
+    isWeb: true,
+    isElectron: getIsElectron(),
+    protocol: window.location.protocol,
+  };
+}
+
+export function assertDirectTcpConnectionAllowed(
+  connection: HostConnection,
+  context: DaemonConnectionBrowserContext = readBrowserConnectionContext(),
+): void {
+  if (
+    connection.type !== "directTcp" ||
+    !context.isWeb ||
+    context.isElectron ||
+    context.protocol !== "https:" ||
+    connection.useTls
+  ) {
+    return;
+  }
+
+  let host: string;
+  try {
+    host = parseHostPort(connection.endpoint).host.toLowerCase();
+  } catch {
+    return;
+  }
+  if (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host === "127.0.0.1" ||
+    host === "::1"
+  ) {
+    return;
+  }
+
+  throw new Error(
+    "Insecure direct connections are unavailable from hosted HTTPS pages. Enable SSL or the relay.",
+  );
+}
+
 function isIncorrectPasswordFailure(input: {
   config: DaemonClientConfig;
   reason: string | null;
@@ -119,6 +172,7 @@ export async function buildClientConfig(
   options?: {
     capabilities?: DaemonClientConfig["capabilities"];
     trace?: DaemonClientConfig["trace"];
+    browserContext?: DaemonConnectionBrowserContext;
   },
   deps: Pick<
     DaemonConnectionDependencies<DaemonProbeClient>,
@@ -128,6 +182,7 @@ export async function buildClientConfig(
     | "buildDesktopTransportUrl"
   > = defaultDaemonConnectionDependencies,
 ): Promise<DaemonClientConfig> {
+  assertDirectTcpConnectionAllowed(connection, options?.browserContext);
   const clientId = await deps.getClientId();
   const desktopTransportFactory = deps.createDesktopTransportFactory();
   const base = {
@@ -260,6 +315,7 @@ interface ProbeOptions {
   timeoutMs?: number;
   capabilities?: DaemonClientConfig["capabilities"];
   trace?: DaemonClientConfig["trace"];
+  browserContext?: DaemonConnectionBrowserContext;
 }
 
 function resolveTimeout(connection: HostConnection, options?: ProbeOptions): number {

@@ -1,5 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DaemonClientConfig } from "@getpaseo/client/internal/daemon-client";
+
+vi.mock("@/constants/platform", () => ({
+  getIsElectron: () => false,
+  isWeb: true,
+}));
 import type { DaemonConnectionDependencies, DaemonProbeClient } from "./test-daemon-connection";
 
 class FakeDaemonClient implements DaemonProbeClient {
@@ -73,6 +78,123 @@ describe("test-daemon-connection connectToDaemon", () => {
   beforeEach(() => {
     vi.stubGlobal("__DEV__", false);
     probe = new FakeDaemonProbe();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("rejects insecure direct TCP from hosted HTTPS before creating a client", async () => {
+    vi.stubGlobal("window", { location: { protocol: "https:" } });
+    const { connectToDaemon } = await import("./test-daemon-connection");
+
+    await expect(
+      connectToDaemon(
+        {
+          id: "direct:lan:6767",
+          type: "directTcp",
+          endpoint: "192.168.1.20:6767",
+        },
+        undefined,
+        probe.deps,
+      ),
+    ).rejects.toThrow(
+      "Insecure direct connections are unavailable from hosted HTTPS pages. Enable SSL or the relay.",
+    );
+    expect(probe.createdClients).toHaveLength(0);
+    expect(probe.clientIdsRequested).toBe(0);
+  });
+
+  it("allows loopback direct TCP from hosted HTTPS", async () => {
+    const { connectToDaemon } = await import("./test-daemon-connection");
+    for (const endpoint of [
+      "localhost:6767",
+      "dev.localhost:6767",
+      "127.0.0.1:6767",
+      "[::1]:6767",
+    ]) {
+      const result = await connectToDaemon(
+        {
+          id: `direct:${endpoint}`,
+          type: "directTcp",
+          endpoint,
+        },
+        {
+          browserContext: { isWeb: true, isElectron: false, protocol: "https:" },
+        },
+        probe.deps,
+      );
+      await result.client.close();
+    }
+
+    expect(probe.createdClients).toHaveLength(4);
+  });
+
+  it("allows TLS direct TCP, relay, HTTP, and non-web connections", async () => {
+    const { connectToDaemon } = await import("./test-daemon-connection");
+    const tlsResult = await connectToDaemon(
+      {
+        id: "direct:lan:6767",
+        type: "directTcp",
+        endpoint: "192.168.1.20:6767",
+        useTls: true,
+      },
+      { browserContext: { isWeb: true, isElectron: false, protocol: "https:" } },
+      probe.deps,
+    );
+    await tlsResult.client.close();
+
+    const relayResult = await connectToDaemon(
+      {
+        id: "relay:relay.example:443",
+        type: "relay",
+        relayEndpoint: "relay.example:443",
+        useTls: false,
+        daemonPublicKeyB64: "pubkey",
+      },
+      {
+        serverId: "srv_probe_test",
+        browserContext: { isWeb: true, isElectron: false, protocol: "https:" },
+      },
+      probe.deps,
+    );
+    await relayResult.client.close();
+
+    const httpResult = await connectToDaemon(
+      {
+        id: "direct:lan:6767",
+        type: "directTcp",
+        endpoint: "192.168.1.20:6767",
+      },
+      { browserContext: { isWeb: true, isElectron: false, protocol: "http:" } },
+      probe.deps,
+    );
+    await httpResult.client.close();
+
+    const nativeResult = await connectToDaemon(
+      {
+        id: "direct:lan:6767",
+        type: "directTcp",
+        endpoint: "192.168.1.20:6767",
+      },
+      { browserContext: { isWeb: false, isElectron: false, protocol: "https:" } },
+      probe.deps,
+    );
+    await nativeResult.client.close();
+
+    const electronResult = await connectToDaemon(
+      {
+        id: "direct:lan:6767",
+        type: "directTcp",
+        endpoint: "192.168.1.20:6767",
+      },
+      { browserContext: { isWeb: true, isElectron: true, protocol: "https:" } },
+      probe.deps,
+    );
+    await electronResult.client.close();
+
+    expect(probe.createdClients).toHaveLength(5);
+    expect(probe.createdConfigs()[0]?.url).toMatch(/^wss:\/\//);
   });
 
   it("reuses the app clientId for direct connections", async () => {

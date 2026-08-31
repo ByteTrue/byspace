@@ -14,7 +14,7 @@ current_wave: 1
 current_item: null
 active_items: []
 blocked_by: null
-next_action: 从 ITEM-01 集成 commit 创建 ITEM-02 隔离 worktree，先复现 Hosted HTTPS 误连不安全 LAN Direct 的 R03 缺口
+next_action: 清理 ITEM-02 已收割 worktree，并从 ITEM-02 milestone 创建 ITEM-03 writer worktree
 ---
 
 # Epic Work: 保留能力交付路线
@@ -27,12 +27,14 @@ next_action: 从 ITEM-01 集成 commit 创建 ITEM-02 隔离 worktree，先复�
 - Wave 1 从 exact-main CI 绿色 commit `5dc678bdefb77e52fe729c00b8034eb89ad7f7de` 开始。
 - Owner 已选择 parallel 推荐方案 A：最多两个 writer，按 worker 完成顺序串行集成。
 - Bounded-parallel contract review 同 lineage round 2 已通过：0 blocking / 0 important；路径级所有权、canonical 集成规则与恢复状态机已生效。
-- ITEM-01 已通过 worker 验证、fresh change review、connection-offer daemon E2E 和集成分支静态门槛，并以 reviewed patch 完成串行集成。
+- ITEM-01 已通过 worker 验证、fresh change review、connection-offer daemon E2E 和集成分支静态门槛，并以 reviewed patch 完成串行集成（`976480bd60c37c43d55e98b17f41b9e62778bdc9`）。
+- ITEM-02 已通过 worker TDD、父流程 Host Runtime 验证、fresh security review 和集成静态门槛；reviewed patch 已完成串行集成。
+- ITEM-03 read-only scout 已完成 optional hostname 的协议/客户端接缝与兼容测试包，没有修改文件。
 
 ## Wave 1 · 发布通道路由与远程连接安全
 
 - [x] ITEM-01 · RELEASE-01 · B01 · integrated
-- [ ] ITEM-02 · RELAY-02 · R03
+- [x] ITEM-02 · RELAY-02 · R03 · integrated
 - [ ] ITEM-03 · RELAY-01 · R02
 
 ## Wave 2 · Terminal 性能与恢复基础
@@ -67,7 +69,7 @@ next_action: 从 ITEM-01 集成 commit 创建 ITEM-02 隔离 worktree，先复�
 
 ## 活跃委派
 
-- 无。ITEM-01 的 worker、reviewer 与 worktree 信息已记录在本次 ITEM milestone 的变更日志和 Git 历史中。
+- 无。
 
 ## 规划证据
 
@@ -103,3 +105,5 @@ next_action: 从 ITEM-01 集成 commit 创建 ITEM-02 隔离 worktree，先复�
 - 2026-08-31：Bounded-parallel contract review 首轮要求补齐结构化 `active_items`、路径级所有权和 canonical 集成/回滚规则。
 - 2026-08-31：同 lineage round 2 通过（0 blocking / 0 important）；机械 minor 已吸收，ITEM-01 进入父流程串行集成。
 - 2026-08-31：ITEM-01 worker `2da13fbf-181a-4a81-84cd-696e764307d8` 与 reviewer `2830ea2b-2be9-4414-b292-5ba50517957b` 完成；reviewed patch `036df3112dbb754078ae10e43b1e7b48f7a438a02a3b66bad28b1b394bf0039a` 经 29 个 Protocol、17 个 Server config、6 个 CLI 与 3 个 connection-offer E2E 验证，集成 Build、Typecheck、Lint 通过。
+- 2026-08-31：从 ITEM-01 milestone `976480bd60c37c43d55e98b17f41b9e62778bdc9` 创建 ITEM-02 writer worktree 与 ITEM-03 detached read-only scout worktree。
+- 2026-08-31：ITEM-02 worker `c2e38a29-ce22-4a0a-99f4-f3b0c937895d` 交付；focused utility 12/12 与 App Typecheck/Lint/Format 通过。父流程确认先前 Host Runtime 收集失败源于从仓库根绕过 App Vitest config；以显式 App config 重跑 `host-runtime.test.ts` 67/67 通过，临时 symlink 已清理且 frozen patch SHA 保持 `0fa84e1b…9497fe`；fresh security reviewer `3cf260f5-f81b-4db9-b28d-590fa705d7c3` 判定 `pass`（0 blocking / 0 important）；集成 Format、Typecheck、Lint 与 source patch 字节一致性通过；ITEM-03 scout `af0a1e45-16a7-415a-b2d6-a607ff1f5563` 同时完成只读实现包。
