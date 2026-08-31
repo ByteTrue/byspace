@@ -84,18 +84,28 @@ describe("terminal virtual keyboard policy", () => {
     expect(
       shouldShowTerminalFloatingCopyAction({
         hasSelection: false,
+        isCompact: true,
         isNative: true,
       }),
     ).toBe(false);
     expect(
       shouldShowTerminalFloatingCopyAction({
         hasSelection: true,
+        isCompact: false,
         isNative: false,
       }),
     ).toBe(false);
     expect(
       shouldShowTerminalFloatingCopyAction({
         hasSelection: true,
+        isCompact: true,
+        isNative: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowTerminalFloatingCopyAction({
+        hasSelection: true,
+        isCompact: false,
         isNative: true,
       }),
     ).toBe(true);

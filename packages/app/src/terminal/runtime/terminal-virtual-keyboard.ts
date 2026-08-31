@@ -62,7 +62,8 @@ export function shouldShowTerminalPasteAction(input: { isNative: boolean }): boo
 
 export function shouldShowTerminalFloatingCopyAction(input: {
   hasSelection: boolean;
+  isCompact: boolean;
   isNative: boolean;
 }): boolean {
-  return input.isNative && input.hasSelection;
+  return input.hasSelection && (input.isCompact || input.isNative);
 }

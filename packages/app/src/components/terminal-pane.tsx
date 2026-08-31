@@ -1005,6 +1005,7 @@ export function TerminalPane({
   const showPasteAction = shouldShowTerminalPasteAction({ isNative });
   const showFloatingCopyAction = shouldShowTerminalFloatingCopyAction({
     hasSelection,
+    isCompact: isMobile,
     isNative,
   });
   const keyboardToggleIconColor = theme.colors.foregroundMuted;

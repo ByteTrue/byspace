@@ -31,6 +31,12 @@ type BrowserTerminal = TerminalSize & {
   paste: (text: string) => void;
   refresh: (start: number, end: number) => void;
   reset: () => void;
+  getSelection: () => string;
+  buffer: {
+    active: {
+      viewportY: number;
+    };
+  };
 };
 
 interface MountedTerminal {
@@ -41,6 +47,7 @@ interface MountedTerminal {
   sizes: TerminalSize[];
   terminalKeys: TerminalKeyRecord[];
   inputModeChanges: TerminalInputModeState[];
+  selectionChanges: boolean[];
 }
 
 const mountedTerminals: MountedTerminal[] = [];
@@ -77,6 +84,7 @@ function createTerminalHost(input: {
   width: number;
   height: number;
   scrollback?: number;
+  touchSelectionEnabled?: boolean;
 }): MountedTerminal {
   const root = document.createElement("div");
   root.style.width = `${input.width}px`;
@@ -96,7 +104,9 @@ function createTerminalHost(input: {
   const inputs: string[] = [];
   const terminalKeys: TerminalKeyRecord[] = [];
   const inputModeChanges: TerminalInputModeState[] = [];
+  const selectionChanges: boolean[] = [];
   const runtime = new TerminalEmulatorRuntime();
+  runtime.setTouchSelectionEnabled({ enabled: input.touchSelectionEnabled ?? false });
   runtime.setCallbacks({
     callbacks: {
       onInput: (data) => {
@@ -110,6 +120,9 @@ function createTerminalHost(input: {
       },
       onInputModeChange: (state) => {
         inputModeChanges.push(state);
+      },
+      onSelectionChange: (hasSelection) => {
+        selectionChanges.push(hasSelection);
       },
     },
   });
@@ -125,7 +138,16 @@ function createTerminalHost(input: {
     },
   });
 
-  const mounted = { host, root, runtime, inputs, sizes, terminalKeys, inputModeChanges };
+  const mounted = {
+    host,
+    root,
+    runtime,
+    inputs,
+    sizes,
+    terminalKeys,
+    inputModeChanges,
+    selectionChanges,
+  };
   mountedTerminals.push(mounted);
   return mounted;
 }
@@ -205,6 +227,28 @@ function dispatchTerminalPaste(input: { host: HTMLElement; text: string }): Clip
   return event;
 }
 
+function dispatchTerminalTouch(input: {
+  target: HTMLElement;
+  type: "touchstart" | "touchmove" | "touchend";
+  x: number;
+  y: number;
+}): void {
+  const touch = new Touch({
+    identifier: 1,
+    target: input.target,
+    clientX: input.x,
+    clientY: input.y,
+  });
+  input.target.dispatchEvent(
+    new TouchEvent(input.type, {
+      bubbles: true,
+      cancelable: true,
+      touches: input.type === "touchend" ? [] : [touch],
+      changedTouches: [touch],
+    }),
+  );
+}
+
 function setNavigatorPlatform(platform: string): () => void {
   const descriptor = Object.getOwnPropertyDescriptor(navigator, "platform");
   Object.defineProperty(navigator, "platform", { configurable: true, value: platform });
@@ -249,6 +293,350 @@ describe("terminal emulator runtime in a real browser", () => {
 
     expect(window.__paseoTerminal).toBe(terminal);
     expect(window.__paseoTerminal?.options.scrollback).toBe(42_000);
+  });
+
+  it("selects the touched word after a long press", async () => {
+    await page.viewport(390, 844);
+    const mounted = createTerminalHost({
+      width: 390,
+      height: 500,
+      touchSelectionEnabled: true,
+    });
+    const terminal = getBrowserTerminal();
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({ data: terminalOutput("copy this text"), onCommitted: resolve });
+    });
+
+    const screen = mounted.host.querySelector<HTMLElement>(".xterm-screen");
+    if (!screen) {
+      throw new Error("Expected xterm screen to be mounted");
+    }
+    const bounds = screen.getBoundingClientRect();
+    const cellWidth = bounds.width / terminal.cols;
+    const cellHeight = bounds.height / terminal.rows;
+    dispatchTerminalTouch({
+      target: screen,
+      type: "touchstart",
+      x: bounds.left + cellWidth * 1.5,
+      y: bounds.top + cellHeight / 2,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 700));
+
+    expect(terminal.getSelection()).toBe("copy");
+    expect(mounted.selectionChanges).toEqual([true]);
+  });
+
+  it("leaves wide-Web long-press behavior unchanged", async () => {
+    await page.viewport(900, 600);
+    const mounted = createTerminalHost({
+      width: 720,
+      height: 360,
+      touchSelectionEnabled: false,
+    });
+    const terminal = getBrowserTerminal();
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({ data: terminalOutput("copy this text"), onCommitted: resolve });
+    });
+
+    const screen = mounted.host.querySelector<HTMLElement>(".xterm-screen");
+    if (!screen) {
+      throw new Error("Expected xterm screen to be mounted");
+    }
+    const bounds = screen.getBoundingClientRect();
+    const cellWidth = bounds.width / terminal.cols;
+    const cellHeight = bounds.height / terminal.rows;
+    dispatchTerminalTouch({
+      target: screen,
+      type: "touchstart",
+      x: bounds.left + cellWidth * 1.5,
+      y: bounds.top + cellHeight / 2,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 700));
+
+    expect(terminal.getSelection()).toBe("");
+    expect(mounted.selectionChanges).toEqual([]);
+  });
+
+  it("extends a word selection when a touch drag follows a long press", async () => {
+    await page.viewport(390, 844);
+    const mounted = createTerminalHost({
+      width: 390,
+      height: 500,
+      touchSelectionEnabled: true,
+    });
+    const terminal = getBrowserTerminal();
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({ data: terminalOutput("copy this text"), onCommitted: resolve });
+    });
+
+    const screen = mounted.host.querySelector<HTMLElement>(".xterm-screen");
+    if (!screen) {
+      throw new Error("Expected xterm screen to be mounted");
+    }
+    const bounds = screen.getBoundingClientRect();
+    const cellWidth = bounds.width / terminal.cols;
+    const cellHeight = bounds.height / terminal.rows;
+    const y = bounds.top + cellHeight / 2;
+    const startX = bounds.left + cellWidth * 1.5;
+    const endX = bounds.left + cellWidth * 13.5;
+
+    dispatchTerminalTouch({ target: screen, type: "touchstart", x: startX, y });
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(terminal.getSelection()).toBe("copy");
+
+    dispatchTerminalTouch({ target: screen, type: "touchmove", x: endX, y });
+    await nextFrame();
+    dispatchTerminalTouch({ target: screen, type: "touchend", x: endX, y });
+
+    expect(terminal.getSelection()).toBe("copy this text");
+  });
+
+  it("forces local selection while the application tracks the mouse", async () => {
+    await page.viewport(390, 844);
+    const mounted = createTerminalHost({
+      width: 390,
+      height: 500,
+      touchSelectionEnabled: true,
+    });
+    const terminal = getBrowserTerminal();
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({
+        data: terminalOutput("\u001b[?1000hcopy this text"),
+        onCommitted: resolve,
+      });
+    });
+
+    const screen = mounted.host.querySelector<HTMLElement>(".xterm-screen");
+    if (!screen) {
+      throw new Error("Expected xterm screen to be mounted");
+    }
+    const bounds = screen.getBoundingClientRect();
+    const cellWidth = bounds.width / terminal.cols;
+    const cellHeight = bounds.height / terminal.rows;
+    dispatchTerminalTouch({
+      target: screen,
+      type: "touchstart",
+      x: bounds.left + cellWidth * 1.5,
+      y: bounds.top + cellHeight / 2,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 700));
+
+    expect(terminal.getSelection()).toBe("copy");
+    expect(mounted.inputs).toEqual([]);
+  });
+
+  it("anchors touch selection to complete double-width cells", async () => {
+    await page.viewport(390, 844);
+    const mounted = createTerminalHost({
+      width: 390,
+      height: 500,
+      touchSelectionEnabled: true,
+    });
+    const terminal = getBrowserTerminal();
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({ data: terminalOutput("x 你 y"), onCommitted: resolve });
+    });
+
+    const screen = mounted.host.querySelector<HTMLElement>(".xterm-screen");
+    if (!screen) {
+      throw new Error("Expected xterm screen to be mounted");
+    }
+    const bounds = screen.getBoundingClientRect();
+    const cellWidth = bounds.width / terminal.cols;
+    const y = bounds.top + bounds.height / terminal.rows / 2;
+    const selectFrom = async (startColumn: number, endColumn: number): Promise<void> => {
+      const startX = bounds.left + cellWidth * (startColumn + 0.5);
+      const endX = bounds.left + cellWidth * (endColumn + 0.5);
+      dispatchTerminalTouch({ target: screen, type: "touchstart", x: startX, y });
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      dispatchTerminalTouch({ target: screen, type: "touchmove", x: endX, y });
+      await nextFrame();
+      dispatchTerminalTouch({ target: screen, type: "touchend", x: endX, y });
+    };
+
+    await selectFrom(0, 3);
+    expect(terminal.getSelection()).toBe("x 你");
+
+    await selectFrom(5, 3);
+    expect(terminal.getSelection()).toBe("你 y");
+  });
+
+  it("cancels long-press before vertical and horizontal gesture ownership", async () => {
+    await page.viewport(390, 844);
+    const mounted = createTerminalHost({
+      width: 390,
+      height: 180,
+      touchSelectionEnabled: true,
+    });
+    const terminal = getBrowserTerminal();
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({
+        data: terminalOutput(
+          Array.from({ length: 40 }, (_, index) => `scroll line ${index}\r\n`).join(""),
+        ),
+        onCommitted: resolve,
+      });
+    });
+
+    const screen = mounted.host.querySelector<HTMLElement>(".xterm-screen");
+    if (!screen) {
+      throw new Error("Expected xterm screen to be mounted");
+    }
+    const bounds = screen.getBoundingClientRect();
+    const cellWidth = bounds.width / terminal.cols;
+    const cellHeight = bounds.height / terminal.rows;
+    const startX = bounds.left + cellWidth * 2.5;
+    const startY = bounds.top + cellHeight / 2;
+    const viewportBefore = terminal.buffer.active.viewportY;
+
+    dispatchTerminalTouch({ target: screen, type: "touchstart", x: startX, y: startY });
+    dispatchTerminalTouch({
+      target: screen,
+      type: "touchmove",
+      x: startX,
+      y: startY + cellHeight * 4,
+    });
+    dispatchTerminalTouch({
+      target: screen,
+      type: "touchend",
+      x: startX,
+      y: startY + cellHeight * 4,
+    });
+    await nextFrame();
+    expect(terminal.buffer.active.viewportY).not.toBe(viewportBefore);
+
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(terminal.getSelection()).toBe("");
+
+    dispatchTerminalTouch({ target: screen, type: "touchstart", x: startX, y: startY });
+    dispatchTerminalTouch({
+      target: screen,
+      type: "touchmove",
+      x: startX + cellWidth * 4,
+      y: startY,
+    });
+    dispatchTerminalTouch({
+      target: screen,
+      type: "touchend",
+      x: startX + cellWidth * 4,
+      y: startY,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 700));
+
+    expect(terminal.getSelection()).toBe("");
+  });
+
+  it("copies and clears a selection through the runtime handle", async () => {
+    await page.viewport(390, 844);
+    const mounted = createTerminalHost({
+      width: 390,
+      height: 500,
+      touchSelectionEnabled: true,
+    });
+    const terminal = getBrowserTerminal();
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({ data: terminalOutput("copy this text"), onCommitted: resolve });
+    });
+
+    const screen = mounted.host.querySelector<HTMLElement>(".xterm-screen");
+    if (!screen) {
+      throw new Error("Expected xterm screen to be mounted");
+    }
+    const bounds = screen.getBoundingClientRect();
+    const cellWidth = bounds.width / terminal.cols;
+    const cellHeight = bounds.height / terminal.rows;
+    dispatchTerminalTouch({
+      target: screen,
+      type: "touchstart",
+      x: bounds.left + cellWidth * 1.5,
+      y: bounds.top + cellHeight / 2,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 700));
+
+    const copied: string[] = [];
+    await expect(
+      mounted.runtime.copySelection({
+        writeText: async (text) => {
+          copied.push(text);
+        },
+      }),
+    ).resolves.toBe("copy");
+    expect(copied).toEqual(["copy"]);
+    expect(terminal.getSelection()).toBe("");
+    expect(mounted.selectionChanges).toEqual([true, false]);
+  });
+
+  it("cancels long-press timers and touch listeners on unmount", async () => {
+    await page.viewport(390, 844);
+    const mounted = createTerminalHost({
+      width: 390,
+      height: 500,
+      touchSelectionEnabled: true,
+    });
+    const terminal = getBrowserTerminal();
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({ data: terminalOutput("stale selection"), onCommitted: resolve });
+    });
+
+    const screen = mounted.host.querySelector<HTMLElement>(".xterm-screen");
+    if (!screen) {
+      throw new Error("Expected xterm screen to be mounted");
+    }
+    const bounds = screen.getBoundingClientRect();
+    const cellWidth = bounds.width / terminal.cols;
+    const cellHeight = bounds.height / terminal.rows;
+    const touch = {
+      target: screen,
+      x: bounds.left + cellWidth * 1.5,
+      y: bounds.top + cellHeight / 2,
+    };
+    dispatchTerminalTouch({ ...touch, type: "touchstart" });
+    mounted.runtime.unmount();
+
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(mounted.selectionChanges).toEqual([]);
+    expect(terminal.getSelection()).toBe("");
+
+    dispatchTerminalTouch({ ...touch, type: "touchstart" });
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(mounted.selectionChanges).toEqual([]);
+    expect(terminal.getSelection()).toBe("");
+  });
+
+  it("clears active selection state on unmount", async () => {
+    await page.viewport(390, 844);
+    const mounted = createTerminalHost({
+      width: 390,
+      height: 500,
+      touchSelectionEnabled: true,
+    });
+    const terminal = getBrowserTerminal();
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({ data: terminalOutput("stale selection"), onCommitted: resolve });
+    });
+
+    const screen = mounted.host.querySelector<HTMLElement>(".xterm-screen");
+    if (!screen) {
+      throw new Error("Expected xterm screen to be mounted");
+    }
+    const bounds = screen.getBoundingClientRect();
+    const cellWidth = bounds.width / terminal.cols;
+    const cellHeight = bounds.height / terminal.rows;
+    dispatchTerminalTouch({
+      target: screen,
+      type: "touchstart",
+      x: bounds.left + cellWidth * 1.5,
+      y: bounds.top + cellHeight / 2,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(mounted.selectionChanges).toEqual([true]);
+
+    mounted.runtime.unmount();
+
+    expect(mounted.selectionChanges).toEqual([true, false]);
   });
 
   it("does not claim PTY ownership from passive mount refits", async () => {
