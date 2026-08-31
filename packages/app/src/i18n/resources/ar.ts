@@ -553,6 +553,8 @@ export const ar: TranslationResources = {
       hostDisconnected: "Host غير متصل",
       updateHost: "حدّث المضيف لاستخدام عارض الطرفية الأصلي.",
       unableToSubscribe: "غير قادر على الاشتراك في المحطة",
+      clipboardImageTooLarge: "صورة الحافظة كبيرة جدًا (الحد الأقصى 50 MiB)",
+      clipboardReadFailed: "تعذر قراءة صورة الحافظة",
     },
     tabs: {
       loading: "تحميل...",

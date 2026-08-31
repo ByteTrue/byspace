@@ -558,6 +558,8 @@ export const ru: TranslationResources = {
       hostDisconnected: "Хост не подключён",
       updateHost: "Обновите хост, чтобы использовать нативный рендерер терминала.",
       unableToSubscribe: "Не удалось подключиться к терминалу",
+      clipboardImageTooLarge: "Изображение в буфере обмена слишком велико (макс. 50 МиБ)",
+      clipboardReadFailed: "Не удалось прочитать изображение из буфера обмена",
     },
     tabs: {
       loading: "Загрузка...",

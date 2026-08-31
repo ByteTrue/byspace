@@ -553,6 +553,8 @@ export const zhCN: TranslationResources = {
       hostDisconnected: "Host 未连接",
       updateHost: "请更新主机以使用原生终端渲染器。",
       unableToSubscribe: "无法订阅 Terminal",
+      clipboardImageTooLarge: "剪贴板图片过大（最大 50 MiB）",
+      clipboardReadFailed: "无法读取剪贴板图片",
     },
     tabs: {
       loading: "正在加载...",
