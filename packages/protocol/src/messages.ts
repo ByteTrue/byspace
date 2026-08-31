@@ -2845,6 +2845,9 @@ export const SubscribeTerminalRequestSchema = z.object({
   restore: z
     .object({
       mode: z.enum(["live", "visible-snapshot", "full-snapshot"]),
+      // COMPAT(terminalRestoreResume): added in v0.7.0-beta.3, remove after 2027-09-01.
+      // Older daemons ignore the optional field and keep snapshot behavior.
+      resume: z.boolean().optional(),
       scrollbackLines: z.number().int().nonnegative().optional(),
       size: z
         .object({

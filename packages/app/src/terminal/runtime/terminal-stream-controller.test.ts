@@ -245,6 +245,38 @@ describe("terminal-stream-controller", () => {
     expect(harness.outputs).toEqual([]);
   });
 
+  it("forwards output the daemon flushed before an unsubscribe reached it", async () => {
+    const harness = createHarness();
+    harness.client.nextSubscribeResults.push({ terminalId: "term-1", error: null });
+
+    harness.controller.setTerminal({ terminalId: "term-1" });
+    await flushAsyncWork();
+    harness.controller.setTerminal({ terminalId: null });
+
+    const lateOutput = terminalOutput("late but delivered");
+    harness.client.emit({ terminalId: "term-1", type: "output", data: lateOutput });
+
+    expect(harness.outputs).toEqual([{ terminalId: "term-1", data: lateOutput }]);
+  });
+
+  it("drops late output after switching the renderer to another terminal", async () => {
+    const harness = createHarness();
+    harness.client.nextSubscribeResults.push({ terminalId: "term-1", error: null });
+    harness.client.nextSubscribeResults.push({ terminalId: "term-2", error: null });
+
+    harness.controller.setTerminal({ terminalId: "term-1" });
+    await flushAsyncWork();
+    harness.controller.setTerminal({ terminalId: "term-2" });
+    await flushAsyncWork();
+    harness.client.emit({
+      terminalId: "term-1",
+      type: "output",
+      data: terminalOutput("stale terminal"),
+    });
+
+    expect(harness.outputs).toEqual([]);
+  });
+
   it("unsubscribes when switching terminals and on dispose", async () => {
     const harness = createHarness();
     harness.client.nextSubscribeResults.push({ terminalId: "term-1", error: null });

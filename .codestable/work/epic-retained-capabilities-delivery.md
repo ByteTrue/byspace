@@ -11,10 +11,10 @@ remote_publish: each-milestone
 commit_strategy: semantic-atomic-per-item
 publish_strategy: epic-plan-pr-then-one-pr-per-wave
 current_wave: 2
-current_item: ITEM-05
+current_item: ITEM-06
 active_items: []
 blocked_by: null
-next_action: 从 reviewed ITEM-04 milestone 启动 ITEM-05（T03/T04/T05）隔离 worktree，先用历史保留用例建立 RED，再实现同 renderer 恢复与 revision gap replay
+next_action: 从 ITEM-05 reviewed milestone 创建 ITEM-06 隔离 worktree，先锁定 input-mode 与 IME RED contract
 ---
 
 # Epic Work: 保留能力交付路线
@@ -33,6 +33,7 @@ next_action: 从 reviewed ITEM-04 milestone 启动 ITEM-05（T03/T04/T05）隔�
 - ITEM-03 read-only scout 已完成 optional hostname 的协议/客户端接缝与兼容测试包，没有修改文件。
 - Wave 1 PR #16 已由 reviewed head `db08188e9b0be50d4d966eac0851ab44aa2a5ecb` 合入 `main`，merge commit 为 `0d81e9fa376a2fb98518e94b5080d97440371811`；post-merge exact-SHA CI `33375176914` 与 Docker `33375176920` 均通过。
 - Wave 2 从上述绿色 `main` 创建；ITEM-04 已取得 Node、Browser Direct、本地 Wrangler Relay/E2EE 与 exact-head Windows 证据。Desktop-web 超大 turn hard cap 已在 Windows 将组合 workload 的 `longTaskMaxMs` 从 `1343` 降到最终 `478`（Direct）/`794`（Relay），`rafMaxGapMs` 从 `1379.3` 降到最终 `706.8`/`999.9`；canonical xterm buffer 完整性 oracle 在两种 transport 均确认 1,000/1,000 输出与 24/24 echo，无 duplicate、out-of-order 或 mismatch。Exact-head run `33405590748` 全绿，final aggregate review `caf8c1ed-6591-4d97-8afb-0758a6fa2d11` 判定 PASS（0 blocking / 0 important）。
+- ITEM-05 已完成 retained renderer 恢复与 revision gap replay：隐藏/返回不 reset，共享 renderer 保留 1,500 行并只补一次 gap；1MB backlog 不连续、终端退出、完整 transport 丢失或 backpressure overflow 均回退权威 snapshot。Protocol 8/8、App 12/12、Server 128/128、Direct/Relay 各 1/1、Build/Typecheck/Lint/Format 全绿；Round 2 review `31a2f709-a9d9-47ec-ad24-421ea8b82986` 为 PASS（0 blocking / 0 important）。
 
 ## Wave 1 · 发布通道路由与远程连接安全
 
@@ -43,7 +44,7 @@ next_action: 从 reviewed ITEM-04 milestone 启动 ITEM-05（T03/T04/T05）隔�
 ## Wave 2 · Terminal 性能与恢复基础
 
 - [x] ITEM-04 · TERM-01 · T01/T02/T08/T09/T16 · reviewed and integrated
-- [ ] ITEM-05 · TERM-02 · T03/T04/T05
+- [x] ITEM-05 · TERM-02 · T03/T04/T05 · reviewed and integrated
 - [ ] ITEM-06 · TERM-05 · T10/T12
 
 ## Wave 3 · Terminal 功能与呈现
@@ -72,7 +73,7 @@ next_action: 从 reviewed ITEM-04 milestone 启动 ITEM-05（T03/T04/T05）隔�
 
 ## 活跃委派
 
-- 当前无运行中的 writer。ITEM-05 两个只读 scout 已完成现状接缝与 legacy reference 对比；下一步只启动一个隔离 writer，避免与 Wave 2 branch 并发写入。
+- ITEM-05 唯一 writer lineage 首轮 `1619df3f-b0f3-4fef-8811-3aa52a0ef803`、续跑 `b779914e-c2cd-46cf-9e96-dac86c08791a` 在隔离 worktree `epic-002-wave2-item05` 建立 RED 并完成首轮实现；父流程在 runner settlement 后接管。首轮 reviewer `6fcf9c03-e55c-49dd-b452-bdd67f2490a7` 提出的 stale preamble 与 overflow-resume 两项 important 均经专门 RED 修复；Round 2 `31a2f709-a9d9-47ec-ad24-421ea8b82986` 返回 PASS（0 blocking / 0 important）。最终 21-path manifest 为 `849c36c761f99fb728dca39e494120f59ff695b2310d90378fae34e88b60fe67`。
 - ITEM-04 worker lineage：首轮 `557f41e3-cf60-4bfa-a1f5-f43eb405109a`，round 2 `980c4c05-9d0d-4831-9d99-b9b2369e9d03`，round 3 `5caaae27-606f-461a-a9f4-90dae2b57409`。父流程接管后修复跨平台 fixture、真实 Relay/E2EE、完整性断言、teardown 与 trace 隔离。
 - ITEM-04 independent reviewer `43a46b21-f879-4943-b0eb-4048af658d25` 对 base `0d81e9fa3` 上 20-path frozen manifest 返回 pass：0 blocking / 0 important。集成 Lint 随后发现 Relay readiness helper 的共享 resolver 触发 `promise/no-multiple-resolved`；父流程改为三个独立 Promise 的 race，targeted Lint、App Typecheck 和真实 Relay/E2EE 2/2 通过，同 reviewer 复审该单文件修正仍为 pass。最终 manifest 为 `3eb63d3e…d95df6`。
 - ITEM-04 read-only audit workflow `0d44efcb-871f-4ffd-80c9-516689703922` 与 minimization review 均已完成；没有稳定分段产品 RED 前不得修改 Terminal/Git/Relay/renderer 热路径的边界得到遵守。
@@ -130,3 +131,5 @@ next_action: 从 reviewed ITEM-04 milestone 启动 ITEM-05（T03/T04/T05）隔�
 - 2026-08-31：修正后 exact-head Windows run `33398770223` 的独立 throughput/latency 与 Relay 均通过，组合 workload 也以 `rafMaxGapMs=485.4`、`longTaskMaxMs=451` 通过响应性门槛；最终截图可见 `OUT:999`，但 raw `terminal_output` 拼接被 Windows ConPTY repaint/control sequences 误解析成 44 duplicates、45 payload mismatches 与 1 out-of-order。历史 run `33395542756` 同一 raw oracle 又在 1,000/1,000 序列完整时漏掉已呈现在 xterm buffer 的 DONE marker，确认这是测试 oracle 缺陷而非产品数据损坏。修正只在 DONE 可见、Agent workload 结束后读取一次 canonical xterm buffer 并拼接 soft-wrapped rows，完整性断言仍要求 1,000 输出、24 echo、单一 DONE 与有效 digest；raw frame/write trace 继续独立承担 latency/transport 指标。本地 Direct 1/1 返回 1,000/24/valid digest、1,007 Agent events、`rafMaxGapMs=244.4`、`longTaskMaxMs=146`，App Typecheck、targeted Lint、Format 及 independent review 全绿。
 - 2026-08-31：canonical integrity probe 以 `e1a651382` 推送后，首次 Windows exact-head run 暴露 teardown 中 `taskkill` 已终止进程但返回非零的竞态；本地 fake-taskkill RED 复现后，`killProcessTree` 仅在目标 PID 已退出时接受该非零结果，仍会抛出存活进程的真实失败。修复提交 `0d0dd540e` 的 exact-head Windows run `33405590748` 全绿：Node L0/L1/L2 各 100/100 echo，p95 `16.79/16.73/16.4ms`，每级约 `2.29MB` burst 且 `0 snapshot`；Direct/Relay 组合 workload 均为 1,000/1,000 输出、24/24 echo、单一有效 digest、0 duplicate/out-of-order/mismatch，rAF 最大间隙 `706.8/999.9ms`，Long Task 最大 `478/794ms`；普通逐键 p95 `6.5/9.4ms`。Windows 软件渲染下 50,000 行仍耗时 `10.6–14.7s`，且 Relay rAF 距 1 秒门槛仅 `0.1ms`，作为 residual risk 交 final aggregate review，不把一次绿色结果表述为所有 Windows/驱动上的性能上限。
 - 2026-08-31：最终只读 aggregate review `caf8c1ed-6591-4d97-8afb-0758a6fa2d11` 覆盖 base `0d81e9fa3` 到 frozen head `0d0dd540e` 的 6 个 ITEM-04 commits，结论 PASS（0 blocking / 0 important）。Review 确认真实 Direct/本地 Wrangler E2EE Relay、负载与严格完整性/1 秒 stall 门槛、超大 Agent turn 可访问性、Windows teardown、手动 CI gating 和文档一致性均符合交付契约；Relay `999.9ms` 边界、Windows throughput `10.6–14.7s`、taskkill 理论窄窗口继续作为 report-only residual risks。ITEM-04 关闭。
+- 2026-08-31：在 reviewed milestone `4270217f1` 创建 ITEM-05 隔离分支/worktree；两个只读 scout 已确认当前 retained panel 与 persistent emulator 覆盖 T03/T04 基础，历史 commit `2c92dcd4c` 提供 T05 的 optional `restore.resume`、bounded revision backlog 与 gap replay 参考。唯一 writer lineage 首轮 `1619df3f-b0f3-4fef-8811-3aa52a0ef803` 按先 RED 后实现执行，并额外锁定 reconnect grace 中零 socket 输出不得被当作 delivered 的断线安全修正；首轮 Direct E2E 已稳定复现返回 workspace 后同一 renderer 的 reset write 从 1 增至 2，Protocol optional resume 也完成 RED→8/8 green。首轮因 runner 将预期 RED 非零退出记为失败而 settlement，续跑 `b779914e-c2cd-46cf-9e96-dac86c08791a` 保留原 worktree 与 RED 证据继续。
+- 2026-09-01：父流程完成 ITEM-05 四层 contract：optional `restore.resume`；App late-frame/retained-renderer；Daemon per-session delivered revision、1MB contiguous backlog 与安全 gap；最后 socket 断开清 anchor。Direct 与本地 Wrangler Relay/E2EE 均验证 1,500 行历史保留、隐藏输出单次补齐、返回后输入可用，`RESTORE_WINDOW` 分别为 `87ms` / `100ms`。首轮 reviewer 找到成功 resume 后 stale input-mode preamble 和 overflow 仍保留 resume 两项 important；两项均补 RED 修复并经 Round 2 结构化 PASS。最终 Protocol 8/8、App 12/12、Server 128/128（3 skipped）、Build、Typecheck、Lint、Format 与 Direct/Relay E2E 全绿，21-path manifest `849c36c7…fe67` 逐文件收割一致；ITEM-05 关闭并推进 ITEM-06。

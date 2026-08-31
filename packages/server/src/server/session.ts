@@ -1141,6 +1141,10 @@ export class Session {
     }
   }
 
+  handleTransportUnavailable(): void {
+    this.terminalController.handleTransportUnavailable();
+  }
+
   private replaceAgentTimelineSubscription(source: object | undefined, agentIds: string[]): void {
     const subscriptionSource = source ?? this.defaultTimelineSubscriptionSource;
     if (agentIds.length === 0) this.viewedTimelineAgentIdsBySource.delete(subscriptionSource);

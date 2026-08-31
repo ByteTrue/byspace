@@ -15,6 +15,7 @@ import type {
   TerminalStateSnapshot,
 } from "./terminal.js";
 import type { CaptureTerminalLinesResult } from "./terminal-capture.js";
+import { TerminalOutputBacklog } from "./terminal-output-backlog.js";
 import type {
   TerminalActivityListener,
   TerminalActivityTransitionEvent,
@@ -71,6 +72,7 @@ interface WorkerTerminalRecord {
   // the snapshotReady event that precedes a live-restore replay.
   replayPreamble: string;
   exitInfo: TerminalExitInfo | null;
+  outputBacklog: TerminalOutputBacklog;
   messageListeners: Set<(msg: ServerMessage) => void>;
   exitListeners: Set<(info: TerminalExitInfo) => void>;
   commandFinishedListeners: Set<(info: TerminalCommandFinishedInfo) => void>;
@@ -235,6 +237,7 @@ export function createWorkerTerminalManager(
       activity: input.info.activity,
       replayPreamble: "",
       exitInfo: null,
+      outputBacklog: new TerminalOutputBacklog(),
       messageListeners: new Set(),
       exitListeners: new Set(),
       commandFinishedListeners: new Set(),
@@ -352,6 +355,9 @@ export function createWorkerTerminalManager(
           revision: 0,
         };
       },
+      getOutputSince(revision: number) {
+        return record.outputBacklog.since(revision);
+      },
       getReplayPreamble(): string {
         // Refreshed from every getTerminalState response, which the controller fetches
         // before every snapshot replay (legacy + visible-snapshot restore). The one
@@ -425,6 +431,9 @@ export function createWorkerTerminalManager(
     }
     if (message.message.type === "snapshot") {
       record.state = message.message.state;
+    }
+    if (message.message.type === "output") {
+      record.outputBacklog.append(message.message.revision, message.message.data);
     }
     if (message.message.type === "snapshotReady" && message.message.replayPreamble !== undefined) {
       record.replayPreamble = message.message.replayPreamble;

@@ -8,6 +8,7 @@ describe("terminal restore options", () => {
       resolveTerminalRestoreOptions({
         supportsTerminalRestoreModes: false,
         canClaimSize: true,
+        canResume: true,
         size: { rows: 24, cols: 80 },
       }),
     ).toBeUndefined();
@@ -18,12 +19,29 @@ describe("terminal restore options", () => {
       resolveTerminalRestoreOptions({
         supportsTerminalRestoreModes: true,
         canClaimSize: true,
+        canResume: false,
         size: { rows: 24, cols: 80 },
       }),
     ).toEqual({
       mode: "visible-snapshot",
-      scrollbackLines: 200,
+      resume: false,
+      scrollbackLines: 1_000,
       size: { rows: 24, cols: 80 },
+    });
+  });
+
+  it("resumes only when the same renderer still owns the terminal history", () => {
+    expect(
+      resolveTerminalRestoreOptions({
+        supportsTerminalRestoreModes: true,
+        canClaimSize: false,
+        canResume: true,
+        size: { rows: 24, cols: 80 },
+      }),
+    ).toEqual({
+      mode: "visible-snapshot",
+      resume: true,
+      scrollbackLines: 1_000,
     });
   });
 
@@ -32,11 +50,13 @@ describe("terminal restore options", () => {
       resolveTerminalRestoreOptions({
         supportsTerminalRestoreModes: true,
         canClaimSize: true,
+        canResume: false,
         size: null,
       }),
     ).toEqual({
       mode: "visible-snapshot",
-      scrollbackLines: 200,
+      resume: false,
+      scrollbackLines: 1_000,
     });
   });
 
@@ -45,11 +65,13 @@ describe("terminal restore options", () => {
       resolveTerminalRestoreOptions({
         supportsTerminalRestoreModes: true,
         canClaimSize: false,
+        canResume: false,
         size: { rows: 24, cols: 80 },
       }),
     ).toEqual({
       mode: "visible-snapshot",
-      scrollbackLines: 200,
+      resume: false,
+      scrollbackLines: 1_000,
     });
   });
 });

@@ -34,6 +34,35 @@ describe("terminal restore schemas", () => {
     }
   });
 
+  test("carries the optional resume request alongside the fallback mode", () => {
+    expect(
+      SubscribeTerminalRequestSchema.parse({
+        type: "subscribe_terminal_request",
+        terminalId: "term-1",
+        requestId: "req-1",
+        restore: {
+          resume: true,
+          mode: "visible-snapshot",
+          scrollbackLines: 1_000,
+        },
+      }).restore,
+    ).toEqual({ resume: true, mode: "visible-snapshot", scrollbackLines: 1_000 });
+  });
+
+  test("keeps resume optional for older terminal subscribe requests", () => {
+    expect(
+      SubscribeTerminalRequestSchema.parse({
+        type: "subscribe_terminal_request",
+        terminalId: "term-1",
+        requestId: "req-1",
+        restore: {
+          mode: "visible-snapshot",
+          scrollbackLines: 1_000,
+        },
+      }).restore?.resume,
+    ).toBeUndefined();
+  });
+
   test("rejects camel-case terminal restore modes", () => {
     expect(() =>
       SubscribeTerminalRequestSchema.parse({

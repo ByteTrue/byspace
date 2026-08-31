@@ -1902,6 +1902,7 @@ export class VoiceAssistantWebSocketServer {
     this.socketIdentities.delete(ws);
 
     if (connection.sockets.size === 0) {
+      connection.session.handleTransportUnavailable();
       this.unregisterBrowserToolsClient(connection.clientId);
       if (connection.lifecycle === "ephemeral-plugin") {
         this.pluginSocketIds.delete(ws);

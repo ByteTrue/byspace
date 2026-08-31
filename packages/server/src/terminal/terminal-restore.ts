@@ -17,7 +17,7 @@ export const MAX_TERMINAL_OUTPUT_FRAME_BYTES = 256 * 1024;
 export const MAX_CLIENT_BUFFERED_BYTES = 4 * 1024 * 1024;
 
 const DEFAULT_VISIBLE_RESTORE_SCROLLBACK_LINES = 200;
-const MAX_VISIBLE_RESTORE_SCROLLBACK_LINES = 500;
+const MAX_VISIBLE_RESTORE_SCROLLBACK_LINES = 1_000;
 
 export type TerminalRestoreOptions = NonNullable<SubscribeTerminalRequest["restore"]>;
 
@@ -32,10 +32,14 @@ export function resolveTerminalSubscriptionSnapshotMode(
 export function resolveRestoreAfterOutputOverflow(
   restore: TerminalRestoreOptions | undefined,
 ): TerminalRestoreOptions | undefined {
-  if (restore?.mode === "live") {
-    return { mode: "visible-snapshot" };
+  if (!restore) {
+    return undefined;
   }
-  return restore;
+  const { resume: _resume, ...withoutResume } = restore;
+  if (withoutResume.mode === "live") {
+    return { ...withoutResume, mode: "visible-snapshot" };
+  }
+  return withoutResume;
 }
 
 export function resolveTerminalRestoreSnapshotOptions(
