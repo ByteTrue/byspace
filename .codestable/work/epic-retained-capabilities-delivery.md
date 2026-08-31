@@ -14,7 +14,7 @@ current_wave: 2
 current_item: null
 active_items: []
 blocked_by: null
-next_action: 冻结并独立审查 Wave 2 aggregate diff，通过后创建 Wave 2 PR
+next_action: 创建并合入 Wave 2 PR；exact-head CI 全绿后推进 Wave 3
 ---
 
 # Epic Work: 保留能力交付路线
@@ -35,6 +35,7 @@ next_action: 冻结并独立审查 Wave 2 aggregate diff，通过后创建 Wave 
 - Wave 2 从上述绿色 `main` 创建；ITEM-04 已取得 Node、Browser Direct、本地 Wrangler Relay/E2EE 与 exact-head Windows 证据。Desktop-web 超大 turn hard cap 已在 Windows 将组合 workload 的 `longTaskMaxMs` 从 `1343` 降到最终 `478`（Direct）/`794`（Relay），`rafMaxGapMs` 从 `1379.3` 降到最终 `706.8`/`999.9`；canonical xterm buffer 完整性 oracle 在两种 transport 均确认 1,000/1,000 输出与 24/24 echo，无 duplicate、out-of-order 或 mismatch。Exact-head run `33405590748` 全绿，final aggregate review `caf8c1ed-6591-4d97-8afb-0758a6fa2d11` 判定 PASS（0 blocking / 0 important）。
 - ITEM-05 已完成 retained renderer 恢复与 revision gap replay：隐藏/返回不 reset，共享 renderer 保留 1,500 行并只补一次 gap；1MB backlog 不连续、终端退出、完整 transport 丢失或 backpressure overflow 均回退权威 snapshot。Protocol 8/8、App 12/12、Server 128/128、Direct/Relay 各 1/1、Build/Typecheck/Lint/Format 全绿；Round 2 review `31a2f709-a9d9-47ec-ad24-421ea8b82986` 为 PASS（0 blocking / 0 important）。
 - ITEM-06 已完成 Windows/ConPTY 多行文本 paste fallback：keyboard、context menu 与 imperative paste 汇入同一 framing 策略，单行/非 Windows 保持 xterm 原路径，reload mode replay 与无 mode fallback 均由真实 PTY byte oracle 覆盖。Reviewer `19112db0-a596-443a-b414-bf6ca9c9cb1f` 为 PASS（0 blocking / 0 important）；exact-head Windows run `33425004246` 在 source milestone `055d0000b` 上 Direct/Relay 各 5/5 全绿。
+- Wave 2 frozen aggregate patch `3ed57574257c38e18d6fcbd98f9ccc7ec95300167e034ce960805d16ab9cbf30` 经 reviewer `91c20656-547e-43b0-b027-f74b57daebec` 审查为 PASS（0 blocking / 0 important）；ITEM-04/05/06 的协议兼容、backlog/reconnect 生命周期、renderer/paste 交互、性能 oracle、CI gating 与文档证据均通过交叉核对。
 
 ## Wave 1 · 发布通道路由与远程连接安全
 
@@ -76,6 +77,7 @@ next_action: 冻结并独立审查 Wave 2 aggregate diff，通过后创建 Wave 
 
 - ITEM-05 唯一 writer lineage 首轮 `1619df3f-b0f3-4fef-8811-3aa52a0ef803`、续跑 `b779914e-c2cd-46cf-9e96-dac86c08791a` 在隔离 worktree `epic-002-wave2-item05` 建立 RED 并完成首轮实现；父流程在 runner settlement 后接管。首轮 reviewer `6fcf9c03-e55c-49dd-b452-bdd67f2490a7` 提出的 stale preamble 与 overflow-resume 两项 important 均经专门 RED 修复；Round 2 `31a2f709-a9d9-47ec-ad24-421ea8b82986` 返回 PASS（0 blocking / 0 important）。最终 21-path manifest 为 `849c36c761f99fb728dca39e494120f59ff695b2310d90378fae34e88b60fe67`。
 - ITEM-06 在隔离 worktree `epic-002-wave2-item06`（base `159a70640`）串行执行；scout workflow `dec0aff1-0930-4a1f-9018-98686354501a` 分别审计当前 runtime/E2E seam 与历史 T10/T12 边界。两个 scout 均确认 T10 已在 tracker/restore preamble，缺口仅为 T12 Windows 多行 framing，且不得整体移植图片 scope；唯一 writer `94da2f9c-f5d0-4a06-babe-8f3eb84cf63d` 完成 RED→GREEN，父流程修正非 Windows listener 与 mode replay 测试保真后冻结 7-path patch `ba654cd7…fa6aa`；reviewer `19112db0-a596-443a-b414-bf6ca9c9cb1f` 返回 PASS（0 blocking / 0 important），source milestone `055d0000b` 经 exact-head Windows run `33425004246` 验证并完成串行集成。
+- Wave 2 aggregate reviewer `91c20656-547e-43b0-b027-f74b57daebec` 审查 base `0d81e9fa3` 至 frozen head `35a0c1341` 的 9 commits / 46 paths，返回 PASS（0 blocking / 0 important）。其 Playwright JSON reporter 环境变量疑问已由锁定版本源码 `node_modules/playwright/lib/reporters/base.js` 核实：当前版本正式读取 `PLAYWRIGHT_JSON_OUTPUT_FILE`，无需改动。
 - ITEM-04 worker lineage：首轮 `557f41e3-cf60-4bfa-a1f5-f43eb405109a`，round 2 `980c4c05-9d0d-4831-9d99-b9b2369e9d03`，round 3 `5caaae27-606f-461a-a9f4-90dae2b57409`。父流程接管后修复跨平台 fixture、真实 Relay/E2EE、完整性断言、teardown 与 trace 隔离。
 - ITEM-04 independent reviewer `43a46b21-f879-4943-b0eb-4048af658d25` 对 base `0d81e9fa3` 上 20-path frozen manifest 返回 pass：0 blocking / 0 important。集成 Lint 随后发现 Relay readiness helper 的共享 resolver 触发 `promise/no-multiple-resolved`；父流程改为三个独立 Promise 的 race，targeted Lint、App Typecheck 和真实 Relay/E2EE 2/2 通过，同 reviewer 复审该单文件修正仍为 pass。最终 manifest 为 `3eb63d3e…d95df6`。
 - ITEM-04 read-only audit workflow `0d44efcb-871f-4ffd-80c9-516689703922` 与 minimization review 均已完成；没有稳定分段产品 RED 前不得修改 Terminal/Git/Relay/renderer 热路径的边界得到遵守。
@@ -138,3 +140,4 @@ next_action: 冻结并独立审查 Wave 2 aggregate diff，通过后创建 Wave 
 - 2026-09-01：ITEM-06 初审确认 T10 的 DECSET 2004 tracker/preamble 已存在；当前缺口收敛为 T12：Windows ConPTY 从未透传 mode 2004 时，多行 clipboard 仍走裸 `Terminal.paste()`。历史 commit `9522a985f` 可作语义参考，但其中图片 path framing 属于已排除 T11，不得整体 cherry-pick。current/legacy 两个 scout 均返回相同边界；已冻结 browser RED（Ctrl+V、context paste、ESC sanitation、snapshot+preamble）和仅文本 PTY E2E，交由唯一 writer 执行。
 - 2026-09-01：ITEM-06 worker 以 Windows 多行 paste 无 framed input 的 browser timeout 建立 RED；父流程将 context listener 收窄为仅 Windows 多行、补齐非 Windows/单行原路径断言，并令 E2E 显式区分 mode=false fallback 与 reload 后 mode=true replay。最终 browser 30/30、App unit 24/24、Protocol input-mode 9/9、Direct PTY 2/2、本地 Wrangler Relay/E2EE PTY 2/2、CI contract、build、全仓 Typecheck/Lint/Format 均通过；7-path frozen patch `ba654cd73895d39d6a24b26dec16ccf0100dfb09a67994f96df4566e383fa6aa` 进入独立审查。
 - 2026-09-01：ITEM-06 reviewer `19112db0-a596-443a-b414-bf6ca9c9cb1f` 逐入口核对 keyboard/context/imperative paste、真实 PTY byte oracle、mode=false 与 reload mode=true 区分、cleanup 及 CI gating，结论 PASS（0 blocking / 0 important）。语义原子 source milestone `055d0000b17214db79c738af5454c71fdd14fea3` 的 exact-head Windows workflow `33425004246` 全绿：Direct 与本地 Wrangler Relay/E2EE 各 5/5，其中两条 clipboard spec 均在实际 `windows-latest` / ConPTY 上通过；Node L0/L1/L2 各 100/100 echo，Direct/Relay 组合 workload 均保持 1,000/1,000 输出、24/24 echo、有效 digest 与零 duplicate/out-of-order/mismatch。ITEM-06 已串行集成，Wave 2 三项进入 aggregate review。
+- 2026-09-01：Wave 2 aggregate reviewer `91c20656-547e-43b0-b027-f74b57daebec` 对 9 commits / 46 paths 的 frozen patch `3ed57574…b9cbf30` 返回 PASS（0 blocking / 0 important）。报告确认三项交付契约、协议双向兼容、无双投/丢失、无常态 trace 内存增长、Windows paste 单次 framing、真实 PTY/E2EE oracle 和 manual CI isolation 均成立；`PLAYWRIGHT_JSON_OUTPUT_FILE` 疑问已由当前 Playwright 源码核实为正确，其他 minor 均为既有或 report-only residual。Wave 2 可创建 PR。
