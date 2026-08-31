@@ -14,12 +14,12 @@ current_wave: 2
 current_item: ITEM-04
 active_items:
   - item: ITEM-04
-    state: ci-verifying
-    run: independent reviewer 43a46b21-f879-4943-b0eb-4048af658d25 passed
+    state: executing
+    run: Windows evidence correction after CI 33392118839 job 94812205263
     workspace: /Users/zijie/workspace/projects/byspace
     base: 0d81e9fa376a2fb98518e94b5080d97440371811
 blocked_by: null
-next_action: 提交并推送 reviewed ITEM-04 milestone，随后以 exact branch ref 手动触发 Windows terminal_performance CI；只有 Windows 证据绿色后才关闭 ITEM-04 并进入 ITEM-05
+next_action: 先移除 Windows benchmark 的全 scrollback 轮询观察者效应并复验 Direct/Relay；再以 exact branch ref 重跑 terminal_performance，只有 Windows 固定门槛绿色后才关闭 ITEM-04
 ---
 
 # Epic Work: 保留能力交付路线
@@ -37,7 +37,7 @@ next_action: 提交并推送 reviewed ITEM-04 milestone，随后以 exact branch
 - ITEM-03 已通过 fresh compatibility review（0 blocking / 0 important）、Protocol 8/8、App 69/69、完整 `build:server`、Server E2E 3/3 和集成分支静态门槛；reviewed patch 已完成串行集成。
 - ITEM-03 read-only scout 已完成 optional hostname 的协议/客户端接缝与兼容测试包，没有修改文件。
 - Wave 1 PR #16 已由 reviewed head `db08188e9b0be50d4d966eac0851ab44aa2a5ecb` 合入 `main`，merge commit 为 `0d81e9fa376a2fb98518e94b5080d97440371811`；post-merge exact-SHA CI `33375176914` 与 Docker `33375176920` 均通过。
-- Wave 2 从上述绿色 `main` 创建；ITEM-04 已形成 measurement-only reviewed candidate：Node L0/L1/L2、Browser Direct 与本地 Wrangler Relay/E2EE 均绿色，连续输出、浏览器输入、Agent streaming、大消息、snapshot/restore 和主线程停顿均有完整性断言；没有稳定产品 RED，因此未修改 Terminal 行为或算法。Windows `workflow_dispatch` 等价证据仍是关闭 ITEM-04 前的最后门槛。
+- Wave 2 从上述绿色 `main` 创建；ITEM-04 的 Node、Browser Direct 与本地 Wrangler Relay/E2EE 候选均绿色，但 exact-head Windows Direct 组合 workload 触发固定的一秒停顿门槛。Daemon/PTY 与 browser runtime 入队前的分段指标健康；当前先消除 benchmark 全 scrollback 轮询造成的观察者效应，再决定是否需要修改产品热路径。
 
 ## Wave 1 · 发布通道路由与远程连接安全
 
@@ -126,3 +126,5 @@ next_action: 提交并推送 reviewed ITEM-04 milestone，随后以 exact branch
 - 2026-08-31：从绿色 merge commit `0d81e9fa376a2fb98518e94b5080d97440371811` 创建 Wave 2 集成分支；ITEM-04 按 `cs-issue` 先做 Direct/Relay 分段与 Windows 等价证据只读审计，没有测量 RED 前不改 Terminal 热路径。
 - 2026-08-31：ITEM-04 父流程验证 Node L0/L1/L2 echo p95 为 3.44/3.48/3.43ms；Browser Direct 3/3 与本地 Wrangler Relay/E2EE 3/3 均通过。Stress 在两个 transport 下均确认 Terminal 1,000/1,000 输出、24/24 输入、1,007 Agent stream events、约 256KB 单消息、0 snapshot/restore、0 个 >=1s 主线程停顿；Direct/Relay 最大 Long Task 分别为 264ms/199ms。Workflow contracts、focused Vitest、Build、Typecheck、Lint 与 Format 全绿。
 - 2026-08-31：初始候选完整内容 manifest 为 `f4d1b56d02086cd07e5e39f1d9f8c339fb35643bee6794b3d40a836990121e96`（20 paths，含 5 个新增文件）；independent reviewer `43a46b21-f879-4943-b0eb-4048af658d25` 判定 pass，0 blocking / 0 important。集成分支完整 Lint 暴露 Relay readiness helper 的 `promise/no-multiple-resolved`，父流程以三路 Promise race 做最小修正；targeted Lint、App Typecheck、真实本地 Relay/E2EE performance 2/2（50,000 行 3.96MB/s，echo p95 10.1ms）与 reviewer 同 lineage 复审均通过。最终 20-path manifest 为 `3eb63d3ef90188bac1ce9f354987e4d2a068e15bf6e6b9e27c549aa144d95df6`；等待 milestone exact-ref Windows CI 后关闭 ITEM-04。
+- 2026-08-31：提交并推送 exact HEAD `97671daa8551fe0fc0551b2909d640af3f22dee8` 后，Windows workflow run `33392118839` 的 job `94812205263` 在 Direct 组合 workload 触发固定 smoothness gate：1,000/1,000 输出与 24/24 输入仍完整有序，但 `rafMaxGapMs=1659.1`、`longTaskMaxMs=1602`，xterm commit p95 `359.4ms`；同一 artifact 中 daemon-only L0/L1/L2 约 2.29MB 均在 `254-270ms` 排空、echo p95 约 `16.5ms`、ping p95 `1ms`。独立 50,000 行样本的 `16.883s` 同时包含每 50ms 全量扫描增长中 xterm scrollback 的观察者开销，因此先把最终标记检测改为仅检查光标附近固定上限的末尾窗口，再重跑 exact-head Windows 门槛；不把未经净化的 `0.03MB/s` 直接归因为产品热路径。
+- 2026-08-31：有界 terminal-tail observer 在本地真实 Direct 与 Wrangler Relay/E2EE 复验通过：两种 transport 均为 3/3，50,000 行分别在 `117ms`（4.80MB/s）和 `110ms`（5.11MB/s）完成；组合 workload 仍完整接收 1,000 输出、24 输入、1,007 Agent events 与约 256KB 单消息，Direct/Relay 最大 Long Task 分别为 `326ms`/`183ms`。该修正只去除测量观察者效应，不降低 workload 或 smoothness 门槛；independent reviewer `6e2dc4da-093a-4c0f-a47b-056e4eb205f4` 判定 pass（0 blocking / 0 important）。下一步以修正后的 exact head 重跑 Windows，若组合 workload 仍红则进入产品 reducer/render 热路径修复。

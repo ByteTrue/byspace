@@ -3,6 +3,7 @@ import { test, expect } from "../support/fixtures";
 import { TerminalE2EHarness } from "../support/helpers/terminal-dsl";
 import {
   waitForTerminalContent,
+  waitForTerminalTailText,
   measureKeystrokeLatency,
   computePercentile,
   round2,
@@ -47,11 +48,7 @@ terminalPerfDescribe("Terminal wire performance", () => {
 
       await terminal.pressSequentially("GO\n", { delay: 0 });
 
-      await waitForTerminalContent(
-        page,
-        (text) => text.includes(sentinel),
-        THROUGHPUT_BUDGET_MS + 15_000,
-      );
+      await waitForTerminalTailText(page, sentinel, THROUGHPUT_BUDGET_MS + 15_000);
 
       const elapsedMs = Date.now() - startMs;
       const estimatedBytes =

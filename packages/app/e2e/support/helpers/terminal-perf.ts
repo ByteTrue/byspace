@@ -58,6 +58,51 @@ export async function waitForTerminalContent(
   throw new Error(`Terminal content did not match predicate within ${timeout}ms`);
 }
 
+// Burst benchmarks use final tail markers; rescanning the growing scrollback would add
+// observer work to the browser main thread and distort the result. The bounded window
+// leaves room for interleaved input echoes after the marker.
+export async function waitForTerminalTailText(
+  page: Page,
+  expected: string,
+  timeout: number,
+): Promise<void> {
+  await page.waitForFunction(
+    ({ expectedText }) => {
+      const buffer = (
+        window as Window & {
+          __paseoTerminal?: {
+            buffer: {
+              active: {
+                baseY: number;
+                cursorY: number;
+                length: number;
+                getLine: (i: number) => { translateToString: (trim: boolean) => string } | null;
+              };
+            };
+          };
+        }
+      ).__paseoTerminal?.buffer.active;
+      if (!buffer) {
+        return false;
+      }
+
+      const lines: string[] = [];
+      const cursorLine = buffer.baseY + buffer.cursorY;
+      const firstLine = Math.max(0, cursorLine - 128);
+      const lastLine = Math.min(buffer.length, cursorLine + 2);
+      for (let index = firstLine; index < lastLine; index += 1) {
+        const line = buffer.getLine(index);
+        if (line) {
+          lines.push(line.translateToString(true));
+        }
+      }
+      return lines.join("\n").includes(expectedText);
+    },
+    { expectedText: expected },
+    { timeout },
+  );
+}
+
 export async function navigateToTerminal(
   page: Page,
   input: { workspaceId: string; terminalId: string },

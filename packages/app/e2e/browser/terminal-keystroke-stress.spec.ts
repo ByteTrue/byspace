@@ -12,7 +12,7 @@ import {
   readTerminalPerformanceEnvironment,
   type LatencyStats,
 } from "../support/helpers/terminal-probes";
-import { waitForTerminalContent } from "../support/helpers/terminal-perf";
+import { waitForTerminalContent, waitForTerminalTailText } from "../support/helpers/terminal-perf";
 
 const INPUT_TEXT = buildStressText(600);
 const STRESS_TIMEOUT_MS = 15_000;
@@ -293,9 +293,9 @@ async function measureNodeWorkload(input: {
       await terminalSurface.press("Enter");
     }
 
-    await waitForTerminalContent(
+    await waitForTerminalTailText(
       input.page,
-      (content) => content.includes(`WORKLOAD_DONE:${WORKLOAD_OUTPUT_COUNT}:`),
+      `WORKLOAD_DONE:${WORKLOAD_OUTPUT_COUNT}:`,
       STRESS_TIMEOUT_MS,
     );
     await activeAgentLoadPromise;
