@@ -1,18 +1,27 @@
+import path from "node:path";
 import { test, expect } from "../support/fixtures";
 import { TerminalE2EHarness } from "../support/helpers/terminal-dsl";
 import {
   waitForTerminalContent,
+  waitForTerminalTailText,
   measureKeystrokeLatency,
   computePercentile,
   round2,
   type LatencySample,
 } from "../support/helpers/terminal-perf";
+import {
+  installTerminalKeystrokeStressProbe,
+  readTerminalKeystrokeStressReport,
+  resetTerminalKeystrokeStressProbe,
+} from "../support/helpers/terminal-probes";
 
 const LINE_COUNT = 50_000;
 const THROUGHPUT_BUDGET_MS = 30_000;
 const KEYSTROKE_SAMPLE_COUNT = 20;
 const KEYSTROKE_P95_BUDGET_MS = 150;
 const RUN_MANUAL_TERMINAL_PERF = process.env.PASEO_TERMINAL_PERF_E2E === "1";
+const WORKLOAD_FIXTURE = path.resolve(__dirname, "../fixtures/terminal-workload.mjs");
+const WORKLOAD_READY = "WORKLOAD_READY";
 const terminalPerfDescribe = RUN_MANUAL_TERMINAL_PERF ? test.describe : test.describe.skip;
 
 terminalPerfDescribe("Terminal wire performance", () => {
@@ -29,30 +38,34 @@ terminalPerfDescribe("Terminal wire performance", () => {
   test("throughput: bulk terminal output renders within budget", async ({ page }, testInfo) => {
     test.setTimeout(90_000);
 
-    const created = await harness.createTerminal({ name: "throughput" });
+    const created = await harness.createTerminal({
+      name: "throughput",
+      command: process.execPath,
+      args: [WORKLOAD_FIXTURE, "--mode", "burst", "--count", String(LINE_COUNT)],
+    });
     try {
+      await installTerminalKeystrokeStressProbe(page);
       await harness.openTerminal(page, { terminalId: created.id });
-      await harness.setupPrompt(page);
+      await waitForTerminalContent(page, (text) => text.includes(WORKLOAD_READY), 10_000);
 
-      const sentinel = `PERF_DONE_${Date.now()}`;
+      const sentinel = `WORKLOAD_DONE:${LINE_COUNT}:`;
       const terminal = harness.terminalSurface(page);
+      await resetTerminalKeystrokeStressProbe(page);
       const startMs = Date.now();
 
-      await terminal.pressSequentially(`seq 1 ${LINE_COUNT}; echo ${sentinel}\n`, { delay: 0 });
+      await terminal.pressSequentially("GO\n", { delay: 0 });
 
-      await waitForTerminalContent(
-        page,
-        (text) => text.includes(sentinel),
-        THROUGHPUT_BUDGET_MS + 15_000,
-      );
+      await waitForTerminalTailText(page, sentinel, THROUGHPUT_BUDGET_MS + 15_000);
 
       const elapsedMs = Date.now() - startMs;
-
-      // seq 1 N outputs each number on its own line
-      const estimatedBytes = Array.from(
-        { length: LINE_COUNT },
-        (_, i) => String(i + 1).length + 1,
-      ).reduce((a, b) => a + b, 0);
+      const runtimeReport = await readTerminalKeystrokeStressReport(page, "");
+      const estimatedBytes =
+        Array.from({ length: LINE_COUNT }, (_, index) => `OUT:${index}:x\n`.length).reduce(
+          (total, bytes) => total + bytes,
+          0,
+        ) +
+        sentinel.length +
+        65;
       const throughputMBps = estimatedBytes / (1024 * 1024) / (elapsedMs / 1000);
 
       const report = {
@@ -64,6 +77,10 @@ terminalPerfDescribe("Terminal wire performance", () => {
 
       await testInfo.attach("throughput-report", {
         body: JSON.stringify(report, null, 2),
+        contentType: "application/json",
+      });
+      await testInfo.attach("throughput-runtime-report", {
+        body: JSON.stringify(runtimeReport, null, 2),
         contentType: "application/json",
       });
 
@@ -83,15 +100,15 @@ terminalPerfDescribe("Terminal wire performance", () => {
   test("keystroke latency: echo round-trip under budget", async ({ page }, testInfo) => {
     test.setTimeout(60_000);
 
-    const created = await harness.createTerminal({ name: "latency" });
+    const created = await harness.createTerminal({
+      name: "latency",
+      command: process.execPath,
+      args: [WORKLOAD_FIXTURE, "--mode", "echo"],
+    });
     try {
       await harness.openTerminal(page, { terminalId: created.id });
-      await harness.setupPrompt(page);
-
-      // Ensure clean prompt state
-      const terminal = harness.terminalSurface(page);
-      await terminal.press("Control+c");
-      await page.waitForTimeout(200);
+      await waitForTerminalContent(page, (text) => text.includes(WORKLOAD_READY), 10_000);
+      await page.waitForTimeout(100);
 
       const samples: LatencySample[] = [];
       const chars = "abcdefghijklmnopqrst";
@@ -102,9 +119,6 @@ terminalPerfDescribe("Terminal wire performance", () => {
         samples.push({ char, latencyMs });
         await page.waitForTimeout(50);
       }
-
-      // Clean up typed characters
-      await terminal.press("Control+c");
 
       const latencies = samples.map((s) => s.latencyMs);
       const p50 = computePercentile(latencies, 50);

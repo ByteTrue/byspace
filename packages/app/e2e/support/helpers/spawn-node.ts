@@ -46,6 +46,9 @@ export async function killProcessTree(child: ChildProcess | null): Promise<void>
     );
     const taskkillError = await completed.promise;
     if (taskkillError && !hasExited(child)) {
+      // taskkill reports an error when a descendant exits during its tree walk,
+      // even if the requested process tree is already shutting down successfully.
+      if (await waitForExitOrTimeout(exited, 1_000)) return;
       try {
         child.kill("SIGKILL");
       } catch {

@@ -7,6 +7,12 @@ on:
     branches: [main]
   merge_group:
   workflow_dispatch:
+    inputs:
+      terminal_performance:
+        description: Run the Windows terminal performance and paste validation only
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -25,17 +31,18 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      full: ${{ github.event_name != 'pull_request' || steps.filter.outputs.routing != 'false' || steps.filter.outputs.workspace != 'false' || steps.filter.outputs.ci != 'false' }}
-      format: ${{ steps.filter.outputs.format }}
-      quality: ${{ steps.filter.outputs.quality }}
-      hub: ${{ steps.filter.outputs.hub }}
-      server: ${{ steps.filter.outputs.server }}
-      desktop: ${{ steps.filter.outputs.desktop }}
-      app: ${{ steps.filter.outputs.app }}
-      sdk: ${{ steps.filter.outputs.sdk }}
-      browser: ${{ steps.filter.outputs.browser }}
-      relay: ${{ steps.filter.outputs.relay }}
-      cli: ${{ steps.filter.outputs.cli }}
+      terminal_performance: ${{ github.event_name == 'workflow_dispatch' && inputs.terminal_performance == true }}
+      full: ${{ inputs.terminal_performance != true && (github.event_name != 'pull_request' || steps.filter.outputs.routing != 'false' || steps.filter.outputs.workspace != 'false' || steps.filter.outputs.ci != 'false') }}
+      format: ${{ inputs.terminal_performance != true && steps.filter.outputs.format != 'false' }}
+      quality: ${{ inputs.terminal_performance != true && steps.filter.outputs.quality != 'false' }}
+      hub: ${{ inputs.terminal_performance != true && steps.filter.outputs.hub != 'false' }}
+      server: ${{ inputs.terminal_performance != true && steps.filter.outputs.server != 'false' }}
+      desktop: ${{ inputs.terminal_performance != true && steps.filter.outputs.desktop != 'false' }}
+      app: ${{ inputs.terminal_performance != true && steps.filter.outputs.app != 'false' }}
+      sdk: ${{ inputs.terminal_performance != true && steps.filter.outputs.sdk != 'false' }}
+      browser: ${{ inputs.terminal_performance != true && steps.filter.outputs.browser != 'false' }}
+      relay: ${{ inputs.terminal_performance != true && steps.filter.outputs.relay != 'false' }}
+      cli: ${{ inputs.terminal_performance != true && steps.filter.outputs.cli != 'false' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -55,9 +62,86 @@ jobs:
         run: >-
           node --test
           scripts/ci-workflow.test.mjs
+          scripts/terminal-performance-workflow.test.mjs
           scripts/daemon-launch-contract.test.mjs
           scripts/release-version-utils.test.mjs
           scripts/sync-fdroid-changelogs.test.mjs
+
+  terminal-performance-windows:
+    name: terminal-performance (windows-latest)
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.terminal_performance == 'true' }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      PASEO_TERMINAL_PERF_E2E: "1"
+      E2E_WORKERS: "1"
+      PASEO_DICTATION_ENABLED: "false"
+      PASEO_VOICE_MODE_ENABLED: "false"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.20.0"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build workspace dependencies
+        run: |
+          npm run build:server
+          npm run build:app-deps
+
+      - name: Run Node daemon and PTY benchmark
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+          TMPDIR: ${{ runner.temp }}
+        run: node --import tsx scripts/benchmark-terminal-latency.ts
+
+      - name: Install Chromium
+        run: npm exec -- playwright install chromium
+
+      - name: Run Direct terminal performance
+        env:
+          PASEO_TERMINAL_TRANSPORT: direct
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ runner.temp }}/terminal-performance/direct/results.json
+        run: >-
+          npm run test:e2e --workspace=@getpaseo/app --
+          e2e/browser/terminal-performance.spec.ts
+          e2e/browser/terminal-keystroke-stress.spec.ts
+          e2e/browser/terminal-clipboard.spec.ts
+          --workers=1 --retries=0 --reporter=line,json
+          --output="${{ runner.temp }}/terminal-performance/direct"
+
+      - name: Run local Relay terminal performance
+        env:
+          PASEO_TERMINAL_TRANSPORT: relay
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ runner.temp }}/terminal-performance/relay/results.json
+        run: >-
+          npm run test:e2e --workspace=@getpaseo/app --
+          e2e/browser/terminal-performance.spec.ts
+          e2e/browser/terminal-keystroke-stress.spec.ts
+          e2e/browser/terminal-clipboard.spec.ts
+          --workers=1 --retries=0 --reporter=line,json
+          --output="${{ runner.temp }}/terminal-performance/relay"
+
+      - name: Upload terminal performance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-terminal-performance-${{ github.sha }}
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/paseo-terminal-bench/**
+            ${{ runner.temp }}/terminal-performance/**
+          retention-days: 7
 
   format:
     name: format

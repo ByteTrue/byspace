@@ -54,6 +54,7 @@ const sessionMock = vi.hoisted(() => {
       this.args.clientCapabilities = capabilities;
     });
     clearAgentTimelineSubscription = vi.fn();
+    handleTransportUnavailable = vi.fn();
     getClientActivity = vi.fn(() => null);
     getSessionId = vi.fn(() => "mock-session-id");
     resetPeakInflight = vi.fn(() => {});
@@ -489,6 +490,7 @@ describe("relay external socket reconnect behavior", () => {
     socket1.emit("close", 1006, "");
     await vi.advanceTimersByTimeAsync(1_000);
     expect(session.cleanup).not.toHaveBeenCalled();
+    expect(session.handleTransportUnavailable).toHaveBeenCalledOnce();
 
     const socket2 = new MockSocket();
     await attachRelayAndHello({
@@ -937,9 +939,11 @@ describe("relay external socket reconnect behavior", () => {
     directSocket.emit("close", 1006, "");
     await vi.advanceTimersByTimeAsync(1_000);
     expect(session.cleanup).not.toHaveBeenCalled();
+    expect(session.handleTransportUnavailable).not.toHaveBeenCalled();
 
     relaySocket.emit("close", 1006, "");
     await vi.advanceTimersByTimeAsync(90_000);
+    expect(session.handleTransportUnavailable).toHaveBeenCalledOnce();
     expect(session.cleanup).toHaveBeenCalledTimes(1);
 
     await server.close();

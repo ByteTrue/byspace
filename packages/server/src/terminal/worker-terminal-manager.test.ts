@@ -415,6 +415,38 @@ it("does not surface fire-and-forget send timeouts as unhandled rejections", asy
   expect(unhandledRejections).toEqual([]);
 });
 
+it("retains revisioned output gaps in the daemon-side worker manager", () => {
+  const worker = new FakeTerminalWorker();
+  manager = createWorkerTerminalManager({ forkWorker: () => worker });
+
+  worker.emitWorkerMessage({
+    type: "terminalCreated",
+    terminal: {
+      id: "terminal-1",
+      name: "Terminal",
+      cwd: "/tmp",
+      workspaceId: "ws-test",
+      activity: { state: "idle", changedAt: 0 },
+    },
+    state: createTerminalState(),
+  });
+  worker.emitWorkerMessage({
+    type: "terminalMessage",
+    terminalId: "terminal-1",
+    message: { type: "output", data: "one", revision: 1 },
+  });
+  worker.emitWorkerMessage({
+    type: "terminalMessage",
+    terminalId: "terminal-1",
+    message: { type: "output", data: "two", revision: 2 },
+  });
+
+  expect(manager.getTerminal("terminal-1")?.getOutputSince(1)).toEqual({
+    data: "two",
+    revision: 2,
+  });
+});
+
 it("keeps registered cwd env inheritance behind the worker manager interface", async () => {
   manager = createWorkerTerminalManager();
   const cwd = mkdtempSync(join(tmpdir(), "worker-terminal-manager-env-"));

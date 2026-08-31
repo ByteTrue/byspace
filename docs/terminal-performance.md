@@ -27,13 +27,14 @@ Terminal frames share the daemon main event loop with all agent traffic. The `ev
 - **Plugin daemon sessions report IPC queue bytes.** Their virtual socket increments `bufferedAmount` before `process.send` and decrements it only in the send callback. Text and binary frames share that ordered queue, so the normal snapshot catch-up and physical high-water gates remain valid for server-side plugin SDK traffic.
 - **Client output writes are not serialized per frame.** The emulator runtime drains contiguous plain writes straight into xterm (which buffers internally). Only barrier ops (`clear`, `snapshot`, `suppressInput` writes) wait — behind a zero-length sentinel write — so resets can't interleave with in-flight output.
 - **Retained terminal tabs in the focused workspace keep their streams.** Hidden mounted terminals continue applying output, so switching tabs does not resubscribe or request a fresh snapshot. The retained-panel LRU bounds the number of live streams; terminals in an unfocused workspace detach.
+- **An unfocused workspace resumes only into the same renderer.** The daemon keeps a revisioned output gap capped at one million characters per terminal; returning to the same emulator replays that gap without resetting xterm, preserving client-only scrollback, selection, and focus. A new renderer, unavailable transport, missing revision, or evicted gap falls back to an authoritative snapshot with at most 1,000 scrollback lines.
 - **Terminal size has one daemon-owned claimant.** Focus and direct interaction send a `claim`; later geometry changes from that connection send `update`. A claim transfers ownership even when the dimensions are unchanged, while an update from any other connection is ignored. This lets an owning pane follow splits and keyboard insets without allowing an idle phone or browser to steal the PTY size.
 
 ## Measuring
 
-- **Node-only benchmark (fast iteration, server pipeline):** `npx tsx scripts/benchmark-terminal-latency.ts`. Boots an isolated daemon (fresh `BYSPACE_HOME`, random port — never 6777), measures echo latency percentiles, burst jitter, and snapshot counts under ramped mock-agent load. Writes JSON to `/tmp/paseo-terminal-bench/` (the benchmark's existing artifact path). Healthy numbers (2026-06): echo p50 ~2.3ms, p95 ~3.3ms, a 2MB burst fully streamed with `snap=0`.
+- **Node-only benchmark (fast iteration, server pipeline):** `node --import tsx scripts/benchmark-terminal-latency.ts`. Boots an isolated daemon (fresh `BYSPACE_HOME`, random port — never 6777), measures echo latency percentiles, burst jitter, and snapshot counts under ramped mock-agent load. Writes JSON to the platform temporary directory under `paseo-terminal-bench/`. Healthy numbers (2026-06): echo p50 ~2.3ms, p95 ~3.3ms, a 2MB burst fully streamed with `snap=0`.
 - **Browser perf specs (user-perceived path):** gated behind `PASEO_TERMINAL_PERF_E2E=1` —
-  `packages/app/e2e/browser/terminal-performance.spec.ts` and `packages/app/e2e/browser/terminal-keystroke-stress.spec.ts` (per-stage keydown→xterm-commit breakdown under mock-agent load). Healthy: keydown→commit p50 ~18ms under 600-key burst.
+  `packages/app/e2e/browser/terminal-performance.spec.ts` and `packages/app/e2e/browser/terminal-keystroke-stress.spec.ts` (per-stage keydown→xterm-commit breakdown under mock-agent load). Compare latency percentiles only between runs on the same runner class; sequence integrity and one-second main-thread stalls are the fixed gates.
 - **Production:** grep `daemon.log` for `ws_runtime_metrics` and read `eventLoopDelay` + `bufferedAmount`.
 - **Git pressure:** the same log line includes `git.commands` (limiter occupancy, queue age,
   queue wait, execution time, failures, timeouts, and top operations),
@@ -46,3 +47,45 @@ Terminal frames share the daemon main event loop with all agent traffic. The `ev
 - A single large `agent_stream` message (e.g. a 250KB diff payload) measurably delays terminal echo (~100ms-class dips) — cost is split between daemon serialization and app-side parse/render on the shared browser main thread. See [agent-stream-performance.md](agent-stream-performance.md) for that pipeline's own budgets.
 - Relay-attached clients pay pure-JS tweetnacl encryption on the daemon main loop (`packages/relay/src/encrypted-channel.ts`). Negotiated binary application frames stay binary ciphertext and avoid base64 encode/decode; text and mixed-version traffic remain base64 WebSocket text frames.
 - `sendToClient` re-stringifies session messages per socket; only matters for multi-socket connections.
+
+## Measurement workflow
+
+Run the opt-in browser measurements one transport at a time. The stress fixture uses a
+Node process started with `TerminalE2EHarness.createTerminal({ command, args })`, so the
+same workload does not depend on shell quoting:
+
+```bash
+PASEO_TERMINAL_PERF_E2E=1 E2E_WORKERS=1 \
+PASEO_TERMINAL_TRANSPORT=direct \
+npm run test:e2e --workspace=@getpaseo/app -- \
+e2e/browser/terminal-performance.spec.ts e2e/browser/terminal-keystroke-stress.spec.ts \
+--retries=0
+
+PASEO_TERMINAL_PERF_E2E=1 E2E_WORKERS=1 \
+PASEO_TERMINAL_TRANSPORT=relay \
+npm run test:e2e --workspace=@getpaseo/app -- \
+e2e/browser/terminal-performance.spec.ts e2e/browser/terminal-keystroke-stress.spec.ts \
+--retries=0
+```
+
+The Relay run starts the repository's Wrangler Worker on a random loopback port and uses
+local Durable Objects plus the normal E2EE path. It measures the local Relay/E2EE code
+path only; it is not a measurement of public Relay round-trip time or Internet quality.
+Run Direct and Relay serially with one worker and no retries. The existing CI workflow
+contains the opt-in Windows job; dispatch it with the `terminal_performance` boolean set to
+`true` on the exact branch/ref. That job runs the Node benchmark before the browser modes,
+then checks multiline terminal paste over both transports on the Windows PTY. It uses bounded
+artifacts and has no deployment or secret inputs.
+
+Each browser run writes a Playwright JSON report containing its output and attachments to
+its bounded transport artifact directory. The evidence includes the browser, viewport, OS,
+architecture, commit, transport topology, stage timings, exact output sequence integrity,
+snapshot/restore observations, rAF gaps, and Long Task observations. Parse integrity once
+from xterm's canonical buffer after the final sentinel; concatenated raw terminal frames are
+not rendered text because Windows ConPTY repaint sequences can repeat or overwrite cells.
+Raw frame traces remain the source for transport latency. A missing, duplicate, or out-of-order
+workload sequence fails the stress test. An rAF gap or Long Task at least 1000 ms fails it.
+The hosted Windows runner supplies evidence for that runner image and browser; it does
+not cover every Windows version, graphics driver, terminal font, or local background load.
+The Node benchmark disables Dictation and Voice Mode in the daemon it spawns so speech
+model downloads cannot contaminate the sample.

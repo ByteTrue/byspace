@@ -12,6 +12,7 @@ import { findExecutable } from "../executable-resolution/executable-resolution.j
 import type { TerminalCell, TerminalState } from "@getpaseo/protocol/messages";
 import { TerminalInputModeTracker } from "@getpaseo/protocol/terminal-input-mode";
 import { TerminalActivityTracker } from "./activity/terminal-activity-tracker.js";
+import type { TerminalBacklogResumption } from "./terminal-output-backlog.js";
 import type { TerminalActivity, TerminalActivityState } from "@getpaseo/protocol/terminal-activity";
 
 const { Terminal } = xterm;
@@ -87,6 +88,7 @@ export interface TerminalSession {
   getSize(): { rows: number; cols: number };
   getState(): TerminalState;
   getStateSnapshot(options?: TerminalStateSnapshotOptions): TerminalStateSnapshot;
+  getOutputSince(revision: number): TerminalBacklogResumption | null;
   getReplayPreamble(): string;
   getTitle(): string | undefined;
   getActivity(): TerminalActivity | null;
@@ -1550,6 +1552,9 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
     getSize,
     getState,
     getStateSnapshot,
+    // Revision gaps are retained in the daemon-side worker manager. This
+    // process owns the PTY and must not keep a duplicate one-million-char copy.
+    getOutputSince: () => null,
     getReplayPreamble,
     getTitle,
     getActivity,

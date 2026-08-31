@@ -45,15 +45,28 @@ describe("terminal restore policy", () => {
         mode: "visible-snapshot",
         scrollbackLines: 999,
       }),
-    ).toEqual({ scrollbackLines: 500 });
+    ).toEqual({ scrollbackLines: 999 });
+    expect(
+      resolveTerminalRestoreSnapshotOptions({
+        mode: "visible-snapshot",
+        scrollbackLines: 5_000,
+      }),
+    ).toEqual({ scrollbackLines: 1_000 });
   });
 
   test("promotes live restore to visible restore after output overflow", () => {
     expect(resolveRestoreAfterOutputOverflow({ mode: "live" })).toEqual({
       mode: "visible-snapshot",
     });
-    expect(resolveRestoreAfterOutputOverflow({ mode: "full-snapshot" })).toEqual({
+    expect(
+      resolveRestoreAfterOutputOverflow({
+        mode: "full-snapshot",
+        resume: true,
+        size: { rows: 24, cols: 80 },
+      }),
+    ).toEqual({
       mode: "full-snapshot",
+      size: { rows: 24, cols: 80 },
     });
   });
 

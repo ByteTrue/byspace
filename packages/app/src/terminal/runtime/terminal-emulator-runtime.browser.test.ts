@@ -28,6 +28,7 @@ interface TerminalKeyRecord {
 
 type BrowserTerminal = TerminalSize & {
   input: (data: string, wasUserInput?: boolean) => void;
+  paste: (text: string) => void;
   refresh: (start: number, end: number) => void;
   reset: () => void;
 };
@@ -186,6 +187,34 @@ function dispatchTerminalKey(input: {
       cancelable: true,
     }),
   );
+}
+
+function dispatchTerminalPaste(input: { host: HTMLElement; text: string }): ClipboardEvent {
+  const textarea = input.host.querySelector<HTMLTextAreaElement>("textarea");
+  if (!textarea) {
+    throw new Error("Expected xterm textarea to be mounted");
+  }
+  const clipboardData = new DataTransfer();
+  clipboardData.setData("text/plain", input.text);
+  const event = new ClipboardEvent("paste", {
+    bubbles: true,
+    cancelable: true,
+    clipboardData,
+  });
+  textarea.dispatchEvent(event);
+  return event;
+}
+
+function setNavigatorPlatform(platform: string): () => void {
+  const descriptor = Object.getOwnPropertyDescriptor(navigator, "platform");
+  Object.defineProperty(navigator, "platform", { configurable: true, value: platform });
+  return () => {
+    if (descriptor) {
+      Object.defineProperty(navigator, "platform", descriptor);
+    } else {
+      Reflect.deleteProperty(navigator, "platform");
+    }
+  };
 }
 
 afterEach(() => {
@@ -349,6 +378,143 @@ describe("terminal emulator runtime in a real browser", () => {
 
     await waitFor({ predicate: () => mounted.inputs.length > 0 });
     expect(mounted.inputs).toEqual(["legacy renderer paste"]);
+  });
+
+  it("preserves bracketed paste mode before and after snapshot replay", async () => {
+    await page.viewport(900, 600);
+    const mounted = createTerminalHost({ width: 720, height: 360 });
+
+    await waitFor({ predicate: () => mounted.sizes.length > 0 });
+    const terminal = getBrowserTerminal();
+    const paste = "first line\nsecond line";
+    const expected = "\x1b[200~first line\rsecond line\x1b[201~";
+
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({ data: terminalOutput("\x1b[?2004h"), onCommitted: resolve });
+    });
+    terminal.paste(paste);
+    await waitFor({ predicate: () => mounted.inputs.length > 0 });
+    expect(mounted.inputs).toEqual([expected]);
+
+    mounted.inputs.length = 0;
+    await new Promise<void>((resolve) => {
+      mounted.runtime.renderSnapshot({
+        state: {
+          rows: terminal.rows,
+          cols: terminal.cols,
+          scrollback: [],
+          grid: [[{ char: ">" }]],
+          cursor: { row: 0, col: 1 },
+        },
+        onCommitted: resolve,
+      });
+    });
+    await new Promise<void>((resolve) => {
+      mounted.runtime.write({ data: terminalOutput("\x1b[?2004h"), onCommitted: resolve });
+    });
+
+    terminal.paste(paste);
+    await waitFor({ predicate: () => mounted.inputs.length > 0 });
+    expect(mounted.inputs).toEqual([expected]);
+  });
+
+  it("forces and sanitizes multiline text on the Windows paste boundary", async () => {
+    const restorePlatform = setNavigatorPlatform("Win32");
+    try {
+      await page.viewport(900, 600);
+      const mounted = createTerminalHost({ width: 720, height: 360 });
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+
+      mounted.runtime.paste("first line\nsecond\x1b[201~line");
+
+      await waitFor({ predicate: () => mounted.inputs.length > 0 });
+      expect(mounted.inputs).toEqual(["\x1b[200~first line\rsecond\u241b[201~line\x1b[201~"]);
+    } finally {
+      restorePlatform();
+    }
+  });
+
+  it("frames multiline clipboard paste events on Windows and blocks their default propagation", async () => {
+    const restorePlatform = setNavigatorPlatform("Win32");
+    let bubbled = false;
+    const onPaste = () => {
+      bubbled = true;
+    };
+    document.body.addEventListener("paste", onPaste);
+    try {
+      await page.viewport(900, 600);
+      const mounted = createTerminalHost({ width: 720, height: 360 });
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+
+      const event = dispatchTerminalPaste({
+        host: mounted.host,
+        text: "first line\nsecond\x1bline",
+      });
+
+      await waitFor({ predicate: () => mounted.inputs.length > 0 });
+      expect(mounted.inputs).toEqual(["\x1b[200~first line\rsecond\u241bline\x1b[201~"]);
+      expect(event.defaultPrevented).toBe(true);
+      expect(bubbled).toBe(false);
+    } finally {
+      document.body.removeEventListener("paste", onPaste);
+      restorePlatform();
+    }
+  });
+
+  it("keeps single-line Windows clipboard paste on the plain xterm path", async () => {
+    const restorePlatform = setNavigatorPlatform("Win32");
+    try {
+      await page.viewport(900, 600);
+      const mounted = createTerminalHost({ width: 720, height: 360 });
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+
+      dispatchTerminalPaste({ host: mounted.host, text: "single line" });
+
+      await waitFor({ predicate: () => mounted.inputs.length > 0 });
+      expect(mounted.inputs).toEqual(["single line"]);
+    } finally {
+      restorePlatform();
+    }
+  });
+
+  it("keeps non-Windows multiline paste on the plain xterm path", async () => {
+    const restorePlatform = setNavigatorPlatform("Linux x86_64");
+    try {
+      await page.viewport(900, 600);
+      const mounted = createTerminalHost({ width: 720, height: 360 });
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+
+      mounted.runtime.paste("first line\nsecond line");
+
+      await waitFor({ predicate: () => mounted.inputs.length > 0 });
+      expect(mounted.inputs).toEqual(["first line\rsecond line"]);
+    } finally {
+      restorePlatform();
+    }
+  });
+
+  it("removes the Windows multiline paste listener on unmount", async () => {
+    const restorePlatform = setNavigatorPlatform("Win32");
+    try {
+      await page.viewport(900, 600);
+      const mounted = createTerminalHost({ width: 720, height: 360 });
+      await waitFor({ predicate: () => mounted.sizes.length > 0 });
+      mounted.runtime.unmount();
+
+      const staleClipboardData = new DataTransfer();
+      staleClipboardData.setData("text/plain", "stale first\nstale second");
+      mounted.host.dispatchEvent(
+        new ClipboardEvent("paste", {
+          bubbles: true,
+          cancelable: true,
+          clipboardData: staleClipboardData,
+        }),
+      );
+      await nextFrame();
+      expect(mounted.inputs).toEqual([]);
+    } finally {
+      restorePlatform();
+    }
   });
 
   it("refreshes visible rows on a forced same-size resize", async () => {

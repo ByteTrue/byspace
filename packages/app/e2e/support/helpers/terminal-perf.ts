@@ -12,34 +12,49 @@ function buildWorkspaceUrl(workspaceId: string): string {
   return buildHostWorkspaceRoute(getServerId(), workspaceId);
 }
 
-export async function getTerminalBufferText(page: Page): Promise<string> {
-  return page.evaluate(() => {
-    const term = (
-      window as Window & {
-        __paseoTerminal?: {
-          buffer: {
-            active: {
-              length: number;
-              getLine: (i: number) => { translateToString: (trim: boolean) => string } | null;
+export async function getTerminalBufferText(
+  page: Page,
+  options?: { joinWrappedLines?: boolean },
+): Promise<string> {
+  return page.evaluate(
+    ({ joinWrappedLines }) => {
+      const term = (
+        window as Window & {
+          __paseoTerminal?: {
+            buffer: {
+              active: {
+                length: number;
+                getLine: (i: number) => {
+                  isWrapped: boolean;
+                  translateToString: (trim: boolean) => string;
+                } | null;
+              };
             };
+            onWriteParsed: (cb: () => void) => { dispose: () => void };
           };
-          onWriteParsed: (cb: () => void) => { dispose: () => void };
-        };
+        }
+      ).__paseoTerminal;
+      if (!term) {
+        return "";
       }
-    ).__paseoTerminal;
-    if (!term) {
-      return "";
-    }
-    const buf = term.buffer.active;
-    const lines: string[] = [];
-    for (let i = 0; i < buf.length; i++) {
-      const line = buf.getLine(i);
-      if (line) {
-        lines.push(line.translateToString(true));
+      const buf = term.buffer.active;
+      const lines: string[] = [];
+      for (let i = 0; i < buf.length; i++) {
+        const line = buf.getLine(i);
+        if (!line) {
+          continue;
+        }
+        const text = line.translateToString(true);
+        if (joinWrappedLines && line.isWrapped && lines.length > 0) {
+          lines[lines.length - 1] += text;
+        } else {
+          lines.push(text);
+        }
       }
-    }
-    return lines.join("\n");
-  });
+      return lines.join("\n");
+    },
+    { joinWrappedLines: options?.joinWrappedLines ?? false },
+  );
 }
 
 export async function waitForTerminalContent(
@@ -56,6 +71,51 @@ export async function waitForTerminalContent(
     await page.waitForTimeout(50);
   }
   throw new Error(`Terminal content did not match predicate within ${timeout}ms`);
+}
+
+// Burst benchmarks use final tail markers; rescanning the growing scrollback would add
+// observer work to the browser main thread and distort the result. The bounded window
+// leaves room for interleaved input echoes after the marker.
+export async function waitForTerminalTailText(
+  page: Page,
+  expected: string,
+  timeout: number,
+): Promise<void> {
+  await page.waitForFunction(
+    ({ expectedText }) => {
+      const buffer = (
+        window as Window & {
+          __paseoTerminal?: {
+            buffer: {
+              active: {
+                baseY: number;
+                cursorY: number;
+                length: number;
+                getLine: (i: number) => { translateToString: (trim: boolean) => string } | null;
+              };
+            };
+          };
+        }
+      ).__paseoTerminal?.buffer.active;
+      if (!buffer) {
+        return false;
+      }
+
+      const lines: string[] = [];
+      const cursorLine = buffer.baseY + buffer.cursorY;
+      const firstLine = Math.max(0, cursorLine - 128);
+      const lastLine = Math.min(buffer.length, cursorLine + 2);
+      for (let index = firstLine; index < lastLine; index += 1) {
+        const line = buffer.getLine(index);
+        if (line) {
+          lines.push(line.translateToString(true));
+        }
+      }
+      return lines.join("\n").includes(expectedText);
+    },
+    { expectedText: expected },
+    { timeout },
+  );
 }
 
 export async function navigateToTerminal(

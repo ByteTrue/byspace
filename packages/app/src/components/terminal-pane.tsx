@@ -60,6 +60,7 @@ import {
 } from "./terminal-resize-debouncer";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
+import { nativePerformanceTrace, traceInstant } from "@/performance/native-trace";
 import {
   applyTerminalRendererReadyChange,
   resolveTerminalStreamTarget,
@@ -268,6 +269,16 @@ export function TerminalPane({
   useBlockMobilePanelOpenGestures(isMobile && isWorkspaceFocused && isPaneFocused && hasSelection);
   const emulatorRef = useRef<TerminalEmulatorHandle>(null);
   const terminalIdRef = useRef<string>(terminalId);
+  const resumeAnchorRef = useRef<{
+    emulator: TerminalEmulatorHandle;
+    terminalId: string;
+  } | null>(null);
+  const markResumeAnchor = useStableEvent((anchorTerminalId: string) => {
+    const emulator = emulatorRef.current;
+    if (emulator) {
+      resumeAnchorRef.current = { emulator, terminalId: anchorTerminalId };
+    }
+  });
   const terminalPresentedRef = useRef(isTerminalPresented);
   terminalPresentedRef.current = isTerminalPresented;
   const inputModeRef = useRef<TerminalInputModeState>(DEFAULT_TERMINAL_INPUT_MODE_STATE);
@@ -465,6 +476,9 @@ export function TerminalPane({
       }
 
       workspaceTerminalSession.snapshots.clear({ terminalId: exitedTerminalId });
+      if (resumeAnchorRef.current?.terminalId === exitedTerminalId) {
+        resumeAnchorRef.current = null;
+      }
       if (terminalIdRef.current === exitedTerminalId) {
         emulatorRef.current?.clear();
       }
@@ -506,7 +520,13 @@ export function TerminalPane({
       if (terminalIdRef.current !== outputTerminalId) {
         return;
       }
+      if (nativePerformanceTrace.isEnabled()) {
+        traceInstant("paseo.terminal.stream-controller-to-emulator-write", {
+          size: String(data.byteLength),
+        });
+      }
       emulatorRef.current?.writeOutput(data);
+      markResumeAnchor(outputTerminalId);
     },
   );
 
@@ -517,6 +537,7 @@ export function TerminalPane({
         return;
       }
       emulatorRef.current?.restoreOutput(data);
+      markResumeAnchor(restoreTerminalId);
     },
   );
 
@@ -527,12 +548,18 @@ export function TerminalPane({
         return;
       }
       emulatorRef.current?.renderSnapshot(state);
+      markResumeAnchor(snapshotTerminalId);
     },
   );
 
-  const getStreamRestoreOptions = useStableEvent(() =>
-    resolveTerminalRestoreOptions({
+  const getStreamRestoreOptions = useStableEvent(() => {
+    const anchor = resumeAnchorRef.current;
+    return resolveTerminalRestoreOptions({
       supportsTerminalRestoreModes,
+      canResume:
+        anchor !== null &&
+        anchor.emulator === emulatorRef.current &&
+        anchor.terminalId === terminalIdRef.current,
       canClaimSize: canRequestFocusClaim({
         isWorkspaceFocused: terminalPresentedRef.current,
         isPaneFocused,
@@ -542,8 +569,8 @@ export function TerminalPane({
         isRendererReady: rendererReadyStreamKey === terminalStreamKey,
       }),
       size: measuredTerminalSizeRef.current,
-    }),
-  );
+    });
+  });
 
   useEffect(() => {
     streamControllerRef.current?.dispose();

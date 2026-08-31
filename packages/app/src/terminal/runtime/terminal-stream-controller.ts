@@ -1,6 +1,7 @@
 import type { SubscribeTerminalRequest, TerminalState } from "@getpaseo/protocol/messages";
 import type { TerminalOutputData } from "./terminal-emulator-runtime";
 import { i18n } from "@/i18n/i18next";
+import { nativePerformanceTrace, traceInstant } from "@/performance/native-trace";
 
 export interface TerminalStreamControllerClient {
   subscribeTerminal: (
@@ -51,25 +52,46 @@ const TERMINAL_EXITED_ERROR = "Terminal exited";
 export class TerminalStreamController {
   private readonly unsubscribeStreamEvents: () => void;
   private terminalId: string | null = null;
+  private rendererTerminalId: string | null = null;
   private disposed = false;
 
   constructor(private readonly options: TerminalStreamControllerOptions) {
     this.unsubscribeStreamEvents = this.options.client.onTerminalStreamEvent((event) => {
-      if (this.disposed || event.terminalId !== this.terminalId) {
+      if (this.disposed) {
         return;
       }
       if (event.type === "snapshot") {
+        if (event.terminalId !== this.terminalId) {
+          return;
+        }
         this.options.onSnapshot({ terminalId: event.terminalId, state: event.state });
         return;
       }
       if (event.type === "restore") {
+        if (event.terminalId !== this.terminalId) {
+          return;
+        }
         if (event.data.length > 0) {
           this.options.onRestore?.({ terminalId: event.terminalId, data: event.data });
         }
         return;
       }
-      if (event.data.length > 0) {
+      if (
+        event.terminalId === (this.terminalId ?? this.rendererTerminalId) &&
+        event.data.length > 0
+      ) {
+        const traceEnabled = nativePerformanceTrace.isEnabled();
+        if (traceEnabled) {
+          traceInstant("paseo.terminal.stream-controller.output", {
+            size: String(event.data.byteLength),
+          });
+        }
         this.options.onOutput({ terminalId: event.terminalId, data: event.data });
+        if (traceEnabled) {
+          traceInstant("paseo.terminal.stream-controller.on-output", {
+            size: String(event.data.byteLength),
+          });
+        }
       }
     });
   }
@@ -81,6 +103,9 @@ export class TerminalStreamController {
     const nextTerminalId = input.terminalId;
     const previousTerminalId = this.terminalId;
     this.terminalId = nextTerminalId;
+    if (nextTerminalId) {
+      this.rendererTerminalId = nextTerminalId;
+    }
     if (previousTerminalId) {
       this.options.client.unsubscribeTerminal(previousTerminalId);
     }
@@ -140,6 +165,7 @@ export class TerminalStreamController {
       return;
     }
     this.terminalId = null;
+    this.rendererTerminalId = null;
     this.options.onStatusChange?.({
       terminalId: input.terminalId,
       isAttaching: false,
@@ -154,6 +180,7 @@ export class TerminalStreamController {
     this.disposed = true;
     const terminalId = this.terminalId;
     this.terminalId = null;
+    this.rendererTerminalId = null;
     if (terminalId) {
       this.options.client.unsubscribeTerminal(terminalId);
     }

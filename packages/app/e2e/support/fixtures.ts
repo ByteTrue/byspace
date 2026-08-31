@@ -129,9 +129,17 @@ const test = daemonTest.extend<{
       if (!serverId) {
         throw new Error("E2E_SERVER_ID is not set - expected from the Playwright worker fixture.");
       }
+      const relayPort = process.env.E2E_RELAY_PORT;
+      const relayDaemonPublicKeyB64 = process.env.E2E_RELAY_DAEMON_PUBLIC_KEY;
       const testDaemon = buildSeededHost({
         serverId,
         endpoint: `127.0.0.1:${daemonPort}`,
+        ...(relayPort && relayDaemonPublicKeyB64
+          ? {
+              relayEndpoint: `127.0.0.1:${relayPort}`,
+              relayDaemonPublicKeyB64,
+            }
+          : {}),
         nowIso,
       });
       const createAgentPreferences = buildCreateAgentPreferences();
