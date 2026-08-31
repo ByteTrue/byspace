@@ -11,15 +11,10 @@ remote_publish: each-milestone
 commit_strategy: semantic-atomic-per-item
 publish_strategy: epic-plan-pr-then-one-pr-per-wave
 current_wave: 2
-current_item: ITEM-04
-active_items:
-  - item: ITEM-04
-    state: executing
-    run: canonical xterm integrity probe after Windows CI 33398770223
-    workspace: /Users/zijie/workspace/projects/byspace
-    base: ceac433d8c20dcc5846f6e6042289220a6345908
+current_item: ITEM-05
+active_items: []
 blocked_by: null
-next_action: 提交、推送 reviewed canonical integrity probe，再以 exact branch ref 重跑 Windows terminal_performance；固定门槛绿色后才关闭 ITEM-04
+next_action: 从 reviewed ITEM-04 milestone 启动 ITEM-05（T03/T04/T05）隔离 worktree，先用历史保留用例建立 RED，再实现同 renderer 恢复与 revision gap replay
 ---
 
 # Epic Work: 保留能力交付路线
@@ -37,7 +32,7 @@ next_action: 提交、推送 reviewed canonical integrity probe，再以 exact b
 - ITEM-03 已通过 fresh compatibility review（0 blocking / 0 important）、Protocol 8/8、App 69/69、完整 `build:server`、Server E2E 3/3 和集成分支静态门槛；reviewed patch 已完成串行集成。
 - ITEM-03 read-only scout 已完成 optional hostname 的协议/客户端接缝与兼容测试包，没有修改文件。
 - Wave 1 PR #16 已由 reviewed head `db08188e9b0be50d4d966eac0851ab44aa2a5ecb` 合入 `main`，merge commit 为 `0d81e9fa376a2fb98518e94b5080d97440371811`；post-merge exact-SHA CI `33375176914` 与 Docker `33375176920` 均通过。
-- Wave 2 从上述绿色 `main` 创建；ITEM-04 已取得 Node、Browser Direct、本地 Wrangler Relay/E2EE 与三轮 exact-head Windows 证据。Desktop-web 超大 turn hard cap 已在 Windows 将组合 workload 的 `longTaskMaxMs` 从 `1343` 降到 `451`、`rafMaxGapMs` 从 `1379.3` 降到 `485.4`；剩余失败已收敛为 raw VT/ConPTY 帧拼接导致的完整性 probe 伪报，canonical xterm buffer 修正已通过本地 Direct 回归与 independent review。
+- Wave 2 从上述绿色 `main` 创建；ITEM-04 已取得 Node、Browser Direct、本地 Wrangler Relay/E2EE 与 exact-head Windows 证据。Desktop-web 超大 turn hard cap 已在 Windows 将组合 workload 的 `longTaskMaxMs` 从 `1343` 降到最终 `478`（Direct）/`794`（Relay），`rafMaxGapMs` 从 `1379.3` 降到最终 `706.8`/`999.9`；canonical xterm buffer 完整性 oracle 在两种 transport 均确认 1,000/1,000 输出与 24/24 echo，无 duplicate、out-of-order 或 mismatch。Exact-head run `33405590748` 全绿，final aggregate review `caf8c1ed-6591-4d97-8afb-0758a6fa2d11` 判定 PASS（0 blocking / 0 important）。
 
 ## Wave 1 · 发布通道路由与远程连接安全
 
@@ -47,7 +42,7 @@ next_action: 提交、推送 reviewed canonical integrity probe，再以 exact b
 
 ## Wave 2 · Terminal 性能与恢复基础
 
-- [ ] ITEM-04 · TERM-01 · T01/T02/T08/T09/T16 · local-reviewed, Windows CI pending
+- [x] ITEM-04 · TERM-01 · T01/T02/T08/T09/T16 · reviewed and integrated
 - [ ] ITEM-05 · TERM-02 · T03/T04/T05
 - [ ] ITEM-06 · TERM-05 · T10/T12
 
@@ -77,7 +72,7 @@ next_action: 提交、推送 reviewed canonical integrity probe，再以 exact b
 
 ## 活跃委派
 
-- 当前没有运行中的子 agent；ITEM-04 的 canonical xterm integrity probe 等待集成静态门槛后进入 exact-ref Windows CI。
+- 当前无运行中的 writer。ITEM-05 两个只读 scout 已完成现状接缝与 legacy reference 对比；下一步只启动一个隔离 writer，避免与 Wave 2 branch 并发写入。
 - ITEM-04 worker lineage：首轮 `557f41e3-cf60-4bfa-a1f5-f43eb405109a`，round 2 `980c4c05-9d0d-4831-9d99-b9b2369e9d03`，round 3 `5caaae27-606f-461a-a9f4-90dae2b57409`。父流程接管后修复跨平台 fixture、真实 Relay/E2EE、完整性断言、teardown 与 trace 隔离。
 - ITEM-04 independent reviewer `43a46b21-f879-4943-b0eb-4048af658d25` 对 base `0d81e9fa3` 上 20-path frozen manifest 返回 pass：0 blocking / 0 important。集成 Lint 随后发现 Relay readiness helper 的共享 resolver 触发 `promise/no-multiple-resolved`；父流程改为三个独立 Promise 的 race，targeted Lint、App Typecheck 和真实 Relay/E2EE 2/2 通过，同 reviewer 复审该单文件修正仍为 pass。最终 manifest 为 `3eb63d3e…d95df6`。
 - ITEM-04 read-only audit workflow `0d44efcb-871f-4ffd-80c9-516689703922` 与 minimization review 均已完成；没有稳定分段产品 RED 前不得修改 Terminal/Git/Relay/renderer 热路径的边界得到遵守。
@@ -133,3 +128,5 @@ next_action: 提交、推送 reviewed canonical integrity probe，再以 exact b
 - 2026-08-31：修正后 exact-head Windows run `33395542756`（`80e5b26cf56e7ecb67725d440d76fb85f4df8479`）仍 RED：组合 workload 的 1,000 条 Terminal 序列与 1,007 条 Agent 帧均完整到达，但页面实际挂载同一 turn 约 1,000 个 todo activity 行，产生 `rafMaxGapMs=1379.3` / `longTaskMaxMs=1343` 并阻塞最终 sentinel；独立 50,000 行 throughput 为 `18.474s`（仍低于 30s gate），keystroke p95 `5.9ms`，Node L0/L1/L2 正常。由此把组合故障收敛到 desktop-web 超大单 turn 绕过 partial virtualization，而非 wire/daemon/observer；在隔离 worktree `epic-002-item04-web-virtualization` 按 RED contract 修复，并给 throughput case 增补无额外轮询的 runtime trace artifact。
 - 2026-08-31：超大单 turn 修正的 focused model test 10/10、targeted Lint、App Typecheck、Format 与 diff-check 通过；冻结 patch `b0f6c892…af736` 获 independent review pass。集成分支本地真实 Direct browser 回归 3/3：组合 workload 完整接收 1,000 输出、24 输入与 1,007 Agent events，最大 rAF gap `248.2ms`、Long Task `153ms`、0 snapshot/restore；50,000 行 `109ms`（5.15MB/s），keystroke p95 `9.2ms`。下一门槛为修正后 exact-ref Windows Direct/Relay。
 - 2026-08-31：修正后 exact-head Windows run `33398770223` 的独立 throughput/latency 与 Relay 均通过，组合 workload 也以 `rafMaxGapMs=485.4`、`longTaskMaxMs=451` 通过响应性门槛；最终截图可见 `OUT:999`，但 raw `terminal_output` 拼接被 Windows ConPTY repaint/control sequences 误解析成 44 duplicates、45 payload mismatches 与 1 out-of-order。历史 run `33395542756` 同一 raw oracle 又在 1,000/1,000 序列完整时漏掉已呈现在 xterm buffer 的 DONE marker，确认这是测试 oracle 缺陷而非产品数据损坏。修正只在 DONE 可见、Agent workload 结束后读取一次 canonical xterm buffer 并拼接 soft-wrapped rows，完整性断言仍要求 1,000 输出、24 echo、单一 DONE 与有效 digest；raw frame/write trace 继续独立承担 latency/transport 指标。本地 Direct 1/1 返回 1,000/24/valid digest、1,007 Agent events、`rafMaxGapMs=244.4`、`longTaskMaxMs=146`，App Typecheck、targeted Lint、Format 及 independent review 全绿。
+- 2026-08-31：canonical integrity probe 以 `e1a651382` 推送后，首次 Windows exact-head run 暴露 teardown 中 `taskkill` 已终止进程但返回非零的竞态；本地 fake-taskkill RED 复现后，`killProcessTree` 仅在目标 PID 已退出时接受该非零结果，仍会抛出存活进程的真实失败。修复提交 `0d0dd540e` 的 exact-head Windows run `33405590748` 全绿：Node L0/L1/L2 各 100/100 echo，p95 `16.79/16.73/16.4ms`，每级约 `2.29MB` burst 且 `0 snapshot`；Direct/Relay 组合 workload 均为 1,000/1,000 输出、24/24 echo、单一有效 digest、0 duplicate/out-of-order/mismatch，rAF 最大间隙 `706.8/999.9ms`，Long Task 最大 `478/794ms`；普通逐键 p95 `6.5/9.4ms`。Windows 软件渲染下 50,000 行仍耗时 `10.6–14.7s`，且 Relay rAF 距 1 秒门槛仅 `0.1ms`，作为 residual risk 交 final aggregate review，不把一次绿色结果表述为所有 Windows/驱动上的性能上限。
+- 2026-08-31：最终只读 aggregate review `caf8c1ed-6591-4d97-8afb-0758a6fa2d11` 覆盖 base `0d81e9fa3` 到 frozen head `0d0dd540e` 的 6 个 ITEM-04 commits，结论 PASS（0 blocking / 0 important）。Review 确认真实 Direct/本地 Wrangler E2EE Relay、负载与严格完整性/1 秒 stall 门槛、超大 Agent turn 可访问性、Windows teardown、手动 CI gating 和文档一致性均符合交付契约；Relay `999.9ms` 边界、Windows throughput `10.6–14.7s`、taskkill 理论窄窗口继续作为 report-only residual risks。ITEM-04 关闭。
