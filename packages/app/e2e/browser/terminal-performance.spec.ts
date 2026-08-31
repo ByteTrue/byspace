@@ -9,6 +9,11 @@ import {
   round2,
   type LatencySample,
 } from "../support/helpers/terminal-perf";
+import {
+  installTerminalKeystrokeStressProbe,
+  readTerminalKeystrokeStressReport,
+  resetTerminalKeystrokeStressProbe,
+} from "../support/helpers/terminal-probes";
 
 const LINE_COUNT = 50_000;
 const THROUGHPUT_BUDGET_MS = 30_000;
@@ -39,11 +44,13 @@ terminalPerfDescribe("Terminal wire performance", () => {
       args: [WORKLOAD_FIXTURE, "--mode", "burst", "--count", String(LINE_COUNT)],
     });
     try {
+      await installTerminalKeystrokeStressProbe(page);
       await harness.openTerminal(page, { terminalId: created.id });
       await waitForTerminalContent(page, (text) => text.includes(WORKLOAD_READY), 10_000);
 
       const sentinel = `WORKLOAD_DONE:${LINE_COUNT}:`;
       const terminal = harness.terminalSurface(page);
+      await resetTerminalKeystrokeStressProbe(page);
       const startMs = Date.now();
 
       await terminal.pressSequentially("GO\n", { delay: 0 });
@@ -51,6 +58,7 @@ terminalPerfDescribe("Terminal wire performance", () => {
       await waitForTerminalTailText(page, sentinel, THROUGHPUT_BUDGET_MS + 15_000);
 
       const elapsedMs = Date.now() - startMs;
+      const runtimeReport = await readTerminalKeystrokeStressReport(page, "");
       const estimatedBytes =
         Array.from({ length: LINE_COUNT }, (_, index) => `OUT:${index}:x\n`.length).reduce(
           (total, bytes) => total + bytes,
@@ -69,6 +77,10 @@ terminalPerfDescribe("Terminal wire performance", () => {
 
       await testInfo.attach("throughput-report", {
         body: JSON.stringify(report, null, 2),
+        contentType: "application/json",
+      });
+      await testInfo.attach("throughput-runtime-report", {
+        body: JSON.stringify(runtimeReport, null, 2),
         contentType: "application/json",
       });
 
