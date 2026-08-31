@@ -32,8 +32,8 @@ Terminal 全组已由 Owner 确认保留；这里记录当前缺口，用于后�
 | T10 | 归档 closed；reset 前有 snapshot preamble 与 DECSET 2004 恢复测试。              | live paste 能按 bracketed mode 包装；缺少 attach/restore 后 mode 恢复并进入单个 PTY block 的端到端证明。       | 部分/待验收                 | **保留并逐项重验** |
 | T11 | 归档 closed；reset 前实现剪贴板图片上传、daemon 临时路径和 Pi paste。            | 当前 Terminal clipboard 仅 `readText()`；Composer 图片上传不能替代 Terminal 图片粘贴。                         | **缺失/回退**               | **保留并实施**     |
 | T12 | 归档 closed；reset 前有 Windows ConPTY 强制 framing fallback。                   | 当前只依据 live DECSET mode 决定 framing；未见 Windows fallback。                                              | **缺失/回退**               | **保留并实施**     |
-| T13 | 归档 closed；reset 前建立 provider hook 解耦。                                   | 当前 Claude/Codex provider registry、全局启停、activity endpoint 和测试都在；Pi provider 不在。                | 强代码证据；Pi 缺口拆在 T14 | **保留并逐项重验** |
-| T14 | 归档 closed；reset 前有 Pi 全局 extension 与内置 profile。                       | 当前 registry 只有 Claude/Codex；没有 Pi hook provider、全局 extension 或内置 Pi profile。                     | **缺失/回退**               | **保留并实施**     |
+| T13 | 归档 closed；reset 前建立 provider hook 解耦。                                   | 当前 Claude/Codex/OpenCode provider registry、全局启停、activity endpoint 和测试都在；Pi provider 不在。       | 强代码证据；Pi 缺口拆在 T14 | **保留并逐项重验** |
+| T14 | 归档 closed；reset 前有 Pi 全局 extension 与内置 profile。                       | 当前 registry 已有 Claude/Codex/OpenCode；没有 Pi hook provider、全局 extension 或内置 Pi profile。            | **缺失/回退**               | **保留并实施**     |
 | T15 | 归档 closed；reset 前移除低收益字体/主题配置并收敛默认值。                       | 当前 Terminal 使用统一外观/mono theme 路径，未见独立 Terminal 字体主题配置面；需浅色/深色/系统与高亮实机复核。 | 强代码证据；待验收          | **保留并逐项重验** |
 | T16 | 归档 closed；reset 前针对 Windows 页面、Timeline、Agent、Terminal 秒级停顿修复。 | 当前缺少 Windows 组合 workload 与长任务延迟门禁；静态代码不能证明无秒级停顿。                                  | 部分/待验收                 | **保留并逐项重验** |
 | T17 | 归档 closed；reset 前 Pi reporter 串行、latest-wins、有界合并与失败续传。        | Pi reporter/extension 已不存在，因此其顺序与恢复保证也不存在。                                                 | **缺失/回退**               | **保留并实施**     |
