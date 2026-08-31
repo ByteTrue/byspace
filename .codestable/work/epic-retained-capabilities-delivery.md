@@ -11,15 +11,10 @@ remote_publish: each-milestone
 commit_strategy: semantic-atomic-per-item
 publish_strategy: epic-plan-pr-then-one-pr-per-wave
 current_wave: 1
-current_item: ITEM-01
-active_items:
-  - item: ITEM-01
-    state: integrating
-    run: native worker 2da13fbf-181a-4a81-84cd-696e764307d8
-    workspace: /Users/zijie/workspace/projects/byspace-worktrees/epic-002-wave1-item01
-    base: 5dc678bdefb77e52fe729c00b8034eb89ad7f7de
+current_item: null
+active_items: []
 blocked_by: null
-next_action: 以已核验 patch 串行收割 ITEM-01，在集成结果上重跑 focused tests 与静态门槛后创建语义原子 commit
+next_action: 从 ITEM-01 集成 commit 创建 ITEM-02 隔离 worktree，先复现 Hosted HTTPS 误连不安全 LAN Direct 的 R03 缺口
 ---
 
 # Epic Work: 保留能力交付路线
@@ -32,11 +27,11 @@ next_action: 以已核验 patch 串行收割 ITEM-01，在集成结果上重跑 
 - Wave 1 从 exact-main CI 绿色 commit `5dc678bdefb77e52fe729c00b8034eb89ad7f7de` 开始。
 - Owner 已选择 parallel 推荐方案 A：最多两个 writer，按 worker 完成顺序串行集成。
 - Bounded-parallel contract review 同 lineage round 2 已通过：0 blocking / 0 important；路径级所有权、canonical 集成规则与恢复状态机已生效。
-- ITEM-01 worker 与 fresh change review 均已完成，既有 connection-offer daemon E2E 3/3 通过；当前进入父流程串行集成。
+- ITEM-01 已通过 worker 验证、fresh change review、connection-offer daemon E2E 和集成分支静态门槛，并以 reviewed patch 完成串行集成。
 
 ## Wave 1 · 发布通道路由与远程连接安全
 
-- [ ] ITEM-01 · RELEASE-01 · B01 · integrating
+- [x] ITEM-01 · RELEASE-01 · B01 · integrated
 - [ ] ITEM-02 · RELAY-02 · R03
 - [ ] ITEM-03 · RELAY-01 · R02
 
@@ -72,15 +67,7 @@ next_action: 以已核验 patch 串行收割 ITEM-01，在集成结果上重跑 
 
 ## 活跃委派
 
-- `ITEM-01`
-  - state：`integrating`；父流程已取得唯一串行集成焦点。
-  - worker：native worker `2da13fbf-181a-4a81-84cd-696e764307d8`（completed）。
-  - reviewer：fresh reviewer `2830ea2b-2be9-4414-b292-5ba50517957b`（pass，0 blocking / 0 important）。
-  - workspace：`/Users/zijie/workspace/projects/byspace-worktrees/epic-002-wave1-item01`。
-  - branch：`item/epic-002-01-release-channel`。
-  - base：`5dc678bdefb77e52fe729c00b8034eb89ad7f7de`。
-  - scope：只允许 ITEM-01 实现与 focused tests；不得修改 `.codestable`、commit、push、PR、基础设施或 ITEM-02/03。
-  - validation：worker focused tests/build/typecheck/lint 已通过；既有 `packages/server/src/server/daemon-e2e/connection-offer.e2e.test.ts` 在同时指向 ITEM-01 Protocol 与正确 Server package-local dependencies 的临时模块视图下 3/3 通过。该用例仅回归 Server pairing/connection offer 对 endpoint utility 的消费，未新增或修改 ITEM-03 hostname schema。
+- 无。ITEM-01 的 worker、reviewer 与 worktree 信息已记录在本次 ITEM milestone 的变更日志和 Git 历史中。
 
 ## 规划证据
 
@@ -115,3 +102,4 @@ next_action: 以已核验 patch 串行收割 ITEM-01，在集成结果上重跑 
 - 2026-08-31：Owner 选择 parallel 推荐方案 A；按完成顺序串行集成，最多两个 writer，Wave 3/4/5 只使用永久契约中的具名 lane。
 - 2026-08-31：Bounded-parallel contract review 首轮要求补齐结构化 `active_items`、路径级所有权和 canonical 集成/回滚规则。
 - 2026-08-31：同 lineage round 2 通过（0 blocking / 0 important）；机械 minor 已吸收，ITEM-01 进入父流程串行集成。
+- 2026-08-31：ITEM-01 worker `2da13fbf-181a-4a81-84cd-696e764307d8` 与 reviewer `2830ea2b-2be9-4414-b292-5ba50517957b` 完成；reviewed patch `036df3112dbb754078ae10e43b1e7b48f7a438a02a3b66bad28b1b394bf0039a` 经 29 个 Protocol、17 个 Server config、6 个 CLI 与 3 个 connection-offer E2E 验证，集成 Build、Typecheck、Lint 通过。

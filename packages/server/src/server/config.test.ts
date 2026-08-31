@@ -122,29 +122,79 @@ describe("server config", () => {
   });
 
   test.each([
-    ["0.7.0", "https://app.byspace.cc.cd"],
-    ["0.7.0-beta.2", "https://app-beta.byspace.cc.cd"],
-  ])("uses the %s release channel app URL", (releaseVersion, expectedAppBaseUrl) => {
-    const persisted = {
-      version: 1,
-      app: { baseUrl: "https://app.byspace.cc.cd" },
-      daemon: { cors: { allowedOrigins: ["https://app.byspace.cc.cd", "http://localhost"] } },
-    } satisfies PersistedConfig;
+    ["0.7.0", "https://app.byspace.cc.cd", "relay.byspace.cc.cd:443"],
+    ["0.7.0-beta.2", "https://app-beta.byspace.cc.cd", "relay-beta.byspace.cc.cd:443"],
+  ])(
+    "uses the %s hosted release endpoints",
+    (releaseVersion, expectedAppBaseUrl, expectedRelayEndpoint) => {
+      const persisted = {
+        version: 1,
+        daemon: { cors: { allowedOrigins: ["http://localhost"] } },
+      } satisfies PersistedConfig;
 
-    const config = resolveConfigFromPersisted("/tmp/byspace", persisted, {
-      env: {},
-      releaseVersion,
-    });
+      const config = resolveConfigFromPersisted("/tmp/byspace", persisted, {
+        env: {},
+        releaseVersion,
+      });
 
-    expect(config.appBaseUrl).toBe(expectedAppBaseUrl);
-    expect(config.corsAllowedOrigins).toEqual([expectedAppBaseUrl, "http://localhost"]);
-  });
+      expect(config.appBaseUrl).toBe(expectedAppBaseUrl);
+      expect(config.relayEndpoint).toBe(expectedRelayEndpoint);
+      expect(config.relayPublicEndpoint).toBe(expectedRelayEndpoint);
+      expect(config.relayUseTls).toBe(true);
+      expect(config.relayPublicUseTls).toBe(true);
+      expect(config.corsAllowedOrigins).toEqual(["http://localhost"]);
+    },
+  );
 
-  test("preserves a custom app URL across release channels", () => {
+  test.each([
+    ["0.7.0", "https://app-beta.byspace.cc.cd", "relay-beta.byspace.cc.cd:443"],
+    ["0.7.0-beta.2", "https://app.byspace.cc.cd", "relay.byspace.cc.cd:443"],
+  ])(
+    "migrates persisted official defaults to the %s release channel",
+    (releaseVersion, persistedAppBaseUrl, persistedRelayEndpoint) => {
+      const persisted = {
+        version: 1,
+        app: { baseUrl: persistedAppBaseUrl },
+        daemon: {
+          cors: { allowedOrigins: [persistedAppBaseUrl] },
+          relay: {
+            endpoint: persistedRelayEndpoint,
+            publicEndpoint: persistedRelayEndpoint,
+          },
+        },
+      } satisfies PersistedConfig;
+
+      const config = resolveConfigFromPersisted("/tmp/byspace", persisted, {
+        env: {},
+        releaseVersion,
+      });
+      const expectedAppBaseUrl = releaseVersion.includes("-")
+        ? "https://app-beta.byspace.cc.cd"
+        : "https://app.byspace.cc.cd";
+      const expectedRelayEndpoint = releaseVersion.includes("-")
+        ? "relay-beta.byspace.cc.cd:443"
+        : "relay.byspace.cc.cd:443";
+
+      expect(config.appBaseUrl).toBe(expectedAppBaseUrl);
+      expect(config.corsAllowedOrigins).toEqual([expectedAppBaseUrl]);
+      expect(config.relayEndpoint).toBe(expectedRelayEndpoint);
+      expect(config.relayPublicEndpoint).toBe(expectedRelayEndpoint);
+    },
+  );
+
+  test("preserves custom persisted endpoints across release channels", () => {
     const persisted = {
       version: 1,
       app: { baseUrl: "https://self-hosted.example.com" },
-      daemon: { cors: { allowedOrigins: ["https://self-hosted.example.com"] } },
+      daemon: {
+        cors: { allowedOrigins: ["https://self-hosted.example.com"] },
+        relay: {
+          endpoint: "relay.internal.example.com:8080",
+          publicEndpoint: "relay.example.com:443",
+          useTls: false,
+          publicUseTls: true,
+        },
+      },
     } satisfies PersistedConfig;
 
     const config = resolveConfigFromPersisted("/tmp/byspace", persisted, {
@@ -154,6 +204,10 @@ describe("server config", () => {
 
     expect(config.appBaseUrl).toBe("https://self-hosted.example.com");
     expect(config.corsAllowedOrigins).toEqual(["https://self-hosted.example.com"]);
+    expect(config.relayEndpoint).toBe("relay.internal.example.com:8080");
+    expect(config.relayPublicEndpoint).toBe("relay.example.com:443");
+    expect(config.relayUseTls).toBe(false);
+    expect(config.relayPublicUseTls).toBe(true);
   });
 
   test.each([

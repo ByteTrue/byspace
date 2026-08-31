@@ -1,4 +1,8 @@
 import type { Logger } from "pino";
+import {
+  isBySpaceHostedRelayEndpoint,
+  resolveBySpaceHostedRelayEndpoint,
+} from "@getpaseo/protocol/daemon-endpoints";
 import { resolveBySpaceHostedAppBaseUrl } from "@getpaseo/protocol/release-channel";
 
 import { createConnectionOfferV2, encodeOfferToFragmentUrl } from "./connection-offer.js";
@@ -15,6 +19,7 @@ export interface LocalPairingOffer {
 
 export async function generateLocalPairingOffer(args: {
   paseoHome: string;
+  releaseVersion?: string;
   relayEnabled?: boolean;
   relayEndpoint?: string;
   relayPublicEndpoint?: string;
@@ -33,12 +38,12 @@ export async function generateLocalPairingOffer(args: {
     };
   }
 
-  const relayEndpoint = args.relayEndpoint ?? "relay.byspace.cc.cd:443";
+  const releaseVersion = args.releaseVersion ?? resolveDaemonVersion(import.meta.url);
+  const relayEndpoint = args.relayEndpoint ?? resolveBySpaceHostedRelayEndpoint(releaseVersion);
   const relayPublicEndpoint = args.relayPublicEndpoint ?? relayEndpoint;
-  const relayUseTls = args.relayUseTls ?? relayEndpoint === "relay.byspace.cc.cd:443";
+  const relayUseTls = args.relayUseTls ?? isBySpaceHostedRelayEndpoint(relayEndpoint);
   const relayPublicUseTls = args.relayPublicUseTls ?? relayUseTls;
-  const appBaseUrl =
-    args.appBaseUrl ?? resolveBySpaceHostedAppBaseUrl(resolveDaemonVersion(import.meta.url));
+  const appBaseUrl = args.appBaseUrl ?? resolveBySpaceHostedAppBaseUrl(releaseVersion);
   const serverId = getOrCreateServerId(args.paseoHome, { logger: args.logger });
   const daemonKeyPair = await loadOrCreateDaemonKeyPair(args.paseoHome, args.logger);
   const offer = await createConnectionOfferV2({
