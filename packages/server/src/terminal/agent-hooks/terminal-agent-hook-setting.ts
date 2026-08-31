@@ -1,10 +1,12 @@
+import type { MutableDaemonConfig, TerminalAgentHookProviderId } from "@getpaseo/protocol/messages";
+import type { DaemonConfigStore } from "../../server/daemon-config-store.js";
 import type { AgentHookInstallLogger, AgentHookInstallOptions } from "./agent-hook-installer.js";
 import {
-  installRegisteredAgentHooks,
+  AGENT_HOOK_PROVIDERS,
+  installRegisteredAgentHook,
   type RegisteredAgentHookInstallOptions,
-  uninstallRegisteredAgentHooks,
+  uninstallRegisteredAgentHook,
 } from "./provider-registry.js";
-import type { DaemonConfigStore } from "../../server/daemon-config-store.js";
 
 interface ApplyTerminalAgentHookSettingOptions {
   store: DaemonConfigStore;
@@ -12,30 +14,49 @@ interface ApplyTerminalAgentHookSettingOptions {
   install?: AgentHookInstallOptions;
 }
 
-// Installing agent hooks edits the user's real agent config files, so it only
-// happens when `enableTerminalAgentHooks` is on. At boot we install when enabled
-// and otherwise leave the configs untouched; toggling the setting live installs
-// on enable and removes our marker-matched hooks on disable so opting out cleans
-// up after itself. Returns an unsubscribe for the field-change listener.
+export type ResolvedTerminalAgentHookSettings = Record<TerminalAgentHookProviderId, boolean>;
+
+export function resolveTerminalAgentHookSettings(
+  config: Pick<MutableDaemonConfig, "enableTerminalAgentHooks" | "terminalAgentHooks">,
+): ResolvedTerminalAgentHookSettings {
+  const providerSettings = config.terminalAgentHooks;
+  return Object.fromEntries(
+    (Object.keys(AGENT_HOOK_PROVIDERS) as TerminalAgentHookProviderId[]).map((providerId) => [
+      providerId,
+      providerSettings === undefined
+        ? config.enableTerminalAgentHooks === true
+        : providerSettings[providerId] === true,
+    ]),
+  ) as ResolvedTerminalAgentHookSettings;
+}
+
+// Provider settings take over as one map: an omitted map keeps the legacy global
+// switch working, while a missing key in a present map is always disabled.
 export function applyTerminalAgentHookSetting(
   options: ApplyTerminalAgentHookSettingOptions,
 ): () => void {
-  const { store, logger, install } = options;
-  const installOptions: RegisteredAgentHookInstallOptions = { ...install, logger };
+  const installOptions: RegisteredAgentHookInstallOptions = {
+    ...options.install,
+    logger: options.logger,
+  };
+  let applied = resolveTerminalAgentHookSettings(options.store.get());
 
-  if (store.get().enableTerminalAgentHooks) {
-    installRegisteredAgentHooks(installOptions);
+  for (const providerId of Object.keys(applied) as TerminalAgentHookProviderId[]) {
+    if (applied[providerId]) {
+      installRegisteredAgentHook(providerId, installOptions);
+    }
   }
 
-  return store.onFieldChange("enableTerminalAgentHooks", (value) => {
-    if (value === true) {
-      installRegisteredAgentHooks(installOptions);
-      return;
+  return options.store.onChange((config) => {
+    const settings = resolveTerminalAgentHookSettings(config);
+    for (const providerId of Object.keys(settings) as TerminalAgentHookProviderId[]) {
+      if (settings[providerId] === applied[providerId]) continue;
+      if (settings[providerId]) {
+        installRegisteredAgentHook(providerId, installOptions);
+      } else {
+        uninstallRegisteredAgentHook(providerId, installOptions);
+      }
     }
-    try {
-      uninstallRegisteredAgentHooks(install);
-    } catch (error) {
-      logger?.warn({ err: error }, "Failed to remove terminal activity hooks");
-    }
+    applied = settings;
   });
 }

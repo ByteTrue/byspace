@@ -754,6 +754,70 @@ describe("DaemonConfigStore", () => {
     expect(persisted.daemon?.enableTerminalAgentHooks).toBe(true);
   });
 
+  test("patch merges provider terminal agent hooks into config.json", () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "byspace-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+
+    const store = new DaemonConfigStore(
+      paseoHome,
+      {
+        mcp: { injectIntoAgents: false },
+        providers: {},
+        metadataGeneration: { providers: [] },
+        autoArchiveAfterMerge: false,
+        enableTerminalAgentHooks: false,
+        terminalAgentHooks: {},
+        appendSystemPrompt: "",
+      },
+      undefined,
+    );
+
+    store.patch({ terminalAgentHooks: { claude: true } });
+    store.patch({ terminalAgentHooks: { pi: true } });
+
+    const expected = { claude: true, codex: false, opencode: false, pi: true };
+    const persisted = loadPersistedConfig(paseoHome);
+    expect(persisted.daemon?.terminalAgentHooks).toEqual(expected);
+    expect(persisted.daemon?.enableTerminalAgentHooks).toBe(true);
+    expect(store.get().terminalAgentHooks).toEqual(expected);
+    expect(store.get().enableTerminalAgentHooks).toBe(true);
+  });
+
+  test("keeps legacy aggregate patches bidirectionally compatible", () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "byspace-daemon-config-legacy-hooks-"));
+    tempDirs.push(paseoHome);
+
+    const store = new DaemonConfigStore(
+      paseoHome,
+      {
+        mcp: { injectIntoAgents: false },
+        providers: {},
+        metadataGeneration: { providers: [] },
+        autoArchiveAfterMerge: false,
+        enableTerminalAgentHooks: true,
+        appendSystemPrompt: "",
+      },
+      undefined,
+    );
+
+    store.patch({ terminalAgentHooks: { pi: false } });
+    expect(store.get().terminalAgentHooks).toEqual({
+      claude: true,
+      codex: true,
+      opencode: true,
+      pi: false,
+    });
+    expect(store.get().enableTerminalAgentHooks).toBe(true);
+
+    store.patch({ enableTerminalAgentHooks: false });
+    const expected = { claude: false, codex: false, opencode: false, pi: false };
+    const persisted = loadPersistedConfig(paseoHome);
+    expect(persisted.daemon?.terminalAgentHooks).toEqual(expected);
+    expect(persisted.daemon?.enableTerminalAgentHooks).toBe(false);
+    expect(store.get().terminalAgentHooks).toEqual(expected);
+    expect(store.get().enableTerminalAgentHooks).toBe(false);
+  });
+
   test("patch persists metadata generation providers into config.json", () => {
     const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
     tempDirs.push(paseoHome);

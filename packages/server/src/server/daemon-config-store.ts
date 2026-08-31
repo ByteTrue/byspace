@@ -7,6 +7,7 @@ import { ProviderOverrideSchema } from "./agent/provider-launch-config.js";
 import {
   MutableDaemonConfigSchema,
   MutableDaemonConfigPatchSchema,
+  TERMINAL_AGENT_HOOK_PROVIDER_IDS,
 } from "@getpaseo/protocol/messages";
 import type { AgentSkillSelection } from "@getpaseo/protocol/messages";
 
@@ -25,6 +26,7 @@ interface SupportedMutableConfigPatch {
   metadataGeneration?: MutableDaemonConfig["metadataGeneration"];
   autoArchiveAfterMerge?: boolean;
   enableTerminalAgentHooks?: boolean;
+  terminalAgentHooks?: MutableDaemonConfig["terminalAgentHooks"];
   appendSystemPrompt?: string;
   terminalProfiles?: MutableDaemonConfig["terminalProfiles"];
   agentProfiles?: MutableDaemonConfig["agentProfiles"];
@@ -180,6 +182,7 @@ const RELOADABLE_PATHS = [
   "daemon.git.maxProcessConcurrency",
   "daemon.autoArchiveAfterMerge",
   "daemon.enableTerminalAgentHooks",
+  "daemon.terminalAgentHooks",
   "daemon.appendSystemPrompt",
   "daemon.terminalProfiles",
   "daemon.agentProfiles",
@@ -203,6 +206,7 @@ const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
   ["daemon.git.maxProcessConcurrency", "git.maxProcessConcurrency"],
   ["daemon.autoArchiveAfterMerge", "autoArchiveAfterMerge"],
   ["daemon.enableTerminalAgentHooks", "enableTerminalAgentHooks"],
+  ["daemon.terminalAgentHooks", "terminalAgentHooks"],
   ["daemon.appendSystemPrompt", "appendSystemPrompt"],
   ["daemon.terminalProfiles", "terminalProfiles"],
   ["daemon.agentProfiles", "agentProfiles"],
@@ -268,6 +272,9 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
       : {}),
     ...(patch.enableTerminalAgentHooks !== undefined
       ? { enableTerminalAgentHooks: patch.enableTerminalAgentHooks }
+      : {}),
+    ...(patch.terminalAgentHooks !== undefined
+      ? { terminalAgentHooks: patch.terminalAgentHooks }
       : {}),
     ...(patch.appendSystemPrompt !== undefined
       ? { appendSystemPrompt: patch.appendSystemPrompt }
@@ -351,7 +358,8 @@ export class DaemonConfigStore {
         "Relay is controlled by a daemon launch override. Remove BYSPACE_RELAY_ENABLED or the relay CLI flag before changing it here.",
       );
     }
-    const { removeProviders = [], ...configPatch } = parsedPatch;
+    const { removeProviders = [], ...rawConfigPatch } = parsedPatch;
+    const configPatch = normalizeTerminalAgentHookPatch(this.current, rawConfigPatch);
     const removedProviders = Array.from(new Set(removeProviders));
     const merged = deepMerge(this.current, configPatch);
     if (parsedPatch.skills?.selection !== undefined) {
@@ -627,6 +635,38 @@ function mergeMutableAgentPatch(
   return Object.keys(next).length > 0 ? (next as PersistedConfig["agents"]) : undefined;
 }
 
+function normalizeTerminalAgentHookPatch(
+  current: MutableDaemonConfig,
+  patch: Omit<SupportedMutableConfigPatch, "removeProviders">,
+): Omit<SupportedMutableConfigPatch, "removeProviders"> {
+  const providerPatch = patch.terminalAgentHooks;
+  const legacyPatch = patch.enableTerminalAgentHooks;
+  if (providerPatch === undefined && legacyPatch === undefined) return patch;
+  if (providerPatch === undefined && current.terminalAgentHooks === undefined) return patch;
+
+  const providerIds = new Set([
+    ...TERMINAL_AGENT_HOOK_PROVIDER_IDS,
+    ...Object.keys(current.terminalAgentHooks ?? {}),
+    ...Object.keys(providerPatch ?? {}),
+  ]);
+  const terminalAgentHooks = Object.fromEntries(
+    Array.from(providerIds, (providerId) => [
+      providerId,
+      legacyPatch ??
+        (current.terminalAgentHooks === undefined
+          ? current.enableTerminalAgentHooks
+          : current.terminalAgentHooks[providerId] === true),
+    ]),
+  );
+  Object.assign(terminalAgentHooks, providerPatch);
+
+  return {
+    ...patch,
+    enableTerminalAgentHooks: Object.values(terminalAgentHooks).some(Boolean),
+    terminalAgentHooks,
+  };
+}
+
 function mergeMutableDaemonPatch(
   persistedDaemon: PersistedConfig["daemon"],
   patch: Omit<SupportedMutableConfigPatch, "removeProviders">,
@@ -647,6 +687,12 @@ function mergeMutableDaemonPatch(
   }
   if (patch.enableTerminalAgentHooks !== undefined) {
     next.enableTerminalAgentHooks = patch.enableTerminalAgentHooks;
+  }
+  if (patch.terminalAgentHooks !== undefined) {
+    next.terminalAgentHooks = {
+      ...next.terminalAgentHooks,
+      ...patch.terminalAgentHooks,
+    };
   }
   if (patch.appendSystemPrompt !== undefined) next.appendSystemPrompt = patch.appendSystemPrompt;
   if (patch.terminalProfiles !== undefined) next.terminalProfiles = patch.terminalProfiles;

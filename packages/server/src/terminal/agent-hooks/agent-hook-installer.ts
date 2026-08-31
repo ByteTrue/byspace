@@ -45,6 +45,8 @@ export interface AgentHookConfigFileInstallStrategy<TConfig> extends AgentHookIn
 export interface AgentHookPluginFileInstallStrategy extends AgentHookInstallStrategyBase {
   kind: "plugin-file";
   source: string;
+  // Providers that set this own only files carrying the marker.
+  ownedFileMarker?: string;
 }
 
 export interface AgentHookConfigFormat<TConfig> {
@@ -158,6 +160,13 @@ function installAgentHookPluginFile(
   const nextRaw = normalizeRawConfig(install.source);
 
   if (currentRaw === null || normalizeRawConfig(currentRaw) !== nextRaw) {
+    if (
+      currentRaw !== null &&
+      install.ownedFileMarker &&
+      !currentRaw.includes(install.ownedFileMarker)
+    ) {
+      throw new Error(`Refusing to overwrite non-BySpace plugin file: ${configPath}`);
+    }
     writePrivateFileAtomicSync(configPath, nextRaw);
     return { configPath, changed: true };
   }
@@ -172,6 +181,12 @@ function uninstallAgentHookPluginFile(
   const configPath = resolveAgentHookInstallPath(install, options);
   if (!existsSync(configPath)) {
     return { configPath, changed: false };
+  }
+  if (install.ownedFileMarker) {
+    const currentRaw = readFileSync(configPath, "utf8");
+    if (!currentRaw.includes(install.ownedFileMarker)) {
+      return { configPath, changed: false };
+    }
   }
 
   rmSync(configPath, { force: true });

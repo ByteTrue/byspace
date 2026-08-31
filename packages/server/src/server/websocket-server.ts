@@ -1719,6 +1719,8 @@ export class VoiceAssistantWebSocketServer {
         pluginThemes: true,
         // COMPAT(skillManagement): added in v0.4.0, remove gate after 2027-08-16.
         skillManagement: true,
+        // COMPAT(terminalAgentHookProviders): added in v0.7.1, remove gate after 2027-09-01.
+        terminalAgentHookProviders: true,
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": true,
         // COMPAT(terminalInputModeReplay): added in v0.2.6, remove gate after 2027-02-02.

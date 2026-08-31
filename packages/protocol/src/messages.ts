@@ -195,6 +195,14 @@ export const AgentSkillSelectionSchema = z.discriminatedUnion("mode", [
 ]);
 export type AgentSkillSelection = z.infer<typeof AgentSkillSelectionSchema>;
 
+export const TERMINAL_AGENT_HOOK_PROVIDER_IDS = ["claude", "codex", "opencode", "pi"] as const;
+export const TerminalAgentHookProviderIdSchema = z.enum(TERMINAL_AGENT_HOOK_PROVIDER_IDS);
+export type TerminalAgentHookProviderId = z.infer<typeof TerminalAgentHookProviderIdSchema>;
+
+// Provider keys stay open so old clients can parse settings added by a future daemon.
+export const TerminalAgentHookSettingsSchema = z.record(z.string().min(1), z.boolean());
+export type TerminalAgentHookSettings = z.infer<typeof TerminalAgentHookSettingsSchema>;
+
 export const MutableDaemonConfigSchema = z
   .object({
     // COMPAT(relayConfig): added in v0.2.6, remove after 2027-01-31 when old daemons are unsupported.
@@ -225,7 +233,9 @@ export const MutableDaemonConfigSchema = z
     providers: z.record(z.string(), MutableDaemonProviderConfigSchema).default({}),
     metadataGeneration: MutableMetadataGenerationConfigSchema.default({ providers: [] }),
     autoArchiveAfterMerge: z.boolean().default(false),
+    // COMPAT(terminalAgentHookProviders): retained for old apps; provider settings win when present.
     enableTerminalAgentHooks: z.boolean().default(false),
+    terminalAgentHooks: TerminalAgentHookSettingsSchema.optional(),
     appendSystemPrompt: z.string().default(""),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
@@ -246,7 +256,9 @@ export const MutableDaemonConfigPatchSchema = z
     removeProviders: z.array(z.string().min(1)).optional(),
     metadataGeneration: MutableMetadataGenerationConfigSchema.partial().optional(),
     autoArchiveAfterMerge: z.boolean().optional(),
+    // COMPAT(terminalAgentHookProviders): retained for old apps; provider settings win when present.
     enableTerminalAgentHooks: z.boolean().optional(),
+    terminalAgentHooks: TerminalAgentHookSettingsSchema.optional(),
     appendSystemPrompt: z.string().optional(),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
@@ -3383,6 +3395,8 @@ export const ServerInfoStatusPayloadSchema = z
         pluginThemes: z.boolean().optional(),
         // COMPAT(skillManagement): added in v0.4.0, remove gate after 2027-08-16.
         skillManagement: z.boolean().optional(),
+        // COMPAT(terminalAgentHookProviders): added in v0.7.1, remove gate after 2027-09-01.
+        terminalAgentHookProviders: z.boolean().optional(),
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": z.boolean().optional(),
         // COMPAT(terminalInputModeReplay): added in v0.2.6, remove gate after 2027-02-02.
