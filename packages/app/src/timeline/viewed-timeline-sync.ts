@@ -554,7 +554,6 @@ export function createViewedTimelineSync(ports: ViewedTimelineSyncPorts): Viewed
     agentId: string,
     generation: number,
     request: ProjectedTimelineForwardFetchPlan,
-    fallbackToLatestTailOnOverflow: boolean,
   ): Promise<void> => {
     if (!ownsCatchUp(agentId, generation)) return;
 
@@ -562,18 +561,7 @@ export function createViewedTimelineSync(ports: ViewedTimelineSyncPorts): Viewed
       const page = await ports.fetchPage(agentId, request);
       if (!ownsCatchUp(agentId, generation)) return;
       if (page.hasNewer && page.endCursor) {
-        if (fallbackToLatestTailOnOverflow) {
-          await ports.fetchLatestTail(agentId);
-          catchUps.set(agentId, { generation, status: "complete" });
-          setVisibilityCatchUpReady(agentId);
-          return;
-        }
-        await fetchUntilCurrent(
-          agentId,
-          generation,
-          planTimelineCatchUpAfter(page.endCursor),
-          false,
-        );
+        await fetchUntilCurrent(agentId, generation, planTimelineCatchUpAfter(page.endCursor));
         return;
       }
       if (page.hasNewer) {
@@ -660,12 +648,7 @@ export function createViewedTimelineSync(ports: ViewedTimelineSyncPorts): Viewed
       retryDelayMs,
     });
     pendingCatchUps.delete(agentId);
-    void fetchUntilCurrent(
-      agentId,
-      generation,
-      nextRequest,
-      request === undefined && nextRequest.direction === "after",
-    );
+    void fetchUntilCurrent(agentId, generation, nextRequest);
   };
 
   const startAcknowledgedCatchUps = () => {

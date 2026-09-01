@@ -104,8 +104,9 @@ range describes those exact items: `startSeq` drives older pagination and `endSe
 catch-up. The owner requests `after endSeq`, and requests `before startSeq` when the user loads older
 history. Code outside the owner does not distinguish cached and network timelines.
 
-The first resume request is bounded. If it reports more newer history, fetch one latest bounded tail
-instead of replaying every missed page. Live gap recovery still pages forward until current.
+When a canonical range is restored, resume starts with `after(endSeq)` and follows each `hasNewer=true`
+page with `after(endCursor)` until `hasNewer=false`. Cursor-less bootstrap and explicit replacement or
+reprojection paths use one bounded latest `tail` page.
 
 If the canonical window exceeds the cache item limit, contains a discontiguous retained range, has a
 live head, or includes presentation data the cache cannot encode losslessly, persistence drops the

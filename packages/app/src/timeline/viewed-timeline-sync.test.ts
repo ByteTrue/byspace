@@ -259,7 +259,7 @@ test("catches up after the restored cursor when an agent becomes visible", async
   fetch.respond({ hasNewer: false });
 });
 
-test("falls back to the latest tail when a restored cursor has more than one catch-up page", async () => {
+test("pages through every restored catch-up page without falling back to a tail", async () => {
   const world = new TimelineWorld();
   world.cursors.set("agent-a", { epoch: "epoch-agent-a", endSeq: 42 });
   world.sync.setConnected(true);
@@ -267,13 +267,26 @@ test("falls back to the latest tail when a restored cursor has more than one cat
   const membership = await world.nextMembership();
   membership.succeed();
 
-  const probe = await world.nextFetch("agent-a");
-  expect(probe.request.direction).toBe("after");
-  probe.respond({ hasNewer: true, seq: 82 });
+  const firstPage = await world.nextFetch("agent-a");
+  expect(firstPage.request).toEqual({
+    direction: "after",
+    cursor: { epoch: "epoch-agent-a", seq: 42 },
+    limit: 40,
+    projection: "projected",
+  });
+  firstPage.respond({ hasNewer: true, seq: 82 });
 
-  const fallback = await world.nextFetch("agent-a");
-  expect(fallback.request).toEqual({ direction: "tail", limit: 40, projection: "projected" });
-  fallback.respond({ hasNewer: false });
+  const secondPage = await world.nextFetch("agent-a");
+  expect(secondPage.request).toEqual({
+    direction: "after",
+    cursor: { epoch: "epoch-agent-a", seq: 82 },
+    limit: 40,
+    projection: "projected",
+  });
+  secondPage.respond({ hasNewer: false });
+
+  await vi.waitFor(() => expect(world.sync.getAgentTimelineStatus("agent-a")).toBe("ready"));
+  world.expectNoPendingFetch();
 });
 
 test("a gap absorbed by a running tail is recovered after the tail completes", async () => {
