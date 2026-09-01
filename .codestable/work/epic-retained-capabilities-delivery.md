@@ -1,7 +1,7 @@
 ---
 title: 保留能力交付路线 · Work
 status: approved
-amended_at: 2026-09-01T13:59:47Z
+amended_at: 2026-09-01T14:03:37Z
 phase: executing
 spec: ../epics/002-o-retained-capabilities-delivery/spec.md
 source_revision: f592e54bf43e5501383224891053d2e0a9dfbf45
@@ -14,10 +14,10 @@ publish_strategy: epic-plan-pr-then-one-pr-per-wave
 execution_strategy_revision: v2-owner-approved
 execution_acceleration_approved_at: 2026-09-01T07:48:00Z
 current_wave: 5
-current_item: null
-active_items: []
+current_item: ITEM-16 / ITEM-18
+active_items: [ITEM-16, ITEM-18]
 blocked_by: null
-next_action: 冻结 ITEM-16 与 ITEM-18 worker brief，从 Wave 4 merge SHA 创建两个隔离 worktree 并启动 Wave 5 双 lane
+next_action: 等待两个隔离 writer 冻结候选；按完成顺序 fresh review、manifest 收割并串行集成
 ---
 
 # Epic Work: 保留能力交付路线
@@ -57,6 +57,7 @@ next_action: 冻结 ITEM-16 与 ITEM-18 worker brief，从 Wave 4 merge SHA 创�
 - Wave 4 双路 aggregate review 已完成。Scope reviewer 的 session-import wire-shape 条件 P1 经 base/history 核对关闭：Wave 4 base 已接受 legacy/new 双形状，new shape 来自 `5b884aee0`，当前 UI 使用的 `importSessionWorkspaceTarget` capability 后于该 shape 引入；本 Wave 仅复用既有 import path。Protocol reviewer 的 `checkout.rename_branch` 来源 P1 也由 base..head diff 证实为 pre-existing 且本 Wave 零改动，ITEM-14 MCP 工具不依赖该 RPC。Wave 4 diff 共 39 paths，无 Appearance/theme/highlight/font 路径；两项 P1 均不需要产品代码修正，aggregate gate 结论为 PASS with report-only P2。
 - Wave 4 PR #19 的 exact head `a387297b7a434d3851bccab63a5dcc787d3828a7` 已通过 CI `33511998071`、Docker `33511998056` 与 Nix `33511998053`，随后以 merge commit `6d2b173a0ba4b1e6722e91a035e99fe63fa0b4a1` 合入 `main`。Post-merge exact-SHA CI `33514417804` 与 Docker `33514417929` 均通过，Wave 5 写入门槛已打开。
 - Wave 5 三路只读预热已完成且没有修改源码：Lane A report `/tmp/byspace-wave5-lane-a-scout.md` 将 ITEM-16/17 对齐到归档 commits `0ec5d6320` / `30e66b0c8`；Lane B report `/tmp/byspace-wave5-lane-b-scout.md` 完成 ITEM-18/19/20 的 hover/menu/project-cardinality 边界与平台证据矩阵；ITEM-21 report `/tmp/byspace-wave5-item21-scout.md` 明确保持阻塞，直至 ITEM-17 与 ITEM-20 均集成后再重新确认 pane-header owner。
+- Wave 5 integration branch `wave/retained-capabilities-5-workspace-sidebar-compact-ui` 已从绿色 Wave 4 merge SHA 创建，tracking baseline 为 `a8e87f5a7`。ITEM-16 与 ITEM-18 分别在隔离 worktree `epic-002-wave5-lane-a` / `epic-002-wave5-lane-b` 启动唯一 writer workflow `dfd25be5-2587-458e-a7f9-ec9152c619ad`；brief SHA-256 为 `d1076cb0…7527` / `ef12f5f6…b5312`。ITEM-17、19、20、21 尚未获得写入权。
 - Windows 性能验证继续使用 shared CI 中仅手动启用的 `terminal_performance` job；默认 PR CI 不运行该 job，且 job 无部署权限、secret 或发布输入。Owner 已于 2026-09-01 明确接受该路径。
 - Wave 3 PR #18 首个 exact-head CI run `33472512893` 暴露两个测试夹具缺口：App 的 stub Terminal 缺 `hasSelection()`，Server 的 provider-name bootstrap assertion 因新增短 ID `pi` 误匹配 `pino` / `pipe` / `/api`。父流程分别本地 RED 复现并做测试侧最小修正；T15 纠偏后新的 exact-head 门槛全绿并完成合并。
 
