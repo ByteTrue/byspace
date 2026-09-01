@@ -2599,6 +2599,17 @@ export const ko: TranslationResources = {
         failedTitle: "프로젝트 구성을 불러올 수 없습니다",
         failedDescription: "다시 로드하여 재시도하세요.",
       },
+      projectSetup: {
+        title: "프로젝트 설정",
+        actionTitle: "에이전트로 설정",
+        description:
+          "에이전트가 이 저장소를 검사하고 워크트리 준비, 서비스 및 자주 쓰는 명령을 제안합니다",
+        configure: "에이전트로 구성",
+        review: "에이전트로 검토",
+        updateHost: "에이전트 지원 프로젝트 설정을 사용하려면 호스트를 업데이트하세요",
+        prompt:
+          "byspace-project-setup 스킬을 사용해 이 저장소를 검사하고, 깨끗한 워크트리를 반복해서 준비하고 자주 쓰는 명령을 쉽게 찾으며 장시간 실행 서비스를 안전하게 병렬로 실행할 수 있도록 근거에 기반한 최소 변경을 제안하세요. 먼저 검사하고 파일을 변경하기 전에 제안 내용을 보여주세요.",
+      },
       worktree: {
         title: "워크트리 수명 주기 훅",
         info: "이 프로젝트에서 워크트리가 생성되거나 정리될 때 실행되는 명령",

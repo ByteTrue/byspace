@@ -2625,6 +2625,17 @@ export const ptBR: TranslationResources = {
         failedTitle: "Não foi possível carregar a configuração do projeto",
         failedDescription: "Recarregue para tentar novamente.",
       },
+      projectSetup: {
+        title: "Configuração do projeto",
+        actionTitle: "Configurar com um agente",
+        description:
+          "Deixe um agente inspecionar este repositório e recomendar preparação de worktrees, serviços e comandos comuns",
+        configure: "Configurar com agente",
+        review: "Revisar com agente",
+        updateHost: "Atualize o host para usar a configuração assistida por agente",
+        prompt:
+          "Use o skill byspace-project-setup para inspecionar este repositório e recomendar as menores mudanças baseadas em evidências que tornem a preparação de worktrees limpos reproduzível, os comandos comuns fáceis de descobrir e os serviços contínuos seguros para executar em paralelo. Inspecione primeiro e mostre as recomendações antes de alterar arquivos.",
+      },
       worktree: {
         title: "Hooks de ciclo de vida do worktree",
         info: "Comandos executados quando um worktree é criado ou desmontado para este projeto",

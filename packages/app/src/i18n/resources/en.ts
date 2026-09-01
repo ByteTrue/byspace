@@ -2687,6 +2687,17 @@ export const en = {
         failedTitle: "Couldn't load project configuration",
         failedDescription: "Reload to try again.",
       },
+      projectSetup: {
+        title: "Project setup",
+        actionTitle: "Set up with an agent",
+        description:
+          "Let an agent inspect this repository and recommend worktree setup, services, and common commands",
+        configure: "Configure with agent",
+        review: "Review with agent",
+        updateHost: "Update the host to use agent-assisted project setup",
+        prompt:
+          "Use the byspace-project-setup skill to inspect this repository and recommend the smallest evidence-based changes that make clean worktrees repeatable, common commands discoverable, and long-running services safe to run in parallel. Inspect first and show me the recommendations before changing files.",
+      },
       worktree: {
         title: "Worktree lifecycle hooks",
         info: "Commands that run when a worktree is created or torn down for this project",

@@ -52,6 +52,7 @@ import {
   openAddProjectFlow,
 } from "../support/helpers/add-project-flow";
 import { createTempGitRepo } from "../support/helpers/workspace";
+import { expectNewWorkspaceDraft } from "../support/helpers/new-workspace";
 import {
   buildOpenProjectRoute,
   buildProjectsSettingsRoute,
@@ -60,6 +61,8 @@ import {
 import { getServerId } from "../support/helpers/server-id";
 
 const updatedSetup = ["npm install", "npm run build"];
+const projectSetupPrompt =
+  "Use the byspace-project-setup skill to inspect this repository and recommend the smallest evidence-based changes that make clean worktrees repeatable, common commands discoverable, and long-running services safe to run in parallel. Inspect first and show me the recommendations before changing files.";
 
 // Smallest valid square PNG the daemon will accept as a custom project icon.
 const PNG_1X1 = Buffer.from([
@@ -199,6 +202,68 @@ async function openProjectSettingsFromSidebar(page: Page, projectId: string): Pr
 }
 
 test.describe("Projects settings", () => {
+  test("agent setup opens an independent project-scoped draft without changing files", async ({
+    page,
+    editableProject,
+  }) => {
+    await openProjects(page);
+    await openProjectSettings(page, editableProject.name);
+
+    const before = await readProjectConfigFile(editableProject);
+    const action = page.getByTestId("project-setup-agent-action");
+    await expect(action).toHaveText("Review with agent");
+    await expect(action).toBeEnabled();
+    await action.click();
+
+    await expect(page).toHaveURL(/\/new\?/);
+    const route = new URL(page.url());
+    expect(route.searchParams.get("serverId")).toBe(getServerId());
+    expect(route.searchParams.get("dir")).toBe(editableProject.path);
+    expect(route.searchParams.get("name")).toBe(editableProject.name);
+    expect(route.searchParams.get("projectId")).toBeTruthy();
+    await expectNewWorkspaceDraft(page, projectSetupPrompt);
+    expect(await readProjectConfigFile(editableProject)).toBe(before);
+  });
+
+  test("agent setup adds its bundled skill to a custom selection before opening the draft", async ({
+    page,
+    editableProject,
+  }) => {
+    const client = await connectSeedClient();
+    const selection = { mode: "custom" as const, skills: ["byspace"] };
+
+    try {
+      const initialSave = await client.saveAgentSkillsSelection(selection);
+      if (initialSave.confirmationRequired) {
+        await client.saveAgentSkillsSelection(selection, initialSave.confirmationRequired.removals);
+      }
+
+      await openProjects(page);
+      await openProjectSettings(page, editableProject.name);
+
+      const before = await readProjectConfigFile(editableProject);
+      const action = page.getByTestId("project-setup-agent-action");
+      await expect(action).toBeEnabled();
+      await action.click();
+
+      await expect(page).toHaveURL(/\/new\?/);
+      await expect
+        .poll(async () => client.getAgentSkillsStatus())
+        .toMatchObject({
+          installed: expect.arrayContaining(["byspace-project-setup"]),
+          selection: {
+            mode: "custom",
+            skills: expect.arrayContaining(["byspace", "byspace-project-setup"]),
+          },
+        });
+      await expectNewWorkspaceDraft(page, projectSetupPrompt);
+      expect(await readProjectConfigFile(editableProject)).toBe(before);
+    } finally {
+      await client.saveAgentSkillsSelection({ mode: "all" }).catch(() => undefined);
+      await client.close().catch(() => undefined);
+    }
+  });
+
   test("freshly-added project with no workspace is editable from the sidebar without a reload", async ({
     page,
   }) => {

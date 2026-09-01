@@ -2552,6 +2552,16 @@ export const zhCN: TranslationResources = {
         failedTitle: "无法加载项目配置",
         failedDescription: "重新加载以重试。",
       },
+      projectSetup: {
+        title: "Project 设置",
+        actionTitle: "通过 Agent 设置",
+        description: "让 Agent 检查此仓库，并推荐 worktree 准备、服务和常用命令",
+        configure: "通过 Agent 配置",
+        review: "通过 Agent 检查",
+        updateHost: "更新 Host 后即可使用 Agent 辅助的 Project 设置",
+        prompt:
+          "使用 byspace-project-setup Skill 检查此仓库，并提出让干净 worktree 可重复准备、高频命令易于发现、长期服务可安全并行运行的最小且有证据支持的改动。先检查并向我展示建议，不要直接修改文件。",
+      },
       worktree: {
         title: "Worktree 生命周期 hooks",
         info: "为此 Project 创建或清理 worktree 时运行的命令",
