@@ -407,6 +407,7 @@ export async function scrollTimelinePromptIntoView(page: Page, prompt: string): 
   await expect
     .poll(async () => (await readTimelineViewport(page)).scrollTop)
     .toBeGreaterThan(HISTORY_START_THRESHOLD_PX);
+  await waitForTimelineGeometryToSettle(page);
 }
 
 export async function rememberTimelinePresentation(

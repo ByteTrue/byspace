@@ -380,6 +380,16 @@ export const en = {
       alreadyImported: "All recent sessions are already imported.",
       noProviderSessions: "No {{provider}} sessions found.",
     },
+    manual: {
+      providerLabel: "Provider",
+      providerPlaceholder: "Select a provider",
+      providerEmpty: "No providers found",
+      handleLabel: "Session or thread ID",
+      handlePlaceholder: "Enter a session or thread ID",
+      handleRequired: "Enter a session or thread ID",
+      workspaceRequired: "A workspace path is required",
+      fallbackFailure: "Could not import this session",
+    },
     row: {
       importing: "Importing...",
     },
@@ -1171,6 +1181,7 @@ export const en = {
         rename: "Rename workspace",
         pin: "Pin to top",
         unpin: "Unpin",
+        renameWithAgent: "Rename with agent",
         archive: "Archive",
         archiveWorkspace: "Archive workspace",
         hideFromSidebar: "Hide from sidebar",
@@ -1193,6 +1204,9 @@ export const en = {
         workspacePathUnavailable: "Workspace path not available",
         pathCopied: "Path copied",
         branchNameCopied: "Branch name copied",
+        agentRenamePromptCopied:
+          "Prompt copied. Paste it into the agent that best understands this workspace.",
+        agentRenamePromptCopyFailed: "Failed to copy prompt",
         hostDisconnected: "Host is not connected",
         hideFailed: "Failed to hide workspace",
         archiveFailed: "Failed to archive workspace",
@@ -2672,6 +2686,17 @@ export const en = {
         transportFallback: "The host didn't respond.",
         failedTitle: "Couldn't load project configuration",
         failedDescription: "Reload to try again.",
+      },
+      projectSetup: {
+        title: "Project setup",
+        actionTitle: "Set up with an agent",
+        description:
+          "Let an agent inspect this repository and recommend worktree setup, services, and common commands",
+        configure: "Configure with agent",
+        review: "Review with agent",
+        updateHost: "Update the host to use agent-assisted project setup",
+        prompt:
+          "Use the byspace-project-setup skill to inspect this repository and recommend the smallest evidence-based changes that make clean worktrees repeatable, common commands discoverable, and long-running services safe to run in parallel. Inspect first and show me the recommendations before changing files.",
       },
       worktree: {
         title: "Worktree lifecycle hooks",

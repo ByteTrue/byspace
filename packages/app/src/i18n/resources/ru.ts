@@ -384,6 +384,16 @@ export const ru: TranslationResources = {
       alreadyImported: "Все недавние сессии уже импортированы.",
       noProviderSessions: "Сессии провайдера {{provider}} не найдены.",
     },
+    manual: {
+      providerLabel: "Провайдер",
+      providerPlaceholder: "Выберите провайдера",
+      providerEmpty: "Провайдеры не найдены",
+      handleLabel: "Идентификатор сессии или ветки",
+      handlePlaceholder: "Введите идентификатор сессии или ветки",
+      handleRequired: "Введите идентификатор сессии или ветки",
+      workspaceRequired: "Требуется путь рабочего пространства",
+      fallbackFailure: "Не удалось импортировать эту сессию",
+    },
     row: {
       importing: "Импортируется...",
     },
@@ -1176,6 +1186,7 @@ export const ru: TranslationResources = {
         copyPath: "Копировать путь",
         copyBranchName: "Скопировать имя ветки",
         rename: "Переименовать рабочее пространство",
+        renameWithAgent: "Переименовать с помощью агента",
         pin: "Закрепить вверху",
         unpin: "Открепить",
         archive: "Архивировать",
@@ -1200,6 +1211,9 @@ export const ru: TranslationResources = {
         workspacePathUnavailable: "Путь к рабочему пространству недоступен",
         pathCopied: "Путь скопирован",
         branchNameCopied: "Имя ветки скопировано",
+        agentRenamePromptCopied:
+          "Промпт скопирован. Вставьте его агенту, который лучше всего понимает это рабочее пространство.",
+        agentRenamePromptCopyFailed: "Не удалось скопировать промпт",
         hostDisconnected: "Хост не подключён",
         hideFailed: "Не удалось скрыть рабочее пространство",
         archiveFailed: "Не удалось архивировать рабочее пространство",
@@ -2616,6 +2630,17 @@ export const ru: TranslationResources = {
         transportFallback: "Хост не ответил.",
         failedTitle: "Не удалось загрузить конфигурацию проекта.",
         failedDescription: "Загрузите данные заново, чтобы повторить попытку.",
+      },
+      projectSetup: {
+        title: "Настройка проекта",
+        actionTitle: "Настроить с помощью агента",
+        description:
+          "Позвольте агенту изучить репозиторий и предложить подготовку worktree, сервисы и часто используемые команды",
+        configure: "Настроить с агентом",
+        review: "Проверить с агентом",
+        updateHost: "Обновите хост для настройки проекта с помощью агента",
+        prompt:
+          "Используй навык byspace-project-setup, чтобы изучить этот репозиторий и предложить минимальные подтверждённые изменения, которые сделают подготовку чистых worktree воспроизводимой, частые команды — доступными, а долго работающие сервисы — безопасными для параллельного запуска. Сначала проведи проверку и покажи рекомендации до изменения файлов.",
       },
       worktree: {
         title: "Хуки жизненного цикла worktree",

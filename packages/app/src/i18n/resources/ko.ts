@@ -383,6 +383,16 @@ export const ko: TranslationResources = {
       alreadyImported: "최근 세션이 모두 이미 가져와졌습니다.",
       noProviderSessions: "{{provider}} 세션을 찾을 수 없습니다.",
     },
+    manual: {
+      providerLabel: "프로바이더",
+      providerPlaceholder: "프로바이더 선택",
+      providerEmpty: "프로바이더를 찾을 수 없습니다",
+      handleLabel: "세션 또는 스레드 ID",
+      handlePlaceholder: "세션 또는 스레드 ID 입력",
+      handleRequired: "세션 또는 스레드 ID 입력",
+      workspaceRequired: "워크스페이스 경로가 필요합니다",
+      fallbackFailure: "이 세션을 가져올 수 없습니다",
+    },
     row: {
       importing: "가져오는 중...",
     },
@@ -1167,6 +1177,7 @@ export const ko: TranslationResources = {
         copyPath: "경로 복사",
         copyBranchName: "브랜치 이름 복사",
         rename: "워크스페이스 이름 변경",
+        renameWithAgent: "에이전트로 이름 바꾸기",
         pin: "상단에 고정",
         unpin: "고정 해제",
         archive: "보관",
@@ -1191,6 +1202,9 @@ export const ko: TranslationResources = {
         workspacePathUnavailable: "워크스페이스 경로를 사용할 수 없습니다",
         pathCopied: "경로가 복사되었습니다",
         branchNameCopied: "브랜치 이름이 복사되었습니다",
+        agentRenamePromptCopied:
+          "프롬프트가 복사되었습니다. 이 워크스페이스를 가장 잘 이해하는 에이전트에게 붙여 넣으세요.",
+        agentRenamePromptCopyFailed: "프롬프트를 복사하지 못했습니다",
         hostDisconnected: "호스트가 연결되어 있지 않습니다",
         hideFailed: "워크스페이스를 숨기지 못했습니다",
         archiveFailed: "워크스페이스를 보관하지 못했습니다.",
@@ -2584,6 +2598,17 @@ export const ko: TranslationResources = {
         transportFallback: "호스트가 응답하지 않았습니다.",
         failedTitle: "프로젝트 구성을 불러올 수 없습니다",
         failedDescription: "다시 로드하여 재시도하세요.",
+      },
+      projectSetup: {
+        title: "프로젝트 설정",
+        actionTitle: "에이전트로 설정",
+        description:
+          "에이전트가 이 저장소를 검사하고 워크트리 준비, 서비스 및 자주 쓰는 명령을 제안합니다",
+        configure: "에이전트로 구성",
+        review: "에이전트로 검토",
+        updateHost: "에이전트 지원 프로젝트 설정을 사용하려면 호스트를 업데이트하세요",
+        prompt:
+          "byspace-project-setup 스킬을 사용해 이 저장소를 검사하고, 깨끗한 워크트리를 반복해서 준비하고 자주 쓰는 명령을 쉽게 찾으며 장시간 실행 서비스를 안전하게 병렬로 실행할 수 있도록 근거에 기반한 최소 변경을 제안하세요. 먼저 검사하고 파일을 변경하기 전에 제안 내용을 보여주세요.",
       },
       worktree: {
         title: "워크트리 수명 주기 훅",

@@ -120,7 +120,10 @@ import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
 import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import { createWorkspaceLabelService } from "./workspace-labels/index.js";
 import { createGitHubService } from "../services/github-service.js";
-import { createPaseoWorktree as createRegisteredPaseoWorktree } from "./paseo-worktree-service.js";
+import {
+  createPaseoWorktree as createRegisteredPaseoWorktree,
+  renameWorkspaceBranch,
+} from "./paseo-worktree-service.js";
 import { createWorkspaceProvisioningService } from "./session/workspace-provisioning/workspace-provisioning-service.js";
 import { createPaseoWorktreeWorkflow } from "./worktree-session.js";
 import { DownloadTokenStore } from "./file-download/token-store.js";
@@ -1074,6 +1077,8 @@ export async function createPaseoDaemon(
       await emitWorkspaceUpdatesExternal([workspaceId]);
     },
     logger,
+    paseoHome: config.paseoHome,
+    worktreesRoot: config.worktreesRoot,
   });
 
   setupAutoArchiveOnMerge({
@@ -1371,6 +1376,22 @@ export async function createPaseoDaemon(
     clearWorkspaceArchiving: clearWorkspaceArchivingExternal,
     ensureWorkspaceForCreate: createAgentCommandDependencies.ensureWorkspaceForCreate,
     createPaseoWorktree: createAgentCommandDependencies.createPaseoWorktree,
+    renameWorkspaceBranch: async (input) => {
+      const renamed = await renameWorkspaceBranch({
+        ...input,
+        paseoHome: config.paseoHome,
+        worktreesRoot: config.worktreesRoot,
+      });
+      try {
+        await workspaceGitService.getSnapshot(input.cwd, {
+          force: true,
+          reason: "rename_branch",
+        });
+      } catch (error) {
+        logger.warn({ error, cwd: input.cwd }, "Branch renamed but Git snapshot refresh failed");
+      }
+      return renamed;
+    },
     browserToolsEnabled: browserToolsPolicy.isEnabled(),
     browserToolsBroker,
     paseoHome: config.paseoHome,

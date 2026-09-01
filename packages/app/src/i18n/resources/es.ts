@@ -385,6 +385,16 @@ export const es: TranslationResources = {
       alreadyImported: "Todas las sesiones recientes ya están importadas.",
       noProviderSessions: "No se encontraron sesiones{{provider}}.",
     },
+    manual: {
+      providerLabel: "Proveedor",
+      providerPlaceholder: "Selecciona un proveedor",
+      providerEmpty: "No se encontraron proveedores",
+      handleLabel: "ID de sesión o hilo",
+      handlePlaceholder: "Introduce un ID de sesión o hilo",
+      handleRequired: "Introduce un ID de sesión o hilo",
+      workspaceRequired: "Se requiere una ruta del espacio de trabajo",
+      fallbackFailure: "No se pudo importar esta sesión",
+    },
     row: {
       importing: "Importador...",
     },
@@ -1196,6 +1206,7 @@ export const es: TranslationResources = {
         rename: "Cambiar nombre del espacio de trabajo",
         pin: "Anclar arriba",
         unpin: "Desanclar",
+        renameWithAgent: "Renombrar con un agente",
         archive: "Archivo",
         archiveWorkspace: "Archivar espacio de trabajo",
         hideFromSidebar: "Ocultar de la barra lateral",
@@ -1218,6 +1229,9 @@ export const es: TranslationResources = {
         workspacePathUnavailable: "RutaWorkspaceno disponible",
         pathCopied: "Ruta copiada",
         branchNameCopied: "Nombre de la sucursal copiado",
+        agentRenamePromptCopied:
+          "Prompt copiado. Pégalo en el agente que mejor entienda este espacio de trabajo.",
+        agentRenamePromptCopyFailed: "No se pudo copiar el prompt",
         hostDisconnected: "Hostno está conectado",
         hideFailed: "No se pudo ocultar el espacio de trabajo",
         archiveFailed: "No se pudo archivar el espacio de trabajo",
@@ -2625,6 +2639,17 @@ export const es: TranslationResources = {
         transportFallback: "El anfitrión no respondió.",
         failedTitle: "No se pudo cargar la configuración del proyecto",
         failedDescription: "Vuelva a cargar para intentarlo de nuevo.",
+      },
+      projectSetup: {
+        title: "Configuración del proyecto",
+        actionTitle: "Configurar con un agente",
+        description:
+          "Deja que un agente inspeccione este repositorio y recomiende la preparación de worktrees, servicios y comandos habituales",
+        configure: "Configurar con agente",
+        review: "Revisar con agente",
+        updateHost: "Actualiza el host para usar la configuración asistida por agentes",
+        prompt:
+          "Usa el skill byspace-project-setup para inspeccionar este repositorio y recomendar los cambios mínimos basados en evidencias que permitan preparar worktrees limpios de forma reproducible, descubrir comandos habituales y ejecutar servicios de larga duración en paralelo con seguridad. Inspecciona primero y muéstrame las recomendaciones antes de cambiar archivos.",
       },
       worktree: {
         title: "Ganchos del ciclo de vida del árbol de trabajo",

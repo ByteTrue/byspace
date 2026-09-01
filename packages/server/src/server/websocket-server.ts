@@ -1719,6 +1719,8 @@ export class VoiceAssistantWebSocketServer {
         pluginThemes: true,
         // COMPAT(skillManagement): added in v0.4.0, remove gate after 2027-08-16.
         skillManagement: true,
+        // COMPAT(projectSetupSkill): added in v0.7.1, remove gate after 2027-09-15.
+        projectSetupSkill: true,
         // COMPAT(terminalAgentHookProviders): added in v0.7.1, remove gate after 2027-09-01.
         terminalAgentHookProviders: true,
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
@@ -1735,6 +1737,8 @@ export class VoiceAssistantWebSocketServer {
         agentHistorySearch: true,
         // COMPAT(checkoutRefresh): added in v0.1.86, remove gate after 2026-11-29.
         checkoutRefresh: true,
+        // COMPAT(workspaceAgentRename): added in v0.7.1, remove gate after 2027-09-01.
+        workspaceAgentRename: true,
         // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
         workspaceMultiplicity: true,
         // COMPAT(projectRemove): added in v0.1.97, drop the gate when floor >= v0.1.97.

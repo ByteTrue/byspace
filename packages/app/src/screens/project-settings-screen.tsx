@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Pressable, Text, View } from "react-native";
+import { router, type Href } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { StyleSheet } from "react-native-unistyles";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, MoreVertical, Pencil, Plus } from "lucide-react-native";
 import { ProjectIconView } from "@/components/project-icon-view";
 import type {
+  AgentSkillsStatus,
   PaseoConfigRaw,
   PaseoConfigRevision,
   ProjectConfigRpcError,
@@ -37,6 +39,8 @@ import { useProjectIcons } from "@/projects/icons";
 import { createProjectIconTarget } from "@/projects/icon-target";
 import { useHostRuntimeClient, useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 import { useHostFeature } from "@/runtime/host-features";
+import { buildNewWorkspaceDraftKey, generateDraftId } from "@/stores/draft-keys";
+import { useDraftStore } from "@/stores/draft-store";
 import { useToast } from "@/contexts/toast-context";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import {
@@ -54,6 +58,7 @@ import {
   type ProjectHostEntry,
   type ProjectSummary,
 } from "@/utils/projects";
+import { buildNewWorkspaceRoute } from "@/utils/host-routes";
 
 const SCRIPT_SERVICE_TYPE = "service";
 
@@ -88,6 +93,7 @@ const METADATA_PROMPT_FIELDS: Record<MetadataPromptKey, MetadataPromptField> = {
 };
 
 const WORKTREE_DOCS_URL = "https://github.com/ByteTrue/byspace/blob/main/public-docs/worktrees.md";
+const PROJECT_SETUP_SKILL_NAME = "byspace-project-setup";
 
 type ReadProjectConfigData = Awaited<ReturnType<DaemonClient["readProjectConfig"]>>;
 
@@ -391,6 +397,8 @@ function renderContent({
       baseConfig={loadedConfig}
       revision={loadedRevision}
       hasUncommittedWorktreeSetupChanges={hasUncommittedWorktreeSetupChanges}
+      projectName={selectedHost.projectName}
+      selectedHost={selectedHost}
       repoRoot={selectedHost.repoRoot}
       queryKey={queryKey}
       client={client}
@@ -481,6 +489,8 @@ interface ProjectConfigFormProps {
   baseConfig: PaseoConfigRaw;
   revision: PaseoConfigRevision | null;
   hasUncommittedWorktreeSetupChanges: boolean;
+  projectName: string;
+  selectedHost: ProjectHostEntry;
   repoRoot: string;
   queryKey: readonly [string, string, string];
   client: DaemonClient;
@@ -491,6 +501,8 @@ function ProjectConfigForm({
   baseConfig,
   revision,
   hasUncommittedWorktreeSetupChanges,
+  projectName,
+  selectedHost,
   repoRoot,
   queryKey,
   client,
@@ -699,6 +711,13 @@ function ProjectConfigForm({
 
   return (
     <View>
+      <ProjectSetupAgentCard
+        client={client}
+        hasConfig={revision !== null}
+        projectName={projectName}
+        selectedHost={selectedHost}
+      />
+
       <SettingsGroup
         title={t("settings.project.worktree.title")}
         info={t("settings.project.worktree.info")}
@@ -855,6 +874,159 @@ function ProjectConfigForm({
         />
       ) : null}
     </View>
+  );
+}
+
+interface ProjectSetupAgentCardProps {
+  client: DaemonClient;
+  hasConfig: boolean;
+  projectName: string;
+  selectedHost: ProjectHostEntry;
+}
+
+function ProjectSetupAgentCard({
+  client,
+  hasConfig,
+  projectName,
+  selectedHost,
+}: ProjectSetupAgentCardProps) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const isSupported = useHostFeature(selectedHost.serverId, "projectSetupSkill");
+  const actionVersionRef = useRef(0);
+  useEffect(
+    () => () => {
+      actionVersionRef.current += 1;
+    },
+    [selectedHost.serverId],
+  );
+  const statusQueryKey = useMemo(
+    () => ["host", selectedHost.serverId, "agent-skills"] as const,
+    [selectedHost.serverId],
+  );
+  const statusQuery = useQuery<AgentSkillsStatus, Error>({
+    queryKey: statusQueryKey,
+    queryFn: () => client.getAgentSkillsStatus(),
+    enabled: isSupported,
+    retry: false,
+  });
+  const prepareSkillsMutation = useMutation({
+    mutationFn: async (status: AgentSkillsStatus) => {
+      let result: AgentSkillsStatus;
+      if (
+        status.selection.mode === "custom" &&
+        !status.selection.skills.includes(PROJECT_SETUP_SKILL_NAME)
+      ) {
+        const saved = await client.saveAgentSkillsSelection({
+          mode: "custom",
+          skills: [...status.selection.skills, PROJECT_SETUP_SKILL_NAME],
+        });
+        if (saved.confirmationRequired) {
+          throw new Error(t("settings.host.skills.updateFailed"));
+        }
+        result = saved;
+      } else if (status.state !== "up-to-date") {
+        result = await client.reconcileAgentSkills();
+      } else {
+        result = status;
+      }
+
+      if (!result.installed.includes(PROJECT_SETUP_SKILL_NAME)) {
+        throw new Error(t("settings.host.skills.updateFailed"));
+      }
+      return result;
+    },
+    onSuccess: (result) => queryClient.setQueryData(statusQueryKey, result),
+  });
+
+  const openAgentDraft = useCallback(() => {
+    const draftId = generateDraftId();
+    useDraftStore.getState().saveDraftInput({
+      draftKey: buildNewWorkspaceDraftKey(draftId),
+      draft: {
+        text: t("settings.project.projectSetup.prompt"),
+        attachments: [],
+      },
+    });
+    router.navigate(
+      buildNewWorkspaceRoute({
+        serverId: selectedHost.serverId,
+        sourceDirectory: selectedHost.repoRoot,
+        displayName: projectName,
+        projectId: selectedHost.projectId,
+        draftId,
+      }) as Href,
+    );
+  }, [projectName, selectedHost, t]);
+
+  const handleAction = useCallback(async () => {
+    const actionVersion = ++actionVersionRef.current;
+    if (statusQuery.isError) {
+      await statusQuery.refetch();
+      return;
+    }
+
+    const status = statusQuery.data;
+    if (!status) return;
+    try {
+      await prepareSkillsMutation.mutateAsync(status);
+    } catch {
+      return;
+    }
+    if (actionVersion !== actionVersionRef.current) return;
+    openAgentDraft();
+  }, [openAgentDraft, prepareSkillsMutation, statusQuery]);
+
+  const isWorking = statusQuery.isLoading || prepareSkillsMutation.isPending;
+  const actionLabel = hasConfig
+    ? t("settings.project.projectSetup.review")
+    : t("settings.project.projectSetup.configure");
+  const error = statusQuery.error ?? prepareSkillsMutation.error;
+
+  return (
+    <SettingsGroup
+      title={t("settings.project.projectSetup.title")}
+      testID="project-setup-agent-group"
+    >
+      <View style={settingsStyles.card} testID="project-setup-agent-card">
+        <View style={settingsStyles.row}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>
+              {t("settings.project.projectSetup.actionTitle")}
+            </Text>
+            <Text style={settingsStyles.rowHint}>
+              {isSupported
+                ? t("settings.project.projectSetup.description")
+                : t("settings.project.projectSetup.updateHost")}
+            </Text>
+          </View>
+          {isSupported ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onPress={handleAction}
+              disabled={isWorking}
+              loading={isWorking}
+              testID="project-setup-agent-action"
+            >
+              {statusQuery.isError ? t("common.actions.retry") : actionLabel}
+            </Button>
+          ) : null}
+        </View>
+        {error ? (
+          <View style={styles.calloutWrap}>
+            <Alert
+              variant="error"
+              title={t("settings.host.skills.updateFailed")}
+              description={
+                error instanceof Error ? error.message : t("settings.host.skills.statusFailed")
+              }
+              testID="project-setup-agent-error"
+            />
+          </View>
+        ) : null}
+      </View>
+    </SettingsGroup>
   );
 }
 

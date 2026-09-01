@@ -32,7 +32,6 @@ async function waitFor(
 function isLiveAssistantTimeline(
   message: SessionOutboundMessage,
   agentId: string,
-  epoch?: string,
   text?: string,
 ): boolean {
   return (
@@ -41,8 +40,7 @@ function isLiveAssistantTimeline(
     message.payload.event.type === "timeline" &&
     message.payload.event.item.type === "assistant_message" &&
     message.payload.seq === undefined &&
-    typeof message.payload.epoch === "string" &&
-    (epoch === undefined || message.payload.epoch === epoch) &&
+    message.payload.epoch === undefined &&
     (text === undefined || message.payload.event.item.text === text)
   );
 }
@@ -91,7 +89,7 @@ test("reconnect catches up committed rows without replaying a provisional seed",
     });
     await waitFor(() =>
       primaryCollector.messages.some((message) =>
-        isLiveAssistantTimeline(message, agent.id, epoch, "partial before disconnect"),
+        isLiveAssistantTimeline(message, agent.id, "partial before disconnect"),
       ),
     );
 
@@ -114,9 +112,7 @@ test("reconnect catches up committed rows without replaying a provisional seed",
       });
 
       expect(
-        reconnectCollector.messages.some((message) =>
-          isLiveAssistantTimeline(message, agent.id, epoch),
-        ),
+        reconnectCollector.messages.some((message) => isLiveAssistantTimeline(message, agent.id)),
       ).toBe(false);
 
       const catchUp = await reconnectClient.fetchAgentTimeline(agent.id, {
@@ -183,7 +179,7 @@ test("reconnect with no new committed rows resumes from future live provisional 
     });
     await waitFor(() =>
       primaryCollector.messages.some((message) =>
-        isLiveAssistantTimeline(message, agent.id, epoch, "partial before disconnect"),
+        isLiveAssistantTimeline(message, agent.id, "partial before disconnect"),
       ),
     );
 
@@ -201,9 +197,7 @@ test("reconnect with no new committed rows resumes from future live provisional 
       });
 
       expect(
-        reconnectCollector.messages.some((message) =>
-          isLiveAssistantTimeline(message, agent.id, epoch),
-        ),
+        reconnectCollector.messages.some((message) => isLiveAssistantTimeline(message, agent.id)),
       ).toBe(false);
 
       const catchUp = await reconnectClient.fetchAgentTimeline(agent.id, {
@@ -228,7 +222,7 @@ test("reconnect with no new committed rows resumes from future live provisional 
       });
       await waitFor(() =>
         reconnectCollector.messages.some((message) =>
-          isLiveAssistantTimeline(message, agent.id, epoch, "fresh live after reconnect"),
+          isLiveAssistantTimeline(message, agent.id, "fresh live after reconnect"),
         ),
       );
     } finally {

@@ -1,6 +1,7 @@
 ---
 title: 保留能力交付路线 · Work
 status: approved
+amended_at: 2026-09-01T12:29:00Z
 phase: executing
 spec: ../epics/002-o-retained-capabilities-delivery/spec.md
 source_revision: f592e54bf43e5501383224891053d2e0a9dfbf45
@@ -10,11 +11,13 @@ milestone_commit: authorized
 remote_publish: each-milestone
 commit_strategy: semantic-atomic-per-item
 publish_strategy: epic-plan-pr-then-one-pr-per-wave
-current_wave: 3
-current_item: Wave 3 PR scope correction
+execution_strategy_revision: v2-owner-approved
+execution_acceleration_approved_at: 2026-09-01T07:48:00Z
+current_wave: 4
+current_item: null
 active_items: []
 blocked_by: null
-next_action: 提交并推送已完成本地验证与独立复审的 PR #18 correction commits，更新 PR 描述后等待新 exact-head required checks
+next_action: 创建 Wave 4 PR，等待 exact-head CI/Docker/Nix 全绿后请求 Owner 合并批准
 ---
 
 # Epic Work: 保留能力交付路线
@@ -43,9 +46,17 @@ next_action: 提交并推送已完成本地验证与独立复审的 PR #18 corre
 - ITEM-10 已完成 provider-scoped Claude/Codex/OpenCode/Pi hook 配置、legacy aggregate 双向兼容、Pi extension latest-wins/failure recovery 与 Host Terminals UI capability gate；built-in Pi profile 保持不变。缺少 provider map 的历史 global `true` 只迁移到 Claude/Codex/OpenCode，Pi 保持关闭直到用户显式启用；旧客户端后续主动切换 global 开关也只更新这三个历史 provider，并保留显式 Pi 或未来 provider 设置。Frozen patch `0ed98c1e…ff49` 经 Round 2 reviewer `b9e9aa3e-6a80-499d-afea-08694669ed3d` 判定 OK（0 blocking / 0 important），父流程已串行集成为 `987738a09`。两条并行 lane 均关闭。
 - ITEM-11 已收窄为 T18：New Workspace 的 Manage Terminal Profiles 精确打开所选 Host 的 `terminals` 路由，并由 exact-host E2E 1/1 覆盖。Owner 已取消 T15；PR #18 中 `53da4f2c0` 引入的 Appearance 主题、语法高亮、UI/code 字体、字号、默认值与持久化删改全部通过新增 correction 撤销。父流程逐路径确认最终 aggregate 对 Wave 2 base 不含 Appearance 产品源码差异，ITEM-09、T18、WebView native-trace 与两项 CI fixture 修正均保留。
 - 纠偏本地验证通过：App Appearance/settings unit 143/143、Server legacy migration 41/41、PR CI fixture App 19/19 + Server 12/12、Appearance browser E2E 4/4、selected-Host T18 E2E 1/1、`build:server`、Typecheck、Lint、Format，以及 Terminal WebView 连续两次 byte-identical build 后格式化。
-- 先前 Wave 3 aggregate review 包含未经授权的 T15，已失效。新 scope reviewer `00b4d3c1-3c82-4ba5-bcfe-b2dd86f6c620` 返回 PASS with notes（0 P0/P1/P2）；correctness reviewer `a577ad8d-c5f0-4008-8932-f665b61d592f` 发现旧客户端 global patch 会覆盖 Pi/future provider 的 P1，父流程修复并补齐测试后由 follow-up run `25baf6cc-9132-4843-9bb9-ae05e4b2515f` 确认 CLOSED（0 remaining P0/P1/P2）。PR #18 保持未合并，等待 additive correction commits 推送后的新 exact-head CI。
+- 先前 Wave 3 aggregate review 包含未经授权的 T15，已失效。新 scope reviewer `00b4d3c1-3c82-4ba5-bcfe-b2dd86f6c620` 返回 PASS with notes（0 P0/P1/P2）；correctness reviewer `a577ad8d-c5f0-4008-8932-f665b61d592f` 发现旧客户端 global patch 会覆盖 Pi/future provider 的 P1，父流程修复并补齐测试后由 follow-up run `25baf6cc-9132-4843-9bb9-ae05e4b2515f` 确认 CLOSED（0 remaining P0/P1/P2）。
+- PR #18 corrected exact head `9d3739f13b5c4f778793a43878f2164e186f69ce` 的 CI `33481331937`、Docker `33481331916` 与 Nix `33481331918` 全绿；Owner 批准精确 SHA 后以 merge commit `f2f76a8f06092c35a0968c1d186d69bba9f00307` 合入 `main`。Post-merge exact-SHA CI `33484117314` 与 Docker `33484117310` 均通过，Wave 4 写入门槛已打开。
+- Owner 已批准 execution acceleration revision：最多两个隔离 worktree writer 加一名只读 scout/reviewer；后续 ITEM 在依赖满足前预热，父流程不接管常规实现；byte-identical reviewed manifest 不重复执行 worker 已报告绿色的相同完整套件，仍保留 owning build、全仓静态门槛、必要 integration smoke、Wave aggregate 与 exact-head CI。合同 reviewer `dcf5e62e-9701-4e55-8290-25c0561c3b15` 首轮要求补齐复用审计记录和五处 wording；同 lineage round 2 `bfc9e44d-2ce6-4e33-8391-9ada07f76ecf` 确认全部关闭，结论 PASS（0 remaining finding）。
+- ITEM-12 已恢复 canonical replica 从 persisted cursor 逐页 `after(endCursor)` catch-up 到 `hasNewer=false`，不再错误跳到 bounded tail；现有 bootstrap/replacement tail 路径保持。App focused 32/32 + 6/6 + 6/6 + 1/1 + 119/119、daemon Timeline window 11/11、reconnect 2/2、owning build 与全仓静态门槛均通过；三轮 fresh review 关闭唯一文档 P1 与 stale provisional metadata fixture，最终四文件 manifest 字节一致并以 `62cb2b4f73b9cdbcb12c960c101661e081a8a8a9` 完成串行集成。
+- ITEM-13 已完成手动 Provider + Session ID 导入，复用现有 import 协议、client、server 与 ITEM-12 timeline owner；当前 UI 适配 canonical `SelectField` / Form Kit 并覆盖九种语言。交付重新对照归档 commit `f997dd5e0`，恢复其确定性 mock-provider Browser E2E，而不是把本 ITEM 绑定到上游已失配的 OpenCode real-provider fixture；目标 E2E 1/1、i18n 36/36、Typecheck/Lint/Format 全绿，passing trace 与两张 UI 截图已保存，语义原子 commit `6b4c60ceb` 已串行集成。
+- ITEM-14 已按归档 `f2e063ba3` 的核心实现适配当前架构：新增可选 `workspaceAgentRename` capability、copy-only Workspace 菜单、独立 `rename_branch` Agent tool 与 BySpace-owned branch 的 ownership/published/upstream/conflict/TOCTOU guards；title 与 branch 保持独立。Focused server 310/310、i18n 36/36、Browser E2E 3/3、Typecheck/Lint/Format 全绿；fresh reviewer `dd817438-6572-4189-81af-5beb035ca303` 返回 0 P0/P1，passing trace 与菜单截图 `/tmp/byspace-wave4-item14-menu.jpg`（SHA-256 `86f62c4f…28e8`）已保存，语义原子 commit `6f0b93abf` 已串行集成。
+- ITEM-15 预热审计曾错误推导出新的 daemon readiness analyzer/token/transaction；回查归档 issue 与 commit `6f9bfdd40` 后纠正：A04 原始产品边界是 Project Settings 只准备未发送的 Agent draft，实际只读检查、确认、保留式修改、回滚和 clean-worktree 验证均由 bundled `byspace-project-setup` Skill 与当前 Agent 执行，不新增配置生成 RPC 或 daemon 技术栈推断。
+- ITEM-15 已按该边界完成：optional `projectSetupSkill` capability、Project Settings capability gate、bundled `byspace-project-setup` Skill，以及 project/Host/cwd scoped 的独立未发送 draft。Custom skill selection 会保留既有选择并只追加所需 Skill，安装/确认失败均阻断导航；Browser E2E 2/2、i18n 36/36、server build、Typecheck/Lint/Format 全绿。初审唯一 P1 已由 follow-up reviewer `d7895e91-19ea-48c1-9ffc-35b5be17fc91` 确认关闭；18-path 收割 manifest `bf0e6762…472962b` 字节一致，语义原子 commit `c1ac7ceaa` 已串行集成。UI 证据保存于 `/tmp/byspace-item15-ui-proof/`。
+- Wave 4 双路 aggregate review 已完成。Scope reviewer 的 session-import wire-shape 条件 P1 经 base/history 核对关闭：Wave 4 base 已接受 legacy/new 双形状，new shape 来自 `5b884aee0`，当前 UI 使用的 `importSessionWorkspaceTarget` capability 后于该 shape 引入；本 Wave 仅复用既有 import path。Protocol reviewer 的 `checkout.rename_branch` 来源 P1 也由 base..head diff 证实为 pre-existing 且本 Wave 零改动，ITEM-14 MCP 工具不依赖该 RPC。Wave 4 diff 共 39 paths，无 Appearance/theme/highlight/font 路径；两项 P1 均不需要产品代码修正，aggregate gate 结论为 PASS with report-only P2。
 - Windows 性能验证继续使用 shared CI 中仅手动启用的 `terminal_performance` job；默认 PR CI 不运行该 job，且 job 无部署权限、secret 或发布输入。Owner 已于 2026-09-01 明确接受该路径。
-- Wave 3 PR #18 已创建。首个 exact-head CI run `33472512893` 暴露两个测试夹具缺口：App 的 stub Terminal 缺 `hasSelection()`，Server 的 provider-name bootstrap assertion 因新增短 ID `pi` 误匹配 `pino` / `pipe` / `/api`。父流程分别本地 RED 复现并做测试侧最小修正；之后因 T15 范围越界暂停所有 push、CI rerun 和 merge。纠偏完成并重新取得 UI、测试和独立复审证据前，PR 不得合入。
+- Wave 3 PR #18 首个 exact-head CI run `33472512893` 暴露两个测试夹具缺口：App 的 stub Terminal 缺 `hasSelection()`，Server 的 provider-name bootstrap assertion 因新增短 ID `pi` 误匹配 `pino` / `pipe` / `/api`。父流程分别本地 RED 复现并做测试侧最小修正；T15 纠偏后新的 exact-head 门槛全绿并完成合并。
 
 ## Wave 1 · 发布通道路由与远程连接安全
 
@@ -65,14 +76,14 @@ next_action: 提交并推送已完成本地验证与独立复审的 PR #18 corre
 - [x] ITEM-08 · TERM-04 · T07 · reviewed and integrated
 - [x] ITEM-09 · TERM-06 · T11 · reviewed and integrated
 - [x] ITEM-10 · TERM-07 · T13/T14/T17 · reviewed and integrated
-- [x] ITEM-11 · TERM-08 · T18 · correction locally verified and reviewed
+- [x] ITEM-11 · TERM-08 · T18 · corrected, exact-head verified, and merged
 
 ## Wave 4 · Agent、Session 与 Timeline
 
-- [ ] ITEM-12 · AGENT-03 · A06/A07/A08
-- [ ] ITEM-13 · AGENT-02 · A05
-- [ ] ITEM-14 · AGENT-04 · A09
-- [ ] ITEM-15 · AGENT-01 · A04
+- [x] ITEM-12 · AGENT-03 · A06/A07/A08 · reviewed and integrated
+- [x] ITEM-13 · AGENT-02 · A05 · reviewed and integrated
+- [x] ITEM-14 · AGENT-04 · A09 · reviewed and integrated
+- [x] ITEM-15 · AGENT-01 · A04 · reviewed and integrated
 
 ## Wave 5 · Workspace、侧栏与 Compact UI
 
@@ -87,7 +98,7 @@ next_action: 提交并推送已完成本地验证与独立复审的 PR #18 corre
 
 - Wave 3 并行 lane 已关闭：ITEM-07、ITEM-08、ITEM-10、ITEM-09 依次以 `0ff226755`、`d596c9376`、`987738a09`、`8e0946084` 串行集成。ITEM-09 worker `99dc78aa-83cd-44cd-b1ba-d68a748465e9` 完成 Lane B 交付；ITEM-10 的 native/Cursor runner 均在源码修改前失败，父流程确认无并发 writer 后完成唯一写入与 review。
 - ITEM-11 原 writer lineage `d79c7913-2976-4b7a-a8a1-55569c4944cb` 与 reviews `e299af3d-8b41-49a2-8a95-7fa29eb88db1` / `fd188487-95af-4751-afb1-9459e55a7c65` 覆盖了未经授权的 T15，现仅保留其中 T18；纠偏由父流程负责，不复用旧审查结论。
-- 先前 Wave 3 aggregate reviewers `484e3755-4106-4652-946c-687d643b81fa` / `f0cbc5e7-13e1-45f8-ac5f-98dc2bdb5a27` 已失效。纠偏 scope reviewer `00b4d3c1-3c82-4ba5-bcfe-b2dd86f6c620` 通过；correctness reviewer `a577ad8d-c5f0-4008-8932-f665b61d592f` 的单个 P1 已修复，并由 follow-up `25baf6cc-9132-4843-9bb9-ae05e4b2515f` 关闭。当前无活跃委派。
+- 先前 Wave 3 aggregate reviewers `484e3755-4106-4652-946c-687d643b81fa` / `f0cbc5e7-13e1-45f8-ac5f-98dc2bdb5a27` 已失效。纠偏 scope reviewer `00b4d3c1-3c82-4ba5-bcfe-b2dd86f6c620` 通过；correctness reviewer `a577ad8d-c5f0-4008-8932-f665b61d592f` 的单个 P1 已修复，并由 follow-up `25baf6cc-9132-4843-9bb9-ae05e4b2515f` 关闭。Execution acceleration 只读审计 workflow `2b44522e-874d-4f91-8642-afe06687b092` 已确认 Wave 4/5 的两 writer 上限、依赖 DAG 和 single validation lock。ITEM-12 worktree `epic-002-wave4-item12` 从合同基线 `043de2d66` 创建；workflow `036f2cc6-6940-4c83-bdab-fb6ffd71ab20` 的唯一 writer `02539378-ea88-45c9-ae71-4de5e7495433` 已建立 `after(E,42) → tail(null)` 稳定 RED，并以两文件最小候选恢复逐页 cursor 连续性；只读 ITEM-15 scout `1ce4b5bf-d21d-45aa-8ee3-592cd8aa8c7a` 已冻结后续验收矩阵。前一调度 `9ea78356-fb46-41e6-9083-bd88430af46c` 因该 worktree 不含 root checkout 的自定义 agent 定义而在 child session/source write 前失败，重新 list 后改用 builtin `worker` / `scout`。ITEM-12 frozen source manifest 为 `9fb809cc…92d3a` / `17446041…3f8`；双路 fresh review workflow `59dba231-7fd0-404d-ab62-4a5500b4246f` 的 concurrency reviewer `19cf0777-e8db-4f7f-ae5a-5a28bd433a39` 与 scope/test reviewer `8420878f-b395-411d-acb8-ce517fe6bf7f` 均判定源码候选正确、最小且 scope clean，仅共同指出 `docs/timeline-sync.md` 仍描述旧 tail fallback。Follow-up worker `d5abd29d-bf45-47b5-901d-2010c616786b` 已仅修正文档，保留源码/测试字节，三文件 manifest 为 `9fb809cc…92d3a` / `17446041…3f8` / `6d5f5bee…8051`；follow-up reviewer `ec557134-cae7-4ed7-86b3-0d44f69a5725` 已确认唯一 P1 关闭。首次 parent daemon E2E 命令误用 server `test` script，意外触发 broad unit suite并在 5316 tests 后因三个与 ITEM-12 无关的本机环境断言失败，目标 E2E 尚未开始；已停止使用该命令。正确的两个指定 E2E 中 timeline window 11/11 通过，reconnect fixture 因旧 matcher 错误要求 provisional live 带 authoritative epoch 而稳定失败两次；follow-up worker `0e1f1a09-c714-4283-a69f-15dd8c532b1e` 已仅修正该 test helper，保留 reconnect/no-replay 与 authoritative epoch 断言，目标文件 2/2 通过、hash `98694ec4…0d76`。Fixture final reviewer `da7b1f2a-ba5c-430d-82a9-d5c3a8596ce5` 判定 PASS（0 P0/P1）；父流程从 reviewed patch `32d99bcc…e5cb` 收割后复核四文件完整 SHA-256 与 reviewed manifest 完全一致。复用而未重跑的 worker 套件为 App viewed timeline 32/32、replica 6/6、sync plan 6/6、replacement 1/1、stream reducers 119/119，以及 worker owning builds；父流程仍运行 owning build 与全仓 Typecheck/Lint/Format，ITEM-12 以 `62cb2b4f7` 完成串行 milestone并推送。ITEM-13/14 worktree 均从该精确 commit 创建并完成独立 `npm ci`；并行 workflow `fd6ceccb-6acc-4c39-b4c3-b9641b7cced0` 以两个 disjoint builtin worker 启动，brief SHA-256 分别为 `af55e417…3960` 与 `562bca6c…23e4`。
 - ITEM-05 唯一 writer lineage 首轮 `1619df3f-b0f3-4fef-8811-3aa52a0ef803`、续跑 `b779914e-c2cd-46cf-9e96-dac86c08791a` 在隔离 worktree `epic-002-wave2-item05` 建立 RED 并完成首轮实现；父流程在 runner settlement 后接管。首轮 reviewer `6fcf9c03-e55c-49dd-b452-bdd67f2490a7` 提出的 stale preamble 与 overflow-resume 两项 important 均经专门 RED 修复；Round 2 `31a2f709-a9d9-47ec-ad24-421ea8b82986` 返回 PASS（0 blocking / 0 important）。最终 21-path manifest 为 `849c36c761f99fb728dca39e494120f59ff695b2310d90378fae34e88b60fe67`。
 - ITEM-06 在隔离 worktree `epic-002-wave2-item06`（base `159a70640`）串行执行；scout workflow `dec0aff1-0930-4a1f-9018-98686354501a` 分别审计当前 runtime/E2E seam 与历史 T10/T12 边界。两个 scout 均确认 T10 已在 tracker/restore preamble，缺口仅为 T12 Windows 多行 framing，且不得整体移植图片 scope；唯一 writer `94da2f9c-f5d0-4a06-babe-8f3eb84cf63d` 完成 RED→GREEN，父流程修正非 Windows listener 与 mode replay 测试保真后冻结 7-path patch `ba654cd7…fa6aa`；reviewer `19112db0-a596-443a-b414-bf6ca9c9cb1f` 返回 PASS（0 blocking / 0 important），source milestone `055d0000b` 经 exact-head Windows run `33425004246` 验证并完成串行集成。
 - Wave 2 aggregate reviewer `91c20656-547e-43b0-b027-f74b57daebec` 审查 base `0d81e9fa3` 至 frozen head `35a0c1341` 的 9 commits / 46 paths，返回 PASS（0 blocking / 0 important）。其 Playwright JSON reporter 环境变量疑问已由锁定版本源码 `node_modules/playwright/lib/reporters/base.js` 核实：当前版本正式读取 `PLAYWRIGHT_JSON_OUTPUT_FILE`，无需改动。
@@ -123,6 +134,9 @@ next_action: 提交并推送已完成本地验证与独立复审的 PR #18 corre
 6. T05 接受“同一 renderer 正常 10,000 行、不可恢复 gap 的权威 snapshot 最多 1,000 行”边界。
 7. Windows `terminal_performance` job 保留为 shared CI 中的手动 opt-in 验证路径。
 8. 历史 global hooks `true` 只自动迁移 Claude/Codex/OpenCode；Pi 必须显式 opt-in，旧客户端后续主动切换 global 开关也只更新这三个历史 provider，并保留显式 Pi 或未来 provider 设置。
+9. 批准 execution acceleration revision：正常最多同时运行两名隔离 writer 和一名只读 scout/reviewer；父流程保持调度、范围裁决、串行集成与远端操作，不接管常规 ITEM 实现。
+10. 冻结候选经 fresh review 且收割后与完整内容 manifest 字节一致时，不重复执行 worker 已报告绿色的相同完整套件；owning build、Typecheck/Lint/Format、必要 integration smoke、Wave aggregate 与 exact-head CI 门槛保持。每个 ITEM 必须记录完整内容 SHA-256 比对结果和复用而未重跑的套件清单。
+11. 批准 ITEM-14/A09 纠正方案 A：capability-gated copy-only Workspace 菜单；既有 `rename_workspace` 与独立 `rename_branch`；title-first、branch-best-effort；仅安全修改 BySpace-owned、非默认、未发布、无 upstream/PR/MR、未人工改名且无冲突的 branch；补齐九种 locale、bundled skill、浏览器证据，并在 ITEM-13 集成后串行执行。
 
 ## 变更日志
 
@@ -169,4 +183,13 @@ next_action: 提交并推送已完成本地验证与独立复审的 PR #18 corre
 - 2026-09-01：Wave 3 PR #18 创建于 head `2b3c9d4b3`，PR body 含 ITEM-08/09/10/11 共 5 张 UI 证据。CI run `33472512893` 的 App job `99745030906` 与 Server Ubuntu job `99745030890` 分别因测试 Terminal mock 缺真实 xterm `hasSelection()` API、短 provider ID `pi` 被 raw substring assertion 误匹配而失败。两项均先在本地 exact file 复现，再只修测试：所有 StubTerminal 强制实现默认 false 的 `hasSelection()`；bootstrap 解耦检查改为 provider token word-boundary。Focused 19/19、12/12 与全仓静态门槛全绿，focused reviewer `7e6b60f2-48d6-47d8-81b9-ffe381ce1071` APPROVE（0 P0/P1）。
 - 2026-09-01：Owner 发现 ITEM-11 未经授权删除 Highlight theme 后立即暂停 PR #18。父流程对 Wave 1–3 从规划基线到 PR head 做逐 commit、逐 ITEM 与历史批准交叉审计；唯一确认的产品范围越界是 T15。ITEM-04 shared CI、T05 fallback 边界和 ITEM-10 legacy Pi 迁移属于需补充确认的实现选择，Owner 随后批准推荐纠偏方案。
 - 2026-09-01：纠偏按 additive commits 执行，不改写历史：逆向 `53da4f2c0` 的 T15 hunks，保留 T18、ITEM-09 与 WebView native-trace；恢复 Appearance 全部主题、语法高亮、字体、字号、默认值与持久化；新增 legacy global `true` 不自动启用 Pi 的 RED→GREEN tests，并将 33 项范围、T05、Windows CI 与 Pi opt-in 决策写回 canonical docs。
-- 2026-09-01：纠偏本地验证通过 App 143/143、Server migration 41/41、PR CI fixtures 19/19 + 12/12、Appearance E2E 4/4、T18 E2E 1/1、Build/Typecheck/Lint/Format 与 WebView reproducibility。新双路复审中，correctness reviewer 发现 legacy global patch 仍会覆盖 Pi/future provider；父流程修复为只更新 Claude/Codex/OpenCode、保留显式与未知 provider，并由 follow-up reviewer 关闭 P1。尚未 push 或触发 CI。
+- 2026-09-01：纠偏本地验证通过 App 143/143、Server migration 41/41、PR CI fixtures 19/19 + 12/12、Appearance E2E 4/4、T18 E2E 1/1、Build/Typecheck/Lint/Format 与 WebView reproducibility。新双路复审中，correctness reviewer 发现 legacy global patch 仍会覆盖 Pi/future provider；父流程修复为只更新 Claude/Codex/OpenCode、保留显式与未知 provider，并由 follow-up reviewer 关闭 P1。
+- 2026-09-01：PR #18 corrected exact head `9d3739f13` 的 CI/Docker/Nix 全绿；Owner 批准后以 merge commit `f2f76a8f0` 合入 `main`，Wave 3 关闭。Owner 同批批准 worktree/subagent execution acceleration 与 hash-verified non-duplicate validation；合同 review round 2 关闭全部 P1/P2 并 PASS。Post-merge exact-SHA CI/Docker 全绿后，从合同基线 `043de2d66` 启动 ITEM-12 唯一 writer，并行预热 ITEM-15。
+- 2026-09-01：ITEM-12 以稳定 RED 证明 restored cursor 多页 catch-up 被错误 tail fallback 截断，改为 `after(endCursor)` 逐页到 current。双路 fresh review 判定源码候选正确且 scope clean，并要求修正文档；同 worktree follow-up worker 更新 canonical doc。Targeted daemon E2E 发现 reconnect 测试的 provisional matcher 错误要求 authoritative epoch；测试侧最小修正后 reconnect 2/2、window 11/11，fresh fixture review PASS。最终四文件完整 SHA-256 `6d5f5bee…8051` / `9fb809cc…92d3a` / `17446041…03f8` / `98694ec4…0d76` 与 reviewed manifest 一致，按复用合同不重复 worker 已绿 focused suites，完成 owning build、Typecheck/Lint/Format 后以 `62cb2b4f7` 串行集成。
+- 2026-09-01：从 ITEM-12 milestone `62cb2b4f7` 创建 ITEM-13 手动 Session ID 导入与 ITEM-14 current-Agent Workspace naming 两个隔离 worktree；依赖安装与精确 base 验证通过，两个唯一 writer 在 disjoint ownership 下并行启动。
+- 2026-09-01：ITEM-13 首轮两文件候选的 focused test 21/21、Typecheck/Lint/Format 通过；correctness reviewer 无 P0/P1，UI reviewer 阻断硬编码文案与手写 provider picker。Follow-up 改用 canonical `SelectField` / Form Kit 并补齐九种语言。
+- 2026-09-01：ITEM-13 最终交付回查归档 commit `f997dd5e0`，确认其原始合同使用确定性 mock-provider Browser E2E；撤销本 ITEM 对上游 OpenCode real-provider 测试的追加和 626 行 JSDOM test expansion，仅保留当前架构所需 UI/i18n 适配，并移植归档 E2E（相对原文件仅路径、当前 test ID 与错误文案适配）。目标 Browser E2E 1/1（11.4s）、i18n 36/36、Typecheck/Lint/Format 全绿；passing trace 和 UI 截图保存于 `/tmp/byspace-item13-ui-proof/`，以 `6b4c60ceb` 串行集成。
+- 2026-09-01：ITEM-14 worker 在无写入时触发 stop-to-serial。只读审计逐项比较历史 issue 与 commit `f2e063ba3`，确认完整 A09 需要 optional capability、copy-only 菜单、两个独立 Agent tools、Git/metadata TOCTOU guards、i18n、skill 与浏览器证据；Owner 批准推荐方案 A，合同已收窄为 ITEM-13 集成后串行实现。
+- 2026-09-01：ITEM-14 按历史 patch 基线做当前架构适配并完成 25-file 交付；focused server 310/310、i18n 36/36、Browser E2E 3/3 与全仓静态门槛全绿，fresh review 0 P0/P1，语义原子 commit `6f0b93abf` 串行集成。ITEM-15 随即回查归档 `6f9bfdd40`，否决预热 scout 新造 daemon transaction 的偏航方案，按原始 Skill + Project Settings draft 入口恢复。
+- 2026-09-01：ITEM-15 完成 capability-gated Project Settings 入口与独立未发送 Agent draft，复用现有 bundled Skill 安装/selection 事务，不新增配置生成 RPC。Fresh review 的 custom-selection P1 修复为保留既有 custom skills 并追加 `byspace-project-setup`，缺失、confirmation required 或安装失败都显性阻断导航；follow-up review PASS。Browser E2E 2/2、i18n 36/36、server build 与全仓 Typecheck/Lint/Format 全绿；18-path manifest `bf0e6762…472962b` 与隔离 worktree 字节一致，以 `c1ac7ceaa` 串行集成，Wave 4 四项全部完成并进入 aggregate review。
+- 2026-09-01：Wave 4 双路 aggregate review 完成。父流程以 `git show`、`git blame` 和 base..head path diff 关闭两项来源疑问：session import new identity shape 与 `checkout.rename_branch` RPC 均在 Wave 4 base 已存在；`importSessionWorkspaceTarget` capability 的引入晚于 new identity shape，因此当前 manual UI gate 不会把该 shape 发给更旧 Host。本 Wave protocol diff 仅追加两个 optional capability，39-path aggregate 不含 Appearance/theme/highlight/font。两名 reviewer 的条件 P1 均关闭，无 P0/P1，进入 PR 门槛。

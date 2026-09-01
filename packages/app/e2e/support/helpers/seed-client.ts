@@ -1,5 +1,10 @@
 import path from "node:path";
 import { readFileSync } from "node:fs";
+import type {
+  AgentSkillSelection,
+  AgentSkillsSaveResult,
+  AgentSkillsStatus,
+} from "@getpaseo/protocol/messages";
 import type { TerminalActivity } from "@getpaseo/protocol/terminal-activity";
 import { connectDaemonClient } from "./daemon-client-loader";
 import { withProjectOwnership } from "./project-ownership";
@@ -41,6 +46,11 @@ export interface SeedDaemonClient {
   }>;
   removeProject(projectId: string): Promise<{ removedWorkspaceIds: string[] }>;
   renameProject(projectId: string, customName: string | null): Promise<void>;
+  getAgentSkillsStatus(): Promise<AgentSkillsStatus>;
+  saveAgentSkillsSelection(
+    selection: AgentSkillSelection,
+    confirmedRemovals?: readonly string[],
+  ): Promise<AgentSkillsSaveResult>;
   fetchWorkspaces(options?: { filter?: { projectId?: string } }): Promise<{
     entries: SeedWorkspaceDescriptor[];
   }>;

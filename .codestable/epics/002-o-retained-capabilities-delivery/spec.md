@@ -4,13 +4,15 @@ status: active
 kind: epic
 owner_decision: approved
 approved_at: 2026-08-31T05:01:54Z
-amended_at: 2026-09-01T06:36:33Z
+amended_at: 2026-09-01T09:45:27Z
 approval_evidence:
   owner: "“批准 Epic，按推荐策略执行”（2026-08-31）"
   parallel_owner: "“确认”并选择推荐方案 A：按 worker 完成顺序串行集成（2026-08-31）"
   review: "bounded-parallel contract review lineage 9ebed510-b74e-4eb9-b796-c6fa1d9a29e6 round 1 needs_changes; resumed run 8aea6ea4-463f-42eb-a90c-febe642a68bb round 2 passed with 0 blocking/important"
   verification: "33/33 retained IDs remain uniquely mapped to 21/21 ITEMs after the Owner cancelled T15"
   scope_correction: "Owner approved the consolidated correction plan on 2026-09-01: restore Appearance, retain T18, document T05 boundaries and opt-in Windows CI, and require explicit Pi opt-in for legacy configs"
+  execution_acceleration: "Owner approved the recommended worktree/subagent pipeline and hash-verified non-duplicate validation contract on 2026-09-01 after read-only audit workflow 2b44522e-874d-4f91-8642-afe06687b092; review dcf5e62e-9701-4e55-8290-25c0561c3b15 round 1 needs_changes and resumed round 2 bfc9e44d-2ce6-4e33-8391-9ada07f76ecf passed with no findings"
+  item14_scope_correction: "Owner approved recommended Plan A on 2026-09-01 after historical A09 issue/commit audit: capability-gated copy-only Workspace menu, separate rename_workspace and rename_branch tools, title-first/branch-best-effort, guarded BySpace-owned branch mutation, localization, bundled skill, and browser evidence"
 source_epic: ../001-o-legacy-cs-requirements-triage/spec.md
 source_revision: f592e54bf43e5501383224891053d2e0a9dfbf45
 created_at: 2026-08-31T04:38:14Z
@@ -80,18 +82,23 @@ Owner 在批准本 Epic 后追加确认有界并行 revision：
 - **Integration：** worker 交付按完成顺序进入单一集成队列；父流程逐项 review、验证并串行集成，不允许两个 worker 同时写集成分支。
 - **Commit strategy：** 每个 ITEM 至少一个语义原子 commit；协议、daemon、app 为同一能力不可拆时可在同一 ITEM 内共同提交。
 - **Publish strategy：** 每个 milestone push 到当前 Wave 的同一个 PR 分支；Wave 通过集成验证并合入后，从最新 `main` 开始下一波。
+- **Rolling pipeline：** 硬依赖集成前只允许为后续 ITEM 做只读调查、RED/fixture 设计和 worker brief；这些预热产物由父流程保存在仓库外的 brief/evidence，不写 integration branch 或后续 ITEM worktree。依赖满足后立即补发下一位 writer，不等待另一 lane 或重复 discovery。
 
-### 有界并行与文件所有权
+### 有界并行、交付验证与文件所有权
 
-- 本节未展开的并行调度、集成机制、`active_items` 状态机、blocker 分类与退化规则，以 `cs-epic` skill-local `references/parallel-execution.md` 为准。
+- 本节未展开的并行调度、集成机制、`active_items` 状态机、blocker 分类与退化规则，以 `cs-epic` skill-local `references/parallel-execution.md` 为准；本节展开的 byte-identical 候选验证规则优先，并把该 reference 中的“权威验证”具体化为 manifest 一致性加本节保留的父流程门槛。
 - 每个 writer 使用独立 Git worktree；子 Agent 不得 commit、push、开 PR、merge、发布或修改 `.codestable`。父流程独占集成分支、work cursor 和远端操作。
-- Worker WIP 历史不得进入 Wave PR。父流程只以 patch、squash 到工作树或 `cherry-pick -n` 等不推进主历史的方式收割交付，在集成结果上重跑该 ITEM 的权威验证；失败时恢复到集成前基线，不留下正式 commit。
+- 最多同时运行两个写入型 worker；正常活跃子 Agent 上限为三名，第三名只做只读 scout 或 fresh review。Heavy validation 期间可以保留只读调查，但不得并发另一项 heavy validation。
+- 父流程不接管常规 ITEM 实现。Worker 失败、停滞或越界时，先冻结当前 worktree 和证据，再在同一 worktree 恢复或替换唯一 writer；任何时刻仍只能有一个 Agent 写该 worktree。
+- Worker WIP 历史不得进入 Wave PR。父流程只以 patch、squash 到工作树或 `cherry-pick -n` 等不推进主历史的方式收割交付，并核对 base、路径 manifest、完整内容 SHA-256 与 review 对象一致。
+- Worker 必须在冻结候选上完成 ITEM 定向测试并保存命令与结果；fresh reviewer 审查同一候选。若父流程收割后的 source bytes 与 reviewed manifest 一致，不重复运行 worker 已报告绿色的相同完整套件；父流程运行 owning stack 所需 build、全仓 Typecheck/Lint/Format，以及存在跨 ITEM 共享接缝时至少一项针对该接缝的 focused integration test。父流程必须在 ITEM work log 记录 reviewed manifest 与收割结果的完整内容 SHA-256 比对结果，以及复用而未重跑的测试套件清单。字节、base、生成产物、依赖声明或测试前提不一致时，候选失去复用资格并重新执行受影响验证。
+- 每个 Wave 结束时在集成 head 运行跨 ITEM focused integration 与 UI/平台证据；PR exact-head CI 仍是合并前完整远端门槛。Format 写入完成后，互不写文件的 Typecheck、Lint 与轻量 focused tests 可以并行；Playwright、benchmark、Windows、模拟器、Electron、Relay/daemon E2E 继续使用单一验证锁。
+- Reviewer 首轮收到 manifest、diff、scope、测试输出、截图/trace 和 residual risks 的完整 evidence pack；修复后只复审 blocker/important delta 及其必要回归，不重复全量 discovery。
 - Wave 1 与 Wave 2 保持单 writer；允许只读调查和 review 与实现并行。
 - Wave 3 在 ITEM-06 集成后启用两个 lane。Lane A `ITEM-07 → ITEM-10` 独占 `packages/server/src/terminal/activity/**`、`packages/server/src/terminal/agent-hooks/**`、待新增的 `packages/server/src/terminal/agent-hooks/pi/**`、`packages/server/src/terminal/terminal-capture.ts`、`packages/server/src/server/websocket-server.ts` 中的 Terminal 通知路径、`packages/server/src/server/bootstrap.ts` 的 hook 安装接线、`packages/server/src/server/config.ts`、`packages/server/src/server/persisted-config.ts`、`packages/server/src/server/daemon-config-store.ts` 的 Terminal profile 配置与 `packages/app/src/screens/settings/host-page.tsx` 中的 hook/profile 呈现，以及 `packages/app/src/screens/settings/terminal-profile-edit-modal.tsx`、`packages/app/src/components/terminal-profile-icon.tsx` 和对应测试；Lane B `ITEM-08 → ITEM-09` 独占 `packages/app/src/terminal/**`、`packages/app/src/components/terminal-pane.tsx`、`packages/app/src/components/terminal-copy-paste-actions.tsx`、既有 binary upload 接线及对应测试。两条 lane 完成后才启动 ITEM-11；ITEM-11 可在串行阶段继续修改上述 profile 路径，不构成并发所有权。
-- Wave 4 先串行集成 ITEM-12，再并行 ITEM-13 与 ITEM-14，最后执行 ITEM-15。ITEM-13 独占 `packages/app/src/components/import-session-sheet*`、`packages/client/src/daemon-client.ts` 中的 import API、`packages/protocol/src/messages.ts` 中的 import schema，以及 `packages/server/src/server/agent/provider-session-import.ts`、`agent-manager.ts` 和 provider import adapter；ITEM-14 独占 `packages/server/src/server/workspace-auto-name.ts`、`paseo-worktree-service.ts`、`worktree-branch-name-generator.ts`、`agent/create-agent-title.ts`、`packages/server/src/utils/worktree-metadata.ts` 与 branch rename 接线。任一方需要改动 `session-store`、workspace registry/reconciliation、共享 metadata writer 或对方路径时，立即停止双 lane 并退回父流程串行处理。
+- Wave 4 先串行集成 ITEM-12，再并行预备 ITEM-13 与 ITEM-14，最后执行 ITEM-15。ITEM-13 独占 `packages/app/src/components/import-session-sheet*`、`packages/client/src/daemon-client.ts` 中的 import API、`packages/protocol/src/messages.ts` 中的 import schema，以及 `packages/server/src/server/agent/provider-session-import.ts`、`agent-manager.ts` 和 provider import adapter。ITEM-14 的历史合同审计触发了 stop-to-serial：先完成并集成 ITEM-13，再由 ITEM-14 串行拥有可选 capability、Agent Tool Catalog、`paseo-worktree-service.ts`、`workspace-auto-name.ts`、`worktree-branch-name-generator.ts`、`checkout-git.ts`、`worktree-metadata.ts`、Workspace 菜单、i18n、bundled skill 与对应测试；不得与 ITEM-13 并行写 protocol、app 或共享持久化接缝。任一 ITEM 需要改动 `session-store`、workspace registry/reconciliation 或本节未列出的共享 owner 时，继续停止并交父流程裁决。
 - Wave 5 启用两个 lane。Lane A `ITEM-16 → ITEM-17` 独占 `packages/app/src/git/policy.ts`、`use-actions.tsx`、`branch-switcher-operations.ts`、`packages/app/src/components/branch-switcher.tsx`、`packages/app/src/hooks/use-branch-switcher.ts`，以及必要的 `packages/server/src/server/workspace-git-service.ts`、`packages/server/src/utils/checkout-git.ts`、`packages/client/src/daemon-client.ts` 和 `packages/protocol/src/messages.ts` Git 查询接线；Lane B `ITEM-18 → ITEM-19 → ITEM-20` 独占 `packages/app/src/components/sidebar-workspace-list.tsx`、`packages/app/src/components/sidebar/sidebar-workspace-row*.tsx`、`packages/app/src/components/sidebar/workspace-meta-row/**`、`packages/app/src/components/workspace-hover-card.tsx`、`packages/app/src/hosts/use-host-badges.ts`、`packages/app/src/hooks/use-sidebar-workspaces-list.ts`、`packages/app/src/hooks/sidebar-workspaces-view-model.ts` 及对应测试。两条 lane 完成后才启动 ITEM-21。
 - Lane 可以只读引用另一 lane 的模块；任何超出具名路径的编辑必须先交父流程检查所有权。发现同一文件、共享 type/schema、持久化或状态 owner 的双重声明时，立即停止相关 lane，不做乐观合并；收窄所有权或退回串行后重新 review。
-- Playwright、benchmark、Windows、模拟器、Electron 和 daemon E2E 使用单一验证锁，不与其他重型验证并发。
 
 ## 波次与依赖
 
@@ -234,10 +241,10 @@ Owner 在批准本 Epic 后追加确认有界并行 revision：
 
 - **Skill：** `cs-feat`
 - **需求：** A09
-- **依赖：** ITEM-12
-- **交付：** 首条 prompt 继续给出初始名称；拥有完整上下文的当前 Agent 可精炼 Workspace 标题及适用的 branch 名。
-- **验收：** 初始命名、后续精炼、用户手动改名保护、并发 archival/metadata write 和无 branch 的 directory workspace 覆盖。
-- **约束：** 不允许后台模型越过当前 Agent 上下文另行生成；用户显式名称优先。
+- **依赖：** ITEM-13（ITEM-12 已完成；历史合同审计触发 stop-to-serial）
+- **交付：** 首条 prompt 继续给出初始名称；Workspace 菜单在 capability 可用时只复制固定 prompt，由拥有完整上下文的当前 Agent 依次调用既有 `rename_workspace` 与新增 `rename_branch` 精炼标题及适用 branch。菜单不自动发送、不选择 Agent、不新增确认弹窗；bundled BySpace skill 记录 title-first、branch-best-effort 与跳过原因。
+- **验收：** 可选 capability 在新旧 daemon/client 间保持兼容；菜单可见性、复制内容、成功/失败 toast 与无自动发送通过浏览器证据，新增菜单/toast 文案覆盖现有九种 locale。Title 成功不因 branch 跳过或失败回滚。Branch 只允许修改仍由 BySpace 管理、非默认、未发布、无 upstream/PR/MR、未人工改名且无本地/远端冲突的分支；check/apply 间分支变化、Workspace 归档/删除、并发 metadata/registry 更新与 Git 失败均不得写入 stale metadata。Directory Workspace 只允许改标题。
+- **约束：** 标题与 branch 保持两个独立工具；不新增 WebSocket rename RPC，不把 branch 参数并入 `rename_workspace`，不整块移植历史补丁。现有初始自动命名保持一次性初始化，不允许后台模型替代当前 Agent 精炼；用户显式标题或 branch 始终优先，Git 成功后才写 branch metadata 和 Workspace 状态。
 
 ### ITEM-15 · AGENT-01 · Agent 引导项目准备
 
@@ -314,7 +321,7 @@ Owner 在批准本 Epic 后追加确认有界并行 revision：
 4. `npm run typecheck`、`npm run lint`、`npm run format` / `format:check` 通过。
 5. 平台相关功能提供对应平台证据；UI 项提供真实交互或截图证据。
 6. 独立 review 无 blocking finding；important finding 已修复或由 Owner 明确接受。
-7. ITEM 的 commit、验证命令、残余风险写入 work log；波次完成后写入最终 delivery index。
+7. ITEM 的 commit、worker 验证命令、manifest 比对结果、复用而未重跑的测试套件和残余风险写入 work log；波次完成后写入最终 delivery index。
 
 ## 波次合入标准
 

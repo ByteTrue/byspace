@@ -2,7 +2,6 @@ import { test } from "../support/fixtures";
 import { installDaemonWebSocketGate } from "../support/helpers/daemon-websocket-gate";
 import {
   expectTimelinePresentationUnchanged,
-  expectTimelinePromptNotMounted,
   expectTimelinePromptVisible,
   openAgentTimeline,
   rememberTimelinePresentation,
@@ -14,13 +13,13 @@ import {
   commitTimelineTurnsWhileDisconnected,
   disconnectViewedTimeline,
   expectOneResumeCheckWithoutTail,
-  expectResumeOverflowFallsBackToOneTail,
+  expectResumeOverflowPagesWithoutTail,
   rememberTimelineRequestCounts,
   restoreViewedTimelineWithHeldResponse,
 } from "../support/helpers/timeline-resume";
 
 test.describe("Agent timeline resume", () => {
-  test("a long disconnected run lands as one latest-tail update", async ({ page }) => {
+  test("a long disconnected run pages forward without a tail fallback", async ({ page }) => {
     test.setTimeout(120_000);
     const gate = await installDaemonWebSocketGate(page);
     const agent = await seedLongMockAgentTimeline({ turns: 3 });
@@ -33,8 +32,7 @@ test.describe("Agent timeline resume", () => {
       await restoreViewedTimelineWithHeldResponse(page, gate);
 
       await expectTimelinePromptVisible(page, background.newestPrompt);
-      await expectTimelinePromptNotMounted(page, background.firstPrompt);
-      expectResumeOverflowFallsBackToOneTail(gate, requests);
+      expectResumeOverflowPagesWithoutTail(gate, requests);
       await scrollTimelineUntilOlderHistoryIsReachable(page, background.firstPrompt);
     } finally {
       gate.restore();

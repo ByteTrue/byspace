@@ -10,10 +10,18 @@ import type { AgentProvider } from "@getpaseo/protocol/agent-types";
 import { ChevronDown, Inbox, Layers, RotateCw } from "lucide-react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { Button } from "@/components/ui/button";
+import { Field, FormTextInput } from "@/components/ui/form-field";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
+import {
+  SelectField,
+  type SelectFieldDisplay,
+  type SelectFieldOption,
+} from "@/components/ui/select-field";
 import { getProviderIcon } from "@/components/provider-icons";
 import { formatTimeAgo } from "@/utils/time";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostFeature } from "@/runtime/host-features";
 import { i18n } from "@/i18n/i18next";
@@ -60,6 +68,38 @@ interface SessionsQueryConfig {
   queryKey: ReadonlyArray<string | null>;
   enabled: boolean;
   queryFn: () => Promise<RecentSessionsResponse>;
+}
+
+interface ImportSessionRequest {
+  providerId: string;
+  providerHandleId: string;
+  cwd?: string;
+  source: "recent" | "manual";
+}
+
+interface ManualImportError {
+  field: "provider" | "handle";
+  message: string;
+}
+
+function shouldShowManualImport(args: {
+  cwd: string | null | undefined;
+  client: RecentProviderSessionsClient | null;
+  supportsSnapshot: boolean;
+  requiresHostUpgrade: boolean;
+  providerCount: number;
+}): boolean {
+  const { cwd, client, supportsSnapshot, requiresHostUpgrade, providerCount } = args;
+  return (
+    Boolean(cwd) && Boolean(client) && supportsSnapshot && !requiresHostUpgrade && providerCount > 0
+  );
+}
+
+function isRecentImportError(
+  isError: boolean,
+  source: ImportSessionRequest["source"] | undefined,
+): boolean {
+  return isError && source !== "manual";
 }
 
 function buildSessionsQueriesConfig(args: {
@@ -258,6 +298,86 @@ function ImportSessionSheetRow({
   );
 }
 
+interface ManualImportFormProps {
+  options: SelectFieldOption<AgentProvider>[];
+  provider: AgentProvider | null;
+  selectedDisplay: SelectFieldDisplay | null;
+  providerLeading?: React.ReactNode;
+  isPending: boolean;
+  error: ManualImportError | null;
+  controlSize: "sm" | "md";
+  resetKey: string;
+  onProviderChange: (value: AgentProvider, display: SelectFieldDisplay) => void;
+  onHandleChange: (value: string) => void;
+  onSubmit: () => void;
+}
+
+function ManualImportForm({
+  options,
+  provider,
+  selectedDisplay,
+  providerLeading,
+  isPending,
+  error,
+  controlSize,
+  resetKey,
+  onProviderChange,
+  onHandleChange,
+  onSubmit,
+}: ManualImportFormProps) {
+  const { t } = useTranslation();
+
+  return (
+    <View style={styles.manualForm} testID="import-session-manual-form">
+      <SelectField
+        label={t("importSession.manual.providerLabel")}
+        value={provider}
+        selectedDisplay={selectedDisplay}
+        options={options}
+        onChange={onProviderChange}
+        placeholder={t("importSession.manual.providerPlaceholder")}
+        emptyText={t("importSession.manual.providerEmpty")}
+        disabled={isPending}
+        error={error?.field === "provider" ? error.message : null}
+        searchable={false}
+        size={controlSize}
+        triggerLeading={providerLeading}
+        testID="import-session-manual-provider-field"
+        triggerTestID="import-session-manual-provider-trigger"
+      />
+      <Field
+        label={t("importSession.manual.handleLabel")}
+        error={error?.field === "handle" ? error.message : null}
+        testID="import-session-manual-handle-field"
+      >
+        <FormTextInput
+          size={controlSize}
+          testID="import-session-manual-handle"
+          initialValue=""
+          resetKey={resetKey}
+          placeholder={t("importSession.manual.handlePlaceholder")}
+          accessibilityLabel={t("importSession.manual.handleLabel")}
+          autoCapitalize="none"
+          autoCorrect={false}
+          onChangeText={onHandleChange}
+          onSubmitEditing={onSubmit}
+          editable={!isPending}
+        />
+      </Field>
+      <Button
+        variant="default"
+        size={controlSize}
+        disabled={isPending}
+        loading={isPending}
+        onPress={onSubmit}
+        testID="import-session-manual-submit"
+      >
+        {isPending ? t("importSession.row.importing") : t("importSession.title")}
+      </Button>
+    </View>
+  );
+}
+
 export function ImportSessionSheet({
   visible,
   client,
@@ -271,6 +391,7 @@ export function ImportSessionSheet({
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { theme } = useUnistyles();
+  const formControlSize = useIsCompactFormFactor() ? "md" : "sm";
 
   const { entries: snapshotEntries, supportsSnapshot } = useProvidersSnapshot(serverId, {
     cwd,
@@ -324,6 +445,14 @@ export function ImportSessionSheet({
   const [selectedProvider, setSelectedProvider] = useState<string>(ALL_FILTER_VALUE);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const filterAnchorRef = useRef<View>(null);
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  const [manualProvider, setManualProvider] = useState<AgentProvider | null>(null);
+  const [manualProviderDisplay, setManualProviderDisplay] = useState<SelectFieldDisplay | null>(
+    null,
+  );
+  const [manualHandleId, setManualHandleId] = useState("");
+  const [manualError, setManualError] = useState<ManualImportError | null>(null);
 
   useEffect(() => {
     if (
@@ -333,6 +462,27 @@ export function ImportSessionSheet({
       setSelectedProvider(ALL_FILTER_VALUE);
     }
   }, [visible, filterProviders, selectedProvider]);
+
+  useEffect(() => {
+    if (!visible) {
+      setManualProvider(null);
+      setManualProviderDisplay(null);
+      setManualHandleId("");
+      setManualError(null);
+      return;
+    }
+    if (!manualProvider || !filterProviders.includes(manualProvider)) {
+      const nextProvider = filterProviders[0] ?? null;
+      setManualProvider(nextProvider);
+      setManualProviderDisplay(
+        nextProvider ? { label: providerLabelById.get(nextProvider) ?? nextProvider } : null,
+      );
+    } else if (!manualProviderDisplay) {
+      setManualProviderDisplay({
+        label: providerLabelById.get(manualProvider) ?? manualProvider,
+      });
+    }
+  }, [visible, filterProviders, manualProvider, manualProviderDisplay, providerLabelById]);
 
   const visibleEntries = useMemo(() => {
     if (selectedProvider === ALL_FILTER_VALUE) return aggregatedEntries;
@@ -357,6 +507,17 @@ export function ImportSessionSheet({
     [filterComboboxOptions, selectedProvider, t],
   );
 
+  const manualProviderOptions = useMemo<SelectFieldOption<AgentProvider>[]>(
+    () =>
+      filterProviders.map((provider) => ({
+        id: provider,
+        value: provider,
+        label: providerLabelById.get(provider) ?? provider,
+        testID: `import-session-manual-provider-${provider}`,
+      })),
+    [filterProviders, providerLabelById],
+  );
+
   const handleFilterOpen = useCallback(() => setIsFilterOpen(true), []);
 
   const filterTriggerStyle = useCallback(
@@ -372,6 +533,26 @@ export function ImportSessionSheet({
     setSelectedProvider(id);
     setIsFilterOpen(false);
   }, []);
+
+  const handleManualProviderChange = useCallback(
+    (provider: AgentProvider, display: SelectFieldDisplay) => {
+      setManualProvider(provider);
+      setManualProviderDisplay(display);
+      setManualError(null);
+    },
+    [],
+  );
+
+  const handleManualHandleChange = useCallback((value: string) => {
+    setManualHandleId(value);
+    setManualError(null);
+  }, []);
+
+  const manualProviderLeading = useMemo(() => {
+    if (!manualProvider) return null;
+    const ProviderIcon = getProviderIcon(manualProvider);
+    return <ProviderIcon size={14} color={theme.colors.foregroundMuted} />;
+  }, [manualProvider, theme.colors.foregroundMuted]);
 
   const filterOptionIcons = useMemo(() => {
     const map = new Map<string, React.ReactNode>();
@@ -407,26 +588,33 @@ export function ImportSessionSheet({
   );
 
   const importMutation = useMutation({
-    mutationFn: async (entry: FetchRecentProviderSessionEntry) => {
+    mutationFn: async ({ source: _source, ...request }: ImportSessionRequest) => {
       if (!client) {
         throw new Error(t("workspace.terminal.hostDisconnected"));
       }
-      if (!entry.cwd) {
-        throw new Error("Session is missing a working directory");
+      if (!request.cwd) {
+        throw new Error(t("importSession.manual.workspaceRequired"));
       }
-      const agent = await client.importAgent({
-        providerId: entry.providerId,
-        providerHandleId: entry.providerHandleId,
-        cwd: entry.cwd,
+      return await client.importAgent({
+        providerId: request.providerId,
+        providerHandleId: request.providerHandleId,
+        cwd: request.cwd,
         ...(workspaceId ? { workspaceId } : {}),
       });
-      return agent;
     },
     onSuccess: async (agent) => {
       await queryClient.invalidateQueries({ queryKey: sessionsQueryRoot });
       onClose();
       onImportedAgent?.(agent.id);
       onImported?.(agent);
+    },
+    onError: (error, request) => {
+      if (request.source !== "manual" || !visibleRef.current) return;
+      const message = error instanceof Error ? error.message.trim() : "";
+      setManualError({
+        field: "handle",
+        message: message || t("importSession.manual.fallbackFailure"),
+      });
     },
   });
 
@@ -437,10 +625,45 @@ export function ImportSessionSheet({
 
   const handleImportSession = useCallback(
     (entry: FetchRecentProviderSessionEntry) => {
-      importMutation.mutate(entry);
+      if (importMutation.isPending) return;
+      setManualError(null);
+      importMutation.mutate({
+        source: "recent",
+        providerId: entry.providerId,
+        providerHandleId: entry.providerHandleId,
+        cwd: entry.cwd,
+      });
     },
     [importMutation],
   );
+
+  const handleManualSubmit = useCallback(() => {
+    if (importMutation.isPending) return;
+    const providerId = manualProvider;
+    const providerHandleId = manualHandleId.trim();
+    if (!providerId) {
+      setManualError({
+        field: "provider",
+        message: t("importSession.manual.providerPlaceholder"),
+      });
+      return;
+    }
+    if (!providerHandleId) {
+      setManualError({ field: "handle", message: t("importSession.manual.handleRequired") });
+      return;
+    }
+    if (!cwd) {
+      setManualError({ field: "handle", message: t("importSession.manual.workspaceRequired") });
+      return;
+    }
+    setManualError(null);
+    importMutation.mutate({
+      source: "manual",
+      providerId,
+      providerHandleId,
+      cwd,
+    });
+  }, [cwd, importMutation, manualHandleId, manualProvider, t]);
 
   const erroredProviderLabels = useMemo(
     () => collectErroredProviderLabels(providersToFetch, queries, providerLabelById),
@@ -483,6 +706,20 @@ export function ImportSessionSheet({
     providerLabelById,
   });
   const showFilter = filterProviders.length > 1;
+  const showManualImport = shouldShowManualImport({
+    cwd,
+    client,
+    supportsSnapshot,
+    requiresHostUpgrade,
+    providerCount: manualProviderOptions.length,
+  });
+
+  useEffect(() => {
+    if (visible && !showManualImport) {
+      setManualHandleId("");
+      setManualError(null);
+    }
+  }, [visible, showManualImport]);
 
   return (
     <AdaptiveModalSheet
@@ -493,6 +730,21 @@ export function ImportSessionSheet({
       desktopMaxWidth={560}
       snapPoints={IMPORT_SHEET_SNAP_POINTS}
     >
+      {showManualImport ? (
+        <ManualImportForm
+          options={manualProviderOptions}
+          provider={manualProvider}
+          selectedDisplay={manualProviderDisplay}
+          providerLeading={manualProviderLeading}
+          isPending={importMutation.isPending}
+          error={manualError}
+          controlSize={formControlSize}
+          resetKey={visible ? "open" : "closed"}
+          onProviderChange={handleManualProviderChange}
+          onHandleChange={handleManualHandleChange}
+          onSubmit={handleManualSubmit}
+        />
+      ) : null}
       {showFilter ? (
         <View ref={filterAnchorRef} collapsable={false} style={styles.filterTriggerWrap}>
           <Pressable
@@ -538,7 +790,10 @@ export function ImportSessionSheet({
         hasRows={visibleEntries.length > 0}
         allQueriesErrored={allQueriesErrored}
         erroredProviderLabels={erroredProviderLabels}
-        importErrored={importMutation.isError}
+        importErrored={isRecentImportError(
+          importMutation.isError,
+          importMutation.variables?.source,
+        )}
       />
       {visibleEntries.length > 0 ? (
         <View style={styles.list}>
@@ -560,6 +815,10 @@ export function ImportSessionSheet({
 }
 
 const styles = StyleSheet.create((theme) => ({
+  manualForm: {
+    gap: theme.spacing[3],
+    paddingBottom: theme.spacing[4],
+  },
   filterTriggerWrap: {
     paddingBottom: theme.spacing[2],
   },

@@ -385,6 +385,16 @@ export const ja: TranslationResources = {
       alreadyImported: "最近のセッションはすでにすべてインポートされています。",
       noProviderSessions: "{{provider}}のセッションが見つかりません。",
     },
+    manual: {
+      providerLabel: "プロバイダー",
+      providerPlaceholder: "プロバイダーを選択",
+      providerEmpty: "プロバイダーが見つかりません",
+      handleLabel: "セッションまたはスレッド ID",
+      handlePlaceholder: "セッションまたはスレッド IDを入力",
+      handleRequired: "セッションまたはスレッド IDを入力",
+      workspaceRequired: "ワークスペースのパスが必要です",
+      fallbackFailure: "このセッションをインポートできませんでした",
+    },
     row: {
       importing: "インポート中...",
     },
@@ -1174,6 +1184,7 @@ export const ja: TranslationResources = {
         rename: "ワークスペースの名前を変更",
         pin: "上部に固定",
         unpin: "固定解除",
+        renameWithAgent: "エージェントで名前を変更",
         archive: "アーカイブ",
         archiveWorkspace: "ワークスペースをアーカイブ",
         hideFromSidebar: "サイドバーから非表示",
@@ -1196,6 +1207,9 @@ export const ja: TranslationResources = {
         workspacePathUnavailable: "ワークスペースパスが利用できません",
         pathCopied: "パスをコピーしました",
         branchNameCopied: "ブランチ名をコピーしました",
+        agentRenamePromptCopied:
+          "プロンプトをコピーしました。このワークスペースを最もよく理解しているエージェントに貼り付けてください。",
+        agentRenamePromptCopyFailed: "プロンプトをコピーできませんでした",
         hostDisconnected: "ホストが接続されていません",
         hideFailed: "ワークスペースの非表示に失敗しました",
         archiveFailed: "ワークスペースのアーカイブに失敗しました",
@@ -2594,6 +2608,17 @@ export const ja: TranslationResources = {
         transportFallback: "ホストが応答しませんでした。",
         failedTitle: "プロジェクト設定を読み込めませんでした",
         failedDescription: "再読み込みして再試行してください。",
+      },
+      projectSetup: {
+        title: "プロジェクトのセットアップ",
+        actionTitle: "エージェントでセットアップ",
+        description:
+          "エージェントがこのリポジトリを調べ、ワークツリーの準備、サービス、よく使うコマンドを提案します",
+        configure: "エージェントで設定",
+        review: "エージェントでレビュー",
+        updateHost: "エージェント支援のプロジェクト設定を使うにはホストを更新してください",
+        prompt:
+          "byspace-project-setup スキルを使ってこのリポジトリを調べ、クリーンなワークツリーを再現可能に準備でき、よく使うコマンドを見つけやすくし、長時間実行サービスを安全に並列実行できる、根拠のある最小限の変更を提案してください。まず調査し、ファイルを変更する前に提案を見せてください。",
       },
       worktree: {
         title: "ワークツリーライフサイクルフック",

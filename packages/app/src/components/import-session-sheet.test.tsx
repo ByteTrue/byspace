@@ -138,6 +138,15 @@ vi.mock("@/components/adaptive-modal-sheet", () => ({
     ) : null,
 }));
 
+vi.mock("@/components/ui/form-field", () => ({
+  Field: ({ children }: { children: ReactNode }) => children,
+  FormTextInput: () => null,
+}));
+
+vi.mock("@/components/ui/select-field", () => ({
+  SelectField: () => null,
+}));
+
 vi.mock("react-native", async () => {
   const actual = await vi.importActual<Record<string, unknown>>("react-native");
   return actual;
