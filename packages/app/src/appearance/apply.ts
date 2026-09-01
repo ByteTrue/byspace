@@ -1,5 +1,5 @@
 import { UnistylesRuntime } from "react-native-unistyles";
-import { resolveSyntaxColors } from "@getpaseo/highlight";
+import { resolveSyntaxColors, type SyntaxThemeId } from "@getpaseo/highlight";
 import {
   DEFAULT_UI_FONT_STACK,
   DEFAULT_MONO_FONT_STACK,
@@ -12,9 +12,12 @@ import { applyRootUiFont } from "./apply-root-font";
 const ALL_THEME_KEYS = Object.keys(REGISTERED_THEMES) as (keyof typeof REGISTERED_THEMES)[];
 
 export interface AppearanceInput {
+  uiFontFamily: string; // "" -> default stack
+  monoFontFamily: string; // "" -> default stack
   uiBaseFontSize: number; // already clamped
   contentFontSize: number; // already clamped
   codeFontSize: number; // already clamped
+  syntaxTheme: SyntaxThemeId;
 }
 
 /**
@@ -46,7 +49,7 @@ function scaleFontSize(
 }
 
 /**
- * Patch every registered Unistyles theme with the selected appearance sizes.
+ * Patch every registered Unistyles theme with the user's appearance choices.
  * All keys in `ALL_THEME_KEYS` are patched because the active theme can change
  * and adaptive mode can flip light/dark — patching all keys keeps the active key
  * always current and makes ordering vs `setTheme`/`setAdaptiveThemes` irrelevant.
@@ -57,13 +60,13 @@ function scaleFontSize(
  * `...t` first.
  */
 export function applyAppearance(input: AppearanceInput): void {
-  const ui = DEFAULT_UI_FONT_STACK;
-  const mono = DEFAULT_MONO_FONT_STACK;
+  const ui = input.uiFontFamily.trim() || DEFAULT_UI_FONT_STACK;
+  const mono = input.monoFontFamily.trim() || DEFAULT_MONO_FONT_STACK;
   const diffLineHeight = Math.round(input.codeFontSize * 1.5); // couple to code size
   const activeTheme = UnistylesRuntime.themeName;
   // Unistyles web emits after each registry patch. Updating the mounted theme
   // first ensures subscribers receive its new numeric tokens in this render;
-  // updating it last makes the active theme appear one committed value behind.
+  // updating it last makes Pure black appear one committed value behind.
   const themeKeys = activeTheme
     ? [activeTheme, ...ALL_THEME_KEYS.filter((key) => key !== activeTheme)]
     : ALL_THEME_KEYS;
@@ -83,7 +86,7 @@ export function applyAppearance(input: AppearanceInput): void {
           fontFamily,
           fontSize,
           lineHeight,
-          colors: { ...t.colors, syntax: resolveSyntaxColors("github", t.colorScheme) },
+          colors: { ...t.colors, syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme) },
         };
       }
       return {
@@ -91,7 +94,7 @@ export function applyAppearance(input: AppearanceInput): void {
         fontFamily,
         fontSize,
         lineHeight,
-        colors: { ...t.colors, syntax: resolveSyntaxColors("github", t.colorScheme) },
+        colors: { ...t.colors, syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme) },
       };
     });
   }

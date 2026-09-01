@@ -2137,6 +2137,11 @@ export const fr: TranslationResources = {
         options: {
           light: "Lumière",
           dark: "Sombre",
+          zinc: "Zinc",
+          midnight: "Minuit",
+          claude: "Claude",
+          ghostty: "Fantôme",
+          pureBlack: "Noir pur",
           auto: "Système",
         },
       },
@@ -2149,17 +2154,30 @@ export const fr: TranslationResources = {
       },
       fonts: {
         title: "Polices",
+        systemDefault: "Valeur par défaut du système",
+        interfaceFont: "Police d'interface",
+        interfaceFontHint:
+          "Utilisé dans toute l'application. Laisser vide pour la valeur par défaut du système",
+        interfaceFontAccessibility: "Famille de polices d'interface",
         interfaceSize: "Taille de l'interface",
         interfaceSizeHint: "Utilisée pour la navigation, les contrôles et les libellés",
         interfaceSizeAccessibility: "Taille de police de l'interface",
         contentSize: "Taille du contenu",
         contentSizeHint: "Utilisée pour le texte du chat et le Markdown rendu",
         contentSizeAccessibility: "Taille de police du contenu",
+        codeFont: "Police de code",
+        codeFontHint:
+          "Utilisé dans le code, les différences et la sortie du terminal. Laisser vide pour la valeur par défaut du système",
+        codeFontAccessibility: "Famille de polices de code",
         codeSize: "Taille du code",
         codeSizeHint: "Utilisée pour le code, les diffs et la sortie du terminal",
         codeSizeAccessibility: "Taille de la police du code",
       },
       syntax: {
+        title: "Syntaxe",
+        highlightTheme: "Thème de surbrillance",
+        highlightThemeHint: "Couleurs du code, indépendamment du thème de l'application",
+        highlightThemeAccessibility: "Thème phare:{{value}}",
         previewAccessibility:
           "Aperçu en direct de la typographie du contenu, du thème de syntaxe et de la police de code",
         previewContent: "Aperçu du contenu et du code",

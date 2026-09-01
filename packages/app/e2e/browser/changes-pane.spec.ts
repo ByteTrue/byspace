@@ -851,22 +851,23 @@ test("canvas diff stays sharp while its workspace pane is resized", async ({ pag
     .toBe(true);
 });
 
-test("changes diff applies the authored code family and size to gutter and code typography", async ({
-  page,
-}) => {
+test("changes diff applies code size changes to gutter and code typography", async ({ page }) => {
   const workspace = await createWorkspaceWithMountedTabDiff();
   await useCodeFont(page, 12);
   await useUnwrappedDiffLines(page);
   await openWorkspaceChanges(page, workspace);
   const before = await readDiffTypographyGeometry(page);
 
-  await changeCodeSizeFromSettings(page, 18);
+  await changeCodeTypographyFromSettings(page, {
+    fontSize: 18,
+    fontFamily: "Courier New, Courier, monospace",
+  });
   await returnToWorkspaceChanges(page);
   await expectStoredCodeFontSize(page, 18);
   await scrollToLowerUnwrappedDiffRows(page);
 
   await expectDiffCodeFontSize(page, 18);
-  await expectDiffCodeFontFamily(page, "ui-monospace");
+  await expectDiffCodeFontFamily(page, "Courier");
   await expectVisibleDiffRowsShareTypography(page);
   const after = await readDiffTypographyGeometry(page);
   expect(after.horizontalExtent).toBeGreaterThan(before.horizontalExtent);
@@ -1172,7 +1173,11 @@ async function useCodeFont(page: Page, codeFontSize: number): Promise<void> {
           sendBehavior: "interrupt",
           serviceUrlBehavior: "ask",
           terminalScrollbackLines: 10_000,
+          uiFontFamily: "",
+          monoFontFamily: "",
+          uiFontSize: 16,
           codeFontSize: fontSize,
+          syntaxTheme: "one",
         }),
       );
     },
@@ -1424,14 +1429,20 @@ async function expectExpandedMountedTabDiff(page: Page): Promise<void> {
   await expect(page.getByTestId("git-diff-canvas")).toBeVisible({ timeout: 30_000 });
 }
 
-async function changeCodeSizeFromSettings(page: Page, fontSize: number): Promise<void> {
+async function changeCodeTypographyFromSettings(
+  page: Page,
+  typography: { fontSize: number; fontFamily: string },
+): Promise<void> {
   await page.getByTestId("sidebar-settings").click();
   await expect(page).toHaveURL(new RegExp(`${buildSettingsSectionRoute("general")}|/settings$`));
   await page.getByRole("button", { name: "Appearance" }).click();
-  await page.getByLabel("Code font size").fill(String(fontSize));
+  await page.getByLabel("Code font family").fill(typography.fontFamily);
+  await page.getByLabel("Code font family").press("Enter");
+  await page.getByLabel("Code font size").fill(String(typography.fontSize));
   await page.getByLabel("Code font size").press("Enter");
-  await expect(page.getByLabel("Code font size")).toHaveValue(String(fontSize));
-  await expectStoredCodeFontSize(page, fontSize);
+  await expect(page.getByLabel("Code font family")).toHaveValue(typography.fontFamily);
+  await expect(page.getByLabel("Code font size")).toHaveValue(String(typography.fontSize));
+  await expectStoredCodeFontSize(page, typography.fontSize);
 }
 
 async function expectStoredCodeFontSize(page: Page, codeFontSize: number): Promise<void> {

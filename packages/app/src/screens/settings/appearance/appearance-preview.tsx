@@ -6,6 +6,7 @@ import type { HighlightToken } from "@getpaseo/highlight";
 import { isWeb } from "@/constants/platform";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { syntaxTokenStyleFor } from "@/styles/syntax-token-styles";
+import { DEFAULT_MONO_FONT_STACK } from "@/styles/theme";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { tokenizeToLines } from "@/utils/highlight-cache";
 import { CHANGED_LINE_INDICES, PREVIEW_AFTER, PREVIEW_BEFORE } from "./preview-snippet";
@@ -26,13 +27,21 @@ type RowType = "context" | "add" | "remove";
 
 interface PreviewOverrides {
   contentFontSize?: number;
+  monoFontFamily?: string;
   codeFontSize?: number;
 }
 
 interface AppearancePreviewProps {
-  // Live draft sizes applied as inline overrides on top of the themed styles.
-  // Empty/invalid fields fall back to the committed theme value.
+  // Live draft values for the code font applied as inline overrides on top of the
+  // themed styles (the while-typing path). Absent/empty fields fall back to the
+  // theme value; an explicitly-empty family resolves to the default stack.
   overrides?: PreviewOverrides;
+}
+
+function resolveFamilyOverride(value: string | undefined, fallback: string): string | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? fallback : trimmed;
 }
 
 function resolveSizeOverride(value: number | undefined): number | undefined {
@@ -42,6 +51,8 @@ function resolveSizeOverride(value: number | undefined): number | undefined {
 function buildCodeOverride(overrides: PreviewOverrides | undefined): TextStyle {
   if (!overrides) return {};
   const style: TextStyle = {};
+  const fontFamily = resolveFamilyOverride(overrides.monoFontFamily, DEFAULT_MONO_FONT_STACK);
+  if (fontFamily !== undefined) style.fontFamily = fontFamily;
   const fontSize = resolveSizeOverride(overrides.codeFontSize);
   if (fontSize !== undefined) {
     style.fontSize = fontSize;
@@ -126,7 +137,7 @@ function markerStyle(type: RowType) {
 }
 
 // Self-contained live preview: a unified diff of a fixed TypeScript snippet in the
-// authored code font and syntax colors. All themed styling flows
+// code (mono) font with the selected syntax colors. All themed styling flows
 // through StyleSheet.create((theme) => …) so it repaints when
 // UnistylesRuntime.updateTheme commits a setting; the optional `overrides` layer
 // inline styles for live-while-typing feedback on the code font.

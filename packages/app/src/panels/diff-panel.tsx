@@ -3,7 +3,6 @@ import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { FileDiff, GitCommitHorizontal } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { DEFAULT_MONO_FONT_STACK } from "@/styles/theme";
 import invariant from "tiny-invariant";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -37,9 +36,9 @@ function useDiffPanelPreferences() {
       layout: effectiveLayout,
       wrapLines: preferences.wrapLines,
       codeFontSize: settings.codeFontSize,
-      monoFontFamily: DEFAULT_MONO_FONT_STACK,
+      monoFontFamily: settings.monoFontFamily,
     }),
-    [effectiveLayout, preferences.wrapLines, settings.codeFontSize],
+    [effectiveLayout, preferences.wrapLines, settings.codeFontSize, settings.monoFontFamily],
   );
   const toggleLayout = useCallback(() => {
     void updatePreferences({ layout: preferences.layout === "unified" ? "split" : "unified" });

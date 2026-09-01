@@ -2119,6 +2119,11 @@ export const ru: TranslationResources = {
         options: {
           light: "Светлая",
           dark: "Тёмная",
+          zinc: "Цинк",
+          midnight: "Полночь",
+          claude: "Claude",
+          ghostty: "Ghostty",
+          pureBlack: "Абсолютно чёрная",
           auto: "Системная",
         },
       },
@@ -2131,17 +2136,30 @@ export const ru: TranslationResources = {
       },
       fonts: {
         title: "Шрифты",
+        systemDefault: "Системный шрифт",
+        interfaceFont: "Шрифт интерфейса",
+        interfaceFontHint:
+          "Используется во всём приложении. Оставьте поле пустым, чтобы использовать системный шрифт.",
+        interfaceFontAccessibility: "Семейство интерфейсных шрифтов",
         interfaceSize: "Размер интерфейса",
         interfaceSizeHint: "Используется для навигации, элементов управления и подписей",
         interfaceSizeAccessibility: "Размер шрифта интерфейса",
         contentSize: "Размер содержимого",
         contentSizeHint: "Используется для текста чата и отображаемого Markdown",
         contentSizeAccessibility: "Размер шрифта содержимого",
+        codeFont: "Шрифт кода",
+        codeFontHint:
+          "Используется для кода, диффов и вывода терминала. Оставьте поле пустым, чтобы использовать системный шрифт.",
+        codeFontAccessibility: "Семейство шрифтов кода",
         codeSize: "Размер кода",
         codeSizeHint: "Используется для кода, диффов и вывода терминала",
         codeSizeAccessibility: "Размер шрифта кода",
       },
       syntax: {
+        title: "Синтаксис",
+        highlightTheme: "Тема подсветки",
+        highlightThemeHint: "Цвета кода, не зависящие от темы приложения",
+        highlightThemeAccessibility: "Тема подсветки: {{value}}",
         previewAccessibility:
           "Предварительный просмотр типографики содержимого, темы синтаксиса и шрифта кода в реальном времени.",
         previewContent: "Предварительный просмотр содержимого и кода",

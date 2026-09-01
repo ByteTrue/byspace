@@ -1,18 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  darkPureBlackTheme,
   darkTheme,
   FONT_SIZE,
   getNextThemePreference,
   lightTheme,
-  LINE_HEIGHT,
-  REGISTERED_THEMES,
   THEME_OPTIONS,
 } from "./theme";
 
 describe("Typography scale", () => {
   it("names 14px as the default interface tier", () => {
     expect(FONT_SIZE).toEqual({
-      code: 14,
+      code: 12,
       content: 15,
       sm: 12,
       base: 14,
@@ -22,19 +21,49 @@ describe("Typography scale", () => {
       "3xl": 22,
       "4xl": 26,
     });
-    expect(LINE_HEIGHT.diff).toBe(21);
   });
 });
 
 describe("Theme catalog", () => {
-  it("owns the three built-in picker and shortcut choices", () => {
-    expect(THEME_OPTIONS.map((option) => option.name)).toEqual(["light", "dark", "auto"]);
+  it("owns the picker and shortcut order", () => {
+    expect(THEME_OPTIONS.map((option) => option.name)).toEqual([
+      "light",
+      "dark",
+      "auto",
+      "zinc",
+      "midnight",
+      "claude",
+      "ghostty",
+      "pureBlack",
+    ]);
     expect(getNextThemePreference("dark")).toBe("auto");
-    expect(getNextThemePreference("auto")).toBe("light");
+    expect(getNextThemePreference("pureBlack")).toBe("light");
+  });
+});
+
+describe("Pure black theme", () => {
+  it("uses a pure black application and terminal background", () => {
+    expect(darkPureBlackTheme.colors.surface0).toBe("#000000");
+    expect(darkPureBlackTheme.colors.background).toBe("#000000");
+    expect(darkPureBlackTheme.colors.terminal.background).toBe("#000000");
   });
 
-  it("retains the two plugin registry slots", () => {
-    expect(Object.keys(REGISTERED_THEMES)).toEqual(["light", "dark", "pluginLight", "pluginDark"]);
+  it("uses Paseo's muted green accent", () => {
+    expect(darkPureBlackTheme.colors.accent).toBe("#20744A");
+    expect(darkPureBlackTheme.colors.accentBright).toBe("#7ccba0");
+  });
+
+  it("derives sidebar interaction surfaces from the surface scale", () => {
+    expect(darkPureBlackTheme.colors.surfaceSidebar).toBe("#000000");
+    expect(darkPureBlackTheme.colors.surfaceSidebarHover).toBe(darkPureBlackTheme.colors.surface1);
+    expect(darkPureBlackTheme.colors.surfaceSidebarSelected).toBe(
+      darkPureBlackTheme.colors.surface2,
+    );
+  });
+
+  it("keeps ANSI black output readable on its zero-luminance terminal background", () => {
+    expect(darkPureBlackTheme.colors.terminal.black).toBe("#595959");
+    expect(darkPureBlackTheme.colors.terminal.brightBlack).toBe("#8a8a8a");
   });
 });
 

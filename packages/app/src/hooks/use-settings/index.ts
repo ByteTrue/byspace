@@ -33,6 +33,7 @@ import {
   normalizeAppSettings,
   parseClampedFontSize,
   parseTerminalScrollbackLines,
+  sanitizeFontFamily,
   saveAppSettings as saveAppSettingsPure,
   type AppSettings,
   type OpenInSidePanePreferences,
@@ -67,6 +68,7 @@ export {
   MIN_UI_BASE_FONT_SIZE,
   parseClampedFontSize,
   parseTerminalScrollbackLines,
+  sanitizeFontFamily,
 };
 export type {
   AppSettings,

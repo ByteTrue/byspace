@@ -307,6 +307,9 @@ test("copying an assistant selection preserves Markdown structure and links", as
   context,
   page,
 }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("@paseo:app-settings", JSON.stringify({ uiFontFamily: "serif" }));
+  });
   const agent = await seedMockAgentWorkspace({
     repoPrefix: "assistant-selection-copy-",
     title: "Assistant selection copy",
@@ -334,6 +337,7 @@ test("copying an assistant selection preserves Markdown structure and links", as
       const formattedProse = assistantMessage
         .locator(`[data-paseo-markdown-tag="${tag}"]`)
         .filter({ hasText: text });
+      await expect(formattedProse).toHaveCSS("font-family", "serif");
       await expect(formattedProse).not.toHaveAttribute("data-pmono");
     }
     const inlineCode = assistantMessage
