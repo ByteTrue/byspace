@@ -1485,6 +1485,8 @@ export const ru: TranslationResources = {
     searchPlaceholder: "Фильтровать ветки...",
     empty: "Ветки не найдены.",
     title: "Переключить ветку",
+    localBranch: "Локальная",
+    remoteBranch: "Удалённая",
     uncommittedTitle: "Незафиксированные изменения",
     uncommittedMessage:
       "У вас есть незафиксированные изменения. Убрать их в stash перед переключением ветки?",

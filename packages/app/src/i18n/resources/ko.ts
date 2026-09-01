@@ -1469,6 +1469,8 @@ export const ko: TranslationResources = {
     searchPlaceholder: "브랜치 필터...",
     empty: "브랜치를 찾을 수 없습니다.",
     title: "브랜치 전환",
+    localBranch: "로컬",
+    remoteBranch: "원격",
     uncommittedTitle: "커밋되지 않은 변경 사항",
     uncommittedMessage: "커밋되지 않은 변경 사항이 있습니다. 브랜치를 전환하기 전에 스태시할까요?",
     stashAndSwitch: "스태시 후 전환",

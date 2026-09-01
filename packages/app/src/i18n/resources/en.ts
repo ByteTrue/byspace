@@ -1469,6 +1469,8 @@ export const en = {
     searchPlaceholder: "Filter branches...",
     empty: "No branches found.",
     title: "Switch branch",
+    localBranch: "Local",
+    remoteBranch: "Remote",
     uncommittedTitle: "Uncommitted changes",
     uncommittedMessage: "You have uncommitted changes. Stash them before switching branches?",
     stashAndSwitch: "Stash & Switch",

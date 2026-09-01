@@ -1503,6 +1503,8 @@ export const es: TranslationResources = {
     searchPlaceholder: "Filtrar ramas...",
     empty: "No se encontraron sucursales.",
     title: "Cambiar rama",
+    localBranch: "Local",
+    remoteBranch: "Remota",
     uncommittedTitle: "Cambios no confirmados",
     uncommittedMessage: "Tienes cambios no confirmados. ¿Guardarlos antes de cambiar de sucursal?",
     stashAndSwitch: "Guardar y cambiar",
