@@ -1,7 +1,7 @@
 ---
 title: 保留能力交付路线 · Work
 status: approved
-amended_at: 2026-09-01T14:48:56Z
+amended_at: 2026-09-01T14:52:22Z
 phase: executing
 spec: ../epics/002-o-retained-capabilities-delivery/spec.md
 source_revision: f592e54bf43e5501383224891053d2e0a9dfbf45
@@ -17,7 +17,7 @@ current_wave: 5
 current_item: ITEM-17 / ITEM-19
 active_items: [ITEM-17, ITEM-19]
 blocked_by: null
-next_action: 从 ITEM-18 集成 milestone 创建两个隔离 writer，分别推进 ITEM-17 与 ITEM-19；ITEM-20 只读预热
+next_action: 等待 ITEM-17 与 ITEM-19 隔离 writer 冻结候选；按完成顺序 fresh review、manifest 收割并串行集成
 ---
 
 # Epic Work: 保留能力交付路线
@@ -60,7 +60,7 @@ next_action: 从 ITEM-18 集成 milestone 创建两个隔离 writer，分别推�
 - Wave 5 integration branch `wave/retained-capabilities-5-workspace-sidebar-compact-ui` 已从绿色 Wave 4 merge SHA 创建，tracking baseline 为 `a8e87f5a7`。ITEM-16 与 ITEM-18 分别在隔离 worktree `epic-002-wave5-lane-a` / `epic-002-wave5-lane-b` 启动唯一 writer workflow `dfd25be5-2587-458e-a7f9-ec9152c619ad`；brief SHA-256 为 `d1076cb0…7527` / `ef12f5f6…b5312`。
 - ITEM-16 已恢复无 configured upstream 但存在同名 `origin/<branch>` 时的精确 ahead/behind/Push 状态，并保持健康显式 upstream 优先、configured-gone 为 unknown。Fresh correctness review `c0c9d22b-2828-4565-83c6-e4fc1050c376` 找到 fallback Promise 未 await 与 behind 状态下裸 `git pull` 不可执行两项 P1；父流程补齐 `await`、无 tracking 时的显式 `git pull origin <branch>` 及真实 Git 回归，同时不写入 tracking config。Focused 213/213（1 skipped）、根 Typecheck/Lint/Format 全绿；3-path content manifest `a91b2a8e…8a49e` 字节一致，以 `faa947aa7` 串行集成。
 - ITEM-18 已让 desktop Workspace hover card 按精确 `(serverId, workspaceId)` 展示全部非归档 Agent（含 subagent）的 canonical lifecycle 状态并随目录快照实时更新；不按 cwd 推断、不改变目录顺序或 native/compact 行为。双 fresh review `5ea66d15-3555-42a2-8749-8905f98892c6` / `b451d59a-ed19-4775-ad12-3c9d52018b96` 均为 0 P0/P1；父流程吸收有界可滚动 Agent 区、subagent unit pin 与标准 Playwright outputPath/viewport hardening。Selector 46/46、Browser E2E 1/1、根 Typecheck/Lint/Format 全绿；5-path content manifest `7388e5f6…3630` 字节一致，以 `28172ba6c` 串行集成。最终 screenshot/trace 保存于 `/tmp/byspace-wave5-item18-ui-proof-final/`。
-- ITEM-17 与 ITEM-19 写入依赖现已满足；ITEM-20 仍依赖 ITEM-19，ITEM-21 仍依赖 ITEM-17 与 ITEM-20。
+- ITEM-17 与 ITEM-19 已从集成 milestone `38ac45902` 创建隔离 worktree `epic-002-wave5-item17` / `epic-002-wave5-item19`，并由唯一双 writer workflow `227882a3-272a-4657-933f-759fc17c085a` 并行执行；brief SHA-256 为 `34128b1b…57876` / `50be063f…2d486`。ITEM-20 仍依赖 ITEM-19，ITEM-21 仍依赖 ITEM-17 与 ITEM-20。
 - Windows 性能验证继续使用 shared CI 中仅手动启用的 `terminal_performance` job；默认 PR CI 不运行该 job，且 job 无部署权限、secret 或发布输入。Owner 已于 2026-09-01 明确接受该路径。
 - Wave 3 PR #18 首个 exact-head CI run `33472512893` 暴露两个测试夹具缺口：App 的 stub Terminal 缺 `hasSelection()`，Server 的 provider-name bootstrap assertion 因新增短 ID `pi` 误匹配 `pino` / `pipe` / `/api`。父流程分别本地 RED 复现并做测试侧最小修正；T15 纠偏后新的 exact-head 门槛全绿并完成合并。
 
