@@ -1,7 +1,7 @@
 ---
 title: 保留能力交付路线 · Work
 status: approved
-amended_at: 2026-09-01T09:09:48Z
+amended_at: 2026-09-01T09:45:27Z
 phase: executing
 spec: ../epics/002-o-retained-capabilities-delivery/spec.md
 source_revision: f592e54bf43e5501383224891053d2e0a9dfbf45
@@ -17,9 +17,8 @@ current_wave: 4
 current_item: null
 active_items:
   - ITEM-13
-  - ITEM-14
 blocked_by: null
-next_action: 等待 ITEM-13/14 并行 worker；首个冻结候选立即进入 fresh review 与串行集成队列
+next_action: 关闭 ITEM-13 UI/i18n review findings、补齐真实浏览器证据并串行集成；随后按 Owner 批准的纠正方案 A 串行启动 ITEM-14
 ---
 
 # Epic Work: 保留能力交付路线
@@ -52,6 +51,8 @@ next_action: 等待 ITEM-13/14 并行 worker；首个冻结候选立即进入 fr
 - PR #18 corrected exact head `9d3739f13b5c4f778793a43878f2164e186f69ce` 的 CI `33481331937`、Docker `33481331916` 与 Nix `33481331918` 全绿；Owner 批准精确 SHA 后以 merge commit `f2f76a8f06092c35a0968c1d186d69bba9f00307` 合入 `main`。Post-merge exact-SHA CI `33484117314` 与 Docker `33484117310` 均通过，Wave 4 写入门槛已打开。
 - Owner 已批准 execution acceleration revision：最多两个隔离 worktree writer 加一名只读 scout/reviewer；后续 ITEM 在依赖满足前预热，父流程不接管常规实现；byte-identical reviewed manifest 不重复执行 worker 已报告绿色的相同完整套件，仍保留 owning build、全仓静态门槛、必要 integration smoke、Wave aggregate 与 exact-head CI。合同 reviewer `dcf5e62e-9701-4e55-8290-25c0561c3b15` 首轮要求补齐复用审计记录和五处 wording；同 lineage round 2 `bfc9e44d-2ce6-4e33-8391-9ada07f76ecf` 确认全部关闭，结论 PASS（0 remaining finding）。
 - ITEM-12 已恢复 canonical replica 从 persisted cursor 逐页 `after(endCursor)` catch-up 到 `hasNewer=false`，不再错误跳到 bounded tail；现有 bootstrap/replacement tail 路径保持。App focused 32/32 + 6/6 + 6/6 + 1/1 + 119/119、daemon Timeline window 11/11、reconnect 2/2、owning build 与全仓静态门槛均通过；三轮 fresh review 关闭唯一文档 P1 与 stale provisional metadata fixture，最终四文件 manifest 字节一致并以 `62cb2b4f73b9cdbcb12c960c101661e081a8a8a9` 完成串行集成。
+- ITEM-13 首轮候选复用现有 import 协议、client、server 与 ITEM-12 timeline owner；正确性 review 无 P0/P1，UI review 要求改用 canonical `SelectField` 并补齐九种语言。当前唯一 writer 在同一 worktree 关闭这些 finding；真实 OpenCode 浏览器证据由父流程验证锁执行。
+- ITEM-14 的只读历史审计确认原 worker brief 漏掉 capability-gated copy-only 菜单、独立 `rename_branch` 工具、branch TOCTOU/ownership guards、i18n、bundled skill 与浏览器证据。Owner 已批准纠正方案 A；该 ITEM 从并行 lane 退回 ITEM-13 之后串行执行，不直接 cherry-pick 旧 27-path patch。
 - Windows 性能验证继续使用 shared CI 中仅手动启用的 `terminal_performance` job；默认 PR CI 不运行该 job，且 job 无部署权限、secret 或发布输入。Owner 已于 2026-09-01 明确接受该路径。
 - Wave 3 PR #18 首个 exact-head CI run `33472512893` 暴露两个测试夹具缺口：App 的 stub Terminal 缺 `hasSelection()`，Server 的 provider-name bootstrap assertion 因新增短 ID `pi` 误匹配 `pino` / `pipe` / `/api`。父流程分别本地 RED 复现并做测试侧最小修正；T15 纠偏后新的 exact-head 门槛全绿并完成合并。
 
@@ -133,6 +134,7 @@ next_action: 等待 ITEM-13/14 并行 worker；首个冻结候选立即进入 fr
 8. 历史 global hooks `true` 只自动迁移 Claude/Codex/OpenCode；Pi 必须显式 opt-in，旧客户端后续主动切换 global 开关也只更新这三个历史 provider，并保留显式 Pi 或未来 provider 设置。
 9. 批准 execution acceleration revision：正常最多同时运行两名隔离 writer 和一名只读 scout/reviewer；父流程保持调度、范围裁决、串行集成与远端操作，不接管常规 ITEM 实现。
 10. 冻结候选经 fresh review 且收割后与完整内容 manifest 字节一致时，不重复执行 worker 已报告绿色的相同完整套件；owning build、Typecheck/Lint/Format、必要 integration smoke、Wave aggregate 与 exact-head CI 门槛保持。每个 ITEM 必须记录完整内容 SHA-256 比对结果和复用而未重跑的套件清单。
+11. 批准 ITEM-14/A09 纠正方案 A：capability-gated copy-only Workspace 菜单；既有 `rename_workspace` 与独立 `rename_branch`；title-first、branch-best-effort；仅安全修改 BySpace-owned、非默认、未发布、无 upstream/PR/MR、未人工改名且无冲突的 branch；补齐九种 locale、bundled skill、浏览器证据，并在 ITEM-13 集成后串行执行。
 
 ## 变更日志
 
@@ -183,3 +185,5 @@ next_action: 等待 ITEM-13/14 并行 worker；首个冻结候选立即进入 fr
 - 2026-09-01：PR #18 corrected exact head `9d3739f13` 的 CI/Docker/Nix 全绿；Owner 批准后以 merge commit `f2f76a8f0` 合入 `main`，Wave 3 关闭。Owner 同批批准 worktree/subagent execution acceleration 与 hash-verified non-duplicate validation；合同 review round 2 关闭全部 P1/P2 并 PASS。Post-merge exact-SHA CI/Docker 全绿后，从合同基线 `043de2d66` 启动 ITEM-12 唯一 writer，并行预热 ITEM-15。
 - 2026-09-01：ITEM-12 以稳定 RED 证明 restored cursor 多页 catch-up 被错误 tail fallback 截断，改为 `after(endCursor)` 逐页到 current。双路 fresh review 判定源码候选正确且 scope clean，并要求修正文档；同 worktree follow-up worker 更新 canonical doc。Targeted daemon E2E 发现 reconnect 测试的 provisional matcher 错误要求 authoritative epoch；测试侧最小修正后 reconnect 2/2、window 11/11，fresh fixture review PASS。最终四文件完整 SHA-256 `6d5f5bee…8051` / `9fb809cc…92d3a` / `17446041…03f8` / `98694ec4…0d76` 与 reviewed manifest 一致，按复用合同不重复 worker 已绿 focused suites，完成 owning build、Typecheck/Lint/Format 后以 `62cb2b4f7` 串行集成。
 - 2026-09-01：从 ITEM-12 milestone `62cb2b4f7` 创建 ITEM-13 手动 Session ID 导入与 ITEM-14 current-Agent Workspace naming 两个隔离 worktree；依赖安装与精确 base 验证通过，两个唯一 writer 在 disjoint ownership 下并行启动。
+- 2026-09-01：ITEM-13 首轮两文件候选的 focused test 21/21、Typecheck/Lint/Format 通过；correctness reviewer 无 P0/P1，UI reviewer 阻断硬编码文案与手写 provider picker。Follow-up 拆分为 core UI/i18n/form 与后续 real-browser 两阶段，当前由 fresh-context 唯一 writer 执行。
+- 2026-09-01：ITEM-14 worker 在无写入时触发 stop-to-serial。只读审计逐项比较历史 issue 与 commit `f2e063ba3`，确认完整 A09 需要 optional capability、copy-only 菜单、两个独立 Agent tools、Git/metadata TOCTOU guards、i18n、skill 与浏览器证据；Owner 批准推荐方案 A，合同已收窄为 ITEM-13 集成后串行实现。
