@@ -1,0 +1,71 @@
+import type { CheckoutStatusPayload } from "@/git/use-status-query";
+import {
+  parseHostWorkspaceOpenIntentFromPathname,
+  parseHostAgentRouteFromPathname,
+  parseHostWorkspaceRouteFromPathname,
+} from "@/utils/host-routes";
+
+export function parseAgentKey(
+  key: string | null | undefined,
+): { serverId: string; agentId: string } | null {
+  if (!key) {
+    return null;
+  }
+  const sep = key.lastIndexOf(":");
+  if (sep <= 0 || sep >= key.length - 1) {
+    return null;
+  }
+  const serverId = key.slice(0, sep).trim();
+  const agentId = key.slice(sep + 1).trim();
+  if (!serverId || !agentId) {
+    return null;
+  }
+  return { serverId, agentId };
+}
+
+export function resolveSelectedAgentForNewAgent(input: {
+  pathname: string;
+  selectedAgentId?: string;
+}): { serverId: string; agentId: string } | null {
+  const workspaceRoute = parseHostWorkspaceRouteFromPathname(input.pathname);
+  const openIntent = parseHostWorkspaceOpenIntentFromPathname(input.pathname);
+  if (workspaceRoute && openIntent?.kind === "agent") {
+    const agentId = openIntent.agentId.trim();
+    if (agentId) {
+      return { serverId: workspaceRoute.serverId, agentId };
+    }
+  }
+  return parseHostAgentRouteFromPathname(input.pathname) ?? parseAgentKey(input.selectedAgentId);
+}
+
+function inferMainRepoRootFromPaseoWorktreePath(cwd: string): string | null {
+  const normalizedPath = cwd.replace(/\\/g, "/");
+  for (const marker of ["/.byspace/worktrees", "/.paseo/worktrees"]) {
+    const markerIndex = normalizedPath.indexOf(marker);
+    if (markerIndex <= 0) {
+      continue;
+    }
+    const markerEnd = markerIndex + marker.length;
+    const nextChar = normalizedPath[markerEnd];
+    if (nextChar && nextChar !== "/") {
+      continue;
+    }
+    const inferred = cwd.slice(0, markerIndex).replace(/[\\/]+$/, "");
+    return inferred.trim() ? inferred : null;
+  }
+  return null;
+}
+
+export function resolveNewAgentWorkingDir(
+  cwd: string,
+  checkout: CheckoutStatusPayload | null,
+): string {
+  const explicitMainRepoRoot = checkout?.isPaseoOwnedWorktree
+    ? checkout.mainRepoRoot?.trim() || null
+    : null;
+  if (explicitMainRepoRoot) {
+    return explicitMainRepoRoot;
+  }
+
+  return inferMainRepoRootFromPaseoWorktreePath(cwd) ?? cwd;
+}
