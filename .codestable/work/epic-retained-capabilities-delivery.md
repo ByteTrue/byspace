@@ -1,7 +1,7 @@
 ---
 title: 保留能力交付路线 · Work
 status: approved
-amended_at: 2026-09-01T14:03:37Z
+amended_at: 2026-09-01T14:48:56Z
 phase: executing
 spec: ../epics/002-o-retained-capabilities-delivery/spec.md
 source_revision: f592e54bf43e5501383224891053d2e0a9dfbf45
@@ -14,10 +14,10 @@ publish_strategy: epic-plan-pr-then-one-pr-per-wave
 execution_strategy_revision: v2-owner-approved
 execution_acceleration_approved_at: 2026-09-01T07:48:00Z
 current_wave: 5
-current_item: ITEM-16 / ITEM-18
-active_items: [ITEM-16, ITEM-18]
+current_item: ITEM-17 / ITEM-19
+active_items: [ITEM-17, ITEM-19]
 blocked_by: null
-next_action: 等待两个隔离 writer 冻结候选；按完成顺序 fresh review、manifest 收割并串行集成
+next_action: 从 ITEM-18 集成 milestone 创建两个隔离 writer，分别推进 ITEM-17 与 ITEM-19；ITEM-20 只读预热
 ---
 
 # Epic Work: 保留能力交付路线
@@ -57,7 +57,10 @@ next_action: 等待两个隔离 writer 冻结候选；按完成顺序 fresh revi
 - Wave 4 双路 aggregate review 已完成。Scope reviewer 的 session-import wire-shape 条件 P1 经 base/history 核对关闭：Wave 4 base 已接受 legacy/new 双形状，new shape 来自 `5b884aee0`，当前 UI 使用的 `importSessionWorkspaceTarget` capability 后于该 shape 引入；本 Wave 仅复用既有 import path。Protocol reviewer 的 `checkout.rename_branch` 来源 P1 也由 base..head diff 证实为 pre-existing 且本 Wave 零改动，ITEM-14 MCP 工具不依赖该 RPC。Wave 4 diff 共 39 paths，无 Appearance/theme/highlight/font 路径；两项 P1 均不需要产品代码修正，aggregate gate 结论为 PASS with report-only P2。
 - Wave 4 PR #19 的 exact head `a387297b7a434d3851bccab63a5dcc787d3828a7` 已通过 CI `33511998071`、Docker `33511998056` 与 Nix `33511998053`，随后以 merge commit `6d2b173a0ba4b1e6722e91a035e99fe63fa0b4a1` 合入 `main`。Post-merge exact-SHA CI `33514417804` 与 Docker `33514417929` 均通过，Wave 5 写入门槛已打开。
 - Wave 5 三路只读预热已完成且没有修改源码：Lane A report `/tmp/byspace-wave5-lane-a-scout.md` 将 ITEM-16/17 对齐到归档 commits `0ec5d6320` / `30e66b0c8`；Lane B report `/tmp/byspace-wave5-lane-b-scout.md` 完成 ITEM-18/19/20 的 hover/menu/project-cardinality 边界与平台证据矩阵；ITEM-21 report `/tmp/byspace-wave5-item21-scout.md` 明确保持阻塞，直至 ITEM-17 与 ITEM-20 均集成后再重新确认 pane-header owner。
-- Wave 5 integration branch `wave/retained-capabilities-5-workspace-sidebar-compact-ui` 已从绿色 Wave 4 merge SHA 创建，tracking baseline 为 `a8e87f5a7`。ITEM-16 与 ITEM-18 分别在隔离 worktree `epic-002-wave5-lane-a` / `epic-002-wave5-lane-b` 启动唯一 writer workflow `dfd25be5-2587-458e-a7f9-ec9152c619ad`；brief SHA-256 为 `d1076cb0…7527` / `ef12f5f6…b5312`。ITEM-17、19、20、21 尚未获得写入权。
+- Wave 5 integration branch `wave/retained-capabilities-5-workspace-sidebar-compact-ui` 已从绿色 Wave 4 merge SHA 创建，tracking baseline 为 `a8e87f5a7`。ITEM-16 与 ITEM-18 分别在隔离 worktree `epic-002-wave5-lane-a` / `epic-002-wave5-lane-b` 启动唯一 writer workflow `dfd25be5-2587-458e-a7f9-ec9152c619ad`；brief SHA-256 为 `d1076cb0…7527` / `ef12f5f6…b5312`。
+- ITEM-16 已恢复无 configured upstream 但存在同名 `origin/<branch>` 时的精确 ahead/behind/Push 状态，并保持健康显式 upstream 优先、configured-gone 为 unknown。Fresh correctness review `c0c9d22b-2828-4565-83c6-e4fc1050c376` 找到 fallback Promise 未 await 与 behind 状态下裸 `git pull` 不可执行两项 P1；父流程补齐 `await`、无 tracking 时的显式 `git pull origin <branch>` 及真实 Git 回归，同时不写入 tracking config。Focused 213/213（1 skipped）、根 Typecheck/Lint/Format 全绿；3-path content manifest `a91b2a8e…8a49e` 字节一致，以 `faa947aa7` 串行集成。
+- ITEM-18 已让 desktop Workspace hover card 按精确 `(serverId, workspaceId)` 展示全部非归档 Agent（含 subagent）的 canonical lifecycle 状态并随目录快照实时更新；不按 cwd 推断、不改变目录顺序或 native/compact 行为。双 fresh review `5ea66d15-3555-42a2-8749-8905f98892c6` / `b451d59a-ed19-4775-ad12-3c9d52018b96` 均为 0 P0/P1；父流程吸收有界可滚动 Agent 区、subagent unit pin 与标准 Playwright outputPath/viewport hardening。Selector 46/46、Browser E2E 1/1、根 Typecheck/Lint/Format 全绿；5-path content manifest `7388e5f6…3630` 字节一致，以 `28172ba6c` 串行集成。最终 screenshot/trace 保存于 `/tmp/byspace-wave5-item18-ui-proof-final/`。
+- ITEM-17 与 ITEM-19 写入依赖现已满足；ITEM-20 仍依赖 ITEM-19，ITEM-21 仍依赖 ITEM-17 与 ITEM-20。
 - Windows 性能验证继续使用 shared CI 中仅手动启用的 `terminal_performance` job；默认 PR CI 不运行该 job，且 job 无部署权限、secret 或发布输入。Owner 已于 2026-09-01 明确接受该路径。
 - Wave 3 PR #18 首个 exact-head CI run `33472512893` 暴露两个测试夹具缺口：App 的 stub Terminal 缺 `hasSelection()`，Server 的 provider-name bootstrap assertion 因新增短 ID `pi` 误匹配 `pino` / `pipe` / `/api`。父流程分别本地 RED 复现并做测试侧最小修正；T15 纠偏后新的 exact-head 门槛全绿并完成合并。
 
@@ -90,9 +93,9 @@ next_action: 等待两个隔离 writer 冻结候选；按完成顺序 fresh revi
 
 ## Wave 5 · Workspace、侧栏与 Compact UI
 
-- [ ] ITEM-16 · WORKSPACE-03 · W04
+- [x] ITEM-16 · WORKSPACE-03 · W04 · reviewed and integrated
 - [ ] ITEM-17 · WORKSPACE-01 · W01
-- [ ] ITEM-18 · WORKSPACE-04 · W05（仅 hover 展示全部 Agent 精确状态）
+- [x] ITEM-18 · WORKSPACE-04 · W05（仅 hover 展示全部 Agent 精确状态）· reviewed and integrated
 - [ ] ITEM-19 · WORKSPACE-02 · W02
 - [ ] ITEM-20 · WORKSPACE-05 · W14
 - [ ] ITEM-21 · UI-01 · U03/U05
@@ -196,3 +199,4 @@ next_action: 等待两个隔离 writer 冻结候选；按完成顺序 fresh revi
 - 2026-09-01：ITEM-14 按历史 patch 基线做当前架构适配并完成 25-file 交付；focused server 310/310、i18n 36/36、Browser E2E 3/3 与全仓静态门槛全绿，fresh review 0 P0/P1，语义原子 commit `6f0b93abf` 串行集成。ITEM-15 随即回查归档 `6f9bfdd40`，否决预热 scout 新造 daemon transaction 的偏航方案，按原始 Skill + Project Settings draft 入口恢复。
 - 2026-09-01：ITEM-15 完成 capability-gated Project Settings 入口与独立未发送 Agent draft，复用现有 bundled Skill 安装/selection 事务，不新增配置生成 RPC。Fresh review 的 custom-selection P1 修复为保留既有 custom skills 并追加 `byspace-project-setup`，缺失、confirmation required 或安装失败都显性阻断导航；follow-up review PASS。Browser E2E 2/2、i18n 36/36、server build 与全仓 Typecheck/Lint/Format 全绿；18-path manifest `bf0e6762…472962b` 与隔离 worktree 字节一致，以 `c1ac7ceaa` 串行集成，Wave 4 四项全部完成并进入 aggregate review。
 - 2026-09-01：Wave 4 双路 aggregate review 完成。父流程以 `git show`、`git blame` 和 base..head path diff 关闭两项来源疑问：session import new identity shape 与 `checkout.rename_branch` RPC 均在 Wave 4 base 已存在；`importSessionWorkspaceTarget` capability 的引入晚于 new identity shape，因此当前 manual UI gate 不会把该 shape 发给更旧 Host。本 Wave protocol diff 仅追加两个 optional capability，39-path aggregate 不含 Appearance/theme/highlight/font。两名 reviewer 的条件 P1 均关闭，无 P0/P1，进入 PR 门槛。
+- 2026-09-01：Wave 5 ITEM-16/18 两个隔离候选完成双路 fresh review。ITEM-16 按 correctness review 修复 async catch 与 no-upstream Pull 执行缺口，并恢复 configured-gone 旧语义；ITEM-18 吸收有界 scroll、subagent contract 与 E2E artifact/viewport hardening。两项均经完整内容 manifest 原字节收割、根静态 pre-commit gate 与语义原子提交，分别以 `faa947aa7` / `28172ba6c` 串行集成；下一并行阶段为 ITEM-17 与 ITEM-19。
