@@ -4,11 +4,13 @@ status: accepted
 kind: epic
 owner_decision: approved
 approved_revision: c7ca9c333af7983cb327be16c8b492ca38b345cf0a85a655e8ad528309a650cb
+amended_at: 2026-09-01T06:36:33Z
 accepted_at: 2026-08-31T04:23:08Z
 acceptance_evidence:
   owner: "“确认验收”（2026-08-31）"
   review: "subagent run 213f6696-b401-4ec7-ac28-8a0c1c9cb790; verdict=pass; 0 blocking/important"
   verification: "typecheck, lint, format:check, git diff --check passed"
+  scope_correction: "Owner cancelled T15 and approved the 33-item correction plan on 2026-09-01"
 ---
 
 # Epic:旧 CodeStable 需求盘点与去留决策
@@ -73,7 +75,7 @@ BySpace 已从历史定制线切换到 Paseo `v0.7.0-beta.2` 干净基线，并�
 
 第一轮提案中的自动去留结论全部撤回，只保留可验证的事实。特别纠正：
 
-1. **Terminal 整体保留。** 旧 `epics/002-o-terminal-experience`、Terminal 截图粘贴、Windows 输入与延迟、retained renderer、revision 恢复、呈现默认值、通知、移动端复制，以及 Pi Terminal agent 状态上报都进入逐项重验。用户当前仍在 Paseo Terminal 复现历史问题，这是当前缺口证据；不能以 worker、snapshot 或 bracketed-paste 模块存在为完成证据。
+1. **Terminal 性能和体验能力保留，T15 除外。** 旧 `epics/002-o-terminal-experience` 中的 Terminal 截图粘贴、Windows 输入与延迟、retained renderer、revision 恢复、通知、移动端复制，以及 Pi Terminal agent 状态上报进入逐项重验。Owner 后续明确取消呈现默认值 T15；不得据此删除或修改现有 Appearance 主题、语法高亮、UI/code 字体、字号或持久化。
 2. **Service Proxy、Relay 与 Remote Web Services 不是同一能力。** 当前 Relay 只承载 BySpace client 与 daemon 的 E2EE 控制/交互流量；当前 Service Proxy 默认只反代 daemon 本机的 workspace services。旧 Remote Web Services 通过独立 Data Relay 让 daemon A 的本地浏览器访问 daemon B 的 loopback Web 服务，当前 `main` 没有该能力。它必须作为独立产品能力展示给 Owner，不能判为已覆盖。
 3. **UI、语音、Forge、发布和侧栏需求不再批量归类。** 每份原始文档都列出后再由 Owner 决定；当前相似方案只能写入证据列。
 
@@ -117,11 +119,12 @@ Epic、Talk、Note、Vision 和 Project Spec 也必须出现在目录中，并�
 ## 最终验收结果
 
 - `requirements-catalog.md` 与 `decision-matrix.md` 覆盖 78 / 78 份历史 Markdown、1 份 Terminal benchmark JSON 和 77 / 77 个原子决策 ID。
-- Owner 保留 34 项：T01–T18、R02–R03、A04–A09、W01、W02、W04、W05 中仅“hover 展示该 Workspace 下全部 Agent 精确状态”、W14、U03、U05、B01。
-- 其余 38 个产品 ID 不再进入 BySpace 定制 backlog；这不授权删除上游当前已有且仍可用的功能。
+- Owner 最终保留 33 项：T01–T14、T16–T18、R02–R03、A04–A09、W01、W02、W04、W05 中仅“hover 展示该 Workspace 下全部 Agent 精确状态”、W14、U03、U05、B01。
+- T15 已由 Owner 于 2026-09-01 明确取消；不得修改或删除现有 Appearance 主题、语法高亮、UI/code 字体、字号或持久化。
+- 其余 39 个产品 ID 不再进入 BySpace 定制 backlog；这不授权删除上游当前已有且仍可用的功能。
 - O01–O05 共 5 个一次性历史任务剔除。
 - B01 的 Beta Relay 基础设施存在：endpoint 为 `relay-beta.byspace.cc.cd:443`，Worker 为 `byspace-relay-beta`；当前缺口是 `main` 未恢复 prerelease 自动选择 Beta Relay 的版本路由。
-- `retained-delivery-index.md` 将 34 / 34 个保留 ID 唯一映射到 21 个后续 `cs-issue` / `cs-feat` 入口；只有实际启动某一入口时才创建临时 work 游标。
+- `retained-delivery-index.md` 将 33 / 33 个保留 ID 唯一映射到 21 个后续 `cs-issue` / `cs-feat` 入口；只有实际启动某一入口时才创建临时 work 游标。
 - 最终独立验收审查 run `213f6696-b401-4ec7-ac28-8a0c1c9cb790` 返回 `verdict=pass`，无 blocking 或 important finding。Owner 于 2026-08-31 明确确认验收。
 
 ## 永久交付索引

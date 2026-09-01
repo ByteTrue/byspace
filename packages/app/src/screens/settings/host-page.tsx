@@ -16,7 +16,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Pressable, Text, View } from "react-native";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
-import type { TerminalProfile } from "@getpaseo/protocol/messages";
+import type {
+  MutableDaemonConfigPatch,
+  TerminalAgentHookProviderId,
+  TerminalProfile,
+} from "@getpaseo/protocol/messages";
 import {
   getTerminalProfileIcon,
   DEFAULT_TERMINAL_PROFILES,
@@ -72,6 +76,11 @@ import { ICON_SIZE } from "@/styles/theme";
 import type { Theme } from "@/styles/theme";
 import { getProviderIcon } from "@/components/provider-icons";
 import { BrowserToolsOptInCard } from "./browser-tools-card";
+import {
+  createTerminalAgentHookPatch,
+  isTerminalAgentHookProviderEnabled,
+  TERMINAL_AGENT_HOOK_PROVIDERS,
+} from "./terminal-agent-hooks-config";
 import { hasDaemonReconnectedAfter, type DaemonConnectionMarker } from "./daemon-reconnect";
 import { restartDaemonFromSettings } from "./daemon-restart";
 
@@ -1048,42 +1057,130 @@ function AutoArchiveMergedWorkspacesCard({ serverId }: { serverId: string }) {
   );
 }
 
+function TerminalAgentHookProviderRow({
+  providerId,
+  label,
+  enabled,
+  disabled,
+  onValueChange,
+}: {
+  providerId: TerminalAgentHookProviderId;
+  label: string;
+  enabled: boolean;
+  disabled: boolean;
+  onValueChange: (providerId: TerminalAgentHookProviderId, enabled: boolean) => void;
+}) {
+  const handleValueChange = useCallback(
+    (next: boolean) => onValueChange(providerId, next),
+    [onValueChange, providerId],
+  );
+
+  return (
+    <View
+      style={[settingsStyles.row, settingsStyles.rowBorder]}
+      testID={`host-page-terminal-agent-hooks-${providerId}-row`}
+    >
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>{label}</Text>
+      </View>
+      <Switch
+        value={enabled}
+        disabled={disabled}
+        onValueChange={handleValueChange}
+        accessibilityLabel={`Enable ${label} terminal agent hooks`}
+        testID={`host-page-terminal-agent-hooks-${providerId}-switch`}
+      />
+    </View>
+  );
+}
+
 function EnableTerminalAgentHooksCard({ serverId }: { serverId: string }) {
   const isConnected = useHostRuntimeIsConnected(serverId);
+  const supportsProviderSettings = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.terminalAgentHookProviders === true,
+  );
   const { config, patchConfig } = useDaemonConfig(serverId);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
-  const handleValueChange = useCallback(
-    (next: boolean) => {
-      void patchConfig({ enableTerminalAgentHooks: next }).catch((error) => {
-        console.error("[HostPage] Failed to update terminal agent hooks", error);
-        Alert.alert(
-          "Unable to update terminal agent hooks",
-          error instanceof Error ? error.message : String(error),
-        );
-      });
+  const applyPatch = useCallback(
+    (patch: MutableDaemonConfigPatch) => {
+      if (!config) return;
+      setIsUpdating(true);
+      setUpdateError(null);
+      void patchConfig(patch)
+        .catch((error) => {
+          console.error("[HostPage] Failed to update terminal agent hooks", error);
+          setUpdateError(error instanceof Error ? error.message : String(error));
+        })
+        .finally(() => setIsUpdating(false));
     },
-    [patchConfig],
+    [config, patchConfig],
+  );
+  const handleValueChange = useCallback(
+    (providerId: TerminalAgentHookProviderId, next: boolean) => {
+      applyPatch(createTerminalAgentHookPatch(providerId, next));
+    },
+    [applyPatch],
+  );
+  const handleLegacyValueChange = useCallback(
+    (next: boolean) => applyPatch({ enableTerminalAgentHooks: next }),
+    [applyPatch],
   );
 
   if (!isConnected) return null;
+
+  // COMPAT(terminalAgentHookProviders): added in v0.7.1, remove after 2027-09-01; old daemons expose only the aggregate setting.
+  if (!supportsProviderSettings) {
+    return (
+      <View style={settingsStyles.card} testID="host-page-terminal-agent-hooks-card">
+        <View style={settingsStyles.row}>
+          <View style={settingsStyles.rowContent}>
+            <Text style={settingsStyles.rowTitle}>Enable terminal agent hooks</Text>
+            <Text style={settingsStyles.rowHint}>
+              Get notifications and status from terminal agents. This installs hooks in your agent
+              config files.
+            </Text>
+            {updateError ? <Text style={settingsStyles.rowError}>{updateError}</Text> : null}
+          </View>
+          <Switch
+            value={config?.enableTerminalAgentHooks === true}
+            disabled={!config || isUpdating}
+            onValueChange={handleLegacyValueChange}
+            accessibilityLabel="Enable terminal agent hooks"
+            testID="host-page-terminal-agent-hooks-switch"
+          />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={settingsStyles.card} testID="host-page-terminal-agent-hooks-card">
       <View style={settingsStyles.row}>
         <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>Enable terminal agent hooks</Text>
+          <Text style={settingsStyles.rowTitle}>Terminal agent hooks</Text>
           <Text style={settingsStyles.rowHint}>
-            Get notifications and status from terminal agents. This installs hooks in your agent
-            config files.
+            Choose which terminal agents report status and notifications. Enabling a provider
+            installs a hook in that agent&apos;s config files.
           </Text>
+          {updateError ? <Text style={settingsStyles.rowError}>{updateError}</Text> : null}
         </View>
-        <Switch
-          value={config?.enableTerminalAgentHooks === true}
-          onValueChange={handleValueChange}
-          accessibilityLabel="Enable terminal agent hooks"
-          testID="host-page-terminal-agent-hooks-switch"
-        />
       </View>
+      {TERMINAL_AGENT_HOOK_PROVIDERS.map((provider) => (
+        <TerminalAgentHookProviderRow
+          key={provider.id}
+          providerId={provider.id}
+          label={provider.label}
+          enabled={isTerminalAgentHookProviderEnabled(
+            config?.terminalAgentHooks,
+            config?.enableTerminalAgentHooks === true,
+            provider.id,
+          )}
+          disabled={!config || isUpdating}
+          onValueChange={handleValueChange}
+        />
+      ))}
     </View>
   );
 }

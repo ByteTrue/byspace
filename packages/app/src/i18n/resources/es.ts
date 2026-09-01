@@ -557,6 +557,8 @@ export const es: TranslationResources = {
       hostDisconnected: "Hostno está conectado",
       updateHost: "Actualiza el host para usar el renderizador de terminal nativo.",
       unableToSubscribe: "No se puede suscribir al terminal",
+      clipboardImageTooLarge: "La imagen del portapapeles es demasiado grande (máx. 50 MiB)",
+      clipboardReadFailed: "No se pudo leer la imagen del portapapeles",
     },
     tabs: {
       loading: "Cargando...",

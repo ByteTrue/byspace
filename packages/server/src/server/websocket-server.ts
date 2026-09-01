@@ -178,6 +178,34 @@ function terminalAttentionTitle(reason: TerminalAttentionReason): string {
   return reason === "needs_input" ? "Terminal needs input" : "Terminal finished";
 }
 
+const TERMINAL_NOTIFICATION_PREVIEW_LINE_LIMIT = 8;
+const TERMINAL_NOTIFICATION_PREVIEW_LIMIT = 220;
+
+async function resolveTerminalNotificationBody(
+  terminalManager: TerminalManager | null,
+  terminalId: string,
+  fallback: string,
+): Promise<string> {
+  if (!terminalManager) return fallback;
+
+  try {
+    const capture = await terminalManager.captureTerminal(terminalId, {
+      start: -TERMINAL_NOTIFICATION_PREVIEW_LINE_LIMIT,
+    });
+    const preview = capture.lines
+      .filter((line) => line.trim().length > 0)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!preview) return fallback;
+    if (preview.length <= TERMINAL_NOTIFICATION_PREVIEW_LIMIT) return preview;
+
+    return `${preview.slice(0, TERMINAL_NOTIFICATION_PREVIEW_LIMIT - 3).trimEnd()}...`;
+  } catch {
+    return fallback;
+  }
+}
+
 function createFallbackWorkspaceGitSnapshot(cwd: string): WorkspaceGitRuntimeSnapshot {
   return {
     cwd,
@@ -1691,6 +1719,8 @@ export class VoiceAssistantWebSocketServer {
         pluginThemes: true,
         // COMPAT(skillManagement): added in v0.4.0, remove gate after 2027-08-16.
         skillManagement: true,
+        // COMPAT(terminalAgentHookProviders): added in v0.7.1, remove gate after 2027-09-01.
+        terminalAgentHookProviders: true,
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": true,
         // COMPAT(terminalInputModeReplay): added in v0.2.6, remove gate after 2027-02-02.
@@ -2649,7 +2679,11 @@ export class VoiceAssistantWebSocketServer {
     });
 
     const title = terminalAttentionTitle(params.reason);
-    const body = params.terminalName;
+    const body = await resolveTerminalNotificationBody(
+      this.terminalManager,
+      params.terminalId,
+      params.terminalName,
+    );
 
     if (plan.shouldPush) {
       void this.pushNotificationSender

@@ -14,6 +14,7 @@ import {
 } from "@getpaseo/protocol/terminal-input-mode";
 import { useTranslation } from "react-i18next";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { useToast } from "@/contexts/toast-context";
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { useStableEvent } from "@/hooks/use-stable-event";
@@ -70,6 +71,10 @@ import {
 } from "@/utils/terminal-renderer-readiness";
 import { useAppSettings } from "@/hooks/use-settings";
 import { classifyForResolution, fetchDaemonResolution } from "@/assistant-file-links/resolver";
+import type {
+  TerminalClipboardImage,
+  TerminalPasteErrorReason,
+} from "@/terminal/runtime/terminal-emulator-runtime";
 import type {
   TerminalLocalFileLinkSource,
   TerminalLocalFileLinkTarget,
@@ -211,6 +216,7 @@ export function TerminalPane({
   onOpenWorkspaceFile,
 }: TerminalPaneProps) {
   const { t } = useTranslation();
+  const toast = useToast();
   const retainedPanelActive = useRetainedPanelActive();
   const isAppActivelyVisible = useAppActivelyVisible();
   const { theme } = useUnistyles();
@@ -916,6 +922,49 @@ export function TerminalPane({
   const handleInputModeChange = useCallback((state: TerminalInputModeState) => {
     inputModeRef.current = state;
   }, []);
+  const handleTerminalPasteImage = useCallback(
+    async (image: TerminalClipboardImage): Promise<string | null> => {
+      if (!client || !isConnected) {
+        toast.error(t("workspace.terminal.hostDisconnected"));
+        return null;
+      }
+
+      try {
+        const result = await client.uploadFile({
+          fileName: `clipboard-image.${image.fileExtension}`,
+          mimeType: image.mimeType,
+          bytes: image.bytes,
+        });
+        if (result.error) {
+          throw new Error(result.error);
+        }
+        if (!result.file) {
+          throw new Error(t("composer.errors.uploadFailed"));
+        }
+        return result.file.path;
+      } catch (error) {
+        toast.error(
+          error instanceof Error && error.message.length > 0
+            ? error.message
+            : t("composer.errors.uploadFailed"),
+        );
+        return null;
+      }
+    },
+    [client, isConnected, t, toast],
+  );
+  const handleTerminalPasteError = useCallback(
+    (reason: TerminalPasteErrorReason) => {
+      toast.error(
+        t(
+          reason === "image-too-large"
+            ? "workspace.terminal.clipboardImageTooLarge"
+            : "workspace.terminal.clipboardReadFailed",
+        ),
+      );
+    },
+    [t, toast],
+  );
   const handleResolveLocalFileLink = useCallback(
     async (source: TerminalLocalFileLinkSource): Promise<TerminalLocalFileLinkTarget | null> => {
       const resolution = classifyForResolution(
@@ -1005,6 +1054,7 @@ export function TerminalPane({
   const showPasteAction = shouldShowTerminalPasteAction({ isNative });
   const showFloatingCopyAction = shouldShowTerminalFloatingCopyAction({
     hasSelection,
+    isCompact: isMobile,
     isNative,
   });
   const keyboardToggleIconColor = theme.colors.foregroundMuted;
@@ -1092,6 +1142,8 @@ export function TerminalPane({
             onResize={handleTerminalResize}
             onTerminalKey={handleTerminalKey}
             onInputModeChange={handleInputModeChange}
+            onPasteImage={handleTerminalPasteImage}
+            onPasteError={handleTerminalPasteError}
             onSelectionChange={handleSelectionChange}
             onResolveLocalFileLink={handleResolveLocalFileLink}
             onOpenLocalFileLink={handleOpenLocalFileLink}

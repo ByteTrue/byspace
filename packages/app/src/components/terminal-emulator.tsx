@@ -21,7 +21,9 @@ import type { TerminalInputModeState } from "@getpaseo/protocol/terminal-input-m
 import type { PendingTerminalModifiers } from "../utils/terminal-keys";
 import {
   TerminalEmulatorRuntime,
+  type TerminalClipboardImage,
   type TerminalOutputData,
+  type TerminalPasteErrorReason,
 } from "../terminal/runtime/terminal-emulator-runtime";
 import type {
   TerminalLocalFileLinkSource,
@@ -127,6 +129,8 @@ interface TerminalEmulatorProps {
   }) => Promise<void> | void;
   onPendingModifiersConsumed?: () => Promise<void> | void;
   onInputModeChange?: (state: TerminalInputModeState) => Promise<void> | void;
+  onPasteImage?: (image: TerminalClipboardImage) => Promise<string | null>;
+  onPasteError?: (reason: TerminalPasteErrorReason) => Promise<void> | void;
   onSelectionChange?: (hasSelection: boolean) => void;
   onResolveLocalFileLink?: (
     source: TerminalLocalFileLinkSource,
@@ -177,6 +181,9 @@ export default function TerminalEmulator({
   onTerminalKey,
   onPendingModifiersConsumed,
   onInputModeChange,
+  onPasteImage,
+  onPasteError,
+  onSelectionChange,
   onResolveLocalFileLink,
   onOpenLocalFileLink,
   onRendererReadyChange,
@@ -187,6 +194,8 @@ export default function TerminalEmulator({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const runtimeRef = useRef<TerminalEmulatorRuntime | null>(null);
+  const touchSelectionEnabledRef = useRef(swipeGesturesEnabled);
+  touchSelectionEnabledRef.current = swipeGesturesEnabled;
   const mountedThemeRef = useRef<ITheme>(xtermTheme);
   const fontFamilyRef = useRef(fontFamily);
   const fontSizeRef = useRef(fontSize);
@@ -205,6 +214,9 @@ export default function TerminalEmulator({
     onTerminalKey,
     onPendingModifiersConsumed,
     onInputModeChange,
+    onPasteImage,
+    onPasteError,
+    onSelectionChange,
     onResolveLocalFileLink,
     onOpenLocalFileLink,
   });
@@ -214,6 +226,9 @@ export default function TerminalEmulator({
     onTerminalKey,
     onPendingModifiersConsumed,
     onInputModeChange,
+    onPasteImage,
+    onPasteError,
+    onSelectionChange,
     onResolveLocalFileLink,
     onOpenLocalFileLink,
   };
@@ -289,7 +304,8 @@ export default function TerminalEmulator({
       paste: (text: string) => {
         pasteText(text);
       },
-      copySelection: async () => "",
+      copySelection: (clipboard: TerminalClipboardWriter) =>
+        runtimeRef.current?.copySelection(clipboard) ?? Promise.resolve(""),
       clear: () => {
         runtimeRef.current?.clear();
       },
@@ -316,6 +332,10 @@ export default function TerminalEmulator({
   useEffect(() => {
     runtimeRef.current?.setScrollback({ lines: scrollbackLines });
   }, [scrollbackLines]);
+
+  useEffect(() => {
+    runtimeRef.current?.setTouchSelectionEnabled({ enabled: swipeGesturesEnabled });
+  }, [swipeGesturesEnabled]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -380,6 +400,10 @@ export default function TerminalEmulator({
       if (activePointerId !== null && event.pointerId !== activePointerId) {
         return;
       }
+      if (runtimeRef.current?.hasSelection()) {
+        reset();
+        return;
+      }
 
       const dx = event.clientX - startX;
       const dy = event.clientY - startY;
@@ -442,6 +466,7 @@ export default function TerminalEmulator({
 
     const runtime = new TerminalEmulatorRuntime();
     runtimeRef.current = runtime;
+    runtime.setTouchSelectionEnabled({ enabled: touchSelectionEnabledRef.current });
     runtime.setCallbacks({
       callbacks: {
         ...mountCallbacksRef.current,
@@ -477,6 +502,9 @@ export default function TerminalEmulator({
         onTerminalKey,
         onPendingModifiersConsumed,
         onInputModeChange,
+        onPasteImage,
+        onPasteError,
+        onSelectionChange,
         onResolveLocalFileLink,
         onOpenLocalFileLink,
         onOpenExternalUrl: openExternalUrl,
@@ -485,10 +513,13 @@ export default function TerminalEmulator({
   }, [
     onInput,
     onInputModeChange,
+    onPasteImage,
+    onPasteError,
     onOpenLocalFileLink,
     onPendingModifiersConsumed,
     onResolveLocalFileLink,
     onResize,
+    onSelectionChange,
     onTerminalKey,
   ]);
 

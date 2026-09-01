@@ -30,7 +30,7 @@ Terminal directory snapshots (`terminalsChanged`) and workspace contribution cha
 
 Each `onChange` delivers both the new snapshot and the `previous` one (`{ state, changedAt }`). The transition flows unchanged up through `TerminalSession.onActivityChange` (as `{ activity, previous }`), the worker protocol's `terminalActivityChange` event, and the manager-level `subscribeTerminalActivity(listener)` stream (`{ terminalId, name, cwd, activity, previous }`).
 
-The daemon consumes these transitions, not snapshots. When a transition moves from `working` to `idle`, the tracker records finished attention, so the terminal shows the same green finished dot as an idle agent that needs review. The websocket layer also fires a "Terminal finished" attention notification. A terminal that exits while still working emits no turn-end notification.
+The daemon consumes these transitions, not snapshots. When a transition moves from `working` to `idle`, the tracker records finished attention, so the terminal shows the same green finished dot as an idle agent that needs review. The websocket layer also fires a terminal attention notification; its body prefers the last eight non-empty rendered lines, collapsed to one line and limited to 220 characters with `...` when truncated. Empty or failed capture falls back to the terminal name. A terminal that exits while still working emits no turn-end notification.
 
 Terminal list visibility is `workspaceId`-scoped: a terminal belongs to the workspace that created it, and same-`cwd` sibling workspaces do not see it in their terminal lists. Terminal status routing starts from that owning workspace, uses the owning workspace's `cwd`, then fans the status bucket out to every active workspace with the same `cwd`.
 
@@ -73,6 +73,15 @@ OpenCode uses a server plugin instead of command hooks. The plugin listens to Op
 - `permission.asked` → `needs-input`
 - `permission.replied` → `running`
 
+Pi uses an auto-discovered extension:
+
+- `agent_start` → `running`
+- `ui_prompt_start` → `needs-input`
+- `ui_prompt_end` → `running`
+- `agent_settled`, `session_shutdown` → `idle`
+
+The Pi extension keeps one activity request in flight and only the newest pending state. Child Pi processes inherit an owner marker and do not register a second reporter for the same terminal.
+
 The daemon maps hook states onto terminal activity like an agent lifecycle plus unread attention: `running` → `state: working`, `idle` → `state: idle`, and `needs-input` → `state: idle` with `attentionReason: needs_input`. A `working` → `idle` transition records `state: idle` with `attentionReason: finished` until the user focuses that terminal; plain idle terminals still contribute no workspace status.
 
 ## Focus clearing
@@ -81,25 +90,20 @@ Client heartbeats include the focused terminal id. When a visible client focuses
 
 ### Agent hook installation
 
-Installing hooks edits the user's real agent config files, so it is opt-in. The daemon setting
-`enableTerminalAgentHooks` (persisted under `daemon.enableTerminalAgentHooks`, default `false`)
-gates installation. It is surfaced in the app under a host's **Terminals** settings as "Enable
-terminal agent hooks" — "Get notifications and status from terminal agents. This installs hooks in
-your agent config files." `applyTerminalAgentHookSetting` reconciles the installed hooks with the
-setting: at startup it installs only when enabled; toggling the setting live installs on enable and
-removes BySpace's marker-matched hooks on disable. `byspace hooks` keeps working regardless — the gate
-only controls whether the daemon writes hooks into agent configs, not whether the CLI can post
-activity when the env is present.
+Installing hooks edits the user's real agent config files, so each provider is opt-in. The daemon stores switches under `daemon.terminalAgentHooks`; an absent key is disabled. Hosts advertising provider-scoped hooks show Claude Code, Codex, OpenCode, and Pi switches under **Terminals** settings; older hosts keep the global switch. Toggling one provider installs or removes only that provider's BySpace-owned hook.
 
-When enabled, BySpace installs provider hooks globally:
+When the provider map is absent, the legacy `daemon.enableTerminalAgentHooks` switch applies only to the providers it originally controlled: Claude Code, Codex, and OpenCode. Pi stays disabled until the user explicitly enables it, so upgrading a host cannot install a new Pi extension from an old persisted `true`. The first provider edit materializes that effective map and updates the legacy aggregate to `true` when any provider is enabled. A later legacy-switch edit from an old app updates only Claude Code, Codex, and OpenCode; explicit Pi or future-provider settings remain unchanged.
+
+BySpace installs providers as follows:
 
 - Claude hooks are written to `~/.claude/settings.json` (or `CLAUDE_CONFIG_DIR/settings.json` when that override is set).
 - Codex hooks are written to `~/.codex/hooks.json` (or `CODEX_HOME/hooks.json` when that override is set). Codex supports a native `commandWindows`, so each BySpace hook includes both POSIX and Windows commands. Non-managed Codex hooks are trust-gated by Codex; users may see Codex's hook review prompt before the hook runs.
 - OpenCode gets a self-contained plugin at `$XDG_CONFIG_HOME/opencode/plugins/paseo-terminal-activity.js` (or `~/.config/opencode/plugins/paseo-terminal-activity.js` when XDG is unset; `OPENCODE_CONFIG_DIR` still wins when set).
+- Pi gets `extensions/byspace-terminal-activity.ts` under `PI_CODING_AGENT_DIR`, or `~/.pi/agent` when the override is unset. The extension uses Pi's documented `agent_start`, `ui_prompt_start`, `ui_prompt_end`, `agent_settled`, and `session_shutdown` events.
 
-Installation is marker-based/idempotent for config hooks and exact-file/idempotent for the OpenCode plugin. BySpace preserves user hooks, removes only its own marker-matched command hooks, and leaves hooks installed across daemon shutdown. Outside a BySpace terminal they are inert because the command or plugin is gated on `PASEO_TERMINAL_ID`.
+Installation is marker-based and idempotent. BySpace preserves user hooks, removes only its own hooks, and leaves enabled hooks installed across daemon shutdown. The Pi installer refuses to replace or remove a same-name file without the BySpace marker. Outside a BySpace terminal the hooks are inert because the required terminal activity environment is absent.
 
-Provider variation lives in `AGENT_HOOK_PROVIDERS`: provider id, installed events, config install metadata, and runtime event-to-activity resolution. The daemon calls `installRegisteredAgentHooks()` once; the CLI calls `resolveHookActivity(provider, event, input)`. Adding a provider should add one provider entry and register it in `AGENT_HOOK_PROVIDERS`, without editing the generic CLI command or daemon bootstrap.
+Provider variation lives in `AGENT_HOOK_PROVIDERS`: provider id, installed events, config install metadata, and runtime event-to-activity resolution. The daemon reconciles one registered provider at a time; the CLI calls `resolveHookActivity(provider, event, input)` for command-based hooks. Adding a provider requires one provider entry and registry registration, without editing the generic CLI command or daemon bootstrap.
 
 The installed hook command keeps the config portable and resolves the CLI at runtime:
 
@@ -115,4 +119,4 @@ if defined PASEO_TERMINAL_ID (if defined BYSPACE_HOOK_CLI ("%BYSPACE_HOOK_CLI%" 
 
 The daemon resolves the current CLI through `BYSPACE_CLI` (normalized to the internal `PASEO_CLI` alias) when its launcher supplies one, or through the npm package shim for standalone installs. Terminal setup exposes that executable as both `BYSPACE_HOOK_CLI` and `PASEO_HOOK_CLI`. The generated command falls back to the legacy alias and then bare `byspace`; it no-ops outside BySpace terminals because the terminal-id gate remains first. BySpace also prepends the resolved CLI directory to each terminal `PATH` as a secondary fallback. All other behavior lives in `byspace hooks`: read the env, map the event, POST activity, and no-op/fail-open when anything is missing or unavailable.
 
-If config installation fails, daemon startup and terminal spawn continue without terminal activity hooks.
+If one provider installation fails, daemon startup, terminal spawn, and reconciliation of the other providers continue.

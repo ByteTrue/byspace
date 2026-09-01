@@ -92,6 +92,12 @@
             "enableTerminalAgentHooks": {
               "type": "boolean"
             },
+            "terminalAgentHooks": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "boolean"
+              }
+            },
             "appendSystemPrompt": {
               "type": "string"
             },

@@ -35,6 +35,16 @@ async function resolveTsPath(basePath) {
 const aliasPlugin = {
   name: "paseo-alias",
   setup(build) {
+    // The terminal WebView is an isolated browser context without Expo's native
+    // module registry, so its optional performance trace sink is a no-op.
+    build.onResolve({ filter: /^@\/performance\/native-trace$/ }, () => ({
+      path: "native-trace",
+      namespace: "paseo-webview-stub",
+    }));
+    build.onLoad({ filter: /.*/, namespace: "paseo-webview-stub" }, () => ({
+      contents:
+        "export const nativePerformanceTrace = { isEnabled: () => false, beginSection() {}, endSection() {} }; export function traceInstant() {}",
+    }));
     build.onResolve({ filter: /^@\// }, async (args) => ({
       path: await resolveTsPath(path.join(appRoot, "src", args.path.slice(2))),
     }));

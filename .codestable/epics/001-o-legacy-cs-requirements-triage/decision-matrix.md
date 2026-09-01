@@ -2,7 +2,7 @@
 
 审计基线：`main` / `3eb257825f30d3c44bc82ec14e72324056ec3c25`。
 
-本矩阵与 `requirements-catalog.md` 配套使用：catalog 保存原始需求和精确归档路径，本文件保存 reset 前证据、当前证据和 Owner 决策。Owner 已完成全部决策：34 个原子 ID 保留，38 个不做，5 个一次性任务剔除，不再有待决定项。
+本矩阵与 `requirements-catalog.md` 配套使用：catalog 保存原始需求和精确归档路径，本文件保存 reset 前证据、当前证据和 Owner 决策。Owner 已完成全部决策：33 个原子 ID 保留，39 个不做，5 个一次性任务剔除，不再有待决定项。
 
 “**不做**”表示不再作为 BySpace 定制实现、验收或维护目标；不会为此主动删除上游当前已有且仍可用的功能。W05 只保留“hover 展示该 Workspace 下全部 Agent 精确状态”，同项内的 Project 单一结构和 attention 优先不做。
 
@@ -18,26 +18,26 @@
 
 Terminal 全组已由 Owner 确认保留；这里记录当前缺口，用于后续 `cs-issue` / `cs-feat` 排序。
 
-| ID  | reset 前证据                                                                     | 当前 `main` 证据                                                                                               | 证据状态                    | Owner 决定         |
-| --- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------- | ------------------ |
-| T01 | Epic 持续目标；历史 Direct 基准未最终闭环。                                      | 有 worker、coalescing、性能 E2E 等机制；用户仍在当前 Paseo 复现历史 Terminal 问题。                            | 部分/待验收                 | **保留并逐项重验** |
-| T02 | Epic 持续目标；要求 Relay 仅有有界性能下降。                                     | Relay/E2EE 与 Terminal stream 存在，但没有当前 Direct/Relay 同 workload 等价基准。                             | 部分/待验收                 | **保留并逐项重验** |
-| T03 | 归档 closed；reset 前有 retained panel layout 修复和专项测试。                   | 有 resize/stuck-size/retained-tab 测试；历史首帧与 passive-refit 专项测试不在。                                | 部分/待验收                 | **保留并逐项重验** |
-| T04 | 归档 closed；reset 前有 workspace 切换 renderer retention 实现与测试。           | pane 有 retained 结构，但 workspace focus 会改变 presented/stream 状态；缺少“不 remount、不 replay”专项证据。  | 部分/待验收                 | **保留并逐项重验** |
-| T05 | 归档 closed；reset 前实现 revision backlog/resume 和 10,000 行客户端保留。       | restore 固定走 `visible-snapshot` 200 行；未见 revision resume、缺口续传或 delivered revision。                | **缺失/回退**               | **保留并实施**     |
-| T06 | 归档 closed；reset 前实现最近非空输出通知摘要。                                  | 当前通知模型、Terminal 输出预览与 WebSocket 测试仍在。                                                         | 强代码证据；待实机          | **保留并逐项重验** |
-| T07 | 归档 closed；reset 前有 compact Web 长按选择/复制验收。                          | 当前有 Terminal selection/clipboard 基础路径，但没有原移动手势组合的直接当前证据。                             | 部分/待验收                 | **保留并逐项重验** |
-| T08 | 归档 open；Windows 逐键延迟未闭环。                                              | 当前浏览器输入仍经 WebSocket round trip，无本地 echo；没有 Windows 实机通过证据。                              | **缺失/未闭环**             | **保留并实施**     |
-| T09 | 归档 open；留下阶段化 benchmark 文档与 JSON。                                    | 有性能测试，但没有固定同机 workload 的 input→daemon→transport→decode→commit 分段报告。                         | 部分/未闭环                 | **保留并实施**     |
-| T10 | 归档 closed；reset 前有 snapshot preamble 与 DECSET 2004 恢复测试。              | live paste 能按 bracketed mode 包装；缺少 attach/restore 后 mode 恢复并进入单个 PTY block 的端到端证明。       | 部分/待验收                 | **保留并逐项重验** |
-| T11 | 归档 closed；reset 前实现剪贴板图片上传、daemon 临时路径和 Pi paste。            | 当前 Terminal clipboard 仅 `readText()`；Composer 图片上传不能替代 Terminal 图片粘贴。                         | **缺失/回退**               | **保留并实施**     |
-| T12 | 归档 closed；reset 前有 Windows ConPTY 强制 framing fallback。                   | 当前只依据 live DECSET mode 决定 framing；未见 Windows fallback。                                              | **缺失/回退**               | **保留并实施**     |
-| T13 | 归档 closed；reset 前建立 provider hook 解耦。                                   | 当前 Claude/Codex/OpenCode provider registry、全局启停、activity endpoint 和测试都在；Pi provider 不在。       | 强代码证据；Pi 缺口拆在 T14 | **保留并逐项重验** |
-| T14 | 归档 closed；reset 前有 Pi 全局 extension 与内置 profile。                       | 当前 registry 已有 Claude/Codex/OpenCode；没有 Pi hook provider、全局 extension 或内置 Pi profile。            | **缺失/回退**               | **保留并实施**     |
-| T15 | 归档 closed；reset 前移除低收益字体/主题配置并收敛默认值。                       | 当前 Terminal 使用统一外观/mono theme 路径，未见独立 Terminal 字体主题配置面；需浅色/深色/系统与高亮实机复核。 | 强代码证据；待验收          | **保留并逐项重验** |
-| T16 | 归档 closed；reset 前针对 Windows 页面、Timeline、Agent、Terminal 秒级停顿修复。 | 当前缺少 Windows 组合 workload 与长任务延迟门禁；静态代码不能证明无秒级停顿。                                  | 部分/待验收                 | **保留并逐项重验** |
-| T17 | 归档 closed；reset 前 Pi reporter 串行、latest-wins、有界合并与失败续传。        | Pi reporter/extension 已不存在，因此其顺序与恢复保证也不存在。                                                 | **缺失/回退**               | **保留并实施**     |
-| T18 | 归档 closed；当时入口改到 Host Providers。                                       | 当前入口直接打开更精确的 `/settings/host/terminals` 专页。                                                     | 架构已变；结果更贴近意图    | **保留并逐项重验** |
+| ID  | reset 前证据                                                                     | 当前 `main` 证据                                                                                              | 证据状态                    | Owner 决定                                                                                     |
+| --- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------- |
+| T01 | Epic 持续目标；历史 Direct 基准未最终闭环。                                      | 有 worker、coalescing、性能 E2E 等机制；用户仍在当前 Paseo 复现历史 Terminal 问题。                           | 部分/待验收                 | **保留并逐项重验**                                                                             |
+| T02 | Epic 持续目标；要求 Relay 仅有有界性能下降。                                     | Relay/E2EE 与 Terminal stream 存在，但没有当前 Direct/Relay 同 workload 等价基准。                            | 部分/待验收                 | **保留并逐项重验**                                                                             |
+| T03 | 归档 closed；reset 前有 retained panel layout 修复和专项测试。                   | 有 resize/stuck-size/retained-tab 测试；历史首帧与 passive-refit 专项测试不在。                               | 部分/待验收                 | **保留并逐项重验**                                                                             |
+| T04 | 归档 closed；reset 前有 workspace 切换 renderer retention 实现与测试。           | pane 有 retained 结构，但 workspace focus 会改变 presented/stream 状态；缺少“不 remount、不 replay”专项证据。 | 部分/待验收                 | **保留并逐项重验**                                                                             |
+| T05 | 归档 closed；reset 前实现 revision backlog/resume 和 10,000 行客户端保留。       | restore 固定走 `visible-snapshot` 200 行；未见 revision resume、缺口续传或 delivered revision。               | **缺失/回退**               | **保留并实施；正常同 renderer 保留 10,000 行，gap 不可恢复时 fallback snapshot 最多 1,000 行** |
+| T06 | 归档 closed；reset 前实现最近非空输出通知摘要。                                  | 当前通知模型、Terminal 输出预览与 WebSocket 测试仍在。                                                        | 强代码证据；待实机          | **保留并逐项重验**                                                                             |
+| T07 | 归档 closed；reset 前有 compact Web 长按选择/复制验收。                          | 当前有 Terminal selection/clipboard 基础路径，但没有原移动手势组合的直接当前证据。                            | 部分/待验收                 | **保留并逐项重验**                                                                             |
+| T08 | 归档 open；Windows 逐键延迟未闭环。                                              | 当前浏览器输入仍经 WebSocket round trip，无本地 echo；没有 Windows 实机通过证据。                             | **缺失/未闭环**             | **保留并实施**                                                                                 |
+| T09 | 归档 open；留下阶段化 benchmark 文档与 JSON。                                    | 有性能测试，但没有固定同机 workload 的 input→daemon→transport→decode→commit 分段报告。                        | 部分/未闭环                 | **保留并实施**                                                                                 |
+| T10 | 归档 closed；reset 前有 snapshot preamble 与 DECSET 2004 恢复测试。              | live paste 能按 bracketed mode 包装；缺少 attach/restore 后 mode 恢复并进入单个 PTY block 的端到端证明。      | 部分/待验收                 | **保留并逐项重验**                                                                             |
+| T11 | 归档 closed；reset 前实现剪贴板图片上传、daemon 临时路径和 Pi paste。            | 当前 Terminal clipboard 仅 `readText()`；Composer 图片上传不能替代 Terminal 图片粘贴。                        | **缺失/回退**               | **保留并实施**                                                                                 |
+| T12 | 归档 closed；reset 前有 Windows ConPTY 强制 framing fallback。                   | 当前只依据 live DECSET mode 决定 framing；未见 Windows fallback。                                             | **缺失/回退**               | **保留并实施**                                                                                 |
+| T13 | 归档 closed；reset 前建立 provider hook 解耦。                                   | 当前 Claude/Codex/OpenCode provider registry、全局启停、activity endpoint 和测试都在；Pi provider 不在。      | 强代码证据；Pi 缺口拆在 T14 | **保留并逐项重验**                                                                             |
+| T14 | 归档 closed；reset 前有 Pi 全局 extension 与内置 profile。                       | 当前 registry 已有 Claude/Codex/OpenCode；没有 Pi hook provider、全局 extension 或内置 Pi profile。           | **缺失/回退**               | **保留并实施**                                                                                 |
+| T15 | 归档 closed；reset 前移除低收益字体/主题配置并收敛默认值。                       | 当前仍有可用的 Appearance 主题、语法高亮、UI/code 字体、字号与持久化。                                        | Owner 后续取消              | **不做；不得修改或删除现有 Appearance 能力**                                                   |
+| T16 | 归档 closed；reset 前针对 Windows 页面、Timeline、Agent、Terminal 秒级停顿修复。 | 当前缺少 Windows 组合 workload 与长任务延迟门禁；静态代码不能证明无秒级停顿。                                 | 部分/待验收                 | **保留并逐项重验**                                                                             |
+| T17 | 归档 closed；reset 前 Pi reporter 串行、latest-wins、有界合并与失败续传。        | Pi reporter/extension 已不存在，因此其顺序与恢复保证也不存在。                                                | **缺失/回退**               | **保留并实施**                                                                                 |
+| T18 | 归档 closed；当时入口改到 Host Providers。                                       | 当前入口直接打开更精确的 `/settings/host/terminals` 专页。                                                    | 架构已变；结果更贴近意图    | **保留并逐项重验**                                                                             |
 
 ## R · Relay、远程访问、配对与 Service Proxy
 
@@ -153,8 +153,8 @@ Terminal benchmark JSON 单独归入 T09 证据。
 
 ## 决策汇总
 
-- **保留 34 项**：T01–T18、R02–R03、A04–A09、W01、W02、W04、W05 的 Agent 状态 hover 子目标、W14、U03、U05、B01。
-- **不做 38 项**：其余 R/A/V/W/U/B/C 条目；它们不再进入 BySpace 定制 backlog。
+- **保留 33 项**：T01–T14、T16–T18、R02–R03、A04–A09、W01、W02、W04、W05 的 Agent 状态 hover 子目标、W14、U03、U05、B01。
+- **不做 39 项**：T15 与其余 R/A/V/W/U/B/C 条目；它们不再进入 BySpace 定制 backlog，且不得据此删除上游或当前仍可用的功能。
 - **一次性剔除 5 项**：O01–O05。
 - **无待决定项**。
 

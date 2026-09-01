@@ -45,6 +45,23 @@ test.describe("Settings host page", () => {
     await expectHostInjectMcpCard(page);
   });
 
+  test("terminals section shows independent agent hook provider switches", async ({ page }) => {
+    const serverId = getServerId();
+
+    await gotoAppShell(page);
+    await openSettings(page);
+    await openSettingsHost(page, serverId);
+    await openHostSection(page, serverId, "terminals");
+
+    await expectSettingsHeader(page, "Terminals");
+    await expect(page.getByTestId("host-page-terminal-agent-hooks-card")).toBeVisible();
+    for (const providerId of ["claude", "codex", "opencode", "pi"] as const) {
+      await expect(
+        page.getByTestId(`host-page-terminal-agent-hooks-${providerId}-switch`),
+      ).toHaveAttribute("aria-checked", "false");
+    }
+  });
+
   test("providers section shows the providers card", async ({ page }) => {
     const serverId = getServerId();
 

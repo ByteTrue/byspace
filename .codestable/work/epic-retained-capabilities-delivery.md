@@ -10,11 +10,11 @@ milestone_commit: authorized
 remote_publish: each-milestone
 commit_strategy: semantic-atomic-per-item
 publish_strategy: epic-plan-pr-then-one-pr-per-wave
-current_wave: 2
-current_item: null
+current_wave: 3
+current_item: Wave 3 PR scope correction
 active_items: []
 blocked_by: null
-next_action: 创建并合入 Wave 2 PR；exact-head CI 全绿后推进 Wave 3
+next_action: 提交并推送已完成本地验证与独立复审的 PR #18 correction commits，更新 PR 描述后等待新 exact-head required checks
 ---
 
 # Epic Work: 保留能力交付路线
@@ -22,7 +22,7 @@ next_action: 创建并合入 Wave 2 PR；exact-head CI 全绿后推进 Wave 3
 ## 当前状态
 
 - Owner 已批准永久 Epic、5 个 Wave、21 个 ITEM 及推荐执行策略；规划 PR #14 已合入。
-- 34 个保留 ID 已唯一映射到 21 个 ITEM。
+- Owner 于 2026-09-01 取消 T15；当前 33 个保留 ID 已唯一映射到 21 个 ITEM，T15 留在历史 catalog 中但不再实施。
 - Fresh design review `a86fc285-9028-4634-85f9-661375af1b24` 返回 `verdict=pass`，无 blocking/important finding；两项 minor 已修正。
 - Wave 1 从 exact-main CI 绿色 commit `5dc678bdefb77e52fe729c00b8034eb89ad7f7de` 开始。
 - Owner 已选择 parallel 推荐方案 A：最多两个 writer，按 worker 完成顺序串行集成。
@@ -33,9 +33,19 @@ next_action: 创建并合入 Wave 2 PR；exact-head CI 全绿后推进 Wave 3
 - ITEM-03 read-only scout 已完成 optional hostname 的协议/客户端接缝与兼容测试包，没有修改文件。
 - Wave 1 PR #16 已由 reviewed head `db08188e9b0be50d4d966eac0851ab44aa2a5ecb` 合入 `main`，merge commit 为 `0d81e9fa376a2fb98518e94b5080d97440371811`；post-merge exact-SHA CI `33375176914` 与 Docker `33375176920` 均通过。
 - Wave 2 从上述绿色 `main` 创建；ITEM-04 已取得 Node、Browser Direct、本地 Wrangler Relay/E2EE 与 exact-head Windows 证据。Desktop-web 超大 turn hard cap 已在 Windows 将组合 workload 的 `longTaskMaxMs` 从 `1343` 降到最终 `478`（Direct）/`794`（Relay），`rafMaxGapMs` 从 `1379.3` 降到最终 `706.8`/`999.9`；canonical xterm buffer 完整性 oracle 在两种 transport 均确认 1,000/1,000 输出与 24/24 echo，无 duplicate、out-of-order 或 mismatch。Exact-head run `33405590748` 全绿，final aggregate review `caf8c1ed-6591-4d97-8afb-0758a6fa2d11` 判定 PASS（0 blocking / 0 important）。
-- ITEM-05 已完成 retained renderer 恢复与 revision gap replay：隐藏/返回不 reset，共享 renderer 保留 1,500 行并只补一次 gap；1MB backlog 不连续、终端退出、完整 transport 丢失或 backpressure overflow 均回退权威 snapshot。Protocol 8/8、App 12/12、Server 128/128、Direct/Relay 各 1/1、Build/Typecheck/Lint/Format 全绿；Round 2 review `31a2f709-a9d9-47ec-ad24-421ea8b82986` 为 PASS（0 blocking / 0 important）。
+- ITEM-05 已完成 retained renderer 恢复与 revision gap replay：同一 renderer 正常保留客户端 10,000 行 scrollback；隐藏/返回不 reset，并只补一次 gap。Daemon 的 contiguous backlog 上限为 1MB；gap 不连续、终端退出、完整 transport 丢失、必须新建 renderer 或 backpressure overflow 时回退最多 1,000 行 scrollback 的权威 snapshot。Protocol 8/8、App 12/12、Server 128/128、Direct/Relay 各 1/1、Build/Typecheck/Lint/Format 全绿；Round 2 review `31a2f709-a9d9-47ec-ad24-421ea8b82986` 为 PASS（0 blocking / 0 important）。
 - ITEM-06 已完成 Windows/ConPTY 多行文本 paste fallback：keyboard、context menu 与 imperative paste 汇入同一 framing 策略，单行/非 Windows 保持 xterm 原路径，reload mode replay 与无 mode fallback 均由真实 PTY byte oracle 覆盖。Reviewer `19112db0-a596-443a-b414-bf6ca9c9cb1f` 为 PASS（0 blocking / 0 important）；exact-head Windows run `33425004246` 在 source milestone `055d0000b` 上 Direct/Relay 各 5/5 全绿。
 - Wave 2 frozen aggregate patch `3ed57574257c38e18d6fcbd98f9ccc7ec95300167e034ce960805d16ab9cbf30` 经 reviewer `91c20656-547e-43b0-b027-f74b57daebec` 审查为 PASS（0 blocking / 0 important）；ITEM-04/05/06 的协议兼容、backlog/reconnect 生命周期、renderer/paste 交互、性能 oracle、CI gating 与文档证据均通过交叉核对。
+- Wave 2 PR #17 的 23 个 required checks 全绿后已合入 `main`，merge commit 为 `30893a48b3b59e2053a171803974f81975ca8a88`；merge-SHA CI run `33429830398` 的已知 Timeline hydration flaky 经本地 20/20 复现通过与单 job rerun 后，最终 20 个检查全绿。
+- Wave 3 从上述绿色 `main` 创建。ITEM-07 已完成最后八行/220 字 Terminal 通知摘要与 fail-open fallback，3-path frozen patch `2fc75d3244235437969691ffc6a0fc1da893c8409e7d6ac4e563789126ca10e2` 经 reviewer `b40c4e19-f593-4e81-8731-fea33d21ac55` 判定 mergeable（0 blocking / 0 important），并由父流程串行集成。
+- ITEM-08 已在独立 worktree `epic-002-wave3-item08` 完成 compact Web 长按选词、拖动扩选、复制及滚动/点击回归。canonical 全仓 lint 发现 E2E 内联 viewport probe 超出 callback nesting 限额后，父流程仅将相同表达式提取为 helper；final 7-path frozen patch `72183505…cd3763f` 的 browser 44/44、真实 compact Chromium 1/1、Typecheck/Lint/Format 均通过，fresh re-reviewer `233f6be9-99b3-4e2a-8bc1-b5b40f5677cf` 返回 0 blocking / 0 important。selection + Copy changed-state screenshot `audit-artifacts/epic-002-wave3/item08/compact-terminal-long-press-selection.jpeg`（SHA-256 `6cb160e2…2155dc`）和 exact-current trace `compact-terminal-selection-trace.zip`（`11bd6aa5…01c1c5`）已保存；final reviewed patch 已原字节收割到 canonical Wave 3 分支。
+- ITEM-09 已完成浏览器 clipboard image 读取、既有 binary upload、daemon 临时路径单次 paste、Windows Alt+V fallback 及错误提示；文本 paste 保持原路径。14-path frozen patch `1ac8774b…dd9c9` 经 Round 2 reviewer `3a380267-554a-45a6-95dc-2164bd517a70` 判定 PASS（0 blocking / 0 important）。Source commit `fcc408146` 的 exact-head Windows run `33450638997` 第 3 attempt 全绿；父流程在 canonical 分支复验 browser 59/59、server upload 5/5、Direct/Relay clipboard E2E 各 6/6、Build/Typecheck/Lint，并按冻结 manifest 原字节集成为 `8e0946084`。UI screenshot/trace 保存于 `audit-artifacts/epic-002-wave3/item09/`。
+- ITEM-10 已完成 provider-scoped Claude/Codex/OpenCode/Pi hook 配置、legacy aggregate 双向兼容、Pi extension latest-wins/failure recovery 与 Host Terminals UI capability gate；built-in Pi profile 保持不变。缺少 provider map 的历史 global `true` 只迁移到 Claude/Codex/OpenCode，Pi 保持关闭直到用户显式启用；旧客户端后续主动切换 global 开关也只更新这三个历史 provider，并保留显式 Pi 或未来 provider 设置。Frozen patch `0ed98c1e…ff49` 经 Round 2 reviewer `b9e9aa3e-6a80-499d-afea-08694669ed3d` 判定 OK（0 blocking / 0 important），父流程已串行集成为 `987738a09`。两条并行 lane 均关闭。
+- ITEM-11 已收窄为 T18：New Workspace 的 Manage Terminal Profiles 精确打开所选 Host 的 `terminals` 路由，并由 exact-host E2E 1/1 覆盖。Owner 已取消 T15；PR #18 中 `53da4f2c0` 引入的 Appearance 主题、语法高亮、UI/code 字体、字号、默认值与持久化删改全部通过新增 correction 撤销。父流程逐路径确认最终 aggregate 对 Wave 2 base 不含 Appearance 产品源码差异，ITEM-09、T18、WebView native-trace 与两项 CI fixture 修正均保留。
+- 纠偏本地验证通过：App Appearance/settings unit 143/143、Server legacy migration 41/41、PR CI fixture App 19/19 + Server 12/12、Appearance browser E2E 4/4、selected-Host T18 E2E 1/1、`build:server`、Typecheck、Lint、Format，以及 Terminal WebView 连续两次 byte-identical build 后格式化。
+- 先前 Wave 3 aggregate review 包含未经授权的 T15，已失效。新 scope reviewer `00b4d3c1-3c82-4ba5-bcfe-b2dd86f6c620` 返回 PASS with notes（0 P0/P1/P2）；correctness reviewer `a577ad8d-c5f0-4008-8932-f665b61d592f` 发现旧客户端 global patch 会覆盖 Pi/future provider 的 P1，父流程修复并补齐测试后由 follow-up run `25baf6cc-9132-4843-9bb9-ae05e4b2515f` 确认 CLOSED（0 remaining P0/P1/P2）。PR #18 保持未合并，等待 additive correction commits 推送后的新 exact-head CI。
+- Windows 性能验证继续使用 shared CI 中仅手动启用的 `terminal_performance` job；默认 PR CI 不运行该 job，且 job 无部署权限、secret 或发布输入。Owner 已于 2026-09-01 明确接受该路径。
+- Wave 3 PR #18 已创建。首个 exact-head CI run `33472512893` 暴露两个测试夹具缺口：App 的 stub Terminal 缺 `hasSelection()`，Server 的 provider-name bootstrap assertion 因新增短 ID `pi` 误匹配 `pino` / `pipe` / `/api`。父流程分别本地 RED 复现并做测试侧最小修正；之后因 T15 范围越界暂停所有 push、CI rerun 和 merge。纠偏完成并重新取得 UI、测试和独立复审证据前，PR 不得合入。
 
 ## Wave 1 · 发布通道路由与远程连接安全
 
@@ -49,13 +59,13 @@ next_action: 创建并合入 Wave 2 PR；exact-head CI 全绿后推进 Wave 3
 - [x] ITEM-05 · TERM-02 · T03/T04/T05 · reviewed and integrated
 - [x] ITEM-06 · TERM-05 · T10/T12 · reviewed and integrated
 
-## Wave 3 · Terminal 功能与呈现
+## Wave 3 · Terminal 功能与 profile
 
-- [ ] ITEM-07 · TERM-03 · T06
-- [ ] ITEM-08 · TERM-04 · T07
-- [ ] ITEM-09 · TERM-06 · T11
-- [ ] ITEM-10 · TERM-07 · T13/T14/T17
-- [ ] ITEM-11 · TERM-08 · T15/T18
+- [x] ITEM-07 · TERM-03 · T06 · reviewed and integrated
+- [x] ITEM-08 · TERM-04 · T07 · reviewed and integrated
+- [x] ITEM-09 · TERM-06 · T11 · reviewed and integrated
+- [x] ITEM-10 · TERM-07 · T13/T14/T17 · reviewed and integrated
+- [x] ITEM-11 · TERM-08 · T18 · correction locally verified and reviewed
 
 ## Wave 4 · Agent、Session 与 Timeline
 
@@ -75,6 +85,9 @@ next_action: 创建并合入 Wave 2 PR；exact-head CI 全绿后推进 Wave 3
 
 ## 活跃委派
 
+- Wave 3 并行 lane 已关闭：ITEM-07、ITEM-08、ITEM-10、ITEM-09 依次以 `0ff226755`、`d596c9376`、`987738a09`、`8e0946084` 串行集成。ITEM-09 worker `99dc78aa-83cd-44cd-b1ba-d68a748465e9` 完成 Lane B 交付；ITEM-10 的 native/Cursor runner 均在源码修改前失败，父流程确认无并发 writer 后完成唯一写入与 review。
+- ITEM-11 原 writer lineage `d79c7913-2976-4b7a-a8a1-55569c4944cb` 与 reviews `e299af3d-8b41-49a2-8a95-7fa29eb88db1` / `fd188487-95af-4751-afb1-9459e55a7c65` 覆盖了未经授权的 T15，现仅保留其中 T18；纠偏由父流程负责，不复用旧审查结论。
+- 先前 Wave 3 aggregate reviewers `484e3755-4106-4652-946c-687d643b81fa` / `f0cbc5e7-13e1-45f8-ac5f-98dc2bdb5a27` 已失效。纠偏 scope reviewer `00b4d3c1-3c82-4ba5-bcfe-b2dd86f6c620` 通过；correctness reviewer `a577ad8d-c5f0-4008-8932-f665b61d592f` 的单个 P1 已修复，并由 follow-up `25baf6cc-9132-4843-9bb9-ae05e4b2515f` 关闭。当前无活跃委派。
 - ITEM-05 唯一 writer lineage 首轮 `1619df3f-b0f3-4fef-8811-3aa52a0ef803`、续跑 `b779914e-c2cd-46cf-9e96-dac86c08791a` 在隔离 worktree `epic-002-wave2-item05` 建立 RED 并完成首轮实现；父流程在 runner settlement 后接管。首轮 reviewer `6fcf9c03-e55c-49dd-b452-bdd67f2490a7` 提出的 stale preamble 与 overflow-resume 两项 important 均经专门 RED 修复；Round 2 `31a2f709-a9d9-47ec-ad24-421ea8b82986` 返回 PASS（0 blocking / 0 important）。最终 21-path manifest 为 `849c36c761f99fb728dca39e494120f59ff695b2310d90378fae34e88b60fe67`。
 - ITEM-06 在隔离 worktree `epic-002-wave2-item06`（base `159a70640`）串行执行；scout workflow `dec0aff1-0930-4a1f-9018-98686354501a` 分别审计当前 runtime/E2E seam 与历史 T10/T12 边界。两个 scout 均确认 T10 已在 tracker/restore preamble，缺口仅为 T12 Windows 多行 framing，且不得整体移植图片 scope；唯一 writer `94da2f9c-f5d0-4a06-babe-8f3eb84cf63d` 完成 RED→GREEN，父流程修正非 Windows listener 与 mode replay 测试保真后冻结 7-path patch `ba654cd7…fa6aa`；reviewer `19112db0-a596-443a-b414-bf6ca9c9cb1f` 返回 PASS（0 blocking / 0 important），source milestone `055d0000b` 经 exact-head Windows run `33425004246` 验证并完成串行集成。
 - Wave 2 aggregate reviewer `91c20656-547e-43b0-b027-f74b57daebec` 审查 base `0d81e9fa3` 至 frozen head `35a0c1341` 的 9 commits / 46 paths，返回 PASS（0 blocking / 0 important）。其 Playwright JSON reporter 环境变量疑问已由锁定版本源码 `node_modules/playwright/lib/reporters/base.js` 核实：当前版本正式读取 `PLAYWRIGHT_JSON_OUTPUT_FILE`，无需改动。
@@ -106,6 +119,10 @@ next_action: 创建并合入 Wave 2 PR；exact-head CI 全绿后推进 Wave 3
 2. Worker 交付按完成顺序进入单一串行集成队列。
 3. 只允许永久 Epic 中 Wave 3、Wave 4 与 Wave 5 的具名 lane；超出路径所有权立即 stop-to-serial。
 4. `milestone_commit = authorized`、`remote_publish = each-milestone`、每 ITEM 语义原子 commit 与每 Wave 一个 PR 保持不变。
+5. T15 取消；恢复全部现有 Appearance 主题、语法高亮、UI/code 字体、字号、默认值和持久化，ITEM-11 只保留 T18。
+6. T05 接受“同一 renderer 正常 10,000 行、不可恢复 gap 的权威 snapshot 最多 1,000 行”边界。
+7. Windows `terminal_performance` job 保留为 shared CI 中的手动 opt-in 验证路径。
+8. 历史 global hooks `true` 只自动迁移 Claude/Codex/OpenCode；Pi 必须显式 opt-in，旧客户端后续主动切换 global 开关也只更新这三个历史 provider，并保留显式 Pi 或未来 provider 设置。
 
 ## 变更日志
 
@@ -141,3 +158,15 @@ next_action: 创建并合入 Wave 2 PR；exact-head CI 全绿后推进 Wave 3
 - 2026-09-01：ITEM-06 worker 以 Windows 多行 paste 无 framed input 的 browser timeout 建立 RED；父流程将 context listener 收窄为仅 Windows 多行、补齐非 Windows/单行原路径断言，并令 E2E 显式区分 mode=false fallback 与 reload 后 mode=true replay。最终 browser 30/30、App unit 24/24、Protocol input-mode 9/9、Direct PTY 2/2、本地 Wrangler Relay/E2EE PTY 2/2、CI contract、build、全仓 Typecheck/Lint/Format 均通过；7-path frozen patch `ba654cd73895d39d6a24b26dec16ccf0100dfb09a67994f96df4566e383fa6aa` 进入独立审查。
 - 2026-09-01：ITEM-06 reviewer `19112db0-a596-443a-b414-bf6ca9c9cb1f` 逐入口核对 keyboard/context/imperative paste、真实 PTY byte oracle、mode=false 与 reload mode=true 区分、cleanup 及 CI gating，结论 PASS（0 blocking / 0 important）。语义原子 source milestone `055d0000b17214db79c738af5454c71fdd14fea3` 的 exact-head Windows workflow `33425004246` 全绿：Direct 与本地 Wrangler Relay/E2EE 各 5/5，其中两条 clipboard spec 均在实际 `windows-latest` / ConPTY 上通过；Node L0/L1/L2 各 100/100 echo，Direct/Relay 组合 workload 均保持 1,000/1,000 输出、24/24 echo、有效 digest 与零 duplicate/out-of-order/mismatch。ITEM-06 已串行集成，Wave 2 三项进入 aggregate review。
 - 2026-09-01：Wave 2 aggregate reviewer `91c20656-547e-43b0-b027-f74b57daebec` 对 9 commits / 46 paths 的 frozen patch `3ed57574…b9cbf30` 返回 PASS（0 blocking / 0 important）。报告确认三项交付契约、协议双向兼容、无双投/丢失、无常态 trace 内存增长、Windows paste 单次 framing、真实 PTY/E2EE oracle 和 manual CI isolation 均成立；`PLAYWRIGHT_JSON_OUTPUT_FILE` 疑问已由当前 Playwright 源码核实为正确，其他 minor 均为既有或 report-only residual。Wave 2 可创建 PR。
+- 2026-09-01：Wave 2 PR #17 在 23 个 required checks 全绿后合入 `main`；merge-SHA CI run `33429830398` 经已知 Timeline hydration flaky 单 job rerun后最终全绿。清理 Wave 2 branches，并从 merge commit `30893a48b3b59e2053a171803974f81975ca8a88` 创建 Wave 3 集成分支。
+- 2026-09-01：Wave 3 ITEM-07 frozen patch `2fc75d32…0ca10e2` 经 fresh review 判定 mergeable（0 blocking / 0 important）；父流程完成 15/15 focused、Build、Typecheck、Lint、Format 验证并按并行协议串行集成。ITEM-08 保持独立 writer 继续执行。
+- 2026-09-01：ITEM-08 初始 patch `fa28e289…ab6341` 经 fresh review 判定 0 blocking / 0 important；canonical 全仓 lint 随后捕获 E2E callback nesting，父流程提取行为等价 viewport helper，final patch `72183505…cd3763f` 再经 fresh review 判定 0 blocking / 0 important。真实 compact Chromium 复验长按选择→拖动扩选→Copy（1/1），exact-current screenshot/trace 保存后原字节收割到 canonical Wave 3 分支并提交 milestone `d596c9376`。
+- 2026-09-01：从 ITEM-08 milestone `d596c9376` 创建 Lane B ITEM-09 worktree，并派发唯一 writer `99dc78aa-83cd-44cd-b1ba-d68a748465e9`；Lane A ITEM-10 由父流程保持唯一 writer，两 lane 文件所有权继续隔离。
+- 2026-09-01：ITEM-10 frozen patch `0ed98c1e…ff49` 经 Round 2 reviewer `b9e9aa3e-6a80-499d-afea-08694669ed3d` 对 installer、registry、setting、persistence、protocol、capability、UI 与测试九条 seam 复核，结论 OK（0 blocking / 0 important）；父流程以语义原子 commit `987738a09` 集成 provider-scoped hooks、Pi reporting 和 legacy aggregate 兼容。
+- 2026-09-01：ITEM-09 14-path frozen patch `1ac8774b…dd9c9` 经两轮审查关闭 Windows text clobber 与 MIME/type correctness 两项 important，final reviewer `3a380267-554a-45a6-95dc-2164bd517a70` 返回 PASS。Source `fcc408146` 在本地 Direct/Relay、browser/runtime、server upload、Typecheck/Lint/Format 通过后，exact-head Windows CI `33450638997` 第 3 attempt 全绿；前两次均为 ITEM-04 的软件渲染 1 秒性能阈值波动且 clipboard cases 已通过，依规则分别本地复验后才重跑，未修改门槛。父流程按 14-path manifest 原字节集成为 `8e0946084`，复验 Direct/Relay clipboard E2E 各 6/6。
+- 2026-09-01：ITEM-11 的 33-path patch `866cb3a6…c7624c` 曾按 T15/T18 集成；两名 item reviewer 对首轮冻结候选均返回 APPROVE（0 P0/P1），父流程处理 report-only 与 stale Desktop consumer 后复验 unit 130/130、terminal browser 59/59、Appearance 3/3、plugin 1/1、selected-Host T18 1/1、Desktop browser-tabs、WebView reproducibility/runtime smoke 及全仓静态门槛，以 commit `53da4f2c0` 集成。后续 Owner 审计确认 T15 未获授权，本次实现与审查结论均由后述纠偏替代。
+- 2026-09-01：Wave 3 aggregate reviewers `484e3755-4106-4652-946c-687d643b81fa` / `f0cbc5e7-13e1-45f8-ac5f-98dc2bdb5a27` 对 `30893a48b..53da4f2c0`、6 commits / 63 paths、patch `5455dc9d…fab70265` 均返回 APPROVE（0 P0/P1）。父流程补齐缺失的 ITEM-07 外部 evidence 并给 legacy compatibility 删除点补日期化 COMPAT 注释；其余 P2 均为已知边界或 report-only residual。Wave 3 解除 PR 阻断。
+- 2026-09-01：Wave 3 PR #18 创建于 head `2b3c9d4b3`，PR body 含 ITEM-08/09/10/11 共 5 张 UI 证据。CI run `33472512893` 的 App job `99745030906` 与 Server Ubuntu job `99745030890` 分别因测试 Terminal mock 缺真实 xterm `hasSelection()` API、短 provider ID `pi` 被 raw substring assertion 误匹配而失败。两项均先在本地 exact file 复现，再只修测试：所有 StubTerminal 强制实现默认 false 的 `hasSelection()`；bootstrap 解耦检查改为 provider token word-boundary。Focused 19/19、12/12 与全仓静态门槛全绿，focused reviewer `7e6b60f2-48d6-47d8-81b9-ffe381ce1071` APPROVE（0 P0/P1）。
+- 2026-09-01：Owner 发现 ITEM-11 未经授权删除 Highlight theme 后立即暂停 PR #18。父流程对 Wave 1–3 从规划基线到 PR head 做逐 commit、逐 ITEM 与历史批准交叉审计；唯一确认的产品范围越界是 T15。ITEM-04 shared CI、T05 fallback 边界和 ITEM-10 legacy Pi 迁移属于需补充确认的实现选择，Owner 随后批准推荐纠偏方案。
+- 2026-09-01：纠偏按 additive commits 执行，不改写历史：逆向 `53da4f2c0` 的 T15 hunks，保留 T18、ITEM-09 与 WebView native-trace；恢复 Appearance 全部主题、语法高亮、字体、字号、默认值与持久化；新增 legacy global `true` 不自动启用 Pi 的 RED→GREEN tests，并将 33 项范围、T05、Windows CI 与 Pi opt-in 决策写回 canonical docs。
+- 2026-09-01：纠偏本地验证通过 App 143/143、Server migration 41/41、PR CI fixtures 19/19 + 12/12、Appearance E2E 4/4、T18 E2E 1/1、Build/Typecheck/Lint/Format 与 WebView reproducibility。新双路复审中，correctness reviewer 发现 legacy global patch 仍会覆盖 Pi/future provider；父流程修复为只更新 Claude/Codex/OpenCode、保留显式与未知 provider，并由 follow-up reviewer 关闭 P1。尚未 push 或触发 CI。

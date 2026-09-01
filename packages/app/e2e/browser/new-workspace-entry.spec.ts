@@ -1,3 +1,4 @@
+import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
 import { expect, test } from "../support/fixtures";
 import { gotoAppShell } from "../support/helpers/app";
 import {
@@ -89,6 +90,58 @@ test.describe("New workspace entry points", () => {
       await expectNewWorkspaceTriggerLabelsAligned(page, {
         projectLabel: seeded.projectDisplayName,
         hostLabel: "localhost",
+      });
+    } finally {
+      await seeded.cleanup();
+    }
+  });
+
+  test("Manage terminal profiles opens the selected host's Terminal settings", async ({
+    page,
+  }, testInfo) => {
+    const seeded: SeededWorkspace = await seedWorkspace({ repoPrefix: "entry-manage-profiles-" });
+    const primaryServerId = getServerId();
+    const selectedServerId = "selected-terminal-profile-host";
+
+    try {
+      await seedSavedSettingsHosts(page, [
+        {
+          serverId: primaryServerId,
+          label: "Primary host",
+          endpoint: `127.0.0.1:${getE2EDaemonPort()}`,
+        },
+        {
+          serverId: selectedServerId,
+          label: "Selected host",
+          endpoint: "127.0.0.1:9",
+        },
+      ]);
+
+      await gotoAppShell(page);
+      await waitForSidebarHydration(page);
+      await expect(
+        page.getByTestId(`sidebar-workspace-row-${primaryServerId}:${seeded.workspaceId}`),
+      ).toBeVisible({ timeout: 30_000 });
+      await openGlobalNewWorkspaceComposer(page);
+
+      await page.getByTestId("host-picker-trigger").click();
+      await page.getByTestId(`new-workspace-host-picker-option-${selectedServerId}`).click();
+      await expect(page.getByTestId("host-picker-trigger")).toContainText("Selected host");
+
+      await page.getByTestId("new-workspace-launch-trigger").click();
+      const manageProfiles = page.getByTestId("new-workspace-launch-manage-profiles");
+      await expect(manageProfiles).toBeVisible();
+      const expectedUrl = new URL(
+        buildSettingsHostSectionRoute(selectedServerId, "terminals"),
+        page.url(),
+      ).href;
+      await manageProfiles.click();
+
+      await expect(page).toHaveURL(expectedUrl);
+      await expect(page.getByTestId("terminal-profiles-unavailable")).toBeVisible();
+      await page.screenshot({
+        path: testInfo.outputPath("selected-host-terminal-profiles.png"),
+        fullPage: true,
       });
     } finally {
       await seeded.cleanup();

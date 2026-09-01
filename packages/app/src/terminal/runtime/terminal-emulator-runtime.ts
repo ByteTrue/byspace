@@ -28,10 +28,19 @@ import {
   type TerminalLocalFileLinkSource,
   type TerminalLocalFileLinkTarget,
 } from "../local-links/terminal-local-link-provider";
+import type { TerminalClipboardWriter } from "../native-renderer/terminal-selection";
 import { resolveTerminalFontFamily, resolveTerminalFontSize } from "./terminal-font";
 import { nativePerformanceTrace, traceInstant } from "@/performance/native-trace";
 
 export type TerminalOutputData = Uint8Array;
+
+export interface TerminalClipboardImage {
+  bytes: Uint8Array;
+  mimeType: string;
+  fileExtension: string;
+}
+
+export type TerminalPasteErrorReason = "clipboard-read-failed" | "image-too-large";
 
 export interface TerminalEmulatorRuntimeMountInput {
   root: HTMLDivElement;
@@ -63,6 +72,9 @@ export interface TerminalEmulatorRuntimeCallbacks {
     disposition: "main" | "side",
   ) => Promise<void> | void;
   onInputModeChange?: (state: TerminalInputModeState) => Promise<void> | void;
+  onPasteImage?: (image: TerminalClipboardImage) => Promise<string | null>;
+  onPasteError?: (reason: TerminalPasteErrorReason) => Promise<void> | void;
+  onSelectionChange?: (hasSelection: boolean) => void;
 }
 
 export interface TerminalResizeEvent {
@@ -125,10 +137,13 @@ declare global {
   }
 }
 
-const isMac =
-  typeof navigator !== "undefined" &&
-  (/Macintosh|Mac OS/i.test(navigator.userAgent ?? "") ||
-    /Mac/i.test((navigator as Navigator & { platform?: string }).platform ?? ""));
+function isMacPlatform(): boolean {
+  return (
+    typeof navigator !== "undefined" &&
+    (/Macintosh|Mac OS/i.test(navigator.userAgent ?? "") ||
+      /Mac/i.test((navigator as Navigator & { platform?: string }).platform ?? ""))
+  );
+}
 
 const isAppleHandheld =
   typeof navigator !== "undefined" &&
@@ -139,14 +154,81 @@ const isAppleHandheld =
   });
 
 const DEFAULT_TOUCH_SCROLL_LINE_HEIGHT_PX = 18;
+const TOUCH_SELECTION_LONG_PRESS_MS = 500;
 const FIT_TIMEOUT_DELAYS_MS = [0, 16, 48, 120, 250, 500, 1_000, 2_000];
 const OUTPUT_OPERATION_TIMEOUT_MS = 5_000;
 const EMPTY_TERMINAL_OUTPUT = new Uint8Array(0);
 const RESET_TERMINAL_OUTPUT = new Uint8Array([0x1b, 0x63]);
+const MAX_TERMINAL_CLIPBOARD_IMAGE_BYTES = 50 * 1024 * 1024;
+const TERMINAL_CLIPBOARD_IMAGE_EXTENSIONS: Readonly<Record<string, string>> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+};
 const TERMINAL_LINE_BREAK_RE = /[\r\n]/;
 const BRACKETED_PASTE_START = "\x1b[200~";
 const BRACKETED_PASTE_END = "\x1b[201~";
 const terminalOutputEncoder = new TextEncoder();
+
+interface TerminalClipboardImageSelection {
+  readBlob: () => Promise<Blob>;
+  mimeType: string;
+  fileExtension: string;
+}
+
+function findTerminalClipboardImageFile(
+  items: DataTransferItemList,
+): TerminalClipboardImageSelection | null {
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    if (!item) {
+      continue;
+    }
+    const fileExtension = TERMINAL_CLIPBOARD_IMAGE_EXTENSIONS[item.type];
+    if (!fileExtension) {
+      continue;
+    }
+    const blob = item.getAsFile();
+    if (blob) {
+      return { readBlob: async () => blob, mimeType: item.type, fileExtension };
+    }
+  }
+  return null;
+}
+
+function findTerminalClipboardImage(
+  items: readonly ClipboardItem[],
+): TerminalClipboardImageSelection | null {
+  for (const item of items) {
+    const mimeType = item.types.find((type) => TERMINAL_CLIPBOARD_IMAGE_EXTENSIONS[type]);
+    const fileExtension = mimeType ? TERMINAL_CLIPBOARD_IMAGE_EXTENSIONS[mimeType] : undefined;
+    if (mimeType && fileExtension) {
+      return { readBlob: () => item.getType(mimeType), mimeType, fileExtension };
+    }
+  }
+  return null;
+}
+
+function isTerminalPasteShortcut(event: KeyboardEvent): boolean {
+  return (
+    event.key.toLowerCase() === "v" &&
+    !event.shiftKey &&
+    !event.altKey &&
+    (isMacPlatform() ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey)
+  );
+}
+
+function isTerminalWindowsImagePasteShortcut(event: KeyboardEvent): boolean {
+  return (
+    isWindowsPlatform() &&
+    event.key.toLowerCase() === "v" &&
+    event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey
+  );
+}
 
 function isWindowsPlatform(): boolean {
   return (
@@ -220,6 +302,8 @@ export class TerminalEmulatorRuntime {
   private readonly inputModeTracker = new TerminalInputModeTracker();
   private lastInputModeState: TerminalInputModeState = this.inputModeTracker.getState();
   private themeBackgroundElements: HTMLElement[] = [];
+  private touchSelectionEnabled = false;
+  private clipboardPasteQueue: Promise<void> = Promise.resolve();
 
   private handleVisibilityRestore = (): void => {
     if (typeof document !== "undefined" && document.visibilityState !== "visible") {
@@ -236,6 +320,134 @@ export class TerminalEmulatorRuntime {
 
   setCallbacks(input: { callbacks: TerminalEmulatorRuntimeCallbacks }): void {
     this.callbacks = input.callbacks;
+  }
+
+  setTouchSelectionEnabled(input: { enabled: boolean }): void {
+    this.touchSelectionEnabled = input.enabled;
+  }
+
+  private queueClipboardPaste(operation: () => Promise<void>): void {
+    const queued = this.clipboardPasteQueue.then(operation);
+    this.clipboardPasteQueue = queued.catch(() => {});
+  }
+
+  private async pasteTerminalClipboardImage(
+    terminal: Terminal,
+    image: TerminalClipboardImageSelection,
+  ): Promise<void> {
+    if (this.terminal !== terminal) {
+      return;
+    }
+
+    try {
+      const blob = await image.readBlob();
+      if (this.terminal !== terminal) {
+        return;
+      }
+      if (blob.size > MAX_TERMINAL_CLIPBOARD_IMAGE_BYTES) {
+        this.callbacks.onPasteError?.("image-too-large");
+        return;
+      }
+
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      if (this.terminal !== terminal) {
+        return;
+      }
+
+      const path = await this.callbacks.onPasteImage?.({
+        bytes,
+        mimeType: image.mimeType,
+        fileExtension: image.fileExtension,
+      });
+      if (this.terminal !== terminal) {
+        return;
+      }
+      if (path) {
+        pasteTerminalText(terminal, path, { forceBracketed: true });
+      }
+    } catch {
+      if (this.terminal === terminal) {
+        this.callbacks.onPasteError?.("clipboard-read-failed");
+      }
+    }
+  }
+
+  private async pasteWindowsClipboardImage(terminal: Terminal): Promise<void> {
+    if (this.terminal !== terminal) {
+      return;
+    }
+
+    const read = navigator.clipboard?.read;
+    if (typeof read !== "function") {
+      this.forwardWindowsImagePasteShortcut(terminal);
+      return;
+    }
+
+    let items: ClipboardItem[];
+    try {
+      items = await read.call(navigator.clipboard);
+    } catch {
+      if (this.terminal === terminal) {
+        this.callbacks.onPasteError?.("clipboard-read-failed");
+      }
+      return;
+    }
+
+    if (this.terminal !== terminal) {
+      return;
+    }
+    const image = findTerminalClipboardImage(items);
+    if (image) {
+      await this.pasteTerminalClipboardImage(terminal, image);
+      return;
+    }
+    this.forwardWindowsImagePasteShortcut(terminal);
+  }
+
+  private forwardWindowsImagePasteShortcut(terminal: Terminal): void {
+    if (this.terminal !== terminal) {
+      return;
+    }
+    const onTerminalKey = this.callbacks.onTerminalKey;
+    if (!onTerminalKey) {
+      return;
+    }
+    onTerminalKey({
+      key: "v",
+      ctrl: false,
+      shift: false,
+      alt: true,
+      meta: false,
+    });
+  }
+
+  private handleClipboardKeyEvent(event: KeyboardEvent, terminal: Terminal): boolean | null {
+    if (isTerminalPasteShortcut(event)) {
+      return true;
+    }
+
+    if (isTerminalWindowsImagePasteShortcut(event)) {
+      if (!this.callbacks.onPasteImage || typeof navigator.clipboard?.read !== "function") {
+        return true;
+      }
+      event.preventDefault();
+      this.queueClipboardPaste(() => this.pasteWindowsClipboardImage(terminal));
+      return false;
+    }
+
+    if (!isMacPlatform() && event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey) {
+      const key = event.key.toLowerCase();
+
+      // Ctrl+C: copy selection to clipboard if text is selected, otherwise let xterm send SIGINT
+      if (key === "c" && terminal.hasSelection()) {
+        void navigator.clipboard.writeText(terminal.getSelection());
+        return false;
+      }
+
+      return true;
+    }
+
+    return null;
   }
 
   setPendingModifiers(input: { pendingModifiers: PendingTerminalModifiers }): void {
@@ -439,8 +651,21 @@ export class TerminalEmulatorRuntime {
       }
       this.callbacks.onInput?.(data);
     });
+    const selectionDisposable = terminal.onSelectionChange(() => {
+      this.callbacks.onSelectionChange?.(terminal.hasSelection());
+    });
 
     const pasteEventHandler = (event: ClipboardEvent): void => {
+      const image = event.clipboardData
+        ? findTerminalClipboardImageFile(event.clipboardData.items)
+        : null;
+      if (image && this.callbacks.onPasteImage) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.queueClipboardPaste(() => this.pasteTerminalClipboardImage(terminal, image));
+        return;
+      }
+
       const text = event.clipboardData?.getData("text/plain") ?? "";
       if (!isWindowsPlatform() || !TERMINAL_LINE_BREAK_RE.test(text)) {
         return;
@@ -457,31 +682,9 @@ export class TerminalEmulatorRuntime {
         return true;
       }
 
-      if (!isMac && event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey) {
-        const key = event.key.toLowerCase();
-
-        // Ctrl+C: copy selection to clipboard if text is selected, otherwise let xterm send SIGINT
-        if (key === "c" && terminal.hasSelection()) {
-          void navigator.clipboard.writeText(terminal.getSelection());
-          return false;
-        }
-
-        // Ctrl+V: paste from clipboard into terminal
-        if (key === "v") {
-          event.preventDefault();
-          void navigator.clipboard.readText().then((text) => {
-            if (this.terminal !== terminal || !text) {
-              return;
-            }
-            pasteTerminalText(terminal, text, {
-              forceBracketed: isWindowsPlatform() && TERMINAL_LINE_BREAK_RE.test(text),
-            });
-            return;
-          });
-          return false;
-        }
-
-        return true;
+      const clipboardKeyResult = this.handleClipboardKeyEvent(event, terminal);
+      if (clipboardKeyResult !== null) {
+        return clipboardKeyResult;
       }
 
       const normalizedKey = normalizeDomTerminalKey(event.key);
@@ -589,6 +792,7 @@ export class TerminalEmulatorRuntime {
     const disposables: TerminalEmulatorRuntimeDisposables = {
       disposeInput: () => {
         inputDisposable.dispose();
+        selectionDisposable.dispose();
       },
       removePasteListener: () => {
         input.host.removeEventListener("paste", pasteEventHandler, true);
@@ -698,6 +902,28 @@ export class TerminalEmulatorRuntime {
     pasteTerminalText(terminal, text, {
       forceBracketed: isWindowsPlatform() && TERMINAL_LINE_BREAK_RE.test(text),
     });
+  }
+
+  hasSelection(): boolean {
+    return this.terminal?.hasSelection() ?? false;
+  }
+
+  async copySelection(clipboard: TerminalClipboardWriter): Promise<string> {
+    const terminal = this.terminal;
+    if (!terminal || !terminal.hasSelection()) {
+      return "";
+    }
+
+    const selection = terminal.getSelection();
+    if (selection.length === 0) {
+      return "";
+    }
+
+    await clipboard.writeText(selection);
+    if (this.terminal === terminal) {
+      terminal.clearSelection();
+    }
+    return selection;
   }
 
   renderSnapshot(input: { state: TerminalState | null; onCommitted?: () => void }): void {
@@ -834,6 +1060,7 @@ export class TerminalEmulatorRuntime {
   }
 
   unmount(): void {
+    this.clipboardPasteQueue = Promise.resolve();
     this.clearInFlightOutputTimeout();
     const inFlightOperation = this.inFlightOutputOperation;
     this.inFlightOutputOperation = null;
@@ -849,6 +1076,9 @@ export class TerminalEmulatorRuntime {
     }
     this.hasUngatedWrites = false;
 
+    if (this.terminal?.hasSelection()) {
+      this.callbacks.onSelectionChange?.(false);
+    }
     this.cleanup?.();
     this.cleanup = null;
     if (window.__paseoTerminal === this.terminal) {
@@ -1176,6 +1406,8 @@ export class TerminalEmulatorRuntime {
     terminal: Terminal;
   }): () => void {
     let touchScrollRemainderPx = 0;
+    let longPressTimer: number | null = null;
+    let selectionAnchor: { startIndex: number; endIndex: number } | null = null;
     const measuredLineHeight =
       input.host.querySelector<HTMLElement>(".xterm-rows > div")?.getBoundingClientRect().height ??
       0;
@@ -1188,22 +1420,93 @@ export class TerminalEmulatorRuntime {
       startY: 0,
       lastX: 0,
       lastY: 0,
-      mode: null as "vertical" | "horizontal" | null,
+      mode: null as "vertical" | "horizontal" | "selection" | null,
+    };
+
+    const clearLongPressTimer = (): void => {
+      if (longPressTimer !== null) {
+        window.clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
+
+    const dispatchSelectionMouseEvent = (
+      type: "mousedown" | "mouseup",
+      x: number,
+      y: number,
+    ): boolean => {
+      const terminalElement = input.terminal.element;
+      if (!terminalElement) {
+        return false;
+      }
+      const ownerDocument = terminalElement.ownerDocument;
+      const MouseEventConstructor = ownerDocument.defaultView?.MouseEvent ?? MouseEvent;
+      const forceSelection = input.terminal.modes.mouseTrackingMode !== "none";
+      const event = new MouseEventConstructor(type, {
+        bubbles: true,
+        cancelable: true,
+        clientX: x,
+        clientY: y,
+        button: 0,
+        buttons: type === "mousedown" ? 1 : 0,
+        detail: type === "mousedown" ? 2 : 0,
+        altKey: forceSelection,
+        shiftKey: forceSelection,
+      });
+      (type === "mousedown" ? terminalElement : ownerDocument).dispatchEvent(event);
+      return true;
+    };
+
+    const getTouchBufferRange = (
+      x: number,
+      y: number,
+    ): { startIndex: number; endIndex: number } | null => {
+      const screen = input.host.querySelector<HTMLElement>(".xterm-screen");
+      const cell = input.terminal.dimensions?.css.cell;
+      if (!screen || !cell || cell.width <= 0 || cell.height <= 0) {
+        return null;
+      }
+      const bounds = screen.getBoundingClientRect();
+      const column = Math.max(
+        0,
+        Math.min(input.terminal.cols - 1, Math.floor((x - bounds.left) / cell.width)),
+      );
+      const viewportRow = Math.max(
+        0,
+        Math.min(input.terminal.rows - 1, Math.floor((y - bounds.top) / cell.height)),
+      );
+      const buffer = input.terminal.buffer.active;
+      const absoluteRow = buffer.viewportY + viewportRow;
+      const line = buffer.getLine(absoluteRow);
+      let startColumn = column;
+      let width = line?.getCell(startColumn)?.getWidth() ?? 1;
+      while (width === 0 && startColumn > 0) {
+        startColumn -= 1;
+        width = line?.getCell(startColumn)?.getWidth() ?? 1;
+      }
+      const rowStartIndex = absoluteRow * input.terminal.cols;
+      return {
+        startIndex: rowStartIndex + startColumn,
+        endIndex: rowStartIndex + Math.min(input.terminal.cols, startColumn + Math.max(1, width)),
+      };
+    };
+
+    const finishActiveTouch = (): void => {
+      clearLongPressTimer();
+      selectionAnchor = null;
+      touchScrollRemainderPx = 0;
+      activeTouch.identifier = -1;
+      activeTouch.mode = null;
     };
 
     const touchStartHandler = (event: TouchEvent) => {
+      finishActiveTouch();
       if (event.touches.length !== 1) {
-        touchScrollRemainderPx = 0;
-        activeTouch.identifier = -1;
-        activeTouch.mode = null;
         return;
       }
 
       const touch = event.touches[0];
       if (!touch) {
-        touchScrollRemainderPx = 0;
-        activeTouch.identifier = -1;
-        activeTouch.mode = null;
         return;
       }
 
@@ -1212,8 +1515,41 @@ export class TerminalEmulatorRuntime {
       activeTouch.startY = touch.clientY;
       activeTouch.lastX = touch.clientX;
       activeTouch.lastY = touch.clientY;
-      activeTouch.mode = null;
-      touchScrollRemainderPx = 0;
+      if (!this.touchSelectionEnabled) {
+        return;
+      }
+      longPressTimer = window.setTimeout(() => {
+        longPressTimer = null;
+        if (
+          !this.touchSelectionEnabled ||
+          activeTouch.identifier !== touch.identifier ||
+          activeTouch.mode !== null
+        ) {
+          return;
+        }
+        const previousMacOptionClickForcesSelection =
+          input.terminal.options.macOptionClickForcesSelection;
+        input.terminal.options.macOptionClickForcesSelection = true;
+        try {
+          if (dispatchSelectionMouseEvent("mousedown", touch.clientX, touch.clientY)) {
+            dispatchSelectionMouseEvent("mouseup", touch.clientX, touch.clientY);
+            const range = input.terminal.getSelectionPosition();
+            const touchRange = getTouchBufferRange(touch.clientX, touch.clientY);
+            if (range) {
+              selectionAnchor = {
+                startIndex: range.start.y * input.terminal.cols + range.start.x,
+                endIndex: range.end.y * input.terminal.cols + range.end.x,
+              };
+            } else {
+              selectionAnchor = touchRange;
+            }
+            activeTouch.mode = "selection";
+          }
+        } finally {
+          input.terminal.options.macOptionClickForcesSelection =
+            previousMacOptionClickForcesSelection;
+        }
+      }, TOUCH_SELECTION_LONG_PRESS_MS);
     };
 
     const touchMoveHandler = (event: TouchEvent) => {
@@ -1228,12 +1564,30 @@ export class TerminalEmulatorRuntime {
         return;
       }
 
+      if (activeTouch.mode === "selection") {
+        activeTouch.lastX = touch.clientX;
+        activeTouch.lastY = touch.clientY;
+        const touchRange = getTouchBufferRange(touch.clientX, touch.clientY);
+        if (selectionAnchor && touchRange) {
+          const startIndex = Math.min(selectionAnchor.startIndex, touchRange.startIndex);
+          const endIndex = Math.max(selectionAnchor.endIndex, touchRange.endIndex);
+          input.terminal.select(
+            startIndex % input.terminal.cols,
+            Math.floor(startIndex / input.terminal.cols),
+            endIndex - startIndex,
+          );
+        }
+        event.preventDefault();
+        return;
+      }
+
       const totalDeltaX = touch.clientX - activeTouch.startX;
       const totalDeltaY = touch.clientY - activeTouch.startY;
       if (activeTouch.mode === null) {
         const absX = Math.abs(totalDeltaX);
         const absY = Math.abs(totalDeltaY);
         if (absX > 8 || absY > 8) {
+          clearLongPressTimer();
           activeTouch.mode = absY >= absX ? "vertical" : "horizontal";
         }
       }
@@ -1261,24 +1615,25 @@ export class TerminalEmulatorRuntime {
         (touch) => touch.identifier === activeTouch.identifier,
       );
       if (activeTouchEnded || event.touches.length === 0) {
-        touchScrollRemainderPx = 0;
-        activeTouch.identifier = -1;
-        activeTouch.mode = null;
+        const wasSelecting = activeTouch.mode === "selection";
+        finishActiveTouch();
+        if (wasSelecting) {
+          event.preventDefault();
+        }
       }
     };
 
     const touchCancelHandler = () => {
-      touchScrollRemainderPx = 0;
-      activeTouch.identifier = -1;
-      activeTouch.mode = null;
+      finishActiveTouch();
     };
 
     input.root.addEventListener("touchstart", touchStartHandler, { passive: true });
     input.root.addEventListener("touchmove", touchMoveHandler, { passive: false });
-    input.root.addEventListener("touchend", touchEndHandler, { passive: true });
+    input.root.addEventListener("touchend", touchEndHandler, { passive: false });
     input.root.addEventListener("touchcancel", touchCancelHandler, { passive: true });
 
     return () => {
+      finishActiveTouch();
       input.root.removeEventListener("touchstart", touchStartHandler);
       input.root.removeEventListener("touchmove", touchMoveHandler);
       input.root.removeEventListener("touchend", touchEndHandler);

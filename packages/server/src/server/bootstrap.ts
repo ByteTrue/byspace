@@ -181,6 +181,7 @@ import type {
   AgentSkillSelection,
   FirstAgentContext,
   PluginSource,
+  TerminalAgentHookSettings,
   TerminalProfile,
 } from "@getpaseo/protocol/messages";
 import type {
@@ -404,6 +405,7 @@ export interface PaseoDaemonConfig {
   };
   autoArchiveAfterMerge?: boolean;
   enableTerminalAgentHooks?: boolean;
+  terminalAgentHooks?: TerminalAgentHookSettings;
   appendSystemPrompt?: string;
   terminalProfiles?: TerminalProfile[];
   agentProfiles?: AgentProfile[];
@@ -553,6 +555,7 @@ function createInitialMutableDaemonConfig(
     },
     autoArchiveAfterMerge: config.autoArchiveAfterMerge ?? false,
     enableTerminalAgentHooks: config.enableTerminalAgentHooks ?? false,
+    terminalAgentHooks: config.terminalAgentHooks,
     appendSystemPrompt: config.appendSystemPrompt ?? "",
     pluginsEnabled: config.pluginsEnabled ?? false,
     plugins: config.plugins ?? {},
