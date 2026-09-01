@@ -11,10 +11,10 @@ remote_publish: each-milestone
 commit_strategy: semantic-atomic-per-item
 publish_strategy: epic-plan-pr-then-one-pr-per-wave
 current_wave: 3
-current_item: ITEM-11
+current_item: Wave 3 PR
 active_items: []
 blocked_by: null
-next_action: 串行审计并仅修复 ITEM-11 的 T15 呈现默认值与 T18 当前 Host profile 入口缺口
+next_action: 提交 Wave 3 closure，推送集成分支并创建 PR；仅在 exact-head required checks 全绿后合入
 ---
 
 # Epic Work: 保留能力交付路线
@@ -40,7 +40,9 @@ next_action: 串行审计并仅修复 ITEM-11 的 T15 呈现默认值与 T18 当
 - Wave 3 从上述绿色 `main` 创建。ITEM-07 已完成最后八行/220 字 Terminal 通知摘要与 fail-open fallback，3-path frozen patch `2fc75d3244235437969691ffc6a0fc1da893c8409e7d6ac4e563789126ca10e2` 经 reviewer `b40c4e19-f593-4e81-8731-fea33d21ac55` 判定 mergeable（0 blocking / 0 important），并由父流程串行集成。
 - ITEM-08 已在独立 worktree `epic-002-wave3-item08` 完成 compact Web 长按选词、拖动扩选、复制及滚动/点击回归。canonical 全仓 lint 发现 E2E 内联 viewport probe 超出 callback nesting 限额后，父流程仅将相同表达式提取为 helper；final 7-path frozen patch `72183505…cd3763f` 的 browser 44/44、真实 compact Chromium 1/1、Typecheck/Lint/Format 均通过，fresh re-reviewer `233f6be9-99b3-4e2a-8bc1-b5b40f5677cf` 返回 0 blocking / 0 important。selection + Copy changed-state screenshot `audit-artifacts/epic-002-wave3/item08/compact-terminal-long-press-selection.jpeg`（SHA-256 `6cb160e2…2155dc`）和 exact-current trace `compact-terminal-selection-trace.zip`（`11bd6aa5…01c1c5`）已保存；final reviewed patch 已原字节收割到 canonical Wave 3 分支。
 - ITEM-09 已完成浏览器 clipboard image 读取、既有 binary upload、daemon 临时路径单次 paste、Windows Alt+V fallback 及错误提示；文本 paste 保持原路径。14-path frozen patch `1ac8774b…dd9c9` 经 Round 2 reviewer `3a380267-554a-45a6-95dc-2164bd517a70` 判定 PASS（0 blocking / 0 important）。Source commit `fcc408146` 的 exact-head Windows run `33450638997` 第 3 attempt 全绿；父流程在 canonical 分支复验 browser 59/59、server upload 5/5、Direct/Relay clipboard E2E 各 6/6、Build/Typecheck/Lint，并按冻结 manifest 原字节集成为 `8e0946084`。UI screenshot/trace 保存于 `audit-artifacts/epic-002-wave3/item09/`。
-- ITEM-10 已完成 provider-scoped Claude/Codex/OpenCode/Pi hook 配置、legacy aggregate 双向兼容、Pi extension latest-wins/failure recovery 与 Host Terminals UI capability gate；built-in Pi profile 保持不变。Frozen patch `0ed98c1e…ff49` 经 Round 2 reviewer `b9e9aa3e-6a80-499d-afea-08694669ed3d` 判定 OK（0 blocking / 0 important），父流程已串行集成为 `987738a09`。两条并行 lane 均关闭，ITEM-11 可在 canonical combined head 上串行启动。
+- ITEM-10 已完成 provider-scoped Claude/Codex/OpenCode/Pi hook 配置、legacy aggregate 双向兼容、Pi extension latest-wins/failure recovery 与 Host Terminals UI capability gate；built-in Pi profile 保持不变。Frozen patch `0ed98c1e…ff49` 经 Round 2 reviewer `b9e9aa3e-6a80-499d-afea-08694669ed3d` 判定 OK（0 blocking / 0 important），父流程已串行集成为 `987738a09`。两条并行 lane 均关闭。
+- ITEM-11 已完成 T15/T18：内建主题收敛为 Light/Dark/System，保留 plugin-contributed themes 与 `contentFontSize`，采用平台字体栈并统一 code/diff/terminal 14px 默认值，syntax palette 跟随各主题 color scheme；旧持久化字段兼容读取后丢弃。T18 复用既有 selected-Host `terminals` 路由并补 exact-host E2E。首轮 32-path patch 经 reviewer `e299af3d-8b41-49a2-8a95-7fa29eb88db1` / `fd188487-95af-4751-afb1-9459e55a7c65` 双 APPROVE（0 P0/P1）；父流程根据审查和全仓 stale-reference audit 修正 screenshot wait、WebView stack 注释及 Desktop E2E 的已移除主题引用。Final 33-path patch `866cb3a6…c7624c` 经 unit 130/130、terminal browser 59/59、Appearance 3/3、plugin theme 1/1、T18 1/1、Desktop browser-tabs 全流程、两轮可复现 WebView build、全仓 Typecheck/Lint/Format 验证，并以 `53da4f2c0` 串行集成。证据在 `audit-artifacts/epic-002-wave3/item11/`。
+- Wave 3 aggregate frozen range `30893a48b..53da4f2c0`（6 commits / 63 paths，patch `5455dc9d…fab70265`）经 correctness reviewer `484e3755-4106-4652-946c-687d643b81fa` 与 scope reviewer `f0cbc5e7-13e1-45f8-ac5f-98dc2bdb5a27` 双 APPROVE，均为 0 P0/P1，可创建 PR。Report-only 项中，ITEM-07 外部证据目录已补齐；legacy aggregate fallback 的删除点已补标准 `COMPAT(terminalAgentHookProviders)` 日期注释；lane ownership、通知隐私边界、upload 生命周期与 Electron 专项覆盖作为已知 residual，不扩大本 Wave。
 
 ## Wave 1 · 发布通道路由与远程连接安全
 
@@ -60,7 +62,7 @@ next_action: 串行审计并仅修复 ITEM-11 的 T15 呈现默认值与 T18 当
 - [x] ITEM-08 · TERM-04 · T07 · reviewed and integrated
 - [x] ITEM-09 · TERM-06 · T11 · reviewed and integrated
 - [x] ITEM-10 · TERM-07 · T13/T14/T17 · reviewed and integrated
-- [ ] ITEM-11 · TERM-08 · T15/T18
+- [x] ITEM-11 · TERM-08 · T15/T18 · reviewed and integrated
 
 ## Wave 4 · Agent、Session 与 Timeline
 
@@ -80,7 +82,9 @@ next_action: 串行审计并仅修复 ITEM-11 的 T15 呈现默认值与 T18 当
 
 ## 活跃委派
 
-- Wave 3 并行 lane 已关闭：ITEM-07、ITEM-08、ITEM-10、ITEM-09 依次以 `0ff226755`、`d596c9376`、`987738a09`、`8e0946084` 串行集成。ITEM-09 worker `99dc78aa-83cd-44cd-b1ba-d68a748465e9` 完成 Lane B 交付；ITEM-10 的 native/Cursor runner 均在源码修改前失败，父流程确认无并发 writer 后完成唯一写入与 review。当前无活跃委派，ITEM-11 按契约转为单 writer 串行阶段。
+- Wave 3 并行 lane 已关闭：ITEM-07、ITEM-08、ITEM-10、ITEM-09 依次以 `0ff226755`、`d596c9376`、`987738a09`、`8e0946084` 串行集成。ITEM-09 worker `99dc78aa-83cd-44cd-b1ba-d68a748465e9` 完成 Lane B 交付；ITEM-10 的 native/Cursor runner 均在源码修改前失败，父流程确认无并发 writer 后完成唯一写入与 review。
+- ITEM-11 串行 lane 已关闭：唯一 writer lineage `d79c7913-2976-4b7a-a8a1-55569c4944cb`，reviewers `e299af3d-8b41-49a2-8a95-7fa29eb88db1` / `fd188487-95af-4751-afb1-9459e55a7c65`；source/final canonical commit 均为 `53da4f2c0d378ed8bd581c755deafe67c505dc52`。
+- Wave 3 aggregate reviewers `484e3755-4106-4652-946c-687d643b81fa` / `f0cbc5e7-13e1-45f8-ac5f-98dc2bdb5a27` 已完成；当前无活跃 writer 或 reviewer，进入 PR gate。
 - ITEM-05 唯一 writer lineage 首轮 `1619df3f-b0f3-4fef-8811-3aa52a0ef803`、续跑 `b779914e-c2cd-46cf-9e96-dac86c08791a` 在隔离 worktree `epic-002-wave2-item05` 建立 RED 并完成首轮实现；父流程在 runner settlement 后接管。首轮 reviewer `6fcf9c03-e55c-49dd-b452-bdd67f2490a7` 提出的 stale preamble 与 overflow-resume 两项 important 均经专门 RED 修复；Round 2 `31a2f709-a9d9-47ec-ad24-421ea8b82986` 返回 PASS（0 blocking / 0 important）。最终 21-path manifest 为 `849c36c761f99fb728dca39e494120f59ff695b2310d90378fae34e88b60fe67`。
 - ITEM-06 在隔离 worktree `epic-002-wave2-item06`（base `159a70640`）串行执行；scout workflow `dec0aff1-0930-4a1f-9018-98686354501a` 分别审计当前 runtime/E2E seam 与历史 T10/T12 边界。两个 scout 均确认 T10 已在 tracker/restore preamble，缺口仅为 T12 Windows 多行 framing，且不得整体移植图片 scope；唯一 writer `94da2f9c-f5d0-4a06-babe-8f3eb84cf63d` 完成 RED→GREEN，父流程修正非 Windows listener 与 mode replay 测试保真后冻结 7-path patch `ba654cd7…fa6aa`；reviewer `19112db0-a596-443a-b414-bf6ca9c9cb1f` 返回 PASS（0 blocking / 0 important），source milestone `055d0000b` 经 exact-head Windows run `33425004246` 验证并完成串行集成。
 - Wave 2 aggregate reviewer `91c20656-547e-43b0-b027-f74b57daebec` 审查 base `0d81e9fa3` 至 frozen head `35a0c1341` 的 9 commits / 46 paths，返回 PASS（0 blocking / 0 important）。其 Playwright JSON reporter 环境变量疑问已由锁定版本源码 `node_modules/playwright/lib/reporters/base.js` 核实：当前版本正式读取 `PLAYWRIGHT_JSON_OUTPUT_FILE`，无需改动。
@@ -153,3 +157,5 @@ next_action: 串行审计并仅修复 ITEM-11 的 T15 呈现默认值与 T18 当
 - 2026-09-01：从 ITEM-08 milestone `d596c9376` 创建 Lane B ITEM-09 worktree，并派发唯一 writer `99dc78aa-83cd-44cd-b1ba-d68a748465e9`；Lane A ITEM-10 由父流程保持唯一 writer，两 lane 文件所有权继续隔离。
 - 2026-09-01：ITEM-10 frozen patch `0ed98c1e…ff49` 经 Round 2 reviewer `b9e9aa3e-6a80-499d-afea-08694669ed3d` 对 installer、registry、setting、persistence、protocol、capability、UI 与测试九条 seam 复核，结论 OK（0 blocking / 0 important）；父流程以语义原子 commit `987738a09` 集成 provider-scoped hooks、Pi reporting 和 legacy aggregate 兼容。
 - 2026-09-01：ITEM-09 14-path frozen patch `1ac8774b…dd9c9` 经两轮审查关闭 Windows text clobber 与 MIME/type correctness 两项 important，final reviewer `3a380267-554a-45a6-95dc-2164bd517a70` 返回 PASS。Source `fcc408146` 在本地 Direct/Relay、browser/runtime、server upload、Typecheck/Lint/Format 通过后，exact-head Windows CI `33450638997` 第 3 attempt 全绿；前两次均为 ITEM-04 的软件渲染 1 秒性能阈值波动且 clipboard cases 已通过，依规则分别本地复验后才重跑，未修改门槛。父流程按 14-path manifest 原字节集成为 `8e0946084`，复验 Direct/Relay clipboard E2E 各 6/6。
+- 2026-09-01：ITEM-11 final 33-path patch `866cb3a6…c7624c` 完成 T15/T18；两名 item reviewer 对首轮冻结候选均返回 APPROVE（0 P0/P1），父流程处理 report-only 与 stale Desktop consumer 后复验 unit 130/130、terminal browser 59/59、Appearance 3/3、plugin 1/1、selected-Host T18 1/1、Desktop browser-tabs、WebView reproducibility/runtime smoke 及全仓静态门槛，以 commit `53da4f2c0` 集成。
+- 2026-09-01：Wave 3 aggregate reviewers `484e3755-4106-4652-946c-687d643b81fa` / `f0cbc5e7-13e1-45f8-ac5f-98dc2bdb5a27` 对 `30893a48b..53da4f2c0`、6 commits / 63 paths、patch `5455dc9d…fab70265` 均返回 APPROVE（0 P0/P1）。父流程补齐缺失的 ITEM-07 外部 evidence 并给 legacy compatibility 删除点补日期化 COMPAT 注释；其余 P2 均为已知边界或 report-only residual。Wave 3 解除 PR 阻断。

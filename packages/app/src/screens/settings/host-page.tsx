@@ -1130,6 +1130,7 @@ function EnableTerminalAgentHooksCard({ serverId }: { serverId: string }) {
 
   if (!isConnected) return null;
 
+  // COMPAT(terminalAgentHookProviders): added in v0.7.1, remove after 2027-09-01; old daemons expose only the aggregate setting.
   if (!supportsProviderSettings) {
     return (
       <View style={settingsStyles.card} testID="host-page-terminal-agent-hooks-card">

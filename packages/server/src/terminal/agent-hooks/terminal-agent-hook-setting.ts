@@ -19,6 +19,7 @@ export type ResolvedTerminalAgentHookSettings = Record<TerminalAgentHookProvider
 export function resolveTerminalAgentHookSettings(
   config: Pick<MutableDaemonConfig, "enableTerminalAgentHooks" | "terminalAgentHooks">,
 ): ResolvedTerminalAgentHookSettings {
+  // COMPAT(terminalAgentHookProviders): added in v0.7.1, remove after 2027-09-01; undefined uses the legacy aggregate setting.
   const providerSettings = config.terminalAgentHooks;
   return Object.fromEntries(
     (Object.keys(AGENT_HOOK_PROVIDERS) as TerminalAgentHookProviderId[]).map((providerId) => [

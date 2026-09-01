@@ -635,6 +635,7 @@ function mergeMutableAgentPatch(
   return Object.keys(next).length > 0 ? (next as PersistedConfig["agents"]) : undefined;
 }
 
+// COMPAT(terminalAgentHookProviders): added in v0.7.1, remove after 2027-09-01; normalize old aggregate patches bidirectionally.
 function normalizeTerminalAgentHookPatch(
   current: MutableDaemonConfig,
   patch: Omit<SupportedMutableConfigPatch, "removeProviders">,

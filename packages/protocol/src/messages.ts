@@ -233,7 +233,7 @@ export const MutableDaemonConfigSchema = z
     providers: z.record(z.string(), MutableDaemonProviderConfigSchema).default({}),
     metadataGeneration: MutableMetadataGenerationConfigSchema.default({ providers: [] }),
     autoArchiveAfterMerge: z.boolean().default(false),
-    // COMPAT(terminalAgentHookProviders): retained for old apps; provider settings win when present.
+    // COMPAT(terminalAgentHookProviders): added in v0.7.1, remove after 2027-09-01; retained for old apps.
     enableTerminalAgentHooks: z.boolean().default(false),
     terminalAgentHooks: TerminalAgentHookSettingsSchema.optional(),
     appendSystemPrompt: z.string().default(""),
@@ -256,7 +256,7 @@ export const MutableDaemonConfigPatchSchema = z
     removeProviders: z.array(z.string().min(1)).optional(),
     metadataGeneration: MutableMetadataGenerationConfigSchema.partial().optional(),
     autoArchiveAfterMerge: z.boolean().optional(),
-    // COMPAT(terminalAgentHookProviders): retained for old apps; provider settings win when present.
+    // COMPAT(terminalAgentHookProviders): added in v0.7.1, remove after 2027-09-01; retained for old apps.
     enableTerminalAgentHooks: z.boolean().optional(),
     terminalAgentHooks: TerminalAgentHookSettingsSchema.optional(),
     appendSystemPrompt: z.string().optional(),
