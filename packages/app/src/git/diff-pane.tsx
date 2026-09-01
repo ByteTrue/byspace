@@ -14,7 +14,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import type { Theme } from "@/styles/theme";
+import { DEFAULT_MONO_FONT_STACK, type Theme } from "@/styles/theme";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import {
   AlignJustify,
@@ -1733,9 +1733,9 @@ export function ChangesSurface({
       layout: effectiveLayout,
       wrapLines,
       codeFontSize,
-      monoFontFamily: appSettings.monoFontFamily,
+      monoFontFamily: DEFAULT_MONO_FONT_STACK,
     }),
-    [appSettings.monoFontFamily, codeFontSize, effectiveLayout, wrapLines],
+    [codeFontSize, effectiveLayout, wrapLines],
   );
   const downloadFile = useFileDownload({ serverId, workspaceId, workspaceRoot: cwd });
   const handleCopyPath = useCallback(

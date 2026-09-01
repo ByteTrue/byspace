@@ -342,10 +342,7 @@ test.describe("CodeMirror workspace file editing", () => {
     await expect(selection).toHaveCSS("background-color", "rgba(255, 255, 255, 0.2)");
   });
 
-  test("applies the interface font to portaled tooltips", async ({ page, withWorkspace }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("@paseo:app-settings", JSON.stringify({ uiFontFamily: "monospace" }));
-    });
+  test("uses the default interface font in portaled tooltips", async ({ page, withWorkspace }) => {
     const workspace = await withWorkspace({ prefix: "file-tooltip-font-" });
     const relativePath = "tooltip-font.txt";
     await writeFile(path.join(workspace.repoPath, relativePath), "tooltip font\n", "utf8");
@@ -360,7 +357,7 @@ test.describe("CodeMirror workspace file editing", () => {
       page
         .getByTestId(`workspace-tab-tooltip-file_${relativePath}`)
         .getByText(relativePath, { exact: true }),
-    ).toHaveCSS("font-family", "monospace");
+    ).toHaveCSS("font-family", /system-ui/);
   });
 
   test("wraps Markdown while source code remains horizontally scrollable", async ({

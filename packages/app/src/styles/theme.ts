@@ -460,87 +460,6 @@ const paseoDarkColors = buildDarkSemanticColors({
   terminalBrightBlack: "#434645",
 });
 
-// Zinc — neutral gray, no tint
-const zincDarkColors = buildDarkSemanticColors({
-  surface0: "#18181b",
-  surface1: "#1f1f22",
-  surface2: "#27272a",
-  surface3: "#3f3f46",
-  surface4: "#52525b",
-  surfaceDiffEmpty: "#242427",
-  surfaceSidebar: "#131316",
-  foregroundMuted: "#a1a1aa",
-  foregroundExtraMuted: "#71717a",
-  border: "#27272a",
-  borderAccent: "#303036",
-  accent: "#e4e4e7",
-  accentBright: "#fafafa",
-  accentForeground: "#18181b", // monochrome zinc accent is near-white — needs dark text
-  destructive: "#c44a4a", // neutral red, hue 0 — clearly red without screaming
-  terminalBlack: "#131316",
-  terminalBrightBlack: "#3f3f46",
-});
-
-// Midnight — subtle blue tint
-const midnightDarkColors = buildDarkSemanticColors({
-  surface0: "#161820",
-  surface1: "#1c1e27",
-  surface2: "#252731",
-  surface3: "#3c3e4c",
-  surface4: "#535564",
-  surfaceDiffEmpty: "#222430",
-  surfaceSidebar: "#121420",
-  foregroundMuted: "#9a9db0",
-  foregroundExtraMuted: "#6b6e82",
-  border: "#242636",
-  borderAccent: "#2e3040",
-  accent: "#3b6fcf",
-  accentBright: "#7eaaeb",
-  destructive: "#c44a52", // red with a hint of cool lean against the blue tint
-  terminalBlack: "#121420",
-  terminalBrightBlack: "#3c3e4c",
-});
-
-// Claude — warm neutral with subtle orange undertone
-const claudeDarkColors = buildDarkSemanticColors({
-  surface0: "#1f1f1e",
-  surface1: "#262523",
-  surface2: "#2f2d2b",
-  surface3: "#4a4745",
-  surface4: "#605d5b",
-  surfaceDiffEmpty: "#2a2826",
-  surfaceSidebar: "#1a1918",
-  foregroundMuted: "#ada9a5",
-  foregroundExtraMuted: "#78746f",
-  border: "#2c2a27",
-  borderAccent: "#36332f",
-  accent: "#d97757",
-  accentBright: "#e89a7f",
-  destructive: "#cf513e", // warm orange-red, hue ~10 — sits with the Claude orange accent
-  terminalBlack: "#1a1918",
-  terminalBrightBlack: "#4a4745",
-});
-
-// Ghostty — blue-tinted dark based on Ghostty default background
-const ghosttyDarkColors = buildDarkSemanticColors({
-  surface0: "#282c34",
-  surface1: "#2f333d",
-  surface2: "#383c48",
-  surface3: "#4a4f5e",
-  surface4: "#5b6175",
-  surfaceDiffEmpty: "#323643",
-  surfaceSidebar: "#21252d",
-  foregroundMuted: "#c8ccd8",
-  foregroundExtraMuted: "#a0a4b2",
-  border: "#353a47",
-  borderAccent: "#3f4454",
-  accent: "#89b4fa",
-  accentBright: "#b4d0fc",
-  destructive: "#c44a55", // red with slight cool lean against the slate-blue surfaces
-  terminalBlack: "#21252d",
-  terminalBrightBlack: "#4a4f5e",
-});
-
 export const SPACING = {
   0: 0,
   0.5: 2,
@@ -559,7 +478,7 @@ export const SPACING = {
 } as const;
 
 export const FONT_SIZE = {
-  code: 12,
+  code: 14,
   content: 15,
   sm: 12,
   base: 14,
@@ -571,7 +490,7 @@ export const FONT_SIZE = {
 } as const;
 
 export const LINE_HEIGHT = {
-  diff: 22,
+  diff: 21,
 } as const;
 
 export const ICON_SIZE = {
@@ -612,8 +531,7 @@ export const OPACITY = {
 } as const;
 
 // Platform default font stacks — copied verbatim from constants/theme.ts `Fonts`
-// (sans -> ui, mono -> mono). These seed the dynamic `fontFamily` theme token and
-// are the fallback an empty user-supplied family resolves to at apply time.
+// (sans -> ui, mono -> mono). Appearance updates always restore these fixed stacks.
 export const DEFAULT_UI_FONT_STACK: string = Platform.select({
   ios: "system-ui",
   default: "normal",
@@ -623,7 +541,7 @@ export const DEFAULT_UI_FONT_STACK: string = Platform.select({
 export const DEFAULT_MONO_FONT_STACK: string = Platform.select({
   ios: "ui-monospace",
   default: "monospace",
-  web: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+  web: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
 });
 
 // `fontSize`, `fontFamily`, and `lineHeight` are deliberately widened to plain
@@ -689,32 +607,6 @@ export function buildDarkTheme(semanticColors: ReturnType<typeof buildDarkSemant
 }
 
 export const darkTheme = buildDarkTheme(paseoDarkColors);
-export const darkZincTheme = buildDarkTheme(zincDarkColors);
-export const darkMidnightTheme = buildDarkTheme(midnightDarkColors);
-export const darkClaudeTheme = buildDarkTheme(claudeDarkColors);
-export const darkGhosttyTheme = buildDarkTheme(ghosttyDarkColors);
-
-// Pure black — zero-luminance background with high-contrast surfaces.
-const pureBlackDarkColors = buildDarkSemanticColors({
-  surface0: "#000000",
-  surface1: "#0a0a0a",
-  surface2: "#111111",
-  surface3: "#202020",
-  surface4: "#2d2d2d",
-  surfaceDiffEmpty: "#0c0c0c",
-  surfaceSidebar: "#000000",
-  foregroundMuted: "#a1a1aa",
-  foregroundExtraMuted: "#71717a",
-  border: "#1c1c1c",
-  borderAccent: "#242424",
-  accent: "#20744A",
-  accentBright: "#7ccba0",
-  destructive: "#c44a4a",
-  terminalBlack: "#595959",
-  terminalBrightBlack: "#8a8a8a",
-});
-
-export const darkPureBlackTheme = buildDarkTheme(pureBlackDarkColors);
 
 const lightShadow = {
   sm: {
@@ -756,56 +648,9 @@ export const lightTheme = buildLightTheme(lightSemanticColors);
 export const theme = darkTheme;
 
 export const THEME_OPTIONS = [
-  {
-    name: "light",
-    group: "primary",
-    unistylesName: "light",
-    theme: lightTheme,
-    swatch: "#ffffff",
-  },
-  {
-    name: "dark",
-    group: "primary",
-    unistylesName: "dark",
-    theme: darkTheme,
-    swatch: "#2D8B62",
-  },
-  { name: "auto", group: "primary" },
-  {
-    name: "zinc",
-    group: "variant",
-    unistylesName: "darkZinc",
-    theme: darkZincTheme,
-    swatch: "#808080",
-  },
-  {
-    name: "midnight",
-    group: "variant",
-    unistylesName: "darkMidnight",
-    theme: darkMidnightTheme,
-    swatch: "#4A6BA8",
-  },
-  {
-    name: "claude",
-    group: "variant",
-    unistylesName: "darkClaude",
-    theme: darkClaudeTheme,
-    swatch: "#D97757",
-  },
-  {
-    name: "ghostty",
-    group: "variant",
-    unistylesName: "darkGhostty",
-    theme: darkGhosttyTheme,
-    swatch: "#8caaee",
-  },
-  {
-    name: "pureBlack",
-    group: "variant",
-    unistylesName: "darkPureBlack",
-    theme: darkPureBlackTheme,
-    swatch: "#000000",
-  },
+  { name: "light", unistylesName: "light", theme: lightTheme },
+  { name: "dark", unistylesName: "dark", theme: darkTheme },
+  { name: "auto" },
 ] as const;
 
 export const PLUGIN_THEME_PREFERENCE = "plugin";
@@ -829,10 +674,6 @@ type ThemeToUnistyles = {
   [Name in ThemeName]: Extract<ConcreteThemeOption, { name: Name }>["unistylesName"];
 };
 
-type ThemeSwatches = {
-  [Name in ThemeName]: Extract<ConcreteThemeOption, { name: Name }>["swatch"];
-};
-
 type RegisteredThemes = {
   [Option in ConcreteThemeOption as Option["unistylesName"]]: Option["theme"];
 } & {
@@ -843,10 +684,6 @@ type RegisteredThemes = {
 export const THEME_TO_UNISTYLES = Object.fromEntries(
   CONCRETE_THEME_OPTIONS.map((option) => [option.name, option.unistylesName]),
 ) as ThemeToUnistyles;
-
-export const THEME_SWATCHES = Object.fromEntries(
-  CONCRETE_THEME_OPTIONS.map((option) => [option.name, option.swatch]),
-) as ThemeSwatches;
 
 export const REGISTERED_THEMES = {
   ...Object.fromEntries(

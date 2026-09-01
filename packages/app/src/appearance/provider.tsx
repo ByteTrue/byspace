@@ -54,23 +54,17 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
     if (isLoading) return;
     applyTheme({ preference: settings.theme, contributedTheme: selected });
     applyAppearance({
-      uiFontFamily: settings.uiFontFamily,
-      monoFontFamily: settings.monoFontFamily,
       uiBaseFontSize: settings.uiBaseFontSize,
       contentFontSize: settings.contentFontSize,
       codeFontSize: settings.codeFontSize,
-      syntaxTheme: settings.syntaxTheme,
     });
   }, [
     isLoading,
     selected,
     settings.theme,
-    settings.uiFontFamily,
-    settings.monoFontFamily,
     settings.uiBaseFontSize,
     settings.contentFontSize,
     settings.codeFontSize,
-    settings.syntaxTheme,
   ]);
 
   const select = useCallback(

@@ -1,4 +1,3 @@
-import { isSyntaxThemeId, type SyntaxThemeId } from "@getpaseo/highlight";
 import type { ActiveTurnBehavior } from "@getpaseo/protocol/messages";
 import type { QueryClient } from "@tanstack/react-query";
 import type { DesktopSettings } from "@/desktop/settings/desktop-settings";
@@ -58,10 +57,9 @@ export function defaultContentFontSize(native: boolean): number {
 export const DEFAULT_CONTENT_FONT_SIZE = defaultContentFontSize(isNative);
 export const MIN_CONTENT_FONT_SIZE = 10;
 export const MAX_CONTENT_FONT_SIZE = 21;
-export const DEFAULT_CODE_FONT_SIZE = 12; // == FONT_SIZE.code
+export const DEFAULT_CODE_FONT_SIZE = 14; // == FONT_SIZE.code (code, diff, and terminal)
 export const MIN_CODE_FONT_SIZE = 9;
 export const MAX_CODE_FONT_SIZE = 22; // line-height 1.5×22=33 stays safe
-export const MAX_FONT_FAMILY_LENGTH = 200;
 
 export interface AppSettings {
   theme: ThemePreference;
@@ -72,12 +70,9 @@ export interface AppSettings {
   serviceUrlBehavior: ServiceUrlBehavior;
   terminalScrollbackLines: number;
   useLegacyTerminalRenderer: boolean;
-  uiFontFamily: string; // "" = platform default UI stack
-  monoFontFamily: string; // "" = platform default mono stack
   uiBaseFontSize: number; // clamped px, platform default 14 or 15
   contentFontSize: number; // clamped px, default 15
-  codeFontSize: number; // clamped px, default 12
-  syntaxTheme: SyntaxThemeId; // default "one"
+  codeFontSize: number; // clamped px, default 14 (code, diff, and terminal)
   workspaceTitleSource: WorkspaceTitleSource;
   sidebarWorkspaceTrailing: SidebarWorkspaceTrailing;
   sidebarRowItems: SidebarRowItems;
@@ -120,12 +115,9 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   serviceUrlBehavior: "ask",
   terminalScrollbackLines: DEFAULT_TERMINAL_SCROLLBACK_LINES,
   useLegacyTerminalRenderer: false,
-  uiFontFamily: "",
-  monoFontFamily: "",
   uiBaseFontSize: DEFAULT_UI_BASE_FONT_SIZE,
   contentFontSize: DEFAULT_CONTENT_FONT_SIZE,
   codeFontSize: DEFAULT_CODE_FONT_SIZE,
-  syntaxTheme: "one",
   workspaceTitleSource: "title",
   sidebarWorkspaceTrailing: "diff",
   sidebarRowItems: DEFAULT_SIDEBAR_ROW_ITEMS,
@@ -149,10 +141,6 @@ function clampedNumber(min: number, max: number) {
     .unknown()
     .transform((value) => parseClampedFontSize(value, { min, max }))
     .pipe(z.number());
-}
-
-function sanitizedFontFamily() {
-  return z.unknown().transform(sanitizeFontFamily).pipe(z.string());
 }
 
 const SidebarRowItemsSchema = z
@@ -197,8 +185,10 @@ const StoredAppSettingsSchema = z
       MAX_TERMINAL_SCROLLBACK_LINES,
     ).catch(DEFAULT_TERMINAL_SCROLLBACK_LINES),
     useLegacyTerminalRenderer: z.boolean().catch(false),
-    uiFontFamily: sanitizedFontFamily().catch(""),
-    monoFontFamily: sanitizedFontFamily().catch(""),
+    // COMPAT(retiredAppearanceFields): added in v0.7.0-beta.2, remove after 2027-09-01.
+    uiFontFamily: z.unknown().optional(),
+    monoFontFamily: z.unknown().optional(),
+    syntaxTheme: z.unknown().optional(),
     uiBaseFontSize: clampedNumber(MIN_UI_BASE_FONT_SIZE, MAX_UI_BASE_FONT_SIZE)
       .optional()
       .catch(undefined),
@@ -210,7 +200,6 @@ const StoredAppSettingsSchema = z
     codeFontSize: clampedNumber(MIN_CODE_FONT_SIZE, MAX_CODE_FONT_SIZE).catch(
       DEFAULT_CODE_FONT_SIZE,
     ),
-    syntaxTheme: z.string().refine(isSyntaxThemeId).catch("one"),
     workspaceTitleSource: z.enum(["title", "branch"]).catch("title"),
     sidebarWorkspaceTrailing: z.enum(["diff", "timestamp", "none"]).catch("diff"),
     sidebarRowItems: SidebarRowItemsSchema,
@@ -416,6 +405,9 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     releaseChannel: _releaseChannel,
     compactToolCalls: _compactToolCalls,
     uiFontSize: _uiFontSize,
+    uiFontFamily: _uiFontFamily,
+    monoFontFamily: _monoFontFamily,
+    syntaxTheme: _syntaxTheme,
     ...settings
   } = StoredAppSettingsSchema.parse(value);
   return settings;
@@ -461,26 +453,6 @@ export function parseClampedFontSize(
     return null;
   }
   return Math.min(bounds.max, Math.max(bounds.min, Math.floor(numericValue)));
-}
-
-export function sanitizeFontFamily(value: unknown): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    return ""; // explicit empty = default
-  }
-  if (trimmed.length > MAX_FONT_FAMILY_LENGTH) {
-    return null;
-  }
-  if (/[;{}<>]/.test(trimmed)) {
-    return null; // would break the web CSS font-family declaration
-  }
-  if ([...trimmed].some((char) => char.charCodeAt(0) <= 0x1f)) {
-    return null; // control chars would corrupt the font-family string
-  }
-  return trimmed; // quotes/commas are legit in stacks
 }
 
 async function loadLegacyDesktopSettingsFromStorage(storage: KeyValueStorage): Promise<{

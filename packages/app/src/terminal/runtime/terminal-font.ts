@@ -1,22 +1,18 @@
-const DEFAULT_TERMINAL_FONT_SIZE = 13;
+const DEFAULT_TERMINAL_FONT_SIZE = 14;
 
+// Keep this standalone from the app theme module: it is bundled into the isolated WebView.
 export const DEFAULT_TERMINAL_FONT_FAMILY = [
-  // Prefer common developer fonts, with Nerd Font variants for prompt/TUI glyphs.
-  "JetBrains Mono",
-  "JetBrainsMono Nerd Font",
-  "JetBrainsMono NF",
-  "MesloLGM Nerd Font",
-  "MesloLGM NF",
-  "Hack Nerd Font",
-  "FiraCode Nerd Font",
-  // PUA-only fallback (many Nerd glyphs live here on some systems).
-  "Symbols Nerd Font",
-  // System fallbacks.
-  "SF Mono",
+  // Browser-visible system monospace first; named fonts and Nerd glyphs are fallbacks.
+  "ui-monospace",
+  "SFMono-Regular",
   "Menlo",
   "Monaco",
   "Consolas",
+  "'Cascadia Mono'",
+  "'DejaVu Sans Mono'",
   "'Liberation Mono'",
+  "'JetBrainsMono Nerd Font'",
+  "'Symbols Nerd Font'",
   "monospace",
 ].join(", ");
 
