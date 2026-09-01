@@ -226,6 +226,26 @@ describe("git-actions-policy", () => {
     });
   });
 
+  it("marks a synchronized no-upstream branch push unavailable", () => {
+    const actions = buildGitActions(
+      createInput({
+        hasRemote: true,
+        isPaseoOwnedWorktree: true,
+        isOnBaseBranch: false,
+        aheadCount: 1,
+        aheadOfOrigin: 0,
+        behindOfOrigin: 0,
+      }),
+    );
+    const pushAction = actions.secondary.find((action) => action.id === "push");
+
+    expect(actions.primary?.id).not.toBe("push");
+    expect(pushAction).toMatchObject({
+      disabled: false,
+      unavailableMessage: "Push isn't available because there is nothing new to send",
+    });
+  });
+
   it("prioritizes push over pull request merge when local commits are unpushed", () => {
     const actions = buildGitActions(
       createInput({

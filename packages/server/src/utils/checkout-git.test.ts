@@ -730,6 +730,19 @@ const x = 1;
     expect(status.mainRepoRoot ?? null).toBeNull();
   });
 
+  it("reports no remote status for a checkout without an origin", async () => {
+    const status = await getCheckoutStatus(repoDir);
+
+    expect(status).toMatchObject({
+      isGit: true,
+      currentBranch: "main",
+      upstreamRef: null,
+      aheadOfOrigin: null,
+      behindOfOrigin: null,
+      hasRemote: false,
+    });
+  });
+
   it("exposes hasRemote when origin is configured", async () => {
     const remoteDir = join(tempDir, "remote.git");
     execFileSync("git", ["init", "--bare", "-b", "main", remoteDir]);
@@ -868,12 +881,102 @@ const x = 1;
     commitFile(repoDir, "local-only.txt", "local\n", "local commit");
 
     const status = await getCheckoutStatus(repoDir);
-    expect(status.isGit).toBe(true);
-    if (!status.isGit) {
-      return;
-    }
-    expect(status.upstreamRef).toBeNull();
-    expect(status.aheadOfOrigin).toBeNull();
+    expect(status).toMatchObject({
+      isGit: true,
+      currentBranch: "local-only",
+      upstreamRef: null,
+      aheadOfOrigin: null,
+      behindOfOrigin: null,
+      hasRemote: true,
+    });
+  });
+
+  it("reports a same-name origin branch when pushed without tracking", async () => {
+    setupRemoteTrackingMain(repoDir, tempDir);
+    execFileSync("git", ["checkout", "-b", "no-track-synced"], { cwd: repoDir });
+    commitFile(repoDir, "feature.txt", "feature\n", "feature commit");
+    execFileSync("git", ["push", "origin", "no-track-synced"], { cwd: repoDir });
+
+    expect(getBranchUpstream(repoDir)).toBeNull();
+
+    const status = await getCheckoutStatus(repoDir);
+
+    expect(status).toMatchObject({
+      isGit: true,
+      currentBranch: "no-track-synced",
+      upstreamRef: "refs/remotes/origin/no-track-synced",
+      aheadOfOrigin: 0,
+      behindOfOrigin: 0,
+    });
+  });
+
+  it("reports local commits ahead of an untracked same-name origin branch", async () => {
+    setupRemoteTrackingMain(repoDir, tempDir);
+    execFileSync("git", ["checkout", "-b", "no-track-ahead"], { cwd: repoDir });
+    commitFile(repoDir, "first.txt", "first\n", "first feature commit");
+    execFileSync("git", ["push", "origin", "no-track-ahead"], { cwd: repoDir });
+    commitFile(repoDir, "second.txt", "second\n", "second feature commit");
+
+    expect(getBranchUpstream(repoDir)).toBeNull();
+
+    const status = await getCheckoutStatus(repoDir);
+
+    expect(status).toMatchObject({
+      isGit: true,
+      currentBranch: "no-track-ahead",
+      upstreamRef: "refs/remotes/origin/no-track-ahead",
+      aheadOfOrigin: 1,
+      behindOfOrigin: 0,
+    });
+  });
+
+  it("reports local commits behind an untracked same-name origin branch", async () => {
+    const { remoteDir } = setupRemoteTrackingMain(repoDir, tempDir);
+    execFileSync("git", ["checkout", "-b", "no-track-behind"], { cwd: repoDir });
+    commitFile(repoDir, "feature.txt", "feature\n", "feature commit");
+    execFileSync("git", ["push", "origin", "no-track-behind"], { cwd: repoDir });
+
+    const cloneDir = join(tempDir, "branch-clone");
+    execFileSync("git", ["clone", remoteDir, cloneDir]);
+    execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: cloneDir });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: cloneDir });
+    execFileSync("git", ["checkout", "no-track-behind"], { cwd: cloneDir });
+    commitFile(cloneDir, "remote.txt", "remote\n", "remote feature commit");
+    execFileSync("git", ["push"], { cwd: cloneDir });
+    execFileSync("git", ["fetch", "origin"], { cwd: repoDir });
+
+    expect(getBranchUpstream(repoDir)).toBeNull();
+
+    const status = await getCheckoutStatus(repoDir);
+
+    expect(status).toMatchObject({
+      isGit: true,
+      currentBranch: "no-track-behind",
+      upstreamRef: "refs/remotes/origin/no-track-behind",
+      aheadOfOrigin: 0,
+      behindOfOrigin: 1,
+    });
+  });
+
+  it("preserves unknown origin status when a configured upstream is gone", async () => {
+    setupRemoteTrackingMain(repoDir, tempDir);
+    execFileSync("git", ["checkout", "-b", "no-track-gone"], { cwd: repoDir });
+    commitFile(repoDir, "feature.txt", "feature\n", "feature commit");
+    execFileSync("git", ["push", "origin", "no-track-gone"], { cwd: repoDir });
+    execFileSync("git", ["config", "branch.no-track-gone.remote", "origin"], { cwd: repoDir });
+    execFileSync("git", ["config", "branch.no-track-gone.merge", "refs/heads/missing"], {
+      cwd: repoDir,
+    });
+
+    const status = await getCheckoutStatus(repoDir);
+
+    expect(status).toMatchObject({
+      isGit: true,
+      currentBranch: "no-track-gone",
+      upstreamRef: null,
+      aheadOfOrigin: null,
+      behindOfOrigin: null,
+    });
   });
 
   it("reports a PR worktree as not ahead when its branch is pushed to the configured PR remote", async () => {
@@ -1923,6 +2026,40 @@ const x = 1;
     await pullCurrentBranch(repoDir);
 
     execFileSync("git", ["merge-base", "--is-ancestor", remoteCommit, "HEAD"], { cwd: repoDir });
+    expect(readFileSync(join(repoDir, "pulled.txt"), "utf8").replace(/\r\n/g, "\n")).toBe(
+      "remote\n",
+    );
+  });
+
+  it("pulls a same-name origin branch without configuring upstream tracking", async () => {
+    const remoteDir = join(tempDir, "remote.git");
+    execFileSync("git", ["init", "--bare", "-b", "main", remoteDir]);
+    execFileSync("git", ["remote", "add", "origin", remoteDir], { cwd: repoDir });
+    execFileSync("git", ["push", "-u", "origin", "main"], { cwd: repoDir });
+    execFileSync("git", ["checkout", "-b", "no-track-pull"], { cwd: repoDir });
+    commitFile(repoDir, "feature.txt", "feature\n", "feature commit");
+    execFileSync("git", ["push", "origin", "no-track-pull"], { cwd: repoDir });
+
+    const otherClone = join(tempDir, "other-clone");
+    execFileSync("git", ["clone", remoteDir, otherClone]);
+    execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: otherClone });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: otherClone });
+    execFileSync("git", ["checkout", "no-track-pull"], { cwd: otherClone });
+    commitFile(otherClone, "pulled.txt", "remote\n", "remote pull commit");
+    const remoteCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: otherClone })
+      .toString()
+      .trim();
+    execFileSync("git", ["push"], { cwd: otherClone });
+    execFileSync("git", ["fetch", "origin"], { cwd: repoDir });
+
+    expect(getBranchUpstream(repoDir)).toBeNull();
+
+    await pullCurrentBranch(repoDir);
+
+    expect(execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoDir }).toString().trim()).toBe(
+      remoteCommit,
+    );
+    expect(getBranchUpstream(repoDir)).toBeNull();
     expect(readFileSync(join(repoDir, "pulled.txt"), "utf8").replace(/\r\n/g, "\n")).toBe(
       "remote\n",
     );
