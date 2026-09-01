@@ -14,10 +14,10 @@ publish_strategy: epic-plan-pr-then-one-pr-per-wave
 execution_strategy_revision: v2-owner-approved
 execution_acceleration_approved_at: 2026-09-01T07:48:00Z
 current_wave: 5
-current_item: ITEM-17 / ITEM-20
-active_items: [ITEM-17, ITEM-20]
+current_item: ITEM-20
+active_items: [ITEM-20]
 blocked_by: null
-next_action: 完成 ITEM-17 remote-only 切换回归与最终收割；并行等待 ITEM-20 Project 级 Auto Host Badge 候选
+next_action: 完成 ITEM-20 Project 级 Auto Host Badge 候选、fresh review 与串行集成，然后解锁 ITEM-21
 ---
 
 # Epic Work: 保留能力交付路线
@@ -62,8 +62,8 @@ next_action: 完成 ITEM-17 remote-only 切换回归与最终收割；并行等�
 - ITEM-18 已让 desktop Workspace hover card 按精确 `(serverId, workspaceId)` 展示全部非归档 Agent（含 subagent）的 canonical lifecycle 状态并随目录快照实时更新；不按 cwd 推断、不改变目录顺序或 native/compact 行为。双 fresh review `5ea66d15-3555-42a2-8749-8905f98892c6` / `b451d59a-ed19-4775-ad12-3c9d52018b96` 均为 0 P0/P1；父流程吸收有界可滚动 Agent 区、subagent unit pin 与标准 Playwright outputPath/viewport hardening。Selector 46/46、Browser E2E 1/1、根 Typecheck/Lint/Format 全绿；5-path content manifest `7388e5f6…3630` 字节一致，以 `28172ba6c` 串行集成。最终 screenshot/trace 保存于 `/tmp/byspace-wave5-item18-ui-proof-final/`。
 - ITEM-17 与 ITEM-19 已从集成 milestone `38ac45902` 创建隔离 worktree `epic-002-wave5-item17` / `epic-002-wave5-item19`，并由唯一双 writer workflow `227882a3-272a-4657-933f-759fc17c085a` 并行执行；brief SHA-256 为 `34128b1b…57876` / `50be063f…2d486`。
 - ITEM-19 证实 exact-base 生产代码已满足 compact/native 三点菜单常显、wide Web 仅 hover 显示与 open-menu trigger retention；没有强造产品改动。双 fresh review 0 P0/P1，父流程只吸收 `toBeInViewport` 的 Reanimated settle 条件并重拍完整 bottom sheet。Compact/Wide Browser E2E 各 1/1、App Typecheck/Lint/Format 全绿，唯一 E2E 文件 manifest `7210d2ca…90ec` 字节一致，以 `a1fab7b96` 串行集成；最终 screenshot/trace 保存于 `/tmp/byspace-wave5-item19-ui-proof-final/`。
-- ITEM-17 双 fresh review 0 P0/P1；父流程正在补齐切换成功后的 `branchSuggestions` 精确 invalidation 与 Remote/Both Browser 证据。首轮 remote-only fixture 暴露 `withRemote` 把 bare `remote.git` 放在 repo 内导致工作树 dirty 的测试夹具问题，现仅在测试 setup 推送/fetch 后移除该 bare fixture，再执行真实 remote-only 切换回归。
-- ITEM-20 依赖已由 ITEM-19 集成解除；隔离 worktree `epic-002-wave5-item20` 从 `a1fab7b96` 创建，frozen brief `/tmp/byspace-wave5-item20-worker-brief.md` SHA-256 `0634a60e…395f`，唯一 writer run `2db6a8bb-046c-4831-9d85-8da8583c6f7d` 已启动。ITEM-21 继续等待 ITEM-17 与 ITEM-20 集成。
+- ITEM-17 双 fresh review 0 P0/P1。父流程验证了 daemon 的 branch-suggestion auxiliary cache 保留 15 秒，因此撤回越出 W01 的“切换 remote-only 后立即转 Both”试验，不扩大到 Server cache 合同；最终真实 Git + Browser fixture 在切换前同时证明 Remote-only 与 Local • Remote，并完成 keyboard selection。Focused Unit/i18n 45/45、Browser E2E 1/1、App Typecheck/Lint/Format 全绿，13 文件 manifest 字节一致，以 `82cd75b5f` 串行集成；最终 screenshot/trace 保存于 `/tmp/byspace-wave5-item17-ui-proof-final/`。
+- ITEM-20 依赖已由 ITEM-19 集成解除；隔离 worktree `epic-002-wave5-item20` 从 `a1fab7b96` 创建，frozen brief `/tmp/byspace-wave5-item20-worker-brief.md` SHA-256 `0634a60e…395f`。首个 writer 因误查不存在的 `.codestable/lessons` 在改动前退出，干净 worktree 已由 fresh retry run `616b030d-41b9-42b5-9be5-90c0c0f30c75` 接管。ITEM-21 继续等待 ITEM-20 集成。
 - Windows 性能验证继续使用 shared CI 中仅手动启用的 `terminal_performance` job；默认 PR CI 不运行该 job，且 job 无部署权限、secret 或发布输入。Owner 已于 2026-09-01 明确接受该路径。
 - Wave 3 PR #18 首个 exact-head CI run `33472512893` 暴露两个测试夹具缺口：App 的 stub Terminal 缺 `hasSelection()`，Server 的 provider-name bootstrap assertion 因新增短 ID `pi` 误匹配 `pino` / `pipe` / `/api`。父流程分别本地 RED 复现并做测试侧最小修正；T15 纠偏后新的 exact-head 门槛全绿并完成合并。
 
@@ -97,9 +97,9 @@ next_action: 完成 ITEM-17 remote-only 切换回归与最终收割；并行等�
 ## Wave 5 · Workspace、侧栏与 Compact UI
 
 - [x] ITEM-16 · WORKSPACE-03 · W04 · reviewed and integrated
-- [ ] ITEM-17 · WORKSPACE-01 · W01
+- [x] ITEM-17 · WORKSPACE-01 · W01 · reviewed and integrated `82cd75b5f`
 - [x] ITEM-18 · WORKSPACE-04 · W05（仅 hover 展示全部 Agent 精确状态）· reviewed and integrated
-- [x] ITEM-19 · WORKSPACE-02 · W02 · evidence-closed and integrated
+- [x] ITEM-19 · WORKSPACE-02 · W02 · evidence-closed and integrated `a1fab7b96`
 - [ ] ITEM-20 · WORKSPACE-05 · W14 · writer active
 - [ ] ITEM-21 · UI-01 · U03/U05
 
