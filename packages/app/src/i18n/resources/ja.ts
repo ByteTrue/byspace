@@ -385,6 +385,16 @@ export const ja: TranslationResources = {
       alreadyImported: "最近のセッションはすでにすべてインポートされています。",
       noProviderSessions: "{{provider}}のセッションが見つかりません。",
     },
+    manual: {
+      providerLabel: "プロバイダー",
+      providerPlaceholder: "プロバイダーを選択",
+      providerEmpty: "プロバイダーが見つかりません",
+      handleLabel: "セッションまたはスレッド ID",
+      handlePlaceholder: "セッションまたはスレッド IDを入力",
+      handleRequired: "セッションまたはスレッド IDを入力",
+      workspaceRequired: "ワークスペースのパスが必要です",
+      fallbackFailure: "このセッションをインポートできませんでした",
+    },
     row: {
       importing: "インポート中...",
     },

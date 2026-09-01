@@ -382,6 +382,16 @@ export const zhCN: TranslationResources = {
       alreadyImported: "所有最近会话都已导入。",
       noProviderSessions: "没有找到 {{provider}} 会话。",
     },
+    manual: {
+      providerLabel: "提供商",
+      providerPlaceholder: "选择提供商",
+      providerEmpty: "未找到提供商",
+      handleLabel: "会话或线程 ID",
+      handlePlaceholder: "输入会话或线程 ID",
+      handleRequired: "输入会话或线程 ID",
+      workspaceRequired: "需要工作区路径",
+      fallbackFailure: "无法导入此会话",
+    },
     row: {
       importing: "正在导入...",
     },

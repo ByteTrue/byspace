@@ -386,6 +386,16 @@ export const fr: TranslationResources = {
       alreadyImported: "Toutes les sessions récentes sont déjà importées.",
       noProviderSessions: "Aucune session{{provider}}trouvée.",
     },
+    manual: {
+      providerLabel: "Fournisseur",
+      providerPlaceholder: "Sélectionnez un fournisseur",
+      providerEmpty: "Aucun fournisseur trouvé",
+      handleLabel: "ID de session ou de fil",
+      handlePlaceholder: "Saisissez un ID de session ou de fil",
+      handleRequired: "Saisissez un ID de session ou de fil",
+      workspaceRequired: "Le chemin de l'espace de travail est requis",
+      fallbackFailure: "Impossible d'importer cette session",
+    },
     row: {
       importing: "Importation...",
     },

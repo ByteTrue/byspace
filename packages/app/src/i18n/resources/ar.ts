@@ -382,6 +382,16 @@ export const ar: TranslationResources = {
       alreadyImported: "تم بالفعل استيراد كافة الجلسات الأخيرة.",
       noProviderSessions: "لم يتم العثور على جلسات{{provider}}.",
     },
+    manual: {
+      providerLabel: "موفر الخدمة",
+      providerPlaceholder: "اختر موفر خدمة",
+      providerEmpty: "لم يتم العثور على موفري خدمات",
+      handleLabel: "معرّف الجلسة أو سلسلة المحادثة",
+      handlePlaceholder: "أدخل معرّف جلسة أو سلسلة محادثة",
+      handleRequired: "أدخل معرّف جلسة أو سلسلة محادثة",
+      workspaceRequired: "مسار مساحة العمل مطلوب",
+      fallbackFailure: "تعذر استيراد هذه الجلسة",
+    },
     row: {
       importing: "جارٍ الاستيراد...",
     },

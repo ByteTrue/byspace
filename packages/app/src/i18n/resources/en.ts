@@ -380,6 +380,16 @@ export const en = {
       alreadyImported: "All recent sessions are already imported.",
       noProviderSessions: "No {{provider}} sessions found.",
     },
+    manual: {
+      providerLabel: "Provider",
+      providerPlaceholder: "Select a provider",
+      providerEmpty: "No providers found",
+      handleLabel: "Session or thread ID",
+      handlePlaceholder: "Enter a session or thread ID",
+      handleRequired: "Enter a session or thread ID",
+      workspaceRequired: "A workspace path is required",
+      fallbackFailure: "Could not import this session",
+    },
     row: {
       importing: "Importing...",
     },

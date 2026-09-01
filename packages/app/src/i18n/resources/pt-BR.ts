@@ -385,6 +385,16 @@ export const ptBR: TranslationResources = {
       alreadyImported: "Todas as sessões recentes já foram importadas.",
       noProviderSessions: "Nenhuma sessão de {{provider}} encontrada.",
     },
+    manual: {
+      providerLabel: "Provedor",
+      providerPlaceholder: "Selecione um provedor",
+      providerEmpty: "Nenhum provedor encontrado",
+      handleLabel: "ID da sessão ou thread",
+      handlePlaceholder: "Insira um ID de sessão ou thread",
+      handleRequired: "Insira um ID de sessão ou thread",
+      workspaceRequired: "O caminho do workspace é obrigatório",
+      fallbackFailure: "Não foi possível importar esta sessão",
+    },
     row: {
       importing: "Importando...",
     },

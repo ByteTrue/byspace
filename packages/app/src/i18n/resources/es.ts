@@ -385,6 +385,16 @@ export const es: TranslationResources = {
       alreadyImported: "Todas las sesiones recientes ya están importadas.",
       noProviderSessions: "No se encontraron sesiones{{provider}}.",
     },
+    manual: {
+      providerLabel: "Proveedor",
+      providerPlaceholder: "Selecciona un proveedor",
+      providerEmpty: "No se encontraron proveedores",
+      handleLabel: "ID de sesión o hilo",
+      handlePlaceholder: "Introduce un ID de sesión o hilo",
+      handleRequired: "Introduce un ID de sesión o hilo",
+      workspaceRequired: "Se requiere una ruta del espacio de trabajo",
+      fallbackFailure: "No se pudo importar esta sesión",
+    },
     row: {
       importing: "Importador...",
     },

@@ -383,6 +383,16 @@ export const ko: TranslationResources = {
       alreadyImported: "최근 세션이 모두 이미 가져와졌습니다.",
       noProviderSessions: "{{provider}} 세션을 찾을 수 없습니다.",
     },
+    manual: {
+      providerLabel: "프로바이더",
+      providerPlaceholder: "프로바이더 선택",
+      providerEmpty: "프로바이더를 찾을 수 없습니다",
+      handleLabel: "세션 또는 스레드 ID",
+      handlePlaceholder: "세션 또는 스레드 ID 입력",
+      handleRequired: "세션 또는 스레드 ID 입력",
+      workspaceRequired: "워크스페이스 경로가 필요합니다",
+      fallbackFailure: "이 세션을 가져올 수 없습니다",
+    },
     row: {
       importing: "가져오는 중...",
     },

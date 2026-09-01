@@ -384,6 +384,16 @@ export const ru: TranslationResources = {
       alreadyImported: "Все недавние сессии уже импортированы.",
       noProviderSessions: "Сессии провайдера {{provider}} не найдены.",
     },
+    manual: {
+      providerLabel: "Провайдер",
+      providerPlaceholder: "Выберите провайдера",
+      providerEmpty: "Провайдеры не найдены",
+      handleLabel: "Идентификатор сессии или ветки",
+      handlePlaceholder: "Введите идентификатор сессии или ветки",
+      handleRequired: "Введите идентификатор сессии или ветки",
+      workspaceRequired: "Требуется путь рабочего пространства",
+      fallbackFailure: "Не удалось импортировать эту сессию",
+    },
     row: {
       importing: "Импортируется...",
     },
