@@ -31,6 +31,7 @@ export {
   computeSidebarOrderUpdates,
   deriveProjectStatusBucket,
   deriveSidebarLoadingState,
+  selectWorkspaceAgents,
   shouldShowSidebarHostLabels,
   type SidebarLoadingState,
   type SidebarOrderUpdates,

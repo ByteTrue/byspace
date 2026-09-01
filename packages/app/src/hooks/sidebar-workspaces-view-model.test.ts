@@ -12,6 +12,7 @@ import {
   createSidebarWorkspaceEntry,
   deriveProjectStatusBucket,
   deriveSidebarLoadingState,
+  selectWorkspaceAgents,
   shouldShowSidebarHostLabels,
   type ProjectStatusSession,
   type SidebarProjectEntry,
@@ -690,14 +691,15 @@ function workspacePlacement(input: {
 
 function agent(input: {
   id: string;
-  workspaceId: string;
+  serverId?: string;
+  workspaceId?: string;
   status: Agent["status"];
   updatedAt?: Date;
   parentAgentId?: string | null;
   archivedAt?: Date | null;
 }): Agent {
   return {
-    serverId: "srv",
+    serverId: input.serverId ?? "srv",
     id: input.id,
     provider: "claude" as Agent["provider"],
     status: input.status,
@@ -742,6 +744,121 @@ function projectWorkspace(id: string, status: WorkspaceDescriptor["status"]): Wo
     status,
   });
 }
+
+describe("selectWorkspaceAgents", () => {
+  it("returns an empty list when the host has no agent directory", () => {
+    expect(
+      selectWorkspaceAgents({
+        agents: undefined,
+        serverId: "srv",
+        workspaceId: "workspace-a",
+      }),
+    ).toEqual([]);
+  });
+
+  it("returns one current agent for its exact workspace", () => {
+    const current = agent({ id: "agent-a", workspaceId: "workspace-a", status: "idle" });
+
+    expect(
+      selectWorkspaceAgents({
+        agents: new Map([[current.id, current]]),
+        serverId: "srv",
+        workspaceId: "workspace-a",
+      }),
+    ).toEqual([current]);
+  });
+
+  it("includes subagents that belong to the exact workspace", () => {
+    const parent = agent({ id: "parent", workspaceId: "workspace-a", status: "idle" });
+    const subagent = agent({
+      id: "subagent",
+      workspaceId: "workspace-a",
+      status: "running",
+      parentAgentId: parent.id,
+    });
+
+    expect(
+      selectWorkspaceAgents({
+        agents: new Map([
+          [parent.id, parent],
+          [subagent.id, subagent],
+        ]),
+        serverId: "srv",
+        workspaceId: "workspace-a",
+      }).map((current) => current.id),
+    ).toEqual(["parent", "subagent"]);
+  });
+
+  it("keeps every non-archived agent and its canonical status in directory order", () => {
+    const agents = new Map(
+      (["initializing", "running", "idle", "error", "closed"] as const).map((status) => {
+        const current = agent({ id: status, workspaceId: "workspace-a", status });
+        return [current.id, current] as const;
+      }),
+    );
+    const archived = agent({
+      id: "archived",
+      workspaceId: "workspace-a",
+      status: "running",
+      archivedAt: new Date(2_000),
+    });
+    agents.set(archived.id, archived);
+
+    expect(
+      selectWorkspaceAgents({ agents, serverId: "srv", workspaceId: "workspace-a" }).map(
+        ({ id, status }) => [id, status],
+      ),
+    ).toEqual([
+      ["initializing", "initializing"],
+      ["running", "running"],
+      ["idle", "idle"],
+      ["error", "error"],
+      ["closed", "closed"],
+    ]);
+  });
+
+  it("updates a returned agent when its current directory snapshot changes", () => {
+    const before = agent({ id: "agent-a", workspaceId: "workspace-a", status: "running" });
+    const after = { ...before, status: "idle" as const, updatedAt: new Date(2_000) };
+
+    expect(
+      selectWorkspaceAgents({
+        agents: new Map([[before.id, before]]),
+        serverId: "srv",
+        workspaceId: "workspace-a",
+      }),
+    ).toEqual([before]);
+    expect(
+      selectWorkspaceAgents({
+        agents: new Map([[after.id, after]]),
+        serverId: "srv",
+        workspaceId: "workspace-a",
+      }),
+    ).toEqual([after]);
+  });
+
+  it("does not fall back to cwd or mix another workspace or host", () => {
+    const agents = new Map(
+      [
+        agent({ id: "target", workspaceId: "workspace-a", status: "idle" }),
+        agent({ id: "other-workspace", workspaceId: "workspace-b", status: "running" }),
+        agent({
+          id: "other-host",
+          serverId: "other-host",
+          workspaceId: "workspace-a",
+          status: "error",
+        }),
+        agent({ id: "legacy-cwd-only", workspaceId: undefined, status: "closed" }),
+      ].map((current) => [current.id, current] as const),
+    );
+
+    expect(
+      selectWorkspaceAgents({ agents, serverId: "srv", workspaceId: "workspace-a" }).map(
+        (current) => current.id,
+      ),
+    ).toEqual(["target"]);
+  });
+});
 
 describe("deriveProjectStatusBucket", () => {
   it("is done when the project has no workspaces", () => {

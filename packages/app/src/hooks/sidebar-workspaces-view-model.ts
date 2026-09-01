@@ -2,7 +2,7 @@ import type { PrHint } from "@/git/pr-hint";
 import { selectPrHintFromStatus } from "@/git/pr-hint";
 import { type HostProjectListItem } from "@/projects/host-project-model";
 import type { PendingCreateAttempt } from "@/stores/create-flow-store";
-import type { WorkspaceDescriptor } from "@/stores/session-store";
+import type { Agent, WorkspaceDescriptor } from "@/stores/session-store";
 import type {
   WorkspaceStructureHostPlacement,
   WorkspaceStructureProject,
@@ -78,6 +78,25 @@ export interface SidebarWorkspaceSession {
 interface SidebarWorkspaceSessionSource {
   workspaces: Map<string, WorkspaceDescriptor>;
   workspaceAgentActivity: Map<string, WorkspaceAgentActivity>;
+}
+
+export function selectWorkspaceAgents(input: {
+  agents: ReadonlyMap<string, Agent> | undefined;
+  serverId: string;
+  workspaceId: string;
+}): Agent[] {
+  if (!input.agents) {
+    return [];
+  }
+
+  // Keep both identities in the predicate: maps are host-scoped today, but the card must never
+  // mix an agent from another host or fall back to cwd when workspaces share a directory.
+  return [...input.agents.values()].filter(
+    (agent) =>
+      agent.serverId === input.serverId &&
+      agent.workspaceId === input.workspaceId &&
+      !agent.archivedAt,
+  );
 }
 
 export function selectSidebarWorkspaceSessions(

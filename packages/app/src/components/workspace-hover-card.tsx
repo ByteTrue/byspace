@@ -8,7 +8,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { Dimensions, Text, View } from "react-native";
+import { Dimensions, Text, View, useWindowDimensions } from "react-native";
 import { useTranslation } from "react-i18next";
 import { FadeIn, FadeOut } from "react-native-reanimated";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -23,22 +23,28 @@ import {
 } from "lucide-react-native";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
 import { ForgeBrandIcon } from "@/git/forge-icon";
+import type { AgentLifecycleStatus } from "@getpaseo/protocol/agent-lifecycle";
 import type { Theme } from "@/styles/theme";
 import { DiffStat } from "@/components/diff-stat";
+import { AgentStatusDot } from "@/components/agent-status-dot";
 import { Pressable } from "react-native";
 import type { GestureResponderEvent } from "react-native";
 import { Portal } from "@gorhom/portal";
 import { useBottomSheetModalInternal } from "@gorhom/bottom-sheet";
-import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
+import {
+  selectWorkspaceAgents,
+  type SidebarWorkspaceEntry,
+} from "@/hooks/use-sidebar-workspaces-list";
 import type { PrHint } from "@/git/use-pr-status-query";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { copyToClipboard } from "@/utils/copy-to-clipboard";
 import { PrBadge } from "@/components/sidebar-workspace-list";
 import { useHoverSafeZone } from "@/hooks/use-hover-safe-zone";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { FloatingSurface } from "@/components/ui/floating";
+import { FloatingScrollView, FloatingSurface } from "@/components/ui/floating";
 import { isWeb } from "@/constants/platform";
 import { useHosts } from "@/runtime/host-runtime";
+import { useSessionStore, type Agent } from "@/stores/session-store";
 import {
   COUNTED_CHECK_PRESENTATIONS,
   countCheckPresentations,
@@ -95,6 +101,14 @@ function computeHoverCardPosition({
 
 const HOVER_GRACE_MS = 100;
 const HOVER_CARD_WIDTH = 260;
+
+const AGENT_STATUS_LABEL_KEYS = {
+  initializing: "agentList.status.initializing",
+  idle: "agentList.status.idle",
+  running: "agentList.status.running",
+  error: "agentList.status.error",
+  closed: "agentList.status.closed",
+} as const satisfies Record<AgentLifecycleStatus, string>;
 
 interface WorkspaceHoverCardProps {
   workspace: SidebarWorkspaceEntry;
@@ -227,7 +241,23 @@ function WorkspaceHoverCardContent({
   contentRef: React.RefObject<View | null>;
 }): ReactElement | null {
   const { t } = useTranslation();
+  const agents = useSessionStore((state) => state.sessions[workspace.serverId]?.agents);
+  const workspaceAgents = useMemo(
+    () =>
+      selectWorkspaceAgents({
+        agents,
+        serverId: workspace.serverId,
+        workspaceId: workspace.workspaceId,
+      }),
+    [agents, workspace.serverId, workspace.workspaceId],
+  );
   const bottomSheetInternal = useBottomSheetModalInternal(true);
+  const { height: viewportHeight } = useWindowDimensions();
+  const agentListMaxHeight = Math.max(96, Math.floor(viewportHeight * 0.4));
+  const agentListFrameStyle = useMemo(
+    () => ({ maxHeight: agentListMaxHeight }),
+    [agentListMaxHeight],
+  );
   const [triggerRect, setTriggerRect] = useState<Rect | null>(null);
   const [contentSize, setContentSize] = useState<{ width: number; height: number } | null>(null);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
@@ -338,6 +368,22 @@ function WorkspaceHoverCardContent({
               />
             </>
           ) : null}
+          {workspaceAgents.length > 0 ? (
+            <>
+              <View style={styles.separator} />
+              <FloatingScrollView
+                bounces={false}
+                showsVerticalScrollIndicator
+                style={agentListFrameStyle}
+              >
+                <View style={styles.agentList}>
+                  {workspaceAgents.map((agent) => (
+                    <WorkspaceAgentRow key={agent.id} agent={agent} />
+                  ))}
+                </View>
+              </FloatingScrollView>
+            </>
+          ) : null}
         </FloatingSurface>
       </View>
     </Portal>
@@ -350,6 +396,42 @@ const ThemedServer = withUnistyles(Server);
 const ThemedFileDiff = withUnistyles(FileDiff);
 
 type CardInfoIcon = React.ComponentType<React.ComponentProps<typeof ThemedGitBranch>>;
+
+function WorkspaceAgentRow({ agent }: { agent: Agent }): ReactElement {
+  const { t } = useTranslation();
+  const agentKey = `${agent.serverId}:${agent.id}`;
+  const title = agent.title || t("agentList.fallbackTitle");
+
+  return (
+    <View style={styles.agentRow} testID={`hover-card-agent-${agentKey}`}>
+      <View style={styles.agentStatusSlot}>
+        <AgentStatusDot
+          status={agent.status}
+          requiresAttention={agent.requiresAttention}
+          attentionReason={agent.attentionReason}
+          pendingPermissionCount={agent.pendingPermissions.length}
+          showInactive
+        />
+      </View>
+      <View style={styles.agentText}>
+        <Text
+          style={styles.agentTitle}
+          numberOfLines={1}
+          testID={`hover-card-agent-title-${agentKey}`}
+        >
+          {title}
+        </Text>
+        <Text
+          style={styles.agentStatus}
+          numberOfLines={1}
+          testID={`hover-card-agent-status-${agentKey}`}
+        >
+          {t(AGENT_STATUS_LABEL_KEYS[agent.status])}
+        </Text>
+      </View>
+    </View>
+  );
+}
 
 function HostRow({ serverId }: { serverId: string }): ReactElement | null {
   const hosts = useHosts();
@@ -620,6 +702,34 @@ const styles = StyleSheet.create((theme) => ({
   },
   listRowHovered: {
     backgroundColor: theme.colors.surface2,
+  },
+  agentList: {
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+  },
+  agentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1.5],
+  },
+  agentStatusSlot: {
+    width: theme.spacing[2],
+    alignItems: "center",
+  },
+  agentText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  agentTitle: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
+  },
+  agentStatus: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
   },
   checksSummaryRow: {
     flexDirection: "row",
