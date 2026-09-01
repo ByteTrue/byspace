@@ -1,0 +1,9 @@
+Added
+- Added manual provider session import and agent-guided project setup.
+- Added safe Agent tools for refining workspace and unpublished branch names.
+- Added terminal clipboard image upload and Pi-aware terminal agent activity reporting.
+- Added Local, Remote, and Both branch source labels.
+- Added workspace hover cards with exact Agent states and project-aware automatic Host badges.
+- Added readable Host names to pairing offers.
+
+Full notes: https://github.com/ByteTrue/byspace/releases

@@ -1,0 +1,78 @@
+name: Deploy App
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact current-main CI SHA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./package.json").version')"
+          sha="$(git rev-parse HEAD)"
+          git fetch origin main --no-tags
+          test "$sha" = "$(git rev-parse origin/main)"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            test "$RELEASE_TAG" = "v$version"
+            test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$sha"
+          else
+            test "$GITHUB_REF" = refs/heads/main
+          fi
+          test -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          if [[ "$version" == *-* ]]; then
+            echo "PAGES_PROJECT=byspace-beta" >> "$GITHUB_ENV"
+            echo "RELEASE_CHANNEL=beta" >> "$GITHUB_ENV"
+          else
+            echo "PAGES_PROJECT=byspace" >> "$GITHUB_ENV"
+            echo "RELEASE_CHANNEL=stable" >> "$GITHUB_ENV"
+          fi
+          echo "EXPECTED_SHA=$sha" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.20.0"
+          cache: "npm"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@boudra"
+
+      - name: Install dependencies
+        run: node scripts/npm-retry.mjs ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build app dependencies
+        run: npm run build:app-deps
+
+      - name: Typecheck
+        run: npm run typecheck --workspace=@getpaseo/app
+
+      - name: Build Web app
+        run: npm run build:web --workspace=@getpaseo/app
+
+      - name: Deploy release channel to Cloudflare Pages
+        working-directory: packages/app
+        run: >-
+          npx wrangler pages deploy dist
+          --project-name "$PAGES_PROJECT"
+          --branch main
+          --commit-hash "$EXPECTED_SHA"
+          --commit-message "v$RELEASE_VERSION ($RELEASE_CHANNEL)"
+          --commit-dirty=false
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

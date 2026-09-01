@@ -1,0 +1,238 @@
+# Running BySpace in Docker
+
+BySpace publishes a container image for running the daemon on a server, VM, NAS,
+or homelab box. The image also serves the bundled browser web UI, so one
+container gives you both the daemon API and a self-hosted UI.
+
+The image source lives in [`docker/`](../docker/).
+
+## How it works
+
+The BySpace image:
+
+- builds `@getpaseo/server` and `@getpaseo/cli` from source-built workspace tarballs
+- runs the daemon as the non-root `byspace` user
+- listens on `0.0.0.0:6777` inside the container
+- enables the bundled daemon web UI with `BYSPACE_WEB_UI_ENABLED=true`
+- stores daemon state and agent credentials under `/home/byspace`
+- leaves agent CLIs out of the base image
+
+Open the container's HTTP origin, for example `http://localhost:6777`, to load
+the web UI. The served app receives a same-origin connection hint and connects
+back to that daemon. Static UI files load without daemon auth; API and
+WebSocket requests still require `BYSPACE_PASSWORD` when one is configured. Matching `PASEO_*` names remain lower-priority compatibility fallbacks.
+
+## Quick Start
+
+```bash
+docker run -d --name byspace \
+  -p 6777:6777 \
+  -e BYSPACE_PASSWORD=change-me \
+  -v "$PWD/byspace-home:/home/byspace" \
+  -v "$PWD:/workspace" \
+  ghcr.io/bytetrue/byspace:0.7.0-beta.2
+```
+
+Then open:
+
+```text
+http://localhost:6777
+```
+
+If you set `BYSPACE_PASSWORD`, enter the same password when adding the direct
+daemon connection in the web UI or another BySpace client.
+
+## Docker Compose
+
+Use [`docker/docker-compose.example.yml`](../docker/docker-compose.example.yml):
+
+```bash
+cp docker/docker-compose.example.yml docker-compose.yml
+$EDITOR docker-compose.yml
+docker compose up -d
+```
+
+Minimal example:
+
+```yaml
+services:
+  byspace:
+    image: ghcr.io/bytetrue/byspace:0.7.0-beta.2
+    restart: unless-stopped
+    ports:
+      - "6777:6777"
+    environment:
+      BYSPACE_PASSWORD: "change-me"
+    volumes:
+      - ./byspace-home:/home/byspace
+      - ./workspace:/workspace
+```
+
+## Installing Agents
+
+The base image does not preinstall Claude Code, Codex, OpenCode, Copilot, Pi, or
+other agent CLIs. That keeps the default image small and avoids coupling BySpace
+releases to third-party agent release cycles.
+
+Create a child image for the agents you use:
+
+```Dockerfile
+FROM ghcr.io/bytetrue/byspace:0.7.0-beta.2
+
+USER root
+RUN npm install -g @openai/codex @anthropic-ai/claude-code opencode-ai
+```
+
+Build it:
+
+```bash
+docker build -f Dockerfile -t byspace-with-agents .
+```
+
+Then use `image: byspace-with-agents` in Compose.
+
+Leave the child image user as root. The base entrypoint uses root only for
+first-run directory setup, then drops the daemon and launched agents to the
+non-root `byspace` user.
+
+An example child image is in
+[`docker/Dockerfile.agents.example`](../docker/Dockerfile.agents.example).
+
+You can also mount credentials from the host or run agent login once inside the
+container:
+
+```bash
+docker exec -it --user byspace byspace codex
+docker exec -it --user byspace byspace claude
+```
+
+Agent credentials and config persist in `/home/byspace`, alongside daemon state.
+Provider environment variables such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
+`OPENAI_BASE_URL`, or `ANTHROPIC_BASE_URL` can be passed through `docker run -e`
+or `compose.environment`; BySpace passes them to launched agents.
+
+## Volumes
+
+| Mount           | Purpose                                                                      |
+| --------------- | ---------------------------------------------------------------------------- |
+| `/home/byspace` | BySpace state under `.byspace` plus agent config such as `.codex`, `.claude` |
+| `/workspace`    | Code that BySpace and launched agents can read and write                     |
+
+The image defaults:
+
+| Variable         | Default                  |
+| ---------------- | ------------------------ |
+| `HOME`           | `/home/byspace`          |
+| `BYSPACE_HOME`   | `/home/byspace/.byspace` |
+| `BYSPACE_LISTEN` | `0.0.0.0:6777`           |
+
+If you bind-mount host directories on Linux, make sure the container user can
+write them. The built-in `byspace` user has uid/gid `1000:1000`. For a different
+host uid/gid, either adjust ownership on the mounted directories or run the
+container with Docker's `--user` / Compose `user:` option.
+
+## Reverse Proxies
+
+When serving BySpace behind a reverse proxy, forward normal HTTP requests and
+WebSocket upgrades to the same daemon port.
+
+Caddy example:
+
+```caddy
+byspace.example.com {
+  reverse_proxy 127.0.0.1:6777
+}
+```
+
+Nginx example:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name byspace.example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:6777;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+If you reach the daemon by DNS name, set `BYSPACE_HOSTNAMES` so host-header
+validation allows that name:
+
+```yaml
+environment:
+  BYSPACE_HOSTNAMES: "byspace.example.com,.lan"
+```
+
+IPs and `localhost` are allowed by default.
+
+## Security
+
+- Set `BYSPACE_PASSWORD` for any published port or network-reachable deployment.
+- Prefer HTTPS at the reverse proxy for direct browser access.
+- Use the BySpace relay at `relay.byspace.cc.cd:443` for mobile access when you
+  do not want to expose the daemon port directly.
+- The container is the isolation boundary for agents. Agents can read and write
+  whatever you mount into `/workspace` and whatever credentials you place in
+  `/home/byspace`.
+- The bundled web UI static files are public on the daemon origin. The daemon
+  API and WebSocket remain protected by password auth when configured.
+
+See [SECURITY.md](../SECURITY.md) for the daemon trust model.
+
+## Building Locally
+
+```bash
+docker build -f docker/base/Dockerfile -t byspace:local .
+```
+
+To assert the source tree version while building:
+
+```bash
+docker build \
+  --build-arg PASEO_VERSION=0.7.0-beta.2 \
+  -t byspace:0.7.0-beta.2 \
+  -f docker/base/Dockerfile \
+  .
+```
+
+The Docker workflow builds the image on pull requests and on `main` as a
+non-publishing check. Stable `vX.Y.Z` tag pushes publish
+`ghcr.io/bytetrue/byspace:X.Y.Z` and `ghcr.io/bytetrue/byspace:latest`. Beta tags
+publish only the exact prerelease tag, such as
+`ghcr.io/bytetrue/byspace:0.7.0-beta.2`, and do not update `latest`.
+
+To replace a Docker image in place without rebuilding desktop, APK, or mobile
+release artifacts, dispatch the Docker workflow manually instead of pushing a
+`v*` release tag:
+
+```bash
+gh workflow run docker.yml \
+  --ref main \
+  -f byspace_version=0.7.0-beta.2 \
+  -f publish=true
+```
+
+Manual Docker publishes require an explicit `byspace_version`. The workflow builds
+from the checked-out source tree and publishes only the exact prerelease image
+tag for prerelease versions.
+
+The published image is multi-arch for `linux/amd64` and `linux/arm64`.
+
+## Troubleshooting
+
+- **The web UI loads but cannot connect**: if `BYSPACE_PASSWORD` is set, add a
+  direct connection with the same password.
+- **403 Host not allowed**: set `BYSPACE_HOSTNAMES` to the DNS names you use.
+- **Provider not available**: install that agent CLI in a child image or mount a
+  runtime where the binary is on `PATH`.
+- **Permission errors in `/workspace`**: make the mounted directory writable by
+  uid/gid `1000:1000`, or run the container as the host uid/gid.
+- **Logs**: inspect `docker logs byspace` or
+  `/home/byspace/.byspace/daemon.log` inside the container.

@@ -1,0 +1,227 @@
+name: Publish npm
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to package"
+        required: true
+        default: main
+        type: string
+      publish:
+        description: "Publish to npm and attach to a release (ref must be a release tag)"
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: npm-release-${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  context:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.release.outputs.sha }}
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      publish: ${{ steps.release.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+      - id: release
+        env:
+          SOURCE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
+          SHOULD_PUBLISH: ${{ github.event_name != 'workflow_dispatch' || inputs.publish }}
+        run: |
+          set -euo pipefail
+          {
+            echo "sha=$(git rev-parse HEAD)"
+            echo "tag=$SOURCE_REF"
+            echo "version=$(node -p 'require("./package.json").version')"
+            echo "publish=$SHOULD_PUBLISH"
+          } >> "$GITHUB_OUTPUT"
+
+  gate:
+    needs: context
+    if: needs.context.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.context.outputs.sha }}
+      - name: Verify exact current-main CI SHA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.context.outputs.tag }}
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./package.json").version')"
+          sha="$(git rev-parse HEAD)"
+          test "$RELEASE_TAG" = "v$version"
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$sha"
+          git fetch origin main --no-tags
+          test "$sha" = "$(git rev-parse origin/main)"
+          test -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+
+  package:
+    needs: [context, gate]
+    if: ${{ always() && needs.context.result == 'success' && (needs.context.outputs.publish != 'true' || needs.gate.result == 'success') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ needs.context.outputs.sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22.20.0"
+          cache: npm
+      - run: npm ci
+      - run: npm run build:server
+      - run: npm run build:daemon-web-ui
+      - run: npm run release:pack:bytetrue
+      - name: Verify package identity
+        run: |
+          set -euo pipefail
+          tarball="dist/npm/bytetrue-byspace-${{ needs.context.outputs.version }}.tgz"
+          test "$(npm pkg get name --json | tr -d '"')" = "byspace"
+          test "$(tar -xOf "$tarball" package/package.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).name))')" = "@bytetrue/byspace"
+          tar -xOf "$tarball" package/package.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);if(p.bin?.byspace!=="bin/byspace"||p.bin?.paseo)process.exit(1)})'
+      - name: Install package without registry access to internal workspaces
+        run: |
+          set -euo pipefail
+          tarball="$PWD/dist/npm/bytetrue-byspace-${{ needs.context.outputs.version }}.tgz"
+          prefix="$(mktemp -d)"
+          printf '%s\n' 'registry=https://registry.npmjs.org/' '@getpaseo:registry=http://127.0.0.1:9/' > "$prefix/npmrc"
+          npm install --prefix "$prefix" --userconfig "$prefix/npmrc" --no-audit --no-fund "$tarball"
+          test "$("$prefix/node_modules/.bin/byspace" --version)" = "${{ needs.context.outputs.version }}"
+          test ! -e "$prefix/node_modules/.bin/paseo"
+      - name: Verify upgrade from the previous BySpace package
+        run: |
+          set -euo pipefail
+          tarball="$PWD/dist/npm/bytetrue-byspace-${{ needs.context.outputs.version }}.tgz"
+          prefix="$(mktemp -d)"
+          printf '%s\n' 'registry=https://registry.npmjs.org/' '@getpaseo:registry=http://127.0.0.1:9/' > "$prefix/npmrc"
+          npm install --prefix "$prefix" --userconfig "$prefix/npmrc" --no-audit --no-fund @bytetrue/byspace@0.7.8
+          npm install --prefix "$prefix" --userconfig "$prefix/npmrc" --no-audit --no-fund "$tarball"
+          test "$("$prefix/node_modules/.bin/byspace" --version)" = "${{ needs.context.outputs.version }}"
+      - name: Include release notes in the artifact
+        run: |
+          notes_file=".github/release/${{ needs.context.outputs.tag }}.md"
+          if [[ -f "$notes_file" ]]; then
+            cp "$notes_file" dist/npm/RELEASE_NOTES.md
+          else
+            printf 'BySpace %s\n' "${{ needs.context.outputs.tag }}" > dist/npm/RELEASE_NOTES.md
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: byspace-npm
+          path: |
+            dist/npm/*.tgz
+            dist/npm/SHA256SUMS.txt
+            dist/npm/RELEASE_NOTES.md
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: [context, gate, package]
+    if: ${{ always() && needs.context.outputs.publish == 'true' && needs.gate.result == 'success' && needs.package.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.context.outputs.sha }}
+          sparse-checkout: |
+            .github/release
+            scripts/upload-release-asset.sh
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22.20.0"
+          registry-url: "https://registry.npmjs.org"
+      - uses: actions/download-artifact@v4
+        with:
+          name: byspace-npm
+          path: dist/npm
+      - name: Upgrade npm for Trusted Publishing
+        run: npm install --global npm@11.5.1
+      - name: Check whether version is already published
+        id: registry
+        env:
+          VERSION: ${{ needs.context.outputs.version }}
+        run: |
+          status="$(curl -sS -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/@bytetrue%2Fbyspace/$VERSION")"
+          case "$status" in
+            200) echo "published=true" >> "$GITHUB_OUTPUT" ;;
+            404) echo "published=false" >> "$GITHUB_OUTPUT" ;;
+            *) echo "npm registry returned HTTP $status" >&2; exit 1 ;;
+          esac
+      - name: Revalidate remote release tag
+        env:
+          RELEASE_SHA: ${{ needs.context.outputs.sha }}
+          RELEASE_TAG: ${{ needs.context.outputs.tag }}
+        run: |
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$RELEASE_SHA"
+      - name: Publish beta
+        if: ${{ contains(needs.context.outputs.version, '-') && steps.registry.outputs.published != 'true' }}
+        run: npm publish "dist/npm/bytetrue-byspace-${{ needs.context.outputs.version }}.tgz" --access public --tag beta --provenance
+      - name: Publish stable
+        if: ${{ !contains(needs.context.outputs.version, '-') && steps.registry.outputs.published != 'true' }}
+        run: npm publish "dist/npm/bytetrue-byspace-${{ needs.context.outputs.version }}.tgz" --access public --provenance
+      - name: Verify dist-tag
+        env:
+          VERSION: ${{ needs.context.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "$VERSION" == *-* ]]; then tag=beta; else tag=latest; fi
+          for _ in {1..60}; do
+            actual="$(npm view "@bytetrue/byspace@$tag" version 2>/dev/null || true)"
+            [[ "$actual" == "$VERSION" ]] && exit 0
+            sleep 5
+          done
+          echo "@bytetrue/byspace@$tag did not resolve to $VERSION" >&2
+          exit 1
+      - name: Revalidate tag and attach npm tarball
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SHA: ${{ needs.context.outputs.sha }}
+          RELEASE_TAG: ${{ needs.context.outputs.tag }}
+          VERSION: ${{ needs.context.outputs.version }}
+        run: |
+          set -euo pipefail
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$RELEASE_SHA"
+          source="dist/npm/bytetrue-byspace-$VERSION.tgz"
+          asset="$RUNNER_TEMP/BySpace-$VERSION-npm.tgz"
+          cp "$source" "$asset"
+          # shellcheck disable=SC2016
+          node -e 'const fs=require("node:fs"),c=require("node:crypto"),p=process.argv[1],h=c.createHash("sha256").update(fs.readFileSync(p)).digest("hex");fs.writeFileSync(`${p}.sha256`,`${h}  ${p.split("/").pop()}\n`)' "$asset"
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "BySpace $RELEASE_TAG" --notes-file dist/npm/RELEASE_NOTES.md)
+            [[ "$RELEASE_TAG" == *-* ]] && args+=(--prerelease)
+            gh "${args[@]}" || gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+          fi
+          for file in "$asset" "$asset.sha256"; do
+            bash scripts/upload-release-asset.sh "$RELEASE_TAG" "$file" "$RELEASE_SHA"
+          done
