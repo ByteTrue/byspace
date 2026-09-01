@@ -1,3 +1,6 @@
+import { execFileSync } from "node:child_process";
+import { rmSync } from "node:fs";
+import path from "node:path";
 import { expect, test, type Page } from "../support/fixtures";
 import { gotoAppShell } from "../support/helpers/app";
 import {
@@ -95,6 +98,83 @@ test.describe("Branch switcher", () => {
           { timeout: 30_000 },
         )
         .toBe("dev");
+    } finally {
+      await workspace.cleanup();
+    }
+  });
+
+  test("shows branch source semantics and supports keyboard selection", async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(90_000);
+    const serverId = getServerId();
+    const workspace = await seedWorkspace({
+      repoPrefix: "branch-source-",
+      repo: { branches: ["main"], withRemote: true },
+    });
+
+    try {
+      execFileSync("git", ["branch", "both-source"], { cwd: workspace.repoPath });
+      execFileSync("git", ["push", "origin", "both-source"], { cwd: workspace.repoPath });
+      execFileSync("git", ["push", "origin", "HEAD:refs/heads/remote-only"], {
+        cwd: workspace.repoPath,
+      });
+      execFileSync("git", ["fetch", "origin"], { cwd: workspace.repoPath });
+      rmSync(path.join(workspace.repoPath, "remote.git"), { recursive: true, force: true });
+
+      await gotoAppShell(page);
+      await waitForSidebarHydration(page);
+      await switchWorkspaceViaSidebar({ page, serverId, workspaceId: workspace.workspaceId });
+      await openChangesPanel(page);
+
+      const trigger = page
+        .getByTestId("changes-repository-header")
+        .getByRole("button", { name: /Current branch: main\b/ })
+        .filter({ visible: true })
+        .first();
+      await trigger.focus();
+      await page.keyboard.press("Enter");
+
+      const picker = page.getByTestId("combobox-desktop-container");
+      await expect(picker).toBeVisible({ timeout: 30_000 });
+      const remoteOnlyOption = picker.getByRole("button", {
+        name: "remote-only, Remote",
+        exact: true,
+      });
+      const bothOption = picker.getByRole("button", {
+        name: "both-source, Local • Remote",
+        exact: true,
+      });
+      await expect(remoteOnlyOption).toBeVisible();
+      await expect(bothOption).toBeVisible();
+      await expect(picker.getByText("Remote", { exact: true })).toBeVisible();
+      await expect(
+        picker.getByRole("button", { name: "both-source, Local • Remote", exact: true }),
+      ).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath("branch-switcher-source.png") });
+
+      await page.keyboard.press("Escape");
+      await expect(picker).not.toBeVisible({ timeout: 30_000 });
+
+      await trigger.focus();
+      await page.keyboard.press("Enter");
+      const search = page.getByPlaceholder("Filter branches...");
+      await expect(search).toBeVisible({ timeout: 30_000 });
+      await search.fill("both-source");
+      await expect(
+        picker.getByRole("button", { name: "both-source, Local • Remote", exact: true }),
+      ).toBeVisible();
+      await page.keyboard.press("ArrowDown");
+      await page.keyboard.press("ArrowUp");
+      await page.keyboard.press("Enter");
+      await expect(picker).not.toBeVisible({ timeout: 30_000 });
+      await expect(
+        page
+          .getByTestId("changes-repository-header")
+          .getByRole("button", { name: /Current branch: both-source\b/ })
+          .filter({ visible: true })
+          .first(),
+      ).toBeVisible({ timeout: 30_000 });
     } finally {
       await workspace.cleanup();
     }

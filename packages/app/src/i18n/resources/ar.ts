@@ -202,6 +202,7 @@ export const ar: TranslationResources = {
   agentStream: {
     empty: "ابدأ الدردشة مع هذا الوكيل...",
     scrollToBottom: "قم بالتمرير إلى الأسفل",
+    collapseAllToolCalls: "طي كل استدعاءات الأدوات",
     historyLoadFailed: "تعذر تحميل سجل الوكيل",
     permission: {
       plan: "يخطط",
@@ -1459,6 +1460,8 @@ export const ar: TranslationResources = {
     searchPlaceholder: "تصفية الفروع...",
     empty: "لم يتم العثور على فروع.",
     title: "فرع التبديل",
+    localBranch: "محلي",
+    remoteBranch: "بعيد",
     uncommittedTitle: "تغييرات غير ملتزم بها",
     uncommittedMessage: "لديك تغييرات غير ملتزم بها. خبأهم قبل تبديل الفروع؟",
     stashAndSwitch: "خبأ والتبديل",
@@ -2267,6 +2270,7 @@ export const ar: TranslationResources = {
           label: "شارة الشريط الجانبي",
           accessibilityLabel: "شارة الشريط الجانبي، {{value}}",
           options: {
+            auto: "تلقائي",
             name: "الاسم",
             icon: "أيقونة فقط",
             hidden: "مخفي",

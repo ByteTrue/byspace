@@ -202,6 +202,7 @@ export const ptBR: TranslationResources = {
   agentStream: {
     empty: "Comece a conversar com este agente...",
     scrollToBottom: "Rolar para o fim",
+    collapseAllToolCalls: "Recolher todas as chamadas de ferramentas",
     historyLoadFailed: "Não foi possível carregar o histórico do agente",
     permission: {
       plan: "Plano",
@@ -1489,6 +1490,8 @@ export const ptBR: TranslationResources = {
     searchPlaceholder: "Filtrar branches...",
     empty: "Nenhuma branch encontrada.",
     title: "Trocar branch",
+    localBranch: "Local",
+    remoteBranch: "Remota",
     uncommittedTitle: "Alterações sem commit",
     uncommittedMessage: "Você tem alterações sem commit. Fazer stash antes de trocar de branch?",
     stashAndSwitch: "Fazer stash e trocar",
@@ -2303,6 +2306,7 @@ export const ptBR: TranslationResources = {
           label: "Selo da barra lateral",
           accessibilityLabel: "Selo da barra lateral, {{value}}",
           options: {
+            auto: "Automático",
             name: "Nome",
             icon: "Somente ícone",
             hidden: "Oculto",

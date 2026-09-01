@@ -199,6 +199,7 @@ export const en = {
   agentStream: {
     empty: "Start chatting with this agent...",
     scrollToBottom: "Scroll to bottom",
+    collapseAllToolCalls: "Collapse all tool calls",
     historyLoadFailed: "Couldn't load agent history",
     permission: {
       plan: "Plan",
@@ -1469,6 +1470,8 @@ export const en = {
     searchPlaceholder: "Filter branches...",
     empty: "No branches found.",
     title: "Switch branch",
+    localBranch: "Local",
+    remoteBranch: "Remote",
     uncommittedTitle: "Uncommitted changes",
     uncommittedMessage: "You have uncommitted changes. Stash them before switching branches?",
     stashAndSwitch: "Stash & Switch",
@@ -2366,6 +2369,7 @@ export const en = {
           label: "Sidebar badge",
           accessibilityLabel: "Sidebar badge, {{value}}",
           options: {
+            auto: "Automatic",
             name: "Name",
             icon: "Icon only",
             hidden: "Hidden",

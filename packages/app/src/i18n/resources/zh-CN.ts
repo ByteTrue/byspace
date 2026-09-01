@@ -202,6 +202,7 @@ export const zhCN: TranslationResources = {
   agentStream: {
     empty: "开始和这个 Agent 对话...",
     scrollToBottom: "滚动到底部",
+    collapseAllToolCalls: "折叠所有工具调用",
     historyLoadFailed: "无法加载智能体历史记录",
     permission: {
       plan: "Plan",
@@ -1442,6 +1443,8 @@ export const zhCN: TranslationResources = {
     searchPlaceholder: "筛选分支...",
     empty: "没有找到分支。",
     title: "切换分支",
+    localBranch: "本地",
+    remoteBranch: "远程",
     uncommittedTitle: "未 commit 的变更",
     uncommittedMessage: "你有未 commit 的变更。切换分支前要先 stash 吗？",
     stashAndSwitch: "Stash 并切换",
@@ -2241,6 +2244,7 @@ export const zhCN: TranslationResources = {
           label: "侧边栏徽章",
           accessibilityLabel: "侧边栏徽章，{{value}}",
           options: {
+            auto: "自动",
             name: "名称",
             icon: "仅图标",
             hidden: "隐藏",

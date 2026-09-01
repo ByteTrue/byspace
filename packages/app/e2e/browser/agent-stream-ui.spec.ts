@@ -1,3 +1,4 @@
+import type { Locator } from "@playwright/test";
 import { test, expect } from "../support/fixtures";
 import {
   awaitAssistantMessage,
@@ -9,13 +10,13 @@ import {
 } from "../support/helpers/agent-stream";
 import {
   expectScrollStaysFixed,
-  clickToolCallBesideScrollToBottomButton,
   readScrollMetrics,
   scrollAgentChatToBottom,
   scrollChatAwayFromBottom,
   waitForScrollableChat,
 } from "../support/helpers/agent-bottom-anchor";
 import { delayCreatedAgentInitialTailResponse } from "../support/helpers/agent-timeline-gate";
+import { splitCurrentPanelRight } from "../support/helpers/chat-outline";
 import { selectModel } from "../support/helpers/app";
 import { clickNewChat } from "../support/helpers/launcher";
 import { expectComposerVisible, startRunningMockAgent } from "../support/helpers/composer";
@@ -26,6 +27,12 @@ import {
 } from "../support/helpers/mock-agent";
 
 const SCROLL_AWAY_MIN_SCROLLABLE_DISTANCE = 360;
+
+async function areAllToolCallsCollapsed(toolCalls: Locator): Promise<boolean> {
+  return toolCalls.evaluateAll((nodes) =>
+    nodes.every((node) => node.getAttribute("aria-expanded") === "false"),
+  );
+}
 
 test.describe("Agent stream UI", () => {
   test("keeps running agent chrome after page refresh", async ({ page }) => {
@@ -231,31 +238,105 @@ test.describe("Agent stream UI", () => {
     await expectScrollStaysFixed(page, baseline);
   });
 
-  test("keeps tool calls clickable beside the scroll-to-bottom button", async ({ page }) => {
-    test.setTimeout(60_000);
+  test("keeps stream controls in active pane headers across desktop, compact, and split layouts", async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(120_000);
+    await page.addInitScript(() => {
+      const key = "@paseo:app-settings";
+      const stored = JSON.parse(localStorage.getItem(key) ?? "{}");
+      localStorage.setItem(key, JSON.stringify({ ...stored, autoExpandReasoning: true }));
+    });
     const agent = await seedMockAgentWorkspace({
-      repoPrefix: "stream-scroll-button-hit-area-",
-      title: "Scroll button hit area",
+      repoPrefix: "stream-pane-header-controls-",
+      title: "Pane header controls",
       model: "ten-second-stream",
-      initialPrompt: "Stream enough content to exercise the scroll button hit area.",
+      initialPrompt: "Stream enough content and tool calls for pane header controls.",
     });
     try {
       await agent.client.waitForFinish(agent.agentId, 30_000);
+      await page.setViewportSize({ width: 1440, height: 900 });
       await openAgentRoute(page, {
         workspaceId: agent.workspaceId,
         agentId: agent.agentId,
       });
+      await expectComposerVisible(page);
+
+      const headerControls = page
+        .getByTestId("pane-header-actions")
+        .getByTestId("agent-stream-controls");
+      await expect(headerControls).toBeVisible();
+      const collapseAll = headerControls.getByRole("button", {
+        name: "Collapse all tool calls",
+      });
+      await expect(collapseAll).toBeVisible();
+
+      const chatScroll = page.getByTestId("agent-chat-scroll");
+      await chatScroll.evaluate((scroll) => {
+        scroll.scrollTop = 0;
+      });
+      const reasoningButtons = page
+        .getByTestId("tool-call-badge")
+        .filter({ hasText: "Thinking" })
+        .getByRole("button");
+      const firstReasoning = reasoningButtons.first();
+      await expect(firstReasoning).toHaveAttribute("aria-expanded", "true");
+
+      const toolCalls = page
+        .getByTestId("tool-call-badge")
+        .filter({ hasNotText: "Thinking" })
+        .getByRole("button");
+      await expect.poll(async () => toolCalls.count()).toBeGreaterThan(0);
+      await toolCalls.first().click();
+      await expect(toolCalls.first()).toHaveAttribute("aria-expanded", "true");
+
+      const expandableToolCalls = page.locator(
+        '[data-testid="tool-call-badge"] [role="button"][aria-expanded]',
+      );
+      await collapseAll.click();
+      await expect.poll(() => areAllToolCallsCollapsed(expandableToolCalls)).toBe(true);
+
+      await chatScroll.evaluate((scroll) => {
+        scroll.scrollTop = scroll.scrollHeight;
+      });
+      await chatScroll.evaluate((scroll) => {
+        scroll.scrollTop = 0;
+      });
+      await expect(reasoningButtons.first()).toHaveAttribute("aria-expanded", "false");
+
+      const collapsedReasoningCount = await reasoningButtons.count();
+      await agent.client.sendAgentMessage(agent.agentId, "Stream new reasoning after collapse.");
+      await expect.poll(() => reasoningButtons.count()).toBeGreaterThan(collapsedReasoningCount);
+      await expect(reasoningButtons.first()).toHaveAttribute("aria-expanded", "false");
+      await expect(reasoningButtons.last()).toHaveAttribute("aria-expanded", "true");
+      await agent.client.waitForFinish(agent.agentId, 30_000);
+
       await waitForScrollableChat(page, {
         minScrollableDistance: SCROLL_AWAY_MIN_SCROLLABLE_DISTANCE,
         timeout: 30_000,
       });
+      await scrollChatAwayFromBottom(page, {
+        deltaY: -900,
+        minDistanceFromBottom: 300,
+      });
+      const scrollToBottom = headerControls.getByRole("button", { name: "Scroll to bottom" });
+      await expect(scrollToBottom).toBeVisible();
+      await scrollToBottom.click();
+      await expect(scrollToBottom).toBeHidden();
 
-      const hitArea = await clickToolCallBesideScrollToBottomButton(page);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(headerControls).toBeVisible();
+      await page.screenshot({
+        path: testInfo.outputPath("compact-pane-header-controls.png"),
+        animations: "disabled",
+      });
 
-      expect(hitArea).toEqual({
-        outsideButton: true,
-        toolCallReceivesPointer: true,
-        withinButtonBand: true,
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await splitCurrentPanelRight(page);
+      await expect(headerControls).toBeVisible();
+      await page.screenshot({
+        path: testInfo.outputPath("split-pane-header-controls.png"),
+        animations: "disabled",
       });
     } finally {
       await agent.cleanup();

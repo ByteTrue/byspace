@@ -202,6 +202,7 @@ export const ru: TranslationResources = {
   agentStream: {
     empty: "Начните общаться с этим агентом...",
     scrollToBottom: "Прокрутить вниз",
+    collapseAllToolCalls: "Свернуть все вызовы инструментов",
     historyLoadFailed: "Не удалось загрузить историю агента",
     permission: {
       plan: "План",
@@ -1485,6 +1486,8 @@ export const ru: TranslationResources = {
     searchPlaceholder: "Фильтровать ветки...",
     empty: "Ветки не найдены.",
     title: "Переключить ветку",
+    localBranch: "Локальная",
+    remoteBranch: "Удалённая",
     uncommittedTitle: "Незафиксированные изменения",
     uncommittedMessage:
       "У вас есть незафиксированные изменения. Убрать их в stash перед переключением ветки?",
@@ -2305,6 +2308,7 @@ export const ru: TranslationResources = {
           label: "Значок на боковой панели",
           accessibilityLabel: "Значок на боковой панели, {{value}}",
           options: {
+            auto: "Автоматически",
             name: "Имя",
             icon: "Только значок",
             hidden: "Скрыт",

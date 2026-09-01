@@ -20,7 +20,10 @@ import { NestableScrollContainer } from "react-native-draggable-flatlist";
 import type { GestureType } from "react-native-gesture-handler";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
-import { type SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
+import {
+  resolveProjectHostBadge,
+  type SidebarWorkspaceEntry,
+} from "@/hooks/use-sidebar-workspaces-list";
 import type { StatusBucket } from "@/hooks/sidebar-status-view-model";
 import type { SidebarWorkspaceGroup } from "@/components/sidebar/sidebar-labels";
 import { SidebarFilterEmptyState } from "@/components/sidebar/empty-states";
@@ -119,6 +122,7 @@ interface StatusWorkspaceListProps {
   showShortcutBadges: boolean;
   onWorkspacePress?: () => void;
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
+  autoHostLabelProjectKeys: ReadonlySet<string>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   onPinnedWorkspaceReorder: (workspaces: SidebarWorkspaceEntry[]) => void;
@@ -137,6 +141,7 @@ export function SidebarStatusWorkspaceList({
   showShortcutBadges,
   onWorkspacePress,
   hostBadgeByServerId,
+  autoHostLabelProjectKeys,
   supportsPinningByServerId,
   onToggleWorkspacePin,
   onPinnedWorkspaceReorder,
@@ -175,6 +180,7 @@ export function SidebarStatusWorkspaceList({
           workspace,
           projectIconByProjectViewKey,
           hostBadgeByServerId,
+          autoHostLabelProjectKeys,
         })}
         inStatusGroup={false}
         shortcutNumber={statusShortcutIndex.get(workspace.workspaceKey) ?? null}
@@ -188,6 +194,7 @@ export function SidebarStatusWorkspaceList({
       />
     ),
     [
+      autoHostLabelProjectKeys,
       hostBadgeByServerId,
       onToggleWorkspacePin,
       onWorkspacePress,
@@ -239,6 +246,7 @@ export function SidebarStatusWorkspaceList({
           showShortcutBadges={showShortcutBadges}
           onWorkspacePress={onWorkspacePress}
           hostBadgeByServerId={hostBadgeByServerId}
+          autoHostLabelProjectKeys={autoHostLabelProjectKeys}
           supportsPinningByServerId={supportsPinningByServerId}
           onToggleWorkspacePin={onToggleWorkspacePin}
         />
@@ -279,6 +287,7 @@ function StatusGroupList({
   showShortcutBadges,
   onWorkspacePress,
   hostBadgeByServerId,
+  autoHostLabelProjectKeys,
   supportsPinningByServerId,
   onToggleWorkspacePin,
 }: {
@@ -289,6 +298,7 @@ function StatusGroupList({
   showShortcutBadges: boolean;
   onWorkspacePress?: () => void;
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
+  autoHostLabelProjectKeys: ReadonlySet<string>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
 }) {
@@ -304,6 +314,7 @@ function StatusGroupList({
           showShortcutBadges={showShortcutBadges}
           onWorkspacePress={onWorkspacePress}
           hostBadgeByServerId={hostBadgeByServerId}
+          autoHostLabelProjectKeys={autoHostLabelProjectKeys}
           supportsPinningByServerId={supportsPinningByServerId}
           onToggleWorkspacePin={onToggleWorkspacePin}
         />
@@ -320,6 +331,7 @@ function StatusGroupRows({
   showShortcutBadges,
   onWorkspacePress,
   hostBadgeByServerId,
+  autoHostLabelProjectKeys,
   supportsPinningByServerId,
   onToggleWorkspacePin,
 }: {
@@ -330,6 +342,7 @@ function StatusGroupRows({
   showShortcutBadges: boolean;
   onWorkspacePress?: () => void;
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
+  autoHostLabelProjectKeys: ReadonlySet<string>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
 }) {
@@ -356,6 +369,7 @@ function StatusGroupRows({
                 workspace,
                 projectIconByProjectViewKey,
                 hostBadgeByServerId,
+                autoHostLabelProjectKeys,
               })}
               shortcutNumber={shortcutIndex.get(workspace.workspaceKey) ?? null}
               showShortcutBadge={showShortcutBadges}
@@ -388,13 +402,18 @@ function buildStatusRowProjectPresentation({
   workspace,
   projectIconByProjectViewKey,
   hostBadgeByServerId,
+  autoHostLabelProjectKeys,
 }: {
   workspace: SidebarWorkspaceEntry;
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
+  autoHostLabelProjectKeys: ReadonlySet<string>;
 }): StatusRowProjectPresentation {
   return {
-    hostBadge: hostBadgeByServerId.get(workspace.serverId) ?? null,
+    hostBadge: resolveProjectHostBadge({
+      badge: hostBadgeByServerId.get(workspace.serverId),
+      showAutoLabel: autoHostLabelProjectKeys.has(workspace.projectViewKey),
+    }),
     projectName: workspace.projectName,
     projectIconDataUri: projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null,
   };

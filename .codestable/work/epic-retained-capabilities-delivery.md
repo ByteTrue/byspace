@@ -1,8 +1,8 @@
 ---
 title: 保留能力交付路线 · Work
 status: approved
-amended_at: 2026-09-01T12:29:00Z
-phase: executing
+amended_at: 2026-09-01T17:40:09Z
+phase: pr-ready
 spec: ../epics/002-o-retained-capabilities-delivery/spec.md
 source_revision: f592e54bf43e5501383224891053d2e0a9dfbf45
 approved_revision: 522c41c499b7c193899e11601816edbe9aa50249e0253da14140679431f3121c
@@ -13,11 +13,11 @@ commit_strategy: semantic-atomic-per-item
 publish_strategy: epic-plan-pr-then-one-pr-per-wave
 execution_strategy_revision: v2-owner-approved
 execution_acceleration_approved_at: 2026-09-01T07:48:00Z
-current_wave: 4
+current_wave: 5
 current_item: null
 active_items: []
 blocked_by: null
-next_action: 创建 Wave 4 PR，等待 exact-head CI/Docker/Nix 全绿后请求 Owner 合并批准
+next_action: 创建 Wave 5 PR，等待 exact-head CI/Docker/Nix 后请求 Owner 合并确认
 ---
 
 # Epic Work: 保留能力交付路线
@@ -55,6 +55,18 @@ next_action: 创建 Wave 4 PR，等待 exact-head CI/Docker/Nix 全绿后请求 
 - ITEM-15 预热审计曾错误推导出新的 daemon readiness analyzer/token/transaction；回查归档 issue 与 commit `6f9bfdd40` 后纠正：A04 原始产品边界是 Project Settings 只准备未发送的 Agent draft，实际只读检查、确认、保留式修改、回滚和 clean-worktree 验证均由 bundled `byspace-project-setup` Skill 与当前 Agent 执行，不新增配置生成 RPC 或 daemon 技术栈推断。
 - ITEM-15 已按该边界完成：optional `projectSetupSkill` capability、Project Settings capability gate、bundled `byspace-project-setup` Skill，以及 project/Host/cwd scoped 的独立未发送 draft。Custom skill selection 会保留既有选择并只追加所需 Skill，安装/确认失败均阻断导航；Browser E2E 2/2、i18n 36/36、server build、Typecheck/Lint/Format 全绿。初审唯一 P1 已由 follow-up reviewer `d7895e91-19ea-48c1-9ffc-35b5be17fc91` 确认关闭；18-path 收割 manifest `bf0e6762…472962b` 字节一致，语义原子 commit `c1ac7ceaa` 已串行集成。UI 证据保存于 `/tmp/byspace-item15-ui-proof/`。
 - Wave 4 双路 aggregate review 已完成。Scope reviewer 的 session-import wire-shape 条件 P1 经 base/history 核对关闭：Wave 4 base 已接受 legacy/new 双形状，new shape 来自 `5b884aee0`，当前 UI 使用的 `importSessionWorkspaceTarget` capability 后于该 shape 引入；本 Wave 仅复用既有 import path。Protocol reviewer 的 `checkout.rename_branch` 来源 P1 也由 base..head diff 证实为 pre-existing 且本 Wave 零改动，ITEM-14 MCP 工具不依赖该 RPC。Wave 4 diff 共 39 paths，无 Appearance/theme/highlight/font 路径；两项 P1 均不需要产品代码修正，aggregate gate 结论为 PASS with report-only P2。
+- Wave 4 PR #19 的 exact head `a387297b7a434d3851bccab63a5dcc787d3828a7` 已通过 CI `33511998071`、Docker `33511998056` 与 Nix `33511998053`，随后以 merge commit `6d2b173a0ba4b1e6722e91a035e99fe63fa0b4a1` 合入 `main`。Post-merge exact-SHA CI `33514417804` 与 Docker `33514417929` 均通过，Wave 5 写入门槛已打开。
+- Wave 5 三路只读预热已完成且没有修改源码：Lane A report `/tmp/byspace-wave5-lane-a-scout.md` 将 ITEM-16/17 对齐到归档 commits `0ec5d6320` / `30e66b0c8`；Lane B report `/tmp/byspace-wave5-lane-b-scout.md` 完成 ITEM-18/19/20 的 hover/menu/project-cardinality 边界与平台证据矩阵；ITEM-21 report `/tmp/byspace-wave5-item21-scout.md` 明确保持阻塞，直至 ITEM-17 与 ITEM-20 均集成后再重新确认 pane-header owner。
+- Wave 5 integration branch `wave/retained-capabilities-5-workspace-sidebar-compact-ui` 已从绿色 Wave 4 merge SHA 创建，tracking baseline 为 `a8e87f5a7`。ITEM-16 与 ITEM-18 分别在隔离 worktree `epic-002-wave5-lane-a` / `epic-002-wave5-lane-b` 启动唯一 writer workflow `dfd25be5-2587-458e-a7f9-ec9152c619ad`；brief SHA-256 为 `d1076cb0…7527` / `ef12f5f6…b5312`。
+- ITEM-16 已恢复无 configured upstream 但存在同名 `origin/<branch>` 时的精确 ahead/behind/Push 状态，并保持健康显式 upstream 优先、configured-gone 为 unknown。Fresh correctness review `c0c9d22b-2828-4565-83c6-e4fc1050c376` 找到 fallback Promise 未 await 与 behind 状态下裸 `git pull` 不可执行两项 P1；父流程补齐 `await`、无 tracking 时的显式 `git pull origin <branch>` 及真实 Git 回归，同时不写入 tracking config。Focused 213/213（1 skipped）、根 Typecheck/Lint/Format 全绿；3-path content manifest `a91b2a8e…8a49e` 字节一致，以 `faa947aa7` 串行集成。
+- ITEM-18 已让 desktop Workspace hover card 按精确 `(serverId, workspaceId)` 展示全部非归档 Agent（含 subagent）的 canonical lifecycle 状态并随目录快照实时更新；不按 cwd 推断、不改变目录顺序或 native/compact 行为。双 fresh review `5ea66d15-3555-42a2-8749-8905f98892c6` / `b451d59a-ed19-4775-ad12-3c9d52018b96` 均为 0 P0/P1；父流程吸收有界可滚动 Agent 区、subagent unit pin 与标准 Playwright outputPath/viewport hardening。Selector 46/46、Browser E2E 1/1、根 Typecheck/Lint/Format 全绿；5-path content manifest `7388e5f6…3630` 字节一致，以 `28172ba6c` 串行集成。最终 screenshot/trace 保存于 `/tmp/byspace-wave5-item18-ui-proof-final/`。
+- ITEM-17 与 ITEM-19 已从集成 milestone `38ac45902` 创建隔离 worktree `epic-002-wave5-item17` / `epic-002-wave5-item19`，并由唯一双 writer workflow `227882a3-272a-4657-933f-759fc17c085a` 并行执行；brief SHA-256 为 `34128b1b…57876` / `50be063f…2d486`。
+- ITEM-19 证实 exact-base 生产代码已满足 compact/native 三点菜单常显、wide Web 仅 hover 显示与 open-menu trigger retention；没有强造产品改动。双 fresh review 0 P0/P1，父流程只吸收 `toBeInViewport` 的 Reanimated settle 条件并重拍完整 bottom sheet。Compact/Wide Browser E2E 各 1/1、App Typecheck/Lint/Format 全绿，唯一 E2E 文件 manifest `7210d2ca…90ec` 字节一致，以 `a1fab7b96` 串行集成；最终 screenshot/trace 保存于 `/tmp/byspace-wave5-item19-ui-proof-final/`。
+- ITEM-17 双 fresh review 0 P0/P1。父流程验证了 daemon 的 branch-suggestion auxiliary cache 保留 15 秒，因此撤回越出 W01 的“切换 remote-only 后立即转 Both”试验，不扩大到 Server cache 合同；最终真实 Git + Browser fixture 在切换前同时证明 Remote-only 与 Local • Remote，并完成 keyboard selection。Focused Unit/i18n 45/45、Browser E2E 1/1、App Typecheck/Lint/Format 全绿，13 文件 manifest 字节一致，以 `82cd75b5f` 串行集成；最终 screenshot/trace 保存于 `/tmp/byspace-wave5-item17-ui-proof-final/`。
+- ITEM-20 依赖已由 ITEM-19 集成解除；隔离 worktree `epic-002-wave5-item20` 从 `a1fab7b96` 创建，frozen brief `/tmp/byspace-wave5-item20-worker-brief.md` SHA-256 `0634a60e…395f`。首个 writer 因误查不存在的 `.codestable/lessons` 在改动前退出，干净 worktree 由 fresh retry run `616b030d-41b9-42b5-9be5-90c0c0f30c75` 接管。
+- ITEM-20 已完成 Project placement 基数驱动的 Automatic Host Badge：仅同一 Project 跨多个 Host 时显示 Host 名，单 Host Project 保持安静，显式 Name/Icon/Hidden 始终优先，并覆盖 project/status/label/pinned row seams。双 fresh review 的唯一 P1 是 Compact Workspace Header 被新的 auto 语义意外改变；父流程新增 non-project resolver，精确保留旧的 pending/local 隐藏与 remote named 行为，并修正 Automatic preview，follow-up reviewer `b90b3551-937d-4d37-9ef1-d1fe8aebf14e` 确认 P1/P2 关闭、0 remaining P0/P1。Focused Unit/i18n 191/191、Browser E2E 8/8、根 Typecheck/Lint/Format 全绿；24-path candidate manifest 为 `a3959c16…6706d`，15 个非 locale 路径集成后字节一致，9 个 locale 与 ITEM-17 clean auto-merge 并由 resources test 复验。语义原子 commit `04dabd00a` 已串行集成；截图/trace 保存于 `/tmp/byspace-wave5-item20-ui-proof-final/`，ITEM-21 解除阻塞。
+- ITEM-21 已完成 archive-first owner 复核与实现：以 `b5b98712f`、`61ae76732`、`f72cea1b4`、`f11bd1851` 为已验证演进链，采用 retained Agent panel → `server/workspace/tab` deterministic portal → desktop/compact pane header 的单一操作 owner；当前 Composer 的 compact context meter 已满足 U03，不重复实现。隔离 worktree `epic-002-wave5-item21` 从 `9a53941da` 创建；frozen brief `/tmp/byspace-wave5-item21-worker-brief.md` 在审查后仅放行既有 `chat-outline` detached-tail 断言和废弃 overlay hit-area helper 清理，最终 SHA-256 `71b86e29…138c5`，不扩大生产代码范围。Collapse All 会收起当前 reasoning、单项及分组 tool details，后续 reasoning 继续服从 `autoExpandReasoning`；Scroll to Bottom 复用既有 detached fetch-tail 权威路径。双 fresh review `5a45ca9a-141b-43ea-95ea-b00f762ee57e` / `fe11ff88-9b11-4503-b4e0-33819c33aa3b` 均返回 0 P0/P1；i18n 36/36、Agent Stream Browser 8/8、detached long-history 1/1、根 Typecheck/Lint/Format 全绿。18-path manifest `44b3dbc9…2a4b3` 集成后逐文件字节一致，以 `7510610bf` 串行集成；截图/trace 保存于 `/tmp/byspace-wave5-item21-ui-proof-final/`。
+- Wave 5 frozen source head `2c58c962e` 覆盖 17 commits / 43 paths，完整内容 manifest 为 `58cc580c…9f0dd`；无 Protocol/Client wire path，也无 Terminal Appearance/theme/highlight/font 变更。双 aggregate review `d05f0501-ff45-47e4-a991-805ce9d8d0b4` / `d6f6bc36-641b-4cb5-bbcd-aa9899f937ce` 均判定 PASS（0 P0/P1）。ITEM-17 的 origin-only P2 经 base 与归档 `30e66b0c8` 核对为 pre-existing daemon collection，W01 直接复用该数据且约束只禁止把展示标签写死为 `origin`，不扩展多 remote 合同。其余 P2 分别已有结构保证或 unit 覆盖，不要求产品修改：active composer 关闭 overlay owner、archived/read-only 固定 64px reservation、空 Agent hover 列表、无重复 action owner。Wave 5 的 21/21 ITEM 已完成并进入 PR exact-head CI 门槛。
 - Windows 性能验证继续使用 shared CI 中仅手动启用的 `terminal_performance` job；默认 PR CI 不运行该 job，且 job 无部署权限、secret 或发布输入。Owner 已于 2026-09-01 明确接受该路径。
 - Wave 3 PR #18 首个 exact-head CI run `33472512893` 暴露两个测试夹具缺口：App 的 stub Terminal 缺 `hasSelection()`，Server 的 provider-name bootstrap assertion 因新增短 ID `pi` 误匹配 `pino` / `pipe` / `/api`。父流程分别本地 RED 复现并做测试侧最小修正；T15 纠偏后新的 exact-head 门槛全绿并完成合并。
 
@@ -87,12 +99,12 @@ next_action: 创建 Wave 4 PR，等待 exact-head CI/Docker/Nix 全绿后请求 
 
 ## Wave 5 · Workspace、侧栏与 Compact UI
 
-- [ ] ITEM-16 · WORKSPACE-03 · W04
-- [ ] ITEM-17 · WORKSPACE-01 · W01
-- [ ] ITEM-18 · WORKSPACE-04 · W05（仅 hover 展示全部 Agent 精确状态）
-- [ ] ITEM-19 · WORKSPACE-02 · W02
-- [ ] ITEM-20 · WORKSPACE-05 · W14
-- [ ] ITEM-21 · UI-01 · U03/U05
+- [x] ITEM-16 · WORKSPACE-03 · W04 · reviewed and integrated
+- [x] ITEM-17 · WORKSPACE-01 · W01 · reviewed and integrated `82cd75b5f`
+- [x] ITEM-18 · WORKSPACE-04 · W05（仅 hover 展示全部 Agent 精确状态）· reviewed and integrated
+- [x] ITEM-19 · WORKSPACE-02 · W02 · evidence-closed and integrated `a1fab7b96`
+- [x] ITEM-20 · WORKSPACE-05 · W14 · reviewed and integrated `04dabd00a`
+- [x] ITEM-21 · UI-01 · U03/U05 · reviewed and integrated `7510610bf`
 
 ## 活跃委派
 
@@ -193,3 +205,4 @@ next_action: 创建 Wave 4 PR，等待 exact-head CI/Docker/Nix 全绿后请求 
 - 2026-09-01：ITEM-14 按历史 patch 基线做当前架构适配并完成 25-file 交付；focused server 310/310、i18n 36/36、Browser E2E 3/3 与全仓静态门槛全绿，fresh review 0 P0/P1，语义原子 commit `6f0b93abf` 串行集成。ITEM-15 随即回查归档 `6f9bfdd40`，否决预热 scout 新造 daemon transaction 的偏航方案，按原始 Skill + Project Settings draft 入口恢复。
 - 2026-09-01：ITEM-15 完成 capability-gated Project Settings 入口与独立未发送 Agent draft，复用现有 bundled Skill 安装/selection 事务，不新增配置生成 RPC。Fresh review 的 custom-selection P1 修复为保留既有 custom skills 并追加 `byspace-project-setup`，缺失、confirmation required 或安装失败都显性阻断导航；follow-up review PASS。Browser E2E 2/2、i18n 36/36、server build 与全仓 Typecheck/Lint/Format 全绿；18-path manifest `bf0e6762…472962b` 与隔离 worktree 字节一致，以 `c1ac7ceaa` 串行集成，Wave 4 四项全部完成并进入 aggregate review。
 - 2026-09-01：Wave 4 双路 aggregate review 完成。父流程以 `git show`、`git blame` 和 base..head path diff 关闭两项来源疑问：session import new identity shape 与 `checkout.rename_branch` RPC 均在 Wave 4 base 已存在；`importSessionWorkspaceTarget` capability 的引入晚于 new identity shape，因此当前 manual UI gate 不会把该 shape 发给更旧 Host。本 Wave protocol diff 仅追加两个 optional capability，39-path aggregate 不含 Appearance/theme/highlight/font。两名 reviewer 的条件 P1 均关闭，无 P0/P1，进入 PR 门槛。
+- 2026-09-01：Wave 5 ITEM-16/18 两个隔离候选完成双路 fresh review。ITEM-16 按 correctness review 修复 async catch 与 no-upstream Pull 执行缺口，并恢复 configured-gone 旧语义；ITEM-18 吸收有界 scroll、subagent contract 与 E2E artifact/viewport hardening。两项均经完整内容 manifest 原字节收割、根静态 pre-commit gate 与语义原子提交，分别以 `faa947aa7` / `28172ba6c` 串行集成；下一并行阶段为 ITEM-17 与 ITEM-19。

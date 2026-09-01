@@ -202,6 +202,7 @@ export const ko: TranslationResources = {
   agentStream: {
     empty: "이 에이전트와 대화를 시작하세요...",
     scrollToBottom: "맨 아래로 스크롤",
+    collapseAllToolCalls: "모든 도구 호출 접기",
     historyLoadFailed: "에이전트 기록을 로드할 수 없습니다.",
     permission: {
       plan: "계획",
@@ -1469,6 +1470,8 @@ export const ko: TranslationResources = {
     searchPlaceholder: "브랜치 필터...",
     empty: "브랜치를 찾을 수 없습니다.",
     title: "브랜치 전환",
+    localBranch: "로컬",
+    remoteBranch: "원격",
     uncommittedTitle: "커밋되지 않은 변경 사항",
     uncommittedMessage: "커밋되지 않은 변경 사항이 있습니다. 브랜치를 전환하기 전에 스태시할까요?",
     stashAndSwitch: "스태시 후 전환",
@@ -2278,6 +2281,7 @@ export const ko: TranslationResources = {
           label: "사이드바 배지",
           accessibilityLabel: "사이드바 배지, {{value}}",
           options: {
+            auto: "자동",
             name: "이름",
             icon: "아이콘만",
             hidden: "숨겨진",

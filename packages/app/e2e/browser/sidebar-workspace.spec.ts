@@ -198,6 +198,90 @@ test.describe("Sidebar workspace list", () => {
   });
 });
 
+test.describe("Workspace menu visibility", () => {
+  test.describe("compact Web", () => {
+    test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+    test("shows the workspace menu before hover and keeps it mounted while open", async ({
+      page,
+    }, testInfo) => {
+      const workspace = await seedWorkspace({ repoPrefix: "sidebar-compact-workspace-menu-" });
+      const workspaceKey = `${getServerId()}:${workspace.workspaceId}`;
+
+      try {
+        await gotoAppShell(page);
+        await openMobileAgentSidebar(page);
+        await expectMobileAgentSidebarVisible(page);
+        await waitForSidebarProject(page, path.basename(workspace.repoPath));
+
+        const row = await waitForSidebarWorkspace(page, workspace.workspaceId);
+        const kebab = page.getByTestId(`sidebar-workspace-kebab-${workspaceKey}`);
+        await expect(kebab).toBeVisible({ timeout: 10_000 });
+
+        await kebab.click();
+        const menuItem = page.getByTestId(`sidebar-workspace-menu-copy-path-${workspaceKey}`);
+        await expect(
+          page.getByRole("button", { name: "Bottom sheet backdrop" }).first(),
+        ).toBeVisible({
+          timeout: 10_000,
+        });
+        await expect(page.getByText("Workspace actions", { exact: true })).toBeVisible();
+        await expect(menuItem).toBeVisible({ timeout: 10_000 });
+
+        await page.mouse.move(2, 2);
+        await expect(row).toHaveCount(1);
+        await expect(kebab).toBeVisible();
+        await expect(menuItem).toBeVisible();
+
+        await expect(menuItem).toBeInViewport({ ratio: 1, timeout: 10_000 });
+
+        const screenshotPath = testInfo.outputPath("workspace-menu-compact.png");
+        await page.screenshot({ path: screenshotPath });
+        await testInfo.attach("workspace-menu-compact", {
+          path: screenshotPath,
+          contentType: "image/png",
+        });
+
+        await page
+          .getByRole("button", { name: "Bottom sheet backdrop" })
+          .first()
+          .click({
+            position: { x: 12, y: 12 },
+          });
+        await expect(menuItem).toHaveCount(0);
+      } finally {
+        await workspace.cleanup();
+      }
+    });
+  });
+
+  test.describe("wide Web", () => {
+    test.use({ viewport: { width: 1280, height: 900 } });
+
+    test("keeps the workspace menu hidden until the row is hovered", async ({ page }) => {
+      const workspace = await seedWorkspace({ repoPrefix: "sidebar-wide-workspace-menu-" });
+      const workspaceKey = `${getServerId()}:${workspace.workspaceId}`;
+
+      try {
+        await gotoAppShell(page);
+        await waitForSidebarProject(page, path.basename(workspace.repoPath));
+
+        const row = await waitForSidebarWorkspace(page, workspace.workspaceId);
+        const kebab = page.getByTestId(`sidebar-workspace-kebab-${workspaceKey}`);
+        await expect(kebab).toBeHidden();
+
+        await row.hover();
+        await expect(kebab).toBeVisible({ timeout: 10_000 });
+
+        await page.mouse.move(1279, 899);
+        await expect(kebab).toBeHidden();
+      } finally {
+        await workspace.cleanup();
+      }
+    });
+  });
+});
+
 test.describe("Mobile sidebar panelState transition", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 

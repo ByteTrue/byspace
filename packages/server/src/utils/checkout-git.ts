@@ -1707,6 +1707,19 @@ async function getAheadBehindForComparisonRef(
   return { ahead, behind };
 }
 
+async function getSameNameOriginStatus(
+  cwd: string,
+  currentBranch: string,
+  context?: CheckoutContext,
+): Promise<UpstreamStatus | null> {
+  const ref = `refs/remotes/origin/${currentBranch}`;
+  if (!(await doesGitRefExist(cwd, ref, context))) {
+    return null;
+  }
+  const aheadBehind = await getAheadBehindForComparisonRef(cwd, ref, currentBranch, context);
+  return aheadBehind ? { ref, aheadBehind } : null;
+}
+
 async function getUpstreamStatus(
   cwd: string,
   currentBranch: string,
@@ -1722,7 +1735,10 @@ async function getUpstreamStatus(
       { cwd, envOverlay: READ_ONLY_GIT_ENV, logger: context?.logger },
     );
     const [ref = "", track = ""] = stdout.trim().split("\0", 2);
-    if (!ref || track === "gone") {
+    if (!ref) {
+      return await getSameNameOriginStatus(cwd, currentBranch, context);
+    }
+    if (track === "gone") {
       return null;
     }
     const ahead = Number.parseInt(track.match(/ahead (\d+)/)?.[1] ?? "0", 10);
@@ -3747,7 +3763,13 @@ export async function pullCurrentBranch(cwd: string, forgeService?: ForgeService
     throw new Error("Remote 'origin' is not configured.");
   }
   try {
-    await runGitCommand(["pull"], { cwd, timeout: 120_000 });
+    const upstreamRef = await getBranchUpstreamRef(cwd, currentBranch);
+    const hasSameNameOriginRef =
+      !upstreamRef && (await doesGitRefExist(cwd, `refs/remotes/origin/${currentBranch}`));
+    await runGitCommand(hasSameNameOriginRef ? ["pull", "origin", currentBranch] : ["pull"], {
+      cwd,
+      timeout: 120_000,
+    });
     forgeService?.invalidate({ cwd });
   } catch (error) {
     await abortGitPullConflictState(cwd);

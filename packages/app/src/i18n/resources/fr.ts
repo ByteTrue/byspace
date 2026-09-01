@@ -204,6 +204,7 @@ export const fr: TranslationResources = {
   agentStream: {
     empty: "Commencez à discuter avec cet agent...",
     scrollToBottom: "Faire défiler vers le bas",
+    collapseAllToolCalls: "Réduire tous les appels d’outils",
     historyLoadFailed: "Impossible de charger l’historique de l’agent",
     permission: {
       plan: "Plan",
@@ -1506,6 +1507,8 @@ export const fr: TranslationResources = {
     searchPlaceholder: "Filtrer les branches...",
     empty: "Aucune branche trouvée.",
     title: "Changer de branche",
+    localBranch: "Locale",
+    remoteBranch: "Distante",
     uncommittedTitle: "Modifications non validées",
     uncommittedMessage:
       "Vous avez des modifications non validées. Les ranger avant de changer de branche?",
@@ -2324,6 +2327,7 @@ export const fr: TranslationResources = {
           label: "Badge de la barre latérale",
           accessibilityLabel: "Badge de la barre latérale, {{value}}",
           options: {
+            auto: "Automatique",
             name: "Nom",
             icon: "Icône seule",
             hidden: "Masqué",

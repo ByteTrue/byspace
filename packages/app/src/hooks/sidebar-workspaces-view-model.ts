@@ -2,7 +2,7 @@ import type { PrHint } from "@/git/pr-hint";
 import { selectPrHintFromStatus } from "@/git/pr-hint";
 import { type HostProjectListItem } from "@/projects/host-project-model";
 import type { PendingCreateAttempt } from "@/stores/create-flow-store";
-import type { WorkspaceDescriptor } from "@/stores/session-store";
+import type { Agent, WorkspaceDescriptor } from "@/stores/session-store";
 import type {
   WorkspaceStructureHostPlacement,
   WorkspaceStructureProject,
@@ -11,6 +11,7 @@ import { projectDisplayNameFromProjectId } from "@/utils/project-display-name";
 import { aggregateSidebarStateBuckets } from "@/utils/sidebar-agent-state";
 import { shortenPath } from "@/utils/shorten-path";
 import type { WorkspaceAgentActivity } from "@/utils/workspace-agent-activity";
+import type { HostBadgeModel } from "@/hosts/appearance";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";
 
 const EMPTY_PROJECTS: SidebarProjectEntry[] = [];
@@ -78,6 +79,25 @@ export interface SidebarWorkspaceSession {
 interface SidebarWorkspaceSessionSource {
   workspaces: Map<string, WorkspaceDescriptor>;
   workspaceAgentActivity: Map<string, WorkspaceAgentActivity>;
+}
+
+export function selectWorkspaceAgents(input: {
+  agents: ReadonlyMap<string, Agent> | undefined;
+  serverId: string;
+  workspaceId: string;
+}): Agent[] {
+  if (!input.agents) {
+    return [];
+  }
+
+  // Keep both identities in the predicate: maps are host-scoped today, but the card must never
+  // mix an agent from another host or fall back to cwd when workspaces share a directory.
+  return [...input.agents.values()].filter(
+    (agent) =>
+      agent.serverId === input.serverId &&
+      agent.workspaceId === input.workspaceId &&
+      !agent.archivedAt,
+  );
 }
 
 export function selectSidebarWorkspaceSessions(
@@ -466,18 +486,29 @@ export function buildSidebarProjectsFromHostProjects(input: {
   }));
 }
 
-// Host labels disambiguate which machine a workspace lives on; they only earn their
-// space once the visible sidebar spans more than one host. Counting distinct hosts
-// across the visible projects (not all connected hosts) keeps labels off when a host
-// filter pins the view to a single host.
-export function shouldShowSidebarHostLabels(projects: SidebarProjectEntry[]): boolean {
-  const serverIds = new Set<string>();
-  for (const project of projects) {
-    for (const host of project.hosts) {
-      serverIds.add(host.serverId);
-    }
-  }
+// Automatic host labels only appear where two hosts have workspace placements in the same
+// project. Counting placements rather than the project's available host records keeps a host
+// with no visible workspace from triggering a badge.
+export function shouldShowProjectHostLabels(
+  project: Pick<SidebarProjectEntry, "workspaces">,
+): boolean {
+  const serverIds = new Set(project.workspaces.map((workspace) => workspace.serverId));
   return serverIds.size >= 2;
+}
+
+/**
+ * Applies project-scoped automatic visibility without changing explicit host choices. Every
+ * sidebar row renderer uses this seam so project, grouped, and pinned rows share one decision.
+ */
+export function resolveProjectHostBadge(input: {
+  badge: HostBadgeModel | null | undefined;
+  showAutoLabel: boolean;
+}): HostBadgeModel | null {
+  const badge = input.badge ?? null;
+  if (!badge || badge.display !== "auto") {
+    return badge;
+  }
+  return input.showAutoLabel ? { ...badge, showLabel: true } : null;
 }
 
 export function applyStoredOrdering<T>(input: {

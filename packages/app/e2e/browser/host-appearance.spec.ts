@@ -21,6 +21,10 @@ import {
 } from "../support/helpers/isolated-host-daemon";
 import { seedWorkspace, type SeededWorkspace } from "../support/helpers/seed-client";
 import { getServerId } from "../support/helpers/server-id";
+import {
+  closeSidebarDisplayPreferences,
+  selectSidebarStatusGrouping,
+} from "../support/helpers/sidebar";
 import { waitForSidebarHydration } from "../support/helpers/workspace-ui";
 
 const PRIMARY_HOST_LABEL = "Primary Host";
@@ -29,30 +33,41 @@ const SECONDARY_HOST_LABEL = "Secondary Host";
 interface TwoHostSidebar {
   primaryServerId: string;
   primaryWorkspaceId: string;
+  singleHostWorkspaceId: string;
   secondaryServerId: string;
   secondaryWorkspaceId: string;
 }
 
-// The host badge only appears once the visible sidebar spans more than one host, and that count
-// runs over visible projects — so an offline host with no workspaces will not raise it. Two real
-// daemons, each with a seeded workspace, is the minimum shape that exercises the feature.
+const SHARED_PROJECT_ORIGIN = "https://github.com/byspace/host-appearance.git";
+const SINGLE_HOST_PROJECT_ORIGIN = "https://github.com/byspace/host-appearance-single.git";
+
+// Two real daemons with the same synthetic origin exercise project-scoped automatic labels. A
+// separate project on the primary host proves that another project's host does not trigger it.
 const test = base.extend<{ twoHostSidebar: TwoHostSidebar }>({
   twoHostSidebar: async ({ page }, provide) => {
     const secondaryHost: IsolatedHostDaemon = await startIsolatedHostDaemon(
       "host-appearance-secondary",
     );
     let primary: SeededWorkspace | null = null;
+    let singleHost: SeededWorkspace | null = null;
     let secondary: SeededWorkspace | null = null;
 
     try {
       primary = await seedWorkspace({
         repoPrefix: "host-appearance-primary-",
         title: "Primary workspace",
+        repo: { originUrl: SHARED_PROJECT_ORIGIN },
+      });
+      singleHost = await seedWorkspace({
+        repoPrefix: "host-appearance-single-",
+        title: "Single-host workspace",
+        repo: { originUrl: SINGLE_HOST_PROJECT_ORIGIN },
       });
       secondary = await seedWorkspace({
         repoPrefix: "host-appearance-secondary-",
         title: "Secondary workspace",
         port: secondaryHost.port,
+        repo: { originUrl: SHARED_PROJECT_ORIGIN },
       });
 
       await gotoAppShell(page);
@@ -71,11 +86,13 @@ const test = base.extend<{ twoHostSidebar: TwoHostSidebar }>({
       await provide({
         primaryServerId: getServerId(),
         primaryWorkspaceId: primary.workspaceId,
+        singleHostWorkspaceId: singleHost.workspaceId,
         secondaryServerId: secondaryHost.serverId,
         secondaryWorkspaceId: secondary.workspaceId,
       });
     } finally {
       await primary?.cleanup().catch(() => undefined);
+      await singleHost?.cleanup().catch(() => undefined);
       await secondary?.cleanup().catch(() => undefined);
       await secondaryHost.close().catch(() => undefined);
     }
@@ -84,6 +101,36 @@ const test = base.extend<{ twoHostSidebar: TwoHostSidebar }>({
 
 test.describe("Host appearance", () => {
   test.describe.configure({ timeout: 180_000 });
+
+  test("automatic badges are scoped to each project", async ({
+    page,
+    twoHostSidebar,
+  }, testInfo) => {
+    const expectAutomaticBadgeContract = async () => {
+      await expectHostBadgeName(page, {
+        serverId: twoHostSidebar.primaryServerId,
+        workspaceId: twoHostSidebar.primaryWorkspaceId,
+        hostName: PRIMARY_HOST_LABEL,
+      });
+      await expectHostBadgeName(page, {
+        serverId: twoHostSidebar.secondaryServerId,
+        workspaceId: twoHostSidebar.secondaryWorkspaceId,
+        hostName: SECONDARY_HOST_LABEL,
+      });
+      await expectNoHostBadge(page, {
+        serverId: twoHostSidebar.primaryServerId,
+        workspaceId: twoHostSidebar.singleHostWorkspaceId,
+        hostName: PRIMARY_HOST_LABEL,
+      });
+    };
+
+    await expectAutomaticBadgeContract();
+    await page.screenshot({ path: testInfo.outputPath("automatic-project-host-badges.png") });
+
+    await selectSidebarStatusGrouping(page);
+    await closeSidebarDisplayPreferences(page);
+    await expectAutomaticBadgeContract();
+  });
 
   test("renaming a host renames its sidebar badge", async ({ page, twoHostSidebar }) => {
     const badge = {
@@ -190,8 +237,15 @@ test.describe("Host appearance", () => {
 
   test("the settings preview shows the badge as configured", async ({ page, twoHostSidebar }) => {
     await openHostAppearanceSettings(page, twoHostSidebar.secondaryServerId);
+    await expect(
+      page
+        .getByTestId("host-appearance-preview")
+        .getByTestId(`host-badge-${twoHostSidebar.secondaryServerId}`),
+    ).toHaveText(SECONDARY_HOST_LABEL);
+
     await renameHostFromSettings(page, "Build Box");
     await chooseHostColor(page, "Emerald");
+    await chooseHostBadgeDisplay(page, "Name");
 
     await expectHostAppearancePreview(page, {
       serverId: twoHostSidebar.secondaryServerId,

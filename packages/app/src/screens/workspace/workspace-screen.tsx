@@ -14,6 +14,7 @@ import {
 } from "react";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useIsFocused } from "@react-navigation/native";
+import { PortalHost } from "@gorhom/portal";
 import { BackHandler, Keyboard, Pressable, Text, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, type Href } from "expo-router";
@@ -28,7 +29,9 @@ import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import { ScreenTitle } from "@/components/headers/screen-title";
 import { HostBadge } from "@/hosts/host-badge";
+import { resolveHostBadgeWithoutProjectContext } from "@/hosts/appearance";
 import { useHostBadges } from "@/hosts/use-host-badges";
+import { useLocalDaemonServerId, useLocalDaemonServerIdState } from "@/hooks/use-is-local-daemon";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import {
@@ -37,6 +40,7 @@ import {
 } from "@/components/ui/floating-panel-portal";
 import { SplitContainer } from "@/components/split-container";
 import { RetainedPanel } from "@/components/retained-panel";
+import { buildPaneHeaderActionsPortalName } from "@/panels/pane-header-actions-portal";
 import { WorkspaceActions } from "@/git/workspace-actions";
 import { WorkspaceOpenInEditorButton } from "@/workspace/open-in-editor/button";
 import { WorkspaceScriptsButton } from "@/screens/workspace/workspace-scripts-button";
@@ -659,6 +663,10 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const anchorRef = useRef<View>(null);
+  const paneHeaderActionsPortalName =
+    activeTab?.target.kind === "agent"
+      ? buildPaneHeaderActionsPortalName(normalizedServerId, normalizedWorkspaceId, activeTab.tabId)
+      : null;
   const tabIndexByKey = useMemo(() => {
     const map = new Map<string, number>();
     tabs.forEach((tab, index) => {
@@ -758,6 +766,12 @@ const MobileWorkspaceTabSwitcher = memo(function MobileWorkspaceTabSwitcher({
           </>
         )}
       </Pressable>
+
+      {paneHeaderActionsPortalName ? (
+        <View style={styles.mobilePaneHeaderActions} testID="pane-header-actions">
+          <PortalHost name={paneHeaderActionsPortalName} />
+        </View>
+      ) : null}
 
       <Combobox
         options={tabSwitcherOptions}
@@ -915,7 +929,14 @@ function WorkspaceHeaderProjectRow({
   serverId: string;
 }) {
   const isCompact = useIsCompactFormFactor();
-  const hostBadge = useHostBadges({ enabled: isCompact }).get(serverId) ?? null;
+  const configuredHostBadge = useHostBadges({ enabled: isCompact }).get(serverId) ?? null;
+  const localServerId = useLocalDaemonServerId();
+  const localDaemon = useLocalDaemonServerIdState();
+  const hostBadge = resolveHostBadgeWithoutProjectContext({
+    badge: configuredHostBadge,
+    isLocalHost: serverId === localServerId,
+    localHostResolutionPending: localDaemon.status !== "resolved",
+  });
   const showProject = isSubtitleDistinct || isCompact;
   if (!showProject && !hostBadge) {
     return null;
@@ -4248,11 +4269,20 @@ const styles = StyleSheet.create((theme) => ({
   },
   newTabTooltipShortcut: {},
   mobileTabsRow: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: theme.colors.surface0,
     borderBottomWidth: theme.borderWidth[1],
     borderBottomColor: theme.colors.border,
   },
+  mobilePaneHeaderActions: {
+    marginLeft: "auto",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: theme.spacing[3],
+  },
   switcherTrigger: {
+    flexShrink: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],

@@ -21,7 +21,6 @@ import {
   type HostBadgeDisplay,
   type HostColor,
 } from "@/hosts/appearance";
-import { useLocalDaemonServerIdState } from "@/hooks/use-is-local-daemon";
 import { useHostMutations } from "@/runtime/host-runtime";
 import { identityColor } from "@/styles/identity-colors";
 import { settingsStyles } from "@/styles/settings";
@@ -211,9 +210,9 @@ function BadgeDisplayMenuItem({
 }
 
 /**
- * Shows the badge exactly as the sidebar will draw it, next to a sample workspace title on
- * the sidebar surface. The real component, never a restyled copy — a preview that can drift
- * from the thing it previews is worse than no preview.
+ * Shows explicit badge choices as the sidebar draws them. Automatic uses its visible, named form;
+ * project cardinality still decides whether a real sidebar row shows it. The preview uses the real
+ * component rather than a restyled copy.
  */
 function BadgePreview({
   host,
@@ -231,11 +230,12 @@ function BadgePreview({
             serverId: host.serverId,
             label: host.label,
             color: host.appearance.color,
-            showLabel: badgeDisplay === "name",
+            showLabel: badgeDisplay === "auto" || badgeDisplay === "name",
+            display: badgeDisplay,
           },
     [badgeDisplay, host.serverId, host.label, host.appearance.color],
   );
-  // The real sidebar row, so the preview can't drift from what the setting actually does.
+  // Use the real sidebar row so badge styling stays aligned with the setting's visible form.
   return (
     <View style={styles.preview} testID="host-appearance-preview">
       <Text style={styles.previewTitle} numberOfLines={1}>
@@ -256,13 +256,7 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
   const { t } = useTranslation();
   const toast = useToast();
   const { setHostColor, setHostBadgeDisplay } = useHostMutations();
-  const localDaemon = useLocalDaemonServerIdState();
-  const isLocalHost = localDaemon.status === "resolved" && localDaemon.serverId === host.serverId;
-  const badgeDisplay = resolveHostBadgeDisplay({
-    appearance: host.appearance,
-    isLocalHost,
-    localHostResolutionPending: localDaemon.status !== "resolved",
-  });
+  const badgeDisplay = resolveHostBadgeDisplay({ appearance: host.appearance });
 
   const handleColorChange = useCallback(
     async (color: HostColor) => {
@@ -300,12 +294,8 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
           </View>
         </View>
         <ColorRow color={host.appearance.color} onChange={handleColorChange} />
-        {badgeDisplay === null ? null : (
-          <>
-            <BadgeDisplayRow badgeDisplay={badgeDisplay} onChange={handleBadgeDisplayChange} />
-            <BadgePreview host={host} badgeDisplay={badgeDisplay} />
-          </>
-        )}
+        <BadgeDisplayRow badgeDisplay={badgeDisplay} onChange={handleBadgeDisplayChange} />
+        <BadgePreview host={host} badgeDisplay={badgeDisplay} />
       </View>
     </SettingsSection>
   );

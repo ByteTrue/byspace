@@ -202,6 +202,7 @@ export const es: TranslationResources = {
   agentStream: {
     empty: "Comience a chatear con este agente...",
     scrollToBottom: "Desplazarse hacia abajo",
+    collapseAllToolCalls: "Contraer todas las llamadas a herramientas",
     historyLoadFailed: "No se pudo cargar el historial del agente",
     permission: {
       plan: "Plan",
@@ -1503,6 +1504,8 @@ export const es: TranslationResources = {
     searchPlaceholder: "Filtrar ramas...",
     empty: "No se encontraron sucursales.",
     title: "Cambiar rama",
+    localBranch: "Local",
+    remoteBranch: "Remota",
     uncommittedTitle: "Cambios no confirmados",
     uncommittedMessage: "Tienes cambios no confirmados. ¿Guardarlos antes de cambiar de sucursal?",
     stashAndSwitch: "Guardar y cambiar",
@@ -2319,6 +2322,7 @@ export const es: TranslationResources = {
           label: "Insignia de la barra lateral",
           accessibilityLabel: "Insignia de la barra lateral, {{value}}",
           options: {
+            auto: "Automático",
             name: "Nombre",
             icon: "Solo icono",
             hidden: "Oculta",

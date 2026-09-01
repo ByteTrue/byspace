@@ -202,6 +202,7 @@ export const ja: TranslationResources = {
   agentStream: {
     empty: "このエージェントとチャットを始めましょう...",
     scrollToBottom: "下にスクロール",
+    collapseAllToolCalls: "すべてのツール呼び出しを折りたたむ",
     historyLoadFailed: "エージェントの履歴を読み込めませんでした",
     permission: {
       plan: "プラン",
@@ -1474,6 +1475,8 @@ export const ja: TranslationResources = {
     searchPlaceholder: "ブランチをフィルタ...",
     empty: "ブランチが見つかりません。",
     title: "ブランチを切り替え",
+    localBranch: "ローカル",
+    remoteBranch: "リモート",
     uncommittedTitle: "未コミットの変更",
     uncommittedMessage: "未コミットの変更があります。ブランチを切り替える前にスタッシュしますか？",
     stashAndSwitch: "スタッシュして切り替え",
@@ -2287,6 +2290,7 @@ export const ja: TranslationResources = {
           label: "サイドバーのバッジ",
           accessibilityLabel: "サイドバーのバッジ、{{value}}",
           options: {
+            auto: "自動",
             name: "名前",
             icon: "アイコンのみ",
             hidden: "非表示",

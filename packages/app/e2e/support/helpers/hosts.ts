@@ -183,7 +183,7 @@ export async function chooseHostColor(page: Page, colorName: string): Promise<vo
 
 export async function chooseHostBadgeDisplay(
   page: Page,
-  option: "Name" | "Icon only" | "Hidden",
+  option: "Automatic" | "Name" | "Icon only" | "Hidden",
 ): Promise<void> {
   await page.getByTestId("host-appearance-badge-display").click();
   await page.getByRole("menuitem", { name: option, exact: true }).click();

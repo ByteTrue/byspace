@@ -246,6 +246,7 @@ function renderLiveHeadStreamItem(input: {
 
 export interface AgentStreamViewHandle {
   scrollToBottom(reason?: BottomAnchorLocalRequest["reason"]): void;
+  collapseAll(): void;
   prepareForViewportChange(): void;
 }
 
@@ -267,6 +268,8 @@ export interface AgentStreamViewProps {
   toast?: ToastApi | null;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
   readOnly?: boolean;
+  showScrollToBottomButton?: boolean;
+  onScrollToBottomVisibilityChange?: (visible: boolean) => void;
   historyPagination?: {
     hasOlder: boolean;
     isLoadingOlder: boolean;
@@ -303,6 +306,14 @@ function resolveBottomOverlayControlOffset(clearance: number | undefined): numbe
   return Math.max(16, clearance ?? 0);
 }
 
+function resolveScrollToBottomVisibility(isNearBottom: boolean, isTimelineDetached: boolean) {
+  return !isNearBottom || isTimelineDetached;
+}
+
+function renderOptionalControl(enabled: boolean, visible: boolean, control: React.ReactNode) {
+  return enabled && visible ? control : null;
+}
+
 const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamViewProps>(
   function AgentStreamView(
     {
@@ -321,6 +332,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       toast,
       onOpenWorkspaceFile,
       readOnly = false,
+      showScrollToBottomButton = true,
+      onScrollToBottomVisibilityChange,
       historyPagination,
     },
     ref,
@@ -348,6 +361,10 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       new Set(),
     );
     const [expandedToolCallGroupIds, setExpandedToolCallGroupIds] = useState<Set<string>>(
+      new Set(),
+    );
+    const [collapseRevision, setCollapseRevision] = useState(0);
+    const [collapsedReasoningIds, setCollapsedReasoningIds] = useState<ReadonlySet<string>>(
       new Set(),
     );
 
@@ -413,6 +430,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       setIsNearBottom(true);
       setExpandedInlineToolCallIds(new Set());
       setExpandedToolCallGroupIds(new Set());
+      setCollapseRevision(0);
+      setCollapsedReasoningIds(new Set());
     }, [agentId]);
 
     const handleInlinePathPress = useStableEvent(
@@ -607,33 +626,52 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       revealLoadedItem: revealLoadedHistory,
     });
 
+    const scrollToBottom = useCallback(
+      (reason: BottomAnchorLocalRequest["reason"] = "jump-to-bottom") => {
+        if (!isTimelineDetached) {
+          viewportRef.current?.scrollToBottom(reason);
+          return;
+        }
+        void returnToTimelineTail({
+          fetchTail: () =>
+            getHostRuntimeStore().fetchAgentTimeline(resolvedServerId, agentId, {
+              ...planTimelineTailFetch(),
+            }),
+          scrollToBottom: () => viewportRef.current?.scrollToBottom(reason),
+          onError: handleTimelineHistoryLoadError,
+        });
+      },
+      [agentId, handleTimelineHistoryLoadError, isTimelineDetached, resolvedServerId],
+    );
+
     useImperativeHandle(
       ref,
       () => ({
-        scrollToBottom(reason = "jump-to-bottom") {
-          viewportRef.current?.scrollToBottom(reason);
+        scrollToBottom,
+        collapseAll() {
+          setExpandedInlineToolCallIds(new Set());
+          setExpandedToolCallGroupIds(new Set());
+          setCollapseRevision((current) => current + 1);
+          setCollapsedReasoningIds(
+            new Set(
+              [...streamLayout.history, ...streamLayout.liveHead]
+                .filter(({ item }) => item.kind === "thought")
+                .map(({ item }) => item.id),
+            ),
+          );
         },
         prepareForViewportChange() {
           viewportRef.current?.prepareForViewportChange();
         },
       }),
-      [],
+      [scrollToBottom, streamLayout.history, streamLayout.liveHead],
     );
 
-    const scrollToBottom = useCallback(() => {
-      if (!isTimelineDetached) {
-        viewportRef.current?.scrollToBottom("jump-to-bottom");
-        return;
-      }
-      void returnToTimelineTail({
-        fetchTail: () =>
-          getHostRuntimeStore().fetchAgentTimeline(resolvedServerId, agentId, {
-            ...planTimelineTailFetch(),
-          }),
-        scrollToBottom: () => viewportRef.current?.scrollToBottom("jump-to-bottom"),
-        onError: handleTimelineHistoryLoadError,
-      });
-    }, [agentId, handleTimelineHistoryLoadError, isTimelineDetached, resolvedServerId]);
+    const scrollToBottomVisible = resolveScrollToBottomVisibility(isNearBottom, isTimelineDetached);
+    const handleScrollToBottomPress = useCallback(() => scrollToBottom(), [scrollToBottom]);
+    useEffect(() => {
+      onScrollToBottomVisibilityChange?.(scrollToBottomVisible);
+    }, [onScrollToBottomVisibilityChange, scrollToBottomVisible]);
 
     const setInlineDetailsExpanded = useCallback(
       (itemId: string, expanded: boolean) => {
@@ -720,16 +758,17 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "thought" }>) => {
         return (
           <ThoughtSlot
+            key={collapseRevision}
             itemId={item.id}
             onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
             text={item.text}
             status={item.status}
             isLastInSequence={layoutItem.isLastInToolSequence}
-            defaultExpanded={autoExpandReasoning}
+            defaultExpanded={autoExpandReasoning && !collapsedReasoningIds.has(item.id)}
           />
         );
       },
-      [autoExpandReasoning, setInlineDetailsExpanded],
+      [autoExpandReasoning, collapsedReasoningIds, collapseRevision, setInlineDetailsExpanded],
     );
 
     const renderSingleToolCallItem = useCallback(
@@ -756,6 +795,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
           return (
             <ToolCallSlot
+              key={collapseRevision}
               itemId={item.id}
               onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
               toolName={data.name}
@@ -774,6 +814,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         const data = payload.data;
         return (
           <ToolCallSlot
+            key={collapseRevision}
             itemId={item.id}
             onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
             toolName={data.toolName}
@@ -786,7 +827,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           />
         );
       },
-      [context.cwd, setInlineDetailsExpanded, handleToolCallOpenFile],
+      [collapseRevision, context.cwd, setInlineDetailsExpanded, handleToolCallOpenFile],
     );
 
     const renderToolCallItem = useCallback(
@@ -1049,13 +1090,24 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const streamScrollEnabled =
       !streamRenderStrategy.shouldDisableParentScrollOnInlineDetailsExpansion() ||
       expandedInlineToolCallIds.size === 0;
+    const historyContentRevisionIds = useMemo(
+      () => ({
+        has: (id: string) =>
+          collapseRevision > 0 || projectedToolCalls.historyGroupUpdatesByHostId.has(id),
+      }),
+      [collapseRevision, projectedToolCalls.historyGroupUpdatesByHostId],
+    );
     const historyRowRevision = useMemo(
       () => ({
-        contentById: projectedToolCalls.historyGroupUpdatesByHostId,
+        contentById: historyContentRevisionIds,
         displayStateById: expandedToolCallGroupIds,
         globalDisplayState: isMobile,
       }),
-      [expandedToolCallGroupIds, isMobile, projectedToolCalls.historyGroupUpdatesByHostId],
+      [expandedToolCallGroupIds, historyContentRevisionIds, isMobile],
+    );
+    const liveHeadRowRevision = useMemo(
+      () => ({ collapseRevision, expandedToolCallGroupIds }),
+      [collapseRevision, expandedToolCallGroupIds],
     );
 
     return (
@@ -1066,7 +1118,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               agentId,
               segments: renderModel.segments,
               historyRowRevision,
-              liveHeadRowRevision: expandedToolCallGroupIds,
+              liveHeadRowRevision,
               boundary,
               renderers,
               listEmptyComponent,
@@ -1090,12 +1142,14 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             activePrompt={chatOutline.activePrompt}
             onJumpToPrompt={chatOutline.jumpToPrompt}
           />
-          {(!isNearBottom || isTimelineDetached) && (
+          {renderOptionalControl(
+            showScrollToBottomButton,
+            scrollToBottomVisible,
             <View style={scrollToBottomContainerStyle} pointerEvents="box-none">
               <Animated.View entering={scrollIndicatorFadeIn} exiting={scrollIndicatorFadeOut}>
                 <Pressable
                   style={stylesheet.scrollToBottomButton}
-                  onPress={scrollToBottom}
+                  onPress={handleScrollToBottomPress}
                   accessibilityRole="button"
                   accessibilityLabel={t("agentStream.scrollToBottom")}
                   testID="scroll-to-bottom-button"
@@ -1103,7 +1157,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
                   <ChevronDown size={24} color={stylesheet.scrollToBottomIcon.color} />
                 </Pressable>
               </Animated.View>
-            </View>
+            </View>,
           )}
         </AssistantSelectionCopySurface>
       </ToolCallSheetProvider>
@@ -1224,6 +1278,12 @@ function agentStreamViewPropsEqual(
   if (left.toast !== right.toast) reasons.push("toast");
   if (left.onOpenWorkspaceFile !== right.onOpenWorkspaceFile) reasons.push("onOpenWorkspaceFile");
   if (left.readOnly !== right.readOnly) reasons.push("readOnly");
+  if (left.showScrollToBottomButton !== right.showScrollToBottomButton) {
+    reasons.push("showScrollToBottomButton");
+  }
+  if (left.onScrollToBottomVisibilityChange !== right.onScrollToBottomVisibilityChange) {
+    reasons.push("onScrollToBottomVisibilityChange");
+  }
   if (!historyPaginationPropsEqual(left.historyPagination, right.historyPagination)) {
     reasons.push("historyPagination");
   }

@@ -4,6 +4,7 @@ import {
   defaultHostAppearance,
   normalizeStoredHostAppearance,
   resolveHostBadgeDisplay,
+  resolveHostBadgeWithoutProjectContext,
   selectHostBadges,
 } from "@/hosts/appearance";
 
@@ -16,14 +17,22 @@ function host(
 }
 
 describe("normalizeStoredHostAppearance", () => {
-  it("defaults when the stored registry predates the field or holds junk", () => {
-    const expected = { color: "none", badgeDisplay: null };
+  it("defaults new and legacy stored values to automatic display", () => {
+    const expected = { color: "none", badgeDisplay: "auto" };
+    expect(defaultHostAppearance()).toEqual(expected);
     expect(normalizeStoredHostAppearance(undefined)).toEqual(expected);
     expect(normalizeStoredHostAppearance(null)).toEqual(expected);
     expect(normalizeStoredHostAppearance("x")).toEqual(expected);
     expect(normalizeStoredHostAppearance({})).toEqual(expected);
     expect(normalizeStoredHostAppearance({ color: "chartreuse" })).toEqual(expected);
     expect(normalizeStoredHostAppearance({ badgeDisplay: "loud" })).toEqual(expected);
+  });
+
+  it("normalizes a legacy null display without dropping its color", () => {
+    expect(normalizeStoredHostAppearance({ color: "teal", badgeDisplay: null })).toEqual({
+      color: "teal",
+      badgeDisplay: "auto",
+    });
   });
 
   it("round-trips a value the user actually chose", () => {
@@ -35,68 +44,94 @@ describe("normalizeStoredHostAppearance", () => {
 });
 
 describe("resolveHostBadgeDisplay", () => {
-  it("hides the badge for the local host until the user chooses", () => {
-    expect(
-      resolveHostBadgeDisplay({ appearance: defaultHostAppearance(), isLocalHost: true }),
-    ).toBe("hidden");
+  it("resolves a new or legacy-null appearance to automatic display", () => {
+    expect(resolveHostBadgeDisplay({ appearance: defaultHostAppearance() })).toBe("auto");
+    expect(resolveHostBadgeDisplay({ appearance: { color: "teal", badgeDisplay: null } })).toBe(
+      "auto",
+    );
   });
 
-  it("names a remote host until the user chooses", () => {
-    expect(
-      resolveHostBadgeDisplay({ appearance: defaultHostAppearance(), isLocalHost: false }),
-    ).toBe("name");
+  it.each(["name", "icon", "hidden"] as const)("preserves an explicit %s choice", (display) => {
+    expect(resolveHostBadgeDisplay({ appearance: { color: "none", badgeDisplay: display } })).toBe(
+      display,
+    );
   });
+});
 
-  it("prefers an explicit choice over either default", () => {
-    expect(
-      resolveHostBadgeDisplay({
-        appearance: { color: "none", badgeDisplay: "icon" },
-        isLocalHost: true,
-      }),
-    ).toBe("icon");
-    expect(
-      resolveHostBadgeDisplay({
-        appearance: { color: "none", badgeDisplay: "hidden" },
-        isLocalHost: false,
-      }),
-    ).toBe("hidden");
-  });
+describe("resolveHostBadgeWithoutProjectContext", () => {
+  const autoBadge = {
+    serverId: "alpha",
+    label: "Alpha",
+    color: "none",
+    showLabel: false,
+    display: "auto",
+  } as const;
 
-  it("defers only the default while local-host detection is unresolved", () => {
+  it("preserves the previous local and remote defaults outside project rows", () => {
     expect(
-      resolveHostBadgeDisplay({
-        appearance: defaultHostAppearance(),
+      resolveHostBadgeWithoutProjectContext({
+        badge: autoBadge,
         isLocalHost: false,
         localHostResolutionPending: true,
       }),
     ).toBeNull();
     expect(
-      resolveHostBadgeDisplay({
-        appearance: { color: "none", badgeDisplay: "icon" },
+      resolveHostBadgeWithoutProjectContext({
+        badge: autoBadge,
+        isLocalHost: true,
+        localHostResolutionPending: false,
+      }),
+    ).toBeNull();
+    expect(
+      resolveHostBadgeWithoutProjectContext({
+        badge: autoBadge,
         isLocalHost: false,
+        localHostResolutionPending: false,
+      }),
+    ).toEqual({ ...autoBadge, showLabel: true });
+  });
+
+  it("keeps explicit choices authoritative", () => {
+    const explicitIcon = { ...autoBadge, display: "icon" } as const;
+    expect(
+      resolveHostBadgeWithoutProjectContext({
+        badge: explicitIcon,
+        isLocalHost: true,
         localHostResolutionPending: true,
       }),
-    ).toBe("icon");
+    ).toBe(explicitIcon);
   });
 });
 
 describe("selectHostBadges", () => {
-  it("shows no badges while the sidebar spans a single host", () => {
+  it("returns no badges when the global sidebar item is disabled", () => {
     const badges = selectHostBadges({
       hosts: [host("alpha", "Alpha"), host("beta", "Beta")],
-      localServerId: null,
       enabled: false,
     });
     expect(badges.size).toBe(0);
+  });
+
+  it("keeps an automatic host in the map for project-level resolution", () => {
+    const badges = selectHostBadges({
+      hosts: [host("alpha", "Alpha")],
+      enabled: true,
+    });
+    expect(badges.get("alpha")).toEqual({
+      serverId: "alpha",
+      label: "Alpha",
+      color: "none",
+      showLabel: false,
+      display: "auto",
+    });
   });
 
   it("omits a host the user hid and keeps its sibling", () => {
     const badges = selectHostBadges({
       hosts: [
         host("alpha", "Alpha", { color: "none", badgeDisplay: "hidden" }),
-        host("beta", "Beta"),
+        host("beta", "Beta", { color: "none", badgeDisplay: "name" }),
       ],
-      localServerId: null,
       enabled: true,
     });
     expect(badges.has("alpha")).toBe(false);
@@ -105,13 +140,13 @@ describe("selectHostBadges", () => {
       label: "Beta",
       color: "none",
       showLabel: true,
+      display: "name",
     });
   });
 
   it("keeps an icon-only host in the map without its label", () => {
     const badges = selectHostBadges({
       hosts: [host("alpha", "Alpha", { color: "teal", badgeDisplay: "icon" })],
-      localServerId: null,
       enabled: true,
     });
     expect(badges.get("alpha")).toEqual({
@@ -119,35 +154,15 @@ describe("selectHostBadges", () => {
       label: "Alpha",
       color: "teal",
       showLabel: false,
+      display: "icon",
     });
   });
 
   it("falls back to the server id when the label is blank", () => {
     const badges = selectHostBadges({
       hosts: [host("alpha", "   ")],
-      localServerId: null,
       enabled: true,
     });
     expect(badges.get("alpha")?.label).toBe("alpha");
-  });
-
-  it("hides an untouched local host while its remote sibling shows", () => {
-    const badges = selectHostBadges({
-      hosts: [host("alpha", "Alpha"), host("beta", "Beta")],
-      localServerId: "alpha",
-      enabled: true,
-    });
-    expect(badges.has("alpha")).toBe(false);
-    expect(badges.get("beta")?.label).toBe("Beta");
-  });
-
-  it("omits untouched badges while local-host detection is unresolved", () => {
-    const badges = selectHostBadges({
-      hosts: [host("alpha", "Alpha"), host("beta", "Beta")],
-      localServerId: null,
-      localHostResolutionPending: true,
-      enabled: true,
-    });
-    expect(badges.size).toBe(0);
   });
 });
