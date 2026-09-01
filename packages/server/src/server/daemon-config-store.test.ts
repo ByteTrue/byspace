@@ -731,7 +731,7 @@ describe("DaemonConfigStore", () => {
     expect(persisted.daemon?.appendSystemPrompt).toBe("Prefer terse replies.");
   });
 
-  test("patch persists enable terminal agent hooks into config.json", () => {
+  test("an explicit legacy patch applies only to historical terminal hook providers", () => {
     const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
     tempDirs.push(paseoHome);
 
@@ -750,8 +750,11 @@ describe("DaemonConfigStore", () => {
 
     store.patch({ enableTerminalAgentHooks: true });
 
+    const expected = { claude: true, codex: true, opencode: true, pi: false };
     const persisted = loadPersistedConfig(paseoHome);
     expect(persisted.daemon?.enableTerminalAgentHooks).toBe(true);
+    expect(persisted.daemon?.terminalAgentHooks).toEqual(expected);
+    expect(store.get().terminalAgentHooks).toEqual(expected);
   });
 
   test("patch merges provider terminal agent hooks into config.json", () => {
@@ -800,22 +803,29 @@ describe("DaemonConfigStore", () => {
       undefined,
     );
 
-    store.patch({ terminalAgentHooks: { pi: false } });
+    store.patch({ terminalAgentHooks: { pi: true, future: true } });
     expect(store.get().terminalAgentHooks).toEqual({
       claude: true,
       codex: true,
       opencode: true,
-      pi: false,
+      pi: true,
+      future: true,
     });
     expect(store.get().enableTerminalAgentHooks).toBe(true);
 
     store.patch({ enableTerminalAgentHooks: false });
-    const expected = { claude: false, codex: false, opencode: false, pi: false };
+    const expected = {
+      claude: false,
+      codex: false,
+      opencode: false,
+      pi: true,
+      future: true,
+    };
     const persisted = loadPersistedConfig(paseoHome);
     expect(persisted.daemon?.terminalAgentHooks).toEqual(expected);
-    expect(persisted.daemon?.enableTerminalAgentHooks).toBe(false);
+    expect(persisted.daemon?.enableTerminalAgentHooks).toBe(true);
     expect(store.get().terminalAgentHooks).toEqual(expected);
-    expect(store.get().enableTerminalAgentHooks).toBe(false);
+    expect(store.get().enableTerminalAgentHooks).toBe(true);
   });
 
   test("patch persists metadata generation providers into config.json", () => {

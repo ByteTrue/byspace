@@ -1,4 +1,8 @@
-import type { MutableDaemonConfig, TerminalAgentHookProviderId } from "@getpaseo/protocol/messages";
+import {
+  TERMINAL_AGENT_HOOK_LEGACY_GLOBAL_PROVIDER_IDS,
+  type MutableDaemonConfig,
+  type TerminalAgentHookProviderId,
+} from "@getpaseo/protocol/messages";
 import type { DaemonConfigStore } from "../../server/daemon-config-store.js";
 import type { AgentHookInstallLogger, AgentHookInstallOptions } from "./agent-hook-installer.js";
 import {
@@ -16,6 +20,10 @@ interface ApplyTerminalAgentHookSettingOptions {
 
 export type ResolvedTerminalAgentHookSettings = Record<TerminalAgentHookProviderId, boolean>;
 
+const legacyGlobalProviderIds = new Set<TerminalAgentHookProviderId>(
+  TERMINAL_AGENT_HOOK_LEGACY_GLOBAL_PROVIDER_IDS,
+);
+
 export function resolveTerminalAgentHookSettings(
   config: Pick<MutableDaemonConfig, "enableTerminalAgentHooks" | "terminalAgentHooks">,
 ): ResolvedTerminalAgentHookSettings {
@@ -25,7 +33,7 @@ export function resolveTerminalAgentHookSettings(
     (Object.keys(AGENT_HOOK_PROVIDERS) as TerminalAgentHookProviderId[]).map((providerId) => [
       providerId,
       providerSettings === undefined
-        ? config.enableTerminalAgentHooks === true
+        ? config.enableTerminalAgentHooks === true && legacyGlobalProviderIds.has(providerId)
         : providerSettings[providerId] === true,
     ]),
   ) as ResolvedTerminalAgentHookSettings;

@@ -196,6 +196,12 @@ export const AgentSkillSelectionSchema = z.discriminatedUnion("mode", [
 export type AgentSkillSelection = z.infer<typeof AgentSkillSelectionSchema>;
 
 export const TERMINAL_AGENT_HOOK_PROVIDER_IDS = ["claude", "codex", "opencode", "pi"] as const;
+// COMPAT(terminalAgentHookProviders): added in v0.7.1, remove after 2027-09-01; providers covered by the former global switch.
+export const TERMINAL_AGENT_HOOK_LEGACY_GLOBAL_PROVIDER_IDS = [
+  "claude",
+  "codex",
+  "opencode",
+] as const;
 export const TerminalAgentHookProviderIdSchema = z.enum(TERMINAL_AGENT_HOOK_PROVIDER_IDS);
 export type TerminalAgentHookProviderId = z.infer<typeof TerminalAgentHookProviderIdSchema>;
 

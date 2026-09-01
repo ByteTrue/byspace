@@ -71,12 +71,12 @@ function createStore(
 }
 
 describe("resolveTerminalAgentHookSettings", () => {
-  it("uses the legacy global setting only when the provider map is absent", () => {
+  it("does not opt a newly added provider into a persisted legacy setting", () => {
     expect(resolveTerminalAgentHookSettings({ enableTerminalAgentHooks: true })).toEqual({
       claude: true,
       codex: true,
       opencode: true,
-      pi: true,
+      pi: false,
     });
   });
 
@@ -102,7 +102,7 @@ describe("applyTerminalAgentHookSetting", () => {
     }
   });
 
-  it("keeps the legacy global setting working when no provider map exists", () => {
+  it("keeps legacy providers enabled without silently installing a new provider", () => {
     const root = createTempDir("byspace-hook-setting-legacy-");
     const store = createStore(createTempDir("byspace-hook-setting-home-"), {
       legacyEnabled: true,
@@ -110,9 +110,11 @@ describe("applyTerminalAgentHookSetting", () => {
 
     applyTerminalAgentHookSetting({ store, install: createInstallEnv(root) });
 
-    for (const path of Object.values(hookPaths(root))) {
-      expect(existsSync(path)).toBe(true);
-    }
+    const paths = hookPaths(root);
+    expect(existsSync(paths.claude)).toBe(true);
+    expect(existsSync(paths.codex)).toBe(true);
+    expect(existsSync(paths.opencode)).toBe(true);
+    expect(existsSync(paths.pi)).toBe(false);
   });
 
   it("installs only explicitly enabled provider hooks", () => {
@@ -150,8 +152,9 @@ describe("applyTerminalAgentHookSetting", () => {
     expect(agentHooksAreInstalled(AGENT_HOOK_PROVIDERS.pi, install)).toBe(true);
 
     store.patch({ enableTerminalAgentHooks: false });
-    for (const provider of Object.values(AGENT_HOOK_PROVIDERS)) {
-      expect(agentHooksAreInstalled(provider, install)).toBe(false);
-    }
+    expect(agentHooksAreInstalled(AGENT_HOOK_PROVIDERS.claude, install)).toBe(false);
+    expect(agentHooksAreInstalled(AGENT_HOOK_PROVIDERS.codex, install)).toBe(false);
+    expect(agentHooksAreInstalled(AGENT_HOOK_PROVIDERS.opencode, install)).toBe(false);
+    expect(agentHooksAreInstalled(AGENT_HOOK_PROVIDERS.pi, install)).toBe(true);
   });
 });

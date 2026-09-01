@@ -6,9 +6,10 @@ import {
 } from "./terminal-agent-hooks-config";
 
 describe("terminal agent hook provider settings", () => {
-  it("uses the legacy global value only while the provider map is absent", () => {
+  it("keeps newly added providers disabled while the provider map is absent", () => {
     expect(isTerminalAgentHookProviderEnabled(undefined, false, "claude")).toBe(false);
     expect(isTerminalAgentHookProviderEnabled(undefined, true, "codex")).toBe(true);
+    expect(isTerminalAgentHookProviderEnabled(undefined, true, "pi")).toBe(false);
     expect(isTerminalAgentHookProviderEnabled({ claude: true }, true, "codex")).toBe(false);
     expect(isTerminalAgentHookProviderEnabled({ claude: true }, false, "claude")).toBe(true);
   });

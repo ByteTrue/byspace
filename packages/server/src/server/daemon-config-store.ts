@@ -7,6 +7,7 @@ import { ProviderOverrideSchema } from "./agent/provider-launch-config.js";
 import {
   MutableDaemonConfigSchema,
   MutableDaemonConfigPatchSchema,
+  TERMINAL_AGENT_HOOK_LEGACY_GLOBAL_PROVIDER_IDS,
   TERMINAL_AGENT_HOOK_PROVIDER_IDS,
 } from "@getpaseo/protocol/messages";
 import type { AgentSkillSelection } from "@getpaseo/protocol/messages";
@@ -635,6 +636,10 @@ function mergeMutableAgentPatch(
   return Object.keys(next).length > 0 ? (next as PersistedConfig["agents"]) : undefined;
 }
 
+const legacyGlobalTerminalAgentHookProviderIds = new Set<string>(
+  TERMINAL_AGENT_HOOK_LEGACY_GLOBAL_PROVIDER_IDS,
+);
+
 // COMPAT(terminalAgentHookProviders): added in v0.7.1, remove after 2027-09-01; normalize old aggregate patches bidirectionally.
 function normalizeTerminalAgentHookPatch(
   current: MutableDaemonConfig,
@@ -643,7 +648,6 @@ function normalizeTerminalAgentHookPatch(
   const providerPatch = patch.terminalAgentHooks;
   const legacyPatch = patch.enableTerminalAgentHooks;
   if (providerPatch === undefined && legacyPatch === undefined) return patch;
-  if (providerPatch === undefined && current.terminalAgentHooks === undefined) return patch;
 
   const providerIds = new Set([
     ...TERMINAL_AGENT_HOOK_PROVIDER_IDS,
@@ -651,13 +655,19 @@ function normalizeTerminalAgentHookPatch(
     ...Object.keys(providerPatch ?? {}),
   ]);
   const terminalAgentHooks = Object.fromEntries(
-    Array.from(providerIds, (providerId) => [
-      providerId,
-      legacyPatch ??
-        (current.terminalAgentHooks === undefined
-          ? current.enableTerminalAgentHooks
-          : current.terminalAgentHooks[providerId] === true),
-    ]),
+    Array.from(providerIds, (providerId) => {
+      const currentEnabled =
+        current.terminalAgentHooks === undefined
+          ? current.enableTerminalAgentHooks &&
+            legacyGlobalTerminalAgentHookProviderIds.has(providerId)
+          : current.terminalAgentHooks[providerId] === true;
+      return [
+        providerId,
+        legacyPatch !== undefined && legacyGlobalTerminalAgentHookProviderIds.has(providerId)
+          ? legacyPatch
+          : currentEnabled,
+      ];
+    }),
   );
   Object.assign(terminalAgentHooks, providerPatch);
 
