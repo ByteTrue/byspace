@@ -202,6 +202,7 @@ export const ptBR: TranslationResources = {
   agentStream: {
     empty: "Comece a conversar com este agente...",
     scrollToBottom: "Rolar para o fim",
+    collapseAllToolCalls: "Recolher todas as chamadas de ferramentas",
     historyLoadFailed: "Não foi possível carregar o histórico do agente",
     permission: {
       plan: "Plano",

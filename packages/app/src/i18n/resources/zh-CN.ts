@@ -202,6 +202,7 @@ export const zhCN: TranslationResources = {
   agentStream: {
     empty: "开始和这个 Agent 对话...",
     scrollToBottom: "滚动到底部",
+    collapseAllToolCalls: "折叠所有工具调用",
     historyLoadFailed: "无法加载智能体历史记录",
     permission: {
       plan: "Plan",

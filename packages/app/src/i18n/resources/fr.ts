@@ -204,6 +204,7 @@ export const fr: TranslationResources = {
   agentStream: {
     empty: "Commencez à discuter avec cet agent...",
     scrollToBottom: "Faire défiler vers le bas",
+    collapseAllToolCalls: "Réduire tous les appels d’outils",
     historyLoadFailed: "Impossible de charger l’historique de l’agent",
     permission: {
       plan: "Plan",

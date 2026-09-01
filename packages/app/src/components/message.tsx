@@ -2975,6 +2975,7 @@ export const ExpandableBadge = memo(function ExpandableBadge({
         {...pressHandlers}
         disabled={!isInteractive}
         accessibilityState={accessibilityState}
+        aria-expanded={isInteractive ? isExpanded : undefined}
         style={pressableStyle}
       >
         <View style={expandableBadgeStylesheet.headerRow}>

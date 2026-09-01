@@ -1,8 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import { Portal } from "@gorhom/portal";
 import type { TFunction } from "i18next";
-import { SquarePen } from "lucide-react-native";
+import { ArrowDownToLine, ListChevronsDownUp, SquarePen } from "lucide-react-native";
 import React, {
   memo,
   useCallback,
@@ -39,6 +40,7 @@ import {
   type ToastApi,
   type ToastState,
 } from "@/components/toast-host";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { WorkspaceComposerAttachment } from "@/attachments/types";
 import { useWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 import {
@@ -60,6 +62,7 @@ import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import { reconcileMissingAgentStateWithPresentAgent } from "@/panels/agent-panel-load-state";
+import { buildPaneHeaderActionsPortalName } from "@/panels/pane-header-actions-portal";
 import {
   reconcileReconnectToastState,
   type ReconnectToastState,
@@ -1280,6 +1283,13 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
 }) {
   const { t } = useTranslation();
+  const isPaneVisible = useRetainedPanelActive();
+  const { tabId } = usePaneContext();
+  const paneHeaderActionsPortalName = buildPaneHeaderActionsPortalName(
+    serverId,
+    workspaceId,
+    tabId,
+  );
   const subagentRows = useSubagentsForParent({ serverId, parentAgentId: agentId });
   const tasks = useSessionStore((state): TodoEntry[] | undefined =>
     state.sessions[serverId]?.agentTasks.get(agentId),
@@ -1291,6 +1301,35 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   });
   const hasPluginComposerPills = useHasPluginComposerPills(serverId, workspaceId, agentId);
   const hasActiveComposer = !agentState.archivedAt && !isArchivingCurrentAgent;
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const handleCollapseAll = useCallback(
+    () => streamViewRef.current?.collapseAll(),
+    [streamViewRef],
+  );
+  const handleScrollToBottom = useCallback(
+    () => streamViewRef.current?.scrollToBottom(),
+    [streamViewRef],
+  );
+  const streamHeaderActions = useMemo(
+    () =>
+      hasActiveComposer && isPaneVisible ? (
+        <Portal hostName={paneHeaderActionsPortalName}>
+          <AgentStreamHeaderControls
+            showScrollToBottom={showScrollToBottom}
+            onCollapseAll={handleCollapseAll}
+            onScrollToBottom={handleScrollToBottom}
+          />
+        </Portal>
+      ) : null,
+    [
+      handleCollapseAll,
+      handleScrollToBottom,
+      hasActiveComposer,
+      isPaneVisible,
+      paneHeaderActionsPortalName,
+      showScrollToBottom,
+    ],
+  );
   const hasVisibleAgentTracks = hasAgentTracks({
     subagentRows,
     tasks,
@@ -1376,6 +1415,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
           hasVisibleAgentTracks={hasVisibleAgentTracks}
           toast={toastApi}
           onOpenWorkspaceFile={onOpenWorkspaceFile}
+          onScrollToBottomVisibilityChange={setShowScrollToBottom}
         />
       </RenderProfile>
       {hasActiveComposer ? (
@@ -1402,6 +1442,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
       onRewindComplete={handleRewindComplete}
     >
       <View style={styles.root}>
+        {streamHeaderActions}
         <FileDropZone style={styles.container} disabled={isArchivingCurrentAgent}>
           {contentContainer}
 
@@ -1463,6 +1504,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
   hasVisibleAgentTracks,
   toast,
   onOpenWorkspaceFile,
+  onScrollToBottomVisibilityChange,
 }: {
   streamViewRef: React.RefObject<AgentStreamViewHandle | null>;
   serverId: string;
@@ -1475,6 +1517,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
   hasVisibleAgentTracks: boolean;
   toast: ReturnType<typeof useToastHost>["api"];
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
+  onScrollToBottomVisibilityChange: (visible: boolean) => void;
 }) {
   const isCompactFormFactor = useIsCompactFormFactor();
   const hasWorkspaceDiffStat = useWorkspaceHasDiffStat(serverId, workspaceId);
@@ -1547,7 +1590,62 @@ const AgentStreamSection = memo(function AgentStreamSection({
       pendingMessageSubmissions={pendingMessageSubmissions}
       turnPresentation={turnPresentation}
       onOpenWorkspaceFile={onOpenWorkspaceFile}
+      showScrollToBottomButton={!hasActiveComposer}
+      onScrollToBottomVisibilityChange={onScrollToBottomVisibilityChange}
     />
+  );
+});
+
+const AgentStreamHeaderControls = memo(function AgentStreamHeaderControls({
+  showScrollToBottom,
+  onCollapseAll,
+  onScrollToBottom,
+}: {
+  showScrollToBottom: boolean;
+  onCollapseAll: () => void;
+  onScrollToBottom: () => void;
+}) {
+  const { t } = useTranslation();
+  const collapseAllLabel = t("agentStream.collapseAllToolCalls");
+  const scrollToBottomLabel = t("agentStream.scrollToBottom");
+
+  return (
+    <View style={styles.streamControls} testID="agent-stream-controls">
+      {showScrollToBottom ? (
+        <Tooltip delayDuration={300} enabledOnDesktop>
+          <TooltipTrigger asChild triggerRefProp="ref">
+            <Button
+              variant="ghost"
+              size="sm"
+              style={styles.streamControlButton}
+              leftIcon={ArrowDownToLine}
+              onPress={onScrollToBottom}
+              accessibilityLabel={scrollToBottomLabel}
+              testID="scroll-to-bottom-button"
+            />
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="center" offset={8}>
+            <Text style={styles.streamControlTooltipText}>{scrollToBottomLabel}</Text>
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+      <Tooltip delayDuration={300} enabledOnDesktop>
+        <TooltipTrigger asChild triggerRefProp="ref">
+          <Button
+            variant="ghost"
+            size="sm"
+            style={styles.streamControlButton}
+            leftIcon={ListChevronsDownUp}
+            onPress={onCollapseAll}
+            accessibilityLabel={collapseAllLabel}
+            testID="collapse-all-tool-calls-button"
+          />
+        </TooltipTrigger>
+        <TooltipContent side="bottom" align="center" offset={8}>
+          <Text style={styles.streamControlTooltipText}>{collapseAllLabel}</Text>
+        </TooltipContent>
+      </Tooltip>
+    </View>
   );
 });
 
@@ -1865,6 +1963,21 @@ const styles = StyleSheet.create((theme) => ({
   timelineSyncCalloutText: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
+  },
+  streamControls: {
+    width: 60,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: theme.spacing[1],
+  },
+  streamControlButton: {
+    width: 28,
+    height: 28,
+  },
+  streamControlTooltipText: {
+    color: theme.colors.popoverForeground,
+    fontSize: theme.fontSize.sm,
   },
   historySyncOverlay: {
     position: "absolute",

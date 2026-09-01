@@ -199,6 +199,7 @@ export const en = {
   agentStream: {
     empty: "Start chatting with this agent...",
     scrollToBottom: "Scroll to bottom",
+    collapseAllToolCalls: "Collapse all tool calls",
     historyLoadFailed: "Couldn't load agent history",
     permission: {
       plan: "Plan",

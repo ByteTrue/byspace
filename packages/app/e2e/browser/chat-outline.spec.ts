@@ -58,7 +58,11 @@ test.describe("desktop chat outline", () => {
       await expect.poll(() => jumps.requests()).toHaveLength(1);
       expect(jumps.requests()[0]).toMatchObject({ limit: 40, mergeWindow: true });
 
-      await page.getByTestId("scroll-to-bottom-button").click();
+      const scrollToBottom = page
+        .getByTestId("pane-header-actions")
+        .getByTestId("scroll-to-bottom-button");
+      await expect(scrollToBottom).toBeVisible();
+      await scrollToBottom.click();
       await expectTimelinePromptVisible(page, agent.newestPrompt);
 
       const requestsBeforeLoadedJump = jumps.requests().length;
@@ -71,6 +75,7 @@ test.describe("desktop chat outline", () => {
       await agent.client.sendAgentMessage(agent.agentId, "live prompt while viewing old history");
       await agent.client.waitForFinish(agent.agentId, 15_000);
       await expectTimelinePromptVisible(page, agent.oldestPrompt);
+      await expect(scrollToBottom).toBeVisible();
     } finally {
       await agent.cleanup();
     }
