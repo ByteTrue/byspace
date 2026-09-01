@@ -1,7 +1,7 @@
 ---
 title: 保留能力交付路线 · Work
 status: approved
-amended_at: 2026-09-01T16:19:56Z
+amended_at: 2026-09-01T16:35:28Z
 phase: executing
 spec: ../epics/002-o-retained-capabilities-delivery/spec.md
 source_revision: f592e54bf43e5501383224891053d2e0a9dfbf45
@@ -65,6 +65,7 @@ next_action: 重新确认 pane-header owner，冻结 ITEM-21 brief 并实现最�
 - ITEM-17 双 fresh review 0 P0/P1。父流程验证了 daemon 的 branch-suggestion auxiliary cache 保留 15 秒，因此撤回越出 W01 的“切换 remote-only 后立即转 Both”试验，不扩大到 Server cache 合同；最终真实 Git + Browser fixture 在切换前同时证明 Remote-only 与 Local • Remote，并完成 keyboard selection。Focused Unit/i18n 45/45、Browser E2E 1/1、App Typecheck/Lint/Format 全绿，13 文件 manifest 字节一致，以 `82cd75b5f` 串行集成；最终 screenshot/trace 保存于 `/tmp/byspace-wave5-item17-ui-proof-final/`。
 - ITEM-20 依赖已由 ITEM-19 集成解除；隔离 worktree `epic-002-wave5-item20` 从 `a1fab7b96` 创建，frozen brief `/tmp/byspace-wave5-item20-worker-brief.md` SHA-256 `0634a60e…395f`。首个 writer 因误查不存在的 `.codestable/lessons` 在改动前退出，干净 worktree 由 fresh retry run `616b030d-41b9-42b5-9be5-90c0c0f30c75` 接管。
 - ITEM-20 已完成 Project placement 基数驱动的 Automatic Host Badge：仅同一 Project 跨多个 Host 时显示 Host 名，单 Host Project 保持安静，显式 Name/Icon/Hidden 始终优先，并覆盖 project/status/label/pinned row seams。双 fresh review 的唯一 P1 是 Compact Workspace Header 被新的 auto 语义意外改变；父流程新增 non-project resolver，精确保留旧的 pending/local 隐藏与 remote named 行为，并修正 Automatic preview，follow-up reviewer `b90b3551-937d-4d37-9ef1-d1fe8aebf14e` 确认 P1/P2 关闭、0 remaining P0/P1。Focused Unit/i18n 191/191、Browser E2E 8/8、根 Typecheck/Lint/Format 全绿；24-path candidate manifest 为 `a3959c16…6706d`，15 个非 locale 路径集成后字节一致，9 个 locale 与 ITEM-17 clean auto-merge 并由 resources test 复验。语义原子 commit `04dabd00a` 已串行集成；截图/trace 保存于 `/tmp/byspace-wave5-item20-ui-proof-final/`，ITEM-21 解除阻塞。
+- ITEM-21 已完成 archive-first owner 复核：以 `b5b98704e`、`61ae76732`、`f72cea1b4`、`f11bd1851` 为已验证演进链，采用 retained Agent panel → `server/workspace/tab` deterministic portal → desktop/compact pane header 的单一操作 owner；当前 Composer 的 compact context meter 已满足 U03，不重复实现。隔离 worktree `epic-002-wave5-item21` 从 `9a53941da` 创建，frozen brief `/tmp/byspace-wave5-item21-worker-brief.md` SHA-256 `49de4d3f…723d`，writer 仅允许修改 Agent stream/header/i18n/focused E2E seams。
 - Windows 性能验证继续使用 shared CI 中仅手动启用的 `terminal_performance` job；默认 PR CI 不运行该 job，且 job 无部署权限、secret 或发布输入。Owner 已于 2026-09-01 明确接受该路径。
 - Wave 3 PR #18 首个 exact-head CI run `33472512893` 暴露两个测试夹具缺口：App 的 stub Terminal 缺 `hasSelection()`，Server 的 provider-name bootstrap assertion 因新增短 ID `pi` 误匹配 `pino` / `pipe` / `/api`。父流程分别本地 RED 复现并做测试侧最小修正；T15 纠偏后新的 exact-head 门槛全绿并完成合并。
 
