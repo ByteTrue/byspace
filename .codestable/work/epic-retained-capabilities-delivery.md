@@ -14,7 +14,7 @@ current_wave: 3
 current_item: Wave 3 PR
 active_items: []
 blocked_by: null
-next_action: 提交 Wave 3 closure，推送集成分支并创建 PR；仅在 exact-head required checks 全绿后合入
+next_action: 提交并推送 PR #18 两项已复现、已复审的测试夹具修正；仅在新 exact-head required checks 全绿后合入
 ---
 
 # Epic Work: 保留能力交付路线
@@ -43,6 +43,7 @@ next_action: 提交 Wave 3 closure，推送集成分支并创建 PR；仅在 exa
 - ITEM-10 已完成 provider-scoped Claude/Codex/OpenCode/Pi hook 配置、legacy aggregate 双向兼容、Pi extension latest-wins/failure recovery 与 Host Terminals UI capability gate；built-in Pi profile 保持不变。Frozen patch `0ed98c1e…ff49` 经 Round 2 reviewer `b9e9aa3e-6a80-499d-afea-08694669ed3d` 判定 OK（0 blocking / 0 important），父流程已串行集成为 `987738a09`。两条并行 lane 均关闭。
 - ITEM-11 已完成 T15/T18：内建主题收敛为 Light/Dark/System，保留 plugin-contributed themes 与 `contentFontSize`，采用平台字体栈并统一 code/diff/terminal 14px 默认值，syntax palette 跟随各主题 color scheme；旧持久化字段兼容读取后丢弃。T18 复用既有 selected-Host `terminals` 路由并补 exact-host E2E。首轮 32-path patch 经 reviewer `e299af3d-8b41-49a2-8a95-7fa29eb88db1` / `fd188487-95af-4751-afb1-9459e55a7c65` 双 APPROVE（0 P0/P1）；父流程根据审查和全仓 stale-reference audit 修正 screenshot wait、WebView stack 注释及 Desktop E2E 的已移除主题引用。Final 33-path patch `866cb3a6…c7624c` 经 unit 130/130、terminal browser 59/59、Appearance 3/3、plugin theme 1/1、T18 1/1、Desktop browser-tabs 全流程、两轮可复现 WebView build、全仓 Typecheck/Lint/Format 验证，并以 `53da4f2c0` 串行集成。证据在 `audit-artifacts/epic-002-wave3/item11/`。
 - Wave 3 aggregate frozen range `30893a48b..53da4f2c0`（6 commits / 63 paths，patch `5455dc9d…fab70265`）经 correctness reviewer `484e3755-4106-4652-946c-687d643b81fa` 与 scope reviewer `f0cbc5e7-13e1-45f8-ac5f-98dc2bdb5a27` 双 APPROVE，均为 0 P0/P1，可创建 PR。Report-only 项中，ITEM-07 外部证据目录已补齐；legacy aggregate fallback 的删除点已补标准 `COMPAT(terminalAgentHookProviders)` 日期注释；lane ownership、通知隐私边界、upload 生命周期与 Electron 专项覆盖作为已知 residual，不扩大本 Wave。
+- Wave 3 PR #18 已创建并包含 5 张 exact-current UI 截图。首个 exact-head CI run `33472512893` 暴露两个测试夹具缺口：App 的 stub Terminal 缺 `hasSelection()`，Server 的 provider-name bootstrap assertion 因新增短 ID `pi` 误匹配 `pino` / `pipe` / `/api`。父流程分别本地 RED 复现并做测试侧最小修正，focused 19/19 与 12/12、全仓 Typecheck/Lint/Format 均通过；reviewer `7e6b60f2-48d6-47d8-81b9-ffe381ce1071` APPROVE（0 P0/P1，1 项 regex sensitivity P2 report-only）。
 
 ## Wave 1 · 发布通道路由与远程连接安全
 
@@ -159,3 +160,4 @@ next_action: 提交 Wave 3 closure，推送集成分支并创建 PR；仅在 exa
 - 2026-09-01：ITEM-09 14-path frozen patch `1ac8774b…dd9c9` 经两轮审查关闭 Windows text clobber 与 MIME/type correctness 两项 important，final reviewer `3a380267-554a-45a6-95dc-2164bd517a70` 返回 PASS。Source `fcc408146` 在本地 Direct/Relay、browser/runtime、server upload、Typecheck/Lint/Format 通过后，exact-head Windows CI `33450638997` 第 3 attempt 全绿；前两次均为 ITEM-04 的软件渲染 1 秒性能阈值波动且 clipboard cases 已通过，依规则分别本地复验后才重跑，未修改门槛。父流程按 14-path manifest 原字节集成为 `8e0946084`，复验 Direct/Relay clipboard E2E 各 6/6。
 - 2026-09-01：ITEM-11 final 33-path patch `866cb3a6…c7624c` 完成 T15/T18；两名 item reviewer 对首轮冻结候选均返回 APPROVE（0 P0/P1），父流程处理 report-only 与 stale Desktop consumer 后复验 unit 130/130、terminal browser 59/59、Appearance 3/3、plugin 1/1、selected-Host T18 1/1、Desktop browser-tabs、WebView reproducibility/runtime smoke 及全仓静态门槛，以 commit `53da4f2c0` 集成。
 - 2026-09-01：Wave 3 aggregate reviewers `484e3755-4106-4652-946c-687d643b81fa` / `f0cbc5e7-13e1-45f8-ac5f-98dc2bdb5a27` 对 `30893a48b..53da4f2c0`、6 commits / 63 paths、patch `5455dc9d…fab70265` 均返回 APPROVE（0 P0/P1）。父流程补齐缺失的 ITEM-07 外部 evidence 并给 legacy compatibility 删除点补日期化 COMPAT 注释；其余 P2 均为已知边界或 report-only residual。Wave 3 解除 PR 阻断。
+- 2026-09-01：Wave 3 PR #18 创建于 head `2b3c9d4b3`，PR body 含 ITEM-08/09/10/11 共 5 张 UI 证据。CI run `33472512893` 的 App job `99745030906` 与 Server Ubuntu job `99745030890` 分别因测试 Terminal mock 缺真实 xterm `hasSelection()` API、短 provider ID `pi` 被 raw substring assertion 误匹配而失败。两项均先在本地 exact file 复现，再只修测试：所有 StubTerminal 强制实现默认 false 的 `hasSelection()`；bootstrap 解耦检查改为 provider token word-boundary。Focused 19/19、12/12 与全仓静态门槛全绿，focused reviewer `7e6b60f2-48d6-47d8-81b9-ffe381ce1071` APPROVE（0 P0/P1）。

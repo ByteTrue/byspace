@@ -73,6 +73,9 @@ vi.mock("@xterm/xterm", () => ({
       return { dispose: () => undefined };
     }
     attachCustomKeyEventHandler(): void {}
+    hasSelection(): boolean {
+      return false;
+    }
     dispose(): void {}
     refresh(): void {}
   },
@@ -89,6 +92,7 @@ interface StubTerminal {
   reset: () => void;
   resize?: (cols: number, rows: number) => void;
   focus: () => void;
+  hasSelection: () => boolean;
   refresh?: (start: number, end: number) => void;
   options?: { theme?: unknown; scrollback?: number; fontFamily?: string; fontSize?: number };
   rows?: number;
@@ -150,6 +154,7 @@ function attachStubTerminal(runtime: TerminalEmulatorRuntime): {
     },
     resize: () => {},
     focus: () => {},
+    hasSelection: () => false,
     refresh: () => {},
     options: { theme: undefined },
     rows: 0,
@@ -536,6 +541,7 @@ describe("terminal-emulator-runtime", () => {
       write: () => {},
       reset: () => {},
       focus: () => {},
+      hasSelection: () => false,
       refresh,
       options: { theme: { background: "before" } },
       rows: 12,
@@ -559,6 +565,7 @@ describe("terminal-emulator-runtime", () => {
       write: () => {},
       reset: () => {},
       focus: () => {},
+      hasSelection: () => false,
       refresh,
       options: { scrollback: 10_000 },
       rows: 12,
@@ -580,6 +587,7 @@ describe("terminal-emulator-runtime", () => {
       write: () => {},
       reset: () => {},
       focus: () => {},
+      hasSelection: () => false,
       refresh,
       options: { fontFamily: "before", fontSize: 13 },
       rows: 12,
