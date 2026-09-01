@@ -1,7 +1,7 @@
 ---
 title: 保留能力交付路线 · Work
 status: approved
-amended_at: 2026-09-01T12:29:00Z
+amended_at: 2026-09-01T13:59:47Z
 phase: executing
 spec: ../epics/002-o-retained-capabilities-delivery/spec.md
 source_revision: f592e54bf43e5501383224891053d2e0a9dfbf45
@@ -13,11 +13,11 @@ commit_strategy: semantic-atomic-per-item
 publish_strategy: epic-plan-pr-then-one-pr-per-wave
 execution_strategy_revision: v2-owner-approved
 execution_acceleration_approved_at: 2026-09-01T07:48:00Z
-current_wave: 4
+current_wave: 5
 current_item: null
 active_items: []
 blocked_by: null
-next_action: 创建 Wave 4 PR，等待 exact-head CI/Docker/Nix 全绿后请求 Owner 合并批准
+next_action: 冻结 ITEM-16 与 ITEM-18 worker brief，从 Wave 4 merge SHA 创建两个隔离 worktree 并启动 Wave 5 双 lane
 ---
 
 # Epic Work: 保留能力交付路线
@@ -55,6 +55,8 @@ next_action: 创建 Wave 4 PR，等待 exact-head CI/Docker/Nix 全绿后请求 
 - ITEM-15 预热审计曾错误推导出新的 daemon readiness analyzer/token/transaction；回查归档 issue 与 commit `6f9bfdd40` 后纠正：A04 原始产品边界是 Project Settings 只准备未发送的 Agent draft，实际只读检查、确认、保留式修改、回滚和 clean-worktree 验证均由 bundled `byspace-project-setup` Skill 与当前 Agent 执行，不新增配置生成 RPC 或 daemon 技术栈推断。
 - ITEM-15 已按该边界完成：optional `projectSetupSkill` capability、Project Settings capability gate、bundled `byspace-project-setup` Skill，以及 project/Host/cwd scoped 的独立未发送 draft。Custom skill selection 会保留既有选择并只追加所需 Skill，安装/确认失败均阻断导航；Browser E2E 2/2、i18n 36/36、server build、Typecheck/Lint/Format 全绿。初审唯一 P1 已由 follow-up reviewer `d7895e91-19ea-48c1-9ffc-35b5be17fc91` 确认关闭；18-path 收割 manifest `bf0e6762…472962b` 字节一致，语义原子 commit `c1ac7ceaa` 已串行集成。UI 证据保存于 `/tmp/byspace-item15-ui-proof/`。
 - Wave 4 双路 aggregate review 已完成。Scope reviewer 的 session-import wire-shape 条件 P1 经 base/history 核对关闭：Wave 4 base 已接受 legacy/new 双形状，new shape 来自 `5b884aee0`，当前 UI 使用的 `importSessionWorkspaceTarget` capability 后于该 shape 引入；本 Wave 仅复用既有 import path。Protocol reviewer 的 `checkout.rename_branch` 来源 P1 也由 base..head diff 证实为 pre-existing 且本 Wave 零改动，ITEM-14 MCP 工具不依赖该 RPC。Wave 4 diff 共 39 paths，无 Appearance/theme/highlight/font 路径；两项 P1 均不需要产品代码修正，aggregate gate 结论为 PASS with report-only P2。
+- Wave 4 PR #19 的 exact head `a387297b7a434d3851bccab63a5dcc787d3828a7` 已通过 CI `33511998071`、Docker `33511998056` 与 Nix `33511998053`，随后以 merge commit `6d2b173a0ba4b1e6722e91a035e99fe63fa0b4a1` 合入 `main`。Post-merge exact-SHA CI `33514417804` 与 Docker `33514417929` 均通过，Wave 5 写入门槛已打开。
+- Wave 5 三路只读预热已完成且没有修改源码：Lane A report `/tmp/byspace-wave5-lane-a-scout.md` 将 ITEM-16/17 对齐到归档 commits `0ec5d6320` / `30e66b0c8`；Lane B report `/tmp/byspace-wave5-lane-b-scout.md` 完成 ITEM-18/19/20 的 hover/menu/project-cardinality 边界与平台证据矩阵；ITEM-21 report `/tmp/byspace-wave5-item21-scout.md` 明确保持阻塞，直至 ITEM-17 与 ITEM-20 均集成后再重新确认 pane-header owner。
 - Windows 性能验证继续使用 shared CI 中仅手动启用的 `terminal_performance` job；默认 PR CI 不运行该 job，且 job 无部署权限、secret 或发布输入。Owner 已于 2026-09-01 明确接受该路径。
 - Wave 3 PR #18 首个 exact-head CI run `33472512893` 暴露两个测试夹具缺口：App 的 stub Terminal 缺 `hasSelection()`，Server 的 provider-name bootstrap assertion 因新增短 ID `pi` 误匹配 `pino` / `pipe` / `/api`。父流程分别本地 RED 复现并做测试侧最小修正；T15 纠偏后新的 exact-head 门槛全绿并完成合并。
 
