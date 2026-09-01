@@ -57,7 +57,8 @@ import {
   parseHostWorkspaceRouteFromPathname,
 } from "@/utils/host-routes";
 import {
-  shouldShowSidebarHostLabels,
+  resolveProjectHostBadge,
+  shouldShowProjectHostLabels,
   useSidebarProjectStatusBucket,
   type SidebarProjectEntry,
   type SidebarWorkspaceEntry,
@@ -1572,6 +1573,7 @@ function ProjectBlock({
   creatingWorkspaceIds,
   activeWorkspaceSelection,
   hostBadgeByServerId,
+  autoHostLabelProjectKeys,
   supportsMultiplicityByServerId,
   supportsPinningByServerId,
   onToggleWorkspacePin,
@@ -1597,6 +1599,7 @@ function ProjectBlock({
   creatingWorkspaceIds: ReadonlySet<string>;
   activeWorkspaceSelection: ActiveWorkspaceSelection | null;
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
+  autoHostLabelProjectKeys: ReadonlySet<string>;
   supportsMultiplicityByServerId: ReadonlyMap<string, boolean>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
@@ -1643,7 +1646,10 @@ function ProjectBlock({
         <MemoWorkspaceRowItem
           workspace={item}
           workspaceEntry={workspaceEntriesByKey.get(item.workspaceKey) ?? null}
-          hostBadge={hostBadgeByServerId.get(item.serverId) ?? null}
+          hostBadge={resolveProjectHostBadge({
+            badge: hostBadgeByServerId.get(item.serverId),
+            showAutoLabel: autoHostLabelProjectKeys.has(item.projectViewKey),
+          })}
           shortcutNumber={shortcutIndexByWorkspaceKey.get(item.workspaceKey) ?? null}
           showShortcutBadge={showShortcutBadges}
           canCopyBranchName={project.projectKind === "git"}
@@ -1661,6 +1667,7 @@ function ProjectBlock({
     },
     [
       project.projectKind,
+      autoHostLabelProjectKeys,
       onToggleWorkspacePin,
       supportsPinningByServerId,
       activeWorkspaceSelection,
@@ -1845,6 +1852,7 @@ function areProjectBlockPropsEqual(previous: ProjectBlockProps, next: ProjectBlo
     previous.showShortcutBadges === next.showShortcutBadges &&
     previous.shortcutIndexByWorkspaceKey === next.shortcutIndexByWorkspaceKey &&
     previous.hostBadgeByServerId === next.hostBadgeByServerId &&
+    previous.autoHostLabelProjectKeys === next.autoHostLabelProjectKeys &&
     previous.supportsMultiplicityByServerId === next.supportsMultiplicityByServerId &&
     previous.supportsPinningByServerId === next.supportsPinningByServerId &&
     previous.onToggleWorkspacePin === next.onToggleWorkspacePin &&
@@ -1915,13 +1923,13 @@ export function SidebarWorkspaceList({
   const pathname = usePathname();
   const hosts = useHosts();
   const rowItems = useSidebarRowItems();
-  // Host badge visibility is a lattice, not three competing switches: this gate is the global
-  // "off", `shouldShowSidebarHostLabels` is the automatic "there is only one host so it says
-  // nothing", and each host's own `badgeDisplay` decides name vs icon vs hidden. Turning the
-  // item off here removes the badge everywhere; leaving it on defers to the per-host setting.
-  const hostBadgeByServerId = useHostBadges({
-    enabled: rowItems.host && shouldShowSidebarHostLabels(projects),
-  });
+  const autoHostLabelProjectKeys = useMemo(
+    () => new Set(projects.filter(shouldShowProjectHostLabels).map((project) => project.viewKey)),
+    [projects],
+  );
+  // The global Display-item switch is the only outer gate. Automatic visibility is resolved per
+  // project at each row seam, while explicit name/icon/hidden choices remain authoritative.
+  const hostBadgeByServerId = useHostBadges({ enabled: rowItems.host });
   const serverIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
   const supportsMultiplicityByServerId = useHostFeatureMap(serverIds, "workspaceMultiplicity");
   const supportsPinningByServerId = useHostFeatureMap(serverIds, "workspacePinning");
@@ -1981,6 +1989,7 @@ export function SidebarWorkspaceList({
         shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
         onWorkspacePress={onWorkspacePress}
         hostBadgeByServerId={hostBadgeByServerId}
+        autoHostLabelProjectKeys={autoHostLabelProjectKeys}
         supportsPinningByServerId={supportsPinningByServerId}
         onToggleWorkspacePin={onToggleWorkspacePin}
         onPinnedWorkspaceReorder={handlePinnedWorkspaceReorder}
@@ -2008,6 +2017,7 @@ export function SidebarWorkspaceList({
         dragGestureHostPresented={dragGestureHostPresented}
         pathname={pathname}
         hostBadgeByServerId={hostBadgeByServerId}
+        autoHostLabelProjectKeys={autoHostLabelProjectKeys}
         supportsMultiplicityByServerId={supportsMultiplicityByServerId}
         supportsPinningByServerId={supportsPinningByServerId}
         onToggleWorkspacePin={onToggleWorkspacePin}
@@ -2032,6 +2042,7 @@ function SidebarGroupedModeList({
   shortcutIndexByWorkspaceKey: _projectShortcutIndex,
   onWorkspacePress,
   hostBadgeByServerId,
+  autoHostLabelProjectKeys,
   supportsPinningByServerId,
   onToggleWorkspacePin,
   onPinnedWorkspaceReorder,
@@ -2047,6 +2058,7 @@ function SidebarGroupedModeList({
   shortcutIndexByWorkspaceKey: Map<string, number>;
   onWorkspacePress?: () => void;
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
+  autoHostLabelProjectKeys: ReadonlySet<string>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   onPinnedWorkspaceReorder: (workspaces: SidebarWorkspacePlacement[]) => void;
@@ -2074,6 +2086,7 @@ function SidebarGroupedModeList({
       showShortcutBadges={showShortcutBadges}
       onWorkspacePress={onWorkspacePress}
       hostBadgeByServerId={hostBadgeByServerId}
+      autoHostLabelProjectKeys={autoHostLabelProjectKeys}
       supportsPinningByServerId={supportsPinningByServerId}
       onToggleWorkspacePin={onToggleWorkspacePin}
       onPinnedWorkspaceReorder={onPinnedWorkspaceReorder}
@@ -2103,6 +2116,7 @@ function ProjectModeList({
   dragGestureHostPresented,
   pathname,
   hostBadgeByServerId,
+  autoHostLabelProjectKeys,
   supportsMultiplicityByServerId,
   supportsPinningByServerId,
   onToggleWorkspacePin,
@@ -2121,6 +2135,7 @@ function ProjectModeList({
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
   pathname: string;
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
+  autoHostLabelProjectKeys: ReadonlySet<string>;
   supportsMultiplicityByServerId: ReadonlyMap<string, boolean>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
@@ -2321,6 +2336,7 @@ function ProjectModeList({
           creatingWorkspaceIds={creatingWorkspaceIds}
           activeWorkspaceSelection={activeWorkspaceSelection}
           hostBadgeByServerId={hostBadgeByServerId}
+          autoHostLabelProjectKeys={autoHostLabelProjectKeys}
           supportsMultiplicityByServerId={supportsMultiplicityByServerId}
           supportsPinningByServerId={supportsPinningByServerId}
           onToggleWorkspacePin={onToggleWorkspacePin}
@@ -2333,6 +2349,7 @@ function ProjectModeList({
       handleWorktreeCreated,
       handleWorkspaceReorder,
       hostBadgeByServerId,
+      autoHostLabelProjectKeys,
       supportsMultiplicityByServerId,
       supportsPinningByServerId,
       onToggleWorkspacePin,
@@ -2366,7 +2383,10 @@ function ProjectModeList({
         <MemoWorkspaceRowItem
           workspace={workspace}
           workspaceEntry={workspaceEntriesByKey.get(workspace.workspaceKey) ?? null}
-          hostBadge={hostBadgeByServerId.get(workspace.serverId) ?? null}
+          hostBadge={resolveProjectHostBadge({
+            badge: hostBadgeByServerId.get(workspace.serverId),
+            showAutoLabel: autoHostLabelProjectKeys.has(workspace.projectViewKey),
+          })}
           leadingProjectName={workspace.projectName}
           leadingProjectIconDataUri={
             projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null
@@ -2388,6 +2408,7 @@ function ProjectModeList({
     },
     [
       activeWorkspaceSelection,
+      autoHostLabelProjectKeys,
       creatingWorkspaceIds,
       hostBadgeByServerId,
       onWorkspacePress,

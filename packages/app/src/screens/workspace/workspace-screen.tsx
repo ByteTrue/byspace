@@ -28,7 +28,9 @@ import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
 import { ScreenTitle } from "@/components/headers/screen-title";
 import { HostBadge } from "@/hosts/host-badge";
+import { resolveHostBadgeWithoutProjectContext } from "@/hosts/appearance";
 import { useHostBadges } from "@/hosts/use-host-badges";
+import { useLocalDaemonServerId, useLocalDaemonServerIdState } from "@/hooks/use-is-local-daemon";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import {
@@ -915,7 +917,14 @@ function WorkspaceHeaderProjectRow({
   serverId: string;
 }) {
   const isCompact = useIsCompactFormFactor();
-  const hostBadge = useHostBadges({ enabled: isCompact }).get(serverId) ?? null;
+  const configuredHostBadge = useHostBadges({ enabled: isCompact }).get(serverId) ?? null;
+  const localServerId = useLocalDaemonServerId();
+  const localDaemon = useLocalDaemonServerIdState();
+  const hostBadge = resolveHostBadgeWithoutProjectContext({
+    badge: configuredHostBadge,
+    isLocalHost: serverId === localServerId,
+    localHostResolutionPending: localDaemon.status !== "resolved",
+  });
   const showProject = isSubtitleDistinct || isCompact;
   if (!showProject && !hostBadge) {
     return null;

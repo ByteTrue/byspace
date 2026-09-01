@@ -2321,6 +2321,7 @@ export const es: TranslationResources = {
           label: "Insignia de la barra lateral",
           accessibilityLabel: "Insignia de la barra lateral, {{value}}",
           options: {
+            auto: "Automático",
             name: "Nombre",
             icon: "Solo icono",
             hidden: "Oculta",

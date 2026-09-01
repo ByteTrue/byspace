@@ -2243,6 +2243,7 @@ export const zhCN: TranslationResources = {
           label: "侧边栏徽章",
           accessibilityLabel: "侧边栏徽章，{{value}}",
           options: {
+            auto: "自动",
             name: "名称",
             icon: "仅图标",
             hidden: "隐藏",

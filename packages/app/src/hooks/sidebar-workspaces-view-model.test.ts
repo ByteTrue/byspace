@@ -13,7 +13,8 @@ import {
   deriveProjectStatusBucket,
   deriveSidebarLoadingState,
   selectWorkspaceAgents,
-  shouldShowSidebarHostLabels,
+  resolveProjectHostBadge,
+  shouldShowProjectHostLabels,
   type ProjectStatusSession,
   type SidebarProjectEntry,
   type SidebarWorkspacePlacement,
@@ -482,36 +483,29 @@ describe("shared sidebar workspace model", () => {
   });
 });
 
-describe("shouldShowSidebarHostLabels", () => {
-  it("is false with no visible projects", () => {
-    expect(shouldShowSidebarHostLabels([])).toBe(false);
+describe("project-scoped automatic host labels", () => {
+  it("is false when a project has no workspace placements", () => {
+    const [projectEntry] = buildSidebarProjectsFromStructure({
+      projects: [project({ projectKey: "project-a", workspaceKeys: [] })],
+    });
+
+    expect(shouldShowProjectHostLabels(projectEntry!)).toBe(false);
   });
 
-  it("is false when every project lives on a single host", () => {
-    const projects = buildSidebarProjectsFromStructure({
+  it("is false when a project has workspace placements on one host", () => {
+    const [projectEntry] = buildSidebarProjectsFromStructure({
       projects: [
-        project({ projectKey: "project-a", workspaceKeys: ["ws-1"] }),
-        project({ projectKey: "project-b", workspaceKeys: ["ws-2"] }),
+        project({ projectKey: "project-a", workspaceKeys: ["host-a:ws-1", "host-a:ws-2"] }),
       ],
     });
 
-    expect(shouldShowSidebarHostLabels(projects)).toBe(false);
+    expect(shouldShowProjectHostLabels(projectEntry!)).toBe(false);
   });
 
-  it("is true when projects span separate hosts", () => {
+  it("does not let different single-host projects trigger one another", () => {
     const projects = buildSidebarProjectsFromStructure({
       projects: [
-        project({
-          projectKey: "project-a",
-          hosts: [
-            {
-              serverId: "host-a",
-              iconWorkingDir: "/repo/project-a",
-              worktreeSupport: "supported" as const,
-            },
-          ],
-          workspaceKeys: ["host-a:ws-1"],
-        }),
+        project({ projectKey: "project-a", workspaceKeys: ["host-a:ws-1"] }),
         project({
           projectKey: "project-b",
           hosts: [
@@ -526,32 +520,78 @@ describe("shouldShowSidebarHostLabels", () => {
       ],
     });
 
-    expect(shouldShowSidebarHostLabels(projects)).toBe(true);
+    expect(projects.every((entry) => !shouldShowProjectHostLabels(entry))).toBe(true);
   });
 
-  it("is true for a single project shared across hosts", () => {
-    const projects = buildSidebarProjectsFromStructure({
+  it("is true when one project has workspace placements on multiple hosts", () => {
+    const [projectEntry] = buildSidebarProjectsFromStructure({
       projects: [
         project({
-          projectKey: "getpaseo/paseo",
+          projectKey: "project-a",
           hosts: [
             {
               serverId: "host-a",
-              iconWorkingDir: "/repo/paseo",
+              iconWorkingDir: "/repo/project-a",
               worktreeSupport: "supported" as const,
             },
             {
               serverId: "host-b",
-              iconWorkingDir: "/repo/paseo",
+              iconWorkingDir: "/repo/project-a",
               worktreeSupport: "supported" as const,
             },
           ],
-          workspaceKeys: ["host-a:main", "host-b:feature"],
+          workspaceKeys: ["host-a:ws-1", "host-b:ws-2"],
         }),
       ],
     });
 
-    expect(shouldShowSidebarHostLabels(projects)).toBe(true);
+    expect(shouldShowProjectHostLabels(projectEntry!)).toBe(true);
+  });
+
+  it.each([
+    { display: "name" as const, showLabel: true },
+    { display: "icon" as const, showLabel: false },
+    { display: "hidden" as const, showLabel: false },
+  ])(
+    "keeps explicit $display choices authoritative for a single-host project",
+    ({ display, showLabel }) => {
+      const badge = {
+        serverId: "host-a",
+        label: "Host A",
+        color: "none" as const,
+        showLabel,
+        display,
+      };
+
+      expect(resolveProjectHostBadge({ badge, showAutoLabel: false })).toEqual(badge);
+    },
+  );
+
+  it("hides an automatic badge for a single-host project", () => {
+    const badge = {
+      serverId: "host-a",
+      label: "Host A",
+      color: "none" as const,
+      showLabel: false,
+      display: "auto" as const,
+    };
+
+    expect(resolveProjectHostBadge({ badge, showAutoLabel: false })).toBeNull();
+  });
+
+  it("names an automatic badge when its project spans hosts", () => {
+    const badge = {
+      serverId: "host-a",
+      label: "Host A",
+      color: "none" as const,
+      showLabel: false,
+      display: "auto" as const,
+    };
+
+    expect(resolveProjectHostBadge({ badge, showAutoLabel: true })).toEqual({
+      ...badge,
+      showLabel: true,
+    });
   });
 });
 

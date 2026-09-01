@@ -15,6 +15,7 @@ import {
   type HostAppearance,
   defaultHostAppearance,
   HostAppearanceSchema,
+  normalizeStoredHostAppearance,
 } from "@/hosts/appearance";
 import { z } from "zod";
 
@@ -479,7 +480,7 @@ export function normalizeStoredHostProfile(entry: unknown): HostProfile | null {
   return {
     serverId,
     label,
-    appearance: record.appearance ?? defaultHostAppearance(),
+    appearance: normalizeStoredHostAppearance(record.appearance),
     lifecycle: defaultLifecycle(),
     connections,
     preferredConnectionId,

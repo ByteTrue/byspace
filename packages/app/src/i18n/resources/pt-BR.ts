@@ -2305,6 +2305,7 @@ export const ptBR: TranslationResources = {
           label: "Selo da barra lateral",
           accessibilityLabel: "Selo da barra lateral, {{value}}",
           options: {
+            auto: "Automático",
             name: "Nome",
             icon: "Somente ícone",
             hidden: "Oculto",

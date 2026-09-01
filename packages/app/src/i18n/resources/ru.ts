@@ -2307,6 +2307,7 @@ export const ru: TranslationResources = {
           label: "Значок на боковой панели",
           accessibilityLabel: "Значок на боковой панели, {{value}}",
           options: {
+            auto: "Автоматически",
             name: "Имя",
             icon: "Только значок",
             hidden: "Скрыт",

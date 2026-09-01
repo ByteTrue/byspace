@@ -128,7 +128,19 @@ describe("normalizeStoredHostProfile", () => {
       ],
     });
 
-    expect(profile?.appearance).toEqual({ color: "none", badgeDisplay: null });
+    expect(profile?.appearance).toEqual({ color: "none", badgeDisplay: "auto" });
+  });
+
+  it("normalizes a legacy null badge display to automatic without losing color", () => {
+    const profile = normalizeStoredHostProfile({
+      serverId: "srv_legacy_appearance",
+      appearance: { color: "teal", badgeDisplay: null },
+      connections: [
+        { id: "socket:/tmp/paseo.sock", type: "directSocket", path: "/tmp/paseo.sock" },
+      ],
+    });
+
+    expect(profile?.appearance).toEqual({ color: "teal", badgeDisplay: "auto" });
   });
 
   it("loads a stored appearance the user chose", () => {
@@ -203,7 +215,7 @@ describe("upsertHostConnectionInProfiles", () => {
       connection,
     });
 
-    expect(profile.appearance).toEqual({ color: "none", badgeDisplay: null });
+    expect(profile.appearance).toEqual({ color: "none", badgeDisplay: "auto" });
   });
 
   it("keeps the appearance the user chose when the host reconnects", () => {
