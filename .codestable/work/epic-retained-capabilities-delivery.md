@@ -1,7 +1,7 @@
 ---
 title: 保留能力交付路线 · Work
 status: approved
-amended_at: 2026-09-01T11:01:00Z
+amended_at: 2026-09-01T11:31:00Z
 phase: executing
 spec: ../epics/002-o-retained-capabilities-delivery/spec.md
 source_revision: f592e54bf43e5501383224891053d2e0a9dfbf45
@@ -14,11 +14,11 @@ publish_strategy: epic-plan-pr-then-one-pr-per-wave
 execution_strategy_revision: v2-owner-approved
 execution_acceleration_approved_at: 2026-09-01T07:48:00Z
 current_wave: 4
-current_item: ITEM-14
+current_item: ITEM-15
 active_items:
-  - ITEM-14
+  - ITEM-15
 blocked_by: null
-next_action: 从 ITEM-13 reviewed milestone 串行实现 Owner 批准的 ITEM-14/A09 方案 A
+next_action: 以归档 commit 6f9bfdd40 为基线恢复 ITEM-15/A04，不重新设计 daemon readiness transaction
 ---
 
 # Epic Work: 保留能力交付路线
@@ -52,7 +52,8 @@ next_action: 从 ITEM-13 reviewed milestone 串行实现 Owner 批准的 ITEM-14
 - Owner 已批准 execution acceleration revision：最多两个隔离 worktree writer 加一名只读 scout/reviewer；后续 ITEM 在依赖满足前预热，父流程不接管常规实现；byte-identical reviewed manifest 不重复执行 worker 已报告绿色的相同完整套件，仍保留 owning build、全仓静态门槛、必要 integration smoke、Wave aggregate 与 exact-head CI。合同 reviewer `dcf5e62e-9701-4e55-8290-25c0561c3b15` 首轮要求补齐复用审计记录和五处 wording；同 lineage round 2 `bfc9e44d-2ce6-4e33-8391-9ada07f76ecf` 确认全部关闭，结论 PASS（0 remaining finding）。
 - ITEM-12 已恢复 canonical replica 从 persisted cursor 逐页 `after(endCursor)` catch-up 到 `hasNewer=false`，不再错误跳到 bounded tail；现有 bootstrap/replacement tail 路径保持。App focused 32/32 + 6/6 + 6/6 + 1/1 + 119/119、daemon Timeline window 11/11、reconnect 2/2、owning build 与全仓静态门槛均通过；三轮 fresh review 关闭唯一文档 P1 与 stale provisional metadata fixture，最终四文件 manifest 字节一致并以 `62cb2b4f73b9cdbcb12c960c101661e081a8a8a9` 完成串行集成。
 - ITEM-13 已完成手动 Provider + Session ID 导入，复用现有 import 协议、client、server 与 ITEM-12 timeline owner；当前 UI 适配 canonical `SelectField` / Form Kit 并覆盖九种语言。交付重新对照归档 commit `f997dd5e0`，恢复其确定性 mock-provider Browser E2E，而不是把本 ITEM 绑定到上游已失配的 OpenCode real-provider fixture；目标 E2E 1/1、i18n 36/36、Typecheck/Lint/Format 全绿，passing trace 与两张 UI 截图已保存，语义原子 commit `6b4c60ceb` 已串行集成。
-- ITEM-14 的只读历史审计确认原 worker brief 漏掉 capability-gated copy-only 菜单、独立 `rename_branch` 工具、branch TOCTOU/ownership guards、i18n、bundled skill 与浏览器证据。Owner 已批准纠正方案 A；该 ITEM 从并行 lane 退回 ITEM-13 之后串行执行，不直接 cherry-pick 旧 27-path patch。
+- ITEM-14 已按归档 `f2e063ba3` 的核心实现适配当前架构：新增可选 `workspaceAgentRename` capability、copy-only Workspace 菜单、独立 `rename_branch` Agent tool 与 BySpace-owned branch 的 ownership/published/upstream/conflict/TOCTOU guards；title 与 branch 保持独立。Focused server 310/310、i18n 36/36、Browser E2E 3/3、Typecheck/Lint/Format 全绿；fresh reviewer `dd817438-6572-4189-81af-5beb035ca303` 返回 0 P0/P1，passing trace 与菜单截图 `/tmp/byspace-wave4-item14-menu.jpg`（SHA-256 `86f62c4f…28e8`）已保存，语义原子 commit `6f0b93abf` 已串行集成。
+- ITEM-15 预热审计曾错误推导出新的 daemon readiness analyzer/token/transaction；回查归档 issue 与 commit `6f9bfdd40` 后纠正：A04 原始产品边界是 Project Settings 只准备未发送的 Agent draft，实际只读检查、确认、保留式修改、回滚和 clean-worktree 验证均由 bundled `byspace-project-setup` Skill 与当前 Agent 执行，不新增配置生成 RPC 或 daemon 技术栈推断。
 - Windows 性能验证继续使用 shared CI 中仅手动启用的 `terminal_performance` job；默认 PR CI 不运行该 job，且 job 无部署权限、secret 或发布输入。Owner 已于 2026-09-01 明确接受该路径。
 - Wave 3 PR #18 首个 exact-head CI run `33472512893` 暴露两个测试夹具缺口：App 的 stub Terminal 缺 `hasSelection()`，Server 的 provider-name bootstrap assertion 因新增短 ID `pi` 误匹配 `pino` / `pipe` / `/api`。父流程分别本地 RED 复现并做测试侧最小修正；T15 纠偏后新的 exact-head 门槛全绿并完成合并。
 
@@ -80,8 +81,8 @@ next_action: 从 ITEM-13 reviewed milestone 串行实现 Owner 批准的 ITEM-14
 
 - [x] ITEM-12 · AGENT-03 · A06/A07/A08 · reviewed and integrated
 - [x] ITEM-13 · AGENT-02 · A05 · reviewed and integrated
-- [ ] ITEM-14 · AGENT-04 · A09 · active (serialized Plan A)
-- [ ] ITEM-15 · AGENT-01 · A04
+- [x] ITEM-14 · AGENT-04 · A09 · reviewed and integrated
+- [ ] ITEM-15 · AGENT-01 · A04 · active
 
 ## Wave 5 · Workspace、侧栏与 Compact UI
 
@@ -188,3 +189,4 @@ next_action: 从 ITEM-13 reviewed milestone 串行实现 Owner 批准的 ITEM-14
 - 2026-09-01：ITEM-13 首轮两文件候选的 focused test 21/21、Typecheck/Lint/Format 通过；correctness reviewer 无 P0/P1，UI reviewer 阻断硬编码文案与手写 provider picker。Follow-up 改用 canonical `SelectField` / Form Kit 并补齐九种语言。
 - 2026-09-01：ITEM-13 最终交付回查归档 commit `f997dd5e0`，确认其原始合同使用确定性 mock-provider Browser E2E；撤销本 ITEM 对上游 OpenCode real-provider 测试的追加和 626 行 JSDOM test expansion，仅保留当前架构所需 UI/i18n 适配，并移植归档 E2E（相对原文件仅路径、当前 test ID 与错误文案适配）。目标 Browser E2E 1/1（11.4s）、i18n 36/36、Typecheck/Lint/Format 全绿；passing trace 和 UI 截图保存于 `/tmp/byspace-item13-ui-proof/`，以 `6b4c60ceb` 串行集成。
 - 2026-09-01：ITEM-14 worker 在无写入时触发 stop-to-serial。只读审计逐项比较历史 issue 与 commit `f2e063ba3`，确认完整 A09 需要 optional capability、copy-only 菜单、两个独立 Agent tools、Git/metadata TOCTOU guards、i18n、skill 与浏览器证据；Owner 批准推荐方案 A，合同已收窄为 ITEM-13 集成后串行实现。
+- 2026-09-01：ITEM-14 按历史 patch 基线做当前架构适配并完成 25-file 交付；focused server 310/310、i18n 36/36、Browser E2E 3/3 与全仓静态门槛全绿，fresh review 0 P0/P1，语义原子 commit `6f0b93abf` 串行集成。ITEM-15 随即回查归档 `6f9bfdd40`，否决预热 scout 新造 daemon transaction 的偏航方案，按原始 Skill + Project Settings draft 入口恢复。
