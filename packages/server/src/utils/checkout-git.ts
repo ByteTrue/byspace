@@ -1123,9 +1123,33 @@ export async function localBranchExists(cwd: string, branchName: string): Promis
   return doesGitRefExist(cwd, `refs/heads/${branchName}`);
 }
 
+export async function remoteBranchExists(cwd: string, branchName: string): Promise<boolean> {
+  const { stdout } = await runGitCommand(["remote"], {
+    cwd,
+    envOverlay: READ_ONLY_GIT_ENV,
+  });
+  const remotes = stdout.split("\n").filter(Boolean);
+  const matches = await Promise.all(
+    remotes.map((remote) => doesGitRefExist(cwd, `refs/remotes/${remote}/${branchName}`)),
+  );
+  return matches.some(Boolean);
+}
+
+export async function getBranchUpstreamRef(
+  cwd: string,
+  branchName: string,
+): Promise<string | null> {
+  const { stdout } = await runGitCommand(
+    ["for-each-ref", "--format=%(upstream)", `refs/heads/${branchName}`],
+    { cwd, envOverlay: READ_ONLY_GIT_ENV },
+  );
+  return stdout.trim() || null;
+}
+
 export async function renameCurrentBranch(
   cwd: string,
   newName: string,
+  expectedBranch?: string,
 ): Promise<{ previousBranch: string | null; currentBranch: string | null }> {
   const worktreeRoot = await requireGitWorktreeRoot(cwd);
 
@@ -1133,13 +1157,19 @@ export async function renameCurrentBranch(
   if (!previousBranch || previousBranch === "HEAD") {
     throw new Error("Cannot rename branch in detached HEAD state");
   }
+  if (expectedBranch && previousBranch !== expectedBranch) {
+    throw new Error(`Current branch changed from ${expectedBranch} to ${previousBranch}`);
+  }
 
-  await runGitCommand(["branch", "-m", newName], {
+  await runGitCommand(["branch", "-m", ...(expectedBranch ? [expectedBranch] : []), newName], {
     cwd,
     timeout: 120_000,
   });
 
   const currentBranch = await getCurrentBranch(cwd);
+  if (expectedBranch && currentBranch !== newName) {
+    throw new Error(`Current branch changed while renaming ${expectedBranch}`);
+  }
   if (currentBranch) {
     rebindPaseoWorktreeChangeRequestHint(worktreeRoot, previousBranch, currentBranch);
   }

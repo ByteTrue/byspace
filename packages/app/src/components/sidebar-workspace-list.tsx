@@ -36,6 +36,7 @@ import { getSidebarRowBackdrop } from "@/components/sidebar/sidebar-row-backdrop
 import { type GestureType } from "react-native-gesture-handler";
 import { WorkspaceRenameModal } from "@/components/workspace-rename-modal";
 import { useWorkspaceClipboardActions } from "@/hooks/use-workspace-clipboard-actions";
+import * as Clipboard from "expo-clipboard";
 import { ExternalLink, Settings, MoreVertical, Plus, Trash2 } from "lucide-react-native";
 import { NestableScrollContainer } from "react-native-draggable-flatlist";
 import { DraggableList, type DraggableRenderItemInfo } from "./draggable-list";
@@ -47,7 +48,7 @@ import {
   type ToggleSidebarWorkspacePin,
 } from "@/hooks/use-sidebar-workspace-pin";
 import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sections-store";
-import { useHostFeatureMap } from "@/runtime/host-features";
+import { useHostFeature, useHostFeatureMap } from "@/runtime/host-features";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useProjectIcons } from "@/projects/icons";
 import {
@@ -151,6 +152,9 @@ import type { HostBadgeModel } from "@/hosts/appearance";
 import { useHostBadges } from "@/hosts/use-host-badges";
 import { useSidebarRowItems } from "@/components/sidebar/display-preferences/model";
 import { PullRequestStateIcon } from "@/git/pull-request-state-icon";
+
+const AGENT_WORKSPACE_RENAME_PROMPT =
+  "Based on our current conversation and the actual repository changes, rename this workspace to reflect what the work has become. First set a concise, distinctive workspace title. If the current branch is still a BySpace-generated, unpublished worktree branch and the proposed name does not conflict, also set a matching branch name. Otherwise leave the branch unchanged and explain why. Generate the title and branch independently rather than mechanically slugifying the title. Never rename a default, published, upstream-tracking, or PR/MR branch. Use the BySpace skill to apply the changes and report the final title and branch.";
 
 const workspaceKeyExtractor = (workspace: SidebarWorkspacePlacement) => workspace.workspaceKey;
 
@@ -282,6 +286,7 @@ interface WorkspaceRowInnerProps {
   onCopyBranchName?: () => void;
   onCopyPath?: () => void;
   onRename?: () => void;
+  onRenameWithAgent?: () => void;
   onMarkAsRead?: () => void;
   archiveShortcutKeys?: ShortcutKey[][] | null;
   isPinned?: boolean;
@@ -614,6 +619,7 @@ function WorkspaceRowRightGroup({
   onCopyBranchName,
   onCopyPath,
   onRename,
+  onRenameWithAgent,
   isPinned,
   onTogglePin,
 }: {
@@ -633,6 +639,7 @@ function WorkspaceRowRightGroup({
   onCopyBranchName?: () => void;
   onCopyPath?: () => void;
   onRename?: () => void;
+  onRenameWithAgent?: () => void;
   isPinned?: boolean;
   onTogglePin?: () => void;
 }) {
@@ -680,6 +687,7 @@ function WorkspaceRowRightGroup({
                 onCopyPath={onCopyPath}
                 onCopyBranchName={onCopyBranchName}
                 onRename={onRename}
+                onRenameWithAgent={onRenameWithAgent}
                 onMarkAsRead={onMarkAsRead}
                 onArchive={onArchive}
                 archiveLabel={archiveLabel}
@@ -1064,6 +1072,7 @@ function WorkspaceRowInner({
   onCopyBranchName,
   onCopyPath,
   onRename,
+  onRenameWithAgent,
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
@@ -1134,6 +1143,7 @@ function WorkspaceRowInner({
               onCopyPath={onCopyPath}
               onCopyBranchName={onCopyBranchName}
               onRename={onRename}
+              onRenameWithAgent={onRenameWithAgent}
               onArchive={onArchive}
               archiveLabel={archiveLabel}
               archiveStatus={archiveStatus}
@@ -1184,6 +1194,7 @@ function WorkspaceRowInner({
                   onCopyBranchName={onCopyBranchName}
                   onCopyPath={onCopyPath}
                   onRename={onRename}
+                  onRenameWithAgent={onRenameWithAgent}
                   isPinned={isPinned}
                   onTogglePin={onTogglePin}
                 />
@@ -1235,6 +1246,7 @@ function WorkspaceRowWithMenu({
   const toast = useToast();
   const [isHidingWorkspace, setIsHidingWorkspace] = useState(false);
   const [isRenameOpen, setIsRenameOpen] = useState(false);
+  const supportsAgentRename = useHostFeature(workspace.serverId, "workspaceAgentRename");
   const isArchiving = workspace.archivingAt !== null || isHidingWorkspace;
   const redirectAfterArchive = useCallback(() => {
     redirectIfArchivingActiveWorkspace({
@@ -1269,6 +1281,21 @@ function WorkspaceRowWithMenu({
   const handleCopyBranchName = useCallback(() => {
     clipboard.copyBranchName(workspace);
   }, [clipboard, workspace]);
+
+  const handleRenameWithAgent = useCallback(() => {
+    void Clipboard.setStringAsync(AGENT_WORKSPACE_RENAME_PROMPT)
+      .then((copied) => {
+        if (copied) {
+          toast.copied(t("sidebar.workspace.toasts.agentRenamePromptCopied"));
+        } else {
+          toast.error(t("sidebar.workspace.toasts.agentRenamePromptCopyFailed"));
+        }
+        return copied;
+      })
+      .catch(() => {
+        toast.error(t("sidebar.workspace.toasts.agentRenamePromptCopyFailed"));
+      });
+  }, [t, toast]);
 
   const handleOpenRename = useCallback(() => {
     setIsRenameOpen(true);
@@ -1330,6 +1357,7 @@ function WorkspaceRowWithMenu({
         onCopyBranchName={canCopyBranchName ? handleCopyBranchName : undefined}
         onCopyPath={handleCopyPath}
         onRename={handleOpenRename}
+        onRenameWithAgent={supportsAgentRename ? handleRenameWithAgent : undefined}
         onMarkAsRead={hasClearableAttention ? handleMarkAsRead : undefined}
         archiveShortcutKeys={selected ? archiveShortcutKeys : null}
         isPinned={isPinned}

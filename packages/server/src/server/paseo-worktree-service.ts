@@ -17,11 +17,19 @@ import {
   validateBranchSlug,
   type WorktreeConfig,
 } from "../utils/worktree.js";
-import { getCurrentBranch, localBranchExists, renameCurrentBranch } from "../utils/checkout-git.js";
+import {
+  getBranchUpstreamRef,
+  getCheckoutStatus,
+  getCurrentBranch,
+  localBranchExists,
+  remoteBranchExists,
+  renameCurrentBranch,
+} from "../utils/checkout-git.js";
 import {
   markPaseoWorktreeFirstAgentBranchAutoNameAttempted,
   normalizeBaseRefName,
   readPaseoWorktreeMetadata,
+  recordPaseoWorktreeFirstAgentBranchAutoName,
   writePaseoWorktreeFirstAgentBranchAutoNameMetadata,
 } from "../utils/worktree-metadata.js";
 import type { WorktreeCreationIntent } from "./resolve-worktree-creation-intent.js";
@@ -54,6 +62,11 @@ export interface AttemptFirstAgentBranchAutoNameResult {
   attempted: boolean;
   renamed: boolean;
   branchName: string | null;
+}
+
+export interface RenameWorkspaceBranchResult {
+  previousBranch: string;
+  currentBranch: string;
 }
 
 export interface CreatePaseoWorktreeDeps extends CreateWorktreeCoreDeps {
@@ -158,8 +171,12 @@ export async function attemptFirstAgentBranchAutoName(options: {
     firstAgentContext: FirstAgentContext;
   }) => Promise<string | null>;
   getCurrentBranch?: typeof getCurrentBranch;
+  getBranchUpstreamRef?: typeof getBranchUpstreamRef;
+  remoteBranchExists?: typeof remoteBranchExists;
   renameCurrentBranch?: typeof renameCurrentBranch;
   localBranchExists?: typeof localBranchExists;
+  paseoHome?: string;
+  worktreesRoot?: string;
 }): Promise<AttemptFirstAgentBranchAutoNameResult> {
   const firstAgentContext = options.firstAgentContext;
   if (!firstAgentContext || !buildAgentBranchNameSeed(firstAgentContext)) {
@@ -200,28 +217,159 @@ export async function attemptFirstAgentBranchAutoName(options: {
   if (!validation.valid || branchName === placeholderBranchName) {
     return { attempted: true, renamed: false, branchName: null };
   }
-  if ((await getCurrentBranchImpl(options.cwd)) !== placeholderBranchName) {
-    return { attempted: true, renamed: false, branchName: null };
-  }
+  return runWithGitCommandPriority("high", async () => {
+    const localBranchExistsImpl = options.localBranchExists ?? localBranchExists;
+    const targetName = await findAvailableBranchName({
+      cwd: options.cwd,
+      desiredName: branchName,
+      placeholderBranchName,
+      localBranchExists: localBranchExistsImpl,
+    });
+    if (!targetName) {
+      return { attempted: true, renamed: false, branchName: null };
+    }
 
-  const localBranchExistsImpl = options.localBranchExists ?? localBranchExists;
-  const targetName = await findAvailableBranchName({
-    cwd: options.cwd,
-    desiredName: branchName,
-    placeholderBranchName,
-    localBranchExists: localBranchExistsImpl,
+    if (
+      !(await isInitialAutoBranchRenameStillSafe({
+        cwd: options.cwd,
+        placeholderBranchName,
+        getCurrentBranch: getCurrentBranchImpl,
+        getBranchUpstreamRef: options.getBranchUpstreamRef,
+        remoteBranchExists: options.remoteBranchExists,
+        paseoHome: options.paseoHome,
+        worktreesRoot: options.worktreesRoot,
+      }))
+    ) {
+      return { attempted: true, renamed: false, branchName: null };
+    }
+
+    const renameCurrentBranchImpl = options.renameCurrentBranch ?? renameCurrentBranch;
+    const renamedBranch = await renameCurrentBranchImpl(
+      options.cwd,
+      targetName,
+      placeholderBranchName,
+    );
+    const currentBranch = renamedBranch.currentBranch ?? targetName;
+    recordPaseoWorktreeFirstAgentBranchAutoName(options.cwd, currentBranch);
+    return { attempted: true, renamed: true, branchName: currentBranch };
   });
-  if (!targetName) {
-    return { attempted: true, renamed: false, branchName: null };
+}
+
+async function isInitialAutoBranchRenameStillSafe(options: {
+  cwd: string;
+  placeholderBranchName: string;
+  getCurrentBranch: typeof getCurrentBranch;
+  getBranchUpstreamRef?: typeof getBranchUpstreamRef;
+  remoteBranchExists?: typeof remoteBranchExists;
+  paseoHome?: string;
+  worktreesRoot?: string;
+}): Promise<boolean> {
+  let currentMetadata: ReturnType<typeof readPaseoWorktreeMetadata>;
+  try {
+    currentMetadata = readPaseoWorktreeMetadata(options.cwd);
+  } catch {
+    return false;
+  }
+  if (
+    !currentMetadata ||
+    currentMetadata.changeRequestLookupTarget?.changeRequestNumber !== undefined
+  ) {
+    return false;
   }
 
-  const renameCurrentBranchImpl = options.renameCurrentBranch ?? renameCurrentBranch;
-  const renamedBranch = await renameCurrentBranchImpl(options.cwd, targetName);
-  return {
-    attempted: true,
-    renamed: true,
-    branchName: renamedBranch.currentBranch ?? targetName,
-  };
+  let currentBranch: string | null;
+  let upstreamRef: string | null;
+  if (options.paseoHome || options.worktreesRoot) {
+    const status = await getCheckoutStatus(options.cwd, {
+      paseoHome: options.paseoHome,
+      worktreesRoot: options.worktreesRoot,
+    });
+    if (!status.isGit || !status.isPaseoOwnedWorktree) {
+      return false;
+    }
+    currentBranch = status.currentBranch;
+    upstreamRef = status.upstreamRef;
+  } else {
+    currentBranch = await options.getCurrentBranch(options.cwd);
+    const getBranchUpstreamRefImpl = options.getBranchUpstreamRef ?? getBranchUpstreamRef;
+    upstreamRef = await getBranchUpstreamRefImpl(options.cwd, options.placeholderBranchName);
+  }
+
+  const remoteBranchExistsImpl = options.remoteBranchExists ?? remoteBranchExists;
+  return (
+    currentBranch === options.placeholderBranchName &&
+    !upstreamRef &&
+    !(await remoteBranchExistsImpl(options.cwd, options.placeholderBranchName))
+  );
+}
+
+function getEligiblePaseoGeneratedBranchName(
+  metadata: ReturnType<typeof readPaseoWorktreeMetadata>,
+): string | null {
+  if (!metadata || metadata.version !== 2 || !metadata.firstAgentBranchAutoName) {
+    return null;
+  }
+  const autoName = metadata.firstAgentBranchAutoName;
+  return autoName.status === "attempted"
+    ? (autoName.renamedBranchName ?? autoName.placeholderBranchName)
+    : autoName.placeholderBranchName;
+}
+
+export async function renameWorkspaceBranch(options: {
+  cwd: string;
+  newBranchName: string;
+  paseoHome?: string;
+  worktreesRoot?: string;
+}): Promise<RenameWorkspaceBranchResult> {
+  const validation = validateBranchSlug(options.newBranchName);
+  if (!validation.valid) {
+    throw new Error(validation.error);
+  }
+  const expectedCurrentBranch = await getCurrentBranch(options.cwd);
+
+  return runWithGitCommandPriority("high", async () => {
+    const status = await getCheckoutStatus(options.cwd, {
+      paseoHome: options.paseoHome,
+      worktreesRoot: options.worktreesRoot,
+    });
+    if (!status.isGit || !status.isPaseoOwnedWorktree || !status.currentBranch) {
+      throw new Error("Branch rename is limited to BySpace-owned worktree branches");
+    }
+    if (status.currentBranch !== expectedCurrentBranch) {
+      throw new Error("Current branch changed before it could be renamed");
+    }
+
+    const metadata = readPaseoWorktreeMetadata(status.repoRoot);
+    const eligibleBranchName = getEligiblePaseoGeneratedBranchName(metadata);
+    if (!eligibleBranchName || status.currentBranch !== eligibleBranchName) {
+      throw new Error("Branch rename is limited to the current BySpace-generated worktree branch");
+    }
+    if (
+      metadata?.changeRequestLookupTarget?.changeRequestNumber !== undefined ||
+      status.upstreamRef ||
+      (await remoteBranchExists(options.cwd, status.currentBranch))
+    ) {
+      throw new Error("Published branches cannot be renamed");
+    }
+    if (await localBranchExists(options.cwd, options.newBranchName)) {
+      throw new Error(`Branch already exists: ${options.newBranchName}`);
+    }
+    if (await remoteBranchExists(options.cwd, options.newBranchName)) {
+      throw new Error(`Remote branch already exists: ${options.newBranchName}`);
+    }
+
+    const renamed = await renameCurrentBranch(
+      options.cwd,
+      options.newBranchName,
+      status.currentBranch,
+    );
+    if (!renamed.previousBranch || !renamed.currentBranch) {
+      throw new Error("Branch rename did not produce a named branch");
+    }
+    markPaseoWorktreeFirstAgentBranchAutoNameAttempted(status.repoRoot);
+    recordPaseoWorktreeFirstAgentBranchAutoName(status.repoRoot, renamed.currentBranch);
+    return { previousBranch: renamed.previousBranch, currentBranch: renamed.currentBranch };
+  });
 }
 
 const MAX_BRANCH_NAME_SUFFIX_ATTEMPTS = 50;

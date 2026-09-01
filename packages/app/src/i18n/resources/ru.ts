@@ -1186,6 +1186,7 @@ export const ru: TranslationResources = {
         copyPath: "Копировать путь",
         copyBranchName: "Скопировать имя ветки",
         rename: "Переименовать рабочее пространство",
+        renameWithAgent: "Переименовать с помощью агента",
         pin: "Закрепить вверху",
         unpin: "Открепить",
         archive: "Архивировать",
@@ -1210,6 +1211,9 @@ export const ru: TranslationResources = {
         workspacePathUnavailable: "Путь к рабочему пространству недоступен",
         pathCopied: "Путь скопирован",
         branchNameCopied: "Имя ветки скопировано",
+        agentRenamePromptCopied:
+          "Промпт скопирован. Вставьте его агенту, который лучше всего понимает это рабочее пространство.",
+        agentRenamePromptCopyFailed: "Не удалось скопировать промпт",
         hostDisconnected: "Хост не подключён",
         hideFailed: "Не удалось скрыть рабочее пространство",
         archiveFailed: "Не удалось архивировать рабочее пространство",

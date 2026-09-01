@@ -1181,6 +1181,7 @@ export const en = {
         rename: "Rename workspace",
         pin: "Pin to top",
         unpin: "Unpin",
+        renameWithAgent: "Rename with agent",
         archive: "Archive",
         archiveWorkspace: "Archive workspace",
         hideFromSidebar: "Hide from sidebar",
@@ -1203,6 +1204,9 @@ export const en = {
         workspacePathUnavailable: "Workspace path not available",
         pathCopied: "Path copied",
         branchNameCopied: "Branch name copied",
+        agentRenamePromptCopied:
+          "Prompt copied. Paste it into the agent that best understands this workspace.",
+        agentRenamePromptCopyFailed: "Failed to copy prompt",
         hostDisconnected: "Host is not connected",
         hideFailed: "Failed to hide workspace",
         archiveFailed: "Failed to archive workspace",

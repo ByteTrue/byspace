@@ -1197,6 +1197,7 @@ export const ptBR: TranslationResources = {
         rename: "Renomear workspace",
         pin: "Fixar no topo",
         unpin: "Desafixar",
+        renameWithAgent: "Renomear com um agente",
         archive: "Arquivar",
         archiveWorkspace: "Arquivar workspace",
         hideFromSidebar: "Ocultar da barra lateral",
@@ -1219,6 +1220,9 @@ export const ptBR: TranslationResources = {
         workspacePathUnavailable: "Caminho do workspace indisponível",
         pathCopied: "Caminho copiado",
         branchNameCopied: "Nome da branch copiado",
+        agentRenamePromptCopied:
+          "Prompt copiado. Cole-o no agente que melhor entende este workspace.",
+        agentRenamePromptCopyFailed: "Falha ao copiar o prompt",
         hostDisconnected: "Host não está conectado",
         hideFailed: "Falha ao ocultar workspace",
         archiveFailed: "Falha ao arquivar workspace",

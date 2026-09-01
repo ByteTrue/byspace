@@ -1177,6 +1177,7 @@ export const ko: TranslationResources = {
         copyPath: "경로 복사",
         copyBranchName: "브랜치 이름 복사",
         rename: "워크스페이스 이름 변경",
+        renameWithAgent: "에이전트로 이름 바꾸기",
         pin: "상단에 고정",
         unpin: "고정 해제",
         archive: "보관",
@@ -1201,6 +1202,9 @@ export const ko: TranslationResources = {
         workspacePathUnavailable: "워크스페이스 경로를 사용할 수 없습니다",
         pathCopied: "경로가 복사되었습니다",
         branchNameCopied: "브랜치 이름이 복사되었습니다",
+        agentRenamePromptCopied:
+          "프롬프트가 복사되었습니다. 이 워크스페이스를 가장 잘 이해하는 에이전트에게 붙여 넣으세요.",
+        agentRenamePromptCopyFailed: "프롬프트를 복사하지 못했습니다",
         hostDisconnected: "호스트가 연결되어 있지 않습니다",
         hideFailed: "워크스페이스를 숨기지 못했습니다",
         archiveFailed: "워크스페이스를 보관하지 못했습니다.",

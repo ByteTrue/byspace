@@ -1206,6 +1206,7 @@ export const es: TranslationResources = {
         rename: "Cambiar nombre del espacio de trabajo",
         pin: "Anclar arriba",
         unpin: "Desanclar",
+        renameWithAgent: "Renombrar con un agente",
         archive: "Archivo",
         archiveWorkspace: "Archivar espacio de trabajo",
         hideFromSidebar: "Ocultar de la barra lateral",
@@ -1228,6 +1229,9 @@ export const es: TranslationResources = {
         workspacePathUnavailable: "RutaWorkspaceno disponible",
         pathCopied: "Ruta copiada",
         branchNameCopied: "Nombre de la sucursal copiado",
+        agentRenamePromptCopied:
+          "Prompt copiado. Pégalo en el agente que mejor entienda este espacio de trabajo.",
+        agentRenamePromptCopyFailed: "No se pudo copiar el prompt",
         hostDisconnected: "Hostno está conectado",
         hideFailed: "No se pudo ocultar el espacio de trabajo",
         archiveFailed: "No se pudo archivar el espacio de trabajo",

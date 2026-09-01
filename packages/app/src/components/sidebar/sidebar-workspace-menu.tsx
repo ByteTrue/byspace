@@ -10,6 +10,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  Sparkles,
   Tag,
 } from "lucide-react-native";
 import { isWeb } from "@/constants/platform";
@@ -56,10 +57,14 @@ const ThemedPencil = withUnistyles(Pencil);
 const ThemedCircleCheck = withUnistyles(CircleCheck);
 const ThemedPin = withUnistyles(Pin);
 const ThemedPinOff = withUnistyles(PinOff);
+const ThemedSparkles = withUnistyles(Sparkles);
 const ThemedTag = withUnistyles(Tag);
 
 const copyLeadingIcon = <ThemedCopy size={14} uniProps={foregroundMutedColorMapping} />;
 const renameLeadingIcon = <ThemedPencil size={14} uniProps={foregroundMutedColorMapping} />;
+const renameWithAgentLeadingIcon = (
+  <ThemedSparkles size={14} uniProps={foregroundMutedColorMapping} />
+);
 const markAsReadLeadingIcon = (
   <ThemedCircleCheck size={14} uniProps={foregroundMutedColorMapping} />
 );
@@ -84,6 +89,7 @@ export interface SidebarWorkspaceMenuProps {
   onCopyPath?: () => void;
   onCopyBranchName?: () => void;
   onRename?: () => void;
+  onRenameWithAgent?: () => void;
   onMarkAsRead?: () => void;
   onArchive: () => void;
   archiveLabel?: string;
@@ -131,6 +137,7 @@ function SidebarWorkspaceMenuItems({
   onCopyPath,
   onCopyBranchName,
   onRename,
+  onRenameWithAgent,
   onMarkAsRead,
   onArchive,
   archiveLabel,
@@ -181,6 +188,16 @@ function SidebarWorkspaceMenuItems({
           onSelect={onRename}
         >
           {t("sidebar.workspace.actions.rename")}
+        </WorkspaceMenuItem>
+      ) : null}
+      {onRenameWithAgent ? (
+        <WorkspaceMenuItem
+          surface={surface}
+          testID={`sidebar-workspace-menu-rename-with-agent-${workspaceKey}`}
+          leading={renameWithAgentLeadingIcon}
+          onSelect={onRenameWithAgent}
+        >
+          {t("sidebar.workspace.actions.renameWithAgent")}
         </WorkspaceMenuItem>
       ) : null}
       {onMarkAsRead ? (
@@ -242,6 +259,7 @@ export function SidebarWorkspaceMenu({
   onCopyPath,
   onCopyBranchName,
   onRename,
+  onRenameWithAgent,
   onMarkAsRead,
   onArchive,
   archiveLabel,
@@ -287,6 +305,7 @@ export function SidebarWorkspaceMenu({
           onCopyPath={onCopyPath}
           onCopyBranchName={onCopyBranchName}
           onRename={onRename}
+          onRenameWithAgent={onRenameWithAgent}
           onMarkAsRead={onMarkAsRead}
           onArchive={onArchive}
           archiveLabel={archiveLabel}
@@ -319,6 +338,7 @@ export function SidebarWorkspaceContextMenu({
   onCopyPath,
   onCopyBranchName,
   onRename,
+  onRenameWithAgent,
   onMarkAsRead,
   onArchive,
   archiveLabel,
@@ -398,6 +418,7 @@ export function SidebarWorkspaceContextMenu({
           onCopyPath={onCopyPath}
           onCopyBranchName={onCopyBranchName}
           onRename={onRename}
+          onRenameWithAgent={onRenameWithAgent}
           onMarkAsRead={onMarkAsRead}
           onArchive={onArchive}
           archiveLabel={archiveLabel}

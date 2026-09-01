@@ -34,6 +34,7 @@ const PaseoWorktreeMetadataV2Schema = z.object({
         status: z.literal("attempted"),
         placeholderBranchName: z.string().min(1),
         attemptedAt: z.string().min(1),
+        renamedBranchName: z.string().min(1).optional(),
       }),
     ])
     .optional(),
@@ -297,6 +298,30 @@ export function markPaseoWorktreeFirstAgentBranchAutoNameAttempted(
       status: "attempted",
       placeholderBranchName: current.firstAgentBranchAutoName.placeholderBranchName,
       attemptedAt: options.attemptedAt ?? new Date().toISOString(),
+    },
+  };
+  writePaseoWorktreeMetadataFile(worktreeRoot, next);
+  return next;
+}
+
+export function recordPaseoWorktreeFirstAgentBranchAutoName(
+  worktreeRoot: string,
+  renamedBranchName: string,
+): PaseoWorktreeMetadata | null {
+  const current = readPaseoWorktreeMetadata(worktreeRoot);
+  if (
+    !current ||
+    current.version !== 2 ||
+    current.firstAgentBranchAutoName?.status !== "attempted"
+  ) {
+    return current;
+  }
+
+  const next: PaseoWorktreeMetadata = {
+    ...current,
+    firstAgentBranchAutoName: {
+      ...current.firstAgentBranchAutoName,
+      renamedBranchName,
     },
   };
   writePaseoWorktreeMetadataFile(worktreeRoot, next);

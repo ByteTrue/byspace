@@ -758,6 +758,7 @@ function createPaseoWorktreeForMcpTest(options: {
       options.broadcasts.push(workspaceId);
     },
     logger: createTestLogger(),
+    paseoHome: options.paseoHome,
     generateWorkspaceName: options.generateWorkspaceName ?? (async () => null),
   });
 
@@ -5830,5 +5831,42 @@ describe("agent snapshot MCP serialization", () => {
     expect(content).not.toContain("[User] u2");
     expect(content).not.toContain("second answer");
     expect(content).not.toContain("first answer");
+  });
+});
+
+describe("rename_branch MCP tool", () => {
+  it("renames the caller's current workspace branch through the guarded service", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    spies.agentManager.getAgent.mockReturnValue({
+      id: "parent-agent",
+      cwd: "/tmp/byspace-worktree",
+      workspaceId: "wks_current",
+    } as ManagedAgent);
+    const renameWorkspaceBranch = vi.fn().mockResolvedValue({
+      previousBranch: "quiet-otter",
+      currentBranch: "focused-rename",
+    });
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager: createClaudeOnlyManager(),
+      callerAgentId: "parent-agent",
+      renameWorkspaceBranch,
+      logger: createTestLogger(),
+    });
+
+    const response = await registeredTool(server, "rename_branch").handler({
+      branchName: "focused-rename",
+    });
+
+    expect(renameWorkspaceBranch).toHaveBeenCalledWith({
+      cwd: "/tmp/byspace-worktree",
+      newBranchName: "focused-rename",
+    });
+    expect(response.structuredContent).toEqual({
+      success: true,
+      previousBranch: "quiet-otter",
+      currentBranch: "focused-rename",
+    });
   });
 });
