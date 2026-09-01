@@ -1,6 +1,6 @@
 # 保留需求后续入口索引
 
-本索引只为 Owner 已确认保留的 34 个原子需求建立最小后续入口，不恢复旧代码，也不创建同时处于执行状态的子任务。实际开始某一入口时，再按对应 skill 建立临时 work 游标、复现/验收并设计当前 `main` 上的最小实现。
+本索引只为 Owner 已确认保留的 33 个原子需求建立最小后续入口，不恢复旧代码，也不创建同时处于执行状态的子任务。实际开始某一入口时，再按对应 skill 建立临时 work 游标、复现/验收并设计当前 `main` 上的最小实现。T15 已取消并留在历史 catalog 中，不进入交付索引。
 
 ## Terminal
 
@@ -13,7 +13,7 @@
 | TERM-05 · Bracketed paste 恢复与 ConPTY fallback | `cs-issue` | T10、T12                | 证明 attach/restore 后 DECSET 2004 正确；Windows 丢失 mode 时仍对多行输入强制 framing。                     |
 | TERM-06 · Terminal 剪贴板图片粘贴                | `cs-feat`  | T11                     | 通过既有 binary upload 写入 daemon 临时文件，把真实远端路径作为单个 paste block 交给 Pi。                   |
 | TERM-07 · Terminal agent activity 与 Pi          | `cs-feat`  | T13、T14、T17           | 保持 provider 独立 hooks，恢复 Pi extension/profile，并保证状态请求串行、有界合并、latest-wins 与失败续传。 |
-| TERM-08 · 呈现默认值与 profile 入口              | `cs-issue` | T15、T18                | 验收字体、字号、高亮、主题默认值以及 Manage Terminal Profiles 的当前 Host 精确导航；只修复不满足项。        |
+| TERM-08 · Terminal profile 入口                  | `cs-issue` | T18                     | Manage Terminal Profiles 精确打开所选 Host 的 Terminals 设置；不改动 Appearance 主题、字体或高亮。          |
 
 ## Relay 与配对
 
@@ -55,7 +55,7 @@
 
 ## 覆盖校验
 
-- 保留原子 ID：34 / 34，且每个只映射一次。
+- 保留原子 ID：33 / 33，且每个只映射一次。
 - 后续入口：21 个。
 - 不做条目与 O01–O05 不创建后续入口。
 - 本索引不代表实施顺序、实现授权、commit 授权或远端发布授权。

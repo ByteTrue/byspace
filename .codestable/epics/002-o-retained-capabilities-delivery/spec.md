@@ -4,12 +4,13 @@ status: active
 kind: epic
 owner_decision: approved
 approved_at: 2026-08-31T05:01:54Z
-amended_at: 2026-08-31T07:13:41Z
+amended_at: 2026-09-01T06:36:33Z
 approval_evidence:
   owner: "“批准 Epic，按推荐策略执行”（2026-08-31）"
   parallel_owner: "“确认”并选择推荐方案 A：按 worker 完成顺序串行集成（2026-08-31）"
   review: "bounded-parallel contract review lineage 9ebed510-b74e-4eb9-b796-c6fa1d9a29e6 round 1 needs_changes; resumed run 8aea6ea4-463f-42eb-a90c-febe642a68bb round 2 passed with 0 blocking/important"
-  verification: "34/34 ID and 21/21 ITEM coverage preserved; packet 82d4075996b910837e4d370cc3e7478814cbf49847287431843ba4eccf1a5a68 and diff from 5dc678bdefb77e52fe729c00b8034eb89ad7f7de verified"
+  verification: "33/33 retained IDs remain uniquely mapped to 21/21 ITEMs after the Owner cancelled T15"
+  scope_correction: "Owner approved the consolidated correction plan on 2026-09-01: restore Appearance, retain T18, document T05 boundaries and opt-in Windows CI, and require explicit Pi opt-in for legacy configs"
 source_epic: ../001-o-legacy-cs-requirements-triage/spec.md
 source_revision: f592e54bf43e5501383224891053d2e0a9dfbf45
 created_at: 2026-08-31T04:38:14Z
@@ -19,13 +20,13 @@ created_at: 2026-08-31T04:38:14Z
 
 ## 背景
 
-[`001-o-legacy-cs-requirements-triage`](../001-o-legacy-cs-requirements-triage/spec.md) 已由 Owner 验收，并把 78 份历史文档归并为 77 个原子决策 ID。Owner 最终保留 34 项，并在 [`retained-delivery-index.md`](../001-o-legacy-cs-requirements-triage/retained-delivery-index.md) 中唯一映射为 21 个后续入口。
+[`001-o-legacy-cs-requirements-triage`](../001-o-legacy-cs-requirements-triage/spec.md) 已由 Owner 验收，并把 78 份历史文档归并为 77 个原子决策 ID。Owner 最终保留 33 项，并在 [`retained-delivery-index.md`](../001-o-legacy-cs-requirements-triage/retained-delivery-index.md) 中唯一映射为 21 个后续入口。T15 于 2026-09-01 被明确取消。
 
 本 Epic 负责在当前 `main` 上按依赖顺序交付这 21 个入口。它不重新讨论已剔除需求，不把“历史曾实现”当作可直接恢复的补丁，也不把所有能力塞进一个巨型实现分支。
 
 ## 目标
 
-1. 完成 34 / 34 个 Owner 保留的原子需求，且每个只由一个入口负责。
+1. 完成 33 / 33 个 Owner 保留的原子需求，且每个只由一个入口负责。
 2. 先建立安全、版本路由和性能基线，再修改依赖这些基础的功能。
 3. 每个入口独立复现或验收、独立实现、独立验证、独立审查。
 4. 优先复用当前 `main` 的架构和上游已有能力；旧快照只提供意图与历史证据。
@@ -33,7 +34,7 @@ created_at: 2026-08-31T04:38:14Z
 
 ## 非目标
 
-- 恢复盘点 Epic 中已明确不做的 38 个产品 ID或 O01–O05。
+- 恢复盘点 Epic 中已明确不做的 39 个产品 ID 或 O01–O05。
 - 删除与“不做”条目对应但上游当前仍提供的功能。
 - 重放旧 CodeStable 文档中的实现步骤或整块 cherry-pick reset 前代码。
 - 在本 Epic 规划阶段修改 runtime、协议、UI、Cloudflare Worker 或发布基础设施。
@@ -43,14 +44,14 @@ created_at: 2026-08-31T04:38:14Z
 
 保留集合固定为：
 
-- Terminal：T01–T18。
+- Terminal：T01–T14、T16–T18。
 - Relay：R02、R03。
 - Agent：A04–A09。
 - Workspace：W01、W02、W04、W14，以及 W05 中仅“hover 展示该 Workspace 下全部 Agent 的精确状态”。
 - Compact UI：U03、U05。
 - Hosted release channel：B01。
 
-W05 不允许扩大为 Project 单一分组、attention 优先排序或其他侧栏重构。任何新增需求都必须另走 `cs-feat`，不得借本 Epic 顺带加入。
+T15 保留在历史 catalog 中作为 Owner 已取消项：不得修改或删除现有 Appearance 主题、语法高亮、UI/code 字体、字号或持久化。W05 不允许扩大为 Project 单一分组、attention 优先排序或其他侧栏重构。任何新增需求都必须另走 `cs-feat`，不得借本 Epic 顺带加入。
 
 ## 执行原则
 
@@ -98,7 +99,7 @@ Owner 在批准本 Epic 后追加确认有界并行 revision：
 | ---- | ---------------------------- | ---------- | -------------------------------------------- |
 | 1    | 发布通道路由与远程连接安全   | ITEM-01–03 | 本 Epic 已批准并合入 `main`                  |
 | 2    | Terminal 性能与恢复基础      | ITEM-04–06 | Wave 1 已合入；隔离 benchmark 环境可用       |
-| 3    | Terminal 功能与呈现          | ITEM-07–11 | Wave 2 基线和恢复不变量通过                  |
+| 3    | Terminal 功能与 profile      | ITEM-07–11 | Wave 2 基线和恢复不变量通过                  |
 | 4    | Agent、Session 与 Timeline   | ITEM-12–15 | Wave 3 已合入；Timeline 权威路径保持单 owner |
 | 5    | Workspace、侧栏与 Compact UI | ITEM-16–21 | Wave 4 已合入；相关平台 QA 环境可用          |
 
@@ -142,15 +143,15 @@ Owner 在批准本 Epic 后追加确认有界并行 revision：
 - **依赖：** ITEM-03
 - **交付：** 建立当前 Direct、Relay、Windows 逐键和组合 workload 的可重复分段基线，定位并修复可复现瓶颈。
 - **验收：** Node benchmark、浏览器分段指标和 Windows 实机/等价证据分别记录 before/after；无字符丢失、乱序、额外 snapshot 或主线程秒级停顿。
-- **约束：** 使用随机端口和隔离 `BYSPACE_HOME`，绝不操作 6777 daemon；不得靠降低测试负载或删除测试达标。
+- **约束：** 使用随机端口和隔离 `BYSPACE_HOME`，绝不操作 6777 daemon；不得靠降低测试负载或删除测试达标。Windows 实机证据保留在 shared CI 的手动 opt-in `terminal_performance` job 中；默认 PR CI 不运行，且不接收部署权限、secret 或发布输入。
 
 ### ITEM-05 · TERM-02 · Retained renderer 与 revision resume
 
 - **Skill：** `cs-issue`
 - **需求：** T03、T04、T05
 - **依赖：** ITEM-04
-- **交付：** 切换首帧布局正确；focused workspace 中 retained terminal 保持 renderer/stream；恢复按 revision 补缺口并保留 10,000 行目标历史。
-- **验收：** tab/workspace 切换、隐藏期间输出、断线恢复、超出窗口和 resize 序列测试通过；没有固定 200 行重放造成的丢失或重复。
+- **交付：** 切换首帧布局正确；focused workspace 中 retained terminal 保持 renderer/stream；同一 renderer 的正常恢复按 revision 补缺口并保留客户端 10,000 行历史。
+- **验收：** tab/workspace 切换、隐藏期间输出、断线恢复、超出窗口和 resize 序列测试通过；gap 不可恢复或必须创建新 renderer 时回退权威 snapshot，最多携带 1,000 行 scrollback，不产生固定 200 行重放造成的丢失或重复。
 - **约束：** 不破坏 daemon-owned size claimant、backpressure gate 或 native retained-panel 生命周期。
 
 ### ITEM-06 · TERM-05 · Bracketed paste 恢复与 ConPTY fallback
@@ -162,7 +163,7 @@ Owner 在批准本 Epic 后追加确认有界并行 revision：
 - **验收：** mode-on、mode-off、restore、Windows fallback、单行输入和 escape sequence 测试通过；逐键输入行为不变。
 - **约束：** fallback 只覆盖可证明的 ConPTY 边界，不把所有输入无条件改成 paste。
 
-## Wave 3：Terminal 功能与呈现
+## Wave 3：Terminal 功能与 profile
 
 ### ITEM-07 · TERM-03 · 通知输出摘要
 
@@ -198,16 +199,16 @@ Owner 在批准本 Epic 后追加确认有界并行 revision：
 - **依赖：** ITEM-07
 - **交付：** 保持 provider 独立 hooks，加入 Pi extension/profile，并使 activity 请求串行、有界合并、latest-wins、失败后续传。
 - **验收：** Claude、Codex、OpenCode 既有行为不回退；Pi running/idle/needs-input 与中断序列可见；并发和失败测试证明无请求风暴及最终状态丢失。
-- **约束：** 复用 provider registry 和单一 `TerminalActivityTracker`；修改 Pi extension 前按 Pi 官方本机文档核对 API。
+- **约束：** 复用 provider registry 和单一 `TerminalActivityTracker`；修改 Pi extension 前按 Pi 官方本机文档核对 API。缺少 provider map 的历史 global `true` 只继承给 Claude、Codex、OpenCode，Pi 必须由用户显式启用；旧客户端后续主动切换 global 开关也只更新这三个历史 provider，并保留显式 Pi 或未来 provider 设置。
 
-### ITEM-11 · TERM-08 · 呈现默认值与 profile 入口
+### ITEM-11 · TERM-08 · Terminal profile 入口
 
 - **Skill：** `cs-issue`
-- **需求：** T15、T18
+- **需求：** T18
 - **依赖：** ITEM-08、ITEM-09、ITEM-10
-- **交付：** 验收字体、字号、高亮、主题默认值和 Manage Terminal Profiles 到当前 Host 的精确导航，仅修复不满足项。
-- **验收：** Web、native、Desktop 的默认/覆盖/系统主题行为以及目标 Host 导航通过；现有满足项不重写。
-- **约束：** 不把 React Native/Unistyles theme proxy 样式提升到 render 外。
+- **交付：** Manage Terminal Profiles 精确打开所选 Host 的 Terminals 设置。
+- **验收：** 从 New Workspace 入口进入所选 Host 的 `/settings/host/terminals`，并由 exact-host E2E 证明没有打开其他 Host。
+- **约束：** T15 已取消；不得修改 Appearance 主题、语法高亮、UI/code 字体、字号、默认值或持久化。
 
 ## Wave 4：Agent、Session 与 Timeline
 
@@ -337,7 +338,7 @@ Owner 在批准本 Epic 后追加确认有界并行 revision：
 
 ## Epic 验收标准
 
-- 21 / 21 个入口全部完成，覆盖 34 / 34 个保留 ID，且没有重复或遗漏。
+- 21 / 21 个入口全部完成，覆盖 33 / 33 个保留 ID，且没有重复或遗漏。
 - 5 个 Wave 均已从各自最新 `main` 开始并通过 exact-head CI。
 - Direct/Relay/Windows Terminal 有可比较的最终性能与正确性证据。
 - Stable/Beta App 与 Relay 路由、Hosted HTTPS Direct 安全边界和 pairing hostname 已通过兼容测试。
