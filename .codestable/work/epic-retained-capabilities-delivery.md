@@ -1,7 +1,7 @@
 ---
 title: 保留能力交付路线 · Work
 status: approved
-amended_at: 2026-09-01T12:04:00Z
+amended_at: 2026-09-01T12:29:00Z
 phase: executing
 spec: ../epics/002-o-retained-capabilities-delivery/spec.md
 source_revision: f592e54bf43e5501383224891053d2e0a9dfbf45
@@ -17,7 +17,7 @@ current_wave: 4
 current_item: null
 active_items: []
 blocked_by: null
-next_action: 对 Wave 4 aggregate 执行只读审查，确认 ITEM-12–15 后创建 Wave 4 PR
+next_action: 创建 Wave 4 PR，等待 exact-head CI/Docker/Nix 全绿后请求 Owner 合并批准
 ---
 
 # Epic Work: 保留能力交付路线
@@ -54,6 +54,7 @@ next_action: 对 Wave 4 aggregate 执行只读审查，确认 ITEM-12–15 后�
 - ITEM-14 已按归档 `f2e063ba3` 的核心实现适配当前架构：新增可选 `workspaceAgentRename` capability、copy-only Workspace 菜单、独立 `rename_branch` Agent tool 与 BySpace-owned branch 的 ownership/published/upstream/conflict/TOCTOU guards；title 与 branch 保持独立。Focused server 310/310、i18n 36/36、Browser E2E 3/3、Typecheck/Lint/Format 全绿；fresh reviewer `dd817438-6572-4189-81af-5beb035ca303` 返回 0 P0/P1，passing trace 与菜单截图 `/tmp/byspace-wave4-item14-menu.jpg`（SHA-256 `86f62c4f…28e8`）已保存，语义原子 commit `6f0b93abf` 已串行集成。
 - ITEM-15 预热审计曾错误推导出新的 daemon readiness analyzer/token/transaction；回查归档 issue 与 commit `6f9bfdd40` 后纠正：A04 原始产品边界是 Project Settings 只准备未发送的 Agent draft，实际只读检查、确认、保留式修改、回滚和 clean-worktree 验证均由 bundled `byspace-project-setup` Skill 与当前 Agent 执行，不新增配置生成 RPC 或 daemon 技术栈推断。
 - ITEM-15 已按该边界完成：optional `projectSetupSkill` capability、Project Settings capability gate、bundled `byspace-project-setup` Skill，以及 project/Host/cwd scoped 的独立未发送 draft。Custom skill selection 会保留既有选择并只追加所需 Skill，安装/确认失败均阻断导航；Browser E2E 2/2、i18n 36/36、server build、Typecheck/Lint/Format 全绿。初审唯一 P1 已由 follow-up reviewer `d7895e91-19ea-48c1-9ffc-35b5be17fc91` 确认关闭；18-path 收割 manifest `bf0e6762…472962b` 字节一致，语义原子 commit `c1ac7ceaa` 已串行集成。UI 证据保存于 `/tmp/byspace-item15-ui-proof/`。
+- Wave 4 双路 aggregate review 已完成。Scope reviewer 的 session-import wire-shape 条件 P1 经 base/history 核对关闭：Wave 4 base 已接受 legacy/new 双形状，new shape 来自 `5b884aee0`，当前 UI 使用的 `importSessionWorkspaceTarget` capability 后于该 shape 引入；本 Wave 仅复用既有 import path。Protocol reviewer 的 `checkout.rename_branch` 来源 P1 也由 base..head diff 证实为 pre-existing 且本 Wave 零改动，ITEM-14 MCP 工具不依赖该 RPC。Wave 4 diff 共 39 paths，无 Appearance/theme/highlight/font 路径；两项 P1 均不需要产品代码修正，aggregate gate 结论为 PASS with report-only P2。
 - Windows 性能验证继续使用 shared CI 中仅手动启用的 `terminal_performance` job；默认 PR CI 不运行该 job，且 job 无部署权限、secret 或发布输入。Owner 已于 2026-09-01 明确接受该路径。
 - Wave 3 PR #18 首个 exact-head CI run `33472512893` 暴露两个测试夹具缺口：App 的 stub Terminal 缺 `hasSelection()`，Server 的 provider-name bootstrap assertion 因新增短 ID `pi` 误匹配 `pino` / `pipe` / `/api`。父流程分别本地 RED 复现并做测试侧最小修正；T15 纠偏后新的 exact-head 门槛全绿并完成合并。
 
@@ -191,3 +192,4 @@ next_action: 对 Wave 4 aggregate 执行只读审查，确认 ITEM-12–15 后�
 - 2026-09-01：ITEM-14 worker 在无写入时触发 stop-to-serial。只读审计逐项比较历史 issue 与 commit `f2e063ba3`，确认完整 A09 需要 optional capability、copy-only 菜单、两个独立 Agent tools、Git/metadata TOCTOU guards、i18n、skill 与浏览器证据；Owner 批准推荐方案 A，合同已收窄为 ITEM-13 集成后串行实现。
 - 2026-09-01：ITEM-14 按历史 patch 基线做当前架构适配并完成 25-file 交付；focused server 310/310、i18n 36/36、Browser E2E 3/3 与全仓静态门槛全绿，fresh review 0 P0/P1，语义原子 commit `6f0b93abf` 串行集成。ITEM-15 随即回查归档 `6f9bfdd40`，否决预热 scout 新造 daemon transaction 的偏航方案，按原始 Skill + Project Settings draft 入口恢复。
 - 2026-09-01：ITEM-15 完成 capability-gated Project Settings 入口与独立未发送 Agent draft，复用现有 bundled Skill 安装/selection 事务，不新增配置生成 RPC。Fresh review 的 custom-selection P1 修复为保留既有 custom skills 并追加 `byspace-project-setup`，缺失、confirmation required 或安装失败都显性阻断导航；follow-up review PASS。Browser E2E 2/2、i18n 36/36、server build 与全仓 Typecheck/Lint/Format 全绿；18-path manifest `bf0e6762…472962b` 与隔离 worktree 字节一致，以 `c1ac7ceaa` 串行集成，Wave 4 四项全部完成并进入 aggregate review。
+- 2026-09-01：Wave 4 双路 aggregate review 完成。父流程以 `git show`、`git blame` 和 base..head path diff 关闭两项来源疑问：session import new identity shape 与 `checkout.rename_branch` RPC 均在 Wave 4 base 已存在；`importSessionWorkspaceTarget` capability 的引入晚于 new identity shape，因此当前 manual UI gate 不会把该 shape 发给更旧 Host。本 Wave protocol diff 仅追加两个 optional capability，39-path aggregate 不含 Appearance/theme/highlight/font。两名 reviewer 的条件 P1 均关闭，无 P0/P1，进入 PR 门槛。
