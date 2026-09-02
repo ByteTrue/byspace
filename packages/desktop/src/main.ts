@@ -646,6 +646,8 @@ function getWorkAreasPrimaryFirst(): Electron.Rectangle[] {
   return [primary, ...others].map((display) => display.workArea);
 }
 
+const openExternalUrl = createExternalUrlOpener({ open: shell.openExternal });
+
 async function createWindow(
   options: {
     initialRoute?: string | null;
@@ -719,6 +721,10 @@ async function createWindow(
   }
   setupDefaultContextMenu(mainWindow);
   setupDragDropPrevention(mainWindow);
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    void openExternalUrl(url).catch(() => undefined);
+    return { action: "deny" };
+  });
   mainWindow.webContents.on("will-attach-webview", (event, webPreferences, params) => {
     if (!isPaseoBrowserWebviewAttach(params)) {
       event.preventDefault();
@@ -948,7 +954,6 @@ async function bootstrap(): Promise<void> {
   registerWindowManager({ mode: DESKTOP_WINDOW_CHROME_MODE });
   registerDialogHandlers();
   registerNotificationHandlers();
-  const openExternalUrl = createExternalUrlOpener({ open: shell.openExternal });
   ipcMain.handle("paseo:opener:openUrl", (_event, value: unknown) => openExternalUrl(value));
   registerEditorTargetHandlers();
   registerBrowserAutomationIpc();

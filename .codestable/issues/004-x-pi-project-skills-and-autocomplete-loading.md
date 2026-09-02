@@ -13,7 +13,8 @@ closed: 2026-09-02
 
 - Pi 会话启动时自动注入 `--approve` 信任参数，确保 Pi 在无 TUI 的后台 RPC 模式下正常发现项目级 `.pi/skills/`（如 `cs`、`impeccable`）和 `.agents/skills/`；
 - 用户敲击 `/` 时按需触发后台命令加载，但补全浮层（Autocomplete Popover）在加载期间保持可见，并显示 `ActivityIndicator` 加载动画与文案（`正在加载 commands...` / `Loading commands...`）；
-- 数据加载完成后，加载指示器与文案自动消失，平滑呈现完整的命令与技能列表。
+- 数据加载完成后，加载指示器与文案自动消失，平滑呈现完整的命令与技能列表；
+- 桌面端主窗口统一设置 `setWindowOpenHandler`，终端与主界面所有链接点击均调用系统默认浏览器打开，不再误弹内部 Electron 网页子窗口。
 
 ## 为什么现在做 / 当前坏在哪
 
@@ -23,10 +24,7 @@ closed: 2026-09-02
 ## 方案与实现安排
 
 1. **Server 端**：在 `appendPiLaunchArgs` 中检查参数，默认追加 `--approve`（若显式指定 `--no-approve` 则不覆盖），使 Pi 子进程自动信任项目目录。
-2. **App 端**：
-   - `useAgentAutocomplete` 中移除 `!(mode === "command" && isCommandsLoading)` 对 `isVisible` 的阻塞，使浮层在命令加载中时正常显示；
-   - `resolveAutocompleteIsLoading` 在 `mode === "command"` 且 `isCommandsLoading` 为 true 时正确返回加载态；
-   - `Autocomplete` 组件在 `isLoading` 状态下使用 `ActivityIndicator` + `resolvedLoadingText` 呈现居中动画和文案。
+2. **Desktop 端**：在主窗口 `createWindow` 挂载 `mainWindow.webContents.setWindowOpenHandler`，统一调用 `openExternalUrl` 打开系统默认浏览器并 deny 内部弹窗。
 
 ## 验证与执行记录
 
