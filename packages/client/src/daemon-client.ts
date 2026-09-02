@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { CLIENT_CAPS, type ClientCapability } from "@getpaseo/protocol/client-capabilities";
 import type { AgentAttentionNotificationPayload } from "@getpaseo/protocol/agent-attention-notification";
+import { parsePluginSourceReference } from "@getpaseo/protocol/plugin-source-reference";
 import {
   AgentCreateFailedStatusPayloadSchema,
   AgentCreatedStatusPayloadSchema,
@@ -86,6 +87,7 @@ import type {
   DaemonGetStatusResponse,
   DaemonGetPairingOfferResponse,
   DaemonConfigReloadResponse,
+  DaemonPermission,
   DiagnosticsResponse,
   AgentRewindResponseMessage,
   ListTerminalsResponse,
@@ -110,6 +112,7 @@ import type {
   AgentSkillSelection,
   AgentSkillsStatus,
   AgentSkillsSaveResult,
+  HubRelationshipStatus,
 } from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -309,7 +312,7 @@ export type BrowserAutomationExecuteResponseMessage = BrowserAutomationExecuteRe
 export interface DaemonClientConfig {
   url: string;
   clientId: string;
-  clientType?: "mobile" | "browser" | "cli" | "mcp";
+  clientType?: "mobile" | "browser" | "cli" | "mcp" | "hub";
   appVersion?: string;
   runtimeGeneration?: number | null;
   password?: string;
@@ -866,6 +869,27 @@ type CorrelatedResponsePayload<TType extends CorrelatedResponseType> = Extract<
   CorrelatedResponseMessage,
   { type: TType }
 >["payload"];
+type NormalizedHubRelationshipStatus = Omit<HubRelationshipStatus, "permissions"> & {
+  permissions: DaemonPermission[];
+};
+
+// COMPAT(semanticHubPermissions): normalize legacy scope responses at the client boundary until 2027-09-15.
+function normalizeHubRelationshipResponse<
+  T extends { requestId: string; status: HubRelationshipStatus },
+>(payload: T): Omit<T, "status"> & { status: NormalizedHubRelationshipStatus } {
+  let permissions: DaemonPermission[];
+  if (payload.status.permissions) {
+    permissions = [...payload.status.permissions];
+  } else if (payload.status.scopes?.includes("hub.execution.*")) {
+    permissions = ["hub.execute"];
+  } else {
+    permissions = [];
+  }
+  return {
+    ...payload,
+    status: { ...payload.status, permissions },
+  };
+}
 
 class DaemonRpcError extends Error {
   readonly requestId: string;
@@ -4680,31 +4704,56 @@ export class DaemonClient {
     });
   }
 
-  async connectHub(hubUrl: string, token: string, requestId?: string) {
+  async connectHub(
+    hubUrl: string,
+    token: string,
+    permissions: readonly string[] = [],
+    requestId?: string,
+  ) {
     this.requireHubRelationshipSupport();
-    return this.sendCorrelatedSessionRequest({
+    const payload = await this.sendCorrelatedSessionRequest({
       requestId,
-      message: { type: "hub.management.daemon.connect.request", hubUrl, token },
+      message: { type: "hub.management.daemon.connect.request", hubUrl, token, permissions },
       responseType: "hub.management.daemon.connect.response",
     });
+    return normalizeHubRelationshipResponse(payload);
+  }
+
+  async updateHubPermissions(
+    input: { grant?: readonly string[]; revoke?: readonly string[] },
+    requestId?: string,
+  ) {
+    this.requireHubRelationshipSupport();
+    const payload = await this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "hub.management.daemon.permissions.update.request",
+        grant: input.grant ?? [],
+        revoke: input.revoke ?? [],
+      },
+      responseType: "hub.management.daemon.permissions.update.response",
+    });
+    return normalizeHubRelationshipResponse(payload);
   }
 
   async getHubStatus(requestId?: string) {
     this.requireHubRelationshipSupport();
-    return this.sendCorrelatedSessionRequest({
+    const payload = await this.sendCorrelatedSessionRequest({
       requestId,
       message: { type: "hub.management.daemon.get_status.request" },
       responseType: "hub.management.daemon.get_status.response",
     });
+    return normalizeHubRelationshipResponse(payload);
   }
 
   async disconnectHub(force = false, requestId?: string) {
     this.requireHubRelationshipSupport();
-    return this.sendCorrelatedSessionRequest({
+    const payload = await this.sendCorrelatedSessionRequest({
       requestId,
       message: { type: "hub.management.daemon.disconnect.request", force },
       responseType: "hub.management.daemon.disconnect.response",
     });
+    return normalizeHubRelationshipResponse(payload);
   }
 
   async getDaemonPairingOffer(
@@ -4950,12 +4999,19 @@ export class DaemonClient {
     source: string;
     id?: string;
     ref?: string;
-    pluginPath?: string;
   }): Promise<PluginListItem> {
     const requestId = this.createRequestId();
+    const reference = parsePluginSourceReference(input.source);
     const payload = await this.sendCorrelatedSessionRequest({
       requestId,
-      message: { type: "plugin.source.install.request", requestId, ...input },
+      message: {
+        type: "plugin.source.install.request",
+        requestId,
+        source: reference.source,
+        ...(reference.pluginPath ? { pluginPath: reference.pluginPath } : {}),
+        ...(input.id ? { id: input.id } : {}),
+        ...(input.ref ? { ref: input.ref } : {}),
+      },
       responseType: "plugin.source.install.response",
     });
     return payload.plugin;

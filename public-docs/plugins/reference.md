@@ -29,7 +29,6 @@ my-plugin/
   byspace-plugin.json
   index.ts
   main.client.tsx
-  byspace-plugin.d.ts
   package.json
   tsconfig.json
 ```
@@ -42,9 +41,10 @@ The required root manifest is `byspace-plugin.json`. It contains the default plu
 
 The entry point is `index.ts` at the plugin root. Plugin, surface, sidebar-item, workspace-panel, Command Center item, and attachment-source IDs start with a lowercase letter and contain lowercase letters, numbers, or hyphens.
 
-The generated declaration file supplies `@getpaseo/plugin`, `@getpaseo/plugin/react-native`, and
-`@getpaseo/plugin/server` types for local typechecking. BySpace supplies the runtime modules.
-Regenerate a fresh project with the matching CLI when the plugin contract changes. Existing `paseo-plugin.json` manifests remain supported, but a directory must not contain both manifest filenames.
+The generated `package.json` installs `@getpaseo/plugin` and the other host modules as development
+dependencies for local typechecking and tests. BySpace supplies their runtime instances. Consumers do
+not install them when adding the plugin. Existing `paseo-plugin.json` manifests remain supported, but
+a directory must not contain both manifest filenames.
 
 Add runtime-specific files as the plugin grows:
 
@@ -161,11 +161,12 @@ export default function contribute(plugin: PluginContext) {
 
 `PluginSurfaceProps` contains:
 
-| Field    | Meaning                                                        |
-| -------- | -------------------------------------------------------------- |
-| `theme`  | Typed `PluginTheme` color tokens for the active BySpace theme. |
-| `host`   | Selected host `id` and display `label`.                        |
-| `layout` | `compact` and the `ios`, `android`, or `web` platform.         |
+| Field        | Meaning                                                                                                                      |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `theme`      | Typed `PluginTheme` color tokens for the active BySpace theme.                                                               |
+| `host`       | Selected host `id` and display `label`.                                                                                      |
+| `layout`     | `compact` and the `ios`, `android`, or `web` platform.                                                                       |
+| `navigation` | Optional client navigation. `openAgent({ agentId })` and `openWorkspace({ workspaceId })` open targets on the selected host. |
 
 BySpace owns the route, header, close action, host picker, error boundary, and query client. The plugin owns the surface body.
 
@@ -322,6 +323,10 @@ Renderers receive `agentId`, `item`, `timestamp`, `theme`, `host`, and `layout`.
 `item.data` with the registered schema before rendering. Keep transformers synchronous and
 deterministic because BySpace reruns them while reconciling projected history.
 
+Check `navigation` before showing an action that depends on it. Older BySpace clients leave the
+capability undefined. Let BySpace own route construction so the action works without reloading on
+desktop, browser, iOS, and Android.
+
 ## Theme and layout
 
 Plugin UI runs on desktop, browser, iOS, and Android, across every BySpace theme. `theme` is a typed `PluginTheme` mapped from the active host theme. Color and spacing must come from those props. Hardcoded colors and unstyled `Text` break when the host theme changes.
@@ -346,7 +351,7 @@ Recreate styles when `theme` or `layout.compact` changes.
 
 Do not hardcode `#000`, `#fff`, or React Native's default text color. Primary copy uses `foreground`. Labels use `foregroundMuted`. Tighten padding when `layout.compact` is true.
 
-Workspace and agent panels receive the same `theme` and `layout` fields.
+Workspace and agent panels receive the same `theme`, `layout`, and optional `navigation` fields.
 
 ## Contribute a theme
 
@@ -877,8 +882,9 @@ byspace plugin init /absolute/path/to/plugin
 byspace plugin install /absolute/path/to/plugin
 byspace plugin install /absolute/path/to/plugin --id another-runtime-id
 byspace plugin add owner/repository
+byspace plugin add https://gitlab.com/group/repository.git --ref main
 byspace plugin add https://git.example.com/owner/repository.git --ref main
-byspace plugin add owner/monorepo --path plugins/review
+byspace plugin add owner/monorepo:plugins/review
 byspace plugin status [id]
 byspace plugin update <id>
 byspace plugin update --all
@@ -894,10 +900,32 @@ Pass `--host <url>` to management commands when the target is not the CLI's defa
 never deletes a directory source; it deletes the managed checkout for a Git source. The install-time
 `--id` is the runtime ID and allows the same directory or repository to be installed more than once.
 
-An existing directory wins over `owner/repository` GitHub shorthand. Omit `--ref` to track the
-default branch. Explicit branches track updates; tags and commits stay pinned. Git installation
-runs no package manager and no install scripts. `update` validates and compiles the candidate before
-activation, then restores the installed commit if startup fails.
+> **Trust every plugin you add.** `byspace plugin add` and `byspace plugin install` mean “I trust this codebase.” Server code and Git preparation commands run unsandboxed with the daemon user's access on the daemon host; client contributions run inside BySpace. Dependencies and future updates are part of that decision. With `--host`, commands run on the remote daemon host.
+
+An existing directory wins over `owner/repository` GitHub shorthand. Append `:relative/path` when
+the plugin lives below the repository root. Omit `--ref` to track the default branch. Explicit
+branches track updates; tags and commits stay pinned.
+
+Most plugins should omit `build`. Use it only when the staged checkout must install a dependency
+that BySpace does not provide, generate source or assets, or perform another required preparation
+step:
+
+```json
+{
+  "id": "review",
+  "build": [
+    ["npm", "ci"],
+    ["npm", "run", "build"]
+  ]
+}
+```
+
+`build` is a list of non-empty argv arrays. BySpace runs each executable directly, without a shell,
+from the staged plugin directory after resolving the exact commit and manifest. It never infers a
+package manager or commands from lockfiles. Install and update both run `build` before validation,
+compilation, activation, or replacement. A failing command reports its output, discards the
+candidate, and leaves the installed/running version intact. The daemon log records each command and
+output; with `--host`, execution is on that daemon host.
 
 Run `npm run typecheck` before install or reload. Never edit the daemon config directly.
 

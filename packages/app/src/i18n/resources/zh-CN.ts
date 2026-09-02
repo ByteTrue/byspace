@@ -204,6 +204,7 @@ export const zhCN: TranslationResources = {
     scrollToBottom: "滚动到底部",
     collapseAllToolCalls: "折叠所有工具调用",
     historyLoadFailed: "无法加载智能体历史记录",
+    messageCapped: "此消息已被截断（{{bytes}} 字节）。",
     permission: {
       plan: "Plan",
       required: "需要权限",
@@ -346,7 +347,6 @@ export const zhCN: TranslationResources = {
         added: "已添加",
         started: "已开始",
         completed: "已完成",
-        reopened: "已重新打开",
       },
     },
     compaction: {

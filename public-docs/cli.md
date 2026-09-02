@@ -144,13 +144,17 @@ The output includes each script's lifecycle and supervised terminal ID. Services
 
 ## Plugins
 
+> **Trust every plugin you add.** `byspace plugin add` and `byspace plugin install` mean “I trust this codebase.” Plugin server code and Git preparation commands run unsandboxed with the daemon user's access on the daemon host; client contributions run inside BySpace. Dependencies and future updates are part of that decision. With `--host`, commands run on the remote daemon host.
+
 Create and manage trusted plugins on a daemon:
 
 ```bash
 byspace plugin init /absolute/path/to/plugin
 byspace plugin install /absolute/path/to/plugin
 byspace plugin add owner/repository
+byspace plugin add https://gitlab.com/group/repository.git --ref main
 byspace plugin add https://git.example.com/owner/repository.git --ref main
+byspace plugin add owner/monorepo:plugins/review
 byspace plugin status
 byspace plugin update my-plugin
 byspace plugin update --all
@@ -162,8 +166,8 @@ byspace plugin enable my-plugin
 byspace plugin remove my-plugin
 ```
 
-GitHub shorthand checks an existing host directory first. Use `--path <directory>` for a plugin in
-a monorepo. `byspace plugin logs <id>` returns the plugin's recent daemon-side stdout and stderr. Add `--json` for
+GitHub shorthand checks an existing host directory first. Append `:<directory>` for a plugin in a
+monorepo. `byspace plugin logs <id>` returns the plugin's recent daemon-side stdout and stderr. Add `--json` for
 structured entries or `--host <target>` for another daemon. See the
 [Plugin reference](/docs/plugins/reference) for installation, trust, lifecycle, and log-retention
 behavior.
@@ -276,6 +280,7 @@ byspace hub status               # Show the current Hub relationship
 byspace hub disconnect           # End it
 byspace hub deploy -p <project>  # Discover, validate, and activate a Hub bundle
 byspace hub deploy -p <project> --dry-run # Validate without activating
+byspace hub export [directory]   # Export the active organization's triggers
 byspace hub logout               # Remove the active stored CLI login
 ```
 
@@ -283,7 +288,7 @@ Run deploy from the project root. It reads `.paseo/hub.yml`, every direct `.pase
 
 Pass `-p, --project <slug>` to select the target project. `--dry-run` performs the same discovery and server validation without recording or activating a revision. Both outputs include the resolved Hub, project, and discovered workflow count.
 
-`login` opens the Hub approval page and stores a durable organization-scoped CLI credential under `BYSPACE_HOME`. In an interactive terminal it then asks whether to connect this daemon and whether to initialize and deploy a starter workflow, both defaulting to yes. Declining the connection prints `byspace hub connect <origin>; then byspace hub init`, because the connection alone does not produce a bundle; declining only the starter prints `byspace hub init`. `--json` and non-TTY login remain login-only and never prompt. The stored login is separate from the daemon relationship created by `connect`.
+`login` opens the Hub approval page and stores a durable organization-scoped CLI credential under `BYSPACE_HOME`. Interactive login optionally connects the local daemon, then points to the Hub UI for trigger configuration; it does not scaffold or deploy configuration. `byspace hub init` remains the explicit triggers-as-code scaffold. `byspace hub export [directory]` writes the active organization's current triggers as one self-contained YAML file per trigger, using the active login unless another Hub or API key is selected. `--json` and non-TTY login remain login-only and never prompt. The stored login is separate from the daemon relationship created by `connect`.
 
 `init` runs the same guided setup on its own and requires a TTY. It connects the daemon, uses the organization's only project or asks which one, and lists the Hub app connections that can back a starter workflow. One usable connection is selected automatically; with several, you choose a **Trigger connection**. If none is ready, setup sends you to **Hub → Apps** and stops before selecting an agent or writing files.
 

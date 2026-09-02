@@ -46,4 +46,22 @@ describe("plugin manifest", () => {
 
     await expect(readPluginManifest(directory)).rejects.toThrow("byspace-plugin.json");
   });
+
+  it("accepts only non-empty argv arrays for build commands", async () => {
+    const directory = await createPluginDirectory();
+    const manifest = path.join(directory, "byspace-plugin.json");
+
+    await writeFile(
+      manifest,
+      JSON.stringify({ id: "prepared", build: [["pnpm", "install", "--frozen-lockfile"]] }),
+    );
+    await expect(readPluginManifest(directory)).resolves.toMatchObject({
+      build: [["pnpm", "install", "--frozen-lockfile"]],
+    });
+
+    for (const build of [[], [[]], [["pnpm", ""]], [["pnpm", 1]], "pnpm install"]) {
+      await writeFile(manifest, JSON.stringify({ id: "prepared", build }));
+      await expect(readPluginManifest(directory)).rejects.toThrow();
+    }
+  });
 });

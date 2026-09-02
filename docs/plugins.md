@@ -2,8 +2,9 @@
 
 Local plugins contribute daemon RPCs, native app surfaces, workspace panels, Command Center items,
 composer pills, app themes, and composer attachment sources from one `index.ts`. BySpace executes the server contribution in a
-subprocess and evaluates the client contribution in the app runtime. Plugin code is trusted code;
-BySpace does not sandbox it.
+subprocess and evaluates the client contribution in the app runtime.
+
+> **Trust every plugin you add.** `byspace plugin add` and `byspace plugin install` mean “I trust this codebase.” Plugins are unsandboxed: server code and Git preparation commands run with the daemon user's access on the daemon host, and client contributions run inside BySpace. The repository's dependencies and future updates are part of that trust decision. With `--host`, preparation runs on that remote daemon host.
 
 ## Install a directory source
 
@@ -47,16 +48,15 @@ my-plugin/
   byspace-plugin.json
   index.ts
   main.client.tsx
-  byspace-plugin.d.ts
   package.json
   tsconfig.json
 ```
 
-BySpace compiles TypeScript and TSX when loading the plugin, so these packages are development dependencies only.
-The generated declaration file supplies `@getpaseo/plugin` and `@getpaseo/plugin/server` types until the
-SDK is distributed as a public package. Regenerate new plugins with the matching BySpace CLI when the
-SDK contract changes. Existing `paseo-plugin.json` and `paseo-plugin.d.ts` files remain supported;
-a plugin directory must not contain both manifest filenames.
+The generated `package.json` installs `@getpaseo/plugin` and the other host modules as development
+dependencies for local typechecking and tests. BySpace compiles TypeScript and TSX and supplies the
+runtime modules, so consumers do not install these packages when adding the plugin. Existing
+`paseo-plugin.json` manifests remain supported, but a plugin directory must not contain both manifest
+filenames.
 
 ```json
 {
@@ -85,28 +85,52 @@ directory always wins over shorthand resolution.
 
 ```bash
 byspace plugin add owner/repository
+byspace plugin add https://gitlab.com/group/repository.git
 byspace plugin add https://git.example.com/owner/repository.git
-byspace plugin add owner/monorepo --path plugins/review
+byspace plugin add owner/monorepo:plugins/review
 byspace plugin add owner/repository --ref main
 byspace plugin status
 byspace plugin update review
 byspace plugin update --all
 ```
 
+Append `:relative/path` to the source when the plugin lives below the repository root.
+
 Omitting `--ref` tracks the remote's default branch. A branch passed with `--ref` also tracks;
 tags and commits stay pinned. `status` fetches tracked refs and reports the installed and available
-commits. `update` checks out a new version, validates its manifest, compiles both bundles, and starts
-it before changing the configured path. A compilation or startup failure restores the running
-version. Removing a Git source deletes BySpace's managed checkout.
+commits. Removing a Git source deletes BySpace's managed checkout.
 
-Git installation does not run a package manager or install script. A distributable source plugin
-uses BySpace's host-provided modules or commits any other bundled source it needs. Native React Native
-dependencies work only when the BySpace app already ships the native module.
+### Declare Git preparation
 
-Server contributions can write to stdout and stderr with normal Node logging. BySpace adds `[paseo]`
+Most plugins should omit `build`. Use it only when the staged checkout must install a dependency
+that BySpace does not provide, generate source or assets, or perform another required preparation
+step:
+
+```json
+{
+  "id": "review",
+  "build": [
+    ["npm", "ci"],
+    ["npm", "run", "build"]
+  ]
+}
+```
+
+`build` is an optional list of argv arrays. Each array must contain at least one non-empty string;
+shell command strings are rejected. BySpace starts the executable directly, without a shell, from the
+plugin directory in the staged checkout. It never detects lockfiles or chooses a package manager.
+
+On install and every update, BySpace resolves the exact Git revision and manifest, runs the declared
+commands, then validates, compiles, and activates the candidate. It logs each argv command and its
+output in the daemon log. If a command fails, the error includes its output, BySpace discards the
+candidate, and the existing installed and running version stays untouched. On a remote daemon, all
+of this happens on the remote daemon host.
+
+Server contributions can write to stdout and stderr with normal Node logging. BySpace adds `[byspace]`
 entries for loading, ready, stopping, and stopped transitions. Compilation and load failures are
 recorded as stderr entries before a subprocess exists. Inspect the recent in-memory
-tail from the host plugin settings or with `byspace plugin logs <id>`. Reload, disable, and process
+tail from the host plugin settings or with `byspace plugin logs <id>`. Git preparation commands are
+recorded in `$BYSPACE_HOME/daemon.log` before a plugin exists, rather than the plugin log tail. Reload, disable, and process
 failure retain the tail; removing the plugin clears it. Daemon restarts do not retain the tail, but
 structured copies remain in `$BYSPACE_HOME/daemon.log`. Plugin output can contain secrets, so do not
 log credentials or tokens.
@@ -202,9 +226,10 @@ when moved between hosts. Explorer configuration can create workspace-context pa
 existing agent-context instances, but it cannot create an agent panel without an agent-aware command.
 
 Command Center callbacks use the selected host's existing `PaseoApi` for normal BySpace operations.
-They use typed plugin RPC only for plugin-specific backend work. Navigation is limited to the
-plugin's registered global surfaces and workspace panels; plugins do not receive Expo Router or
-workspace-layout store access.
+They use typed plugin RPC only for plugin-specific backend work. Surface and panel props expose
+optional client-owned agent and workspace navigation; its absence is the compatibility gate for
+older clients. Other navigation remains limited to registered global surfaces and workspace panels.
+Plugins do not receive Expo Router or workspace-layout store access.
 
 ## Contribute composer pills
 

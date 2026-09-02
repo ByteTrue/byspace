@@ -204,6 +204,7 @@ export const ar: TranslationResources = {
     scrollToBottom: "قم بالتمرير إلى الأسفل",
     collapseAllToolCalls: "طي كل استدعاءات الأدوات",
     historyLoadFailed: "تعذر تحميل سجل الوكيل",
+    messageCapped: "تم اقتطاع هذه الرسالة ({{bytes}} بايت).",
     permission: {
       plan: "يخطط",
       required: "الإذن مطلوب",
@@ -346,7 +347,6 @@ export const ar: TranslationResources = {
         added: "أُضيفت",
         started: "بدأت",
         completed: "اكتملت",
-        reopened: "أُعيد فتحها",
       },
     },
     compaction: {
