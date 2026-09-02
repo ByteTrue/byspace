@@ -28,6 +28,7 @@ export function resolveTerminalResizeClaim(input: {
   shouldClaim: boolean;
   forceClaim: boolean;
   supportsTerminalSizeOwnership: boolean;
+  hasClaimedSize: boolean;
   readiness: FocusClaimReadiness;
 }): { shouldSend: boolean; intent: "claim" | "update" } {
   const intent = input.shouldClaim ? "claim" : "update";
@@ -48,7 +49,11 @@ export function resolveTerminalResizeClaim(input: {
     };
   }
 
-  if (!input.supportsTerminalSizeOwnership || !canRequestOwnedSizeUpdate(input.readiness)) {
+  if (
+    !input.supportsTerminalSizeOwnership ||
+    !input.hasClaimedSize ||
+    !canRequestOwnedSizeUpdate(input.readiness)
+  ) {
     return { shouldSend: false, intent };
   }
 
@@ -94,23 +99,19 @@ export function reconcileFocusClaim(
   if (input.key === null) {
     return { state: EMPTY_FOCUS_CLAIM_STATE, shouldRequest: false };
   }
-  if (state.claimedKey === input.key) {
-    return {
-      state: { claimedKey: input.key, requestedKey: null },
-      shouldRequest: false,
-    };
-  }
+  const claimedKey = state.claimedKey === input.key ? input.key : null;
+  const requestedKey = state.requestedKey === input.key ? input.key : null;
   if (!input.canRequest) {
     return {
-      state: { claimedKey: state.claimedKey, requestedKey: null },
+      state: { claimedKey, requestedKey: null },
       shouldRequest: false,
     };
   }
-  if (state.requestedKey === input.key) {
-    return { state, shouldRequest: false };
+  if (requestedKey) {
+    return { state: { claimedKey, requestedKey }, shouldRequest: false };
   }
   return {
-    state: { claimedKey: state.claimedKey, requestedKey: input.key },
+    state: { claimedKey, requestedKey: input.key },
     shouldRequest: true,
   };
 }
@@ -124,6 +125,6 @@ export function settleFocusClaim(
   }
   return {
     claimedKey: input.sent ? input.key : state.claimedKey,
-    requestedKey: null,
+    requestedKey: input.sent ? input.key : null,
   };
 }

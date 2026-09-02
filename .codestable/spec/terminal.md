@@ -10,6 +10,11 @@ Daemon 从当前 xterm buffer 生成 scrollback 和 visible grid。两部分使�
 
 Alternate buffer、current grid 和 scrollback 都遵守同一 active-buffer 规则。行截断、wrapped 标记和 scrollback 上限必须保持一一对应。
 
+## 尺寸同步与首帧就绪
+
+- 终端组件挂载时只在 WebGL 换装完成且测量出非零有效 fit 后才声明 `onRendererReady`；在就绪前不发起数据流订阅，确保首次发送的 `restore.size` 100% 为最终满宽几何，避免远程 PTY 收到未测量的初始尺寸导致会话被多次重新刷新（Resize Storm）。
+- 挂载阶梯与布局过渡等被动尺寸变化统一通过 250ms 尾部合并窗口发送，用户交互驱动的尺寸变化保持即时发送。
+
 ## 边界
 
 - 字体、字号、主题和语法高亮属于 Appearance，不由快照恢复逻辑调整。
@@ -19,3 +24,4 @@ Alternate buffer、current grid 和 scrollback 都遵守同一 active-buffer 规
 ## 历史证据
 
 - [Terminal 中文快照回放间距](../issues/001-x-terminal-cjk-snapshot-spacing.md)
+- [复原 Terminal 首帧 post-WebGL 尺寸就绪与 250ms 被动合并机制](../issues/005-x-terminal-remote-resize-storm-and-fit.md)
