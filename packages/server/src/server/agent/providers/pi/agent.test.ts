@@ -1154,6 +1154,7 @@ describe("PiRpcAgentSession", () => {
       "/tmp/native-pi-session",
       "--extension",
       actualLaunch.extensionPaths[0],
+      "--approve",
     ]);
   });
 
@@ -1227,6 +1228,7 @@ describe("PiRpcAgentSession", () => {
       "medium",
       "--extension",
       actualLaunch.extensionPaths[0],
+      "--approve",
     ]);
 
     await expect(
@@ -1276,6 +1278,7 @@ describe("PiRpcAgentSession", () => {
       "/tmp/native-pi-session",
       "--extension",
       actualLaunch.extensionPaths[0],
+      "--approve",
     ]);
     await expect(
       applyPaseoExtensionSystemPrompt(actualLaunch.extensionPaths[0]!, "Pi project prompt"),
@@ -2042,6 +2045,7 @@ describe("PiRpcAgentClient", () => {
       sessionFile,
       "--extension",
       actualLaunch.extensionPaths[0],
+      "--approve",
     ]);
     expect(imported.config).toMatchObject({
       provider: "pi",
@@ -2378,7 +2382,7 @@ describe("PiRpcAgentClient", () => {
     expect(pi.recordedLaunches).toHaveLength(2);
     expect(pi.recordedLaunches[0]).toMatchObject({
       cwd: "/tmp/paseo-pi-rpc-test",
-      argv: ["pi", "--mode", "rpc"],
+      argv: ["pi", "--mode", "rpc", "--approve"],
     });
     const actualLaunch = pi.recordedLaunches[1]!;
     expect(actualLaunch.extensionPaths).toHaveLength(1);
@@ -2392,6 +2396,7 @@ describe("PiRpcAgentClient", () => {
       actualLaunch.mcpConfigPath,
       "--extension",
       actualLaunch.extensionPaths[0],
+      "--approve",
     ]);
     expect(session.capabilities.supportsMcpServers).toBe(true);
 
@@ -2472,6 +2477,7 @@ describe("PiRpcAgentClient", () => {
       "medium",
       "--extension",
       actualLaunch.extensionPaths[0],
+      "--approve",
     ]);
     expect(actualLaunch.mcpConfigPath).toBeUndefined();
     expect(session.capabilities.supportsMcpServers).toBe(false);
