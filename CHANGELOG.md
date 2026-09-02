@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.1 - 2026-09-02
+
+### Improved
+
+- Improved Pi thinking level selector to filter options strictly by model `thinkingLevelMap`, showing only model-supported levels and synchronizing clamped thinking on model change.
+- Improved macOS desktop updater to automatically clear the `com.apple.quarantine` attribute from the downloaded DMG before opening, eliminating Gatekeeper quarantine blocks on manual overwrite install.
+
 ## 0.11.0 - 2026-09-02
 
 ### Added
