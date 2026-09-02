@@ -1,0 +1,6 @@
+Added
+- Added upstream Paseo v0.7.2 baseline alignment, incorporating mobile streaming smoothness under JS stall, Astro syntax highlighting, and monorepo source paths for Git-hosted plugins.
+- Added active-turn steering and project-level skill discovery for Pi agents.
+- Added visible loading indicators and feedback for slash-command autocomplete.
+
+Full notes: https://github.com/ByteTrue/byspace/releases
