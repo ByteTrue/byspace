@@ -20,6 +20,11 @@ macOS 不尝试原地替换正在运行的 App。发现新版本后，用户点�
 
 Windows 和受支持的 Linux 安装形态继续使用 Electron updater 的下载与 `quitAndInstall` 流程。macOS 的手动交接不能改变其他平台的下载、退出或重启参数。
 
+## 外部链接处理
+
+Desktop 主窗口（`mainWindow`）设置统一的 `setWindowOpenHandler`。无论用户在 Terminal（xterm web links）、Markdown 消息渲染还是界面其他区域点击 HTTP(S) 链接，均校验协议并统一调用系统默认浏览器（`shell.openExternal`）打开，彻底禁止 Electron 打开未受管理的子 BrowserWindow。
+
 ## 历史证据
 
 - [macOS 更新改为 DMG 手动覆盖交接](../issues/002-x-macos-dmg-update-handoff.md)
+- [Pi 启动注入项目信任并完善斜杠补全加载态与外部链接交接](../issues/004-x-pi-project-skills-and-autocomplete-loading.md)

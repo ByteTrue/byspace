@@ -288,7 +288,7 @@ function resolveAutocompleteIsLoading(args: {
   optionsLength: number;
 }): boolean {
   if (args.mode === "command") {
-    return args.isCommandsLoading && args.optionsLength === 0;
+    return args.isCommandsLoading;
   }
   if (args.mode === "file") {
     return (
@@ -402,7 +402,7 @@ export function useAgentAutocomplete(input: UseAgentAutocompleteInput): AgentAut
     draftConfig: queryDraftConfig,
   });
 
-  const isVisible = canShowAutocomplete && !(mode === "command" && isCommandsLoading);
+  const isVisible = canShowAutocomplete;
 
   const fileSuggestionsQuery = useQuery({
     queryKey: [

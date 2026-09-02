@@ -146,7 +146,7 @@ describe("PiCliRuntime", () => {
     expect(launches).toEqual([
       expect.objectContaining({
         cwd: "/workspace/project",
-        argv: ["pi", "--mode", "rpc"],
+        argv: ["pi", "--mode", "rpc", "--approve"],
       }),
     ]);
   });
@@ -166,7 +166,7 @@ describe("PiCliRuntime", () => {
       expect.objectContaining({
         cwd: "/workspace/project",
         mcpConfigPath: "/tmp/paseo-pi-mcp/mcp.json",
-        argv: ["pi", "--mode", "rpc", "--mcp-config", "/tmp/paseo-pi-mcp/mcp.json"],
+        argv: ["pi", "--mode", "rpc", "--mcp-config", "/tmp/paseo-pi-mcp/mcp.json", "--approve"],
       }),
     ]);
   });
@@ -196,7 +196,7 @@ describe("PiCliRuntime", () => {
       expect.objectContaining({
         cwd: "/workspace/project",
         session: "/tmp/pi-session.jsonl",
-        argv: ["custom-pi", "--mode", "rpc", "--session", "/tmp/pi-session.jsonl"],
+        argv: ["custom-pi", "--mode", "rpc", "--session", "/tmp/pi-session.jsonl", "--approve"],
       }),
     ]);
   });
@@ -225,7 +225,36 @@ describe("PiCliRuntime", () => {
     expect(launches).toEqual([
       expect.objectContaining({
         cwd: "/workspace/project",
-        argv: ["custom-pi", "--mode", "json"],
+        argv: ["custom-pi", "--mode", "json", "--approve"],
+      }),
+    ]);
+  });
+
+  test("does not append --approve when the configured command already includes --no-approve", async () => {
+    const child = createPiChild();
+    replyToCommands(child, () => ({}));
+    const launches: PiRuntimeLaunch[] = [];
+    const runtime = new PiCliRuntime({
+      logger: pino({ level: "silent" }),
+      command: ["pi"],
+      runtimeSettings: {
+        command: {
+          mode: "replace",
+          argv: ["custom-pi", "--no-approve"],
+        },
+      },
+      spawnProcess: (launch) => {
+        launches.push(launch);
+        return child;
+      },
+    });
+
+    await runtime.startSession({ cwd: "/workspace/project" });
+
+    expect(launches).toEqual([
+      expect.objectContaining({
+        cwd: "/workspace/project",
+        argv: ["custom-pi", "--no-approve", "--mode", "rpc"],
       }),
     ]);
   });

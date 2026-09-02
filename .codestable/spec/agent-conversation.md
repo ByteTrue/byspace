@@ -25,6 +25,12 @@ Desktop、split pane 和 compact 布局都保持这一垂直关系。左侧状�
 
 这些控件只调用 Agent stream 的现有 owner，不建立第二份 scroll、collapse 或 timeline 状态。
 
+## 斜杠补全与技能发现
+
+- 输入 `/` 时按需加载命令与技能列表；在命令拉取完成前，Autocomplete Popover 保持可见并展示加载动画（`ActivityIndicator`）与提示文案，数据返回后自动平滑切换为命令列表。
+- Pi Provider 在后台启动会话时自动注入 `--approve` 信任标志，保证项目级 `.pi/skills/` 与 `.agents/skills/` 能够被自动发现并列入命令补全。
+
 ## 历史证据
 
 - [将 Agent stream 控件移到 Composer 操作行](../issues/003-x-composer-stream-controls.md)
+- [Pi 启动注入项目信任并完善斜杠补全加载态](../issues/004-x-pi-project-skills-and-autocomplete-loading.md)
