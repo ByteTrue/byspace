@@ -50,6 +50,7 @@ export interface TerminalEmulatorRuntimeMountInput {
   theme: ITheme;
   fontFamily?: string;
   fontSize?: number;
+  onRendererReady?: () => void;
 }
 
 export interface TerminalEmulatorRuntimeCallbacks {
@@ -487,6 +488,13 @@ export class TerminalEmulatorRuntime {
     const unicode11Addon = new Unicode11Addon();
     let webglAddon: WebglAddon | null = null;
     let imageAddon: ImageAddon | null = null;
+    let canSignalRendererReady = false;
+    let didSignalRendererReady = false;
+    const signalRendererReady = (): void => {
+      if (!canSignalRendererReady || didSignalRendererReady) return;
+      didSignalRendererReady = true;
+      input.onRendererReady?.();
+    };
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(unicode11Addon);
     terminal.loadAddon(
@@ -580,10 +588,11 @@ export class TerminalEmulatorRuntime {
         imageAddon = new ImageAddon();
         terminal.loadAddon(imageAddon);
         registerProtocolQuerySuppression();
-        this.fitAndEmitResize?.({ forceRefresh: true, shouldClaim: false });
       } catch {
         disposeWebglRenderer();
       }
+      canSignalRendererReady = true;
+      this.fitAndEmitResize?.({ forceRefresh: true, shouldClaim: false });
     });
 
     const restoreDocumentStyles = this.applyDocumentBoundsStyles({
@@ -627,6 +636,7 @@ export class TerminalEmulatorRuntime {
         previous.rows === nextRows &&
         previous.cols === nextCols
       ) {
+        signalRendererReady();
         return;
       }
 
@@ -640,6 +650,7 @@ export class TerminalEmulatorRuntime {
           forceClaim,
         }),
       );
+      signalRendererReady();
     };
     this.fitAndEmitResize = fitAndEmitResize;
 
@@ -956,8 +967,24 @@ export class TerminalEmulatorRuntime {
     this.processOutputQueue();
   }
 
-  resize(input?: TerminalResizeRequest): void {
-    this.fitAndEmitResize?.(input);
+  resize(input?: TerminalResizeRequest): boolean {
+    if (!this.fitAndEmitResize) {
+      return false;
+    }
+    this.fitAndEmitResize(input);
+    return true;
+  }
+
+  resizeAfterLayout(input?: TerminalResizeRequest): void {
+    const terminal = this.terminal;
+    const fitSucceeded = this.resize(input);
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(() => {
+        if (this.terminal === terminal) {
+          this.resize(fitSucceeded && input ? { ...input, forceRefresh: false } : input);
+        }
+      });
+    }
   }
 
   setTheme(input: { theme: ITheme }): void {
