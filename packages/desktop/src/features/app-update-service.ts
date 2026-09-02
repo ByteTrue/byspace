@@ -26,6 +26,10 @@ export interface RuntimeUpdateInfo {
   releaseNotes?: unknown;
   releaseDate?: unknown;
   rolloutHours?: unknown;
+  files?: readonly {
+    url: string;
+    sha512?: string;
+  }[];
 }
 
 export interface RuntimeUpdateCheckResult {
@@ -42,6 +46,10 @@ export interface AppUpdateRuntimeConfiguration {
 }
 
 export interface AppUpdateRuntime {
+  readonly manualInstaller?: {
+    open(info: RuntimeUpdateInfo): Promise<void>;
+    quit(): void;
+  };
   configure(input: AppUpdateRuntimeConfiguration): void;
   checkForUpdates(): Promise<RuntimeUpdateCheckResult | null>;
   downloadUpdate(): Promise<unknown>;
@@ -136,7 +144,7 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
   let checkQueue: Promise<void> = Promise.resolve();
 
   function isReadyToInstallVersion(version: string): boolean {
-    return downloadedUpdateVersion === version;
+    return Boolean(deps.runtime.manualInstaller) || downloadedUpdateVersion === version;
   }
 
   function clearUpdateState(): void {
@@ -184,10 +192,14 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
         });
       },
       onUpdateAvailable(info) {
-        const alreadyReady = downloadedUpdateVersion === info.version;
+        const alreadyDownloaded = downloadedUpdateVersion === info.version;
         cachedUpdateInfo = info;
-        downloadedUpdateVersion = alreadyReady ? info.version : null;
-        if (!alreadyReady && preparingUpdateVersion === null) {
+        downloadedUpdateVersion = alreadyDownloaded ? info.version : null;
+        if (
+          !alreadyDownloaded &&
+          preparingUpdateVersion === null &&
+          !deps.runtime.manualInstaller
+        ) {
           preparingUpdateVersion = info.version;
         }
       },
@@ -405,16 +417,27 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
       return buildDeferredInstallResult(currentVersion);
     }
 
-    if (isReadyToInstallVersion(readyVersion)) {
-      await performQuitAndInstall(deps.runtime, { onBeforeQuit, restart });
-      return {
-        installed: true,
-        version: readyVersion,
-        message: "Update downloaded. The app will restart shortly.",
-      };
-    }
-
     try {
+      if (restart && deps.runtime.manualInstaller) {
+        await deps.runtime.manualInstaller.open(cachedUpdateInfo);
+        if (onBeforeQuit) await onBeforeQuit();
+        deps.runtime.manualInstaller.quit();
+        return {
+          installed: true,
+          version: readyVersion,
+          message: "Update DMG opened. Finish installation in Finder.",
+        };
+      }
+
+      if (isReadyToInstallVersion(readyVersion)) {
+        await performQuitAndInstall(deps.runtime, { onBeforeQuit, restart });
+        return {
+          installed: true,
+          version: readyVersion,
+          message: "Update downloaded. The app will restart shortly.",
+        };
+      }
+
       const preparation = await ensureUpdateDownloaded(readyVersion, signal);
       if (preparation === "aborted") {
         return buildDeferredInstallResult(currentVersion);

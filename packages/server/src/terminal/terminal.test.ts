@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
+import { renderTerminalSnapshotToAnsi } from "@getpaseo/protocol/terminal-snapshot";
 import { isPlatform } from "../test-utils/platform.js";
 import {
   buildTerminalEnvironment,
@@ -621,6 +622,42 @@ describe.skipIf(isPlatform("win32"))("send input", () => {
     expect(getRowText(state, 0)).toBe("$ echo hello");
     expect(getRowText(state, 1)).toBe("hello");
     expect(getRowText(state, 2)).toBe("$");
+  });
+
+  it("replays double-width characters without a padding space", async () => {
+    const session = trackSession(
+      await createTerminal({
+        workspaceId: "ws-test",
+        cwd: "/tmp",
+        shell: "/bin/sh",
+        env: { PS1: "$ " },
+      }),
+    );
+
+    await waitForLines(session, ["$"]);
+
+    session.send({ type: "input", data: "printf '中文ab\\n'\r" });
+    const hasWideLine = (state: ReturnType<TerminalSession["getState"]>): boolean =>
+      getLines(state).some((line) => line === "中文ab");
+    await waitForState(session, hasWideLine);
+
+    // xterm parks a zero-width placeholder in the column each wide character spills into.
+    // Replaying it as a space used to push the rest of the row right by one column per CJK
+    // character, which is what a restored screen full of Chinese text looked like.
+    expect(renderTerminalSnapshotToAnsi(session.getStateSnapshot().state)).toContain("中文ab");
+
+    // The same row has to survive scrolling out of the viewport: scrollback used to run its
+    // own copy of the cell extraction, so it kept padding wide characters after the grid was
+    // fixed — the restored screen looked right until the user scrolled up.
+    session.send({
+      type: "input",
+      data: "i=1; while [ $i -le 40 ]; do echo pad-$i; i=$((i+1)); done\r",
+    });
+    const hasScrolledOut = (state: ReturnType<TerminalSession["getState"]>): boolean =>
+      !getLines(state).some((line) => line === "中文ab");
+    await waitForState(session, hasScrolledOut);
+
+    expect(renderTerminalSnapshotToAnsi(session.getStateSnapshot().state)).toContain("中文ab");
   });
 
   it("captures output from pwd in specified cwd", async () => {

@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { app } from "electron";
+import { app, net, shell } from "electron";
 import { UUID } from "builder-util-runtime";
 import { autoUpdater } from "electron-updater";
 import {
@@ -13,6 +13,7 @@ import {
   type RuntimeUpdateCheckResult,
   type RuntimeUpdateInfo,
 } from "./app-update-service.js";
+import { downloadAndOpenMacDmg } from "./mac-dmg-updater.js";
 import {
   bucketFromStagingUserId,
   rolloutManifestSchema,
@@ -32,6 +33,7 @@ export {
 };
 
 let cachedStagingUserIdPromise: Promise<string> | null = null;
+let manualInstallQuitRequested = false;
 
 const UPDATE_CHANNEL_NOT_PUBLISHED_CODE = "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND";
 
@@ -90,17 +92,38 @@ export function getStagingUserId(): Promise<string> {
 export function shouldInstallAppUpdateOnQuit(input: {
   platform: NodeJS.Platform;
   isAppImage: boolean;
+  manualInstallQuitRequested?: boolean;
 }): boolean {
   // AppImage's no-relaunch install path blocks while launching the replacement
   // binary, which can hang after the running file has already been replaced.
-  return !(input.platform === "linux" && input.isAppImage);
+  if (input.platform === "linux" && input.isAppImage) return false;
+  // A mounted DMG is already handing installation to the user. Running the ZIP
+  // updater again from before-quit would race that handoff.
+  return !input.manualInstallQuitRequested;
 }
 
 class ElectronAppUpdateRuntime implements AppUpdateRuntime {
   private configured = false;
+  readonly manualInstaller =
+    process.platform === "darwin"
+      ? {
+          open: async (info: RuntimeUpdateInfo) => {
+            await downloadAndOpenMacDmg(info, {
+              arch: process.arch,
+              downloadsDirectory: app.getPath("downloads"),
+              fetch: (url) => net.fetch(url),
+              openPath: (filePath) => shell.openPath(filePath),
+            });
+          },
+          quit: () => {
+            manualInstallQuitRequested = true;
+            app.quit();
+          },
+        }
+      : undefined;
 
   configure(input: AppUpdateRuntimeConfiguration): void {
-    autoUpdater.autoDownload = true;
+    autoUpdater.autoDownload = !this.manualInstaller;
     autoUpdater.autoRunAppAfterInstall = true;
     // Paseo revalidates the current manifest before explicitly installing on quit.
     // Electron's built-in handler would install an older download without checking
@@ -229,6 +252,7 @@ export async function installAppUpdateOnQuit({
     !shouldInstallAppUpdateOnQuit({
       platform: process.platform,
       isAppImage: Boolean(process.env.APPIMAGE),
+      manualInstallQuitRequested,
     })
   ) {
     return false;

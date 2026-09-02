@@ -1,4 +1,4 @@
-import { memo, useCallback, type ReactElement } from "react";
+import { memo, useCallback, type ReactElement, type ReactNode } from "react";
 import { WorkspaceDiffStatPill } from "@/composer/diff-stat-pill";
 import { useWorkspaceHasDiffStat } from "@/composer/workspace-diff-stat";
 import { AgentTaskList } from "@/composer/task-list";
@@ -38,6 +38,7 @@ export const AgentTracks = memo(function AgentTracks({
   archiveFinishedStatus,
   onArchiveFinished,
   hasPluginComposerPills,
+  actions,
 }: {
   serverId: string;
   workspaceId: string;
@@ -48,6 +49,7 @@ export const AgentTracks = memo(function AgentTracks({
   archiveFinishedStatus: ArchiveFinishedStatus;
   onArchiveFinished: () => void;
   hasPluginComposerPills: boolean;
+  actions?: ReactNode;
 }): ReactElement | null {
   const { tabId, openTab } = usePaneContext();
   const hasWorkspaceDiffStat = useWorkspaceHasDiffStat(serverId, workspaceId);
@@ -113,6 +115,7 @@ export const AgentTracks = memo(function AgentTracks({
   }, [cwd, isCompact, openInSidePane, serverId, workspaceKey]);
 
   if (
+    !actions &&
     !hasWorkspaceDiffStat &&
     !hasAgentTracks({
       subagentRows,
@@ -147,6 +150,7 @@ export const AgentTracks = memo(function AgentTracks({
         workspaceId={workspaceId}
         onPress={handleOpenChanges}
       />
+      {actions}
     </ComposerTrackBar>
   );
 });
