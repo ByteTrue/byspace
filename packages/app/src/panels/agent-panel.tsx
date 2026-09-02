@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import { Portal } from "@gorhom/portal";
 import type { TFunction } from "i18next";
 import { ArrowDownToLine, ListChevronsDownUp, SquarePen } from "lucide-react-native";
 import React, {
@@ -62,7 +61,6 @@ import {
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import { reconcileMissingAgentStateWithPresentAgent } from "@/panels/agent-panel-load-state";
-import { buildPaneHeaderActionsPortalName } from "@/panels/pane-header-actions-portal";
 import {
   reconcileReconnectToastState,
   type ReconnectToastState,
@@ -1273,12 +1271,6 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
 }) {
   const { t } = useTranslation();
   const isPaneVisible = useRetainedPanelActive();
-  const { tabId } = usePaneContext();
-  const paneHeaderActionsPortalName = buildPaneHeaderActionsPortalName(
-    serverId,
-    workspaceId,
-    tabId,
-  );
   const subagentRows = useSubagentsForParent({ serverId, parentAgentId: agentId });
   const tasks = useSessionStore((state): TodoEntry[] | undefined =>
     state.sessions[serverId]?.agentTasks.get(agentId),
@@ -1299,32 +1291,25 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
     () => streamViewRef.current?.scrollToBottom(),
     [streamViewRef],
   );
-  const streamHeaderActions = useMemo(
+  const streamControls = useMemo(
     () =>
       hasActiveComposer && isPaneVisible ? (
-        <Portal hostName={paneHeaderActionsPortalName}>
-          <AgentStreamHeaderControls
-            showScrollToBottom={showScrollToBottom}
-            onCollapseAll={handleCollapseAll}
-            onScrollToBottom={handleScrollToBottom}
-          />
-        </Portal>
+        <AgentStreamHeaderControls
+          showScrollToBottom={showScrollToBottom}
+          onCollapseAll={handleCollapseAll}
+          onScrollToBottom={handleScrollToBottom}
+        />
       ) : null,
-    [
-      handleCollapseAll,
-      handleScrollToBottom,
-      hasActiveComposer,
-      isPaneVisible,
-      paneHeaderActionsPortalName,
-      showScrollToBottom,
-    ],
+    [handleCollapseAll, handleScrollToBottom, hasActiveComposer, isPaneVisible, showScrollToBottom],
   );
-  const hasVisibleAgentTracks = hasAgentTracks({
-    subagentRows,
-    tasks,
-    archiveFinishedStatus: archiveFinishedSubagents.status,
-    hasPluginComposerPills,
-  });
+  const hasVisibleAgentTracks =
+    streamControls !== null ||
+    hasAgentTracks({
+      subagentRows,
+      tasks,
+      archiveFinishedStatus: archiveFinishedSubagents.status,
+      hasPluginComposerPills,
+    });
   const rawAgentInputDraft = useAgentInputDraft({
     draftKey: buildDraftStoreKey({
       serverId,
@@ -1418,6 +1403,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
           archiveFinishedStatus={archiveFinishedSubagents.status}
           onArchiveFinished={archiveFinishedSubagents.archiveFinished}
           hasPluginComposerPills={hasPluginComposerPills}
+          actions={streamControls}
         />
       ) : null}
     </View>
@@ -1431,7 +1417,6 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
       onRewindComplete={handleRewindComplete}
     >
       <View style={styles.root}>
-        {streamHeaderActions}
         <DockedChatSurface disabled={isArchivingCurrentAgent}>
           {contentContainer}
 
@@ -1959,6 +1944,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   streamControls: {
     width: 60,
+    marginLeft: "auto",
+    flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",

@@ -1,5 +1,4 @@
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { PortalHost } from "@gorhom/portal";
 import React, {
   useCallback,
   useEffect,
@@ -67,7 +66,6 @@ import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-
 import type { SurfaceBackdrop } from "@/styles/surface-backdrop";
 import type { Theme } from "@/styles/theme";
 import { RenderProfile } from "@/utils/render-profiler";
-import { buildPaneHeaderActionsPortalName } from "@/panels/pane-header-actions-portal";
 import { TrailingActionScrim } from "@/components/ui/trailing-action-scrim";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { buildWorkspaceKeyboardHandlerId } from "@/keyboard/handler-id";
@@ -94,7 +92,6 @@ const PANE_SPLIT_ACTIONS_RESERVED_WIDTH =
   PANE_SPLIT_ACTIONS_HORIZONTAL_PADDING * 2 +
   PANE_SPLIT_ACTIONS_OUTER_MARGIN;
 const PANE_MAXIMIZE_ACTION_RESERVED_WIDTH = smallIconButtonChromeFrameSize(false) + 1;
-const PANE_HEADER_AGENT_ACTIONS_RESERVED_WIDTH = 64;
 // Chip geometry. `layoutMetrics` measures tabs from these same numbers, so a chip that changes
 // shape without changing them mis-measures and drops the row into the overflow-scroll fallback at
 // the wrong width. Keep them together.
@@ -976,11 +973,6 @@ function ResolvedWorkspaceDesktopTabsRow({
     () => new Map<string, WorkspaceTabLabelMeasurement>(),
   );
   const [trackSnapshot, setTrackSnapshot] = useState<WorkspaceTabTrackSnapshot | null>(null);
-  const activeTab = tabs.find((item) => item.isActive)?.tab ?? null;
-  const paneHeaderActionsPortalName =
-    activeTab?.target.kind === "agent"
-      ? buildPaneHeaderActionsPortalName(normalizedServerId, normalizedWorkspaceId, activeTab.tabId)
-      : null;
 
   const handleTabsContainerLayout = useCallback((event: LayoutChangeEvent) => {
     updateMeasuredWidth(setTabsContainerWidth, event);
@@ -998,8 +990,7 @@ function ResolvedWorkspaceDesktopTabsRow({
         DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH +
           (focusModeEnabled ? exitFocusModeWidth : 0) +
           (showPaneSplitActions ? PANE_SPLIT_ACTIONS_RESERVED_WIDTH : 0) +
-          (showPaneMaximizeAction ? PANE_MAXIMIZE_ACTION_RESERVED_WIDTH : 0) +
-          (paneHeaderActionsPortalName ? PANE_HEADER_AGENT_ACTIONS_RESERVED_WIDTH : 0),
+          (showPaneMaximizeAction ? PANE_MAXIMIZE_ACTION_RESERVED_WIDTH : 0),
       ),
       rowPaddingHorizontal: TAB_ROW_PADDING_HORIZONTAL,
       tabGap: TAB_CHIP_GAP,
@@ -1010,13 +1001,7 @@ function ResolvedWorkspaceDesktopTabsRow({
       tabHorizontalPadding: TAB_CHIP_HORIZONTAL_PADDING,
       closeButtonWidth: TAB_CLOSE_BUTTON_RESERVED_WIDTH,
     }),
-    [
-      exitFocusModeWidth,
-      focusModeEnabled,
-      paneHeaderActionsPortalName,
-      showPaneMaximizeAction,
-      showPaneSplitActions,
-    ],
+    [exitFocusModeWidth, focusModeEnabled, showPaneMaximizeAction, showPaneSplitActions],
   );
 
   const fallbackTabLabels = useMemo(
@@ -1333,11 +1318,6 @@ function ResolvedWorkspaceDesktopTabsRow({
           rightStyle={tabScrollBoundary.rightShadeStyle}
         />
       </View>
-      {paneHeaderActionsPortalName ? (
-        <View style={styles.paneHeaderActions} testID="pane-header-actions">
-          <PortalHost name={paneHeaderActionsPortalName} />
-        </View>
-      ) : null}
       <WorkspacePaneToolbarActions
         showNewTabButton={layout.requiresHorizontalScrollFallback}
         showSplitActions={showPaneSplitActions}
@@ -1508,12 +1488,6 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: TAB_ROW_PADDING_HORIZONTAL,
-  },
-  paneHeaderActions: {
-    width: PANE_HEADER_AGENT_ACTIONS_RESERVED_WIDTH,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingRight: theme.spacing[1],
   },
   exitFocusModeSlot: {
     alignSelf: "stretch",

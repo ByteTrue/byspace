@@ -59,7 +59,7 @@ test.describe("desktop chat outline", () => {
       expect(jumps.requests()[0]).toMatchObject({ limit: 40, mergeWindow: true });
 
       const scrollToBottom = page
-        .getByTestId("pane-header-actions")
+        .getByTestId("composer-track-bar")
         .getByTestId("scroll-to-bottom-button");
       await expect(scrollToBottom).toBeVisible();
       await scrollToBottom.click();

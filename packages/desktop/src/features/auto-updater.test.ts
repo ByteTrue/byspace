@@ -29,6 +29,13 @@ vi.mock("electron", () => ({
   app: {
     getPath: vi.fn(),
     isPackaged: true,
+    quit: vi.fn(),
+  },
+  net: {
+    fetch: vi.fn(),
+  },
+  shell: {
+    openPath: vi.fn(),
   },
 }));
 
@@ -103,6 +110,16 @@ describe("shouldInstallAppUpdateOnQuit", () => {
     expect(shouldInstallAppUpdateOnQuit({ platform: "linux", isAppImage: false })).toBe(true);
     expect(shouldInstallAppUpdateOnQuit({ platform: "darwin", isAppImage: false })).toBe(true);
     expect(shouldInstallAppUpdateOnQuit({ platform: "win32", isAppImage: false })).toBe(true);
+  });
+
+  it("does not invoke the ZIP updater after opening a manual DMG", () => {
+    expect(
+      shouldInstallAppUpdateOnQuit({
+        platform: "darwin",
+        isAppImage: false,
+        manualInstallQuitRequested: true,
+      }),
+    ).toBe(false);
   });
 });
 
