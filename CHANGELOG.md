@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.11.0 - 2026-09-02
+
+### Added
+
+- Added upstream Paseo v0.7.2 baseline alignment, incorporating mobile streaming smoothness under JS stall, Astro syntax highlighting, and monorepo source paths for Git-hosted plugins.
+- Added active-turn steering and project-level skill discovery for Pi agents.
+- Added visible loading indicators and feedback for slash-command autocomplete.
+
+### Improved
+
+- Improved terminal character measurement and spacing for CJK / double-width glyphs.
+- Stabilized terminal initial mount fit and coalesced passive resize events into a 250ms trailing window to eliminate remote session redraw storms.
+- Relocated agent conversation collapse and scroll-to-bottom controls to the composer trackbar.
+- Standardized desktop external link navigation to always open in the system default browser.
+
+### Fixed
+
+- Fixed macOS desktop updater to open the downloaded DMG via the system shell before process exit for manual drag-and-drop overwrite.
+- Fixed large diff rendering stalls, Codex rewind pagination errors, and image preview escape shortcuts from upstream v0.7.2.
+- Fixed terminal size ownership loss during pane split and tab switching.
+
 ## 0.10.0 - 2026-09-02
 
 ### Added
