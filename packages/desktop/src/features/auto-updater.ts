@@ -1,6 +1,8 @@
+import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 import { app, net, shell } from "electron";
 import { UUID } from "builder-util-runtime";
 import { autoUpdater } from "electron-updater";
@@ -31,6 +33,17 @@ export {
   type AppUpdateCheckResult,
   type AppUpdateInstallResult,
 };
+
+const execFileAsync = promisify(execFile);
+
+export async function stripMacQuarantineAttribute(filePath: string): Promise<void> {
+  if (process.platform !== "darwin") return;
+  try {
+    await execFileAsync("xattr", ["-c", filePath]);
+  } catch {
+    // Best effort: xattr failure should not block opening the DMG
+  }
+}
 
 let cachedStagingUserIdPromise: Promise<string> | null = null;
 let manualInstallQuitRequested = false;
@@ -113,6 +126,7 @@ class ElectronAppUpdateRuntime implements AppUpdateRuntime {
               downloadsDirectory: app.getPath("downloads"),
               fetch: (url) => net.fetch(url),
               openPath: (filePath) => shell.openPath(filePath),
+              stripQuarantine: (filePath) => stripMacQuarantineAttribute(filePath),
             });
           },
           quit: () => {
