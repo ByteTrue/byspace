@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
+  ActivityIndicator,
   ScrollView,
   Text,
   View,
@@ -216,7 +217,8 @@ export function Autocomplete({
   if (isLoading) {
     return (
       <View style={containerStyle}>
-        <View style={styles.emptyItem}>
+        <View style={styles.loadingItem}>
+          <ActivityIndicator size="small" color={theme.colors.foregroundMuted} />
           <Text style={styles.emptyText}>{resolvedLoadingText}</Text>
         </View>
       </View>
@@ -387,6 +389,13 @@ const styles = StyleSheet.create((theme: Theme) => ({
   emptyItem: {
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[3],
+  },
+  loadingItem: {
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[3],
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
   },
   emptyText: {
     color: theme.colors.foregroundMuted,

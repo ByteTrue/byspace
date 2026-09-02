@@ -226,7 +226,7 @@ const providerLaunchCases: ProviderLaunchCase[] = [
   {
     provider: "pi",
     binaryName: "pi",
-    args: ["--mode", "rpc"],
+    args: ["--mode", "rpc", "--approve"],
     launchMode: "piRuntime",
   },
 ];
