@@ -1,0 +1,5 @@
+Improved
+- Improved Pi thinking level selector to filter options strictly by model thinkingLevelMap, showing only model-supported levels and synchronizing clamped thinking on model change.
+- Improved macOS desktop updater to automatically clear the com.apple.quarantine attribute from the downloaded DMG before opening, eliminating Gatekeeper quarantine blocks on manual overwrite install.
+
+Full notes: https://github.com/ByteTrue/byspace/releases
