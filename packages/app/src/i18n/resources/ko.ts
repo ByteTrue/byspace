@@ -204,6 +204,7 @@ export const ko: TranslationResources = {
     scrollToBottom: "맨 아래로 스크롤",
     collapseAllToolCalls: "모든 도구 호출 접기",
     historyLoadFailed: "에이전트 기록을 로드할 수 없습니다.",
+    messageCapped: "이 메시지는 길이 제한으로 잘렸습니다({{bytes}}바이트).",
     permission: {
       plan: "계획",
       required: "권한 필요",
@@ -347,7 +348,6 @@ export const ko: TranslationResources = {
         added: "추가됨",
         started: "시작됨",
         completed: "완료됨",
-        reopened: "다시 열림",
       },
     },
     compaction: {

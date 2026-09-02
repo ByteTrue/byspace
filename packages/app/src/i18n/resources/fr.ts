@@ -206,6 +206,7 @@ export const fr: TranslationResources = {
     scrollToBottom: "Faire défiler vers le bas",
     collapseAllToolCalls: "Réduire tous les appels d’outils",
     historyLoadFailed: "Impossible de charger l’historique de l’agent",
+    messageCapped: "Ce message a été tronqué ({{bytes}} octets).",
     permission: {
       plan: "Plan",
       required: "Autorisation requise",
@@ -350,7 +351,6 @@ export const fr: TranslationResources = {
         added: "Ajoutée",
         started: "Commencée",
         completed: "Terminée",
-        reopened: "Rouverte",
       },
     },
     compaction: {

@@ -5,7 +5,15 @@ import { PluginIdSchema } from "@getpaseo/protocol/messages";
 
 export const BYSPACE_PLUGIN_MANIFEST_FILENAME = "byspace-plugin.json";
 export const LEGACY_PASEO_PLUGIN_MANIFEST_FILENAME = "paseo-plugin.json";
-const PluginManifestSchema = z.object({ id: PluginIdSchema }).strict();
+const PluginBuildCommandSchema = z
+  .array(z.string().refine((argument) => argument.trim().length > 0))
+  .min(1);
+const PluginManifestSchema = z
+  .object({
+    id: PluginIdSchema,
+    build: z.array(PluginBuildCommandSchema).min(1).optional(),
+  })
+  .strict();
 
 export type PluginManifest = z.infer<typeof PluginManifestSchema>;
 
@@ -20,7 +28,7 @@ async function resolvePluginManifestPath(directory: string): Promise<string> {
   const legacyPath = path.join(directory, LEGACY_PASEO_PLUGIN_MANIFEST_FILENAME);
   const [hasByspaceManifest, hasLegacyManifest] = await Promise.all([
     isFile(byspacePath),
-    // COMPAT(byspacePluginManifestFilename): added after v0.7.0-beta.2; remove when legacy paseo-plugin.json plugins are no longer supported.
+    // COMPAT(byspacePluginManifestFilename): added after v0.7.0-beta.2; remove after 2027-09-15.
     isFile(legacyPath),
   ]);
   if (hasByspaceManifest && hasLegacyManifest) {

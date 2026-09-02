@@ -139,10 +139,13 @@ describe("DaemonSession", () => {
           state: "not_connected",
           daemonId: null,
           hubOrigin: null,
-          scopes: [],
+          permissions: [],
           connectedAt: null,
           lastError: null,
         }),
+        updatePermissions: async () => {
+          throw new Error("Hub permission update failed");
+        },
         disconnect: async () => {
           throw new Error("Hub revocation failed (503)");
         },
