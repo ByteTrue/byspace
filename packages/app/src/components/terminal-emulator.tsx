@@ -477,13 +477,15 @@ export default function TerminalEmulator({
     runtime.mount({
       root,
       host,
-      initialSnapshot: initialSnapshotRef.current,
+      initialSnapshot: null,
       scrollback: scrollbackLinesRef.current,
       theme: mountedThemeRef.current,
       fontFamily: fontFamilyRef.current,
       fontSize: fontSizeRef.current,
+      onRendererReady: () => {
+        onRendererReadyChangeRef.current?.({ streamKey, isReady: true });
+      },
     });
-    onRendererReadyChangeRef.current?.({ streamKey, isReady: true });
 
     return () => {
       runtime.unmount();
@@ -535,7 +537,7 @@ export default function TerminalEmulator({
     if (focusRequestToken <= 0) {
       return () => {};
     }
-    runtimeRef.current?.resize({ forceClaim: true, shouldClaim: true });
+    runtimeRef.current?.resizeAfterLayout({ forceClaim: true, shouldClaim: true });
     return focusWithRetries({
       focus: () => {
         runtimeRef.current?.focus();
@@ -555,7 +557,7 @@ export default function TerminalEmulator({
     if (resizeRequestToken <= 0) {
       return;
     }
-    runtimeRef.current?.resize({ forceClaim: false, shouldClaim: false });
+    runtimeRef.current?.resizeAfterLayout({ forceClaim: false, shouldClaim: false });
   }, [resizeRequestToken]);
 
   const showTerminalContextMenu = useCallback(() => {
