@@ -141,6 +141,23 @@ function appendPiLaunchArgs(
   for (const extensionPath of session.extensionPaths ?? []) {
     argv.push("--extension", extensionPath);
   }
+  if (!hasApproveFlag(argv)) {
+    argv.push("--approve");
+  }
+}
+
+function hasApproveFlag(argv: string[]): boolean {
+  for (let i = 0; i < argv.length; i += 1) {
+    if (
+      argv[i] === "--approve" ||
+      argv[i] === "-a" ||
+      argv[i] === "--no-approve" ||
+      argv[i] === "-na"
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function hasModeFlag(argv: string[]): boolean {

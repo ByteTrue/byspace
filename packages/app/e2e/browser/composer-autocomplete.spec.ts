@@ -148,6 +148,52 @@ async function installListCommandsStub(page: Page): Promise<void> {
   });
 }
 
+async function installDelayedListCommandsStub(page: Page, delayMs: number): Promise<void> {
+  await page.routeWebSocket(daemonWsRoutePattern(), (ws) => {
+    const server = ws.connectToServer();
+
+    ws.onMessage((message) => {
+      server.send(message);
+    });
+
+    server.onMessage((message) => {
+      if (typeof message !== "string") {
+        ws.send(message);
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(message) as {
+          type?: string;
+          message?: {
+            type?: string;
+            payload?: {
+              commands?: unknown;
+              error?: string | null;
+            };
+          };
+        };
+        if (
+          parsed.type === "session" &&
+          parsed.message?.type === "list_commands_response" &&
+          parsed.message.payload
+        ) {
+          parsed.message.payload.commands = TEST_COMMANDS;
+          parsed.message.payload.error = null;
+          setTimeout(() => {
+            ws.send(JSON.stringify(parsed));
+          }, delayMs);
+          return;
+        }
+      } catch {
+        // Forward non-JSON frames unchanged.
+      }
+
+      ws.send(message);
+    });
+  });
+}
+
 async function openAppWideNewWorkspace(page: Page): Promise<void> {
   await page.getByTestId("sidebar-global-new-workspace").first().click();
   await page.waitForURL((url) => url.pathname === "/new", { timeout: 30_000 });
@@ -323,15 +369,12 @@ function expectPopoverFramesStable(frames: PopoverFrame[]): void {
 
   const finalFrame = visibleFrames[visibleFrames.length - 1];
   const jumpingFrame = visibleFrames.find(
-    (frame) =>
-      Math.abs(frame.top - finalFrame.top) > 4 ||
-      Math.abs(frame.bottom - finalFrame.bottom) > 4 ||
-      Math.abs(frame.height - finalFrame.height) > 4,
+    (frame) => Math.abs(frame.bottom - finalFrame.bottom) > 4,
   );
 
   expect(
     jumpingFrame,
-    `expected first visible popover paint to be stable; first=${formatFrame(
+    `expected first visible popover paint to be anchored; first=${formatFrame(
       visibleFrames[0],
     )} jumping=${formatFrame(jumpingFrame)} final=${formatFrame(finalFrame)}`,
   ).toBeUndefined();
@@ -653,6 +696,31 @@ test.describe("Composer autocomplete", () => {
     }
   });
 
+  test("shows loading state while commands are fetching and renders results once loaded", async ({
+    page,
+  }) => {
+    await installDelayedListCommandsStub(page, 400);
+    const agent = await openReadyMockAgent(page);
+
+    try {
+      const input = composerLocator(page);
+      await expect(input).toBeEditable({ timeout: 30_000 });
+
+      await input.fill("/");
+      const popover = page.getByTestId("composer-autocomplete-popover");
+      await expect(popover.getByText("Loading commands...", { exact: true })).toBeVisible({
+        timeout: 30_000,
+      });
+
+      await expect(popover.getByText("/help", { exact: true }).first()).toBeVisible({
+        timeout: 30_000,
+      });
+      await expect(popover.getByText("Loading commands...", { exact: true })).not.toBeVisible();
+    } finally {
+      await agent.cleanup();
+    }
+  });
+
   test.describe("compact sidebar layering", () => {
     test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
@@ -672,6 +740,7 @@ test.describe("Composer autocomplete", () => {
 
         await page.getByRole("button", { name: "Open menu" }).click();
         await expect(page.getByTestId("sidebar-sessions")).toBeInViewport({ timeout: 5_000 });
+        await page.waitForTimeout(300);
 
         const popoverBox = await popover.boundingBox();
         expect(popoverBox).not.toBeNull();
