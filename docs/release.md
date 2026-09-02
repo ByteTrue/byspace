@@ -17,7 +17,7 @@ The iOS IPA requires user re-signing. The Android APK uses the long-lived ByteTr
 
 Stable Web releases deploy to `app.byspace.cc.cd`. Versions with a prerelease suffix deploy to `app-beta.byspace.cc.cd`.
 
-The macOS client does not replace the running app in place. It verifies the current-architecture DMG from the release manifest, saves it to Downloads, opens it, and exits so the user can drag the new app over the old one. Every desktop release must publish both `arm64` and `x64` DMGs with SHA-512 entries in `latest-mac.yml`.
+The macOS client does not replace the running app in place. It verifies the current-architecture DMG from the release manifest, saves it to Downloads, strips its quarantine attribute, opens it, and exits so the user can drag the new app over the old one. Every desktop release must publish both `arm64` and `x64` DMGs with SHA-512 entries in `latest-mac.yml`.
 
 ## Prepare
 

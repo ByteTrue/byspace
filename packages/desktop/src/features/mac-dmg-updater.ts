@@ -20,6 +20,7 @@ export interface MacDmgInstallerDeps {
   downloadsDirectory: string;
   fetch(url: string): Promise<Response>;
   openPath(filePath: string): Promise<string>;
+  stripQuarantine?(filePath: string): Promise<void>;
 }
 
 const RELEASE_DOWNLOAD_BASE = "https://github.com/ByteTrue/byspace/releases/download/";
@@ -65,6 +66,14 @@ export async function downloadAndOpenMacDmg(
 
     await rm(destinationPath, { force: true });
     await rename(temporaryPath, destinationPath);
+
+    if (deps.stripQuarantine) {
+      try {
+        await deps.stripQuarantine(destinationPath);
+      } catch {
+        // Quarantine clearing is best-effort and must not fail valid downloads
+      }
+    }
 
     const openError = await deps.openPath(destinationPath);
     if (openError) {

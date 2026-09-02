@@ -37,9 +37,10 @@ afterEach(async () => {
 });
 
 describe("downloadAndOpenMacDmg", () => {
-  it("downloads, verifies, and opens the DMG for the current architecture", async () => {
+  it("downloads, verifies, strips quarantine, and opens the DMG for the current architecture", async () => {
     const downloadsDirectory = await createDownloadsDirectory();
     const openPath = vi.fn(async () => "");
+    const stripQuarantine = vi.fn(async () => {});
     const fetch = vi.fn(async () => new Response("intel"));
 
     const filePath = await downloadAndOpenMacDmg(updateInfo("intel"), {
@@ -47,6 +48,7 @@ describe("downloadAndOpenMacDmg", () => {
       downloadsDirectory,
       fetch,
       openPath,
+      stripQuarantine,
     });
 
     expect(fetch).toHaveBeenCalledWith(
@@ -54,7 +56,29 @@ describe("downloadAndOpenMacDmg", () => {
     );
     expect(filePath).toBe(path.join(downloadsDirectory, "BySpace-1.2.3-x64.dmg"));
     expect(await readFile(filePath, "utf8")).toBe("intel");
+    expect(stripQuarantine).toHaveBeenCalledWith(filePath);
     expect(openPath).toHaveBeenCalledWith(filePath);
+  });
+
+  it("proceeds to open DMG even if stripQuarantine fails", async () => {
+    const downloadsDirectory = await createDownloadsDirectory();
+    const openPath = vi.fn(async () => "");
+    const stripQuarantine = vi.fn(async () => {
+      throw new Error("xattr failed");
+    });
+    const fetch = vi.fn(async () => new Response("intel"));
+
+    const filePath = await downloadAndOpenMacDmg(updateInfo("intel"), {
+      arch: "x64",
+      downloadsDirectory,
+      fetch,
+      openPath,
+      stripQuarantine,
+    });
+
+    expect(stripQuarantine).toHaveBeenCalledWith(filePath);
+    expect(openPath).toHaveBeenCalledWith(filePath);
+    expect(filePath).toBe(path.join(downloadsDirectory, "BySpace-1.2.3-x64.dmg"));
   });
 
   it("keeps encoded manifest paths inside Downloads", async () => {
