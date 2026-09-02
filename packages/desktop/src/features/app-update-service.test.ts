@@ -30,6 +30,20 @@ class FakeAppUpdateRuntime implements AppUpdateRuntime {
   downloadedVersions: string[] = [];
   installedVersions: string[] = [];
   installModes: Array<{ isSilent: boolean; isForceRunAfter: boolean }> = [];
+  manualInstallEvents: string[] = [];
+  manualInstaller?: AppUpdateRuntime["manualInstaller"];
+
+  enableManualInstaller(openError?: Error): void {
+    this.manualInstaller = {
+      open: async (info) => {
+        this.manualInstallEvents.push(`open:${info.version}`);
+        if (openError) throw openError;
+      },
+      quit: () => {
+        this.manualInstallEvents.push("quit");
+      },
+    };
+  }
 
   configure(input: AppUpdateRuntimeConfiguration): void {
     this.configuration = input;
@@ -469,6 +483,62 @@ describe("app update service", () => {
 
     expect(installed).toBe(false);
     expect(runtime.installedVersions).toEqual([]);
+  });
+
+  it("exposes a macOS manual installer without waiting for a ZIP download", async () => {
+    const { runtime, service } = createService();
+    runtime.enableManualInstaller();
+    runtime.nextCheck({ isUpdateAvailable: true, updateInfo: rolledOutUpdate });
+
+    const result = await service.checkForAppUpdate({
+      currentVersion: "1.2.3",
+      releaseChannel: "stable",
+      intent: "manual",
+    });
+
+    expect(result.readyToInstall).toBe(true);
+    expect(runtime.downloadCallCount).toBe(0);
+  });
+
+  it("opens the macOS DMG before stopping the daemon and quitting", async () => {
+    const { runtime, service } = createService();
+    runtime.enableManualInstaller();
+    runtime.nextCheck({ isUpdateAvailable: true, updateInfo: rolledOutUpdate });
+
+    const result = await service.downloadAndInstallUpdate(
+      { currentVersion: "1.2.3", releaseChannel: "stable" },
+      async () => {
+        runtime.manualInstallEvents.push("before-quit");
+      },
+    );
+
+    expect(result).toEqual({
+      installed: true,
+      version: "1.2.4",
+      message: "Update DMG opened. Finish installation in Finder.",
+    });
+    expect(runtime.manualInstallEvents).toEqual(["open:1.2.4", "before-quit", "quit"]);
+    expect(runtime.downloadCallCount).toBe(0);
+    expect(runtime.installedVersions).toEqual([]);
+  });
+
+  it("keeps the app running when the macOS DMG cannot be opened", async () => {
+    const { runtime, service } = createService();
+    runtime.enableManualInstaller(new Error("Launch Services rejected the image"));
+    runtime.nextCheck({ isUpdateAvailable: true, updateInfo: rolledOutUpdate });
+    let beforeQuitCalled = false;
+
+    const result = await service.downloadAndInstallUpdate(
+      { currentVersion: "1.2.3", releaseChannel: "stable" },
+      async () => {
+        beforeQuitCalled = true;
+      },
+    );
+
+    expect(result.installed).toBe(false);
+    expect(result.message).toContain("Launch Services rejected the image");
+    expect(runtime.manualInstallEvents).toEqual(["open:1.2.4"]);
+    expect(beforeQuitCalled).toBe(false);
   });
 
   it("rechecks for the newest release before a manual install", async () => {

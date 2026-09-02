@@ -238,7 +238,7 @@ test.describe("Agent stream UI", () => {
     await expectScrollStaysFixed(page, baseline);
   });
 
-  test("keeps stream controls in active pane headers across desktop, compact, and split layouts", async ({
+  test("keeps stream controls above the composer across desktop, compact, and split layouts", async ({
     page,
   }, testInfo) => {
     test.setTimeout(120_000);
@@ -262,11 +262,21 @@ test.describe("Agent stream UI", () => {
       });
       await expectComposerVisible(page);
 
-      const headerControls = page
-        .getByTestId("pane-header-actions")
-        .getByTestId("agent-stream-controls");
-      await expect(headerControls).toBeVisible();
-      const collapseAll = headerControls.getByRole("button", {
+      const composerTrackBar = page.getByTestId("composer-track-bar");
+      const composerControls = composerTrackBar.getByTestId("agent-stream-controls");
+      await expect(composerControls).toBeVisible();
+      await expect(page.getByTestId("pane-header-actions")).toHaveCount(0);
+      const composer = page.getByRole("textbox", { name: "Message agent..." }).first();
+      const [controlsBox, composerBox] = await Promise.all([
+        composerControls.boundingBox(),
+        composer.boundingBox(),
+      ]);
+      expect(controlsBox).not.toBeNull();
+      expect(composerBox).not.toBeNull();
+      expect((controlsBox?.y ?? 0) + (controlsBox?.height ?? 0)).toBeLessThanOrEqual(
+        composerBox?.y ?? 0,
+      );
+      const collapseAll = composerControls.getByRole("button", {
         name: "Collapse all tool calls",
       });
       await expect(collapseAll).toBeVisible();
@@ -319,23 +329,29 @@ test.describe("Agent stream UI", () => {
         deltaY: -900,
         minDistanceFromBottom: 300,
       });
-      const scrollToBottom = headerControls.getByRole("button", { name: "Scroll to bottom" });
+      const scrollToBottom = composerControls.getByRole("button", {
+        name: "Scroll to bottom",
+      });
       await expect(scrollToBottom).toBeVisible();
+      await page.screenshot({
+        path: testInfo.outputPath("desktop-composer-stream-controls.png"),
+        animations: "disabled",
+      });
       await scrollToBottom.click();
       await expect(scrollToBottom).toBeHidden();
 
       await page.setViewportSize({ width: 390, height: 844 });
-      await expect(headerControls).toBeVisible();
+      await expect(composerControls).toBeVisible();
       await page.screenshot({
-        path: testInfo.outputPath("compact-pane-header-controls.png"),
+        path: testInfo.outputPath("compact-composer-stream-controls.png"),
         animations: "disabled",
       });
 
       await page.setViewportSize({ width: 1440, height: 900 });
       await splitCurrentPanelRight(page);
-      await expect(headerControls).toBeVisible();
+      await expect(composerControls).toBeVisible();
       await page.screenshot({
-        path: testInfo.outputPath("split-pane-header-controls.png"),
+        path: testInfo.outputPath("split-composer-stream-controls.png"),
         animations: "disabled",
       });
     } finally {
