@@ -3,7 +3,8 @@
   "version": "0.10.0",
   "files": [
     "dist",
-    "!dist/**/*.map"
+    "!dist/**/*.map",
+    "src/astro/LICENSE"
   ],
   "type": "module",
   "main": "./dist/index.js",

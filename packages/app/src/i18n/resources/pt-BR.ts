@@ -204,6 +204,7 @@ export const ptBR: TranslationResources = {
     scrollToBottom: "Rolar para o fim",
     collapseAllToolCalls: "Recolher todas as chamadas de ferramentas",
     historyLoadFailed: "Não foi possível carregar o histórico do agente",
+    messageCapped: "Esta mensagem foi truncada ({{bytes}} bytes).",
     permission: {
       plan: "Plano",
       required: "Permissão necessária",
@@ -349,7 +350,6 @@ export const ptBR: TranslationResources = {
         added: "Adicionada",
         started: "Iniciada",
         completed: "Concluída",
-        reopened: "Reaberta",
       },
     },
     compaction: {

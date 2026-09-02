@@ -204,6 +204,7 @@ export const es: TranslationResources = {
     scrollToBottom: "Desplazarse hacia abajo",
     collapseAllToolCalls: "Contraer todas las llamadas a herramientas",
     historyLoadFailed: "No se pudo cargar el historial del agente",
+    messageCapped: "Este mensaje fue truncado ({{bytes}} bytes).",
     permission: {
       plan: "Plan",
       required: "Permiso requerido",
@@ -349,7 +350,6 @@ export const es: TranslationResources = {
         added: "Añadida",
         started: "Iniciada",
         completed: "Completada",
-        reopened: "Reabierta",
       },
     },
     compaction: {

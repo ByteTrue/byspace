@@ -201,6 +201,7 @@ export const en = {
     scrollToBottom: "Scroll to bottom",
     collapseAllToolCalls: "Collapse all tool calls",
     historyLoadFailed: "Couldn't load agent history",
+    messageCapped: "This message was capped ({{bytes}} bytes).",
     permission: {
       plan: "Plan",
       required: "Permission Required",
@@ -344,7 +345,6 @@ export const en = {
         added: "Added",
         started: "Started",
         completed: "Completed",
-        reopened: "Reopened",
       },
     },
     compaction: {

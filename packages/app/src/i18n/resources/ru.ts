@@ -204,6 +204,7 @@ export const ru: TranslationResources = {
     scrollToBottom: "Прокрутить вниз",
     collapseAllToolCalls: "Свернуть все вызовы инструментов",
     historyLoadFailed: "Не удалось загрузить историю агента",
+    messageCapped: "Это сообщение было обрезано ({{bytes}} байт).",
     permission: {
       plan: "План",
       required: "Требуется разрешение",
@@ -348,7 +349,6 @@ export const ru: TranslationResources = {
         added: "Добавлена",
         started: "Начата",
         completed: "Завершена",
-        reopened: "Возобновлена",
       },
     },
     compaction: {
