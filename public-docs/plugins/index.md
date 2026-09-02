@@ -16,7 +16,7 @@ surfaces and their current status.
 
 BySpace plugins add native workspace panels, composer pills, Command Center items, global surfaces, app themes, daemon behavior, and composer attachment sources. They run on every BySpace client connected to the host, including mobile.
 
-Plugins are trusted local code. Install only code you trust: backend code runs unsandboxed with access to the daemon machine, and client contributions run inside the BySpace app.
+> **Trust every plugin you add.** `byspace plugin add` and `byspace plugin install` mean “I trust this codebase.” Server code and Git preparation commands run unsandboxed with the daemon user's access on the daemon host; client contributions run inside BySpace. Dependencies and future updates are part of that decision. With `--host`, commands run on the remote daemon host.
 
 On the target host, open **Settings → Plugins** and turn on **Enable plugins**. This is the global switch for every configured plugin on that daemon.
 
@@ -38,7 +38,10 @@ cd /absolute/path/to/workspace-plugin
 npm install
 ```
 
-`init` creates a strict TypeScript project. It does not run the package manager. `index.ts` registers contributions; client UI lives in `*.client.tsx` files.
+`init` creates a strict TypeScript project. It does not run the package manager. `npm install`
+installs development dependencies for local typechecking and tests. BySpace supplies the plugin SDK,
+React, React Native, TanStack Query, and Zod at runtime; plugins do not need a `build` hook for these
+modules. `index.ts` registers contributions; client UI lives in `*.client.tsx` files.
 
 Plugins run on desktop, browser, iOS, and Android. BySpace ships several themes. Color every `Text` from `theme.colors.foreground` or `theme.colors.foregroundMuted`, and size layout from `layout.compact`. Hardcoded black text fails in dark themes.
 
@@ -123,10 +126,13 @@ To install a plugin published through GitHub or another Git host:
 
 ```bash
 byspace plugin add owner/repository
+byspace plugin add https://gitlab.com/group/repository.git
 byspace plugin add https://git.example.com/owner/repository.git
-byspace plugin add owner/monorepo --path plugins/workspace
+byspace plugin add owner/monorepo:plugins/workspace
 byspace plugin add owner/repository --ref main
 ```
+
+Append `:relative/path` to the source when the plugin lives below the repository root.
 
 An omitted `--ref` tracks the default branch. Explicit branches track updates; tags and commits are
 pinned. Check and apply updates with:
@@ -137,9 +143,26 @@ byspace plugin update workspace-plugin
 byspace plugin update --all
 ```
 
-BySpace validates and compiles the new commit before replacing a running version. If startup fails,
-the previous version is restored. Git installation runs no package manager or install scripts, so
-published plugins must use BySpace's host-provided modules or include the source they bundle.
+Most plugins should omit `build`. BySpace compiles TypeScript and TSX and supplies its runtime modules.
+Declare preparation only when the staged checkout must install another dependency, generate source,
+or perform another required build step:
+
+```json
+{
+  "id": "workspace-plugin",
+  "build": [
+    ["npm", "ci"],
+    ["npm", "run", "build"]
+  ]
+}
+```
+
+Each `build` entry is a non-empty argv array, executed directly without a shell from the staged
+plugin directory. BySpace never chooses a package manager or infers commands from lockfiles. On
+install and update it resolves the exact commit, runs these commands, then validates, compiles, and
+activates the candidate. A failed command discards the candidate and keeps the installed/running
+version. The daemon log records the exact argv and output; `--host` runs them on the remote daemon
+host.
 
 ## Edit and reload
 
