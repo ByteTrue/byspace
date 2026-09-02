@@ -91,9 +91,13 @@ if (remoteMainCommit !== headCommit) {
   throw new Error(`origin/main is ${remoteMainCommit}, expected ${headCommit}.`);
 }
 
+const repository = process.env.GITHUB_REPOSITORY || "ByteTrue/byspace";
+
 const successfulCiRun = tryRunQuiet("gh", [
   "run",
   "list",
+  "--repo",
+  repository,
   "--workflow",
   "CI",
   "--commit",
