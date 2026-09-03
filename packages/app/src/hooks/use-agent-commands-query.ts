@@ -35,6 +35,12 @@ export async function fetchAgentCommands(input: {
     agentId: input.agentId,
     draftConfig: input.draftConfig,
   });
+  if (response.error) {
+    // Daemon-side failures (agent not found, provider unavailable, …) come back with
+    // an empty commands array. Treating that as success would cache the empty list
+    // and hide all provider skills until the query goes stale.
+    throw new Error(response.error);
+  }
   return response.commands as AgentSlashCommand[];
 }
 
@@ -43,6 +49,27 @@ interface UseAgentCommandsQueryOptions {
   agentId: string;
   enabled?: boolean;
   draftConfig?: DraftCommandConfig;
+}
+
+export function resolveAgentCommandsQueryEnabled(input: {
+  enabled: boolean;
+  hasClient: boolean;
+  isConnected: boolean;
+  agentId: string;
+  draftConfig?: DraftCommandConfig;
+}): boolean {
+  if (
+    !input.enabled ||
+    !input.hasClient ||
+    !input.isConnected ||
+    (!input.agentId && !input.draftConfig)
+  ) {
+    return false;
+  }
+  // Draft listings without a model return an empty list server-side (listDraftCommands
+  // bails when the default model has not resolved yet). Gating here keeps the query
+  // pending instead of caching an empty command list while provider models load.
+  return input.draftConfig === undefined || !!input.draftConfig.model;
 }
 
 export function useAgentCommandsQuery({
@@ -65,7 +92,13 @@ export function useAgentCommandsQuery({
       }
       return fetchAgentCommands({ client, agentId, draftConfig });
     },
-    enabled: queryEnabled && !!client && isConnected && (!!agentId || !!draftConfig),
+    enabled: resolveAgentCommandsQueryEnabled({
+      enabled: queryEnabled,
+      hasClient: !!client,
+      isConnected,
+      agentId,
+      draftConfig,
+    }),
     staleTime: draftConfig ? DRAFT_COMMANDS_STALE_TIME : SESSION_COMMANDS_STALE_TIME,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
