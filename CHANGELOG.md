@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.11.2 - 2026-09-03
+
+### Added
+
+- Added Remote SSH password authentication with host key fingerprint confirmation dialogs for desktop connections.
+
+### Fixed
+
+- Fixed Pi Agent turn boundary settlement to complete immediately on `agent_end` (`willRetry: false`) without waiting for delayed background extension processing, preventing UI from remaining stuck in the running state after response completion.
+- Fixed `SyncedLoader` working indicator from freezing into a static glyph on Windows and environments with reduced-motion preferences enabled.
+- Fixed Terminal OSC 8 hyperlinks to route directly to secure external browser navigation, eliminating dangerous link warnings and Electron popup blocks.
+
 ## 0.11.1 - 2026-09-02
 
 ### Improved
