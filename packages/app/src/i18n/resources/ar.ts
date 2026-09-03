@@ -1634,18 +1634,34 @@ export const ar: TranslationResources = {
     },
     remoteSsh: {
       title: "SSH عن بُعد",
-      helper: "الاتصال بخادم Paseo يعمل على المضيف البعيد.",
+      helper: "الاتصال بخادم BySpace يعمل على المضيف البعيد.",
       fields: {
         target: "مضيف SSH",
+        password: "كلمة المرور",
+        passwordOptional: "اختياري - لمصادقة كلمة المرور",
+      },
+      passwordVisibility: {
+        show: "إظهار كلمة المرور",
+        hide: "إخفاء كلمة المرور",
       },
       actions: {
         cancel: "إلغاء",
         connect: "اتصال",
         connecting: "جارٍ الاتصال...",
       },
+      hostKey: {
+        title: "التحقق من مفتاح المضيف",
+        firstUseMessage: "أول اتصال بـ {{target}}. تحقق من بصمة مفتاحه:",
+        changedWarning:
+          "تغير مفتاح {{target}} منذ آخر اتصال. قد يكون ذلك إعادة تثبيت للخادم — أو طرفًا يعترض الاتصال.",
+        pinnedFingerprint: "البصمة السابقة: {{fingerprint}}",
+        help: "ثق واتصل فقط إذا كانت تطابق ما أخبرك به مشغل الخادم.",
+        trust: "ثق واتصل",
+        reject: "إلغاء",
+      },
       errors: {
         targetRequired: "مضيف SSH مطلوب",
-        invalidTarget: "أدخل مضيف ssh:// صالحًا",
+        invalidTarget: "أدخل مضيف SSH صالحًا، مثل user@host",
         failedToConnect: "تعذر الاتصال عبر SSH. {{detail}}",
       },
     },

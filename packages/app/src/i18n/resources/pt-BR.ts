@@ -1665,18 +1665,34 @@ export const ptBR: TranslationResources = {
     },
     remoteSsh: {
       title: "SSH remoto",
-      helper: "Conecte-se a um daemon Paseo no host remoto.",
+      helper: "Conecte-se a um daemon BySpace no host remoto.",
       fields: {
         target: "Host SSH",
+        password: "Senha",
+        passwordOptional: "Opcional — para autenticação por senha",
+      },
+      passwordVisibility: {
+        show: "Mostrar senha",
+        hide: "Ocultar senha",
       },
       actions: {
         cancel: "Cancelar",
         connect: "Conectar",
         connecting: "Conectando...",
       },
+      hostKey: {
+        title: "Verificar chave do host",
+        firstUseMessage: "Primeira conexão a {{target}}. Verifique a impressão digital da chave:",
+        changedWarning:
+          "A chave de {{target}} MUDOU desde a última conexão. Pode ser uma reinstalação do servidor — ou um terceiro interceptando.",
+        pinnedFingerprint: "Impressão digital anterior: {{fingerprint}}",
+        help: "Só confie e conecte se corresponder ao que o operador do servidor informou.",
+        trust: "Confiar e conectar",
+        reject: "Cancelar",
+      },
       errors: {
         targetRequired: "O host SSH é obrigatório",
-        invalidTarget: "Insira um host ssh:// válido",
+        invalidTarget: "Insira um host SSH válido, como user@host",
         failedToConnect: "Não foi possível conectar por SSH. {{detail}}",
       },
     },

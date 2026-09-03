@@ -1643,18 +1643,34 @@ export const ko: TranslationResources = {
     },
     remoteSsh: {
       title: "원격 SSH",
-      helper: "원격 호스트에서 실행 중인 Paseo 데몬에 연결합니다.",
+      helper: "원격 호스트에서 실행 중인 BySpace 데몬에 연결합니다.",
       fields: {
         target: "SSH 호스트",
+        password: "비밀번호",
+        passwordOptional: "선택 사항 - 비밀번호 인증 시 입력",
+      },
+      passwordVisibility: {
+        show: "비밀번호 표시",
+        hide: "비밀번호 숨기기",
       },
       actions: {
         cancel: "취소",
         connect: "연결",
         connecting: "연결 중...",
       },
+      hostKey: {
+        title: "호스트 키 확인",
+        firstUseMessage: "{{target}}에 처음 연결합니다. 호스트 키 지문을 확인하세요:",
+        changedWarning:
+          "{{target}}의 호스트 키가 마지막 연결 이후 변경되었습니다. 서버 재설정이거나 중간자 공격일 수 있습니다.",
+        pinnedFingerprint: "이전 지문: {{fingerprint}}",
+        help: "서버 운영자가 알려준 것과 일치할 때만 신뢰하고 연결하세요.",
+        trust: "신뢰하고 연결",
+        reject: "취소",
+      },
       errors: {
         targetRequired: "SSH 호스트가 필요합니다",
-        invalidTarget: "유효한 ssh:// 호스트를 입력하세요",
+        invalidTarget: "유효한 SSH 호스트를 입력하세요 (예: user@host)",
         failedToConnect: "SSH로 연결할 수 없습니다. {{detail}}",
       },
     },

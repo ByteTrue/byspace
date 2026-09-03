@@ -114,6 +114,7 @@ import {
   useHosts,
 } from "@/runtime/host-runtime";
 import { getDaemonStartService } from "@/runtime/daemon-start-service";
+import { SshHostKeyPromptModal } from "@/components/ssh-host-key-prompt-modal";
 import { usePanelStore } from "@/stores/panel-store";
 import { flushDraftPersistStorage } from "@/stores/draft-store";
 import { getNextThemePreference } from "@/styles/theme";
@@ -666,6 +667,7 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
         <OfferLinkListener upsertDaemonFromOfferUrl={upsertConnectionFromOfferUrl} />
         <HostSessionManager />
         <FaviconStatusSync />
+        <SshHostKeyPromptModal />
         <AppearanceStyleBoundary>{children}</AppearanceStyleBoundary>
       </VoiceProvider>
     </AppearanceProvider>

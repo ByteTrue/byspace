@@ -25,6 +25,7 @@ import {
 } from "../integrations/cli-install/index.js";
 import {
   openLocalTransportSession,
+  respondSshHostKeyPrompt,
   sendLocalTransportMessage,
   closeLocalTransportSession,
 } from "./local-transport.js";
@@ -551,6 +552,10 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
           ? (args as { sessionId: string }).sessionId
           : "";
       if (sessionId) closeLocalTransportSession(sessionId);
+    },
+    respond_ssh_host_key_prompt: (args) => {
+      respondSshHostKeyPrompt(args);
+      return undefined;
     },
     check_app_update: async (args) => {
       const currentVersion = resolveDesktopAppVersion();

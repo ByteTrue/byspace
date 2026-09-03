@@ -1662,18 +1662,34 @@ export const ru: TranslationResources = {
     },
     remoteSsh: {
       title: "Удалённый SSH",
-      helper: "Подключитесь к демону Paseo на удалённом хосте.",
+      helper: "Подключитесь к демону BySpace на удалённом хосте.",
       fields: {
         target: "Хост SSH",
+        password: "Пароль",
+        passwordOptional: "Необязательно — для парольной аутентификации",
+      },
+      passwordVisibility: {
+        show: "Показать пароль",
+        hide: "Скрыть пароль",
       },
       actions: {
         cancel: "Отмена",
         connect: "Подключить",
         connecting: "Подключение...",
       },
+      hostKey: {
+        title: "Проверка ключа хоста",
+        firstUseMessage: "Первое подключение к {{target}}. Проверьте отпечаток ключа хоста:",
+        changedWarning:
+          "Ключ хоста {{target}} изменился с прошлого подключения. Возможна переустановка сервера — или перехват третьей стороной.",
+        pinnedFingerprint: "Прежний отпечаток: {{fingerprint}}",
+        help: "Доверяйте и подключайтесь, только если отпечаток совпадает с тем, что сообщил владелец сервера.",
+        trust: "Доверять и подключить",
+        reject: "Отмена",
+      },
       errors: {
         targetRequired: "Укажите хост SSH",
-        invalidTarget: "Укажите корректный хост ssh://",
+        invalidTarget: "Укажите корректный хост SSH, например user@host",
         failedToConnect: "Не удалось подключиться по SSH. {{detail}}",
       },
     },

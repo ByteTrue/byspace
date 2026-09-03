@@ -58,6 +58,7 @@ function buildRemoteSshClientConfig(input: {
       ...(input.connection.daemonPort !== undefined
         ? { daemonPort: input.connection.daemonPort }
         : {}),
+      ...(input.connection.password !== undefined ? { password: input.connection.password } : {}),
     }),
   };
 }
@@ -321,7 +322,9 @@ interface ProbeOptions {
 function resolveTimeout(connection: HostConnection, options?: ProbeOptions): number {
   if (options?.timeoutMs) return options.timeoutMs;
   if (connection.type === "relay") return 10_000;
-  if (connection.type === "remoteSsh") return 15_000;
+  // Remote SSH may pause on a host-key fingerprint dialog, so the window is
+  // wider than a plain connection timeout.
+  if (connection.type === "remoteSsh") return 180_000;
   return 6_000;
 }
 

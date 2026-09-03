@@ -1679,18 +1679,34 @@ export const es: TranslationResources = {
     },
     remoteSsh: {
       title: "SSH remoto",
-      helper: "Conéctate a un daemon de Paseo en el host remoto.",
+      helper: "Conéctate a un daemon de BySpace en el host remoto.",
       fields: {
         target: "Host SSH",
+        password: "Contraseña",
+        passwordOptional: "Opcional: para autenticación con contraseña",
+      },
+      passwordVisibility: {
+        show: "Mostrar contraseña",
+        hide: "Ocultar contraseña",
       },
       actions: {
         cancel: "Cancelar",
         connect: "Conectar",
         connecting: "Conectando...",
       },
+      hostKey: {
+        title: "Verificar clave del host",
+        firstUseMessage: "Primera conexión a {{target}}. Verifica la huella de su clave:",
+        changedWarning:
+          "La clave de {{target}} ha CAMBIADO desde la última conexión. Puede ser una reinstalación del servidor, o un tercero interceptando.",
+        pinnedFingerprint: "Huella anterior: {{fingerprint}}",
+        help: "Confía y conéctate solo si coincide con lo que te indicó el operador del servidor.",
+        trust: "Confiar y conectar",
+        reject: "Cancelar",
+      },
       errors: {
         targetRequired: "El host SSH es obligatorio",
-        invalidTarget: "Introduce un host ssh:// válido",
+        invalidTarget: "Introduce un host SSH válido, como user@host",
         failedToConnect: "No se pudo conectar por SSH. {{detail}}",
       },
     },
