@@ -3,7 +3,7 @@ title: 保留能力交付路线 · Work
 status: approved
 amended_at: 2026-09-01T17:40:09Z
 phase: pr-ready
-spec: ../epics/002-o-retained-capabilities-delivery/spec.md
+spec: ../epics/002-x-retained-capabilities-delivery/spec.md
 source_revision: f592e54bf43e5501383224891053d2e0a9dfbf45
 approved_revision: 522c41c499b7c193899e11601816edbe9aa50249e0253da14140679431f3121c
 item_progression: parallel
