@@ -876,6 +876,8 @@ export const fr: TranslationResources = {
           failedPush: "Échec de la poussée",
           failedPullAndPush: "Impossible de tirer et de pousser",
           failedCreatePr: "Échec de la création dePR",
+          mayStillBeRunning:
+            "Le serveur traite peut-être encore la demande. Vérifie l'espace de travail avant de réessayer pour éviter un doublon.",
           failedMergePr: "Échec de la fusion dePR",
           failedEnableAutoMerge: "Échec de l'activation de la fusion automatique",
           failedDisableAutoMerge: "Échec de la désactivation de la fusion automatique",
