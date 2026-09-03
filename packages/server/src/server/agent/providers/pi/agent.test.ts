@@ -1064,6 +1064,38 @@ describe("PiRpcAgentSession", () => {
     ]);
   });
 
+  test("completes normal turn immediately on agent_end without waiting for delayed agent_settled", async () => {
+    const { pi, session, events } = await createSession();
+    const fakeSession = pi.latestSession();
+    const { turnId } = await session.startTurn("hello");
+
+    fakeSession.emit({ type: "turn_start" });
+    fakeSession.finishAgentRun({
+      message: {
+        role: "assistant",
+        provider: "test-provider",
+        model: "test-model",
+        stopReason: "stop",
+        content: [{ type: "text", text: "Finished output" }],
+      },
+      willRetry: false,
+    });
+
+    // Notice: settleTurn() has NOT been called yet (simulating delayed extension post-processing)
+    // Turn must complete immediately so client does not stay stuck on running
+    expect(events.turnLifecycleEvents()).toEqual([
+      { type: "turn_started", turnId },
+      { type: "turn_completed", turnId },
+    ]);
+
+    // Late arrival of agent_settled should be safe and idempotent
+    fakeSession.settleTurn();
+    expect(events.turnLifecycleEvents()).toEqual([
+      { type: "turn_started", turnId },
+      { type: "turn_completed", turnId },
+    ]);
+  });
+
   test("fails an exhausted Pi recovery only after settlement", async () => {
     const { pi, session, events } = await createSession();
     const fakeSession = pi.latestSession();

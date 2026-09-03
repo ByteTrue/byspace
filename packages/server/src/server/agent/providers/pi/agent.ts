@@ -1271,6 +1271,7 @@ export class PiRpcAgentSession implements AgentSession {
   private activeAssistantMessageId: string | null = null;
   private activeTurnStarted = false;
   private activeTurnStartedEmitted = false;
+  private isAutoRetrying = false;
   private pendingSettledMessages: PiAgentMessage[] | null = null;
   private activeNoTurnPromptText: string | null = null;
   private readonly pendingNoTurnOutputs: Array<{ turnId: string; message: string }> = [];
@@ -2294,6 +2295,7 @@ export class PiRpcAgentSession implements AgentSession {
         });
         return;
       case "auto_retry_start":
+        this.isAutoRetrying = true;
         this.emit({
           type: "timeline",
           provider: this.provider,
@@ -2317,15 +2319,17 @@ export class PiRpcAgentSession implements AgentSession {
     turnId: string | undefined;
   }): void {
     if (event.type === "agent_end") {
-      // COMPAT(piAgentSettled): added in v0.5.0, remove after 2027-02-21 once the Pi
-      // floor emits agent_settled and willRetry.
-      if (event.willRetry === undefined) {
-        this.completeTurn(turnId, event.messages ?? []);
-        return;
-      }
       if (this.activeTurnId) {
         this.pendingSettledMessages = event.messages ?? [];
       }
+      // If Pi explicitly flags that an automatic retry will follow, or if this run is
+      // actively recovering from a retry attempt, defer turn completion until agent_settled.
+      // Normal runs (willRetry false/undefined without active retry) complete immediately on agent_end
+      // so UI does not remain stuck on running while background extensions settle.
+      if (event.willRetry === true || (this.isAutoRetrying && event.willRetry !== undefined)) {
+        return;
+      }
+      this.completeTurn(turnId, event.messages ?? []);
       return;
     }
     if (this.activeTurnId) {
@@ -2503,6 +2507,7 @@ export class PiRpcAgentSession implements AgentSession {
     this.activeAssistantMessageId = null;
     this.activeTurnStarted = false;
     this.activeTurnStartedEmitted = false;
+    this.isAutoRetrying = false;
     this.pendingSettledMessages = null;
     this.pendingSteerSubmissions.length = 0;
     this.clearNoTurnBuffers();

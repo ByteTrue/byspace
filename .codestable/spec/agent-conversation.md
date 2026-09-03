@@ -33,9 +33,11 @@ Desktop、split pane 和 compact 布局都保持这一垂直关系。左侧状�
 ## 运行与加载指示
 
 - 会话 turn 运行/思考指示器（`SyncedLoader`）承载关键的运行时存活反馈，不因操作系统的 `prefers-reduced-motion` 策略而冻结在初始静止帧，确保用户能明确感知 Agent 处于活跃执行状态而非崩溃死锁。
+- Pi Provider 的 Turn 边界结算基于 `agent_end`（`!willRetry`）即时触发 `turn_completed` 并转入 `idle`，解除对扩展层异步后处理（如 Watchdog、LSP 或自动压缩）延迟发射的 `agent_settled` 的硬性等待，保证模型输出完毕瞬间前端输入框与操作按钮即刻解锁恢复；随后到来的 `agent_settled` 保持幂等忽略。
 
 ## 历史证据
 
 - [将 Agent stream 控件移到 Composer 操作行](../issues/003-x-composer-stream-controls.md)
 - [Pi 启动注入项目信任并完善斜杠补全加载态](../issues/004-x-pi-project-skills-and-autocomplete-loading.md)
 - [修复 Windows 下思考加载图标定格与终端 OSC 8 链接打开无反应](../issues/008-x-ff-synced-loader-and-terminal-osc8-links.md)
+- [修复 Pi Agent 回复结束后客户端依然保持运行中状态的边界结算缺陷](../issues/009-x-ff-pi-turn-boundary-immediate-completion.md)
