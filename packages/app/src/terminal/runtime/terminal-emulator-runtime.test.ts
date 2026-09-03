@@ -60,6 +60,7 @@ vi.mock("@xterm/xterm", () => ({
     unicode = { activeVersion: "" };
     parser = {
       registerCsiHandler: () => undefined,
+      registerOscHandler: () => undefined,
     };
     constructor(options: unknown) {
       terminalConstructorOptions.values.push(options);
@@ -70,6 +71,9 @@ vi.mock("@xterm/xterm", () => ({
     }
     open(): void {}
     onData(): { dispose: () => void } {
+      return { dispose: () => undefined };
+    }
+    onSelectionChange(): { dispose: () => void } {
       return { dispose: () => undefined };
     }
     attachCustomKeyEventHandler(): void {}
@@ -644,5 +648,101 @@ describe("terminal-emulator-runtime", () => {
     ).handleVisibilityRestore();
 
     expect(fitAndEmitResize).not.toHaveBeenCalled();
+  });
+
+  it("registers linkHandler to route OSC 8 hyperlinks to onOpenExternalUrl callback", () => {
+    const runtime = new TerminalEmulatorRuntime();
+    const onOpenExternalUrl = vi.fn();
+    runtime.setCallbacks({
+      callbacks: {
+        onOpenExternalUrl,
+      },
+    });
+
+    const host = {
+      innerHTML: "",
+      style: {},
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      getBoundingClientRect: () => ({ width: 800, height: 600, top: 0, left: 0 }),
+      ownerDocument: {
+        documentElement: { style: {} },
+        body: { style: {} },
+        defaultView: {
+          devicePixelRatio: 1,
+        },
+      },
+    } as unknown as HTMLDivElement;
+
+    const originalDocument = (globalThis as { document?: unknown }).document;
+    (globalThis as { document?: unknown }).document = {
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      documentElement: {
+        style: {
+          overflow: "",
+          width: "",
+          height: "",
+          getPropertyValue: () => "",
+          setProperty: () => undefined,
+          removeProperty: () => undefined,
+        },
+      },
+      body: {
+        style: {
+          overflow: "",
+          width: "",
+          height: "",
+          margin: "",
+          padding: "",
+          getPropertyValue: () => "",
+          setProperty: () => undefined,
+          removeProperty: () => undefined,
+        },
+      },
+    };
+
+    const originalResizeObserver = (globalThis as { ResizeObserver?: unknown }).ResizeObserver;
+    (globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    };
+
+    const priorWindow = (globalThis as { window?: unknown }).window;
+    (globalThis as { window?: unknown }).window = {
+      __paseoTerminal: undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+    };
+
+    try {
+      runtime.mount({
+        root: host,
+        host,
+        initialSnapshot: null,
+        scrollback: 1000,
+        theme: {},
+      });
+
+      const options = terminalConstructorOptions.values.at(-1) as {
+        linkHandler?: { activate: (event: { preventDefault: () => void }, text: string) => void };
+      };
+
+      expect(options.linkHandler).toBeDefined();
+      const preventDefault = vi.fn();
+      options.linkHandler?.activate({ preventDefault }, "https://example.com/test");
+
+      expect(preventDefault).toHaveBeenCalled();
+      expect(onOpenExternalUrl).toHaveBeenCalledWith("https://example.com/test");
+    } finally {
+      (globalThis as { document?: unknown }).document = originalDocument;
+      (globalThis as { ResizeObserver?: unknown }).ResizeObserver = originalResizeObserver;
+      (globalThis as { window?: unknown }).window = priorWindow;
+    }
   });
 });

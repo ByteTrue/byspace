@@ -1,10 +1,9 @@
-import { useLayoutEffect, useMemo, useState } from "react";
+import React, { useLayoutEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 import Animated, {
   makeMutable,
   type SharedValue,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
 } from "react-native-reanimated";
 import { scheduleOnUI } from "react-native-worklets";
@@ -71,15 +70,17 @@ function unregisterStepListener(registered: SharedValue<boolean>, listenerId: nu
   activeLoaderCount.value -= 1;
 }
 
-function useSyncedLoaderStep(active: boolean, reduceMotion: boolean): SharedValue<number> {
+function useSyncedLoaderStep(active: boolean): SharedValue<number> {
   // The local value lets retained loaders detach from the app-wide clock without
   // unmounting their animated views or leaving hidden style worklets subscribed.
-  const step = useSharedValue(reduceMotion ? 0 : getSyncedLoaderStep(Date.now()));
+  // Working and loading indicators represent critical runtime state and must not
+  // freeze into a stuck glyph under system-level reduced-motion settings.
+  const step = useSharedValue(getSyncedLoaderStep(Date.now()));
   const registered = useSharedValue(false);
   const [listenerId] = useState(() => nextStepListenerId++);
 
   useLayoutEffect(() => {
-    if (!active || reduceMotion) {
+    if (!active) {
       return;
     }
 
@@ -87,15 +88,14 @@ function useSyncedLoaderStep(active: boolean, reduceMotion: boolean): SharedValu
     return () => {
       scheduleOnUI(unregisterStepListener, registered, listenerId);
     };
-  }, [active, listenerId, reduceMotion, registered, step]);
+  }, [active, listenerId, registered, step]);
 
   return step;
 }
 
 export function SyncedLoader({ size = 10, color }: { size?: number; color: string }) {
   const active = useRetainedPanelActive();
-  const reduceMotion = useReducedMotion();
-  const step = useSyncedLoaderStep(active, reduceMotion);
+  const step = useSyncedLoaderStep(active);
 
   // The 2x3 grid fills `size` exactly on its long axis: the dot is whatever is left after
   // the two gaps, not a floored integer. Flooring cost the grid up to a third of a dot per

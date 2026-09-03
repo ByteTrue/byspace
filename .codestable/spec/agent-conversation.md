@@ -30,7 +30,12 @@ Desktop、split pane 和 compact 布局都保持这一垂直关系。左侧状�
 - 输入 `/` 时按需加载命令与技能列表；在命令拉取完成前，Autocomplete Popover 保持可见并展示加载动画（`ActivityIndicator`）与提示文案，数据返回后自动平滑切换为命令列表。
 - Pi Provider 在后台启动会话时自动注入 `--approve` 信任标志，保证项目级 `.pi/skills/` 与 `.agents/skills/` 能够被自动发现并列入命令补全。
 
+## 运行与加载指示
+
+- 会话 turn 运行/思考指示器（`SyncedLoader`）承载关键的运行时存活反馈，不因操作系统的 `prefers-reduced-motion` 策略而冻结在初始静止帧，确保用户能明确感知 Agent 处于活跃执行状态而非崩溃死锁。
+
 ## 历史证据
 
 - [将 Agent stream 控件移到 Composer 操作行](../issues/003-x-composer-stream-controls.md)
 - [Pi 启动注入项目信任并完善斜杠补全加载态](../issues/004-x-pi-project-skills-and-autocomplete-loading.md)
+- [修复 Windows 下思考加载图标定格与终端 OSC 8 链接打开无反应](../issues/008-x-ff-synced-loader-and-terminal-osc8-links.md)
