@@ -75,6 +75,12 @@ describe("fetchAgentCommands", () => {
     expect(client.calls).toEqual([{ agentId: "agent-1", draftConfig: undefined }]);
   });
 
+  it("returns an empty list instead of throwing when the provider has no command list", async () => {
+    const client = createClient(errorPayload("Agent does not support listing commands"));
+
+    await expect(fetchAgentCommands({ client, agentId: "agent-1" })).resolves.toEqual([]);
+  });
+
   it("throws instead of returning the empty command list when the daemon reports an error", async () => {
     const client = createClient(errorPayload("Agent not found: agent-1"));
 

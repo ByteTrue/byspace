@@ -26,6 +26,12 @@ export interface AgentCommandsClient {
   listCommands(options: ListAgentCommandsOptions): ReturnType<DaemonClient["listCommands"]>;
 }
 
+// The daemon answers list_commands with this message when the agent exists but its
+// provider has no command list (mock sessions, CLIs without slash commands). That is
+// a legitimate empty result, not a lookup failure: throwing would flip the composer
+// autocomplete into its error placeholder and hide the always-available client commands.
+const UNSUPPORTED_COMMANDS_LISTING_PATTERN = /does not support listing commands/i;
+
 export async function fetchAgentCommands(input: {
   client: AgentCommandsClient;
   agentId: string;
@@ -36,6 +42,9 @@ export async function fetchAgentCommands(input: {
     draftConfig: input.draftConfig,
   });
   if (response.error) {
+    if (UNSUPPORTED_COMMANDS_LISTING_PATTERN.test(response.error)) {
+      return [];
+    }
     // Daemon-side failures (agent not found, provider unavailable, …) come back with
     // an empty commands array. Treating that as success would cache the empty list
     // and hide all provider skills until the query goes stale.
