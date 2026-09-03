@@ -23,9 +23,10 @@ SSH transport connects to an existing daemon through your local OpenSSH client. 
 Before connecting:
 
 1. Start the BySpace daemon on the remote host.
-2. Confirm `ssh user@host` works with a key or SSH agent. BySpace uses non-interactive SSH and follows your OpenSSH config.
+2. Confirm `ssh user@host` works with a key or SSH agent. BySpace uses non-interactive SSH and follows your OpenSSH config. If the host only supports password authentication, enter the password in the Remote SSH dialog instead — connections with a password use a built-in SSH client.
+3. On the first connection BySpace shows the host's key fingerprint and asks you to trust it; later connections verify against that choice. A changed fingerprint triggers an explicit warning before anything is sent to the host.
 
-The CLI accepts an SSH URI as its host:
+The CLI accepts an SSH URI as its host (key or agent authentication only; confirm the host key once in a terminal):
 
 ```bash
 byspace ls -a --host ssh://user@host
@@ -45,7 +46,7 @@ byspace ls -a --host 'ssh://user@host?daemonPort=7777'
 
 `--host` belongs after the command. `byspace daemon status` checks only the local daemon; use `byspace ls --host ...` to verify a remote connection. `byspace run --host ...` also requires `--cwd` with a path that exists on the remote host.
 
-In BySpace Desktop, open **Settings → Add host → Remote SSH** and enter the same `ssh://` destination.
+In BySpace Desktop, open **Settings → Add host → Remote SSH** and enter the same destination. The `ssh://` prefix is optional: `user@host`, `user@host:2222`, and full `ssh://` URIs all work. The password field is optional; leave it empty to authenticate with your keys or SSH agent. Desktop connections prompt for the host key fingerprint on first use and warn if it ever changes.
 
 ## BySpace relay
 

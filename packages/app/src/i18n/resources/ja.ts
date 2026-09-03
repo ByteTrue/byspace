@@ -1649,18 +1649,35 @@ export const ja: TranslationResources = {
     },
     remoteSsh: {
       title: "リモート SSH",
-      helper: "リモートホストで動作する Paseo デーモンに接続します。",
+      helper: "リモートホストで動作する BySpace デーモンに接続します。",
       fields: {
         target: "SSH ホスト",
+        password: "パスワード",
+        passwordOptional: "任意 - パスワード認証で使用",
+      },
+      passwordVisibility: {
+        show: "パスワードを表示",
+        hide: "パスワードを隠す",
       },
       actions: {
         cancel: "キャンセル",
         connect: "接続",
         connecting: "接続中...",
       },
+      hostKey: {
+        title: "ホスト鍵の確認",
+        firstUseMessage:
+          "{{target}} への初回接続です。ホスト鍵のフィンガープリントを確認してください:",
+        changedWarning:
+          "{{target}} のホスト鍵が前回の接続から変わっています。サーバーの再インストールか、中間者攻撃の可能性があります。",
+        pinnedFingerprint: "以前のフィンガープリント:{{fingerprint}}",
+        help: "サーバー管理者が伝えたものと一致する場合のみ信頼して接続してください。",
+        trust: "信頼して接続",
+        reject: "キャンセル",
+      },
       errors: {
         targetRequired: "SSH ホストは必須です",
-        invalidTarget: "有効な ssh:// ホストを入力してください",
+        invalidTarget: "有効な SSH ホストを入力してください (例: user@host)",
         failedToConnect: "SSH で接続できません。{{detail}}",
       },
     },

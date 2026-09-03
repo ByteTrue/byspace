@@ -1683,18 +1683,34 @@ export const fr: TranslationResources = {
     },
     remoteSsh: {
       title: "SSH distant",
-      helper: "Connectez-vous à un daemon Paseo sur l’hôte distant.",
+      helper: "Connectez-vous à un daemon BySpace sur l’hôte distant.",
       fields: {
         target: "Hôte SSH",
+        password: "Mot de passe",
+        passwordOptional: "Facultatif — pour l’authentification par mot de passe",
+      },
+      passwordVisibility: {
+        show: "Afficher le mot de passe",
+        hide: "Masquer le mot de passe",
       },
       actions: {
         cancel: "Annuler",
         connect: "Connecter",
         connecting: "Connexion...",
       },
+      hostKey: {
+        title: "Vérifier la clé de l’hôte",
+        firstUseMessage: "Première connexion à {{target}}. Vérifiez l’empreinte de sa clé :",
+        changedWarning:
+          "La clé de {{target}} a CHANGÉ depuis la dernière connexion. Cela peut être une réinstallation du serveur — ou un tiers intercepteur.",
+        pinnedFingerprint: "Empreinte précédente : {{fingerprint}}",
+        help: "N’acceptez et connectez-vous que si l’empreinte correspond à ce que l’opérateur du serveur vous a indiqué.",
+        trust: "Faire confiance et connecter",
+        reject: "Annuler",
+      },
       errors: {
         targetRequired: "L’hôte SSH est requis",
-        invalidTarget: "Saisissez un hôte ssh:// valide",
+        invalidTarget: "Saisissez un hôte SSH valide, comme user@host",
         failedToConnect: "Connexion SSH impossible. {{detail}}",
       },
     },

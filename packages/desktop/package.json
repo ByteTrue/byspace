@@ -31,11 +31,13 @@
     "@getpaseo/server": "*",
     "electron-log": "^5.4.3",
     "electron-updater": "^6.6.2",
+    "ssh2": "^1.17.0",
     "ws": "^8.14.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "24.6.0",
+    "@types/ssh2": "^1.15.6",
     "@types/ws": "^8.5.14",
     "electron": "41.2.0",
     "electron-builder": "26.8.1",

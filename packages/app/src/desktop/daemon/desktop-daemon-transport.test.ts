@@ -94,6 +94,27 @@ describe("desktop-daemon-transport", () => {
     });
   });
 
+  it("round-trips a Remote SSH password through the desktop transport bridge", async () => {
+    const rpc = createFakeLocalDaemonTransportRpc();
+    const transportFactory = createDesktopDaemonTransportFactory(rpc);
+
+    const url = buildDesktopDaemonTransportUrl({
+      transportType: "ssh",
+      host: "deploy@example.com",
+      password: "s3cret/:&=x",
+    });
+    transportFactory!({ url });
+    rpc.resolveListen(vi.fn());
+    await Promise.resolve();
+
+    expect(rpc.openCalls).toHaveLength(1);
+    expect(rpc.openCalls[0]?.target).toEqual({
+      transportType: "ssh",
+      host: "deploy@example.com",
+      password: "s3cret/:&=x",
+    });
+  });
+
   it.each([0, 65536])("rejects an out-of-range Remote SSH port (%s)", (sshPort) => {
     const transportFactory = createDesktopDaemonTransportFactory(
       createFakeLocalDaemonTransportRpc(),

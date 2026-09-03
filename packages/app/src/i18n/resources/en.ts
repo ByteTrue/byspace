@@ -1644,18 +1644,34 @@ export const en = {
     },
     remoteSsh: {
       title: "Remote SSH",
-      helper: "Connect to a Paseo daemon running on the remote host.",
+      helper: "Connect to a BySpace daemon running on the remote host.",
       fields: {
         target: "SSH host",
+        password: "Password",
+        passwordOptional: "Optional — for password authentication",
+      },
+      passwordVisibility: {
+        show: "Show password",
+        hide: "Hide password",
       },
       actions: {
         cancel: "Cancel",
         connect: "Connect",
         connecting: "Connecting...",
       },
+      hostKey: {
+        title: "Verify host key",
+        firstUseMessage: "First time connecting to {{target}}. Verify its key fingerprint:",
+        changedWarning:
+          "The key for {{target}} has CHANGED since the last connection. This could be a server reinstall — or an intercepting third party.",
+        pinnedFingerprint: "Previous fingerprint: {{fingerprint}}",
+        help: "Trust and connect only if this matches what the server operator told you.",
+        trust: "Trust & connect",
+        reject: "Cancel",
+      },
       errors: {
         targetRequired: "SSH host is required",
-        invalidTarget: "Enter a valid ssh:// host",
+        invalidTarget: "Enter a valid SSH host, like user@host",
         failedToConnect: "Unable to connect over SSH. {{detail}}",
       },
     },

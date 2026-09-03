@@ -1,14 +1,54 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   buildSshArgs,
+  buildManagedKnownHostsLine,
+  connectPasswordSshTunnel,
   createLocalTransportManager,
+  describeSsh2Error,
   LOCAL_TRANSPORT_SETUP_TIMEOUT_MS,
+  parseSshHostKeyType,
   parseTransportTarget,
+  prepareKeyPathSpawn,
   resolveSshFailureDetail,
   type TransportEndpoint,
   type TransportEventPayload,
   type TransportWebSocket,
 } from "./local-transport";
+import { createHostKeyPromptManager, type SshHostKeyPrompt } from "./ssh-host-key-prompt";
+import { createInMemoryKnownHostsStore, sshHostKeyFingerprint } from "./ssh-known-hosts";
+
+interface FakeSshClient {
+  handlers: Map<string, (...args: never[]) => void>;
+  connect: ReturnType<typeof vi.fn> & { mock: { calls: Array<Record<string, unknown>> } };
+  forwardOut: ReturnType<typeof vi.fn>;
+  end: ReturnType<typeof vi.fn>;
+}
+
+vi.mock("ssh2", () => {
+  class FakeSshClient {
+    static readonly instances: FakeSshClient[] = [];
+    handlers = new Map<string, (...args: never[]) => void>();
+    on = vi.fn((event: string, handler: never) => {
+      this.handlers.set(event, handler as (...args: never[]) => void);
+    });
+    connect = vi.fn();
+    forwardOut = vi.fn();
+    end = vi.fn();
+
+    constructor() {
+      FakeSshClient.instances.push(this);
+    }
+  }
+  return { Client: FakeSshClient };
+});
+
+async function createSshClientHarness(): Promise<FakeSshClient[]> {
+  const mod = (await import("ssh2")) as unknown as {
+    Client: { new (): FakeSshClient; instances: FakeSshClient[] };
+  };
+  mod.Client.instances.length = 0;
+  return mod.Client.instances;
+}
 
 const SESSION_INPUT = {
   sessionId: "local-session-test",
@@ -118,6 +158,342 @@ describe("Remote SSH desktop transport", () => {
     expect(resolveSshFailureDetail("ssh exited with code 255", "earlier stderr")).toBe(
       "ssh exited with code 255",
     );
+  });
+});
+
+describe("password SSH transport", () => {
+  const passwordTarget = {
+    transportType: "ssh",
+    host: "deploy@example.com",
+    password: "s3cret",
+  } as const;
+
+  function createFakeSocket(): Record<"on" | "once", ReturnType<typeof vi.fn>> & {
+    destroy: ReturnType<typeof vi.fn>;
+    pipe: ReturnType<typeof vi.fn>;
+  } {
+    return {
+      on: vi.fn(),
+      once: vi.fn(),
+      destroy: vi.fn(),
+      pipe: vi.fn(),
+    };
+  }
+
+  async function createClientHarness() {
+    return createSshClientHarness();
+  }
+
+  it("parses the password from the IPC target", () => {
+    expect(parseTransportTarget(passwordTarget)).toEqual(passwordTarget);
+    expect(parseTransportTarget({ transportType: "ssh", host: "build-box", password: "" })).toEqual(
+      { transportType: "ssh", host: "build-box" },
+    );
+  });
+
+  it("asks the user on first use, pins on trust, and forwards to the daemon port", async () => {
+    const instances = await createClientHarness();
+    const store = createInMemoryKnownHostsStore();
+    const failures: string[] = [];
+    const prompts: SshHostKeyPrompt[] = [];
+    const promptManager = createHostKeyPromptManager({
+      emitPrompt: (prompt) => prompts.push(prompt),
+      scheduleTimeout: () => () => undefined,
+    });
+
+    connectPasswordSshTunnel({
+      target: passwordTarget,
+      acceptedSocket: createFakeSocket() as never,
+      knownHostsStore: store,
+      onFailure: (message) => failures.push(message),
+      promptManager,
+    });
+    const client = instances[0]!;
+    await Promise.resolve();
+
+    (client.handlers.get("ready") as () => void)();
+    expect(client.forwardOut).toHaveBeenCalledWith(
+      "127.0.0.1",
+      0,
+      "127.0.0.1",
+      6777,
+      expect.any(Function),
+    );
+    expect(client.connect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: "example.com",
+        username: "deploy",
+        password: "s3cret",
+        port: 22,
+      }),
+    );
+
+    const connectConfig = client.connect.mock.calls[0]![0] as {
+      hostVerifier: (key: Buffer, verify: (accepted: boolean) => void) => void;
+    };
+    const verify = vi.fn();
+    const verifierResult = connectConfig.hostVerifier(Buffer.from("first-key"), verify);
+    expect(verifierResult).toBeUndefined();
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toMatchObject({ target: "deploy@example.com", kind: "first-use" });
+
+    promptManager.respond({ promptId: prompts[0]!.promptId, decision: "trust" });
+    await vi.waitFor(() => expect(verify).toHaveBeenCalledWith(true));
+    expect((await store.load())["deploy@example.com"]).toBe(
+      sshHostKeyFingerprint(Buffer.from("first-key")),
+    );
+    expect(failures).toEqual([]);
+  });
+
+  it("fails the handshake when the user rejects the fingerprint", async () => {
+    const instances = await createClientHarness();
+    const store = createInMemoryKnownHostsStore();
+    const failures: string[] = [];
+    const prompts: SshHostKeyPrompt[] = [];
+    const promptManager = createHostKeyPromptManager({
+      emitPrompt: (prompt) => prompts.push(prompt),
+      scheduleTimeout: () => () => undefined,
+    });
+
+    connectPasswordSshTunnel({
+      target: passwordTarget,
+      acceptedSocket: createFakeSocket() as never,
+      knownHostsStore: store,
+      onFailure: (message) => failures.push(message),
+      promptManager,
+    });
+    const client = instances[0]!;
+    await Promise.resolve();
+
+    const connectConfig = client.connect.mock.calls[0]![0] as {
+      hostVerifier: (key: Buffer, verify: (accepted: boolean) => void) => void;
+    };
+    const verify = vi.fn();
+    connectConfig.hostVerifier(Buffer.from("first-key"), verify);
+    promptManager.respond({ promptId: prompts[0]!.promptId, decision: "cancel" });
+    await vi.waitFor(() => expect(verify).toHaveBeenCalledWith(false));
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toContain("not trusted");
+    expect(await store.load()).toEqual({});
+  });
+
+  it("prompts with both fingerprints when the pinned key changes", async () => {
+    const instances = await createClientHarness();
+    const store = createInMemoryKnownHostsStore({ "deploy@example.com": "SHA256:pinned" });
+    const failures: string[] = [];
+    const prompts: SshHostKeyPrompt[] = [];
+    const promptManager = createHostKeyPromptManager({
+      emitPrompt: (prompt) => prompts.push(prompt),
+      scheduleTimeout: () => () => undefined,
+    });
+
+    connectPasswordSshTunnel({
+      target: passwordTarget,
+      acceptedSocket: createFakeSocket() as never,
+      knownHostsStore: store,
+      onFailure: (message) => failures.push(message),
+      promptManager,
+    });
+    const client = instances[0]!;
+    await Promise.resolve();
+
+    const connectConfig = client.connect.mock.calls[0]![0] as {
+      hostVerifier: (key: Buffer, verify: (accepted: boolean) => void) => void;
+    };
+    const verify = vi.fn();
+    connectConfig.hostVerifier(Buffer.from("attacker-key"), verify);
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toMatchObject({
+      kind: "changed",
+      pinnedFingerprint: "SHA256:pinned",
+      fingerprint: sshHostKeyFingerprint(Buffer.from("attacker-key")),
+    });
+
+    promptManager.respond({ promptId: prompts[0]!.promptId, decision: "trust" });
+    await vi.waitFor(() => expect(verify).toHaveBeenCalledWith(true));
+    expect((await store.load())["deploy@example.com"]).toBe(
+      sshHostKeyFingerprint(Buffer.from("attacker-key")),
+    );
+    expect(failures).toEqual([]);
+  });
+
+  it("accepts a known fingerprint without prompting", async () => {
+    const instances = await createClientHarness();
+    const knownFingerprint = sshHostKeyFingerprint(Buffer.from("first-key"));
+    const store = createInMemoryKnownHostsStore({ "deploy@example.com": knownFingerprint });
+    const prompts: SshHostKeyPrompt[] = [];
+    const promptManager = createHostKeyPromptManager({
+      emitPrompt: (prompt) => prompts.push(prompt),
+      scheduleTimeout: () => () => undefined,
+    });
+
+    connectPasswordSshTunnel({
+      target: passwordTarget,
+      acceptedSocket: createFakeSocket() as never,
+      knownHostsStore: store,
+      onFailure: () => undefined,
+      promptManager,
+    });
+    const client = instances[0]!;
+    await Promise.resolve();
+
+    const connectConfig = client.connect.mock.calls[0]![0] as {
+      hostVerifier: (key: Buffer, verify: (accepted: boolean) => void) => void;
+    };
+    const verify = vi.fn();
+    connectConfig.hostVerifier(Buffer.from("first-key"), verify);
+    await vi.waitFor(() => expect(verify).toHaveBeenCalledWith(true));
+    expect(prompts).toEqual([]);
+  });
+
+  it("maps ssh2 failures to readable messages", () => {
+    expect(
+      describeSsh2Error({
+        level: "client-authentication",
+        message: "All configured authentication methods failed",
+      }),
+    ).toContain("Authentication failed");
+    expect(describeSsh2Error({ message: "Timed out while waiting for handshake" })).toBe(
+      "Connection timed out",
+    );
+    expect(describeSsh2Error({ message: "connect ECONNREFUSED" })).toBe("connect ECONNREFUSED");
+    expect(describeSsh2Error({ message: "  " })).toBe("SSH connection failed");
+  });
+
+  it("parses the SSH key type from the wire-format host key", () => {
+    const keyType = "ssh-ed25519";
+    const nameLength = Buffer.alloc(4);
+    nameLength.writeUInt32BE(keyType.length, 0);
+    const hostKey = Buffer.concat([nameLength, Buffer.from(keyType), Buffer.from("key-bytes")]);
+    expect(parseSshHostKeyType(hostKey)).toBe("ssh-ed25519");
+    expect(parseSshHostKeyType(Buffer.from("tiny"))).toBe("ssh");
+  });
+
+  it("builds managed known_hosts lines with bracketed non-standard ports", () => {
+    expect(
+      buildManagedKnownHostsLine({
+        hostname: "example.com",
+        keyType: "ssh-ed25519",
+        keyBase64: "AAA",
+      }),
+    ).toBe("example.com ssh-ed25519 AAA");
+    expect(
+      buildManagedKnownHostsLine({
+        hostname: "example.com",
+        sshPort: 2222,
+        keyType: "ssh-ed25519",
+        keyBase64: "AAA",
+      }),
+    ).toBe("[example.com]:2222 ssh-ed25519 AAA");
+  });
+
+  it("prompts on first use and stages a pinned known_hosts file for key-path spawns", async () => {
+    const store = createInMemoryKnownHostsStore();
+    const prompts: SshHostKeyPrompt[] = [];
+    const promptManager = createHostKeyPromptManager({
+      emitPrompt: (prompt) => prompts.push(prompt),
+      scheduleTimeout: () => () => undefined,
+    });
+    const hostKey = Buffer.concat([
+      Buffer.from([0, 0, 0, 11]),
+      Buffer.from("ssh-ed25519"),
+      Buffer.from("key-bytes"),
+    ]);
+    const probe = { hostKey, keyType: "ssh-ed25519", fingerprint: sshHostKeyFingerprint(hostKey) };
+    const target = { transportType: "ssh", host: "deploy@example.com" } as const;
+
+    const firstPromise = prepareKeyPathSpawn({
+      target,
+      knownHostsStore: store,
+      promptManager,
+      probeSshHostKeyFn: () => Promise.resolve(probe),
+    });
+    await vi.waitFor(() => expect(prompts).toHaveLength(1));
+    expect(prompts[0]).toMatchObject({ target: "deploy@example.com", kind: "first-use" });
+    promptManager.respond({ promptId: prompts[0]!.promptId, decision: "cancel" });
+    expect(await firstPromise).toMatchObject({ outcome: "cancelled" });
+
+    // Trust: pin is saved and ssh is pointed at a managed known_hosts file.
+    const second = await prepareKeyPathSpawn({
+      target,
+      knownHostsStore: store,
+      promptManager: {
+        ask: (prompt) => {
+          prompts.push(prompt);
+          return Promise.resolve("trust");
+        },
+        respond: () => undefined,
+        cancelAll: () => undefined,
+      },
+      probeSshHostKeyFn: () => Promise.resolve(probe),
+    });
+    expect(second.outcome).toBe("proceed");
+    if (second.outcome === "proceed") {
+      expect(second.extraArgs).toContain("StrictHostKeyChecking=yes");
+      expect(second.extraArgs.some((arg) => arg.startsWith("UserKnownHostsFile="))).toBe(true);
+      second.cleanup();
+    }
+    expect((await store.load())["deploy@example.com"]).toBe(probe.fingerprint);
+    expect(prompts).toHaveLength(2);
+  });
+
+  it("re-prompts when the key changes and prompts nothing when the pin matches", async () => {
+    const hostKey = Buffer.concat([
+      Buffer.from([0, 0, 0, 11]),
+      Buffer.from("ssh-ed25519"),
+      Buffer.from("key-bytes"),
+    ]);
+    const target = { transportType: "ssh", host: "deploy@example.com" } as const;
+    const probe = { hostKey, keyType: "ssh-ed25519", fingerprint: sshHostKeyFingerprint(hostKey) };
+
+    // Known fingerprint: no prompt, straight to proceed.
+    const prompts: SshHostKeyPrompt[] = [];
+    const store = createInMemoryKnownHostsStore({
+      "deploy@example.com": sshHostKeyFingerprint(hostKey),
+    });
+    const result = await prepareKeyPathSpawn({
+      target,
+      knownHostsStore: store,
+      promptManager: {
+        ask: (prompt) => {
+          prompts.push(prompt);
+          return Promise.resolve("cancel");
+        },
+        respond: () => undefined,
+        cancelAll: () => undefined,
+      },
+      probeSshHostKeyFn: () => Promise.resolve(probe),
+    });
+    expect(result.outcome).toBe("proceed");
+    expect(prompts).toEqual([]);
+
+    // Changed fingerprint with a rejecting user: cancelled.
+    const changedKey = Buffer.concat([
+      Buffer.from([0, 0, 0, 11]),
+      Buffer.from("ssh-ed25519"),
+      Buffer.from("other-bytes"),
+    ]);
+    const changedProbe = {
+      hostKey: changedKey,
+      keyType: "ssh-ed25519",
+      fingerprint: sshHostKeyFingerprint(changedKey),
+    };
+    const result2 = await prepareKeyPathSpawn({
+      target,
+      knownHostsStore: store,
+      promptManager: {
+        ask: (prompt) => {
+          prompts.push(prompt);
+          return Promise.resolve("cancel");
+        },
+        respond: () => undefined,
+        cancelAll: () => undefined,
+      },
+      probeSshHostKeyFn: () => Promise.resolve(changedProbe),
+    });
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toMatchObject({ kind: "changed" });
+    expect(result2.outcome).toBe("cancelled");
   });
 });
 

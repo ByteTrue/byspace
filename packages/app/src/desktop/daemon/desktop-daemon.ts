@@ -46,6 +46,7 @@ export interface RemoteSshTransportTarget {
   host: string;
   sshPort?: number;
   daemonPort?: number;
+  password?: string;
 }
 
 export type DesktopDaemonTransportTarget = LocalTransportTarget | RemoteSshTransportTarget;
@@ -215,6 +216,59 @@ export async function sendLocalTransportMessage(input: {
 
 export async function closeLocalTransportSession(sessionId: string): Promise<void> {
   await invokeDesktopCommand("close_local_daemon_transport", { sessionId });
+}
+
+export interface SshHostKeyPromptPayload {
+  promptId: string;
+  target: string;
+  kind: "first-use" | "changed";
+  fingerprint: string;
+  pinnedFingerprint?: string | null;
+}
+
+export type SshHostKeyPromptUnlisten = () => void;
+
+export async function listenToSshHostKeyPrompts(
+  handler: (prompt: SshHostKeyPromptPayload) => void,
+): Promise<SshHostKeyPromptUnlisten> {
+  const listen = getDesktopHost()?.events?.on;
+  if (typeof listen !== "function") {
+    throw new Error("Desktop events API is unavailable.");
+  }
+  const unlisten = await listen("ssh-host-key-prompt", (payload: unknown) => {
+    if (typeof payload !== "object" || payload === null) {
+      return;
+    }
+    const promptId = toStringOrNull((payload as { promptId?: unknown }).promptId);
+    const target = toStringOrNull((payload as { target?: unknown }).target);
+    const fingerprint = toStringOrNull((payload as { fingerprint?: unknown }).fingerprint);
+    if (!promptId || !target || !fingerprint) {
+      return;
+    }
+    const kind = toStringOrNull((payload as { kind?: unknown }).kind);
+    handler({
+      promptId,
+      target,
+      kind: kind === "changed" ? "changed" : "first-use",
+      fingerprint,
+      pinnedFingerprint: toStringOrNull(
+        (payload as { pinnedFingerprint?: unknown }).pinnedFingerprint,
+      ),
+    });
+  });
+  return typeof unlisten === "function" ? unlisten : () => {};
+}
+
+export async function respondSshHostKeyPrompt(input: SshHostKeyPromptResponseInput): Promise<void> {
+  await invokeDesktopCommand("respond_ssh_host_key_prompt", {
+    promptId: input.promptId,
+    decision: input.decision,
+  });
+}
+
+export interface SshHostKeyPromptResponseInput {
+  promptId: string;
+  decision: "trust" | "cancel";
 }
 
 // ---------------------------------------------------------------------------

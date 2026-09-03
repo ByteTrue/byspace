@@ -1615,18 +1615,34 @@ export const zhCN: TranslationResources = {
     },
     remoteSsh: {
       title: "远程 SSH",
-      helper: "连接到远程主机上运行的 Paseo 守护进程。",
+      helper: "连接到远程主机上运行的 BySpace 守护进程。",
       fields: {
         target: "SSH 主机",
+        password: "密码",
+        passwordOptional: "可选 - 密码认证时填写",
+      },
+      passwordVisibility: {
+        show: "显示密码",
+        hide: "隐藏密码",
       },
       actions: {
         cancel: "取消",
         connect: "连接",
         connecting: "正在连接...",
       },
+      hostKey: {
+        title: "验证主机指纹",
+        firstUseMessage: "首次连接 {{target}},请核对主机指纹:",
+        changedWarning:
+          "{{target}} 的主机指纹与上次连接相比已变化。可能是服务器重装,也可能存在中间人攻击。",
+        pinnedFingerprint: "之前的指纹:{{fingerprint}}",
+        help: "仅当指纹与服务提供方告知的一致时才信任并连接。",
+        trust: "信任并连接",
+        reject: "取消",
+      },
       errors: {
         targetRequired: "SSH 主机为必填项",
-        invalidTarget: "请输入有效的 ssh:// 主机",
+        invalidTarget: "请输入有效的 SSH 主机，如 user@host",
         failedToConnect: "无法通过 SSH 连接。{{detail}}",
       },
     },

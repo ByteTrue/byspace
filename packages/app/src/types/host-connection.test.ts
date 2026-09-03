@@ -176,11 +176,45 @@ describe("normalizeStoredHostProfile", () => {
       daemonPort: 7777,
     });
   });
+
+  it("keeps the password on a stored Remote SSH connection", () => {
+    const profile = normalizeStoredHostProfile({
+      serverId: "srv_ssh_pw",
+      connections: [
+        {
+          type: "remoteSsh",
+          host: "deploy@example.com",
+          password: " secret ",
+        },
+      ],
+    });
+
+    expect(profile?.connections[0]).toEqual({
+      id: "ssh:deploy%40example.com::",
+      type: "remoteSsh",
+      host: "deploy@example.com",
+      password: "secret",
+    });
+  });
 });
 
 describe("createRemoteSshHostConnection", () => {
   it("keeps optional SSH settings absent", () => {
     expect(createRemoteSshHostConnection({ host: "build-box" })).toEqual({
+      id: "ssh:build-box::",
+      type: "remoteSsh",
+      host: "build-box",
+    });
+  });
+
+  it("stores a trimmed password when provided", () => {
+    expect(createRemoteSshHostConnection({ host: "build-box", password: " s3cret " })).toEqual({
+      id: "ssh:build-box::",
+      type: "remoteSsh",
+      host: "build-box",
+      password: "s3cret",
+    });
+    expect(createRemoteSshHostConnection({ host: "build-box", password: "   " })).toEqual({
       id: "ssh:build-box::",
       type: "remoteSsh",
       host: "build-box",
