@@ -1,0 +1,7 @@
+Added
+- Added Remote SSH password authentication with host key fingerprint confirmation dialogs for desktop connections.
+
+Fixed
+- Fixed Pi Agent turn boundary settlement to complete immediately on agent_end (willRetry: false) without waiting for delayed background extension processing, preventing UI from remaining stuck in the running state after response completion.
+
+Full notes: https://github.com/ByteTrue/byspace/releases
