@@ -3,10 +3,15 @@ import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 
-const sourceRoot = process.env.PASEO_SOURCE_CHECKOUT_PATH;
-const targetRoot = process.env.PASEO_WORKTREE_PATH || process.cwd();
+const sourceRoot =
+  process.env.BYSPACE_SOURCE_CHECKOUT_PATH || process.env.PASEO_SOURCE_CHECKOUT_PATH;
+const targetRoot =
+  process.env.BYSPACE_WORKTREE_PATH || process.env.PASEO_WORKTREE_PATH || process.cwd();
 
-if (process.env.PASEO_SKIP_IOS_NATIVE_CACHE === "1") {
+if (
+  process.env.BYSPACE_SKIP_IOS_NATIVE_CACHE === "1" ||
+  process.env.PASEO_SKIP_IOS_NATIVE_CACHE === "1"
+) {
   process.exit(0);
 }
 

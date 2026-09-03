@@ -1,24 +1,34 @@
 #!/usr/bin/env node
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
+import {
+  cpSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+} from "node:fs";
+import { dirname, join, resolve } from "node:path";
 
-// Worktree setup runs through a stable script shell: bash on macOS/Linux, but PowerShell
-// on Windows. POSIX-only command strings (`VAR=1 cmd` env prefixes, `$VAR` expansion, `cp`,
-// `./scripts/*.sh`) cannot express this step portably, so the seeding lives in Node — the
-// one interpreter every Paseo checkout already depends on.
+// Worktree setup uses bash on macOS/Linux and PowerShell on Windows. Keep setup-time
+// environment handling and file copies in Node so one command works in every shell.
+const sourceRoot =
+  process.env.BYSPACE_SOURCE_CHECKOUT_PATH || process.env.PASEO_SOURCE_CHECKOUT_PATH;
+const targetRoot =
+  process.env.BYSPACE_WORKTREE_PATH || process.env.PASEO_WORKTREE_PATH || process.cwd();
 
-const sourceRoot = process.env.PASEO_SOURCE_CHECKOUT_PATH;
-const targetRoot = process.env.PASEO_WORKTREE_PATH || process.cwd();
-
-if (!sourceRoot || sourceRoot === targetRoot) {
+if (!sourceRoot || samePath(sourceRoot, targetRoot)) {
   process.exit(0);
 }
 
-seedPaseoHome();
+seedBySpaceHome();
 copyServerEnv();
 
-function seedPaseoHome() {
-  const source = process.env.PASEO_DEV_SEED_HOME || join(sourceRoot, ".dev/byspace-home");
+function seedBySpaceHome() {
+  const source =
+    process.env.BYSPACE_DEV_SEED_HOME ||
+    process.env.PASEO_DEV_SEED_HOME ||
+    join(sourceRoot, ".dev/byspace-home");
   const target = join(targetRoot, ".dev/byspace-home");
 
   if (!existsSync(source)) {
@@ -26,12 +36,14 @@ function seedPaseoHome() {
     return;
   }
 
-  if (source === target) {
+  if (samePath(source, target)) {
     console.log("  Seed:    skipped (source is target)");
     return;
   }
 
-  if (process.env.PASEO_DEV_RESET_HOME === "1") {
+  const shouldReset =
+    process.env.BYSPACE_DEV_RESET_HOME === "1" || process.env.PASEO_DEV_RESET_HOME === "1";
+  if (shouldReset) {
     rmSync(target, { recursive: true, force: true });
   } else if (hasEntries(target)) {
     console.log(`  Seed:    skipped (${target} already has data)`);
@@ -44,22 +56,20 @@ function seedPaseoHome() {
   copyJsonTree(join(source, "projects"), join(target, "projects"));
 
   const config = join(source, "config.json");
-  if (existsSync(config)) {
+  if (isRegularFile(config)) {
     cpSync(config, join(target, "config.json"));
   }
 
   console.log(`  Seed:    copied metadata from ${source}`);
 }
 
-// Durable JSON metadata only. Runtime files (pid files, sockets, logs) must not be copied.
+// Durable JSON metadata only. Runtime files, logs, sockets, and symlinks are not copied.
 function copyJsonTree(source, target) {
-  if (!existsSync(source)) {
-    return;
-  }
+  if (!isDirectory(source)) return;
 
   cpSync(source, target, {
     recursive: true,
-    filter: (path) => isDirectory(path) || path.endsWith(".json"),
+    filter: (path) => isDirectory(path) || isRegularJsonFile(path),
   });
 }
 
@@ -67,8 +77,8 @@ function copyServerEnv() {
   const source = join(sourceRoot, "packages/server/.env");
   const target = join(targetRoot, "packages/server/.env");
 
-  // Untracked local config. A checkout without one is normal, so this is not a setup failure.
-  if (!existsSync(source)) {
+  // Untracked local config is optional; its absence must not fail worktree creation.
+  if (!isRegularFile(source)) {
     console.log(`  Env:     skipped (${source} missing)`);
     return;
   }
@@ -86,10 +96,30 @@ function hasEntries(path) {
   }
 }
 
+function samePath(left, right) {
+  try {
+    return realpathSync(left) === realpathSync(right);
+  } catch {
+    return resolve(left) === resolve(right);
+  }
+}
+
 function isDirectory(path) {
   try {
-    return statSync(path).isDirectory();
+    return lstatSync(path).isDirectory();
   } catch {
     return false;
   }
+}
+
+function isRegularFile(path) {
+  try {
+    return lstatSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function isRegularJsonFile(path) {
+  return path.endsWith(".json") && isRegularFile(path);
 }

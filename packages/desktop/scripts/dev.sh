@@ -11,7 +11,8 @@ export PATH="$ROOT_DIR/node_modules/.bin:$PATH"
 export BYSPACE_LISTEN="${BYSPACE_LISTEN:-127.0.0.1:6778}"
 configure_dev_paseo_home
 
-DEV_ROOT="${PASEO_DEV_ROOT:-$(default_dev_paseo_root)}"
+DEV_ROOT="${BYSPACE_DEV_ROOT:-${PASEO_DEV_ROOT:-$(default_dev_paseo_root)}}"
+export BYSPACE_DEV_ROOT="$DEV_ROOT"
 export PASEO_DEV_ROOT="$DEV_ROOT"
 export PASEO_DEV_RUNTIME_FALLBACK_ROOT="$DEV_ROOT"
 DEV_RUNTIME="$(node "$SCRIPT_DIR/dev-runtime.mjs")"
