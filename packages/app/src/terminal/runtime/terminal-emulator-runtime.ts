@@ -475,6 +475,12 @@ export class TerminalEmulatorRuntime {
       fontFamily: resolveTerminalFontFamily(input.fontFamily),
       fontSize: resolveTerminalFontSize(input.fontSize),
       lineHeight: 1.0,
+      linkHandler: {
+        activate: (event, text) => {
+          event.preventDefault?.();
+          void this.callbacks.onOpenExternalUrl?.(text);
+        },
+      },
       macOptionIsMeta: true,
       minimumContrastRatio: 1,
       rescaleOverlappingGlyphs: true,
