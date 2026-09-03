@@ -838,6 +838,7 @@ export const zhCN: TranslationResources = {
           failedPush: "Push 失败",
           failedPullAndPush: "Pull 并 push 失败",
           failedCreatePr: "创建 PR 失败",
+          mayStillBeRunning: "服务端可能仍在处理该请求。重试前请先检查工作区,以免产生重复操作。",
           failedMergePr: "Merge PR 失败",
           failedEnableAutoMerge: "启用 auto-merge 失败",
           failedDisableAutoMerge: "禁用 auto-merge 失败",

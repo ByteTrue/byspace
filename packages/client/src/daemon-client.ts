@@ -182,6 +182,15 @@ const perfNow: () => number =
 
 const PROJECT_GITHUB_CLONE_TIMEOUT_MS = 5 * 60 * 1000;
 
+/**
+ * Git metadata RPCs (commit message, PR title/body) run agent LLM generation
+ * with retries before the actual git/forge call, so they can legitimately take
+ * far longer than the 60s default session RPC timeout. The client timed out
+ * first and surfaced an error while the daemon kept going and still completed
+ * the operation.
+ */
+const CHECKOUT_GIT_METADATA_TIMEOUT_MS = 5 * 60 * 1000;
+
 interface ImportAgentInputBase {
   cwd?: string;
   workspaceId?: string;
@@ -3804,6 +3813,7 @@ export class DaemonClient {
     cwd: string,
     input: { message?: string; addAll?: boolean },
     requestId?: string,
+    timeout?: number,
   ): Promise<CheckoutCommitPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
@@ -3814,6 +3824,7 @@ export class DaemonClient {
         addAll: input.addAll,
       },
       responseType: "checkout_commit_response",
+      timeout: timeout ?? CHECKOUT_GIT_METADATA_TIMEOUT_MS,
     });
   }
 
@@ -3931,6 +3942,7 @@ export class DaemonClient {
     cwd: string,
     input: { title?: string; body?: string; baseRef?: string },
     requestId?: string,
+    timeout?: number,
   ): Promise<CheckoutPrCreatePayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
@@ -3942,6 +3954,7 @@ export class DaemonClient {
         baseRef: input.baseRef,
       },
       responseType: "checkout_pr_create_response",
+      timeout: timeout ?? CHECKOUT_GIT_METADATA_TIMEOUT_MS,
     });
   }
 

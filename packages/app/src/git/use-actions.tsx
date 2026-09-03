@@ -467,6 +467,26 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
     [toast],
   );
 
+  // Git metadata RPCs (commit message, PR title/body) run agent LLM generation
+  // with retries before the actual git/forge call, so the daemon can outlive
+  // the client's RPC timeout. When a timeout surfaces, the operation may still
+  // be completing server-side — tell the user to check the workspace rather
+  // than immediately retrying and risking a duplicate side effect.
+  const isCheckoutTimeout = useCallback((error: unknown): boolean => {
+    return error instanceof Error && error.message.startsWith("Timeout waiting for message");
+  }, []);
+
+  const toastCheckoutActionError = useCallback(
+    (error: unknown, fallback: string) => {
+      if (isCheckoutTimeout(error)) {
+        toast.error(t("workspace.git.actions.toasts.mayStillBeRunning"));
+        return;
+      }
+      toastActionError(error, fallback);
+    },
+    [t, toast, toastActionError, isCheckoutTimeout],
+  );
+
   const toastActionSuccess = useCallback(
     (message: string) => {
       toast.show(message, { variant: "success" });
@@ -482,9 +502,9 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
         return;
       })
       .catch((err) => {
-        toastActionError(err, t("workspace.git.actions.toasts.failedCommit"));
+        toastCheckoutActionError(err, t("workspace.git.actions.toasts.failedCommit"));
       });
-  }, [cwd, runCommit, serverId, t, toastActionError, toastActionSuccess]);
+  }, [cwd, runCommit, serverId, t, toastActionSuccess, toastCheckoutActionError]);
 
   const handlePull = useCallback(() => {
     void runPull({ serverId, cwd })
@@ -527,7 +547,7 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
         return;
       })
       .catch((err) => {
-        toastActionError(err, t("workspace.git.actions.toasts.failedCreatePr"));
+        toastCheckoutActionError(err, t("workspace.git.actions.toasts.failedCreatePr"));
       });
   }, [
     cwd,
@@ -536,8 +556,8 @@ export function useGitActions({ serverId, cwd, icons }: UseGitActionsInput): Use
     runCreatePr,
     serverId,
     t,
-    toastActionError,
     toastActionSuccess,
+    toastCheckoutActionError,
   ]);
 
   const handleMergePr = useCallback(

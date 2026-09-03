@@ -868,6 +868,8 @@ export const ptBR: TranslationResources = {
           failedPush: "Falha ao fazer push",
           failedPullAndPush: "Falha ao fazer pull e push",
           failedCreatePr: "Falha ao criar PR",
+          mayStillBeRunning:
+            "O servidor ainda pode estar processando esta solicitação. Verifique o espaço de trabalho antes de tentar novamente para evitar duplicatas.",
           failedMergePr: "Falha ao fazer merge da PR",
           failedEnableAutoMerge: "Falha ao ativar merge automático",
           failedDisableAutoMerge: "Falha ao desativar merge automático",

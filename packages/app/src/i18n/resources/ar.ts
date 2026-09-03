@@ -846,6 +846,8 @@ export const ar: TranslationResources = {
           failedPush: "فشل في الدفع",
           failedPullAndPush: "فشل في السحب والدفع",
           failedCreatePr: "فشل في إنشاء PR",
+          mayStillBeRunning:
+            "قد لا يزال الخادم يعالج هذا الطلب. تحقق من مساحة العمل قبل إعادة المحاولة لتجنب التكرار.",
           failedMergePr: "فشل دمج PR",
           failedEnableAutoMerge: "فشل في تمكين الدمج التلقائي",
           failedDisableAutoMerge: "فشل في تعطيل الدمج التلقائي",

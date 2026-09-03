@@ -861,6 +861,8 @@ export const ru: TranslationResources = {
           failedPush: "Не удалось отправить изменения",
           failedPullAndPush: "Не удалось получить и отправить изменения",
           failedCreatePr: "Не удалось создать PR.",
+          mayStillBeRunning:
+            "Сервер, возможно, все еще обрабатывает этот запрос. Проверьте рабочее пространство перед повторной попыткой, чтобы избежать дубликата.",
           failedMergePr: "Не удалось выполнить слияние PR",
           failedEnableAutoMerge: "Не удалось включить автослияние",
           failedDisableAutoMerge: "Не удалось отключить автослияние",
