@@ -5,6 +5,7 @@ import type { TFunction } from "i18next";
 import { ArrowDownToLine, ListChevronsDownUp, SquarePen } from "lucide-react-native";
 import React, {
   memo,
+  type ComponentType,
   type ReactNode,
   useCallback,
   useEffect,
@@ -14,7 +15,13 @@ import React, {
   useSyncExternalStore,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { StyleSheet as RNStyleSheet, Text, View } from "react-native";
+import {
+  Pressable,
+  StyleSheet as RNStyleSheet,
+  Text,
+  View,
+  type PressableStateCallbackType,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import invariant from "tiny-invariant";
@@ -28,6 +35,7 @@ import { useRetainedPanelActive } from "@/components/retained-panel";
 import { Composer } from "@/composer";
 import { useWorkspaceHasDiffStat } from "@/composer/workspace-diff-stat";
 import {
+  composerPillStyles,
   resolveComposerTrackControlClearance,
   resolveComposerTrackTailClearance,
 } from "@/composer/pill-styles";
@@ -97,7 +105,7 @@ import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import { openWorkspaceChanges } from "@/workspace-tabs/open-supporting-view";
 import { useSettings } from "@/hooks/use-settings";
-import type { Theme } from "@/styles/theme";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { PendingPermission } from "@/types/shared";
 import type { StreamItem, TodoEntry } from "@/types/stream";
 import type { ViewedTimelineStatus, ViewedTimelineUiBridge } from "@/timeline/viewed-timeline-sync";
@@ -1580,6 +1588,46 @@ const AgentStreamSection = memo(function AgentStreamSection({
   );
 });
 
+const AgentStreamControlButton = memo(function AgentStreamControlButton({
+  ThemedIcon,
+  onPress,
+  accessibilityLabel,
+  testID,
+}: {
+  ThemedIcon: ComponentType<{ size?: number; uniProps?: typeof foregroundColorMapping }>;
+  onPress: () => void;
+  accessibilityLabel: string;
+  testID: string;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+  const handleHoverIn = useCallback(() => setIsHovered(true), []);
+  const handleHoverOut = useCallback(() => setIsHovered(false), []);
+  const bodyStyle = useCallback(
+    ({ pressed }: PressableStateCallbackType) => [
+      composerPillStyles.body,
+      styles.streamControlButton,
+      (isHovered || pressed) && composerPillStyles.bodyActive,
+    ],
+    [isHovered],
+  );
+  return (
+    <Pressable
+      onPress={onPress}
+      onHoverIn={handleHoverIn}
+      onHoverOut={handleHoverOut}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      testID={testID}
+      style={bodyStyle}
+    >
+      <ThemedIcon
+        size={ICON_SIZE.sm}
+        uniProps={isHovered ? foregroundColorMapping : foregroundMutedColorMapping}
+      />
+    </Pressable>
+  );
+});
+
 const AgentStreamHeaderControls = memo(function AgentStreamHeaderControls({
   showScrollToBottom,
   onCollapseAll,
@@ -1598,11 +1646,8 @@ const AgentStreamHeaderControls = memo(function AgentStreamHeaderControls({
       {showScrollToBottom ? (
         <Tooltip delayDuration={300} enabledOnDesktop>
           <TooltipTrigger asChild triggerRefProp="ref">
-            <Button
-              variant="ghost"
-              size="sm"
-              style={styles.streamControlButton}
-              leftIcon={ArrowDownToLine}
+            <AgentStreamControlButton
+              ThemedIcon={ThemedArrowDownToLine}
               onPress={onScrollToBottom}
               accessibilityLabel={scrollToBottomLabel}
               testID="scroll-to-bottom-button"
@@ -1615,11 +1660,8 @@ const AgentStreamHeaderControls = memo(function AgentStreamHeaderControls({
       ) : null}
       <Tooltip delayDuration={300} enabledOnDesktop>
         <TooltipTrigger asChild triggerRefProp="ref">
-          <Button
-            variant="ghost"
-            size="sm"
-            style={styles.streamControlButton}
-            leftIcon={ListChevronsDownUp}
+          <AgentStreamControlButton
+            ThemedIcon={ThemedListChevronsDownUp}
             onPress={onCollapseAll}
             accessibilityLabel={collapseAllLabel}
             testID="collapse-all-tool-calls-button"
@@ -1883,6 +1925,9 @@ function AgentSessionUnavailableState({
   );
 }
 
+const ThemedArrowDownToLine = withUnistyles(ArrowDownToLine);
+const ThemedListChevronsDownUp = withUnistyles(ListChevronsDownUp);
+
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -1943,7 +1988,6 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
   },
   streamControls: {
-    width: 60,
     marginLeft: "auto",
     flexShrink: 0,
     flexDirection: "row",
@@ -1952,8 +1996,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
   },
   streamControlButton: {
-    width: 28,
-    height: 28,
+    flexShrink: 0,
   },
   streamControlTooltipText: {
     color: theme.colors.popoverForeground,
