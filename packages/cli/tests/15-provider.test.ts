@@ -141,11 +141,27 @@ let claudeModelsFromJson: ProviderModel[] = [];
 
 const ctx = await createE2ETestContext({ timeout: 120000 });
 
+/** Provider models boots a real provider process (opencode CLI cold start
+ * can exceed the 60s harness default on CI runners), and runPaseoCli
+ * rejects on timeout, so catch and retry transient failures explicitly. */
+const PROVIDER_MODELS_TIMEOUT_MS = 120_000;
+
 async function runProviderModelsJson(provider: string): Promise<ProviderModel[]> {
   const transientNeedles = ["transport closed", "timed out", "timeout", "socket", "econn"];
 
   async function attemptRun(attempt: number): Promise<ProviderModel[]> {
-    const result = await ctx.paseo(["provider", "models", provider, "--json"]);
+    let result: { exitCode: number; stdout: string; stderr: string };
+    try {
+      result = await ctx.paseo(["provider", "models", provider, "--json"], {
+        timeout: PROVIDER_MODELS_TIMEOUT_MS,
+      });
+    } catch (error) {
+      if (attempt === 3) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+      return attemptRun(attempt + 1);
+    }
     if (result.exitCode === 0) {
       return JSON.parse(result.stdout.trim()) as ProviderModel[];
     }

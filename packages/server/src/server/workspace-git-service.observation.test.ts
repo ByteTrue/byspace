@@ -902,10 +902,16 @@ describe("WorkspaceGitService checkout observation", () => {
     await vi.waitFor(() => {
       expect(service.getMetrics().fetchInFlightCount).toBe(0);
     });
-    await vi.advanceTimersByTimeAsync(1_000);
-    await vi.waitFor(() => {
-      expect(getCheckoutSnapshotFacts).toHaveBeenCalledTimes(2);
-    });
+    // Fire whatever debounce is already scheduled instead of advancing an
+    // exact 1s: a zero-margin advance can miss the timer registration tick
+    // and silently skip the refresh (seen flaking on windows runners).
+    await vi.runOnlyPendingTimersAsync();
+    await vi.waitFor(
+      () => {
+        expect(getCheckoutSnapshotFacts).toHaveBeenCalledTimes(2);
+      },
+      { timeout: 5_000 },
+    );
 
     subscription.unsubscribe();
     service.dispose();
