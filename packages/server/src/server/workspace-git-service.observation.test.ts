@@ -902,12 +902,14 @@ describe("WorkspaceGitService checkout observation", () => {
     await vi.waitFor(() => {
       expect(service.getMetrics().fetchInFlightCount).toBe(0);
     });
-    // Fire whatever debounce is already scheduled instead of advancing an
-    // exact 1s: a zero-margin advance can miss the timer registration tick
-    // and silently skip the refresh (seen flaking on windows runners).
-    await vi.runOnlyPendingTimersAsync();
     await vi.waitFor(
-      () => {
+      async () => {
+        // The refresh debounce is a fake timer; vi.waitFor polls on real
+        // time, so a registered-but-unfired timer would never run. Advance
+        // fake time on every poll so the refresh fires no matter how many
+        // async hops precede the debounce registration (windows runners add
+        // one).
+        await vi.advanceTimersByTimeAsync(1_000);
         expect(getCheckoutSnapshotFacts).toHaveBeenCalledTimes(2);
       },
       { timeout: 5_000 },
