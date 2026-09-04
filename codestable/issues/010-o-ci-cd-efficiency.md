@@ -21,6 +21,8 @@ created: 2026-09-04
 
 **审计修正（2026-09-04 补充）：** v0.11.3 发布故障不全是既有 flake，部分由会话中全局环境变更造成（全局装 claude/codex/opencode 最新版、写错 `~/.npmrc` 只留一条 allow-scripts）。「本地没在跑过 15-provider」是用户真实环境特征；「CI 上 15-provider 跑过且绿」是 v0.11.2 事实。把本地与 CI 混为一谈是不准的。
 
+**审计修正 2（2026-09-04 用户裁决）：** 开发机明确不装任何 agent CLI。测试结果以 CI 为基准——本地跑不了（缺真实 provider）就不跑；绝不为此装全局包或改 `~/.npmrc`。三个全局包和 opencode 已卸载，`~/.npmrc` 恢复原状。普通 e2e spec（settings-toggle 等 8 个）在无 opencode 机器上本地跑会报 "Provider 'opencode' is not available" 快速失败，这是设计边界，不是 bug。
+
 **范围：** 包含 CI workflow、e2e/单测 flake 治理、发布门禁配套自动化；不包含：降低门禁标准、缩减测试覆盖、生产 RPC 超时调整。
 
 ## 为什么现在做 / 当前坏在哪
@@ -28,7 +30,7 @@ created: 2026-09-04
 v0.11.3 发布（2026-09-04）实测：全程 ~6 小时，其中 ~5 小时在等 CI 与重跑。具体证据：
 
 - merge commit `ba2184de4` 的 CI 重跑 **4 次才绿**；bump commit `3ecc55327` 自动重试 4 轮仍不绿，最终靠修复 commit `bed6d2e69` 才一次全绿；
-- playwright shard 4 的 `worktree-restore-after-restart` 与 `settings-toggle-tab-regression`：seed 阶段 `createIdleAgent → daemon createAgent` RPC 等 60s 默认超时（`DEFAULT_SESSION_RPC_TIMEOUT_MS`）。冷 runner 上 opencode 首会话创建 50–70s+（双 worker 并发加剧），绿跑本就 1.1–1.2m 贴线，本地同 spec 仅 10–17s。当天 8 次尝试挂 7 次；
+- playwright shard 4 的 `worktree-restore-after-restart` 与 `settings-toggle-tab-regression`：seed 阶段 `createIdleAgent → daemon createAgent` RPC 等 60s 默认超时（`DEFAULT_SESSION_RPC_TIMEOUT_MS`）。冷 runner 上 opencode 首会话创建 50–70s+（双 worker 并发加剧），绿跑本就 1.1–1.2m 贴线，。当天 8 次尝试挂 7 次；
 - windows vitest 随机时序断言：`workspace-git-service.observation.test.ts`（mock 调用计数 2 次 vs 1 次）与 `plugins/index.posix.test.ts`（git 更新构建命令）两处中过；
 - cli-tests 的 `paseo provider models opencode --json` 60s 超时随机挂；`mermaid-streaming.spec` 为已知 flake；
 - PR CI 的 changes 过滤器常跳过 cli/relay tests，flake 在 merge 后 main 首曝，发布时才付代价。
@@ -63,7 +65,7 @@ v0.11.3 发布（2026-09-04）实测：全程 ~6 小时，其中 ~5 小时在等
 
 - 2026-09-04：v0.11.3 发布过程中发现问题并落地 seed timeout 修复（见上）。
 - 2026-09-04：nix/npm-deps.hash 刷新路径实战验证：发 PR 触发 nix.yml → 从 darwin job FOD 报错的 `got:` 值取正确 hash → 回填分支 → build + build-desktop-darwin 双绿 → PR #26 合入 main（`nix/package.nix` 顺带文档化了刷新路径）。bump 后的 nix 修复从此有可复制的固定流程。
-- 2026-09-04：flake 治理第一批落地（`429898b2f`）：seed 链路 upsert 等待 30→60s；cli provider models 重试接住 harness 超时 reject（此前超时直接炸测）+ 120s 命令超时；observation 测试用 runOnlyPendingTimers 替代零余量 exact-1s advance（windows flake 形态）；plugins git-update 测试超时 30→60s（windows 实测 33s）；mermaid 采样循环容忍 ≤2 个连续 svg 瞬时丢失（已知 composer ~157ms 重挂载）。本地验证：observation+plugins 56 测试全绿、15-provider claude 路径过（codex 本机挂起未验，重试逻辑已本地复现生效）、mermaid 本地 reload 步失败为既有问题与 diff 无关（基线同挂，CI 从未在此挂，已列为后续调查项）。
+- 2026-09-04：flake 治理第一批落地（`429898b2f`）：seed 链路 upsert 等待 30→60s；cli provider models 重试接住 harness 超时 reject（此前超时直接炸测）+ 120s 命令超时；observation 测试用 runOnlyPendingTimers 替代零余量 exact-1s advance（windows flake 形态）；plugins git-update 测试超时 30→60s（windows 实测 33s）；mermaid 采样循环容忍 ≤2 个连续 svg 瞬时丢失（已知 composer ~157ms 重挂载）。本地验证仅限不依赖真实 CLI 的部分：observation+plugins 56 测试全绿（vitest 纯 mock，无外部依赖）、mermaid 本地 reload 步失败为基线同挂（本机缺 opencode 属设计边界，非 CI 问题）。涉及真实 CLI 的验证一律以 CI 为准。
 - 2026-09-04：结构性缓解落地（`1354b631c`）：CI/Docker 对 main push 开启 concurrency 取消（新 push 取消在飞旧 run）；CI 的 `full` 门控对 main push 改为与 PR 相同的 paths 路由（docs/codestable-only push 几分钟出结果；bump commit 因触碰 package.json 仍全量，release 门禁不变）。当天实测 docs-only push 白跑 ~30min 全量矩阵且被下一 push 立即取代——此形态不再发生。
 
 ## 关闭时
