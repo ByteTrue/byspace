@@ -67,7 +67,7 @@ created: 2026-09-04
 3. **冷热维度**：发版 bump 是新 SHA、冷缓存、冷 daemon、真 opencode 首次会话创建（慢 5-6 倍）。阶段 1 mock 化已消除此项对普通 spec 的威胁。
 4. **纯 flake**：概率性竞态（mermaid composer 重挂载、desktop browser-tools 截图 90s 超时），单次绿不能证明不 flaky，发版首跑撞上。
 
-应对：阶段 1 治 2/3，阶段 3（自动重试）治 4 的代价，覆盖维度是路径路由的语义（合理，不动）但要求 mock 化后残余 flake 足够少。
+应对：阶段 1 治 2/3，阶段 4 维度的代价由 playwright retries+人工 rerun 兜底（阶段 3 已改判不建），覆盖维度是路径路由的语义（合理，不动）但要求 mock 化后残余 flake 足够少。
 
 ## 已落地（按 commit，可复核）
 
@@ -85,8 +85,8 @@ created: 2026-09-04
 - **desktop-tests ubuntu「inactive browser remains captureable」**（browser_screenshot 90s 不可用）：db99c0b38 首见，与本次改动无关，需单独调查（browser-capture-harness 相关）；
 - **new-workspace-launch-memory.spec**（terminal-surface 30s 不可见）：db99c0b38 首见，待现是否复现；
 - **隐性 .real 的归属**：archive-tab / worktree-restore 用真 opencode seed 跑在普通 shard，是否应迁到 real-provider project（需对照上游意图）；
-- **mermaid composer 重挂载的真根治**（产品代码）；
-- 阶段 3（自动重试）、阶段 4（时长）未动。
+- **mermaid composer 重挂载的真根治**（产品代码）：初步排查 tabId=`agent_${agentId}` 稳定不随 turn 变化，重挂载另有原因（useMountedTabSet cap 驱逐或 StrictMode），容忍补丁（ddcdfb313）在位，不再深挖；
+- 阶段 3 已改判不建（见下）；阶段 4 等全量 CI 实测数据。
 
 ## 实施计划（一次性完整落地）
 
@@ -108,11 +108,16 @@ v0.11.3 tag 发布实测各 workflow 耗时：
 - Publish npm 5m4s = 打包 + 上传；Deploy App 4m39s = Web/PWA；Docker 在 tag 前已完成镜像 build，tag 触发只 publish（1m17s）。
   结论：CD 无优化溃点。各发布链路的构建都是已并行的物理时长，压缩依赖上游（electron/xcode 构建本身），不在本 issue 追求。
 
-### 阶段 3：CI flake 自动重试（缓解残余 flake）
+### 阶段 3：CI flake 自动重试——改判：不建（2026-09-04）
 
-- CI workflow 加收尾 job：白名单内的已知 flake 形态（含 `.real` 的 provider 冷启动、windows 时序）失败后自动 rerun 一次；rerun 仍红才报红；
-- 白名单不放宽成无条件重试（掩盖真失败）；
-- 人工 `gh run rerun --failed` 兜底流程保留，文档已写（`docs/release.md`）。
+原计划建白名单自动 rerun 机制。调研后改判不做，理由：
+
+1. **上游 paseo 没有该机制**：上游哲学是步骤级 npm-retry + playwright 内建 `retries: 1`（我们已有且一致）+ 人工 `gh run rerun --failed` 兜底；自建 workflow 级 rerun = 永久偏离上游 CI 结构（违背 #1700 不加上游没有的编排层）；
+2. **要解决的问题主体已消失**：自动重试主要治 seed 超时类 flake，mock 化（db99c0b38）已根治；
+3. **残余 flake 低频**：browser capture 近 5 次全量 run 仅 1 挂（Electron 合成器时序，上游同样存在）；
+4. GitHub Actions 无原生 job 级 rerun，workflow 内实现需 always() 绕过依赖门控，与 ci-workflow.test.mjs 契约（禁 always()）冲突。
+
+兜底维持：playwright `retries: 1`（已有）+ 人工 rerun 手册（docs/release.md 已写）。若未来发版再被同一 flake 卡 ≥2 次，重新评估。
 
 ### 阶段 4：CI 时长优化（只针对改代码 push）
 
@@ -132,7 +137,6 @@ v0.11.3 tag 发布实测各 workflow 耗时：
 
 - 阶段 0：撤回后无冗余 diff，本地 vitest（纯 mock）全绿，CI 全绿；
 - 阶段 1：普通 spec（含 settings-toggle、worktree-restore）CI 连续全绿且 shard 时长显著下降；无 opencode 的开发机本地可跑通这些普通 spec；
-- 阶段 3：人为注入白名单 flake 观察自动 rerun 生效一次后仍红（不掩盖）；
 - 总体验收：一次真实发布 exact-SHA CI 一次全绿、全程零人工 rerun。
 
 ## 执行记录
@@ -145,4 +149,4 @@ v0.11.3 tag 发布实测各 workflow 耗时：
 
 - 回写候选：`docs/testing.md`（普通 spec 不触达真实 CLI 的约定）、`docs/release.md`（已补）、issue 内已标注的 revert 项需在代码中执行；
 - 关闭判断：验证标准全部达标；
-- 遗留：阶段 3 缓存优化若未做，拆后续 issue（低优先）。
+- 遗留：缓存优化若未做，拆后续 issue（低优先）。
