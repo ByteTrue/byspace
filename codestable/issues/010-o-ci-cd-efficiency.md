@@ -60,6 +60,7 @@ v0.11.3 发布（2026-09-04）实测：全程 ~6 小时，其中 ~5 小时在等
 ## 执行记录
 
 - 2026-09-04：v0.11.3 发布过程中发现问题并落地 seed timeout 修复（见上）。
+- 2026-09-04：nix/npm-deps.hash 刷新路径实战验证：发 PR 触发 nix.yml → 从 darwin job FOD 报错的 `got:` 值取正确 hash → 回填分支 → build + build-desktop-darwin 双绿 → PR #26 合入 main（`nix/package.nix` 顺带文档化了刷新路径）。bump 后的 nix 修复从此有可复制的固定流程。
 
 ## 关闭时
 
