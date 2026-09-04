@@ -30,11 +30,9 @@ function buildSeededStoragePayload() {
   };
 }
 
-/**
- * The slice of a daemon client `createIdleAgent` needs: spawn an agent and await
+/** The slice of a daemon client `createIdleAgent` needs: spawn an agent and await
  * its idle upsert. The shared seed client satisfies it, so a spec can seed an
- * idle agent from the same client it uses for everything else.
- */
+ * idle agent from the same client it uses for everything else. */
 export interface IdleAgentSeedClient {
   createAgent(options: {
     provider: string;
@@ -44,6 +42,7 @@ export interface IdleAgentSeedClient {
     cwd: string;
     workspaceId: string;
     title: string;
+    timeout?: number;
   }): Promise<{ id: string }>;
   waitForAgentUpsert(
     agentId: string,
@@ -51,6 +50,11 @@ export interface IdleAgentSeedClient {
     timeout?: number,
   ): Promise<{ status: string }>;
 }
+
+/** Cold CI runners can take well over a minute to boot a real provider
+ * process for the first seeded agent (opencode CLI boot + skills scan), so
+ * seed calls override the 60s interactive RPC default. */
+const SEED_CREATE_AGENT_TIMEOUT_MS = 180_000;
 
 async function seedIdleAgent(
   client: IdleAgentSeedClient,
@@ -67,6 +71,7 @@ async function seedIdleAgent(
     cwd: input.cwd,
     workspaceId: input.workspaceId,
     title: input.title,
+    timeout: SEED_CREATE_AGENT_TIMEOUT_MS,
   });
   const snapshot = await client.waitForAgentUpsert(
     created.id,
