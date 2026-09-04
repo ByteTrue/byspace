@@ -63,14 +63,15 @@ Keep the keystore and passwords outside the repository. Use the same release key
 
 ## Dry-runs
 
-Before tagging, run these workflows with the current `main` SHA:
+Before tagging, run these workflows with `workflow_dispatch` on the current `main` SHA:
 
-- Desktop Release with `dry_run=true`
-- iOS Unsigned Release with `dry_run=true`
-- npm Release with `dry_run=true`
-- Docker with `dry_run=true`
+- Desktop Release with `tag=<version tag>`, `platform=all`, `publish=false`
+- iOS Unsigned Release with `ref=<full SHA>`, `publish=false`
+- Publish npm with `ref=<full SHA>`, `publish=false`
+- Docker with `byspace_version=<version>`
 
-The iOS workflow builds only the unsigned device IPA. It does not build Simulator artifacts.
+`ref` and `checkout_ref` inputs require the full 40-character SHA — `actions/checkout`
+fetch mode fails on abbreviated SHAs.
 
 ## Tag and publish
 
@@ -81,14 +82,19 @@ npm run release:push
 ```
 
 `release:push` waits for successful CI on the exact `main` SHA before creating the version tag.
+If CI fails on unchanged test files, check whether the failure is a known flake (seed-timeout
+E2E specs, windows vitest timing assertions) and rerun only the failed jobs with
+`gh run rerun <run-id> --failed`. A run must be completed before `--failed` reruns are accepted.
 
-The tag starts npm, Web/PWA, Docker, Desktop, and iOS publication. Wait for all workflows to finish. Upload the already verified Android APK and checksum after the GitHub Release exists:
+The tag starts npm, Web/PWA, Docker, Desktop, and iOS publication. Wait for all workflows to
+finish. Upload the already verified Android APK and checksum after the GitHub Release exists
+(argument order: tag, asset path, then the exact commit SHA the tag points to):
 
 ```bash
 GITHUB_REPOSITORY=ByteTrue/byspace \
-  scripts/upload-release-asset.sh v0.7.0-beta.2 <exact-sha> dist/android/BySpace-0.7.0-beta.2-android.apk
+  scripts/upload-release-asset.sh v0.7.0-beta.2 dist/android/BySpace-0.7.0-beta.2-android.apk <exact-sha>
 GITHUB_REPOSITORY=ByteTrue/byspace \
-  scripts/upload-release-asset.sh v0.7.0-beta.2 <exact-sha> dist/android/BySpace-0.7.0-beta.2-android.apk.sha256
+  scripts/upload-release-asset.sh v0.7.0-beta.2 dist/android/BySpace-0.7.0-beta.2-android.apk.sha256 <exact-sha>
 ```
 
 ## Verify
