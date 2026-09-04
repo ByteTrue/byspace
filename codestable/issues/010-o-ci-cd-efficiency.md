@@ -39,15 +39,15 @@ v0.11.3 发布（2026-09-04）实测：全程 ~6 小时，其中 ~5 小时在等
 
 分三层，按根治程度排序：
 
-1. **flake 治理（根治）**
-   - 排查 seed 链路上其余贴线点（`waitForAgentUpsert` 30s、隔离 daemon 冷启动路径）；
-   - windows vitest 时序断言逐个修复（fake timers / 放宽等待）或隔离到 retry 组；
-   - `mermaid-streaming.spec`、cli `provider models` 超时分别处置。
+1. **flake 治理（根治）**——第一批已落地（见执行记录）；余项：
+   - 本地 mermaid reload 步稳定失败（CI 未见）：调查是真实产品 bug（blob/srcdoc 生命周期）还是本地环境伪影；
+   - codex CLI 本机冷启动挂起导致 daemon models RPC 超时（本地复现）——与 CI opencode 超时同族，观察 CI 验证。
 2. **自动重试（结构性缓解）**
    - 为已知 flaky job 建「失败自动 rerun 一次」机制（workflow 收尾 job 或轻量脚本），rerun 仍红才报警；人工 `gh run rerun --failed` 流程保留为兜底（注意：run 必须 completed 才能 rerun）。
 3. **配套（缓解）**
    - CI 时长优化：gradle/oxlint/metro 缓存、shard 均衡（shard 4 集中了 terminal-\* 重负载 spec）；
-   - nix/npm-deps.hash：bump 后过期的取数路径固化（本机无 nix 时，从 PR 触发的 ubuntu job 日志取 Computed hash 或 darwin job 报错 got 值写入 `nix/npm-deps.hash`）。
+   - ~~nix/npm-deps.hash~~ 已完成（见执行记录）；
+   - ~~main push 取消旧 run + paths 路由~~ 已完成（见执行记录）。
 
 **危险边界：** 不降低 exact-SHA 门禁；不为掩盖失败而无条件重试——自动重试仅限白名单内的已知 flake 形态。
 
@@ -61,6 +61,8 @@ v0.11.3 发布（2026-09-04）实测：全程 ~6 小时，其中 ~5 小时在等
 
 - 2026-09-04：v0.11.3 发布过程中发现问题并落地 seed timeout 修复（见上）。
 - 2026-09-04：nix/npm-deps.hash 刷新路径实战验证：发 PR 触发 nix.yml → 从 darwin job FOD 报错的 `got:` 值取正确 hash → 回填分支 → build + build-desktop-darwin 双绿 → PR #26 合入 main（`nix/package.nix` 顺带文档化了刷新路径）。bump 后的 nix 修复从此有可复制的固定流程。
+- 2026-09-04：flake 治理第一批落地（`429898b2f`）：seed 链路 upsert 等待 30→60s；cli provider models 重试接住 harness 超时 reject（此前超时直接炸测）+ 120s 命令超时；observation 测试用 runOnlyPendingTimers 替代零余量 exact-1s advance（windows flake 形态）；plugins git-update 测试超时 30→60s（windows 实测 33s）；mermaid 采样循环容忍 ≤2 个连续 svg 瞬时丢失（已知 composer ~157ms 重挂载）。本地验证：observation+plugins 56 测试全绿、15-provider claude 路径过（codex 本机挂起未验，重试逻辑已本地复现生效）、mermaid 本地 reload 步失败为既有问题与 diff 无关（基线同挂，CI 从未在此挂，已列为后续调查项）。
+- 2026-09-04：结构性缓解落地（`1354b631c`）：CI/Docker 对 main push 开启 concurrency 取消（新 push 取消在飞旧 run）；CI 的 `full` 门控对 main push 改为与 PR 相同的 paths 路由（docs/codestable-only push 几分钟出结果；bump commit 因触碰 package.json 仍全量，release 门禁不变）。当天实测 docs-only push 白跑 ~30min 全量矩阵且被下一 push 立即取代——此形态不再发生。
 
 ## 关闭时
 
