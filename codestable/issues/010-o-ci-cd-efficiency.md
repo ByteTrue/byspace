@@ -1,75 +1,131 @@
 ---
 kind: issue
-title: "CI 发布门禁与 flaky 测试治理（CI/CD 效率优化）"
+title: "CI/CD 效率根治：E2E 测试架构、CI 结构与发布纪律"
 type: chore
 status: open
 created: 2026-09-04
 ---
 
-# CI 发布门禁与 flaky 测试治理（CI/CD 效率优化）
+# CI/CD 效率根治：E2E 测试架构、CI 结构与发布纪律
 
-> **读者：** 跨会话接手的人——目标：发布打 tag 不再靠人工 rerun 抽卡。别碰：不降低 exact-SHA CI 门禁标准，不改生产 60s RPC 默认值。验证：连续发布演练无 flake 阻塞。
+> **读者：** 跨会话接手的人。
+> **目标：** 一次发布会话不再浪费 5 小时在等 CI 与重跑上；外部 agent CLI 的更新永远不会让 BySpace 的测试必现失败。
+> **别碰：** 不降低 exact-SHA 发布门禁；开发机不装任何 agent CLI；测试结果以 CI 为基准。
+> **验证：** 一次真实发布全程无人工 rerun；mock 化后普通 spec 不再触达真实 provider。
 
 ---
 
-## 做成以后是什么样
+## 触发事件（2026-09-04 v0.11.3 发布）
 
-- 发布时 exact-SHA CI 一次全绿是常态；已知 flaky job 失败后有自动重试，仍失败才需要人介入；
-- e2e seed 链路在冷 runner 上有充足超时余量，不再贴生产默认 60s 线；
-- windows vitest 时序断言类 flake 被修复或隔离，不再随机打红 CI；
-- bump commit 导致的 nix/npm-deps.hash 过期有明确、可执行的取数修复路径，不拖到下个 PR 才暴露。
+全程约 6 小时，其中约 5 小时消耗在 CI 重跑与人工等待：
 
-**审计修正（2026-09-04 补充）：** v0.11.3 发布故障不全是既有 flake，部分由会话中全局环境变更造成（全局装 claude/codex/opencode 最新版、写错 `~/.npmrc` 只留一条 allow-scripts）。「本地没在跑过 15-provider」是用户真实环境特征；「CI 上 15-provider 跑过且绿」是 v0.11.2 事实。把本地与 CI 混为一谈是不准的。
+| 事件                           | 消耗                          | 性质                       |
+| ------------------------------ | ----------------------------- | -------------------------- |
+| `ba2184de4`（merge PR #25）CI  | 重跑 4 次才绿                 | flake 抽卡                 |
+| `3ecc55327`（bump commit）CI   | 自动重试 4 轮仍不绿           | flake 抽卡                 |
+| `bed6d2e69`（seed 超时缓解）CI | 1 次全绿                      | 缓解生效                   |
+| docs-only commit CI            | 白跑 ~30min 全量矩阵          | CI 结构缺陷（已修）        |
+| 本地「复现」e2e                | 污染开发机（装 3 个全局 CLI） | 会话操作纪律错误（已纠正） |
 
-**审计修正 2（2026-09-04 用户裁决）：** 开发机明确不装任何 agent CLI。测试结果以 CI 为基准——本地跑不了（缺真实 provider）就不跑；绝不为此装全局包或改 `~/.npmrc`。三个全局包和 opencode 已卸载，`~/.npmrc` 恢复原状。普通 e2e spec（settings-toggle 等 8 个）在无 opencode 机器上本地跑会报 "Provider 'opencode' is not available" 快速失败，这是设计边界，不是 bug。
+**核心症状**：playwright shard 4 的 `worktree-restore-after-restart`、`settings-toggle-tab-regression` 当天 8 次尝试挂 7 次，重跑 3-4 轮才绿。
 
-**范围：** 包含 CI workflow、e2e/单测 flake 治理、发布门禁配套自动化；不包含：降低门禁标准、缩减测试覆盖、生产 RPC 超时调整。
+## 根因分析（按因果链，非按表面症状）
 
-## 为什么现在做 / 当前坏在哪
+### 根因 A：普通 UI/daemon e2e 测试错误依赖真实 agent CLI
 
-v0.11.3 发布（2026-09-04）实测：全程 ~6 小时，其中 ~5 小时在等 CI 与重跑。具体证据：
+- `settings-toggle-tab-regression` 验证的是「设置页开关后回到同一 workspace tab」——纯 UI 回归；
+- `worktree-restore-after-restart` 验证的是「daemon 重启后 History 显示 worktree 分支」——纯 daemon 持久化；
+- 两者都不测 agent 集成，却通过 `archive-tab.ts` 的 `createIdleAgent` seed **真实 opencode 进程**（CI 上冷启动 50-70s+，双 worker 并发加剧）；
+- daemon 内置 `MockLoadTestAgentClient`（毫秒级 idle、零外部依赖），19 个普通 spec 已用它，但这 10 个没有；
+- **后果**：测试贴 60s RPC 超时线侥幸通过（绿跑 1.1-1.2m）；runner 稍慢或 opencode 稍慢必挂。若 opencode 更新变慢，测试必现失败——这正是用户指出的「测试写得有问题」。
+- 真正测 agent 集成的测试已有单独归类：`.real.spec.ts`（17 个）+ `real-provider` project + CI 专用安装 CLI。**真实 provider 只应出现在 `.real` 里。**
 
-- merge commit `ba2184de4` 的 CI 重跑 **4 次才绿**；bump commit `3ecc55327` 自动重试 4 轮仍不绿，最终靠修复 commit `bed6d2e69` 才一次全绿；
-- playwright shard 4 的 `worktree-restore-after-restart` 与 `settings-toggle-tab-regression`：seed 阶段 `createIdleAgent → daemon createAgent` RPC 等 60s 默认超时（`DEFAULT_SESSION_RPC_TIMEOUT_MS`）。冷 runner 上 opencode 首会话创建 50–70s+（双 worker 并发加剧），绿跑本就 1.1–1.2m 贴线，。当天 8 次尝试挂 7 次；
-- windows vitest 随机时序断言：`workspace-git-service.observation.test.ts`（mock 调用计数 2 次 vs 1 次）与 `plugins/index.posix.test.ts`（git 更新构建命令）两处中过；
-- cli-tests 的 `paseo provider models opencode --json` 60s 超时随机挂；`mermaid-streaming.spec` 为已知 flake；
-- PR CI 的 changes 过滤器常跳过 cli/relay tests，flake 在 merge 后 main 首曝，发布时才付代价。
+### 根因 B：UI 测试对「seed 完成时间」做脆弱假设
 
-## 已落地（本次发布中）
+- 生产 RPC 默认 60s（交互场景合理），UI 测试却把「冷启动真实 CLI」塞进这条链路；
+- 测试自身超时余量不足：绿跑也要 1.1-1.2m，与超时线只有几十秒余量。
 
-- `bed6d2e69`：`DaemonClient.createAgent` 增加可选 `timeout`（复刻 checkout git metadata RPC 的既有模式），e2e seed helper 传 180s。落地后 bed6d2e69 CI 一次全绿，shard 4 不再抽卡。生产 60s 默认不变。
+### 根因 C：CI 结构放大 flake 的代价
 
-## 方案与实现安排
+- PR 的 changes 过滤器常跳过 cli/relay/browser 测试 → 代码合入 main 后全量矩阵第一次真正跑这些测试 → **flake 在 main 首曝，发布时才付代价**（PR #25 的 cli-tests 就被跳过）；
+- main push 旧 run 不被取消（docs push 白跑 30min，随即被下一 push 取代）；
+- main push 与 PR 路由不同（docs-only 也全量）——**已修**（`1354b631c`）；
+- 无自动重试机制 → flake 需要人守着 `gh run rerun --failed`。
 
-分三层，按根治程度排序：
+### 根因 D：发布会话操作纪律（本次会话教训）
 
-1. **flake 治理（根治）**——第一批已落地（见执行记录）；余项：
-   - 本地 mermaid reload 步稳定失败（CI 未见）：调查是真实产品 bug（blob/srcdoc 生命周期）还是本地环境伪影；
-   - codex CLI 本机冷启动挂起导致 daemon models RPC 超时（本地复现）——与 CI opencode 超时同族，观察 CI 验证。
-2. **自动重试（结构性缓解）**
-   - 为已知 flaky job 建「失败自动 rerun 一次」机制（workflow 收尾 job 或轻量脚本），rerun 仍红才报警；人工 `gh run rerun --failed` 流程保留为兜底（注意：run 必须 completed 才能 rerun）。
-3. **配套（缓解）**
-   - CI 时长优化：gradle/oxlint/metro 缓存、shard 均衡（shard 4 集中了 terminal-\* 重负载 spec）；
-   - ~~nix/npm-deps.hash~~ 已完成（见执行记录）；
-   - ~~main push 取消旧 run + paths 路由~~ 已完成（见执行记录）。
+- 为了「本地复现 CI 失败」，擅自全局装了 claude/codex/opencode 三个 CLI 并改写 `~/.npmrc`——用户开发机明确不装这些；
+- 用被污染的本地环境当「基线」，得出「本地 10s 过 / CI 1m 挂 → 测试脆弱」的部分错误结论；
+- 用户裁决（审计修正 2）：**测试结果以 CI 为基准**；本地跑不了（缺 provider）就不跑；开发机不装任何 agent CLI。
 
-**危险边界：** 不降低 exact-SHA 门禁；不为掩盖失败而无条件重试——自动重试仅限白名单内的已知 flake 形态。
+## 已落地（按 commit，可复核）
+
+| Commit            | 内容                                                                                                                                                                         | 是否仍必要（mock 化后评估）                                                                                                                                                                     |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bed6d2e69`       | `createAgent` 加可选 timeout，e2e seed 传 180s                                                                                                                               | **待定**：mock 化后 seed 毫秒级完成，180s 缓解不再需要；`timeout` 参数本身是防御性 API，可保留也可 revert 简化                                                                                  |
+| `429898b2f`       | seed upsert 30→60s；cli provider models 重试接住超时 reject + 120s；observation 测试 runOnlyPendingTimers（windows 时序）；plugins git-update 30→60s；mermaid 采样容忍重挂载 | **分项评估**：windows vitest 两项是纯 mock 真实修复，**保留**；seed upsert 放宽与 mermaid 容忍依赖根因 A 修复（mock 化），mock 后**可 revert**；cli 重试接住 reject 是 harness 真缺陷，**保留** |
+| `1354b631c`       | main push 取消旧 run；main push 走 paths 路由（docs-only 快，bump 全量）                                                                                                     | **保留**（独立于 provider 问题，已实测生效）                                                                                                                                                    |
+| nix hash PR #26   | bump 后 hash 刷新路径固化                                                                                                                                                    | **保留**                                                                                                                                                                                        |
+| `docs/release.md` | dry-run 输入、上传脚本参数序、flake rerun 处置                                                                                                                               | **保留**（含此次教训）                                                                                                                                                                          |
+
+**诚实标注**：`bed6d2e69`/`429898b2f` 的 seed 部分治的是症状（放大超时容忍慢 CLI），没治根因 A（UI 测试根本不该等真实 CLI）。若本次方案落地 mock 化，这两项的 seed 部分应 revert，保持代码与测试贴近上游、无冗余。
+
+## 实施计划（一次性完整落地）
+
+### 阶段 1：普通 spec 的 seed 全面 mock 化（治根因 A + B）
+
+**方案**：复用现存成熟链路 `seedMockAgentWorkspace`（建于 daemon 内置 mock provider，19 个普通 spec 已在用），把 10 个通过 `createIdleAgent` 拉真 opencode 的普通 spec 改成同样用法；不引入新基建，不拆 api。
+
+**10 个调用方**（全部普通 spec，全部把 seed 从真 opencode 换 mock）：
+
+- `archive-tab.spec.ts`
+- `command-center-host.spec.ts`
+- `command-center-workspaces.spec.ts`
+- `sessions-search-hosts.spec.ts`
+- `sessions-search.spec.ts`
+- `settings-toggle-tab-regression.spec.ts`
+- `workspace-agent-tab-rename.spec.ts`
+- `workspace-pane-remount.spec.ts`
+- `worktree-restore-after-restart.spec.ts`
+- `worktree-restore.spec.ts`
+
+**撤回项**：`429898b2f` 中的 seed upsert 30→60s、mermaid 采样容忍重挂载，在 mock 化后失去意义，评估后 revert；windows vitest 两项与 cli 重试接住 reject 为独立修复保留。`bed6d2e69` 的 `timeout` 参数保留（对齐 checkout 先例），但 e2e seed 不再传 180s。
+
+**效果**：普通 spec 永不触达真实 CLI；外部 CLI 更新不再影响它们；shard 4 不再有 50-70s 冷启动等待；开发机本地可跑（依赖 mock，无 provider 也可）——与用户裁决完全一致。
+
+### 阶段 2：CI flake 自动重试（缓解残余 flake）
+
+- CI workflow 加收尾 job：白名单内的已知 flake 形态（含 `.real` 的 provider 冷启动、windows 时序）失败后自动 rerun 一次；rerun 仍红才报红；
+- 白名单不放宽成无条件重试（掩盖真失败）；
+- 人工 `gh run rerun --failed` 兜底流程保留，文档已写（`docs/release.md`）。
+
+### 阶段 3：CI 时长与结构收尾
+
+- `.real.spec.ts` 单独 shard/跑在独立 project 已有；评估是否需要单独 job（避免真 provider 慢测试拖累普通 shard 的并行度）；
+- 观察 playwright shard 均衡（mock 化后自然变化，先测后调）；
+- gradle/oxlint/metro 缓存如经实测有显著收益再做（低优先）。
+
+## 决策边界（本 issue 锁死）
+
+1. 开发机不装任何 agent CLI；测试结果以 CI 为基准；
+2. 真实 agent CLI 只允许出现在 `.real.spec.ts`（CI 专用 project 内）；
+3. 不降低 exact-SHA 发布门禁；
+4. mock 化不改普通 spec 的测试意图（它们验证 UI/daemon 行为，不验证 agent）。
 
 ## 验证
 
-- 连续 2 次发布演练（或真实发布）exact-SHA CI 一次全绿；
-- playwright shard 4 在 CI 连续多次全绿；
-- windows server-tests 连续多次无时序 flake。
+- 阶段 1：普通 spec（含 settings-toggle、worktree-restore）CI 连续全绿且 shard 时长显著下降；无 opencode 的开发机本地可跑通这些普通 spec；
+- 阶段 2：人为注入白名单 flake 观察自动 rerun 生效一次后仍红（不掩盖）；
+- 总体验收：一次真实发布 exact-SHA CI 一次全绿、全程零人工 rerun。
 
 ## 执行记录
 
-- 2026-09-04：v0.11.3 发布过程中发现问题并落地 seed timeout 修复（见上）。
-- 2026-09-04：nix/npm-deps.hash 刷新路径实战验证：发 PR 触发 nix.yml → 从 darwin job FOD 报错的 `got:` 值取正确 hash → 回填分支 → build + build-desktop-darwin 双绿 → PR #26 合入 main（`nix/package.nix` 顺带文档化了刷新路径）。bump 后的 nix 修复从此有可复制的固定流程。
-- 2026-09-04：flake 治理第一批落地（`429898b2f`）：seed 链路 upsert 等待 30→60s；cli provider models 重试接住 harness 超时 reject（此前超时直接炸测）+ 120s 命令超时；observation 测试用 runOnlyPendingTimers 替代零余量 exact-1s advance（windows flake 形态）；plugins git-update 测试超时 30→60s（windows 实测 33s）；mermaid 采样循环容忍 ≤2 个连续 svg 瞬时丢失（已知 composer ~157ms 重挂载）。本地验证仅限不依赖真实 CLI 的部分：observation+plugins 56 测试全绿（vitest 纯 mock，无外部依赖）、mermaid 本地 reload 步失败为基线同挂（本机缺 opencode 属设计边界，非 CI 问题）。涉及真实 CLI 的验证一律以 CI 为准。
-- 2026-09-04：结构性缓解落地（`1354b631c`）：CI/Docker 对 main push 开启 concurrency 取消（新 push 取消在飞旧 run）；CI 的 `full` 门控对 main push 改为与 PR 相同的 paths 路由（docs/codestable-only push 几分钟出结果；bump commit 因触碰 package.json 仍全量，release 门禁不变）。当天实测 docs-only push 白跑 ~30min 全量矩阵且被下一 push 立即取代——此形态不再发生。
+- 2026-09-04：v0.11.3 发布（触发本 issue）；当日已落地缓解项见上表。
+- 2026-09-04：审计修正（用户裁决）：开发机不装 CLI、CI 为基准、普通 spec 缺 provider 快速失败是设计边界。
+- 2026-09-04：本文件重写为完整梳理版（原版为发布当日边修边记的散乱记录）。
 
 ## 关闭时
 
-- 回写候选：`docs/release.md`（rerun 处置已补）、`docs/testing.md`（flake 隔离策略）、`nix/npm-deps.hash` 修复路径；
-- 关闭判断：验证标准连续达标；
-- 遗留：CI 时长优化若未完成，拆后续 issue。
+- 回写候选：`docs/testing.md`（普通 spec 不触达真实 CLI 的约定）、`docs/release.md`（已补）、issue 内已标注的 revert 项需在代码中执行；
+- 关闭判断：验证标准全部达标；
+- 遗留：阶段 3 缓存优化若未做，拆后续 issue（低优先）。
