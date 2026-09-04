@@ -16,6 +16,9 @@
   #
   # The default is read from a sidecar file so the CI auto-updater can replace
   # the hash with a single file write instead of a sed against this source.
+  # Any package-lock.json change (even version-only bumps) invalidates the
+  # sidecar: refresh it via ./scripts/update-nix.sh, or take the computed
+  # value from the nix.yml job logs when working without a local nix.
   npmDepsHash ? lib.fileContents ./npm-deps.hash,
 }:
 
