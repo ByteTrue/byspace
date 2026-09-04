@@ -82,8 +82,8 @@ created: 2026-09-04
 
 ## 未尽事项（新发现，待排序）
 
-- **desktop-tests ubuntu「inactive browser remains captureable」**（browser_screenshot 90s 不可用）：db99c0b38 首见，与本次改动无关，需单独调查（browser-capture-harness 相关）；
-- **new-workspace-launch-memory.spec**（terminal-surface 30s 不可见）：db99c0b38 首见，待现是否复现；
+- **desktop-tests ubuntu「inactive browser remains captureable」**（browser_screenshot 90s 不可用）：已连续 2 次全量挂（db99c0b38、33909370864）。定位：测试切回 agent tab 后被 park 的 webview 在 ubuntu 无头合成器下丢拷贝表面（`browser_no_host`/`browser_timeout` 可重试错误持续 90s）；docs/browser-capture-harness.md 的 parking 机制按 macOS 行为设计，linux 行为不同。上游同款 harness 同样暴露。深修需动产品合成器代码且只能 linux CI 验证——挂起为独立调查项，发版期间用人工 rerun 兜底；
+- **new-workspace-launch-memory.spec**（terminal-surface 30s 不可见）：仅 db99c0b38 一次（retry #1 已过），33909370864 未复现——降级为观察项；
 - **隐性 .real 的归属**：archive-tab / worktree-restore 用真 opencode seed 跑在普通 shard，是否应迁到 real-provider project（需对照上游意图）；
 - **mermaid composer 重挂载的真根治**（产品代码）：初步排查 tabId=`agent_${agentId}` 稳定不随 turn 变化，重挂载另有原因（useMountedTabSet cap 驱逐或 StrictMode），容忍补丁（ddcdfb313）在位，不再深挖；
 - 阶段 3 已改判不建（见下）；阶段 4 等全量 CI 实测数据。
@@ -124,7 +124,7 @@ v0.11.3 tag 发布实测各 workflow 耗时：
 - docs-only push 已实测 3 job / 几分钟绿（80337fda2：changes+release-package+format，playwright 全 skipped 零耗时）；
 - 「playwright 30+min」只发生在改代码 push：paths 路由已把矩阵缩到受影响 contract，full 仅在 merge_group/workflow_dispatch；
 - playwright shard 由 playwright 按 test 轮转分配（非固定文件分组）；shard 4 慢的主因是其中恰有真 provider 的 `.real`/慢 spec + 双 worker 并发冷启动——mock 化后自然缓解；`.real` 是否需要独立 job 待 mock 化落地后看 shard 实际耗时再定；
-- gradle/oxlint/metro 缓存：先看 mock 化收益，若仍 >20min 再评估（低优先）。
+- **评估结论（2026-09-04，全量实测 33909370864）**：mock 化后最慢 playwright shard 45m→24.9m（shard1；原重灾区 shard4 → 19.6m），全量总时长 30-45m→~30m。进一步压缩仅剩「加 shard 数 4→6」一途：每 run 多 2 个 runner、更多 flake 曝露面、偏离上游 4-shard 布局，换 ~5 分钟收益，且发版墙钟由 Desktop Release（25m 物理构建）主导——**判定不做**，待发布节奏需要时重评。
 
 ## 决策边界（本 issue 锁死）
 
