@@ -72,6 +72,13 @@ created: 2026-09-04
 
 ## 实施计划（一次性完整落地）
 
+### 阶段 0：撤回症状性缓解（用户拍板：先撤回，直接做根治，不留无用代码）
+
+- revert `bed6d2e69` 中 e2e seed 传 180s 的调用（保留 `createAgent` 的 `timeout` 参数本体——对齐 checkout 先例的防御性 API，无冗余）；
+- revert `429898b2f` 中 seed upsert 30→60s 与 mermaid 采样容忍重挂载（此两处是本 issue 症状性缓解）；
+- **保留**：`429898b2f` 的 windows vitest 两项 + cli provider models 重试接住 reject（独立修复）、`1354b631c`、nix PR #26、`docs/release.md`。
+- 验证：撤回后 code 与上游同区无冗余 diff；先本地 vitest（纯 mock）全绿，再交 CI。
+
 ### 阶段 1：普通 spec 的 seed 全面 mock 化（治根因 A + B）
 
 **方案**：复用现存成熟链路 `seedMockAgentWorkspace`（建于 daemon 内置 mock provider，19 个普通 spec 已在用），把 10 个通过 `createIdleAgent` 拉真 opencode 的普通 spec 改成同样用法；不引入新基建，不拆 api。
@@ -89,21 +96,31 @@ created: 2026-09-04
 - `worktree-restore-after-restart.spec.ts`
 - `worktree-restore.spec.ts`
 
-**撤回项**：`429898b2f` 中的 seed upsert 30→60s、mermaid 采样容忍重挂载，在 mock 化后失去意义，评估后 revert；windows vitest 两项与 cli 重试接住 reject 为独立修复保留。`bed6d2e69` 的 `timeout` 参数保留（对齐 checkout 先例），但 e2e seed 不再传 180s。
-
 **效果**：普通 spec 永不触达真实 CLI；外部 CLI 更新不再影响它们；shard 4 不再有 50-70s 冷启动等待；开发机本地可跑（依赖 mock，无 provider 也可）——与用户裁决完全一致。
 
-### 阶段 2：CI flake 自动重试（缓解残余 flake）
+**撤回项**：见阶段 0。
+
+### 阶段 2：CD（tag 发布链路）——查证结论：无溃点，不新增改动
+
+v0.11.3 tag 发布实测各 workflow 耗时：
+
+- Desktop Release：mac-x64 18m48s / mac-arm64 7m5s / linux 12m55s / windows 14m37s **四个平台并行**，随后 finalize-rollout + publish-desktop 3m32s 收尾（总 ~25min 物理时长，已并行，无串行浪费）；
+- iOS Unsigned 23m45s = 真实 xcodebuild，物理时长，不动；
+- Publish npm 5m4s = 打包 + 上传；Deploy App 4m39s = Web/PWA；Docker 在 tag 前已完成镜像 build，tag 触发只 publish（1m17s）。
+  结论：CD 无优化溃点。各发布链路的构建都是已并行的物理时长，压缩依赖上游（electron/xcode 构建本身），不在本 issue 追求。
+
+### 阶段 3：CI flake 自动重试（缓解残余 flake）
 
 - CI workflow 加收尾 job：白名单内的已知 flake 形态（含 `.real` 的 provider 冷启动、windows 时序）失败后自动 rerun 一次；rerun 仍红才报红；
 - 白名单不放宽成无条件重试（掩盖真失败）；
 - 人工 `gh run rerun --failed` 兜底流程保留，文档已写（`docs/release.md`）。
 
-### 阶段 3：CI 时长与结构收尾
+### 阶段 4：CI 时长优化（只针对改代码 push）
 
-- `.real.spec.ts` 单独 shard/跑在独立 project 已有；评估是否需要单独 job（避免真 provider 慢测试拖累普通 shard 的并行度）；
-- 观察 playwright shard 均衡（mock 化后自然变化，先测后调）；
-- gradle/oxlint/metro 缓存如经实测有显著收益再做（低优先）。
+- docs-only push 已实测 3 job / 几分钟绿（80337fda2：changes+release-package+format，playwright 全 skipped 零耗时）；
+- 「playwright 30+min」只发生在改代码 push：paths 路由已把矩阵缩到受影响 contract，full 仅在 merge_group/workflow_dispatch；
+- playwright shard 由 playwright 按 test 轮转分配（非固定文件分组）；shard 4 慢的主因是其中恰有真 provider 的 `.real`/慢 spec + 双 worker 并发冷启动——mock 化后自然缓解；`.real` 是否需要独立 job 待 mock 化落地后看 shard 实际耗时再定；
+- gradle/oxlint/metro 缓存：先看 mock 化收益，若仍 >20min 再评估（低优先）。
 
 ## 决策边界（本 issue 锁死）
 
@@ -114,8 +131,9 @@ created: 2026-09-04
 
 ## 验证
 
+- 阶段 0：撤回后无冗余 diff，本地 vitest（纯 mock）全绿，CI 全绿；
 - 阶段 1：普通 spec（含 settings-toggle、worktree-restore）CI 连续全绿且 shard 时长显著下降；无 opencode 的开发机本地可跑通这些普通 spec；
-- 阶段 2：人为注入白名单 flake 观察自动 rerun 生效一次后仍红（不掩盖）；
+- 阶段 3：人为注入白名单 flake 观察自动 rerun 生效一次后仍红（不掩盖）；
 - 总体验收：一次真实发布 exact-SHA CI 一次全绿、全程零人工 rerun。
 
 ## 执行记录
