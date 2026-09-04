@@ -389,10 +389,6 @@ export interface CreateAgentRequestOptions extends AgentConfigOverrides {
   worktreeName?: string;
   requestId?: string;
   labels?: Record<string, string>;
-  /** Overrides the session RPC timeout for the create request. Agent creation
-   * spawns a provider process (CLI boot, auth, skills scan); e2e seeds on cold
-   * CI machines legitimately exceed the 60s interactive default. */
-  timeout?: number;
 }
 
 export interface CreatePaseoWorktreeInput extends Pick<
@@ -2549,7 +2545,6 @@ export class DaemonClient {
     const status = await this.sendRequest({
       requestId,
       message,
-      timeout: options.timeout,
       options: { skipQueue: true },
       select: (msg) => {
         if (msg.type !== "status") {

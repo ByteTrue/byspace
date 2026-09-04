@@ -42,7 +42,6 @@ export interface IdleAgentSeedClient {
     cwd: string;
     workspaceId: string;
     title: string;
-    timeout?: number;
   }): Promise<{ id: string }>;
   waitForAgentUpsert(
     agentId: string,
@@ -50,11 +49,6 @@ export interface IdleAgentSeedClient {
     timeout?: number,
   ): Promise<{ status: string }>;
 }
-
-/** Cold CI runners can take well over a minute to boot a real provider
- * process for the first seeded agent (opencode CLI boot + skills scan), so
- * seed calls override the 60s interactive RPC default. */
-const SEED_CREATE_AGENT_TIMEOUT_MS = 180_000;
 
 async function seedIdleAgent(
   client: IdleAgentSeedClient,
@@ -71,12 +65,11 @@ async function seedIdleAgent(
     cwd: input.cwd,
     workspaceId: input.workspaceId,
     title: input.title,
-    timeout: SEED_CREATE_AGENT_TIMEOUT_MS,
   });
   const snapshot = await client.waitForAgentUpsert(
     created.id,
     (agent) => agent.status === "idle",
-    60_000,
+    30_000,
   );
   if (snapshot.status !== "idle") {
     throw new Error(`Expected agent ${created.id} to become idle, got ${snapshot.status}.`);

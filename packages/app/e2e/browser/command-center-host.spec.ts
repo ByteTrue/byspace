@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { test } from "../support/fixtures";
 import { gotoAppShell } from "../support/helpers/app";
-import { createIdleAgent } from "../support/helpers/archive-tab";
+import { createMockIdleAgent } from "../support/helpers/archive-tab";
 import { openCommandCenter } from "../support/helpers/command-center";
 import { expectAgentTabActive } from "../support/helpers/launcher";
 import { seedWorkspace } from "../support/helpers/seed-client";
@@ -14,7 +14,7 @@ test.describe("Command center host labels", () => {
     const title = `cc-navigation-${randomUUID().slice(0, 8)}`;
 
     try {
-      const agent = await createIdleAgent(seeded.client, {
+      const agent = await createMockIdleAgent(seeded.client, {
         cwd: seeded.repoPath,
         workspaceId: seeded.workspaceId,
         title,
