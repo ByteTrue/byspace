@@ -19,6 +19,8 @@ created: 2026-09-04
 - windows vitest 时序断言类 flake 被修复或隔离，不再随机打红 CI；
 - bump commit 导致的 nix/npm-deps.hash 过期有明确、可执行的取数修复路径，不拖到下个 PR 才暴露。
 
+**审计修正（2026-09-04 补充）：** v0.11.3 发布故障不全是既有 flake，部分由会话中全局环境变更造成（全局装 claude/codex/opencode 最新版、写错 `~/.npmrc` 只留一条 allow-scripts）。「本地没在跑过 15-provider」是用户真实环境特征；「CI 上 15-provider 跑过且绿」是 v0.11.2 事实。把本地与 CI 混为一谈是不准的。
+
 **范围：** 包含 CI workflow、e2e/单测 flake 治理、发布门禁配套自动化；不包含：降低门禁标准、缩减测试覆盖、生产 RPC 超时调整。
 
 ## 为什么现在做 / 当前坏在哪
