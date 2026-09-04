@@ -1,0 +1,6 @@
+Fixed
+- Fixed slash-command autocomplete dropping project skills for up to a minute by no longer caching failed agent command listings.
+- Fixed composer autocomplete flipping into an error placeholder when an agent's provider has no command list; missing support now shows an empty list.
+- Fixed checkout commit and PR creation timing out while agent LLM generation runs; git metadata RPCs now use a 5-minute timeout.
+
+Full notes: https://github.com/ByteTrue/byspace/releases
