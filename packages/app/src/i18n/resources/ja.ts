@@ -857,6 +857,8 @@ export const ja: TranslationResources = {
           failedPush: "プッシュに失敗しました",
           failedPullAndPush: "プル＆プッシュに失敗しました",
           failedCreatePr: "PRの作成に失敗しました",
+          mayStillBeRunning:
+            "サーバーがこのリクエストをまだ処理している可能性があります。重複を避けるため、再試行する前にワークスペースを確認してください。",
           failedMergePr: "PRのマージに失敗しました",
           failedEnableAutoMerge: "自動マージの有効化に失敗しました",
           failedDisableAutoMerge: "自動マージの無効化に失敗しました",

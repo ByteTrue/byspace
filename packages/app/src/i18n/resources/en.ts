@@ -855,6 +855,8 @@ export const en = {
           failedPush: "Failed to push",
           failedPullAndPush: "Failed to pull and push",
           failedCreatePr: "Failed to create PR",
+          mayStillBeRunning:
+            "The daemon may still be processing this request. Check the workspace before retrying to avoid a duplicate.",
           failedMergePr: "Failed to merge PR",
           failedEnableAutoMerge: "Failed to enable auto-merge",
           failedDisableAutoMerge: "Failed to disable auto-merge",

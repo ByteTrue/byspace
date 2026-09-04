@@ -20,6 +20,24 @@ Alternate buffer、current grid 和 scrollback 都遵守同一 active-buffer 规
 - Terminal 运行时同时加载 `WebLinksAddon`（纯文本 URL 正则识别）与显式 `linkHandler`（OSC 8 ANSI 富文本超链接）。
 - 终端中点击任意外部链接直接统一路由至应用级 `onOpenExternalUrl` 链路，禁止触发 xterm 原生危险确认弹窗，桌面端交由系统默认浏览器打开。
 
+## Revision 恢复与历史上限
+
+- 同一 renderer 的恢复按 revision 补缺口，正常恢复保留客户端 10,000 行 scrollback；缺口不可恢复或必须新建 renderer 时回退权威 snapshot，最多携带 1,000 行，不做固定行数重放。
+- 断线恢复与 resize 序列不得产生字符丢失、乱序或额外 snapshot。
+
+## 输入与粘贴
+
+- attach、restore 和隐藏返回后重新确认 DECSET 2004 bracketed paste 状态；逐键输入路径不因粘贴恢复而改变。
+- Windows ConPTY 未透传 mode 2004 时，多行剪贴板文本仍作为一个 bracketed paste block 发送给 PTY，不退化为逐行裸粘贴。
+- 剪贴板中的图片经既有 binary upload 写入 daemon 临时文件，Terminal/Pi 收到真实远端路径；客户端本地路径不发给远端 Agent。
+
+## 通知与选择
+
+- Terminal 完成通知优先使用最近一段非空输出摘要；空白尾行和无输出时保持稳定内容，不扩大既有通知数据边界。
+- Compact Web 支持长按选词、拖动扩展与复制；滚动、点击输入和面板手势保持原语义。
+- Agent 活动上报按 provider 独立配置：Claude、Codex、OpenCode 与 Pi extension 各自开关，请求串行、有界合并、latest-wins；历史 global 开启只继承给 Claude/Codex/OpenCode，Pi 必须用户显式启用。
+- Manage Terminal Profiles 精确打开所选 Host 的 Terminals 设置页。
+
 ## 边界
 
 - 字体、字号、主题和语法高亮属于 Appearance，不由快照恢复逻辑调整。
@@ -31,3 +49,4 @@ Alternate buffer、current grid 和 scrollback 都遵守同一 active-buffer 规
 - [Terminal 中文快照回放间距](../issues/001-x-terminal-cjk-snapshot-spacing.md)
 - [复原 Terminal 首帧 post-WebGL 尺寸就绪与 250ms 被动合并机制](../issues/005-x-terminal-remote-resize-storm-and-fit.md)
 - [修复 Windows 下思考加载图标定格与终端 OSC 8 链接打开无反应](../issues/008-x-ff-synced-loader-and-terminal-osc8-links.md)
+- [Epic 002 交付记录](../epics/002-x-retained-capabilities-delivery/spec.md)
