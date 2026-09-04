@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.3 - 2026-09-04
+
+### Fixed
+
+- Fixed slash-command autocomplete dropping project skills for up to a minute by no longer caching failed agent command listings.
+- Fixed composer autocomplete flipping into an error placeholder when an agent's provider has no command list; missing support now shows an empty list.
+- Fixed checkout commit and PR creation timing out while agent LLM generation runs; git metadata RPCs now use a 5-minute timeout.
+- Fixed scroll-to-bottom and collapse-all stream control buttons blending into message content by matching the composer pill styling.
+
 ## 0.11.2 - 2026-09-03
 
 ### Added
