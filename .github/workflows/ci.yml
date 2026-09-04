@@ -16,7 +16,7 @@ on:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 env:
   # CI does not use the CUDA execution provider, and the onnxruntime-node
@@ -32,7 +32,7 @@ jobs:
       pull-requests: read
     outputs:
       terminal_performance: ${{ github.event_name == 'workflow_dispatch' && inputs.terminal_performance == true }}
-      full: ${{ inputs.terminal_performance != true && (github.event_name != 'pull_request' || steps.filter.outputs.routing != 'false' || steps.filter.outputs.workspace != 'false' || steps.filter.outputs.ci != 'false') }}
+      full: ${{ inputs.terminal_performance != true && (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || steps.filter.outputs.routing != 'false' || steps.filter.outputs.workspace != 'false' || steps.filter.outputs.ci != 'false') }}
       format: ${{ inputs.terminal_performance != true && steps.filter.outputs.format != 'false' }}
       quality: ${{ inputs.terminal_performance != true && steps.filter.outputs.quality != 'false' }}
       hub: ${{ inputs.terminal_performance != true && steps.filter.outputs.hub != 'false' }}
