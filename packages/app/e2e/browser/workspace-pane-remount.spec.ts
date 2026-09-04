@@ -1,7 +1,7 @@
 import { buildHostAgentDetailRoute, buildHostWorkspaceRoute } from "@/utils/host-routes";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "../support/fixtures";
-import { createIdleAgent } from "../support/helpers/archive-tab";
+import { createMockIdleAgent } from "../support/helpers/archive-tab";
 import { expectComposerVisible } from "../support/helpers/composer";
 import { clickNewTerminal, terminalSurfaceLocator } from "../support/helpers/launcher";
 import { renameModalInput } from "../support/helpers/rename";
@@ -57,7 +57,7 @@ test.describe("Workspace pane mounting", () => {
     const workspace = await seedWorkspace({ repoPrefix: "pane-remount-" });
 
     try {
-      const agent = await createIdleAgent(workspace.client, {
+      const agent = await createMockIdleAgent(workspace.client, {
         cwd: workspace.repoPath,
         workspaceId: workspace.workspaceId,
         title: `pane-remount-${Date.now()}`,
@@ -120,7 +120,7 @@ test.describe("Workspace pane mounting", () => {
     const workspace = await seedWorkspace({ repoPrefix: "compact-settings-pane-retention-" });
 
     try {
-      const agent = await createIdleAgent(workspace.client, {
+      const agent = await createMockIdleAgent(workspace.client, {
         cwd: workspace.repoPath,
         workspaceId: workspace.workspaceId,
         title: `compact-settings-pane-retention-${Date.now()}`,
@@ -148,7 +148,7 @@ test.describe("Workspace pane mounting", () => {
     const workspace = await seedWorkspace({ repoPrefix: "terminal-pane-retention-" });
 
     try {
-      const agent = await createIdleAgent(workspace.client, {
+      const agent = await createMockIdleAgent(workspace.client, {
         cwd: workspace.repoPath,
         workspaceId: workspace.workspaceId,
         title: `terminal-pane-retention-${Date.now()}`,

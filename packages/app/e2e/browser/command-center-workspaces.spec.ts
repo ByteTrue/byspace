@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { expect } from "@playwright/test";
 import { test } from "../support/fixtures";
 import { gotoAppShell } from "../support/helpers/app";
-import { createIdleAgent } from "../support/helpers/archive-tab";
+import { createMockIdleAgent } from "../support/helpers/archive-tab";
 import { openCommandCenter } from "../support/helpers/command-center";
 import { addOfflineHostAndReload } from "../support/helpers/hosts";
 import { expectAppRoute } from "../support/helpers/route-assertions";
@@ -36,7 +36,7 @@ test.describe("Command center workspaces", () => {
       if (!refreshed.success) {
         throw new Error(`Failed to refresh checkout: ${JSON.stringify(refreshed.error)}`);
       }
-      const agent = await createIdleAgent(seeded.client, {
+      const agent = await createMockIdleAgent(seeded.client, {
         cwd: seeded.repoPath,
         workspaceId: seeded.workspaceId,
         title: AGENT_TITLE,

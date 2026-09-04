@@ -28,21 +28,9 @@ export async function expectDiagramWithLabels(
 export async function expectDiagramRemainsRenderedWhileStreaming(page: Page): Promise<void> {
   const { diagram, svg } = renderedDiagram(page);
   const samples = 80;
-  let transientMisses = 0;
   for (let sample = 0; sample < samples; sample += 1) {
     await expect(diagram).toBeVisible({ timeout: 100 });
-    // The composer remounts transiently (~157ms) when a mock streaming turn
-    // starts, which can briefly unmount the diagram mid-sample. Allow a
-    // couple of re-acquired samples instead of failing the whole loop.
-    try {
-      await expect(svg).toBeVisible({ timeout: 500 });
-      transientMisses = 0;
-    } catch {
-      transientMisses += 1;
-      if (transientMisses > 2) {
-        throw new Error("diagram svg stayed invisible across consecutive samples while streaming");
-      }
-    }
+    await expect(svg).toBeVisible({ timeout: 500 });
     await page.waitForTimeout(25);
   }
 }

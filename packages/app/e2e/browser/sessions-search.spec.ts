@@ -4,7 +4,7 @@ import { test } from "../support/fixtures";
 import { connectSeedClient } from "../support/helpers/seed-client";
 import { createTempGitRepo } from "../support/helpers/workspace";
 import {
-  createIdleAgent,
+  createMockIdleAgent,
   openSessions,
   resetSeededPageState,
 } from "../support/helpers/archive-tab";
@@ -60,7 +60,7 @@ test.describe("History search", () => {
     const workspaceId = created.workspace.id;
 
     for (const title of [TITLES.terminal, TITLES.unbilled, TITLES.billing]) {
-      await createIdleAgent(client, { cwd: tempRepo.path, workspaceId, title });
+      await createMockIdleAgent(client, { cwd: tempRepo.path, workspaceId, title });
     }
   });
 

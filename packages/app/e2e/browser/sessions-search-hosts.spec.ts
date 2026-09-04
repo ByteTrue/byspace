@@ -3,7 +3,7 @@ import { expect, type Page } from "@playwright/test";
 import { test } from "../support/fixtures";
 import { gotoAppShell } from "../support/helpers/app";
 import { openSessions } from "../support/helpers/archive-tab";
-import { createIdleAgent } from "../support/helpers/archive-tab";
+import { createMockIdleAgent } from "../support/helpers/archive-tab";
 import { addConnectedHostAndReload, addOfflineHostAndReload } from "../support/helpers/hosts";
 import { startIsolatedHostDaemon } from "../support/helpers/isolated-host-daemon";
 import { connectSeedClient, seedWorkspace } from "../support/helpers/seed-client";
@@ -63,7 +63,7 @@ test.describe("History search across hosts", () => {
         repoPrefix: "sessions-search-secondary-",
         port: secondaryDaemon.port,
       });
-      await createIdleAgent(secondaryWorkspace.client, {
+      await createMockIdleAgent(secondaryWorkspace.client, {
         cwd: secondaryWorkspace.repoPath,
         workspaceId: secondaryWorkspace.workspaceId,
         title: strongTitle,
@@ -71,7 +71,7 @@ test.describe("History search across hosts", () => {
 
       primaryWorkspace = await seedWorkspace({ repoPrefix: "sessions-search-primary-" });
       for (const title of [unrelatedTitle, weakTitle]) {
-        await createIdleAgent(primaryClient, {
+        await createMockIdleAgent(primaryClient, {
           cwd: primaryWorkspace.repoPath,
           workspaceId: primaryWorkspace.workspaceId,
           title,
@@ -119,7 +119,7 @@ test.describe("History search across hosts", () => {
     const reachableTitle = `${NONCE} Bill the reachable customer`;
 
     try {
-      await createIdleAgent(workspace.client, {
+      await createMockIdleAgent(workspace.client, {
         cwd: workspace.repoPath,
         workspaceId: workspace.workspaceId,
         title: reachableTitle,

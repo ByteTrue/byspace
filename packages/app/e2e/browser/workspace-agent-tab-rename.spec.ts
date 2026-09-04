@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { test, expect, type Page } from "../support/fixtures";
 import { seedWorkspace, type SeedDaemonClient } from "../support/helpers/seed-client";
-import { createIdleAgent, expectWorkspaceTabVisible } from "../support/helpers/archive-tab";
+import { createMockIdleAgent, expectWorkspaceTabVisible } from "../support/helpers/archive-tab";
 import { waitForWorkspaceTabsVisible } from "../support/helpers/workspace-tabs";
 import { buildHostAgentDetailRoute } from "@/utils/host-routes";
 import { renameModalInput, renameModalSubmit } from "../support/helpers/rename";
@@ -32,7 +32,7 @@ test.describe("Workspace agent tab rename", () => {
 
     try {
       const initialTitle = `agent-rename-${randomUUID().slice(0, 8)}`;
-      const agent = await createIdleAgent(workspace.client, {
+      const agent = await createMockIdleAgent(workspace.client, {
         cwd: workspace.repoPath,
         workspaceId: workspace.workspaceId,
         title: initialTitle,
