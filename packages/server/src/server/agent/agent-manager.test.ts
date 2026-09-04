@@ -1907,6 +1907,93 @@ test("listDraftCommands uses explicit model config without default model fetchin
   ]);
 });
 
+test("listDraftCommands reuses a recent listing instead of spawning per request", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-draft-commands-"));
+  const storagePath = join(workdir, "agents");
+  const storage = new AgentStorage(storagePath, logger);
+  const draftCommand: AgentSlashCommand = {
+    name: "review",
+    description: "Review changes",
+    argumentHint: "",
+    kind: "command",
+  };
+  class DraftCommandSession extends TestAgentSession {
+    override async listCommands(): Promise<AgentSlashCommand[]> {
+      return [draftCommand];
+    }
+  }
+  class DraftCommandClient extends TestAgentClient {
+    createSessionCalls = 0;
+
+    override async isAvailable(): Promise<boolean> {
+      return true;
+    }
+
+    override async createSession(config: AgentSessionConfig): Promise<AgentSession> {
+      this.createSessionCalls += 1;
+      return new DraftCommandSession(config);
+    }
+  }
+  const client = new DraftCommandClient();
+  const manager = new AgentManager({
+    clients: {
+      codex: client,
+    },
+    registry: storage,
+    logger,
+  });
+
+  const config = { provider: "codex" as const, cwd: workdir, model: "gpt-5.4" };
+
+  await expect(manager.listDraftCommands(config)).resolves.toEqual([draftCommand]);
+  await expect(manager.listDraftCommands(config)).resolves.toEqual([draftCommand]);
+  await expect(manager.listDraftCommands(config)).resolves.toEqual([draftCommand]);
+
+  expect(client.createSessionCalls).toBe(1);
+
+  // A different draft config (model switch) must not reuse the cached listing.
+  await manager.listDraftCommands({ ...config, model: "gpt-5.4-turbo" });
+  expect(client.createSessionCalls).toBe(2);
+});
+
+test("listDraftCommands does not cache failed listings", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-draft-commands-"));
+  const storagePath = join(workdir, "agents");
+  const storage = new AgentStorage(storagePath, logger);
+  class FailingSession extends TestAgentSession {
+    override async listCommands(): Promise<AgentSlashCommand[]> {
+      throw new Error("provider crashed");
+    }
+  }
+  class DraftCommandClient extends TestAgentClient {
+    createSessionCalls = 0;
+
+    override async isAvailable(): Promise<boolean> {
+      return true;
+    }
+
+    override async createSession(config: AgentSessionConfig): Promise<AgentSession> {
+      this.createSessionCalls += 1;
+      return new FailingSession(config);
+    }
+  }
+  const client = new DraftCommandClient();
+  const manager = new AgentManager({
+    clients: {
+      codex: client,
+    },
+    registry: storage,
+    logger,
+  });
+
+  const config = { provider: "codex" as const, cwd: workdir, model: "gpt-5.4" };
+
+  await expect(manager.listDraftCommands(config)).rejects.toThrow("provider crashed");
+  await expect(manager.listDraftCommands(config)).rejects.toThrow("provider crashed");
+
+  expect(client.createSessionCalls).toBe(2);
+});
+
 test("listDraftFeatures does not start a fallback session without a model", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-draft-features-"));
   const storagePath = join(workdir, "agents");

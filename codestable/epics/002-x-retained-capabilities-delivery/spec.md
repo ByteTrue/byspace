@@ -1,6 +1,6 @@
 ---
 title: 保留能力交付路线
-status: active
+status: closed
 kind: epic
 owner_decision: approved
 approved_at: 2026-08-31T05:01:54Z
@@ -13,16 +13,21 @@ approval_evidence:
   scope_correction: "Owner approved the consolidated correction plan on 2026-09-01: restore Appearance, retain T18, document T05 boundaries and opt-in Windows CI, and require explicit Pi opt-in for legacy configs"
   execution_acceleration: "Owner approved the recommended worktree/subagent pipeline and hash-verified non-duplicate validation contract on 2026-09-01 after read-only audit workflow 2b44522e-874d-4f91-8642-afe06687b092; review dcf5e62e-9701-4e55-8290-25c0561c3b15 round 1 needs_changes and resumed round 2 bfc9e44d-2ce6-4e33-8391-9ada07f76ecf passed with no findings"
   item14_scope_correction: "Owner approved recommended Plan A on 2026-09-01 after historical A09 issue/commit audit: capability-gated copy-only Workspace menu, separate rename_workspace and rename_branch tools, title-first/branch-best-effort, guarded BySpace-owned branch mutation, localization, bundled skill, and browser evidence"
-source_epic: ../001-o-legacy-cs-requirements-triage/spec.md
+source_epic: ../001-x-legacy-cs-requirements-triage/spec.md
 source_revision: f592e54bf43e5501383224891053d2e0a9dfbf45
 created_at: 2026-08-31T04:38:14Z
+closed_at: 2026-09-04
+closure_evidence:
+  owner: "“这个应该是漏网之鱼 你帮我关闭吧”（2026-09-04）"
+  delivery: "21/21 ITEM 已集成；Wave 1–5 经 PR #16–#20 合入 main，exact-head CI/Docker/Nix 全绿且 post-merge 验证通过（见 work-log.md）"
+graduation: "Project Spec：index.md 地图、terminal.md、agent-conversation.md、workspace.md（新）、connection.md（新）"
 ---
 
 # Epic: 保留能力交付路线
 
 ## 背景
 
-[`001-o-legacy-cs-requirements-triage`](../001-o-legacy-cs-requirements-triage/spec.md) 已由 Owner 验收，并把 78 份历史文档归并为 77 个原子决策 ID。Owner 最终保留 33 项，并在 [`retained-delivery-index.md`](../001-o-legacy-cs-requirements-triage/retained-delivery-index.md) 中唯一映射为 21 个后续入口。T15 于 2026-09-01 被明确取消。
+[`001-x-legacy-cs-requirements-triage`](../001-x-legacy-cs-requirements-triage/spec.md) 已由 Owner 验收，并把 78 份历史文档归并为 77 个原子决策 ID。Owner 最终保留 33 项，并在 [`retained-delivery-index.md`](../001-x-legacy-cs-requirements-triage/retained-delivery-index.md) 中唯一映射为 21 个后续入口。T15 于 2026-09-01 被明确取消。
 
 本 Epic 负责在当前 `main` 上按依赖顺序交付这 21 个入口。它不重新讨论已剔除需求，不把“历史曾实现”当作可直接恢复的补丁，也不把所有能力塞进一个巨型实现分支。
 
@@ -87,7 +92,7 @@ Owner 在批准本 Epic 后追加确认有界并行 revision：
 ### 有界并行、交付验证与文件所有权
 
 - 本节未展开的并行调度、集成机制、`active_items` 状态机、blocker 分类与退化规则，以 `cs-epic` skill-local `references/parallel-execution.md` 为准；本节展开的 byte-identical 候选验证规则优先，并把该 reference 中的“权威验证”具体化为 manifest 一致性加本节保留的父流程门槛。
-- 每个 writer 使用独立 Git worktree；子 Agent 不得 commit、push、开 PR、merge、发布或修改 `.codestable`。父流程独占集成分支、work cursor 和远端操作。
+- 每个 writer 使用独立 Git worktree；子 Agent 不得 commit、push、开 PR、merge、发布或修改 `codestable`。父流程独占集成分支、work cursor 和远端操作。
 - 最多同时运行两个写入型 worker；正常活跃子 Agent 上限为三名，第三名只做只读 scout 或 fresh review。Heavy validation 期间可以保留只读调查，但不得并发另一项 heavy validation。
 - 父流程不接管常规 ITEM 实现。Worker 失败、停滞或越界时，先冻结当前 worktree 和证据，再在同一 worktree 恢复或替换唯一 writer；任何时刻仍只能有一个 Agent 写该 worktree。
 - Worker WIP 历史不得进入 Wave PR。父流程只以 patch、squash 到工作树或 `cherry-pick -n` 等不推进主历史的方式收割交付，并核对 base、路径 manifest、完整内容 SHA-256 与 review 对象一致。
@@ -355,4 +360,28 @@ Owner 在批准本 Epic 后追加确认有界并行 revision：
 
 ## Final Delivery Index
 
-待 ITEM 完成后逐项填写；规划通过不算交付。
+| ITEM    | 需求                | 集成 commit          | 波次 PR |
+| ------- | ------------------- | -------------------- | ------- |
+| ITEM-01 | B01                 | `976480bd6`          | #16     |
+| ITEM-02 | R03                 | `fe45b78e6`          | #16     |
+| ITEM-03 | R02                 | 随 Wave 1 合入       | #16     |
+| ITEM-04 | T01/T02/T08/T09/T16 | 随 Wave 2 合入       | #17     |
+| ITEM-05 | T03/T04/T05         | `159a70640`          | #17     |
+| ITEM-06 | T10/T12             | `055d0000b`          | #17     |
+| ITEM-07 | T06                 | 随 Wave 3 合入       | #18     |
+| ITEM-08 | T07                 | `d596c9376`          | #18     |
+| ITEM-09 | T11                 | `8e0946084`          | #18     |
+| ITEM-10 | T13/T14/T17         | `987738a09`          | #18     |
+| ITEM-11 | T18                 | 纠偏后随 Wave 3 合入 | #18     |
+| ITEM-12 | A06/A07/A08         | `62cb2b4f7`          | #19     |
+| ITEM-13 | A05                 | `6b4c60ceb`          | #19     |
+| ITEM-14 | A09                 | `6f0b93abf`          | #19     |
+| ITEM-15 | A04                 | `c1ac7ceaa`          | #19     |
+| ITEM-16 | W04                 | `faa947aa7`          | #20     |
+| ITEM-17 | W01                 | `82cd75b5f`          | #20     |
+| ITEM-18 | W05                 | `28172ba6c`          | #20     |
+| ITEM-19 | W02                 | `a1fab7b96`          | #20     |
+| ITEM-20 | W14                 | `04dabd00a`          | #20     |
+| ITEM-21 | U03/U05             | `7510610bf`          | #20     |
+
+完整验证流水、manifest 比对、平台证据与残余风险见 [`work-log.md`](work-log.md)。

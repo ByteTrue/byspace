@@ -84,6 +84,7 @@ import {
 
 const RELOAD_SESSION_CLOSE_TIMEOUT_MS = 3_000;
 const INTERRUPT_SESSION_TIMEOUT_MS = 2_000;
+const DRAFT_COMMANDS_CACHE_TTL_MS = 30_000;
 const STORED_AGENT_CAPABILITIES: AgentCapabilityFlags = {
   supportsStreaming: false,
   supportsSessionPersistence: true,
@@ -689,6 +690,10 @@ export class AgentManager {
   private readonly agentRegistrationTasks = new Set<Promise<void>>();
   private readonly inFlightAgentCloses = new Map<string, Promise<void>>();
   private readonly lifecycleMutationTails = new Map<string, Promise<void>>();
+  private readonly draftCommandsCache = new Map<
+    string,
+    { expiresAt: number; promise: Promise<AgentSlashCommand[]> }
+  >();
   private readonly agentStreamCoalescer: AgentStreamCoalescer;
   private mcpBaseUrl: string | null;
   private readonly mcpAuthToken: string | null;
@@ -1007,6 +1012,35 @@ export class AgentManager {
     if (!normalizedConfig.model) {
       return [];
     }
+
+    // Draft listings spawn a throwaway provider process (pi boots a full RPC session),
+    // so reuse a recent result for the same config. Short TTL: commands rarely change,
+    // but freshly installed skills should appear without a daemon restart.
+    const cacheKey = JSON.stringify([
+      normalizedConfig.provider,
+      normalizedConfig.cwd,
+      normalizedConfig.model,
+      normalizedConfig.thinkingOptionId ?? null,
+      normalizedConfig.modeId ?? null,
+    ]);
+    const cached = this.draftCommandsCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.promise;
+    }
+    const promise = this.uncachedListDraftCommands(client, normalizedConfig);
+    this.draftCommandsCache.set(cacheKey, {
+      expiresAt: Date.now() + DRAFT_COMMANDS_CACHE_TTL_MS,
+      promise,
+    });
+    // Do not keep failed listings cached; a retry should hit the provider again.
+    promise.catch(() => this.draftCommandsCache.delete(cacheKey));
+    return promise;
+  }
+
+  private async uncachedListDraftCommands(
+    client: AgentClient,
+    normalizedConfig: AgentSessionConfig,
+  ): Promise<AgentSlashCommand[]> {
     const available = await client.isAvailable();
     if (!available) {
       throw new Error(

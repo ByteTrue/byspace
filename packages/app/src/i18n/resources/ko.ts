@@ -853,6 +853,8 @@ export const ko: TranslationResources = {
           failedPush: "푸시하지 못했습니다",
           failedPullAndPush: "풀 후 푸시하지 못했습니다",
           failedCreatePr: "PR을 생성하지 못했습니다",
+          mayStillBeRunning:
+            "서버가 이 요청을 아직 처리 중일 수 있습니다. 중복을 피하려면 다시 시도하기 전에 작업 공간을 확인하세요.",
           failedMergePr: "PR을 병합하지 못했습니다",
           failedEnableAutoMerge: "자동 병합을 사용 설정하지 못했습니다",
           failedDisableAutoMerge: "자동 병합을 해제하지 못했습니다",

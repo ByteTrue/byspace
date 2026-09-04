@@ -877,6 +877,8 @@ export const es: TranslationResources = {
           failedPush: "No se pudo empujar",
           failedPullAndPush: "No se pudo tirar y empujar",
           failedCreatePr: "No se pudo crearPR",
+          mayStillBeRunning:
+            "El servidor puede estar aún procesando esta solicitud. Revisa el espacio de trabajo antes de volver a intentarlo para evitar duplicados.",
           failedMergePr: "No se pudo fusionarPR",
           failedEnableAutoMerge: "No se pudo habilitar la combinación automática",
           failedDisableAutoMerge: "No se pudo deshabilitar la combinación automática",
