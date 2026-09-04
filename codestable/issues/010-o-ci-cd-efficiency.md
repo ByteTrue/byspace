@@ -6,12 +6,12 @@ status: open
 created: 2026-09-04
 ---
 
-# CI/CD 效率根治：E2E 测试架构、CI 结构与发布纪律
+# CI/CD 治理总纲：成功率、时长与发布纪律
 
 > **读者：** 跨会话接手的人。
-> **目标：** 一次发布会话不再浪费 5 小时在等 CI 与重跑上；外部 agent CLI 的更新永远不会让 BySpace 的测试必现失败。
+> **目标：** 发版 bump 全量 CI 一次全绿为常态（硬指标 1）；全量 CI 时长压到可接受区间（硬指标 2）；外部 agent CLI 更新永远不影响 BySpace 测试；一次发布会话不再浪费 5 小时在 CI 重跑上。
 > **别碰：** 不降低 exact-SHA 发布门禁；开发机不装任何 agent CLI；测试结果以 CI 为基准。
-> **验证：** 一次真实发布全程无人工 rerun；mock 化后普通 spec 不再触达真实 provider。
+> **验证：** 连续两次真实发布全程无人工 rerun。
 
 ---
 
@@ -58,47 +58,46 @@ created: 2026-09-04
 - 用被污染的本地环境当「基线」，得出「本地 10s 过 / CI 1m 挂 → 测试脆弱」的部分错误结论；
 - 用户裁决（审计修正 2）：**测试结果以 CI 为基准**；本地跑不了（缺 provider）就不跑；开发机不装任何 agent CLI。
 
+## 根因 E：PR 绿 ≠ 发版绿（用户核心疑问，结构性回答）
+
+「改动很小 CI 一直跑、同样代码到发版又挂」不是玄学，是四个维度叠加：
+
+1. **覆盖维度**：PR/普通 push 按路径路由只跑子集；发版 bump 触碰 package.json → workspace 契约 → 全量 23 job。发版是很多测试的首次 CI 曝光（PR #25 的 cli-tests 就是被路径过滤跳过的）。
+2. **时间维度**：PR 与发版之间上游在动——claude CLI 9/3 深夜发新版；npm 依赖每天变。
+3. **冷热维度**：发版 bump 是新 SHA、冷缓存、冷 daemon、真 opencode 首次会话创建（慢 5-6 倍）。阶段 1 mock 化已消除此项对普通 spec 的威胁。
+4. **纯 flake**：概率性竞态（mermaid composer 重挂载、desktop browser-tools 截图 90s 超时），单次绿不能证明不 flaky，发版首跑撞上。
+
+应对：阶段 1 治 2/3，阶段 3（自动重试）治 4 的代价，覆盖维度是路径路由的语义（合理，不动）但要求 mock 化后残余 flake 足够少。
+
 ## 已落地（按 commit，可复核）
 
-| Commit            | 内容                                                                                                                                                                         | 是否仍必要（mock 化后评估）                                                                                                                                                                     |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bed6d2e69`       | `createAgent` 加可选 timeout，e2e seed 传 180s                                                                                                                               | **待定**：mock 化后 seed 毫秒级完成，180s 缓解不再需要；`timeout` 参数本身是防御性 API，可保留也可 revert 简化                                                                                  |
-| `429898b2f`       | seed upsert 30→60s；cli provider models 重试接住超时 reject + 120s；observation 测试 runOnlyPendingTimers（windows 时序）；plugins git-update 30→60s；mermaid 采样容忍重挂载 | **分项评估**：windows vitest 两项是纯 mock 真实修复，**保留**；seed upsert 放宽与 mermaid 容忍依赖根因 A 修复（mock 化），mock 后**可 revert**；cli 重试接住 reject 是 harness 真缺陷，**保留** |
-| `1354b631c`       | main push 取消旧 run；main push 走 paths 路由（docs-only 快，bump 全量）                                                                                                     | **保留**（独立于 provider 问题，已实测生效）                                                                                                                                                    |
-| nix hash PR #26   | bump 后 hash 刷新路径固化                                                                                                                                                    | **保留**                                                                                                                                                                                        |
-| `docs/release.md` | dry-run 输入、上传脚本参数序、flake rerun 处置                                                                                                                               | **保留**（含此次教训）                                                                                                                                                                          |
+| Commit                         | 内容                                                                                                               | 状态                                                                                                                                                              |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `db99c0b38`                    | **阶段 0+1 落地**：8 个普通 spec seed 换 mock；revert bed6d2e69 全部；revert 429898b2f 的 seed 放宽与 mermaid 容忍 | 本地 14/14 全绿。**诚实标注：archive-tab 与 worktree-restore 未 mock 化**——验证归档/恢复的真实端到端语义，上游本身真 opencode seed（隐性 .real），保留真 provider |
+| `ddcdfb313`                    | 恢复 mermaid 采样容忍（db99c0b38 撤过头：mermaid 用 mock agent，与 seed 根因无关，撤回后 CI 立刻复现）             | 保留；真根治列为产品代码后续项                                                                                                                                    |
+| `bed6d2e69`                    | createAgent timeout + seed 180s                                                                                    | **已全部 revert**（上游无此参数，mock 化后不需要）                                                                                                                |
+| `429898b2f`                    | seed upsert 30→60s；cli provider models 重试 + 120s；windows vitest 时序×2；mermaid 容忍                           | seed 部分**已 revert**；cli 重试与 windows 两项**保留**（独立真缺陷）；mermaid 容忍经 ddcdfb313 **恢复**                                                          |
+| `1354b631c`                    | main push 取消旧 run；paths 路由统一                                                                               | **保留**（实测生效）                                                                                                                                              |
+| nix PR #26 / `docs/release.md` | hash 刷新路径 / 发布手册                                                                                           | **保留**                                                                                                                                                          |
 
-**诚实标注**：`bed6d2e69`/`429898b2f` 的 seed 部分治的是症状（放大超时容忍慢 CLI），没治根因 A（UI 测试根本不该等真实 CLI）。若本次方案落地 mock 化，这两项的 seed 部分应 revert，保持代码与测试贴近上游、无冗余。
+## 未尽事项（新发现，待排序）
+
+- **desktop-tests ubuntu「inactive browser remains captureable」**（browser_screenshot 90s 不可用）：db99c0b38 首见，与本次改动无关，需单独调查（browser-capture-harness 相关）；
+- **new-workspace-launch-memory.spec**（terminal-surface 30s 不可见）：db99c0b38 首见，待现是否复现；
+- **隐性 .real 的归属**：archive-tab / worktree-restore 用真 opencode seed 跑在普通 shard，是否应迁到 real-provider project（需对照上游意图）；
+- **mermaid composer 重挂载的真根治**（产品代码）；
+- 阶段 3（自动重试）、阶段 4（时长）未动。
 
 ## 实施计划（一次性完整落地）
 
-### 阶段 0：撤回症状性缓解（用户拍板：先撤回，直接做根治，不留无用代码）
+### 阶段 0+1：已落地（db99c0b38 + ddcdfb313）
 
-- revert `bed6d2e69` 中 e2e seed 传 180s 的调用（保留 `createAgent` 的 `timeout` 参数本体——对齐 checkout 先例的防御性 API，无冗余）；
-- revert `429898b2f` 中 seed upsert 30→60s 与 mermaid 采样容忍重挂载（此两处是本 issue 症状性缓解）；
-- **保留**：`429898b2f` 的 windows vitest 两项 + cli provider models 重试接住 reject（独立修复）、`1354b631c`、nix PR #26、`docs/release.md`。
-- 验证：撤回后 code 与上游同区无冗余 diff；先本地 vitest（纯 mock）全绿，再交 CI。
-
-### 阶段 1：普通 spec 的 seed 全面 mock 化（治根因 A + B）
-
-**方案**：复用现存成熟链路 `seedMockAgentWorkspace`（建于 daemon 内置 mock provider，19 个普通 spec 已在用），把 10 个通过 `createIdleAgent` 拉真 opencode 的普通 spec 改成同样用法；不引入新基建，不拆 api。
-
-**10 个调用方**（全部普通 spec，全部把 seed 从真 opencode 换 mock）：
-
-- `archive-tab.spec.ts`
-- `command-center-host.spec.ts`
-- `command-center-workspaces.spec.ts`
-- `sessions-search-hosts.spec.ts`
-- `sessions-search.spec.ts`
-- `settings-toggle-tab-regression.spec.ts`
-- `workspace-agent-tab-rename.spec.ts`
-- `workspace-pane-remount.spec.ts`
-- `worktree-restore-after-restart.spec.ts`
-- `worktree-restore.spec.ts`
-
-**效果**：普通 spec 永不触达真实 CLI；外部 CLI 更新不再影响它们；shard 4 不再有 50-70s 冷启动等待；开发机本地可跑（依赖 mock，无 provider 也可）——与用户裁决完全一致。
-
-**撤回项**：见阶段 0。
+- revert `bed6d2e69` 全部（含 createAgent timeout 参数——上游无此参数，mock 化后不需要）；
+- revert `429898b2f` 的 seed upsert 放宽；mermaid 容忍先撤后经 CI 验证撤错、已恢复（ddcdfb313）；
+- 8 个普通 spec seed 换 `createMockIdleAgent`（settings-toggle-tab-regression、worktree-restore-after-restart、command-center-host、command-center-workspaces、sessions-search、sessions-search-hosts、workspace-agent-tab-rename、workspace-pane-remount）；
+- **保留未 mock 化**：archive-tab、worktree-restore（验证归档/恢复真实端到端语义，上游本身真 opencode seed，隐性 .real）；
+- **保留**：429898b2f 的 windows vitest 两项 + cli provider models 重试、1354b631c、nix PR #26、docs/release.md；
+- 本地验证：14/14 全绿（1.2m），无 opencode 的开发机可跑。
 
 ### 阶段 2：CD（tag 发布链路）——查证结论：无溃点，不新增改动
 
