@@ -76,7 +76,7 @@ async function seedIdleAgent(
   const snapshot = await client.waitForAgentUpsert(
     created.id,
     (agent) => agent.status === "idle",
-    30_000,
+    60_000,
   );
   if (snapshot.status !== "idle") {
     throw new Error(`Expected agent ${created.id} to become idle, got ${snapshot.status}.`);

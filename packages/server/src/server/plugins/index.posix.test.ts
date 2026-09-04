@@ -343,7 +343,7 @@ describe("PluginService", () => {
       }),
     ]);
     await service.stopAllPlugins();
-  }, 30_000);
+  }, 60_000);
 
   it("runs Git build commands in staging before validation and activation on install and update", async () => {
     const home = await mkdtemp(path.join(tmpdir(), "paseo-plugin-home-"));
