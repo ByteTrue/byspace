@@ -4,16 +4,16 @@ Use Node 22.20.0 and npm 10.9.3. Run release commands from a clean `main` checko
 
 ## Published targets
 
-| Target  | Publication path                                               |
-| ------- | -------------------------------------------------------------- |
-| npm     | `@bytetrue/byspace` with the `beta` or `latest` dist-tag       |
-| Web/PWA | Cloudflare Pages (`byspace` stable, `byspace-beta` prerelease) |
-| Docker  | `ghcr.io/bytetrue/byspace:<version>`                           |
-| Desktop | GitHub Release artifacts for macOS, Windows, and Linux         |
-| iOS     | One unsigned device IPA on the GitHub Release                  |
-| Android | One locally built and signed APK on the GitHub Release         |
+| Target  | Publication path                                                        |
+| ------- | ----------------------------------------------------------------------- |
+| npm     | `@bytetrue/byspace` with the `beta` or `latest` dist-tag                |
+| Web/PWA | Cloudflare Pages (`byspace` stable, `byspace-beta` prerelease)          |
+| Docker  | `ghcr.io/bytetrue/byspace:<version>`                                    |
+| Desktop | GitHub Release artifacts for macOS, Windows, and Linux                  |
+| iOS     | One unsigned device IPA on the GitHub Release                           |
+| Android | CI-built and signed APK on the GitHub Release (android-apk-release.yml) |
 
-The iOS IPA requires user re-signing. The Android APK uses the long-lived ByteTrue release key and does not depend on Google Play or EAS.
+The iOS IPA requires user re-signing. The Android APK is built and signed by CI with the long-lived ByteTrue release key and does not depend on Google Play or EAS.
 
 Stable Web releases deploy to `app.byspace.cc.cd`. Versions with a prerelease suffix deploy to `app-beta.byspace.cc.cd`.
 
@@ -50,7 +50,11 @@ The macOS client does not replace the running app in place. It verifies the curr
 
 ## Android APK
 
-Build Android on the release development machine. Do not use EAS Cloud or EAS Local.
+The `Android APK Release` workflow builds, signs, and uploads the APK automatically when the version tag is pushed. It verifies the package id (`com.bytetrue.byspace`), the version against `packages/app/native-release-version.js`, the release certificate, and ABI coverage before uploading `BySpace-<version>-android.apk` and its `.sha256` to the GitHub Release.
+
+Rebuild or repair a published APK with an `android-v*` tag (e.g. `android-v0.11.3`) pointing at a green SHA: the workflow normalizes it to the release tag and replaces the asset. `workflow_dispatch` with a tag input does the same without a new tag.
+
+The local build path (below) is the fallback when CI cannot build; it must produce a byte-identical package id, version, and certificate.
 
 1. Run `expo prebuild --platform android` once for the release SHA.
 2. Run Gradle `:app:assembleRelease`, excluding Android lint tasks already covered by CI.
@@ -86,9 +90,9 @@ If CI fails on unchanged test files, check whether the failure is a known flake 
 E2E specs, windows vitest timing assertions) and rerun only the failed jobs with
 `gh run rerun <run-id> --failed`. A run must be completed before `--failed` reruns are accepted.
 
-The tag starts npm, Web/PWA, Docker, Desktop, and iOS publication. Wait for all workflows to
-finish. Upload the already verified Android APK and checksum after the GitHub Release exists
-(argument order: tag, asset path, then the exact commit SHA the tag points to):
+The tag starts npm, Web/PWA, Docker, Desktop, iOS, and Android publication. Wait for all workflows to
+finish. Android uploads the APK and checksum automatically once the GitHub Release exists (the
+ensure-release job creates the draft if the tag workflow raced ahead); the manual fallback remains:
 
 ```bash
 GITHUB_REPOSITORY=ByteTrue/byspace \
