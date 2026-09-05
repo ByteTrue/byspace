@@ -9,7 +9,7 @@ Controlled by `APP_VARIANT` in `packages/app/app.config.js` (vanilla Expo, no cu
 | `production`  | BySpace       | `com.bytetrue.byspace`       |
 | `development` | BySpace Debug | `com.bytetrue.byspace.debug` |
 
-EAS profiles: `development`, `production`, and `production-apk` in `packages/app/eas.json`.
+EAS profiles in `packages/app/eas.json` (`development`, `production`, `production-apk`) drive local development builds only; releases are built by CI. The repo has no EAS project binding (owner/projectId were intentionally removed at fork), so EAS cloud builds cannot run without re-establishing one.
 
 `development` uses Android `debug`.
 

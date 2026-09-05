@@ -108,4 +108,4 @@ GITHUB_REPOSITORY=ByteTrue/byspace \
 - The GitHub Release contains Desktop artifacts, one unsigned IPA, the signed APK, and checksums.
 - The Docker image resolves at `ghcr.io/bytetrue/byspace:<version>`.
 - The matching Web channel serves the new build: `app.byspace.cc.cd` for stable or `app-beta.byspace.cc.cd` for prereleases.
-- The Android APK package, version, and signer match the values checked before tagging.
+- The Android APK Release workflow run for the tag is green; the uploaded APK's signer matches the ByteTrue release certificate (the workflow asserts package, version, and ABI itself — spot-check the cert if anything looks off).
