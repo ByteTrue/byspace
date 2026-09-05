@@ -1,0 +1,199 @@
+name: Android APK Release
+
+on:
+  push:
+    tags:
+      - "v*"
+      - "android-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build (e.g. v0.1.0)"
+        required: true
+        type: string
+
+concurrency:
+  group: android-apk-release-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+env:
+  SOURCE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  ensure-release:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
+
+      - name: Resolve release tag
+        shell: bash
+        run: node scripts/emit-release-env.mjs --source-tag "$SOURCE_TAG" >> "$GITHUB_ENV"
+
+      - name: Ensure GitHub release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if node scripts/github-release.mjs --repo "${{ github.repository }}" --tag "$RELEASE_TAG" >/dev/null 2>&1; then
+            exit 0
+          fi
+
+          release_args=(
+            release create "$RELEASE_TAG"
+            --repo "${{ github.repository }}"
+            --title "BySpace $RELEASE_TAG"
+            --notes ""
+            --draft
+          )
+
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
+            release_args+=(--prerelease)
+          fi
+
+          if ! gh "${release_args[@]}"; then
+            echo "Release creation raced with another workflow; continuing."
+            node scripts/github-release.mjs --repo "${{ github.repository }}" --tag "$RELEASE_TAG" >/dev/null
+          fi
+
+  publish-android-apk:
+    needs: [ensure-release]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
+
+      - name: Resolve release tag
+        shell: bash
+        run: node scripts/emit-release-env.mjs --source-tag "$SOURCE_TAG" >> "$GITHUB_ENV"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install JS dependencies
+        run: node scripts/npm-retry.mjs ci
+
+      - name: Build workspace dependencies
+        run: npm run build:app-deps
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Prebuild Android project
+        working-directory: packages/app
+        env:
+          APP_VARIANT: production
+        run: npx expo prebuild --platform android --clean --non-interactive
+
+      - name: Build release APK
+        working-directory: packages/app/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleRelease \
+            -x lint -x lintVitalAnalyzeRelease -x lintVitalRelease \
+            -x generateReleaseLintModel -x generateReleaseLintVitalModel \
+            --no-daemon --max-workers=2 -Dorg.gradle.parallel=false
+
+      - name: Sign APK
+        env:
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          keystore_dir="$RUNNER_TEMP/android-signing"
+          mkdir -p "$keystore_dir"
+          keystore_file="$keystore_dir/release.jks"
+          echo "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$keystore_file"
+
+          apk_path="$(find packages/app/android/app/build/outputs/apk/release -name '*.apk' -type f | head -n 1)"
+          if [ -z "$apk_path" ]; then
+            echo "No release APK found in build outputs."
+            exit 1
+          fi
+
+          BUILD_TOOLS_DIR="$(find "$ANDROID_HOME/build-tools" -maxdepth 1 -mindepth 1 -type d | sort -V | tail -n 1)"
+          "$BUILD_TOOLS_DIR/apksigner" sign \
+            --ks "$keystore_file" \
+            --ks-key-alias "$ANDROID_RELEASE_KEY_ALIAS" \
+            --ks-pass "pass:$ANDROID_RELEASE_KEYSTORE_PASSWORD" \
+            --key-pass "pass:$ANDROID_RELEASE_KEY_PASSWORD" \
+            "$apk_path"
+
+          "$BUILD_TOOLS_DIR/apksigner" verify --print-certs "$apk_path"
+
+      - name: Verify APK
+        env:
+          EXPECTED_APPLICATION_ID: com.bytetrue.byspace
+        run: |
+          set -euo pipefail
+
+          apk_path="$(find packages/app/android/app/build/outputs/apk/release -name '*.apk' -type f | head -n 1)"
+
+          BUILD_TOOLS_DIR="$(find "$ANDROID_HOME/build-tools" -maxdepth 1 -mindepth 1 -type d | sort -V | tail -n 1)"
+          AAPT="$BUILD_TOOLS_DIR/aapt2"
+
+          actual_id="$("$AAPT" dump badging "$apk_path" | head -n 1 | sed -n "s/^package: name='\([^']*\)'.*$/\1/p")"
+          if [ "$actual_id" != "$EXPECTED_APPLICATION_ID" ]; then
+            echo "Application id mismatch: expected $EXPECTED_APPLICATION_ID, got $actual_id"
+            exit 1
+          fi
+
+          version_name="$("$AAPT" dump badging "$apk_path" | sed -n "s/^package: name='[^']*' versionName='\([^']*\)'.*$/\1/p" | head -n 1)"
+          if [ "$version_name" != "$RELEASE_VERSION" ]; then
+            echo "Version mismatch: expected $RELEASE_VERSION, got $version_name"
+            exit 1
+          fi
+
+          abi_count="$("$AAPT" dump badging "$apk_path" | grep -c "^native-code:")"
+          if [ "$abi_count" -eq 0 ]; then
+            echo "No native code (ABI splits) found in APK."
+            exit 1
+          fi
+
+      - name: Stage release asset
+        run: |
+          set -euo pipefail
+
+          apk_path="$(find packages/app/android/app/build/outputs/apk/release -name '*.apk' -type f | head -n 1)"
+          asset_name="BySpace-$RELEASE_VERSION-android.apk"
+          asset_path="$RUNNER_TEMP/$asset_name"
+          cp "$apk_path" "$asset_path"
+          sha256sum "$asset_path" | awk '{print $1}' > "$asset_path.sha256"
+
+          {
+            echo "asset_name=$asset_name"
+            echo "asset_path=$asset_path"
+            echo "asset_sha256_path=$asset_path.sha256"
+          } >> "$GITHUB_ENV"
+
+          cat "$asset_path.sha256"
+
+      - name: Upload APK to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          release_lookup="$(node scripts/github-release.mjs --repo "${{ github.repository }}" --tag "$RELEASE_TAG")"
+          gh release upload "$release_lookup" "$asset_path" "$asset_sha256_path" --clobber --repo "${{ github.repository }}"
