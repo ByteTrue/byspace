@@ -161,7 +161,7 @@ jobs:
             exit 1
           fi
 
-          version_name="$("$AAPT" dump badging "$apk_path" | sed -n "s/^package: name='[^']*' versionName='\([^']*\)'.*$/\1/p" | head -n 1)"
+          version_name="$("$AAPT" dump badging "$apk_path" | head -n 1 | grep -oE "versionName='[^']*'" | head -n 1 | sed "s/versionName='\(.*\)'/\1/")"
           if [ "$version_name" != "$RELEASE_VERSION" ]; then
             echo "Version mismatch: expected $RELEASE_VERSION, got $version_name"
             exit 1
