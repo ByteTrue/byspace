@@ -192,11 +192,6 @@ The `Android APK Release` workflow (.github/workflows/android-apk-release.yml) b
 verifies, and uploads the release APK on every `v*` tag — no manual step. It runs the same
 prebuild + Gradle + apksigner chain on an ubuntu runner, asserts package id, version, and
 native ABIs, and uploads `BySpace-<version>-android.apk` plus its SHA-256 to the GitHub
-Release. Rebuild a published APK with an `android-v*` tag or a workflow_dispatch run.
-
-The local path below is the fallback when CI cannot build; keep it producing the same
-package id, version, and certificate.
-
-Build the release APK locally with Expo prebuild and Gradle. Reuse the generated Android
-project and Gradle cache for retries. Sign the final APK with the long-lived ByteTrue
-release key, then upload it and its SHA-256 file to the GitHub Release.
+Release. Rebuild a published APK with an `android-v*` tag or a workflow*dispatch run. The
+local build commands above double as the CI-outage fallback; if the release key is ever
+rotated, refresh all four `ANDROID_RELEASE*\*` GitHub secrets before the next release.
