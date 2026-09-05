@@ -54,16 +54,14 @@ The `Android APK Release` workflow builds, signs, and uploads the APK automatica
 
 Rebuild or repair a published APK with an `android-v*` tag (e.g. `android-v0.11.3`) pointing at a green SHA: the workflow normalizes it to the release tag and replaces the asset. `workflow_dispatch` with a tag input does the same without a new tag.
 
-The local build path (below) is the fallback when CI cannot build; it must produce a byte-identical package id, version, and certificate.
+The numbered path below is the fallback for a CI outage. It follows `docs/android.md`'s local build commands, so keep this list short: verify package id, version, and release certificate on the result, and upload with `scripts/upload-release-asset.sh`.
 
 1. Run `expo prebuild --platform android` once for the release SHA.
 2. Run Gradle `:app:assembleRelease`, excluding Android lint tasks already covered by CI.
-3. Reuse the generated `packages/app/android` directory and Gradle cache if the build must be retried.
-4. Sign with the ByteTrue Android release key.
-5. Verify the APK package is `com.bytetrue.byspace`, its version matches `packages/app/native-release-version.js`, and `apksigner verify --print-certs` reports the expected release certificate.
-6. Write `BySpace-<version>-android.apk.sha256` next to the APK.
+3. Sign with the ByteTrue Android release key and verify the certificate.
+4. Upload the APK and its SHA-256 with `scripts/upload-release-asset.sh`.
 
-Keep the keystore and passwords outside the repository. Use the same release key for every future Android update.
+Keep the keystore and passwords outside the repository; after any key rotation, refresh the four `ANDROID_RELEASE_*` GitHub secrets before the next release.
 
 ## Dry-runs
 
