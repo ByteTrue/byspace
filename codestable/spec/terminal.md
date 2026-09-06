@@ -1,6 +1,6 @@
 # Terminal
 
-BySpace Terminal 同时支持实时输出、历史回放和断线恢复。用户在这些路径中看到的字符、颜色、换行和先后顺序必须一致；恢复不能改变原始命令输出。
+BySpace Terminal 同时支持实时输出、历史回放、断线恢复和 daemon 重启后的标签恢复。用户在这些路径中看到的字符、颜色、换行和先后顺序必须一致；恢复不能改变原始命令输出。
 
 ## 快照与恢复
 
@@ -38,6 +38,13 @@ Alternate buffer、current grid 和 scrollback 都遵守同一 active-buffer 规
 - Agent 活动上报按 provider 独立配置：Claude、Codex、OpenCode 与 Pi extension 各自开关，请求串行、有界合并、latest-wins；历史 global 开启只继承给 Claude/Codex/OpenCode，Pi 必须用户显式启用。
 - Manage Terminal Profiles 精确打开所选 Host 的 Terminals 设置页。
 
+## 重启恢复
+
+- Daemon 重启（崩溃拉起、自动更新、停机、睡眠导致的 daemon 死亡）后，workspace 的 terminal 标签按原 id、名称和 cwd 恢复为全新 shell。运行中的进程和 scrollback 不恢复：PTY 与 daemon 同生共死，这是与 Agent 对话恢复的关键差异。客户端布局里持久化的 terminalId 因此跨重启仍然有效。
+- 只有标签元数据被持久化（id、cwd、workspaceId、名称、profile 命令）。恢复时丢弃 cwd 已删除或 workspace 已归档/不存在的记录，并回写幸存集合；存储文件损坏只记日志并跳过恢复，不阻塞启动。
+- 恢复在 daemon 开始监听前完成，客户端连上时看到的列表已是最终状态。持久化写失败只记日志，不影响终端生命周期。
+- 优雅停机是保留语义：停机时的 killAll 不从持久化中移除记录，下次启动据此恢复；只有有机移除（用户关 tab、shell 自退、workspace 归档）才会删记录。命令在 create 完成前就退出的终端不落盘。
+
 ## 边界
 
 - 字体、字号、主题和语法高亮属于 Appearance，不由快照恢复逻辑调整。
@@ -47,6 +54,7 @@ Alternate buffer、current grid 和 scrollback 都遵守同一 active-buffer 规
 ## 历史证据
 
 - [Terminal 中文快照回放间距](../issues/001-x-terminal-cjk-snapshot-spacing.md)
+- [Daemon 重启后 terminal 标签恢复](../issues/012-x-terminal-tab-persistence-across-daemon-restart.md)
 - [复原 Terminal 首帧 post-WebGL 尺寸就绪与 250ms 被动合并机制](../issues/005-x-terminal-remote-resize-storm-and-fit.md)
 - [修复 Windows 下思考加载图标定格与终端 OSC 8 链接打开无反应](../issues/008-x-ff-synced-loader-and-terminal-osc8-links.md)
 - [Epic 002 交付记录](../epics/002-x-retained-capabilities-delivery/spec.md)
