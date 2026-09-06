@@ -2358,6 +2358,14 @@ export const zhCN: TranslationResources = {
       workspaces: {
         unavailable: "连接到这个 Host 以管理 Workspace",
       },
+      terminalDefaultShell: {
+        sectionTitle: "默认 shell",
+        label: "默认 shell",
+        autoOption: "自动(系统默认)",
+        autoHint: "新终端使用系统默认 shell",
+        configuredHint: "新终端将使用此 shell 打开",
+        empty: "未在这台机器上检测到 shell",
+      },
       terminalProfiles: {
         unavailable: "Connect to this host to manage terminal profiles",
         sectionTitle: "Terminal profiles",

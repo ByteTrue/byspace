@@ -416,6 +416,7 @@ export interface PaseoDaemonConfig {
   terminalAgentHooks?: TerminalAgentHookSettings;
   appendSystemPrompt?: string;
   terminalProfiles?: TerminalProfile[];
+  terminalDefaultShell?: string;
   agentProfiles?: AgentProfile[];
   skillSelection?: AgentSkillSelection;
   pluginsEnabled?: boolean;
@@ -536,6 +537,21 @@ function resolveExpressTrustProxySetting(config: PaseoDaemonConfig): true | stri
   return config.trustedProxies ?? ["loopback"];
 }
 
+function applyOptionalConfigLists(
+  initialConfig: MutableDaemonConfig,
+  config: PaseoDaemonConfig,
+): void {
+  if (config.terminalProfiles !== undefined) {
+    initialConfig.terminalProfiles = config.terminalProfiles;
+  }
+  if (config.terminalDefaultShell !== undefined) {
+    initialConfig.terminalDefaultShell = config.terminalDefaultShell;
+  }
+  if (config.agentProfiles !== undefined) {
+    initialConfig.agentProfiles = config.agentProfiles;
+  }
+}
+
 function createInitialMutableDaemonConfig(
   config: PaseoDaemonConfig,
   defaultAppBaseUrl: string,
@@ -570,13 +586,7 @@ function createInitialMutableDaemonConfig(
     skills: { selection: config.skillSelection },
   };
 
-  if (config.terminalProfiles !== undefined) {
-    initialConfig.terminalProfiles = config.terminalProfiles;
-  }
-
-  if (config.agentProfiles !== undefined) {
-    initialConfig.agentProfiles = config.agentProfiles;
-  }
+  applyOptionalConfigLists(initialConfig, config);
 
   return initialConfig;
 }
@@ -671,6 +681,7 @@ export async function createPaseoDaemon(
   const terminalManager = createPersistingTerminalManager({
     inner: createConfiguredTerminalManager({
       getTerminalActivityUrl: () => createTerminalActivityUrl(boundListenTarget),
+      getDefaultShell: () => daemonConfigStore.get().terminalDefaultShell,
     }),
     store: terminalSessionStore,
     logger,

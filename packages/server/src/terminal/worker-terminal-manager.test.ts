@@ -1002,3 +1002,68 @@ it("removes a killed worker terminal from terminalExit without duplicate snapsho
     },
   ]);
 });
+
+it("forwards the configured default shell to the worker when no command is given", async () => {
+  const worker = new FakeTerminalWorker();
+  manager = createWorkerTerminalManager({
+    forkWorker: () => worker,
+    getDefaultShell: () => "/opt/homebrew/bin/fish",
+  });
+
+  const createPromise = manager.createTerminal({
+    workspaceId: "ws-test",
+    cwd: "/tmp",
+  });
+  worker.emitWorkerMessage({
+    type: "response",
+    requestId:
+      worker.sentMessages[0]?.type === "createTerminal" ? worker.sentMessages[0].requestId : "",
+    ok: false,
+    error: "stop",
+  });
+  await createPromise.catch(() => {});
+
+  const request = worker.sentMessages.find((message) => message.type === "createTerminal");
+  expect(request?.type === "createTerminal" && request.options.shell).toBe(
+    "/opt/homebrew/bin/fish",
+  );
+});
+
+it("prefers an explicit shell over the configured default and omits shell when unset", async () => {
+  const worker = new FakeTerminalWorker();
+  let configuredShell: string | null = "/opt/homebrew/bin/fish";
+  manager = createWorkerTerminalManager({
+    forkWorker: () => worker,
+    getDefaultShell: () => configuredShell,
+  });
+
+  // createTerminal sends its worker request synchronously, so the latest
+  // createTerminal entry is the request for the create call just started.
+  const drainLatestCreate = (create: Promise<TerminalSession>): Promise<string | undefined> => {
+    const last = worker.sentMessages.findLast(
+      (message): message is Extract<TerminalWorkerRequest, { type: "createTerminal" }> =>
+        message.type === "createTerminal",
+    );
+    if (!last) {
+      throw new Error("no createTerminal request sent");
+    }
+    worker.emitWorkerMessage({
+      type: "response",
+      requestId: last.requestId,
+      ok: false,
+      error: "stop",
+    });
+    return create.catch(() => {}).then(() => last.options.shell);
+  };
+
+  const explicitShell = await drainLatestCreate(
+    manager.createTerminal({ workspaceId: "ws-test", cwd: "/tmp", shell: "/bin/bash" }),
+  );
+  expect(explicitShell).toBe("/bin/bash");
+
+  configuredShell = null;
+  const autoShell = await drainLatestCreate(
+    manager.createTerminal({ workspaceId: "ws-test", cwd: "/tmp" }),
+  );
+  expect(autoShell).toBeUndefined();
+});

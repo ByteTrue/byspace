@@ -258,6 +258,10 @@ export const MutableDaemonConfigSchema = z
     terminalAgentHooks: TerminalAgentHookSettingsSchema.optional(),
     appendSystemPrompt: z.string().default(""),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
+    // Path of the shell the daemon spawns for new terminals. Absent (or null,
+    // after a client patch clears it) means auto: $SHELL / ComSpec, the
+    // pre-config behavior.
+    terminalDefaultShell: z.string().min(1).nullish(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
     skills: z.object({ selection: AgentSkillSelectionSchema.optional() }).strict().optional(),
     pluginsEnabled: z.boolean().optional(),
@@ -281,6 +285,9 @@ export const MutableDaemonConfigPatchSchema = z
     terminalAgentHooks: TerminalAgentHookSettingsSchema.optional(),
     appendSystemPrompt: z.string().optional(),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
+    // COMPAT(terminalShellConfig): added in v0.7.x alongside the
+    // terminal.shell.detect RPC and the terminalShellConfig feature gate.
+    terminalDefaultShell: z.string().min(1).nullish(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
     pluginsEnabled: z.boolean().optional(),
     plugins: z.record(PluginIdSchema, PluginSourceSchema).optional(),
@@ -2852,6 +2859,33 @@ export const RenameTerminalRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const TerminalShellDetectRequestSchema = z.object({
+  type: z.literal("terminal.shell.detect.request"),
+  requestId: z.string(),
+});
+
+/** A shell executable the daemon found installed on the host machine. */
+export const DetectedShellSchema = z.object({
+  path: z.string(),
+  name: z.string(),
+});
+
+export type DetectedShell = z.infer<typeof DetectedShellSchema>;
+
+export const TerminalShellDetectResponseSchema = z.object({
+  type: z.literal("terminal.shell.detect.response"),
+  payload: z.object({
+    /** Installed shells on the host, deduped by path. */
+    shells: z.array(DetectedShellSchema),
+    /** What the daemon would use right now with no configured shell. */
+    resolvedDefault: z.string(),
+    /** The configured `daemon.terminalDefaultShell`, absent in auto mode. */
+    configured: z.string().optional(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
 export const StartWorkspaceScriptRequestSchema = z.object({
   type: z.literal("start_workspace_script_request"),
   workspaceId: z.string(),
@@ -3180,6 +3214,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   UnsubscribeTerminalsRequestSchema,
   CreateTerminalRequestSchema,
   RenameTerminalRequestSchema,
+  TerminalShellDetectRequestSchema,
   StartWorkspaceScriptRequestSchema,
   WorkspaceScriptListRequestSchema,
   WorkspaceScriptStartRequestSchema,
@@ -3431,6 +3466,10 @@ export const ServerInfoStatusPayloadSchema = z
         projectSetupSkill: z.boolean().optional(),
         // COMPAT(terminalAgentHookProviders): added in v0.7.1, remove gate after 2027-09-01.
         terminalAgentHookProviders: z.boolean().optional(),
+        // COMPAT(terminalShellConfig): added in v0.7.x, remove gate after 2027-09-01.
+        // Gates terminal.shell.detect plus the terminalDefaultShell config field;
+        // clients without the gate never send either.
+        terminalShellConfig: z.boolean().optional(),
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
         "terminal-restore-modes": z.boolean().optional(),
         // COMPAT(terminalInputModeReplay): added in v0.2.6, remove gate after 2027-02-02.
@@ -6511,6 +6550,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   TerminalsChangedSchema,
   CreateTerminalResponseSchema,
   RenameTerminalResponseSchema,
+  TerminalShellDetectResponseSchema,
   SubscribeTerminalResponseSchema,
   KillTerminalResponseSchema,
   CaptureTerminalResponseSchema,
@@ -6962,6 +7002,8 @@ export type CreateTerminalRequest = z.infer<typeof CreateTerminalRequestSchema>;
 export type CreateTerminalResponse = z.infer<typeof CreateTerminalResponseSchema>;
 export type RenameTerminalRequest = z.infer<typeof RenameTerminalRequestSchema>;
 export type RenameTerminalResponse = z.infer<typeof RenameTerminalResponseSchema>;
+export type TerminalShellDetectRequest = z.infer<typeof TerminalShellDetectRequestSchema>;
+export type TerminalShellDetectResponse = z.infer<typeof TerminalShellDetectResponseSchema>;
 export type StartWorkspaceScriptRequest = z.infer<typeof StartWorkspaceScriptRequestSchema>;
 export type StartWorkspaceScriptResponse = z.infer<
   typeof StartWorkspaceScriptResponseMessageSchema

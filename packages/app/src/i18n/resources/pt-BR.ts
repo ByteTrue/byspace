@@ -2423,6 +2423,14 @@ export const ptBR: TranslationResources = {
       workspaces: {
         unavailable: "Conecte-se a este host para gerenciar workspaces",
       },
+      terminalDefaultShell: {
+        sectionTitle: "Shell padrão",
+        label: "Shell padrão",
+        autoOption: "Automático (padrão do sistema)",
+        autoHint: "Novos terminais usam o shell padrão do sistema",
+        configuredHint: "Novos terminais abrem com este shell",
+        empty: "Nenhum shell detectado nesta máquina",
+      },
       terminalProfiles: {
         unavailable: "Conecte-se a este host para gerenciar perfis de terminal",
         sectionTitle: "Perfis de terminal",

@@ -985,6 +985,7 @@ export class Session {
       clientSupportsWrapReflow: () =>
         this.clientCapabilities.has(CLIENT_CAPS.terminalReflowableSnapshot),
       getClientBufferedAmount: () => this.getTransportBufferedAmount(),
+      getConfiguredDefaultShell: () => daemonConfigStore.get().terminalDefaultShell,
     });
     this.agentUpdates = createAgentUpdatesService({
       emit: (message) => this.emit(message),

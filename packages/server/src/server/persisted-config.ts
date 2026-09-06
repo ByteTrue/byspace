@@ -267,6 +267,9 @@ export const PersistedConfigSchema = z
         terminalAgentHooks: TerminalAgentHookSettingsSchema.optional(),
         appendSystemPrompt: z.string().optional(),
         terminalProfiles: z.array(TerminalProfileSchema).optional(),
+        // null is a valid persisted value meaning "auto"; config.ts omits it
+        // when resolving so MutableDaemonConfig keeps absent = auto.
+        terminalDefaultShell: z.string().min(1).nullish(),
         agentProfiles: z.array(AgentProfileSchema).optional(),
         cors: z
           .object({

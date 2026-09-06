@@ -120,6 +120,31 @@ describe("DaemonConfigStore", () => {
     expect(loadPersistedConfig(paseoHome).daemon?.relay?.enabled).toBe(true);
   });
 
+  test("patch sets terminalDefaultShell and a null patch clears it back to auto", () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+    const store = new DaemonConfigStore(paseoHome, {
+      relay: { enabled: false },
+      mcp: { injectIntoAgents: false },
+      browserTools: { enabled: false },
+      providers: {},
+      metadataGeneration: { providers: [] },
+      autoArchiveAfterMerge: false,
+      enableTerminalAgentHooks: false,
+      appendSystemPrompt: "",
+    });
+
+    store.patch({ terminalDefaultShell: "/opt/homebrew/bin/fish" });
+    expect(store.get().terminalDefaultShell).toBe("/opt/homebrew/bin/fish");
+    expect(loadPersistedConfig(paseoHome).daemon?.terminalDefaultShell).toBe(
+      "/opt/homebrew/bin/fish",
+    );
+
+    store.patch({ terminalDefaultShell: null });
+    expect(store.get().terminalDefaultShell ?? null).toBeNull();
+    expect(loadPersistedConfig(paseoHome).daemon?.terminalDefaultShell ?? null).toBeNull();
+  });
+
   test("patch round-trips agent profiles through the strictly-parsed persisted config", () => {
     const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
     tempDirs.push(paseoHome);
