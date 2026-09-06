@@ -7,7 +7,7 @@ BySpace 让用户从移动端、Web 或桌面端查看和控制自己开发环�
 ## 当前体验地图
 
 - [Agent 对话](agent-conversation.md) — 对话、工具调用和消息输入如何共处，以及 active 与 archived stream 的操作边界。
-- [Terminal](terminal.md) — Terminal 快照、历史和恢复必须维持的字符与顺序语义。
+- [Terminal](terminal.md) — Terminal 快照、历史和恢复必须维持的字符与顺序语义，以及 daemon 重启后的标签恢复。
 - [Workspace](workspace.md) — 侧栏行内信息、分支与推送状态、hover 状态展示与 Agent 精炼命名。
 - [连接与发布通道](connection.md) — App 与 Relay 地址按通道选择、连接安全边界与配对 hostname。
 - [桌面更新](desktop-updates.md) — 各桌面平台怎样从 release manifest 进入安装流程，尤其是 macOS 的 DMG 交接。

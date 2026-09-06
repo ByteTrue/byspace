@@ -2,7 +2,7 @@
 kind: issue
 title: "Daemon 重启后 workspace terminal 标签全部消失"
 type: bug
-status: open
+status: closed
 created: 2026-06-11
 ---
 
@@ -61,6 +61,6 @@ Daemon 重启（崩溃被拉起、自动更新、手动重启、Windows 睡眠�
 
 ## 关闭时
 
-- 回写候选：`codestable/spec/terminal.md` 增「重启恢复」小节；`docs/data-model.md` 已随实现更新。
-- 关闭判断：restore 在真实重启路径生效（daemon.log 启动横幅后有恢复日志）+ 测试绿。
-- 遗留：Windows 睡眠唤醒若 daemon 未死标签仍消失，另开 issue 查重连路径；方案 B（detached worker，保留运行中进程）未排期。
+- **关闭判断**：目标达成。实现 + 验证 + 独立 review 完成：12 项真实 PTY 测试全绿；typecheck / lint / format 全仓通过；reviewer subagent 结论 MERGE，零 MUST-FIX / SHOULD-FIX（移除镜像、killAll 冻结、restore 顺序、id 冲突、写队列等 8 项均有 file:line 核实）；代码已提交 `e3f264814`，pre-commit 钩子全过。
+- **回写位置**：`codestable/spec/terminal.md` 新增「重启恢复」节并补历史证据链接；`codestable/spec/index.md` Terminal 条目更新；`docs/data-model.md` 已随实现更新（目录布局 + 持久化语义）。
+- **遗留**：Windows 睡眠真机验证未做——若唤醒后 daemon 存活但标签仍消失，属重连路径的另一个 bug，另开 issue；若 daemon.log 显示唤醒时崩溃，崩溃单独修。方案 B（detached worker 保活进程，保留运行中进程）未排期，需要时另立事项。
