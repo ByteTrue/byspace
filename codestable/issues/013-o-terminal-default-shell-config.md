@@ -106,6 +106,15 @@ daemon 默认 shell 只看 `$SHELL` env 兜底 `/bin/sh`(Windows 为 `%ComSpec%`
 - 自定义 shell 路径输入未做(探测列表 + Auto 覆盖主场景)
 - 老 daemon(无 gate)上 section 隐藏;新 daemon 不会收到老客户端的 detect 请求或 shell patch,无兼容风险
 
+### Review 修复(2026-02-13,subagent review PR #27 后)
+
+Review 结论“建议先改再合”,两个发现均已修:
+
+1. **必须处理 — Windows 探测必空**:`WELL_KNOWN_WINDOWS_SHELLS` 用 bare name(`pwsh`),PATH 解析只做 `join(dir, name)` + existsSync,真实文件是 `.exe`,生产 Windows 上 detect 返回空数组;单测因注入返回 `.exe` 路径的 resolveOnPath 桩而掩盖。修复:候选改为 `pwsh.exe`/`powershell.exe`/`cmd.exe`;`defaultResolveOnPath` 按 PATHEXT(`.COM;.EXE;.BAT;.CMD`)后缀探测(win32 平台),bare name 仍为最终回退;Windows 候选补 `ComSpec`(对齐 Unix `$SHELL` 语义,排首位);候选 absoluteness 判断按探测平台(win32/posix)而非运行宿主。新增测试:ComSpec 排序 + `.exe` 桩解析、`resolvePathExtSuffixes` 纯函数、POSIX 不应用 PATHEXT。真实 PATHEXT walk 依赖宿主 fs 语义,无法在 POSIX 宿主上对 Windows 路径验证(注释已说明),真实 Windows 验证仍属已知限制
+2. **建议处理 — dscl 无超时**:`execFile("dscl", ...)` 加 `{ timeout: 2000 }`,域控环境下挂起时降级到其余探测源
+
+验证:`shell-detect.test.ts` 10/10;worker-terminal-manager/controller/daemon-config-store 83/83;server typecheck、lint 0 错误、oxfmt 通过。
+
 ## 关闭时
 
 - 回写候选:`codestable/spec/terminal.md` 增补默认 shell 配置小节

@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { detectInstalledShells, parseDsclUserShell, parseEtcShells } from "./shell-detect.js";
+import {
+  detectInstalledShells,
+  parseDsclUserShell,
+  parseEtcShells,
+  resolvePathExtSuffixes,
+} from "./shell-detect.js";
 
 function makeExists(paths: readonly string[]): (path: string) => boolean {
   const set = new Set(paths);
@@ -90,16 +95,47 @@ describe("detectInstalledShells", () => {
     expect(shells).toEqual([{ path: "/bin/bash", name: "bash" }]);
   });
 
-  it("resolves bare Windows candidates against PATH", async () => {
+  it("orders Windows candidates ComSpec first and resolves .exe names via PATH", async () => {
+    // The PATHEXT walk itself uses host fs semantics and cannot run against
+    // Windows paths on a POSIX test host; the resolver stub stands in for it,
+    // while resolvePathExtSuffixes tests the suffix derivation it relies on.
     const shells = await detectInstalledShells({
       platform: "win32",
-      env: { PATH: "C:\\Windows\\System32" },
+      env: {
+        PATH: "C:\\Windows\\System32",
+        ComSpec: "C:\\Windows\\System32\\cmd.exe",
+      },
+      exists: makeExists([
+        "C:\\Windows\\System32\\cmd.exe",
+        "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      ]),
       resolveOnPath: (name) =>
-        name === "pwsh" ? "C:\\Program Files\\PowerShell\\7\\pwsh.exe" : null,
-      exists: makeExists(["C:\\Program Files\\PowerShell\\7\\pwsh.exe"]),
+        name === "powershell.exe"
+          ? "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+          : null,
     });
     expect(shells).toEqual([
-      { path: "C:\\Program Files\\PowerShell\\7\\pwsh.exe", name: "pwsh.exe" },
+      { path: "C:\\Windows\\System32\\cmd.exe", name: "cmd.exe" },
+      {
+        path: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+        name: "powershell.exe",
+      },
     ]);
+  });
+
+  it("derives PATHEXT suffixes with the bare name as final fallback", () => {
+    expect(resolvePathExtSuffixes({})).toEqual([".COM", ".EXE", ".BAT", ".CMD", ""]);
+    expect(resolvePathExtSuffixes({ PATHEXT: ".EXE;.CMD" })).toEqual([".EXE", ".CMD", ""]);
+  });
+
+  it("does not apply PATHEXT suffixes when resolving on POSIX platforms", async () => {
+    const shells = await detectInstalledShells({
+      platform: "linux",
+      env: { HOME: "/home/user" },
+      candidates: [{ location: "fish", source: "well-known" }],
+      resolveOnPath: (name) => (name === "fish" ? "/usr/local/bin/fish" : null),
+      exists: makeExists(["/usr/local/bin/fish"]),
+    });
+    expect(shells).toEqual([{ path: "/usr/local/bin/fish", name: "fish" }]);
   });
 });
