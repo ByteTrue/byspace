@@ -142,8 +142,19 @@ describe("persisting terminal manager", () => {
       args: ["-e", "process.exit(0)"],
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    expect(readStoreRecords(filePath) ?? []).toEqual([]);
+    // Windows is slow to spawn and exit, so the terminal may exit after
+    // createTerminal resolves: the record lands and the removal mirror
+    // clears it shortly after. Wait out that bounded window instead of a
+    // fixed sleep; the resurrect guard only promises the store ends empty.
+    // Require a non-empty sighting first so a poll racing ahead of the
+    // first write cannot pass the assertion vacuously.
+    try {
+      await waitForCondition(() => (readStoreRecords(filePath) ?? []).length > 0, 2000);
+    } catch {
+      // No record ever landed: the exit genuinely preceded create. Fall
+      // through and confirm the store still ends empty.
+    }
+    await waitForCondition(() => (readStoreRecords(filePath) ?? []).length === 0, 10000);
   });
 
   it("mirrors removals on killTerminalAndWait", async () => {
