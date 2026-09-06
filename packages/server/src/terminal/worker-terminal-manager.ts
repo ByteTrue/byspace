@@ -95,6 +95,8 @@ interface WorkerTerminalManagerOptions {
   requestTimeoutMs?: number;
   forkWorker?: () => TerminalWorkerProcess;
   getTerminalActivityUrl?: () => string | null;
+  /** Reads daemon.terminalDefaultShell; nullish means auto. */
+  getDefaultShell?: () => string | null | undefined;
 }
 
 function createActivityToken(): string {
@@ -694,6 +696,7 @@ export function createWorkerTerminalManager(
       const terminalId = options.id ?? randomUUID();
       const activityToken = createActivityToken();
       const terminalActivityUrl = managerOptions.getTerminalActivityUrl?.() ?? null;
+      const configuredShell = options.shell ?? managerOptions.getDefaultShell?.() ?? undefined;
       terminalActivityTokenById.set(terminalId, activityToken);
       let result: {
         terminal: RequiredWorkerTerminalInfo;
@@ -705,6 +708,7 @@ export function createWorkerTerminalManager(
           options: {
             ...options,
             id: terminalId,
+            ...(configuredShell !== undefined ? { shell: configuredShell } : {}),
             activityToken,
             activityUrl: terminalActivityUrl,
           },

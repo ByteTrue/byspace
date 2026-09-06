@@ -3,6 +3,8 @@ import { createWorkerTerminalManager } from "./worker-terminal-manager.js";
 
 export interface ConfiguredTerminalManagerOptions {
   getTerminalActivityUrl?: () => string | null;
+  /** Reads daemon.terminalDefaultShell; nullish means auto. */
+  getDefaultShell?: () => string | null | undefined;
 }
 
 export function createConfiguredTerminalManager(

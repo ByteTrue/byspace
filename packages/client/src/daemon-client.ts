@@ -10,6 +10,7 @@ import {
   CheckoutRenameBranchResponseSchema,
   parseServerInfoStatusPayload,
   RenameTerminalResponseSchema,
+  TerminalShellDetectResponseSchema,
   RestartRequestedStatusPayloadSchema,
   ShutdownRequestedStatusPayloadSchema,
   DaemonUpdateResponseSchema,
@@ -514,6 +515,9 @@ type AgentPermissionResolvedPayload = AgentPermissionResolvedMessage["payload"];
 type ListTerminalsPayload = ListTerminalsResponse["payload"];
 type CreateTerminalPayload = CreateTerminalResponse["payload"];
 export type RenameTerminalResult = z.infer<typeof RenameTerminalResponseSchema>["payload"];
+export type DetectTerminalShellsResult = z.infer<
+  typeof TerminalShellDetectResponseSchema
+>["payload"];
 type SubscribeTerminalPayload = SubscribeTerminalResponse["payload"];
 type CloseItemsPayload = CloseItemsResponse["payload"];
 type KillTerminalPayload = KillTerminalResponse["payload"];
@@ -796,6 +800,9 @@ export interface RenameBranchInput {
 export interface RenameTerminalInput {
   terminalId: string;
   title: string;
+  requestId?: string;
+}
+export interface DetectTerminalShellsInput {
   requestId?: string;
 }
 type OpenProjectPayload = OpenProjectResponseMessage["payload"];
@@ -5376,6 +5383,18 @@ export class DaemonClient {
         title: input.title,
       },
       responseType: "terminal.rename.response",
+    });
+  }
+
+  async detectTerminalShells(
+    input: DetectTerminalShellsInput = {},
+  ): Promise<DetectTerminalShellsResult> {
+    return this.sendCorrelatedSessionRequest({
+      requestId: input.requestId,
+      message: {
+        type: "terminal.shell.detect.request",
+      },
+      responseType: "terminal.shell.detect.response",
     });
   }
 

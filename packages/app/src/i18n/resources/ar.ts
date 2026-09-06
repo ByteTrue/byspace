@@ -2385,6 +2385,14 @@ export const ar: TranslationResources = {
       workspaces: {
         unavailable: "Connect to this host to manage workspaces",
       },
+      terminalDefaultShell: {
+        sectionTitle: "Default shell",
+        label: "Default shell",
+        autoOption: "Auto (system default)",
+        autoHint: "New terminals use the system default shell",
+        configuredHint: "New terminals open with this shell",
+        empty: "No shells detected on this machine",
+      },
       terminalProfiles: {
         unavailable: "Connect to this host to manage terminal profiles",
         sectionTitle: "Terminal profiles",

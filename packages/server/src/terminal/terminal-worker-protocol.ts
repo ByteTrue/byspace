@@ -25,6 +25,9 @@ export interface WorkerCreateTerminalOptions {
   name?: string;
   title?: string;
   env?: Record<string, string>;
+  // Configured default shell (daemon.terminalDefaultShell). Only honored when
+  // `command` is absent; callers without a configured shell omit it.
+  shell?: string;
   command?: string;
   args?: string[];
   rows?: number;
