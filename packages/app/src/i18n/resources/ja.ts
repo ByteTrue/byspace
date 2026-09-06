@@ -2408,6 +2408,14 @@ export const ja: TranslationResources = {
       workspaces: {
         unavailable: "ワークスペースを管理するにはこのホストに接続してください",
       },
+      terminalDefaultShell: {
+        sectionTitle: "デフォルトシェル",
+        label: "デフォルトシェル",
+        autoOption: "自動(システムのデフォルト)",
+        autoHint: "新しいターミナルはシステムのデフォルトシェルを使用します",
+        configuredHint: "新しいターミナルはこのシェルで開きます",
+        empty: "このマシンでシェルが検出されませんでした",
+      },
       terminalProfiles: {
         unavailable: "ターミナルプロファイルを管理するにはこのホストに接続してください",
         sectionTitle: "ターミナルプロファイル",

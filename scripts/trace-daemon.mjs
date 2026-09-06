@@ -67,8 +67,12 @@ const additionalInputs = [
   // node-pty loads it via `require(path.join(__dirname, 'prebuilds/<plat>/pty.node'))`
   // with a runtime-computed platform suffix. Pin to the host platform —
   // the Nix derivation builds for one platform at a time and ships only
-  // its own binaries.
+  // its own binaries. The binary must be copied next to the lib/ directory
+  // that requires it, so cover both npm layouts: hoisted to the root
+  // node_modules and nested under the workspace package (which layout npm
+  // produces depends on its version).
   `node_modules/node-pty/prebuilds/${process.platform}-${process.arch}/**`,
+  `packages/server/node_modules/node-pty/prebuilds/${process.platform}-${process.arch}/**`,
   // sherpa-onnx-node dynamically resolves a platform-specific native package.
   // Copy the wrapper plus the host platform package explicitly.
   "node_modules/sherpa-onnx-node/**",

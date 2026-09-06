@@ -571,6 +571,9 @@ function resolveStaticLoadConfigSettings(
     autoArchiveAfterMerge: persisted.daemon?.autoArchiveAfterMerge ?? false,
     appendSystemPrompt: resolveAppendSystemPrompt(persisted),
     ...resolveProfileLists(persisted),
+    // null in the persisted file means "auto"; the daemon config omits it so
+    // MutableDaemonConfig keeps the absent = auto semantics.
+    terminalDefaultShell: persisted.daemon?.terminalDefaultShell ?? undefined,
     hostnames: mergeHostnames([
       persisted.daemon?.hostnames,
       parseHostnamesEnv(env.PASEO_HOSTNAMES ?? env.PASEO_ALLOWED_HOSTS),
@@ -610,6 +613,7 @@ export function resolveConfigFromPersisted(
     autoArchiveAfterMerge,
     appendSystemPrompt,
     terminalProfiles,
+    terminalDefaultShell,
     agentProfiles,
     hostnames,
     trustedProxies,
@@ -659,6 +663,7 @@ export function resolveConfigFromPersisted(
       : {}),
     appendSystemPrompt,
     terminalProfiles,
+    terminalDefaultShell,
     agentProfiles,
     skillSelection: persisted.agents?.skills?.selection,
     pluginsEnabled: persisted.pluginsEnabled ?? false,
