@@ -115,6 +115,15 @@ Review 结论“建议先改再合”,两个发现均已修:
 
 验证:`shell-detect.test.ts` 10/10;worker-terminal-manager/controller/daemon-config-store 83/83;server typecheck、lint 0 错误、oxfmt 通过。
 
+### CI 修复(2026-09-06,PR #27 首轮 CI 两处红)
+
+两个失败均非 013 功能代码问题:
+
+1. **Nix build(node-pty 崩溃)**:nix 包里 node-pty 落在 `packages/server/node_modules/`(未 hoist 到 root),而 `scripts/trace-daemon.mjs` 的 prebuilds glob 只覆盖 root `node_modules/node-pty/prebuilds/<plat>/**` → `pty.node` 未进 daemon closure,daemon worker 启动即崩、crash loop、smoke 不可达。hoisting 布局由 nixpkgs unstable 滚动渠道里的 npm 版本决定(09-04 成功 → 09-06 失败,渠道移动),与本分支代码无关。修复:trace 脚本同时覆盖 root 与 workspace 嵌套两种布局的 glob,二进制始终拷到与 lib/ 相邻的位置
+2. **server-tests (windows-latest)**:012 的 `does not persist terminals that exit before create resolves` 用固定 500ms sleep;Windows spawn 慢,child 在 create resolve 之后才退出,记录先落盘再由 removal mirror 清除,500ms 内未清完即失败。修复:改为有界等待最终空态(先等非空出现最多 2s 防轮询抢跑,再等空最多 10s);resurrect guard 语义不变(死终端不得永久滞留)
+
+验证:`terminal-persistence.test.ts` 7/7 本地通过;trace 本机命中嵌套布局(darwin-arm64);server typecheck、lint、format 全过。Windows/Nix 结果以 CI 重跑为准。
+
 ## 关闭时
 
 - 回写候选:`codestable/spec/terminal.md` 增补默认 shell 配置小节
