@@ -45,25 +45,53 @@ const WELL_KNOWN_UNIX_SHELLS: readonly ShellCandidate[] = [
 ];
 
 const WELL_KNOWN_WINDOWS_SHELLS: readonly ShellCandidate[] = [
-  { location: "pwsh", source: "well-known" },
-  { location: "powershell", source: "well-known" },
-  { location: "cmd", source: "well-known" },
+  { location: "pwsh.exe", source: "well-known" },
+  { location: "powershell.exe", source: "well-known" },
+  { location: "cmd.exe", source: "well-known" },
 ];
 
-function resolveOnPathVariable(name: string, env: NodeJS.ProcessEnv): string | null {
+/**
+ * Resolves a bare executable name against PATH. On Windows, executables live
+ * under PATHEXT suffixes (.exe and friends), so each PATH entry is probed with
+ * each suffix before the bare name.
+ */
+function resolveOnPathVariable(
+  name: string,
+  env: NodeJS.ProcessEnv,
+  suffixes: readonly string[],
+): string | null {
   const path = env.PATH ?? "";
   for (const dir of path.split(delimiter)) {
     if (!dir) continue;
-    const candidate = join(dir, name);
-    if (existsSync(candidate)) {
-      return candidate;
+    for (const suffix of suffixes) {
+      const candidate = join(dir, `${name}${suffix}`);
+      if (existsSync(candidate)) {
+        return candidate;
+      }
     }
   }
   return null;
 }
 
-function defaultResolveOnPath(env: NodeJS.ProcessEnv): (name: string) => string | null {
-  return (name) => resolveOnPathVariable(name, env);
+/**
+ * Executable suffixes to probe, derived from PATHEXT. The bare name is always
+ * the final fallback for names that already carry an extension.
+ */
+export function resolvePathExtSuffixes(env: NodeJS.ProcessEnv): readonly string[] {
+  const pathExt = env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD";
+  const suffixes = pathExt
+    .split(";")
+    .map((suffix) => suffix.trim())
+    .filter((suffix) => suffix.length > 0);
+  return [...suffixes, ""];
+}
+
+function defaultResolveOnPath(
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform,
+): (name: string) => string | null {
+  const suffixes = platform === "win32" ? resolvePathExtSuffixes(env) : [""];
+  return (name) => resolveOnPathVariable(name, env, suffixes);
 }
 
 /**
@@ -102,10 +130,17 @@ export async function readMacUserShell(homeDir: string): Promise<string | null> 
   const user = basename(homeDir);
   try {
     const stdout = await new Promise<string>((resolve, reject) => {
-      execFile("dscl", [".", "-read", `/Users/${user}`, "UserShell"], (error, result) => {
-        if (error) reject(error);
-        else resolve(result);
-      });
+      // Domain-joined macOS hosts can make dscl hang on directory-service
+      // lookups; the timeout degrades to the remaining detection sources.
+      execFile(
+        "dscl",
+        [".", "-read", `/Users/${user}`, "UserShell"],
+        { timeout: 2000 },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        },
+      );
     });
     return parseDsclUserShell(stdout);
   } catch {
@@ -123,6 +158,8 @@ function toDetectedShell(path: string, platform: NodeJS.Platform): DetectedShell
 /**
  * Resolves and dedupes candidate shell paths into detected shells. Bare names
  * resolve against PATH; duplicates and non-existent paths are dropped.
+ * Absoluteness follows the detected platform so Windows paths classify
+ * correctly even when detection runs on a POSIX host.
  */
 async function resolveDetectedShells(
   candidates: readonly ShellCandidate[],
@@ -130,10 +167,12 @@ async function resolveDetectedShells(
   resolveOnPath: (name: string) => string | null,
   exists: (path: string) => boolean,
 ): Promise<DetectedShell[]> {
+  const isCandidateAbsolute = (location: string): boolean =>
+    platform === "win32" ? win32.isAbsolute(location) : posix.isAbsolute(location);
   const seen = new Set<string>();
   const shells: DetectedShell[] = [];
   for (const candidate of candidates) {
-    const path = isAbsolute(candidate.location)
+    const path = isCandidateAbsolute(candidate.location)
       ? candidate.location
       : resolveOnPath(candidate.location);
     if (!path || seen.has(path) || !exists(path)) {
@@ -184,7 +223,13 @@ async function gatherCandidates(
     return [...options.candidates];
   }
   if (platform === "win32") {
-    return [...WELL_KNOWN_WINDOWS_SHELLS];
+    // ComSpec mirrors the Unix $SHELL env candidate: the shell the host
+    // itself considers the default, ahead of the well-known probes.
+    const comspec = env.ComSpec || env.COMSPEC;
+    return [
+      ...(comspec ? [{ location: comspec, source: "env" as const }] : []),
+      ...WELL_KNOWN_WINDOWS_SHELLS,
+    ];
   }
   return gatherUnixCandidates(options, platform, env, homeDir);
 }
@@ -202,7 +247,7 @@ export async function detectInstalledShells(
   const env = options.env ?? process.env;
   const homeDir = options.homeDir ?? env.HOME ?? "";
   const exists = options.exists ?? existsSync;
-  const resolveOnPath = options.resolveOnPath ?? defaultResolveOnPath(env);
+  const resolveOnPath = options.resolveOnPath ?? defaultResolveOnPath(env, platform);
 
   const candidates = await gatherCandidates(options, platform, env, homeDir);
   return resolveDetectedShells(candidates, platform, resolveOnPath, exists);
