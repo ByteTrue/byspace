@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import type pino from "pino";
 
-import type { SessionOutboundMessage } from "../server/messages.js";
+import type { DetectedShell, SessionOutboundMessage } from "../server/messages.js";
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -1022,5 +1022,82 @@ describe("terminal-session-controller backpressure snapshot fallback", () => {
     await waitForCoalescerFlush();
 
     expect(frames.some((frame) => frame.opcode === TerminalStreamOpcode.Snapshot)).toBe(true);
+  });
+});
+
+describe("terminal-shell detect rpc", () => {
+  const detectTwoShells = async (): Promise<DetectedShell[]> => [
+    { path: "/bin/zsh", name: "zsh" },
+    { path: "/bin/bash", name: "bash" },
+  ];
+  const detectFailure = async (): Promise<DetectedShell[]> => {
+    throw new Error("boom");
+  };
+
+  test("responds with detected shells, resolved default, and configured shell", async () => {
+    vi.resetModules();
+    vi.doMock("./shell-detect.js", () => ({
+      detectInstalledShells: vi.fn(detectTwoShells),
+    }));
+    const { TerminalSessionController: MockedController } =
+      await import("./terminal-session-controller.js");
+    const outboundMessages: SessionOutboundMessage[] = [];
+    const terminalManager = {} as TerminalManager;
+    const controller = new MockedController({
+      terminalManager,
+      emit: (msg) => outboundMessages.push(msg),
+      emitBinary: vi.fn(),
+      hasBinaryChannel: () => false,
+      isPathWithinRoot: () => false,
+      sessionLogger: createLogger(),
+      getConfiguredDefaultShell: () => "/bin/zsh",
+    });
+
+    await controller.dispatch({ type: "terminal.shell.detect.request", requestId: "req-1" });
+
+    const response = outboundMessages.find(
+      (message) => message.type === "terminal.shell.detect.response",
+    );
+    expect(response?.type === "terminal.shell.detect.response" && response.payload).toEqual({
+      shells: [
+        { path: "/bin/zsh", name: "zsh" },
+        { path: "/bin/bash", name: "bash" },
+      ],
+      resolvedDefault: expect.any(String),
+      configured: "/bin/zsh",
+      error: null,
+      requestId: "req-1",
+    });
+    vi.doUnmock("./shell-detect.js");
+    vi.restoreAllMocks();
+  });
+
+  test("reports an error instead of throwing when detection fails", async () => {
+    vi.resetModules();
+    vi.doMock("./shell-detect.js", () => ({
+      detectInstalledShells: vi.fn(detectFailure),
+    }));
+    const { TerminalSessionController: MockedController } =
+      await import("./terminal-session-controller.js");
+    const outboundMessages: SessionOutboundMessage[] = [];
+    const controller = new MockedController({
+      terminalManager: {} as TerminalManager,
+      emit: (msg) => outboundMessages.push(msg),
+      emitBinary: vi.fn(),
+      hasBinaryChannel: () => false,
+      isPathWithinRoot: () => false,
+      sessionLogger: createLogger(),
+    });
+
+    await controller.dispatch({ type: "terminal.shell.detect.request", requestId: "req-2" });
+
+    const response = outboundMessages.find(
+      (message) => message.type === "terminal.shell.detect.response",
+    );
+    expect(response?.type === "terminal.shell.detect.response" && response.payload.error).toBe(
+      "boom",
+    );
+    vi.doUnmock("./shell-detect.js");
+    vi.restoreAllMocks();
   });
 });

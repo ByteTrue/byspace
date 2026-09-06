@@ -2397,6 +2397,14 @@ export const ko: TranslationResources = {
       workspaces: {
         unavailable: "워크스페이스를 관리하려면 이 호스트에 연결하세요",
       },
+      terminalDefaultShell: {
+        sectionTitle: "기본 셸",
+        label: "기본 셸",
+        autoOption: "자동(시스템 기본값)",
+        autoHint: "새 터미널은 시스템 기본 셸을 사용합니다",
+        configuredHint: "새 터미널이 이 셸로 열립니다",
+        empty: "이 머신에서 셸을 감지하지 못했습니다",
+      },
       terminalProfiles: {
         unavailable: "터미널 프로필을 관리하려면 이 호스트에 연결하세요",
         sectionTitle: "터미널 프로필",

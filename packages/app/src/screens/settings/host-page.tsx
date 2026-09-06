@@ -33,6 +33,7 @@ import { Alert as InlineAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/ui/status-badge";
 import { Switch } from "@/components/ui/switch";
+import { DefaultShellSection } from "@/screens/settings/default-shell-section";
 import {
   ProfileDraft,
   TerminalProfileEditModal,
@@ -1874,6 +1875,7 @@ export function HostTerminalsPage({ serverId }: { serverId: string }) {
       <SettingsSection title="Terminal agents">
         <EnableTerminalAgentHooksCard serverId={serverId} />
       </SettingsSection>
+      <DefaultShellSection serverId={serverId} />
       <TerminalProfilesSection serverId={serverId} />
     </View>
   );

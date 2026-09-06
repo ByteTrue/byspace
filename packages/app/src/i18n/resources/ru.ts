@@ -2428,6 +2428,14 @@ export const ru: TranslationResources = {
       workspaces: {
         unavailable: "Подключитесь к этому хосту, чтобы управлять рабочими пространствами",
       },
+      terminalDefaultShell: {
+        sectionTitle: "Оболочка по умолчанию",
+        label: "Оболочка по умолчанию",
+        autoOption: "Авто (системная)",
+        autoHint: "Новые терминалы используют системную оболочку по умолчанию",
+        configuredHint: "Новые терминалы открываются в этой оболочке",
+        empty: "Оболочки на этой машине не обнаружены",
+      },
       terminalProfiles: {
         unavailable: "Подключитесь к этому хосту, чтобы управлять профилями терминала",
         sectionTitle: "Профили терминала",

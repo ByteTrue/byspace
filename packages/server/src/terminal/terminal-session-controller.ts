@@ -10,10 +10,14 @@ import type {
   SubscribeTerminalRequest,
   SubscribeTerminalsRequest,
   TerminalInput,
+  TerminalShellDetectRequest,
+  TerminalShellDetectResponse,
   UnsubscribeTerminalRequest,
   UnsubscribeTerminalsRequest,
 } from "../server/messages.js";
 import { killTerminalsForWorkspace as killWorkspaceTerminals } from "../server/workspace-archive-service.js";
+import { detectInstalledShells } from "./shell-detect.js";
+import { resolveDefaultTerminalShell } from "./terminal.js";
 import {
   TerminalStreamOpcode,
   decodeTerminalResizePayload,
@@ -83,6 +87,8 @@ export interface TerminalSessionControllerOptions {
   // Bytes queued on the client transport but not yet sent, or null when the
   // transport exposes no backpressure signal (e.g. the multiplexed relay socket).
   getClientBufferedAmount?: () => number | null;
+  /** Reads daemon.terminalDefaultShell; nullish means auto. */
+  getConfiguredDefaultShell?: () => string | null | undefined;
 }
 
 interface TerminalWorkspaceRef {
@@ -105,7 +111,8 @@ type TerminalDispatchableMessage =
   | TerminalInput
   | KillTerminalRequest
   | CaptureTerminalRequest
-  | RenameTerminalRequest;
+  | RenameTerminalRequest
+  | TerminalShellDetectRequest;
 
 const TERMINAL_MESSAGE_TYPES: ReadonlySet<TerminalDispatchableMessage["type"]> = new Set([
   "subscribe_terminals_request",
@@ -118,6 +125,7 @@ const TERMINAL_MESSAGE_TYPES: ReadonlySet<TerminalDispatchableMessage["type"]> =
   "kill_terminal_request",
   "capture_terminal_request",
   "terminal.rename.request",
+  "terminal.shell.detect.request",
 ]);
 
 export class TerminalSessionController {
@@ -131,6 +139,7 @@ export class TerminalSessionController {
   private readonly listTerminalWorkspaceRoots: () => Promise<readonly string[]>;
   private readonly clientSupportsWrapReflow: () => boolean;
   private readonly getClientBufferedAmount: () => number | null;
+  private readonly getConfiguredDefaultShell: () => string | null | undefined;
   private readonly terminalSizeOwner = {};
 
   // A subscription is scoped to a (cwd, workspaceId) pair, keyed by
@@ -161,6 +170,7 @@ export class TerminalSessionController {
       (async () => (await this.listTerminalWorkspaceRefs()).map((workspace) => workspace.cwd));
     this.clientSupportsWrapReflow = options.clientSupportsWrapReflow ?? (() => false);
     this.getClientBufferedAmount = options.getClientBufferedAmount ?? (() => 0);
+    this.getConfiguredDefaultShell = options.getConfiguredDefaultShell ?? (() => undefined);
   }
 
   start(): void {
@@ -228,6 +238,8 @@ export class TerminalSessionController {
         return this.handleCaptureTerminalRequest(msg);
       case "terminal.rename.request":
         return this.handleRenameTerminalRequest(msg);
+      case "terminal.shell.detect.request":
+        return this.handleShellDetectRequest(msg);
       default:
         return undefined;
     }
@@ -653,6 +665,36 @@ export class TerminalSessionController {
 
     const renamed = this.terminalManager.setTerminalTitle(msg.terminalId, title);
     respond(renamed, renamed ? null : "Terminal not found");
+  }
+
+  private async handleShellDetectRequest(msg: TerminalShellDetectRequest): Promise<void> {
+    const respond = (payload: Omit<TerminalShellDetectResponse["payload"], "requestId">): void => {
+      this.emit({
+        type: "terminal.shell.detect.response",
+        payload: { ...payload, requestId: msg.requestId },
+      });
+    };
+
+    try {
+      const configured = this.getConfiguredDefaultShell() ?? undefined;
+      const [shells, resolvedDefault] = await Promise.all([
+        detectInstalledShells(),
+        Promise.resolve(resolveDefaultTerminalShell()),
+      ]);
+      respond({
+        shells,
+        resolvedDefault,
+        ...(configured !== undefined ? { configured } : {}),
+        error: null,
+      });
+    } catch (error) {
+      this.sessionLogger.error({ err: error }, "Failed to detect installed shells");
+      respond({
+        shells: [],
+        resolvedDefault: resolveDefaultTerminalShell(),
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   private async handleSubscribeTerminalRequest(msg: SubscribeTerminalRequest): Promise<void> {

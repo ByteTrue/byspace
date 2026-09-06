@@ -30,6 +30,9 @@ interface SupportedMutableConfigPatch {
   terminalAgentHooks?: MutableDaemonConfig["terminalAgentHooks"];
   appendSystemPrompt?: string;
   terminalProfiles?: MutableDaemonConfig["terminalProfiles"];
+  // Allows null so a patch can clear a configured shell ("Auto" selection);
+  // mergeMutableDaemonPatch persists the null and config resolution omits it.
+  terminalDefaultShell?: MutableDaemonConfig["terminalDefaultShell"] | null;
   agentProfiles?: MutableDaemonConfig["agentProfiles"];
   skills?: MutableDaemonConfig["skills"];
   pluginsEnabled?: boolean;
@@ -281,6 +284,9 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
       ? { appendSystemPrompt: patch.appendSystemPrompt }
       : {}),
     ...(patch.terminalProfiles !== undefined ? { terminalProfiles: patch.terminalProfiles } : {}),
+    ...(patch.terminalDefaultShell !== undefined
+      ? { terminalDefaultShell: patch.terminalDefaultShell }
+      : {}),
     ...(patch.agentProfiles !== undefined ? { agentProfiles: patch.agentProfiles } : {}),
     ...(patch.pluginsEnabled !== undefined ? { pluginsEnabled: patch.pluginsEnabled } : {}),
     ...(patch.plugins !== undefined ? { plugins: patch.plugins } : {}),
@@ -707,6 +713,11 @@ function mergeMutableDaemonPatch(
   }
   if (patch.appendSystemPrompt !== undefined) next.appendSystemPrompt = patch.appendSystemPrompt;
   if (patch.terminalProfiles !== undefined) next.terminalProfiles = patch.terminalProfiles;
+  // null clears the configured shell (client "Auto" selection); the field stays
+  // in the persisted JSON as null so a later non-null patch replaces it.
+  if (patch.terminalDefaultShell !== undefined) {
+    next.terminalDefaultShell = patch.terminalDefaultShell;
+  }
   if (patch.agentProfiles !== undefined) next.agentProfiles = patch.agentProfiles;
   return Object.keys(next).length > 0 ? next : undefined;
 }

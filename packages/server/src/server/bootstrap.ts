@@ -167,6 +167,11 @@ import { setupAutoArchiveOnMerge } from "./auto-archive-on-merge/index.js";
 import { wrapSessionMessage, type SessionOutboundMessage } from "./messages.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import { createConfiguredTerminalManager } from "../terminal/terminal-manager-factory.js";
+import {
+  createPersistingTerminalManager,
+  restorePersistedTerminals,
+} from "../terminal/terminal-persistence.js";
+import { TerminalSessionStore } from "../terminal/terminal-session-store.js";
 import { applyTerminalAgentHookSetting } from "../terminal/agent-hooks/terminal-agent-hook-setting.js";
 import { loadOrCreateDaemonKeyPair } from "./daemon-keypair.js";
 import { createRelayRuntime, type RelayRuntime } from "./relay-runtime.js";
@@ -411,6 +416,7 @@ export interface PaseoDaemonConfig {
   terminalAgentHooks?: TerminalAgentHookSettings;
   appendSystemPrompt?: string;
   terminalProfiles?: TerminalProfile[];
+  terminalDefaultShell?: string;
   agentProfiles?: AgentProfile[];
   skillSelection?: AgentSkillSelection;
   pluginsEnabled?: boolean;
@@ -531,6 +537,21 @@ function resolveExpressTrustProxySetting(config: PaseoDaemonConfig): true | stri
   return config.trustedProxies ?? ["loopback"];
 }
 
+function applyOptionalConfigLists(
+  initialConfig: MutableDaemonConfig,
+  config: PaseoDaemonConfig,
+): void {
+  if (config.terminalProfiles !== undefined) {
+    initialConfig.terminalProfiles = config.terminalProfiles;
+  }
+  if (config.terminalDefaultShell !== undefined) {
+    initialConfig.terminalDefaultShell = config.terminalDefaultShell;
+  }
+  if (config.agentProfiles !== undefined) {
+    initialConfig.agentProfiles = config.agentProfiles;
+  }
+}
+
 function createInitialMutableDaemonConfig(
   config: PaseoDaemonConfig,
   defaultAppBaseUrl: string,
@@ -565,13 +586,7 @@ function createInitialMutableDaemonConfig(
     skills: { selection: config.skillSelection },
   };
 
-  if (config.terminalProfiles !== undefined) {
-    initialConfig.terminalProfiles = config.terminalProfiles;
-  }
-
-  if (config.agentProfiles !== undefined) {
-    initialConfig.agentProfiles = config.agentProfiles;
-  }
+  applyOptionalConfigLists(initialConfig, config);
 
   return initialConfig;
 }
@@ -660,8 +675,16 @@ export async function createPaseoDaemon(
   });
   let boundListenTarget: ListenTarget | null = null;
   let workspaceRegistry: FileBackedWorkspaceRegistry | null = null;
-  const terminalManager = createConfiguredTerminalManager({
-    getTerminalActivityUrl: () => createTerminalActivityUrl(boundListenTarget),
+  const terminalSessionStore = new TerminalSessionStore(
+    path.join(config.paseoHome, "terminals", "terminals.json"),
+  );
+  const terminalManager = createPersistingTerminalManager({
+    inner: createConfiguredTerminalManager({
+      getTerminalActivityUrl: () => createTerminalActivityUrl(boundListenTarget),
+      getDefaultShell: () => daemonConfigStore.get().terminalDefaultShell,
+    }),
+    store: terminalSessionStore,
+    logger,
   });
   applyTerminalAgentHookSetting({ store: daemonConfigStore, logger });
 
@@ -954,6 +977,15 @@ export async function createPaseoDaemon(
   });
   await workspaceLabelService.initialize();
   logger.info({ elapsed: elapsed() }, "Workspace registries bootstrapped");
+  await restorePersistedTerminals({
+    manager: terminalManager,
+    store: terminalSessionStore,
+    isWorkspaceActive: async (workspaceId) => {
+      const record = await workspaceRegistry.get(workspaceId);
+      return record !== null && record.archivedAt === null;
+    },
+    logger,
+  });
   const teardownArchivedWorkspaceRuntime = (workspaceId: string): void => {
     scriptRuntimeStore.removeForWorkspace(workspaceId);
     releaseWorkspaceServicePortPlan(workspaceId);
