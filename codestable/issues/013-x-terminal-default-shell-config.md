@@ -2,7 +2,7 @@
 kind: issue
 title: "Terminal 默认 shell 配置与自动探测"
 type: feature
-status: open
+status: closed
 created: 2026-02-13
 ---
 
@@ -126,5 +126,6 @@ Review 结论“建议先改再合”,两个发现均已修:
 
 ## 关闭时
 
-- 回写候选:`codestable/spec/terminal.md` 增补默认 shell 配置小节
+- 回写:`codestable/spec/terminal.md` 增补“默认 shell”小节(shell 优先级、注入点、探测、UI 门控与 Auto 语义)
+- 关闭判断与验证摘要:PR #27 已合入 main(f60ee8cb5),CI 全部 20 项检查通过(含 Nix build 与 windows-latest server-tests)。单测:shell-detect 10/10、worker-terminal-manager 26/26、session-controller 21/21、daemon-config-store 36/36、persistence 7/7;typecheck/lint/format 全过。UI 手动走查与真实 Windows 探测验证未做,列为遗留
 - 遗留:Windows 探测仅 CI 外验证;自定义路径输入未做

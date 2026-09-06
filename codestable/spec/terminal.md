@@ -45,6 +45,13 @@ Alternate buffer、current grid 和 scrollback 都遵守同一 active-buffer 规
 - 恢复在 daemon 开始监听前完成，客户端连上时看到的列表已是最终状态。持久化写失败只记日志，不影响终端生命周期。
 - 优雅停机是保留语义：停机时的 killAll 不从持久化中移除记录，下次启动据此恢复；只有有机移除（用户关 tab、shell 自退、workspace 归档）才会删记录。命令在 create 完成前就退出的终端不落盘。
 
+## 默认 shell
+
+- 新终端的 shell 按优先级解析：请求显式 `command`（profile 启动）> daemon 配置 `daemon.terminalDefaultShell` > 自动解析（`$SHELL`，Windows `%ComSpec%`，兑底 `/bin/sh`）。配置缺省或为 null 即 Auto，即合并前的行为。
+- 注入点在 bootstrap 处的 terminalManager 包装层，请求显式 shell 时才透传；所有创建路径（客户端请求、ACP、重启恢复）统一生效，profile 启动（带 `command`）不受影响。
+- 探测（`terminal.shell.detect` RPC，权限 `daemon.read`）按 `$SHELL` → macOS `dscl` 登录 shell（2s 超时，域控挂起时降级）→ `/etc/shells` → 常见路径的顺序发现，existsSync 过滤后去重；Windows 为 `ComSpec` + pwsh/powershell/cmd 按 PATHEXT 后缀解析。任一来源失败降级继续，探测失败经 response `error` 返回，不抛出。
+- 设置 UI（Host → Terminals → Default shell）由 `server_info.features.terminalShellConfig` 门控；老 daemon 上隐藏。Auto 选项保存为 null patch，持久化为 null，读侧转回 auto。保存不做路径校验，无效路径在 spawn 时经 `create_terminal_response.error` 报错。
+
 ## 边界
 
 - 字体、字号、主题和语法高亮属于 Appearance，不由快照恢复逻辑调整。
@@ -55,6 +62,7 @@ Alternate buffer、current grid 和 scrollback 都遵守同一 active-buffer 规
 
 - [Terminal 中文快照回放间距](../issues/001-x-terminal-cjk-snapshot-spacing.md)
 - [Daemon 重启后 terminal 标签恢复](../issues/012-x-terminal-tab-persistence-across-daemon-restart.md)
+- [Terminal 默认 shell 配置与自动探测](../issues/013-x-terminal-default-shell-config.md)
 - [复原 Terminal 首帧 post-WebGL 尺寸就绪与 250ms 被动合并机制](../issues/005-x-terminal-remote-resize-storm-and-fit.md)
 - [修复 Windows 下思考加载图标定格与终端 OSC 8 链接打开无反应](../issues/008-x-ff-synced-loader-and-terminal-osc8-links.md)
 - [Epic 002 交付记录](../epics/002-x-retained-capabilities-delivery/spec.md)
