@@ -2,6 +2,8 @@
 
 BySpace Desktop 从 GitHub Release manifest 检查和下载更新。用户手动点击安装时，当前平台负责把已经确认的新版本交给系统安装机制；更新失败不得提前停止 daemon 或关闭 App。
 
+更新安装前的 daemon 停止与退出路径同源门控：只有 `daemon.manageBuiltInDaemon` 开启且 pid 锁显示 desktop 托管时才停止；npm 自启的外部 daemon 不受更新影响。
+
 ## macOS
 
 macOS 不尝试原地替换正在运行的 App。发现新版本后，用户点击安装会触发以下流程：
@@ -27,5 +29,6 @@ Desktop 主窗口（`mainWindow`）设置统一的 `setWindowOpenHandler`。无�
 ## 历史证据
 
 - [macOS 更新改为 DMG 手动覆盖交接](../issues/002-x-macos-dmg-update-handoff.md)
+- [App 更新不再停止外部 daemon](../issues/014-x-ff-app-update-external-daemon.md)
 - [Pi 启动注入项目信任并完善斜杠补全加载态与外部链接交接](../issues/004-x-pi-project-skills-and-autocomplete-loading.md)
 - [macOS DMG 更新器自动清除 com.apple.quarantine 隔离属性](../issues/006-x-macos-dmg-updater-quarantine-strip.md)
