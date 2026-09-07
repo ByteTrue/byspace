@@ -2,6 +2,12 @@
 
 BySpace's public command is `byspace`. New runtime state uses `$BYSPACE_HOME` (`~/.byspace` by default), and public daemon configuration variables use the `BYSPACE_*` prefix. Matching `PASEO_*` names remain lower-priority compatibility fallbacks where supported; development-only script and benchmark variables retain their existing names.
 
+## CI
+
+CI and Docker runs cancel superseded runs on the same branch: a new push to `main` immediately cancels any in-flight run. When a run exists to verify a specific commit (a release bump, a fix under validation), do not push anything else to `main` — including docs-only commits — until it finishes; rerun via `gh workflow run CI --ref main` if a verification run gets cancelled by mistake.
+
+Main pushes route through the same path filters as pull requests (`.github/ci-paths.yml`); only merge-group checks and manual dispatches run the full matrix unconditionally. A release bump commit touches `package.json`, so it always runs the full matrix as the release gate.
+
 ## Prerequisites
 
 - Node.js (see `.tool-versions` for exact version)

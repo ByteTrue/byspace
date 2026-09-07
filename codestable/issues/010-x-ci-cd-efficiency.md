@@ -1,8 +1,8 @@
 ---
 kind: issue
-title: "CI/CD 效率根治：E2E 测试架构、CI 结构与发布纪律"
+title: "CI/CD 治理：成功率、时长与发布纪律"
 type: chore
-status: open
+status: closed
 created: 2026-09-04
 ---
 
@@ -152,3 +152,25 @@ v0.11.3 tag 发布实测各 workflow 耗时：
 - 回写候选：`docs/testing.md`（普通 spec 不触达真实 CLI 的约定）、`docs/release.md`（已补）、issue 内已标注的 revert 项需在代码中执行；
 - 关闭判断：验证标准全部达标；
 - 遗留：缓存优化若未做，拆后续 issue（低优先）。
+
+## 关闭结论（2026-09-07，v0.12.0 发布验证达成）
+
+**判断**：两条硬指标在 v0.12.0 实测达成——bump commit 全量 CI 一次全绿（23 分钟零人工 rerun）；全量时长 ~23-30 分钟（docs-only push 6.5 分钟）。发布链七件套全部 CI 化（Android 于 2026-09-05 补完，见 ff 011）。外部 CLI 更新不再影响普通 spec（mock 化根治）。
+
+**验证摘要**：
+
+- v0.12.0（`61fe01463`）：bump CI 首跑全绿；npm/Web/Docker/Desktop/iOS/Android 全部产物就位，Android APK cert/sha256/ABI 对账通过。
+- v0.11.3 事后重建（android-v0.11.3）：验证了 android-v\* 重建通道与 secrets 修复链。
+
+**毕业位置**：
+
+- 普通 spec 不触真实 CLI、隐性 .real 两个 spec、开发机不装 CLI → `docs/testing.md`（Real providers live only in real-provider specs 节）
+- main 并发取消纪律、paths 路由语义 → `docs/development.md`（CI 节）
+- 发布链与 Android CI → `docs/release.md` + `docs/android.md`（已在 ff 011 落地时写入）
+- CI 路由契约（禁 always()、gated job 结构）→ `scripts/ci-workflow.test.mjs`（代码即契约）
+
+**遗留事项**（不成新 issue，复发时按 issue 内记录的处置先查）：
+
+- desktop browser capture（linux 无头合成器表面丢失，上游同有；发版期间人工 rerun 兜底，v0.12.0 未复发）
+- ubuntu runner 对 ~40m 长任务的驱逐（v0.12.0 Android 连续两次、第三次成功；可考虑 gradle 缓存缩短暴露窗口）
+- mermaid composer 重挂载真根治（产品代码；容忍补丁在位）

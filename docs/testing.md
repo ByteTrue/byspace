@@ -206,6 +206,12 @@ The smallest meaningful contract wins over package ownership. Tiny structural in
 
 Agent providers handle their own auth. Do not add auth checks, environment variable gates, or conditional skips to tests. If auth fails, report it.
 
+## Real providers live only in real-provider specs
+
+Plain UI/daemon specs never boot a real agent CLI: they seed agents through the daemon's built-in mock provider (`createMockIdleAgent`), which is instant and immune to upstream CLI churn. A real CLI process belongs only in `*.real.spec.ts` (app) and `*.real.e2e.test.ts` (server), which CI runs on machines that install the CLIs. Development machines install no agent CLIs; when a plain spec hits a missing provider it fails fast with "Provider 'opencode' is not available" — that is the designed boundary, not a bug. CI is the baseline for test results; if a suite cannot run locally (missing provider), skip it locally rather than installing global CLIs.
+
+Two specs deliberately keep real seeding in the plain suite (`archive-tab`, `worktree-restore`): they verify the real end-to-end archive/restore semantics that mock agents do not reproduce, matching upstream intent.
+
 ## Debugging with tests
 
 Use the test as your debugging ground:
