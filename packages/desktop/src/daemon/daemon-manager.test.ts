@@ -511,8 +511,10 @@ describe("daemon-manager commands", () => {
   });
 
   it("does not stop an external daemon when installing an app update", async () => {
-    // No byspace.pid lock: an npm-started daemon never marks itself
+    // An npm-started daemon writes the pid lock but never marks itself
     // desktop-managed, so the update handoff must leave it running.
+    mkdirSync(mocks.paseoHome, { recursive: true });
+    writeFileSync(`${mocks.paseoHome}/byspace.pid`, JSON.stringify({ pid: process.pid }));
     mocks.downloadAndInstallUpdate.mockImplementation(async (_input, onBeforeQuit) => {
       await onBeforeQuit?.();
       return { installed: true, version: "2.0.0", message: "ok" };

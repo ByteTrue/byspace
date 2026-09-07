@@ -2,7 +2,7 @@
 
 BySpace Desktop 从 GitHub Release manifest 检查和下载更新。用户手动点击安装时，当前平台负责把已经确认的新版本交给系统安装机制；更新失败不得提前停止 daemon 或关闭 App。
 
-更新安装前的 daemon 停止与退出路径同源门控：只有 `daemon.manageBuiltInDaemon` 开启且 pid 锁显示 desktop 托管时才停止；npm 自启的外部 daemon 不受更新影响。
+更新安装前的 daemon 停止有自己的门控：只有 `daemon.manageBuiltInDaemon` 开启且 pid 锁显示 desktop 托管时才停止；npm 自启的外部 daemon 不受更新影响。退出路径的门控（`keepRunningAfterQuit` + pid 锁）与之独立，两处仅共享 pid 锁检查。
 
 ## macOS
 

@@ -498,7 +498,7 @@ async function getCliDaemonStatus(): Promise<string> {
   return await runExternalCliTextCommand(["daemon", "status"]);
 }
 
-export async function stopDesktopManagedDaemonForAppUpdate(): Promise<void> {
+async function stopDesktopManagedDaemonForAppUpdate(): Promise<void> {
   const settings = await getDesktopSettingsStore().get();
   if (!settings.daemon.manageBuiltInDaemon) return;
   // External (user-managed) daemons are never desktop-managed in the pid lock,
