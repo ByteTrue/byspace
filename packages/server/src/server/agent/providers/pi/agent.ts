@@ -90,6 +90,7 @@ import {
 
 const PI_PROVIDER = "pi";
 const DEFAULT_PI_THINKING_LEVEL: PiThinkingLevel = "medium";
+const PI_MODEL_PROBE_CACHE_MS = 30_000;
 const PI_BINARY_COMMAND = process.env.PI_COMMAND ?? process.env.PI_ACP_PI_COMMAND ?? "pi";
 const PASEO_PI_TREE_EXTENSION_COMMAND = "paseo_tree";
 const PASEO_PI_CAPTURE_EXTENSION_COMMAND = "paseo_capture_entries";
@@ -2549,6 +2550,7 @@ export class PiRpcAgentClient implements AgentClient {
   private readonly providerParams: PiProviderParams;
   private readonly runtime: PiRuntime;
   private readonly usagePollScheduler?: PiUsagePollScheduler;
+  private availableProvidersCache: { providers: string[]; cachedAt: number } | null = null;
 
   constructor(options: PiRpcAgentClientOptions) {
     this.provider = PI_PROVIDER;
@@ -2574,11 +2576,19 @@ export class PiRpcAgentClient implements AgentClient {
     const paseoExtension = createPiPaseoExtensionFile(
       composeSystemPromptParts(config.systemPrompt, config.daemonAppendSystemPrompt),
     );
+    const launchModel = await this.resolveLaunchModel(
+      config.cwd,
+      launchContext?.env,
+      config.model,
+      {
+        skipProbe: config.internal === true,
+      },
+    );
     let runtimeSession: PiRuntimeSession;
     try {
       runtimeSession = await this.runtime.startSession({
         cwd: config.cwd,
-        model: config.model,
+        model: launchModel,
         thinkingOptionId:
           normalizePiThinkingOption(config.thinkingOptionId) ?? DEFAULT_PI_THINKING_LEVEL,
         noSession: config.internal === true,
@@ -2594,7 +2604,7 @@ export class PiRpcAgentClient implements AgentClient {
     try {
       return new PiRpcAgentSession({
         runtimeSession,
-        config,
+        config: launchModel === config.model ? config : { ...config, model: launchModel },
         initialState: await runtimeSession.getState(),
         capabilities: capabilitiesForSession(mcpConfig !== null),
         cleanup: combineCleanup([mcpConfig?.cleanup, paseoExtension?.cleanup]),
@@ -2638,11 +2648,24 @@ export class PiRpcAgentClient implements AgentClient {
         resumeConfig.config.daemonAppendSystemPrompt,
       ),
     );
+    const launchModel = await this.resolveLaunchModel(
+      resumeConfig.cwd,
+      launchContext?.env,
+      resumeConfig.model,
+    );
+    const resumedConfig =
+      launchModel === resumeConfig.model
+        ? resumeConfig
+        : {
+            ...resumeConfig,
+            model: launchModel,
+            config: { ...resumeConfig.config, model: launchModel },
+          };
     let runtimeSession: PiRuntimeSession;
     try {
       runtimeSession = await this.runtime.startSession(
         buildResumeStartInput({
-          resumeConfig,
+          resumeConfig: resumedConfig,
           sessionFile,
           launchContext,
           mcpConfig,
@@ -2657,7 +2680,7 @@ export class PiRpcAgentClient implements AgentClient {
     try {
       return new PiRpcAgentSession({
         runtimeSession,
-        config: resumeConfig.config,
+        config: resumedConfig.config,
         initialState: await runtimeSession.getState(),
         capabilities: capabilitiesForSession(mcpConfig !== null),
         cleanup: combineCleanup([mcpConfig?.cleanup, paseoExtension?.cleanup]),
@@ -2768,6 +2791,87 @@ export class PiRpcAgentClient implements AgentClient {
       return {
         diagnostic: formatProviderDiagnosticError("Pi", error),
       };
+    }
+  }
+
+  /**
+   * Pi exits with an error when --model references a provider that no longer
+   * exists in models.json (e.g. a stale model recorded in a session file or
+   * persistence metadata). Probe the authoritative provider list and drop the
+   * model when its provider is unavailable so Pi's own session-restore
+   * fallback can pick a usable model instead of refusing to start. Pi only
+   * hard-fails on unknown providers — unknown model ids under a known provider
+   * go through its custom-model fallback — so only the provider is validated.
+   * Internal sessions resolve their model from the current provider snapshot,
+   * so they never carry stale references and skip the probe.
+   */
+  private async resolveLaunchModel(
+    cwd: string,
+    env: Record<string, string> | undefined,
+    model: string | undefined,
+    options?: { skipProbe?: boolean },
+  ): Promise<string | undefined> {
+    if (!model || options?.skipProbe) {
+      return model;
+    }
+    const provider = model.split("/")[0];
+    if (!provider || !model.includes("/")) {
+      this.logger.debug(
+        { model },
+        "Pi launch model has no provider prefix; keeping it for Pi to resolve",
+      );
+      return model;
+    }
+    const availableProviders = await this.fetchAvailableProviders(cwd, env);
+    if (availableProviders === null) {
+      // Probe failure is not evidence the model is dead; keep the requested
+      // model and let the real session surface the definitive error.
+      this.logger.warn(
+        { model },
+        "Pi model probe failed; keeping --model and letting the session report",
+      );
+      return model;
+    }
+    const isAvailable = availableProviders.some(
+      (candidate) => candidate.toLowerCase() === provider.toLowerCase(),
+    );
+    if (!isAvailable) {
+      this.logger.info(
+        { model, provider },
+        "Pi launch model's provider is not available; omitting --model so Pi falls back",
+      );
+      return undefined;
+    }
+    return model;
+  }
+
+  private async fetchAvailableProviders(
+    cwd: string,
+    env: Record<string, string> | undefined,
+  ): Promise<string[] | null> {
+    const cacheEntry = this.availableProvidersCache;
+    if (cacheEntry && Date.now() - cacheEntry.cachedAt < PI_MODEL_PROBE_CACHE_MS) {
+      return cacheEntry.providers;
+    }
+    const probeSession = await this.runtime
+      .startSession({ cwd, env, noSession: true })
+      .catch((error) => {
+        this.logger.debug({ err: error, cwd }, "Pi model probe failed to start");
+        return null;
+      });
+    if (!probeSession) {
+      return null;
+    }
+    try {
+      const availableModels = await probeSession.getAvailableModels();
+      const providers = [...new Set(availableModels.map((model) => model.provider))];
+      this.availableProvidersCache = { providers, cachedAt: Date.now() };
+      return providers;
+    } catch (error) {
+      this.logger.debug({ err: error }, "Pi model probe RPC failed");
+      return null;
+    } finally {
+      await probeSession.close().catch(() => undefined);
     }
   }
 
