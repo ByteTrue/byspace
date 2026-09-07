@@ -2156,6 +2156,7 @@ export function createGitHubService(options: CreateGitHubServiceOptions = {}): G
             headRef: input.headRef,
             headSha: input.headSha,
             headRepositoryOwner: input.headRepositoryOwner,
+            originSlug: await resolveRepoSlugCached(input.cwd),
             run,
           });
           return addCurrentPullRequestGithubFacts({ cwd: input.cwd, status, run });
@@ -2949,9 +2950,16 @@ async function resolveCurrentPullRequestView(options: {
   headRef: string;
   headSha?: string;
   headRepositoryOwner?: string;
+  originSlug?: string | null;
   run: (args: string[], options: GitHubCommandRunnerOptions) => Promise<string>;
 }): Promise<CurrentPullRequestStatus | null> {
-  const viewCandidate = await tryCurrentPullRequestView(options);
+  const repo = options.originSlug ?? undefined;
+  const viewCandidate = await tryCurrentPullRequestView({
+    cwd: options.cwd,
+    headRef: options.headRef,
+    repo,
+    run: options.run,
+  });
   const viewMatch = viewCandidate
     ? pickPullRequestCandidate({
         candidates: [viewCandidate],
@@ -2965,14 +2973,14 @@ async function resolveCurrentPullRequestView(options: {
   }
 
   let listHeadRef = options.headRef;
-  let listRepo: string | undefined;
+  let listRepo = repo;
   let headRepositoryOwner = options.headRepositoryOwner;
 
   if (!headRepositoryOwner) {
-    const repo = await getGitHubRepoView(options);
-    const forkOwner = repo?.owner?.login;
-    const parentOwner = repo?.parent?.owner?.login;
-    const parentName = repo?.parent?.name;
+    const repoView = await getGitHubRepoView(options);
+    const forkOwner = repoView?.owner?.login;
+    const parentOwner = repoView?.parent?.owner?.login;
+    const parentName = repoView?.parent?.name;
     if (!forkOwner) {
       return null;
     }
@@ -3057,13 +3065,14 @@ async function loadPullRequestGithubFacts(options: {
 async function tryCurrentPullRequestView(options: {
   cwd: string;
   headRef: string;
+  repo?: string;
   run: (args: string[], options: GitHubCommandRunnerOptions) => Promise<string>;
 }): Promise<ResolvedPullRequestCandidate | null> {
   try {
     const stdout = await runCurrentPullRequestStatusCommand({
       cwd: options.cwd,
       run: options.run,
-      args: ["pr", "view"],
+      args: options.repo ? ["pr", "view", options.headRef, "--repo", options.repo] : ["pr", "view"],
     });
     return parseCurrentPullRequestCandidate(stdout, options.headRef, {
       args: ["pr", "view", "--json", CURRENT_PR_STATUS_FIELDS],

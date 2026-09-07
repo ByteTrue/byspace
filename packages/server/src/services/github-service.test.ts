@@ -920,6 +920,7 @@ describe("ForgeService", () => {
       runner: runner.runner,
       resolveGhPath: async () => "/usr/bin/gh",
       now: () => now,
+      resolveRepoSlug: async () => null,
     });
     const reads = recordCurrentPullRequestStatusReads(service);
 
@@ -3311,6 +3312,43 @@ describe("ForgeService", () => {
     expect(status).toMatchObject({ number: 43, state: "open" });
   });
 
+  it("passes the origin slug as --repo so multi-remote checkouts skip gh's upstream heuristic", async () => {
+    // A checkout with an `upstream` remote makes `gh pr view` resolve the
+    // upstream repo as the PR base and report no PR for the origin branch.
+    // The direct read must pin the base repo to the origin slug instead.
+    const runner = createScriptedRunner([
+      currentPullRequestJson({
+        number: 29,
+        url: "https://github.com/ByteTrue/byspace/pull/29",
+        title: "Origin PR",
+        headRefName: "fix/branch",
+        headRepositoryOwner: { login: "ByteTrue" },
+      }),
+    ]);
+    const service = createGitHubService({
+      ttlMs: 0,
+      runner: runner.runner,
+      resolveGhPath: async () => "/usr/bin/gh",
+      resolveRepoSlug: async () => "ByteTrue/byspace",
+    });
+
+    const status = await service.getCurrentPullRequestStatus({
+      cwd: "/repo",
+      headRef: "fix/branch",
+    });
+
+    expect(status).toMatchObject({ number: 29, repoOwner: "ByteTrue", repoName: "byspace" });
+    expect(runner.calls[0]?.args).toEqual([
+      "pr",
+      "view",
+      "fix/branch",
+      "--repo",
+      "ByteTrue/byspace",
+      "--json",
+      CURRENT_PR_STATUS_FIELDS,
+    ]);
+  });
+
   it("resolves fork PR heads to the parent repository when gh pr view returns a stale branch match", async () => {
     const runner = createScriptedRunner([
       currentPullRequestJson({
@@ -4322,6 +4360,7 @@ describe("ForgeService", () => {
       runner: runner.runner,
       resolveGhPath: async () => "/usr/bin/gh",
       resolveRepoHost: async () => null,
+      resolveRepoSlug: async () => null,
       now: () => 100,
     });
 
