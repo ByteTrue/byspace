@@ -2574,11 +2574,12 @@ export class PiRpcAgentClient implements AgentClient {
     const paseoExtension = createPiPaseoExtensionFile(
       composeSystemPromptParts(config.systemPrompt, config.daemonAppendSystemPrompt),
     );
+    const launchModel = await this.resolveLaunchModel(config.cwd, launchContext?.env, config.model);
     let runtimeSession: PiRuntimeSession;
     try {
       runtimeSession = await this.runtime.startSession({
         cwd: config.cwd,
-        model: config.model,
+        model: launchModel,
         thinkingOptionId:
           normalizePiThinkingOption(config.thinkingOptionId) ?? DEFAULT_PI_THINKING_LEVEL,
         noSession: config.internal === true,
@@ -2594,7 +2595,7 @@ export class PiRpcAgentClient implements AgentClient {
     try {
       return new PiRpcAgentSession({
         runtimeSession,
-        config,
+        config: launchModel === config.model ? config : { ...config, model: launchModel },
         initialState: await runtimeSession.getState(),
         capabilities: capabilitiesForSession(mcpConfig !== null),
         cleanup: combineCleanup([mcpConfig?.cleanup, paseoExtension?.cleanup]),
@@ -2638,11 +2639,24 @@ export class PiRpcAgentClient implements AgentClient {
         resumeConfig.config.daemonAppendSystemPrompt,
       ),
     );
+    const launchModel = await this.resolveLaunchModel(
+      resumeConfig.cwd,
+      launchContext?.env,
+      resumeConfig.model,
+    );
+    const resumedConfig =
+      launchModel === resumeConfig.model
+        ? resumeConfig
+        : {
+            ...resumeConfig,
+            model: launchModel,
+            config: { ...resumeConfig.config, model: launchModel },
+          };
     let runtimeSession: PiRuntimeSession;
     try {
       runtimeSession = await this.runtime.startSession(
         buildResumeStartInput({
-          resumeConfig,
+          resumeConfig: resumedConfig,
           sessionFile,
           launchContext,
           mcpConfig,
@@ -2657,7 +2671,7 @@ export class PiRpcAgentClient implements AgentClient {
     try {
       return new PiRpcAgentSession({
         runtimeSession,
-        config: resumeConfig.config,
+        config: resumedConfig.config,
         initialState: await runtimeSession.getState(),
         capabilities: capabilitiesForSession(mcpConfig !== null),
         cleanup: combineCleanup([mcpConfig?.cleanup, paseoExtension?.cleanup]),
@@ -2768,6 +2782,62 @@ export class PiRpcAgentClient implements AgentClient {
       return {
         diagnostic: formatProviderDiagnosticError("Pi", error),
       };
+    }
+  }
+
+  /**
+   * Pi exits with an error when --model references a provider/model that no
+   * longer exists in models.json (e.g. a stale model recorded in a session
+   * file or persistence metadata). Probe the authoritative model list and drop
+   * the model when it is unavailable so Pi's own session-restore fallback can
+   * pick a usable model instead of refusing to start.
+   */
+  private async resolveLaunchModel(
+    cwd: string,
+    env: Record<string, string> | undefined,
+    model: string | undefined,
+  ): Promise<string | undefined> {
+    if (!model) {
+      return undefined;
+    }
+    const [provider, ...modelIdParts] = model.split("/");
+    const modelId = modelIdParts.join("/");
+    if (!provider || !modelId) {
+      this.logger.debug(
+        { model },
+        "Pi launch model has no provider prefix; keeping it for Pi to resolve",
+      );
+      return model;
+    }
+    const probeSession = await this.runtime
+      .startSession({ cwd, env, noSession: true })
+      .catch((error) => {
+        this.logger.debug({ err: error, cwd }, "Pi model probe failed to start");
+        return null;
+      });
+    if (!probeSession) {
+      return undefined;
+    }
+    try {
+      const availableModels = await probeSession.getAvailableModels();
+      const isAvailable = availableModels.some(
+        (candidate) =>
+          candidate.provider.toLowerCase() === provider.toLowerCase() &&
+          candidate.id.toLowerCase() === modelId.toLowerCase(),
+      );
+      if (!isAvailable) {
+        this.logger.info(
+          { model },
+          "Pi launch model is not in the available model list; omitting --model so Pi falls back",
+        );
+        return undefined;
+      }
+      return model;
+    } catch (error) {
+      this.logger.debug({ err: error, model }, "Pi model probe failed; omitting --model");
+      return undefined;
+    } finally {
+      await probeSession.close().catch(() => undefined);
     }
   }
 
