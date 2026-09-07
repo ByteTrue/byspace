@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.12.0 - 2026-09-07
+
+### Added
+
+- Added configurable default terminal shell with host-side detection: `daemon.terminalDefaultShell` plus a terminal shell detection RPC; the daemon probes installed shells (login shell, `/etc/shells`, well-known paths on Unix; PowerShell variants on Windows) and spawns every new terminal with the configured shell. Absent or null keeps the previous auto behavior, and host settings gains a Default shell section behind a feature gate.
+
+### Fixed
+
+- Fixed workspace terminal tabs disappearing after daemon restarts: terminal metadata is now persisted under `$BYSPACE_HOME/terminals/terminals.json` with atomic writes and recreated at boot, so crashes, auto-updates, and shutdowns no longer lose open terminals.
+- Fixed Pi session imports failing after a recorded model is removed from `~/.pi/agent/models.json`: the daemon now probes the authoritative model list and omits `--model` when it is unavailable, letting Pi's own restore fallback pick a working model.
+
 ## 0.11.3 - 2026-09-04
 
 ### Fixed
