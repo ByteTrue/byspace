@@ -117,6 +117,7 @@ export class FakePiSession implements PiRuntimeSession {
   }> = [];
   setModelResult: PiModel | null = null;
   models: PiModel[] = [];
+  availableModelsError: Error | null = null;
   messages: PiAgentMessage[] = [];
   stats: PiSessionStats = {
     tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
@@ -257,6 +258,9 @@ export class FakePiSession implements PiRuntimeSession {
   }
 
   async getAvailableModels(_timeoutMs?: number | null): Promise<PiModel[]> {
+    if (this.availableModelsError) {
+      throw this.availableModelsError;
+    }
     return this.models;
   }
 

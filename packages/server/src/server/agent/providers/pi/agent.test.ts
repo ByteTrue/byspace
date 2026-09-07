@@ -179,6 +179,122 @@ test("keeps normal Pi agent sessions persisted", async () => {
   await session.close();
 });
 
+test("drops --model when the configured model's provider is not available", async () => {
+  const pi = new FakePi();
+  pi.queueSessionSetup((probe) => {
+    probe.models = [{ provider: "bytetrueapi", id: "gpt-5.6-sol" }];
+  });
+  const client = createClient(pi);
+  const session = await client.createSession(createConfig({ model: "zijie/gpt-5.6-sol" }));
+
+  expect(pi.recordedLaunches).toHaveLength(2);
+  expect(pi.recordedLaunches[0]?.argv).toContain("--no-session");
+  const realLaunch = pi.recordedLaunches.at(-1);
+  expect(realLaunch?.argv).not.toContain("--model");
+
+  await session.close();
+});
+
+test("keeps --model when the provider is available even if the model id is unknown", async () => {
+  const pi = new FakePi();
+  pi.queueSessionSetup((probe) => {
+    probe.models = [{ provider: "bytetrueapi", id: "gpt-5.6-sol" }];
+  });
+  const client = createClient(pi);
+  const session = await client.createSession(
+    createConfig({ model: "bytetrueapi/custom-model-id" }),
+  );
+
+  const realLaunch = pi.recordedLaunches.at(-1);
+  expect(realLaunch?.argv).toEqual(
+    expect.arrayContaining(["--model", "bytetrueapi/custom-model-id"]),
+  );
+
+  await session.close();
+});
+
+test("keeps --model without probing when the model has no provider prefix", async () => {
+  const pi = new FakePi();
+  const client = createClient(pi);
+  const session = await client.createSession(createConfig({ model: "gpt-5.6-sol" }));
+
+  expect(pi.recordedLaunches).toHaveLength(1);
+  const realLaunch = pi.recordedLaunches.at(-1);
+  expect(realLaunch?.argv).toEqual(expect.arrayContaining(["--model", "gpt-5.6-sol"]));
+
+  await session.close();
+});
+
+test("keeps --model when the model probe fails", async () => {
+  const pi = new FakePi();
+  pi.queueSessionSetup((probe) => {
+    probe.availableModelsError = new Error("probe boom");
+  });
+  const client = createClient(pi);
+  const session = await client.createSession(createConfig({ model: "zijie/gpt-5.6-sol" }));
+
+  const realLaunch = pi.recordedLaunches.at(-1);
+  expect(realLaunch?.argv).toEqual(expect.arrayContaining(["--model", "zijie/gpt-5.6-sol"]));
+
+  await session.close();
+});
+
+test("reuses the cached provider list across sessions within the TTL", async () => {
+  const pi = new FakePi();
+  pi.queueSessionSetup((probe) => {
+    probe.models = [{ provider: "bytetrueapi", id: "gpt-5.6-sol" }];
+  });
+  const client = createClient(pi);
+  const first = await client.createSession(createConfig({ model: "zijie/gpt-5.6-sol" }));
+  const second = await client.createSession(createConfig({ model: "zijie/gpt-5.6-sol" }));
+
+  expect(pi.recordedLaunches).toHaveLength(3);
+  expect(pi.recordedLaunches[0]?.argv).toContain("--no-session");
+  expect(pi.recordedLaunches[1]?.argv).not.toContain("--model");
+  expect(pi.recordedLaunches[2]?.argv).not.toContain("--model");
+
+  await first.close();
+  await second.close();
+});
+
+test("skips the model probe for internal sessions", async () => {
+  const pi = new FakePi();
+  const client = createClient(pi);
+  const session = await client.createSession(
+    createConfig({ model: "zijie/gpt-5.6-sol", internal: true }),
+  );
+
+  expect(pi.recordedLaunches).toHaveLength(1);
+  expect(pi.recordedLaunches[0]?.argv).toContain("--no-session");
+  expect(pi.recordedLaunches[0]?.argv).toEqual(
+    expect.arrayContaining(["--model", "zijie/gpt-5.6-sol"]),
+  );
+
+  await session.close();
+});
+
+test("drops stale --model when resuming a session", async () => {
+  const pi = new FakePi();
+  pi.queueSessionSetup((probe) => {
+    probe.models = [{ provider: "bytetrueapi", id: "gpt-5.6-sol" }];
+  });
+  const client = createClient(pi);
+  const sessionFile = path.join(tmpdir(), "paseo-pi-resume-probe-test.jsonl");
+  writeFileSync(sessionFile, "");
+  onTestFinished(() => rmSync(sessionFile, { force: true }));
+  const session = await client.resumeSession(
+    { provider: "pi", sessionId: "stale-1", nativeHandle: sessionFile },
+    { model: "zijie/gpt-5.6-sol" },
+  );
+
+  const realLaunch = pi.recordedLaunches.at(-1);
+  expect(realLaunch?.argv).toEqual(expect.arrayContaining(["--session", sessionFile]));
+  expect(realLaunch?.argv).not.toContain("--model");
+  expect(session.describePersistence()?.metadata).not.toHaveProperty("model");
+
+  await session.close();
+});
+
 class SessionEvents {
   private readonly events: AgentStreamEvent[] = [];
   private readonly waiters: Array<{
@@ -1173,6 +1289,9 @@ describe("PiRpcAgentSession", () => {
 
   test("resumes by launching Pi with the persisted session file and cwd metadata", async () => {
     const pi = new FakePi();
+    pi.queueSessionSetup((probe) => {
+      probe.models = [{ provider: "openrouter", id: "model-a" }];
+    });
     const client = createClient(pi);
 
     await client.resumeSession(
@@ -1190,8 +1309,8 @@ describe("PiRpcAgentSession", () => {
       { env: { RESUME_PROBE: "expected" } },
     );
 
-    expect(pi.recordedLaunches).toHaveLength(1);
-    const actualLaunch = pi.recordedLaunches[0]!;
+    expect(pi.recordedLaunches).toHaveLength(2);
+    const actualLaunch = pi.recordedLaunches.at(-1)!;
     expect(actualLaunch).toMatchObject({
       cwd: "/workspace/project",
       env: { RESUME_PROBE: "expected" },
@@ -1296,6 +1415,9 @@ describe("PiRpcAgentSession", () => {
 
   test("resumes Pi sessions with daemon system prompts appended", async () => {
     const pi = new FakePi();
+    pi.queueSessionSetup((probe) => {
+      probe.models = [{ provider: "openrouter", id: "model-a" }];
+    });
     const client = createClient(pi);
 
     await client.resumeSession(
@@ -1315,8 +1437,8 @@ describe("PiRpcAgentSession", () => {
       },
     );
 
-    expect(pi.recordedLaunches).toHaveLength(1);
-    const actualLaunch = pi.recordedLaunches[0]!;
+    expect(pi.recordedLaunches).toHaveLength(2);
+    const actualLaunch = pi.recordedLaunches.at(-1)!;
     expect(actualLaunch).toMatchObject({
       cwd: "/workspace/project",
       session: "/tmp/native-pi-session",
@@ -2076,6 +2198,9 @@ describe("PiRpcAgentClient", () => {
       "utf8",
     );
     const pi = new FakePi();
+    pi.queueSessionSetup((probe) => {
+      probe.models = [{ provider: "openrouter", id: "anthropic/claude-sonnet-4.5" }];
+    });
     const client = new PiRpcAgentClient({
       logger: pino({ level: "silent" }),
       runtime: pi,
@@ -2087,7 +2212,8 @@ describe("PiRpcAgentClient", () => {
       { config: createConfig({ cwd }), storedConfig: createConfig({ cwd }) },
     );
 
-    const actualLaunch = pi.recordedLaunches[0]!;
+    expect(pi.recordedLaunches).toHaveLength(2);
+    const actualLaunch = pi.recordedLaunches.at(-1)!;
     expect(actualLaunch.extensionPaths).toHaveLength(1);
     expect(actualLaunch.argv).toEqual([
       "pi",
