@@ -498,6 +498,15 @@ async function getCliDaemonStatus(): Promise<string> {
   return await runExternalCliTextCommand(["daemon", "status"]);
 }
 
+async function stopDesktopManagedDaemonForAppUpdate(): Promise<void> {
+  const settings = await getDesktopSettingsStore().get();
+  if (!settings.daemon.manageBuiltInDaemon) return;
+  // External (user-managed) daemons are never desktop-managed in the pid lock,
+  // so an app update must leave them running.
+  if (!isDesktopManagedDaemonRunningSync()) return;
+  await stopDesktopDaemon("app_update");
+}
+
 async function getLocalDaemonVersion(): Promise<{ version: string | null; error: string | null }> {
   const status = await resolveDesktopDaemonStatus();
   if (status.status !== "running") {
@@ -569,9 +578,7 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
       const currentVersion = resolveDesktopAppVersion();
       return downloadAndInstallUpdate(
         { currentVersion, releaseChannel: await resolveRequestedReleaseChannel(args) },
-        async () => {
-          await stopDesktopDaemon("app_update");
-        },
+        stopDesktopManagedDaemonForAppUpdate,
       );
     },
     get_local_daemon_version: () => getLocalDaemonVersion(),
