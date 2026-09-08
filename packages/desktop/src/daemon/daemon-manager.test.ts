@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   },
   runExternalCliJsonCommand: vi.fn(),
   runExternalCliTextCommand: vi.fn(),
+  checkForAppUpdate: vi.fn(),
+  downloadAndInstallUpdate: vi.fn(),
   createNodeEntrypointInvocation: vi.fn(() => ({
     command: "node",
     args: [],
@@ -77,6 +79,11 @@ vi.mock("./cli/external.js", () => ({
   runExternalCliTextCommand: mocks.runExternalCliTextCommand,
 }));
 
+vi.mock("../features/auto-updater.js", () => ({
+  checkForAppUpdate: mocks.checkForAppUpdate,
+  downloadAndInstallUpdate: mocks.downloadAndInstallUpdate,
+}));
+
 function desktopSettingsWithManagement(enabled: boolean) {
   return {
     ...DEFAULT_DESKTOP_SETTINGS,
@@ -114,6 +121,8 @@ describe("daemon-manager commands", () => {
     mocks.settings = DEFAULT_DESKTOP_SETTINGS;
     mocks.runExternalCliJsonCommand.mockReset();
     mocks.runExternalCliTextCommand.mockReset();
+    mocks.checkForAppUpdate.mockReset();
+    mocks.downloadAndInstallUpdate.mockReset();
     mocks.createNodeEntrypointInvocation.mockReset();
     mocks.createNodeEntrypointInvocation.mockReturnValue({ command: "node", args: [], env: {} });
     mocks.spawnProcess.mockReset();
@@ -498,6 +507,100 @@ describe("daemon-manager commands", () => {
 
     expect(mocks.createNodeEntrypointInvocation).toHaveBeenCalledWith(
       expect.objectContaining({ args: [] }),
+    );
+  });
+
+  it("does not stop an external daemon when installing an app update", async () => {
+    // An npm-started daemon writes the pid lock but never marks itself
+    // desktop-managed, so the update handoff must leave it running.
+    mkdirSync(mocks.paseoHome, { recursive: true });
+    writeFileSync(`${mocks.paseoHome}/byspace.pid`, JSON.stringify({ pid: process.pid }));
+    mocks.downloadAndInstallUpdate.mockImplementation(async (_input, onBeforeQuit) => {
+      await onBeforeQuit?.();
+      return { installed: true, version: "2.0.0", message: "ok" };
+    });
+    const handlers = createDaemonCommandHandlers();
+
+    await expect(handlers.install_app_update()).resolves.toEqual({
+      installed: true,
+      version: "2.0.0",
+      message: "ok",
+    });
+
+    expect(mocks.downloadAndInstallUpdate).toHaveBeenCalledWith(
+      { currentVersion: "1.2.3", releaseChannel: "stable" },
+      expect.any(Function),
+    );
+    expect(mocks.runExternalCliJsonCommand).not.toHaveBeenCalled();
+  });
+
+  it("does not stop the daemon on app update while built-in daemon management is disabled", async () => {
+    mocks.settings = desktopSettingsWithManagement(false);
+    mkdirSync(mocks.paseoHome, { recursive: true });
+    writeFileSync(
+      `${mocks.paseoHome}/byspace.pid`,
+      JSON.stringify({ pid: process.pid, desktopManaged: true }),
+    );
+    mocks.downloadAndInstallUpdate.mockImplementation(async (_input, onBeforeQuit) => {
+      await onBeforeQuit?.();
+      return { installed: true, version: "2.0.0", message: "ok" };
+    });
+    const handlers = createDaemonCommandHandlers();
+
+    await expect(handlers.install_app_update()).resolves.toEqual({
+      installed: true,
+      version: "2.0.0",
+      message: "ok",
+    });
+
+    expect(mocks.runExternalCliJsonCommand).not.toHaveBeenCalled();
+  });
+
+  it("stops a desktop-managed daemon before installing an app update", async () => {
+    mkdirSync(mocks.paseoHome, { recursive: true });
+    writeFileSync(
+      `${mocks.paseoHome}/byspace.pid`,
+      JSON.stringify({ pid: process.pid, desktopManaged: true }),
+    );
+    mocks.runExternalCliJsonCommand
+      .mockResolvedValueOnce({
+        localDaemon: "running",
+        serverId: "server-1",
+        pid: 4242,
+        listen: "127.0.0.1:6767",
+        desktopManaged: true,
+      })
+      .mockResolvedValueOnce({ action: "stopped" })
+      .mockResolvedValueOnce({
+        localDaemon: "stopped",
+        serverId: "",
+      });
+    mocks.downloadAndInstallUpdate.mockImplementation(async (_input, onBeforeQuit) => {
+      await onBeforeQuit?.();
+      return { installed: true, version: "2.0.0", message: "ok" };
+    });
+    const handlers = createDaemonCommandHandlers();
+
+    await expect(handlers.install_app_update()).resolves.toEqual({
+      installed: true,
+      version: "2.0.0",
+      message: "ok",
+    });
+
+    expect(mocks.runExternalCliJsonCommand).toHaveBeenNthCalledWith(2, [
+      "daemon",
+      "stop",
+      "--json",
+      "--timeout",
+      "5",
+      "--force",
+      "--kill-timeout",
+      "5",
+    ]);
+    expect(mocks.logInfo).toHaveBeenCalledWith(
+      "[desktop daemon]",
+      "desktop daemon stop requested",
+      expect.objectContaining({ reason: "app_update" }),
     );
   });
 
