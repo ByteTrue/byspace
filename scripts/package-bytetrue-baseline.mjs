@@ -88,17 +88,29 @@ try {
     runtimePackages.push({ packageJson: internalPackage, packagePath: internalPackagePath });
   }
 
-  const externalDependencies = {};
   const externalDependencyEntries = runtimePackages.flatMap(({ packageJson: runtimePackage }) =>
     [runtimePackage.dependencies, runtimePackage.peerDependencies].flatMap((dependencySet) =>
       Object.entries(dependencySet ?? {}).filter(([name]) => !name.startsWith("@getpaseo/")),
     ),
   );
+  const specifiersByName = new Map();
   for (const [name, specifier] of externalDependencyEntries) {
-    if (externalDependencies[name] && externalDependencies[name] !== specifier) {
-      throw new Error(`Conflicting dependency versions for ${name}`);
-    }
-    externalDependencies[name] = specifier;
+    specifiersByName.set(name, (specifiersByName.get(name) ?? new Set()).add(specifier));
+  }
+  const externalDependencies = {};
+  // Bundled workspaces do not always agree on a version. Upstream gives the plugin SDK
+  // @agentclientprotocol/sdk ^1.4.0 while the daemon stays on ^0.17.1, both import values
+  // from it, and a single published package can only carry one copy: npm prunes the
+  // node_modules inside a bundled dependency. The daemon's specifier wins, because running
+  // the daemon is what this package is for. A plugin reaching the SDK's newer ACP surface
+  // through the npm bundle will fail at runtime; the desktop and repo installs are
+  // unaffected, since npm nests both versions there.
+  const daemonDependencies =
+    runtimePackages.find((entry) => entry.packageJson.name === "@getpaseo/server")?.packageJson
+      .dependencies ?? {};
+  for (const [name, specifier] of externalDependencyEntries) {
+    const chosen = specifiersByName.get(name).size > 1 ? daemonDependencies[name] : undefined;
+    externalDependencies[name] = chosen ?? externalDependencies[name] ?? specifier;
   }
 
   for (const entry of runtimePackages.slice(1)) {
