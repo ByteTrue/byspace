@@ -2338,14 +2338,19 @@ export class PiRpcAgentSession implements AgentSession {
       return;
     }
     if (event.type === "agent_end") {
-      if (this.activeTurnId) {
-        this.pendingSettledMessages = event.messages ?? [];
-      }
-      // If Pi explicitly flags that an automatic retry will follow, or if this run is
-      // actively recovering from a retry attempt, defer turn completion until agent_settled.
-      // Normal runs (willRetry false/undefined without active retry) complete immediately on agent_end
-      // so UI does not remain stuck on running while background extensions settle.
-      if (event.willRetry === true || (this.isAutoRetrying && event.willRetry !== undefined)) {
+      this.pendingSettledMessages = event.messages ?? [];
+      // A turn the client started settles as soon as Pi finishes, so the composer never
+      // stays locked while extension-layer post-processing (watchdog, LSP, auto-compact)
+      // drags out `agent_settled`. Three cases still wait for it, because their follow-up
+      // work belongs to the same turn: Pi says a retry follows or one is already being
+      // recovered; a stop is in flight, so cancellation decides the outcome; or the run is
+      // autonomous, with no client-started turn, so an extension may continue it.
+      if (
+        event.willRetry === true ||
+        (this.isAutoRetrying && event.willRetry !== undefined) ||
+        this.interruptingTurn !== null ||
+        !this.activeTurnId
+      ) {
         return;
       }
       this.completeTurn(turnId, event.messages ?? []);
