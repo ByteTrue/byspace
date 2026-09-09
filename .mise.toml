@@ -1,10 +1,13 @@
 [vars]
 android_sdk_version = '{{ read_file(path=".tool-versions") | split(pat="android-sdk") | last | trim | split(pat="\n") | first | trim }}'
+home_dir = "{{ get_env(name='HOME', default=get_env(name='USERPROFILE', default='')) }}"
+local_app_data = "{{ get_env(name='LOCALAPPDATA', default=vars.home_dir ~ '/AppData/Local') }}"
+sdk_root = "{% if os() == 'windows' %}{{ vars.local_app_data }}/mise/installs/android-sdk/{{ vars.android_sdk_version }}{% else %}{{ vars.home_dir }}/.local/share/mise/installs/android-sdk/{{ vars.android_sdk_version }}{% endif %}"
 
 [env]
-ANDROID_HOME = "{{ env.HOME }}/.local/share/mise/installs/android-sdk/{{ vars.android_sdk_version }}"
+ANDROID_HOME = "{{ vars.sdk_root }}"
 _.path = [
-  "{{ env.HOME }}/.local/share/mise/installs/android-sdk/{{ vars.android_sdk_version }}/cmdline-tools/{{ vars.android_sdk_version }}/bin",
-  "{{ env.HOME }}/.local/share/mise/installs/android-sdk/{{ vars.android_sdk_version }}/platform-tools",
-  "{{ env.HOME }}/.local/share/mise/installs/android-sdk/{{ vars.android_sdk_version }}/emulator",
+  "{{ vars.sdk_root }}/cmdline-tools/{{ vars.android_sdk_version }}/bin",
+  "{{ vars.sdk_root }}/platform-tools",
+  "{{ vars.sdk_root }}/emulator",
 ]
