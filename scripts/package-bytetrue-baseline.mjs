@@ -88,28 +88,39 @@ try {
     runtimePackages.push({ packageJson: internalPackage, packagePath: internalPackagePath });
   }
 
-  const externalDependencies = {};
   const externalDependencyEntries = runtimePackages.flatMap(({ packageJson: runtimePackage }) =>
     [runtimePackage.dependencies, runtimePackage.peerDependencies].flatMap((dependencySet) =>
       Object.entries(dependencySet ?? {}).filter(([name]) => !name.startsWith("@getpaseo/")),
     ),
   );
-  for (const [name, specifier] of externalDependencyEntries) {
-    if (externalDependencies[name] && externalDependencies[name] !== specifier) {
-      throw new Error(`Conflicting dependency versions for ${name}`);
-    }
-    externalDependencies[name] = specifier;
-  }
 
+  // Hoisting every external dependency onto the published package assumes the bundled
+  // workspaces agree on a version. They do not always: the plugin SDK and the daemon
+  // speak different major versions of @agentclientprotocol/sdk. Those cannot be
+  // flattened, so a name with more than one specifier stays declared on the workspace
+  // that needs it and npm nests it there, which is what a dev install already does.
+  const specifiersByName = new Map();
+  for (const [name, specifier] of externalDependencyEntries) {
+    specifiersByName.set(name, (specifiersByName.get(name) ?? new Set()).add(specifier));
+  }
+  const nestedDependencyNames = new Set(
+    [...specifiersByName].filter(([, specifiers]) => specifiers.size > 1).map(([name]) => name),
+  );
+  const externalDependencies = Object.fromEntries(
+    externalDependencyEntries.filter(([name]) => !nestedDependencyNames.has(name)),
+  );
+
+  const keepsDependency = (name) =>
+    name.startsWith("@getpaseo/") || nestedDependencyNames.has(name);
   for (const entry of runtimePackages.slice(1)) {
     entry.packageJson.dependencies = Object.fromEntries(
       Object.entries(entry.packageJson.dependencies ?? {}).filter(([name]) =>
-        name.startsWith("@getpaseo/"),
+        keepsDependency(name),
       ),
     );
     entry.packageJson.peerDependencies = Object.fromEntries(
       Object.entries(entry.packageJson.peerDependencies ?? {}).filter(([name]) =>
-        name.startsWith("@getpaseo/"),
+        keepsDependency(name),
       ),
     );
     writeFileSync(entry.packagePath, `${JSON.stringify(entry.packageJson, null, 2)}\n`);
