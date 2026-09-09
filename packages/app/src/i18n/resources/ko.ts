@@ -291,6 +291,7 @@ export const ko: TranslationResources = {
       zoomIn: "확대",
       zoomOut: "축소",
       resetZoom: "보기 초기화",
+      fullscreen: "전체 화면",
       viewSource: "소스 보기",
       viewDiagram: "다이어그램 보기",
     },
@@ -362,7 +363,13 @@ export const ko: TranslationResources = {
     },
   },
   importSession: {
+    chooseHostTitle: en.importSession.chooseHostTitle,
     title: "세션 가져오기",
+    searchPlaceholder: "세션 검색...",
+    scope: {
+      host: "{{host}}의 세션",
+      workspace: "이 워크스페이스",
+    },
     filters: {
       all: "전체",
     },
@@ -371,12 +378,13 @@ export const ko: TranslationResources = {
       updateHost: "세션을 가져오려면 호스트를 업데이트하세요.",
       noProviders: "가져올 수 있는 프로바이더가 활성화되어 있지 않습니다.",
       loading: "최근 세션을 불러오는 중...",
-      failedAll: "최근 세션을 불러올 수 없습니다.",
-      failedProviders: "{{providers}}의 세션을 불러올 수 없습니다.",
+      failedProvider: "{{provider}} 세션을 불러올 수 없습니다",
       failedImport: "선택한 세션을 가져올 수 없습니다.",
     },
     actions: {
       refresh: "세션 새로고침",
+      showAll: "전체 표시",
+      loadMore: "더 보기",
     },
     preview: {
       untitledSession: "제목 없는 세션",
@@ -384,6 +392,7 @@ export const ko: TranslationResources = {
     },
     empty: {
       noRecent: "가져올 최근 세션이 없습니다.",
+      noMatches: "검색과 일치하는 세션이 없습니다.",
       alreadyImported: "최근 세션이 모두 이미 가져와졌습니다.",
       noProviderSessions: "{{provider}} 세션을 찾을 수 없습니다.",
     },
@@ -914,11 +923,8 @@ export const ko: TranslationResources = {
         refresh: "새로고침",
         refreshState: "Git 및 {{brand}} 상태 새로고침",
         failedRefresh: "Git 상태를 새로고침하지 못했습니다.",
-        emptyHiddenWhitespace: "공백을 숨긴 후 표시할 변경 사항이 없습니다",
-        emptyUncommitted: "커밋되지 않은 변경 사항이 없습니다",
         seeUncommittedChanges: "커밋되지 않은 변경 사항 보기",
         seeCommittedChanges: "커밋된 변경 사항 보기",
-        emptyAgainstBase: "{{baseRef}} 대비 변경 사항이 없습니다",
         checkingRepository: "저장소 확인 중...",
         notRepository: "Git 저장소가 아닙니다",
         diffMode: "Diff 모드",
@@ -1116,7 +1122,6 @@ export const ko: TranslationResources = {
       addProject: "프로젝트 추가",
       newWorkspace: "새 워크스페이스",
       hosts: "호스트",
-      home: "홈",
       settings: "설정",
       closeSidebar: "사이드바 닫기",
     },
@@ -1133,6 +1138,7 @@ export const ko: TranslationResources = {
     },
     sections: {
       sessions: "기록",
+      search: "검색",
       schedules: "일정",
     },
     worktreeSetup: {
@@ -2155,6 +2161,12 @@ export const ko: TranslationResources = {
       chatOutline: {
         title: "채팅 개요",
         description: "프롬프트 사이를 이동하기 위한 개요 표시",
+      },
+      sidebar: {
+        title: "사이드바",
+        description: "사이드바 상단에 표시할 항목과 순서를 선택하세요",
+        moveUp: "위로 이동",
+        moveDown: "아래로 이동",
       },
       fonts: {
         title: "글꼴",

@@ -564,14 +564,17 @@ npm run cli -- daemon status         # Check daemon status
 npm run cli -- clone owner/repo --dir ~/workspace # Clone GitHub repo and register project
 ```
 
-Use `--host` to point the CLI at a different daemon:
+Use the global `--host` option to point the CLI at a different daemon:
 
 ```bash
-npm run cli -- ls -a --host localhost:6777
-npm run cli -- ls -a --host ssh://user@host
+npm run cli -- --host localhost:6777 ls -a
+npm run cli -- --host ssh://user@host ls -a
 ```
 
-In an SSH URI, the URL port is the SSH server port. The remote daemon defaults to `127.0.0.1:6777`; use `?daemonPort=6778` to target a development daemon explicitly. The transport runs non-interactively through the local OpenSSH client and never installs, starts, or configures the remote daemon. User-facing setup and troubleshooting live in [public-docs/connectivity.md](../public-docs/connectivity.md#ssh).
+Set `BYSPACE_HOST` to use the same target across invocations. An explicit
+`--host` overrides the environment variable.
+
+In an SSH URI, the URL port is the SSH server port. The remote daemon defaults to `127.0.0.1:6777`; use `?daemonPort=6778` to override it. The transport runs non-interactively through the local OpenSSH client and never installs, starts, or configures the remote daemon. User-facing setup and troubleshooting live in [public-docs/connectivity.md](../public-docs/connectivity.md#ssh).
 
 Desktop integrations can focus an existing agent without creating one or
 sending a message. Use `byspace://h/<server-id>/agent/<agent-id>`, or run

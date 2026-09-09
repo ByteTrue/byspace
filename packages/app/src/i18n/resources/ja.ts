@@ -293,6 +293,7 @@ export const ja: TranslationResources = {
       zoomIn: "拡大",
       zoomOut: "縮小",
       resetZoom: "表示をリセット",
+      fullscreen: "全画面表示",
       viewSource: "ソースを表示",
       viewDiagram: "図を表示",
     },
@@ -364,7 +365,13 @@ export const ja: TranslationResources = {
     },
   },
   importSession: {
+    chooseHostTitle: en.importSession.chooseHostTitle,
     title: "セッションをインポート",
+    searchPlaceholder: "セッションを検索...",
+    scope: {
+      host: "{{host}} のセッション",
+      workspace: "このワークスペース",
+    },
     filters: {
       all: "すべて",
     },
@@ -373,12 +380,13 @@ export const ja: TranslationResources = {
       updateHost: "セッションをインポートするにはホストを更新してください。",
       noProviders: "インポート可能なプロバイダーが有効になっていません。",
       loading: "最近のセッションを読み込み中...",
-      failedAll: "最近のセッションを読み込めませんでした。",
-      failedProviders: "{{providers}}のセッションを読み込めませんでした。",
+      failedProvider: "{{provider}} のセッションを読み込めませんでした",
       failedImport: "選択したセッションをインポートできませんでした。",
     },
     actions: {
       refresh: "セッションを更新",
+      showAll: "すべて表示",
+      loadMore: "さらに読み込む",
     },
     preview: {
       untitledSession: "無題のセッション",
@@ -386,6 +394,7 @@ export const ja: TranslationResources = {
     },
     empty: {
       noRecent: "インポートする最近のセッションがありません。",
+      noMatches: "検索に一致するセッションがありません。",
       alreadyImported: "最近のセッションはすでにすべてインポートされています。",
       noProviderSessions: "{{provider}}のセッションが見つかりません。",
     },
@@ -918,11 +927,8 @@ export const ja: TranslationResources = {
         refresh: "更新",
         refreshState: "gitと{{brand}}の状態を更新",
         failedRefresh: "gitの状態の更新に失敗しました。",
-        emptyHiddenWhitespace: "空白を非表示にすると変更は表示されません",
-        emptyUncommitted: "未コミットの変更なし",
         seeUncommittedChanges: "未コミットの変更を表示",
         seeCommittedChanges: "コミット済みの変更を表示",
-        emptyAgainstBase: "{{baseRef}}との差分なし",
         checkingRepository: "リポジトリを確認中...",
         notRepository: "gitリポジトリではありません",
         diffMode: "差分モード",
@@ -1121,7 +1127,6 @@ export const ja: TranslationResources = {
       addProject: "プロジェクトを追加",
       newWorkspace: "新しいワークスペース",
       hosts: "ホスト",
-      home: "ホーム",
       settings: "設定",
       closeSidebar: "サイドバーを閉じる",
     },
@@ -1138,6 +1143,7 @@ export const ja: TranslationResources = {
     },
     sections: {
       sessions: "履歴",
+      search: "検索",
       schedules: "スケジュール",
     },
     worktreeSetup: {
@@ -2162,6 +2168,12 @@ export const ja: TranslationResources = {
       chatOutline: {
         title: "チャットのアウトライン",
         description: "プロンプト間を移動するためのアウトラインを表示します",
+      },
+      sidebar: {
+        title: "サイドバー",
+        description: "サイドバー上部に表示する項目とその順序を選択します",
+        moveUp: "上に移動",
+        moveDown: "下に移動",
       },
       fonts: {
         title: "フォント",
