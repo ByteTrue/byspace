@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { StreamItem } from "@/types/stream";
+import { projectPluginTimelineItems } from "@/plugins/timeline/projection";
+import { findMountedWindowStart } from "./history-window";
 import { DEFAULT_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD } from "./web-virtualization";
 import { buildAgentStreamRenderModel } from "./model";
 
@@ -100,6 +102,31 @@ describe("buildAgentStreamRenderModel", () => {
     expect(model.segments.historyVirtualized).toHaveLength(21);
     expect(segmentedIds).toEqual(tail.map((item) => item.id));
     expect(new Set(segmentedIds).size).toBe(tail.length);
+  });
+
+  it("keeps the mounted boundary stable when a transformer filters an earlier item", () => {
+    const tail = [
+      userMessage("filtered", 1),
+      assistantMessage("hidden", 2),
+      userMessage("visible-u", 3),
+      assistantMessage("visible-a", 4),
+    ];
+
+    const projectedTail = projectPluginTimelineItems(tail, ({ sourceId }) =>
+      sourceId === "filtered" ? [] : undefined,
+    );
+    const historyStart = findMountedWindowStart({ items: projectedTail, minMountedCount: 2 });
+    const model = buildAgentStreamRenderModel({
+      isTurnActive: false,
+      activeTurnStartedAt: null,
+      tail: projectedTail,
+      head: [],
+      platform: "native",
+      isMobileBreakpoint: false,
+      historyStart,
+    });
+
+    expect(model.history.map((item) => item.id)).toEqual(["visible-a", "visible-u"]);
   });
 
   it("keeps head separate from committed history on desktop web", () => {

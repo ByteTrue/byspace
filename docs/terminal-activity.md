@@ -66,12 +66,18 @@ Codex hook mapping:
 - `PermissionRequest` → `needs-input`
 - `Stop` → `idle`
 
-OpenCode uses a server plugin instead of command hooks. The plugin listens to OpenCode bus events and emits these BySpace hook events:
+OpenCode uses a server plugin instead of command hooks. Both generations discover the same global plugin file. Their loaders select separate entrypoints: OpenCode 1 calls `server()` with `{ type, properties }` bus events; OpenCode 2 calls `setup()` and subscribes to decoded `{ type, data }` events. Do not share their status mapping: V1 publishes `session.status` snapshots, while V2 publishes `session.execution.*` transitions.
 
-- `session.status` with `busy` or `retry` → `running`
-- `session.status` with `idle` → `idle`
-- `permission.asked` → `needs-input`
-- `permission.replied` → `running`
+| OpenCode event                                              | Generation | Activity    |
+| ----------------------------------------------------------- | ---------- | ----------- |
+| `session.status` with `busy` or `retry`                     | 1          | running     |
+| `session.status` with `idle`                                | 1          | idle        |
+| `session.execution.started`                                 | 2          | running     |
+| `session.execution.succeeded`, `.failed`, or `.interrupted` | 2          | idle        |
+| `permission.asked`                                          | Both       | needs-input |
+| `permission.replied`                                        | Both       | running     |
+
+The plugin translates both event contracts into the existing BySpace hook events. OpenCode 2 disposes its event subscription when the plugin unloads.
 
 Pi uses an auto-discovered extension:
 

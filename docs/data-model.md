@@ -286,6 +286,45 @@ rather than storing something it cannot describe. That is why the client gates t
 UI on `server_info.features.agentProfiles` instead of letting a save appear to succeed against an
 older daemon.
 
+### Agent provider Paseo tools
+
+`agents.providers` is keyed by the exact provider ID used to launch the agent. The built-in IDs are
+`claude`, `codex`, `copilot`, `opencode`, `pi`, and `omp`. Custom provider IDs are their literal
+configuration keys, such as `my-claude` or `zai`, not the provider named by `extends`.
+
+Each entry may include a Paseo-tool policy:
+
+```json
+{
+  "agents": {
+    "providers": {
+      "my-claude": {
+        "extends": "claude",
+        "label": "My Claude",
+        "paseoTools": {
+          "enabled": true,
+          "disabledTools": ["browser_evaluate"]
+        }
+      }
+    }
+  }
+}
+```
+
+Absent `paseoTools`, or absent fields within it, means Paseo tools are enabled and all tools are
+allowed. `enabled: false` disables the provider's Paseo catalog; `disabledTools` lists exact tool
+IDs to omit. The policy covers the core and browser catalog, not the voice-only `speak` tool.
+Browser tools also require `daemon.browserTools.enabled` and a connected browser host.
+This policy controls the catalog presented to an agent. It is not an authorization boundary for
+agents that can access the host through a shell.
+
+`daemon.mcp.injectIntoAgents` is the global override. When it is `false`, no provider receives
+Paseo tools; otherwise the provider policy applies. Provider and global policy are resolved when a
+session is created, resumed, imported, or reloaded, so configuration changes affect the next
+session rather than an already-running one.
+
+`agents.metadataGeneration.providers` controls the preferred structured-generation fallback order for daemon-side metadata tasks such as commit messages, PR text, branch names, and generated agent titles. Entries are tried first in the configured order, then Paseo falls through to dynamically discovered defaults and finally the current selection when available.
+
 ### Git process limits
 
 Git process limits are global to one daemon. The start-rate limit defaults to `64` processes per
@@ -464,7 +503,7 @@ Array of workspace records. A workspace is a specific working directory within a
 | `branch`                       | `string \| null`                                             | The current Git branch for git-backed workspaces. Separate from `displayName`/`title`; a background branch refresh never rewrites the name.                                                   |
 | `worktreeRoot`                 | `string \| null`                                             | Backing checkout/worktree root. May differ from `cwd` for exact subprojects and remains persisted after the worktree is deleted so restore can reproduce the placement.                       |
 | `baseBranch`                   | `string \| null`                                             | Normalized branch the BySpace worktree was created from; null for directories, local checkouts, and checkout-branch worktrees                                                                 |
-| `isPaseoOwnedWorktree`         | `boolean`                                                    | Whether BySpace owns and may remove/recreate the backing `worktreeRoot`; field name is retained for compatibility                                                                             |
+| `isBySpaceOwnedWorktree`       | `boolean`                                                    | Whether BySpace owns and may remove/recreate the backing `worktreeRoot`                                                                                                                       |
 | `mainRepoRoot`                 | `string \| null`                                             | Main repository root for worktree checkouts, independent of both exact `cwd` and backing `worktreeRoot`                                                                                       |
 | `createdAt`                    | `string` (ISO 8601)                                          |                                                                                                                                                                                               |
 | `updatedAt`                    | `string` (ISO 8601)                                          |                                                                                                                                                                                               |
@@ -549,8 +588,8 @@ Right-sidebar client state splits on whether it is determined by the directory o
 
 The durable client replica uses IndexedDB on browser/Electron and expo-sqlite on native. Rows use the
 compound key `(serverId, kind, id)`; kinds are `agent`, `workspace`, `project`, `timeline`, and
-`checkpoint`. Directory entities have individual rows. Timeline and checkpoint use the singleton id
-and have at most one row per host.
+`checkpoint`. Directory entities have individual rows, timelines use the agent id, and the checkpoint
+uses the singleton id.
 
 The store is a typed persistence boundary. It returns values to directory and timeline owners and
 accepts their explicit commits; it never reads or writes UI state. Reads are scoped to the requested

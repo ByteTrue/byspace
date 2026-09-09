@@ -66,6 +66,7 @@ jobs:
     needs: [ensure-release]
     permissions:
       contents: write
+      packages: read
     runs-on: ubuntu-latest
 
     steps:

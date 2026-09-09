@@ -1,10 +1,17 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { readPluginManifest } from "./manifest.js";
 
 const directories: string[] = [];
+const examplesDirectory = fileURLToPath(
+  new URL("../../../../../plugin-examples/", import.meta.url),
+);
+const examples = (await readdir(examplesDirectory, { withFileTypes: true }))
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name);
 
 async function createPluginDirectory(): Promise<string> {
   const directory = await mkdtemp(path.join(tmpdir(), "byspace-plugin-manifest-"));
@@ -17,34 +24,31 @@ afterEach(async () => {
 });
 
 describe("plugin manifest", () => {
-  it("reads byspace-plugin.json", async () => {
-    const directory = await createPluginDirectory();
-    await writeFile(path.join(directory, "byspace-plugin.json"), JSON.stringify({ id: "current" }));
-
-    await expect(readPluginManifest(directory)).resolves.toEqual({ id: "current" });
+  it.each(examples)("validates the %s example manifest", async (name) => {
+    await expect(readPluginManifest(path.join(examplesDirectory, name))).resolves.toMatchObject({
+      id: expect.any(String),
+    });
   });
 
-  it("reads legacy paseo-plugin.json", async () => {
-    const directory = await createPluginDirectory();
-    await writeFile(path.join(directory, "paseo-plugin.json"), JSON.stringify({ id: "legacy" }));
-
-    await expect(readPluginManifest(directory)).resolves.toEqual({ id: "legacy" });
-  });
-
-  it("rejects directories containing both manifest filenames", async () => {
-    const directory = await createPluginDirectory();
-    await Promise.all([
-      writeFile(path.join(directory, "byspace-plugin.json"), JSON.stringify({ id: "current" })),
-      writeFile(path.join(directory, "paseo-plugin.json"), JSON.stringify({ id: "legacy" })),
-    ]);
-
-    await expect(readPluginManifest(directory)).rejects.toThrow("Keep only one plugin manifest");
-  });
-
-  it("reports the canonical filename when no manifest exists", async () => {
-    const directory = await createPluginDirectory();
-
-    await expect(readPluginManifest(directory)).rejects.toThrow("byspace-plugin.json");
+  it("reads and validates requirements before any plugin code runs", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "byspace-plugin-manifest-"));
+    directories.push(directory);
+    const manifest = path.join(directory, "byspace-plugin.json");
+    await writeFile(manifest, JSON.stringify({ id: "example", requirements: { paseo: "^0.8.0" } }));
+    await expect(readPluginManifest(directory)).resolves.toEqual({
+      id: "example",
+      requirements: { paseo: "^0.8.0" },
+    });
+    for (const requirements of [
+      { byspace: "latest" },
+      { byspace: "" },
+      { byspace: 8 },
+      { node: ">=20" },
+      "0.8.0",
+    ]) {
+      await writeFile(manifest, JSON.stringify({ id: "example", requirements }));
+      await expect(readPluginManifest(directory)).rejects.toThrow();
+    }
   });
 
   it("accepts only non-empty argv arrays for build commands", async () => {
