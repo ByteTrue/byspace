@@ -978,15 +978,6 @@ export async function createPaseoDaemon(
   });
   await workspaceLabelService.initialize();
   logger.info({ elapsed: elapsed() }, "Workspace registries bootstrapped");
-  await restorePersistedTerminals({
-    manager: terminalManager,
-    store: terminalSessionStore,
-    isWorkspaceActive: async (workspaceId) => {
-      const record = await workspaceRegistry.get(workspaceId);
-      return record !== null && record.archivedAt === null;
-    },
-    logger,
-  });
   const teardownArchivedWorkspaceRuntime = (workspaceId: string): void => {
     scriptRuntimeStore.removeForWorkspace(workspaceId);
     releaseWorkspaceServicePortPlan(workspaceId);
@@ -1758,6 +1749,18 @@ export async function createPaseoDaemon(
             );
             pluginRuntime.bindPaseoSessionHost(wsServer);
             await pluginRuntime.start();
+            // Restored terminals must spawn after boundListenTarget is set,
+            // otherwise createTerminal bakes a null activity URL into their
+            // env and agent hooks in those terminals can never report state.
+            await restorePersistedTerminals({
+              manager: terminalManager,
+              store: terminalSessionStore,
+              isWorkspaceActive: async (workspaceId) => {
+                const record = await workspaceRegistry.get(workspaceId);
+                return record !== null && record.archivedAt === null;
+              },
+              logger,
+            });
             wsServer.beginAcceptingConnections();
             relayRuntime = createRelayRuntime({
               config: {
