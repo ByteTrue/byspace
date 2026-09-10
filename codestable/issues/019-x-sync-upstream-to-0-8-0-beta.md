@@ -271,6 +271,6 @@ worktree 内做了独立 `npm install`（2677 个包），未复用主检出的 
 
 **未处理，不藏在结论里。**
 
-- 本地 `v0.7.0`、`v0.7.2`、`v0.7.3`、`v0.7.4` 与 origin 同名但指向不同提交。先于本次同步的隐患。
-- desktop release manifest 缺少发布前校验。上游有 `scripts/validate-desktop-manifests.mjs`，但它强制的 `minimumSystemVersion` 检查与我方不变量不同，直接移植不行。
+- ~~本地 `v0.7.x` 与 origin 同名但指向不同提交~~ —— 误报，当时拿本地已剥离提交比 origin 的标签对象。真正冲突只有 `v0.8.0`，已在 [021](021-x-ff-release-manifest-guard-and-macos-floor.md) 处理。
+- ~~desktop release manifest 缺少发布前校验~~ —— 部分记错：工作流本就校验 rollout 三项，缺的是 mac 双架构 DMG 覆盖。已在 [021](021-x-ff-release-manifest-guard-and-macos-floor.md) 补上。
 - 插件通过 npm 包使用 `@getpaseo/plugin/server/acp` 会在运行时失败，是本次明确接受的代价。

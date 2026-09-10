@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+Carry this notice into the next release entry. `parseChangelogEntries` ignores this heading because it has no date, so nothing here reaches the published notes until it moves under a real version.
+
+> **macOS 13 or later is now required.** The desktop app moved to Electron 44, which does not run on macOS 12. Macs on macOS 12 stay on the version they have and stop receiving desktop updates.
+
 ## 0.12.0 - 2026-09-07
 
 ### Added

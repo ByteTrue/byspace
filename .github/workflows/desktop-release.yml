@@ -463,19 +463,10 @@ jobs:
           ((${#files[@]} > 0))
           timestamp="$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")"
           node ../scripts/stamp-rollout.mjs --release-date "$timestamp" --rollout-hours "$ROLLOUT_HOURS" "${files[@]}"
-          # shellcheck disable=SC2016
-          ROLLOUT_HOURS_EXPECTED="$ROLLOUT_HOURS" RELEASE_DATE_EXPECTED="$timestamp" node -e '
-            const yaml = require("js-yaml");
-            const fs = require("fs");
-            const expectedHours = Number(process.env.ROLLOUT_HOURS_EXPECTED);
-            const expectedDate = process.env.RELEASE_DATE_EXPECTED;
-            for (const f of process.argv.slice(1)) {
-              const m = yaml.load(fs.readFileSync(f, "utf8")) ?? {};
-              if (m.rolloutHours !== expectedHours || m.releaseDate !== expectedDate || typeof m.version !== "string" || m.version.length === 0) {
-                throw new Error(`${f}: invalid stamped rollout manifest`);
-              }
-            }
-          ' "${files[@]}"
+          node ../scripts/validate-desktop-manifests.mjs \
+            --release-date "$timestamp" \
+            --rollout-hours "$ROLLOUT_HOURS" \
+            "${files[@]}"
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-release-manifests

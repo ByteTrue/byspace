@@ -17,7 +17,9 @@ The iOS IPA requires user re-signing. The Android APK is built and signed by CI 
 
 Stable Web releases deploy to `app.byspace.cc.cd`. Versions with a prerelease suffix deploy to `app-beta.byspace.cc.cd`.
 
-The macOS client does not replace the running app in place. It verifies the current-architecture DMG from the release manifest, saves it to Downloads, strips its quarantine attribute, opens it, and exits so the user can drag the new app over the old one. Every desktop release must publish both `arm64` and `x64` DMGs with SHA-512 entries in `latest-mac.yml`.
+The macOS client does not replace the running app in place. It verifies the current-architecture DMG from the release manifest, saves it to Downloads, strips its quarantine attribute, opens it, and exits so the user can drag the new app over the old one. Every desktop release must publish both `arm64` and `x64` DMGs with SHA-512 entries in `latest-mac.yml`. `scripts/validate-desktop-manifests.mjs` enforces that before publication, along with the rollout stamp and the macOS floor; the release job fails rather than shipping a manifest that strands one architecture.
+
+The desktop runtime is Electron 44, so macOS 13 is the floor and `minimumSystemVersion` in the mac manifest declares it. A release that changes which platforms can update must say so as a blockquote in its changelog entry: blockquotes are the one thing `parseChangelogBody` surfaces as an action-required notice in both the GitHub release notes and the F-Droid changelog.
 
 ## Prepare
 
