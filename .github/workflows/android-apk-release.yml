@@ -110,10 +110,14 @@ jobs:
         working-directory: packages/app/android
         run: |
           chmod +x ./gradlew
+          # Standard runners have 4 cores. The previous --max-workers=2 with
+          # parallel disabled let the build outgrow the ~40min window in which
+          # hosted runners get recycled (v0.13.0: four attempts, all killed by
+          # a runner shutdown signal mid-build).
           ./gradlew :app:assembleRelease \
             -x lint -x lintVitalAnalyzeRelease -x lintVitalRelease \
             -x generateReleaseLintModel -x generateReleaseLintVitalModel \
-            --no-daemon --max-workers=2 -Dorg.gradle.parallel=false
+            --no-daemon --max-workers=4
 
       - name: Sign APK
         env:
