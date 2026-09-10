@@ -152,7 +152,7 @@ const StoredTimelineItemSchema = z.discriminatedUnion("kind", [
     kind: z.literal("custom_message"),
     customType: z.string(),
     content: z.string(),
-    details: z.unknown().optional(),
+    details: z.json().optional(),
   }),
   z.strictObject({
     ...TimelineItemBaseShape,

@@ -68,7 +68,7 @@ function sourceTimelineItem(item: StreamItem): AgentTimelineItem | null {
         customType: item.customType,
         display: true,
         content: item.content,
-        ...(item.details !== undefined ? { details: item.details as never } : {}),
+        ...(item.details !== undefined ? { details: item.details } : {}),
       };
     case "compaction":
       return {

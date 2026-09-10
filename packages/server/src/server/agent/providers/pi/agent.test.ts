@@ -1120,6 +1120,7 @@ describe("PiRpcAgentSession", () => {
         customType: "background-exit",
         display: true,
         content: "[bg_1] npm run build exited with code 0",
+        details: { id: "bg_1", exitCode: 0 },
       },
     ]);
   });

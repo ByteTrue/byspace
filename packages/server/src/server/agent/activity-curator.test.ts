@@ -53,6 +53,21 @@ describe("curateAgentActivity", () => {
     expect(result).toContain("[Thought] Thinking");
   });
 
+  it("renders custom messages with their customType label", () => {
+    const timeline: AgentTimelineItem[] = [
+      {
+        type: "custom_message",
+        customType: "background-exit",
+        display: true,
+        content: "[bg_1] npm run build exited with code 0",
+      },
+    ];
+
+    expect(curateAgentActivity(timeline)).toContain(
+      "[background-exit] [bg_1] npm run build exited with code 0",
+    );
+  });
+
   it("uses detail enrichment for tool summaries", () => {
     const timeline: AgentTimelineItem[] = [
       toolCallItem({

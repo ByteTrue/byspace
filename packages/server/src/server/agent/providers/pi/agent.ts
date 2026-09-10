@@ -2470,9 +2470,10 @@ export class PiRpcAgentSession implements AgentSession {
             turnId,
             item: {
               type: "custom_message",
-              customType: event.message.customType ?? "custom",
+              customType: event.message.customType || "custom",
               display: true,
               content: text,
+              ...(event.message.details !== undefined ? { details: event.message.details } : {}),
             },
           });
         }

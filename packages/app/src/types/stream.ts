@@ -797,7 +797,7 @@ export interface CustomMessageItem {
   timestamp: Date;
   customType: string;
   content: string;
-  details?: unknown;
+  details?: JsonValue;
 }
 
 export interface CompactionItem {
@@ -1252,17 +1252,10 @@ function appendAgentToolCall(input: AppendAgentToolCallInput): StreamItem[] {
   return [...state, item];
 }
 
-function appendNotification(state: StreamItem[], entry: NotificationItem): StreamItem[] {
-  const index = state.findIndex((existing) => existing.id === entry.id);
-  if (index >= 0) {
-    const next = [...state];
-    next[index] = entry;
-    return next;
-  }
-  return [...state, entry];
-}
-
-function appendCustomMessage(state: StreamItem[], entry: CustomMessageItem): StreamItem[] {
+function appendByIdentity(
+  state: StreamItem[],
+  entry: NotificationItem | CustomMessageItem,
+): StreamItem[] {
   const index = state.findIndex((existing) => existing.id === entry.id);
   if (index >= 0) {
     const next = [...state];
@@ -1580,7 +1573,7 @@ function reduceTimelineEvent(
         level: "error",
         message: item.message ?? "Unknown error",
       };
-      return finalizeActiveThoughts(appendNotification(state, notification));
+      return finalizeActiveThoughts(appendByIdentity(state, notification));
     }
     case "notification": {
       const notification: NotificationItem = {
@@ -1592,7 +1585,7 @@ function reduceTimelineEvent(
         level: item.level,
         message: item.message,
       };
-      return finalizeActiveThoughts(appendNotification(state, notification));
+      return finalizeActiveThoughts(appendByIdentity(state, notification));
     }
     case "custom_message": {
       const customMessage: CustomMessageItem = {
@@ -1604,7 +1597,7 @@ function reduceTimelineEvent(
         content: item.content,
         ...(item.details !== undefined ? { details: item.details } : {}),
       };
-      return finalizeActiveThoughts(appendCustomMessage(state, customMessage));
+      return finalizeActiveThoughts(appendByIdentity(state, customMessage));
     }
     case "compaction":
       return finalizeActiveThoughts(

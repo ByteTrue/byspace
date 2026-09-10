@@ -134,9 +134,10 @@ export class PiHistoryMapper {
             provider: this.provider,
             item: {
               type: "custom_message",
-              customType: message.customType ?? "custom",
+              customType: message.customType || "custom",
               display: true,
               content: text,
+              ...(message.details !== undefined ? { details: message.details } : {}),
             },
           },
         ]

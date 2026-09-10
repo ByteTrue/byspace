@@ -130,16 +130,24 @@ describe("Pi history mapper", () => {
 
   test("replays non-notice custom messages as custom_message items, matching the live path", async () => {
     await expect(
-      collectHistory([{ role: "custom", content: "Extension command output" }]),
+      collectHistory([
+        {
+          role: "custom",
+          customType: "background-exit",
+          content: "Extension command output",
+          details: { exitCode: 0 },
+        },
+      ]),
     ).resolves.toEqual([
       {
         type: "timeline",
         provider: "pi",
         item: {
           type: "custom_message",
-          customType: "custom",
+          customType: "background-exit",
           display: true,
           content: "Extension command output",
+          details: { exitCode: 0 },
         },
       },
     ]);

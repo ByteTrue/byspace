@@ -2178,15 +2178,20 @@ const customMessageStylesheet = StyleSheet.create((theme) => ({
   containerSpacing: {
     marginBottom: theme.spacing[1],
   },
-  content: {
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: 10,
-    gap: theme.spacing[1],
-  },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    paddingTop: 10,
+    paddingBottom: theme.spacing[1],
+  },
+  contentText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
+    lineHeight: 20,
+    paddingHorizontal: theme.spacing[3],
+    paddingBottom: 10,
   },
   headerLabel: {
     color: theme.colors.foregroundMuted,
@@ -2196,11 +2201,6 @@ const customMessageStylesheet = StyleSheet.create((theme) => ({
   },
   chevron: {
     flexShrink: 0,
-  },
-  contentText: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
-    lineHeight: 20,
   },
 }));
 
@@ -2217,6 +2217,7 @@ export const CustomMessage = memo(function CustomMessage({
   const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
   const [expanded, setExpanded] = useState(false);
   const toggleExpanded = useCallback(() => setExpanded((prev) => !prev), []);
+  const accessibilityState = useMemo(() => ({ expanded }), [expanded]);
 
   const containerStyle = useMemo(
     () => [
@@ -2226,13 +2227,13 @@ export const CustomMessage = memo(function CustomMessage({
     [resolvedDisableOuterSpacing],
   );
   return (
-    <Pressable
-      style={containerStyle}
-      onPress={toggleExpanded}
-      accessibilityRole="button"
-      accessibilityLabel={customType}
-    >
-      <View style={customMessageStylesheet.content} pointerEvents="none">
+    <View style={containerStyle}>
+      <Pressable
+        onPress={toggleExpanded}
+        accessibilityRole="button"
+        accessibilityLabel={customType}
+        accessibilityState={accessibilityState}
+      >
         <View style={customMessageStylesheet.headerRow}>
           <Text style={customMessageStylesheet.headerLabel} numberOfLines={1}>
             [{customType}]
@@ -2245,15 +2246,15 @@ export const CustomMessage = memo(function CustomMessage({
             />
           </View>
         </View>
-        <Text
-          style={customMessageStylesheet.contentText}
-          selectable
-          numberOfLines={expanded ? undefined : CUSTOM_MESSAGE_COLLAPSED_LINE_COUNT}
-        >
-          {content}
-        </Text>
-      </View>
-    </Pressable>
+      </Pressable>
+      <Text
+        style={customMessageStylesheet.contentText}
+        selectable
+        numberOfLines={expanded ? undefined : CUSTOM_MESSAGE_COLLAPSED_LINE_COUNT}
+      >
+        {content}
+      </Text>
+    </View>
   );
 });
 
