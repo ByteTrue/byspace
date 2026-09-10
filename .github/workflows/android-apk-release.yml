@@ -67,10 +67,9 @@ jobs:
     permissions:
       contents: write
       packages: read
-    # 8-core/32GB. Standard 2-core/16GB runners kept dying with "runner has
-    # received a shutdown signal" during the hermesc silence right after the
-    # JS bundle is written; five attempts across two configs never survived it.
-    runs-on: ubuntu-latest-8-cores
+    # Larger free runner labels (ubuntu-latest-8-cores) queue for 70+ minutes
+    # at the moment; ubuntu-latest starts immediately.
+    runs-on: ubuntu-latest
     timeout-minutes: 90
 
     steps:
@@ -114,10 +113,20 @@ jobs:
         working-directory: packages/app/android
         run: |
           chmod +x ./gradlew
-          # Standard runners have 4 cores. The previous --max-workers=2 with
-          # parallel disabled let the build outgrow the ~40min window in which
-          # hosted runners get recycled (v0.13.0: four attempts, all killed by
-          # a runner shutdown signal mid-build).
+          # v0.13.0: five attempts on 2 workers all died with "runner received a
+          # shutdown signal" during the silent hermesc phase right after the JS
+          # bundle is written. Keep output flowing through that silence so the
+          # runner never looks idle, and cap the JVM so hermesc + Kotlin daemon
+          # fit the 16GB standard runner.
+          export GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx4g"
+          (
+            while true; do
+              sleep 60
+              echo "[keepalive] $(date -u +%H:%M:%S) build still running"
+            done
+          ) &
+          KEEPALIVE_PID=$!
+          trap 'kill $KEEPALIVE_PID' EXIT
           ./gradlew :app:assembleRelease \
             -x lint -x lintVitalAnalyzeRelease -x lintVitalRelease \
             -x generateReleaseLintModel -x generateReleaseLintVitalModel \
