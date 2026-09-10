@@ -67,7 +67,11 @@ jobs:
     permissions:
       contents: write
       packages: read
-    runs-on: ubuntu-latest
+    # 8-core/32GB. Standard 2-core/16GB runners kept dying with "runner has
+    # received a shutdown signal" during the hermesc silence right after the
+    # JS bundle is written; five attempts across two configs never survived it.
+    runs-on: ubuntu-latest-8-cores
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
