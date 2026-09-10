@@ -131,7 +131,11 @@ amended: 2026-09-09
 
 ## 阶段二执行记录
 
-**冲突全部解决，验证基本通过。分支 `sync/paseo-v0.8.0-beta.1`，提交 `577ea6c92`（前置检查点 `5da041011`）。**
+**已完成并合入 `main`。** PR #32 以 merge commit `3e1d69d76` 合并，验收候选 `b68aabc6f`。
+
+合并前 `origin/main` 从冻结的 `28c770533` 移动到 `71c993252`（并行工作的两个 ff 提交合入），按技能停止合并、把新 main 并进候选、重新验证、推新候选并重新取得接受。重叠文件只有 `packages/server/src/server/bootstrap.ts`，自动合并干净，且已核对对方「终端恢复必须在 `boundListenTarget` 赋值之后」的修复完整保留、`restorePersistedTerminals` 只出现一次。
+
+同步 worktree 与 `sync/paseo-v0.8.0-beta.1` 分支（本地与远端）已清理。
 
 ### 排除的 16 个路径
 
@@ -251,6 +255,9 @@ worktree 内做了独立 `npm install`（2677 个包），未复用主检出的 
 
 ## 关闭时
 
+本 Issue 的实现与合并已完成，按 CodeStable 规则关闭需要 Owner 授权，故仍为 `open`。关闭时要做：
+
 - 回写到 Project Spec：同步后若有当前真相变化，更新对应 `codestable/spec/` 章节。
+- 遗留：Electron 41 → 44 带来的 macOS 13 下限，必须写进发布说明；macOS 12 用户从本版起不再收到桌面更新。
+- 遗留：本地 `v0.7.0`、`v0.7.2`、`v0.7.3`、`v0.7.4` 与 origin 同名但指向不同提交，先于本次的隐患，未处理。
 - 遗留：desktop release manifest 缺少发布前校验。上游 `scripts/validate-desktop-manifests.mjs` 在发布前校验 manifest 的 `rolloutHours`、`releaseDate`、`version`；本仓库 `desktop-release.yml` 只组装不校验，而 `codestable/spec/desktop-updates.md` 要求每个 release 的 mac manifest 必须提供 arm64 与 x64 DMG 及 SHA-512，目前无自动化保障。阶段二会把该脚本带进来，但它强制的 `minimumSystemVersion` 检查不适用，需要改成校验本仓库真正的不变量。建议单独立 Issue。
-- 遗留：是否接受 Electron 41 → 44 升级，见 #4322 的判断。
