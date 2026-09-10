@@ -200,7 +200,13 @@ describe("OMP history mapper", () => {
         [
           { role: "user", content: "first prompt" },
           { role: "custom", content: "hidden reminder", display: false },
-          { role: "custom", content: "visible explicit custom", display: true },
+          {
+            role: "custom",
+            content: "visible explicit custom",
+            display: true,
+            customType: "task-exit",
+            details: { exitCode: 0 },
+          },
           { role: "custom", content: "visible legacy custom" },
           {
             role: "assistant",
@@ -225,9 +231,10 @@ describe("OMP history mapper", () => {
         provider: "omp",
         item: {
           type: "custom_message",
-          customType: "custom",
+          customType: "task-exit",
           display: true,
           content: "visible explicit custom",
+          details: { exitCode: 0 },
         },
       },
       {

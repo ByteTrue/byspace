@@ -64,6 +64,7 @@ import {
   type PiCapturedUserMessageEntry,
 } from "./history-mapper.js";
 import { materializeProviderImage } from "../provider-image-output.js";
+import { limitTimelineDetails } from "../../agent-timeline-content.js";
 import { PiCliRuntime } from "./cli-runtime.js";
 import { revertPiConversation } from "./rewind.js";
 import { listPiImportableSessions, readPiImportSessionConfig } from "./session-descriptor.js";
@@ -2463,6 +2464,7 @@ export class PiRpcAgentSession implements AgentSession {
       // runtimes; treat missing as true so exit notifications still surface.
       if (event.message.display !== false) {
         const text = getUserMessageText(event.message.content);
+        const details = limitTimelineDetails(event.message.details);
         if (text) {
           this.emit({
             type: "timeline",
@@ -2473,7 +2475,7 @@ export class PiRpcAgentSession implements AgentSession {
               customType: event.message.customType || "custom",
               display: true,
               content: text,
-              ...(event.message.details !== undefined ? { details: event.message.details } : {}),
+              ...(details !== undefined ? { details } : {}),
             },
           });
         }

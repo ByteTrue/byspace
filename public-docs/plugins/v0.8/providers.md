@@ -283,8 +283,9 @@ Publish complete snapshots through `timeline.item`. Reuse an item `id` when upda
 a running tool, or a todo list. BySpace derives the live delta and keeps the normal timeline.
 
 Built-in item types cover user and assistant messages, reasoning, tools, todos, errors,
-notifications, and compaction. Use a plugin item when your provider has a presentation that those
-types cannot express:
+notifications, custom messages (extension-injected items carrying `customType`, `content`, and
+optional `details` — items with `display: false` are dropped), and compaction. Use a plugin item
+when your provider has a presentation that those types cannot express:
 
 ```ts
 emit({

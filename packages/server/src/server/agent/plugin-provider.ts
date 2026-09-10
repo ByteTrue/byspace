@@ -1618,11 +1618,9 @@ function mapTimelineItem(
       data: item.data,
     };
   }
-  if (item.type === "custom_message") {
-    // Plugin providers may emit custom_message items directly; display=false means
-    // context-only, matching the Pi/OMP provider semantics.
-    return item.display === false ? null : (withoutIdentity as AgentTimelineItem);
-  }
+  // Plugin providers may emit custom_message items directly; display=false means
+  // context-only, matching the Pi/OMP provider semantics.
+  if (item.type === "custom_message" && item.display === false) return null;
   return withoutIdentity as AgentTimelineItem;
 }
 

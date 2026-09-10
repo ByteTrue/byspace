@@ -44,6 +44,9 @@ const OmpCustomMessageSchema = z
   .object({
     role: z.literal("custom"),
     content: z.union([z.string(), z.array(z.union([OmpTextContentSchema, OmpImageContentSchema]))]),
+    customType: z.string().optional(),
+    display: z.boolean().optional(),
+    details: z.unknown().optional(),
   })
   .passthrough();
 const OmpAssistantMessageSchema = z

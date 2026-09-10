@@ -11,6 +11,17 @@ export function assertPluginTimelineDataSize(data: JsonValue): void {
   }
 }
 
+/**
+ * Custom-message details ride along as auxiliary payload on every timeline row,
+ * durable store row, and client fetch. Drop oversized ones instead of failing the
+ * item — the content text still delivers.
+ */
+export function limitTimelineDetails(details: JsonValue | undefined): JsonValue | undefined {
+  if (details === undefined) return undefined;
+  const serializedBytes = Buffer.byteLength(JSON.stringify(details), "utf8");
+  return serializedBytes > PLUGIN_TIMELINE_DATA_MAX_BYTES ? undefined : details;
+}
+
 function limitFailedShellError(item: AgentTimelineItem): AgentTimelineItem {
   if (
     item.type !== "tool_call" ||

@@ -1,4 +1,5 @@
 import type { AgentStreamEvent, AgentTimelineItem, ToolCallDetail } from "../../agent-sdk-types.js";
+import { limitTimelineDetails } from "../../agent-timeline-content.js";
 import type { PiAgentMessage, PiImageContent, PiTextContent } from "./rpc-types.js";
 import {
   extractTextFromToolResult,
@@ -127,6 +128,7 @@ export class PiHistoryMapper {
     if (mappedEvent) {
       return [mappedEvent];
     }
+    const details = limitTimelineDetails(message.details);
     return text
       ? [
           {
@@ -137,7 +139,7 @@ export class PiHistoryMapper {
               customType: message.customType || "custom",
               display: true,
               content: text,
-              ...(message.details !== undefined ? { details: message.details } : {}),
+              ...(details !== undefined ? { details } : {}),
             },
           },
         ]
