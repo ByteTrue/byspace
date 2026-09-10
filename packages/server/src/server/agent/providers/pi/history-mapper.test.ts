@@ -128,16 +128,27 @@ describe("Pi history mapper", () => {
     ]);
   });
 
-  test("replays non-notice custom messages as assistant text, matching the live path", async () => {
+  test("replays non-notice custom messages as custom_message items, matching the live path", async () => {
     await expect(
       collectHistory([{ role: "custom", content: "Extension command output" }]),
     ).resolves.toEqual([
       {
         type: "timeline",
         provider: "pi",
-        item: { type: "assistant_message", text: "Extension command output" },
+        item: {
+          type: "custom_message",
+          customType: "custom",
+          display: true,
+          content: "Extension command output",
+        },
       },
     ]);
+  });
+
+  test("skips display=false custom messages on replay", async () => {
+    await expect(
+      collectHistory([{ role: "custom", content: "context-only payload", display: false }]),
+    ).resolves.toEqual([]);
   });
 
   test("uses Pi tree entry ids for replayed user messages", async () => {

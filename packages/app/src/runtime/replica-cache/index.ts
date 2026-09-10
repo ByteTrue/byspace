@@ -149,6 +149,13 @@ const StoredTimelineItemSchema = z.discriminatedUnion("kind", [
   }),
   z.strictObject({
     ...TimelineItemBaseShape,
+    kind: z.literal("custom_message"),
+    customType: z.string(),
+    content: z.string(),
+    details: z.unknown().optional(),
+  }),
+  z.strictObject({
+    ...TimelineItemBaseShape,
     kind: z.literal("compaction"),
     status: z.enum(["loading", "completed"]),
     trigger: z.enum(["auto", "manual"]).optional(),
@@ -456,6 +463,14 @@ function serializeTimelineItem(item: StreamItem): StoredTimelineItem | null {
         level: item.level,
         message: item.message,
       };
+    case "custom_message":
+      return {
+        ...base,
+        kind: item.kind,
+        customType: item.customType,
+        content: item.content,
+        ...(item.details !== undefined ? { details: item.details } : {}),
+      };
     case "compaction":
       return {
         ...base,
@@ -506,6 +521,12 @@ function deserializeTimelineItem(item: StoredTimelineItem): StreamItem {
 function deserializeBuiltinTimelineItem(
   item: Exclude<StoredTimelineItem, { kind: "plugin" }>,
 ): StreamItem {
+  if (item.kind === "custom_message") {
+    return deserializeCustomMessageItem(item);
+  }
+  if (item.kind === "tool_call") {
+    return deserializeToolCallItem(item);
+  }
   const base = {
     id: item.id,
     ...(item.timelineCursor ? { timelineCursor: item.timelineCursor } : {}),
@@ -556,29 +577,50 @@ function deserializeBuiltinTimelineItem(
         ...(item.trigger ? { trigger: item.trigger } : {}),
         ...(item.preTokens !== undefined ? { preTokens: item.preTokens } : {}),
       };
-    case "tool_call": {
-      const tool = item.item;
-      if (tool.type !== "tool_call") {
-        throw new Error("Stored tool call contains a non-tool timeline item");
-      }
-      return {
-        ...base,
-        kind: item.kind,
-        payload: {
-          source: "agent",
-          data: {
-            provider: item.provider,
-            callId: tool.callId,
-            name: tool.name,
-            status: tool.status,
-            error: tool.error,
-            detail: tool.detail,
-            ...(tool.metadata ? { metadata: tool.metadata } : {}),
-          },
-        },
-      };
-    }
   }
+}
+
+function deserializeCustomMessageItem(
+  item: Extract<StoredTimelineItem, { kind: "custom_message" }>,
+): StreamItem {
+  return {
+    id: item.id,
+    ...(item.timelineCursor ? { timelineCursor: item.timelineCursor } : {}),
+    ...(item.turnId ? { turnId: item.turnId } : {}),
+    timestamp: new Date(item.timestamp),
+    kind: item.kind,
+    customType: item.customType,
+    content: item.content,
+    ...(item.details !== undefined ? { details: item.details } : {}),
+  };
+}
+
+function deserializeToolCallItem(
+  item: Extract<StoredTimelineItem, { kind: "tool_call" }>,
+): StreamItem {
+  const tool = item.item;
+  if (tool.type !== "tool_call") {
+    throw new Error("Stored tool call contains a non-tool timeline item");
+  }
+  return {
+    id: item.id,
+    ...(item.timelineCursor ? { timelineCursor: item.timelineCursor } : {}),
+    ...(item.turnId ? { turnId: item.turnId } : {}),
+    timestamp: new Date(item.timestamp),
+    kind: item.kind,
+    payload: {
+      source: "agent",
+      data: {
+        provider: item.provider,
+        callId: tool.callId,
+        name: tool.name,
+        status: tool.status,
+        error: tool.error,
+        detail: tool.detail,
+        ...(tool.metadata ? { metadata: tool.metadata } : {}),
+      },
+    },
+  };
 }
 
 function serializeProjectPlacement(agent: Agent): StoredAgent["projectPlacement"] {

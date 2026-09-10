@@ -1,6 +1,6 @@
 import type { AgentStreamEvent, AgentTimelineItem, ToolCallDetail } from "../../agent-sdk-types.js";
 import type { OmpAgentMessage, OmpImageContent, OmpTextContent } from "./rpc-types.js";
-import { shouldDisplayOmpCustomMessage } from "./custom-message.js";
+import { readOmpCustomType, shouldDisplayOmpCustomMessage } from "./custom-message.js";
 import {
   extractTextFromToolResult,
   mapToolDetail,
@@ -131,7 +131,12 @@ export class OmpHistoryMapper {
           {
             type: "timeline",
             provider: this.provider,
-            item: { type: "assistant_message", text },
+            item: {
+              type: "custom_message",
+              customType: readOmpCustomType(message),
+              display: true,
+              content: text,
+            },
           },
         ]
       : [];

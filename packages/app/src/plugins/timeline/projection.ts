@@ -62,6 +62,14 @@ function sourceTimelineItem(item: StreamItem): AgentTimelineItem | null {
       return item.sourceType === "error"
         ? { type: "error", message: item.message }
         : { type: "notification", level: item.level, message: item.message };
+    case "custom_message":
+      return {
+        type: "custom_message",
+        customType: item.customType,
+        display: true,
+        content: item.content,
+        ...(item.details !== undefined ? { details: item.details as never } : {}),
+      };
     case "compaction":
       return {
         type: "compaction",

@@ -2266,3 +2266,80 @@ describe("notification timeline items", () => {
     expect(new Set(state.map((item) => item.id)).size).toBe(state.length);
   });
 });
+
+describe("custom_message timeline items", () => {
+  it("stores customType, content, and details", () => {
+    const timestamp = new Date("2026-07-26T10:00:00.000Z");
+    const state = hydrateStreamState(
+      [
+        {
+          event: {
+            type: "timeline",
+            provider: "pi",
+            item: {
+              type: "custom_message",
+              customType: "background-exit",
+              display: true,
+              content: "[bg_1] npm run build exited with code 0",
+              details: { id: "bg_1", exitCode: 0 },
+            },
+          },
+          timestamp,
+        },
+      ],
+      { source: "canonical" },
+    );
+
+    expect(state).toEqual([
+      {
+        kind: "custom_message",
+        id: expect.any(String),
+        timestamp,
+        customType: "background-exit",
+        content: "[bg_1] npm run build exited with code 0",
+        details: { id: "bg_1", exitCode: 0 },
+      },
+    ]);
+  });
+
+  it("keeps repeated custom messages with the same type in the same millisecond distinct", () => {
+    const timestamp = new Date("2026-07-26T10:00:00.000Z");
+    const state = hydrateStreamState(
+      [
+        {
+          event: {
+            type: "timeline",
+            provider: "pi",
+            item: {
+              type: "custom_message",
+              customType: "background-exit",
+              display: true,
+              content: "first exit",
+            },
+          },
+          timestamp,
+        },
+        {
+          event: {
+            type: "timeline",
+            provider: "pi",
+            item: {
+              type: "custom_message",
+              customType: "background-exit",
+              display: true,
+              content: "second exit",
+            },
+          },
+          timestamp,
+        },
+      ],
+      { source: "canonical" },
+    );
+
+    expect(state.map((item) => (item.kind === "custom_message" ? item.content : null))).toEqual([
+      "first exit",
+      "second exit",
+    ]);
+    expect(new Set(state.map((item) => item.id)).size).toBe(state.length);
+  });
+});

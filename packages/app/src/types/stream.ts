@@ -85,6 +85,7 @@ export type StreamItem =
   | ToolCallItem
   | TodoListItem
   | NotificationItem
+  | CustomMessageItem
   | CompactionItem
   | PluginTimelineStreamItem;
 
@@ -788,6 +789,17 @@ export interface NotificationItem {
   message: string;
 }
 
+export interface CustomMessageItem {
+  kind: "custom_message";
+  id: string;
+  timelineCursor?: TimelinePosition;
+  turnId?: string;
+  timestamp: Date;
+  customType: string;
+  content: string;
+  details?: unknown;
+}
+
 export interface CompactionItem {
   kind: "compaction";
   id: string;
@@ -1250,6 +1262,16 @@ function appendNotification(state: StreamItem[], entry: NotificationItem): Strea
   return [...state, entry];
 }
 
+function appendCustomMessage(state: StreamItem[], entry: CustomMessageItem): StreamItem[] {
+  const index = state.findIndex((existing) => existing.id === entry.id);
+  if (index >= 0) {
+    const next = [...state];
+    next[index] = entry;
+    return next;
+  }
+  return [...state, entry];
+}
+
 function appendPluginTimelineItem(
   state: StreamItem[],
   item: Extract<AgentTimelineItem, { type: "plugin" }>,
@@ -1572,6 +1594,18 @@ function reduceTimelineEvent(
       };
       return finalizeActiveThoughts(appendNotification(state, notification));
     }
+    case "custom_message": {
+      const customMessage: CustomMessageItem = {
+        kind: "custom_message",
+        id: createUniqueTimelineId(state, "custom_message", item.customType, timestamp),
+        ...(timelineCursor ? { timelineCursor } : {}),
+        timestamp,
+        customType: item.customType,
+        content: item.content,
+        ...(item.details !== undefined ? { details: item.details } : {}),
+      };
+      return finalizeActiveThoughts(appendCustomMessage(state, customMessage));
+    }
     case "compaction":
       return finalizeActiveThoughts(
         reduceTimelineCompaction(state, item, timestamp, timelineCursor),
@@ -1734,6 +1768,8 @@ function getEventItemKind(event: AgentStreamEventPayload): StreamItem["kind"] | 
     case "error":
     case "notification":
       return "notification";
+    case "custom_message":
+      return "custom_message";
     case "plugin":
       return "plugin";
     default:

@@ -116,6 +116,12 @@ export class PiHistoryMapper {
   private mapCustomMessage(
     message: Extract<PiAgentMessage, { role: "custom" }>,
   ): AgentStreamEvent[] {
+    // Pi extension sendMessage() payloads surface as custom messages. display=false
+    // means context-only (Pi's TUI hides them too). display is optional on older
+    // runtimes; treat missing as true so exit notifications still surface.
+    if (message.display === false) {
+      return [];
+    }
     const text = getUserMessageText(message.content);
     const mappedEvent = text ? this.hooks.mapCustomMessage?.(text, this.provider) : null;
     if (mappedEvent) {
@@ -126,7 +132,12 @@ export class PiHistoryMapper {
           {
             type: "timeline",
             provider: this.provider,
-            item: { type: "assistant_message", text },
+            item: {
+              type: "custom_message",
+              customType: message.customType ?? "custom",
+              display: true,
+              content: text,
+            },
           },
         ]
       : [];

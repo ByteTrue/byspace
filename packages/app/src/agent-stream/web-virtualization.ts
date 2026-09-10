@@ -72,6 +72,8 @@ export function estimateStreamItemHeight(item: StreamItem): number {
       return 144;
     case "notification":
       return 88;
+    case "custom_message":
+      return 96;
     case "compaction":
       return 72;
     default:
