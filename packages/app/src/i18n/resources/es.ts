@@ -2019,6 +2019,26 @@ export const es: TranslationResources = {
       sentTitle: "Notificación de prueba enviada",
       sentDescription: "Paseo entregó la notificación al sistema operativo.",
       sendFailedTitle: "No se pudo enviar la notificación de prueba",
+      webPush: {
+        title: "Notificaciones del navegador",
+        description:
+          "Recibe un aviso cuando un agente termina o te necesita, incluso con esta pestaña cerrada.",
+        enable: "Activar",
+        enabling: "Activando…",
+        disable: "Desactivar",
+        disabling: "Desactivando…",
+        unsupported: "Este navegador no puede recibir notificaciones push.",
+        iosHomeScreenHint:
+          "En iPhone y iPad, añade BySpace a la pantalla de inicio primero. Las pestañas de Safari no pueden recibir notificaciones push.",
+        state: {
+          enabled: "Activadas en este navegador.",
+          prompt: "Desactivadas. Actívalas para permitir notificaciones.",
+          denied:
+            "Bloqueadas. Permite las notificaciones de este sitio en los ajustes del navegador.",
+          unavailable: "Este host no admite notificaciones del navegador.",
+          unsupported: "Este navegador no puede recibir notificaciones push.",
+        },
+      },
     },
     hostSections: {
       projects: "Proyectos",

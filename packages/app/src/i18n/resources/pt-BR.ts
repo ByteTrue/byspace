@@ -2005,6 +2005,25 @@ export const ptBR: TranslationResources = {
       sentTitle: "Notificação de teste enviada",
       sentDescription: "O Paseo entregou a notificação ao sistema operacional.",
       sendFailedTitle: "Não foi possível enviar a notificação de teste",
+      webPush: {
+        title: "Notificações do navegador",
+        description:
+          "Receba um aviso quando um agente terminar ou precisar de você, mesmo com esta aba fechada.",
+        enable: "Ativar",
+        enabling: "Ativando…",
+        disable: "Desativar",
+        disabling: "Desativando…",
+        unsupported: "Este navegador não pode receber notificações push.",
+        iosHomeScreenHint:
+          "No iPhone e no iPad, adicione o BySpace à Tela de Início primeiro. Abas do Safari não recebem notificações push.",
+        state: {
+          enabled: "Ativadas neste navegador.",
+          prompt: "Desativadas. Ative para permitir notificações.",
+          denied: "Bloqueadas. Permita as notificações deste site nas configurações do navegador.",
+          unavailable: "Este host não oferece suporte a notificações do navegador.",
+          unsupported: "Este navegador não pode receber notificações push.",
+        },
+      },
     },
     hostSections: {
       projects: "Projetos",

@@ -1972,6 +1972,24 @@ export const ar: TranslationResources = {
       sentTitle: "تم إرسال إشعار الاختبار",
       sentDescription: "سلّم Paseo الإشعار إلى نظام التشغيل.",
       sendFailedTitle: "تعذر إرسال إشعار الاختبار",
+      webPush: {
+        title: "إشعارات المتصفح",
+        description: "تصلك إشعارات عندما ينتهي وكيل أو يحتاج إليك، حتى لو كانت هذه العلامة مغلقة.",
+        enable: "تفعيل",
+        enabling: "جارٍ التفعيل…",
+        disable: "تعطيل",
+        disabling: "جارٍ التعطيل…",
+        unsupported: "لا يمكن لهذا المتصفح استقبال إشعارات الدفع.",
+        iosHomeScreenHint:
+          "على iPhone و iPad أضف BySpace إلى الشاشة الرئيسية أولًا. علامات تبويب Safari لا تستقبل إشعارات الدفع.",
+        state: {
+          enabled: "مفعّلة في هذا المتصفح.",
+          prompt: "غير مفعّلة. فعّلها للسماح بالإشعارات.",
+          denied: "محظورة. اسمح بإشعارات هذا الموقع من إعدادات المتصفح.",
+          unavailable: "هذا المضيف لا يدعم إشعارات المتصفح.",
+          unsupported: "لا يمكن لهذا المتصفح استقبال إشعارات الدفع.",
+        },
+      },
     },
     hostSections: {
       projects: "المشاريع",

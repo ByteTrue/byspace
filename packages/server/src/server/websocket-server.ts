@@ -755,6 +755,7 @@ export class VoiceAssistantWebSocketServer {
     this.pushNotifications = createPushNotifications({
       logger: pushLogger,
       filePath: join(paseoHome, "push-tokens.json"),
+      vapidFilePath: join(paseoHome, "web-push-keys.json"),
     });
     this.pushNotificationSender = pushNotificationSender ?? this.pushNotifications;
 
@@ -1650,6 +1651,7 @@ export class VoiceAssistantWebSocketServer {
   }
 
   private buildServerInfoStatusPayload(session: Session): ServerInfoStatusPayload {
+    const webPushPublicKey = this.pushNotifications.webPushPublicKey();
     return {
       status: "server_info",
       serverId: this.serverId,
@@ -1659,6 +1661,8 @@ export class VoiceAssistantWebSocketServer {
       // COMPAT(desktopManaged): added in v0.1.X, remove optional parsing after 2027-01-16.
       desktopManaged: this.daemonRuntimeConfig?.desktopManaged === true,
       ...(this.serverCapabilities ? { capabilities: this.serverCapabilities } : {}),
+      // COMPAT(webPush): added in v0.13.0, remove optional parsing after 2027-09-10.
+      ...(webPushPublicKey ? { webPushPublicKey } : {}),
       features: {
         agentRequestReceipts: true,
         hubAgentRpc: true,
@@ -1700,6 +1704,8 @@ export class VoiceAssistantWebSocketServer {
         ...(this.advertiseRelayConfig ? { relayConfig: true } : {}),
         // COMPAT(pushTokenRevocation): added in v0.3.2, remove gate after 2027-02-10.
         pushTokenRevocation: true,
+        // COMPAT(webPush): added in v0.13.0, remove gate after 2027-09-10.
+        ...(webPushPublicKey ? { webPush: true } : {}),
         // COMPAT(plugins): added in v0.3.0, remove gate after 2027-08-07.
         plugins: true,
         pluginManagement: true,

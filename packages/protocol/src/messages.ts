@@ -3458,6 +3458,10 @@ export const ServerInfoStatusPayloadSchema = z
     // COMPAT(desktopManaged): added in v0.1.X, remove optional parsing after 2027-01-16.
     desktopManaged: z.boolean().optional(),
     capabilities: ServerCapabilitiesFromUnknownSchema.optional(),
+    // COMPAT(webPush): added in v0.13.0, remove optional parsing after 2027-09-10.
+    // VAPID application server public key (base64url, uncompressed P-256 point).
+    // Only meaningful when features.webPush is true.
+    webPushPublicKey: z.string().trim().min(1).optional(),
     // COMPAT(providersSnapshot): added in v0.1.48, remove gating when all clients use snapshot
     features: z
       .object({
@@ -3504,6 +3508,10 @@ export const ServerInfoStatusPayloadSchema = z
         relayConfig: z.boolean().optional(),
         // COMPAT(pushTokenRevocation): added in v0.3.2, remove gate after 2027-02-10.
         pushTokenRevocation: z.boolean().optional(),
+        // COMPAT(webPush): added in v0.13.0, remove gate after 2027-09-10.
+        // Gates browser push: clients only subscribe when this is true and
+        // webPushPublicKey is present.
+        webPush: z.boolean().optional(),
         // COMPAT(plugins): added in v0.3.0, remove gate after 2027-08-07.
         plugins: z.boolean().optional(),
         // COMPAT(pluginManagement): added in v0.4.0, remove gate after 2027-08-14.

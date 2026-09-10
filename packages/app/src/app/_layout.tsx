@@ -141,6 +141,7 @@ import {
   WEB_NOTIFICATION_CLICK_EVENT,
   type WebNotificationClickDetail,
 } from "@/utils/os-notifications";
+import { SERVICE_WORKER_NOTIFICATION_CLICK_MESSAGE } from "@/push-notifications/internal/types";
 
 polyfillNavigator();
 polyfillCrypto();
@@ -221,10 +222,30 @@ function PushNotificationRouter() {
 
       window.addEventListener(WEB_NOTIFICATION_CLICK_EVENT, openFromWebClick as EventListener);
 
+      // Web Push notifications are clicked in the service worker, which hands the
+      // payload back here because route building lives in the app bundle.
+      const openFromServiceWorker = (event: MessageEvent) => {
+        const message = event.data;
+        if (
+          typeof message !== "object" ||
+          message === null ||
+          (message as { type?: unknown }).type !== SERVICE_WORKER_NOTIFICATION_CLICK_MESSAGE
+        ) {
+          return;
+        }
+        const data = (message as { data?: unknown }).data;
+        openNotification(
+          typeof data === "object" && data !== null ? (data as Record<string, unknown>) : undefined,
+        );
+      };
+
+      navigator.serviceWorker?.addEventListener("message", openFromServiceWorker);
+
       return () => {
         cancelled = true;
         removeDesktopNotificationListener?.();
         window.removeEventListener(WEB_NOTIFICATION_CLICK_EVENT, openFromWebClick as EventListener);
+        navigator.serviceWorker?.removeEventListener("message", openFromServiceWorker);
       };
     }
 

@@ -1950,6 +1950,24 @@ export const zhCN: TranslationResources = {
       sentTitle: "测试通知已发送",
       sentDescription: "Paseo 已将通知交给操作系统。",
       sendFailedTitle: "无法发送测试通知",
+      webPush: {
+        title: "浏览器通知",
+        description: "agent 结束或需要你时收到通知，标签页关着也能收到。",
+        enable: "开启",
+        enabling: "开启中…",
+        disable: "关闭",
+        disabling: "关闭中…",
+        unsupported: "此浏览器无法接收推送通知。",
+        iosHomeScreenHint:
+          "在 iPhone 和 iPad 上请先把 BySpace 添加到主屏幕。Safari 标签页无法接收推送通知。",
+        state: {
+          enabled: "已在此浏览器开启。",
+          prompt: "未开启。点击开启以允许通知。",
+          denied: "已被拦截。请在浏览器设置里允许本站通知。",
+          unavailable: "此主机不支持浏览器通知。",
+          unsupported: "此浏览器无法接收推送通知。",
+        },
+      },
     },
     hostSections: {
       projects: "项目",

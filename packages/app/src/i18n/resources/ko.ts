@@ -1983,6 +1983,24 @@ export const ko: TranslationResources = {
       sentTitle: "테스트 알림을 보냈습니다",
       sentDescription: "Paseo가 알림을 운영 체제에 전달했습니다.",
       sendFailedTitle: "테스트 알림을 보낼 수 없음",
+      webPush: {
+        title: "브라우저 알림",
+        description: "에이전트가 끝나거나 입력을 기다릴 때 탭이 닫혀 있어도 알려줍니다.",
+        enable: "사용",
+        enabling: "설정 중…",
+        disable: "해제",
+        disabling: "해제 중…",
+        unsupported: "이 브라우저는 푸시 알림을 받을 수 없습니다.",
+        iosHomeScreenHint:
+          "iPhone과 iPad에서는 먼저 BySpace를 홈 화면에 추가하세요. Safari 탭은 푸시 알림을 받을 수 없습니다.",
+        state: {
+          enabled: "이 브라우저에서 켜져 있습니다.",
+          prompt: "꺼져 있습니다. 사용을 눌러 알림을 허용하세요.",
+          denied: "차단됨. 브라우저 설정에서 이 사이트의 알림을 허용하세요.",
+          unavailable: "이 호스트는 브라우저 알림을 지원하지 않습니다.",
+          unsupported: "이 브라우저는 푸시 알림을 받을 수 없습니다.",
+        },
+      },
     },
     hostSections: {
       projects: "프로젝트",

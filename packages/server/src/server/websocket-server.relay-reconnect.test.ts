@@ -99,6 +99,7 @@ vi.mock("./push/index.js", () => ({
     renew: () => undefined,
     revoke: () => undefined,
     send: async () => undefined,
+    webPushPublicKey: () => null,
   }),
 }));
 

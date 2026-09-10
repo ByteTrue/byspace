@@ -1992,6 +1992,25 @@ export const ja: TranslationResources = {
       sentTitle: "テスト通知を送信しました",
       sentDescription: "Paseo が通知をオペレーティングシステムに渡しました。",
       sendFailedTitle: "テスト通知を送信できません",
+      webPush: {
+        title: "ブラウザ通知",
+        description:
+          "エージェントが完了したときや入力待ちになったとき、タブを閉じていても通知します。",
+        enable: "有効にする",
+        enabling: "有効化中…",
+        disable: "無効にする",
+        disabling: "無効化中…",
+        unsupported: "このブラウザはプッシュ通知を受信できません。",
+        iosHomeScreenHint:
+          "iPhone と iPad では先に BySpace をホーム画面に追加してください。Safari のタブではプッシュ通知を受信できません。",
+        state: {
+          enabled: "このブラウザで有効です。",
+          prompt: "無効です。有効にすると通知を受け取れます。",
+          denied: "ブロックされています。ブラウザ設定でこのサイトの通知を許可してください。",
+          unavailable: "このホストはブラウザ通知に対応していません。",
+          unsupported: "このブラウザはプッシュ通知を受信できません。",
+        },
+      },
     },
     hostSections: {
       projects: "プロジェクト",

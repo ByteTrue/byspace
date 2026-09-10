@@ -2018,6 +2018,25 @@ export const en = {
       sentTitle: "Test notification sent",
       sentDescription: "Paseo handed the notification to the operating system.",
       sendFailedTitle: "Unable to send test notification",
+      webPush: {
+        title: "Browser notifications",
+        description:
+          "Get notified when an agent finishes or needs you, even when this tab is closed.",
+        enable: "Enable",
+        enabling: "Enabling…",
+        disable: "Disable",
+        disabling: "Disabling…",
+        unsupported: "This browser cannot receive push notifications.",
+        iosHomeScreenHint:
+          "On iPhone and iPad, add BySpace to the Home Screen first. Safari tabs cannot receive push notifications.",
+        state: {
+          enabled: "On for this browser.",
+          prompt: "Off. Enable to allow notifications.",
+          denied: "Blocked. Allow notifications for this site in browser settings.",
+          unavailable: "This host does not support browser notifications.",
+          unsupported: "This browser cannot receive push notifications.",
+        },
+      },
     },
     hostSections: {
       projects: "Projects",

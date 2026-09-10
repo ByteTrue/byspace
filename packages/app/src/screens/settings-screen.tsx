@@ -85,6 +85,8 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { DesktopPermissionsSection } from "@/desktop/components/desktop-permissions-section";
 import { DesktopNotificationsSection } from "@/desktop/components/desktop-notifications-section";
+import { WebPushSection } from "@/screens/settings/web-push-section";
+import { isWebPushSupported } from "@/push-notifications";
 import { BrowserDataSection } from "@/desktop/browser/settings/browser-data-section";
 import { IntegrationsSection } from "@/desktop/components/integrations-section";
 import { isElectronRuntime } from "@/desktop/host";
@@ -145,6 +147,8 @@ interface SidebarSectionItem {
   icon: ComponentType<{ size: number; color: string }>;
   desktopOnly?: boolean;
   webOnly?: boolean;
+  /** Keeps a desktop-only section visible in browsers that can do Web Push. */
+  orWebPush?: boolean;
 }
 
 const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
@@ -169,6 +173,7 @@ const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
     labelKey: "settings.sections.notifications",
     icon: Bell,
     desktopOnly: true,
+    orWebPush: true,
   },
   {
     id: "permissions",
@@ -1052,9 +1057,15 @@ function SettingsSidebar({
   const hasHosts = sortedHosts.length > 0;
   const enableBuiltInDaemonOption = useEnableBuiltInDaemonOption();
   const isDesktopApp = isElectronRuntime();
-  const items = SIDEBAR_SECTION_ITEMS.filter(
-    (item) => (!item.desktopOnly || isDesktopApp) && (!item.webOnly || isWeb),
-  );
+  const items = SIDEBAR_SECTION_ITEMS.filter((item) => {
+    if (item.webOnly && !isWeb) {
+      return false;
+    }
+    if (!item.desktopOnly || isDesktopApp) {
+      return true;
+    }
+    return item.orWebPush === true && isWebPushSupported();
+  });
   const insets = useSafeAreaInsets();
   const isDesktop = layout === "desktop";
   const outerContainerStyle = useMemo(
@@ -1514,7 +1525,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
           case "integrations":
             return isDesktopApp ? <IntegrationsSection /> : null;
           case "notifications":
-            return isDesktopApp ? <DesktopNotificationsSection /> : null;
+            return isDesktopApp ? <DesktopNotificationsSection /> : <WebPushSection />;
           case "permissions":
             return isDesktopApp ? <DesktopPermissionsSection /> : null;
           case "diagnostics":

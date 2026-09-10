@@ -2024,6 +2024,26 @@ export const fr: TranslationResources = {
       sentTitle: "Notification de test envoyée",
       sentDescription: "Paseo a transmis la notification au système d’exploitation.",
       sendFailedTitle: "Impossible d’envoyer la notification de test",
+      webPush: {
+        title: "Notifications du navigateur",
+        description:
+          "Soyez prévenu quand un agent termine ou vous attend, même si cet onglet est fermé.",
+        enable: "Activer",
+        enabling: "Activation…",
+        disable: "Désactiver",
+        disabling: "Désactivation…",
+        unsupported: "Ce navigateur ne peut pas recevoir de notifications push.",
+        iosHomeScreenHint:
+          "Sur iPhone et iPad, ajoutez d'abord BySpace à l'écran d'accueil. Les onglets Safari ne peuvent pas recevoir de notifications push.",
+        state: {
+          enabled: "Activées dans ce navigateur.",
+          prompt: "Désactivées. Activez-les pour autoriser les notifications.",
+          denied:
+            "Bloquées. Autorisez les notifications de ce site dans les réglages du navigateur.",
+          unavailable: "Cet hôte ne prend pas en charge les notifications du navigateur.",
+          unsupported: "Ce navigateur ne peut pas recevoir de notifications push.",
+        },
+      },
     },
     hostSections: {
       projects: "Projets",
