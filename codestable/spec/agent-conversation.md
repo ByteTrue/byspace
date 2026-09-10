@@ -33,7 +33,8 @@ Desktop、split pane 和 compact 布局都保持这一垂直关系。左侧状�
 ## 运行与加载指示
 
 - 会话 turn 运行/思考指示器（`SyncedLoader`）承载关键的运行时存活反馈，不因操作系统的 `prefers-reduced-motion` 策略而冻结在初始静止帧，确保用户能明确感知 Agent 处于活跃执行状态而非崩溃死锁。
-- Pi Provider 的 Turn 边界结算基于 `agent_end`（`!willRetry`）即时触发 `turn_completed` 并转入 `idle`，解除对扩展层异步后处理（如 Watchdog、LSP 或自动压缩）延迟发射的 `agent_settled` 的硬性等待，保证模型输出完毕瞬间前端输入框与操作按钮即刻解锁恢复；随后到来的 `agent_settled` 保持幂等忽略。
+- Pi Provider 的 Turn 边界结算按**发起方**区分。客户端发起的 turn 在 `agent_end` 即时触发 `turn_completed` 并转入 `idle`，不等扩展层异步后处理（Watchdog、LSP、自动压缩）延迟发射的 `agent_settled`，保证模型输出完毕瞬间输入框与操作按钮即刻解锁；随后到来的 `agent_settled` 幂等忽略。
+- 三种情况仍等待 `agent_settled`，因为它们的后续工作属于同一个 turn：Pi 标记将要重试或本次运行正在从重试中恢复；有 stop 在途，由取消决定结果；运行是自主的、没有客户端发起的 turn，扩展可能继续它。自主轮次是上游 v0.8.0 引入的能力。
 
 ## 时间线恢复与同步
 

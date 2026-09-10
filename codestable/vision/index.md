@@ -63,7 +63,7 @@ BySpace 让你从任何一个浏览器查看和操控自己开发环境里的 AI
 ## 演化地图
 
 - `codestable/epics/003-o-orca-terminal-agent-experience/spec.md`：建设中。对照 orca 优化 terminal agent 体验，不改变结构化会话。
-- `codestable/issues/019-o-sync-upstream-to-0-8-0-beta.md`：已合入 `main`，待关闭。同步上游到 `v0.8.0-beta.1`。
+- `codestable/issues/019-x-sync-upstream-to-0-8-0-beta.md`：已完成。同步上游到 `v0.8.0-beta.1`，结论已毕业到 `agent-conversation.md` 与 `desktop-updates.md`。
 - `codestable/spec/agent-conversation.md`、`terminal.md`、`workspace.md`、`connection.md`、`desktop-updates.md`：当前真相，Epic 003 只扩展 terminal 一侧。
 - `codestable/talks/001-terminal-native-hard-fork.md`：一次关于"要不要转向 terminal-native 并独立 fork"的完整讨论，结论是撤回。想知道为什么两条路共存、为什么不以 orca 为底、为什么继续同步上游，读它。
 

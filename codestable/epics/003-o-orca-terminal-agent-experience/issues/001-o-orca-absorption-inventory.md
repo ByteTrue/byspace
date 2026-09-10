@@ -26,7 +26,7 @@ created: 2026-09-09
 
 **不包含：** 任何吸收项的实现；orca 的架构、Kanban、Design Mode、SSH worktree、browser 等未点名区域；对结构化会话的改动。
 
-**顺序建议：** `codestable/issues/019-o-sync-upstream-to-0-8-0-beta.md` 的全量同步先完成，本 Issue 的结论才建立在同步后的现状上。判断工作本身不阻塞，但结论要在同步后复核一次。
+**顺序建议：** `codestable/issues/019-x-sync-upstream-to-0-8-0-beta.md` 的全量同步先完成，本 Issue 的结论才建立在同步后的现状上。判断工作本身不阻塞，但结论要在同步后复核一次。
 
 ## 为什么现在做
 

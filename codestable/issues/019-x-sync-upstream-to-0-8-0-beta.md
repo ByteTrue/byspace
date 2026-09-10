@@ -2,9 +2,10 @@
 kind: issue
 title: "同步上游到 Paseo v0.8.0-beta.1"
 type: chore
-status: open
+status: closed
 created: 2026-09-09
 amended: 2026-09-09
+closed: 2026-09-10
 ---
 
 # 同步上游到 Paseo v0.8.0-beta.1
@@ -253,11 +254,23 @@ worktree 内做了独立 `npm install`（2677 个包），未复用主检出的 
 2. 在没有拿到指明完整 SHA 的接受之前就创建了 PR #32。技能要求接受必须形如「我测试了候选 `<完整 SHA>`，创建 PR」，「确认授权」不足。
 3. force-push 并 amend 过候选。技能规定已推送的候选不可变，任何改写都产生新候选并使先前测试与接受失效。
 
-## 关闭时
+## 关闭结论
 
-本 Issue 的实现与合并已完成，按 CodeStable 规则关闭需要 Owner 授权，故仍为 `open`。关闭时要做：
+**可以关闭。** 目标达成：代码基线推进到 `v0.8.0-beta.1`，BySpace 的分歧逐项保住并有记录。范围没有暗扩，唯一超出"纯导入"的两处改动都是被上游变化逼出来的，且各自单独成提交：Pi 轮次结算收窄、打包器在依赖冲突时取 daemon 版本。
 
-- 回写到 Project Spec：同步后若有当前真相变化，更新对应 `codestable/spec/` 章节。
-- 遗留：Electron 41 → 44 带来的 macOS 13 下限，必须写进发布说明；macOS 12 用户从本版起不再收到桌面更新。
-- 遗留：本地 `v0.7.0`、`v0.7.2`、`v0.7.3`、`v0.7.4` 与 origin 同名但指向不同提交，先于本次的隐患，未处理。
-- 遗留：desktop release manifest 缺少发布前校验。上游 `scripts/validate-desktop-manifests.mjs` 在发布前校验 manifest 的 `rolloutHours`、`releaseDate`、`version`；本仓库 `desktop-release.yml` 只组装不校验，而 `codestable/spec/desktop-updates.md` 要求每个 release 的 mac manifest 必须提供 arm64 与 x64 DMG 及 SHA-512，目前无自动化保障。阶段二会把该脚本带进来，但它强制的 `minimumSystemVersion` 检查不适用，需要改成校验本仓库真正的不变量。建议单独立 Issue。
+**验证摘要。** typecheck、lint、format、`release:check` 全过；app 5211、server 5638、protocol 710、cli 284、desktop 408、client 149、plugin 73、highlight 97、relay 50 项测试通过。CI 25 个 check-runs 绑定候选 `b68aabc6f`，23 通过 2 跳过 0 失败。本地两处失败均与同步无关且文件与主干逐字节相同：macOS 的 `/private/var` 符号链接、需要本机真实 Claude 二进制的 e2e。
+
+**基点正确性有内容证据。** 两条历史无共同祖先，谱系无法验证基点，改用内容比对：上游改动过的 561 个文件中 336 个与基点逐字节相同、32 个去品牌后相同，其余 193 个全部能由我方后续改动或既有分歧解释，没有"上游有而我们从未收到"的内容。
+
+**毕业回写。**
+
+- `codestable/spec/agent-conversation.md`：Pi 的 Turn 边界结算规则按发起方区分，客户端发起的即时结算，重试在途、stop 在途、自主运行三种等 `agent_settled`。原表述"一律在 `agent_end` 即时结算"已失效。
+- `codestable/spec/desktop-updates.md`：Desktop 运行时为 Electron 44，要求 macOS 13 起，manifest 用 `minimumSystemVersion` 声明，macOS 12 不再收到更新。
+
+其余 spec 章节的当前真相未因本次同步改变。
+
+**未处理，不藏在结论里。**
+
+- 本地 `v0.7.0`、`v0.7.2`、`v0.7.3`、`v0.7.4` 与 origin 同名但指向不同提交。先于本次同步的隐患。
+- desktop release manifest 缺少发布前校验。上游有 `scripts/validate-desktop-manifests.mjs`，但它强制的 `minimumSystemVersion` 检查与我方不变量不同，直接移植不行。
+- 插件通过 npm 包使用 `@getpaseo/plugin/server/acp` 会在运行时失败，是本次明确接受的代价。

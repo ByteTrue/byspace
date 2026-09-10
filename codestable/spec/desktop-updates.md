@@ -16,6 +16,8 @@ macOS 不尝试原地替换正在运行的 App。发现新版本后，用户点�
 
 下载、校验或打开失败时，BySpace 保持运行并报告错误。普通退出不启动这条 DMG 流程，也不会与 Electron 的自动安装路径竞争。
 
+Desktop 运行时为 Electron 44，要求 macOS 13 或更高。发布 manifest 通过 `minimumSystemVersion` 声明该下限，因此 macOS 12 不再收到桌面更新。每次发布说明必须写明这一点。
+
 每个正式或预发布 Desktop release 都必须在对应 mac manifest 中提供 arm64 和 x64 DMG 及 SHA-512。
 
 ## Windows 与 Linux

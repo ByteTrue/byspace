@@ -131,7 +131,7 @@ Owner 要求改结构：cherry-pick 开一个单独的 Issue 来做；删除适�
 
 AI 按此重排：
 
-- 上游同步与断开从 Epic 内提到根 `codestable/issues/017-…`（第 8 节撤回后该 Issue 更名并改号为 `019-o-sync-upstream-to-0-8-0-beta.md`）。理由是断开上游是项目级决定，不属于任何一个 Epic；取舍表、冲突解法和断开点原样带走。
+- 上游同步与断开从 Epic 内提到根 `codestable/issues/017-…`（第 8 节撤回后该 Issue 更名并改号为 `019-x-sync-upstream-to-0-8-0-beta.md`）。理由是断开上游是项目级决定，不属于任何一个 Epic；取舍表、冲突解法和断开点原样带走。
 - Epic 003 更名为「以 orca 为模板改造 terminal agent 体验」，目录改为 `003-o-orca-terminal-agent-experience`。边界从「迁移加删除」收窄为「把 terminal 跑 agent 做成主力路径」，吸收对象是 orca 的启动命令表、四档状态、hook 装配、通知和手机端，并记下这些能力在 orca 源码里的落点供移植。
 - 删除适配器移入 Epic 的「搁置」：删除只能是主力切换完成后的结果，不是逼迫切换的手段。随之保留现状的还有权限 UI、工具卡片、subagent 树、会话导入、rewind，以及 `agent-conversation.md` 的退役和 CLAUDE.md 上游兼容措辞的清理。
 - 穿刺 Issue 在 Epic 内改号为 001，与同步 Issue 之间只保留顺序建议，不设硬依赖。
@@ -166,6 +166,6 @@ Owner 随后给出最终判断：撤回最开始的决定，UI 与 terminal 依�
 
 ## 出口
 
-- 已执行：本 Talk；PR #31 合入 `main`；`codestable/vision/index.md` 改回 UI 与 terminal 共存；`codestable/issues/019-o-sync-upstream-to-0-8-0-beta.md`（由原「选择性同步并断开」扩展而来）；`codestable/epics/003-o-orca-terminal-agent-experience/` 重定为「吸收 orca 的 terminal agent 体验」。
+- 已执行：本 Talk；PR #31 合入 `main`；`codestable/vision/index.md` 改回 UI 与 terminal 共存；`codestable/issues/019-x-sync-upstream-to-0-8-0-beta.md`（由原「选择性同步并断开」扩展而来）；`codestable/epics/003-o-orca-terminal-agent-experience/` 重定为「吸收 orca 的 terminal agent 体验」。
 - 建议下一步：完成 Issue 017 的全量同步，再做 Epic 003 的吸收清单。
 - 暂不纳入：删除适配器、terminal-native 迁移、断开上游（均已撤回）；侧栏模型与转录投影对话视图（吸收候选，待清单排序后再定）。

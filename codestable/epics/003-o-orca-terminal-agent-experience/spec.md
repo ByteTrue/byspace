@@ -75,7 +75,7 @@ BySpace 的 terminal 会话目前只是「一个能跑 TUI 的终端」加一层
 
 **暂不推进：** 具体吸收项的实现，等清单排序。转录投影视图的 Pi 解析器可行性，作为清单中的一项评估。
 
-**不在本 Epic：** 上游同步，见 `codestable/issues/019-o-sync-upstream-to-0-8-0-beta.md`。建议同步完成后再开始实现，避免吸收改动与全量同步的大 diff 互相冲突。
+**不在本 Epic：** 上游同步，见 `codestable/issues/019-x-sync-upstream-to-0-8-0-beta.md`。建议同步完成后再开始实现，避免吸收改动与全量同步的大 diff 互相冲突。
 
 **明确不做：** 删除或弱化 provider 适配器；把 terminal 变成默认或唯一路径；照搬 orca 的架构、Kanban、Design Mode、SSH worktree 等未点名区域。
 
