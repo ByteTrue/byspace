@@ -4,7 +4,35 @@
 
 Carry this notice into the next release entry. `parseChangelogEntries` ignores this heading because it has no date, so nothing here reaches the published notes until it moves under a real version.
 
+## 0.13.0 - 2026-09-10
+
 > **macOS 13 or later is now required.** The desktop app moved to Electron 44, which does not run on macOS 12. Macs on macOS 12 stay on the version they have and stop receiving desktop updates.
+
+### Added
+
+- Added Web Push notifications for browsers and Home Screen web apps, so agent-finished, needs-permission, and terminal-attention alerts arrive even when the tab is closed
+- Added the plugin system from the upstream Paseo v0.8.0-beta.1 baseline: plugins install from local directories or git sources, with plugin management, logs, themes, settings, and timeline items
+- Added upstream Paseo v0.8.0-beta.1 baseline alignment, incorporating OpenCode 2 event contract support and autonomous Pi turns where extensions continue after the main response
+
+### Improved
+
+- Smoothed mobile keyboard transitions when focusing composer and terminal inputs
+- Required explicit setup before creating pull requests from fork repositories
+- Disabled repository fsmonitor queries that slowed git status on large repositories
+
+### Fixed
+
+- Fixed the Pi composer locking during autonomous turns by settling client-started turns immediately and waiting only for autonomous extension processing
+- Fixed terminal agent hook CLI resolution when the daemon is installed from the published npm package
+- Fixed restored terminal tabs missing their activity URL after a daemon restart
+- Fixed desktop app updates stopping externally managed daemons alongside the desktop-managed one
+- Fixed forge PR lookups returning pull requests from fork repositories instead of only the origin repo
+- Fixed Linux desktop installs launching the wrong CLI binary
+- Fixed the Changes pane and working diff disagreeing after git operations
+- Fixed diff file headers scrolling out of sync with diff content
+- Fixed missing copy actions in web diffs
+- Fixed Settings retaining closed views when navigating back
+- Fixed version conflicts in bundled dependencies when installing the published npm package
 
 ## 0.12.0 - 2026-09-07
 
