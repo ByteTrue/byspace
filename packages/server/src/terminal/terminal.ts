@@ -17,7 +17,7 @@ import type { TerminalActivity, TerminalActivityState } from "@getpaseo/protocol
 
 const { Terminal } = xterm;
 const require = createRequire(import.meta.url);
-const PASEO_CLI_BIN_ENTRY = "@getpaseo/cli/bin/byspace";
+const PASEO_CLI_BIN_ENTRIES = ["@bytetrue/byspace/bin/byspace", "@getpaseo/cli/bin/byspace"];
 let nodePtySpawnHelperChecked = false;
 const TERMINAL_TITLE_DEBOUNCE_MS = 150;
 const TERMINAL_EXIT_OUTPUT_LINE_LIMIT = 12;
@@ -401,31 +401,45 @@ export function resolvePaseoCliBinDir(): string | null {
 }
 
 export function resolvePaseoCliExecutablePath(): string | null {
-  const configuredCli = process.env.PASEO_CLI?.trim();
+  const configuredCli = process.env.BYSPACE_CLI?.trim() || process.env.PASEO_CLI?.trim();
   if (configuredCli) {
     return resolvePath(configuredCli);
   }
 
   const cliEntrypoint = resolvePaseoCliBinEntrypoint();
-  if (!cliEntrypoint) {
-    return null;
-  }
-
-  const externalCliEntrypoint = resolveExternalProcessPath(cliEntrypoint);
-  const npmBinDir = findNpmBinDir(dirname(externalCliEntrypoint));
-  if (npmBinDir) {
-    const shim = resolvePaseoCliShim(npmBinDir);
-    if (shim) {
-      return shim;
+  if (cliEntrypoint) {
+    const externalCliEntrypoint = resolveExternalProcessPath(cliEntrypoint);
+    const npmBinDir = findNpmBinDir(dirname(externalCliEntrypoint));
+    if (npmBinDir) {
+      const shim = resolvePaseoCliShim(npmBinDir);
+      if (shim) {
+        return shim;
+      }
     }
+
+    return externalCliEntrypoint;
   }
 
-  return externalCliEntrypoint;
+  return resolvePaseoCliFromPath();
 }
 
 function resolvePaseoCliBinEntrypoint(): string | null {
+  for (const entry of PASEO_CLI_BIN_ENTRIES) {
+    try {
+      return require.resolve(entry);
+    } catch {
+      // try next candidate
+    }
+  }
+  return null;
+}
+
+function resolvePaseoCliFromPath(): string | null {
   try {
-    return require.resolve(PASEO_CLI_BIN_ENTRY);
+    const which = require("which") as {
+      sync(cmd: string, opt?: { nothrow?: boolean }): string | null;
+    };
+    return which.sync("byspace", { nothrow: true });
   } catch {
     return null;
   }

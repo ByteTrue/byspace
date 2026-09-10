@@ -9,6 +9,8 @@ import {
   resolveTerminalSpawnCommand,
   humanizeProcessTitle,
   normalizeProcessTitle,
+  resolvePaseoCliBinDir,
+  resolvePaseoCliExecutablePath,
   resolveZshShellIntegrationDir,
   type TerminalSession,
 } from "./terminal.js";
@@ -1379,5 +1381,58 @@ describe.runIf(isPlatform("win32"))(".cmd shim argv round-trip on Windows", () =
 
   it("normalizes newlines to spaces rather than splitting the command", async () => {
     expect(await roundTrip("first\nsecond")).toEqual(["first second"]);
+  });
+});
+
+describe("resolvePaseoCliExecutablePath", () => {
+  it("respects BYSPACE_CLI environment override", () => {
+    const originalByspace = process.env.BYSPACE_CLI;
+    const originalPaseo = process.env.PASEO_CLI;
+    try {
+      process.env.BYSPACE_CLI = "/custom/path/to/byspace";
+      delete process.env.PASEO_CLI;
+      expect(resolvePaseoCliExecutablePath()).toBe(join("/custom/path/to/byspace"));
+      expect(resolvePaseoCliBinDir()).toBe(join("/custom/path/to"));
+    } finally {
+      if (originalByspace !== undefined) process.env.BYSPACE_CLI = originalByspace;
+      else delete process.env.BYSPACE_CLI;
+      if (originalPaseo !== undefined) process.env.PASEO_CLI = originalPaseo;
+      else delete process.env.PASEO_CLI;
+    }
+  });
+
+  it("respects PASEO_CLI environment override when BYSPACE_CLI is not set", () => {
+    const originalByspace = process.env.BYSPACE_CLI;
+    const originalPaseo = process.env.PASEO_CLI;
+    try {
+      delete process.env.BYSPACE_CLI;
+      process.env.PASEO_CLI = "/custom/path/to/paseo";
+      expect(resolvePaseoCliExecutablePath()).toBe(join("/custom/path/to/paseo"));
+      expect(resolvePaseoCliBinDir()).toBe(join("/custom/path/to"));
+    } finally {
+      if (originalByspace !== undefined) process.env.BYSPACE_CLI = originalByspace;
+      else delete process.env.BYSPACE_CLI;
+      if (originalPaseo !== undefined) process.env.PASEO_CLI = originalPaseo;
+      else delete process.env.PASEO_CLI;
+    }
+  });
+
+  it("resolves a non-null CLI executable in workspace or system path", () => {
+    const originalByspace = process.env.BYSPACE_CLI;
+    const originalPaseo = process.env.PASEO_CLI;
+    try {
+      delete process.env.BYSPACE_CLI;
+      delete process.env.PASEO_CLI;
+      const cliPath = resolvePaseoCliExecutablePath();
+      expect(cliPath).not.toBeNull();
+      const binDir = resolvePaseoCliBinDir();
+      expect(binDir).not.toBeNull();
+      expect(cliPath?.startsWith(binDir!)).toBe(true);
+    } finally {
+      if (originalByspace !== undefined) process.env.BYSPACE_CLI = originalByspace;
+      else delete process.env.BYSPACE_CLI;
+      if (originalPaseo !== undefined) process.env.PASEO_CLI = originalPaseo;
+      else delete process.env.PASEO_CLI;
+    }
   });
 });
