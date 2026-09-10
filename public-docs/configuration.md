@@ -230,7 +230,8 @@ Set the persisted value in `config.json`:
 ## Common env vars
 
 - `BYSPACE_HOME`, set BySpace home directory
-- `BYSPACE_PASSWORD`, on the daemon, the password to require (plaintext, hashed at startup); on the CLI, the password used to connect when the host URI doesn't include one
+- `BYSPACE_HOST`, set the daemon target for CLI commands
+- `PASEO_PASSWORD`, on the daemon, the password to require (plaintext, hashed at startup); on the CLI, the password used to connect when the host URI doesn't include one
 - `BYSPACE_LISTEN`, override `daemon.listen`
 - `BYSPACE_RELAY_ENABLED`, enable or disable the outbound relay for this daemon launch
 - `BYSPACE_HOSTNAMES`, override/extend `daemon.hostnames`

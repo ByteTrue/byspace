@@ -29,22 +29,22 @@ Before connecting:
 The CLI accepts an SSH URI as its host (key or agent authentication only; confirm the host key once in a terminal):
 
 ```bash
-byspace ls -a --host ssh://user@host
+byspace --host ssh://user@host ls -a
 ```
 
 The daemon is expected at `127.0.0.1:6777` on the remote host. The port in the SSH URL is the SSH server port:
 
 ```bash
-byspace ls -a --host ssh://user@host:2222
+byspace --host ssh://user@host:2222 ls -a
 ```
 
 Set a different remote daemon port with `daemonPort`:
 
 ```bash
-byspace ls -a --host 'ssh://user@host?daemonPort=7777'
+byspace --host 'ssh://user@host?daemonPort=7777' ls -a
 ```
 
-`--host` belongs after the command. `byspace daemon status` checks only the local daemon; use `byspace ls --host ...` to verify a remote connection. `byspace run --host ...` also requires `--cwd` with a path that exists on the remote host.
+Put `--host` before the command. `byspace daemon status` checks only the local daemon; use `byspace --host ssh://user@host ls` to verify a remote connection. `byspace --host ssh://user@host run --cwd /path/on/remote ...` requires a working directory that exists on the remote host.
 
 In BySpace Desktop, open **Settings → Add host → Remote SSH** and enter the same destination. The `ssh://` prefix is optional: `user@host`, `user@host:2222`, and full `ssh://` URIs all work. The password field is optional; leave it empty to authenticate with your keys or SSH agent. Desktop connections prompt for the host key fingerprint on first use and warn if it ever changes.
 

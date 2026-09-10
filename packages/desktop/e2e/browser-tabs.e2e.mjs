@@ -120,7 +120,7 @@ function seedPaseoHome(paseoHome, listen, workspaceRoot) {
     daemon: {
       listen,
       relay: { enabled: false },
-      mcp: { enabled: true, injectIntoAgents: false },
+      mcp: { enabled: true, injectIntoAgents: true },
       browserTools: { enabled: true },
       cors: { allowedOrigins: ["*"] },
     },
@@ -255,6 +255,21 @@ async function waitForGuestSelector(client, browserId) {
       function: "() => Boolean(globalThis.__paseoSelector)",
     });
     if (JSON.parse(evaluated.resultJson) === true) {
+      return true;
+    }
+    await delay(50);
+  }
+  return false;
+}
+
+async function waitForGuestActiveElement(client, browserId, elementId) {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const evaluated = await callBrowserTool(client, "browser_evaluate", {
+      browserId,
+      function: "() => document.activeElement?.id ?? null",
+    });
+    if (JSON.parse(evaluated.resultJson) === elementId) {
       return true;
     }
     await delay(50);
@@ -492,12 +507,8 @@ async function runRegression({ page, client, serverId, targetUrl, callerAgentId,
   );
 
   await clickGuestElement(page, client, browserId, "#typing-target");
-  const activeGuestElement = await callBrowserTool(client, "browser_evaluate", {
-    browserId,
-    function: "() => document.activeElement?.id ?? null",
-  });
   assert(
-    JSON.parse(activeGuestElement.resultJson) === "typing-target",
+    await waitForGuestActiveElement(client, browserId, "typing-target"),
     "Physical browser click did not focus the guest input",
   );
   const focusedGuest = await page.evaluate(
@@ -581,7 +592,19 @@ async function runRegression({ page, client, serverId, targetUrl, callerAgentId,
   const responsiveViewport = await readViewport(client, browserId);
 
   await originalDeck.getByTestId(`workspace-tab-agent_${callerAgentId}`).click();
-  await page.waitForTimeout(500);
+  await page.waitForFunction(
+    ({ id, webContentsId }) => {
+      const webview = document.querySelector(`[data-paseo-browser-id="${id}"]`);
+      return (
+        webview?.parentElement?.getAttribute("data-paseo-browser-surface") === id &&
+        webview.parentElement.style.width === "1px" &&
+        webview.parentElement.style.pointerEvents === "none" &&
+        webview.getWebContentsId() === webContentsId
+      );
+    },
+    { id: browserId, webContentsId: firstGuest.webContentsId },
+    { timeout: timeoutMs },
+  );
   try {
     await callBrowserToolUntilReady(client, "browser_screenshot", { browserId });
   } catch (error) {
@@ -823,7 +846,7 @@ async function runRegression({ page, client, serverId, targetUrl, callerAgentId,
   await originalDeck.getByRole("button", { name: "Cancel element selector" }).click();
 
   await originalDeck.getByTestId(`workspace-tab-agent_${callerAgentId}`).click();
-  await page.getByRole("button", { name: "Open command center" }).click();
+  await page.getByTestId("sidebar-search").click();
   await page.getByTestId("command-center-input").fill("Split pane right");
   await page.getByText("Split pane right", { exact: true }).click();
   assert(
