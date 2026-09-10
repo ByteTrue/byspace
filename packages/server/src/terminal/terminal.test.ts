@@ -27,7 +27,7 @@ import {
 } from "node:fs";
 import { spawnSync } from "node:child_process";
 import * as pty from "node-pty";
-import { join } from "node:path";
+import { join, resolve as resolvePath } from "node:path";
 import { tmpdir } from "node:os";
 import { setImmediate as waitForImmediate, setTimeout as delay } from "node:timers/promises";
 import { stripVTControlCharacters } from "node:util";
@@ -1391,8 +1391,10 @@ describe("resolvePaseoCliExecutablePath", () => {
     try {
       process.env.BYSPACE_CLI = "/custom/path/to/byspace";
       delete process.env.PASEO_CLI;
-      expect(resolvePaseoCliExecutablePath()).toBe(join("/custom/path/to/byspace"));
-      expect(resolvePaseoCliBinDir()).toBe(join("/custom/path/to"));
+      // The resolver uses path.resolve: on Windows a rooted-but-driveless path
+      // gains the current drive, so the assertion must resolve the same way.
+      expect(resolvePaseoCliExecutablePath()).toBe(resolvePath("/custom/path/to/byspace"));
+      expect(resolvePaseoCliBinDir()).toBe(resolvePath("/custom/path/to"));
     } finally {
       if (originalByspace !== undefined) process.env.BYSPACE_CLI = originalByspace;
       else delete process.env.BYSPACE_CLI;
@@ -1407,8 +1409,8 @@ describe("resolvePaseoCliExecutablePath", () => {
     try {
       delete process.env.BYSPACE_CLI;
       process.env.PASEO_CLI = "/custom/path/to/paseo";
-      expect(resolvePaseoCliExecutablePath()).toBe(join("/custom/path/to/paseo"));
-      expect(resolvePaseoCliBinDir()).toBe(join("/custom/path/to"));
+      expect(resolvePaseoCliExecutablePath()).toBe(resolvePath("/custom/path/to/paseo"));
+      expect(resolvePaseoCliBinDir()).toBe(resolvePath("/custom/path/to"));
     } finally {
       if (originalByspace !== undefined) process.env.BYSPACE_CLI = originalByspace;
       else delete process.env.BYSPACE_CLI;
