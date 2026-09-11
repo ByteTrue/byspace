@@ -1,14 +1,14 @@
-# Paseo Hub relationship
+# BySpace Hub relationship
 
-Paseo Hub is the upstream Hub product. Keep its public and protocol names — `hub.paseo.sh`,
+BySpace Hub is the upstream Hub product. Keep its public and protocol names — `hub.paseo.sh`,
 `.paseo/workflows/${{ paseo.* }}`, and `@getpaseo/hub` — unchanged. Local BySpace commands use
 `byspace hub`.
 
-Paseo Hub is an explicit opt-in connection from one BySpace daemon to one Hub. Running a daemon does
+BySpace Hub is an explicit opt-in connection from one BySpace daemon to one Hub. Running a daemon does
 not register it with a Hub. The relationship begins only when a user runs
 `byspace hub connect [url]` from the daemon machine with an explicit API key or matching stored CLI login.
 
-The human CLI login and daemon relationship are separate identities. `byspace hub login [url]` stores a durable organization-scoped CLI credential keyed by normalized Hub origin under `$BYSPACE_HOME`. Interactive login optionally connects the local daemon, then points to the Hub UI for trigger configuration; it does not scaffold or deploy configuration. `byspace hub init` remains the explicit triggers-as-code scaffold. `byspace hub export [directory]` writes the active organization's current triggers as one self-contained YAML file per trigger, using the active login unless another Hub or API key is selected. Origin resolution uses explicit command input, `BYSPACE_HUB_URL`, active login, then `https://hub.paseo.sh`; the legacy `PASEO_HUB_URL` name remains a lower-priority fallback. Connect uses exact-origin authority to request a one-time enrollment token, then passes only that token to the daemon. The daemon generates and persists its own relationship credential.
+The human CLI login and daemon relationship are separate identities. `byspace hub login [url]` stores a durable organization-scoped CLI credential keyed by normalized Hub origin under `PASEO_HOME`. Interactive login optionally connects the local daemon, then points to the Hub UI for trigger configuration; it does not scaffold or deploy configuration. `byspace hub init` remains the explicit triggers-as-code scaffold: it writes one self-contained organization trigger under `.paseo/triggers/`, validates it through the trigger API, and optionally installs it. `byspace hub deploy` validates and installs every trigger in that directory; passing `--project` keeps deploying the legacy project bundle instead. `byspace hub export [directory]` writes the active organization's current triggers in the same layout, using the active login unless another Hub or API key is selected. Origin resolution uses explicit command input, `PASEO_HUB_URL`, active login, then `https://hub.paseo.sh`. Connect uses exact-origin authority to request a one-time enrollment token, then passes only that token to the daemon. The daemon generates and persists its own relationship credential.
 
 ## Connection and authority
 
@@ -92,9 +92,9 @@ the daemon does not retry revocation in the background.
 
 ## Cross-repository compatibility
 
-The consumer implementation lives in Paseo Cloud. Cloud owns its copy of the Hub wire schemas and
-has no Paseo runtime or build dependency. Cross-repository end-to-end verification separately builds
-a Paseo source checkout and exercises the real daemon, CLI, direct WebSocket, Cloud service, and
+The consumer implementation lives in BySpace Cloud. Cloud owns its copy of the Hub wire schemas and
+has no BySpace runtime or build dependency. Cross-repository end-to-end verification separately builds
+a BySpace source checkout and exercises the real daemon, CLI, direct WebSocket, Cloud service, and
 Postgres. That compatibility fixture is not a package dependency or fallback implementation.
 Its `hub-e2e` ACP provider accepts only exact tool names on the injected `hub` MCP server. Other
 custom ACP providers remain unsupported for unattended preapproval.

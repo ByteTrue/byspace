@@ -1,7 +1,7 @@
 # Plugins
 
 Local plugins contribute daemon RPCs, native app surfaces, workspace panels, Command Center items,
-client slash commands, timeline items, composer pills, app themes, composer attachment sources, and settings screens.
+client slash commands, timeline items, header buttons, composer pills, app themes, composer attachment sources, and settings screens.
 BySpace executes `index.server.ts` in a subprocess and `index.client.tsx` in every connected app.
 
 > **Trust every plugin you add.** `byspace plugin add` and `byspace plugin install` mean “I trust this codebase.” Plugins are unsandboxed: server code and Git preparation commands run with the daemon user's access on the daemon host, and client contributions run inside BySpace. The repository's dependencies and future updates are part of that trust decision. With `--host`, preparation runs on that remote daemon host.
@@ -41,7 +41,7 @@ runtime-safe: run `byspace reload` after editing `$BYSPACE_HOME/config.json`. En
 enabled plugin; disabling tears them all down without restarting the daemon. Plugin source entries
 remain lifecycle-owned and do not reload from manual config edits.
 
-The directory contains a manifest declaring identity and Paseo requirements, one optional entry per runtime, runtime-owned
+The directory contains a manifest declaring identity and BySpace requirements, one optional entry per runtime, runtime-owned
 directories, and local typechecking support. At least one entry is required.
 
 ```text
@@ -69,7 +69,7 @@ filenames.
 }
 ```
 
-Declare the supported Paseo range and keep it current when adopting newer APIs. See the
+Declare the supported BySpace range and keep it current when adopting newer APIs. See the
 [requirements contract](../public-docs/plugins/v0.8/reference.md#requirements), including legacy
 manifests and prerelease matching.
 
@@ -321,7 +321,7 @@ need no change. See [catalogue ownership](providers.md#provider-snapshot-refresh
 `send()` resolves after acceptance. Publish operation completion, prompt disposition, turn state,
 configuration, permissions, persistence, and complete timeline snapshots through `onEvent()`.
 Route messages, structured commands, steering, and command side effects through `session.prompt`.
-Provider settings are toggle/select data that Paseo renders in the composer. Keep private options in
+Provider settings are toggle/select data that BySpace renders in the composer. Keep private options in
 the opaque `providerOptions` config object.
 
 Agent refresh closes the current provider session and opens it again with current configuration and
@@ -343,58 +343,26 @@ owns author workflow, lifecycle, testing, and distribution guidance.
 It must resolve inside that directory to a regular SVG file no larger than 64 KiB. The SVG must be
 self-contained: scripts, styles, `foreignObject`, event-handler attributes, JavaScript URLs, and
 external `href` or `xlink:href` references are rejected. Fragment references such as `#mark` are
-allowed. Paseo reads and sanitizes the file when the plugin starts; the string is never an inline
+allowed. BySpace reads and sanitizes the file when the plugin starts; the string is never an inline
 SVG or URL.
 
-## Contribute composer pills
+## Contribute buttons
 
-Add and remove targeted pills from the client entry lifecycle. `index.client.tsx` runs once per
-plugin installation in each connected app and never runs in the daemon subprocess. It can subscribe
-to the client API, call plugin RPCs, and own arbitrary client state without mounting a panel or
-surface.
+Header buttons and composer pills share the client-only descriptor and registration lifecycle in
+`packages/app/src/plugins/buttons/`. The [public button reference](../public-docs/plugins/v0.8/reference.md#header-buttons)
+owns the author API and placement rules. Keep presentation policy in this module so another
+placement can reuse behavior without copying registration or action state.
 
-```tsx
-export function contributeClient(client: PluginClientContext) {
-  const pills = new Map<string, () => void>();
-  const unsubscribe = client.paseo.agents.subscribe((update) => {
-    if (update.kind !== "upsert" || !update.agent.workspaceId) return;
-    const { id: agentId, workspaceId } = update.agent;
-    pills.get(agentId)?.();
-    pills.set(
-      agentId,
-      client.addComposerPill({
-        id: "review",
-        title: "Open review",
-        workspaceId,
-        agentId,
-        Component: ReviewPill,
-        async onPress() {
-          await client.rpc(refreshReview, { agentId });
-          client.openPanel("review", { workspaceId, agentId });
-        },
-      }),
-    );
-  });
-  return () => {
-    unsubscribe();
-    for (const remove of pills.values()) remove();
-  };
-}
-```
-
-Call `contributeClient(client)` from `index.client.tsx`, or move its body into that entry.
-`addComposerPill` returns an idempotent removal function. A pill appears only in the
-matching workspace and agent track bar alongside Tasks and Subagents. BySpace owns the pressable,
-shared chrome, pending state, error reporting, and placement. The component owns its icon and text;
-the callback is client code by construction. Removing the pill, reloading the plugin, disconnecting
-the host, or unloading the app tears down the contribution.
+Native sheets teleport their children. Button surfaces rebuild the installation's SDK, state,
+query, and toast providers inside the surface content, including overflow pages from different
+plugins. Providers only around the trigger do not reach those bodies.
 
 ## Contribute timeline items
 
 Timeline transformers and renderers are client contributions. The daemon's canonical rows and
 built-in projection stay unchanged. The app transforms each source item while building the render
 model, for both fetched history and live events. The input includes `phase: "streaming" | "complete"`.
-Paseo memoizes by source-item reference and derives every replacement ID from the source identity, so
+BySpace memoizes by source-item reference and derives every replacement ID from the source identity, so
 streaming updates preserve mounted component identity.
 
 `query.itemType` selects one public `AgentTimelineItem.type`. The callback owns any detailed
@@ -433,7 +401,7 @@ be rendered intact. The daemon advertises this RPC through
 
 `addSlashCommand` registers an agent- or workspace-context command in the composer. The
 callback runs in the app, receives the trimmed text after the command name as `args`, and receives
-the same `paseo`, `rpc`, `openSurface`, workspace, agent, and `openPanel` capabilities as the matching
+the same `byspace`, `rpc`, `openSurface`, workspace, agent, and `openPanel` capabilities as the matching
 Command Center callback.
 
 ```ts
@@ -448,7 +416,7 @@ client.addSlashCommand({
 });
 ```
 
-Paseo owns the autocomplete row, input clearing, and error toast. It never sends the command text to
+BySpace owns the autocomplete row, input clearing, and error toast. It never sends the command text to
 the agent. Built-in client commands win name and alias collisions, plugin commands win
 provider-command collisions, and the first plugin in stable catalog order wins collisions between
 plugins. Plugin slash commands do not run when the composer has attachments.
