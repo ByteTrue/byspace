@@ -8,7 +8,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { Buffer } from "buffer";
 import {
   ArrowLeft,
   Settings,
@@ -75,8 +74,6 @@ import { resolveAppVersion } from "@/utils/app-version";
 import { openChangelog } from "@/changelog";
 import { useAppDiagnosticStore } from "@/diagnostics/store";
 import { settingsStyles } from "@/styles/settings";
-import { THINKING_TONE_NATIVE_PCM_BASE64 } from "@/utils/thinking-tone.native-pcm";
-import { useVoiceAudioEngineOptional } from "@/contexts/voice-context";
 import {
   LANGUAGE_OPTIONS,
   formatLanguageOptionLabel,
@@ -491,25 +488,14 @@ function GeneralSection({
 interface DiagnosticsSectionProps {
   useLegacyTerminalRenderer: boolean;
   onUseLegacyTerminalRendererChange: (value: boolean) => void;
-  voiceAudioEngine: ReturnType<typeof useVoiceAudioEngineOptional>;
-  isPlaybackTestRunning: boolean;
-  playbackTestResult: string | null;
-  handlePlaybackTest: () => Promise<void>;
 }
 
 function DiagnosticsSection({
   useLegacyTerminalRenderer,
   onUseLegacyTerminalRendererChange,
-  voiceAudioEngine,
-  isPlaybackTestRunning,
-  playbackTestResult,
-  handlePlaybackTest,
 }: DiagnosticsSectionProps) {
   const { t } = useTranslation();
   const openAppDiagnostic = useAppDiagnosticStore((state) => state.open);
-  const handlePlayPress = useCallback(() => {
-    void handlePlaybackTest();
-  }, [handlePlaybackTest]);
   return (
     <SettingsSection title={t("settings.diagnostics.title")}>
       <View style={settingsStyles.card}>
@@ -540,24 +526,6 @@ function DiagnosticsSection({
           </View>
           <Button variant="secondary" size="sm" onPress={openAppDiagnostic}>
             {t("settings.diagnostics.app.run")}
-          </Button>
-        </View>
-        <View style={settingsStyles.row}>
-          <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>{t("settings.diagnostics.testAudio")}</Text>
-            {playbackTestResult ? (
-              <Text style={settingsStyles.rowHint}>{playbackTestResult}</Text>
-            ) : null}
-          </View>
-          <Button
-            variant="secondary"
-            size="sm"
-            onPress={handlePlayPress}
-            disabled={!voiceAudioEngine || isPlaybackTestRunning}
-          >
-            {isPlaybackTestRunning
-              ? t("settings.diagnostics.playing")
-              : t("settings.diagnostics.playTest")}
           </Button>
         </View>
       </View>
@@ -1060,14 +1028,11 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const router = useRouter();
   const { theme } = useUnistyles();
   const { t } = useTranslation();
-  const voiceAudioEngine = useVoiceAudioEngineOptional();
   const { settings, isLoading: settingsLoading, updateSettings } = useAppSettings();
   const [isAddHostMethodVisible, setIsAddHostMethodVisible] = useState(false);
   const [isDirectHostVisible, setIsDirectHostVisible] = useState(false);
   const [isRemoteSshVisible, setIsRemoteSshVisible] = useState(false);
   const [isPasteLinkVisible, setIsPasteLinkVisible] = useState(false);
-  const [isPlaybackTestRunning, setIsPlaybackTestRunning] = useState(false);
-  const [playbackTestResult, setPlaybackTestResult] = useState<string | null>(null);
   const lastOpenedAddHostIntentRef = useRef<string | null>(null);
   const isDesktopApp = false;
   const appVersion = resolveAppVersion();
@@ -1141,35 +1106,6 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     },
     [updateSettings],
   );
-
-  const handlePlaybackTest = useCallback(async () => {
-    if (!voiceAudioEngine || isPlaybackTestRunning) {
-      return;
-    }
-
-    setIsPlaybackTestRunning(true);
-    setPlaybackTestResult(null);
-
-    try {
-      const bytes = Buffer.from(THINKING_TONE_NATIVE_PCM_BASE64, "base64");
-      await voiceAudioEngine.initialize();
-      voiceAudioEngine.stop();
-      await voiceAudioEngine.play({
-        type: "audio/pcm;rate=16000;bits=16",
-        size: bytes.byteLength,
-        async arrayBuffer() {
-          return Uint8Array.from(bytes).buffer;
-        },
-      });
-      setPlaybackTestResult(null);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("[Settings] Playback test failed", error);
-      setPlaybackTestResult(t("settings.diagnostics.playbackFailed", { message }));
-    } finally {
-      setIsPlaybackTestRunning(false);
-    }
-  }, [isPlaybackTestRunning, t, voiceAudioEngine]);
 
   const closeAddConnectionFlow = useCallback(() => {
     setIsAddHostMethodVisible(false);
@@ -1378,10 +1314,6 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
               <DiagnosticsSection
                 useLegacyTerminalRenderer={settings.useLegacyTerminalRenderer}
                 onUseLegacyTerminalRendererChange={handleUseLegacyTerminalRendererChange}
-                voiceAudioEngine={voiceAudioEngine}
-                isPlaybackTestRunning={isPlaybackTestRunning}
-                playbackTestResult={playbackTestResult}
-                handlePlaybackTest={handlePlaybackTest}
               />
             );
           case "about":

@@ -12,7 +12,6 @@ import {
   LogLevelSchema,
   type PersistedConfig,
 } from "./persisted-config.js";
-import type { AgentProvider } from "./agent/agent-sdk-types.js";
 import type {
   AgentProviderRuntimeSettingsMap,
   ProviderOverride,
@@ -28,8 +27,6 @@ import {
   resolveBySpaceHostedAppBaseUrl,
 } from "@getpaseo/protocol/release-channel";
 import { hashDaemonPassword } from "./auth.js";
-import { resolveSpeechConfig } from "./speech/speech-config-resolver.js";
-import type { RequestedSpeechProviders } from "./speech/speech-types.js";
 import { mergeHostnames, parseHostnamesEnv, type HostnamesConfig } from "./hostnames.js";
 import { resolveGitProcessPolicy } from "../utils/git-process-scheduler.js";
 import { withByspaceEnvironment } from "../utils/byspace-env.js";
@@ -201,18 +198,6 @@ function parsePositiveIntegerEnv(value: string | undefined): number | undefined 
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-const OptionalVoiceLlmProviderSchema = z
-  .union([z.string(), z.null(), z.undefined()])
-  .transform((value): string | null =>
-    typeof value === "string" ? value.trim().toLowerCase() : null,
-  )
-  .pipe(z.union([AgentProviderSchema, z.null()]));
-
-function parseOptionalVoiceLlmProvider(value: unknown): AgentProvider | null {
-  const parsed = OptionalVoiceLlmProviderSchema.safeParse(value);
-  return parsed.success ? parsed.data : null;
-}
-
 function extractProviderOverrides(
   providers: Record<string, unknown> | undefined,
 ): Record<string, ProviderOverride> | undefined {
@@ -348,12 +333,6 @@ function resolveRelayConfig(input: ResolveRelayInput): ResolvedRelay {
   };
 }
 
-interface ResolvedVoiceLlm {
-  provider: AgentProvider | null;
-  providerExplicit: boolean;
-  model: string | null;
-}
-
 function resolveServiceProxyPublicBaseUrl(value: string | null): string | null {
   if (value === null) {
     return null;
@@ -416,21 +395,6 @@ function resolveWebUiConfig(
   return {
     enabled,
     distDir,
-  };
-}
-
-function resolveVoiceLlmConfig(
-  env: NodeJS.ProcessEnv,
-  persisted: ReturnType<typeof loadPersistedConfig>,
-): ResolvedVoiceLlm {
-  const envVoiceLlmProvider = parseOptionalVoiceLlmProvider(env.PASEO_VOICE_LLM_PROVIDER);
-  const persistedVoiceLlmProvider = parseOptionalVoiceLlmProvider(
-    persisted.features?.voiceMode?.llm?.provider,
-  );
-  return {
-    provider: envVoiceLlmProvider ?? persistedVoiceLlmProvider ?? null,
-    providerExplicit: envVoiceLlmProvider !== null || persistedVoiceLlmProvider !== null,
-    model: persisted.features?.voiceMode?.llm?.model ?? null,
   };
 }
 
@@ -634,18 +598,12 @@ export function resolveConfigFromPersisted(
   const serviceProxy = resolveServiceProxyConfig(env, persisted);
   const webUi = resolveWebUiConfig(paseoHome, env, cli, persisted);
 
-  const { openai, speech } = resolveSpeechConfig({
-    paseoHome,
-    env,
-    persisted,
-  });
-
-  const voiceLlm = resolveVoiceLlmConfig(env, persisted);
+  // Speech/dictation/voice config is retired (issue 025 C8).
   const providerOverrides = extractProviderOverrides(
     persisted.agents?.providers as Record<string, unknown> | undefined,
   );
 
-  const overrideControlledPaths = resolveOverrideControlledPaths(env, cli, speech.providers);
+  const overrideControlledPaths = resolveOverrideControlledPaths(env, cli, null);
 
   return {
     listen,
@@ -686,11 +644,6 @@ export function resolveConfigFromPersisted(
     webUi,
     appBaseUrl,
     auth: resolveAuthConfig(env, persisted),
-    openai,
-    speech,
-    voiceLlmProvider: voiceLlm.provider,
-    voiceLlmProviderExplicit: voiceLlm.providerExplicit,
-    voiceLlmModel: voiceLlm.model,
     agentProviderSettings: extractAgentProviderSettings(providerOverrides),
     providerCatalogRefreshTimeoutMs: persisted.agents?.catalogRefreshTimeoutMs,
     metadataGeneration: persisted.agents?.metadataGeneration,
@@ -723,7 +676,7 @@ function parsePositiveGitOverride(value: string | undefined): boolean {
 function resolveOverrideControlledPaths(
   env: NodeJS.ProcessEnv,
   cli: CliConfigOverrides | undefined,
-  speechProviders: RequestedSpeechProviders,
+  speechProviders: RequestedSpeechProviders | null,
 ): string[] {
   return Array.from(
     new Set([
@@ -838,6 +791,8 @@ function resolveLogOverrideControlledPaths(env: NodeJS.ProcessEnv): string[] {
   return paths;
 }
 
+type RequestedSpeechProviders = Record<string, { enabled?: boolean; provider?: string }>;
+
 function isEnabledSpeechProvider(
   provider: RequestedSpeechProviders[keyof RequestedSpeechProviders],
   expected: "local" | "openai",
@@ -847,8 +802,9 @@ function isEnabledSpeechProvider(
 
 function resolveSpeechOverrideControlledPaths(
   env: NodeJS.ProcessEnv,
-  providers: RequestedSpeechProviders,
+  providers: RequestedSpeechProviders | null,
 ): string[] {
+  if (!providers) return [];
   const paths: string[] = [];
   const add = (envName: string, ...configPaths: string[]) => {
     if (env[envName] !== undefined) paths.push(...configPaths);

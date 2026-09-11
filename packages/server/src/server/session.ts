@@ -9,7 +9,6 @@ import { CLIENT_CAPS, type ClientCapability } from "@getpaseo/protocol/client-ca
 import {
   serializeAgentStreamEvent,
   type AgentSnapshotPayload,
-  type AgentAttachment,
   type FirstAgentContext,
   type SessionInboundMessage,
   type SessionOutboundMessage,
@@ -34,8 +33,6 @@ import type { BinaryFrame } from "@getpaseo/protocol/binary-frames/index";
 import { CursorError } from "./pagination/cursor.js";
 import { SortablePager, type SortSpec } from "./pagination/sortable-pager.js";
 import { describeAgentHistoryMatches, rankAgentHistoryCandidates } from "./agent-history-search.js";
-import type { SpeechToTextProvider, TextToSpeechProvider } from "./speech/speech-provider.js";
-import type { TurnDetectionProvider } from "./speech/turn-detection-provider.js";
 import {
   buildConfigOverrides,
   isStoredAgentProviderAvailable,
@@ -52,7 +49,6 @@ import {
   resolveFirstAgentPromptTitle,
 } from "./agent/create-agent-title.js";
 import { respondToAgentPermission } from "./agent/permission-response.js";
-import type { VoiceCallerContext, VoiceSpeakHandler } from "./voice-types.js";
 import type { ScriptHealthState } from "./script-health-monitor.js";
 import { spawnWorkspaceScript } from "./worktree-bootstrap.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
@@ -126,7 +122,6 @@ import {
   getAgentStreamEventTurnId,
   type AgentPersistenceHandle,
   type AgentPermissionResponse,
-  type AgentRunOptions,
   type AgentSessionConfig,
 } from "./agent/agent-sdk-types.js";
 import type { StoredAgentRecord } from "./agent/agent-storage.js";
@@ -154,7 +149,6 @@ import {
   type WorkspaceMutation,
   type WorkspaceRegistry,
 } from "./workspace-registry.js";
-import { wrapSpokenInput } from "./voice-config.js";
 import { isVoicePermissionAllowed } from "./voice-permission-policy.js";
 import {
   ProjectIconReader,
@@ -210,8 +204,6 @@ import {
   WORKSPACE_SEARCH_HIDDEN_DIRECTORIES,
 } from "../utils/directory-suggestions.js";
 import type { CheckoutDiffManager } from "./checkout-diff-manager.js";
-import type { Resolvable } from "./speech/provider-resolver.js";
-import type { SpeechReadinessSnapshot } from "./speech/speech-runtime.js";
 import type pino from "pino";
 import { ScheduleService } from "./schedule/service.js";
 import {
@@ -476,9 +468,6 @@ export interface SessionOptions {
   daemonConfigStore: DaemonConfigStore;
   orchestrationSkills?: import("./orchestration-skills/index.js").OrchestrationSkills;
   mcpBaseUrl?: string | null;
-  stt: Resolvable<SpeechToTextProvider | null>;
-  sttLanguage?: string;
-  tts: Resolvable<TextToSpeechProvider | null>;
   terminalManager: TerminalManager | null;
   providerSnapshotManager: ProviderSnapshotManager;
   providerUsageService: ProviderUsageService;
@@ -495,21 +484,6 @@ export interface SessionOptions {
   getDaemonTcpHost?: () => string | null;
   serviceProxyPublicBaseUrl?: string | null;
   resolveScriptHealth?: (hostname: string) => ScriptHealthState | null;
-  voice?: {
-    turnDetection?: Resolvable<TurnDetectionProvider | null>;
-  };
-  voiceBridge?: {
-    registerVoiceSpeakHandler?: (agentId: string, handler: VoiceSpeakHandler) => void;
-    unregisterVoiceSpeakHandler?: (agentId: string) => void;
-    registerVoiceCallerContext?: (agentId: string, context: VoiceCallerContext) => void;
-    unregisterVoiceCallerContext?: (agentId: string) => void;
-  };
-  dictation?: {
-    finalTimeoutMs?: number;
-    stt?: Resolvable<SpeechToTextProvider | null>;
-    sttLanguage?: string;
-    getSpeechReadiness?: () => SpeechReadinessSnapshot;
-  };
   serverId?: string;
   daemonVersion?: string;
   daemonRuntimeConfig?: DaemonRuntimeConfig;
@@ -749,9 +723,6 @@ export class Session {
       workspaceAutoName,
       daemonConfigStore,
       orchestrationSkills,
-      stt,
-      sttLanguage,
-      tts,
       terminalManager,
       providerSnapshotManager,
       providerUsageService,
@@ -764,9 +735,6 @@ export class Session {
       getDaemonTcpHost,
       serviceProxyPublicBaseUrl,
       resolveScriptHealth,
-      voice,
-      voiceBridge,
-      dictation,
       serverId,
       daemonVersion,
       daemonRuntimeConfig,
@@ -1037,40 +1005,7 @@ export class Session {
       buildWorkspaceDescriptor: (input) => this.buildWorkspaceDescriptor(input),
     });
 
-    this.voiceSession = new VoiceSession({
-      host: {
-        emit: (msg) => this.emit(msg),
-        loadAgent: (agentId) =>
-          ensureAgentLoaded(agentId, {
-            agentManager: this.agentManager,
-            agentStorage: this.agentStorage,
-            logger: this.sessionLogger,
-          }),
-        reloadAgentSession: (agentId, overrides) =>
-          this.agentManager.reloadAgentSession(agentId, overrides),
-        sendSpokenInput: async (agentId, text) => {
-          await this.handleSendAgentMessage(
-            agentId,
-            text,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            { spokenInput: true },
-          );
-        },
-        interruptAgentIfRunning: (agentId) => this.interruptAgentIfRunning(agentId),
-        hasActiveAgentRun: (agentId) => this.hasActiveAgentRun(agentId),
-      },
-      logger: this.sessionLogger,
-      sessionId: this.sessionId,
-      sttLanguage,
-      tts,
-      stt,
-      voice,
-      voiceBridge,
-      dictation,
-    });
+    this.voiceSession = new VoiceSession(); // Voice is retired (issue 025 C8)
 
     this.subscribeToAgentEvents();
     this.subscribeToRegistryMutations();
@@ -1435,13 +1370,6 @@ export class Session {
       );
       throw new AgentRunCancellationError(agentId, "stop");
     }
-  }
-
-  private hasActiveAgentRun(agentId: string | null): boolean {
-    if (!agentId) {
-      return false;
-    }
-    return this.agentManager.hasInFlightRun(agentId);
   }
 
   private handleAgentRunError(agentId: string, error: unknown, context: string): void {
@@ -2125,7 +2053,7 @@ export class Session {
         this.voiceSession.handleAudioPlayed(msg.id);
         return undefined;
       case "set_voice_mode":
-        return this.voiceSession.handleSetVoiceMode(msg.enabled, msg.agentId, msg.requestId);
+        return this.voiceSession.handleSetVoiceMode(msg.enabled, msg.agentId, msg.requestId ?? "");
       case "dictation_stream_start":
         return this.voiceSession.handleDictationStreamStart(msg);
       case "dictation_stream_chunk":
@@ -3415,56 +3343,6 @@ export class Session {
   /**
    * Handle text message to agent (with optional image attachments)
    */
-  private async handleSendAgentMessage(
-    agentId: string,
-    text: string,
-    messageId?: string,
-    images?: Array<{ data: string; mimeType: string }>,
-    attachments?: AgentAttachment[],
-    runOptions?: AgentRunOptions,
-    options?: { spokenInput?: boolean },
-  ): Promise<{ ok: true } | { ok: false; error: string }> {
-    this.sessionLogger.info(
-      {
-        agentId,
-        textPreview: text.substring(0, 50),
-        imageCount: images?.length ?? 0,
-        attachmentCount: attachments?.length ?? 0,
-      },
-      `Sending text to agent ${agentId}${
-        images && images.length > 0 ? ` with ${images.length} image attachment(s)` : ""
-      }${
-        attachments && attachments.length > 0
-          ? ` and ${attachments.length} structured attachment(s)`
-          : ""
-      }`,
-    );
-
-    const promptText = options?.spokenInput ? wrapSpokenInput(text) : text;
-    const prompt = buildAgentPrompt(promptText, images, attachments);
-
-    try {
-      await sendPromptToAgent({
-        agentManager: this.agentManager,
-        agentStorage: this.agentStorage,
-        agentId,
-        prompt,
-        messageId,
-        runOptions,
-        // A typed or spoken message from the human answers any permission the
-        // agent is blocked on.
-        clearPendingPermissions: true,
-        logger: this.sessionLogger,
-      });
-      return { ok: true };
-    } catch (error) {
-      this.handleAgentRunError(agentId, error, "Failed to send agent message");
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
 
   /**
    * Handle create agent request
@@ -7795,7 +7673,7 @@ export class Session {
     }
     this.providerCatalogSession.dispose();
 
-    await this.voiceSession.cleanup();
+    this.voiceSession.dispose();
 
     this.terminalController.dispose();
 

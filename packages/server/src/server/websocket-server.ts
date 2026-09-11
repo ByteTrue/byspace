@@ -22,7 +22,6 @@ import {
   type WSHelloMessage,
   type WSInboundMessage,
   WSInboundMessageSchema,
-  type ServerCapabilityState,
   type ServerCapabilities,
   type WSOutboundMessage,
   wrapSessionMessage,
@@ -58,8 +57,6 @@ import {
 import type { ScriptHealthState } from "./script-health-monitor.js";
 import type { ServiceProxySubsystem } from "./service-proxy.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
-import type { SpeechReadinessSnapshot, SpeechService } from "./speech/speech-runtime.js";
-import type { VoiceCallerContext, VoiceSpeakHandler } from "./voice-types.js";
 import {
   computeNotificationPlan,
   isPushEligibleAttentionReason,
@@ -366,62 +363,11 @@ function createNoopWorkspaceRegistry(): WorkspaceRegistry {
   };
 }
 
-function toServerCapabilityState(params: {
-  state: SpeechReadinessSnapshot["dictation"];
-  reason: string;
-}): ServerCapabilityState {
-  const { state, reason } = params;
-  return {
-    enabled: state.enabled,
-    reason,
-  };
-}
-
-function resolveCapabilityReason(params: {
-  state: SpeechReadinessSnapshot["dictation"];
-  readiness: SpeechReadinessSnapshot;
-}): string {
-  const { state, readiness } = params;
-  if (state.available) {
-    return "";
-  }
-
-  if (readiness.voiceFeature.reasonCode === "model_download_in_progress") {
-    const baseMessage = readiness.voiceFeature.message.trim();
-    if (baseMessage.includes("Try again in a few minutes")) {
-      return baseMessage;
-    }
-    return `${baseMessage} Try again in a few minutes.`;
-  }
-
-  return state.message;
-}
-
-function buildServerCapabilities(params: {
-  readiness: SpeechReadinessSnapshot | null;
-}): ServerCapabilities | undefined {
-  const readiness = params.readiness;
-  if (!readiness) {
-    return undefined;
-  }
-  return {
-    voice: {
-      dictation: toServerCapabilityState({
-        state: readiness.dictation,
-        reason: resolveCapabilityReason({
-          state: readiness.dictation,
-          readiness,
-        }),
-      }),
-      voice: toServerCapabilityState({
-        state: readiness.realtimeVoice,
-        reason: resolveCapabilityReason({
-          state: readiness.realtimeVoice,
-          readiness,
-        }),
-      }),
-    },
-  };
+function buildServerCapabilities(): ServerCapabilities | undefined {
+  // Voice capabilities are retired (issue 025 C8); the voice block reports
+  // disabled so old clients hide voice affordances.
+  void 0;
+  return undefined;
 }
 
 function areServerCapabilitiesEqual(
@@ -586,7 +532,6 @@ export class VoiceAssistantWebSocketServer {
   private readonly pushNotifications: PushNotifications;
   private readonly pushNotificationSender: PushNotificationSender;
   private readonly mcpBaseUrl: string | null;
-  private speech!: SpeechService | null;
   private terminalManager!: TerminalManager | null;
   private serviceProxy!: ServiceProxySubsystem | null;
   private scriptRuntimeStore!: WorkspaceScriptRuntimeStore | null;
@@ -594,11 +539,6 @@ export class VoiceAssistantWebSocketServer {
   private getDaemonTcpHost!: (() => string | null) | null;
   private serviceProxyPublicBaseUrl!: string | null;
   private resolveScriptHealth!: ((hostname: string) => ScriptHealthState | null) | null;
-  private dictation!: {
-    finalTimeoutMs?: number;
-  } | null;
-  private readonly voiceSpeakHandlers = new Map<string, VoiceSpeakHandler>();
-  private readonly voiceCallerContexts = new Map<string, VoiceCallerContext>();
   private readonly workspaceSetupSnapshots = new Map<string, WorkspaceSetupSnapshot>();
   private readonly workspaceSetupRuntime: WorkspaceSetupRuntime;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
@@ -613,7 +553,6 @@ export class VoiceAssistantWebSocketServer {
   private applicationSocketLeaseInterval: ReturnType<typeof setInterval> | null = null;
   private readonly applicationSocketLease = new ApplicationSocketLease<WebSocketLike>();
   private eventLoopDelayMonitor: ReturnType<typeof monitorEventLoopDelay> | null = null;
-  private unsubscribeSpeechReadiness: (() => void) | null = null;
   private unsubscribeDaemonConfigChange: (() => void) | null = null;
   private readonly providerUsageService: ProviderUsageService;
   private unsubscribeTerminalActivity: (() => void) | null = null;
@@ -638,11 +577,7 @@ export class VoiceAssistantWebSocketServer {
     wsConfig: WebSocketServerConfig,
     workspaceAutoName: WorkspaceAutoName,
     auth?: DaemonAuthConfig,
-    speech?: SpeechService | null,
     terminalManager?: TerminalManager | null,
-    dictation?: {
-      finalTimeoutMs?: number;
-    },
     daemonVersion?: string,
     onLifecycleIntent?: (intent: SessionLifecycleIntent) => void,
     projectRegistry?: ProjectRegistry,
@@ -704,9 +639,7 @@ export class VoiceAssistantWebSocketServer {
     this.daemonConfigStore = daemonConfigStore;
     this.mcpBaseUrl = mcpBaseUrl;
     this.assignOptionalServices({
-      speech,
       terminalManager,
-      dictation,
       onLifecycleIntent,
       serviceProxy,
       scriptRuntimeStore,
@@ -720,13 +653,7 @@ export class VoiceAssistantWebSocketServer {
       throw new Error("providerSnapshotManager is required");
     }
     this.providerSnapshotManager = providerSnapshotManager;
-    this.serverCapabilities = buildServerCapabilities({
-      readiness: this.speech?.getReadiness() ?? null,
-    });
-    this.unsubscribeSpeechReadiness =
-      this.speech?.onReadinessChange((snapshot) => {
-        this.publishSpeechReadiness(snapshot);
-      }) ?? null;
+    this.serverCapabilities = buildServerCapabilities();
     const unsubscribeProviderConfig = attachMutableProviderConfigOwner({
       store: this.daemonConfigStore,
       providerSnapshotManager: this.providerSnapshotManager,
@@ -766,9 +693,7 @@ export class VoiceAssistantWebSocketServer {
   }
 
   private assignOptionalServices(params: {
-    speech: SpeechService | null | undefined;
     terminalManager: TerminalManager | null | undefined;
-    dictation: { finalTimeoutMs?: number } | undefined;
     onLifecycleIntent: ((intent: SessionLifecycleIntent) => void) | undefined;
     serviceProxy: ServiceProxySubsystem | null | undefined;
     scriptRuntimeStore: WorkspaceScriptRuntimeStore | null | undefined;
@@ -780,7 +705,6 @@ export class VoiceAssistantWebSocketServer {
     serviceProxyPublicBaseUrl: string | null | undefined;
     resolveScriptHealth: ((hostname: string) => ScriptHealthState | null) | undefined;
   }): void {
-    this.speech = params.speech ?? null;
     this.terminalManager = params.terminalManager ?? null;
     if (this.terminalManager) {
       this.unsubscribeTerminalActivity = this.terminalManager.subscribeTerminalActivity((event) => {
@@ -806,7 +730,6 @@ export class VoiceAssistantWebSocketServer {
         });
       });
     }
-    this.dictation = params.dictation ?? null;
     this.onLifecycleIntent = params.onLifecycleIntent ?? null;
     this.serviceProxy = params.serviceProxy ?? null;
     this.scriptRuntimeStore = params.scriptRuntimeStore ?? null;
@@ -968,10 +891,6 @@ export class VoiceAssistantWebSocketServer {
     }
   }
 
-  public publishSpeechReadiness(readiness: SpeechReadinessSnapshot | null): void {
-    this.updateServerCapabilities(buildServerCapabilities({ readiness }));
-  }
-
   public updateServerCapabilities(capabilities: ServerCapabilities | null | undefined): void {
     const next = capabilities ?? undefined;
     if (areServerCapabilitiesEqual(this.serverCapabilities, next)) {
@@ -1022,8 +941,6 @@ export class VoiceAssistantWebSocketServer {
 
   public async close(): Promise<void> {
     this.prepareForShutdown();
-    this.unsubscribeSpeechReadiness?.();
-    this.unsubscribeSpeechReadiness = null;
     this.unsubscribeDaemonConfigChange?.();
     this.unsubscribeDaemonConfigChange = null;
     this.unsubscribeTerminalActivity?.();
@@ -1413,9 +1330,6 @@ export class VoiceAssistantWebSocketServer {
       daemonConfigStore: this.daemonConfigStore,
       orchestrationSkills: this.orchestrationSkills,
       mcpBaseUrl: this.mcpBaseUrl,
-      stt: () => this.speech?.resolveStt() ?? null,
-      sttLanguage: this.speech?.resolveSttLanguage() ?? "en",
-      tts: () => this.speech?.resolveTts() ?? null,
       terminalManager: this.terminalManager,
       providerSnapshotManager: this.providerSnapshotManager,
       providerUsageService: this.providerUsageService,
@@ -1428,32 +1342,6 @@ export class VoiceAssistantWebSocketServer {
       getDaemonTcpHost: this.getDaemonTcpHost ?? undefined,
       serviceProxyPublicBaseUrl: this.serviceProxyPublicBaseUrl,
       resolveScriptHealth: this.resolveScriptHealth ?? undefined,
-      voice: {
-        turnDetection: () => this.speech?.resolveTurnDetection() ?? null,
-      },
-      voiceBridge: {
-        registerVoiceSpeakHandler: (agentId, handler) => {
-          this.voiceSpeakHandlers.set(agentId, handler);
-        },
-        unregisterVoiceSpeakHandler: (agentId) => {
-          this.voiceSpeakHandlers.delete(agentId);
-        },
-        registerVoiceCallerContext: (agentId, context) => {
-          this.voiceCallerContexts.set(agentId, context);
-        },
-        unregisterVoiceCallerContext: (agentId) => {
-          this.voiceCallerContexts.delete(agentId);
-        },
-      },
-      dictation:
-        this.dictation || this.speech
-          ? {
-              finalTimeoutMs: this.dictation?.finalTimeoutMs,
-              stt: () => this.speech?.resolveDictationStt() ?? null,
-              sttLanguage: this.speech?.resolveDictationSttLanguage() ?? "en",
-              getSpeechReadiness: () => this.speech!.getReadiness(),
-            }
-          : undefined,
       serverId: this.serverId,
       daemonVersion: this.daemonVersion,
       daemonRuntimeConfig: this.daemonRuntimeConfig,
@@ -1830,12 +1718,12 @@ export class VoiceAssistantWebSocketServer {
     });
   }
 
-  public resolveVoiceSpeakHandler(callerAgentId: string): VoiceSpeakHandler | null {
-    return this.voiceSpeakHandlers.get(callerAgentId) ?? null;
+  public resolveVoiceSpeakHandler(_callerAgentId: string): null {
+    return null; // Voice is retired (issue 025 C8)
   }
 
-  public resolveVoiceCallerContext(callerAgentId: string): VoiceCallerContext | null {
-    return this.voiceCallerContexts.get(callerAgentId) ?? null;
+  public resolveVoiceCallerContext(_callerAgentId: string): null {
+    return null;
   }
 
   private async detachSocket(

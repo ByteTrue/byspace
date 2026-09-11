@@ -127,10 +127,6 @@ import {
 import { createWorkspaceProvisioningService } from "./session/workspace-provisioning/workspace-provisioning-service.js";
 import { createPaseoWorktreeWorkflow } from "./worktree-session.js";
 import { DownloadTokenStore } from "./file-download/token-store.js";
-import type { OpenAiSpeechProviderConfig } from "./speech/providers/openai/config.js";
-import type { LocalSpeechProviderConfig } from "./speech/providers/local/config.js";
-import type { RequestedSpeechProviders } from "./speech/speech-types.js";
-import { createSpeechService } from "./speech/speech-runtime.js";
 import { AgentManager } from "./agent/agent-manager.js";
 import { AgentStorage } from "./agent/agent-storage.js";
 import { attachAgentStoragePersistence } from "./persistence-hooks.js";
@@ -354,20 +350,6 @@ function describeMcpDebugPayload(value: unknown): Record<string, unknown> {
   };
 }
 
-export type PaseoOpenAIConfig = OpenAiSpeechProviderConfig;
-export type PaseoLocalSpeechConfig = LocalSpeechProviderConfig;
-
-export interface PaseoSpeechSttLanguages {
-  dictation: string;
-  voice: string;
-}
-
-export interface PaseoSpeechConfig {
-  providers: RequestedSpeechProviders;
-  sttLanguages?: PaseoSpeechSttLanguages;
-  local?: PaseoLocalSpeechConfig;
-}
-
 export type DaemonLifecycleIntent =
   | {
       type: "shutdown";
@@ -430,12 +412,6 @@ export interface PaseoDaemonConfig {
   };
   appBaseUrl?: string;
   auth?: DaemonAuthConfig;
-  openai?: PaseoOpenAIConfig;
-  speech?: PaseoSpeechConfig;
-  voiceLlmProvider?: AgentProvider | null;
-  voiceLlmProviderExplicit?: boolean;
-  voiceLlmModel?: string | null;
-  dictationFinalTimeoutMs?: number;
   downloadTokenTtlMs?: number;
   agentProviderSettings?: AgentProviderRuntimeSettingsMap;
   providerCatalogRefreshTimeoutMs?: number;
@@ -1344,9 +1320,6 @@ export async function createPaseoDaemon(
     paseoHome: config.paseoHome,
     worktreesRoot: config.worktreesRoot,
     callerAgentId: runtime.callerAgentId,
-    enableVoiceTools: runtime.enableVoiceTools,
-    voiceOnly: runtime.voiceOnly,
-    resolveSpeakHandler: (agentId) => wsServer?.resolveVoiceSpeakHandler(agentId) ?? null,
     resolveCallerContext: (agentId) => wsServer?.resolveVoiceCallerContext(agentId) ?? null,
     logger,
   });
@@ -1487,13 +1460,6 @@ export async function createPaseoDaemon(
     logger.info({ route: agentMcpRoute, enabled: mcpEnabled }, "Agent MCP route mounted");
   }
 
-  const speechService = createSpeechService({
-    logger,
-    openaiConfig: config.openai,
-    speechConfig: config.speech,
-  });
-  logger.info({ elapsed: elapsed() }, "Speech service created");
-
   logger.info({ elapsed: elapsed() }, "Bootstrap complete, ready to start listening");
 
   const start = async () => {
@@ -1593,11 +1559,7 @@ export async function createPaseoDaemon(
               },
               workspaceAutoName,
               config.auth,
-              speechService,
               terminalManager,
-              {
-                finalTimeoutMs: config.dictationFinalTimeoutMs,
-              },
               daemonVersion,
               (intent) => {
                 try {
@@ -1691,9 +1653,6 @@ export async function createPaseoDaemon(
         }
       });
 
-      // Start speech service after listening so synchronous Sherpa native
-      // model loading doesn't block the server from accepting connections.
-      speechService.start();
       scriptHealthMonitor.start();
     } catch (error) {
       await serviceProxy.stopStandalone().catch(() => undefined);
@@ -1718,7 +1677,6 @@ export async function createPaseoDaemon(
     await agentStorage.flush().catch(() => undefined);
     await agentProviderRuntime.shutdown();
     terminalManager.killAll();
-    await speechService.stop();
     await scheduleService.stop().catch(() => undefined);
     await relayRuntime?.stop().catch(() => undefined);
     if (wsServer) {

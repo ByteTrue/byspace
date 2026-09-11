@@ -76,7 +76,7 @@ import {
   type QueueWriter,
   type QueuedComposerMessage,
 } from "@/composer/actions";
-import { useVoiceOptional } from "@/contexts/voice-context";
+import { type VoiceRuntimeLike, useVoiceOptional } from "@/contexts/voice-context";
 import { useToast } from "@/contexts/toast-context";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Shortcut } from "@/components/ui/shortcut";
@@ -178,7 +178,7 @@ function resolveIsComposerLocked(
 }
 
 function resolveIsVoiceModeForAgent(
-  voice: ReturnType<typeof useVoiceOptional>,
+  voice: VoiceRuntimeLike | null,
   serverId: string,
   agentId: string,
 ): boolean {
@@ -469,7 +469,7 @@ function resolveErrorMessage(error: unknown): string | null {
 }
 
 interface AttemptStartRealtimeVoiceArgs {
-  voice: ReturnType<typeof useVoiceOptional>;
+  voice: VoiceRuntimeLike | null;
   isConnected: boolean;
   hasAgent: boolean;
   serverId: string;
@@ -1842,7 +1842,7 @@ function ComposerContentImpl({
     [isConnected, isCancellingAgent],
   );
 
-  const isVoiceSwitching = voice?.isVoiceSwitching ?? false;
+  const isVoiceSwitching = (voice as VoiceRuntimeLike | null)?.isVoiceSwitching ?? false;
   const voiceButtonDisabled = !isConnected || isVoiceSwitching;
   const realtimeVoiceButtonStyle = useCallback(
     (state: PressableStateCallbackType & { hovered?: boolean }) =>

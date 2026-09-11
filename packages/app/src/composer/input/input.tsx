@@ -27,7 +27,7 @@ import { DictationOverlay } from "@/components/dictation-controls";
 import { RealtimeVoiceOverlay } from "@/components/realtime-voice-overlay";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { useSessionStore } from "@/stores/session-store";
-import { useVoiceOptional } from "@/contexts/voice-context";
+import { type VoiceRuntimeLike, useVoiceOptional } from "@/contexts/voice-context";
 import { useToast } from "@/contexts/toast-context";
 import { resolveVoiceUnavailableMessage } from "@/utils/server-info-capabilities";
 import {
@@ -556,14 +556,7 @@ function MessageInputOverlay({
 }: {
   showDictationOverlay: boolean;
   showRealtimeOverlay: boolean;
-  voice:
-    | {
-        isMuted: boolean;
-        isVoiceSwitching: boolean;
-        toggleMute: () => void;
-      }
-    | null
-    | undefined;
+  voice: VoiceRuntimeLike | null | undefined;
   dictationVolume: number;
   dictationDuration: number;
   isDictating: boolean;
@@ -827,14 +820,7 @@ function PrimaryAction({
   return null;
 }
 interface ToggleRealtimeVoiceContext {
-  voice:
-    | {
-        isVoiceSwitching: boolean;
-        isVoiceModeForAgent: (serverId: string, agentId: string) => boolean;
-        startVoice: (serverId: string, agentId: string) => Promise<unknown>;
-      }
-    | null
-    | undefined;
+  voice: VoiceRuntimeLike | null | undefined;
   voiceServerId: string | undefined;
   voiceAgentId: string | undefined;
   isConnected: boolean;
@@ -887,7 +873,7 @@ async function startDictationIfAvailableImpl(ctx: StartDictationContext): Promis
 
 interface VoicePressContext {
   isRealtimeVoiceForCurrentAgent: boolean;
-  voice: { toggleMute: () => void } | null | undefined;
+  voice: VoiceRuntimeLike | null | undefined;
   isDictating: boolean;
   cancelDictation: () => Promise<void> | void;
   startDictationIfAvailable: () => Promise<void>;
@@ -959,7 +945,7 @@ function queueMessageImpl(ctx: QueueMessageContext): void {
 }
 
 function computeIsRealtimeVoiceForAgent(
-  voice: { isVoiceModeForAgent: (serverId: string, agentId: string) => boolean } | null | undefined,
+  voice: VoiceRuntimeLike | null | undefined,
   voiceServerId: string | undefined,
   voiceAgentId: string | undefined,
 ): boolean {
@@ -1193,7 +1179,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     const maxInputHeight = resolveMaxInputHeight(windowHeight);
     const buttonIconSize = isWeb ? ICON_SIZE.md : ICON_SIZE.lg;
     const toast = useToast();
-    const voice = useVoiceOptional();
+    const voice: VoiceRuntimeLike | null = useVoiceOptional();
     const voiceMuteToggleKeys = useShortcutKeys("voice-mute-toggle");
     const dictationToggleKeys = useShortcutKeys("dictation-toggle");
     const focusInputKeys = useShortcutKeys("focus-message-input");
@@ -1264,7 +1250,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       runKeyboardAction: (action) =>
         runMessageInputKeyboardAction(action, {
           focusInput: () => textInputRef.current?.focus(),
-          isDictationRecording: isDictationActive,
+          isDictationRecording: () => isDictationActive,
           markTranscriptForSend: () => {
             sendAfterTranscriptRef.current = true;
           },
@@ -1273,7 +1259,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
           startDictation: startDictationIfAvailable,
           toggleRealtimeVoice: handleToggleRealtimeVoiceShortcut,
           isRealtimeVoiceActive: isRealtimeVoiceForCurrentAgent,
-          toggleRealtimeVoiceMute: () => voice?.toggleMute(),
+          toggleRealtimeVoiceMute: () => (voice as VoiceRuntimeLike | null)?.toggleMute(),
         }),
       getNativeElement: () => (isWeb ? getTextInputNativeElement(textInputRef.current) : null),
     }));
@@ -1410,7 +1396,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
           dictationUnavailableMessage,
           canStartDictation,
           toast,
-          startDictation,
+          startDictation: async () => startDictation(),
         }),
       [canStartDictation, dictationUnavailableMessage, startDictation, toast],
     );
@@ -1649,14 +1635,14 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
 
     const voiceButtonAccessibilityLabel = resolveVoiceAccessibilityLabel({
       isRealtimeVoiceForCurrentAgent,
-      isMuted: Boolean(voice?.isMuted),
+      isMuted: Boolean((voice as VoiceRuntimeLike | null)?.isMuted),
       isDictating,
       t,
     });
 
     const voiceTooltipText = resolveVoiceTooltipText({
       isRealtimeVoiceForCurrentAgent,
-      isMuted: Boolean(voice?.isMuted),
+      isMuted: Boolean((voice as VoiceRuntimeLike | null)?.isMuted),
       t,
     });
 
@@ -1772,11 +1758,18 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         <VoiceButtonIcon
           hovered={Boolean(hovered)}
           isDictating={isDictating}
-          isMutedRealtime={Boolean(isRealtimeVoiceForCurrentAgent && voice?.isMuted)}
+          isMutedRealtime={Boolean(
+            isRealtimeVoiceForCurrentAgent && (voice as VoiceRuntimeLike | null)?.isMuted,
+          )}
           buttonIconSize={buttonIconSize}
         />
       ),
-      [isDictating, isRealtimeVoiceForCurrentAgent, voice?.isMuted, buttonIconSize],
+      [
+        isDictating,
+        isRealtimeVoiceForCurrentAgent,
+        buttonIconSize,
+        (voice as VoiceRuntimeLike | null)?.isMuted,
+      ],
     );
 
     return (
