@@ -509,6 +509,13 @@ export type ProviderTimelineItem =
       message: string;
     })
   | (ProviderTimelineIdentity & {
+      type: "custom_message";
+      customType: string;
+      display: boolean;
+      content: string;
+      details?: JsonValue;
+    })
+  | (ProviderTimelineIdentity & {
       type: "compaction";
       status: "loading" | "completed";
       trigger?: "auto" | "manual";
@@ -1203,6 +1210,16 @@ const timelineItemSchema: z.ZodType<ProviderTimelineItem> = z.union([
       type: z.literal("notification"),
       level: z.enum(["info", "warning", "error"]),
       message: z.string(),
+    })
+    .strip(),
+  z
+    .object({
+      ...timelineIdentityShape,
+      type: z.literal("custom_message"),
+      customType: z.string(),
+      display: z.boolean(),
+      content: z.string(),
+      details: z.json().optional(),
     })
     .strip(),
   z

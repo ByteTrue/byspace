@@ -1587,12 +1587,7 @@ function mapTimelineItem(
   const previous = snapshots.get(item.id);
   snapshots.set(item.id, item);
   const { id, revertToken, ...withoutIdentity } = item;
-  if (revertToken !== undefined && revertTokens) {
-    revertTokens.set(id, revertToken);
-    if (item.type === "user_message" || item.type === "assistant_message") {
-      revertTokens.set(item.messageId ?? id, revertToken);
-    }
-  }
+  trackRevertToken(item, id, revertToken, revertTokens);
 
   if (item.type === "assistant_message" || item.type === "reasoning") {
     const previousText = previous?.type === item.type ? previous.text : "";
@@ -1623,7 +1618,23 @@ function mapTimelineItem(
       data: item.data,
     };
   }
+  // Plugin providers may emit custom_message items directly; display=false means
+  // context-only, matching the Pi/OMP provider semantics.
+  if (item.type === "custom_message" && item.display === false) return null;
   return withoutIdentity as AgentTimelineItem;
+}
+
+function trackRevertToken(
+  item: ProviderTimelineItem,
+  id: string,
+  revertToken: ProviderTimelineItem["revertToken"],
+  revertTokens: Map<string, ProviderTimelineItem["revertToken"]> | undefined,
+): void {
+  if (revertToken === undefined || !revertTokens) return;
+  revertTokens.set(id, revertToken);
+  if (item.type === "user_message" || item.type === "assistant_message") {
+    revertTokens.set(item.messageId ?? id, revertToken);
+  }
 }
 
 function persistenceHandle(

@@ -1029,7 +1029,12 @@ describe("PiRpcAgentSession", () => {
     expect(events.timelineAndCompletionEvents()).toEqual([
       {
         type: "timeline",
-        item: { type: "assistant_message", text: "Extension command output" },
+        item: {
+          type: "custom_message",
+          customType: "custom",
+          display: true,
+          content: "Extension command output",
+        },
       },
       { type: "turn_completed" },
     ]);
@@ -1058,7 +1063,12 @@ describe("PiRpcAgentSession", () => {
     });
 
     expect(events.timelineItems()).toEqual([
-      { type: "assistant_message", text: "Background process completed" },
+      {
+        type: "custom_message",
+        customType: "custom",
+        display: true,
+        content: "Background process completed",
+      },
     ]);
     expect(events.turnLifecycleEvents()).toEqual([{ type: "turn_started", turnId: undefined }]);
 
@@ -1067,6 +1077,51 @@ describe("PiRpcAgentSession", () => {
     expect(events.turnLifecycleEvents()).toEqual([
       { type: "turn_started", turnId: undefined },
       { type: "turn_completed", turnId: undefined },
+    ]);
+  });
+
+  test("custom message with customType is forwarded and display=false is hidden", async () => {
+    const { pi, events } = await createSession();
+    const fakeSession = pi.latestSession();
+
+    fakeSession.emit({ type: "agent_start" });
+    fakeSession.emit({ type: "turn_start" });
+    fakeSession.emit({
+      type: "message_end",
+      message: {
+        role: "custom",
+        customType: "background-exit",
+        display: true,
+        content: "[bg_1] npm run build exited with code 0",
+        details: { id: "bg_1", exitCode: 0 },
+      },
+    });
+    fakeSession.emit({
+      type: "message_end",
+      message: {
+        role: "custom",
+        customType: "vision-internal",
+        display: false,
+        content: "context-only payload",
+      },
+    });
+    fakeSession.finishAgentRun({
+      message: {
+        role: "assistant",
+        stopReason: "stop",
+        content: [],
+      },
+      willRetry: false,
+    });
+
+    expect(events.timelineItems()).toEqual([
+      {
+        type: "custom_message",
+        customType: "background-exit",
+        display: true,
+        content: "[bg_1] npm run build exited with code 0",
+        details: { id: "bg_1", exitCode: 0 },
+      },
     ]);
   });
 

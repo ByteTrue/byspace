@@ -1180,11 +1180,12 @@ export class Session {
     return true;
   }
 
-  // COMPAT(timelineItemCapabilities): plugin items added in v0.8.0, notifications in v0.7.2.
-  // Remove after 2027-03-07 once the supported client floor is >= v0.8.0.
+  // COMPAT(timelineItemCapabilities): plugin items added in v0.8.0, notifications in v0.7.2,
+  // custom messages in v0.13.X. Remove after 2027-09-17 once the supported client floor is >= v0.13.X.
   private supportsTimelineItem(item: { type: string }, source?: object): boolean {
     let capability: ClientCapability;
     if (item.type === "notification") capability = CLIENT_CAPS.timelineNotifications;
+    else if (item.type === "custom_message") capability = CLIENT_CAPS.customTimelineMessages;
     else if (item.type === "plugin") capability = CLIENT_CAPS.pluginTimelineItems;
     else return true;
     return source ? this.supportsForSource(capability, source) : this.supports(capability);

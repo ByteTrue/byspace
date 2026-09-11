@@ -200,7 +200,13 @@ describe("OMP history mapper", () => {
         [
           { role: "user", content: "first prompt" },
           { role: "custom", content: "hidden reminder", display: false },
-          { role: "custom", content: "visible explicit custom", display: true },
+          {
+            role: "custom",
+            content: "visible explicit custom",
+            display: true,
+            customType: "task-exit",
+            details: { exitCode: 0 },
+          },
           { role: "custom", content: "visible legacy custom" },
           {
             role: "assistant",
@@ -223,12 +229,23 @@ describe("OMP history mapper", () => {
       {
         type: "timeline",
         provider: "omp",
-        item: { type: "assistant_message", text: "visible explicit custom" },
+        item: {
+          type: "custom_message",
+          customType: "task-exit",
+          display: true,
+          content: "visible explicit custom",
+          details: { exitCode: 0 },
+        },
       },
       {
         type: "timeline",
         provider: "omp",
-        item: { type: "assistant_message", text: "visible legacy custom" },
+        item: {
+          type: "custom_message",
+          customType: "custom",
+          display: true,
+          content: "visible legacy custom",
+        },
       },
       {
         type: "timeline",
@@ -447,8 +464,18 @@ describe("OMP history mapper", () => {
     }
     expect(events.map((event) => event.item)).toEqual([
       { type: "user_message", text: "active branch", messageId: "user-active" },
-      { type: "assistant_message", text: "[future_control] Unsupported history record" },
-      { type: "assistant_message", text: "[developer] developer note" },
+      {
+        type: "custom_message",
+        customType: "custom",
+        display: true,
+        content: "[future_control] Unsupported history record",
+      },
+      {
+        type: "custom_message",
+        customType: "custom",
+        display: true,
+        content: "[developer] developer note",
+      },
     ]);
 
     const omp = new FakeOmp();

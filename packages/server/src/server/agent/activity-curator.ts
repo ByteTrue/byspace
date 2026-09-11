@@ -183,6 +183,10 @@ function curateProjectedActivityEntries(
         flushBuffers(entries, buffers, options);
         entries.push(activityEntry(`[Error] ${item.message}`));
         break;
+      case "custom_message":
+        flushBuffers(entries, buffers, options);
+        entries.push(activityEntry(`[${item.customType}] ${item.content.trim()}`));
+        break;
       case "compaction":
         flushBuffers(entries, buffers, options);
         entries.push(activityEntry("[Compacted]"));

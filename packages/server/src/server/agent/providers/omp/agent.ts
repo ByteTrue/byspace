@@ -67,7 +67,11 @@ import {
 } from "./provider-config.js";
 export { formatOmpVersionSupport, resolveOmpDiagnosticPaths } from "./provider-config.js";
 import { OmpSubagentCardTracker, type OmpSubagentCardScheduler } from "./subagent-card-tracker.js";
-import { shouldDisplayOmpCustomMessage } from "./custom-message.js";
+import {
+  readOmpCustomDetails,
+  readOmpCustomType,
+  shouldDisplayOmpCustomMessage,
+} from "./custom-message.js";
 import { getUserMessageText } from "./message-history.js";
 import { mapOmpSystemNoticeToNotification } from "./system-notice.js";
 import { materializeProviderImage } from "../provider-image-output.js";
@@ -2017,6 +2021,7 @@ export class OmpAgentSession implements AgentSession {
       if (shouldDisplayOmpCustomMessage(event.message)) {
         const text = getUserMessageText(event.message.content);
         if (text) {
+          const details = readOmpCustomDetails(event.message);
           const item =
             mapOmpAdvisorMessageToToolCall(event.message, text) ??
             mapOmpSystemNoticeToNotification(text);
@@ -2024,7 +2029,13 @@ export class OmpAgentSession implements AgentSession {
             type: "timeline",
             provider: this.provider,
             turnId,
-            item: item ?? { type: "assistant_message", text },
+            item: item ?? {
+              type: "custom_message",
+              customType: readOmpCustomType(event.message),
+              display: true,
+              content: text,
+              ...(details !== undefined ? { details } : {}),
+            },
           });
         }
       }

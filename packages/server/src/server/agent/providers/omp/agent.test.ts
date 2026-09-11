@@ -394,10 +394,14 @@ describe("OMP agent client and session", () => {
         message: "Background job DocsSmokeTwo completed",
       },
     ]);
-    // Non-notice custom messages still fall through as assistant messages.
-    expect(omp.timeline().filter((item) => item.type === "assistant_message")).toMatchObject([
-      { text: "done" },
-      { text: "plain custom status text" },
+    // Non-notice custom messages fall through as custom_message items.
+    expect(omp.timeline().filter((item) => item.type === "custom_message")).toEqual([
+      {
+        type: "custom_message",
+        customType: "custom",
+        display: true,
+        content: "plain custom status text",
+      },
     ]);
   });
 

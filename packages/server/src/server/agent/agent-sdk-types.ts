@@ -401,6 +401,15 @@ export interface PluginTimelineItem {
   data: JsonValue;
 }
 
+export interface CustomMessageTimelineItem {
+  [key: string]: unknown;
+  type: "custom_message";
+  customType: string;
+  display: boolean;
+  content: string;
+  details?: JsonValue;
+}
+
 export type AgentTimelineItem =
   | { type: "user_message"; text: string; messageId?: string; clientMessageId?: string }
   | { type: "assistant_message"; text: string; messageId?: string }
@@ -413,6 +422,7 @@ export type AgentTimelineItem =
       level: "info" | "warning" | "error";
       message: string;
     }
+  | CustomMessageTimelineItem
   | CompactionTimelineItem
   | PluginTimelineItem;
 

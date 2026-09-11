@@ -140,6 +140,7 @@ async function connect(input: {
   timelineNotifications?: boolean;
   pluginTimelineItems?: boolean;
   workspaceSetupBlocked?: boolean;
+  customTimelineMessages?: boolean;
 }): Promise<ConnectedClient> {
   const client = new DaemonClient({
     url: `ws://127.0.0.1:${daemon.port}/ws`,
@@ -147,6 +148,7 @@ async function connect(input: {
     capabilities: {
       [CLIENT_CAPS.selectiveAgentTimeline]: input.selective,
       [CLIENT_CAPS.pluginTimelineItems]: input.pluginTimelineItems ?? false,
+      [CLIENT_CAPS.customTimelineMessages]: input.customTimelineMessages ?? false,
       [CLIENT_CAPS.workspaceSetupBlocked]: input.workspaceSetupBlocked ?? false,
       ...(input.timelineNotifications === undefined
         ? {}
@@ -726,6 +728,76 @@ test("plugin items are gated in provider child streams, child fetches, and rewin
   expect(replayItems(capable)).toContainEqual(plugin);
   expect(replayItems(legacy).some((item) => item.type === "plugin")).toBe(false);
   expect(replayItems(legacy)).toContainEqual(expect.objectContaining({ type: "user_message" }));
+});
+
+test("custom_message timeline items are sent only to clients that advertise support", async () => {
+  await daemon.close();
+  daemon = await createTestPaseoDaemon({
+    isDev: true,
+    agentClients: { mock: new MockLoadTestAgentClient() },
+  });
+  const capable = await connect({
+    clientId: "custom-message-capable",
+    selective: false,
+    customTimelineMessages: true,
+  });
+  const legacy = await connect({
+    clientId: "custom-message-legacy",
+    selective: false,
+    customTimelineMessages: false,
+  });
+  const agent = await capable.client.createAgent({
+    provider: "mock",
+    cwd: "/tmp",
+    title: "Custom message compatibility",
+    model: "ten-second-stream",
+  });
+  capable.clear();
+  legacy.clear();
+
+  const customItem = {
+    type: "custom_message" as const,
+    customType: "background-exit",
+    display: true,
+    content: "Capable clients only",
+  };
+  await daemon.daemon.agentManager.appendTimelineItem(agent.id, customItem);
+  await daemon.daemon.agentManager.appendTimelineItem(agent.id, {
+    type: "assistant_message",
+    text: "Visible to every client",
+  });
+  await Promise.all([
+    capable.next(isAgentStream(agent.id), "capable timeline delivery"),
+    legacy.next(isAgentStream(agent.id), "legacy timeline delivery"),
+  ]);
+  await Promise.all([
+    capable.barrier("custom-message-capable"),
+    legacy.barrier("custom-message-legacy"),
+  ]);
+
+  const liveItems = (connected: ConnectedClient) =>
+    connected.messages.flatMap((message) =>
+      message.type === "agent_stream" && message.payload.event.type === "timeline"
+        ? [message.payload.event.item]
+        : [],
+    );
+  expect(liveItems(capable).some((item) => item.type === "custom_message")).toBe(true);
+  expect(liveItems(legacy).some((item) => item.type === "custom_message")).toBe(false);
+  expect(liveItems(legacy)).toContainEqual(
+    expect.objectContaining({ type: "assistant_message", text: "Visible to every client" }),
+  );
+
+  const [capableTimeline, legacyTimeline] = await Promise.all([
+    capable.client.fetchAgentTimeline(agent.id, { direction: "tail", projection: "canonical" }),
+    legacy.client.fetchAgentTimeline(agent.id, { direction: "tail", projection: "canonical" }),
+  ]);
+  expect(capableTimeline.entries.some((entry) => entry.item.type === "custom_message")).toBe(true);
+  expect(legacyTimeline.entries.some((entry) => entry.item.type === "custom_message")).toBe(false);
+  expect(legacyTimeline.entries).toContainEqual(
+    expect.objectContaining({
+      item: expect.objectContaining({ type: "assistant_message", text: "Visible to every client" }),
+    }),
+  );
 });
 
 async function createAttentionWorkspace(client: DaemonClient): Promise<string> {

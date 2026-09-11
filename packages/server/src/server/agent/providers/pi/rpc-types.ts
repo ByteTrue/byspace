@@ -1,3 +1,5 @@
+import type { JsonValue } from "@getpaseo/protocol/agent-types";
+
 export type PiThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface PiImageContent {
@@ -41,6 +43,9 @@ export type PiAgentMessage =
   | {
       role: "custom";
       content: string | Array<PiTextContent | PiImageContent>;
+      customType?: string;
+      display?: boolean;
+      details?: JsonValue;
     }
   | {
       role: "assistant";

@@ -85,6 +85,7 @@ export type StreamItem =
   | ToolCallItem
   | TodoListItem
   | NotificationItem
+  | CustomMessageItem
   | CompactionItem
   | PluginTimelineStreamItem;
 
@@ -788,6 +789,17 @@ export interface NotificationItem {
   message: string;
 }
 
+export interface CustomMessageItem {
+  kind: "custom_message";
+  id: string;
+  timelineCursor?: TimelinePosition;
+  turnId?: string;
+  timestamp: Date;
+  customType: string;
+  content: string;
+  details?: JsonValue;
+}
+
 export interface CompactionItem {
   kind: "compaction";
   id: string;
@@ -1240,7 +1252,10 @@ function appendAgentToolCall(input: AppendAgentToolCallInput): StreamItem[] {
   return [...state, item];
 }
 
-function appendNotification(state: StreamItem[], entry: NotificationItem): StreamItem[] {
+function appendByIdentity(
+  state: StreamItem[],
+  entry: NotificationItem | CustomMessageItem,
+): StreamItem[] {
   const index = state.findIndex((existing) => existing.id === entry.id);
   if (index >= 0) {
     const next = [...state];
@@ -1558,7 +1573,7 @@ function reduceTimelineEvent(
         level: "error",
         message: item.message ?? "Unknown error",
       };
-      return finalizeActiveThoughts(appendNotification(state, notification));
+      return finalizeActiveThoughts(appendByIdentity(state, notification));
     }
     case "notification": {
       const notification: NotificationItem = {
@@ -1570,7 +1585,19 @@ function reduceTimelineEvent(
         level: item.level,
         message: item.message,
       };
-      return finalizeActiveThoughts(appendNotification(state, notification));
+      return finalizeActiveThoughts(appendByIdentity(state, notification));
+    }
+    case "custom_message": {
+      const customMessage: CustomMessageItem = {
+        kind: "custom_message",
+        id: createUniqueTimelineId(state, "custom_message", item.customType, timestamp),
+        ...(timelineCursor ? { timelineCursor } : {}),
+        timestamp,
+        customType: item.customType,
+        content: item.content,
+        ...(item.details !== undefined ? { details: item.details } : {}),
+      };
+      return finalizeActiveThoughts(appendByIdentity(state, customMessage));
     }
     case "compaction":
       return finalizeActiveThoughts(
@@ -1734,6 +1761,8 @@ function getEventItemKind(event: AgentStreamEventPayload): StreamItem["kind"] | 
     case "error":
     case "notification":
       return "notification";
+    case "custom_message":
+      return "custom_message";
     case "plugin":
       return "plugin";
     default:

@@ -20,6 +20,7 @@ Desktop、split pane 和 compact 布局都保持这一垂直关系。左侧状�
 - Active Agent 始终可以收起当前已展开的工具和 reasoning。
 - 用户离开时间线底部或查看 detached timeline 时显示“滚动到底部”；回到底部后隐藏。
 - 新到达的 reasoning 或工具调用仍按正常规则展开，不被之前的“收起全部”永久抑制。
+- 扩展注入的 custom 消息（Pi `sendMessage`、OMP custom）渲染为带 `[customType]` 标签的独立通知卡，不与 agent 正文混排；`display: false` 的消息从时间线隐藏。该项由 `custom_timeline_messages` client capability 门控。
 - Archived 或 read-only stream 没有 active Composer，继续使用时间线内的 floating 返回底部操作。
 - Pane header 不为这组控件保留 host 或空白宽度。
 
@@ -53,4 +54,5 @@ Desktop、split pane 和 compact 布局都保持这一垂直关系。左侧状�
 - [Pi 启动注入项目信任并完善斜杠补全加载态](../issues/004-x-pi-project-skills-and-autocomplete-loading.md)
 - [修复 Windows 下思考加载图标定格与终端 OSC 8 链接打开无反应](../issues/008-x-ff-synced-loader-and-terminal-osc8-links.md)
 - [修复 Pi Agent 回复结束后客户端依然保持运行中状态的边界结算缺陷](../issues/009-x-ff-pi-turn-boundary-immediate-completion.md)
+- [扩展 custom message 全链路透传为 custom_message timeline 项](../issues/024-x-ff-custom-message-timeline-items.md)
 - [Epic 002 交付记录](../epics/002-x-retained-capabilities-delivery/spec.md)

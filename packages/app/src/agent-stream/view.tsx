@@ -33,6 +33,7 @@ import {
   SpeakMessage,
   UserMessage,
   Notification,
+  CustomMessage,
   ToolCall,
   TodoListCard,
   CompactionMarker,
@@ -920,6 +921,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
           case "notification":
             return <Notification level={item.level} message={item.message} />;
+
+          case "custom_message":
+            return <CustomMessage customType={item.customType} content={item.content} />;
 
           case "todo_list":
             return <TodoListCard items={item.items} activity={item.activity} />;

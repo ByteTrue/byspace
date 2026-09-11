@@ -769,6 +769,13 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknow
     message: z.string(),
   }),
   z.object({
+    type: z.literal("custom_message"),
+    customType: z.string(),
+    display: z.boolean(),
+    content: z.string(),
+    details: JsonWireValueSchema.optional(),
+  }),
+  z.object({
     type: z.literal("compaction"),
     status: z.enum(["loading", "completed"]),
     trigger: z.enum(["auto", "manual"]).optional(),
