@@ -520,7 +520,6 @@ export interface SessionOptions {
   providerUsageService: ProviderUsageService;
   hubExecutionAgents?: HubExecutionAgents;
   hubRelationships?: HubRelationshipManagement;
-  sshTunnelManager: import("./tunnel/index.js").SshTunnelManager | null;
   serviceProxy?: ServiceProxySubsystem;
   scriptRuntimeStore?: WorkspaceScriptRuntimeStore;
   workspaceSetupSnapshots?: Map<string, WorkspaceSetupSnapshot>;
@@ -655,18 +654,6 @@ function workspaceLabelErrorCode(error: unknown): string {
   return "workspace_label_failed";
 }
 
-/** Outbound events routed per source: only subscribed clients receive them. */
-const PER_SOURCE_EVENT_TYPES: ReadonlySet<string> = new Set([
-  "project.update",
-  "providers_snapshot_update",
-  "agent_attention_required",
-  "agent_permission_request",
-  "agent_permission_resolved",
-  "tunnel.ssh.frame",
-  "tunnel.ssh.state",
-  "tunnel.ssh.host_key_prompt",
-]);
-
 export class Session {
   private readonly clientId: string;
   private readonly authorization: SessionAuthorization;
@@ -769,8 +756,6 @@ export class Session {
   private readonly workspaceScripts: WorkspaceScriptsService;
   private readonly agentRequests: Pick<AgentRequests, "create" | "send">;
   private readonly createAgentLifecycleDispatch: CreateAgentLifecycleDispatch;
-
-  private readonly sshTunnelManager: import("./tunnel/index.js").SshTunnelManager | null;
 
   constructor(options: SessionOptions) {
     const {
@@ -1002,7 +987,6 @@ export class Session {
       hubRelationships: options.hubRelationships,
       reloadConfig: () => daemonConfigStore.reload(),
     });
-    this.sshTunnelManager = options.sshTunnelManager;
     this.hubExecutionController = options.hubExecutionAgents
       ? new HubExecutionController({
           agents: options.hubExecutionAgents,
@@ -2020,7 +2004,6 @@ export class Session {
   private async dispatchInboundMessage(msg: SessionInboundMessage, source?: object): Promise<void> {
     const promise =
       this.dispatchVoiceAndControlMessage(msg) ??
-      this.dispatchTunnelMessage(msg, source) ??
       this.dispatchAgentRewindMessage(msg, source) ??
       this.dispatchAgentRelationshipMessage(msg) ??
       this.dispatchAgentTimelineMessage(msg, source) ??
@@ -2038,205 +2021,6 @@ export class Session {
       this.dispatchScheduleMessage(msg) ??
       this.dispatchMiscMessage(msg);
     if (promise) await promise;
-  }
-
-  private dispatchTunnelMessage(
-    msg: SessionInboundMessage,
-    source?: object,
-  ): Promise<void> | undefined {
-    if (!msg.type.startsWith("tunnel.ssh.")) return undefined;
-    const manager = this.sshTunnelManager;
-    if (!manager) {
-      if (msg.type === "tunnel.ssh.list.request") {
-        this.emit({
-          type: "tunnel.ssh.list.response",
-          payload: { tunnels: [], requestId: msg.requestId },
-        });
-        return undefined;
-      }
-      if ("requestId" in msg && typeof msg.requestId === "string") {
-        this.emit({
-          type: "rpc_error",
-          payload: {
-            requestId: msg.requestId,
-            requestType: msg.type,
-            error: "SSH tunnels are not available on this daemon.",
-            code: "unavailable",
-          },
-        });
-      }
-      return undefined;
-    }
-
-    const emitForOwner = (
-      message: import("@getpaseo/protocol/messages").SessionOutboundMessage,
-    ): void => {
-      if (source && this.onMessageToSource) {
-        this.onMessageToSource(source, message);
-        return;
-      }
-      this.emit(message);
-    };
-
-    const emitTunnelEvent = (event: import("./tunnel/index.js").TunnelEvent): void => {
-      switch (event.kind) {
-        case "frame":
-          emitForOwner({
-            type: "tunnel.ssh.frame",
-            payload: {
-              tunnelId: event.tunnelId,
-              ...(event.text !== undefined ? { text: event.text } : {}),
-              ...(event.binaryBase64 !== undefined ? { binaryBase64: event.binaryBase64 } : {}),
-            },
-          });
-          return;
-        case "state":
-          emitForOwner({
-            type: "tunnel.ssh.state",
-            payload: { tunnelId: event.tunnelId, state: event.state, error: event.error },
-          });
-          return;
-        case "host-key-prompt":
-          emitForOwner({
-            type: "tunnel.ssh.host_key_prompt",
-            payload: {
-              hostKeyPromptId: event.prompt.promptId,
-              host: event.prompt.target,
-              kind: event.prompt.kind,
-              fingerprint: event.prompt.fingerprint,
-              ...(event.prompt.pinnedFingerprint !== undefined
-                ? { pinnedFingerprint: event.prompt.pinnedFingerprint }
-                : {}),
-            },
-          });
-          return;
-      }
-    };
-
-    switch (msg.type) {
-      case "tunnel.ssh.open.request": {
-        void (async () => {
-          try {
-            const result = await manager.open({
-              tunnelId: msg.tunnelId,
-              host: msg.host,
-              ...(msg.sshPort !== undefined ? { sshPort: msg.sshPort } : {}),
-              ...(msg.daemonPort !== undefined ? { daemonPort: msg.daemonPort } : {}),
-              authMode: msg.authMode,
-              ...(msg.password !== undefined ? { password: msg.password } : {}),
-              emitEvent: emitTunnelEvent,
-            });
-            emitForOwner({
-              type: "tunnel.ssh.open.response",
-              payload: result.ok
-                ? {
-                    tunnelId: msg.tunnelId,
-                    success: true,
-                    error: null,
-                    errorCode: null,
-                    requestId: msg.requestId,
-                  }
-                : {
-                    tunnelId: msg.tunnelId,
-                    success: false,
-                    error: result.error,
-                    errorCode: result.errorCode,
-                    requestId: msg.requestId,
-                  },
-            });
-          } catch (error) {
-            emitForOwner({
-              type: "tunnel.ssh.open.response",
-              payload: {
-                tunnelId: msg.tunnelId,
-                success: false,
-                error: error instanceof Error ? error.message : String(error),
-                errorCode: "invalid_input",
-                requestId: msg.requestId,
-              },
-            });
-          }
-        })();
-        return undefined;
-      }
-      case "tunnel.ssh.probe.request": {
-        void (async () => {
-          try {
-            const probe = await manager.probe({
-              host: msg.host,
-              ...(msg.sshPort !== undefined ? { sshPort: msg.sshPort } : {}),
-            });
-            emitForOwner({
-              type: "tunnel.ssh.probe.response",
-              payload: { ...probe, requestId: msg.requestId },
-            });
-          } catch (error) {
-            emitForOwner({
-              type: "tunnel.ssh.probe.response",
-              payload: {
-                reachable: false,
-                fingerprint: null,
-                keyType: null,
-                pinnedFingerprint: null,
-                verdict: null,
-                requestId: msg.requestId,
-              },
-            });
-            this.sessionLogger.warn({ err: error }, "tunnel.ssh.probe failed");
-          }
-        })();
-        return undefined;
-      }
-      case "tunnel.ssh.respond-host-key.request": {
-        const accepted = manager.respondHostKey({
-          promptId: msg.hostKeyPromptId,
-          decision: msg.decision,
-        });
-        this.emit({
-          type: "tunnel.ssh.respond-host-key.response",
-          payload: {
-            accepted,
-            error: accepted ? null : "No pending host-key prompt with that id.",
-            requestId: msg.requestId,
-          },
-        });
-        return undefined;
-      }
-      case "tunnel.ssh.close.request": {
-        const success = manager.closeTunnel(msg.tunnelId);
-        this.emit({
-          type: "tunnel.ssh.close.response",
-          payload: { tunnelId: msg.tunnelId, success, requestId: msg.requestId },
-        });
-        return undefined;
-      }
-      case "tunnel.ssh.list.request": {
-        this.emit({
-          type: "tunnel.ssh.list.response",
-          payload: { tunnels: manager.list(), requestId: msg.requestId },
-        });
-        return undefined;
-      }
-      case "tunnel.ssh.send.request": {
-        const accepted = manager.sendFrame({
-          tunnelId: msg.tunnelId,
-          ...(msg.text !== undefined ? { text: msg.text } : {}),
-          ...(msg.binaryBase64 !== undefined ? { binaryBase64: msg.binaryBase64 } : {}),
-        });
-        this.emit({
-          type: "tunnel.ssh.send.response",
-          payload: {
-            tunnelId: msg.tunnelId,
-            accepted,
-            error: accepted ? null : `Tunnel is not open: ${msg.tunnelId}`,
-            requestId: msg.requestId,
-          },
-        });
-        return undefined;
-      }
-      default:
-        return undefined;
-    }
   }
 
   private dispatchWorkspaceLifecycleMessage(msg: SessionInboundMessage): Promise<void> | undefined {
@@ -8022,15 +7806,20 @@ export class Session {
     if (!this.authorization.allowsOutbound(msg)) {
       return;
     }
-    if (PER_SOURCE_EVENT_TYPES.has(msg.type)) {
-      const eventType = msg.type as SessionEventSubscription;
+    if (
+      msg.type === "project.update" ||
+      msg.type === "providers_snapshot_update" ||
+      msg.type === "agent_attention_required" ||
+      msg.type === "agent_permission_request" ||
+      msg.type === "agent_permission_resolved"
+    ) {
       if (this.clientCapabilitiesBySource.size > 0 && this.onMessageToSource) {
         for (const source of this.clientCapabilitiesBySource.keys()) {
-          if (this.wantsEvent(eventType, source)) this.onMessageToSource(source, msg);
+          if (this.wantsEvent(msg.type, source)) this.onMessageToSource(source, msg);
         }
         return;
       }
-      if (!this.wantsEvent(eventType)) return;
+      if (!this.wantsEvent(msg.type)) return;
     }
     // JSON.stringify(msg) is only computed when trace is enabled — it runs for
     // every outbound message otherwise, and trace is disabled by default.

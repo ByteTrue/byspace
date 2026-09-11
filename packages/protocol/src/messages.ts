@@ -2234,54 +2234,6 @@ export const CheckoutForgeSetAutoMergeRequestSchema = z.object({
   requestId: z.string(),
 });
 
-// SSH tunnels owned by the daemon: the client asks an already-connected
-// daemon to relay a WebSocket session to a remote daemon over SSH. Key/agent
-// auth shells out to the system ssh binary (credentials never enter the
-// daemon); password auth runs an in-process ssh2 handshake.
-export const TunnelSshOpenRequestSchema = z.object({
-  type: z.literal("tunnel.ssh.open.request"),
-  tunnelId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/u),
-  host: z.string().min(1),
-  sshPort: z.number().int().min(1).max(65535).optional(),
-  daemonPort: z.number().int().min(1).max(65535).optional(),
-  authMode: z.enum(["key", "password"]),
-  password: z.string().optional(),
-  requestId: z.string(),
-});
-
-export const TunnelSshProbeRequestSchema = z.object({
-  type: z.literal("tunnel.ssh.probe.request"),
-  host: z.string().min(1),
-  sshPort: z.number().int().min(1).max(65535).optional(),
-  requestId: z.string(),
-});
-
-export const TunnelSshRespondHostKeyRequestSchema = z.object({
-  type: z.literal("tunnel.ssh.respond-host-key.request"),
-  hostKeyPromptId: z.string().min(1),
-  decision: z.enum(["trust", "cancel"]),
-  requestId: z.string(),
-});
-
-export const TunnelSshCloseRequestSchema = z.object({
-  type: z.literal("tunnel.ssh.close.request"),
-  tunnelId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/u),
-  requestId: z.string(),
-});
-
-export const TunnelSshListRequestSchema = z.object({
-  type: z.literal("tunnel.ssh.list.request"),
-  requestId: z.string(),
-});
-
-export const TunnelSshSendRequestSchema = z.object({
-  type: z.literal("tunnel.ssh.send.request"),
-  tunnelId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/u),
-  text: z.string().optional(),
-  binaryBase64: z.string().optional(),
-  requestId: z.string(),
-});
-
 // COMPAT(githubAutoMergeRpc): legacy RPC retained when
 // checkout.forge.set_auto_merge.* shipped in v0.2.0-beta.1. Stop serving and
 // consuming it after 2027-01-17 once client and daemon floors are >= v0.2.0.
@@ -3164,9 +3116,6 @@ export const SessionEventSubscriptionSchema = z.enum([
   "agent_attention_required",
   "agent_permission_request",
   "agent_permission_resolved",
-  "tunnel.ssh.frame",
-  "tunnel.ssh.state",
-  "tunnel.ssh.host_key_prompt",
 ]);
 export type SessionEventSubscription = z.infer<typeof SessionEventSubscriptionSchema>;
 export const SessionEventsSetSubscriptionRequestSchema = z.object({
@@ -3291,12 +3240,6 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   CheckoutPrCreateRequestSchema,
   CheckoutPrMergeRequestSchema,
   CheckoutForgeSetAutoMergeRequestSchema,
-  TunnelSshOpenRequestSchema,
-  TunnelSshProbeRequestSchema,
-  TunnelSshRespondHostKeyRequestSchema,
-  TunnelSshCloseRequestSchema,
-  TunnelSshListRequestSchema,
-  TunnelSshSendRequestSchema,
   CheckoutGithubSetAutoMergeRequestSchema,
   CheckoutCommitsListRequestSchema,
   CheckoutCommitFileDiffRequestSchema,
@@ -5405,108 +5348,6 @@ export const CheckoutForgeSetAutoMergeResponseSchema = z.object({
   }),
 });
 
-export const TunnelSshOpenResponseSchema = z.object({
-  type: z.literal("tunnel.ssh.open.response"),
-  payload: z.object({
-    tunnelId: z.string(),
-    success: z.boolean(),
-    error: z.string().nullable(),
-    errorCode: z.string().nullable(),
-    requestId: z.string(),
-  }),
-});
-
-export const TunnelSshProbeResponseSchema = z.object({
-  type: z.literal("tunnel.ssh.probe.response"),
-  payload: z.object({
-    reachable: z.boolean(),
-    fingerprint: z.string().nullable(),
-    keyType: z.string().nullable(),
-    pinnedFingerprint: z.string().nullable(),
-    verdict: z.enum(["new", "pinned", "changed"]).nullable(),
-    requestId: z.string(),
-  }),
-});
-
-export const TunnelSshRespondHostKeyResponseSchema = z.object({
-  type: z.literal("tunnel.ssh.respond-host-key.response"),
-  payload: z.object({
-    accepted: z.boolean(),
-    error: z.string().nullable(),
-    requestId: z.string(),
-  }),
-});
-
-export const TunnelSshCloseResponseSchema = z.object({
-  type: z.literal("tunnel.ssh.close.response"),
-  payload: z.object({
-    tunnelId: z.string(),
-    success: z.boolean(),
-    requestId: z.string(),
-  }),
-});
-
-export const TunnelSshListResponseSchema = z.object({
-  type: z.literal("tunnel.ssh.list.response"),
-  payload: z.object({
-    tunnels: z.array(
-      z.object({
-        tunnelId: z.string(),
-        host: z.string(),
-        sshPort: z.number().int().optional(),
-        daemonPort: z.number().int().optional(),
-        authMode: z.enum(["key", "password"]),
-        state: z.enum(["opening", "open", "closed"]),
-        openedAt: z.number(),
-      }),
-    ),
-    requestId: z.string(),
-  }),
-});
-
-export const TunnelSshSendResponseSchema = z.object({
-  type: z.literal("tunnel.ssh.send.response"),
-  payload: z.object({
-    tunnelId: z.string(),
-    accepted: z.boolean(),
-    error: z.string().nullable(),
-    requestId: z.string(),
-  }),
-});
-
-// Unsolicited tunnel pushes: frames relay the remote daemon's WebSocket
-// traffic back to the owning client; state changes and host-key prompts
-// drive the connection UI. Only the client that opened a tunnel receives
-// its events.
-export const TunnelSshFrameMessageSchema = z.object({
-  type: z.literal("tunnel.ssh.frame"),
-  payload: z.object({
-    tunnelId: z.string(),
-    text: z.string().optional(),
-    binaryBase64: z.string().optional(),
-  }),
-});
-
-export const TunnelSshStateMessageSchema = z.object({
-  type: z.literal("tunnel.ssh.state"),
-  payload: z.object({
-    tunnelId: z.string(),
-    state: z.enum(["opening", "open", "closed"]),
-    error: z.string().nullable(),
-  }),
-});
-
-export const TunnelSshHostKeyPromptMessageSchema = z.object({
-  type: z.literal("tunnel.ssh.host_key_prompt"),
-  payload: z.object({
-    hostKeyPromptId: z.string(),
-    host: z.string(),
-    kind: z.enum(["first-use", "changed"]),
-    fingerprint: z.string(),
-    pinnedFingerprint: z.string().optional(),
-  }),
-});
-
 // COMPAT(githubAutoMergeRpc): legacy RPC retained when
 // checkout.forge.set_auto_merge.* shipped in v0.2.0-beta.1. Stop serving and
 // consuming it after 2027-01-17 once client and daemon floors are >= v0.2.0.
@@ -6841,15 +6682,6 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   CheckoutPrCreateResponseSchema,
   CheckoutPrMergeResponseSchema,
   CheckoutForgeSetAutoMergeResponseSchema,
-  TunnelSshOpenResponseSchema,
-  TunnelSshProbeResponseSchema,
-  TunnelSshRespondHostKeyResponseSchema,
-  TunnelSshCloseResponseSchema,
-  TunnelSshListResponseSchema,
-  TunnelSshSendResponseSchema,
-  TunnelSshFrameMessageSchema,
-  TunnelSshStateMessageSchema,
-  TunnelSshHostKeyPromptMessageSchema,
   CheckoutGithubSetAutoMergeResponseSchema,
   CheckoutCommitsListResponseSchema,
   CheckoutCommitFileDiffResponseSchema,
@@ -7225,21 +7057,6 @@ export type CheckoutForgeSetAutoMergeRequest = z.infer<
 export type CheckoutForgeSetAutoMergeResponse = z.infer<
   typeof CheckoutForgeSetAutoMergeResponseSchema
 >;
-export type TunnelSshOpenRequest = z.infer<typeof TunnelSshOpenRequestSchema>;
-export type TunnelSshOpenResponse = z.infer<typeof TunnelSshOpenResponseSchema>;
-export type TunnelSshProbeRequest = z.infer<typeof TunnelSshProbeRequestSchema>;
-export type TunnelSshProbeResponse = z.infer<typeof TunnelSshProbeResponseSchema>;
-export type TunnelSshRespondHostKeyRequest = z.infer<typeof TunnelSshRespondHostKeyRequestSchema>;
-export type TunnelSshRespondHostKeyResponse = z.infer<typeof TunnelSshRespondHostKeyResponseSchema>;
-export type TunnelSshCloseRequest = z.infer<typeof TunnelSshCloseRequestSchema>;
-export type TunnelSshCloseResponse = z.infer<typeof TunnelSshCloseResponseSchema>;
-export type TunnelSshListRequest = z.infer<typeof TunnelSshListRequestSchema>;
-export type TunnelSshListResponse = z.infer<typeof TunnelSshListResponseSchema>;
-export type TunnelSshSendRequest = z.infer<typeof TunnelSshSendRequestSchema>;
-export type TunnelSshSendResponse = z.infer<typeof TunnelSshSendResponseSchema>;
-export type TunnelSshFrameMessage = z.infer<typeof TunnelSshFrameMessageSchema>;
-export type TunnelSshStateMessage = z.infer<typeof TunnelSshStateMessageSchema>;
-export type TunnelSshHostKeyPromptMessage = z.infer<typeof TunnelSshHostKeyPromptMessageSchema>;
 export type CheckoutGithubSetAutoMergeRequest = z.infer<
   typeof CheckoutGithubSetAutoMergeRequestSchema
 >;

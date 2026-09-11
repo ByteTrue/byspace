@@ -100,12 +100,6 @@ const INBOUND_PERMISSION = {
   "hub.management.daemon.connect.request": "tunnel.manage",
   "hub.management.daemon.disconnect.request": "tunnel.manage",
   "hub.management.daemon.get_status.request": "tunnel.manage",
-  "tunnel.ssh.close.request": "tunnel.manage",
-  "tunnel.ssh.list.request": "tunnel.manage",
-  "tunnel.ssh.open.request": "tunnel.manage",
-  "tunnel.ssh.probe.request": "tunnel.manage",
-  "tunnel.ssh.respond-host-key.request": "tunnel.manage",
-  "tunnel.ssh.send.request": "tunnel.manage",
   "hub.management.daemon.permissions.update.request": "access.manage",
   import_agent_request: "workspace.write",
   kill_terminal_request: "workspace.write",
@@ -426,15 +420,6 @@ const OUTBOUND_PERMISSION = {
   "workspace.setup.run.response": "workspace.write",
   workspace_update: ["workspace.read", "hub.execute"],
   write_project_config_response: "workspace.write",
-  "tunnel.ssh.close.response": "tunnel.manage",
-  "tunnel.ssh.frame": "tunnel.manage",
-  "tunnel.ssh.host_key_prompt": "tunnel.manage",
-  "tunnel.ssh.list.response": "tunnel.manage",
-  "tunnel.ssh.open.response": "tunnel.manage",
-  "tunnel.ssh.probe.response": "tunnel.manage",
-  "tunnel.ssh.respond-host-key.response": "tunnel.manage",
-  "tunnel.ssh.send.response": "tunnel.manage",
-  "tunnel.ssh.state": "tunnel.manage",
 } as const satisfies Record<OutboundOperation, PermissionRequirement>;
 
 export function requiredPermissionForInbound(operation: InboundOperation): PermissionRequirement {
