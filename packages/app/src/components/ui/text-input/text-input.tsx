@@ -1,1 +1,1 @@
-export { EditingTextInput } from "./text-input.native";
+export { EditingTextInput } from "./text-input.web";

@@ -1,1 +1,1 @@
-export * from "./keyboard-dock.native";
+export * from "./keyboard-dock.web";

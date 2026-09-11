@@ -1,5 +1,0 @@
-appId: com.bytetrue.byspace
----
-- launchApp:
-    clearState: true
-- runFlow: flows/dev-client.yaml

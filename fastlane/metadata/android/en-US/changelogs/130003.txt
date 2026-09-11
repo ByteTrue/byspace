@@ -1,6 +1,0 @@
-macOS 13 or later is now required. The desktop app moved to Electron 44, which does not run on macOS 12. Macs on macOS 12 stay on the version they have and stop receiving desktop updates.
-
-Added
-- Added Web Push notifications for browsers and Home Screen web apps, so agent-finished, needs-permission, and terminal-attention alerts arrive even when the tab is closed
-
-Full notes: https://github.com/ByteTrue/byspace/releases

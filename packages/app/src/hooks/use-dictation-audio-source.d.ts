@@ -1,1 +1,1 @@
-export * from "./use-dictation-audio-source.native";
+export * from "./use-dictation-audio-source.web";

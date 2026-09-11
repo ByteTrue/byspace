@@ -1,4 +1,0 @@
-Added
-- Added configurable default terminal shell with host-side detection: daemon.terminalDefaultShell plus a terminal shell detection RPC; the daemon probes installed shells (login shell, /etc/shells, well-known paths on Unix; PowerShell variants on Windows) and spawns every new terminal with the configured shell. Absent or null keeps the previous auto behavior, and host settings gains a Default shell section behind a feature gate.
-
-Full notes: https://github.com/ByteTrue/byspace/releases
