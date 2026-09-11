@@ -10,6 +10,8 @@ created: 2026-09-10
 
 ## 范围与决策状态
 
+**执行状态（2026-09-12）：** 除批次 7（provider 收缩，Owner 指示暂缓）外全部执行完毕——Web UI 默认开启（399d5a210c）、原生移动端退出（da626db362）、Electron 退出（b1c37223af）、Hub 移除（446bc38a3d）、插件系统移除（a5c6bb6588）、语音移除（8d96875115）、Nix 与营销站移除（e61194ccd1）。归档 ref：archive/pre-{mobile,electron,hub,plugin,voice,nix-website}-removal。
+
 Owner 于 2026-09-11 确认 Web/PWA + daemon 路线：移动原生与 Electron 退出，现有网页技术暂不更换；内嵌浏览器不保留，SSH 移除（同日修订，见 A5），Hub 移除，Docker 保留。本 Issue 记录已确认方向、待决项与执行门槛；不代表已经取得精确删除批次、数据迁移或停部署的执行授权。
 
 - **审计基线：** 静态审计在 `6e8e98a1042e1161dd6512ea3df1d531f69a04ab`（v0.13.0），SSH 补充核对在 `a54087a1d14c6bff45064dd678b572c6263e4344`。**当前基线：** `8ce02b66707dad700eea9104ecd308a35779316c`（Paseo v0.8.0 同步合并后，PR #34），关键路径已复核，见下。
