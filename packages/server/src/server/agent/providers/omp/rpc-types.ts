@@ -44,8 +44,9 @@ const OmpCustomMessageSchema = z
   .object({
     role: z.literal("custom"),
     content: z.union([z.string(), z.array(z.union([OmpTextContentSchema, OmpImageContentSchema]))]),
-    customType: z.string().optional(),
-    display: z.boolean().optional(),
+    // v17 runtimes emit display: null for visible messages; only false hides.
+    display: z.boolean().nullish(),
+    customType: z.string().nullish(),
     details: z.unknown().optional(),
   })
   .passthrough();
