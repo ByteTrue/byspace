@@ -27,7 +27,6 @@
     "packages/server",
     "packages/app",
     "packages/relay",
-    "packages/website",
     "packages/cli"
   ],
   "scripts": {
@@ -38,7 +37,6 @@
     "dev:server:raw": "npm run dev --workspace=@getpaseo/server",
     "dev:app": "cross-env BYSPACE_LISTEN=127.0.0.1:6778 EXPO_PORT=8081 ./scripts/dev-app.sh",
     "test:e2e:mobile": "./scripts/test-mobile-agent-device.sh",
-    "dev:website": "npm run dev --workspace=@getpaseo/website",
     "postinstall": "node scripts/postinstall-patches.mjs",
     "prepare": "lefthook install --force",
     "build": "npm run build --workspaces --if-present",

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="packages/website/public/logo.svg" width="64" height="64" alt="BySpace logo">
+  <img src="assets/logo.svg" width="64" height="64" alt="BySpace logo">
 </p>
 
 <h1 align="center">BySpace</h1>
@@ -23,11 +23,11 @@
 <p align="center">One interface for Claude Code, Codex, Copilot, OpenCode, and Pi agents.</p>
 
 <p align="center">
-  <img src="packages/website/public/hero-mockup.png" alt="BySpace app screenshot" width="100%">
+  <img src="assets/hero-mockup.png" alt="BySpace app screenshot" width="100%">
 </p>
 
 <p align="center">
-  <img src="packages/website/public/mobile-mockup.png" alt="BySpace mobile app" width="100%">
+  <img src="assets/mobile-mockup.png" alt="BySpace mobile app" width="100%">
 </p>
 
 Run agents in parallel on your own machines. Ship from your phone or your desk.
@@ -140,7 +140,6 @@ Quick monorepo package map:
 - `packages/cli`: `byspace` CLI for daemon and agent workflows
 - `packages/desktop`: Electron desktop app
 - `packages/relay`: Relay transport and encryption used by the daemon and clients
-- `packages/website`: retained upstream marketing source; it is not deployed by this release line
 
 Common commands:
 
@@ -151,8 +150,6 @@ npm run dev
 # run individual surfaces
 npm run dev:server
 npm run dev:app
-npm run dev:desktop
-npm run dev:website
 
 # build the server stack
 npm run build:server
