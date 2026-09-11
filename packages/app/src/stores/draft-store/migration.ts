@@ -28,6 +28,14 @@ const LegacyPullRequestItemSchema = z.strictObject({
   headRefName: z.string().nullable().optional(),
   updatedAt: z.string().optional(),
 });
+// COMPAT(pluginAttachments): legacy persisted plugin_resource attachments are
+// dropped on hydration now that the plugin system is removed (issue 025 C6).
+// The draft text and non-plugin attachments survive; plugin ones had no
+// offline meaning without their plugin runtime. Remove after 2027-03-11 once
+// old drafts have been migrated.
+const LegacyPluginResourceAttachmentSchema = z.strictObject({
+  kind: z.literal("plugin_resource"),
+});
 const LegacyGithubPrAttachmentSchema = z.strictObject({
   kind: z.literal("github_pr"),
   item: LegacyPullRequestItemSchema,
@@ -66,6 +74,7 @@ const LegacyReviewAttachmentSchema = z.strictObject({
 });
 const PersistedComposerAttachmentSchema = z.union([
   UserComposerAttachmentSchema,
+  LegacyPluginResourceAttachmentSchema,
   LegacyGithubPrAttachmentSchema,
   LegacyReviewAttachmentSchema,
 ]);
@@ -131,6 +140,10 @@ function normalizePersistedComposerAttachment(
   attachment: PersistedComposerAttachment,
 ): UserComposerAttachment | null {
   if (attachment.kind === "review") {
+    return null;
+  }
+  // COMPAT(pluginAttachments): see LegacyPluginResourceAttachmentSchema.
+  if (attachment.kind === "plugin_resource") {
     return null;
   }
   if (attachment.kind === "github_pr" && attachment.item.kind === "pr") {

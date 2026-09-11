@@ -108,8 +108,6 @@ import type { Theme } from "@/styles/theme";
 import { recordRenderProfileReasons } from "@/utils/render-profiler";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useStreamHistoryWindow } from "./use-stream-history-window";
-import { PluginTimelineItemView, useInstalledTimelineTransform } from "@/plugins/timeline";
-import { projectPluginTimelineItems } from "@/plugins/timeline/projection";
 
 function renderLiveAuxiliaryNode(input: {
   pendingPermissions: ReactNode;
@@ -394,7 +392,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     // Get serverId (fallback to agent's serverId if not provided)
     const resolvedServerId = serverId ?? context.serverId ?? "";
-    const transformTimelineItem = useInstalledTimelineTransform(resolvedServerId);
 
     const client = useSessionStore((state) => state.sessions[resolvedServerId]?.client ?? null);
     const sessionStreamHead = useSessionStore((state) =>
@@ -579,13 +576,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         toolCallDetailLevel,
       ],
     );
-    const projectedPlugins = useMemo(
-      () => ({
-        tail: projectPluginTimelineItems(projectedToolCalls.tail, transformTimelineItem),
-        head: projectPluginTimelineItems(projectedToolCalls.head, transformTimelineItem),
-      }),
-      [projectedToolCalls.head, projectedToolCalls.tail, transformTimelineItem],
-    );
+    // Plugin timeline projection was removed with the plugin system (issue 025
+    // C6); the stream renders tool-call output directly.
+    const projectedPlugins = projectedToolCalls;
     const {
       start: historyWindowStart,
       hasLocalHistory,
@@ -937,23 +930,11 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               />
             );
 
-          case "plugin":
-            return (
-              <PluginTimelineItemView agentId={agentId} item={item} serverId={resolvedServerId} />
-            );
-
           default:
             return null;
         }
       },
-      [
-        agentId,
-        renderUserMessageItem,
-        renderAssistantMessageItem,
-        renderThoughtItem,
-        renderToolCallItem,
-        resolvedServerId,
-      ],
+      [renderUserMessageItem, renderAssistantMessageItem, renderThoughtItem, renderToolCallItem],
     );
 
     const bottomTurnFooterHost = streamLayout.auxiliaryTurnFooter;

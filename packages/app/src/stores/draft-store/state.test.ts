@@ -71,18 +71,15 @@ describe("draft-store lifecycle", () => {
 });
 
 describe("draft-store normalization", () => {
-  it("preserves plugin resources when hydrating a draft", () => {
+  it("rejects plugin resource attachments now that plugins are removed", () => {
     const attachment = {
-      kind: "plugin_resource" as const,
+      kind: "plugin_resource",
       pluginId: "linear",
       sourceId: "issues",
-      sourceTitle: "Linear issue",
-      sourceIcon: "CircleDot",
       item: {
         id: "issue-uuid",
         identifier: "ENG-123",
         title: "Plugin attachments",
-        subtitle: "In progress",
         url: "https://linear.app/acme/issue/ENG-123/plugin-attachments",
         text: "Linear issue ENG-123: Plugin attachments",
         resourceType: "issue",
@@ -90,13 +87,16 @@ describe("draft-store normalization", () => {
     };
 
     expect(
-      toDraftInputIfReady({
-        input: { text: "Implement this", attachments: [attachment] },
-        lifecycle: "active",
-        updatedAt: 1,
-        version: 1,
-      }),
-    ).toEqual({ text: "Implement this", attachments: [attachment] });
+      toDraftInputIfReady(
+        // Simulate a legacy persisted draft that predates plugin removal.
+        {
+          input: { text: "Implement this", attachments: [attachment] },
+          lifecycle: "active",
+          updatedAt: 1,
+          version: 1,
+        } as unknown as Parameters<typeof toDraftInputIfReady>[0],
+      ),
+    ).toBeUndefined();
   });
 
   it("preserves uploaded file attachments when hydrating a draft", () => {

@@ -1,4 +1,3 @@
-import { describeHookWorkspace } from "./plugins/lifecycle/index.js";
 import express from "express";
 import { createServer as createHTTPServer, type IncomingMessage, type ServerResponse } from "http";
 import { constants, existsSync, unlinkSync } from "fs";
@@ -230,8 +229,6 @@ import {
   createAgentCommand,
   type CreateAgentCommandDependencies,
 } from "./agent/create-agent/create.js";
-import { PluginService } from "./plugins/index.js";
-import { ManagedPluginSources } from "./plugins/managed-source.js";
 
 const MCP_DEBUG_BATCH_LIMIT = 10;
 const MCP_DEBUG_SECRET = "[redacted]";
@@ -624,10 +621,6 @@ export async function createPaseoDaemon(
   });
   const browserToolsPolicy = new DaemonConfigBrowserToolsPolicy(daemonConfigStore);
   const browserToolsBroker = new BrowserToolsBroker({});
-  const pluginRuntime = new PluginService(logger, daemonConfigStore, daemonVersion, {
-    managedSources: new ManagedPluginSources(config.paseoHome),
-    settingsDirectory: path.join(config.paseoHome, "plugin-settings"),
-  });
 
   const serverId = getOrCreateServerId(config.paseoHome, { logger });
   const daemonKeyPair = await loadOrCreateDaemonKeyPair(config.paseoHome, logger);
@@ -904,15 +897,7 @@ export async function createPaseoDaemon(
       forgeOverrides: { github },
     },
   });
-  workspaceRegistry.subscribeToMutations((mutation) => {
-    if (mutation.kind === "archive" && mutation.workspace) {
-      pluginRuntime.emit("workspace.archived", {
-        workspace: describeHookWorkspace(mutation.workspace),
-      });
-    }
-  });
   const workspaceProvisioning = createWorkspaceProvisioningService({
-    lifecycle: pluginRuntime,
     serverId,
     projectRegistry,
     workspaceRegistry,
@@ -946,7 +931,6 @@ export async function createPaseoDaemon(
   });
   const initialAgentManagerState = providerSnapshotManager.getAgentManagerProviderState();
   const agentManager = new AgentManager({
-    pluginLifecycle: pluginRuntime,
     clients: initialAgentManagerState.clients,
     providerDefinitions: initialAgentManagerState.providerDefinitions,
     registry: agentStorage,
@@ -959,14 +943,6 @@ export async function createPaseoDaemon(
       resolvePaseoToolPolicy(provider, daemonConfigStore.get().providers),
     logger,
   });
-  const syncPluginProviders = () => {
-    agentManager.updateProviderRegistry(
-      providerSnapshotManager.replacePluginProviders(pluginRuntime.getProviderRegistrations()),
-    );
-  };
-  const unsubscribePluginProviders =
-    pluginRuntime.subscribeProviderRegistrations(syncPluginProviders);
-
   const detachAgentStoragePersistence = attachAgentStoragePersistence(
     logger,
     agentManager,
@@ -1663,12 +1639,9 @@ export async function createPaseoDaemon(
               serviceProxyPublicBaseUrl,
               browserToolsBroker,
               workspaceSetupRuntime,
-              pluginRuntime,
               orchestrationSkills,
               workspaceLabelService,
             );
-            pluginRuntime.bindPaseoSessionHost(wsServer);
-            await pluginRuntime.start();
             // Restored terminals must spawn after boundListenTarget is set,
             // otherwise createTerminal bakes a null activity URL into their
             // env and agent hooks in those terminals can never report state.
@@ -1723,8 +1696,6 @@ export async function createPaseoDaemon(
       speechService.start();
       scriptHealthMonitor.start();
     } catch (error) {
-      unsubscribePluginProviders();
-      await pluginRuntime.stopAllPlugins().catch(() => undefined);
       await serviceProxy.stopStandalone().catch(() => undefined);
       await agentProviderRuntime.shutdown().catch(() => undefined);
       if (mainStarted) {
@@ -1736,8 +1707,6 @@ export async function createPaseoDaemon(
   };
 
   const stop = async () => {
-    await pluginRuntime.stopAllPlugins();
-    unsubscribePluginProviders();
     workspaceReconciliation.dispose();
     scriptHealthMonitor.stop();
     // Freeze both ingress and registration before taking the agent closure snapshot.

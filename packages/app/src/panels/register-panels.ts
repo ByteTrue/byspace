@@ -37,6 +37,8 @@ export function ensurePanelsRegistered(): void {
   registerPanel(commitDiffPanelRegistration);
   registerPanel(workingDiffPanelRegistration);
   registerPanel(changesTreePanelRegistration);
-  registerPanel(pluginPanelRegistration);
+  if (pluginPanelRegistration) {
+    registerPanel(pluginPanelRegistration);
+  }
   panelsRegistered = true;
 }

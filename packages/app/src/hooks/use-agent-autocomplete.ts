@@ -167,13 +167,12 @@ function mapDirectorySuggestionsToEntries(payload: {
 }
 
 function mapCommandToOption(entry: AvailableCommand, t: TFunction): AgentAutocompleteOption {
-  const command = entry.command;
+  const command = entry.command as { name: string; argumentHint?: string; description?: string };
   const base = {
     id: command.name,
     label: `/${command.name}`,
     detail: command.argumentHint || undefined,
-    description:
-      entry.source === "client" ? t(entry.command.descriptionKey) : entry.command.description,
+    description: entry.source === "client" ? t(entry.command.descriptionKey) : command.description,
     kind: "command" as const,
   };
   if (entry.source === "client") {
@@ -229,8 +228,10 @@ function buildCommandAutocompleteOptions(input: BuildAutocompleteOptionsInput) {
     })
       .filter((entry) => !input.isDraftContext || entry.source !== "built-in")
       .map((entry): AvailableCommand => {
-        if (entry.source === "built-in") return { source: "client", command: entry.command };
-        return entry;
+        if (entry.source === "built-in") {
+          return { source: "client", command: entry.command as ClientSlashCommand };
+        }
+        return { source: "provider", command: entry.command as AgentSlashCommand };
       });
     const availableCommands: AvailableCommand[] =
       input.activeSlashCommand?.position === "inline"

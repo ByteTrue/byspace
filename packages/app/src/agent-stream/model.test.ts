@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import type { StreamItem } from "@/types/stream";
-import { projectPluginTimelineItems } from "@/plugins/timeline/projection";
 import { findMountedWindowStart } from "./history-window";
 import { DEFAULT_WEB_PARTIAL_VIRTUALIZATION_THRESHOLD } from "./web-virtualization";
 import { buildAgentStreamRenderModel } from "./model";
@@ -104,7 +103,7 @@ describe("buildAgentStreamRenderModel", () => {
     expect(new Set(segmentedIds).size).toBe(tail.length);
   });
 
-  it("keeps the mounted boundary stable when a transformer filters an earlier item", () => {
+  it("keeps the mounted boundary stable when an earlier item is filtered out", () => {
     const tail = [
       userMessage("filtered", 1),
       assistantMessage("hidden", 2),
@@ -112,9 +111,9 @@ describe("buildAgentStreamRenderModel", () => {
       assistantMessage("visible-a", 4),
     ];
 
-    const projectedTail = projectPluginTimelineItems(tail, ({ sourceId }) =>
-      sourceId === "filtered" ? [] : undefined,
-    );
+    // Simulates a stream transform (previously plugin timeline projection)
+    // removing earlier items from the tail.
+    const projectedTail = tail.filter((item) => item.id !== "filtered");
     const historyStart = findMountedWindowStart({ items: projectedTail, minMountedCount: 2 });
     const model = buildAgentStreamRenderModel({
       isTurnActive: false,

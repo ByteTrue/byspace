@@ -94,10 +94,6 @@ import {
   HostWorkspacesPage,
   HostTerminalsPage,
 } from "@/screens/settings/host-page";
-import { resolvePluginIcon } from "@/plugins/icons";
-import { PluginSettingsContent } from "@/plugins/settings";
-import { useInstalledPlugins } from "@/plugins/registry";
-import { HostPluginsPage } from "@/screens/settings/plugins-page";
 import { MetadataGenerationPage } from "@/screens/settings/metadata-generation-page";
 import ProjectsScreen from "@/screens/projects-screen";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
@@ -205,7 +201,7 @@ function renderHostSettingsContent(
     case "terminals":
       return <HostTerminalsPage serverId={view.serverId} />;
     case "plugins":
-      return <HostPluginsPage serverId={view.serverId} />;
+      return null; // Plugin management is retired (issue 025 C6)
     case "host":
       return <HostSettingsPage serverId={view.serverId} onHostRemoved={onHostRemoved} />;
   }
@@ -1308,20 +1304,14 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     returnFromSettings({ kind: "root" });
   }, []);
 
-  const installedPlugins = useInstalledPlugins();
   const detailHeader = ((): {
     title: string;
     Icon: ComponentType<{ size: number; color: string }>;
     titleAccessory?: ReactNode;
   } | null => {
     if (view.kind === "plugin") {
-      const screen = installedPlugins
-        .find((plugin) => plugin.serverId === view.serverId && plugin.id === view.pluginId)
-        ?.settingsScreens.find((candidate) => candidate.id === view.screenId);
-      return {
-        title: `${view.pluginId} · ${screen?.title ?? t("settings.title")}`,
-        Icon: screen ? resolvePluginIcon(screen.icon) : Blocks,
-      };
+      // Plugin settings screens are retired (issue 025 C6).
+      return null;
     }
     if (view.kind === "host") {
       const item = HOST_SECTION_ITEMS.find((s) => s.id === view.section);
@@ -1344,14 +1334,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     content = null;
   } else {
     content = (() => {
-      if (view.kind === "plugin")
-        return (
-          <PluginSettingsContent
-            serverId={view.serverId}
-            pluginId={view.pluginId}
-            screenId={view.screenId}
-          />
-        );
+      if (view.kind === "plugin") return null; // Plugin settings are retired (issue 025 C6)
       if (view.kind === "host") {
         return renderHostSettingsContent(view, handleHostRemoved);
       }

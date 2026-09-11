@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Shortcut } from "@/components/ui/shortcut";
 import { Switch } from "@/components/ui/switch";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
-import { resolvePluginIcon } from "@/plugins/icons";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import {
   builtinSidebarNavLabelKey,
@@ -50,11 +49,14 @@ function NavIcon({ Icon, color = "" }: { Icon: LucideIcon; color?: string }) {
 const ThemedNavIcon = withUnistyles(NavIcon);
 
 function navItemIcon(item: SidebarNavItem): LucideIcon {
-  return item.kind === "builtin" ? BUILTIN_ICONS[item.id] : resolvePluginIcon(item.group.icon);
+  // Plugin sidebar groups are retired (issue 025 C6); only builtin items remain.
+  return BUILTIN_ICONS[(item as { id: keyof typeof BUILTIN_ICONS }).id];
 }
 
 function navItemLabel(t: TFunction, item: SidebarNavItem): string {
-  return item.kind === "builtin" ? t(builtinSidebarNavLabelKey(item.id)) : item.group.title;
+  return t(
+    builtinSidebarNavLabelKey((item as { id: Parameters<typeof builtinSidebarNavLabelKey>[0] }).id),
+  );
 }
 
 /** Own component so the row can stay hook-free about which items have a shortcut. */

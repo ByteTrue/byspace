@@ -6,16 +6,10 @@ import {
   useMemo,
   useRef,
   type ReactNode,
+  type Ref,
 } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import type {
-  SettingsRowProps,
-  SettingsSwitchProps,
-  SettingsSelectProps,
-  SettingsInputProps,
-  SettingsActionProps,
-} from "@getpaseo/plugin/client/ui";
 import type { EditingTextInputHandle } from "@/components/ui/text-input";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
@@ -26,6 +20,47 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { settingsStyles } from "@/styles/settings";
 export { SettingsGroup } from "./headings/settings-group";
 export { SettingsSection } from "./headings/settings-section";
+
+// The settings row props were previously re-exported from the plugin SDK's
+// client UI contracts; they live here now that the plugin system is gone.
+
+export interface SettingsRowProps {
+  label: string;
+  hint?: string;
+  error?: string | null;
+  children?: ReactNode;
+  testID?: string;
+}
+export interface SettingsSwitchProps extends SettingsRowProps {
+  value: boolean;
+  onValueChange(value: boolean): void;
+  disabled?: boolean;
+}
+export interface SettingsSelectProps<Value extends string = string> extends SettingsRowProps {
+  value: Value;
+  options: readonly { label: string; value: Value }[];
+  onValueChange(value: Value): void;
+  disabled?: boolean;
+}
+export interface SettingsInputHandle {
+  focus(): void;
+  blur(): void;
+  getText(): string;
+  replaceText(text: string): void;
+}
+export interface SettingsInputProps extends SettingsRowProps {
+  initialValue?: string;
+  onChangeText(text: string): void;
+  placeholder?: string;
+  disabled?: boolean;
+  secureTextEntry?: boolean;
+  ref?: Ref<SettingsInputHandle>;
+}
+export interface SettingsActionProps extends SettingsRowProps {
+  actionLabel: string;
+  onPress(): void;
+  disabled?: boolean;
+}
 
 export function SettingsCard({ children, testID }: { children: ReactNode; testID?: string }) {
   return (

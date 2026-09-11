@@ -6,7 +6,6 @@ import { lstat, mkdir, mkdtemp, rename, rm, stat } from "node:fs/promises";
 import { basename, resolve, sep } from "path";
 import { homedir } from "node:os";
 import { CLIENT_CAPS, type ClientCapability } from "@getpaseo/protocol/client-capabilities";
-import { formatPluginSourceReference } from "@getpaseo/protocol/plugin-source-reference";
 import {
   serializeAgentStreamEvent,
   type AgentSnapshotPayload,
@@ -114,8 +113,6 @@ import {
   appendTimelineItemIfAgentKnown,
   emitLiveTimelineItemIfAgentKnown,
 } from "./agent/timeline-append.js";
-import { assertPluginTimelineDataSize } from "./agent/agent-timeline-content.js";
-import { parsePluginClientId } from "./plugins/plugin-session-identity.js";
 import {
   projectTimelineRows,
   selectProjectedTimelinePage,
@@ -477,36 +474,6 @@ export interface SessionOptions {
   workspaceGitService: WorkspaceGitService;
   workspaceAutoName: WorkspaceAutoName;
   daemonConfigStore: DaemonConfigStore;
-  pluginRuntime?: {
-    before: import("./plugins/lifecycle/index.js").PluginLifecycle["before"];
-    emit: import("./plugins/lifecycle/index.js").PluginLifecycle["emit"];
-    listPlugins(): import("@getpaseo/protocol/messages").PluginListItem[];
-    getLogs(pluginId: string): import("@getpaseo/protocol/messages").PluginLogEntry[];
-    installDirectory(input: {
-      path: string;
-      id?: string;
-    }): Promise<import("@getpaseo/protocol/messages").PluginListItem>;
-    inspectDirectory(path: string): Promise<{ id: string }>;
-    installSource(input: {
-      source: string;
-      id?: string;
-      ref?: string;
-    }): Promise<import("@getpaseo/protocol/messages").PluginListItem>;
-    statusSources(
-      pluginId?: string,
-    ): Promise<import("@getpaseo/protocol/messages").PluginSourceStatusItem[]>;
-    updateSources(
-      pluginId?: string,
-    ): Promise<import("@getpaseo/protocol/messages").PluginSourceUpdateItem[]>;
-    reloadPlugin(pluginId: string): Promise<import("@getpaseo/protocol/messages").PluginListItem>;
-    enablePlugin(pluginId: string): Promise<import("@getpaseo/protocol/messages").PluginListItem>;
-    disablePlugin(pluginId: string): Promise<import("@getpaseo/protocol/messages").PluginListItem>;
-    removePlugin(pluginId: string): Promise<void>;
-    subscribe(listener: (pluginId: string) => void): () => void;
-    subscribeSettings?(listener: (pluginId: string, settingsId: string) => void): () => void;
-    catalog(): Array<{ id: string; clientBundle: string }>;
-    invokePluginRpc(pluginId: string, method: string, input: unknown): Promise<unknown>;
-  };
   orchestrationSkills?: import("./orchestration-skills/index.js").OrchestrationSkills;
   mcpBaseUrl?: string | null;
   stt: Resolvable<SpeechToTextProvider | null>;
@@ -689,11 +656,9 @@ export class Session {
   private readonly workspaceRecovery: WorkspaceRecoveryService;
   private readonly daemonConfigStore: DaemonConfigStore;
   private readonly pushNotifications: PushNotifications;
-  private readonly pluginRuntime: SessionOptions["pluginRuntime"];
   private readonly orchestrationSkills: SessionOptions["orchestrationSkills"];
   private unsubscribeAgentEvents: (() => void) | null = null;
   private unsubscribeProjectMutations: (() => void) | null = null;
-  private unsubscribePluginChanges: (() => void) | null = null;
   private unsubscribeWorkspaceMutations: (() => void) | null = null;
   private registryMutationQueue: Promise<void> = Promise.resolve();
   private projectUpdateQueue: Promise<void> = Promise.resolve();
@@ -783,7 +748,6 @@ export class Session {
       workspaceGitService,
       workspaceAutoName,
       daemonConfigStore,
-      pluginRuntime,
       orchestrationSkills,
       stt,
       sttLanguage,
@@ -825,9 +789,7 @@ export class Session {
     this.agentRequests = options.agentRequests;
     this.projectIcons = new ProjectIconReader(paseoHome);
     this.worktreesRoot = worktreesRoot;
-    this.pluginRuntime = pluginRuntime;
     this.orchestrationSkills = orchestrationSkills;
-    this.unsubscribePluginChanges = this.subscribeToPluginChanges(pluginRuntime);
     this.sessionLogger = logger.child({
       module: "session",
       clientId: this.clientId,
@@ -859,7 +821,6 @@ export class Session {
     });
     this.workspaceAutoName = workspaceAutoName;
     this.workspaceProvisioning = createWorkspaceProvisioningService({
-      lifecycle: this.pluginRuntime,
       serverId,
       workspaceRegistry: this.workspaceRegistry,
       projectRegistry: this.projectRegistry,
@@ -2078,165 +2039,80 @@ export class Session {
   }
 
   private dispatchPluginMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    // Plugin system is retired (issue 025 C6). Wire responses stay valid for old
+    // clients: list-style requests answer with empty results, mutating requests
+    // fail through the rpc_error fallback with "Plugin system is retired".
     if (msg.type === "plugin.list.request") {
       this.emit({
         type: "plugin.list.response",
-        payload: { requestId: msg.requestId, plugins: this.pluginRuntime?.listPlugins() ?? [] },
+        payload: { requestId: msg.requestId, plugins: [] },
       });
       return undefined;
     }
     if (msg.type === "plugin.logs.get.request") {
-      if (!this.pluginRuntime) throw new Error("Plugin service is unavailable");
       this.emit({
         type: "plugin.logs.get.response",
-        payload: {
-          requestId: msg.requestId,
-          pluginId: msg.pluginId,
-          entries: this.pluginRuntime.getLogs(msg.pluginId),
-        },
+        payload: { requestId: msg.requestId, pluginId: msg.pluginId, entries: [] },
       });
       return undefined;
     }
     if (msg.type === "plugin.reload.request") {
-      if (!this.pluginRuntime) throw new Error("Plugin service is unavailable");
-      return this.pluginRuntime.reloadPlugin(msg.pluginId).then((plugin) => {
-        this.emit({
-          type: "plugin.reload.response",
-          payload: { requestId: msg.requestId, plugin },
-        });
-        return undefined;
-      });
+      throw new Error("Plugin system is retired");
     }
     if (msg.type === "plugin.enable.request") {
-      if (!this.pluginRuntime) throw new Error("Plugin service is unavailable");
-      return this.pluginRuntime.enablePlugin(msg.pluginId).then((plugin) => {
-        this.emit({
-          type: "plugin.enable.response",
-          payload: { requestId: msg.requestId, plugin },
-        });
-        return undefined;
-      });
+      throw new Error("Plugin system is retired");
     }
     if (msg.type === "plugin.disable.request") {
-      if (!this.pluginRuntime) throw new Error("Plugin service is unavailable");
-      return this.pluginRuntime.disablePlugin(msg.pluginId).then((plugin) => {
-        this.emit({
-          type: "plugin.disable.response",
-          payload: { requestId: msg.requestId, plugin },
-        });
-        return undefined;
-      });
+      throw new Error("Plugin system is retired");
     }
     if (msg.type === "plugin.remove.request") {
-      if (!this.pluginRuntime) throw new Error("Plugin service is unavailable");
-      return this.pluginRuntime.removePlugin(msg.pluginId).then(() => {
-        this.emit({ type: "plugin.remove.response", payload: { requestId: msg.requestId } });
-        return undefined;
-      });
+      this.emit({ type: "plugin.remove.response", payload: { requestId: msg.requestId } });
+      return undefined;
     }
     if (msg.type === "plugin.catalog.get.request") {
       this.emit({
         type: "plugin.catalog.get.response",
-        payload: {
-          requestId: msg.requestId,
-          plugins: this.pluginRuntime?.catalog() ?? [],
-        },
+        payload: { requestId: msg.requestId, plugins: [] },
       });
       return undefined;
     }
     if (msg.type === "plugin.rpc.invoke.request") {
-      if (!this.pluginRuntime) throw new Error("Plugin service is unavailable");
-      return this.pluginRuntime
-        .invokePluginRpc(msg.pluginId, msg.method, msg.input)
-        .then((output) => {
-          this.emit({
-            type: "plugin.rpc.invoke.response",
-            payload: { requestId: msg.requestId, output },
-          });
-          return undefined;
-        });
+      this.emit({
+        type: "plugin.rpc.invoke.response",
+        payload: { requestId: msg.requestId, output: null },
+      });
+      return undefined;
     }
     return undefined;
   }
 
   private dispatchPluginDirectoryMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    // Plugin system is retired (issue 025 C6); installs and source operations
+    // have no valid success payload, so they fail through the rpc_error fallback.
     if (msg.type === "plugin.source.install.request") {
-      if (!this.pluginRuntime) throw new Error("Plugin service is unavailable");
-      return this.pluginRuntime
-        .installSource({
-          // COMPAT(plugin-source-path): accepted for v0.7 clients; remove after 2027-09-01.
-          source: formatPluginSourceReference(msg.source, msg.pluginPath),
-          ...(msg.id ? { id: msg.id } : {}),
-          ...(msg.ref ? { ref: msg.ref } : {}),
-        })
-        .then((plugin) => {
-          this.emit({
-            type: "plugin.source.install.response",
-            payload: { requestId: msg.requestId, plugin },
-          });
-          return undefined;
-        });
+      throw new Error("Plugin system is retired");
     }
     if (msg.type === "plugin.source.status.request") {
-      if (!this.pluginRuntime) throw new Error("Plugin service is unavailable");
-      return this.pluginRuntime.statusSources(msg.pluginId).then((plugins) => {
-        this.emit({
-          type: "plugin.source.status.response",
-          payload: { requestId: msg.requestId, plugins },
-        });
-        return undefined;
+      this.emit({
+        type: "plugin.source.status.response",
+        payload: { requestId: msg.requestId, plugins: [] },
       });
+      return undefined;
     }
     if (msg.type === "plugin.source.update.request") {
-      if (!this.pluginRuntime) throw new Error("Plugin service is unavailable");
-      return this.pluginRuntime.updateSources(msg.pluginId).then((plugins) => {
-        this.emit({
-          type: "plugin.source.update.response",
-          payload: { requestId: msg.requestId, plugins },
-        });
-        return undefined;
+      this.emit({
+        type: "plugin.source.update.response",
+        payload: { requestId: msg.requestId, plugins: [] },
       });
+      return undefined;
     }
     if (msg.type === "plugin.directory.install.request") {
-      if (!this.pluginRuntime) throw new Error("Plugin service is unavailable");
-      return this.pluginRuntime.installDirectory({ path: msg.path, id: msg.id }).then((plugin) => {
-        this.emit({
-          type: "plugin.directory.install.response",
-          payload: { requestId: msg.requestId, plugin },
-        });
-        return undefined;
-      });
+      throw new Error("Plugin system is retired");
     }
     if (msg.type === "plugin.directory.inspect.request") {
-      if (!this.pluginRuntime) throw new Error("Plugin service is unavailable");
-      return this.pluginRuntime.inspectDirectory(msg.path).then(({ id }) => {
-        this.emit({
-          type: "plugin.directory.inspect.response",
-          payload: { requestId: msg.requestId, id },
-        });
-        return undefined;
-      });
+      throw new Error("Plugin system is retired");
     }
     return undefined;
-  }
-
-  private subscribeToPluginChanges(
-    pluginRuntime: SessionOptions["pluginRuntime"],
-  ): (() => void) | null {
-    if (!pluginRuntime) return null;
-    const catalog = pluginRuntime.subscribe((pluginId) => {
-      this.emit({ type: "status", payload: { status: "plugin_catalog_changed", pluginId } });
-    });
-    const settings = pluginRuntime.subscribeSettings?.((pluginId, settingsId) => {
-      this.emit({
-        type: "status",
-        payload: { status: "plugin_settings_changed", pluginId, settingsId },
-      });
-    });
-    return () => {
-      catalog();
-      settings?.();
-    };
   }
 
   private dispatchVoiceAndControlMessage(msg: SessionInboundMessage): Promise<void> | undefined {
@@ -2318,7 +2194,9 @@ export class Session {
       case "fetch_agent_timeline_request":
         return this.handleFetchAgentTimelineRequest(msg, source);
       case "agent.timeline.append.request":
-        return this.handleAgentTimelineAppendRequest(msg);
+        // Plugin system is retired (issue 025 C6); only plugin sessions ever
+        // appended timeline items, so the request fails through rpc_error.
+        throw new Error("Plugin system is retired");
       case "agent.timeline.list_prompts.request":
         return this.handleAgentTimelineListPromptsRequest(msg, source);
       case "agent.provider_subagents.list.request":
@@ -6099,11 +5977,6 @@ export class Session {
     request: Extract<SessionInboundMessage, { type: "workspace.create.request" }>,
   ): Promise<void> {
     try {
-      if (this.pluginRuntime) {
-        const { type, requestId, ...input } = request;
-        const transformed = await this.pluginRuntime.before("workspace.create", input);
-        request = { ...transformed, type, requestId };
-      }
       if (request.source.kind === "directory") {
         await this.handleWorkspaceCreateLocal(request);
         return;
@@ -7361,22 +7234,6 @@ export class Session {
     }
   }
 
-  private async handleAgentTimelineAppendRequest(
-    msg: Extract<SessionInboundMessage, { type: "agent.timeline.append.request" }>,
-  ): Promise<void> {
-    const pluginId = parsePluginClientId(this.clientId);
-    if (!pluginId) throw new Error("Only plugin sessions can append plugin timeline items");
-    assertPluginTimelineDataSize(msg.item.data);
-    const { seq, epoch } = await this.agentManager.appendTimelineItem(msg.agentId, {
-      ...msg.item,
-      pluginId,
-    });
-    this.emit({
-      type: "agent.timeline.append.response",
-      payload: { requestId: msg.requestId, seq, epoch },
-    });
-  }
-
   private async handleAgentTimelineListPromptsRequest(
     msg: Extract<SessionInboundMessage, { type: "agent.timeline.list_prompts.request" }>,
     source?: object,
@@ -7927,8 +7784,6 @@ export class Session {
     }
     this.unsubscribeProjectMutations?.();
     this.unsubscribeProjectMutations = null;
-    this.unsubscribePluginChanges?.();
-    this.unsubscribePluginChanges = null;
     this.unsubscribeWorkspaceMutations?.();
     this.unsubscribeWorkspaceMutations = null;
     this.workspaceLabelSubscription?.unsubscribe();

@@ -1,11 +1,11 @@
 import { z } from "zod";
+import type { JsonValue } from "@getpaseo/protocol/agent-types";
 import {
   AgentStatusSchema,
   AgentTimelineItemPayloadSchema,
   WorkspaceGitHubRuntimePayloadSchema,
 } from "@getpaseo/protocol/messages";
 import { AgentProviderSchema } from "@getpaseo/protocol/provider-manifest";
-import type { PluginTimelineData } from "@getpaseo/plugin";
 import {
   normalizeProjectDescriptor,
   normalizeWorkspaceDescriptor,
@@ -76,7 +76,7 @@ const TimelinePositionSchema = z.strictObject({
   epoch: z.string(),
   seq: z.number().int().nonnegative(),
 });
-const PluginTimelineDataSchema: z.ZodType<PluginTimelineData> = z.lazy(() =>
+const PluginTimelineDataSchema: z.ZodType<unknown> = z.lazy(() =>
   z.union([
     z.null(),
     z.boolean(),
@@ -495,7 +495,7 @@ function serializeTimelineItem(item: StreamItem): StoredTimelineItem | null {
         pluginItemId: item.pluginItemId,
         itemKind: item.itemKind,
         version: item.version,
-        data: item.data,
+        data: item.data as JsonValue,
       };
   }
 }
@@ -512,7 +512,7 @@ function deserializeTimelineItem(item: StoredTimelineItem): StreamItem {
       pluginItemId: item.pluginItemId,
       itemKind: item.itemKind,
       version: item.version,
-      data: item.data,
+      data: item.data as JsonValue,
     };
   }
   return deserializeBuiltinTimelineItem(item);

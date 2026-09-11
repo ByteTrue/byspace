@@ -13,12 +13,7 @@ import {
   type SidebarRowItems,
 } from "@/components/sidebar/display-preferences/row-items";
 import { isNative } from "@/constants/platform";
-import {
-  FONT_SIZE,
-  PLUGIN_THEME_PREFERENCE,
-  THEME_OPTIONS,
-  type ThemePreference,
-} from "@/styles/theme";
+import { FONT_SIZE, THEME_OPTIONS, type ThemePreference } from "@/styles/theme";
 import { z } from "zod";
 import { APP_SETTINGS_KEY, LEGACY_SETTINGS_KEY } from "./keys";
 import { migrateAppSettings } from "./migrations";
@@ -35,10 +30,11 @@ export type PullRequestOpenLocation = "main" | "side" | "explorer";
 export type SidebarWorkspaceTrailing = "diff" | "timestamp" | "none";
 export type ToolCallDetailLevel = "overview" | "detailed";
 
-const ThemePreferenceSchema = z.enum([
-  ...THEME_OPTIONS.map((option) => option.name),
-  PLUGIN_THEME_PREFERENCE,
-]);
+const THEME_PREFERENCE_NAMES = THEME_OPTIONS.map((option) => option.name) as [
+  ThemePreference,
+  ...ThemePreference[],
+];
+const ThemePreferenceSchema = z.enum(THEME_PREFERENCE_NAMES);
 /** Where the theme picker lands when the persisted preference cannot be honoured. */
 export const DEFAULT_THEME_PREFERENCE = "auto" satisfies ThemePreference;
 export const DEFAULT_TERMINAL_SCROLLBACK_LINES = 10_000;
@@ -65,8 +61,6 @@ export const MAX_FONT_FAMILY_LENGTH = 200;
 
 export interface AppSettings {
   theme: ThemePreference;
-  /** Which contributed theme `theme: "plugin"` selects. */
-  pluginThemeId: string | null;
   language: AppLanguage;
   sendBehavior: SendBehavior;
   serviceUrlBehavior: ServiceUrlBehavior;
@@ -120,7 +114,6 @@ export interface Settings extends AppSettings {
 
 export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   theme: DEFAULT_THEME_PREFERENCE,
-  pluginThemeId: null,
   language: "system",
   sendBehavior: "steer",
   serviceUrlBehavior: "ask",
@@ -193,7 +186,6 @@ const DEFAULT_STORED_APP_SETTINGS = {
 const StoredAppSettingsSchema = z
   .looseObject({
     theme: ThemePreferenceSchema.catch(DEFAULT_THEME_PREFERENCE),
-    pluginThemeId: z.string().nullable().catch(null),
     language: z
       .enum(["system", "ar", "en", "es", "fr", "ja", "ko", "pt-BR", "ru", "zh-CN"])
       .catch("system"),

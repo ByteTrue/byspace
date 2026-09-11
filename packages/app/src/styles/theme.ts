@@ -808,16 +808,8 @@ export const THEME_OPTIONS = [
   },
 ] as const;
 
-export const PLUGIN_THEME_PREFERENCE = "plugin";
-export const PLUGIN_THEME_NAMES = {
-  light: "pluginLight",
-  dark: "pluginDark",
-} as const;
-
-export type ThemePreference =
-  | (typeof THEME_OPTIONS)[number]["name"]
-  | typeof PLUGIN_THEME_PREFERENCE;
-export type ThemeName = Exclude<ThemePreference, "auto" | typeof PLUGIN_THEME_PREFERENCE>;
+export type ThemePreference = (typeof THEME_OPTIONS)[number]["name"];
+export type ThemeName = Exclude<ThemePreference, "auto">;
 type ConcreteThemeOption = Exclude<(typeof THEME_OPTIONS)[number], { name: "auto" }>;
 export type Theme = ConcreteThemeOption["theme"];
 
@@ -835,9 +827,6 @@ type ThemeSwatches = {
 
 type RegisteredThemes = {
   [Option in ConcreteThemeOption as Option["unistylesName"]]: Option["theme"];
-} & {
-  pluginLight: typeof lightTheme;
-  pluginDark: typeof darkTheme;
 };
 
 export const THEME_TO_UNISTYLES = Object.fromEntries(
@@ -848,13 +837,9 @@ export const THEME_SWATCHES = Object.fromEntries(
   CONCRETE_THEME_OPTIONS.map((option) => [option.name, option.swatch]),
 ) as ThemeSwatches;
 
-export const REGISTERED_THEMES = {
-  ...Object.fromEntries(
-    CONCRETE_THEME_OPTIONS.map((option) => [option.unistylesName, option.theme]),
-  ),
-  [PLUGIN_THEME_NAMES.light]: lightTheme,
-  [PLUGIN_THEME_NAMES.dark]: darkTheme,
-} as RegisteredThemes;
+export const REGISTERED_THEMES = Object.fromEntries(
+  CONCRETE_THEME_OPTIONS.map((option) => [option.unistylesName, option.theme]),
+) as RegisteredThemes;
 
 export function getNextThemePreference(current: ThemePreference): ThemePreference {
   const currentIndex = THEME_OPTIONS.findIndex((option) => option.name === current);

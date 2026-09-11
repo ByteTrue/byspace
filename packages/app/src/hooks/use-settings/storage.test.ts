@@ -7,6 +7,7 @@ import {
   DEFAULT_CLIENT_SETTINGS,
   DEFAULT_CODE_FONT_SIZE,
   DEFAULT_CONTENT_FONT_SIZE,
+  DEFAULT_THEME_PREFERENCE,
   DEFAULT_UI_BASE_FONT_SIZE,
   defaultUiBaseFontSize,
   defaultContentFontSize,
@@ -629,19 +630,17 @@ describe("saveAppSettings", () => {
     });
   });
 
-  it("persists a selected plugin theme", async () => {
+  it("resets a legacy plugin theme preference to the default", async () => {
     const deps = makeDeps();
-    const queryClient = new QueryClient();
 
-    await saveAppSettings({
-      queryClient,
-      updates: { theme: "plugin", pluginThemeId: "catppuccin/theme/mocha" },
-      deps,
-    });
+    // Settings persisted before plugin removal could hold theme: "plugin".
+    deps.storage.entries.set(
+      APP_SETTINGS_KEY,
+      JSON.stringify({ ...DEFAULT_CLIENT_SETTINGS, theme: "plugin", pluginThemeId: "x" }),
+    );
 
     const loaded = await loadAppSettingsFromStorage(deps);
-    expect(loaded.theme).toBe("plugin");
-    expect(loaded.pluginThemeId).toBe("catppuccin/theme/mocha");
+    expect(loaded.theme).toBe(DEFAULT_THEME_PREFERENCE);
   });
 
   // The row items are written as one object through one strict schema, so an item the schema
