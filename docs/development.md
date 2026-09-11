@@ -461,7 +461,8 @@ byspace daemon start --web-ui
 Or set the environment variable:
 
 ```bash
-BYSPACE_WEB_UI_ENABLED=true byspace daemon start
+# The bundled web UI is on by default; no flag needed. To disable it:
+BYSPACE_WEB_UI_ENABLED=false byspace daemon start
 ```
 
 Or persist it in `config.json`:

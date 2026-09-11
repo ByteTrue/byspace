@@ -236,7 +236,7 @@ Set the persisted value in `config.json`:
 - `BYSPACE_RELAY_ENABLED`, enable or disable the outbound relay for this daemon launch
 - `BYSPACE_HOSTNAMES`, override/extend `daemon.hostnames`
 - `BYSPACE_ALLOWED_HOSTS`, deprecated alias for `BYSPACE_HOSTNAMES`
-- `BYSPACE_WEB_UI_ENABLED`, enable or disable the daemon-served web UI
+- `BYSPACE_WEB_UI_ENABLED`, override the daemon-served web UI (on by default)
 - `BYSPACE_WEB_UI_DIST_DIR`, override the daemon web UI build directory
 - `BYSPACE_TRUSTED_PROXIES`, configure trusted reverse proxy ranges for `X-Forwarded-*` headers
 - `BYSPACE_LOG_CONSOLE_LEVEL`, override `log.console.level`

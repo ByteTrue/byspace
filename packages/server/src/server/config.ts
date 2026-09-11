@@ -404,7 +404,10 @@ function resolveWebUiConfig(
     cli?.webUiEnabled ??
     parseBooleanEnv(env.PASEO_WEB_UI_ENABLED) ??
     persisted.features?.webUi?.enabled ??
-    false;
+    // Default-on per issue 025 A7: the bundled web UI is the primary client
+    // entry (LAN users open http://daemon-host:6777 directly). Explicit
+    // config, CLI flags, and PASEO_WEB_UI_ENABLED still override this.
+    true;
   const rawDistDir = env.PASEO_WEB_UI_DIST_DIR ?? persisted.features?.webUi?.distDir;
   const trimmedDistDir = rawDistDir?.trim();
   const distDir = trimmedDistDir

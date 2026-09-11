@@ -26,12 +26,12 @@ describe("daemon web UI config", () => {
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
   });
 
-  test("web UI is disabled by default", async () => {
+  test("web UI is enabled by default (issue 025 A7)", async () => {
     const home = await createPaseoHome({ version: 1 });
 
     const config = loadConfig(home, { env: {} });
 
-    expect(config.webUi.enabled).toBe(false);
+    expect(config.webUi.enabled).toBe(true);
     expectBundledWebUiDistDir(config.webUi.distDir);
   });
 

@@ -528,7 +528,9 @@ async function reconcileManagedProcessLedger(
 function mountWebUi(app: express.Application, config: PaseoDaemonConfig, logger: Logger): void {
   app.use(
     createWebUiMiddleware({
-      enabled: config.webUi?.enabled ?? false,
+      // Default-on per issue 025 A7 (see config.ts for the resolved-config
+      // default); direct createPaseoDaemon callers get the same default.
+      enabled: config.webUi?.enabled ?? true,
       distDir: config.webUi?.distDir ?? null,
       label: getHostname(),
       logger,

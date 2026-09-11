@@ -29,7 +29,8 @@ byspace daemon start --web-ui
 Or with an environment variable:
 
 ```bash
-BYSPACE_WEB_UI_ENABLED=true byspace daemon start
+# The web UI is on by default. To turn it off:
+BYSPACE_WEB_UI_ENABLED=false byspace daemon start
 ```
 
 Or persist it in `config.json` so it survives restarts:
