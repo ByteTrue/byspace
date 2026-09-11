@@ -21,7 +21,11 @@ import { resolvePreferredEditorId, usePreferredEditor } from "@/hooks/use-prefer
 import { openExternalUrl } from "@/utils/open-external-url";
 import { isAbsolutePath } from "@/utils/path";
 import { isWeb } from "@/constants/platform";
-import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-open-targets";
+import {
+  type DesktopOpenTargetIcon,
+  openDesktopTarget,
+  useDesktopOpenTargets,
+} from "@/workspace/desktop-open-targets";
 import { resolveWorkspaceFilePaths, type WorkspaceFileLocation } from "@/workspace/file-open";
 import { planWorkspaceOpenTargets } from "@/workspace/open-in-editor/planner";
 import type { Theme } from "@/styles/theme";
@@ -143,7 +147,11 @@ export function WorkspaceOpenInEditorButton({
           id: target.id,
           label: target.label,
           icon: (
-            <ThemedEditorTargetIcon icon={target.icon} size={16} uniProps={mutedColorMapping} />
+            <ThemedEditorTargetIcon
+              icon={target.icon as DesktopOpenTargetIcon | undefined}
+              size={16}
+              uniProps={mutedColorMapping}
+            />
           ),
           onOpen: () => openDesktopTarget(target.openInput),
         };

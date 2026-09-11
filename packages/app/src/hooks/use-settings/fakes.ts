@@ -1,4 +1,3 @@
-import type { DesktopSettings } from "@/desktop/settings/desktop-settings";
 import type { DesktopSettingsBridge, KeyValueStorage, ReleaseChannel } from "./storage";
 
 export interface InMemoryKeyValueStorage extends KeyValueStorage {
@@ -30,7 +29,13 @@ export interface FakeDesktopBridge extends DesktopSettingsBridge {
   }>;
 }
 
-const DEFAULT_DESKTOP: DesktopSettings = {
+interface FakeDesktopSettings {
+  releaseChannel?: import("./storage").ReleaseChannel;
+  notifications?: { playSound?: boolean };
+  daemon?: { manageBuiltInDaemon?: boolean; keepRunningAfterQuit?: boolean };
+}
+
+const DEFAULT_DESKTOP: FakeDesktopSettings = {
   releaseChannel: "stable",
   notifications: {
     playSound: true,
@@ -44,7 +49,7 @@ const DEFAULT_DESKTOP: DesktopSettings = {
 export function createFakeDesktopBridge(
   options: {
     isElectron?: boolean;
-    settings?: DesktopSettings;
+    settings?: FakeDesktopSettings;
   } = {},
 ): FakeDesktopBridge {
   const isElectron = options.isElectron ?? false;

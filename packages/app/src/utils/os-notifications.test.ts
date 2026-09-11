@@ -263,7 +263,7 @@ describe("sendOsNotification", () => {
     expect(created[0]?.clickListeners).toHaveLength(0);
   });
 
-  it("uses the desktop notification bridge when available", async () => {
+  it("ignores the retired desktop notification bridge (issue 025 A3)", async () => {
     const sendNotification = vi.fn(async () => true);
 
     const { sendOsNotification } = await loadModuleForPlatform("web", {
@@ -274,17 +274,13 @@ describe("sendOsNotification", () => {
       },
     });
 
-    const sent = await sendOsNotification({
+    // The desktop bridge is never consulted; only web Notification is used.
+    await sendOsNotification({
       title: "Paseo notification test",
-      body: "If you can see this, desktop notifications work.",
+      body: "If you can see this, web notifications work.",
       data: { serverId: "srv-1" },
     });
 
-    expect(sent).toBe(true);
-    expect(sendNotification).toHaveBeenCalledWith({
-      title: "Paseo notification test",
-      body: "If you can see this, desktop notifications work.",
-      data: { serverId: "srv-1" },
-    });
+    expect(sendNotification).not.toHaveBeenCalled();
   });
 });

@@ -3,13 +3,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { queryClient as appQueryClient } from "@/data/query-client";
 import type { AppLanguage } from "@/i18n/locales";
+import { isElectronRuntime } from "@/desktop/host";
 import {
-  DEFAULT_DESKTOP_SETTINGS,
   loadDesktopSettings,
   migrateLegacyDesktopSettings,
-  useDesktopSettings,
 } from "@/desktop/settings/desktop-settings";
-import { isElectronRuntime } from "@/desktop/host";
 import {
   APP_SETTINGS_KEY,
   APP_SETTINGS_QUERY_KEY,
@@ -180,7 +178,6 @@ export function useSettings<TSelected>(
   selector?: SettingsSelector<TSelected>,
 ): UseSettingsReturn | TSelected {
   const appSettings = useAppSettings();
-  const desktopSettings = useDesktopSettings();
 
   const updateSettings = useCallback(
     async (updates: Partial<Settings>) => {
@@ -190,39 +187,20 @@ export function useSettings<TSelected>(
         promises.push(appSettings.updateSettings(appUpdates));
       }
 
-      if (isElectronRuntime()) {
-        const desktopUpdates: Parameters<typeof desktopSettings.updateSettings>[0] = {};
-        if (updates.manageBuiltInDaemon !== undefined) {
-          desktopUpdates.daemon = {
-            manageBuiltInDaemon: updates.manageBuiltInDaemon,
-          };
-        }
-        if (updates.releaseChannel !== undefined) {
-          desktopUpdates.releaseChannel = updates.releaseChannel;
-        }
-        if (Object.keys(desktopUpdates).length > 0) {
-          promises.push(desktopSettings.updateSettings(desktopUpdates));
-        }
-      }
-
       await Promise.all(promises);
     },
-    [appSettings, desktopSettings],
+    [appSettings],
   );
 
   const resetSettings = useCallback(async () => {
-    const resets: Promise<void>[] = [appSettings.resetSettings()];
-    if (isElectronRuntime()) {
-      resets.push(desktopSettings.updateSettings(DEFAULT_DESKTOP_SETTINGS));
-    }
-    await Promise.all(resets);
-  }, [appSettings, desktopSettings]);
+    await appSettings.resetSettings();
+  }, [appSettings]);
 
   const settings = {
     ...DEFAULT_APP_SETTINGS,
     ...appSettings.settings,
-    manageBuiltInDaemon: desktopSettings.settings.daemon.manageBuiltInDaemon,
-    releaseChannel: desktopSettings.settings.releaseChannel,
+    manageBuiltInDaemon: false,
+    releaseChannel: "stable" as ReleaseChannel,
   };
 
   if (selector) {
@@ -231,8 +209,8 @@ export function useSettings<TSelected>(
 
   return {
     settings,
-    isLoading: appSettings.isLoading || desktopSettings.isLoading,
-    error: appSettings.error ?? desktopSettings.error,
+    isLoading: appSettings.isLoading,
+    error: appSettings.error,
     updateSettings,
     resetSettings,
   };

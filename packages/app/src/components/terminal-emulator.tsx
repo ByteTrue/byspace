@@ -561,16 +561,8 @@ export default function TerminalEmulator({
   }, [resizeRequestToken]);
 
   const showTerminalContextMenu = useCallback(() => {
-    const showContextMenu = window.paseoDesktop?.menu?.showContextMenu;
-    if (typeof showContextMenu !== "function") {
-      return;
-    }
-
-    const hasSelection = Boolean(window.getSelection()?.toString());
-    void showContextMenu({
-      kind: "terminal",
-      hasSelection,
-    });
+    // Desktop context menu is retired (issue 025 A3); the browser default
+    // context menu stays available.
   }, []);
 
   const handleRootPointerDown = useCallback(() => {

@@ -1,24 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { DesktopDialogBridge, DesktopDialogOpenOptions } from "@/desktop/host";
-import { normalizePickedImageAssets, pickImagesWithDesktopDialog } from "./image-attachment-picker";
-
-function fakeDialogReturning(selection: string | string[] | null): {
-  dialog: DesktopDialogBridge;
-  recordedOptions: DesktopDialogOpenOptions[];
-} {
-  const recordedOptions: DesktopDialogOpenOptions[] = [];
-  return {
-    dialog: {
-      open: async (options?: DesktopDialogOpenOptions) => {
-        if (options) {
-          recordedOptions.push(options);
-        }
-        return selection;
-      },
-    },
-    recordedOptions,
-  };
-}
+import { normalizePickedImageAssets } from "./image-attachment-picker";
 
 describe("image-attachment-picker", () => {
   it("normalizes a picked File into a blob source", async () => {
@@ -91,39 +72,5 @@ describe("image-attachment-picker", () => {
     expect(result[0]?.source.kind).toBe("blob");
     expect(result[0]?.fileName).toBe("inline.png");
     expect(result[0]?.mimeType).toBe("image/png");
-  });
-
-  it("uses the desktop dialog api when available", async () => {
-    const { dialog, recordedOptions } = fakeDialogReturning(["/tmp/one.png", "/tmp/two.jpg"]);
-
-    const result = await pickImagesWithDesktopDialog(dialog);
-
-    expect(recordedOptions).toHaveLength(1);
-    expect(recordedOptions[0]).toMatchObject({
-      multiple: true,
-      directory: false,
-      title: "Attach images",
-    });
-    expect(result).toEqual([
-      {
-        source: { kind: "file_uri", uri: "/tmp/one.png" },
-        mimeType: "image/png",
-        fileName: "one.png",
-      },
-      {
-        source: { kind: "file_uri", uri: "/tmp/two.jpg" },
-        mimeType: "image/jpeg",
-        fileName: "two.jpg",
-      },
-    ]);
-  });
-
-  it("throws when desktop dialog API is not available", async () => {
-    await expect(pickImagesWithDesktopDialog(null)).rejects.toThrow(
-      "Desktop dialog API is not available.",
-    );
-    await expect(pickImagesWithDesktopDialog({})).rejects.toThrow(
-      "Desktop dialog API is not available.",
-    );
   });
 });

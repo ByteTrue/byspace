@@ -48,17 +48,19 @@ describe("confirmDialog", () => {
     clearDialogGlobals();
   });
 
-  it("uses the desktop dialog bridge on web when available", async () => {
+  it("ignores the retired desktop dialog bridge (issue 025 A3)", async () => {
     const askMock = vi.fn(async () => true);
+    const browserConfirm = vi.fn(() => true);
     const blurMock = vi.fn();
     (globalThis as { document?: unknown }).document = {
       activeElement: { blur: blurMock },
     } as unknown as Document;
+    (globalThis as { confirm?: unknown }).confirm = browserConfirm;
     desktopHostState.api = {
       dialog: { ask: askMock },
     };
 
-    const { confirmDialog, alertMock } = await loadModuleForPlatform("web");
+    const { confirmDialog } = await loadModuleForPlatform("web");
     const confirmed = await confirmDialog({
       title: "Restart host",
       message: "This will restart the daemon.",
@@ -68,14 +70,9 @@ describe("confirmDialog", () => {
     });
 
     expect(confirmed).toBe(true);
-    expect(alertMock).not.toHaveBeenCalled();
     expect(blurMock).toHaveBeenCalledTimes(1);
-    expect(askMock).toHaveBeenCalledWith("This will restart the daemon.", {
-      title: "Restart host",
-      okLabel: "Restart",
-      cancelLabel: "Cancel",
-      kind: "warning",
-    });
+    expect(askMock).not.toHaveBeenCalled();
+    expect(browserConfirm).toHaveBeenCalled();
   });
 
   it("falls back to browser confirm on web when desktop APIs are unavailable", async () => {

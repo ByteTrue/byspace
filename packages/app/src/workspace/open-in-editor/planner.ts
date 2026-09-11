@@ -1,5 +1,9 @@
 import { type Forge, forgeFromRemoteUrl, getForgePresentation } from "@/git/forge";
-import type { DesktopOpenTarget, OpenDesktopTargetInput } from "@/workspace/desktop-open-targets";
+import {
+  type DesktopOpenTargetIcon,
+  DesktopOpenTarget,
+  OpenDesktopTargetInput,
+} from "@/workspace/desktop-open-targets";
 import {
   type ResolvedWorkspaceFilePaths,
   resolveWorkspaceFilePaths,
@@ -17,7 +21,7 @@ export interface PlannedDesktopOpenTarget {
   id: string;
   label: string;
   editorId: string;
-  icon: DesktopOpenTarget["icon"];
+  icon: DesktopOpenTargetIcon | undefined;
   openInput: OpenDesktopTargetInput;
 }
 
@@ -94,7 +98,7 @@ function planDesktopOpenTargets(input: {
         id: target.id,
         label: target.label,
         editorId: target.id,
-        icon: target.icon,
+        icon: target.icon as DesktopOpenTargetIcon | undefined,
         openInput: { editorId: target.id, workspacePath },
       };
     }
@@ -103,7 +107,7 @@ function planDesktopOpenTargets(input: {
       id: target.id,
       label: target.label,
       editorId: target.id,
-      icon: target.icon,
+      icon: target.icon as DesktopOpenTargetIcon | undefined,
       openInput: {
         editorId: target.id,
         workspacePath,

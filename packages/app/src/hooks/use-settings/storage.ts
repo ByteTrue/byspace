@@ -1,7 +1,6 @@
 import { isSyntaxThemeId, type SyntaxThemeId } from "@getpaseo/highlight";
 import type { ActiveTurnBehavior } from "@getpaseo/protocol/messages";
 import type { QueryClient } from "@tanstack/react-query";
-import type { DesktopSettings } from "@/desktop/settings/desktop-settings";
 import type { AppLanguage } from "@/i18n/locales";
 import type { SidebarNavPreference } from "@/sidebar-nav/model";
 import {
@@ -262,7 +261,7 @@ const StoredAppSettingsSchema = z
     pullRequestOpenLocation: z.enum(["main", "side", "explorer"]).optional(),
     // COMPAT(explorerSidebarRouting): replaced by source-specific side-pane preferences in v0.6.
     openSupportingTabsInSidePanel: z.boolean().optional().catch(undefined),
-    // COMPAT(rendererDesktopSettings): these fields used to share this renderer-owned key.
+    // COMPAT(rendererRecord<string, never>): these fields used to share this renderer-owned key.
     manageBuiltInDaemon: z.boolean().optional().catch(undefined),
     releaseChannel: z.enum(["stable", "beta"]).optional().catch(undefined),
   })
@@ -310,6 +309,12 @@ export interface KeyValueStorage {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
   removeItem(key: string): Promise<void>;
+}
+
+/** Legacy desktop-settings bridge shape (Electron retired, issue 025 A3). */
+export interface DesktopSettings {
+  daemon?: { manageBuiltInDaemon?: boolean };
+  releaseChannel?: ReleaseChannel;
 }
 
 export interface DesktopSettingsBridge {
@@ -394,28 +399,12 @@ async function readAppSettings(
 }
 
 export async function loadSettingsFromStorage(deps: SettingsDeps): Promise<Settings> {
-  const legacyDesktopSettings = deps.desktop.isElectron()
-    ? await loadLegacyDesktopSettingsFromStorage(deps.storage)
-    : null;
   const appSettings = await loadAppSettingsFromStorage(deps);
 
-  if (!deps.desktop.isElectron()) {
-    return {
-      ...DEFAULT_APP_SETTINGS,
-      ...appSettings,
-    };
-  }
-
-  if (legacyDesktopSettings) {
-    await deps.desktop.migrateLegacyDesktopSettings(legacyDesktopSettings);
-  }
-
-  const desktopSettings = await deps.desktop.loadDesktopSettings();
+  // Desktop settings are retired (issue 025 A3): the web client never loads them.
   return {
     ...DEFAULT_APP_SETTINGS,
     ...appSettings,
-    manageBuiltInDaemon: desktopSettings.daemon.manageBuiltInDaemon,
-    releaseChannel: desktopSettings.releaseChannel,
   };
 }
 
@@ -491,41 +480,6 @@ export function sanitizeFontFamily(value: unknown): string | null {
     return null; // control chars would corrupt the font-family string
   }
   return trimmed; // quotes/commas are legit in stacks
-}
-
-async function loadLegacyDesktopSettingsFromStorage(storage: KeyValueStorage): Promise<{
-  manageBuiltInDaemon?: boolean;
-  releaseChannel?: ReleaseChannel;
-} | null> {
-  const stored = await loadRendererSettingsPayload(storage);
-  if (!stored) {
-    return null;
-  }
-
-  const result: {
-    manageBuiltInDaemon?: boolean;
-    releaseChannel?: ReleaseChannel;
-  } = {};
-
-  if (stored.manageBuiltInDaemon !== undefined) {
-    result.manageBuiltInDaemon = stored.manageBuiltInDaemon;
-  }
-  if (stored.releaseChannel !== undefined) {
-    result.releaseChannel = stored.releaseChannel;
-  }
-
-  return Object.keys(result).length > 0 ? result : null;
-}
-
-async function loadRendererSettingsPayload(
-  storage: KeyValueStorage,
-): Promise<StoredAppSettings | null> {
-  const current = await readSettingsObject(storage, APP_SETTINGS_KEY);
-  if (current) {
-    return current;
-  }
-
-  return readSettingsObject(storage, LEGACY_SETTINGS_KEY);
 }
 
 async function readSettingsObject(

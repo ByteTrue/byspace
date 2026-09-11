@@ -28,6 +28,7 @@ function createFakeStore(hosts: HostProfile[] = []): {
 
 function makeStatus(overrides: Partial<DesktopDaemonStatus> = {}): DesktopDaemonStatus {
   return {
+    state: "unavailable",
     serverId: "srv_desktop",
     status: "running",
     listen: "127.0.0.1:6767",

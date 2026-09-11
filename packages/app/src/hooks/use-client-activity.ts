@@ -1,13 +1,10 @@
 import { useEffect, useRef } from "react";
 import { AppState } from "react-native";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import { getIsElectron, isWeb, isNative } from "@/constants/platform";
-import { readDesktopSystemIdleTimeMs } from "@/desktop/electron/idle";
-import { invokeDesktopCommand } from "@/desktop/electron/invoke";
+import { isWeb, isNative } from "@/constants/platform";
 import {
   type ClientActivityTracker,
   createClientActivityTracker,
-  DESKTOP_IDLE_POLL_INTERVAL_MS,
   HEARTBEAT_INTERVAL_MS,
 } from "./client-activity-tracker";
 
@@ -92,25 +89,7 @@ export function useClientActivity({
   }, [tracker]);
 
   // Track OS-wide activity in Electron so backgrounded desktop windows still report presence.
-  useEffect(() => {
-    if (!getIsElectron()) return;
-
-    let disposed = false;
-    const pollSystemIdleTime = async () => {
-      const systemIdleMs = await readDesktopSystemIdleTimeMs(invokeDesktopCommand);
-      if (disposed) return;
-      tracker.notifySystemIdleMs(systemIdleMs);
-    };
-
-    const interval = setInterval(() => {
-      void pollSystemIdleTime();
-    }, DESKTOP_IDLE_POLL_INTERVAL_MS);
-
-    return () => {
-      disposed = true;
-      clearInterval(interval);
-    };
-  }, [tracker]);
+  // OS-wide idle tracking was Electron-only and is retired (issue 025 A3).
 
   // Send heartbeat on focused agent change.
   useEffect(() => {

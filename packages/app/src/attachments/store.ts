@@ -1,4 +1,3 @@
-import { isElectronRuntime } from "@/desktop/host";
 import type { AttachmentStore } from "@/attachments/types";
 import { isWeb } from "@/constants/platform";
 
@@ -6,14 +5,6 @@ let attachmentStorePromise: Promise<AttachmentStore> | null = null;
 
 async function createAttachmentStore(): Promise<AttachmentStore> {
   if (isWeb) {
-    if (isElectronRuntime()) {
-      const { createDesktopAttachmentStore } =
-        await import("../desktop/attachments/desktop-attachment-store");
-      const { createDesktopAttachmentBridge } =
-        await import("../desktop/attachments/desktop-attachment-bridge");
-      return createDesktopAttachmentStore(createDesktopAttachmentBridge());
-    }
-
     const { createIndexedDbAttachmentStore } = await import("./web/indexeddb-attachment-store");
     return createIndexedDbAttachmentStore();
   }

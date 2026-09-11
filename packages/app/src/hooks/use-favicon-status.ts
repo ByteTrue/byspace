@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getIsElectronRuntimeMac } from "@/constants/layout";
 import { useAggregatedAgents } from "./use-aggregated-agents";
-import { getDesktopHost } from "@/desktop/host";
 import { useWorkspaceStatusesForBadges } from "@/stores/session-store-hooks";
 import { deriveMacDockBadgeCountFromWorkspaceStatuses } from "@/utils/desktop-badge-state";
 import { isNative } from "@/constants/platform";
@@ -78,21 +76,6 @@ function getSystemColorScheme(): ColorScheme {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-async function updateMacDockBadge(count?: number) {
-  if (isNative || !getIsElectronRuntimeMac()) return;
-
-  const desktopWindow = getDesktopHost()?.window?.getCurrentWindow?.();
-  if (!desktopWindow || typeof desktopWindow.setBadgeCount !== "function") {
-    return;
-  }
-
-  try {
-    await desktopWindow.setBadgeCount(count);
-  } catch (error) {
-    console.warn("[useFaviconStatus] Failed to update macOS dock badge", error);
-  }
-}
-
 export function useFaviconStatus() {
   const { agents } = useAggregatedAgents({ demand: !isNative });
   const workspaceStatuses = useWorkspaceStatusesForBadges();
@@ -122,7 +105,6 @@ export function useFaviconStatus() {
     const dockBadgeCount = deriveMacDockBadgeCountFromWorkspaceStatuses(workspaceStatuses);
     if (dockBadgeCount !== lastDockBadgeCountRef.current) {
       lastDockBadgeCountRef.current = dockBadgeCount;
-      void updateMacDockBadge(dockBadgeCount);
     }
   }, [agents, colorScheme, workspaceStatuses]);
 }

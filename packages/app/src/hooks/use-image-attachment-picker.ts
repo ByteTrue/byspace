@@ -2,13 +2,10 @@ import { useCallback, useRef } from "react";
 import { Alert } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useTranslation } from "react-i18next";
-import { getDesktopHost, isElectronRuntime } from "@/desktop/host";
 import {
   normalizePickedImageAssets,
-  pickImagesWithDesktopDialog,
   type PickedImageAttachmentInput,
 } from "@/hooks/image-attachment-picker";
-import { isWeb } from "@/constants/platform";
 
 interface UseImageAttachmentPickerResult {
   pickImages: () => Promise<PickedImageAttachmentInput[] | null>;
@@ -50,14 +47,6 @@ export function useImageAttachmentPicker(): UseImageAttachmentPickerResult {
     isPickingRef.current = true;
 
     try {
-      if (isWeb && isElectronRuntime()) {
-        const selectedImages = await pickImagesWithDesktopDialog(getDesktopHost()?.dialog);
-        if (selectedImages.length === 0) {
-          return null;
-        }
-        return selectedImages;
-      }
-
       const hasPermission = await ensurePermission();
       if (!hasPermission) {
         return null;

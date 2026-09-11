@@ -3,7 +3,6 @@ import { usePathname, useRouter } from "expo-router";
 import { getIsElectronRuntime } from "@/constants/layout";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { setCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
-import { getResidentBrowserWebview } from "@/desktop/browser/resident-webviews";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
 import {
@@ -16,7 +15,6 @@ import {
 import { resolveKeyboardFocusScope } from "@/keyboard/focus-scope";
 import {
   buildBrowserKeyboardPolicy,
-  parseBrowserShortcutInput,
   shouldPublishBrowserShortcutPolicy,
 } from "@/desktop/browser/shortcuts";
 import type { KeyboardFocusScope, KeyboardShortcutPayload } from "@/keyboard/actions";
@@ -30,7 +28,6 @@ import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useKeyboardShortcutOverrides } from "@/hooks/use-keyboard-shortcut-overrides";
 import { isNative } from "@/constants/platform";
 import { keyboardShortcutsAvailable } from "@/keyboard/availability";
-import { getDesktopHost, isElectronRuntime } from "@/desktop/host";
 import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
 import { hasActiveWebOverlay } from "@/lib/overlay-root";
@@ -88,7 +85,7 @@ export function useKeyboardShortcuts({
               isDesktop: isDesktopApp,
             })
           : { menuPrefixes: [], prefixes: [] };
-      void getDesktopHost()?.browser?.setShortcutPolicy?.(policy);
+      void policy; // Desktop shortcut policy is retired (issue 025 A3).
     },
     [bindings, enabled, isDesktopApp, isMac, shortcutsAvailable],
   );
@@ -381,20 +378,6 @@ export function useKeyboardShortcuts({
     window.addEventListener("blur", handleBlurOrHide);
     document.addEventListener("visibilitychange", handleBlurOrHide);
 
-    const browserShortcutSubscription = isElectronRuntime()
-      ? getDesktopHost()?.events?.on?.("browser-shortcut-input", (payload) => {
-          const input = parseBrowserShortcutInput(payload);
-          if (!input) {
-            return;
-          }
-          resolveAndPerformShortcut({
-            event: input,
-            focusScope: "browser",
-            domEvent: null,
-            browserFocusRestoreElement: getResidentBrowserWebview(input.browserId),
-          });
-        })
-      : null;
     return () => {
       if (chordStateRef.current.timeoutId !== null) {
         clearTimeout(chordStateRef.current.timeoutId);
@@ -408,11 +391,6 @@ export function useKeyboardShortcuts({
       window.removeEventListener("keyup", handleKeyUp, true);
       window.removeEventListener("blur", handleBlurOrHide);
       document.removeEventListener("visibilitychange", handleBlurOrHide);
-      if (typeof browserShortcutSubscription === "function") {
-        browserShortcutSubscription();
-      } else {
-        void browserShortcutSubscription?.then((dispose) => dispose());
-      }
     };
   }, [
     bindings,

@@ -1,5 +1,4 @@
 import { AppDiagnosticSheet } from "@/components/app-diagnostic-sheet";
-import { isElectronRuntime } from "@/desktop/host";
 import { useAppDiagnosticStore } from "@/diagnostics/store";
 import { resolveAppVersion } from "@/utils/app-version";
 
@@ -12,7 +11,7 @@ export function AppDiagnosticHost() {
       visible={visible}
       onClose={close}
       appVersion={resolveAppVersion()}
-      isDesktopApp={isElectronRuntime()}
+      isDesktopApp={false}
     />
   );
 }

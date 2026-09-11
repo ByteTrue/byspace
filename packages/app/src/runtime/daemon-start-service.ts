@@ -41,7 +41,7 @@ export async function upsertDesktopDaemonConnection(
   await store.upsertConnectionFromListen({
     listenAddress,
     serverId,
-    hostname: daemon.hostname,
+    hostname: daemon.hostname ?? null,
   });
   return { ok: true };
 }

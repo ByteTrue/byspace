@@ -10,11 +10,6 @@ import {
   parseHostPort,
   shouldUseTlsForDefaultHostedRelay,
 } from "./daemon-endpoints";
-import {
-  buildDesktopDaemonTransportUrl,
-  createDesktopDaemonTransportFactory,
-} from "@/desktop/daemon/desktop-daemon-transport";
-import type { DesktopDaemonTransportTarget } from "@/desktop/daemon/desktop-daemon";
 
 export interface DaemonProbeClient {
   readonly lastError: string | null;
@@ -26,42 +21,14 @@ export interface DaemonProbeClient {
 export interface DaemonConnectionDependencies<TClient extends DaemonProbeClient> {
   getClientId(): Promise<string>;
   resolveAppVersion(): string | null;
-  createDesktopTransportFactory(): DaemonClientConfig["transportFactory"] | null;
-  buildDesktopTransportUrl(input: DesktopDaemonTransportTarget): string;
   createClient(config: DaemonClientConfig): TClient;
 }
 
 const defaultDaemonConnectionDependencies: DaemonConnectionDependencies<DaemonClient> = {
   getClientId: getOrCreateClientId,
   resolveAppVersion,
-  createDesktopTransportFactory: createDesktopDaemonTransportFactory,
-  buildDesktopTransportUrl: buildDesktopDaemonTransportUrl,
   createClient: (config) => new DaemonClient(config),
 };
-
-function buildRemoteSshClientConfig(input: {
-  connection: Extract<HostConnection, { type: "remoteSsh" }>;
-  base: Omit<DaemonClientConfig, "url">;
-  desktopTransportFactory: DaemonClientConfig["transportFactory"] | null;
-  buildDesktopTransportUrl: (target: DesktopDaemonTransportTarget) => string;
-}): DaemonClientConfig {
-  if (!input.desktopTransportFactory) {
-    throw new Error("Remote SSH is only available in the desktop app.");
-  }
-  return {
-    ...input.base,
-    transportFactory: input.desktopTransportFactory,
-    url: input.buildDesktopTransportUrl({
-      transportType: "ssh",
-      host: input.connection.host,
-      ...(input.connection.sshPort !== undefined ? { sshPort: input.connection.sshPort } : {}),
-      ...(input.connection.daemonPort !== undefined
-        ? { daemonPort: input.connection.daemonPort }
-        : {}),
-      ...(input.connection.password !== undefined ? { password: input.connection.password } : {}),
-    }),
-  };
-}
 
 function normalizeNonEmptyString(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -177,15 +144,11 @@ export async function buildClientConfig(
   },
   deps: Pick<
     DaemonConnectionDependencies<DaemonProbeClient>,
-    | "getClientId"
-    | "resolveAppVersion"
-    | "createDesktopTransportFactory"
-    | "buildDesktopTransportUrl"
+    "getClientId" | "resolveAppVersion"
   > = defaultDaemonConnectionDependencies,
 ): Promise<DaemonClientConfig> {
   assertDirectTcpConnectionAllowed(connection, options?.browserContext);
   const clientId = await deps.getClientId();
-  const desktopTransportFactory = deps.createDesktopTransportFactory();
   const base = {
     clientId,
     clientType: "mobile" as const,
@@ -194,29 +157,16 @@ export async function buildClientConfig(
     reconnect: { enabled: false },
     ...(options?.capabilities ? { capabilities: options.capabilities } : {}),
     ...(options?.trace ? { trace: options.trace } : {}),
-    ...((connection.type === "directSocket" || connection.type === "directPipe") &&
-    desktopTransportFactory
-      ? { transportFactory: desktopTransportFactory }
-      : {}),
   };
 
   if (connection.type === "directSocket" || connection.type === "directPipe") {
-    return {
-      ...base,
-      url: deps.buildDesktopTransportUrl({
-        transportType: connection.type === "directSocket" ? "socket" : "pipe",
-        transportPath: connection.path,
-      }),
-    };
+    throw new Error(
+      "Socket/pipe daemon transports were desktop-only and are retired (issue 025 A3).",
+    );
   }
 
   if (connection.type === "remoteSsh") {
-    return buildRemoteSshClientConfig({
-      connection,
-      base,
-      desktopTransportFactory,
-      buildDesktopTransportUrl: deps.buildDesktopTransportUrl,
-    });
+    throw new Error("Remote SSH access is retired (issue 025 A5).");
   }
 
   if (connection.type === "directTcp") {

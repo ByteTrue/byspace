@@ -41,26 +41,21 @@ The two things that go wrong most often:
 
 BySpace is composable by design, which means your change sits next to features you didn't touch. Open the surfaces around it. A change to the agent list affects archive, subagents, and tabs; a change to git actions affects worktrees and the checkout flow.
 
-Performance is part of this. The app is Expo React Native, not a web app in a native shell. You are not writing CSS, styles resolve differently, and performance characteristics differ per platform. What feels instant in a desktop dev build can be visibly slow on a phone.
+Performance is part of this. The app is Expo React Native Web. Verify on a phone-sized viewport: what feels instant on a desktop browser can be visibly slow there.
 
 If your change touches a hot path such as the terminal, the message list, or git polling, submit before and after numbers. [terminal-performance.md](terminal-performance.md) has the terminal pipeline and its benchmarks, and [development.md](development.md) covers renderer and React profiling.
 
 ## Every platform it affects
 
-Your code does not only run on the platform you tested it on. The same app ships to iOS, Android, browser web, and Electron on macOS, Windows, and Linux, and the daemon runs on all three desktop operating systems plus Docker.
+The daemon runs on macOS, Linux, and Windows plus Docker. The client is the web app; verify both a desktop browser and a phone-sized viewport.
 
 You aren't expected to own every device. You are expected to say what you covered:
 
-| Platform        | Tested | Notes |
-| --------------- | ------ | ----- |
-| iOS             |        |       |
-| Android         |        |       |
-| Web             |        |       |
-| Desktop macOS   |        |       |
-| Desktop Windows |        |       |
-| Desktop Linux   |        |       |
+| Platform | Tested | Notes |
+| -------- | ------ | ----- |
+| Web      |        |       |
 
-Install what you reasonably can. An iOS simulator and an Android emulator cover most of the gap on a single machine, see [development.md](development.md) and [android.md](android.md).
+A phone-sized browser viewport (or device-mode in dev tools) covers the compact layout; see [development.md](development.md).
 
 For the rules about which code runs where, read the platform gating section in [CLAUDE.md](../CLAUDE.md). The recurring traps have their own docs: [hover.md](hover.md), [unistyles.md](unistyles.md), [floating-panels.md](floating-panels.md), [mobile-panels.md](mobile-panels.md), [expo-router.md](expo-router.md).
 

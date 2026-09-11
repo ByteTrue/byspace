@@ -1,5 +1,8 @@
 import { Platform } from "react-native";
-import { isElectronRuntime, isElectronRuntimeMac } from "@/desktop/host";
+
+// Electron desktop wrapper retired (issue 025, 2026-09). Web is the only JS
+// runtime with a DOM, so the Electron gates below are compile-time dead and
+// kept only as named exports to limit churn at call sites.
 
 // ---------------------------------------------------------------------------
 // Runtime environment constants
@@ -11,7 +14,7 @@ import { isElectronRuntime, isElectronRuntimeMac } from "@/desktop/host";
 //   isWeb      → DOM APIs (document, window, <div>, addEventListener)
 //   isNative   → Native-only APIs (Haptics, StatusBar, push tokens, camera)
 //   isDev      → Development-only diagnostics and instrumentation
-//   isElectron → Desktop wrapper features (file dialogs, titlebar, updates)
+//   isElectron → Retired; always false. Dead branches are being removed over time.
 //
 // For layout decisions, use useIsCompactFormFactor() from constants/layout.ts.
 // For hover-tracking, see docs/hover.md — the short answer is `onPointerEnter`/
@@ -29,27 +32,15 @@ export const isNative = Platform.OS !== "web";
 export const isDev = Boolean((globalThis as { __DEV__?: boolean }).__DEV__);
 
 // ---------------------------------------------------------------------------
-// Electron detection (cached — only caches `true`, keeps checking if false
-// because the desktop bridge may load after initial module evaluation)
+// Electron detection (retired — always false)
 // ---------------------------------------------------------------------------
 
-let _isElectronCached: boolean | null = null;
-let _isElectronMacCached: boolean | null = null;
-
-/** Running inside the Electron desktop wrapper (any OS). */
+/** Running inside the Electron desktop wrapper (any OS). Retired: always false. */
 export function getIsElectron(): boolean {
-  if (_isElectronCached === true) return true;
-  if (!isWeb) return false;
-  const result = isElectronRuntime();
-  if (result) _isElectronCached = true;
-  return result;
+  return false;
 }
 
-/** Running inside the Electron desktop wrapper on macOS. */
+/** Running inside the Electron desktop wrapper on macOS. Retired: always false. */
 export function getIsElectronMac(): boolean {
-  if (_isElectronMacCached === true) return true;
-  if (!isWeb) return false;
-  const result = isElectronRuntimeMac();
-  if (result) _isElectronMacCached = true;
-  return result;
+  return false;
 }

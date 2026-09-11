@@ -38,16 +38,7 @@ import {
   ProfileDraft,
   TerminalProfileEditModal,
 } from "@/screens/settings/terminal-profile-edit-modal";
-import { getIsElectron } from "@/constants/platform";
-import {
-  getDesktopDaemonStatus,
-  restartDesktopDaemon,
-  startDesktopDaemon,
-  stopDesktopDaemon,
-} from "@/desktop/daemon/desktop-daemon";
 import { LocalDaemonSection } from "@/desktop/components/desktop-updates-section";
-import { useDaemonStatus } from "@/desktop/hooks/use-daemon-status";
-import { loadDesktopSettings, useDesktopSettings } from "@/desktop/settings/desktop-settings";
 import { PairDeviceModal } from "@/desktop/components/pair-device-modal";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
@@ -682,10 +673,6 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
           host.serverId,
           `settings_daemon_restart_${host.serverId}`,
           {
-            getIsElectron,
-            getDesktopDaemonStatus,
-            getDesktopSettings: loadDesktopSettings,
-            restartDesktopDaemon,
             restartServer: (reason) => daemonClient.restartServer(reason),
           },
         );
@@ -1346,11 +1333,8 @@ function RemoveHostSection({
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const { removeHost } = useHostMutations();
-  const { updateSettings } = useDesktopSettings();
-  const { data: daemonStatusData, setStatus } = useDaemonStatus();
   const [isConfirming, setIsConfirming] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
-  const daemonStatus = daemonStatusData?.status ?? null;
   const removeHostHeader = useMemo<SheetHeader>(
     () => ({
       title: isLocalDaemon
@@ -1371,42 +1355,11 @@ function RemoveHostSection({
     setIsConfirming(false);
   }, [isRemoving]);
   const handleCancel = useCallback(() => setIsConfirming(false), []);
-  const rollbackLocalhostRemoval = useCallback(
-    async (shouldRestartDaemon: boolean) => {
-      await updateSettings({ daemon: { manageBuiltInDaemon: true } });
-      if (!shouldRestartDaemon) {
-        return;
-      }
-      setStatus(await startDesktopDaemon());
-    },
-    [setStatus, updateSettings],
-  );
   const handleConfirmRemove = useCallback(() => {
     setIsRemoving(true);
     const remove = async () => {
-      let didDisableDaemonManagement = false;
-      let didStopDaemon = false;
-      if (isLocalDaemon) {
-        try {
-          await updateSettings({ daemon: { manageBuiltInDaemon: false } });
-          didDisableDaemonManagement = true;
-          if (daemonStatus?.status === "running" && daemonStatus.desktopManaged) {
-            setStatus(await stopDesktopDaemon("host_remove"));
-            didStopDaemon = true;
-          }
-          await removeHost(host.serverId);
-        } catch (error) {
-          if (didDisableDaemonManagement) {
-            try {
-              await rollbackLocalhostRemoval(didStopDaemon);
-            } catch (rollbackError) {
-              console.error("[HostPage] Failed to roll back localhost removal", rollbackError);
-            }
-          }
-          throw error;
-        }
-        return;
-      }
+      // Desktop-managed daemon stop-on-remove is retired (issue 025 A3);
+      // removing the host entry never touches a daemon process.
       await removeHost(host.serverId);
     };
     void remove()
@@ -1425,17 +1378,7 @@ function RemoveHostSection({
         );
       })
       .finally(() => setIsRemoving(false));
-  }, [
-    daemonStatus,
-    host.serverId,
-    isLocalDaemon,
-    onRemoved,
-    removeHost,
-    rollbackLocalhostRemoval,
-    setStatus,
-    t,
-    updateSettings,
-  ]);
+  }, [host.serverId, isLocalDaemon, onRemoved, removeHost, t]);
 
   const removeIcon = useMemo(
     () => <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />,

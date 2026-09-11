@@ -103,30 +103,3 @@ jobs:
           echo "::endgroup::"
 
           exit 1
-
-      - name: Build Nix desktop package
-        run: nix build .#desktop -o result-desktop
-
-  build-desktop-darwin:
-    runs-on: macos-14
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - uses: cachix/install-nix-action@v31
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
-
-      - name: Build Nix desktop package
-        run: nix build .#desktop -o result-desktop
-
-      - name: Verify macOS application bundle
-        run: |
-          set -euo pipefail
-
-          app="result-desktop/Applications/BySpace.app"
-          test -x "$app/Contents/MacOS/BySpace"
-          test -L result-desktop/bin/byspace-desktop
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = "com.bytetrue.byspace.desktop"
-          find "$app" -name Info.plist -print0 | xargs -0 -n 1 plutil -lint

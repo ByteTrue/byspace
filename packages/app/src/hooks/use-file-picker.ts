@@ -1,44 +1,9 @@
 import { useCallback, useRef } from "react";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
-import { getDesktopHost, isElectronRuntime } from "@/desktop/host";
 import { isWeb } from "@/constants/platform";
 import { getMimeTypeFromPath } from "@/attachments/file-types";
-import { readDesktopFileBytes, type PickedFile } from "@/attachments/picked-file";
-
-async function pickFilesWithDesktopDialog(): Promise<PickedFile[] | null> {
-  const dialog = getDesktopHost()?.dialog;
-  const dialogOpen = dialog?.open;
-  if (typeof dialogOpen !== "function") {
-    throw new Error("Desktop dialog API is not available.");
-  }
-
-  const selection = await dialogOpen({
-    directory: false,
-    multiple: true,
-  });
-
-  if (!selection) {
-    return null;
-  }
-
-  const paths = Array.isArray(selection) ? selection : [selection];
-  if (paths.length === 0) {
-    return null;
-  }
-
-  const result: PickedFile[] = [];
-
-  for (const filePath of paths) {
-    const fileName = filePath.split("/").pop() ?? filePath.split("\\").pop() ?? filePath;
-    const mimeType = getMimeTypeFromPath(filePath);
-    const bytes = await readDesktopFileBytes(filePath);
-
-    result.push({ fileName, mimeType, bytes });
-  }
-
-  return result;
-}
+import type { PickedFile } from "@/attachments/picked-file";
 
 function pickFilesWithWebInput(): Promise<PickedFile[] | null> {
   return new Promise((resolve) => {
@@ -109,10 +74,6 @@ export function useFilePicker() {
     isPickingRef.current = true;
 
     try {
-      if (isWeb && isElectronRuntime()) {
-        return await pickFilesWithDesktopDialog();
-      }
-
       if (isWeb) {
         return await pickFilesWithWebInput();
       }

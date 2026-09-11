@@ -506,7 +506,7 @@ describe("loadSettingsFromStorage", () => {
     expect(result.releaseChannel).toBe("stable");
   });
 
-  it("migrates legacy desktop-owned settings through the bridge before reading effective settings", async () => {
+  it("never calls the desktop bridge: desktop settings are retired (issue 025 A3)", async () => {
     const desktop = createFakeDesktopBridge({
       isElectron: true,
       settings: {
@@ -519,8 +519,6 @@ describe("loadSettingsFromStorage", () => {
       storage: createInMemoryKeyValueStorage({
         [APP_SETTINGS_KEY]: JSON.stringify({
           theme: "light",
-          manageBuiltInDaemon: false,
-          releaseChannel: "beta",
         }),
       }),
       desktop,
@@ -528,15 +526,11 @@ describe("loadSettingsFromStorage", () => {
 
     const result = await loadSettingsFromStorage(deps);
 
-    expect(desktop.migrationsApplied).toEqual([
-      { manageBuiltInDaemon: false, releaseChannel: "beta" },
-    ]);
+    expect(desktop.migrationsApplied).toEqual([]);
     expect(result).toEqual({
       ...DEFAULT_APP_SETTINGS,
       theme: "light",
       contentFontSize: DEFAULT_UI_BASE_FONT_SIZE,
-      manageBuiltInDaemon: false,
-      releaseChannel: "beta",
     });
   });
 

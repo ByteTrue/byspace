@@ -27,7 +27,6 @@ import {
 } from "@/utils/daemon-endpoints";
 import { resolveAppVersion } from "@/utils/app-version";
 import { ConnectionOfferSchema, type ConnectionOffer } from "@getpaseo/protocol/connection-offer";
-import { shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
 import { isWeb } from "@/constants/platform";
 import { assertDirectTcpConnectionAllowed, connectToDaemon } from "@/utils/test-daemon-connection";
 import { getOrCreateClientId } from "@/utils/client-id";
@@ -38,13 +37,6 @@ import {
   type ConnectionCandidate,
   type ConnectionProbeState,
 } from "@/utils/connection-selection";
-import {
-  buildDesktopDaemonTransportUrl,
-  createDesktopDaemonTransportFactory,
-} from "@/desktop/daemon/desktop-daemon-transport";
-import { getDesktopHost } from "@/desktop/host";
-import { CLIENT_CAPS } from "@getpaseo/protocol/client-capabilities";
-import { BROWSER_AUTOMATION_COMMAND_NAMES } from "@getpaseo/protocol/browser-automation/rpc-schemas";
 import {
   useSessionStore,
   type Agent,
@@ -59,7 +51,6 @@ import {
   invalidateServerDataQueriesAfterReconnect,
   mountServerDataPushRouter,
 } from "@/data/push-router";
-import { mountBrowserAutomationDaemonClientHandler } from "@/desktop/browser/automation/handler";
 import { schedulesQueryBaseKey } from "@/schedules/aggregated-schedules";
 import { dispatchComposerAgentMessage, sendQueuedComposerMessageNow } from "@/composer/actions";
 import { createMessageSubmissionWriter } from "@/composer/submission/writer";
@@ -490,23 +481,11 @@ function probeIntervalForConnection(
 }
 
 function createDefaultDeps(): HostRuntimeControllerDeps {
-  const browserHostAvailable =
-    typeof getDesktopHost()?.browser?.executeAutomationCommand === "function";
-  const browserAutomationCapabilities = browserHostAvailable
-    ? {
-        [CLIENT_CAPS.browserHost]: {
-          supportedCommands: [...BROWSER_AUTOMATION_COMMAND_NAMES],
-          hostKind: "desktop app",
-        },
-      }
-    : undefined;
-  const appCapabilities = {
-    ...browserAutomationCapabilities,
-  };
+  // Browser host automation was desktop-only and is retired (issue 025 A3).
+  const appCapabilities = {};
 
   return {
     createClient: ({ host, connection, clientId, runtimeGeneration }) => {
-      const desktopTransportFactory = createDesktopDaemonTransportFactory();
       const webSocketConfig = { webSocketFactory: createAppWebSocketFactory() };
       const base = {
         suppressSendErrors: true,
@@ -519,29 +498,12 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
         providerSnapshots: "wire",
       } satisfies Omit<DaemonClientConfig, "url">;
       if (connection.type === "directSocket" || connection.type === "directPipe") {
-        return new DaemonClient({
-          ...base,
-          ...(desktopTransportFactory ? { transportFactory: desktopTransportFactory } : {}),
-          url: buildDesktopDaemonTransportUrl({
-            transportType: connection.type === "directSocket" ? "socket" : "pipe",
-            transportPath: connection.path,
-          }),
-        });
+        throw new Error(
+          "Socket/pipe daemon transports were desktop-only and are retired (issue 025 A3).",
+        );
       }
       if (connection.type === "remoteSsh") {
-        if (!desktopTransportFactory) {
-          throw new Error("Remote SSH is only available in the desktop app.");
-        }
-        return new DaemonClient({
-          ...base,
-          transportFactory: desktopTransportFactory,
-          url: buildDesktopDaemonTransportUrl({
-            transportType: "ssh",
-            host: connection.host,
-            ...(connection.sshPort !== undefined ? { sshPort: connection.sshPort } : {}),
-            ...(connection.daemonPort !== undefined ? { daemonPort: connection.daemonPort } : {}),
-          }),
-        });
+        throw new Error("Remote SSH access is retired (issue 025 A5).");
       }
       if (connection.type === "directTcp") {
         assertDirectTcpConnectionAllowed(connection);
@@ -582,16 +544,8 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
         queryClient,
         serverId: host.serverId,
       });
-      if (!browserAutomationCapabilities) {
-        return unmountServerData;
-      }
-      const unmountBrowserAutomation = mountBrowserAutomationDaemonClientHandler(client, {
-        serverId: host.serverId,
-      });
-      return () => {
-        unmountBrowserAutomation();
-        unmountServerData();
-      };
+      void host.serverId;
+      return unmountServerData;
     },
   };
 }
@@ -1459,10 +1413,6 @@ export class HostRuntimeStore {
       return;
     }
     if (isE2E) {
-      return;
-    }
-
-    if (shouldUseDesktopDaemon()) {
       return;
     }
 
