@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
-
-Carry this notice into the next release entry. `parseChangelogEntries` ignores this heading because it has no date, so nothing here reaches the published notes until it moves under a real version.
+<!-- Working notes for the next release. Keep this as a comment, not a "##"
+     heading: the in-app changelog parser treats every "##" as a published
+     release and must find only versioned, dated headings. Move content under
+     the next version heading when cutting a release. -->
 
 ## 0.13.0 - 2026-09-10
 

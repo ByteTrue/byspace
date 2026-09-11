@@ -10,6 +10,13 @@ category: Getting started
 
 These third-party projects target BySpace or its upstream Paseo-compatible interfaces. Their names and links are preserved as published by their maintainers.
 
+## Plugin directory
+
+[paseo.cafe](https://paseo.cafe) is a community-run directory of Paseo plugins. Listings are generated
+from each plugin's public repository, so it is the fastest way to see what people are building and to
+publish your own. It is independent of the Paseo project and nothing on it is reviewed or endorsed by
+us, so read a plugin's source before installing it.
+
 ## Tools and integrations
 
 | Project                                                                                      | What it does                                                                                                                         |

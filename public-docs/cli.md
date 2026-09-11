@@ -1,12 +1,12 @@
 ---
-title: CLI
-description: "BySpace CLI reference: manage projects, workspaces, agents, plugins, scripts, schedules, daemons, and permissions from your terminal."
-nav: CLI
-order: 3
-category: Getting started
----
 
-# CLI
+title: CLI reference
+description: "BySpace CLI reference: manage projects, workspaces, agents, plugins, scripts, schedules, daemons, and permissions from your terminal."
+nav: CLI reference
+order: 35
+category: Orchestration---
+
+# CLI reference
 
 The BySpace CLI lets you manage agents from your terminal. It's the same interface exposed by the daemon's API, so anything you can do in the app you can do from the command line.
 
@@ -133,12 +133,12 @@ Add `--forge <name>` to PR checkout when BySpace cannot infer the forge from the
 Use the workspace ID when multiple workspaces share a directory:
 
 ```bash
-paseo terminal create --workspace <workspace-id> --name Development
-paseo terminal ls --workspace <workspace-id> --json
-paseo terminal send-keys <terminal-id> -l "echo ready"
-paseo terminal send-keys <terminal-id> Enter
-paseo terminal capture <terminal-id>
-paseo terminal kill <terminal-id>
+byspace terminal create --workspace <workspace-id> --name Development
+byspace terminal ls --workspace <workspace-id> --json
+byspace terminal send-keys <terminal-id> -l "echo ready"
+byspace terminal send-keys <terminal-id> Enter
+byspace terminal capture <terminal-id>
+byspace terminal kill <terminal-id>
 ```
 
 Creation defaults to the workspace directory. Add `--cwd <absolute-path>` to change the process directory while keeping that workspace as the owner. Unknown and archived workspace IDs fail.
@@ -192,12 +192,11 @@ behavior.
 
 ## Listing agents
 
-```bash
-byspace ls                    # Running agents in current directory
-byspace ls -a                 # Include completed/stopped agents
-byspace ls -g                 # All directories
-byspace ls -a -g --json       # Full list as JSON
-```
+````bash
+byspace ls                    # Non-archived agents in active workspaces
+byspace ls -a                 # Also include archived agents
+byspace ls -g                 # Non-archived agents across all workspaces
+byspace ls -a -g --json       # All agents, including archived, as JSON```
 
 ## Streaming output
 
@@ -205,13 +204,15 @@ Use `byspace attach` to stream an agent's output in real-time:
 
 ```bash
 byspace attach abc123   # Attach to agent (Ctrl+C to detach)
-```
+````
 
 Agent IDs can be shortened, `abc` works if it's unambiguous.
 
 ## Sending messages
 
 Send follow-up tasks to a running or idle agent:
+
+Use the recipient's agent ID from `byspace ls`, or [copy it from the agent's tab](/docs/orchestration-workflows#send-a-prompt-to-another-agent).
 
 ```bash
 byspace send <id> "now run the tests"
@@ -289,28 +290,26 @@ Use `BYSPACE_HOME` to run multiple isolated daemon instances.
 
 ## Hub
 
-```bash
+````bash
 byspace hub login [url]          # Approve and store organization-scoped CLI access
-byspace hub init                 # Guided setup: scaffold and deploy a starter bundle here
+byspace hub init                 # Create and optionally deploy a starter trigger here
 byspace hub connect [url]        # Enroll this daemon using CLI access
-byspace hub projects             # List projects in the authenticated organization
+byspace hub projects             # List legacy projects in the authenticated organization
 byspace hub status               # Show the current Hub relationship
 byspace hub disconnect           # End it
-byspace hub deploy -p <project>  # Discover, validate, and activate a Hub bundle
-byspace hub deploy -p <project> --dry-run # Validate without activating
-byspace hub export [directory]   # Export the active organization's triggers
-byspace hub logout               # Remove the active stored CLI login
-```
+byspace hub deploy               # Validate and install .paseo/triggers/*.yml
+byspace hub deploy --dry-run     # Validate without installing
+byspace hub deploy -p <project>   # Deploy an existing legacy project bundle
+byspace hub logout               # Remove the active stored CLI login```
 
-Run deploy from the project root. It reads `.paseo/hub.yml`, every direct `.paseo/workflows/*.yml` file, and referenced `.paseo/workflows/partials/*` files in deterministic path order. It does not search parents, accept an alternate resource path, or flatten the bundle into monolithic YAML.
+Run deploy from the repository root. By default it reads every direct `.paseo/triggers/*.yml` file in deterministic path order. It validates all triggers before installing them one at a time. If an installation fails after earlier ones succeeded, the error lists the installed files. `--dry-run` only validates; it does not create or activate revisions.
 
-Pass `-p, --project <slug>` to select the target project. `--dry-run` performs the same discovery and server validation without recording or activating a revision. Both outputs include the resolved Hub, project, and discovered workflow count.
+Pass `-p, --project <slug>` for an existing legacy bundle: `.paseo/hub.yml`, direct `.paseo/workflows/*.yml` files, and referenced workflow partials. See [Deploy from the CLI](/docs/hub/configuration#deploy-from-the-cli).
 
-`login` opens the Hub approval page and stores a durable organization-scoped CLI credential under `BYSPACE_HOME`. Interactive login optionally connects the local daemon, then points to the Hub UI for trigger configuration; it does not scaffold or deploy configuration. `byspace hub init` remains the explicit triggers-as-code scaffold. `byspace hub export [directory]` writes the active organization's current triggers as one self-contained YAML file per trigger, using the active login unless another Hub or API key is selected. `--json` and non-TTY login remain login-only and never prompt. The stored login is separate from the daemon relationship created by `connect`.
+`login` opens the Hub approval page and stores a durable organization-scoped CLI credential under `PASEO_HOME`. In an interactive terminal it offers to connect this daemon, then separately asks whether to allow Hub automations to run agents. Connection defaults to yes; execution permission defaults to no. It then links to Hub's **Triggers** page and prints `byspace hub init` for setup as code. `--json` and non-TTY login remain login-only and never prompt. The stored login is separate from the daemon relationship created by `connect`.
+`init` requires a TTY. It signs in and connects the daemon as needed, then lists the organization's app connections that can back a starter trigger. One usable connection is selected automatically; with several, you choose a **Trigger connection**. If none is ready, setup sends you to **Hub → Apps** and stops before selecting an agent or writing files.
 
-`init` runs the same guided setup on its own and requires a TTY. It connects the daemon, uses the organization's only project or asks which one, and lists the Hub app connections that can back a starter workflow. One usable connection is selected automatically; with several, you choose a **Trigger connection**. If none is ready, setup sends you to **Hub → Apps** and stops before selecting an agent or writing files.
-
-Setup then asks which agent provider, model, and mode the starter should run, choosing from what the connected daemon reports. A provider is offered only when the daemon has it enabled with a selectable model. Suggested model and mode entries are the daemon's defaults; no provider is suggested merely because it appears first. The mode question is skipped for providers that expose no modes and asked explicitly when the daemon has modes but no default. Finally, setup asks for the identity that gates the chosen connection: a GitHub username, a Slack member ID, or a Discord user ID. It writes `.paseo/hub.yml` and `.paseo/workflows/<provider>-help.yml`, validates them against Hub, and deploys. An existing `.paseo/` directory is replaced only after you confirm. See the [generated starter bundle](/docs/hub/configuration#generated-starter-bundle).
+Setup asks which agent provider, model, and mode to run. Providers must be enabled and expose both a selectable model and an execution mode. Suggested model and mode entries are the daemon's defaults; a mode is still selected explicitly when there is no default. Setup then asks for the identity allowed to trigger the bot: a GitHub username, Slack member ID, or Discord user ID. It validates the trigger, writes `.paseo/triggers/<provider>-help.yml`, and asks whether to deploy. Replacing that file requires confirmation; existing legacy bundles and other trigger files are preserved. See the [generated starter trigger](/docs/hub/configuration#generated-starter-trigger).
 
 Interactive logout checks the same-origin daemon relationship and asks whether to disconnect before deleting the login. Declining removes only the login. JSON and noninteractive logout never prompt or disconnect implicitly; `--disconnect-daemon` is the explicit automation path, and `--force` applies to that daemon disconnection. If a requested disconnection fails, the login is preserved.
 
@@ -322,7 +321,7 @@ See [Daemons in Hub](/docs/hub/daemons), [Hub configuration](/docs/hub/configura
 
 ## Connecting to a remote daemon
 
-The global `--host` option accepts either a local target (`host:port`, a unix socket, or a Windows pipe) or a pairing offer URL, the same `https://app.paseo.sh/#offer=...` link the mobile app uses for QR pairing. With an offer URL the CLI connects through the BySpace relay with end-to-end encryption, so you can drive a daemon on another machine without exposing it to the network.
+The global `--host` option accepts either a local target (`host:port`, a unix socket, or a Windows pipe) or a pairing offer URL, the same `https://app.byspace.cc.cd/#offer=...` link the mobile app uses for QR pairing. With an offer URL the CLI connects through the BySpace relay with end-to-end encryption, so you can drive a daemon on another machine without exposing it to the network.
 
 Get an offer URL from the daemon you want to control:
 
@@ -330,14 +329,14 @@ Get an offer URL from the daemon you want to control:
 byspace daemon pair          # asks before enabling relay, then prints the QR and link
 byspace daemon pair --relay  # enables relay without prompting
 byspace daemon pair --json   # structured output; never prompts
-```
+````
 
 Relay is off for new installations. In non-interactive or JSON mode, a disabled relay returns a `RELAY_DISABLED` error; pass `--relay` to provide explicit consent. Relay pairing is end-to-end encrypted. See [Security](/docs/security).
 
 Use it from anywhere:
 
 ```bash
-byspace --host 'https://app.paseo.sh/#offer=eyJ2IjoyLC...' ls
+byspace --host 'https://app.byspace.cc.cd/#offer=eyJ2IjoyLC...' ls
 byspace --host "$OFFER_URL" run "fix the failing tests"
 ```
 
