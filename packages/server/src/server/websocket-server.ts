@@ -510,6 +510,7 @@ interface SocketSessionOptions {
   onLifecycleIntent?: (intent: SessionLifecycleIntent) => void;
   hubExecutionAgents?: HubExecutionAgents;
   hubRelationships?: HubRelationshipManagement;
+  sshTunnelManager: import("./tunnel/index.js").SshTunnelManager | null;
 }
 
 interface ClosePhysicalSocketParams {
@@ -624,6 +625,7 @@ export class VoiceAssistantWebSocketServer {
   private unsubscribeTerminalActivity: (() => void) | null = null;
   private readonly browserToolsBroker: BrowserToolsBroker | null;
   private readonly hubRelationships: HubRelationshipManagement | null;
+  private readonly sshTunnelManager: import("./tunnel/index.js").SshTunnelManager | null;
   private readonly browserToolsRegistrations = new Map<string, BrowserToolsRegistration>();
   private connectionLifecycle: "starting" | "accepting" | "stopping" = "accepting";
   private readonly advertiseDaemonStatusRpc: boolean;
@@ -674,6 +676,7 @@ export class VoiceAssistantWebSocketServer {
     serviceProxyPublicBaseUrl?: string | null,
     browserToolsBroker?: BrowserToolsBroker | null,
     hubRelationships?: HubRelationshipManagement | null,
+    sshTunnelManager?: import("./tunnel/index.js").SshTunnelManager | null,
     workspaceSetupRuntime: WorkspaceSetupRuntime = new WorkspaceSetupRuntime(),
     pluginRuntime?: SessionOptions["pluginRuntime"],
     orchestrationSkills?: SessionOptions["orchestrationSkills"],
@@ -692,6 +695,7 @@ export class VoiceAssistantWebSocketServer {
     this.daemonRuntimeConfig = daemonRuntimeConfig;
     this.browserToolsBroker = browserToolsBroker ?? null;
     this.hubRelationships = hubRelationships ?? null;
+    this.sshTunnelManager = sshTunnelManager ?? null;
     this.pluginRuntime = pluginRuntime;
     this.orchestrationSkills = orchestrationSkills;
     this.agentManager = agentManager;
@@ -1395,6 +1399,7 @@ export class VoiceAssistantWebSocketServer {
       },
       hubExecutionAgents: admission.hubExecutionAgents,
       hubRelationships: this.hubRelationships ?? undefined,
+      sshTunnelManager: this.sshTunnelManager,
     });
 
     const base: SessionConnectionBase = {
@@ -1462,7 +1467,8 @@ export class VoiceAssistantWebSocketServer {
       providerSnapshotManager: this.providerSnapshotManager,
       providerUsageService: this.providerUsageService,
       hubExecutionAgents: options.hubExecutionAgents,
-      hubRelationships: options.hubRelationships,
+      hubRelationships: this.hubRelationships ?? undefined,
+      sshTunnelManager: this.sshTunnelManager,
       serviceProxy: this.serviceProxy ?? undefined,
       scriptRuntimeStore: this.scriptRuntimeStore ?? undefined,
       workspaceSetupSnapshots: this.workspaceSetupSnapshots,

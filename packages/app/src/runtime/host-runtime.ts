@@ -42,6 +42,7 @@ import {
   buildDesktopDaemonTransportUrl,
   createDesktopDaemonTransportFactory,
 } from "@/desktop/daemon/desktop-daemon-transport";
+import { createSshTunnelTransportFactory } from "@/hosts/ssh-tunnel-transport";
 import { getDesktopHost } from "@/desktop/host";
 import { CLIENT_CAPS } from "@getpaseo/protocol/client-capabilities";
 import { BROWSER_AUTOMATION_COMMAND_NAMES } from "@getpaseo/protocol/browser-automation/rpc-schemas";
@@ -529,18 +530,28 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
         });
       }
       if (connection.type === "remoteSsh") {
-        if (!desktopTransportFactory) {
-          throw new Error("Remote SSH is only available in the desktop app.");
+        if (desktopTransportFactory) {
+          return new DaemonClient({
+            ...base,
+            transportFactory: desktopTransportFactory,
+            url: buildDesktopDaemonTransportUrl({
+              transportType: "ssh",
+              host: connection.host,
+              ...(connection.sshPort !== undefined ? { sshPort: connection.sshPort } : {}),
+              ...(connection.daemonPort !== undefined ? { daemonPort: connection.daemonPort } : {}),
+            }),
+          });
+        }
+        const carrierClient = getHostRuntimeStore().findTunnelCarrierClient(host.serverId);
+        if (!carrierClient) {
+          throw new Error(
+            "Remote SSH needs a connected daemon to tunnel through. Connect to a reachable daemon first.",
+          );
         }
         return new DaemonClient({
           ...base,
-          transportFactory: desktopTransportFactory,
-          url: buildDesktopDaemonTransportUrl({
-            transportType: "ssh",
-            host: connection.host,
-            ...(connection.sshPort !== undefined ? { sshPort: connection.sshPort } : {}),
-            ...(connection.daemonPort !== undefined ? { daemonPort: connection.daemonPort } : {}),
-          }),
+          transportFactory: createSshTunnelTransportFactory(carrierClient, connection),
+          url: `byspace+tunnel://ssh/${encodeURIComponent(connection.host)}`,
         });
       }
       if (connection.type === "directTcp") {
@@ -2289,6 +2300,25 @@ export class HostRuntimeStore {
 
   getClient(serverId: string): DaemonClient | null {
     return this.controllers.get(serverId)?.getClient() ?? null;
+  }
+
+  /**
+   * Finds an online daemon whose client can own SSH tunnels for a new
+   * Remote SSH host. Excludes the target server itself and other SSH hosts
+   * (a tunnel must not chain through another tunnel).
+   */
+  findTunnelCarrierClient(excludeServerId: string | null): DaemonClient | null {
+    for (const [serverId, controller] of this.controllers) {
+      if (excludeServerId !== null && serverId === excludeServerId) continue;
+      const snapshot = controller.getSnapshot();
+      const activeConnection = snapshot.activeConnection;
+      if (activeConnection?.type === "remoteSsh") continue;
+      const status = this.lastConnectionStatusByServer.get(serverId);
+      if (status !== "online" && status !== "connecting") continue;
+      const client = controller.getClient();
+      if (client) return client;
+    }
+    return null;
   }
 
   subscribe(serverId: string, listener: () => void): () => void {

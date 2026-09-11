@@ -15,6 +15,7 @@ import {
   createDesktopDaemonTransportFactory,
 } from "@/desktop/daemon/desktop-daemon-transport";
 import type { DesktopDaemonTransportTarget } from "@/desktop/daemon/desktop-daemon";
+import { createSshTunnelTransportFactory } from "@/hosts/ssh-tunnel-transport";
 
 export interface DaemonProbeClient {
   readonly lastError: string | null;
@@ -39,27 +40,44 @@ const defaultDaemonConnectionDependencies: DaemonConnectionDependencies<DaemonCl
   createClient: (config) => new DaemonClient(config),
 };
 
+function resolveCarrierClient(options?: {
+  carrierClient?: DaemonClient | null;
+}): DaemonClient | null {
+  return options?.carrierClient ?? null;
+}
+
 function buildRemoteSshClientConfig(input: {
   connection: Extract<HostConnection, { type: "remoteSsh" }>;
   base: Omit<DaemonClientConfig, "url">;
   desktopTransportFactory: DaemonClientConfig["transportFactory"] | null;
   buildDesktopTransportUrl: (target: DesktopDaemonTransportTarget) => string;
+  carrierClient: DaemonClient | null;
 }): DaemonClientConfig {
-  if (!input.desktopTransportFactory) {
-    throw new Error("Remote SSH is only available in the desktop app.");
+  if (input.desktopTransportFactory) {
+    return {
+      ...input.base,
+      transportFactory: input.desktopTransportFactory,
+      url: input.buildDesktopTransportUrl({
+        transportType: "ssh",
+        host: input.connection.host,
+        ...(input.connection.sshPort !== undefined ? { sshPort: input.connection.sshPort } : {}),
+        ...(input.connection.daemonPort !== undefined
+          ? { daemonPort: input.connection.daemonPort }
+          : {}),
+        ...(input.connection.password !== undefined ? { password: input.connection.password } : {}),
+      }),
+    };
+  }
+  if (!input.carrierClient) {
+    throw new Error(
+      "Remote SSH needs a connected daemon to tunnel through. Connect to a reachable daemon first.",
+    );
   }
   return {
     ...input.base,
-    transportFactory: input.desktopTransportFactory,
-    url: input.buildDesktopTransportUrl({
-      transportType: "ssh",
-      host: input.connection.host,
-      ...(input.connection.sshPort !== undefined ? { sshPort: input.connection.sshPort } : {}),
-      ...(input.connection.daemonPort !== undefined
-        ? { daemonPort: input.connection.daemonPort }
-        : {}),
-      ...(input.connection.password !== undefined ? { password: input.connection.password } : {}),
-    }),
+    transportFactory: createSshTunnelTransportFactory(input.carrierClient, input.connection),
+    // The tunnel transport ignores the url; keep it descriptive for logs.
+    url: `byspace+tunnel://ssh/${encodeURIComponent(input.connection.host)}`,
   };
 }
 
@@ -174,6 +192,7 @@ export async function buildClientConfig(
     capabilities?: DaemonClientConfig["capabilities"];
     trace?: DaemonClientConfig["trace"];
     browserContext?: DaemonConnectionBrowserContext;
+    carrierClient?: DaemonClient | null;
   },
   deps: Pick<
     DaemonConnectionDependencies<DaemonProbeClient>,
@@ -216,6 +235,7 @@ export async function buildClientConfig(
       base,
       desktopTransportFactory,
       buildDesktopTransportUrl: deps.buildDesktopTransportUrl,
+      carrierClient: resolveCarrierClient(options),
     });
   }
 
@@ -312,6 +332,7 @@ export function connectAndProbe(
 }
 
 interface ProbeOptions {
+  carrierClient?: DaemonClient | null;
   serverId?: string;
   timeoutMs?: number;
   capabilities?: DaemonClientConfig["capabilities"];

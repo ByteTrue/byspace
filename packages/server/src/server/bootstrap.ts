@@ -237,6 +237,8 @@ import {
   type HubRelationshipClock,
   type HubRelationshipRetryPolicy,
 } from "./hub/relationship-controller.js";
+import { SshTunnelManager } from "./tunnel/index.js";
+import { createFileKnownHostsStore } from "./tunnel/known-hosts.js";
 import {
   DirectHubRelationshipRemote,
   type HubRelationshipRemote,
@@ -1262,6 +1264,10 @@ export async function createPaseoDaemon(
       killTerminalsForWorkspace({ terminalManager, sessionLogger: logger }, workspaceId),
     logger,
   });
+  const sshTunnelManager = new SshTunnelManager({
+    knownHosts: createFileKnownHostsStore(config.paseoHome),
+  });
+
   const hubRelationships = new HubRelationshipController({
     paseoHome: config.paseoHome,
     hostname: getHostname(),
@@ -1771,6 +1777,7 @@ export async function createPaseoDaemon(
               serviceProxyPublicBaseUrl,
               browserToolsBroker,
               hubRelationships,
+              sshTunnelManager,
               workspaceSetupRuntime,
               pluginRuntime,
               orchestrationSkills,
@@ -1849,6 +1856,7 @@ export async function createPaseoDaemon(
     await pluginRuntime.stopAllPlugins();
     unsubscribePluginProviders();
     await hubRelationships.stop();
+    sshTunnelManager.closeAll();
     workspaceReconciliation.dispose();
     scriptHealthMonitor.stop();
     // Freeze both ingress and registration before taking the agent closure snapshot.

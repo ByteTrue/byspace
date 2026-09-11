@@ -320,6 +320,18 @@ export type DaemonEvent =
       type: "providers_snapshot_update";
       payload: Extract<SessionOutboundMessage, { type: "providers_snapshot_update" }>["payload"];
     }
+  | {
+      type: "tunnel.ssh.frame";
+      payload: Extract<SessionOutboundMessage, { type: "tunnel.ssh.frame" }>["payload"];
+    }
+  | {
+      type: "tunnel.ssh.state";
+      payload: Extract<SessionOutboundMessage, { type: "tunnel.ssh.state" }>["payload"];
+    }
+  | {
+      type: "tunnel.ssh.host_key_prompt";
+      payload: Extract<SessionOutboundMessage, { type: "tunnel.ssh.host_key_prompt" }>["payload"];
+    }
   | { type: "error"; message: string };
 
 export type DaemonEventHandler = (event: DaemonEvent) => void;
@@ -1944,6 +1956,97 @@ export class DaemonClient {
     if (!response.success) {
       throw new Error(response.error ?? "Failed to mark workspace unread");
     }
+  }
+
+  /** Ask the connected daemon to open an SSH tunnel to a remote daemon. */
+  async openSshTunnel(
+    input: {
+      tunnelId: string;
+      host: string;
+      sshPort?: number;
+      daemonPort?: number;
+      authMode: "key" | "password";
+      password?: string;
+    },
+    requestId?: string,
+  ): Promise<Extract<SessionOutboundMessage, { type: "tunnel.ssh.open.response" }>["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest<"tunnel.ssh.open.response">({
+      requestId,
+      message: {
+        type: "tunnel.ssh.open.request",
+        ...input,
+      },
+    });
+  }
+
+  /** Probe a remote SSH host's key without authenticating. */
+  async probeSshHost(
+    input: { host: string; sshPort?: number },
+    requestId?: string,
+  ): Promise<Extract<SessionOutboundMessage, { type: "tunnel.ssh.probe.response" }>["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest<"tunnel.ssh.probe.response">({
+      requestId,
+      message: {
+        type: "tunnel.ssh.probe.request",
+        ...input,
+      },
+    });
+  }
+
+  /** Answer a pending host-key confirmation prompt. */
+  async respondSshHostKey(
+    input: { hostKeyPromptId: string; decision: "trust" | "cancel" },
+    requestId?: string,
+  ): Promise<
+    Extract<SessionOutboundMessage, { type: "tunnel.ssh.respond-host-key.response" }>["payload"]
+  > {
+    return this.sendNamespacedCorrelatedSessionRequest<"tunnel.ssh.respond-host-key.response">({
+      requestId,
+      message: {
+        type: "tunnel.ssh.respond-host-key.request",
+        ...input,
+      },
+    });
+  }
+
+  /** Close a daemon-owned SSH tunnel (idempotent). */
+  async closeSshTunnel(
+    tunnelId: string,
+    requestId?: string,
+  ): Promise<Extract<SessionOutboundMessage, { type: "tunnel.ssh.close.response" }>["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest<"tunnel.ssh.close.response">({
+      requestId,
+      message: {
+        type: "tunnel.ssh.close.request",
+        tunnelId,
+      },
+    });
+  }
+
+  /** List the daemon-owned SSH tunnels. */
+  async listSshTunnels(
+    requestId?: string,
+  ): Promise<Extract<SessionOutboundMessage, { type: "tunnel.ssh.list.response" }>["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest<"tunnel.ssh.list.response">({
+      requestId,
+      message: {
+        type: "tunnel.ssh.list.request",
+      },
+    });
+  }
+
+  /** Write a frame into a daemon-owned SSH tunnel. */
+  async sendSshTunnelFrame(
+    input: { tunnelId: string; text?: string; binaryBase64?: string },
+    requestId?: string,
+  ): Promise<Extract<SessionOutboundMessage, { type: "tunnel.ssh.send.response" }>["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest<"tunnel.ssh.send.response">({
+      requestId,
+      message: {
+        type: "tunnel.ssh.send.request",
+        ...input,
+      },
+    });
   }
 
   sendHeartbeat(params: {
