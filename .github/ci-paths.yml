@@ -24,29 +24,18 @@ format:
   - ".agents/**/*.{cjs,css,html,js,json,jsonc,jsx,md,mjs,ts,tsx,yaml,yml}"
   - ".github/**/*.{cjs,css,html,js,json,jsonc,jsx,md,mjs,ts,tsx,yaml,yml}"
   - "**/*.{cjs,css,html,js,json,jsonc,jsx,md,mjs,ts,tsx,yaml,yml}"
-  - "packages/expo-two-way-audio/**"
 
 quality:
   - "**/*.{cjs,js,json,jsx,mjs,ts,tsx}"
-  - "packages/expo-two-way-audio/**"
 
 server:
   - "packages/server/**"
   - "packages/app/e2e/support/fixtures/recording.*"
 
-  - "packages/server/src/server/browser-tools/**"
-  - "packages/app/e2e/support/**"
-  - "packages/app/*config.{cjs,js,ts}"
-  - "packages/app/package.json"
-
 app:
   - "packages/app/**"
-  - "packages/expo-two-way-audio/**"
 
 sdk:
-  - "packages/plugin/**"
-  - "plugin-examples/**"
-  - "public-docs/plugins/v0.8/**"
   - "packages/client/**"
   - "packages/highlight/**"
   - "packages/protocol/**"
@@ -60,11 +49,8 @@ browser:
   - "packages/server/src/server/agent/agent-sdk-types.ts"
   - "packages/server/src/server/agent/providers/codex-app-server-agent.ts"
   - "packages/server/src/server/agent/providers/claude/agent.ts"
-  - "packages/server/src/server/agent/plugin-provider.ts"
-  - "packages/server/src/server/plugins/{index,plugin-process,plugin-process-protocol,runtime}.ts"
   - "packages/server/src/executable-resolution/**"
-  - "packages/plugin/src/server/provider.ts"
-  - "packages/app/src/!(desktop)/**"
+  - "packages/app/src/**"
   - "packages/app/e2e/browser/**"
   - "packages/app/e2e/support/**"
   - "packages/app/assets/**"

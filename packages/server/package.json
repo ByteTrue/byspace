@@ -73,7 +73,6 @@
     "@babel/parser": "^7.29.8",
     "@getpaseo/client": "0.13.0",
     "@getpaseo/highlight": "0.13.0",
-    "@getpaseo/plugin": "0.13.0",
     "@getpaseo/protocol": "0.13.0",
     "@getpaseo/relay": "0.13.0",
     "@isaacs/ttlcache": "^2.1.4",

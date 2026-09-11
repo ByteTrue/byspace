@@ -44,7 +44,6 @@
     "@floating-ui/react-native": "^0.10.7",
     "@getpaseo/client": "*",
     "@getpaseo/highlight": "*",
-    "@getpaseo/plugin": "*",
     "@getpaseo/protocol": "*",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@gorhom/portal": "^1.0.14",

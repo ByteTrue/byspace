@@ -14,7 +14,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 
-const workspaces = ["highlight", "relay", "protocol", "client", "plugin", "server", "cli"];
+const workspaces = ["highlight", "relay", "protocol", "client", "server", "cli"];
 const bundledPackages = workspaces
   .filter((workspace) => workspace !== "cli")
   .map((workspace) => `@getpaseo/${workspace}`);
@@ -98,13 +98,10 @@ try {
     specifiersByName.set(name, (specifiersByName.get(name) ?? new Set()).add(specifier));
   }
   const externalDependencies = {};
-  // Bundled workspaces do not always agree on a version. Upstream gives the plugin SDK
-  // @agentclientprotocol/sdk ^1.4.0 while the daemon stays on ^0.17.1, both import values
-  // from it, and a single published package can only carry one copy: npm prunes the
-  // node_modules inside a bundled dependency. The daemon's specifier wins, because running
-  // the daemon is what this package is for. A plugin reaching the SDK's newer ACP surface
-  // through the npm bundle will fail at runtime; the desktop and repo installs are
-  // unaffected, since npm nests both versions there.
+  // Bundled workspaces do not always agree on a version; a single published
+  // package can only carry one copy (npm prunes node_modules inside a bundled
+  // dependency). The daemon's specifier wins because running the daemon is
+  // what this package is for.
   const daemonDependencies =
     runtimePackages.find((entry) => entry.packageJson.name === "@getpaseo/server")?.packageJson
       .dependencies ?? {};
