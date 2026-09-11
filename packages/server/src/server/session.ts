@@ -181,9 +181,6 @@ import { AgentConfigSession } from "./session/agent-config/agent-config-session.
 import { ProjectConfigSession } from "./session/project-config/project-config-session.js";
 import { DaemonSession, type DaemonRuntimeConfig } from "./session/daemon/daemon-session.js";
 import type { DaemonWebSocketRuntimeDiagnosticSnapshot } from "./session/daemon/diagnostics.js";
-import type { HubRelationshipManagement } from "./hub/relationship-controller.js";
-import { HubExecutionController } from "./hub/execution-controller.js";
-import type { HubExecutionAgents } from "./hub/daemon-executions.js";
 import { DownloadTokenStore } from "./file-download/token-store.js";
 import type { PushNotifications } from "./push/index.js";
 import {
@@ -518,8 +515,6 @@ export interface SessionOptions {
   terminalManager: TerminalManager | null;
   providerSnapshotManager: ProviderSnapshotManager;
   providerUsageService: ProviderUsageService;
-  hubExecutionAgents?: HubExecutionAgents;
-  hubRelationships?: HubRelationshipManagement;
   serviceProxy?: ServiceProxySubsystem;
   scriptRuntimeStore?: WorkspaceScriptRuntimeStore;
   workspaceSetupSnapshots?: Map<string, WorkspaceSetupSnapshot>;
@@ -752,7 +747,6 @@ export class Session {
   private readonly agentConfigSession: AgentConfigSession;
   private readonly projectConfigSession: ProjectConfigSession;
   private readonly daemonSession: DaemonSession;
-  private readonly hubExecutionController: HubExecutionController | null;
   private readonly workspaceScripts: WorkspaceScriptsService;
   private readonly agentRequests: Pick<AgentRequests, "create" | "send">;
   private readonly createAgentLifecycleDispatch: CreateAgentLifecycleDispatch;
@@ -984,17 +978,8 @@ export class Session {
       listProjects: () => this.projectRegistry.list(),
       listWorkspaces: () => this.workspaceRegistry.list(),
       logger: this.sessionLogger,
-      hubRelationships: options.hubRelationships,
       reloadConfig: () => daemonConfigStore.reload(),
     });
-    this.hubExecutionController = options.hubExecutionAgents
-      ? new HubExecutionController({
-          agents: options.hubExecutionAgents,
-          validateAgentConfiguration: (input) =>
-            providerSnapshotManager.validateAgentConfiguration(input),
-          send: (message) => this.emit(message),
-        })
-      : null;
     this.daemonConfigStore = daemonConfigStore;
     this.terminalManager = terminalManager;
     this.terminalController = new TerminalSessionController({
@@ -2379,14 +2364,46 @@ export class Session {
   }
 
   private dispatchHubExecutionMessage(msg: SessionInboundMessage): Promise<void> | undefined {
-    if (msg.type === "hub.execution.agent.create.request") {
-      return this.hubExecutionController?.createAgent(msg);
-    }
-    if (msg.type === "hub.execution.agent.validate.request") {
-      return this.hubExecutionController?.validateAgent(msg);
-    }
-    if (msg.type === "hub.execution.control.request") {
-      return this.hubExecutionController?.controlExecution(msg);
+    // Hub executions are retired (issue 025 C7); each request gets a
+    // structured error response so old clients fail cleanly.
+    const error = "Hub integration is retired";
+    switch (msg.type) {
+      case "hub.execution.agent.create.request":
+        this.emit({
+          type: "hub.execution.agent.create.response",
+          payload: {
+            requestId: msg.requestId,
+            executionId: "",
+            agentId: null,
+            agent: null,
+            success: false,
+            error: {
+              code: "provider_options_invalid",
+              provider: "hub",
+              issues: [],
+              message: error,
+            },
+          },
+        });
+        return undefined;
+      case "hub.execution.agent.validate.request":
+        this.emit({
+          type: "hub.execution.agent.validate.response",
+          payload: { requestId: msg.requestId, valid: false, issues: [], error },
+        });
+        return undefined;
+      case "hub.execution.control.request":
+        this.emit({
+          type: "hub.execution.control.response",
+          payload: {
+            requestId: msg.requestId,
+            executionId: "",
+            action: "interrupt",
+            success: false,
+            error,
+          },
+        });
+        return undefined;
     }
     return undefined;
   }
@@ -7917,7 +7934,6 @@ export class Session {
     this.workspaceLabelSubscription?.unsubscribe();
     this.workspaceLabelSubscription = null;
     this.agentUpdates.dispose();
-    await this.hubExecutionController?.cleanup();
     if (this.unsubscribeTerminalWorkspaceContributionEvents) {
       this.unsubscribeTerminalWorkspaceContributionEvents();
       this.unsubscribeTerminalWorkspaceContributionEvents = null;

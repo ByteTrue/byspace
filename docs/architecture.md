@@ -179,11 +179,6 @@ The production relay server lives in [getpaseo/paseo-relay](https://github.com/g
 
 See [SECURITY.md](../SECURITY.md) for the full threat model.
 
-### Paseo Hub
-
-The optional Hub relationship is daemon-outbound and does not use the relay. Its connection,
-authorization, ownership, persistence, and lifecycle contract is documented in [hub.md](hub.md).
-
 ### `packages/website` — Marketing site
 
 TanStack Router + Cloudflare Workers. Serves the BySpace web experience.

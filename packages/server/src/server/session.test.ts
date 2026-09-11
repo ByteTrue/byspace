@@ -732,21 +732,12 @@ describe("workspace label editing", () => {
 });
 
 describe("session authorization permissions", () => {
-  test("routes named-agent validation through the session source", async () => {
+  test("hub execution validation is retired (issue 025 C7)", async () => {
     const messages: SessionOutboundMessage[] = [];
     const providers = createProviderSnapshotManagerStub();
-    providers.validateAgentConfiguration.mockResolvedValue([
-      { path: ["model"], message: "Model is unavailable" },
-    ]);
     const session = createSessionForTest({
       messages,
       providerSnapshotManager: providers.manager,
-      hubExecutionAgents: {
-        create: vi.fn(),
-        control: vi.fn(),
-        subscribe: vi.fn(() => () => undefined),
-        invalidateAuthority: vi.fn(),
-      },
     });
 
     await session.handleMessage({
@@ -756,16 +747,14 @@ describe("session authorization permissions", () => {
       model: "missing",
     });
 
-    expect(providers.validateAgentConfiguration).toHaveBeenCalledWith(
-      expect.objectContaining({ provider: "codex", model: "missing" }),
-    );
+    expect(providers.validateAgentConfiguration).not.toHaveBeenCalled();
     expect(messages).toContainEqual({
       type: "hub.execution.agent.validate.response",
       payload: {
         requestId: "validate-agent",
         valid: false,
-        issues: [{ path: ["model"], message: "Model is unavailable" }],
-        error: null,
+        issues: [],
+        error: "Hub integration is retired",
       },
     });
   });

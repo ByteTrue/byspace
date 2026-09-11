@@ -33,9 +33,7 @@ This BySpace version accepts these keys:
   [OpenCode permissions reference](https://opencode.ai/docs/permissions/). OpenCode permissions are
   application policy, not an OS sandbox.
 
-Each provider definition owns its option schema and exact MCP preapproval mapping. A new provider
-must fail closed for Hub unattended execution until it can approve one exact injected MCP server
-and tool identity without approving native tools.
+Each provider definition owns its option schema and exact MCP preapproval mapping.
 
 ## Two Integration Patterns
 

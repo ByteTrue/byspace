@@ -35,7 +35,6 @@ jobs:
       full: ${{ inputs.terminal_performance != true && (github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || steps.filter.outputs.routing != 'false' || steps.filter.outputs.workspace != 'false' || steps.filter.outputs.ci != 'false') }}
       format: ${{ inputs.terminal_performance != true && steps.filter.outputs.format != 'false' }}
       quality: ${{ inputs.terminal_performance != true && steps.filter.outputs.quality != 'false' }}
-      hub: ${{ inputs.terminal_performance != true && steps.filter.outputs.hub != 'false' }}
       server: ${{ inputs.terminal_performance != true && steps.filter.outputs.server != 'false' }}
       app: ${{ inputs.terminal_performance != true && steps.filter.outputs.app != 'false' }}
       sdk: ${{ inputs.terminal_performance != true && steps.filter.outputs.sdk != 'false' }}
@@ -294,14 +293,10 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
-      - name: Run Hub CLI/daemon contract
-        if: ${{ needs.changes.outputs.full == 'false' && needs.changes.outputs.server == 'false' && needs.changes.outputs.hub != 'false' }}
-        run: npm run test:hub-cli-contract --workspace=@getpaseo/server
-
   server-tests-windows:
     name: server-tests (windows-latest)
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.outputs.full != 'false' || needs.changes.outputs.server != 'false' || needs.changes.outputs.hub != 'false') }}
+    if: ${{ !cancelled() && (needs.changes.outputs.full != 'false' || needs.changes.outputs.server != 'false') }}
     runs-on: windows-latest
     steps: *server_test_steps
 
