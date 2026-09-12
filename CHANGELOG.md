@@ -5,6 +5,34 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.14.0 - 2026-09-12
+
+BySpace is now a web-first product: the browser and Home Screen PWA are the client,
+and the daemon serves its own web UI. This release removes the retired native and
+desktop surfaces and keeps the WebSocket protocol backward compatible.
+
+### Added
+
+- Added custom timeline message items so extensions surface structured status entries in agent conversations
+- Added an in-app changelog viewer under Help
+- Added mark-as-read and mark-as-unread actions for workspaces in the sidebar
+- Added custom agent provider configuration in config.json, connecting ACP agents, custom binaries, and API endpoints with profiles
+- The daemon now serves the bundled web UI by default, so a browser on the LAN connects without extra setup
+
+### Removed
+
+- Removed the iOS and Android native apps and their release pipelines
+- Removed the Electron desktop app and its update channel
+- Removed SSH remote host access; LAN access uses the bundled web UI and remote access uses the relay
+- Removed the plugin system; existing protocol messages keep parsing
+- Removed Hub integration; hub requests now return a retired response
+- Removed voice features: dictation, realtime voice mode, and text-to-speech
+- Removed Nix packaging
+
+### Fixed
+
+- Fixed OMP custom messages with missing display metadata breaking the timeline
+
 ## 0.13.0 - 2026-09-10
 
 > **macOS 13 or later is now required.** The desktop app moved to Electron 44, which does not run on macOS 12. Macs on macOS 12 stay on the version they have and stop receiving desktop updates.
