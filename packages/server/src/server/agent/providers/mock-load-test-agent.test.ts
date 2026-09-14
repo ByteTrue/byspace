@@ -372,6 +372,34 @@ describe("MockLoadTestAgentClient", () => {
     expect(events.at(-1)).toMatchObject({ type: "turn_completed" });
   });
 
+  test("emits a synthetic todowrite tool_call timeline item", async () => {
+    vi.useFakeTimers();
+    const client = new MockLoadTestAgentClient();
+    const session = await client.createSession({
+      provider: "mock",
+      cwd: process.cwd(),
+      model: "ten-second-stream",
+    });
+    const events: AgentStreamEvent[] = [];
+    const unsubscribe = session.subscribe((event) => events.push(event));
+
+    await session.startTurn("Emit synthetic todowrite.");
+    await vi.advanceTimersByTimeAsync(0);
+    unsubscribe();
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "timeline",
+        item: expect.objectContaining({
+          type: "tool_call",
+          name: "todowrite",
+          status: "completed",
+        }),
+      }),
+    );
+    expect(events.at(-1)).toMatchObject({ type: "turn_completed" });
+  });
+
   test("emits turn_started before the submitted user message", async () => {
     vi.useFakeTimers();
     const client = new MockLoadTestAgentClient();

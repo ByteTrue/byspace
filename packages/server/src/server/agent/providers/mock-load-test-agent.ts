@@ -249,6 +249,10 @@ function shouldEmitSyntheticCustomMessage(prompt: AgentPromptInput): boolean {
   return /emit\s+(?:a\s+)?synthetic\s+custom\s+message/i.test(promptToText(prompt));
 }
 
+function shouldEmitSyntheticToolCallTodo(prompt: AgentPromptInput): boolean {
+  return /emit\s+(?:a\s+)?synthetic\s+(?:todowrite|tool\s*call\s*todo)/i.test(promptToText(prompt));
+}
+
 function parseSteeringReplayShape(prompt: AgentPromptInput): SteeringReplayShape | null {
   const match = /replay a (claude|codex)-shaped foreground shell tool call/i.exec(
     promptToText(prompt),
@@ -838,6 +842,7 @@ export class MockLoadTestAgentSession implements AgentSession {
     const settledAssistantImageMarkdown = parseSettledAssistantImageMarkdown(prompt);
     const steeringReplayShape = parseSteeringReplayShape(prompt);
     const syntheticCustomMessage = shouldEmitSyntheticCustomMessage(prompt);
+    const syntheticToolCallTodo = shouldEmitSyntheticToolCallTodo(prompt);
     const scheduleTurn = () => {
       if (shouldEmitTurnFailure(prompt)) {
         this.scheduleFailedTurn(turn);
@@ -855,6 +860,8 @@ export class MockLoadTestAgentSession implements AgentSession {
         this.schedulePlanApprovalTurn(turn);
       } else if (syntheticCustomMessage) {
         this.scheduleSyntheticCustomMessageTurn(turn);
+      } else if (syntheticToolCallTodo) {
+        this.scheduleSyntheticToolCallTodoTurn(turn);
       } else if (questionPrompt) {
         this.scheduleQuestionPromptTurn(turn, questionPrompt);
       } else if (largePayload) {
@@ -1231,6 +1238,64 @@ export class MockLoadTestAgentSession implements AgentSession {
       this.emitSyntheticCustomMessageTurn(turn);
     }, 0);
     turn.timer.unref?.();
+  }
+
+  private scheduleSyntheticToolCallTodoTurn(turn: ActiveTurn): void {
+    turn.timer = setTimeout(() => {
+      this.emitSyntheticToolCallTodoTurn(turn);
+    }, 0);
+    turn.timer.unref?.();
+  }
+
+  private emitSyntheticToolCallTodoTurn(turn: ActiveTurn): void {
+    if (this.activeTurn !== turn) {
+      return;
+    }
+
+    this.clearTurnTimer(turn);
+    this.emitTurnStarted(turn);
+
+    const item: AgentTimelineItem = {
+      type: "tool_call",
+      callId: `mock-todowrite-${turn.turnId}`,
+      name: "todowrite",
+      status: "completed",
+      detail: {
+        type: "unknown",
+        input: {
+          todos: [
+            { content: "Setup scaffold", status: "completed" },
+            { content: "Implement tool call parser", status: "completed" },
+            { content: "Verify Tasks track button in browser", status: "in_progress" },
+            { content: "Submit PR", status: "pending" },
+          ],
+        },
+        output: null,
+      },
+      error: null,
+    };
+    this.emitTimeline(turn.turnId, item);
+    const finalText = "Synthetic todowrite tool call emitted";
+    this.activeTurn = null;
+    const usage = {
+      inputTokens: 10,
+      outputTokens: 20,
+      contextWindowUsedTokens: 30,
+      contextWindowMaxTokens: 128_000,
+    };
+    this.emit({
+      type: "turn_completed",
+      provider: this.provider,
+      turnId: turn.turnId,
+      usage,
+    });
+    turn.resolve({
+      sessionId: this.id,
+      finalText,
+      timeline: [item],
+      canceled: false,
+      usage,
+    });
   }
 
   private emitSyntheticCustomMessageTurn(turn: ActiveTurn): void {
