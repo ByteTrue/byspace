@@ -78,6 +78,20 @@ describe("sidebar-sort-projects", () => {
     expect(getProjectSortTier(activeProject, entries)).toBe(1);
     expect(getProjectSortTier(idleProject, entries)).toBe(2);
     expect(getProjectSortTier(emptyProject, entries)).toBe(3);
+
+    // Missing workspace entry defaults to non-active (Tier 2)
+    const missingEntryProject = makeProject("p-missing", "Missing", ["srv:unhydrated-ws"]);
+    expect(getProjectSortTier(missingEntryProject, entries)).toBe(2);
+  });
+
+  it("handles natural numeric sorting within the same tier", () => {
+    const entries = new Map<string, SidebarWorkspaceEntry>();
+    const p1 = makeProject("p-1", "App 1", []);
+    const p2 = makeProject("p-2", "App 2", []);
+    const p10 = makeProject("p-10", "App 10", []);
+
+    const sorted = sortProjectsByRules([p10, p1, p2], entries);
+    expect(sorted.map((p) => p.projectName)).toEqual(["App 1", "App 2", "App 10"]);
   });
 
   it("sorts projects into three tiers and alphabetically within each tier", () => {

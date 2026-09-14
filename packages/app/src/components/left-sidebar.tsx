@@ -57,7 +57,7 @@ import { MobilePanelOverlay } from "@/mobile-panels/presentation";
 import { buildSettingsAddHostRoute, buildSettingsRoute } from "@/utils/host-routes";
 import { openHostOverview } from "@/navigation/settings-navigation";
 import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
-import { mergeWithRemainder } from "@/utils/sidebar-reorder";
+import { hasVisibleOrderChanged, mergeWithRemainder } from "@/utils/sidebar-reorder";
 import { sortProjectsByRules } from "@/utils/sidebar-sort-projects";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarCalloutSlot } from "./sidebar-callout-slot";
@@ -821,6 +821,14 @@ function SortProjectsButton() {
     const sorted = sortProjectsByRules(allProjects, workspaceEntriesByKey);
     const sortedKeys = sorted.map((project) => project.viewKey);
     const currentOrder = getProjectOrder();
+    if (
+      !hasVisibleOrderChanged({
+        currentOrder,
+        reorderedVisibleKeys: sortedKeys,
+      })
+    ) {
+      return;
+    }
     setProjectOrder(
       mergeWithRemainder({
         currentOrder,
