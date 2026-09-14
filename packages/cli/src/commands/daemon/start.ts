@@ -12,26 +12,38 @@ import { getErrorMessage } from "../../utils/errors.js";
 const PID_FILE_POLL_ATTEMPTS = 50;
 const PID_FILE_POLL_INTERVAL_MS = 100;
 
+interface ResolvedDaemonEndpoints {
+  webUiUrl: string | null;
+  relayEnabled: boolean;
+}
+
 /** Web UI is enabled by default since 0.14.0; the pid file's listen target is authoritative. */
-async function resolveWebUiUrl(options: StartOptions): Promise<string | null> {
-  if (options.webUi === false) return null;
+async function resolveDaemonEndpoints(options: StartOptions): Promise<ResolvedDaemonEndpoints> {
+  const webUiEnabled = options.webUi !== false;
   for (let attempt = 0; attempt < PID_FILE_POLL_ATTEMPTS; attempt++) {
     try {
       const state = resolveLocalDaemonState({ home: options.home });
       const listen = state.listen;
-      const match = /^\[?([^:]+)]?:(\d+)$/.exec(listen);
-      if (match) {
-        const host = match[1] === "0.0.0.0" ? "127.0.0.1" : match[1];
-        return `http://${host}:${match[2]}`;
+      // The start command passes relay as an env override to the daemon, while
+      // resolveLocalDaemonState reports only persisted config; merge the two.
+      const relayEnabled = options.relay ?? state.relayEnabled;
+      let webUiUrl: string | null = null;
+      if (webUiEnabled) {
+        const match = /^\[?([^:]+)]?:(\d+)$/.exec(listen);
+        if (match) {
+          const host = match[1] === "0.0.0.0" ? "127.0.0.1" : match[1];
+          webUiUrl = `http://${host}:${match[2]}`;
+        } else if (/^\d+$/.test(listen)) {
+          webUiUrl = `http://127.0.0.1:${listen}`;
+        }
       }
-      if (!/^\d+$/.test(listen)) return null; // unix socket or unknown shape
-      return `http://127.0.0.1:${listen}`;
+      return { webUiUrl, relayEnabled };
     } catch {
       // daemon still writing the pid file
     }
     await sleep(PID_FILE_POLL_INTERVAL_MS);
   }
-  return null;
+  return { webUiUrl: null, relayEnabled: false };
 }
 
 export type { DaemonStartOptions as StartOptions } from "./local-daemon.js";
@@ -77,9 +89,12 @@ export async function runStart(options: StartOptions): Promise<void> {
     try {
       const startup = await startLocalDaemonDetached(options);
       console.log(chalk.green(`Daemon starting in background (PID ${startup.pid ?? "unknown"}).`));
-      const webUiUrl = await resolveWebUiUrl(options);
+      const { webUiUrl, relayEnabled } = await resolveDaemonEndpoints(options);
       if (webUiUrl) {
         console.log(chalk.cyan(`Web UI: ${webUiUrl}`));
+      }
+      if (relayEnabled) {
+        console.log(chalk.cyan("Online web: https://app.byspace.cc.cd (pair a device to connect)"));
       }
       console.log(chalk.dim(`Logs: ${startup.logPath}`));
     } catch (err) {
