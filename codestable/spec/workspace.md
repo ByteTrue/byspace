@@ -1,6 +1,7 @@
 # Workspace
 
 侧栏把 Workspace 按 Project 组织，行内呈现分支与宿主信息；行级操作走 hover 与菜单。
+侧栏提供一键整理 Project 顺序操作，按活跃（running/attention/needs_input/failed）、有 Workspace（全 done）、无 Workspace 三层排列，各层内按名称首字母 A–Z 升序。
 
 ## 分支与推送状态
 

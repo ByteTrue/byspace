@@ -1079,6 +1079,9 @@ export const ja: TranslationResources = {
     },
   },
   sidebar: {
+    sortProjects: {
+      label: "プロジェクト順序を整理",
+    },
     display: {
       trigger: "表示設定",
       heading: "表示",

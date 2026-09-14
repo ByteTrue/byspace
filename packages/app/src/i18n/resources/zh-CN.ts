@@ -1059,6 +1059,9 @@ export const zhCN: TranslationResources = {
     },
   },
   sidebar: {
+    sortProjects: {
+      label: "整理项目顺序",
+    },
     display: {
       trigger: "显示偏好",
       heading: "显示",

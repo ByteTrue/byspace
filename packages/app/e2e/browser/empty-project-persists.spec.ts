@@ -115,9 +115,9 @@ test.describe("Project picker search", () => {
 });
 
 // Projects are parents in the sidebar. Archiving the last workspace leaves the
-// project row in place with a ghost "+ New workspace" child row.
+// project row in place without a ghost child row.
 test.describe("Project with no workspaces persists", () => {
-  test("adding a project starts with only a new-workspace child row", async ({ page }) => {
+  test("adding a project starts with only the project header row", async ({ page }) => {
     const repo = await createTempGitRepo("empty-project-add-");
     const client = await connectSeedClient();
     let projectId: string | null = null;
@@ -133,8 +133,7 @@ test.describe("Project with no workspaces persists", () => {
       await expect(page.getByTestId(`sidebar-workspace-list-${projectId}`)).toHaveCount(0);
 
       const newWorkspaceRow = page.getByTestId(`sidebar-project-new-workspace-row-${projectId}`);
-      await expect(newWorkspaceRow).toBeVisible({ timeout: 30_000 });
-      await expect(newWorkspaceRow).toContainText("New workspace");
+      await expect(newWorkspaceRow).toHaveCount(0);
 
       const workspaces = await client.fetchWorkspaces({ filter: { projectId } });
       expect(workspaces.entries).toEqual([]);
@@ -172,22 +171,21 @@ test.describe("Project with no workspaces persists", () => {
 
       await archiveWorkspaceFromSidebar(page, workspace.workspaceId);
 
-      // The workspace row goes away, but its project parent stays and exposes a
-      // child row for creating the next workspace.
+      // The workspace row goes away, but its project parent stays and creation
+      // remains reachable from the project row action.
       await expect(page.getByTestId(workspaceRowTestId(workspace.workspaceId))).toHaveCount(0, {
         timeout: 30_000,
       });
       expect(existsSync(workspace.repoPath)).toBe(true);
       await expect(projectRow).toBeVisible({ timeout: 30_000 });
-      await expect(newWorkspaceRow).toBeVisible({ timeout: 30_000 });
-      await expect(newWorkspaceRow).toContainText("New workspace");
+      await expect(newWorkspaceRow).toHaveCount(0);
       await expect(globalNewWorkspace).toBeVisible({ timeout: 30_000 });
 
       // The project survives a reload after its last workspace is archived.
       await page.reload();
       await waitForSidebarHydration(page);
       await expect(projectRow).toBeVisible({ timeout: 30_000 });
-      await expect(newWorkspaceRow).toBeVisible({ timeout: 30_000 });
+      await expect(newWorkspaceRow).toHaveCount(0);
     } finally {
       await workspace.cleanup();
     }
@@ -239,7 +237,7 @@ test.describe("Project remove", () => {
         page.getByTestId(
           `sidebar-project-new-workspace-row-${projectEquivalenceViewKey(readdedProjectKey)}`,
         ),
-      ).toBeVisible({ timeout: 30_000 });
+      ).toHaveCount(0);
     } finally {
       if (readdedProjectId) {
         await workspace.client.removeProject(readdedProjectId).catch(() => undefined);

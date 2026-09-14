@@ -1075,6 +1075,9 @@ export const ko: TranslationResources = {
     },
   },
   sidebar: {
+    sortProjects: {
+      label: "프로젝트 순서 정렬",
+    },
     display: {
       trigger: "표시 설정",
       heading: "표시",

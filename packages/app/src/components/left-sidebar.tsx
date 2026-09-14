@@ -1,5 +1,13 @@
 import { router } from "expo-router";
-import { FolderPlus, GitBranch, Import, Server, Settings, X } from "lucide-react-native";
+import {
+  ArrowDownAZ,
+  FolderPlus,
+  GitBranch,
+  Import,
+  Server,
+  Settings,
+  X,
+} from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
@@ -14,7 +22,7 @@ import { Gesture } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { resolveDesktopSidebarWidth } from "@/components/desktop-sidebar-layout";
 import {
   SIDEBAR_RESIZE_ACTIVATION_OFFSET,
@@ -48,9 +56,16 @@ import { useCloseAgentListGesture } from "@/mobile-panels/gestures";
 import { MobilePanelOverlay } from "@/mobile-panels/presentation";
 import { buildSettingsAddHostRoute, buildSettingsRoute } from "@/utils/host-routes";
 import { openHostOverview } from "@/navigation/settings-navigation";
+import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
+import { hasVisibleOrderChanged, mergeWithRemainder } from "@/utils/sidebar-reorder";
+import { sortProjectsByRules } from "@/utils/sidebar-sort-projects";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarCalloutSlot } from "./sidebar-callout-slot";
 import { SidebarWorkspaceList } from "./sidebar-workspace-list";
+import type { Theme } from "@/styles/theme";
+
+const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 type SidebarTheme = ReturnType<typeof useUnistyles>["theme"];
 
@@ -793,11 +808,77 @@ function DesktopSidebar({
   );
 }
 
+const ThemedArrowDownAZ = withUnistyles(ArrowDownAZ);
+
+function SortProjectsButton() {
+  const { allProjects, workspaceEntriesByKey } = useSidebarModel();
+  const getProjectOrder = useSidebarOrderStore((state) => state.getProjectOrder);
+  const setProjectOrder = useSidebarOrderStore((state) => state.setProjectOrder);
+  const { t } = useTranslation();
+
+  const handleSort = useCallback(() => {
+    if (allProjects.length === 0) return;
+    const sorted = sortProjectsByRules(allProjects, workspaceEntriesByKey);
+    const sortedKeys = sorted.map((project) => project.viewKey);
+    const currentOrder = getProjectOrder();
+    if (
+      !hasVisibleOrderChanged({
+        currentOrder,
+        reorderedVisibleKeys: sortedKeys,
+      })
+    ) {
+      return;
+    }
+    setProjectOrder(
+      mergeWithRemainder({
+        currentOrder,
+        reorderedVisibleKeys: sortedKeys,
+      }),
+    );
+  }, [allProjects, getProjectOrder, setProjectOrder, workspaceEntriesByKey]);
+
+  const buttonStyle = useCallback(
+    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.headerActionButton,
+      hovered && styles.headerActionButtonHovered,
+      pressed && styles.headerActionButtonPressed,
+    ],
+    [],
+  );
+
+  const label = t("sidebar.sortProjects.label", { defaultValue: "Sort projects" });
+
+  return (
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger asChild>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          onPress={handleSort}
+          style={buttonStyle}
+          testID="sidebar-sort-projects-button"
+        >
+          {({ hovered }) => (
+            <ThemedArrowDownAZ
+              size={14}
+              uniProps={hovered ? foregroundColorMapping : foregroundMutedColorMapping}
+            />
+          )}
+        </Pressable>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" align="center" offset={8}>
+        <IconTooltipContent label={label} />
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 function WorkspacesSectionHeader() {
   return (
     <View style={styles.workspacesSectionHeader}>
       <Text style={styles.workspacesSectionTitle}>Workspaces</Text>
       <View style={styles.workspacesSectionActions}>
+        <SortProjectsButton />
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
             <View>
@@ -862,6 +943,19 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
+  },
+  headerActionButton: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.md,
+  },
+  headerActionButtonHovered: {
+    backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  headerActionButtonPressed: {
+    backgroundColor: theme.colors.surface2,
   },
   sidebarContent: {
     flex: 1,
