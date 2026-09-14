@@ -169,7 +169,8 @@ export function resolveProjectSelection(
       (project) =>
         project.viewKey === selection.originProject.viewKey &&
         (selection.originProject.projectKey === null ||
-          project.projectKey === selection.originProject.projectKey),
+          project.projectKey === selection.originProject.projectKey) &&
+        project.hosts.some((h) => h.serverId === context.selectedServerId),
     );
     if (matchedManual) {
       return matchedManual;

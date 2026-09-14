@@ -96,16 +96,19 @@ export function useNewWorkspaceProjectPicker({
       project.hosts.some((host) => host.worktreeSupport !== "unsupported"),
     );
   }, [allowAllProjects, projects]);
-  const initialProject = useMemo(
-    () =>
+  const initialProject = useMemo(() => {
+    const hostProjects = selectableProjects.filter((p) =>
+      p.hosts.some((h) => h.serverId === selectedServerId),
+    );
+    return (
       resolveInitialProject({
         routeProject,
         lastActiveProject,
-        projects: selectableProjects,
+        projects: hostProjects,
         allowAllProjects,
-      }),
-    [allowAllProjects, lastActiveProject, routeProject, selectableProjects],
-  );
+      }) ?? null
+    );
+  }, [allowAllProjects, lastActiveProject, routeProject, selectableProjects, selectedServerId]);
 
   const selectionContextKey = createProjectSelectionContextKey({
     selectedServerId,

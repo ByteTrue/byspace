@@ -1725,14 +1725,6 @@ export function NewWorkspaceScreen({
     return matched.length > 0 ? matched : allHosts;
   }, [allHosts, selectedProject]);
 
-  useEffect(() => {
-    if (availableHosts.length === 0) return;
-    const isCurrentHostAvailable = availableHosts.some((h) => h.serverId === selectedServerId);
-    if (!isCurrentHostAvailable && availableHosts[0]) {
-      handleSelectHost(availableHosts[0].serverId);
-    }
-  }, [availableHosts, handleSelectHost, selectedServerId]);
-
   const projectIconTargets = useMemo(
     () => buildNewWorkspaceProjectIconTargets(projects, selectedServerId),
     [projects, selectedServerId],
