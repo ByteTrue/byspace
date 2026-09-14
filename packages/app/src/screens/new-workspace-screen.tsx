@@ -1365,6 +1365,7 @@ interface NewWorkspaceFormStackInput {
   };
   host: FormPickerControl & {
     allHosts: HostProfile[];
+    systemHosts?: HostProfile[];
     selectedServerId: string;
     onSelect: (id: string) => void;
   };
@@ -1401,9 +1402,10 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
   const { t } = useTranslation();
   const { isCompact, isPending, project, host, isolation, base, launch } = input;
 
+  const systemHosts = host.systemHosts ?? host.allHosts;
   const selectedHostLabel =
-    host.allHosts.find((h) => h.serverId === host.selectedServerId)?.label ?? "Host";
-  const showHostControl = host.allHosts.length > 1;
+    systemHosts.find((h) => h.serverId === host.selectedServerId)?.label ?? "Host";
+  const showHostControl = systemHosts.length > 1;
   const isolationTriggerLabel = isolationLabel(t, isolation.effectiveIsolation);
   const addProjectAction = useMemo(
     () => <AddProjectPickerAction onPress={project.onAddProject} />,
@@ -1715,7 +1717,7 @@ export function NewWorkspaceScreen({
   });
 
   const availableHosts = useMemo(() => {
-    if (!selectedProject || selectedProject.hosts.length === 0) {
+    if (!selectedProject || selectedProject.hosts.length <= 1) {
       return allHosts;
     }
     const projectHostSet = new Set(selectedProject.hosts.map((h) => h.serverId));
@@ -2358,6 +2360,7 @@ export function NewWorkspaceScreen({
     },
     host: {
       allHosts: availableHosts,
+      systemHosts: allHosts,
       selectedServerId,
       onSelect: handleSelectWorkspaceHost,
       openState: hostPickerOpen,
