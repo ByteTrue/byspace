@@ -2,7 +2,7 @@
 kind: issue
 title: "CI/CD 关键路径耗时优化"
 type: chore
-status: open
+status: closed
 created: 2026-09-14
 ---
 
@@ -63,6 +63,6 @@ v0.14.0 发布（2026-09-14）暴露的耗时数据（40 个 run 的逐 job 实�
 
 ## 关闭时
 
-- 回写候选：`docs/development.md` 或 `docs/qa.md` 若提及 CI 时长/分片约定；`codestable/notes/` 若沉淀 buildx 缓存 key 的结论。
-- 关闭判断：CI wall ≤ 25m 实测 + 全绿 + Docker PR build 恢复缓存命中。
-- 遗留：build 产物 artifact 化（若 8 分片仍不达标时的下一步）；playwright 用例级提速（不在本轮）。
+- **关闭判断（2026-09-14 达成）：** CI wall 39m → 14m 实测（≤ 25m 目标达成），全绿；Docker PR build 缓存命中后 6m（依赖不变路径）。Windows flaky 源消除。
+- **毕业回写：** 无需改 spec——CI 分片数是易变的运维参数，不值得进 project spec；Dockerfile 拆层与 postinstall/prepare 剥除的取舍已作为代码注释留在 Dockerfile 内（注释即文档）。
+- **遗留（未立项，需要时再说）：** build 产物 artifact 化（若未来 CI 再变慢的下一步）；playwright 用例级提速；windows server-tests 13m 的时间优化（慢在 runner 本身，非测试逻辑）。
