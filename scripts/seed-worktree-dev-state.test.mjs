@@ -38,10 +38,8 @@ function runSetup(sourceRoot, targetRoot, extraEnv = {}) {
 test("keeps worktree setup commands portable across PowerShell and POSIX shells", () => {
   assert.deepEqual(byspaceConfig.worktree.setup, [
     "npm ci",
-    "node ./scripts/seed-ios-native-cache.mjs",
     "node ./scripts/seed-worktree-dev-state.mjs",
     "npm run build:server",
-    "npm run build --workspace=@getpaseo/expo-two-way-audio",
   ]);
 });
 

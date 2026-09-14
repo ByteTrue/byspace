@@ -1,25 +1,27 @@
 /** Plugin workspace-panel location rules shim (issue 025 C6).
  *
- * No plugin panels exist, so every target supports every host and every
- * workspace key; the plugin panel location filter passes nothing.
+ * No plugin panels exist, so plugin targets no longer consult a registry.
+ * Built-in panel host rules still apply: non-plugin targets delegate to
+ * panelSupportsHost exactly as before.
  */
+
+import type { PaneHost } from "@/panels/panel-manifest";
+import { panelSupportsHost } from "@/panels/panel-manifest";
+import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 
 export function panelTargetSupportsHost(
   _serverId: string,
-  _target: unknown,
-  _destinationHost: unknown,
-): true {
-  return true;
+  target: WorkspaceTabTarget,
+  host: PaneHost,
+): boolean {
+  if (target.kind === "plugin") return true;
+  return panelSupportsHost(target.kind, host);
 }
 
 export function panelTargetSupportsHostForWorkspaceKey(
   _workspaceKey: string,
-  _target: unknown,
-  _destinationHost: unknown,
-): true {
-  return true;
-}
-
-export function pluginPanelSupportsLocation(_panel: unknown, _location: unknown): false {
-  return false;
+  target: WorkspaceTabTarget,
+  host: PaneHost,
+): boolean {
+  return panelTargetSupportsHost("", target, host);
 }

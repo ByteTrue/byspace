@@ -178,7 +178,7 @@ Use the named root build targets instead of remembering workspace dependency cha
 npm run build:client       # protocol -> client
 npm run build:server-deps  # highlight -> relay -> protocol -> client
 npm run build:server       # server-deps -> server -> cli
-npm run build:app-deps     # highlight -> protocol -> client -> expo-two-way-audio
+npm run build:app-deps     # highlight -> protocol -> client
 ```
 
 Use `npm run build:server` whenever you have changed any daemon/server-facing package and need clean cross-package types or runtime behavior.
