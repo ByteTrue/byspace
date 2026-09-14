@@ -344,6 +344,34 @@ describe("MockLoadTestAgentClient", () => {
     });
   });
 
+  test("emits a synthetic custom_message timeline item", async () => {
+    vi.useFakeTimers();
+    const client = new MockLoadTestAgentClient();
+    const session = await client.createSession({
+      provider: "mock",
+      cwd: process.cwd(),
+      model: "ten-second-stream",
+    });
+    const events: AgentStreamEvent[] = [];
+    const unsubscribe = session.subscribe((event) => events.push(event));
+
+    await session.startTurn("Emit a synthetic custom message.");
+    await vi.advanceTimersByTimeAsync(0);
+    unsubscribe();
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "timeline",
+        item: expect.objectContaining({
+          type: "custom_message",
+          customType: "background-exit",
+          display: true,
+        }),
+      }),
+    );
+    expect(events.at(-1)).toMatchObject({ type: "turn_completed" });
+  });
+
   test("emits turn_started before the submitted user message", async () => {
     vi.useFakeTimers();
     const client = new MockLoadTestAgentClient();

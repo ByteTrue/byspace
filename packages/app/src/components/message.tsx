@@ -171,8 +171,6 @@ const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const ThemedNotificationInfo = withUnistyles(Info);
 const ThemedNotificationWarning = withUnistyles(TriangleAlertIcon);
 const ThemedNotificationError = withUnistyles(XCircle);
-const customMessageChevronMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const foregroundMutedColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
@@ -2166,95 +2164,60 @@ interface CustomMessageProps {
   disableOuterSpacing?: boolean;
 }
 
-const CUSTOM_MESSAGE_COLLAPSED_LINE_COUNT = 6;
-const CUSTOM_MESSAGE_CHEVRON_EXPANDED_STYLE = { transform: [{ rotate: "90deg" }] };
-
-const customMessageStylesheet = StyleSheet.create((theme) => ({
-  container: {
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.surface1,
-    overflow: "hidden",
+const customMessageDetailsStylesheet = StyleSheet.create((theme) => ({
+  wrapper: {
+    padding: theme.spacing[2],
   },
-  containerSpacing: {
-    marginBottom: theme.spacing[1],
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    paddingTop: 10,
-    paddingBottom: theme.spacing[1],
-  },
-  contentText: {
+  text: {
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
-    lineHeight: 20,
-    paddingHorizontal: theme.spacing[3],
-    paddingBottom: 10,
-  },
-  headerLabel: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.mono,
-    flexShrink: 1,
-  },
-  chevron: {
-    flexShrink: 0,
+    fontSize: theme.fontSize.code,
+    lineHeight: 18,
   },
 }));
 
+function customMessagePreview(content: string): string {
+  const newlineIndex = content.indexOf("\n");
+  return (newlineIndex === -1 ? content : content.slice(0, newlineIndex)).trim();
+}
+
 /**
  * Timeline card for extension-injected custom messages (Pi sendMessage / OMP custom).
- * Rendered with distinct styling so it never reads as the agent's own words, mirroring
- * Pi's TUI treatment (labelled box instead of plain transcript text).
+ * Reuses the same collapsible-badge shell as tool calls and todo updates
+ * (`ExpandableBadge`) instead of a bespoke box, so it reads as one more
+ * timeline entry — collapsed to a one-line label + preview, expandable for
+ * the full text — while still never reading as the agent's own words.
  */
 export const CustomMessage = memo(function CustomMessage({
   customType,
   content,
   disableOuterSpacing,
 }: CustomMessageProps) {
-  const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
   const [expanded, setExpanded] = useState(false);
   const toggleExpanded = useCallback(() => setExpanded((prev) => !prev), []);
-  const accessibilityState = useMemo(() => ({ expanded }), [expanded]);
-
-  const containerStyle = useMemo(
-    () => [
-      customMessageStylesheet.container,
-      !resolvedDisableOuterSpacing && customMessageStylesheet.containerSpacing,
-    ],
-    [resolvedDisableOuterSpacing],
+  const secondaryLabel = useMemo(() => customMessagePreview(content), [content]);
+  const renderDetails = useCallback(
+    () => (
+      <View style={customMessageDetailsStylesheet.wrapper}>
+        <Text style={customMessageDetailsStylesheet.text} selectable>
+          {content}
+        </Text>
+      </View>
+    ),
+    [content],
   );
+
   return (
-    <View style={containerStyle}>
-      <Pressable
-        onPress={toggleExpanded}
-        accessibilityRole="button"
-        accessibilityLabel={customType}
-        accessibilityState={accessibilityState}
-      >
-        <View style={customMessageStylesheet.headerRow}>
-          <Text style={customMessageStylesheet.headerLabel} numberOfLines={1}>
-            [{customType}]
-          </Text>
-          <View style={customMessageStylesheet.chevron}>
-            <ThemedChevronRightIcon
-              size={12}
-              uniProps={customMessageChevronMapping}
-              style={expanded ? CUSTOM_MESSAGE_CHEVRON_EXPANDED_STYLE : undefined}
-            />
-          </View>
-        </View>
-      </Pressable>
-      <Text
-        style={customMessageStylesheet.contentText}
-        selectable
-        numberOfLines={expanded ? undefined : CUSTOM_MESSAGE_COLLAPSED_LINE_COUNT}
-      >
-        {content}
-      </Text>
-    </View>
+    <ExpandableBadge
+      testID="custom-message-badge"
+      label={customType}
+      secondaryLabel={secondaryLabel}
+      icon={Info}
+      isExpanded={expanded}
+      onToggle={toggleExpanded}
+      renderDetails={renderDetails}
+      disableOuterSpacing={disableOuterSpacing}
+    />
   );
 });
 
