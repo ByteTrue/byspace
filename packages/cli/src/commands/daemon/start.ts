@@ -1,11 +1,38 @@
+import { setTimeout as sleep } from "node:timers/promises";
 import { Command, Option } from "commander";
 import chalk from "chalk";
 import {
   startLocalDaemonForeground,
   startLocalDaemonDetached,
+  resolveLocalDaemonState,
   type DaemonStartOptions as StartOptions,
 } from "./local-daemon.js";
 import { getErrorMessage } from "../../utils/errors.js";
+
+const PID_FILE_POLL_ATTEMPTS = 50;
+const PID_FILE_POLL_INTERVAL_MS = 100;
+
+/** Web UI is enabled by default since 0.14.0; the pid file's listen target is authoritative. */
+async function resolveWebUiUrl(options: StartOptions): Promise<string | null> {
+  if (options.webUi === false) return null;
+  for (let attempt = 0; attempt < PID_FILE_POLL_ATTEMPTS; attempt++) {
+    try {
+      const state = resolveLocalDaemonState({ home: options.home });
+      const listen = state.listen;
+      const match = /^\[?([^:]+)]?:(\d+)$/.exec(listen);
+      if (match) {
+        const host = match[1] === "0.0.0.0" ? "127.0.0.1" : match[1];
+        return `http://${host}:${match[2]}`;
+      }
+      if (!/^\d+$/.test(listen)) return null; // unix socket or unknown shape
+      return `http://127.0.0.1:${listen}`;
+    } catch {
+      // daemon still writing the pid file
+    }
+    await sleep(PID_FILE_POLL_INTERVAL_MS);
+  }
+  return null;
+}
 
 export type { DaemonStartOptions as StartOptions } from "./local-daemon.js";
 
@@ -50,6 +77,10 @@ export async function runStart(options: StartOptions): Promise<void> {
     try {
       const startup = await startLocalDaemonDetached(options);
       console.log(chalk.green(`Daemon starting in background (PID ${startup.pid ?? "unknown"}).`));
+      const webUiUrl = await resolveWebUiUrl(options);
+      if (webUiUrl) {
+        console.log(chalk.cyan(`Web UI: ${webUiUrl}`));
+      }
       console.log(chalk.dim(`Logs: ${startup.logPath}`));
     } catch (err) {
       exitWithError(getErrorMessage(err));
