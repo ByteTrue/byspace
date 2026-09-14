@@ -3726,6 +3726,48 @@ describe("processAgentStreamEvent", () => {
     expect(gapped.taskSnapshot).toBeUndefined();
   });
 
+  it("publishes task snapshots from accepted todowrite tool_call events", () => {
+    const event: AgentStreamEventPayload = {
+      type: "timeline",
+      provider: "pi",
+      item: {
+        type: "tool_call",
+        callId: "call-todo-1",
+        name: "todowrite",
+        status: "completed",
+        detail: {
+          type: "unknown",
+          input: {
+            todos: [
+              { content: "Task 1", status: "completed" },
+              { content: "Task 2", status: "in_progress" },
+            ],
+          },
+          output: null,
+        },
+        error: null,
+      },
+    } as unknown as AgentStreamEventPayload;
+    const currentCursor: TimelineCursor = {
+      epoch: "epoch-1",
+      startSeq: 1,
+      endSeq: 4,
+    };
+
+    const accepted = processAgentStreamEvent({
+      ...baseStreamInput,
+      event,
+      seq: 5,
+      epoch: "epoch-1",
+      currentCursor,
+    });
+
+    expect(accepted.taskSnapshot).toEqual([
+      { text: "Task 1", completed: true, status: "completed" },
+      { text: "Task 2", completed: false, status: "in_progress" },
+    ]);
+  });
+
   it("detects gap and emits catch-up side effect", () => {
     const existingCursor: TimelineCursor = {
       epoch: "epoch-1",

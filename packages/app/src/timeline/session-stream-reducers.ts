@@ -5,6 +5,7 @@ import type { AssistantMessageItem, StreamItem, TodoEntry } from "@/types/stream
 import type { TurnLivenessTransition } from "@/timeline/turn-liveness";
 import {
   applyStreamEvent,
+  extractTaskSnapshotFromStreamEvent,
   flushHeadToTail,
   hydrateStreamState,
   isAgentToolCallItem,
@@ -1662,6 +1663,10 @@ export function processAgentStreamEvent(
   }
   const { tail, head, changedTail, changedHead } = streamResult;
 
+  const taskSnapshot = sequencing.shouldApplyStreamEvent
+    ? extractTaskSnapshotFromStreamEvent(event)
+    : undefined;
+
   return {
     tail,
     head,
@@ -1670,9 +1675,7 @@ export function processAgentStreamEvent(
     cursor: sequencing.nextTimelineCursor,
     cursorChanged: sequencing.cursorChanged,
     acknowledgedClientMessageIds: streamResult.acknowledgedClientMessageIds ?? [],
-    ...(sequencing.shouldApplyStreamEvent && event.type === "timeline" && event.item.type === "todo"
-      ? { taskSnapshot: event.item.items }
-      : {}),
+    ...(taskSnapshot !== undefined ? { taskSnapshot } : {}),
     sideEffects: sequencing.sideEffects,
   };
 }

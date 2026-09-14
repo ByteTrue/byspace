@@ -1142,7 +1142,10 @@ export function mergeToolCallDetail(
 }
 
 function inputFromUnknownDetail(detail: ToolCallDetail): unknown {
-  return detail.type === "unknown" ? detail.input : null;
+  if (!detail || typeof detail !== "object") return null;
+  if (detail.type === "unknown") return detail.input;
+  if ("input" in detail) return (detail as { input: unknown }).input;
+  return null;
 }
 
 function mergeAgentToolCallStatus(
@@ -1429,7 +1432,11 @@ function reduceTimelineToolCall(
     return appendTodoList(
       state,
       event.provider,
-      tasks.map((entry) => ({ text: entry.text, completed: entry.completed })),
+      tasks.map((entry) => ({
+        text: entry.text,
+        completed: entry.completed,
+        status: entry.status,
+      })),
       timestamp,
       timelineCursor,
     );
@@ -1449,7 +1456,11 @@ function reduceTimelineToolCall(
     return appendTodoList(
       state,
       event.provider,
-      tasks.map((entry) => ({ text: entry.text, completed: entry.completed })),
+      tasks.map((entry) => ({
+        text: entry.text,
+        completed: entry.completed,
+        status: entry.status,
+      })),
       timestamp,
       timelineCursor,
     );
@@ -2177,4 +2188,30 @@ export function applyStreamEvent(params: {
   }
 
   return { tail: nextTail, head: nextHead, changedTail, changedHead };
+}
+
+export function extractTaskSnapshotFromStreamEvent(
+  event: AgentStreamEventPayload,
+): TodoEntry[] | undefined {
+  if (event.type !== "timeline") {
+    return undefined;
+  }
+  if (event.item.type === "todo") {
+    return event.item.items;
+  }
+  if (event.item.type === "tool_call") {
+    const tasks = extractTaskEntriesFromToolCall(
+      event.item.name,
+      inputFromUnknownDetail(event.item.detail),
+    );
+    if (!tasks) {
+      return undefined;
+    }
+    return tasks.map((entry) => ({
+      text: entry.text,
+      completed: entry.completed,
+      status: entry.status,
+    }));
+  }
+  return undefined;
 }
