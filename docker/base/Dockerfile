@@ -8,16 +8,31 @@ ARG PASEO_VERSION
 ENV ONNXRUNTIME_NODE_INSTALL=skip
 
 WORKDIR /tmp/paseo-src
+
+# Manifests first so `npm ci` layer survives source-only changes (issue 027).
+COPY package.json package-lock.json ./
+COPY packages/highlight/package.json packages/highlight/
+COPY packages/protocol/package.json packages/protocol/
+COPY packages/client/package.json packages/client/
+COPY packages/app/package.json packages/app/
+COPY packages/relay/package.json packages/relay/
+COPY packages/server/package.json packages/server/
+COPY packages/cli/package.json packages/cli/
+
+RUN set -eux; \
+    node -e 'const fs=require("node:fs"); const pkg=JSON.parse(fs.readFileSync("package.json","utf8")); delete pkg.scripts.prepare; fs.writeFileSync("package.json", `${JSON.stringify(pkg)}\n`);'; \
+    npm ci
+
 COPY . .
+
+# COPY restored the original package.json (with its prepare hook); strip it
+# again so `npm pack` below does not try to run lefthook inside the container.
+RUN node -e 'const fs=require("node:fs"); const pkg=JSON.parse(fs.readFileSync("package.json","utf8")); delete pkg.scripts.prepare; fs.writeFileSync("package.json", `${JSON.stringify(pkg)}\n`);'
 
 RUN set -eux; \
     if [ -n "${PASEO_VERSION:-}" ]; then \
       test "$(node -p "require('./package.json').version")" = "${PASEO_VERSION}"; \
     fi; \
-    node -e 'const fs=require("node:fs"); const pkg=JSON.parse(fs.readFileSync("package.json","utf8")); delete pkg.scripts.prepare; fs.writeFileSync("package.json", `${JSON.stringify(pkg)}\n`);'; \
-    npm ci
-
-RUN set -eux; \
     mkdir -p /tmp/paseo-packs; \
     npm pack --workspace=@getpaseo/highlight --pack-destination /tmp/paseo-packs; \
     npm pack --workspace=@getpaseo/relay --pack-destination /tmp/paseo-packs; \

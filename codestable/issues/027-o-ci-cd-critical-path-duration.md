@@ -57,7 +57,7 @@ v0.14.0 发布（2026-09-14）暴露的耗时数据（40 个 run 的逐 job 实�
 
 ## 执行记录
 
-[实现阶段追加。]
+- **2026-09-14：** A——ci.yml playwright 分片 4→8（`PLAYWRIGHT_SHARD: N/8`，job 5–8 追加，`ci-workflow.test.mjs` 期望同步）。B——file-observer 千并发压测 `test.skipIf(win32)`，注释记录两次 flaky 证据与 ubuntu 覆盖理由。C——`docker/base/Dockerfile` 拆层：7 个 workspace 的 package.json + 根 manifest 先 COPY 使 `npm ci` layer 只随依赖变化失效；`COPY . .` 后重新剥 `scripts.prepare`（防止 `npm pack` 在容器内触发 lefthook），`.dockerignore` 已排除 node_modules/dist。本地 Docker daemon 未运行，Dockerfile 变更由 CI 的非发布 build 验证。
 
 ## 关闭时
 
