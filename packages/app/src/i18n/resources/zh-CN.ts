@@ -1159,6 +1159,11 @@ export const zhCN: TranslationResources = {
         removeMessage: "从侧边栏移除「{{projectName}}」？\n\n磁盘上的文件不会被更改。",
         removeConfirm: "移除",
         cancel: "取消",
+        removeMultiHostTitle: "移除 project",
+        removeMultiHostPrompt: "选择从何处移除「{{projectName}}」：",
+        removeFromHost: "仅从 {{hostName}} 移除",
+        removeFromAllHosts: "从所有设备移除",
+        removeNote: "磁盘上的文件不会被更改。",
       },
       toasts: {
         hostDisconnected: "Host 未连接",

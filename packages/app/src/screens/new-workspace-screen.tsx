@@ -1365,6 +1365,7 @@ interface NewWorkspaceFormStackInput {
   };
   host: FormPickerControl & {
     allHosts: HostProfile[];
+    systemHosts?: HostProfile[];
     selectedServerId: string;
     onSelect: (id: string) => void;
   };
@@ -1401,9 +1402,10 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
   const { t } = useTranslation();
   const { isCompact, isPending, project, host, isolation, base, launch } = input;
 
+  const systemHosts = host.systemHosts ?? host.allHosts;
   const selectedHostLabel =
-    host.allHosts.find((h) => h.serverId === host.selectedServerId)?.label ?? "Host";
-  const showHostControl = host.allHosts.length > 1;
+    systemHosts.find((h) => h.serverId === host.selectedServerId)?.label ?? "Host";
+  const showHostControl = systemHosts.length > 1;
   const isolationTriggerLabel = isolationLabel(t, isolation.effectiveIsolation);
   const addProjectAction = useMemo(
     () => <AddProjectPickerAction onPress={project.onAddProject} />,
@@ -1713,6 +1715,16 @@ export function NewWorkspaceScreen({
     lastActiveProject,
     allowAllProjects: supportsWorkspaceMultiplicity,
   });
+
+  const availableHosts = useMemo(() => {
+    if (!selectedProject || selectedProject.hosts.length <= 1) {
+      return allHosts;
+    }
+    const projectHostSet = new Set(selectedProject.hosts.map((h) => h.serverId));
+    const matched = allHosts.filter((h) => projectHostSet.has(h.serverId));
+    return matched.length > 0 ? matched : allHosts;
+  }, [allHosts, selectedProject]);
+
   const projectIconTargets = useMemo(
     () => buildNewWorkspaceProjectIconTargets(projects, selectedServerId),
     [projects, selectedServerId],
@@ -1879,6 +1891,14 @@ export function NewWorkspaceScreen({
     [chatDraft],
   );
 
+  const handleSelectWorkspaceHost = useCallback(
+    (id: string) => {
+      handleSelectHost(id);
+      clearPickerSelectionForTargetChange(selectedServerId, id);
+    },
+    [clearPickerSelectionForTargetChange, handleSelectHost, selectedServerId],
+  );
+
   const handleSelectProjectOption = useCallback(
     (id: string) => {
       // selectProjectOption enforces selectability (worktree-only when
@@ -1887,16 +1907,26 @@ export function NewWorkspaceScreen({
       selectProjectOption(id);
       setProjectPickerOpen(false);
       clearPickerSelectionForTargetChange(selectedProjectOptionId, id);
-    },
-    [clearPickerSelectionForTargetChange, selectProjectOption, selectedProjectOptionId],
-  );
 
-  const handleSelectWorkspaceHost = useCallback(
-    (id: string) => {
-      handleSelectHost(id);
-      clearPickerSelectionForTargetChange(selectedServerId, id);
+      const targetProject = projectByOptionId.get(id);
+      if (targetProject && targetProject.hosts.length > 0) {
+        const isCurrentHostValid = targetProject.hosts.some((h) => h.serverId === selectedServerId);
+        if (!isCurrentHostValid) {
+          const nextHost = targetProject.hosts[0];
+          if (nextHost) {
+            handleSelectWorkspaceHost(nextHost.serverId);
+          }
+        }
+      }
     },
-    [clearPickerSelectionForTargetChange, handleSelectHost, selectedServerId],
+    [
+      clearPickerSelectionForTargetChange,
+      handleSelectWorkspaceHost,
+      projectByOptionId,
+      selectProjectOption,
+      selectedProjectOptionId,
+      selectedServerId,
+    ],
   );
 
   const handleAddProject = useCallback(() => {
@@ -2321,7 +2351,8 @@ export function NewWorkspaceScreen({
       renderOption: renderProjectOption,
     },
     host: {
-      allHosts,
+      allHosts: availableHosts,
+      systemHosts: allHosts,
       selectedServerId,
       onSelect: handleSelectWorkspaceHost,
       openState: hostPickerOpen,

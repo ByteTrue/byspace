@@ -2,9 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ComboboxOption as ComboboxOptionType } from "@/components/ui/combobox";
 import { isWorkspaceArchivePending } from "@/contexts/session-workspace-upserts";
 import {
-  filterWorkspaceProjectsForHost,
   getHostProjectSourceDirectory,
-  resolveInitialWorkspaceProject,
+  resolveInitialProject,
   type HostProjectListItem,
 } from "@/projects/host-projects";
 import {
@@ -89,22 +88,27 @@ export function useNewWorkspaceProjectPicker({
   lastActiveProject,
   allowAllProjects,
 }: NewWorkspaceProjectPickerInput): NewWorkspaceProjectPickerState {
-  const selectableProjects = useMemo(
-    () =>
-      filterWorkspaceProjectsForHost({ projects, serverId: selectedServerId, allowAllProjects }),
-    [allowAllProjects, projects, selectedServerId],
-  );
-  const initialProject = useMemo(
-    () =>
-      resolveInitialWorkspaceProject({
+  const selectableProjects = useMemo(() => {
+    if (allowAllProjects) {
+      return projects;
+    }
+    return projects.filter((project) =>
+      project.hosts.some((host) => host.worktreeSupport !== "unsupported"),
+    );
+  }, [allowAllProjects, projects]);
+  const initialProject = useMemo(() => {
+    const hostProjects = selectableProjects.filter((p) =>
+      p.hosts.some((h) => h.serverId === selectedServerId),
+    );
+    return (
+      resolveInitialProject({
         routeProject,
         lastActiveProject,
-        projects: selectableProjects,
-        serverId: selectedServerId,
+        projects: hostProjects,
         allowAllProjects,
-      }),
-    [allowAllProjects, lastActiveProject, routeProject, selectableProjects, selectedServerId],
-  );
+      }) ?? null
+    );
+  }, [allowAllProjects, lastActiveProject, routeProject, selectableProjects, selectedServerId]);
 
   const selectionContextKey = createProjectSelectionContextKey({
     selectedServerId,

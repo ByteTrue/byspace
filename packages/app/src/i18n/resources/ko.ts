@@ -1177,6 +1177,11 @@ export const ko: TranslationResources = {
           '"{{projectName}}"을(를) 사이드바에서 제거할까요?\n\n디스크의 파일은 변경되지 않습니다.',
         removeConfirm: "제거",
         cancel: "취소",
+        removeMultiHostTitle: "프로젝트 제거",
+        removeMultiHostPrompt: '"{{projectName}}"을(를) 어디에서 제거할지 선택하세요:',
+        removeFromHost: "{{hostName}}에서만 제거",
+        removeFromAllHosts: "모든 호스트에서 제거",
+        removeNote: "디스크의 파일은 변경되지 않습니다.",
       },
       toasts: {
         hostDisconnected: "호스트가 연결되어 있지 않습니다",

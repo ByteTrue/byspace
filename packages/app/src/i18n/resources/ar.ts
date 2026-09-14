@@ -1170,6 +1170,11 @@ export const ar: TranslationResources = {
           'هل تريد إزالة "{{projectName}}" من الشريط الجانبي؟\n\n لن يتم تغيير الملفات الموجودة على القرص.',
         removeConfirm: "يزيل",
         cancel: "يلغي",
+        removeMultiHostTitle: "إزالة المشروع",
+        removeMultiHostPrompt: 'حدد مكان إزالة "{{projectName}}":',
+        removeFromHost: "إزالة من {{hostName}} فقط",
+        removeFromAllHosts: "إزالة من جميع المضيفين",
+        removeNote: "لن يتم تغيير الملفات الموجودة على القرص.",
       },
       toasts: {
         hostDisconnected: "Host غير متصل",

@@ -1182,6 +1182,11 @@ export const ja: TranslationResources = {
           '"{{projectName}}"をサイドバーから削除しますか？\n\nディスク上のファイルは変更されません。',
         removeConfirm: "削除",
         cancel: "キャンセル",
+        removeMultiHostTitle: "プロジェクトの削除",
+        removeMultiHostPrompt: "「{{projectName}}」をどこから削除するか選択してください：",
+        removeFromHost: "{{hostName}} からのみ削除",
+        removeFromAllHosts: "すべてのホストから削除",
+        removeNote: "ディスク上のファイルは変更されません。",
       },
       toasts: {
         hostDisconnected: "ホストが接続されていません",

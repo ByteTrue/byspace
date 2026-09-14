@@ -141,6 +141,7 @@ import {
   getCurrentProjectRemoveReadiness,
   removeProjectFromHosts,
 } from "@/projects/project-remove";
+import { ProjectRemoveModal } from "@/projects/project-remove-modal";
 import { isWeb as platformIsWeb, isNative as platformIsNative } from "@/constants/platform";
 import { OpenInFileManagerMenuItem } from "@/workspace/open-in-file-manager/menu-item";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
@@ -1646,9 +1647,19 @@ function ProjectBlock({
   const toast = useToast();
   const { t } = useTranslation();
   const [isRemovingProject, setIsRemovingProject] = useState(false);
+  const [isRemoveModalOpen, setIsRemoveModalOpen] = useState(false);
+
+  const handleCloseRemoveModal = useCallback(() => {
+    setIsRemoveModalOpen(false);
+  }, []);
 
   const handleRemoveProject = useCallback(() => {
     if (isRemovingProject) {
+      return;
+    }
+
+    if (project.hosts.length > 1) {
+      setIsRemoveModalOpen(true);
       return;
     }
 
@@ -1764,6 +1775,16 @@ function ProjectBlock({
       />
 
       {projectChildren}
+
+      {project.hosts.length > 1 ? (
+        <ProjectRemoveModal
+          visible={isRemoveModalOpen}
+          projectName={displayName}
+          projectViewKey={project.viewKey}
+          hosts={project.hosts}
+          onClose={handleCloseRemoveModal}
+        />
+      ) : null}
     </View>
   );
 }
