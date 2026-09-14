@@ -57,7 +57,9 @@ v0.14.0 发布（2026-09-14）暴露的耗时数据（40 个 run 的逐 job 实�
 
 ## 执行记录
 
-- **2026-09-14：** A——ci.yml playwright 分片 4→8（`PLAYWRIGHT_SHARD: N/8`，job 5–8 追加，`ci-workflow.test.mjs` 期望同步）。B——file-observer 千并发压测 `test.skipIf(win32)`，注释记录两次 flaky 证据与 ubuntu 覆盖理由。C——`docker/base/Dockerfile` 拆层：7 个 workspace 的 package.json + 根 manifest 先 COPY 使 `npm ci` layer 只随依赖变化失效；`COPY . .` 后重新剥 `scripts.prepare`（防止 `npm pack` 在容器内触发 lefthook），`.dockerignore` 已排除 node_modules/dist。本地 Docker daemon 未运行，Dockerfile 变更由 CI 的非发布 build 验证。
+- **2026-09-14：** A——ci.yml playwright 分片 4→8（`PLAYWRIGHT_SHARD: N/8`，job 5–8 追加，`ci-workflow.test.mjs` 期望同步）。B——file-observer 千并发压测 `test.skipIf(win32)`，注释记录两次 flaky 证据与 ubuntu 覆盖理由。C——`docker/base/Dockerfile` 拆层：7 个 workspace 的 package.json + 根 manifest 先 COPY 使 `npm ci` layer 只随依赖变化失效；`COPY . .` 后重新剥 `scripts.prepare`（防止 `npm pack` 在容器内触发 lefthook），`.dockerignore` 已排除 node_modules/dist。
+- **首轮修正（c6e4461f0a）：** Docker build 失败——root `postinstall`（patch-package，只补 app 侧 react-native 依赖）在 manifest-only 层无 scripts/ 可跑。修法：manifest 层与 `COPY . .` 后同时剥 `prepare` 与 `postinstall`（dfd70656be）；app 依赖不进镜像，patch 结果不影响镜像内容。
+- **实测（对比 v0.14.0 发布基线）：** CI wall **39m → 14m**（playwright 每片 8–13m，原 17–24m）；Docker PR build 缓存命中后 **10–16m → 6m**（依赖变更后首轮 14m 属预期全量）；windows server-tests 13m（原 11–14m）——B 的收益主要是消除 flaky 源，时间上 file-observer 只占 ~2m。目标「CI ≤ 25m」达成，「Docker ≤ 5m」以 6m 收尾：剩余为源码 pack 层 + 多架构 QEMU 构建，属源码变更的固有重建。
 
 ## 关闭时
 
