@@ -5,6 +5,16 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.14.1 - 2026-09-14
+
+### Added
+
+- The `daemon start` output now prints the local web UI address, and the online web address when relay is enabled
+
+### Improved
+
+- CI runs finish about three times faster: the browser end-to-end suite runs in eight shards, and the Docker image build reuses the dependency install layer across source-only changes
+
 ## 0.14.0 - 2026-09-14
 
 BySpace is now a web-first product: the browser and Home Screen PWA are the client,
