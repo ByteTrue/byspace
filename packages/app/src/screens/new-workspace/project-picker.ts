@@ -2,9 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ComboboxOption as ComboboxOptionType } from "@/components/ui/combobox";
 import { isWorkspaceArchivePending } from "@/contexts/session-workspace-upserts";
 import {
-  filterWorkspaceProjectsForHost,
   getHostProjectSourceDirectory,
-  resolveInitialWorkspaceProject,
+  resolveInitialProject,
   type HostProjectListItem,
 } from "@/projects/host-projects";
 import {
@@ -89,21 +88,23 @@ export function useNewWorkspaceProjectPicker({
   lastActiveProject,
   allowAllProjects,
 }: NewWorkspaceProjectPickerInput): NewWorkspaceProjectPickerState {
-  const selectableProjects = useMemo(
-    () =>
-      filterWorkspaceProjectsForHost({ projects, serverId: selectedServerId, allowAllProjects }),
-    [allowAllProjects, projects, selectedServerId],
-  );
+  const selectableProjects = useMemo(() => {
+    if (allowAllProjects) {
+      return projects;
+    }
+    return projects.filter((project) =>
+      project.hosts.some((host) => host.worktreeSupport !== "unsupported"),
+    );
+  }, [allowAllProjects, projects]);
   const initialProject = useMemo(
     () =>
-      resolveInitialWorkspaceProject({
+      resolveInitialProject({
         routeProject,
         lastActiveProject,
         projects: selectableProjects,
-        serverId: selectedServerId,
         allowAllProjects,
       }),
-    [allowAllProjects, lastActiveProject, routeProject, selectableProjects, selectedServerId],
+    [allowAllProjects, lastActiveProject, routeProject, selectableProjects],
   );
 
   const selectionContextKey = createProjectSelectionContextKey({

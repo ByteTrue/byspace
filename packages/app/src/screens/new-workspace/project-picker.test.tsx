@@ -79,4 +79,53 @@ describe("useNewWorkspaceProjectPicker", () => {
 
     expect(result.current.selectedProject).toEqual(manualProject);
   });
+
+  it("includes projects from other hosts and allows selecting them", () => {
+    const projectHostA = project({
+      viewKey: "remote:github.com/acme/project-a",
+      projectKey: "remote:github.com/acme/project-a",
+      projectId: "proj-a",
+      projectName: "Project On Host A",
+    });
+    const projectHostB: HostProjectListItem = {
+      viewKey: "remote:github.com/acme/project-b",
+      projectKey: "remote:github.com/acme/project-b",
+      projectName: "Project On Host B",
+      projectKind: "git",
+      iconWorkingDir: "/work/proj-b",
+      hosts: [
+        {
+          serverId: "host-b",
+          projectId: "proj-b",
+          iconWorkingDir: "/work/proj-b",
+          worktreeSupport: "supported",
+        },
+      ],
+      workspaceKeys: [],
+    };
+
+    const projectsList = [projectHostA, projectHostB];
+    const { result } = renderHook(() =>
+      useNewWorkspaceProjectPicker({
+        selectedServerId: "host-a",
+        projects: projectsList,
+        routeProject: null,
+        routeProjectContextViewKey: null,
+        lastActiveProject: null,
+        allowAllProjects: true,
+      }),
+    );
+
+    // Both projects appear in options even though selectedServerId is host-a
+    expect(result.current.projectPickerOptions).toHaveLength(2);
+    expect(
+      result.current.projectPickerOptions.some((opt) => opt.label === "Project On Host B"),
+    ).toBe(true);
+
+    const optionB = result.current.projectPickerOptions.find(
+      (opt) => opt.label === "Project On Host B",
+    )!;
+    act(() => result.current.handleSelectProjectOption(optionB.id));
+    expect(result.current.selectedProject).toEqual(projectHostB);
+  });
 });

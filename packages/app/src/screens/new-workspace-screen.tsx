@@ -1713,6 +1713,24 @@ export function NewWorkspaceScreen({
     lastActiveProject,
     allowAllProjects: supportsWorkspaceMultiplicity,
   });
+
+  const availableHosts = useMemo(() => {
+    if (!selectedProject || selectedProject.hosts.length === 0) {
+      return allHosts;
+    }
+    const projectHostSet = new Set(selectedProject.hosts.map((h) => h.serverId));
+    const matched = allHosts.filter((h) => projectHostSet.has(h.serverId));
+    return matched.length > 0 ? matched : allHosts;
+  }, [allHosts, selectedProject]);
+
+  useEffect(() => {
+    if (availableHosts.length === 0) return;
+    const isCurrentHostAvailable = availableHosts.some((h) => h.serverId === selectedServerId);
+    if (!isCurrentHostAvailable && availableHosts[0]) {
+      handleSelectHost(availableHosts[0].serverId);
+    }
+  }, [availableHosts, handleSelectHost, selectedServerId]);
+
   const projectIconTargets = useMemo(
     () => buildNewWorkspaceProjectIconTargets(projects, selectedServerId),
     [projects, selectedServerId],
@@ -1879,6 +1897,14 @@ export function NewWorkspaceScreen({
     [chatDraft],
   );
 
+  const handleSelectWorkspaceHost = useCallback(
+    (id: string) => {
+      handleSelectHost(id);
+      clearPickerSelectionForTargetChange(selectedServerId, id);
+    },
+    [clearPickerSelectionForTargetChange, handleSelectHost, selectedServerId],
+  );
+
   const handleSelectProjectOption = useCallback(
     (id: string) => {
       // selectProjectOption enforces selectability (worktree-only when
@@ -1887,16 +1913,26 @@ export function NewWorkspaceScreen({
       selectProjectOption(id);
       setProjectPickerOpen(false);
       clearPickerSelectionForTargetChange(selectedProjectOptionId, id);
-    },
-    [clearPickerSelectionForTargetChange, selectProjectOption, selectedProjectOptionId],
-  );
 
-  const handleSelectWorkspaceHost = useCallback(
-    (id: string) => {
-      handleSelectHost(id);
-      clearPickerSelectionForTargetChange(selectedServerId, id);
+      const targetProject = projectByOptionId.get(id);
+      if (targetProject && targetProject.hosts.length > 0) {
+        const isCurrentHostValid = targetProject.hosts.some((h) => h.serverId === selectedServerId);
+        if (!isCurrentHostValid) {
+          const nextHost = targetProject.hosts[0];
+          if (nextHost) {
+            handleSelectWorkspaceHost(nextHost.serverId);
+          }
+        }
+      }
     },
-    [clearPickerSelectionForTargetChange, handleSelectHost, selectedServerId],
+    [
+      clearPickerSelectionForTargetChange,
+      handleSelectWorkspaceHost,
+      projectByOptionId,
+      selectProjectOption,
+      selectedProjectOptionId,
+      selectedServerId,
+    ],
   );
 
   const handleAddProject = useCallback(() => {
@@ -2321,7 +2357,7 @@ export function NewWorkspaceScreen({
       renderOption: renderProjectOption,
     },
     host: {
-      allHosts,
+      allHosts: availableHosts,
       selectedServerId,
       onSelect: handleSelectWorkspaceHost,
       openState: hostPickerOpen,

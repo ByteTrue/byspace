@@ -207,6 +207,31 @@ export function resolveHostProjectCandidate(input: {
   return resolveExactHostProjectCandidate(input) ?? resolveEquivalentHostProjectCandidate(input);
 }
 
+export function resolveInitialProject(input: {
+  routeProject: HostProjectListItem | null;
+  lastActiveProject: HostProjectListItem | null;
+  projects: readonly HostProjectListItem[];
+  allowAllProjects: boolean;
+}): HostProjectListItem | null {
+  const candidates = [input.routeProject, input.lastActiveProject];
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+    const match =
+      input.projects.find((p) => p.viewKey === candidate.viewKey) ??
+      (candidate.projectKey !== null
+        ? input.projects.find((p) => p.projectKey === candidate.projectKey)
+        : null);
+    const resolved = match ?? candidate;
+    if (input.allowAllProjects || projectCanCreateWorktree(resolved)) {
+      return resolved;
+    }
+  }
+
+  return input.projects[0] ?? null;
+}
+
 export function resolveInitialWorkspaceProject(input: {
   routeProject: HostProjectListItem | null;
   lastActiveProject: HostProjectListItem | null;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getProjectRemoveReadiness,
+  getProjectRemoveReadinessForTargets,
   removeProjectFromHosts,
   type ProjectRemoveProject,
 } from "./project-remove";
@@ -81,5 +82,33 @@ describe("project remove policy", () => {
 
     expect(outcome).toEqual({ kind: "host_disconnected", serverIds: ["host-b"] });
     expect(hostA.removedProjectKeys).toEqual([]);
+  });
+
+  it("can check and remove project for a single target host", async () => {
+    const hostA = createProjectRemoveClient();
+    const hostB = createProjectRemoveClient();
+
+    const readiness = getProjectRemoveReadinessForTargets({
+      targets: [{ serverId: "host-a", projectId: "prj_host_a" }],
+      supportsProjectRemove: () => true,
+    });
+
+    expect(readiness).toEqual({
+      kind: "ready",
+      targets: [{ serverId: "host-a", projectId: "prj_host_a" }],
+    });
+
+    const outcome = await removeProjectFromHosts({
+      targets: readiness.kind === "ready" ? readiness.targets : [],
+      getClient: (serverId) => {
+        if (serverId === "host-a") return hostA.client;
+        if (serverId === "host-b") return hostB.client;
+        return null;
+      },
+    });
+
+    expect(outcome).toEqual({ kind: "removed", serverIds: ["host-a"] });
+    expect(hostA.removedProjectKeys).toEqual(["prj_host_a"]);
+    expect(hostB.removedProjectKeys).toEqual([]);
   });
 });

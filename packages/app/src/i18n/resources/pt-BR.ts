@@ -1192,6 +1192,11 @@ export const ptBR: TranslationResources = {
           'Remover "{{projectName}}" da barra lateral?\n\nOs arquivos no disco não serão alterados.',
         removeConfirm: "Remover",
         cancel: "Cancelar",
+        removeMultiHostTitle: "Remover projeto",
+        removeMultiHostPrompt: 'Selecione de onde remover "{{projectName}}":',
+        removeFromHost: "Remover apenas de {{hostName}}",
+        removeFromAllHosts: "Remover de todos os hosts",
+        removeNote: "Os arquivos no disco não serão alterados.",
       },
       toasts: {
         hostDisconnected: "Host não está conectado",

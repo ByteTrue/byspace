@@ -13,6 +13,7 @@ export {
   resolveHostProjectCandidate,
   resolveExactHostProjectCandidate,
   resolveEquivalentHostProjectCandidate,
+  resolveInitialProject,
   resolveInitialWorkspaceProject,
   resolveInitialWorktreeProject,
   resolveSelectedHostProject,

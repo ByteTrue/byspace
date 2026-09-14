@@ -1176,6 +1176,11 @@ export const en = {
           'Remove "{{projectName}}" from the sidebar?\n\nFiles on disk will not be changed.',
         removeConfirm: "Remove",
         cancel: "Cancel",
+        removeMultiHostTitle: "Remove project",
+        removeMultiHostPrompt: 'Select where to remove "{{projectName}}" from:',
+        removeFromHost: "Remove from {{hostName}}",
+        removeFromAllHosts: "Remove from all hosts",
+        removeNote: "Files on disk will not be changed.",
       },
       toasts: {
         hostDisconnected: "Host is not connected",

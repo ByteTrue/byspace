@@ -165,6 +165,15 @@ export function resolveProjectSelection(
   }
 
   if (selection.source === "manual") {
+    const matchedManual = context.projects.find(
+      (project) =>
+        project.viewKey === selection.originProject.viewKey &&
+        (selection.originProject.projectKey === null ||
+          project.projectKey === selection.originProject.projectKey),
+    );
+    if (matchedManual) {
+      return matchedManual;
+    }
     const originProject = resolveManualOriginProject(selection, context);
     if (originProject) {
       return originProject;

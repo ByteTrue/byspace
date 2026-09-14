@@ -27,21 +27,21 @@ export type ProjectRemoveOutcome =
 
 type ProjectRemoveClient = Pick<DaemonClient, "removeProject">;
 
-export function getProjectRemoveReadiness(input: {
-  project: ProjectRemoveProject;
+export function getProjectRemoveReadinessForTargets(input: {
+  targets: readonly ProjectRemoveTarget[];
   supportsProjectRemove: (serverId: string) => boolean;
 }): ProjectRemoveReadiness {
   const unsupportedServerIds: string[] = [];
-  const targets: ProjectRemoveTarget[] = [];
+  const readyTargets: ProjectRemoveTarget[] = [];
 
-  for (const host of input.project.hosts) {
-    if (!input.supportsProjectRemove(host.serverId)) {
-      unsupportedServerIds.push(host.serverId);
+  for (const target of input.targets) {
+    if (!input.supportsProjectRemove(target.serverId)) {
+      unsupportedServerIds.push(target.serverId);
       continue;
     }
-    targets.push({
-      serverId: host.serverId,
-      projectId: host.projectId,
+    readyTargets.push({
+      serverId: target.serverId,
+      projectId: target.projectId,
     });
   }
 
@@ -49,17 +49,41 @@ export function getProjectRemoveReadiness(input: {
     return { kind: "needs_host_update", serverIds: unsupportedServerIds };
   }
 
-  return { kind: "ready", targets };
+  return { kind: "ready", targets: readyTargets };
+}
+
+export function getProjectRemoveReadiness(input: {
+  project: ProjectRemoveProject;
+  supportsProjectRemove: (serverId: string) => boolean;
+}): ProjectRemoveReadiness {
+  return getProjectRemoveReadinessForTargets({
+    targets: input.project.hosts.map((host) => ({
+      serverId: host.serverId,
+      projectId: host.projectId,
+    })),
+    supportsProjectRemove: input.supportsProjectRemove,
+  });
+}
+
+export function getCurrentProjectRemoveReadinessForTargets(
+  targets: readonly ProjectRemoveTarget[],
+): ProjectRemoveReadiness {
+  const sessionState = useSessionStore.getState();
+  return getProjectRemoveReadinessForTargets({
+    targets,
+    supportsProjectRemove: (serverId) => selectHostFeature(sessionState, serverId, "projectRemove"),
+  });
 }
 
 export function getCurrentProjectRemoveReadiness(
   project: ProjectRemoveProject,
 ): ProjectRemoveReadiness {
-  const sessionState = useSessionStore.getState();
-  return getProjectRemoveReadiness({
-    project,
-    supportsProjectRemove: (serverId) => selectHostFeature(sessionState, serverId, "projectRemove"),
-  });
+  return getCurrentProjectRemoveReadinessForTargets(
+    project.hosts.map((host) => ({
+      serverId: host.serverId,
+      projectId: host.projectId,
+    })),
+  );
 }
 
 export async function removeProjectFromHosts(input: {

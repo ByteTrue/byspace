@@ -1183,6 +1183,11 @@ export const ru: TranslationResources = {
           "Удалить проект «{{projectName}}» с боковой панели?\n\nФайлы на диске не будут изменены.",
         removeConfirm: "Удалить",
         cancel: "Отмена",
+        removeMultiHostTitle: "Удалить проект",
+        removeMultiHostPrompt: 'Выберите, откуда удалить "{{projectName}}":',
+        removeFromHost: "Удалить только с {{hostName}}",
+        removeFromAllHosts: "Удалить со всех хостов",
+        removeNote: "Файлы на диске не будут изменены.",
       },
       toasts: {
         hostDisconnected: "Хост не подключён",

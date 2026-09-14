@@ -1,5 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { expect } from "@playwright/test";
 import { test as base } from "../support/fixtures";
 import {
   beginWorkspaceFromProject,
@@ -417,5 +418,61 @@ test.describe("Sidebar project grouping", () => {
       hostName: SECONDARY_HOST_LABEL,
       count: 2,
     });
+  });
+
+  test("shows multi-host remove modal and removes project from a single host", async ({
+    page,
+    crossHostProject,
+  }) => {
+    await openScenario(page, crossHostProject);
+    const projectRow = page.locator('[data-testid^="sidebar-project-row-"]').first();
+    await expect(projectRow).toBeVisible();
+    await projectRow.hover();
+
+    const kebab = page.locator('[data-testid^="sidebar-project-kebab-"]').first();
+    await expect(kebab).toBeVisible();
+    await kebab.click();
+
+    const removeItem = page.locator('[data-testid^="sidebar-project-menu-remove-"]').first();
+    await expect(removeItem).toBeVisible();
+    await removeItem.click();
+
+    // The multi-host remove modal must be visible with individual remove buttons for each host
+    const removeModal = page.locator('[data-testid^="project-remove-modal-"]');
+    await expect(removeModal).toBeVisible();
+    const secondaryHost = crossHostProject.hosts[0];
+    if (!secondaryHost) throw new Error("Expected secondary host");
+
+    const removeSecondaryBtn = page.locator(
+      `[data-testid="project-remove-host-button-${secondaryHost.serverId}"]`,
+    );
+    await expect(removeSecondaryBtn).toBeVisible();
+    await removeSecondaryBtn.click();
+    await expect(removeModal).not.toBeVisible();
+
+    // After removing from secondary host, the project still exists with primary host's workspace
+    await expect(page.getByText("Primary workspace", { exact: true })).toBeVisible();
+    await expect(page.getByText("Secondary workspace", { exact: true })).not.toBeVisible();
+  });
+
+  test("shows only participating hosts in new workspace host picker", async ({
+    page,
+    crossHostProject,
+  }) => {
+    await openScenario(page, crossHostProject);
+    await beginWorkspaceFromProject(page, GROUPED_PROJECT_NAME);
+
+    // Host picker button exists because the grouped project is on two hosts
+    const hostTrigger = page.getByRole("button", { name: "Host", exact: true });
+    await expect(hostTrigger).toBeVisible();
+    await hostTrigger.click();
+
+    // Only the two participating hosts appear as options
+    const secondaryHost = crossHostProject.hosts[0];
+    if (!secondaryHost) throw new Error("Expected secondary host");
+    await expect(
+      page.getByRole("button", { name: SECONDARY_HOST_LABEL, exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: PRIMARY_HOST_LABEL, exact: true })).toBeVisible();
   });
 });
