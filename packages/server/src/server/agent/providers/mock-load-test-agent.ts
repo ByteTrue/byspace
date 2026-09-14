@@ -245,6 +245,10 @@ function shouldEmitTurnFailure(prompt: AgentPromptInput): boolean {
   return /emit\s+(?:a\s+)?synthetic\s+turn\s+failure/i.test(promptToText(prompt));
 }
 
+function shouldEmitSyntheticCustomMessage(prompt: AgentPromptInput): boolean {
+  return /emit\s+(?:a\s+)?synthetic\s+custom\s+message/i.test(promptToText(prompt));
+}
+
 function parseSteeringReplayShape(prompt: AgentPromptInput): SteeringReplayShape | null {
   const match = /replay a (claude|codex)-shaped foreground shell tool call/i.exec(
     promptToText(prompt),
@@ -538,6 +542,17 @@ function buildEditDiff(filePath: string): string {
   ].join("\n");
 }
 
+// Mirrors a real extension-injected custom_message (Pi background-terminal's
+// background-exit): a short summary line followed by one entry per finished
+// task, long enough to exercise the collapsed one-line preview + expand.
+function buildSyntheticCustomMessageContent(): string {
+  return [
+    "2 background tasks finished:",
+    '[bg_2bc2494e69199b6a] cd /Users/example/workspace/project && npm run dev:server > /tmp/dev-server.log 2>&1 & echo "server pid: $!" exited with code 0. Last line: server pid: 43229 Output: /tmp/pi-background-terminal/bg_2bc2494e69199b6a.log',
+    "[bg_eb37efed6b1968a8] cd /Users/example/workspace/project && npm run dev:app -- --port 8081 exited with code 0. Last line: app pid: 44822 Output: /tmp/pi-background-terminal/bg_eb37efed6b1968a8.log",
+  ].join("\n");
+}
+
 function buildCycleQueue(turnId: string, cycle: number): CycleEvent[] {
   const queue: CycleEvent[] = [];
 
@@ -822,6 +837,7 @@ export class MockLoadTestAgentSession implements AgentSession {
     const structuredBranchName = parseStructuredBranchNamePrompt(prompt);
     const settledAssistantImageMarkdown = parseSettledAssistantImageMarkdown(prompt);
     const steeringReplayShape = parseSteeringReplayShape(prompt);
+    const syntheticCustomMessage = shouldEmitSyntheticCustomMessage(prompt);
     const scheduleTurn = () => {
       if (shouldEmitTurnFailure(prompt)) {
         this.scheduleFailedTurn(turn);
@@ -837,6 +853,8 @@ export class MockLoadTestAgentSession implements AgentSession {
         this.scheduleSettledAssistantTurn(turn, settledAssistantImageMarkdown);
       } else if (shouldEmitPlanApprovalPrompt(prompt)) {
         this.schedulePlanApprovalTurn(turn);
+      } else if (syntheticCustomMessage) {
+        this.scheduleSyntheticCustomMessageTurn(turn);
       } else if (questionPrompt) {
         this.scheduleQuestionPromptTurn(turn, questionPrompt);
       } else if (largePayload) {
@@ -1206,6 +1224,43 @@ export class MockLoadTestAgentSession implements AgentSession {
       this.emitSettledAssistantTurn(turn, finalText);
     }, 0);
     turn.timer.unref?.();
+  }
+
+  private scheduleSyntheticCustomMessageTurn(turn: ActiveTurn): void {
+    turn.timer = setTimeout(() => {
+      this.emitSyntheticCustomMessageTurn(turn);
+    }, 0);
+    turn.timer.unref?.();
+  }
+
+  private emitSyntheticCustomMessageTurn(turn: ActiveTurn): void {
+    if (this.activeTurn !== turn) {
+      return;
+    }
+
+    this.clearTurnTimer(turn);
+    this.emitTurnStarted(turn);
+
+    const item: AgentTimelineItem = {
+      type: "custom_message",
+      customType: "background-exit",
+      display: true,
+      content: buildSyntheticCustomMessageContent(),
+    };
+    this.emitTimeline(turn.turnId, item);
+    const finalText = "Synthetic custom message emitted";
+    this.activeTurn = null;
+    this.emit({
+      type: "turn_completed",
+      provider: this.provider,
+      turnId: turn.turnId,
+    });
+    turn.resolve({
+      sessionId: this.id,
+      finalText,
+      timeline: [item],
+      canceled: false,
+    });
   }
 
   private scheduleStreamingAssistantTurn(turn: ActiveTurn, finalText: string): void {

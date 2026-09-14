@@ -1093,6 +1093,9 @@ export const ptBR: TranslationResources = {
     },
   },
   sidebar: {
+    sortProjects: {
+      label: "Ordenar projetos",
+    },
     display: {
       trigger: "Preferências de exibição",
       heading: "Exibição",

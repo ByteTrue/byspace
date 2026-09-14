@@ -1068,6 +1068,9 @@ export const ar: TranslationResources = {
     },
   },
   sidebar: {
+    sortProjects: {
+      label: "ترتيب المشاريع",
+    },
     display: {
       trigger: "تفضيلات العرض",
       heading: "العرض",

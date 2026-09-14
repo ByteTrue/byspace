@@ -1101,6 +1101,9 @@ export const fr: TranslationResources = {
     },
   },
   sidebar: {
+    sortProjects: {
+      label: "Trier les projets",
+    },
     display: {
       trigger: "Préférences d'affichage",
       heading: "Affichage",

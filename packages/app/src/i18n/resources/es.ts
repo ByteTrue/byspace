@@ -1102,6 +1102,9 @@ export const es: TranslationResources = {
     },
   },
   sidebar: {
+    sortProjects: {
+      label: "Ordenar proyectos",
+    },
     display: {
       trigger: "Preferencias de visualización",
       heading: "Visualización",
