@@ -1077,6 +1077,9 @@ export const en = {
     },
   },
   sidebar: {
+    sortProjects: {
+      label: "Sort projects",
+    },
     display: {
       trigger: "Display preferences",
       heading: "Display",

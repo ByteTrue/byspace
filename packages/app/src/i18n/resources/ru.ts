@@ -1083,6 +1083,9 @@ export const ru: TranslationResources = {
     },
   },
   sidebar: {
+    sortProjects: {
+      label: "Сортировать проекты",
+    },
     display: {
       trigger: "Настройки отображения",
       heading: "Отображение",
