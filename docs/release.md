@@ -91,7 +91,7 @@ republish the packages:
 
 ```bash
 BYSPACE_VERSION=$(node -p "require('./package.json').version")
-for package in highlight relay protocol client plugin server cli; do
+for package in highlight relay protocol client server cli; do
   npm dist-tag add "@getpaseo/$package@$BYSPACE_VERSION" beta
 done
 ```

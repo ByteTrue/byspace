@@ -5,7 +5,7 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
-## 0.14.0 - 2026-09-12
+## 0.14.0 - 2026-09-14
 
 BySpace is now a web-first product: the browser and Home Screen PWA are the client,
 and the daemon serves its own web UI. This release removes the retired native and
