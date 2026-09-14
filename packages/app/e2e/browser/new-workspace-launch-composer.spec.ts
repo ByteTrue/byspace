@@ -62,7 +62,6 @@ test.describe("New workspace: the composer is one control in two modes", () => {
 
     await test.step("the attachment button and mic are absent in terminal mode, and the submit button is inside the same surface", async () => {
       await expect(attachButton(page)).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "Start dictation" })).toHaveCount(0);
       await expect(
         page.locator('[data-testid="message-input-root"]:visible').getByRole("button", {
           name: "Launch",

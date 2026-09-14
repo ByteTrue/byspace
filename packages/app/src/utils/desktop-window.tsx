@@ -12,8 +12,10 @@ export function TitlebarDragRegion(_props?: any): ReactNode {
   return null;
 }
 
-export function WindowChromeSafeArea(_props?: any): ReactNode {
-  return null;
+export function WindowChromeSafeArea(
+  props: { children?: ReactNode } & Record<string, any>,
+): ReactNode {
+  return props.children;
 }
 
 export function WindowChromeRegion(

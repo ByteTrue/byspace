@@ -30,7 +30,6 @@ quality:
 
 server:
   - "packages/server/**"
-  - "packages/app/e2e/support/fixtures/recording.*"
 
 app:
   - "packages/app/**"

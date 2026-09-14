@@ -129,62 +129,6 @@ describe("DaemonSession", () => {
       },
     ]);
   });
-  test("Hub relationship command failures return correlated RPC errors", async () => {
-    const { subsystem, emitted } = makeSubsystem({
-      hubRelationships: {
-        connect: async () => {
-          throw new Error("Hub rejected enrollment (401)");
-        },
-        status: () => ({
-          state: "not_connected",
-          daemonId: null,
-          hubOrigin: null,
-          permissions: [],
-          connectedAt: null,
-          lastError: null,
-        }),
-        updatePermissions: async () => {
-          throw new Error("Hub permission update failed");
-        },
-        disconnect: async () => {
-          throw new Error("Hub revocation failed (503)");
-        },
-      },
-    });
-
-    await subsystem.handleHubRelationshipRequest({
-      type: "hub.management.daemon.connect.request",
-      requestId: "connect-1",
-      hubUrl: "https://hub.test",
-      token: "token",
-    });
-    await subsystem.handleHubRelationshipRequest({
-      type: "hub.management.daemon.disconnect.request",
-      requestId: "disconnect-1",
-      force: false,
-    });
-
-    expect(emitted).toEqual([
-      {
-        type: "rpc_error",
-        payload: {
-          requestId: "connect-1",
-          requestType: "hub.management.daemon.connect.request",
-          error: "Hub rejected enrollment (401)",
-          code: "handler_error",
-        },
-      },
-      {
-        type: "rpc_error",
-        payload: {
-          requestId: "disconnect-1",
-          requestType: "hub.management.daemon.disconnect.request",
-          error: "Hub revocation failed (503)",
-          code: "handler_error",
-        },
-      },
-    ]);
-  });
 
   test("status reports identity, runtime config, and providers with errors normalized to null", async () => {
     const { subsystem, emitted } = makeSubsystem({

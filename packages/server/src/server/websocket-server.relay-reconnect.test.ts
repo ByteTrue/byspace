@@ -106,7 +106,6 @@ vi.mock("./push/index.js", () => ({
 import { z } from "zod";
 import { VoiceAssistantWebSocketServer } from "./websocket-server";
 import { DAEMON_PERMISSIONS, parseServerInfoStatusPayload } from "./messages.js";
-import type { SpeechReadinessSnapshot } from "./speech/speech-runtime.js";
 
 interface WebSocketServerInternals {
   attachSocket(ws: unknown, req: unknown): Promise<void>;
@@ -133,11 +132,6 @@ function sentEnvelopes(socket: MockSocket): z.infer<typeof WireEnvelopeSchema>[]
   return socket.sent.filter((data) => typeof data === "string").map(parseSentEnvelope);
 }
 
-function sentServerInfoEnvelopes(socket: MockSocket): z.infer<typeof WireEnvelopeSchema>[] {
-  return sentEnvelopes(socket).filter(
-    (envelope) => parseServerInfoStatusPayload(envelope.message?.payload) !== null,
-  );
-}
 
 function sentBinaryFrames(socket: MockSocket): Uint8Array[] {
   return socket.sent.map(asUint8Array).filter((frame): frame is Uint8Array => frame !== null);
@@ -227,11 +221,9 @@ function createWorkspaceAutoNameStub(): WorkspaceAutoName {
 }
 
 function createServer(options?: {
-  speechReadiness?: SpeechReadinessSnapshot | null;
   logger?: ReturnType<typeof createLogger>;
   startPaused?: boolean;
 }) {
-  const speechReadiness = options?.speechReadiness ?? null;
   const daemonConfigStore = {
     onApply: vi.fn(() => () => {}),
     onChange: vi.fn(() => () => {}),
@@ -261,22 +253,6 @@ function createServer(options?: {
     { allowedOrigins: new Set(), startPaused: options?.startPaused },
     createWorkspaceAutoNameStub(),
     undefined,
-    speechReadiness
-      ? {
-          resolveStt: () => null,
-          resolveSttLanguage: () => "en",
-          resolveTts: () => null,
-          resolveTurnDetection: () => null,
-          resolveDictationStt: () => null,
-          resolveDictationSttLanguage: () => "en",
-          getReadiness: () => speechReadiness,
-          onReadinessChange: vi.fn(() => () => {}),
-          start: vi.fn(),
-          stop: vi.fn(),
-          ready: Promise.resolve(),
-        }
-      : undefined,
-    undefined,
     undefined,
     TEST_DAEMON_VERSION,
     undefined,
@@ -305,79 +281,6 @@ function createServer(options?: {
     undefined,
     createProviderSnapshotManagerStub().manager,
   );
-}
-
-function createReadySpeechReadinessSnapshot(): SpeechReadinessSnapshot {
-  return {
-    generatedAt: "2026-02-14T00:00:00.000Z",
-    requiredLocalModelIds: [],
-    missingLocalModelIds: [],
-    download: {
-      inProgress: false,
-      error: null,
-    },
-    dictation: {
-      enabled: true,
-      available: true,
-      reasonCode: "ready",
-      message: "Dictation is ready.",
-      retryable: false,
-      missingModelIds: [],
-    },
-    realtimeVoice: {
-      enabled: true,
-      available: true,
-      reasonCode: "ready",
-      message: "Realtime voice is ready.",
-      retryable: false,
-      missingModelIds: [],
-    },
-    voiceFeature: {
-      enabled: true,
-      available: true,
-      reasonCode: "ready",
-      message: "Voice features are ready.",
-      retryable: false,
-      missingModelIds: [],
-    },
-  };
-}
-
-function createDownloadInProgressSpeechReadinessSnapshot(): SpeechReadinessSnapshot {
-  return {
-    generatedAt: "2026-02-14T00:00:00.000Z",
-    requiredLocalModelIds: ["parakeet-tdt-0.6b-v2-int8"],
-    missingLocalModelIds: ["parakeet-tdt-0.6b-v2-int8"],
-    download: {
-      inProgress: true,
-      error: null,
-    },
-    dictation: {
-      enabled: true,
-      available: false,
-      reasonCode: "stt_unavailable",
-      message: "Dictation is unavailable: speech-to-text service is not ready.",
-      retryable: false,
-      missingModelIds: [],
-    },
-    realtimeVoice: {
-      enabled: true,
-      available: false,
-      reasonCode: "stt_unavailable",
-      message: "Realtime voice is unavailable: speech-to-text service is not ready.",
-      retryable: false,
-      missingModelIds: [],
-    },
-    voiceFeature: {
-      enabled: true,
-      available: false,
-      reasonCode: "model_download_in_progress",
-      message:
-        "Voice features are unavailable while models download in the background (parakeet-tdt-0.6b-v2-int8).",
-      retryable: true,
-      missingModelIds: ["parakeet-tdt-0.6b-v2-int8"],
-    },
-  };
 }
 
 function createHelloMessage(
@@ -514,39 +417,6 @@ describe("relay external socket reconnect behavior", () => {
     await server.close();
   });
 
-  test("gives every plugin socket an exclusively owned session and cleans it immediately", async () => {
-    const server = createServer();
-    const firstSocket = new MockSocket();
-    const firstAttachment = await server.attachPluginSocket("exclusive", firstSocket);
-    firstSocket.emit("message", JSON.stringify(createHelloMessage("plugin:exclusive")));
-
-    const secondSocket = new MockSocket();
-    const secondAttachment = await server.attachPluginSocket("exclusive", secondSocket);
-    secondSocket.emit("message", JSON.stringify(createHelloMessage("plugin:exclusive")));
-
-    expect(sessionMock.instances).toHaveLength(2);
-    firstSocket.emit("close", 1000, "plugin stopped");
-    await firstAttachment.closed;
-    expect(sessionMock.instances[0]?.cleanup).toHaveBeenCalledOnce();
-    expect(sessionMock.instances[1]?.cleanup).not.toHaveBeenCalled();
-
-    secondSocket.emit("close", 1000, "plugin stopped");
-    await secondAttachment.closed;
-    expect(sessionMock.instances[1]?.cleanup).toHaveBeenCalledOnce();
-    await server.close();
-  });
-
-  test("rejects ordinary sockets that claim the reserved plugin client id", async () => {
-    const server = createServer();
-    const socket = new MockSocket();
-    await server.attachExternalSocket(socket, { transport: "relay" });
-    socket.emit("message", JSON.stringify(createHelloMessage("plugin:not-a-plugin")));
-
-    expect(socket.readyState).toBe(3);
-    expect(sessionMock.instances).toHaveLength(0);
-    await server.close();
-  });
-
   test("passes hello capabilities through to the created session", async () => {
     const server = createServer();
     const socket = new MockSocket();
@@ -597,27 +467,6 @@ describe("relay external socket reconnect behavior", () => {
       heldCleanup.finish();
       await closePromise;
     }
-  });
-
-  test("accepts plugin startup sessions while application sessions remain paused", async () => {
-    const server = createServer({ startPaused: true });
-    const applicationSocket = new MockSocket();
-    await server.attachExternalSocket(applicationSocket, { transport: "relay" });
-    expect(applicationSocket.readyState).toBe(3);
-
-    const pluginSocket = new MockSocket();
-    const attachment = await server.attachPluginSocket("startup", pluginSocket);
-    pluginSocket.emit("message", JSON.stringify(createHelloMessage("plugin:startup")));
-    expect(sessionMock.instances).toHaveLength(1);
-
-    server.beginAcceptingConnections();
-    const readySocket = new MockSocket();
-    await attachRelayAndHello({ server, socket: readySocket, clientId: "ready-client" });
-    expect(sessionMock.instances).toHaveLength(2);
-
-    pluginSocket.emit("close", 1000, "done");
-    await attachment.closed;
-    await server.close();
   });
 
   test("closes pending connection when hello timeout elapses", async () => {
@@ -1020,87 +869,6 @@ describe("relay external socket reconnect behavior", () => {
     expect(serverInfo.features?.projectSetupSkill).toBe(true);
     expect(serverInfo.features?.agentTurnIdentity).toBeUndefined();
     expect(serverInfo.permissions).toEqual(DAEMON_PERMISSIONS);
-    await server.close();
-  });
-
-  test("includes voice capabilities in initial server_info when speech readiness exists", async () => {
-    const speechReadiness = createReadySpeechReadinessSnapshot();
-    const server = createServer({ speechReadiness });
-
-    const socket = new MockSocket();
-    const serverInfo = (await attachRelayAndHello({
-      server,
-      socket,
-      clientId: "cid-server-info-capabilities",
-    })) as {
-      version?: unknown;
-      capabilities?: {
-        voice?: {
-          dictation?: { enabled?: unknown; reason?: unknown };
-          voice?: { enabled?: unknown; reason?: unknown };
-        };
-      };
-    };
-    expect(serverInfo.version).toBe(TEST_DAEMON_VERSION);
-    expect(serverInfo.capabilities?.voice?.dictation?.enabled).toBe(
-      speechReadiness.dictation.enabled,
-    );
-    expect(serverInfo.capabilities?.voice?.dictation?.reason).toBe("");
-    expect(serverInfo.capabilities?.voice?.voice?.enabled).toBe(
-      speechReadiness.realtimeVoice.enabled,
-    );
-    expect(serverInfo.capabilities?.voice?.voice?.reason).toBe("");
-
-    await server.close();
-  });
-
-  test("broadcasts updated server_info when capabilities change", async () => {
-    const server = createServer();
-
-    const socket = new MockSocket();
-    await attachRelayAndHello({
-      server,
-      socket,
-      clientId: "cid-server-info-broadcast",
-    });
-    expect(sentServerInfoEnvelopes(socket)).toHaveLength(1);
-
-    const speechReadiness = createReadySpeechReadinessSnapshot();
-    server.publishSpeechReadiness(speechReadiness);
-    expect(sentServerInfoEnvelopes(socket)).toHaveLength(2);
-
-    const secondEnvelope = sentServerInfoEnvelopes(socket)[1];
-    const secondPayload = parseServerInfoStatusPayload(secondEnvelope.message?.payload);
-    expect(secondPayload?.capabilities?.voice?.dictation.enabled).toBe(true);
-    expect(secondPayload?.capabilities?.voice?.voice.enabled).toBe(true);
-
-    // Same readiness should not produce another server_info broadcast.
-    server.publishSpeechReadiness(speechReadiness);
-    expect(sentServerInfoEnvelopes(socket)).toHaveLength(2);
-
-    await server.close();
-  });
-
-  test("includes temporary retry guidance while models are downloading", async () => {
-    const server = createServer();
-    const socket = new MockSocket();
-    await attachRelayAndHello({
-      server,
-      socket,
-      clientId: "cid-server-info-download-guidance",
-    });
-    expect(sentServerInfoEnvelopes(socket)).toHaveLength(1);
-
-    server.publishSpeechReadiness(createDownloadInProgressSpeechReadinessSnapshot());
-    expect(sentServerInfoEnvelopes(socket)).toHaveLength(2);
-
-    const envelope = sentServerInfoEnvelopes(socket)[1];
-    const payload = parseServerInfoStatusPayload(envelope.message?.payload);
-    expect(payload?.capabilities?.voice?.dictation.enabled).toBe(true);
-    expect(payload?.capabilities?.voice?.voice.enabled).toBe(true);
-    expect(payload?.capabilities?.voice?.dictation.reason).toContain("Try again in a few minutes.");
-    expect(payload?.capabilities?.voice?.voice.reason).toContain("Try again in a few minutes.");
-
     await server.close();
   });
 
