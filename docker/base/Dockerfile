@@ -20,14 +20,16 @@ COPY packages/server/package.json packages/server/
 COPY packages/cli/package.json packages/cli/
 
 RUN set -eux; \
-    node -e 'const fs=require("node:fs"); const pkg=JSON.parse(fs.readFileSync("package.json","utf8")); delete pkg.scripts.prepare; fs.writeFileSync("package.json", `${JSON.stringify(pkg)}\n`);'; \
+    node -e 'const fs=require("node:fs"); const pkg=JSON.parse(fs.readFileSync("package.json","utf8")); delete pkg.scripts.prepare; delete pkg.scripts.postinstall; fs.writeFileSync("package.json", `${JSON.stringify(pkg)}\n`);'; \
     npm ci
 
 COPY . .
 
-# COPY restored the original package.json (with its prepare hook); strip it
-# again so `npm pack` below does not try to run lefthook inside the container.
-RUN node -e 'const fs=require("node:fs"); const pkg=JSON.parse(fs.readFileSync("package.json","utf8")); delete pkg.scripts.prepare; fs.writeFileSync("package.json", `${JSON.stringify(pkg)}\n`);'
+# COPY restored the original package.json (with its prepare and postinstall
+# hooks). Strip both again: `npm pack` must not run lefthook, and the
+# patch-package postinstall only patches app-only react-native deps that
+# never enter this image.
+RUN node -e 'const fs=require("node:fs"); const pkg=JSON.parse(fs.readFileSync("package.json","utf8")); delete pkg.scripts.prepare; delete pkg.scripts.postinstall; fs.writeFileSync("package.json", `${JSON.stringify(pkg)}\n`);'
 
 RUN set -eux; \
     if [ -n "${PASEO_VERSION:-}" ]; then \
