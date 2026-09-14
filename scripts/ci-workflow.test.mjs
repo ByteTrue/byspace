@@ -171,7 +171,7 @@ test("PR routing declares stable behavior ownership", () => {
       "**/*.{cjs,css,html,js,json,jsonc,jsx,md,mjs,ts,tsx,yaml,yml}",
     ],
     quality: ["**/*.{cjs,js,json,jsx,mjs,ts,tsx}"],
-    server: ["packages/server/**", "packages/app/e2e/support/fixtures/recording.*"],
+    server: ["packages/server/**"],
     app: ["packages/app/**"],
     sdk: ["packages/client/**", "packages/highlight/**", "packages/protocol/**"],
     browser: [

@@ -2107,10 +2107,6 @@ export const ar: TranslationResources = {
         description: "استخدام طرفية WebView السابقة بعد إعادة فتح الطرفية",
         accessibilityLabel: "استخدام عارض الطرفية السابق",
       },
-      testAudio: "اختبار الصوت",
-      playTest: "لعب الاختبار",
-      playing: "جارٍ اللعب...",
-      playbackFailed: "فشل التشغيل:{{message}}",
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",

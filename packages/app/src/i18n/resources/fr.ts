@@ -2163,10 +2163,6 @@ export const fr: TranslationResources = {
         description: "Utilise l’ancien terminal WebView après la réouverture d’un terminal",
         accessibilityLabel: "Utiliser l’ancien rendu du terminal",
       },
-      testAudio: "Tester le son",
-      playTest: "Jouer à l'essai",
-      playing: "Jouant...",
-      playbackFailed: "Échec de la lecture:{{message}}",
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",

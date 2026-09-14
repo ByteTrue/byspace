@@ -2143,10 +2143,6 @@ export const ptBR: TranslationResources = {
         description: "Usa o terminal WebView anterior após reabrir um terminal",
         accessibilityLabel: "Usar renderizador de terminal anterior",
       },
-      testAudio: "Testar áudio",
-      playTest: "Reproduzir teste",
-      playing: "Reproduzindo...",
-      playbackFailed: "Falha na reprodução: {{message}}",
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",

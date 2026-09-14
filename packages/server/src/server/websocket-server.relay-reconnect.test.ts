@@ -132,7 +132,6 @@ function sentEnvelopes(socket: MockSocket): z.infer<typeof WireEnvelopeSchema>[]
   return socket.sent.filter((data) => typeof data === "string").map(parseSentEnvelope);
 }
 
-
 function sentBinaryFrames(socket: MockSocket): Uint8Array[] {
   return socket.sent.map(asUint8Array).filter((frame): frame is Uint8Array => frame !== null);
 }

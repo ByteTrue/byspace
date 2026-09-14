@@ -2160,10 +2160,6 @@ export const es: TranslationResources = {
         description: "Usa el terminal WebView anterior al volver a abrir un terminal",
         accessibilityLabel: "Usar el renderizador de terminal anterior",
       },
-      testAudio: "audio de prueba",
-      playTest: "Prueba de juego",
-      playing: "Jugando...",
-      playbackFailed: "Error de reproducción:{{message}}",
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",

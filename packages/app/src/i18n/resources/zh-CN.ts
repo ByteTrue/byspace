@@ -2082,10 +2082,6 @@ export const zhCN: TranslationResources = {
         description: "重新打开终端后使用之前的 WebView 终端",
         accessibilityLabel: "使用旧版终端渲染器",
       },
-      testAudio: "测试音频",
-      playTest: "播放测试",
-      playing: "正在播放...",
-      playbackFailed: "播放失败：{{message}}",
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",

@@ -2143,10 +2143,6 @@ export const ru: TranslationResources = {
         description: "Использовать прежний WebView-терминал после повторного открытия",
         accessibilityLabel: "Использовать прежний рендерер терминала",
       },
-      testAudio: "Проверка звука",
-      playTest: "Воспроизвести тестовый звук",
-      playing: "Воспроизведение...",
-      playbackFailed: "Ошибка воспроизведения: {{message}}",
       app: {
         title: "Диагностика приложения",
         rowTitle: "Диагностика приложения",

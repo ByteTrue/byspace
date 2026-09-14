@@ -2127,10 +2127,6 @@ export const ja: TranslationResources = {
         description: "ターミナルを開き直した後、以前の WebView ターミナルを使用します",
         accessibilityLabel: "以前のターミナルレンダラーを使用",
       },
-      testAudio: "音声をテスト",
-      playTest: "テスト再生",
-      playing: "再生中...",
-      playbackFailed: "再生に失敗しました: {{message}}",
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",

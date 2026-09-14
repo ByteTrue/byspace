@@ -2214,10 +2214,6 @@ export const en = {
         description: "Use the previous WebView terminal after reopening a terminal",
         accessibilityLabel: "Use legacy terminal renderer",
       },
-      testAudio: "Test audio",
-      playTest: "Play test",
-      playing: "Playing...",
-      playbackFailed: "Playback failed: {{message}}",
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",
