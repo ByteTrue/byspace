@@ -2809,7 +2809,7 @@ describe("create_agent MCP tool", () => {
     expect(parsed.success).toBe(true);
   });
 
-  it("allows caller agents to override cwd and applies caller context labels", async () => {
+  it("allows caller agents to override cwd", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
     const baseDir = await mkdtemp(join(tmpdir(), "paseo-mcp-test-"));
     const subdir = join(baseDir, "subdir");
@@ -2835,10 +2835,6 @@ describe("create_agent MCP tool", () => {
       agentStorage,
       providerSnapshotManager: createOpenCodeManager().manager,
       callerAgentId: "voice-agent",
-      resolveCallerContext: () => ({
-        childAgentDefaultLabels: { source: "voice" },
-        allowCustomCwd: true,
-      }),
       logger,
     });
 
@@ -2858,7 +2854,6 @@ describe("create_agent MCP tool", () => {
       {
         labels: {
           [PARENT_AGENT_ID_LABEL]: "voice-agent",
-          source: "voice",
         },
         workspaceId: "wks_voice",
       },

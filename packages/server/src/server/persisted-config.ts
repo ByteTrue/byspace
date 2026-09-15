@@ -105,6 +105,10 @@ const SpeechProviderIdSchema = z
   .toLowerCase()
   .pipe(z.enum(["openai", "local"]));
 
+// COMPAT(speech): speech/dictation/voice mode are retired (issue 025 C8). These schemas stay
+// so config files written by older daemons still parse under the strict parents — the values are
+// unread. Remove after 2027-09-15 together with LocalSpeechProviderSchema and the stt/tts fields
+// on OpenAiProviderSchema.
 const FeatureDictationSchema = z
   .object({
     enabled: z.boolean().optional(),

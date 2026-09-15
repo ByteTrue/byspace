@@ -22,7 +22,6 @@ export async function resolveCreateAgentIntent(input: {
   explicitWorkspaceId?: string;
   caller: CreateAgentCaller | null;
   labels?: Record<string, string>;
-  childAgentDefaultLabels?: Record<string, string>;
   resolveWorkspace: (workspaceId: string) => Promise<CreateAgentPlacement>;
   createWorkspace: () => Promise<CreateAgentPlacement>;
   legacyDetached?: boolean;
@@ -30,7 +29,6 @@ export async function resolveCreateAgentIntent(input: {
   const parentAgentId = input.legacyDetached ? null : (input.caller?.id ?? null);
   const placement = await resolvePlacement(input);
   const labels = {
-    ...input.childAgentDefaultLabels,
     ...input.labels,
     ...(parentAgentId ? { [PARENT_AGENT_ID_LABEL]: parentAgentId } : {}),
   };

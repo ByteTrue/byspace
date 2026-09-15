@@ -317,12 +317,6 @@ export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
     description: "Short description of the provider",
     defaultModeId: "default",
     modes: MY_PROVIDER_MODES,
-    // Optional: enable voice
-    voice: {
-      enabled: true,
-      defaultModeId: "default",
-      defaultModel: "some-model",
-    },
   },
 ];
 ```

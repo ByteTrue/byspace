@@ -149,13 +149,11 @@ import {
   type WorkspaceMutation,
   type WorkspaceRegistry,
 } from "./workspace-registry.js";
-import { isVoicePermissionAllowed } from "./voice-permission-policy.js";
 import {
   ProjectIconReader,
   removeProjectCustomIcon,
   setProjectCustomIcon,
 } from "../utils/project-custom-icon.js";
-import { VoiceSession } from "./session/voice/voice-session.js";
 import { CheckoutSession } from "./session/checkout/checkout-session.js";
 import {
   createWorkspaceGitObserverService,
@@ -678,7 +676,6 @@ export class Session {
   private readonly workspaceSetupRuntime: WorkspaceSetupRuntime;
   private readonly workspaceGitObserver: WorkspaceGitObserverService;
   private readonly workspaceDirectory: WorkspaceDirectory;
-  private readonly voiceSession: VoiceSession;
   private readonly checkoutSession: CheckoutSession;
   private readonly scheduleSession: ScheduleSession;
   private readonly providerCatalogSession: ProviderCatalogSession;
@@ -1004,8 +1001,6 @@ export class Session {
       isProviderVisibleToClient: (provider) => this.isProviderVisibleToClient(provider),
       buildWorkspaceDescriptor: (input) => this.buildWorkspaceDescriptor(input),
     });
-
-    this.voiceSession = new VoiceSession(); // Voice is retired (issue 025 C8)
 
     this.subscribeToAgentEvents();
     this.subscribeToRegistryMutations();
@@ -1617,28 +1612,6 @@ export class Session {
           return;
         }
 
-        if (
-          this.voiceSession.isActiveForAgent(event.agentId) &&
-          event.event.type === "permission_requested" &&
-          isVoicePermissionAllowed(event.event.request)
-        ) {
-          const requestId = event.event.request.id;
-          void this.agentManager
-            .respondToPermission(event.agentId, requestId, {
-              behavior: "allow",
-            })
-            .catch((error) => {
-              this.sessionLogger.warn(
-                {
-                  err: error,
-                  agentId: event.agentId,
-                  requestId,
-                },
-                "Failed to auto-allow speak tool permission in voice mode",
-              );
-            });
-        }
-
         const serializedEvent = serializeAgentStreamEvent(event.event);
         if (!serializedEvent) {
           return;
@@ -1877,7 +1850,7 @@ export class Session {
 
   private async dispatchInboundMessage(msg: SessionInboundMessage, source?: object): Promise<void> {
     const promise =
-      this.dispatchVoiceAndControlMessage(msg) ??
+      this.dispatchControlMessage(msg) ??
       this.dispatchAgentRewindMessage(msg, source) ??
       this.dispatchAgentRelationshipMessage(msg) ??
       this.dispatchAgentTimelineMessage(msg, source) ??
@@ -2043,30 +2016,23 @@ export class Session {
     return undefined;
   }
 
-  private dispatchVoiceAndControlMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+  private dispatchControlMessage(msg: SessionInboundMessage): Promise<void> | undefined {
     switch (msg.type) {
+      // COMPAT(voice): voice and dictation are retired (issue 025 C8), but the wire
+      // messages still parse. `set_voice_mode` carries a requestId that a pre-0.14 client
+      // waits on, so it gets an explicit refusal instead of hanging; the audio and
+      // dictation-stream messages have no response contract and are dropped.
+      // Remove after 2027-09-15.
       case "voice_audio_chunk":
-        return this.voiceSession.handleAudioChunk(msg);
       case "abort_request":
-        return this.voiceSession.handleAbort();
       case "audio_played":
-        this.voiceSession.handleAudioPlayed(msg.id);
+      case "dictation_stream_start":
+      case "dictation_stream_chunk":
+      case "dictation_stream_finish":
+      case "dictation_stream_cancel":
         return undefined;
       case "set_voice_mode":
-        return this.voiceSession.handleSetVoiceMode(msg.enabled, msg.agentId, msg.requestId ?? "");
-      case "dictation_stream_start":
-        return this.voiceSession.handleDictationStreamStart(msg);
-      case "dictation_stream_chunk":
-        return this.voiceSession.handleDictationChunk({
-          dictationId: msg.dictationId,
-          seq: msg.seq,
-          audioBase64: msg.audio,
-          format: msg.format,
-        });
-      case "dictation_stream_finish":
-        return this.voiceSession.handleDictationFinish(msg.dictationId, msg.finalSeq);
-      case "dictation_stream_cancel":
-        this.voiceSession.handleDictationCancel(msg.dictationId);
+        this.respondVoiceModeRetired(msg.requestId, msg.agentId);
         return undefined;
       case "restart_server_request":
         return this.handleRestartServerRequest(msg.requestId, msg.reason);
@@ -2091,6 +2057,26 @@ export class Session {
       default:
         return undefined;
     }
+  }
+
+  // COMPAT(voice): remove with the dispatchControlMessage voice cases after 2027-09-15.
+  private respondVoiceModeRetired(
+    requestId: string | undefined,
+    agentId: string | undefined,
+  ): void {
+    if (!requestId) {
+      return;
+    }
+    this.emit({
+      type: "set_voice_mode_response",
+      payload: {
+        requestId,
+        enabled: false,
+        agentId: agentId ?? null,
+        accepted: false,
+        error: "Voice mode is not available in this version of BySpace.",
+      },
+    });
   }
 
   private dispatchAgentRewindMessage(
@@ -7672,8 +7658,6 @@ export class Session {
       this.unsubscribeTerminalWorkspaceContributionEvents = null;
     }
     this.providerCatalogSession.dispose();
-
-    this.voiceSession.dispose();
 
     this.terminalController.dispose();
 

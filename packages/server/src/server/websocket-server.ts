@@ -358,9 +358,8 @@ function createNoopWorkspaceRegistry(): WorkspaceRegistry {
 }
 
 function buildServerCapabilities(): ServerCapabilities | undefined {
-  // Voice capabilities are retired (issue 025 C8); the voice block reports
-  // disabled so old clients hide voice affordances.
-  void 0;
+  // Voice capabilities are retired (issue 025 C8). Omitting the block entirely is what
+  // hides voice affordances on older clients: they read `capabilities?.voice` as absent.
   return undefined;
 }
 
@@ -1685,14 +1684,6 @@ export class VoiceAssistantWebSocketServer {
       log.error({ err }, "Client error");
       await this.detachSocket(ws, { error: err });
     });
-  }
-
-  public resolveVoiceSpeakHandler(_callerAgentId: string): null {
-    return null; // Voice is retired (issue 025 C8)
-  }
-
-  public resolveVoiceCallerContext(_callerAgentId: string): null {
-    return null;
   }
 
   private async detachSocket(

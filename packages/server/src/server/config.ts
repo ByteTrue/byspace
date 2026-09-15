@@ -597,7 +597,7 @@ export function resolveConfigFromPersisted(
     persisted.agents?.providers as Record<string, unknown> | undefined,
   );
 
-  const overrideControlledPaths = resolveOverrideControlledPaths(env, cli, null);
+  const overrideControlledPaths = resolveOverrideControlledPaths(env, cli);
 
   return {
     listen,
@@ -669,13 +669,11 @@ function parsePositiveGitOverride(value: string | undefined): boolean {
 function resolveOverrideControlledPaths(
   env: NodeJS.ProcessEnv,
   cli: CliConfigOverrides | undefined,
-  speechProviders: RequestedSpeechProviders | null,
 ): string[] {
   return Array.from(
     new Set([
       ...resolveDaemonOverrideControlledPaths(env, cli),
       ...resolveLogOverrideControlledPaths(env),
-      ...resolveSpeechOverrideControlledPaths(env, speechProviders),
     ]),
   ).sort();
 }
@@ -780,74 +778,6 @@ function resolveLogOverrideControlledPaths(env: NodeJS.ProcessEnv): string[] {
   }
   if (parsePositiveIntegerEnv(env.PASEO_LOG_FILE_ROTATE_COUNT) !== undefined) {
     paths.push("log.file.rotate.maxFiles");
-  }
-  return paths;
-}
-
-type RequestedSpeechProviders = Record<string, { enabled?: boolean; provider?: string }>;
-
-function isEnabledSpeechProvider(
-  provider: RequestedSpeechProviders[keyof RequestedSpeechProviders],
-  expected: "local" | "openai",
-): boolean {
-  return provider.enabled !== false && provider.provider === expected;
-}
-
-function resolveSpeechOverrideControlledPaths(
-  env: NodeJS.ProcessEnv,
-  providers: RequestedSpeechProviders | null,
-): string[] {
-  if (!providers) return [];
-  const paths: string[] = [];
-  const add = (envName: string, ...configPaths: string[]) => {
-    if (env[envName] !== undefined) paths.push(...configPaths);
-  };
-
-  add("PASEO_DICTATION_ENABLED", "features.dictation.enabled");
-  add("PASEO_DICTATION_STT_PROVIDER", "features.dictation.stt.provider");
-  if (
-    env.PASEO_DICTATION_LOCAL_STT_MODEL !== undefined &&
-    isEnabledSpeechProvider(providers.dictationStt, "local")
-  ) {
-    paths.push("features.dictation.stt.model");
-  }
-  add("PASEO_DICTATION_LANGUAGE", "features.dictation.stt.language");
-  add("PASEO_VOICE_MODE_ENABLED", "features.voiceMode.enabled");
-  add("PASEO_VOICE_LLM_PROVIDER", "features.voiceMode.llm.provider");
-  add("PASEO_VOICE_STT_PROVIDER", "features.voiceMode.stt.provider");
-  if (
-    env.PASEO_VOICE_LOCAL_STT_MODEL !== undefined &&
-    isEnabledSpeechProvider(providers.voiceStt, "local")
-  ) {
-    paths.push("features.voiceMode.stt.model");
-  }
-  add("PASEO_VOICE_LANGUAGE", "features.voiceMode.stt.language");
-  add("PASEO_VOICE_TURN_DETECTION_PROVIDER", "features.voiceMode.turnDetection.provider");
-  add("PASEO_VOICE_TTS_PROVIDER", "features.voiceMode.tts.provider");
-  if (
-    env.PASEO_VOICE_LOCAL_TTS_MODEL !== undefined &&
-    isEnabledSpeechProvider(providers.voiceTts, "local")
-  ) {
-    paths.push("features.voiceMode.tts.model");
-  }
-  add("PASEO_VOICE_LOCAL_TTS_SPEAKER_ID", "features.voiceMode.tts.speakerId");
-  add("PASEO_VOICE_LOCAL_TTS_SPEED", "features.voiceMode.tts.speed");
-  add("PASEO_LOCAL_MODELS_DIR", "providers.local.modelsDir");
-  const openAiDictationStt = isEnabledSpeechProvider(providers.dictationStt, "openai");
-  const openAiVoiceStt = isEnabledSpeechProvider(providers.voiceStt, "openai");
-  if (env.STT_CONFIDENCE_THRESHOLD !== undefined && (openAiDictationStt || openAiVoiceStt)) {
-    paths.push("features.dictation.stt.confidenceThreshold");
-  }
-  if (env.STT_MODEL !== undefined) {
-    if (openAiDictationStt) paths.push("features.dictation.stt.model");
-    if (openAiVoiceStt) paths.push("features.voiceMode.stt.model");
-  }
-  if (isEnabledSpeechProvider(providers.voiceTts, "openai")) {
-    add("TTS_MODEL", "features.voiceMode.tts.model");
-    add("TTS_VOICE", "features.voiceMode.tts.voice");
-  }
-  if (env.PASEO_DICTATION_LANGUAGE !== undefined && env.PASEO_VOICE_LANGUAGE === undefined) {
-    paths.push("features.voiceMode.stt.language");
   }
   return paths;
 }

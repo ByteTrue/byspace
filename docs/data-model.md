@@ -228,13 +228,9 @@ snapshot so a mixed edit can apply its live subset and still name the paths that
       portScript?: string    // executable that receives service/workspace context and prints one TCP port
     }
   },
+  // Retired speech config: accepted so older files load, read by nothing.
   providers: {
-    openai: {
-      apiKey?: string,
-      baseUrl?: string,
-      stt?: { apiKey?: string, baseUrl?: string },
-      tts?: { apiKey?: string, baseUrl?: string }
-    },
+    openai: { apiKey?: string, baseUrl?: string, stt?: {...}, tts?: {...} },
     local: { modelsDir: string }
   },
   agents: {
@@ -251,10 +247,6 @@ snapshot so a mixed edit can apply its live subset and still name the paths that
   },
   pluginsEnabled: boolean,
   plugins: Record<pluginId, { source: "directory", path: string, enabled?: boolean }>,
-  features: {
-    dictation: { enabled, stt: { provider, model, language, confidenceThreshold } },
-    voiceMode: { enabled, llm, stt: { provider, model, language }, turnDetection, tts: { provider, model, voice, speakerId, speed } }
-  },
   log: {
     level, format,
     console: { level, format },
@@ -361,44 +353,9 @@ remains authoritative during reload.
 
 `agents.metadataGeneration.providers` controls the preferred structured-generation fallback order for daemon-side metadata tasks such as commit messages, PR text, branch names, and generated agent titles. Entries are tried first in the configured order, then BySpace falls through to dynamically discovered defaults and finally the current selection when available.
 
-Local speech model ids are intentionally narrow: STT uses `parakeet-tdt-0.6b-v2-int8`, TTS uses `kokoro-en-v0_19`, and turn detection uses the bundled Silero VAD model.
-
-Set these to select OpenAI instead of local speech:
-
-| Env var                          | Applies to                      |
-| -------------------------------- | ------------------------------- |
-| `BYSPACE_VOICE_STT_PROVIDER`     | Voice mode STT provider         |
-| `BYSPACE_DICTATION_STT_PROVIDER` | Composer dictation STT provider |
-| `BYSPACE_VOICE_TTS_PROVIDER`     | Voice mode TTS provider         |
-
-The corresponding `PASEO_*` names remain accepted as lower-priority compatibility fallbacks.
-
-OpenAI speech can be configured under `providers.openai`. STT and TTS resolve independently, so they can point at different endpoints:
-
-```json
-{
-  "providers": {
-    "openai": {
-      "stt": {
-        "apiKey": "sk-...",
-        "baseUrl": "https://stt.example.com/v1"
-      },
-      "tts": {
-        "apiKey": "sk-...",
-        "baseUrl": "https://api.openai.com/v1"
-      }
-    }
-  }
-}
-```
-
-`providers.openai.stt` is used for both composer dictation and voice mode speech-to-text; `providers.openai.tts` is used for voice mode text-to-speech. The equivalent env vars are `OPENAI_STT_API_KEY`/`OPENAI_STT_BASE_URL` and `OPENAI_TTS_API_KEY`/`OPENAI_TTS_BASE_URL`. Each feature falls back to `providers.openai.apiKey`/`providers.openai.baseUrl`, then `OPENAI_API_KEY`/`OPENAI_BASE_URL`, when its own fields are unset. These settings apply only to BySpace OpenAI speech features, not to Codex or other OpenAI-backed tools.
-
-BySpace uses these paths under the configured OpenAI base URL:
-
-- dictation STT: `/v1/audio/transcriptions`
-- voice mode STT: `/v1/audio/transcriptions`
-- voice mode TTS: `/v1/audio/speech`
+Speech, dictation, and voice mode are retired (issue 025 C8). `features.dictation`,
+`features.voiceMode`, and the `providers.*.stt`/`tts` keys are still accepted by the config schema
+so files written by older daemons load, but nothing reads them.
 
 ---
 

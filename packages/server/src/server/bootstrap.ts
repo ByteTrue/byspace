@@ -1232,10 +1232,7 @@ export async function createPaseoDaemon(
     { elapsed: elapsed() },
     `Agent registry loaded (${persistedRecords.length} record${persistedRecords.length === 1 ? "" : "s"}); agents will initialize on demand`,
   );
-  logger.info(
-    "Voice mode configured for agent-scoped resume flow (no dedicated voice assistant provider)",
-  );
-  logger.info({ elapsed: elapsed() }, "Preparing voice and MCP runtime");
+  logger.info({ elapsed: elapsed() }, "Preparing websocket and MCP runtime");
 
   const createAgentToolHostDependencies = (
     runtime: PaseoToolRuntimeContext,
@@ -1310,7 +1307,6 @@ export async function createPaseoDaemon(
     paseoHome: config.paseoHome,
     worktreesRoot: config.worktreesRoot,
     callerAgentId: runtime.callerAgentId,
-    resolveCallerContext: (agentId) => wsServer?.resolveVoiceCallerContext(agentId) ?? null,
     logger,
   });
   const createAgentToolCatalog = (runtime: PaseoToolRuntimeContext) =>
