@@ -297,25 +297,25 @@ try {
       reloadConfig.daemon = {
         ...reloadConfig.daemon,
         listen: process.platform === "win32" ? `${listen}-changed` : `${listen}.changed`,
-        browserTools: { enabled: true },
+        appendSystemPrompt: "Prefer terse replies.",
       };
       await writeFile(configPath, `${JSON.stringify(reloadConfig, null, 2)}\n`, "utf-8");
       const nestedReload = await daemonCommand(["reload", "--host", listen, "--json"]);
       assert.strictEqual(nestedReload.exitCode, 0, nestedReload.stderr);
       assert.deepStrictEqual(JSON.parse(nestedReload.stdout), {
-        appliedPaths: ["daemon.browserTools.enabled"],
+        appliedPaths: ["daemon.appendSystemPrompt"],
         restartRequiredPaths: [],
         overrideControlledPaths: ["daemon.listen"],
       });
 
-      reloadConfig.daemon.browserTools.enabled = false;
+      reloadConfig.daemon.appendSystemPrompt = "Prefer detailed replies.";
       await writeFile(configPath, `${JSON.stringify(reloadConfig, null, 2)}\n`, "utf-8");
       const aliasReload = await runLocalPaseo(["reload", "--host", listen, "--json"], {
         BYSPACE_HOME: paseoHome,
       });
       assert.strictEqual(aliasReload.exitCode, 0, aliasReload.stderr);
       assert.deepStrictEqual(JSON.parse(aliasReload.stdout), {
-        appliedPaths: ["daemon.browserTools.enabled"],
+        appliedPaths: ["daemon.appendSystemPrompt"],
         restartRequiredPaths: [],
         overrideControlledPaths: [],
       });
