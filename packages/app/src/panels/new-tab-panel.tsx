@@ -205,10 +205,6 @@ const NewTabPanel = memo(function NewTabPanel(): ReactElement {
         itemsById.get("terminal")?.launch({ kind: "replace", tabId });
         return true;
       }
-      if (action.id === "workspace.browser.new" || action.id === "workspace.tab.target.browser") {
-        itemsById.get("browser")?.launch({ kind: "replace", tabId });
-        return true;
-      }
       if (action.id === "workspace.tab.target.changes") {
         const changesItem = itemsById.get("changes") ?? itemsById.get("diff");
         if (!changesItem) return false;
@@ -230,9 +226,7 @@ const NewTabPanel = memo(function NewTabPanel(): ReactElement {
     actions: [
       "workspace.agent.new",
       "workspace.terminal.new",
-      "workspace.browser.new",
       "workspace.tab.target.agent",
-      "workspace.tab.target.browser",
       "workspace.tab.target.changes",
       "workspace.tab.target.files",
     ],

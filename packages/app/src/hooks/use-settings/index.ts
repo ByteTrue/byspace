@@ -45,6 +45,7 @@ import {
   type Settings,
   type SidebarWorkspaceTrailing,
   type SettingsDeps,
+  type TerminalAppearance,
   type WorkspaceTitleSource,
 } from "./storage";
 
@@ -83,6 +84,7 @@ export type {
   Settings,
   SettingsDeps,
   SidebarWorkspaceTrailing,
+  TerminalAppearance,
   WorkspaceTitleSource,
 };
 

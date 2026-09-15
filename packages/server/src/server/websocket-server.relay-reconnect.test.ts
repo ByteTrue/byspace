@@ -104,7 +104,7 @@ vi.mock("./push/index.js", () => ({
 }));
 
 import { z } from "zod";
-import { VoiceAssistantWebSocketServer } from "./websocket-server";
+import { DaemonWebSocketServer } from "./websocket-server";
 import { DAEMON_PERMISSIONS, parseServerInfoStatusPayload } from "./messages.js";
 
 interface WebSocketServerInternals {
@@ -228,7 +228,7 @@ function createServer(options?: {
     onChange: vi.fn(() => () => {}),
   };
   const logger = options?.logger ?? createLogger();
-  return new VoiceAssistantWebSocketServer(
+  return new DaemonWebSocketServer(
     createStub<HTTPServer>({}),
     createStub<pino.Logger>(logger),
     "srv_test",
@@ -310,7 +310,7 @@ function createDirectRequest() {
 }
 
 async function attachRelayAndHello(params: {
-  server: VoiceAssistantWebSocketServer;
+  server: DaemonWebSocketServer;
   socket: MockSocket;
   clientId: string;
 }) {
@@ -326,7 +326,7 @@ async function attachRelayAndHello(params: {
 }
 
 async function attachDirectAndHello(params: {
-  server: VoiceAssistantWebSocketServer;
+  server: DaemonWebSocketServer;
   socket: MockSocket;
   clientId: string;
 }) {

@@ -1,5 +1,4 @@
 import { en, type TranslationResources } from "./en";
-import { pluginSettings } from "./plugin-settings";
 
 export const ar: TranslationResources = {
   common: {
@@ -112,18 +111,6 @@ export const ar: TranslationResources = {
       cancelingAgent: "وكيل الإلغاء",
       stopAgent: "توقف الوكيل",
       interrupt: "مقاطعة",
-    },
-    voice: {
-      enableVoiceMode: "تمكين الوضع الصوتي",
-      voiceMode: "وضع الصوت",
-      unmuteVoiceMode: "إلغاء كتم وضع الصوت",
-      muteVoiceMode: "وضع كتم الصوت",
-      stopDictation: "توقف عن الإملاء",
-      startDictation: "بدء الإملاء",
-      unmuteVoice: "إلغاء كتم الصوت",
-      muteVoice: "كتم الصوت",
-      dictation: "الإملاء",
-      interruptBeforeVoice: "قم بمقاطعة الوكيل قبل بدء الوضع الصوتي",
     },
     attachments: {
       addImage: "أضف صورة",
@@ -326,15 +313,6 @@ export const ar: TranslationResources = {
     },
     activity: {
       details: "تفاصيل",
-    },
-    dictation: {
-      start: "بدء الإملاء الصوتي",
-      cancel: "إلغاء الإملاء",
-      retry: "أعد محاولة الإملاء",
-      insert: "إدراج النسخ",
-      insertAndSend: "أدخل النسخ وأرسل",
-      failed: "فشل الإملاء:{{error}}",
-      failedRetry: "فشل الإملاء. اضغط على إعادة المحاولة.",
     },
     question: {
       submit: "يُقدِّم",
@@ -542,45 +520,6 @@ export const ar: TranslationResources = {
         noOutput: "لا يوجد إخراج",
       },
     },
-    browser: {
-      unavailable: {
-        title: "المتصفح مخصص لسطح المكتب فقط",
-        subtitle: "افتح مساحة العمل هذه في Electron لاستخدام المتصفح المدمج.",
-      },
-      session: "جلسة المتصفح{{browserId}}",
-      controls: {
-        back: "خلف",
-        forward: "إلى الأمام",
-        stopLoading: "توقف عن التحميل",
-        refresh: "ينعش",
-        browserUrl: "متصفح URL",
-        enterUrl: "أدخل URL",
-        openDevTools: "افتح أدوات تطوير المتصفح",
-        cancelSelector: "إلغاء محدد العنصر",
-        annotateElement: "التعليق على العنصر",
-        screenshotElement: "لقطة للعنصر",
-        screenshotCopied: "تم نسخ لقطة الشاشة إلى الحافظة",
-        elementCopied: "تم نسخ العنصر إلى الحافظة",
-        screenshotFailed: "تعذّر نسخ لقطة الشاشة",
-        selectorLoading: "انتظر حتى ينتهي تحميل الصفحة",
-        selectorFailed: "تعذّر بدء محدد العنصر",
-      },
-      annotate: {
-        title: "التعليق على العنصر",
-        placeholder: "رسالة إلى الوكيل حول هذا العنصر…",
-        submit: "إرفاق",
-        cancel: "إلغاء",
-      },
-      devices: {
-        label: "حجم الجهاز",
-        responsive: "متجاوب",
-      },
-      errors: {
-        failedToLoad: "فشل تحميل الصفحة",
-        invalidUrl: "متصفح غير صالح URL",
-        unsupportedProtocol: "متصفح محظور غير مدعوم URL:{{protocol}}",
-      },
-    },
     terminal: {
       hostDisconnected: "Host غير متصل",
       updateHost: "حدّث المضيف لاستخدام عارض الطرفية الأصلي.",
@@ -631,7 +570,6 @@ export const ar: TranslationResources = {
         newTerminal: "محطة جديدة",
         preparingTerminal: "إعداد علامة التبويب المحطة الطرفية",
         preparingTerminalTooltip: "جارٍ تحضير المحطة...",
-        newBrowser: "متصفح جديد",
         maximizePane: "تكبير الجزء",
         restorePane: "استعادة الجزء",
         closePane: "إغلاق الجزء",
@@ -703,7 +641,6 @@ export const ar: TranslationResources = {
         workspaceActions: "إجراءات Workspace",
         newAgent: "وكيل جديد",
         newTerminal: "محطة جديدة",
-        newBrowser: "علامة تبويب متصفح جديدة",
         importSession: "جلسة الاستيراد",
         copyPath: "نسخ مسار مساحة العمل",
         copyBranchName: "انسخ اسم الفرع",
@@ -1287,163 +1224,6 @@ export const ar: TranslationResources = {
       commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
   },
-  desktop: {
-    windowControls: {
-      minimize: "تصغير النافذة",
-      maximize: "تكبير النافذة",
-      restore: "استعادة النافذة",
-      close: "إغلاق النافذة",
-    },
-    quitting: {
-      title: "جارٍ إنهاء BySpace...",
-      detail: "إيقاف البرنامج الخفي المحلي.",
-    },
-    daemon: {
-      title: "Daemon",
-      status: {
-        title: "حالة",
-        builtInOnly: "يتم عرض البرنامج الخفي لسطح المكتب المدمج فقط هنا",
-        running: "جري",
-        notRunning: "لا يعمل",
-        pid: "PID{{pid}}",
-      },
-      management: {
-        title: "إدارة البرنامج الخفي المدمج",
-        hint: "اسمح لـ Paseo ببدء تشغيل البرنامج الخفي المدمج وإيقافه",
-        pauseTitle: "وقفة المدمج في البرنامج الخفي",
-        pauseMessage:
-          "سيؤدي هذا إلى إيقاف البرنامج الخفي المدمج على الفور. سيتم إيقاف تشغيل الوكلاء والمحطات الطرفية المتصلة بالبرنامج الخفي المدمج.",
-        pauseAndStop: "وقفة وتوقف",
-        registrationFailed:
-          "Built-in daemon started, but Paseo could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
-        pausedStopFailed:
-          "تم إيقاف إدارة البرنامج الخفي المضمنة مؤقتًا، لكن لم يتمكن Paseo من إيقاف البرنامج الخفي.",
-        updateFailed: "غير قادر على تحديث إدارة البرنامج الخفي المضمنة.",
-      },
-      keepRunning: {
-        title: "استمر في تشغيل البرنامج الخفي بعد الإقلاع عن التدخين",
-        hint: "يستمر تشغيل Daemon عند إنهاء Paseo",
-      },
-      logs: {
-        title: "ملف السجل",
-        modalTitle: "سجلات Daemon",
-        unavailable: "مسار السجل غير متاح",
-        empty: "(ملف السجل فارغ)",
-        copied: "تم نسخ مسار السجل.",
-        copyFailed: "غير قادر على نسخ مسار السجل.",
-        open: "فتح السجلات",
-        copyPath: "نسخ المسار",
-      },
-      fullStatus: {
-        title: "الوضع الكامل",
-        modalTitle: "حالة Daemon",
-        hint: "يقوم بتشغيل`byspace daemon status`ويظهر الإخراج",
-        view: "عرض الحالة",
-        copied: "تم نسخ الحالة إلى الحافظة.",
-        fetchFailed: "فشل جلب حالة البرنامج الخفي:{{message}}",
-      },
-      advancedSettings: "الإعدادات المتقدمة",
-      openAdvancedSettings: "افتح إعدادات البرنامج الخفي المتقدمة",
-      versionMismatch:
-        "إصدارا التطبيق والبرنامج الخفي غير متطابقين. قم بتحديث كلاهما إلى نفس الإصدار للحصول على أفضل تجربة.",
-      loadFailed: "غير قادر على تحميل حالة البرنامج الخفي لسطح المكتب.",
-    },
-    updates: {
-      status: {
-        checking: "جارٍ التحقق من وجود تحديثات للتطبيق...",
-        installing: "جارٍ تثبيت تحديث التطبيق...",
-        upToDate: "التطبيق محدث.",
-        upToDateWithLastChecked: "Up to date. Last checked at {{time}}.",
-        pending: "سنخبرك عندما يصبح التحديث جاهزًا.",
-        pendingWithLastChecked: "سنخبرك عندما يصبح التحديث جاهزًا. آخر فحص في {{time}}.",
-        pendingWithVersion: "تم العثور على تحديث: {{version}}. جارٍ التنزيل...",
-        pendingWithVersionAndLastChecked:
-          "تم العثور على تحديث: {{version}}. جارٍ التنزيل... آخر فحص في {{time}}.",
-        availableWithVersion: "التحديث جاهز:{{version}}",
-        availableWithVersionAndLastChecked: "التحديث جاهز:{{version}}. آخر فحص في {{time}}.",
-        available: "تحديث التطبيق جاهز للتثبيت.",
-        availableWithLastChecked: "تحديث التطبيق جاهز للتثبيت. آخر فحص في {{time}}.",
-        installed: "تم تثبيت تحديث التطبيق. إعادة التشغيل مطلوبة.",
-        failed: "فشل في تحديث التطبيق.",
-        idle: "لم يتم التحقق من حالة التحديث بعد.",
-      },
-      installError: "غير قادر على تثبيت تحديث تطبيق سطح المكتب.",
-      callout: {
-        installingTitle: "تثبيت التحديث",
-        failedTitle: "فشل التحديث",
-        availableTitle: "التحديث متاح",
-        genericError: "حدث خطأ ما.",
-        whatsNew: "ما هو الجديد",
-        installingAction: "جارٍ التثبيت...",
-        installAndRestart: "التثبيت وإعادة التشغيل",
-        installingDescription: "التثبيت وإعادة التشغيل...",
-        versionReady: "{{version}}جاهز للتثبيت.",
-        newVersionReady: "إصدار جديد جاهز للتثبيت.",
-        restartWarning: "ستؤدي ترقية التطبيق إلى إيقاف تشغيل الوكلاء وإغلاق الجلسات الطرفية.",
-      },
-    },
-    settings: {
-      loadFailed: "غير قادر على تحميل إعدادات سطح المكتب.",
-      saveFailed: "غير قادر على حفظ إعدادات سطح المكتب.",
-    },
-    rosetta: {
-      title: "قم بتنزيل نسخة Apple Silicon",
-      runningIntel: "أنت تقوم بتشغيل إصدار Intel من Paseo ضمن Rosetta على Apple Silicon.",
-      highCpu:
-        "يؤدي هذا إلى ارتفاع استخدام وحدة المعالجة المركزية. قم بتنزيل إصدار Apple Silicon لإصلاحه.",
-      download: "تحميل",
-    },
-    permissions: {
-      notifications: {
-        allowed: "يسمح نظام التشغيل بالإشعارات.",
-        denied: "تم رفض الإخطارات في إعدادات النظام.",
-        notGranted: "لم يتم منح الإخطارات بعد.",
-        webOnly: "حالة إشعار سطح المكتب متاحة فقط في وقت تشغيل الويب.",
-        supported: "يتم دعم إشعارات سطح المكتب.",
-        unsupported: "إشعارات سطح المكتب غير مدعومة على هذا النظام الأساسي.",
-        apiUnavailable: "واجهة برمجة تطبيقات إشعارات الويب غير متاحة في هذه البيئة.",
-        requestsWebOnly: "طلبات إعلام سطح المكتب متاحة فقط في وقت تشغيل الويب.",
-        requestUnavailable: "واجهة برمجة تطبيقات إشعارات الويب requestPermission() غير متاحة.",
-        requestFailed: "فشل طلب إذن الإعلام:{{message}}",
-        unexpectedState: "حالة إذن الإعلام غير المتوقعة:{{state}}",
-      },
-      microphone: {
-        webOnly: "حالة ميكروفون سطح المكتب متاحة فقط في وقت تشغيل الويب.",
-        navigatorUnavailable: "Navigator غير متوفر في هذه البيئة.",
-        granted: "تم منح الوصول إلى الميكروفون.",
-        denied: "تم رفض الوصول إلى الميكروفون في إعدادات النظام.",
-        notGranted: "لم يتم منح إذن الميكروفون بعد.",
-        unexpectedState: "حالة إذن الميكروفون غير متوقعة:{{state}}",
-        statusApiUnavailable:
-          "واجهة برمجة التطبيقات لحالة الميكروفون غير متاحة في وقت التشغيل هذا. استخدم الطلب للتحقق من الوصول.",
-        queryFailed: "فشل الاستعلام عن حالة الميكروفون:{{message}}",
-        captureUnavailable: "التقاط الميكروفون غير متوفر في هذه البيئة.",
-        permissionApiUnavailable:
-          "واجهة برمجة تطبيقات حالة الإذن غير متاحة. استخدم الطلب للتحقق من الوصول.",
-        requestsWebOnly: "طلبات ميكروفون سطح المكتب متاحة فقط في وقت تشغيل الويب.",
-        captureApiUnavailable: "واجهة برمجة تطبيقات التقاط الميكروفون غير متاحة في هذه البيئة.",
-        requestDenied: "تم رفض إذن الميكروفون من قبل المستخدم أو النظام.",
-        noDevice: "لم يتم العثور على جهاز ميكروفون.",
-        requestFailed: "فشل طلب إذن الميكروفون:{{message}}",
-      },
-      empty: {
-        notifications: "لم يتم التحقق من حالة الإخطار بعد.",
-        microphone: "لم يتم التحقق من حالة الميكروفون بعد.",
-      },
-      testNotification: {
-        title: "اختبار الإخطار BySpace",
-        body: "إذا كان بإمكانك رؤية ذلك، فهذا يعني أن إشعارات سطح المكتب تعمل.",
-        notDelivered: "لم يتم تسليم الإخطار. تحقق من إعدادات النظام > الإشعارات.",
-        failed: "فشل في إرسال الإخطار.",
-      },
-    },
-    integrations: {
-      cli: {
-        statusFailed: "غير قادر على التحقق من حالة تثبيت CLI.",
-        installFailed: "غير قادر على تثبيت PaseoCLI.",
-      },
-    },
-  },
   rootError: {
     title: "واجه BySpace مشكلة.",
     body: "جرّب مرة أخرى لإعادة تحميل التطبيق. إذا استمر حدوث ذلك، فأرفق التفاصيل أدناه عند الإبلاغ عنه.",
@@ -2018,10 +1798,8 @@ export const ar: TranslationResources = {
       providers: "مقدمي الخدمات",
       usage: "الاستخدام",
       terminals: "Terminals",
-      plugins: "Plugins",
       host: "نظرة عامة",
     },
-    plugins: pluginSettings.ar,
     metadataGeneration: {
       title: "إنشاء البيانات الوصفية",
       description:
@@ -2140,28 +1918,18 @@ export const ar: TranslationResources = {
       connectedHosts: "المضيفين المتصلين",
       offline: "غير متصل",
       versionDiffers: "الإصدار يختلف عن هذا الجهاز",
-      releaseChannel: {
-        label: "الافراج عن القناة",
-        description: "قم بالتبديل إلى Beta للحصول على التحديثات عاجلاً والمساعدة في تشكيلها",
-        stable: "Stable",
-        beta: "Beta",
-      },
-      updates: {
-        label: "تحديثات التطبيق",
-        readyToInstall: "جاهز للتثبيت:{{version}}",
-        installTitle: "تثبيت تحديث سطح المكتب",
-        installMessage: "يؤدي هذا إلى تحديث Paseo على هذا الكمبيوتر",
-        installConfirm: "تثبيت التحديث",
-        update: "تحديث",
-        updateTo: "التحديث إلى{{version}}",
-        installing: "جارٍ التثبيت...",
-        check: "يفحص",
-        checking: "جارٍ التحقق...",
-        alertTitle: "خطأ",
-        alertMessage: "غير قادر على فتح مربع حوار تأكيد التحديث.",
-      },
     },
     appearance: {
+      terminal: {
+        title: "الطرفية",
+        hint: "مخطط ألوان الطرفية، مستقل عن سمة التطبيق",
+        accessibilityLabel: "مظهر الطرفية: {{value}}",
+        options: {
+          match: "مطابق للتطبيق",
+          dark: "داكن",
+          light: "فاتح",
+        },
+      },
       theme: {
         title: "سمة",
         accessibilityLabel: "الموضوع:{{value}}",
@@ -2278,12 +2046,9 @@ export const ar: TranslationResources = {
         cycleTheme: "موضوع الدورة",
         focusMessageInput: "التركيز على إدخال الرسالة",
         cycleAgentMode: "تبديل وضع الوكيل",
-        toggleVoiceMode: "تبديل الوضع الصوتي",
-        startStopDictation: "بدء إملاء /stop",
         interruptAgent: "عامل المقاطعة",
         sendMessage: "أرسل رسالة",
         queueMessage: "رسالة قائمة الانتظار",
-        muteUnmuteVoiceMode: "كتم وضع الصوت /unmute",
         switchProject: "تبديل المشروع",
       },
       helpNotes: {

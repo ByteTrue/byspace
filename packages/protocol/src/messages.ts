@@ -180,9 +180,12 @@ export const AgentProfileSchema = z
 
 export type AgentProfile = z.infer<typeof AgentProfileSchema>;
 
+// COMPAT(browserTools): browser automation retired in v0.14.x with the desktop app. The
+// schema stays so config snapshots/patches from older clients still parse (field may be
+// present or absent); the daemon ignores the value. Remove after 2027-09-15.
 const MutableBrowserToolsConfigSchema = z
   .object({
-    enabled: z.boolean().default(false),
+    enabled: z.boolean().optional(),
   })
   .passthrough();
 const MutableRelayConfigSchema = z
@@ -254,7 +257,9 @@ export const MutableDaemonConfigSchema = z
       .optional(),
     app: z.object({ baseUrl: z.string() }).optional(),
     catalogRefreshTimeoutMs: z.number().int().positive().optional(),
-    browserTools: MutableBrowserToolsConfigSchema.default({ enabled: false }),
+    // COMPAT(browserTools): retired in v0.14.x; kept so older-client config payloads parse.
+    // Remove after 2027-09-15.
+    browserTools: MutableBrowserToolsConfigSchema.optional(),
     providers: z.record(z.string(), MutableDaemonProviderConfigSchema).default({}),
     metadataGeneration: MutableMetadataGenerationConfigSchema.default({ providers: [] }),
     autoArchiveAfterMerge: z.boolean().default(false),
@@ -278,6 +283,8 @@ export const MutableDaemonConfigPatchSchema = z
   .object({
     relay: MutableRelayConfigSchema.partial().optional(),
     mcp: z.object({ injectIntoAgents: z.boolean().optional() }).passthrough().optional(),
+    // COMPAT(browserTools): retired in v0.14.x; kept so older-client patches parse.
+    // Remove after 2027-09-15.
     browserTools: MutableBrowserToolsConfigSchema.partial().optional(),
     providers: z
       .record(z.string(), MutableDaemonProviderConfigSchema.partial().passthrough())

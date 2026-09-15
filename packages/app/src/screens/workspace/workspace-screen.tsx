@@ -109,8 +109,6 @@ import type { CheckoutStatusPayload } from "@/git/use-status-query";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useStableEvent } from "@/hooks/use-stable-event";
-import { removeResidentBrowserWebview } from "@/desktop/browser/resident-webviews";
-import { createWorkspaceBrowser, useBrowserStore } from "@/desktop/browser/store";
 import { buildProviderCommand } from "@/utils/provider-command-templates";
 import { generateDraftId } from "@/stores/draft-keys";
 import { resolveWorkspaceRouteId } from "@/utils/workspace-identity";
@@ -134,7 +132,6 @@ import {
   buildWorkspaceTabMenuEntries,
   type WorkspaceTabMenuLabels,
 } from "@/screens/workspace/workspace-tab-menu";
-import { useDesktopBrowserNewTabRequests } from "@/desktop/browser/new-tab-requests";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import {
   resolveWorkspaceExplorerToggleOwner,
@@ -188,7 +185,7 @@ import {
 } from "@/panels/panel-instance-attributes";
 import { findAdjacentPane } from "@/utils/split-navigation";
 import { supportsDesktopPaneSplits, useIsCompactFormFactor } from "@/constants/layout";
-import { getIsElectron, isNative, isWeb } from "@/constants/platform";
+import { isNative, isWeb } from "@/constants/platform";
 import type { SurfaceBackdrop } from "@/styles/surface-backdrop";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
 import { useWorkspaceTerminals } from "@/screens/workspace/terminals/use-workspace-terminals";
@@ -944,7 +941,6 @@ interface WorkspaceHeaderTitleBarProps {
   workspaceScripts: WorkspaceDescriptor["scripts"];
   liveTerminalIds: string[];
   showWorkspaceSetup: boolean;
-  showCreateBrowserTab: boolean;
   isMobile: boolean;
   createTerminalDisabled: boolean;
   importAgentDisabled: boolean;
@@ -952,14 +948,12 @@ interface WorkspaceHeaderTitleBarProps {
   onCreateDraftTab: () => void;
   onCreateTerminal: () => void;
   onCreateTerminalWithProfile: (profile: TerminalProfile) => void;
-  onCreateBrowser: () => void;
   onOpenImportSheet: () => void;
   onCopyWorkspacePath: () => void;
   onCopyBranchName: () => void;
   onOpenSetupTab: () => void;
   onScriptTerminalStarted: (terminalId: string) => void;
   onViewScriptTerminal: (terminalId: string) => void;
-  onOpenUrlInBrowserTab: (url: string) => void;
 }
 
 function WorkspaceHeaderTitleBar({
@@ -973,7 +967,6 @@ function WorkspaceHeaderTitleBar({
   workspaceScripts,
   liveTerminalIds,
   showWorkspaceSetup,
-  showCreateBrowserTab,
   isMobile,
   createTerminalDisabled,
   importAgentDisabled,
@@ -981,14 +974,12 @@ function WorkspaceHeaderTitleBar({
   onCreateDraftTab,
   onCreateTerminal,
   onCreateTerminalWithProfile,
-  onCreateBrowser,
   onOpenImportSheet,
   onCopyWorkspacePath,
   onCopyBranchName,
   onOpenSetupTab,
   onScriptTerminalStarted,
   onViewScriptTerminal,
-  onOpenUrlInBrowserTab,
 }: WorkspaceHeaderTitleBarProps) {
   return (
     <View style={styles.headerTitleContainer}>
@@ -1012,14 +1003,12 @@ function WorkspaceHeaderTitleBar({
             normalizedServerId={normalizedServerId}
             currentBranchName={currentBranchName}
             showWorkspaceSetup={showWorkspaceSetup}
-            showCreateBrowserTab={showCreateBrowserTab}
             createTerminalDisabled={createTerminalDisabled}
             importAgentDisabled={importAgentDisabled}
             copyPathDisabled={copyPathDisabled}
             onCreateDraftTab={onCreateDraftTab}
             onCreateTerminal={onCreateTerminal}
             onCreateTerminalWithProfile={onCreateTerminalWithProfile}
-            onCreateBrowser={onCreateBrowser}
             onOpenImportSheet={onOpenImportSheet}
             onCopyWorkspacePath={onCopyWorkspacePath}
             onCopyBranchName={onCopyBranchName}
@@ -1045,7 +1034,6 @@ function WorkspaceHeaderTitleBar({
             liveTerminalIds={liveTerminalIds}
             onScriptTerminalStarted={onScriptTerminalStarted}
             onViewTerminal={onViewScriptTerminal}
-            onOpenUrlInBrowserTab={onOpenUrlInBrowserTab}
             hideLabels
             presentation="ghost"
           />
@@ -1880,11 +1868,6 @@ function WorkspaceScreenContent({
         unpinWorkspaceAgent(persistenceKey, input.target.agentId);
         hideWorkspaceAgent(persistenceKey, input.target.agentId);
       }
-      if (input.target?.kind === "browser") {
-        const { browserId } = input.target;
-        useBrowserStore.getState().removeBrowser(browserId);
-        removeResidentBrowserWebview(browserId);
-      }
       closeWorkspaceTab(persistenceKey, normalizedTabId);
     },
     [closeWorkspaceTab, hideWorkspaceAgent, persistenceKey, unpinWorkspaceAgent],
@@ -2379,21 +2362,6 @@ function WorkspaceScreenContent({
     [createTerminal],
   );
 
-  const handleCreateBrowserTab = useCallback(
-    (input?: { paneId?: string }) => {
-      if (!persistenceKey || !getIsElectron()) {
-        return;
-      }
-      const { browserId } = createWorkspaceBrowser();
-      openWorkspaceTabFocused(
-        persistenceKey,
-        { kind: "browser", browserId },
-        paneLocalPlacement(input?.paneId),
-      );
-    },
-    [openWorkspaceTabFocused, persistenceKey],
-  );
-
   const handleCreateNewTab = useCallback(
     (input?: { paneId?: string }) => {
       if (!persistenceKey) {
@@ -2434,32 +2402,10 @@ function WorkspaceScreenContent({
         });
         return;
       }
-      const { browserId } = createWorkspaceBrowser();
-      openTarget({ kind: "browser", browserId });
+      return;
     },
     [createTerminal, createWorkspaceTab, persistenceKey, replaceWorkspaceTabTarget],
   );
-
-  const handleOpenUrlInBrowserTab = useCallback(
-    (url: string) => {
-      if (!persistenceKey || !getIsElectron()) {
-        return;
-      }
-      const { browserId } = createWorkspaceBrowser({ initialUrl: url });
-      openWorkspaceTabFocused(
-        persistenceKey,
-        { kind: "browser", browserId },
-        FOCUSED_PANE_PLACEMENT,
-      );
-    },
-    [openWorkspaceTabFocused, persistenceKey],
-  );
-
-  useDesktopBrowserNewTabRequests({
-    enabled: Boolean(persistenceKey),
-    workspaceLayout,
-    openUrl: handleOpenUrlInBrowserTab,
-  });
 
   const handleSelectSwitcherTab = useCallback(
     (key: string) => {
@@ -3108,9 +3054,6 @@ function WorkspaceScreenContent({
         case "workspace.terminal.new":
           handleCreateTerminal();
           return true;
-        case "workspace.browser.new":
-          handleCreateBrowserTab();
-          return true;
         case "workspace.tab.menu.open":
           handleCreateNewTab({ paneId: focusedPaneTabState.pane?.id });
           return true;
@@ -3146,7 +3089,6 @@ function WorkspaceScreenContent({
       activeTabId,
       handleCloseTabById,
       handleCreateDraftTab,
-      handleCreateBrowserTab,
       handleCreateNewTab,
       handleCreateTerminal,
       focusedPaneTabState.pane?.id,
@@ -3161,9 +3103,6 @@ function WorkspaceScreenContent({
       switch (action.id) {
         case "workspace.tab.target.agent":
           handleCreateDraftTab({ paneId });
-          return true;
-        case "workspace.tab.target.browser":
-          handleCreateBrowserTab({ paneId });
           return true;
         case "workspace.tab.target.changes":
           if (persistenceKey && isGitCheckout) {
@@ -3192,7 +3131,6 @@ function WorkspaceScreenContent({
     [
       focusedPaneTabState.pane?.id,
       activeExplorerCheckout,
-      handleCreateBrowserTab,
       handleCreateDraftTab,
       isGitCheckout,
       isMobile,
@@ -3323,7 +3261,6 @@ function WorkspaceScreenContent({
       "workspace.tab.navigate-index",
       "workspace.tab.navigate-relative",
       "workspace.terminal.new",
-      "workspace.browser.new",
       "workspace.tab.menu.open",
     ] as const,
     enabled: workspaceActionsEnabled,
@@ -3340,7 +3277,6 @@ function WorkspaceScreenContent({
     }),
     actions: [
       "workspace.tab.target.agent",
-      "workspace.tab.target.browser",
       "workspace.tab.target.changes",
       "workspace.tab.target.files",
     ] as const,
@@ -3747,7 +3683,6 @@ function WorkspaceScreenContent({
             liveTerminalIds={liveTerminalIds}
             onScriptTerminalStarted={handleScriptTerminalStarted}
             onViewTerminal={handleViewScriptTerminal}
-            onOpenUrlInBrowserTab={handleOpenUrlInBrowserTab}
             hideLabels
           />
         ) : null}
@@ -3795,7 +3730,6 @@ function WorkspaceScreenContent({
       liveTerminalIds,
       handleScriptTerminalStarted,
       handleViewScriptTerminal,
-      handleOpenUrlInBrowserTab,
       handleToggleExplorerSidebar,
       explorerSidebarToggleLabel,
       explorerSidebarToggleAccessibilityState,
@@ -3831,22 +3765,15 @@ function WorkspaceScreenContent({
     () => createTerminalMutation.isPending || pendingTerminalCreateInput !== null,
     [createTerminalMutation.isPending, pendingTerminalCreateInput],
   );
-  const showCreateBrowserTab = getIsElectron();
   const newTabLauncher = useMemo<NewTabLauncher>(
     () => ({
       showChanges: isGitCheckout,
       showPullRequest: hasPullRequest,
-      showBrowser: showCreateBrowserTab,
+      showBrowser: false,
       terminalDisabled: createTerminalDisabled,
       launch: launchWorkspaceTab,
     }),
-    [
-      createTerminalDisabled,
-      hasPullRequest,
-      isGitCheckout,
-      launchWorkspaceTab,
-      showCreateBrowserTab,
-    ],
+    [createTerminalDisabled, hasPullRequest, isGitCheckout, launchWorkspaceTab],
   );
   const focusedPaneIdOrUndefined = useMemo(() => focusedPaneId ?? undefined, [focusedPaneId]);
   const desktopFocusModeEnabled = useMemo(
@@ -3876,7 +3803,6 @@ function WorkspaceScreenContent({
                 workspaceScripts={workspaceScripts}
                 liveTerminalIds={liveTerminalIds}
                 showWorkspaceSetup={showWorkspaceSetup}
-                showCreateBrowserTab={showCreateBrowserTab}
                 isMobile={isMobile}
                 createTerminalDisabled={createTerminalDisabled}
                 importAgentDisabled={!canOpenImportSheet}
@@ -3884,14 +3810,12 @@ function WorkspaceScreenContent({
                 onCreateDraftTab={handleCreateDraftTab}
                 onCreateTerminal={handleCreateTerminal}
                 onCreateTerminalWithProfile={handleCreateTerminalWithProfile}
-                onCreateBrowser={handleCreateBrowserTab}
                 onOpenImportSheet={openImportSheet}
                 onCopyWorkspacePath={handleCopyWorkspacePath}
                 onCopyBranchName={handleCopyBranchName}
                 onOpenSetupTab={handleOpenSetupTab}
                 onScriptTerminalStarted={handleScriptTerminalStarted}
                 onViewScriptTerminal={handleViewScriptTerminal}
-                onOpenUrlInBrowserTab={handleOpenUrlInBrowserTab}
               />
             </>
           }
@@ -3904,12 +3828,10 @@ function WorkspaceScreenContent({
       currentBranchName,
       handleCopyBranchName,
       handleCopyWorkspacePath,
-      handleCreateBrowserTab,
       handleCreateDraftTab,
       handleCreateTerminal,
       handleCreateTerminalWithProfile,
       handleOpenSetupTab,
-      handleOpenUrlInBrowserTab,
       handleScriptTerminalStarted,
       handleViewScriptTerminal,
       headerRight,
@@ -3919,7 +3841,6 @@ function WorkspaceScreenContent({
       normalizedServerId,
       normalizedWorkspaceId,
       openImportSheet,
-      showCreateBrowserTab,
       showScreenHeader,
       showWorkspaceSetup,
       workspaceDirectory,

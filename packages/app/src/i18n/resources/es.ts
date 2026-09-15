@@ -1,5 +1,4 @@
 import { en, type TranslationResources } from "./en";
-import { pluginSettings } from "./plugin-settings";
 
 export const es: TranslationResources = {
   common: {
@@ -112,18 +111,6 @@ export const es: TranslationResources = {
       cancelingAgent: "Agente de cancelación",
       stopAgent: "detener agente",
       interrupt: "Interrumpir",
-    },
-    voice: {
-      enableVoiceMode: "Habilitar el modo de voz",
-      voiceMode: "Modo de voz",
-      unmuteVoiceMode: "Activar el modo de voz",
-      muteVoiceMode: "Modo de voz silenciosa",
-      stopDictation: "detener el dictado",
-      startDictation: "Iniciar dictado",
-      unmuteVoice: "Activar voz",
-      muteVoice: "voz muda",
-      dictation: "Dictado",
-      interruptBeforeVoice: "Interrumpir al agente antes de iniciar el modo de voz.",
     },
     attachments: {
       addImage: "Agregar imagen",
@@ -329,15 +316,6 @@ export const es: TranslationResources = {
     },
     activity: {
       details: "Detalles",
-    },
-    dictation: {
-      start: "Iniciar dictado de voz",
-      cancel: "Cancelar dictado",
-      retry: "Reintentar el dictado",
-      insert: "Insertar transcripción",
-      insertAndSend: "Insertar transcripción y enviar",
-      failed: "Fallo en el dictado:{{error}}",
-      failedRetry: "El dictado falló. Toca reintentar.",
     },
     question: {
       submit: "Entregar",
@@ -546,45 +524,6 @@ export const es: TranslationResources = {
         noOutput: "Sin salida",
       },
     },
-    browser: {
-      unavailable: {
-        title: "El navegador es solo para escritorio",
-        subtitle: "Abra este espacio de trabajo en Electron para usar el navegador integrado.",
-      },
-      session: "Sesión de navegador{{browserId}}",
-      controls: {
-        back: "Atrás",
-        forward: "Adelante",
-        stopLoading: "dejar de cargar",
-        refresh: "Refrescar",
-        browserUrl: "NavegadorURL",
-        enterUrl: "IngreseURL",
-        openDevTools: "Abrir herramientas de desarrollo del navegador",
-        cancelSelector: "Cancelar selector de elementos",
-        annotateElement: "Anotar elemento",
-        screenshotElement: "Capturar elemento",
-        screenshotCopied: "Captura copiada al portapapeles",
-        elementCopied: "Elemento copiado al portapapeles",
-        screenshotFailed: "No se pudo copiar la captura",
-        selectorLoading: "Espera a que la página termine de cargar",
-        selectorFailed: "No se pudo iniciar el selector de elementos",
-      },
-      annotate: {
-        title: "Anotar elemento",
-        placeholder: "Mensaje al agente sobre este elemento…",
-        submit: "Adjuntar",
-        cancel: "Cancelar",
-      },
-      devices: {
-        label: "Tamaño del dispositivo",
-        responsive: "Adaptable",
-      },
-      errors: {
-        failedToLoad: "No se pudo cargar la página",
-        invalidUrl: "Navegador no válidoURL",
-        unsupportedProtocol: "Navegador bloqueado no compatibleURL:{{protocol}}",
-      },
-    },
     terminal: {
       hostDisconnected: "Hostno está conectado",
       updateHost: "Actualiza el host para usar el renderizador de terminal nativo.",
@@ -636,7 +575,6 @@ export const es: TranslationResources = {
         newTerminal: "Nueva terminal",
         preparingTerminal: "Preparando la pestaña del terminal",
         preparingTerminalTooltip: "Preparando terminal...",
-        newBrowser: "Nuevo navegador",
         maximizePane: "Maximizar panel",
         restorePane: "Restaurar panel",
         closePane: "Cerrar panel",
@@ -708,7 +646,6 @@ export const es: TranslationResources = {
         workspaceActions: "AccionesWorkspace",
         newAgent: "Nuevo agente",
         newTerminal: "Nueva terminal",
-        newBrowser: "Nueva pestaña del navegador",
         importSession: "Importar sesión",
         copyPath: "Copiar ruta del espacio de trabajo",
         copyBranchName: "Copiar nombre de sucursal",
@@ -1322,172 +1259,6 @@ export const es: TranslationResources = {
       commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
   },
-  desktop: {
-    windowControls: {
-      minimize: "Minimizar ventana",
-      maximize: "Maximizar ventana",
-      restore: "Restaurar ventana",
-      close: "Cerrar ventana",
-    },
-    quitting: {
-      title: "Saliendo de BySpace...",
-      detail: "Deteniendo el demonio local.",
-    },
-    daemon: {
-      title: "Daemon",
-      status: {
-        title: "Estado",
-        builtInOnly: "Aquí solo se muestra el demonio de escritorio integrado.",
-        running: "correr",
-        notRunning: "no corriendo",
-        pid: "PID{{pid}}",
-      },
-      management: {
-        title: "Administrar demonio incorporado",
-        hint: "Deje quePaseoinicie y detenga el demonio incorporado",
-        pauseTitle: "Pausar el demonio incorporado",
-        pauseMessage:
-          "Esto detendrá el demonio incorporado inmediatamente. Se detendrán los agentes en ejecución y los terminales conectados al demonio integrado.",
-        pauseAndStop: "Pausa y para",
-        registrationFailed:
-          "Built-in daemon started, but Paseo could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
-        pausedStopFailed:
-          "La gestión del demonio integrado se pausó, peroPaseono pudo detener el demonio.",
-        updateFailed: "No se puede actualizar la gestión de demonios integrada.",
-      },
-      keepRunning: {
-        title: "Mantener el demonio en ejecución después de salir",
-        hint: "Daemonsigue ejecutándose cuando sales dePaseo",
-      },
-      logs: {
-        title: "Archivo de registro",
-        modalTitle: "RegistrosDaemon",
-        unavailable: "Ruta de registro no disponible",
-        empty: "(el archivo de registro está vacío)",
-        copied: "Ruta de registro copiada.",
-        copyFailed: "No se puede copiar la ruta del registro.",
-        open: "Abrir registros",
-        copyPath: "Copiar ruta",
-      },
-      fullStatus: {
-        title: "Estado completo",
-        modalTitle: "EstadoDaemon",
-        hint: "Ejecuta `byspace daemon status` y muestra la salida.",
-        view: "Ver estado",
-        copied: "Estado copiado al portapapeles.",
-        fetchFailed: "No se pudo recuperar el estado del demonio:{{message}}",
-      },
-      advancedSettings: "Configuraciones avanzadas",
-      openAdvancedSettings: "Abrir configuración avanzada del demonio",
-      versionMismatch:
-        "Las versiones de la aplicación y del demonio no coinciden. Actualice ambos a la misma versión para obtener la mejor experiencia.",
-      loadFailed: "No se puede cargar el estado del demonio del escritorio.",
-    },
-    updates: {
-      status: {
-        checking: "Buscando actualizaciones de la aplicación...",
-        installing: "Instalando actualización de la aplicación...",
-        upToDate: "La aplicación está actualizada.",
-        upToDateWithLastChecked: "Up to date. Last checked at {{time}}.",
-        pending: "Le avisaremos cuando la actualización esté lista.",
-        pendingWithLastChecked:
-          "Le avisaremos cuando la actualización esté lista. Última comprobación a las {{time}}.",
-        pendingWithVersion: "Actualización encontrada: {{version}}. Descargando...",
-        pendingWithVersionAndLastChecked:
-          "Actualización encontrada: {{version}}. Descargando... Última comprobación a las {{time}}.",
-        availableWithVersion: "Actualización lista:{{version}}",
-        availableWithVersionAndLastChecked:
-          "Actualización lista:{{version}}. Última comprobación a las {{time}}.",
-        available: "Una actualización de la aplicación está lista para instalarse.",
-        availableWithLastChecked:
-          "Una actualización de la aplicación está lista para instalarse. Última comprobación a las {{time}}.",
-        installed: "Actualización de la aplicación instalada. Se requiere reinicio.",
-        failed: "No se pudo actualizar la aplicación.",
-        idle: "El estado de la actualización aún no se ha comprobado.",
-      },
-      installError: "No se puede instalar la actualización de la aplicación de escritorio.",
-      callout: {
-        installingTitle: "Instalando actualización",
-        failedTitle: "La actualización falló",
-        availableTitle: "Actualización disponible",
-        genericError: "Algo salió mal.",
-        whatsNew: "Qué hay de nuevo",
-        installingAction: "Instalando...",
-        installAndRestart: "Instalar y reiniciar",
-        installingDescription: "Instalando y reiniciando...",
-        versionReady: "{{version}}está listo para instalar.",
-        newVersionReady: "Una nueva versión está lista para instalar.",
-        restartWarning:
-          "La actualización de la aplicación dejará de ejecutar agentes y cerrará sesiones de terminal.",
-      },
-    },
-    settings: {
-      loadFailed: "No se puede cargar la configuración del escritorio.",
-      saveFailed: "No se puede guardar la configuración del escritorio.",
-    },
-    rosetta: {
-      title: "Descargue la compilaciónApple Silicon",
-      runningIntel: "Estás ejecutando la compilaciónInteldePaseoenRosettaenApple Silicon.",
-      highCpu:
-        "Esto provoca un uso elevado de la CPU. Descargue la compilaciónApple Siliconpara solucionarlo.",
-      download: "Descargar",
-    },
-    permissions: {
-      notifications: {
-        allowed: "El sistema operativo permite las notificaciones.",
-        denied: "Las notificaciones se niegan en la configuración del sistema.",
-        notGranted: "Las notificaciones aún no han sido concedidas.",
-        webOnly:
-          "El estado de notificación de escritorio solo está disponible en tiempo de ejecución web.",
-        supported: "Se admiten notificaciones de escritorio.",
-        unsupported: "Las notificaciones de escritorio no son compatibles con esta plataforma.",
-        apiUnavailable: "La API de notificación web no está disponible en este entorno.",
-        requestsWebOnly:
-          "Las solicitudes de notificación de escritorio solo están disponibles en tiempo de ejecución web.",
-        requestUnavailable: "RequestPermission() de la API de notificación web no está disponible.",
-        requestFailed: "No se pudo solicitar permiso de notificación:{{message}}",
-        unexpectedState: "Estado de permiso de notificación inesperado:{{state}}",
-      },
-      microphone: {
-        webOnly:
-          "El estado del micrófono de escritorio solo está disponible en tiempo de ejecución web.",
-        navigatorUnavailable: "Navigator no está disponible en este entorno.",
-        granted: "Se concede acceso al micrófono.",
-        denied: "El acceso al micrófono está denegado en la configuración del sistema.",
-        notGranted: "Aún no se ha concedido el permiso para el micrófono.",
-        unexpectedState: "Estado de permiso de micrófono inesperado:{{state}}",
-        statusApiUnavailable:
-          "La API de estado del micrófono no está disponible en este tiempo de ejecución. Utilice Solicitud para comprobar el acceso.",
-        queryFailed: "No se pudo consultar el estado del micrófono:{{message}}",
-        captureUnavailable: "La captura de micrófono no está disponible en este entorno.",
-        permissionApiUnavailable:
-          "La API de estado de permiso no está disponible. Utilice Solicitud para comprobar el acceso.",
-        requestsWebOnly:
-          "Las solicitudes de micrófono de escritorio solo están disponibles en tiempo de ejecución web.",
-        captureApiUnavailable: "La API de captura de micrófono no está disponible en este entorno.",
-        requestDenied: "El usuario o el sistema denegaron el permiso del micrófono.",
-        noDevice: "No se encontró ningún dispositivo de micrófono.",
-        requestFailed: "No se pudo solicitar el permiso del micrófono:{{message}}",
-      },
-      empty: {
-        notifications: "El estado de la notificación aún no se ha verificado.",
-        microphone: "El estado del micrófono aún no se ha comprobado.",
-      },
-      testNotification: {
-        title: "Prueba de notificación BySpace",
-        body: "Si puede ver esto, las notificaciones de escritorio funcionan.",
-        notDelivered:
-          "La notificación no fue entregada. Verifique Configuración del sistema> Notificaciones.",
-        failed: "No se pudo enviar la notificación.",
-      },
-    },
-    integrations: {
-      cli: {
-        statusFailed: "No se puede verificar el estado de instalación deCLI.",
-        installFailed: "No se puede instalar elPaseoCLI.",
-      },
-    },
-  },
   rootError: {
     title: "BySpace tuvo un problema.",
     body: "Vuelve a intentarlo para recargar la app. Si sigue ocurriendo, incluye los detalles de abajo al reportarlo.",
@@ -2067,10 +1838,8 @@ export const es: TranslationResources = {
       providers: "Proveedores",
       usage: "Uso",
       terminals: "Terminals",
-      plugins: "Plugins",
       host: "Resumen",
     },
-    plugins: pluginSettings.es,
     metadataGeneration: {
       title: "Generación de metadatos",
       description:
@@ -2193,28 +1962,18 @@ export const es: TranslationResources = {
       connectedHosts: "Anfitriones conectados",
       offline: "Desconectado",
       versionDiffers: "La versión difiere de este dispositivo.",
-      releaseChannel: {
-        label: "Canal de lanzamiento",
-        description: "Cambie aBetapara recibir actualizaciones antes y ayudar a darles forma",
-        stable: "Stable",
-        beta: "Beta",
-      },
-      updates: {
-        label: "Actualizaciones de aplicaciones",
-        readyToInstall: "Listo para instalar:{{version}}",
-        installTitle: "Instalar actualización de escritorio",
-        installMessage: "Esto actualizaPaseoen esta computadora.",
-        installConfirm: "Instalar actualización",
-        update: "Actualizar",
-        updateTo: "Actualización a{{version}}",
-        installing: "Instalando...",
-        check: "Controlar",
-        checking: "De cheques...",
-        alertTitle: "Error",
-        alertMessage: "No se puede abrir el cuadro de diálogo de confirmación de actualización.",
-      },
     },
     appearance: {
+      terminal: {
+        title: "Terminal",
+        hint: "Esquema de colores del terminal, independiente del tema de la aplicación",
+        accessibilityLabel: "Apariencia del terminal: {{value}}",
+        options: {
+          match: "Igual que la aplicación",
+          dark: "Oscuro",
+          light: "Claro",
+        },
+      },
       theme: {
         title: "Tema",
         accessibilityLabel: "Tema:{{value}}",
@@ -2333,12 +2092,9 @@ export const es: TranslationResources = {
         cycleTheme: "Tema del ciclo",
         focusMessageInput: "Entrada de mensaje de enfoque",
         cycleAgentMode: "Alternar modo del agente",
-        toggleVoiceMode: "Alternar modo de voz",
-        startStopDictation: "Iniciar dictado/stop",
         interruptAgent: "agente de interrupción",
         sendMessage: "enviar mensaje",
         queueMessage: "mensaje de cola",
-        muteUnmuteVoiceMode: "Silenciar el modo de voz/unmute",
         switchProject: "Cambiar proyecto",
       },
       helpNotes: {

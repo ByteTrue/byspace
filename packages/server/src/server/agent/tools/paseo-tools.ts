@@ -32,7 +32,6 @@ import {
   type ArchiveDependencies,
 } from "../../workspace-archive-service.js";
 import { createAgentCommand, type CreateAgentFromMcpInput } from "../create-agent/create.js";
-import type { VoiceCallerContext } from "../../voice-types.js";
 import type { FirstAgentContext } from "../../messages.js";
 import { everyMsToFiveFieldCron } from "@getpaseo/protocol/schedule/cadence";
 import { expandUserPath, isSameOrDescendantPath, resolvePathFromBase } from "../../path-utils.js";
@@ -84,8 +83,6 @@ import {
   type CreatePaseoWorktreeCommandInput,
   createPaseoWorktreeCommand,
 } from "../../worktree/commands.js";
-import { registerBrowserTools } from "../../browser-tools/tools.js";
-import type { BrowserToolsBroker } from "../../browser-tools/broker.js";
 import type {
   PaseoToolCatalog,
   PaseoToolConfig,
@@ -133,8 +130,6 @@ export interface PaseoToolHostDependencies {
     cwd: string,
     firstAgentContext?: FirstAgentContext,
   ) => Promise<string>;
-  browserToolsEnabled?: boolean;
-  browserToolsBroker?: BrowserToolsBroker | null;
   paseoToolPolicy?: ProviderPaseoToolsPolicy;
   paseoHome?: string;
   worktreesRoot?: string;
@@ -143,13 +138,6 @@ export interface PaseoToolHostDependencies {
    * Used for cwd/mode inheritance when agents spawn child agents.
    */
   callerAgentId?: string;
-  /**
-   * Optional resolver for session-bound speak handlers.
-   * Used by hidden voice agents to narrate through daemon-managed TTS.
-   */
-  resolveCallerContext?: (callerAgentId: string) => VoiceCallerContext | null;
-  enableVoiceTools?: boolean;
-  voiceOnly?: boolean;
   logger: Logger;
 }
 
@@ -487,19 +475,9 @@ function buildScheduleUpdateInput(input: ScheduleUpdateToolInput): UpdateSchedul
   };
 }
 
-function resolveChildAgentCwd(params: {
-  parentCwd: string;
-  requestedCwd?: string;
-  lockedCwd?: string;
-  allowCustomCwd: boolean;
-}): string {
-  const lockedCwd = params.lockedCwd?.trim();
-  if (lockedCwd) {
-    return expandUserPath(lockedCwd);
-  }
-
+function resolveChildAgentCwd(params: { parentCwd: string; requestedCwd?: string }): string {
   const requestedCwd = params.requestedCwd?.trim();
-  if (!requestedCwd || !params.allowCustomCwd) {
+  if (!requestedCwd) {
     return params.parentCwd;
   }
 
@@ -555,11 +533,9 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
     providerSnapshotManager,
     daemonConfigStore,
     callerAgentId,
-    resolveCallerContext,
     logger,
   } = options;
   const childLogger = logger.child({ module: "agent", component: "paseo-tool-catalog" });
-  const callerContext = callerAgentId ? (resolveCallerContext?.(callerAgentId) ?? null) : null;
 
   const parseToolInput = async (tool: PaseoToolDefinition, input: unknown): Promise<unknown> => {
     const inputSchema = tool.inputSchema;
@@ -658,12 +634,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
   const resolveScopedCwd = (requestedCwd?: string, opts?: { required?: boolean }): string => {
     const callerAgent = resolveCallerAgent();
     if (callerAgent) {
-      return resolveChildAgentCwd({
-        parentCwd: callerAgent.cwd,
-        requestedCwd,
-        lockedCwd: callerContext?.lockedCwd,
-        allowCustomCwd: callerContext?.allowCustomCwd ?? true,
-      });
+      return resolveChildAgentCwd({ parentCwd: callerAgent.cwd, requestedCwd });
     }
 
     const trimmedCwd = requestedCwd?.trim();
@@ -1165,21 +1136,6 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
   type TopLevelCreateAgentArgs = z.infer<typeof canonicalTopLevelCreateAgentArgsSchema>;
   type LegacyTopLevelCreateAgentArgs = z.infer<typeof legacyTopLevelCreateAgentArgsSchema>;
 
-  // The speak tool is retired with voice (issue 025 C8).
-
-  if (options.voiceOnly) {
-    return toCatalog();
-  }
-
-  if (options.browserToolsEnabled && options.browserToolsBroker) {
-    registerBrowserTools({
-      registerTool,
-      broker: options.browserToolsBroker,
-      callerAgentId,
-      resolveCallerAgent,
-    });
-  }
-
   registerTool(
     "create_workspace",
     {
@@ -1437,7 +1393,6 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
           notifyOnFinish,
           detached: resolvedArgs.detached,
           callerAgentId,
-          callerContext,
           worktree,
         },
       );
@@ -1774,10 +1729,6 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
       const cwd = workspace.cwd
         ? resolveScopedCwd(workspace.cwd, { required: true })
         : existingWorkspace.cwd;
-      const lockedCwd = callerContext?.lockedCwd?.trim();
-      if (lockedCwd && !isSameOrDescendantPath(expandUserPath(lockedCwd), cwd)) {
-        throw new Error(`Workspace ${workspace.workspaceId} is outside the allowed cwd`);
-      }
       return {
         cwd,
         workspaceId: workspace.workspaceId,

@@ -29,7 +29,6 @@ import {
   Code2,
   Smartphone,
   Sparkles,
-  Blocks,
   PanelsTopLeft,
   ChevronRight,
 } from "lucide-react-native";
@@ -48,7 +47,6 @@ import {
   parseTerminalScrollbackLines,
   type AppSettings,
   type SendBehavior,
-  type ServiceUrlBehavior,
 } from "@/hooks/use-settings";
 import { useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
@@ -171,7 +169,6 @@ const HOST_SECTION_ITEMS: HostSectionItem[] = [
   { id: "providers", labelKey: "settings.hostSections.providers", icon: Boxes },
   { id: "usage", labelKey: "settings.hostSections.usage", icon: Gauge },
   { id: "terminals", labelKey: "settings.hostSections.terminals", icon: SquareTerminal },
-  { id: "plugins", labelKey: "settings.hostSections.plugins", icon: Blocks },
 ];
 
 function renderHostSettingsContent(
@@ -197,8 +194,6 @@ function renderHostSettingsContent(
       return <HostUsagePage serverId={view.serverId} />;
     case "terminals":
       return <HostTerminalsPage serverId={view.serverId} />;
-    case "plugins":
-      return null; // Plugin management is retired (issue 025 C6)
     case "host":
       return <HostSettingsPage serverId={view.serverId} onHostRemoved={onHostRemoved} />;
   }
@@ -232,21 +227,10 @@ function getSendBehaviorOptions(t: TFunction) {
   ];
 }
 
-function getServiceUrlBehaviorLabel(t: TFunction, value: ServiceUrlBehavior): string {
-  const labels: Record<ServiceUrlBehavior, string> = {
-    ask: t("settings.general.serviceUrls.options.ask"),
-    "in-app": t("settings.general.serviceUrls.options.inApp"),
-    external: t("settings.general.serviceUrls.options.external"),
-  };
-  return labels[value];
-}
-
 function getActiveLocale(language: string | undefined): SupportedLocale {
   const parsed = parseAppLanguage(language);
   return parsed && parsed !== "system" ? parsed : "en";
 }
-
-const SERVICE_URL_BEHAVIOR_VALUES: ServiceUrlBehavior[] = ["ask", "in-app", "external"];
 
 // ---------------------------------------------------------------------------
 // Section components
@@ -254,18 +238,9 @@ const SERVICE_URL_BEHAVIOR_VALUES: ServiceUrlBehavior[] = ["ask", "in-app", "ext
 
 interface GeneralSectionProps {
   settings: AppSettings;
-  isDesktopApp: boolean;
   handleSendBehaviorChange: (behavior: SendBehavior) => void;
-  handleServiceUrlBehaviorChange: (behavior: ServiceUrlBehavior) => void;
   handleLanguageChange: (language: AppLanguage) => void;
   handleTerminalScrollbackLinesChange: (lines: number) => void;
-}
-
-interface ServiceUrlBehaviorMenuItemProps {
-  value: ServiceUrlBehavior;
-  label: string;
-  selected: boolean;
-  onChange: (value: ServiceUrlBehavior) => void;
 }
 
 interface SendBehaviorMenuItemProps {
@@ -276,22 +251,6 @@ interface SendBehaviorMenuItemProps {
 }
 
 function SendBehaviorMenuItem({ value, label, selected, onChange }: SendBehaviorMenuItemProps) {
-  const handleSelect = useCallback(() => {
-    onChange(value);
-  }, [onChange, value]);
-  return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
-      {label}
-    </DropdownMenuItem>
-  );
-}
-
-function ServiceUrlBehaviorMenuItem({
-  value,
-  label,
-  selected,
-  onChange,
-}: ServiceUrlBehaviorMenuItemProps) {
   const handleSelect = useCallback(() => {
     onChange(value);
   }, [onChange, value]);
@@ -328,9 +287,7 @@ function LanguageMenuItem({ value, activeLocale, selected, onChange }: LanguageM
 
 function GeneralSection({
   settings,
-  isDesktopApp,
   handleSendBehaviorChange,
-  handleServiceUrlBehaviorChange,
   handleLanguageChange,
   handleTerminalScrollbackLinesChange,
 }: GeneralSectionProps) {
@@ -431,34 +388,6 @@ function GeneralSection({
             </DropdownMenuContent>
           </DropdownMenu>
         </View>
-        {isDesktopApp ? (
-          <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-            <View style={settingsStyles.rowContent}>
-              <Text style={settingsStyles.rowTitle}>{t("settings.general.serviceUrls.label")}</Text>
-              <Text style={settingsStyles.rowHint}>
-                {t("settings.general.serviceUrls.description")}
-              </Text>
-            </View>
-            <DropdownMenu>
-              <DropdownTrigger style={themeTriggerStyle}>
-                <Text style={styles.themeTriggerText}>
-                  {getServiceUrlBehaviorLabel(t, settings.serviceUrlBehavior)}
-                </Text>
-              </DropdownTrigger>
-              <DropdownMenuContent side="bottom" align="end" width={200}>
-                {SERVICE_URL_BEHAVIOR_VALUES.map((value) => (
-                  <ServiceUrlBehaviorMenuItem
-                    key={value}
-                    value={value}
-                    label={getServiceUrlBehaviorLabel(t, value)}
-                    selected={settings.serviceUrlBehavior === value}
-                    onChange={handleServiceUrlBehaviorChange}
-                  />
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </View>
-        ) : null}
         <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
           <View style={settingsStyles.rowContent}>
             <Text style={settingsStyles.rowTitle}>
@@ -911,7 +840,6 @@ function SettingsSidebar({
   let selectedHostSection: HostSectionSlug | null = null;
   if (view.kind === "host") selectedHostSection = view.section;
   if (view.kind === "project") selectedHostSection = "projects";
-  if (view.kind === "plugin") selectedHostSection = "plugins";
 
   const sidebarBody = (
     <>
@@ -1034,7 +962,6 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const [isRemoteSshVisible, setIsRemoteSshVisible] = useState(false);
   const [isPasteLinkVisible, setIsPasteLinkVisible] = useState(false);
   const lastOpenedAddHostIntentRef = useRef<string | null>(null);
-  const isDesktopApp = false;
   const appVersion = resolveAppVersion();
   const appVersionText = formatVersionWithPrefix(appVersion);
   const isCompactLayout = useIsCompactFormFactor();
@@ -1045,9 +972,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const sortedHosts = useSortedHosts(hosts, localServerId);
   const lastWorkspaceSelection = useLastWorkspaceSelection();
   const routedSettingsHostServerId =
-    view.kind === "host" || view.kind === "project" || view.kind === "plugin"
-      ? view.serverId
-      : null;
+    view.kind === "host" || view.kind === "project" ? view.serverId : null;
   const [selectedSettingsHostServerId, setSelectedSettingsHostServerId] = useState<string | null>(
     routedSettingsHostServerId ?? lastWorkspaceSelection?.serverId ?? null,
   );
@@ -1062,8 +987,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   // The host the four sections scope to: the host on the active view, otherwise
   // the picker choice, otherwise the connected local daemon, otherwise the first host.
   const activeHostServerId = useMemo(() => {
-    if (view.kind === "host" || view.kind === "project" || view.kind === "plugin")
-      return view.serverId;
+    if (view.kind === "host" || view.kind === "project") return view.serverId;
     return resolveActiveHostServerId({
       selectedServerId: selectedSettingsHostServerId,
       localServerId,
@@ -1075,13 +999,6 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const handleSendBehaviorChange = useCallback(
     (behavior: SendBehavior) => {
       void updateSettings({ sendBehavior: behavior });
-    },
-    [updateSettings],
-  );
-
-  const handleServiceUrlBehaviorChange = useCallback(
-    (behavior: ServiceUrlBehavior) => {
-      void updateSettings({ serviceUrlBehavior: behavior });
     },
     [updateSettings],
   );
@@ -1245,10 +1162,6 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     Icon: ComponentType<{ size: number; color: string }>;
     titleAccessory?: ReactNode;
   } | null => {
-    if (view.kind === "plugin") {
-      // Plugin settings screens are retired (issue 025 C6).
-      return null;
-    }
     if (view.kind === "host") {
       const item = HOST_SECTION_ITEMS.find((s) => s.id === view.section);
       if (!item) return null;
@@ -1270,7 +1183,6 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     content = null;
   } else {
     content = (() => {
-      if (view.kind === "plugin") return null; // Plugin settings are retired (issue 025 C6)
       if (view.kind === "host") {
         return renderHostSettingsContent(view, handleHostRemoved);
       }
@@ -1290,9 +1202,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
             return (
               <GeneralSection
                 settings={settings}
-                isDesktopApp={isDesktopApp}
                 handleSendBehaviorChange={handleSendBehaviorChange}
-                handleServiceUrlBehaviorChange={handleServiceUrlBehaviorChange}
                 handleLanguageChange={handleLanguageChange}
                 handleTerminalScrollbackLinesChange={handleTerminalScrollbackLinesChange}
               />

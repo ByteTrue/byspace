@@ -90,5 +90,3 @@ Raw frame traces remain the source for transport latency. A missing, duplicate, 
 workload sequence fails the stress test. An rAF gap or Long Task at least 1000 ms fails it.
 The hosted Windows runner supplies evidence for that runner image and browser; it does
 not cover every Windows version, graphics driver, terminal font, or local background load.
-The Node benchmark disables Dictation and Voice Mode in the daemon it spawns so speech
-model downloads cannot contaminate the sample.

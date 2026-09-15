@@ -54,14 +54,12 @@ import type { TerminalManager } from "../../terminal/terminal-manager.js";
 import { PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
 import { MutableDaemonConfigSchema, type AgentProfile } from "@getpaseo/protocol/messages";
 import type { DaemonConfigStore } from "../daemon-config-store.js";
-import type { BrowserToolsBroker, BrowserToolsExecuteInput } from "../browser-tools/broker.js";
-import type { BrowserToolsResponsePayload } from "../browser-tools/errors.js";
 import { readPaseoWorktreeMetadata } from "../../utils/worktree-metadata.js";
 import { createWorkspaceProvisioningService } from "../session/workspace-provisioning/workspace-provisioning-service.js";
 
 const REPO_CWD = resolvePath("/tmp/repo");
 const TARGET_CWD = resolvePath("/tmp/target");
-const BROWSER_WORKSPACE_ID = "wks_browser_tools";
+const BOUNDARY_WORKSPACE_ID = "wks_boundary_tools";
 
 interface LooseSafeParseResult {
   success: boolean;
@@ -552,22 +550,11 @@ function createGitHubServiceStub(): ForgeService {
   };
 }
 
-class FakeBrowserToolsBroker {
-  public readonly calls: BrowserToolsExecuteInput[] = [];
-
-  public constructor(private readonly response: BrowserToolsResponsePayload) {}
-
-  public async execute(input: BrowserToolsExecuteInput): Promise<BrowserToolsResponsePayload> {
-    this.calls.push(input);
-    return this.response;
-  }
-}
-
 class BoundaryAgentManagerFake {
   private readonly agent = createManagedAgent({
     id: "agent-1",
     cwd: REPO_CWD,
-    workspaceId: BROWSER_WORKSPACE_ID,
+    workspaceId: BOUNDARY_WORKSPACE_ID,
   });
 
   public getAgent(agentId: string): ManagedAgent | null {
@@ -813,24 +800,17 @@ function createPaseoWorktreeForMcpTest(options: {
   };
 }
 
-describe("browser MCP tools", () => {
+describe("agent MCP tools", () => {
   const logger = createTestLogger();
 
   it("omits output schemas from tools/list and keeps tool call content model-visible", async () => {
     const agentManager = new BoundaryAgentManagerFake();
     const agentStorage = new BoundaryAgentStorageFake();
-    const broker = new FakeBrowserToolsBroker({
-      requestId: "req-browser-tabs",
-      ok: true,
-      result: { command: "list_tabs", tabs: [] },
-    });
     const serverOptions = {
       agentManager: agentManager as AgentManager,
       agentStorage: agentStorage as AgentStorage,
       providerSnapshotManager:
         new BoundaryProviderSnapshotManagerFake() as unknown as ProviderSnapshotManager,
-      browserToolsEnabled: true,
-      browserToolsBroker: broker as BrowserToolsBroker,
       callerAgentId: "agent-1",
       logger,
     };
@@ -838,39 +818,20 @@ describe("browser MCP tools", () => {
     const client = await connectInMemoryMcpClient(server);
 
     try {
-      const browserResult = await client.callTool({
-        name: "browser_list_tabs",
-        arguments: {},
-      });
       const listAgentsResult = await client.callTool({
         name: "list_agents",
         arguments: {},
       });
 
-      expect(broker.calls).toEqual([
-        {
-          agentId: "agent-1",
-          cwd: REPO_CWD,
-          workspaceId: BROWSER_WORKSPACE_ID,
-          command: { command: "list_tabs", args: {} },
-        },
-      ]);
-      expect(browserResult.isError).not.toBe(true);
-      expect(browserResult.structuredContent).toEqual({
-        ok: true,
-        result: { command: "list_tabs", tabs: [] },
-        context: { agentId: "agent-1", cwd: REPO_CWD, workspaceId: BROWSER_WORKSPACE_ID },
-      });
       expect(listAgentsResult.isError).not.toBe(true);
       expect(listAgentsResult.structuredContent).toEqual({
         agents: [],
       });
-      expectSingleTextContent(browserResult);
       expect(expectSingleTextContent(listAgentsResult)).toContain('"agents": []');
 
       const listedTools = await client.listTools();
       expect(listedTools.tools.map((tool) => tool.name)).toEqual(
-        expect.arrayContaining(["browser_list_tabs", "list_agents"]),
+        expect.arrayContaining(["list_agents", "create_workspace"]),
       );
       for (const tool of listedTools.tools) {
         expect(tool, `${tool.name} outputSchema`).not.toHaveProperty("outputSchema");
@@ -881,152 +842,33 @@ describe("browser MCP tools", () => {
     }
   });
 
-  it("returns screenshot pixels as image content and keeps structured content metadata-only", async () => {
+  it("applies provider policy to registered tools", async () => {
     const agentManager = new BoundaryAgentManagerFake();
     const agentStorage = new BoundaryAgentStorageFake();
-    const broker = new FakeBrowserToolsBroker({
-      requestId: "req-browser-screenshot",
-      ok: true,
-      result: {
-        command: "screenshot",
-        browserId: "11111111-1111-4111-8111-111111111111",
-        mimeType: "image/png",
-        dataBase64: "iVBORw0KGgo=",
-        width: 800,
-        height: 600,
-      },
-    });
     const server = await createAgentMcpServer({
       agentManager: agentManager as AgentManager,
       agentStorage: agentStorage as AgentStorage,
       providerSnapshotManager:
         new BoundaryProviderSnapshotManagerFake() as unknown as ProviderSnapshotManager,
-      browserToolsEnabled: true,
-      browserToolsBroker: broker as BrowserToolsBroker,
       callerAgentId: "agent-1",
-      logger,
-    });
-    const client = await connectInMemoryMcpClient(server);
-
-    try {
-      const response = await client.callTool({
-        name: "browser_screenshot",
-        arguments: { browserId: "11111111-1111-4111-8111-111111111111" },
-      });
-
-      expect(broker.calls).toEqual([
-        {
-          agentId: "agent-1",
-          cwd: REPO_CWD,
-          workspaceId: BROWSER_WORKSPACE_ID,
-          command: {
-            command: "screenshot",
-            args: {
-              browserId: "11111111-1111-4111-8111-111111111111",
-              fullPage: false,
-            },
-          },
-        },
-      ]);
-      expect(response.content).toEqual([
-        { type: "text", text: "Captured browser screenshot (800x600)." },
-        { type: "image", data: "iVBORw0KGgo=", mimeType: "image/png" },
-      ]);
-      expect(response.structuredContent).toEqual({
-        ok: true,
-        result: {
-          command: "screenshot",
-          browserId: "11111111-1111-4111-8111-111111111111",
-          mimeType: "image/png",
-          width: 800,
-          height: 600,
-        },
-        context: {
-          agentId: "agent-1",
-          cwd: REPO_CWD,
-          workspaceId: BROWSER_WORKSPACE_ID,
-          browserId: "11111111-1111-4111-8111-111111111111",
-        },
-      });
-      expect(JSON.stringify(response.structuredContent)).not.toContain("iVBORw0KGgo=");
-      expect(JSON.stringify(response.structuredContent)).not.toContain("dataBase64");
-    } finally {
-      await client.close();
-      await server.close();
-    }
-  });
-
-  it("does not register browser tools when browser tools are disabled", async () => {
-    const { agentManager, agentStorage, spies } = createTestDeps();
-    spies.agentManager.getAgent.mockReturnValue({
-      id: "agent-1",
-      cwd: REPO_CWD,
-      workspaceId: BROWSER_WORKSPACE_ID,
-    });
-    const server = await createAgentMcpServer({
-      agentManager,
-      agentStorage,
-      providerSnapshotManager: createOpenCodeManager().manager,
-      browserToolsEnabled: false,
-      callerAgentId: "agent-1",
+      paseoToolPolicy: { disabledTools: ["create_workspace"] },
       logger,
     });
 
-    const client = await connectInMemoryMcpClient(server);
-    try {
-      const listedTools = await client.listTools();
-      const toolNames = listedTools.tools.map((tool) => tool.name);
-
-      expect(toolNames).not.toContain("browser_list_tabs");
-      expect(toolNames).not.toContain("browser_snapshot");
-      expect(toolNames).toEqual(expect.arrayContaining(["create_agent", "list_agents"]));
-    } finally {
-      await client.close();
-      await server.close();
-    }
-  });
-
-  it("applies provider policy after the browser-tools host gate", async () => {
-    const agentManager = new BoundaryAgentManagerFake();
-    const agentStorage = new BoundaryAgentStorageFake();
-    const broker = new FakeBrowserToolsBroker({
-      requestId: "req-browser-policy",
-      ok: true,
-      result: { command: "list_tabs", tabs: [] },
-    });
-    const server = await createAgentMcpServer({
-      agentManager: agentManager as AgentManager,
-      agentStorage: agentStorage as AgentStorage,
-      providerSnapshotManager:
-        new BoundaryProviderSnapshotManagerFake() as unknown as ProviderSnapshotManager,
-      browserToolsEnabled: true,
-      browserToolsBroker: broker as BrowserToolsBroker,
-      callerAgentId: "agent-1",
-      paseoToolPolicy: { disabledTools: ["browser_list_tabs"] },
-      logger,
-    });
-
-    expect(lookupTool(server, "browser_list_tabs")).toBeUndefined();
-    expect(lookupTool(server, "browser_snapshot")).toBeDefined();
+    expect(lookupTool(server, "create_workspace")).toBeUndefined();
+    expect(lookupTool(server, "list_agents")).toBeDefined();
   });
 
   it("filters policy-disabled tools from MCP listing and calls", async () => {
     const agentManager = new BoundaryAgentManagerFake();
     const agentStorage = new BoundaryAgentStorageFake();
-    const broker = new FakeBrowserToolsBroker({
-      requestId: "req-browser-policy-call",
-      ok: true,
-      result: { command: "list_tabs", tabs: [] },
-    });
     const server = await createAgentMcpServer({
       agentManager: agentManager as AgentManager,
       agentStorage: agentStorage as AgentStorage,
       providerSnapshotManager:
         new BoundaryProviderSnapshotManagerFake() as unknown as ProviderSnapshotManager,
-      browserToolsEnabled: true,
-      browserToolsBroker: broker as BrowserToolsBroker,
       callerAgentId: "agent-1",
-      paseoToolPolicy: { disabledTools: ["list_agents", "browser_list_tabs"] },
+      paseoToolPolicy: { disabledTools: ["list_agents", "create_workspace"] },
       logger,
     });
     const client = await connectInMemoryMcpClient(server);
@@ -1036,110 +878,21 @@ describe("browser MCP tools", () => {
       const toolNames = listedTools.tools.map((tool) => tool.name);
 
       expect(toolNames).not.toContain("list_agents");
-      expect(toolNames).not.toContain("browser_list_tabs");
-      expect(toolNames).toEqual(expect.arrayContaining(["create_agent", "browser_snapshot"]));
+      expect(toolNames).not.toContain("create_workspace");
+      expect(toolNames).toEqual(expect.arrayContaining(["create_agent"]));
       await expect(client.callTool({ name: "list_agents", arguments: {} })).resolves.toEqual({
         content: [{ type: "text", text: "MCP error -32602: Tool list_agents not found" }],
         isError: true,
       });
-      await expect(client.callTool({ name: "browser_list_tabs", arguments: {} })).resolves.toEqual({
-        content: [{ type: "text", text: "MCP error -32602: Tool browser_list_tabs not found" }],
+      await expect(client.callTool({ name: "create_workspace", arguments: {} })).resolves.toEqual({
+        content: [{ type: "text", text: "MCP error -32602: Tool create_workspace not found" }],
         isError: true,
       });
-      expect(broker.calls).toEqual([]);
     } finally {
       await client.close();
       await server.close();
     }
   });
-
-  it("wires browser tools through the browser tools broker", async () => {
-    const { agentManager, agentStorage, spies } = createTestDeps();
-    spies.agentManager.getAgent.mockReturnValue({
-      id: "agent-1",
-      cwd: REPO_CWD,
-      workspaceId: BROWSER_WORKSPACE_ID,
-    });
-    const execute = vi.fn().mockResolvedValue({
-      requestId: "req-browser-tabs",
-      ok: true,
-      result: { command: "list_tabs", tabs: [] },
-    });
-    const server = await createAgentMcpServer({
-      agentManager,
-      agentStorage,
-      providerSnapshotManager: createOpenCodeManager().manager,
-      browserToolsEnabled: true,
-      browserToolsBroker: { execute } as never,
-      callerAgentId: "agent-1",
-      logger,
-    });
-    const tool = registeredTool(server, "browser_list_tabs");
-
-    const response = await tool.handler({});
-
-    expect(execute).toHaveBeenCalledWith({
-      agentId: "agent-1",
-      cwd: REPO_CWD,
-      workspaceId: BROWSER_WORKSPACE_ID,
-      command: { command: "list_tabs", args: {} },
-    });
-    expect(response.content).toEqual([
-      {
-        type: "text",
-        text: "No BySpace browser tabs are open. Call browser_new_tab to create one.",
-      },
-    ]);
-    expect(response.structuredContent).toEqual({
-      ok: true,
-      result: { command: "list_tabs", tabs: [] },
-      context: { agentId: "agent-1", cwd: REPO_CWD, workspaceId: BROWSER_WORKSPACE_ID },
-    });
-  });
-
-  it("tells browser callers without a workspace how to proceed before broker execution", async () => {
-    const { agentManager, agentStorage, spies } = createTestDeps();
-    spies.agentManager.getAgent.mockReturnValue({ id: "agent-1", cwd: REPO_CWD });
-    const execute = vi.fn().mockResolvedValue({
-      requestId: "req-browser-tabs",
-      ok: true,
-      result: { command: "list_tabs", tabs: [] },
-    });
-    const server = await createAgentMcpServer({
-      agentManager,
-      agentStorage,
-      providerSnapshotManager: createOpenCodeManager().manager,
-      browserToolsEnabled: true,
-      browserToolsBroker: { execute } as never,
-      callerAgentId: "agent-1",
-      logger,
-    });
-    const tool = registeredTool(server, "browser_list_tabs");
-
-    const response = await tool.handler({});
-
-    expect(execute).not.toHaveBeenCalled();
-    expect(response.content).toEqual([
-      {
-        type: "text",
-        text: "This browser tool needs a workspace. Start the agent from a BySpace workspace before calling browser_new_tab or browser_list_tabs.",
-      },
-    ]);
-    expect(response.structuredContent).toEqual({
-      ok: false,
-      error: {
-        code: "browser_denied",
-        message:
-          "This browser tool needs a workspace. Start the agent from a BySpace workspace before calling browser_new_tab or browser_list_tabs.",
-        retryable: false,
-      },
-      context: { agentId: "agent-1", cwd: REPO_CWD },
-    });
-  });
-});
-
-describe("terminal MCP tools", () => {
-  const logger = createTestLogger();
 
   it("captures terminal output through the terminal manager authority", async () => {
     const { agentManager, agentStorage } = createTestDeps();
@@ -3056,7 +2809,7 @@ describe("create_agent MCP tool", () => {
     expect(parsed.success).toBe(true);
   });
 
-  it("allows caller agents to override cwd and applies caller context labels", async () => {
+  it("allows caller agents to override cwd", async () => {
     const { agentManager, agentStorage, spies } = createTestDeps();
     const baseDir = await mkdtemp(join(tmpdir(), "paseo-mcp-test-"));
     const subdir = join(baseDir, "subdir");
@@ -3082,10 +2835,6 @@ describe("create_agent MCP tool", () => {
       agentStorage,
       providerSnapshotManager: createOpenCodeManager().manager,
       callerAgentId: "voice-agent",
-      resolveCallerContext: () => ({
-        childAgentDefaultLabels: { source: "voice" },
-        allowCustomCwd: true,
-      }),
       logger,
     });
 
@@ -3105,7 +2854,6 @@ describe("create_agent MCP tool", () => {
       {
         labels: {
           [PARENT_AGENT_ID_LABEL]: "voice-agent",
-          source: "voice",
         },
         workspaceId: "wks_voice",
       },

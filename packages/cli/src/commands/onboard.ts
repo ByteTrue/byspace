@@ -1,8 +1,6 @@
-import { cancel, confirm, intro, isCancel, log, note, outro, spinner } from "@clack/prompts";
+import { cancel, intro, log, note, outro, spinner } from "@clack/prompts";
 import { Command, Option } from "commander";
-import { writeFileSync } from "node:fs";
 import path from "node:path";
-import { loadPersistedConfig, type PersistedConfig } from "@getpaseo/server";
 import { resolveBySpaceHostedAppBaseUrl } from "@getpaseo/protocol/release-channel";
 import {
   resolveLocalPaseoHome,
@@ -23,28 +21,14 @@ import { resolveCliVersion } from "../version.js";
 
 interface OnboardOptions extends DaemonStartOptions {
   timeout?: string;
-  voice?: "ask" | "enable" | "disable";
 }
 
 type RawOnboardOptions = OnboardOptions & {
   allowedHosts?: string;
 };
 
-type OnboardPersistedConfig = PersistedConfig & {
-  features?: PersistedConfig["features"] & {
-    dictation?: PersistedConfig["features"] extends { dictation?: infer T }
-      ? T & { enabled?: boolean }
-      : { enabled?: boolean };
-    voiceMode?: PersistedConfig["features"] extends { voiceMode?: infer T }
-      ? T & { enabled?: boolean }
-      : { enabled?: boolean };
-  };
-};
-
 const DEFAULT_READY_TIMEOUT_MS = 10 * 60 * 1000;
 const READY_PROBE_TIMEOUT_MS = 1200;
-
-class OnboardCancelledError extends Error {}
 
 const plainNoteFormat = (line: string): string => line;
 
@@ -69,106 +53,6 @@ function parseTimeoutMs(raw: string | undefined): number {
   }
 
   return Math.ceil(seconds * 1000);
-}
-
-function savePersistedConfig(paseoHome: string, config: OnboardPersistedConfig): void {
-  const configPath = path.join(paseoHome, "config.json");
-  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
-}
-
-function applyVoiceSelection(
-  config: OnboardPersistedConfig,
-  enabled: boolean,
-): OnboardPersistedConfig {
-  return {
-    ...config,
-    features: {
-      ...config.features,
-      dictation: {
-        ...config.features?.dictation,
-        enabled,
-      },
-      voiceMode: {
-        ...config.features?.voiceMode,
-        enabled,
-      },
-    },
-  };
-}
-
-function resolvePersistedVoiceSelection(config: OnboardPersistedConfig): boolean | null {
-  const voiceModeEnabled = config.features?.voiceMode?.enabled;
-  if (typeof voiceModeEnabled === "boolean") {
-    return voiceModeEnabled;
-  }
-
-  const dictationEnabled = config.features?.dictation?.enabled;
-  if (typeof dictationEnabled === "boolean") {
-    return dictationEnabled;
-  }
-
-  return null;
-}
-
-async function resolveVoiceSelection(mode: OnboardOptions["voice"]): Promise<boolean> {
-  if (mode === "enable") {
-    return true;
-  }
-  if (mode === "disable") {
-    return false;
-  }
-
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    log.message("Non-interactive terminal detected; voice setup defaults to disabled.");
-    return false;
-  }
-
-  const answer = await confirm({
-    message: "Enable voice features? (downloads local STT/TTS models in background)",
-    active: "Yes",
-    inactive: "No",
-    initialValue: false,
-  });
-
-  if (isCancel(answer)) {
-    throw new OnboardCancelledError("Onboarding cancelled by user.");
-  }
-
-  return answer;
-}
-
-interface DownloadProgress {
-  modelId: string | null;
-  pct: number | null;
-}
-
-function parseDownloadProgress(logTail: string): DownloadProgress | null {
-  const lines = logTail.split("\n").filter(Boolean);
-
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const line = lines[index];
-    if (!line || !line.includes("Downloading model artifact")) {
-      continue;
-    }
-
-    const pctMatch = line.match(/"pct"\s*:\s*(\d{1,3})|\bpct[=:]\s*(\d{1,3})/);
-    const modelMatch = line.match(/"modelId"\s*:\s*"([^"]+)"|\bmodelId[=:]\s*"?([^\s",}]+)/);
-
-    return {
-      modelId: modelMatch?.[1] ?? modelMatch?.[2] ?? null,
-      pct: pctMatch ? Number(pctMatch[1] ?? pctMatch[2]) : null,
-    };
-  }
-
-  return null;
-}
-
-function renderProgressLine(progress: DownloadProgress): string {
-  const modelSuffix = progress.modelId ? ` (${progress.modelId})` : "";
-  if (progress.pct === null) {
-    return `Downloading speech model${modelSuffix}...`;
-  }
-  return `Downloading speech model${modelSuffix}: ${progress.pct}%`;
 }
 
 type ProbeResult = { kind: "ready"; listen: string; host: string | null } | { kind: "pending" };
@@ -209,13 +93,10 @@ interface ProgressState {
 }
 
 function announceProgress(
-  home: string,
   state: ProgressState,
   onStatus: ((message: string) => void) | undefined,
 ): ProgressState {
-  const progress = parseDownloadProgress(tailDaemonLog(home, 120) ?? "");
-  const progressLine = progress ? renderProgressLine(progress) : null;
-  const statusMessage = progressLine ?? "Waiting for daemon to become ready...";
+  const statusMessage = "Waiting for daemon to become ready...";
 
   if (statusMessage !== state.lastStatus) {
     onStatus?.(statusMessage);
@@ -254,7 +135,7 @@ async function waitForDaemonReady(args: {
     if (probe.kind === "ready") {
       return { listen: probe.listen, host: probe.host };
     }
-    const nextState = announceProgress(args.home, state, args.onStatus);
+    const nextState = announceProgress(state, args.onStatus);
     if (Date.now() >= deadline) {
       throw createTimeoutError();
     }
@@ -318,43 +199,12 @@ export function onboardCommand(): Command {
     )
     .addOption(new Option("--allowed-hosts <hosts>").hideHelp())
     .option("--timeout <seconds>", "Max time to wait for daemon readiness (default: 600)")
-    .option("--voice <mode>", "Voice setup mode: ask, enable, disable", "ask")
     .action(async (options: RawOnboardOptions) => {
       await runOnboard({
         ...options,
         hostnames: options.hostnames ?? options.allowedHosts,
       });
     });
-}
-
-async function resolveAndPersistVoice(
-  paseoHome: string,
-  options: OnboardOptions,
-): Promise<boolean> {
-  let persisted = loadPersistedConfig(paseoHome) as OnboardPersistedConfig;
-  const persistedVoiceSelection = resolvePersistedVoiceSelection(persisted);
-  const shouldPrompt = options.voice === "ask" || options.voice === undefined;
-  let voiceEnabled: boolean;
-  try {
-    voiceEnabled =
-      shouldPrompt && persistedVoiceSelection !== null
-        ? persistedVoiceSelection
-        : await resolveVoiceSelection(options.voice);
-  } catch (error) {
-    if (error instanceof OnboardCancelledError) {
-      cancel("Onboarding cancelled.");
-      process.exit(0);
-    }
-    throw error;
-  }
-
-  if (shouldPrompt && persistedVoiceSelection !== null) {
-    log.message(`Using saved voice setup from config (${voiceEnabled ? "enabled" : "disabled"}).`);
-  }
-
-  persisted = applyVoiceSelection(persisted, voiceEnabled);
-  savePersistedConfig(paseoHome, persisted);
-  return voiceEnabled;
 }
 
 async function ensureDaemonStarted(options: OnboardOptions, richUi: boolean): Promise<void> {
@@ -447,13 +297,6 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
   if (richUi) {
     renderNote(paseoHome, "BySpace home");
   }
-
-  const voiceEnabled = await resolveAndPersistVoice(paseoHome, options);
-  log.message(
-    voiceEnabled
-      ? "Voice features enabled. Local speech models will be downloaded automatically if missing."
-      : "Voice features disabled. Local speech models will not be downloaded.",
-  );
 
   await ensureDaemonStarted(options, richUi);
   await waitForDaemonReadyWithUi({

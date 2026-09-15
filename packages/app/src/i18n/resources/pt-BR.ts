@@ -1,5 +1,4 @@
 import { en, type TranslationResources } from "./en";
-import { pluginSettings } from "./plugin-settings";
 
 export const ptBR: TranslationResources = {
   common: {
@@ -112,18 +111,6 @@ export const ptBR: TranslationResources = {
       cancelingAgent: "Cancelando agente",
       stopAgent: "Parar agente",
       interrupt: "Interromper",
-    },
-    voice: {
-      enableVoiceMode: "Ativar modo de voz",
-      voiceMode: "Modo de voz",
-      unmuteVoiceMode: "Ativar som do modo de voz",
-      muteVoiceMode: "Silenciar modo de voz",
-      stopDictation: "Parar ditado",
-      startDictation: "Iniciar ditado",
-      unmuteVoice: "Ativar som da voz",
-      muteVoice: "Silenciar voz",
-      dictation: "Ditado",
-      interruptBeforeVoice: "Interrompa o agente antes de iniciar o modo de voz",
     },
     attachments: {
       addImage: "Adicionar imagem",
@@ -329,15 +316,6 @@ export const ptBR: TranslationResources = {
     },
     activity: {
       details: "Detalhes",
-    },
-    dictation: {
-      start: "Iniciar ditado por voz",
-      cancel: "Cancelar ditado",
-      retry: "Tentar ditado novamente",
-      insert: "Inserir transcrição",
-      insertAndSend: "Inserir transcrição e enviar",
-      failed: "Falha no ditado: {{error}}",
-      failedRetry: "Falha no ditado. Toque para tentar novamente.",
     },
     question: {
       submit: "Enviar",
@@ -546,45 +524,6 @@ export const ptBR: TranslationResources = {
         noOutput: "Nenhuma saída",
       },
     },
-    browser: {
-      unavailable: {
-        title: "O navegador é exclusivo do desktop",
-        subtitle: "Abra este workspace no Electron para usar o navegador integrado.",
-      },
-      session: "Sessão do navegador {{browserId}}",
-      controls: {
-        back: "Voltar",
-        forward: "Avançar",
-        stopLoading: "Parar carregamento",
-        refresh: "Atualizar",
-        browserUrl: "URL do navegador",
-        enterUrl: "Inserir URL",
-        openDevTools: "Abrir ferramentas de desenvolvedor do navegador",
-        cancelSelector: "Cancelar seletor de elemento",
-        annotateElement: "Anotar elemento",
-        screenshotElement: "Capturar elemento",
-        screenshotCopied: "Captura copiada para a área de transferência",
-        elementCopied: "Elemento copiado para a área de transferência",
-        screenshotFailed: "Não foi possível copiar a captura",
-        selectorLoading: "Aguarde o carregamento da página terminar",
-        selectorFailed: "Não foi possível iniciar o seletor de elemento",
-      },
-      annotate: {
-        title: "Anotar elemento",
-        placeholder: "Mensagem ao agente sobre este elemento…",
-        submit: "Anexar",
-        cancel: "Cancelar",
-      },
-      devices: {
-        label: "Tamanho do dispositivo",
-        responsive: "Responsivo",
-      },
-      errors: {
-        failedToLoad: "Falha ao carregar página",
-        invalidUrl: "URL de navegador inválida",
-        unsupportedProtocol: "URL de navegador sem suporte bloqueada: {{protocol}}",
-      },
-    },
     terminal: {
       hostDisconnected: "Host não está conectado",
       updateHost: "Atualize o host para usar o renderizador de terminal nativo.",
@@ -635,7 +574,6 @@ export const ptBR: TranslationResources = {
         newTerminal: "Novo terminal",
         preparingTerminal: "Preparando aba de terminal",
         preparingTerminalTooltip: "Preparando terminal...",
-        newBrowser: "Novo navegador",
         maximizePane: "Maximizar painel",
         restorePane: "Restaurar painel",
         closePane: "Fechar painel",
@@ -706,7 +644,6 @@ export const ptBR: TranslationResources = {
         workspaceActions: "Ações do workspace",
         newAgent: "Novo agente",
         newTerminal: "Novo terminal",
-        newBrowser: "Nova aba de navegador",
         importSession: "Importar sessão",
         copyPath: "Copiar caminho do workspace",
         copyBranchName: "Copiar nome da branch",
@@ -1313,167 +1250,6 @@ export const ptBR: TranslationResources = {
       commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
   },
-  desktop: {
-    windowControls: {
-      minimize: "Minimizar janela",
-      maximize: "Maximizar janela",
-      restore: "Restaurar janela",
-      close: "Fechar janela",
-    },
-    quitting: {
-      title: "Saindo do BySpace...",
-      detail: "Parando o daemon local.",
-    },
-    daemon: {
-      title: "Daemon",
-      status: {
-        title: "Status",
-        builtInOnly: "Apenas o daemon desktop integrado é exibido aqui",
-        running: "em execução",
-        notRunning: "não está em execução",
-        pid: "PID {{pid}}",
-      },
-      management: {
-        title: "Gerenciar daemon integrado",
-        hint: "Permitir que o Paseo inicie e pare o daemon integrado",
-        pauseTitle: "Pausar daemon integrado",
-        pauseMessage:
-          "Isso vai parar o daemon integrado imediatamente. Agentes e terminais em execução conectados ao daemon integrado serão interrompidos.",
-        pauseAndStop: "Pausar e parar",
-        registrationFailed:
-          "O daemon integrado foi iniciado, mas o Paseo não conseguiu salvar a conexão localhost. Desative e reative o gerenciamento do daemon ou adicione localhost manualmente.",
-        pausedStopFailed:
-          "O gerenciamento do daemon integrado foi pausado, mas o Paseo não conseguiu parar o daemon.",
-        updateFailed: "Não foi possível atualizar o gerenciamento do daemon integrado.",
-      },
-      keepRunning: {
-        title: "Manter daemon em execução ao sair",
-        hint: "O daemon continua em execução quando você sai do Paseo",
-      },
-      logs: {
-        title: "Arquivo de log",
-        modalTitle: "Logs do daemon",
-        unavailable: "Caminho do log indisponível",
-        empty: "(arquivo de log vazio)",
-        copied: "Caminho do log copiado.",
-        copyFailed: "Não foi possível copiar o caminho do log.",
-        open: "Abrir logs",
-        copyPath: "Copiar caminho",
-      },
-      fullStatus: {
-        title: "Status completo",
-        modalTitle: "Status do daemon",
-        hint: "Executa `byspace daemon status` e mostra a saída",
-        view: "Ver status",
-        copied: "Status copiado para a área de transferência.",
-        fetchFailed: "Falha ao buscar status do daemon: {{message}}",
-      },
-      advancedSettings: "Configurações avançadas",
-      openAdvancedSettings: "Abrir configurações avançadas do daemon",
-      versionMismatch:
-        "As versões do app e do daemon não coincidem. Atualize ambos para a mesma versão para a melhor experiência.",
-      loadFailed: "Não foi possível carregar o status do daemon desktop.",
-    },
-    updates: {
-      status: {
-        checking: "Verificando atualizações do app...",
-        installing: "Instalando atualização do app...",
-        upToDate: "O app está atualizado.",
-        upToDateWithLastChecked: "Atualizado. Última verificação às {{time}}.",
-        pending: "Avisaremos quando a atualização estiver pronta.",
-        pendingWithLastChecked:
-          "Avisaremos quando a atualização estiver pronta. Última verificação às {{time}}.",
-        pendingWithVersion: "Atualização encontrada: {{version}}. Baixando...",
-        pendingWithVersionAndLastChecked:
-          "Atualização encontrada: {{version}}. Baixando... Última verificação às {{time}}.",
-        availableWithVersion: "Atualização pronta: {{version}}",
-        availableWithVersionAndLastChecked:
-          "Atualização pronta: {{version}}. Última verificação às {{time}}.",
-        available: "Há uma atualização do app pronta para instalar.",
-        availableWithLastChecked:
-          "Há uma atualização do app pronta para instalar. Última verificação às {{time}}.",
-        installed: "Atualização do app instalada. Reinicialização obrigatória.",
-        failed: "Falha ao atualizar o app.",
-        idle: "O status de atualização ainda não foi verificado.",
-      },
-      installError: "Não foi possível instalar a atualização do app desktop.",
-      callout: {
-        installingTitle: "Instalando atualização",
-        failedTitle: "Falha na atualização",
-        availableTitle: "Atualização disponível",
-        genericError: "Algo deu errado.",
-        whatsNew: "Novidades",
-        installingAction: "Instalando...",
-        installAndRestart: "Instalar e reiniciar",
-        installingDescription: "Instalando e reiniciando...",
-        versionReady: "{{version}} está pronta para instalar.",
-        newVersionReady: "Uma nova versão está pronta para instalar.",
-        restartWarning:
-          "Atualizar o app vai interromper agentes em execução e fechar sessões de terminal.",
-      },
-    },
-    settings: {
-      loadFailed: "Não foi possível carregar as configurações do desktop.",
-      saveFailed: "Não foi possível salvar as configurações do desktop.",
-    },
-    rosetta: {
-      title: "Baixar a build para Apple Silicon",
-      runningIntel: "Você está executando a build Intel do Paseo pelo Rosetta no Apple Silicon.",
-      highCpu: "Isso causa alto uso de CPU. Baixe a build para Apple Silicon para corrigir.",
-      download: "Baixar",
-    },
-    permissions: {
-      notifications: {
-        allowed: "As notificações são permitidas pelo sistema operacional.",
-        denied: "As notificações estão negadas nas configurações do sistema.",
-        notGranted: "As notificações ainda não foram concedidas.",
-        webOnly: "O status de notificações desktop só está disponível no runtime web.",
-        supported: "Notificações desktop são compatíveis.",
-        unsupported: "Notificações desktop não são compatíveis nesta plataforma.",
-        apiUnavailable: "A Web Notification API não está disponível neste ambiente.",
-        requestsWebOnly: "Solicitações de notificação desktop só estão disponíveis no runtime web.",
-        requestUnavailable: "Web Notification API requestPermission() está indisponível.",
-        requestFailed: "Falha ao solicitar permissão de notificação: {{message}}",
-        unexpectedState: "Estado inesperado de permissão de notificação: {{state}}",
-      },
-      microphone: {
-        webOnly: "O status do microfone desktop só está disponível no runtime web.",
-        navigatorUnavailable: "Navigator não está disponível neste ambiente.",
-        granted: "O acesso ao microfone foi concedido.",
-        denied: "O acesso ao microfone está negado nas configurações do sistema.",
-        notGranted: "A permissão do microfone ainda não foi concedida.",
-        unexpectedState: "Estado inesperado de permissão do microfone: {{state}}",
-        statusApiUnavailable:
-          "A API de status do microfone não está disponível neste runtime. Use Solicitar para verificar o acesso.",
-        queryFailed: "Falha ao consultar o status do microfone: {{message}}",
-        captureUnavailable: "A captura do microfone não está disponível neste ambiente.",
-        permissionApiUnavailable:
-          "A API de status de permissão não está disponível. Use Solicitar para verificar o acesso.",
-        requestsWebOnly: "Solicitações de microfone desktop só estão disponíveis no runtime web.",
-        captureApiUnavailable: "A API de captura do microfone não está disponível neste ambiente.",
-        requestDenied: "A permissão do microfone foi negada pelo usuário ou pelo sistema.",
-        noDevice: "Nenhum dispositivo de microfone foi encontrado.",
-        requestFailed: "Falha ao solicitar permissão do microfone: {{message}}",
-      },
-      empty: {
-        notifications: "O status das notificações ainda não foi verificado.",
-        microphone: "O status do microfone ainda não foi verificado.",
-      },
-      testNotification: {
-        title: "Teste de notificação do BySpace",
-        body: "Se você consegue ver isto, as notificações desktop funcionam.",
-        notDelivered:
-          "A notificação não foi entregue. Verifique Ajustes do Sistema > Notificações.",
-        failed: "Falha ao enviar notificação.",
-      },
-    },
-    integrations: {
-      cli: {
-        statusFailed: "Não foi possível verificar o status de instalação da CLI.",
-        installFailed: "Não foi possível instalar a CLI do Paseo.",
-      },
-    },
-  },
   rootError: {
     title: "O BySpace encontrou um problema.",
     body: "Tente novamente para recarregar o app. Se isso continuar acontecendo, inclua os detalhes abaixo ao relatar o problema.",
@@ -2052,10 +1828,8 @@ export const ptBR: TranslationResources = {
       providers: "Provedores",
       usage: "Uso",
       terminals: "Terminais",
-      plugins: "Plugins",
       host: "Visão geral",
     },
-    plugins: pluginSettings["pt-BR"],
     metadataGeneration: {
       title: "Geração de metadados",
       description:
@@ -2176,28 +1950,18 @@ export const ptBR: TranslationResources = {
       connectedHosts: "Hosts conectados",
       offline: "Offline",
       versionDiffers: "A versão é diferente da deste dispositivo",
-      releaseChannel: {
-        label: "Canal de lançamento",
-        description: "Troque para Beta para receber atualizações antes e ajudar a moldá-las",
-        stable: "Stable",
-        beta: "Beta",
-      },
-      updates: {
-        label: "Atualizações do app",
-        readyToInstall: "Pronta para instalar: {{version}}",
-        installTitle: "Instalar atualização desktop",
-        installMessage: "Isso atualiza o Paseo neste computador",
-        installConfirm: "Instalar atualização",
-        update: "Atualizar",
-        updateTo: "Atualizar para {{version}}",
-        installing: "Instalando...",
-        check: "Verificar",
-        checking: "Verificando...",
-        alertTitle: "Erro",
-        alertMessage: "Não foi possível abrir o diálogo de confirmação da atualização.",
-      },
     },
     appearance: {
+      terminal: {
+        title: "Terminal",
+        hint: "Esquema de cores do terminal, independente do tema do aplicativo",
+        accessibilityLabel: "Aparência do terminal: {{value}}",
+        options: {
+          match: "Igual ao aplicativo",
+          dark: "Escuro",
+          light: "Claro",
+        },
+      },
       theme: {
         title: "Tema",
         accessibilityLabel: "Tema: {{value}}",
@@ -2314,12 +2078,9 @@ export const ptBR: TranslationResources = {
         cycleTheme: "Alternar tema",
         focusMessageInput: "Focar entrada de mensagem",
         cycleAgentMode: "Alternar modo do agente",
-        toggleVoiceMode: "Alternar modo de voz",
-        startStopDictation: "Iniciar/parar ditado",
         interruptAgent: "Interromper agente",
         sendMessage: "Enviar mensagem",
         queueMessage: "Enfileirar mensagem",
-        muteUnmuteVoiceMode: "Silenciar/ativar modo de voz",
         switchProject: "Trocar projeto",
       },
       helpNotes: {

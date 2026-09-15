@@ -116,7 +116,6 @@ Cross-platform React Native app that connects to one or more daemons.
 - Composer UI and submit/draft behavior live in `packages/app/src/composer/`; screens and panels should integrate it from there instead of dropping composer internals into `components/`, `hooks/`, or `screens/workspace/`
 - Timeline reducers in `timeline/session-stream-reducers.ts` handle compaction, gap detection, sequence-based deduplication
 - Timeline sync correctness is documented in [docs/timeline-sync.md](timeline-sync.md): live streams are for immediacy, `fetch_agent_timeline_request` is authoritative, and catch-up is paged but complete.
-- Voice features: dictation (STT) and voice agent (realtime)
 
 Consumers request directory or timeline data without choosing memory, cache, or network. The owner
 publishes an accepted cache hit and then reconciles it over the existing network path. A miss or an
@@ -196,7 +195,7 @@ Client → Server:  WSHelloMessage {
                     clientType: "mobile" | "browser" | "cli" | "mcp",
                     protocolVersion,
                     appVersion?,
-                    capabilities?: { voice?, pushNotifications?, ... },
+                    capabilities?: { pushNotifications?, browser_host?, ... },
                   }
 Server → Client:  status message with payload { status: "server_info",
                     serverId, hostname, version, capabilities?, features }
@@ -228,7 +227,6 @@ optionally carry the same `turnId`. New clients use these fields when present an
 status once at the directory boundary rather than maintaining a second activity model.
 
 - Terminal subscribe/input/capture commands
-- Voice/dictation streaming events (`dictation_stream_*`, `assistant_chunk`, `audio_output`, `transcription_result`)
 - Request/response pairs for fetch, list, create, etc., correlated by `requestId`; failures use `rpc_error`
 
 `directory_suggestions_request` is one daemon-owned filesystem search capability. The daemon

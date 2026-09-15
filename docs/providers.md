@@ -57,7 +57,7 @@ Claude first-party model metadata lives in `packages/server/src/server/agent/pro
 
 BySpace tools are not implemented as MCP tools internally. They live in a shared tool catalog under `packages/server/src/server/agent/tools/`; MCP is only the fallback adapter. The daemon resolves `agents.providers.<provider>.byspaceTools` by the exact provider ID. The catalog policy belongs to the caller: it filters the tools exposed to the current agent. When that agent calls `create_agent`, the child receives the policy for the child provider ID; the caller's policy is not inherited.
 
-A provider that can register runtime tools directly should set `supportsNativeBySpaceTools: true` and consume the already-filtered `launchContext.byspaceTools` in `createSession`/`resumeSession`. When native tools are present, `AgentManager` strips the internal BySpace MCP server from the provider launch config so the provider does not receive the same tools twice. Providers that only know MCP should keep `supportsMcpServers: true` and let the daemon inject `/mcp/agents`; the MCP server builds the same policy-filtered catalog for that caller. Filtering is enforced at catalog registration in both paths. Browser tools remain subject to the daemon browser-tools setting and browser-host availability.
+A provider that can register runtime tools directly should set `supportsNativeBySpaceTools: true` and consume the already-filtered `launchContext.byspaceTools` in `createSession`/`resumeSession`. When native tools are present, `AgentManager` strips the internal BySpace MCP server from the provider launch config so the provider does not receive the same tools twice. Providers that only know MCP should keep `supportsMcpServers: true` and let the daemon inject `/mcp/agents`; the MCP server builds the same policy-filtered catalog for that caller. Filtering is enforced at catalog registration in both paths.
 
 Pi is a process-backed provider. BySpace requires the user to have the `pi` binary installed and talks to it through `pi --mode rpc`; the server package does not embed Pi's SDK/runtime packages.
 
@@ -317,12 +317,6 @@ export const AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [
     description: "Short description of the provider",
     defaultModeId: "default",
     modes: MY_PROVIDER_MODES,
-    // Optional: enable voice
-    voice: {
-      enabled: true,
-      defaultModeId: "default",
-      defaultModel: "some-model",
-    },
   },
 ];
 ```

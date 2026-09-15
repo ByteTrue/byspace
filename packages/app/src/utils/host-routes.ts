@@ -518,7 +518,6 @@ export const HOST_SECTION_SLUGS = [
   "providers",
   "usage",
   "terminals",
-  "plugins",
   "host",
 ] as const;
 
@@ -527,6 +526,9 @@ export type HostSectionSlug = (typeof HOST_SECTION_SLUGS)[number];
 const LEGACY_HOST_SECTION_SLUGS: Record<string, HostSectionSlug> = {
   orchestration: "agents",
   daemon: "host",
+  // COMPAT(pluginsSection): plugin management retired in v0.14.x; old deep links
+  // fall back to the host overview instead of an unknown section. Remove after 2027-09-15.
+  plugins: "host",
 };
 
 export function isHostSectionSlug(value: string): value is HostSectionSlug {

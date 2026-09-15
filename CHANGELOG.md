@@ -5,6 +5,22 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+<!-- Next release, staged:
+
+### Added
+
+- The terminal can now keep its own dark or light color scheme, independent of the app theme
+
+### Improved
+
+- Empty sidebar projects no longer show a collapse/expand chevron
+
+### Removed
+
+- Settings no longer offer Browser tools, Plugins, voice setup during `byspace onboard`, or the in-app service URL behavior, all of which had no effect since the desktop app was retired
+
+-->
+
 ## 0.14.2 - 2026-09-15
 
 ### Added

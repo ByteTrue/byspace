@@ -77,7 +77,7 @@ try {
   );
   console.log("✓ --no-relay suppresses pairing for an already-running daemon\n");
 
-  console.log("Test 3: non-interactive onboarding persists voice disabled config");
+  console.log("Test 3: non-interactive onboarding leaves retired speech config alone");
   const configRaw = await readFile(join(paseoHome, "config.json"), "utf-8");
   const config = JSON.parse(configRaw) as {
     features?: {
@@ -86,22 +86,24 @@ try {
     };
   };
 
+  // Voice is retired (issue 025 C8): onboard no longer asks, and nothing reads
+  // these keys. Writing them would advertise a feature that does not exist.
   assert.strictEqual(
-    config.features?.dictation?.enabled,
-    false,
-    "dictation.enabled should be false",
+    config.features?.dictation,
+    undefined,
+    "onboard should not write features.dictation",
   );
   assert.strictEqual(
-    config.features?.voiceMode?.enabled,
-    false,
-    "voiceMode.enabled should be false",
+    config.features?.voiceMode,
+    undefined,
+    "onboard should not write features.voiceMode",
   );
   const daemonLog = await readFile(join(paseoHome, "daemon.log"), "utf-8");
   assert(
     !daemonLog.includes("Ensuring local speech models"),
-    "daemon should not attempt local speech model setup when voice is disabled",
+    "daemon should not attempt local speech model setup",
   );
-  console.log("✓ non-interactive run persisted voice disabled choices\n");
+  console.log("✓ non-interactive run left retired speech config untouched\n");
 } finally {
   await $`BYSPACE_HOME=${paseoHome} npx byspace daemon stop --home ${paseoHome} --force`.nothrow();
   await rm(paseoHome, { recursive: true, force: true });

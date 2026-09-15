@@ -55,7 +55,6 @@ import { HorizontalScrollProvider } from "@/contexts/horizontal-scroll-context";
 import { SessionProvider } from "@/contexts/session-context";
 import { SidebarCalloutProvider } from "@/contexts/sidebar-callout-context";
 import { ToastProvider } from "@/contexts/toast-context";
-import { VoiceProvider } from "@/contexts/voice-context";
 import {
   resolveStartupBlocker,
   resolveStartupNavigationReady,
@@ -596,12 +595,10 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
 
   return (
     <AppearanceProvider>
-      <VoiceProvider>
-        <OfferLinkListener upsertDaemonFromOfferUrl={upsertConnectionFromOfferUrl} />
-        <HostSessionManager />
-        <FaviconStatusSync />
-        <AppearanceStyleBoundary>{children}</AppearanceStyleBoundary>
-      </VoiceProvider>
+      <OfferLinkListener upsertDaemonFromOfferUrl={upsertConnectionFromOfferUrl} />
+      <HostSessionManager />
+      <FaviconStatusSync />
+      <AppearanceStyleBoundary>{children}</AppearanceStyleBoundary>
     </AppearanceProvider>
   );
 }

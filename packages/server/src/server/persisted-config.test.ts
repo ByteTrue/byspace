@@ -46,7 +46,7 @@ describe("PersistedConfigSchema daemon append system prompt config", () => {
   });
 });
 
-describe("PersistedConfigSchema daemon browser tools config", () => {
+describe("PersistedConfigSchema daemon browser tools compat", () => {
   test("accepts optional browser tools opt-in", () => {
     const parsed = PersistedConfigSchema.parse({
       daemon: {

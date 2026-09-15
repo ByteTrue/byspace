@@ -178,6 +178,91 @@ function ThemeRow({ value, onChange }: ThemeRowProps) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Terminal appearance picker — the terminal's scheme, independent of the app
+// theme.
+// ---------------------------------------------------------------------------
+
+type TerminalAppearance = AppSettings["terminalAppearance"];
+
+const TERMINAL_APPEARANCE_OPTIONS: readonly TerminalAppearance[] = ["match", "dark", "light"];
+
+function getTerminalAppearanceLabel(t: TFunction, value: TerminalAppearance): string {
+  return t(`settings.appearance.terminal.options.${value}`);
+}
+
+function TerminalAppearanceLeading({ value }: { value: TerminalAppearance }) {
+  switch (value) {
+    case "dark":
+      return <ThemedMoon size={ICON_SIZE.md} uniProps={mutedColorMapping} />;
+    case "light":
+      return <ThemedSun size={ICON_SIZE.md} uniProps={mutedColorMapping} />;
+    case "match":
+      return <ThemedMonitor size={ICON_SIZE.md} uniProps={mutedColorMapping} />;
+  }
+}
+
+interface TerminalAppearanceMenuItemProps {
+  value: TerminalAppearance;
+  selected: boolean;
+  onChange: (value: TerminalAppearance) => void;
+}
+
+function TerminalAppearanceMenuItem({
+  value,
+  selected,
+  onChange,
+}: TerminalAppearanceMenuItemProps) {
+  const { t } = useTranslation();
+  const handleSelect = useCallback(() => onChange(value), [onChange, value]);
+  const leading = useMemo(() => <TerminalAppearanceLeading value={value} />, [value]);
+  return (
+    <DropdownMenuItem selected={selected} onSelect={handleSelect} leading={leading}>
+      {getTerminalAppearanceLabel(t, value)}
+    </DropdownMenuItem>
+  );
+}
+
+interface TerminalAppearanceRowProps {
+  value: TerminalAppearance;
+  onChange: (value: TerminalAppearance) => void;
+}
+
+function TerminalAppearanceRow({ value, onChange }: TerminalAppearanceRowProps) {
+  const { t } = useTranslation();
+  const selectedLabel = getTerminalAppearanceLabel(t, value);
+  return (
+    <View style={settingsStyles.row}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>{t("settings.appearance.terminal.title")}</Text>
+        <Text style={settingsStyles.rowHint}>{t("settings.appearance.terminal.hint")}</Text>
+      </View>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          style={dropdownTriggerStyle}
+          accessibilityLabel={t("settings.appearance.terminal.accessibilityLabel", {
+            value: selectedLabel,
+          })}
+        >
+          <TerminalAppearanceLeading value={value} />
+          <Text style={styles.triggerText}>{selectedLabel}</Text>
+          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="bottom" align="end" width={200}>
+          {TERMINAL_APPEARANCE_OPTIONS.map((option) => (
+            <TerminalAppearanceMenuItem
+              key={option}
+              value={option}
+              selected={value === option}
+              onChange={onChange}
+            />
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </View>
+  );
+}
+
 interface AutoExpandReasoningRowProps {
   value: boolean;
   onChange: (value: boolean) => void;
@@ -489,6 +574,13 @@ export function AppearanceSection() {
     [updateSettings],
   );
 
+  const handleTerminalAppearanceChange = useCallback(
+    (terminalAppearance: AppSettings["terminalAppearance"]) => {
+      void updateSettings({ terminalAppearance });
+    },
+    [updateSettings],
+  );
+
   const handleSyntaxThemeChange = useCallback(
     (syntaxTheme: SyntaxThemeId) => {
       void updateSettings({ syntaxTheme });
@@ -612,6 +704,10 @@ export function AppearanceSection() {
       <SettingsSection title={t("settings.appearance.theme.title")}>
         <View style={settingsStyles.card}>
           <ThemeRow value={settings.theme} onChange={handleThemeChange} />
+          <TerminalAppearanceRow
+            value={settings.terminalAppearance}
+            onChange={handleTerminalAppearanceChange}
+          />
         </View>
       </SettingsSection>
       <SettingsSection title={t("settings.appearance.detailLevel.title")}>

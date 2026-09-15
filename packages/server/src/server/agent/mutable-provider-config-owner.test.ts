@@ -78,7 +78,6 @@ function mutableConfig(persisted: PersistedConfig): MutableDaemonConfig {
   return {
     relay: { enabled: false },
     mcp: { enabled: true, injectIntoAgents: false },
-    browserTools: { enabled: false },
     providers: CONTROLLED_PROVIDERS,
     metadataGeneration: { providers: [] },
     autoArchiveAfterMerge: false,

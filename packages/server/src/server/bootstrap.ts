@@ -116,7 +116,7 @@ export async function fanOutReconciledWorkspaceUpdates(input: {
   );
 }
 
-import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
+import { DaemonWebSocketServer } from "./websocket-server.js";
 import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import { createWorkspaceLabelService } from "./workspace-labels/index.js";
 import { createGitHubService } from "../services/github-service.js";
@@ -150,8 +150,6 @@ import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-sto
 import { createOrchestrationSkills } from "./orchestration-skills/index.js";
 import { resolveConfigFromPersisted, type CliConfigOverrides } from "./config.js";
 import { resolvePaseoToolPolicy } from "./agent/paseo-tool-policy.js";
-import { BrowserToolsBroker } from "./browser-tools/broker.js";
-import { DaemonConfigBrowserToolsPolicy } from "./browser-tools/policy.js";
 import { WorkspaceGitServiceImpl } from "./workspace-git-service.js";
 import { resolveWorkspaceIdForPath } from "./resolve-workspace-id-for-path.js";
 import {
@@ -376,7 +374,6 @@ export interface PaseoDaemonConfig {
   trustedProxies?: true | string[];
   mcpEnabled?: boolean;
   mcpInjectIntoAgents?: boolean;
-  browserToolsEnabled?: boolean;
   git?: {
     maxProcessesPerSecond: number;
     maxProcessConcurrency: number;
@@ -443,7 +440,6 @@ export interface PaseoDaemon {
   terminalManager: TerminalManager;
   serviceProxy: ServiceProxySubsystem;
   scriptRuntimeStore: WorkspaceScriptRuntimeStore;
-  browserToolsBroker: BrowserToolsBroker;
   start(): Promise<void>;
   stop(): Promise<void>;
   getListenTarget(): ListenTarget | null;
@@ -534,7 +530,6 @@ function createInitialMutableDaemonConfig(
     ...(config.providerCatalogRefreshTimeoutMs !== undefined
       ? { catalogRefreshTimeoutMs: config.providerCatalogRefreshTimeoutMs }
       : {}),
-    browserTools: { enabled: config.browserToolsEnabled ?? false },
     providers,
     metadataGeneration: {
       providers: config.metadataGeneration?.providers ?? [],
@@ -595,9 +590,6 @@ export async function createPaseoDaemon(
   void orchestrationSkills.autoUpdate().catch((error) => {
     logger.error({ err: error }, "Failed to maintain orchestration skills at startup");
   });
-  const browserToolsPolicy = new DaemonConfigBrowserToolsPolicy(daemonConfigStore);
-  const browserToolsBroker = new BrowserToolsBroker({});
-
   const serverId = getOrCreateServerId(config.paseoHome, { logger });
   const daemonKeyPair = await loadOrCreateDaemonKeyPair(config.paseoHome, logger);
   const managedProcesses = createBootstrapManagedProcessRegistry(config, logger);
@@ -664,7 +656,7 @@ export async function createPaseoDaemon(
   daemonConfigStore.onFieldChange("app.baseUrl", (value) => {
     appBaseUrl = typeof value === "string" ? value : hostedAppBaseUrl;
   });
-  let wsServer: VoiceAssistantWebSocketServer | null = null;
+  let wsServer: DaemonWebSocketServer | null = null;
   let serviceProxyListenTarget: ListenTarget | null = null;
   const scriptHealthMonitor = new ScriptHealthMonitor({
     serviceProxy,
@@ -842,7 +834,7 @@ export async function createPaseoDaemon(
   const httpServer = createHTTPServer(app);
 
   // Script proxy WebSocket upgrade handler — must be registered before the
-  // VoiceAssistantWebSocketServer attaches its own "upgrade" listener so that
+  // DaemonWebSocketServer attaches its own "upgrade" listener so that
   // script-bound upgrades are forwarded first. The handler is a no-op for
   // requests that don't match a registered script route.
   httpServer.on("upgrade", serviceProxy.upgradeHandler({ passthroughUnknown: true }));
@@ -1240,10 +1232,7 @@ export async function createPaseoDaemon(
     { elapsed: elapsed() },
     `Agent registry loaded (${persistedRecords.length} record${persistedRecords.length === 1 ? "" : "s"}); agents will initialize on demand`,
   );
-  logger.info(
-    "Voice mode configured for agent-scoped resume flow (no dedicated voice assistant provider)",
-  );
-  logger.info({ elapsed: elapsed() }, "Preparing voice and MCP runtime");
+  logger.info({ elapsed: elapsed() }, "Preparing websocket and MCP runtime");
 
   const createAgentToolHostDependencies = (
     runtime: PaseoToolRuntimeContext,
@@ -1312,15 +1301,12 @@ export async function createPaseoDaemon(
       }
       return renamed;
     },
-    browserToolsEnabled: browserToolsPolicy.isEnabled(),
-    browserToolsBroker,
     paseoToolPolicy:
       runtime.paseoToolPolicy ??
       (runtime.callerAgentId ? agentManager.getPaseoToolPolicy(runtime.callerAgentId) : undefined),
     paseoHome: config.paseoHome,
     worktreesRoot: config.worktreesRoot,
     callerAgentId: runtime.callerAgentId,
-    resolveCallerContext: (agentId) => wsServer?.resolveVoiceCallerContext(agentId) ?? null,
     logger,
   });
   const createAgentToolCatalog = (runtime: PaseoToolRuntimeContext) =>
@@ -1540,7 +1526,7 @@ export async function createPaseoDaemon(
               logger.info("Daemon password authentication enabled");
             }
 
-            wsServer = new VoiceAssistantWebSocketServer(
+            wsServer = new DaemonWebSocketServer(
               httpServer,
               logger,
               serverId,
@@ -1599,7 +1585,6 @@ export async function createPaseoDaemon(
                   },
               },
               serviceProxyPublicBaseUrl,
-              browserToolsBroker,
               workspaceSetupRuntime,
               orchestrationSkills,
               workspaceLabelService,
@@ -1707,7 +1692,6 @@ export async function createPaseoDaemon(
     terminalManager,
     serviceProxy,
     scriptRuntimeStore,
-    browserToolsBroker,
     start,
     stop,
     getListenTarget: () => boundListenTarget,

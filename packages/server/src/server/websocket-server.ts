@@ -86,12 +86,6 @@ import {
   normalizeClientRestartRpcReason,
 } from "./lifecycle-reasons.js";
 import { CLIENT_CAPS } from "@getpaseo/protocol/client-capabilities";
-import type { BrowserAutomationExecuteResponse } from "@getpaseo/protocol/browser-automation/rpc-schemas";
-import {
-  BrowserAutomationHostCapabilitySchema,
-  type BrowserAutomationHostCapability,
-} from "@getpaseo/protocol/browser-automation/capabilities";
-import type { BrowserToolsBroker } from "./browser-tools/broker.js";
 import type { DaemonRuntimeConfig } from "./session/daemon/daemon-session.js";
 import { DirectorySyncService } from "./directory-sync/index.js";
 import { OWNER_PERMISSIONS, type DaemonPermission } from "./authorization/index.js";
@@ -364,9 +358,8 @@ function createNoopWorkspaceRegistry(): WorkspaceRegistry {
 }
 
 function buildServerCapabilities(): ServerCapabilities | undefined {
-  // Voice capabilities are retired (issue 025 C8); the voice block reports
-  // disabled so old clients hide voice affordances.
-  void 0;
+  // Voice capabilities are retired (issue 025 C8). Omitting the block entirely is what
+  // hides voice affordances on older clients: they read `capabilities?.voice` as absent.
   return undefined;
 }
 
@@ -386,15 +379,6 @@ function bufferFromWsData(data: Buffer | ArrayBuffer | Buffer[] | string): Buffe
   }
   if (Buffer.isBuffer(data)) return data;
   return Buffer.from(data);
-}
-
-function getBrowserHostCapability(
-  capabilities: Record<string, unknown> | null,
-): BrowserAutomationHostCapability | null {
-  const parsed = BrowserAutomationHostCapabilitySchema.safeParse(
-    capabilities?.[CLIENT_CAPS.browserHost],
-  );
-  return parsed.success ? parsed.data : null;
 }
 
 export interface WebSocketLike {
@@ -436,11 +420,6 @@ function isPluginClientId(clientId: string): boolean {
   return clientId.startsWith(PLUGIN_CLIENT_ID_PREFIX);
 }
 
-interface BrowserToolsRegistration {
-  capabilitySignature: string;
-  unregister: () => void;
-}
-
 interface SocketSessionOptions {
   clientId: string;
   appVersion: string | null;
@@ -477,7 +456,7 @@ const OWNER_SESSION_ADMISSION: SessionAdmission = {
 
 export class MissingDaemonVersionError extends Error {
   constructor() {
-    super("VoiceAssistantWebSocketServer requires a non-empty daemonVersion.");
+    super("DaemonWebSocketServer requires a non-empty daemonVersion.");
     this.name = "MissingDaemonVersionError";
   }
 }
@@ -493,10 +472,10 @@ function requireWebSocketServices(params: {
 }): RequiredWebSocketServices {
   const { scheduleService, checkoutDiffManager } = params;
   if (!scheduleService) {
-    throw new Error("VoiceAssistantWebSocketServer requires a schedule service.");
+    throw new Error("DaemonWebSocketServer requires a schedule service.");
   }
   if (!checkoutDiffManager) {
-    throw new Error("VoiceAssistantWebSocketServer requires a checkout diff manager.");
+    throw new Error("DaemonWebSocketServer requires a checkout diff manager.");
   }
   return { scheduleService, checkoutDiffManager };
 }
@@ -504,7 +483,7 @@ function requireWebSocketServices(params: {
 /**
  * WebSocket server that only accepts sockets + parses/forwards messages to the session layer.
  */
-export class VoiceAssistantWebSocketServer {
+export class DaemonWebSocketServer {
   private readonly logger: pino.Logger;
   private readonly wss: WebSocketServer;
   private readonly pendingConnections: Map<WebSocketLike, PendingConnection> = new Map();
@@ -556,8 +535,6 @@ export class VoiceAssistantWebSocketServer {
   private unsubscribeDaemonConfigChange: (() => void) | null = null;
   private readonly providerUsageService: ProviderUsageService;
   private unsubscribeTerminalActivity: (() => void) | null = null;
-  private readonly browserToolsBroker: BrowserToolsBroker | null;
-  private readonly browserToolsRegistrations = new Map<string, BrowserToolsRegistration>();
   private connectionLifecycle: "starting" | "accepting" | "stopping" = "accepting";
   private readonly advertiseDaemonStatusRpc: boolean;
   private readonly advertiseRelayConfig: boolean;
@@ -600,7 +577,6 @@ export class VoiceAssistantWebSocketServer {
     providerSnapshotManager?: ProviderSnapshotManager,
     daemonRuntimeConfig?: DaemonRuntimeConfig,
     serviceProxyPublicBaseUrl?: string | null,
-    browserToolsBroker?: BrowserToolsBroker | null,
     workspaceSetupRuntime: WorkspaceSetupRuntime = new WorkspaceSetupRuntime(),
     orchestrationSkills?: SessionOptions["orchestrationSkills"],
     workspaceLabelService?: WorkspaceLabelService,
@@ -616,7 +592,6 @@ export class VoiceAssistantWebSocketServer {
     }
     this.daemonVersion = daemonVersion.trim();
     this.daemonRuntimeConfig = daemonRuntimeConfig;
-    this.browserToolsBroker = browserToolsBroker ?? null;
     this.orchestrationSkills = orchestrationSkills;
     this.agentManager = agentManager;
     this.agentStorage = agentStorage;
@@ -924,7 +899,6 @@ export class VoiceAssistantWebSocketServer {
     for (const connection of new Set(this.externalSessionsByKey.values())) {
       if (connection.principalId === principalId) {
         connection.session.setPermissions(permissions);
-        this.syncBrowserToolsClientRegistration(connection);
       }
     }
   }
@@ -1015,9 +989,6 @@ export class VoiceAssistantWebSocketServer {
     this.sessions.clear();
     this.socketIdentities.clear();
     this.externalSessionsByKey.clear();
-    for (const clientId of this.browserToolsRegistrations.keys()) {
-      this.unregisterBrowserToolsClient(clientId);
-    }
     this.wss.close();
   }
 
@@ -1432,7 +1403,6 @@ export class VoiceAssistantWebSocketServer {
       this.externalSessionsByKey.set(sessionKey, connection);
     }
     pending.identity.sessionId = connection.session.getSessionId();
-    this.syncBrowserToolsClientRegistration(connection);
     this.sendToClient(ws, this.createServerInfoMessage(connection.session));
     connection.connectionLogger.info(
       {
@@ -1471,12 +1441,10 @@ export class VoiceAssistantWebSocketServer {
       JSON.stringify(newClientCapabilities ?? null)
     ) {
       existing.clientCapabilities = newClientCapabilities;
-      this.syncBrowserToolsClientRegistration(existing);
     }
     existing.sockets.add(ws);
     this.sessions.set(ws, existing);
     pending.identity.sessionId = existing.session.getSessionId();
-    this.syncBrowserToolsClientRegistration(existing);
     this.sendToClient(ws, this.createServerInfoMessage(existing.session));
     pending.connectionLogger.info(
       {
@@ -1718,14 +1686,6 @@ export class VoiceAssistantWebSocketServer {
     });
   }
 
-  public resolveVoiceSpeakHandler(_callerAgentId: string): null {
-    return null; // Voice is retired (issue 025 C8)
-  }
-
-  public resolveVoiceCallerContext(_callerAgentId: string): null {
-    return null;
-  }
-
   private async detachSocket(
     ws: WebSocketLike,
     details: {
@@ -1775,7 +1735,6 @@ export class VoiceAssistantWebSocketServer {
 
     if (connection.sockets.size === 0) {
       connection.session.handleTransportUnavailable();
-      this.unregisterBrowserToolsClient(connection);
       this.incrementRuntimeCounter("sessionDisconnectedWaitingReconnect");
       if (connection.externalDisconnectCleanupTimeout) {
         clearTimeout(connection.externalDisconnectCleanupTimeout);
@@ -1839,61 +1798,11 @@ export class VoiceAssistantWebSocketServer {
         this.externalSessionsByKey.delete(connection.sessionKey);
       }
     }
-    this.unregisterBrowserToolsClient(connection);
-
     connection.connectionLogger.trace(
       { clientId: connection.clientId, totalSessions: this.sessions.size },
       logMessage,
     );
     await connection.session.cleanup();
-  }
-
-  private syncBrowserToolsClientRegistration(connection: SessionConnection): void {
-    if (!this.browserToolsBroker) {
-      return;
-    }
-    const registrationKey = connection.sessionKey;
-    if (!connection.session.allowsPermission("workspace.write")) {
-      this.unregisterBrowserToolsClient(registrationKey);
-      return;
-    }
-    const browserHostCapability = getBrowserHostCapability(connection.clientCapabilities);
-    if (!browserHostCapability) {
-      this.unregisterBrowserToolsClient(registrationKey);
-      return;
-    }
-    const capabilitySignature = JSON.stringify(browserHostCapability);
-    const existing = this.browserToolsRegistrations.get(registrationKey);
-    if (existing?.capabilitySignature === capabilitySignature) {
-      return;
-    }
-    if (existing) {
-      this.browserToolsRegistrations.delete(registrationKey);
-      existing.unregister();
-    }
-
-    const unregister = this.browserToolsBroker.registerClient({
-      id: connection.principalId === "owner" ? connection.clientId : registrationKey,
-      hostKind: browserHostCapability.hostKind,
-      supportedCommands: browserHostCapability.supportedCommands,
-      sendBrowserAutomationRequest: (request) => {
-        this.sendToConnection(connection, wrapSessionMessage(request));
-      },
-    });
-    this.browserToolsRegistrations.set(registrationKey, {
-      capabilitySignature,
-      unregister,
-    });
-  }
-
-  private unregisterBrowserToolsClient(connection: SessionConnection | string): void {
-    const registrationKey = typeof connection === "string" ? connection : connection.sessionKey;
-    const registration = this.browserToolsRegistrations.get(registrationKey);
-    if (!registration) {
-      return;
-    }
-    this.browserToolsRegistrations.delete(registrationKey);
-    registration.unregister();
   }
 
   private handleInvalidInboundMessage(args: {
@@ -2151,15 +2060,6 @@ export class VoiceAssistantWebSocketServer {
         "ws_control_rpc_received",
       );
     }
-    if (message.message.type === "browser.automation.execute.response") {
-      if (!activeConnection.session.allowsInbound(message.message)) {
-        await activeConnection.session.handleMessage(message.message, ws);
-        return;
-      }
-      this.browserToolsBroker?.receiveResponse(message.message as BrowserAutomationExecuteResponse);
-      return;
-    }
-
     const startMs = performance.now();
     await activeConnection.session.handleMessage(message.message, ws);
     const durationMs = performance.now() - startMs;
