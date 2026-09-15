@@ -1232,67 +1232,6 @@ export const ko: TranslationResources = {
       commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
   },
-  desktop: {
-    daemon: {
-      title: "데몬",
-      status: {
-        title: "상태",
-        builtInOnly: "여기에는 내장 데스크톱 데몬만 표시됩니다",
-        running: "실행 중",
-        notRunning: "실행 중이 아님",
-        pid: "PID {{pid}}",
-      },
-      management: {
-        title: "내장 데몬 관리",
-        hint: "Paseo가 내장 데몬을 시작하고 중지하도록 허용합니다",
-        pauseTitle: "내장 데몬 일시 중지",
-        pauseMessage:
-          "내장 데몬이 즉시 중지됩니다. 내장 데몬에 연결된 실행 중인 에이전트와 터미널이 중지됩니다.",
-        pauseAndStop: "일시 중지 후 중지",
-        registrationFailed:
-          "내장 데몬이 시작되었지만 Paseo가 localhost 연결을 저장하지 못했습니다. 데몬 관리를 껐다가 다시 켜거나 localhost를 수동으로 추가하세요.",
-        pausedStopFailed: "내장 데몬 관리가 일시 중지되었지만 Paseo가 데몬을 중지하지 못했습니다.",
-        updateFailed: "내장 데몬 관리를 업데이트할 수 없습니다.",
-      },
-      keepRunning: {
-        title: "종료 후에도 데몬 계속 실행",
-        hint: "Paseo를 종료해도 데몬이 계속 실행됩니다",
-      },
-      logs: {
-        title: "로그 파일",
-        modalTitle: "데몬 로그",
-        unavailable: "로그 경로를 사용할 수 없습니다",
-        empty: "(로그 파일이 비어 있습니다)",
-        copied: "로그 경로가 복사되었습니다.",
-        copyFailed: "로그 경로를 복사할 수 없습니다.",
-        open: "로그 열기",
-        copyPath: "경로 복사",
-      },
-      fullStatus: {
-        title: "전체 상태",
-        modalTitle: "데몬 상태",
-        hint: "`byspace daemon status`를 실행하고 출력을 표시합니다",
-        view: "상태 보기",
-        copied: "상태가 클립보드에 복사되었습니다.",
-        fetchFailed: "데몬 상태를 가져오지 못했습니다: {{message}}",
-      },
-      advancedSettings: "고급 설정",
-      openAdvancedSettings: "고급 데몬 설정 열기",
-      versionMismatch:
-        "앱과 데몬의 버전이 일치하지 않습니다. 최상의 경험을 위해 둘 다 동일한 버전으로 업데이트하세요.",
-      loadFailed: "데스크톱 데몬 상태를 불러올 수 없습니다.",
-    },
-    settings: {
-      loadFailed: "데스크톱 설정을 불러올 수 없습니다.",
-      saveFailed: "데스크톱 설정을 저장할 수 없습니다.",
-    },
-    integrations: {
-      cli: {
-        statusFailed: "CLI 설치 상태를 확인할 수 없습니다.",
-        installFailed: "BySpace CLI를 설치할 수 없습니다.",
-      },
-    },
-  },
   rootError: {
     title: "BySpace에 문제가 발생했습니다.",
     body: "앱을 다시 로드해 보세요. 이런 일이 계속 발생하면 신고할 때 아래 세부정보를 포함하세요.",
@@ -1989,26 +1928,6 @@ export const ko: TranslationResources = {
       connectedHosts: "연결된 호스트",
       offline: "오프라인",
       versionDiffers: "이 기기와 버전이 다릅니다",
-      releaseChannel: {
-        label: "릴리스 채널",
-        description: "Beta로 전환하면 업데이트를 더 빨리 받고 개선에 참여할 수 있습니다",
-        stable: "안정",
-        beta: "베타",
-      },
-      updates: {
-        label: "앱 업데이트",
-        readyToInstall: "설치 준비됨: {{version}}",
-        installTitle: "데스크톱 업데이트 설치",
-        installMessage: "이 컴퓨터의 Paseo를 업데이트합니다",
-        installConfirm: "업데이트 설치",
-        update: "업데이트",
-        updateTo: "{{version}}(으)로 업데이트",
-        installing: "설치 중...",
-        check: "확인",
-        checking: "확인 중...",
-        alertTitle: "오류",
-        alertMessage: "업데이트 확인 대화 상자를 열 수 없습니다.",
-      },
     },
     appearance: {
       theme: {

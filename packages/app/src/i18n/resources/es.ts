@@ -1259,68 +1259,6 @@ export const es: TranslationResources = {
       commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
   },
-  desktop: {
-    daemon: {
-      title: "Daemon",
-      status: {
-        title: "Estado",
-        builtInOnly: "Aquí solo se muestra el demonio de escritorio integrado.",
-        running: "correr",
-        notRunning: "no corriendo",
-        pid: "PID{{pid}}",
-      },
-      management: {
-        title: "Administrar demonio incorporado",
-        hint: "Deje quePaseoinicie y detenga el demonio incorporado",
-        pauseTitle: "Pausar el demonio incorporado",
-        pauseMessage:
-          "Esto detendrá el demonio incorporado inmediatamente. Se detendrán los agentes en ejecución y los terminales conectados al demonio integrado.",
-        pauseAndStop: "Pausa y para",
-        registrationFailed:
-          "Built-in daemon started, but Paseo could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
-        pausedStopFailed:
-          "La gestión del demonio integrado se pausó, peroPaseono pudo detener el demonio.",
-        updateFailed: "No se puede actualizar la gestión de demonios integrada.",
-      },
-      keepRunning: {
-        title: "Mantener el demonio en ejecución después de salir",
-        hint: "Daemonsigue ejecutándose cuando sales dePaseo",
-      },
-      logs: {
-        title: "Archivo de registro",
-        modalTitle: "RegistrosDaemon",
-        unavailable: "Ruta de registro no disponible",
-        empty: "(el archivo de registro está vacío)",
-        copied: "Ruta de registro copiada.",
-        copyFailed: "No se puede copiar la ruta del registro.",
-        open: "Abrir registros",
-        copyPath: "Copiar ruta",
-      },
-      fullStatus: {
-        title: "Estado completo",
-        modalTitle: "EstadoDaemon",
-        hint: "Ejecuta `byspace daemon status` y muestra la salida.",
-        view: "Ver estado",
-        copied: "Estado copiado al portapapeles.",
-        fetchFailed: "No se pudo recuperar el estado del demonio:{{message}}",
-      },
-      advancedSettings: "Configuraciones avanzadas",
-      openAdvancedSettings: "Abrir configuración avanzada del demonio",
-      versionMismatch:
-        "Las versiones de la aplicación y del demonio no coinciden. Actualice ambos a la misma versión para obtener la mejor experiencia.",
-      loadFailed: "No se puede cargar el estado del demonio del escritorio.",
-    },
-    settings: {
-      loadFailed: "No se puede cargar la configuración del escritorio.",
-      saveFailed: "No se puede guardar la configuración del escritorio.",
-    },
-    integrations: {
-      cli: {
-        statusFailed: "No se puede verificar el estado de instalación deCLI.",
-        installFailed: "No se puede instalar elPaseoCLI.",
-      },
-    },
-  },
   rootError: {
     title: "BySpace tuvo un problema.",
     body: "Vuelve a intentarlo para recargar la app. Si sigue ocurriendo, incluye los detalles de abajo al reportarlo.",
@@ -2024,26 +1962,6 @@ export const es: TranslationResources = {
       connectedHosts: "Anfitriones conectados",
       offline: "Desconectado",
       versionDiffers: "La versión difiere de este dispositivo.",
-      releaseChannel: {
-        label: "Canal de lanzamiento",
-        description: "Cambie aBetapara recibir actualizaciones antes y ayudar a darles forma",
-        stable: "Stable",
-        beta: "Beta",
-      },
-      updates: {
-        label: "Actualizaciones de aplicaciones",
-        readyToInstall: "Listo para instalar:{{version}}",
-        installTitle: "Instalar actualización de escritorio",
-        installMessage: "Esto actualizaPaseoen esta computadora.",
-        installConfirm: "Instalar actualización",
-        update: "Actualizar",
-        updateTo: "Actualización a{{version}}",
-        installing: "Instalando...",
-        check: "Controlar",
-        checking: "De cheques...",
-        alertTitle: "Error",
-        alertMessage: "No se puede abrir el cuadro de diálogo de confirmación de actualización.",
-      },
     },
     appearance: {
       theme: {

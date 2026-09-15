@@ -1224,68 +1224,6 @@ export const ar: TranslationResources = {
       commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
   },
-  desktop: {
-    daemon: {
-      title: "Daemon",
-      status: {
-        title: "حالة",
-        builtInOnly: "يتم عرض البرنامج الخفي لسطح المكتب المدمج فقط هنا",
-        running: "جري",
-        notRunning: "لا يعمل",
-        pid: "PID{{pid}}",
-      },
-      management: {
-        title: "إدارة البرنامج الخفي المدمج",
-        hint: "اسمح لـ Paseo ببدء تشغيل البرنامج الخفي المدمج وإيقافه",
-        pauseTitle: "وقفة المدمج في البرنامج الخفي",
-        pauseMessage:
-          "سيؤدي هذا إلى إيقاف البرنامج الخفي المدمج على الفور. سيتم إيقاف تشغيل الوكلاء والمحطات الطرفية المتصلة بالبرنامج الخفي المدمج.",
-        pauseAndStop: "وقفة وتوقف",
-        registrationFailed:
-          "Built-in daemon started, but Paseo could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
-        pausedStopFailed:
-          "تم إيقاف إدارة البرنامج الخفي المضمنة مؤقتًا، لكن لم يتمكن Paseo من إيقاف البرنامج الخفي.",
-        updateFailed: "غير قادر على تحديث إدارة البرنامج الخفي المضمنة.",
-      },
-      keepRunning: {
-        title: "استمر في تشغيل البرنامج الخفي بعد الإقلاع عن التدخين",
-        hint: "يستمر تشغيل Daemon عند إنهاء Paseo",
-      },
-      logs: {
-        title: "ملف السجل",
-        modalTitle: "سجلات Daemon",
-        unavailable: "مسار السجل غير متاح",
-        empty: "(ملف السجل فارغ)",
-        copied: "تم نسخ مسار السجل.",
-        copyFailed: "غير قادر على نسخ مسار السجل.",
-        open: "فتح السجلات",
-        copyPath: "نسخ المسار",
-      },
-      fullStatus: {
-        title: "الوضع الكامل",
-        modalTitle: "حالة Daemon",
-        hint: "يقوم بتشغيل`byspace daemon status`ويظهر الإخراج",
-        view: "عرض الحالة",
-        copied: "تم نسخ الحالة إلى الحافظة.",
-        fetchFailed: "فشل جلب حالة البرنامج الخفي:{{message}}",
-      },
-      advancedSettings: "الإعدادات المتقدمة",
-      openAdvancedSettings: "افتح إعدادات البرنامج الخفي المتقدمة",
-      versionMismatch:
-        "إصدارا التطبيق والبرنامج الخفي غير متطابقين. قم بتحديث كلاهما إلى نفس الإصدار للحصول على أفضل تجربة.",
-      loadFailed: "غير قادر على تحميل حالة البرنامج الخفي لسطح المكتب.",
-    },
-    settings: {
-      loadFailed: "غير قادر على تحميل إعدادات سطح المكتب.",
-      saveFailed: "غير قادر على حفظ إعدادات سطح المكتب.",
-    },
-    integrations: {
-      cli: {
-        statusFailed: "غير قادر على التحقق من حالة تثبيت CLI.",
-        installFailed: "غير قادر على تثبيت PaseoCLI.",
-      },
-    },
-  },
   rootError: {
     title: "واجه BySpace مشكلة.",
     body: "جرّب مرة أخرى لإعادة تحميل التطبيق. إذا استمر حدوث ذلك، فأرفق التفاصيل أدناه عند الإبلاغ عنه.",
@@ -1980,26 +1918,6 @@ export const ar: TranslationResources = {
       connectedHosts: "المضيفين المتصلين",
       offline: "غير متصل",
       versionDiffers: "الإصدار يختلف عن هذا الجهاز",
-      releaseChannel: {
-        label: "الافراج عن القناة",
-        description: "قم بالتبديل إلى Beta للحصول على التحديثات عاجلاً والمساعدة في تشكيلها",
-        stable: "Stable",
-        beta: "Beta",
-      },
-      updates: {
-        label: "تحديثات التطبيق",
-        readyToInstall: "جاهز للتثبيت:{{version}}",
-        installTitle: "تثبيت تحديث سطح المكتب",
-        installMessage: "يؤدي هذا إلى تحديث Paseo على هذا الكمبيوتر",
-        installConfirm: "تثبيت التحديث",
-        update: "تحديث",
-        updateTo: "التحديث إلى{{version}}",
-        installing: "جارٍ التثبيت...",
-        check: "يفحص",
-        checking: "جارٍ التحقق...",
-        alertTitle: "خطأ",
-        alertMessage: "غير قادر على فتح مربع حوار تأكيد التحديث.",
-      },
     },
     appearance: {
       theme: {

@@ -194,8 +194,6 @@ async function bootDaemon(): Promise<BootedDaemon> {
         PASEO_SERVER_ID: "srv_terminal_bench",
         BYSPACE_LISTEN: `127.0.0.1:${port}`,
         PASEO_NODE_ENV: "development",
-        PASEO_DICTATION_ENABLED: "false",
-        PASEO_VOICE_MODE_ENABLED: "false",
         NODE_ENV: "development",
       },
       stdio: ["ignore", "pipe", "pipe"],

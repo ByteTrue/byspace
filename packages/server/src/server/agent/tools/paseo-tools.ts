@@ -138,12 +138,6 @@ export interface PaseoToolHostDependencies {
    * Used for cwd/mode inheritance when agents spawn child agents.
    */
   callerAgentId?: string;
-  /**
-   * Optional resolver for session-bound speak handlers.
-   * Used by hidden voice agents to narrate through daemon-managed TTS.
-   */
-  enableVoiceTools?: boolean;
-  voiceOnly?: boolean;
   logger: Logger;
 }
 
@@ -1141,12 +1135,6 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
   type LegacyAgentToAgentCreateAgentArgs = z.infer<typeof legacyAgentToAgentCreateAgentArgsSchema>;
   type TopLevelCreateAgentArgs = z.infer<typeof canonicalTopLevelCreateAgentArgsSchema>;
   type LegacyTopLevelCreateAgentArgs = z.infer<typeof legacyTopLevelCreateAgentArgsSchema>;
-
-  // The speak tool is retired with voice (issue 025 C8).
-
-  if (options.voiceOnly) {
-    return toCatalog();
-  }
 
   registerTool(
     "create_workspace",

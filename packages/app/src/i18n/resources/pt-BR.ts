@@ -1250,68 +1250,6 @@ export const ptBR: TranslationResources = {
       commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
   },
-  desktop: {
-    daemon: {
-      title: "Daemon",
-      status: {
-        title: "Status",
-        builtInOnly: "Apenas o daemon desktop integrado é exibido aqui",
-        running: "em execução",
-        notRunning: "não está em execução",
-        pid: "PID {{pid}}",
-      },
-      management: {
-        title: "Gerenciar daemon integrado",
-        hint: "Permitir que o Paseo inicie e pare o daemon integrado",
-        pauseTitle: "Pausar daemon integrado",
-        pauseMessage:
-          "Isso vai parar o daemon integrado imediatamente. Agentes e terminais em execução conectados ao daemon integrado serão interrompidos.",
-        pauseAndStop: "Pausar e parar",
-        registrationFailed:
-          "O daemon integrado foi iniciado, mas o Paseo não conseguiu salvar a conexão localhost. Desative e reative o gerenciamento do daemon ou adicione localhost manualmente.",
-        pausedStopFailed:
-          "O gerenciamento do daemon integrado foi pausado, mas o Paseo não conseguiu parar o daemon.",
-        updateFailed: "Não foi possível atualizar o gerenciamento do daemon integrado.",
-      },
-      keepRunning: {
-        title: "Manter daemon em execução ao sair",
-        hint: "O daemon continua em execução quando você sai do Paseo",
-      },
-      logs: {
-        title: "Arquivo de log",
-        modalTitle: "Logs do daemon",
-        unavailable: "Caminho do log indisponível",
-        empty: "(arquivo de log vazio)",
-        copied: "Caminho do log copiado.",
-        copyFailed: "Não foi possível copiar o caminho do log.",
-        open: "Abrir logs",
-        copyPath: "Copiar caminho",
-      },
-      fullStatus: {
-        title: "Status completo",
-        modalTitle: "Status do daemon",
-        hint: "Executa `byspace daemon status` e mostra a saída",
-        view: "Ver status",
-        copied: "Status copiado para a área de transferência.",
-        fetchFailed: "Falha ao buscar status do daemon: {{message}}",
-      },
-      advancedSettings: "Configurações avançadas",
-      openAdvancedSettings: "Abrir configurações avançadas do daemon",
-      versionMismatch:
-        "As versões do app e do daemon não coincidem. Atualize ambos para a mesma versão para a melhor experiência.",
-      loadFailed: "Não foi possível carregar o status do daemon desktop.",
-    },
-    settings: {
-      loadFailed: "Não foi possível carregar as configurações do desktop.",
-      saveFailed: "Não foi possível salvar as configurações do desktop.",
-    },
-    integrations: {
-      cli: {
-        statusFailed: "Não foi possível verificar o status de instalação da CLI.",
-        installFailed: "Não foi possível instalar a CLI do Paseo.",
-      },
-    },
-  },
   rootError: {
     title: "O BySpace encontrou um problema.",
     body: "Tente novamente para recarregar o app. Se isso continuar acontecendo, inclua os detalhes abaixo ao relatar o problema.",
@@ -2012,26 +1950,6 @@ export const ptBR: TranslationResources = {
       connectedHosts: "Hosts conectados",
       offline: "Offline",
       versionDiffers: "A versão é diferente da deste dispositivo",
-      releaseChannel: {
-        label: "Canal de lançamento",
-        description: "Troque para Beta para receber atualizações antes e ajudar a moldá-las",
-        stable: "Stable",
-        beta: "Beta",
-      },
-      updates: {
-        label: "Atualizações do app",
-        readyToInstall: "Pronta para instalar: {{version}}",
-        installTitle: "Instalar atualização desktop",
-        installMessage: "Isso atualiza o Paseo neste computador",
-        installConfirm: "Instalar atualização",
-        update: "Atualizar",
-        updateTo: "Atualizar para {{version}}",
-        installing: "Instalando...",
-        check: "Verificar",
-        checking: "Verificando...",
-        alertTitle: "Erro",
-        alertMessage: "Não foi possível abrir o diálogo de confirmação da atualização.",
-      },
     },
     appearance: {
       theme: {

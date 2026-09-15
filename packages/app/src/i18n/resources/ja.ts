@@ -1237,68 +1237,6 @@ export const ja: TranslationResources = {
       commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
   },
-  desktop: {
-    daemon: {
-      title: "デーモン",
-      status: {
-        title: "ステータス",
-        builtInOnly: "組み込みデスクトップデーモンのみここに表示されます",
-        running: "実行中",
-        notRunning: "実行していません",
-        pid: "PID {{pid}}",
-      },
-      management: {
-        title: "組み込みデーモンを管理",
-        hint: "Paseoが組み込みデーモンを起動・停止できるようにする",
-        pauseTitle: "組み込みデーモンを一時停止",
-        pauseMessage:
-          "これにより組み込みデーモンが即座に停止します。組み込みデーモンに接続されている実行中のエージェントとターミナルが停止されます。",
-        pauseAndStop: "一時停止して停止",
-        registrationFailed:
-          "組み込みデーモンは起動しましたが、Paseoがlocalhostの接続を保存できませんでした。デーモン管理をオフにしてから再度オンにするか、localhostを手動で追加してください。",
-        pausedStopFailed:
-          "組み込みデーモン管理は一時停止されましたが、Paseoがデーモンを停止できませんでした。",
-        updateFailed: "組み込みデーモン管理を更新できません。",
-      },
-      keepRunning: {
-        title: "終了後もデーモンを実行し続ける",
-        hint: "Paseoを終了してもデーモンは実行し続けます",
-      },
-      logs: {
-        title: "ログファイル",
-        modalTitle: "デーモンログ",
-        unavailable: "ログパスが利用できません",
-        empty: "（ログファイルは空です）",
-        copied: "ログパスをコピーしました。",
-        copyFailed: "ログパスをコピーできません。",
-        open: "ログを開く",
-        copyPath: "パスをコピー",
-      },
-      fullStatus: {
-        title: "詳細ステータス",
-        modalTitle: "デーモンのステータス",
-        hint: "`byspace daemon status`を実行して出力を表示します",
-        view: "ステータスを表示",
-        copied: "ステータスをクリップボードにコピーしました。",
-        fetchFailed: "デーモンのステータスの取得に失敗しました: {{message}}",
-      },
-      advancedSettings: "詳細設定",
-      openAdvancedSettings: "高度なデーモン設定を開く",
-      versionMismatch:
-        "アプリとデーモンのバージョンが一致しません。最良の体験のために両方を同じバージョンに更新してください。",
-      loadFailed: "デスクトップデーモンのステータスを読み込めません。",
-    },
-    settings: {
-      loadFailed: "デスクトップ設定を読み込めません。",
-      saveFailed: "デスクトップ設定を保存できません。",
-    },
-    integrations: {
-      cli: {
-        statusFailed: "CLIのインストール状態を確認できません。",
-        installFailed: "BySpace CLIをインストールできません。",
-      },
-    },
-  },
   rootError: {
     title: "BySpace で問題が発生しました。",
     body: "アプリを再読み込みするにはもう一度お試しください。繰り返し発生する場合は、以下の詳細を添えて報告してください。",
@@ -1998,26 +1936,6 @@ export const ja: TranslationResources = {
       connectedHosts: "接続されているホスト",
       offline: "オフライン",
       versionDiffers: "このデバイスとバージョンが異なります",
-      releaseChannel: {
-        label: "リリースチャンネル",
-        description: "ベータに切り替えると早期に更新を取得してフィードバックを提供できます",
-        stable: "安定版",
-        beta: "ベータ",
-      },
-      updates: {
-        label: "アプリの更新",
-        readyToInstall: "インストール準備完了: {{version}}",
-        installTitle: "デスクトップの更新をインストール",
-        installMessage: "このコンピューターのPaseoを更新します",
-        installConfirm: "更新をインストール",
-        update: "更新",
-        updateTo: "{{version}}に更新",
-        installing: "インストール中...",
-        check: "確認",
-        checking: "確認中...",
-        alertTitle: "エラー",
-        alertMessage: "更新確認ダイアログを開けません。",
-      },
     },
     appearance: {
       theme: {

@@ -195,7 +195,7 @@ Client → Server:  WSHelloMessage {
                     clientType: "mobile" | "browser" | "cli" | "mcp",
                     protocolVersion,
                     appVersion?,
-                    capabilities?: { voice?, pushNotifications?, ... },
+                    capabilities?: { pushNotifications?, browser_host?, ... },
                   }
 Server → Client:  status message with payload { status: "server_info",
                     serverId, hostname, version, capabilities?, features }

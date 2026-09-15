@@ -305,7 +305,7 @@ Each entry may include a Paseo-tool policy:
 
 Absent `paseoTools`, or absent fields within it, means Paseo tools are enabled and all tools are
 allowed. `enabled: false` disables the provider's Paseo catalog; `disabledTools` lists exact tool
-IDs to omit. The policy covers the core catalog, not the voice-only `speak` tool.
+IDs to omit. The policy covers the core catalog.
 This policy controls the catalog presented to an agent. It is not an authorization boundary for
 agents that can access the host through a shell.
 

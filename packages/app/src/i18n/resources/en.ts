@@ -1235,68 +1235,6 @@ export const en = {
       commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
   },
-  desktop: {
-    daemon: {
-      title: "Daemon",
-      status: {
-        title: "Status",
-        builtInOnly: "Only the built-in desktop daemon is shown here",
-        running: "running",
-        notRunning: "not running",
-        pid: "PID {{pid}}",
-      },
-      management: {
-        title: "Manage built-in daemon",
-        hint: "Let Paseo start and stop the built-in daemon",
-        pauseTitle: "Pause built-in daemon",
-        pauseMessage:
-          "This will stop the built-in daemon immediately. Running agents and terminals connected to the built-in daemon will be stopped.",
-        pauseAndStop: "Pause and stop",
-        registrationFailed:
-          "Built-in daemon started, but Paseo could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
-        pausedStopFailed:
-          "Built-in daemon management was paused, but Paseo could not stop the daemon.",
-        updateFailed: "Unable to update built-in daemon management.",
-      },
-      keepRunning: {
-        title: "Keep daemon running after quit",
-        hint: "Daemon keeps running when you quit Paseo",
-      },
-      logs: {
-        title: "Log file",
-        modalTitle: "Daemon logs",
-        unavailable: "Log path unavailable",
-        empty: "(log file is empty)",
-        copied: "Log path copied.",
-        copyFailed: "Unable to copy log path.",
-        open: "Open logs",
-        copyPath: "Copy path",
-      },
-      fullStatus: {
-        title: "Full status",
-        modalTitle: "Daemon status",
-        hint: "Runs `byspace daemon status` and shows the output",
-        view: "View status",
-        copied: "Status copied to clipboard.",
-        fetchFailed: "Failed to fetch daemon status: {{message}}",
-      },
-      advancedSettings: "Advanced settings",
-      openAdvancedSettings: "Open advanced daemon settings",
-      versionMismatch:
-        "App and daemon versions don't match. Update both to the same version for the best experience.",
-      loadFailed: "Unable to load desktop daemon status.",
-    },
-    settings: {
-      loadFailed: "Unable to load desktop settings.",
-      saveFailed: "Unable to save desktop settings.",
-    },
-    integrations: {
-      cli: {
-        statusFailed: "Unable to check CLI install status.",
-        installFailed: "Unable to install the BySpace CLI.",
-      },
-    },
-  },
   rootError: {
     title: "BySpace ran into a problem.",
     body: "Try again to reload the app. If this keeps happening, include the details below when you report it.",
@@ -2027,26 +1965,6 @@ export const en = {
       connectedHosts: "Connected hosts",
       offline: "Offline",
       versionDiffers: "Version differs from this device",
-      releaseChannel: {
-        label: "Release channel",
-        description: "Switch to Beta to get updates sooner and help shape them",
-        stable: "Stable",
-        beta: "Beta",
-      },
-      updates: {
-        label: "App updates",
-        readyToInstall: "Ready to install: {{version}}",
-        installTitle: "Install desktop update",
-        installMessage: "This updates Paseo on this computer",
-        installConfirm: "Install update",
-        update: "Update",
-        updateTo: "Update to {{version}}",
-        installing: "Installing...",
-        check: "Check",
-        checking: "Checking...",
-        alertTitle: "Error",
-        alertMessage: "Unable to open the update confirmation dialog.",
-      },
     },
     appearance: {
       theme: {

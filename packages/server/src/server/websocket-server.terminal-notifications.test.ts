@@ -45,7 +45,7 @@ vi.mock("./session.js", () => ({
   },
 }));
 
-import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
+import { DaemonWebSocketServer } from "./websocket-server.js";
 
 class RecordingPushNotificationSender implements PushNotificationSender {
   readonly sent: PushPayload[] = [];
@@ -143,7 +143,7 @@ function createServer(terminalManager: TerminalManager, workspaceRegistry?: Work
     onChange: vi.fn(() => () => {}),
   };
 
-  const server = new VoiceAssistantWebSocketServer(
+  const server = new DaemonWebSocketServer(
     createStub<HTTPServer>({}),
     createStub<pino.Logger>(createLogger()),
     "srv-test",
@@ -198,7 +198,7 @@ function createOpenSocket() {
   };
 }
 
-function connectClient(server: VoiceAssistantWebSocketServer, subscribed = true) {
+function connectClient(server: DaemonWebSocketServer, subscribed = true) {
   const ws = createOpenSocket();
   asInternals<{ sessions: Map<unknown, unknown> }>(server).sessions.set(ws, {
     kind: "trusted",
@@ -276,7 +276,7 @@ function transition(input: {
   };
 }
 
-describe("VoiceAssistantWebSocketServer terminal attention notifications", () => {
+describe("DaemonWebSocketServer terminal attention notifications", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });

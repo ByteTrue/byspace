@@ -1259,68 +1259,6 @@ export const fr: TranslationResources = {
       commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
   },
-  desktop: {
-    daemon: {
-      title: "Daemon",
-      status: {
-        title: "Statut",
-        builtInOnly: "Seul le démon de bureau intégré est affiché ici",
-        running: "en cours d'exécution",
-        notRunning: "ne fonctionne pas",
-        pid: "PID{{pid}}",
-      },
-      management: {
-        title: "Gérer le démon intégré",
-        hint: "LaissezPaseodémarrer et arrêter le démon intégré",
-        pauseTitle: "Suspendre le démon intégré",
-        pauseMessage:
-          "Cela arrêtera immédiatement le démon intégré. Les agents en cours d'exécution et les terminaux connectés au démon intégré seront arrêtés.",
-        pauseAndStop: "Pause et arrêt",
-        registrationFailed:
-          "Built-in daemon started, but Paseo could not save the localhost connection. Toggle daemon management off and on again, or add localhost manually.",
-        pausedStopFailed:
-          "La gestion du démon intégré a été suspendue, maisPaseon'a ​​pas pu arrêter le démon.",
-        updateFailed: "Impossible de mettre à jour la gestion des démons intégrés.",
-      },
-      keepRunning: {
-        title: "Laisser le démon fonctionner après avoir quitté",
-        hint: "Daemoncontinue de fonctionner lorsque vous quittezPaseo",
-      },
-      logs: {
-        title: "Fichier journal",
-        modalTitle: "JournauxDaemon",
-        unavailable: "Chemin du journal indisponible",
-        empty: "(le fichier journal est vide)",
-        copied: "Chemin du journal copié.",
-        copyFailed: "Impossible de copier le chemin du journal.",
-        open: "Journaux ouverts",
-        copyPath: "Copier le chemin",
-      },
-      fullStatus: {
-        title: "Statut complet",
-        modalTitle: "StatutDaemon",
-        hint: "Exécute `byspace daemon status` et affiche la sortie",
-        view: "Afficher l'état",
-        copied: "Statut copié dans le presse-papiers.",
-        fetchFailed: "Échec de la récupération de l'état du démon:{{message}}",
-      },
-      advancedSettings: "Paramètres avancés",
-      openAdvancedSettings: "Ouvrir les paramètres avancés du démon",
-      versionMismatch:
-        "Les versions de l'application et du démon ne correspondent pas. Mettez à jour les deux vers la même version pour une meilleure expérience.",
-      loadFailed: "Impossible de charger l'état du démon de bureau.",
-    },
-    settings: {
-      loadFailed: "Impossible de charger les paramètres du bureau.",
-      saveFailed: "Impossible d'enregistrer les paramètres du bureau.",
-    },
-    integrations: {
-      cli: {
-        statusFailed: "Impossible de vérifier l'état de l'installation deCLI.",
-        installFailed: "Impossible d'installer lePaseoCLI.",
-      },
-    },
-  },
   rootError: {
     title: "BySpace a rencontré un problème.",
     body: "Réessayez pour recharger l'application. Si cela continue, joignez les détails ci-dessous au signalement.",
@@ -2024,27 +1962,6 @@ export const fr: TranslationResources = {
       connectedHosts: "Hôtes connectés",
       offline: "Hors ligne",
       versionDiffers: "La version diffère de cet appareil",
-      releaseChannel: {
-        label: "Canal de sortie",
-        description:
-          "Passez àBetapour obtenir des mises à jour plus tôt et contribuer à les façonner",
-        stable: "Stable",
-        beta: "Beta",
-      },
-      updates: {
-        label: "Mises à jour de l'application",
-        readyToInstall: "Prêt à installer:{{version}}",
-        installTitle: "Installer la mise à jour du bureau",
-        installMessage: "Cela met à jourPaseosur cet ordinateur",
-        installConfirm: "Installer la mise à jour",
-        update: "Mise à jour",
-        updateTo: "Mise à jour vers{{version}}",
-        installing: "Installation...",
-        check: "Vérifier",
-        checking: "Vérification...",
-        alertTitle: "Erreur",
-        alertMessage: "Impossible d'ouvrir la boîte de dialogue de confirmation de mise à jour.",
-      },
     },
     appearance: {
       theme: {

@@ -180,7 +180,6 @@ describe("translation resources", () => {
 
   it("preserves reviewed Korean status labels", () => {
     expect(ko.common.states.starting).toBe("시작 중...");
-    expect(ko.desktop.daemon.status.notRunning).toBe("실행 중이 아님");
   });
 
   it("labels the immediate add-to-chat action without an ellipsis", () => {
@@ -257,7 +256,6 @@ describe("translation resources", () => {
       "Use legacy terminal renderer",
     );
     expect(en.settings.about.title).toBe("About");
-    expect(en.settings.about.releaseChannel.label).toBe("Release channel");
     expect(en.settings.appearance.theme.title).toBe("Theme");
     expect(en.settings.appearance.fonts.interfaceFont).toBe("Interface font");
     expect(en.settings.shortcuts.actions.rebind).toBe("Rebind");
@@ -589,26 +587,6 @@ describe("translation resources", () => {
     expect(en.providerSelection.readiness.modelDefaultsLoading).toBe(
       "Model defaults are still loading",
     );
-  });
-
-  it("includes desktop daemon settings keys for the Batch 4S migration", () => {
-    expect(en.desktop.daemon.title).toBe("Daemon");
-    expect(en.desktop.daemon.status.title).toBe("Status");
-    expect(en.desktop.daemon.status.builtInOnly).toBe(
-      "Only the built-in desktop daemon is shown here",
-    );
-    expect(en.desktop.daemon.status.notRunning).toBe("not running");
-    expect(en.desktop.daemon.status.pid).toBe("PID {{pid}}");
-    expect(en.desktop.daemon.management.pauseTitle).toBe("Pause built-in daemon");
-    expect(en.desktop.daemon.management.pauseAndStop).toBe("Pause and stop");
-    expect(en.desktop.daemon.logs.modalTitle).toBe("Daemon logs");
-    expect(en.desktop.daemon.logs.unavailable).toBe("Log path unavailable");
-    expect(en.desktop.daemon.fullStatus.modalTitle).toBe("Daemon status");
-    expect(en.desktop.daemon.fullStatus.fetchFailed).toBe(
-      "Failed to fetch daemon status: {{message}}",
-    );
-    expect(en.desktop.daemon.loadFailed).toBe("Unable to load desktop daemon status.");
-    expect(en.desktop.integrations.cli.installFailed).toBe("Unable to install the BySpace CLI.");
   });
 
   it("includes remaining utility chrome keys for the Batch 4T migration", () => {

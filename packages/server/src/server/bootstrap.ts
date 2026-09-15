@@ -116,7 +116,7 @@ export async function fanOutReconciledWorkspaceUpdates(input: {
   );
 }
 
-import { VoiceAssistantWebSocketServer } from "./websocket-server.js";
+import { DaemonWebSocketServer } from "./websocket-server.js";
 import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import { createWorkspaceLabelService } from "./workspace-labels/index.js";
 import { createGitHubService } from "../services/github-service.js";
@@ -656,7 +656,7 @@ export async function createPaseoDaemon(
   daemonConfigStore.onFieldChange("app.baseUrl", (value) => {
     appBaseUrl = typeof value === "string" ? value : hostedAppBaseUrl;
   });
-  let wsServer: VoiceAssistantWebSocketServer | null = null;
+  let wsServer: DaemonWebSocketServer | null = null;
   let serviceProxyListenTarget: ListenTarget | null = null;
   const scriptHealthMonitor = new ScriptHealthMonitor({
     serviceProxy,
@@ -834,7 +834,7 @@ export async function createPaseoDaemon(
   const httpServer = createHTTPServer(app);
 
   // Script proxy WebSocket upgrade handler — must be registered before the
-  // VoiceAssistantWebSocketServer attaches its own "upgrade" listener so that
+  // DaemonWebSocketServer attaches its own "upgrade" listener so that
   // script-bound upgrades are forwarded first. The handler is a no-op for
   // requests that don't match a registered script route.
   httpServer.on("upgrade", serviceProxy.upgradeHandler({ passthroughUnknown: true }));
@@ -1526,7 +1526,7 @@ export async function createPaseoDaemon(
               logger.info("Daemon password authentication enabled");
             }
 
-            wsServer = new VoiceAssistantWebSocketServer(
+            wsServer = new DaemonWebSocketServer(
               httpServer,
               logger,
               serverId,

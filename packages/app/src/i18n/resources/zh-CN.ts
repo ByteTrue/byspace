@@ -1212,66 +1212,6 @@ export const zhCN: TranslationResources = {
       commandPlaceholder: "Run a command, or leave empty for a blank terminal",
     },
   },
-  desktop: {
-    daemon: {
-      title: "Daemon",
-      status: {
-        title: "状态",
-        builtInOnly: "这里只显示内置桌面 daemon",
-        running: "running",
-        notRunning: "not running",
-        pid: "PID {{pid}}",
-      },
-      management: {
-        title: "管理内置 daemon",
-        hint: "让 Paseo 启动和停止内置 daemon",
-        pauseTitle: "暂停内置 daemon",
-        pauseMessage:
-          "这会立即停止内置 daemon。连接到内置 daemon 的运行中 agents 和 terminals 会被停止。",
-        pauseAndStop: "暂停并停止",
-        registrationFailed:
-          "内置 daemon 已启动，但 Paseo 无法保存 localhost 连接。请关闭后重新开启 daemon 管理，或手动添加 localhost。",
-        pausedStopFailed: "内置 daemon 管理已暂停，但 Paseo 无法停止 daemon。",
-        updateFailed: "无法更新内置 daemon 管理设置。",
-      },
-      keepRunning: {
-        title: "退出后保持 daemon 运行",
-        hint: "退出 Paseo 后 daemon 会继续运行",
-      },
-      logs: {
-        title: "日志文件",
-        modalTitle: "Daemon 日志",
-        unavailable: "日志路径不可用",
-        empty: "（日志文件为空）",
-        copied: "日志路径已复制。",
-        copyFailed: "无法复制日志路径。",
-        open: "打开日志",
-        copyPath: "复制路径",
-      },
-      fullStatus: {
-        title: "完整状态",
-        modalTitle: "Daemon 状态",
-        hint: "运行 `byspace daemon status` 并显示输出",
-        view: "查看状态",
-        copied: "状态已复制到剪贴板。",
-        fetchFailed: "获取 daemon 状态失败：{{message}}",
-      },
-      advancedSettings: "高级设置",
-      openAdvancedSettings: "打开 daemon 高级设置",
-      versionMismatch: "App 和 daemon 版本不匹配。请将两者更新到相同版本，以获得最佳体验。",
-      loadFailed: "无法加载桌面 daemon 状态。",
-    },
-    settings: {
-      loadFailed: "无法加载桌面设置。",
-      saveFailed: "无法保存桌面设置。",
-    },
-    integrations: {
-      cli: {
-        statusFailed: "无法检查 CLI 安装状态。",
-        installFailed: "无法安装 BySpace CLI。",
-      },
-    },
-  },
   rootError: {
     title: "BySpace 遇到了问题。",
     body: "请重试以重新加载应用。如果问题持续发生，请在报告时附上下面的详细信息。",
@@ -1958,26 +1898,6 @@ export const zhCN: TranslationResources = {
       connectedHosts: "已连接的 Host",
       offline: "离线",
       versionDiffers: "版本与此设备不同",
-      releaseChannel: {
-        label: "发布通道",
-        description: "切换到 Beta 可更早获取更新并参与改进",
-        stable: "Stable",
-        beta: "Beta",
-      },
-      updates: {
-        label: "应用更新",
-        readyToInstall: "可安装：{{version}}",
-        installTitle: "安装桌面版更新",
-        installMessage: "这会更新此电脑上的 Paseo",
-        installConfirm: "安装更新",
-        update: "更新",
-        updateTo: "更新到 {{version}}",
-        installing: "正在安装...",
-        check: "检查",
-        checking: "正在检查...",
-        alertTitle: "错误",
-        alertMessage: "无法打开更新确认对话框。",
-      },
     },
     appearance: {
       theme: {

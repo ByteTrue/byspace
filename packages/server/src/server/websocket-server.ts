@@ -456,7 +456,7 @@ const OWNER_SESSION_ADMISSION: SessionAdmission = {
 
 export class MissingDaemonVersionError extends Error {
   constructor() {
-    super("VoiceAssistantWebSocketServer requires a non-empty daemonVersion.");
+    super("DaemonWebSocketServer requires a non-empty daemonVersion.");
     this.name = "MissingDaemonVersionError";
   }
 }
@@ -472,10 +472,10 @@ function requireWebSocketServices(params: {
 }): RequiredWebSocketServices {
   const { scheduleService, checkoutDiffManager } = params;
   if (!scheduleService) {
-    throw new Error("VoiceAssistantWebSocketServer requires a schedule service.");
+    throw new Error("DaemonWebSocketServer requires a schedule service.");
   }
   if (!checkoutDiffManager) {
-    throw new Error("VoiceAssistantWebSocketServer requires a checkout diff manager.");
+    throw new Error("DaemonWebSocketServer requires a checkout diff manager.");
   }
   return { scheduleService, checkoutDiffManager };
 }
@@ -483,7 +483,7 @@ function requireWebSocketServices(params: {
 /**
  * WebSocket server that only accepts sockets + parses/forwards messages to the session layer.
  */
-export class VoiceAssistantWebSocketServer {
+export class DaemonWebSocketServer {
   private readonly logger: pino.Logger;
   private readonly wss: WebSocketServer;
   private readonly pendingConnections: Map<WebSocketLike, PendingConnection> = new Map();
