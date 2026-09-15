@@ -1694,6 +1694,30 @@ test("tears down and reports a liveness timeout after the daemon goes silent for
   expect(session.teardownCount()).toBe(1);
 });
 
+test("a liveness miss inside the wall-clock silence deadline never tears the connection down", async () => {
+  useHeartbeatClock();
+  const session = new DaemonClientSession();
+  session.daemonGoesSilent();
+
+  await session.connect();
+
+  // First genuine heartbeat miss lands at t=25s, less than LIVENESS_DEADLINE_MS
+  // after the last inbound traffic (server_info at t=0). Mobile browsers freeze
+  // JS timers and fire the backlog as a burst on resume; teardown must depend on
+  // how long the socket has actually been silent, not on how many misses fired.
+  await session.advance(25_000);
+  expect(session.state()).toEqual({ status: "connected" });
+  expect(session.teardownCount()).toBe(0);
+
+  // Silence crosses the deadline; the next heartbeat timeout tears it down.
+  await session.advance(25_000);
+  expect(session.state()).toEqual({
+    status: "disconnected",
+    reason: "Liveness check timed out (15000ms)",
+  });
+  expect(session.teardownCount()).toBe(1);
+});
+
 test("survives a single missed pong when answers resume", async () => {
   useHeartbeatClock();
   const session = new DaemonClientSession();
