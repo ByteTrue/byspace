@@ -234,7 +234,6 @@ describe("translation resources", () => {
     );
     expect(en.composer.input.addAttachment).toBe("Add attachment");
     expect(en.composer.input.sendMessage).toBe("Send message");
-    expect(en.composer.voice.startDictation).toBe("Start dictation");
     expect(en.composer.attachments.addIssueOrPr).toBe("Add issue or PR");
     expect(en.composer.attachments.addIssueOrPr_mr).toBe("Add issue or MR");
     expect(en.composer.github.title).toBe("Attach issue or PR");
@@ -295,8 +294,6 @@ describe("translation resources", () => {
     expect(en.workspace.fileExplorer.empty.noVisibleFiles).toBe("No visible files");
     expect(en.workspace.setup.status.running).toBe("Running");
     expect(en.workspace.setup.empty.noCommands).toBe("No setup commands ran for this workspace.");
-    expect(en.workspace.browser.unavailable.title).toBe("Browser is desktop-only");
-    expect(en.workspace.browser.controls.enterUrl).toBe("Enter URL");
     expect(en.workspace.terminal.hostDisconnected).toBe("Host is not connected");
     expect(en.panels.file.directoryMissing).toBe("Workspace directory not found.");
     expect(en.openProject.tiles.importSession.description).toBe(
@@ -408,13 +405,6 @@ describe("translation resources", () => {
     expect(en.message.attachments.closeImage).toBe("Close image");
     expect(en.message.attachments.imageLoadFailed).toBe("Couldn't load image");
     expect(en.message.attachments.imageUnavailable).toBe("Image unavailable");
-    expect(en.message.dictation.start).toBe("Start voice dictation");
-    expect(en.message.dictation.cancel).toBe("Cancel dictation");
-    expect(en.message.dictation.retry).toBe("Retry dictation");
-    expect(en.message.dictation.insert).toBe("Insert transcription");
-    expect(en.message.dictation.insertAndSend).toBe("Insert transcription and send");
-    expect(en.message.dictation.failed).toBe("Dictation failed: {{error}}");
-    expect(en.message.dictation.failedRetry).toBe("Dictation failed. Tap retry.");
     expect(en.message.question.submit).toBe("Submit");
     expect(en.message.question.answerPlaceholder).toBe("Type your answer...");
     expect(en.message.question.otherPlaceholder).toBe("Other...");
@@ -543,8 +533,6 @@ describe("translation resources", () => {
     expect(en.workspace.git.pr.errors.activityLoadFailed).toBe(
       "Unable to load pull request activity",
     );
-    expect(en.desktop.settings.loadFailed).toBe("Unable to load desktop settings.");
-    expect(en.desktop.settings.saveFailed).toBe("Unable to save desktop settings.");
     expect(en.toolCallDetails.input).toBe("Input");
     expect(en.toolCallDetails.output).toBe("Output");
     expect(en.renameModal.rename).toBe("Rename");
@@ -584,8 +572,6 @@ describe("translation resources", () => {
     expect(en.message.compaction.completed).toBe("Context compacted");
     expect(en.agentPanel.archived.callout).toBe("This agent is archived");
     expect(en.agentPanel.archived.unarchive).toBe("Unarchive");
-    expect(en.desktop.quitting.title).toBe("Quitting BySpace...");
-    expect(en.desktop.quitting.detail).toBe("Stopping the local daemon.");
     expect(en.composer.attachments.dropImagesHere).toBe("Drop images here");
   });
 
@@ -603,78 +589,6 @@ describe("translation resources", () => {
     expect(en.providerSelection.readiness.modelDefaultsLoading).toBe(
       "Model defaults are still loading",
     );
-  });
-
-  it("includes desktop update utility keys for the Batch 4Q migration", () => {
-    expect(en.desktop.updates.status.checking).toBe("Checking for app updates...");
-    expect(en.desktop.updates.status.installing).toBe("Installing app update...");
-    expect(en.desktop.updates.status.upToDate).toBe("App is up to date.");
-    expect(en.desktop.updates.status.pending).toBe("We'll let you know when the update is ready.");
-    expect(en.desktop.updates.status.pendingWithLastChecked).toBe(
-      "We'll let you know when the update is ready. Last checked at {{time}}.",
-    );
-    expect(en.desktop.updates.status.pendingWithVersion).toBe(
-      "Update found: {{version}}. Downloading...",
-    );
-    expect(en.desktop.updates.status.pendingWithVersionAndLastChecked).toBe(
-      "Update found: {{version}}. Downloading... Last checked at {{time}}.",
-    );
-    expect(en.desktop.updates.status.availableWithVersion).toBe("Update ready: {{version}}");
-    expect(en.desktop.updates.status.availableWithVersionAndLastChecked).toBe(
-      "Update ready: {{version}}. Last checked at {{time}}.",
-    );
-    expect(en.desktop.updates.status.available).toBe("An app update is ready to install.");
-    expect(en.desktop.updates.status.availableWithLastChecked).toBe(
-      "An app update is ready to install. Last checked at {{time}}.",
-    );
-    expect(en.desktop.updates.status.installed).toBe("App update installed. Restart required.");
-    expect(en.desktop.updates.status.failed).toBe("Failed to update app.");
-    expect(en.desktop.updates.status.idle).toBe("Update status has not been checked yet.");
-    expect(en.desktop.updates.installError).toBe("Unable to install the desktop app update.");
-    expect(en.desktop.updates.callout.installingTitle).toBe("Installing update");
-    expect(en.desktop.updates.callout.failedTitle).toBe("Update failed");
-    expect(en.desktop.updates.callout.availableTitle).toBe("Update available");
-    expect(en.desktop.updates.callout.genericError).toBe("Something went wrong.");
-    expect(en.desktop.updates.callout.whatsNew).toBe("What's new");
-    expect(en.desktop.updates.callout.installAndRestart).toBe("Install & restart");
-    expect(en.desktop.updates.callout.installingDescription).toBe("Installing and restarting...");
-    expect(en.desktop.updates.callout.versionReady).toBe("{{version}} is ready to install.");
-    expect(en.desktop.updates.callout.newVersionReady).toBe("A new version is ready to install.");
-    expect(en.desktop.updates.callout.restartWarning).toBe(
-      "Upgrading the app will stop running agents and close terminal sessions.",
-    );
-    expect(en.desktop.rosetta.title).toBe("Download the Apple Silicon build");
-    expect(en.desktop.rosetta.runningIntel).toBe(
-      "You're running the Intel build of Paseo under Rosetta on Apple Silicon.",
-    );
-    expect(en.desktop.rosetta.highCpu).toBe(
-      "This causes high CPU usage. Download the Apple Silicon build to fix it.",
-    );
-    expect(en.desktop.rosetta.download).toBe("Download");
-  });
-
-  it("includes desktop permission utility keys for the Batch 4R migration", () => {
-    expect(en.desktop.permissions.notifications.allowed).toBe(
-      "Notifications are allowed by the OS.",
-    );
-    expect(en.desktop.permissions.notifications.denied).toBe(
-      "Notifications are denied in system settings.",
-    );
-    expect(en.desktop.permissions.notifications.unexpectedState).toBe(
-      "Unexpected notification permission state: {{state}}",
-    );
-    expect(en.desktop.permissions.microphone.granted).toBe("Microphone access is granted.");
-    expect(en.desktop.permissions.microphone.statusApiUnavailable).toBe(
-      "Microphone status API is unavailable in this runtime. Use Request to check access.",
-    );
-    expect(en.desktop.permissions.microphone.requestDenied).toBe(
-      "Microphone permission was denied by the user or system.",
-    );
-    expect(en.desktop.permissions.empty.notifications).toBe(
-      "Notification status has not been checked yet.",
-    );
-    expect(en.desktop.permissions.testNotification.title).toBe("BySpace notification test");
-    expect(en.desktop.permissions.testNotification.failed).toBe("Failed to send notification.");
   });
 
   it("includes desktop daemon settings keys for the Batch 4S migration", () => {

@@ -112,18 +112,6 @@ export const ko: TranslationResources = {
       stopAgent: "에이전트 중지",
       interrupt: "중단",
     },
-    voice: {
-      enableVoiceMode: "음성 모드 켜기",
-      voiceMode: "음성 모드",
-      unmuteVoiceMode: "음성 모드 음소거 해제",
-      muteVoiceMode: "음성 모드 음소거",
-      stopDictation: "받아쓰기 중지",
-      startDictation: "받아쓰기 시작",
-      unmuteVoice: "음성 음소거 해제",
-      muteVoice: "음성 음소거",
-      dictation: "받아쓰기",
-      interruptBeforeVoice: "음성 모드를 시작하기 전에 에이전트를 중단하세요",
-    },
     attachments: {
       addImage: "이미지 추가",
       pasteImage: "이미지 붙여넣기",
@@ -326,15 +314,6 @@ export const ko: TranslationResources = {
     },
     activity: {
       details: "세부 정보",
-    },
-    dictation: {
-      start: "음성 받아쓰기 시작",
-      cancel: "받아쓰기 취소",
-      retry: "받아쓰기 다시 시도",
-      insert: "전사 삽입",
-      insertAndSend: "전사 삽입 후 보내기",
-      failed: "받아쓰기 실패: {{error}}",
-      failedRetry: "받아쓰기에 실패했습니다. 다시 시도하려면 누르세요.",
     },
     question: {
       submit: "제출",
@@ -542,45 +521,6 @@ export const ko: TranslationResources = {
         noOutput: "출력 없음",
       },
     },
-    browser: {
-      unavailable: {
-        title: "브라우저는 데스크톱 전용입니다",
-        subtitle: "내장 브라우저를 사용하려면 이 워크스페이스를 Electron에서 여세요.",
-      },
-      session: "브라우저 세션 {{browserId}}",
-      controls: {
-        back: "뒤로",
-        forward: "앞으로",
-        stopLoading: "로딩 중지",
-        refresh: "새로고침",
-        browserUrl: "브라우저 URL",
-        enterUrl: "URL 입력",
-        openDevTools: "브라우저 개발자 도구 열기",
-        cancelSelector: "요소 선택기 취소",
-        annotateElement: "요소에 주석 달기",
-        screenshotElement: "요소 스크린샷",
-        screenshotCopied: "스크린샷을 클립보드에 복사했습니다.",
-        elementCopied: "요소를 클립보드에 복사했습니다.",
-        screenshotFailed: "스크린샷을 복사할 수 없습니다.",
-        selectorLoading: "페이지 로딩이 끝날 때까지 기다려 주세요.",
-        selectorFailed: "요소 선택기를 시작할 수 없습니다.",
-      },
-      annotate: {
-        title: "요소에 주석 달기",
-        placeholder: "이 요소에 관해 에이전트에게 보낼 메시지…",
-        submit: "첨부",
-        cancel: "취소",
-      },
-      devices: {
-        label: "장치 크기",
-        responsive: "반응형",
-      },
-      errors: {
-        failedToLoad: "페이지를 불러오지 못했습니다",
-        invalidUrl: "잘못된 브라우저 URL",
-        unsupportedProtocol: "지원되지 않는 브라우저 URL을 차단했습니다: {{protocol}}",
-      },
-    },
     terminal: {
       hostDisconnected: "호스트가 연결되어 있지 않습니다",
       updateHost: "기본 터미널 렌더러를 사용하도록 호스트를 업데이트합니다.",
@@ -632,7 +572,6 @@ export const ko: TranslationResources = {
         newTerminal: "새 터미널",
         preparingTerminal: "터미널 탭 준비 중",
         preparingTerminalTooltip: "터미널 준비 중...",
-        newBrowser: "새 브라우저",
         maximizePane: "창 최대화",
         restorePane: "창 복원",
         closePane: "창 닫기",
@@ -702,7 +641,6 @@ export const ko: TranslationResources = {
         workspaceActions: "워크스페이스 작업",
         newAgent: "새 에이전트",
         newTerminal: "새 터미널",
-        newBrowser: "새 브라우저 탭",
         importSession: "세션 가져오기",
         copyPath: "워크스페이스 경로 복사",
         copyBranchName: "브랜치 이름 복사",
@@ -1295,16 +1233,6 @@ export const ko: TranslationResources = {
     },
   },
   desktop: {
-    windowControls: {
-      minimize: "창 최소화",
-      maximize: "창 최대화",
-      restore: "창 복원",
-      close: "창 닫기",
-    },
-    quitting: {
-      title: "BySpace 종료 중...",
-      detail: "로컬 데몬을 중지하는 중입니다.",
-    },
     daemon: {
       title: "데몬",
       status: {
@@ -1354,97 +1282,9 @@ export const ko: TranslationResources = {
         "앱과 데몬의 버전이 일치하지 않습니다. 최상의 경험을 위해 둘 다 동일한 버전으로 업데이트하세요.",
       loadFailed: "데스크톱 데몬 상태를 불러올 수 없습니다.",
     },
-    updates: {
-      status: {
-        checking: "앱 업데이트 확인 중...",
-        installing: "앱 업데이트 설치 중...",
-        upToDate: "앱이 최신 상태입니다.",
-        upToDateWithLastChecked: "최신 상태입니다. 마지막 확인: {{time}}.",
-        pending: "업데이트가 준비되면 알려드리겠습니다.",
-        pendingWithLastChecked:
-          "업데이트가 준비되면 알려드리겠습니다. {{time}}에서 마지막으로 확인했습니다.",
-        pendingWithVersion: "업데이트 발견: {{version}}. 다운로드 중...",
-        pendingWithVersionAndLastChecked:
-          "업데이트 발견: {{version}}. 다운로드 중... {{time}}에서 마지막으로 확인했습니다.",
-        availableWithVersion: "업데이트 준비됨: {{version}}",
-        availableWithVersionAndLastChecked:
-          "업데이트 준비됨: {{version}}. {{time}}에서 마지막으로 확인했습니다.",
-        available: "설치할 앱 업데이트가 준비되었습니다.",
-        availableWithLastChecked:
-          "앱 업데이트를 설치할 준비가 되었습니다. {{time}}에서 마지막으로 확인했습니다.",
-        installed: "앱 업데이트가 설치되었습니다. 재시작이 필요합니다.",
-        failed: "앱을 업데이트하지 못했습니다.",
-        idle: "업데이트 상태를 아직 확인하지 않았습니다.",
-      },
-      installError: "데스크톱 앱 업데이트를 설치할 수 없습니다.",
-      callout: {
-        installingTitle: "업데이트 설치 중",
-        failedTitle: "업데이트 실패",
-        availableTitle: "업데이트 사용 가능",
-        genericError: "문제가 발생했습니다.",
-        whatsNew: "새로운 기능",
-        installingAction: "설치 중...",
-        installAndRestart: "설치 후 재시작",
-        installingDescription: "설치 후 재시작 중...",
-        versionReady: "{{version}} 설치가 준비되었습니다.",
-        newVersionReady: "새 버전 설치가 준비되었습니다.",
-        restartWarning: "앱을 업그레이드하면 실행 중인 에이전트가 중지되고 터미널 세션이 닫힙니다.",
-      },
-    },
     settings: {
       loadFailed: "데스크톱 설정을 불러올 수 없습니다.",
       saveFailed: "데스크톱 설정을 저장할 수 없습니다.",
-    },
-    rosetta: {
-      title: "Apple Silicon 빌드 다운로드",
-      runningIntel: "Apple Silicon에서 Rosetta로 Paseo의 Intel 빌드를 실행하고 있습니다.",
-      highCpu:
-        "이로 인해 CPU 사용량이 높아집니다. 이를 해결하려면 Apple Silicon 빌드를 다운로드하세요.",
-      download: "다운로드",
-    },
-    permissions: {
-      notifications: {
-        allowed: "OS에서 알림이 허용되어 있습니다.",
-        denied: "시스템 설정에서 알림이 거부되어 있습니다.",
-        notGranted: "알림이 아직 허용되지 않았습니다.",
-        webOnly: "데스크톱 알림 상태는 웹 런타임에서만 사용할 수 있습니다.",
-        supported: "데스크톱 알림이 지원됩니다.",
-        unsupported: "이 플랫폼에서는 데스크톱 알림이 지원되지 않습니다.",
-        apiUnavailable: "이 환경에서는 웹 알림 API를 사용할 수 없습니다.",
-        requestsWebOnly: "데스크톱 알림 요청은 웹 런타임에서만 사용할 수 있습니다.",
-        requestUnavailable: "웹 알림 API의 requestPermission()을 사용할 수 없습니다.",
-        requestFailed: "알림 권한을 요청하지 못했습니다: {{message}}",
-        unexpectedState: "예기치 않은 알림 권한 상태: {{state}}",
-      },
-      microphone: {
-        webOnly: "데스크톱 마이크 상태는 웹 런타임에서만 사용할 수 있습니다.",
-        navigatorUnavailable: "이 환경에서는 Navigator를 사용할 수 없습니다.",
-        granted: "마이크 접근이 허용되었습니다.",
-        denied: "시스템 설정에서 마이크 접근이 거부되어 있습니다.",
-        notGranted: "마이크 권한이 아직 허용되지 않았습니다.",
-        unexpectedState: "예기치 않은 마이크 권한 상태: {{state}}",
-        statusApiUnavailable:
-          "이 런타임에서는 마이크 상태 API를 사용할 수 없습니다. 접근을 확인하려면 요청을 사용하세요.",
-        queryFailed: "마이크 상태를 조회하지 못했습니다: {{message}}",
-        captureUnavailable: "이 환경에서는 마이크 캡처를 사용할 수 없습니다.",
-        permissionApiUnavailable:
-          "권한 상태 API를 사용할 수 없습니다. 접근을 확인하려면 요청을 사용하세요.",
-        requestsWebOnly: "데스크톱 마이크 요청은 웹 런타임에서만 사용할 수 있습니다.",
-        captureApiUnavailable: "이 환경에서는 마이크 캡처 API를 사용할 수 없습니다.",
-        requestDenied: "사용자 또는 시스템에 의해 마이크 권한이 거부되었습니다.",
-        noDevice: "마이크 장치를 찾을 수 없습니다.",
-        requestFailed: "마이크 권한을 요청하지 못했습니다: {{message}}",
-      },
-      empty: {
-        notifications: "알림 상태를 아직 확인하지 않았습니다.",
-        microphone: "마이크 상태를 아직 확인하지 않았습니다.",
-      },
-      testNotification: {
-        title: "BySpace 알림 테스트",
-        body: "이 메시지가 보이면 데스크톱 알림이 작동하는 것입니다.",
-        notDelivered: "알림이 전달되지 않았습니다. 시스템 설정 > 알림을 확인하세요.",
-        failed: "알림을 보내지 못했습니다.",
-      },
     },
     integrations: {
       cli: {
@@ -2296,12 +2136,9 @@ export const ko: TranslationResources = {
         cycleTheme: "테마 순환",
         focusMessageInput: "메시지 입력란에 포커스",
         cycleAgentMode: "에이전트 모드 전환",
-        toggleVoiceMode: "음성 모드 토글",
-        startStopDictation: "받아쓰기 시작/중지",
         interruptAgent: "에이전트 중단",
         sendMessage: "메시지 보내기",
         queueMessage: "메시지 대기열에 추가",
-        muteUnmuteVoiceMode: "음성 모드 음소거/해제",
         switchProject: "프로젝트 전환",
       },
       helpNotes: {

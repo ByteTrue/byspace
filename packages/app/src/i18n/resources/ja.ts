@@ -112,18 +112,6 @@ export const ja: TranslationResources = {
       stopAgent: "エージェントを停止",
       interrupt: "中断",
     },
-    voice: {
-      enableVoiceMode: "音声モードを有効にする",
-      voiceMode: "音声モード",
-      unmuteVoiceMode: "音声モードのミュートを解除",
-      muteVoiceMode: "音声モードをミュート",
-      stopDictation: "音声入力を停止",
-      startDictation: "音声入力を開始",
-      unmuteVoice: "音声のミュートを解除",
-      muteVoice: "音声をミュート",
-      dictation: "音声入力",
-      interruptBeforeVoice: "音声モードを開始する前にエージェントを中断してください",
-    },
     attachments: {
       addImage: "画像を追加",
       pasteImage: "画像を貼り付け",
@@ -328,15 +316,6 @@ export const ja: TranslationResources = {
     },
     activity: {
       details: "詳細",
-    },
-    dictation: {
-      start: "音声入力を開始",
-      cancel: "音声入力をキャンセル",
-      retry: "音声入力を再試行",
-      insert: "文字起こしを挿入",
-      insertAndSend: "文字起こしを挿入して送信",
-      failed: "音声入力に失敗しました: {{error}}",
-      failedRetry: "音声入力に失敗しました。再試行をタップしてください。",
     },
     question: {
       submit: "送信",
@@ -545,45 +524,6 @@ export const ja: TranslationResources = {
         noOutput: "出力なし",
       },
     },
-    browser: {
-      unavailable: {
-        title: "ブラウザはデスクトップ専用です",
-        subtitle: "組み込みブラウザを使用するには、このワークスペースをElectronで開いてください。",
-      },
-      session: "ブラウザセッション{{browserId}}",
-      controls: {
-        back: "戻る",
-        forward: "進む",
-        stopLoading: "読み込みを停止",
-        refresh: "更新",
-        browserUrl: "ブラウザURL",
-        enterUrl: "URLを入力",
-        openDevTools: "ブラウザ開発ツールを開く",
-        cancelSelector: "要素セレクターをキャンセル",
-        annotateElement: "要素に注釈を付ける",
-        screenshotElement: "要素のスクリーンショット",
-        screenshotCopied: "スクリーンショットをクリップボードにコピーしました",
-        elementCopied: "要素をクリップボードにコピーしました",
-        screenshotFailed: "スクリーンショットをコピーできませんでした",
-        selectorLoading: "ページの読み込みが完了するまでお待ちください",
-        selectorFailed: "要素セレクターを開始できませんでした",
-      },
-      annotate: {
-        title: "要素に注釈を付ける",
-        placeholder: "この要素についてエージェントへのメッセージ…",
-        submit: "添付",
-        cancel: "キャンセル",
-      },
-      devices: {
-        label: "デバイスサイズ",
-        responsive: "レスポンシブ",
-      },
-      errors: {
-        failedToLoad: "ページの読み込みに失敗しました",
-        invalidUrl: "無効なブラウザURL",
-        unsupportedProtocol: "サポートされていないブラウザURLをブロック: {{protocol}}",
-      },
-    },
     terminal: {
       hostDisconnected: "ホストが接続されていません",
       updateHost: "ネイティブターミナルを使用するにはホストを更新してください。",
@@ -635,7 +575,6 @@ export const ja: TranslationResources = {
         newTerminal: "新しいターミナル",
         preparingTerminal: "ターミナルタブを準備中",
         preparingTerminalTooltip: "ターミナルを準備中...",
-        newBrowser: "新しいブラウザ",
         maximizePane: "ペインを最大化",
         restorePane: "ペインを元に戻す",
         closePane: "ペインを閉じる",
@@ -704,7 +643,6 @@ export const ja: TranslationResources = {
         workspaceActions: "ワークスペースアクション",
         newAgent: "新しいエージェント",
         newTerminal: "新しいターミナル",
-        newBrowser: "新しいブラウザタブ",
         importSession: "セッションをインポート",
         copyPath: "ワークスペースパスをコピー",
         copyBranchName: "ブランチ名をコピー",
@@ -1300,16 +1238,6 @@ export const ja: TranslationResources = {
     },
   },
   desktop: {
-    windowControls: {
-      minimize: "ウィンドウを最小化",
-      maximize: "ウィンドウを最大化",
-      restore: "ウィンドウを元に戻す",
-      close: "ウィンドウを閉じる",
-    },
-    quitting: {
-      title: "BySpaceを終了中...",
-      detail: "ローカルデーモンを停止中。",
-    },
     daemon: {
       title: "デーモン",
       status: {
@@ -1360,96 +1288,9 @@ export const ja: TranslationResources = {
         "アプリとデーモンのバージョンが一致しません。最良の体験のために両方を同じバージョンに更新してください。",
       loadFailed: "デスクトップデーモンのステータスを読み込めません。",
     },
-    updates: {
-      status: {
-        checking: "アプリの更新を確認中...",
-        installing: "アプリの更新をインストール中...",
-        upToDate: "アプリは最新です。",
-        upToDateWithLastChecked: "最新の状態です。最終確認: {{time}}。",
-        pending: "更新の準備ができたらお知らせします。",
-        pendingWithLastChecked: "更新の準備ができたらお知らせします。最終確認: {{time}}。",
-        pendingWithVersion: "更新が見つかりました: {{version}}。ダウンロード中...",
-        pendingWithVersionAndLastChecked:
-          "更新が見つかりました: {{version}}。ダウンロード中... 最終確認: {{time}}。",
-        availableWithVersion: "更新の準備ができました: {{version}}",
-        availableWithVersionAndLastChecked:
-          "更新の準備ができました: {{version}}。最終確認: {{time}}。",
-        available: "アプリの更新をインストールできます。",
-        availableWithLastChecked: "アプリの更新をインストールできます。最終確認: {{time}}。",
-        installed: "アプリの更新がインストールされました。再起動が必要です。",
-        failed: "アプリの更新に失敗しました。",
-        idle: "更新ステータスはまだ確認されていません。",
-      },
-      installError: "デスクトップアプリの更新をインストールできません。",
-      callout: {
-        installingTitle: "更新をインストール中",
-        failedTitle: "更新に失敗しました",
-        availableTitle: "更新が利用可能",
-        genericError: "問題が発生しました。",
-        whatsNew: "新機能",
-        installingAction: "インストール中...",
-        installAndRestart: "インストールして再起動",
-        installingDescription: "インストールして再起動中...",
-        versionReady: "{{version}}のインストール準備ができました。",
-        newVersionReady: "新しいバージョンのインストール準備ができました。",
-        restartWarning:
-          "アプリを更新すると、実行中のエージェントが停止しターミナルセッションが閉じられます。",
-      },
-    },
     settings: {
       loadFailed: "デスクトップ設定を読み込めません。",
       saveFailed: "デスクトップ設定を保存できません。",
-    },
-    rosetta: {
-      title: "Apple Siliconビルドをダウンロード",
-      runningIntel: "Apple Silicon上のRosettaでPaseoのIntelビルドを実行しています。",
-      highCpu:
-        "これにより高いCPU使用率が発生します。修正するにはApple Siliconビルドをダウンロードしてください。",
-      download: "ダウンロード",
-    },
-    permissions: {
-      notifications: {
-        allowed: "通知はOSによって許可されています。",
-        denied: "通知はシステム設定で拒否されています。",
-        notGranted: "通知はまだ許可されていません。",
-        webOnly: "デスクトップ通知のステータスはWebランタイムでのみ利用できます。",
-        supported: "デスクトップ通知はサポートされています。",
-        unsupported: "デスクトップ通知はこのプラットフォームではサポートされていません。",
-        apiUnavailable: "この環境ではWeb Notification APIは利用できません。",
-        requestsWebOnly: "デスクトップ通知のリクエストはWebランタイムでのみ利用できます。",
-        requestUnavailable: "Web Notification API の requestPermission() は利用できません。",
-        requestFailed: "通知の権限リクエストに失敗しました: {{message}}",
-        unexpectedState: "予期しない通知の権限状態: {{state}}",
-      },
-      microphone: {
-        webOnly: "デスクトップマイクのステータスはWebランタイムでのみ利用できます。",
-        navigatorUnavailable: "この環境ではNavigatorは利用できません。",
-        granted: "マイクへのアクセスが許可されています。",
-        denied: "マイクへのアクセスはシステム設定で拒否されています。",
-        notGranted: "マイクの権限はまだ許可されていません。",
-        unexpectedState: "予期しないマイクの権限状態: {{state}}",
-        statusApiUnavailable:
-          "マイクステータスAPIはこのランタイムでは利用できません。アクセス確認は［許可を求める］から行ってください。",
-        queryFailed: "マイクのステータス確認に失敗しました: {{message}}",
-        captureUnavailable: "この環境ではマイクのキャプチャは利用できません。",
-        permissionApiUnavailable:
-          "権限ステータスAPIは利用できません。アクセス確認は［許可を求める］から行ってください。",
-        requestsWebOnly: "デスクトップマイクのリクエストはWebランタイムでのみ利用できます。",
-        captureApiUnavailable: "この環境ではマイクキャプチャAPIは利用できません。",
-        requestDenied: "マイクの権限はユーザーまたはシステムによって拒否されました。",
-        noDevice: "マイクデバイスが見つかりませんでした。",
-        requestFailed: "マイクの権限リクエストに失敗しました: {{message}}",
-      },
-      empty: {
-        notifications: "通知のステータスはまだ確認されていません。",
-        microphone: "マイクのステータスはまだ確認されていません。",
-      },
-      testNotification: {
-        title: "BySpace通知テスト",
-        body: "これが見えれば、デスクトップ通知は機能しています。",
-        notDelivered: "通知が届きませんでした。システム設定 > 通知を確認してください。",
-        failed: "通知の送信に失敗しました。",
-      },
     },
     integrations: {
       cli: {
@@ -2306,12 +2147,9 @@ export const ja: TranslationResources = {
         cycleTheme: "テーマを順に切り替え",
         focusMessageInput: "メッセージ入力にフォーカス",
         cycleAgentMode: "エージェントモードを順に切り替え",
-        toggleVoiceMode: "音声モードを切り替え",
-        startStopDictation: "音声入力を開始/停止",
         interruptAgent: "エージェントを中断",
         sendMessage: "メッセージを送信",
         queueMessage: "メッセージをキューに追加",
-        muteUnmuteVoiceMode: "音声モードのミュートを切り替え",
         switchProject: "プロジェクトを切り替え",
       },
       helpNotes: {

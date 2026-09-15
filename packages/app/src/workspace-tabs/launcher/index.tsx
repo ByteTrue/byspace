@@ -8,7 +8,7 @@ import {
 } from "react";
 import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { Globe, SquarePen, SquareTerminal } from "lucide-react-native";
+import { SquarePen, SquareTerminal } from "lucide-react-native";
 import invariant from "tiny-invariant";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
@@ -37,7 +37,6 @@ export type WorkspaceTabLaunchDestination =
 export interface NewTabLauncher {
   showChanges: boolean;
   showPullRequest: boolean;
-  showBrowser: boolean;
   terminalDisabled: boolean;
   launch: (selection: NewTabSelection, destination: WorkspaceTabLaunchDestination) => void;
 }
@@ -80,7 +79,6 @@ const BUILT_IN_SELECTIONS = {
   changes: { kind: "target", target: { kind: "changes_tree" } },
   diff: { kind: "target", target: { kind: "working_diff" } },
   files: { kind: "target", target: { kind: "files" } },
-  browser: { kind: "browser" },
   pullRequest: { kind: "target", target: { kind: "pull_request" } },
 } satisfies Record<BuiltInLaunchItemId, NewTabSelection>;
 
@@ -169,17 +167,6 @@ export function useWorkspaceTabLaunchCatalog(input: {
         panelKind: "files",
         toggleTarget: BUILT_IN_SELECTIONS.files.target,
         launch: launchSelection(BUILT_IN_SELECTIONS.files),
-      },
-      browser: {
-        id: "browser",
-        label: t("workspace.tabs.fallback.browser"),
-        Icon: Globe,
-        shortcutActionId: "workspace-tab-target-browser",
-        disabled: false,
-        panelKind: "browser",
-        toggleTarget: null,
-        hidden: !launcher.showBrowser,
-        launch: launchSelection(BUILT_IN_SELECTIONS.browser),
       },
       pullRequest: {
         id: "pull-request",

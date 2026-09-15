@@ -38,7 +38,6 @@ function source(gitActions: GitActions): {
         section: "Workspace actions",
         newAgent: "New agent",
         newTerminal: "New terminal",
-        newBrowser: "New browser",
         splitRight: "Split pane right",
         splitDown: "Split pane down",
         changes: "Changes",
@@ -80,7 +79,6 @@ function source(gitActions: GitActions): {
       shortcuts: {},
       capabilities: {
         canSplitPanes: true,
-        canOpenBrowserTabs: true,
         isGit: false,
         canPin: false,
         canShowSetup: false,
@@ -146,7 +144,7 @@ describe("workspace command center contributions", () => {
     expect(contributions.filter((item) => item.id === "git:pull")).toHaveLength(1);
   });
 
-  it("orders New agent before Git and keeps terminal, browser, and splits search-only", () => {
+  it("orders New agent before Git and keeps terminal and splits search-only", () => {
     const fixture = source({
       primary: gitAction("commit", "Commit"),
       secondary: [],
@@ -162,7 +160,6 @@ describe("workspace command center contributions", () => {
             "tab:new-agent",
             "git:commit",
             "tab:new-terminal",
-            "tab:new-browser",
             "pane:split-right",
             "pane:split-down",
           ].includes(item.id),
@@ -172,17 +169,15 @@ describe("workspace command center contributions", () => {
       { id: "tab:new-agent", visibility: "always" },
       { id: "git:commit", visibility: "always" },
       { id: "tab:new-terminal", visibility: "query" },
-      { id: "tab:new-browser", visibility: "query" },
       { id: "pane:split-right", visibility: "query" },
       { id: "pane:split-down", visibility: "query" },
     ]);
   });
 
-  it("omits browser and split actions when their existing capabilities are unavailable", () => {
+  it("omits split actions when their existing capabilities are unavailable", () => {
     const fixture = source({ primary: null, secondary: [], menu: [] });
     fixture.value.capabilities = {
       canSplitPanes: false,
-      canOpenBrowserTabs: false,
       isGit: false,
       canPin: false,
       canShowSetup: false,
@@ -192,7 +187,6 @@ describe("workspace command center contributions", () => {
 
     expect(contributions.some((item) => item.id === "tab:new-agent")).toBe(true);
     expect(contributions.some((item) => item.id === "tab:new-terminal")).toBe(true);
-    expect(contributions.some((item) => item.id === "tab:new-browser")).toBe(false);
     expect(contributions.some((item) => item.id.startsWith("pane:"))).toBe(false);
     expect(contributions.some((item) => item.id === "workspace:rename")).toBe(true);
     expect(contributions.some((item) => item.id === "workspace:copy-path")).toBe(true);
@@ -222,7 +216,6 @@ describe("workspace command center contributions", () => {
 
     expect(contributions.some((item) => item.id === "tab:new-agent")).toBe(true);
     expect(contributions.some((item) => item.id === "tab:new-terminal")).toBe(true);
-    expect(contributions.some((item) => item.id === "tab:new-browser")).toBe(true);
     expect(contributions.some((item) => item.id === "pane:split-right")).toBe(true);
     expect(contributions.some((item) => item.id === "pane:split-down")).toBe(true);
     expect(contributions.some((item) => item.id.startsWith("git:"))).toBe(false);

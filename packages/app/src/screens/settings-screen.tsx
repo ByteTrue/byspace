@@ -47,7 +47,6 @@ import {
   parseTerminalScrollbackLines,
   type AppSettings,
   type SendBehavior,
-  type ServiceUrlBehavior,
 } from "@/hooks/use-settings";
 import { useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
@@ -228,21 +227,10 @@ function getSendBehaviorOptions(t: TFunction) {
   ];
 }
 
-function getServiceUrlBehaviorLabel(t: TFunction, value: ServiceUrlBehavior): string {
-  const labels: Record<ServiceUrlBehavior, string> = {
-    ask: t("settings.general.serviceUrls.options.ask"),
-    "in-app": t("settings.general.serviceUrls.options.inApp"),
-    external: t("settings.general.serviceUrls.options.external"),
-  };
-  return labels[value];
-}
-
 function getActiveLocale(language: string | undefined): SupportedLocale {
   const parsed = parseAppLanguage(language);
   return parsed && parsed !== "system" ? parsed : "en";
 }
-
-const SERVICE_URL_BEHAVIOR_VALUES: ServiceUrlBehavior[] = ["ask", "in-app", "external"];
 
 // ---------------------------------------------------------------------------
 // Section components
@@ -250,18 +238,9 @@ const SERVICE_URL_BEHAVIOR_VALUES: ServiceUrlBehavior[] = ["ask", "in-app", "ext
 
 interface GeneralSectionProps {
   settings: AppSettings;
-  isDesktopApp: boolean;
   handleSendBehaviorChange: (behavior: SendBehavior) => void;
-  handleServiceUrlBehaviorChange: (behavior: ServiceUrlBehavior) => void;
   handleLanguageChange: (language: AppLanguage) => void;
   handleTerminalScrollbackLinesChange: (lines: number) => void;
-}
-
-interface ServiceUrlBehaviorMenuItemProps {
-  value: ServiceUrlBehavior;
-  label: string;
-  selected: boolean;
-  onChange: (value: ServiceUrlBehavior) => void;
 }
 
 interface SendBehaviorMenuItemProps {
@@ -272,22 +251,6 @@ interface SendBehaviorMenuItemProps {
 }
 
 function SendBehaviorMenuItem({ value, label, selected, onChange }: SendBehaviorMenuItemProps) {
-  const handleSelect = useCallback(() => {
-    onChange(value);
-  }, [onChange, value]);
-  return (
-    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
-      {label}
-    </DropdownMenuItem>
-  );
-}
-
-function ServiceUrlBehaviorMenuItem({
-  value,
-  label,
-  selected,
-  onChange,
-}: ServiceUrlBehaviorMenuItemProps) {
   const handleSelect = useCallback(() => {
     onChange(value);
   }, [onChange, value]);
@@ -324,9 +287,7 @@ function LanguageMenuItem({ value, activeLocale, selected, onChange }: LanguageM
 
 function GeneralSection({
   settings,
-  isDesktopApp,
   handleSendBehaviorChange,
-  handleServiceUrlBehaviorChange,
   handleLanguageChange,
   handleTerminalScrollbackLinesChange,
 }: GeneralSectionProps) {
@@ -427,34 +388,6 @@ function GeneralSection({
             </DropdownMenuContent>
           </DropdownMenu>
         </View>
-        {isDesktopApp ? (
-          <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
-            <View style={settingsStyles.rowContent}>
-              <Text style={settingsStyles.rowTitle}>{t("settings.general.serviceUrls.label")}</Text>
-              <Text style={settingsStyles.rowHint}>
-                {t("settings.general.serviceUrls.description")}
-              </Text>
-            </View>
-            <DropdownMenu>
-              <DropdownTrigger style={themeTriggerStyle}>
-                <Text style={styles.themeTriggerText}>
-                  {getServiceUrlBehaviorLabel(t, settings.serviceUrlBehavior)}
-                </Text>
-              </DropdownTrigger>
-              <DropdownMenuContent side="bottom" align="end" width={200}>
-                {SERVICE_URL_BEHAVIOR_VALUES.map((value) => (
-                  <ServiceUrlBehaviorMenuItem
-                    key={value}
-                    value={value}
-                    label={getServiceUrlBehaviorLabel(t, value)}
-                    selected={settings.serviceUrlBehavior === value}
-                    onChange={handleServiceUrlBehaviorChange}
-                  />
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </View>
-        ) : null}
         <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
           <View style={settingsStyles.rowContent}>
             <Text style={settingsStyles.rowTitle}>
@@ -1029,7 +962,6 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const [isRemoteSshVisible, setIsRemoteSshVisible] = useState(false);
   const [isPasteLinkVisible, setIsPasteLinkVisible] = useState(false);
   const lastOpenedAddHostIntentRef = useRef<string | null>(null);
-  const isDesktopApp = false;
   const appVersion = resolveAppVersion();
   const appVersionText = formatVersionWithPrefix(appVersion);
   const isCompactLayout = useIsCompactFormFactor();
@@ -1067,13 +999,6 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const handleSendBehaviorChange = useCallback(
     (behavior: SendBehavior) => {
       void updateSettings({ sendBehavior: behavior });
-    },
-    [updateSettings],
-  );
-
-  const handleServiceUrlBehaviorChange = useCallback(
-    (behavior: ServiceUrlBehavior) => {
-      void updateSettings({ serviceUrlBehavior: behavior });
     },
     [updateSettings],
   );
@@ -1277,9 +1202,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
             return (
               <GeneralSection
                 settings={settings}
-                isDesktopApp={isDesktopApp}
                 handleSendBehaviorChange={handleSendBehaviorChange}
-                handleServiceUrlBehaviorChange={handleServiceUrlBehaviorChange}
                 handleLanguageChange={handleLanguageChange}
                 handleTerminalScrollbackLinesChange={handleTerminalScrollbackLinesChange}
               />

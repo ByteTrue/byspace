@@ -6,22 +6,13 @@ export type KeyboardFocusScope =
   | "browser"
   | "other";
 
-export type MessageInputKeyboardActionKind =
-  | "focus"
-  | "send"
-  | "dictation-toggle"
-  | "dictation-cancel"
-  | "dictation-confirm"
-  | "voice-toggle"
-  | "voice-mute-toggle"
-  | "mode-cycle";
+export type MessageInputKeyboardActionKind = "focus" | "send" | "mode-cycle";
 
 export type KeyboardActionId =
   | "agent.interrupt"
   | "agent.new"
   | "workspace.tab.menu.open"
   | "workspace.tab.target.agent"
-  | "workspace.tab.target.browser"
   | "workspace.tab.target.changes"
   | "workspace.tab.target.files"
   | "workspace.tab.close.current"

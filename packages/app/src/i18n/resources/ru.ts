@@ -112,18 +112,6 @@ export const ru: TranslationResources = {
       stopAgent: "Остановить агента",
       interrupt: "Прервать",
     },
-    voice: {
-      enableVoiceMode: "Включить голосовой режим",
-      voiceMode: "Голосовой режим",
-      unmuteVoiceMode: "Включить голосовой режим",
-      muteVoiceMode: "Отключить голосовой режим",
-      stopDictation: "Остановить диктовку",
-      startDictation: "Начать диктовку",
-      unmuteVoice: "Включить звук",
-      muteVoice: "Отключить голос",
-      dictation: "Диктовка",
-      interruptBeforeVoice: "Остановите агента перед запуском голосового режима",
-    },
     attachments: {
       addImage: "Добавить изображение",
       pasteImage: "Вставить изображение",
@@ -327,15 +315,6 @@ export const ru: TranslationResources = {
     },
     activity: {
       details: "Подробности",
-    },
-    dictation: {
-      start: "Начать диктовку голосом",
-      cancel: "Отменить диктовку",
-      retry: "Повторить диктовку",
-      insert: "Вставить транскрипцию",
-      insertAndSend: "Вставить транскрипцию и отправить",
-      failed: "Диктовка не удалась: {{error}}",
-      failedRetry: "Диктовка не удалась. Нажмите «Повторить».",
     },
     question: {
       submit: "Отправить",
@@ -544,47 +523,6 @@ export const ru: TranslationResources = {
         noOutput: "Нет вывода",
       },
     },
-    browser: {
-      unavailable: {
-        title: "Встроенный браузер доступен только в настольном приложении",
-        subtitle:
-          "Откройте это рабочее пространство в Electron, чтобы использовать встроенный браузер.",
-      },
-      session: "Сеанс браузера {{browserId}}",
-      controls: {
-        back: "Назад",
-        forward: "Вперед",
-        stopLoading: "Остановить загрузку",
-        refresh: "Обновить",
-        browserUrl: "URL браузера",
-        enterUrl: "Введите URL",
-        openDevTools: "Открыть инструменты разработчика браузера",
-        cancelSelector: "Отменить выбор элемента",
-        annotateElement: "Добавить примечание к элементу",
-        screenshotElement: "Сделать снимок элемента",
-        screenshotCopied: "Снимок скопирован в буфер обмена",
-        elementCopied: "Элемент скопирован в буфер обмена",
-        screenshotFailed: "Не удалось скопировать снимок",
-        selectorLoading: "Дождитесь окончания загрузки страницы",
-        selectorFailed: "Не удалось включить режим выбора элемента",
-      },
-      annotate: {
-        title: "Добавить примечание к элементу",
-        placeholder: "Сообщение агенту об этом элементе…",
-        submit: "Прикрепить",
-        cancel: "Отмена",
-      },
-      devices: {
-        label: "Размер экрана устройства",
-        responsive: "Адаптивный режим",
-      },
-      errors: {
-        failedToLoad: "Не удалось загрузить страницу",
-        invalidUrl: "Недопустимый URL браузера",
-        unsupportedProtocol:
-          "URL браузера с неподдерживаемым протоколом заблокирован: {{protocol}}",
-      },
-    },
     terminal: {
       hostDisconnected: "Хост не подключён",
       updateHost: "Обновите хост, чтобы использовать нативный рендерер терминала.",
@@ -635,7 +573,6 @@ export const ru: TranslationResources = {
         newTerminal: "Новый терминал",
         preparingTerminal: "Подготовка вкладки терминала",
         preparingTerminalTooltip: "Подготовка терминала...",
-        newBrowser: "Новый браузер",
         maximizePane: "Развернуть панель",
         restorePane: "Восстановить панель",
         closePane: "Закрыть панель",
@@ -707,7 +644,6 @@ export const ru: TranslationResources = {
         workspaceActions: "Действия с рабочим пространством",
         newAgent: "Новый агент",
         newTerminal: "Новый терминал",
-        newBrowser: "Новая вкладка браузера",
         importSession: "Импортировать сессию",
         copyPath: "Скопировать путь к рабочему пространству",
         copyBranchName: "Скопировать название ветки",
@@ -1305,16 +1241,6 @@ export const ru: TranslationResources = {
     },
   },
   desktop: {
-    windowControls: {
-      minimize: "Свернуть окно",
-      maximize: "Развернуть окно",
-      restore: "Восстановить окно",
-      close: "Закрыть окно",
-    },
-    quitting: {
-      title: "Завершение работы BySpace...",
-      detail: "Остановка локального демона.",
-    },
     daemon: {
       title: "Демон",
       status: {
@@ -1365,102 +1291,9 @@ export const ru: TranslationResources = {
         "Версии приложения и демона не совпадают. Обновите приложение и демон до одной версии, чтобы избежать проблем.",
       loadFailed: "Не удалось загрузить статус встроенного демона.",
     },
-    updates: {
-      status: {
-        checking: "Проверка обновлений приложения...",
-        installing: "Установка обновления приложения...",
-        upToDate: "Установлена последняя версия приложения.",
-        upToDateWithLastChecked:
-          "Установлена последняя версия приложения. Последняя проверка: {{time}}.",
-        pending: "Мы сообщим вам, когда обновление будет готово.",
-        pendingWithLastChecked:
-          "Мы сообщим вам, когда обновление будет готово. Последняя проверка в {{time}}.",
-        pendingWithVersion: "Найдено обновление: {{version}}. Загрузка...",
-        pendingWithVersionAndLastChecked:
-          "Найдено обновление: {{version}}. Загрузка... Последняя проверка в {{time}}.",
-        availableWithVersion: "Обновление готово: {{version}}",
-        availableWithVersionAndLastChecked:
-          "Обновление готово: {{version}}. Последняя проверка: {{time}}.",
-        available: "Обновление приложения готово к установке.",
-        availableWithLastChecked:
-          "Обновление приложения готово к установке. Последняя проверка в {{time}}.",
-        installed: "Обновление приложения установлено. Требуется перезапуск.",
-        failed: "Не удалось обновить приложение.",
-        idle: "Статус обновления ещё не проверен.",
-      },
-      installError: "Не удалось установить обновление настольного приложения.",
-      callout: {
-        installingTitle: "Установка обновления",
-        failedTitle: "Обновление не выполнено",
-        availableTitle: "Доступно обновление",
-        genericError: "Что-то пошло не так.",
-        whatsNew: "Что нового",
-        installingAction: "Установка...",
-        installAndRestart: "Установить и перезапустить",
-        installingDescription: "Установка и перезапуск...",
-        versionReady: "Версия {{version}} готова к установке.",
-        newVersionReady: "Новая версия готова к установке.",
-        restartWarning:
-          "При обновлении приложения работающие агенты будут остановлены, а сеансы терминала закрыты.",
-      },
-    },
     settings: {
       loadFailed: "Не удалось загрузить настройки настольного приложения.",
       saveFailed: "Не удалось сохранить настройки настольного приложения.",
-    },
-    rosetta: {
-      title: "Загрузите сборку Apple Silicon",
-      runningIntel: "Вы используете сборку Paseo для Intel через Rosetta на Apple Silicon.",
-      highCpu:
-        "Из-за этого процессор сильно загружен. Чтобы устранить проблему, скачайте сборку для Apple Silicon.",
-      download: "Скачать",
-    },
-    permissions: {
-      notifications: {
-        allowed: "Уведомления разрешены операционной системой.",
-        denied: "Уведомления запрещены в настройках системы.",
-        notGranted: "Разрешение на уведомления ещё не предоставлено.",
-        webOnly: "Статус системных уведомлений доступен только в веб-среде выполнения.",
-        supported: "Уведомления на рабочем столе поддерживаются.",
-        unsupported: "Уведомления на рабочем столе не поддерживаются на этой платформе.",
-        apiUnavailable: "Web Notification API недоступен в этой среде.",
-        requestsWebOnly:
-          "Запрашивать разрешение на системные уведомления можно только в веб-среде выполнения.",
-        requestUnavailable: "В Web Notification API недоступен метод requestPermission().",
-        requestFailed: "Не удалось запросить разрешение на уведомления: {{message}}",
-        unexpectedState: "Неожиданное состояние разрешения на уведомления: {{state}}",
-      },
-      microphone: {
-        webOnly: "Статус микрофона доступен только в веб-среде выполнения.",
-        navigatorUnavailable: "Объект Navigator недоступен в этой среде.",
-        granted: "Доступ к микрофону разрешён.",
-        denied: "Доступ к микрофону запрещен в настройках системы.",
-        notGranted: "Разрешение на использование микрофона ещё не получено.",
-        unexpectedState: "Неожиданное состояние разрешения на микрофон: {{state}}",
-        statusApiUnavailable:
-          "API проверки состояния микрофона недоступен в этой среде выполнения. Запросите доступ, чтобы проверить его.",
-        queryFailed: "Не удалось проверить состояние микрофона: {{message}}",
-        captureUnavailable: "В этой среде захват микрофона недоступен.",
-        permissionApiUnavailable:
-          "API проверки разрешений недоступен. Запросите доступ, чтобы проверить его.",
-        requestsWebOnly: "Запрашивать доступ к микрофону можно только в веб-среде выполнения.",
-        captureApiUnavailable: "API захвата микрофона недоступен в этой среде.",
-        requestDenied:
-          "Разрешение на использование микрофона было отклонено пользователем или системой.",
-        noDevice: "Микрофон не найден.",
-        requestFailed: "Не удалось запросить доступ к микрофону: {{message}}",
-      },
-      empty: {
-        notifications: "Статус уведомлений ещё не проверен.",
-        microphone: "Состояние микрофона ещё не проверялось.",
-      },
-      testNotification: {
-        title: "Тест уведомлений BySpace",
-        body: "Если вы это видите, уведомления на рабочем столе работают.",
-        notDelivered:
-          "Уведомление не доставлено. Проверьте раздел «Уведомления» в системных настройках.",
-        failed: "Не удалось отправить уведомление.",
-      },
     },
     integrations: {
       cli: {
@@ -2325,12 +2158,9 @@ export const ru: TranslationResources = {
         cycleTheme: "Переключить тему",
         focusMessageInput: "Перейти к полю ввода сообщения",
         cycleAgentMode: "Переключить режим агента",
-        toggleVoiceMode: "Переключить голосовой режим",
-        startStopDictation: "Начать/остановить диктовку",
         interruptAgent: "Прервать агента",
         sendMessage: "Отправить сообщение",
         queueMessage: "Поставить сообщение в очередь",
-        muteUnmuteVoiceMode: "Выключить/включить звук в голосовом режиме",
         switchProject: "Сменить проект",
       },
       helpNotes: {

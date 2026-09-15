@@ -313,25 +313,11 @@ describe("keyboard-shortcuts", () => {
       action: "sidebar.toggle.both",
     },
     {
-      name: "routes Mod+D to message-input action outside terminal",
-      event: { key: "d", code: "KeyD", metaKey: true },
-      context: { isMac: true, focusScope: "message-input" },
-      action: "message-input.action",
-      payload: { kind: "dictation-toggle" },
-    },
-    {
       name: "routes Shift+Tab to cycle agent mode from the message input",
       event: { key: "Tab", code: "Tab", shiftKey: true },
       context: { focusScope: "message-input" },
       action: "message-input.action",
       payload: { kind: "mode-cycle" },
-    },
-    {
-      name: "routes space to voice mute toggle outside editable scopes",
-      event: { key: " ", code: "Space" },
-      context: { focusScope: "other" },
-      action: "message-input.action",
-      payload: { kind: "voice-mute-toggle" },
     },
     {
       name: "routes Escape to agent interrupt outside terminal focus",
@@ -475,11 +461,6 @@ describe("keyboard-shortcuts", () => {
       name: "does not bind Ctrl+B on non-mac while terminal is focused",
       event: { key: "b", code: "KeyB", ctrlKey: true },
       context: { isMac: false, focusScope: "terminal" },
-    },
-    {
-      name: "does not route message-input actions when terminal is focused",
-      event: { key: "d", code: "KeyD", metaKey: true },
-      context: { isMac: true, focusScope: "terminal" },
     },
     {
       name: "does not cycle agent mode outside the message input",
@@ -1142,7 +1123,6 @@ describe("direct new-tab target shortcuts", () => {
   const desktopNonMac = { isMac: false, isDesktop: true };
   const targetCases = [
     ["a", "KeyA", "workspace.tab.target.agent"],
-    ["b", "KeyB", "workspace.tab.target.browser"],
     ["g", "KeyG", "workspace.tab.target.changes"],
     ["e", "KeyE", "workspace.tab.target.files"],
   ] as const;
