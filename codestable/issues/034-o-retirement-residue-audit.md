@@ -55,3 +55,17 @@ issue 025 架构整理后已出现两例 UI 入口漏网（browser tools 设置�
 1. 立即批：A1 browser 标签入口群 + A2 composer 语音面（UI 死分支，收益直观）
 2. 立即批：B 级 i18n 孤儿（纯删除）
 3. 后续批：C 级 server voice shim（动 server 运行时，单独验证）
+
+## 执行状态
+
+### A + B 已完成（commit 56dc4188f，42 文件 +105/−3412）
+
+A1 browser 标签入口群、A2 composer 语音面（含键盘 voice/dictation 动作、`useDictation`/`useVoiceOptional`/`useIsDictationReady`/`DictationOverlay`/`RealtimeVoiceOverlay`/`voice-context` shim 本体删除）、B 级 i18n ×9 语言全部清除。附带发现并处理：`serviceUrlBehavior` 设置项——「in-app」行为的唯一实现就是 browser tab，设置行已删（存储字段保留，不重置用户偏好），`openServiceUrl` 恒定走 external。
+
+审计期间确认保留（不可删）：`SpeakMessage`（渲染历史 speak 工具调用）、workspace tab 的 `kind: "browser"` 标签回退与 tab model 分支（存量持久化 tab）、protocol 全部 wire schema、`src/plugins/` 其余 shim、`pair-device` 组件。
+
+验证：composer/keyboard/workspace-tabs/command-center/i18n/utils/appearance/settings 1193 测试通过；typecheck / lint / format 全绿。
+
+### C 待处理（server voice shim，~250 行）
+
+`speech/*` 六文件、`session/voice/voice-session.ts`、`voice-types/config/permission-policy`、session.ts 的 voice 分发分支、websocket-server 恒 null 方法、paseo-tools 的 `VoiceCallerContext` 残参。动 daemon 运行时，需单独批次与验证。
