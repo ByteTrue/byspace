@@ -1853,8 +1853,9 @@ describe("HostRuntimeStore", () => {
 
     const color = store.setHostColor("srv_appearance", "teal");
     const display = store.setHostBadgeDisplay("srv_appearance", "icon");
-    await Promise.resolve();
-    expect(writeCount).toBe(1);
+    // The appearance mutation awaits the registry-load gate first, so the first
+    // write starts after a few microtask hops, not one.
+    await vi.waitFor(() => expect(writeCount).toBe(1));
 
     firstWrite.resolve();
     await Promise.all([color, display]);

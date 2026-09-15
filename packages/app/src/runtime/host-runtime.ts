@@ -1408,6 +1408,12 @@ export class HostRuntimeStore {
   private ensureHostRegistryLoaded(): Promise<void> {
     if (!this.hostRegistryLoadPromise) {
       this.hostRegistryLoadPromise = this.loadFromStorage();
+      // loadFromStorage() never rejects on its own (catch-all body + guarded
+      // finally); this only guards against a throwing host-list listener during
+      // the finally-block emit, so one bad listener can't brick every mutation.
+      this.hostRegistryLoadPromise.catch(() => {
+        this.hostRegistryLoadPromise = null;
+      });
     }
     return this.hostRegistryLoadPromise;
   }
@@ -1885,6 +1891,9 @@ export class HostRuntimeStore {
     serverId: string,
     apply: (host: HostProfile) => HostProfile,
   ): Promise<void> {
+    // Same cold-load gate as the other mutations: before boot() reads storage,
+    // this.hosts is empty and persisting the mapped result would wipe saved hosts.
+    await this.ensureHostRegistryLoaded();
     const updatedAt = new Date().toISOString();
     const next = this.hosts.map((host) =>
       host.serverId === serverId ? { ...apply(host), updatedAt } : host,
