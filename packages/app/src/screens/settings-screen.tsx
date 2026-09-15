@@ -29,7 +29,6 @@ import {
   Code2,
   Smartphone,
   Sparkles,
-  Blocks,
   PanelsTopLeft,
   ChevronRight,
 } from "lucide-react-native";
@@ -171,7 +170,6 @@ const HOST_SECTION_ITEMS: HostSectionItem[] = [
   { id: "providers", labelKey: "settings.hostSections.providers", icon: Boxes },
   { id: "usage", labelKey: "settings.hostSections.usage", icon: Gauge },
   { id: "terminals", labelKey: "settings.hostSections.terminals", icon: SquareTerminal },
-  { id: "plugins", labelKey: "settings.hostSections.plugins", icon: Blocks },
 ];
 
 function renderHostSettingsContent(
@@ -197,8 +195,6 @@ function renderHostSettingsContent(
       return <HostUsagePage serverId={view.serverId} />;
     case "terminals":
       return <HostTerminalsPage serverId={view.serverId} />;
-    case "plugins":
-      return null; // Plugin management is retired (issue 025 C6)
     case "host":
       return <HostSettingsPage serverId={view.serverId} onHostRemoved={onHostRemoved} />;
   }
@@ -911,7 +907,6 @@ function SettingsSidebar({
   let selectedHostSection: HostSectionSlug | null = null;
   if (view.kind === "host") selectedHostSection = view.section;
   if (view.kind === "project") selectedHostSection = "projects";
-  if (view.kind === "plugin") selectedHostSection = "plugins";
 
   const sidebarBody = (
     <>
@@ -1045,9 +1040,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const sortedHosts = useSortedHosts(hosts, localServerId);
   const lastWorkspaceSelection = useLastWorkspaceSelection();
   const routedSettingsHostServerId =
-    view.kind === "host" || view.kind === "project" || view.kind === "plugin"
-      ? view.serverId
-      : null;
+    view.kind === "host" || view.kind === "project" ? view.serverId : null;
   const [selectedSettingsHostServerId, setSelectedSettingsHostServerId] = useState<string | null>(
     routedSettingsHostServerId ?? lastWorkspaceSelection?.serverId ?? null,
   );
@@ -1062,8 +1055,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   // The host the four sections scope to: the host on the active view, otherwise
   // the picker choice, otherwise the connected local daemon, otherwise the first host.
   const activeHostServerId = useMemo(() => {
-    if (view.kind === "host" || view.kind === "project" || view.kind === "plugin")
-      return view.serverId;
+    if (view.kind === "host" || view.kind === "project") return view.serverId;
     return resolveActiveHostServerId({
       selectedServerId: selectedSettingsHostServerId,
       localServerId,
@@ -1245,10 +1237,6 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     Icon: ComponentType<{ size: number; color: string }>;
     titleAccessory?: ReactNode;
   } | null => {
-    if (view.kind === "plugin") {
-      // Plugin settings screens are retired (issue 025 C6).
-      return null;
-    }
     if (view.kind === "host") {
       const item = HOST_SECTION_ITEMS.find((s) => s.id === view.section);
       if (!item) return null;
@@ -1270,7 +1258,6 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     content = null;
   } else {
     content = (() => {
-      if (view.kind === "plugin") return null; // Plugin settings are retired (issue 025 C6)
       if (view.kind === "host") {
         return renderHostSettingsContent(view, handleHostRemoved);
       }
