@@ -5,6 +5,23 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.14.2 - 2026-09-15
+
+### Added
+
+- Removing a project configured across multiple hosts now opens a dialog to remove it from one host or from all hosts
+- New workspace creation now selects a project first across all connected hosts, then narrows the host picker to hosts where that project exists
+- Added one-click sidebar project sorting by workspace activity, then name
+
+### Fixed
+
+- Fixed the Tasks pill above the composer not appearing during live execution for Pi and other third-party providers that report progress as a plain tool call instead of a synthesized todo item
+- Fixed a blank gap rendering above the sidebar navigation rows
+
+### Improved
+
+- Custom timeline messages (e.g. background-exit) now render as a collapsible card matching tool calls, with a one-line preview instead of a fixed six-line clamp
+
 ## 0.14.1 - 2026-09-14
 
 ### Added
