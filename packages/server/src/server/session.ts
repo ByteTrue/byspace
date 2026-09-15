@@ -2020,9 +2020,9 @@ export class Session {
     switch (msg.type) {
       // COMPAT(voice): voice and dictation are retired (issue 025 C8), but the wire
       // messages still parse. `set_voice_mode` carries a requestId that a pre-0.14 client
-      // waits on, so it gets an explicit refusal instead of hanging; the audio and
-      // dictation-stream messages have no response contract and are dropped.
-      // Remove after 2027-09-15.
+      // waits on for the full RPC timeout before failing, so it gets an explicit refusal
+      // instead; the audio and dictation-stream messages have no response contract and are
+      // dropped. Remove after 2027-09-15.
       case "voice_audio_chunk":
       case "abort_request":
       case "audio_played":
