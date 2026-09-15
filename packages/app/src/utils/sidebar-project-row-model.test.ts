@@ -268,7 +268,7 @@ describe("buildSidebarProjectRowModel", () => {
     expect(resolveSidebarProjectLocalPath(groupedProject, "missing")).toBe("");
   });
 
-  it("renders an empty project as an expandable section", () => {
+  it("renders an empty project with no expand toggle", () => {
     const result = buildSidebarProjectRowModel({
       project: project({ projectKind: "git", workspaces: [] }),
       collapsed: false,
@@ -276,7 +276,7 @@ describe("buildSidebarProjectRowModel", () => {
 
     expect(result).toEqual({
       kind: "project_section",
-      chevron: "collapse",
+      chevron: null,
       trailingAction: {
         kind: "new_workspace",
         target: { serverId: "srv", projectId: "project-srv", iconWorkingDir: "/repo" },

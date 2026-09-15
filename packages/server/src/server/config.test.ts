@@ -48,14 +48,14 @@ describe("server config", () => {
       path.join(paseoHome, "config.json"),
       JSON.stringify({
         ...snapshot,
-        daemon: { ...snapshot.daemon, browserTools: { enabled: true } },
+        daemon: { ...snapshot.daemon, appendSystemPrompt: "Be terse." },
       }),
     );
 
-    expect(resolveConfigFromPersisted(paseoHome, snapshot, { env: {} }).browserToolsEnabled).toBe(
-      false,
+    expect(resolveConfigFromPersisted(paseoHome, snapshot, { env: {} }).appendSystemPrompt).toBe(
+      "",
     );
-    expect(loadConfig(paseoHome, { env: {} }).browserToolsEnabled).toBe(true);
+    expect(loadConfig(paseoHome, { env: {} }).appendSystemPrompt).toBe("Be terse.");
   });
 
   test("records mutable and startup launch overrides by persisted leaf", async () => {

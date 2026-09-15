@@ -310,7 +310,6 @@ function makeConfig(providers: MutableDaemonConfig["providers"] = {}): MutableDa
   return {
     relay: { enabled: false },
     mcp: { injectIntoAgents: false },
-    browserTools: { enabled: false },
     providers,
     metadataGeneration: { providers: [] },
     autoArchiveAfterMerge: false,

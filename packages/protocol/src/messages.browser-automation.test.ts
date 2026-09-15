@@ -156,12 +156,14 @@ describe("browser automation protocol integration", () => {
     expect(parsed.type).toBe("browser.automation.execute.response");
   });
 
-  test("mutable daemon config defaults browser tools off and accepts opt-in patches", () => {
+  test("daemon config keeps parsing legacy browserTools payloads after retirement", () => {
+    // COMPAT(browserTools): the field is retired and unread, but absent must stay valid
+    // and older-client payloads must still parse.
     expect(
       MutableDaemonConfigSchema.parse({
         mcp: { injectIntoAgents: false },
       }).browserTools,
-    ).toEqual({ enabled: false });
+    ).toBeUndefined();
 
     expect(
       MutableDaemonConfigPatchSchema.parse({

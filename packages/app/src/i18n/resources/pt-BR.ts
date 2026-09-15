@@ -2199,6 +2199,16 @@ export const ptBR: TranslationResources = {
     },
     appearance: {
       theme: {
+        terminal: {
+          title: "Terminal",
+          hint: "Esquema de cores do terminal, independente do tema do aplicativo",
+          accessibilityLabel: "Aparência do terminal: {{value}}",
+          options: {
+            match: "Igual ao aplicativo",
+            dark: "Escuro",
+            light: "Claro",
+          },
+        },
         title: "Tema",
         accessibilityLabel: "Tema: {{value}}",
         options: {

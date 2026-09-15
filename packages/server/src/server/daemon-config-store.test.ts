@@ -21,7 +21,6 @@ function reloadableConfig(
       enabled: relay.enabled ?? options.relayEnabledFallback ?? true,
     },
     mcp: { enabled: true, injectIntoAgents: false },
-    browserTools: { enabled: daemon.browserTools?.enabled ?? false },
     providers: (agents.providers ?? {}) as MutableDaemonConfig["providers"],
     metadataGeneration: { providers: agents.metadataGeneration?.providers ?? [] },
     autoArchiveAfterMerge: daemon.autoArchiveAfterMerge ?? false,
@@ -104,7 +103,6 @@ describe("DaemonConfigStore", () => {
     const store = new DaemonConfigStore(paseoHome, {
       relay: { enabled: false },
       mcp: { injectIntoAgents: false },
-      browserTools: { enabled: false },
       providers: {},
       metadataGeneration: { providers: [] },
       autoArchiveAfterMerge: false,
@@ -126,7 +124,6 @@ describe("DaemonConfigStore", () => {
     const store = new DaemonConfigStore(paseoHome, {
       relay: { enabled: false },
       mcp: { injectIntoAgents: false },
-      browserTools: { enabled: false },
       providers: {},
       metadataGeneration: { providers: [] },
       autoArchiveAfterMerge: false,
@@ -151,7 +148,6 @@ describe("DaemonConfigStore", () => {
     const store = new DaemonConfigStore(paseoHome, {
       relay: { enabled: false },
       mcp: { injectIntoAgents: false },
-      browserTools: { enabled: false },
       providers: {},
       metadataGeneration: { providers: [] },
       autoArchiveAfterMerge: false,
@@ -197,7 +193,6 @@ describe("DaemonConfigStore", () => {
     const store = new DaemonConfigStore(paseoHome, {
       relay: { enabled: false },
       mcp: { injectIntoAgents: false },
-      browserTools: { enabled: false },
       providers: {},
       metadataGeneration: { providers: [] },
       autoArchiveAfterMerge: false,
@@ -221,7 +216,6 @@ describe("DaemonConfigStore", () => {
     const store = new DaemonConfigStore(paseoHome, {
       relay: { enabled: false },
       mcp: { injectIntoAgents: false },
-      browserTools: { enabled: false },
       providers: {},
       metadataGeneration: { providers: [] },
       autoArchiveAfterMerge: false,
@@ -247,30 +241,27 @@ describe("DaemonConfigStore", () => {
     const store = new DaemonConfigStore(paseoHome, {
       relay: { enabled: false },
       mcp: { injectIntoAgents: false },
-      browserTools: { enabled: false },
       providers: {},
       metadataGeneration: { providers: [] },
       autoArchiveAfterMerge: false,
       enableTerminalAgentHooks: false,
       appendSystemPrompt: "",
     });
-    let browserToolsEnabled = false;
+    let archivedAfterApply = false;
     store.onApply((next, previous) => {
-      browserToolsEnabled = next.browserTools.enabled;
+      archivedAfterApply = next.autoArchiveAfterMerge;
       return () => {
-        browserToolsEnabled = previous.browserTools.enabled;
+        archivedAfterApply = previous.autoArchiveAfterMerge;
       };
     });
     store.onApply(() => {
       throw new Error("Provider refresh failed");
     });
 
-    expect(() => store.patch({ browserTools: { enabled: true } })).toThrow(
-      "Provider refresh failed",
-    );
-    expect(browserToolsEnabled).toBe(false);
-    expect(store.get().browserTools.enabled).toBe(false);
-    expect(loadPersistedConfig(paseoHome).daemon?.browserTools?.enabled).toBeUndefined();
+    expect(() => store.patch({ autoArchiveAfterMerge: true })).toThrow("Provider refresh failed");
+    expect(archivedAfterApply).toBe(false);
+    expect(store.get().autoArchiveAfterMerge).toBe(false);
+    expect(loadPersistedConfig(paseoHome).daemon?.autoArchiveAfterMerge).toBeUndefined();
   });
 
   test("rejects relay patches when a launch override owns the setting", () => {
@@ -281,7 +272,6 @@ describe("DaemonConfigStore", () => {
       {
         relay: { enabled: false },
         mcp: { injectIntoAgents: false },
-        browserTools: { enabled: false },
         providers: {},
         metadataGeneration: { providers: [] },
         autoArchiveAfterMerge: false,
@@ -313,7 +303,6 @@ describe("DaemonConfigStore", () => {
       {
         relay: { enabled: true },
         mcp: { injectIntoAgents: false },
-        browserTools: { enabled: false },
         providers: {},
         metadataGeneration: { providers: [] },
         autoArchiveAfterMerge: false,
@@ -324,7 +313,7 @@ describe("DaemonConfigStore", () => {
       { relayEnabledMutable: false },
     );
 
-    store.patch({ browserTools: { enabled: true } });
+    store.patch({ autoArchiveAfterMerge: true });
 
     expect(loadPersistedConfig(paseoHome).daemon?.relay?.enabled).toBe(false);
   });
@@ -344,7 +333,6 @@ describe("DaemonConfigStore", () => {
         git: { maxProcessesPerSecond: 7, maxProcessConcurrency: 2 },
         app: { baseUrl: "https://launch.example.test" },
         catalogRefreshTimeoutMs: 9_000,
-        browserTools: { enabled: false },
         providers: {},
         metadataGeneration: { providers: [] },
         autoArchiveAfterMerge: false,
@@ -400,7 +388,6 @@ describe("DaemonConfigStore", () => {
       paseoHome,
       {
         mcp: { injectIntoAgents: false },
-        browserTools: { enabled: false },
         providers: {},
         metadataGeneration: { providers: [] },
         autoArchiveAfterMerge: false,
@@ -434,7 +421,6 @@ describe("DaemonConfigStore", () => {
     );
     const store = new DaemonConfigStore(paseoHome, {
       mcp: { injectIntoAgents: true },
-      browserTools: { enabled: false },
       providers: { claude: { enabled: false } },
       metadataGeneration: { providers: [] },
       autoArchiveAfterMerge: false,
@@ -499,7 +485,6 @@ describe("DaemonConfigStore", () => {
       paseoHome,
       {
         mcp: { injectIntoAgents: false },
-        browserTools: { enabled: false },
         providers: {
           gemini: {},
           claude: { enabled: false },
@@ -550,7 +535,6 @@ describe("DaemonConfigStore", () => {
       paseoHome,
       {
         mcp: { injectIntoAgents: false },
-        browserTools: { enabled: false },
         providers: { gemini: {} },
         metadataGeneration: { providers: [] },
         autoArchiveAfterMerge: false,
@@ -604,7 +588,6 @@ describe("DaemonConfigStore", () => {
       paseoHome,
       {
         mcp: { injectIntoAgents: false },
-        browserTools: { enabled: false },
         providers: {
           gemini: {},
           claude: { enabled: false },
@@ -663,7 +646,6 @@ describe("DaemonConfigStore", () => {
       paseoHome,
       {
         mcp: { injectIntoAgents: false },
-        browserTools: { enabled: false },
         providers: {},
         metadataGeneration: { providers: [] },
         autoArchiveAfterMerge: false,
@@ -689,7 +671,6 @@ describe("DaemonConfigStore", () => {
       paseoHome,
       {
         mcp: { injectIntoAgents: false },
-        browserTools: { enabled: false },
         providers: {},
         metadataGeneration: { providers: [] },
         autoArchiveAfterMerge: false,
@@ -707,29 +688,6 @@ describe("DaemonConfigStore", () => {
     expect(persisted.daemon?.appendSystemPrompt).toBe("Prefer terse replies.");
   });
 
-  test("patch persists browser tools opt-in into config.json", () => {
-    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
-    tempDirs.push(paseoHome);
-
-    const store = new DaemonConfigStore(
-      paseoHome,
-      {
-        mcp: { injectIntoAgents: false },
-        browserTools: { enabled: false },
-        providers: {},
-        metadataGeneration: { providers: [] },
-        autoArchiveAfterMerge: false,
-        appendSystemPrompt: "",
-      },
-      undefined,
-    );
-
-    store.patch({ browserTools: { enabled: true } });
-
-    const persisted = loadPersistedConfig(paseoHome);
-    expect(persisted.daemon?.browserTools).toEqual({ enabled: true });
-  });
-
   test("patch persists provider additional models into config.json", () => {
     const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
     tempDirs.push(paseoHome);
@@ -738,7 +696,6 @@ describe("DaemonConfigStore", () => {
       paseoHome,
       {
         mcp: { injectIntoAgents: false },
-        browserTools: { enabled: false },
         providers: {},
         metadataGeneration: { providers: [] },
         autoArchiveAfterMerge: false,
@@ -780,7 +737,6 @@ describe("DaemonConfigStore", () => {
       paseoHome,
       {
         mcp: { injectIntoAgents: false },
-        browserTools: { enabled: false },
         providers: {},
         metadataGeneration: { providers: [] },
         autoArchiveAfterMerge: false,
@@ -903,7 +859,6 @@ describe("DaemonConfigStore", () => {
       paseoHome,
       {
         mcp: { injectIntoAgents: false },
-        browserTools: { enabled: false },
         providers: {},
         metadataGeneration: { providers: [] },
         autoArchiveAfterMerge: false,
@@ -956,7 +911,6 @@ describe("DaemonConfigStore", () => {
       paseoHome,
       {
         mcp: { injectIntoAgents: false },
-        browserTools: { enabled: false },
         providers: {},
         autoArchiveAfterMerge: false,
         enableTerminalAgentHooks: false,
@@ -980,7 +934,6 @@ describe("DaemonConfigStore", () => {
       paseoHome,
       {
         mcp: { injectIntoAgents: false },
-        browserTools: { enabled: false },
         providers: {},
         autoArchiveAfterMerge: false,
         enableTerminalAgentHooks: false,
@@ -1065,21 +1018,21 @@ describe("DaemonConfigStore reload", () => {
       daemon: {
         ...persisted.daemon,
         listen: "127.0.0.1:7777",
-        browserTools: { enabled: true },
+        appendSystemPrompt: "Be terse.",
         git: { maxProcessesPerSecond: 12, maxProcessConcurrency: 3 },
       },
     });
 
     expect(store.reload()).toEqual({
       appliedPaths: [
-        "daemon.browserTools.enabled",
+        "daemon.appendSystemPrompt",
         "daemon.git.maxProcessConcurrency",
         "daemon.git.maxProcessesPerSecond",
       ],
       restartRequiredPaths: ["daemon.listen"],
       overrideControlledPaths: [],
     });
-    expect(store.get().browserTools.enabled).toBe(true);
+    expect(store.get().appendSystemPrompt).toBe("Be terse.");
     expect(store.get().git).toEqual({ maxProcessesPerSecond: 12, maxProcessConcurrency: 3 });
   });
 
@@ -1136,7 +1089,7 @@ describe("DaemonConfigStore reload", () => {
         version: 1,
         daemon: {
           listen: "127.0.0.1:7777",
-          browserTools: { enabled: true },
+          appendSystemPrompt: "Be terse.",
           relay: {
             enabled: false,
             endpoint: "relay.example.test:443",
@@ -1152,7 +1105,7 @@ describe("DaemonConfigStore reload", () => {
     writeConfig(paseoHome, { version: 1 });
 
     expect(store.reload()).toEqual({
-      appliedPaths: ["daemon.browserTools.enabled"],
+      appliedPaths: ["daemon.appendSystemPrompt"],
       restartRequiredPaths: [
         "daemon.listen",
         "daemon.relay.endpoint",
@@ -1188,11 +1141,11 @@ describe("DaemonConfigStore reload", () => {
     const { paseoHome, store } = createReloadableStore();
     writeFileSync(path.join(paseoHome, "config.json"), "{ nope\n");
     expect(() => store.reload()).toThrow("Invalid JSON");
-    expect(store.get().browserTools.enabled).toBe(false);
+    expect(store.get().autoArchiveAfterMerge).toBe(false);
 
-    writeConfig(paseoHome, { daemon: { browserTools: { enabled: "yes" } } });
+    writeConfig(paseoHome, { daemon: { autoArchiveAfterMerge: "yes" } });
     expect(() => store.reload()).toThrow("Invalid config");
-    expect(store.get().browserTools.enabled).toBe(false);
+    expect(store.get().autoArchiveAfterMerge).toBe(false);
   });
 
   test("removing providers and optional profiles clears live state", () => {

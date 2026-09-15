@@ -29,6 +29,8 @@ export type PullRequestOpenLocation = "main" | "side" | "explorer";
 /** What a sidebar workspace row shows in the space to the right of its title. */
 export type SidebarWorkspaceTrailing = "diff" | "timestamp" | "none";
 export type ToolCallDetailLevel = "overview" | "detailed";
+/** Terminal scheme independent of the app theme: "match" follows the app theme. */
+export type TerminalAppearance = "match" | "dark" | "light";
 
 const THEME_PREFERENCE_NAMES = THEME_OPTIONS.map((option) => option.name) as [
   ThemePreference,
@@ -61,6 +63,7 @@ export const MAX_FONT_FAMILY_LENGTH = 200;
 
 export interface AppSettings {
   theme: ThemePreference;
+  terminalAppearance: TerminalAppearance;
   language: AppLanguage;
   sendBehavior: SendBehavior;
   serviceUrlBehavior: ServiceUrlBehavior;
@@ -114,6 +117,7 @@ export interface Settings extends AppSettings {
 
 export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   theme: DEFAULT_THEME_PREFERENCE,
+  terminalAppearance: "match",
   language: "system",
   sendBehavior: "steer",
   serviceUrlBehavior: "ask",
@@ -186,6 +190,7 @@ const DEFAULT_STORED_APP_SETTINGS = {
 const StoredAppSettingsSchema = z
   .looseObject({
     theme: ThemePreferenceSchema.catch(DEFAULT_THEME_PREFERENCE),
+    terminalAppearance: z.enum(["match", "dark", "light"]).catch("match"),
     language: z
       .enum(["system", "ar", "en", "es", "fr", "ja", "ko", "pt-BR", "ru", "zh-CN"])
       .catch("system"),

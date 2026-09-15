@@ -150,8 +150,6 @@ import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-sto
 import { createOrchestrationSkills } from "./orchestration-skills/index.js";
 import { resolveConfigFromPersisted, type CliConfigOverrides } from "./config.js";
 import { resolvePaseoToolPolicy } from "./agent/paseo-tool-policy.js";
-import { BrowserToolsBroker } from "./browser-tools/broker.js";
-import { DaemonConfigBrowserToolsPolicy } from "./browser-tools/policy.js";
 import { WorkspaceGitServiceImpl } from "./workspace-git-service.js";
 import { resolveWorkspaceIdForPath } from "./resolve-workspace-id-for-path.js";
 import {
@@ -376,7 +374,6 @@ export interface PaseoDaemonConfig {
   trustedProxies?: true | string[];
   mcpEnabled?: boolean;
   mcpInjectIntoAgents?: boolean;
-  browserToolsEnabled?: boolean;
   git?: {
     maxProcessesPerSecond: number;
     maxProcessConcurrency: number;
@@ -443,7 +440,6 @@ export interface PaseoDaemon {
   terminalManager: TerminalManager;
   serviceProxy: ServiceProxySubsystem;
   scriptRuntimeStore: WorkspaceScriptRuntimeStore;
-  browserToolsBroker: BrowserToolsBroker;
   start(): Promise<void>;
   stop(): Promise<void>;
   getListenTarget(): ListenTarget | null;
@@ -534,7 +530,6 @@ function createInitialMutableDaemonConfig(
     ...(config.providerCatalogRefreshTimeoutMs !== undefined
       ? { catalogRefreshTimeoutMs: config.providerCatalogRefreshTimeoutMs }
       : {}),
-    browserTools: { enabled: config.browserToolsEnabled ?? false },
     providers,
     metadataGeneration: {
       providers: config.metadataGeneration?.providers ?? [],
@@ -595,9 +590,6 @@ export async function createPaseoDaemon(
   void orchestrationSkills.autoUpdate().catch((error) => {
     logger.error({ err: error }, "Failed to maintain orchestration skills at startup");
   });
-  const browserToolsPolicy = new DaemonConfigBrowserToolsPolicy(daemonConfigStore);
-  const browserToolsBroker = new BrowserToolsBroker({});
-
   const serverId = getOrCreateServerId(config.paseoHome, { logger });
   const daemonKeyPair = await loadOrCreateDaemonKeyPair(config.paseoHome, logger);
   const managedProcesses = createBootstrapManagedProcessRegistry(config, logger);
@@ -1312,8 +1304,6 @@ export async function createPaseoDaemon(
       }
       return renamed;
     },
-    browserToolsEnabled: browserToolsPolicy.isEnabled(),
-    browserToolsBroker,
     paseoToolPolicy:
       runtime.paseoToolPolicy ??
       (runtime.callerAgentId ? agentManager.getPaseoToolPolicy(runtime.callerAgentId) : undefined),
@@ -1599,7 +1589,6 @@ export async function createPaseoDaemon(
                   },
               },
               serviceProxyPublicBaseUrl,
-              browserToolsBroker,
               workspaceSetupRuntime,
               orchestrationSkills,
               workspaceLabelService,
@@ -1707,7 +1696,6 @@ export async function createPaseoDaemon(
     terminalManager,
     serviceProxy,
     scriptRuntimeStore,
-    browserToolsBroker,
     start,
     stop,
     getListenTarget: () => boundListenTarget,

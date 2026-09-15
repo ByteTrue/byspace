@@ -2216,6 +2216,16 @@ export const es: TranslationResources = {
     },
     appearance: {
       theme: {
+        terminal: {
+          title: "Terminal",
+          hint: "Esquema de colores del terminal, independiente del tema de la aplicación",
+          accessibilityLabel: "Apariencia del terminal: {{value}}",
+          options: {
+            match: "Igual que la aplicación",
+            dark: "Oscuro",
+            light: "Claro",
+          },
+        },
         title: "Tema",
         accessibilityLabel: "Tema:{{value}}",
         options: {

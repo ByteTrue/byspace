@@ -2220,6 +2220,16 @@ export const fr: TranslationResources = {
     },
     appearance: {
       theme: {
+        terminal: {
+          title: "Terminal",
+          hint: "Jeu de couleurs du terminal, indépendant du thème de l’application",
+          accessibilityLabel: "Apparence du terminal : {{value}}",
+          options: {
+            match: "Comme l’application",
+            dark: "Sombre",
+            light: "Clair",
+          },
+        },
         title: "Thème",
         accessibilityLabel: "Thème:{{value}}",
         options: {

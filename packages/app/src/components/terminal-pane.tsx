@@ -56,6 +56,7 @@ import { resolveTerminalRestoreOptions } from "@/terminal/runtime/terminal-resto
 import { usePanelStore } from "@/stores/panel-store";
 import { useBlockMobilePanelOpenGestures } from "@/mobile-panels/provider";
 import { useSessionStore } from "@/stores/session-store";
+import { resolveTerminalTheme } from "@/appearance/terminal-theme";
 import { toXtermTheme } from "@/utils/to-xterm-theme";
 import TerminalEmulator, { type TerminalEmulatorHandle } from "./terminal-emulator";
 import { TerminalFloatingCopyAction, TerminalPasteAction } from "./terminal-copy-paste-actions";
@@ -123,25 +124,37 @@ function terminalScopeKey(input: { serverId: string; cwd: string }): string {
   return `${input.serverId}:${input.cwd}`;
 }
 
+/** Terminal-scheme colors for the virtual keyboard, resolved by the pane. */
+interface TerminalKeyPalette {
+  border: string;
+  surface: string;
+  surfaceHovered: string;
+  activeBorder: string;
+  text: string;
+  textActive: string;
+}
+
 interface ModifierButtonProps {
   modifier: keyof ModifierState;
   active: boolean;
+  palette: TerminalKeyPalette;
   onToggle: (modifier: keyof ModifierState) => void;
 }
 
-function ModifierButton({ modifier, active, onToggle }: ModifierButtonProps) {
+function ModifierButton({ modifier, active, palette, onToggle }: ModifierButtonProps) {
   const handlePress = useCallback(() => onToggle(modifier), [onToggle, modifier]);
   const pressableStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.keyButton,
-      active && styles.keyButtonActive,
-      (Boolean(hovered) || pressed) && styles.keyButtonHovered,
+      { backgroundColor: palette.surface, borderColor: palette.border },
+      active && { borderColor: palette.activeBorder, backgroundColor: palette.surfaceHovered },
+      (Boolean(hovered) || pressed) && { backgroundColor: palette.surfaceHovered },
     ],
-    [active],
+    [active, palette],
   );
   const textStyle = useMemo(
-    () => [styles.keyButtonText, active && styles.keyButtonTextActive],
-    [active],
+    () => [styles.keyButtonText, { color: palette.text }, active && { color: palette.textActive }],
+    [active, palette],
   );
   return (
     <Pressable testID={`terminal-key-${modifier}`} onPress={handlePress} style={pressableStyle}>
@@ -154,21 +167,24 @@ interface VirtualKeyButtonProps {
   id: string;
   label: string;
   keyValue: string;
+  palette: TerminalKeyPalette;
   onSend: (key: string) => void;
 }
 
-function VirtualKeyButton({ id, label, keyValue, onSend }: VirtualKeyButtonProps) {
+function VirtualKeyButton({ id, label, keyValue, palette, onSend }: VirtualKeyButtonProps) {
   const handlePress = useCallback(() => onSend(keyValue), [onSend, keyValue]);
   const pressableStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.keyButton,
-      (Boolean(hovered) || pressed) && styles.keyButtonHovered,
+      { backgroundColor: palette.surface, borderColor: palette.border },
+      (Boolean(hovered) || pressed) && { backgroundColor: palette.surfaceHovered },
     ],
-    [],
+    [palette],
   );
+  const textStyle = useMemo(() => [styles.keyButtonText, { color: palette.text }], [palette]);
   return (
     <Pressable testID={`terminal-key-${id}`} onPress={handlePress} style={pressableStyle}>
-      <Text style={styles.keyButtonText}>{label}</Text>
+      <Text style={textStyle}>{label}</Text>
     </Pressable>
   );
 }
@@ -176,12 +192,14 @@ function VirtualKeyButton({ id, label, keyValue, onSend }: VirtualKeyButtonProps
 interface KeyboardToggleButtonProps {
   isKeyboardVisible: boolean;
   iconColor: string;
+  palette: TerminalKeyPalette;
   onToggle: () => void;
 }
 
 function KeyboardToggleButton({
   isKeyboardVisible,
   iconColor,
+  palette,
   onToggle,
 }: KeyboardToggleButtonProps) {
   const label = isKeyboardVisible ? "Hide keyboard" : "Show keyboard";
@@ -189,9 +207,10 @@ function KeyboardToggleButton({
   const pressableStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.keyButton,
-      (Boolean(hovered) || pressed) && styles.keyButtonHovered,
+      { backgroundColor: palette.surface, borderColor: palette.border },
+      (Boolean(hovered) || pressed) && { backgroundColor: palette.surfaceHovered },
     ],
-    [],
+    [palette],
   );
 
   return (
@@ -222,7 +241,15 @@ export function TerminalPane({
   const isAppActivelyVisible = useAppActivelyVisible();
   const { theme } = useUnistyles();
   const { settings } = useAppSettings();
-  const xtermTheme = useMemo(() => toXtermTheme(theme.colors.terminal), [theme]);
+  // The terminal keeps its own scheme, independent of the app theme when the
+  // user forces one. Everything painted over the terminal surface — xterm
+  // palette, virtual keyboard, inline error row — follows the resolved
+  // terminal theme, not the app theme.
+  const terminalTheme = useMemo(
+    () => resolveTerminalTheme(theme, settings.terminalAppearance),
+    [theme, settings.terminalAppearance],
+  );
+  const xtermTheme = useMemo(() => toXtermTheme(terminalTheme.colors.terminal), [terminalTheme]);
   const terminalFontFamily = useMemo(() => {
     const trimmed = settings.monoFontFamily.trim();
     return trimmed.length > 0 ? trimmed : undefined;
@@ -1062,8 +1089,23 @@ export function TerminalPane({
   );
 
   const containerStyle = useMemo(
-    () => [styles.container, keyboardPaddingStyle],
-    [keyboardPaddingStyle],
+    () => [
+      styles.container,
+      keyboardPaddingStyle,
+      { backgroundColor: terminalTheme.colors.surface0 },
+    ],
+    [keyboardPaddingStyle, terminalTheme],
+  );
+  const terminalKeyPalette = useMemo<TerminalKeyPalette>(
+    () => ({
+      border: terminalTheme.colors.border,
+      surface: terminalTheme.colors.surface1,
+      surfaceHovered: terminalTheme.colors.surface2,
+      activeBorder: terminalTheme.colors.primary,
+      text: terminalTheme.colors.foregroundMuted,
+      textActive: terminalTheme.colors.foreground,
+    }),
+    [terminalTheme],
   );
 
   const handleSwipeRight = useCallback(() => {
@@ -1083,7 +1125,7 @@ export function TerminalPane({
     isCompact: isMobile,
     isNative,
   });
-  const keyboardToggleIconColor = theme.colors.foregroundMuted;
+  const keyboardToggleIconColor = terminalTheme.colors.foregroundMuted;
 
   const renderVirtualKeyboardControl = (control: TerminalVirtualKeyboardControl) => {
     const controlId = getTerminalVirtualKeyboardControlId(control);
@@ -1095,6 +1137,7 @@ export function TerminalPane({
             id={control.button.id}
             label={control.button.label}
             keyValue={control.button.key}
+            palette={terminalKeyPalette}
             onSend={sendVirtualKey}
           />
         );
@@ -1104,6 +1147,7 @@ export function TerminalPane({
             key={controlId}
             modifier={control.modifier}
             active={modifiers[control.modifier]}
+            palette={terminalKeyPalette}
             onToggle={toggleModifier}
           />
         );
@@ -1121,6 +1165,7 @@ export function TerminalPane({
             key={controlId}
             iconColor={keyboardToggleIconColor}
             isKeyboardVisible={isKeyboardToggleVisible}
+            palette={terminalKeyPalette}
             onToggle={handleKeyboardToggle}
           />
         );
@@ -1137,14 +1182,16 @@ export function TerminalPane({
   if (!client || !isConnected) {
     return (
       <View style={styles.centerState}>
-        <Text style={styles.stateText}>{t("workspace.terminal.hostDisconnected")}</Text>
+        <Text style={[styles.stateText, { color: terminalTheme.colors.foregroundMuted }]}>
+          {t("workspace.terminal.hostDisconnected")}
+        </Text>
       </View>
     );
   }
 
   return (
     <Animated.View style={containerStyle}>
-      <View style={styles.outputContainer}>
+      <View style={[styles.outputContainer, { backgroundColor: terminalTheme.colors.background }]}>
         <View style={styles.terminalGestureContainer}>
           <TerminalEmulator
             ref={emulatorRef}
@@ -1182,7 +1229,7 @@ export function TerminalPane({
 
         {showLoadingOverlay ? (
           <View style={styles.attachOverlay} pointerEvents="none" testID="terminal-attach-loading">
-            <LoadingSpinner size="small" color={theme.colors.foregroundMuted} />
+            <LoadingSpinner size="small" color={terminalTheme.colors.foregroundMuted} />
           </View>
         ) : null}
 
@@ -1194,15 +1241,35 @@ export function TerminalPane({
       </View>
 
       {streamError ? (
-        <View style={styles.errorRow}>
-          <Text style={styles.statusError} numberOfLines={2}>
+        <View
+          style={[
+            styles.errorRow,
+            {
+              borderTopColor: terminalTheme.colors.border,
+              backgroundColor: terminalTheme.colors.surface1,
+            },
+          ]}
+        >
+          <Text
+            style={[styles.statusError, { color: terminalTheme.colors.destructive }]}
+            numberOfLines={2}
+          >
             {streamError}
           </Text>
         </View>
       ) : null}
 
       {isMobile ? (
-        <View style={styles.keyboardContainer} testID="terminal-virtual-keyboard">
+        <View
+          style={[
+            styles.keyboardContainer,
+            {
+              borderTopColor: terminalTheme.colors.border,
+              backgroundColor: terminalTheme.colors.surface0,
+            },
+          ]}
+          testID="terminal-virtual-keyboard"
+        >
           <View style={styles.keyboardRows}>
             {TERMINAL_VIRTUAL_KEYBOARD_ROWS.map((row) => (
               <View
@@ -1223,13 +1290,11 @@ const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: theme.colors.surface0,
   },
   outputContainer: {
     flex: 1,
     minHeight: 0,
     position: "relative",
-    backgroundColor: theme.colors.background,
   },
   terminalGestureContainer: {
     flex: 1,
@@ -1251,17 +1316,12 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[1],
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    backgroundColor: theme.colors.surface1,
   },
   statusError: {
-    color: theme.colors.destructive,
     fontSize: theme.fontSize.sm,
   },
   keyboardContainer: {
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    backgroundColor: theme.colors.surface0,
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[2],
   },
@@ -1279,27 +1339,14 @@ const styles = StyleSheet.create((theme) => ({
     height: 34,
     borderRadius: theme.borderRadius.md,
     borderWidth: 1,
-    borderColor: theme.colors.border,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: theme.spacing[1],
-    backgroundColor: theme.colors.surface1,
-  },
-  keyButtonHovered: {
-    backgroundColor: theme.colors.surface2,
-  },
-  keyButtonActive: {
-    borderColor: theme.colors.primary,
-    backgroundColor: theme.colors.surface2,
   },
   keyButtonText: {
-    color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
     textAlign: "center",
-  },
-  keyButtonTextActive: {
-    color: theme.colors.foreground,
   },
   centerState: {
     flex: 1,

@@ -84,8 +84,6 @@ import {
   type CreatePaseoWorktreeCommandInput,
   createPaseoWorktreeCommand,
 } from "../../worktree/commands.js";
-import { registerBrowserTools } from "../../browser-tools/tools.js";
-import type { BrowserToolsBroker } from "../../browser-tools/broker.js";
 import type {
   PaseoToolCatalog,
   PaseoToolConfig,
@@ -133,8 +131,6 @@ export interface PaseoToolHostDependencies {
     cwd: string,
     firstAgentContext?: FirstAgentContext,
   ) => Promise<string>;
-  browserToolsEnabled?: boolean;
-  browserToolsBroker?: BrowserToolsBroker | null;
   paseoToolPolicy?: ProviderPaseoToolsPolicy;
   paseoHome?: string;
   worktreesRoot?: string;
@@ -1169,15 +1165,6 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
 
   if (options.voiceOnly) {
     return toCatalog();
-  }
-
-  if (options.browserToolsEnabled && options.browserToolsBroker) {
-    registerBrowserTools({
-      registerTool,
-      broker: options.browserToolsBroker,
-      callerAgentId,
-      resolveCallerAgent,
-    });
   }
 
   registerTool(

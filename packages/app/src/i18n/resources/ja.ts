@@ -2183,6 +2183,16 @@ export const ja: TranslationResources = {
     },
     appearance: {
       theme: {
+        terminal: {
+          title: "ターミナル",
+          hint: "ターミナルの配色はアプリのテーマとは独立しています",
+          accessibilityLabel: "ターミナルの外観: {{value}}",
+          options: {
+            match: "アプリに合わせる",
+            dark: "ダーク",
+            light: "ライト",
+          },
+        },
         title: "テーマ",
         accessibilityLabel: "テーマ: {{value}}",
         options: {

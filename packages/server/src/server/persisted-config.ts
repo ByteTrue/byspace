@@ -249,6 +249,9 @@ export const PersistedConfigSchema = z
           })
           .passthrough()
           .optional(),
+        // COMPAT(browserTools): browser automation retired in v0.14.x with the desktop app.
+        // Kept so config files written by older daemons still parse under this strict object;
+        // the value is unread. Remove after 2027-09-15.
         browserTools: z
           .object({
             enabled: z.boolean().optional(),

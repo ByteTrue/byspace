@@ -2201,6 +2201,16 @@ export const ru: TranslationResources = {
     },
     appearance: {
       theme: {
+        terminal: {
+          title: "Терминал",
+          hint: "Цветовая схема терминала, независимая от темы приложения",
+          accessibilityLabel: "Оформление терминала: {{value}}",
+          options: {
+            match: "Как в приложении",
+            dark: "Тёмный",
+            light: "Светлый",
+          },
+        },
         title: "Тема",
         accessibilityLabel: "Тема: {{value}}",
         options: {

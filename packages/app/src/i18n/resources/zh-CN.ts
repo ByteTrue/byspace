@@ -2138,6 +2138,16 @@ export const zhCN: TranslationResources = {
     },
     appearance: {
       theme: {
+        terminal: {
+          title: "终端",
+          hint: "终端配色独立于应用主题",
+          accessibilityLabel: "终端外观：{{value}}",
+          options: {
+            match: "跟随应用",
+            dark: "深色",
+            light: "浅色",
+          },
+        },
         title: "主题",
         accessibilityLabel: "主题：{{value}}",
         options: {

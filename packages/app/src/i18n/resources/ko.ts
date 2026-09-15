@@ -2175,6 +2175,16 @@ export const ko: TranslationResources = {
     },
     appearance: {
       theme: {
+        terminal: {
+          title: "터미널",
+          hint: "터미널 색 구성은 앱 테마와 독립적입니다",
+          accessibilityLabel: "터미널 모양: {{value}}",
+          options: {
+            match: "앱에 맞추기",
+            dark: "다크",
+            light: "라이트",
+          },
+        },
         title: "테마",
         accessibilityLabel: "테마: {{value}}",
         options: {

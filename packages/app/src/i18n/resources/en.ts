@@ -2270,6 +2270,16 @@ export const en = {
     },
     appearance: {
       theme: {
+        terminal: {
+          title: "Terminal",
+          hint: "Terminal color scheme, independent of the app theme",
+          accessibilityLabel: "Terminal appearance: {{value}}",
+          options: {
+            match: "Match app",
+            dark: "Dark",
+            light: "Light",
+          },
+        },
         title: "Theme",
         accessibilityLabel: "Theme: {{value}}",
         options: {

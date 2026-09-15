@@ -2163,6 +2163,16 @@ export const ar: TranslationResources = {
     },
     appearance: {
       theme: {
+        terminal: {
+          title: "الطرفية",
+          hint: "مخطط ألوان الطرفية، مستقل عن سمة التطبيق",
+          accessibilityLabel: "مظهر الطرفية: {{value}}",
+          options: {
+            match: "مطابق للتطبيق",
+            dark: "داكن",
+            light: "فاتح",
+          },
+        },
         title: "سمة",
         accessibilityLabel: "الموضوع:{{value}}",
         options: {
