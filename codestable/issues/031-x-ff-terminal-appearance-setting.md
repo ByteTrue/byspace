@@ -36,6 +36,10 @@ closed: 2026-09-15
 
 - 无影响（新增独立设置，不改既定模型）。
 
+## 后续修正（commit fcfc28ff4）
+
+浏览器 QA 发现 i18n 插入点错误：`terminal` 块被插进了 `appearance.theme` 内部（代码读 `appearance.terminal`），设置行渲染原始 key。9 语言同样错位所以 key-parity 测试查不出来——嵌套位置是 parity 的盲区。已移位，并在 `resources.test.ts` 加 `settings.appearance.terminal` 断言、在 `terminal-theme.test.ts` 加「浅色应用 + 强制深色终端」的实际调色板断言。
+
 ## 顺手发现
 
 - `terminal-pane.tsx` 使用 `useUnistyles()`（docs/unistyles.md 禁用清单中的遗留调用点），本次未新增调用，仅复用该既有订阅派生 `terminalTheme`。
