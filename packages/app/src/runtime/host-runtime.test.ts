@@ -3651,6 +3651,38 @@ describe("HostRuntimeStore", () => {
 
     store.syncHosts([]);
   });
+
+  it("merges a cold-load offer import with hosts that are still being read from storage", async () => {
+    const storedHost = makeHost({ serverId: "srv_stored", label: "Stored host" });
+    const storage = createMemoryHostRuntimeStorage({
+      "@paseo:daemon-registry": JSON.stringify([storedHost]),
+    });
+    const store = new HostRuntimeStore({
+      deps: {
+        createClient: () => new FakeDaemonClient() as unknown as DaemonClient,
+        connectToDaemon: async ({ host }) => ({
+          client: makeConnectedProbeClient(5) as unknown as DaemonClient,
+          serverId: host.serverId,
+          hostname: host.label ?? null,
+        }),
+        getClientId: async () => "cid_test_runtime",
+      },
+      storage,
+    });
+
+    // Cold web load: the offer import fires before boot() has read the stored
+    // registry, so the upsert must wait for the load instead of computing from
+    // an empty list (which would overwrite the stored host).
+    await store.upsertConnectionFromOffer(makeOffer(), "Scanned host");
+
+    expect(store.getHosts().map((host) => host.serverId)).toEqual(["srv_stored", "srv_offer"]);
+    const persisted = JSON.parse((await storage.getItem("@paseo:daemon-registry")) ?? "[]") as {
+      serverId: string;
+    }[];
+    expect(persisted.map((host) => host.serverId)).toEqual(["srv_stored", "srv_offer"]);
+
+    store.syncHosts([]);
+  });
 });
 
 describe("readInitialDaemonConnectionHint", () => {

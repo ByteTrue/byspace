@@ -1353,6 +1353,7 @@ export class HostRuntimeStore {
   private timelineReplicaByServer = new Map<string, TimelineReplica>();
   private configuredOverrideBootstrapInFlight: Promise<void> | null = null;
   private bootPromise: Promise<void> | null = null;
+  private hostRegistryLoadPromise: Promise<void> | null = null;
   private storage: HostRuntimeStorage;
   private replicaCache: ReplicaCache;
   private readonly revokePushNotifications: typeof revokePushNotifications;
@@ -1401,9 +1402,19 @@ export class HostRuntimeStore {
     return this.bootPromise;
   }
 
+  // Mutations must never run against a not-yet-loaded registry: the pairing-offer
+  // import on a cold web load races boot(), and an upsert computed from an empty
+  // registry would replace every stored host instead of merging with it.
+  private ensureHostRegistryLoaded(): Promise<void> {
+    if (!this.hostRegistryLoadPromise) {
+      this.hostRegistryLoadPromise = this.loadFromStorage();
+    }
+    return this.hostRegistryLoadPromise;
+  }
+
   private async runBoot(): Promise<void> {
     const override = readConfiguredLocalDaemonOverride();
-    await this.loadFromStorage();
+    await this.ensureHostRegistryLoaded();
     this.markHostRegistryLoaded();
 
     let isE2E: string | null = null;
@@ -1832,6 +1843,7 @@ export class HostRuntimeStore {
     serverId: string,
     apply: (host: HostProfile) => HostProfile,
   ): Promise<void> {
+    await this.ensureHostRegistryLoaded();
     const updatedAt = new Date().toISOString();
     const next = this.hosts.map((host) =>
       host.serverId === serverId ? { ...apply(host), updatedAt } : host,
@@ -1882,6 +1894,7 @@ export class HostRuntimeStore {
   }
 
   async removeHost(serverId: string): Promise<void> {
+    await this.ensureHostRegistryLoaded();
     await this.revokePushNotifications({ client: this.getClient(serverId), serverId });
     const remaining = this.hosts.filter((daemon) => daemon.serverId !== serverId);
     this.setHostsAndSync(remaining);
@@ -1889,6 +1902,7 @@ export class HostRuntimeStore {
   }
 
   async removeConnection(serverId: string, connectionId: string): Promise<void> {
+    await this.ensureHostRegistryLoaded();
     const host = this.hosts.find((candidate) => candidate.serverId === serverId);
     if (host?.connections.length === 1 && host.connections[0]?.id === connectionId) {
       await this.removeHost(serverId);
@@ -1924,6 +1938,7 @@ export class HostRuntimeStore {
     connection: HostConnection;
     existingClient?: DaemonClient;
   }): Promise<HostProfile> {
+    await this.ensureHostRegistryLoaded();
     const now = new Date().toISOString();
     const next = upsertHostConnectionInProfiles({
       profiles: this.hosts,

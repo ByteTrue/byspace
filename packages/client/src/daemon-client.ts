@@ -971,7 +971,16 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
 const DEFAULT_LIVENESS_TIMEOUT_MS = 5000;
 const LIVENESS_HEARTBEAT_INTERVAL_MS = 10_000;
 const LIVENESS_HEARTBEAT_TIMEOUT_MS = 15_000;
-const LIVENESS_FAILURE_RECONNECT_THRESHOLD = 2;
+// How long the socket may go without ANY inbound traffic before a liveness
+// timeout is allowed to tear it down. This must be measured in wall-clock time,
+// not heartbeat-miss count: mobile browsers (Android PWA especially) silently
+// freeze JS timers while the page looks foregrounded, and on resume the backlog
+// of expired ping timeouts fires within a single tick. A miss counter would
+// reach the teardown threshold instantly in that scenario, killing a healthy
+// connection. 45s ≈ 4 heartbeat intervals: real outages are still detected
+// quickly, while a frozen-then-resumed tab (silent for less than the deadline)
+// survives and refreshes via the next pong.
+const LIVENESS_DEADLINE_MS = 45_000;
 
 /** Default timeout for waiting for connection before sending queued messages */
 const DEFAULT_SEND_QUEUE_TIMEOUT_MS = DEFAULT_SESSION_RPC_TIMEOUT_MS;
@@ -1172,7 +1181,7 @@ export class DaemonClient {
   private pingProbe: PingProbe | null = null;
   private livenessHeartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   private lastLivenessRttMs: number | null = null;
-  private consecutiveLivenessFailures = 0;
+  private lastInboundAtMs: number | null = null;
 
   constructor(private config: DaemonClientConfig) {
     this.logger = config.logger ?? consoleLogger;
@@ -5977,7 +5986,7 @@ export class DaemonClient {
       return;
     }
 
-    this.consecutiveLivenessFailures = 0;
+    this.lastInboundAtMs = perfNow();
 
     if (parsed.data.type === "pong") {
       this.traceInstant("paseo.ws.message.inbound", {
@@ -6017,7 +6026,7 @@ export class DaemonClient {
         messageType: "file",
         opcode: String(fileFrame.opcode),
       });
-      this.consecutiveLivenessFailures = 0;
+      this.lastInboundAtMs = perfNow();
       this.handleFileTransferFrame(fileFrame);
       this.runtimeMetrics?.recordBinaryFrame("other", rawBytes.byteLength, 0);
       return true;
@@ -6041,7 +6050,7 @@ export class DaemonClient {
       messageType: "terminal",
       opcode: String(frame.opcode),
     });
-    this.consecutiveLivenessFailures = 0;
+    this.lastInboundAtMs = perfNow();
     const binaryStartMs = perfNow();
     const terminalEmitOpen = traceEnabled
       ? this.beginTraceSection("paseo.terminal.client.terminal-emit", {
@@ -6287,11 +6296,13 @@ export class DaemonClient {
   }
 
   private recordLivenessFailure(error: Error): void {
-    this.consecutiveLivenessFailures += 1;
-    if (this.consecutiveLivenessFailures < LIVENESS_FAILURE_RECONNECT_THRESHOLD) {
+    // Teardown only once the socket has been silent for the full deadline, so a
+    // burst of backlogged ping timeouts after a mobile tab unfreezes does not
+    // reset a connection whose daemon is still alive.
+    const silentForMs = this.lastInboundAtMs === null ? 0 : perfNow() - this.lastInboundAtMs;
+    if (silentForMs < LIVENESS_DEADLINE_MS) {
       return;
     }
-    this.consecutiveLivenessFailures = 0;
     this.lastErrorValue = error.message;
     this.disposeTransport(1001, "Liveness check timed out");
     this.scheduleReconnect({
