@@ -1920,17 +1920,17 @@ export const ar: TranslationResources = {
       versionDiffers: "الإصدار يختلف عن هذا الجهاز",
     },
     appearance: {
-      theme: {
-        terminal: {
-          title: "الطرفية",
-          hint: "مخطط ألوان الطرفية، مستقل عن سمة التطبيق",
-          accessibilityLabel: "مظهر الطرفية: {{value}}",
-          options: {
-            match: "مطابق للتطبيق",
-            dark: "داكن",
-            light: "فاتح",
-          },
+      terminal: {
+        title: "الطرفية",
+        hint: "مخطط ألوان الطرفية، مستقل عن سمة التطبيق",
+        accessibilityLabel: "مظهر الطرفية: {{value}}",
+        options: {
+          match: "مطابق للتطبيق",
+          dark: "داكن",
+          light: "فاتح",
         },
+      },
+      theme: {
         title: "سمة",
         accessibilityLabel: "الموضوع:{{value}}",
         options: {

@@ -1967,17 +1967,17 @@ export const en = {
       versionDiffers: "Version differs from this device",
     },
     appearance: {
-      theme: {
-        terminal: {
-          title: "Terminal",
-          hint: "Terminal color scheme, independent of the app theme",
-          accessibilityLabel: "Terminal appearance: {{value}}",
-          options: {
-            match: "Match app",
-            dark: "Dark",
-            light: "Light",
-          },
+      terminal: {
+        title: "Terminal",
+        hint: "Terminal color scheme, independent of the app theme",
+        accessibilityLabel: "Terminal appearance: {{value}}",
+        options: {
+          match: "Match app",
+          dark: "Dark",
+          light: "Light",
         },
+      },
+      theme: {
         title: "Theme",
         accessibilityLabel: "Theme: {{value}}",
         options: {

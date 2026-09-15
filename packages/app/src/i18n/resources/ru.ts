@@ -1947,17 +1947,17 @@ export const ru: TranslationResources = {
       versionDiffers: "Версия отличается от версии на этом устройстве",
     },
     appearance: {
-      theme: {
-        terminal: {
-          title: "Терминал",
-          hint: "Цветовая схема терминала, независимая от темы приложения",
-          accessibilityLabel: "Оформление терминала: {{value}}",
-          options: {
-            match: "Как в приложении",
-            dark: "Тёмный",
-            light: "Светлый",
-          },
+      terminal: {
+        title: "Терминал",
+        hint: "Цветовая схема терминала, независимая от темы приложения",
+        accessibilityLabel: "Оформление терминала: {{value}}",
+        options: {
+          match: "Как в приложении",
+          dark: "Тёмный",
+          light: "Светлый",
         },
+      },
+      theme: {
         title: "Тема",
         accessibilityLabel: "Тема: {{value}}",
         options: {

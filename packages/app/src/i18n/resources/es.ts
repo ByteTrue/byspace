@@ -1964,17 +1964,17 @@ export const es: TranslationResources = {
       versionDiffers: "La versión difiere de este dispositivo.",
     },
     appearance: {
-      theme: {
-        terminal: {
-          title: "Terminal",
-          hint: "Esquema de colores del terminal, independiente del tema de la aplicación",
-          accessibilityLabel: "Apariencia del terminal: {{value}}",
-          options: {
-            match: "Igual que la aplicación",
-            dark: "Oscuro",
-            light: "Claro",
-          },
+      terminal: {
+        title: "Terminal",
+        hint: "Esquema de colores del terminal, independiente del tema de la aplicación",
+        accessibilityLabel: "Apariencia del terminal: {{value}}",
+        options: {
+          match: "Igual que la aplicación",
+          dark: "Oscuro",
+          light: "Claro",
         },
+      },
+      theme: {
         title: "Tema",
         accessibilityLabel: "Tema:{{value}}",
         options: {

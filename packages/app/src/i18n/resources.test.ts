@@ -257,6 +257,8 @@ describe("translation resources", () => {
     );
     expect(en.settings.about.title).toBe("About");
     expect(en.settings.appearance.theme.title).toBe("Theme");
+    expect(en.settings.appearance.terminal.title).toBe("Terminal");
+    expect(en.settings.appearance.terminal.options.match).toBe("Match app");
     expect(en.settings.appearance.fonts.interfaceFont).toBe("Interface font");
     expect(en.settings.shortcuts.actions.rebind).toBe("Rebind");
     expect(en.settings.integrations.commandLine.title).toBe("Command line");
