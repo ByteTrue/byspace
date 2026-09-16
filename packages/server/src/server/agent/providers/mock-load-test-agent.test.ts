@@ -372,6 +372,34 @@ describe("MockLoadTestAgentClient", () => {
     expect(events.at(-1)).toMatchObject({ type: "turn_completed" });
   });
 
+  test("emits a synthetic notification timeline item", async () => {
+    vi.useFakeTimers();
+    const client = new MockLoadTestAgentClient();
+    const session = await client.createSession({
+      provider: "mock",
+      cwd: process.cwd(),
+      model: "ten-second-stream",
+    });
+    const events: AgentStreamEvent[] = [];
+    const unsubscribe = session.subscribe((event) => events.push(event));
+
+    await session.startTurn("Emit a synthetic notification.");
+    await vi.advanceTimersByTimeAsync(0);
+    unsubscribe();
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "timeline",
+        item: expect.objectContaining({
+          type: "notification",
+          level: "info",
+          message: expect.stringContaining("Historian recovery"),
+        }),
+      }),
+    );
+    expect(events.at(-1)).toMatchObject({ type: "turn_completed" });
+  });
+
   test("emits a synthetic todowrite tool_call timeline item", async () => {
     vi.useFakeTimers();
     const client = new MockLoadTestAgentClient();

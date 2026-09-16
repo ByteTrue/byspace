@@ -249,6 +249,10 @@ function shouldEmitSyntheticCustomMessage(prompt: AgentPromptInput): boolean {
   return /emit\s+(?:a\s+)?synthetic\s+custom\s+message/i.test(promptToText(prompt));
 }
 
+function shouldEmitSyntheticNotification(prompt: AgentPromptInput): boolean {
+  return /emit\s+(?:a\s+)?synthetic\s+notification/i.test(promptToText(prompt));
+}
+
 function shouldEmitSyntheticToolCallTodo(prompt: AgentPromptInput): boolean {
   return /emit\s+(?:a\s+)?synthetic\s+(?:todowrite|tool\s*call\s*todo)/i.test(promptToText(prompt));
 }
@@ -842,6 +846,7 @@ export class MockLoadTestAgentSession implements AgentSession {
     const settledAssistantImageMarkdown = parseSettledAssistantImageMarkdown(prompt);
     const steeringReplayShape = parseSteeringReplayShape(prompt);
     const syntheticCustomMessage = shouldEmitSyntheticCustomMessage(prompt);
+    const syntheticNotification = shouldEmitSyntheticNotification(prompt);
     const syntheticToolCallTodo = shouldEmitSyntheticToolCallTodo(prompt);
     const scheduleTurn = () => {
       if (shouldEmitTurnFailure(prompt)) {
@@ -860,6 +865,8 @@ export class MockLoadTestAgentSession implements AgentSession {
         this.schedulePlanApprovalTurn(turn);
       } else if (syntheticCustomMessage) {
         this.scheduleSyntheticCustomMessageTurn(turn);
+      } else if (syntheticNotification) {
+        this.scheduleSyntheticNotificationTurn(turn);
       } else if (syntheticToolCallTodo) {
         this.scheduleSyntheticToolCallTodoTurn(turn);
       } else if (questionPrompt) {
@@ -1240,6 +1247,13 @@ export class MockLoadTestAgentSession implements AgentSession {
     turn.timer.unref?.();
   }
 
+  private scheduleSyntheticNotificationTurn(turn: ActiveTurn): void {
+    turn.timer = setTimeout(() => {
+      this.emitSyntheticNotificationTurn(turn);
+    }, 0);
+    turn.timer.unref?.();
+  }
+
   private scheduleSyntheticToolCallTodoTurn(turn: ActiveTurn): void {
     turn.timer = setTimeout(() => {
       this.emitSyntheticToolCallTodoTurn(turn);
@@ -1314,6 +1328,36 @@ export class MockLoadTestAgentSession implements AgentSession {
     };
     this.emitTimeline(turn.turnId, item);
     const finalText = "Synthetic custom message emitted";
+    this.activeTurn = null;
+    this.emit({
+      type: "turn_completed",
+      provider: this.provider,
+      turnId: turn.turnId,
+    });
+    turn.resolve({
+      sessionId: this.id,
+      finalText,
+      timeline: [item],
+      canceled: false,
+    });
+  }
+
+  private emitSyntheticNotificationTurn(turn: ActiveTurn): void {
+    if (this.activeTurn !== turn) {
+      return;
+    }
+
+    this.clearTurnTimer(turn);
+    this.emitTurnStarted(turn);
+
+    const item: AgentTimelineItem = {
+      type: "notification",
+      level: "info",
+      message:
+        "## Historian recovery\n\nHistorian previously failed 3 time(s), so Magic Context is retrying history comparting immediately after restart.",
+    };
+    this.emitTimeline(turn.turnId, item);
+    const finalText = "Synthetic notification emitted";
     this.activeTurn = null;
     this.emit({
       type: "turn_completed",

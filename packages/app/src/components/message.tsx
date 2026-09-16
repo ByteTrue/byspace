@@ -91,6 +91,7 @@ import {
   useAssistantLinkPress,
 } from "@/assistant-file-links";
 import { getCompactionMarkerLabel } from "./message-compaction-label";
+import { parseNotificationMessage } from "./message-notification-parser";
 import { useAssistantImage } from "@/assistant-image/use-assistant-image";
 import {
   AttachmentFrame,
@@ -2065,39 +2066,57 @@ interface NotificationProps {
 
 const notificationStylesheet = StyleSheet.create((theme) => ({
   container: {
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.lg,
+    borderWidth: theme.borderWidth[1],
     overflow: "hidden",
   },
   containerSpacing: {
-    marginBottom: theme.spacing[1],
+    marginBottom: theme.spacing[2],
   },
   infoBg: {
-    backgroundColor: "rgba(147, 197, 253, 0.1)",
+    backgroundColor: "rgba(59, 130, 246, 0.08)",
+    borderColor: "rgba(59, 130, 246, 0.25)",
   },
   warningBg: {
-    backgroundColor: "rgba(245, 158, 11, 0.1)",
+    backgroundColor: "rgba(245, 158, 11, 0.08)",
+    borderColor: "rgba(245, 158, 11, 0.25)",
   },
   errorBg: {
-    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    backgroundColor: "rgba(239, 68, 68, 0.08)",
+    borderColor: "rgba(239, 68, 68, 0.25)",
   },
   content: {
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: 10,
+    paddingVertical: theme.spacing[3],
   },
   row: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: theme.spacing[2],
+    gap: theme.spacing[3],
   },
   iconContainer: {
     flexShrink: 0,
     height: 20,
+    alignItems: "center",
     justifyContent: "center",
   },
   textContainer: {
     flex: 1,
+    minWidth: 0,
+    gap: theme.spacing[1],
   },
-  messageText: {
+  titleText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
+    fontWeight: theme.fontWeight.medium,
+    lineHeight: 20,
+  },
+  bodyText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 18,
+  },
+  standaloneText: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.base,
     lineHeight: 20,
@@ -2110,6 +2129,7 @@ export const Notification = memo(function Notification({
   disableOuterSpacing,
 }: NotificationProps) {
   const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
+  const parsed = useMemo(() => parseNotificationMessage(message), [message]);
 
   const typeConfig = {
     info: {
@@ -2140,17 +2160,29 @@ export const Notification = memo(function Notification({
     ],
     [resolvedDisableOuterSpacing, config.bg],
   );
+  const bodyText = parsed.body || (!parsed.title ? message : null);
+  const bodyStyle = parsed.title
+    ? notificationStylesheet.bodyText
+    : notificationStylesheet.standaloneText;
+
   return (
-    <View style={containerStyle}>
+    <View style={containerStyle} accessibilityRole="alert" testID="timeline-notification">
       <View style={notificationStylesheet.content}>
         <View style={notificationStylesheet.row}>
           <View style={notificationStylesheet.iconContainer}>
             <IconComponent size={16} uniProps={config.iconColorMapping} />
           </View>
           <View style={notificationStylesheet.textContainer}>
-            <Text style={notificationStylesheet.messageText} selectable>
-              {message}
-            </Text>
+            {parsed.title ? (
+              <Text style={notificationStylesheet.titleText} selectable testID="notification-title">
+                {parsed.title}
+              </Text>
+            ) : null}
+            {bodyText ? (
+              <Text style={bodyStyle} selectable testID="notification-body">
+                {bodyText}
+              </Text>
+            ) : null}
           </View>
         </View>
       </View>
