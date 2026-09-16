@@ -32,6 +32,11 @@ Historian previously failed 3 time(s), so Magic Context is retrying history comp
       title: "Title Only",
       body: null,
     });
+
+    expect(parseNotificationMessage("## Title with trailing hashes ##   \n\nBody text")).toEqual({
+      title: "Title with trailing hashes",
+      body: "Body text",
+    });
   });
 
   it("extracts bold first-line headings", () => {
@@ -41,6 +46,11 @@ Historian previously failed 3 time(s), so Magic Context is retrying history comp
     expect(parseNotificationMessage(raw)).toEqual({
       title: "Context full",
       body: "/ctx-flush or /clear to continue.",
+    });
+
+    expect(parseNotificationMessage("**Context full**   \n\n/ctx-flush or /clear")).toEqual({
+      title: "Context full",
+      body: "/ctx-flush or /clear",
     });
   });
 

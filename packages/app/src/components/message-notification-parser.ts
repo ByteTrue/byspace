@@ -17,13 +17,13 @@ export function parseNotificationMessage(rawMessage: string): ParsedNotification
   // 1. Explicit Markdown heading at the start: e.g. "## Historian recovery\n\nBody" or "# Title"
   const headingMatch = message.match(/^#{1,6}\s+([^\n]+)(?:\n+([\s\S]*))?$/);
   if (headingMatch) {
-    const rawTitle = headingMatch[1].replace(/\s+#+$/, "").trim();
+    const rawTitle = headingMatch[1].replace(/\s+#+\s*$/, "").trim();
     const body = headingMatch[2]?.trim() || null;
     return { title: rawTitle || null, body };
   }
 
   // 2. Bold text on line 1: e.g. "**Title**\n\nBody"
-  const boldMatch = message.match(/^\*\*([^\n]+)\*\*(?:\n+([\s\S]*))?$/);
+  const boldMatch = message.match(/^\*\*([^\n]+?)\*\*[^\S\r\n]*(?:\n+([\s\S]*))?$/);
   if (boldMatch) {
     const rawTitle = boldMatch[1].trim();
     const body = boldMatch[2]?.trim() || null;
