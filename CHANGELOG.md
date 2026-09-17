@@ -1,5 +1,10 @@
 # Changelog
 
+<!-- Working notes for the next release. Keep this as a comment, not a "##"
+     heading: the in-app changelog parser treats every "##" as a published
+     release and must find only versioned, dated headings. Move content under
+     the next version heading when cutting a release. -->
+
 ## 0.14.3 - 2026-09-17
 
 ### Added
@@ -25,11 +30,6 @@
 - Removed the service URL setting, which had no effect ([#38](https://github.com/ByteTrue/byspace/pull/38))
 - Removed the browser tab entry points from the workspace header menu, the tab launcher, and the command center ([#38](https://github.com/ByteTrue/byspace/pull/38))
 - Removed `--voice` from `byspace onboard` ([#38](https://github.com/ByteTrue/byspace/pull/38))
-
-<!-- Working notes for the next release. Keep this as a comment, not a "##"
-     heading: the in-app changelog parser treats every "##" as a published
-     release and must find only versioned, dated headings. Move content under
-     the next version heading when cutting a release. -->
 
 ## 0.14.2 - 2026-09-15
 
