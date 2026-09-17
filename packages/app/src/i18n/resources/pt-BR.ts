@@ -2319,6 +2319,38 @@ export const ptBR: TranslationResources = {
           placeholder: "Meu Host",
           submit: "Renomear",
         },
+        network: {
+          sectionTitle: "Rede",
+          unavailable: "Conecte-se a este host para gerenciar as configurações de rede",
+          saveError: "Não foi possível atualizar as configurações de rede",
+          restartHint: "Reinicie o daemon para aplicar as alterações de rede",
+          restartPrompt: {
+            title: "Reiniciar o daemon agora?",
+            message:
+              "As alterações de rede são aplicadas após a reinicialização. O app reconectará automaticamente.",
+            confirm: "Reiniciar agora",
+            later: "Mais tarde",
+            failedTitle: "Não foi possível reiniciar o daemon",
+          },
+          password: {
+            title: "Senha de acesso",
+            setHint: "Definida — outros dispositivos deverão informá-la ao conectar",
+            unsetHint: "Não definida — qualquer dispositivo desta rede pode conectar sem ela",
+            edit: "Editar",
+            sheetTitle: "Senha de acesso",
+            fieldLabel: "Senha",
+            fieldHint: "Aplica-se após reiniciar o daemon",
+            toggleVisibility: "Mostrar ou ocultar a senha",
+            clear: "Remover senha",
+            save: "Salvar",
+          },
+          allowLan: {
+            title: "Permitir conexões LAN",
+            hint: "Outros dispositivos desta rede podem acessar este daemon na porta {{port}}",
+            noTcp: "Requer um listener TCP; este daemon usa socket ou pipe",
+            noPassword: "Defina primeiro uma senha de acesso para ativar conexões LAN",
+          },
+        },
         restart: {
           title: "Reiniciar daemon",
           hint: "Reinicia o processo do daemon. O app reconectará automaticamente",

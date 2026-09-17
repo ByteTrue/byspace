@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
-import { DaemonConfigStore, applyMutableProviderConfigToOverrides } from "./daemon-config-store.js";
+import {
+  DaemonConfigStore,
+  applyMutableProviderConfigToOverrides,
+  type DaemonNetworkControls,
+} from "./daemon-config-store.js";
 import { loadPersistedConfig } from "./persisted-config.js";
 import type { PersistedConfig } from "./persisted-config.js";
 import type { MutableDaemonConfig } from "@getpaseo/protocol/messages";
@@ -95,6 +99,38 @@ describe("DaemonConfigStore", () => {
     for (const dir of tempDirs) {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  function createStore(
+    paseoHome: string,
+    options: {
+      initial?: Partial<MutableDaemonConfig>;
+      networkControls?: DaemonNetworkControls;
+    } = {},
+  ): DaemonConfigStore {
+    return new DaemonConfigStore(
+      paseoHome,
+      {
+        relay: { enabled: false },
+        mcp: { injectIntoAgents: false },
+        providers: {},
+        metadataGeneration: { providers: [] },
+        autoArchiveAfterMerge: false,
+        enableTerminalAgentHooks: false,
+        appendSystemPrompt: "",
+        network: { allowLanAccess: false, tcpPort: 6777 },
+        auth: { passwordSet: false },
+        ...options.initial,
+      },
+      undefined,
+      { networkControls: options.networkControls },
+    );
+  }
+
+  const loopbackControls = (): DaemonNetworkControls => ({
+    getTcpPort: () => 6777,
+    isListenOverridden: () => false,
+    isPasswordOverridden: () => false,
   });
 
   test("patch persists relay state and emits its field change", () => {
@@ -963,6 +999,145 @@ describe("DaemonConfigStore", () => {
       command: ["npx", "-y", "--version"],
       env: {},
     });
+  });
+  test("password patch hashes into persisted auth and exposes only passwordSet", () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+    const store = createStore(paseoHome, { networkControls: loopbackControls() });
+
+    store.patch({ auth: { password: "lan-secret" } });
+
+    expect(store.get().auth?.passwordSet).toBe(true);
+    expect(store.get().auth).not.toHaveProperty("password");
+    const persistedAuth = loadPersistedConfig(paseoHome).daemon?.auth?.password;
+    expect(persistedAuth).toBeDefined();
+    expect(persistedAuth).not.toBe("lan-secret");
+    expect(persistedAuth).toMatch(/^\$2[aby]\$/);
+  });
+
+  test("null password patch clears persisted auth", () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+    const store = createStore(paseoHome, { networkControls: loopbackControls() });
+    store.patch({ auth: { password: "lan-secret" } });
+
+    store.patch({ auth: { password: null } });
+
+    expect(store.get().auth?.passwordSet).toBe(false);
+    expect(loadPersistedConfig(paseoHome).daemon?.auth).toBeUndefined();
+  });
+
+  test("allowLanAccess patch rewrites persisted listen preserving the bound port", () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+    const store = createStore(paseoHome, { networkControls: loopbackControls() });
+    store.patch({ auth: { password: "lan-secret" } });
+
+    store.patch({ network: { allowLanAccess: true } });
+
+    expect(store.get().network?.allowLanAccess).toBe(true);
+    expect(store.get().network?.tcpPort).toBe(6777);
+    expect(loadPersistedConfig(paseoHome).daemon?.listen).toBe("0.0.0.0:6777");
+
+    store.patch({ network: { allowLanAccess: false } });
+    expect(store.get().network?.allowLanAccess).toBe(false);
+    expect(loadPersistedConfig(paseoHome).daemon?.listen).toBe("127.0.0.1:6777");
+  });
+
+  test("allowLanAccess is rejected while no password is configured", () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+    const store = createStore(paseoHome, { networkControls: loopbackControls() });
+
+    expect(() => store.patch({ network: { allowLanAccess: true } })).toThrow(
+      /Set a daemon password before allowing LAN access/,
+    );
+    expect(store.get().network?.allowLanAccess).toBe(false);
+  });
+
+  test("clearing the password is rejected while LAN access stays enabled", () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+    const store = createStore(paseoHome, { networkControls: loopbackControls() });
+    store.patch({ auth: { password: "lan-secret" } });
+    store.patch({ network: { allowLanAccess: true } });
+
+    expect(() => store.patch({ auth: { password: null } })).toThrow(
+      /Disable LAN access before removing the daemon password/,
+    );
+    expect(store.get().auth?.passwordSet).toBe(true);
+    expect(loadPersistedConfig(paseoHome).daemon?.auth?.password).toBeDefined();
+  });
+
+  test("a patch may set the password and enable LAN access atomically", () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+    const store = createStore(paseoHome, { networkControls: loopbackControls() });
+
+    store.patch({ auth: { password: "lan-secret" }, network: { allowLanAccess: true } });
+
+    expect(store.get().auth?.passwordSet).toBe(true);
+    expect(store.get().network?.allowLanAccess).toBe(true);
+    expect(loadPersistedConfig(paseoHome).daemon?.listen).toBe("0.0.0.0:6777");
+    expect(loadPersistedConfig(paseoHome).daemon?.auth?.password).toMatch(/^\$2[aby]\$/);
+  });
+
+  test("allowLanAccess is rejected when the daemon does not listen on TCP", () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+    const store = createStore(paseoHome, {
+      initial: { network: { allowLanAccess: false, tcpPort: null }, auth: { passwordSet: true } },
+      networkControls: { ...loopbackControls(), getTcpPort: () => null },
+    });
+
+    expect(() => store.patch({ network: { allowLanAccess: true } })).toThrow(
+      /requires a TCP listener/,
+    );
+  });
+
+  test("network and password patches are rejected under launch overrides", () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+    const store = createStore(paseoHome, {
+      networkControls: {
+        ...loopbackControls(),
+        isListenOverridden: () => true,
+        isPasswordOverridden: () => true,
+      },
+    });
+
+    expect(() => store.patch({ network: { allowLanAccess: true } })).toThrow(
+      /controlled by BYSPACE_LISTEN/,
+    );
+    expect(() => store.patch({ auth: { password: "x" } })).toThrow(
+      /controlled by the PASEO_PASSWORD environment variable/,
+    );
+  });
+
+  test("re-setting the password persists a new hash even when the view is unchanged", () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+    const store = createStore(paseoHome, { networkControls: loopbackControls() });
+    store.patch({ auth: { password: "first-secret" } });
+    const firstHash = loadPersistedConfig(paseoHome).daemon?.auth?.password;
+
+    store.patch({ auth: { password: "second-secret" } });
+
+    const secondHash = loadPersistedConfig(paseoHome).daemon?.auth?.password;
+    expect(secondHash).toBeDefined();
+    expect(secondHash).not.toBe(firstHash);
+  });
+
+  test("refreshNetworkRuntimeState updates the view without persisting", () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+    const store = createStore(paseoHome, { networkControls: loopbackControls() });
+    const before = loadPersistedConfig(paseoHome);
+
+    store.refreshNetworkRuntimeState({ tcpPort: 61234, allowLanAccess: false });
+
+    expect(store.get().network?.tcpPort).toBe(61234);
+    expect(loadPersistedConfig(paseoHome)).toEqual(before);
   });
 });
 

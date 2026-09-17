@@ -89,6 +89,27 @@ function formatListenTarget(listenTarget: ListenTarget | null): string | null {
   return listenTarget.path;
 }
 
+const LOOPBACK_LISTEN_HOSTS = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost"]);
+
+function isLoopbackListenHost(host: string): boolean {
+  return LOOPBACK_LISTEN_HOSTS.has(host.toLowerCase());
+}
+
+function createNetworkView(config: PaseoDaemonConfig): {
+  allowLanAccess: boolean;
+  tcpPort: number | null;
+} {
+  try {
+    const target = parseListenString(config.listen);
+    if (target.type !== "tcp" || target.port <= 0) {
+      return { allowLanAccess: false, tcpPort: null };
+    }
+    return { allowLanAccess: !isLoopbackListenHost(target.host), tcpPort: target.port };
+  } catch {
+    return { allowLanAccess: false, tcpPort: null };
+  }
+}
+
 export async function fanOutReconciledWorkspaceUpdates(input: {
   sessions: Iterable<{
     syncWorkspaceGitObserversForExternalWorkspaceIds(workspaceIds: Iterable<string>): Promise<void>;
@@ -541,6 +562,8 @@ function createInitialMutableDaemonConfig(
     pluginsEnabled: config.pluginsEnabled ?? false,
     plugins: config.plugins ?? {},
     skills: { selection: config.skillSelection },
+    network: createNetworkView(config),
+    auth: { passwordSet: config.auth?.password !== undefined },
   };
 
   applyOptionalConfigLists(initialConfig, config);
@@ -568,9 +591,17 @@ export async function createPaseoDaemon(
   const hostedAppBaseUrl = resolveBySpaceHostedAppBaseUrl(daemonVersion);
   const hostedRelayEndpoint = DEFAULT_RELAY_ENDPOINT;
   const initialMutableConfig = createInitialMutableDaemonConfig(config, hostedAppBaseUrl);
+  const configReloadEnv = config.configReload?.env ?? process.env;
   const daemonConfigStore = new DaemonConfigStore(config.paseoHome, initialMutableConfig, logger, {
     relayEnabledMutable: config.relayEnabledMutable ?? true,
     startupPersisted: config.configReload?.startupPersisted,
+    networkControls: {
+      getTcpPort: () => (boundListenTarget?.type === "tcp" ? boundListenTarget.port : null),
+      isListenOverridden: () =>
+        config.configReload?.cli?.listen !== undefined ||
+        configReloadEnv.BYSPACE_LISTEN !== undefined,
+      isPasswordOverridden: () => Boolean(configReloadEnv.PASEO_PASSWORD?.trim()),
+    },
     reloadSource: {
       resolve: (persisted) => {
         const reloaded = resolveConfigFromPersisted(config.paseoHome, persisted, {
@@ -1477,6 +1508,13 @@ export async function createPaseoDaemon(
           mainStarted = true;
           const logAndResolve = async () => {
             boundListenTarget = resolveBoundListenTarget(listenTarget, httpServer);
+            // Ephemeral ports (listen :0) resolve only after binding; refresh the
+            // network view so clients see the real port.
+            daemonConfigStore.refreshNetworkRuntimeState({
+              tcpPort: boundListenTarget.type === "tcp" ? boundListenTarget.port : null,
+              allowLanAccess:
+                boundListenTarget.type === "tcp" && !isLoopbackListenHost(boundListenTarget.host),
+            });
             const mcpBaseUrl = createAgentMcpBaseUrl(boundListenTarget);
             agentMcpBaseUrl =
               !mcpEnabled || config.mcpInjectIntoAgents === false ? null : mcpBaseUrl;

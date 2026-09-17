@@ -2332,6 +2332,38 @@ export const en = {
           placeholder: "My Host",
           submit: "Rename",
         },
+        network: {
+          sectionTitle: "Network",
+          unavailable: "Connect to this host to manage network settings",
+          saveError: "Unable to update network settings",
+          restartHint: "Restart the daemon to apply network changes",
+          restartPrompt: {
+            title: "Restart daemon?",
+            message:
+              "Network changes take effect after a restart. The app will reconnect automatically.",
+            confirm: "Restart now",
+            later: "Later",
+            failedTitle: "Unable to restart the daemon",
+          },
+          password: {
+            title: "Access password",
+            setHint: "A password is required to connect from other devices",
+            unsetHint: "Not set. Other devices on this network can connect without one",
+            edit: "Edit",
+            sheetTitle: "Access password",
+            fieldLabel: "Password",
+            fieldHint: "Applies after the daemon restarts",
+            toggleVisibility: "Show or hide password",
+            clear: "Clear password",
+            save: "Save",
+          },
+          allowLan: {
+            title: "Allow LAN connections",
+            hint: "Other devices on this network can reach this daemon at port {{port}}",
+            noTcp: "Requires a TCP listener; this daemon uses a socket or pipe",
+            noPassword: "Set an access password first to enable LAN connections",
+          },
+        },
         restart: {
           title: "Restart daemon",
           hint: "Restarts the daemon process. The app will reconnect automatically",

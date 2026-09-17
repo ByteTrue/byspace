@@ -42,6 +42,7 @@ import { LocalDaemonSection } from "@/desktop/components/desktop-updates-section
 import { PairDeviceModal } from "@/desktop/components/pair-device-modal";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
+import { NetworkSection } from "@/screens/settings/network-section";
 import {
   getHostRuntimeStore,
   isHostRuntimeConnected,
@@ -370,6 +371,8 @@ export function HostSettingsPage({
       <HostStatusBadges serverId={serverId} />
 
       <HostAppearanceSection host={host} />
+
+      <NetworkSection serverId={serverId} />
 
       {isLocalDaemon ? <LocalDaemonSection /> : null}
 

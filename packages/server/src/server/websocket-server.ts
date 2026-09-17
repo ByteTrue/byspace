@@ -1626,6 +1626,8 @@ export class DaemonWebSocketServer {
         agentProfiles: true,
         // COMPAT(agentConfigApply): added in v0.3.2, remove gate after 2027-02-11.
         agentConfigApply: true,
+        // COMPAT(daemonNetworkConfig): added in v0.14.3, remove gate after 2027-07-14.
+        daemonNetworkConfig: true,
       },
     };
   }
