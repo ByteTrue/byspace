@@ -2334,6 +2334,41 @@ export const fr: TranslationResources = {
           placeholder: "MonHost",
           submit: "Renommer",
         },
+        network: {
+          sectionTitle: "Réseau",
+          unavailable: "Connectez-vous à cet hôte pour gérer les paramètres réseau",
+          saveError: "Impossible de mettre à jour les paramètres réseau",
+          restartHint: "Redémarrez le daemon pour appliquer les changements réseau",
+          restartPrompt: {
+            title: "Redémarrer le daemon maintenant ?",
+            message:
+              "Les changements réseau s'appliquent après un redémarrage. L'app se reconnectera automatiquement.",
+            confirm: "Redémarrer maintenant",
+            later: "Plus tard",
+            failedTitle: "Impossible de redémarrer le daemon",
+          },
+          password: {
+            title: "Mot de passe d'accès",
+            setHint: "Défini — les autres appareils devront le fournir pour se connecter",
+            unsetHint: "Non défini — n'importe quel appareil du réseau peut se connecter sans lui",
+            edit: "Modifier",
+            sheetTitle: "Mot de passe d'accès",
+            fieldLabel: "Mot de passe",
+            fieldHint: "S'applique après le redémarrage du daemon",
+            toggleVisibility: "Afficher ou masquer le mot de passe",
+            clear: "Supprimer le mot de passe",
+            profileSyncFailed:
+              "Échec de l'enregistrement du mot de passe sur cet appareil. Une ressaisie pourra être nécessaire à la reconnexion.",
+            save: "Enregistrer",
+          },
+          allowLan: {
+            title: "Autoriser les connexions LAN",
+            hint: "Les autres appareils de ce réseau peuvent joindre ce daemon sur le port {{port}}",
+            noTcp: "Nécessite un écouteur TCP ; ce daemon utilise un socket ou un pipe",
+            noPassword:
+              "Définissez d'abord un mot de passe d'accès pour activer les connexions LAN",
+          },
+        },
         restart: {
           title: "Redémarrer le démon",
           hint: "Redémarre le processus démon. L'application se reconnectera automatiquement",

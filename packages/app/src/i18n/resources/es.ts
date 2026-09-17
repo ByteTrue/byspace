@@ -2331,6 +2331,42 @@ export const es: TranslationResources = {
           placeholder: "MiHost",
           submit: "Cambiar nombre",
         },
+        network: {
+          sectionTitle: "Red",
+          unavailable: "Conéctate a este host para gestionar los ajustes de red",
+          saveError: "No se pudo actualizar la configuración de red",
+          restartHint: "Reinicia el daemon para aplicar los cambios de red",
+          restartPrompt: {
+            title: "¿Reiniciar el daemon ahora?",
+            message:
+              "Los cambios de red se aplican tras reiniciar. La app se reconectará automáticamente.",
+            confirm: "Reiniciar ahora",
+            later: "Más tarde",
+            failedTitle: "No se pudo reiniciar el daemon",
+          },
+          password: {
+            title: "Contraseña de acceso",
+            setHint: "Establecida: otros dispositivos deberán indicarla al conectarse",
+            unsetHint:
+              "Sin establecer: cualquier dispositivo de esta red puede conectarse sin ella",
+            edit: "Editar",
+            sheetTitle: "Contraseña de acceso",
+            fieldLabel: "Contraseña",
+            fieldHint: "Se aplica tras reiniciar el daemon",
+            toggleVisibility: "Mostrar u ocultar la contraseña",
+            clear: "Borrar contraseña",
+            profileSyncFailed:
+              "No se pudo guardar la contraseña en este dispositivo. Reconectar puede requerir volver a introducirla.",
+            save: "Guardar",
+          },
+          allowLan: {
+            title: "Permitir conexiones LAN",
+            hint: "Otros dispositivos de esta red pueden acceder al daemon en el puerto {{port}}",
+            noTcp: "Requiere un listener TCP; este daemon usa socket o pipe",
+            noPassword:
+              "Configura primero una contraseña de acceso para activar las conexiones LAN",
+          },
+        },
         restart: {
           title: "Reiniciar demonio",
           hint: "Reinicia el proceso del demonio. La aplicación se volverá a conectar automáticamente",

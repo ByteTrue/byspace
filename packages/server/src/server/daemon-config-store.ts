@@ -3,6 +3,8 @@ import {
   savePersistedConfig,
   type PersistedConfig,
 } from "./persisted-config.js";
+import { hashDaemonPassword } from "./auth.js";
+import { isLanListenString } from "./hostnames.js";
 import { ProviderOverrideSchema } from "./agent/provider-launch-config.js";
 import {
   MutableDaemonConfigSchema,
@@ -36,6 +38,27 @@ interface SupportedMutableConfigPatch {
   skills?: MutableDaemonConfig["skills"];
   pluginsEnabled?: boolean;
   plugins?: MutableDaemonConfig["plugins"];
+  // COMPAT(daemonNetworkConfig): added in v0.14.3.
+  // - wire input: auth.password (plaintext or null-to-clear) — translate before persisting
+  // - wire view: auth.passwordSet / network.{allowLanAccess,tcpPort} — derived only
+  network?: { allowLanAccess?: boolean; tcpPort?: number | null };
+  auth?: { password?: string | null; passwordSet?: boolean };
+}
+
+/** Translated form of the network/auth patch used only by the persisted merge. */
+interface DaemonPersistedPatch {
+  listen?: string;
+  /** bcrypt hash to store, or null to clear daemon.auth.password. */
+  authPasswordHash?: string | null;
+}
+
+export interface DaemonNetworkControls {
+  /** Bound TCP port; null when the daemon listens on a unix socket or named pipe. */
+  getTcpPort(): number | null;
+  /** True when BYSPACE_LISTEN or a CLI --listen flag owns the listen address. */
+  isListenOverridden(): boolean;
+  /** True when PASEO_PASSWORD owns the daemon password. */
+  isPasswordOverridden(): boolean;
 }
 
 interface LoggerLike {
@@ -284,7 +307,98 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
     ...(patch.agentProfiles !== undefined ? { agentProfiles: patch.agentProfiles } : {}),
     ...(patch.pluginsEnabled !== undefined ? { pluginsEnabled: patch.pluginsEnabled } : {}),
     ...(patch.plugins !== undefined ? { plugins: patch.plugins } : {}),
+    ...pickNetworkAuthPatchFields(patch),
   };
+}
+
+function pickNetworkAuthPatchFields(patch: MutableDaemonConfigPatch): SupportedMutableConfigPatch {
+  return {
+    ...(patch.network?.allowLanAccess !== undefined
+      ? { network: { allowLanAccess: patch.network.allowLanAccess } }
+      : {}),
+    ...(patch.auth?.password !== undefined ? { auth: { password: patch.auth.password } } : {}),
+  };
+}
+
+function resolveEffectivePasswordSet(input: {
+  authPatch: { password?: string | null } | undefined;
+  passwordOverridden: boolean;
+  persistedPassword: string | undefined;
+  viewPasswordSet: boolean;
+}): boolean {
+  if (input.authPatch !== undefined) {
+    return input.authPatch.password !== null;
+  }
+  return input.passwordOverridden || input.persistedPassword !== undefined || input.viewPasswordSet;
+}
+
+/**
+ * Post-patch LAN state. When the patch sets the listen itself, the patch value
+ * is what the invariant checks; otherwise the daemon keeps whatever it exposes
+ * today — persisted first (what a restart will use), then the view.
+ */
+/** Persisted listen rewrite for a network patch; undefined keeps the current value. */
+function resolvePersistedListen(
+  networkPatch: { allowLanAccess?: boolean } | undefined,
+  controls: DaemonNetworkControls,
+): string | undefined {
+  if (networkPatch === undefined) {
+    return undefined;
+  }
+  const tcpPort = controls.getTcpPort();
+  // A socket/pipe daemon has no TCP port to bind; skipping the write keeps
+  // the persisted listen intact instead of inventing a broken one.
+  if (tcpPort === null) {
+    return undefined;
+  }
+  return `${networkPatch.allowLanAccess ? "0.0.0.0" : "127.0.0.1"}:${tcpPort}`;
+}
+
+/** Bcrypt of a patch password, or null to clear; undefined keeps the current value. */
+function resolveAuthPasswordHash(
+  authPatch: { password?: string | null } | undefined,
+): string | null | undefined {
+  if (authPatch === undefined) {
+    return undefined;
+  }
+  // The patch schema rejects empty strings, so truthy here means a real password.
+  return authPatch.password ? hashDaemonPassword(authPatch.password) : null;
+}
+
+function resolveLanOpen(input: {
+  networkPatch: { allowLanAccess?: boolean } | undefined;
+  persistedListen: string | undefined;
+  viewAllowLanAccess: boolean;
+}): boolean {
+  if (input.networkPatch !== undefined) {
+    return input.networkPatch.allowLanAccess === true;
+  }
+  return isLanListenString(input.persistedListen) || input.viewAllowLanAccess;
+}
+
+/** Guards for the network/auth patch: launch overrides and the password-before-LAN invariant. */
+function assertNetworkAuthPatchAllowed(input: {
+  networkPatch: { allowLanAccess?: boolean } | undefined;
+  authPatch: { password?: string | null } | undefined;
+  controls: DaemonNetworkControls;
+  lanOpen: boolean;
+  effectivePasswordSet: boolean;
+}): void {
+  if (input.lanOpen && !input.effectivePasswordSet) {
+    throw new Error(
+      input.authPatch?.password === null
+        ? "Disable LAN access before removing the daemon password"
+        : "Set a daemon password before allowing LAN access; an open daemon lets anyone on the network run agents",
+    );
+  }
+  if (input.networkPatch?.allowLanAccess !== true) {
+    return;
+  }
+  if (input.controls.getTcpPort() === null) {
+    throw new Error(
+      "LAN access requires a TCP listener; this daemon uses a unix socket or named pipe",
+    );
+  }
 }
 
 export function applyMutableProviderConfigToOverrides(
@@ -326,6 +440,7 @@ export class DaemonConfigStore {
   private readonly relayEnabledMutable: boolean;
   private readonly reloadSource: DaemonConfigReloadSource | undefined;
   private readonly startupPersisted: PersistedConfig;
+  private readonly networkControls: DaemonNetworkControls | undefined;
   private lastKnownPersisted: PersistedConfig;
 
   constructor(
@@ -336,6 +451,7 @@ export class DaemonConfigStore {
       relayEnabledMutable?: boolean;
       reloadSource?: DaemonConfigReloadSource;
       startupPersisted?: PersistedConfig;
+      networkControls?: DaemonNetworkControls;
     } = {},
   ) {
     this.paseoHome = paseoHome;
@@ -346,6 +462,7 @@ export class DaemonConfigStore {
     });
     this.relayEnabledMutable = options.relayEnabledMutable ?? true;
     this.reloadSource = options.reloadSource;
+    this.networkControls = options.networkControls;
     this.startupPersisted = options.startupPersisted ?? loadPersistedConfig(paseoHome, this.logger);
     this.lastKnownPersisted = this.startupPersisted;
   }
@@ -369,8 +486,28 @@ export class DaemonConfigStore {
         "Relay is controlled by a daemon launch override. Remove BYSPACE_RELAY_ENABLED or the relay CLI flag before changing it here.",
       );
     }
-    const { removeProviders = [], ...rawConfigPatch } = parsedPatch;
-    const configPatch = normalizeTerminalAgentHookPatch(this.current, rawConfigPatch);
+    // The network/auth patch never lands in the mutable view verbatim: the
+    // plaintext password and listen semantics are translated below, and only
+    // the derived view fields (allowLanAccess / passwordSet) surface to clients.
+    const {
+      removeProviders = [],
+      network: networkPatch,
+      auth: authPatch,
+      ...rawConfigPatch
+    } = parsedPatch;
+
+    let daemonPersistedPatch: DaemonPersistedPatch | null = null;
+    let networkViewPatch: SupportedMutableConfigPatch = {};
+    const resolved = this.resolveDaemonNetworkPatch(networkPatch, authPatch);
+    if (resolved) {
+      daemonPersistedPatch = resolved.persistedPatch;
+      networkViewPatch = resolved.viewPatch;
+    }
+
+    const configPatch = normalizeTerminalAgentHookPatch(this.current, {
+      ...rawConfigPatch,
+      ...networkViewPatch,
+    });
     const removedProviders = Array.from(new Set(removeProviders));
     const merged = deepMerge(this.current, configPatch);
     if (parsedPatch.skills?.selection !== undefined) {
@@ -386,13 +523,14 @@ export class DaemonConfigStore {
 
     const configChanged = !isEqualValue(this.current, next);
 
-    if (!configChanged && removedProviders.length === 0) {
+    if (!configChanged && removedProviders.length === 0 && !daemonPersistedPatch) {
       return this.current;
     }
 
     const { previous: persistedBeforePatch, knownNext } = this.persistConfig(
       configPatch,
       removedProviders,
+      daemonPersistedPatch,
     );
     if (!configChanged) {
       this.lastKnownPersisted = knownNext;
@@ -408,6 +546,96 @@ export class DaemonConfigStore {
     }
 
     return this.current;
+  }
+
+  /**
+   * Translates the network/auth patch into persisted-config writes and enforces
+   * the security invariant (LAN access requires a password) server-side, so the
+   * UI cannot be the only thing keeping an open daemon protected.
+   */
+  private resolveDaemonNetworkPatch(
+    networkPatch: { allowLanAccess?: boolean } | undefined,
+    authPatch: { password?: string | null } | undefined,
+  ): { persistedPatch: DaemonPersistedPatch; viewPatch: SupportedMutableConfigPatch } | null {
+    if (networkPatch === undefined && authPatch === undefined) {
+      return null;
+    }
+    const controls = this.networkControls;
+    if (!controls) {
+      throw new Error("Network settings are not available on this daemon instance");
+    }
+    if (networkPatch !== undefined && controls.isListenOverridden()) {
+      // The launch value beats the file on restart, so an edit here would look
+      // accepted and then silently revert — reject it instead.
+      throw new Error(
+        "Listen address is controlled by BYSPACE_LISTEN or a --listen launch flag. Remove the override before changing LAN access here.",
+      );
+    }
+    if (authPatch !== undefined && controls.isPasswordOverridden()) {
+      throw new Error(
+        "Password is controlled by the PASEO_PASSWORD environment variable. Remove the override before changing it here.",
+      );
+    }
+
+    const persisted = loadPersistedConfig(this.paseoHome, this.logger);
+    // LAN state has two owners: the persisted listen address decides what the
+    // daemon will actually expose on restart, the view mirrors it for clients.
+    // A password clear must consult BOTH so a launch override that silences the
+    // view cannot launder it past an already-open listener.
+    const effectivePasswordSet = resolveEffectivePasswordSet({
+      authPatch,
+      passwordOverridden: controls.isPasswordOverridden(),
+      persistedPassword: persisted.daemon?.auth?.password,
+      viewPasswordSet: this.current.auth?.passwordSet === true,
+    });
+    const lanOpen = resolveLanOpen({
+      networkPatch,
+      persistedListen: persisted.daemon?.listen,
+      viewAllowLanAccess: this.current.network?.allowLanAccess === true,
+    });
+    assertNetworkAuthPatchAllowed({
+      networkPatch,
+      authPatch,
+      controls,
+      lanOpen,
+      effectivePasswordSet,
+    });
+
+    const listen = resolvePersistedListen(networkPatch, controls);
+    const authPasswordHash = resolveAuthPasswordHash(authPatch);
+
+    return {
+      persistedPatch: { listen, authPasswordHash },
+      viewPatch: {
+        ...(networkPatch !== undefined
+          ? {
+              network: {
+                allowLanAccess: networkPatch.allowLanAccess,
+                tcpPort: this.current.network?.tcpPort ?? null,
+              },
+            }
+          : {}),
+        ...(authPatch !== undefined ? { auth: { passwordSet: authPatch.password !== null } } : {}),
+      },
+    };
+  }
+
+  /**
+   * Runtime-only refresh of the network view once the real TCP port binds
+   * (ephemeral ports); never persists.
+   */
+  public refreshNetworkRuntimeState(state: {
+    tcpPort: number | null;
+    allowLanAccess: boolean;
+  }): void {
+    const next = MutableDaemonConfigSchema.parse({
+      ...this.current,
+      network: {
+        allowLanAccess: state.allowLanAccess,
+        tcpPort: state.tcpPort,
+      },
+    });
+    this.applyReplacement(next, { removedProviders: [] });
   }
 
   public reload(): DaemonConfigReloadResult {
@@ -568,6 +796,7 @@ export class DaemonConfigStore {
   private persistConfig(
     patch: Omit<SupportedMutableConfigPatch, "removeProviders">,
     removeProviders: readonly string[],
+    daemonPersistedPatch?: DaemonPersistedPatch | null,
   ): { previous: PersistedConfig; knownNext: PersistedConfig } {
     const persisted = loadPersistedConfig(this.paseoHome, this.logger);
     const merge = (source: PersistedConfig) =>
@@ -576,6 +805,7 @@ export class DaemonConfigStore {
         patch,
         removeProviders,
         persistRelayEnabled: this.relayEnabledMutable,
+        daemonPersistedPatch,
       });
     const nextPersisted = merge(persisted);
     const knownNext = merge(this.lastKnownPersisted);
@@ -589,9 +819,15 @@ function mergeMutablePatchIntoPersistedConfig(params: {
   patch: Omit<SupportedMutableConfigPatch, "removeProviders">;
   removeProviders: readonly string[];
   persistRelayEnabled: boolean;
+  daemonPersistedPatch?: DaemonPersistedPatch | null;
 }): PersistedConfig {
-  const { persisted, patch, removeProviders, persistRelayEnabled } = params;
-  const daemon = mergeMutableDaemonPatch(persisted.daemon, patch, persistRelayEnabled);
+  const { persisted, patch, removeProviders, persistRelayEnabled, daemonPersistedPatch } = params;
+  const daemon = mergeMutableDaemonPatch(
+    persisted.daemon,
+    patch,
+    persistRelayEnabled,
+    daemonPersistedPatch,
+  );
   const agents = mergeMutableAgentPatch(persisted.agents, patch, removeProviders);
   return {
     ...persisted,
@@ -692,8 +928,19 @@ function mergeMutableDaemonPatch(
   persistedDaemon: PersistedConfig["daemon"],
   patch: Omit<SupportedMutableConfigPatch, "removeProviders">,
   persistRelayEnabled: boolean,
+  daemonPersistedPatch?: DaemonPersistedPatch | null,
 ): PersistedConfig["daemon"] {
   const next = { ...persistedDaemon } as NonNullable<PersistedConfig["daemon"]>;
+  if (daemonPersistedPatch?.listen !== undefined) {
+    next.listen = daemonPersistedPatch.listen;
+  }
+  if (daemonPersistedPatch?.authPasswordHash !== undefined) {
+    if (daemonPersistedPatch.authPasswordHash === null) {
+      delete next.auth;
+    } else {
+      next.auth = { password: daemonPersistedPatch.authPasswordHash };
+    }
+  }
   if (persistRelayEnabled && patch.relay?.enabled !== undefined) {
     next.relay = { ...next.relay, enabled: patch.relay.enabled };
   }

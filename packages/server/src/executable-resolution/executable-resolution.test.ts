@@ -24,6 +24,32 @@ function makeTempDir(): string {
   return dir;
 }
 
+/**
+ * The winget test copies node.exe and probes it as a child process; on Windows
+ * that handle can outlive the test, and CI antivirus/indexer locks show up as
+ * EBUSY/EPERM/ENOTEMPTY on cleanup. Retry briefly; if it still fails, drop the
+ * leftovers instead of failing an unrelated test.
+ */
+function cleanupTempDirs(): void {
+  for (const dir of tempDirs.splice(0)) {
+    const maxAttempts = isPlatform("win32") ? 5 : 1;
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        rmSync(dir, { recursive: true, force: true });
+        break;
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException | null)?.code;
+        const locked = code === "EBUSY" || code === "EPERM" || code === "ENOTEMPTY";
+        // Best-effort on lock contention: leave the temp dir for the OS to
+        // clean up rather than failing an unrelated test.
+        if (!locked || attempt >= maxAttempts - 1) return;
+        if (!locked) throw error;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+      }
+    }
+  }
+}
+
 function prependPath(...dirs: string[]): void {
   process.env.PATH = [...dirs, originalEnv.PATH].filter(Boolean).join(path.delimiter);
 }
@@ -52,9 +78,7 @@ function expectWindowsPathsEqual(actual: string | null, expected: string): void 
 afterEach(() => {
   process.env.PATH = originalEnv.PATH;
   process.env.PATHEXT = originalEnv.PATHEXT;
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  cleanupTempDirs();
 });
 
 describe("findExecutable", () => {

@@ -1,3 +1,4 @@
+import { isLoopbackHost } from "./hostnames.js";
 import { projectServiceProxyUrls } from "./service-proxy.js";
 
 export interface WorkspaceServicePeer {
@@ -98,14 +99,7 @@ function isLoopbackListenHost(host: string | null | undefined): boolean {
   if (!host) {
     return true;
   }
-
-  const normalizedHost = host.trim().toLowerCase();
-  return (
-    normalizedHost === "localhost" ||
-    normalizedHost === "127.0.0.1" ||
-    normalizedHost === "::1" ||
-    normalizedHost === "[::1]"
-  );
+  return isLoopbackHost(host);
 }
 
 export function assertNoServiceEnvNameCollisions(scriptNames: readonly string[]): void {

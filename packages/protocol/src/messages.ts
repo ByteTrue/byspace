@@ -276,6 +276,23 @@ export const MutableDaemonConfigSchema = z
     skills: z.object({ selection: AgentSkillSelectionSchema.optional() }).strict().optional(),
     pluginsEnabled: z.boolean().optional(),
     plugins: z.record(PluginIdSchema, PluginSourceSchema).optional(),
+    // COMPAT(daemonNetworkConfig): added in v0.14.3; old daemons omit both fields.
+    network: z
+      .object({
+        allowLanAccess: z.boolean(),
+        // Bound TCP port, or null when the daemon listens on a unix socket or
+        // named pipe (LAN access does not apply there).
+        tcpPort: z.number().int().positive().nullable(),
+      })
+      .passthrough()
+      .optional(),
+    // Derived view only: never the password itself, never its hash.
+    auth: z
+      .object({
+        passwordSet: z.boolean(),
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 
@@ -303,6 +320,21 @@ export const MutableDaemonConfigPatchSchema = z
     agentProfiles: z.array(AgentProfileSchema).optional(),
     pluginsEnabled: z.boolean().optional(),
     plugins: z.record(PluginIdSchema, PluginSourceSchema).optional(),
+    // COMPAT(daemonNetworkConfig): added in v0.14.3; old daemons drop these patches.
+    network: z
+      .object({
+        allowLanAccess: z.boolean().optional(),
+      })
+      .passthrough()
+      .optional(),
+    // Plaintext goes in and is bcrypt-hashed server-side before persisting;
+    // null clears the password. The view never echoes either back.
+    auth: z
+      .object({
+        password: z.string().min(1).nullable().optional(),
+      })
+      .passthrough()
+      .optional(),
   })
   .partial()
   .passthrough();
@@ -3678,6 +3710,10 @@ export const ServerInfoStatusPayloadSchema = z
         agentProfiles: z.boolean().optional(),
         // COMPAT(agentConfigApply): added in v0.3.2, remove gate after 2027-02-11.
         agentConfigApply: z.boolean().optional(),
+        // COMPAT(daemonNetworkConfig): added in v0.14.3; remove gate after 2027-07-14.
+        // Old daemons drop network/auth config patches silently, so clients must
+        // hide the network settings instead of letting a save appear to succeed.
+        daemonNetworkConfig: z.boolean().optional(),
       })
       .optional(),
   })
