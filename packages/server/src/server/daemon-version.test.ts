@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { DaemonVersionResolutionError, resolveDaemonVersion } from "./daemon-version.js";
+import { resolveDaemonVersion } from "./daemon-version.js";
+import { PackageVersionResolutionError } from "./package-version.js";
 
 const createdDirs: string[] = [];
 
@@ -45,7 +46,7 @@ describe("resolveDaemonVersion", () => {
     mkdirSync(nestedDir, { recursive: true });
 
     const moduleUrl = pathToFileURL(path.join(nestedDir, "index.js")).href;
-    expect(() => resolveDaemonVersion(moduleUrl)).toThrow(DaemonVersionResolutionError);
+    expect(() => resolveDaemonVersion(moduleUrl)).toThrow(PackageVersionResolutionError);
   });
 
   it("throws when @getpaseo/server version is missing", () => {
@@ -59,6 +60,6 @@ describe("resolveDaemonVersion", () => {
     mkdirSync(nestedDir, { recursive: true });
 
     const moduleUrl = pathToFileURL(path.join(nestedDir, "index.js")).href;
-    expect(() => resolveDaemonVersion(moduleUrl)).toThrow(DaemonVersionResolutionError);
+    expect(() => resolveDaemonVersion(moduleUrl)).toThrow(PackageVersionResolutionError);
   });
 });

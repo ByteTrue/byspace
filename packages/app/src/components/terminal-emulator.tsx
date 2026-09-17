@@ -29,7 +29,7 @@ import type {
   TerminalLocalFileLinkSource,
   TerminalLocalFileLinkTarget,
 } from "../terminal/local-links/terminal-local-link-provider";
-import type { TerminalClipboardWriter } from "../terminal/native-renderer/terminal-selection";
+import type { TerminalClipboardWriter } from "../terminal/runtime/terminal-clipboard-writer";
 import type { TerminalRendererReadyChange } from "../utils/terminal-renderer-readiness";
 import { openExternalUrl } from "../utils/open-external-url";
 import { focusWithRetries } from "../utils/web-focus";

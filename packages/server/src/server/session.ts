@@ -1,7 +1,7 @@
 import type { SessionEventSubscription } from "@getpaseo/protocol/messages";
 import type { AgentRequests } from "./agent/requests/index.js";
-import equal from "fast-deep-equal";
-import { v4 as uuidv4 } from "uuid";
+import { isDeepStrictEqual as equal } from "node:util";
+import { randomUUID } from "node:crypto";
 import { lstat, mkdir, mkdtemp, rename, rm, stat } from "node:fs/promises";
 import { basename, resolve, sep } from "path";
 import { homedir } from "node:os";
@@ -282,7 +282,7 @@ function resolveSubscriptionId(
   if (requestedSubscriptionId && requestedSubscriptionId.length > 0) {
     return requestedSubscriptionId;
   }
-  return uuidv4();
+  return randomUUID();
 }
 
 function isAppVersionAtLeast(appVersion: string | null, minVersion: string): boolean {
@@ -741,7 +741,7 @@ export class Session {
     this.authorization = new SessionAuthorization(permissions);
     this.appVersion = appVersion ?? null;
     this.clientCapabilities = parseClientCapabilities(clientCapabilities);
-    this.sessionId = uuidv4();
+    this.sessionId = randomUUID();
     this.onMessage = onMessage;
     this.onMessageToSource = onMessageToSource ?? null;
     this.onBinaryMessage = onBinaryMessage ?? null;
@@ -1373,7 +1373,7 @@ export class Session {
     this.emit({
       type: "activity_log",
       payload: {
-        id: uuidv4(),
+        id: randomUUID(),
         timestamp: new Date(),
         type: "error",
         content: `${context}: ${message}`,
@@ -1805,7 +1805,7 @@ export class Session {
         this.emit({
           type: "activity_log",
           payload: {
-            id: uuidv4(),
+            id: randomUUID(),
             timestamp: new Date(),
             type: "error",
             content: `Error: ${err.message}`,
@@ -2904,7 +2904,7 @@ export class Session {
       this.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to update agent: ${getErrorMessage(error)}`,
@@ -2990,7 +2990,7 @@ export class Session {
       this.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to rename project: ${getErrorMessage(error)}`,
@@ -3144,7 +3144,7 @@ export class Session {
       this.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to remove project: ${getErrorMessage(error)}`,
@@ -3216,7 +3216,7 @@ export class Session {
       this.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to set workspace title: ${getErrorMessage(error)}`,
@@ -3271,7 +3271,7 @@ export class Session {
       this.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to pin workspace: ${getErrorMessage(error)}`,
@@ -3381,7 +3381,7 @@ export class Session {
       this.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to create agent: ${wireError.message}`,
@@ -3580,7 +3580,7 @@ export class Session {
       this.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: "Unable to resume agent: missing persistence handle",
@@ -3640,7 +3640,7 @@ export class Session {
       this.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to resume agent: ${message}`,
@@ -3709,7 +3709,7 @@ export class Session {
       this.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to import agent: ${message}`,
@@ -3787,7 +3787,7 @@ export class Session {
       this.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to refresh agent: ${message}`,
@@ -4200,7 +4200,7 @@ export class Session {
       this.emit({
         type: "activity_log",
         payload: {
-          id: uuidv4(),
+          id: randomUUID(),
           timestamp: new Date(),
           type: "error",
           content: `Failed to respond to permission: ${getErrorMessage(error)}`,

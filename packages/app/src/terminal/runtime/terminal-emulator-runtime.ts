@@ -28,7 +28,7 @@ import {
   type TerminalLocalFileLinkSource,
   type TerminalLocalFileLinkTarget,
 } from "../local-links/terminal-local-link-provider";
-import type { TerminalClipboardWriter } from "../native-renderer/terminal-selection";
+import type { TerminalClipboardWriter } from "./terminal-clipboard-writer";
 import { resolveTerminalFontFamily, resolveTerminalFontSize } from "./terminal-font";
 import { nativePerformanceTrace, traceInstant } from "@/performance/native-trace";
 

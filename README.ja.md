@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="packages/website/public/logo.svg" width="64" height="64" alt="BySpace logo">
+  <img src="assets/logo.svg" width="64" height="64" alt="BySpace logo">
 </p>
 
 <h1 align="center">BySpace</h1>
@@ -23,11 +23,11 @@
 <p align="center">Claude Code、Codex、Copilot、OpenCode、Pi のエージェントを、ひとつのインターフェースで。</p>
 
 <p align="center">
-  <img src="packages/website/public/hero-mockup.png" alt="BySpace app screenshot" width="100%">
+  <img src="assets/hero-mockup.png" alt="BySpace app screenshot" width="100%">
 </p>
 
 <p align="center">
-  <img src="packages/website/public/mobile-mockup.png" alt="BySpace mobile app" width="100%">
+  <img src="assets/mobile-mockup.png" alt="BySpace mobile app" width="100%">
 </p>
 
 ---
@@ -36,13 +36,12 @@
 
 - **セルフホスト:** エージェントはあなたのマシン上で動作し、完全な開発環境を使用します。自分のツール・設定・スキルをそのまま活用できます。
 - **マルチプロバイダー:** Claude Code、Codex、Copilot、OpenCode、Pi を同一のインターフェースで利用。タスクに合ったモデルを選べます。
-- **音声コントロール:** 音声モードでタスクを口述したり問題を話し合ったりできます。ハンズフリーが必要なときに便利です。
-- **クロスデバイス:** iOS、Android、デスクトップ、Web、CLI に対応。机で作業を始め、スマートフォンで確認し、ターミナルから自動化できます。
+- **クロスデバイス:** Web と CLI に対応。机で作業を始め、スマートフォンで確認し、ターミナルから自動化できます。
 - **プライバシー優先:** BySpace にはテレメトリー・トラッキング・強制ログインは一切ありません。
 
 ## はじめかた
 
-BySpace はコーディングエージェントを管理するローカルサーバー（デーモン）を起動します。デスクトップアプリ・モバイルアプリ・Web アプリ・CLI などのクライアントがこのデーモンに接続します。
+BySpace はコーディングエージェントを管理するローカルサーバー（デーモン）を起動します。Web アプリと CLI がこのデーモンに接続します。
 
 ### 前提条件
 
@@ -54,9 +53,9 @@ BySpace はコーディングエージェントを管理するローカルサー
 - [OpenCode](https://github.com/anomalyco/opencode)
 - [Pi](https://pi.dev)
 
-### デスクトップアプリ（推奨）
+### Web アプリ
 
-[BySpace GitHub Releases](https://github.com/ByteTrue/byspace/releases) からダウンロードしてください。アプリを開くとデーモンが自動的に起動します。追加のインストールは不要です。
+[app.byspace.cc.cd](https://app.byspace.cc.cd) を開いてください。または下の CLI でデーモンを起動すると、同じ Web UI が自分のマシンで提供されます。
 
 スマートフォンから接続するには、Settings 画面に表示される QR コードをスキャンしてください。
 
@@ -114,11 +113,9 @@ npx skills add ByteTrue/byspace
 モノレポのパッケージ構成：
 
 - `packages/server`: BySpace デーモン（エージェントプロセスのオーケストレーション、WebSocket API、MCP サーバー）
-- `packages/app`: Expo クライアント（iOS、Android、Web）
+- `packages/app`: Expo Web クライアント
 - `packages/cli`: デーモンおよびエージェントワークフロー向け `byspace` CLI
-- `packages/desktop`: Electron デスクトップアプリ
 - `packages/relay`: リモート接続用リレーパッケージ
-- `packages/website`: 保持している上流マーケティングサイトのソース（このリリースでは未デプロイ）
 
 よく使うコマンド：
 
@@ -129,8 +126,6 @@ npm run dev
 # 個別のサービスを起動
 npm run dev:server
 npm run dev:app
-npm run dev:desktop
-npm run dev:website
 
 # サーバースタックをビルド
 npm run build:server

@@ -7,7 +7,7 @@ import type {
   TerminalLocalFileLinkSource,
   TerminalLocalFileLinkTarget,
 } from "../terminal/local-links/terminal-local-link-provider";
-import type { TerminalClipboardWriter } from "../terminal/native-renderer/terminal-selection";
+import type { TerminalClipboardWriter } from "../terminal/runtime/terminal-clipboard-writer";
 import type { PendingTerminalModifiers } from "../utils/terminal-keys";
 import type { TerminalRendererReadyChange } from "../utils/terminal-renderer-readiness";
 

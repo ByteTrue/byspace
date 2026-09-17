@@ -13,7 +13,6 @@ import {
 } from "react-native";
 import { useTranslation } from "react-i18next";
 import { MarkdownParagraphView, MarkdownTextSpan } from "@/components/markdown-text";
-import { MarkdownTableCellText } from "@/components/markdown-text-selection";
 import * as React from "react";
 import {
   useState,
@@ -1648,12 +1647,9 @@ export const AssistantMessage = memo(function AssistantMessage({
         </MarkdownInheritedText>
       ),
       // strong/em/s have no custom rule in react-native-markdown-display's
-      // defaults beyond wrapping children in a plain RN <Text>. On iOS the
-      // paragraph/textgroup are native UITextViews (see markdown-text.ios.tsx),
-      // and a plain <Text> nested inside one is not hoisted into a
-      // UITextViewChild, so its content renders invisibly. Route these inline
-      // marks through MarkdownTextSpan (same path as text/textgroup) so the
-      // styled content composes and stays visible + selectable on iOS.
+      // defaults beyond wrapping children in a plain RN <Text>. These routes were
+      // added for the native iOS UITextView renderer (since retired) and is kept
+      // so the styled content still composes through MarkdownTextSpan.
       strong: (
         node: ASTNode,
         children: ReactNode[],
@@ -1874,24 +1870,22 @@ export const AssistantMessage = memo(function AssistantMessage({
         );
       },
       th: (node: ASTNode, children: ReactNode[], _parent: ASTNode[], styles: MarkdownStyles) => (
-        <MarkdownTableCellText key={node.key}>
-          <View
-            style={styles._VIEW_SAFE_th}
-            dataSet={markdownCopyTableCellDataSet("th", node.attributes?.style)}
-          >
-            {children}
-          </View>
-        </MarkdownTableCellText>
+        <View
+          key={node.key}
+          style={styles._VIEW_SAFE_th}
+          dataSet={markdownCopyTableCellDataSet("th", node.attributes?.style)}
+        >
+          {children}
+        </View>
       ),
       td: (node: ASTNode, children: ReactNode[], _parent: ASTNode[], styles: MarkdownStyles) => (
-        <MarkdownTableCellText key={node.key}>
-          <View
-            style={styles._VIEW_SAFE_td}
-            dataSet={markdownCopyTableCellDataSet("td", node.attributes?.style)}
-          >
-            {children}
-          </View>
-        </MarkdownTableCellText>
+        <View
+          key={node.key}
+          style={styles._VIEW_SAFE_td}
+          dataSet={markdownCopyTableCellDataSet("td", node.attributes?.style)}
+        >
+          {children}
+        </View>
       ),
       paragraph: (
         node: ASTNode,

@@ -10,7 +10,6 @@ import {
 } from "./daemon-session.js";
 import type { DaemonWebSocketRuntimeDiagnosticSnapshot } from "./diagnostics.js";
 import type { ProviderAvailability } from "../../agent/agent-manager.js";
-import type { HubRelationshipManagement } from "../../hub/relationship-controller.js";
 import type { SessionOutboundMessage } from "../../messages.js";
 import type { DaemonConfigReloadResult } from "../../daemon-config-store.js";
 
@@ -42,7 +41,6 @@ function makeSubsystem(overrides: {
   daemonRuntimeConfig?: DaemonRuntimeConfig;
   listProviderAvailability?: () => Promise<ProviderAvailability[]>;
   getWebSocketRuntimeMetrics?: () => DaemonWebSocketRuntimeDiagnosticSnapshot | null;
-  hubRelationships?: HubRelationshipManagement;
   reloadConfig?: () => DaemonConfigReloadResult;
 }) {
   const emitted: SessionOutboundMessage[] = [];
@@ -64,7 +62,6 @@ function makeSubsystem(overrides: {
     listWorkspaces: async () => [],
     listProviderAvailability: overrides.listProviderAvailability ?? (async () => []),
     getWebSocketRuntimeMetrics: overrides.getWebSocketRuntimeMetrics,
-    hubRelationships: overrides.hubRelationships,
     reloadConfig:
       overrides.reloadConfig ??
       (() => ({

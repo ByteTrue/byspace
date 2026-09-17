@@ -176,7 +176,7 @@ import {
 import { setupAutoArchiveOnMerge } from "./auto-archive-on-merge/index.js";
 import { wrapSessionMessage, type SessionOutboundMessage } from "./messages.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
-import { createConfiguredTerminalManager } from "../terminal/terminal-manager-factory.js";
+import { createWorkerTerminalManager } from "../terminal/worker-terminal-manager.js";
 import {
   createPersistingTerminalManager,
   restorePersistedTerminals,
@@ -655,7 +655,7 @@ export async function createPaseoDaemon(
     path.join(config.paseoHome, "terminals", "terminals.json"),
   );
   const terminalManager = createPersistingTerminalManager({
-    inner: createConfiguredTerminalManager({
+    inner: createWorkerTerminalManager({
       getTerminalActivityUrl: () => createTerminalActivityUrl(boundListenTarget),
       getDefaultShell: () => daemonConfigStore.get().terminalDefaultShell,
     }),

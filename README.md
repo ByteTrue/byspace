@@ -34,22 +34,12 @@ Run agents in parallel on your own machines. Ship from your phone or your desk.
 
 - **Self-hosted:** Agents run on your machine with your full dev environment. Use your tools, your configs, and your skills.
 - **Multi-provider:** Claude Code, Codex, Copilot, OpenCode, and Pi through the same interface. Pick the right model for each job.
-- **Voice control:** Dictate tasks or talk through problems in voice mode. Hands-free when you need it.
-- **Cross-device:** iOS, Android, desktop, web, and CLI. Start work at your desk, check in from your phone, script it from the terminal.
+- **Cross-device:** web and CLI. Start work at your desk, check in from your phone, script it from the terminal.
 - **Privacy-first:** BySpace doesn't have any telemetry, tracking, or forced log-ins.
-
-## Plugins
-
-Add themes, workspace panels, commands, settings screens, and coding-agent providers with trusted
-TypeScript plugins. Install from a local directory or Git repository with `paseo plugin add <source>`.
-
-See the [plugin docs](https://paseo.sh/docs/plugins) for your Paseo version, or start with the
-[0.8 beta quickstart](https://paseo.sh/docs/plugins/v0.8). Plugins run with access to your daemon
-machine and inside connected clients; install only code you trust.
 
 ## Getting Started
 
-BySpace runs a local server called the daemon that manages your coding agents. Clients like the desktop app, mobile app, web app, and CLI connect to it.
+BySpace runs a local server called the daemon that manages your coding agents. The web app, the phone PWA, and the CLI connect to it.
 
 ### Prerequisites
 
@@ -61,9 +51,9 @@ You need at least one agent CLI installed and configured with your credentials:
 - [OpenCode](https://github.com/anomalyco/opencode)
 - [Pi](https://pi.dev)
 
-### Desktop app (recommended)
+### Web app
 
-Download it from the [BySpace GitHub releases page](https://github.com/ByteTrue/byspace/releases). Open the app and the daemon starts automatically. Nothing else to install.
+Open the web app at [app.byspace.cc.cd](https://app.byspace.cc.cd). Or run the daemon from the CLI below, which serves the same web UI on your own machine.
 
 To connect from your phone, open **Settings → your host → Pair Device**.
 
@@ -136,9 +126,8 @@ Then use them in any agent conversation:
 Quick monorepo package map:
 
 - `packages/server`: BySpace daemon (agent process orchestration, WebSocket API, MCP server)
-- `packages/app`: Expo client (iOS, Android, web)
+- `packages/app`: Expo web client
 - `packages/cli`: `byspace` CLI for daemon and agent workflows
-- `packages/desktop`: Electron desktop app
 - `packages/relay`: Relay transport and encryption used by the daemon and clients
 
 Common commands:

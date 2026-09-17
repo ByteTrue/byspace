@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="packages/website/public/logo.svg" width="64" height="64" alt="BySpace logo">
+  <img src="assets/logo.svg" width="64" height="64" alt="BySpace logo">
 </p>
 
 <h1 align="center">BySpace</h1>
@@ -23,11 +23,11 @@
 <p align="center">Claude Code、Codex、Copilot、OpenCode 和 Pi agents 的统一界面。</p>
 
 <p align="center">
-  <img src="packages/website/public/hero-mockup.png" alt="BySpace app screenshot" width="100%">
+  <img src="assets/hero-mockup.png" alt="BySpace app screenshot" width="100%">
 </p>
 
 <p align="center">
-  <img src="packages/website/public/mobile-mockup.png" alt="BySpace mobile app" width="100%">
+  <img src="assets/mobile-mockup.png" alt="BySpace mobile app" width="100%">
 </p>
 
 ---
@@ -36,13 +36,12 @@
 
 - **自托管：** Agents 在你的机器上运行，使用完整的本地开发环境、工具、配置和技能。
 - **多提供商：** 通过同一个界面使用 Claude Code、Codex、Copilot、OpenCode 和 Pi。为每个任务选择合适的模型。
-- **语音控制：** 在语音模式下口述任务或讨论问题。需要免手操作时很方便。
-- **跨设备：** 支持 iOS、Android、桌面端、Web 和 CLI。在桌前开始工作，用手机查看进度，也可以从终端脚本化操作。
+- **跨设备：** 支持 Web 和 CLI。在桌前开始工作，用手机查看进度，也可以从终端脚本化操作。
 - **隐私优先：** BySpace 没有遥测、追踪，也不会强制登录。
 
 ## 快速开始
 
-BySpace 会运行一个名为 daemon 的本地服务，用来管理你的 coding agents。桌面 app、移动 app、Web app 和 CLI 等客户端都会连接到它。
+BySpace 会运行一个名为 daemon 的本地服务，用来管理你的 coding agents。Web app、手机 PWA 和 CLI 等客户端都会连接到它。
 
 ### 前置条件
 
@@ -54,9 +53,9 @@ BySpace 会运行一个名为 daemon 的本地服务，用来管理你的 coding
 - [OpenCode](https://github.com/anomalyco/opencode)
 - [Pi](https://pi.dev)
 
-### 桌面 app（推荐）
+### Web app
 
-从 [BySpace GitHub Releases](https://github.com/ByteTrue/byspace/releases) 下载。打开 app 后 daemon 会自动启动，不需要再安装其他东西。
+打开 [app.byspace.cc.cd](https://app.byspace.cc.cd)。或者用下面的 CLI 启动 daemon，它会在你自己的机器上提供同一套 Web UI。
 
 如果要从手机连接，在 Settings 中扫描显示的二维码。
 
@@ -114,11 +113,9 @@ npx skills add ByteTrue/byspace
 Monorepo 包结构速览：
 
 - `packages/server`：BySpace daemon（agent 进程编排、WebSocket API、MCP server）
-- `packages/app`：Expo 客户端（iOS、Android、Web）
+- `packages/app`：Expo Web 客户端
 - `packages/cli`：用于 daemon 和 agent 工作流的 `byspace` CLI
-- `packages/desktop`：Electron 桌面 app
 - `packages/relay`：用于远程连接的 relay 包
-- `packages/website`：保留的上游营销站点源码，本发布线不部署
 
 常用命令：
 
@@ -129,8 +126,6 @@ npm run dev
 # 单独运行某个界面
 npm run dev:server
 npm run dev:app
-npm run dev:desktop
-npm run dev:website
 
 # 构建 server stack
 npm run build:server

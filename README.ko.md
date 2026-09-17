@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="packages/website/public/logo.svg" width="64" height="64" alt="BySpace logo">
+  <img src="assets/logo.svg" width="64" height="64" alt="BySpace logo">
 </p>
 
 <h1 align="center">BySpace</h1>
@@ -23,24 +23,23 @@
 <p align="center">Claude Code, Codex, Copilot, OpenCode, Pi 에이전트를 위한 하나의 인터페이스</p>
 
 <p align="center">
-  <img src="packages/website/public/hero-mockup.png" alt="BySpace app screenshot" width="100%">
+  <img src="assets/hero-mockup.png" alt="BySpace app screenshot" width="100%">
 </p>
 
 <p align="center">
-  <img src="packages/website/public/mobile-mockup.png" alt="BySpace mobile app" width="100%">
+  <img src="assets/mobile-mockup.png" alt="BySpace mobile app" width="100%">
 </p>
 
 내 컴퓨터에서 에이전트를 병렬로 실행하세요. 데스크톱이나 휴대폰에서 배포하세요.
 
 - **셀프 호스팅:** 에이전트는 완전한 개발 환경이 갖춰진 내 컴퓨터에서 실행됩니다. 평소 쓰던 도구, 설정, 스킬을 그대로 쓸 수 있습니다.
 - **여러 제공자 지원:** Claude Code, Codex, Copilot, OpenCode, Pi를 하나의 인터페이스에서 사용할 수 있습니다. 작업마다 알맞은 모델을 고를 수 있습니다.
-- **음성 제어:** 음성 모드에서 작업을 말로 지시하거나 문제를 음성으로 함께 검토할 수 있습니다. 손을 쓰지 않고 작업해야 할 때 유용합니다.
-- **여러 기기 지원:** iOS, Android, 데스크톱, 웹, CLI를 지원합니다. 데스크톱에서 시작해 휴대폰으로 확인하고 터미널에서 자동화할 수 있습니다.
+- **여러 기기 지원:** 웹과 CLI를 지원합니다. 데스크톱에서 시작해 휴대폰으로 확인하고 터미널에서 자동화할 수 있습니다.
 - **개인정보 보호 우선:** BySpace는 텔레메트리, 추적, 강제 로그인을 사용하지 않습니다.
 
 ## 시작하기
 
-BySpace는 코딩 에이전트를 관리하는 로컬 서버인 데몬을 실행합니다. 데스크톱 앱, 모바일 앱, 웹 앱, CLI 같은 클라이언트가 이 데몬에 연결합니다.
+BySpace는 코딩 에이전트를 관리하는 로컬 서버인 데몬을 실행합니다. 웹 앱과 CLI가 이 데몬에 연결합니다.
 
 ### 준비 사항
 
@@ -52,9 +51,9 @@ BySpace는 코딩 에이전트를 관리하는 로컬 서버인 데몬을 실행
 - [OpenCode](https://github.com/anomalyco/opencode)
 - [Pi](https://pi.dev)
 
-### 데스크톱 앱(권장)
+### 웹 앱
 
-[BySpace GitHub Releases](https://github.com/ByteTrue/byspace/releases)에서 다운로드하세요. 앱을 열면 데몬이 자동으로 시작됩니다. 별도로 설치할 것은 없습니다.
+[app.byspace.cc.cd](https://app.byspace.cc.cd)를 여세요. 또는 아래 CLI로 데몬을 실행하면 같은 웹 UI가 내 컴퓨터에서 제공됩니다.
 
 휴대폰에서 연결하려면 **설정 → 호스트 → 기기 페어링**을 여세요.
 
@@ -127,11 +126,9 @@ npx skills add ByteTrue/byspace
 모노레포 패키지 구성은 다음과 같습니다.
 
 - `packages/server`: BySpace 데몬(에이전트 프로세스 오케스트레이션, WebSocket API, MCP 서버 제공)
-- `packages/app`: Expo 클라이언트(iOS, Android, 웹)
+- `packages/app`: Expo 웹 클라이언트
 - `packages/cli`: `byspace` CLI(데몬과 에이전트 워크플로)
-- `packages/desktop`: Electron 데스크톱 앱
 - `packages/relay`: 데몬과 클라이언트가 쓰는 릴레이 전송 및 암호화 패키지
-- `packages/website`: 유지된 업스트림 마케팅 소스(이 릴리스에서는 배포하지 않음)
 
 자주 쓰는 명령:
 
@@ -142,8 +139,6 @@ npm run dev
 # 개별 환경 실행
 npm run dev:server
 npm run dev:app
-npm run dev:desktop
-npm run dev:website
 
 # 서버 스택 빌드
 npm run build:server

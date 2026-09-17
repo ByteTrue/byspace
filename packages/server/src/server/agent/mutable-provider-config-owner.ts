@@ -1,4 +1,4 @@
-import equal from "fast-deep-equal";
+import { isDeepStrictEqual as equal } from "node:util";
 
 import type { DaemonConfigStore } from "../daemon-config-store.js";
 import type {

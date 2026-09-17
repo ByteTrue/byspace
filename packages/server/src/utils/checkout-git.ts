@@ -1,7 +1,7 @@
 import { resolve, dirname, basename } from "path";
 import { existsSync, realpathSync } from "fs";
 import { open as openFile, readFile, stat as statFile } from "fs/promises";
-import { TTLCache } from "@isaacs/ttlcache";
+import { LRUCache } from "lru-cache";
 import type { CheckoutCommit, CheckoutCommitFile } from "@getpaseo/protocol/messages";
 import { parseGitHubRemoteIdentity, parseGitRemoteLocation } from "@getpaseo/protocol/git-remote";
 import { maxBase64EncryptedPlaintextByteLength } from "@getpaseo/relay";
@@ -121,18 +121,23 @@ function throwBranchNotFound(branch: string | undefined): never {
 }
 
 function createPullRequestStatusCache(ttlMs: number) {
-  return new TTLCache<string, PullRequestStatusResult>({
+  return new LRUCache<string, PullRequestStatusResult>({
     ttl: ttlMs,
     max: PULL_REQUEST_STATUS_CACHE_MAX,
-    checkAgeOnGet: true,
   });
 }
 
+// lru-cache values must extend `{}`, but this cache needs `null` ("git says no
+// shortstat") to stay distinct from `undefined` ("not cached"). The wrapper keeps
+// that distinction; `shortstat: null` is a real cached entry.
+interface CachedShortstat {
+  shortstat: CheckoutShortstat | null;
+}
+
 function createShortstatCache(ttlMs: number) {
-  return new TTLCache<string, CheckoutShortstat | null>({
+  return new LRUCache<string, CachedShortstat>({
     ttl: ttlMs,
     max: SHORTSTAT_CACHE_MAX,
-    checkAgeOnGet: true,
   });
 }
 
@@ -157,7 +162,6 @@ function getShortstatCacheKey(cwd: string): string {
 
 export function __resetPullRequestStatusCacheForTests(): void {
   pullRequestStatusCache.clear();
-  pullRequestStatusCache.cancelTimer();
   pullRequestStatusCacheTtlMs = DEFAULT_PULL_REQUEST_STATUS_CACHE_TTL_MS;
   pullRequestStatusCache = createPullRequestStatusCache(pullRequestStatusCacheTtlMs);
   pullRequestStatusInFlight.clear();
@@ -166,7 +170,6 @@ export function __resetPullRequestStatusCacheForTests(): void {
 
 export function __setPullRequestStatusCacheTtlForTests(ttlMs: number): void {
   pullRequestStatusCache.clear();
-  pullRequestStatusCache.cancelTimer();
   pullRequestStatusCacheTtlMs = ttlMs;
   pullRequestStatusCache = createPullRequestStatusCache(ttlMs);
   pullRequestStatusInFlight.clear();
@@ -175,7 +178,6 @@ export function __setPullRequestStatusCacheTtlForTests(ttlMs: number): void {
 
 export function __resetCheckoutShortstatCacheForTests(): void {
   shortstatCache.clear();
-  shortstatCache.cancelTimer();
   shortstatCacheTtlMs = DEFAULT_SHORTSTAT_CACHE_TTL_MS;
   shortstatCache = createShortstatCache(shortstatCacheTtlMs);
   shortstatInFlight.clear();
@@ -183,7 +185,6 @@ export function __resetCheckoutShortstatCacheForTests(): void {
 
 export function __setCheckoutShortstatCacheTtlForTests(ttlMs: number): void {
   shortstatCache.clear();
-  shortstatCache.cancelTimer();
   shortstatCacheTtlMs = ttlMs;
   shortstatCache = createShortstatCache(ttlMs);
   shortstatInFlight.clear();
@@ -2823,7 +2824,7 @@ function getOrLoadCheckoutShortstat(
   if (!options?.force) {
     const cached = shortstatCache.get(cacheKey);
     if (cached !== undefined) {
-      return Promise.resolve(cached);
+      return Promise.resolve(cached.shortstat);
     }
 
     const existing = shortstatInFlight.get(cacheKey);
@@ -2834,7 +2835,7 @@ function getOrLoadCheckoutShortstat(
 
   const load = getCheckoutShortstatUncached(cwd, context)
     .then((shortstat) => {
-      shortstatCache.set(cacheKey, shortstat);
+      shortstatCache.set(cacheKey, { shortstat });
       return shortstat;
     })
     .finally(() => {
@@ -2981,7 +2982,7 @@ export async function getCheckoutWorktreeState(
 }
 
 export function getCachedCheckoutShortstat(cwd: string): CheckoutShortstat | null | undefined {
-  return shortstatCache.get(getShortstatCacheKey(cwd));
+  return shortstatCache.get(getShortstatCacheKey(cwd))?.shortstat;
 }
 
 export function warmCheckoutShortstatInBackground(

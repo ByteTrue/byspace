@@ -134,11 +134,15 @@ The fix for transforms is Gotcha 3. The fix for context is Gotcha 7.
 
 ## Gotcha 3 — Keyboard layout and portal anchors
 
-`KeyboardTranslateView` owns visual keyboard motion. Android uses the
-controller's Reanimated signal. iOS uses its native-driver `Animated.event`
-signal because the stock iOS Reanimated value changes at move start, while
-writing a replacement Reanimated value every frame interrupts UIKit's hide
-animation. Keep this platform choice inside `KeyboardTranslateView`.
+`KeyboardTranslateView` (`packages/app/src/components/keyboard-translate-view.tsx`)
+is a plain `View` passthrough that still accepts the `enabled` prop. It used to
+own visual keyboard motion with a per-platform split: Android via the
+controller's Reanimated signal, iOS via a native-driver `Animated.event` signal,
+because the stock iOS Reanimated value changes at move start while writing a
+replacement every frame interrupts UIKit's hide animation. The `.ios`/`.android`
+variants were deleted with the native build retirement, so the motion is gone and
+the component is a passthrough. Keep platform choice inside this component if a
+native target returns.
 
 `KeyboardDock` always keeps the chat surface at full height and wraps it in
 `KeyboardTranslateView`. The panel root clips it at the header edge, so rows
