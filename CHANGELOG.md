@@ -1,25 +1,35 @@
 # Changelog
 
+## 0.14.3 - 2026-09-17
+
+### Added
+
+- Added a Network section to host settings with an access password ([#41](https://github.com/ByteTrue/byspace/pull/41))
+- Added an Allow LAN connections toggle to host settings ([#41](https://github.com/ByteTrue/byspace/pull/41))
+- Added a terminal color scheme setting that is independent of the app theme ([#38](https://github.com/ByteTrue/byspace/pull/38))
+
+### Fixed
+
+- Fixed QR pairing replacing already-stored hosts when a pairing link was opened on a cold browser load ([#39](https://github.com/ByteTrue/byspace/pull/39))
+- Fixed remote hosts appearing disconnected when using the Android Home Screen app ([#39](https://github.com/ByteTrue/byspace/pull/39))
+
+### Improved
+
+- Notification cards in the timeline now render a parsed Markdown title instead of raw `##` markers, with callout styling ([#40](https://github.com/ByteTrue/byspace/pull/40))
+- Empty sidebar projects no longer show a collapse chevron ([#38](https://github.com/ByteTrue/byspace/pull/38))
+
+### Removed
+
+- Removed the microphone button and the dictation and realtime voice overlays from the composer ([#38](https://github.com/ByteTrue/byspace/pull/38))
+- Removed the Plugins section and the Browser tools card from host settings ([#38](https://github.com/ByteTrue/byspace/pull/38))
+- Removed the service URL setting, which had no effect ([#38](https://github.com/ByteTrue/byspace/pull/38))
+- Removed the browser tab entry points from the workspace header menu, the tab launcher, and the command center ([#38](https://github.com/ByteTrue/byspace/pull/38))
+- Removed `--voice` from `byspace onboard` ([#38](https://github.com/ByteTrue/byspace/pull/38))
+
 <!-- Working notes for the next release. Keep this as a comment, not a "##"
      heading: the in-app changelog parser treats every "##" as a published
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
-
-<!-- Next release, staged:
-
-### Added
-
-- The terminal can now keep its own dark or light color scheme, independent of the app theme
-
-### Improved
-
-- Empty sidebar projects no longer show a collapse/expand chevron
-
-### Removed
-
-- Settings no longer offer Browser tools, Plugins, voice setup during `byspace onboard`, or the in-app service URL behavior, all of which had no effect since the desktop app was retired
-
--->
 
 ## 0.14.2 - 2026-09-15
 
