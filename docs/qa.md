@@ -11,9 +11,6 @@ The bar is four questions:
 
 Every pull request needs evidence for the questions its change touches. Pull requests without evidence get closed.
 
-For plugin changes, verify the [SDK import boundaries](plugins.md#sdk-import-boundaries) before
-exercising contributions. Include the boundary tests and both runtime loaders in the evidence.
-
 ## Evidence
 
 Evidence is something someone else can look at:
@@ -72,4 +69,4 @@ Tests are evidence only when they exercise the real thing.
 
 Tests that mock away the behavior, assert on internals, or pass against the broken code claim coverage that isn't there.
 
-[testing.md](testing.md) is the standard, including how to run suites without freezing your machine. For driving a real daemon in a test, see [ad-hoc-daemon-testing.md](ad-hoc-daemon-testing.md). For mobile flows, [mobile-testing.md](mobile-testing.md). For Electron screenshots, [browser-capture-harness.md](browser-capture-harness.md).
+[testing.md](testing.md) is the standard, including how to run suites without freezing your machine. For driving a real daemon in a test, see [ad-hoc-daemon-testing.md](ad-hoc-daemon-testing.md).

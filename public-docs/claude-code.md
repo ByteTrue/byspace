@@ -32,4 +32,3 @@ You can use the terminal from BySpace's desktop, web, or mobile app while keepin
 
 - [Supported providers](/docs/supported-providers), for other agents you can run alongside Claude Code.
 - [Custom providers](/docs/custom-providers), for custom binaries, third-party endpoints, or multiple Claude profiles.
-- [BySpace vs Claude Desktop](/alternatives/claude-desktop), for a feature comparison.

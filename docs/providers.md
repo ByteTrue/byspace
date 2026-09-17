@@ -126,7 +126,6 @@ The key chooses storage, never execution. Availability and catalogue discovery r
 `{ scope: "global", force }` or `{ scope: "workspace", cwd, force }` request, including when another
 target can share its result. Runtime-aware adapters must use that target for both probing and key
 resolution. An explicit home-directory workspace is distinct from a semantic global request.
-Plugin callbacks follow the same contract; see [plugin providers](plugins.md#contribute-a-provider).
 
 `ProviderSnapshotManager` owns one refresh deadline per provider. The deadline starts before the
 availability check and covers that check plus the complete catalog probe. Providers that make

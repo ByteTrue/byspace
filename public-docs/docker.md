@@ -8,7 +8,7 @@ category: Getting started
 
 # Docker
 
-The official BySpace Docker image runs the daemon and serves the bundled browser UI from the same HTTP origin. It is meant for servers, dev boxes, NAS devices, homelab hosts, and other places where you want BySpace running without the desktop app.
+The official BySpace Docker image runs the daemon and serves the bundled browser UI from the same HTTP origin. It is meant for servers, dev boxes, NAS devices, homelab hosts, and other places where you want BySpace running headless.
 
 Docker images follow the BySpace release cadence. `ghcr.io/bytetrue/byspace:latest` points at the latest stable release; use an explicit version or prerelease tag when required.
 

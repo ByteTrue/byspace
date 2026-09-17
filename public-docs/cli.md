@@ -1,7 +1,7 @@
 ---
 
 title: CLI reference
-description: "BySpace CLI reference: manage projects, workspaces, agents, plugins, scripts, schedules, daemons, and permissions from your terminal."
+description: "BySpace CLI reference: manage projects, workspaces, agents, scripts, schedules, daemons, and permissions from your terminal."
 nav: CLI reference
 order: 35
 category: Orchestration---
@@ -160,35 +160,6 @@ byspace script stop web
 By default, BySpace selects the workspace whose directory is the current directory. Pass `--cwd <path>` to select a different directory, or `--workspace <workspace-id>` when a directory has multiple workspaces. Use the global `--host` option to target another daemon. These commands also accept standard output options such as `--json`.
 
 The output includes each script's lifecycle and supervised terminal ID. Services also include their assigned port, proxy URL, and health. See [Git worktrees](/docs/worktrees#scripts-and-services) for `byspace.json` configuration.
-
-## Plugins
-
-> **Trust every plugin you add.** `byspace plugin add` and `byspace plugin install` mean “I trust this codebase.” Plugin server code and Git preparation commands run unsandboxed with the daemon user's access on the daemon host; client contributions run inside BySpace. Dependencies and future updates are part of that decision. With the global `--host` option, commands run on the remote daemon host.
-
-Create and manage trusted plugins on a daemon:
-
-```bash
-byspace plugin init /absolute/path/to/plugin
-byspace plugin install /absolute/path/to/plugin
-byspace plugin add owner/repository
-byspace plugin add https://gitlab.com/group/repository.git --ref main
-byspace plugin add owner/monorepo:plugins/review
-byspace plugin ls [id]
-byspace plugin update my-plugin
-byspace plugin update --all
-byspace plugin reload my-plugin
-byspace plugin logs my-plugin
-byspace plugin disable my-plugin
-byspace plugin enable my-plugin
-byspace plugin remove my-plugin
-```
-
-GitHub shorthand checks an existing host directory first. Append `:<directory>` for a plugin in a
-monorepo. `byspace plugin ls [id]` does not contact the remote. `byspace plugin logs <id>` returns the
-plugin's recent daemon-side stdout and stderr. Add `--json` for structured entries, or run
-`byspace --host <target> plugin logs <id>` for another daemon. See the
-[Plugin reference](/docs/plugins/v0.7/reference) for installation, trust, lifecycle, and log-retention
-behavior.
 
 ## Listing agents
 

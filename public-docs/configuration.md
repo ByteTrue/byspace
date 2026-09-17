@@ -63,13 +63,13 @@ The daemon validates the complete file before applying anything. It applies runt
 byspace daemon restart
 ```
 
-Runtime-safe settings include relay enablement, MCP settings, browser tools, hostnames, CORS origins, trusted proxies, Git process limits, agent and terminal profiles, provider definitions, metadata generation, the app base URL, provider catalog timeout, and the global plugin switch. Removing one of these settings applies its omitted-field behavior; removing a provider removes it from future launches.
+Runtime-safe settings include relay enablement, MCP settings, hostnames, CORS origins, trusted proxies, Git process limits, agent and terminal profiles, provider definitions, metadata generation, the app base URL, and provider catalog timeout. Removing one of these settings applies its omitted-field behavior; removing a provider removes it from future launches.
 
 New homes keep relay disabled when you remove `daemon.relay.enabled`. A daemon whose config already omitted this field when it started keeps the legacy relay-enabled behavior for compatibility. Set `daemon.relay.enabled` explicitly when editing an older config.
 
-Listen addresses, authentication, relay endpoints and TLS, worktree allocation, service-proxy addresses, the bundled web UI, logging, speech, voice, credentials, and local model settings require a restart. Reload applies other valid edits in the same file before reporting those paths.
+Listen addresses, authentication, relay endpoints and TLS, worktree allocation, service-proxy addresses, the bundled web UI, logging, credentials, and local model settings require a restart. Reload applies other valid edits in the same file before reporting those paths.
 
-Environment variables and daemon start flags remain authoritative. Reload reports a changed file setting under `overrideControlledPaths` when a launch override prevents it from taking effect. This includes startup settings such as listen addresses, passwords, relay endpoints and TLS, service-proxy and web UI settings, logging, speech, and voice configuration. List settings such as hostnames and CORS origins still append across sources, so values from `config.json` continue to apply. Remove the override and restart the daemon if you want the file value to become authoritative.
+Environment variables and daemon start flags remain authoritative. Reload reports a changed file setting under `overrideControlledPaths` when a launch override prevents it from taking effect. This includes startup settings such as listen addresses, passwords, relay endpoints and TLS, service-proxy and web UI settings, and logging configuration. List settings such as hostnames and CORS origins still append across sources, so values from `config.json` continue to apply. Remove the override and restart the daemon if you want the file value to become authoritative.
 
 ## Agent providers
 
@@ -90,12 +90,6 @@ New worktrees are created under `$BYSPACE_HOME/worktrees` by default. To place n
 ```
 
 Relative paths are resolved against `BYSPACE_HOME`. Existing worktrees remain where they are; changing this setting only changes where BySpace creates and discovers BySpace-managed worktrees going forward.
-
-## Voice
-
-Voice is configured through `features.dictation` and `features.voiceMode`, with provider credentials under `providers`.
-
-For voice philosophy, architecture, and complete local/OpenAI setup examples, see [Voice docs](/docs/voice).
 
 ## Bundled web UI
 
@@ -246,15 +240,7 @@ Set the persisted value in `config.json`:
 - `BYSPACE_LOG_FILE_ROTATE_COUNT`, override `log.file.rotate.maxFiles`
 - `BYSPACE_LOG`, `BYSPACE_LOG_FORMAT`, legacy log overrides (still supported)
 - `OPENAI_API_KEY`, override OpenAI provider key
-- `OPENAI_STT_API_KEY`, `OPENAI_STT_BASE_URL`, OpenAI speech-to-text endpoint (dictation + voice mode STT)
-- `OPENAI_TTS_API_KEY`, `OPENAI_TTS_BASE_URL`, OpenAI text-to-speech endpoint (voice mode TTS)
-- `BYSPACE_VOICE_LLM_PROVIDER`, override voice LLM provider (`claude`, `codex`, `opencode`)
-- `BYSPACE_DICTATION_STT_PROVIDER`, `BYSPACE_VOICE_STT_PROVIDER`, `BYSPACE_VOICE_TTS_PROVIDER`, override voice provider selection (`local` or `openai`)
 - `BYSPACE_LOCAL_MODELS_DIR`, control local model directory
-- `BYSPACE_DICTATION_LOCAL_STT_MODEL`, override local dictation STT model
-- `BYSPACE_VOICE_LOCAL_STT_MODEL`, `BYSPACE_VOICE_LOCAL_TTS_MODEL`, override local voice STT/TTS models
-- `BYSPACE_DICTATION_LANGUAGE`, `BYSPACE_VOICE_LANGUAGE`, override dictation and voice STT language
-- `BYSPACE_VOICE_LOCAL_TTS_SPEAKER_ID`, `BYSPACE_VOICE_LOCAL_TTS_SPEED`, optional local voice TTS tuning
 
 Legacy `PASEO_*` names remain accepted as lower-priority compatibility aliases.
 

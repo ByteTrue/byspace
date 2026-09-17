@@ -10,7 +10,7 @@ category: Getting started
 
 Your BySpace app connects to the daemon running on your computer or server. BySpace Desktop and the CLI can tunnel through SSH. Mobile clients can connect through the BySpace relay or directly with Tailscale.
 
-This is client-to-daemon transport. If you are looking for the upstream service that starts agents from GitHub, Slack, and Discord events, that is [Paseo Hub](/docs/hub).
+This is client-to-daemon transport. The upstream Hub service that started agents from GitHub, Slack, and Discord events was retired.
 
 - [SSH](#ssh)
 - [BySpace relay](#byspace-relay)

@@ -61,26 +61,15 @@ For alternative endpoints, multiple profiles, custom binaries, and ACP agents, s
 
 The same mismatch shows up anywhere BySpace runs your tools: an agent or terminal reports `command not found` for something you use every day.
 
-When you open the **desktop app** from the Dock or Finder, the OS hands it a stripped-down environment, not your terminal's `PATH`. To compensate, BySpace runs your login shell once at startup (`$SHELL -i -l -c`), captures its environment, and hands that to the daemon and everything it spawns. The rule of thumb: **if a brand-new terminal can run the command, BySpace should too.** Open a fresh terminal and try it there.
+The daemon inherits the environment it was started with. When you run `byspace` from a terminal, that is your terminal's environment. When the daemon is started by a service manager, container runtime, or launchd unit, it gets that manager's environment instead, which usually has a shorter `PATH`.
 
-When you start the daemon yourself from a terminal (`byspace`), there's no login-shell step; it inherits that terminal's environment.
+BySpace looks for agent binaries by searching `PATH` (`which` on POSIX). The fix for a missing tool lives in your shell config (`.zshrc`, `.zprofile`, …) or in whatever starts the daemon, not in BySpace. Tools installed through version managers (asdf, mise, nvm, …) are the usual offenders: make sure they initialize for a clean login shell, not only inside one you've already opened.
 
-Either way, the fix for a missing tool lives in your shell config (`.zshrc`, `.zprofile`, …), not in BySpace. Tools installed through version managers (asdf, mise, nvm, …) are the usual offenders: make sure they initialize for a clean login shell, not only inside one you've already opened.
-
-This login-shell step runs on macOS and Linux. On Windows, BySpace uses the environment it was launched with.
+On Windows, BySpace uses the environment it was launched with and resolves commands through `PATHEXT`.
 
 ## Reading the logs
 
-- **Desktop app** — the login-shell resolution is logged here. Look for `[login-shell-env]`: `applied` means it worked (it logs the `PATH` before and after); `failed; keeping inherited env` means it fell back to the stripped-down environment, with a `reason` (a timeout, a non-zero exit from your shell config, no output, …). A slow or erroring `.zshrc`/`.zprofile` is the usual cause.
 - **Daemon** — `~/.byspace/daemon.log` (`$BYSPACE_HOME/daemon.log` if you've set a custom home).
-
-Desktop app log location:
-
-| Platform | Path                              |
-| -------- | --------------------------------- |
-| macOS    | `~/Library/Logs/BySpace/main.log` |
-| Linux    | `~/.config/BySpace/logs/main.log` |
-| Windows  | `%APPDATA%\BySpace\logs\main.log` |
 
 ## I changed config.json but nothing happened
 
@@ -98,5 +87,4 @@ Run `byspace daemon restart` only when reload requests it. In the app, open **Se
 
 - [Custom providers](/docs/custom-providers) — endpoints, profiles, binaries, ACP agents.
 - [Configuration](/docs/configuration) — `config.json`, environment variables, logging.
-- [How BySpace resolves your login shell](https://github.com/ByteTrue/byspace/blob/main/packages/desktop/src/login-shell-env.ts) — the exact code that loads your shell environment.
 - [Report an issue](https://github.com/ByteTrue/byspace/issues).

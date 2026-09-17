@@ -8,17 +8,17 @@ category: Getting started
 
 # Getting started
 
-BySpace runs your coding agents on your machine and gives you a mobile, desktop, web, and CLI client to drive them from anywhere. Three common ways to install.
+BySpace runs your coding agents on your machine and gives you a web, phone PWA, and CLI client to drive them from anywhere. Three common ways to install.
 
-## Desktop app (recommended)
+## Web app
 
-Download the installer for your platform from the [BySpace GitHub releases page](https://github.com/ByteTrue/byspace/releases). Open it and you're done.
+Open the web app at [app.byspace.cc.cd](https://app.byspace.cc.cd). Run the daemon from the CLI below and the same web UI is served from your own machine.
 
-The desktop app bundles its own daemon and starts it automatically, no separate install required. On first launch you'll see a brief startup screen, then connect from your phone using **Settings → your host → Pair Device**.
+To connect from your phone, open **Settings → your host → Pair Device**.
 
 ## Server / CLI
 
-For headless machines, dev boxes, or any setup where you want the daemon running without the desktop UI:
+For headless machines, dev boxes, or any setup where you want the daemon running without a browser open:
 
 ```bash
 npm install -g @bytetrue/byspace@beta
@@ -55,7 +55,6 @@ The image runs the daemon and serves the bundled web UI. It does not bundle agen
 - [Workspaces](/docs/workspaces), the project, workspace, and session model BySpace is built around.
 - [Providers](/docs/providers), what a provider is and how BySpace wraps existing CLIs.
 - [Orchestration](/docs/orchestration), let one agent delegate work to other providers and models.
-- [Plugins](/docs/plugins), add trusted local surfaces, sidebar actions, daemon behavior, and composer attachments.
 - [CLI reference](/docs/cli), every command.
 - [Self-hosting the web UI](/docs/web-ui), serve the browser app from your own daemon.
 - [GitHub repo](https://github.com/ByteTrue/byspace)

@@ -9,11 +9,15 @@ BySpace is a mobile app for monitoring and controlling your local AI coding agen
 This is an npm workspace monorepo:
 
 - `packages/server` — Daemon: agent lifecycle, WebSocket API, MCP server
-- `packages/app` — Mobile + web client (Expo)
+- `packages/app` — Web/PWA client (Expo, web-only build)
 - `packages/cli` — Docker-style CLI (`byspace run/ls/logs/wait`)
 - `packages/relay` — E2E encrypted relay for remote access
-- `packages/desktop` — Electron desktop wrapper
-- `packages/website` — Inherited marketing site source (deployment disabled)
+- `packages/protocol` — Wire schemas and shared protocol types
+- `packages/client` — Daemon client library and SDK facade
+- `packages/highlight` — Cross-package syntax highlighting
+
+Native mobile (`packages/app/ios`, `android`) and the Electron desktop wrapper were
+retired in issue 025. `packages/app` builds only for web.
 
 ## Docs
 
@@ -40,7 +44,6 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/providers.md](docs/providers.md)                               | Adding a new agent provider end-to-end                                                                                         |
 | [docs/forge-providers.md](docs/forge-providers.md)                   | Adding a git forge: registry/manifest, drop-in checklist, self-host/GHES, the two facts tiers                                  |
 | [docs/custom-providers.md](docs/custom-providers.md)                 | Custom provider config: Z.AI, Alibaba/Qwen, ACP agents, profiles, custom binaries                                              |
-| [docs/plugins.md](docs/plugins.md)                                   | Local plugin manifest, directory source config, RPCs, native surfaces, and attachment sources                                  |
 | [docs/service-proxy.md](docs/service-proxy.md)                       | Service proxy: exposing workspace scripts at public URLs, DNS setup, reverse proxy config                                      |
 | [docs/development.md](docs/development.md)                           | Dev server, build sync gotchas, CLI reference, agent state, Playwright MCP                                                     |
 | [docs/rpc-namespacing.md](docs/rpc-namespacing.md)                   | WebSocket RPC naming convention — dotted namespaces and `.request`/`.response` pairs                                           |
@@ -52,12 +55,9 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/file-observation.md](docs/file-observation.md)                 | Recursive watcher ownership, Linux constraints, teardown invariants, and Parcel comparison                                     |
 | [docs/testing.md](docs/testing.md)                                   | TDD workflow, determinism, real dependencies over mocks, test organization                                                     |
 | [docs/qa.md](docs/qa.md)                                             | QA evidence bar for pull requests — platform matrix, version drift, performance, UI proof                                      |
-| [docs/mobile-testing.md](docs/mobile-testing.md)                     | Maestro and mobile test workflows                                                                                              |
 | [docs/mobile-panels.md](docs/mobile-panels.md)                       | Compact left/center/right panel ownership, worklet motion, gesture revisions, and Fabric constraints                           |
 | [docs/explorer-sidebar.md](docs/explorer-sidebar.md)                 | Explorer sidebar and ordinary side-pane host contracts, lifecycle, placement, and routing preferences                          |
 | [docs/ad-hoc-daemon-testing.md](docs/ad-hoc-daemon-testing.md)       | Isolated in-process daemon test harness                                                                                        |
-| [docs/browser-capture-harness.md](docs/browser-capture-harness.md)   | Real-Electron browser screenshot harness and compositor-surface gotcha                                                         |
-| [docs/android.md](docs/android.md)                                   | App variants, local builds as CI fallback, version codes, F-Droid source builds and store metadata                             |
 | [docs/docker.md](docs/docker.md)                                     | Running the daemon and bundled web UI in Docker, volumes, agent images, security                                               |
 | [docs/release.md](docs/release.md)                                   | Release playbook, draft releases, completion checklist                                                                         |
 | [docs/terminal-activity.md](docs/terminal-activity.md)               | Terminal activity indicators — source-agnostic tracker, agent hook reporting, adding a new hook provider                       |
@@ -141,51 +141,43 @@ and updating `next`, integrating it after a release, and releasing a hotfix from
 
 ## Platform gating
 
-The app runs on iOS, Android, web (browser), and web (Electron desktop). Code is cross-platform by default. Gate only when you must. Import gates from `@/constants/platform`.
+The app builds only for web (browser and installed PWA); native mobile and the Electron
+wrapper were retired in issue 025. Prefer plain web code and gate only when a DOM API or
+an Electron-only capability forces it. Import gates from `@/constants/platform`.
 
-### The four gates
+### The gates
 
-| Gate                       | Type      | When to use                                                                                                                 |
-| -------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `isWeb`                    | constant  | DOM APIs — `document`, `window`, `<div>`, `addEventListener`, `ResizeObserver`. This is the **exception**, not the default. |
-| `isNative`                 | constant  | Native-only APIs — Haptics, `StatusBar.currentHeight`, push tokens, camera/scanner, `expo-av`.                              |
-| `getIsElectron()`          | cached fn | Desktop wrapper features — file dialogs, titlebar drag region, daemon management, app updates, dock badges.                 |
-| `useIsCompactFormFactor()` | hook      | Layout decisions — sidebar overlay vs pinned, modal vs full screen, single-panel vs split. From `@/constants/layout`.       |
-
-### Decision matrix
-
-| I need to...                                                   | Use                                                                       |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Access DOM (`document`, `window`, `<div>`, `addEventListener`) | `if (isWeb)`                                                              |
-| Use a native-only API (Haptics, push tokens, camera)           | `if (isNative)`                                                           |
-| Use an Electron bridge (file dialog, titlebar, updates)        | `if (getIsElectron())`                                                    |
-| Switch layout between phone and tablet/desktop                 | `useIsCompactFormFactor()`                                                |
-| Show something on hover, always-visible on native              | `isHovered \|\| isNative \|\| isCompact` (hover only works on web)        |
-| Gate to iOS or Android specifically                            | `Platform.OS === "ios"` / `Platform.OS === "android"` (rare, keep inline) |
+| Gate                       | Type      | When to use                                                                                                           |
+| -------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| `isWeb`                    | constant  | Always true in this build. Legacy branch guards; new code does not need it.                                           |
+| `isNative`                 | constant  | Always false. Retired along with the native clients; do not add new uses.                                             |
+| `getIsElectron()`          | cached fn | Always false. Retired along with the desktop wrapper; do not add new uses.                                            |
+| `useIsCompactFormFactor()` | hook      | Layout decisions — sidebar overlay vs pinned, modal vs full screen, single-panel vs split. From `@/constants/layout`. |
 
 ### Rules
 
-- **Default is cross-platform.** Don't gate unless you have a specific reason.
-- **Prefer Metro file extensions over `if` statements.** When a module has fundamentally different implementations per platform, use `.web.ts` / `.native.ts` file extensions instead of runtime `if (isWeb)` branches. Metro resolves the correct file at build time — the unused platform code is never bundled. Reserve `if (isWeb)` for small, inline checks (a single line or a few props). If you find yourself writing a large `if (isWeb) { ... } else { ... }` block, split into separate files instead.
+- **Default to plain web code.** The retired gates still exist so existing call sites keep
+  type-checking; they are dead branches that are being removed over time, not a target to
+  write against.
+- **Prefer Metro file extensions over `if` statements.** When a module has genuinely
+  different web implementations, use `.web.ts` file extensions instead of runtime
+  `if (isWeb)` branches. Metro resolves the correct file at build time.
   ```
-  hooks/
-    use-audio-recorder.web.ts    ← uses Web Audio API
-    use-audio-recorder.native.ts ← uses expo-audio
+  runtime/
+    websocket-factory.ts      ← base entry Metro resolves to
+    websocket-factory.web.ts  ← web implementation
   ```
-  Import as `@/hooks/use-audio-recorder` — Metro picks the right file automatically.
-- **Use `.electron.ts` / `.electron.tsx` for Electron-only web modules.** Electron is still the Metro `web` platform, but desktop dev/build sets `PASEO_WEB_PLATFORM=electron`, so Metro first looks for `.electron.*` files and falls back to normal `.web.*` files. Use this when the implementation depends on Electron-only behavior such as `webviewTag`, desktop preload APIs, or the Electron bridge. Keep plain browser web in `.web.*`, and keep native fallbacks in the base file or `.native.*`.
-  ```
-  desktop/browser/pane/
-    index.electron.tsx ← Electron <webview> implementation
-    index.web.tsx      ← plain web fallback
-    index.tsx          ← native fallback
-  ```
-  Import as `@/desktop/browser/pane` — Electron desktop gets the `.electron.tsx` file, browser web gets `.web.tsx`, and native gets the native/base implementation.
-- **NEVER use raw DOM APIs without `isWeb` guard.** DOM APIs crash native. Casting a RN ref to `HTMLElement` is a red flag — ensure the block is web-only.
-- **NEVER use `onPointerEnter`/`onPointerLeave`.** They don't fire on native iOS.
-- **Hover only works on web.** React Native's `onHoverIn`/`onHoverOut` on `Pressable` does NOT fire on native iOS/iPad — the underlying W3C pointer events are behind disabled experimental flags. For hover-to-show UI (kebab menus, action buttons), use `isHovered || isNative || isCompact` so the controls are always visible on native and hover-to-show on web.
-- **Don't use Platform.OS as a proxy for layout capabilities.** Use breakpoints for layout decisions, not platform checks.
-- **Import `isWeb`/`isNative` from `@/constants/platform`.** Never write `const isWeb = Platform.OS === "web"` locally.
+- **NEVER use raw DOM APIs in a module that can be imported outside a browser.** A DOM
+  call at module scope breaks non-browser importers. Casting a RN ref to `HTMLElement` is a
+  red flag.
+- **NEVER use `onPointerEnter`/`onPointerLeave`.** They do not fire on native iOS or on
+  touch input. See [docs/hover.md](docs/hover.md) for the supported pattern.
+- **Hover only works on web.** For hover-to-show UI (kebab menus, action buttons), use
+  `isHovered || isNative || isCompact` so the controls are always visible on touch and
+  hover-to-show on desktop web. [docs/hover.md](docs/hover.md) owns this pattern.
+- **Don't use platform checks as a proxy for layout capabilities.** Use breakpoints for
+  layout decisions (`useIsCompactFormFactor()`), not platform constants.
+- **Import gates from `@/constants/platform`.** Never write `const isWeb = Platform.OS === "web"` locally.
 
 ## Debugging
 

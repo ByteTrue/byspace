@@ -81,4 +81,3 @@ Codex also works inside the BySpace terminal. Open a terminal in your workspace 
 
 - [Supported providers](/docs/supported-providers), for other agents you can run alongside Codex.
 - [Custom providers](/docs/custom-providers), for custom binaries, third-party endpoints, or multiple Codex profiles.
-- [BySpace vs Codex app](/alternatives/codex-app), for a feature comparison.

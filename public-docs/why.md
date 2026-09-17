@@ -38,7 +38,6 @@ BySpace is a self-hostable platform for running and orchestrating coding agents.
 
 - The CLI exposes the same surface as the app. Anything in the UI is scriptable.
 - [BySpace tools](/docs/orchestration). Agents can drive BySpace themselves: create isolated workspaces, spawn subagents, open terminals, and send prompts.
-- [Hub](/docs/hub). A service you host that starts agents on your daemon when someone mentions you on GitHub, Slack, or Discord.
 
 ## What it isn't
 
