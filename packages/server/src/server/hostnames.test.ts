@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { PersistedConfigSchema } from "./persisted-config.js";
-import { isHostnameAllowed, mergeHostnames, parseHostnamesEnv } from "./hostnames.js";
+import {
+  isHostnameAllowed,
+  isLanListenString,
+  isLoopbackHost,
+  mergeHostnames,
+  parseHostnamesEnv,
+} from "./hostnames.js";
 
 describe("hostnames (vite-style)", () => {
   it("allows localhost by default", () => {
@@ -52,5 +58,25 @@ describe("hostnames (vite-style)", () => {
     });
 
     expect(parsed.daemon?.hostnames).toEqual([".example.com"]);
+  });
+
+  it("classifies listen hosts for the LAN toggle", () => {
+    expect(isLoopbackHost("127.0.0.1")).toBe(true);
+    expect(isLoopbackHost("[::1]")).toBe(true);
+    expect(isLoopbackHost("::ffff:127.0.0.1")).toBe(true);
+    expect(isLoopbackHost("localhost")).toBe(true);
+    expect(isLoopbackHost("0.0.0.0")).toBe(false);
+    expect(isLoopbackHost("192.168.1.5")).toBe(false);
+  });
+
+  it("detects LAN-facing persisted listen strings", () => {
+    expect(isLanListenString("0.0.0.0:6777")).toBe(true);
+    expect(isLanListenString("192.168.1.5:6777")).toBe(true);
+    expect(isLanListenString("127.0.0.1:6777")).toBe(false);
+    expect(isLanListenString("[::1]:6777")).toBe(false);
+    expect(isLanListenString("/tmp/paseo.sock")).toBe(false);
+    expect(isLanListenString("unix:///tmp/paseo.sock")).toBe(false);
+    expect(isLanListenString("\\\\.\\pipe\\paseo")).toBe(false);
+    expect(isLanListenString(undefined)).toBe(false);
   });
 });

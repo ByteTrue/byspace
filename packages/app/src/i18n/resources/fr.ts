@@ -2357,6 +2357,8 @@ export const fr: TranslationResources = {
             fieldHint: "S'applique après le redémarrage du daemon",
             toggleVisibility: "Afficher ou masquer le mot de passe",
             clear: "Supprimer le mot de passe",
+            profileSyncFailed:
+              "Échec de l'enregistrement du mot de passe sur cet appareil. Une ressaisie pourra être nécessaire à la reconnexion.",
             save: "Enregistrer",
           },
           allowLan: {

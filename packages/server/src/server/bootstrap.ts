@@ -89,12 +89,6 @@ function formatListenTarget(listenTarget: ListenTarget | null): string | null {
   return listenTarget.path;
 }
 
-const LOOPBACK_LISTEN_HOSTS = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost"]);
-
-function isLoopbackListenHost(host: string): boolean {
-  return LOOPBACK_LISTEN_HOSTS.has(host.toLowerCase());
-}
-
 function createNetworkView(config: PaseoDaemonConfig): {
   allowLanAccess: boolean;
   tcpPort: number | null;
@@ -104,7 +98,7 @@ function createNetworkView(config: PaseoDaemonConfig): {
     if (target.type !== "tcp" || target.port <= 0) {
       return { allowLanAccess: false, tcpPort: null };
     }
-    return { allowLanAccess: !isLoopbackListenHost(target.host), tcpPort: target.port };
+    return { allowLanAccess: !isLoopbackHost(target.host), tcpPort: target.port };
   } catch {
     return { allowLanAccess: false, tcpPort: null };
   }
@@ -227,7 +221,7 @@ import {
   type ManagedProcessRegistry,
 } from "./managed-processes/managed-processes.js";
 import { terminateWithTreeKill } from "../utils/tree-kill.js";
-import { isHostnameAllowed, type HostnamesConfig } from "./hostnames.js";
+import { isHostnameAllowed, isLoopbackHost, type HostnamesConfig } from "./hostnames.js";
 import {
   createRequireBearerMiddleware,
   isAgentMcpRequestAuthorized,
@@ -1513,7 +1507,7 @@ export async function createPaseoDaemon(
             daemonConfigStore.refreshNetworkRuntimeState({
               tcpPort: boundListenTarget.type === "tcp" ? boundListenTarget.port : null,
               allowLanAccess:
-                boundListenTarget.type === "tcp" && !isLoopbackListenHost(boundListenTarget.host),
+                boundListenTarget.type === "tcp" && !isLoopbackHost(boundListenTarget.host),
             });
             const mcpBaseUrl = createAgentMcpBaseUrl(boundListenTarget);
             agentMcpBaseUrl =

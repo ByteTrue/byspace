@@ -11,6 +11,7 @@ import { Field, FormTextInput } from "@/components/ui/form-field";
 import { Switch } from "@/components/ui/switch";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { restartDaemonFromSettings } from "@/screens/settings/daemon-restart";
+import { useSessionStore } from "@/stores/session-store";
 import { settingsStyles } from "@/styles/settings";
 import type { MutableDaemonConfigPatch } from "@getpaseo/protocol/messages";
 import {
@@ -39,6 +40,11 @@ const ThemedEyeOff = withUnistyles(EyeOff);
 export function NetworkSection({ serverId }: { serverId: string }) {
   const { t } = useTranslation();
   const isConnected = useHostRuntimeIsConnected(serverId);
+  // COMPAT(daemonNetworkConfig): old daemons silently drop the network/auth
+  // patches, so the section must hide instead of letting a save appear to work.
+  const supportsNetworkSettings = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.daemonNetworkConfig === true,
+  );
   const { config, patchConfig } = useDaemonConfig(serverId);
   const daemonClient = useHostRuntimeClient(serverId);
   const hosts = useHosts();
@@ -109,41 +115,50 @@ export function NetworkSection({ serverId }: { serverId: string }) {
         useTls: direct.useTls,
         ...(password ? { password } : {}),
       }).catch((err) => {
+        // Without the stored password the reconnect after the restart fails
+        // with 401 — surface it instead of leaving a silent trap.
         console.error("[NetworkSection] Failed to update local connection password", err);
+        Alert.alert(t("settings.host.network.password.profileSyncFailed"));
       });
     },
-    [hosts, serverId, upsertDirectConnection],
+    [hosts, serverId, t, upsertDirectConnection],
   );
 
   const handleSavePassword = useCallback(
-    (password: string | null) => {
-      void applyPatch({ auth: { password } }).then((saved) => {
-        if (!saved) return undefined;
-        syncLocalProfilePassword(password);
-        promptRestart();
-        setIsSheetOpen(false);
-        return undefined;
-      });
+    async (password: string | null) => {
+      const saved = await applyPatch({ auth: { password } });
+      if (!saved) return;
+      syncLocalProfilePassword(password);
+      promptRestart();
+      setIsSheetOpen(false);
     },
     [applyPatch, promptRestart, syncLocalProfilePassword],
   );
 
   const handleAllowLanChange = useCallback(
-    (next: boolean) => {
-      void applyPatch({ network: { allowLanAccess: next } }).then((saved) => {
-        if (!saved) return undefined;
+    async (next: boolean) => {
+      if (await applyPatch({ network: { allowLanAccess: next } })) {
         promptRestart();
-        return undefined;
-      });
+      }
     },
     [applyPatch, promptRestart],
   );
 
-  const lanHint = useMemo(() => {
-    if (tcpPort === null) return t("settings.host.network.allowLan.noTcp");
-    if (!passwordSet) return t("settings.host.network.allowLan.noPassword");
-    return t("settings.host.network.allowLan.hint", { port: tcpPort });
-  }, [passwordSet, tcpPort, t]);
+  // Plain string per render; the branches map to real UI states and a memo
+  // only obscures which dependency changes them.
+  let lanHint: string;
+  if (tcpPort === null) {
+    lanHint = t("settings.host.network.allowLan.noTcp");
+  } else if (passwordSet) {
+    lanHint = t("settings.host.network.allowLan.hint", { port: tcpPort });
+  } else {
+    lanHint = t("settings.host.network.allowLan.noPassword");
+  }
+
+  if (!supportsNetworkSettings) {
+    // Old daemon: patches would be dropped silently. Hide the section.
+    return null;
+  }
 
   if (!isConnected) {
     return (
@@ -217,16 +232,15 @@ export function NetworkSection({ serverId }: { serverId: string }) {
         </View>
       </View>
 
-      {isSheetOpen ? (
-        <PasswordSheet
-          visible
-          passwordSet={passwordSet}
-          allowLanAccess={allowLanAccess}
-          isBusy={isBusy}
-          onClose={handleCloseSheet}
-          onSave={handleSavePassword}
-        />
-      ) : null}
+      <PasswordSheet
+        visible={isSheetOpen}
+        passwordSet={passwordSet}
+        allowLanAccess={allowLanAccess}
+        isBusy={isBusy}
+        error={error}
+        onClose={handleCloseSheet}
+        onSave={handleSavePassword}
+      />
     </SettingsSection>
   );
 }
@@ -236,6 +250,7 @@ function PasswordSheet({
   passwordSet,
   allowLanAccess,
   isBusy,
+  error,
   onClose,
   onSave,
 }: {
@@ -243,6 +258,7 @@ function PasswordSheet({
   passwordSet: boolean;
   allowLanAccess: boolean;
   isBusy: boolean;
+  error: string | null;
   onClose: () => void;
   onSave: (password: string | null) => void;
 }) {
@@ -284,6 +300,7 @@ function PasswordSheet({
       <Field
         label={t("settings.host.network.password.fieldLabel")}
         hint={t("settings.host.network.password.fieldHint")}
+        error={error}
         testID="host-page-network-password"
       >
         <View style={styles.passwordRow}>
@@ -292,7 +309,6 @@ function PasswordSheet({
               size="sm"
               testID="host-page-network-password-input"
               accessibilityLabel={t("settings.host.network.password.fieldLabel")}
-              initialValue=""
               onChangeText={setPassword}
               autoCapitalize="none"
               autoCorrect={false}

@@ -119,6 +119,31 @@ daemon 默认只监听 127.0.0.1，局域网设备无法连接；要放开只能
 - store 返回的 view patch 同时携带 `passwordSet`/`allowLanAccess`（原设计只更新持久化），否则 UI 在重启前显示旧状态，且 UI 显示的是“已保存待生效”状态，比隐藏字段更诚实
 - 错误信息英文硬编码（跟随 `relay` override 的现有先例，未入 i18n）
 
+## Review 修复（PR #41 评审后追加）
+
+**正确性（P1，必修）**
+
+- 清密码的 LAN 判定改为「持久化 listen ∨ 视图 allowLanAccess」双源：此前只看视图，`BYSPACE_LISTEN=127.0.0.1` 启动可绕过已开 LAN 的盘上状态清掉密码，去掉 override 重启后 LAN 裸奔。新增 `isLanListenString`（hostnames.ts）判定盘上 listen。
+- App 补上 `features.daemonNetworkConfig` 消费（此前只在协议端声明，客户端漏接）：老 daemon 上整个 Network 分区隐藏，而不是 patch 被静默丢弃后假成功。
+
+**正确性（P2）**
+
+- socket/pipe daemon 收到 network patch 时不再落盘 `127.0.0.1:0`（跳过 listen 写入，保留原值）。
+- patch 失败错误透传进 PasswordSheet 的 Field（override 拒绝等路径不再无反馈）。
+- 本机连接档案同步失败改为 Alert 提示（`password.profileSyncFailed`，9 locale），不再只有 console.error。
+
+**Ponytail 收缩（-45 行目标中已落地主要项）**
+
+- validate/translate 三段单调用者链合并为单方法 + 3 个模块级纯函数（resolveEffectivePasswordSet / resolveLanOpen / resolvePersistedListen / resolveAuthPasswordHash），穿针参数消失。
+- bootstrap 与 workspace-service-env 两份漂移的 loopback 判定收敛到 `hostnames.isLoopbackHost`（语义差异：统一认 `::ffff:127.0.0.1`，不再认 `[::1]`——`isLoopbackHost` 会剥掉方括号，两者实际都认）。
+- App：PasswordSheet 改无条件渲染 + `visible` prop、删冗余 `initialValue=""`、`lanHint` 三元链改 if/let、`.then` 回调改 async/await。
+
+**CI flaky（executable-resolution.test.ts，Windows）**
+
+- winget 用例把 node.exe 拷进临时目录并当作子进程 probe，Windows 句柄/AV 锁导致清理 `rmSync` 报 EBUSY。清理改为 EBUSY/EPERM/ENOTEMPTY 重试 5 次×100ms，仍失败则 best-effort 跳过（留给 OS 清理），不再让无关测试失败。
+
+**回归验证**：相关 7 文件 147 过 7 skip；typecheck（protocol/server/app）、全仓 lint、format 全绿。
+
 ## 关闭时
 
 - 回写候选：`codestable/spec/connection.md` 安全边界一节补充"局域网放开与密码的强制绑定"；若有坑点（如 listen 改写与 override 优先级的交互）记 note

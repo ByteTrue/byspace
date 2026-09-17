@@ -2355,6 +2355,8 @@ export const en = {
             fieldHint: "Applies after the daemon restarts",
             toggleVisibility: "Show or hide password",
             clear: "Clear password",
+            profileSyncFailed:
+              "Failed to save the password on this device. Reconnecting may require re-entering it.",
             save: "Save",
           },
           allowLan: {

@@ -2315,6 +2315,8 @@ export const ko: TranslationResources = {
             fieldHint: "daemon 재시작 후 적용됩니다",
             toggleVisibility: "비밀번호 표시/숨기기",
             clear: "비밀번호 제거",
+            profileSyncFailed:
+              "이 기기에 비밀번호를 저장하지 못했습니다. 다시 연결할 때 재입력이 필요할 수 있습니다.",
             save: "저장",
           },
           allowLan: {

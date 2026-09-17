@@ -2355,6 +2355,8 @@ export const es: TranslationResources = {
             fieldHint: "Se aplica tras reiniciar el daemon",
             toggleVisibility: "Mostrar u ocultar la contraseña",
             clear: "Borrar contraseña",
+            profileSyncFailed:
+              "No se pudo guardar la contraseña en este dispositivo. Reconectar puede requerir volver a introducirla.",
             save: "Guardar",
           },
           allowLan: {

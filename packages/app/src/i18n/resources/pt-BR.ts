@@ -2342,6 +2342,8 @@ export const ptBR: TranslationResources = {
             fieldHint: "Aplica-se após reiniciar o daemon",
             toggleVisibility: "Mostrar ou ocultar a senha",
             clear: "Remover senha",
+            profileSyncFailed:
+              "Falha ao salvar a senha neste dispositivo. Reconectar pode exigir digitá-la novamente.",
             save: "Salvar",
           },
           allowLan: {

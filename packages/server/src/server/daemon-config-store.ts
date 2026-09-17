@@ -4,6 +4,7 @@ import {
   type PersistedConfig,
 } from "./persisted-config.js";
 import { hashDaemonPassword } from "./auth.js";
+import { isLanListenString } from "./hostnames.js";
 import { ProviderOverrideSchema } from "./agent/provider-launch-config.js";
 import {
   MutableDaemonConfigSchema,
@@ -319,6 +320,87 @@ function pickNetworkAuthPatchFields(patch: MutableDaemonConfigPatch): SupportedM
   };
 }
 
+function resolveEffectivePasswordSet(input: {
+  authPatch: { password?: string | null } | undefined;
+  passwordOverridden: boolean;
+  persistedPassword: string | undefined;
+  viewPasswordSet: boolean;
+}): boolean {
+  if (input.authPatch !== undefined) {
+    return input.authPatch.password !== null;
+  }
+  return input.passwordOverridden || input.persistedPassword !== undefined || input.viewPasswordSet;
+}
+
+/**
+ * Post-patch LAN state. When the patch sets the listen itself, the patch value
+ * is what the invariant checks; otherwise the daemon keeps whatever it exposes
+ * today — persisted first (what a restart will use), then the view.
+ */
+/** Persisted listen rewrite for a network patch; undefined keeps the current value. */
+function resolvePersistedListen(
+  networkPatch: { allowLanAccess?: boolean } | undefined,
+  controls: DaemonNetworkControls,
+): string | undefined {
+  if (networkPatch === undefined) {
+    return undefined;
+  }
+  const tcpPort = controls.getTcpPort();
+  // A socket/pipe daemon has no TCP port to bind; skipping the write keeps
+  // the persisted listen intact instead of inventing a broken one.
+  if (tcpPort === null) {
+    return undefined;
+  }
+  return `${networkPatch.allowLanAccess ? "0.0.0.0" : "127.0.0.1"}:${tcpPort}`;
+}
+
+/** Bcrypt of a patch password, or null to clear; undefined keeps the current value. */
+function resolveAuthPasswordHash(
+  authPatch: { password?: string | null } | undefined,
+): string | null | undefined {
+  if (authPatch === undefined) {
+    return undefined;
+  }
+  // The patch schema rejects empty strings, so truthy here means a real password.
+  return authPatch.password ? hashDaemonPassword(authPatch.password) : null;
+}
+
+function resolveLanOpen(input: {
+  networkPatch: { allowLanAccess?: boolean } | undefined;
+  persistedListen: string | undefined;
+  viewAllowLanAccess: boolean;
+}): boolean {
+  if (input.networkPatch !== undefined) {
+    return input.networkPatch.allowLanAccess === true;
+  }
+  return isLanListenString(input.persistedListen) || input.viewAllowLanAccess;
+}
+
+/** Guards for the network/auth patch: launch overrides and the password-before-LAN invariant. */
+function assertNetworkAuthPatchAllowed(input: {
+  networkPatch: { allowLanAccess?: boolean } | undefined;
+  authPatch: { password?: string | null } | undefined;
+  controls: DaemonNetworkControls;
+  lanOpen: boolean;
+  effectivePasswordSet: boolean;
+}): void {
+  if (input.lanOpen && !input.effectivePasswordSet) {
+    throw new Error(
+      input.authPatch?.password === null
+        ? "Disable LAN access before removing the daemon password"
+        : "Set a daemon password before allowing LAN access; an open daemon lets anyone on the network run agents",
+    );
+  }
+  if (input.networkPatch?.allowLanAccess !== true) {
+    return;
+  }
+  if (input.controls.getTcpPort() === null) {
+    throw new Error(
+      "LAN access requires a TCP listener; this daemon uses a unix socket or named pipe",
+    );
+  }
+}
+
 export function applyMutableProviderConfigToOverrides(
   baseOverrides: Record<string, ProviderOverride> | undefined,
   mutableProviders: MutableDaemonConfig["providers"] | undefined,
@@ -482,74 +564,45 @@ export class DaemonConfigStore {
     if (!controls) {
       throw new Error("Network settings are not available on this daemon instance");
     }
-    const validated = this.validateNetworkAuthPatch(networkPatch, authPatch, controls);
-    return this.translateNetworkAuthPatch(networkPatch, authPatch, controls, validated);
-  }
-
-  /** Guards for the network/auth patch: launch overrides and the password-before-LAN invariant. */
-  private validateNetworkAuthPatch(
-    networkPatch: { allowLanAccess?: boolean } | undefined,
-    authPatch: { password?: string | null } | undefined,
-    controls: DaemonNetworkControls,
-  ): { allowLan: boolean; effectivePasswordSet: boolean } {
-    const persisted = loadPersistedConfig(this.paseoHome, this.logger);
-    const listenOverridden = controls.isListenOverridden();
-    const passwordOverridden = controls.isPasswordOverridden();
-    // The launch value beats the file on restart, so an edit here would look
-    // accepted and then silently revert — reject it instead.
-    if (networkPatch !== undefined && listenOverridden) {
+    if (networkPatch !== undefined && controls.isListenOverridden()) {
+      // The launch value beats the file on restart, so an edit here would look
+      // accepted and then silently revert — reject it instead.
       throw new Error(
         "Listen address is controlled by BYSPACE_LISTEN or a --listen launch flag. Remove the override before changing LAN access here.",
       );
     }
-    if (authPatch !== undefined && passwordOverridden) {
+    if (authPatch !== undefined && controls.isPasswordOverridden()) {
       throw new Error(
         "Password is controlled by the PASEO_PASSWORD environment variable. Remove the override before changing it here.",
       );
     }
 
-    const currentPasswordSet =
-      passwordOverridden ||
-      Boolean(persisted.daemon?.auth?.password) ||
-      this.current.auth?.passwordSet === true;
-    const effectivePasswordSet =
-      authPatch !== undefined ? authPatch.password !== null : currentPasswordSet;
-    const allowLan =
-      networkPatch !== undefined
-        ? networkPatch.allowLanAccess === true
-        : this.current.network?.allowLanAccess === true;
-    if (allowLan && !effectivePasswordSet) {
-      throw new Error(
-        authPatch !== undefined && authPatch.password === null
-          ? "Disable LAN access before removing the daemon password"
-          : "Set a daemon password before allowing LAN access; an open daemon lets anyone on the network run agents",
-      );
-    }
-    if (allowLan && controls.getTcpPort() === null) {
-      throw new Error(
-        "LAN access requires a TCP listener; this daemon uses a unix socket or named pipe",
-      );
-    }
-    return { allowLan, effectivePasswordSet };
-  }
+    const persisted = loadPersistedConfig(this.paseoHome, this.logger);
+    // LAN state has two owners: the persisted listen address decides what the
+    // daemon will actually expose on restart, the view mirrors it for clients.
+    // A password clear must consult BOTH so a launch override that silences the
+    // view cannot launder it past an already-open listener.
+    const effectivePasswordSet = resolveEffectivePasswordSet({
+      authPatch,
+      passwordOverridden: controls.isPasswordOverridden(),
+      persistedPassword: persisted.daemon?.auth?.password,
+      viewPasswordSet: this.current.auth?.passwordSet === true,
+    });
+    const lanOpen = resolveLanOpen({
+      networkPatch,
+      persistedListen: persisted.daemon?.listen,
+      viewAllowLanAccess: this.current.network?.allowLanAccess === true,
+    });
+    assertNetworkAuthPatchAllowed({
+      networkPatch,
+      authPatch,
+      controls,
+      lanOpen,
+      effectivePasswordSet,
+    });
 
-  private translateNetworkAuthPatch(
-    networkPatch: { allowLanAccess?: boolean } | undefined,
-    authPatch: { password?: string | null } | undefined,
-    controls: DaemonNetworkControls,
-    validated: { allowLan: boolean; effectivePasswordSet: boolean },
-  ): { persistedPatch: DaemonPersistedPatch; viewPatch: SupportedMutableConfigPatch } {
-    let listen: string | undefined;
-    if (networkPatch !== undefined) {
-      const tcpPort = controls.getTcpPort() ?? 0;
-      listen = `${networkPatch.allowLanAccess ? "0.0.0.0" : "127.0.0.1"}:${tcpPort}`;
-    }
-
-    let authPasswordHash: string | null | undefined;
-    if (authPatch !== undefined) {
-      // The patch schema rejects empty strings, so truthy here means a real password.
-      authPasswordHash = authPatch.password ? hashDaemonPassword(authPatch.password) : null;
-    }
+    const listen = resolvePersistedListen(networkPatch, controls);
+    const authPasswordHash = resolveAuthPasswordHash(authPatch);
 
     return {
       persistedPatch: { listen, authPasswordHash },
@@ -557,14 +610,12 @@ export class DaemonConfigStore {
         ...(networkPatch !== undefined
           ? {
               network: {
-                allowLanAccess: validated.allowLan,
+                allowLanAccess: networkPatch.allowLanAccess,
                 tcpPort: this.current.network?.tcpPort ?? null,
               },
             }
           : {}),
-        ...(authPatch !== undefined
-          ? { auth: { passwordSet: validated.effectivePasswordSet } }
-          : {}),
+        ...(authPatch !== undefined ? { auth: { passwordSet: authPatch.password !== null } } : {}),
       },
     };
   }

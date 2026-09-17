@@ -46,6 +46,28 @@ function isDefaultAllowedHostname(hostname: string): boolean {
   return false;
 }
 
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost"]);
+
+/** Whether a listen host (no port, IPv6 brackets tolerated) is a loopback address. */
+export function isLoopbackHost(host: string): boolean {
+  const normalized = host.trim().toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+  return LOOPBACK_HOSTS.has(normalized);
+}
+
+/**
+ * Whether a persisted `daemon.listen` string selects a non-loopback TCP host,
+ * i.e. the daemon comes up reachable from the network. Unix sockets, named
+ * pipes, and unparseable values are treated as not LAN-facing.
+ */
+export function isLanListenString(listen: string | undefined): boolean {
+  if (!listen) return false;
+  if (listen.startsWith("unix://") || listen.startsWith("pipe://")) return false;
+  if (/^[A-Za-z]:\\/.test(listen) || listen.startsWith("/")) return false;
+  if (!listen.includes(":")) return false;
+  const host = listen.slice(0, listen.lastIndexOf(":"));
+  return !isLoopbackHost(host);
+}
+
 /**
  * Vite-style hostname allowlist check, adapted to raw Host headers.
  *

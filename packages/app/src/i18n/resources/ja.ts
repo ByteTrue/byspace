@@ -2328,6 +2328,8 @@ export const ja: TranslationResources = {
             fieldHint: "daemon の再起動後に反映されます",
             toggleVisibility: "パスワードを表示/非表示",
             clear: "パスワードを解除",
+            profileSyncFailed:
+              "このデバイスへのパスワード保存に失敗しました。再接続時に再入力が必要になる場合があります。",
             save: "保存",
           },
           allowLan: {

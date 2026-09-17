@@ -2341,6 +2341,8 @@ export const ru: TranslationResources = {
             fieldHint: "Вступит в силу после перезапуска daemon",
             toggleVisibility: "Показать или скрыть пароль",
             clear: "Удалить пароль",
+            profileSyncFailed:
+              "Не удалось сохранить пароль на этом устройстве. При переподключении может потребоваться ввести его снова.",
             save: "Сохранить",
           },
           allowLan: {

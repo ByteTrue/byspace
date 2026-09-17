@@ -8,6 +8,7 @@ import {
   applyMutableProviderConfigToOverrides,
   type DaemonNetworkControls,
 } from "./daemon-config-store.js";
+import { hashDaemonPassword } from "./auth.js";
 import { loadPersistedConfig } from "./persisted-config.js";
 import type { PersistedConfig } from "./persisted-config.js";
 import type { MutableDaemonConfig } from "@getpaseo/protocol/messages";
@@ -94,6 +95,8 @@ describe("applyMutableProviderConfigToOverrides", () => {
 
 describe("DaemonConfigStore", () => {
   const tempDirs: string[] = [];
+  // bcrypt cost 12 is slow; a single fixture hash shared by config-file tests.
+  const HASH_FIXTURE = hashDaemonPassword("fixture");
 
   afterEach(() => {
     for (const dir of tempDirs) {
@@ -1093,6 +1096,47 @@ describe("DaemonConfigStore", () => {
     expect(() => store.patch({ network: { allowLanAccess: true } })).toThrow(
       /requires a TCP listener/,
     );
+  });
+
+  test("clearing the password is rejected when the persisted listen is LAN-open even if the view is loopback", () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+    writeFileSync(
+      path.join(paseoHome, "config.json"),
+      JSON.stringify({ daemon: { listen: "0.0.0.0:6777", auth: { password: HASH_FIXTURE } } }),
+    );
+    // A launch override forced this run onto loopback, hiding the open listener
+    // from the view. The invariant must still consult the persisted value.
+    const store = createStore(paseoHome, {
+      initial: { network: { allowLanAccess: false, tcpPort: 6777 }, auth: { passwordSet: true } },
+      networkControls: {
+        ...loopbackControls(),
+        isListenOverridden: () => true,
+      },
+    });
+
+    expect(() => store.patch({ auth: { password: null } })).toThrow(
+      /Disable LAN access before removing the daemon password/,
+    );
+    expect(loadPersistedConfig(paseoHome).daemon?.auth?.password).toBe(HASH_FIXTURE);
+  });
+
+  test("a network patch on a socket daemon leaves the persisted listen untouched", () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+    writeFileSync(
+      path.join(paseoHome, "config.json"),
+      JSON.stringify({ daemon: { listen: "/tmp/paseo.sock", auth: { password: HASH_FIXTURE } } }),
+    );
+    const store = createStore(paseoHome, {
+      initial: { network: { allowLanAccess: false, tcpPort: null }, auth: { passwordSet: true } },
+      networkControls: { ...loopbackControls(), getTcpPort: () => null },
+    });
+
+    store.patch({ network: { allowLanAccess: false } });
+
+    expect(loadPersistedConfig(paseoHome).daemon?.listen).toBe("/tmp/paseo.sock");
+    expect(store.get().network?.allowLanAccess).toBe(false);
   });
 
   test("network and password patches are rejected under launch overrides", () => {

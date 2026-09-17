@@ -2304,6 +2304,8 @@ export const ar: TranslationResources = {
             fieldHint: "تسري بعد إعادة تشغيل الخادم",
             toggleVisibility: "إظهار كلمة المرور أو إخفاؤها",
             clear: "إزالة كلمة المرور",
+            profileSyncFailed:
+              "تعذّر حفظ كلمة المرور على هذا الجهاز. قد يتطلب الاتصال مجددًا إعادة إدخالها.",
             save: "حفظ",
           },
           allowLan: {

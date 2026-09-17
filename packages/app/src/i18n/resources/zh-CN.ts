@@ -2282,6 +2282,7 @@ export const zhCN: TranslationResources = {
             fieldHint: "保存后重启 daemon 生效",
             toggleVisibility: "显示或隐藏密码",
             clear: "清除密码",
+            profileSyncFailed: "本机保存密码失败，重启后重连可能需要重新输入",
             save: "保存",
           },
           allowLan: {
