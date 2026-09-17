@@ -60,10 +60,11 @@ jobs:
         run: >-
           node --test
           scripts/ci-workflow.test.mjs
+          scripts/docs-links.test.mjs
           scripts/terminal-performance-workflow.test.mjs
           scripts/daemon-launch-contract.test.mjs
           scripts/release-version-utils.test.mjs
-          scripts/sync-fdroid-changelogs.test.mjs
+          scripts/sync-release-notes-from-changelog.test.mjs
 
   terminal-performance-windows:
     name: terminal-performance (windows-latest)

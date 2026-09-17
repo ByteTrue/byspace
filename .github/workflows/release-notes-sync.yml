@@ -1,0 +1,65 @@
+name: Release Notes Sync
+
+# The GitHub Release body must come from CHANGELOG.md, not from GitHub's
+# --generate-notes (PR titles). Nothing else writes it: `Publish npm` and
+# `Docker` each create the Release if it is missing, and whichever runs first
+# wins the initial body. This workflow overwrites that body with the matching
+# changelog entry after the tag push.
+#
+# It does not create the Release. `Publish npm` and `Docker` own creation, and
+# the sync script's create path marks a Release as a draft, which nothing in
+# this repository would ever publish.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to sync (e.g. v0.14.3). Leave empty to use the newest changelog entry."
+        required: false
+        type: string
+
+concurrency:
+  group: release-notes-sync-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sync-release-notes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.20.0"
+
+      - name: Sync release body from changelog
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # On a tag push the Release may not exist yet: Publish npm and Docker
+          # create it in parallel. Wait for one of them instead of racing.
+          for _ in $(seq 1 60); do
+            if gh release view "$INPUT_TAG" --repo "$REPO" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 10
+          done
+
+          if ! gh release view "$INPUT_TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "Release $INPUT_TAG was never created; skipping notes sync." >&2
+            exit 0
+          fi
+
+          node scripts/sync-release-notes-from-changelog.mjs --repo "$REPO" --tag "$INPUT_TAG"

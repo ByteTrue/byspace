@@ -95,8 +95,9 @@ Stable `vX.Y.Z` tag pushes publish `ghcr.io/bytetrue/byspace:X.Y.Z` and
 `ghcr.io/bytetrue/byspace:latest`; prerelease `vX.Y.Z-beta.N` tag pushes publish only
 `ghcr.io/bytetrue/byspace:X.Y.Z-beta.N` and never move `latest`.
 
-After the tag push, sync the GitHub Release body from the changelog — see
-**Release notes**. Then confirm every item in the completion checklist.
+After the tag push, **Release Notes Sync** sets the GitHub Release body from the
+changelog automatically; confirm it landed (see **Release notes**). Then confirm every
+item in the completion checklist.
 
 **Stable means stable.** If the user says "stable" or "ship stable", do not ask whether they want a beta first. They picked stable; treat it as a direct stable release. Only run the beta flow when the user explicitly says "beta".
 
@@ -190,15 +191,20 @@ later transitions and stops itself when the release is complete.
 
 ## Release notes on GitHub
 
-Nothing reads `CHANGELOG.md` automatically. On a tag push, both **Publish npm** and
-**Docker** create the GitHub Release if it does not exist yet, and whichever runs
-first wins the initial body:
+The **Release Notes Sync** workflow (`.github/workflows/release-notes-sync.yml`) makes
+the Release body match the changelog. It runs on every `v*` tag push, waits for
+**Publish npm** or **Docker** to create the Release, then overwrites the body with the
+matching `CHANGELOG.md` entry. It does not create the Release itself: the sync script's
+create path marks a Release as a draft, and nothing in this repository publishes drafts.
+
+The workflows that create the Release both pick an initial body, which is why the sync
+step exists — whichever runs first wins:
 
 - **Publish npm** uses `.github/release/<tag>.md` when present, otherwise the placeholder `BySpace <tag>`
 - **Docker** uses `.github/release/<tag>.md` when present, otherwise `--generate-notes` (the PR-title list)
 
-To give the Release the changelog entry, either commit
-`.github/release/<tag>.md` before tagging, or sync it after the tag push:
+To re-sync a Release whose body drifted, dispatch the workflow with a tag, or run it
+directly:
 
 ```bash
 node scripts/sync-release-notes-from-changelog.mjs --repo ByteTrue/byspace --tag vX.Y.Z
@@ -382,7 +388,7 @@ Each beta entry records what its testers receive. Promotion produces the single 
 - [ ] The GitHub prerelease has the changelog body and both assets with their `.sha256` siblings
 - [ ] The GitHub prerelease is marked as a prerelease
 - [ ] Docker published the versioned beta image without moving `latest`
-- [ ] The release notes were synced from `CHANGELOG.md`
+- [ ] **Release Notes Sync** overwrote the prerelease body with the changelog entry
 - [ ] The release heartbeat was created after the tag push and deleted only after every item above passed
 
 ### Stable release
@@ -402,5 +408,5 @@ Each beta entry records what its testers receive. Promotion produces the single 
 - [ ] The GitHub Release is published with the changelog body and both assets with their `.sha256` siblings
 - [ ] Docker published both the versioned and `latest` images
 - [ ] **Deploy App** deployed the stable web build to `app.byspace.cc.cd`
-- [ ] The release notes were synced from `CHANGELOG.md`
+- [ ] **Release Notes Sync** overwrote the Release body with the changelog entry
 - [ ] The release heartbeat was created after the tag push and deleted only after every item above passed

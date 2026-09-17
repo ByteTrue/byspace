@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { relative as relativePath } from "node:path";
 import test from "node:test";
 
@@ -255,4 +255,26 @@ test("browser tests own their directory suite", () => {
   }
 
   assert.ok(filters.browser.length > 0);
+});
+
+// `node --test` exits 0 when a named file is missing as long as another file in the
+// same invocation exists and passes, so a deleted test script silently stops running
+// instead of failing the step. Assert every script named in the contract step exists.
+test("every script named in the CI contract step exists", () => {
+  const ciSource = readFileSync(ciWorkflowPath, "utf8");
+  const stepMatch = /- name: Validate CI contracts\n\s+run: >-\n([\s\S]*?)\n\n/.exec(ciSource);
+  assert.ok(stepMatch, "Validate CI contracts step not found in ci.yml");
+
+  const named = stepMatch[1]
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("scripts/"));
+
+  assert.ok(named.length > 0, "no scripts found in the Validate CI contracts step");
+  for (const script of named) {
+    assert.ok(
+      existsSync(new URL(script, repoRoot)),
+      `${script} is named in the Validate CI contracts step but does not exist`,
+    );
+  }
 });
