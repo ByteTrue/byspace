@@ -18,7 +18,7 @@ describe("projectDisplayNameFromProjectId", () => {
 
 describe("projectIconPlaceholderLabelFromDisplayName", () => {
   it("uses repo name instead of owner for GitHub-style display names", () => {
-    expect(projectIconPlaceholderLabelFromDisplayName("bytetrue/byspace")).toBe("paseo");
+    expect(projectIconPlaceholderLabelFromDisplayName("bytetrue/byspace")).toBe("byspace");
   });
 
   it("returns the original display name when it has no path separator", () => {
