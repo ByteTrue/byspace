@@ -5,6 +5,29 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.14.4 - 2026-09-18
+
+BySpace no longer carries Paseo identity in its package names, on the wire, or on disk.
+Update the app and the daemon together.
+
+### Changed
+
+- Renamed every internal workspace package to the `@bytetrue` scope, matching the published package
+- Renamed the WebSocket RPC literals, the `paseo.bearer` authentication subprotocol, and the MCP server name agents connect to
+- Renamed browser storage keys, so existing hosts must be paired again
+- Renamed the on-disk git namespace for managed worktrees to `.git/byspace`
+- Project config files are now read only as `byspace.json`
+- Corrected Paseo names in the daemon errors for unbound and disabled OpenCode sessions
+
+### Added
+
+- Added a self-hosted JSON Schema for `config.json` at `https://app.byspace.cc.cd/schemas/byspace.config.v1.json`, generated from the daemon's own config definition
+
+### Fixed
+
+- Fixed GitHub Releases showing a PR-title list instead of the changelog entry for the version
+- Fixed the changelog working-notes comment being appended to the newest entry and shipped in its release notes
+
 ## 0.14.3 - 2026-09-17
 
 ### Added
