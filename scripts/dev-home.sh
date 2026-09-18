@@ -4,7 +4,7 @@ default_dev_byspace_root() {
   git rev-parse --show-toplevel 2>/dev/null || pwd
 }
 
-default_dev_paseo_root() {
+default_dev_byspace_root() {
   default_dev_byspace_root
 }
 
@@ -35,7 +35,7 @@ has_files() {
 }
 
 seed_worktree_byspace_home() {
-  local source_home="${BYSPACE_DEV_SEED_HOME:-${PASEO_DEV_SEED_HOME:-$HOME/.byspace}}"
+  local source_home="${BYSPACE_DEV_SEED_HOME:-${BYSPACE_DEV_SEED_HOME:-$HOME/.byspace}}"
   local target_home="$1"
 
   if [ ! -d "$source_home" ]; then
@@ -48,7 +48,7 @@ seed_worktree_byspace_home() {
     return
   fi
 
-  if [ "${BYSPACE_DEV_RESET_HOME:-${PASEO_DEV_RESET_HOME:-0}}" = "1" ]; then
+  if [ "${BYSPACE_DEV_RESET_HOME:-${BYSPACE_DEV_RESET_HOME:-0}}" = "1" ]; then
     rm -rf "$target_home"
   elif has_files "$target_home"; then
     echo "  Seed:    skipped (${target_home} already has data)"
@@ -66,7 +66,7 @@ seed_worktree_byspace_home() {
   echo "  Seed:    copied metadata from ${source_home}"
 }
 
-seed_worktree_paseo_home() {
+seed_worktree_byspace_home() {
   seed_worktree_byspace_home "$@"
 }
 
@@ -91,7 +91,7 @@ fs.writeFileSync(path, JSON.stringify(cfg, null, 2));
 }
 
 resolve_dev_daemon_endpoint() {
-  local endpoint="${BYSPACE_DEV_DAEMON_ENDPOINT:-${PASEO_DEV_DAEMON_ENDPOINT:-}}"
+  local endpoint="${BYSPACE_DEV_DAEMON_ENDPOINT:-${BYSPACE_DEV_DAEMON_ENDPOINT:-}}"
   if [ -n "$endpoint" ]; then
     echo "$endpoint"
     return
@@ -105,8 +105,8 @@ resolve_dev_daemon_endpoint() {
 }
 
 configure_dev_byspace_home() {
-  local seed_home="${BYSPACE_DEV_SEED_HOME:-${PASEO_DEV_SEED_HOME:-}}"
-  local managed_home="${BYSPACE_DEV_MANAGED_HOME:-${PASEO_DEV_MANAGED_HOME:-0}}"
+  local seed_home="${BYSPACE_DEV_SEED_HOME:-${BYSPACE_DEV_SEED_HOME:-}}"
+  local managed_home="${BYSPACE_DEV_MANAGED_HOME:-${BYSPACE_DEV_MANAGED_HOME:-0}}"
 
   if [ -n "${BYSPACE_HOME:-}" ]; then
     export BYSPACE_HOME
@@ -122,10 +122,10 @@ configure_dev_byspace_home() {
 
   export BYSPACE_HOME
   local dev_root
-  dev_root="${BYSPACE_DEV_ROOT:-${PASEO_DEV_ROOT:-$(default_dev_byspace_root)}}"
+  dev_root="${BYSPACE_DEV_ROOT:-${BYSPACE_DEV_ROOT:-$(default_dev_byspace_root)}}"
   BYSPACE_HOME="$dev_root/.dev/byspace-home"
   export BYSPACE_DEV_MANAGED_HOME=1
-  export PASEO_DEV_MANAGED_HOME=1
+  export BYSPACE_DEV_MANAGED_HOME=1
 
   if [ -n "$seed_home" ]; then
     seed_worktree_byspace_home "$BYSPACE_HOME"
@@ -135,13 +135,13 @@ configure_dev_byspace_home() {
   configure_dev_daemon_config
 }
 
-configure_dev_paseo_home() {
+configure_dev_byspace_home() {
   configure_dev_byspace_home "$@"
 }
 
 configure_dev_command_env() {
   if [ -z "${BYSPACE_LISTEN:-}" ]; then
-    local service_port="${BYSPACE_SERVICE_DAEMON_PORT:-${PASEO_SERVICE_DAEMON_PORT:-}}"
+    local service_port="${BYSPACE_SERVICE_DAEMON_PORT:-${BYSPACE_SERVICE_DAEMON_PORT:-}}"
     if [ -n "$service_port" ]; then
       export BYSPACE_LISTEN="0.0.0.0:${service_port}"
     else

@@ -134,11 +134,7 @@ npm run build:server
 npm run typecheck
 ```
 
-## 関連プロジェクト
-
-- [getpaseo/paseo-relay](https://github.com/getpaseo/paseo-relay) — Elixir 製の公式分散リレー
-- [paseo-vscode](https://marketplace.visualstudio.com/items?itemName=hinnes.paseo-vscode) — VS Code 拡張機能
-
 ## ライセンス
 
-Apache-2.0
+Apache-2.0。BySpace は [Paseo](https://github.com/getpaseo/paseo) のフォークです。
+Paseo の著作権は Mohamed Boudra（2025 年以降）に帰属し、同じく Apache-2.0 で提供されています。

@@ -3,7 +3,7 @@
 /**
  * Phase 2: Daemon Command Tests
  *
- * Tests daemon commands with an isolated PASEO_HOME.
+ * Tests daemon commands with an isolated BYSPACE_HOME.
  *
  * Tests:
  * - daemon --help shows subcommands
@@ -24,17 +24,17 @@ import { mkdtemp, readFile, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { dirname, join } from "path";
 import YAML from "yaml";
-import { runLocalPaseo } from "./helpers/local-cli.ts";
+import { runLocalBySpace } from "./helpers/local-cli.ts";
 
 console.log("=== Daemon Commands ===\n");
 
 // Keep restart off the default ports to avoid collisions with any existing daemon.
 const port = 10000 + Math.floor(Math.random() * 50000);
-const paseoHome = await mkdtemp(join(tmpdir(), "paseo-test-home-"));
+const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-test-home-"));
 const require = createRequire(import.meta.url);
 
 function daemonCommand(args: string[]) {
-  return runLocalPaseo(["daemon", ...args], { BYSPACE_HOME: paseoHome });
+  return runLocalBySpace(["daemon", ...args], { BYSPACE_HOME: byspaceHome });
 }
 
 async function stopChildProcess(child: ChildProcess): Promise<void> {
@@ -51,13 +51,13 @@ async function stopChildProcess(child: ChildProcess): Promise<void> {
 }
 
 function resolveDaemonWorkerEntry(): string {
-  let currentDir = dirname(require.resolve("@getpaseo/server"));
+  let currentDir = dirname(require.resolve("@byspace/server"));
 
   while (true) {
     const packageJsonPath = join(currentDir, "package.json");
     if (existsSync(packageJsonPath)) {
       const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
-      if (packageJson.name === "@getpaseo/server") {
+      if (packageJson.name === "@byspace/server") {
         const candidates = [
           join(currentDir, "dist", "server", "server", "daemon-worker.js"),
           join(currentDir, "src", "server", "daemon-worker.ts"),
@@ -73,12 +73,12 @@ function resolveDaemonWorkerEntry(): string {
     currentDir = parentDir;
   }
 
-  throw new Error("Unable to resolve @getpaseo/server package root");
+  throw new Error("Unable to resolve @byspace/server package root");
 }
 
 async function tailDaemonLog(): Promise<string> {
   try {
-    const log = await readFile(join(paseoHome, "daemon.log"), "utf-8");
+    const log = await readFile(join(byspaceHome, "daemon.log"), "utf-8");
     return log.split("\n").slice(-30).join("\n");
   } catch {
     return "<daemon log unavailable>";
@@ -111,7 +111,7 @@ try {
   // Test 1: daemon --help shows subcommands
   {
     console.log("Test 1: daemon --help shows subcommands");
-    const result = await runLocalPaseo(["daemon", "--help"]);
+    const result = await runLocalBySpace(["daemon", "--help"]);
     assert.strictEqual(result.exitCode, 0, "daemon --help should exit 0");
     assert(result.stdout.includes("start"), "help should mention start");
     assert(result.stdout.includes("status"), "help should mention status");
@@ -166,7 +166,7 @@ try {
     const status = JSON.parse(result.stdout);
     assert.strictEqual(typeof status.serverId, "string", "json status should include serverId");
     assert.strictEqual(status.localDaemon, "stopped", "json status should report stopped");
-    assert.strictEqual(status.home, paseoHome, "json status should reflect the isolated home");
+    assert.strictEqual(status.home, byspaceHome, "json status should reflect the isolated home");
     assert.strictEqual(
       status.hostname,
       null,
@@ -178,8 +178,8 @@ try {
   // Global hosts do not change local daemon lifecycle commands.
   {
     console.log("Test 5b: daemon status ignores a global --host");
-    const result = await runLocalPaseo(["--host", "localhost:1", "daemon", "status", "--json"], {
-      PASEO_HOME: paseoHome,
+    const result = await runLocalBySpace(["--host", "localhost:1", "daemon", "status", "--json"], {
+      BYSPACE_HOME: byspaceHome,
     });
     assert.strictEqual(result.exitCode, 0, `daemon status should stay local: ${result.stderr}`);
     const parsed = JSON.parse(result.stdout);
@@ -222,9 +222,9 @@ try {
     console.log("Test 8: daemon status probes live relay state over local IPC");
     const listen =
       process.platform === "win32"
-        ? `\\\\.\\pipe\\paseo-status-${process.pid}-${Date.now()}`
-        : join(paseoHome, "status.sock");
-    const configPath = join(paseoHome, "config.json");
+        ? `\\\\.\\pipe\\byspace-status-${process.pid}-${Date.now()}`
+        : join(byspaceHome, "status.sock");
+    const configPath = join(byspaceHome, "config.json");
     const config = JSON.parse(await readFile(configPath, "utf-8"));
     config.daemon = {
       ...config.daemon,
@@ -242,11 +242,11 @@ try {
       cwd: join(import.meta.dirname, ".."),
       env: {
         ...process.env,
-        BYSPACE_HOME: paseoHome,
+        BYSPACE_HOME: byspaceHome,
         BYSPACE_LISTEN: listen,
-        PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD: "0",
-        PASEO_DICTATION_ENABLED: "0",
-        PASEO_VOICE_MODE_ENABLED: "0",
+        BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD: "0",
+        BYSPACE_DICTATION_ENABLED: "0",
+        BYSPACE_VOICE_MODE_ENABLED: "0",
         CI: "true",
       },
       stdio: "ignore",
@@ -310,8 +310,8 @@ try {
 
       reloadConfig.daemon.appendSystemPrompt = "Prefer detailed replies.";
       await writeFile(configPath, `${JSON.stringify(reloadConfig, null, 2)}\n`, "utf-8");
-      const aliasReload = await runLocalPaseo(["reload", "--host", listen, "--json"], {
-        BYSPACE_HOME: paseoHome,
+      const aliasReload = await runLocalBySpace(["reload", "--host", listen, "--json"], {
+        BYSPACE_HOME: byspaceHome,
       });
       assert.strictEqual(aliasReload.exitCode, 0, aliasReload.stderr);
       assert.deepStrictEqual(JSON.parse(aliasReload.stdout), {
@@ -331,7 +331,7 @@ try {
       const humanReload = await daemonCommand(["reload", "--host", listen]);
       assert.match(humanReload.stdout, /Configuration reloaded\./);
 
-      const foreignHome = await mkdtemp(join(tmpdir(), "paseo-test-foreign-home-"));
+      const foreignHome = await mkdtemp(join(tmpdir(), "byspace-test-foreign-home-"));
       try {
         await writeFile(
           join(foreignHome, "config.json"),
@@ -341,7 +341,7 @@ try {
         const foreignPairing = await retryWhileWorkerRuns(
           worker,
           () =>
-            runLocalPaseo(["daemon", "pair", "--home", foreignHome, "--json"], {
+            runLocalBySpace(["daemon", "pair", "--home", foreignHome, "--json"], {
               BYSPACE_HOME: foreignHome,
             }),
           (result) => result.stderr.includes("different BySpace home"),
@@ -372,7 +372,7 @@ try {
   // Test 9: --relay accepts an already-enabled persisted relay while stopped
   {
     console.log("Test 9: daemon pair --relay accepts persisted relay while stopped");
-    const configPath = join(paseoHome, "config.json");
+    const configPath = join(byspaceHome, "config.json");
     const config = JSON.parse(await readFile(configPath, "utf-8"));
     config.daemon = {
       ...config.daemon,
@@ -396,7 +396,7 @@ try {
   // Best-effort daemon cleanup in case assertions fail before explicit stop.
   await daemonCommand(["stop", "--force"]);
   // Clean up temp directory
-  await rm(paseoHome, { recursive: true, force: true });
+  await rm(byspaceHome, { recursive: true, force: true });
 }
 
 console.log("=== All daemon tests passed ===");

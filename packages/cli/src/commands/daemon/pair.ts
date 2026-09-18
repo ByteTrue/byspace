@@ -5,8 +5,8 @@ import {
   generateLocalPairingOffer,
   getOrCreateServerId,
   loadConfig,
-  resolvePaseoHome,
-} from "@getpaseo/server";
+  resolveBySpaceHome,
+} from "@byspace/server";
 import { tryConnectToDaemon } from "../../utils/client.js";
 import { resolveLocalDaemonState } from "./local-daemon.js";
 import { addJsonOption } from "../../utils/command-options.js";
@@ -71,10 +71,10 @@ export function pairCommand(): Command {
 }
 
 export async function resolveLocalPairingOffer(options: {
-  paseoHome: string;
+  byspaceHome: string;
   enableRelay?: boolean;
 }): Promise<PairingOffer> {
-  const state = resolveLocalDaemonState({ home: options.paseoHome });
+  const state = resolveLocalDaemonState({ home: options.byspaceHome });
   const serverId = getOrCreateServerId(state.home);
   const daemonOffer = await resolveDaemonPairingOffer(state.listen, serverId, options.enableRelay);
   if (daemonOffer) return daemonOffer;
@@ -85,13 +85,13 @@ export async function resolveLocalPairingOffer(options: {
     );
   }
 
-  const config = loadConfig(options.paseoHome);
+  const config = loadConfig(options.byspaceHome);
   if (options.enableRelay && !config.relayEnabled) {
     throw new Error("Start the daemon before enabling relay for pairing.");
   }
 
   return generateLocalPairingOffer({
-    paseoHome: options.paseoHome,
+    byspaceHome: options.byspaceHome,
     relayEnabled: config.relayEnabled,
     relayEndpoint: config.relayEndpoint,
     relayPublicEndpoint: config.relayPublicEndpoint,
@@ -180,9 +180,9 @@ export async function runPairCommand(
     ...dependencyOverrides,
   };
 
-  const paseoHome = resolvePaseoHome();
+  const byspaceHome = resolveBySpaceHome();
   let pairing = await dependencies.resolveOffer({
-    paseoHome,
+    byspaceHome,
     enableRelay: options.relay === true,
   });
 
@@ -195,7 +195,7 @@ export async function runPairCommand(
       dependencies.output.setExitCode(1);
       return;
     }
-    pairing = await dependencies.resolveOffer({ paseoHome, enableRelay: true });
+    pairing = await dependencies.resolveOffer({ byspaceHome, enableRelay: true });
     dependencies.output.success("Relay enabled");
   }
 

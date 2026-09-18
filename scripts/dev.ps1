@@ -27,9 +27,9 @@ if (-not $env:BYSPACE_HOME) {
 }
 
 # Share speech models with the main install to avoid duplicate downloads
-if (-not $env:PASEO_LOCAL_MODELS_DIR) {
-    $env:PASEO_LOCAL_MODELS_DIR = "$env:USERPROFILE\.byspace\models\local-speech"
-    New-Item -ItemType Directory -Force -Path $env:PASEO_LOCAL_MODELS_DIR | Out-Null
+if (-not $env:BYSPACE_LOCAL_MODELS_DIR) {
+    $env:BYSPACE_LOCAL_MODELS_DIR = "$env:USERPROFILE\.byspace\models\local-speech"
+    New-Item -ItemType Directory -Force -Path $env:BYSPACE_LOCAL_MODELS_DIR | Out-Null
 }
 
 Write-Host @"
@@ -37,7 +37,7 @@ Write-Host @"
   BySpace Dev (Windows)
 ======================================================
   Home:    $($env:BYSPACE_HOME)
-  Models:  $($env:PASEO_LOCAL_MODELS_DIR)
+  Models:  $($env:BYSPACE_LOCAL_MODELS_DIR)
   Daemon:  localhost:6778
 ======================================================
 "@
@@ -50,7 +50,7 @@ $env:BYSPACE_CORS_ORIGINS = "*"
 # Configure the app to auto-connect to this daemon on localhost
 $env:APP_VARIANT = "development"
 $env:EXPO_PUBLIC_LOCAL_DAEMON = "localhost:6778"
-$env:EXPO_PUBLIC_PASEO_DEV_BUILD_LABEL = (git branch --show-current).Trim()
+$env:EXPO_PUBLIC_BYSPACE_DEV_BUILD_LABEL = (git branch --show-current).Trim()
 $env:BYSPACE_LISTEN = "127.0.0.1:6778"
 $env:BROWSER = "none"
 

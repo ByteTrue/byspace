@@ -1,13 +1,13 @@
-# @getpaseo/client
+# @byspace/client
 
 Internal BySpace workspace used by the app, CLI, server, and consolidated release package.
 
 ```bash
-npm install @getpaseo/client
+npm install @byspace/client
 ```
 
 ```ts
-import { createBySpaceClient } from "@getpaseo/client";
+import { createBySpaceClient } from "@byspace/client";
 
 const client = createBySpaceClient({ url: "ws://127.0.0.1:6767/ws" });
 await client.connect();
@@ -24,7 +24,7 @@ console.log(result.lastMessage);
 await client.close();
 ```
 
-The public API is the package root. Imports under `@getpaseo/client/internal/*` are unsupported implementation details used by BySpace's own packages.
+The public API is the package root. Imports under `@byspace/client/internal/*` are unsupported implementation details used by BySpace's own packages.
 
 Read the [SDK documentation](https://paseo.sh/docs/sdk) for agents, workspaces, terminals, provider discovery, events, recipes, and the API reference. Runnable TypeScript patterns also live in [`examples/`](./examples/README.md).
 
@@ -41,4 +41,4 @@ Connecting alone does not subscribe to agent timelines or catalog events. See th
 
 ## Stability
 
-The high-level API exported from `@getpaseo/client` is the supported SDK surface. The SDK and daemon remain protocol-compatible across versions, but newly added capabilities can require a newer daemon.
+The high-level API exported from `@byspace/client` is the supported SDK surface. The SDK and daemon remain protocol-compatible across versions, but newly added capabilities can require a newer daemon.

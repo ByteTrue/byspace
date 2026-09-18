@@ -170,7 +170,7 @@ test.describe("Add Project command-center flow", () => {
     });
 
     test("New directory creates a Project on the selected remote host", async ({ page }) => {
-      const parentDirectory = await mkdtemp(path.join(tmpdir(), "paseo-e2e-remote-project-"));
+      const parentDirectory = await mkdtemp(path.join(tmpdir(), "byspace-e2e-remote-project-"));
       const directoryName = `remote-${randomUUID().slice(0, 8)}`;
       const directoryPath = path.join(parentDirectory, directoryName);
 
@@ -264,7 +264,7 @@ test.describe("Add Project command-center flow", () => {
   test("New directory validates the name, restores parent and name state, then creates a Project", async ({
     page,
   }) => {
-    const parentDirectory = await mkdtemp(path.join(tmpdir(), "paseo-e2e-new-project-"));
+    const parentDirectory = await mkdtemp(path.join(tmpdir(), "byspace-e2e-new-project-"));
     const directoryName = `created-${randomUUID().slice(0, 8)}`;
     const directoryPath = path.join(parentDirectory, directoryName);
     let projectId: string | null = null;

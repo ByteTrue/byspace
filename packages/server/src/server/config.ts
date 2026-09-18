@@ -1,11 +1,11 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolvePaseoNodeEnv } from "./paseo-env.js";
+import { resolveBySpaceNodeEnv } from "./byspace-env.js";
 import { z } from "zod";
 import { expandTilde } from "../utils/path.js";
 
-import type { PaseoDaemonConfig } from "./bootstrap.js";
+import type { BySpaceDaemonConfig } from "./bootstrap.js";
 import {
   loadPersistedConfig,
   LogFormatSchema,
@@ -20,16 +20,15 @@ import { ProviderOverrideSchema } from "./agent/provider-launch-config.js";
 import {
   DEFAULT_RELAY_ENDPOINT,
   isBySpaceHostedRelayEndpoint,
-} from "@getpaseo/protocol/daemon-endpoints";
-import { AgentProviderSchema } from "@getpaseo/protocol/provider-manifest";
+} from "@byspace/protocol/daemon-endpoints";
+import { AgentProviderSchema } from "@byspace/protocol/provider-manifest";
 import {
   isBySpaceHostedAppBaseUrl,
   resolveBySpaceHostedAppBaseUrl,
-} from "@getpaseo/protocol/release-channel";
+} from "@byspace/protocol/release-channel";
 import { hashDaemonPassword } from "./auth.js";
 import { mergeHostnames, parseHostnamesEnv, type HostnamesConfig } from "./hostnames.js";
 import { resolveGitProcessPolicy } from "../utils/git-process-scheduler.js";
-import { withByspaceEnvironment } from "../utils/byspace-env.js";
 import { resolveDaemonVersion } from "./daemon-version.js";
 
 const DEFAULT_PORT = 6777;
@@ -97,7 +96,7 @@ function normalizeLogEnv(value: string | undefined): string | undefined {
 function resolveGitProcessConfig(
   env: NodeJS.ProcessEnv,
   persisted: ReturnType<typeof loadPersistedConfig>,
-): NonNullable<PaseoDaemonConfig["git"]> {
+): NonNullable<BySpaceDaemonConfig["git"]> {
   return resolveGitProcessPolicy({
     env,
     persisted: persisted.daemon?.git,
@@ -120,8 +119,8 @@ function resolveLogConfigFromEnv(
   env: NodeJS.ProcessEnv,
   persisted: PersistedConfig,
 ): PersistedConfig["log"] {
-  const level = parseLogLevelEnv(env.PASEO_LOG_LEVEL ?? env.PASEO_LOG);
-  const format = parseLogFormatEnv(env.PASEO_LOG_FORMAT);
+  const level = parseLogLevelEnv(env.BYSPACE_LOG_LEVEL ?? env.BYSPACE_LOG);
+  const format = parseLogFormatEnv(env.BYSPACE_LOG_FORMAT);
   const console = resolveConsoleLogConfigFromEnv(env, persisted.log?.console);
   const file = resolveFileLogConfigFromEnv(env, persisted.log?.file);
 
@@ -142,8 +141,8 @@ function resolveConsoleLogConfigFromEnv(
   env: NodeJS.ProcessEnv,
   persisted: NonNullable<PersistedConfig["log"]>["console"],
 ): NonNullable<PersistedConfig["log"]>["console"] {
-  const level = parseLogLevelEnv(env.PASEO_LOG_CONSOLE_LEVEL);
-  const format = parseLogFormatEnv(env.PASEO_LOG_CONSOLE_FORMAT);
+  const level = parseLogLevelEnv(env.BYSPACE_LOG_CONSOLE_LEVEL);
+  const format = parseLogFormatEnv(env.BYSPACE_LOG_CONSOLE_FORMAT);
   if (level === undefined && format === undefined) return undefined;
   return {
     ...persisted,
@@ -156,10 +155,10 @@ function resolveFileLogConfigFromEnv(
   env: NodeJS.ProcessEnv,
   persisted: NonNullable<PersistedConfig["log"]>["file"],
 ): NonNullable<PersistedConfig["log"]>["file"] {
-  const level = parseLogLevelEnv(env.PASEO_LOG_FILE_LEVEL);
-  const filePath = nonEmptyEnv(env.PASEO_LOG_FILE_PATH);
-  const maxSize = nonEmptyEnv(env.PASEO_LOG_FILE_ROTATE_SIZE);
-  const maxFiles = parsePositiveIntegerEnv(env.PASEO_LOG_FILE_ROTATE_COUNT);
+  const level = parseLogLevelEnv(env.BYSPACE_LOG_FILE_LEVEL);
+  const filePath = nonEmptyEnv(env.BYSPACE_LOG_FILE_PATH);
+  const maxSize = nonEmptyEnv(env.BYSPACE_LOG_FILE_ROTATE_SIZE);
+  const maxFiles = parsePositiveIntegerEnv(env.BYSPACE_LOG_FILE_ROTATE_COUNT);
   const hasRotateOverride = maxSize !== undefined || maxFiles !== undefined;
   if (level === undefined && filePath === undefined && !hasRotateOverride) return undefined;
   return {
@@ -289,7 +288,7 @@ function resolvePersistedRelayEndpoint(
 }
 
 function resolveRelayConfig(input: ResolveRelayInput): ResolvedRelay {
-  const environmentEnabled = parseBooleanEnv(input.env.PASEO_RELAY_ENABLED);
+  const environmentEnabled = parseBooleanEnv(input.env.BYSPACE_RELAY_ENABLED);
   // COMPAT(relayOptInDefault): daemons whose startup config omitted this field
   // retain relay-on removal semantics until 2027-01-31. Modern homes use false.
   const enabled =
@@ -298,14 +297,14 @@ function resolveRelayConfig(input: ResolveRelayInput): ResolvedRelay {
     input.persisted.daemon?.relay?.enabled ??
     input.enabledFallback;
   const endpoint =
-    input.env.PASEO_RELAY_ENDPOINT ??
+    input.env.BYSPACE_RELAY_ENDPOINT ??
     resolvePersistedRelayEndpoint(
       input.persisted.daemon?.relay?.endpoint,
       input.hostedRelayEndpoint,
     ) ??
     input.hostedRelayEndpoint;
   const publicEndpoint =
-    input.env.PASEO_RELAY_PUBLIC_ENDPOINT ??
+    input.env.BYSPACE_RELAY_PUBLIC_ENDPOINT ??
     resolvePersistedRelayEndpoint(
       input.persisted.daemon?.relay?.publicEndpoint,
       input.hostedRelayEndpoint,
@@ -314,12 +313,12 @@ function resolveRelayConfig(input: ResolveRelayInput): ResolvedRelay {
   const useTls =
     input.cliRelayUseTls ??
     resolveTlsFromEnv(
-      input.env.PASEO_RELAY_USE_TLS,
+      input.env.BYSPACE_RELAY_USE_TLS,
       input.persisted.daemon?.relay?.useTls,
       isBySpaceHostedRelayEndpoint(endpoint),
     );
   const publicUseTls = resolveTlsFromEnv(
-    input.env.PASEO_RELAY_PUBLIC_USE_TLS,
+    input.env.BYSPACE_RELAY_PUBLIC_USE_TLS,
     input.persisted.daemon?.relay?.publicUseTls,
     useTls,
   );
@@ -349,20 +348,20 @@ function resolveServiceProxyConfig(
   persisted: ReturnType<typeof loadPersistedConfig>,
 ): ResolvedServiceProxy {
   const enabledShim =
-    parseBooleanEnv(env.PASEO_SERVICE_PROXY_ENABLED) ?? persisted.daemon?.serviceProxy?.enabled;
+    parseBooleanEnv(env.BYSPACE_SERVICE_PROXY_ENABLED) ?? persisted.daemon?.serviceProxy?.enabled;
   // COMPAT(serviceProxyEnabled): added 2026-06-02, remove after 2026-12-02.
   // `enabled=false` used to disable the separate service proxy listener. Localhost
   // service proxying is now always enabled; this only suppresses optional layers.
   const optionalLayersEnabled = enabledShim !== false;
   const publicBaseUrl = optionalLayersEnabled
     ? resolveServiceProxyPublicBaseUrl(
-        env.PASEO_SERVICE_PROXY_PUBLIC_BASE_URL ??
+        env.BYSPACE_SERVICE_PROXY_PUBLIC_BASE_URL ??
           persisted.daemon?.serviceProxy?.publicBaseUrl ??
           null,
       )
     : null;
   const standaloneListen = optionalLayersEnabled
-    ? (env.PASEO_SERVICE_PROXY_LISTEN ?? persisted.daemon?.serviceProxy?.listen ?? null)
+    ? (env.BYSPACE_SERVICE_PROXY_LISTEN ?? persisted.daemon?.serviceProxy?.listen ?? null)
     : null;
 
   return { publicBaseUrl, standaloneListen };
@@ -374,23 +373,23 @@ interface ResolvedWebUi {
 }
 
 function resolveWebUiConfig(
-  paseoHome: string,
+  byspaceHome: string,
   env: NodeJS.ProcessEnv,
   cli: CliConfigOverrides | undefined,
   persisted: ReturnType<typeof loadPersistedConfig>,
 ): ResolvedWebUi {
   const enabled =
     cli?.webUiEnabled ??
-    parseBooleanEnv(env.PASEO_WEB_UI_ENABLED) ??
+    parseBooleanEnv(env.BYSPACE_WEB_UI_ENABLED) ??
     persisted.features?.webUi?.enabled ??
     // Default-on per issue 025 A7: the bundled web UI is the primary client
     // entry (LAN users open http://daemon-host:6777 directly). Explicit
-    // config, CLI flags, and PASEO_WEB_UI_ENABLED still override this.
+    // config, CLI flags, and BYSPACE_WEB_UI_ENABLED still override this.
     true;
-  const rawDistDir = env.PASEO_WEB_UI_DIST_DIR ?? persisted.features?.webUi?.distDir;
+  const rawDistDir = env.BYSPACE_WEB_UI_DIST_DIR ?? persisted.features?.webUi?.distDir;
   const trimmedDistDir = rawDistDir?.trim();
   const distDir = trimmedDistDir
-    ? path.resolve(path.isAbsolute(trimmedDistDir) ? trimmedDistDir : paseoHome, trimmedDistDir)
+    ? path.resolve(path.isAbsolute(trimmedDistDir) ? trimmedDistDir : byspaceHome, trimmedDistDir)
     : BUNDLED_WEB_UI_DIST_DIR;
   return {
     enabled,
@@ -403,8 +402,8 @@ function resolveCorsAllowedOrigins(
   persisted: ReturnType<typeof loadPersistedConfig>,
   hostedAppBaseUrl: string,
 ): string[] {
-  const envCorsOrigins = env.PASEO_CORS_ORIGINS
-    ? env.PASEO_CORS_ORIGINS.split(",").map((s) => s.trim())
+  const envCorsOrigins = env.BYSPACE_CORS_ORIGINS
+    ? env.BYSPACE_CORS_ORIGINS.split(",").map((s) => s.trim())
     : [];
   const configuredOrigins = [...(persisted.daemon?.cors?.allowedOrigins ?? []), ...envCorsOrigins];
   const resolvedOrigins = configuredOrigins.map((origin) =>
@@ -438,7 +437,7 @@ function resolveTrustedProxiesConfig(
   persisted: ReturnType<typeof loadPersistedConfig>,
 ): TrustedProxiesConfig {
   return (
-    parseTrustedProxiesEnv(env.PASEO_TRUSTED_PROXIES) ??
+    parseTrustedProxiesEnv(env.BYSPACE_TRUSTED_PROXIES) ??
     persisted.daemon?.trustedProxies ??
     DEFAULT_TRUSTED_PROXIES
   );
@@ -465,8 +464,8 @@ function resolveListenAddress(
 function resolveAuthConfig(
   env: NodeJS.ProcessEnv,
   persisted: ReturnType<typeof loadPersistedConfig>,
-): PaseoDaemonConfig["auth"] {
-  const envPassword = env.PASEO_PASSWORD?.trim();
+): BySpaceDaemonConfig["auth"] {
+  const envPassword = env.BYSPACE_PASSWORD?.trim();
   if (envPassword) {
     return { password: hashDaemonPassword(envPassword) };
   }
@@ -476,7 +475,7 @@ function resolveAuthConfig(
 }
 
 function resolveWorktreesRoot(
-  paseoHome: string,
+  byspaceHome: string,
   persisted: ReturnType<typeof loadPersistedConfig>,
 ): string | undefined {
   const configuredRoot = persisted.worktrees?.root?.trim();
@@ -487,7 +486,7 @@ function resolveWorktreesRoot(
   const expandedRoot = expandTilde(configuredRoot);
   return path.isAbsolute(expandedRoot)
     ? path.resolve(expandedRoot)
-    : path.resolve(paseoHome, expandedRoot);
+    : path.resolve(byspaceHome, expandedRoot);
 }
 
 function resolveAppendSystemPrompt(persisted: ReturnType<typeof loadPersistedConfig>): string {
@@ -511,8 +510,8 @@ function resolveAppBaseUrl(
   persisted: ReturnType<typeof loadPersistedConfig>,
   hostedAppBaseUrl: string,
 ): string {
-  if (env.PASEO_APP_BASE_URL) {
-    return env.PASEO_APP_BASE_URL;
+  if (env.BYSPACE_APP_BASE_URL) {
+    return env.BYSPACE_APP_BASE_URL;
   }
   const configuredAppBaseUrl = persisted.app?.baseUrl;
   return isBySpaceHostedAppBaseUrl(configuredAppBaseUrl)
@@ -538,7 +537,7 @@ function resolveStaticLoadConfigSettings(
     terminalDefaultShell: persisted.daemon?.terminalDefaultShell ?? undefined,
     hostnames: mergeHostnames([
       persisted.daemon?.hostnames,
-      parseHostnamesEnv(env.PASEO_HOSTNAMES ?? env.PASEO_ALLOWED_HOSTS),
+      parseHostnamesEnv(env.BYSPACE_HOSTNAMES ?? env.BYSPACE_ALLOWED_HOSTS),
       cli?.hostnames,
     ]),
     trustedProxies: resolveTrustedProxiesConfig(env, persisted),
@@ -554,12 +553,12 @@ interface ResolveConfigFromPersistedOptions {
 }
 
 export function resolveConfigFromPersisted(
-  paseoHome: string,
+  byspaceHome: string,
   persisted: PersistedConfig,
   options?: ResolveConfigFromPersistedOptions,
-): PaseoDaemonConfig {
+): BySpaceDaemonConfig {
   const resolvedOptions = options ?? {};
-  const env = withByspaceEnvironment(resolvedOptions.env ?? process.env);
+  const env = resolvedOptions.env ?? process.env;
   const releaseVersion = resolvedOptions.releaseVersion ?? resolveDaemonVersion(import.meta.url);
   const hostedAppBaseUrl = resolveBySpaceHostedAppBaseUrl(releaseVersion);
   const hostedRelayEndpoint = DEFAULT_RELAY_ENDPOINT;
@@ -590,7 +589,7 @@ export function resolveConfigFromPersisted(
     hostedRelayEndpoint,
   });
   const serviceProxy = resolveServiceProxyConfig(env, persisted);
-  const webUi = resolveWebUiConfig(paseoHome, env, cli, persisted);
+  const webUi = resolveWebUiConfig(byspaceHome, env, cli, persisted);
 
   // Speech/dictation/voice config is retired (issue 025 C8).
   const providerOverrides = extractProviderOverrides(
@@ -601,9 +600,9 @@ export function resolveConfigFromPersisted(
 
   return {
     listen,
-    paseoHome,
-    desktopManaged: env.PASEO_DESKTOP_MANAGED === "1",
-    worktreesRoot: resolveWorktreesRoot(paseoHome, persisted),
+    byspaceHome,
+    desktopManaged: env.BYSPACE_DESKTOP_MANAGED === "1",
+    worktreesRoot: resolveWorktreesRoot(byspaceHome, persisted),
     corsAllowedOrigins: resolveCorsAllowedOrigins(env, persisted, hostedAppBaseUrl),
     hostnames,
     trustedProxies,
@@ -623,8 +622,8 @@ export function resolveConfigFromPersisted(
     pluginsEnabled: persisted.pluginsEnabled ?? false,
     plugins: persisted.plugins,
     mcpDebug: env.MCP_DEBUG === "1",
-    isDev: resolvePaseoNodeEnv(env) === "development",
-    agentStoragePath: path.join(paseoHome, "agents"),
+    isDev: resolveBySpaceNodeEnv(env) === "development",
+    agentStoragePath: path.join(byspaceHome, "agents"),
     staticDir: "public",
     agentClients: {},
     relayEnabled: relay.enabled,
@@ -653,11 +652,11 @@ export function resolveConfigFromPersisted(
 }
 
 export function loadConfig(
-  paseoHome: string,
+  byspaceHome: string,
   options?: Omit<ResolveConfigFromPersistedOptions, "relayEnabledFallback">,
-): PaseoDaemonConfig {
-  const persisted = loadPersistedConfig(paseoHome);
-  return resolveConfigFromPersisted(paseoHome, persisted, options);
+): BySpaceDaemonConfig {
+  const persisted = loadPersistedConfig(byspaceHome);
+  return resolveConfigFromPersisted(byspaceHome, persisted, options);
 }
 
 function parsePositiveGitOverride(value: string | undefined): boolean {
@@ -701,19 +700,19 @@ function resolveCoreDaemonOverridePaths(
   if (cli?.mcpInjectIntoAgents !== undefined) paths.push("daemon.mcp.injectIntoAgents");
   // Hostname sources append instead of replacing one another, so a launch value
   // does not prevent a persisted hostname edit from taking effect.
-  if (parseTrustedProxiesEnv(env.PASEO_TRUSTED_PROXIES) !== undefined) {
+  if (parseTrustedProxiesEnv(env.BYSPACE_TRUSTED_PROXIES) !== undefined) {
     paths.push("daemon.trustedProxies");
   }
-  if (parsePositiveGitOverride(env.PASEO_GIT_MAX_PROCESSES_PER_SECOND)) {
+  if (parsePositiveGitOverride(env.BYSPACE_GIT_MAX_PROCESSES_PER_SECOND)) {
     paths.push("daemon.git.maxProcessesPerSecond");
   }
   if (
-    parsePositiveGitOverride(env.PASEO_GIT_MAX_PROCESS_CONCURRENCY ?? env.PASEO_GIT_CONCURRENCY)
+    parsePositiveGitOverride(env.BYSPACE_GIT_MAX_PROCESS_CONCURRENCY ?? env.BYSPACE_GIT_CONCURRENCY)
   ) {
     paths.push("daemon.git.maxProcessConcurrency");
   }
-  if (env.PASEO_APP_BASE_URL !== undefined) paths.push("app.baseUrl");
-  if (env.PASEO_PASSWORD?.trim()) paths.push("daemon.auth.password");
+  if (env.BYSPACE_APP_BASE_URL !== undefined) paths.push("app.baseUrl");
+  if (env.BYSPACE_PASSWORD?.trim()) paths.push("daemon.auth.password");
   return paths;
 }
 
@@ -722,17 +721,17 @@ function resolveRelayOverridePaths(
   cli: CliConfigOverrides | undefined,
 ): string[] {
   const paths: string[] = [];
-  if (cli?.relayEnabled !== undefined || parseBooleanEnv(env.PASEO_RELAY_ENABLED) !== undefined) {
+  if (cli?.relayEnabled !== undefined || parseBooleanEnv(env.BYSPACE_RELAY_ENABLED) !== undefined) {
     paths.push("daemon.relay.enabled");
   }
-  if (env.PASEO_RELAY_ENDPOINT !== undefined) paths.push("daemon.relay.endpoint");
-  if (env.PASEO_RELAY_PUBLIC_ENDPOINT !== undefined) {
+  if (env.BYSPACE_RELAY_ENDPOINT !== undefined) paths.push("daemon.relay.endpoint");
+  if (env.BYSPACE_RELAY_PUBLIC_ENDPOINT !== undefined) {
     paths.push("daemon.relay.publicEndpoint");
   }
-  if (cli?.relayUseTls !== undefined || env.PASEO_RELAY_USE_TLS !== undefined) {
+  if (cli?.relayUseTls !== undefined || env.BYSPACE_RELAY_USE_TLS !== undefined) {
     paths.push("daemon.relay.useTls");
   }
-  if (env.PASEO_RELAY_PUBLIC_USE_TLS !== undefined) {
+  if (env.BYSPACE_RELAY_PUBLIC_USE_TLS !== undefined) {
     paths.push("daemon.relay.publicUseTls");
   }
   return paths;
@@ -743,40 +742,43 @@ function resolveServiceAndWebUiOverridePaths(
   cli: CliConfigOverrides | undefined,
 ): string[] {
   const paths: string[] = [];
-  const serviceProxyEnabled = parseBooleanEnv(env.PASEO_SERVICE_PROXY_ENABLED);
+  const serviceProxyEnabled = parseBooleanEnv(env.BYSPACE_SERVICE_PROXY_ENABLED);
   if (serviceProxyEnabled !== undefined) paths.push("daemon.serviceProxy.enabled");
-  if (env.PASEO_SERVICE_PROXY_LISTEN !== undefined || serviceProxyEnabled === false) {
+  if (env.BYSPACE_SERVICE_PROXY_LISTEN !== undefined || serviceProxyEnabled === false) {
     paths.push("daemon.serviceProxy.listen");
   }
-  if (env.PASEO_SERVICE_PROXY_PUBLIC_BASE_URL !== undefined || serviceProxyEnabled === false) {
+  if (env.BYSPACE_SERVICE_PROXY_PUBLIC_BASE_URL !== undefined || serviceProxyEnabled === false) {
     paths.push("daemon.serviceProxy.publicBaseUrl");
   }
 
-  if (cli?.webUiEnabled !== undefined || parseBooleanEnv(env.PASEO_WEB_UI_ENABLED) !== undefined) {
+  if (
+    cli?.webUiEnabled !== undefined ||
+    parseBooleanEnv(env.BYSPACE_WEB_UI_ENABLED) !== undefined
+  ) {
     paths.push("features.webUi.enabled");
   }
-  if (env.PASEO_WEB_UI_DIST_DIR !== undefined) paths.push("features.webUi.distDir");
+  if (env.BYSPACE_WEB_UI_DIST_DIR !== undefined) paths.push("features.webUi.distDir");
   return paths;
 }
 
 function resolveLogOverrideControlledPaths(env: NodeJS.ProcessEnv): string[] {
   const paths: string[] = [];
-  if (parseLogLevelEnv(env.PASEO_LOG_LEVEL ?? env.PASEO_LOG) !== undefined) {
+  if (parseLogLevelEnv(env.BYSPACE_LOG_LEVEL ?? env.BYSPACE_LOG) !== undefined) {
     paths.push("log.level");
   }
-  if (parseLogFormatEnv(env.PASEO_LOG_FORMAT) !== undefined) paths.push("log.format");
-  if (parseLogLevelEnv(env.PASEO_LOG_CONSOLE_LEVEL) !== undefined) {
+  if (parseLogFormatEnv(env.BYSPACE_LOG_FORMAT) !== undefined) paths.push("log.format");
+  if (parseLogLevelEnv(env.BYSPACE_LOG_CONSOLE_LEVEL) !== undefined) {
     paths.push("log.console.level");
   }
-  if (parseLogFormatEnv(env.PASEO_LOG_CONSOLE_FORMAT) !== undefined) {
+  if (parseLogFormatEnv(env.BYSPACE_LOG_CONSOLE_FORMAT) !== undefined) {
     paths.push("log.console.format");
   }
-  if (parseLogLevelEnv(env.PASEO_LOG_FILE_LEVEL) !== undefined) paths.push("log.file.level");
-  if (nonEmptyEnv(env.PASEO_LOG_FILE_PATH) !== undefined) paths.push("log.file.path");
-  if (nonEmptyEnv(env.PASEO_LOG_FILE_ROTATE_SIZE) !== undefined) {
+  if (parseLogLevelEnv(env.BYSPACE_LOG_FILE_LEVEL) !== undefined) paths.push("log.file.level");
+  if (nonEmptyEnv(env.BYSPACE_LOG_FILE_PATH) !== undefined) paths.push("log.file.path");
+  if (nonEmptyEnv(env.BYSPACE_LOG_FILE_ROTATE_SIZE) !== undefined) {
     paths.push("log.file.rotate.maxSize");
   }
-  if (parsePositiveIntegerEnv(env.PASEO_LOG_FILE_ROTATE_COUNT) !== undefined) {
+  if (parsePositiveIntegerEnv(env.BYSPACE_LOG_FILE_ROTATE_COUNT) !== undefined) {
     paths.push("log.file.rotate.maxFiles");
   }
   return paths;

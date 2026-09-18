@@ -1,5 +1,5 @@
-import { isSyntaxThemeId, type SyntaxThemeId } from "@getpaseo/highlight";
-import type { ActiveTurnBehavior } from "@getpaseo/protocol/messages";
+import { isSyntaxThemeId, type SyntaxThemeId } from "@byspace/highlight";
+import type { ActiveTurnBehavior } from "@byspace/protocol/messages";
 import type { QueryClient } from "@tanstack/react-query";
 import type { AppLanguage } from "@/i18n/locales";
 import type { SidebarNavPreference } from "@/sidebar-nav/model";

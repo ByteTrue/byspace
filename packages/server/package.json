@@ -1,5 +1,5 @@
 {
-  "name": "@getpaseo/server",
+  "name": "@byspace/server",
   "version": "0.14.3",
   "description": "BySpace backend server",
   "files": [
@@ -33,8 +33,8 @@
     "access": "public"
   },
   "scripts": {
-    "dev": "cross-env PASEO_NODE_ENV=development node --import tsx scripts/dev-runner.ts",
-    "dev:tsx": "cross-env PASEO_NODE_ENV=development tsx watch --ignore '**/*.timestamp-*' scripts/dev-runner.ts",
+    "dev": "cross-env BYSPACE_NODE_ENV=development node --import tsx scripts/dev-runner.ts",
+    "dev:tsx": "cross-env BYSPACE_NODE_ENV=development tsx watch --ignore '**/*.timestamp-*' scripts/dev-runner.ts",
     "clean": "node ../../scripts/clean-package-dist.mjs",
     "build": "npm run build:lib && npm run build:scripts",
     "build:clean": "npm run clean && npm run build",
@@ -70,10 +70,10 @@
     "@agentclientprotocol/sdk": "^0.17.1",
     "@anthropic-ai/claude-agent-sdk": "0.3.246",
     "@anthropic-ai/sdk": "^0.104.2",
-    "@getpaseo/client": "0.14.3",
-    "@getpaseo/highlight": "0.14.3",
-    "@getpaseo/protocol": "0.14.3",
-    "@getpaseo/relay": "0.14.3",
+    "@byspace/client": "0.14.3",
+    "@byspace/highlight": "0.14.3",
+    "@byspace/protocol": "0.14.3",
+    "@byspace/relay": "0.14.3",
     "@modelcontextprotocol/sdk": "1.29.0",
     "@opencode-ai/sdk": "1.14.46",
     "@xterm/headless": "^6.0.0",

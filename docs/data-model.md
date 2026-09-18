@@ -47,7 +47,7 @@ $BYSPACE_HOME/
 ├── config.json                          # Daemon configuration
 ├── server-id                            # Stable daemon identifier (plain text, "srv_<base64url>")
 ├── daemon-keypair.json                  # E2EE keypair for relay (mode 0600)
-├── paseo.pid                            # Daemon PID lock file
+├── byspace.pid                            # Daemon PID lock file
 ├── daemon.log                           # Default log file (path configurable)
 ├── agents/
 │   └── {sanitized-cwd}/
@@ -92,7 +92,7 @@ Each agent is stored as a separate JSON file, grouped by project directory.
 | `lastActivityAt`     | `string?` (ISO 8601)                     | Last activity timestamp                                                                                                                                                                                                                                                                                                                                                             |
 | `lastUserMessageAt`  | `string?` (ISO 8601)                     | Last user message timestamp                                                                                                                                                                                                                                                                                                                                                         |
 | `title`              | `string?`                                | User-visible title                                                                                                                                                                                                                                                                                                                                                                  |
-| `labels`             | `Record<string, string>`                 | Key-value labels (default `{}`). BySpace uses the persisted `paseo.parent-agent-id` for parentage and client-scoped `paseo.open-agent-tab.*` labels while managed subagent tabs are open — see [agent-lifecycle.md](./agent-lifecycle.md)                                                                                                                                           |
+| `labels`             | `Record<string, string>`                 | Key-value labels (default `{}`). BySpace uses the persisted `byspace.parent-agent-id` for parentage and client-scoped `byspace.open-agent-tab.*` labels while managed subagent tabs are open — see [agent-lifecycle.md](./agent-lifecycle.md)                                                                                                                                       |
 | `lastStatus`         | `AgentStatus`                            | One of: `"initializing"`, `"idle"`, `"running"`, `"error"`, `"closed"`. `closed` means the record is resumable but has no live provider runtime; archive remains represented separately by `archivedAt`.                                                                                                                                                                            |
 | `lastModeId`         | `string?`                                | Last active mode ID                                                                                                                                                                                                                                                                                                                                                                 |
 | `config`             | `SerializableConfig?`                    | Agent session configuration (see below)                                                                                                                                                                                                                                                                                                                                             |
@@ -186,10 +186,10 @@ Single file, validated with `PersistedConfigSchema`.
 
 ### Project configuration filenames
 
-New projects use `byspace.json`. The reader falls back to legacy `paseo.json`, and updates whichever
+New projects use `byspace.json`. The reader falls back to legacy `byspace.json`, and updates whichever
 file it found in place so a legacy project keeps its filename. If both files exist, BySpace reports a
 configuration conflict instead of choosing one. Code schemas and persisted protocol fields retain
-Paseo names where they are internal compatibility identifiers.
+BySpace names where they are internal compatibility identifiers.
 
 `agents.skills.selection` is the daemon host's orchestration-skill preference. Missing means
 `{ mode: "all" }`. Installed state is not persisted; the daemon derives it from its three managed
@@ -278,13 +278,13 @@ rather than storing something it cannot describe. That is why the client gates t
 UI on `server_info.features.agentProfiles` instead of letting a save appear to succeed against an
 older daemon.
 
-### Agent provider Paseo tools
+### Agent provider BySpace tools
 
 `agents.providers` is keyed by the exact provider ID used to launch the agent. The built-in IDs are
 `claude`, `codex`, `copilot`, `opencode`, `pi`, and `omp`. Custom provider IDs are their literal
 configuration keys, such as `my-claude` or `zai`, not the provider named by `extends`.
 
-Each entry may include a Paseo-tool policy:
+Each entry may include a BySpace-tool policy:
 
 ```json
 {
@@ -293,7 +293,7 @@ Each entry may include a Paseo-tool policy:
       "my-claude": {
         "extends": "claude",
         "label": "My Claude",
-        "paseoTools": {
+        "byspaceTools": {
           "enabled": true,
           "disabledTools": ["browser_evaluate"]
         }
@@ -303,18 +303,18 @@ Each entry may include a Paseo-tool policy:
 }
 ```
 
-Absent `paseoTools`, or absent fields within it, means Paseo tools are enabled and all tools are
-allowed. `enabled: false` disables the provider's Paseo catalog; `disabledTools` lists exact tool
+Absent `byspaceTools`, or absent fields within it, means BySpace tools are enabled and all tools are
+allowed. `enabled: false` disables the provider's BySpace catalog; `disabledTools` lists exact tool
 IDs to omit. The policy covers the core catalog.
 This policy controls the catalog presented to an agent. It is not an authorization boundary for
 agents that can access the host through a shell.
 
 `daemon.mcp.injectIntoAgents` is the global override. When it is `false`, no provider receives
-Paseo tools; otherwise the provider policy applies. Provider and global policy are resolved when a
+BySpace tools; otherwise the provider policy applies. Provider and global policy are resolved when a
 session is created, resumed, imported, or reloaded, so configuration changes affect the next
 session rather than an already-running one.
 
-`agents.metadataGeneration.providers` controls the preferred structured-generation fallback order for daemon-side metadata tasks such as commit messages, PR text, branch names, and generated agent titles. Entries are tried first in the configured order, then Paseo falls through to dynamically discovered defaults and finally the current selection when available.
+`agents.metadataGeneration.providers` controls the preferred structured-generation fallback order for daemon-side metadata tasks such as commit messages, PR text, branch names, and generated agent titles. Entries are tried first in the configured order, then BySpace falls through to dynamically discovered defaults and finally the current selection when available.
 
 ### Git process limits
 
@@ -346,7 +346,7 @@ Environment variables override `config.json`:
 | `BYSPACE_GIT_MAX_PROCESS_CONCURRENCY`  | `maxProcessConcurrency`  |
 | `BYSPACE_GIT_CONCURRENCY`              | Legacy concurrency alias |
 
-The corresponding `PASEO_*` names remain accepted as lower-priority compatibility fallbacks.
+The corresponding `BYSPACE_*` names remain accepted as lower-priority compatibility fallbacks.
 `BYSPACE_GIT_MAX_PROCESS_CONCURRENCY` wins when it and the legacy alias are both set. Run `byspace reload`
 after changing `config.json`. Environment changes require a daemon restart; the launch environment
 remains authoritative during reload.
@@ -520,12 +520,12 @@ Simple set of Expo push notification tokens. Loaded with permissive parsing (fil
 
 These small files are not validated as full Zod schemas but are persisted under `$BYSPACE_HOME` for daemon identity and runtime coordination.
 
-| Path                  | Format                                                         | Notes                                                                                                          |
-| --------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `server-id`           | Plain text, e.g. `srv_<base64url>`                             | Stable per-`$BYSPACE_HOME` daemon ID. Overridable via `BYSPACE_SERVER_ID` (legacy `PASEO_SERVER_ID` fallback). |
-| `daemon-keypair.json` | `{ v: 2, publicKeyB64, secretKeyB64 }` (libsodium box keypair) | E2EE relay identity. Written with mode `0600`. Regenerated if file is unreadable.                              |
-| `paseo.pid`           | JSON `{ pid, startedAt, ... }`                                 | PID lock; prevents two daemons sharing one `$BYSPACE_HOME`; legacy filename retained.                          |
-| `daemon.log`          | Pino log output                                                | Default location; path/rotation configurable via `log.file` in `config.json`.                                  |
+| Path                  | Format                                                         | Notes                                                                                                            |
+| --------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `server-id`           | Plain text, e.g. `srv_<base64url>`                             | Stable per-`$BYSPACE_HOME` daemon ID. Overridable via `BYSPACE_SERVER_ID` (legacy `BYSPACE_SERVER_ID` fallback). |
+| `daemon-keypair.json` | `{ v: 2, publicKeyB64, secretKeyB64 }` (libsodium box keypair) | E2EE relay identity. Written with mode `0600`. Regenerated if file is unreadable.                                |
+| `byspace.pid`         | JSON `{ pid, startedAt, ... }`                                 | PID lock; prevents two daemons sharing one `$BYSPACE_HOME`; legacy filename retained.                            |
+| `daemon.log`          | Pino log output                                                | Default location; path/rotation configurable via `log.file` in `config.json`.                                    |
 
 ---
 
@@ -538,7 +538,7 @@ These live in React Native `AsyncStorage` or browser `IndexedDB`, not on the dae
 Right-sidebar client state splits on whether it is determined by the directory or owned by the workspace (two workspaces can share one `cwd`). The split is enforced by the cache key, so changing a key changes the sharing semantics — see [architecture.md](architecture.md#right-sidebar-boundary-directory-backed-vs-workspace-owned) for the full table.
 
 - **Directory-backed** (shared by same-`cwd` workspaces): keyed by `(serverId, cwd)`. Git status/diff, GitHub PR status, PR timeline, file preview content. These are TanStack Query caches, not persisted stores.
-- **Workspace-owned** (independent per workspace): keyed by `workspaceId`, with `cwd` used only as a fallback when no `workspaceId` is present. Review draft comments (`@paseo:review-draft-store`), diff-mode overrides (in-memory), workspace composer attachments, and file-explorer nav/expand state. The `workspaceId` part of these keys is **opaque** — never parse it back into a path.
+- **Workspace-owned** (independent per workspace): keyed by `workspaceId`, with `cwd` used only as a fallback when no `workspaceId` is present. Review draft comments (`@byspace:review-draft-store`), diff-mode overrides (in-memory), workspace composer attachments, and file-explorer nav/expand state. The `workspaceId` part of these keys is **opaque** — never parse it back into a path.
 
 ### Replica row store
 
@@ -562,7 +562,7 @@ source code, prompts, and tool output; encrypted-at-rest storage is a separate s
 
 ### Draft Store
 
-**AsyncStorage key:** `paseo-drafts` (version 2)
+**AsyncStorage key:** `byspace-drafts` (version 2)
 
 ```typescript
 {
@@ -578,7 +578,7 @@ source code, prompts, and tool output; encrypted-at-rest storage is a separate s
 
 ### Attachment Store (Web)
 
-**IndexedDB database:** `paseo-attachment-bytes`, object store: `attachments`
+**IndexedDB database:** `byspace-attachment-bytes`, object store: `attachments`
 
 Stores binary attachment blobs keyed by attachment ID.
 

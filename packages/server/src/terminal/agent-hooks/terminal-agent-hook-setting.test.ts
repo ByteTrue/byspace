@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { TerminalAgentHookSettings } from "@getpaseo/protocol/messages";
+import type { TerminalAgentHookSettings } from "@byspace/protocol/messages";
 import { DaemonConfigStore } from "../../server/daemon-config-store.js";
 import { agentHooksAreInstalled } from "./agent-hook-installer.js";
 import { AGENT_HOOK_PROVIDERS } from "./provider-registry.js";
@@ -43,20 +43,20 @@ function hookPaths(root: string) {
   return {
     claude: join(root, "claude", "settings.json"),
     codex: join(root, "codex", "hooks.json"),
-    opencode: join(root, "opencode", "plugins", "paseo-terminal-activity.js"),
+    opencode: join(root, "opencode", "plugins", "byspace-terminal-activity.js"),
     pi: join(root, "pi", "extensions", "byspace-terminal-activity.ts"),
   };
 }
 
 function createStore(
-  paseoHome: string,
+  byspaceHome: string,
   options: {
     legacyEnabled?: boolean;
     providers?: TerminalAgentHookSettings;
   } = {},
 ): DaemonConfigStore {
   return new DaemonConfigStore(
-    paseoHome,
+    byspaceHome,
     {
       mcp: { injectIntoAgents: false },
       providers: {},

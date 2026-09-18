@@ -6,10 +6,10 @@ import type {
   ConnectionState,
   FetchAgentsEntry,
   FetchAgentsOptions,
-} from "@getpaseo/client/internal/daemon-client";
-import type { ConnectionOffer } from "@getpaseo/protocol/connection-offer";
-import type { SessionOutboundMessage } from "@getpaseo/protocol/messages";
-import type { AgentPermissionRequest } from "@getpaseo/protocol/agent-types";
+} from "@byspace/client/internal/daemon-client";
+import type { ConnectionOffer } from "@byspace/protocol/connection-offer";
+import type { SessionOutboundMessage } from "@byspace/protocol/messages";
+import type { AgentPermissionRequest } from "@byspace/protocol/agent-types";
 import type { HostConnection, HostProfile } from "@/types/host-connection";
 import { defaultHostAppearance } from "@/hosts/appearance";
 import { useSessionStore, type Agent } from "@/stores/session-store";
@@ -216,7 +216,7 @@ class FakeDaemonClient {
 
 afterEach(() => {
   vi.useRealTimers();
-  delete (globalThis as Record<string, unknown>).__PASEO_INITIAL_DAEMON_CONNECTION__;
+  delete (globalThis as Record<string, unknown>).__BYSPACE_INITIAL_DAEMON_CONNECTION__;
   delete (globalThis as { window?: unknown }).window;
 });
 
@@ -329,7 +329,7 @@ function makeFetchAgentsEntry(input: {
         currentBranch: null,
         remoteUrl: null,
         worktreeRoot: null,
-        isPaseoOwnedWorktree: false,
+        isBySpaceOwnedWorktree: false,
         mainRepoRoot: null,
       },
     },
@@ -1588,8 +1588,8 @@ describe("HostRuntimeStore", () => {
     const host = makeHost({ connections: [makeHost().connections[0]!] });
     const revocation = createDeferred<void>();
     const storage = createMemoryHostRuntimeStorage({
-      "@paseo:daemon-registry": JSON.stringify([host]),
-      "@paseo:e2e": "1",
+      "@byspace:daemon-registry": JSON.stringify([host]),
+      "@byspace:e2e": "1",
     });
     const store = new HostRuntimeStore({
       storage,
@@ -1614,8 +1614,8 @@ describe("HostRuntimeStore", () => {
     const host = makeHost({ connections: [makeHost().connections[0]!] });
     const revokedServerIds: string[] = [];
     const storage = createMemoryHostRuntimeStorage({
-      "@paseo:daemon-registry": JSON.stringify([host]),
-      "@paseo:e2e": "1",
+      "@byspace:daemon-registry": JSON.stringify([host]),
+      "@byspace:e2e": "1",
     });
     const store = new HostRuntimeStore({
       storage,
@@ -1644,8 +1644,8 @@ describe("HostRuntimeStore", () => {
         return backingStore.read(...args);
       },
     };
-    await storage.setItem("@paseo:daemon-registry", JSON.stringify([host]));
-    await storage.setItem("@paseo:e2e", "1");
+    await storage.setItem("@byspace:daemon-registry", JSON.stringify([host]));
+    await storage.setItem("@byspace:e2e", "1");
     const session = useSessionStore.getState();
 
     const store = new HostRuntimeStore({
@@ -1723,7 +1723,7 @@ describe("HostRuntimeStore", () => {
   it("exposes the default appearance for a host stored before the field existed", async () => {
     const storage = createMemoryHostRuntimeStorage();
     await storage.setItem(
-      "@paseo:daemon-registry",
+      "@byspace:daemon-registry",
       JSON.stringify([
         {
           serverId: "srv_legacy",
@@ -1735,7 +1735,7 @@ describe("HostRuntimeStore", () => {
         },
       ]),
     );
-    await storage.setItem("@paseo:e2e", "1");
+    await storage.setItem("@byspace:e2e", "1");
     const store = createAppearanceStore(storage);
 
     const registryLoaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
@@ -1750,8 +1750,8 @@ describe("HostRuntimeStore", () => {
   it("records a chosen host color and writes it through to storage", async () => {
     const host = makeHost({ serverId: "srv_appearance", updatedAt: new Date(0).toISOString() });
     const storage = createMemoryHostRuntimeStorage();
-    await storage.setItem("@paseo:daemon-registry", JSON.stringify([host]));
-    await storage.setItem("@paseo:e2e", "1");
+    await storage.setItem("@byspace:daemon-registry", JSON.stringify([host]));
+    await storage.setItem("@byspace:e2e", "1");
     const store = createAppearanceStore(storage);
 
     const registryLoaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
@@ -1769,7 +1769,7 @@ describe("HostRuntimeStore", () => {
     expect(updated?.appearance).toEqual({ color: "teal", badgeDisplay: "auto" });
     expect(updated?.updatedAt).not.toBe(host.updatedAt);
 
-    const persisted = await storage.getItem("@paseo:daemon-registry");
+    const persisted = await storage.getItem("@byspace:daemon-registry");
     expect(JSON.parse(persisted ?? "[]")[0].appearance).toEqual({
       color: "teal",
       badgeDisplay: "auto",
@@ -1784,8 +1784,8 @@ describe("HostRuntimeStore", () => {
       appearance: { color: "amber", badgeDisplay: "auto" },
     });
     const storage = createMemoryHostRuntimeStorage();
-    await storage.setItem("@paseo:daemon-registry", JSON.stringify([host]));
-    await storage.setItem("@paseo:e2e", "1");
+    await storage.setItem("@byspace:daemon-registry", JSON.stringify([host]));
+    await storage.setItem("@byspace:e2e", "1");
     const store = createAppearanceStore(storage);
 
     const registryLoaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
@@ -1801,7 +1801,7 @@ describe("HostRuntimeStore", () => {
 
     expect(store.getHosts()[0]?.appearance).toEqual({ color: "amber", badgeDisplay: "icon" });
 
-    const persisted = await storage.getItem("@paseo:daemon-registry");
+    const persisted = await storage.getItem("@byspace:daemon-registry");
     expect(JSON.parse(persisted ?? "[]")[0].appearance).toEqual({
       color: "amber",
       badgeDisplay: "icon",
@@ -1813,8 +1813,8 @@ describe("HostRuntimeStore", () => {
   it("keeps host appearance unchanged when persistence fails", async () => {
     const host = makeHost({ serverId: "srv_appearance" });
     const storage = createMemoryHostRuntimeStorage();
-    await storage.setItem("@paseo:daemon-registry", JSON.stringify([host]));
-    await storage.setItem("@paseo:e2e", "1");
+    await storage.setItem("@byspace:daemon-registry", JSON.stringify([host]));
+    await storage.setItem("@byspace:e2e", "1");
     const store = createAppearanceStore(storage);
 
     const registryLoaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
@@ -1834,8 +1834,8 @@ describe("HostRuntimeStore", () => {
   it("serializes overlapping host appearance writes", async () => {
     const host = makeHost({ serverId: "srv_appearance" });
     const storage = createMemoryHostRuntimeStorage();
-    await storage.setItem("@paseo:daemon-registry", JSON.stringify([host]));
-    await storage.setItem("@paseo:e2e", "1");
+    await storage.setItem("@byspace:daemon-registry", JSON.stringify([host]));
+    await storage.setItem("@byspace:e2e", "1");
     const store = createAppearanceStore(storage);
 
     const registryLoaded = onceHostListMatches(store, () => store.isHostRegistryLoaded());
@@ -1861,7 +1861,7 @@ describe("HostRuntimeStore", () => {
     await Promise.all([color, display]);
 
     expect(store.getHosts()[0]?.appearance).toEqual({ color: "teal", badgeDisplay: "icon" });
-    const persistedHosts = JSON.parse((await storage.getItem("@paseo:daemon-registry")) ?? "[]");
+    const persistedHosts = JSON.parse((await storage.getItem("@byspace:daemon-registry")) ?? "[]");
     expect(persistedHosts[0]?.appearance).toEqual({ color: "teal", badgeDisplay: "icon" });
     store.syncHosts([]);
   });
@@ -2239,7 +2239,7 @@ describe("HostRuntimeStore", () => {
         entries: [
           makeFetchAgentsEntry({
             id: "agent-recent",
-            cwd: "/workspaces/paseo",
+            cwd: "/workspaces/byspace",
             updatedAt: "2026-03-04T12:00:00.000Z",
             title: "Recent agent",
           }),
@@ -2252,7 +2252,7 @@ describe("HostRuntimeStore", () => {
         entries: [
           makeFetchAgentsEntry({
             id: "agent-stale-attention",
-            cwd: "/workspaces/paseo-pr67-review",
+            cwd: "/workspaces/byspace-pr67-review",
             updatedAt: "2026-02-20T08:00:00.000Z",
             title: "Needs triage",
             requiresAttention: true,
@@ -3212,7 +3212,7 @@ describe("HostRuntimeStore", () => {
     useSessionStore.getState().setAgents(host.serverId, () => {
       const stale = makeFetchAgentsEntry({
         id: "agent-archived",
-        cwd: "/workspaces/paseo",
+        cwd: "/workspaces/byspace",
         updatedAt: "2026-03-30T15:29:00.000Z",
         archivedAt: null,
         title: "Stale active copy",
@@ -3379,7 +3379,7 @@ describe("HostRuntimeStore", () => {
 
     await store.upsertDirectConnection({
       serverId: "srv_tls_password",
-      endpoint: "example.paseo.test:7443",
+      endpoint: "example.byspace.test:7443",
       useTls: true,
       password: "shared-secret",
       label: "tls host",
@@ -3388,9 +3388,9 @@ describe("HostRuntimeStore", () => {
     const host = store.getHosts().find((entry) => entry.serverId === "srv_tls_password");
     expect(host?.connections).toEqual([
       {
-        id: "direct:example.paseo.test:7443",
+        id: "direct:example.byspace.test:7443",
         type: "directTcp",
-        endpoint: "example.paseo.test:7443",
+        endpoint: "example.byspace.test:7443",
         useTls: true,
         password: "shared-secret",
       },
@@ -3656,7 +3656,7 @@ describe("HostRuntimeStore", () => {
   it("merges a cold-load offer import with hosts that are still being read from storage", async () => {
     const storedHost = makeHost({ serverId: "srv_stored", label: "Stored host" });
     const storage = createMemoryHostRuntimeStorage({
-      "@paseo:daemon-registry": JSON.stringify([storedHost]),
+      "@byspace:daemon-registry": JSON.stringify([storedHost]),
     });
     const store = new HostRuntimeStore({
       deps: {
@@ -3677,7 +3677,7 @@ describe("HostRuntimeStore", () => {
     await store.upsertConnectionFromOffer(makeOffer(), "Scanned host");
 
     expect(store.getHosts().map((host) => host.serverId)).toEqual(["srv_stored", "srv_offer"]);
-    const persisted = JSON.parse((await storage.getItem("@paseo:daemon-registry")) ?? "[]") as {
+    const persisted = JSON.parse((await storage.getItem("@byspace:daemon-registry")) ?? "[]") as {
       serverId: string;
     }[];
     expect(persisted.map((host) => host.serverId)).toEqual(["srv_stored", "srv_offer"]);
@@ -3692,7 +3692,7 @@ describe("readInitialDaemonConnectionHint", () => {
   });
 
   it("parses a valid listen-only hint", () => {
-    (globalThis as Record<string, unknown>).__PASEO_INITIAL_DAEMON_CONNECTION__ = {
+    (globalThis as Record<string, unknown>).__BYSPACE_INITIAL_DAEMON_CONNECTION__ = {
       listen: "localhost:6767",
     };
     expect(readInitialDaemonConnectionHint({ isWebRuntime: true })).toEqual({
@@ -3702,21 +3702,22 @@ describe("readInitialDaemonConnectionHint", () => {
   });
 
   it("preserves useTls when explicitly true", () => {
-    (globalThis as Record<string, unknown>).__PASEO_INITIAL_DAEMON_CONNECTION__ = {
-      listen: "paseo.example.com:443",
+    (globalThis as Record<string, unknown>).__BYSPACE_INITIAL_DAEMON_CONNECTION__ = {
+      listen: "byspace.example.com:443",
       useTls: true,
     };
     expect(readInitialDaemonConnectionHint({ isWebRuntime: true })).toEqual({
-      listen: "paseo.example.com:443",
+      listen: "byspace.example.com:443",
       useTls: true,
     });
   });
 
   it("ignores invalid shapes", () => {
-    (globalThis as Record<string, unknown>).__PASEO_INITIAL_DAEMON_CONNECTION__ = "localhost:6767";
+    (globalThis as Record<string, unknown>).__BYSPACE_INITIAL_DAEMON_CONNECTION__ =
+      "localhost:6767";
     expect(readInitialDaemonConnectionHint({ isWebRuntime: true })).toBeNull();
 
-    (globalThis as Record<string, unknown>).__PASEO_INITIAL_DAEMON_CONNECTION__ = {
+    (globalThis as Record<string, unknown>).__BYSPACE_INITIAL_DAEMON_CONNECTION__ = {
       useTls: true,
     };
     expect(readInitialDaemonConnectionHint({ isWebRuntime: true })).toBeNull();

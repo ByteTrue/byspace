@@ -4,7 +4,7 @@ Spin up an isolated in-process daemon test harness without touching the main dae
 
 This is for test code only. Executable daemon processes must start through
 `scripts/supervisor-entrypoint.ts` or `dist/scripts/supervisor-entrypoint.js`;
-do not use `createPaseoDaemon` as a product launch path.
+do not use `createBySpaceDaemon` as a product launch path.
 
 ## Quick start
 
@@ -13,7 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import pino from "pino";
-import { createPaseoDaemon } from "./bootstrap.js";
+import { createBySpaceDaemon } from "./bootstrap.js";
 import { DaemonClient } from "./test-utils/daemon-client.js";
 
 const logger = pino({ level: "warn" });
@@ -22,10 +22,10 @@ const byspaceHome = path.join(byspaceHomeRoot, ".byspace");
 await mkdir(byspaceHome, { recursive: true });
 const staticDir = await mkdtemp(path.join(os.tmpdir(), "byspace-static-"));
 
-const daemon = await createPaseoDaemon(
+const daemon = await createBySpaceDaemon(
   {
     listen: "127.0.0.1:0", // OS picks a free port
-    paseoHome: byspaceHome,
+    byspaceHome: byspaceHome,
     corsAllowedOrigins: [],
     hostnames: true,
     mcpEnabled: false,
@@ -69,13 +69,13 @@ npx tsx packages/server/src/server/your-script.ts
 
 ## Using the test helper
 
-For simpler cases, `createTestPaseoDaemon` + `DaemonClient` handles temp dirs and port selection:
+For simpler cases, `createTestBySpaceDaemon` + `DaemonClient` handles temp dirs and port selection:
 
 ```typescript
-import { createTestPaseoDaemon } from "./test-utils/paseo-daemon.js";
+import { createTestBySpaceDaemon } from "./test-utils/byspace-daemon.js";
 import { DaemonClient } from "./test-utils/daemon-client.js";
 
-const daemon = await createTestPaseoDaemon();
+const daemon = await createTestBySpaceDaemon();
 const client = new DaemonClient({
   url: `ws://127.0.0.1:${daemon.port}/ws`,
   appVersion: "0.1.70",
@@ -89,7 +89,7 @@ await client.close();
 await daemon.close(); // stops daemon + cleans up temp dirs
 ```
 
-The test helper does **not** expose `providerOverrides`. In test harnesses, use `createPaseoDaemon` directly when you need it (see quick start above).
+The test helper does **not** expose `providerOverrides`. In test harnesses, use `createBySpaceDaemon` directly when you need it (see quick start above).
 
 ## Common client methods
 

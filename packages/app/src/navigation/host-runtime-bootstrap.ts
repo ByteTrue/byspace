@@ -40,44 +40,7 @@ export function startHostRuntimeBootstrap(input: StartHostRuntimeBootstrapInput)
 
 const WELCOME_ROUTE: Href = "/welcome";
 
-export type StartupBlocker =
-  | { kind: "none" }
-  | { kind: "managed-daemon-starting" }
-  | { kind: "managed-daemon-error"; message: string };
-
-export interface ResolveStartupBlockerInput {
-  isDesktopRuntime: boolean;
-  anyOnlineHostServerId: string | null;
-  daemonStartIsRunning: boolean;
-  daemonStartError: string | null;
-}
-
-export function resolveStartupBlocker(input: ResolveStartupBlockerInput): StartupBlocker {
-  if (!input.isDesktopRuntime) {
-    return { kind: "none" };
-  }
-
-  if (input.anyOnlineHostServerId) {
-    return { kind: "none" };
-  }
-
-  if (input.daemonStartError) {
-    return { kind: "managed-daemon-error", message: input.daemonStartError };
-  }
-
-  if (input.daemonStartIsRunning) {
-    return { kind: "managed-daemon-starting" };
-  }
-
-  return { kind: "none" };
-}
-
-export function resolveStartupNavigationReady(input: { startupBlocker: StartupBlocker }): boolean {
-  return input.startupBlocker.kind !== "managed-daemon-starting";
-}
-
 export function shouldRunStartupGiveUpTimer(input: {
-  startupBlocker: StartupBlocker;
   anyOnlineHostServerId: string | null;
   hasGivenUpWaitingForHost: boolean;
 }): boolean {
@@ -87,7 +50,7 @@ export function shouldRunStartupGiveUpTimer(input: {
   if (input.hasGivenUpWaitingForHost) {
     return false;
   }
-  return input.startupBlocker.kind === "none";
+  return true;
 }
 
 export type StartupRegistryStatus = "loading" | "ready";
@@ -105,7 +68,6 @@ export interface HostStartupRouteTarget {
 export type StartupRouteTarget = IndexStartupRouteTarget | HostStartupRouteTarget;
 
 interface ResolveStartupRouteBaseInput {
-  startupBlocker: StartupBlocker;
   hostRegistryStatus: StartupRegistryStatus;
   hosts: readonly { serverId: string }[];
 }
@@ -235,14 +197,10 @@ function isHostStartupRouteInput(
 
 export function resolveStartupRoute(input: ResolveStartupRouteInput): StartupRouteDecision {
   if (isHostStartupRouteInput(input)) {
-    if (input.startupBlocker.kind !== "none" || input.hostRegistryStatus === "loading") {
+    if (input.hostRegistryStatus === "loading") {
       return { kind: "render" };
     }
     return resolveReadyHostStartupRoute(input);
-  }
-
-  if (input.startupBlocker.kind !== "none") {
-    return { kind: "splash" };
   }
 
   if (input.hostRegistryStatus === "loading") {

@@ -44,9 +44,9 @@ Terminals receive the following environment variables when the daemon creates th
 - `BYSPACE_ACTIVITY_TOKEN`
 - `BYSPACE_TERMINAL_ACTIVITY_URL`
 - `BYSPACE_HOOK_CLI` — absolute path to the current `byspace` CLI executable
-- `PASEO_TERMINAL_ID`, `PASEO_ACTIVITY_TOKEN`, `PASEO_TERMINAL_ACTIVITY_URL`, and `PASEO_HOOK_CLI` — legacy aliases kept for installed provider hooks
+- `BYSPACE_TERMINAL_ID`, `BYSPACE_ACTIVITY_TOKEN`, `BYSPACE_TERMINAL_ACTIVITY_URL`, and `BYSPACE_HOOK_CLI` — legacy aliases kept for installed provider hooks
 
-Installed provider hooks use the terminal-id compatibility alias as their gate and resolve the CLI from `BYSPACE_HOOK_CLI`, then `PASEO_HOOK_CLI`, then bare `byspace`. `byspace hooks <agent> <event>` reads the terminal id, token, and activity URL, asks the agent hook provider registry to resolve the event to a coarse activity state, and silently posts `{ terminalId, token, state }` to the activity URL. Missing env, unsupported agents/events, malformed hook input, and daemon/network failures are no-ops so agent hooks never break the user's terminal session.
+Installed provider hooks use the terminal-id compatibility alias as their gate and resolve the CLI from `BYSPACE_HOOK_CLI`, then `BYSPACE_HOOK_CLI`, then bare `byspace`. `byspace hooks <agent> <event>` reads the terminal id, token, and activity URL, asks the agent hook provider registry to resolve the event to a coarse activity state, and silently posts `{ terminalId, token, state }` to the activity URL. Missing env, unsupported agents/events, malformed hook input, and daemon/network failures are no-ops so agent hooks never break the user's terminal session.
 
 Claude hook mapping:
 
@@ -104,7 +104,7 @@ BySpace installs providers as follows:
 
 - Claude hooks are written to `~/.claude/settings.json` (or `CLAUDE_CONFIG_DIR/settings.json` when that override is set).
 - Codex hooks are written to `~/.codex/hooks.json` (or `CODEX_HOME/hooks.json` when that override is set). Codex supports a native `commandWindows`, so each BySpace hook includes both POSIX and Windows commands. Non-managed Codex hooks are trust-gated by Codex; users may see Codex's hook review prompt before the hook runs.
-- OpenCode gets a self-contained plugin at `$XDG_CONFIG_HOME/opencode/plugins/paseo-terminal-activity.js` (or `~/.config/opencode/plugins/paseo-terminal-activity.js` when XDG is unset; `OPENCODE_CONFIG_DIR` still wins when set).
+- OpenCode gets a self-contained plugin at `$XDG_CONFIG_HOME/opencode/plugins/byspace-terminal-activity.js` (or `~/.config/opencode/plugins/byspace-terminal-activity.js` when XDG is unset; `OPENCODE_CONFIG_DIR` still wins when set).
 - Pi gets `extensions/byspace-terminal-activity.ts` under `PI_CODING_AGENT_DIR`, or `~/.pi/agent` when the override is unset. The extension uses Pi's documented `agent_start`, `ui_prompt_start`, `ui_prompt_end`, `agent_settled`, and `session_shutdown` events.
 
 Installation is marker-based and idempotent. BySpace preserves user hooks, removes only its own hooks, and leaves enabled hooks installed across daemon shutdown. The Pi installer refuses to replace or remove a same-name file without the BySpace marker. Outside a BySpace terminal the hooks are inert because the required terminal activity environment is absent.
@@ -114,15 +114,15 @@ Provider variation lives in `AGENT_HOOK_PROVIDERS`: provider id, installed event
 The installed hook command keeps the config portable and resolves the CLI at runtime:
 
 ```sh
-[ -n "$PASEO_TERMINAL_ID" ] && "${BYSPACE_HOOK_CLI:-${PASEO_HOOK_CLI:-byspace}}" hooks claude <event>
+[ -n "$BYSPACE_TERMINAL_ID" ] && "${BYSPACE_HOOK_CLI:-${BYSPACE_HOOK_CLI:-byspace}}" hooks claude <event>
 ```
 
 Codex also receives the Windows equivalent:
 
 ```bat
-if defined PASEO_TERMINAL_ID (if defined BYSPACE_HOOK_CLI ("%BYSPACE_HOOK_CLI%" hooks codex <event>) else (if defined PASEO_HOOK_CLI ("%PASEO_HOOK_CLI%" hooks codex <event>) else (byspace hooks codex <event>)))
+if defined BYSPACE_TERMINAL_ID (if defined BYSPACE_HOOK_CLI ("%BYSPACE_HOOK_CLI%" hooks codex <event>) else (if defined BYSPACE_HOOK_CLI ("%BYSPACE_HOOK_CLI%" hooks codex <event>) else (byspace hooks codex <event>)))
 ```
 
-The daemon resolves the current CLI through `BYSPACE_CLI` (normalized to the internal `PASEO_CLI` alias) when its launcher supplies one, or through the npm package shim for standalone installs. Terminal setup exposes that executable as both `BYSPACE_HOOK_CLI` and `PASEO_HOOK_CLI`. The generated command falls back to the legacy alias and then bare `byspace`; it no-ops outside BySpace terminals because the terminal-id gate remains first. BySpace also prepends the resolved CLI directory to each terminal `PATH` as a secondary fallback. All other behavior lives in `byspace hooks`: read the env, map the event, POST activity, and no-op/fail-open when anything is missing or unavailable.
+The daemon resolves the current CLI through `BYSPACE_CLI` (normalized to the internal `BYSPACE_CLI` alias) when its launcher supplies one, or through the npm package shim for standalone installs. Terminal setup exposes that executable as both `BYSPACE_HOOK_CLI` and `BYSPACE_HOOK_CLI`. The generated command falls back to the legacy alias and then bare `byspace`; it no-ops outside BySpace terminals because the terminal-id gate remains first. BySpace also prepends the resolved CLI directory to each terminal `PATH` as a secondary fallback. All other behavior lives in `byspace hooks`: read the env, map the event, POST activity, and no-op/fail-open when anything is missing or unavailable.
 
 If one provider installation fails, daemon startup, terminal spawn, and reconciliation of the other providers continue.

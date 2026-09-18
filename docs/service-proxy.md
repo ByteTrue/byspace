@@ -4,7 +4,7 @@ BySpace proxies HTTP traffic to services running inside your workspaces. Localho
 
 ## How it works
 
-When a `byspace.json` script of `"type": "service"` starts, BySpace assigns it a local port and registers a route in the service proxy. Legacy `paseo.json` files are read and updated in place; do not keep both project config filenames in one project. Incoming requests whose `Host` header matches the script's generated hostname are forwarded to that port.
+When a `byspace.json` script of `"type": "service"` starts, BySpace assigns it a local port and registers a route in the service proxy. Legacy `byspace.json` files are read and updated in place; do not keep both project config filenames in one project. Incoming requests whose `Host` header matches the script's generated hostname are forwarded to that port.
 
 The generated hostname is built from the script name, branch, and project:
 
@@ -28,7 +28,7 @@ Local and public routes use one combined leftmost label (`script--branch--projec
 
 ## Managing workspace scripts
 
-Configured `byspace.json` scripts (or legacy `paseo.json` scripts) can be managed without addressing their backing terminal directly:
+Configured `byspace.json` scripts (or legacy `byspace.json` scripts) can be managed without addressing their backing terminal directly:
 
 ```bash
 byspace script ls [--cwd <path> | --workspace <workspace-id>]
@@ -90,7 +90,7 @@ If the same reverse proxy serves the daemon web UI over HTTPS, it must also set 
 }
 ```
 
-`BYSPACE_TRUSTED_PROXIES` accepts the same comma-separated values, for example `loopback,172.16.0.0/12`. The legacy `PASEO_TRUSTED_PROXIES` name remains a lower-priority fallback. Use `true` only when the final trusted proxy overwrites client-supplied `X-Forwarded-*` headers.
+`BYSPACE_TRUSTED_PROXIES` accepts the same comma-separated values, for example `loopback,172.16.0.0/12`. The legacy `BYSPACE_TRUSTED_PROXIES` name remains a lower-priority fallback. Use `true` only when the final trusted proxy overwrites client-supplied `X-Forwarded-*` headers.
 
 Nginx example:
 
@@ -132,7 +132,7 @@ Treat the forwarded authority as client-influenced input. A service that builds 
 
 ## Environment variables
 
-The listen address and public base URL can also be set via environment variables, which take precedence over `config.json`. The corresponding `PASEO_*` names remain accepted as lower-priority compatibility fallbacks:
+The listen address and public base URL can also be set via environment variables, which take precedence over `config.json`. The corresponding `BYSPACE_*` names remain accepted as lower-priority compatibility fallbacks:
 
 | Variable                                | Description                                                               |
 | --------------------------------------- | ------------------------------------------------------------------------- |

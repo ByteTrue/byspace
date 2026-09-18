@@ -3,7 +3,7 @@ import {
   type MutableDaemonConfigPatch,
   type TerminalAgentHookProviderId,
   type TerminalAgentHookSettings,
-} from "@getpaseo/protocol/messages";
+} from "@byspace/protocol/messages";
 
 const legacyGlobalProviderIds = new Set<TerminalAgentHookProviderId>(
   TERMINAL_AGENT_HOOK_LEGACY_GLOBAL_PROVIDER_IDS,

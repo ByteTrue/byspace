@@ -13,7 +13,7 @@ import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { restartDaemonFromSettings } from "@/screens/settings/daemon-restart";
 import { useSessionStore } from "@/stores/session-store";
 import { settingsStyles } from "@/styles/settings";
-import type { MutableDaemonConfigPatch } from "@getpaseo/protocol/messages";
+import type { MutableDaemonConfigPatch } from "@byspace/protocol/messages";
 import {
   useHostRuntimeClient,
   useHostRuntimeIsConnected,

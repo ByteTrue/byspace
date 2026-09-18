@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { usePathname, useRouter } from "expo-router";
-import { getIsElectronRuntime } from "@/constants/layout";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { setCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
@@ -13,10 +12,6 @@ import {
   getWorkspaceIndexJumpModifierKey,
 } from "@/keyboard/keyboard-shortcuts";
 import { resolveKeyboardFocusScope } from "@/keyboard/focus-scope";
-import {
-  buildBrowserKeyboardPolicy,
-  shouldPublishBrowserShortcutPolicy,
-} from "@/desktop/browser/shortcuts";
 import type { KeyboardFocusScope, KeyboardShortcutPayload } from "@/keyboard/actions";
 import {
   routeKeyboardShortcut,
@@ -62,7 +57,6 @@ export function useKeyboardShortcuts({
   const { overrides } = useKeyboardShortcutOverrides();
   const bindings = useMemo(() => buildEffectiveBindings(overrides), [overrides]);
   const shortcutsAvailable = keyboardShortcutsAvailable({ isNative, isCompact: isMobile });
-  const isDesktopApp = getIsElectronRuntime();
   const isMac = getShortcutOs() === "mac";
   const chordStateRef = useRef<ChordState>({
     candidateIndices: [],
@@ -74,35 +68,11 @@ export function useKeyboardShortcuts({
   const keyboardWorkspaceSelectionRef = useRef<ActiveWorkspaceSelection | null>(null);
   const badgeModifierKeyRef = useRef<string | null | undefined>(undefined);
 
-  const publishBrowserShortcutPolicy = useCallback(
-    (chordState?: ChordState) => {
-      const policy =
-        enabled && shortcutsAvailable
-          ? buildBrowserKeyboardPolicy({
-              bindings,
-              chordState,
-              isMac,
-              isDesktop: isDesktopApp,
-            })
-          : { menuPrefixes: [], prefixes: [] };
-      void policy; // Desktop shortcut policy is retired (issue 025 A3).
-    },
-    [bindings, enabled, isDesktopApp, isMac, shortcutsAvailable],
-  );
-
   useEffect(() => {
     if (activeWorkspaceSelection) {
       keyboardWorkspaceSelectionRef.current = activeWorkspaceSelection;
     }
   }, [activeWorkspaceSelection]);
-
-  useEffect(() => {
-    if (!isDesktopApp) {
-      return;
-    }
-
-    publishBrowserShortcutPolicy();
-  }, [isDesktopApp, publishBrowserShortcutPolicy]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -115,17 +85,9 @@ export function useKeyboardShortcuts({
     // Derived from the effective bindings: `null` when the user unassigned or
     // rebound the jump shortcut, and no `event.key` ever equals null, so the
     // badges simply never appear.
-    const badgeModifierKey = getWorkspaceIndexJumpModifierKey(
-      { isMac, isDesktop: isDesktopApp },
-      bindings,
-    );
+    const badgeModifierKey = getWorkspaceIndexJumpModifierKey({ isMac }, bindings);
     const setBadgeModifierDown = (down: boolean) => {
-      const state = useKeyboardShortcutsStore.getState();
-      if (isDesktopApp) {
-        state.setCmdOrCtrlDown(down);
-      } else {
-        state.setAltDown(down);
-      }
+      useKeyboardShortcutsStore.getState().setAltDown(down);
     };
 
     // The keyup listener matches the released key against the modifier derived
@@ -254,12 +216,10 @@ export function useKeyboardShortcuts({
       browserFocusRestoreElement?: HTMLElement | null;
     }) => {
       const store = useKeyboardShortcutsStore.getState();
-      const previousChordState = chordStateRef.current;
       const result = resolveKeyboardShortcut({
         event: input.event,
         context: {
           isMac,
-          isDesktop: isDesktopApp,
           focusScope: input.focusScope,
           commandCenterOpen: store.commandCenterOpen,
         },
@@ -270,20 +230,10 @@ export function useKeyboardShortcuts({
             step: 0,
             timeoutId: null,
           };
-          publishBrowserShortcutPolicy();
         },
         bindings,
       });
       chordStateRef.current = result.nextChordState;
-      if (
-        shouldPublishBrowserShortcutPolicy({
-          isBrowserInput: "browserId" in input.event,
-          previousChordState,
-          nextChordState: result.nextChordState,
-        })
-      ) {
-        publishBrowserShortcutPolicy(result.nextChordState);
-      }
 
       if (result.preventDefault && input.domEvent) {
         input.domEvent.preventDefault();
@@ -398,14 +348,12 @@ export function useKeyboardShortcuts({
     enabled,
     exitFocusMode,
     activeWorkspaceSelection,
-    isDesktopApp,
     isMac,
     isMobile,
     isWorkspaceFocusModeEnabled,
     keyboardActionDispatcher,
     openProjectPickerAction,
     pathname,
-    publishBrowserShortcutPolicy,
     resetModifiers,
     router,
     shortcutsAvailable,

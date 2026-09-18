@@ -25,4 +25,4 @@ Either way, **you install the underlying CLI**. BySpace runs it.
 
 - [Supported providers](/docs/supported-providers), the full list with install links.
 - [Agent profiles](/docs/agent-profiles), save model, mode, and thinking settings together, with notes to guide delegation.
-- [Custom providers](/docs/custom-providers), add your own provider, point an existing one at a different endpoint, configure multiple provider aliases, or override the binary in `~/.paseo/config.json`.
+- [Custom providers](/docs/custom-providers), add your own provider, point an existing one at a different endpoint, configure multiple provider aliases, or override the binary in `~/.byspace/config.json`.

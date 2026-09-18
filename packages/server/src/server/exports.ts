@@ -1,7 +1,7 @@
-// CLI exports for @getpaseo/server
-export { createPaseoDaemon, type PaseoDaemon, type PaseoDaemonConfig } from "./bootstrap.js";
+// CLI exports for @byspace/server
+export { createBySpaceDaemon, type BySpaceDaemon, type BySpaceDaemonConfig } from "./bootstrap.js";
 export { loadConfig, type CliConfigOverrides } from "./config.js";
-export { resolvePaseoHome } from "./paseo-home.js";
+export { resolveBySpaceHome } from "./byspace-home.js";
 export { getOrCreateServerId } from "./server-id.js";
 export { createRootLogger, type LogLevel, type LogFormat } from "./logger.js";
 export {
@@ -16,21 +16,21 @@ export {
   decodeOfferFragmentPayload,
   parseConnectionOfferFromUrl,
   type ConnectionOffer,
-} from "@getpaseo/protocol/connection-offer";
-export { buildRelayWebSocketUrl } from "@getpaseo/protocol/daemon-endpoints";
+} from "@byspace/protocol/connection-offer";
+export { buildRelayWebSocketUrl } from "@byspace/protocol/daemon-endpoints";
 export {
   buildDaemonWebSocketUrl,
   deriveLabelFromEndpoint,
   normalizeHostPort,
   parseConnectionUri,
   shouldUseTlsForDefaultHostedRelay,
-} from "@getpaseo/protocol/daemon-endpoints";
-export { PARENT_AGENT_ID_LABEL } from "@getpaseo/protocol/agent-labels";
+} from "@byspace/protocol/daemon-endpoints";
+export { PARENT_AGENT_ID_LABEL } from "@byspace/protocol/agent-labels";
 export {
   DirectTcpHostConnectionSchema,
   type DirectTcpHostConnection,
   type NormalizedDirectTcpHostConnection,
-} from "@getpaseo/protocol/host-connection-schema";
+} from "@byspace/protocol/host-connection-schema";
 
 // Provider binary resolution
 export {
@@ -45,7 +45,7 @@ export {
   AGENT_PROVIDER_DEFINITIONS,
   BUILTIN_PROVIDER_IDS,
   type AgentProviderDefinition,
-} from "@getpaseo/protocol/provider-manifest";
+} from "@byspace/protocol/provider-manifest";
 
 // Agent SDK types for CLI commands
 export type {
@@ -79,4 +79,4 @@ export type {
   AgentSnapshotPayload,
   AgentStreamEventPayload,
   AgentStreamMessage,
-} from "@getpaseo/protocol/messages";
+} from "@byspace/protocol/messages";

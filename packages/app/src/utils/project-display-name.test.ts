@@ -12,7 +12,7 @@ describe("projectDisplayNameFromProjectId", () => {
   });
 
   it("shows the trailing directory name for local projects", () => {
-    expect(projectDisplayNameFromProjectId("/Users/me/dev/paseo")).toBe("paseo");
+    expect(projectDisplayNameFromProjectId("/Users/me/dev/byspace")).toBe("byspace");
   });
 });
 
@@ -22,6 +22,6 @@ describe("projectIconPlaceholderLabelFromDisplayName", () => {
   });
 
   it("returns the original display name when it has no path separator", () => {
-    expect(projectIconPlaceholderLabelFromDisplayName("paseo")).toBe("paseo");
+    expect(projectIconPlaceholderLabelFromDisplayName("byspace")).toBe("byspace");
   });
 });

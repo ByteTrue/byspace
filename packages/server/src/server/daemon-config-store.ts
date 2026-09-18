@@ -11,13 +11,13 @@ import {
   MutableDaemonConfigPatchSchema,
   TERMINAL_AGENT_HOOK_LEGACY_GLOBAL_PROVIDER_IDS,
   TERMINAL_AGENT_HOOK_PROVIDER_IDS,
-} from "@getpaseo/protocol/messages";
-import type { AgentSkillSelection } from "@getpaseo/protocol/messages";
+} from "@byspace/protocol/messages";
+import type { AgentSkillSelection } from "@byspace/protocol/messages";
 
-export type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@getpaseo/protocol/messages";
+export type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@byspace/protocol/messages";
 
-type MutableDaemonConfig = import("@getpaseo/protocol/messages").MutableDaemonConfig;
-type MutableDaemonConfigPatch = import("@getpaseo/protocol/messages").MutableDaemonConfigPatch;
+type MutableDaemonConfig = import("@byspace/protocol/messages").MutableDaemonConfig;
+type MutableDaemonConfigPatch = import("@byspace/protocol/messages").MutableDaemonConfigPatch;
 type ProviderOverride = import("./agent/provider-launch-config.js").ProviderOverride;
 
 interface SupportedMutableConfigPatch {
@@ -57,7 +57,7 @@ export interface DaemonNetworkControls {
   getTcpPort(): number | null;
   /** True when BYSPACE_LISTEN or a CLI --listen flag owns the listen address. */
   isListenOverridden(): boolean;
-  /** True when PASEO_PASSWORD owns the daemon password. */
+  /** True when BYSPACE_PASSWORD owns the daemon password. */
   isPasswordOverridden(): boolean;
 }
 
@@ -416,11 +416,11 @@ export function applyMutableProviderConfigToOverrides(
     nextOverrides[providerId] = {
       ...previousOverride,
       ...parsedOverride,
-      ...(parsedOverride.paseoTools
+      ...(parsedOverride.byspaceTools
         ? {
-            paseoTools: {
-              ...previousOverride?.paseoTools,
-              ...parsedOverride.paseoTools,
+            byspaceTools: {
+              ...previousOverride?.byspaceTools,
+              ...parsedOverride.byspaceTools,
             },
           }
         : {}),
@@ -432,7 +432,7 @@ export function applyMutableProviderConfigToOverrides(
 
 export class DaemonConfigStore {
   private current: MutableDaemonConfig;
-  private readonly paseoHome: string;
+  private readonly byspaceHome: string;
   private readonly logger: LoggerLike | undefined;
   private readonly changeListeners = new Set<ConfigListener>();
   private readonly applyListeners = new Set<ConfigApplyListener>();
@@ -444,7 +444,7 @@ export class DaemonConfigStore {
   private lastKnownPersisted: PersistedConfig;
 
   constructor(
-    paseoHome: string,
+    byspaceHome: string,
     initial: MutableDaemonConfig,
     logger?: LoggerLike,
     options: {
@@ -454,7 +454,7 @@ export class DaemonConfigStore {
       networkControls?: DaemonNetworkControls;
     } = {},
   ) {
-    this.paseoHome = paseoHome;
+    this.byspaceHome = byspaceHome;
     this.logger = getLogger(logger);
     this.current = MutableDaemonConfigSchema.parse({
       ...initial,
@@ -463,7 +463,8 @@ export class DaemonConfigStore {
     this.relayEnabledMutable = options.relayEnabledMutable ?? true;
     this.reloadSource = options.reloadSource;
     this.networkControls = options.networkControls;
-    this.startupPersisted = options.startupPersisted ?? loadPersistedConfig(paseoHome, this.logger);
+    this.startupPersisted =
+      options.startupPersisted ?? loadPersistedConfig(byspaceHome, this.logger);
     this.lastKnownPersisted = this.startupPersisted;
   }
 
@@ -541,7 +542,7 @@ export class DaemonConfigStore {
       this.applyReplacement(next, { removedProviders });
       this.lastKnownPersisted = knownNext;
     } catch (error) {
-      savePersistedConfig(this.paseoHome, persistedBeforePatch, this.logger);
+      savePersistedConfig(this.byspaceHome, persistedBeforePatch, this.logger);
       throw error;
     }
 
@@ -573,11 +574,11 @@ export class DaemonConfigStore {
     }
     if (authPatch !== undefined && controls.isPasswordOverridden()) {
       throw new Error(
-        "Password is controlled by the PASEO_PASSWORD environment variable. Remove the override before changing it here.",
+        "Password is controlled by the BYSPACE_PASSWORD environment variable. Remove the override before changing it here.",
       );
     }
 
-    const persisted = loadPersistedConfig(this.paseoHome, this.logger);
+    const persisted = loadPersistedConfig(this.byspaceHome, this.logger);
     // LAN state has two owners: the persisted listen address decides what the
     // daemon will actually expose on restart, the view mirrors it for clients.
     // A password clear must consult BOTH so a launch override that silences the
@@ -643,7 +644,7 @@ export class DaemonConfigStore {
       throw new Error("Daemon config reload is unavailable for this daemon instance");
     }
 
-    const persisted = loadPersistedConfig(this.paseoHome, this.logger);
+    const persisted = loadPersistedConfig(this.byspaceHome, this.logger);
     const resolved = this.reloadSource.resolve(persisted);
     // Plugin source changes require the plugin lifecycle operation or a daemon
     // restart. The global switch is independently reloadable.
@@ -798,7 +799,7 @@ export class DaemonConfigStore {
     removeProviders: readonly string[],
     daemonPersistedPatch?: DaemonPersistedPatch | null,
   ): { previous: PersistedConfig; knownNext: PersistedConfig } {
-    const persisted = loadPersistedConfig(this.paseoHome, this.logger);
+    const persisted = loadPersistedConfig(this.byspaceHome, this.logger);
     const merge = (source: PersistedConfig) =>
       mergeMutablePatchIntoPersistedConfig({
         persisted: source,
@@ -809,7 +810,7 @@ export class DaemonConfigStore {
       });
     const nextPersisted = merge(persisted);
     const knownNext = merge(this.lastKnownPersisted);
-    savePersistedConfig(this.paseoHome, nextPersisted, this.logger);
+    savePersistedConfig(this.byspaceHome, nextPersisted, this.logger);
     return { previous: persisted, knownNext };
   }
 }

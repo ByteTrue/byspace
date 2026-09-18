@@ -26,6 +26,6 @@ exec cross-env \
   BROWSER="${BROWSER:-none}" \
   APP_VARIANT=development \
   EXPO_PUBLIC_BYSPACE_DEV_BUILD_LABEL="$DEV_BUILD_LABEL" \
-  EXPO_PUBLIC_PASEO_DEV_BUILD_LABEL="$DEV_BUILD_LABEL" \
+  EXPO_PUBLIC_BYSPACE_DEV_BUILD_LABEL="$DEV_BUILD_LABEL" \
   EXPO_PUBLIC_LOCAL_DAEMON="$DAEMON_ENDPOINT" \
-  npm run start:expo --workspace=@getpaseo/app -- --port "$EXPO_PORT"
+  npm run start:expo --workspace=@byspace/app -- --port "$EXPO_PORT"

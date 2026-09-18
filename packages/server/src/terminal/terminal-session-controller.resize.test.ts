@@ -4,8 +4,8 @@ import {
   TerminalStreamOpcode,
   encodeTerminalResizePayload,
   type TerminalStreamFrame,
-} from "@getpaseo/protocol/binary-frames/index";
-import type { SessionOutboundMessage, TerminalState } from "@getpaseo/protocol/messages";
+} from "@byspace/protocol/binary-frames/index";
+import type { SessionOutboundMessage, TerminalState } from "@byspace/protocol/messages";
 import type pino from "pino";
 
 import { TerminalSessionController } from "./terminal-session-controller.js";

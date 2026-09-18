@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { homedir } from "node:os";
 import { basename, join, sep } from "node:path";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { DaemonClient } from "@byspace/client/internal/daemon-client";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type { CommandOptions, ListResult, OutputSchema, CommandError } from "../../output/index.js";
 
@@ -27,16 +27,16 @@ function extractWorktreeName(path: string): string {
   return basename(path);
 }
 
-export function resolvePaseoHomePath(): string {
+export function resolveBySpaceHomePath(): string {
   return process.env.BYSPACE_HOME ?? join(homedir(), ".byspace");
 }
 
-export function resolvePaseoWorktreesDir(): string {
-  return join(resolvePaseoHomePath(), "worktrees");
+export function resolveBySpaceWorktreesDir(): string {
+  return join(resolveBySpaceHomePath(), "worktrees");
 }
 
 function isAgentInManagedWorktree(agentCwd: string): boolean {
-  const worktreesDir = resolvePaseoWorktreesDir();
+  const worktreesDir = resolveBySpaceWorktreesDir();
   return agentCwd === worktreesDir || agentCwd.startsWith(worktreesDir + sep);
 }
 
@@ -81,7 +81,7 @@ export async function runLsCommand(
     const agents = agentsPayload.entries.map((entry) => entry.agent);
 
     // Get worktree list from daemon
-    const response = await client.getPaseoWorktreeList({});
+    const response = await client.getBySpaceWorktreeList({});
 
     await client.close();
 

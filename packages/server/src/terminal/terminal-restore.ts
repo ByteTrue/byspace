@@ -1,10 +1,10 @@
-import type { SubscribeTerminalRequest } from "@getpaseo/protocol/messages";
+import type { SubscribeTerminalRequest } from "@byspace/protocol/messages";
 import {
   TerminalStreamOpcode,
   encodeTerminalSnapshotPayload,
   encodeTerminalStreamFrame,
-} from "@getpaseo/protocol/binary-frames/index";
-import { renderTerminalSnapshotToAnsi } from "@getpaseo/protocol/terminal-snapshot";
+} from "@byspace/protocol/binary-frames/index";
+import { renderTerminalSnapshotToAnsi } from "@byspace/protocol/terminal-snapshot";
 import type { TerminalStateSnapshot, TerminalStateSnapshotOptions } from "./terminal.js";
 
 export const MAX_TERMINAL_OUTPUT_FRAME_BYTES = 256 * 1024;

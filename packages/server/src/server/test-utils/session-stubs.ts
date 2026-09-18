@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { vi } from "vitest";
 
-import { getAgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
+import { getAgentProviderDefinition } from "@byspace/protocol/provider-manifest";
 
 import type { ProviderSnapshotEntry } from "../agent/agent-sdk-types.js";
 import type { ProviderSnapshot } from "../agent/provider-snapshot-manager.js";
@@ -10,7 +10,7 @@ import {
   ProviderSnapshotManager,
 } from "../agent/provider-snapshot-manager.js";
 import type { SessionOptions } from "../session.js";
-import type { SessionOutboundMessage } from "@getpaseo/protocol/messages";
+import type { SessionOutboundMessage } from "@byspace/protocol/messages";
 import { asInternals, createStub } from "./class-mocks.js";
 
 // ---------------------------------------------------------------------------

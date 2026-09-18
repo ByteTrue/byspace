@@ -12,7 +12,7 @@ Use Node 22.20.0 and npm 10.9.3. Run release commands from a clean `main` checko
 
 Stable Web releases deploy to `app.byspace.cc.cd`. Versions with a prerelease suffix deploy to `app-beta.byspace.cc.cd`.
 
-`@bytetrue/byspace` is the only published package. The `@getpaseo/*` workspaces are packed into it as bundled dependencies; they are not published separately and have no dist-tags to maintain.
+`@bytetrue/byspace` is the only published package. The `@byspace/*` workspaces are packed into it as bundled dependencies; they are not published separately and have no dist-tags to maintain.
 
 GitHub Release assets are the npm tarball and a container descriptor, each with a `.sha256` sibling:
 
@@ -235,7 +235,7 @@ Tag pushes are the one supported way to rebuild a release: `git tag -f vX.Y.Z HE
 
 ## Notes
 
-- `version:all:*` bumps root + syncs workspace versions and `@getpaseo/*` dependency versions
+- `version:all:*` bumps root + syncs workspace versions and `@byspace/*` dependency versions
 - `release:prepare` refreshes workspace `node_modules` links to prevent stale types
 - A stable run leaves `beta` where it is. `latest` moves on publish; `@bytetrue/byspace@beta` only moves when a prerelease publishes with `--tag beta`
 - The public relay is the upstream Elixir service in [getpaseo/paseo-relay](https://github.com/getpaseo/paseo-relay), with its own deployment process. BySpace releases do not deploy it, and no workflow in this repository does. `packages/relay` holds the client transport and E2E encryption used by the daemon

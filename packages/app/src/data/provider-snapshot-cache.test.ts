@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { Buffer } from "buffer";
-import type { ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
-import { compactProviderSnapshot } from "@getpaseo/protocol/provider-snapshot-codec";
+import type { ProviderSnapshotEntry } from "@byspace/protocol/agent-types";
+import { compactProviderSnapshot } from "@byspace/protocol/provider-snapshot-codec";
 import { createProviderSnapshotCache, type ProviderSnapshotCache } from "./provider-snapshot-cache";
 
-const SNAPSHOT_KEY_PREFIX = "@paseo/provider-snapshot/v2:";
-const SNAPSHOT_INDEX_KEY = "@paseo/provider-snapshot-index/v2";
+const SNAPSHOT_KEY_PREFIX = "@byspace/provider-snapshot/v2:";
+const SNAPSHOT_INDEX_KEY = "@byspace/provider-snapshot-index/v2";
 function createStorage(maxSnapshotBytes = Number.POSITIVE_INFINITY) {
   const values = new Map<string, string>();
   const stats = { getAllKeysCalls: 0 };
@@ -255,7 +255,7 @@ describe("provider snapshot cache", () => {
   it("discards an invalid cache record", async () => {
     const storage = createStorage();
     const cache = createProviderSnapshotCache(storage);
-    storage.values.set('@paseo/provider-snapshot/v1:["server-1","/repo"]', "not json");
+    storage.values.set('@byspace/provider-snapshot/v1:["server-1","/repo"]', "not json");
 
     await expect(cache.read("server-1", "/repo")).resolves.toBeNull();
     expect([...storage.values.keys()].some((key) => key.startsWith(SNAPSHOT_KEY_PREFIX))).toBe(
@@ -301,7 +301,7 @@ describe("provider snapshot cache", () => {
 
   it("clears unindexed snapshots once when creating the cache index", async () => {
     const storage = createStorage();
-    storage.values.set('@paseo/provider-snapshot/v1:["server-1","/legacy"]', "legacy");
+    storage.values.set('@byspace/provider-snapshot/v1:["server-1","/legacy"]', "legacy");
     const cache = createProviderSnapshotCache(storage);
 
     await cache.write({
@@ -312,26 +312,26 @@ describe("provider snapshot cache", () => {
       compactSnapshot: compactProviderSnapshot(snapshotEntries("current")),
     });
 
-    expect(storage.values.has('@paseo/provider-snapshot/v1:["server-1","/legacy"]')).toBe(false);
+    expect(storage.values.has('@byspace/provider-snapshot/v1:["server-1","/legacy"]')).toBe(false);
     await expect(cache.read("server-1", "/current")).resolves.not.toBeNull();
     expectConsistentSnapshots(storage.values);
   });
 
   it("clears unindexed snapshots on the first read", async () => {
     const storage = createStorage();
-    storage.values.set('@paseo/provider-snapshot/v1:["server-1","/legacy"]', "legacy");
+    storage.values.set('@byspace/provider-snapshot/v1:["server-1","/legacy"]', "legacy");
     const cache = createProviderSnapshotCache(storage);
 
     await expect(cache.read("server-1", "/legacy")).resolves.toBeNull();
 
-    expect(storage.values.has('@paseo/provider-snapshot/v1:["server-1","/legacy"]')).toBe(false);
+    expect(storage.values.has('@byspace/provider-snapshot/v1:["server-1","/legacy"]')).toBe(false);
     expectConsistentSnapshots(storage.values);
     expect(storage.stats.getAllKeysCalls).toBe(1);
   });
 
   it("initializes the cache index once when the first read and write race", async () => {
     const storage = createStorage();
-    storage.values.set('@paseo/provider-snapshot/v1:["server-1","/legacy"]', "legacy");
+    storage.values.set('@byspace/provider-snapshot/v1:["server-1","/legacy"]', "legacy");
     const cache = createProviderSnapshotCache(storage);
 
     await Promise.all([
@@ -498,7 +498,7 @@ describe("provider snapshot cache", () => {
     const storage = createStorage();
     const maxBytes = 1_000;
     const cache = createProviderSnapshotCache(storage, { maxBytes });
-    storage.values.set("@paseo/unrelated", "keep-me");
+    storage.values.set("@byspace/unrelated", "keep-me");
     await writeSnapshot(cache, {
       cwd: "/oldest",
       label: "oldest",
@@ -530,7 +530,7 @@ describe("provider snapshot cache", () => {
       generatedAt: "2026-08-04T00:00:00.000Z",
     });
 
-    expect(storage.values.get("@paseo/unrelated")).toBe("keep-me");
+    expect(storage.values.get("@byspace/unrelated")).toBe("keep-me");
     expect(snapshotBytes(storage.values)).toBeLessThanOrEqual(maxBytes);
     expectConsistentSnapshots(storage.values);
     await expect(restarted.read("server-1", "/final")).resolves.not.toBeNull();

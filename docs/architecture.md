@@ -5,9 +5,9 @@ BySpace is a client-server system for monitoring and controlling local AI coding
 Your code never leaves your machine. BySpace is local-first.
 
 Public runtime defaults are `$BYSPACE_HOME=~/.byspace`, daemon ports `127.0.0.1:6777` (production) and
-`127.0.0.1:6778` (development), and `BYSPACE_*` configuration variables. Matching `PASEO_*` names
+`127.0.0.1:6778` (development), and `BYSPACE_*` configuration variables. Matching `BYSPACE_*` names
 remain lower-priority compatibility fallbacks where supported. Internal package, protocol, RPC, schema,
-type, storage, and git metadata names retain their upstream `Paseo` spelling.
+type, storage, and git metadata names retain their upstream `BySpace` spelling.
 
 ## System overview
 
@@ -88,18 +88,18 @@ not retain non-Git directories.
 
 The source of truth for WebSocket messages, binary frame codecs, endpoint parsing,
 agent timeline types, provider config schemas, and other values shared by daemon
-and clients. Server, app, CLI, and `@getpaseo/client` all depend on this package;
+and clients. Server, app, CLI, and `@byspace/client` all depend on this package;
 it does not depend on the server.
 
 ### `packages/client` — Daemon client library and SDK facade
 
-Owns the low-level daemon WebSocket driver plus the higher-level `PaseoClient`
+Owns the low-level daemon WebSocket driver plus the higher-level `BySpaceClient`
 facade. App and CLI may import the low-level driver from
-`@getpaseo/client/internal/daemon-client` during migration, while new SDK-shaped
-code imports from `@getpaseo/client`.
+`@byspace/client/internal/daemon-client` during migration, while new SDK-shaped
+code imports from `@byspace/client`.
 
-`PaseoApi` is the capability-only boundary over workspaces, agents, terminals, providers, and config.
-`PaseoClient` adds connection lifecycle. App plugin surfaces borrow an API over their selected
+`BySpaceApi` is the capability-only boundary over workspaces, agents, terminals, providers, and config.
+`BySpaceClient` adds connection lifecycle. App plugin surfaces borrow an API over their selected
 host's client; plugin subprocesses use the same facade over a host-owned IPC transport. Protocol capability ownership and subscription lifetimes follow
 [the client contract](protocol-compatibility.md#client-capability-ownership).
 
@@ -172,7 +172,7 @@ Enables remote access when the daemon is behind a firewall.
 - Pairing via QR code transfers the daemon's public key to the client
 - New homes keep relay disabled until pairing consent. `DaemonConfigStore` persists the desired state, while the relay runtime starts or stops the outbound transport live; pairing reads that current state instead of a startup snapshot.
 - Optional E2EE capability negotiation preserves application frame kind: text plaintext uses base64 ciphertext text frames, while binary plaintext uses raw ciphertext binary frames; mixed-version peers remain base64-only
-- Self-hosted relays opt into TLS with `daemon.relay.useTls` or `BYSPACE_RELAY_USE_TLS=true`; the public (client-facing) TLS setting can be overridden independently via `daemon.relay.publicUseTls` or `BYSPACE_RELAY_PUBLIC_USE_TLS`. The corresponding `PASEO_*` names remain lower-priority compatibility fallbacks.
+- Self-hosted relays opt into TLS with `daemon.relay.useTls` or `BYSPACE_RELAY_USE_TLS=true`; the public (client-facing) TLS setting can be overridden independently via `daemon.relay.publicUseTls` or `BYSPACE_RELAY_PUBLIC_USE_TLS`. The corresponding `BYSPACE_*` names remain lower-priority compatibility fallbacks.
 
 The production relay server lives in [getpaseo/paseo-relay](https://github.com/getpaseo/paseo-relay). It is a distributed Elixir service. The Cloudflare relay implementation in this monorepo is retained as legacy code and is not deployed.
 
@@ -353,7 +353,7 @@ All providers:
 - Map tool calls to a normalized `ToolCallDetail` type
 - Expose provider-specific modes (plan, default, full-access)
 
-Providers that can accept native tool definitions should set `supportsNativePaseoTools` and read `launchContext.paseoTools`. The daemon then passes the shared BySpace tool catalog directly and removes the internal MCP adapter from that provider launch config. Providers that only support MCP continue to receive the same tools through the MCP fallback at `/mcp/agents`.
+Providers that can accept native tool definitions should set `supportsNativeBySpaceTools` and read `launchContext.byspaceTools`. The daemon then passes the shared BySpace tool catalog directly and removes the internal MCP adapter from that provider launch config. Providers that only support MCP continue to receive the same tools through the MCP fallback at `/mcp/agents`.
 
 ## Data flow: running an agent
 
@@ -379,12 +379,12 @@ $BYSPACE_HOME/
 ├── config.json                                 # Daemon config (mutable)
 ├── daemon-keypair.json                         # Daemon identity for relay/E2EE
 ├── push-tokens.json                            # Mobile push tokens
-├── paseo.sock / paseo.pid                      # Local IPC socket and pidfile
+├── byspace.sock / byspace.pid                      # Local IPC socket and pidfile
 └── daemon.log                                  # Daemon trace logs (rotated)
 ```
 
 ## Deployment models
 
-1. **Local daemon** (default): `byspace daemon start` on `127.0.0.1:6777`. A daemon started by the retired desktop app recorded `desktopManaged` in `paseo.pid`; those daemons are left running when the app quits and are not stopped by anything anymore.
+1. **Local daemon** (default): `byspace daemon start` on `127.0.0.1:6777`. A daemon started by the retired desktop app recorded `desktopManaged` in `byspace.pid`; those daemons are left running when the app quits and are not stopped by anything anymore.
 2. **LAN daemon**: `listen` on a LAN address; the bundled web UI serves `http://daemon-host:6777` same-origin.
 3. **Remote + relay**: Daemon behind firewall, relay bridges with E2E encryption

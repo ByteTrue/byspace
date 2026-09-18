@@ -10,11 +10,11 @@ import { ArrowLeft, MoreVertical, Pencil, Plus } from "lucide-react-native";
 import { ProjectIconView } from "@/components/project-icon-view";
 import type {
   AgentSkillsStatus,
-  PaseoConfigRaw,
-  PaseoConfigRevision,
+  BySpaceConfigRaw,
+  BySpaceConfigRevision,
   ProjectConfigRpcError,
-} from "@getpaseo/protocol/messages";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+} from "@byspace/protocol/messages";
+import type { DaemonClient } from "@byspace/client/internal/daemon-client";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -260,8 +260,8 @@ function ProjectSettingsBody({
       selectedHost.projectName,
     ],
   );
-  const loadedConfig: PaseoConfigRaw | null = data?.ok ? (data.config ?? {}) : null;
-  const loadedRevision: PaseoConfigRevision | null = data?.ok ? data.revision : null;
+  const loadedConfig: BySpaceConfigRaw | null = data?.ok ? (data.config ?? {}) : null;
+  const loadedRevision: BySpaceConfigRevision | null = data?.ok ? data.revision : null;
   const hasUncommittedWorktreeSetupChanges =
     data?.ok === true && data.hasUncommittedWorktreeSetupChanges === true;
   const readError: ProjectConfigRpcError | null = data && !data.ok ? data.error : null;
@@ -330,8 +330,8 @@ function ProjectSettingsBody({
 
 interface RenderContentInput {
   readQuery: ReturnType<typeof useQuery<ReadProjectConfigData>>;
-  loadedConfig: PaseoConfigRaw | null;
-  loadedRevision: PaseoConfigRevision | null;
+  loadedConfig: BySpaceConfigRaw | null;
+  loadedRevision: BySpaceConfigRevision | null;
   hasUncommittedWorktreeSetupChanges: boolean;
   readError: ProjectConfigRpcError | null;
   selectedHost: ProjectHostEntry;
@@ -407,7 +407,7 @@ function renderContent({
   );
 }
 
-function revisionToKey(revision: PaseoConfigRevision | null): string {
+function revisionToKey(revision: BySpaceConfigRevision | null): string {
   if (!revision) return "none";
   return `${revision.mtimeMs}-${revision.size}`;
 }
@@ -452,7 +452,7 @@ function resolveReadFailureCopy(input: {
       title: input.t("settings.project.readFailures.invalidTitle"),
       description: isFilenameConflict
         ? input.t("settings.project.readFailures.conflictingDescription", {
-            legacyFileName: "paseo.json",
+            legacyFileName: "byspace.json",
           })
         : input.t("settings.project.readFailures.invalidDescription"),
     };
@@ -486,8 +486,8 @@ function errorToDetail(error: unknown): string | null {
 }
 
 interface ProjectConfigFormProps {
-  baseConfig: PaseoConfigRaw;
-  revision: PaseoConfigRevision | null;
+  baseConfig: BySpaceConfigRaw;
+  revision: BySpaceConfigRevision | null;
   hasUncommittedWorktreeSetupChanges: boolean;
   projectName: string;
   selectedHost: ProjectHostEntry;
@@ -518,8 +518,8 @@ function ProjectConfigForm({
 
   const saveMutation = useMutation({
     mutationFn: async (input: {
-      config: PaseoConfigRaw;
-      expectedRevision: PaseoConfigRevision | null;
+      config: BySpaceConfigRaw;
+      expectedRevision: BySpaceConfigRevision | null;
     }) => {
       return client.writeProjectConfig({
         repoRoot,

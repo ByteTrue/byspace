@@ -4,7 +4,7 @@ import path from "node:path";
 import { expect, test } from "vitest";
 
 import { DaemonClient } from "../test-utils/daemon-client.js";
-import { createTestPaseoDaemon, type TestPaseoDaemon } from "../test-utils/paseo-daemon.js";
+import { createTestBySpaceDaemon, type TestBySpaceDaemon } from "../test-utils/byspace-daemon.js";
 
 const CREATED_AT = "2026-06-29T11:12:42.000Z";
 const HEALTHY_UPDATED_AT = "2026-06-29T11:40:00.000Z";
@@ -16,17 +16,20 @@ interface StaleAgentFixture {
   orphanWorkspaceId: string;
   healthyAgentId: string;
   orphanAgentId: string;
-  paseoHomeRoot: string;
+  byspaceHomeRoot: string;
   cleanupPaths: string[];
 }
 
 test("agent fetch RPCs tolerate an agent whose workspace project record is gone", async () => {
   const fixture = seedStaleAgentFixture();
-  let daemon: TestPaseoDaemon | null = null;
+  let daemon: TestBySpaceDaemon | null = null;
   let client: DaemonClient | null = null;
 
   try {
-    daemon = await createTestPaseoDaemon({ paseoHomeRoot: fixture.paseoHomeRoot, cleanup: false });
+    daemon = await createTestBySpaceDaemon({
+      byspaceHomeRoot: fixture.byspaceHomeRoot,
+      cleanup: false,
+    });
     client = new DaemonClient({ url: `ws://127.0.0.1:${daemon.port}/ws` });
     await client.connect();
 
@@ -75,15 +78,15 @@ test("agent fetch RPCs tolerate an agent whose workspace project record is gone"
 });
 
 function seedStaleAgentFixture(): StaleAgentFixture {
-  const healthyCwd = mkdtempSync(path.join(os.tmpdir(), "paseo-healthy-agent-"));
-  const orphanCwd = mkdtempSync(path.join(os.tmpdir(), "paseo-orphan-agent-"));
-  const paseoHomeRoot = mkdtempSync(path.join(os.tmpdir(), "paseo-orphan-agent-home-"));
-  const paseoHome = path.join(paseoHomeRoot, ".paseo");
-  const projectsDir = path.join(paseoHome, "projects");
-  const agentsDir = path.join(paseoHome, "agents");
+  const healthyCwd = mkdtempSync(path.join(os.tmpdir(), "byspace-healthy-agent-"));
+  const orphanCwd = mkdtempSync(path.join(os.tmpdir(), "byspace-orphan-agent-"));
+  const byspaceHomeRoot = mkdtempSync(path.join(os.tmpdir(), "byspace-orphan-agent-home-"));
+  const byspaceHome = path.join(byspaceHomeRoot, ".byspace");
+  const projectsDir = path.join(byspaceHome, "projects");
+  const agentsDir = path.join(byspaceHome, "agents");
   const healthyProjectId = "proj-healthy-agent-rpc";
   const healthyWorkspaceId = "ws-healthy-agent-rpc";
-  const orphanWorkspaceId = "c:\\Users\\paseo\\stale-project";
+  const orphanWorkspaceId = "c:\\Users\\byspace\\stale-project";
   const orphanProjectId = "proj-removed-agent-rpc";
   const healthyAgentId = "agent-healthy-rpc";
   const orphanAgentId = "agent-orphan-rpc";
@@ -170,8 +173,8 @@ function seedStaleAgentFixture(): StaleAgentFixture {
     orphanWorkspaceId,
     healthyAgentId,
     orphanAgentId,
-    paseoHomeRoot,
-    cleanupPaths: [healthyCwd, orphanCwd, paseoHomeRoot],
+    byspaceHomeRoot,
+    cleanupPaths: [healthyCwd, orphanCwd, byspaceHomeRoot],
   };
 }
 

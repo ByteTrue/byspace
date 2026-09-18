@@ -1,9 +1,9 @@
 import { cancel, intro, log, note, outro, spinner } from "@clack/prompts";
 import { Command, Option } from "commander";
 import path from "node:path";
-import { resolveBySpaceHostedAppBaseUrl } from "@getpaseo/protocol/release-channel";
+import { resolveBySpaceHostedAppBaseUrl } from "@byspace/protocol/release-channel";
 import {
-  resolveLocalPaseoHome,
+  resolveLocalBySpaceHome,
   resolveLocalDaemonState,
   resolveTcpHostFromListen,
   startLocalDaemonDetached,
@@ -146,8 +146,8 @@ async function waitForDaemonReady(args: {
   return poll({ lastStatus: "", lastPrintedAt: 0 });
 }
 
-function printNextSteps(pairingUrl: string | null, paseoHome: string, richUi: boolean): void {
-  const daemonLogPath = path.join(paseoHome, "daemon.log");
+function printNextSteps(pairingUrl: string | null, byspaceHome: string, richUi: boolean): void {
+  const daemonLogPath = path.join(byspaceHome, "daemon.log");
   const appBaseUrl = resolveBySpaceHostedAppBaseUrl(resolveCliVersion());
   const nextStepsLines = [
     pairingUrl
@@ -293,27 +293,27 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
     process.exit(1);
   }
 
-  const paseoHome = resolveLocalPaseoHome(options.home);
+  const byspaceHome = resolveLocalBySpaceHome(options.home);
   if (richUi) {
-    renderNote(paseoHome, "BySpace home");
+    renderNote(byspaceHome, "BySpace home");
   }
 
   await ensureDaemonStarted(options, richUi);
   await waitForDaemonReadyWithUi({
-    home: options.home ?? paseoHome,
+    home: options.home ?? byspaceHome,
     timeoutMs,
     richUi,
   });
 
   if (options.relay === false) {
     log.message("Relay pairing skipped because --no-relay was provided.");
-    printNextSteps(null, paseoHome, richUi);
+    printNextSteps(null, byspaceHome, richUi);
     if (richUi) outro("BySpace daemon is running.");
     return;
   }
 
   let pairing = await resolveLocalPairingOffer({
-    paseoHome,
+    byspaceHome,
     enableRelay: options.relay === true,
   });
 
@@ -321,17 +321,17 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
     const shouldEnable = richUi ? await confirmRelayPairing() : false;
     if (!shouldEnable) {
       printDirectConnectionGuidance();
-      printNextSteps(null, paseoHome, richUi);
+      printNextSteps(null, byspaceHome, richUi);
       if (richUi) outro("BySpace daemon is running.");
       return;
     }
-    pairing = await resolveLocalPairingOffer({ paseoHome, enableRelay: true });
+    pairing = await resolveLocalPairingOffer({ byspaceHome, enableRelay: true });
     log.success("Relay enabled");
   }
 
   if (!pairing.url) {
     log.warn("Relay pairing URL is unavailable for this daemon configuration.");
-    printNextSteps(null, paseoHome, richUi);
+    printNextSteps(null, byspaceHome, richUi);
     if (richUi) {
       outro("BySpace daemon is running.");
     }
@@ -345,7 +345,7 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
       columns: process.stdout.columns,
     }),
   );
-  printNextSteps(pairing.url, paseoHome, richUi);
+  printNextSteps(pairing.url, byspaceHome, richUi);
   if (richUi) {
     outro("BySpace is ready!");
   }

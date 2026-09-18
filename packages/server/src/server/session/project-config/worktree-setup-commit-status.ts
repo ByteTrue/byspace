@@ -1,16 +1,16 @@
 import { basename } from "node:path";
 import {
-  PaseoConfigRawSchema,
+  BySpaceConfigRawSchema,
   normalizeLifecycleCommands,
-  type PaseoConfigRaw,
-} from "@getpaseo/protocol/paseo-config-schema";
+  type BySpaceConfigRaw,
+} from "@byspace/protocol/byspace-config-schema";
 import { READ_ONLY_GIT_ENV } from "../../checkout-git-utils.js";
 import { runGitCommand } from "../../../utils/run-git-command.js";
-import { resolvePaseoConfigPath } from "../../../utils/paseo-config-file.js";
+import { resolveBySpaceConfigPath } from "../../../utils/byspace-config-file.js";
 
 export async function hasUncommittedWorktreeSetupChanges(input: {
   repoRoot: string;
-  currentConfig: PaseoConfigRaw | null;
+  currentConfig: BySpaceConfigRaw | null;
 }): Promise<boolean> {
   const gitPath = await resolveConfigGitPath(input.repoRoot);
   const committedConfig = await readCommittedConfig(input.repoRoot, gitPath);
@@ -24,13 +24,13 @@ async function resolveConfigGitPath(repoRoot: string): Promise<string> {
     cwd: repoRoot,
     envOverlay: READ_ONLY_GIT_ENV,
   });
-  return `${stdout.trim()}${basename(resolvePaseoConfigPath(repoRoot))}`;
+  return `${stdout.trim()}${basename(resolveBySpaceConfigPath(repoRoot))}`;
 }
 
 async function readCommittedConfig(
   repoRoot: string,
   gitPath: string,
-): Promise<PaseoConfigRaw | null> {
+): Promise<BySpaceConfigRaw | null> {
   await runGitCommand(["rev-parse", "--verify", "HEAD"], {
     cwd: repoRoot,
     envOverlay: READ_ONLY_GIT_ENV,
@@ -48,7 +48,7 @@ async function readCommittedConfig(
     cwd: repoRoot,
     envOverlay: READ_ONLY_GIT_ENV,
   });
-  return PaseoConfigRawSchema.parse(JSON.parse(stdout));
+  return BySpaceConfigRawSchema.parse(JSON.parse(stdout));
 }
 
 function stringArraysEqual(left: string[], right: string[]): boolean {

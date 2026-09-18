@@ -1,4 +1,4 @@
-import type { TerminalAgentHookProviderId } from "@getpaseo/protocol/messages";
+import type { TerminalAgentHookProviderId } from "@byspace/protocol/messages";
 import {
   type AgentHookActivityInput,
   type AgentHookActivityState,

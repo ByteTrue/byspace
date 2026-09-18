@@ -1,4 +1,4 @@
-import type { AgentSkillSelection } from "@getpaseo/protocol/messages";
+import type { AgentSkillSelection } from "@byspace/protocol/messages";
 
 import type { DaemonConfigStore } from "../../daemon-config-store.js";
 
@@ -13,12 +13,12 @@ export interface SkillSelectionStore {
 const DEFAULT_SKILL_SELECTION: SkillSelection = { mode: "all" };
 
 const LEGACY_SKILL_NAME_ALIASES: Readonly<Record<string, string>> = {
-  paseo: "byspace",
-  "paseo-advisor": "byspace-advisor",
-  "paseo-committee": "byspace-committee",
-  "paseo-handoff": "byspace-handoff",
-  "paseo-help": "byspace-help",
-  "paseo-plugin": "byspace-plugin",
+  byspace: "byspace",
+  "byspace-advisor": "byspace-advisor",
+  "byspace-committee": "byspace-committee",
+  "byspace-handoff": "byspace-handoff",
+  "byspace-help": "byspace-help",
+  "byspace-plugin": "byspace-plugin",
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {

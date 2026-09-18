@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { CLIENT_CAPS } from "@getpaseo/protocol/client-capabilities";
+import { CLIENT_CAPS } from "@byspace/protocol/client-capabilities";
 import { DaemonClient, type DaemonTransport } from "./daemon-client";
 
 function connection(options: { acknowledgeSubscriptions?: boolean } = {}) {
@@ -97,9 +97,9 @@ test("a plain client advertises every protocol capability and no browser host", 
 });
 
 test("SDK timeline listeners own their union across unsubscribe and reconnect", async () => {
-  const { createPaseoApi } = await import("./index");
+  const { createBySpaceApi } = await import("./index");
   const h = connection();
-  const api = createPaseoApi(h.client);
+  const api = createBySpaceApi(h.client);
   try {
     const ready = h.client.connect();
     h.open();
@@ -130,14 +130,14 @@ test("SDK timeline listeners own their union across unsubscribe and reconnect", 
 });
 
 test("SDK subscribers receive timeline replacement instead of silently losing history", async () => {
-  const { createPaseoApi } = await import("./index");
+  const { createBySpaceApi } = await import("./index");
   const h = connection();
   const received: unknown[] = [];
   try {
     const ready = h.client.connect();
     h.open();
     await ready;
-    const off = createPaseoApi(h.client)
+    const off = createBySpaceApi(h.client)
       .agents.ref("agent")
       .timeline.subscribe((event) => received.push(event));
     h.receive({ type: "agent.timeline.replacement", payload: { agentId: "agent", epoch: "next" } });

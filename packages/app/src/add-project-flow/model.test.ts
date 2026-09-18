@@ -160,28 +160,28 @@ describe("Add Project options", () => {
       expect.objectContaining({ cloneProtocol: "https", cloneUrl: "getpaseo/paseo" }),
       expect.objectContaining({ cloneProtocol: "ssh", cloneUrl: "getpaseo/paseo" }),
     ]);
-    expect(buildManualGithubRepositoryChoices("paseo")).toEqual([]);
+    expect(buildManualGithubRepositoryChoices("byspace")).toEqual([]);
   });
 
   it("shows final clone paths while retaining parent paths as values", () => {
     expect(
       buildCloneLocationOptions({
         parents: ["~/dev", "~/workspace"],
-        repositoryName: "paseo",
-        existingPaths: ["~/workspace/paseo"],
+        repositoryName: "byspace",
+        existingPaths: ["~/workspace/byspace"],
       }),
     ).toEqual([
       {
         id: "~/dev",
         path: "~/dev",
-        displayPath: "~/dev/paseo",
+        displayPath: "~/dev/byspace",
         secondaryText: "Parent directory: ~/dev",
         disabled: false,
       },
       {
         id: "~/workspace",
         path: "~/workspace",
-        displayPath: "~/workspace/paseo",
+        displayPath: "~/workspace/byspace",
         secondaryText: "Already exists",
         disabled: true,
       },

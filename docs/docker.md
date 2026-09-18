@@ -10,7 +10,7 @@ The image source lives in [`docker/`](../docker/).
 
 The BySpace image:
 
-- builds `@getpaseo/server` and `@getpaseo/cli` from source-built workspace tarballs
+- builds `@byspace/server` and `@byspace/cli` from source-built workspace tarballs
 - runs the daemon as the non-root `byspace` user
 - listens on `0.0.0.0:6777` inside the container
 - enables the bundled daemon web UI with `BYSPACE_WEB_UI_ENABLED=true`
@@ -20,7 +20,7 @@ The BySpace image:
 Open the container's HTTP origin, for example `http://localhost:6777`, to load
 the web UI. The served app receives a same-origin connection hint and connects
 back to that daemon. Static UI files load without daemon auth; API and
-WebSocket requests still require `BYSPACE_PASSWORD` when one is configured. Matching `PASEO_*` names remain lower-priority compatibility fallbacks.
+WebSocket requests still require `BYSPACE_PASSWORD` when one is configured. Matching `BYSPACE_*` names remain lower-priority compatibility fallbacks.
 
 ## Quick Start
 
@@ -196,7 +196,7 @@ To assert the source tree version while building:
 
 ```bash
 docker build \
-  --build-arg PASEO_VERSION=0.7.0-beta.2 \
+  --build-arg BYSPACE_VERSION=0.7.0-beta.2 \
   -t byspace:0.7.0-beta.2 \
   -f docker/base/Dockerfile \
   .

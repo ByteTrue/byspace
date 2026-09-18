@@ -1,4 +1,4 @@
-import type { AgentSkillSelection } from "@getpaseo/protocol/messages";
+import type { AgentSkillSelection } from "@byspace/protocol/messages";
 
 interface LegacySelectionClient {
   importLegacyAgentSkillsSelection(selection: AgentSkillSelection): Promise<unknown>;

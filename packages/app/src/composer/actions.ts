@@ -1,5 +1,5 @@
-import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
-import type { ActiveTurnBehavior } from "@getpaseo/protocol/messages";
+import type { ForgeSearchItem } from "@byspace/protocol/messages";
+import type { ActiveTurnBehavior } from "@byspace/protocol/messages";
 import type {
   AttachmentMetadata,
   ComposerAttachment,

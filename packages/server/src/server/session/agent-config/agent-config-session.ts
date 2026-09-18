@@ -1,7 +1,7 @@
 import type pino from "pino";
 import { randomUUID } from "node:crypto";
-import { getErrorMessage, getErrorMessageOr } from "@getpaseo/protocol/error-utils";
-import type { AgentConfigApply } from "@getpaseo/protocol/messages";
+import { getErrorMessage, getErrorMessageOr } from "@byspace/protocol/error-utils";
+import type { AgentConfigApply } from "@byspace/protocol/messages";
 import type { AgentProviderNotice } from "../../agent/agent-sdk-types.js";
 import type { SessionInboundMessage, SessionOutboundMessage } from "../../messages.js";
 

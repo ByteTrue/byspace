@@ -97,7 +97,7 @@ function readClipboard(page: Page): Promise<string> {
 }
 
 function readTerminalViewportY(page: Page): Promise<number> {
-  return page.evaluate(() => window.__paseoTerminal?.buffer.active.viewportY ?? 0);
+  return page.evaluate(() => window.__byspaceTerminal?.buffer.active.viewportY ?? 0);
 }
 
 test.describe("Terminal clipboard", () => {
@@ -160,7 +160,7 @@ test.describe("Terminal clipboard", () => {
           10_000,
         );
         await page.waitForFunction(
-          () => window.__paseoTerminal?.modes.bracketedPasteMode === false,
+          () => window.__byspaceTerminal?.modes.bracketedPasteMode === false,
         );
 
         if (trigger === "paste-event") {
@@ -231,7 +231,9 @@ test.describe("Terminal clipboard", () => {
         (text) => text.includes("BYSPACE_CLIPBOARD_READY"),
         10_000,
       );
-      await page.waitForFunction(() => window.__paseoTerminal?.modes.bracketedPasteMode === false);
+      await page.waitForFunction(
+        () => window.__byspaceTerminal?.modes.bracketedPasteMode === false,
+      );
 
       await dispatchTerminalPaste(terminal, { text: MULTILINE_CLIPBOARD_TEXT });
       await waitForCapture(page);
@@ -265,7 +267,7 @@ test.describe("Terminal clipboard", () => {
         (text) => text.includes("BYSPACE_CLIPBOARD_READY"),
         10_000,
       );
-      await page.waitForFunction(() => window.__paseoTerminal?.modes.bracketedPasteMode === true);
+      await page.waitForFunction(() => window.__byspaceTerminal?.modes.bracketedPasteMode === true);
 
       await dispatchTerminalPaste(terminal, { text: PLAIN_MULTILINE_CLIPBOARD_TEXT });
       await waitForCapture(page);
@@ -301,7 +303,7 @@ test.describe("Terminal clipboard", () => {
         .evaluate((screen, selectedText) => {
           const browserTerminal = (
             window as Window & {
-              __paseoTerminal?: {
+              __byspaceTerminal?: {
                 dimensions?: { css: { cell: { width: number; height: number } } };
                 buffer: {
                   active: {
@@ -314,7 +316,7 @@ test.describe("Terminal clipboard", () => {
                 };
               };
             }
-          ).__paseoTerminal;
+          ).__byspaceTerminal;
           const cell = browserTerminal?.dimensions?.css.cell;
           if (!browserTerminal || !cell) {
             throw new Error("Terminal dimensions are unavailable");

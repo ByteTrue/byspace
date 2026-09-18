@@ -18,7 +18,7 @@ test.describe("real Claude project-inspection workflow", () => {
   test("shows the workflow's actual report in the generic detail pane", async ({
     page,
   }, testInfo) => {
-    const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "paseo-project-inspection-")));
+    const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "byspace-project-inspection-")));
     let handle: AgentHandle | undefined;
 
     try {

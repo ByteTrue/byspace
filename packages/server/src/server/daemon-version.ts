@@ -1,6 +1,6 @@
 import { resolvePackageVersion } from "./package-version.js";
 
-const SERVER_PACKAGE_NAME = "@getpaseo/server";
+const SERVER_PACKAGE_NAME = "@byspace/server";
 
 export function resolveDaemonVersion(moduleUrl: string = import.meta.url): string {
   return resolvePackageVersion({

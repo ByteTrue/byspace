@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { CheckoutPrStatusSchema } from "@getpaseo/protocol/messages";
+import { CheckoutPrStatusSchema } from "@byspace/protocol/messages";
 import type { WorkspaceGitRuntimeSnapshot } from "../workspace-git-service.js";
 import {
   buildCheckoutPrStatusPayloadFromSnapshot,
@@ -49,8 +49,8 @@ describe("checkout status projection", () => {
     const payload = normalizeCheckoutPrStatusPayload(
       {
         number: 993,
-        repoOwner: "getpaseo",
-        repoName: "paseo",
+        repoOwner: "getbyspace",
+        repoName: "byspace",
         url: "https://github.com/getpaseo/paseo/pull/993",
         title: "Auto-merge UX",
         state: "open",

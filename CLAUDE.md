@@ -114,7 +114,7 @@ and updating `next`, integrating it after a release, and releasing a hotfix from
 
 ## Critical rules
 
-- **NEVER restart the host Paseo daemon on port 6767 or BySpace daemon on port 6777 without permission** — they manage running agents. If you're an agent, restarting either can kill your own process.
+- **NEVER restart the host BySpace daemon on port 6767 or BySpace daemon on port 6777 without permission** — they manage running agents. If you're an agent, restarting either can kill your own process.
 - **NEVER assume a timeout means the service needs restarting** — timeouts can be transient.
 - **NEVER add auth checks to tests** — agent providers handle their own auth.
 - **Before changing app routes, startup routing, remembered workspace restore, or active workspace selection, read [docs/expo-router.md](docs/expo-router.md).**

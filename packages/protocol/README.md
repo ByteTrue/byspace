@@ -1,4 +1,4 @@
-# @getpaseo/protocol
+# @byspace/protocol
 
 Shared BySpace protocol schemas, codecs, and wire types.
 

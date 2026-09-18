@@ -4,8 +4,8 @@ import type {
   AgentSkillSelection,
   AgentSkillsSaveResult,
   AgentSkillsStatus,
-} from "@getpaseo/protocol/messages";
-import type { TerminalActivity } from "@getpaseo/protocol/terminal-activity";
+} from "@byspace/protocol/messages";
+import type { TerminalActivity } from "@byspace/protocol/terminal-activity";
 import { connectDaemonClient } from "./daemon-client-loader";
 import { withProjectOwnership } from "./project-ownership";
 import { createTempDirectory, createTempGitRepo } from "./workspace";
@@ -197,7 +197,7 @@ export interface SeedDaemonClient {
 
 export async function connectSeedClient(options?: {
   port?: number;
-  /** Use only with a private host whose teardown removes its entire PASEO_HOME. */
+  /** Use only with a private host whose teardown removes its entire BYSPACE_HOME. */
   projectOwnership?: "client" | "host";
 }): Promise<SeedDaemonClient> {
   const client = await connectDaemonClient<SeedDaemonClient>({

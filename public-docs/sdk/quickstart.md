@@ -9,7 +9,7 @@ category: TypeScript SDK
 # SDK quickstart
 
 ```bash
-npm install @getpaseo/client
+npm install @byspace/client
 ```
 
 Requires Node.js 22 or newer.
@@ -17,16 +17,16 @@ Requires Node.js 22 or newer.
 ## Connect
 
 ```ts
-import { createPaseoClient } from "@getpaseo/client";
+import { createBySpaceClient } from "@byspace/client";
 
-const client = createPaseoClient({ url: "ws://127.0.0.1:6777/ws" });
+const client = createBySpaceClient({ url: "ws://127.0.0.1:6777/ws" });
 await client.connect();
 ```
 
 `connect()` resolves once the daemon has identified itself. If the daemon has a password, pass it:
 
 ```ts
-const client = createPaseoClient({
+const client = createBySpaceClient({
   url: "wss://devbox.example.com/ws",
   password: "my-secret",
 });

@@ -56,7 +56,7 @@ describe("prompt attachments", () => {
     expect(
       renderPromptAttachmentAsText({
         type: "forge_change_request",
-        mimeType: "application/paseo-forge-change-request",
+        mimeType: "application/byspace-forge-change-request",
         forge: "gitlab",
         number: 123,
         title: "Fix race in worktree setup",
@@ -73,7 +73,7 @@ describe("prompt attachments", () => {
     expect(
       renderPromptAttachmentAsText({
         type: "review",
-        mimeType: "application/paseo-review",
+        mimeType: "application/byspace-review",
         cwd: "/tmp/repo",
         mode: "base",
         baseRef: "main",
@@ -155,12 +155,12 @@ describe("prompt attachments", () => {
         fileName: "notes.txt",
         mimeType: "text/plain",
         size: 11,
-        path: "/tmp/paseo/uploads/upload_req-upload/notes.txt",
+        path: "/tmp/byspace/uploads/upload_req-upload/notes.txt",
       }),
     ).toBe(
       [
         "Uploaded file: notes.txt",
-        "Path: /tmp/paseo/uploads/upload_req-upload/notes.txt",
+        "Path: /tmp/byspace/uploads/upload_req-upload/notes.txt",
         "MIME: text/plain",
         "Size: 11 bytes",
       ].join("\n"),

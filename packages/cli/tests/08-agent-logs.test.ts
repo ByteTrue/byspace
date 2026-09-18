@@ -29,9 +29,9 @@ console.log("=== Logs Command Tests ===\n");
 
 // Get random port that's definitely not in use (never 6767)
 const port = 10000 + Math.floor(Math.random() * 50000);
-const paseoHome = await mkdtemp(join(tmpdir(), "paseo-test-home-"));
+const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-test-home-"));
 process.env.BYSPACE_HOST = `localhost:${port}`;
-process.env.BYSPACE_HOME = paseoHome;
+process.env.BYSPACE_HOME = byspaceHome;
 
 try {
   // Test 1: logs --help shows options
@@ -53,7 +53,7 @@ try {
   {
     console.log("Test 2: logs requires ID argument");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace logs`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace logs`.nothrow();
     assert.notStrictEqual(result.exitCode, 0, "should fail without id");
     const output = result.stdout + result.stderr;
     const hasError =
@@ -69,7 +69,7 @@ try {
   {
     console.log("Test 3: logs handles daemon not running");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace logs abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace logs abc123`.nothrow();
     // Should fail because daemon not running
     assert.notStrictEqual(result.exitCode, 0, "should fail when daemon not running");
     const output = result.stdout + result.stderr;
@@ -86,7 +86,7 @@ try {
     console.log("Test 4: logs -f (follow) flag is accepted");
     // Use timeout to avoid hanging on follow mode
     const result =
-      await $`timeout 1 bash -c 'BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace logs -f abc123' || true`.nothrow();
+      await $`timeout 1 bash -c 'BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace logs -f abc123' || true`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept -f flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -97,7 +97,7 @@ try {
   {
     console.log("Test 5: logs --follow flag is accepted");
     const result =
-      await $`timeout 1 bash -c 'BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace logs --follow abc123' || true`.nothrow();
+      await $`timeout 1 bash -c 'BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace logs --follow abc123' || true`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --follow flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -108,7 +108,7 @@ try {
   {
     console.log("Test 6: logs --tail flag is accepted");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace logs --tail 50 abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace logs --tail 50 abc123`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --tail flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -119,7 +119,7 @@ try {
   {
     console.log("Test 7: logs with ID and --host flag is accepted");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace logs abc123 --host localhost:${port}`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace logs abc123 --host localhost:${port}`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --host flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -139,7 +139,7 @@ try {
   {
     console.log("Test 9: -q (quiet) flag is accepted with logs");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace -q logs abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace -q logs abc123`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept -q flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -147,7 +147,7 @@ try {
   }
 } finally {
   // Clean up temp directory
-  await rm(paseoHome, { recursive: true, force: true });
+  await rm(byspaceHome, { recursive: true, force: true });
 }
 
 console.log("=== All logs tests passed ===");

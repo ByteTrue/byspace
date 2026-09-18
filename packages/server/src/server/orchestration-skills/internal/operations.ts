@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { AgentSkillSelection } from "@getpaseo/protocol/messages";
+import type { AgentSkillSelection } from "@byspace/protocol/messages";
 import { listFilesRecursive, removeSkill, syncSkills } from "./sync.js";
 
 export type SkillsState = "not-installed" | "up-to-date" | "drift";
@@ -37,16 +37,16 @@ export interface SkillTargets {
 // Names the bundle used to ship. They are never selectable, but every scan still
 // covers them so an older install's copies get cleaned up.
 export const LEGACY_SKILL_NAMES = [
-  "paseo",
-  "paseo-advisor",
-  "paseo-chat",
-  "paseo-committee",
-  "paseo-epic",
-  "paseo-handoff",
-  "paseo-help",
-  "paseo-orchestrate",
-  "paseo-orchestrator",
-  "paseo-plugin",
+  "byspace",
+  "byspace-advisor",
+  "byspace-chat",
+  "byspace-committee",
+  "byspace-epic",
+  "byspace-handoff",
+  "byspace-help",
+  "byspace-orchestrate",
+  "byspace-orchestrator",
+  "byspace-plugin",
 ] as const;
 
 type SkillFiles = Map<string, string>;
@@ -132,7 +132,7 @@ function diff(
   return ops;
 }
 
-function hasInstalledPaseoSkill(disks: readonly TargetSkills[]): boolean {
+function hasInstalledBySpaceSkill(disks: readonly TargetSkills[]): boolean {
   return disks.some((disk) => disk.size > 0);
 }
 
@@ -173,7 +173,8 @@ export async function getSkillsStatus(
   const ops = diff(bundle, disks, names, resolveDesiredSkills(selection, available));
   const installed = installedSkillNames(disks, names);
 
-  if (!hasInstalledPaseoSkill(disks)) return { state: "not-installed", ops, available, installed };
+  if (!hasInstalledBySpaceSkill(disks))
+    return { state: "not-installed", ops, available, installed };
   if (ops.length === 0) return { state: "up-to-date", ops, available, installed };
   return { state: "drift", ops, available, installed };
 }

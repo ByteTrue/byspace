@@ -245,7 +245,7 @@ test.describe("Agent stream UI", () => {
   }, testInfo) => {
     test.setTimeout(120_000);
     await page.addInitScript(() => {
-      const key = "@paseo:app-settings";
+      const key = "@byspace:app-settings";
       const stored = JSON.parse(localStorage.getItem(key) ?? "{}");
       localStorage.setItem(key, JSON.stringify({ ...stored, autoExpandReasoning: true }));
     });

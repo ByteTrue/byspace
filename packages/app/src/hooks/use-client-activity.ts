@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { AppState } from "react-native";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { DaemonClient } from "@byspace/client/internal/daemon-client";
 import { isWeb, isNative } from "@/constants/platform";
 import {
   type ClientActivityTracker,

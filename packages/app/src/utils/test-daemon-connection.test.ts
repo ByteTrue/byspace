@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { DaemonClientConfig } from "@getpaseo/client/internal/daemon-client";
+import type { DaemonClientConfig } from "@byspace/client/internal/daemon-client";
 
 vi.mock("@/constants/platform", () => ({
   getIsElectron: () => false,
@@ -113,7 +113,7 @@ describe("test-daemon-connection connectToDaemon", () => {
           endpoint,
         },
         {
-          browserContext: { isWeb: true, isElectron: false, protocol: "https:" },
+          browserContext: { isWeb: true, protocol: "https:" },
         },
         probe.deps,
       );
@@ -132,7 +132,7 @@ describe("test-daemon-connection connectToDaemon", () => {
         endpoint: "192.168.1.20:6767",
         useTls: true,
       },
-      { browserContext: { isWeb: true, isElectron: false, protocol: "https:" } },
+      { browserContext: { isWeb: true, protocol: "https:" } },
       probe.deps,
     );
     await tlsResult.client.close();
@@ -147,7 +147,7 @@ describe("test-daemon-connection connectToDaemon", () => {
       },
       {
         serverId: "srv_probe_test",
-        browserContext: { isWeb: true, isElectron: false, protocol: "https:" },
+        browserContext: { isWeb: true, protocol: "https:" },
       },
       probe.deps,
     );
@@ -159,7 +159,7 @@ describe("test-daemon-connection connectToDaemon", () => {
         type: "directTcp",
         endpoint: "192.168.1.20:6767",
       },
-      { browserContext: { isWeb: true, isElectron: false, protocol: "http:" } },
+      { browserContext: { isWeb: true, protocol: "http:" } },
       probe.deps,
     );
     await httpResult.client.close();
@@ -170,23 +170,12 @@ describe("test-daemon-connection connectToDaemon", () => {
         type: "directTcp",
         endpoint: "192.168.1.20:6767",
       },
-      { browserContext: { isWeb: false, isElectron: false, protocol: "https:" } },
+      { browserContext: { isWeb: false, protocol: "https:" } },
       probe.deps,
     );
     await nativeResult.client.close();
 
-    const electronResult = await connectToDaemon(
-      {
-        id: "direct:lan:6767",
-        type: "directTcp",
-        endpoint: "192.168.1.20:6767",
-      },
-      { browserContext: { isWeb: true, isElectron: true, protocol: "https:" } },
-      probe.deps,
-    );
-    await electronResult.client.close();
-
-    expect(probe.createdClients).toHaveLength(5);
+    expect(probe.createdClients).toHaveLength(4);
     expect(probe.createdConfigs()[0]?.url).toMatch(/^wss:\/\//);
   });
 
@@ -248,9 +237,9 @@ describe("test-daemon-connection connectToDaemon", () => {
     await expect(
       connectToDaemon(
         {
-          id: "socket:/tmp/paseo.sock",
+          id: "socket:/tmp/byspace.sock",
           type: "directSocket",
-          path: "/tmp/paseo.sock",
+          path: "/tmp/byspace.sock",
         },
         undefined,
         probe.deps,
@@ -263,7 +252,7 @@ describe("test-daemon-connection connectToDaemon", () => {
     await expect(
       connectToDaemon(
         {
-          id: "ssh:deploy%40example.com:2222:%2Fkeys%2Fpaseo",
+          id: "ssh:deploy%40example.com:2222:%2Fkeys%2Fbyspace",
           type: "remoteSsh",
           host: "deploy@example.com",
           sshPort: 2222,

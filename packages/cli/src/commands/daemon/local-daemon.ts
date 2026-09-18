@@ -2,8 +2,8 @@ import { spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { DEFAULT_RELAY_ENDPOINT } from "@getpaseo/protocol/daemon-endpoints";
-import { loadConfig, resolvePaseoHome, spawnProcess } from "@getpaseo/server";
+import { DEFAULT_RELAY_ENDPOINT } from "@byspace/protocol/daemon-endpoints";
+import { loadConfig, resolveBySpaceHome, spawnProcess } from "@byspace/server";
 import treeKill from "tree-kill";
 import { tryConnectToDaemon } from "../../utils/client.js";
 
@@ -107,7 +107,7 @@ const require = createRequire(import.meta.url);
 
 const defaultDaemonLaunchRuntime: DaemonLaunchRuntime = {
   resolveRunnerEntry: resolveDaemonRunnerEntry,
-  resolveHome: resolvePaseoHome,
+  resolveHome: resolveBySpaceHome,
   spawnDetached: spawnProcess,
   spawnForeground: spawnSync,
 };
@@ -166,16 +166,16 @@ function buildChildEnv(options: DaemonStartOptions): NodeJS.ProcessEnv {
     childEnv.BYSPACE_LISTEN = `127.0.0.1:${options.port}`;
   }
   if (options.hostnames) {
-    childEnv.PASEO_HOSTNAMES = options.hostnames;
+    childEnv.BYSPACE_HOSTNAMES = options.hostnames;
   }
   if (options.relayUseTls === true) {
-    childEnv.PASEO_RELAY_USE_TLS = "true";
+    childEnv.BYSPACE_RELAY_USE_TLS = "true";
   }
   if (options.webUi === true) {
-    childEnv.PASEO_WEB_UI_ENABLED = "true";
+    childEnv.BYSPACE_WEB_UI_ENABLED = "true";
   }
   if (options.webUi === false) {
-    childEnv.PASEO_WEB_UI_ENABLED = "false";
+    childEnv.BYSPACE_WEB_UI_ENABLED = "false";
   }
   return childEnv;
 }
@@ -185,7 +185,7 @@ function resolveServerRunnerFromDir(currentDir: string): string | null {
   if (!existsSync(packageJsonPath)) return null;
   try {
     const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8")) as { name?: string };
-    if (packageJson.name !== "@getpaseo/server") return null;
+    if (packageJson.name !== "@byspace/server") return null;
     const distRunner = path.join(currentDir, "dist", "scripts", "supervisor-entrypoint.js");
     if (existsSync(distRunner)) {
       return distRunner;
@@ -197,7 +197,7 @@ function resolveServerRunnerFromDir(currentDir: string): string | null {
 }
 
 function resolveDaemonRunnerEntry(): string {
-  const serverExportPath = require.resolve("@getpaseo/server");
+  const serverExportPath = require.resolve("@byspace/server");
   let currentDir = path.dirname(serverExportPath);
 
   while (true) {
@@ -213,11 +213,11 @@ function resolveDaemonRunnerEntry(): string {
     currentDir = parentDir;
   }
 
-  throw new Error("Unable to resolve @getpaseo/server package root for daemon runner");
+  throw new Error("Unable to resolve @byspace/server package root for daemon runner");
 }
 
-function pidFilePath(paseoHome: string): string {
-  return path.join(paseoHome, DAEMON_PID_FILENAME);
+function pidFilePath(byspaceHome: string): string {
+  return path.join(byspaceHome, DAEMON_PID_FILENAME);
 }
 
 function resolveListenField(listen: unknown, sockPath: unknown): string | undefined {
@@ -504,8 +504,8 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function resolveLocalPaseoHome(home?: string): string {
-  return resolvePaseoHome(envWithHome(home));
+export function resolveLocalBySpaceHome(home?: string): string {
+  return resolveBySpaceHome(envWithHome(home));
 }
 
 export function resolveTcpHostFromListen(listen: string): string | null {
@@ -541,15 +541,15 @@ export function resolveLocalDaemonState(options: { home?: string } = {}): LocalD
     // Status should reflect local persisted config + pid file, not inherited daemon env overrides.
     // This is CLI-side defensive scrubbing; the daemon RPC is authoritative when available.
     BYSPACE_LISTEN: undefined,
-    PASEO_HOSTNAMES: undefined,
-    PASEO_ALLOWED_HOSTS: undefined,
-    PASEO_RELAY_ENABLED: undefined,
-    PASEO_RELAY_ENDPOINT: undefined,
-    PASEO_RELAY_PUBLIC_ENDPOINT: undefined,
-    PASEO_RELAY_USE_TLS: undefined,
-    PASEO_RELAY_PUBLIC_USE_TLS: undefined,
+    BYSPACE_HOSTNAMES: undefined,
+    BYSPACE_ALLOWED_HOSTS: undefined,
+    BYSPACE_RELAY_ENABLED: undefined,
+    BYSPACE_RELAY_ENDPOINT: undefined,
+    BYSPACE_RELAY_PUBLIC_ENDPOINT: undefined,
+    BYSPACE_RELAY_USE_TLS: undefined,
+    BYSPACE_RELAY_PUBLIC_USE_TLS: undefined,
   };
-  const home = resolvePaseoHome(env);
+  const home = resolveBySpaceHome(env);
   const config = loadConfig(home, { env });
   const pidPath = pidFilePath(home);
   const logPath = path.join(home, DAEMON_LOG_FILENAME);
@@ -573,7 +573,7 @@ export function resolveLocalDaemonState(options: { home?: string } = {}): LocalD
 }
 
 export function tailDaemonLog(home?: string, lines = 30): string | null {
-  const logPath = path.join(resolveLocalPaseoHome(home), DAEMON_LOG_FILENAME);
+  const logPath = path.join(resolveLocalBySpaceHome(home), DAEMON_LOG_FILENAME);
   return tailFile(logPath, lines);
 }
 
@@ -588,8 +588,8 @@ export async function startLocalDaemonDetached(
   const daemonRunnerEntry = runtime.resolveRunnerEntry();
   const childEnv = buildChildEnv(options);
 
-  const paseoHome = runtime.resolveHome(childEnv);
-  const logPath = path.join(paseoHome, DAEMON_LOG_FILENAME);
+  const byspaceHome = runtime.resolveHome(childEnv);
+  const logPath = path.join(byspaceHome, DAEMON_LOG_FILENAME);
   const child = runtime.spawnDetached(
     process.execPath,
     [...process.execArgv, daemonRunnerEntry, ...buildRunnerArgs(options)],

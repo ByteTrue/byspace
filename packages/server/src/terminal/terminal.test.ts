@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { renderTerminalSnapshotToAnsi } from "@getpaseo/protocol/terminal-snapshot";
+import { renderTerminalSnapshotToAnsi } from "@byspace/protocol/terminal-snapshot";
 import { isPlatform } from "../test-utils/platform.js";
 import {
   buildTerminalEnvironment,
@@ -9,8 +9,8 @@ import {
   resolveTerminalSpawnCommand,
   humanizeProcessTitle,
   normalizeProcessTitle,
-  resolvePaseoCliBinDir,
-  resolvePaseoCliExecutablePath,
+  resolveBySpaceCliBinDir,
+  resolveBySpaceCliExecutablePath,
   resolveZshShellIntegrationDir,
   type TerminalSession,
 } from "./terminal.js";
@@ -691,14 +691,14 @@ describe.skipIf(isPlatform("win32"))("terminal title", () => {
     temporaryDirs.push(homeDir);
     const realZdotdir = join(homeDir, ".config", "zsh");
     mkdirSync(realZdotdir, { recursive: true });
-    writeFileSync(join(realZdotdir, ".zshenv"), "export PASEO_TEST_REAL_ZDOTDIR=1\n");
+    writeFileSync(join(realZdotdir, ".zshenv"), "export BYSPACE_TEST_REAL_ZDOTDIR=1\n");
 
     const session = trackSession(
       await createTerminal({
         workspaceId: "ws-test",
         cwd: homeDir,
         command: "/bin/zsh",
-        args: ["-c", 'printf \'%s\\n%s\\n\' "${ZDOTDIR-}" "${PASEO_TEST_REAL_ZDOTDIR-}"'],
+        args: ["-c", 'printf \'%s\\n%s\\n\' "${ZDOTDIR-}" "${BYSPACE_TEST_REAL_ZDOTDIR-}"'],
         env: {
           HOME: homeDir,
           ZDOTDIR: realZdotdir,
@@ -923,14 +923,14 @@ describe.skipIf(isPlatform("win32"))("terminal title", () => {
   it.skipIf(!hasZsh)("loads the user's zsh prompt when the integration dir is packaged", () => {
     const homeDir = mkdtempSync(join(tmpdir(), "terminal-zsh-packaged-home-"));
     temporaryDirs.push(homeDir);
-    writeFileSync(join(homeDir, ".zshrc"), "PS1='PASEO_CUSTOM_PROMPT> '\n");
+    writeFileSync(join(homeDir, ".zshrc"), "PS1='BYSPACE_CUSTOM_PROMPT> '\n");
 
-    const fakeAppRoot = join(homeDir, "Paseo.app", "Contents", "Resources");
+    const fakeAppRoot = join(homeDir, "BySpace.app", "Contents", "Resources");
     const inaccessiblePackagedIntegrationDir = join(
       fakeAppRoot,
       "app.asar",
       "node_modules",
-      "@getpaseo",
+      "",
       "server",
       "dist",
       "server",
@@ -942,7 +942,7 @@ describe.skipIf(isPlatform("win32"))("terminal title", () => {
       fakeAppRoot,
       "app.asar.unpacked",
       "node_modules",
-      "@getpaseo",
+      "",
       "server",
       "dist",
       "server",
@@ -969,7 +969,7 @@ describe.skipIf(isPlatform("win32"))("terminal title", () => {
     });
 
     expect(result.status).toBe(0);
-    expect(result.stdout.split(/\r?\n/)).toContain("PASEO_CUSTOM_PROMPT> ");
+    expect(result.stdout.split(/\r?\n/)).toContain("BYSPACE_CUSTOM_PROMPT> ");
   });
 
   it.skipIf(!hasZsh)("emits zsh shell integration command completion", async () => {
@@ -1304,10 +1304,10 @@ describe("terminal activity interruption", () => {
 // the prompt instead of executing part of it, which is the failure the
 // escaping exists to prevent (the CVE-2024-27980 class).
 describe.runIf(isPlatform("win32"))(".cmd shim argv round-trip on Windows", () => {
-  const argvMarker = "__PASEO_ARGV__";
+  const argvMarker = "__BYSPACE_ARGV__";
 
   function writeArgvEchoShim(): { dir: string; cmdPath: string } {
-    const dir = mkdtempSync(join(tmpdir(), "paseo-cmd-shim-"));
+    const dir = mkdtempSync(join(tmpdir(), "byspace-cmd-shim-"));
     temporaryDirs.push(dir);
     const cmdPath = join(dir, "echoargv.cmd");
     const scriptPath = join(dir, "echoargv.js");
@@ -1384,57 +1384,33 @@ describe.runIf(isPlatform("win32"))(".cmd shim argv round-trip on Windows", () =
   });
 });
 
-describe("resolvePaseoCliExecutablePath", () => {
-  it("respects BYSPACE_CLI environment override", () => {
-    const originalByspace = process.env.BYSPACE_CLI;
-    const originalPaseo = process.env.PASEO_CLI;
+describe("resolveBySpaceCliExecutablePath", () => {
+  it("respects the BYSPACE_CLI environment override", () => {
+    const originalCli = process.env.BYSPACE_CLI;
     try {
       process.env.BYSPACE_CLI = "/custom/path/to/byspace";
-      delete process.env.PASEO_CLI;
       // The resolver uses path.resolve: on Windows a rooted-but-driveless path
       // gains the current drive, so the assertion must resolve the same way.
-      expect(resolvePaseoCliExecutablePath()).toBe(resolvePath("/custom/path/to/byspace"));
-      expect(resolvePaseoCliBinDir()).toBe(resolvePath("/custom/path/to"));
+      expect(resolveBySpaceCliExecutablePath()).toBe(resolvePath("/custom/path/to/byspace"));
+      expect(resolveBySpaceCliBinDir()).toBe(resolvePath("/custom/path/to"));
     } finally {
-      if (originalByspace !== undefined) process.env.BYSPACE_CLI = originalByspace;
+      if (originalCli !== undefined) process.env.BYSPACE_CLI = originalCli;
       else delete process.env.BYSPACE_CLI;
-      if (originalPaseo !== undefined) process.env.PASEO_CLI = originalPaseo;
-      else delete process.env.PASEO_CLI;
-    }
-  });
-
-  it("respects PASEO_CLI environment override when BYSPACE_CLI is not set", () => {
-    const originalByspace = process.env.BYSPACE_CLI;
-    const originalPaseo = process.env.PASEO_CLI;
-    try {
-      delete process.env.BYSPACE_CLI;
-      process.env.PASEO_CLI = "/custom/path/to/paseo";
-      expect(resolvePaseoCliExecutablePath()).toBe(resolvePath("/custom/path/to/paseo"));
-      expect(resolvePaseoCliBinDir()).toBe(resolvePath("/custom/path/to"));
-    } finally {
-      if (originalByspace !== undefined) process.env.BYSPACE_CLI = originalByspace;
-      else delete process.env.BYSPACE_CLI;
-      if (originalPaseo !== undefined) process.env.PASEO_CLI = originalPaseo;
-      else delete process.env.PASEO_CLI;
     }
   });
 
   it("resolves a non-null CLI executable in workspace or system path", () => {
-    const originalByspace = process.env.BYSPACE_CLI;
-    const originalPaseo = process.env.PASEO_CLI;
+    const originalCli = process.env.BYSPACE_CLI;
     try {
       delete process.env.BYSPACE_CLI;
-      delete process.env.PASEO_CLI;
-      const cliPath = resolvePaseoCliExecutablePath();
+      const cliPath = resolveBySpaceCliExecutablePath();
       expect(cliPath).not.toBeNull();
-      const binDir = resolvePaseoCliBinDir();
+      const binDir = resolveBySpaceCliBinDir();
       expect(binDir).not.toBeNull();
       expect(cliPath?.startsWith(binDir!)).toBe(true);
     } finally {
-      if (originalByspace !== undefined) process.env.BYSPACE_CLI = originalByspace;
+      if (originalCli !== undefined) process.env.BYSPACE_CLI = originalCli;
       else delete process.env.BYSPACE_CLI;
-      if (originalPaseo !== undefined) process.env.PASEO_CLI = originalPaseo;
-      else delete process.env.PASEO_CLI;
     }
   });
 });

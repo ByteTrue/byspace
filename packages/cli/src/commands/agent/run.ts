@@ -1,6 +1,6 @@
 import { Command, Option } from "commander";
-import { getStructuredAgentResponse, StructuredAgentResponseError } from "@getpaseo/server";
-import type { AgentSnapshotPayload } from "@getpaseo/protocol/messages";
+import { getStructuredAgentResponse, StructuredAgentResponseError } from "@byspace/server";
+import type { AgentSnapshotPayload } from "@byspace/protocol/messages";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type {
   CommandOptions,
@@ -556,7 +556,7 @@ async function resolveRunWorkspace(
 
   const ambientWorkspaceId = newWorkspace
     ? undefined
-    : (process.env.BYSPACE_WORKSPACE_ID ?? process.env.PASEO_WORKSPACE_ID)?.trim();
+    : (process.env.BYSPACE_WORKSPACE_ID ?? process.env.BYSPACE_WORKSPACE_ID)?.trim();
   if (ambientWorkspaceId) {
     console.error(`Using workspace ${ambientWorkspaceId}`);
     return resolveExistingRunWorkspace(client, ambientWorkspaceId);
@@ -755,7 +755,7 @@ export async function runRunCommand(
 }
 
 export function resolveRunCallerAgentId(
-  env: { BYSPACE_AGENT_ID?: string; PASEO_AGENT_ID?: string } = process.env,
+  env: { BYSPACE_AGENT_ID?: string } = process.env,
 ): string | undefined {
-  return env.BYSPACE_AGENT_ID?.trim() || env.PASEO_AGENT_ID?.trim() || undefined;
+  return env.BYSPACE_AGENT_ID?.trim() || undefined;
 }

@@ -135,15 +135,15 @@ test("focused contracts stay inside existing required checks", () => {
   assert.match(changes, /scripts\/daemon-launch-contract\.test\.mjs/);
   assert.doesNotMatch(changes, /Install dependencies|npm run build/);
 
-  assert.match(server, /npm run test --workspace=@getpaseo\/server/);
+  assert.match(server, /npm run test --workspace=@byspace\/server/);
 
   assert.match(releasePackage, /^    name: release-package$/m);
   assert.match(releasePackage, /github\.event_name == 'push'/);
   assert.match(releasePackage, /needs\.changes\.outputs\.full != 'false'/);
   assert.match(releasePackage, /npm run release:pack:bytetrue/);
-  assert.match(releasePackage, /registry\.getpaseo\.invalid/);
+  assert.match(releasePackage, /registry\.byspace\.invalid/);
   assert.match(releasePackage, /node_modules\/\.bin\/byspace.*--version/);
-  assert.match(releasePackage, /test ! -e .*node_modules\/\.bin\/paseo/);
+  assert.match(releasePackage, /test ! -e .*node_modules\/\.bin\/byspace/);
   assert.ok(!jobs.has("playwright-desktop"));
 });
 
@@ -250,7 +250,7 @@ test("browser tests own their directory suite", () => {
   for (const path of browserSpecs) {
     assert.doesNotMatch(
       readFileSync(new URL(path, repoRoot), "utf8"),
-      /paseoDesktop|injectDesktopBridge/,
+      /byspaceDesktop|injectDesktopBridge/,
     );
   }
 
