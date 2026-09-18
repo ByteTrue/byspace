@@ -5,6 +5,16 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.14.5 - 2026-09-18
+
+### Removed
+
+- Removed the `byspace-plugin` skill from the Orchestration skills list. Its plugin runtime was removed in an earlier release, so the skill documented commands that no longer exist.
+
+### Fixed
+
+- Fixed the relay Worker configuration carrying a leftover variable that would have routed every relay connection to the former upstream service on the next deploy
+
 ## 0.14.4 - 2026-09-18
 
 BySpace no longer carries Paseo identity in its package names, on the wire, or on disk.
