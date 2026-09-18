@@ -18,19 +18,19 @@ import {
   type TimelineResponsePayload,
   type ViewedTimelineOwner,
 } from "@/timeline/viewed-timeline-sync";
-import type { AgentAttachment, SessionOutboundMessage } from "@getpaseo/protocol/messages";
-import { parseServerInfoStatusPayload } from "@getpaseo/protocol/messages";
+import type { AgentAttachment, SessionOutboundMessage } from "@bytetrue/protocol/messages";
+import { parseServerInfoStatusPayload } from "@bytetrue/protocol/messages";
 import {
   buildAgentAttentionNotificationPayload,
   type AgentAttentionReason,
   type AgentAttentionNotificationPayload,
   type NotificationPermissionRequest,
-} from "@getpaseo/protocol/agent-attention-notification";
+} from "@bytetrue/protocol/agent-attention-notification";
 
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import type { AgentSessionConfig } from "@getpaseo/protocol/agent-types";
-import type { GitSetupOptions } from "@getpaseo/protocol/messages";
-import type { AgentPermissionResponse } from "@getpaseo/protocol/agent-types";
+import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
+import type { AgentSessionConfig } from "@bytetrue/protocol/agent-types";
+import type { GitSetupOptions } from "@bytetrue/protocol/messages";
+import type { AgentPermissionResponse } from "@bytetrue/protocol/agent-types";
 import { getHostRuntimeStore, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import {
   selectAgentTimelineState,

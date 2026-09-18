@@ -29,7 +29,7 @@ async function installTerminalRetentionProbe(page: Page): Promise<void> {
     win.__retainedTerminalResetWrites = resetWrites;
     win.__retainedTerminalSetCount = setCount;
     win.__retainedTerminalUnsetCount = unsetCount;
-    Object.defineProperty(win, "__paseoTerminal", {
+    Object.defineProperty(win, "__byspaceTerminal", {
       configurable: true,
       get: () => current,
       set: (terminal: unknown) => {

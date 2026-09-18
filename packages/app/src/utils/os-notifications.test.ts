@@ -254,7 +254,7 @@ describe("sendOsNotification", () => {
     const { sendOsNotification } = await loadModuleForPlatform("web");
 
     const sent = await sendOsNotification({
-      title: "Paseo notification test",
+      title: "BySpace notification test",
       body: "If you can see this, desktop notifications work.",
     });
 
@@ -276,7 +276,7 @@ describe("sendOsNotification", () => {
 
     // The desktop bridge is never consulted; only web Notification is used.
     await sendOsNotification({
-      title: "Paseo notification test",
+      title: "BySpace notification test",
       body: "If you can see this, web notifications work.",
       data: { serverId: "srv-1" },
     });

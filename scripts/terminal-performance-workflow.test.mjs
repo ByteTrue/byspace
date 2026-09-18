@@ -58,13 +58,13 @@ test("Windows terminal performance is an opt-in CI job with centralized gating",
 
   const nodeBenchmark = performance.indexOf("Run Node daemon and PTY benchmark");
   const chromium = performance.indexOf("Install Chromium");
-  const direct = performance.indexOf("PASEO_TERMINAL_TRANSPORT: direct");
-  const relay = performance.indexOf("PASEO_TERMINAL_TRANSPORT: relay");
+  const direct = performance.indexOf("BYSPACE_TERMINAL_TRANSPORT: direct");
+  const relay = performance.indexOf("BYSPACE_TERMINAL_TRANSPORT: relay");
   assert.ok(nodeBenchmark >= 0 && nodeBenchmark < chromium);
   assert.ok(chromium < direct && direct < relay);
   assert.match(performance, /run: node --import tsx scripts\/benchmark-terminal-latency\.ts/);
-  assert.match(performance, /PASEO_TERMINAL_TRANSPORT: direct/);
-  assert.match(performance, /PASEO_TERMINAL_TRANSPORT: relay/);
+  assert.match(performance, /BYSPACE_TERMINAL_TRANSPORT: direct/);
+  assert.match(performance, /BYSPACE_TERMINAL_TRANSPORT: relay/);
   assert.equal(performance.match(/e2e\/browser\/terminal-clipboard\.spec\.ts/g)?.length, 2);
   assert.equal(performance.match(/--reporter=line,json/g)?.length, 2);
   assert.match(
@@ -79,7 +79,7 @@ test("Windows terminal performance is an opt-in CI job with centralized gating",
   assert.match(performance, /if: always\(\)/);
   assert.match(performance, /--output="\$\{\{ runner\.temp \}\}\/terminal-performance\/direct"/);
   assert.match(performance, /--output="\$\{\{ runner\.temp \}\}\/terminal-performance\/relay"/);
-  assert.match(performance, /\$\{\{ runner\.temp \}\}\/paseo-terminal-bench\/\*\*/);
+  assert.match(performance, /\$\{\{ runner\.temp \}\}\/byspace-terminal-bench\/\*\*/);
   assert.match(performance, /\$\{\{ runner\.temp \}\}\/terminal-performance\/\*\*/);
   assert.doesNotMatch(performance, /packages\/app\/(?:test-results|playwright-report)\/\*\*/);
   assert.doesNotMatch(performance, /\*\*\/\*\.(?:log|json)/);

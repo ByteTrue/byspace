@@ -1,4 +1,4 @@
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import type { RevokePushNotificationsInput, StartPushNotificationsInput } from "./types";
 
 const SERVICE_WORKER_URL = "/sw.js";

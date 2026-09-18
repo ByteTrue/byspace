@@ -124,7 +124,7 @@ jobs:
           file: docker/base/Dockerfile
           platforms: ${{ env.PLATFORMS }}
           build-args: |
-            PASEO_VERSION=${{ needs.setup.outputs.install_version }}
+            BYSPACE_VERSION=${{ needs.setup.outputs.install_version }}
           tags: ${{ needs.setup.outputs.check_tag }}
           push: false
           provenance: false
@@ -169,7 +169,7 @@ jobs:
           file: docker/base/Dockerfile
           platforms: ${{ env.PLATFORMS }}
           build-args: |
-            PASEO_VERSION=${{ needs.setup.outputs.install_version }}
+            BYSPACE_VERSION=${{ needs.setup.outputs.install_version }}
           tags: ${{ needs.setup.outputs.publish_tags }}
           push: true
           provenance: false

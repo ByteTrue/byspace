@@ -7,12 +7,12 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { LigaturesAddon } from "@xterm/addon-ligatures/lib/addon-ligatures.mjs";
 import { Terminal, type ITheme } from "@xterm/xterm";
-import type { TerminalState } from "@getpaseo/protocol/messages";
+import type { TerminalState } from "@bytetrue/protocol/messages";
 import {
   type TerminalInputModeState,
   TerminalInputModeTracker,
   terminalInputModeStatesEqual,
-} from "@getpaseo/protocol/terminal-input-mode";
+} from "@bytetrue/protocol/terminal-input-mode";
 import {
   type PendingTerminalModifiers,
   isAppleHandheldPlatform,
@@ -134,7 +134,7 @@ interface TerminalOutputOperation {
 
 declare global {
   interface Window {
-    __paseoTerminal?: Terminal;
+    __byspaceTerminal?: Terminal;
   }
 }
 
@@ -610,7 +610,7 @@ export class TerminalEmulatorRuntime {
 
     this.terminal = terminal;
     this.fitAddon = fitAddon;
-    window.__paseoTerminal = terminal;
+    window.__byspaceTerminal = terminal;
 
     const fitAndEmitResize = (resizeInput?: TerminalResizeRequest): void => {
       const forceRefresh = resizeInput?.forceRefresh ?? false;
@@ -892,7 +892,7 @@ export class TerminalEmulatorRuntime {
       ...(input.onCommitted ? { onCommitted: input.onCommitted } : {}),
     });
     if (nativePerformanceTrace.isEnabled()) {
-      traceInstant("paseo.terminal.runtime-write-enqueued", {
+      traceInstant("byspace.terminal.runtime-write-enqueued", {
         size: String(input.data.byteLength),
         queueDepth: String(this.outputOperations.length),
       });
@@ -1114,8 +1114,8 @@ export class TerminalEmulatorRuntime {
     }
     this.cleanup?.();
     this.cleanup = null;
-    if (window.__paseoTerminal === this.terminal) {
-      window.__paseoTerminal = undefined;
+    if (window.__byspaceTerminal === this.terminal) {
+      window.__byspaceTerminal = undefined;
     }
     this.terminal = null;
     this.fitAddon = null;
@@ -1194,7 +1194,7 @@ export class TerminalEmulatorRuntime {
   private submitWrite(terminal: Terminal, operation: TerminalOutputOperation): void {
     const traceEnabled = nativePerformanceTrace.isEnabled();
     if (traceEnabled) {
-      traceInstant("paseo.terminal.runtime-operation-start", {
+      traceInstant("byspace.terminal.runtime-operation-start", {
         size: String(operation.data.byteLength),
       });
     }
@@ -1210,7 +1210,7 @@ export class TerminalEmulatorRuntime {
     if (!onCommitted) {
       try {
         if (traceEnabled) {
-          traceInstant("paseo.terminal.runtime-xterm-write", {
+          traceInstant("byspace.terminal.runtime-xterm-write", {
             size: String(operation.data.byteLength),
           });
         }
@@ -1229,7 +1229,7 @@ export class TerminalEmulatorRuntime {
     this.pendingWriteCommits.add(commit);
     try {
       if (traceEnabled) {
-        traceInstant("paseo.terminal.runtime-xterm-write", {
+        traceInstant("byspace.terminal.runtime-xterm-write", {
           size: String(operation.data.byteLength),
         });
       }

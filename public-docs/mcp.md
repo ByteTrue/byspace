@@ -22,11 +22,11 @@ Depending on the provider, BySpace delivers tools through its native tool interf
 ## Limit BySpace tools by provider
 
 Use provider policies when different agent profiles should receive different BySpace tools. Enable
-tool injection globally, then add `paseoTools` to the exact provider IDs you launch:
+tool injection globally, then add `byspaceTools` to the exact provider IDs you launch:
 
 ```json
 {
-  "$schema": "https://paseo.sh/schemas/paseo.config.v1.json",
+  "$schema": "https://app.byspace.cc.cd/schemas/byspace.config.v1.json",
   "version": 1,
   "daemon": {
     "mcp": {
@@ -43,14 +43,14 @@ tool injection globally, then add `paseoTools` to the exact provider IDs you lau
       "codex-worker": {
         "extends": "codex",
         "label": "Codex Worker",
-        "paseoTools": {
+        "byspaceTools": {
           "disabledTools": ["create_agent", "send_agent_prompt", "kill_agent"]
         }
       },
       "codex-isolated": {
         "extends": "codex",
         "label": "Codex Isolated",
-        "paseoTools": {
+        "byspaceTools": {
           "enabled": false
         }
       }
@@ -59,10 +59,10 @@ tool injection globally, then add `paseoTools` to the exact provider IDs you lau
 }
 ```
 
-Run `byspace reload` after editing `~/.paseo/config.json`, then start a new agent or reload an
+Run `byspace reload` after editing `~/.byspace/config.json`, then start a new agent or reload an
 existing one. A running session keeps the catalog it received at launch.
 
-Omitting `paseoTools` enables the complete catalog. Set `enabled` to `false` to remove the catalog,
+Omitting `byspaceTools` enables the complete catalog. Set `enabled` to `false` to remove the catalog,
 or list exact tool IDs in `disabledTools` to remove selected tools. Custom profiles do not inherit
 this policy from `extends`; configure each custom provider ID separately.
 
@@ -110,7 +110,7 @@ For worktree isolation, `create_workspace` accepts the same useful choices as th
 
 ### Workspace scripts
 
-These tools manage scripts configured in a workspace's `byspace.json` or legacy `paseo.json`. Each requires an explicit `workspaceId`; start and stop also require the configured `scriptName`.
+These tools manage scripts configured in a workspace's `byspace.json`. Each requires an explicit `workspaceId`; start and stop also require the configured `scriptName`.
 
 | Tool                     | Function                                                                                |
 | ------------------------ | --------------------------------------------------------------------------------------- |

@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  resolveStartupBlocker,
-  resolveStartupNavigationReady,
   resolveHostIndexRoute,
   resolveStartupRoute,
   shouldRunStartupGiveUpTimer,
@@ -91,75 +89,30 @@ describe("startHostRuntimeBootstrap", () => {
   });
 });
 
-describe("startup blocking policy", () => {
-  const noBlockerInput = {
-    isDesktopRuntime: false,
-    anyOnlineHostServerId: null,
-    daemonStartIsRunning: false,
-    daemonStartError: null,
-  };
-
-  it("runs the give-up timer when no startup blocker is active", () => {
-    const blocker = resolveStartupBlocker(noBlockerInput);
-
-    expect(blocker).toEqual({ kind: "none" });
-    expect(resolveStartupNavigationReady({ startupBlocker: blocker })).toBe(true);
+describe("startup give-up timer", () => {
+  it("runs while no host is online and we have not given up", () => {
     expect(
       shouldRunStartupGiveUpTimer({
-        startupBlocker: blocker,
         anyOnlineHostServerId: null,
         hasGivenUpWaitingForHost: false,
       }),
     ).toBe(true);
   });
 
-  it("blocks navigation while desktop is starting the managed daemon", () => {
-    const blocker = resolveStartupBlocker({
-      ...noBlockerInput,
-      isDesktopRuntime: true,
-      daemonStartIsRunning: true,
-    });
-
-    expect(blocker).toEqual({ kind: "managed-daemon-starting" });
-    expect(resolveStartupNavigationReady({ startupBlocker: blocker })).toBe(false);
+  it("does not run once a host is online", () => {
     expect(
       shouldRunStartupGiveUpTimer({
-        startupBlocker: blocker,
-        anyOnlineHostServerId: null,
+        anyOnlineHostServerId: "srv_online",
         hasGivenUpWaitingForHost: false,
       }),
     ).toBe(false);
   });
 
-  it("unblocks navigation when any host is online", () => {
-    const blocker = resolveStartupBlocker({
-      ...noBlockerInput,
-      isDesktopRuntime: true,
-      anyOnlineHostServerId: "srv_desktop",
-      daemonStartIsRunning: true,
-    });
-
-    expect(blocker).toEqual({ kind: "none" });
-    expect(resolveStartupNavigationReady({ startupBlocker: blocker })).toBe(true);
-  });
-
-  it("keeps desktop daemon startup errors on the startup error surface", () => {
-    const blocker = resolveStartupBlocker({
-      ...noBlockerInput,
-      isDesktopRuntime: true,
-      daemonStartError: "daemon failed to start",
-    });
-
-    expect(blocker).toEqual({
-      kind: "managed-daemon-error",
-      message: "daemon failed to start",
-    });
-    expect(resolveStartupNavigationReady({ startupBlocker: blocker })).toBe(true);
+  it("does not run again after giving up", () => {
     expect(
       shouldRunStartupGiveUpTimer({
-        startupBlocker: blocker,
         anyOnlineHostServerId: null,
-        hasGivenUpWaitingForHost: false,
+        hasGivenUpWaitingForHost: true,
       }),
     ).toBe(false);
   });
@@ -168,7 +121,6 @@ describe("startup blocking policy", () => {
 describe("resolveStartupRoute", () => {
   const baseIndexInput = {
     route: { kind: "index" as const, pathname: "/" },
-    startupBlocker: { kind: "none" as const },
     hostRegistryStatus: "ready" as const,
     hosts: [],
     anyOnlineHostServerId: null,
@@ -179,7 +131,6 @@ describe("resolveStartupRoute", () => {
   };
   const baseHostInput = {
     route: { kind: "host" as const, serverId: "server-saved" },
-    startupBlocker: { kind: "none" as const },
     hostRegistryStatus: "ready" as const,
     hosts: [],
   };
@@ -301,15 +252,6 @@ describe("resolveStartupRoute", () => {
       resolveStartupRoute({
         ...baseHostInput,
         hostRegistryStatus: "loading",
-      }),
-    ).toEqual({ kind: "render" });
-  });
-
-  it("keeps host routes mounted while the managed daemon is starting", () => {
-    expect(
-      resolveStartupRoute({
-        ...baseHostInput,
-        startupBlocker: { kind: "managed-daemon-starting" },
       }),
     ).toEqual({ kind: "render" });
   });

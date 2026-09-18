@@ -10,11 +10,11 @@ import { ScrollView as GHScrollView } from "react-native-gesture-handler";
 import { StyleSheet } from "react-native-unistyles";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import type { ToolCallDetail } from "@getpaseo/protocol/agent-types";
+import type { ToolCallDetail } from "@bytetrue/protocol/agent-types";
 import {
-  buildPaseoToolDetailSections,
-  type PaseoToolDetailSection,
-} from "@getpaseo/protocol/paseo-tool-call-detail";
+  buildBySpaceToolDetailSections,
+  type BySpaceToolDetailSection,
+} from "@bytetrue/protocol/byspace-tool-call-detail";
 import { buildLineDiff, parseUnifiedDiff, type DiffLine } from "@/utils/tool-call-parsers";
 import { highlightDiffLines } from "@/utils/diff-highlight";
 import { hasMeaningfulToolCallDetail } from "@/utils/tool-call-detail-state";
@@ -631,20 +631,20 @@ function buildUnknownSections(detail: UnknownDetail, ds: DetailStyles, t: TFunct
   return out;
 }
 
-function PaseoDetailSection({ section }: { section: PaseoToolDetailSection }) {
+function BySpaceDetailSection({ section }: { section: BySpaceToolDetailSection }) {
   return (
-    <View style={styles.paseoSection}>
-      <Text style={styles.paseoSectionTitle}>{section.title}</Text>
+    <View style={styles.byspaceSection}>
+      <Text style={styles.byspaceSectionTitle}>{section.title}</Text>
       {section.kind === "prose" ? (
-        <Text selectable style={styles.paseoProse}>
+        <Text selectable style={styles.byspaceProse}>
           {section.text}
         </Text>
       ) : (
-        <View style={styles.paseoFields}>
+        <View style={styles.byspaceFields}>
           {section.fields.map((field) => (
-            <View key={field.label} style={styles.paseoFieldRow}>
-              <Text style={styles.paseoFieldLabel}>{field.label}</Text>
-              <Text selectable style={styles.paseoFieldValue}>
+            <View key={field.label} style={styles.byspaceFieldRow}>
+              <Text style={styles.byspaceFieldLabel}>{field.label}</Text>
+              <Text selectable style={styles.byspaceFieldValue}>
                 {field.value}
               </Text>
             </View>
@@ -655,14 +655,14 @@ function PaseoDetailSection({ section }: { section: PaseoToolDetailSection }) {
   );
 }
 
-function buildPaseoUnknownSections(
+function buildBySpaceUnknownSections(
   toolName: string | undefined,
   detail: UnknownDetail,
 ): ReactNode[] | null {
   if (!toolName) return null;
-  const sections = buildPaseoToolDetailSections(toolName, detail.input, detail.output);
+  const sections = buildBySpaceToolDetailSections(toolName, detail.input, detail.output);
   if (!sections) return null;
-  return sections.map((section) => <PaseoDetailSection key={section.title} section={section} />);
+  return sections.map((section) => <BySpaceDetailSection key={section.title} section={section} />);
 }
 
 function buildDetailSections(
@@ -741,7 +741,7 @@ function buildDetailSections(
     return [<ScrollablePlainTextSection key="plain-text" text={detail.text} ds={ds} />];
   }
   if (detail.type === "unknown") {
-    return buildPaseoUnknownSections(toolName, detail) ?? buildUnknownSections(detail, ds, t);
+    return buildBySpaceUnknownSections(toolName, detail) ?? buildUnknownSections(detail, ds, t);
   }
   return [];
 }
@@ -837,39 +837,39 @@ const styles = StyleSheet.create((theme) => {
       fontSize: theme.fontSize.base,
       fontWeight: theme.fontWeight.normal,
     },
-    paseoSection: {
+    byspaceSection: {
       gap: theme.spacing[3],
       paddingHorizontal: theme.spacing[4],
       paddingVertical: theme.spacing[4],
       borderBottomWidth: theme.borderWidth[1],
       borderBottomColor: theme.colors.border,
     },
-    paseoSectionTitle: {
+    byspaceSectionTitle: {
       color: theme.colors.foreground,
       fontSize: theme.fontSize.base,
       fontWeight: theme.fontWeight.medium,
     },
-    paseoProse: {
+    byspaceProse: {
       color: theme.colors.foreground,
       fontSize: theme.fontSize.content,
       lineHeight: Math.round(theme.fontSize.content * 1.5),
       overflowWrap: "anywhere",
     },
-    paseoFields: {
+    byspaceFields: {
       gap: theme.spacing[3],
     },
-    paseoFieldRow: {
+    byspaceFieldRow: {
       flexDirection: "row",
       alignItems: "flex-start",
       gap: theme.spacing[4],
     },
-    paseoFieldLabel: {
+    byspaceFieldLabel: {
       width: 120,
       color: theme.colors.foregroundMuted,
       fontSize: theme.fontSize.sm,
       lineHeight: Math.round(theme.fontSize.base * 1.5),
     },
-    paseoFieldValue: {
+    byspaceFieldValue: {
       flex: 1,
       minWidth: 0,
       color: theme.colors.foreground,

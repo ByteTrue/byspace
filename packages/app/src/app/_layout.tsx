@@ -56,12 +56,9 @@ import { SessionProvider } from "@/contexts/session-context";
 import { SidebarCalloutProvider } from "@/contexts/sidebar-callout-context";
 import { ToastProvider } from "@/contexts/toast-context";
 import {
-  resolveStartupBlocker,
-  resolveStartupNavigationReady,
   shouldRunStartupGiveUpTimer,
   startHostRuntimeBootstrap,
   bindHostRuntimeAppState,
-  type StartupBlocker,
 } from "@/navigation/host-runtime-bootstrap";
 import { registerWorkspaceRouteNavigationRef } from "@/navigation/workspace-route-navigation";
 import { ThemedStack } from "@/navigation/themed-stack";
@@ -121,7 +118,6 @@ export interface HostRuntimeBootstrapState {
   retry: () => void;
   hasGivenUpWaitingForHost: boolean;
   storeReady: boolean;
-  startupBlocker: StartupBlocker;
 }
 
 const HostRuntimeBootstrapContext = createContext<HostRuntimeBootstrapState>({
@@ -129,7 +125,6 @@ const HostRuntimeBootstrapContext = createContext<HostRuntimeBootstrapState>({
   retry: () => {},
   hasGivenUpWaitingForHost: false,
   storeReady: false,
-  startupBlocker: { kind: "none" },
 });
 
 function PushNotificationRouter() {
@@ -296,24 +291,6 @@ export function useEarliestOnlineHostServerId(): string | null {
   );
 }
 
-function useDaemonStartLastError(): string | null {
-  const service = getDaemonStartService({ store: getHostRuntimeStore() });
-  return useSyncExternalStore(
-    (listener) => service.subscribe(listener),
-    () => service.getLastError(),
-    () => service.getLastError(),
-  );
-}
-
-function useDaemonStartIsRunning(): boolean {
-  const service = getDaemonStartService({ store: getHostRuntimeStore() });
-  return useSyncExternalStore(
-    (listener) => service.subscribe(listener),
-    () => service.isRunning(),
-    () => service.isRunning(),
-  );
-}
-
 const STARTUP_GIVE_UP_TIMEOUT_MS = 5_000;
 
 // Electron retired (issue 025): the app no longer manages a built-in daemon, so
@@ -340,22 +317,8 @@ function HostRuntimeBootstrapProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const anyOnlineHostServerId = useEarliestOnlineHostServerId();
-  const daemonStartError = useDaemonStartLastError();
-  const daemonStartIsRunning = useDaemonStartIsRunning();
   const [hasGivenUpWaitingForHost, setHasGivenUpWaitingForHost] = useState(false);
-  const isDesktopRuntime = false;
-  const startupBlocker = useMemo(
-    () =>
-      resolveStartupBlocker({
-        isDesktopRuntime,
-        anyOnlineHostServerId,
-        daemonStartIsRunning,
-        daemonStartError,
-      }),
-    [anyOnlineHostServerId, daemonStartError, daemonStartIsRunning, isDesktopRuntime],
-  );
   const shouldRunGiveUpTimer = shouldRunStartupGiveUpTimer({
-    startupBlocker,
     anyOnlineHostServerId,
     hasGivenUpWaitingForHost,
   });
@@ -377,13 +340,12 @@ function HostRuntimeBootstrapProvider({ children }: { children: ReactNode }) {
     void daemonStartService.startIfEnabled({ shouldStart: shouldStartBuiltInDaemon });
   }, []);
 
-  const splashError =
-    startupBlocker.kind === "managed-daemon-error" ? startupBlocker.message : null;
-  const storeReady = resolveStartupNavigationReady({ startupBlocker });
+  const splashError = null;
+  const storeReady = true;
 
   const state = useMemo<HostRuntimeBootstrapState>(
-    () => ({ splashError, retry, hasGivenUpWaitingForHost, storeReady, startupBlocker }),
-    [splashError, retry, hasGivenUpWaitingForHost, storeReady, startupBlocker],
+    () => ({ splashError, retry, hasGivenUpWaitingForHost, storeReady }),
+    [splashError, retry, hasGivenUpWaitingForHost, storeReady],
   );
 
   return (

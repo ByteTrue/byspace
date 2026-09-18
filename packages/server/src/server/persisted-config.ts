@@ -16,8 +16,8 @@ import {
   PluginSourceSchema,
   TerminalAgentHookSettingsSchema,
   TerminalProfileSchema,
-} from "@getpaseo/protocol/messages";
-import { PaseoServicePortAllocationSchema } from "@getpaseo/protocol/paseo-config-schema";
+} from "@bytetrue/protocol/messages";
+import { BySpaceServicePortAllocationSchema } from "@bytetrue/protocol/byspace-config-schema";
 
 export const LogLevelSchema = z.enum(["trace", "debug", "info", "warn", "error", "fatal"]);
 export const LogFormatSchema = z.enum(["pretty", "json"]);
@@ -85,7 +85,7 @@ const ProvidersSchema = z
 const WorktreesConfigSchema = z
   .object({
     root: z.string().min(1).optional(),
-    servicePorts: PaseoServicePortAllocationSchema.optional(),
+    servicePorts: BySpaceServicePortAllocationSchema.optional(),
   })
   .strict();
 
@@ -377,8 +377,8 @@ interface LoggerLike {
   info(...args: unknown[]): void;
 }
 
-function getConfigPath(paseoHome: string): string {
-  return path.join(paseoHome, CONFIG_FILENAME);
+function getConfigPath(byspaceHome: string): string {
+  return path.join(byspaceHome, CONFIG_FILENAME);
 }
 
 function getLogger(logger: LoggerLike | undefined): LoggerLike | undefined {
@@ -424,9 +424,9 @@ function stripRemovedConfigFields(parsed: unknown): unknown {
   return root;
 }
 
-export function loadPersistedConfig(paseoHome: string, logger?: LoggerLike): PersistedConfig {
+export function loadPersistedConfig(byspaceHome: string, logger?: LoggerLike): PersistedConfig {
   const log = getLogger(logger);
-  const configPath = getConfigPath(paseoHome);
+  const configPath = getConfigPath(byspaceHome);
 
   if (!existsSync(configPath)) {
     try {
@@ -476,12 +476,12 @@ export function loadPersistedConfig(paseoHome: string, logger?: LoggerLike): Per
 }
 
 export function savePersistedConfig(
-  paseoHome: string,
+  byspaceHome: string,
   config: PersistedConfig,
   logger?: LoggerLike,
 ): void {
   const log = getLogger(logger);
-  const configPath = getConfigPath(paseoHome);
+  const configPath = getConfigPath(byspaceHome);
 
   const result = PersistedConfigSchema.safeParse(config);
   if (!result.success) {

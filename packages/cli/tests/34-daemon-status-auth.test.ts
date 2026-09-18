@@ -1,22 +1,22 @@
 #!/usr/bin/env npx tsx
 
 import assert from "node:assert";
-import { runLocalPaseo } from "./helpers/local-cli.ts";
+import { runLocalBySpace } from "./helpers/local-cli.ts";
 import { startTestDaemon } from "./helpers/test-daemon.ts";
 
 console.log("=== Daemon Status Auth ===\n");
 
 const daemon = await startTestDaemon({
-  env: { PASEO_PASSWORD: "shared-secret" },
+  env: { BYSPACE_PASSWORD: "shared-secret" },
 });
 
 try {
   {
     console.log("Test 1: status reports password requirement without marking daemon unreachable");
-    const result = await runLocalPaseo(["daemon", "status", "--json"], {
-      BYSPACE_HOME: daemon.paseoHome,
+    const result = await runLocalBySpace(["daemon", "status", "--json"], {
+      BYSPACE_HOME: daemon.byspaceHome,
       BYSPACE_HOST: "",
-      PASEO_PASSWORD: "",
+      BYSPACE_PASSWORD: "",
     });
 
     assert.strictEqual(result.exitCode, 0, "status should still succeed");
@@ -33,10 +33,10 @@ try {
 
   {
     console.log("Test 2: status reports rejected supplied password separately");
-    const result = await runLocalPaseo(["daemon", "status", "--json"], {
-      BYSPACE_HOME: daemon.paseoHome,
+    const result = await runLocalBySpace(["daemon", "status", "--json"], {
+      BYSPACE_HOME: daemon.byspaceHome,
       BYSPACE_HOST: "",
-      PASEO_PASSWORD: "wrong-secret",
+      BYSPACE_PASSWORD: "wrong-secret",
     });
 
     assert.strictEqual(result.exitCode, 0, "status should still succeed");
@@ -51,10 +51,10 @@ try {
 
   {
     console.log("Test 3: status reaches the same daemon when password is supplied");
-    const result = await runLocalPaseo(["daemon", "status", "--json"], {
-      BYSPACE_HOME: daemon.paseoHome,
+    const result = await runLocalBySpace(["daemon", "status", "--json"], {
+      BYSPACE_HOME: daemon.byspaceHome,
       BYSPACE_HOST: "",
-      PASEO_PASSWORD: "shared-secret",
+      BYSPACE_PASSWORD: "shared-secret",
     });
 
     assert.strictEqual(result.exitCode, 0, "status should succeed with password");

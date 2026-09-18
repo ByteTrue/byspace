@@ -36,7 +36,6 @@ export interface BuildAgentStreamRenderModelInput {
   activeTurnStartedAt: Date | null;
   tail: StreamItem[];
   head: StreamItem[];
-  platform: "web" | "native";
   isMobileBreakpoint: boolean;
   historyStart?: number;
 }
@@ -81,15 +80,13 @@ function getOrderedItems(params: {
 
 function splitOrderedTail(params: {
   orderedTail: StreamItem[];
-  platform: "web" | "native";
   isMobileBreakpoint: boolean;
 }): Pick<AgentStreamRenderModel, "history" | "segments"> {
-  const { orderedTail, platform, isMobileBreakpoint } = params;
+  const { orderedTail, isMobileBreakpoint } = params;
   const mountedRecentItems = getMountedRecentStreamItems();
   const virtualizationThreshold = getWebPartialVirtualizationThreshold();
-  const shouldSplitHistory =
-    platform === "web" && !isMobileBreakpoint && orderedTail.length > virtualizationThreshold;
-  const cacheKey = `${platform}:${isMobileBreakpoint}:${mountedRecentItems}:${virtualizationThreshold}:${shouldSplitHistory}`;
+  const shouldSplitHistory = !isMobileBreakpoint && orderedTail.length > virtualizationThreshold;
+  const cacheKey = `${isMobileBreakpoint}:${mountedRecentItems}:${virtualizationThreshold}:${shouldSplitHistory}`;
   let cachedByKey = splitHistoryCache.get(orderedTail);
   if (!cachedByKey) {
     cachedByKey = new Map();
@@ -163,10 +160,9 @@ export function buildAgentStreamRenderModel(
   input: BuildAgentStreamRenderModelInput,
 ): AgentStreamRenderModel {
   const strategy = resolveStreamRenderStrategy({
-    platform: input.platform === "web" ? "web" : "native",
     isMobileBreakpoint: input.isMobileBreakpoint,
   });
-  const orderingCacheKey = `${input.platform}:${input.isMobileBreakpoint}`;
+  const orderingCacheKey = `${input.isMobileBreakpoint}`;
   const renderedTail = input.historyStart ? input.tail.slice(input.historyStart) : input.tail;
   const orderedTail = getOrderedItems({
     cache: orderedTailCache,
@@ -190,7 +186,6 @@ export function buildAgentStreamRenderModel(
   });
   const splitHistory = splitOrderedTail({
     orderedTail,
-    platform: input.platform,
     isMobileBreakpoint: input.isMobileBreakpoint,
   });
   const turnTiming = getTurnTiming({

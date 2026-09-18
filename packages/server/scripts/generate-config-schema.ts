@@ -10,7 +10,9 @@ const __dirname = path.dirname(__filename);
 
 function main() {
   const repoRoot = path.resolve(__dirname, "../../..");
-  const outPath = path.join(repoRoot, "packages/website/public/schemas/paseo.config.v1.json");
+  // Served by the Cloudflare Pages deployment of the web app, so editors can
+  // resolve $schema to a URL that describes BySpace's config, not upstream's.
+  const outPath = path.join(repoRoot, "packages/app/public/schemas/byspace.config.v1.json");
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
 
   const schema = z.toJSONSchema(PersistedConfigSchema, {
@@ -18,7 +20,7 @@ function main() {
     unrepresentable: "any",
     io: "input",
   });
-  schema.title = "PaseoConfigV1";
+  schema.title = "BySpaceConfigV1";
 
   fs.writeFileSync(outPath, JSON.stringify(schema, null, 2) + "\n", "utf8");
   process.stdout.write(`Wrote ${outPath}\n`);

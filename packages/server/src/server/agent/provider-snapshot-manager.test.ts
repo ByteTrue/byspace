@@ -696,36 +696,8 @@ describe("ProviderSnapshotManager public surface", () => {
     }
   });
 
-  test("BYSPACE_PROVIDER_REFRESH_TIMEOUT_MS takes precedence over the legacy alias", async () => {
+  test("BYSPACE_PROVIDER_REFRESH_TIMEOUT_MS sets the refresh deadline", async () => {
     vi.stubEnv("BYSPACE_PROVIDER_REFRESH_TIMEOUT_MS", "1");
-    vi.stubEnv("PASEO_PROVIDER_REFRESH_TIMEOUT_MS", "50");
-    const isAvailable = vi.fn(waitUntilAborted);
-    const manager = new ProviderSnapshotManager({
-      logger: createTestLogger(),
-      providerOverrides: {
-        claude: { enabled: false },
-        copilot: { enabled: false },
-        opencode: { enabled: false },
-        pi: { enabled: false },
-      },
-      extraClients: { codex: createExtraClient("codex", { isAvailable }) },
-    });
-    try {
-      const entry = await manager.getProvider({
-        cwd: "/tmp/project",
-        provider: "codex",
-        wait: true,
-      });
-      expect(entry.status).toBe("error");
-      expect(entry.error).toMatch(/after 1ms/);
-    } finally {
-      manager.destroy();
-      vi.unstubAllEnvs();
-    }
-  });
-
-  test("PASEO_PROVIDER_REFRESH_TIMEOUT_MS remains a compatibility fallback", async () => {
-    vi.stubEnv("PASEO_PROVIDER_REFRESH_TIMEOUT_MS", "1");
     const isAvailable = vi.fn(waitUntilAborted);
     const manager = new ProviderSnapshotManager({
       logger: createTestLogger(),
@@ -1138,7 +1110,7 @@ describe("ProviderSnapshotManager public surface", () => {
   });
 
   test("getProviderDiagnostic reports a stuck catalog refresh inside the diagnostic", async () => {
-    await withEnv("PASEO_ENABLE_MOCK_SLOW", "true", async () => {
+    await withEnv("BYSPACE_ENABLE_MOCK_SLOW", "true", async () => {
       vi.useFakeTimers();
       const manager = new ProviderSnapshotManager({
         logger: createTestLogger(),

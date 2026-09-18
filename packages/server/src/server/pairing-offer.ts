@@ -2,8 +2,8 @@ import type { Logger } from "pino";
 import {
   DEFAULT_RELAY_ENDPOINT,
   isBySpaceHostedRelayEndpoint,
-} from "@getpaseo/protocol/daemon-endpoints";
-import { resolveBySpaceHostedAppBaseUrl } from "@getpaseo/protocol/release-channel";
+} from "@bytetrue/protocol/daemon-endpoints";
+import { resolveBySpaceHostedAppBaseUrl } from "@bytetrue/protocol/release-channel";
 
 import { createConnectionOfferV2, encodeOfferToFragmentUrl } from "./connection-offer.js";
 import { loadOrCreateDaemonKeyPair } from "./daemon-keypair.js";
@@ -18,7 +18,7 @@ export interface LocalPairingOffer {
 }
 
 export async function generateLocalPairingOffer(args: {
-  paseoHome: string;
+  byspaceHome: string;
   releaseVersion?: string;
   relayEnabled?: boolean;
   relayEndpoint?: string;
@@ -44,8 +44,8 @@ export async function generateLocalPairingOffer(args: {
   const relayUseTls = args.relayUseTls ?? isBySpaceHostedRelayEndpoint(relayEndpoint);
   const relayPublicUseTls = args.relayPublicUseTls ?? relayUseTls;
   const appBaseUrl = args.appBaseUrl ?? resolveBySpaceHostedAppBaseUrl(releaseVersion);
-  const serverId = getOrCreateServerId(args.paseoHome, { logger: args.logger });
-  const daemonKeyPair = await loadOrCreateDaemonKeyPair(args.paseoHome, args.logger);
+  const serverId = getOrCreateServerId(args.byspaceHome, { logger: args.logger });
+  const daemonKeyPair = await loadOrCreateDaemonKeyPair(args.byspaceHome, args.logger);
   const offer = await createConnectionOfferV2({
     serverId,
     daemonPublicKeyB64: daemonKeyPair.publicKeyB64,

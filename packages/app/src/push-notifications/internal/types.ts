@@ -1,4 +1,4 @@
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 
 /**
  * Message the service worker posts to an open window when a Web Push notification

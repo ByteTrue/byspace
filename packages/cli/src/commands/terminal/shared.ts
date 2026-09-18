@@ -1,4 +1,4 @@
-import { createPaseoApi } from "@getpaseo/client";
+import { createBySpaceApi } from "@bytetrue/client";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type { CommandError, CommandOptions } from "../../output/index.js";
 
@@ -15,7 +15,7 @@ export async function connectTerminalClient(host?: string) {
   const daemonHost = getDaemonHost({ host });
   try {
     const client = await connectToDaemon({ host });
-    return { client: createPaseoApi(client), daemonHost, close: () => client.close() };
+    return { client: createBySpaceApi(client), daemonHost, close: () => client.close() };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const error: CommandError = {

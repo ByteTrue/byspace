@@ -8,9 +8,9 @@ import { resolveProjectName, runRenameCommand } from "./rename.js";
 
 const project = {
   projectId: "project-1",
-  projectDisplayName: "Paseo",
+  projectDisplayName: "BySpace",
   projectCustomName: null,
-  projectRootPath: "/tmp/paseo",
+  projectRootPath: "/tmp/byspace",
   projectKind: "git" as const,
 };
 const addProject = vi.fn(async () => ({ project, error: null }));
@@ -52,9 +52,9 @@ describe("project commands", () => {
     expect(addProject).toHaveBeenCalledWith(path.resolve("relative/project"));
     expect(result.data).toEqual({
       projectId: "project-1",
-      name: "Paseo",
+      name: "BySpace",
       kind: "git",
-      path: "/tmp/paseo",
+      path: "/tmp/byspace",
     });
     expect(close).toHaveBeenCalled();
   });

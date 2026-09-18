@@ -1,5 +1,5 @@
 import type pino from "pino";
-import type { FirstAgentContext } from "@getpaseo/protocol/messages";
+import type { FirstAgentContext } from "@bytetrue/protocol/messages";
 
 import { resolveFirstAgentPromptTitle } from "./agent/create-agent-title.js";
 import type { AgentManager } from "./agent/agent-manager.js";
@@ -8,7 +8,7 @@ import type { StructuredGenerationDaemonConfig } from "./agent/structured-genera
 import {
   attemptFirstAgentBranchAutoName,
   type AttemptFirstAgentBranchAutoNameResult,
-} from "./paseo-worktree-service.js";
+} from "./byspace-worktree-service.js";
 import type { GitMutationService } from "./session/git-mutation/git-mutation-service.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
 import type { PersistedWorkspaceRecord, WorkspaceRegistry } from "./workspace-registry.js";
@@ -32,7 +32,7 @@ interface WorkspaceAutoNameOptions {
   emitWorkspaceUpdateForCwd: (cwd: string) => Promise<void>;
   emitWorkspaceUpdateForWorkspaceId: (workspaceId: string) => Promise<void>;
   logger: pino.Logger;
-  paseoHome?: string;
+  byspaceHome?: string;
   worktreesRoot?: string;
   generateWorkspaceName?: WorkspaceNameGenerator;
 }
@@ -51,7 +51,7 @@ export class WorkspaceAutoName {
   private readonly emitWorkspaceUpdateForCwd: (cwd: string) => Promise<void>;
   private readonly emitWorkspaceUpdateForWorkspaceId: (workspaceId: string) => Promise<void>;
   private readonly logger: pino.Logger;
-  private readonly paseoHome: string | undefined;
+  private readonly byspaceHome: string | undefined;
   private readonly worktreesRoot: string | undefined;
   private readonly generateWorkspaceName: WorkspaceNameGenerator;
 
@@ -65,7 +65,7 @@ export class WorkspaceAutoName {
     this.emitWorkspaceUpdateForCwd = options.emitWorkspaceUpdateForCwd;
     this.emitWorkspaceUpdateForWorkspaceId = options.emitWorkspaceUpdateForWorkspaceId;
     this.logger = options.logger;
-    this.paseoHome = options.paseoHome;
+    this.byspaceHome = options.byspaceHome;
     this.worktreesRoot = options.worktreesRoot;
     this.generateWorkspaceName =
       options.generateWorkspaceName ?? generateBranchNameFromFirstAgentContext;
@@ -129,7 +129,7 @@ export class WorkspaceAutoName {
           return nextGenerated?.branch ?? null;
         });
       },
-      paseoHome: this.paseoHome,
+      byspaceHome: this.byspaceHome,
       worktreesRoot: this.worktreesRoot,
     });
 

@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { forkPaseoHomeMetadata, resolvePaseoHomePath } from "./paseo-home-fork";
+import { forkBySpaceHomeMetadata, resolveBySpaceHomePath } from "./byspace-home-fork";
 import { startIsolatedHostDaemon } from "./isolated-host-daemon";
 import { startLocalWranglerRelay, type LocalWranglerRelay } from "./local-wrangler-relay";
 
@@ -13,7 +13,7 @@ export interface E2EWorker {
 
 export interface E2EWorkerOptions {
   forkProviders?: string[];
-  injectPaseoTools?: boolean;
+  injectBySpaceTools?: boolean;
   daemonConfig?: Record<string, unknown>;
   environment?: Record<string, string>;
 }
@@ -21,11 +21,11 @@ export interface E2EWorkerOptions {
 function resolveOptionalHome(value: string | undefined): string | null {
   const trimmed = value?.trim();
   if (!trimmed) return null;
-  return resolvePaseoHomePath(trimmed === "current" ? "~/.paseo" : trimmed);
+  return resolveBySpaceHomePath(trimmed === "current" ? "~/.byspace" : trimmed);
 }
 
 async function createFakeEditorBin(): Promise<string> {
-  const binDir = await mkdtemp(path.join(tmpdir(), "paseo-e2e-editor-bin-"));
+  const binDir = await mkdtemp(path.join(tmpdir(), "byspace-e2e-editor-bin-"));
   let realGhPath = "";
   try {
     const locator = process.platform === "win32" ? "where.exe" : "which";
@@ -44,7 +44,7 @@ async function createFakeEditorBin(): Promise<string> {
   const fakeEditorSource = `#!/usr/bin/env node
 const fs = require("fs");
 const path = require("path");
-const recordPath = process.env.PASEO_E2E_EDITOR_RECORD_PATH;
+const recordPath = process.env.BYSPACE_E2E_EDITOR_RECORD_PATH;
 if (recordPath) {
   fs.appendFileSync(recordPath, JSON.stringify({
     command: path.basename(process.argv[1]),
@@ -67,7 +67,7 @@ if (recordPath) {
   const fakeGhSource = `#!/usr/bin/env node
 const { spawnSync } = require("child_process");
 const args = process.argv.slice(2);
-const fixtureRemote = "https://github.com/paseo-e2e/local-fixture.git";
+const fixtureRemote = "https://github.com/byspace-e2e/local-fixture.git";
 const origin = spawnSync("git", ["config", "--get", "remote.origin.url"], {
   encoding: "utf8",
   stdio: ["ignore", "pipe", "ignore"]
@@ -77,7 +77,7 @@ if (origin === fixtureRemote) {
   const command = args.slice(0, 2).join(" ");
   if (command === "auth status") process.exit(0);
   if (command === "repo view") {
-    process.stdout.write(JSON.stringify({ owner: { login: "paseo-e2e" }, name: "local-fixture", parent: null }));
+    process.stdout.write(JSON.stringify({ owner: { login: "byspace-e2e" }, name: "local-fixture", parent: null }));
     process.exit(0);
   }
   if (command === "issue list") {
@@ -89,7 +89,7 @@ if (origin === fixtureRemote) {
     const pr = {
       number: isFork ? 2 : 1,
       title: "Use pasted PR as start ref",
-      url: "https://github.com/paseo-e2e/local-fixture/pull/" + (isFork ? 2 : 1),
+      url: "https://github.com/byspace-e2e/local-fixture/pull/" + (isFork ? 2 : 1),
       state: "OPEN",
       body: null,
       labels: [],
@@ -108,9 +108,9 @@ if (origin === fixtureRemote) {
         baseRefName: "main",
         headRefName: isFork ? "pr-branch-2" : "pr-branch-1",
         isCrossRepository: isFork,
-        headRepositoryOwner: { login: isFork ? "fork-owner" : "paseo-e2e" },
+        headRepositoryOwner: { login: isFork ? "fork-owner" : "byspace-e2e" },
         headRepository: {
-          sshUrl: isFork ? "git@github.com:fork-owner/local-fixture.git" : "git@github.com:paseo-e2e/local-fixture.git",
+          sshUrl: isFork ? "git@github.com:fork-owner/local-fixture.git" : "git@github.com:byspace-e2e/local-fixture.git",
           url: isFork ? "https://github.com/fork-owner/local-fixture" : fixtureRemote
         }
       } } }
@@ -135,11 +135,11 @@ process.exit(result.status ?? 1);
 }
 
 async function applyMetadataFork(targetHome: string, providerIds: string[]): Promise<void> {
-  const sourceHome = resolveOptionalHome(process.env.E2E_FORK_PASEO_HOME_FROM);
+  const sourceHome = resolveOptionalHome(process.env.E2E_FORK_BYSPACE_HOME_FROM);
   if (!sourceHome) return;
-  const result = await forkPaseoHomeMetadata({ sourceHome, targetHome });
-  process.env.E2E_FORK_SOURCE_PASEO_HOME = result.sourceHome;
-  process.env.E2E_FORK_TARGET_PASEO_HOME = result.targetHome;
+  const result = await forkBySpaceHomeMetadata({ sourceHome, targetHome });
+  process.env.E2E_FORK_SOURCE_BYSPACE_HOME = result.sourceHome;
+  process.env.E2E_FORK_TARGET_BYSPACE_HOME = result.targetHome;
   process.env.E2E_FORK_COPIED_FILES = String(result.copiedFiles);
   process.env.E2E_FORK_COPIED_BYTES = String(result.copiedBytes);
 
@@ -168,52 +168,52 @@ export async function startE2EWorker(
   workerIndex: number,
   options: E2EWorkerOptions = {},
 ): Promise<E2EWorker> {
-  const requestedRoot = resolveOptionalHome(process.env.E2E_PASEO_HOME);
-  const paseoHome = requestedRoot
+  const requestedRoot = resolveOptionalHome(process.env.E2E_BYSPACE_HOME);
+  const byspaceHome = requestedRoot
     ? path.join(requestedRoot, `worker-${workerIndex}`)
-    : await mkdtemp(path.join(tmpdir(), `paseo-e2e-worker-${workerIndex}-`));
-  const preserveHome = Boolean(requestedRoot) || process.env.E2E_KEEP_PASEO_HOME === "1";
+    : await mkdtemp(path.join(tmpdir(), `byspace-e2e-worker-${workerIndex}-`));
+  const preserveHome = Boolean(requestedRoot) || process.env.E2E_KEEP_BYSPACE_HOME === "1";
   const fakeEditorBin = await createFakeEditorBin();
-  const editorRecordPath = path.join(paseoHome, "editor-open-records.jsonl");
+  const editorRecordPath = path.join(byspaceHome, "editor-open-records.jsonl");
   const serverId = `srv_e2e_worker_${workerIndex}`;
 
   let relay: LocalWranglerRelay | null = null;
   let daemon: Awaited<ReturnType<typeof startIsolatedHostDaemon>> | null = null;
   try {
-    await applyMetadataFork(paseoHome, options.forkProviders ?? []);
+    await applyMetadataFork(byspaceHome, options.forkProviders ?? []);
     // Worker-scoped fixture config lets a spec exercise provider discovery without
     // reading the developer's provider state or sharing configuration with other specs.
     if (options.daemonConfig) {
       await writeFile(
-        path.join(paseoHome, "config.json"),
+        path.join(byspaceHome, "config.json"),
         `${JSON.stringify(options.daemonConfig, null, 2)}\n`,
       );
     }
-    if (options.injectPaseoTools) {
-      await enablePaseoTools(paseoHome);
+    if (options.injectBySpaceTools) {
+      await enableBySpaceTools(byspaceHome);
     }
-    if (process.env.PASEO_TERMINAL_TRANSPORT === "relay") {
+    if (process.env.BYSPACE_TERMINAL_TRANSPORT === "relay") {
       relay = await startLocalWranglerRelay();
     }
     daemon = await startIsolatedHostDaemon(serverId, {
-      paseoHome,
+      byspaceHome,
       preserveHome,
       ...(relay ? { mutableRelay: { enabled: true, endpoint: relay.endpoint } } : {}),
       environment: {
         NODE_ENV: "development",
         PATH: `${fakeEditorBin}${path.delimiter}${process.env.PATH ?? ""}`,
-        PASEO_E2E_EDITOR_RECORD_PATH: editorRecordPath,
+        BYSPACE_E2E_EDITOR_RECORD_PATH: editorRecordPath,
         ...options.environment,
       },
     });
 
     process.env.E2E_DAEMON_PORT = String(daemon.port);
     process.env.E2E_SERVER_ID = daemon.serverId;
-    process.env.E2E_PASEO_HOME = daemon.paseoHome;
+    process.env.E2E_BYSPACE_HOME = daemon.byspaceHome;
     process.env.E2E_EDITOR_RECORD_PATH = editorRecordPath;
     if (relay) {
       const keypair = JSON.parse(
-        await readFile(path.join(daemon.paseoHome, "daemon-keypair.json"), "utf8"),
+        await readFile(path.join(daemon.byspaceHome, "daemon-keypair.json"), "utf8"),
       ) as { publicKeyB64?: unknown };
       if (typeof keypair.publicKeyB64 !== "string" || keypair.publicKeyB64.length === 0) {
         throw new Error("Isolated daemon keypair did not contain a public key");
@@ -227,7 +227,7 @@ export async function startE2EWorker(
 
     const runningDaemon = daemon;
     console.log(
-      `[e2e] Worker ${workerIndex} daemon started on port ${runningDaemon.port}, home: ${runningDaemon.paseoHome}`,
+      `[e2e] Worker ${workerIndex} daemon started on port ${runningDaemon.port}, home: ${runningDaemon.byspaceHome}`,
     );
     return {
       close: async () => {
@@ -247,13 +247,13 @@ export async function startE2EWorker(
     await daemon?.close().catch(() => undefined);
     await relay?.close().catch(() => undefined);
     await rm(fakeEditorBin, { recursive: true, force: true });
-    if (!preserveHome) await rm(paseoHome, { recursive: true, force: true });
+    if (!preserveHome) await rm(byspaceHome, { recursive: true, force: true });
     throw error;
   }
 }
 
-async function enablePaseoTools(paseoHome: string): Promise<void> {
-  const configPath = path.join(paseoHome, "config.json");
+async function enableBySpaceTools(byspaceHome: string): Promise<void> {
+  const configPath = path.join(byspaceHome, "config.json");
   const existing = existsSync(configPath)
     ? JSON.parse(await readFile(configPath, "utf8"))
     : { version: 1 };

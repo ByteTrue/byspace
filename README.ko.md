@@ -147,12 +147,7 @@ npm run build:server
 npm run typecheck
 ```
 
-## 관련 프로젝트
-
-- [getpaseo/paseo-relay](https://github.com/getpaseo/paseo-relay) — Elixir로 작성한 공식 분산형 릴레이
-- [paseo-skins](https://github.com/huangguang1999/paseo-skins) — 커뮤니티 테마와 Agent Skill을 제공하고, 코드 수정 없이 쓸 수 있는 데스크톱 테마 로더
-- [paseo-vscode](https://marketplace.visualstudio.com/items?itemName=hinnes.paseo-vscode) — VS Code 확장 프로그램
-
 ## 라이선스
 
-Apache-2.0
+Apache-2.0. BySpace는 [Paseo](https://github.com/getpaseo/paseo)의 포크입니다.
+Paseo의 저작권은 Mohamed Boudra(2025년~)에게 있으며, 동일하게 Apache-2.0으로 배포됩니다.

@@ -23,7 +23,6 @@ import {
   SquareTerminal,
   X,
 } from "lucide-react-native";
-import { getIsElectron } from "@/constants/platform";
 import { supportsDesktopPaneSplits, useIsCompactFormFactor } from "@/constants/layout";
 import { GIT_ACTION_ICONS } from "@/git/action-icons";
 import { useGitActionRunner, useGitActions } from "@/git/use-actions";
@@ -103,7 +102,7 @@ function staticIcon(element: ReactElement | undefined): CommandCenterIcon | unde
 }
 
 function resolveWorkspaceShortcuts(overrides: ShortcutOverrides): WorkspaceCommandCenterShortcuts {
-  const platform = { isMac: getShortcutOs() === "mac", isDesktop: getIsElectron() };
+  const platform = { isMac: getShortcutOs() === "mac" };
   return resolveWorkspaceCommandCenterShortcuts({ overrides, platform });
 }
 

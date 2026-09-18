@@ -43,13 +43,12 @@ function layoutFor(items: StreamItem[], isTurnActive: boolean) {
     activeTurnStartedAt: isTurnActive ? at(1) : null,
     tail: items,
     head: [],
-    platform: "web",
     isMobileBreakpoint: false,
   });
   return {
     model,
     layout: layoutStream({
-      strategy: resolveStreamRenderStrategy({ platform: "web", isMobileBreakpoint: false }),
+      strategy: resolveStreamRenderStrategy({ isMobileBreakpoint: false }),
       isTurnActive,
       history: model.segments.historyMounted,
       liveHead: model.segments.liveHead,

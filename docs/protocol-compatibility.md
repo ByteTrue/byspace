@@ -6,6 +6,13 @@ In development both sides are always the same version, which is why this is the 
 
 Two contracts follow from it.
 
+The contract binds BySpace to BySpace. The repo is a hard fork of Paseo and the
+identity migration renamed the wire names (`isPaseoOwnedWorktree` →
+`isBySpaceOwnedWorktree`, the `paseo_worktree_*` RPCs, the `paseo.bearer.*`
+subprotocol, the old package scope), so a daemon released before that migration
+is not a supported peer. There is no shim for it. See
+`byissue/issues/042-o-paseo-identity-migration.md`.
+
 ## The protocol contract: always compatible
 
 A schema change must not break parsing in either direction. An old app still parses messages from a new daemon. A new daemon still parses messages from an old app.

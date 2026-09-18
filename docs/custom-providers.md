@@ -29,7 +29,7 @@ agent catalog during startup, raise the limit in milliseconds:
 ```
 
 The limit applies independently to every provider refresh and covers availability plus the entire
-catalog probe. `BYSPACE_PROVIDER_REFRESH_TIMEOUT_MS` sets it when the config field is absent; `PASEO_PROVIDER_REFRESH_TIMEOUT_MS` remains a compatibility fallback.
+catalog probe. `BYSPACE_PROVIDER_REFRESH_TIMEOUT_MS` sets it when the config field is absent.
 
 ---
 

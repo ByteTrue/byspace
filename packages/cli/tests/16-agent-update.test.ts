@@ -23,7 +23,7 @@ console.log("=== Agent Update Command Tests ===\n");
 
 // Resolve an available local port so daemon-not-running checks stay deterministic.
 const port = await getAvailablePort();
-const paseoHome = await mkdtemp(join(tmpdir(), "paseo-test-home-"));
+const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-test-home-"));
 
 try {
   // Test 1: agent update --help shows options
@@ -43,7 +43,7 @@ try {
   {
     console.log("Test 2: agent update requires ID argument");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace agent update --name "New Name"`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace agent update --name "New Name"`.nothrow();
     assert.notStrictEqual(result.exitCode, 0, "should fail without id");
     const output = result.stdout + result.stderr;
     const hasError =
@@ -59,7 +59,7 @@ try {
   {
     console.log("Test 3: agent update requires update field");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace agent update abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace agent update abc123`.nothrow();
     assert.notStrictEqual(result.exitCode, 0, "should fail without --name/--label");
     const output = result.stdout + result.stderr;
     const hasError =
@@ -74,7 +74,7 @@ try {
   {
     console.log("Test 4: agent update handles daemon not running");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace agent update abc123 --name "Renamed Agent"`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace agent update abc123 --name "Renamed Agent"`.nothrow();
     assert.notStrictEqual(result.exitCode, 0, "should fail when daemon not running");
     const output = result.stdout + result.stderr;
     const hasError =
@@ -89,7 +89,7 @@ try {
   {
     console.log("Test 5: agent update accepts multi-label syntax");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace agent update abc123 --label surface=workspace,area=frontend --label priority=high`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace agent update abc123 --label surface=workspace,area=frontend --label priority=high`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --label flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -109,7 +109,7 @@ try {
   {
     console.log("Test 7: agent update accepts thinking as an update field");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace agent update abc123 --thinking high`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace agent update abc123 --thinking high`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("Nothing to update"), "should treat --thinking as an update field");
     console.log("✓ agent update accepts thinking as an update field\n");
@@ -119,7 +119,7 @@ try {
   {
     console.log("Test 8: thinking cannot be combined with metadata updates");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace agent update abc123 --name renamed --thinking high`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace agent update abc123 --name renamed --thinking high`.nothrow();
     assert.notStrictEqual(result.exitCode, 0, "should reject a combined update");
     const output = result.stdout + result.stderr;
     assert(
@@ -130,7 +130,7 @@ try {
   }
 } finally {
   // Clean up temp directory
-  await rm(paseoHome, { recursive: true, force: true });
+  await rm(byspaceHome, { recursive: true, force: true });
 }
 
 console.log("=== All agent update tests passed ===");

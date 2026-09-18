@@ -1,15 +1,41 @@
 import { spawn, execFileSync, type ChildProcess, type SpawnOptions } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { withDisabledE2ESpeechEnv } from "./speech-env";
 import { killProcessTree, spawnTsx } from "./spawn-node";
 
+function resolvePublishedServerDir(publishedPackageRoot: string): string {
+  // The published daemon ships as one aggregate package with the server in
+  // bundledDependencies. npm keeps bundled deps nested, but hoists them when
+  // installing from a registry, so check both layouts.
+  const candidates = [
+    path.join(
+      publishedPackageRoot,
+      "node_modules",
+      "@bytetrue",
+      "byspace",
+      "node_modules",
+      "@bytetrue",
+      "server",
+    ),
+    path.join(publishedPackageRoot, "node_modules", "@bytetrue", "server"),
+  ];
+  const found = candidates.find((candidate) => existsSync(candidate));
+  if (!found) {
+    throw new Error(
+      `Could not find the bundled daemon under ${publishedPackageRoot}. Looked in: ${candidates.join(", ")}`,
+    );
+  }
+  return found;
+}
+
 export interface IsolatedHostDaemon {
   serverId: string;
   port: number;
-  paseoHome: string;
+  byspaceHome: string;
   getPid(): number | undefined;
   restart(): Promise<void>;
   close(): Promise<void>;
@@ -21,7 +47,7 @@ export interface IsolatedHostDaemonOptions {
     enabled: boolean;
     endpoint?: string;
   };
-  paseoHome?: string;
+  byspaceHome?: string;
   preserveHome?: boolean;
   publishedVersion?: string;
 }
@@ -88,11 +114,11 @@ export async function startIsolatedHostDaemon(
   const metroPort = process.env.E2E_METRO_PORT;
   if (!metroPort) throw new Error("E2E_METRO_PORT is required to start an isolated host daemon");
 
-  const paseoHome =
-    options.paseoHome ?? (await mkdtemp(path.join(tmpdir(), "paseo-e2e-secondary-host-")));
+  const byspaceHome =
+    options.byspaceHome ?? (await mkdtemp(path.join(tmpdir(), "byspace-e2e-secondary-host-")));
   let publishedPackageRoot: string | null = null;
   if (options.publishedVersion) {
-    publishedPackageRoot = await mkdtemp(path.join(tmpdir(), "paseo-e2e-published-server-"));
+    publishedPackageRoot = await mkdtemp(path.join(tmpdir(), "byspace-e2e-published-server-"));
     await writeFile(
       path.join(publishedPackageRoot, "package.json"),
       `${JSON.stringify({ private: true })}\n`,
@@ -104,6 +130,9 @@ export async function startIsolatedHostDaemon(
           "Published-version E2E requires npm_execpath from npm. Start it through `npm run test:e2e`.",
         );
       }
+      // Any daemon published after the identity migration ships as the single
+      // aggregate package, with the server bundled under node_modules. The pin
+      // names a version that exists; the scope and layout are fixed here.
       execFileSync(
         process.execPath,
         [
@@ -112,13 +141,13 @@ export async function startIsolatedHostDaemon(
           "--no-audit",
           "--no-fund",
           "--no-package-lock",
-          `@getpaseo/server@${options.publishedVersion}`,
+          `@bytetrue/byspace@${options.publishedVersion}`,
         ],
         { cwd: publishedPackageRoot, stdio: "ignore" },
       );
     } catch (error) {
       if (!options.preserveHome) {
-        await rm(paseoHome, { recursive: true, force: true });
+        await rm(byspaceHome, { recursive: true, force: true });
       }
       await rm(publishedPackageRoot, { recursive: true, force: true });
       throw error;
@@ -129,7 +158,7 @@ export async function startIsolatedHostDaemon(
       options.mutableRelay.endpoint ??
       (process.env.E2E_RELAY_PORT ? `127.0.0.1:${process.env.E2E_RELAY_PORT}` : "127.0.0.1:9");
     await writeFile(
-      path.join(paseoHome, "config.json"),
+      path.join(byspaceHome, "config.json"),
       `${JSON.stringify({
         version: 1,
         daemon: {
@@ -145,27 +174,26 @@ export async function startIsolatedHostDaemon(
     );
   }
   const serverDir = publishedPackageRoot
-    ? path.join(publishedPackageRoot, "node_modules", "@getpaseo", "server")
+    ? resolvePublishedServerDir(publishedPackageRoot)
     : path.resolve(__dirname, "../../../../server");
   const spawnDaemon = async (): Promise<ChildProcess> => {
+    // Every daemon this helper can start now speaks the current protocol: the
+    // in-repo one, and any published version new enough to parse this app's
+    // wire names. Both read the BYSPACE_* variables only.
+    const daemonEnv = {
+      BYSPACE_HOME: byspaceHome,
+      BYSPACE_LISTEN: `127.0.0.1:${port}`,
+      BYSPACE_SERVER_ID: serverId,
+      BYSPACE_CORS_ORIGINS: `http://localhost:${metroPort}`,
+      BYSPACE_RELAY_ENABLED: options.mutableRelay ? undefined : "0",
+      BYSPACE_NODE_ENV: "development",
+    };
     const spawnOptions: SpawnOptions = {
       cwd: serverDir,
       env: withDisabledE2ESpeechEnv({
         ...process.env,
         ...options.environment,
-        ...(publishedPackageRoot
-          ? {
-              PASEO_HOME: paseoHome,
-              PASEO_LISTEN: `127.0.0.1:${port}`,
-            }
-          : {
-              BYSPACE_HOME: paseoHome,
-              BYSPACE_LISTEN: `127.0.0.1:${port}`,
-            }),
-        PASEO_SERVER_ID: serverId,
-        PASEO_CORS_ORIGINS: `http://localhost:${metroPort}`,
-        PASEO_RELAY_ENABLED: options.mutableRelay ? undefined : "0",
-        PASEO_NODE_ENV: "development",
+        ...daemonEnv,
         NODE_ENV: "development",
       }),
       stdio: ["ignore", "ignore", "pipe"],
@@ -198,7 +226,7 @@ export async function startIsolatedHostDaemon(
     child = await spawnDaemon();
   } catch (error) {
     if (!options.preserveHome) {
-      await rm(paseoHome, { recursive: true, force: true });
+      await rm(byspaceHome, { recursive: true, force: true });
     }
     if (publishedPackageRoot) {
       await rm(publishedPackageRoot, { recursive: true, force: true });
@@ -210,7 +238,7 @@ export async function startIsolatedHostDaemon(
   return {
     serverId,
     port,
-    paseoHome,
+    byspaceHome,
     getPid: () => child.pid,
     restart: async () => {
       if (closed) throw new Error(`Cannot restart closed isolated daemon ${serverId}`);
@@ -222,7 +250,7 @@ export async function startIsolatedHostDaemon(
       closed = true;
       await killProcessTree(child);
       if (!options.preserveHome) {
-        await rm(paseoHome, { recursive: true, force: true });
+        await rm(byspaceHome, { recursive: true, force: true });
       }
       if (publishedPackageRoot) {
         await rm(publishedPackageRoot, { recursive: true, force: true });

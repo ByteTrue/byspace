@@ -1,8 +1,8 @@
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import {
   workspaceLabelKey,
   type WorkspaceLabelDefinition,
-} from "@getpaseo/protocol/workspace-labels";
+} from "@bytetrue/protocol/workspace-labels";
 import { useMemo } from "react";
 import { create } from "zustand";
 import { HostWorkspaceLabelReplica } from "./internal/host-replica";

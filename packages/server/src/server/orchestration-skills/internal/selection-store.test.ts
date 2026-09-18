@@ -13,7 +13,7 @@ afterEach(async () => {
 });
 
 async function createStore() {
-  const root = await mkdtemp(path.join(os.tmpdir(), "paseo-agent-skills-config-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "byspace-agent-skills-config-"));
   roots.push(root);
   const config = new DaemonConfigStore(root, {
     mcp: { injectIntoAgents: false },
@@ -40,16 +40,6 @@ describe("daemon agent skill selection", () => {
     expect(loadPersistedConfig(root).agents?.skills?.selection).toEqual({
       mode: "custom",
       skills: ["byspace", "byspace-loop"],
-    });
-  });
-
-  it("maps legacy Paseo skill selections to their BySpace names", async () => {
-    const { store } = await createStore();
-    await store.set({ mode: "custom", skills: ["paseo", "paseo-help", "custom"] });
-
-    expect(await store.get()).toEqual({
-      mode: "custom",
-      skills: ["byspace", "byspace-help", "custom"],
     });
   });
 

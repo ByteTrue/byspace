@@ -36,14 +36,14 @@ import {
   shutdownAgentClients,
   type ProviderDefinition,
 } from "./provider-registry.js";
-import { BUILTIN_PROVIDER_IDS } from "@getpaseo/protocol/provider-manifest";
+import { BUILTIN_PROVIDER_IDS } from "@bytetrue/protocol/provider-manifest";
 import { applyMutableProviderConfigToOverrides } from "../daemon-config-store.js";
 import {
   formatProviderDiagnostic,
   formatProviderDiagnosticError,
 } from "./providers/diagnostic-utils.js";
 import type { MutableDaemonConfig } from "../daemon-config-store.js";
-import type { HubExecutionAgentValidationIssue } from "@getpaseo/protocol/messages";
+import type { HubExecutionAgentValidationIssue } from "@bytetrue/protocol/messages";
 import {
   type AgentConfigurationValidationInput,
   validateAgentConfigurationAgainstProvider,
@@ -53,8 +53,7 @@ const DEFAULT_REFRESH_TIMEOUT_MS = 120_000;
 const MAX_REFRESH_TIMEOUT_MS = 2_147_483_647;
 const DEFAULT_DIAGNOSTIC_TIMEOUT_MS = 120_000;
 const BYSPACE_PROVIDER_REFRESH_DEADLINE_ENV = "BYSPACE_PROVIDER_REFRESH_TIMEOUT_MS";
-const PASEO_PROVIDER_REFRESH_DEADLINE_ENV = "PASEO_PROVIDER_REFRESH_TIMEOUT_MS";
-export const GLOBAL_PROVIDER_SNAPSHOT_KEY = "paseo:global";
+export const GLOBAL_PROVIDER_SNAPSHOT_KEY = "byspace:global";
 
 function validRefreshDeadline(value: unknown): number | undefined {
   return typeof value === "number" &&
@@ -68,9 +67,7 @@ function validRefreshDeadline(value: unknown): number | undefined {
 function providerRefreshDeadline(configured: number | undefined): number {
   const explicit = validRefreshDeadline(configured);
   if (explicit !== undefined) return explicit;
-  const environmentValue =
-    process.env[BYSPACE_PROVIDER_REFRESH_DEADLINE_ENV] ??
-    process.env[PASEO_PROVIDER_REFRESH_DEADLINE_ENV];
+  const environmentValue = process.env[BYSPACE_PROVIDER_REFRESH_DEADLINE_ENV];
   return validRefreshDeadline(Number(environmentValue)) ?? DEFAULT_REFRESH_TIMEOUT_MS;
 }
 
@@ -1112,7 +1109,7 @@ export function isGlobalProviderSnapshotKey(cwd: string): boolean {
 function identifyEntry(entry: ProviderSnapshotEntry): ProviderSnapshotRecord {
   const { fetchedAt: _fetchedAt, ...content } = entry;
   const contentHash = createHash("sha256")
-    .update(JSON.stringify(["paseo.provider-result/1", content]))
+    .update(JSON.stringify(["byspace.provider-result/1", content]))
     .digest("base64url");
   return { entry, contentHash };
 }

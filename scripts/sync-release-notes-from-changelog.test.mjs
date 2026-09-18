@@ -8,7 +8,7 @@ import { syncReleaseNotes } from "./sync-release-notes-from-changelog.mjs";
 
 function withTempChangelog(fn, changelogText = "## 0.1.60-beta.1 - 2026-04-20\n\n- Beta notes.\n") {
   const previousCwd = process.cwd();
-  const tempDir = mkdtempSync(path.join(tmpdir(), "paseo-release-notes-test-"));
+  const tempDir = mkdtempSync(path.join(tmpdir(), "byspace-release-notes-test-"));
   process.chdir(tempDir);
   writeFileSync("CHANGELOG.md", changelogText);
 
@@ -112,7 +112,7 @@ test("updates a draft release body without publishing it", () => {
           {
             id: 311163621,
             draft: true,
-            name: "Paseo v0.1.60-beta.1",
+            name: "BySpace v0.1.60-beta.1",
             tag_name: "untagged-draft",
             html_url: "https://github.com/getpaseo/paseo/releases/tag/untagged-draft",
           },
@@ -160,7 +160,7 @@ test("creates missing beta releases as drafts", () => {
               {
                 id: 311163621,
                 draft: true,
-                name: "Paseo v0.1.60-beta.1",
+                name: "BySpace v0.1.60-beta.1",
                 tag_name: "v0.1.60-beta.1",
               },
             ])

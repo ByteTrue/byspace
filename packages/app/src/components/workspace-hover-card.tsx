@@ -23,7 +23,7 @@ import {
 } from "lucide-react-native";
 import { getForgePresentation, normalizeForge } from "@/git/forge";
 import { ForgeBrandIcon } from "@/git/forge-icon";
-import type { AgentLifecycleStatus } from "@getpaseo/protocol/agent-lifecycle";
+import type { AgentLifecycleStatus } from "@bytetrue/protocol/agent-lifecycle";
 import type { Theme } from "@/styles/theme";
 import { DiffStat } from "@/components/diff-stat";
 import { AgentStatusDot } from "@/components/agent-status-dot";

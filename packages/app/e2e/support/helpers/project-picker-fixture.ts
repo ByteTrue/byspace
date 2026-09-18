@@ -16,16 +16,16 @@ interface ProjectPickerFixtureResource {
 }
 
 export async function createProjectPickerFixture(): Promise<ProjectPickerFixtureResource> {
-  const root = await mkdtemp(path.join(homedir(), "paseo-e2e-project-picker-"));
+  const root = await mkdtemp(path.join(homedir(), "byspace-e2e-project-picker-"));
   const nonce = randomUUID().replaceAll("-", "").slice(0, 8);
-  const projectPath = path.join(root, "client", "team", `paseo-desktop-fuzzy-target-${nonce}`);
+  const projectPath = path.join(root, "client", "team", `byspace-desktop-fuzzy-target-${nonce}`);
   await mkdir(projectPath, { recursive: true });
 
   return {
     fixture: {
       projectPath,
       projectName: path.basename(projectPath),
-      fuzzyQuery: `psodfzt${nonce}`,
+      fuzzyQuery: `bsdfzt${nonce}`,
     },
     removeDirectory: () => rm(root, { recursive: true, force: true }),
   };

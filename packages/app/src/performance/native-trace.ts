@@ -1,8 +1,8 @@
-import type { DaemonClientTrace } from "@getpaseo/client/internal/daemon-client";
+import type { DaemonClientTrace } from "@bytetrue/client/internal/daemon-client";
 import { requireOptionalNativeModule } from "expo-modules-core";
 import { isProfileBuild } from "@/constants/build-profile";
 
-interface PaseoNativeTraceModule {
+interface BySpaceNativeTraceModule {
   beginSection(name: string): void;
   endSection(): void;
 }
@@ -13,15 +13,15 @@ interface BrowserPerformanceTraceSink {
   endSection(): void;
 }
 
-const traceModule = requireOptionalNativeModule<PaseoNativeTraceModule>("PaseoNativeTrace");
+const traceModule = requireOptionalNativeModule<BySpaceNativeTraceModule>("BySpaceNativeTrace");
 
 function getBrowserTraceSink(): BrowserPerformanceTraceSink | null {
   try {
     const candidate = (
       globalThis as typeof globalThis & {
-        __paseoPerformanceTrace?: BrowserPerformanceTraceSink;
+        __byspacePerformanceTrace?: BrowserPerformanceTraceSink;
       }
-    ).__paseoPerformanceTrace;
+    ).__byspacePerformanceTrace;
     if (
       !candidate ||
       typeof candidate.isEnabled !== "function" ||

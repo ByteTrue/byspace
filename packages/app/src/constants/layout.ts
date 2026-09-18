@@ -30,11 +30,6 @@ export const DESKTOP_TRAFFIC_LIGHT_HEIGHT = 45;
 // Custom desktop window controls (minimize/maximize/close) — top-right
 export const DESKTOP_WINDOW_CONTROLS_HEIGHT = HEADER_INNER_HEIGHT;
 
-export {
-  getIsElectron as getIsElectronRuntime,
-  getIsElectronMac as getIsElectronRuntimeMac,
-} from "./platform";
-
 /**
  * Reactive hook — re-renders the component when the breakpoint changes.
  * Always use this instead of reading UnistylesRuntime.breakpoint directly.

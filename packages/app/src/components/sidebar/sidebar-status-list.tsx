@@ -896,7 +896,6 @@ function StatusWorkspaceRowInnerContent({
               archiveShortcutKeys={archiveShortcutKeys}
               isPinned={isPinned}
               onTogglePin={onTogglePin}
-              openInFileManagerPath={workspace.workspaceDirectory}
               disabled={isArchiving}
               accessibilityRole="button"
               accessibilityState={accessibilityState}

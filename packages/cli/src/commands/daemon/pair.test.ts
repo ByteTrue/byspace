@@ -58,7 +58,7 @@ describe("daemon pair workflow", () => {
 
   test("interactive consent enables relay and prints the refreshed offer", async () => {
     const resolveOffer = vi
-      .fn<(options: { paseoHome: string; enableRelay?: boolean }) => Promise<PairingOffer>>()
+      .fn<(options: { byspaceHome: string; enableRelay?: boolean }) => Promise<PairingOffer>>()
       .mockResolvedValueOnce(disabledOffer)
       .mockResolvedValueOnce(enabledOffer);
     const output = createRecordedOutput();

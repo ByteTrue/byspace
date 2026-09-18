@@ -1,6 +1,6 @@
 # BySpace Development
 
-BySpace's public command is `byspace`. New runtime state uses `$BYSPACE_HOME` (`~/.byspace` by default), and public daemon configuration variables use the `BYSPACE_*` prefix. Matching `PASEO_*` names remain lower-priority compatibility fallbacks where supported; development-only script and benchmark variables retain their existing names.
+BySpace's public command is `byspace`. New runtime state uses `$BYSPACE_HOME` (`~/.byspace` by default), and public daemon configuration variables use the `BYSPACE_*` prefix. Development-only script and benchmark variables retain their existing names.
 
 ## CI
 
@@ -28,7 +28,7 @@ Root checkout dev is intentionally split across terminals:
 so development-only providers such as Mock Load Test are available. Packaged
 
 The web dev launcher passes the current Git branch to Metro as the internal
-`EXPO_PUBLIC_PASEO_DEV_BUILD_LABEL` setting.
+`EXPO_PUBLIC_BYSPACE_DEV_BUILD_LABEL` setting.
 the titlebar row. Production builds leave the variable unset and show no label.
 
 `npm run dev` is only a shorthand for `npm run dev:server`. Keep `127.0.0.1:6777` for the packaged app and production-style `~/.byspace` state.
@@ -91,7 +91,7 @@ Every `scripts` entry with `"type": "service"` receives these environment variab
 
 Service proxy hostnames use the double-dash shape: `web--feature-auth--project.localhost` or, on the default branch, `web--project.localhost`. Optional public aliases use the same leftmost label under the configured public base host.
 
-`<NAME>` is normalized from the script name by uppercasing it, replacing each run of non-`A-Z0-9` characters with `_`, and trimming leading or trailing `_`. For example, `app-server` and `app.server` both normalize to `APP_SERVER`; that collision fails at spawn time with an actionable error. The legacy `PASEO_SERVICE_*`, `PASEO_URL`, and `PASEO_PORT` names are injected as compatibility aliases.
+`<NAME>` is normalized from the script name by uppercasing it, replacing each run of non-`A-Z0-9` characters with `_`, and trimming leading or trailing `_`. For example, `app-server` and `app.server` both normalize to `APP_SERVER`; that collision fails at spawn time with an actionable error. The `BYSPACE_SERVICE_*`, `BYSPACE_URL`, and `BYSPACE_PORT` names are injected into every service.
 
 `PORT` is not injected by default. If a framework requires `PORT`, set it in the command:
 
@@ -108,11 +108,11 @@ Service proxy hostnames use the double-dash shape: `web--feature-auth--project.l
 
 Service ports use OS ephemeral allocation by default. Set `worktrees.servicePorts` in
 `$BYSPACE_HOME/config.json`, or replace it for one project with `worktree.servicePorts` in
-`byspace.json`. Legacy `paseo.json` is read and updated in place; do not keep both project config filenames. The block accepts an inclusive `range` such as `"3000-4000"` or a `portScript`
+`byspace.json`. The block accepts an inclusive `range` such as `"3000-4000"` or a `portScript`
 executable. Since `portScript` is executed directly without a shell, it must point to a real executable (e.g., a binary or a script with a proper shebang like `#!/bin/sh`) rather than an inline shell command or shell pipeline. For inline shell commands or pipelines, wrap them in a small script. `portScript` runs in the workspace directory with four arguments: service name,
 workspace ID, branch name, and worktree path. A missing branch is passed as an empty string. The same
 values are available as `BYSPACE_SCRIPTNAME`, `BYSPACE_WORKSPACE_ID`, `BYSPACE_BRANCH_NAME`, and
-`BYSPACE_WORKTREE_PATH`; the corresponding `PASEO_*` names remain compatibility aliases. The script must print one valid TCP port. BySpace trusts the external allocator,
+`BYSPACE_WORKTREE_PATH`. The script must print one valid TCP port. BySpace trusts the external allocator,
 so the port may already be bound. `portScript` takes precedence when both values are present.
 
 ## Bundled daemon web UI
@@ -164,13 +164,13 @@ Measured bundle size for a standard Expo web export:
 - gzip: 2.55 MiB
 - brotli: 1.93 MiB
 
-The desktop-managed daemon disables the bundled web UI by default (`BYSPACE_WEB_UI_ENABLED=false`) because the desktop app already ships the renderer as `app-dist`. Shipping the same assets again inside `@getpaseo/server` would duplicate the ~10.8 MiB install. Desktop packaging also excludes `node_modules/@getpaseo/server/dist/server/web-ui/**` from the packaged app.
+The desktop-managed daemon disables the bundled web UI by default (`BYSPACE_WEB_UI_ENABLED=false`) because the desktop app already ships the renderer as `app-dist`. Shipping the same assets again inside `@bytetrue/server` would duplicate the ~10.8 MiB install. Desktop packaging also excludes `node_modules/@bytetrue/server/dist/server/web-ui/**` from the packaged app.
 
 ## Built workspace packages
 
 Package imports resolve through package exports to compiled `dist/` output, not sibling `src/` files. This is true in local dev and in published packages: the app, daemon, CLI, and SDK consumers should all exercise the same runtime paths.
 
-`npm run dev:server` builds the server-side workspace packages once, then keeps `@getpaseo/protocol` and `@getpaseo/client` fresh with TypeScript watch builds while the daemon runs. If you change protocol schemas or client code outside that watch workflow, rebuild the producer before trusting runtime behavior.
+`npm run dev:server` builds the server-side workspace packages once, then keeps `@bytetrue/protocol` and `@bytetrue/client` fresh with TypeScript watch builds while the daemon runs. If you change protocol schemas or client code outside that watch workflow, rebuild the producer before trusting runtime behavior.
 
 Use the named root build targets instead of remembering workspace dependency chains:
 
@@ -296,7 +296,7 @@ Do NOT use browser history (back/forward). Always navigate by clicking UI elemen
 ## App web deploys
 
 `packages/app` exports a single-page Expo web app and deploys the `dist/`
-directory to Cloudflare Pages with `npm run deploy:web --workspace=@getpaseo/app`.
+directory to Cloudflare Pages with `npm run deploy:web --workspace=@bytetrue/app`.
 
 PWA install metadata lives in `packages/app/public/manifest.json` and is linked
 from `packages/app/public/index.html`. Keep the install icons in `public/` so

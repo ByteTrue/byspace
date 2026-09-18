@@ -34,7 +34,6 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { Shortcut } from "@/components/ui/shortcut";
-import { OpenInFileManagerMenuItem } from "@/workspace/open-in-file-manager/menu-item";
 import { resolveSidebarWorkspaceAccessibilityLabel } from "@/components/sidebar/sidebar-workspace-title";
 import {
   workspaceServiceLabelKey,
@@ -102,7 +101,6 @@ export interface SidebarWorkspaceMenuProps {
   archiveShortcutKeys?: ShortcutKey[][] | null;
   isPinned?: boolean;
   onTogglePin?: () => void;
-  openInFileManagerPath?: string | null;
   /**
    * Lifted so the row that reveals the kebab can keep it mounted while its menu is up. See
    * `useOpenKebabMenuVisibility`.
@@ -151,7 +149,6 @@ function SidebarWorkspaceMenuItems({
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
-  openInFileManagerPath,
 }: SidebarWorkspaceMenuItemsProps & { surface: MenuSurface }): ReactNode {
   const { t } = useTranslation();
   const archiveTrailing = useMemo(
@@ -244,11 +241,6 @@ function SidebarWorkspaceMenuItems({
           {t("workspaceLabels.title")}
         </DropdownMenuSubTrigger>
       ) : null}
-      <OpenInFileManagerMenuItem
-        surface={surface}
-        path={openInFileManagerPath}
-        testID={`sidebar-workspace-menu-open-folder-${workspaceKey}`}
-      />
       {onArchive ? (
         <WorkspaceMenuItem
           surface={surface}
@@ -284,7 +276,6 @@ export function SidebarWorkspaceMenu({
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
-  openInFileManagerPath,
   open,
   onOpenChange,
 }: SidebarWorkspaceMenuProps) {
@@ -331,7 +322,6 @@ export function SidebarWorkspaceMenu({
           archiveShortcutKeys={archiveShortcutKeys}
           isPinned={isPinned}
           onTogglePin={onTogglePin}
-          openInFileManagerPath={openInFileManagerPath}
         />
       </DropdownMenuContent>
     </DropdownMenu>
@@ -365,7 +355,6 @@ export function SidebarWorkspaceContextMenu({
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
-  openInFileManagerPath,
   accessibilityLabel,
   highlightStyle,
   ...triggerProps
@@ -446,7 +435,6 @@ export function SidebarWorkspaceContextMenu({
           archiveShortcutKeys={archiveShortcutKeys}
           isPinned={isPinned}
           onTogglePin={onTogglePin}
-          openInFileManagerPath={openInFileManagerPath}
         />
       </ContextMenuContent>
     </ContextMenu>

@@ -27,7 +27,7 @@ function assistantMessage(id: string, seed: number): StreamItem {
 }
 
 describe("buildAgentStreamRenderModel", () => {
-  it("projects a bounded recent turn-aligned history window on every platform", () => {
+  it("projects a bounded recent turn-aligned history window", () => {
     const tail = [
       userMessage("u1", 1),
       assistantMessage("a1", 2),
@@ -42,12 +42,11 @@ describe("buildAgentStreamRenderModel", () => {
       activeTurnStartedAt: null,
       tail,
       head: [],
-      platform: "native",
       isMobileBreakpoint: false,
       historyStart: 2,
     });
 
-    expect(model.history.map((item) => item.id)).toEqual(["a3", "u3", "a2", "u2"]);
+    expect(model.history.map((item) => item.id)).toEqual(["u2", "a2", "u3", "a3"]);
     expect(model.segments.historyVirtualized).toHaveLength(0);
   });
 
@@ -64,7 +63,6 @@ describe("buildAgentStreamRenderModel", () => {
       activeTurnStartedAt: null,
       tail,
       head: [],
-      platform: "web",
       isMobileBreakpoint: false,
       historyStart: 2,
     });
@@ -87,7 +85,6 @@ describe("buildAgentStreamRenderModel", () => {
       activeTurnStartedAt: null,
       tail,
       head: [],
-      platform: "web",
       isMobileBreakpoint: false,
     });
     const segmentedIds = [
@@ -120,12 +117,11 @@ describe("buildAgentStreamRenderModel", () => {
       activeTurnStartedAt: null,
       tail: projectedTail,
       head: [],
-      platform: "native",
       isMobileBreakpoint: false,
       historyStart,
     });
 
-    expect(model.history.map((item) => item.id)).toEqual(["visible-a", "visible-u"]);
+    expect(model.history.map((item) => item.id)).toEqual(["visible-u", "visible-a"]);
   });
 
   it("keeps head separate from committed history on desktop web", () => {
@@ -142,7 +138,6 @@ describe("buildAgentStreamRenderModel", () => {
       activeTurnStartedAt: tail.at(-2)?.timestamp ?? null,
       tail,
       head,
-      platform: "web",
       isMobileBreakpoint: false,
     });
 
@@ -161,7 +156,6 @@ describe("buildAgentStreamRenderModel", () => {
       activeTurnStartedAt: tail[0]?.timestamp ?? null,
       tail,
       head,
-      platform: "web",
       isMobileBreakpoint: true,
     });
 
@@ -180,7 +174,6 @@ describe("buildAgentStreamRenderModel", () => {
       activeTurnStartedAt: tail[0]?.timestamp ?? null,
       tail,
       head: firstHead,
-      platform: "native",
       isMobileBreakpoint: false,
     });
     const second = buildAgentStreamRenderModel({
@@ -188,7 +181,6 @@ describe("buildAgentStreamRenderModel", () => {
       activeTurnStartedAt: tail[0]?.timestamp ?? null,
       tail,
       head: secondHead,
-      platform: "native",
       isMobileBreakpoint: false,
     });
 
@@ -206,7 +198,6 @@ describe("buildAgentStreamRenderModel", () => {
       activeTurnStartedAt: tail[0]?.timestamp ?? null,
       tail,
       head,
-      platform: "web",
       isMobileBreakpoint: false,
     });
 
@@ -223,7 +214,6 @@ describe("buildAgentStreamRenderModel", () => {
       activeTurnStartedAt: null,
       tail,
       head,
-      platform: "web",
       isMobileBreakpoint: false,
     });
 
@@ -234,7 +224,7 @@ describe("buildAgentStreamRenderModel", () => {
     });
   });
 
-  it("derives the same timing for native inverted rendering", () => {
+  it("derives the same timing for history rendering", () => {
     const tail = [userMessage("u1", 1), assistantMessage("a1", 4)];
 
     const model = buildAgentStreamRenderModel({
@@ -242,11 +232,10 @@ describe("buildAgentStreamRenderModel", () => {
       activeTurnStartedAt: null,
       tail,
       head: [],
-      platform: "native",
       isMobileBreakpoint: false,
     });
 
-    expect(model.segments.historyMounted.map((item) => item.id)).toEqual(["a1", "u1"]);
+    expect(model.segments.historyMounted.map((item) => item.id)).toEqual(["u1", "a1"]);
     expect(model.turnTiming.byAssistantId.get("a1")).toEqual({
       completedAt: tail[1]?.timestamp,
       durationMs: 3000,
@@ -261,7 +250,6 @@ describe("buildAgentStreamRenderModel", () => {
       activeTurnStartedAt: null,
       tail,
       head: [],
-      platform: "web",
       isMobileBreakpoint: false,
     });
 

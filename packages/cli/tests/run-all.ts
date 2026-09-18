@@ -23,13 +23,13 @@ const repoRoot = join(__dirname, "..", "..", "..");
 const rootNodeModulesBin = join(repoRoot, "node_modules", ".bin");
 const args = process.argv.slice(2);
 const testEnvDefaults = {
-  PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD: process.env.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD ?? "0",
-  PASEO_DICTATION_ENABLED: process.env.PASEO_DICTATION_ENABLED ?? "0",
-  PASEO_VOICE_MODE_ENABLED: process.env.PASEO_VOICE_MODE_ENABLED ?? "0",
+  BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD: process.env.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD ?? "0",
+  BYSPACE_DICTATION_ENABLED: process.env.BYSPACE_DICTATION_ENABLED ?? "0",
+  BYSPACE_VOICE_MODE_ENABLED: process.env.BYSPACE_VOICE_MODE_ENABLED ?? "0",
 };
 
 const DEFAULT_CONCURRENCY = 4;
-const concurrencyEnv = process.env.PASEO_CLI_TEST_CONCURRENCY;
+const concurrencyEnv = process.env.BYSPACE_CLI_TEST_CONCURRENCY;
 const parsedConcurrency = concurrencyEnv ? Number.parseInt(concurrencyEnv, 10) : NaN;
 const concurrency =
   Number.isFinite(parsedConcurrency) && parsedConcurrency > 0
@@ -42,11 +42,11 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-const shardTotal = parsePositiveInt(process.env.PASEO_CLI_TEST_SHARD_TOTAL, 1);
-const shardIndexRaw = parsePositiveInt(process.env.PASEO_CLI_TEST_SHARD, 1);
+const shardTotal = parsePositiveInt(process.env.BYSPACE_CLI_TEST_SHARD_TOTAL, 1);
+const shardIndexRaw = parsePositiveInt(process.env.BYSPACE_CLI_TEST_SHARD, 1);
 if (shardIndexRaw < 1 || shardIndexRaw > shardTotal) {
   throw new Error(
-    `PASEO_CLI_TEST_SHARD=${shardIndexRaw} out of range for SHARD_TOTAL=${shardTotal}`,
+    `BYSPACE_CLI_TEST_SHARD=${shardIndexRaw} out of range for SHARD_TOTAL=${shardTotal}`,
   );
 }
 const shardIndex = shardIndexRaw - 1;
@@ -104,7 +104,7 @@ async function writeJsonSummary({
     JSON.stringify(
       {
         suite: "cli-local",
-        command: "npm run test:local --workspace=@getpaseo/cli",
+        command: "npm run test:local --workspace=@bytetrue/cli",
         counts: {
           passed,
           failed,
@@ -195,7 +195,7 @@ async function runSingleTest(testFile: string): Promise<TestOutcome> {
   const testPath = join(__dirname, testFile);
   const testName = testFile.replace(/\.test\.ts$/, "");
   const startedAt = Date.now();
-  const npmCache = await mkdtemp(join(tmpdir(), "paseo-cli-test-npm-cache-"));
+  const npmCache = await mkdtemp(join(tmpdir(), "byspace-cli-test-npm-cache-"));
 
   try {
     return await new Promise<TestOutcome>((resolve) => {
@@ -204,9 +204,9 @@ async function runSingleTest(testFile: string): Promise<TestOutcome> {
           ...process.env,
           PATH: [rootNodeModulesBin, process.env.PATH].filter(Boolean).join(delimiter),
           npm_config_cache: npmCache,
-          PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD: testEnvDefaults.PASEO_LOCAL_SPEECH_AUTO_DOWNLOAD,
-          PASEO_DICTATION_ENABLED: testEnvDefaults.PASEO_DICTATION_ENABLED,
-          PASEO_VOICE_MODE_ENABLED: testEnvDefaults.PASEO_VOICE_MODE_ENABLED,
+          BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD: testEnvDefaults.BYSPACE_LOCAL_SPEECH_AUTO_DOWNLOAD,
+          BYSPACE_DICTATION_ENABLED: testEnvDefaults.BYSPACE_DICTATION_ENABLED,
+          BYSPACE_VOICE_MODE_ENABLED: testEnvDefaults.BYSPACE_VOICE_MODE_ENABLED,
         },
         stdio: ["ignore", "pipe", "pipe"],
       });

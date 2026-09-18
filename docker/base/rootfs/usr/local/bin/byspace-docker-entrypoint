@@ -6,9 +6,9 @@ IMAGE_HOME="/home/byspace"
 : "${HOME:=$IMAGE_HOME}"
 : "${BYSPACE_HOME:=${HOME}/.byspace}"
 : "${BYSPACE_LISTEN:=0.0.0.0:6777}"
-: "${PASEO_WEB_UI_ENABLED:=true}"
-: "${PASEO_LOG_LEVEL:=info}"
-: "${PASEO_LOG_FORMAT:=json}"
+: "${BYSPACE_WEB_UI_ENABLED:=true}"
+: "${BYSPACE_LOG_LEVEL:=info}"
+: "${BYSPACE_LOG_FORMAT:=json}"
 : "${CLAUDE_CONFIG_DIR:=${HOME}/.claude}"
 : "${CODEX_HOME:=${HOME}/.codex}"
 : "${XDG_CONFIG_HOME:=${HOME}/.config}"
@@ -19,9 +19,9 @@ IMAGE_HOME="/home/byspace"
 export HOME
 export BYSPACE_HOME
 export BYSPACE_LISTEN
-export PASEO_WEB_UI_ENABLED
-export PASEO_LOG_LEVEL
-export PASEO_LOG_FORMAT
+export BYSPACE_WEB_UI_ENABLED
+export BYSPACE_LOG_LEVEL
+export BYSPACE_LOG_FORMAT
 export CLAUDE_CONFIG_DIR
 export CODEX_HOME
 export XDG_CONFIG_HOME
@@ -57,11 +57,11 @@ if [[ "$#" -gt 0 ]]; then
   exec "$@"
 fi
 
-if [[ -z "${PASEO_PASSWORD:-}" ]]; then
+if [[ -z "${BYSPACE_PASSWORD:-}" ]]; then
   {
-    echo "[byspace] WARNING: PASEO_PASSWORD is not set."
+    echo "[byspace] WARNING: BYSPACE_PASSWORD is not set."
     echo "[byspace] The daemon accepts unauthenticated control connections from any client that can reach it."
-    echo "[byspace] Set PASEO_PASSWORD for any published port or network-reachable deployment."
+    echo "[byspace] Set BYSPACE_PASSWORD for any published port or network-reachable deployment."
   } >&2
 fi
 
@@ -71,7 +71,7 @@ if [[ ! -f /etc/byspace-server-entry ]]; then
 fi
 
 entry="$(cat /etc/byspace-server-entry)"
-echo "[byspace] starting daemon on ${BYSPACE_LISTEN} with web UI ${PASEO_WEB_UI_ENABLED}"
+echo "[byspace] starting daemon on ${BYSPACE_LISTEN} with web UI ${BYSPACE_WEB_UI_ENABLED}"
 if [[ "$(id -u)" == "0" ]]; then
   exec gosu byspace node "$entry"
 fi

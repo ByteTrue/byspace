@@ -80,7 +80,7 @@ byspace heartbeat update <id> --cron "*/10 * * * *"
 byspace heartbeat delete <id>
 ```
 
-Updating a heartbeat changes only its cron cadence and optional time zone. Its target and prompt stay fixed. Heartbeat commands require `BYSPACE_AGENT_ID` or the legacy `PASEO_AGENT_ID`; BySpace sets both inside agent sessions.
+Updating a heartbeat changes only its cron cadence and optional time zone. Its target and prompt stay fixed. Heartbeat commands require `BYSPACE_AGENT_ID`; BySpace sets it inside agent sessions.
 
 Heartbeats require a raw `--cron` expression. The `--every` presets below are available only for new-agent schedules.
 
@@ -105,4 +105,4 @@ Schedules default to UTC. Pass `--timezone <IANA>` to interpret cron fields in a
 
 Schedules wait for the next matching cron time by default. Pass `--run-now` to start one immediate run on creation.
 
-Start the command with `paseo --host <target> schedule create ...` when targeting a remote daemon. Pass `--cwd`; your local working directory may not exist on the remote machine.
+Start the command with `byspace --host <target> schedule create ...` when targeting a remote daemon. Pass `--cwd`; your local working directory may not exist on the remote machine.

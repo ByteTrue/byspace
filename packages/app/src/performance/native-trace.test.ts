@@ -9,8 +9,8 @@ interface TraceSink {
 
 describe("native performance trace", () => {
   afterEach(() => {
-    delete (globalThis as typeof globalThis & { __paseoPerformanceTrace?: TraceSink })
-      .__paseoPerformanceTrace;
+    delete (globalThis as typeof globalThis & { __byspacePerformanceTrace?: TraceSink })
+      .__byspacePerformanceTrace;
   });
 
   it("forwards tracing to an explicitly installed browser sink", () => {
@@ -20,13 +20,13 @@ describe("native performance trace", () => {
       endSection: vi.fn(),
     };
     (
-      globalThis as typeof globalThis & { __paseoPerformanceTrace?: TraceSink }
-    ).__paseoPerformanceTrace = sink;
+      globalThis as typeof globalThis & { __byspacePerformanceTrace?: TraceSink }
+    ).__byspacePerformanceTrace = sink;
 
     expect(nativePerformanceTrace.isEnabled()).toBe(true);
-    traceInstant("paseo.test", { size: "4" });
+    traceInstant("byspace.test", { size: "4" });
 
-    expect(sink.beginSection).toHaveBeenCalledWith("paseo.test", { size: "4" });
+    expect(sink.beginSection).toHaveBeenCalledWith("byspace.test", { size: "4" });
     expect(sink.endSection).toHaveBeenCalledOnce();
   });
 
@@ -41,12 +41,12 @@ describe("native performance trace", () => {
       },
     };
     (
-      globalThis as typeof globalThis & { __paseoPerformanceTrace?: TraceSink }
-    ).__paseoPerformanceTrace = sink;
+      globalThis as typeof globalThis & { __byspacePerformanceTrace?: TraceSink }
+    ).__byspacePerformanceTrace = sink;
 
-    expect(() => traceInstant("paseo.test")).not.toThrow();
-    delete (globalThis as typeof globalThis & { __paseoPerformanceTrace?: TraceSink })
-      .__paseoPerformanceTrace;
+    expect(() => traceInstant("byspace.test")).not.toThrow();
+    delete (globalThis as typeof globalThis & { __byspacePerformanceTrace?: TraceSink })
+      .__byspacePerformanceTrace;
     expect(nativePerformanceTrace.isEnabled()).toBe(false);
   });
 
@@ -59,11 +59,11 @@ describe("native performance trace", () => {
       endSection: vi.fn(),
     };
     (
-      globalThis as typeof globalThis & { __paseoPerformanceTrace?: TraceSink }
-    ).__paseoPerformanceTrace = sink;
+      globalThis as typeof globalThis & { __byspacePerformanceTrace?: TraceSink }
+    ).__byspacePerformanceTrace = sink;
 
     expect(nativePerformanceTrace.isEnabled()).toBe(false);
-    expect(() => traceInstant("paseo.test")).not.toThrow();
+    expect(() => traceInstant("byspace.test")).not.toThrow();
     expect(sink.beginSection).not.toHaveBeenCalled();
     expect(sink.endSection).not.toHaveBeenCalled();
   });

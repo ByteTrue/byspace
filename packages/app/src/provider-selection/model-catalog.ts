@@ -1,4 +1,4 @@
-import type { AgentModelDefinition } from "@getpaseo/protocol/agent-types";
+import type { AgentModelDefinition } from "@bytetrue/protocol/agent-types";
 
 export function findModelByReference(
   models: AgentModelDefinition[] | null,

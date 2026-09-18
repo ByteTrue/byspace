@@ -74,9 +74,9 @@ describe("hostnames (vite-style)", () => {
     expect(isLanListenString("192.168.1.5:6777")).toBe(true);
     expect(isLanListenString("127.0.0.1:6777")).toBe(false);
     expect(isLanListenString("[::1]:6777")).toBe(false);
-    expect(isLanListenString("/tmp/paseo.sock")).toBe(false);
-    expect(isLanListenString("unix:///tmp/paseo.sock")).toBe(false);
-    expect(isLanListenString("\\\\.\\pipe\\paseo")).toBe(false);
+    expect(isLanListenString("/tmp/byspace.sock")).toBe(false);
+    expect(isLanListenString("unix:///tmp/byspace.sock")).toBe(false);
+    expect(isLanListenString("\\\\.\\pipe\\byspace")).toBe(false);
     expect(isLanListenString(undefined)).toBe(false);
   });
 });

@@ -2,7 +2,7 @@ import {
   TERMINAL_AGENT_HOOK_LEGACY_GLOBAL_PROVIDER_IDS,
   type MutableDaemonConfig,
   type TerminalAgentHookProviderId,
-} from "@getpaseo/protocol/messages";
+} from "@bytetrue/protocol/messages";
 import type { DaemonConfigStore } from "../../server/daemon-config-store.js";
 import type { AgentHookInstallLogger, AgentHookInstallOptions } from "./agent-hook-installer.js";
 import {

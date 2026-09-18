@@ -49,7 +49,7 @@ import type {
   AgentCapabilityFlags,
   AgentPermissionAction,
   AgentPermissionResponse,
-} from "@getpaseo/protocol/agent-types";
+} from "@bytetrue/protocol/agent-types";
 import type { AgentScreenAgent } from "@/hooks/use-agent-screen-state-machine";
 import { useSessionStore } from "@/stores/session-store";
 import { useRevealedText } from "@/hooks/use-revealed-text";
@@ -58,7 +58,7 @@ import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
 import { useSettings } from "@/hooks/use-settings";
 import type { ToastApi } from "@/components/toast-host";
 import { returnToTimelineTail } from "./timeline-tail-navigation";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import { ToolCallDetailsContent } from "@/components/tool-call-details";
 import { QuestionFormCard } from "@/components/question-form-card";
 import { ToolCallSheetProvider } from "@/components/tool-call-sheet";
@@ -103,7 +103,6 @@ import {
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { useForkAgent } from "@/hooks/use-fork-agent";
-import { isWeb } from "@/constants/platform";
 import type { Theme } from "@/styles/theme";
 import { recordRenderProfileReasons } from "@/utils/render-profiler";
 import { useRetainedPanelActive } from "@/components/retained-panel";
@@ -373,7 +372,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const streamRenderStrategy = useMemo(
       () =>
         resolveStreamRenderStrategy({
-          platform: Platform.OS,
           isMobileBreakpoint: isMobile,
         }),
       [isMobile],
@@ -599,7 +597,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         activeTurnStartedAt: effectiveTurnPresentation.startedAt,
         tail: projectedPlugins.tail,
         head: projectedPlugins.head,
-        platform: isWeb ? "web" : "native",
         isMobileBreakpoint: isMobile,
         historyStart: historyWindowStart,
       });

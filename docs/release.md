@@ -12,7 +12,7 @@ Use Node 22.20.0 and npm 10.9.3. Run release commands from a clean `main` checko
 
 Stable Web releases deploy to `app.byspace.cc.cd`. Versions with a prerelease suffix deploy to `app-beta.byspace.cc.cd`.
 
-`@bytetrue/byspace` is the only published package. The `@getpaseo/*` workspaces are packed into it as bundled dependencies; they are not published separately and have no dist-tags to maintain.
+`@bytetrue/byspace` is the only published package. The `@bytetrue/*` workspaces are packed into it as bundled dependencies; they are not published separately and have no dist-tags to maintain.
 
 GitHub Release assets are the npm tarball and a container descriptor, each with a `.sha256` sibling:
 
@@ -235,7 +235,7 @@ Tag pushes are the one supported way to rebuild a release: `git tag -f vX.Y.Z HE
 
 ## Notes
 
-- `version:all:*` bumps root + syncs workspace versions and `@getpaseo/*` dependency versions
+- `version:all:*` bumps root + syncs workspace versions and `@bytetrue/*` dependency versions
 - `release:prepare` refreshes workspace `node_modules` links to prevent stale types
 - A stable run leaves `beta` where it is. `latest` moves on publish; `@bytetrue/byspace@beta` only moves when a prerelease publishes with `--tag beta`
 - The public relay is the upstream Elixir service in [getpaseo/paseo-relay](https://github.com/getpaseo/paseo-relay), with its own deployment process. BySpace releases do not deploy it, and no workflow in this repository does. `packages/relay` holds the client transport and E2E encryption used by the daemon
@@ -410,3 +410,4 @@ Each beta entry records what its testers receive. Promotion produces the single 
 - [ ] **Deploy App** deployed the stable web build to `app.byspace.cc.cd`
 - [ ] **Release Notes Sync** overwrote the Release body with the changelog entry
 - [ ] The release heartbeat was created after the tag push and deleted only after every item above passed
+- [ ] `PINNED_DAEMON_VERSION` in `packages/app/e2e/browser/agent-timeline-pagination-old-daemon.spec.ts` names this release (or the newest one that speaks the current wire protocol), and that spec passes instead of skipping. The identity migration left it skipped because no published daemon is a compatible peer yet; this is the release that makes re-enabling it possible.

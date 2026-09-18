@@ -12,10 +12,8 @@ import { dirname, join, resolve } from "node:path";
 
 // Worktree setup uses bash on macOS/Linux and PowerShell on Windows. Keep setup-time
 // environment handling and file copies in Node so one command works in every shell.
-const sourceRoot =
-  process.env.BYSPACE_SOURCE_CHECKOUT_PATH || process.env.PASEO_SOURCE_CHECKOUT_PATH;
-const targetRoot =
-  process.env.BYSPACE_WORKTREE_PATH || process.env.PASEO_WORKTREE_PATH || process.cwd();
+const sourceRoot = process.env.BYSPACE_SOURCE_CHECKOUT_PATH;
+const targetRoot = process.env.BYSPACE_WORKTREE_PATH || process.cwd();
 
 if (!sourceRoot || samePath(sourceRoot, targetRoot)) {
   process.exit(0);
@@ -25,10 +23,7 @@ seedBySpaceHome();
 copyServerEnv();
 
 function seedBySpaceHome() {
-  const source =
-    process.env.BYSPACE_DEV_SEED_HOME ||
-    process.env.PASEO_DEV_SEED_HOME ||
-    join(sourceRoot, ".dev/byspace-home");
+  const source = process.env.BYSPACE_DEV_SEED_HOME || join(sourceRoot, ".dev/byspace-home");
   const target = join(targetRoot, ".dev/byspace-home");
 
   if (!existsSync(source)) {
@@ -41,8 +36,7 @@ function seedBySpaceHome() {
     return;
   }
 
-  const shouldReset =
-    process.env.BYSPACE_DEV_RESET_HOME === "1" || process.env.PASEO_DEV_RESET_HOME === "1";
+  const shouldReset = process.env.BYSPACE_DEV_RESET_HOME === "1";
   if (shouldReset) {
     rmSync(target, { recursive: true, force: true });
   } else if (hasEntries(target)) {

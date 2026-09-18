@@ -15,7 +15,7 @@ pty (node-pty, forked worker process)
   → xterm.write (back-to-back; xterm batches internally)
 ```
 
-Terminal frames share the daemon main event loop with all agent traffic. The `eventLoopDelay` block in the `ws_runtime_metrics` log line (every 30s in `daemon.log`) is the ground truth for "the daemon is busy" — p99/max there directly bound worst-case terminal frame delay. The `PASEO_*` variables below are performance-test controls; public daemon configuration uses `BYSPACE_*`, with matching `PASEO_*` compatibility fallbacks where supported.
+Terminal frames share the daemon main event loop with all agent traffic. The `eventLoopDelay` block in the `ws_runtime_metrics` log line (every 30s in `daemon.log`) is the ground truth for "the daemon is busy" — p99/max there directly bound worst-case terminal frame delay. The `BYSPACE_*` variables below are performance-test controls, not public daemon configuration.
 
 ## Invariants (the easy-to-break ones)
 
@@ -35,8 +35,8 @@ Terminal frames share the daemon main event loop with all agent traffic. The `ev
 
 ## Measuring
 
-- **Node-only benchmark (fast iteration, server pipeline):** `node --import tsx scripts/benchmark-terminal-latency.ts`. Boots an isolated daemon (fresh `BYSPACE_HOME`, random port — never 6777), measures echo latency percentiles, burst jitter, and snapshot counts under ramped mock-agent load. Writes JSON to the platform temporary directory under `paseo-terminal-bench/`. Healthy numbers (2026-06): echo p50 ~2.3ms, p95 ~3.3ms, a 2MB burst fully streamed with `snap=0`.
-- **Browser perf specs (user-perceived path):** gated behind `PASEO_TERMINAL_PERF_E2E=1` —
+- **Node-only benchmark (fast iteration, server pipeline):** `node --import tsx scripts/benchmark-terminal-latency.ts`. Boots an isolated daemon (fresh `BYSPACE_HOME`, random port — never 6777), measures echo latency percentiles, burst jitter, and snapshot counts under ramped mock-agent load. Writes JSON to the platform temporary directory under `byspace-terminal-bench/`. Healthy numbers (2026-06): echo p50 ~2.3ms, p95 ~3.3ms, a 2MB burst fully streamed with `snap=0`.
+- **Browser perf specs (user-perceived path):** gated behind `BYSPACE_TERMINAL_PERF_E2E=1` —
   `packages/app/e2e/browser/terminal-performance.spec.ts` and `packages/app/e2e/browser/terminal-keystroke-stress.spec.ts` (per-stage keydown→xterm-commit breakdown under mock-agent load). Compare latency percentiles only between runs on the same runner class; sequence integrity and one-second main-thread stalls are the fixed gates.
 - **Production:** grep `daemon.log` for `ws_runtime_metrics` and read `eventLoopDelay` + `bufferedAmount`.
 - **Git pressure:** the same log line includes `git.commands` (limiter occupancy, queue age,
@@ -58,15 +58,15 @@ Node process started with `TerminalE2EHarness.createTerminal({ command, args })`
 same workload does not depend on shell quoting:
 
 ```bash
-PASEO_TERMINAL_PERF_E2E=1 E2E_WORKERS=1 \
-PASEO_TERMINAL_TRANSPORT=direct \
-npm run test:e2e --workspace=@getpaseo/app -- \
+BYSPACE_TERMINAL_PERF_E2E=1 E2E_WORKERS=1 \
+BYSPACE_TERMINAL_TRANSPORT=direct \
+npm run test:e2e --workspace=@bytetrue/app -- \
 e2e/browser/terminal-performance.spec.ts e2e/browser/terminal-keystroke-stress.spec.ts \
 --retries=0
 
-PASEO_TERMINAL_PERF_E2E=1 E2E_WORKERS=1 \
-PASEO_TERMINAL_TRANSPORT=relay \
-npm run test:e2e --workspace=@getpaseo/app -- \
+BYSPACE_TERMINAL_PERF_E2E=1 E2E_WORKERS=1 \
+BYSPACE_TERMINAL_TRANSPORT=relay \
+npm run test:e2e --workspace=@bytetrue/app -- \
 e2e/browser/terminal-performance.spec.ts e2e/browser/terminal-keystroke-stress.spec.ts \
 --retries=0
 ```

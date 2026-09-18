@@ -52,7 +52,7 @@ Accepting new work after an ambiguous interruption would create a split-brain se
 
 ## Relationships
 
-Agents can launch other agents via the agent-scoped `create_agent` MCP tool. Agent-scoped creation is always asynchronous and always stamps `paseo.parent-agent-id`, pointing back at the caller. Omit `workspaceId` to use the caller's workspace, or pass an existing workspace ID returned by `create_workspace`. Placement never changes parentage.
+Agents can launch other agents via the agent-scoped `create_agent` MCP tool. Agent-scoped creation is always asynchronous and always stamps `byspace.parent-agent-id`, pointing back at the caller. Omit `workspaceId` to use the caller's workspace, or pass an existing workspace ID returned by `create_workspace`. Placement never changes parentage.
 
 - **Subagents** — exist as part of the creating agent's work, appear in that agent's subagent track, and are archived with it.
 - **Detached agents** — stand on their own after an explicit detach transition, do not appear in the former parent's subagent track, and are not archived with it.
@@ -63,7 +63,7 @@ Parent archive detaches a subagent instead of archiving it when either condition
 - The child is currently open in an agent tab.
 
 All other children archive with the parent. After the workspace layout hydrates, the client marks
-every managed subagent present in its tabs with `paseo.open-agent-tab.<client-id>=true` through the
+every managed subagent present in its tabs with `byspace.open-agent-tab.<client-id>=true` through the
 generic agent metadata update. This includes background and restored tabs; navigation does not own
 the marker. Closing a tab sets that client's label to `false`. Any `true` client label keeps the child
 open. Detach clears the parent and every open-tab label. The surviving child therefore becomes a
@@ -80,7 +80,7 @@ A watched child that closes before its finish event also notifies the caller so 
 
 ## Provider-managed child agents
 
-Some providers can create their own child sessions inside one provider runtime. OMP's task tool reports these with `child_session` events; `AgentManager` imports the live provider handle, stamps `paseo.parent-agent-id`, and surfaces the result as a normal subagent in the parent's subagents track.
+Some providers can create their own child sessions inside one provider runtime. OMP's task tool reports these with `child_session` events; `AgentManager` imports the live provider handle, stamps `byspace.parent-agent-id`, and surfaces the result as a normal subagent in the parent's subagents track.
 
 The provider still owns the underlying runtime. BySpace keeps an agent record so the child can be opened, tracked, archived, and cascaded with the parent, but prompts and history hydration route through the provider adapter for that native child handle.
 
@@ -224,12 +224,12 @@ $BYSPACE_HOME/agents/{cwd-with-dashes}/{agent-id}.json
 
 Each agent is a single JSON file. Fields relevant to this doc:
 
-| Field                                        | Type          | Meaning                                                                            |
-| -------------------------------------------- | ------------- | ---------------------------------------------------------------------------------- |
-| `id`                                         | `string`      | Stable identifier                                                                  |
-| `archivedAt`                                 | `string?`     | Soft-delete timestamp (ISO 8601)                                                   |
-| `labels["paseo.parent-agent-id"]`            | `string?`     | Parent agent ID, set automatically for agent-scoped creation and removed by detach |
-| `labels["paseo.open-agent-tab.<client-id>"]` | `string?`     | `"true"` protects an open tab on that client; detach clears every matching label   |
-| `lastStatus`                                 | `AgentStatus` | `initializing` / `idle` / `running` / `error` / `closed`                           |
+| Field                                          | Type          | Meaning                                                                            |
+| ---------------------------------------------- | ------------- | ---------------------------------------------------------------------------------- |
+| `id`                                           | `string`      | Stable identifier                                                                  |
+| `archivedAt`                                   | `string?`     | Soft-delete timestamp (ISO 8601)                                                   |
+| `labels["byspace.parent-agent-id"]`            | `string?`     | Parent agent ID, set automatically for agent-scoped creation and removed by detach |
+| `labels["byspace.open-agent-tab.<client-id>"]` | `string?`     | `"true"` protects an open tab on that client; detach clears every matching label   |
+| `lastStatus`                                   | `AgentStatus` | `initializing` / `idle` / `running` / `error` / `closed`                           |
 
 See [`docs/data-model.md`](./data-model.md) for the full agent record.

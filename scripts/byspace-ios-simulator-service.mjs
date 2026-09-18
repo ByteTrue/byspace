@@ -9,7 +9,7 @@ const appDir = join(rootDir, "packages/app");
 const appProductName = "BySpaceDebug";
 const appScheme = "byspace";
 const preferredSimulatorType = byspaceEnv("IOS_DEVICE_TYPE") || "iPhone 16 Pro";
-const paseoPort = requiredByspaceEnv("PORT");
+const byspacePort = requiredByspaceEnv("PORT");
 const worktreePath = byspaceEnv("WORKTREE_PATH") || rootDir;
 const worktreeName = byspaceEnv("BRANCH_NAME") || basename(worktreePath);
 const worktreeHash = createHash("sha1").update(worktreePath).digest("hex").slice(0, 8);
@@ -50,8 +50,8 @@ async function main() {
   hideNativeSimulatorApp();
 
   metro = startMetro();
-  await waitForUrl(`http://127.0.0.1:${paseoPort}/.sim`);
-  console.log(`iOS preview: ${byspaceEnv("URL") || `http://127.0.0.1:${paseoPort}`}/.sim`);
+  await waitForUrl(`http://127.0.0.1:${byspacePort}/.sim`);
+  console.log(`iOS preview: ${byspaceEnv("URL") || `http://127.0.0.1:${byspacePort}`}/.sim`);
 
   console.log("Building app dependencies...");
   try {
@@ -104,7 +104,7 @@ function installApp(nativeProject) {
 }
 
 function launchApp() {
-  const metroUrl = encodeURIComponent(`http://127.0.0.1:${paseoPort}`);
+  const metroUrl = encodeURIComponent(`http://127.0.0.1:${byspacePort}`);
   run(
     "xcrun",
     ["simctl", "openurl", simulatorUdid, `${appScheme}://expo-development-client/?url=${metroUrl}`],
@@ -113,12 +113,12 @@ function launchApp() {
 }
 
 function startMetro() {
-  const child = spawn("npx", ["expo", "start", "--port", paseoPort, "--localhost"], {
+  const child = spawn("npx", ["expo", "start", "--port", byspacePort, "--localhost"], {
     cwd: appDir,
     env: {
       ...env,
-      PASEO_SERVE_SIM_PREVIEW: "1",
-      PASEO_SERVE_SIM_DEVICE_UDID: simulatorUdid,
+      BYSPACE_SERVE_SIM_PREVIEW: "1",
+      BYSPACE_SERVE_SIM_DEVICE_UDID: simulatorUdid,
       BROWSER: "none",
     },
     stdio: "inherit",
@@ -332,7 +332,7 @@ function simulatorSlug() {
 }
 
 function byspaceEnv(name) {
-  return process.env[`BYSPACE_${name}`] || process.env[`PASEO_${name}`];
+  return process.env[`BYSPACE_${name}`];
 }
 
 function requiredByspaceEnv(name) {

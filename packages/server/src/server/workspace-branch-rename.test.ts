@@ -7,10 +7,10 @@ import { afterEach, expect, test, vi } from "vitest";
 import {
   attemptFirstAgentBranchAutoName,
   renameWorkspaceBranch,
-} from "./paseo-worktree-service.js";
+} from "./byspace-worktree-service.js";
 import {
-  writePaseoWorktreeFirstAgentBranchAutoNameMetadata,
-  writePaseoWorktreeMetadata,
+  writeBySpaceWorktreeFirstAgentBranchAutoNameMetadata,
+  writeBySpaceWorktreeMetadata,
 } from "../utils/worktree-metadata.js";
 
 const cleanupPaths: string[] = [];
@@ -22,7 +22,7 @@ afterEach(() => {
 });
 
 test("renames an unpublished BySpace-generated worktree branch", async () => {
-  const { paseoHome, worktree } = createManagedWorktree("quiet-otter");
+  const { byspaceHome, worktree } = createManagedWorktree("quiet-otter");
   const nestedCwd = path.join(worktree, "nested");
   mkdirSync(nestedCwd);
 
@@ -30,7 +30,7 @@ test("renames an unpublished BySpace-generated worktree branch", async () => {
     renameWorkspaceBranch({
       cwd: nestedCwd,
       newBranchName: "focused-rename",
-      paseoHome,
+      byspaceHome,
     }),
   ).resolves.toEqual({
     previousBranch: "quiet-otter",
@@ -40,7 +40,7 @@ test("renames an unpublished BySpace-generated worktree branch", async () => {
 });
 
 test("renames the provisional branch produced by initial auto-naming", async () => {
-  const { paseoHome, worktree } = createManagedWorktree("quiet-otter");
+  const { byspaceHome, worktree } = createManagedWorktree("quiet-otter");
   await attemptFirstAgentBranchAutoName({
     cwd: worktree,
     firstAgentContext: { prompt: "Build focused workspace rename" },
@@ -51,7 +51,7 @@ test("renames the provisional branch produced by initial auto-naming", async () 
     renameWorkspaceBranch({
       cwd: worktree,
       newBranchName: "converged-workspace-name",
-      paseoHome,
+      byspaceHome,
     }),
   ).resolves.toEqual({
     previousBranch: "initial-prompt-name",
@@ -60,7 +60,7 @@ test("renames the provisional branch produced by initial auto-naming", async () 
 });
 
 test("allows a later agent refinement of an auto-named branch", async () => {
-  const { paseoHome, worktree } = createManagedWorktree("quiet-otter");
+  const { byspaceHome, worktree } = createManagedWorktree("quiet-otter");
   await attemptFirstAgentBranchAutoName({
     cwd: worktree,
     firstAgentContext: { prompt: "Build focused workspace rename" },
@@ -71,7 +71,7 @@ test("allows a later agent refinement of an auto-named branch", async () => {
     renameWorkspaceBranch({
       cwd: worktree,
       newBranchName: "converged-workspace-name",
-      paseoHome,
+      byspaceHome,
     }),
   ).resolves.toEqual({
     previousBranch: "initial-prompt-name",
@@ -81,7 +81,7 @@ test("allows a later agent refinement of an auto-named branch", async () => {
     renameWorkspaceBranch({
       cwd: worktree,
       newBranchName: "final-workspace-name",
-      paseoHome,
+      byspaceHome,
     }),
   ).resolves.toEqual({
     previousBranch: "converged-workspace-name",
@@ -90,20 +90,20 @@ test("allows a later agent refinement of an auto-named branch", async () => {
 });
 
 test("rejects a branch that was renamed outside BySpace", async () => {
-  const { paseoHome, worktree } = createManagedWorktree("quiet-otter");
+  const { byspaceHome, worktree } = createManagedWorktree("quiet-otter");
   git(worktree, "branch", "-m", "manually-renamed");
 
   await expect(
     renameWorkspaceBranch({
       cwd: worktree,
       newBranchName: "focused-rename",
-      paseoHome,
+      byspaceHome,
     }),
   ).rejects.toThrow("current BySpace-generated worktree branch");
 });
 
 test("rejects a published branch even without an upstream", async () => {
-  const { root, paseoHome, repo, worktree } = createManagedWorktree("quiet-otter");
+  const { root, byspaceHome, repo, worktree } = createManagedWorktree("quiet-otter");
   const remote = path.join(root, "remote.git");
   git(root, "init", "--bare", remote);
   git(repo, "remote", "add", "origin", remote);
@@ -113,7 +113,7 @@ test("rejects a published branch even without an upstream", async () => {
     renameWorkspaceBranch({
       cwd: worktree,
       newBranchName: "focused-rename",
-      paseoHome,
+      byspaceHome,
     }),
   ).rejects.toThrow("Published branches cannot be renamed");
 });
@@ -146,7 +146,7 @@ test("rechecks BySpace ownership before applying the delayed initial auto-name",
       cwd: worktree,
       firstAgentContext: { prompt: "Rename this worktree" },
       generateBranchNameFromContext: async () => "focused-rename",
-      paseoHome: path.join(root, "different-home"),
+      byspaceHome: path.join(root, "different-home"),
       renameCurrentBranch,
     }),
   ).resolves.toEqual({ attempted: true, renamed: false, branchName: null });
@@ -155,26 +155,26 @@ test("rechecks BySpace ownership before applying the delayed initial auto-name",
 
 function createManagedWorktree(branchName: string): {
   root: string;
-  paseoHome: string;
+  byspaceHome: string;
   repo: string;
   worktree: string;
 } {
-  const root = mkdtempSync(path.join(tmpdir(), "paseo-branch-rename-"));
+  const root = mkdtempSync(path.join(tmpdir(), "byspace-branch-rename-"));
   cleanupPaths.push(root);
-  const paseoHome = path.join(root, "paseo-home");
+  const byspaceHome = path.join(root, "byspace-home");
   const repo = path.join(root, "repo");
-  const worktree = path.join(paseoHome, "worktrees", "project", branchName);
+  const worktree = path.join(byspaceHome, "worktrees", "project", branchName);
   mkdirSync(path.dirname(worktree), { recursive: true });
   git(root, "init", "-b", "main", repo);
   git(repo, "config", "user.email", "test@example.com");
   git(repo, "config", "user.name", "Test User");
   git(repo, "commit", "--allow-empty", "-m", "initial");
   git(repo, "worktree", "add", "-b", branchName, worktree);
-  writePaseoWorktreeMetadata(worktree, { baseRefName: "main", baseRef: "refs/heads/main" });
-  writePaseoWorktreeFirstAgentBranchAutoNameMetadata(worktree, {
+  writeBySpaceWorktreeMetadata(worktree, { baseRefName: "main", baseRef: "refs/heads/main" });
+  writeBySpaceWorktreeFirstAgentBranchAutoNameMetadata(worktree, {
     placeholderBranchName: branchName,
   });
-  return { root, paseoHome, repo, worktree };
+  return { root, byspaceHome, repo, worktree };
 }
 
 function git(cwd: string, ...args: string[]): string {

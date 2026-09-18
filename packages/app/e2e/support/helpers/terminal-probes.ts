@@ -106,7 +106,7 @@ export async function installTerminalRenderProbe(page: Page): Promise<void> {
   await page.addInitScript(() => {
     interface ProbeTerm {
       write?: (data: string | Uint8Array, callback?: () => void) => void;
-      __paseoRenderProbeWriteWrapped?: boolean;
+      __byspaceRenderProbeWriteWrapped?: boolean;
     }
     interface ProbeState {
       term: ProbeTerm | undefined;
@@ -128,9 +128,9 @@ export async function installTerminalRenderProbe(page: Page): Promise<void> {
 
     const win = window as unknown as Record<string, unknown> & {
       __terminalRenderProbe?: ProbeState;
-      __paseoTerminal?: ProbeTerm;
+      __byspaceTerminal?: ProbeTerm;
     };
-    const existingDescriptor = Object.getOwnPropertyDescriptor(win, "__paseoTerminal");
+    const existingDescriptor = Object.getOwnPropertyDescriptor(win, "__byspaceTerminal");
     const getExisting = () =>
       existingDescriptor?.get ? existingDescriptor.get.call(win) : existingDescriptor?.value;
 
@@ -205,7 +205,7 @@ export async function installTerminalRenderProbe(page: Page): Promise<void> {
       value: probe,
     });
 
-    Object.defineProperty(win, "__paseoTerminal", {
+    Object.defineProperty(win, "__byspaceTerminal", {
       configurable: true,
       get() {
         return probe.term;
@@ -222,7 +222,7 @@ export async function installTerminalRenderProbe(page: Page): Promise<void> {
         probe.events.push({ at: performance.now(), type: "set" });
         probe.term = next;
 
-        if (next?.write && !next.__paseoRenderProbeWriteWrapped) {
+        if (next?.write && !next.__byspaceRenderProbeWriteWrapped) {
           const originalWrite = next.write.bind(next);
           next.write = (data: string | Uint8Array, callback?: () => void) => {
             const text = typeof data === "string" ? data : new TextDecoder().decode(data);
@@ -250,7 +250,7 @@ export async function installTerminalRenderProbe(page: Page): Promise<void> {
             }
             return originalWrite(data, callback);
           };
-          next.__paseoRenderProbeWriteWrapped = true;
+          next.__byspaceRenderProbeWriteWrapped = true;
         }
       },
     });
@@ -399,16 +399,16 @@ export async function installTerminalKeystrokeStressProbe(page: Page): Promise<v
     }
 
     const traceAppEventTypes: Record<string, string> = {
-      "paseo.terminal.client.input-frame": "daemon-client-input-frame",
-      "paseo.terminal.client.output-frame": "daemon-client-output-frame",
-      "paseo.terminal.client.frame-decoded": "daemon-client-frame-decoded",
-      "paseo.terminal.client.terminal-emit": "daemon-client-terminal-emit",
-      "paseo.terminal.stream-controller.output": "stream-controller-output",
-      "paseo.terminal.stream-controller.on-output": "stream-controller-on-output",
-      "paseo.terminal.stream-controller-to-emulator-write": "terminal-emulator-write-output",
-      "paseo.terminal.runtime-write-enqueued": "runtime-write-enqueued",
-      "paseo.terminal.runtime-operation-start": "runtime-operation-start",
-      "paseo.terminal.runtime-xterm-write": "runtime-xterm-write",
+      "byspace.terminal.client.input-frame": "daemon-client-input-frame",
+      "byspace.terminal.client.output-frame": "daemon-client-output-frame",
+      "byspace.terminal.client.frame-decoded": "daemon-client-frame-decoded",
+      "byspace.terminal.client.terminal-emit": "daemon-client-terminal-emit",
+      "byspace.terminal.stream-controller.output": "stream-controller-output",
+      "byspace.terminal.stream-controller.on-output": "stream-controller-on-output",
+      "byspace.terminal.stream-controller-to-emulator-write": "terminal-emulator-write-output",
+      "byspace.terminal.runtime-write-enqueued": "runtime-write-enqueued",
+      "byspace.terminal.runtime-operation-start": "runtime-operation-start",
+      "byspace.terminal.runtime-xterm-write": "runtime-xterm-write",
     };
 
     function appEventsOf(type: string, events: AppProbeEvent[]): AppProbeEvent[] {
@@ -599,7 +599,7 @@ export async function installTerminalKeystrokeStressProbe(page: Page): Promise<v
         );
         const outputFrames = appEventsOf("daemon-client-output-frame", this.appEvents);
         const traceAgentStreams = this.traceEvents.filter(
-          (event) => event.name === "paseo.agent.stream.inbound",
+          (event) => event.name === "byspace.agent.stream.inbound",
         );
         const traceAgentStreamBytes = traceAgentStreams.map(
           (event) => Number(event.args.size) || 0,
@@ -798,7 +798,7 @@ export async function installTerminalKeystrokeStressProbe(page: Page): Promise<v
         }
       },
     };
-    Object.defineProperty(window, "__paseoPerformanceTrace", {
+    Object.defineProperty(window, "__byspacePerformanceTrace", {
       configurable: true,
       value: traceSink,
     });
@@ -845,22 +845,22 @@ export async function installTerminalKeystrokeStressProbe(page: Page): Promise<v
       true,
     );
 
-    const existingDescriptor = Object.getOwnPropertyDescriptor(window, "__paseoTerminal");
+    const existingDescriptor = Object.getOwnPropertyDescriptor(window, "__byspaceTerminal");
     const getExisting = () =>
       existingDescriptor?.get ? existingDescriptor.get.call(window) : existingDescriptor?.value;
 
     let terminal = getExisting();
-    Object.defineProperty(window, "__paseoTerminal", {
+    Object.defineProperty(window, "__byspaceTerminal", {
       configurable: true,
       get() {
         return terminal;
       },
       set(next: {
         write?: (data: string | Uint8Array, callback?: () => void) => void;
-        __paseoKeystrokeProbeWriteWrapped?: boolean;
+        __byspaceKeystrokeProbeWriteWrapped?: boolean;
       }) {
         terminal = next;
-        if (next?.write && !next.__paseoKeystrokeProbeWriteWrapped) {
+        if (next?.write && !next.__byspaceKeystrokeProbeWriteWrapped) {
           const originalWrite = next.write.bind(next);
           next.write = (data: string | Uint8Array, callback?: () => void) => {
             const text = typeof data === "string" ? data : new TextDecoder().decode(data);
@@ -876,7 +876,7 @@ export async function installTerminalKeystrokeStressProbe(page: Page): Promise<v
               callback?.();
             });
           };
-          next.__paseoKeystrokeProbeWriteWrapped = true;
+          next.__byspaceKeystrokeProbeWriteWrapped = true;
         }
       },
     });

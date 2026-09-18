@@ -1,7 +1,7 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { createPaseoApi, createPaseoClient } from "./index.js";
+import { createBySpaceApi, createBySpaceClient } from "./index.js";
 import { DaemonClient } from "./daemon-client.js";
-import type { PaseoAgent, PaseoClient, PaseoWorkspace } from "./index.js";
+import type { BySpaceAgent, BySpaceClient, BySpaceWorkspace } from "./index.js";
 
 type FakeWebSocketHandler = (...args: unknown[]) => void;
 
@@ -87,9 +87,9 @@ async function connectClient(
     providerUsageList: true,
     providersSnapshotCwd: true,
   },
-): Promise<{ client: PaseoClient; ws: FakeWebSocket }> {
+): Promise<{ client: BySpaceClient; ws: FakeWebSocket }> {
   vi.stubGlobal("WebSocket", FakeWebSocket);
-  const client = createPaseoClient({
+  const client = createBySpaceClient({
     url: "ws://daemon.test",
     reconnect: { enabled: false },
   });
@@ -103,7 +103,7 @@ async function connectClient(
     clientType: "cli",
     protocolVersion: 1,
   });
-  expect(hello.clientId).toEqual(expect.stringMatching(/^paseo-sdk-/));
+  expect(hello.clientId).toEqual(expect.stringMatching(/^byspace-sdk-/));
   ws.message(
     sessionMessage({
       type: "status",
@@ -121,7 +121,7 @@ async function connectClient(
   return { client, ws };
 }
 
-function createWorkspace(input: Partial<PaseoWorkspace> = {}): PaseoWorkspace {
+function createWorkspace(input: Partial<BySpaceWorkspace> = {}): BySpaceWorkspace {
   return {
     id: "workspace_sdk",
     projectId: "project_sdk",
@@ -142,7 +142,7 @@ function createWorkspace(input: Partial<PaseoWorkspace> = {}): PaseoWorkspace {
   };
 }
 
-function createAgent(input: Partial<PaseoAgent> = {}): PaseoAgent {
+function createAgent(input: Partial<BySpaceAgent> = {}): BySpaceAgent {
   return {
     id: "agent_sdk",
     provider: "codex",
@@ -174,7 +174,7 @@ function createAgent(input: Partial<PaseoAgent> = {}): PaseoAgent {
   };
 }
 
-test("createPaseoClient exposes workspace list through the daemon client", async () => {
+test("createBySpaceClient exposes workspace list through the daemon client", async () => {
   const { client, ws } = await connectClient();
 
   const listPromise = client.workspaces.list({
@@ -219,16 +219,16 @@ test("createPaseoClient exposes workspace list through the daemon client", async
   await client.close();
 });
 
-test("createPaseoApi borrows daemon capabilities without exposing connection ownership", () => {
+test("createBySpaceApi borrows daemon capabilities without exposing connection ownership", () => {
   const daemonClient = new DaemonClient({
     url: "ws://daemon.test",
     clientId: "borrowed-api",
     reconnect: { enabled: false },
   });
 
-  const paseo = createPaseoApi(daemonClient);
+  const byspace = createBySpaceApi(daemonClient);
 
-  expect(Object.keys(paseo).sort()).toEqual([
+  expect(Object.keys(byspace).sort()).toEqual([
     "agents",
     "config",
     "projects",
@@ -236,9 +236,9 @@ test("createPaseoApi borrows daemon capabilities without exposing connection own
     "terminals",
     "workspaces",
   ]);
-  expect("connect" in paseo).toBe(false);
-  expect("close" in paseo).toBe(false);
-  expect("skills" in paseo.agents).toBe(false);
+  expect("connect" in byspace).toBe(false);
+  expect("close" in byspace).toBe(false);
+  expect("skills" in byspace.agents).toBe(false);
 });
 
 test("agent handles send permission responses for their agent", async () => {
@@ -427,7 +427,7 @@ test("agent actions list the daemon directory without exposing the low-level cli
                 isGit: false,
                 currentBranch: null,
                 remoteUrl: null,
-                isPaseoOwnedWorktree: false,
+                isBySpaceOwnedWorktree: false,
                 mainRepoRoot: null,
               },
             },

@@ -12,7 +12,7 @@ Git worktrees are one kind of workspace.
 
 A [workspace](/docs/workspaces) is the place where a task happens. When that workspace is backed by a git worktree, BySpace creates a separate directory on a separate branch so parallel agents never step on each other.
 
-This page covers the git-specific details: where worktrees live, how branches are chosen, and how to configure setup hooks, scripts, terminals, and long-running services through `byspace.json`. Legacy `paseo.json` files remain supported.
+This page covers the git-specific details: where worktrees live, how branches are chosen, and how to configure setup hooks, scripts, terminals, and long-running services through `byspace.json`.
 
 ## Layout and workflow
 
@@ -80,7 +80,7 @@ Add `--forge <name>` when BySpace cannot infer the forge from the source checkou
 
 ## byspace.json
 
-Drop a `byspace.json` in your repo root. BySpace reads it from the committed version of the base branch you picked, so uncommitted changes in other branches don't apply. If a project still has `paseo.json`, BySpace reads and updates that file in place; keep only one of the two filenames.
+Drop a `byspace.json` in your repo root. BySpace reads it from the committed version of the base branch you picked, so uncommitted changes in other branches don't apply.
 
 ```json
 {
@@ -252,7 +252,7 @@ Services additionally get:
 - `$BYSPACE_SERVICE_<NAME>_PORT` / `_URL`, peer service ports and URLs
 - `$HOST`, `127.0.0.1` for local-only daemons, `0.0.0.0` when the daemon binds all interfaces
 
-BySpace also injects the corresponding `PASEO_*` names for existing project scripts. New scripts should use `BYSPACE_*`.
+BySpace injects these names for project scripts.
 
 ## Manage the workspace
 

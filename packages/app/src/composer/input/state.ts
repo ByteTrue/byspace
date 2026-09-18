@@ -1,4 +1,4 @@
-import type { ActiveTurnBehavior } from "@getpaseo/protocol/messages";
+import type { ActiveTurnBehavior } from "@bytetrue/protocol/messages";
 import type { MessagePayload } from "@/composer/types";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 

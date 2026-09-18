@@ -1,6 +1,6 @@
 ---
 title: Common orchestration workflows
-description: Prompts for delegating, parallelizing, reviewing, and continuing agent work with Paseo.nav: Common workflows
+description: Prompts for delegating, parallelizing, reviewing, and continuing agent work with BySpace.nav: Common workflows
 order: 31
 category: Orchestration
 ---

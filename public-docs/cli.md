@@ -149,7 +149,7 @@ Create and list results include `id`, `name`, `cwd`, and `workspaceId`. Use `--j
 
 ## Workspace scripts
 
-List, start, and stop the scripts configured in a workspace's `byspace.json` (legacy `paseo.json` files remain supported):
+List, start, and stop the scripts configured in a workspace's `byspace.json` :
 
 ```bash
 byspace script ls

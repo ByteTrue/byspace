@@ -30,7 +30,7 @@ import {
 import type {
   CreateAgentRequestOptions,
   DaemonClient,
-} from "@getpaseo/client/internal/daemon-client";
+} from "@bytetrue/client/internal/daemon-client";
 import { projectIconPlaceholderLabelFromDisplayName } from "@/utils/project-display-name";
 import { requireWorkspaceDirectory } from "@/utils/workspace-directory";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
@@ -92,7 +92,7 @@ async function callWorkspaceCreation({
   input: { cwd: string };
 }) {
   if (creationMethod === "create_worktree") {
-    return connectedClient.createPaseoWorktree({
+    return connectedClient.createBySpaceWorktree({
       cwd: input.cwd,
       worktreeSlug: createNameId(),
     });

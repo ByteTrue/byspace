@@ -1,24 +1,24 @@
 ---
 name: upstream-sync
-description: Sync ByteTrue/byspace with a user-approved getpaseo/paseo release tag. Use when checking for a new Paseo stable or prerelease, upgrading BySpace to an exact Paseo tag, preparing or continuing an upstream sync candidate, resolving Paseo merge conflicts, verifying a sync candidate, or creating and merging its PR after exact-SHA user acceptance. Do not use for dependency updates, ordinary Git merges, other repositories, releases, or deployments.
+description: Sync ByteTrue/byspace with a user-approved getpaseo/paseo release tag. Use when checking for a new BySpace stable or prerelease, upgrading BySpace to an exact BySpace tag, preparing or continuing an upstream sync candidate, resolving BySpace merge conflicts, verifying a sync candidate, or creating and merging its PR after exact-SHA user acceptance. Do not use for dependency updates, ordinary Git merges, other repositories, releases, or deployments.
 argument-hint: "[check|prepare|continue|verify|submit|merge] [tag, candidate SHA, or PR]"
 user-invocable: true
 ---
 
 # Upstream sync
 
-Update `ByteTrue/byspace` with the complete diff between two accepted Paseo releases. Keep the process small: use standard Git diff/apply, with no custom sync engine, state file, helper script, release, or deployment.
+Update `ByteTrue/byspace` with the complete diff between two accepted BySpace releases. Keep the process small: use standard Git diff/apply, with no custom sync engine, state file, helper script, release, or deployment.
 
 ## Non-negotiable rules
 
 - Target only a user-confirmed `getpaseo/paseo` release tag and its peeled commit SHA. Never merge `upstream/main`, `latest`, or another moving ref.
-- Fetch upstream tags with `--no-tags` into `refs/upstream/tags/<tag>`. Never fetch upstream tags into `refs/tags/*`; BySpace and Paseo can have same-named tags pointing to different commits.
+- Fetch upstream tags with `--no-tags` into `refs/upstream/tags/<tag>`. Never fetch upstream tags into `refs/tags/*`; BySpace and BySpace can have same-named tags pointing to different commits.
 - Freeze the peeled upstream target SHA and `origin/main` start SHA before creating anything. Use those SHAs throughout.
-- Create `sync/paseo-<version>` and a separate worktree from the frozen `origin/main` SHA. Never sync in the main worktree.
+- Create `sync/byspace-<version>` and a separate worktree from the frozen `origin/main` SHA. Never sync in the main worktree.
 - Apply the complete `LAST_UPSTREAM_SHA..UPSTREAM_TARGET_SHA` release diff. Never copy a release tree or cherry-pick selected upstream features.
 - Do not auto-stash, reset, clean, delete worktrees, overwrite branches, or force-push a candidate. Unrelated dirty worktrees are reported but block only when they occupy this sync's branch or path.
 - Synchronization may contain only the upstream merge, required conflict reconciliation, and minimal preservation of established BySpace boundaries. Do not add features, refactor, fix unrelated bugs, expand branding scope, alter release policy, publish, or deploy.
-- Never run `paseo daemon stop` or `byspace daemon stop` on the development host. Use isolated homes, ports, worktrees, and caches for any runtime check.
+- Never run `byspace daemon stop` on the development host. Use isolated homes, ports, worktrees, and caches for any runtime check.
 - Follow repository verification rules: never run the full local test suite; build generated workspace declarations first, then run static checks and focused tests. PR CI supplies the broad matrix after acceptance.
 - A pushed candidate is immutable while awaiting acceptance. Any new, amended, rebased, or rewritten commit creates a new candidate SHA and invalidates prior tests and acceptance.
 - CI success is not user acceptance. No PR of any kind exists before the user explicitly accepts the exact full candidate SHA.
@@ -68,8 +68,8 @@ Before creating the sync branch:
 
    Record the upstream tag object SHA, peeled target commit SHA, release URL, and frozen `origin/main` SHA. If GitHub, `ls-remote`, and the fetched ref disagree, stop.
 
-5. If the target tag equals the previously accepted Paseo release, report `already-synced` and stop without creating a branch or candidate.
-6. Find `LAST_UPSTREAM_SHA`: the exact commit of the most recent previously accepted Paseo release, using namespaced release refs and the prior sync record. If it is missing or ambiguous, show the candidates and ask the user; do not guess.
+5. If the target tag equals the previously accepted BySpace release, report `already-synced` and stop without creating a branch or candidate.
+6. Find `LAST_UPSTREAM_SHA`: the exact commit of the most recent previously accepted BySpace release, using namespaced release refs and the prior sync record. If it is missing or ambiguous, show the candidates and ask the user; do not guess.
 7. Read the target's `.tool-versions` before installing dependencies. Do not assume the previous Node/npm versions still apply.
 8. Create the uniquely named branch and worktree from the frozen main SHA. Push only to explicit `origin`; never push to `upstream`.
 
@@ -119,8 +119,8 @@ Do not resolve the capability until the user decides. Compilation convenience is
 1. In the sync worktree, generate and apply the complete release interval:
 
    ```bash
-   git diff --binary --full-index "$LAST_UPSTREAM_SHA".."$UPSTREAM_TARGET_SHA" > /tmp/paseo-release.patch
-   git apply --3way --index /tmp/paseo-release.patch
+   git diff --binary --full-index "$LAST_UPSTREAM_SHA".."$UPSTREAM_TARGET_SHA" > /tmp/byspace-release.patch
+   git apply --3way --index /tmp/byspace-release.patch
    ```
 
    Keep every upstream interval change unless an approved BySpace boundary or semantic decision requires reconciliation.
@@ -129,9 +129,9 @@ Do not resolve the capability until the user decides. Compilation convenience is
 3. Mechanical conflicts such as generated output, lockfiles, or version metadata may be resolved from authoritative source and regenerated with existing project commands. A conflict touching intentional product behavior follows the dual-change decision gate.
 4. Audit conflict-free additions for violations of established BySpace boundaries: public BySpace identity, CLI and app IDs, `6777/6778` and `~/.byspace` coexistence, approved app/relay/Hub endpoints, ByteTrue publication ownership, single-package release staging, and supervisor daemon entrypoints.
 5. For clear user-facing brand conflicts, preserve the established BySpace behavior and group the resolutions in the report. Do not use a sync to broaden the current rebrand—for example, do not introduce a new `byspace.json` migration while syncing. If a name is also a protocol, storage, SDK, plugin, Hub, or backwards-compatibility contract, stop for a user decision.
-6. Preserve intentional internal/upstream compatibility names unless the current code already migrated that boundary, including internal `@getpaseo/*`, protocol/RPC identities, and internal storage namespaces. Never perform a global search-and-replace rebrand.
+6. Preserve intentional internal/upstream compatibility names unless the current code already migrated that boundary, including internal `@bytetrue/*`, protocol/RPC identities, and internal storage namespaces. Never perform a global search-and-replace rebrand.
 7. Make only the edits required by approved semantic decisions and established boundaries. Format manually edited files with existing npm scripts.
-8. Commit the applied interval and reconciliations with a message such as `chore(sync): apply Paseo vX.Y.Z`. Record the exact `LAST_UPSTREAM_SHA..UPSTREAM_TARGET_SHA` interval in the commit body.
+8. Commit the applied interval and reconciliations with a message such as `chore(sync): apply BySpace vX.Y.Z`. Record the exact `LAST_UPSTREAM_SHA..UPSTREAM_TARGET_SHA` interval in the commit body.
 
 If an unmodified upstream target appears broken, reproduce only the failing command in a detached checkout of the exact target. If it fails there too, save the command and relevant log, report the upstream failure, and stop; do not repair upstream during the sync.
 
@@ -149,7 +149,7 @@ Use project scripts and the target toolchain. In a fresh worktree, install once 
 
 Do not run all Vitest or Playwright tests locally. Do not delete/skip a test to make the merge pass, treat a lucky rerun as a fix, or increase a timeout without measured duration evidence. Investigate CI failures before any targeted rerun; never reflexively rerun the whole matrix.
 
-Use an isolated `TMPDIR` or cache for Expo/Metro build validation so another checkout cannot contaminate generated assets. Runtime acceptance must not start, stop, or reuse the installed Paseo/BySpace daemons or their state directories.
+Use an isolated `TMPDIR` or cache for Expo/Metro build validation so another checkout cannot contaminate generated assets. Runtime acceptance must not start, stop, or reuse the installed Paseo or BySpace daemons or their state directories.
 
 Finally verify and report:
 

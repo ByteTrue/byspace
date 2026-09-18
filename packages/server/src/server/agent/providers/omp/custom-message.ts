@@ -1,4 +1,4 @@
-import type { JsonValue } from "@getpaseo/protocol/agent-types";
+import type { JsonValue } from "@bytetrue/protocol/agent-types";
 import type { OmpAgentMessage } from "./rpc-types.js";
 
 type OmpCustomMessage = Extract<OmpAgentMessage, { role: "custom" }>;
