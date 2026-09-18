@@ -8,9 +8,6 @@ routes = [{ pattern = "relay.byspace.cc.cd", custom_domain = true }]
 [observability]
 enabled = true
 
-[vars]
-BYSPACE_RELAY_UPSTREAM = "https://paseo-relay-next.fly.dev"
-
 [[durable_objects.bindings]]
 name = "RELAY"
 class_name = "RelayDurableObject"

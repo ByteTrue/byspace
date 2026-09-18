@@ -238,7 +238,7 @@ Tag pushes are the one supported way to rebuild a release: `git tag -f vX.Y.Z HE
 - `version:all:*` bumps root + syncs workspace versions and `@bytetrue/*` dependency versions
 - `release:prepare` refreshes workspace `node_modules` links to prevent stale types
 - A stable run leaves `beta` where it is. `latest` moves on publish; `@bytetrue/byspace@beta` only moves when a prerelease publishes with `--tag beta`
-- The public relay is the upstream Elixir service in [getpaseo/paseo-relay](https://github.com/getpaseo/paseo-relay), with its own deployment process. BySpace releases do not deploy it, and no workflow in this repository does. `packages/relay` holds the client transport and E2E encryption used by the daemon
+- The public relay is the Cloudflare Worker in `packages/relay`, deployed by hand as `byspace-relay` at `relay.byspace.cc.cd`. BySpace releases do not deploy it and no workflow in this repository does — run `wrangler deploy` from `packages/relay` after a relay change. `packages/relay` also holds the client transport and E2E encryption used by the daemon
 
 ## Changelog format
 

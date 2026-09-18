@@ -2,7 +2,7 @@
 
 Authoritative terminology for BySpace. UI label wins. Don't invent synonyms; use what's here.
 
-BySpace is the public product name and `byspace` is the user-facing CLI. Packaged defaults use daemon ports `127.0.0.1:6777`; repository development uses `127.0.0.1:6778`. New installations use `~/.byspace` and `BYSPACE_*` environment variables. New projects use `byspace.json`. New plugins use `byspace-plugin.json` and `byspace-plugin.d.ts`.
+BySpace is the public product name and `byspace` is the user-facing CLI. Packaged defaults use daemon ports `127.0.0.1:6777`; repository development uses `127.0.0.1:6778`. New installations use `~/.byspace` and `BYSPACE_*` environment variables. New projects use `byspace.json`.
 
 - **Project** — A stable, exact selected-root record. Its host-local `projectId` is an opaque `prj_<16 hex>` value. Its persisted `projectKey` is an opaque equivalence key that may group the logical project across hosts. A normalized Git remote is the current key producer, but consumers must not parse or rederive it. Git facts can update mutable kind and grouping metadata but never the ID, root, or default display name. UI: "Project" / "Add project". Forbidden: "Repo", "Repository" as UI label.
 - **Workspace** — One concrete `cwd` on one daemon, with git state; belongs to exactly one project. Its `id` is opaque workspace identity; its `cwd` is the filesystem directory. UI: "Workspace". Code: `WorkspaceDescriptorPayload` (`packages/protocol/src/messages.ts:2178`). Don't confuse with: Branch (one branch can back many workspaces via worktrees). Forbidden: "Folder", "Directory" as UI label.
