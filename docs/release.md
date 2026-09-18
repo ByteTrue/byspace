@@ -410,4 +410,4 @@ Each beta entry records what its testers receive. Promotion produces the single 
 - [ ] **Deploy App** deployed the stable web build to `app.byspace.cc.cd`
 - [ ] **Release Notes Sync** overwrote the Release body with the changelog entry
 - [ ] The release heartbeat was created after the tag push and deleted only after every item above passed
-- [ ] `PINNED_DAEMON_VERSION` in `packages/app/e2e/browser/agent-timeline-pagination-old-daemon.spec.ts` names this release (or the newest one that speaks the current wire protocol), and that spec passes instead of skipping. The identity migration left it skipped because no published daemon is a compatible peer yet; this is the release that makes re-enabling it possible.
+- [ ] `PINNED_DAEMON_VERSION` in `packages/app/e2e/browser/agent-timeline-pagination-old-daemon.spec.ts` names a release published **after** the identity migration, and that spec passes instead of skipping. Pre-migration daemons speak the old wire names and are not supported peers; a pin naming one skips forever.

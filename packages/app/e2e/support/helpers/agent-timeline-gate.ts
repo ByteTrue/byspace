@@ -18,7 +18,6 @@ export interface AgentTimelineResponseGate {
 export interface OlderTimelinePagesGate {
   getRequestCount(): number;
   getRepeatedEntryCount(): number;
-  getOwnedEntryCountContaining(text: string): number;
   releasePage(pageNumber: number): void;
   waitForRequestCount(count: number): Promise<void>;
 }
@@ -197,30 +196,6 @@ function readTimelineEntries(payload: Record<string, unknown>): ObservedTimeline
       typeof candidate.item?.type === "string"
     );
   });
-}
-
-function readCursorSeq(cursor: unknown): number | undefined {
-  if (!cursor || typeof cursor !== "object") return undefined;
-  const seq = (cursor as { seq?: unknown }).seq;
-  return typeof seq === "number" ? seq : undefined;
-}
-
-function recordOwnedTimelineEntries(
-  payload: Record<string, unknown>,
-  ownedEntries: Map<string, string>,
-): void {
-  const pageStartSeq = readCursorSeq(payload.startCursor);
-  const pageEndSeq = readCursorSeq(payload.endCursor);
-  for (const entry of readTimelineEntries(payload)) {
-    const belongsToPage =
-      payload.direction === "tail" ||
-      (pageStartSeq !== undefined &&
-        pageEndSeq !== undefined &&
-        entry.seqStart >= pageStartSeq &&
-        entry.seqStart <= pageEndSeq);
-    if (!belongsToPage) continue;
-    ownedEntries.set(`${entry.seqStart}:${entry.seqEnd}`, JSON.stringify(entry.item));
-  }
 }
 
 function recordRepeatedTimelineEntries(
@@ -413,7 +388,6 @@ export async function holdAgentOlderTimelinePages(
   let responseCount = 0;
   let repeatedEntryCount = 0;
   const entryKeys = new Set<string>();
-  const ownedEntries = new Map<string, string>();
   const releasedPages = new Set<number>();
   const delayedForwards = new Map<number, Array<() => void>>();
   const requestWaiters = new Map<number, Array<() => void>>();
@@ -448,13 +422,6 @@ export async function holdAgentOlderTimelinePages(
       if (
         sessionMessage?.type === "fetch_agent_timeline_response" &&
         payload?.agentId === agentId &&
-        (payload.direction === "tail" || payload.direction === "before")
-      ) {
-        recordOwnedTimelineEntries(payload, ownedEntries);
-      }
-      if (
-        sessionMessage?.type === "fetch_agent_timeline_response" &&
-        payload?.agentId === agentId &&
         payload.direction === "before"
       ) {
         responseCount += 1;
@@ -476,8 +443,6 @@ export async function holdAgentOlderTimelinePages(
   return {
     getRequestCount: () => requestCount,
     getRepeatedEntryCount: () => repeatedEntryCount,
-    getOwnedEntryCountContaining: (value) =>
-      [...ownedEntries.values()].filter((text) => text.includes(value)).length,
     releasePage(pageNumber) {
       releasedPages.add(pageNumber);
       for (const forward of delayedForwards.get(pageNumber) ?? []) forward();

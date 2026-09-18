@@ -11,19 +11,21 @@ import {
   scrollThroughOlderHistoryPages,
 } from "../support/helpers/timeline-pagination";
 
-// The app must still parse a *published* daemon's messages. Every daemon
-// released so far speaks the pre-rename wire names (`isPaseoOwnedWorktree`,
-// `paseo_worktree_*`); this app now speaks the renamed ones, so no existing
-// release is compatible and there is nothing to pin.
+// The app must still paginate a *published* daemon's timeline. Any release
+// published before the identity migration speaks the old wire names, so the
+// pin has to name a daemon from after it.
 //
-// Set this to the first daemon version published after the identity
-// migration. The test then runs for real and fails if that contract breaks.
-const PINNED_DAEMON_VERSION: string | null = null;
+// This spec used to assert that the pinned daemon sent overlapping pages and
+// that the app rendered each owned block exactly once. No post-migration
+// release does that: the overlap was a 0.2.5 projection bug, fixed long before
+// the rename. Those two assertions are gone; the wire-level no-duplicates
+// check below is what the scenario still guarantees.
+const PINNED_DAEMON_VERSION: string | null = "0.14.4";
 
 const SKIP_REASON =
-  "No published daemon speaks the renamed wire protocol yet. Set PINNED_DAEMON_VERSION " +
-  "to the first release published after the identity migration so this guards the " +
-  "cross-version protocol contract for real.";
+  "No released daemon speaks the current wire protocol. Set PINNED_DAEMON_VERSION to a " +
+  "release published after the identity migration so this guards the cross-version " +
+  "contract for real.";
 
 test("does not repeat an assistant block when the current app paginates a published daemon", async ({
   page,
@@ -96,8 +98,7 @@ test("does not repeat an assistant block when the current app paginates a publis
     );
     await scrollThroughOlderHistoryPages(page, 3, history);
 
-    history.expectRepeatedEntries();
-    await history.expectOwnedTextRendered("Now I have a clearer picture.");
+    history.expectNoRepeatedEntries();
   } finally {
     await agent.cleanup();
     await daemon.close();

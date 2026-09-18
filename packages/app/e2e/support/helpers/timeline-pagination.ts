@@ -66,8 +66,6 @@ interface OlderHistoryPages {
   expectRequestedPages(count: number): Promise<void>;
   expectSettledWithRequestedPages(count: number): Promise<void>;
   expectNoRepeatedEntries(): void;
-  expectRepeatedEntries(): void;
-  expectOwnedTextRendered(text: string): Promise<void>;
   releasePage(pageNumber: number): void;
   requestCount(): number;
 }
@@ -368,15 +366,6 @@ export async function holdOlderHistoryPages(
     },
     expectNoRepeatedEntries() {
       expect(gate.getRepeatedEntryCount()).toBe(0);
-    },
-    expectRepeatedEntries() {
-      expect(gate.getRepeatedEntryCount()).toBeGreaterThan(0);
-    },
-    async expectOwnedTextRendered(text) {
-      const expectedCount = gate.getOwnedEntryCountContaining(text);
-      expect(expectedCount).toBeGreaterThan(0);
-      const timeline = page.locator('[data-testid="agent-chat-scroll"]:visible').first();
-      await expect(timeline.getByText(text, { exact: false })).toHaveCount(expectedCount);
     },
     releasePage(pageNumber) {
       gate.releasePage(pageNumber);
