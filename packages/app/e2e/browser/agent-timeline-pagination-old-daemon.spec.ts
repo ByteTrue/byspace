@@ -62,9 +62,9 @@ test("does not repeat an assistant block when the current app paginates a publis
     });
     await page.addInitScript(
       ({ seededHost, preferences }) => {
-        localStorage.setItem("@paseo:e2e", "1");
-        localStorage.setItem("@paseo:daemon-registry", JSON.stringify([seededHost]));
-        localStorage.setItem("@paseo:create-agent-preferences", JSON.stringify(preferences));
+        localStorage.setItem("@byspace:e2e", "1");
+        localStorage.setItem("@byspace:daemon-registry", JSON.stringify([seededHost]));
+        localStorage.setItem("@byspace:create-agent-preferences", JSON.stringify(preferences));
       },
       { seededHost: host, preferences: buildCreateAgentPreferences() },
     );

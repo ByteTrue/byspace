@@ -15,61 +15,61 @@ describe("server config", () => {
   });
 
   test("records when the daemon is managed by BySpace Desktop", async () => {
-    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-desktop-managed-"));
-    roots.push(paseoHome);
+    const byspaceHome = await mkdtemp(path.join(os.tmpdir(), "byspace-config-desktop-managed-"));
+    roots.push(byspaceHome);
 
-    const desktopConfig = loadConfig(paseoHome, {
-      env: { PASEO_DESKTOP_MANAGED: "1" },
+    const desktopConfig = loadConfig(byspaceHome, {
+      env: { BYSPACE_DESKTOP_MANAGED: "1" },
     });
-    const standaloneConfig = loadConfig(paseoHome, { env: {} });
+    const standaloneConfig = loadConfig(byspaceHome, { env: {} });
 
     expect(desktopConfig.desktopManaged).toBe(true);
     expect(standaloneConfig.desktopManaged).toBe(false);
   });
 
   test("loads the provider catalog refresh timeout", async () => {
-    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-provider-timeout-"));
-    roots.push(paseoHome);
+    const byspaceHome = await mkdtemp(path.join(os.tmpdir(), "byspace-config-provider-timeout-"));
+    roots.push(byspaceHome);
     await writeFile(
-      path.join(paseoHome, "config.json"),
+      path.join(byspaceHome, "config.json"),
       JSON.stringify({ agents: { catalogRefreshTimeoutMs: 180_000 } }),
     );
 
-    const config = loadConfig(paseoHome, { env: {} });
+    const config = loadConfig(byspaceHome, { env: {} });
 
     expect(config.providerCatalogRefreshTimeoutMs).toBe(180_000);
   });
 
   test("resolves reload state from the supplied validated snapshot", async () => {
-    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-snapshot-"));
-    roots.push(paseoHome);
-    const snapshot = loadPersistedConfig(paseoHome);
+    const byspaceHome = await mkdtemp(path.join(os.tmpdir(), "byspace-config-snapshot-"));
+    roots.push(byspaceHome);
+    const snapshot = loadPersistedConfig(byspaceHome);
     await writeFile(
-      path.join(paseoHome, "config.json"),
+      path.join(byspaceHome, "config.json"),
       JSON.stringify({
         ...snapshot,
         daemon: { ...snapshot.daemon, appendSystemPrompt: "Be terse." },
       }),
     );
 
-    expect(resolveConfigFromPersisted(paseoHome, snapshot, { env: {} }).appendSystemPrompt).toBe(
+    expect(resolveConfigFromPersisted(byspaceHome, snapshot, { env: {} }).appendSystemPrompt).toBe(
       "",
     );
-    expect(loadConfig(paseoHome, { env: {} }).appendSystemPrompt).toBe("Be terse.");
+    expect(loadConfig(byspaceHome, { env: {} }).appendSystemPrompt).toBe("Be terse.");
   });
 
   test("records mutable and startup launch overrides by persisted leaf", async () => {
-    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "paseo-config-overrides-"));
-    roots.push(paseoHome);
-    const config = loadConfig(paseoHome, {
+    const byspaceHome = await mkdtemp(path.join(os.tmpdir(), "byspace-config-overrides-"));
+    roots.push(byspaceHome);
+    const config = loadConfig(byspaceHome, {
       env: {
         BYSPACE_LISTEN: "127.0.0.1:7000",
-        PASEO_PASSWORD: "secret",
-        PASEO_RELAY_ENDPOINT: "relay.example.test:443",
-        PASEO_TRUSTED_PROXIES: "true",
-        PASEO_WEB_UI_ENABLED: "true",
-        PASEO_LOG_FILE_PATH: "custom.log",
-        PASEO_VOICE_LLM_PROVIDER: "codex",
+        BYSPACE_PASSWORD: "secret",
+        BYSPACE_RELAY_ENDPOINT: "relay.example.test:443",
+        BYSPACE_TRUSTED_PROXIES: "true",
+        BYSPACE_WEB_UI_ENABLED: "true",
+        BYSPACE_LOG_FILE_PATH: "custom.log",
+        BYSPACE_VOICE_LLM_PROVIDER: "codex",
       },
       cli: { relayUseTls: false },
     });
@@ -88,35 +88,15 @@ describe("server config", () => {
     expect(config.log?.file?.path).toBe("custom.log");
   });
 
-  test("uses the BySpace port and ignores the legacy Paseo listen override", async () => {
-    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "byspace-config-defaults-"));
-    roots.push(paseoHome);
+  test("honors BYSPACE_LISTEN over the default port", async () => {
+    const byspaceHome = await mkdtemp(path.join(os.tmpdir(), "byspace-config-defaults-"));
+    roots.push(byspaceHome);
 
-    const config = loadConfig(paseoHome, {
-      env: { PASEO_LISTEN: "127.0.0.1:6767" },
+    const config = loadConfig(byspaceHome, {
+      env: { BYSPACE_LISTEN: "127.0.0.1:6767" },
     });
 
-    expect(config.listen).toBe("127.0.0.1:6777");
-  });
-
-  test("prefers public BYSPACE environment variables over legacy aliases", async () => {
-    const paseoHome = await mkdtemp(path.join(os.tmpdir(), "byspace-config-env-"));
-    roots.push(paseoHome);
-
-    const config = loadConfig(paseoHome, {
-      env: {
-        BYSPACE_APP_BASE_URL: "https://app.byspace.example",
-        BYSPACE_PASSWORD: "byspace-password",
-        BYSPACE_RELAY_ENDPOINT: "relay.byspace.example:443",
-        PASEO_APP_BASE_URL: "https://legacy.example",
-        PASEO_PASSWORD: "legacy-password",
-        PASEO_RELAY_ENDPOINT: "legacy.example:443",
-      },
-    });
-
-    expect(config.appBaseUrl).toBe("https://app.byspace.example");
-    expect(config.relayEndpoint).toBe("relay.byspace.example:443");
-    expect(config.auth).toBeDefined();
+    expect(config.listen).toBe("127.0.0.1:6767");
   });
 
   test("resolves bundled web UI path from source-tree modules", () => {
@@ -131,7 +111,7 @@ describe("server config", () => {
   });
 
   test("resolves bundled web UI path from globally installed compiled modules", async () => {
-    const packageRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-config-compiled-"));
+    const packageRoot = await mkdtemp(path.join(os.tmpdir(), "byspace-config-compiled-"));
     roots.push(packageRoot);
     await mkdir(path.join(packageRoot, "dist", "server", "web-ui"), { recursive: true });
 
@@ -143,7 +123,7 @@ describe("server config", () => {
   });
 
   test("resolves packaged desktop web UI path from resources app-dist", async () => {
-    const packageRoot = await mkdtemp(path.join(os.tmpdir(), "paseo-config-packaged-"));
+    const packageRoot = await mkdtemp(path.join(os.tmpdir(), "byspace-config-packaged-"));
     roots.push(packageRoot);
     await mkdir(path.join(packageRoot, "app-dist"), { recursive: true });
 
@@ -154,7 +134,7 @@ describe("server config", () => {
             packageRoot,
             "app.asar",
             "node_modules",
-            "@getpaseo",
+            "",
             "server",
             "dist",
             "server",

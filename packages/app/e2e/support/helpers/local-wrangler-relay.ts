@@ -91,7 +91,7 @@ export async function startLocalWranglerRelay(): Promise<LocalWranglerRelay> {
       "--persist-to",
       persistenceDir,
       "--var",
-      "PASEO_RELAY_UPSTREAM:",
+      "BYSPACE_RELAY_UPSTREAM:",
     ],
     {
       cwd: relayDir,

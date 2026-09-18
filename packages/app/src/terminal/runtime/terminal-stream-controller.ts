@@ -1,4 +1,4 @@
-import type { SubscribeTerminalRequest, TerminalState } from "@getpaseo/protocol/messages";
+import type { SubscribeTerminalRequest, TerminalState } from "@bytetrue/protocol/messages";
 import type { TerminalOutputData } from "./terminal-emulator-runtime";
 import { i18n } from "@/i18n/i18next";
 import { nativePerformanceTrace, traceInstant } from "@/performance/native-trace";
@@ -82,13 +82,13 @@ export class TerminalStreamController {
       ) {
         const traceEnabled = nativePerformanceTrace.isEnabled();
         if (traceEnabled) {
-          traceInstant("paseo.terminal.stream-controller.output", {
+          traceInstant("byspace.terminal.stream-controller.output", {
             size: String(event.data.byteLength),
           });
         }
         this.options.onOutput({ terminalId: event.terminalId, data: event.data });
         if (traceEnabled) {
-          traceInstant("paseo.terminal.stream-controller.on-output", {
+          traceInstant("byspace.terminal.stream-controller.on-output", {
             size: String(event.data.byteLength),
           });
         }

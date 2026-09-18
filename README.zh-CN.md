@@ -134,11 +134,6 @@ npm run build:server
 npm run typecheck
 ```
 
-## 相关项目
-
-- [getpaseo/paseo-relay](https://github.com/getpaseo/paseo-relay) — 官方分布式 relay，使用 Elixir 编写
-- [paseo-vscode](https://marketplace.visualstudio.com/items?itemName=hinnes.paseo-vscode) — VS Code 扩展
-
 ### 自托管 relay TLS
 
 自托管 relay 默认使用 `ws://`，除非显式启用 TLS。对于 nginx 后面、监听 443 的 relay，可以这样启动 daemon：
@@ -187,4 +182,5 @@ server {
 
 ## License
 
-Apache-2.0
+Apache-2.0。BySpace 是 [Paseo](https://github.com/getpaseo/paseo) 的 fork，
+Paseo 版权归 Mohamed Boudra 所有（2025 至今），同样以 Apache-2.0 授权。

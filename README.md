@@ -147,11 +147,7 @@ npm run build:server
 npm run typecheck
 ```
 
-## Related projects
-
-- [getpaseo/paseo-relay](https://github.com/getpaseo/paseo-relay) — official distributed relay, written in Elixir
-- [paseo-vscode](https://marketplace.visualstudio.com/items?itemName=hinnes.paseo-vscode) — VS Code extension
-
 ## License
 
-Apache-2.0
+Apache-2.0. BySpace is a fork of [Paseo](https://github.com/getpaseo/paseo), which is
+copyright (c) 2025-present Mohamed Boudra and licensed under Apache-2.0.

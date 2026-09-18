@@ -1,4 +1,4 @@
-import type { ProviderOptions, ToolPolicy } from "@getpaseo/protocol/agent-types";
+import type { ProviderOptions, ToolPolicy } from "@bytetrue/protocol/agent-types";
 import { z } from "zod";
 
 const ApprovalPolicySchema = z.union([

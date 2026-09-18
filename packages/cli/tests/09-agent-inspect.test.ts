@@ -29,9 +29,9 @@ console.log("=== Inspect Command Tests ===\n");
 
 // Get random port that's definitely not in use (never 6767)
 const port = 10000 + Math.floor(Math.random() * 50000);
-const paseoHome = await mkdtemp(join(tmpdir(), "paseo-test-home-"));
+const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-test-home-"));
 process.env.BYSPACE_HOST = `localhost:${port}`;
-process.env.BYSPACE_HOME = paseoHome;
+process.env.BYSPACE_HOME = byspaceHome;
 
 try {
   // Test 1: inspect --help shows options
@@ -50,7 +50,7 @@ try {
   {
     console.log("Test 2: inspect requires id argument");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace inspect`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace inspect`.nothrow();
     assert.notStrictEqual(result.exitCode, 0, "should fail without id");
     const output = result.stdout + result.stderr;
     // Commander should complain about missing argument
@@ -66,7 +66,7 @@ try {
   {
     console.log("Test 3: inspect handles daemon not running");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace inspect abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace inspect abc123`.nothrow();
     // Should fail because daemon not running
     assert.notStrictEqual(result.exitCode, 0, "should fail when daemon not running");
     const output = result.stdout + result.stderr;
@@ -82,7 +82,7 @@ try {
   {
     console.log("Test 4: inspect --host flag is accepted");
     const result =
-      await $`BYSPACE_HOME=${paseoHome} npx byspace inspect --host localhost:${port} abc123`.nothrow();
+      await $`BYSPACE_HOME=${byspaceHome} npx byspace inspect --host localhost:${port} abc123`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --host flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -93,7 +93,7 @@ try {
   {
     console.log("Test 5: -q (quiet) flag is accepted with inspect");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace -q inspect abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace -q inspect abc123`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept -q flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -104,7 +104,7 @@ try {
   {
     console.log("Test 6: --json flag is accepted with inspect");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace inspect abc123 --json`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace inspect abc123 --json`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --json flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -115,7 +115,7 @@ try {
   {
     console.log("Test 7: --format yaml flag is accepted with inspect");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace --format yaml inspect abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace --format yaml inspect abc123`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --format yaml flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -156,7 +156,7 @@ try {
   }
 } finally {
   // Clean up temp directory
-  await rm(paseoHome, { recursive: true, force: true });
+  await rm(byspaceHome, { recursive: true, force: true });
 }
 
 console.log("=== All inspect tests passed ===");

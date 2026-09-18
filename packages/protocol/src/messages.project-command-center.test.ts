@@ -10,13 +10,13 @@ describe("project command-center protocol", () => {
     expect(
       SessionInboundMessageSchema.parse({
         type: "workspace.github.search_repositories.request",
-        query: "paseo",
+        query: "byspace",
         limit: 12,
         requestId: "req-search",
       }),
     ).toEqual({
       type: "workspace.github.search_repositories.request",
-      query: "paseo",
+      query: "byspace",
       limit: 12,
       requestId: "req-search",
     });
@@ -29,8 +29,8 @@ describe("project command-center protocol", () => {
           requestId: "req-search",
           repositories: [
             {
-              id: "R_paseo",
-              name: "paseo",
+              id: "R_byspace",
+              name: "byspace",
               nameWithOwner: "getpaseo/paseo",
               description: "Development environment in your pocket",
               visibility: "public",
@@ -47,8 +47,8 @@ describe("project command-center protocol", () => {
       requestId: "req-search",
       repositories: [
         {
-          id: "R_paseo",
-          name: "paseo",
+          id: "R_byspace",
+          name: "byspace",
           nameWithOwner: "getpaseo/paseo",
           description: "Development environment in your pocket",
           visibility: "public",
@@ -142,7 +142,7 @@ describe("project command-center protocol", () => {
           repositories: [
             {
               id: "repo",
-              name: " paseo ",
+              name: " byspace ",
               nameWithOwner: " getpaseo/paseo ",
               description: null,
               visibility: "public",
@@ -154,7 +154,7 @@ describe("project command-center protocol", () => {
           error: null,
         },
       }).payload.repositories[0]?.name,
-    ).toBe(" paseo ");
+    ).toBe(" byspace ");
   });
 
   it("keeps project command feature flags optional for older server_info payloads", () => {

@@ -59,10 +59,10 @@ jobs:
         run: npm run build:app-deps
 
       - name: Typecheck
-        run: npm run typecheck --workspace=@getpaseo/app
+        run: npm run typecheck --workspace=@bytetrue/app
 
       - name: Build Web app
-        run: npm run build:web --workspace=@getpaseo/app
+        run: npm run build:web --workspace=@bytetrue/app
 
       - name: Deploy release channel to Cloudflare Pages
         working-directory: packages/app

@@ -102,24 +102,26 @@ jobs:
           tarball="dist/npm/bytetrue-byspace-${{ needs.context.outputs.version }}.tgz"
           test "$(npm pkg get name --json | tr -d '"')" = "byspace"
           test "$(tar -xOf "$tarball" package/package.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).name))')" = "@bytetrue/byspace"
-          tar -xOf "$tarball" package/package.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);if(p.bin?.byspace!=="bin/byspace"||p.bin?.paseo)process.exit(1)})'
+          tar -xOf "$tarball" package/package.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);if(p.bin?.byspace!=="bin/byspace"||Object.keys(p.bin).length!==1)process.exit(1)})'
       - name: Install package without registry access to internal workspaces
         run: |
           set -euo pipefail
           tarball="$PWD/dist/npm/bytetrue-byspace-${{ needs.context.outputs.version }}.tgz"
           prefix="$(mktemp -d)"
-          printf '%s\n' 'registry=https://registry.npmjs.org/' '@getpaseo:registry=http://127.0.0.1:9/' > "$prefix/npmrc"
+          printf '%s\n' 'registry=https://registry.npmjs.org/' '@bytetrue:registry=http://127.0.0.1:9/' > "$prefix/npmrc"
           npm install --prefix "$prefix" --userconfig "$prefix/npmrc" --no-audit --no-fund "$tarball"
           test "$("$prefix/node_modules/.bin/byspace" --version)" = "${{ needs.context.outputs.version }}"
-          test ! -e "$prefix/node_modules/.bin/paseo"
+          test "$(node -p "Object.keys(require('$prefix/node_modules/@bytetrue/byspace/package.json').bin).join(',')")" = "byspace"
       - name: Verify upgrade from the previous BySpace package
         run: |
           set -euo pipefail
           tarball="$PWD/dist/npm/bytetrue-byspace-${{ needs.context.outputs.version }}.tgz"
           prefix="$(mktemp -d)"
-          printf '%s\n' 'registry=https://registry.npmjs.org/' '@getpaseo:registry=http://127.0.0.1:9/' > "$prefix/npmrc"
-          npm install --prefix "$prefix" --userconfig "$prefix/npmrc" --no-audit --no-fund @bytetrue/byspace@0.7.8
-          npm install --prefix "$prefix" --userconfig "$prefix/npmrc" --no-audit --no-fund "$tarball"
+          # This step reaches the registry for the previously published package, so the
+          # internal-scope poisoning used by the tarball check must not apply here: the
+          # internal scope and the published scope are the same name.
+          npm install --prefix "$prefix" --no-audit --no-fund @bytetrue/byspace@0.7.8
+          npm install --prefix "$prefix" --no-audit --no-fund "$tarball"
           test "$("$prefix/node_modules/.bin/byspace" --version)" = "${{ needs.context.outputs.version }}"
       - name: Include release notes in the artifact
         run: |

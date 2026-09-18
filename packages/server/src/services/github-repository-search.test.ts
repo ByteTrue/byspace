@@ -27,7 +27,7 @@ describe("GitHub repository search", () => {
       JSON.stringify([
         {
           id: " R_recent ",
-          name: " paseo ",
+          name: " byspace ",
           nameWithOwner: " getpaseo/paseo ",
           description: null,
           isPrivate: false,
@@ -48,7 +48,7 @@ describe("GitHub repository search", () => {
     ).resolves.toEqual([
       {
         id: "R_recent",
-        name: "paseo",
+        name: "byspace",
         nameWithOwner: "getpaseo/paseo",
         description: null,
         visibility: "public",

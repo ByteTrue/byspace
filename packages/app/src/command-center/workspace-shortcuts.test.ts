@@ -6,7 +6,7 @@ describe("resolveWorkspaceCommandCenterShortcuts", () => {
     expect(
       resolveWorkspaceCommandCenterShortcuts({
         overrides: {},
-        platform: { isMac: true, isDesktop: true },
+        platform: { isMac: true },
       }).newAgent,
     ).toEqual([["mod", "shift", "A"]]);
   });

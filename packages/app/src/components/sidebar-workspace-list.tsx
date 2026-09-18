@@ -130,7 +130,6 @@ import { useWorkspaceReadState } from "@/hooks/use-workspace-read-state";
 import type { PrHint } from "@/git/use-pr-status-query";
 import {
   buildSidebarProjectRowModel,
-  resolveSidebarProjectLocalPath,
   type SidebarProjectHostTarget,
   type SidebarProjectIconTarget,
 } from "@/utils/sidebar-project-row-model";
@@ -143,8 +142,6 @@ import {
 } from "@/projects/project-remove";
 import { ProjectRemoveModal } from "@/projects/project-remove-modal";
 import { isWeb as platformIsWeb, isNative as platformIsNative } from "@/constants/platform";
-import { OpenInFileManagerMenuItem } from "@/workspace/open-in-file-manager/menu-item";
-import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { useHostBadges } from "@/hosts/use-host-badges";
 import { useSidebarRowItems } from "@/components/sidebar/display-preferences/model";
@@ -408,7 +405,6 @@ function ProjectRowTrailingActions({
   displayName,
   worktreeTarget,
   settingsTarget,
-  projectPath,
   isHovered,
   isMobileBreakpoint,
   isProjectActive,
@@ -420,7 +416,6 @@ function ProjectRowTrailingActions({
   displayName: string;
   worktreeTarget: SidebarProjectHostTarget | null;
   settingsTarget: { serverId: string; projectId: string } | null;
-  projectPath: string;
   isHovered: boolean;
   isMobileBreakpoint: boolean;
   isProjectActive: boolean;
@@ -448,7 +443,6 @@ function ProjectRowTrailingActions({
           <ProjectKebabMenu
             projectViewKey={projectViewKey}
             settingsTarget={settingsTarget}
-            projectPath={projectPath}
             onRemoveProject={onRemoveProject}
             removeProjectStatus={removeProjectStatus}
           />
@@ -460,9 +454,6 @@ function ProjectRowTrailingActions({
 
 const trash2LeadingIcon = <ThemedTrash2 size={14} uniProps={foregroundMutedColorMapping} />;
 const settingsLeadingIcon = <ThemedSettings size={14} uniProps={foregroundMutedColorMapping} />;
-const openInNewWindowLeadingIcon = (
-  <ThemedExternalLink size={14} uniProps={foregroundMutedColorMapping} />
-);
 
 function renderKebabTriggerIcon({ hovered }: { hovered?: boolean }) {
   return (
@@ -476,13 +467,11 @@ function renderKebabTriggerIcon({ hovered }: { hovered?: boolean }) {
 function ProjectKebabMenu({
   projectViewKey,
   settingsTarget,
-  projectPath,
   onRemoveProject,
   removeProjectStatus,
 }: {
   projectViewKey: string;
   settingsTarget: { serverId: string; projectId: string } | null;
-  projectPath: string;
   onRemoveProject: () => void;
   removeProjectStatus: "idle" | "pending" | "success";
 }) {
@@ -503,7 +492,6 @@ function ProjectKebabMenu({
           surface="dropdown"
           projectViewKey={projectViewKey}
           settingsTarget={settingsTarget}
-          projectPath={projectPath}
           onRemoveProject={onRemoveProject}
           removeProjectStatus={removeProjectStatus}
         />
@@ -531,14 +519,12 @@ function ProjectMenuItems({
   surface,
   projectViewKey,
   settingsTarget,
-  projectPath,
   onRemoveProject,
   removeProjectStatus,
 }: {
   surface: ProjectMenuSurface;
   projectViewKey: string;
   settingsTarget: { serverId: string; projectId: string } | null;
-  projectPath: string;
   onRemoveProject: () => void;
   removeProjectStatus: "idle" | "pending" | "success";
 }) {
@@ -547,10 +533,6 @@ function ProjectMenuItems({
     if (!settingsTarget) return;
     router.navigate(buildProjectSettingsRoute(settingsTarget.serverId, settingsTarget.projectId));
   }, [settingsTarget]);
-  const canOpenInNewWindow = false;
-  const handleOpenInNewWindow = useCallback(() => {
-    // Desktop window opening is retired (issue 025 A3).
-  }, []);
 
   return (
     <>
@@ -564,21 +546,6 @@ function ProjectMenuItems({
           {t("sidebar.project.actions.openSettings")}
         </ProjectMenuItem>
       ) : null}
-      {canOpenInNewWindow ? (
-        <ProjectMenuItem
-          surface={surface}
-          testID={`sidebar-project-menu-open-new-window-${projectViewKey}`}
-          leading={openInNewWindowLeadingIcon}
-          onSelect={handleOpenInNewWindow}
-        >
-          {t("sidebar.project.actions.openNewWindow")}
-        </ProjectMenuItem>
-      ) : null}
-      <OpenInFileManagerMenuItem
-        surface={surface}
-        path={projectPath}
-        testID={`sidebar-project-menu-open-folder-${projectViewKey}`}
-      />
       <ProjectMenuItem
         surface={surface}
         testID={`sidebar-project-menu-remove-${projectViewKey}`}
@@ -636,7 +603,6 @@ function WorkspaceRowRightGroup({
   isPinned?: boolean;
   onTogglePin?: () => void;
 }) {
-  const workspacePath = workspace.workspaceDirectory ?? workspace.projectRootPath;
   const { t } = useTranslation();
   const trailing = useSidebarWorkspaceTrailing();
   const showShortcut = showShortcutBadge && shortcutNumber !== null;
@@ -690,7 +656,6 @@ function WorkspaceRowRightGroup({
                 archiveShortcutKeys={archiveShortcutKeys}
                 isPinned={isPinned}
                 onTogglePin={onTogglePin}
-                openInFileManagerPath={workspacePath}
               />
             ) : null}
           </SidebarWorkspaceTrailingActionOverlay>
@@ -804,8 +769,6 @@ function ProjectHeaderRow({
   const [isPressed, setIsPressed] = useState(false);
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const isMobileBreakpoint = useIsCompactFormFactor();
-  const localDaemonServerId = useLocalDaemonServerId();
-  const projectPath = resolveSidebarProjectLocalPath(project, localDaemonServerId);
   const settingsTarget = project.hosts[0] ?? null;
   const handleBeginWorkspaceSetup = useCallback(() => {
     if (!worktreeTarget) {
@@ -896,7 +859,6 @@ function ProjectHeaderRow({
         displayName={displayName}
         worktreeTarget={worktreeTarget}
         settingsTarget={settingsTarget}
-        projectPath={projectPath}
         isHovered={isHovered}
         isMobileBreakpoint={isMobileBreakpoint}
         isProjectActive={isProjectActive}
@@ -969,7 +931,6 @@ function ProjectHeaderRow({
           surface="context"
           projectViewKey={project.viewKey}
           settingsTarget={settingsTarget}
-          projectPath={projectPath}
           onRemoveProject={onRemoveProject}
           removeProjectStatus={removeProjectStatus}
         />
@@ -1083,7 +1044,6 @@ function WorkspaceRowInner({
               archiveShortcutKeys={archiveShortcutKeys}
               isPinned={isPinned}
               onTogglePin={onTogglePin}
-              openInFileManagerPath={workspace.workspaceDirectory}
               disabled={isArchiving}
               aria-selected={selected}
               accessibilityRole="button"

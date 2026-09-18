@@ -33,7 +33,7 @@ console.log("=== Permit Allow/Deny Command Tests ===\n");
 
 // Get random port that's definitely not in use (never 6767)
 const port = 10000 + Math.floor(Math.random() * 50000);
-const paseoHome = await mkdtemp(join(tmpdir(), "paseo-test-home-"));
+const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-test-home-"));
 
 try {
   // Test 1: permit allow --help shows options
@@ -65,7 +65,7 @@ try {
   {
     console.log("Test 3: permit allow handles daemon not running");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace permit allow abc123 req456`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace permit allow abc123 req456`.nothrow();
     // Should fail because daemon not running
     assert.notStrictEqual(result.exitCode, 0, "should fail when daemon not running");
     const output = result.stdout + result.stderr;
@@ -81,7 +81,7 @@ try {
   {
     console.log("Test 4: permit deny handles daemon not running");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace permit deny abc123 req456`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace permit deny abc123 req456`.nothrow();
     // Should fail because daemon not running
     assert.notStrictEqual(result.exitCode, 0, "should fail when daemon not running");
     const output = result.stdout + result.stderr;
@@ -97,7 +97,7 @@ try {
   {
     console.log("Test 5: permit allow --all flag is accepted");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace permit allow abc123 --all`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace permit allow abc123 --all`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --all flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -108,7 +108,7 @@ try {
   {
     console.log("Test 6: permit deny --all flag is accepted");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace permit deny abc123 --all`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace permit deny abc123 --all`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --all flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -119,7 +119,7 @@ try {
   {
     console.log("Test 7: permit deny --message flag is accepted");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace permit deny abc123 req456 --message "Not allowed"`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace permit deny abc123 req456 --message "Not allowed"`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --message flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -130,7 +130,7 @@ try {
   {
     console.log("Test 8: permit deny --interrupt flag is accepted");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace permit deny abc123 req456 --interrupt`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace permit deny abc123 req456 --interrupt`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --interrupt flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -141,7 +141,7 @@ try {
   {
     console.log("Test 9: permit allow --input flag is accepted");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace permit allow abc123 req456 --input '{"key":"value"}'`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace permit allow abc123 req456 --input '{"key":"value"}'`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --input flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -152,7 +152,7 @@ try {
   {
     console.log("Test 10: permit allow requires req_id or --all");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace permit allow abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace permit allow abc123`.nothrow();
     // This might fail due to daemon not running first, or due to missing argument
     // The important thing is it doesn't crash with an unhandled error
     assert.notStrictEqual(result.exitCode, 0, "should fail without req_id or --all");
@@ -163,13 +163,13 @@ try {
   {
     console.log("Test 11: permit deny requires req_id or --all");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace permit deny abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace permit deny abc123`.nothrow();
     assert.notStrictEqual(result.exitCode, 0, "should fail without req_id or --all");
     console.log("✓ permit deny requires req_id or --all\n");
   }
 } finally {
   // Clean up temp directory
-  await rm(paseoHome, { recursive: true, force: true });
+  await rm(byspaceHome, { recursive: true, force: true });
 }
 
 console.log("=== All permit allow/deny tests passed ===");

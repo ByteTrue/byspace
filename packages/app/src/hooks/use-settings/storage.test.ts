@@ -25,7 +25,7 @@ import {
 } from "@/components/sidebar/display-preferences/row-items";
 import { THEME_OPTIONS } from "@/styles/theme";
 
-const LEGACY_SETTINGS_KEY = "@paseo:settings";
+const LEGACY_SETTINGS_KEY = "@byspace:settings";
 
 function makeDeps(
   overrides: {
@@ -46,7 +46,7 @@ describe("loadAppSettingsFromStorage", () => {
   it("preserves a persisted steer send behavior", async () => {
     const deps = makeDeps({
       storage: createInMemoryKeyValueStorage({
-        "@paseo:app-settings": JSON.stringify({ sendBehavior: "steer" }),
+        "@byspace:app-settings": JSON.stringify({ sendBehavior: "steer" }),
       }),
     });
     expect((await loadAppSettingsFromStorage(deps)).sendBehavior).toBe("steer");

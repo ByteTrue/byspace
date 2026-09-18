@@ -71,7 +71,7 @@ describe("createSidebarWorkspaceEntry forge threading", () => {
 });
 
 describe("createSidebarWorkspaceEntry workspace directory label", () => {
-  it("uses the daemon-provided slug for a Paseo-owned worktree", () => {
+  it("uses the daemon-provided slug for a BySpace-owned worktree", () => {
     const descriptor = workspaceWithForge(undefined, "https://github.com/acme/repo/pull/42");
     descriptor.workspaceDirectory = "/worktrees/feature/packages/app";
     descriptor.worktreeSlug = "feature";
@@ -276,19 +276,19 @@ describe("buildSidebarProjectsFromStructure", () => {
           projectKey: "project-1",
           hosts: [
             {
-              serverId: "relay:paseo-host",
+              serverId: "relay:byspace-host",
               iconWorkingDir: "/repo/project-1",
               worktreeSupport: "supported" as const,
             },
           ],
-          workspaceKeys: ["relay:paseo-host:ws-main"],
+          workspaceKeys: ["relay:byspace-host:ws-main"],
         }),
       ],
     });
 
     expect(projects[0]?.workspaces[0]).toMatchObject({
-      workspaceKey: "relay:paseo-host:ws-main",
-      serverId: "relay:paseo-host",
+      workspaceKey: "relay:byspace-host:ws-main",
+      serverId: "relay:byspace-host",
       workspaceId: "ws-main",
     });
   });

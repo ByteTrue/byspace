@@ -1,7 +1,7 @@
-import { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import type { DaemonClientConfig } from "@getpaseo/client/internal/daemon-client";
+import { DaemonClient } from "@bytetrue/client/internal/daemon-client";
+import type { DaemonClientConfig } from "@bytetrue/client/internal/daemon-client";
 import type { HostConnection } from "@/types/host-connection";
-import { getIsElectron, isWeb } from "@/constants/platform";
+import { isWeb } from "@/constants/platform";
 import { getOrCreateClientId } from "./client-id";
 import { resolveAppVersion } from "./app-version";
 import {
@@ -56,17 +56,15 @@ function pickBestReason(reason: string | null, lastError: string | null): string
 
 export interface DaemonConnectionBrowserContext {
   isWeb: boolean;
-  isElectron: boolean;
   protocol: string | null;
 }
 
 function readBrowserConnectionContext(): DaemonConnectionBrowserContext {
   if (!isWeb || typeof window === "undefined") {
-    return { isWeb: false, isElectron: false, protocol: null };
+    return { isWeb: false, protocol: null };
   }
   return {
     isWeb: true,
-    isElectron: getIsElectron(),
     protocol: window.location.protocol,
   };
 }
@@ -78,7 +76,6 @@ export function assertDirectTcpConnectionAllowed(
   if (
     connection.type !== "directTcp" ||
     !context.isWeb ||
-    context.isElectron ||
     context.protocol !== "https:" ||
     connection.useTls
   ) {

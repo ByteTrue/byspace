@@ -132,7 +132,7 @@ function createSession(terminateProcess?: ProcessTerminator): ACPAgentSession {
   return new ACPAgentSession(
     {
       provider: "claude-acp",
-      cwd: "/tmp/paseo-acp-test",
+      cwd: "/tmp/byspace-acp-test",
     },
     {
       provider: "claude-acp",
@@ -189,7 +189,7 @@ function createSessionWithConfig(
   return new ACPAgentSession(
     {
       provider: config.provider ?? "claude-acp",
-      cwd: "/tmp/paseo-acp-test",
+      cwd: "/tmp/byspace-acp-test",
       modeId: config.modeId ?? undefined,
       model: config.model ?? undefined,
       featureValues: config.featureValues,
@@ -218,7 +218,7 @@ function createKiroSession(
   return new ACPAgentSession(
     {
       provider: "kiro",
-      cwd: "/tmp/paseo-acp-test",
+      cwd: "/tmp/byspace-acp-test",
     },
     {
       provider: "kiro",
@@ -289,7 +289,7 @@ function createCopilotSessionWithConfig(
   return new ACPAgentSession(
     {
       provider: "copilot",
-      cwd: "/tmp/paseo-acp-test",
+      cwd: "/tmp/byspace-acp-test",
       modeId: modeId ?? undefined,
       ...(featureValues ? { featureValues } : {}),
     },
@@ -690,7 +690,7 @@ describe("ACPAgentSession terminal tools", () => {
 });
 
 describe("mapACPUsage", () => {
-  test("maps ACP usage fields into Paseo usage", () => {
+  test("maps ACP usage fields into BySpace usage", () => {
     expect(
       mapACPUsage({
         inputTokens: 11,
@@ -1194,7 +1194,7 @@ describe("ACPAgentSession Zed parity", () => {
             type: "content",
             content: {
               type: "text",
-              text: "Which path should Paseo take?",
+              text: "Which path should BySpace take?",
             },
           },
         ],
@@ -1215,7 +1215,7 @@ describe("ACPAgentSession Zed parity", () => {
         detail: {
           type: "plain_text",
           label: "AskUserQuestion",
-          text: "Which path should Paseo take?",
+          text: "Which path should BySpace take?",
         },
         actions: [
           { id: "q0_opt_0", label: "Narrow fix", behavior: "allow" },
@@ -2329,7 +2329,7 @@ describe("ACPAgentSession slash commands", () => {
     const session = new ACPAgentSession(
       {
         provider: "claude-acp",
-        cwd: "/tmp/paseo-acp-test",
+        cwd: "/tmp/byspace-acp-test",
       },
       {
         provider: "claude-acp",
@@ -2355,7 +2355,7 @@ describe("ACPAgentSession slash commands", () => {
     const session = new ACPAgentSession(
       {
         provider: "claude-acp",
-        cwd: "/tmp/paseo-acp-test",
+        cwd: "/tmp/byspace-acp-test",
       },
       {
         provider: "claude-acp",
@@ -2428,9 +2428,9 @@ describe("ACPAgentSession", () => {
     const session = new ACPAgentSession(
       {
         provider: "no-mcp-acp",
-        cwd: "/tmp/paseo-acp-test",
+        cwd: "/tmp/byspace-acp-test",
         mcpServers: {
-          paseo: {
+          byspace: {
             type: "http",
             url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=agent-1",
           },
@@ -3241,11 +3241,11 @@ describe("ACPAgentSession", () => {
     await connection.initialize({
       protocolVersion: PROTOCOL_VERSION,
       clientCapabilities: {},
-      clientInfo: { name: "Paseo test", version: "dev" },
+      clientInfo: { name: "BySpace test", version: "dev" },
     });
     expect(agentConnection.signal.aborted).toBe(false);
     const sessionResponse = await connection.newSession({
-      cwd: "/tmp/paseo-acp-test",
+      cwd: "/tmp/byspace-acp-test",
       mcpServers: [],
     });
     const turnFailed = new Promise<Extract<AgentStreamEvent, { type: "turn_failed" }>>(
@@ -3423,7 +3423,7 @@ describe("ACPAgentSession initialization cleanup", () => {
     }
 
     const session = new FailingNewSession(
-      { provider: "copilot", cwd: "/tmp/paseo-acp-test" },
+      { provider: "copilot", cwd: "/tmp/byspace-acp-test" },
       {
         provider: "copilot",
         logger: createTestLogger(),
@@ -3459,7 +3459,7 @@ describe("ACPAgentSession initialization cleanup", () => {
     }
 
     const session = new FailingLoadSession(
-      { provider: "cursor", cwd: "/tmp/paseo-acp-test" },
+      { provider: "cursor", cwd: "/tmp/byspace-acp-test" },
       {
         provider: "cursor",
         logger: createTestLogger(),
@@ -3807,7 +3807,7 @@ describe("ACP session/load invariant — cwd and mcpServers always passed", () =
 
     // Pass handle through the typed constructor option (no private-field casts).
     const session = new TestSession(
-      { provider: "claude-acp", cwd: "/tmp/paseo-acp-test" },
+      { provider: "claude-acp", cwd: "/tmp/byspace-acp-test" },
       {
         provider: "claude-acp",
         logger: createTestLogger(),
@@ -3839,7 +3839,7 @@ describe("ACP session/load invariant — cwd and mcpServers always passed", () =
 
     expect(loadSession).toHaveBeenCalledWith({
       sessionId: "session-1",
-      cwd: "/tmp/paseo-acp-test",
+      cwd: "/tmp/byspace-acp-test",
       mcpServers: [],
     });
   });
@@ -4014,7 +4014,7 @@ describe("ACP session/load invariant — cwd and mcpServers always passed", () =
     // Even with supportsMcpServers=false, mcpServers: [] must still be passed
     expect(loadSession).toHaveBeenCalledWith({
       sessionId: "session-1",
-      cwd: "/tmp/paseo-acp-test",
+      cwd: "/tmp/byspace-acp-test",
       mcpServers: [],
     });
   });
@@ -4029,7 +4029,7 @@ describe("ACP session/load invariant — cwd and mcpServers always passed", () =
 
     expect(unstableResumeSession).toHaveBeenCalledWith({
       sessionId: "session-1",
-      cwd: "/tmp/paseo-acp-test",
+      cwd: "/tmp/byspace-acp-test",
       mcpServers: [],
     });
   });

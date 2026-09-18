@@ -36,10 +36,6 @@ describe("deriveProjectKey", () => {
   it("returns the parent repository for BySpace worktrees", () => {
     expect(deriveProjectKey("/Users/me/repo/.byspace/worktrees/feature-a")).toBe("/Users/me/repo");
   });
-
-  it("supports legacy Paseo worktree paths", () => {
-    expect(deriveProjectKey("/Users/me/repo/.paseo/worktrees/feature-a")).toBe("/Users/me/repo");
-  });
 });
 
 describe("deriveRemoteProjectKey", () => {
@@ -61,7 +57,7 @@ describe("deriveProjectDisplayName", () => {
     expect(
       deriveProjectDisplayName({
         projectKey: "remote:github.com/getpaseo/paseo",
-        projectName: "paseo",
+        projectName: "byspace",
       }),
     ).toBe("getpaseo/paseo");
   });
@@ -78,10 +74,10 @@ describe("deriveProjectDisplayName", () => {
   it("falls back to projectName for local keys", () => {
     expect(
       deriveProjectDisplayName({
-        projectKey: "/Users/me/dev/paseo",
-        projectName: "paseo",
+        projectKey: "/Users/me/dev/byspace",
+        projectName: "byspace",
       }),
-    ).toBe("paseo");
+    ).toBe("byspace");
   });
 });
 
@@ -110,8 +106,8 @@ describe("groupAgents", () => {
 
   it("groups active agents by remote URL when available", () => {
     const agents = [
-      makeAgent({ id: "a1", cwd: "/Users/me/dev/paseo" }),
-      makeAgent({ id: "a2", cwd: "/Users/me/dev/paseo-fix/worktree" }),
+      makeAgent({ id: "a1", cwd: "/Users/me/dev/byspace" }),
+      makeAgent({ id: "a2", cwd: "/Users/me/dev/byspace-fix/worktree" }),
     ];
 
     const { activeGroups } = groupAgents(agents, {
@@ -124,8 +120,8 @@ describe("groupAgents", () => {
 
   it("falls back to cwd grouping when remote URL is unavailable", () => {
     const agents = [
-      makeAgent({ id: "a1", cwd: "/Users/me/dev/paseo" }),
-      makeAgent({ id: "a2", cwd: "/Users/me/dev/paseo-fix/worktree" }),
+      makeAgent({ id: "a1", cwd: "/Users/me/dev/byspace" }),
+      makeAgent({ id: "a2", cwd: "/Users/me/dev/byspace-fix/worktree" }),
     ];
 
     const { activeGroups } = groupAgents(agents, {

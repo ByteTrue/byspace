@@ -23,7 +23,7 @@ export async function prepareLocalPairingHost(
   additionalHosts: PairingHostInput[] = [],
 ): Promise<void> {
   await page.addInitScript((localServerId) => {
-    (window as unknown as { paseoDesktop: unknown }).paseoDesktop = {
+    (window as unknown as { byspaceDesktop: unknown }).byspaceDesktop = {
       platform: "darwin",
       invoke: async (command: string) => {
         if (command === "desktop_daemon_status") {
@@ -51,7 +51,7 @@ export async function prepareLocalPairingHost(
       events: { on: async () => () => undefined },
       opener: {
         openUrl: async (url: string) => {
-          localStorage.setItem("@paseo:e2e-opened-url", url);
+          localStorage.setItem("@byspace:e2e-opened-url", url);
         },
       },
     };
@@ -132,9 +132,9 @@ export async function closePairDeviceModal(page: Page): Promise<void> {
 
 export async function reloadAndOpenPairDevice(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const nonce = localStorage.getItem("@paseo:e2e-seed-nonce");
+    const nonce = localStorage.getItem("@byspace:e2e-seed-nonce");
     if (!nonce) throw new Error("Expected e2e seed nonce");
-    localStorage.setItem("@paseo:e2e-disable-default-seed-once", nonce);
+    localStorage.setItem("@byspace:e2e-disable-default-seed-once", nonce);
   });
   await page.reload();
   await openPairDeviceModal(page);
@@ -163,9 +163,9 @@ export async function retryRelayAndExpectFailure(
 
 export async function openPairDeviceFromHome(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const nonce = localStorage.getItem("@paseo:e2e-seed-nonce");
+    const nonce = localStorage.getItem("@byspace:e2e-seed-nonce");
     if (!nonce) throw new Error("Expected e2e seed nonce");
-    localStorage.setItem("@paseo:e2e-disable-default-seed-once", nonce);
+    localStorage.setItem("@byspace:e2e-disable-default-seed-once", nonce);
   });
   await page.goto("/open-project");
   await page.getByTestId("open-project-pair-device").click();
@@ -209,7 +209,7 @@ export async function switchPairDeviceToHost(page: Page, serverId: string): Prom
 export async function openRelaySecurityDocs(page: Page): Promise<void> {
   await page.getByRole("link", { name: "Read how BySpace relay works" }).click();
   await expect
-    .poll(() => page.evaluate(() => localStorage.getItem("@paseo:e2e-opened-url")))
+    .poll(() => page.evaluate(() => localStorage.getItem("@byspace:e2e-opened-url")))
     .toBe("https://github.com/ByteTrue/byspace/blob/main/SECURITY.md");
 }
 

@@ -1,5 +1,5 @@
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import type { SessionOutboundMessage } from "@getpaseo/protocol/messages";
+import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
+import type { SessionOutboundMessage } from "@bytetrue/protocol/messages";
 
 export interface MessageCollector {
   messages: SessionOutboundMessage[];

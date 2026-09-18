@@ -37,7 +37,7 @@ Minimal example that configures listening address, hostnames, and MCP:
 
 ```json
 {
-  "$schema": "https://paseo.sh/schemas/paseo.config.v1.json",
+  "$schema": "https://app.byspace.cc.cd/schemas/byspace.config.v1.json",
   "version": 1,
   "daemon": {
     "listen": "127.0.0.1:6777",
@@ -225,7 +225,7 @@ Set the persisted value in `config.json`:
 
 - `BYSPACE_HOME`, set BySpace home directory
 - `BYSPACE_HOST`, set the daemon target for CLI commands
-- `PASEO_PASSWORD`, on the daemon, the password to require (plaintext, hashed at startup); on the CLI, the password used to connect when the host URI doesn't include one
+- `BYSPACE_PASSWORD`, on the daemon, the password to require (plaintext, hashed at startup); on the CLI, the password used to connect when the host URI doesn't include one
 - `BYSPACE_LISTEN`, override `daemon.listen`
 - `BYSPACE_RELAY_ENABLED`, enable or disable the outbound relay for this daemon launch
 - `BYSPACE_HOSTNAMES`, override/extend `daemon.hostnames`
@@ -242,12 +242,12 @@ Set the persisted value in `config.json`:
 - `OPENAI_API_KEY`, override OpenAI provider key
 - `BYSPACE_LOCAL_MODELS_DIR`, control local model directory
 
-Legacy `PASEO_*` names remain accepted as lower-priority compatibility aliases.
+`BYSPACE_*` names are the only accepted environment variables.
 
 ## Schema
 
 For editor autocomplete/validation, set `$schema` to:
 
 ```
-https://paseo.sh/schemas/paseo.config.v1.json
+https://app.byspace.cc.cd/schemas/byspace.config.v1.json
 ```

@@ -190,8 +190,8 @@ describe("terminal-emulator-runtime", () => {
   const originalWindow = (globalThis as { window?: unknown }).window;
 
   beforeEach(() => {
-    (globalThis as { window?: { __paseoTerminal?: unknown } }).window = {
-      __paseoTerminal: undefined,
+    (globalThis as { window?: { __byspaceTerminal?: unknown } }).window = {
+      __byspaceTerminal: undefined,
     };
     terminalConstructorOptions.values = [];
   });
@@ -713,7 +713,7 @@ describe("terminal-emulator-runtime", () => {
 
     const priorWindow = (globalThis as { window?: unknown }).window;
     (globalThis as { window?: unknown }).window = {
-      __paseoTerminal: undefined,
+      __byspaceTerminal: undefined,
       addEventListener: () => undefined,
       removeEventListener: () => undefined,
       setTimeout: globalThis.setTimeout.bind(globalThis),

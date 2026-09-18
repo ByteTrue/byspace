@@ -17,33 +17,33 @@ console.log("=== CLI IPC Target Helpers ===\n");
 
 {
   console.log("Test 1: unix hosts resolve to ws+unix URLs");
-  const target = resolveDaemonTarget("unix:///tmp/paseo.sock");
+  const target = resolveDaemonTarget("unix:///tmp/byspace.sock");
   assert.deepStrictEqual(target, {
     type: "ipc",
-    url: "ws+unix:///tmp/paseo.sock:/ws",
-    socketPath: "/tmp/paseo.sock",
+    url: "ws+unix:///tmp/byspace.sock:/ws",
+    socketPath: "/tmp/byspace.sock",
   });
   console.log("✓ unix hosts resolve to ws+unix URLs\n");
 }
 
 {
   console.log("Test 1b: bare unix socket paths resolve at the connection boundary");
-  const target = resolveDaemonTarget("/tmp/paseo.sock");
+  const target = resolveDaemonTarget("/tmp/byspace.sock");
   assert.deepStrictEqual(target, {
     type: "ipc",
-    url: "ws+unix:///tmp/paseo.sock:/ws",
-    socketPath: "/tmp/paseo.sock",
+    url: "ws+unix:///tmp/byspace.sock:/ws",
+    socketPath: "/tmp/byspace.sock",
   });
   console.log("✓ bare unix socket paths resolve at the connection boundary\n");
 }
 
 {
   console.log("Test 2: pipe hosts preserve the Node socketPath transport form");
-  const target = resolveDaemonTarget("pipe://\\\\.\\pipe\\paseo-managed-test");
+  const target = resolveDaemonTarget("pipe://\\\\.\\pipe\\byspace-managed-test");
   assert.deepStrictEqual(target, {
     type: "ipc",
     url: "ws://localhost/ws",
-    socketPath: "\\\\.\\pipe\\paseo-managed-test",
+    socketPath: "\\\\.\\pipe\\byspace-managed-test",
   });
   console.log("✓ pipe hosts preserve Node socketPath transport form\n");
 }
@@ -69,33 +69,33 @@ console.log("=== CLI IPC Target Helpers ===\n");
 
 {
   console.log("Test 5: local unix socket paths normalize into IPC daemon targets");
-  assert.strictEqual(normalizeDaemonHost("/tmp/paseo.sock"), "unix:///tmp/paseo.sock");
+  assert.strictEqual(normalizeDaemonHost("/tmp/byspace.sock"), "unix:///tmp/byspace.sock");
   console.log("✓ local unix socket paths normalize into IPC daemon targets\n");
 }
 
 {
   console.log("Test 5b: Windows absolute paths are NOT treated as unix sockets");
-  assert.strictEqual(normalizeDaemonHost("C:\\Users\\foo\\.paseo\\paseo.sock"), null);
+  assert.strictEqual(normalizeDaemonHost("C:\\Users\\foo\\.byspace\\byspace.sock"), null);
   assert.strictEqual(normalizeDaemonHost("D:\\project\\socket"), null);
   console.log("✓ Windows absolute paths are not treated as unix sockets\n");
 }
 
 {
   console.log("Test 6: default host resolution tries local IPC first, then localhost fallback");
-  const paseoHome = mkdtempSync(path.join(os.tmpdir(), "paseo-client-targets-"));
+  const byspaceHome = mkdtempSync(path.join(os.tmpdir(), "byspace-client-targets-"));
   try {
-    mkdirSync(paseoHome, { recursive: true });
+    mkdirSync(byspaceHome, { recursive: true });
     writeFileSync(
-      path.join(paseoHome, "byspace.pid"),
+      path.join(byspaceHome, "byspace.pid"),
       JSON.stringify({ pid: process.pid, listen: "/tmp/byspace-from-pid.sock" }),
     );
-    assert.deepStrictEqual(resolveDefaultDaemonHosts({ BYSPACE_HOME: paseoHome }), [
+    assert.deepStrictEqual(resolveDefaultDaemonHosts({ BYSPACE_HOME: byspaceHome }), [
       "unix:///tmp/byspace-from-pid.sock",
       "localhost:6777",
     ]);
     const previousHome = process.env.BYSPACE_HOME;
     const previousHost = process.env.BYSPACE_HOST;
-    process.env.BYSPACE_HOME = paseoHome;
+    process.env.BYSPACE_HOME = byspaceHome;
     delete process.env.BYSPACE_HOST;
     assert.strictEqual(getDaemonHost(), "unix:///tmp/byspace-from-pid.sock");
     if (previousHome === undefined) delete process.env.BYSPACE_HOME;
@@ -103,65 +103,26 @@ console.log("=== CLI IPC Target Helpers ===\n");
     if (previousHost === undefined) delete process.env.BYSPACE_HOST;
     else process.env.BYSPACE_HOST = previousHost;
   } finally {
-    rmSync(paseoHome, { recursive: true, force: true });
+    rmSync(byspaceHome, { recursive: true, force: true });
   }
   console.log("✓ default host resolution tries local IPC first, then localhost fallback\n");
 }
 
 {
   console.log("Test 7: configured TCP host is preserved before the localhost fallback");
-  const paseoHome = mkdtempSync(path.join(os.tmpdir(), "paseo-client-targets-tcp-"));
+  const byspaceHome = mkdtempSync(path.join(os.tmpdir(), "byspace-client-targets-tcp-"));
   try {
     assert.deepStrictEqual(
       resolveDefaultDaemonHosts({
-        BYSPACE_HOME: paseoHome,
+        BYSPACE_HOME: byspaceHome,
         BYSPACE_LISTEN: "127.0.0.1:7777",
       }),
       ["127.0.0.1:7777", "localhost:6777"],
     );
   } finally {
-    rmSync(paseoHome, { recursive: true, force: true });
+    rmSync(byspaceHome, { recursive: true, force: true });
   }
   console.log("✓ configured TCP host is preserved before the localhost fallback\n");
-}
-
-{
-  console.log("Test 7b: legacy Paseo home, listen, and host variables are ignored");
-  const byspaceHome = mkdtempSync(path.join(os.tmpdir(), "byspace-client-targets-legacy-"));
-  const paseoHome = mkdtempSync(path.join(os.tmpdir(), "paseo-client-targets-legacy-"));
-  const previousByspaceHome = process.env.BYSPACE_HOME;
-  const previousByspaceHost = process.env.BYSPACE_HOST;
-  const previousPaseoHost = process.env.PASEO_HOST;
-  try {
-    writeFileSync(
-      path.join(paseoHome, "paseo.pid"),
-      JSON.stringify({ pid: process.pid, listen: "127.0.0.1:6767" }),
-    );
-    assert.deepStrictEqual(
-      resolveDefaultDaemonHosts({
-        BYSPACE_HOME: byspaceHome,
-        PASEO_HOME: paseoHome,
-        PASEO_LISTEN: "127.0.0.1:6767",
-      }),
-      ["localhost:6777"],
-    );
-    process.env.BYSPACE_HOME = byspaceHome;
-    delete process.env.BYSPACE_HOST;
-    process.env.PASEO_HOST = "127.0.0.1:6767";
-    assert.strictEqual(getDaemonHost(), "localhost:6777");
-    process.env.BYSPACE_HOST = "127.0.0.1:7777";
-    assert.strictEqual(getDaemonHost(), "127.0.0.1:7777");
-  } finally {
-    if (previousByspaceHome === undefined) delete process.env.BYSPACE_HOME;
-    else process.env.BYSPACE_HOME = previousByspaceHome;
-    if (previousByspaceHost === undefined) delete process.env.BYSPACE_HOST;
-    else process.env.BYSPACE_HOST = previousByspaceHost;
-    if (previousPaseoHost === undefined) delete process.env.PASEO_HOST;
-    else process.env.PASEO_HOST = previousPaseoHost;
-    rmSync(byspaceHome, { recursive: true, force: true });
-    rmSync(paseoHome, { recursive: true, force: true });
-  }
-  console.log("✓ legacy Paseo home, listen, and host variables are ignored\n");
 }
 
 {
@@ -172,31 +133,31 @@ console.log("=== CLI IPC Target Helpers ===\n");
 
 {
   console.log("Test 9: local IPC still takes priority over configured TCP hosts");
-  const paseoHome = mkdtempSync(path.join(os.tmpdir(), "paseo-client-targets-order-"));
+  const byspaceHome = mkdtempSync(path.join(os.tmpdir(), "byspace-client-targets-order-"));
   try {
-    mkdirSync(paseoHome, { recursive: true });
+    mkdirSync(byspaceHome, { recursive: true });
     writeFileSync(
-      path.join(paseoHome, "byspace.pid"),
+      path.join(byspaceHome, "byspace.pid"),
       JSON.stringify({ pid: process.pid, listen: "/tmp/byspace-priority.sock" }),
     );
     assert.deepStrictEqual(
       resolveDefaultDaemonHosts({
-        BYSPACE_HOME: paseoHome,
+        BYSPACE_HOME: byspaceHome,
         BYSPACE_LISTEN: "127.0.0.1:7777",
       }),
       ["unix:///tmp/byspace-priority.sock", "127.0.0.1:7777", "localhost:6777"],
     );
   } finally {
-    rmSync(paseoHome, { recursive: true, force: true });
+    rmSync(byspaceHome, { recursive: true, force: true });
   }
   console.log("✓ local IPC still takes priority over configured TCP hosts\n");
 }
 
 {
   console.log("Test 10: daemon password resolution prefers TCP URI query, falls back to env");
-  const previousEnv = process.env.PASEO_PASSWORD;
+  const previousEnv = process.env.BYSPACE_PASSWORD;
   try {
-    delete process.env.PASEO_PASSWORD;
+    delete process.env.BYSPACE_PASSWORD;
     assert.strictEqual(
       resolveDaemonPassword("tcp://example.com:6767?ssl=true&password=query-secret"),
       "query-secret",
@@ -204,7 +165,7 @@ console.log("=== CLI IPC Target Helpers ===\n");
     assert.strictEqual(resolveDaemonPassword("tcp://missing.example:6767"), undefined);
     assert.strictEqual(resolveDaemonPassword("example.com:6767"), undefined);
 
-    process.env.PASEO_PASSWORD = "env-secret";
+    process.env.BYSPACE_PASSWORD = "env-secret";
     assert.strictEqual(
       resolveDaemonPassword("tcp://example.com:6767?ssl=true&password=query-secret"),
       "query-secret",
@@ -222,7 +183,7 @@ console.log("=== CLI IPC Target Helpers ===\n");
     );
     assert.strictEqual(resolveDaemonPassword("localhost:6767"), "env-secret");
 
-    process.env.PASEO_PASSWORD = "";
+    process.env.BYSPACE_PASSWORD = "";
     assert.strictEqual(
       resolveDaemonPassword("localhost:6767"),
       undefined,
@@ -230,9 +191,9 @@ console.log("=== CLI IPC Target Helpers ===\n");
     );
   } finally {
     if (previousEnv === undefined) {
-      delete process.env.PASEO_PASSWORD;
+      delete process.env.BYSPACE_PASSWORD;
     } else {
-      process.env.PASEO_PASSWORD = previousEnv;
+      process.env.BYSPACE_PASSWORD = previousEnv;
     }
   }
   console.log("✓ daemon password resolution prefers TCP URI query, falls back to env\n");

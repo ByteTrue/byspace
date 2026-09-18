@@ -38,9 +38,9 @@ export function resolveSelectedAgentForNewAgent(input: {
   return parseHostAgentRouteFromPathname(input.pathname) ?? parseAgentKey(input.selectedAgentId);
 }
 
-function inferMainRepoRootFromPaseoWorktreePath(cwd: string): string | null {
+function inferMainRepoRootFromBySpaceWorktreePath(cwd: string): string | null {
   const normalizedPath = cwd.replace(/\\/g, "/");
-  for (const marker of ["/.byspace/worktrees", "/.paseo/worktrees"]) {
+  for (const marker of ["/.byspace/worktrees"]) {
     const markerIndex = normalizedPath.indexOf(marker);
     if (markerIndex <= 0) {
       continue;
@@ -60,12 +60,12 @@ export function resolveNewAgentWorkingDir(
   cwd: string,
   checkout: CheckoutStatusPayload | null,
 ): string {
-  const explicitMainRepoRoot = checkout?.isPaseoOwnedWorktree
+  const explicitMainRepoRoot = checkout?.isBySpaceOwnedWorktree
     ? checkout.mainRepoRoot?.trim() || null
     : null;
   if (explicitMainRepoRoot) {
     return explicitMainRepoRoot;
   }
 
-  return inferMainRepoRootFromPaseoWorktreePath(cwd) ?? cwd;
+  return inferMainRepoRootFromBySpaceWorktreePath(cwd) ?? cwd;
 }

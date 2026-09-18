@@ -1,8 +1,8 @@
 import { createRequire } from "node:module";
 import { QueryClient, CancelledError } from "@tanstack/react-query";
-import type { ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
-import type { GetProvidersSnapshotResponseMessage } from "@getpaseo/protocol/messages";
-import { compactProviderSnapshot } from "@getpaseo/protocol/provider-snapshot-codec";
+import type { ProviderSnapshotEntry } from "@bytetrue/protocol/agent-types";
+import type { GetProvidersSnapshotResponseMessage } from "@bytetrue/protocol/messages";
+import { compactProviderSnapshot } from "@bytetrue/protocol/provider-snapshot-codec";
 import { applyProvidersSnapshotUpdate } from "./push-router";
 import { createProviderSnapshotCache } from "./provider-snapshot-cache";
 import {

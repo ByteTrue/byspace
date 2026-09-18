@@ -29,9 +29,9 @@ console.log("=== Stop Command Tests ===\n");
 
 // Get random port that's definitely not in use (never 6767)
 const port = 10000 + Math.floor(Math.random() * 50000);
-const paseoHome = await mkdtemp(join(tmpdir(), "paseo-test-home-"));
+const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-test-home-"));
 process.env.BYSPACE_HOST = `localhost:${port}`;
-process.env.BYSPACE_HOME = paseoHome;
+process.env.BYSPACE_HOME = byspaceHome;
 
 try {
   // Test 1: stop --help shows options
@@ -50,7 +50,7 @@ try {
   {
     console.log("Test 2: stop requires ID, --all, or --cwd");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace stop`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace stop`.nothrow();
     assert.notStrictEqual(result.exitCode, 0, "should fail without id, --all, or --cwd");
     const output = result.stdout + result.stderr;
     const hasError =
@@ -66,7 +66,7 @@ try {
   {
     console.log("Test 3: stop handles daemon not running");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace stop abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace stop abc123`.nothrow();
     // Should fail because daemon not running
     assert.notStrictEqual(result.exitCode, 0, "should fail when daemon not running");
     const output = result.stdout + result.stderr;
@@ -82,7 +82,7 @@ try {
   {
     console.log("Test 4: stop --all flag is accepted");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace stop --all`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace stop --all`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --all flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -93,7 +93,7 @@ try {
   {
     console.log("Test 5: stop --cwd flag is accepted");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace stop --cwd /tmp`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace stop --cwd /tmp`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --cwd flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -104,7 +104,7 @@ try {
   {
     console.log("Test 6: stop with ID and --host flag is accepted");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace stop abc123 --host localhost:${port}`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace stop abc123 --host localhost:${port}`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --host flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -124,7 +124,7 @@ try {
   {
     console.log("Test 8: -q (quiet) flag is accepted with stop");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace -q stop abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace -q stop abc123`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept -q flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -132,7 +132,7 @@ try {
   }
 } finally {
   // Clean up temp directory
-  await rm(paseoHome, { recursive: true, force: true });
+  await rm(byspaceHome, { recursive: true, force: true });
 }
 
 console.log("=== All stop tests passed ===");

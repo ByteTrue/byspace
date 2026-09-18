@@ -6,7 +6,7 @@ import type { AggregatedAgent } from "@/hooks/use-aggregated-agents";
  * For regular repos/directories, returns the cwd.
  */
 export function deriveProjectKey(cwd: string): string {
-  for (const worktreeMarker of [".byspace/worktrees/", ".paseo/worktrees/"]) {
+  for (const worktreeMarker of [".byspace/worktrees/"]) {
     const idx = cwd.indexOf(worktreeMarker);
     if (idx !== -1) {
       return cwd.slice(0, idx).replace(/\/$/, "");

@@ -4,10 +4,10 @@ import type pino from "pino";
 import type { SessionInboundMessage, SessionOutboundMessage } from "../../messages.js";
 import type { ProjectRegistry } from "../../workspace-registry.js";
 import {
-  readPaseoConfigForEdit,
-  writePaseoConfigForEdit,
+  readBySpaceConfigForEdit,
+  writeBySpaceConfigForEdit,
   type ProjectConfigRpcError,
-} from "../../../utils/paseo-config-file.js";
+} from "../../../utils/byspace-config-file.js";
 import { hasUncommittedWorktreeSetupChanges } from "./worktree-setup-commit-status.js";
 
 export interface ProjectConfigSessionHost {
@@ -47,7 +47,7 @@ export class ProjectConfigSession {
       return;
     }
 
-    const result = readPaseoConfigForEdit(repoRoot);
+    const result = readBySpaceConfigForEdit(repoRoot);
     if (!result.ok) {
       this.logger.warn(
         { repoRoot, requestId: msg.requestId, outcome: result.error.code },
@@ -94,7 +94,7 @@ export class ProjectConfigSession {
       { repoRoot, requestId: msg.requestId, outcome: "write_attempt" },
       "Writing project config",
     );
-    const result = writePaseoConfigForEdit({
+    const result = writeBySpaceConfigForEdit({
       repoRoot,
       config: msg.config,
       expectedRevision: msg.expectedRevision,

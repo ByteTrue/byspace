@@ -8,7 +8,7 @@ HTTP origin. Start it, then open the daemon URL in a browser.
 ```bash
 docker run -d --name byspace \
   -p 6777:6777 \
-  -e PASEO_PASSWORD=change-me \
+  -e BYSPACE_PASSWORD=change-me \
   -v "$PWD/byspace-home:/home/byspace" \
   -v "$PWD:/workspace" \
   ghcr.io/bytetrue/byspace:0.7.0-beta.2

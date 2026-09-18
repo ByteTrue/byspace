@@ -46,9 +46,9 @@ const reportQueue = createReportQueue(sendReport);
 
 function report(state) {
   const url =
-    process.env.BYSPACE_TERMINAL_ACTIVITY_URL ?? process.env.PASEO_TERMINAL_ACTIVITY_URL;
-  const terminalId = process.env.BYSPACE_TERMINAL_ID ?? process.env.PASEO_TERMINAL_ID;
-  const token = process.env.BYSPACE_ACTIVITY_TOKEN ?? process.env.PASEO_ACTIVITY_TOKEN;
+    process.env.BYSPACE_TERMINAL_ACTIVITY_URL;
+  const terminalId = process.env.BYSPACE_TERMINAL_ID;
+  const token = process.env.BYSPACE_ACTIVITY_TOKEN;
   if (!url || !terminalId || !token) return reportQueue.wait();
 
   return reportQueue.enqueue({ url, terminalId, token, state });

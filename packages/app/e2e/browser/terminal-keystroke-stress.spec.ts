@@ -20,8 +20,8 @@ import {
 
 const INPUT_TEXT = buildStressText(600);
 const STRESS_TIMEOUT_MS = 15_000;
-const RUN_MANUAL_TERMINAL_PERF = process.env.PASEO_TERMINAL_PERF_E2E === "1";
-const TERMINAL_TRANSPORT = process.env.PASEO_TERMINAL_TRANSPORT === "relay" ? "relay" : "direct";
+const RUN_MANUAL_TERMINAL_PERF = process.env.BYSPACE_TERMINAL_PERF_E2E === "1";
+const TERMINAL_TRANSPORT = process.env.BYSPACE_TERMINAL_TRANSPORT === "relay" ? "relay" : "direct";
 const WORKLOAD_FIXTURE = path.resolve(__dirname, "../fixtures/terminal-workload.mjs");
 const WORKLOAD_OUTPUT_COUNT = 1000;
 const WORKLOAD_OUTPUT_PAYLOAD = "x";

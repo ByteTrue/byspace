@@ -17,12 +17,12 @@ import path from "node:path";
 const workspaces = ["highlight", "relay", "protocol", "client", "server", "cli"];
 const bundledPackages = workspaces
   .filter((workspace) => workspace !== "cli")
-  .map((workspace) => `@getpaseo/${workspace}`);
+  .map((workspace) => `@bytetrue/${workspace}`);
 
 const [sourceArgument = process.cwd(), outputArgument = "dist/npm"] = process.argv.slice(2);
 const sourceDir = path.resolve(sourceArgument);
 const outputDir = path.resolve(outputArgument);
-const expectedCommit = process.env.PASEO_SOURCE_COMMIT?.trim();
+const expectedCommit = process.env.BYSPACE_SOURCE_COMMIT?.trim();
 const temporaryDir = mkdtempSync(path.join(os.tmpdir(), "bytetrue-byspace-pack-"));
 const packsDir = path.join(temporaryDir, "packs");
 const stagingDir = path.join(temporaryDir, "package");
@@ -41,7 +41,7 @@ function packWorkspace(workspace) {
     "pack",
     "--ignore-scripts",
     "--json",
-    `--workspace=@getpaseo/${workspace}`,
+    `--workspace=@bytetrue/${workspace}`,
     `--pack-destination=${packsDir}`,
   ]);
   const [{ filename }] = JSON.parse(output);
@@ -75,12 +75,12 @@ try {
   const runtimePackages = [{ packageJson, packagePath }];
 
   for (const workspace of workspaces.filter((name) => name !== "cli")) {
-    const destination = path.join(stagingDir, "node_modules", "@getpaseo", workspace);
+    const destination = path.join(stagingDir, "node_modules", "@bytetrue", workspace);
     extract(tarballs.get(workspace), destination);
     const internalPackagePath = path.join(destination, "package.json");
     const internalPackage = JSON.parse(readFileSync(internalPackagePath, "utf8"));
     if (
-      internalPackage.name !== `@getpaseo/${workspace}` ||
+      internalPackage.name !== `@bytetrue/${workspace}` ||
       internalPackage.version !== rootPackage.version
     ) {
       throw new Error(`Unexpected ${workspace} package identity`);
@@ -90,7 +90,7 @@ try {
 
   const externalDependencyEntries = runtimePackages.flatMap(({ packageJson: runtimePackage }) =>
     [runtimePackage.dependencies, runtimePackage.peerDependencies].flatMap((dependencySet) =>
-      Object.entries(dependencySet ?? {}).filter(([name]) => !name.startsWith("@getpaseo/")),
+      Object.entries(dependencySet ?? {}).filter(([name]) => !name.startsWith("@bytetrue/")),
     ),
   );
   const specifiersByName = new Map();
@@ -103,7 +103,7 @@ try {
   // dependency). The daemon's specifier wins because running the daemon is
   // what this package is for.
   const daemonDependencies =
-    runtimePackages.find((entry) => entry.packageJson.name === "@getpaseo/server")?.packageJson
+    runtimePackages.find((entry) => entry.packageJson.name === "@bytetrue/server")?.packageJson
       .dependencies ?? {};
   for (const [name, specifier] of externalDependencyEntries) {
     const chosen = specifiersByName.get(name).size > 1 ? daemonDependencies[name] : undefined;
@@ -113,12 +113,12 @@ try {
   for (const entry of runtimePackages.slice(1)) {
     entry.packageJson.dependencies = Object.fromEntries(
       Object.entries(entry.packageJson.dependencies ?? {}).filter(([name]) =>
-        name.startsWith("@getpaseo/"),
+        name.startsWith("@bytetrue/"),
       ),
     );
     entry.packageJson.peerDependencies = Object.fromEntries(
       Object.entries(entry.packageJson.peerDependencies ?? {}).filter(([name]) =>
-        name.startsWith("@getpaseo/"),
+        name.startsWith("@bytetrue/"),
       ),
     );
     writeFileSync(entry.packagePath, `${JSON.stringify(entry.packageJson, null, 2)}\n`);

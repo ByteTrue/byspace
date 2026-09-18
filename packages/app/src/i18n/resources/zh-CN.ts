@@ -674,7 +674,7 @@ export const zhCN: TranslationResources = {
       },
       routes: {
         public: "反向代理",
-        paseo: "Memorable",
+        byspace: "Memorable",
         direct: "直接地址",
       },
       states: {
@@ -779,7 +779,7 @@ export const zhCN: TranslationResources = {
           updateDirty: "有本地变更时无法更新，请先 commit 或 stash",
           updateCurrent: "无法更新，因为此分支已与 {{baseRef}} 保持最新",
           mergePrNoGithub: "当前无法 merge PR，因为 GitHub 未连接",
-          archiveNotWorktree: "此处无法归档，因为此 workspace 不是作为 Paseo worktree 创建的",
+          archiveNotWorktree: "此处无法归档，因为此 workspace 不是作为 BySpace worktree 创建的",
           mergePrNoForge: "当前无法 merge {{noun}}，因为 {{brand}} 未连接",
           mergePrMissing: "无法 merge PR，因为还没有 pull request",
           mergePrDraft: "无法 merge PR，因为 pull request 仍是 draft",
@@ -1396,7 +1396,7 @@ export const zhCN: TranslationResources = {
     },
     direct: {
       title: "直接连接",
-      helper: "输入 Paseo server 的地址。",
+      helper: "输入 BySpace server 的地址。",
       fields: {
         host: "Host",
         port: "端口",
@@ -1507,15 +1507,15 @@ export const zhCN: TranslationResources = {
       enableTitle: "启用中继？",
       enableDescription: "中继让此设备可以从任何地方连接。配对流量采用端到端加密。",
       relayDocs: "中继如何工作",
-      relayDocsAccessibility: "阅读 Paseo 中继的工作原理",
+      relayDocsAccessibility: "阅读 BySpace 中继的工作原理",
       enableRelay: "启用中继",
       enablingRelay: "正在启用...",
       notNow: "暂不",
       directConnectionHint:
         "不使用中继时，请通过 TCP、Tailscale 或其他 VPN 直接连接。不会生成二维码。",
-      updateRequired: "请更新主机，以便从 Paseo Desktop 启用中继。",
+      updateRequired: "请更新主机，以便从 BySpace Desktop 启用中继。",
       unavailable: "配对 offer 不可用。",
-      hint: "用手机上的 Paseo 扫描此二维码，或复制下方链接。",
+      hint: "用手机上的 BySpace 扫描此二维码，或复制下方链接。",
       securityWarning: "请像保管密码一样保管此配对链接。任何获得此链接的人都可以访问此守护进程。",
       qrUnavailable: "二维码不可用。",
       qrAccessibility: "配对二维码",
@@ -1549,7 +1549,7 @@ export const zhCN: TranslationResources = {
   serviceUrl: {
     title: "打开服务 URL",
     message: "打开 {{url}}？",
-    inPaseo: "在 Paseo 中",
+    inBySpace: "在 BySpace 中",
     externalBrowser: "外部浏览器",
     dontAskAgain: "不再询问",
   },
@@ -1668,9 +1668,9 @@ export const zhCN: TranslationResources = {
       one: "使用了 {{count}} 个其他工具",
       other: "使用了 {{count}} 个其他工具",
     },
-    paseoCalls: {
-      one: "调用了 Paseo {{count}} 次",
-      other: "调用了 Paseo {{count}} 次",
+    byspaceCalls: {
+      one: "调用了 BySpace {{count}} 次",
+      other: "调用了 BySpace {{count}} 次",
     },
     and: "并",
   },
@@ -1751,7 +1751,7 @@ export const zhCN: TranslationResources = {
       send: "发送",
       sending: "正在发送...",
       sentTitle: "测试通知已发送",
-      sentDescription: "Paseo 已将通知交给操作系统。",
+      sentDescription: "BySpace 已将通知交给操作系统。",
       sendFailedTitle: "无法发送测试通知",
       webPush: {
         title: "浏览器通知",
@@ -1785,14 +1785,14 @@ export const zhCN: TranslationResources = {
     },
     metadataGeneration: {
       title: "元数据生成",
-      description: "选择 Paseo 用于工作区标题、分支名称、提交消息和拉取请求草稿的模型",
+      description: "选择 BySpace 用于工作区标题、分支名称、提交消息和拉取请求草稿的模型",
       selection: "模型选择",
       automatic: "自动",
       preferred: "手动",
-      automaticHint: "Paseo 会选择一个可用的快速模型",
-      preferredHint: "选择 Paseo 使用的模型",
+      automaticHint: "BySpace 会选择一个可用的快速模型",
+      preferredHint: "选择 BySpace 使用的模型",
       model: "模型",
-      fallbackHint: "如果不可用，Paseo 会改用其他可用模型",
+      fallbackHint: "如果不可用，BySpace 会改用其他可用模型",
       docs: "文档",
       saveError: "无法更新元数据生成设置",
     },
@@ -1801,7 +1801,7 @@ export const zhCN: TranslationResources = {
       browserData: {
         title: "浏览器数据",
         siteData: "Cookie 和网站数据",
-        description: "浏览器标签页在 Paseo 中共享登录状态和网站数据。",
+        description: "浏览器标签页在 BySpace 中共享登录状态和网站数据。",
         clear: "清除浏览器数据",
         clearing: "正在清除...",
         confirmTitle: "清除浏览器数据？",
@@ -1827,7 +1827,7 @@ export const zhCN: TranslationResources = {
         description: "运行脚本中的 URL 打开位置",
         options: {
           ask: "询问",
-          inApp: "在 Paseo 中",
+          inApp: "在 BySpace 中",
           external: "外部浏览器",
         },
       },
@@ -2124,10 +2124,10 @@ export const zhCN: TranslationResources = {
         title: "编排 skills",
         description: "教会 Agent 通过 CLI 编排任务",
         updateAvailable: "有更新可用",
-        updateTitle: "更新 Paseo skills？",
+        updateTitle: "更新 BySpace skills？",
         updateFallback: "将内置 skills 同步到你的机器。",
-        uninstallTitle: "卸载 Paseo skills？",
-        uninstallMessage: "会从 ~/.agents、~/.claude、~/.codex 移除所有 Paseo 编排 skills。",
+        uninstallTitle: "卸载 BySpace skills？",
+        uninstallMessage: "会从 ~/.agents、~/.claude、~/.codex 移除所有 BySpace 编排 skills。",
         choose: "选择 skills",
         chooseAll: "全部 skills",
         chooseAllHint: "保持安装所有内置 skills，包括以后新增的。",
@@ -2165,7 +2165,7 @@ export const zhCN: TranslationResources = {
         enableTools: {
           title: "启用 BySpace tools",
           hint: "Agent 将能够管理 worktree、Agent 和计划",
-          accessibilityLabel: "注入 Paseo tools",
+          accessibilityLabel: "注入 BySpace tools",
         },
         systemPrompt: {
           title: "System prompt",
@@ -2304,13 +2304,14 @@ export const zhCN: TranslationResources = {
           unavailableTitle: "Host 不可用",
           unavailableMessage: "这个 Host 尚未连接。请等待它上线后再重启。",
           offlineTitle: "Host 离线",
-          offlineMessage: "这个 Host 已离线。Paseo 会自动重连，请等它恢复在线后再重启。",
+          offlineMessage: "这个 Host 已离线。BySpace 会自动重连，请等它恢复在线后再重启。",
           requestFailedTitle: "错误",
-          requestFailedMessage: "发送重启请求失败。Paseo 会自动重连，请在 Host 显示在线后重试。",
+          requestFailedMessage: "发送重启请求失败。BySpace 会自动重连，请在 Host 显示在线后重试。",
           dialogFailedMessage: "无法打开重启确认对话框。",
         },
         update: {
-          desktopManagedHint: "此 Daemon 由 Paseo Desktop 管理。请在 Host 上更新 Paseo Desktop。",
+          desktopManagedHint:
+            "此 Daemon 由 BySpace Desktop 管理。请在 Host 上更新 BySpace Desktop。",
           title: "Update daemon",
           hint: "Update the daemon to the latest version and restart it",
           confirm: "Update",
@@ -2431,8 +2432,6 @@ export const zhCN: TranslationResources = {
       readFailures: {
         invalidTitle: "无法解析项目配置",
         invalidDescription: "修复磁盘上的文件，然后重新加载。",
-        conflictingDescription:
-          "同时存在 byspace.json 和旧版 {{legacyFileName}}。请仅保留一个文件，然后重新加载。",
         missingTitle: "这个 Host 没有这个 Project",
         missingSingleHost: "所选 Host 没有这个 Project 的记录。",
         transportTitle: "无法加载项目配置",
@@ -2481,7 +2480,7 @@ export const zhCN: TranslationResources = {
         newScript: "新建 script",
         editScript: "编辑 {{name}}",
         runAsService: "作为服务运行",
-        serviceHint: "Paseo 会监管该进程，并通过 $BYSPACE_PORT 分配端口",
+        serviceHint: "BySpace 会监管该进程，并通过 $BYSPACE_PORT 分配端口",
         actions: {
           add: "添加 script",
           edit: "编辑",
@@ -2490,7 +2489,7 @@ export const zhCN: TranslationResources = {
       },
       metadata: {
         title: "元数据生成",
-        info: "注入到 Paseo 用来生成元数据的 AI prompts 中的 Project 专属指令，可用于强制执行团队约定，例如分支命名、提交风格或 PR 格式",
+        info: "注入到 BySpace 用来生成元数据的 AI prompts 中的 Project 专属指令，可用于强制执行团队约定，例如分支命名、提交风格或 PR 格式",
         branchName: "分支名称",
         branchNamePlaceholder: "分支以 feat/ 或 fix/ 开头，个人分支使用 mb/",
         commitMessage: "提交消息",

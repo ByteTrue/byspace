@@ -3,7 +3,7 @@ import type {
   ListTerminalsResponse,
   MutableDaemonConfig,
   SessionOutboundMessage,
-} from "@getpaseo/protocol/messages";
+} from "@bytetrue/protocol/messages";
 import { agentCommandsQueryRoot } from "@/hooks/agent-commands-query";
 import { shareCheckoutDiff } from "@/git/diff-sharing";
 import { orderCheckoutDiffFiles } from "@/git/diff-order";
@@ -70,7 +70,7 @@ export interface ServerDataQueryMeta extends Record<string, unknown> {
 export type ProvidersSnapshotUpdate = ProvidersSnapshotUpdateMessage;
 
 interface ServerDataPushClient {
-  getProvidersSnapshot: import("@getpaseo/client/internal/daemon-client").DaemonClient["getProvidersSnapshot"];
+  getProvidersSnapshot: import("@bytetrue/client/internal/daemon-client").DaemonClient["getProvidersSnapshot"];
   on<TType extends ServerDataEventType>(
     type: TType,
     handler: (message: Extract<SessionOutboundMessage, { type: TType }>) => void,

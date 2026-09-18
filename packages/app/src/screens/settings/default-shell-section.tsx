@@ -8,7 +8,7 @@ import { settingsStyles } from "@/styles/settings";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
-import type { DetectedShell } from "@getpaseo/protocol/messages";
+import type { DetectedShell } from "@bytetrue/protocol/messages";
 
 const AUTO_SHELL_VALUE = "__auto__";
 

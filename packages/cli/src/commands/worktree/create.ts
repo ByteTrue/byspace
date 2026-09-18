@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { Command } from "commander";
-import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
+import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type { CommandError, OutputSchema, SingleResult } from "../../output/index.js";
 import { buildCreateWorktreeRequest, type WorktreeCreateOptions } from "./create-input.js";
@@ -45,7 +45,7 @@ export async function runCreateCommand(
   }
 
   try {
-    const response = await client.createPaseoWorktree(request);
+    const response = await client.createBySpaceWorktree(request);
 
     const workspace = response.workspace;
     if (!workspace || response.error) {

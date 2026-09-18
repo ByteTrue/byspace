@@ -1,7 +1,7 @@
-import type { PaseoTerminal } from "@getpaseo/client";
+import type { BySpaceTerminal } from "@bytetrue/client";
 import type { OutputSchema } from "../../output/index.js";
 
-export type TerminalRow = PaseoTerminal;
+export type TerminalRow = BySpaceTerminal;
 
 export interface TerminalKillRow {
   terminalId: string;

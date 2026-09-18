@@ -1,8 +1,8 @@
-import { readPaseoConfigJson } from "./paseo-config-file.js";
+import { readBySpaceConfigJson } from "./byspace-config-file.js";
 import {
-  PaseoConfigSchema,
-  type PaseoMetadataGeneration,
-} from "@getpaseo/protocol/paseo-config-schema";
+  BySpaceConfigSchema,
+  type BySpaceMetadataGeneration,
+} from "@bytetrue/protocol/byspace-config-schema";
 
 export type MetadataConfigKey = "title" | "branchName" | "commitMessage" | "pullRequest";
 
@@ -46,14 +46,14 @@ function renderStyleSection(section: MetadataStyleSection, override: string | un
 
 async function readProjectMetadataOverrides(
   options: Pick<BuildMetadataPromptOptions, "cwd" | "workspaceGitService">,
-): Promise<PaseoMetadataGeneration | undefined> {
+): Promise<BySpaceMetadataGeneration | undefined> {
   if (!options.workspaceGitService) {
     return undefined;
   }
   try {
     const repoRoot = await options.workspaceGitService.resolveRepoRoot(options.cwd);
-    const json = readPaseoConfigJson(repoRoot);
-    return PaseoConfigSchema.parse(json).metadataGeneration;
+    const json = readBySpaceConfigJson(repoRoot);
+    return BySpaceConfigSchema.parse(json).metadataGeneration;
   } catch {
     return undefined;
   }

@@ -16,8 +16,8 @@ function getLogger(logger: LoggerLike | undefined): LoggerLike | undefined {
   return logger?.child({ module: "server-id" });
 }
 
-function getServerIdPath(paseoHome: string): string {
-  return path.join(paseoHome, SERVER_ID_FILENAME);
+function getServerIdPath(byspaceHome: string): string {
+  return path.join(byspaceHome, SERVER_ID_FILENAME);
 }
 
 function generateServerId(): string {
@@ -30,21 +30,19 @@ function generateServerId(): string {
  * Stable daemon identifier scoped to a given $BYSPACE_HOME.
  *
  * - Persisted to `$BYSPACE_HOME/server-id`
- * - Can be overridden via `BYSPACE_SERVER_ID` (legacy `PASEO_SERVER_ID` is accepted)
+ * - Can be overridden via `BYSPACE_SERVER_ID`
  */
 export function getOrCreateServerId(
-  paseoHome: string,
+  byspaceHome: string,
   options?: { env?: NodeJS.ProcessEnv; logger?: LoggerLike },
 ): string {
   const env = options?.env ?? process.env;
   const log = getLogger(options?.logger);
-  const serverIdPath = getServerIdPath(paseoHome);
+  const serverIdPath = getServerIdPath(byspaceHome);
 
   let envOverride: string | null = null;
   if (typeof env.BYSPACE_SERVER_ID === "string" && env.BYSPACE_SERVER_ID.trim().length > 0) {
     envOverride = env.BYSPACE_SERVER_ID.trim();
-  } else if (typeof env.PASEO_SERVER_ID === "string" && env.PASEO_SERVER_ID.trim().length > 0) {
-    envOverride = env.PASEO_SERVER_ID.trim();
   }
 
   if (envOverride) {

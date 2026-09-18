@@ -1,6 +1,6 @@
 # BySpace
 
-BySpace lets you monitor and control local AI coding agents from mobile, web, desktop, and the command line. This baseline is derived from [Paseo](https://github.com/getpaseo/paseo).
+BySpace lets you monitor and control local AI coding agents from mobile, web, and the command line. It is a fork of [Paseo](https://github.com/getpaseo/paseo).
 
 ## Install the beta
 

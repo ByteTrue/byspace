@@ -1,5 +1,5 @@
-import type { SessionEventSubscription } from "@getpaseo/protocol/messages";
-import { CLIENT_CAPS, type ClientCapability } from "@getpaseo/protocol/client-capabilities";
+import type { SessionEventSubscription } from "@bytetrue/protocol/messages";
+import { CLIENT_CAPS, type ClientCapability } from "@bytetrue/protocol/client-capabilities";
 
 // Protocol support belongs to the installed client. Only browser hosting needs
 // a resource supplied by the caller. Keep this exhaustive as the protocol evolves.

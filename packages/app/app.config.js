@@ -1,10 +1,7 @@
 const pkg = require("./package.json");
-const withPasteInput = require("./plugins/with-paste-input");
 
-// Native mobile builds are retired (issue 025 A2): this config now serves the
-// Expo web export only. withPasteInput stays — it patches the paste-input
-// native module used by the terminal paste path on native; on web it is inert
-// but the plugin list must keep resolving for `expo export --platform web`.
+// Native mobile builds are retired (issue 025 A2): this config serves the Expo
+// web export only.
 const appVariant = process.env.APP_VARIANT ?? "production";
 
 const variants = {
@@ -35,7 +32,7 @@ export default {
     autolinking: {
       searchPaths: ["../../node_modules", "./node_modules"],
     },
-    plugins: ["expo-router", withPasteInput],
+    plugins: ["expo-router"],
     experiments: {
       typedRoutes: true,
       reactCompiler: true,

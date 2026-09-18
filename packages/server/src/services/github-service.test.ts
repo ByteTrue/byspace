@@ -17,7 +17,7 @@ import {
   type GitHubPullRequestStatusFacts,
 } from "./github-service.js";
 import { isPlatform } from "../test-utils/platform.js";
-import { CheckoutPrStatusResponseSchema } from "@getpaseo/protocol/messages";
+import { CheckoutPrStatusResponseSchema } from "@bytetrue/protocol/messages";
 
 const EXPECTED_GITHUB_FAST_POLL_MS = 20_000;
 const EXPECTED_GITHUB_SLOW_POLL_MS = 120_000;
@@ -418,8 +418,8 @@ function pullRequestCheckoutTargetJson(): string {
           isCrossRepository: true,
           headRepositoryOwner: { login: "therainisme" },
           headRepository: {
-            sshUrl: "git@github.com:therainisme/paseo.git",
-            url: "https://github.com/therainisme/paseo",
+            sshUrl: "git@github.com:therainisme/byspace.git",
+            url: "https://github.com/therainisme/byspace",
           },
         },
       },
@@ -429,8 +429,8 @@ function pullRequestCheckoutTargetJson(): string {
 
 function repoViewJson(): string {
   return JSON.stringify({
-    owner: { login: "getpaseo" },
-    name: "paseo",
+    owner: { login: "getbyspace" },
+    name: "byspace",
     parent: null,
   });
 }
@@ -793,8 +793,8 @@ describe("ForgeService", () => {
         { remoteName: "upstream", remoteRef: "refs/pull/526/head" },
       ],
       headOwnerLogin: "therainisme",
-      headRepositorySshUrl: "git@github.com:therainisme/paseo.git",
-      headRepositoryUrl: "https://github.com/therainisme/paseo",
+      headRepositorySshUrl: "git@github.com:therainisme/byspace.git",
+      headRepositoryUrl: "https://github.com/therainisme/byspace",
       isCrossRepository: true,
     });
 
@@ -805,8 +805,8 @@ describe("ForgeService", () => {
     });
     expect(runner.calls[1]?.cwd).toBe("/repo");
     expect(runner.calls[1]?.args.slice(0, 3)).toEqual(["api", "graphql", "-f"]);
-    expect(runner.calls[1]?.args).toContain("owner=getpaseo");
-    expect(runner.calls[1]?.args).toContain("name=paseo");
+    expect(runner.calls[1]?.args).toContain("owner=getbyspace");
+    expect(runner.calls[1]?.args).toContain("name=byspace");
     expect(runner.calls[1]?.args).toContain("number=526");
   });
 

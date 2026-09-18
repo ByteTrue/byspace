@@ -85,7 +85,7 @@ function createWorkspaceRuntimeSnapshot(
       mainRepoRoot: null,
       currentBranch: "main",
       remoteUrl: "https://github.com/acme/repo.git",
-      isPaseoOwnedWorktree: false,
+      isBySpaceOwnedWorktree: false,
       isDirty: false,
       baseRef: "main",
       aheadBehind: { ahead: 0, behind: 0 },
@@ -199,7 +199,7 @@ function createSessionForWorkspaceGitWatchTests(options?: {
     logger: createStub<pino.Logger>(logger),
     downloadTokenStore: createStub<SessionOptions["downloadTokenStore"]>({}),
     pushNotifications: createStub<SessionOptions["pushNotifications"]>({}),
-    paseoHome: "/tmp/paseo-test",
+    byspaceHome: "/tmp/byspace-test",
     agentManager: createStub<SessionOptions["agentManager"]>({
       subscribe: () => () => {},
       listAgents: () => [],
@@ -442,7 +442,7 @@ describe("workspace git watch targets", () => {
       behindOfOrigin: 1,
       hasRemote: true,
       remoteUrl: "https://github.com/acme/repo.git",
-      isPaseoOwnedWorktree: false,
+      isBySpaceOwnedWorktree: false,
       error: null,
       requestId: REPO_SUBSCRIPTION_REQUEST_ID,
     });
@@ -459,7 +459,7 @@ describe("workspace git watch targets", () => {
     serviceProxy.registerWorkspaceService({
       port: 4321,
       workspaceId: "ws-10",
-      projectSlug: "paseo",
+      projectSlug: "byspace",
       branchName: "old-branch",
       scriptName: "app",
     });
@@ -505,7 +505,7 @@ describe("workspace git watch targets", () => {
 
     expect(serviceProxy.getWorkspaceHealthTargets("ws-10")).toEqual([
       expect.objectContaining({
-        hostname: "app--new-branch--paseo.localhost",
+        hostname: "app--new-branch--byspace.localhost",
         scriptName: "app",
       }),
     ]);

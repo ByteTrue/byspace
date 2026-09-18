@@ -14,7 +14,7 @@ import { join } from "path";
 import { win32 } from "node:path";
 import { tmpdir } from "os";
 import pino from "pino";
-import { base64EncryptedWireByteLength } from "@getpaseo/relay";
+import { base64EncryptedWireByteLength } from "@bytetrue/relay";
 import {
   __resetCheckoutShortstatCacheForTests,
   __resetPullRequestStatusCacheForTests,
@@ -43,7 +43,7 @@ import {
   resolveRepositoryDefaultBranch,
   parseWorktreeList,
   renameCurrentBranch,
-  isPaseoWorktreePath,
+  isBySpaceWorktreePath,
   isDescendantPath,
   warmCheckoutShortstatInBackground,
 } from "./checkout-git.js";
@@ -68,7 +68,7 @@ interface LegacyCreateWorktreeTestOptions {
   baseBranch: string;
   worktreeSlug: string;
   runSetup?: boolean;
-  paseoHome?: string;
+  byspaceHome?: string;
 }
 
 function createLegacyWorktreeForTest(
@@ -87,13 +87,13 @@ function createLegacyWorktreeForTest(
       branchName: options.branchName,
     },
     runSetup: options.runSetup ?? true,
-    paseoHome: options.paseoHome,
+    byspaceHome: options.byspaceHome,
   });
 }
 import {
-  getPaseoWorktreeMetadataPath,
-  readPaseoWorktreeMetadata,
-  writePaseoWorktreeMetadata,
+  getBySpaceWorktreeMetadataPath,
+  readBySpaceWorktreeMetadata,
+  writeBySpaceWorktreeMetadata,
 } from "./worktree-metadata.js";
 
 function initRepo(): { tempDir: string; repoDir: string } {
@@ -205,9 +205,9 @@ function createGitHubServiceRecordingPullRequestTargets(
 
 async function readPullRequestLookupTargetFromFacts(
   repoDir: string,
-  paseoHome: string,
+  byspaceHome: string,
 ): Promise<RequestedPullRequestTarget | null> {
-  const facts = await getCheckoutSnapshotFacts(repoDir, { paseoHome });
+  const facts = await getCheckoutSnapshotFacts(repoDir, { byspaceHome });
   if (!facts.isGit) {
     throw new Error("Expected git checkout facts");
   }
@@ -246,13 +246,13 @@ function commitFile(cwd: string, path: string, content: string, message: string)
 describe("checkout git utilities", () => {
   let tempDir: string;
   let repoDir: string;
-  let paseoHome: string;
+  let byspaceHome: string;
 
   beforeEach(() => {
     const setup = initRepo();
     tempDir = setup.tempDir;
     repoDir = setup.repoDir;
-    paseoHome = join(tempDir, "paseo-home");
+    byspaceHome = join(tempDir, "byspace-home");
     __resetCheckoutShortstatCacheForTests();
     __resetPullRequestStatusCacheForTests();
   });
@@ -558,7 +558,7 @@ describe("checkout git utilities", () => {
     setupRemoteTrackingMain(repoDir, tempDir);
 
     startGitCommandMetrics();
-    const facts = await getCheckoutSnapshotFacts(repoDir, { paseoHome });
+    const facts = await getCheckoutSnapshotFacts(repoDir, { byspaceHome });
     const metrics = stopGitCommandMetrics();
     const originUrlCommands = metrics.commands.filter(
       (command) => command.args.join(" ") === "config --get remote.origin.url",
@@ -580,7 +580,7 @@ describe("checkout git utilities", () => {
     execFileSync("git", ["config", "branch.main.merge", "refs/heads/main"], { cwd: repoDir });
 
     startGitCommandMetrics();
-    const facts = await getCheckoutSnapshotFacts(repoDir, { paseoHome });
+    const facts = await getCheckoutSnapshotFacts(repoDir, { byspaceHome });
     const metrics = stopGitCommandMetrics();
     const commands = metrics.commands.map((command) => command.args.join(" "));
 
@@ -600,30 +600,30 @@ describe("checkout git utilities", () => {
     writeFileSync(join(repoDir, "feature.txt"), "feature\nchanged\n");
     const github = createGitHubServiceForStatus(createPullRequestStatus());
 
-    const facts = await getCheckoutSnapshotFacts(repoDir, { paseoHome });
-    const status = await getCheckoutStatus(repoDir, { paseoHome, facts });
-    const shortstat = await getCheckoutShortstat(repoDir, { paseoHome, facts }, { force: true });
+    const facts = await getCheckoutSnapshotFacts(repoDir, { byspaceHome });
+    const status = await getCheckoutStatus(repoDir, { byspaceHome, facts });
+    const shortstat = await getCheckoutShortstat(repoDir, { byspaceHome, facts }, { force: true });
     const prStatus = await getPullRequestStatus(
       repoDir,
       github,
       { force: true, reason: "snapshot-equivalence" },
-      { paseoHome, facts },
+      { byspaceHome, facts },
     );
 
     __resetCheckoutShortstatCacheForTests();
     __resetPullRequestStatusCacheForTests();
     startGitCommandMetrics();
-    const statusWithFacts = await getCheckoutStatus(repoDir, { paseoHome, facts });
+    const statusWithFacts = await getCheckoutStatus(repoDir, { byspaceHome, facts });
     const shortstatWithFacts = await getCheckoutShortstat(
       repoDir,
-      { paseoHome, facts },
+      { byspaceHome, facts },
       { force: true },
     );
     const prStatusWithFacts = await getPullRequestStatus(
       repoDir,
       github,
       { force: true, reason: "snapshot-equivalence-with-facts" },
-      { paseoHome, facts },
+      { byspaceHome, facts },
     );
     const metrics = stopGitCommandMetrics();
     const commands = metrics.commands.map((command) => command.args.join(" "));
@@ -726,7 +726,7 @@ const x = 1;
     }
     expect(status.currentBranch).toBe("main");
     expect(realpathSync.native(status.repoRoot)).toBe(realpathSync.native(repoDir));
-    expect(status.isPaseoOwnedWorktree).toBe(false);
+    expect(status.isBySpaceOwnedWorktree).toBe(false);
     expect(status.mainRepoRoot ?? null).toBeNull();
   });
 
@@ -987,15 +987,15 @@ const x = 1;
       cwd: repoDir,
     });
     commitFile(repoDir, "feature.txt", "feature\n", "feature commit");
-    execFileSync("git", ["remote", "add", "paseo-pr-1285", prRemoteDir], { cwd: repoDir });
+    execFileSync("git", ["remote", "add", "byspace-pr-1285", prRemoteDir], { cwd: repoDir });
     execFileSync(
       "git",
-      ["push", "paseo-pr-1285", "HEAD:refs/heads/open-button-targets-active-file"],
+      ["push", "byspace-pr-1285", "HEAD:refs/heads/open-button-targets-active-file"],
       { cwd: repoDir },
     );
     execFileSync(
       "git",
-      ["config", "branch.aaronzhongg/open-button-targets-active-file.remote", "paseo-pr-1285"],
+      ["config", "branch.aaronzhongg/open-button-targets-active-file.remote", "byspace-pr-1285"],
       {
         cwd: repoDir,
       },
@@ -1028,15 +1028,15 @@ const x = 1;
       cwd: repoDir,
     });
     commitFile(repoDir, "feature.txt", "feature\n", "feature commit");
-    execFileSync("git", ["remote", "add", "paseo-pr-1285", prRemoteDir], { cwd: repoDir });
+    execFileSync("git", ["remote", "add", "byspace-pr-1285", prRemoteDir], { cwd: repoDir });
     execFileSync(
       "git",
-      ["push", "paseo-pr-1285", "HEAD:refs/heads/open-button-targets-active-file"],
+      ["push", "byspace-pr-1285", "HEAD:refs/heads/open-button-targets-active-file"],
       { cwd: repoDir },
     );
     execFileSync(
       "git",
-      ["config", "branch.aaronzhongg/open-button-targets-active-file.remote", "paseo-pr-1285"],
+      ["config", "branch.aaronzhongg/open-button-targets-active-file.remote", "byspace-pr-1285"],
       { cwd: repoDir },
     );
     execFileSync(
@@ -1054,7 +1054,7 @@ const x = 1;
     execFileSync("git", ["config", "user.name", "Test"], { cwd: prCloneDir });
     commitFile(prCloneDir, "remote.txt", "remote\n", "remote update");
     execFileSync("git", ["push"], { cwd: prCloneDir });
-    execFileSync("git", ["fetch", "paseo-pr-1285"], { cwd: repoDir });
+    execFileSync("git", ["fetch", "byspace-pr-1285"], { cwd: repoDir });
 
     const status = await getCheckoutStatus(repoDir);
 
@@ -1082,7 +1082,7 @@ const x = 1;
     expect(status.behindOfOrigin).toBeNull();
   });
 
-  it("does not report full history as unpushed for fresh no-track Paseo worktrees", async () => {
+  it("does not report full history as unpushed for fresh no-track BySpace worktrees", async () => {
     setupRemoteTrackingMain(repoDir, tempDir);
     commitFile(repoDir, "second.txt", "second\n", "second commit");
     execFileSync("git", ["push"], { cwd: repoDir });
@@ -1092,13 +1092,13 @@ const x = 1;
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "fresh-feature",
-      paseoHome,
+      byspaceHome,
     });
 
-    const status = await getCheckoutStatus(worktree.worktreePath, { paseoHome });
+    const status = await getCheckoutStatus(worktree.worktreePath, { byspaceHome });
     expect(status).toMatchObject({
       isGit: true,
-      isPaseoOwnedWorktree: true,
+      isBySpaceOwnedWorktree: true,
       baseRef: "main",
       aheadBehind: { ahead: 0, behind: 0 },
       aheadOfOrigin: null,
@@ -1115,14 +1115,14 @@ const x = 1;
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "fresh-feature",
-      paseoHome,
+      byspaceHome,
     });
     commitFile(worktree.worktreePath, "feature.txt", "feature\n", "feature commit");
 
-    const status = await getCheckoutStatus(worktree.worktreePath, { paseoHome });
+    const status = await getCheckoutStatus(worktree.worktreePath, { byspaceHome });
     expect(status).toMatchObject({
       isGit: true,
-      isPaseoOwnedWorktree: true,
+      isBySpaceOwnedWorktree: true,
       baseRef: "main",
       aheadBehind: { ahead: 1, behind: 0 },
       aheadOfOrigin: null,
@@ -1712,17 +1712,17 @@ const x = 1;
     expect(diff.diff).toContain("# untracked-large.txt: diff too large omitted");
   });
 
-  it("resolves the Git common directory once when reading Paseo worktree facts", async () => {
+  it("resolves the Git common directory once when reading BySpace worktree facts", async () => {
     const result = await createLegacyWorktreeForTest({
       branchName: "main",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "common-dir",
-      paseoHome,
+      byspaceHome,
     });
 
     startGitCommandMetrics();
-    const facts = await getCheckoutSnapshotFacts(result.worktreePath, { paseoHome });
+    const facts = await getCheckoutSnapshotFacts(result.worktreePath, { byspaceHome });
     const metrics = stopGitCommandMetrics();
     const commonDirCommands = metrics.commands.filter(
       (command) => command.args.join(" ") === "rev-parse --git-common-dir",
@@ -1732,31 +1732,35 @@ const x = 1;
     expect(commonDirCommands).toHaveLength(1);
   });
 
-  it("handles status/diff/commit in a .paseo worktree", async () => {
+  it("handles status/diff/commit in a .byspace worktree", async () => {
     const result = await createLegacyWorktreeForTest({
       branchName: "main",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "alpha",
-      paseoHome,
+      byspaceHome,
     });
 
     writeFileSync(join(result.worktreePath, "file.txt"), "worktree change\n");
 
-    const status = await getCheckoutStatus(result.worktreePath, { paseoHome });
+    const status = await getCheckoutStatus(result.worktreePath, { byspaceHome });
     expect(status.isGit).toBe(true);
     expect(realpathSync.native(status.repoRoot)).toBe(realpathSync.native(result.worktreePath));
     expect(status.isDirty).toBe(true);
-    expect(status.isPaseoOwnedWorktree).toBe(true);
+    expect(status.isBySpaceOwnedWorktree).toBe(true);
     expect(realpathSync.native(status.mainRepoRoot ?? "")).toBe(realpathSync.native(repoDir));
 
-    const diff = await getCheckoutDiff(result.worktreePath, { mode: "uncommitted" }, { paseoHome });
+    const diff = await getCheckoutDiff(
+      result.worktreePath,
+      { mode: "uncommitted" },
+      { byspaceHome },
+    );
     expect(diff.diff).toContain("-hello");
     expect(diff.diff).toContain("+worktree change");
 
     await commitAll(result.worktreePath, "worktree update");
 
-    const cleanStatus = await getCheckoutStatus(result.worktreePath, { paseoHome });
+    const cleanStatus = await getCheckoutStatus(result.worktreePath, { byspaceHome });
     expect(cleanStatus.isDirty).toBe(false);
     const message = execFileSync("git", ["log", "-1", "--pretty=%B"], {
       cwd: result.worktreePath,
@@ -1766,22 +1770,22 @@ const x = 1;
     expect(message).toBe("worktree update");
   });
 
-  it("returns checkout root metadata for .paseo worktrees", async () => {
+  it("returns checkout root metadata for .byspace worktrees", async () => {
     const result = await createLegacyWorktreeForTest({
       branchName: "main",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "lite-alpha",
-      paseoHome,
+      byspaceHome,
     });
 
-    const status = await getCheckoutStatus(result.worktreePath, { paseoHome });
+    const status = await getCheckoutStatus(result.worktreePath, { byspaceHome });
     expect(status.isGit).toBe(true);
     if (!status.isGit) {
       return;
     }
     expect(realpathSync.native(status.repoRoot)).toBe(realpathSync.native(result.worktreePath));
-    expect(status.isPaseoOwnedWorktree).toBe(true);
+    expect(status.isBySpaceOwnedWorktree).toBe(true);
     expect(realpathSync.native(status.mainRepoRoot ?? "")).toBe(realpathSync.native(repoDir));
   });
 
@@ -1799,12 +1803,12 @@ const x = 1;
       cwd: mainCheckoutDir,
       baseBranch: "main",
       worktreeSlug: "feature-worktree",
-      paseoHome,
+      byspaceHome,
     });
 
-    const status = await getCheckoutStatus(worktree.worktreePath, { paseoHome });
+    const status = await getCheckoutStatus(worktree.worktreePath, { byspaceHome });
     expect(status.isGit).toBe(true);
-    expect(status.isPaseoOwnedWorktree).toBe(true);
+    expect(status.isBySpaceOwnedWorktree).toBe(true);
     expect(realpathSync.native(status.mainRepoRoot ?? "")).toBe(
       realpathSync.native(mainCheckoutDir),
     );
@@ -1816,10 +1820,10 @@ const x = 1;
       cwd: repoDir,
     });
 
-    const status = await getCheckoutStatus(worktreeDir, { paseoHome });
+    const status = await getCheckoutStatus(worktreeDir, { byspaceHome });
     expect(status.isGit).toBe(true);
     expect(realpathSync.native(status.repoRoot)).toBe(realpathSync.native(worktreeDir));
-    expect(status.isPaseoOwnedWorktree).toBe(false);
+    expect(status.isBySpaceOwnedWorktree).toBe(false);
     expect(realpathSync.native(status.mainRepoRoot ?? "")).toBe(realpathSync.native(repoDir));
     expect(status.currentBranch).toBe("feature/plain");
   });
@@ -1830,7 +1834,7 @@ const x = 1;
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "merge",
-      paseoHome,
+      byspaceHome,
     });
 
     writeFileSync(join(worktree.worktreePath, "merge.txt"), "feature\n");
@@ -1843,7 +1847,7 @@ const x = 1;
       .toString()
       .trim();
 
-    await mergeToBase(worktree.worktreePath, { baseRef: "main" }, { paseoHome });
+    await mergeToBase(worktree.worktreePath, { baseRef: "main" }, { byspaceHome });
 
     const baseContainsFeature = execFileSync(
       "git",
@@ -1855,7 +1859,7 @@ const x = 1;
     );
     expect(baseContainsFeature).toBeDefined();
 
-    const statusAfterMerge = await getCheckoutStatus(worktree.worktreePath, { paseoHome });
+    const statusAfterMerge = await getCheckoutStatus(worktree.worktreePath, { byspaceHome });
     expect(statusAfterMerge.isGit).toBe(true);
     if (statusAfterMerge.isGit) {
       expect(statusAfterMerge.aheadBehind?.ahead ?? 0).toBe(0);
@@ -1886,7 +1890,7 @@ const x = 1;
       cwd: repoDir,
       baseBranch: "develop",
       worktreeSlug: "feature-worktree",
-      paseoHome,
+      byspaceHome,
     });
 
     writeFileSync(join(featureWorktree.worktreePath, "feature.txt"), "feature\n");
@@ -1895,7 +1899,7 @@ const x = 1;
       cwd: featureWorktree.worktreePath,
     });
 
-    const mutatedCwd = await mergeToBase(featureWorktree.worktreePath, {}, { paseoHome });
+    const mutatedCwd = await mergeToBase(featureWorktree.worktreePath, {}, { byspaceHome });
 
     expect(realpathSync.native(mutatedCwd)).toBe(realpathSync.native(baseWorktreePath));
     expect(mutatedCwd).not.toBe(featureWorktree.worktreePath);
@@ -2193,10 +2197,10 @@ const x = 1;
     execFileSync("git", ["clone", "--bare", repoDir, originDir]);
     execFileSync("git", ["clone", "--bare", repoDir, prRemoteDir]);
     execFileSync("git", ["remote", "add", "origin", originDir], { cwd: repoDir });
-    execFileSync("git", ["remote", "add", "paseo-pr-526", prRemoteDir], { cwd: repoDir });
+    execFileSync("git", ["remote", "add", "byspace-pr-526", prRemoteDir], { cwd: repoDir });
     execFileSync("git", ["checkout", "-b", "therainisme/main"], { cwd: repoDir });
-    execFileSync("git", ["fetch", "paseo-pr-526", "main"], { cwd: repoDir });
-    execFileSync("git", ["config", "branch.therainisme/main.remote", "paseo-pr-526"], {
+    execFileSync("git", ["fetch", "byspace-pr-526", "main"], { cwd: repoDir });
+    execFileSync("git", ["config", "branch.therainisme/main.remote", "byspace-pr-526"], {
       cwd: repoDir,
     });
     execFileSync("git", ["config", "branch.therainisme/main.merge", "refs/heads/main"], {
@@ -2229,7 +2233,7 @@ const x = 1;
       .toString()
       .trim();
     expect(prRemoteMain).toBe(localHead);
-    expect(upstream).toBe("paseo-pr-526/main");
+    expect(upstream).toBe("byspace-pr-526/main");
   });
 
   it("pushes the current branch to its configured push remote", async () => {
@@ -2238,12 +2242,12 @@ const x = 1;
     execFileSync("git", ["clone", "--bare", repoDir, originDir]);
     execFileSync("git", ["clone", "--bare", repoDir, prRemoteDir]);
     execFileSync("git", ["remote", "add", "origin", originDir], { cwd: repoDir });
-    execFileSync("git", ["remote", "add", "paseo-pr-526", prRemoteDir], { cwd: repoDir });
+    execFileSync("git", ["remote", "add", "byspace-pr-526", prRemoteDir], { cwd: repoDir });
     execFileSync("git", ["checkout", "-b", "therainisme/main"], { cwd: repoDir });
-    execFileSync("git", ["config", "branch.therainisme/main.pushRemote", "paseo-pr-526"], {
+    execFileSync("git", ["config", "branch.therainisme/main.pushRemote", "byspace-pr-526"], {
       cwd: repoDir,
     });
-    execFileSync("git", ["config", "remote.paseo-pr-526.push", "HEAD:refs/heads/main"], {
+    execFileSync("git", ["config", "remote.byspace-pr-526.push", "HEAD:refs/heads/main"], {
       cwd: repoDir,
     });
     writeFileSync(join(repoDir, "fork-pr.txt"), "fork pr edit\n");
@@ -2273,7 +2277,7 @@ const x = 1;
     );
     const trackedPrRemoteHead = execFileSync(
       "git",
-      ["rev-parse", "refs/remotes/paseo-pr-526/main"],
+      ["rev-parse", "refs/remotes/byspace-pr-526/main"],
       {
         cwd: repoDir,
       },
@@ -2283,7 +2287,7 @@ const x = 1;
     const afterPushStatus = await getCheckoutStatus(repoDir);
     expect(upstreamBeforePush).toBeNull();
     expect(prRemoteMain).toBe(localHead);
-    expect(getBranchUpstream(repoDir)).toBe("paseo-pr-526/main");
+    expect(getBranchUpstream(repoDir)).toBe("byspace-pr-526/main");
     expect(trackedPrRemoteHead).toBe(localHead);
     expect(afterPushStatus).toMatchObject({ aheadOfOrigin: 0, behindOfOrigin: 0 });
     expect(originBranch.status).toBe(1);
@@ -2295,11 +2299,11 @@ const x = 1;
     execFileSync("git", ["remote", "add", "origin", originDir], { cwd: repoDir });
     execFileSync("git", ["checkout", "-b", "feature"], { cwd: repoDir });
     execFileSync("git", ["push", "-u", "origin", "feature"], { cwd: repoDir });
-    execFileSync("git", ["remote", "add", "paseo-pr-1790", originDir], { cwd: repoDir });
-    execFileSync("git", ["config", "branch.feature.pushRemote", "paseo-pr-1790"], {
+    execFileSync("git", ["remote", "add", "byspace-pr-1790", originDir], { cwd: repoDir });
+    execFileSync("git", ["config", "branch.feature.pushRemote", "byspace-pr-1790"], {
       cwd: repoDir,
     });
-    execFileSync("git", ["config", "remote.paseo-pr-1790.push", "HEAD:refs/heads/feature"], {
+    execFileSync("git", ["config", "remote.byspace-pr-1790.push", "HEAD:refs/heads/feature"], {
       cwd: repoDir,
     });
     writeFileSync(join(repoDir, "feature.txt"), "feature edit\n");
@@ -2754,7 +2758,7 @@ const x = 1;
       { cwd: repoDir },
     );
 
-    const lookupTarget = await readPullRequestLookupTargetFromFacts(repoDir, paseoHome);
+    const lookupTarget = await readPullRequestLookupTargetFromFacts(repoDir, byspaceHome);
 
     expect(lookupTarget).toMatchObject({ headRef: "refactor/workspace-scripts" });
     expect(lookupTarget?.headSha).toMatch(/^[0-9a-f]{40}$/);
@@ -2770,7 +2774,7 @@ const x = 1;
       cwd: repoDir,
     });
 
-    const lookupTarget = await readPullRequestLookupTargetFromFacts(repoDir, paseoHome);
+    const lookupTarget = await readPullRequestLookupTargetFromFacts(repoDir, byspaceHome);
 
     expect(lookupTarget).toMatchObject({ headRef: "feature" });
     expect(lookupTarget?.headSha).toMatch(/^[0-9a-f]{40}$/);
@@ -2792,12 +2796,12 @@ const x = 1;
       execFileSync("git", ["config", "branch.new-change.merge", "refs/heads/new-change"], {
         cwd: repoDir,
       });
-      const workspaceDir = join(paseoHome, "worktrees", "repo", "pr-worktree");
-      mkdirSync(join(paseoHome, "worktrees", "repo"), { recursive: true });
+      const workspaceDir = join(byspaceHome, "worktrees", "repo", "pr-worktree");
+      mkdirSync(join(byspaceHome, "worktrees", "repo"), { recursive: true });
       execFileSync("git", ["worktree", "add", workspaceDir, "contributor/old-change"], {
         cwd: repoDir,
       });
-      writePaseoWorktreeMetadata(workspaceDir, {
+      writeBySpaceWorktreeMetadata(workspaceDir, {
         baseRefName: "main",
         changeRequestLookupTarget: {
           headRef: "old-change",
@@ -2809,7 +2813,7 @@ const x = 1;
 
       execFileSync("git", ["checkout", "new-change"], { cwd: workspaceDir });
       const requestedTargets: RequestedPullRequestTarget[] = [];
-      const facts = await getCheckoutSnapshotFacts(workspaceDir, { paseoHome });
+      const facts = await getCheckoutSnapshotFacts(workspaceDir, { byspaceHome });
       const result = await getPullRequestStatus(
         workspaceDir,
         createGitHubServiceRecordingPullRequestTargets({
@@ -2817,7 +2821,7 @@ const x = 1;
           statusOverrides: { state, isMerged },
         }),
         { force: true, reason: "current-checkout-pr" },
-        { paseoHome, facts },
+        { byspaceHome, facts },
       );
 
       expect(requestedTargets).toEqual([expect.objectContaining({ headRef: "new-change" })]);
@@ -2834,10 +2838,10 @@ const x = 1;
       cwd: repoDir,
     });
     execFileSync("git", ["branch", "placeholder"], { cwd: repoDir });
-    const workspaceDir = join(paseoHome, "worktrees", "repo", "renamed-by-agent");
-    mkdirSync(join(paseoHome, "worktrees", "repo"), { recursive: true });
+    const workspaceDir = join(byspaceHome, "worktrees", "repo", "renamed-by-agent");
+    mkdirSync(join(byspaceHome, "worktrees", "repo"), { recursive: true });
     execFileSync("git", ["worktree", "add", workspaceDir, "placeholder"], { cwd: repoDir });
-    writePaseoWorktreeMetadata(workspaceDir, {
+    writeBySpaceWorktreeMetadata(workspaceDir, {
       baseRefName: "main",
       changeRequestLookupTarget: {
         headRef: "placeholder",
@@ -2847,12 +2851,12 @@ const x = 1;
 
     execFileSync("git", ["branch", "-m", "agent-chosen-name"], { cwd: workspaceDir });
     const requestedTargets: RequestedPullRequestTarget[] = [];
-    const facts = await getCheckoutSnapshotFacts(workspaceDir, { paseoHome });
+    const facts = await getCheckoutSnapshotFacts(workspaceDir, { byspaceHome });
     const result = await getPullRequestStatus(
       workspaceDir,
       createGitHubServiceRecordingPullRequestTargets({ requestedTargets }),
       { force: true, reason: "agent-renamed-branch-pr" },
-      { paseoHome, facts },
+      { byspaceHome, facts },
     );
 
     expect(requestedTargets).toEqual([expect.objectContaining({ headRef: "agent-chosen-name" })]);
@@ -2871,10 +2875,10 @@ const x = 1;
     execFileSync("git", ["remote", "add", "fork", "https://github.com/other/repo.git"], {
       cwd: repoDir,
     });
-    const workspaceDir = join(paseoHome, "worktrees", "repo", "pinned-worktree");
-    mkdirSync(join(paseoHome, "worktrees", "repo"), { recursive: true });
+    const workspaceDir = join(byspaceHome, "worktrees", "repo", "pinned-worktree");
+    mkdirSync(join(byspaceHome, "worktrees", "repo"), { recursive: true });
     execFileSync("git", ["worktree", "add", workspaceDir, "feature/pinned"], { cwd: repoDir });
-    writePaseoWorktreeMetadata(workspaceDir, {
+    writeBySpaceWorktreeMetadata(workspaceDir, {
       baseRefName: "main",
       changeRequestLookupTarget: {
         headRef: "feature/pinned",
@@ -2888,32 +2892,32 @@ const x = 1;
       cwd: repoDir,
     });
 
-    expect(await readPullRequestLookupTargetFromFacts(workspaceDir, paseoHome)).toMatchObject({
+    expect(await readPullRequestLookupTargetFromFacts(workspaceDir, byspaceHome)).toMatchObject({
       headRef: "feature/pinned",
     });
   });
 
   it("uses the checked-out branch when a managed worktree has no metadata", async () => {
     execFileSync("git", ["branch", "feature/unpinned"], { cwd: repoDir });
-    const workspaceDir = join(paseoHome, "worktrees", "repo", "unpinned-worktree");
-    mkdirSync(join(paseoHome, "worktrees", "repo"), { recursive: true });
+    const workspaceDir = join(byspaceHome, "worktrees", "repo", "unpinned-worktree");
+    mkdirSync(join(byspaceHome, "worktrees", "repo"), { recursive: true });
     execFileSync("git", ["worktree", "add", workspaceDir, "feature/unpinned"], {
       cwd: repoDir,
     });
 
-    expect(await readPullRequestLookupTargetFromFacts(workspaceDir, paseoHome)).toMatchObject({
+    expect(await readPullRequestLookupTargetFromFacts(workspaceDir, byspaceHome)).toMatchObject({
       headRef: "feature/unpinned",
     });
   });
 
   it("uses the checked-out branch instead of ambiguous legacy PR metadata", async () => {
     execFileSync("git", ["branch", "contributor/old-change-1"], { cwd: repoDir });
-    const workspaceDir = join(paseoHome, "worktrees", "repo", "legacy-pr-worktree");
-    mkdirSync(join(paseoHome, "worktrees", "repo"), { recursive: true });
+    const workspaceDir = join(byspaceHome, "worktrees", "repo", "legacy-pr-worktree");
+    mkdirSync(join(byspaceHome, "worktrees", "repo"), { recursive: true });
     execFileSync("git", ["worktree", "add", workspaceDir, "contributor/old-change-1"], {
       cwd: repoDir,
     });
-    writePaseoWorktreeMetadata(workspaceDir, {
+    writeBySpaceWorktreeMetadata(workspaceDir, {
       baseRefName: "main",
       changeRequestLookupTarget: {
         headRef: "old-change",
@@ -2922,7 +2926,7 @@ const x = 1;
       },
     });
 
-    const lookupTarget = await readPullRequestLookupTargetFromFacts(workspaceDir, paseoHome);
+    const lookupTarget = await readPullRequestLookupTargetFromFacts(workspaceDir, byspaceHome);
 
     expect(lookupTarget).toMatchObject({ headRef: "contributor/old-change-1" });
   });
@@ -2930,12 +2934,12 @@ const x = 1;
   it("does not apply a legacy fork hint to an ownerless branch with the same head", async () => {
     execFileSync("git", ["branch", "contributor/old-change"], { cwd: repoDir });
     execFileSync("git", ["branch", "old-change"], { cwd: repoDir });
-    const workspaceDir = join(paseoHome, "worktrees", "repo", "legacy-fork-worktree");
-    mkdirSync(join(paseoHome, "worktrees", "repo"), { recursive: true });
+    const workspaceDir = join(byspaceHome, "worktrees", "repo", "legacy-fork-worktree");
+    mkdirSync(join(byspaceHome, "worktrees", "repo"), { recursive: true });
     execFileSync("git", ["worktree", "add", workspaceDir, "contributor/old-change"], {
       cwd: repoDir,
     });
-    writePaseoWorktreeMetadata(workspaceDir, {
+    writeBySpaceWorktreeMetadata(workspaceDir, {
       baseRefName: "main",
       changeRequestLookupTarget: {
         headRef: "old-change",
@@ -2946,12 +2950,12 @@ const x = 1;
     const requestedTargets: RequestedPullRequestTarget[] = [];
     const forge = createGitHubServiceRecordingPullRequestTargets({ requestedTargets });
 
-    const forkFacts = await getCheckoutSnapshotFacts(workspaceDir, { paseoHome });
+    const forkFacts = await getCheckoutSnapshotFacts(workspaceDir, { byspaceHome });
     await getPullRequestStatus(
       workspaceDir,
       forge,
       { force: true, reason: "legacy-fork-branch" },
-      { paseoHome, facts: forkFacts },
+      { byspaceHome, facts: forkFacts },
     );
     expect(requestedTargets.at(-1)).toMatchObject({
       headRef: "old-change",
@@ -2959,12 +2963,12 @@ const x = 1;
     });
 
     execFileSync("git", ["checkout", "old-change"], { cwd: workspaceDir });
-    const ownerlessFacts = await getCheckoutSnapshotFacts(workspaceDir, { paseoHome });
+    const ownerlessFacts = await getCheckoutSnapshotFacts(workspaceDir, { byspaceHome });
     await getPullRequestStatus(
       workspaceDir,
       forge,
       { force: true, reason: "ownerless-same-head" },
-      { paseoHome, facts: ownerlessFacts },
+      { byspaceHome, facts: ownerlessFacts },
     );
 
     expect(requestedTargets).toEqual([
@@ -2995,12 +2999,12 @@ const x = 1;
     execFileSync("git", ["config", "branch.mixedowner/old-change.merge", "refs/heads/old-change"], {
       cwd: repoDir,
     });
-    const workspaceDir = join(paseoHome, "worktrees", "repo", "legacy-enterprise-worktree");
-    mkdirSync(join(paseoHome, "worktrees", "repo"), { recursive: true });
+    const workspaceDir = join(byspaceHome, "worktrees", "repo", "legacy-enterprise-worktree");
+    mkdirSync(join(byspaceHome, "worktrees", "repo"), { recursive: true });
     execFileSync("git", ["worktree", "add", workspaceDir, "mixedowner/old-change"], {
       cwd: repoDir,
     });
-    writePaseoWorktreeMetadata(workspaceDir, {
+    writeBySpaceWorktreeMetadata(workspaceDir, {
       baseRefName: "main",
       changeRequestLookupTarget: {
         headRef: "old-change",
@@ -3011,12 +3015,12 @@ const x = 1;
     const requestedTargets: RequestedPullRequestTarget[] = [];
     const forge = createGitHubServiceRecordingPullRequestTargets({ requestedTargets });
 
-    const facts = await getCheckoutSnapshotFacts(workspaceDir, { paseoHome });
+    const facts = await getCheckoutSnapshotFacts(workspaceDir, { byspaceHome });
     await getPullRequestStatus(
       workspaceDir,
       forge,
       { force: true, reason: "legacy-enterprise-owner" },
-      { paseoHome, facts },
+      { byspaceHome, facts },
     );
 
     expect(requestedTargets).toEqual([
@@ -3031,12 +3035,12 @@ const x = 1;
     execFileSync("git", ["config", "branch.mixedowner/old-change.remote", "replacement-fork"], {
       cwd: repoDir,
     });
-    const repointedFacts = await getCheckoutSnapshotFacts(workspaceDir, { paseoHome });
+    const repointedFacts = await getCheckoutSnapshotFacts(workspaceDir, { byspaceHome });
     await getPullRequestStatus(
       workspaceDir,
       forge,
       { force: true, reason: "repointed-enterprise-owner" },
-      { paseoHome, facts: repointedFacts },
+      { byspaceHome, facts: repointedFacts },
     );
 
     expect(requestedTargets.at(-1)).toMatchObject({
@@ -3047,12 +3051,12 @@ const x = 1;
 
   it("keeps a ref-only change request across rename and follows a later branch switch", async () => {
     execFileSync("git", ["branch", "feature/gitlab-mr"], { cwd: repoDir });
-    const workspaceDir = join(paseoHome, "worktrees", "repo", "gitlab-mr-worktree");
-    mkdirSync(join(paseoHome, "worktrees", "repo"), { recursive: true });
+    const workspaceDir = join(byspaceHome, "worktrees", "repo", "gitlab-mr-worktree");
+    mkdirSync(join(byspaceHome, "worktrees", "repo"), { recursive: true });
     execFileSync("git", ["worktree", "add", workspaceDir, "feature/gitlab-mr"], {
       cwd: repoDir,
     });
-    writePaseoWorktreeMetadata(workspaceDir, {
+    writeBySpaceWorktreeMetadata(workspaceDir, {
       baseRefName: "main",
       changeRequestLookupTarget: {
         headRef: "feature/gitlab-mr",
@@ -3066,27 +3070,27 @@ const x = 1;
     const forge = createGitHubServiceRecordingPullRequestTargets({ requestedTargets });
 
     await renameCurrentBranch(workspaceCwd, "feature/renamed");
-    expect(readPaseoWorktreeMetadata(workspaceDir)?.changeRequestLookupTarget).toMatchObject({
+    expect(readBySpaceWorktreeMetadata(workspaceDir)?.changeRequestLookupTarget).toMatchObject({
       localBranchName: "feature/renamed",
     });
-    const renamedFacts = await getCheckoutSnapshotFacts(workspaceDir, { paseoHome });
+    const renamedFacts = await getCheckoutSnapshotFacts(workspaceDir, { byspaceHome });
     const renamedStatus = await getPullRequestStatus(
       workspaceDir,
       forge,
       { force: true, reason: "renamed-change-request" },
-      { paseoHome, facts: renamedFacts },
+      { byspaceHome, facts: renamedFacts },
     );
 
     expect(requestedTargets).toEqual([expect.objectContaining({ headRef: "feature/gitlab-mr" })]);
     expect(renamedStatus.status?.headRefName).toBe("feature/gitlab-mr");
 
     execFileSync("git", ["checkout", "-b", "other-branch"], { cwd: workspaceDir });
-    const switchedFacts = await getCheckoutSnapshotFacts(workspaceDir, { paseoHome });
+    const switchedFacts = await getCheckoutSnapshotFacts(workspaceDir, { byspaceHome });
     await getPullRequestStatus(
       workspaceDir,
       forge,
       { force: true, reason: "switched-after-rename" },
-      { paseoHome, facts: switchedFacts },
+      { byspaceHome, facts: switchedFacts },
     );
 
     expect(requestedTargets).toEqual([
@@ -3097,12 +3101,12 @@ const x = 1;
 
   it("moves a managed branch identity pin when its branch is renamed", async () => {
     execFileSync("git", ["branch", "feature/placeholder"], { cwd: repoDir });
-    const workspaceDir = join(paseoHome, "worktrees", "repo", "renamed-worktree");
-    mkdirSync(join(paseoHome, "worktrees", "repo"), { recursive: true });
+    const workspaceDir = join(byspaceHome, "worktrees", "repo", "renamed-worktree");
+    mkdirSync(join(byspaceHome, "worktrees", "repo"), { recursive: true });
     execFileSync("git", ["worktree", "add", workspaceDir, "feature/placeholder"], {
       cwd: repoDir,
     });
-    writePaseoWorktreeMetadata(workspaceDir, {
+    writeBySpaceWorktreeMetadata(workspaceDir, {
       baseRefName: "main",
       changeRequestLookupTarget: {
         headRef: "feature/placeholder",
@@ -3112,11 +3116,11 @@ const x = 1;
 
     await renameCurrentBranch(workspaceDir, "feature/generated");
 
-    expect(readPaseoWorktreeMetadata(workspaceDir)?.changeRequestLookupTarget).toEqual({
+    expect(readBySpaceWorktreeMetadata(workspaceDir)?.changeRequestLookupTarget).toEqual({
       headRef: "feature/generated",
       localBranchName: "feature/generated",
     });
-    const facts = await getCheckoutSnapshotFacts(workspaceDir, { paseoHome });
+    const facts = await getCheckoutSnapshotFacts(workspaceDir, { byspaceHome });
     expect(facts.isGit && facts.pullRequestLookupTarget).toMatchObject({
       headRef: "feature/generated",
     });
@@ -3126,14 +3130,18 @@ const x = 1;
     execFileSync("git", ["remote", "add", "origin", "https://github.com/getpaseo/paseo.git"], {
       cwd: repoDir,
     });
-    execFileSync("git", ["remote", "add", "contributor", "git@github.com:contributor/paseo.git"], {
-      cwd: repoDir,
-    });
+    execFileSync(
+      "git",
+      ["remote", "add", "contributor", "git@github.com:contributor/byspace.git"],
+      {
+        cwd: repoDir,
+      },
+    );
     execFileSync("git", ["checkout", "-b", "topic"], { cwd: repoDir });
     execFileSync("git", ["config", "branch.topic.remote", "contributor"], { cwd: repoDir });
     execFileSync("git", ["config", "branch.topic.merge", "refs/heads/topic"], { cwd: repoDir });
 
-    const lookupTarget = await readPullRequestLookupTargetFromFacts(repoDir, paseoHome);
+    const lookupTarget = await readPullRequestLookupTargetFromFacts(repoDir, byspaceHome);
 
     expect(lookupTarget).toMatchObject({
       headRef: "topic",
@@ -3158,7 +3166,7 @@ const x = 1;
       { cwd: repoDir },
     );
 
-    const lookupTarget = await readPullRequestLookupTargetFromFacts(repoDir, paseoHome);
+    const lookupTarget = await readPullRequestLookupTargetFromFacts(repoDir, byspaceHome);
 
     expect(lookupTarget).toMatchObject({ headRef: "refactor/workspace-scripts" });
     expect(lookupTarget?.headSha).toMatch(/^[0-9a-f]{40}$/);
@@ -3167,17 +3175,21 @@ const x = 1;
   it("keeps the fork owner when same-repo comparison is indeterminate", async () => {
     execFileSync("git", ["checkout", "-b", "chethanuk/main"], { cwd: repoDir });
     execFileSync("git", ["remote", "add", "origin", "not-a-github-remote"], { cwd: repoDir });
-    execFileSync("git", ["remote", "add", "paseo-pr-345", "git@github.com:chethanuk/paseo.git"], {
-      cwd: repoDir,
-    });
-    execFileSync("git", ["config", "branch.chethanuk/main.remote", "paseo-pr-345"], {
+    execFileSync(
+      "git",
+      ["remote", "add", "byspace-pr-345", "git@github.com:chethanuk/byspace.git"],
+      {
+        cwd: repoDir,
+      },
+    );
+    execFileSync("git", ["config", "branch.chethanuk/main.remote", "byspace-pr-345"], {
       cwd: repoDir,
     });
     execFileSync("git", ["config", "branch.chethanuk/main.merge", "refs/heads/main"], {
       cwd: repoDir,
     });
 
-    const lookupTarget = await readPullRequestLookupTargetFromFacts(repoDir, paseoHome);
+    const lookupTarget = await readPullRequestLookupTargetFromFacts(repoDir, byspaceHome);
 
     expect(lookupTarget).toMatchObject({ headRef: "main", headRepositoryOwner: "chethanuk" });
     expect(lookupTarget?.headSha).toMatch(/^[0-9a-f]{40}$/);
@@ -3188,24 +3200,28 @@ const x = 1;
     execFileSync("git", ["remote", "add", "origin", "https://github.com/getpaseo/paseo.git"], {
       cwd: repoDir,
     });
-    execFileSync("git", ["remote", "add", "paseo-pr-345", "git@github.com:chethanuk/paseo.git"], {
+    execFileSync(
+      "git",
+      ["remote", "add", "byspace-pr-345", "git@github.com:chethanuk/byspace.git"],
+      {
+        cwd: repoDir,
+      },
+    );
+    execFileSync("git", ["config", "branch.chethanuk/main.pushRemote", "byspace-pr-345"], {
       cwd: repoDir,
     });
-    execFileSync("git", ["config", "branch.chethanuk/main.pushRemote", "paseo-pr-345"], {
-      cwd: repoDir,
-    });
-    execFileSync("git", ["config", "remote.paseo-pr-345.push", "HEAD:refs/heads/main"], {
+    execFileSync("git", ["config", "remote.byspace-pr-345.push", "HEAD:refs/heads/main"], {
       cwd: repoDir,
     });
     const requestedTargets: RequestedPullRequestTarget[] = [];
     const github = createGitHubServiceRecordingPullRequestTargets({ requestedTargets });
 
-    const factsTarget = await readPullRequestLookupTargetFromFacts(repoDir, paseoHome);
+    const factsTarget = await readPullRequestLookupTargetFromFacts(repoDir, byspaceHome);
     await getPullRequestStatus(
       repoDir,
       github,
       { force: true, reason: "push-remote-pr-lookup" },
-      { paseoHome },
+      { byspaceHome },
     );
 
     expect(getBranchUpstream(repoDir)).toBeNull();
@@ -3226,7 +3242,7 @@ const x = 1;
       cwd: repoDir,
     });
 
-    const lookupTarget = await readPullRequestLookupTargetFromFacts(repoDir, paseoHome);
+    const lookupTarget = await readPullRequestLookupTargetFromFacts(repoDir, byspaceHome);
 
     expect(lookupTarget).toMatchObject({ headRef: "tender-parrot" });
     expect(lookupTarget?.headSha).toMatch(/^[0-9a-f]{40}$/);
@@ -3234,7 +3250,7 @@ const x = 1;
 
   it("keeps the local branch lookup when a fork tracks the upstream base branch", async () => {
     execFileSync("git", ["checkout", "-b", "local-feature"], { cwd: repoDir });
-    execFileSync("git", ["remote", "add", "origin", "git@github.com:contributor/paseo.git"], {
+    execFileSync("git", ["remote", "add", "origin", "git@github.com:contributor/byspace.git"], {
       cwd: repoDir,
     });
     execFileSync("git", ["remote", "add", "upstream", "https://github.com/getpaseo/paseo.git"], {
@@ -3247,7 +3263,7 @@ const x = 1;
       cwd: repoDir,
     });
 
-    const lookupTarget = await readPullRequestLookupTargetFromFacts(repoDir, paseoHome);
+    const lookupTarget = await readPullRequestLookupTargetFromFacts(repoDir, byspaceHome);
 
     expect(lookupTarget).toMatchObject({ headRef: "local-feature" });
     expect(lookupTarget).not.toHaveProperty("headRepositoryOwner");
@@ -3270,7 +3286,7 @@ const x = 1;
       cwd: repoDir,
     });
 
-    const lookupTarget = await readPullRequestLookupTargetFromFacts(repoDir, paseoHome);
+    const lookupTarget = await readPullRequestLookupTargetFromFacts(repoDir, byspaceHome);
 
     expect(lookupTarget).toMatchObject({ headRef: "local-feature" });
     expect(lookupTarget).not.toHaveProperty("headRepositoryOwner");
@@ -3287,7 +3303,7 @@ const x = 1;
       ["config", "branch.tender-parrot.merge", "refs/heads/refactor/workspace-scripts"],
       { cwd: repoDir },
     );
-    const factsTarget = await readPullRequestLookupTargetFromFacts(repoDir, paseoHome);
+    const factsTarget = await readPullRequestLookupTargetFromFacts(repoDir, byspaceHome);
     const requestedTargets: RequestedPullRequestTarget[] = [];
     const github = createGitHubServiceRecordingPullRequestTargets({ requestedTargets });
 
@@ -3295,7 +3311,7 @@ const x = 1;
       repoDir,
       github,
       { force: true, reason: "tracked-head-parity" },
-      { paseoHome },
+      { byspaceHome },
     );
 
     expect(requestedTargets).toEqual([factsTarget]);
@@ -3306,10 +3322,14 @@ const x = 1;
     execFileSync("git", ["remote", "add", "origin", "https://github.com/getpaseo/paseo.git"], {
       cwd: repoDir,
     });
-    execFileSync("git", ["remote", "add", "paseo-pr-345", "git@github.com:chethanuk/paseo.git"], {
-      cwd: repoDir,
-    });
-    execFileSync("git", ["config", "branch.chethanuk/main.remote", "paseo-pr-345"], {
+    execFileSync(
+      "git",
+      ["remote", "add", "byspace-pr-345", "git@github.com:chethanuk/byspace.git"],
+      {
+        cwd: repoDir,
+      },
+    );
+    execFileSync("git", ["config", "branch.chethanuk/main.remote", "byspace-pr-345"], {
       cwd: repoDir,
     });
     execFileSync("git", ["config", "branch.chethanuk/main.merge", "refs/heads/main"], {
@@ -3702,7 +3722,7 @@ const x = 1;
     );
   });
 
-  it("uses stored baseRefName for Paseo worktrees (no heuristics)", async () => {
+  it("uses stored baseRefName for BySpace worktrees (no heuristics)", async () => {
     // Create a non-default base branch with a unique commit.
     execFileSync("git", ["checkout", "-b", "develop"], { cwd: repoDir });
     writeFileSync(join(repoDir, "file.txt"), "develop\n");
@@ -3718,7 +3738,7 @@ const x = 1;
       cwd: repoDir,
       baseBranch: "develop",
       worktreeSlug: "feature",
-      paseoHome,
+      byspaceHome,
     });
 
     writeFileSync(join(worktree.worktreePath, "feature.txt"), "feature\n");
@@ -3727,12 +3747,16 @@ const x = 1;
       cwd: worktree.worktreePath,
     });
 
-    const status = await getCheckoutStatus(worktree.worktreePath, { paseoHome });
+    const status = await getCheckoutStatus(worktree.worktreePath, { byspaceHome });
     expect(status.isGit).toBe(true);
     expect(status.baseRef).toBe("develop");
     expect(status.aheadBehind?.ahead).toBe(1);
 
-    const baseDiff = await getCheckoutDiff(worktree.worktreePath, { mode: "base" }, { paseoHome });
+    const baseDiff = await getCheckoutDiff(
+      worktree.worktreePath,
+      { mode: "base" },
+      { byspaceHome },
+    );
     expect(baseDiff.diff).toContain("feature.txt");
     expect(baseDiff.diff).not.toContain("file.txt");
   });
@@ -3743,21 +3767,21 @@ const x = 1;
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "mismatch-feature",
-      paseoHome,
+      byspaceHome,
     });
 
     await expect(
-      getCheckoutDiff(worktree.worktreePath, { mode: "base", baseRef: "other" }, { paseoHome }),
+      getCheckoutDiff(worktree.worktreePath, { mode: "base", baseRef: "other" }, { byspaceHome }),
     ).rejects.toThrow("Base ref mismatch: stored refs/heads/main, requested other");
   });
 
-  it("excludes dirty working tree changes from Paseo worktree base diffs", async () => {
+  it("excludes dirty working tree changes from BySpace worktree base diffs", async () => {
     const worktree = await createLegacyWorktreeForTest({
       branchName: "feature",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "dirty-feature",
-      paseoHome,
+      byspaceHome,
     });
 
     writeFileSync(join(worktree.worktreePath, "feature.txt"), "feature\n");
@@ -3772,7 +3796,7 @@ const x = 1;
     const baseDiff = await getCheckoutDiff(
       worktree.worktreePath,
       { mode: "base", includeStructured: true },
-      { paseoHome },
+      { byspaceHome },
     );
 
     expect(baseDiff.diff).toContain("feature.txt");
@@ -3810,13 +3834,13 @@ const x = 1;
     });
     execFileSync("git", ["checkout", "main"], { cwd: repoDir });
 
-    // Create a Paseo worktree configured to use develop as base.
+    // Create a BySpace worktree configured to use develop as base.
     const worktree = await createLegacyWorktreeForTest({
       branchName: "feature",
       cwd: repoDir,
       baseBranch: "develop",
       worktreeSlug: "merge-to-develop",
-      paseoHome,
+      byspaceHome,
     });
 
     writeFileSync(join(worktree.worktreePath, "feature.txt"), "feature\n");
@@ -3829,7 +3853,7 @@ const x = 1;
       .trim();
 
     // No baseRef passed: should merge into the configured base (develop), not default/main.
-    await mergeToBase(worktree.worktreePath, {}, { paseoHome });
+    await mergeToBase(worktree.worktreePath, {}, { byspaceHome });
 
     execFileSync("git", ["merge-base", "--is-ancestor", featureCommit, "develop"], {
       cwd: repoDir,
@@ -3849,7 +3873,7 @@ const x = 1;
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "missing-metadata",
-      paseoHome,
+      byspaceHome,
     });
 
     writeFileSync(join(worktree.worktreePath, "feature.txt"), "feature\n");
@@ -3858,33 +3882,37 @@ const x = 1;
       cwd: worktree.worktreePath,
     });
 
-    const metadataPath = getPaseoWorktreeMetadataPath(worktree.worktreePath);
+    const metadataPath = getBySpaceWorktreeMetadataPath(worktree.worktreePath);
     rmSync(metadataPath, { force: true });
 
-    const baseDiff = await getCheckoutDiff(worktree.worktreePath, { mode: "base" }, { paseoHome });
+    const baseDiff = await getCheckoutDiff(
+      worktree.worktreePath,
+      { mode: "base" },
+      { byspaceHome },
+    );
     expect(baseDiff.diff).toContain("feature.txt");
 
-    const shortstat = await getCheckoutShortstat(worktree.worktreePath, { paseoHome });
+    const shortstat = await getCheckoutShortstat(worktree.worktreePath, { byspaceHome });
     expect(shortstat).toEqual({ additions: 1, deletions: 0 });
   });
 
-  it("falls back to plain git checkout status when Paseo worktree metadata is missing", async () => {
+  it("falls back to plain git checkout status when BySpace worktree metadata is missing", async () => {
     const worktree = await createLegacyWorktreeForTest({
       branchName: "feature",
       cwd: repoDir,
       baseBranch: "main",
       worktreeSlug: "missing-metadata-status-fallback",
-      paseoHome,
+      byspaceHome,
     });
 
-    const metadataPath = getPaseoWorktreeMetadataPath(worktree.worktreePath);
+    const metadataPath = getBySpaceWorktreeMetadataPath(worktree.worktreePath);
     rmSync(metadataPath, { force: true });
 
-    const status = await getCheckoutStatus(worktree.worktreePath, { paseoHome });
+    const status = await getCheckoutStatus(worktree.worktreePath, { byspaceHome });
     expect(status.isGit).toBe(true);
     expect(status.currentBranch).toBe("feature");
     expect(realpathSync.native(status.repoRoot)).toBe(realpathSync.native(worktree.worktreePath));
-    expect(status.isPaseoOwnedWorktree).toBe(true);
+    expect(status.isBySpaceOwnedWorktree).toBe(true);
     expect(realpathSync.native(status.mainRepoRoot ?? "")).toBe(realpathSync.native(repoDir));
     expect(status.baseRef).toBe("main");
   });
@@ -3895,7 +3923,7 @@ const x = 1;
         "worktree /home/user/repo",
         "branch refs/heads/main",
         "",
-        "worktree /home/user/.paseo/worktrees/feature",
+        "worktree /home/user/.byspace/worktrees/feature",
         "branch refs/heads/feature",
         "",
       ].join("\n");
@@ -3904,7 +3932,7 @@ const x = 1;
       expect(entries).toHaveLength(2);
       expect(entries[0]).toEqual({ path: "/home/user/repo", branchRef: "refs/heads/main" });
       expect(entries[1]).toEqual({
-        path: "/home/user/.paseo/worktrees/feature",
+        path: "/home/user/.byspace/worktrees/feature",
         branchRef: "refs/heads/feature",
       });
     });
@@ -3917,32 +3945,32 @@ const x = 1;
     });
   });
 
-  describe("isPaseoWorktreePath", () => {
+  describe("isBySpaceWorktreePath", () => {
     it("matches Unix .byspace/worktrees/ paths", () => {
-      expect(isPaseoWorktreePath("/home/user/.byspace/worktrees/feature")).toBe(true);
+      expect(isBySpaceWorktreePath("/home/user/.byspace/worktrees/feature")).toBe(true);
     });
 
     it("matches Windows .byspace\\worktrees\\ paths", () => {
-      expect(isPaseoWorktreePath("C:\\Users\\dev\\.byspace\\worktrees\\feature")).toBe(true);
+      expect(isBySpaceWorktreePath("C:\\Users\\dev\\.byspace\\worktrees\\feature")).toBe(true);
     });
 
-    it("matches worktrees under a custom PASEO_HOME", () => {
-      const customPaseoHome = process.platform === "win32" ? "C:\\paseo" : "/var/lib/paseo";
+    it("matches worktrees under a custom BYSPACE_HOME", () => {
+      const customBySpaceHome = process.platform === "win32" ? "C:\\byspace" : "/var/lib/byspace";
       const worktreePath =
         process.platform === "win32"
-          ? win32.join(customPaseoHome, "worktrees", "project", "feature")
-          : `${customPaseoHome}/worktrees/project/feature`;
+          ? win32.join(customBySpaceHome, "worktrees", "project", "feature")
+          : `${customBySpaceHome}/worktrees/project/feature`;
 
       expect(
-        isPaseoWorktreePath(worktreePath, {
-          paseoHome: customPaseoHome,
+        isBySpaceWorktreePath(worktreePath, {
+          byspaceHome: customBySpaceHome,
         }),
       ).toBe(true);
     });
 
-    it("rejects paths without .paseo/worktrees segment", () => {
-      expect(isPaseoWorktreePath("/home/user/repo")).toBe(false);
-      expect(isPaseoWorktreePath("C:\\Users\\dev\\repo")).toBe(false);
+    it("rejects paths without .byspace/worktrees segment", () => {
+      expect(isBySpaceWorktreePath("/home/user/repo")).toBe(false);
+      expect(isBySpaceWorktreePath("C:\\Users\\dev\\repo")).toBe(false);
     });
   });
 

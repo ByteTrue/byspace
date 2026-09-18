@@ -136,8 +136,8 @@ test("treats a missing optional source home and server env as a successful no-op
   assert.match(output, /Env:\s+skipped/);
 });
 
-test("falls back to PASEO_* environment variables when BYSPACE_* are unset", () => {
-  const root = mkdtempSync(join(tmpdir(), "byspace-worktree-fallback-"));
+test("uses the process cwd when BYSPACE_WORKTREE_PATH is unset", () => {
+  const root = mkdtempSync(join(tmpdir(), "byspace-worktree-cwd-"));
   const source = join(root, "source");
   const target = join(root, "target");
   mkdirSync(target, { recursive: true });
@@ -148,10 +148,8 @@ test("falls back to PASEO_* environment variables when BYSPACE_* are unset", () 
     cwd: target,
     env: {
       ...process.env,
-      BYSPACE_SOURCE_CHECKOUT_PATH: "",
+      BYSPACE_SOURCE_CHECKOUT_PATH: source,
       BYSPACE_WORKTREE_PATH: "",
-      PASEO_SOURCE_CHECKOUT_PATH: source,
-      PASEO_WORKTREE_PATH: target,
     },
     encoding: "utf8",
   });

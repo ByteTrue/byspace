@@ -9,21 +9,21 @@ import type { Logger } from "pino";
 import { writeFileAtomic } from "../../../atomic-file.js";
 import {
   addModelVisibleStructuredContent,
-  serializePaseoToolInputParameters,
-} from "../../tools/paseo-tool-serialization.js";
-import type { PaseoToolCatalog } from "../../tools/types.js";
+  serializeBySpaceToolInputParameters,
+} from "../../tools/byspace-tool-serialization.js";
+import type { BySpaceToolCatalog } from "../../tools/types.js";
 
 const INTERNAL_PREFIX = "/_internal/opencode";
 const MAX_REQUEST_BYTES = 1024 * 1024;
 
 interface OpenCodeBridgeOptions {
-  paseoHome: string;
+  byspaceHome: string;
   logger: Logger;
 }
 
 interface OpenCodeSessionBinding {
   env: Record<string, string>;
-  tools?: PaseoToolCatalog;
+  tools?: BySpaceToolCatalog;
 }
 
 interface BindOpenCodeSessionInput extends OpenCodeSessionBinding {
@@ -41,17 +41,17 @@ interface OpenCodeConfig {
 }
 
 export class OpenCodeBridge {
-  private readonly paseoHome: string;
+  private readonly byspaceHome: string;
   private readonly logger: Logger;
   private readonly token = randomBytes(32).toString("hex");
   private readonly sessions = new Map<string, OpenCodeSessionBinding>();
   private server: Server | null = null;
   private baseUrl: string | null = null;
   private pluginUrl: string | null = null;
-  private manifestCatalog: PaseoToolCatalog | null = null;
+  private manifestCatalog: BySpaceToolCatalog | null = null;
 
   constructor(options: OpenCodeBridgeOptions) {
-    this.paseoHome = options.paseoHome;
+    this.byspaceHome = options.byspaceHome;
     this.logger = options.logger.child({ module: "agent", component: "opencode-bridge" });
   }
 
@@ -77,7 +77,7 @@ export class OpenCodeBridge {
     this.baseUrl = `http://127.0.0.1:${address.port}`;
   }
 
-  setManifestCatalog(catalog: PaseoToolCatalog | null): void {
+  setManifestCatalog(catalog: BySpaceToolCatalog | null): void {
     this.manifestCatalog = catalog;
   }
 
@@ -104,7 +104,7 @@ export class OpenCodeBridge {
     const plugins = config.plugin ?? [];
     const withoutBridge = plugins.filter((entry) => {
       const specifier = Array.isArray(entry) ? entry[0] : entry;
-      return !specifier.includes("/paseo-") || !specifier.endsWith(".mjs");
+      return !specifier.includes("/byspace-") || !specifier.endsWith(".mjs");
     });
     return {
       ...env,
@@ -126,7 +126,7 @@ export class OpenCodeBridge {
   private async materializePlugin(): Promise<string> {
     const artifact = await loadOpenCodeBridgePluginArtifact(import.meta.url);
     const digest = createHash("sha256").update(artifact).digest("hex");
-    const destination = path.join(this.paseoHome, "runtime", "opencode", `paseo-${digest}.mjs`);
+    const destination = path.join(this.byspaceHome, "runtime", "opencode", `byspace-${digest}.mjs`);
     await writeFileAtomic(destination, artifact);
     return pathToFileURL(destination).href;
   }
@@ -149,7 +149,7 @@ export class OpenCodeBridge {
       if (request.method === "GET" && contextMatch) {
         const binding = this.sessions.get(decodeURIComponent(contextMatch[1]));
         if (!binding) {
-          sendJson(response, 404, { error: "OpenCode session is not bound to a Paseo agent" });
+          sendJson(response, 404, { error: "OpenCode session is not bound to a BySpace agent" });
           return;
         }
         sendJson(response, 200, { env: binding.env });
@@ -187,7 +187,7 @@ export class OpenCodeBridge {
       const definition: Record<string, unknown> = {
         name: tool.name,
         description: tool.description,
-        inputSchema: serializePaseoToolInputParameters(tool),
+        inputSchema: serializeBySpaceToolInputParameters(tool),
       };
       if (tool.title) definition.title = tool.title;
       return definition;
@@ -202,11 +202,11 @@ export class OpenCodeBridge {
   }): Promise<void> {
     const binding = this.sessions.get(input.sessionId);
     if (!binding) {
-      sendJson(input.response, 404, { error: "OpenCode session is not bound to a Paseo agent" });
+      sendJson(input.response, 404, { error: "OpenCode session is not bound to a BySpace agent" });
       return;
     }
     if (!binding.tools) {
-      sendJson(input.response, 403, { error: "Paseo tools are disabled for this session" });
+      sendJson(input.response, 403, { error: "BySpace tools are disabled for this session" });
       return;
     }
     const body = await readJsonBody(input.request);

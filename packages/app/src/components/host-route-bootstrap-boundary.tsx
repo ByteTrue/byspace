@@ -7,7 +7,7 @@ export function HostRouteBootstrapBoundary({ children }: { children: ReactNode }
   const bootstrapState = useHostRuntimeBootstrapState();
   const hostRegistryStatus = useHostRegistryStatus();
 
-  if (bootstrapState.startupBlocker.kind !== "none" || hostRegistryStatus === "loading") {
+  if (hostRegistryStatus === "loading") {
     return <StartupSplashScreen bootstrapState={bootstrapState} />;
   }
 

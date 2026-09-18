@@ -19,7 +19,7 @@ function parseArgs(argv) {
 }
 
 function byspaceEnv(name) {
-  return process.env[`BYSPACE_${name}`] ?? process.env[`PASEO_${name}`];
+  return process.env[`BYSPACE_${name}`];
 }
 
 const args = parseArgs(process.argv);
@@ -62,8 +62,8 @@ page.on("pageerror", (e) => console.error(`[browser:pageerror] ${e.message}`));
 
 await page.addInitScript(
   (seed) => {
-    localStorage.setItem("@paseo:daemon-registry", JSON.stringify([seed.daemon]));
-    localStorage.removeItem("@paseo:settings");
+    localStorage.setItem("@byspace:daemon-registry", JSON.stringify([seed.daemon]));
+    localStorage.removeItem("@byspace:settings");
   },
   { daemon },
 );

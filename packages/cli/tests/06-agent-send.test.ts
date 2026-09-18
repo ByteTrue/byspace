@@ -29,10 +29,10 @@ console.log("=== Send Command Tests ===\n");
 
 // Get random port that's definitely not in use (never 6767)
 const port = 10000 + Math.floor(Math.random() * 50000);
-const paseoHome = await mkdtemp(join(tmpdir(), "paseo-test-home-"));
-const promptFilePath = join(paseoHome, "send-prompt.txt");
+const byspaceHome = await mkdtemp(join(tmpdir(), "byspace-test-home-"));
+const promptFilePath = join(byspaceHome, "send-prompt.txt");
 process.env.BYSPACE_HOST = `localhost:${port}`;
-process.env.BYSPACE_HOME = paseoHome;
+process.env.BYSPACE_HOME = byspaceHome;
 await writeFile(promptFilePath, "prompt from file");
 
 try {
@@ -60,7 +60,7 @@ try {
   {
     console.log("Test 2: send requires id argument");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace send`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace send`.nothrow();
     assert.notStrictEqual(result.exitCode, 0, "should fail without id");
     const output = result.stdout + result.stderr;
     // Commander should complain about missing argument
@@ -76,7 +76,7 @@ try {
   {
     console.log("Test 3: send requires prompt argument");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace send abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace send abc123`.nothrow();
     assert.notStrictEqual(result.exitCode, 0, "should fail without prompt");
     const output = result.stdout + result.stderr;
     // Commander should complain about missing argument
@@ -92,7 +92,7 @@ try {
   {
     console.log("Test 4: send handles daemon not running");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace send abc123 "test prompt"`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace send abc123 "test prompt"`.nothrow();
     // Should fail because daemon not running
     assert.notStrictEqual(result.exitCode, 0, "should fail when daemon not running");
     const output = result.stdout + result.stderr;
@@ -108,7 +108,7 @@ try {
   {
     console.log("Test 5: send --no-wait flag is accepted");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace send --no-wait abc123 "test prompt"`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace send --no-wait abc123 "test prompt"`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --no-wait flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -119,7 +119,7 @@ try {
   {
     console.log("Test 5b: send --prompt flag is accepted");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace send --prompt "test prompt" abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace send --prompt "test prompt" abc123`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --prompt flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -130,7 +130,7 @@ try {
   {
     console.log("Test 5c: send --prompt-file flag is accepted");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace send --prompt-file ${promptFilePath} abc123`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace send --prompt-file ${promptFilePath} abc123`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --prompt-file flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -141,7 +141,7 @@ try {
   {
     console.log("Test 6: send --host flag is accepted");
     const result =
-      await $`BYSPACE_HOME=${paseoHome} npx byspace send --host localhost:${port} abc123 "test prompt"`.nothrow();
+      await $`BYSPACE_HOME=${byspaceHome} npx byspace send --host localhost:${port} abc123 "test prompt"`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept --host flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -152,7 +152,7 @@ try {
   {
     console.log("Test 7: -q (quiet) flag is accepted with send");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace -q send --no-wait abc123 "test prompt"`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace -q send --no-wait abc123 "test prompt"`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept -q flag");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -163,7 +163,7 @@ try {
   {
     console.log("Test 8: Combined flags work together");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace -q send --no-wait abc123 "Run the linter"`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace -q send --no-wait abc123 "Run the linter"`.nothrow();
     const output = result.stdout + result.stderr;
     assert(!output.includes("unknown option"), "should accept all combined flags");
     assert(!output.includes("error: option"), "should not have option parsing error");
@@ -174,7 +174,7 @@ try {
   {
     console.log("Test 8b: conflicting prompt sources are rejected");
     const result =
-      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${paseoHome} npx byspace send abc123 "positional prompt" --prompt "flag prompt"`.nothrow();
+      await $`BYSPACE_HOST=localhost:${port} BYSPACE_HOME=${byspaceHome} npx byspace send abc123 "positional prompt" --prompt "flag prompt"`.nothrow();
     assert.notStrictEqual(result.exitCode, 0, "should fail for conflicting prompt sources");
     const output = result.stdout + result.stderr;
     assert(
@@ -205,7 +205,7 @@ try {
   }
 } finally {
   // Clean up temp directory
-  await rm(paseoHome, { recursive: true, force: true });
+  await rm(byspaceHome, { recursive: true, force: true });
 }
 
 console.log("=== All send tests passed ===");

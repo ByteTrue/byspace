@@ -1,8 +1,8 @@
 import {
   BUILTIN_PROVIDER_ICON_NAMES,
   KNOWN_PROVIDER_ICON_NAMES,
-} from "@getpaseo/protocol/provider-icon-names";
-import type { ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
+} from "@bytetrue/protocol/provider-icon-names";
+import type { ProviderSnapshotEntry } from "@bytetrue/protocol/agent-types";
 
 export type ProviderIconName =
   | { kind: "builtin"; id: string }

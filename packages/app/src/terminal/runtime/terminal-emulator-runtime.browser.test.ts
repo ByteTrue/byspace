@@ -1,6 +1,6 @@
 import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { TerminalInputModeState } from "@getpaseo/protocol/terminal-input-mode";
+import type { TerminalInputModeState } from "@bytetrue/protocol/terminal-input-mode";
 import {
   encodeTerminalOutput,
   TerminalEmulatorRuntime,
@@ -190,7 +190,7 @@ function expectNoForcedSameSizeClaim(input: {
 }
 
 function getBrowserTerminal(): BrowserTerminal {
-  const terminal = window.__paseoTerminal as BrowserTerminal | undefined;
+  const terminal = window.__byspaceTerminal as BrowserTerminal | undefined;
   if (!terminal) {
     throw new Error("Expected xterm to be exposed for browser test inspection");
   }
@@ -320,10 +320,10 @@ describe("terminal emulator runtime in a real browser", () => {
     createTerminalHost({ width: 720, height: 360, scrollback: 42_000 });
 
     await waitFor({
-      predicate: () => window.__paseoTerminal !== undefined,
+      predicate: () => window.__byspaceTerminal !== undefined,
     });
 
-    expect(window.__paseoTerminal?.options.scrollback).toBe(42_000);
+    expect(window.__byspaceTerminal?.options.scrollback).toBe(42_000);
   });
 
   it("updates scrollback on the mounted xterm", async () => {
@@ -331,14 +331,14 @@ describe("terminal emulator runtime in a real browser", () => {
     const mounted = createTerminalHost({ width: 720, height: 360, scrollback: 10_000 });
 
     await waitFor({
-      predicate: () => window.__paseoTerminal !== undefined,
+      predicate: () => window.__byspaceTerminal !== undefined,
     });
-    const terminal = window.__paseoTerminal;
+    const terminal = window.__byspaceTerminal;
 
     mounted.runtime.setScrollback({ lines: 42_000 });
 
-    expect(window.__paseoTerminal).toBe(terminal);
-    expect(window.__paseoTerminal?.options.scrollback).toBe(42_000);
+    expect(window.__byspaceTerminal).toBe(terminal);
+    expect(window.__byspaceTerminal?.options.scrollback).toBe(42_000);
   });
 
   it("selects the touched word after a long press", async () => {
