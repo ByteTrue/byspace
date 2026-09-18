@@ -33,7 +33,7 @@ For a local daemon, `project create` defaults to the current directory and resol
 
 ## Workspace scripts
 
-Configured `byspace.json` scripts use the same supervised lifecycle from tools and the CLI. Legacy `byspace.json` files remain supported.
+Configured `byspace.json` scripts use the same supervised lifecycle from tools and the CLI.
 
 **`list_workspace_scripts`** — `{ workspaceId }`. Lists configured scripts with lifecycle, service port, proxy URLs, health, exit code, and terminal ID.
 

@@ -80,7 +80,7 @@ Add `--forge <name>` when BySpace cannot infer the forge from the source checkou
 
 ## byspace.json
 
-Drop a `byspace.json` in your repo root. BySpace reads it from the committed version of the base branch you picked, so uncommitted changes in other branches don't apply. If a project still has `byspace.json`, BySpace reads and updates that file in place; keep only one of the two filenames.
+Drop a `byspace.json` in your repo root. BySpace reads it from the committed version of the base branch you picked, so uncommitted changes in other branches don't apply.
 
 ```json
 {

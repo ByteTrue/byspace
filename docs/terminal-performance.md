@@ -15,7 +15,7 @@ pty (node-pty, forked worker process)
   → xterm.write (back-to-back; xterm batches internally)
 ```
 
-Terminal frames share the daemon main event loop with all agent traffic. The `eventLoopDelay` block in the `ws_runtime_metrics` log line (every 30s in `daemon.log`) is the ground truth for "the daemon is busy" — p99/max there directly bound worst-case terminal frame delay. The `BYSPACE_*` variables below are performance-test controls; public daemon configuration uses `BYSPACE_*`, with matching `BYSPACE_*` compatibility fallbacks where supported.
+Terminal frames share the daemon main event loop with all agent traffic. The `eventLoopDelay` block in the `ws_runtime_metrics` log line (every 30s in `daemon.log`) is the ground truth for "the daemon is busy" — p99/max there directly bound worst-case terminal frame delay. The `BYSPACE_*` variables below are performance-test controls, not public daemon configuration.
 
 ## Invariants (the easy-to-break ones)
 

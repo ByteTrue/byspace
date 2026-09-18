@@ -46,7 +46,7 @@ Terminals receive the following environment variables when the daemon creates th
 - `BYSPACE_HOOK_CLI` — absolute path to the current `byspace` CLI executable
 - `BYSPACE_TERMINAL_ID`, `BYSPACE_ACTIVITY_TOKEN`, `BYSPACE_TERMINAL_ACTIVITY_URL`, and `BYSPACE_HOOK_CLI` — legacy aliases kept for installed provider hooks
 
-Installed provider hooks use the terminal-id compatibility alias as their gate and resolve the CLI from `BYSPACE_HOOK_CLI`, then `BYSPACE_HOOK_CLI`, then bare `byspace`. `byspace hooks <agent> <event>` reads the terminal id, token, and activity URL, asks the agent hook provider registry to resolve the event to a coarse activity state, and silently posts `{ terminalId, token, state }` to the activity URL. Missing env, unsupported agents/events, malformed hook input, and daemon/network failures are no-ops so agent hooks never break the user's terminal session.
+Installed provider hooks use the terminal-id environment variable as their gate and resolve the CLI from `BYSPACE_HOOK_CLI`, then bare `byspace`. `byspace hooks <agent> <event>` reads the terminal id, token, and activity URL, asks the agent hook provider registry to resolve the event to a coarse activity state, and silently posts `{ terminalId, token, state }` to the activity URL. Missing env, unsupported agents/events, malformed hook input, and daemon/network failures are no-ops so agent hooks never break the user's terminal session.
 
 Claude hook mapping:
 
@@ -123,6 +123,6 @@ Codex also receives the Windows equivalent:
 if defined BYSPACE_TERMINAL_ID (if defined BYSPACE_HOOK_CLI ("%BYSPACE_HOOK_CLI%" hooks codex <event>) else (if defined BYSPACE_HOOK_CLI ("%BYSPACE_HOOK_CLI%" hooks codex <event>) else (byspace hooks codex <event>)))
 ```
 
-The daemon resolves the current CLI through `BYSPACE_CLI` (normalized to the internal `BYSPACE_CLI` alias) when its launcher supplies one, or through the npm package shim for standalone installs. Terminal setup exposes that executable as both `BYSPACE_HOOK_CLI` and `BYSPACE_HOOK_CLI`. The generated command falls back to the legacy alias and then bare `byspace`; it no-ops outside BySpace terminals because the terminal-id gate remains first. BySpace also prepends the resolved CLI directory to each terminal `PATH` as a secondary fallback. All other behavior lives in `byspace hooks`: read the env, map the event, POST activity, and no-op/fail-open when anything is missing or unavailable.
+The daemon resolves the current CLI through `BYSPACE_CLI` when its launcher supplies one, or through the npm package shim for standalone installs. Terminal setup exposes that executable as `BYSPACE_HOOK_CLI`. The generated command falls back to bare `byspace`; it no-ops outside BySpace terminals because the terminal-id gate remains first. BySpace also prepends the resolved CLI directory to each terminal `PATH` as a secondary fallback. All other behavior lives in `byspace hooks`: read the env, map the event, POST activity, and no-op/fail-open when anything is missing or unavailable.
 
 If one provider installation fails, daemon startup, terminal spawn, and reconciliation of the other providers continue.

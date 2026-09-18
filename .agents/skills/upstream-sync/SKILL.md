@@ -42,7 +42,7 @@ Report one of: `checking`, `preparing`, `decision-needed`, `already-synced`, `aw
 1. Confirm the checkout belongs to `ByteTrue/byspace`; inspect `origin`, `upstream`, current branch, `git status`, local/remote branches, and worktrees.
 2. Confirm `upstream` resolves to `getpaseo/paseo`. Do not add or rewrite a remote during a read-only check.
 3. Query GitHub releases, not a moving branch. If the user says only “latest,” list stable and prerelease candidates separately with tag, release type, publish time, URL, and resolved commit when available. Do not silently choose between them.
-4. Compare candidates with the last BySpace release previously accepted into BySpace. Do not assume a release commit belongs to upstream `main`.
+4. Compare candidates with the last Paseo release previously accepted into BySpace. Do not assume a release commit belongs to upstream `main`.
 5. If a target-specific sync branch or worktree already exists, report its path, local SHA, remote SHA, cleanliness, and merge state; ask whether to continue it. Do not replace it.
 
 `check` ends after reporting. A release selection made during `check` is not permission to write unless the request already explicitly says to prepare that exact tag.
@@ -98,7 +98,7 @@ git diff -M -C --name-status "$LAST_UPSTREAM_SHA".."$UPSTREAM_TARGET_SHA"
 
 Intersect changed paths to find review candidates, counting both old and new paths from rename/copy entries. Then inspect hunks, commit history, callers, tests, release notes, schemas, and user flows. Path overlap is only a lower bound: review known BySpace capability divergences against upstream release notes and history even when paths do not intersect. Same-file changes are not automatically semantic conflicts; independent changes may merge normally.
 
-Enter `decision-needed` and stop whenever BySpace intentionally changed a capability and BySpace changed the same capability, even when Git merged it cleanly. Also stop when upstream removes or redesigns local behavior, upstream and local tests assert different product expectations, a local workaround may now be obsolete, or more than one user-visible result is reasonable.
+Enter `decision-needed` and stop whenever BySpace intentionally changed a capability and Paseo changed the same capability, even when Git merged it cleanly. Also stop when upstream removes or redesigns local behavior, upstream and local tests assert different product expectations, a local workaround may now be obsolete, or more than one user-visible result is reasonable.
 
 Batch related decisions instead of interrupting for each hunk. For each capability report:
 
@@ -125,7 +125,7 @@ Do not resolve the capability until the user decides. Compilation convenience is
 
    Keep every upstream interval change unless an approved BySpace boundary or semantic decision requires reconciliation.
 
-2. For every textual conflict, inspect base, BySpace, and BySpace versions plus callers and tests. Never choose whole-file `ours` or `theirs` merely to finish.
+2. For every textual conflict, inspect base, BySpace, and Paseo versions plus callers and tests. Never choose whole-file `ours` or `theirs` merely to finish.
 3. Mechanical conflicts such as generated output, lockfiles, or version metadata may be resolved from authoritative source and regenerated with existing project commands. A conflict touching intentional product behavior follows the dual-change decision gate.
 4. Audit conflict-free additions for violations of established BySpace boundaries: public BySpace identity, CLI and app IDs, `6777/6778` and `~/.byspace` coexistence, approved app/relay/Hub endpoints, ByteTrue publication ownership, single-package release staging, and supervisor daemon entrypoints.
 5. For clear user-facing brand conflicts, preserve the established BySpace behavior and group the resolutions in the report. Do not use a sync to broaden the current rebrand—for example, do not introduce a new `byspace.json` migration while syncing. If a name is also a protocol, storage, SDK, plugin, Hub, or backwards-compatibility contract, stop for a user decision.
@@ -149,7 +149,7 @@ Use project scripts and the target toolchain. In a fresh worktree, install once 
 
 Do not run all Vitest or Playwright tests locally. Do not delete/skip a test to make the merge pass, treat a lucky rerun as a fix, or increase a timeout without measured duration evidence. Investigate CI failures before any targeted rerun; never reflexively rerun the whole matrix.
 
-Use an isolated `TMPDIR` or cache for Expo/Metro build validation so another checkout cannot contaminate generated assets. Runtime acceptance must not start, stop, or reuse the installed BySpace daemon or its state directory.
+Use an isolated `TMPDIR` or cache for Expo/Metro build validation so another checkout cannot contaminate generated assets. Runtime acceptance must not start, stop, or reuse the installed Paseo or BySpace daemons or their state directories.
 
 Finally verify and report:
 
