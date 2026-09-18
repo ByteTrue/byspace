@@ -162,9 +162,9 @@ describe("resolveWorktreeCreationIntent", () => {
       number: 1790,
       baseRefName: "main",
       headRefName: "daemon-shutdown-diagnostics",
-      headOwnerLogin: "getbyspace",
-      headRepositorySshUrl: "git@github.com:getpaseo/paseo.git",
-      headRepositoryUrl: "https://github.com/getpaseo/paseo",
+      headOwnerLogin: "bytetrue",
+      headRepositorySshUrl: "git@github.com:bytetrue/byspace.git",
+      headRepositoryUrl: "https://github.com/bytetrue/byspace",
       isCrossRepository: false,
     });
 

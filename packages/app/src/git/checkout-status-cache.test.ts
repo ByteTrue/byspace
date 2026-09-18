@@ -50,7 +50,7 @@ function checkoutStatus(overrides: Partial<CheckoutStatusPayload> = {}): Checkou
     aheadOfOrigin: 0,
     behindOfOrigin: 0,
     hasRemote: true,
-    remoteUrl: "git@github.com:getpaseo/paseo.git",
+    remoteUrl: "git@github.com:bytetrue/byspace.git",
     ...overrides,
   } as CheckoutStatusPayload;
 }
@@ -60,7 +60,7 @@ function prStatus(overrides: Partial<CheckoutPrStatusPayload> = {}): CheckoutPrS
     cwd,
     status: {
       forge: "github",
-      url: "https://github.com/getpaseo/paseo/pull/42",
+      url: "https://github.com/bytetrue/byspace/pull/42",
       title: "My PR",
       state: "open",
       baseRefName: "main",

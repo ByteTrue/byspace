@@ -252,7 +252,7 @@ Services additionally get:
 - `$BYSPACE_SERVICE_<NAME>_PORT` / `_URL`, peer service ports and URLs
 - `$HOST`, `127.0.0.1` for local-only daemons, `0.0.0.0` when the daemon binds all interfaces
 
-BySpace also injects the corresponding `BYSPACE_*` names for existing project scripts. New scripts should use `BYSPACE_*`.
+BySpace injects these names for project scripts.
 
 ## Manage the workspace
 

@@ -1647,7 +1647,7 @@ describe("handleCreateBySpaceWorktreeRequest", () => {
           mimeType: "application/github-pr",
           number: 123,
           title: "Fix worktree naming",
-          url: "https://github.com/getpaseo/paseo/pull/123",
+          url: "https://github.com/bytetrue/byspace/pull/123",
           baseRefName: "main",
           headRefName: "fix/worktree-naming",
         },

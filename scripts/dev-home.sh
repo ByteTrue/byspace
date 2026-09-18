@@ -4,10 +4,6 @@ default_dev_byspace_root() {
   git rev-parse --show-toplevel 2>/dev/null || pwd
 }
 
-default_dev_byspace_root() {
-  default_dev_byspace_root
-}
-
 copy_json_tree() {
   local source_dir="$1"
   local target_dir="$2"
@@ -66,10 +62,6 @@ seed_worktree_byspace_home() {
   echo "  Seed:    copied metadata from ${source_home}"
 }
 
-seed_worktree_byspace_home() {
-  seed_worktree_byspace_home "$@"
-}
-
 configure_dev_daemon_config() {
   if [ -z "${BYSPACE_LISTEN:-}" ]; then
     return
@@ -125,7 +117,6 @@ configure_dev_byspace_home() {
   dev_root="${BYSPACE_DEV_ROOT:-$(default_dev_byspace_root)}"
   BYSPACE_HOME="$dev_root/.dev/byspace-home"
   export BYSPACE_DEV_MANAGED_HOME=1
-  export BYSPACE_DEV_MANAGED_HOME=1
 
   if [ -n "$seed_home" ]; then
     seed_worktree_byspace_home "$BYSPACE_HOME"
@@ -133,10 +124,6 @@ configure_dev_byspace_home() {
 
   mkdir -p "$BYSPACE_HOME"
   configure_dev_daemon_config
-}
-
-configure_dev_byspace_home() {
-  configure_dev_byspace_home "$@"
 }
 
 configure_dev_command_env() {

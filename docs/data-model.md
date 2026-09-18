@@ -344,7 +344,6 @@ Environment variables override `config.json`:
 | `BYSPACE_GIT_MAX_PROCESS_CONCURRENCY`  | `maxProcessConcurrency`  |
 | `BYSPACE_GIT_CONCURRENCY`              | Legacy concurrency alias |
 
-The corresponding `BYSPACE_*` names remain accepted as lower-priority compatibility fallbacks.
 `BYSPACE_GIT_MAX_PROCESS_CONCURRENCY` wins when it and the legacy alias are both set. Run `byspace reload`
 after changing `config.json`. Environment changes require a daemon restart; the launch environment
 remains authoritative during reload.

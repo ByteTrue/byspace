@@ -67,9 +67,7 @@ function validRefreshDeadline(value: unknown): number | undefined {
 function providerRefreshDeadline(configured: number | undefined): number {
   const explicit = validRefreshDeadline(configured);
   if (explicit !== undefined) return explicit;
-  const environmentValue =
-    process.env[BYSPACE_PROVIDER_REFRESH_DEADLINE_ENV] ??
-    process.env[BYSPACE_PROVIDER_REFRESH_DEADLINE_ENV];
+  const environmentValue = process.env[BYSPACE_PROVIDER_REFRESH_DEADLINE_ENV];
   return validRefreshDeadline(Number(environmentValue)) ?? DEFAULT_REFRESH_TIMEOUT_MS;
 }
 

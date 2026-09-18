@@ -12,6 +12,12 @@ import { PersistedConfigSchema } from "../src/server/persisted-config.js";
 const repoRoot = path.resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 const schemaPath = path.join(repoRoot, "packages/app/public/schemas/byspace.config.v1.json");
 
+// Git checks this file out with CRLF on Windows, so the comparison is made on
+// normalized newlines. Real drift still fails; a platform line ending does not.
+function normalizeNewlines(value: string): string {
+  return value.replace(/\r\n/g, "\n");
+}
+
 function generate(): string {
   const schema = z.toJSONSchema(PersistedConfigSchema, {
     target: "draft-07",
@@ -24,7 +30,7 @@ function generate(): string {
 
 describe("generated config schema", () => {
   test("matches the committed file", () => {
-    expect(readFileSync(schemaPath, "utf8")).toBe(generate());
+    expect(normalizeNewlines(readFileSync(schemaPath, "utf8"))).toBe(generate());
   });
 
   test("declares the fields the daemon actually accepts", () => {

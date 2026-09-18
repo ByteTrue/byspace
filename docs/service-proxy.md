@@ -132,7 +132,7 @@ Treat the forwarded authority as client-influenced input. A service that builds 
 
 ## Environment variables
 
-The listen address and public base URL can also be set via environment variables, which take precedence over `config.json`. The corresponding `BYSPACE_*` names remain accepted as lower-priority compatibility fallbacks:
+The listen address and public base URL can also be set via environment variables, which take precedence over `config.json`.
 
 | Variable                                | Description                                                               |
 | --------------------------------------- | ------------------------------------------------------------------------- |

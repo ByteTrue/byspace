@@ -22,7 +22,7 @@ function candidate(input: {
     },
     project: {
       projectKey: "key",
-      projectName: input.projectName ?? "getpaseo/paseo",
+      projectName: input.projectName ?? "bytetrue/byspace",
       workspaceName: input.workspaceName ?? null,
       checkout: {
         cwd: "/tmp/repo",
@@ -65,7 +65,7 @@ describe("scoreAgentHistoryCandidate", () => {
 
   it("matches the project name", () => {
     expect(
-      scoreAgentHistoryCandidate("byspace", candidate({ projectName: "getpaseo/paseo" })),
+      scoreAgentHistoryCandidate("byspace", candidate({ projectName: "bytetrue/byspace" })),
     ).not.toBeNull();
   });
 
@@ -117,8 +117,8 @@ describe("rankAgentHistoryCandidates", () => {
     const ranked = rankAgentHistoryCandidates(
       "byspace",
       [
-        candidate({ title: "unrelated work", projectName: "getpaseo/paseo" }),
-        candidate({ workspaceName: "byspace", projectName: "getpaseo/paseo" }),
+        candidate({ title: "unrelated work", projectName: "bytetrue/byspace" }),
+        candidate({ workspaceName: "byspace", projectName: "bytetrue/byspace" }),
       ],
       byUpdatedAtDesc,
     );

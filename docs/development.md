@@ -1,6 +1,6 @@
 # BySpace Development
 
-BySpace's public command is `byspace`. New runtime state uses `$BYSPACE_HOME` (`~/.byspace` by default), and public daemon configuration variables use the `BYSPACE_*` prefix. Matching `BYSPACE_*` names remain lower-priority compatibility fallbacks where supported; development-only script and benchmark variables retain their existing names.
+BySpace's public command is `byspace`. New runtime state uses `$BYSPACE_HOME` (`~/.byspace` by default), and public daemon configuration variables use the `BYSPACE_*` prefix. Development-only script and benchmark variables retain their existing names.
 
 ## CI
 
@@ -112,7 +112,7 @@ Service ports use OS ephemeral allocation by default. Set `worktrees.servicePort
 executable. Since `portScript` is executed directly without a shell, it must point to a real executable (e.g., a binary or a script with a proper shebang like `#!/bin/sh`) rather than an inline shell command or shell pipeline. For inline shell commands or pipelines, wrap them in a small script. `portScript` runs in the workspace directory with four arguments: service name,
 workspace ID, branch name, and worktree path. A missing branch is passed as an empty string. The same
 values are available as `BYSPACE_SCRIPTNAME`, `BYSPACE_WORKSPACE_ID`, `BYSPACE_BRANCH_NAME`, and
-`BYSPACE_WORKTREE_PATH`; the corresponding `BYSPACE_*` names remain compatibility aliases. The script must print one valid TCP port. BySpace trusts the external allocator,
+`BYSPACE_WORKTREE_PATH`. The script must print one valid TCP port. BySpace trusts the external allocator,
 so the port may already be bound. `portScript` takes precedence when both values are present.
 
 ## Bundled daemon web UI

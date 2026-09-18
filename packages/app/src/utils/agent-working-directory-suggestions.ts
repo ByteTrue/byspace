@@ -4,7 +4,7 @@ export interface AgentWorkingDirectorySource {
   lastActivityAt?: Date | null;
 }
 
-const BYSPACE_WORKTREE_PATH_PATTERN = /(^|\/)\.(?:byspace|byspace)\/worktrees(\/|$)/;
+const BYSPACE_WORKTREE_PATH_PATTERN = /(^|\/)\.byspace\/worktrees(\/|$)/;
 
 export function collectAgentWorkingDirectorySuggestions(
   sources: Iterable<AgentWorkingDirectorySource>,

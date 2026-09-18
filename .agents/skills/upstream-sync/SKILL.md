@@ -18,7 +18,7 @@ Update `ByteTrue/byspace` with the complete diff between two accepted BySpace re
 - Apply the complete `LAST_UPSTREAM_SHA..UPSTREAM_TARGET_SHA` release diff. Never copy a release tree or cherry-pick selected upstream features.
 - Do not auto-stash, reset, clean, delete worktrees, overwrite branches, or force-push a candidate. Unrelated dirty worktrees are reported but block only when they occupy this sync's branch or path.
 - Synchronization may contain only the upstream merge, required conflict reconciliation, and minimal preservation of established BySpace boundaries. Do not add features, refactor, fix unrelated bugs, expand branding scope, alter release policy, publish, or deploy.
-- Never run `byspace daemon stop` or `byspace daemon stop` on the development host. Use isolated homes, ports, worktrees, and caches for any runtime check.
+- Never run `byspace daemon stop` on the development host. Use isolated homes, ports, worktrees, and caches for any runtime check.
 - Follow repository verification rules: never run the full local test suite; build generated workspace declarations first, then run static checks and focused tests. PR CI supplies the broad matrix after acceptance.
 - A pushed candidate is immutable while awaiting acceptance. Any new, amended, rebased, or rewritten commit creates a new candidate SHA and invalidates prior tests and acceptance.
 - CI success is not user acceptance. No PR of any kind exists before the user explicitly accepts the exact full candidate SHA.
@@ -149,7 +149,7 @@ Use project scripts and the target toolchain. In a fresh worktree, install once 
 
 Do not run all Vitest or Playwright tests locally. Do not delete/skip a test to make the merge pass, treat a lucky rerun as a fix, or increase a timeout without measured duration evidence. Investigate CI failures before any targeted rerun; never reflexively rerun the whole matrix.
 
-Use an isolated `TMPDIR` or cache for Expo/Metro build validation so another checkout cannot contaminate generated assets. Runtime acceptance must not start, stop, or reuse the installed BySpace/BySpace daemons or their state directories.
+Use an isolated `TMPDIR` or cache for Expo/Metro build validation so another checkout cannot contaminate generated assets. Runtime acceptance must not start, stop, or reuse the installed BySpace daemon or its state directory.
 
 Finally verify and report:
 

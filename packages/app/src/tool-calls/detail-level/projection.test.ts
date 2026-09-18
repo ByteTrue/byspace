@@ -304,7 +304,7 @@ describe("tool call detail-level projection", () => {
         { name: "mcp__byspace__list_worktrees" },
       ),
       toolCall("3", { type: "fetch", url: "https://paseo.sh" }),
-      toolCall("4", { type: "fetch", url: "https://github.com/getbyspace" }),
+      toolCall("4", { type: "fetch", url: "https://github.com/bytetrue" }),
     ];
 
     const result = project({ level: "overview", head: calls });

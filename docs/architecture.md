@@ -5,7 +5,7 @@ BySpace is a client-server system for monitoring and controlling local AI coding
 Your code never leaves your machine. BySpace is local-first.
 
 Public runtime defaults are `$BYSPACE_HOME=~/.byspace`, daemon ports `127.0.0.1:6777` (production) and
-`127.0.0.1:6778` (development), and `BYSPACE_*` configuration variables. Matching `BYSPACE_*` names
+`127.0.0.1:6778` (development), and `BYSPACE_*` configuration variables.
 remain lower-priority compatibility fallbacks where supported. Internal package, protocol, RPC, schema,
 type, storage, and git metadata names retain their upstream `BySpace` spelling.
 
@@ -172,7 +172,7 @@ Enables remote access when the daemon is behind a firewall.
 - Pairing via QR code transfers the daemon's public key to the client
 - New homes keep relay disabled until pairing consent. `DaemonConfigStore` persists the desired state, while the relay runtime starts or stops the outbound transport live; pairing reads that current state instead of a startup snapshot.
 - Optional E2EE capability negotiation preserves application frame kind: text plaintext uses base64 ciphertext text frames, while binary plaintext uses raw ciphertext binary frames; mixed-version peers remain base64-only
-- Self-hosted relays opt into TLS with `daemon.relay.useTls` or `BYSPACE_RELAY_USE_TLS=true`; the public (client-facing) TLS setting can be overridden independently via `daemon.relay.publicUseTls` or `BYSPACE_RELAY_PUBLIC_USE_TLS`. The corresponding `BYSPACE_*` names remain lower-priority compatibility fallbacks.
+- Self-hosted relays opt into TLS with `daemon.relay.useTls` or `BYSPACE_RELAY_USE_TLS=true`; the public (client-facing) TLS setting can be overridden independently via `daemon.relay.publicUseTls` or `BYSPACE_RELAY_PUBLIC_USE_TLS`.
 
 The production relay server lives in [getpaseo/paseo-relay](https://github.com/getpaseo/paseo-relay). It is a distributed Elixir service. The Cloudflare relay implementation in this monorepo is retained as legacy code and is not deployed.
 

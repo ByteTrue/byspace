@@ -41,10 +41,12 @@ test.describe("Add Project GitHub flow", () => {
       await openAddProjectFlow(page);
       await chooseAddProjectMethod(page, "github");
 
-      await addProjectFlowInput(page).fill("getpaseo/paseo");
-      await expect(addProjectFlow(page).getByText("getpaseo/paseo", { exact: true })).toBeVisible({
-        timeout: 30_000,
-      });
+      await addProjectFlowInput(page).fill("bytetrue/byspace");
+      await expect(addProjectFlow(page).getByText("bytetrue/byspace", { exact: true })).toBeVisible(
+        {
+          timeout: 30_000,
+        },
+      );
       await addProjectFlowInput(page).fill("");
 
       const repositoryRow = addProjectFlow(page).getByText(repository.fullName, { exact: true });

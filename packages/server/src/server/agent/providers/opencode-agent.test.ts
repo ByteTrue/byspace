@@ -855,7 +855,7 @@ describe("OpenCodeAgentClient adapter smoke tests", () => {
 
     const custom = modes.find((mode) => mode.id === "byspace-test-custom");
     expect(custom).toBeDefined();
-    expect(custom!.label).toBe("BySpace-test-custom");
+    expect(custom!.label).toBe("Byspace-test-custom");
     expect(custom!.description).toBe("Custom agent defined for BySpace integration test");
 
     // System agents should not appear as selectable modes
@@ -1222,7 +1222,7 @@ describe("OpenCode adapter normalization", () => {
         mimeType: "application/github-issue",
         number: 55,
         title: "Improve startup error details",
-        url: "https://github.com/getpaseo/paseo/issues/55",
+        url: "https://github.com/bytetrue/byspace/issues/55",
         body: "Issue body",
       },
     ]);
