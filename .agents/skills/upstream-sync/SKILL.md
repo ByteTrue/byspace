@@ -105,7 +105,7 @@ Batch related decisions instead of interrupting for each hunk. For each capabili
 ```text
 capability
 BySpace behavior and evidence
-BySpace behavior and evidence
+Paseo behavior and evidence
 files and tests
 textual conflict or clean semantic overlap
 options and user impact

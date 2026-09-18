@@ -188,7 +188,6 @@ describe("Claude terminal agent hooks", () => {
 
     expect(env.PATH?.split(delimiter)).toEqual([cliBinDir, "/usr/bin", "/bin"]);
     expect(env.BYSPACE_HOOK_CLI).toBe(hookCliPath);
-    expect(env.BYSPACE_HOOK_CLI).toBe(hookCliPath);
   });
 
   it("leaves terminal PATH unchanged when the CLI directory cannot be resolved", () => {

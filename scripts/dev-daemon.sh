@@ -11,7 +11,6 @@ configure_dev_byspace_home
 
 LOCAL_MODELS_DIR="${BYSPACE_LOCAL_MODELS_DIR:-$HOME/.byspace/models/local-speech}"
 export BYSPACE_LOCAL_MODELS_DIR="$LOCAL_MODELS_DIR"
-export BYSPACE_LOCAL_MODELS_DIR="$LOCAL_MODELS_DIR"
 mkdir -p "$LOCAL_MODELS_DIR"
 
 echo "══════════════════════════════════════════════════════"
