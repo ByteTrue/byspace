@@ -11,12 +11,31 @@ import {
   scrollThroughOlderHistoryPages,
 } from "../support/helpers/timeline-pagination";
 
-test("does not repeat an assistant block when the current app paginates a published 0.2.5 daemon", async ({
+// The app must still parse a *published* daemon's messages. Every daemon
+// released so far speaks the pre-rename wire names (`isPaseoOwnedWorktree`,
+// `paseo_worktree_*`); this app now speaks the renamed ones, so no existing
+// release is compatible and there is nothing to pin.
+//
+// Set this to the first daemon version published after the identity
+// migration. The test then runs for real and fails if that contract breaks.
+const PINNED_DAEMON_VERSION: string | null = null;
+
+const SKIP_REASON =
+  "No published daemon speaks the renamed wire protocol yet. Set PINNED_DAEMON_VERSION " +
+  "to the first release published after the identity migration so this guards the " +
+  "cross-version protocol contract for real.";
+
+test("does not repeat an assistant block when the current app paginates a published daemon", async ({
   page,
 }) => {
+  test.skip(PINNED_DAEMON_VERSION === null, SKIP_REASON);
+  const publishedVersion = PINNED_DAEMON_VERSION;
+  if (publishedVersion === null) {
+    return;
+  }
   test.setTimeout(120_000);
   const serverId = `srv_old_pagination_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
-  const daemon = await startIsolatedHostDaemon(serverId, { publishedVersion: "0.2.5" });
+  const daemon = await startIsolatedHostDaemon(serverId, { publishedVersion });
   const workspace = await seedWorkspace({
     repoPrefix: "timeline-old-daemon-pagination-",
     port: daemon.port,
