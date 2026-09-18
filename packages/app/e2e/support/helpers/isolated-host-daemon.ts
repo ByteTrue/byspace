@@ -148,24 +148,32 @@ export async function startIsolatedHostDaemon(
     ? path.join(publishedPackageRoot, "node_modules", "@getpaseo", "server")
     : path.resolve(__dirname, "../../../../server");
   const spawnDaemon = async (): Promise<ChildProcess> => {
+    // The published daemon predates the rename and reads only PASEO_*. The
+    // in-repo daemon reads only BYSPACE_*. Every variable has to follow the
+    // daemon being started, or the spawned process ignores the whole block.
+    const daemonEnv = publishedPackageRoot
+      ? {
+          PASEO_HOME: byspaceHome,
+          PASEO_LISTEN: `127.0.0.1:${port}`,
+          PASEO_SERVER_ID: serverId,
+          PASEO_CORS_ORIGINS: `http://localhost:${metroPort}`,
+          PASEO_RELAY_ENABLED: options.mutableRelay ? undefined : "0",
+          PASEO_NODE_ENV: "development",
+        }
+      : {
+          BYSPACE_HOME: byspaceHome,
+          BYSPACE_LISTEN: `127.0.0.1:${port}`,
+          BYSPACE_SERVER_ID: serverId,
+          BYSPACE_CORS_ORIGINS: `http://localhost:${metroPort}`,
+          BYSPACE_RELAY_ENABLED: options.mutableRelay ? undefined : "0",
+          BYSPACE_NODE_ENV: "development",
+        };
     const spawnOptions: SpawnOptions = {
       cwd: serverDir,
       env: withDisabledE2ESpeechEnv({
         ...process.env,
         ...options.environment,
-        ...(publishedPackageRoot
-          ? {
-              BYSPACE_HOME: byspaceHome,
-              BYSPACE_LISTEN: `127.0.0.1:${port}`,
-            }
-          : {
-              BYSPACE_HOME: byspaceHome,
-              BYSPACE_LISTEN: `127.0.0.1:${port}`,
-            }),
-        BYSPACE_SERVER_ID: serverId,
-        BYSPACE_CORS_ORIGINS: `http://localhost:${metroPort}`,
-        BYSPACE_RELAY_ENABLED: options.mutableRelay ? undefined : "0",
-        BYSPACE_NODE_ENV: "development",
+        ...daemonEnv,
         NODE_ENV: "development",
       }),
       stdio: ["ignore", "ignore", "pipe"],
