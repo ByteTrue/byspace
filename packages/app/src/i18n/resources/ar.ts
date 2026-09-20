@@ -143,6 +143,7 @@ export const ar: TranslationResources = {
       noClipboardImage: "لا توجد صورة في الحافظة",
       pasteImageFailed: "تعذر لصق الصورة",
       fileTooLarge: "{{fileName}} is too large (max {{size}})",
+      daemonClientDisconnected: "تم قطع اتصال عميل Daemon",
     },
     clientCommands: {
       archiveAgent: "أرشفة الوكيل الحالي",
@@ -2314,6 +2315,24 @@ export const ar: TranslationResources = {
             noTcp: "يلزم مستمع TCP؛ يستخدم هذا الخادم مقبسًا أو أنبوبًا",
             noPassword: "عيّن كلمة مرور الوصول أولًا لتمكين اتصالات الشبكة المحلية",
           },
+        },
+        service: {
+          sectionTitle: "إدارة الخدمة",
+          unavailable: "اتصل بهذا المضيف لإدارة إعدادات الخدمة",
+          errorTitle: "تعذر تحديث إعدادات الخدمة",
+          toggle: {
+            title: "التشغيل عند تسجيل الدخول",
+            hint: "يوضع daemon تحت إدارة خدمات النظام؛ يستمر بعد إغلاق الطرفية",
+          },
+          state: {
+            "not-installed": "غير مثبتة. يعمل daemon من المكان الذي شغلته منه",
+            "installed-stopped": "مثبتة لكنها لا تعمل. ستبدأ عند تسجيل الدخول التالي",
+            "installed-running-not-this-process": "توجد خدمة daemon قيد التشغيل بالفعل",
+            "managed-by-service":
+              "تُدار بواسطة الخدمة. تبدأ عند تسجيل الدخول ولا تتأثر بإغلاق الطرفية",
+            unknown: "حالة الخدمة غير معروفة",
+          },
+          lingerHint: "فعّل linger (loginctl enable-linger) لاستمرار الخدمة بعد الخروج",
         },
         restart: {
           title: "إعادة تشغيل البرنامج الخفي",

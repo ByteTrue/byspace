@@ -4,6 +4,19 @@ import {
   type PersistedConfig,
 } from "./persisted-config.js";
 import { hashDaemonPassword } from "./auth.js";
+import {
+  DAEMON_SERVICE_LABEL,
+  queryDaemonServiceView,
+  validateServiceOriginSync,
+} from "./session/daemon/daemon-service-manager.js";
+import {
+  buildServerServiceSpec,
+  installLaunchdServiceServer,
+  installSystemdServiceServer,
+  uninstallLaunchdServiceServer,
+  uninstallSystemdServiceServer,
+  uninstallWindowsTaskServer,
+} from "./session/daemon/daemon-service-install.js";
 import { isLanListenString } from "./hostnames.js";
 import { ProviderOverrideSchema } from "./agent/provider-launch-config.js";
 import {
@@ -43,6 +56,9 @@ interface SupportedMutableConfigPatch {
   // - wire view: auth.passwordSet / network.{allowLanAccess,tcpPort} — derived only
   network?: { allowLanAccess?: boolean; tcpPort?: number | null };
   auth?: { password?: string | null; passwordSet?: boolean };
+  // COMPAT(daemonServiceInstall): added in v0.14.7. Execute-only: install runs the
+  // service-manager registration and never lands in the mutable config view.
+  service?: { install?: boolean };
 }
 
 /** Translated form of the network/auth patch used only by the persisted merge. */
@@ -308,6 +324,7 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
     ...(patch.pluginsEnabled !== undefined ? { pluginsEnabled: patch.pluginsEnabled } : {}),
     ...(patch.plugins !== undefined ? { plugins: patch.plugins } : {}),
     ...pickNetworkAuthPatchFields(patch),
+    ...(patch.service !== undefined ? { service: patch.service } : {}),
   };
 }
 
@@ -466,6 +483,9 @@ export class DaemonConfigStore {
     this.startupPersisted =
       options.startupPersisted ?? loadPersistedConfig(byspaceHome, this.logger);
     this.lastKnownPersisted = this.startupPersisted;
+    // Service view is probed, not persisted: refresh it once at construction so the
+    // first server_info carries a real state, then again after each service patch.
+    this.refreshServiceRuntimeState();
   }
 
   public get(): MutableDaemonConfig {
@@ -494,8 +514,17 @@ export class DaemonConfigStore {
       removeProviders = [],
       network: networkPatch,
       auth: authPatch,
+      service: servicePatch,
       ...rawConfigPatch
     } = parsedPatch;
+
+    // Service install is a side effect, not config state: it runs the OS service
+    // registration and the resulting view refresh arrives via the service probe.
+    if (servicePatch?.install !== undefined) {
+      this.applyServicePatch(servicePatch.install);
+      // Re-probe after the side effect so the response carries the new state.
+      this.refreshServiceRuntimeState();
+    }
 
     let daemonPersistedPatch: DaemonPersistedPatch | null = null;
     let networkViewPatch: SupportedMutableConfigPatch = {};
@@ -637,6 +666,59 @@ export class DaemonConfigStore {
       },
     });
     this.applyReplacement(next, { removedProviders: [] });
+  }
+
+  /**
+   * Re-probe the OS service manager and refresh the derived service view. Never
+   * persists: the service state is a property of the host, not of config.json.
+   */
+  public refreshServiceRuntimeState(): void {
+    let view: ReturnType<typeof queryDaemonServiceView>;
+    try {
+      view = queryDaemonServiceView();
+    } catch {
+      // The service-manager probe is host-dependent (launchctl/systemctl may be
+      // absent, e.g. unit tests or containers); leave the view out rather than
+      // failing every config operation.
+      return;
+    }
+    const next = MutableDaemonConfigSchema.parse({
+      ...this.current,
+      service: view,
+    });
+    if (JSON.stringify(next) === JSON.stringify(this.current)) return;
+    this.applyReplacement(next, { removedProviders: [] });
+  }
+
+  /**
+   * Execute a service install/uninstall (issue 043). Install/uninstall are side
+   * effects on the OS service manager, never config state: the mutable view stays
+   * untouched and the service view is re-probed on demand.
+   */
+  private applyServicePatch(install: boolean): void {
+    if (install) {
+      // The same npm-global guard the CLI enforces: a service must point at the
+      // published install, not a dev checkout or container filesystem. The daemon
+      // process runs the check because it owns the install-origin context.
+      const originError = validateServiceOriginSync();
+      if (originError) throw new Error(originError);
+      const spec = buildServerServiceSpec(this.byspaceHome);
+      if (process.platform === "darwin") {
+        installLaunchdServiceServer(spec);
+      } else if (process.platform === "linux") {
+        installSystemdServiceServer(spec);
+      } else {
+        throw new Error(
+          "Service installation is not supported on this platform (expected macOS or Linux).",
+        );
+      }
+    } else if (process.platform === "darwin") {
+      uninstallLaunchdServiceServer(DAEMON_SERVICE_LABEL);
+    } else if (process.platform === "linux") {
+      uninstallSystemdServiceServer(DAEMON_SERVICE_LABEL);
+    } else if (process.platform === "win32") {
+      uninstallWindowsTaskServer(DAEMON_SERVICE_LABEL);
+    }
   }
 
   public reload(): DaemonConfigReloadResult {

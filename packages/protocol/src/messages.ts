@@ -293,6 +293,22 @@ export const MutableDaemonConfigSchema = z
       })
       .passthrough()
       .optional(),
+    // COMPAT(daemonServiceInstall): added in v0.14.7. Derived view of the OS service
+    // manager state; the daemon re-queries it lazily, never caches a stale verdict.
+    service: z
+      .object({
+        state: z.enum([
+          "not-installed",
+          "installed-stopped",
+          "installed-running-not-this-process",
+          "managed-by-service",
+          "unknown",
+        ]),
+        label: z.string(),
+        linger: z.boolean().optional(),
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 
@@ -332,6 +348,15 @@ export const MutableDaemonConfigPatchSchema = z
     auth: z
       .object({
         password: z.string().min(1).nullable().optional(),
+      })
+      .passthrough()
+      .optional(),
+    // COMPAT(daemonServiceInstall): added in v0.14.7; old daemons drop these patches.
+    // Install/uninstall execute in the daemon process and need its install-origin
+    // context, so they ride the same config-patch pipe instead of a separate RPC.
+    service: z
+      .object({
+        install: z.boolean().optional(),
       })
       .passthrough()
       .optional(),
@@ -3714,6 +3739,10 @@ export const ServerInfoStatusPayloadSchema = z
         // Old daemons drop network/auth config patches silently, so clients must
         // hide the network settings instead of letting a save appear to succeed.
         daemonNetworkConfig: z.boolean().optional(),
+        // COMPAT(daemonServiceInstall): added in v0.14.7. When false (or absent on
+        // an older daemon), the app hides the service-management switch instead of
+        // letting an install appear to succeed.
+        daemonServiceInstall: z.boolean().optional(),
       })
       .optional(),
   })

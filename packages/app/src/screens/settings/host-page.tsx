@@ -43,6 +43,7 @@ import { PairDeviceModal } from "@/desktop/components/pair-device-modal";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { NetworkSection } from "@/screens/settings/network-section";
+import { DaemonServiceSection } from "@/screens/settings/daemon-service-section";
 import {
   getHostRuntimeStore,
   isHostRuntimeConnected,
@@ -375,6 +376,8 @@ export function HostSettingsPage({
       <NetworkSection serverId={serverId} />
 
       {isLocalDaemon ? <LocalDaemonSection /> : null}
+
+      {isLocalDaemon ? <DaemonServiceSection serverId={serverId} /> : null}
 
       {!isLocalDaemon ? <UpdateDaemonCard key={host.serverId} host={host} /> : null}
 

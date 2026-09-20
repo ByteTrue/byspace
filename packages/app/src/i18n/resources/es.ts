@@ -143,6 +143,7 @@ export const es: TranslationResources = {
       noClipboardImage: "No hay ninguna imagen en el portapapeles",
       pasteImageFailed: "No se pudo pegar la imagen",
       fileTooLarge: "{{fileName}} is too large (max {{size}})",
+      daemonClientDisconnected: "El cliente Daemon está desconectado",
     },
     clientCommands: {
       archiveAgent: "Archivar el agente actual",
@@ -2366,6 +2367,27 @@ export const es: TranslationResources = {
             noPassword:
               "Configura primero una contraseña de acceso para activar las conexiones LAN",
           },
+        },
+        service: {
+          sectionTitle: "Gestión del servicio",
+          unavailable: "Conéctate a este host para gestionar los ajustes del servicio",
+          errorTitle: "No se pudo actualizar la configuración del servicio",
+          toggle: {
+            title: "Iniciar al iniciar sesión",
+            hint: "Delega el daemon al gestor de servicios del sistema; sobrevive al cierre del terminal",
+          },
+          state: {
+            "not-installed": "No instalado. El daemon se ejecuta desde donde lo iniciaste",
+            "installed-stopped":
+              "Instalado pero sin ejecutar. Arrancará en el próximo inicio de sesión",
+            "installed-running-not-this-process":
+              "Ya hay un daemon gestionado por el servicio en ejecución",
+            "managed-by-service":
+              "Gestionado por el servicio. Arranca al iniciar sesión y sobrevive al cierre del terminal",
+            unknown: "Estado del servicio desconocido",
+          },
+          lingerHint:
+            "Activa linger (loginctl enable-linger) para que el servicio siga tras cerrar sesión",
         },
         restart: {
           title: "Reiniciar demonio",

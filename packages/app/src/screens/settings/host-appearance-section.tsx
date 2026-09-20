@@ -263,7 +263,7 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
       try {
         await setHostColor(host.serverId, color);
       } catch {
-        toast.error(t("errors.unableToSave"));
+        toast.error(t("common.errors.unableToSave"));
       }
     },
     [host.serverId, setHostColor, t, toast],
@@ -273,7 +273,7 @@ export function HostAppearanceSection({ host }: { host: HostProfile }) {
       try {
         await setHostBadgeDisplay(host.serverId, next);
       } catch {
-        toast.error(t("errors.unableToSave"));
+        toast.error(t("common.errors.unableToSave"));
       }
     },
     [host.serverId, setHostBadgeDisplay, t, toast],

@@ -1628,6 +1628,8 @@ export class DaemonWebSocketServer {
         agentConfigApply: true,
         // COMPAT(daemonNetworkConfig): added in v0.14.3, remove gate after 2027-07-14.
         daemonNetworkConfig: true,
+        // COMPAT(daemonServiceInstall): added in v0.14.7, remove gate after 2027-09-20.
+        daemonServiceInstall: true,
       },
     };
   }

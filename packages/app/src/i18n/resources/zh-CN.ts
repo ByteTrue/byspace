@@ -143,6 +143,7 @@ export const zhCN: TranslationResources = {
       noClipboardImage: "剪贴板中没有图片",
       pasteImageFailed: "无法粘贴图片",
       fileTooLarge: "{{fileName}} is too large (max {{size}})",
+      daemonClientDisconnected: "Daemon client 已断开连接",
     },
     clientCommands: {
       archiveAgent: "归档当前 Agent",
@@ -2291,6 +2292,23 @@ export const zhCN: TranslationResources = {
             noTcp: "需要 TCP 监听；当前使用 socket 或管道，无法开放",
             noPassword: "先设置访问密码，才能开放局域网连接",
           },
+        },
+        service: {
+          sectionTitle: "服务托管",
+          unavailable: "连接到此主机后才能管理服务设置",
+          errorTitle: "无法更新服务设置",
+          toggle: {
+            title: "登录时启动",
+            hint: "把 daemon 交给系统服务管理器托管，终端退出后仍继续运行",
+          },
+          state: {
+            "not-installed": "未安装。daemon 从你启动它的地方运行",
+            "installed-stopped": "已安装但未运行，将在下次登录时启动",
+            "installed-running-not-this-process": "已有一个服务托管的 daemon 在运行",
+            "managed-by-service": "由服务托管。登录时启动，终端退出后不受影响",
+            unknown: "服务状态未知",
+          },
+          lingerHint: "需要启用 lingering（loginctl enable-linger），注销后服务才能继续运行",
         },
         restart: {
           title: "重启 Daemon",

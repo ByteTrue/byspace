@@ -143,6 +143,7 @@ export const ko: TranslationResources = {
       noClipboardImage: "클립보드에 이미지가 없습니다.",
       pasteImageFailed: "이미지를 붙여넣지 못했습니다.",
       fileTooLarge: "{{fileName}}이(가) 너무 큽니다 (최대 {{size}})",
+      daemonClientDisconnected: "데몬 클라이언트 연결이 끊어졌습니다",
     },
     clientCommands: {
       archiveAgent: "현재 에이전트 보관",
@@ -2325,6 +2326,25 @@ export const ko: TranslationResources = {
             noTcp: "TCP 리스너가 필요합니다. 이 daemon은 소켓/파이프를 사용합니다",
             noPassword: "먼저 접근 비밀번호를 설정하세요",
           },
+        },
+        service: {
+          sectionTitle: "서비스 관리",
+          unavailable: "서비스 설정을 관리하려면 이 호스트에 연결하세요",
+          errorTitle: "서비스 설정을 업데이트할 수 없습니다",
+          toggle: {
+            title: "로그인 시 시작",
+            hint: "daemon을 OS 서비스 관리자에 등록해 터미널을 종료해도 계속 실행됩니다",
+          },
+          state: {
+            "not-installed": "설치되지 않았습니다. daemon은 시작한 위치에서 실행됩니다",
+            "installed-stopped": "설치되었지만 실행 중이 아닙니다. 다음 로그인 시 시작됩니다",
+            "installed-running-not-this-process": "서비스로 관리되는 daemon이 이미 실행 중입니다",
+            "managed-by-service":
+              "서비스로 관리되고 있습니다. 로그인 시 시작되며 터미널 종료의 영향을 받지 않습니다",
+            unknown: "서비스 상태를 알 수 없습니다",
+          },
+          lingerHint:
+            "로그아웃 후에도 계속 실행하려면 linger를 활성화하세요(loginctl enable-linger)",
         },
         restart: {
           title: "데몬 재시작",

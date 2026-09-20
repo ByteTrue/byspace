@@ -143,6 +143,7 @@ export const ja: TranslationResources = {
       noClipboardImage: "クリップボードに画像がありません",
       pasteImageFailed: "画像を貼り付けられませんでした",
       fileTooLarge: "{{fileName}}が大きすぎます（最大{{size}}）",
+      daemonClientDisconnected: "デーモンクライアントが切断されています",
     },
     clientCommands: {
       archiveAgent: "現在のエージェントをアーカイブ",
@@ -2338,6 +2339,24 @@ export const ja: TranslationResources = {
             noTcp: "TCP リスナーが必要です。この daemon は socket / pipe を使用しています",
             noPassword: "先にアクセスパスワードを設定してください",
           },
+        },
+        service: {
+          sectionTitle: "サービス管理",
+          unavailable: "このホストに接続してサービス設定を管理してください",
+          errorTitle: "サービス設定を更新できません",
+          toggle: {
+            title: "ログイン時に起動",
+            hint: "daemon を OS のサービスマネージャーに登録し、ターミナルを終了しても継続します",
+          },
+          state: {
+            "not-installed": "未インストール。daemon は起動元で動作しています",
+            "installed-stopped": "インストール済みですが未実行。次回ログイン時に起動します",
+            "installed-running-not-this-process": "サービス管理の daemon が既に実行中です",
+            "managed-by-service":
+              "サービスで管理中。ログイン時に起動し、ターミナル終了の影響を受けません",
+            unknown: "サービス状態を取得できません",
+          },
+          lingerHint: "linger を有効にすると（loginctl enable-linger）、ログアウト後も継続します",
         },
         restart: {
           title: "デーモンを再起動",

@@ -141,6 +141,7 @@ export const en = {
       noClipboardImage: "No image in clipboard",
       pasteImageFailed: "Failed to paste image",
       fileTooLarge: "{{fileName}} is too large (max {{size}})",
+      daemonClientDisconnected: "Daemon client is disconnected",
     },
     clientCommands: {
       archiveAgent: "Archive the current agent",
@@ -2365,6 +2366,25 @@ export const en = {
             noTcp: "Requires a TCP listener; this daemon uses a socket or pipe",
             noPassword: "Set an access password first to enable LAN connections",
           },
+        },
+        service: {
+          sectionTitle: "Service hosting",
+          unavailable: "Connect to this host to manage service settings",
+          errorTitle: "Unable to update service settings",
+          toggle: {
+            title: "Start at login",
+            hint: "Hosts the daemon with the OS service manager so it survives terminal exit",
+          },
+          state: {
+            "not-installed": "Not installed. The daemon starts from where you launched it",
+            "installed-stopped": "Installed but not running. It will start at next login",
+            "installed-running-not-this-process": "A service-hosted daemon is already running",
+            "managed-by-service":
+              "Managed by the service. It starts at login and survives terminal exit",
+            unknown: "Service state unknown",
+          },
+          lingerHint:
+            "Enable lingering (loginctl enable-linger) so the service keeps running after logout",
         },
         restart: {
           title: "Restart daemon",

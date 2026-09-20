@@ -145,6 +145,7 @@ export const fr: TranslationResources = {
       noClipboardImage: "Aucune image dans le presse-papiers",
       pasteImageFailed: "Impossible de coller l’image",
       fileTooLarge: "{{fileName}} is too large (max {{size}})",
+      daemonClientDisconnected: "Le client Daemon est déconnecté",
     },
     clientCommands: {
       archiveAgent: "Archiver l'agent actuel",
@@ -2368,6 +2369,28 @@ export const fr: TranslationResources = {
             noPassword:
               "Définissez d'abord un mot de passe d'accès pour activer les connexions LAN",
           },
+        },
+        service: {
+          sectionTitle: "Gestion du service",
+          unavailable: "Connectez-vous à cet hôte pour gérer les paramètres du service",
+          errorTitle: "Impossible de mettre à jour les paramètres du service",
+          toggle: {
+            title: "Lancer à l'ouverture de session",
+            hint: "Confie le daemon au gestionnaire de services de l'OS ; il survit à la fermeture du terminal",
+          },
+          state: {
+            "not-installed":
+              "Non installé. Le daemon s'exécute depuis l'endroit où vous l'avez lancé",
+            "installed-stopped":
+              "Installé mais pas en cours d'exécution. Il démarrera à la prochaine session",
+            "installed-running-not-this-process":
+              "Un daemon géré par le service est déjà en cours d'exécution",
+            "managed-by-service":
+              "Géré par le service. Démarre à l'ouverture de session et survit à la fermeture du terminal",
+            unknown: "État du service inconnu",
+          },
+          lingerHint:
+            "Activez linger (loginctl enable-linger) pour que le service continue après déconnexion",
         },
         restart: {
           title: "Redémarrer le démon",

@@ -143,6 +143,7 @@ export const ptBR: TranslationResources = {
       noClipboardImage: "Não há imagem na área de transferência",
       pasteImageFailed: "Falha ao colar a imagem",
       fileTooLarge: "{{fileName}} é grande demais (máximo {{size}})",
+      daemonClientDisconnected: "O cliente do daemon está desconectado",
     },
     clientCommands: {
       archiveAgent: "Arquivar o agente atual",
@@ -2352,6 +2353,26 @@ export const ptBR: TranslationResources = {
             noTcp: "Requer um listener TCP; este daemon usa socket ou pipe",
             noPassword: "Defina primeiro uma senha de acesso para ativar conexões LAN",
           },
+        },
+        service: {
+          sectionTitle: "Gerenciamento do serviço",
+          unavailable: "Conecte-se a este host para gerenciar as configurações do serviço",
+          errorTitle: "Não foi possível atualizar as configurações do serviço",
+          toggle: {
+            title: "Iniciar no login",
+            hint: "Deixa o daemon sob o gerenciador de serviços do SO; ele sobrevive ao fechamento do terminal",
+          },
+          state: {
+            "not-installed": "Não instalado. O daemon roda de onde você o iniciou",
+            "installed-stopped": "Instalado, mas não em execução. Iniciará no próximo login",
+            "installed-running-not-this-process":
+              "Um daemon gerenciado pelo serviço já está em execução",
+            "managed-by-service":
+              "Gerenciado pelo serviço. Inicia no login e sobrevive ao fechamento do terminal",
+            unknown: "Estado do serviço desconhecido",
+          },
+          lingerHint:
+            "Ative o linger (loginctl enable-linger) para o serviço continuar após o logout",
         },
         restart: {
           title: "Reiniciar daemon",

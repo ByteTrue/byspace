@@ -81,10 +81,10 @@ export function NetworkSection({ serverId }: { serverId: string }) {
   const promptRestart = useCallback(() => {
     setNeedsRestart(true);
     void confirmDialog({
-      title: t("settings.host.network.restartPrompt.title"),
-      message: t("settings.host.network.restartPrompt.message"),
-      confirmLabel: t("settings.host.network.restartPrompt.confirm"),
-      cancelLabel: t("settings.host.network.restartPrompt.later"),
+      title: t("settings.host.daemon.network.restartPrompt.title"),
+      message: t("settings.host.daemon.network.restartPrompt.message"),
+      confirmLabel: t("settings.host.daemon.network.restartPrompt.confirm"),
+      cancelLabel: t("settings.host.daemon.network.restartPrompt.later"),
       destructive: false,
     })
       .then((confirmed) => {
@@ -93,7 +93,7 @@ export function NetworkSection({ serverId }: { serverId: string }) {
           restartServer: (reason) => daemonClient.restartServer(reason),
         }).catch((err) => {
           console.error("[NetworkSection] Failed to restart daemon", err);
-          Alert.alert(t("settings.host.network.restartPrompt.failedTitle"));
+          Alert.alert(t("settings.host.daemon.network.restartPrompt.failedTitle"));
         });
       })
       .catch((err) => {
@@ -118,7 +118,7 @@ export function NetworkSection({ serverId }: { serverId: string }) {
         // Without the stored password the reconnect after the restart fails
         // with 401 — surface it instead of leaving a silent trap.
         console.error("[NetworkSection] Failed to update local connection password", err);
-        Alert.alert(t("settings.host.network.password.profileSyncFailed"));
+        Alert.alert(t("settings.host.daemon.network.password.profileSyncFailed"));
       });
     },
     [hosts, serverId, t, upsertDirectConnection],
@@ -148,11 +148,11 @@ export function NetworkSection({ serverId }: { serverId: string }) {
   // only obscures which dependency changes them.
   let lanHint: string;
   if (tcpPort === null) {
-    lanHint = t("settings.host.network.allowLan.noTcp");
+    lanHint = t("settings.host.daemon.network.allowLan.noTcp");
   } else if (passwordSet) {
-    lanHint = t("settings.host.network.allowLan.hint", { port: tcpPort });
+    lanHint = t("settings.host.daemon.network.allowLan.hint", { port: tcpPort });
   } else {
-    lanHint = t("settings.host.network.allowLan.noPassword");
+    lanHint = t("settings.host.daemon.network.allowLan.noPassword");
   }
 
   if (!supportsNetworkSettings) {
@@ -162,21 +162,23 @@ export function NetworkSection({ serverId }: { serverId: string }) {
 
   if (!isConnected) {
     return (
-      <SettingsSection title={t("settings.host.network.sectionTitle")}>
+      <SettingsSection title={t("settings.host.daemon.network.sectionTitle")}>
         <View style={settingsStyles.card}>
-          <Text style={settingsStyles.rowHint}>{t("settings.host.network.unavailable")}</Text>
+          <Text style={settingsStyles.rowHint}>
+            {t("settings.host.daemon.network.unavailable")}
+          </Text>
         </View>
       </SettingsSection>
     );
   }
 
   return (
-    <SettingsSection title={t("settings.host.network.sectionTitle")}>
+    <SettingsSection title={t("settings.host.daemon.network.sectionTitle")}>
       {error ? (
         <View style={styles.errorWrap}>
           <InlineAlert
             variant="error"
-            title={t("settings.host.network.saveError")}
+            title={t("settings.host.daemon.network.saveError")}
             description={error}
             testID="host-page-network-error"
           />
@@ -186,7 +188,7 @@ export function NetworkSection({ serverId }: { serverId: string }) {
         <View style={styles.errorWrap}>
           <InlineAlert
             variant="info"
-            title={t("settings.host.network.restartHint")}
+            title={t("settings.host.daemon.network.restartHint")}
             testID="host-page-network-restart-hint"
           />
         </View>
@@ -199,11 +201,13 @@ export function NetworkSection({ serverId }: { serverId: string }) {
           testID="host-page-network-password-row"
         >
           <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>{t("settings.host.network.password.title")}</Text>
+            <Text style={settingsStyles.rowTitle}>
+              {t("settings.host.daemon.network.password.title")}
+            </Text>
             <Text style={settingsStyles.rowHint}>
               {passwordSet
-                ? t("settings.host.network.password.setHint")
-                : t("settings.host.network.password.unsetHint")}
+                ? t("settings.host.daemon.network.password.setHint")
+                : t("settings.host.daemon.network.password.unsetHint")}
             </Text>
           </View>
           <Button
@@ -213,20 +217,22 @@ export function NetworkSection({ serverId }: { serverId: string }) {
             disabled={isBusy}
             testID="host-page-network-password-edit"
           >
-            {t("settings.host.network.password.edit")}
+            {t("settings.host.daemon.network.password.edit")}
           </Button>
         </Pressable>
 
         <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
           <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>{t("settings.host.network.allowLan.title")}</Text>
+            <Text style={settingsStyles.rowTitle}>
+              {t("settings.host.daemon.network.allowLan.title")}
+            </Text>
             <Text style={settingsStyles.rowHint}>{lanHint}</Text>
           </View>
           <Switch
             value={allowLanAccess}
             disabled={isBusy || tcpPort === null || (!passwordSet && !allowLanAccess)}
             onValueChange={handleAllowLanChange}
-            accessibilityLabel={t("settings.host.network.allowLan.title")}
+            accessibilityLabel={t("settings.host.daemon.network.allowLan.title")}
             testID="host-page-network-allow-lan-switch"
           />
         </View>
@@ -270,7 +276,7 @@ function PasswordSheet({
     [],
   );
   const header = useMemo<SheetHeader>(
-    () => ({ title: t("settings.host.network.password.sheetTitle") }),
+    () => ({ title: t("settings.host.daemon.network.password.sheetTitle") }),
     [t],
   );
 
@@ -298,8 +304,8 @@ function PasswordSheet({
       desktopMaxWidth={480}
     >
       <Field
-        label={t("settings.host.network.password.fieldLabel")}
-        hint={t("settings.host.network.password.fieldHint")}
+        label={t("settings.host.daemon.network.password.fieldLabel")}
+        hint={t("settings.host.daemon.network.password.fieldHint")}
         error={error}
         testID="host-page-network-password"
       >
@@ -308,7 +314,7 @@ function PasswordSheet({
             <FormTextInput
               size="sm"
               testID="host-page-network-password-input"
-              accessibilityLabel={t("settings.host.network.password.fieldLabel")}
+              accessibilityLabel={t("settings.host.daemon.network.password.fieldLabel")}
               onChangeText={setPassword}
               autoCapitalize="none"
               autoCorrect={false}
@@ -321,7 +327,7 @@ function PasswordSheet({
             style={styles.iconButton}
             onPress={handleToggleVisibility}
             accessibilityRole="button"
-            accessibilityLabel={t("settings.host.network.password.toggleVisibility")}
+            accessibilityLabel={t("settings.host.daemon.network.password.toggleVisibility")}
             testID="host-page-network-password-visibility"
           >
             {isPasswordVisible ? (
@@ -342,7 +348,7 @@ function PasswordSheet({
             disabled={isBusy}
             testID="host-page-network-password-clear"
           >
-            {t("settings.host.network.password.clear")}
+            {t("settings.host.daemon.network.password.clear")}
           </Button>
         ) : null}
         <Button
@@ -352,7 +358,7 @@ function PasswordSheet({
           disabled={!canSave || isBusy}
           testID="host-page-network-password-save"
         >
-          {t("settings.host.network.password.save")}
+          {t("settings.host.daemon.network.password.save")}
         </Button>
       </View>
     </AdaptiveModalSheet>

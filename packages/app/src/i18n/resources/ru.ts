@@ -143,6 +143,7 @@ export const ru: TranslationResources = {
       noClipboardImage: "В буфере обмена нет изображения",
       pasteImageFailed: "Не удалось вставить изображение",
       fileTooLarge: "Файл {{fileName}} слишком большой (максимальный размер: {{size}})",
+      daemonClientDisconnected: "Daemon клиента отключен",
     },
     clientCommands: {
       archiveAgent: "Архивировать текущего агента",
@@ -2351,6 +2352,25 @@ export const ru: TranslationResources = {
             noTcp: "Требуется TCP-слушатель; этот daemon использует сокет или пайп",
             noPassword: "Сначала задайте пароль доступа, чтобы включить подключения по LAN",
           },
+        },
+        service: {
+          sectionTitle: "Управление службой",
+          unavailable: "Подключитесь к этому хосту, чтобы управлять настройками службы",
+          errorTitle: "Не удалось обновить настройки службы",
+          toggle: {
+            title: "Запускать при входе",
+            hint: "Передаёт daemon менеджеру служб ОС; работает даже после закрытия терминала",
+          },
+          state: {
+            "not-installed": "Не установлена. daemon работает там, откуда вы его запустили",
+            "installed-stopped": "Установлена, но не запущена. Запустится при следующем входе",
+            "installed-running-not-this-process": "Служба daemon уже запущена",
+            "managed-by-service":
+              "Управляется службой. Запускается при входе и переживает закрытие терминала",
+            unknown: "Состояние службы неизвестно",
+          },
+          lingerHint:
+            "Включите linger (loginctl enable-linger), чтобы служба работала после выхода",
         },
         restart: {
           title: "Перезапустить демон",
