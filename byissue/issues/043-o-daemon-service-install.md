@@ -2,7 +2,7 @@
 kind: issue
 title: "Daemon 系统服务部署：CLI 与设置页可选开机自启"
 type: feature
-status: open
+status: closed
 created: 2026-09-18
 ---
 
@@ -135,6 +135,17 @@ created: 2026-09-18
 - 跨平台：Linux/Windows 的真机验证列入发布清单（CI 只覆盖可自动化的单元部分，遵循 [docs/qa.md](../../docs/qa.md) 的平台矩阵与证据要求）
 
 ## 执行记录
+
+### 2026-09-20 · 剩余片完成：RPC 管道、App 开关、systemd/Task Scheduler（4e22d043d，v0.15.0 发布）
+
+- **RPC 走 config patch 管道**而非新 RPC：`MutableDaemonConfigPatchSchema` 增加 `service.install`，沿用 `set_daemon_config_request` → config store → `status:daemon_config_changed` 推送，与 040 的 network 设置同构。`service` 派生视图（四态 + linger）按需重探 OS 服务管理器，不持久化、不缓存。
+- **`features.daemonServiceInstall` 门控**：老 daemon 上 App 隐藏分区而非假成功。
+- **App 开关**（`DaemonServiceSection`）：host 页本机 daemon 分区，状态文案逐态如实（unknown 显示未知提示而非假判定），9 locale。
+- **systemd 后端**：`Restart=on-failure`（非 `always`），WantedBy=default.target，linger 缺失时文案提示而非静默降级。**Task Scheduler 后端**：指向 `node.exe <entry>` 而非 .cmd shim。
+- **e2e（真实 daemon 进程，隔离 home）抓到一个真漏洞**：daemon 侧 origin 校验最初拿 daemon 自己的包根自比，dev checkout 通过——自指校验。修正为以 **npm -g 清单**为权威来源后，dev 实测拒绝（`not installed with npm -g`）。uninstall 有意不设守卫：移除永不创建定义，且允许 dev daemon 清理残留服务。
+- **发版**：v0.15.0（tag @ de9c1c940），npm latest 0.15.0，双 asset sha256 MATCH，Docker 双 tag 同 digest，Web 新 bundle，安装后 `daemon --help` 可见三条 service 命令。
+
+**剩余（后续版本）**：Windows 真机验证（单元层已覆盖任务 XML/命令正确性）、干净机器 Local Network 弹窗穿刺（风险 1 未授权环境部分）、服务定义热迁移（明确不做，重跑 install-service 即可）。
 
 ### 2026-09-20 · 穿刺 + macOS 第一片（CLI）
 
