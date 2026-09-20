@@ -21,7 +21,7 @@ describe("connection offer", () => {
       v: 2,
       serverId: "server-123",
       daemonPublicKeyB64: "pubkey",
-      relay: { endpoint: "relay.paseo.sh:443" },
+      relay: { endpoint: "relay.byspace.cc.cd:443" },
     };
 
     expect(decodeOfferFragmentPayload(encodeBase64UrlNoPadUtf8(JSON.stringify(payload)))).toEqual(
@@ -34,11 +34,13 @@ describe("connection offer", () => {
       v: 2,
       serverId: "server-123",
       daemonPublicKeyB64: "pubkey",
-      relay: { endpoint: "relay.paseo.sh:443" },
+      relay: { endpoint: "relay.byspace.cc.cd:443" },
     });
     const encoded = encodeBase64UrlNoPadUtf8(JSON.stringify(offer));
 
-    expect(parseConnectionOfferFromUrl(`https://app.paseo.sh/#offer=${encoded}`)).toEqual(offer);
+    expect(parseConnectionOfferFromUrl(`https://app.byspace.cc.cd/#offer=${encoded}`)).toEqual(
+      offer,
+    );
   });
 
   it("round-trips the optional hostname in V2 offers", () => {
@@ -46,12 +48,14 @@ describe("connection offer", () => {
       v: 2,
       serverId: "server-123",
       daemonPublicKeyB64: "pubkey",
-      relay: { endpoint: "relay.paseo.sh:443" },
+      relay: { endpoint: "relay.byspace.cc.cd:443" },
       hostname: "mbp.local",
     };
     const encoded = encodeBase64UrlNoPadUtf8(JSON.stringify(payload));
 
-    expect(parseConnectionOfferFromUrl(`https://app.paseo.sh/#offer=${encoded}`)).toEqual(payload);
+    expect(parseConnectionOfferFromUrl(`https://app.byspace.cc.cd/#offer=${encoded}`)).toEqual(
+      payload,
+    );
   });
 
   it("accepts old V2 payloads without hostname", () => {
@@ -59,11 +63,13 @@ describe("connection offer", () => {
       v: 2,
       serverId: "server-123",
       daemonPublicKeyB64: "pubkey",
-      relay: { endpoint: "relay.paseo.sh:443" },
+      relay: { endpoint: "relay.byspace.cc.cd:443" },
     };
     const encoded = encodeBase64UrlNoPadUtf8(JSON.stringify(payload));
 
-    expect(parseConnectionOfferFromUrl(`https://app.paseo.sh/#offer=${encoded}`)).toEqual(payload);
+    expect(parseConnectionOfferFromUrl(`https://app.byspace.cc.cd/#offer=${encoded}`)).toEqual(
+      payload,
+    );
   });
 
   it("allows a legacy-shaped client to ignore the new hostname field", () => {
@@ -80,7 +86,7 @@ describe("connection offer", () => {
       v: 2,
       serverId: "server-123",
       daemonPublicKeyB64: "pubkey",
-      relay: { endpoint: "relay.paseo.sh:443" },
+      relay: { endpoint: "relay.byspace.cc.cd:443" },
       hostname: "mbp.local",
     };
 
@@ -88,7 +94,7 @@ describe("connection offer", () => {
       v: 2,
       serverId: "server-123",
       daemonPublicKeyB64: "pubkey",
-      relay: { endpoint: "relay.paseo.sh:443" },
+      relay: { endpoint: "relay.byspace.cc.cd:443" },
     });
   });
 
@@ -117,7 +123,7 @@ describe("connection offer", () => {
     });
     const encoded = encodeBase64UrlNoPadUtf8(JSON.stringify(offer));
 
-    expect(parseConnectionOfferFromUrl(`https://app.paseo.sh/#offer=${encoded}`)).toEqual({
+    expect(parseConnectionOfferFromUrl(`https://app.byspace.cc.cd/#offer=${encoded}`)).toEqual({
       v: 2,
       serverId: "server-123",
       daemonPublicKeyB64: "pubkey",
@@ -126,6 +132,6 @@ describe("connection offer", () => {
   });
 
   it("returns null when the URL has no offer fragment", () => {
-    expect(parseConnectionOfferFromUrl("https://app.paseo.sh/pair")).toBeNull();
+    expect(parseConnectionOfferFromUrl("https://app.byspace.cc.cd/pair")).toBeNull();
   });
 });

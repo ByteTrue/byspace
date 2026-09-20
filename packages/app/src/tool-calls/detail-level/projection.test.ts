@@ -303,7 +303,7 @@ describe("tool call detail-level projection", () => {
         { type: "unknown", input: null, output: null },
         { name: "mcp__byspace__list_worktrees" },
       ),
-      toolCall("3", { type: "fetch", url: "https://paseo.sh" }),
+      toolCall("3", { type: "fetch", url: "https://byspace.cc.cd" }),
       toolCall("4", { type: "fetch", url: "https://github.com/bytetrue" }),
     ];
 

@@ -50,7 +50,7 @@ BySpace 让你从任何一个浏览器查看和操控自己开发环境里的 AI
 - 不绑定任何客户端 App。手机与桌面 App 只提供该平台特有的便利，例如推送与系统通知。
 - terminal 会话里，terminal 内容是 agent 状态的唯一真相。hook 上报的活动状态是提示，允许不准，不允许把用户锁在错误状态里。
 
-**与上游的关系。** BySpace 以 Paseo 为基线并持续同步。同步是选择性的：取修复与我们要的能力，不取与本项目方向无关的部分。协议保持双向兼容，见 `docs/protocol-compatibility.md`。
+**与上游的关系。** BySpace 以 Paseo 为基线，最后一次同步停在 Paseo v0.8.0（2026-09-11），此后不再追上游。Paseo 只作参考：取修复与我们要的能力，不取与本项目方向无关的部分。身份迁移已经改掉包作用域、wire 字面量与磁盘命名空间，不设兼容层，见 `docs/protocol-compatibility.md`。
 
 **参考产品。** orca 是 terminal agent 体验的吸收来源，只借交互，不借架构，按区域逐块吸收而不整体照搬。它 MIT 授权，移植代码需保留版权声明；栈不同，UI 按 BySpace 设计系统重做，daemon 侧逻辑可以移植。当前吸收工作在 Epic 003。
 

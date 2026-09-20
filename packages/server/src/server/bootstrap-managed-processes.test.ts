@@ -43,7 +43,7 @@ describe("daemon managed process bootstrap", () => {
         agentClients: createTestAgentClients(),
         agentStoragePath: path.join(byspaceHome, "agents"),
         relayEnabled: false,
-        appBaseUrl: "https://app.paseo.sh",
+        appBaseUrl: "https://app.byspace.cc.cd",
         managedProcesses,
       } as BySpaceDaemonConfig,
       pino({ level: "silent" }),
