@@ -5,7 +5,7 @@ import {
   expectNewWorkspaceProjectSelected,
   openNewWorkspaceComposer,
 } from "../support/helpers/new-workspace";
-import { seedWorkspace, type SeededWorkspace } from "../support/helpers/seed-client";
+import { seedWorkspace } from "../support/helpers/seed-client";
 import { getServerId } from "../support/helpers/server-id";
 import { selectSidebarStatusGrouping } from "../support/helpers/sidebar";
 
@@ -28,19 +28,6 @@ async function openWorkspace(page: Page, workspaceId: string) {
   await expect(row).toBeVisible({ timeout: 30_000 });
   await row.click();
   await expect(page).toHaveURL(/\/workspace\//, { timeout: 30_000 });
-}
-
-// The project key is host-scoped and not exposed by the seed helper, so the header is addressed by
-// its display name, scoped to project rows so a workspace row can never match. Pressing the header
-// toggles the section, which unmounts every workspace row under it.
-async function collapseProjectSection(page: Page, project: SeededWorkspace): Promise<void> {
-  const header = page
-    .locator('[data-testid^="sidebar-project-row-"]')
-    .filter({ hasText: project.projectDisplayName });
-  await expect(header).toHaveCount(1, { timeout: 30_000 });
-
-  await header.click();
-  await expect(workspaceRow(page, project.workspaceId)).toHaveCount(0, { timeout: 10_000 });
 }
 
 async function switchToStatusGrouping(page: Page): Promise<void> {
@@ -177,27 +164,6 @@ test.describe("Pin workspace shortcut", () => {
         await openNewWorkspaceComposer(page, workspace);
         await expectNewWorkspaceProjectSelected(page, workspace.projectDisplayName);
       });
-    } finally {
-      await workspace.cleanup();
-    }
-  });
-
-  test("pins the active workspace while its project section is collapsed", async ({ page }) => {
-    const workspace = await seedWorkspace({ repoPrefix: "pin-shortcut-collapsed-" });
-
-    try {
-      await gotoAppShell(page);
-      await openWorkspace(page, workspace.workspaceId);
-      await collapseProjectSection(page, workspace);
-
-      await page.keyboard.press(PIN_SHORTCUT);
-
-      await expect(pinnedSection(page)).toBeVisible({ timeout: 10_000 });
-      await expect(
-        pinnedSection(page).getByTestId(
-          `sidebar-workspace-row-${getServerId()}:${workspace.workspaceId}`,
-        ),
-      ).toBeVisible();
     } finally {
       await workspace.cleanup();
     }

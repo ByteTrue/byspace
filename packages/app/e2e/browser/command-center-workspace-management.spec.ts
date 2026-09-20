@@ -4,6 +4,7 @@ import { gotoAppShell } from "../support/helpers/app";
 import { daemonWsRoutePattern } from "../support/helpers/daemon-port";
 import { seedWorkspace, type SeededWorkspace } from "../support/helpers/seed-client";
 import { getServerId } from "../support/helpers/server-id";
+import { selectSidebarStatusGrouping } from "../support/helpers/sidebar";
 
 // These actions used to be reachable only from the sidebar workspace ⋯ menu, the workspace header
 // menu, or an unlisted keybind. Rename was the worst of them: its dialog lived inside the sidebar
@@ -25,15 +26,32 @@ async function openWorkspace(page: Page, workspaceId: string): Promise<void> {
   await expect(page).toHaveURL(/\/workspace\//, { timeout: 30_000 });
 }
 
-// Collapsing the project section unmounts every workspace row under it, which is exactly the state
-// that used to make the sidebar-owned rename dialog unreachable.
-async function collapseProjectSection(page: Page, project: SeededWorkspace): Promise<void> {
-  const header = page
-    .locator('[data-testid^="sidebar-project-row-"]')
-    .filter({ hasText: project.projectDisplayName });
-  await expect(header).toHaveCount(1, { timeout: 30_000 });
-  await header.click();
-  await expect(workspaceRow(page, project.workspaceId)).toHaveCount(0, { timeout: 10_000 });
+// Unmounting the workspace row is the state that used to make the sidebar-owned rename dialog
+// unreachable. Project sections no longer collapse, so this switches to status grouping and
+// collapses the group holding the row instead.
+async function switchToStatusGrouping(page: Page): Promise<void> {
+  await selectSidebarStatusGrouping(page);
+  await expect(page.getByTestId("sidebar-status-list-scroll")).toBeVisible({ timeout: 10_000 });
+}
+
+// Returns the bucket, because once collapsed the rows container is unmounted and there is no
+// other way back to the group header.
+async function collapseStatusGroupContaining(page: Page, workspaceId: string): Promise<string> {
+  const rows = page
+    .locator('[data-testid^="sidebar-status-group-rows-"]')
+    .filter({ has: workspaceRow(page, workspaceId) });
+  await expect(rows).toHaveCount(1, { timeout: 30_000 });
+
+  const rowsTestId = await rows.getAttribute("data-testid");
+  const bucket = rowsTestId?.replace("sidebar-status-group-rows-", "");
+  expect(bucket).toBeTruthy();
+
+  await page.getByTestId(`sidebar-status-group-${bucket}`).click();
+  return bucket!;
+}
+
+async function expandStatusGroup(page: Page, bucket: string): Promise<void> {
+  await page.getByTestId(`sidebar-status-group-${bucket}`).click();
 }
 
 // The shared helper clicks the sidebar's search button, which is inside the Workspaces section
@@ -114,7 +132,9 @@ test.describe("Command center workspace management", () => {
     try {
       await gotoAppShell(page);
       await openWorkspace(page, workspace.workspaceId);
-      await collapseProjectSection(page, workspace);
+      await switchToStatusGrouping(page);
+      const bucket = await collapseStatusGroupContaining(page, workspace.workspaceId);
+      await expect(workspaceRow(page, workspace.workspaceId)).toHaveCount(0, { timeout: 10_000 });
 
       await runCommand(page, "rename", "Rename workspace");
 
@@ -129,11 +149,8 @@ test.describe("Command center workspace management", () => {
       await page.getByTestId("workspace-rename-modal-global-submit").click();
       await expect(input).toHaveCount(0, { timeout: 15_000 });
 
-      // Re-expand the section to read the row back.
-      const header = page
-        .locator('[data-testid^="sidebar-project-row-"]')
-        .filter({ hasText: workspace.projectDisplayName });
-      await header.click();
+      // Re-expand the group to read the row back.
+      await expandStatusGroup(page, bucket);
       await expect(workspaceRow(page, workspace.workspaceId)).toContainText(customTitle, {
         timeout: 15_000,
       });
