@@ -27,6 +27,16 @@
       "types": "./dist/server/terminal/agent-hooks/provider-registry.d.ts",
       "source": "./src/terminal/agent-hooks/provider-registry.ts",
       "default": "./dist/server/terminal/agent-hooks/provider-registry.js"
+    },
+    "./daemon-install-origin": {
+      "types": "./dist/server/server/session/daemon/install-origin.d.ts",
+      "source": "./src/server/session/daemon/install-origin.ts",
+      "default": "./dist/server/server/session/daemon/install-origin.js"
+    },
+    "./npm-global-cli": {
+      "types": "./dist/server/server/session/daemon/npm-global-cli.d.ts",
+      "source": "./src/server/session/daemon/npm-global-cli.ts",
+      "default": "./dist/server/server/session/daemon/npm-global-cli.js"
     }
   },
   "publishConfig": {

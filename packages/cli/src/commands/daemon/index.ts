@@ -3,6 +3,9 @@ import { startCommand } from "./start.js";
 import { runStatusCommand } from "./status.js";
 import { runStopCommand } from "./stop.js";
 import { runRestartCommand } from "./restart.js";
+import { runInstallServiceCommand } from "./install-service.js";
+import { runUninstallServiceCommand } from "./uninstall-service.js";
+import { runServiceStatusCommand } from "./service-status.js";
 import { runSetPasswordCommand } from "./set-password.js";
 import { pairCommand } from "./pair.js";
 import { runDaemonReloadCommand } from "./reload.js";
@@ -76,6 +79,28 @@ export function createDaemonCommand(): Command {
   )
     .option("--home <path>", "BySpace home directory (default: ~/.byspace)")
     .action(withOutput(runSetPasswordCommand));
+
+  addJsonOption(
+    daemon
+      .command("install-service")
+      .description("Register the daemon as a login service (macOS LaunchAgent)"),
+  )
+    .option("--home <path>", "BySpace home directory (default: ~/.byspace)")
+    .action(withOutput(runInstallServiceCommand));
+
+  addJsonOption(
+    daemon.command("uninstall-service").description("Unregister the daemon login service"),
+  )
+    .option("--home <path>", "BySpace home directory (default: ~/.byspace)")
+    .action(withOutput(runUninstallServiceCommand));
+
+  addJsonOption(
+    daemon
+      .command("service-status")
+      .description("Show whether the daemon is managed by the OS service manager"),
+  )
+    .option("--home <path>", "BySpace home directory (default: ~/.byspace)")
+    .action(withOutput(runServiceStatusCommand));
 
   return daemon;
 }

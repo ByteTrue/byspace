@@ -196,7 +196,7 @@ function resolveServerRunnerFromDir(currentDir: string): string | null {
   }
 }
 
-function resolveDaemonRunnerEntry(): string {
+export function resolveDaemonRunnerEntry(): string {
   const serverExportPath = require.resolve("@bytetrue/server");
   let currentDir = path.dirname(serverExportPath);
 
