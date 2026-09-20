@@ -5,6 +5,17 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.15.0 - 2026-09-20
+
+### Added
+
+- The daemon can now be hosted by the OS service manager (macOS launchd, Linux systemd). `byspace daemon install-service` registers it to start at login, `uninstall-service` removes it, and `service-status` reports the live state. A hosted daemon keeps working when the terminal that started it closes; the access password and network settings stay in effect
+- Added a "Start at login" switch on the host settings page for the local daemon, gated on daemon capability and showing the real service state reported by the daemon
+
+### Fixed
+
+- Fixed several settings strings rendering as raw key names (the network section, appearance save errors, and the composer disconnect toast) in all languages
+
 ## 0.14.6 - 2026-09-20
 
 ### Changed
