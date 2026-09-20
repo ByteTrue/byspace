@@ -1,6 +1,6 @@
 import { ActivityIndicator, View, type ViewStyle } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { ChevronDown, ChevronRight, CircleAlert } from "lucide-react-native";
+import { CircleAlert } from "lucide-react-native";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { STATUS_BUCKET_LABELS } from "@/hooks/sidebar-status-view-model";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
@@ -50,38 +50,20 @@ const needsInputColorMapping = (theme: Theme) => ({
 });
 
 /**
- * Leading slot of a sidebar project row: chevron on hover, archive spinner while removing,
- * otherwise the project icon carrying the project's aggregate workspace status.
+ * Leading slot of a sidebar project row: archive spinner while removing, otherwise the project
+ * icon. Status lives on the workspace rows beneath the header.
  */
 export function ProjectLeadingVisual({
   displayName,
   iconDataUri,
-  statusBucket,
   projectViewKey,
-  backdrop,
-  chevron = null,
-  showChevron = false,
   isArchiving = false,
 }: {
   displayName: string;
   iconDataUri: string | null;
-  /** Aggregate status of the project's workspaces; null when it shouldn't be surfaced. */
-  statusBucket: SidebarStateBucket | null;
   projectViewKey: string;
-  /** The row's current background, so the status badge can knock out of it. */
-  backdrop: SidebarSurfaceBackdrop;
-  chevron?: "expand" | "collapse" | null;
-  showChevron?: boolean;
   isArchiving?: boolean;
 }) {
-  if (showChevron && chevron !== null) {
-    return (
-      <View style={styles.projectLeadingVisualSlot}>
-        <ProjectInlineChevron chevron={chevron} />
-      </View>
-    );
-  }
-
   if (isArchiving) {
     return (
       <View style={styles.projectLeadingVisualSlot} testID="project-status-indicator-archiving">
@@ -95,8 +77,7 @@ export function ProjectLeadingVisual({
       iconDataUri={iconDataUri}
       displayName={displayName}
       projectViewKey={projectViewKey}
-      statusBucket={statusBucket}
-      backdrop={backdrop}
+      statusBucket={null}
     />
   );
 }
@@ -119,8 +100,9 @@ export function ProjectStatusIndicator({
   displayName: string;
   projectViewKey: string;
   statusBucket: SidebarStateBucket | null;
-  /** The row's current background, so the status badge can knock out of it. */
-  backdrop: SidebarSurfaceBackdrop;
+  /** The row's current background, so the status badge can knock out of it. Only read when a
+   * badge renders; an icon-only slot needs no backdrop. */
+  backdrop?: SidebarSurfaceBackdrop;
   loading?: boolean;
   testID?: string;
 }) {
@@ -168,7 +150,7 @@ function ProjectStatusBadge({
 }: {
   content: ProjectStatusBadgeContent;
   statusBucket: SidebarStateBucket;
-  backdrop: SidebarSurfaceBackdrop;
+  backdrop?: SidebarSurfaceBackdrop;
 }) {
   // Running skips the shell. The ring is wider than the 12pt shell and carries its own knockout,
   // so nesting it inside would clip it against the very thing that was meant to separate it from
@@ -201,8 +183,9 @@ function ProjectStatusBadge({
   );
 }
 
-function getStatusBadgeBackdropStyle(backdrop: SidebarSurfaceBackdrop): ViewStyle {
+function getStatusBadgeBackdropStyle(backdrop: SidebarSurfaceBackdrop | undefined): ViewStyle {
   switch (backdrop) {
+    case undefined:
     case "surfaceSidebar":
       return styles.statusBadgeOnSidebar;
     case "surfaceSidebarHover":
@@ -236,16 +219,6 @@ function ProjectIcon({
       textStyle={styles.projectIconFallbackText}
     />
   );
-}
-
-function ProjectInlineChevron({ chevron }: { chevron: "expand" | "collapse" | null }) {
-  if (chevron === null) {
-    return null;
-  }
-  if (chevron === "collapse") {
-    return <ChevronDown size={14} color="#9ca3af" />;
-  }
-  return <ChevronRight size={14} color="#9ca3af" />;
 }
 
 function getStatusDotColorStyle(bucket: ProjectStatusBadgeDotBucket): ViewStyle {

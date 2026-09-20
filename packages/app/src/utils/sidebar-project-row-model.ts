@@ -15,8 +15,6 @@ export type SidebarProjectTrailingAction =
 
 export interface SidebarProjectSectionRowModel {
   kind: "project_section";
-  /** null when the section can't toggle (no workspaces to reveal) — the row then shows no chevron. */
-  chevron: "expand" | "collapse" | null;
   trailingAction: SidebarProjectTrailingAction;
 }
 
@@ -108,25 +106,12 @@ function projectTrailingAction(
   return target ? { kind: "new_workspace", target } : { kind: "none" };
 }
 
-function projectChevron(
-  project: SidebarProjectEntry,
-  collapsed: boolean,
-): "expand" | "collapse" | null {
-  if (project.workspaces.length === 0) {
-    // An empty project has nothing to expand, so it forgoes the toggle affordance entirely.
-    return null;
-  }
-  return collapsed ? "expand" : "collapse";
-}
-
 export function buildSidebarProjectRowModel(input: {
   project: SidebarProjectEntry;
-  collapsed: boolean;
   supportsMultiplicityByServerId?: ReadonlyMap<string, boolean>;
 }): SidebarProjectRowModel {
   return {
     kind: "project_section",
-    chevron: projectChevron(input.project, input.collapsed),
     trailingAction: projectTrailingAction(
       input.project,
       input.supportsMultiplicityByServerId ?? EMPTY_MULTIPLICITY_MAP,

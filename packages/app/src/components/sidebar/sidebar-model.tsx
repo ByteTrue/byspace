@@ -40,8 +40,6 @@ interface SidebarModel extends SidebarWorkspacesListResult {
   workspaceGroups: SidebarWorkspaceGroup[];
   projectIconTargets: SidebarProjectIconTarget[];
   pinnedGroups: PinnedSidebarGroups;
-  collapsedProjectKeys: ReadonlySet<string>;
-  toggleProjectCollapsed: (projectViewKey: string) => void;
   shortcutModel: SidebarShortcutModel;
 }
 
@@ -60,17 +58,11 @@ export function SidebarModelProvider({
   const projectFilters = useSidebarViewStore((state) => state.projectFilters);
   const reconcileLabelFilter = useSidebarViewStore((state) => state.reconcileLabelFilter);
   const { hosts: labelHosts } = useWorkspaceLabelProjection();
-  const collapsedProjectKeys = useSidebarCollapsedSectionsStore(
-    (state) => state.collapsedProjectKeys,
-  );
   const collapsedWorkspaceGroupKeys = useSidebarCollapsedSectionsStore(
     (state) => state.collapsedWorkspaceGroupKeys,
   );
   const pinnedCollapsed = useSidebarCollapsedSectionsStore((state) => state.collapsedPinned);
   const pinnedWorkspaceOrder = useSidebarOrderStore((state) => state.pinnedWorkspaceOrder);
-  const toggleProjectCollapsed = useSidebarCollapsedSectionsStore(
-    (state) => state.toggleProjectCollapsed,
-  );
   const availableLabelNames = useMemo(
     () => labelHosts.flatMap((host) => host.labels.map((label) => label.name)),
     [labelHosts],
@@ -148,11 +140,9 @@ export function SidebarModelProvider({
       projectNamesByViewKey: list.projectNamesByViewKey,
       groupMode,
       pinnedCollapsed,
-      collapsedProjectKeys,
       collapsedWorkspaceGroupKeys,
     }),
     [
-      collapsedProjectKeys,
       collapsedWorkspaceGroupKeys,
       groupMode,
       list.projectNamesByViewKey,
@@ -176,18 +166,14 @@ export function SidebarModelProvider({
       workspaceGroups: projection.workspaceGroups,
       projectIconTargets: projection.projectIconTargets,
       pinnedGroups: projection.pinnedGroups,
-      collapsedProjectKeys,
-      toggleProjectCollapsed,
       shortcutModel: projection.shortcutModel,
     }),
     [
       resolvedProjectFilters,
-      collapsedProjectKeys,
       groupMode,
       list,
       filteredProjects,
       projection,
-      toggleProjectCollapsed,
       filteredWorkspaceEntriesByKey,
     ],
   );

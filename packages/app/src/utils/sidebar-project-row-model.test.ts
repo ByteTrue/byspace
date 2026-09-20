@@ -65,34 +65,30 @@ function project(overrides: ProjectOverrides = {}): SidebarProjectEntry {
 }
 
 describe("buildSidebarProjectRowModel", () => {
-  it("renders a non-git single-workspace project as an expandable section", () => {
+  it("renders a non-git single-workspace project section with no new workspace action", () => {
     const result = buildSidebarProjectRowModel({
       project: project({
         projectKind: "directory",
         workspaces: [workspace({ workspaceId: "ws-non-git", workspaceKind: "checkout" })],
       }),
-      collapsed: false,
     });
 
     expect(result).toEqual({
       kind: "project_section",
-      chevron: "collapse",
       trailingAction: { kind: "none" },
     });
   });
 
-  it("renders a single-workspace git project as an expandable section with the new workspace action", () => {
+  it("renders a single-workspace git project section with the new workspace action", () => {
     const result = buildSidebarProjectRowModel({
       project: project({
         projectKind: "git",
         workspaces: [workspace({ workspaceId: "ws-main", workspaceKind: "checkout" })],
       }),
-      collapsed: true,
     });
 
     expect(result).toEqual({
       kind: "project_section",
-      chevron: "expand",
       trailingAction: {
         kind: "new_workspace",
         target: { serverId: "srv", projectId: "project-srv", iconWorkingDir: "/repo" },
@@ -103,7 +99,6 @@ describe("buildSidebarProjectRowModel", () => {
   it("shows the new workspace action for a non-git project when the host supports workspace multiplicity", () => {
     const result = buildSidebarProjectRowModel({
       project: project({ projectKind: "directory", workspaces: [] }),
-      collapsed: false,
       supportsMultiplicityByServerId: new Map([["srv", true]]),
     });
 
@@ -116,7 +111,6 @@ describe("buildSidebarProjectRowModel", () => {
   it("hides the new workspace action for a non-git project when the host lacks workspace multiplicity", () => {
     const result = buildSidebarProjectRowModel({
       project: project({ projectKind: "directory", workspaces: [] }),
-      collapsed: false,
       supportsMultiplicityByServerId: new Map([["srv", false]]),
     });
 
@@ -126,7 +120,6 @@ describe("buildSidebarProjectRowModel", () => {
   it("still shows the new workspace action for a git project regardless of multiplicity", () => {
     const result = buildSidebarProjectRowModel({
       project: project({ projectKind: "git" }),
-      collapsed: false,
       supportsMultiplicityByServerId: new Map([["srv", false]]),
     });
 
@@ -148,7 +141,6 @@ describe("buildSidebarProjectRowModel", () => {
           { serverId: "host-b", iconWorkingDir: "/repo/b", worktreeSupport: "supported" as const },
         ],
       }),
-      collapsed: false,
     });
 
     expect(result).toMatchObject({
@@ -176,7 +168,6 @@ describe("buildSidebarProjectRowModel", () => {
           },
         ],
       }),
-      collapsed: false,
       supportsMultiplicityByServerId: new Map([["host-b", true]]),
     });
 
@@ -188,7 +179,7 @@ describe("buildSidebarProjectRowModel", () => {
     });
   });
 
-  it("renders a multi-workspace git project as an expandable section with a new workspace action", () => {
+  it("renders a multi-workspace git project section with a new workspace action", () => {
     const result = buildSidebarProjectRowModel({
       project: project({
         projectKind: "git",
@@ -197,12 +188,10 @@ describe("buildSidebarProjectRowModel", () => {
           workspace({ workspaceId: "ws-feature", workspaceKind: "worktree" }),
         ],
       }),
-      collapsed: true,
     });
 
     expect(result).toEqual({
       kind: "project_section",
-      chevron: "expand",
       trailingAction: {
         kind: "new_workspace",
         target: { serverId: "srv", projectId: "project-srv", iconWorkingDir: "/repo" },
@@ -268,15 +257,13 @@ describe("buildSidebarProjectRowModel", () => {
     expect(resolveSidebarProjectLocalPath(groupedProject, "missing")).toBe("");
   });
 
-  it("renders an empty project with no expand toggle", () => {
+  it("renders an empty project section with the new workspace action", () => {
     const result = buildSidebarProjectRowModel({
       project: project({ projectKind: "git", workspaces: [] }),
-      collapsed: false,
     });
 
     expect(result).toEqual({
       kind: "project_section",
-      chevron: null,
       trailingAction: {
         kind: "new_workspace",
         target: { serverId: "srv", projectId: "project-srv", iconWorkingDir: "/repo" },

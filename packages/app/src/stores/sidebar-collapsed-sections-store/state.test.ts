@@ -3,42 +3,34 @@ import {
   type CollapsedProjectsState,
   mergePersistedCollapsedProjects,
   serializeCollapsedProjects,
-  setProjectCollapsed,
   togglePinnedCollapsed,
-  toggleProjectCollapsed,
   toggleWorkspaceGroupCollapsed,
 } from "@/stores/sidebar-collapsed-sections-store/state";
 
 function emptyState(): CollapsedProjectsState {
   return {
-    collapsedProjectKeys: new Set(),
     collapsedWorkspaceGroupKeys: new Set(),
     collapsedPinned: false,
   };
 }
 
-describe("sidebar collapsed projects transitions", () => {
-  it("tracks collapsed project keys as a Set", () => {
+describe("sidebar collapsed sections transitions", () => {
+  it("tracks collapsed workspace group keys as a Set", () => {
     let state = emptyState();
 
-    state = setProjectCollapsed(state, "project-a", true);
-    state = toggleProjectCollapsed(state, "project-b");
-    state = toggleProjectCollapsed(state, "project-a");
     state = toggleWorkspaceGroupCollapsed(state, "running");
+    state = toggleWorkspaceGroupCollapsed(state, "done");
 
-    expect(Array.from(state.collapsedProjectKeys)).toEqual(["project-b"]);
-    expect(Array.from(state.collapsedWorkspaceGroupKeys)).toEqual(["running"]);
+    expect(Array.from(state.collapsedWorkspaceGroupKeys)).toEqual(["running", "done"]);
   });
 
-  it("serializes collapsed project keys for preference storage", () => {
+  it("serializes collapsed workspace group keys for preference storage", () => {
     const state: CollapsedProjectsState = {
-      collapsedProjectKeys: new Set(["project-a", "project-b"]),
       collapsedWorkspaceGroupKeys: new Set(["running"]),
       collapsedPinned: true,
     };
 
     expect(serializeCollapsedProjects(state)).toEqual({
-      collapsedProjectKeys: ["project-a", "project-b"],
       collapsedWorkspaceGroupKeys: ["running"],
       collapsedPinned: true,
     });
@@ -52,13 +44,12 @@ describe("sidebar collapsed projects transitions", () => {
     expect(restored.collapsedPinned).toBe(true);
   });
 
-  it("rejects the complete value when a persisted project key is invalid", () => {
+  it("rejects the complete value when a persisted workspace group key is invalid", () => {
     const restored = mergePersistedCollapsedProjects(
-      { collapsedProjectKeys: ["project-a", "project-b", 42] },
+      { collapsedWorkspaceGroupKeys: ["running", 42] },
       emptyState(),
     );
 
-    expect(Array.from(restored.collapsedProjectKeys)).toEqual([]);
     expect(Array.from(restored.collapsedWorkspaceGroupKeys)).toEqual([]);
   });
 
@@ -67,7 +58,7 @@ describe("sidebar collapsed projects transitions", () => {
 
     expect(mergePersistedCollapsedProjects(undefined, currentState)).toBe(currentState);
     expect(mergePersistedCollapsedProjects({}, currentState)).toBe(currentState);
-    expect(mergePersistedCollapsedProjects({ collapsedProjectKeys: [] }, currentState)).toBe(
+    expect(mergePersistedCollapsedProjects({ collapsedWorkspaceGroupKeys: [] }, currentState)).toBe(
       currentState,
     );
   });

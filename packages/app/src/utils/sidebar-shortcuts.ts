@@ -30,13 +30,11 @@ function createShortcutTarget(
 
 export function buildSidebarShortcutModel(input: {
   projects: SidebarProjectEntry[];
-  collapsedProjectKeys: ReadonlySet<string>;
   shortcutLimit?: number;
 }): SidebarShortcutModel {
   return buildSidebarShortcutSections({
     sections: input.projects.map((project) => ({
       workspaces: project.workspaces,
-      collapsed: input.collapsedProjectKeys.has(project.viewKey),
     })),
     shortcutLimit: input.shortcutLimit,
   });
