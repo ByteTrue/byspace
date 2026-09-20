@@ -1,6 +1,6 @@
 {
   "name": "@bytetrue/highlight",
-  "version": "0.14.5",
+  "version": "0.14.6",
   "files": [
     "dist",
     "!dist/**/*.map",
