@@ -3,14 +3,13 @@
 <!-- Working notes for the next release. Keep this as a comment, not a "##"
      heading: the in-app changelog parser treats every "##" as a published
      release and must find only versioned, dated headings. Move content under
-     the next version heading when cutting a release.
+     the next version heading when cutting a release. -->
+
+## 0.14.6 - 2026-09-20
 
 ### Changed
 
-- The sidebar's project rows no longer collapse. Clicking a project row does nothing and the
-  hover chevron is gone, so workspaces are always visible. Pinned and status-group collapsing
-  are unchanged.
--->
+- Sidebar project rows no longer collapse. The hover chevron is gone, clicking a project row does nothing, and every workspace stays visible. Collapsing the Pinned section and the status groups is unchanged.
 
 ## 0.14.5 - 2026-09-18
 
