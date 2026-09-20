@@ -136,7 +136,20 @@ created: 2026-09-18
 
 ## 执行记录
 
-（实现阶段追加）
+### 2026-09-20 · 穿刺 + macOS 第一片（CLI）
+
+**两个穿刺都通过，且拿到机制级证据**（本机 macOS 27.0）：
+
+- **穿刺 1（Local Network）**：一次性 LaunchAgent 访问真实模型端点 `10.1.115.59:23000` → HTTP 200，无 blocked 记录。日志给出与终端场景的机制分界：launchd 场景是 `Failed to find bundle ID, ignoring`（按可执行文件 UUID 解析身份后放行），终端故障场景是 `Failed to get the signing identifier ... No such process`（fail closed）。`ignoring` vs `No such process` 就是放行与阻断的分界，方案不需要 .app 包装器。
+- **穿刺 2（agent 二进制）**：launchd 默认环境 PATH 仅 `/usr/bin:/bin`，`pi`/`claude`/`node` 全部解析不到；把安装时快照的 PATH 写进 `EnvironmentVariables` 后全部解析成功。环境快照是功能前提，不是优化。
+
+**已落地（`b3fc6f311`）**：`daemon service-status`（四态，以 launchd 实报为准）/ `install-service` / `uninstall-service`，ServiceSpec 抽象层（`packages/cli/src/commands/daemon/service/`），KeepAlive=false，拒绝路径（dev checkout / Docker 各自说明）。server package.json 新增 `./daemon-install-origin` 与 `./npm-global-cli` 子路径导出供 CLI 复用。
+
+**真实验收**：用实现渲染的 plist 在隔离 home（6799 端口）把 daemon 跑在 launchd 下：`running`、HTTP 200、**supervisor 的 responsible = 自身 pid**（用 `responsibility_get_pid_responsible_for_pid` 实测）、PPID=1。终端退出的故障机制就此解除。
+
+**过程发现并加固**：测试脚本 heredoc 丢变量导致 runner 路径为空的 plist 被 launchd 接受（`exit code 0` 秒退），据此给 `buildDaemonServiceSpec` 加了空/相对路径防线。
+
+**剩余**：systemd / Task Scheduler 后端、daemon RPC（`daemon.service.*`）+ `features.daemonServiceInstall` 门控、App 设置页开关 + i18n 9 locale、干净机器弹窗穿刺（风险 1 的未授权环境部分）。
 
 ## 关闭时
 
