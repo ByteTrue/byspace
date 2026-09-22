@@ -5,6 +5,20 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.16.0 - 2026-09-22
+
+### Changed
+
+- Reworked the interface on a terminal-native design system: new light and dark palettes, a 4px corner scale, and pane header rules aligned on shared baselines
+- Sidebar and list selection is now a 3px leading bar with a muted fill, consistent across workspaces, settings, search, and history
+- The composer is a bordered surface floating above the conversation instead of a filled bar
+- Updated the app icon, logo, and favicons to the BS monogram
+
+### Fixed
+
+- Fixed Pi terminal activity never reporting after Pi restarted, when a leftover owner marker from an earlier process stopped the extension registering a reporter
+- Fixed a terminal stuck showing "working" when an agent was killed without reporting shutdown
+
 ## 0.15.0 - 2026-09-20
 
 ### Added
