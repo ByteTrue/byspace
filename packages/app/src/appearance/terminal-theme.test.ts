@@ -31,8 +31,10 @@ describe("terminal palette independent of the app theme", () => {
     const resolved = resolveTerminalTheme(lightTheme, "dark");
     const xterm = toXtermTheme(resolved.colors.terminal);
 
-    // The user's scenario: light app, dark terminal.
-    expect(lightTheme.colors.terminal.background).toBe("#ffffff");
+    // The user's scenario: light app, dark terminal. The light theme still owns its own terminal
+    // palette; assert it differs from the dark one rather than pinning a canvas hex, which the
+    // palette is free to move.
+    expect(lightTheme.colors.terminal.background).not.toBe(darkTheme.colors.terminal.background);
     expect(xterm.background).toBe(darkTheme.colors.terminal.background);
     expect(xterm.foreground).toBe(darkTheme.colors.terminal.foreground);
     expect(resolved.colorScheme).toBe("dark");

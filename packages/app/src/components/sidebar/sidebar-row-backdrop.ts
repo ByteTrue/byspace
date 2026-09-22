@@ -21,7 +21,9 @@ export function getSidebarRowBackdrop({
   selected?: boolean;
   isHovered?: boolean;
 }): SidebarSurfaceBackdrop {
-  if (isDragging || isPressed) return "surface2";
+  // Mirrors the row style arrays, where dragging paints after selected and pressed paints last.
+  if (isPressed) return "surfaceSidebarSelected";
+  if (isDragging) return "surface2";
   if (selected) return "surfaceSidebarSelected";
   if (isHovered) return "surfaceSidebarHover";
   return "surfaceSidebar";

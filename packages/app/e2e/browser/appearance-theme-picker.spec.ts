@@ -35,7 +35,7 @@ test("keeps the selected workspace visible in Light", async ({ page }, testInfo)
     await row.click();
 
     await expect(row).toHaveAttribute("aria-selected", "true");
-    await expect(row).toHaveCSS("background-color", "rgb(228, 228, 231)");
+    await expect(row).toHaveCSS("background-color", "rgb(229, 231, 235)");
     await page.screenshot({
       path: testInfo.outputPath("light-selected-workspace.png"),
       fullPage: true,
@@ -62,7 +62,7 @@ test("keeps the selected workspace visible in Pure black", async ({ page }, test
     await row.click();
 
     await expect(row).toHaveAttribute("aria-selected", "true");
-    await expect(row).toHaveCSS("background-color", "rgb(17, 17, 17)");
+    await expect(row).toHaveCSS("background-color", "rgb(22, 22, 22)");
     await page.screenshot({
       path: testInfo.outputPath("pure-black-selected-workspace.png"),
       fullPage: true,

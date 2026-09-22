@@ -101,7 +101,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
   rowPressed: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceSidebarSelected,
   },
   // The width of a workspace row's status slot, so the label lands on the same rail as the
   // titles above it rather than two points to their left.
