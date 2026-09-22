@@ -39,7 +39,7 @@ date: 2026-09-09
 
 - 单测验证：`npx vitest run packages/server/src/terminal/terminal.test.ts --bail=1`（54 passed, 3 skipped）。
 - 类型与代码检查：`npm run typecheck` 全工作区通过，`npm run lint -- packages/server/src/terminal/terminal.ts packages/server/src/terminal/terminal.test.ts` 0 errors。
-- 格式化：`npm run format:files -- byissue/issues/018-x-ff-terminal-agent-hook-cli-resolution.md packages/server/src/terminal/terminal.ts packages/server/src/terminal/terminal.test.ts`。
+- 格式化：`npm run format:files -- byissue/issues/020-x-ff-terminal-agent-hook-cli-resolution.md packages/server/src/terminal/terminal.ts packages/server/src/terminal/terminal.test.ts`。
 
 ## 对 byissue/ 的影响
 
