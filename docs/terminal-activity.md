@@ -59,6 +59,10 @@ while terminal activity is working clears the activity without finished attentio
 fallback applies to every hooked terminal agent; exact input matching excludes escape sequences and
 pasted content, while later provider idle events remain authoritative.
 
+A hooked agent that dies without reporting idle (SIGKILL, crash, a suspend that never resumes) has
+no provider event to clear it. The shell's OSC 633 `D` — the same signal that drives command
+finished — clears `working` when the foreground job ends, so the dot does not stay on forever.
+
 Codex hook mapping:
 
 - `UserPromptSubmit` → `running`
@@ -86,7 +90,7 @@ Pi uses an auto-discovered extension:
 - `ui_prompt_end` → `running`
 - `agent_settled`, `session_shutdown` → `idle`
 
-The Pi extension keeps one activity request in flight and only the newest pending state. Child Pi processes inherit an owner marker and do not register a second reporter for the same terminal.
+The Pi extension keeps one activity request in flight and only the newest pending state. Child Pi processes inherit an owner marker and do not register a second reporter for the same terminal. The marker names a pid, not a boolean, because a stale marker left in a terminal or agent environment would otherwise mute every later Pi in it; a marker whose pid is gone is ignored. The daemon also strips the marker from every spawned process (`RUNTIME_CONTROL_ENV_KEYS` in `packages/server/src/server/byspace-env.ts`), so fresh terminals and agents never inherit it.
 
 The daemon maps hook states onto terminal activity like an agent lifecycle plus unread attention: `running` → `state: working`, `idle` → `state: idle`, and `needs-input` → `state: idle` with `attentionReason: needs_input`. A `working` → `idle` transition records `state: idle` with `attentionReason: finished` until the user focuses that terminal; plain idle terminals still contribute no workspace status.
 

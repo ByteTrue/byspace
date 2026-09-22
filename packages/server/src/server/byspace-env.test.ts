@@ -20,6 +20,7 @@ describe("byspace env contract", () => {
     [BYSPACE_NODE_ENV]: "production",
     BYSPACE_SUPERVISED: "1",
     ESBUILD_BINARY_PATH: "/Applications/BySpace.app/Contents/Resources/app.asar.unpacked/esbuild",
+    BYSPACE_PI_TERMINAL_HOOK_OWNER_PID: "4242",
   };
   const runtimeControlEnvKeys = [
     "ELECTRON_RUN_AS_NODE",
@@ -28,6 +29,7 @@ describe("byspace env contract", () => {
     "BYSPACE_SUPERVISED",
     "ELECTRON_NO_ATTACH_CONSOLE",
     "ESBUILD_BINARY_PATH",
+    "BYSPACE_PI_TERMINAL_HOOK_OWNER_PID",
   ] as const;
 
   test("builds internal daemon child env by preserving pass-through and control vars", () => {
@@ -43,6 +45,18 @@ describe("byspace env contract", () => {
       BYSPACE_SUPERVISED: "1",
       BYSPACE_AGENT_ID: "agent-123",
     });
+  });
+
+  test("never passes the Pi hook owner marker into spawned processes", () => {
+    // It is per-process state for the Pi extension's duplicate-reporter guard. A
+    // leaked marker mutes reporting in the next Pi, so no spawn path may carry it.
+    expect(createExternalProcessEnv(baseEnv).BYSPACE_PI_TERMINAL_HOOK_OWNER_PID).toBeUndefined();
+    expect(
+      createExternalCommandProcessEnv("node", baseEnv).BYSPACE_PI_TERMINAL_HOOK_OWNER_PID,
+    ).toBeUndefined();
+    expect(
+      buildSelfNodeCommand(["script.js"], {}).env.BYSPACE_PI_TERMINAL_HOOK_OWNER_PID,
+    ).toBeUndefined();
   });
 
   test("builds external process env by scrubbing runtime control vars after overlays", () => {

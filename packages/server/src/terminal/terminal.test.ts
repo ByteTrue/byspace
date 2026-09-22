@@ -1296,6 +1296,32 @@ describe("terminal activity interruption", () => {
 
     expect(session.getActivity()).toMatchObject({ state: "working" });
   });
+
+  it("clears working activity when the foreground command finishes", async () => {
+    // An agent that exits without reporting idle (SIGKILL, crash) otherwise
+    // leaves the terminal dot on "working" forever. The shell's OSC 633 D is
+    // proof the foreground job ended.
+    const packageRoot = mkdtempSync(join(tmpdir(), "terminal-activity-finished-"));
+    temporaryDirs.push(packageRoot);
+    const scriptPath = join(packageRoot, "emit-command-finished.sh");
+    writeFileSync(scriptPath, "#!/bin/sh\nprintf '\\033]633;D;137\\007'\n");
+    chmodSync(scriptPath, 0o755);
+
+    const session = trackSession(
+      await createTerminal({
+        workspaceId: "ws-test",
+        cwd: packageRoot,
+        shell: "/bin/sh",
+        env: { PS1: "$ " },
+      }),
+    );
+    await waitForLines(session, ["$"]);
+    session.setActivity("working");
+
+    session.send({ type: "input", data: "./emit-command-finished.sh\r" });
+
+    await waitForState(session, () => session.getActivity() === null);
+  });
 });
 
 // The escaping tests above assert the command line we generate. This one runs

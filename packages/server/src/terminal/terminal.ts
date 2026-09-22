@@ -1073,6 +1073,13 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
       return true;
     }
 
+    // The interactive shell only emits this when its foreground job ends. A
+    // terminal agent that exits without reporting idle (SIGKILL, crash, a
+    // suspend that never resumes) leaves `working` set forever, so treat the
+    // shell regaining the prompt as proof that the agent is gone. `interrupt`
+    // only clears `working`; a finished-attention idle state is untouched.
+    activityTracker.interrupt();
+
     for (const listener of Array.from(commandFinishedListeners)) {
       try {
         listener(commandFinished);

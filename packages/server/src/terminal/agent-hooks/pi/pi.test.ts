@@ -172,12 +172,30 @@ describe("Pi terminal agent hooks", () => {
   });
 
   it("does not register duplicate reporters in inherited Pi child processes", async () => {
-    process.env.BYSPACE_PI_TERMINAL_HOOK_OWNER_PID = "parent-pid";
+    // A live owning process is a real parent: this Pi is an inherited child and
+    // must stay silent.
+    process.env.BYSPACE_PI_TERMINAL_HOOK_OWNER_PID = String(process.ppid);
     const extension = await loadInstalledExtension();
     const on = vi.fn();
 
     extension.default({ on });
 
     expect(on).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a dead pid", "999999"],
+    ["a non-numeric marker", "parent-pid"],
+  ])("takes over the reporter when the marker holds %s", async (_label, marker) => {
+    // A stale marker must not mute a fresh Pi: that is indistinguishable from
+    // "the terminal stopped showing running".
+    process.env.BYSPACE_PI_TERMINAL_HOOK_OWNER_PID = marker;
+    const extension = await loadInstalledExtension();
+    const on = vi.fn();
+
+    extension.default({ on });
+
+    expect(on).toHaveBeenCalled();
+    expect(process.env.BYSPACE_PI_TERMINAL_HOOK_OWNER_PID).toBe(String(process.pid));
   });
 });

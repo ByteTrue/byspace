@@ -1,6 +1,9 @@
 const BYSPACE_NODE_ENV = "BYSPACE_NODE_ENV";
 const ELECTRON_RUN_AS_NODE = "ELECTRON_RUN_AS_NODE";
 
+// Shared with the installed Pi extension (which cannot import from here).
+export const PI_TERMINAL_HOOK_OWNER_PID_ENV_KEY = "BYSPACE_PI_TERMINAL_HOOK_OWNER_PID";
+
 const RUNTIME_CONTROL_ENV_KEYS = [
   BYSPACE_NODE_ENV,
   "BYSPACE_DESKTOP_MANAGED",
@@ -8,6 +11,13 @@ const RUNTIME_CONTROL_ENV_KEYS = [
   ELECTRON_RUN_AS_NODE,
   "ELECTRON_NO_ATTACH_CONSOLE",
   "ESBUILD_BINARY_PATH",
+  // Written into `process.env` by the Pi terminal-activity extension so child Pi
+  // processes do not register a second reporter for the same terminal. If it
+  // survives into a fresh terminal or agent, that Pi process sees a marker whose
+  // value is a stale pid, concludes it is an inherited child, and registers no
+  // handlers at all — the terminal then never reports running/idle. It is
+  // per-process state, never inherited. See docs/terminal-activity.md.
+  PI_TERMINAL_HOOK_OWNER_PID_ENV_KEY,
 ] as const;
 
 export type BySpaceNodeEnv = "development" | "production" | "test";

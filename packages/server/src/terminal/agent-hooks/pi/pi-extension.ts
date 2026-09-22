@@ -44,6 +44,21 @@ async function sendReport(next) {
 
 const reportQueue = createReportQueue(sendReport);
 
+// The marker is inherited by Pi child processes so they do not register a second
+// reporter for the same terminal. A marker left by a process that is gone is
+// stale, not an owner: treating it as an owner makes this Pi report nothing at
+// all, which looks exactly like "the terminal stopped showing running".
+function ownerIsLive(ownerPid) {
+  const pid = Number(ownerPid);
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === "EPERM";
+  }
+}
+
 function report(state) {
   const url =
     process.env.BYSPACE_TERMINAL_ACTIVITY_URL;
@@ -56,7 +71,7 @@ function report(state) {
 
 export default function byspaceTerminalActivity(pi) {
   const ownerPid = process.env[ownerPidKey];
-  if (ownerPid && ownerPid !== String(process.pid)) return;
+  if (ownerPid && ownerPid !== String(process.pid) && ownerIsLive(ownerPid)) return;
   process.env[ownerPidKey] = String(process.pid);
 
   pi.on("agent_start", () => void report("running"));
