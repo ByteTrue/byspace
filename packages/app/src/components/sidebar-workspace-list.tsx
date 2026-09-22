@@ -1029,6 +1029,9 @@ function WorkspaceRowInner({
               onPress={handlePress}
               testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
             >
+              {selected ? (
+                <View pointerEvents="none" aria-hidden style={styles.selectedIndicator} />
+              ) : null}
               <SidebarWorkspaceRowContent
                 workspace={workspace}
                 hostBadge={hostBadge}
@@ -2405,13 +2408,14 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 36,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: theme.borderRadius.base,
     marginBottom: theme.spacing[1],
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: theme.spacing[2],
     userSelect: "none",
+    overflow: "hidden",
   },
   projectRowHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
@@ -2524,17 +2528,19 @@ const styles = StyleSheet.create((theme) => ({
     right: theme.spacing[2],
   },
   workspaceRow: {
+    position: "relative",
     minHeight: 36,
     marginBottom: theme.spacing[0.5],
     paddingVertical: theme.spacing[2],
     paddingLeft: theme.spacing[2],
     paddingRight: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: theme.borderRadius.base,
     flexDirection: "column",
     alignItems: "stretch",
     justifyContent: "center",
     gap: theme.spacing[1],
     userSelect: "none",
+    overflow: "hidden",
   },
   workspaceRowMain: {
     flexDirection: "row",
@@ -2572,6 +2578,15 @@ const styles = StyleSheet.create((theme) => ({
   },
   sidebarRowSelected: {
     backgroundColor: theme.colors.surfaceSidebarSelected,
+  },
+  selectedIndicator: {
+    position: "absolute",
+    left: 0,
+    top: 6,
+    bottom: 6,
+    width: 3,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.foreground,
   },
   workspaceRowContainer: {
     position: "relative",

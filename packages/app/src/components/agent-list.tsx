@@ -272,6 +272,9 @@ function SessionRow({
       onLongPress={handleLongPress}
       testID={`agent-row-${agent.serverId}-${agent.id}`}
     >
+      {isSelected ? (
+        <View pointerEvents="none" aria-hidden style={styles.selectedIndicator} />
+      ) : null}
       <View style={styles.rowContent}>
         <View style={styles.rowTitleRow}>
           <WorkspaceTitlePrefix
@@ -622,18 +625,14 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
   },
   row: {
+    position: "relative",
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    borderRadius: {
-      xs: theme.borderRadius.lg,
-      md: 0,
-    },
-    marginBottom: {
-      xs: theme.spacing[1],
-      md: 0,
-    },
+    borderRadius: theme.borderRadius.base,
+    marginBottom: theme.spacing[0.5],
+    overflow: "hidden",
   },
   rowContent: {
     flex: 1,
@@ -669,13 +668,22 @@ const styles = StyleSheet.create((theme) => ({
     marginLeft: theme.spacing[2],
   },
   rowSelected: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceSidebarSelected,
   },
   rowHovered: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
   rowPressed: {
     backgroundColor: theme.colors.surface2,
+  },
+  selectedIndicator: {
+    position: "absolute",
+    left: 0,
+    top: 6,
+    bottom: 6,
+    width: 3,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.foreground,
   },
   sessionTitle: {
     flexShrink: 1,

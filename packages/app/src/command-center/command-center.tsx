@@ -428,6 +428,7 @@ const ResultRow = memo(function ResultRow({ result, active, onSelect }: ResultRo
         result.kind === "file" ? `command-center-file-row-${result.filePath}` : choice?.testId
       }
     >
+      {active ? <View pointerEvents="none" aria-hidden style={styles.selectedIndicator} /> : null}
       <ResultContent result={result} />
     </Pressable>
   );
@@ -910,22 +911,40 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     fontWeight: "500",
   },
-  results: { flex: 1 },
+  results: { flex: 1, paddingHorizontal: theme.spacing[2], paddingVertical: theme.spacing[1] },
   sectionLabel: {
-    paddingHorizontal: theme.spacing[4],
-    paddingBottom: theme.spacing[2],
+    paddingHorizontal: theme.spacing[2],
+    paddingBottom: theme.spacing[1.5],
+    paddingTop: theme.spacing[1],
     fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
   sectionDivider: {
     height: 1,
-    marginTop: theme.spacing[2],
-    marginBottom: theme.spacing[2],
+    marginTop: theme.spacing[1.5],
+    marginBottom: theme.spacing[1.5],
     backgroundColor: theme.colors.border,
   },
-  row: { height: 36, paddingHorizontal: theme.spacing[4], paddingVertical: theme.spacing[2] },
+  row: {
+    position: "relative",
+    height: 36,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[2],
+    borderRadius: theme.borderRadius.base,
+    marginVertical: 1,
+    overflow: "hidden",
+  },
   tallRow: { height: 56 },
-  activeRow: { backgroundColor: theme.colors.surface1 },
+  activeRow: { backgroundColor: theme.colors.surfaceSidebarSelected },
+  selectedIndicator: {
+    position: "absolute",
+    left: 0,
+    top: 6,
+    bottom: 6,
+    width: 3,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.foreground,
+  },
   rowContent: {
     flexDirection: "row",
     alignItems: "center",

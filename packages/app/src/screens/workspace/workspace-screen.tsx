@@ -4103,10 +4103,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   headerProjectTitle: {
     color: theme.colors.foregroundMuted,
-    fontSize: {
-      xs: theme.fontSize.sm,
-      md: theme.fontSize.base,
-    },
+    fontSize: theme.fontSize.sm,
+    backgroundColor: theme.colors.surface2,
+    paddingHorizontal: theme.spacing[1.5],
+    paddingVertical: 2,
+    borderRadius: theme.borderRadius.sm,
+    overflow: "hidden",
     flexShrink: 1,
     minWidth: 0,
   },

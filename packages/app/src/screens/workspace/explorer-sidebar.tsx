@@ -12,6 +12,7 @@ import type { WorkspacePaneContentModel } from "@/screens/workspace/workspace-pa
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import type { SplitPane } from "@/stores/workspace-layout-store";
 import type { WorkspaceTab } from "@/workspace-tabs/model";
+import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
 import { WindowChromeRegion, WindowChromeSafeArea } from "@/utils/desktop-window";
 
 interface ExplorerSidebarDockProps {
@@ -132,6 +133,7 @@ const styles = StyleSheet.create((theme) => ({
   tabRail: {
     position: "relative",
     flexShrink: 0,
+    height: WORKSPACE_SECONDARY_HEADER_HEIGHT,
     backgroundColor: theme.colors.surfaceSidebar,
   },
   tabRailDivider: {

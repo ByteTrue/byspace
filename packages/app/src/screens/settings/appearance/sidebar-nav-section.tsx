@@ -32,8 +32,8 @@ const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMut
 const ThemedArrowUp = withUnistyles(ArrowUp);
 const ThemedArrowDown = withUnistyles(ArrowDown);
 
-const moveUpIcon = <ThemedArrowUp size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
-const moveDownIcon = <ThemedArrowDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
+const moveUpIcon = <ThemedArrowUp size={ICON_SIZE.xs} uniProps={mutedColorMapping} />;
+const moveDownIcon = <ThemedArrowDown size={ICON_SIZE.xs} uniProps={mutedColorMapping} />;
 
 const BUILTIN_ICONS: Record<BuiltinSidebarNavId, LucideIcon> = {
   "new-workspace": Plus,
@@ -107,24 +107,26 @@ function SidebarNavRow({
         <NavItemShortcut item={item} />
       </View>
       <View style={styles.rowActions}>
-        <Button
-          variant="ghost"
-          size="sm"
-          leftIcon={moveUpIcon}
-          onPress={handleMoveUp}
-          disabled={isFirst}
-          accessibilityLabel={t("settings.appearance.sidebar.moveUp")}
-          testID={`sidebar-nav-move-up-${item.key}`}
-        />
-        <Button
-          variant="ghost"
-          size="sm"
-          leftIcon={moveDownIcon}
-          onPress={handleMoveDown}
-          disabled={isLast}
-          accessibilityLabel={t("settings.appearance.sidebar.moveDown")}
-          testID={`sidebar-nav-move-down-${item.key}`}
-        />
+        <View style={styles.reorderCluster}>
+          <Button
+            variant="ghost"
+            size="xs"
+            leftIcon={moveUpIcon}
+            onPress={handleMoveUp}
+            disabled={isFirst}
+            accessibilityLabel={t("settings.appearance.sidebar.moveUp")}
+            testID={`sidebar-nav-move-up-${item.key}`}
+          />
+          <Button
+            variant="ghost"
+            size="xs"
+            leftIcon={moveDownIcon}
+            onPress={handleMoveDown}
+            disabled={isLast}
+            accessibilityLabel={t("settings.appearance.sidebar.moveDown")}
+            testID={`sidebar-nav-move-down-${item.key}`}
+          />
+        </View>
         <Switch
           value={item.visible}
           onValueChange={handleVisibleChange}
@@ -175,6 +177,15 @@ const styles = StyleSheet.create((theme) => ({
   rowActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[2],
+    gap: theme.spacing[3],
+  },
+  reorderCluster: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: theme.colors.surface2,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    overflow: "hidden",
   },
 }));

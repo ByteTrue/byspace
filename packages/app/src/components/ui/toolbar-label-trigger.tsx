@@ -46,13 +46,14 @@ export function ToolbarLabelTriggerIcon({ children }: { children: ReactNode }) {
 interface ToolbarLabelSelectTriggerProps extends Omit<PressableProps, "children" | "style"> {
   label: string;
   open?: boolean;
+  leadingIcon?: ReactNode;
 }
 
 const ThemedChevronDown = withUnistyles(ChevronDown);
 
 /** The shared current/base branch geometry. Disabled keeps the frame but has no interaction. */
 export const ToolbarLabelSelectTrigger = forwardRef<View, ToolbarLabelSelectTriggerProps>(
-  function ToolbarLabelSelectTrigger({ label, open = false, ...props }, ref) {
+  function ToolbarLabelSelectTrigger({ label, open = false, leadingIcon, ...props }, ref) {
     const triggerStyle = useCallback(
       (state: ToolbarLabelTriggerState) => toolbarLabelTriggerStyle({ ...state, open }),
       [open],
@@ -63,6 +64,9 @@ export const ToolbarLabelSelectTrigger = forwardRef<View, ToolbarLabelSelectTrig
           const highlighted = isToolbarLabelTriggerHighlighted({ ...state, open });
           return (
             <>
+              {leadingIcon ? (
+                <ToolbarLabelTriggerIcon>{leadingIcon}</ToolbarLabelTriggerIcon>
+              ) : null}
               <Text style={toolbarLabelTriggerTextStyle(highlighted)} numberOfLines={1}>
                 {label}
               </Text>
@@ -81,7 +85,7 @@ const styles = StyleSheet.create((theme) => ({
   trigger: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[1],
+    gap: theme.spacing[1.5],
     minWidth: 0,
     paddingVertical: theme.spacing[1],
     paddingHorizontal: theme.spacing[1],

@@ -58,7 +58,7 @@ const styles = StyleSheet.create((theme) => ({
     flexShrink: 1,
     minWidth: 0,
     paddingHorizontal: WORKSPACE_LABEL_CHIP_INSET,
-    borderRadius: theme.borderRadius.full,
+    borderRadius: theme.borderRadius.base,
   },
   // No optical nudge: the ground is the text's own line box, so the chip's ink sits on the same
   // baseline as the bare text beside it and centring is whatever the line already does.

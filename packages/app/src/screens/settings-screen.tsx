@@ -641,10 +641,7 @@ function SidebarSectionButton({
     onSelect(itemId);
   }, [onSelect, itemId]);
   const accessibilityState = useMemo(() => ({ selected: isSelected }), [isSelected]);
-  const labelStyle = useMemo(
-    () => [sidebarStyles.label, isSelected && { color: theme.colors.foreground }],
-    [isSelected, theme.colors.foreground],
-  );
+  const labelStyle = [sidebarStyles.label, isSelected && sidebarStyles.labelSelected];
   return (
     <Pressable
       accessibilityRole="button"
@@ -652,6 +649,9 @@ function SidebarSectionButton({
       onPress={handlePress}
       style={isSelected ? selectedSidebarItemStyle : sidebarItemStyle}
     >
+      {isSelected ? (
+        <View pointerEvents="none" aria-hidden style={sidebarStyles.selectedIndicator} />
+      ) : null}
       <IconComponent
         size={theme.iconSize.md}
         color={isSelected ? theme.colors.foreground : theme.colors.foregroundMuted}
@@ -683,10 +683,7 @@ function SidebarHostSectionButton({
     onSelect(itemId);
   }, [onSelect, itemId]);
   const accessibilityState = useMemo(() => ({ selected: isSelected }), [isSelected]);
-  const labelStyle = useMemo(
-    () => [sidebarStyles.label, isSelected && { color: theme.colors.foreground }],
-    [isSelected, theme.colors.foreground],
-  );
+  const labelStyle = [sidebarStyles.label, isSelected && sidebarStyles.labelSelected];
   return (
     <Pressable
       accessibilityRole="button"
@@ -695,6 +692,9 @@ function SidebarHostSectionButton({
       testID={`settings-host-section-${itemId}`}
       style={isSelected ? selectedSidebarItemStyle : sidebarItemStyle}
     >
+      {isSelected ? (
+        <View pointerEvents="none" aria-hidden style={sidebarStyles.selectedIndicator} />
+      ) : null}
       <IconComponent
         size={theme.iconSize.md}
         color={isSelected ? theme.colors.foreground : theme.colors.foregroundMuted}
@@ -1370,7 +1370,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   container: {
     flex: 1,
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: theme.colors.surfaceSidebar,
   },
   scrollView: {
     flex: 1,
@@ -1484,19 +1484,30 @@ const sidebarStyles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[1],
   },
   item: {
+    position: "relative",
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    minHeight: 36,
-    paddingVertical: theme.spacing[2],
+    minHeight: 34,
+    paddingVertical: theme.spacing[1.5],
     paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: theme.borderRadius.base,
+    overflow: "hidden",
   },
   itemHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
   itemSelected: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
+    backgroundColor: theme.colors.surfaceSidebarSelected,
+  },
+  selectedIndicator: {
+    position: "absolute",
+    left: 0,
+    top: 6,
+    bottom: 6,
+    width: 3,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.foreground,
   },
   label: {
     fontSize: theme.fontSize.base,
@@ -1504,14 +1515,18 @@ const sidebarStyles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.normal,
     flex: 1,
   },
+  labelSelected: {
+    color: theme.colors.foreground,
+    fontWeight: theme.fontWeight.medium,
+  },
   pickerTrigger: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    minHeight: 36,
-    paddingVertical: theme.spacing[2],
+    minHeight: 34,
+    paddingVertical: theme.spacing[1.5],
     paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: theme.borderRadius.base,
   },
   pickerTriggerHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,

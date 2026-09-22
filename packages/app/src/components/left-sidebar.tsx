@@ -900,7 +900,7 @@ const styles = StyleSheet.create((theme) => ({
   sidebarHeaderGroup: {
     paddingTop: theme.spacing[2],
     gap: 2,
-    paddingBottom: theme.spacing[1.5],
+    paddingBottom: theme.spacing[2],
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
@@ -917,8 +917,8 @@ const styles = StyleSheet.create((theme) => ({
     // inside its 14px SVG, so 4px aligns the ink rather than the SVG box to the row rail.
     paddingLeft: theme.spacing[2],
     paddingRight: 4,
-    paddingTop: theme.spacing[1],
-    paddingBottom: theme.spacing[1],
+    paddingTop: theme.spacing[3],
+    paddingBottom: theme.spacing[1.5],
   },
   workspacesSectionTitle: {
     color: theme.colors.foregroundMuted,
@@ -992,7 +992,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     paddingHorizontal: theme.spacing[2],
     paddingVertical: 2,
-    borderRadius: theme.borderRadius.full,
+    borderRadius: theme.borderRadius.base,
     backgroundColor: theme.colors.accent,
   },
   devBuildBadgeText: {

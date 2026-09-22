@@ -120,7 +120,7 @@ const styles = StyleSheet.create((theme) => {
     },
     outline: {
       backgroundColor: "transparent",
-      borderColor: theme.colors.borderAccent,
+      borderColor: theme.colors.border,
     },
     ghost: {
       backgroundColor: "transparent",

@@ -48,9 +48,9 @@ describe("Pure black theme", () => {
     expect(darkPureBlackTheme.colors.terminal.background).toBe("#000000");
   });
 
-  it("uses BySpace's muted green accent", () => {
-    expect(darkPureBlackTheme.colors.accent).toBe("#20744A");
-    expect(darkPureBlackTheme.colors.accentBright).toBe("#7ccba0");
+  it("uses BySpace's accent", () => {
+    expect(darkPureBlackTheme.colors.accent).toBe("#ffffff");
+    expect(darkPureBlackTheme.colors.accentBright).toBe("#ffffff");
   });
 
   it("derives sidebar interaction surfaces from the surface scale", () => {
@@ -69,7 +69,7 @@ describe("Pure black theme", () => {
 
 describe("Sidebar interaction surfaces", () => {
   it("keeps Light selection distinct from the sidebar surface", () => {
-    expect(lightTheme.colors.surfaceSidebarHover).toBe(lightTheme.colors.surface1);
+    expect(lightTheme.colors.surfaceSidebarHover).toBe(lightTheme.colors.surface2);
     expect(lightTheme.colors.surfaceSidebarSelected).toBe(lightTheme.colors.surface3);
     expect(lightTheme.colors.surfaceSidebarSelected).not.toBe(lightTheme.colors.surfaceSidebar);
   });

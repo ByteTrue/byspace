@@ -68,7 +68,7 @@ export function ScreenHeader({
 
 const styles = StyleSheet.create((theme) => ({
   header: {
-    backgroundColor: theme.colors.surface0,
+    backgroundColor: "transparent",
   },
   inner: {},
   row: {

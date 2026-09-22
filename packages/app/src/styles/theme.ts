@@ -253,7 +253,7 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
     surface4: tint.surface4,
     surfaceDiffEmpty: tint.surfaceDiffEmpty,
     surfaceSidebar: tint.surfaceSidebar,
-    surfaceSidebarHover: tint.surface1,
+    surfaceSidebarHover: tint.surface2,
     surfaceSidebarSelected: tint.surface3,
     surfaceWorkspace: tint.surface0,
     interactionHighlight: "rgba(0, 0, 0, 0.06)",
@@ -270,9 +270,9 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
     accentForeground: tint.accentForeground ?? tint.surface0,
 
     destructive: tint.destructive,
-    destructiveForeground: tint.surface0,
+    destructiveForeground: "#ffffff",
     success: tint.accent,
-    successForeground: tint.surface0,
+    successForeground: "#ffffff",
 
     background: tint.surface0,
     popover: tint.surface0,
@@ -306,27 +306,27 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
 }
 
 const lightSemanticColors = buildLightSemanticColors({
-  surface0: "#ffffff",
-  surface1: "#fafafa",
-  surface2: "#f4f4f5",
-  surface3: "#e4e4e7",
-  surface4: "#d4d4d8",
-  surfaceDiffEmpty: "#f6f6f6",
-  surfaceSidebar: "#f4f4f5",
-  foreground: "#1a1a1e",
-  foregroundMuted: "#71717a",
-  foregroundExtraMuted: "#a1a1aa",
-  border: "#e4e4e7",
-  borderAccent: "#ececf1",
-  accent: "#20744A",
-  accentBright: "#239956",
+  surface0: "#f6f7f8",
+  surface1: "#ffffff",
+  surface2: "#f0f1f3",
+  surface3: "#e5e7eb",
+  surface4: "#d6d9de",
+  surfaceDiffEmpty: "#f6f7f8",
+  surfaceSidebar: "#f6f7f8",
+  foreground: "#201d1d",
+  foregroundMuted: "#646262",
+  foregroundExtraMuted: "#9a9898",
+  border: "rgba(15, 0, 0, 0.08)",
+  borderAccent: "rgba(15, 0, 0, 0.09)",
+  accent: "#201d1d",
+  accentBright: "#302c2c",
   accentForeground: "#ffffff",
   primary: "#18181b",
   primaryForeground: "#fafafa",
-  destructive: "#b04138",
+  destructive: "#ff3b30",
   terminalBlack: "#1a1a1e",
   terminalBrightBlack: "#3f3f46",
-  ring: "#18181b",
+  ring: "#201d1d",
 });
 
 // ---------------------------------------------------------------------------
@@ -440,24 +440,25 @@ export function buildDarkSemanticColors(tint: DarkThemeConfig) {
 // Dark tint definitions
 // ---------------------------------------------------------------------------
 
-// BySpace — subtle teal-green tint (default)
+// BySpace — clean terminal dark with elevated hierarchy (default)
 const byspaceDarkColors = buildDarkSemanticColors({
-  surface0: "#181B1A",
-  surface1: "#1E2120",
-  surface2: "#272A29",
-  surface3: "#434645",
-  surface4: "#595B5B",
-  surfaceDiffEmpty: "#252827",
-  surfaceSidebar: "#141716",
-  foregroundMuted: "#A1A5A4",
-  foregroundExtraMuted: "#717574",
-  border: "#252B2A",
-  borderAccent: "#2F3534",
-  accent: "#20744A",
-  accentBright: "#7ccba0",
-  destructive: "#c64f43", // warm red, hue ~7 — reads as red (not pink) against the green tint
-  terminalBlack: "#141716",
-  terminalBrightBlack: "#434645",
+  surface0: "#0f1011",
+  surface1: "#18191b",
+  surface2: "#222426",
+  surface3: "#2d2f32",
+  surface4: "#3a3d41",
+  surfaceDiffEmpty: "#0f1011",
+  surfaceSidebar: "#0a0b0c",
+  foregroundMuted: "#8a8f96",
+  foregroundExtraMuted: "#62666c",
+  border: "#25272a",
+  borderAccent: "#2c2e32",
+  accent: "#ffffff",
+  accentBright: "#ffffff",
+  accentForeground: "#0f1011",
+  destructive: "#f85149",
+  terminalBlack: "#0f1011",
+  terminalBrightBlack: "#3a3d41",
 });
 
 // Zinc — neutral gray, no tint
@@ -590,12 +591,12 @@ export const FONT_WEIGHT = {
 
 export const BORDER_RADIUS = {
   none: 0,
-  sm: 2,
+  sm: 3,
   base: 4,
   md: 6,
   lg: 8,
-  xl: 12,
-  "2xl": 16,
+  xl: 10,
+  "2xl": 12,
   full: 9999,
 } as const;
 
@@ -621,9 +622,9 @@ export const DEFAULT_UI_FONT_STACK: string = Platform.select({
 });
 
 export const DEFAULT_MONO_FONT_STACK: string = Platform.select({
-  ios: "ui-monospace",
+  ios: "ui-monospace, Menlo, Monaco, monospace",
   default: "monospace",
-  web: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+  web: "'Berkeley Mono', 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
 });
 
 // `fontSize`, `fontFamily`, and `lineHeight` are deliberately widened to plain
@@ -697,18 +698,19 @@ export const darkGhosttyTheme = buildDarkTheme(ghosttyDarkColors);
 // Pure black — zero-luminance background with high-contrast surfaces.
 const pureBlackDarkColors = buildDarkSemanticColors({
   surface0: "#000000",
-  surface1: "#0a0a0a",
-  surface2: "#111111",
-  surface3: "#202020",
+  surface1: "#0d0d0d",
+  surface2: "#161616",
+  surface3: "#222222",
   surface4: "#2d2d2d",
-  surfaceDiffEmpty: "#0c0c0c",
+  surfaceDiffEmpty: "#000000",
   surfaceSidebar: "#000000",
   foregroundMuted: "#a1a1aa",
   foregroundExtraMuted: "#71717a",
-  border: "#1c1c1c",
-  borderAccent: "#242424",
-  accent: "#20744A",
-  accentBright: "#7ccba0",
+  border: "#222222",
+  borderAccent: "#333333",
+  accent: "#ffffff",
+  accentBright: "#ffffff",
+  accentForeground: "#000000",
   destructive: "#c44a4a",
   terminalBlack: "#595959",
   terminalBrightBlack: "#8a8a8a",
@@ -716,25 +718,17 @@ const pureBlackDarkColors = buildDarkSemanticColors({
 
 export const darkPureBlackTheme = buildDarkTheme(pureBlackDarkColors);
 
+const noShadow = {
+  shadowColor: "transparent",
+  shadowOffset: { width: 0, height: 0 },
+  shadowRadius: 0,
+  elevation: 0,
+} as const;
+
 const lightShadow = {
-  sm: {
-    shadowColor: "rgba(0, 0, 0, 0.02)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  md: {
-    shadowColor: "rgba(0, 0, 0, 0.04)",
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 16,
-    elevation: 4,
-  },
-  lg: {
-    shadowColor: "rgba(0, 0, 0, 0.08)",
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 24,
-    elevation: 8,
-  },
+  sm: noShadow,
+  md: noShadow,
+  lg: noShadow,
 } as const;
 
 export function buildLightTheme(semanticColors: ReturnType<typeof buildLightSemanticColors>) {

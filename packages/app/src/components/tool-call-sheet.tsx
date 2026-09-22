@@ -73,7 +73,7 @@ const ThemedCloseIcon = withUnistyles(X, (theme) => ({
 export const ToolCallSheetModal = withUnistyles(IsolatedBottomSheetModal, (theme) => ({
   backgroundStyle: {
     backgroundColor: theme.colors.surface2,
-    borderRadius: 16,
+    borderRadius: theme.borderRadius.lg,
   },
   handleIndicatorStyle: {
     backgroundColor: theme.colors.palette.zinc[600],

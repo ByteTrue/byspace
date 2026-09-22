@@ -53,7 +53,8 @@ export function SidebarHeaderRow({
     ({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.button,
       variant === "compact" && styles.buttonCompact,
-      (Boolean(hovered) || isActive) && styles.buttonHovered,
+      Boolean(hovered) && styles.buttonHovered,
+      isActive && styles.buttonSelected,
     ],
     [isActive, variant],
   );
@@ -63,6 +64,9 @@ export function SidebarHeaderRow({
       const isHighlighted = Boolean(state.hovered) || isActive;
       return (
         <>
+          {isActive ? (
+            <View pointerEvents="none" aria-hidden style={styles.selectedIndicator} />
+          ) : null}
           <ThemedIcon
             size={ICON_SIZE.sm}
             uniProps={isHighlighted ? foregroundColorMapping : foregroundMutedColorMapping}
@@ -126,15 +130,15 @@ const styles = StyleSheet.create((theme) => ({
     userSelect: "none",
   },
   button: {
+    position: "relative",
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    // Match the sidebar workspace-row shape (height, padding, radius) so the
-    // compact header entries sit tight against the workspace list below.
-    minHeight: 36,
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
+    minHeight: 34,
+    paddingVertical: theme.spacing[1.5],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.base,
+    overflow: "hidden",
   },
   // Compact header entries (New workspace / History) sit tighter than the
   // workspace-row shape the base button mirrors.
@@ -147,6 +151,18 @@ const styles = StyleSheet.create((theme) => ({
   },
   buttonHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  buttonSelected: {
+    backgroundColor: theme.colors.surfaceSidebarSelected,
+  },
+  selectedIndicator: {
+    position: "absolute",
+    left: 0,
+    top: 6,
+    bottom: 6,
+    width: 3,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.foreground,
   },
   label: {
     fontSize: theme.fontSize.base,

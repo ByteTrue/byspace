@@ -99,15 +99,15 @@ const PANE_MAXIMIZE_ACTION_RESERVED_WIDTH = smallIconButtonChromeFrameSize(false
 // the wrong width. Keep them together.
 // Tabs and the adjacent New Tab trigger are one control family. Keep their outer box and corner
 // token identical; only their horizontal sizing differs (content-width chip versus square icon).
-const TAB_CHIP_HORIZONTAL_PADDING = 8;
+const TAB_CHIP_HORIZONTAL_PADDING = 10;
 const TAB_CHIP_GAP = 4;
-const TAB_ROW_PADDING_HORIZONTAL = 4;
+const TAB_ROW_PADDING_HORIZONTAL = 6;
 const TAB_ICON_WIDTH = 14;
-const TAB_CONTENT_GAP = 4;
+const TAB_CONTENT_GAP = 6;
 const TAB_DROP_INDICATOR_WIDTH = 4;
 const TAB_MODIFIED_DOT_SIZE = 8;
 const TAB_MIN_WIDTH = 96;
-const TAB_MAX_WIDTH = 160;
+const TAB_MAX_WIDTH = 240;
 const TAB_CLOSE_BUTTON_RESERVED_WIDTH = 0;
 const TAB_LABEL_LAYOUT_ALLOWANCE = 4;
 const AGENT_TOOLTIP_TITLE_MAX_LENGTH = 80;
@@ -1586,7 +1586,7 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.md,
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[1],
+    gap: TAB_CONTENT_GAP,
     userSelect: "none",
   },
   tabHovered: {
@@ -1609,7 +1609,7 @@ const styles = StyleSheet.create((theme) => ({
   tabHandle: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[1],
+    gap: TAB_CONTENT_GAP,
     flex: 1,
     minWidth: 0,
     userSelect: "none",

@@ -1310,19 +1310,13 @@ const styles = StyleSheet.create((theme: Theme) => ({
   inputWrapper: {
     flexShrink: 1,
     flexDirection: "column",
-    gap: theme.spacing[3],
+    gap: theme.spacing[2],
     backgroundColor: theme.colors.surface1,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
-    borderRadius: theme.borderRadius["2xl"],
-    paddingVertical: {
-      xs: theme.spacing[2],
-      md: theme.spacing[4],
-    },
-    paddingHorizontal: {
-      xs: theme.spacing[3],
-      md: theme.spacing[4],
-    },
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.base,
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
     ...(isWeb
       ? {
           transitionProperty: "border-color",
@@ -1395,7 +1389,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   attachButton: {
     width: 28,
     height: 28,
-    borderRadius: theme.borderRadius.full,
+    borderRadius: theme.borderRadius.md,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1408,7 +1402,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   sendButton: {
     width: 28,
     height: 28,
-    borderRadius: theme.borderRadius.full,
+    borderRadius: theme.borderRadius.md,
     backgroundColor: theme.colors.accent,
     alignItems: "center",
     justifyContent: "center",
@@ -1418,7 +1412,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
     width: "auto",
     minWidth: 28,
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.full,
+    borderRadius: theme.borderRadius.md,
   },
   sendButtonLabel: {
     fontSize: theme.fontSize.base,

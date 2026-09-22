@@ -238,6 +238,7 @@ function BadgePreview({
   // Use the real sidebar row so badge styling stays aligned with the setting's visible form.
   return (
     <View style={styles.preview} testID="host-appearance-preview">
+      <Text style={styles.previewCaption}>PREVIEW</Text>
       <Text style={styles.previewTitle} numberOfLines={1}>
         {t("settings.host.appearance.preview.workspaceName")}
       </Text>
@@ -350,6 +351,14 @@ const styles = StyleSheet.create((theme) => ({
     borderTopWidth: theme.borderWidth[1],
     borderTopColor: theme.colors.border,
     backgroundColor: theme.colors.surfaceSidebar,
+  },
+  previewCaption: {
+    color: theme.colors.foregroundExtraMuted,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginBottom: 2,
   },
   previewTitle: {
     color: theme.colors.foregroundMuted,

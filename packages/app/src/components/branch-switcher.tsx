@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { Text, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { Download, GitBranch } from "lucide-react-native";
@@ -113,6 +113,11 @@ export function BranchSwitcher({
     [renderBranchOptionLeadingSlot],
   );
 
+  const branchLeadingIcon = useMemo(
+    () => <ThemedGitBranch size={13} uniProps={foregroundMutedIconColorMapping} />,
+    [],
+  );
+
   if (!currentBranchName) {
     return null;
   }
@@ -124,6 +129,7 @@ export function BranchSwitcher({
           <ToolbarLabelSelectTrigger
             testID={testID}
             label={currentBranchName}
+            leadingIcon={branchLeadingIcon}
             open={isOpen}
             onPress={handleOpen}
             accessibilityRole="button"

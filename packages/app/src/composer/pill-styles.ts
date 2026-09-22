@@ -33,9 +33,9 @@ export const composerPillStyles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[1],
     // Match the composer's 16px tangent point. The 32px floor prevents short labels from
     // clamping the radius and pulling the point where the curve meets the straight edge inward.
-    borderRadius: theme.borderRadius["2xl"],
+    borderRadius: theme.borderRadius.md,
     borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.borderAccent,
+    borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface1,
   },
   bodyActive: {

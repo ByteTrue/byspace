@@ -1733,7 +1733,7 @@ const styles = StyleSheet.create((theme) => ({
     textAlign: "center",
   },
   retryButton: {
-    borderRadius: theme.borderRadius.full,
+    borderRadius: theme.borderRadius.base,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
     paddingHorizontal: theme.spacing[3],

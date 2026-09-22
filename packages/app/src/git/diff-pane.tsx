@@ -21,6 +21,7 @@ import {
   ChevronDown,
   Columns2,
   ExternalLink,
+  FileDiff,
   ListChevronsDownUp,
   ListChevronsUpDown,
   Maximize,
@@ -84,7 +85,10 @@ import {
   ToolbarButton,
   ToolbarControls,
 } from "@/components/ui/pane-content-toolbar";
-import { extraMutedIconColorMapping } from "@/components/ui/icon-button-chrome";
+import {
+  extraMutedIconColorMapping,
+  mutedIconColorMapping,
+} from "@/components/ui/icon-button-chrome";
 import {
   isToolbarLabelTriggerHighlighted,
   ToolbarLabelTriggerIcon,
@@ -212,6 +216,7 @@ const ThemedListChevronsDownUp = withUnistyles(ListChevronsDownUp);
 const ThemedListChevronsUpDown = withUnistyles(ListChevronsUpDown);
 const ThemedMaximize = withUnistyles(Maximize);
 const noopStateChange = () => {};
+const ThemedFileDiff = withUnistyles(FileDiff);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedMoreHorizontal = withUnistyles(MoreHorizontal);
 const ThemedExternalLink = withUnistyles(ExternalLink);
@@ -314,6 +319,9 @@ export function DiffModeMenu({
           const highlighted = isToolbarLabelTriggerHighlighted(state);
           return (
             <>
+              <ToolbarLabelTriggerIcon>
+                <ThemedFileDiff size={13} uniProps={mutedIconColorMapping} />
+              </ToolbarLabelTriggerIcon>
               <Text style={toolbarLabelTriggerTextStyle(highlighted)} numberOfLines={1}>
                 {diffMode === "uncommitted" ? uncommittedLabel : committedLabel}
               </Text>
@@ -2074,6 +2082,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.destructive,
   },
   forgeSetupCallout: {
+    marginTop: theme.spacing[2],
     marginHorizontal: theme.spacing[3],
     marginBottom: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],

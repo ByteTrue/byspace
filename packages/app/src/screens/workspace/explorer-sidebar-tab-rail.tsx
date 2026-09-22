@@ -17,10 +17,9 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { titlebarDragSurfaceStyle } from "@/components/desktop/titlebar-drag-region";
 import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
 import { iconButtonChromeGlyphSize } from "@/components/ui/icon-button-chrome";
-import { HEADER_CONTROL_HEIGHT } from "@/components/ui/control-geometry";
+import { buttonControlHeight } from "@/components/ui/control-geometry";
 import {
   WorkspaceTabIcon,
   WorkspaceTabPresentationResolver,
@@ -332,11 +331,7 @@ export function ExplorerSidebarTabRail({
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger
-        contextOnly
-        style={[styles.track, titlebarDragSurfaceStyle as never]}
-        testID="explorer-sidebar-tab-rail"
-      >
+      <ContextMenuTrigger contextOnly style={styles.track} testID="explorer-sidebar-tab-rail">
         <View style={styles.scrollContainer}>
           <Animated.ScrollView
             horizontal
@@ -401,27 +396,29 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
     alignSelf: "stretch",
+    justifyContent: "center",
   },
   scrollContent: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 4,
+    paddingLeft: theme.spacing[1],
+    paddingRight: theme.spacing[2],
   },
   trailingAccessory: {
-    marginRight: 4,
+    marginRight: theme.spacing[1.5],
   },
   tabSlot: {
     position: "relative",
     marginHorizontal: TAB_GAP / 2,
   },
   tab: {
-    height: HEADER_CONTROL_HEIGHT,
+    height: buttonControlHeight.xs,
     maxWidth: 180,
-    paddingHorizontal: theme.spacing[2],
+    paddingHorizontal: theme.spacing[1.5],
     borderRadius: theme.borderRadius.md,
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[1],
+    gap: theme.spacing[1.5],
     userSelect: "none",
   },
   tabHovered: {

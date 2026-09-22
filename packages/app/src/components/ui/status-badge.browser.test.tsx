@@ -39,7 +39,7 @@ describe("StatusBadge", () => {
       const badge = mountBadge(variant);
       const style = getComputedStyle(badge);
 
-      expect(style.backgroundColor).toBe("rgb(228, 228, 231)");
+      expect(style.backgroundColor).toBe("rgb(244, 244, 245)");
       expect(style.borderColor).toBe("rgb(228, 228, 231)");
     },
   );

@@ -834,7 +834,7 @@ const styles = StyleSheet.create((theme) => ({
   fontFamilyInput: {
     flexGrow: 1,
     flexShrink: 1,
-    maxWidth: 280,
+    maxWidth: 380,
     minHeight: 36,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
@@ -843,7 +843,7 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface2,
     color: theme.colors.foreground,
-    fontSize: theme.fontSize.base,
+    fontSize: theme.fontSize.sm,
     textAlign: "left",
   },
   sizeField: {
