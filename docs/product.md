@@ -46,7 +46,6 @@ This architecture means:
 - The daemon can run on any machine: laptop, VM, remote server
 - Multiple clients can connect simultaneously
 - Agents keep running when a client disconnects — the daemon owns them, not the client
-- Quitting the desktop app stops the daemon it started, so "restart the app" is a real fix; a daemon you run yourself is unaffected
 
 ## Target user
 

@@ -164,8 +164,6 @@ Measured bundle size for a standard Expo web export:
 - gzip: 2.55 MiB
 - brotli: 1.93 MiB
 
-The desktop-managed daemon disables the bundled web UI by default (`BYSPACE_WEB_UI_ENABLED=false`) because the desktop app already ships the renderer as `app-dist`. Shipping the same assets again inside `@bytetrue/server` would duplicate the ~10.8 MiB install. Desktop packaging also excludes `node_modules/@bytetrue/server/dist/server/web-ui/**` from the packaged app.
-
 ## Built workspace packages
 
 Package imports resolve through package exports to compiled `dist/` output, not sibling `src/` files. This is true in local dev and in published packages: the app, daemon, CLI, and SDK consumers should all exercise the same runtime paths.
@@ -220,7 +218,7 @@ install.
 
 ## CLI reference
 
-Use `npm run cli` to run the in-repo CLI from source (`npx tsx packages/cli/src/index.ts`). The script wraps the CLI with `scripts/dev-home.sh`, so it automatically uses this checkout's `.dev/byspace-home` and dev daemon endpoint unless you pass an explicit override. The globally installed `byspace` binary on macOS is a symlink into the installed BySpace desktop app, not this checkout — use it to drive the desktop's built-in daemon, but use `npm run cli` when you want to talk to the CLI you are editing.
+Use `npm run cli` to run the in-repo CLI from source (`npx tsx packages/cli/src/index.ts`). The script wraps the CLI with `scripts/dev-home.sh`, so it automatically uses this checkout's `.dev/byspace-home` and dev daemon endpoint unless you pass an explicit override. The globally installed `byspace` binary is the published npm package, not this checkout — use `npm run cli` when you want to talk to the CLI you are editing.
 
 Canonical automation uses `byspace project create/ls/rename/delete`, `byspace workspace create/ls/rename/archive`, `byspace heartbeat create/update/delete`, and the full `byspace schedule` group. MCP heartbeat automation is intentionally smaller: create and delete only. Detach remains an explicit user lifecycle action rather than an agent tool. `byspace run --new-workspace local|worktree` composes workspace creation with agent creation. The old `byspace worktree` and `byspace run --worktree` forms are hidden compatibility aliases.
 
