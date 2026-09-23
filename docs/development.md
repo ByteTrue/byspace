@@ -68,7 +68,7 @@ expansion, `cp`/`rm`, or a `./scripts/*.sh` entrypoint all fail under PowerShell
 and `bash` is not guaranteed to exist on Windows. Put that logic in a Node script
 that reads what it needs from `process.env` and invoke it as
 `node ./scripts/<name>.mjs`. This repo's own setup does exactly that in
-`scripts/seed-worktree-dev-state.mjs` and `scripts/seed-ios-native-cache.mjs`.
+`scripts/seed-worktree-dev-state.mjs`.
 
 ```json
 {

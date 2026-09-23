@@ -4,12 +4,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-// electron-builder packs node_modules by walking declared production
-// `dependencies` only. A package that imports something it lists as a peer
+// Published tarballs are unpacked on the user's machine and only their declared
+// `dependencies` come along. A package that imports something it lists as a peer
 // dependency resolves fine in this hoisted workspace and then throws
-// ERR_MODULE_NOT_FOUND inside app.asar, taking the desktop daemon down at
-// startup. That shipped twice from @replit/codemirror-lang-* grammars, which
-// are editor extensions published as if they were bare parsers.
+// ERR_MODULE_NOT_FOUND once installed. That shipped twice from
+// @replit/codemirror-lang-* grammars, which are editor extensions published as
+// if they were bare parsers.
 //
 // This replicates the packer's traversal statically: build the closure of
 // declared dependencies reachable from @bytetrue/highlight, walk each package's
