@@ -9,10 +9,6 @@ import type { ReactNode } from "react";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export function TitlebarDragRegion(_props?: any): ReactNode {
-  return null;
-}
-
 /**
  * On web there is no window chrome obstruction, so this is a plain View that
  * keeps the caller's horizontal padding (the Electron path used to add
