@@ -1,6 +1,6 @@
 {
   "name": "byspace",
-  "version": "0.16.0",
+  "version": "0.16.1",
   "private": true,
   "description": "BySpace: control local AI coding agents from anywhere",
   "keywords": [
