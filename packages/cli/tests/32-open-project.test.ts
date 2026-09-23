@@ -5,7 +5,7 @@ import { mkdir, mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { classifyInvocation, isExistingDirectory, isPathLikeArg } from "../src/classify.ts";
-import { openDesktopWithProject } from "../src/commands/open.ts";
+import { buildWorkspaceWebRoute, resolveWebUiOrigin } from "../src/commands/open.ts";
 
 console.log("📋 Phase 32: Open Project CLI Tests\n");
 
@@ -45,26 +45,24 @@ assert.equal(
 process.chdir(originalCwd);
 console.log("  ✅ existing directories open as projects, but known commands still win");
 
-console.log("  Testing desktop CLI passthrough guard...");
-const originalWrite = process.stderr.write.bind(process.stderr);
-const stderrChunks: string[] = [];
-process.stderr.write = ((chunk: string | Uint8Array) => {
-  stderrChunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
-  return true;
-}) as typeof process.stderr.write;
+console.log("  Testing the daemon web UI origin...");
+assert.equal(resolveWebUiOrigin("127.0.0.1:6777"), "http://127.0.0.1:6777");
+assert.equal(resolveWebUiOrigin("tcp://localhost:6778"), "http://localhost:6778");
+assert.equal(resolveWebUiOrigin("0.0.0.0:6777"), "http://127.0.0.1:6777");
+assert.equal(resolveWebUiOrigin("[::1]:6777"), "http://[::1]:6777");
+assert.equal(resolveWebUiOrigin(" unix:///tmp/byspace.sock "), null);
+assert.equal(resolveWebUiOrigin("pipe://\\\\.\\pipe\\byspace"), null);
+assert.equal(resolveWebUiOrigin("ssh://build-host"), null);
+assert.equal(resolveWebUiOrigin("localhost"), null);
+assert.equal(resolveWebUiOrigin(""), null);
+console.log("  ✅ only TCP daemon hosts produce a browser-reachable origin");
 
-const previousExitCode = process.exitCode;
-process.exitCode = undefined;
-const previousDesktopCli = process.env.BYSPACE_DESKTOP_CLI;
-process.env.BYSPACE_DESKTOP_CLI = "1";
-
-await openDesktopWithProject(existingProject);
-
-process.stderr.write = originalWrite;
-assert.equal(process.exitCode, 1);
-assert.match(stderrChunks.join(""), /desktop CLI passthrough mode/);
-process.exitCode = previousExitCode;
-process.env.BYSPACE_DESKTOP_CLI = previousDesktopCli;
-console.log("  ✅ desktop CLI passthrough mode is rejected");
+console.log("  Testing the workspace web route...");
+assert.equal(
+  buildWorkspaceWebRoute("srv_1", "wks_60e42485f5bb08e2"),
+  "/h/srv_1/workspace/wks_60e42485f5bb08e2",
+);
+assert.equal(buildWorkspaceWebRoute("srv 1", "wks/a"), "/h/srv%201/workspace/wks%2Fa");
+console.log("  ✅ workspace routes match the app's host route shape");
 
 console.log("\n✅ Phase 32: Open Project CLI Tests PASSED");

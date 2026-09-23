@@ -154,9 +154,8 @@ function printNextSteps(pairingUrl: string | null, byspaceHome: string, richUi: 
       ? "1. Open BySpace and scan the QR code above, or paste the pairing link."
       : "1. Open BySpace and connect to your daemon.",
     `2. Web app: ${appBaseUrl}`,
-    "3. Desktop app: https://github.com/ByteTrue/byspace/releases/latest",
-    "4. Docs: https://github.com/ByteTrue/byspace",
-    '5. Example: byspace run --output-schema schema.json "extract fields"',
+    "3. Docs: https://github.com/ByteTrue/byspace",
+    '4. Example: byspace run --output-schema schema.json "extract fields"',
   ];
   const quickReferenceLines = [
     "1. byspace --help",

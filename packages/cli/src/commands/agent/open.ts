@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { buildDaemonConnectionCommandError, connectToDaemon } from "../../utils/client.js";
-import { openDesktopWithAgent } from "../open.js";
+import { openAgentInWebApp } from "../open.js";
 import type {
   CommandError,
   CommandOptions,
@@ -25,7 +25,7 @@ const openAgentSchema: OutputSchema<OpenAgentResult> = {
 
 export function addOpenOptions(command: Command): Command {
   return command
-    .description("Open an existing agent in BySpace Desktop")
+    .description("Open an existing agent in the BySpace web app")
     .argument("<agent-id>", "Existing agent ID")
     .option("--server <server-id>", "Server ID (defaults to the local daemon)");
 }
@@ -72,7 +72,7 @@ export async function runOpenCommand(
   }
 
   const serverId = await resolveServerId(options);
-  await openDesktopWithAgent({ serverId, agentId });
+  await openAgentInWebApp({ serverId, agentId }, { host: options.host });
 
   return {
     type: "single",

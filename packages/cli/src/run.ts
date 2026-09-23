@@ -1,6 +1,6 @@
 import { createCli } from "./cli.js";
 import { classifyInvocation } from "./classify.js";
-import { openDesktopWithProject } from "./commands/open.js";
+import { openProjectInWebApp } from "./commands/open.js";
 
 export interface RunCliOptions {
   cwd?: string;
@@ -43,7 +43,7 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
   });
 
   if (!Array.isArray(parseArgv)) {
-    await openDesktopWithProject(parseArgv.resolvedPath);
+    await openProjectInWebApp(parseArgv.resolvedPath);
     return typeof process.exitCode === "number" ? process.exitCode : 0;
   }
 

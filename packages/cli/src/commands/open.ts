@@ -1,106 +1,137 @@
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import path from "node:path";
 import { spawnProcess } from "@bytetrue/server";
-import { buildAgentDeepLink, type AgentDeepLinkTarget } from "@bytetrue/protocol/agent-deep-link";
+import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
+import {
+  buildAgentDeepLinkRoute,
+  type AgentDeepLinkTarget,
+} from "@bytetrue/protocol/agent-deep-link";
+import { resolveLocalDaemonState, resolveTcpHostFromListen } from "./daemon/local-daemon.js";
+import {
+  buildDaemonConnectionCommandError,
+  connectToDaemon,
+  getDaemonHost,
+  getExplicitDaemonHost,
+} from "../utils/client.js";
 
-function findDesktopApp(): string | null {
-  if (process.platform === "darwin") {
-    const candidates = [
-      "/Applications/BySpace.app",
-      path.join(homedir(), "Applications", "BySpace.app"),
-    ];
-
-    for (const candidate of candidates) {
-      if (existsSync(candidate)) {
-        return candidate;
-      }
-    }
-
+/**
+ * The daemon serves its bundled web UI on the same TCP port as `/ws`, so a TCP
+ * daemon host doubles as its HTTP origin. Unix sockets, SSH tunnels, and relay
+ * offers have no address a browser on this machine can reach.
+ */
+export function resolveWebUiOrigin(rawHost: string): string | null {
+  const trimmed = rawHost.trim();
+  if (!trimmed || trimmed.startsWith("ssh://")) {
     return null;
   }
 
-  if (process.platform === "linux") {
-    const candidates = [
-      "/usr/bin/BySpace",
-      "/opt/BySpace/BySpace",
-      path.join(homedir(), "Applications", "BySpace.AppImage"),
-    ];
-
-    for (const candidate of candidates) {
-      if (existsSync(candidate)) {
-        return candidate;
-      }
-    }
-
+  const endpoint = trimmed.startsWith("tcp://") ? trimmed.slice("tcp://".length) : trimmed;
+  const match = /^\[?([^\]/]+?)]?:(\d+)$/.exec(endpoint);
+  if (!match) {
     return null;
   }
 
-  if (process.platform === "win32") {
-    const localAppData = process.env.LOCALAPPDATA;
-    if (!localAppData) {
-      return null;
-    }
-
-    const candidate = path.join(localAppData, "Programs", "BySpace", "BySpace.exe");
-    return existsSync(candidate) ? candidate : null;
-  }
-
-  return null;
+  const [, rawHostname, port] = match;
+  const hostname = rawHostname === "0.0.0.0" ? "127.0.0.1" : rawHostname;
+  const hostPart = hostname.includes(":") ? `[${hostname}]` : hostname;
+  return `http://${hostPart}:${port}`;
 }
 
-function cleanEnvForDesktopLaunch(): NodeJS.ProcessEnv {
-  const env = { ...process.env };
-  // The CLI runs via ELECTRON_RUN_AS_NODE=1. On Linux/Windows the spawned
-  // desktop process inherits the env directly, so we must strip it or the
-  // desktop app would start as a bare Node process instead of Electron.
-  delete env.ELECTRON_RUN_AS_NODE;
-  delete env.ELECTRON_NO_ATTACH_CONSOLE;
-  delete env.BYSPACE_NODE_ENV;
-  return env;
+function resolveLocalWebUiOrigin(): { origin: string | null; host: string } {
+  const listen = resolveLocalDaemonState().listen;
+  const host = resolveTcpHostFromListen(listen) ?? listen;
+  return { origin: resolveWebUiOrigin(host), host };
 }
 
-function spawnDetached(command: string, args: string[]): void {
-  spawnProcess(command, args, {
-    detached: true,
-    stdio: "ignore",
-    env: cleanEnvForDesktopLaunch(),
-  }).unref();
+function resolveWebUiOriginForHost(host: string | undefined): {
+  origin: string | null;
+  host: string;
+} {
+  const explicitHost = getExplicitDaemonHost(host);
+  if (!explicitHost) {
+    return resolveLocalWebUiOrigin();
+  }
+  return { origin: resolveWebUiOrigin(explicitHost), host: explicitHost };
 }
 
-function launchDesktop(args: string[]): void {
-  if (process.env.BYSPACE_DESKTOP_CLI === "1") {
-    throw new Error("Cannot open BySpace Desktop while running in desktop CLI passthrough mode.");
-  }
+/**
+ * Mirrors `buildHostWorkspaceRoute` in `packages/app/src/utils/host-routes.ts`.
+ * Workspace IDs are generated as `wks_<hex>` (packages/server/src/server/workspace-registry-model.ts),
+ * so percent-encoding always suffices; the app's base64 path segment form only
+ * exists for pre-v0.1.95 path-shaped IDs, which this fork does not carry.
+ */
+export function buildWorkspaceWebRoute(serverId: string, workspaceId: string): string {
+  return `/h/${encodeURIComponent(serverId)}/workspace/${encodeURIComponent(workspaceId)}`;
+}
 
-  const desktopApp = findDesktopApp();
-  if (!desktopApp) {
-    throw new Error(
-      "BySpace desktop app not found. Install it from https://github.com/ByteTrue/byspace/releases",
-    );
-  }
-
+function openInBrowser(url: string): void {
+  let command: string;
+  let args: string[];
   if (process.platform === "darwin") {
-    // -n forces a new instance even if the app is already running. The new
-    // instance relays its argv to the existing one through Electron's
-    // single-instance lock. -g keeps the terminal in the foreground.
-    spawnDetached("open", ["-n", "-g", "-a", desktopApp, "--args", ...args]);
+    command = "open";
+    args = [url];
+  } else if (process.platform === "win32") {
+    command = process.env.ComSpec ?? "cmd";
+    args = ["/c", "start", "", url];
+  } else {
+    command = "xdg-open";
+    args = [url];
+  }
+
+  spawnProcess(command, args, { detached: true, stdio: "ignore", shell: false }).unref();
+  process.stderr.write(`${url}\n`);
+}
+
+function reportWebUiUnavailable(host: string): void {
+  process.stderr.write(
+    `Cannot open the web app for ${host}: the daemon has no HTTP endpoint reachable from here.\n` +
+      "Start it with `byspace daemon start` and open the Web UI URL it prints.\n",
+  );
+  process.exitCode = 1;
+}
+
+export async function openProjectInWebApp(projectPath: string): Promise<void> {
+  const { origin, host } = resolveLocalWebUiOrigin();
+  if (!origin) {
+    reportWebUiUnavailable(host);
     return;
   }
 
-  spawnDetached(desktopApp, args);
-}
-
-export async function openDesktopWithProject(projectPath: string): Promise<void> {
+  let client: DaemonClient;
   try {
-    launchDesktop([projectPath]);
+    client = await connectToDaemon();
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`${message}\n`);
+    const failure = buildDaemonConnectionCommandError({ error });
+    process.stderr.write(`${failure.message}\n${failure.details}\n`);
     process.exitCode = 1;
+    return;
+  }
+
+  try {
+    const serverId = client.getLastServerInfoMessage()?.serverId.trim();
+    if (!serverId) {
+      throw new Error("The daemon did not report a server ID.");
+    }
+    const result = await client.openProject(projectPath);
+    if (result.error || !result.workspace) {
+      throw new Error(result.error ?? `The daemon did not open a workspace for ${projectPath}`);
+    }
+    openInBrowser(`${origin}${buildWorkspaceWebRoute(serverId, result.workspace.id)}`);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  } finally {
+    await client.close().catch(() => {});
   }
 }
 
-export async function openDesktopWithAgent(target: AgentDeepLinkTarget): Promise<void> {
-  launchDesktop([buildAgentDeepLink(target)]);
+export async function openAgentInWebApp(
+  target: AgentDeepLinkTarget,
+  options: { host?: string } = {},
+): Promise<void> {
+  const { origin, host } = resolveWebUiOriginForHost(options.host);
+  if (!origin) {
+    reportWebUiUnavailable(host || getDaemonHost());
+    return;
+  }
+
+  openInBrowser(`${origin}${buildAgentDeepLinkRoute(target)}`);
 }
