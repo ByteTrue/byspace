@@ -1528,7 +1528,7 @@ export const ar: TranslationResources = {
       notNow: "ليس الآن",
       directConnectionHint:
         "بدون التتابع، اتصل مباشرة عبر TCP أو Tailscale أو شبكة VPN أخرى. لن يتم إنشاء رمز QR.",
-      updateRequired: "حدّث المضيف لتمكين التتابع من BySpace Desktop.",
+      updateRequired: "حدّث المضيف لتمكين التتابع من BySpace.",
       unavailable: "عرض الاقتران غير متاح.",
       hint: "قم بمسح رمز QR هذا باستخدام BySpace على هاتفك، أو انسخ الرابط أدناه.",
       securityWarning:
@@ -1887,11 +1887,6 @@ export const ar: TranslationResources = {
     },
     diagnostics: {
       title: "التشخيص",
-      legacyTerminalRenderer: {
-        label: "استخدام عارض الطرفية السابق",
-        description: "استخدام طرفية WebView السابقة بعد إعادة فتح الطرفية",
-        accessibilityLabel: "استخدام عارض الطرفية السابق",
-      },
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",

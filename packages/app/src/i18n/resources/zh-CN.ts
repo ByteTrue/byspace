@@ -1512,7 +1512,7 @@ export const zhCN: TranslationResources = {
       notNow: "暂不",
       directConnectionHint:
         "不使用中继时，请通过 TCP、Tailscale 或其他 VPN 直接连接。不会生成二维码。",
-      updateRequired: "请更新主机，以便从 BySpace Desktop 启用中继。",
+      updateRequired: "请更新主机，以便从 BySpace 启用中继。",
       unavailable: "配对 offer 不可用。",
       hint: "用手机上的 BySpace 扫描此二维码，或复制下方链接。",
       securityWarning: "请像保管密码一样保管此配对链接。任何获得此链接的人都可以访问此守护进程。",
@@ -1867,11 +1867,6 @@ export const zhCN: TranslationResources = {
     },
     diagnostics: {
       title: "诊断",
-      legacyTerminalRenderer: {
-        label: "使用旧版终端渲染器",
-        description: "重新打开终端后使用之前的 WebView 终端",
-        accessibilityLabel: "使用旧版终端渲染器",
-      },
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",

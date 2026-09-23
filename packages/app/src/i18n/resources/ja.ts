@@ -1545,7 +1545,7 @@ export const ja: TranslationResources = {
       notNow: "今はしない",
       directConnectionHint:
         "リレーを使わない場合は、TCP、Tailscale、または別の VPN で直接接続してください。QR コードは作成されません。",
-      updateRequired: "BySpace Desktop からリレーを有効にするにはホストを更新してください。",
+      updateRequired: "BySpace からリレーを有効にするにはホストを更新してください。",
       unavailable: "ペアリングオファーが利用できません。",
       hint: "スマートフォンのBySpaceでこのQRコードをスキャンするか、以下のリンクをコピーしてください。",
       securityWarning:
@@ -1905,11 +1905,6 @@ export const ja: TranslationResources = {
     },
     diagnostics: {
       title: "診断",
-      legacyTerminalRenderer: {
-        label: "以前のターミナルレンダラーを使用",
-        description: "ターミナルを開き直した後、以前の WebView ターミナルを使用します",
-        accessibilityLabel: "以前のターミナルレンダラーを使用",
-      },
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",

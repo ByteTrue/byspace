@@ -1540,7 +1540,7 @@ export const en = {
       notNow: "Not now",
       directConnectionHint:
         "Without relay, connect directly over TCP, Tailscale, or another VPN. No QR code is created.",
-      updateRequired: "Update the host to enable relay from BySpace Desktop.",
+      updateRequired: "Update the host to enable relay from BySpace.",
       unavailable: "Pairing offer unavailable.",
       hint: "Scan this QR code with BySpace on your phone, or copy the link below.",
       securityWarning:
@@ -1934,11 +1934,6 @@ export const en = {
     },
     diagnostics: {
       title: "Diagnostics",
-      legacyTerminalRenderer: {
-        label: "Use legacy terminal renderer",
-        description: "Use the previous WebView terminal after reopening a terminal",
-        accessibilityLabel: "Use legacy terminal renderer",
-      },
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",

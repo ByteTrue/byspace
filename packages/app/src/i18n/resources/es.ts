@@ -1566,7 +1566,7 @@ export const es: TranslationResources = {
       notNow: "Ahora no",
       directConnectionHint:
         "Sin relé, conéctese directamente por TCP, Tailscale u otra VPN. No se crea ningún código QR.",
-      updateRequired: "Actualice el host para habilitar el relé desde BySpace Desktop.",
+      updateRequired: "Actualice el host para habilitar el relé desde BySpace.",
       unavailable: "Oferta de maridaje no disponible.",
       hint: "Escanee este códigoQRconBySpaceen su teléfono o copie el enlace a continuación.",
       securityWarning:
@@ -1931,11 +1931,6 @@ export const es: TranslationResources = {
     },
     diagnostics: {
       title: "Diagnóstico",
-      legacyTerminalRenderer: {
-        label: "Usar el renderizador de terminal anterior",
-        description: "Usa el terminal WebView anterior al volver a abrir un terminal",
-        accessibilityLabel: "Usar el renderizador de terminal anterior",
-      },
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",

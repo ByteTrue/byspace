@@ -1537,7 +1537,7 @@ export const ko: TranslationResources = {
       notNow: "지금은 아님",
       directConnectionHint:
         "릴레이 없이 TCP, Tailscale 또는 다른 VPN을 통해 직접 연결하세요. QR 코드가 생성되지 않습니다.",
-      updateRequired: "BySpace 데스크톱에서 릴레이를 활성화하려면 호스트를 업데이트하세요.",
+      updateRequired: "BySpace에서 릴레이를 활성화하려면 호스트를 업데이트하세요。",
       unavailable: "페어링 정보를 사용할 수 없습니다.",
       hint: "휴대폰의 BySpace로 이 QR 코드를 스캔하거나 아래 링크를 복사하세요.",
       securityWarning:
@@ -1897,11 +1897,6 @@ export const ko: TranslationResources = {
     },
     diagnostics: {
       title: "진단",
-      legacyTerminalRenderer: {
-        label: "레거시 터미널 렌더러 사용",
-        description: "터미널을 다시 열 때 이전 WebView 터미널을 사용합니다.",
-        accessibilityLabel: "레거시 터미널 렌더러 사용",
-      },
       app: {
         title: "앱 진단",
         rowTitle: "앱 진단",

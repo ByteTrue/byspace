@@ -252,9 +252,6 @@ describe("translation resources", () => {
 
   it("includes Settings expansion keys for the Batch 3A migration", () => {
     expect(en.settings.diagnostics.title).toBe("Diagnostics");
-    expect(en.settings.diagnostics.legacyTerminalRenderer.label).toBe(
-      "Use legacy terminal renderer",
-    );
     expect(en.settings.about.title).toBe("About");
     expect(en.settings.appearance.theme.title).toBe("Theme");
     expect(en.settings.appearance.terminal.title).toBe("Terminal");

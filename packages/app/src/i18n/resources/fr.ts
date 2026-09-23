@@ -1567,7 +1567,7 @@ export const fr: TranslationResources = {
       notNow: "Pas maintenant",
       directConnectionHint:
         "Sans relais, connectez-vous directement via TCP, Tailscale ou un autre VPN. Aucun code QR n’est créé.",
-      updateRequired: "Mettez à jour l’hôte pour activer le relais depuis BySpace Desktop.",
+      updateRequired: "Mettez à jour l’hôte pour activer le relais depuis BySpace.",
       unavailable: "Offre de jumelage indisponible.",
       hint: "Scannez ce codeQRavecBySpacesur votre téléphone ou copiez le lien ci-dessous.",
       securityWarning:
@@ -1931,11 +1931,6 @@ export const fr: TranslationResources = {
     },
     diagnostics: {
       title: "Diagnostic",
-      legacyTerminalRenderer: {
-        label: "Utiliser l’ancien rendu du terminal",
-        description: "Utilise l’ancien terminal WebView après la réouverture d’un terminal",
-        accessibilityLabel: "Utiliser l’ancien rendu du terminal",
-      },
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",

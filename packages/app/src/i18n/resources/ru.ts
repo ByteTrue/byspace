@@ -1549,7 +1549,7 @@ export const ru: TranslationResources = {
       notNow: "Не сейчас",
       directConnectionHint:
         "Без ретранслятора подключайтесь напрямую через TCP, Tailscale или другую VPN. QR-код создаваться не будет.",
-      updateRequired: "Обновите хост, чтобы включить ретранслятор из BySpace Desktop.",
+      updateRequired: "Обновите хост, чтобы включить ретранслятор из BySpace.",
       unavailable: "Данные для сопряжения недоступны.",
       hint: "Отсканируйте этот QR-код с помощью BySpace на телефоне или скопируйте ссылку ниже.",
       securityWarning:
@@ -1913,11 +1913,6 @@ export const ru: TranslationResources = {
     },
     diagnostics: {
       title: "Диагностика",
-      legacyTerminalRenderer: {
-        label: "Использовать прежний рендерер терминала",
-        description: "Использовать прежний WebView-терминал после повторного открытия",
-        accessibilityLabel: "Использовать прежний рендерер терминала",
-      },
       app: {
         title: "Диагностика приложения",
         rowTitle: "Диагностика приложения",
