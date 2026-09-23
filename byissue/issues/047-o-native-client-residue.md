@@ -24,25 +24,22 @@ F-Droid overlay 整链、Android-only 原生模块 `byspace-native-trace`、10 �
 - **死启动链**：`DaemonStartService` + `shouldStartBuiltInDaemon()`（恒 false）+ daemon-start-service 测试；`startHostRuntimeBootstrap` 收敛为只 boot 注册表；splash 的 retry 改为重置 give-up 门（旧 retry 是 no-op）。
 - **`Platform.OS` 恒假分支**（18 处）：Android 状态栏偏移、ToastAndroid、iOS menu teardown grace、model-browser Android 手势包装、iOS 键盘 accessory-bar 补偿（`resolveKeyboardShift` 去 `isIos`；零消费的 `resolveStreamKeyboardInset` 一并删）、两个 sidebar 列表的 `NestableScrollContainer` 包装。
 - **`useIsLocalDaemon` 重写**：「本地 daemon」= 服务当前 web UI 的 daemon（注入的 listen 地址匹配浏览器 origin）。此前该 hook 走恒 false 的 desktop 链，把 issue 043 的 daemon-service 区块（Start at login 开关）整体藏死，且让 UpdateDaemonCard 在本地 daemon 上恒显示。
-- **文档**：`docs/hover.md` 模式收敛为 `isHovered || isCompact`；`AGENTS.md` gates 表删掉 `isNative` 行与不存在的 `getIsElectron()`（原「需要 Owner 自己改」项已由本批次完成）。
+- **文档**：`docs/hover.md` 模式收敛为 `isHovered || isCompact`；`AGENTS.md` gates 表删掉 `isNative` 行与不存在的 `getIsElectron()`。
 
-### 留在 047 的
+### 批次 4（已完成，2026-09-23）
 
-- `utils/desktop-window.tsx`：恒真/恒假 shim 但有 10 个消费方且参与布局（`useOwnsWindowChromeCorner()` 等），需要单独一批逐点改造。
-- draggable-list 的手势协调接口（`parentGestureRef`/`waitFor`/`simultaneousGestureRef`/`nestable`）：web 实现忽略它们，但接口是 Metro 双端分派边界，删除需要连同 drag hooks 一起过。
-- 恒走 native 的路径：`push-notifications/index.ts` base、`use-file-picker.ts`、`use-image-attachment-picker.ts`、`download-store.ts` Sharing 分支、`pair-scan.tsx` CameraView 分支、`constants/shortcut-platform.ts`（已删一半，`isNative` 分支在批次 2 处理）。
-- `push-notifications/internal/subscriptions.ts` 的 Expo push token 链（web 用 Web Push，Expo 链是否可删需先确认通知矩阵）。
-- README.md / SECURITY.md / docs/expo-router.md / docs/architecture.md 文案漂移；i18n 的 `pairing.connectionMethods.remoteSsh` 孤儿键（welcome-screen 的 Electron-only 入口已删，settings 入口仍活）。
+- **`utils/desktop-window.tsx` 垫片层整体删除**：清除了全部 10 个消费点（presentation, fullscreen-viewer, attachment-lightbox, explorer-sidebar, workspace-screen, workspace-explorer-toggle, screen-header, split-container, menu-header, left-sidebar, compact-explorer-sidebar），去掉对不存在的 Electron 窗口控制（全屏、红绿灯避让、窗口角落占用）的虚假调用，各容器直连标准 View。
+- **已退役能力的孤儿设置与 i18n 清理**：清理了旧版 WebView 终端渲染器残留设置 `useLegacyTerminalRenderer`（storage 字段、默认值、schema、单测、9 国语言 i18n 资源文件）；清理了 `updateRequired` 中已退役的 "BySpace Desktop" 措辞。
+- **文档与 README 纠偏**：`packages/app/README.md` 重写为现代 Expo Web/PWA 说明（去掉 Expo 模板残留的移动端模拟器/Expo Go/已删除的 reset-project/语音调试）；同步修正 `SECURITY.md`、`docs/architecture.md`、`docs/expo-router.md`。
+- **明确 PWA 主力边界**：PWA（手机与电脑端）能用到的能力均非僵尸代码。`expo-haptics`（Android PWA 下真实触发 W3C Vibration API `navigator.vibrate`）和 `expo-camera` / `pair-scan`（手机端 PWA 扫码配对核心流程）全部完整保留。
 
 ## 背景
 
-app 只构建 web（`expo export --platform web`），所以 `isNative = Platform.OS !== "web"` 恒为 false，`Platform.OS` 恒为 `"web"`。这些分支不可达，但让「哪些代码路径真的会跑」变得难读，新代码也会照抄。
-
-025 的执行批次清掉了客户端形态本身，034/036 清掉了 browser/voice/hub/plugin 与 Electron 的 UI 面。本事项收尾剩下的活文件分支与文案。
+app 只构建 web（`expo export --platform web`，主打浏览器与安装式 PWA），所以 `isNative = Platform.OS !== "web"` 恒为 false，`Platform.OS` 恒为 `"web"`。但 PWA 自身具备完整的 Web API 能力（如 Vibration、MediaDevices/Camera、Web Push、Web Share 等），不能把移动 PWA 能力误判为原生残留。
 
 ## 验证
 
-每批次：`npm run typecheck` / `npm run lint` / `npm run format:check` + 受影响单测 + web 构建（`npx expo export --platform web`，批次 3 产物 20.2 MB 正常导出）。
+每批次：`npm run typecheck` / `npm run lint` / `npm run format:check` + 受影响单测 + web 构建（`npx expo export --platform web` 正常导出）。
 
 ## 关闭回写
 

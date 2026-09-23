@@ -1,6 +1,6 @@
 # Security
 
-BySpace follows a client-server architecture, similar to Docker. The daemon runs on your machine and manages your coding agents. Clients (the mobile app, CLI, or web interface) connect to the daemon to monitor and control those agents.
+BySpace follows a client-server architecture, similar to Docker. The daemon runs on your machine and manages your coding agents. Clients (the web app/PWA or CLI) connect to the daemon to monitor and control those agents.
 
 Your code never leaves your machine. BySpace is a local-first tool that connects directly to your development environment.
 

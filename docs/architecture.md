@@ -103,9 +103,9 @@ code imports from `@bytetrue/client`.
 host's client; plugin subprocesses use the same facade over a host-owned IPC transport. Protocol capability ownership and subscription lifetimes follow
 [the client contract](protocol-compatibility.md#client-capability-ownership).
 
-### `packages/app` — Mobile + web client (Expo)
+### `packages/app` — Web and PWA client (Expo)
 
-Cross-platform React Native app that connects to one or more daemons.
+React Native web/PWA client that connects to one or more daemons.
 
 - Expo Router navigation (`/h/[serverId]/workspace/[workspaceId]`, `/h/[serverId]/agent/[agentId]`, etc.). The `workspaceId` URL segment is an opaque workspace id, not a directly meaningful filesystem path.
 - `HostRuntimeController` manages saved host connections, reconnection, and per-host runtime state. Direct TCP and relay connections use the ordinary client transport. (The Electron desktop transports — socket, pipe, and SSH — were retired with the desktop app; LAN access uses the daemon's bundled same-origin web UI, remote access the relay.)

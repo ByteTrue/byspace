@@ -157,13 +157,13 @@ stack owns its own screens. See [unistyles.md](unistyles.md).
 
 ## Regression Shape
 
-Pure helper tests are useful but not enough. The failure mode here is native
-route-tree state, so a real regression should launch native with seeded persisted
+Pure helper tests are useful but not enough. The failure mode here is
+route-tree state, so a real regression should launch with seeded persisted
 state:
 
 1. Seed `byspace:last-workspace-route-selection` with a valid
    `{ serverId, workspaceId }`.
-2. Launch the native app cold.
+2. Launch the app cold.
 3. Assert a real screen is visible, not the blank tree.
 4. Assert no `[Layout children]` warning appears.
 
