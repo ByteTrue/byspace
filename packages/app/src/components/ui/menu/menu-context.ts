@@ -25,8 +25,6 @@ export type MenuPresentation = "popover" | "sheet";
 export type MenuCompactMode = "popover" | "sheet";
 
 /** How long UIKit is given to finish removing the menu surface before an action runs. */
-export const IOS_TEARDOWN_GRACE_MS = 250;
-
 export interface MenuContextValue {
   open: boolean;
   setOpen: (open: boolean) => void;
