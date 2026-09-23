@@ -209,4 +209,4 @@ Web UI：可由 daemon 内置提供，也可使用托管版本
 
 ### 尚未处理
 
-活文件里的恒假 `isNative` / `Platform.OS` 分支、`src/desktop/` 剩余孤儿 shim，以及指向已退役客户端的文档与文案，另见 [047-o-native-client-residue](047-o-native-client-residue.md)。其中 `AGENTS.md:153` 的 `getIsElectron()` 已经不存在于 `constants/platform.ts`，属文档错误但不归 ByIssue 修改。
+活文件里的恒假 `isNative` / `Platform.OS` 分支、`src/desktop/` 剩余孤儿 shim，以及指向已退役客户端的文档与文案，另见已交付关闭的 [047-x-native-client-residue](047-x-native-client-residue.md)。其中 `AGENTS.md:153` 的 `getIsElectron()` 已经不存在于 `constants/platform.ts`，属文档错误，已在 047 中清理。

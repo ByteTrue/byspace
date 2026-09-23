@@ -2,8 +2,9 @@
 kind: issue
 title: "清理恒假原生分支与原生文案"
 type: refactor
-status: open
+status: closed
 created: 2026-09-23
+closed: 2026-09-23
 ---
 
 # 清理恒假原生分支与原生文案
