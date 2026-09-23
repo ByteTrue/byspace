@@ -188,3 +188,23 @@ Web UI：可由 daemon 内置提供，也可使用托管版本
 **仍待决定：** 无。方向全部定案；所有删除批次进入影响报告与执行授权阶段。
 
 本 Issue 保持 open，作为执行批次的追踪入口；方向已全部确认，未启动任何删除。执行批次仍需精确影响报告、归档和授权；Issue 026 继续暂缓。
+
+## 原生客户端残留补审（2026-09-23）
+
+上面的执行批次清掉了客户端形态本身，[034](034-x-retirement-residue-audit.md)/[036](036-x-ff-retirement-leftovers.md) 清掉了 browser/voice/hub/plugin 与 Electron 的 UI 面，但都没有覆盖**原生构建链**。补审结果如下。
+
+### 已执行：低风险批次
+
+- **本地产物（未跟踪）**：`dist/mac-arm64`（4.2 GB Electron 构建）、`dist/android`（1.1 GB，五个 APK，归档库 Release 均有副本）、`dist/builder-debug.yml`。`packages/app/android-release.jks` 移入 `.git/cleanup-backup/native-retirement-20260923T041216Z/`，凭据不硬删。共释放 5.3 GB。
+- **死配置**：根 devDependencies 的 `electron@44.2.0`（全仓零 import）；`ci.yml` 里只为它存在的 `ELECTRON_SKIP_BINARY_DOWNLOAD`；F-Droid overlay 整条链（`BYSPACE_FDROID_BUILD` → `src/fdroid/` → `constants/build-profile.ts` 的两个 flag，全仓无人设置）；`packages/app/scripts/reset-project.js`（Expo 模板残留）；`Gemfile`（fastlane，无 Fastfile）。
+- **移动端工具**：`scripts/test-mobile-agent-device.sh` 与 `test:e2e:mobile`、`scripts/seed-ios-native-cache.mjs`、`android:clear`。
+- **Android-only 原生模块** `packages/app/modules/byspace-native-trace/`（Kotlin + Gradle，`platforms: ["android"]`）：它是 `requireOptionalNativeModule("BySpaceNativeTrace")` 的实现，随 `isProfileBuild` 分支一并移除。浏览器 trace sink 保留。
+- **十个零引用原生依赖**：`expo-dev-client`、`expo-build-properties`、`expo-gradle-jvmargs`、`expo-audio`、`expo-image`、`expo-image-manipulator`、`expo-sqlite`、`expo-splash-screen`、`expo-system-ui`、`@shopify/react-native-skia`。
+
+验证：web 导出成功，bundle 20.2 MB → 19 MB，被删依赖在产物中零命中，`__byspacePerformanceTrace` 保留；typecheck / lint / format / 受影响单测 56 项全绿。
+
+审计中确认**不能删**的两项：`react-native-nitro-modules` 被 unistyles 在 `lib/module/specs/*/index.js` 硬 import；`expo-keep-awake` 虽无直接引用但是 `expo` 包自身的依赖。两者都从「零引用」扫描里被反向依赖检查拦下。
+
+### 尚未处理
+
+活文件里的恒假 `isNative` / `Platform.OS` 分支、`src/desktop/` 剩余孤儿 shim，以及指向已退役客户端的文档与文案，另见 [047-o-native-client-residue](047-o-native-client-residue.md)。其中 `AGENTS.md:153` 的 `getIsElectron()` 已经不存在于 `constants/platform.ts`，属文档错误但不归 ByIssue 修改。
