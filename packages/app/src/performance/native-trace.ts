@@ -1,19 +1,10 @@
 import type { DaemonClientTrace } from "@bytetrue/client/internal/daemon-client";
-import { requireOptionalNativeModule } from "expo-modules-core";
-import { isProfileBuild } from "@/constants/build-profile";
-
-interface BySpaceNativeTraceModule {
-  beginSection(name: string): void;
-  endSection(): void;
-}
 
 interface BrowserPerformanceTraceSink {
   isEnabled(): boolean;
   beginSection(name: string, args?: Record<string, string>): void;
   endSection(): void;
 }
-
-const traceModule = requireOptionalNativeModule<BySpaceNativeTraceModule>("BySpaceNativeTrace");
 
 function getBrowserTraceSink(): BrowserPerformanceTraceSink | null {
   try {
@@ -55,24 +46,15 @@ function safelyIsEnabled(sink: BrowserPerformanceTraceSink): boolean {
 export const nativePerformanceTrace: DaemonClientTrace = {
   isEnabled() {
     const browserTrace = getBrowserTraceSink();
-    return (
-      (isProfileBuild && traceModule !== null) ||
-      (browserTrace !== null && safelyIsEnabled(browserTrace))
-    );
+    return browserTrace !== null && safelyIsEnabled(browserTrace);
   },
   beginSection(name, args) {
-    if (isProfileBuild) {
-      safelyCall(() => traceModule?.beginSection(formatSectionName(name, args)));
-    }
     const browserTrace = getBrowserTraceSink();
     if (browserTrace && safelyIsEnabled(browserTrace)) {
       safelyCall(() => browserTrace.beginSection(name, args));
     }
   },
   endSection() {
-    if (isProfileBuild) {
-      safelyCall(() => traceModule?.endSection());
-    }
     const browserTrace = getBrowserTraceSink();
     if (browserTrace && safelyIsEnabled(browserTrace)) {
       safelyCall(() => browserTrace.endSection());
@@ -86,12 +68,4 @@ export function traceInstant(name: string, args?: Record<string, string>): void 
   }
   nativePerformanceTrace.beginSection(name, args);
   nativePerformanceTrace.endSection();
-}
-
-function formatSectionName(name: string, args?: Record<string, string>): string {
-  if (!args) {
-    return name;
-  }
-  const fields = Object.entries(args).map(([key, value]) => `${key}=${value}`);
-  return `${name}|${fields.join(";")}`;
 }
