@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Pressable, Text, View, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { QrCode, Link2, ClipboardPaste, Settings, Terminal } from "lucide-react-native";
+import { QrCode, Link2, ClipboardPaste, Settings } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { HostProfile } from "@/types/host-connection";
 import { getHostRuntimeStore, isHostRuntimeConnected, useHosts } from "@/runtime/host-runtime";
@@ -16,7 +16,6 @@ import { formatVersionWithPrefix } from "@/utils/format-version";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
 import { BySpaceLogo } from "@/components/icons/byspace-logo";
 import { isWeb } from "@/constants/platform";
-import { isElectronRuntime } from "@/desktop/host";
 
 interface WelcomeAction {
   key: "scan-qr" | "direct-connection" | "remote-ssh" | "paste-pairing-link";
@@ -185,7 +184,6 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
 
   const handleOpenDirect = useCallback(() => setIsDirectOpen(true), []);
   const handleCloseDirect = useCallback(() => setIsDirectOpen(false), []);
-  const handleOpenRemoteSsh = useCallback(() => setIsRemoteSshOpen(true), []);
   const handleCloseRemoteSsh = useCallback(() => setIsRemoteSshOpen(false), []);
   const handleOpenPasteLink = useCallback(() => setIsPasteLinkOpen(true), []);
   const handleClosePasteLink = useCallback(() => setIsPasteLinkOpen(false), []);
@@ -246,17 +244,6 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
           onPress: handleOpenPasteLink,
         },
       ];
-
-  if (isElectronRuntime()) {
-    actions.splice(1, 0, {
-      key: "remote-ssh",
-      label: t("pairing.connectionMethods.remoteSsh.title"),
-      testID: "welcome-remote-ssh",
-      primary: false,
-      icon: Terminal,
-      onPress: handleOpenRemoteSsh,
-    });
-  }
 
   const scrollContentContainerStyle = useMemo(
     () => [styles.container, { paddingBottom: theme.spacing[6] + insets.bottom }],

@@ -1222,9 +1222,7 @@ export const zhCN: TranslationResources = {
     errorTitle: "出现问题",
     errorDescription: "本地服务器启动失败。如果持续发生，请在 GitHub 报告问题并附上下方日志。",
     logs: {
-      loading: "正在加载 daemon 日志...",
-      unavailable: "没有可用的 daemon 日志。",
-      loadFailed: "无法加载 daemon 日志：{{message}}",
+      hint: "查看 daemon 日志：~/.byspace/daemon.log",
     },
   },
   openProject: {

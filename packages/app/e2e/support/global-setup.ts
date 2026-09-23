@@ -157,7 +157,6 @@ function startMetro(port: number, buffer: ReturnType<typeof createLineBuffer>): 
     env: {
       ...process.env,
       BROWSER: "none",
-      ...(process.env.E2E_DESKTOP_RUNTIME === "1" ? { BYSPACE_WEB_PLATFORM: "electron" } : {}),
     },
     stdio: ["ignore", "pipe", "pipe"],
     detached: false,

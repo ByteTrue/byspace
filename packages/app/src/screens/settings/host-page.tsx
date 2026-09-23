@@ -38,8 +38,7 @@ import {
   ProfileDraft,
   TerminalProfileEditModal,
 } from "@/screens/settings/terminal-profile-edit-modal";
-import { LocalDaemonSection } from "@/desktop/components/desktop-updates-section";
-import { PairDeviceModal } from "@/desktop/components/pair-device-modal";
+import { PairDeviceModal } from "@/settings/pair-device-modal";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { NetworkSection } from "@/screens/settings/network-section";
@@ -62,7 +61,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { settingsStyles } from "@/styles/settings";
 import type { HostConnection, HostProfile } from "@/types/host-connection";
 import { confirmDialog } from "@/utils/confirm-dialog";
-import { isVersionMismatch } from "@/desktop/updates/desktop-updates";
+import { isVersionMismatch } from "@/utils/version-display";
 import { resolveAppVersion } from "@/utils/app-version";
 import { formatConnectionStatus, getConnectionStatusTone } from "@/utils/daemons";
 import { formatLatency } from "@/utils/latency";
@@ -374,8 +373,6 @@ export function HostSettingsPage({
       <HostAppearanceSection host={host} />
 
       <NetworkSection serverId={serverId} />
-
-      {isLocalDaemon ? <LocalDaemonSection /> : null}
 
       {isLocalDaemon ? <DaemonServiceSection serverId={serverId} /> : null}
 

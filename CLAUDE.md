@@ -146,12 +146,10 @@ an Electron-only capability forces it. Import gates from `@/constants/platform`.
 
 ### The gates
 
-| Gate                       | Type      | When to use                                                                                                           |
-| -------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
-| `isWeb`                    | constant  | Always true in this build. Legacy branch guards; new code does not need it.                                           |
-| `isNative`                 | constant  | Always false. Retired along with the native clients; do not add new uses.                                             |
-| `getIsElectron()`          | cached fn | Always false. Retired along with the desktop wrapper; do not add new uses.                                            |
-| `useIsCompactFormFactor()` | hook      | Layout decisions — sidebar overlay vs pinned, modal vs full screen, single-panel vs split. From `@/constants/layout`. |
+| Gate                       | Type     | When to use                                                                                                           |
+| -------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
+| `isWeb`                    | constant | Always true in this build. Legacy branch guards; new code does not need it.                                           |
+| `useIsCompactFormFactor()` | hook     | Layout decisions — sidebar overlay vs pinned, modal vs full screen, single-panel vs split. From `@/constants/layout`. |
 
 ### Rules
 
@@ -169,10 +167,9 @@ an Electron-only capability forces it. Import gates from `@/constants/platform`.
 - **NEVER use raw DOM APIs in a module that can be imported outside a browser.** A DOM
   call at module scope breaks non-browser importers. Casting a RN ref to `HTMLElement` is a
   red flag.
-- **NEVER use `onPointerEnter`/`onPointerLeave`.** They do not fire on native iOS or on
-  touch input. See [docs/hover.md](docs/hover.md) for the supported pattern.
-- **Hover only works on web.** For hover-to-show UI (kebab menus, action buttons), use
-  `isHovered || isNative || isCompact` so the controls are always visible on touch and
+- **NEVER use `onPointerEnter`/`onPointerLeave`.** They do not fire on touch input. See [docs/hover.md](docs/hover.md) for the supported pattern.
+- **Hover only works with a pointer.** For hover-to-show UI (kebab menus, action buttons), use
+  `isHovered || isCompact` so the controls are always visible on touch and
   hover-to-show on desktop web. [docs/hover.md](docs/hover.md) owns this pattern.
 - **Don't use platform checks as a proxy for layout capabilities.** Use breakpoints for
   layout decisions (`useIsCompactFormFactor()`), not platform constants.

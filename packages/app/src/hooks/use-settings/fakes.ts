@@ -1,4 +1,4 @@
-import type { DesktopSettingsBridge, KeyValueStorage, ReleaseChannel } from "./storage";
+import type { KeyValueStorage } from "./storage";
 
 export interface InMemoryKeyValueStorage extends KeyValueStorage {
   readonly entries: Map<string, string>;
@@ -18,51 +18,6 @@ export function createInMemoryKeyValueStorage(
     },
     async removeItem(key) {
       entries.delete(key);
-    },
-  };
-}
-
-export interface FakeDesktopBridge extends DesktopSettingsBridge {
-  readonly migrationsApplied: Array<{
-    manageBuiltInDaemon?: boolean;
-    releaseChannel?: ReleaseChannel;
-  }>;
-}
-
-interface FakeDesktopSettings {
-  releaseChannel?: import("./storage").ReleaseChannel;
-  notifications?: { playSound?: boolean };
-  daemon?: { manageBuiltInDaemon?: boolean; keepRunningAfterQuit?: boolean };
-}
-
-const DEFAULT_DESKTOP: FakeDesktopSettings = {
-  releaseChannel: "stable",
-  notifications: {
-    playSound: true,
-  },
-  daemon: {
-    manageBuiltInDaemon: true,
-    keepRunningAfterQuit: false,
-  },
-};
-
-export function createFakeDesktopBridge(
-  options: {
-    isElectron?: boolean;
-    settings?: FakeDesktopSettings;
-  } = {},
-): FakeDesktopBridge {
-  const isElectron = options.isElectron ?? false;
-  const settings = options.settings ?? DEFAULT_DESKTOP;
-  const migrationsApplied: FakeDesktopBridge["migrationsApplied"] = [];
-  return {
-    migrationsApplied,
-    isElectron: () => isElectron,
-    async loadDesktopSettings() {
-      return settings;
-    },
-    async migrateLegacyDesktopSettings(input) {
-      migrationsApplied.push(input);
     },
   };
 }

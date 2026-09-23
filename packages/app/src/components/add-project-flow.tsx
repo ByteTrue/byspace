@@ -4,7 +4,6 @@ import type { WorkspaceProjectDescriptorPayload } from "@bytetrue/protocol/messa
 import {
   ArrowLeft,
   Folder,
-  FolderOpen,
   FolderPlus,
   Github,
   HardDrive,
@@ -72,11 +71,9 @@ import {
 } from "@/components/project-picker-options";
 import { Shortcut } from "@/components/ui/shortcut";
 import { useKeyboardShortcutsAvailable } from "@/keyboard/availability";
-import { isNative, isWeb } from "@/constants/platform";
-import { pickDirectory } from "@/desktop/pick-directory";
+import { isWeb } from "@/constants/platform";
 import { useFetchQuery } from "@/data/query";
 import { getOpenProjectFailureReason, registerProjectDescriptor } from "@/hooks/open-project";
-import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { useCloneGithubProject, useOpenProject } from "@/hooks/use-open-project";
 import {
   OverlayLayerProvider,
@@ -162,7 +159,6 @@ function FlowBackButton({ onPress }: { onPress: () => void }) {
 
 function methodIcon(method: AddProjectMethodId): FlowRowOption["icon"] {
   if (method === "github") return Github;
-  if (method === "browse") return FolderOpen;
   if (method === "new-directory") return FolderPlus;
   return Search;
 }
@@ -339,7 +335,6 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
             serverId: host.serverId,
             label: host.label,
             canAddProject,
-            canBrowse: false,
             canCloneGithubRepositories: githubCloneByHost.get(host.serverId) === true,
             canSearchGithubRepositories: githubSearchByHost.get(host.serverId) === true,
             canCreateDirectory: createDirectoryByHost.get(host.serverId) === true,
@@ -366,7 +361,6 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   const hostId = pageHostId(page);
   const host = hostId ? state.hosts.find((candidate) => candidate.serverId === hostId) : null;
   const client = useHostRuntimeClient(hostId ?? "");
-  const isLocalDaemon = useIsLocalDaemon(hostId ?? "");
   const recommendedPaths = useRecommendedProjectPaths(hostId);
   const openProject = useOpenProject(hostId);
   const cloneGithubProject = useCloneGithubProject(hostId);
@@ -382,7 +376,6 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
   const setHasHydratedWorkspaces = useSessionStore((store) => store.setHasHydratedWorkspaces);
   const inputRef = useRef<EditingTextInputHandle>(null);
   const submissionInFlightRef = useRef(false);
-  const browseInFlightRef = useRef(false);
   const query = page.kind === "new-directory-name" || page.kind === "method" ? "" : page.query;
   const pageInputValueRef = useRef(page.kind === "method" ? "" : pageInput(page));
   pageInputValueRef.current = page.kind === "method" ? "" : pageInput(page);
@@ -501,35 +494,18 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
     [hostId, openNewWorkspaceForProject, openProject],
   );
 
-  const browse = useCallback(async () => {
-    if (!hostId || !isLocalDaemon || browseInFlightRef.current) return;
-    browseInFlightRef.current = true;
-    try {
-      const path = await pickDirectory();
-      if (path) await openAddedProject(path, "method");
-    } catch {
-      setState((current) =>
-        setPageStatus(current, "method", { error: "Unable to browse for a directory" }),
-      );
-    } finally {
-      browseInFlightRef.current = false;
-    }
-  }, [hostId, isLocalDaemon, openAddedProject]);
-
   const selectMethod = useCallback(
     (method: AddProjectMethodId) => {
       if (!hostId) return;
       if (method === "directory-search") {
         setState((current) => openDirectorySearchPage(current, hostId));
-      } else if (method === "browse") {
-        void browse();
       } else if (method === "github") {
         setState((current) => openGithubSearchPage(current, hostId));
       } else {
         setState((current) => openNewDirectoryParentPage(current, hostId));
       }
     },
-    [browse, hostId],
+    [hostId],
   );
 
   const directoryPaths = useMemo(
@@ -805,15 +781,6 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
     onKeyDown: handleWebOverlayKeyDown,
   });
 
-  const handleNativeKeyPress = useCallback(
-    ({ nativeEvent: { key } }: { nativeEvent: { key: string } }) => {
-      if (key === "ArrowDown" || key === "ArrowUp" || key === "Escape") {
-        handleKey(key);
-      }
-    },
-    [handleKey],
-  );
-
   const handleInputChange = useCallback((value: string) => {
     setState((current) =>
       currentAddProjectPage(current).kind === "new-directory-name"
@@ -867,30 +834,11 @@ export function AddProjectFlow({ request, onClose }: AddProjectFlowProps) {
                 ) : null}
               </View>
             </View>
-            {page.kind === "method" && isNative ? (
-              // Native hardware-keyboard events need a focused responder even without a visible field.
-              <TextInput
-                ref={inputRef}
-                onKeyPress={handleNativeKeyPress}
-                onSubmitEditing={submitActive}
-                showSoftInputOnFocus={false}
-                caretHidden
-                contextMenuHidden
-                accessible={false}
-                accessibilityElementsHidden
-                importantForAccessibility="no-hide-descendants"
-                pointerEvents="none"
-                style={styles.keyboardCapture}
-                testID="add-project-flow-keyboard-capture"
-              />
-            ) : null}
             {page.kind !== "method" ? (
               <ThemedTextInput
                 ref={inputRef}
                 initialValue={pageInput(page)}
                 onChangeText={handleInputChange}
-                onKeyPress={isWeb ? undefined : handleNativeKeyPress}
-                onSubmitEditing={isWeb ? undefined : submitActive}
                 placeholder={pagePlaceholder(page)}
                 style={styles.input}
                 autoCapitalize="none"

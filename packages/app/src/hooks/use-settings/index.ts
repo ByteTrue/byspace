@@ -3,11 +3,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { queryClient as appQueryClient } from "@/data/query-client";
 import type { AppLanguage } from "@/i18n/locales";
-import { isElectronRuntime } from "@/desktop/host";
-import {
-  loadDesktopSettings,
-  migrateLegacyDesktopSettings,
-} from "@/desktop/settings/desktop-settings";
 import {
   APP_SETTINGS_KEY,
   APP_SETTINGS_QUERY_KEY,
@@ -37,7 +32,6 @@ import {
   type AppSettingsUpdate,
   type OpenInSidePanePreferences,
   type PullRequestOpenLocation,
-  type DesktopSettingsBridge,
   type KeyValueStorage,
   type ReleaseChannel,
   type SendBehavior,
@@ -76,7 +70,6 @@ export type {
   AppLanguage,
   OpenInSidePanePreferences,
   PullRequestOpenLocation,
-  DesktopSettingsBridge,
   KeyValueStorage,
   ReleaseChannel,
   SendBehavior,
@@ -107,11 +100,6 @@ function pickDefinedAppSettings(updates: Partial<Settings>): Partial<AppSettings
 
 const productionDeps: SettingsDeps = {
   storage: AsyncStorage,
-  desktop: {
-    isElectron: isElectronRuntime,
-    loadDesktopSettings,
-    migrateLegacyDesktopSettings,
-  },
 };
 
 export interface UseAppSettingsReturn {

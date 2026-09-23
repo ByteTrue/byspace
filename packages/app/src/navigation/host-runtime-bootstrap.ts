@@ -1,10 +1,5 @@
 import type { AppState } from "react-native";
 import type { ActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
-import type {
-  DaemonStartCondition,
-  DaemonStartResult,
-  StartDaemonIfEnabledInput,
-} from "@/runtime/daemon-start-service";
 import type { Href } from "expo-router";
 import {
   buildHostRootRoute,
@@ -16,26 +11,12 @@ export interface HostRuntimeBootstrapStore {
   boot: () => Promise<void>;
 }
 
-export interface HostRuntimeBootstrapDaemonStartService {
-  startIfEnabled: (input: StartDaemonIfEnabledInput) => Promise<DaemonStartResult>;
-}
-
 export interface StartHostRuntimeBootstrapInput {
   store: HostRuntimeBootstrapStore;
-  daemonStartService: HostRuntimeBootstrapDaemonStartService;
-  shouldStartDaemon: DaemonStartCondition;
 }
 
 export function startHostRuntimeBootstrap(input: StartHostRuntimeBootstrapInput): void {
-  const registryReady = input.store.boot();
-  void input.daemonStartService.startIfEnabled({
-    shouldStart: async () => {
-      await registryReady;
-      return typeof input.shouldStartDaemon === "boolean"
-        ? input.shouldStartDaemon
-        : input.shouldStartDaemon();
-    },
-  });
+  void input.store.boot();
 }
 
 const WELCOME_ROUTE: Href = "/welcome";

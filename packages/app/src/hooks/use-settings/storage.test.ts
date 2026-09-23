@@ -16,7 +16,7 @@ import {
   saveAppSettings,
   type SettingsDeps,
 } from "./storage";
-import { createFakeDesktopBridge, createInMemoryKeyValueStorage } from "./fakes";
+import { createInMemoryKeyValueStorage } from "./fakes";
 import {
   DEFAULT_SIDEBAR_ROW_ITEMS,
   SIDEBAR_ROW_ITEMS,
@@ -28,15 +28,12 @@ const LEGACY_SETTINGS_KEY = "@byspace:settings";
 function makeDeps(
   overrides: {
     storage?: ReturnType<typeof createInMemoryKeyValueStorage>;
-    desktop?: ReturnType<typeof createFakeDesktopBridge>;
   } = {},
 ): SettingsDeps & {
   storage: ReturnType<typeof createInMemoryKeyValueStorage>;
-  desktop: ReturnType<typeof createFakeDesktopBridge>;
 } {
   return {
     storage: overrides.storage ?? createInMemoryKeyValueStorage(),
-    desktop: overrides.desktop ?? createFakeDesktopBridge(),
   };
 }
 
@@ -503,53 +500,6 @@ describe("loadSettingsFromStorage", () => {
     const result = await loadSettingsFromStorage(deps);
 
     expect(result.releaseChannel).toBe("stable");
-  });
-
-  it("never calls the desktop bridge: desktop settings are retired (issue 025 A3)", async () => {
-    const desktop = createFakeDesktopBridge({
-      isElectron: true,
-      settings: {
-        releaseChannel: "beta",
-        notifications: { playSound: true },
-        daemon: { manageBuiltInDaemon: false, keepRunningAfterQuit: true },
-      },
-    });
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({
-          theme: "light",
-        }),
-      }),
-      desktop,
-    });
-
-    const result = await loadSettingsFromStorage(deps);
-
-    expect(desktop.migrationsApplied).toEqual([]);
-    expect(result).toEqual({
-      ...DEFAULT_APP_SETTINGS,
-      theme: "light",
-      contentFontSize: DEFAULT_UI_BASE_FONT_SIZE,
-    });
-  });
-
-  it("does not call the desktop bridge outside Electron", async () => {
-    const desktop = createFakeDesktopBridge({ isElectron: false });
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({ theme: "light" }),
-      }),
-      desktop,
-    });
-
-    const result = await loadSettingsFromStorage(deps);
-
-    expect(desktop.migrationsApplied).toEqual([]);
-    expect(result).toEqual({
-      ...DEFAULT_APP_SETTINGS,
-      theme: "light",
-      contentFontSize: DEFAULT_UI_BASE_FONT_SIZE,
-    });
   });
 });
 

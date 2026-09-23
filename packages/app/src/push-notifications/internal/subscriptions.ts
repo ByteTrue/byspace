@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
-import { Platform } from "react-native";
+
 import { z } from "zod";
 import { readValidatedString } from "@/storage/validated-storage";
 import type { RevokePushNotificationsInput, StartPushNotificationsInput } from "./types";
@@ -34,13 +34,6 @@ async function resolveToken(serverId: string): Promise<string | null> {
   if (!(await ensurePushPermission())) {
     await AsyncStorage.removeItem(key);
     return null;
-  }
-
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync("default", {
-      name: "default",
-      importance: Notifications.AndroidImportance.DEFAULT,
-    });
   }
 
   const projectId = getExpoProjectId();

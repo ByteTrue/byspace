@@ -1,67 +1,51 @@
-import { useQuery } from "@tanstack/react-query";
-import { getDesktopDaemonStatus, shouldUseDesktopDaemon } from "@/desktop/daemon/desktop-daemon";
+import { useMemo } from "react";
+import {
+  normalizeHostPort,
+  normalizeLoopbackToLocalhost,
+} from "@bytetrue/protocol/daemon-endpoints";
+import { useHosts, useHostRegistryLoaded } from "@/runtime/host-runtime";
 
-const DESKTOP_DAEMON_SERVER_ID_QUERY_KEY = ["desktop-daemon-server-id"] as const;
-
-interface DesktopDaemonServerIdResult {
-  serverId: string | null;
+function normalizeEndpoint(endpoint: string): string {
+  return normalizeLoopbackToLocalhost(normalizeHostPort(endpoint));
 }
 
-async function loadDesktopDaemonServerId(): Promise<DesktopDaemonServerIdResult> {
-  const status = await getDesktopDaemonStatus();
-  const serverId = status.serverId.trim();
-  return {
-    serverId: serverId.length > 0 ? serverId : null,
-  };
+function browserOriginHost(): string | null {
+  if (typeof window === "undefined") return null;
+  const host = window.location?.host?.trim();
+  return host ? normalizeEndpoint(host) : null;
 }
 
-function useLocalDaemonServerIdQuery() {
-  const isDesktopApp = shouldUseDesktopDaemon();
-
-  return useQuery({
-    queryKey: DESKTOP_DAEMON_SERVER_ID_QUERY_KEY,
-    queryFn: loadDesktopDaemonServerId,
-    enabled: isDesktopApp,
-    staleTime: Infinity,
-    gcTime: Infinity,
-    refetchInterval: (activeQuery) => (activeQuery.state.data?.serverId ? false : 1000),
-    refetchOnMount: false,
-    refetchOnReconnect: false,
-    refetchOnWindowFocus: false,
-    retry: false,
-  });
-}
-
+/**
+ * The daemon that serves this web UI. The daemon injects its own listen
+ * address into the page (`__BYSPACE_INITIAL_DAEMON_CONNECTION__`) and the app
+ * bootstraps its registry from it, so "local" means the host whose direct-TCP
+ * endpoint is the browser's own origin — the LAN same-origin model from
+ * docs/architecture.md.
+ */
 export function useLocalDaemonServerId(): string | null {
-  const isDesktopApp = shouldUseDesktopDaemon();
-  const query = useLocalDaemonServerIdQuery();
-
-  if (!isDesktopApp) {
-    return null;
-  }
-
-  return query.data?.serverId ?? null;
+  const hosts = useHosts();
+  return useMemo(() => {
+    const origin = browserOriginHost();
+    if (!origin) return null;
+    const match = hosts.find((host) =>
+      host.connections.some(
+        (connection) =>
+          connection.type === "directTcp" && normalizeEndpoint(connection.endpoint) === origin,
+      ),
+    );
+    return match?.serverId ?? null;
+  }, [hosts]);
 }
 
 export type LocalDaemonServerIdState =
   | { status: "loading" }
-  | { status: "error" }
   | { status: "resolved"; serverId: string | null };
 
 export function useLocalDaemonServerIdState(): LocalDaemonServerIdState {
-  const isDesktopApp = shouldUseDesktopDaemon();
-  const query = useLocalDaemonServerIdQuery();
-
-  if (!isDesktopApp) {
-    return { status: "resolved", serverId: null };
-  }
-  if (query.isError) {
-    return { status: "error" };
-  }
-  if (query.isSuccess) {
-    return { status: "resolved", serverId: query.data.serverId };
-  }
-  return { status: "loading" };
+  const loaded = useHostRegistryLoaded();
+  const serverId = useLocalDaemonServerId();
+  if (!loaded) return { status: "loading" };
+  return { status: "resolved", serverId };
 }
 
 export function useIsLocalDaemon(serverId: string): boolean {

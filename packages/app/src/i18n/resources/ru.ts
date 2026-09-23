@@ -1251,9 +1251,7 @@ export const ru: TranslationResources = {
     errorDescription:
       "Не удалось запустить локальный сервер. Если ошибка повторится, сообщите о ней на GitHub и приложите приведённые ниже журналы.",
     logs: {
-      loading: "Загрузка журналов демона...",
-      unavailable: "Журналы демона отсутствуют.",
-      loadFailed: "Не удалось загрузить журналы демона: {{message}}",
+      hint: "Проверьте журнал демона: ~/.byspace/daemon.log",
     },
   },
   openProject: {

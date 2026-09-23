@@ -1,15 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { ScrollView, Text, View } from "react-native";
-import Animated, {
-  cancelAnimation,
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from "react-native-reanimated";
-import MaskedView from "@react-native-masked-view/masked-view";
-import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "react-native-svg";
 import * as Clipboard from "expo-clipboard";
 import { useTranslation } from "react-i18next";
 import { openExternalUrl } from "@/utils/open-external-url";
@@ -21,8 +11,6 @@ import {
   BySpaceLogo,
 } from "@/components/icons/byspace-logo";
 import { Button } from "@/components/ui/button";
-import { getDesktopDaemonLogs, type DesktopDaemonLogs } from "@/desktop/daemon/desktop-daemon";
-import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { isWeb } from "@/constants/platform";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 
@@ -83,11 +71,7 @@ function ensureWebSplashShimmerKeyframes() {
 function LogoShimmer() {
   const { theme } = useUnistyles();
 
-  if (isWeb) {
-    return <WebLogoShimmer color={theme.colors.foreground} />;
-  }
-
-  return <NativeLogoShimmer color={theme.colors.foreground} />;
+  return <WebLogoShimmer color={theme.colors.foreground} />;
 }
 
 function WebLogoShimmer({ color }: { color: string }) {
@@ -114,70 +98,6 @@ function WebLogoShimmer({ color }: { color: string }) {
   );
 
   return <View style={shimmerStyle as never} />;
-}
-
-function NativeLogoShimmer({ color }: { color: string }) {
-  const shimmerTranslateX = useSharedValue(-SHIMMER_PEAK_WIDTH);
-
-  useEffect(() => {
-    shimmerTranslateX.value = -SHIMMER_PEAK_WIDTH;
-    shimmerTranslateX.value = withRepeat(
-      withTiming(LOGO_SIZE + SHIMMER_PEAK_WIDTH, {
-        duration: SHIMMER_DURATION_MS,
-        easing: Easing.linear,
-      }),
-      -1,
-      false,
-    );
-    return () => {
-      cancelAnimation(shimmerTranslateX);
-    };
-  }, [shimmerTranslateX]);
-
-  const peakStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: shimmerTranslateX.value }],
-  }));
-
-  const trackStyle = useMemo(
-    () => [styles.nativeShimmerTrack, { width: LOGO_SIZE, height: LOGO_SIZE }],
-    [],
-  );
-
-  const peakCombinedStyle = useMemo(
-    () => [styles.nativeShimmerPeak, peakStyle, { width: SHIMMER_PEAK_WIDTH, height: LOGO_SIZE }],
-    [peakStyle],
-  );
-
-  const maskElement = useMemo(
-    () => (
-      <View style={styles.shimmerMask}>
-        <BySpaceLogo size={LOGO_SIZE} color="#000000" />
-      </View>
-    ),
-    [],
-  );
-
-  return (
-    <MaskedView style={trackStyle} maskElement={maskElement}>
-      <View style={trackStyle}>
-        <View style={styles.nativeShimmerBase}>
-          <BySpaceLogo size={LOGO_SIZE} color={color} />
-        </View>
-        <Animated.View style={peakCombinedStyle}>
-          <Svg width="100%" height="100%" preserveAspectRatio="none">
-            <Defs>
-              <SvgLinearGradient id="splashShimmer" x1="0" y1="0" x2="1" y2="0">
-                <Stop offset="0" stopColor="#FFFFFF" stopOpacity="0" />
-                <Stop offset="0.5" stopColor="#FFFFFF" stopOpacity="0.4" />
-                <Stop offset="1" stopColor="#FFFFFF" stopOpacity="0" />
-              </SvgLinearGradient>
-            </Defs>
-            <Rect x="0" y="0" width="100%" height="100%" fill="url(#splashShimmer)" />
-          </Svg>
-        </Animated.View>
-      </View>
-    </MaskedView>
-  );
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -240,34 +160,10 @@ const styles = StyleSheet.create((theme) => ({
     fontFamily: theme.fontFamily.mono,
   },
   logsMeta: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.base,
-  },
-  logsContainer: {
-    height: 200,
-    borderRadius: theme.borderRadius.xl,
-    backgroundColor: theme.colors.surface1,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    overflow: "hidden",
-  },
-  logsScroll: {
-    flexGrow: 0,
-  },
-  logsContent: {
-    padding: theme.spacing[4],
-  },
-  logsText: {
     fontFamily: theme.fontFamily.mono,
     fontSize: theme.fontSize.code,
-    color: theme.colors.foreground,
+    color: theme.colors.foregroundMuted,
     lineHeight: 18,
-    ...(isWeb
-      ? {
-          whiteSpace: "pre",
-          overflowWrap: "normal",
-        }
-      : null),
   },
   actionRow: {
     flexDirection: "row",
@@ -300,70 +196,11 @@ const styles = StyleSheet.create((theme) => ({
 export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
-  const [daemonLogs, setDaemonLogs] = useState<DesktopDaemonLogs | null>(null);
-  const [logsError, setLogsError] = useState<string | null>(null);
-  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
-
   const isError = bootstrapState !== undefined && bootstrapState.splashError !== null;
 
-  useEffect(() => {
-    if (!isError) {
-      setDaemonLogs(null);
-      setLogsError(null);
-      setIsLoadingLogs(false);
-      return;
-    }
-
-    let isCancelled = false;
-    setIsLoadingLogs(true);
-    setLogsError(null);
-
-    void getDesktopDaemonLogs()
-      .then((logs) => {
-        if (isCancelled) {
-          return;
-        }
-        setDaemonLogs(logs);
-        return;
-      })
-      .catch((error) => {
-        if (isCancelled) {
-          return;
-        }
-        const message = error instanceof Error ? error.message : String(error);
-        setDaemonLogs(null);
-        setLogsError(t("startup.logs.loadFailed", { message }));
-      })
-      .finally(() => {
-        if (!isCancelled) {
-          setIsLoadingLogs(false);
-        }
-      });
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [isError, t]);
-
-  const logsText = useMemo(() => {
-    if (isLoadingLogs) {
-      return t("startup.logs.loading");
-    }
-    if (daemonLogs?.contents) {
-      return daemonLogs.contents;
-    }
-    if (logsError) {
-      return logsError;
-    }
-    return t("startup.logs.unavailable");
-  }, [daemonLogs?.contents, isLoadingLogs, logsError, t]);
-
   const handleCopyLogs = useCallback(() => {
-    const payload = daemonLogs?.logPath
-      ? `${daemonLogs.logPath}\n\n${daemonLogs.contents}`
-      : logsText;
-    void Clipboard.setStringAsync(payload);
-  }, [daemonLogs?.logPath, daemonLogs?.contents, logsText]);
+    void Clipboard.setStringAsync(bootstrapState?.splashError ?? "");
+  }, [bootstrapState?.splashError]);
 
   const copyIcon = useMemo(
     () => <Copy size={16} color={theme.colors.foreground} />,
@@ -385,7 +222,6 @@ export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps
   if (!isError) {
     return (
       <View testID="startup-splash" style={styles.container}>
-        <TitlebarDragRegion />
         <LogoShimmer />
       </View>
     );
@@ -393,7 +229,6 @@ export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps
 
   return (
     <View style={styles.errorScreen}>
-      <TitlebarDragRegion />
       <ScrollView
         style={styles.errorScrollView}
         contentContainerStyle={styles.errorScrollContent}
@@ -411,19 +246,9 @@ export function StartupSplashScreen({ bootstrapState }: StartupSplashScreenProps
             {bootstrapState.splashError}
           </Text>
 
-          {daemonLogs?.logPath ? <Text style={styles.logsMeta}>{daemonLogs.logPath}</Text> : null}
-
-          <View style={styles.logsContainer}>
-            <ScrollView
-              style={styles.logsScroll}
-              contentContainerStyle={styles.logsContent}
-              showsVerticalScrollIndicator
-            >
-              <Text dataSet={CODE_SURFACE_DATASET} selectable style={styles.logsText}>
-                {logsText}
-              </Text>
-            </ScrollView>
-          </View>
+          <Text dataSet={CODE_SURFACE_DATASET} selectable style={styles.logsMeta}>
+            {t("startup.logs.hint")}
+          </Text>
 
           <View style={styles.actionRow}>
             <Button variant="secondary" leftIcon={copyIcon} onPress={handleCopyLogs}>

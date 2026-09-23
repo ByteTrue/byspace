@@ -90,7 +90,6 @@ import {
   useHostRuntimeIsConnected,
   useHosts,
 } from "@/runtime/host-runtime";
-import { getDaemonStartService } from "@/runtime/daemon-start-service";
 import { usePanelStore } from "@/stores/panel-store";
 import { flushDraftPersistStorage } from "@/stores/draft-store";
 import { getNextThemePreference } from "@/styles/theme";
@@ -293,13 +292,6 @@ export function useEarliestOnlineHostServerId(): string | null {
 
 const STARTUP_GIVE_UP_TIMEOUT_MS = 5_000;
 
-// Electron retired (issue 025): the app no longer manages a built-in daemon, so
-// the web bootstrap never requests a start. The DaemonStartService wiring is
-// kept for the singleton contract used by startup navigation.
-async function shouldStartBuiltInDaemon(): Promise<boolean> {
-  return false;
-}
-
 function HostRuntimeBootstrapProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const store = getHostRuntimeStore();
@@ -307,13 +299,7 @@ function HostRuntimeBootstrapProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const store = getHostRuntimeStore();
-    const daemonStartService = getDaemonStartService({ store });
-    startHostRuntimeBootstrap({
-      store,
-      daemonStartService,
-      shouldStartDaemon: shouldStartBuiltInDaemon,
-    });
+    startHostRuntimeBootstrap({ store: getHostRuntimeStore() });
   }, []);
 
   const anyOnlineHostServerId = useEarliestOnlineHostServerId();
@@ -336,8 +322,9 @@ function HostRuntimeBootstrapProvider({ children }: { children: ReactNode }) {
   }, [shouldRunGiveUpTimer]);
 
   const retry = useCallback(() => {
-    const daemonStartService = getDaemonStartService({ store: getHostRuntimeStore() });
-    void daemonStartService.startIfEnabled({ shouldStart: shouldStartBuiltInDaemon });
+    // boot() caches its promise; the retry only resets the give-up gate so the
+    // startup route logic re-evaluates once hosts change.
+    setHasGivenUpWaitingForHost(false);
   }, []);
 
   const splashError = null;

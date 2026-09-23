@@ -1,5 +1,5 @@
 import { createElement, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Platform } from "react-native";
+
 import type { ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -14,11 +14,7 @@ import {
   type SharedValue,
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
-import {
-  DEFAULT_IOS_KEYBOARD_INSET_MIN_HEIGHT,
-  resolveKeyboardShift,
-  shouldReconcileHiddenKeyboardEnd,
-} from "@/hooks/keyboard-shift-policy";
+import { resolveKeyboardShift } from "@/hooks/keyboard-shift-policy";
 import {
   KeyboardShiftContext,
   SettledKeyboardShiftContext,
@@ -31,7 +27,6 @@ export function KeyboardShiftProvider({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
   const { height: keyboardHeight, progress: keyboardProgress } = useReanimatedKeyboardAnimation();
   const bottomInset = useSharedValue(insets.bottom);
-  const isIos = Platform.OS === "ios";
   const isMoving = useSharedValue(false);
   const [settledShift, setSettledShift] = useState(0);
   const publishSettledShift = useCallback((nextShift: number) => {
@@ -48,8 +43,6 @@ export function KeyboardShiftProvider({ children }: { children: ReactNode }) {
       rawKeyboardHeight: Math.abs(keyboardHeight.value),
       keyboardProgress: keyboardProgress.value,
       bottomInset: bottomInset.value,
-      isIos,
-      iosMinHeight: DEFAULT_IOS_KEYBOARD_INSET_MIN_HEIGHT,
     });
   });
 
@@ -59,16 +52,12 @@ export function KeyboardShiftProvider({ children }: { children: ReactNode }) {
         "worklet";
         isMoving.value = true;
       },
-      onEnd: (event) => {
+      onEnd: () => {
         "worklet";
-        if (isIos && shouldReconcileHiddenKeyboardEnd(event)) {
-          keyboardHeight.value = 0;
-          keyboardProgress.value = 0;
-        }
         isMoving.value = false;
       },
     },
-    [isIos, isMoving, keyboardHeight, keyboardProgress],
+    [isMoving, keyboardHeight, keyboardProgress],
   );
 
   useAnimatedReaction(

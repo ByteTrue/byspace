@@ -9,16 +9,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import {
-  Dimensions,
-  Modal,
-  Platform,
-  Pressable,
-  StatusBar,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from "react-native";
+import { Dimensions, Modal, Pressable, View, type StyleProp, type ViewStyle } from "react-native";
 import { Keyframe, runOnJS } from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
 import { FloatingScrollView, FloatingSurface } from "@/components/ui/floating";
@@ -162,16 +153,11 @@ export function useAnchoredPosition({
       return undefined;
     }
 
-    // Capture status bar height synchronously before async measurement, so it cannot change
-    // or read back null between the measure call and its resolution.
-    const statusBarHeight = Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
     let cancelled = false;
 
     void measureElement(anchorRef.current).then((rect) => {
       if (cancelled) return undefined;
-      // On Android with statusBarTranslucent, measureInWindow returns coordinates relative to
-      // below the status bar while Modal content starts at the screen top.
-      setTriggerRect({ ...rect, y: rect.y + statusBarHeight });
+      setTriggerRect(rect);
       return undefined;
     });
 
@@ -501,13 +487,7 @@ export function MenuOverlay({
   }
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      statusBarTranslucent={Platform.OS === "android"}
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       {overlay}
     </Modal>
   );

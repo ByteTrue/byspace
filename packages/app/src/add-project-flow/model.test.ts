@@ -26,7 +26,6 @@ const HOST: AddProjectHost = {
   serverId: "host-1",
   label: "Local",
   canAddProject: true,
-  canBrowse: true,
   canCloneGithubRepositories: true,
   canSearchGithubRepositories: true,
   canCreateDirectory: true,
@@ -118,11 +117,10 @@ describe("Add Project options", () => {
     expect(addProjectMethodEmptyText(outdatedHost)).toBe("Update the host to use Add Project.");
   });
 
-  it("keeps host-upgrade methods discoverable while hiding local-only Browse", () => {
+  it("keeps host-upgrade methods discoverable with disabled descriptions", () => {
     expect(
       buildAddProjectMethods({
         ...HOST,
-        canBrowse: false,
         canCloneGithubRepositories: false,
         canSearchGithubRepositories: false,
         canCreateDirectory: false,

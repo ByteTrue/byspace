@@ -1261,9 +1261,7 @@ export const ptBR: TranslationResources = {
     errorDescription:
       "O servidor local falhou ao iniciar. Se isso continuar acontecendo, reporte o problema no GitHub e inclua os logs abaixo.",
     logs: {
-      loading: "Carregando logs do daemon...",
-      unavailable: "Nenhum log do daemon disponível.",
-      loadFailed: "Não foi possível carregar logs do daemon: {{message}}",
+      hint: "Verifique o log do daemon em ~/.byspace/daemon.log",
     },
   },
   openProject: {

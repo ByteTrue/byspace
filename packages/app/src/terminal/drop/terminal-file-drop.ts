@@ -1,25 +1,8 @@
-import type { DesktopHostBridge } from "@/desktop/host";
-
 const DANGEROUS_NON_WINDOWS_PATH_CHARS = /[`$|&>~#!^*;<]/g;
 
 function getLegacyFilePath(file: File): string | null {
   const path = Reflect.get(file, "path");
   return typeof path === "string" && path.length > 0 ? path : null;
-}
-
-function getFilePath(file: File, bridge: DesktopHostBridge | null): string | null {
-  const getPathForFile = bridge?.webUtils?.getPathForFile;
-  if (typeof getPathForFile === "function") {
-    try {
-      const path = getPathForFile(file);
-      if (typeof path === "string" && path.length > 0) {
-        return path;
-      }
-    } catch {
-      // Fall through to the legacy Electron File.path property if present.
-    }
-  }
-  return getLegacyFilePath(file);
 }
 
 export function isTerminalFileDrag(dataTransfer: DataTransfer | null): boolean {
@@ -48,17 +31,14 @@ export function isTerminalDragLeaveOutside(input: {
   return !currentTarget.contains(input.relatedTarget);
 }
 
-export function extractTerminalDropPaths(
-  dataTransfer: DataTransfer | null,
-  bridge: DesktopHostBridge | null,
-): string[] {
+export function extractTerminalDropPaths(dataTransfer: DataTransfer | null): string[] {
   if (!dataTransfer) {
     return [];
   }
 
   const paths: string[] = [];
   for (const file of Array.from(dataTransfer.files)) {
-    const path = getFilePath(file, bridge);
+    const path = getLegacyFilePath(file);
     if (path) {
       paths.push(path);
     }
@@ -83,26 +63,10 @@ function escapeNonWindowsPath(path: string): string {
   return `'${nextPath}'`;
 }
 
-function escapeWindowsPath(path: string): string {
-  if (!path.includes(" ")) {
-    return path;
-  }
-  return `"${path}"`;
-}
-
-export function prepareDroppedPathForTerminal(
-  path: string,
-  bridge: DesktopHostBridge | null,
-): string {
-  if (bridge?.platform === "win32") {
-    return escapeWindowsPath(path);
-  }
+export function prepareDroppedPathForTerminal(path: string): string {
   return escapeNonWindowsPath(path);
 }
 
-export function prepareDroppedPathsForTerminal(
-  paths: readonly string[],
-  bridge: DesktopHostBridge | null,
-): string {
-  return paths.map((path) => prepareDroppedPathForTerminal(path, bridge)).join(" ");
+export function prepareDroppedPathsForTerminal(paths: readonly string[]): string {
+  return paths.map((path) => prepareDroppedPathForTerminal(path)).join(" ");
 }

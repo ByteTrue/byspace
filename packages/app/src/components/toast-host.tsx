@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Animated, Easing, Platform, Text, ToastAndroid, View } from "react-native";
+import { Animated, Easing, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -63,15 +63,6 @@ export function useToastHost(): {
 
     const variant = options?.variant ?? "default";
     const durationMs = options?.durationMs === undefined ? DEFAULT_DURATION_MS : options.durationMs;
-    const nativeAndroid = options?.nativeAndroid ?? false;
-
-    if (Platform.OS === "android" && nativeAndroid && nativeMessage) {
-      const duration =
-        durationMs !== null && durationMs <= 2500 ? ToastAndroid.SHORT : ToastAndroid.LONG;
-      ToastAndroid.showWithGravity(nativeMessage, duration, ToastAndroid.TOP);
-      return;
-    }
-
     idRef.current += 1;
     setToast({
       id: idRef.current,

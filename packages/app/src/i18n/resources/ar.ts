@@ -1235,9 +1235,7 @@ export const ar: TranslationResources = {
     errorDescription:
       "فشل الخادم المحلي في البدء. إذا استمر حدوث ذلك، فيرجى الإبلاغ عن المشكلة على GitHub وتضمين السجلات أدناه.",
     logs: {
-      loading: "جارٍ تحميل سجلات البرنامج الخفي...",
-      unavailable: "لا توجد سجلات خفية متاحة.",
-      loadFailed: "غير قادر على تحميل سجلات البرنامج الخفي:{{message}}",
+      hint: "تحقق من سجل daemon في ~/.byspace/daemon.log",
     },
   },
   openProject: {

@@ -300,24 +300,8 @@ export interface KeyValueStorage {
   removeItem(key: string): Promise<void>;
 }
 
-/** Legacy desktop-settings bridge shape (Electron retired, issue 025 A3). */
-export interface DesktopSettings {
-  daemon?: { manageBuiltInDaemon?: boolean };
-  releaseChannel?: ReleaseChannel;
-}
-
-export interface DesktopSettingsBridge {
-  isElectron(): boolean;
-  loadDesktopSettings(): Promise<DesktopSettings>;
-  migrateLegacyDesktopSettings(input: {
-    manageBuiltInDaemon?: boolean;
-    releaseChannel?: ReleaseChannel;
-  }): Promise<void>;
-}
-
 export interface SettingsDeps {
   storage: KeyValueStorage;
-  desktop: DesktopSettingsBridge;
 }
 
 export async function saveAppSettings(input: {

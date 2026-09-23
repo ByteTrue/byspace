@@ -17,9 +17,8 @@ import {
   HEADER_INNER_HEIGHT_MOBILE,
   HEADER_TOP_PADDING_MOBILE,
 } from "@/constants/layout";
-import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
-import { PairDeviceModal } from "@/desktop/components/pair-device-modal";
+import { PairDeviceModal } from "@/settings/pair-device-modal";
 import { buildSettingsHostSectionRoute } from "@/utils/host-routes";
 
 export function OpenProjectScreen() {
@@ -60,7 +59,6 @@ export function OpenProjectScreen() {
     <View style={styles.container}>
       <MenuHeader borderless />
       <View style={styles.content}>
-        <TitlebarDragRegion />
         <View style={styles.logo}>
           <BySpaceLogo size={52} />
         </View>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { Platform, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
@@ -167,7 +167,7 @@ function stateHint(state: WebPushState, t: TFunction): string {
 }
 
 function isIosBrowser(): boolean {
-  if (Platform.OS !== "web" || typeof navigator === "undefined") {
+  if (typeof navigator === "undefined") {
     return false;
   }
   // iPadOS reports itself as Macintosh, so touch support separates it from a Mac.

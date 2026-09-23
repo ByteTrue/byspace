@@ -1270,9 +1270,7 @@ export const es: TranslationResources = {
     errorDescription:
       "El servidor local no pudo iniciarse. Si esto continúa sucediendo, informe el problema enGitHube incluya los registros a continuación.",
     logs: {
-      loading: "Cargando registros de demonio...",
-      unavailable: "No hay registros de demonios disponibles.",
-      loadFailed: "No se pueden cargar registros de demonio:{{message}}",
+      hint: "Consulta el registro del daemon en ~/.byspace/daemon.log",
     },
   },
   openProject: {

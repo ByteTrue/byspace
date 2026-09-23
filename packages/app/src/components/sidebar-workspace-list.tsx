@@ -38,7 +38,6 @@ import { WorkspaceRenameModal } from "@/components/workspace-rename-modal";
 import { useWorkspaceClipboardActions } from "@/hooks/use-workspace-clipboard-actions";
 import * as Clipboard from "expo-clipboard";
 import { ExternalLink, Settings, MoreVertical, Plus, Trash2 } from "lucide-react-native";
-import { NestableScrollContainer } from "react-native-draggable-flatlist";
 import { DraggableList, type DraggableRenderItemInfo } from "./draggable-list";
 import type { DraggableListDragHandleProps } from "./draggable-list.types";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
@@ -139,7 +138,7 @@ import {
   removeProjectFromHosts,
 } from "@/projects/project-remove";
 import { ProjectRemoveModal } from "@/projects/project-remove-modal";
-import { isWeb as platformIsWeb, isNative as platformIsNative } from "@/constants/platform";
+import { isWeb as platformIsWeb } from "@/constants/platform";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { useHostBadges } from "@/hosts/use-host-badges";
 import { useSidebarRowItems } from "@/components/sidebar/display-preferences/model";
@@ -416,7 +415,7 @@ function ProjectRowTrailingActions({
   onRemoveProject?: () => void;
   removeProjectStatus: "idle" | "pending" | "success";
 }) {
-  const actionsVisible = isHovered || platformIsNative || isMobileBreakpoint;
+  const actionsVisible = isHovered || isMobileBreakpoint;
   return (
     <View style={styles.projectTrailingActions}>
       {worktreeTarget ? (
@@ -944,7 +943,7 @@ function WorkspaceRowInner({
 }: WorkspaceRowInnerProps) {
   const isCompact = useIsCompactFormFactor();
   const [isPressed, setIsPressed] = useState(false);
-  const isTouchPlatform = platformIsNative || isCompact;
+  const isTouchPlatform = isCompact;
   const interaction = useLongPressDragInteraction({
     drag,
     menuController,
@@ -1442,7 +1441,6 @@ function ProjectBlock({
   drag,
   isDragging,
   dragHandleProps,
-  useNestable,
   dragGestureHostActive,
   creatingWorkspaceIds,
   activeWorkspaceSelection,
@@ -1466,7 +1464,6 @@ function ProjectBlock({
   drag: () => void;
   isDragging: boolean;
   dragHandleProps?: DraggableListDragHandleProps;
-  useNestable: boolean;
   dragGestureHostActive?: boolean;
   creatingWorkspaceIds: ReadonlySet<string>;
   activeWorkspaceSelection: ActiveWorkspaceSelection | null;
@@ -1646,7 +1643,6 @@ function ProjectBlock({
           extraData={activeWorkspaceSelectionKey(activeWorkspaceSelection)}
           scrollEnabled={false}
           useDragHandle
-          nestable={useNestable}
           simultaneousGestureRef={parentGestureRef}
           gestureHostPresented={dragGestureHostActive}
           containerStyle={styles.workspaceListContainer}
@@ -1726,7 +1722,6 @@ function areProjectBlockPropsEqual(previous: ProjectBlockProps, next: ProjectBlo
     previous.drag === next.drag &&
     previous.isDragging === next.isDragging &&
     previous.dragHandleProps === next.dragHandleProps &&
-    previous.useNestable === next.useNestable &&
     previous.dragGestureHostActive === next.dragGestureHostActive &&
     previous.creatingWorkspaceIds === next.creatingWorkspaceIds &&
     areProjectBlockSelectionsEqual(previous, next)
@@ -2029,20 +2024,6 @@ function ProjectModeList({
     canToggle: canTogglePinnedChats,
     toggleExpanded: togglePinnedChatsExpanded,
   } = useLimitedSidebarGroup(pinnedChats);
-  const nativeScrollGestureProps = useMemo(
-    () =>
-      parentGestureRef
-        ? ({
-            // NestableScrollContainer forwards props to RNGH ScrollView. Keep
-            // vertical scroll and sidebar close pan simultaneous: vertical
-            // intent scrolls immediately, clear horizontal intent can still
-            // activate close from inside the list.
-            simultaneousHandlers: parentGestureRef,
-          } as object)
-        : undefined,
-    [parentGestureRef],
-  );
-
   useEffect(() => {
     const timeouts = creatingWorkspaceTimeoutsRef.current;
     return () => {
@@ -2188,7 +2169,6 @@ function ProjectModeList({
           drag={dragState.drag}
           isDragging={dragState.isDragging}
           dragHandleProps={dragState.dragHandleProps}
-          useNestable={platformIsNative}
           dragGestureHostActive={dragGestureHostActive}
           creatingWorkspaceIds={creatingWorkspaceIds}
           activeWorkspaceSelection={activeWorkspaceSelection}
@@ -2290,7 +2270,6 @@ function ProjectModeList({
         extraData={activeWorkspaceSelectionKey(activeWorkspaceSelection)}
         scrollEnabled={false}
         useDragHandle
-        nestable={platformIsNative}
         simultaneousGestureRef={parentGestureRef}
         gestureHostPresented={dragGestureHostActive}
         containerStyle={styles.projectListContainer}
@@ -2313,7 +2292,6 @@ function ProjectModeList({
                 extraData={activeWorkspaceSelectionKey(activeWorkspaceSelection)}
                 scrollEnabled={false}
                 useDragHandle
-                nestable={platformIsNative}
                 simultaneousGestureRef={parentGestureRef}
                 gestureHostPresented={dragGestureHostActive}
                 containerStyle={styles.workspaceListContainer}
@@ -2348,26 +2326,14 @@ function ProjectModeList({
 
   return (
     <View style={styles.container}>
-      {platformIsNative ? (
-        <NestableScrollContainer
-          {...nativeScrollGestureProps}
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          testID="sidebar-project-workspace-list-scroll"
-        >
-          {content}
-        </NestableScrollContainer>
-      ) : (
-        <ScrollView
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          testID="sidebar-project-workspace-list-scroll"
-        >
-          {content}
-        </ScrollView>
-      )}
+      <ScrollView
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        testID="sidebar-project-workspace-list-scroll"
+      >
+        {content}
+      </ScrollView>
     </View>
   );
 }

@@ -1,6 +1,6 @@
 import * as Clipboard from "expo-clipboard";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Platform, Pressable, Text, View, type PressableStateCallbackType } from "react-native";
+import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { Copy, RotateCw } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -93,7 +93,7 @@ export function AppDiagnosticSheet({
       sections.push(
         formatAppDiagnosticHeader({
           appVersion,
-          platform: Platform.OS,
+          platform: "web",
           isDesktopApp,
           hostCount: hosts.length,
         }),

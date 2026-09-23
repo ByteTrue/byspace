@@ -30,25 +30,9 @@ const originalGlobals: GlobalSnapshot = {
   location: (globalThis as { location?: unknown }).location,
 };
 
-async function loadModuleForPlatform(
-  platform: "web" | "ios" | "android",
-  options?: {
-    desktopHost?: {
-      notification?: {
-        sendNotification?: (payload: {
-          title: string;
-          body?: string;
-          data?: Record<string, unknown>;
-        }) => Promise<boolean>;
-      };
-    } | null;
-  },
-) {
+async function loadModuleForPlatform(platform: "web" | "ios" | "android") {
   vi.resetModules();
   vi.doMock("react-native", () => ({ Platform: { OS: platform } }));
-  vi.doMock("@/desktop/host", () => ({
-    getDesktopHost: () => options?.desktopHost ?? null,
-  }));
   vi.doMock("expo-asset", () => ({
     Asset: {
       fromModule: vi.fn(() => ({
@@ -261,26 +245,5 @@ describe("sendOsNotification", () => {
     expect(sent).toBe(true);
     expect(created).toHaveLength(1);
     expect(created[0]?.clickListeners).toHaveLength(0);
-  });
-
-  it("ignores the retired desktop notification bridge (issue 025 A3)", async () => {
-    const sendNotification = vi.fn(async () => true);
-
-    const { sendOsNotification } = await loadModuleForPlatform("web", {
-      desktopHost: {
-        notification: {
-          sendNotification,
-        },
-      },
-    });
-
-    // The desktop bridge is never consulted; only web Notification is used.
-    await sendOsNotification({
-      title: "BySpace notification test",
-      body: "If you can see this, web notifications work.",
-      data: { serverId: "srv-1" },
-    });
-
-    expect(sendNotification).not.toHaveBeenCalled();
   });
 });

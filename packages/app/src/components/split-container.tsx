@@ -53,7 +53,6 @@ import {
   useWindowChromeCorners,
   type WindowChromeCorners,
 } from "@/utils/desktop-window";
-import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import {
   computeTabDropPreview,
   type TabDropPreview,
@@ -1254,7 +1253,6 @@ function SplitPaneView({
         testID={`workspace-pane-${pane.id}`}
       >
         <WindowChromeSafeArea placement="inline" style={styles.paneTabs}>
-          <TitlebarDragRegion />
           <WorkspaceDesktopTabsRow
             paneId={pane.id}
             isFocused={isFocused && isWorkspaceFocused}
