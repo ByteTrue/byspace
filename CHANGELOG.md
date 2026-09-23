@@ -5,6 +5,14 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.16.1 - 2026-09-23
+
+### Fixed
+
+- `byspace <path>` opens that project's workspace in the browser instead of failing on the removed desktop app
+- `byspace agent open <agent-id>` opens the agent in the browser instead of failing on the removed desktop app
+- Removed the desktop app download link from the `byspace onboard` next steps
+
 ## 0.16.0 - 2026-09-22
 
 ### Changed
