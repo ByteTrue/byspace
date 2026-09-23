@@ -23,7 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { getDesktopDaemonLogs, type DesktopDaemonLogs } from "@/desktop/daemon/desktop-daemon";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
-import { isNative, isWeb } from "@/constants/platform";
+import { isWeb } from "@/constants/platform";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 
 interface StartupSplashScreenProps {
@@ -65,9 +65,6 @@ const WEB_SPLASH_SHIMMER_KEYFRAME_CSS = `
 let webSplashShimmerRegistered = false;
 
 function ensureWebSplashShimmerKeyframes() {
-  if (isNative) {
-    return;
-  }
   if (webSplashShimmerRegistered) {
     return;
   }

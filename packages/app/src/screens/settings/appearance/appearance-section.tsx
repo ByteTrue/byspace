@@ -39,7 +39,6 @@ import {
   THEME_SWATCHES,
   type Theme,
 } from "@/styles/theme";
-import { isNative } from "@/constants/platform";
 import { settingsStyles } from "@/styles/settings";
 import { AppearancePreview } from "./appearance-preview";
 import { SidebarNavSection } from "./sidebar-nav-section";
@@ -546,7 +545,6 @@ function SyntaxRow({ value, onChange }: SyntaxRowProps) {
 export function AppearanceSection() {
   const { t } = useTranslation();
   const { settings, updateSettings } = useAppSettings();
-  const showInterfaceFontFamilyRow = !isNative;
   const uiFontPlaceholder = resolveDefaultStackPlaceholder(t, DEFAULT_UI_FONT_STACK);
   const monoFontPlaceholder = resolveDefaultStackPlaceholder(t, DEFAULT_MONO_FONT_STACK);
 
@@ -720,36 +718,29 @@ export function AppearanceSection() {
             value={settings.toolCallDetailLevel}
             onChange={handleToolCallDetailLevelChange}
           />
-          {!isNative ? (
-            <ChatOutlineRow
-              value={settings.chatOutlineEnabled}
-              onChange={handleChatOutlineChange}
-            />
-          ) : null}
+          <ChatOutlineRow value={settings.chatOutlineEnabled} onChange={handleChatOutlineChange} />
         </SettingsCard>
       </SettingsSection>
       <SidebarNavSection />
       <SettingsSection title={t("settings.appearance.fonts.title")}>
         <View style={settingsStyles.card}>
-          {showInterfaceFontFamilyRow ? (
-            <FontFamilyRow
-              title={t("settings.appearance.fonts.interfaceFont")}
-              hint={t("settings.appearance.fonts.interfaceFontHint")}
-              accessibilityLabel={t("settings.appearance.fonts.interfaceFontAccessibility")}
-              placeholder={uiFontPlaceholder}
-              value={settings.uiFontFamily}
-              draft={uiFontDraft}
-              withBorder={false}
-              onChangeDraft={setUiFontDraft}
-              onCommit={commitUiFontFamily}
-            />
-          ) : null}
+          <FontFamilyRow
+            title={t("settings.appearance.fonts.interfaceFont")}
+            hint={t("settings.appearance.fonts.interfaceFontHint")}
+            accessibilityLabel={t("settings.appearance.fonts.interfaceFontAccessibility")}
+            placeholder={uiFontPlaceholder}
+            value={settings.uiFontFamily}
+            draft={uiFontDraft}
+            withBorder={false}
+            onChangeDraft={setUiFontDraft}
+            onCommit={commitUiFontFamily}
+          />
           <FontSizeRow
             title={t("settings.appearance.fonts.interfaceSize")}
             hint={t("settings.appearance.fonts.interfaceSizeHint")}
             accessibilityLabel={t("settings.appearance.fonts.interfaceSizeAccessibility")}
             draft={uiBaseSizeDraft}
-            withBorder={showInterfaceFontFamilyRow}
+            withBorder
             onChangeDraft={handleUiBaseSizeChange}
             onCommit={commitUiBaseSize}
           />

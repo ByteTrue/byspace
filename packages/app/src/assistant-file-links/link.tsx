@@ -1,10 +1,8 @@
 import { useMemo, type CSSProperties, type MouseEvent, type ReactNode } from "react";
-import { Platform, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
+import { Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { isNative, isWeb } from "@/constants/platform";
-import { MarkdownTextSpan } from "@/components/markdown-text";
+import { isWeb } from "@/constants/platform";
 import { MarkdownLinkText } from "@/components/markdown/link-text";
-import { AssistantLinkPressProvider, type AssistantLinkPress } from "./link-press-context";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { markdownCopyDataSet } from "@/assistant-selection-copy/markup";
@@ -37,46 +35,7 @@ export function AssistantMarkdownLink({
     () => (target ? formatInlinePathTargetForTooltip(target, workspaceRoot) : null),
     [target, workspaceRoot],
   );
-  const linkPress = useMemo<AssistantLinkPress>(
-    () => ({ onPress, accessibilityRole: "link" }),
-    [onPress],
-  );
   const unwrapForMarkdownCopy = source.sourceType === "inline-code" || source.markup === "linkify";
-
-  if (isNative) {
-    // Must be a MarkdownTextSpan, not a plain <Text>: on iOS the link renders
-    // inside the paragraph's native UITextView, and a plain <Text> nested there
-    // is not hoisted into a UITextViewChild, so its text is silently dropped
-    // (the link disappears). The span composes correctly and stays selectable.
-    //
-    // Tap-to-open: react-native-uitextview only wires onPress onto the *string*
-    // children it turns into RNUITextViewChild nodes — the element children that
-    // markdown emits for link text pass through untouched, so an onPress placed
-    // here never reaches a tappable native node. We thread it down through
-    // AssistantLinkPressProvider so each leaf text span re-attaches it to its
-    // own string children, where the native tap recognizer can find it. iOS
-    // only: Android forwards onPress through nested <Text> already, and web uses
-    // the <a> path below.
-    const span = (
-      <MarkdownTextSpan
-        accessibilityRole="link"
-        monoSurface={monoSurface}
-        onPress={onPress}
-        style={style}
-      >
-        {children}
-      </MarkdownTextSpan>
-    );
-    return (
-      <FileLinkHoverTooltip filePath={tooltipPath}>
-        {Platform.OS === "ios" ? (
-          <AssistantLinkPressProvider value={linkPress}>{span}</AssistantLinkPressProvider>
-        ) : (
-          span
-        )}
-      </FileLinkHoverTooltip>
-    );
-  }
 
   const anchor = (
     <a

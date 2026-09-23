@@ -20,7 +20,6 @@ import { Button } from "@/components/ui/button";
 import type { FieldControlSize } from "@/components/ui/control-geometry";
 import { Field, FormTextInput } from "@/components/ui/form-field";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { isNative } from "@/constants/platform";
 import { useHosts } from "@/runtime/host-runtime";
 import type { Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
@@ -254,7 +253,7 @@ function WorkspaceLabelManagerRow({
   const handlePointerEnter = useCallback(() => setIsHovered(true), []);
   const handlePointerLeave = useCallback(() => setIsHovered(false), []);
   const edit = useCallback(() => onEdit(label), [label, onEdit]);
-  const revealed = isHovered || isNative || isCompact;
+  const revealed = isHovered || isCompact;
   const editStyle = useCallback(
     ({ pressed }: PressableStateCallbackType) => [
       styles.rowEdit,

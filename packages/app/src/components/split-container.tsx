@@ -89,7 +89,6 @@ import {
 } from "@/stores/workspace-layout-store";
 import type { WorkspaceTab } from "@/workspace-tabs/model";
 import { RenderProfile } from "@/utils/render-profiler";
-import { isNative } from "@/constants/platform";
 import { panelTargetSupportsHost } from "@/plugins/workspace-panels/locations";
 
 interface SplitContainerProps {
@@ -1183,10 +1182,6 @@ function SplitPaneView({
   );
 
   useEffect(() => {
-    if (isNative) {
-      return () => {};
-    }
-
     const rawRef: unknown = paneRef.current;
     if (!(rawRef instanceof HTMLElement)) {
       return () => {};

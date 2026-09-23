@@ -185,7 +185,7 @@ import {
 } from "@/panels/panel-instance-attributes";
 import { findAdjacentPane } from "@/utils/split-navigation";
 import { supportsDesktopPaneSplits, useIsCompactFormFactor } from "@/constants/layout";
-import { isNative, isWeb } from "@/constants/platform";
+import { isWeb } from "@/constants/platform";
 import type { SurfaceBackdrop } from "@/styles/surface-backdrop";
 import { buildHostRootRoute, buildSettingsHostRoute } from "@/utils/host-routes";
 import { useWorkspaceTerminals } from "@/screens/workspace/terminals/use-workspace-terminals";
@@ -469,7 +469,7 @@ function WorkspaceDocumentTitleEffect({
 }) {
   const { t } = useTranslation();
   useEffect(() => {
-    if (isNative || typeof document === "undefined") {
+    if (typeof document === "undefined") {
       return;
     }
     const resolvedLabel = label.trim();
@@ -3410,7 +3410,7 @@ function WorkspaceScreenContent({
     [isMobile, canRenderDesktopPaneSplits],
   );
   useEffect(() => {
-    if (!isRouteFocused || isNative || typeof document === "undefined" || activeTabDescriptor) {
+    if (!isRouteFocused || typeof document === "undefined" || activeTabDescriptor) {
       return;
     }
     document.title = "Workspace";

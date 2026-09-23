@@ -35,7 +35,6 @@ import { useSessionStore } from "@/stores/session-store";
 import { useWorkspaceAttachmentsStore } from "@/attachments/workspace-attachments-store";
 import { useToast } from "@/contexts/toast-context";
 import { useCheckoutGitActionsStore } from "@/git/actions-store";
-import { isNative } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import {
   PaneContentToolbar,
@@ -668,7 +667,7 @@ function useRevealOnHover() {
   const [menuOpen, setMenuOpen] = useState(false);
   const handlePointerEnter = useCallback(() => setIsHovered(true), []);
   const handlePointerLeave = useCallback(() => setIsHovered(false), []);
-  const actionsVisible = isHovered || menuOpen || isNative || isCompact;
+  const actionsVisible = isHovered || menuOpen || isCompact;
   return { actionsVisible, handlePointerEnter, handlePointerLeave, setMenuOpen };
 }
 

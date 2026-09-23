@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { AppState } from "react-native";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
-import { isWeb, isNative } from "@/constants/platform";
+import { isWeb } from "@/constants/platform";
 import {
   type ClientActivityTracker,
   createClientActivityTracker,
@@ -55,7 +55,6 @@ export function useClientActivity({
 
   // Track user activity and visibility on web.
   useEffect(() => {
-    if (isNative) return;
     if (typeof document === "undefined") return;
 
     const handleUserActivity = () => {

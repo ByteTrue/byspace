@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { useAggregatedAgents } from "./use-aggregated-agents";
 import { useWorkspaceStatusesForBadges } from "@/stores/session-store-hooks";
 import { deriveMacDockBadgeCountFromWorkspaceStatuses } from "@/utils/desktop-badge-state";
-import { isNative } from "@/constants/platform";
 
 type FaviconStatus = "none" | "running" | "attention";
 type ColorScheme = "dark" | "light";
@@ -70,21 +69,21 @@ function updateFavicon(status: FaviconStatus, colorScheme: ColorScheme) {
 }
 
 function getSystemColorScheme(): ColorScheme {
-  if (isNative || typeof window === "undefined" || typeof window.matchMedia !== "function") {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
     return "dark";
   }
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 export function useFaviconStatus() {
-  const { agents } = useAggregatedAgents({ demand: !isNative });
+  const { agents } = useAggregatedAgents({ demand: true });
   const workspaceStatuses = useWorkspaceStatusesForBadges();
   const [colorScheme, setColorScheme] = useState<ColorScheme>(getSystemColorScheme);
   const lastDockBadgeCountRef = useRef<number | undefined>(undefined);
 
   // Listen for system color scheme changes
   useEffect(() => {
-    if (isNative || typeof window === "undefined") return;
+    if (typeof window === "undefined") return;
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = (e: MediaQueryListEvent) => {
@@ -97,8 +96,6 @@ export function useFaviconStatus() {
 
   // Update favicon when agents or color scheme changes
   useEffect(() => {
-    if (isNative) return;
-
     const status = deriveFaviconStatus(agents);
     updateFavicon(status, colorScheme);
 

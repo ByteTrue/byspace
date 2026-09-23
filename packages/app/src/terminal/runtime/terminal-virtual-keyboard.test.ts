@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   getTerminalVirtualKeyboardControlId,
   shouldShowTerminalFloatingCopyAction,
-  shouldShowTerminalPasteAction,
   TERMINAL_VIRTUAL_KEYBOARD_ROWS,
   type TerminalVirtualKeyboardControl,
 } from "./terminal-virtual-keyboard";
@@ -80,39 +79,24 @@ describe("terminal virtual keyboard policy", () => {
     expect(controlIds()).not.toContain("terminal-copy");
   });
 
-  it("shows Copy only as a native selection affordance", () => {
+  it("shows Copy only for a compact-layout selection", () => {
     expect(
       shouldShowTerminalFloatingCopyAction({
         hasSelection: false,
         isCompact: true,
-        isNative: true,
       }),
     ).toBe(false);
     expect(
       shouldShowTerminalFloatingCopyAction({
         hasSelection: true,
         isCompact: false,
-        isNative: false,
       }),
     ).toBe(false);
     expect(
       shouldShowTerminalFloatingCopyAction({
         hasSelection: true,
         isCompact: true,
-        isNative: false,
       }),
     ).toBe(true);
-    expect(
-      shouldShowTerminalFloatingCopyAction({
-        hasSelection: true,
-        isCompact: false,
-        isNative: true,
-      }),
-    ).toBe(true);
-  });
-
-  it("keeps Paste native-gated", () => {
-    expect(shouldShowTerminalPasteAction({ isNative: true })).toBe(true);
-    expect(shouldShowTerminalPasteAction({ isNative: false })).toBe(false);
   });
 });

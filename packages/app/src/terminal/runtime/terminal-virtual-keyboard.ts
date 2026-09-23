@@ -56,14 +56,9 @@ export function getTerminalVirtualKeyboardControlId(
   }
 }
 
-export function shouldShowTerminalPasteAction(input: { isNative: boolean }): boolean {
-  return input.isNative;
-}
-
 export function shouldShowTerminalFloatingCopyAction(input: {
   hasSelection: boolean;
   isCompact: boolean;
-  isNative: boolean;
 }): boolean {
-  return input.hasSelection && (input.isCompact || input.isNative);
+  return input.hasSelection && input.isCompact;
 }

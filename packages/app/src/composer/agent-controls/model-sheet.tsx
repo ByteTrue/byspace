@@ -15,7 +15,7 @@ import { ComposerToolbarGlyph } from "@/composer/agent-controls/glyph";
 import { resolveModelSheetOpening } from "@/composer/agent-controls/model-sheet-flow";
 import type { ProviderSelectorProvider } from "@/provider-selection/provider-selection";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { isNative, isWeb } from "@/constants/platform";
+import { isWeb } from "@/constants/platform";
 
 const SNAP_POINTS = ["80%", "90%"];
 const MODEL_LIST_TOP_INSET = 4;
@@ -100,10 +100,7 @@ export function CompactModelSheet({
 }: CompactModelSheetProps) {
   const { t } = useTranslation();
   const usesBottomSheet = useIsCompactFormFactor();
-  const modelBrowserScrolling = resolveModelBrowserScrolling({
-    isNative,
-    isCompact: usesBottomSheet,
-  });
+  const modelBrowserScrolling = resolveModelBrowserScrolling({ isCompact: usesBottomSheet });
   const [isOpen, setIsOpen] = useState(false);
   const [isModelBrowserOpen, setIsModelBrowserOpen] = useState(false);
   const availableProviders = useMemo(() => {

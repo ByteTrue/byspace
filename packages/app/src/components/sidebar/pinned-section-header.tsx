@@ -4,7 +4,6 @@ import { ChevronDown, ChevronRight } from "lucide-react-native";
 import { Pressable, Text } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { isNative } from "@/constants/platform";
 import type { Theme } from "@/styles/theme";
 
 const ThemedChevronDown = withUnistyles(ChevronDown);
@@ -36,7 +35,7 @@ export function PinnedSectionHeader({
       {({ hovered }) => (
         <>
           <Text style={styles.title}>{t("sidebar.pinned.title")}</Text>
-          {hovered || isNative || isCompact ? (
+          {hovered || isCompact ? (
             <Chevron size={12} uniProps={foregroundMutedColorMapping} />
           ) : null}
         </>

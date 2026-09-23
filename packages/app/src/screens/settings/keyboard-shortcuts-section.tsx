@@ -31,7 +31,6 @@ import {
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { getShortcutOs } from "@/utils/shortcut-platform";
-import { isNative } from "@/constants/platform";
 
 const EMPTY_CAPTURED_COMBOS: string[] = [];
 
@@ -366,7 +365,6 @@ export function KeyboardShortcutsSection() {
   }, [isFocused, capturingBindingId, cancelCapture]);
 
   useEffect(() => {
-    if (isNative) return;
     if (capturingBindingId === null) return;
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -412,16 +410,6 @@ export function KeyboardShortcutsSection() {
     (bindingId: string) => void removeOverride(bindingId),
     [removeOverride],
   );
-
-  if (isNative) {
-    return (
-      <SettingsSection title={t("settings.sections.shortcuts")}>
-        <View style={[settingsStyles.card, styles.mobileCard]}>
-          <Text style={styles.mobileText}>{t("settings.shortcuts.unavailableOnMobile")}</Text>
-        </View>
-      </SettingsSection>
-    );
-  }
 
   const resetAllButton = hasOverrides ? (
     <Button variant="ghost" size="sm" onPress={handleResetAll}>

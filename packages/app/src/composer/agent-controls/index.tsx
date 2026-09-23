@@ -69,7 +69,6 @@ import {
   type AgentControlCommandCenterSource,
 } from "@/command-center/agent-control-registration";
 import { useComposerKeyboardScope } from "@/composer/keyboard-scope";
-import { isNative } from "@/constants/platform";
 import {
   resolveComposerControlDensity,
   resolveComposerControlPresentation,
@@ -572,7 +571,7 @@ function ControlledAgentControls({
   const presentation = useMemo(() => resolveComposerControlPresentation(density), [density]);
   const layoutContextValue = useMemo(
     () => ({
-      glyphSize: resolveComposerToolbarGlyphSize(isNative ? "native" : "web"),
+      glyphSize: resolveComposerToolbarGlyphSize("web"),
       presentation,
     }),
     [presentation],

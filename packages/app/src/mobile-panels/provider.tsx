@@ -10,7 +10,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { Keyboard, useWindowDimensions } from "react-native";
+import { useWindowDimensions } from "react-native";
 import type { GestureType } from "react-native-gesture-handler";
 import {
   cancelAnimation,
@@ -21,7 +21,6 @@ import {
   type SharedValue,
 } from "react-native-reanimated";
 import { scheduleOnRN, scheduleOnUI } from "react-native-worklets";
-import { isNative } from "@/constants/platform";
 import {
   usePanelStore,
   type MobilePanelSelection,
@@ -98,9 +97,6 @@ export function MobilePanelsProvider({ children }: { children: ReactNode }) {
     const selection = usePanelStore.getState().mobilePanel;
     if (selection.revision !== revision || selection.target !== panel) {
       return;
-    }
-    if (isNative && panel !== "agent") {
-      Keyboard.dismiss();
     }
     setActivePanel(panel);
   }, []);

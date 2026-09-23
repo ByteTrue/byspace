@@ -3,14 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Pressable, Text, View, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import {
-  QrCode,
-  Link2,
-  ClipboardPaste,
-  ExternalLink,
-  Settings,
-  Terminal,
-} from "lucide-react-native";
+import { QrCode, Link2, ClipboardPaste, Settings, Terminal } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { HostProfile } from "@/types/host-connection";
 import { getHostRuntimeStore, isHostRuntimeConnected, useHosts } from "@/runtime/host-runtime";
@@ -22,8 +15,7 @@ import { resolveAppVersion } from "@/utils/app-version";
 import { formatVersionWithPrefix } from "@/utils/format-version";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
 import { BySpaceLogo } from "@/components/icons/byspace-logo";
-import { openExternalUrl } from "@/utils/open-external-url";
-import { isWeb, isNative } from "@/constants/platform";
+import { isWeb } from "@/constants/platform";
 import { isElectronRuntime } from "@/desktop/host";
 
 interface WelcomeAction {
@@ -187,10 +179,6 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
     router.replace(buildOpenProjectRoute());
   }, [router]);
 
-  const handleOpenBySpaceSite = useCallback(() => {
-    void openExternalUrl("https://github.com/ByteTrue/byspace");
-  }, []);
-
   const handleOpenSettings = useCallback(() => {
     router.push("/settings");
   }, [router]);
@@ -288,12 +276,6 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
           <View style={styles.copyBlock}>
             <Text style={styles.title}>{t("onboarding.title")}</Text>
             <Text style={styles.subtitle}>{t("onboarding.subtitle")}</Text>
-            {isNative ? (
-              <Pressable style={styles.setupLink} onPress={handleOpenBySpaceSite}>
-                <Text style={styles.setupLinkText}>github.com/ByteTrue/byspace</Text>
-                <ExternalLink size={14} color={theme.colors.accent} />
-              </Pressable>
-            ) : null}
           </View>
 
           <View style={styles.actions}>

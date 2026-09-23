@@ -1,9 +1,7 @@
 import { AppState } from "react-native";
-import { isNative } from "@/constants/platform";
 
 interface AppVisibilityInput {
   appState: string;
-  native: boolean;
   documentVisible: boolean;
 }
 
@@ -12,11 +10,11 @@ interface ActiveAppVisibilityInput extends AppVisibilityInput {
 }
 
 export function isAppVisible(input: AppVisibilityInput): boolean {
-  return input.appState === "active" && (input.native || input.documentVisible);
+  return input.appState === "active" && input.documentVisible;
 }
 
 export function isAppActivelyVisible(input: ActiveAppVisibilityInput): boolean {
-  return isAppVisible(input) && (input.native || input.windowFocused);
+  return isAppVisible(input) && input.windowFocused;
 }
 
 function getDocumentVisible(): boolean {
@@ -34,7 +32,6 @@ function getWindowFocused(): boolean {
 export function getIsAppVisible(appState: string = AppState.currentState): boolean {
   return isAppVisible({
     appState,
-    native: isNative,
     documentVisible: getDocumentVisible(),
   });
 }
@@ -42,7 +39,6 @@ export function getIsAppVisible(appState: string = AppState.currentState): boole
 export function getIsAppActivelyVisible(appState: string = AppState.currentState): boolean {
   return isAppActivelyVisible({
     appState,
-    native: isNative,
     documentVisible: getDocumentVisible(),
     windowFocused: getWindowFocused(),
   });

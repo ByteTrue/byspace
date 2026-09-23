@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getProviderIcon } from "@/components/provider-icons";
-import { isNative } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { settingsStyles } from "@/styles/settings";
 import type { Theme } from "@/styles/theme";
@@ -327,7 +326,6 @@ function ScheduleKebabMenu({
       <DropdownMenuTrigger
         hitSlop={8}
         style={kebabTriggerStyle}
-        accessibilityRole={isNative ? "button" : undefined}
         accessibilityLabel={`${productName} actions`}
         testID={`schedule-kebab-${schedule.id}`}
       >

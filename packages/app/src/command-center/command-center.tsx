@@ -14,11 +14,6 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, ChevronRight, Folder, X } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import {
-  BottomSheetBackdrop,
-  BottomSheetFlatList,
-  type BottomSheetFlatListMethods,
-} from "@gorhom/bottom-sheet";
 import { AgentStatusDot } from "@/components/agent-status-dot";
 import { MaterialFileIcon } from "@/components/material-file-icon";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -27,12 +22,7 @@ import {
   type EditingTextInputHandle,
 } from "@/components/ui/text-input";
 import { Shortcut } from "@/components/ui/shortcut";
-import {
-  IsolatedBottomSheetModal,
-  useIsolatedBottomSheetVisibility,
-} from "@/components/ui/isolated-bottom-sheet-modal";
-import { useIsCompactFormFactor } from "@/constants/layout";
-import { isNative, isWeb } from "@/constants/platform";
+import { isWeb } from "@/constants/platform";
 import { useAggregatedAgents, type AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { useProjects } from "@/hooks/use-projects";
 import {
@@ -75,9 +65,6 @@ import {
 } from "./results";
 import { useWorkspaceFileSearch } from "./workspace-file-search";
 
-const ThemedBottomSheetTextInput = withUnistyles(TextInput, (theme) => ({
-  placeholderTextColor: theme.colors.foregroundMuted,
-}));
 const ThemedTextInput = withUnistyles(TextInput, (theme) => ({
   placeholderTextColor: theme.colors.foregroundMuted,
 }));
@@ -90,7 +77,6 @@ const ThemedX = withUnistyles(X, (theme) => ({ color: theme.colors.foregroundMut
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner, (theme) => ({
   color: theme.colors.foregroundMuted,
 }));
-const COMMAND_CENTER_SNAP_POINTS = ["60%", "90%"];
 const KEYBOARD_SHOULD_PERSIST_TAPS = "always" as const;
 
 function sortAgents(left: AggregatedAgent, right: AggregatedAgent): number {
@@ -399,10 +385,6 @@ const ResultRow = memo(function ResultRow({ result, active, onSelect }: ResultRo
     result.kind === "file"
       ? [result.title, result.subtitle].filter(Boolean).join(" ")
       : choice?.path.join(" › ");
-  const accessibilityState = useMemo(
-    () => (isNative && choice ? { selected: choice.selected } : undefined),
-    [choice],
-  );
   const style = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.row,
@@ -422,7 +404,6 @@ const ResultRow = memo(function ResultRow({ result, active, onSelect }: ResultRo
       onPress={press}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={accessibilityState}
       aria-pressed={isWeb ? choice?.selected : undefined}
       testID={
         result.kind === "file" ? `command-center-file-row-${result.filePath}` : choice?.testId
@@ -582,18 +563,9 @@ function SectionRow({ row }: { row: Extract<CommandCenterListRow, { kind: "secti
 export function CommandCenter() {
   const { t } = useTranslation();
   const state = useCommandCenterState();
-  const isCompact = useIsCompactFormFactor();
-  const showBottomSheet = isCompact && isNative;
-  const modalLayer = useGlobalWebOverlayLayer("modal", isWeb && state.open && !showBottomSheet);
+  const modalLayer = useGlobalWebOverlayLayer("modal", isWeb && state.open);
   const listRef = useRef<FlatList<CommandCenterListRow>>(null);
-  const bottomSheetListRef = useRef<BottomSheetFlatListMethods>(null);
-  const bottomSheetInputRef = useRef<EditingTextInputHandle>(null);
   const scrollMetricsRef = useRef({ offset: 0, visibleLength: 0 });
-  const { sheetRef, handleSheetChange, handleSheetDismiss } = useIsolatedBottomSheetVisibility({
-    visible: state.open,
-    isEnabled: showBottomSheet,
-    onClose: state.close,
-  });
 
   const revealActiveResult = useCallback(() => {
     if (!state.open || !state.activeId) return;
@@ -607,18 +579,10 @@ export function CommandCenter() {
     if (rowTop < offset) nextOffset = rowTop;
     if (rowBottom > offset + visibleLength) nextOffset = rowBottom - visibleLength;
     if (nextOffset === null) return;
-    const ref = showBottomSheet ? bottomSheetListRef.current : listRef.current;
     const boundedOffset = Math.max(0, nextOffset);
     scrollMetricsRef.current.offset = boundedOffset;
-    ref?.scrollToOffset({ offset: boundedOffset, animated: false });
-  }, [
-    showBottomSheet,
-    state.activeId,
-    state.offsets,
-    state.open,
-    state.rowIndexByResultId,
-    state.rows,
-  ]);
+    listRef.current?.scrollToOffset({ offset: boundedOffset, animated: false });
+  }, [state.activeId, state.offsets, state.open, state.rowIndexByResultId, state.rows]);
   useEffect(() => {
     if (!state.open) {
       scrollMetricsRef.current = { offset: 0, visibleLength: 0 };
@@ -636,11 +600,6 @@ export function CommandCenter() {
   const handleListScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     scrollMetricsRef.current.offset = event.nativeEvent.contentOffset.y;
   }, []);
-  useEffect(() => {
-    if (!showBottomSheet || !state.open) return;
-    const timer = setTimeout(() => bottomSheetInputRef.current?.focus(), 300);
-    return () => clearTimeout(timer);
-  }, [showBottomSheet, state.open]);
 
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<CommandCenterListRow>) =>
@@ -701,11 +660,6 @@ export function CommandCenter() {
     onScroll: handleListScroll,
     scrollEventThrottle: 16,
   };
-  const keyPress = useCallback(
-    ({ nativeEvent: { key } }: { nativeEvent: { key: string } }) => state.key(key),
-    [state],
-  );
-  const submit = useCallback(() => state.key("Enter"), [state]);
   const handleWebOverlayKeyDown = useCallback(
     (event: KeyboardEvent) => {
       if (!state.key(event.key)) return false;
@@ -715,67 +669,11 @@ export function CommandCenter() {
     [state],
   );
   const setWebOverlayScope = useWebOverlayRegistration({
-    active: isWeb && state.open && !showBottomSheet,
+    active: isWeb && state.open,
     layer: modalLayer,
     onKeyDown: handleWebOverlayKeyDown,
   });
-  const backdrop = useCallback(
-    (props: React.ComponentProps<typeof BottomSheetBackdrop>) => (
-      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.45} />
-    ),
-    [],
-  );
 
-  if (showBottomSheet) {
-    return (
-      <IsolatedBottomSheetModal
-        ref={sheetRef}
-        contextBridge={null}
-        snapPoints={COMMAND_CENTER_SNAP_POINTS}
-        index={0}
-        enableDynamicSizing={false}
-        onChange={handleSheetChange}
-        onDismiss={handleSheetDismiss}
-        backdropComponent={backdrop}
-        enablePanDownToClose
-        backgroundStyle={styles.sheetBackground}
-        handleIndicatorStyle={styles.sheetHandle}
-        keyboardBehavior="extend"
-        keyboardBlurBehavior="restore"
-        accessible={false}
-      >
-        <View style={[styles.bottomSheetHeader, styles.searchRow]} testID="command-center-header">
-          {state.scope === "files" ? (
-            <ScopeChip label={t("shell.commandCenter.files")} onRemove={state.clearScope} />
-          ) : null}
-          <ThemedBottomSheetTextInput
-            testID="command-center-input"
-            ref={bottomSheetInputRef}
-            initialValue={state.query}
-            variant="bottom-sheet"
-            onChangeText={state.setQuery}
-            onKeyPress={keyPress}
-            onSubmitEditing={submit}
-            placeholder={
-              state.scope === "files"
-                ? t("shell.commandCenter.filePlaceholder")
-                : t("shell.commandCenter.placeholder")
-            }
-            style={[styles.input, styles.growingInput]}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoFocus
-          />
-          <FileSearchLoadingIndicator
-            loading={state.fileSearchLoading}
-            label={t("shell.commandCenter.searchingFiles")}
-          />
-        </View>
-        {fileSearchError}
-        <BottomSheetFlatList ref={bottomSheetListRef} {...commonListProps} />
-      </IsolatedBottomSheetModal>
-    );
-  }
   if (!state.open) return null;
   return (
     <OverlayLayerProvider layer={isWeb ? modalLayer : 0}>
@@ -872,12 +770,6 @@ const styles = StyleSheet.create((theme) => ({
     ...theme.shadow.lg,
   },
   header: {
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[3],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  bottomSheetHeader: {
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
     borderBottomWidth: 1,

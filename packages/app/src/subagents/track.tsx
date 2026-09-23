@@ -7,7 +7,6 @@ import { getProviderIcon } from "@/components/provider-icons";
 import { ComposerTrackActions, ComposerTrackPill, ComposerTrackRow } from "@/composer/tracks";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { isNative } from "@/constants/platform";
 import {
   WorkspaceTabIcon,
   type WorkspaceTabPresentation,
@@ -201,7 +200,7 @@ function SubagentsTrackRow({
   const handleDetachPress = useCallback(() => {
     onDetachSubagent?.(row.id);
   }, [onDetachSubagent, row.id]);
-  const actionsAlwaysVisible = isNative || isCompact;
+  const actionsAlwaysVisible = isCompact;
 
   const renderRow = useCallback(
     ({ active }: { active: boolean }) => (

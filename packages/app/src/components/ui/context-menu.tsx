@@ -16,7 +16,7 @@ import {
   type ViewProps,
   type ViewStyle,
 } from "react-native";
-import { isNative, isWeb } from "@/constants/platform";
+import { isWeb } from "@/constants/platform";
 import {
   MenuHint,
   MenuItem,
@@ -168,7 +168,6 @@ export function ContextMenuTrigger({
 
   const handleContextMenu = useCallback(
     (event: unknown) => {
-      if (isNative) return;
       if (typeof event === "object" && event !== null) {
         const preventDefault = Reflect.get(event, "preventDefault");
         const stopPropagation = Reflect.get(event, "stopPropagation");

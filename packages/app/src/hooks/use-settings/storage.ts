@@ -12,7 +12,7 @@ import {
   isChecksHiddenByLegacyRowItem,
   type SidebarRowItems,
 } from "@/components/sidebar/display-preferences/row-items";
-import { isNative } from "@/constants/platform";
+
 import { FONT_SIZE, THEME_OPTIONS, type ThemePreference } from "@/styles/theme";
 import { z } from "zod";
 import { APP_SETTINGS_KEY, LEGACY_SETTINGS_KEY } from "./keys";
@@ -42,18 +42,10 @@ export const DEFAULT_THEME_PREFERENCE = "auto" satisfies ThemePreference;
 export const DEFAULT_TERMINAL_SCROLLBACK_LINES = 10_000;
 export const MIN_TERMINAL_SCROLLBACK_LINES = 0;
 export const MAX_TERMINAL_SCROLLBACK_LINES = 1_000_000;
-export function defaultUiBaseFontSize(native: boolean): number {
-  return native ? 15 : FONT_SIZE.base;
-}
-
-export const DEFAULT_UI_BASE_FONT_SIZE = defaultUiBaseFontSize(isNative);
+export const DEFAULT_UI_BASE_FONT_SIZE = FONT_SIZE.base;
 export const MIN_UI_BASE_FONT_SIZE = 10;
 export const MAX_UI_BASE_FONT_SIZE = 21;
-export function defaultContentFontSize(native: boolean): number {
-  return native ? 16 : FONT_SIZE.content;
-}
-
-export const DEFAULT_CONTENT_FONT_SIZE = defaultContentFontSize(isNative);
+export const DEFAULT_CONTENT_FONT_SIZE = FONT_SIZE.content;
 export const MIN_CONTENT_FONT_SIZE = 10;
 export const MAX_CONTENT_FONT_SIZE = 21;
 export const DEFAULT_CODE_FONT_SIZE = 12; // == FONT_SIZE.code
@@ -355,7 +347,7 @@ export async function loadAppSettingsFromStorage(deps: SettingsDeps): Promise<Ap
       await writeAppSettings(deps.storage, read.stored, read.settings);
     }
     const { needsWrite: _needsWrite, ...stored } = read.stored;
-    return await migrateAppSettings(read.settings, deps.storage, stored, { native: isNative });
+    return await migrateAppSettings(read.settings, deps.storage, stored);
   } catch (error) {
     console.error("[AppSettings] Failed to load settings:", error);
     throw error;

@@ -9,8 +9,6 @@ import {
   DEFAULT_CONTENT_FONT_SIZE,
   DEFAULT_THEME_PREFERENCE,
   DEFAULT_UI_BASE_FONT_SIZE,
-  defaultUiBaseFontSize,
-  defaultContentFontSize,
   loadAppSettingsFromStorage,
   loadSettingsFromStorage,
   parseClampedFontSize,
@@ -725,15 +723,9 @@ describe("appearance settings", () => {
     expect((await loadAppSettingsFromStorage(deps)).sidebarChecksDisplay).toBe("icon");
   });
 
-  it("uses a 15px mobile base and a 14px web base", () => {
-    expect(defaultUiBaseFontSize(true)).toBe(15);
-    expect(defaultUiBaseFontSize(false)).toBe(14);
-  });
-
-  it("uses a 16px content default on mobile and a 15px default on web", () => {
-    expect(defaultContentFontSize(true)).toBe(16);
-    expect(defaultContentFontSize(false)).toBe(15);
-    expect(DEFAULT_CONTENT_FONT_SIZE).toBe(defaultContentFontSize(false));
+  it("defaults the interface and content font sizes", () => {
+    expect(DEFAULT_UI_BASE_FONT_SIZE).toBe(14);
+    expect(DEFAULT_CONTENT_FONT_SIZE).toBe(15);
   });
 
   it("derives and persists content size from an existing interface-size preference", async () => {

@@ -95,7 +95,7 @@ import { ComposerKeyboardScopeProvider, useComposerKeyboardScope } from "@/compo
 import { useAppSettings } from "@/hooks/use-settings";
 import { RenderProfile } from "@/utils/render-profiler";
 import { AfterPaintPublication } from "@/composer/after-paint-publication";
-import { isWeb, isNative } from "@/constants/platform";
+import { isWeb } from "@/constants/platform";
 import type { ForgeSearchItem } from "@bytetrue/protocol/messages";
 import type {
   AttachmentMetadata,
@@ -437,10 +437,6 @@ function resolveErrorMessage(error: unknown): string | null {
 function focusMessageInputWithPlatformStrategy(messageInputRef: {
   current: MessageInputRef | null;
 }): void {
-  if (isNative) {
-    messageInputRef.current?.focus();
-    return;
-  }
   focusWithRetries({
     focus: () => messageInputRef.current?.focus(),
     isFocused: () => {
@@ -1189,7 +1185,6 @@ function ComposerContentImpl({
   );
 
   const focusInput = useCallback(() => {
-    if (isNative) return;
     focusWithRetries({
       focus: () => messageInputRef.current?.focus(),
       isFocused: () => {
@@ -1779,17 +1774,15 @@ function ComposerContentImpl({
         },
       },
     ];
-    if (isNative) {
-      items.push({
+    items.push(
+      {
         id: "paste-image",
         label: t("composer.attachments.pasteImage"),
         icon: <ThemedClipboardPaste size={ICON_SIZE.md} uniProps={iconForegroundMutedMapping} />,
         onSelect: () => {
           void handlePasteImage();
         },
-      });
-    }
-    items.push(
+      },
       {
         id: "github",
         label: t("composer.attachments.addIssueOrPr", {

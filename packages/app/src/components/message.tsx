@@ -200,9 +200,6 @@ export const STREAM_METADATA_FONT_SIZE = 13;
 type ScrollAxis = "x" | "y";
 
 function ensureWebToolCallShimmerKeyframes() {
-  if (isNative) {
-    return;
-  }
   if (typeof document === "undefined") {
     return;
   }
@@ -449,7 +446,7 @@ export const UserMessage = memo(function UserMessage({
   const hasText = message.trim().length > 0;
   const hasImages = images.length > 0;
   const hasAttachments = attachments.length > 0;
-  const showTrailingRow = !isPending && hasText && (isCompact || isNative || isHovered);
+  const showTrailingRow = !isPending && hasText && (isCompact || isHovered);
   const formattedTimestamp = useMemo(
     () => formatMessageTimestamp(new Date(timestamp)),
     [timestamp],
@@ -2873,7 +2870,7 @@ export const ExpandableBadge = memo(function ExpandableBadge({
 
   useDetailWheelPropagationBlocker({
     detailWrapperRef,
-    enabled: !isNative && isExpanded && hasDetailContent,
+    enabled: isExpanded && hasDetailContent,
   });
 
   const shimmerLabelStyle = useMemo<StyleProp<TextStyle>>(

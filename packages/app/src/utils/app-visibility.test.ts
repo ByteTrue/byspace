@@ -1,10 +1,9 @@
 import { expect, test } from "vitest";
 import { isAppActivelyVisible, isAppVisible } from "./app-visibility";
 
-test("a visible desktop app remains visible when another window has focus", () => {
+test("a visible page remains visible when another window has focus", () => {
   const input = {
     appState: "active",
-    native: false,
     documentVisible: true,
     windowFocused: false,
   };
@@ -13,10 +12,9 @@ test("a visible desktop app remains visible when another window has focus", () =
   expect(isAppActivelyVisible(input)).toBe(false);
 });
 
-test("a hidden desktop page is neither visible nor actively visible", () => {
+test("a hidden page is neither visible nor actively visible", () => {
   const input = {
     appState: "active",
-    native: false,
     documentVisible: false,
     windowFocused: true,
   };

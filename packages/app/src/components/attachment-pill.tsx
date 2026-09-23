@@ -2,7 +2,6 @@ import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { X } from "lucide-react-native";
-import { isNative } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
@@ -34,7 +33,7 @@ export function AttachmentPill({
   const isCompact = useIsCompactFormFactor();
   const [isBodyHovered, setIsBodyHovered] = useState(false);
   const [isCloseHovered, setIsCloseHovered] = useState(false);
-  const alwaysShow = isNative || isCompact;
+  const alwaysShow = isCompact;
   const showRemove = alwaysShow || isBodyHovered || isCloseHovered;
   const closeButtonStyle = useMemo(
     () => [styles.closeButton, !showRemove && styles.closeButtonHidden],

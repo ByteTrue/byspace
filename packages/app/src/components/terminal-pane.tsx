@@ -35,7 +35,6 @@ import {
 import {
   getTerminalVirtualKeyboardControlId,
   shouldShowTerminalFloatingCopyAction,
-  shouldShowTerminalPasteAction,
   TERMINAL_VIRTUAL_KEYBOARD_ROWS,
   type TerminalVirtualKeyboardControl,
 } from "@/terminal/runtime/terminal-virtual-keyboard";
@@ -61,7 +60,6 @@ import { toXtermTheme } from "@/utils/to-xterm-theme";
 import TerminalEmulator, { type TerminalEmulatorHandle } from "./terminal-emulator";
 import { TerminalFloatingCopyAction, TerminalPasteAction } from "./terminal-copy-paste-actions";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { isNative } from "@/constants/platform";
 import { nativePerformanceTrace, traceInstant } from "@/performance/native-trace";
 import {
   applyTerminalRendererReadyChange,
@@ -1119,11 +1117,9 @@ export function TerminalPane({
     emulatorRef.current?.blur();
     onOpenFileExplorer();
   }, [swipeGesturesEnabled, onOpenFileExplorer]);
-  const showPasteAction = shouldShowTerminalPasteAction({ isNative });
   const showFloatingCopyAction = shouldShowTerminalFloatingCopyAction({
     hasSelection,
     isCompact: isMobile,
-    isNative,
   });
   const keyboardToggleIconColor = terminalTheme.colors.foregroundMuted;
 
@@ -1152,13 +1148,13 @@ export function TerminalPane({
           />
         );
       case "paste":
-        return showPasteAction ? (
+        return (
           <TerminalPasteAction
             key={controlId}
             hasClipboardText={hasClipboardText}
             onPaste={handleTerminalPaste}
           />
-        ) : null;
+        );
       case "keyboardToggle":
         return (
           <KeyboardToggleButton

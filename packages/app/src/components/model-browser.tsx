@@ -13,10 +13,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import {
-  FlatList as SheetFlatList,
-  ScrollView as SheetScrollView,
-} from "@/components/ui/scroll-view";
+import { ScrollView as SheetScrollView } from "@/components/ui/scroll-view";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
@@ -41,7 +38,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getProviderIcon } from "@/components/provider-icons";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { isNative, isWeb } from "@/constants/platform";
+import { isWeb } from "@/constants/platform";
 import {
   buildProviderQualifiedDescription,
   buildSelectedTriggerLabel,
@@ -624,7 +621,7 @@ function ModelRowProfileAction({
   children: React.ReactNode;
 }) {
   const isCompact = useIsCompactFormFactor();
-  const visible = hovered || isNative || isCompact;
+  const visible = hovered || isCompact;
   const handlePress = useCallback(
     (event: GestureResponderEvent) => {
       event.stopPropagation();
@@ -1158,7 +1155,6 @@ function ModelRowList({
   onEditProfile?: (profileId: string) => void;
   onEditProfiles?: () => void;
 }) {
-  const isCompact = useIsCompactFormFactor();
   const renderItem = useCallback(
     ({ item }: { item: ProviderSelectionModelRow }) => (
       <SelectableModelRow
@@ -1185,25 +1181,8 @@ function ModelRowList({
       showProviderLabel,
     ],
   );
-  const keyExtractor = useCallback((row: ProviderSelectionModelRow) => row.favoriteKey, []);
-
   if (scrolling === "independent") {
     return <IndependentModelList rows={rows} renderItem={renderItem} header={header} />;
-  }
-
-  if (isCompact && isNative) {
-    return (
-      <SheetFlatList
-        data={rows}
-        renderItem={renderItem}
-        ListHeaderComponent={header}
-        keyExtractor={keyExtractor}
-        style={styles.virtualizedModelList}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.virtualizedModelListContent}
-      />
-    );
   }
 
   return (

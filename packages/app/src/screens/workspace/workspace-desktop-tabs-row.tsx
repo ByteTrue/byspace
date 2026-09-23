@@ -33,7 +33,7 @@ import type {
   DraggableListDragHandleProps,
   DraggableRenderItemInfo,
 } from "@/components/draggable-list.types";
-import { isNative, isWeb } from "@/constants/platform";
+import { isWeb } from "@/constants/platform";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -621,7 +621,6 @@ function useMiddleClickClose(onClose: () => void) {
   const ref = useRef<View>(null);
 
   useEffect(() => {
-    if (isNative) return;
     const node = ref.current as unknown as HTMLElement | null;
     if (!node) return;
 
@@ -754,7 +753,7 @@ function TabChip({
     isActiveFocused,
     isFilled: isActive || isHovered,
   });
-  const showCloseControl = showCloseButton && (isHovered || isNative || isCompact || isClosingTab);
+  const showCloseControl = showCloseButton && (isHovered || isCompact || isClosingTab);
   const closeButtonDragBlockers = isWeb
     ? ({
         onPointerDown: (event: { stopPropagation?: () => void }) => {

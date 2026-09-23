@@ -31,7 +31,6 @@ import { createMarkdownParser } from "@/utils/markdown-parser";
 import { createCompactMarkdownStyles, createMarkdownStyles } from "@/styles/markdown-styles";
 import type { Theme } from "@/styles/theme";
 import { openExternalUrl } from "@/utils/open-external-url";
-import { isNative } from "@/constants/platform";
 import {
   splitHtmlishMarkdown,
   type MarkdownDisplayPart,
@@ -485,23 +484,10 @@ function SharedMarkdownLink({
   }, [href, onLinkPress]);
   const style = useMemo(() => [inheritedStyles, linkStyle], [inheritedStyles, linkStyle]);
 
-  if (!isNative) {
-    return (
-      <MarkdownLinkText style={style} onPress={handlePress}>
-        {children}
-      </MarkdownLinkText>
-    );
-  }
-
   return (
-    <MarkdownInheritedText
-      inheritedStyles={inheritedStyles}
-      textStyle={linkStyle}
-      accessibilityRole="link"
-      onPress={handlePress}
-    >
+    <MarkdownLinkText style={style} onPress={handlePress}>
       {children}
-    </MarkdownInheritedText>
+    </MarkdownLinkText>
   );
 }
 
