@@ -26,7 +26,6 @@ import { changesStateSchema, defaultChangesState, type ChangesState } from "@/pa
 import { FileExplorerPane } from "./file-explorer-pane";
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 import { shouldUseCompactExplorerKeyboardPadding } from "@/hooks/keyboard-shift-policy";
-import { WindowChromeSafeArea } from "@/utils/desktop-window";
 import { RetainedPanel, RetainedPanelActivity } from "@/components/retained-panel";
 import { useMountedTabSet } from "@/screens/workspace/use-mounted-tab-set";
 import { usePullRequestPanelAvailability } from "@/panels/pull-request-availability";
@@ -340,10 +339,8 @@ function ExplorerSidebarContent({
   return (
     <View style={styles.sidebarContent} pointerEvents="auto">
       {/* Header with tabs and close button */}
-      <WindowChromeSafeArea
-        placement="inline"
-        horizontalPadding={theme.spacing[2]}
-        style={styles.header}
+      <View
+        style={[styles.header, { paddingHorizontal: theme.spacing[2] }]}
         testID="explorer-header"
       >
         <View style={styles.tabsContainer}>
@@ -400,7 +397,7 @@ function ExplorerSidebarContent({
             )}
           </Pressable>
         </View>
-      </WindowChromeSafeArea>
+      </View>
 
       {/* Content based on active tab */}
       <View style={styles.contentArea} testID="explorer-content-area">

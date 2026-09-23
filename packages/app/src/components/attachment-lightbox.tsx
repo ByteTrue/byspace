@@ -8,7 +8,6 @@ import type { AttachmentMetadata } from "@/attachments/types";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
 import { isWeb } from "@/constants/platform";
 import { SPACING } from "@/styles/theme";
-import { WindowChromeRootRegion } from "@/utils/desktop-window";
 import { ZoomableImage } from "@/components/zoomable-viewport/image";
 import type { ViewportSize } from "@/components/zoomable-viewport/geometry";
 import { useGlobalWebOverlayLayer, useWebOverlayRegistration } from "@/lib/overlay-root";
@@ -90,36 +89,34 @@ export function AttachmentLightbox({ source, onClose }: AttachmentLightboxProps)
   return (
     <Modal transparent animationType="fade" statusBarTranslucent visible onRequestClose={onClose}>
       <ModalRoot style={styles.root}>
-        <WindowChromeRootRegion corners="both">
-          <View ref={setWebOverlayScope} style={styles.root}>
-            <Pressable
-              testID="attachment-lightbox-backdrop"
-              accessibilityRole="button"
-              accessibilityLabel={t("message.attachments.dismissImage")}
-              onPress={onClose}
-              style={styles.backdrop}
-            />
-            <View pointerEvents="box-none" style={contentLayerStyle}>
-              <View pointerEvents="box-none" style={styles.imageArea}>
-                {hasError ? (
-                  <Text style={styles.errorText}>{t("message.attachments.imageLoadFailed")}</Text>
-                ) : (
-                  <ZoomableImage
-                    accessibilityLabel={t("composer.attachments.openImage")}
-                    actions={actions}
-                    contentSize={contentSize}
-                    fit={LIGHTBOX_FIT}
-                    onError={handleImageError}
-                    onPressOutsideContent={onClose}
-                    style={styles.imageViewport}
-                    testID="attachment-lightbox"
-                    uri={url}
-                  />
-                )}
-              </View>
+        <View ref={setWebOverlayScope} style={styles.root}>
+          <Pressable
+            testID="attachment-lightbox-backdrop"
+            accessibilityRole="button"
+            accessibilityLabel={t("message.attachments.dismissImage")}
+            onPress={onClose}
+            style={styles.backdrop}
+          />
+          <View pointerEvents="box-none" style={contentLayerStyle}>
+            <View pointerEvents="box-none" style={styles.imageArea}>
+              {hasError ? (
+                <Text style={styles.errorText}>{t("message.attachments.imageLoadFailed")}</Text>
+              ) : (
+                <ZoomableImage
+                  accessibilityLabel={t("composer.attachments.openImage")}
+                  actions={actions}
+                  contentSize={contentSize}
+                  fit={LIGHTBOX_FIT}
+                  onError={handleImageError}
+                  onPressOutsideContent={onClose}
+                  style={styles.imageViewport}
+                  testID="attachment-lightbox"
+                  uri={url}
+                />
+              )}
             </View>
           </View>
-        </WindowChromeRootRegion>
+        </View>
       </ModalRoot>
     </Modal>
   );

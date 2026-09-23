@@ -12,7 +12,6 @@ import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-
 import type { SplitPane } from "@/stores/workspace-layout-store";
 import type { WorkspaceTab } from "@/workspace-tabs/model";
 import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
-import { WindowChromeRegion, WindowChromeSafeArea } from "@/utils/desktop-window";
 
 interface ExplorerSidebarDockProps {
   pane: SplitPane;
@@ -82,41 +81,39 @@ export function ExplorerSidebarDock({
 
   return (
     <RetainedPanel active>
-      <WindowChromeRegion corners="top-right">
-        <View style={styles.dock} testID="workspace-explorer-sidebar">
-          <WindowChromeSafeArea placement="inline" style={styles.tabRail}>
-            <ExplorerSidebarTabRail
-              paneId={pane.id}
-              tabs={tabItems}
-              normalizedServerId={normalizedServerId}
-              normalizedWorkspaceId={normalizedWorkspaceId}
-              activeDragTabId={activeDragTabId}
-              tabDropPreviewIndex={
-                tabDropPreview?.paneId === pane.id ? tabDropPreview.indicatorIndex : null
-              }
-              onNavigateTab={handleSelectTab}
-              onCloseTab={onCloseTab}
-              onCreateNewTab={onCreateNewTab}
-              onMoveTabToMain={onMoveTabToMain}
-              onReorderTabs={handleReorderTabs}
-              trailingAccessory={headerAction}
-            />
-            <View pointerEvents="none" style={styles.tabRailDivider} />
-          </WindowChromeSafeArea>
-          <View style={styles.content}>
-            <WorkspacePanelHost
-              paneId={pane.id}
-              tabs={tabs}
-              activeTabId={activeTabId}
-              normalizedServerId={normalizedServerId}
-              normalizedWorkspaceId={normalizedWorkspaceId}
-              isWorkspaceFocused={isWorkspaceFocused}
-              isPaneFocused
-              buildPaneContentModel={buildPaneContentModel}
-            />
-          </View>
+      <View style={styles.dock} testID="workspace-explorer-sidebar">
+        <View style={styles.tabRail}>
+          <ExplorerSidebarTabRail
+            paneId={pane.id}
+            tabs={tabItems}
+            normalizedServerId={normalizedServerId}
+            normalizedWorkspaceId={normalizedWorkspaceId}
+            activeDragTabId={activeDragTabId}
+            tabDropPreviewIndex={
+              tabDropPreview?.paneId === pane.id ? tabDropPreview.indicatorIndex : null
+            }
+            onNavigateTab={handleSelectTab}
+            onCloseTab={onCloseTab}
+            onCreateNewTab={onCreateNewTab}
+            onMoveTabToMain={onMoveTabToMain}
+            onReorderTabs={handleReorderTabs}
+            trailingAccessory={headerAction}
+          />
+          <View pointerEvents="none" style={styles.tabRailDivider} />
         </View>
-      </WindowChromeRegion>
+        <View style={styles.content}>
+          <WorkspacePanelHost
+            paneId={pane.id}
+            tabs={tabs}
+            activeTabId={activeTabId}
+            normalizedServerId={normalizedServerId}
+            normalizedWorkspaceId={normalizedWorkspaceId}
+            isWorkspaceFocused={isWorkspaceFocused}
+            isPaneFocused
+            buildPaneContentModel={buildPaneContentModel}
+          />
+        </View>
+      </View>
     </RetainedPanel>
   );
 }

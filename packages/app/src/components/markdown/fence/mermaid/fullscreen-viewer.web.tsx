@@ -6,7 +6,6 @@ import { StyleSheet } from "react-native-unistyles";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ZoomableViewport } from "@/components/zoomable-viewport";
 import { SPACING } from "@/styles/theme";
-import { WindowChromeRootRegion } from "@/utils/desktop-window";
 import { MermaidIframeRuntime, type MermaidRenderedMessage } from "./iframe-runtime.web";
 import type { DiagramColorScheme } from "./render-model";
 import { useMermaidRenderModel } from "./use-render-model";
@@ -93,33 +92,31 @@ export function MermaidFullscreenViewer({
 
   return (
     <Modal transparent animationType="fade" statusBarTranslucent visible onRequestClose={onClose}>
-      <WindowChromeRootRegion corners="both">
-        <View style={styles.root}>
-          <View style={styles.backdrop} />
-          <View style={contentLayerStyle}>
-            {/* biome-ignore lint/a11y/noNoninteractiveTabindex: focus holder for the Escape shortcut */}
-            <div ref={contentLayerRef} style={focusLayerDomStyle} tabIndex={-1}>
-              <ZoomableViewport
-                accessibilityLabel={t("message.diagram.diagram")}
-                actions={actions}
-                contentSize={contentSize}
-                fit={VIEWER_FIT}
-                minScale={1}
-                onPressOutsideContent={onClose}
-                style={styles.viewport}
-                testID="mermaid-fullscreen-viewport"
-                wheelActivation="always"
-              >
-                <MermaidIframeRuntime
-                  request={request}
-                  onRendered={handleRendered}
-                  onRenderFailed={renderFailed}
-                />
-              </ZoomableViewport>
-            </div>
-          </View>
+      <View style={styles.root}>
+        <View style={styles.backdrop} />
+        <View style={contentLayerStyle}>
+          {/* biome-ignore lint/a11y/noNoninteractiveTabindex: focus holder for the Escape shortcut */}
+          <div ref={contentLayerRef} style={focusLayerDomStyle} tabIndex={-1}>
+            <ZoomableViewport
+              accessibilityLabel={t("message.diagram.diagram")}
+              actions={actions}
+              contentSize={contentSize}
+              fit={VIEWER_FIT}
+              minScale={1}
+              onPressOutsideContent={onClose}
+              style={styles.viewport}
+              testID="mermaid-fullscreen-viewport"
+              wheelActivation="always"
+            >
+              <MermaidIframeRuntime
+                request={request}
+                onRendered={handleRendered}
+                onRenderFailed={renderFailed}
+              />
+            </ZoomableViewport>
+          </div>
         </View>
-      </WindowChromeRootRegion>
+      </View>
     </Modal>
   );
 }

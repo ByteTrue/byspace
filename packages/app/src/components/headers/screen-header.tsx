@@ -9,7 +9,6 @@ import {
   HEADER_TOP_PADDING_MOBILE,
   useIsCompactFormFactor,
 } from "@/constants/layout";
-import { WindowChromeSafeArea } from "@/utils/desktop-window";
 
 interface ScreenHeaderProps {
   left?: ReactNode;
@@ -43,22 +42,24 @@ export function ScreenHeader({
     () => [styles.inner, { paddingTop: insets.top + topPadding }],
     [insets.top, topPadding],
   );
-  const rowStyle = useMemo(() => [styles.row, borderless && styles.borderless], [borderless]);
+  const rowStyle = useMemo(
+    () => [
+      styles.row,
+      { paddingHorizontal: baseHorizontalPadding },
+      borderless && styles.borderless,
+    ],
+    [baseHorizontalPadding, borderless],
+  );
   const leftCombinedStyle = useMemo(() => [styles.left, leftStyle], [leftStyle]);
   const rightCombinedStyle = useMemo(() => [styles.right, rightStyle], [rightStyle]);
 
   return (
     <View style={styles.header}>
       <View style={innerStyle}>
-        <WindowChromeSafeArea
-          placement="inline"
-          horizontalPadding={baseHorizontalPadding}
-          onLayout={onRowLayout}
-          style={rowStyle}
-        >
+        <View onLayout={onRowLayout} style={rowStyle}>
           <View style={leftCombinedStyle}>{left}</View>
           <View style={rightCombinedStyle}>{right}</View>
-        </WindowChromeSafeArea>
+        </View>
       </View>
     </View>
   );
