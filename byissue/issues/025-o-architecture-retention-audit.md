@@ -201,7 +201,9 @@ Web UI：可由 daemon 内置提供，也可使用托管版本
 - **Android-only 原生模块** `packages/app/modules/byspace-native-trace/`（Kotlin + Gradle，`platforms: ["android"]`）：它是 `requireOptionalNativeModule("BySpaceNativeTrace")` 的实现，随 `isProfileBuild` 分支一并移除。浏览器 trace sink 保留。
 - **十个零引用原生依赖**：`expo-dev-client`、`expo-build-properties`、`expo-gradle-jvmargs`、`expo-audio`、`expo-image`、`expo-image-manipulator`、`expo-sqlite`、`expo-splash-screen`、`expo-system-ui`、`@shopify/react-native-skia`。
 
-验证：web 导出成功，bundle 20.2 MB → 19 MB，被删依赖在产物中零命中，`__byspacePerformanceTrace` 保留；typecheck / lint / format / 受影响单测 56 项全绿。
+验证：web 导出成功；被删依赖在产物中零命中。**但这些依赖在改动前也只在产物里以 package.json 清单字符串出现，从未真正打包**——用已发布的 0.16.1 tarball 与改动后产物逐字节对比，raw 20,188,418 → 20,187,151 字节（−1,267 B，−0.006%），gzip −508 B；真正从头包里消失的是 `BySpaceNativeTrace` 原生模块调用路径。typecheck / lint / format / 受影响单测 56 项全绿。
+
+本地磁盘释放与仓库行数减少是实数（−5.3 GB、−1458 行），产物体积不是。`docs/development.md:163` 记的 raw 10.77 MiB 早于当前构建，与实测 19.25 MiB 不符，属既有文档漂移。
 
 审计中确认**不能删**的两项：`react-native-nitro-modules` 被 unistyles 在 `lib/module/specs/*/index.js` 硬 import；`expo-keep-awake` 虽无直接引用但是 `expo` 包自身的依赖。两者都从「零引用」扫描里被反向依赖检查拦下。
 

@@ -117,7 +117,7 @@ so the port may already be bound. `portScript` takes precedence when both values
 
 ## Bundled daemon web UI
 
-> The user-facing guide for this feature (enabling it, reverse proxy, TLS, tunnels, security) lives at [public-docs/web-ui.md](../public-docs/web-ui.md). This section is the contributor/build reference: how the artifact is produced, bundled, and excluded from desktop packaging.
+> The user-facing guide for this feature (enabling it, reverse proxy, TLS, tunnels, security) lives at [public-docs/web-ui.md](../public-docs/web-ui.md). This section is the contributor/build reference: how the artifact is produced and bundled.
 
 The daemon can optionally serve the browser web client from the same HTTP server. This is disabled by default.
 
@@ -156,13 +156,15 @@ Build the artifact for packaging or measurement with:
 npm run build:daemon-web-ui
 ```
 
-This exports the normal browser web app (not the Electron-flavored desktop renderer) and copies it into `packages/server/dist/server/web-ui`, precompressing `.html`, `.js`, `.css`, and JSON assets as `.br` and `.gz`.
+This exports the browser web app and copies it into `packages/server/dist/server/web-ui`, precompressing `.html`, `.js`, `.css`, `.json`, `.svg`, and `.map` files as `.br` and `.gz`.
 
-Measured bundle size for a standard Expo web export:
+Measured size of the daemon web UI at v0.16.1, counting every file in the export; `gzip` and `brotli` count only the precompressed copies, so `raw` excludes them:
 
-- raw: 10.77 MiB
-- gzip: 2.55 MiB
-- brotli: 1.93 MiB
+- raw: 19.41 MiB
+- gzip: 4.37 MiB
+- brotli: 3.22 MiB
+
+These grow with the app. `npm run build:daemon-web-ui` prints the current numbers on every run.
 
 ## Built workspace packages
 
