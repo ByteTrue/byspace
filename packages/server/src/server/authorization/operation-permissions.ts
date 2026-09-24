@@ -215,6 +215,12 @@ const INBOUND_PERMISSION = {
   "worker.task.history.request": "workspace.read",
   "worker.task.list.request": "workspace.read",
   "worker.guard.evaluate.request": "workspace.read",
+  // Groups are structural: creating one and changing its roster both mutate
+  // daemon state, while reading the list is inspection.
+  "worker.group.list.request": "workspace.read",
+  "worker.group.create.request": "workspace.write",
+  "worker.group.add_member.request": "workspace.write",
+  "worker.group.remove_member.request": "workspace.write",
 } as const satisfies Record<InboundOperation, PermissionRequirement>;
 
 const OUTBOUND_PERMISSION = {
@@ -440,6 +446,10 @@ const OUTBOUND_PERMISSION = {
   "worker.task.history.response": "workspace.read",
   "worker.task.list.response": "workspace.read",
   "worker.guard.evaluate.response": "workspace.read",
+  "worker.group.list.response": "workspace.read",
+  "worker.group.create.response": "workspace.write",
+  "worker.group.add_member.response": "workspace.write",
+  "worker.group.remove_member.response": "workspace.write",
 } as const satisfies Record<OutboundOperation, PermissionRequirement>;
 
 export function requiredPermissionForInbound(operation: InboundOperation): PermissionRequirement {

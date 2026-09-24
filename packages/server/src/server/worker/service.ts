@@ -19,6 +19,9 @@ import { resolveBySpaceHome } from "../byspace-home.js";
 import {
   WorkerStore,
   resolveWorkerDatabasePath,
+  type WorkerGroupMemberRecord,
+  type WorkerGroupMemberRole,
+  type WorkerGroupRecord,
   type WorkerRecord,
   type WorkerTaskHistoryEntry,
   type WorkerTaskRecord,
@@ -70,6 +73,13 @@ export class WorkerTaskNotFoundError extends Error {
   constructor(taskId: string) {
     super(`Unknown worker task: ${taskId}`);
     this.name = "WorkerTaskNotFoundError";
+  }
+}
+
+export class WorkerGroupNotFoundError extends Error {
+  constructor(groupId: string) {
+    super(`Unknown worker group: ${groupId}`);
+    this.name = "WorkerGroupNotFoundError";
   }
 }
 
@@ -210,6 +220,83 @@ export class WorkerService {
   listAllTasks(workerId?: string): WorkerTaskRecord[] {
     if (workerId) return this.listTasks(workerId);
     return this.getStore().listAllTasks();
+  }
+
+  // ----------------------------------------------------------------- groups
+
+  listGroups(): WorkerGroupRecord[] {
+    return this.getStore().listGroups();
+  }
+
+  getGroup(groupId: string): WorkerGroupRecord {
+    const group = this.getStore().getGroup(groupId);
+    if (!group) throw new WorkerGroupNotFoundError(groupId);
+    return group;
+  }
+
+  /**
+   * Create a group on a project, optionally with its first members.
+   *
+   * Members are added after the group exists so a bad roster cannot leave a
+   * half-made group behind: the caller either gets a group with the roster it
+   * asked for, or nothing.
+   */
+  createGroup(input: {
+    name: string;
+    projectId: string;
+    workspaceId?: string | null;
+    goal?: string | null;
+    coordinatorWorkerId?: string;
+    memberWorkerIds?: readonly string[];
+  }): WorkerGroupRecord {
+    const id = `grp_${randomBytes(6).toString("hex")}`;
+    const group = this.getStore().createGroup({
+      id,
+      name: input.name,
+      projectId: input.projectId,
+      workspaceId: input.workspaceId ?? null,
+      goal: input.goal ?? null,
+    });
+
+    try {
+      if (input.coordinatorWorkerId) {
+        this.getStore().addGroupMember({
+          groupId: id,
+          workerId: input.coordinatorWorkerId,
+          role: "coordinator",
+        });
+      }
+      for (const workerId of input.memberWorkerIds ?? []) {
+        if (workerId === input.coordinatorWorkerId) continue;
+        this.getStore().addGroupMember({ groupId: id, workerId, role: "member" });
+      }
+    } catch (error) {
+      // The group is not worth keeping if its roster was rejected.
+      this.getStore().deleteGroup(id);
+      throw error;
+    }
+
+    this.logger.info({ groupId: id, projectId: input.projectId }, "Created worker group");
+    return group;
+  }
+
+  listGroupMembers(groupId: string): WorkerGroupMemberRecord[] {
+    this.getGroup(groupId);
+    return this.getStore().listGroupMembers(groupId);
+  }
+
+  addGroupMember(input: {
+    groupId: string;
+    workerId: string;
+    role: WorkerGroupMemberRole;
+  }): WorkerGroupMemberRecord {
+    this.getGroup(input.groupId);
+    return this.getStore().addGroupMember(input);
+  }
+
+  removeGroupMember(input: { groupId: string; workerId: string }): void {
+    this.getGroup(input.groupId);
+    this.getStore().removeGroupMember(input);
   }
 
   getTask(taskId: string): WorkerTaskRecord {

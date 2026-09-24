@@ -1,5 +1,5 @@
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
-import type { WorkerTaskSummary } from "@bytetrue/protocol/worker/rpc-schemas";
+import type { WorkerGroupSummary, WorkerTaskSummary } from "@bytetrue/protocol/worker/rpc-schemas";
 import { toErrorMessage } from "@/utils/error-messages";
 
 /**
@@ -28,7 +28,10 @@ export interface WorkerRuntimeSnapshot {
 export interface WorkerRuntime {
   getClient(
     serverId: string,
-  ): Pick<DaemonClient, "listWorkers" | "listWorkerTemplates" | "listWorkerTasks"> | null;
+  ): Pick<
+    DaemonClient,
+    "listWorkers" | "listWorkerTemplates" | "listWorkerTasks" | "listWorkerGroups"
+  > | null;
   getSnapshot(serverId: string): WorkerRuntimeSnapshot | null | undefined;
 }
 
@@ -59,6 +62,12 @@ export interface AggregatedWorkerTask {
   serverName: string;
 }
 
+/** A group tagged with the host it came from. */
+export interface AggregatedWorkerGroup extends WorkerGroupSummary {
+  serverId: string;
+  serverName: string;
+}
+
 export interface WorkerTemplateOption {
   id: string;
   title: string;
@@ -81,6 +90,7 @@ export type WorkerLoadState =
       workers: AggregatedWorker[];
       templates: WorkerTemplateOption[];
       tasks: AggregatedWorkerTask[];
+      groups: AggregatedWorkerGroup[];
       hostErrors: WorkerHostError[];
     };
 
@@ -102,7 +112,10 @@ function isHostSettling(snapshot: WorkerRuntimeSnapshot | null | undefined): boo
 function connectedClient(
   host: WorkerHostInput,
   runtime: WorkerRuntime,
-): Pick<DaemonClient, "listWorkers" | "listWorkerTemplates" | "listWorkerTasks"> | null {
+): Pick<
+  DaemonClient,
+  "listWorkers" | "listWorkerTemplates" | "listWorkerTasks" | "listWorkerGroups"
+> | null {
   const snapshot = runtime.getSnapshot(host.serverId);
   if (!snapshot || snapshot.connectionStatus !== "online") return null;
   return runtime.getClient(host.serverId);
@@ -123,6 +136,7 @@ export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<
   const workers: AggregatedWorker[] = [];
   const templates: WorkerTemplateOption[] = [];
   const tasks: AggregatedWorkerTask[] = [];
+  const groups: AggregatedWorkerGroup[] = [];
   const hostErrors: WorkerHostError[] = [];
 
   await Promise.all(
@@ -131,14 +145,15 @@ export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<
       if (!client) return;
       try {
         // Workers and their catalog are the critical path: without them there is
-        // no roster. Tasks are best-effort, because a host that cannot answer
-        // for tasks should still show its workers rather than being reported as
-        // entirely broken.
+        // no roster. Tasks and groups are best-effort, because a host that
+        // cannot answer for them should still show its workers rather than being
+        // reported as entirely broken.
         const [workerResult, templateResult] = await Promise.all([
           client.listWorkers(),
           client.listWorkerTemplates(),
         ]);
         const taskResult = await client.listWorkerTasks().catch(() => ({ tasks: [] }));
+        const groupResult = await client.listWorkerGroups().catch(() => ({ groups: [] }));
 
         const titleById = new Map(
           templateResult.templates.map((template) => [template.id, template.title]),
@@ -177,6 +192,9 @@ export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<
             serverName: host.serverName,
           });
         }
+        for (const group of groupResult.groups) {
+          groups.push({ ...group, serverId: host.serverId, serverName: host.serverName });
+        }
       } catch (error) {
         hostErrors.push({
           serverId: host.serverId,
@@ -187,5 +205,5 @@ export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<
     }),
   );
 
-  return { status: "loaded", workers, templates, tasks, hostErrors };
+  return { status: "loaded", workers, templates, tasks, groups, hostErrors };
 }

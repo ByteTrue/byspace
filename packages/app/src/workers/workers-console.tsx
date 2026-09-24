@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { ArrowLeft, Blocks, LayoutDashboard, Plus, Users } from "lucide-react-native";
+import { ArrowLeft, Blocks, LayoutDashboard, Plus, Users, UsersRound } from "lucide-react-native";
 
 import { Button } from "@/components/ui/button";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
@@ -13,6 +13,7 @@ import {
   describeRosterActivity,
   selectAttentionTasks,
 } from "@/workers/dashboard-derived";
+import { WorkerGroupsSection } from "@/workers/worker-groups-section";
 import { ICON_SIZE } from "@/styles/theme";
 
 /**
@@ -28,7 +29,7 @@ import { ICON_SIZE } from "@/styles/theme";
  * destinations beside a scrolling content area with a title block.
  */
 
-type Section = "dashboard" | "management" | "capabilities";
+type Section = "dashboard" | "management" | "groups" | "capabilities";
 
 const NAV_GROUPS: { title: string; items: { id: Section; label: string; icon: typeof Users }[] }[] =
   [
@@ -37,6 +38,7 @@ const NAV_GROUPS: { title: string; items: { id: Section; label: string; icon: ty
       items: [
         { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
         { id: "management", label: "Worker management", icon: Users },
+        { id: "groups", label: "Groups", icon: UsersRound },
       ],
     },
     {
@@ -53,6 +55,14 @@ export function WorkersConsole({ onExit }: { onExit: () => void }): ReactElement
   const workers = loadState.status === "loaded" ? loadState.workers : [];
   const templates = loadState.status === "loaded" ? loadState.templates : [];
   const tasks = loadState.status === "loaded" ? loadState.tasks : [];
+  const groups = loadState.status === "loaded" ? loadState.groups : [];
+
+  // Counts sit on the roster and group rows only; a count on the other entries
+  // would be a number with nothing behind it.
+  const sectionCounts = useMemo<Partial<Record<Section, number>>>(
+    () => ({ management: workers.length, groups: groups.length }),
+    [workers.length, groups.length],
+  );
 
   return (
     <View style={styles.root}>
@@ -79,7 +89,7 @@ export function WorkersConsole({ onExit }: { onExit: () => void }): ReactElement
                   item={item}
                   active={item.id === section}
                   onSelect={setSection}
-                  count={item.id === "management" ? workers.length : undefined}
+                  count={sectionCounts[item.id]}
                 />
               ))}
             </View>
@@ -105,6 +115,9 @@ export function WorkersConsole({ onExit }: { onExit: () => void }): ReactElement
                 isRefetching={isRefetching}
                 onCreated={refetch}
               />
+            ) : null}
+            {section === "groups" ? (
+              <WorkerGroupsSection groups={groups} workers={workers} onChanged={refetch} />
             ) : null}
             {section === "capabilities" ? <CapabilitiesSection /> : null}
           </ScrollView>

@@ -117,6 +117,7 @@ BySpace 现在管的是**会话**：你选一个 workspace，起一个 agent，�
 | 004  | tool guard：21 条规则（QwenPaw 移植）+ 三档裁决                         | `c0d31d5e6`             |
 | 005  | 协议与 daemon：8 对 RPC + `WorkerService` + `WorkerSession`，端到端验证 | `a77a9e4b4`             |
 | 006  | 侧栏入口 + 独立路由 + 名册屏幕；浏览器里跑通到真实创建 worker           | `1a1371fef` `cd420c083` |
+| 007  | 独立 console 页（自带侧栏，不套 BySpace 壳）+ `worker.task.list`        | `2b27a8856`             |
 
 **第一批已完成，用户已经能看见并用。** 侧栏有 Workers，进去能看名册、能选角色建 worker。
 

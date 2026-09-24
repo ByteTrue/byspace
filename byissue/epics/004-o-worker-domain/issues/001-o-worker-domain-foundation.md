@@ -459,3 +459,57 @@ npx tsx src/server/worker/verify-worker-rpc.e2e.ts
 判定“产生当前状态的动作”需要读历史，所以这个判断交给**唯一的状态写入入口**（它能读同一事务里的历史），而不是纯函数。
 
 新增 3 个用例：合法边配错动作被拒且状态与历史均不变；同一状态配无关动作被拒；in-flight 任务的进度报告放行。
+
+### 切片 008：项目组（存储 + 协议 + 界面）
+
+**Owner 裁决：B 为主线（协调者自己建组拉人），A 为兜底（手工建组）。** 本切片做的是 A——它既是可用能力，也是 B 所需的地基。
+
+**数据库强制的约束。** "谁负责"必须可信，所以让它**在 schema 层不可表示**，而不是靠应用代码检查：
+
+```sql
+CREATE UNIQUE INDEX idx_worker_group_one_coordinator
+  ON worker_group_members(group_id) WHERE role = 'coordinator';
+```
+
+为此做了三件事，缺一不可：实测 SQLite 确实执行部分唯一索引；写一条**绕过 store 检查、直接 INSERT** 的用例证明约束真的成立（否则注释是空话）；把"两个协调者"和"重复成员"分开测——第一版脚本用同一个 worker 同时触发两条规则，结果只测到了"已是成员"，协调者分支根本没被执行。
+
+**两处建模决定。** 组绑的是 `project_id` 而不是路径，checkout 移动后组仍指向同一项目；`workspace_id` 可空，名册先于具体工作目录存在。
+
+**协议与界面。** 4 对 RPC（list / create / add_member / remove_member），create 支持**一次调用带完整名册**，协调者建队只需一步。console 新增 Groups 分区（计数徽标），创建表单可选项目、指定协调者、勾选成员。
+
+**被测试抓出的三个真问题：**
+
+1. **roster 顺序不确定。** 原本按 `joined_at, worker_id` 排序，但 worker id 是随机十六进制，同毫秒加入的成员**每次读取顺序都可能不同**。改按 `rowid`（插入顺序）——这才是"名册"的意思。
+2. **schema 版本号没随升级记录。** 建表用 `IF NOT EXISTS` 所以表会出现，但版本停在 1，将来真需要迁移时会重复执行同一步。补了版本分支，加"升级后旧数据仍在"的用例。
+3. **我自己写的 Chip 有个静默 bug（浏览器验证才发现）。** 它有个"聪明"的默认 `value ?? label`：成员 chip 传了 `value`，项目与协调者 chip 没传，于是**存的是显示名而 `selected` 比的是 id**，那两个 chip 永远选不中、Create 按钮永远禁用。控制台只显示"未选中"，没有任何报错。修法是**删掉默认值、让 `value` 必填**——这类 bug 就不再有静默的可能。
+
+**验证：**
+
+```
+verify-worker-rpc.e2e.ts → 18 项全通
+  （新增 create group / 第二协调者被拒 / 加成员 / 列出）
+worker 相关 vitest        → 9 files / 144 tests
+typecheck 0 错误 / lint 0 错误 / format 全通过
+```
+
+**浏览器端到端确认：** Groups 分区 → New group → 填名、选项目（byspace）、指定协调者（Alice）、勾选成员（Bob）→ Create → 列表出现 `Pricing page / Coordinator: Alice / +1 member`。数据库落盘核对一致：
+
+```
+grp_8d892296073b | Pricing page | prj_405024cae814dd4f | active
+  wkr_4383c89da6c9 | coordinator   (Alice)
+  wkr_e813856df209 | member        (Bob)
+```
+
+### 关于 B（协调者自己建组拉人）：方案已定，改为照搬上游
+
+**Owner 指出 QoderWake 是用 CLI + skills 实现的，要求直接参考而非自创。核对后确认 Owner 正确，我此前的"worker 工具目录"方案是在重新发明轮子。**
+
+上游做法（一手证据在 `builtin-skills/qoderwake-cli/SKILL.md`）：waker **通过 `qoderwake` CLI 干活**（`waker create`、`group create --waker`、`group add-waker` 都是命令行），CLI 在 agent 的 PATH 里，身份从环境变量注入；**skill 只是说明层**，告诉 agent 该跑哪些命令、有什么安全规则（如"创建员工前必须二次确认"）。**没有专门的 agent 工具 API**——agent 本来就有 Bash。
+
+BySpace 两侧都已具备同样机制：`packages/cli` 与 `skills/` 目录。因此 B 的实现路径是：
+
+1. **给 BySpace CLI 补齐组与 worker 的管理命令**（现无）。
+2. **写一份 worker 侧的 skill** 说明命令与规则。
+3. 让 worker 的角色模板带上它。
+
+**安全边界要写清：** 上游自己明确区分"对话规则"与"daemon 权限裁决"，并声明 skill 里的确认要求**不改变**运行时权限。BySpace 同理——skill 是给模型的规则，真正的边界在 daemon 权限层。这也正是仍开放的"worker 能否创建 worker"那条待定项。

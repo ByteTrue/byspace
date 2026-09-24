@@ -8,10 +8,11 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { IllegalWorkerTaskTransitionError } from "./worker-task-state.js";
-import { WorkerStore } from "./worker-store.js";
+import { SCHEMA_VERSION, WorkerGroupCoordinatorError, WorkerStore } from "./worker-store.js";
 
 let dir: string;
 let store: WorkerStore;
@@ -39,7 +40,51 @@ afterEach(() => {
 
 describe("worker store", () => {
   it("records the schema version so the domain can migrate forward", () => {
-    expect(store.getSchemaVersion()).toBe(1);
+    // Asserts the invariant, not the literal: the point is that a fresh
+    // database reports the schema the code was written against, so a bump that
+    // forgets to record itself fails here.
+    expect(store.getSchemaVersion()).toBe(SCHEMA_VERSION);
+  });
+
+  it("records the version when opening a database from an older schema", () => {
+    // A file of its own: this closes a store, and the shared one must survive
+    // for the other cases in this block.
+    const databasePath = path.join(dir, "upgrade-version.db");
+    new WorkerStore({ databasePath }).close();
+
+    const legacy = new DatabaseSync(databasePath);
+    legacy.exec("DELETE FROM worker_schema_version");
+    legacy
+      .prepare("INSERT INTO worker_schema_version (version, applied_at) VALUES (1, ?)")
+      .run("2026-01-01T00:00:00.000Z");
+    legacy.close();
+
+    const upgraded = new WorkerStore({ databasePath });
+    try {
+      // Without this the upgraded database would keep claiming version 1 and a
+      // later migration would try to apply the same step again.
+      expect(upgraded.getSchemaVersion()).toBe(SCHEMA_VERSION);
+      // The new tables exist, so the upgrade really happened.
+      expect(upgraded.listGroups()).toEqual([]);
+    } finally {
+      upgraded.close();
+    }
+  });
+
+  it("keeps existing data across the schema upgrade", () => {
+    const databasePath = path.join(dir, "upgrade-data.db");
+    const before = new WorkerStore({ databasePath });
+    before.createWorker(WORKER);
+    before.createTask({ taskId: "t1", workerId: "w1", title: "Build it" });
+    before.close();
+
+    const upgraded = new WorkerStore({ databasePath });
+    try {
+      expect(upgraded.getWorker("w1")?.name).toBe("Alice");
+      expect(upgraded.getTask("t1")?.title).toBe("Build it");
+    } finally {
+      upgraded.close();
+    }
   });
 
   it("round-trips a worker", () => {
@@ -302,5 +347,129 @@ describe("worker store", () => {
     } finally {
       reopened.close();
     }
+  });
+});
+
+describe("worker groups", () => {
+  const GROUP = {
+    id: "grp_1",
+    name: "Pricing page",
+    projectId: "prj_abc",
+    workspaceId: "ws_1",
+    goal: "Ship the pricing page",
+  };
+
+  beforeEach(() => {
+    store.createWorker({ ...WORKER, id: "w2", name: "Bob" });
+    store.createGroup(GROUP);
+  });
+
+  it("round-trips a group bound to a project and workspace", () => {
+    expect(store.getGroup("grp_1")).toMatchObject({
+      name: "Pricing page",
+      projectId: "prj_abc",
+      workspaceId: "ws_1",
+      goal: "Ship the pricing page",
+      status: "active",
+    });
+    expect(store.listGroups().map((g) => g.id)).toEqual(["grp_1"]);
+  });
+
+  it("allows a group with no workspace yet", () => {
+    // The roster and channels are useful before a workspace is chosen.
+    const group = store.createGroup({ id: "grp_2", name: "Unassigned", projectId: "prj_abc" });
+    expect(group.workspaceId).toBeNull();
+    expect(group.goal).toBeNull();
+  });
+
+  it("keeps the roster ordered with the coordinator first", () => {
+    store.addGroupMember({ groupId: "grp_1", workerId: "w1", role: "member" });
+    store.addGroupMember({ groupId: "grp_1", workerId: "w2", role: "coordinator" });
+
+    expect(store.listGroupMembers("grp_1").map((m) => `${m.role}:${m.workerId}`)).toEqual([
+      "coordinator:w2",
+      "member:w1",
+    ]);
+  });
+
+  it("refuses a second coordinator at the database level", () => {
+    // "Who is in charge" must be trustworthy. Enforcing it in the schema makes
+    // two coordinators unrepresentable rather than merely discouraged.
+    store.addGroupMember({ groupId: "grp_1", workerId: "w1", role: "coordinator" });
+    expect(() =>
+      store.addGroupMember({ groupId: "grp_1", workerId: "w2", role: "coordinator" }),
+    ).toThrow(WorkerGroupCoordinatorError);
+
+    expect(store.listGroupMembers("grp_1")).toHaveLength(1);
+  });
+
+  it("allows each group to have its own coordinator", () => {
+    const second = store.createGroup({ id: "grp_2", name: "Other", projectId: "prj_abc" });
+    store.addGroupMember({ groupId: "grp_1", workerId: "w1", role: "coordinator" });
+    store.addGroupMember({ groupId: second.id, workerId: "w2", role: "coordinator" });
+
+    expect(store.listGroupMembers("grp_1").map((m) => m.workerId)).toEqual(["w1"]);
+    expect(store.listGroupMembers("grp_2").map((m) => m.workerId)).toEqual(["w2"]);
+  });
+
+  it("refuses to add the same worker twice", () => {
+    store.addGroupMember({ groupId: "grp_1", workerId: "w1", role: "member" });
+    expect(() =>
+      store.addGroupMember({ groupId: "grp_1", workerId: "w1", role: "member" }),
+    ).toThrow(/already a member/);
+  });
+
+  it("refuses a member of a group that does not exist", () => {
+    expect(() =>
+      store.addGroupMember({ groupId: "grp_missing", workerId: "w1", role: "member" }),
+    ).toThrow(/unknown worker group/);
+  });
+
+  it("removes a member without touching the others", () => {
+    store.addGroupMember({ groupId: "grp_1", workerId: "w1", role: "coordinator" });
+    store.addGroupMember({ groupId: "grp_1", workerId: "w2", role: "member" });
+
+    store.removeGroupMember({ groupId: "grp_1", workerId: "w1" });
+    expect(store.listGroupMembers("grp_1").map((m) => m.workerId)).toEqual(["w2"]);
+  });
+
+  it("enforces one coordinator in the schema, not only in the store", () => {
+    // The store checks before inserting so it can explain the refusal. This
+    // bypasses that check and writes straight to the table, which is the only
+    // way to show the invariant holds without the store's cooperation.
+    store.addGroupMember({ groupId: "grp_1", workerId: "w1", role: "coordinator" });
+
+    const raw = new DatabaseSync(path.join(dir, "worker.db"));
+    try {
+      expect(() =>
+        raw
+          .prepare(
+            `INSERT INTO worker_group_members (group_id, worker_id, role, joined_at)
+             VALUES ('grp_1', 'w2', 'coordinator', '2026-09-24T00:00:00.000Z')`,
+          )
+          .run(),
+      ).toThrow(/UNIQUE constraint failed/);
+    } finally {
+      raw.close();
+    }
+
+    expect(store.listGroupMembers("grp_1").map((m) => m.workerId)).toEqual(["w1"]);
+  });
+
+  it("refuses a member that is not a worker", () => {
+    expect(() =>
+      store.addGroupMember({ groupId: "grp_1", workerId: "wkr_ghost", role: "member" }),
+    ).toThrow(/unknown worker/);
+  });
+
+  it("leaves the roster empty after removing the only coordinator", () => {
+    // A group without a coordinator is representable: the invariant is "at most
+    // one", not "exactly one". Removing the last one is a state the caller must
+    // handle rather than a crash, and no other group is affected.
+    store.addGroupMember({ groupId: "grp_1", workerId: "w1", role: "coordinator" });
+    store.removeGroupMember({ groupId: "grp_1", workerId: "w1" });
+
+    expect(store.listGroupMembers("grp_1")).toEqual([]);
+    expect(store.getGroup("grp_1")).not.toBeNull();
   });
 });

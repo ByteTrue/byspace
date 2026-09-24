@@ -347,3 +347,223 @@ describe("worker guard RPC", () => {
     expect(payload.findings[0]!.remediation.length).toBeGreaterThan(0);
   });
 });
+
+describe("worker group RPC", () => {
+  let workerIds: string[];
+
+  beforeEach(async () => {
+    workerIds = [];
+    for (const [name, templateId] of [
+      ["Lead", "project-administrator"],
+      ["Alice", "frontend-developer"],
+      ["Bob", "backend-engineer"],
+    ] as const) {
+      await harness.session.handleWorkerCreateRequest(
+        request({
+          type: "worker.worker.create.request",
+          requestId: `create-${name}`,
+          name,
+          templateId,
+        }),
+      );
+      workerIds.push(
+        (takeOutbound(harness.emitted).payload as { worker: { id: string } }).worker.id,
+      );
+    }
+  });
+
+  it("creates a group with a roster in one call", async () => {
+    const [lead, alice, bob] = workerIds as [string, string, string];
+
+    await harness.session.handleGroupCreateRequest(
+      request({
+        type: "worker.group.create.request",
+        requestId: "gc1",
+        name: "Pricing page",
+        projectId: "prj_abc",
+        workspaceId: "ws_1",
+        goal: "Ship the pricing page",
+        coordinatorWorkerId: lead,
+        memberWorkerIds: [alice, bob],
+      }),
+    );
+
+    const message = takeOutbound(harness.emitted);
+    expect(message.type).toBe("worker.group.create.response");
+    const group = (
+      message.payload as {
+        group: {
+          id: string;
+          name: string;
+          projectId: string;
+          workspaceId: string | null;
+          goal: string | null;
+          status: string;
+          members: Array<{ workerId: string; role: string }>;
+        };
+      }
+    ).group;
+
+    expect(group.id).toMatch(/^grp_/);
+    expect(group).toMatchObject({
+      name: "Pricing page",
+      projectId: "prj_abc",
+      workspaceId: "ws_1",
+      goal: "Ship the pricing page",
+      status: "active",
+    });
+    // The coordinator is first, and named as such.
+    expect(group.members.map((m) => `${m.role}:${m.workerId}`)).toEqual([
+      `coordinator:${lead}`,
+      `member:${alice}`,
+      `member:${bob}`,
+    ]);
+  });
+
+  it("does not list the coordinator twice when it is also a member", async () => {
+    const [lead] = workerIds as [string];
+
+    await harness.session.handleGroupCreateRequest(
+      request({
+        type: "worker.group.create.request",
+        requestId: "gc2",
+        name: "Solo",
+        projectId: "prj_abc",
+        coordinatorWorkerId: lead,
+        memberWorkerIds: [lead],
+      }),
+    );
+
+    const group = (takeOutbound(harness.emitted).payload as { group: { members: unknown[] } })
+      .group;
+    expect(group.members).toHaveLength(1);
+  });
+
+  it("leaves no group behind when the roster is rejected", async () => {
+    // A group whose roster failed is not a group; keeping it would show an
+    // empty team to the user and make the failure look like success.
+    await harness.session.handleGroupCreateRequest(
+      request({
+        type: "worker.group.create.request",
+        requestId: "gc3",
+        name: "Doomed",
+        projectId: "prj_abc",
+        coordinatorWorkerId: "wkr_ghost",
+      }),
+    );
+
+    expect(takeOutbound(harness.emitted).type).toBe("rpc_error");
+
+    await harness.session.handleGroupListRequest(
+      request({ type: "worker.group.list.request", requestId: "gl" }),
+    );
+    const groups = (takeOutbound(harness.emitted).payload as { groups: unknown[] }).groups;
+    expect(groups).toEqual([]);
+  });
+
+  it("refuses a second coordinator and says why", async () => {
+    const [lead, alice] = workerIds as [string, string];
+    await harness.session.handleGroupCreateRequest(
+      request({
+        type: "worker.group.create.request",
+        requestId: "gc4",
+        name: "Pricing page",
+        projectId: "prj_abc",
+        coordinatorWorkerId: lead,
+      }),
+    );
+    const groupId = (takeOutbound(harness.emitted).payload as { group: { id: string } }).group.id;
+
+    await harness.session.handleGroupAddMemberRequest(
+      request({
+        type: "worker.group.add_member.request",
+        requestId: "ga1",
+        groupId,
+        workerId: alice,
+        role: "coordinator",
+      }),
+    );
+
+    const message = takeOutbound(harness.emitted);
+    expect(message.type).toBe("rpc_error");
+    expect(JSON.stringify(message)).toContain("already has a coordinator");
+  });
+
+  it("answers a membership change with the whole roster", async () => {
+    const [lead, alice] = workerIds as [string, string];
+    await harness.session.handleGroupCreateRequest(
+      request({
+        type: "worker.group.create.request",
+        requestId: "gc5",
+        name: "Pricing page",
+        projectId: "prj_abc",
+        coordinatorWorkerId: lead,
+      }),
+    );
+    const groupId = (takeOutbound(harness.emitted).payload as { group: { id: string } }).group.id;
+
+    await harness.session.handleGroupAddMemberRequest(
+      request({
+        type: "worker.group.add_member.request",
+        requestId: "ga2",
+        groupId,
+        workerId: alice,
+        role: "member",
+      }),
+    );
+    let group = (takeOutbound(harness.emitted).payload as { group: { members: unknown[] } }).group;
+    expect(group.members).toHaveLength(2);
+
+    await harness.session.handleGroupRemoveMemberRequest(
+      request({
+        type: "worker.group.remove_member.request",
+        requestId: "gr1",
+        groupId,
+        workerId: alice,
+      }),
+    );
+    group = (takeOutbound(harness.emitted).payload as { group: { members: unknown[] } }).group;
+    expect(group.members).toHaveLength(1);
+  });
+
+  it("reports an unknown group as an rpc error", async () => {
+    await harness.session.handleGroupAddMemberRequest(
+      request({
+        type: "worker.group.add_member.request",
+        requestId: "ga3",
+        groupId: "grp_missing",
+        workerId: workerIds[0]!,
+        role: "member",
+      }),
+    );
+    const message = takeOutbound(harness.emitted);
+    expect(message.type).toBe("rpc_error");
+    expect(JSON.stringify(message)).toContain("Unknown worker group");
+  });
+
+  it("keeps groups scoped to their own project", async () => {
+    const [lead] = workerIds as [string];
+    for (const [requestId, name, projectId] of [
+      ["a", "One", "prj_a"],
+      ["b", "Two", "prj_b"],
+    ] as const) {
+      await harness.session.handleGroupCreateRequest(
+        request({
+          type: "worker.group.create.request",
+          requestId,
+          name,
+          projectId,
+          coordinatorWorkerId: lead,
+        }),
+      );
+    }
+
+    await harness.session.handleGroupListRequest(
+      request({ type: "worker.group.list.request", requestId: "gl2" }),
+    );
+    const groups = (
+      takeOutbound(harness.emitted).payload as { groups: Array<{ projectId: string }> }
+    ).groups;
+    expect(groups.map((group) => group.projectId).sort()).toEqual(["prj_a", "prj_b"]);
+  });
+});

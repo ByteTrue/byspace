@@ -2554,6 +2554,14 @@ export class Session {
         return this.workerSession.handleTaskListRequest(msg);
       case "worker.guard.evaluate.request":
         return this.workerSession.handleGuardEvaluateRequest(msg);
+      case "worker.group.list.request":
+        return this.workerSession.handleGroupListRequest(msg);
+      case "worker.group.create.request":
+        return this.workerSession.handleGroupCreateRequest(msg);
+      case "worker.group.add_member.request":
+        return this.workerSession.handleGroupAddMemberRequest(msg);
+      case "worker.group.remove_member.request":
+        return this.workerSession.handleGroupRemoveMemberRequest(msg);
       default:
         return undefined;
     }

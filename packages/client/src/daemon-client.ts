@@ -575,6 +575,22 @@ type WorkerTaskListPayload = Extract<
   SessionOutboundMessage,
   { type: "worker.task.list.response" }
 >["payload"];
+type WorkerGroupListPayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.group.list.response" }
+>["payload"];
+type WorkerGroupCreatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.group.create.response" }
+>["payload"];
+type WorkerGroupAddMemberPayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.group.add_member.response" }
+>["payload"];
+type WorkerGroupRemoveMemberPayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.group.remove_member.response" }
+>["payload"];
 type WorkerGuardEvaluatePayload = Extract<
   SessionOutboundMessage,
   { type: "worker.guard.evaluate.response" }
@@ -2542,6 +2558,73 @@ export class DaemonClient {
         ...(input.workerId !== undefined ? { workerId: input.workerId } : {}),
       },
       responseType: "worker.task.list.response",
+    });
+  }
+
+  async listWorkerGroups(requestId?: string): Promise<WorkerGroupListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "worker.group.list.request" },
+      responseType: "worker.group.list.response",
+    });
+  }
+
+  async createWorkerGroup(
+    input: {
+      name: string;
+      projectId: string;
+      workspaceId?: string | null;
+      goal?: string | null;
+      coordinatorWorkerId?: string;
+      memberWorkerIds?: string[];
+    },
+    requestId?: string,
+  ): Promise<WorkerGroupCreatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "worker.group.create.request",
+        name: input.name,
+        projectId: input.projectId,
+        ...(input.workspaceId !== undefined ? { workspaceId: input.workspaceId } : {}),
+        ...(input.goal !== undefined ? { goal: input.goal } : {}),
+        ...(input.coordinatorWorkerId !== undefined
+          ? { coordinatorWorkerId: input.coordinatorWorkerId }
+          : {}),
+        ...(input.memberWorkerIds !== undefined ? { memberWorkerIds: input.memberWorkerIds } : {}),
+      },
+      responseType: "worker.group.create.response",
+    });
+  }
+
+  async addWorkerGroupMember(
+    input: { groupId: string; workerId: string; role: "coordinator" | "member" },
+    requestId?: string,
+  ): Promise<WorkerGroupAddMemberPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "worker.group.add_member.request",
+        groupId: input.groupId,
+        workerId: input.workerId,
+        role: input.role,
+      },
+      responseType: "worker.group.add_member.response",
+    });
+  }
+
+  async removeWorkerGroupMember(
+    input: { groupId: string; workerId: string },
+    requestId?: string,
+  ): Promise<WorkerGroupRemoveMemberPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "worker.group.remove_member.request",
+        groupId: input.groupId,
+        workerId: input.workerId,
+      },
+      responseType: "worker.group.remove_member.response",
     });
   }
 

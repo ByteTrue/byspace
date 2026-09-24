@@ -188,6 +188,115 @@ export class WorkerSession {
     }
   }
 
+  // ----------------------------------------------------------------- groups
+
+  async handleGroupListRequest(
+    request: Extract<SessionInboundMessage, { type: "worker.group.list.request" }>,
+  ): Promise<void> {
+    try {
+      const groups = this.workerService.listGroups().map((group) => this.toGroupSummary(group));
+      this.host.emit({
+        type: "worker.group.list.response",
+        payload: { requestId: request.requestId, groups },
+      });
+    } catch (error) {
+      this.emitError(request, error);
+    }
+  }
+
+  async handleGroupCreateRequest(
+    request: Extract<SessionInboundMessage, { type: "worker.group.create.request" }>,
+  ): Promise<void> {
+    try {
+      const group = this.workerService.createGroup({
+        name: request.name,
+        projectId: request.projectId,
+        ...(request.workspaceId !== undefined ? { workspaceId: request.workspaceId } : {}),
+        ...(request.goal !== undefined ? { goal: request.goal } : {}),
+        ...(request.coordinatorWorkerId !== undefined
+          ? { coordinatorWorkerId: request.coordinatorWorkerId }
+          : {}),
+        ...(request.memberWorkerIds !== undefined
+          ? { memberWorkerIds: request.memberWorkerIds }
+          : {}),
+      });
+      this.host.emit({
+        type: "worker.group.create.response",
+        payload: { requestId: request.requestId, group: this.toGroupSummary(group) },
+      });
+    } catch (error) {
+      this.emitError(request, error);
+    }
+  }
+
+  async handleGroupAddMemberRequest(
+    request: Extract<SessionInboundMessage, { type: "worker.group.add_member.request" }>,
+  ): Promise<void> {
+    try {
+      this.workerService.addGroupMember({
+        groupId: request.groupId,
+        workerId: request.workerId,
+        role: request.role,
+      });
+      this.emitGroup(request, request.groupId);
+    } catch (error) {
+      this.emitError(request, error);
+    }
+  }
+
+  async handleGroupRemoveMemberRequest(
+    request: Extract<SessionInboundMessage, { type: "worker.group.remove_member.request" }>,
+  ): Promise<void> {
+    try {
+      this.workerService.removeGroupMember({
+        groupId: request.groupId,
+        workerId: request.workerId,
+      });
+      this.emitGroup(request, request.groupId);
+    } catch (error) {
+      this.emitError(request, error);
+    }
+  }
+
+  /** Both member changes answer with the whole group, so a caller needs no refetch. */
+  private emitGroup(
+    request: Extract<
+      SessionInboundMessage,
+      { type: "worker.group.add_member.request" | "worker.group.remove_member.request" }
+    >,
+    groupId: string,
+  ): void {
+    const group = this.toGroupSummary(this.workerService.getGroup(groupId));
+    this.host.emit(
+      request.type === "worker.group.add_member.request"
+        ? {
+            type: "worker.group.add_member.response",
+            payload: { requestId: request.requestId, group },
+          }
+        : {
+            type: "worker.group.remove_member.response",
+            payload: { requestId: request.requestId, group },
+          },
+    );
+  }
+
+  /** Groups always carry their roster: a group without one says nothing useful. */
+  private toGroupSummary(
+    group: ReturnType<WorkerService["getGroup"]>,
+  ): Extract<
+    SessionOutboundMessage,
+    { type: "worker.group.list.response" }
+  >["payload"]["groups"][number] {
+    return {
+      ...group,
+      members: this.workerService.listGroupMembers(group.id).map((member) => ({
+        workerId: member.workerId,
+        role: member.role,
+        joinedAt: member.joinedAt,
+      })),
+    };
+  }
+
   async handleGuardEvaluateRequest(
     request: Extract<SessionInboundMessage, { type: "worker.guard.evaluate.request" }>,
   ): Promise<void> {

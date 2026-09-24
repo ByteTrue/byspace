@@ -91,6 +91,55 @@ async function main(): Promise<void> {
     const allowed = await client.evaluateWorkerGuard({ command: "npm test" });
     checks.push({ name: "guard allow", detail: allowed.decision });
 
+    // Groups: created with a roster in one call, then edited.
+    const created2 = await client.createWorker({ name: "QA", templateId: "qa-engineer" });
+    const group = await client.createWorkerGroup({
+      name: "Pricing page",
+      projectId: "prj_verify",
+      goal: "Ship the pricing page",
+      coordinatorWorkerId: workerId,
+      memberWorkerIds: [created2.worker.id],
+    });
+    checks.push({
+      name: "create group",
+      detail: `${group.group.id} coordinator=${group.group.members.find((m) => m.role === "coordinator")?.workerId}`,
+    });
+
+    // A third worker, so the refusal under test is the coordinator rule rather
+    // than "already a member".
+    const outsider = await client.createWorker({ name: "Ops", templateId: "devops-engineer" });
+    let coordinatorRefusal = "NOT REFUSED";
+    try {
+      await client.addWorkerGroupMember({
+        groupId: group.group.id,
+        workerId: outsider.worker.id,
+        role: "coordinator",
+      });
+    } catch (error) {
+      coordinatorRefusal = error instanceof Error ? error.message : String(error);
+    }
+    checks.push({
+      name: "second coordinator refused",
+      detail: coordinatorRefusal.slice(0, 70),
+    });
+
+    await client.addWorkerGroupMember({
+      groupId: group.group.id,
+      workerId: outsider.worker.id,
+      role: "member",
+    });
+    const afterAdd = await client.listWorkerGroups();
+    checks.push({
+      name: "member added",
+      detail: `${afterAdd.groups[0]?.members.length ?? 0} member(s)`,
+    });
+
+    const listed = await client.listWorkerGroups();
+    checks.push({
+      name: "list groups",
+      detail: listed.groups.map((g) => `${g.name}:${g.members.length}`).join(", "),
+    });
+
     // Two different refusals, both worth proving over the wire: an edge the
     // graph forbids, and a legal edge carrying an action that does not produce
     // it. The second is the one that keeps history truthful.

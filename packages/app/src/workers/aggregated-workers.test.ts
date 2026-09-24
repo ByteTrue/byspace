@@ -15,6 +15,7 @@ function runtimeWith(input: {
   workers?: Record<string, unknown[]>;
   templates?: Record<string, unknown[]>;
   tasks?: Record<string, unknown[]>;
+  groups?: Record<string, unknown[]>;
   failHosts?: string[];
 }): WorkerRuntime {
   return {
@@ -35,12 +36,16 @@ function runtimeWith(input: {
           listWorkerTasks: async () => {
             throw new Error("worker_request_failed");
           },
+          listWorkerGroups: async () => {
+            throw new Error("worker_request_failed");
+          },
         };
       }
       return {
         listWorkers: async () => ({ workers: input.workers?.[serverId] ?? [] }),
         listWorkerTemplates: async () => ({ templates: input.templates?.[serverId] ?? [] }),
         listWorkerTasks: async () => ({ tasks: input.tasks?.[serverId] ?? [] }),
+        listWorkerGroups: async () => ({ groups: input.groups?.[serverId] ?? [] }),
       } as never;
     },
   } as WorkerRuntime;
@@ -86,6 +91,7 @@ describe("fetchAggregatedWorkers", () => {
     if (state.status !== "loaded") return;
     expect(state.workers).toEqual([]);
     expect(state.tasks).toEqual([]);
+    expect(state.groups).toEqual([]);
     expect(state.hostErrors).toEqual([]);
   });
 
@@ -103,6 +109,7 @@ describe("fetchAggregatedWorkers", () => {
             listWorkerTasks: async () => {
               throw new Error("task fetch unavailable");
             },
+            listWorkerGroups: async () => ({ groups: [] }),
           }) as never,
       } as WorkerRuntime,
     });

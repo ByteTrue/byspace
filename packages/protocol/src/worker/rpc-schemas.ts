@@ -237,7 +237,104 @@ export const WorkerGuardEvaluateResponseSchema = z.object({
   }),
 });
 
+// ------------------------------------------------------------------ groups
+
+/** What a member contributes. Exactly one member per group is its coordinator. */
+export const WorkerGroupMemberRoleSchema = z.enum(["coordinator", "member"]);
+
+export const WorkerGroupSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  /** The daemon's project id. A group outlives a moved checkout. */
+  projectId: z.string(),
+  /** Null until a workspace is chosen; the roster exists before one does. */
+  workspaceId: z.string().nullable(),
+  goal: z.string().nullable(),
+  status: z.enum(["active", "archived"]),
+  members: z.array(
+    z.object({
+      workerId: z.string(),
+      role: WorkerGroupMemberRoleSchema,
+      joinedAt: z.string(),
+    }),
+  ),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const WorkerGroupListRequestSchema = z.object({
+  type: z.literal("worker.group.list.request"),
+  requestId: z.string(),
+});
+
+export const WorkerGroupListResponseSchema = z.object({
+  type: z.literal("worker.group.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    groups: z.array(WorkerGroupSummarySchema),
+  }),
+});
+
+/**
+ * Create a group on a project, optionally with its roster in the same call.
+ *
+ * The roster is part of creation rather than a follow-up so a coordinator can
+ * stand up a team in one step, and so a rejected roster cannot leave a
+ * half-made group behind.
+ */
+export const WorkerGroupCreateRequestSchema = z.object({
+  type: z.literal("worker.group.create.request"),
+  requestId: z.string(),
+  name: z.string().min(1),
+  projectId: z.string().min(1),
+  workspaceId: z.string().min(1).nullable().optional(),
+  goal: z.string().min(1).nullable().optional(),
+  /** The worker that owns the goal; it is added to the roster as coordinator. */
+  coordinatorWorkerId: z.string().min(1).optional(),
+  memberWorkerIds: z.array(z.string().min(1)).optional(),
+});
+
+export const WorkerGroupCreateResponseSchema = z.object({
+  type: z.literal("worker.group.create.response"),
+  payload: z.object({
+    requestId: z.string(),
+    group: WorkerGroupSummarySchema,
+  }),
+});
+
+export const WorkerGroupAddMemberRequestSchema = z.object({
+  type: z.literal("worker.group.add_member.request"),
+  requestId: z.string(),
+  groupId: z.string().min(1),
+  workerId: z.string().min(1),
+  role: WorkerGroupMemberRoleSchema,
+});
+
+export const WorkerGroupAddMemberResponseSchema = z.object({
+  type: z.literal("worker.group.add_member.response"),
+  payload: z.object({
+    requestId: z.string(),
+    group: WorkerGroupSummarySchema,
+  }),
+});
+
+export const WorkerGroupRemoveMemberRequestSchema = z.object({
+  type: z.literal("worker.group.remove_member.request"),
+  requestId: z.string(),
+  groupId: z.string().min(1),
+  workerId: z.string().min(1),
+});
+
+export const WorkerGroupRemoveMemberResponseSchema = z.object({
+  type: z.literal("worker.group.remove_member.response"),
+  payload: z.object({
+    requestId: z.string(),
+    group: WorkerGroupSummarySchema,
+  }),
+});
+
 // Inferred types, exported on demand rather than all at once: consumers need the
 // shapes, not the validators, and an export nobody imports drifts unnoticed.
 // `WorkerTaskSummary` is the one the app derives its task-state union from.
 export type WorkerTaskSummary = z.infer<typeof WorkerTaskSummarySchema>;
+export type WorkerGroupSummary = z.infer<typeof WorkerGroupSummarySchema>;
