@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { IllegalWorkerTaskTransitionError } from "./worker-task-state.js";
 import {
   SCHEMA_VERSION,
+  WorkerGoalBudgetExhaustedError,
   WorkerGoalConflictError,
   WorkerGroupCoordinatorError,
   WorkerStore,
@@ -1067,5 +1068,98 @@ describe("suggested turn limits", () => {
   it("stays inside the allowed range", () => {
     expect(WorkerStore.suggestTurnLimit(0)).toBeLessThanOrEqual(96);
     expect(WorkerStore.suggestTurnLimit(1000)).toBe(96);
+  });
+});
+
+describe("goal budget stops waking", () => {
+  const GROUP = { id: "grp_1", name: "Pricing page", projectId: "prj_abc" };
+
+  beforeEach(() => {
+    store.createWorker({ ...WORKER, id: "w2", name: "Bob" });
+    store.createGroup(GROUP);
+  });
+
+  function createGoal(turnLimit: number) {
+    return store.createGoal({
+      goalId: "goal_1",
+      groupId: "grp_1",
+      content: "Ship it",
+      turnLimit,
+    });
+  }
+
+  function send(deliveryPolicy: "wake" | "store_only") {
+    return store.createMessage({
+      messageId: `msg_${Math.random().toString(16).slice(2)}`,
+      groupId: "grp_1",
+      senderWorkerId: "w1",
+      body: "hello",
+      audience: ["w2"],
+      deliveryPolicy,
+    });
+  }
+
+  it("allows the message that reaches the limit, then refuses the next", () => {
+    // The limit is how many are allowed, not one fewer.
+    createGoal(1);
+    expect(() => send("wake")).not.toThrow();
+    expect(() => send("wake")).toThrow(WorkerGoalBudgetExhaustedError);
+  });
+
+  it("refuses a waking send once the budget is spent", () => {
+    createGoal(1);
+    send("wake");
+    expect(() => send("wake")).toThrow(/has spent its budget of 1 public messages/);
+  });
+
+  it("still allows a store-only message past the limit", () => {
+    // The budget stops wakes, not communication: a spent group can still record
+    // something, and required lifecycle updates must not be dropped to save
+    // budget.
+    createGoal(1);
+    send("wake");
+    expect(() => send("store_only")).not.toThrow();
+    // And nobody was woken by it.
+    expect(store.listInbox("w2")).toHaveLength(1);
+  });
+
+  it("counts a store-only message: it is public, it just does not wake", () => {
+    // The budget bounds *public* messages, and visibility is what makes one
+    // public. A store-only message is readable by the group, so it counts; only
+    // a private message is free.
+    createGoal(3);
+    send("store_only");
+    send("store_only");
+    expect(store.getGoal("grp_1")?.turnUsed).toBe(2);
+    expect(() => send("wake")).not.toThrow();
+  });
+
+  it("does not enforce a budget on a group with no goal", () => {
+    // A group can exist before its objective does; nothing bounds it yet.
+    expect(() => send("wake")).not.toThrow();
+  });
+
+  it("lets a reopened goal wake again with its new budget", () => {
+    createGoal(1);
+    send("wake");
+    expect(() => send("wake")).toThrow(WorkerGoalBudgetExhaustedError);
+
+    store.mutateGoal({
+      groupId: "grp_1",
+      action: "pause",
+      expectedGeneration: 1,
+      expectedRevision: 1,
+      pauseReason: "turn_limit",
+    });
+    store.mutateGoal({
+      groupId: "grp_1",
+      action: "reopen",
+      expectedGeneration: 1,
+      expectedRevision: 2,
+      turnLimit: 5,
+    });
+
+    expect(() => send("wake")).not.toThrow();
+    expect(store.getGoal("grp_1")?.turnUsed).toBe(1);
   });
 });

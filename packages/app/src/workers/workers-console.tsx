@@ -4,6 +4,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { ArrowLeft, Blocks, LayoutDashboard, Plus, Users, UsersRound } from "lucide-react-native";
 
 import { Button } from "@/components/ui/button";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useWorkers } from "@/hooks/use-workers";
@@ -48,6 +49,7 @@ const NAV_GROUPS: { title: string; items: { id: Section; label: string; icon: ty
   ];
 
 export function WorkersConsole({ onExit }: { onExit: () => void }): ReactElement {
+  const isCompact = useIsCompactFormFactor();
   const [section, setSection] = useState<Section>("dashboard");
   const openManagement = useCallback(() => setSection("management"), []);
   const { loadState, hostErrors, refetch, isRefetching } = useWorkers();
@@ -64,9 +66,12 @@ export function WorkersConsole({ onExit }: { onExit: () => void }): ReactElement
     [workers.length, groups.length],
   );
 
+  // A fixed-width column beside the content needs room for both. Below that,
+  // the same destinations become a horizontal strip so the content keeps the
+  // full width instead of collapsing to a few characters per line.
   return (
-    <View style={styles.root}>
-      <View style={styles.sidebar}>
+    <View style={isCompact ? styles.rootCompact : styles.root}>
+      <View style={isCompact ? styles.sidebarCompact : styles.sidebar}>
         <View style={styles.sidebarHeader}>
           <Pressable
             onPress={onExit}
@@ -79,10 +84,16 @@ export function WorkersConsole({ onExit }: { onExit: () => void }): ReactElement
             <Text style={styles.exitLabel}>BySpace</Text>
           </Pressable>
         </View>
-        <ScrollView style={styles.sidebarScroll} contentContainerStyle={styles.sidebarContent}>
+        <ScrollView
+          style={isCompact ? styles.sidebarScrollCompact : styles.sidebarScroll}
+          contentContainerStyle={isCompact ? styles.sidebarContentCompact : styles.sidebarContent}
+          horizontal={isCompact}
+        >
           {NAV_GROUPS.map((group) => (
-            <View key={group.title} style={styles.navGroup}>
-              <Text style={styles.navGroupTitle}>{group.title}</Text>
+            <View key={group.title} style={isCompact ? styles.navGroupCompact : styles.navGroup}>
+              <Text style={isCompact ? styles.navGroupTitleCompact : styles.navGroupTitle}>
+                {group.title}
+              </Text>
               {group.items.map((item) => (
                 <NavRow
                   key={item.id}
@@ -90,6 +101,7 @@ export function WorkersConsole({ onExit }: { onExit: () => void }): ReactElement
                   active={item.id === section}
                   onSelect={setSection}
                   count={sectionCounts[item.id]}
+                  compact={isCompact}
                 />
               ))}
             </View>
@@ -137,11 +149,14 @@ function NavRow({
   active,
   count,
   onSelect,
+  compact,
 }: {
   item: { id: Section; label: string; icon: typeof Users };
   active: boolean;
   count?: number;
   onSelect: (id: Section) => void;
+  /** Laid out in a horizontal strip rather than a column. */
+  compact: boolean;
 }): ReactElement {
   const Icon = item.icon;
   const handlePress = useCallback(() => onSelect(item.id), [item.id, onSelect]);
@@ -149,7 +164,7 @@ function NavRow({
   return (
     <Pressable
       onPress={handlePress}
-      style={active ? styles.navRowActive : styles.navRow}
+      style={NAV_ROW_STYLES[`${compact ? "compact" : "wide"}:${active ? "active" : "idle"}`]}
       testID={`workers-console-nav-${item.id}`}
       accessibilityRole="button"
       accessibilityLabel={item.label}
@@ -512,6 +527,46 @@ const styles = StyleSheet.create((theme) => ({
     borderRightColor: theme.colors.border,
     backgroundColor: theme.colors.surfaceSidebar,
   },
+  rootCompact: {
+    flex: 1,
+    flexDirection: "column",
+    backgroundColor: theme.colors.surface0,
+  },
+  sidebarCompact: {
+    flexShrink: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceSidebar,
+  },
+  sidebarScrollCompact: { flexGrow: 0 },
+  sidebarContentCompact: {
+    paddingHorizontal: theme.spacing[3],
+    paddingBottom: theme.spacing[3],
+    gap: theme.spacing[4],
+    alignItems: "center",
+  },
+  navGroupCompact: { gap: theme.spacing[1] },
+  navGroupTitleCompact: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  navRowCompact: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.md,
+  },
+  navRowCompactActive: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface2,
+  },
   sidebarHeader: { padding: theme.spacing[3] },
   sidebarScroll: { flex: 1, minHeight: 0 },
   sidebarContent: {
@@ -729,3 +784,16 @@ const styles = StyleSheet.create((theme) => ({
     textAlign: "center",
   },
 }));
+/**
+ * The nav row's four visual states.
+ *
+ * Keyed by layout and selection rather than written as a conditional chain:
+ * nested ternaries are not allowed here, and `compact ? active ? ...` is the
+ * shape that rule exists to prevent.
+ */
+const NAV_ROW_STYLES = {
+  "wide:idle": () => styles.navRow,
+  "wide:active": () => styles.navRowActive,
+  "compact:idle": () => styles.navRowCompact,
+  "compact:active": () => styles.navRowCompactActive,
+} as const;

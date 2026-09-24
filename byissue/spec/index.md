@@ -11,6 +11,7 @@ BySpace 让用户从手机 PWA、Web 或 CLI 查看和控制自己开发环境�
 - [Workspace](workspace.md) — 侧栏行内信息、分支与推送状态、hover 状态展示与 Agent 精炼命名。
 - [连接与发布通道](connection.md) — App 与 Relay 地址按通道选择、连接安全边界与配对 hostname。
 - [通知送达](notifications.md) — 各平台怎样收到「agent 需要你」的通知，Web Push 的凭据归属与加密边界，以及 PWA 与局域网直连的互斥。
+- [Worker 与项目组](worker.md) — 数字员工与项目组的长期对象模型、提及即唤醒的消息路由、目标与预算的边界，以及为什么「谁负责」由数据库保证。
 
 系统架构、协议、发布和性能的工程约束仍由 `docs/` 中的主题文档负责。Project Spec 记录用户能依赖的当前产品行为；实现过程和验证证据留在已关闭 Issue。
 
@@ -20,6 +21,7 @@ BySpace 让用户从手机 PWA、Web 或 CLI 查看和控制自己开发环境�
 2. 用户选择 workspace 和 Agent，在对话 pane 中查看流式输出、工具调用和上下文状态。
 3. 需要 shell 交互时，Terminal 在同一连接上提供实时输出，并能在重连后恢复。
 4. CLI 可以脚本化地驱动 daemon、workspace 和 Agent，不改变 daemon 与用户项目的所有权边界。
+5. 需要把一件事整个托付出去时，用户向一个项目组提需求；组里的协调者拉人、派活、汇总，并把进展和结果汇报回来。
 
 ## 边界与考量
 

@@ -209,6 +209,7 @@ async function main(): Promise<void> {
       checks,
       groupId: group.group.id,
       coordinatorWorkerId: workerId,
+      memberWorkerId: created2.worker.id,
     });
 
     for (const check of checks) {
@@ -371,8 +372,9 @@ async function verifyGoal(input: {
   checks: Array<{ name: string; detail: string }>;
   groupId: string;
   coordinatorWorkerId: string;
+  memberWorkerId: string;
 }): Promise<void> {
-  const { client, checks, groupId, coordinatorWorkerId } = input;
+  const { client, checks, groupId, coordinatorWorkerId, memberWorkerId } = input;
 
   const created = await client.createWorkerGoal({
     groupId,
@@ -482,16 +484,81 @@ async function verifyGoal(input: {
     expectedGeneration: completed.goal.generation,
     expectedRevision: completed.goal.revision,
     content: "Add the annual billing page",
+    // The smallest legal budget, so the ceiling can be reached in one send.
+    turnLimit: 1,
   });
   checks.push({
     name: "reopen resets budget",
-    detail: `gen=${reopened.goal.generation} used=${reopened.goal.turnUsed} status=${reopened.goal.status}`,
+    detail: `gen=${reopened.goal.generation} used=${reopened.goal.turnUsed} limit=${reopened.goal.turnLimit} status=${reopened.goal.status}`,
   });
   if (reopened.goal.generation !== 2 || reopened.goal.turnUsed !== 0) {
     throw new Error("reopening must start a new generation with a fresh budget");
   }
   if (reopened.goal.resultMessageId !== null) {
     throw new Error("reopening must clear the previous result");
+  }
+
+  await verifyGoalBudget({
+    client,
+    checks,
+    groupId,
+    coordinatorWorkerId,
+    memberWorkerId,
+  });
+}
+
+/**
+ * The resource-efficiency commitment: a group at its budget ceiling stops
+ * waking people, rather than keeping spending.
+ *
+ * The refusal has to name the budget. Anything else refusing the send — a bad
+ * addressee, a missing goal — would let the check pass while the ceiling went
+ * unenforced, so the reason is asserted too.
+ */
+async function verifyGoalBudget(input: {
+  client: DaemonClient;
+  checks: Array<{ name: string; detail: string }>;
+  groupId: string;
+  coordinatorWorkerId: string;
+  memberWorkerId: string;
+}): Promise<void> {
+  const { client, checks, groupId, coordinatorWorkerId, memberWorkerId } = input;
+
+  await client.sendWorkerMessage({
+    groupId,
+    senderWorkerId: coordinatorWorkerId,
+    body: "spending the last of the budget",
+  });
+  const exhausted = await captureRefusal(() =>
+    client.sendWorkerMessage({
+      groupId,
+      senderWorkerId: coordinatorWorkerId,
+      body: "this would exceed the budget",
+      audience: [memberWorkerId],
+    }),
+  );
+  checks.push({ name: "budget stops waking", detail: exhausted.slice(0, 70) });
+  if (exhausted === "NOT REFUSED") {
+    throw new Error("a wake past the budget must be refused");
+  }
+  if (!exhausted.includes("budget")) {
+    throw new Error(`a wake past the budget was refused for the wrong reason: ${exhausted}`);
+  }
+
+  // But not communication: a spent group can still record something, and
+  // required lifecycle updates must not be dropped to save budget.
+  const stillStored = await client
+    .sendWorkerMessage({
+      groupId,
+      senderWorkerId: coordinatorWorkerId,
+      body: "a note past the budget",
+      deliveryPolicy: "store_only",
+    })
+    .then(() => "ALLOWED")
+    .catch((error) => (error instanceof Error ? error.message : String(error)));
+  checks.push({ name: "budget allows storing", detail: stillStored.slice(0, 60) });
+  if (stillStored !== "ALLOWED") {
+    throw new Error("a store-only message must remain possible past the budget");
   }
 }
 

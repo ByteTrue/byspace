@@ -84,6 +84,23 @@ export class WorkerTaskNotFoundError extends Error {
   }
 }
 
+/**
+ * A worker already has work in flight.
+ *
+ * The bound is one task per worker, because a worker has one workspace: two runs
+ * would be two sessions in the same directory, and neither result could be
+ * attributed cleanly. Refusing is also what makes "the same work is not handed
+ * out twice" true rather than merely intended.
+ */
+export class WorkerBusyError extends Error {
+  constructor(workerId: string) {
+    super(
+      `Worker ${workerId} is already working on a task. Wait for it to settle, or cancel that task first.`,
+    );
+    this.name = "WorkerBusyError";
+  }
+}
+
 export class WorkerRunUnavailableError extends Error {
   constructor() {
     super("This daemon was started without a worker runner, so tasks cannot be run.");
@@ -452,6 +469,13 @@ export class WorkerService {
 
     const task = this.getTask(taskId);
     const worker = this.getWorker(task.workerId);
+
+    // Checked before the transition, so a refused run leaves the task untouched
+    // rather than acknowledged-then-abandoned.
+    if (this.getStore().countInProgressTasks(worker.id) > 0) {
+      throw new WorkerBusyError(worker.id);
+    }
+
     const template = await this.loadTemplate(worker.templateId);
 
     this.transitionTask({

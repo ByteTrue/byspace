@@ -12,7 +12,7 @@ import { join } from "node:path";
 import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { WorkerRunUnavailableError, WorkerService } from "./service.js";
+import { WorkerBusyError, WorkerRunUnavailableError, WorkerService } from "./service.js";
 import type { WorkerRunner } from "./worker-runner.js";
 
 const silentLogger = pino({ level: "silent" });
@@ -145,6 +145,47 @@ describe("worker service runTask", () => {
     expect(input.workspacePath).toBe(workspace);
     expect(input.template.id).toBe("frontend-developer");
     expect(Object.keys(input.template.parts).length).toBeGreaterThan(0);
+  });
+
+  it("refuses a second run while one is already in flight", async () => {
+    // A worker has one workspace, so two runs would be two sessions in the same
+    // directory and neither result could be attributed cleanly. The bound is
+    // also what makes "the same work is not handed out twice" true rather than
+    // merely intended.
+    let release: (() => void) | null = null;
+    const run = vi.fn(
+      () =>
+        new Promise<{ kind: "submitted"; agentId: string }>((resolve) => {
+          release = () => resolve({ kind: "submitted", agentId: "agent_1" });
+        }),
+    );
+    const service = createService({ run });
+    const { taskId: first } = await seedTask(service);
+    const workerId = service.getTask(first).workerId;
+    const second = service.createTask({ workerId, title: "A second task" });
+
+    const inFlight = service.runTask(first);
+    // Let the first run reach the point where it has acknowledged the task.
+    await vi.waitFor(() => expect(service.getTask(first).state).toBe("in_progress"));
+
+    await expect(service.runTask(second.taskId)).rejects.toThrow(WorkerBusyError);
+    // The refused task is untouched: it must not be acknowledged then abandoned.
+    expect(service.getTask(second.taskId).state).toBe("planned");
+
+    release?.();
+    await expect(inFlight).resolves.toMatchObject({ state: "submitted" });
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows the next run once the previous one settles", async () => {
+    const run = vi.fn(async () => ({ kind: "submitted" as const, agentId: "agent_1" }));
+    const service = createService({ run });
+    const { taskId: first } = await seedTask(service);
+    const workerId = service.getTask(first).workerId;
+    const second = service.createTask({ workerId, title: "A second task" });
+    await service.runTask(first);
+
+    await expect(service.runTask(second.taskId)).resolves.toMatchObject({ state: "submitted" });
   });
 
   it("refuses clearly when the daemon has no runner", async () => {

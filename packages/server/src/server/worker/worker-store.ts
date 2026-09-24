@@ -238,6 +238,23 @@ export class WorkerGoalConflictError extends Error {
   }
 }
 
+/**
+ * The group has spent the messages its goal allowed.
+ *
+ * Distinct from a plain validation failure because the way forward is a
+ * decision, not a correction: the budget is exhausted, so someone has to reopen
+ * the goal with a new one or accept that the work has stopped. Raising the limit
+ * purely to get around this is exactly what the limit exists to prevent.
+ */
+export class WorkerGoalBudgetExhaustedError extends Error {
+  constructor(groupId: string, turnLimit: number) {
+    super(
+      `Group ${groupId} has spent its budget of ${turnLimit} public messages, so it cannot wake anyone. Reopen the goal with a new budget, or leave the work stopped.`,
+    );
+    this.name = "WorkerGoalBudgetExhaustedError";
+  }
+}
+
 /** A goal mutation is not valid for the goal's current state. */
 export class WorkerGoalActionError extends Error {
   constructor(message: string) {
@@ -672,6 +689,22 @@ export class WorkerStore {
     return row ? toTaskRecord(row) : null;
   }
 
+  /**
+   * How many of a worker's tasks are currently being worked on.
+   *
+   * Used to bound concurrency: a worker has one workspace and one session at a
+   * time, so two tasks in flight for it would be two sessions competing for the
+   * same directory, and neither could be attributed cleanly.
+   */
+  countInProgressTasks(workerId: string): number {
+    const row = this.db
+      .prepare(
+        "SELECT COUNT(*) AS in_progress FROM worker_tasks WHERE worker_id = ? AND state = 'in_progress'",
+      )
+      .get(workerId) as { in_progress: number };
+    return row.in_progress;
+  }
+
   listTasksForWorker(workerId: string): WorkerTaskRecord[] {
     const rows = this.db
       .prepare(
@@ -998,6 +1031,18 @@ export class WorkerStore {
     const { audience, privateTo } = this.validateMessageRecipients(input);
     const intent = input.intent ?? (audience.length > 0 ? "request_action" : "chat");
     const deliveryPolicy = input.deliveryPolicy ?? (audience.length > 0 ? "wake" : "store_only");
+
+    // The budget stops wakes, not communication. A spent group can still be
+    // told something: the reference product is explicit that required lifecycle
+    // updates must not be dropped to save budget, and that no *wake* may be
+    // created past the limit. So this refuses only waking sends, and only when
+    // the budget is actually gone.
+    if (deliveryPolicy === "wake") {
+      const goal = this.getGoal(input.groupId);
+      if (goal && goal.turnUsed >= goal.turnLimit) {
+        throw new WorkerGoalBudgetExhaustedError(input.groupId, goal.turnLimit);
+      }
+    }
     const createdAt = input.createdAt ?? new Date().toISOString();
 
     this.db.exec("BEGIN IMMEDIATE");

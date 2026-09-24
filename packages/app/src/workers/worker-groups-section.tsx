@@ -142,7 +142,7 @@ function GroupRow({
   ));
 
   return (
-    <View style={styles.row} testID={`group-row-${report.groupId}`}>
+    <View style={styles.card} testID={`group-row-${report.groupId}`}>
       <View style={styles.reportHeader}>
         <View style={styles.reportHeaderText}>
           <Text style={styles.rowTitle}>{report.name}</Text>
@@ -419,24 +419,19 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.medium,
   },
   sectionSubtitle: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing[3],
-    paddingVertical: theme.spacing[4],
-    paddingHorizontal: theme.spacing[4],
+  card: {
+    gap: theme.spacing[4],
+    padding: theme.spacing[4],
     borderRadius: theme.borderRadius.md,
     borderWidth: 1,
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface1,
   },
-  rowMain: { flexShrink: 1, gap: theme.spacing[1] },
-  rowTrailing: { alignItems: "flex-end", gap: theme.spacing[1] },
   reportHeader: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
+    flexWrap: "wrap",
     gap: theme.spacing[3],
   },
   reportHeaderText: { flexShrink: 1, gap: theme.spacing[1] },
