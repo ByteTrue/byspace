@@ -374,6 +374,30 @@ npx vitest run packages/app/src/sidebar-nav/model.test.ts \
 
 i18n 的 key-contract 测试扫描 `t("…")` 字面量与 en 资源树的一致性，所以新增的标签不可能只在部分语言生效而无人发现。
 
+### 界面验证（在真实浏览器里跑通）
+
+构建产物未生成，所以用 `npm run dev:app` 起 Expo 连开发 daemon（6778），在真实浏览器里验证。**验证结果：侧栏入口、路由、名册、新建表单、以及一次真实创建全部跑通。**
+
+最终确认的行为：
+
+- 侧栏出现 **Workers**，点击进入 `/workers`；
+- 名册列出真实数据（`Alice / Frontend Developer`）；
+- **New worker** 打开表单，八个角色全部渲染并带技能数（Software Developer 8、Frontend Developer 7…）；
+- 填名、选 **DevOps Engineer**、点 **Create** → 真实创建成功，名册出现 `Bob / DevOps Engineer`；
+- daemon 日志证实 `worker.worker.create.request → response`、`worker.template.list.*`、`worker.worker.list.*` 成对往返。
+
+### 验证过程中发现并修掉的两个真缺陷
+
+这两个都是我自己刚写的代码里的，且都只有在真浏览器里才会暴露。
+
+**一、把过渡态当成终态。** 屏幕在 `connecting` 时显示 “Connect to a host to manage workers.”——这句话读起来是给用户派任务，但用户无事可做；而且每一次重连都会闪一次。改为按 schedules 屏幕的现有语义处理：**`connecting` 与 `loading` 同样显示加载态**。
+
+**二、把 offline 当成 connecting。** 原实现只要没有任何 host 可问就返回 `connecting`。但“所有 host 都离线/出错”与“还在握手”是两件事：前者是已加载状态（空名册 + host 错误），后者才是过渡。把 offline 归为 connecting 会让屏幕永久转圈，因为状态再也不会变得更“可问”。改法与 schedules 一致：**只有在“没有可问的 host”且“至少一个还在 settling”时才是 connecting**。这条改动让一条既有用例失败了——它编码的正是旧错误行为，已修正。
+
+**三、重连会抹掉已加载的名册。** 连接状态进了 query key，而重连不是瞬时的：状态先报 `connecting` 再回到 `online`。在那段窗口里取到的 fetch 合法地回答“仍在连接”，若让它覆盖一份本来正确的名册，每次闪断都会清空屏幕。现在**保留最近一次成功的 payload 直到有新的成功结果**。
+
+**一个未完全定性的点，如实记录：** 让查询在 host 转为 online 时重新取数的触发不可靠（观察到运行时已是 `online` 而 fetch 仍看到 `connecting`）。我用**“未加载则每 2s 重试、加载后停止”** 的轮询代替它：这是自愈的，且因第二项修正而在 offline 时也会终止（offline 返回 `loaded`）。**精确的反应性缺口没有根因定位**，这是当前的已知不足，不是已验证的结论。
+
 ### 真实链路验证（发现并修掉一个真缺陷）
 
 构建产物没生成，所以浏览器里看不到页面。改为直接跑一遍**客户端真正走的那条路**：`verify-worker-rpc.e2e.ts` 起一个真实 daemon、真实 socket、真实 `DaemonClient`，两端都过真实协议 schema。

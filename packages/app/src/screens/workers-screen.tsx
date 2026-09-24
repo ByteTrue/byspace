@@ -132,15 +132,10 @@ function WorkersScreenBody({
   );
   const emptyRoster = useMemo(() => <EmptyRoster onCreate={onCreate} />, [onCreate]);
 
-  if (loadState.status === "connecting") {
-    return (
-      <View style={styles.centered}>
-        <Text style={styles.message}>Connect to a host to manage workers.</Text>
-      </View>
-    );
-  }
-
-  if (loadState.status === "loading") {
+  // `connecting` is a transient state, not an instruction. Showing "connect a
+  // host" while a host is mid-handshake reads as a task for the user when there
+  // is nothing for them to do, and it is what a reconnect would flash.
+  if (loadState.status === "connecting" || loadState.status === "loading") {
     return (
       <View style={styles.centered}>
         <LoadingSpinner size="large" color={styles.spinnerColor.color} />

@@ -67,10 +67,29 @@ export type WorkerLoadState =
       templates: WorkerTemplateOption[];
       hostErrors: WorkerHostError[];
     };
-
 export interface FetchWorkersInput {
   hosts: readonly WorkerHostInput[];
   runtime: WorkerRuntime;
+}
+
+/**
+ * A host the runtime has not finished with yet. `idle` counts because a host
+ * that has not started connecting is still expected to.
+ */
+function isHostSettling(snapshot: WorkerRuntimeSnapshot | null | undefined): boolean {
+  if (!snapshot) return true;
+  return snapshot.connectionStatus === "connecting" || snapshot.connectionStatus === "idle";
+}
+
+/**
+ * A host that can be asked for workers right now.
+ *
+ * Only `online` counts. A client object can exist before the socket is usable,
+ * so the client alone is not sufficient evidence.
+ */
+function isHostAskable(host: WorkerHostInput, runtime: WorkerRuntime): boolean {
+  const snapshot = runtime.getSnapshot(host.serverId);
+  return snapshot?.connectionStatus === "online" && runtime.getClient(host.serverId) !== null;
 }
 
 /**
@@ -88,19 +107,28 @@ function connectedClient(
 }
 
 export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<WorkerLoadState> {
+  const hasAskableHost = input.hosts.some((host) => isHostAskable(host, input.runtime));
+  // Settling means a connection is still being established. If nothing is
+  // askable and nothing is settling, every host is genuinely unusable (offline,
+  // erroring) and that is a loaded state with errors — not "still connecting".
+  // Reporting it as connecting is what left the screen spinning forever after a
+  // host went away.
+  const hasSettlingHost = input.hosts.some((host) =>
+    isHostSettling(input.runtime.getSnapshot(host.serverId)),
+  );
+
+  if (!hasAskableHost && hasSettlingHost) {
+    return { status: "connecting" };
+  }
+
   const clients = input.hosts.map((host) => ({
     host,
     client: connectedClient(host, input.runtime),
   }));
 
-  if (clients.length > 0 && clients.every((entry) => entry.client === null)) {
-    return { status: "connecting" };
-  }
-
   const workers: AggregatedWorker[] = [];
   const templates: WorkerTemplateOption[] = [];
   const hostErrors: WorkerHostError[] = [];
-
   await Promise.all(
     clients.map(async ({ host, client }) => {
       if (!client) return;

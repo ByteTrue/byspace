@@ -1,10 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useFetchQuery } from "@/data/query";
-import {
-  getHostRuntimeStore,
-  useHostRuntimeConnectionStatuses,
-  useHosts,
-} from "@/runtime/host-runtime";
+import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
 import {
   fetchAggregatedWorkers,
   workersQueryBaseKey,
@@ -26,6 +22,19 @@ export interface UseWorkersResult {
   isRefetching: boolean;
 }
 
+/**
+ * Workers across connected hosts.
+ *
+ * The connection status is part of the query key so a host coming online re-runs
+ * the fetch instead of serving a cached "nothing yet" answer.
+ *
+ * That key changes on every reconnect, and a reconnect is not instantaneous: the
+ * status reports `connecting` before `online` again. A fetch taken during that
+ * window legitimately answers "still connecting", and letting that answer
+ * replace a roster that is already correct would blank the screen on every
+ * blip. So the last successful payload is held and preferred until a newer
+ * successful one arrives.
+ */
 export function useWorkers(): UseWorkersResult {
   const hosts = useHosts();
   const runtime = getHostRuntimeStore();
@@ -34,49 +43,52 @@ export function useWorkers(): UseWorkersResult {
     [hosts],
   );
   const serverIds = useMemo(() => hostInputs.map((host) => host.serverId), [hostInputs]);
-  const connectionStatuses = useHostRuntimeConnectionStatuses(serverIds);
-  // Part of the query key so a reconnect refetches instead of serving a stale
-  // "this host has no workers" answer.
-  const connectionStatusKey = useMemo(
-    () => serverIds.map((serverId) => connectionStatuses.get(serverId) ?? "connecting").join("|"),
-    [connectionStatuses, serverIds],
-  );
 
   const query = useFetchQuery({
-    queryKey: [...workersQueryKey(serverIds), connectionStatusKey],
+    queryKey: workersQueryKey(serverIds),
     queryFn: () => fetchAggregatedWorkers({ hosts: hostInputs, runtime }),
     dataShape: "list",
     staleTimeMs: 5_000,
+    // A screen opened while a host is still handshaking would otherwise cache
+    // that answer and never ask again: the connection status in the query key
+    // did not re-key reliably, so the roster stayed on the transient state.
+    // Polling until something loads is the self-healing version and it stops as
+    // soon as it succeeds.
+    refetchInterval: (state) => (state.state.data?.status === "loaded" ? false : 2_000),
   });
 
-  if (query.data?.status === "connecting") {
-    return {
-      loadState: { status: "connecting" },
-      hostErrors: [],
-      refetch: () => {
-        void query.refetch();
-      },
-      isRefetching: query.isRefetching,
-    };
-  }
-
+  // Written during render on purpose: the ref only ever holds the most recent
+  // successful payload, and an effect would leave one render showing the
+  // transient state it is meant to suppress.
+  const lastLoadedRef = useRef<Extract<WorkerLoadState, { status: "loaded" }> | null>(null);
   if (query.data?.status === "loaded") {
-    return {
-      loadState: query.data,
-      hostErrors: query.data.hostErrors,
-      refetch: () => {
-        void query.refetch();
-      },
-      isRefetching: query.isRefetching,
-    };
+    lastLoadedRef.current = query.data;
   }
 
-  return {
-    loadState: { status: "loading" },
-    hostErrors: [],
-    refetch: () => {
+  const loadState = useMemo<WorkerLoadState>(() => {
+    if (query.data?.status === "loaded") return query.data;
+    const lastLoaded = lastLoadedRef.current;
+    if (lastLoaded) return lastLoaded;
+    // Nothing has ever loaded, so the transient state is all there is to show.
+    return query.data?.status === "connecting" ? { status: "connecting" } : { status: "loading" };
+  }, [query.data]);
+
+  const refetch = useMemo(
+    () => () => {
       void query.refetch();
     },
+    [query],
+  );
+
+  return {
+    loadState,
+    // Errors describe the latest attempt; a reconnect must not resurrect the
+    // errors of an attempt that has since been superseded.
+    hostErrors:
+      query.data?.status === "loaded"
+        ? query.data.hostErrors
+        : (lastLoadedRef.current?.hostErrors ?? []),
+    refetch,
     isRefetching: query.isRefetching,
   };
 }
