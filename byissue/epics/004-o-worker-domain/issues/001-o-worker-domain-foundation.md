@@ -275,3 +275,34 @@ npx vitest run packages/server/src/server/worker/ \
 npx vitest run packages/server/src/server/worker/ --bail=1
 → 5 files / 62 tests passed
 ```
+
+### 切片 004：权限闸（已完成）
+
+新增 `packages/server/src/server/worker/tool-guard/`：规则数据 + 裁决引擎。
+
+**规则来源与做法。** 从 QwenPaw（`agentscope-ai/QwenPaw` 的 `rules/dangerous_shell_commands.yaml`，Apache-2.0）**按数据导入**而非手抄：21 条规则，7 CRITICAL / 14 HIGH，分 6 类（code_execution 8、command_injection 4、resource_abuse 4、privilege_escalation 2、sensitive_file_access 2、network_abuse 1）。用脚本转换，`rules.json` 里保留 `source`、`sourcePath`、`importedAt`。
+
+上游还有一类 `ShellEvasionGuardian`（7 项反规避检查），但**它是代码不是数据**（引用符状态机、逐字符扫描），本切片未移植，记为后续。
+
+**裁决语义。** 三档决策，且 `block` 与 `confirm` **不是严重度的同义词**：
+
+- `block` = CRITICAL，拒绝，worker 问也得不到；
+- `confirm` = 其余命中，真人可以放行；
+- `allow` = 无命中。
+
+命中时**收集全部匹配规则**而不是遇到第一条就返回，让审阅者看到完整画面。片段截断到 200 字符——findings 会被记录和展示，不能把整条命令抛进去。
+
+**一个安全上的设计选择：规则加载失败就报错，不降级。** 零规则的 guard 与“未发现风险的 guard”从外部看一模一样，这是安全控制最坏的失败模式。因此：文件声明条数与实际不符、正则非法均抛错。
+
+**引号处理。** 匹配前剥掉单引号内容（`echo 'rm -rf /'` 只是打印文本），但保留双引号内容（shell 在双引号内仍会展开）。这是个近似，不是 shell 语法解析——文档里写清了：真正兜底的是审批闸，不是这个匹配器。
+
+**构建产物已验证。** JSON 导入用的是 `with { type: "json" }`；担心它过不了真实构建，所以实际跑了 `tsc -p tsconfig.server.json` 并**执行了编译后的 JS**：`rules.json` 被拷贝到 `dist`，导入语句保留，运行输出 `block / confirm / allow` 三档均正确。
+
+验证：
+
+```
+npx vitest run packages/server/src/server/worker/ --bail=1
+→ 6 files / 84 tests passed
+```
+
+覆盖：四类威胁各有拦截用例（磁盘销毁、fork bomb、提权、rm/mv 需确认）；规则完整性（21 条、id 唯一、严重度合法）；加载失败两个负例；引号语义四条；禁用规则可解除阻断；发现项片段有界。
