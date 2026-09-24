@@ -27,6 +27,7 @@ import {
   type WorkerTaskRecord,
 } from "./worker-store.js";
 import { WORKER_TASK_ACTIONS, type WorkerTaskAction } from "./worker-task-state.js";
+import type { WorkerRunner } from "./worker-runner.js";
 import {
   listWorkerTemplateIds,
   loadWorkerTemplate,
@@ -76,6 +77,13 @@ export class WorkerTaskNotFoundError extends Error {
   }
 }
 
+export class WorkerRunUnavailableError extends Error {
+  constructor() {
+    super("This daemon was started without a worker runner, so tasks cannot be run.");
+    this.name = "WorkerRunUnavailableError";
+  }
+}
+
 export class WorkerGroupNotFoundError extends Error {
   constructor(groupId: string) {
     super(`Unknown worker group: ${groupId}`);
@@ -95,6 +103,13 @@ export interface WorkerServiceOptions {
   templateRoot?: string;
   databasePath?: string;
   logger: pino.Logger;
+  /**
+   * Runs a task's agent session. Optional so the store, catalog and guard remain
+   * usable without an execution path (the CLI and tests do exactly that);
+   * `runTask` reports a clear refusal when it is absent rather than pretending
+   * to have run something.
+   */
+  runner?: WorkerRunner;
 }
 
 export interface CreateWorkerInput {
@@ -122,6 +137,7 @@ export class WorkerService {
   private readonly templateRoot: string;
   private readonly databasePath: string;
   private readonly logger: pino.Logger;
+  private readonly runner: WorkerRunner | null;
   private store: WorkerStore | null = null;
   private rules: GuardRule[] | null = null;
 
@@ -135,6 +151,7 @@ export class WorkerService {
         env: { BYSPACE_HOME: this.byspaceHome },
       });
     this.logger = options.logger;
+    this.runner = options.runner ?? null;
   }
 
   getStore(): WorkerStore {
@@ -297,6 +314,61 @@ export class WorkerService {
   removeGroupMember(input: { groupId: string; workerId: string }): void {
     this.getGroup(input.groupId);
     this.getStore().removeGroupMember(input);
+  }
+
+  // ------------------------------------------------------------------- runs
+
+  /**
+   * Run a task and leave it in the state its outcome implies.
+   *
+   * The three state changes are recorded through the same single transition
+   * writer every other status change uses, so a run cannot bypass the history.
+   * An outcome that is not terminal (the worker is waiting on a permission
+   * decision) is recorded as `blocked` rather than `submitted`: a person has to
+   * act, and filing it as a finished result would put unfinished work in the
+   * review queue.
+   */
+  async runTask(taskId: string): Promise<WorkerTaskRecord> {
+    if (!this.runner) {
+      throw new WorkerRunUnavailableError();
+    }
+
+    const task = this.getTask(taskId);
+    const worker = this.getWorker(task.workerId);
+    const template = await this.loadTemplate(worker.templateId);
+
+    this.transitionTask({
+      taskId,
+      toState: "in_progress",
+      action: "ack_task",
+      actor: `worker:${worker.id}`,
+    });
+
+    const outcome = await this.runner.run({
+      workerId: worker.id,
+      workerName: worker.name,
+      workspacePath: worker.workspacePath,
+      template,
+      task,
+    });
+
+    if (outcome.kind === "submitted") {
+      return this.transitionTask({
+        taskId,
+        toState: "submitted",
+        action: "submit_task",
+        actor: `worker:${worker.id}`,
+        note: outcome.agentId,
+      });
+    }
+
+    return this.transitionTask({
+      taskId,
+      toState: "blocked",
+      action: "block_task",
+      actor: `worker:${worker.id}`,
+      note: outcome.reason,
+    });
   }
 
   getTask(taskId: string): WorkerTaskRecord {

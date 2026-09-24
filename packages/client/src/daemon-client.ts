@@ -567,6 +567,10 @@ type WorkerTaskTransitionPayload = Extract<
   SessionOutboundMessage,
   { type: "worker.task.transition.response" }
 >["payload"];
+type WorkerTaskRunPayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.task.run.response" }
+>["payload"];
 type WorkerTaskHistoryPayload = Extract<
   SessionOutboundMessage,
   { type: "worker.task.history.response" }
@@ -2533,6 +2537,21 @@ export class DaemonClient {
         ...(input.note !== undefined ? { note: input.note } : {}),
       },
       responseType: "worker.task.transition.response",
+    });
+  }
+
+  /**
+   * Run a task.
+   *
+   * A run is long: this resolves when the task reaches a terminal outcome, not
+   * when the agent starts. The returned task carries the resulting state, in
+   * the same shape every other task call returns.
+   */
+  async runWorkerTask(taskId: string, requestId?: string): Promise<WorkerTaskRunPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "worker.task.run.request", taskId },
+      responseType: "worker.task.run.response",
     });
   }
 

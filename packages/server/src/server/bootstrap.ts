@@ -162,6 +162,7 @@ import {
 import { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import { ScheduleService } from "./schedule/service.js";
 import { WorkerService } from "./worker/service.js";
+import { WorkerRunner } from "./worker/worker-runner.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
 import { createOrchestrationSkills } from "./orchestration-skills/index.js";
 import { resolveConfigFromPersisted, type CliConfigOverrides } from "./config.js";
@@ -1251,7 +1252,31 @@ export async function createBySpaceDaemon(
   await scheduleService.start();
   // Opened lazily: a daemon that never touches workers creates no database for
   // them, and a failure here must not stop sessions and terminals working.
-  const workerService = new WorkerService({ byspaceHome: config.byspaceHome, logger });
+  //
+  // The runner is given the same create-agent command and agent manager the
+  // scheduler uses, so a worker run is an ordinary agent session with a role
+  // rather than a second execution path to keep working.
+  const workerRunner = new WorkerRunner({
+    logger,
+    createAgent,
+    agentManager,
+    resolveWorkspaceId: async ({ workspacePath, workerName }) => {
+      const existing = await findWorkspaceIdForCwdExternal(workspacePath);
+      if (existing) return existing;
+      // A worker's own directory is created before any workspace exists for it,
+      // so the first run adopts it the same way a scheduled run would.
+      const workspace = await createScheduleLocalWorkspaceExternal({
+        cwd: workspacePath,
+        firstAgentContext: { prompt: workerName },
+      });
+      return workspace.workspaceId;
+    },
+  });
+  const workerService = new WorkerService({
+    byspaceHome: config.byspaceHome,
+    logger,
+    runner: workerRunner,
+  });
   agentManager.setAgentArchivedCallback(async (agentId) => {
     try {
       await scheduleService.completeForAgent(agentId);

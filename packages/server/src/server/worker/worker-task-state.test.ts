@@ -31,8 +31,10 @@ const LEGAL_EDGES: Array<[WorkerTaskState, WorkerTaskState]> = [
   ["prepared", "cancelled"],
   ["assigned", "in_progress"],
   ["assigned", "submitted"],
+  ["assigned", "blocked"],
   ["assigned", "cancelled"],
   ["in_progress", "submitted"],
+  ["in_progress", "blocked"],
   ["in_progress", "cancelled"],
   ["submitted", "completed"],
   ["submitted", "revision"],
@@ -45,6 +47,26 @@ function edgeKey(from: WorkerTaskState, to: WorkerTaskState): string {
 }
 
 const legalEdgeKeys = new Set(LEGAL_EDGES.map(([from, to]) => edgeKey(from, to)));
+
+describe("blocked is reachable from a run's own states", () => {
+  // A run that fails, or that stops for a permission decision, never produces a
+  // result. Requiring it to pass through `submitted` first would record a
+  // submission that did not happen.
+  it("allows assigned -> blocked", () => {
+    expect(canTransition("assigned", "blocked")).toBe(true);
+    expect(suggestedAction("assigned", "blocked")).toBe("block_task");
+  });
+
+  it("allows in_progress -> blocked", () => {
+    expect(canTransition("in_progress", "blocked")).toBe(true);
+    expect(suggestedAction("in_progress", "blocked")).toBe("block_task");
+  });
+
+  it("keeps blocked terminal", () => {
+    expect(allowedNextStates("blocked")).toEqual([]);
+    expect(isTerminalWorkerTaskState("blocked")).toBe(true);
+  });
+});
 
 describe("worker task state machine", () => {
   it("covers the full state set with no duplicates", () => {

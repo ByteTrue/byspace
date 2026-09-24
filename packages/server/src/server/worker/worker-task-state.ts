@@ -40,8 +40,12 @@ export const WORKER_TASK_TERMINAL_STATES: readonly WorkerTaskState[] = [
 const TRANSITIONS: Record<WorkerTaskState, readonly WorkerTaskState[]> = {
   planned: ["prepared", "assigned", "in_progress", "submitted", "cancelled"],
   prepared: ["assigned", "cancelled"],
-  assigned: ["in_progress", "submitted", "cancelled"],
-  in_progress: ["submitted", "cancelled"],
+  assigned: ["in_progress", "submitted", "blocked", "cancelled"],
+  // `blocked` is reachable from the states a run starts in, not only from
+  // `submitted`. A run that fails, or that stops for a permission decision, never
+  // produced a result to submit, so requiring it to pass through `submitted`
+  // would mean recording a submission that did not happen.
+  in_progress: ["submitted", "blocked", "cancelled"],
   submitted: ["completed", "revision", "blocked", "cancelled"],
   completed: [],
   revision: [],
@@ -117,6 +121,8 @@ export function suggestedAction(
     case "submitted->revision":
       return "request_revision";
     case "submitted->blocked":
+    case "assigned->blocked":
+    case "in_progress->blocked":
       return "block_task";
     default:
       return to === "cancelled" ? "cancel_task" : null;

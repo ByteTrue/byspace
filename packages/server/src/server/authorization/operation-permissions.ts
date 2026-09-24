@@ -212,6 +212,10 @@ const INBOUND_PERMISSION = {
   "worker.worker.create.request": "workspace.manage",
   "worker.task.create.request": "workspace.write",
   "worker.task.transition.request": "workspace.write",
+  // Starting a run creates an agent session in the workspace, so it needs the
+  // same authority as any other write there rather than the read the rest of
+  // the worker inspection surface uses.
+  "worker.task.run.request": "workspace.write",
   "worker.task.history.request": "workspace.read",
   "worker.task.list.request": "workspace.read",
   "worker.guard.evaluate.request": "workspace.read",
@@ -443,6 +447,7 @@ const OUTBOUND_PERMISSION = {
   "worker.worker.create.response": "workspace.manage",
   "worker.task.create.response": "workspace.write",
   "worker.task.transition.response": "workspace.write",
+  "worker.task.run.response": "workspace.write",
   "worker.task.history.response": "workspace.read",
   "worker.task.list.response": "workspace.read",
   "worker.guard.evaluate.response": "workspace.read",

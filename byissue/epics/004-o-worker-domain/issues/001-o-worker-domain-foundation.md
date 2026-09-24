@@ -513,3 +513,34 @@ BySpace 两侧都已具备同样机制：`packages/cli` 与 `skills/` 目录。�
 3. 让 worker 的角色模板带上它。
 
 **安全边界要写清：** 上游自己明确区分"对话规则"与"daemon 权限裁决"，并声明 skill 里的确认要求**不改变**运行时权限。BySpace 同理——skill 是给模型的规则，真正的边界在 daemon 权限层。这也正是仍开放的"worker 能否创建 worker"那条待定项。
+
+### 切片 009：worker 执行接线（任务真的能跑）
+
+**做法：不新建执行机制，复用调度器那条路。** worker 任务就是"带角色的 agent session"，所以 runner 直接用调度器在用的同一个 `createAgent` 命令与 `runAgent` / `waitForAgentEvent` 配对，于是**自动继承**守护进程的工作区处理、权限请求、取消与通知语义。第二种执行路径意味着第二处会漂移的东西。
+
+**输出映射是这一刀真正的内容**（三个结果都通向任务状态机）：
+
+| run 结果               | 任务状态    | 为什么                                              |
+| ---------------------- | ----------- | --------------------------------------------------- |
+| 提交成功               | `submitted` | 有产出待评审                                        |
+| 等权限裁决 / 被取消    | `blocked`   | **没产出**。报到 `submitted` 会把半成品塞进评审队列 |
+| 创建会话或初始提示失败 | `blocked`   | 失败是人要处理的事，任务得留在可见处而不是消失      |
+
+**测试抓出一个真缺陷——而且是我自己在切片 001 写的状态机。** `blocked` 当时**只能从 `submitted` 到达**，但上表里三个结果有两个需要直接从 `assigned` / `in_progress` 进入。这不是测试写错：要求一条失败的 run 先"假装提交"再阻塞，等于在审计流水里记下一次并未发生的提交。已给 `assigned` 与 `in_progress` 补上到 `blocked` 的边与 `block_task` 动作，并在状态机测试里加了对应断言。
+
+注意那张**穷举负例测试**（对九态做叉积，断言表里没有的边一律非法）当时立刻红了——它是一份独立复述，正是它把这次改动挡下来要求我显式确认，而不是让新边悄悄溜进去。
+
+**测试策略：** runner 测试里 agent 创建/运行/等待都是假的（它们本来就是守护进程的能力），但服务的 `runTask` 测试**用真 store**——"跑完留下正确状态、且每一步都在 history 里"只有对真实转换写入器才有意义。
+
+**验证：**
+
+```
+worker 相关 vitest         → 9 files / 141 tests
+新 runner 测试            → 9 项
+新 service 测试           → 8 项
+typecheck 0 错误 / lint 0 错误 / format 全通过
+```
+
+**新增 `worker.task.run.request/response` 一对 RPC**，权限按 `workspace.write`（起 run 会在工作区里创建 agent session，和其他写操作同权），`bootstrap` 里注入 runner。
+
+**顺带修掉一个环境问题：** 上一轮 `pkill` 停掉 daemon 后 `.dev/byspace-home/byspace.pid` 成了陈旧文件（PID 已死、端口已空），新 daemon 因此拒绝启动并报 "Another BySpace daemon is already running"。已确认 PID 无对应进程、6778 无监听后清除。**记一笔：判断 pid 文件是否陈旧，要比对进程存活与端口监听，而不是只看文件是否存在。**

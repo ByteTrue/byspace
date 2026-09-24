@@ -160,6 +160,20 @@ export class WorkerSession {
     }
   }
 
+  async handleTaskRunRequest(
+    request: Extract<SessionInboundMessage, { type: "worker.task.run.request" }>,
+  ): Promise<void> {
+    try {
+      const task = await this.workerService.runTask(request.taskId);
+      this.host.emit({
+        type: "worker.task.run.response",
+        payload: { requestId: request.requestId, task },
+      });
+    } catch (error) {
+      this.emitError(request, error);
+    }
+  }
+
   async handleTaskHistoryRequest(
     request: Extract<SessionInboundMessage, { type: "worker.task.history.request" }>,
   ): Promise<void> {

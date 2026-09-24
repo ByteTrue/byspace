@@ -176,6 +176,27 @@ export const WorkerTaskTransitionResponseSchema = z.object({
   }),
 });
 
+/**
+ * Run a task.
+ *
+ * Long-running and no payload beyond the task id: the outcome of a run is the
+ * task's own state, which the client already watches, so the response reports
+ * where the task ended up rather than a second description of the run.
+ */
+export const WorkerTaskRunRequestSchema = z.object({
+  type: z.literal("worker.task.run.request"),
+  requestId: z.string(),
+  taskId: z.string().min(1),
+});
+
+export const WorkerTaskRunResponseSchema = z.object({
+  type: z.literal("worker.task.run.response"),
+  payload: z.object({
+    requestId: z.string(),
+    task: WorkerTaskSummarySchema,
+  }),
+});
+
 export const WorkerTaskHistoryRequestSchema = z.object({
   type: z.literal("worker.task.history.request"),
   requestId: z.string(),
