@@ -174,6 +174,20 @@ export class WorkerSession {
     }
   }
 
+  async handleTaskListRequest(
+    request: Extract<SessionInboundMessage, { type: "worker.task.list.request" }>,
+  ): Promise<void> {
+    try {
+      const tasks = this.workerService.listAllTasks(request.workerId);
+      this.host.emit({
+        type: "worker.task.list.response",
+        payload: { requestId: request.requestId, tasks },
+      });
+    } catch (error) {
+      this.emitError(request, error);
+    }
+  }
+
   async handleGuardEvaluateRequest(
     request: Extract<SessionInboundMessage, { type: "worker.guard.evaluate.request" }>,
   ): Promise<void> {

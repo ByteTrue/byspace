@@ -14,6 +14,7 @@ function runtimeWith(input: {
   statuses: Record<string, string>;
   workers?: Record<string, unknown[]>;
   templates?: Record<string, unknown[]>;
+  tasks?: Record<string, unknown[]>;
   failHosts?: string[];
 }): WorkerRuntime {
   return {
@@ -31,11 +32,15 @@ function runtimeWith(input: {
           listWorkerTemplates: async () => {
             throw new Error("worker_request_failed");
           },
+          listWorkerTasks: async () => {
+            throw new Error("worker_request_failed");
+          },
         };
       }
       return {
         listWorkers: async () => ({ workers: input.workers?.[serverId] ?? [] }),
         listWorkerTemplates: async () => ({ templates: input.templates?.[serverId] ?? [] }),
+        listWorkerTasks: async () => ({ tasks: input.tasks?.[serverId] ?? [] }),
       } as never;
     },
   } as WorkerRuntime;
@@ -80,6 +85,31 @@ describe("fetchAggregatedWorkers", () => {
     expect(state.status).toBe("loaded");
     if (state.status !== "loaded") return;
     expect(state.workers).toEqual([]);
+    expect(state.tasks).toEqual([]);
+    expect(state.hostErrors).toEqual([]);
+  });
+
+  it("keeps the roster when only the task fetch fails", async () => {
+    // Tasks are secondary: a host that cannot answer for them should still show
+    // its workers rather than being written off entirely.
+    const state = await fetchAggregatedWorkers({
+      hosts: [HOST_A],
+      runtime: {
+        getSnapshot: () => ({ connectionStatus: "online" }),
+        getClient: () =>
+          ({
+            listWorkers: async () => ({ workers: [WORKER] }),
+            listWorkerTemplates: async () => ({ templates: [TEMPLATE] }),
+            listWorkerTasks: async () => {
+              throw new Error("task fetch unavailable");
+            },
+          }) as never,
+      } as WorkerRuntime,
+    });
+
+    if (state.status !== "loaded") throw new Error("expected loaded");
+    expect(state.workers.map((worker) => worker.id)).toEqual(["wkr_1"]);
+    expect(state.tasks).toEqual([]);
     expect(state.hostErrors).toEqual([]);
   });
 

@@ -292,6 +292,18 @@ export class WorkerStore {
     return rows.map(toTaskRecord);
   }
 
+  /** Every task, most recently updated first. One query rather than one per worker. */
+  listAllTasks(): WorkerTaskRecord[] {
+    const rows = this.db
+      .prepare(
+        `SELECT task_id, worker_id, title, state, created_at, updated_at
+         FROM worker_tasks
+         ORDER BY updated_at DESC, task_id ASC`,
+      )
+      .all() as WorkerTaskRow[];
+    return rows.map(toTaskRecord);
+  }
+
   /**
    * The only writer of `worker_tasks.state`.
    *

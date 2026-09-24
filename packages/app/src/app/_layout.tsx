@@ -608,9 +608,11 @@ function AppWithSidebar({ children }: { children: ReactNode }) {
       pathname === "/new" ||
       pathname === "/sessions" ||
       pathname === "/schedules" ||
-      pathname === "/workers" ||
       routeHasKnownHost);
 
+  // `/workers` renders its own shell: its own sidebar, its own navigation
+  // vocabulary, spanning every connected host. Mounting the workspace sidebar
+  // there would put two unrelated navigation models on screen at once.
   return <AppContainer chromeEnabled={shouldShowAppChrome}>{children}</AppContainer>;
 }
 
@@ -641,6 +643,7 @@ function RootStack() {
         <Stack.Screen name="open-project" />
         <Stack.Screen name="sessions" />
         <Stack.Screen name="schedules" />
+        <Stack.Screen name="workers" />
         <Stack.Screen name="pair-scan" />
       </Stack.Protected>
       <Stack.Screen name="h/[serverId]" />

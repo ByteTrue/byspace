@@ -66,6 +66,22 @@ async function main(): Promise<void> {
       detail: history.entries.map((entry) => `${entry.fromState}->${entry.toState}`).join(", "),
     });
 
+    // The dashboard and the task table both read this, so it is checked at both
+    // scopes it supports: everything, and one worker's slice.
+    const allTasks = await client.listWorkerTasks();
+    checks.push({
+      name: "list all tasks",
+      detail: allTasks.tasks.map((entry) => `${entry.title}:${entry.state}`).join(", "),
+    });
+
+    const workerTasks = await client.listWorkerTasks({ workerId });
+    checks.push({
+      name: "list one worker's tasks",
+      detail: `${workerTasks.tasks.length} task(s), all owned=${workerTasks.tasks.every(
+        (entry) => entry.workerId === workerId,
+      )}`,
+    });
+
     const blocked = await client.evaluateWorkerGuard({ command: "mkfs.ext4 /dev/sda1" });
     checks.push({ name: "guard block", detail: blocked.decision });
 

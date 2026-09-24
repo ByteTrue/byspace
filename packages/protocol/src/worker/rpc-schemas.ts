@@ -182,6 +182,27 @@ export const WorkerTaskHistoryRequestSchema = z.object({
   taskId: z.string().min(1),
 });
 
+/**
+ * Every task across every worker, optionally narrowed to one worker.
+ *
+ * The dashboard needs totals across workers, and the task table needs rows from
+ * more than one; fetching them one worker at a time would make the screen's
+ * cost track the roster size.
+ */
+export const WorkerTaskListRequestSchema = z.object({
+  type: z.literal("worker.task.list.request"),
+  requestId: z.string(),
+  workerId: z.string().min(1).optional(),
+});
+
+export const WorkerTaskListResponseSchema = z.object({
+  type: z.literal("worker.task.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    tasks: z.array(WorkerTaskSummarySchema),
+  }),
+});
+
 export const WorkerTaskHistoryResponseSchema = z.object({
   type: z.literal("worker.task.history.response"),
   payload: z.object({
@@ -215,3 +236,8 @@ export const WorkerGuardEvaluateResponseSchema = z.object({
     findings: z.array(GuardFindingSchema),
   }),
 });
+
+// Inferred types, exported on demand rather than all at once: consumers need the
+// shapes, not the validators, and an export nobody imports drifts unnoticed.
+// `WorkerTaskSummary` is the one the app derives its task-state union from.
+export type WorkerTaskSummary = z.infer<typeof WorkerTaskSummarySchema>;

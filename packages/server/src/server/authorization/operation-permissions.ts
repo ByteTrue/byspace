@@ -213,6 +213,7 @@ const INBOUND_PERMISSION = {
   "worker.task.create.request": "workspace.write",
   "worker.task.transition.request": "workspace.write",
   "worker.task.history.request": "workspace.read",
+  "worker.task.list.request": "workspace.read",
   "worker.guard.evaluate.request": "workspace.read",
 } as const satisfies Record<InboundOperation, PermissionRequirement>;
 
@@ -437,6 +438,7 @@ const OUTBOUND_PERMISSION = {
   "worker.task.create.response": "workspace.write",
   "worker.task.transition.response": "workspace.write",
   "worker.task.history.response": "workspace.read",
+  "worker.task.list.response": "workspace.read",
   "worker.guard.evaluate.response": "workspace.read",
 } as const satisfies Record<OutboundOperation, PermissionRequirement>;
 

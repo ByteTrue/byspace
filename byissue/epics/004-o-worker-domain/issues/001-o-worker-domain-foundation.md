@@ -396,6 +396,43 @@ i18n 的 key-contract 测试扫描 `t("…")` 字面量与 en 资源树的一致
 
 **三、重连会抹掉已加载的名册。** 连接状态进了 query key，而重连不是瞬时的：状态先报 `connecting` 再回到 `online`。在那段窗口里取到的 fetch 合法地回答“仍在连接”，若让它覆盖一份本来正确的名册，每次闪断都会清空屏幕。现在**保留最近一次成功的 payload 直到有新的成功结果**。
 
+### 切片 007：独立 console 页（已完成）
+
+**Owner 纠正了我对形态的理解。** 先前做成的是嵌在 BySpace 壳里的一个路由；Owner 要的是：点 Workers 后**进入一个完全独立的新页面**，长得像 QoderWake，并带一个能跳回 BySpace 的按钮。
+
+**关键改动是把壳换掉。** `/workers` 不再出现在 `_layout.tsx` 的 `shouldShowAppChrome` 里，因此 BySpace 的工作区侧栏在这个路由上不渲染；页面自建侧栏（BySpace 返回 / Work management / Workers & capabilities），并在左上角提供返回。
+
+理由是两套导航模型不兼容：BySpace 侧栏回答“我在哪个 workspace”，而这个页面横跨所有已连接 host，词汇也不同（worker / task / capabilities）。同时摆出来等于把两个无关的导航树并在一屏。
+
+**页面内容按参考产品对齐：**
+
+- **Dashboard**：标题 + 副标题；Task records 卡（四格统计 + 一句状态描述）；Needs attention（Action required / Review results 两个 tab）;All tasks。
+- **Worker management**：名册 + 内嵌新建卡（选角色、填名），侧栏带数量徒标。
+- **Capabilities & resources**：空态（技能与连接器属后续切片）。
+
+**新增 `worker.task.list` RPC。** Dashboard 的统计和任务表需要跨 worker 的数据；逐个 worker 取会让屏幕开销跟名册大小跑。支持全量与单 worker 两个范围。
+
+**两处有意的取舍：**
+
+- **任务取数失败不拖垮名册。** worker 与角色目录是主路径（没有它们就没名册）；任务是尽力而为，取不到就退化成空列表，而不是把整台 host 报成坏掉。有用例钉住。
+- **协议只导出真正被用的推断类型。** 我一开始导出了 8 个，检查后发现 7 个无人引用——那是投机导出，已删。
+
+**一个我自己造成的误导，如实记录：** 我曾把 `worker.task.list` 报的 `unknown_schema` 归因为“入站 AOT 白名单没生成”。**那是错的**：查时间戳发现 daemon 启动（13:14）早于该 RPC 加入（14:18），是跑着的服务比代码旧。重启后同一请求立刻通过；并且入站根本没有 AOT 生成（只有出站有）。教训是**先取证、后归因**，而不是反过来。
+
+验证：
+
+```
+npx tsx src/server/worker/verify-worker-rpc.e2e.ts
+→ 15 项全通（新增 task.list 全量与单 worker 两个范围）
+npx vitest run packages/app/src/workers/ packages/app/src/sidebar-nav/ \
+  packages/app/src/i18n/key-contract.test.ts \
+  packages/server/src/server/worker/ packages/server/src/server/session/worker/ --bail=1
+→ 11 files / 133 tests passed
+npx vitest run <protocol 与 agent 相关四个文件> → 158 tests passed
+```
+
+**浏览器里逐项确认：** 点侧栏 Workers → BySpace 侧栏消失、进入独立页；Dashboard 显示真实数据（1 Total / 1 Active / “1 task in flight”）；All tasks 列出 `Build the pricing table / assigned`；Worker management 列出 Alice、Bob 与计数 2；点 **← BySpace** 回到 BySpace 且侧栏恢复（含 Workers 入口）；再点可重新进入。
+
 **一个未完全定性的点，如实记录：** 让查询在 host 转为 online 时重新取数的触发不可靠（观察到运行时已是 `online` 而 fetch 仍看到 `connecting`）。我用**“未加载则每 2s 重试、加载后停止”** 的轮询代替它：这是自愈的，且因第二项修正而在 offline 时也会终止（offline 返回 `loaded`）。**精确的反应性缺口没有根因定位**，这是当前的已知不足，不是已验证的结论。
 
 ### 真实链路验证（发现并修掉一个真缺陷）

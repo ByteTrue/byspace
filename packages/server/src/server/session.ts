@@ -2550,6 +2550,8 @@ export class Session {
         return this.workerSession.handleTaskTransitionRequest(msg);
       case "worker.task.history.request":
         return this.workerSession.handleTaskHistoryRequest(msg);
+      case "worker.task.list.request":
+        return this.workerSession.handleTaskListRequest(msg);
       case "worker.guard.evaluate.request":
         return this.workerSession.handleGuardEvaluateRequest(msg);
       default:

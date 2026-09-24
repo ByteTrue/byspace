@@ -200,6 +200,18 @@ export class WorkerService {
     return this.getStore().listTasksForWorker(workerId);
   }
 
+  /**
+   * Every task, newest first, optionally narrowed to one worker.
+   *
+   * Sorted here rather than in the screen because the ordering is part of what
+   * the list means ("most recent activity first"), and every consumer should
+   * agree on it.
+   */
+  listAllTasks(workerId?: string): WorkerTaskRecord[] {
+    if (workerId) return this.listTasks(workerId);
+    return this.getStore().listAllTasks();
+  }
+
   getTask(taskId: string): WorkerTaskRecord {
     const task = this.getStore().getTask(taskId);
     if (!task) throw new WorkerTaskNotFoundError(taskId);

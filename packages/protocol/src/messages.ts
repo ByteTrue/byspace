@@ -74,6 +74,8 @@ import {
   WorkerTaskTransitionResponseSchema,
   WorkerTaskHistoryRequestSchema,
   WorkerTaskHistoryResponseSchema,
+  WorkerTaskListRequestSchema,
+  WorkerTaskListResponseSchema,
   WorkerGuardEvaluateRequestSchema,
   WorkerGuardEvaluateResponseSchema,
 } from "./worker/rpc-schemas.js";
@@ -3416,6 +3418,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   WorkerTaskCreateRequestSchema,
   WorkerTaskTransitionRequestSchema,
   WorkerTaskHistoryRequestSchema,
+  WorkerTaskListRequestSchema,
   WorkerGuardEvaluateRequestSchema,
 ]);
 
@@ -6863,6 +6866,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   WorkerTaskCreateResponseSchema,
   WorkerTaskTransitionResponseSchema,
   WorkerTaskHistoryResponseSchema,
+  WorkerTaskListResponseSchema,
   WorkerGuardEvaluateResponseSchema,
 ]);
 

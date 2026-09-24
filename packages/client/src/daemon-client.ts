@@ -571,6 +571,10 @@ type WorkerTaskHistoryPayload = Extract<
   SessionOutboundMessage,
   { type: "worker.task.history.response" }
 >["payload"];
+type WorkerTaskListPayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.task.list.response" }
+>["payload"];
 type WorkerGuardEvaluatePayload = Extract<
   SessionOutboundMessage,
   { type: "worker.guard.evaluate.response" }
@@ -2524,6 +2528,20 @@ export class DaemonClient {
       requestId,
       message: { type: "worker.task.history.request", taskId },
       responseType: "worker.task.history.response",
+    });
+  }
+
+  async listWorkerTasks(
+    input: { workerId?: string } = {},
+    requestId?: string,
+  ): Promise<WorkerTaskListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "worker.task.list.request",
+        ...(input.workerId !== undefined ? { workerId: input.workerId } : {}),
+      },
+      responseType: "worker.task.list.response",
     });
   }
 

@@ -1,18 +1,17 @@
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
+import type { WorkerTaskSummary } from "@bytetrue/protocol/worker/rpc-schemas";
 import { toErrorMessage } from "@/utils/error-messages";
 
 /**
  * Loading the worker domain across connected hosts.
  *
- * Follows the aggregated-load pattern the schedules list already uses: the
- * result is a flat list tagged with its host, and a host that fails does not
- * take the screen down with it. The worker domain is new and optional, so a
- * daemon that does not serve it yet must degrade to "this host has nothing",
- * not to an error page.
+ * Follows the aggregated-load pattern the schedules list already uses: a flat
+ * list tagged with its host, where one failing host does not take the screen
+ * down with it.
  *
- * A daemon that answers with an empty worker list and one that refuses the
- * request entirely are different states and are reported separately: the first
- * means "no workers yet", the second means "this host cannot do workers".
+ * A host that answers with an empty worker list and one that refuses the
+ * request are different states and are reported separately: the first means "no
+ * workers yet", the second means "this host cannot do workers".
  */
 
 export const workersQueryBaseKey = ["workers"] as const;
@@ -27,9 +26,13 @@ export interface WorkerRuntimeSnapshot {
 }
 
 export interface WorkerRuntime {
-  getClient(serverId: string): Pick<DaemonClient, "listWorkers" | "listWorkerTemplates"> | null;
+  getClient(
+    serverId: string,
+  ): Pick<DaemonClient, "listWorkers" | "listWorkerTemplates" | "listWorkerTasks"> | null;
   getSnapshot(serverId: string): WorkerRuntimeSnapshot | null | undefined;
 }
+
+export type WorkerTaskState = WorkerTaskSummary["state"];
 
 export interface AggregatedWorker {
   id: string;
@@ -38,6 +41,18 @@ export interface AggregatedWorker {
   /** Resolved role title when the host's catalog still has the template. */
   templateTitle: string | null;
   status: "online" | "offline";
+  createdAt: string;
+  updatedAt: string;
+  serverId: string;
+  serverName: string;
+}
+
+/** A task tagged with its owning worker and host, so one flat list can render. */
+export interface AggregatedWorkerTask {
+  taskId: string;
+  workerId: string;
+  title: string;
+  state: WorkerTaskSummary["state"];
   createdAt: string;
   updatedAt: string;
   serverId: string;
@@ -65,8 +80,10 @@ export type WorkerLoadState =
       status: "loaded";
       workers: AggregatedWorker[];
       templates: WorkerTemplateOption[];
+      tasks: AggregatedWorkerTask[];
       hostErrors: WorkerHostError[];
     };
+
 export interface FetchWorkersInput {
   hosts: readonly WorkerHostInput[];
   runtime: WorkerRuntime;
@@ -81,64 +98,47 @@ function isHostSettling(snapshot: WorkerRuntimeSnapshot | null | undefined): boo
   return snapshot.connectionStatus === "connecting" || snapshot.connectionStatus === "idle";
 }
 
-/**
- * A host that can be asked for workers right now.
- *
- * Only `online` counts. A client object can exist before the socket is usable,
- * so the client alone is not sufficient evidence.
- */
-function isHostAskable(host: WorkerHostInput, runtime: WorkerRuntime): boolean {
-  const snapshot = runtime.getSnapshot(host.serverId);
-  return snapshot?.connectionStatus === "online" && runtime.getClient(host.serverId) !== null;
-}
-
-/**
- * A host is only asked for workers once its connection is up. The runtime
- * snapshot is consulted rather than assumed, because a client object can exist
- * before the socket is usable.
- */
+/** A host that can be asked for workers right now. */
 function connectedClient(
   host: WorkerHostInput,
   runtime: WorkerRuntime,
-): Pick<DaemonClient, "listWorkers" | "listWorkerTemplates"> | null {
+): Pick<DaemonClient, "listWorkers" | "listWorkerTemplates" | "listWorkerTasks"> | null {
   const snapshot = runtime.getSnapshot(host.serverId);
   if (!snapshot || snapshot.connectionStatus !== "online") return null;
   return runtime.getClient(host.serverId);
 }
 
 export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<WorkerLoadState> {
-  const hasAskableHost = input.hosts.some((host) => isHostAskable(host, input.runtime));
-  // Settling means a connection is still being established. If nothing is
-  // askable and nothing is settling, every host is genuinely unusable (offline,
-  // erroring) and that is a loaded state with errors — not "still connecting".
-  // Reporting it as connecting is what left the screen spinning forever after a
-  // host went away.
+  const hasAskableHost = input.hosts.some((host) => connectedClient(host, input.runtime) !== null);
+  // Nothing askable and nothing settling means every host is genuinely unusable
+  // (offline, erroring). That is a loaded state with host errors, not "still
+  // connecting"; reporting it as connecting would spin forever.
   const hasSettlingHost = input.hosts.some((host) =>
     isHostSettling(input.runtime.getSnapshot(host.serverId)),
   );
-
   if (!hasAskableHost && hasSettlingHost) {
     return { status: "connecting" };
   }
 
-  const clients = input.hosts.map((host) => ({
-    host,
-    client: connectedClient(host, input.runtime),
-  }));
-
   const workers: AggregatedWorker[] = [];
   const templates: WorkerTemplateOption[] = [];
+  const tasks: AggregatedWorkerTask[] = [];
   const hostErrors: WorkerHostError[] = [];
+
   await Promise.all(
-    clients.map(async ({ host, client }) => {
+    input.hosts.map(async (host) => {
+      const client = connectedClient(host, input.runtime);
       if (!client) return;
       try {
-        // Fetch the catalog alongside the workers so a row can show the role
-        // name rather than the template id.
+        // Workers and their catalog are the critical path: without them there is
+        // no roster. Tasks are best-effort, because a host that cannot answer
+        // for tasks should still show its workers rather than being reported as
+        // entirely broken.
         const [workerResult, templateResult] = await Promise.all([
           client.listWorkers(),
           client.listWorkerTemplates(),
         ]);
+        const taskResult = await client.listWorkerTasks().catch(() => ({ tasks: [] }));
 
         const titleById = new Map(
           templateResult.templates.map((template) => [template.id, template.title]),
@@ -165,6 +165,18 @@ export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<
             serverName: host.serverName,
           });
         }
+        for (const task of taskResult.tasks) {
+          tasks.push({
+            taskId: task.taskId,
+            workerId: task.workerId,
+            title: task.title,
+            state: task.state,
+            createdAt: task.createdAt,
+            updatedAt: task.updatedAt,
+            serverId: host.serverId,
+            serverName: host.serverName,
+          });
+        }
       } catch (error) {
         hostErrors.push({
           serverId: host.serverId,
@@ -175,5 +187,5 @@ export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<
     }),
   );
 
-  return { status: "loaded", workers, templates, hostErrors };
+  return { status: "loaded", workers, templates, tasks, hostErrors };
 }
