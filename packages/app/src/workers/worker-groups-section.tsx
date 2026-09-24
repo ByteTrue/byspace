@@ -5,10 +5,8 @@ import { StyleSheet } from "react-native-unistyles";
 import { Plus } from "lucide-react-native";
 
 import { Button } from "@/components/ui/button";
-import { EditingTextInput as TextInput } from "@/components/ui/text-input";
-import { useProjects } from "@/hooks/use-projects";
+import { GroupCreateModal } from "@/workers/group-create-modal";
 import { buildHostAgentDetailRoute } from "@/utils/host-routes";
-import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import type {
   AggregatedWorker,
   AggregatedWorkerGroup,
@@ -97,9 +95,12 @@ export function WorkerGroupsSection({
         {createAction}
       </View>
       {viewSwitch}
-      {isCreating ? (
-        <GroupCreateForm workers={workers} onCancel={closeCreate} onCreated={handleCreated} />
-      ) : null}
+      <GroupCreateModal
+        visible={isCreating}
+        workers={workers}
+        onClose={closeCreate}
+        onCreated={handleCreated}
+      />
       {groups.length === 0 && !isCreating ? (
         <EmptyPanel
           title="No groups yet"
@@ -232,216 +233,6 @@ function WorkRow({
       accessibilityLabel={`Open the conversation for ${item.title}`}
     >
       {content}
-    </Pressable>
-  );
-}
-
-function GroupCreateForm({
-  workers,
-  onCancel,
-  onCreated,
-}: {
-  workers: AggregatedWorker[];
-  onCancel: () => void;
-  onCreated: () => void;
-}): ReactElement {
-  const { projects } = useProjects();
-  const [name, setName] = useState("");
-  const [projectKey, setProjectKey] = useState<string | null>(null);
-  const [coordinatorKey, setCoordinatorKey] = useState<string | null>(null);
-  const [memberKeys, setMemberKeys] = useState<readonly string[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  const projectOptions = useMemo(
-    () => projects.flatMap((project) => project.hosts.map((host) => ({ ...host }))),
-    [projects],
-  );
-  const selectedProject = useMemo(
-    () =>
-      projectOptions.find((option) => `${option.serverId}:${option.projectId}` === projectKey) ??
-      null,
-    [projectOptions, projectKey],
-  );
-  const selectedCoordinator = useMemo(
-    () => workers.find((worker) => `${worker.serverId}:${worker.id}` === coordinatorKey) ?? null,
-    [workers, coordinatorKey],
-  );
-
-  const canSubmit = name.trim().length > 0 && selectedProject !== null && !submitting;
-
-  const toggleMember = useCallback((key: string) => {
-    setMemberKeys((current) =>
-      current.includes(key) ? current.filter((entry) => entry !== key) : [...current, key],
-    );
-  }, []);
-
-  const submit = useCallback(async () => {
-    if (!selectedProject) return;
-    const client = getHostRuntimeStore().getClient(selectedProject.serverId);
-    if (!client) {
-      setError("This host is not connected.");
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      const members = memberKeys
-        .map((key) => workers.find((worker) => `${worker.serverId}:${worker.id}` === key))
-        .filter((worker): worker is AggregatedWorker => Boolean(worker))
-        // A group lives on one host; members from another host would be
-        // unrunnable, so they are left out rather than silently accepted.
-        .filter((worker) => worker.serverId === selectedProject.serverId)
-        .map((worker) => worker.id);
-
-      await client.createWorkerGroup({
-        name: name.trim(),
-        projectId: selectedProject.projectId,
-        ...(selectedCoordinator && selectedCoordinator.serverId === selectedProject.serverId
-          ? { coordinatorWorkerId: selectedCoordinator.id }
-          : {}),
-        memberWorkerIds: members,
-      });
-      onCreated();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setSubmitting(false);
-    }
-  }, [name, selectedProject, selectedCoordinator, memberKeys, workers, onCreated]);
-
-  const handleSubmit = useCallback(() => {
-    void submit();
-  }, [submit]);
-
-  const eligibleWorkers = useMemo(
-    () =>
-      selectedProject
-        ? workers.filter((worker) => worker.serverId === selectedProject.serverId)
-        : workers,
-    [workers, selectedProject],
-  );
-
-  return (
-    <View style={styles.form} testID="group-create-form">
-      <Text style={styles.formTitle}>New group</Text>
-
-      <Text style={styles.fieldLabel}>Name</Text>
-      <TextInput
-        initialValue=""
-        onChangeText={setName}
-        placeholder="Pricing page"
-        testID="group-create-name"
-      />
-
-      <Text style={styles.fieldLabel}>Project</Text>
-      {projectOptions.length === 0 ? (
-        <Text style={styles.rowMeta}>No projects yet. Add one in BySpace first.</Text>
-      ) : (
-        <View style={styles.chipRow}>
-          {projectOptions.map((option) => {
-            const key = `${option.serverId}:${option.projectId}`;
-            return (
-              <Chip
-                key={key}
-                label={option.projectCustomName ?? option.projectName}
-                value={key}
-                selected={key === projectKey}
-                onPress={setProjectKey}
-                testID={`group-project-${option.projectId}`}
-              />
-            );
-          })}
-        </View>
-      )}
-
-      <Text style={styles.fieldLabel}>Coordinator</Text>
-      {eligibleWorkers.length === 0 ? (
-        <Text style={styles.rowMeta}>No workers on this host yet.</Text>
-      ) : (
-        <View style={styles.chipRow}>
-          {eligibleWorkers.map((worker) => {
-            const key = `${worker.serverId}:${worker.id}`;
-            return (
-              <Chip
-                key={key}
-                label={`${worker.name} · ${worker.templateTitle ?? worker.templateId}`}
-                value={key}
-                selected={key === coordinatorKey}
-                onPress={setCoordinatorKey}
-                testID={`group-coordinator-${worker.id}`}
-              />
-            );
-          })}
-        </View>
-      )}
-
-      <Text style={styles.fieldLabel}>Other members</Text>
-      <View style={styles.chipRow}>
-        {eligibleWorkers.map((worker) => {
-          const key = `${worker.serverId}:${worker.id}`;
-          return (
-            <Chip
-              key={`member-${key}`}
-              label={worker.name}
-              value={key}
-              selected={memberKeys.includes(key)}
-              onPress={toggleMember}
-              testID={`group-member-${worker.id}`}
-            />
-          );
-        })}
-      </View>
-
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-      <View style={styles.formActions}>
-        <Button variant="ghost" onPress={onCancel} testID="group-create-cancel">
-          Cancel
-        </Button>
-        <Button
-          variant="default"
-          onPress={handleSubmit}
-          disabled={!canSubmit}
-          testID="group-create-submit"
-        >
-          {submitting ? "Creating…" : "Create group"}
-        </Button>
-      </View>
-    </View>
-  );
-}
-
-/**
- * A selectable chip.
- *
- * `value` is required and deliberately has no fallback to `label`. A previous
- * version defaulted to the label, and two of three call sites silently stored a
- * display name while their `selected` check compared against an id, so those
- * chips could never select. The fallback made that invisible.
- */
-function Chip({
-  label,
-  selected,
-  onPress,
-  value,
-  testID,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: (value: string) => void;
-  value: string;
-  testID: string;
-}): ReactElement {
-  const handlePress = useCallback(() => onPress(value), [onPress, value]);
-  return (
-    <Pressable
-      onPress={handlePress}
-      style={selected ? styles.chipSelected : styles.chip}
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      <Text style={selected ? styles.chipLabelSelected : styles.chipLabel}>{label}</Text>
     </Pressable>
   );
 }
