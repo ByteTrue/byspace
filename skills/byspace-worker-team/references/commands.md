@@ -66,3 +66,36 @@ Each task keeps an append-only history of `fromState`, `toState`, `action`, `act
 `note`, and `recordedAt`. Read it to find out _why_ a task is where it is — a `blocked`
 task's last note carries the failure reason, and a `submitted` one carries the agent id
 that produced it. Every state change is attributed to the actor that caused it.
+
+## Messages
+
+```bash
+byspace worker message send --group-id <id> --sender-worker-id <id> --body "<text>" \
+  (--mention <worker-id> ... | --not-mention) \
+  [--private-to <worker-id> ...] [--intent chat|ask|notify|request_action] [--reply-to <message-id>]
+byspace worker message ls --group-id <id> [--viewer-worker-id <id>] [--limit <n>]
+byspace worker inbox --worker-id <id>
+byspace worker message read --message-id <id> --worker-id <id>
+```
+
+**Mentions wake; the text does not route.** `--mention` addresses the named workers
+and makes the message waking. Routing reads the audience, never the body, so an `@name`
+in the text is presentation only. `--mention` and `--not-mention` are exclusive, because
+they are two different sends rather than two flags on one.
+
+**Visibility and waking are separate questions.** `--not-mention` stores a message that
+everyone can read and that wakes nobody. `--private-to` narrows who may read it without
+changing whether anyone is woken. A message with no `--private-to` is public to the group.
+
+**One delivery per addressed worker.** A waking message creates a delivery row for each
+addressee, so "has this been picked up" is a fact about a pair. Two workers addressed by
+one message read it independently; one reading it does not mark it read for the other.
+
+`inbox` lists only messages that woke the worker and are not finished — `unread` or
+`claimed`. Claiming keeps a message in the inbox so work interrupted mid-way can be
+resumed. `message read` returns `not-addressed` when the worker had no delivery for the
+message, which means it was not for them; that is an answer, not an error.
+
+Read a group's stream with your own `--viewer-worker-id` unless you mean to inspect the
+whole group. Without it you get the operator view, including messages you are not a
+reader of.

@@ -354,8 +354,132 @@ export const WorkerGroupRemoveMemberResponseSchema = z.object({
   }),
 });
 
+// ----------------------------------------------------------------- messages
+
+/**
+ * Whether a message wakes its audience.
+ *
+ * Deliberately separate from who can read it: the reference product models
+ * waking and visibility as different questions, so a message can be visible to
+ * the whole group while waking nobody.
+ */
+export const WorkerMessageDeliveryPolicySchema = z.enum(["wake", "store_only"]);
+
+/** Display classification. It does not change routing. */
+export const WorkerMessageIntentSchema = z.enum(["chat", "ask", "notify", "request_action"]);
+
+export const WorkerMessageDeliveryStateSchema = z.enum(["unread", "claimed", "read"]);
+
+export const WorkerMessageSummarySchema = z.object({
+  messageId: z.string(),
+  groupId: z.string(),
+  /** Visible ordering within the group. */
+  seq: z.number(),
+  senderWorkerId: z.string(),
+  body: z.string(),
+  intent: WorkerMessageIntentSchema,
+  deliveryPolicy: WorkerMessageDeliveryPolicySchema,
+  replyToMessageId: z.string().nullable(),
+  /** Addressed workers. Empty when nobody is addressed. */
+  audience: z.array(z.string()),
+  /** Workers allowed to read it when narrower than the group; empty means public. */
+  privateTo: z.array(z.string()),
+  createdAt: z.string(),
+});
+
+export const WorkerMessageSendRequestSchema = z.object({
+  type: z.literal("worker.message.send.request"),
+  requestId: z.string(),
+  groupId: z.string().min(1),
+  senderWorkerId: z.string().min(1),
+  body: z.string().min(1),
+  intent: WorkerMessageIntentSchema.optional(),
+  deliveryPolicy: WorkerMessageDeliveryPolicySchema.optional(),
+  replyToMessageId: z.string().optional(),
+  audience: z.array(z.string()).optional(),
+  privateTo: z.array(z.string()).optional(),
+});
+
+export const WorkerMessageSendResponseSchema = z.object({
+  type: z.literal("worker.message.send.response"),
+  payload: z.object({
+    requestId: z.string(),
+    message: WorkerMessageSummarySchema,
+    /**
+     * Workers this message woke. Empty for a store-only send, and empty for a
+     * waking send that addressed nobody — which is why it is reported rather
+     * than inferred from the message.
+     */
+    woke: z.array(z.string()),
+  }),
+});
+
+export const WorkerMessageListRequestSchema = z.object({
+  type: z.literal("worker.message.list.request"),
+  requestId: z.string(),
+  groupId: z.string().min(1),
+  /**
+   * Filters to what this worker may read. Omit for the operator view. A worker
+   * asking for its own stream must pass its own id, or it would see messages
+   * it is not a reader of.
+   */
+  viewerWorkerId: z.string().min(1).optional(),
+  limit: z.number().int().positive().optional(),
+});
+
+export const WorkerMessageListResponseSchema = z.object({
+  type: z.literal("worker.message.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    messages: z.array(WorkerMessageSummarySchema),
+  }),
+});
+
+export const WorkerInboxListRequestSchema = z.object({
+  type: z.literal("worker.inbox.list.request"),
+  requestId: z.string(),
+  workerId: z.string().min(1),
+});
+
+export const WorkerInboxListResponseSchema = z.object({
+  type: z.literal("worker.inbox.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    /** Delivery state is per reader, so it travels with the message. */
+    entries: z.array(
+      z.object({
+        message: WorkerMessageSummarySchema,
+        state: WorkerMessageDeliveryStateSchema,
+      }),
+    ),
+  }),
+});
+
+export const WorkerMessageDeliveryMarkRequestSchema = z.object({
+  type: z.literal("worker.message.delivery.request"),
+  requestId: z.string(),
+  messageId: z.string().min(1),
+  workerId: z.string().min(1),
+  state: WorkerMessageDeliveryStateSchema,
+});
+
+export const WorkerMessageDeliveryMarkResponseSchema = z.object({
+  type: z.literal("worker.message.delivery.response"),
+  payload: z.object({
+    requestId: z.string(),
+    /**
+     * False when the worker has no delivery for this message, which means it was
+     * not addressed by it. A normal answer, not an error.
+     */
+    marked: z.boolean(),
+  }),
+});
+
 // Inferred types, exported on demand rather than all at once: consumers need the
 // shapes, not the validators, and an export nobody imports drifts unnoticed.
 // `WorkerTaskSummary` is the one the app derives its task-state union from.
 export type WorkerTaskSummary = z.infer<typeof WorkerTaskSummarySchema>;
 export type WorkerGroupSummary = z.infer<typeof WorkerGroupSummarySchema>;
+export type WorkerMessageSummary = z.infer<typeof WorkerMessageSummarySchema>;
+export type WorkerMessageDeliveryPolicy = z.infer<typeof WorkerMessageDeliveryPolicySchema>;
+export type WorkerMessageIntent = z.infer<typeof WorkerMessageIntentSchema>;

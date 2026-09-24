@@ -22,6 +22,11 @@ import {
   type WorkerGroupMemberRecord,
   type WorkerGroupMemberRole,
   type WorkerGroupRecord,
+  type WorkerInboxEntry,
+  type WorkerMessageDeliveryPolicy,
+  type WorkerMessageDeliveryState,
+  type WorkerMessageIntent,
+  type WorkerMessageRecord,
   type WorkerRecord,
   type WorkerTaskHistoryEntry,
   type WorkerTaskRecord,
@@ -314,6 +319,76 @@ export class WorkerService {
   removeGroupMember(input: { groupId: string; workerId: string }): void {
     this.getGroup(input.groupId);
     this.getStore().removeGroupMember(input);
+  }
+
+  // --------------------------------------------------------------- messages
+
+  /**
+   * Record a message in a group's stream.
+   *
+   * Returns the message and, for a waking message, the workers it woke. The two
+   * are returned together because a caller that sent a waking message needs to
+   * know whether anyone was actually addressed: an audience of zero wakes
+   * nobody, which looks identical to a successful send from the message alone.
+   */
+  sendMessage(input: {
+    groupId: string;
+    senderWorkerId: string;
+    body: string;
+    intent?: WorkerMessageIntent;
+    deliveryPolicy?: WorkerMessageDeliveryPolicy;
+    replyToMessageId?: string | null;
+    audience?: readonly string[];
+    privateTo?: readonly string[];
+  }): { message: WorkerMessageRecord; woke: string[] } {
+    this.getGroup(input.groupId);
+    this.getWorker(input.senderWorkerId);
+
+    const messageId = `msg_${randomBytes(6).toString("hex")}`;
+    const message = this.getStore().createMessage({
+      messageId,
+      groupId: input.groupId,
+      senderWorkerId: input.senderWorkerId,
+      body: input.body,
+      ...(input.intent !== undefined ? { intent: input.intent } : {}),
+      ...(input.deliveryPolicy !== undefined ? { deliveryPolicy: input.deliveryPolicy } : {}),
+      ...(input.replyToMessageId !== undefined ? { replyToMessageId: input.replyToMessageId } : {}),
+      ...(input.audience !== undefined ? { audience: [...input.audience] } : {}),
+      ...(input.privateTo !== undefined ? { privateTo: [...input.privateTo] } : {}),
+    });
+
+    const woke = message.deliveryPolicy === "wake" ? message.audience : [];
+    this.logger.info(
+      { messageId, groupId: input.groupId, woke: woke.length },
+      "Recorded worker message",
+    );
+    return { message, woke };
+  }
+
+  listMessages(input: { groupId: string; viewerWorkerId?: string; limit?: number }) {
+    this.getGroup(input.groupId);
+    return this.getStore().listMessages(input);
+  }
+
+  /** A worker's open inbox: messages that woke it and are not finished. */
+  listInbox(workerId: string): WorkerInboxEntry[] {
+    this.getWorker(workerId);
+    return this.getStore().listInbox(workerId);
+  }
+
+  /**
+   * Mark a message picked up or finished for one worker.
+   *
+   * Reports `false` rather than throwing when the worker has no delivery, so a
+   * caller can tell "this was not addressed to you" from a real failure.
+   */
+  markMessageDelivery(input: {
+    messageId: string;
+    workerId: string;
+    state: WorkerMessageDeliveryState;
+  }): boolean {
+    this.getWorker(input.workerId);
+    return this.getStore().markDelivery(input);
   }
 
   // ------------------------------------------------------------------- runs

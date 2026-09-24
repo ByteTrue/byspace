@@ -28,7 +28,7 @@ import {
   type WorkerTaskState,
 } from "./worker-task-state.js";
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export interface WorkerRecord {
   id: string;
@@ -89,6 +89,76 @@ export interface CreateWorkerGroupInput {
   projectId: string;
   workspaceId?: string | null;
   goal?: string | null;
+  createdAt?: string;
+}
+
+// ---------------------------------------------------------------- messages
+
+/**
+ * Whether sending a message wakes its audience.
+ *
+ * `wake` and reading are separate questions: a message can be visible to a
+ * worker without starting a run for it, and the reference product models that
+ * as this policy rather than as visibility.
+ */
+export type WorkerMessageDeliveryPolicy = "wake" | "store_only";
+
+/** What the message is for. Presentation only; it does not change routing. */
+export type WorkerMessageIntent = "chat" | "ask" | "notify" | "request_action";
+
+/** Per-recipient pickup state, so two recipients of one message are independent. */
+export type WorkerMessageDeliveryState = "unread" | "claimed" | "read";
+
+export interface WorkerMessageRecord {
+  messageId: string;
+  groupId: string;
+  /** Visible ordering within the group, allocated on insert. */
+  seq: number;
+  senderWorkerId: string;
+  body: string;
+  intent: WorkerMessageIntent;
+  deliveryPolicy: WorkerMessageDeliveryPolicy;
+  replyToMessageId: string | null;
+  /** Workers the message is addressed to. Empty when nobody is addressed. */
+  audience: string[];
+  /**
+   * Workers allowed to read it, when narrower than the group. Empty means
+   * public to the group, which is the common case.
+   */
+  privateTo: string[];
+  createdAt: string;
+}
+
+export interface WorkerMessageDeliveryRecord {
+  messageId: string;
+  workerId: string;
+  state: WorkerMessageDeliveryState;
+  claimedAt: string | null;
+  readAt: string | null;
+}
+
+/**
+ * A stored message together with its delivery state for one reader.
+ *
+ * Delivery state belongs to the pair, so the same message appears in two
+ * workers' inboxes with different states. Returning it alongside the message
+ * keeps that difference visible to the caller.
+ */
+export interface WorkerInboxEntry {
+  message: WorkerMessageRecord;
+  state: WorkerMessageDeliveryState;
+}
+
+export interface CreateWorkerMessageInput {
+  messageId: string;
+  groupId: string;
+  senderWorkerId: string;
+  body: string;
+  intent?: WorkerMessageIntent;
+  deliveryPolicy?: WorkerMessageDeliveryPolicy;
+  replyToMessageId?: string | null;
+  audience?: string[];
+  privateTo?: string[];
   createdAt?: string;
 }
 
@@ -253,6 +323,59 @@ export class WorkerStore {
       -- unrepresentable instead of merely discouraged.
       CREATE UNIQUE INDEX IF NOT EXISTS idx_worker_group_one_coordinator
         ON worker_group_members(group_id) WHERE role = 'coordinator';
+
+      -- A group's message stream. The seq column is the visible ordering and
+      -- is allocated inside the same statement that inserts the row, so two
+      -- concurrent sends cannot claim the same position.
+      CREATE TABLE IF NOT EXISTS worker_messages (
+        message_id        TEXT PRIMARY KEY,
+        group_id          TEXT NOT NULL REFERENCES worker_groups(id) ON DELETE CASCADE,
+        seq               INTEGER NOT NULL,
+        sender_worker_id  TEXT NOT NULL REFERENCES workers(id) ON DELETE CASCADE,
+        body              TEXT NOT NULL,
+        intent            TEXT NOT NULL,
+        delivery_policy   TEXT NOT NULL,
+        reply_to_message_id TEXT,
+        created_at        TEXT NOT NULL,
+        UNIQUE (group_id, seq)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_worker_messages_group_seq
+        ON worker_messages(group_id, seq);
+
+      -- Who a message is addressed to. Routing reads this, never the text: an
+      -- @name in the body is presentation, and parsing it would make routing
+      -- depend on prose.
+      CREATE TABLE IF NOT EXISTS worker_message_audience (
+        message_id TEXT NOT NULL REFERENCES worker_messages(message_id) ON DELETE CASCADE,
+        worker_id  TEXT NOT NULL REFERENCES workers(id) ON DELETE CASCADE,
+        PRIMARY KEY (message_id, worker_id)
+      );
+
+      -- Who may read a message, when that is narrower than the whole group.
+      -- Absence of rows means public. This is deliberately independent of
+      -- the audience table: waking someone and letting them read are different
+      -- questions, and a store-only message is visible without waking anyone.
+      CREATE TABLE IF NOT EXISTS worker_message_private_to (
+        message_id TEXT NOT NULL REFERENCES worker_messages(message_id) ON DELETE CASCADE,
+        worker_id  TEXT NOT NULL REFERENCES workers(id) ON DELETE CASCADE,
+        PRIMARY KEY (message_id, worker_id)
+      );
+
+      -- One row per recipient of a waking message, so "has this been picked up"
+      -- is a fact about a pair rather than a flag on the message. Two workers
+      -- addressed by the same message have independent delivery state.
+      CREATE TABLE IF NOT EXISTS worker_message_deliveries (
+        message_id TEXT NOT NULL REFERENCES worker_messages(message_id) ON DELETE CASCADE,
+        worker_id  TEXT NOT NULL REFERENCES workers(id) ON DELETE CASCADE,
+        state      TEXT NOT NULL,
+        claimed_at TEXT,
+        read_at    TEXT,
+        PRIMARY KEY (message_id, worker_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_worker_message_deliveries_inbox
+        ON worker_message_deliveries(worker_id, state, message_id);
     `);
 
     const current = this.db
@@ -652,6 +775,247 @@ export class WorkerStore {
   deleteGroup(groupId: string): void {
     this.db.prepare("DELETE FROM worker_groups WHERE id = ?").run(groupId);
   }
+
+  // --------------------------------------------------------------- messages
+
+  /**
+   * Check a message's participants and return its deduplicated recipients.
+   *
+   * Errors rather than repairing: an unknown worker, or an addressee who cannot
+   * read the message, is a caller mistake, and silently dropping either half
+   * would hide it.
+   */
+  private validateMessageRecipients(input: CreateWorkerMessageInput): {
+    audience: string[];
+    privateTo: string[];
+  } {
+    if (!this.getGroup(input.groupId)) {
+      throw new Error(`unknown worker group: ${input.groupId}`);
+    }
+    if (!this.getWorker(input.senderWorkerId)) {
+      throw new Error(`unknown worker: ${input.senderWorkerId}`);
+    }
+
+    const audience = [...new Set(input.audience ?? [])];
+    const privateTo = [...new Set(input.privateTo ?? [])];
+
+    for (const workerId of [...audience, ...privateTo]) {
+      if (!this.getWorker(workerId)) {
+        throw new Error(`unknown worker: ${workerId}`);
+      }
+    }
+
+    // Addressing someone who cannot read the message is contradictory.
+    if (privateTo.length > 0) {
+      const readers = new Set([...privateTo, input.senderWorkerId]);
+      const unreachable = audience.filter((workerId) => !readers.has(workerId));
+      if (unreachable.length > 0) {
+        throw new Error(
+          `message addresses ${unreachable.join(", ")} who are not among its readers`,
+        );
+      }
+    }
+
+    return { audience, privateTo };
+  }
+
+  /**
+   * Append a message to a group's stream.
+   *
+   * The visible `seq` is allocated here rather than passed in, inside the same
+   * transaction as the insert: a caller that supplied its own sequence could
+   * not know what is free, and reading the maximum first would let two
+   * concurrent sends claim the same position.
+   *
+   * A waking message gets one delivery row per addressed worker. A store-only
+   * message gets none, which is what makes "visible but not waking" a fact
+   * rather than a convention: there is nothing for an inbox to pick up.
+   */
+  createMessage(input: CreateWorkerMessageInput): WorkerMessageRecord {
+    const { audience, privateTo } = this.validateMessageRecipients(input);
+    const intent = input.intent ?? (audience.length > 0 ? "request_action" : "chat");
+    const deliveryPolicy = input.deliveryPolicy ?? (audience.length > 0 ? "wake" : "store_only");
+    const createdAt = input.createdAt ?? new Date().toISOString();
+
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const next = this.db
+        .prepare("SELECT COALESCE(MAX(seq), 0) + 1 AS seq FROM worker_messages WHERE group_id = ?")
+        .get(input.groupId) as { seq: number };
+
+      this.db
+        .prepare(
+          `INSERT INTO worker_messages
+             (message_id, group_id, seq, sender_worker_id, body, intent, delivery_policy,
+              reply_to_message_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          input.messageId,
+          input.groupId,
+          next.seq,
+          input.senderWorkerId,
+          input.body,
+          intent,
+          deliveryPolicy,
+          input.replyToMessageId ?? null,
+          createdAt,
+        );
+
+      const insertAudience = this.db.prepare(
+        "INSERT INTO worker_message_audience (message_id, worker_id) VALUES (?, ?)",
+      );
+      for (const workerId of audience) insertAudience.run(input.messageId, workerId);
+
+      const insertPrivate = this.db.prepare(
+        "INSERT INTO worker_message_private_to (message_id, worker_id) VALUES (?, ?)",
+      );
+      for (const workerId of privateTo) insertPrivate.run(input.messageId, workerId);
+
+      if (deliveryPolicy === "wake") {
+        const insertDelivery = this.db.prepare(
+          `INSERT INTO worker_message_deliveries (message_id, worker_id, state, claimed_at, read_at)
+           VALUES (?, ?, 'unread', NULL, NULL)`,
+        );
+        for (const workerId of audience) insertDelivery.run(input.messageId, workerId);
+      }
+
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+
+    const created = this.getMessage(input.messageId);
+    if (!created) throw new Error(`message ${input.messageId} vanished immediately after insert`);
+    return created;
+  }
+
+  getMessage(messageId: string): WorkerMessageRecord | null {
+    const row = this.db
+      .prepare(
+        `SELECT message_id, group_id, seq, sender_worker_id, body, intent, delivery_policy,
+                reply_to_message_id, created_at
+         FROM worker_messages WHERE message_id = ?`,
+      )
+      .get(messageId) as WorkerMessageRow | undefined;
+    if (!row) return null;
+
+    const audience = this.db
+      .prepare(
+        `SELECT worker_id FROM worker_message_audience
+         WHERE message_id = ? ORDER BY rowid ASC`,
+      )
+      .all(messageId) as Array<{ worker_id: string }>;
+    const privateTo = this.db
+      .prepare(
+        `SELECT worker_id FROM worker_message_private_to
+         WHERE message_id = ? ORDER BY rowid ASC`,
+      )
+      .all(messageId) as Array<{ worker_id: string }>;
+
+    return toMessageRecord(
+      row,
+      audience.map((entry) => entry.worker_id),
+      privateTo.map((entry) => entry.worker_id),
+    );
+  }
+
+  /**
+   * A group's stream in visible order.
+   *
+   * `viewerWorkerId` filters to what that worker may read; omitting it returns
+   * everything, which is what an operator view wants and a worker must not get.
+   */
+  listMessages(input: {
+    groupId: string;
+    viewerWorkerId?: string;
+    limit?: number;
+  }): WorkerMessageRecord[] {
+    const rows = this.db
+      .prepare(
+        `SELECT message_id, group_id, seq, sender_worker_id, body, intent, delivery_policy,
+                reply_to_message_id, created_at
+         FROM worker_messages WHERE group_id = ? ORDER BY seq ASC`,
+      )
+      .all(input.groupId) as WorkerMessageRow[];
+
+    const messages = rows.map((row) => {
+      const record = this.getMessage(row.message_id);
+      if (!record) throw new Error(`message ${row.message_id} vanished between reads`);
+      return record;
+    });
+
+    const visible =
+      input.viewerWorkerId === undefined
+        ? messages
+        : messages.filter(
+            (message) =>
+              message.privateTo.length === 0 ||
+              message.privateTo.includes(input.viewerWorkerId as string) ||
+              message.senderWorkerId === input.viewerWorkerId,
+          );
+
+    if (input.limit === undefined || visible.length <= input.limit) return visible;
+    // The most recent `limit` messages, still in ascending order: a truncated
+    // stream should end at the newest message, not the oldest.
+    return visible.slice(visible.length - input.limit);
+  }
+
+  /**
+   * A worker's inbox: the messages addressed to it that it has not finished.
+   *
+   * Only waking messages appear, because a delivery row is only written for
+   * those. Read messages are excluded; claimed ones are included so a worker
+   * that stopped mid-way can pick its work back up.
+   */
+  listInbox(workerId: string): WorkerInboxEntry[] {
+    const rows = this.db
+      .prepare(
+        `SELECT message_id, state FROM worker_message_deliveries
+         WHERE worker_id = ? AND state IN ('unread', 'claimed')
+         ORDER BY message_id ASC`,
+      )
+      .all(workerId) as Array<{ message_id: string; state: string }>;
+
+    return rows.flatMap((row) => {
+      const message = this.getMessage(row.message_id);
+      if (!message) return [];
+      return [{ message, state: row.state as WorkerMessageDeliveryState }];
+    });
+  }
+
+  /**
+   * Mark a delivery picked up, or finished.
+   *
+   * Returns false when the worker has no delivery for the message, which means
+   * it was not addressed by it. That is a normal answer rather than an error:
+   * a worker reading history should not be able to claim work addressed to
+   * someone else.
+   */
+  markDelivery(input: {
+    messageId: string;
+    workerId: string;
+    state: WorkerMessageDeliveryState;
+    at?: string;
+  }): boolean {
+    const at = input.at ?? new Date().toISOString();
+    const result =
+      input.state === "claimed"
+        ? this.db
+            .prepare(
+              `UPDATE worker_message_deliveries SET state = 'claimed', claimed_at = ?
+               WHERE message_id = ? AND worker_id = ? AND state = 'unread'`,
+            )
+            .run(at, input.messageId, input.workerId)
+        : this.db
+            .prepare(
+              `UPDATE worker_message_deliveries SET state = 'read', read_at = ?, claimed_at = COALESCE(claimed_at, ?)
+               WHERE message_id = ? AND worker_id = ? AND state IN ('unread', 'claimed')`,
+            )
+            .run(at, at, input.messageId, input.workerId);
+    return result.changes > 0;
+  }
 }
 
 function toTaskRecord(row: WorkerTaskRow): WorkerTaskRecord {
@@ -674,6 +1038,38 @@ interface WorkerGroupRow {
   status: string;
   created_at: string;
   updated_at: string;
+}
+
+interface WorkerMessageRow {
+  message_id: string;
+  group_id: string;
+  seq: number;
+  sender_worker_id: string;
+  body: string;
+  intent: string;
+  delivery_policy: string;
+  reply_to_message_id: string | null;
+  created_at: string;
+}
+
+function toMessageRecord(
+  row: WorkerMessageRow,
+  audience: string[],
+  privateTo: string[],
+): WorkerMessageRecord {
+  return {
+    messageId: row.message_id,
+    groupId: row.group_id,
+    seq: row.seq,
+    senderWorkerId: row.sender_worker_id,
+    body: row.body,
+    intent: row.intent as WorkerMessageIntent,
+    deliveryPolicy: row.delivery_policy as WorkerMessageDeliveryPolicy,
+    replyToMessageId: row.reply_to_message_id,
+    audience,
+    privateTo,
+    createdAt: row.created_at,
+  };
 }
 
 interface WorkerGroupMemberRow {

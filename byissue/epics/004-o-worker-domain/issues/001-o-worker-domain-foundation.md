@@ -585,3 +585,39 @@ worker task create + run         → submitted
 **测试里踩了一次和切片 008 同一个坑。** 第一次测"第二个协调者被拒"时，我用了一个**已在组里**的 worker，于是命中的是「已是成员」规则，**协调者规则根本没被执行**。换成一个组外的 worker 才真正触发。同一个陷阱犯了第二次，说明凡是"测某条规则"的用例，都必须先确认**这条规则是此时唯一能挡住的规则**。
 
 **typecheck 0 错误 / lint 0 错误 / format 通过 / CLI 与 worker 相关 vitest 34 files 334 tests。**
+
+### 切片 011：群聊与路由（照搬上游的 messaging）
+
+**上游的两个关键区分原样搬过来**（一手证据：`qoderwake-collab-group/references/messaging.md`、`inbox-loop.md`）：
+
+1. **提及即唤醒，且正文不参与路由。** 上游 `--mention` 重复项解析成 `audience` 并置 `deliveryPolicy="wake"`；`--not-mention` 置 `store_only`；两者**互斥**（是两次不同的发送，不是同一个发送的两个开关）。上游还明写：正文里的可见 `@Name` 只是呈现，**结构化 mention 才决定路由**。所以 BySpace 的路由读 `worker_message_audience` 表，绝不解析正文 —— 解析正文等于让路由依赖散文。
+2. **可见性与唤醒分离。** `--private-to` 收窄**谁能读**，与**是否唤醒**正交。上游说得很清楚："A private reply reference is not an automatic visibility setting."
+
+**存储上让这两个区分成为事实而非约定：**
+
+- `deliveryPolicy = 'wake'` 才写 `worker_message_deliveries` 行；`store_only` **一行都不写**。于是"可见但不唤醒"不是靠代码遵守，而是**没有东西可供收件箱拾取**。
+- 送达状态是**一对 (message, worker) 的属性**，不是消息上的标志位。一条消息唤醒两个人，两人各自独立已读：`markDelivery` 只影响那一对。
+- `seq` 在**插入的同一个事务内**分配（`BEGIN IMMEDIATE` + `MAX(seq)+1`）。让调用方传 seq 它不可能知道哪个空着；先读最大值再插入则两次并发发送会撞位。已有并发交错的用例。
+- 给**读不到的人发私密消息**直接被拒 —— 静默丢掉任一半都会掩盖调用方的错。
+
+**上游的"claim"语义照搬其形状**：`inbox` 只列 `unread` 与 `claimed`；`claimed` 仍留在收件箱，因为中途被打断的工作要能接着做；已读的不再可被 claim。`read` 对没有投递的人返回 `marked=false`（即"这条不是给你的"）——**是正常答复，不是错误**，所以 CLI 打印 `not-addressed` 而不是报错。
+
+**权限：这批用了 `workspace.read` 而不是 write。** 消息是对话不是结构：发一条、标一条已读都不改工作区状态，读流是检视。若按 write 卡，worker 就得有改项目的权限才能回同事一句话。**而"worker 能否创建 worker"的强制边界本来就在权限层**——`worker.worker.create.request` 从切片 005 起就要求 `workspace.manage`（比 write 更强），不靠 skill 文案。
+
+**schema v2 → v3**：新增 4 张表（messages / audience / private_to / deliveries）。在**已有真实数据的库上**实测了迁移：版本行 1→2→3 都在，新表齐全，且切片 008/009 造的 9 个 worker / 2 个 task **原样保留**。
+
+**验证（全部对真实 daemon + 真实 CLI）：**
+
+```
+提及即唤醒         seq=1 wakes→bob，Bob 收件箱 1 条，Alice 0 条
+store-only         seq=2 stores→-，Bob 收件箱仍 1 条，但流里两条都在
+--mention + --not-mention  → 被拒（互斥）
+私密消息           Bob 视角 3 条，Carol 视角 2 条
+给读不到的人发      → "message addresses wkr_… who are not among its readers"
+已读               Bob 标已读 → 收件箱降到 1；Carol 标同一条 → not-addressed
+e2e verifier       27 项全通（新增 7 项 messaging）
+vitest             97 files / 1019 tests
+typecheck 0 错误 / lint 0 错误 / format 通过
+```
+
+**lint 抓出一条真信号：** `createMessage` 复杂度 21（上限 20）—— 它同时做**校验**和**写入**两件事。已把参与者校验抽成 `validateMessageRecipients`，两件事各自独立。这种地方不该靠调高阈值糊过去。

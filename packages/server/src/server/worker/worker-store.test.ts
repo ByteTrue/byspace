@@ -473,3 +473,171 @@ describe("worker groups", () => {
     expect(store.getGroup("grp_1")).not.toBeNull();
   });
 });
+
+describe("worker messages", () => {
+  const GROUP = { id: "grp_1", name: "Pricing page", projectId: "prj_abc" };
+
+  beforeEach(() => {
+    store.createWorker({ ...WORKER, id: "w2", name: "Bob" });
+    store.createWorker({ ...WORKER, id: "w3", name: "Carol" });
+    store.createGroup(GROUP);
+  });
+
+  function send(overrides: Partial<Parameters<WorkerStore["createMessage"]>[0]> = {}) {
+    return store.createMessage({
+      messageId: `msg_${Math.random().toString(16).slice(2)}`,
+      groupId: "grp_1",
+      senderWorkerId: "w1",
+      body: "hello",
+      ...overrides,
+    });
+  }
+
+  it("allocates increasing sequence numbers within a group", () => {
+    // Sequence is the visible ordering, so it must be dense and monotonic.
+    const first = send();
+    const second = send();
+    expect([first.seq, second.seq]).toEqual([1, 2]);
+  });
+
+  it("keeps sequence numbers independent per group", () => {
+    store.createGroup({ id: "grp_2", name: "Other", projectId: "prj_abc" });
+    const other = send({ groupId: "grp_2" });
+    expect(other.seq).toBe(1);
+  });
+
+  it("refuses a message on an unknown group", () => {
+    expect(() => send({ groupId: "grp_missing" })).toThrow(/unknown worker group/);
+  });
+
+  it("refuses a sender who is not a worker", () => {
+    expect(() => send({ senderWorkerId: "w_missing" })).toThrow(/unknown worker/);
+  });
+
+  it("allocates sequence numbers without collision when interleaved", () => {
+    // Two sends whose ids were both computed before either insert. Reading the
+    // max inside the insert transaction is what keeps them apart.
+    const a = store.createMessage({
+      messageId: "msg_a",
+      groupId: "grp_1",
+      senderWorkerId: "w1",
+      body: "first",
+    });
+    const b = store.createMessage({
+      messageId: "msg_b",
+      groupId: "grp_1",
+      senderWorkerId: "w1",
+      body: "second",
+    });
+    expect(new Set([a.seq, b.seq]).size).toBe(2);
+  });
+
+  it("records who a message addresses, separately from its text", () => {
+    // Routing reads the audience table. Parsing an @name in the body would make
+    // routing depend on prose.
+    const message = send({ body: "@Bob please look at this", audience: ["w2"] });
+    expect(message.audience).toEqual(["w2"]);
+  });
+
+  it("deduplicates a repeated addressee", () => {
+    const message = send({ audience: ["w2", "w2"] });
+    expect(message.audience).toEqual(["w2"]);
+  });
+
+  it("creates one delivery per addressee of a waking message", () => {
+    send({ audience: ["w2", "w3"] });
+    expect(store.listInbox("w2")).toHaveLength(1);
+    expect(store.listInbox("w3")).toHaveLength(1);
+  });
+
+  it("does not wake anyone for a store-only message", () => {
+    // Visibility without waking is a fact here, not a convention: there is no
+    // delivery row for an inbox to pick up.
+    send({ audience: ["w2"], deliveryPolicy: "store_only" });
+    expect(store.listInbox("w2")).toHaveLength(0);
+    expect(store.listMessages({ groupId: "grp_1" })).toHaveLength(1);
+  });
+
+  it("defaults to waking the audience and storing when there is none", () => {
+    expect(send({ audience: ["w2"] }).deliveryPolicy).toBe("wake");
+    expect(send().deliveryPolicy).toBe("store_only");
+  });
+
+  it("gives each addressee an independent delivery state", () => {
+    // One worker reading a message must not mark it read for the other.
+    const message = send({ audience: ["w2", "w3"] });
+    expect(
+      store.markDelivery({ messageId: message.messageId, workerId: "w2", state: "read" }),
+    ).toBe(true);
+    expect(store.listInbox("w2")).toHaveLength(0);
+    expect(store.listInbox("w3")).toHaveLength(1);
+  });
+
+  it("keeps a claimed message in the inbox so work can be resumed", () => {
+    const message = send({ audience: ["w2"] });
+    store.markDelivery({ messageId: message.messageId, workerId: "w2", state: "claimed" });
+    expect(store.listInbox("w2").map((entry) => entry.state)).toEqual(["claimed"]);
+  });
+
+  it("will not let a worker claim a message addressed to someone else", () => {
+    // Reading history must not be a way to take on another worker's work.
+    const message = send({ audience: ["w2"] });
+    expect(
+      store.markDelivery({ messageId: message.messageId, workerId: "w3", state: "claimed" }),
+    ).toBe(false);
+  });
+
+  it("does not reclaim a message that was already read", () => {
+    const message = send({ audience: ["w2"] });
+    store.markDelivery({ messageId: message.messageId, workerId: "w2", state: "read" });
+    expect(
+      store.markDelivery({ messageId: message.messageId, workerId: "w2", state: "claimed" }),
+    ).toBe(false);
+  });
+
+  it("keeps a private message out of an outsider's stream", () => {
+    send({ privateTo: ["w2"], audience: ["w2"], body: "just between us" });
+    expect(store.listMessages({ groupId: "grp_1", viewerWorkerId: "w2" })).toHaveLength(1);
+    expect(store.listMessages({ groupId: "grp_1", viewerWorkerId: "w3" })).toHaveLength(0);
+  });
+
+  it("lets the sender read their own private message", () => {
+    send({ privateTo: ["w2"], audience: ["w2"] });
+    expect(store.listMessages({ groupId: "grp_1", viewerWorkerId: "w1" })).toHaveLength(1);
+  });
+
+  it("treats a message with no private readers as public", () => {
+    send();
+    expect(store.listMessages({ groupId: "grp_1", viewerWorkerId: "w3" })).toHaveLength(1);
+  });
+
+  it("refuses to address someone who cannot read the message", () => {
+    // A message that wakes a worker the message is hidden from is a mistake in
+    // the caller, and dropping either half silently would hide it.
+    expect(() => send({ privateTo: ["w2"], audience: ["w3"] })).toThrow(
+      /addresses w3 who are not among its readers/,
+    );
+  });
+
+  it("returns the most recent messages when truncated", () => {
+    // A truncated stream should end at the newest message, not the oldest.
+    for (let index = 0; index < 5; index += 1) send({ body: `message ${index}` });
+    const recent = store.listMessages({ groupId: "grp_1", limit: 2 });
+    expect(recent.map((message) => message.body)).toEqual(["message 3", "message 4"]);
+  });
+
+  it("records a reply reference", () => {
+    const original = send();
+    const reply = send({ replyToMessageId: original.messageId });
+    expect(reply.replyToMessageId).toBe(original.messageId);
+  });
+
+  it("survives reopening the database", () => {
+    send({ audience: ["w2"], body: "durable" });
+    const databasePath = path.join(dir, "worker.db");
+    store.close();
+    store = new WorkerStore({ databasePath });
+    expect(store.listMessages({ groupId: "grp_1" })[0]?.body).toBe("durable");
+    expect(store.listInbox("w2")).toHaveLength(1);
+  });
+});

@@ -579,6 +579,22 @@ type WorkerTaskListPayload = Extract<
   SessionOutboundMessage,
   { type: "worker.task.list.response" }
 >["payload"];
+type WorkerMessageSendPayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.message.send.response" }
+>["payload"];
+type WorkerMessageListPayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.message.list.response" }
+>["payload"];
+type WorkerInboxListPayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.inbox.list.response" }
+>["payload"];
+type WorkerMessageDeliveryPayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.message.delivery.response" }
+>["payload"];
 type WorkerGroupListPayload = Extract<
   SessionOutboundMessage,
   { type: "worker.group.list.response" }
@@ -2644,6 +2660,92 @@ export class DaemonClient {
         workerId: input.workerId,
       },
       responseType: "worker.group.remove_member.response",
+    });
+  }
+
+  /**
+   * Send a message into a group's stream.
+   *
+   * `woke` is the point of the return value: a waking send that addressed
+   * nobody wakes nobody, and that looks identical to a successful send from the
+   * message alone.
+   */
+  async sendWorkerMessage(
+    input: {
+      groupId: string;
+      senderWorkerId: string;
+      body: string;
+      intent?: Extract<SessionInboundMessage, { type: "worker.message.send.request" }>["intent"];
+      deliveryPolicy?: Extract<
+        SessionInboundMessage,
+        { type: "worker.message.send.request" }
+      >["deliveryPolicy"];
+      replyToMessageId?: string;
+      audience?: string[];
+      privateTo?: string[];
+    },
+    requestId?: string,
+  ): Promise<WorkerMessageSendPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "worker.message.send.request",
+        groupId: input.groupId,
+        senderWorkerId: input.senderWorkerId,
+        body: input.body,
+        ...(input.intent !== undefined ? { intent: input.intent } : {}),
+        ...(input.deliveryPolicy !== undefined ? { deliveryPolicy: input.deliveryPolicy } : {}),
+        ...(input.replyToMessageId !== undefined
+          ? { replyToMessageId: input.replyToMessageId }
+          : {}),
+        ...(input.audience !== undefined ? { audience: input.audience } : {}),
+        ...(input.privateTo !== undefined ? { privateTo: input.privateTo } : {}),
+      },
+      responseType: "worker.message.send.response",
+    });
+  }
+
+  async listWorkerMessages(
+    input: { groupId: string; viewerWorkerId?: string; limit?: number },
+    requestId?: string,
+  ): Promise<WorkerMessageListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "worker.message.list.request",
+        groupId: input.groupId,
+        ...(input.viewerWorkerId !== undefined ? { viewerWorkerId: input.viewerWorkerId } : {}),
+        ...(input.limit !== undefined ? { limit: input.limit } : {}),
+      },
+      responseType: "worker.message.list.response",
+    });
+  }
+
+  async listWorkerInbox(workerId: string, requestId?: string): Promise<WorkerInboxListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "worker.inbox.list.request", workerId },
+      responseType: "worker.inbox.list.response",
+    });
+  }
+
+  async markWorkerMessageDelivery(
+    input: {
+      messageId: string;
+      workerId: string;
+      state: Extract<SessionInboundMessage, { type: "worker.message.delivery.request" }>["state"];
+    },
+    requestId?: string,
+  ): Promise<WorkerMessageDeliveryPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "worker.message.delivery.request",
+        messageId: input.messageId,
+        workerId: input.workerId,
+        state: input.state,
+      },
+      responseType: "worker.message.delivery.response",
     });
   }
 

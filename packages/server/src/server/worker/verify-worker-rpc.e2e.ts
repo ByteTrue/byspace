@@ -196,12 +196,144 @@ async function main(): Promise<void> {
       throw new Error("a run must record that it started");
     }
 
+    await verifyMessaging({
+      client,
+      checks,
+      groupId: group.group.id,
+      coordinatorWorkerId: workerId,
+      memberWorkerId: created2.worker.id,
+      outsiderWorkerId: outsider.worker.id,
+    });
+
     for (const check of checks) {
       console.log(`  ok   ${check.name.padEnd(28)} ${check.detail}`);
     }
   } finally {
     await client.close().catch(() => undefined);
     await daemon.close();
+  }
+}
+
+/**
+ * Messaging checks.
+ *
+ * Split out of `main` because it is a self-contained group of assertions about
+ * one subject: a mention wakes only the named worker, a store-only message is
+ * visible without waking anyone, and privacy filters reads without changing who
+ * was woken.
+ */
+async function verifyMessaging(input: {
+  client: DaemonClient;
+  checks: Array<{ name: string; detail: string }>;
+  groupId: string;
+  coordinatorWorkerId: string;
+  memberWorkerId: string;
+  outsiderWorkerId: string;
+}): Promise<void> {
+  const { client, checks, groupId, coordinatorWorkerId, memberWorkerId, outsiderWorkerId } = input;
+
+  const waking = await client.sendWorkerMessage({
+    groupId,
+    senderWorkerId: coordinatorWorkerId,
+    body: "Take the API side",
+    audience: [memberWorkerId],
+  });
+  checks.push({
+    name: "mention wakes",
+    detail: `seq=${waking.message.seq} woke=${waking.woke.length} policy=${waking.message.deliveryPolicy}`,
+  });
+  if (!waking.woke.includes(memberWorkerId)) {
+    throw new Error("a mentioned worker must be woken");
+  }
+  if (waking.woke.includes(coordinatorWorkerId)) {
+    throw new Error("the sender mentioned nobody but was woken");
+  }
+
+  const addresseeInbox = await client.listWorkerInbox(memberWorkerId);
+  const senderInbox = await client.listWorkerInbox(coordinatorWorkerId);
+  checks.push({
+    name: "inbox routing",
+    detail: `addressee=${addresseeInbox.entries.length} sender=${senderInbox.entries.length}`,
+  });
+  if (addresseeInbox.entries.length !== 1 || senderInbox.entries.length !== 0) {
+    throw new Error("a waking message must land only in its addressee's inbox");
+  }
+
+  const stored = await client.sendWorkerMessage({
+    groupId,
+    senderWorkerId: coordinatorWorkerId,
+    body: "FYI the spec changed",
+    audience: [memberWorkerId],
+    deliveryPolicy: "store_only",
+  });
+  const afterStore = await client.listWorkerInbox(memberWorkerId);
+  checks.push({
+    name: "store-only does not wake",
+    detail: `woke=${stored.woke.length} inbox=${afterStore.entries.length}`,
+  });
+  if (stored.woke.length !== 0 || afterStore.entries.length !== 1) {
+    throw new Error("a store-only message must not wake its audience");
+  }
+
+  const stream = await client.listWorkerMessages({ groupId });
+  checks.push({
+    name: "stream keeps both",
+    detail: stream.messages.map((message) => `${message.seq}:${message.deliveryPolicy}`).join(", "),
+  });
+  if (stream.messages.length !== 2) {
+    throw new Error("the stream must contain both the waking and the stored message");
+  }
+
+  // Privacy is a read filter, not a wake filter: the private message woke its
+  // addressee and is invisible to a third worker.
+  const privateMessage = await client.sendWorkerMessage({
+    groupId,
+    senderWorkerId: coordinatorWorkerId,
+    body: "just between us",
+    audience: [memberWorkerId],
+    privateTo: [memberWorkerId],
+  });
+  const [asAddressee, asOutsider] = await Promise.all([
+    client.listWorkerMessages({ groupId, viewerWorkerId: memberWorkerId }),
+    client.listWorkerMessages({ groupId, viewerWorkerId: outsiderWorkerId }),
+  ]);
+  checks.push({
+    name: "private visibility",
+    detail: `addressee=${asAddressee.messages.length} outsider=${asOutsider.messages.length}`,
+  });
+  if (
+    asOutsider.messages.some((message) => message.messageId === privateMessage.message.messageId)
+  ) {
+    throw new Error("a private message must not be visible to an outsider");
+  }
+
+  // Delivery state belongs to the pair: an outsider marking it read must not
+  // succeed, because the message was never theirs.
+  const marked = await client.markWorkerMessageDelivery({
+    messageId: waking.message.messageId,
+    workerId: memberWorkerId,
+    state: "read",
+  });
+  const notAddressed = await client.markWorkerMessageDelivery({
+    messageId: waking.message.messageId,
+    workerId: outsiderWorkerId,
+    state: "read",
+  });
+  checks.push({
+    name: "delivery is per worker",
+    detail: `addressee=${marked.marked} outsider=${notAddressed.marked}`,
+  });
+  if (!marked.marked || notAddressed.marked) {
+    throw new Error("delivery state must belong to the addressed pair");
+  }
+
+  const afterRead = await client.listWorkerInbox(memberWorkerId);
+  checks.push({
+    name: "read clears the inbox",
+    detail: `remaining=${afterRead.entries.length}`,
+  });
+  if (afterRead.entries.length !== 1) {
+    throw new Error("only the read message should leave the inbox");
   }
 }
 

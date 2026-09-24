@@ -10,6 +10,12 @@ import {
 } from "./group.js";
 import { runWorkerLsCommand } from "./ls.js";
 import {
+  runInboxListCommand,
+  runMessageListCommand,
+  runMessageReadCommand,
+  runMessageSendCommand,
+} from "./message.js";
+import {
   runWorkerTaskCreateCommand,
   runWorkerTaskLsCommand,
   runWorkerTaskRunCommand,
@@ -77,6 +83,57 @@ export function createWorkerCommand(): Command {
       .argument("<task-id>", "Task id")
       .allowExcessArguments(false),
   ).action(withOutput(runWorkerTaskRunCommand));
+
+  // Messages mirror the reference product's split: `--mention` wakes the named
+  // workers, `--not-mention` stores without waking anyone.
+  const message = worker.command("message").description("Messages within a group");
+
+  addJsonAndDaemonHostOptions(
+    message
+      .command("send")
+      .description("Send a message to a group, waking anyone mentioned")
+      .requiredOption("--group-id <id>", "Group to send to")
+      .requiredOption("--sender-worker-id <id>", "Worker sending it")
+      .requiredOption("--body <text>", "Message body")
+      .option("--mention <worker-id>", "Waking recipient (repeatable)", collectMultiple, [])
+      .option("--not-mention", "Store the message without waking anyone")
+      .option(
+        "--private-to <worker-id>",
+        "Reader when narrower than the group (repeatable)",
+        collectMultiple,
+        [],
+      )
+      .option("--intent <intent>", "chat | ask | notify | request_action")
+      .option("--reply-to <message-id>", "Message being replied to")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMessageSendCommand));
+
+  addJsonAndDaemonHostOptions(
+    message
+      .command("ls")
+      .description("Read a group's stream")
+      .requiredOption("--group-id <id>", "Group to read")
+      .option("--viewer-worker-id <id>", "Only what this worker may read")
+      .option("--limit <n>", "Most recent N messages")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMessageListCommand));
+
+  addJsonAndDaemonHostOptions(
+    worker
+      .command("inbox")
+      .description("Messages that woke a worker and are not finished")
+      .requiredOption("--worker-id <id>", "Worker whose inbox to read")
+      .allowExcessArguments(false),
+  ).action(withOutput(runInboxListCommand));
+
+  addJsonAndDaemonHostOptions(
+    message
+      .command("read")
+      .description("Mark a message finished for one worker")
+      .requiredOption("--message-id <id>", "Message to mark")
+      .requiredOption("--worker-id <id>", "Worker who read it")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMessageReadCommand));
 
   const group = worker.command("group").description("Project groups: a team on one project");
 

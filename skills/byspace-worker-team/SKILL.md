@@ -59,6 +59,23 @@ A `blocked` task is **not** a finished one. Never report it as done. The reason 
 the task's history (`references/commands.md`), and it usually names something a person
 has to decide.
 
+## Talking to the group
+
+```bash
+byspace worker message send --group-id <id> --sender-worker-id <id> --body "..." \
+  --mention <worker-id>          # wakes them
+byspace worker inbox --worker-id <id>
+byspace worker message read --message-id <id> --worker-id <id>
+```
+
+**Mentions wake; the rest of the text does not route.** Addressing a worker means
+`--mention`, not writing `@name` in the body. Use `--not-mention` to record something
+without waking anyone.
+
+Check your inbox when you are woken; mark a message read only once the work it asked for
+is actually done. Claiming a message keeps it in your inbox, so an interrupted job can be
+picked back up.
+
 ## Reporting
 
 The group's state and every task's state are queryable at any time. Report what the

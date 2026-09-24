@@ -294,6 +294,84 @@ export class WorkerSession {
     );
   }
 
+  // ------------------------------------------------------------- messages
+
+  async handleMessageSendRequest(
+    request: Extract<SessionInboundMessage, { type: "worker.message.send.request" }>,
+  ): Promise<void> {
+    try {
+      const { message, woke } = this.workerService.sendMessage({
+        groupId: request.groupId,
+        senderWorkerId: request.senderWorkerId,
+        body: request.body,
+        ...(request.intent !== undefined ? { intent: request.intent } : {}),
+        ...(request.deliveryPolicy !== undefined ? { deliveryPolicy: request.deliveryPolicy } : {}),
+        ...(request.replyToMessageId !== undefined
+          ? { replyToMessageId: request.replyToMessageId }
+          : {}),
+        ...(request.audience !== undefined ? { audience: request.audience } : {}),
+        ...(request.privateTo !== undefined ? { privateTo: request.privateTo } : {}),
+      });
+
+      this.host.emit({
+        type: "worker.message.send.response",
+        payload: { requestId: request.requestId, message, woke },
+      });
+    } catch (error) {
+      this.emitError(request, error);
+    }
+  }
+
+  async handleMessageListRequest(
+    request: Extract<SessionInboundMessage, { type: "worker.message.list.request" }>,
+  ): Promise<void> {
+    try {
+      const messages = this.workerService.listMessages({
+        groupId: request.groupId,
+        ...(request.viewerWorkerId !== undefined ? { viewerWorkerId: request.viewerWorkerId } : {}),
+        ...(request.limit !== undefined ? { limit: request.limit } : {}),
+      });
+      this.host.emit({
+        type: "worker.message.list.response",
+        payload: { requestId: request.requestId, messages },
+      });
+    } catch (error) {
+      this.emitError(request, error);
+    }
+  }
+
+  async handleInboxListRequest(
+    request: Extract<SessionInboundMessage, { type: "worker.inbox.list.request" }>,
+  ): Promise<void> {
+    try {
+      const entries = this.workerService.listInbox(request.workerId);
+      this.host.emit({
+        type: "worker.inbox.list.response",
+        payload: { requestId: request.requestId, entries },
+      });
+    } catch (error) {
+      this.emitError(request, error);
+    }
+  }
+
+  async handleMessageDeliveryRequest(
+    request: Extract<SessionInboundMessage, { type: "worker.message.delivery.request" }>,
+  ): Promise<void> {
+    try {
+      const marked = this.workerService.markMessageDelivery({
+        messageId: request.messageId,
+        workerId: request.workerId,
+        state: request.state,
+      });
+      this.host.emit({
+        type: "worker.message.delivery.response",
+        payload: { requestId: request.requestId, marked },
+      });
+    } catch (error) {
+      this.emitError(request, error);
+    }
+  }
+
   /** Groups always carry their roster: a group without one says nothing useful. */
   private toGroupSummary(
     group: ReturnType<WorkerService["getGroup"]>,

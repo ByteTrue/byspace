@@ -225,6 +225,14 @@ const INBOUND_PERMISSION = {
   "worker.group.create.request": "workspace.write",
   "worker.group.add_member.request": "workspace.write",
   "worker.group.remove_member.request": "workspace.write",
+  // Messages are conversation, not structure: sending one and marking one read
+  // change no workspace state, and reading a stream is inspection. Gating these
+  // at write would mean a worker could not answer a teammate without the
+  // authority to modify the project.
+  "worker.message.send.request": "workspace.read",
+  "worker.message.list.request": "workspace.read",
+  "worker.inbox.list.request": "workspace.read",
+  "worker.message.delivery.request": "workspace.read",
 } as const satisfies Record<InboundOperation, PermissionRequirement>;
 
 const OUTBOUND_PERMISSION = {
@@ -455,6 +463,10 @@ const OUTBOUND_PERMISSION = {
   "worker.group.create.response": "workspace.write",
   "worker.group.add_member.response": "workspace.write",
   "worker.group.remove_member.response": "workspace.write",
+  "worker.message.send.response": "workspace.read",
+  "worker.message.list.response": "workspace.read",
+  "worker.inbox.list.response": "workspace.read",
+  "worker.message.delivery.response": "workspace.read",
 } as const satisfies Record<OutboundOperation, PermissionRequirement>;
 
 export function requiredPermissionForInbound(operation: InboundOperation): PermissionRequirement {

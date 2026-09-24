@@ -166,3 +166,157 @@ describe("worker service runTask", () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("worker service messages", () => {
+  async function seedGroup(service: WorkerService): Promise<{ groupId: string; alice: string }> {
+    const alice = await service.createWorker({
+      name: "Alice",
+      templateId: "project-administrator",
+      workspacePath: join(home, "alice"),
+    });
+    const bob = await service.createWorker({
+      name: "Bob",
+      templateId: "backend-engineer",
+      workspacePath: join(home, "bob"),
+    });
+    const group = service.createGroup({
+      name: "Pricing page",
+      projectId: "prj_1",
+      coordinatorWorkerId: alice.id,
+      memberWorkerIds: [bob.id],
+    });
+    return { groupId: group.id, alice: alice.id };
+  }
+
+  it("sends a message and reports who it woke", async () => {
+    const service = createService();
+    const { groupId, alice } = await seedGroup(service);
+    const members = service.listGroupMembers(groupId);
+    const bob = members.find((member) => member.workerId !== alice)!.workerId;
+
+    const { message, woke } = service.sendMessage({
+      groupId,
+      senderWorkerId: alice,
+      body: "Please take the API side",
+      audience: [bob],
+    });
+
+    expect(message.seq).toBe(1);
+    expect(woke).toEqual([bob]);
+    expect(message.intent).toBe("request_action");
+  });
+
+  it("reports nobody woken when a waking send addresses nobody", async () => {
+    // This is why `woke` is returned rather than inferred: the message alone
+    // cannot distinguish this from a send that reached someone.
+    const service = createService();
+    const { groupId, alice } = await seedGroup(service);
+
+    const { message, woke } = service.sendMessage({
+      groupId,
+      senderWorkerId: alice,
+      body: "Nobody in particular",
+      deliveryPolicy: "wake",
+    });
+
+    expect(woke).toEqual([]);
+    expect(message.deliveryPolicy).toBe("wake");
+  });
+
+  it("surfaces the message in the addressee's inbox, not the sender's", async () => {
+    const service = createService();
+    const { groupId, alice } = await seedGroup(service);
+    const bob = service
+      .listGroupMembers(groupId)
+      .find((member) => member.workerId !== alice)!.workerId;
+
+    service.sendMessage({ groupId, senderWorkerId: alice, body: "task", audience: [bob] });
+
+    expect(service.listInbox(bob)).toHaveLength(1);
+    expect(service.listInbox(alice)).toHaveLength(0);
+  });
+
+  it("does not wake the addressee for a store-only message", async () => {
+    const service = createService();
+    const { groupId, alice } = await seedGroup(service);
+    const bob = service
+      .listGroupMembers(groupId)
+      .find((member) => member.workerId !== alice)!.workerId;
+
+    service.sendMessage({
+      groupId,
+      senderWorkerId: alice,
+      body: "for the record",
+      audience: [bob],
+      deliveryPolicy: "store_only",
+    });
+
+    expect(service.listInbox(bob)).toHaveLength(0);
+    expect(service.listMessages({ groupId })).toHaveLength(1);
+  });
+
+  it("refuses a message on an unknown group", async () => {
+    const service = createService();
+    const { alice } = await seedGroup(service);
+    expect(() =>
+      service.sendMessage({ groupId: "grp_missing", senderWorkerId: alice, body: "hi" }),
+    ).toThrow(/Unknown worker group/);
+  });
+
+  it("marks a delivery and drops it from the inbox", async () => {
+    const service = createService();
+    const { groupId, alice } = await seedGroup(service);
+    const bob = service
+      .listGroupMembers(groupId)
+      .find((member) => member.workerId !== alice)!.workerId;
+    const { message } = service.sendMessage({
+      groupId,
+      senderWorkerId: alice,
+      body: "task",
+      audience: [bob],
+    });
+
+    expect(
+      service.markMessageDelivery({ messageId: message.messageId, workerId: bob, state: "read" }),
+    ).toBe(true);
+    expect(service.listInbox(bob)).toHaveLength(0);
+  });
+
+  it("reports false rather than throwing when a worker was not addressed", async () => {
+    const service = createService();
+    const { groupId, alice } = await seedGroup(service);
+    const { message } = service.sendMessage({
+      groupId,
+      senderWorkerId: alice,
+      body: "private to me",
+    });
+
+    expect(
+      service.markMessageDelivery({ messageId: message.messageId, workerId: alice, state: "read" }),
+    ).toBe(false);
+  });
+
+  it("filters the stream to a viewer, so a private message stays private", async () => {
+    const service = createService();
+    const { groupId, alice } = await seedGroup(service);
+    const bob = service
+      .listGroupMembers(groupId)
+      .find((member) => member.workerId !== alice)!.workerId;
+    const carol = await service.createWorker({
+      name: "Carol",
+      templateId: "qa-engineer",
+      workspacePath: join(home, "carol"),
+    });
+
+    service.sendMessage({
+      groupId,
+      senderWorkerId: alice,
+      body: "just between us",
+      audience: [bob],
+      privateTo: [bob],
+    });
+
+    expect(service.listMessages({ groupId, viewerWorkerId: bob })).toHaveLength(1);
+    expect(service.listMessages({ groupId, viewerWorkerId: carol.id })).toHaveLength(0);
+  });
+});

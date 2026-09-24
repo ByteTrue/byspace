@@ -2560,6 +2560,14 @@ export class Session {
         return this.workerSession.handleGroupListRequest(msg);
       case "worker.group.create.request":
         return this.workerSession.handleGroupCreateRequest(msg);
+      case "worker.message.send.request":
+        return this.workerSession.handleMessageSendRequest(msg);
+      case "worker.message.list.request":
+        return this.workerSession.handleMessageListRequest(msg);
+      case "worker.inbox.list.request":
+        return this.workerSession.handleInboxListRequest(msg);
+      case "worker.message.delivery.request":
+        return this.workerSession.handleMessageDeliveryRequest(msg);
       case "worker.group.add_member.request":
         return this.workerSession.handleGroupAddMemberRequest(msg);
       case "worker.group.remove_member.request":
