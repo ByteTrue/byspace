@@ -11,13 +11,26 @@
  * byissue/talks/003-worker-domain-qoderwake-reference.md for the provenance and
  * the licensing note on that product's own assets.
  */
-import { readFile } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
 /** The parts of a role, in the order they are assembled. */
 export const WORKER_TEMPLATE_PARTS = ["IDENTITY", "PERSONA", "BIBLE"] as const;
 
 export type WorkerTemplatePart = (typeof WORKER_TEMPLATE_PARTS)[number];
+
+/**
+ * Role skills that the upstream assets reference but that are deliberately not
+ * imported. Keeping this list explicit means a dangling reference in a template
+ * is either a known decision or a test failure, never a silent gap.
+ */
+export const DELIBERATELY_UNIMPORTED_SKILLS: Readonly<Record<string, string>> = {
+  "browser-harness":
+    "Vendored third-party browser automation (MIT, Browser Use) whose capability " +
+    "BySpace retired on purpose in byissue/issues/032-x-ff-retire-browser-tools.md. " +
+    "Re-importing it would reinstate a removed feature, so roles keep the reference " +
+    "while the skill stays out.",
+};
 
 export interface WorkerTemplate {
   /** Directory name, e.g. `frontend-developer`. */
@@ -61,6 +74,22 @@ function extractTitle(identity: string, fallback: string): string {
   return title.length > 0 ? title : fallback;
 }
 
+async function listSkillIds(templateDir: string): Promise<string[]> {
+  const skillsDir = path.join(templateDir, "skills");
+  const entries = await readdir(skillsDir, { withFileTypes: true }).catch(() => []);
+  const ids: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    // A skill directory without SKILL.md is not loadable, so it does not count
+    // as present; the reference test would otherwise pass on an empty folder.
+    const hasSkillFile = await stat(path.join(skillsDir, entry.name, "SKILL.md"))
+      .then((s) => s.isFile())
+      .catch(() => false);
+    if (hasSkillFile) ids.push(entry.name);
+  }
+  return ids.sort();
+}
+
 export async function loadWorkerTemplate(
   id: string,
   root: string = resolveWorkerTemplateRoot(),
@@ -98,19 +127,33 @@ export async function loadWorkerTemplate(
     id,
     title: extractTitle(parts.IDENTITY, id),
     parts,
-    skills: [],
+    skills: await listSkillIds(templateDir),
   };
 }
 
 export async function listWorkerTemplateIds(
   root: string = resolveWorkerTemplateRoot(),
 ): Promise<string[]> {
-  const { readdir } = await import("node:fs/promises");
   const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
   return entries
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort();
+}
+
+/**
+ * Skills a template's own BIBLE tells the worker to invoke, by name.
+ *
+ * The upstream templates reference skills as `` `skill <name>` ``. Parsing them
+ * lets a test assert the reference is satisfiable instead of trusting that
+ * import and prose stayed in step.
+ */
+export function extractReferencedSkillIds(bible: string): string[] {
+  const referenced = new Set<string>();
+  for (const match of bible.matchAll(/`skill ([a-z0-9-]+)`/g)) {
+    referenced.add(match[1]!);
+  }
+  return [...referenced].sort();
 }
 
 /**

@@ -11,10 +11,12 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  DELIBERATELY_UNIMPORTED_SKILLS,
   WORKER_TEMPLATE_PARTS,
   WorkerTemplateIncompleteError,
   WorkerTemplateNotFoundError,
   assembleWorkerSystemPrompt,
+  extractReferencedSkillIds,
   listWorkerTemplateIds,
   loadWorkerTemplate,
   resolveWorkerTemplateRoot,
@@ -37,15 +39,27 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
+async function referencesSkillAnywhere(skill: string): Promise<boolean> {
+  const ids = await listWorkerTemplateIds(resolveWorkerTemplateRoot());
+  for (const id of ids) {
+    const template = await loadWorkerTemplate(id, resolveWorkerTemplateRoot());
+    if (extractReferencedSkillIds(template.parts.BIBLE).includes(skill)) return true;
+  }
+  return false;
+}
+
 describe("worker templates", () => {
   it("loads the shipped dev roles", async () => {
     const ids = await listWorkerTemplateIds(resolveWorkerTemplateRoot());
-    // Shipped set is deliberately the development roles only.
     expect(ids).toEqual([
       "backend-engineer",
+      "data-analyst",
+      "devops-engineer",
       "frontend-developer",
+      "product-manager",
       "project-administrator",
       "qa-engineer",
+      "ui-designer",
     ]);
   });
 
@@ -60,6 +74,63 @@ describe("worker templates", () => {
       // The upstream `common-` / role prefixes must not survive import.
       expect(template.id.startsWith("common-")).toBe(false);
     }
+  });
+
+  it("ships the skills each role's own BIBLE tells it to invoke", async () => {
+    // The BIBLEs dispatch work with `skill <name>`, so an import that drops a
+    // skill leaves the role instructed to use something it cannot load. This is
+    // the check that catches that: every reference must resolve, or be an
+    // explicitly recorded omission.
+    const ids = await listWorkerTemplateIds(resolveWorkerTemplateRoot());
+    for (const id of ids) {
+      const template = await loadWorkerTemplate(id, resolveWorkerTemplateRoot());
+      const referenced = extractReferencedSkillIds(template.parts.BIBLE);
+      const missing = referenced.filter(
+        (skill) =>
+          !template.skills.includes(skill) && DELIBERATELY_UNIMPORTED_SKILLS[skill] === undefined,
+      );
+      expect(missing, `${id} references unimported skills`).toEqual([]);
+    }
+  });
+
+  it("records why each deliberately unimported skill is absent", async () => {
+    for (const [skill, reason] of Object.entries(DELIBERATELY_UNIMPORTED_SKILLS)) {
+      expect(reason.length, skill).toBeGreaterThan(20);
+      // A name recorded but referenced nowhere is stale and should be dropped.
+      const referencedSomewhere = await referencesSkillAnywhere(skill);
+      expect(referencedSomewhere, `${skill} is listed but no template references it`).toBe(true);
+    }
+  });
+
+  it("ships at least one skill per role that has any", async () => {
+    const ids = await listWorkerTemplateIds(resolveWorkerTemplateRoot());
+    for (const id of ids) {
+      const template = await loadWorkerTemplate(id, resolveWorkerTemplateRoot());
+      const referenced = extractReferencedSkillIds(template.parts.BIBLE);
+      if (referenced.length === 0) continue;
+      expect(template.skills.length, `${id} shipped no skills`).toBeGreaterThan(0);
+    }
+  });
+
+  it("does not treat an empty skill directory as a shipped skill", async () => {
+    writeTemplate("frontend-developer", {
+      IDENTITY: "# Identity — Frontend Developer\n\nx",
+      PERSONA: "# Persona\n\ny",
+      BIBLE: "# Bible\n\nUse `skill front-design`.",
+    });
+    mkdirSync(path.join(root, "frontend-developer", "skills", "front-design"), { recursive: true });
+
+    const template = await loadWorkerTemplate("frontend-developer", root);
+    expect(template.skills).toEqual([]);
+  });
+
+  it("extracts skill references from the BIBLE", () => {
+    expect(
+      extractReferencedSkillIds(
+        "Use `skill front-design` then `skill design-system`. Also `skill front-design` again.",
+      ),
+    ).toEqual(["design-system", "front-design"]);
+    expect(extractReferencedSkillIds("no references here")).toEqual([]);
   });
 
   it("derives the role title from the template's own heading", async () => {

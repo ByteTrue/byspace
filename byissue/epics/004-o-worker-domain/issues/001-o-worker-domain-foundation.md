@@ -154,6 +154,8 @@ worker 的一次任务 = 一个 Session：
 
 ## 执行记录
 
+### 切片 001：地基（已完成）
+
 已实现。新增 `packages/server/src/server/worker/`：
 
 | 文件                       | 内容                                                                                       |
@@ -228,3 +230,48 @@ npx vitest run packages/server/src/server/worker/ \
 - worker 域用 `node:sqlite` 且自带迁移版本的决定。
 
 值得单独记一条 note 的：`@types/node@20` 早于 `node:sqlite`，仓库采用局部 `.d.ts` 环境声明解决，位置必须落在 tsconfig 的 `include` 覆盖范围内（`src/types/` 不被编译，故放在 `src/server/worker/`）。
+
+### 切片 002：模板扩展（已完成）
+
+模板从 4 个扩到 **8 个**，技能从 0 补到 **47 个**，总体积 488KB：
+
+| 角色                  | 技能 |
+| --------------------- | ---- |
+| backend-engineer      | 8    |
+| data-analyst          | 7    |
+| devops-engineer       | 7    |
+| frontend-developer    | 7    |
+| project-administrator | 6    |
+| product-manager       | 5    |
+| qa-engineer           | 5    |
+| ui-designer           | 2    |
+
+**未入的 3 个模板，各有理由：**
+
+- `content-operations`——运营角色，与产品主线（开发）无关。
+- `q&a-specialist`——内容只有 1 行身份加几条约束，是为 IM 群答疑定制的；IM 渠道已明确放最后。
+- `personal-avatar`——是“本人分身”而非员工角色，且 PERSONA/BIBLE 为空。
+
+**未入的技能：`browser-harness`。**
+
+这是本切片最重要的一个决定，也暴露了 001 遗留的一个真实缺陷。
+
+`browser-harness` 是一个**内置的第三方项目**（MIT，Copyright Browser Use，92 个文件、1.25MB，含 Python runtime），不是角色方法。更关键的是：**BySpace 已经专门把它退役了**——`byissue/issues/032-x-ff-retire-browser-tools.md`（已关闭，2026-09-15）删掉了整套 browser tools 运行时。把它引进来等于复活一个刚退役的能力。
+
+**但 001 已经把这个缺陷写进了仓库：** 四个模板的 BIBLE 用 `` `skill browser-harness` `` 指令 worker 调用它，而技能目录里没有这个东西。**worker 会被要求使用一个加载不出来的技能。**
+
+修法不是删掉引用（那是改对方的方法论），而是**让这种悬空引用不可能幸存**：
+
+- `loadWorkerTemplate` 现在真实列出技能目录（且要求目录里有 `SKILL.md`，空目录不算）。
+- 新增 `extractReferencedSkillIds(bible)` 解析 `` `skill <name>` ``。
+- 新增测试：每个模板 BIBLE 引用的技能必须已入库，或在 `DELIBERATELY_UNIMPORTED_SKILLS` 里显式登记原因。
+- 另一条测试反过来验证登记表的每一条都还真的被某个模板引用（避免登记表变成垃圾堆）。
+
+**这条测试已反向验证过有效性：** 临时移走 `front-design` 后，它准确报出 `frontend-developer references unimported skills: expected [ 'front-design' ]`。
+
+验证：
+
+```
+npx vitest run packages/server/src/server/worker/ --bail=1
+→ 5 files / 62 tests passed
+```
