@@ -2,7 +2,7 @@
 kind: issue
 title: "修复 048 hover 反馈回归与 049 host 选项过滤失真"
 type: bug
-status: open
+status: closed
 created: 2026-09-24
 ---
 
