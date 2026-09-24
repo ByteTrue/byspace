@@ -72,4 +72,24 @@ describe("canonical CLI surface", () => {
     expect(open?.helpInformation()).toContain("<agent-id>");
     expect(open?.helpInformation()).toContain("--server <server-id>");
   });
+
+  it("exposes worker and group management, which is how a coordinator builds a team", () => {
+    const worker = createCli().commands.find((command) => command.name() === "worker");
+    const help = worker?.helpInformation();
+
+    expect(help).toContain("ls");
+    expect(help).toContain("create");
+    expect(help).toContain("group");
+    expect(help).toContain("task");
+
+    const create = worker?.commands.find((command) => command.name() === "create");
+    expect(create?.helpInformation()).toContain("--template-id <id>");
+
+    const group = worker?.commands.find((command) => command.name() === "group");
+    const groupCreate = group?.commands.find((command) => command.name() === "create");
+    // One call carries a whole roster, so standing up a team is one step.
+    expect(groupCreate?.helpInformation()).toContain("--coordinator <worker-id>");
+    expect(groupCreate?.helpInformation()).toContain("--member <worker-id>");
+    expect(groupCreate?.helpInformation()).toContain("--project-id <id>");
+  });
 });

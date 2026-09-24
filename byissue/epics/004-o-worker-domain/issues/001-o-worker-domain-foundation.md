@@ -544,3 +544,44 @@ typecheck 0 错误 / lint 0 错误 / format 全通过
 **新增 `worker.task.run.request/response` 一对 RPC**，权限按 `workspace.write`（起 run 会在工作区里创建 agent session，和其他写操作同权），`bootstrap` 里注入 runner。
 
 **顺带修掉一个环境问题：** 上一轮 `pkill` 停掉 daemon 后 `.dev/byspace-home/byspace.pid` 成了陈旧文件（PID 已死、端口已空），新 daemon 因此拒绝启动并报 "Another BySpace daemon is already running"。已确认 PID 无对应进程、6778 无监听后清除。**记一笔：判断 pid 文件是否陈旧，要比对进程存活与端口监听，而不是只看文件是否存在。**
+
+### 切片 010：CLI 命令 + worker skill（B 的本体）
+
+**照搬上游，不自建 worker 工具 API。** QoderWake 的 waker 用 `qoderwake` CLI 干活，skill 只说明该跑哪些命令与安全规则；agent 本来就有 Bash。BySpace 两侧都已具备，这一刀把缺的部分补上。
+
+**1. `byspace worker` 命令组**（对齐上游 `waker` / `group` 的形状）：
+
+```
+worker templates                 角色与其技能（角色在创建时固定，所以这是创建前该看的）
+worker ls
+worker create --name <n> --template-id <role> [--workspace-path <p>]
+worker task ls|create|run        run 阻塞到任务落定，返回最终状态
+worker group create --name <n> --project-id <p> [--goal] [--coordinator] [--member ...]
+worker group ls|add-worker|remove-worker
+```
+
+上游叫 `add-waker`，BySpace 的实体叫 worker，所以是 `add-worker --worker`；命名差异是有意的，不保留 `waker` 别名（那是上游实体名，不是 BySpace 的）。
+
+**2. `skills/byspace-worker-team/`**（SKILL.md + `references/commands.md`）：
+
+- **动手前先跟用户确认**建员工 —— 上游 `waker create` 的规则原样搬。"这会花掉别人的钱、往名册里塞人"。
+- **明写这条是对话规则，不是权限系统**（上游自己就这么写）：它不阻止你跑命令，也不改变 daemon 允许什么；真正的边界在 daemon 权限层。这正是此前悬着的"worker 能否创建 worker"的答案 —— 照上游，由权限层裁决，不靠文案。
+- **`blocked` 不是完成**：三种状态的含义与处置列成表，因为把没产出的 run 报成完成是这条链路最容易犯的错。
+- 技能**随 bundle 目录自动被收录**（`listBundledSkills` 读目录即目录清单，无硬编码名单），`build:server` 会把 `skills/` 拷进发行物。已实测两处：dist 里有 `SKILL.md` + `references/commands.md`；`getSkillsStatus` 的 `available` 含 `byspace-worker-team`。
+
+**验证（全部对真实 daemon、真实 CLI，不是单测）：**
+
+```
+worker templates                 → 8 个角色（含技能列）
+worker create ×3                 → Alice/Bob/Carol
+worker group create（一次带齐名册）→ grp_bab998fa92a8，coordinator:wkr_97a0… + 2 member
+worker group add-worker --role coordinator（组外的新 worker）
+                                 → 被拒："already has a coordinator. A group has exactly one."
+worker task create + run         → submitted
+  历史：planned->in_progress(ack_task), in_progress->submitted(submit_task)
+  真跑出的 agent：03bda17「Draft the pricing table spec」，provider pi/bytetrueapi/claude-sonnet-5
+```
+
+**测试里踩了一次和切片 008 同一个坑。** 第一次测"第二个协调者被拒"时，我用了一个**已在组里**的 worker，于是命中的是「已是成员」规则，**协调者规则根本没被执行**。换成一个组外的 worker 才真正触发。同一个陷阱犯了第二次，说明凡是"测某条规则"的用例，都必须先确认**这条规则是此时唯一能挡住的规则**。
+
+**typecheck 0 错误 / lint 0 错误 / format 通过 / CLI 与 worker 相关 vitest 34 files 334 tests。**
