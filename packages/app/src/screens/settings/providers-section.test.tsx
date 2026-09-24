@@ -16,6 +16,26 @@ const { theme, snapshotState, configState, patchConfigMock, openProviderSettings
       fontWeight: { normal: "400" },
       borderRadius: { lg: 8 },
       opacity: { 50: 0.5 },
+      shadow: {
+        sm: {
+          shadowColor: "rgba(0, 0, 0, 0.25)",
+          shadowOffset: { width: 0, height: 2 },
+          shadowRadius: 4,
+          elevation: 2,
+        },
+        md: {
+          shadowColor: "rgba(0, 0, 0, 0.2)",
+          shadowOffset: { width: 0, height: 4 },
+          shadowRadius: 8,
+          elevation: 8,
+        },
+        lg: {
+          shadowColor: "rgba(0, 0, 0, 0.4)",
+          shadowOffset: { width: 0, height: 12 },
+          shadowRadius: 24,
+          elevation: 8,
+        },
+      },
       colors: {
         surface1: "#111",
         surface2: "#222",

@@ -398,8 +398,8 @@ const styles = StyleSheet.create((theme) => ({
     paddingLeft: theme.spacing[3],
     paddingRight: WORKSPACE_PANE_TRAILING_GLYPH_RAIL,
   },
-  documentActive: { backgroundColor: theme.colors.surface1 },
-  documentPressFeedback: { backgroundColor: theme.colors.surface1 },
+  documentActive: { backgroundColor: theme.colors.surface2 },
+  documentPressFeedback: { backgroundColor: theme.colors.surface2 },
   canvasInteraction: {
     backgroundColor: "transparent",
     borderColor: "transparent",
