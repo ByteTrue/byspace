@@ -59,6 +59,24 @@ import {
   BrowserAutomationExecuteRequestSchema,
   BrowserAutomationExecuteResponseSchema,
 } from "./browser-automation/rpc-schemas.js";
+import {
+  WorkerTemplateListRequestSchema,
+  WorkerTemplateListResponseSchema,
+  WorkerListRequestSchema,
+  WorkerListResponseSchema,
+  WorkerCreateRequestSchema,
+  WorkerCreateResponseSchema,
+  WorkerGetRequestSchema,
+  WorkerGetResponseSchema,
+  WorkerTaskCreateRequestSchema,
+  WorkerTaskCreateResponseSchema,
+  WorkerTaskTransitionRequestSchema,
+  WorkerTaskTransitionResponseSchema,
+  WorkerTaskHistoryRequestSchema,
+  WorkerTaskHistoryResponseSchema,
+  WorkerGuardEvaluateRequestSchema,
+  WorkerGuardEvaluateResponseSchema,
+} from "./worker/rpc-schemas.js";
 import { BrowserAutomationHostCapabilitySchema } from "./browser-automation/capabilities.js";
 import {
   BySpaceConfigRawSchema,
@@ -3391,6 +3409,14 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   LoopInspectRequestSchema,
   LoopLogsRequestSchema,
   LoopStopRequestSchema,
+  WorkerTemplateListRequestSchema,
+  WorkerListRequestSchema,
+  WorkerCreateRequestSchema,
+  WorkerGetRequestSchema,
+  WorkerTaskCreateRequestSchema,
+  WorkerTaskTransitionRequestSchema,
+  WorkerTaskHistoryRequestSchema,
+  WorkerGuardEvaluateRequestSchema,
 ]);
 
 export type SessionInboundMessage = z.infer<typeof SessionInboundMessageSchema>;
@@ -6830,6 +6856,14 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   LoopStopResponseSchema,
   DaemonUpdateProgressMessageSchema,
   DaemonUpdateResponseSchema,
+  WorkerTemplateListResponseSchema,
+  WorkerListResponseSchema,
+  WorkerCreateResponseSchema,
+  WorkerGetResponseSchema,
+  WorkerTaskCreateResponseSchema,
+  WorkerTaskTransitionResponseSchema,
+  WorkerTaskHistoryResponseSchema,
+  WorkerGuardEvaluateResponseSchema,
 ]);
 
 export type SessionOutboundMessage = z.infer<typeof SessionOutboundMessageSchema>;

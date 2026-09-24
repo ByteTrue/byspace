@@ -306,3 +306,34 @@ npx vitest run packages/server/src/server/worker/ --bail=1
 ```
 
 覆盖：四类威胁各有拦截用例（磁盘销毁、fork bomb、提权、rm/mv 需确认）；规则完整性（21 条、id 唯一、严重度合法）；加载失败两个负例；引号语义四条；禁用规则可解除阻断；发现项片段有界。
+
+### 切片 005：接入 daemon 与 RPC（已完成）
+
+按 Owner 选择的顺序 A：先把已有能力变成可通过协议调用的东西，再加项目组。
+
+**协议。** 新增 `packages/protocol/src/worker/rpc-schemas.ts`，8 对 `.request` / `.response`，按 `docs/rpc-namespacing.md` 用 `worker.template.*`、`worker.worker.*`、`worker.task.*`、`worker.guard.*` 命名。全部并入入站与出站 union。
+
+**权限分类是穷尽的。** `operation-permissions.ts` 用 `satisfies Record<InboundOperation, ...>`，所以新增 RPC 不分类就编译不过——这是好事，但不能靠它提醒人把映射写对。分类：读操作用 `workspace.read`，建 worker 用 `workspace.manage`，动任务用 `workspace.write`，guard 评估是 `workspace.read`（它只读不写，且应该允许保守调用者先问再做）。
+
+**存量仓库/类别。** 新增 `WorkerService`（daemon 侧门面，持 store、模板目录、guard 规则），新增 `WorkerSession`（薄翻译层，不含领域规则），接入 session 分派链与 websocket server 的必需服务。
+
+**存储生命周期是个设计选择：惰性打开。** 从不碰 worker 的 daemon 不会为它建库；打不开库也不能阻止 session 与 terminal 工作。所以 `WorkerService` 在首次使用时才 `new WorkerStore`，bootstrap 里只构造对象。
+
+**错误处理分两类。** 拒绍（模板不存在、转换非法、任务不存在、动作未知）是用户可预期的，记 `debug`；只有真正的意外才记 `error`。否则日志会被用户输错淹没。响应统一走 `rpc_error`，不往每个响应上挂 `error` 字段——领域错误都是可读的拒绍，挂上去是重复。
+
+**测试用真实协议 schema 解析每次响应。** `worker-session.test.ts` 驱动真实 `WorkerSession` + 真实 `WorkerService`（真 SQLite、真模板、真规则），然后**把服务端发出的每条消息用 `SessionOutboundMessageSchema` 解析一遍**。手写 fixture 会在形状漂移后继续通过，这一步让服务端与协议契约按构造成立。
+
+验证：
+
+```
+npx vitest run packages/server/src/server/worker/ \
+  packages/server/src/server/session/worker/ \
+  packages/server/src/server/agent/permission-response.test.ts \
+  packages/server/src/server/agent/mcp-server.test.ts --bail=1
+→ 9 files / 218 tests passed
+npx vitest run packages/protocol/src/messages.wire-compat.test.ts \
+  packages/protocol/src/messages.test.ts
+→ 36 tests passed
+```
+
+**尚未完成：客户端方法与界面。** `DaemonClient` 已加 8 个方法，但 app 侧还没有路由、没有入口、没有屏幕。所以这个切片做成的是**可调用的后端**，不是用户能看见的功能。

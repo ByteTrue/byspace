@@ -204,6 +204,16 @@ const INBOUND_PERMISSION = {
   workspace_setup_status_request: "workspace.read",
   "workspace.setup.run.request": "workspace.write",
   write_project_config_request: "workspace.write",
+  // Worker domain. Reading the catalog and guard verdicts is inspection; making
+  // workers and moving their tasks mutates daemon state.
+  "worker.template.list.request": "workspace.read",
+  "worker.worker.list.request": "workspace.read",
+  "worker.worker.get.request": "workspace.read",
+  "worker.worker.create.request": "workspace.manage",
+  "worker.task.create.request": "workspace.write",
+  "worker.task.transition.request": "workspace.write",
+  "worker.task.history.request": "workspace.read",
+  "worker.guard.evaluate.request": "workspace.read",
 } as const satisfies Record<InboundOperation, PermissionRequirement>;
 
 const OUTBOUND_PERMISSION = {
@@ -420,6 +430,14 @@ const OUTBOUND_PERMISSION = {
   "workspace.setup.run.response": "workspace.write",
   workspace_update: ["workspace.read", "hub.execute"],
   write_project_config_response: "workspace.write",
+  "worker.template.list.response": "workspace.read",
+  "worker.worker.list.response": "workspace.read",
+  "worker.worker.get.response": "workspace.read",
+  "worker.worker.create.response": "workspace.manage",
+  "worker.task.create.response": "workspace.write",
+  "worker.task.transition.response": "workspace.write",
+  "worker.task.history.response": "workspace.read",
+  "worker.guard.evaluate.response": "workspace.read",
 } as const satisfies Record<OutboundOperation, PermissionRequirement>;
 
 export function requiredPermissionForInbound(operation: InboundOperation): PermissionRequirement {

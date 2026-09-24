@@ -13,6 +13,7 @@ import type pino from "pino";
 import type { ProjectRegistry, WorkspaceRegistry } from "./workspace-registry.js";
 import type { ProjectUpdate } from "./workspace-reconciliation-service.js";
 import type { ScheduleService } from "./schedule/service.js";
+import type { WorkerService } from "./worker/service.js";
 import type { CheckoutDiffManager, CheckoutDiffMetrics } from "./checkout-diff-manager.js";
 import type { DaemonConfigStore, MutableDaemonConfig } from "./daemon-config-store.js";
 import {
@@ -464,20 +465,25 @@ export class MissingDaemonVersionError extends Error {
 interface RequiredWebSocketServices {
   scheduleService: ScheduleService;
   checkoutDiffManager: CheckoutDiffManager;
+  workerService: WorkerService;
 }
 
 function requireWebSocketServices(params: {
   scheduleService?: ScheduleService;
   checkoutDiffManager?: CheckoutDiffManager;
+  workerService?: WorkerService;
 }): RequiredWebSocketServices {
-  const { scheduleService, checkoutDiffManager } = params;
+  const { scheduleService, checkoutDiffManager, workerService } = params;
   if (!scheduleService) {
     throw new Error("DaemonWebSocketServer requires a schedule service.");
   }
   if (!checkoutDiffManager) {
     throw new Error("DaemonWebSocketServer requires a checkout diff manager.");
   }
-  return { scheduleService, checkoutDiffManager };
+  if (!workerService) {
+    throw new Error("DaemonWebSocketServer requires a worker service.");
+  }
+  return { scheduleService, checkoutDiffManager, workerService };
 }
 
 /**
@@ -500,6 +506,7 @@ export class DaemonWebSocketServer {
   private readonly workspaceRegistry: WorkspaceRegistry;
   private readonly workspaceLabelService: WorkspaceLabelService | null;
   private readonly scheduleService: ScheduleService;
+  private readonly workerService: WorkerService;
   private readonly checkoutDiffManager: CheckoutDiffManager;
   private readonly github: ForgeService;
   private readonly workspaceGitService: WorkspaceGitService;
@@ -561,6 +568,7 @@ export class DaemonWebSocketServer {
     workspaceRegistry?: WorkspaceRegistry,
     scheduleService?: ScheduleService,
     checkoutDiffManager?: CheckoutDiffManager,
+    workerService?: WorkerService,
     serviceProxy?: ServiceProxySubsystem | null,
     scriptRuntimeStore?: WorkspaceScriptRuntimeStore | null,
     onBranchChanged?: (
@@ -602,9 +610,11 @@ export class DaemonWebSocketServer {
     const requiredServices = requireWebSocketServices({
       scheduleService,
       checkoutDiffManager,
+      workerService,
     });
     this.scheduleService = requiredServices.scheduleService;
     this.checkoutDiffManager = requiredServices.checkoutDiffManager;
+    this.workerService = requiredServices.workerService;
     this.github = github ?? createGitHubService();
     this.workspaceGitService = workspaceGitService ?? createFallbackWorkspaceGitService();
     this.workspaceAutoName = workspaceAutoName;
@@ -1294,6 +1304,7 @@ export class DaemonWebSocketServer {
       workspaceLabelService: this.workspaceLabelService ?? undefined,
       directorySync: this.directorySync,
       scheduleService: this.scheduleService,
+      workerService: this.workerService,
       checkoutDiffManager: this.checkoutDiffManager,
       github: this.github,
       workspaceGitService: this.workspaceGitService,

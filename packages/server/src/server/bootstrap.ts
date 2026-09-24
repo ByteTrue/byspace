@@ -161,6 +161,7 @@ import {
 } from "./workspace-registry.js";
 import { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import { ScheduleService } from "./schedule/service.js";
+import { WorkerService } from "./worker/service.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
 import { createOrchestrationSkills } from "./orchestration-skills/index.js";
 import { resolveConfigFromPersisted, type CliConfigOverrides } from "./config.js";
@@ -1248,6 +1249,9 @@ export async function createBySpaceDaemon(
     archiveWorkspace: archiveScheduleWorkspaceExternal,
   });
   await scheduleService.start();
+  // Opened lazily: a daemon that never touches workers creates no database for
+  // them, and a failure here must not stop sessions and terminals working.
+  const workerService = new WorkerService({ byspaceHome: config.byspaceHome, logger });
   agentManager.setAgentArchivedCallback(async (agentId) => {
     try {
       await scheduleService.completeForAgent(agentId);
@@ -1597,6 +1601,7 @@ export async function createBySpaceDaemon(
               workspaceRegistry,
               scheduleService,
               checkoutDiffManager,
+              workerService,
               serviceProxy,
               scriptRuntimeStore,
               handleBranchChange,
@@ -1702,6 +1707,7 @@ export async function createBySpaceDaemon(
     await agentProviderRuntime.shutdown();
     terminalManager.killAll();
     await scheduleService.stop().catch(() => undefined);
+    workerService.close();
     await relayRuntime?.stop().catch(() => undefined);
     if (wsServer) {
       await wsServer.close();

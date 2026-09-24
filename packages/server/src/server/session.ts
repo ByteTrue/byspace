@@ -164,6 +164,7 @@ import {
   createGitMetadataGenerator,
 } from "./session/checkout/git-metadata-generator.js";
 import { ScheduleSession } from "./session/schedule/schedule-session.js";
+import { WorkerSession } from "./session/worker/worker-session.js";
 import { ProviderCatalogSession } from "./session/provider/provider-catalog-session.js";
 import { WorkspaceFilesSession } from "./session/files/workspace-files-session.js";
 import { AgentConfigSession } from "./session/agent-config/agent-config-session.js";
@@ -204,6 +205,7 @@ import {
 import type { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import type pino from "pino";
 import { ScheduleService } from "./schedule/service.js";
+import type { WorkerService } from "./worker/service.js";
 import {
   createGitHubService,
   GitHubAuthenticationError,
@@ -455,6 +457,7 @@ export interface SessionOptions {
   workspaceLabelService?: WorkspaceLabelService;
   filesystem?: SessionFileSystem;
   scheduleService: ScheduleService;
+  workerService: WorkerService;
   checkoutDiffManager: CheckoutDiffManager;
   github?: ForgeService;
   createAgentMcpTransport?: AgentMcpTransportFactory;
@@ -678,6 +681,7 @@ export class Session {
   private readonly workspaceDirectory: WorkspaceDirectory;
   private readonly checkoutSession: CheckoutSession;
   private readonly scheduleSession: ScheduleSession;
+  private readonly workerSession: WorkerSession;
   private readonly providerCatalogSession: ProviderCatalogSession;
   private readonly workspaceFilesSession: WorkspaceFilesSession;
   private readonly agentConfigSession: AgentConfigSession;
@@ -713,6 +717,7 @@ export class Session {
       workspaceLabelService,
       filesystem,
       scheduleService,
+      workerService,
       checkoutDiffManager,
       github,
       renameCurrentBranch,
@@ -841,6 +846,11 @@ export class Session {
     this.scheduleSession = new ScheduleSession({
       host: { emit: (msg) => this.emit(msg) },
       scheduleService,
+      logger: this.sessionLogger,
+    });
+    this.workerSession = new WorkerSession({
+      host: { emit: (msg) => this.emit(msg) },
+      workerService,
       logger: this.sessionLogger,
     });
     this.providerCatalogSession = new ProviderCatalogSession({
@@ -1866,6 +1876,7 @@ export class Session {
       this.dispatchPluginMessage(msg) ??
       this.dispatchTerminalMessage(msg) ??
       this.dispatchScheduleMessage(msg) ??
+      this.dispatchWorkerMessage(msg) ??
       this.dispatchMiscMessage(msg);
     if (promise) await promise;
   }
@@ -2520,6 +2531,29 @@ export class Session {
         return this.handleWorkspaceScriptStopRequest(msg);
       default:
         return this.terminalController.dispatch(msg);
+    }
+  }
+
+  private dispatchWorkerMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "worker.template.list.request":
+        return this.workerSession.handleTemplateListRequest(msg);
+      case "worker.worker.list.request":
+        return this.workerSession.handleWorkerListRequest(msg);
+      case "worker.worker.create.request":
+        return this.workerSession.handleWorkerCreateRequest(msg);
+      case "worker.worker.get.request":
+        return this.workerSession.handleWorkerGetRequest(msg);
+      case "worker.task.create.request":
+        return this.workerSession.handleTaskCreateRequest(msg);
+      case "worker.task.transition.request":
+        return this.workerSession.handleTaskTransitionRequest(msg);
+      case "worker.task.history.request":
+        return this.workerSession.handleTaskHistoryRequest(msg);
+      case "worker.guard.evaluate.request":
+        return this.workerSession.handleGuardEvaluateRequest(msg);
+      default:
+        return undefined;
     }
   }
 

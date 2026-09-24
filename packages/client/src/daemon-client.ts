@@ -543,6 +543,38 @@ type ScheduleResumePayload = Extract<
   SessionOutboundMessage,
   { type: "schedule/resume/response" }
 >["payload"];
+type WorkerTemplateListPayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.template.list.response" }
+>["payload"];
+type WorkerListPayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.worker.list.response" }
+>["payload"];
+type WorkerCreatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.worker.create.response" }
+>["payload"];
+type WorkerGetPayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.worker.get.response" }
+>["payload"];
+type WorkerTaskCreatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.task.create.response" }
+>["payload"];
+type WorkerTaskTransitionPayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.task.transition.response" }
+>["payload"];
+type WorkerTaskHistoryPayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.task.history.response" }
+>["payload"];
+type WorkerGuardEvaluatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.guard.evaluate.response" }
+>["payload"];
 type ScheduleDeletePayload = Extract<
   SessionOutboundMessage,
   { type: "schedule/delete/response" }
@@ -2399,6 +2431,114 @@ export class DaemonClient {
       requestId,
       message: { type: "workspace.script.list.request", workspaceId },
       responseType: "workspace.script.list.response",
+    });
+  }
+
+  async listWorkerTemplates(requestId?: string): Promise<WorkerTemplateListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "worker.template.list.request" },
+      responseType: "worker.template.list.response",
+    });
+  }
+
+  async listWorkers(requestId?: string): Promise<WorkerListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "worker.worker.list.request" },
+      responseType: "worker.worker.list.response",
+    });
+  }
+
+  async createWorker(
+    input: { name: string; templateId: string; workspacePath?: string },
+    requestId?: string,
+  ): Promise<WorkerCreatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "worker.worker.create.request",
+        name: input.name,
+        templateId: input.templateId,
+        ...(input.workspacePath !== undefined ? { workspacePath: input.workspacePath } : {}),
+      },
+      responseType: "worker.worker.create.response",
+    });
+  }
+
+  async getWorker(workerId: string, requestId?: string): Promise<WorkerGetPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "worker.worker.get.request", workerId },
+      responseType: "worker.worker.get.response",
+    });
+  }
+
+  async createWorkerTask(
+    input: { workerId: string; title: string },
+    requestId?: string,
+  ): Promise<WorkerTaskCreatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "worker.task.create.request",
+        workerId: input.workerId,
+        title: input.title,
+      },
+      responseType: "worker.task.create.response",
+    });
+  }
+
+  async transitionWorkerTask(
+    input: {
+      taskId: string;
+      toState: Extract<
+        SessionInboundMessage,
+        { type: "worker.task.transition.request" }
+      >["toState"];
+      action: string;
+      actor: string;
+      note?: string;
+    },
+    requestId?: string,
+  ): Promise<WorkerTaskTransitionPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "worker.task.transition.request",
+        taskId: input.taskId,
+        toState: input.toState,
+        action: input.action,
+        actor: input.actor,
+        ...(input.note !== undefined ? { note: input.note } : {}),
+      },
+      responseType: "worker.task.transition.response",
+    });
+  }
+
+  async getWorkerTaskHistory(
+    taskId: string,
+    requestId?: string,
+  ): Promise<WorkerTaskHistoryPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "worker.task.history.request", taskId },
+      responseType: "worker.task.history.response",
+    });
+  }
+
+  async evaluateWorkerGuard(
+    input: { command: string; toolName?: string },
+    requestId?: string,
+  ): Promise<WorkerGuardEvaluatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "worker.guard.evaluate.request",
+        command: input.command,
+        ...(input.toolName !== undefined ? { toolName: input.toolName } : {}),
+      },
+      responseType: "worker.guard.evaluate.response",
     });
   }
 
