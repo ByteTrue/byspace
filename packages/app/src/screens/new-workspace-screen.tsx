@@ -4,7 +4,7 @@ import type { ReactElement, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Pressable, StyleSheet as RNStyleSheet, Text, View } from "react-native";
-import type { PressableStateCallbackType } from "react-native";
+import type { PressableStateCallbackType, StyleProp, ViewStyle } from "react-native";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { createNameId } from "mnemonic-id";
@@ -1396,6 +1396,82 @@ interface NewWorkspaceFormStackInput {
   };
 }
 
+interface HostControlProps {
+  showHostControl: boolean;
+  canSwitchHost: boolean;
+  desktopControlStyle?: StyleProp<ViewStyle>;
+  host: FormPickerControl & {
+    allHosts: HostProfile[];
+    systemHosts?: HostProfile[];
+    selectedServerId: string;
+    onSelect: (id: string) => void;
+  };
+  isPending: boolean;
+  selectedHostLabel: string;
+  badgePressableStyle: (
+    state: PressableStateCallbackType & { hovered?: boolean },
+  ) => StyleProp<ViewStyle>;
+  tooltipText: string;
+}
+
+function NewWorkspaceHostControl(props: HostControlProps): ReactElement | null {
+  const {
+    showHostControl,
+    canSwitchHost,
+    desktopControlStyle,
+    host,
+    isPending,
+    selectedHostLabel,
+    badgePressableStyle,
+    tooltipText,
+  } = props;
+
+  if (!showHostControl) return null;
+
+  return (
+    <View style={desktopControlStyle}>
+      <HostPicker
+        hosts={host.allHosts}
+        value={host.selectedServerId}
+        onSelect={host.onSelect}
+        open={host.openState}
+        onOpenChange={host.onOpenChange}
+        anchorRef={host.anchorRef}
+        searchable={false}
+        title="Host"
+        desktopPlacement="bottom-start"
+        desktopMinWidth={200}
+        hostOptionTestID={newWorkspaceHostOptionTestID}
+      >
+        <Tooltip>
+          <TooltipTrigger asChild triggerRefProp="ref">
+            <Pressable
+              ref={host.anchorRef}
+              accessibilityRole="button"
+              accessibilityLabel="Host"
+              onPress={host.open}
+              disabled={isPending || !canSwitchHost}
+              style={badgePressableStyle}
+              testID="host-picker-trigger"
+            >
+              <View style={styles.badgeIconBox}>
+                <HostStatusDot serverId={host.selectedServerId} />
+              </View>
+              <Text style={styles.badgeText} numberOfLines={1}>
+                {selectedHostLabel}
+              </Text>
+              {canSwitchHost ? metaChevron : null}
+            </Pressable>
+          </TooltipTrigger>
+          <TooltipContent side="top" align="center" offset={8}>
+            <Text style={styles.tooltipText}>{tooltipText}</Text>
+          </TooltipContent>
+        </Tooltip>
+      </HostPicker>
+    </View>
+  );
+}
+
 function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactElement {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -1405,6 +1481,7 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
   const selectedHostLabel =
     systemHosts.find((h) => h.serverId === host.selectedServerId)?.label ?? "Host";
   const showHostControl = systemHosts.length > 1;
+  const canSwitchHost = host.allHosts.length > 1;
   const isolationTriggerLabel = isolationLabel(t, isolation.effectiveIsolation);
   const addProjectAction = useMemo(
     () => <AddProjectPickerAction onPress={project.onAddProject} />,
@@ -1460,48 +1537,18 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
     </View>
   );
 
-  const hostControl = showHostControl ? (
-    <View style={desktopControlStyle}>
-      <HostPicker
-        hosts={host.allHosts}
-        value={host.selectedServerId}
-        onSelect={host.onSelect}
-        open={host.openState}
-        onOpenChange={host.onOpenChange}
-        anchorRef={host.anchorRef}
-        searchable={false}
-        title="Host"
-        desktopPlacement="bottom-start"
-        desktopMinWidth={200}
-        hostOptionTestID={newWorkspaceHostOptionTestID}
-      >
-        <Tooltip>
-          <TooltipTrigger asChild triggerRefProp="ref">
-            <Pressable
-              ref={host.anchorRef}
-              accessibilityRole="button"
-              accessibilityLabel="Host"
-              onPress={host.open}
-              disabled={isPending || host.allHosts.length === 0}
-              style={badgePressableStyle}
-              testID="host-picker-trigger"
-            >
-              <View style={styles.badgeIconBox}>
-                <HostStatusDot serverId={host.selectedServerId} />
-              </View>
-              <Text style={styles.badgeText} numberOfLines={1}>
-                {selectedHostLabel}
-              </Text>
-              {metaChevron}
-            </Pressable>
-          </TooltipTrigger>
-          <TooltipContent side="top" align="center" offset={8}>
-            <Text style={styles.tooltipText}>{t("newWorkspace.tooltips.host")}</Text>
-          </TooltipContent>
-        </Tooltip>
-      </HostPicker>
-    </View>
-  ) : null;
+  const hostControl = (
+    <NewWorkspaceHostControl
+      showHostControl={showHostControl}
+      canSwitchHost={canSwitchHost}
+      desktopControlStyle={desktopControlStyle}
+      host={host}
+      isPending={isPending}
+      selectedHostLabel={selectedHostLabel}
+      badgePressableStyle={badgePressableStyle}
+      tooltipText={t("newWorkspace.tooltips.host")}
+    />
+  );
 
   const isolationControl = isolation.canCreateWorktree ? (
     <View style={desktopControlStyle}>
@@ -1716,7 +1763,7 @@ export function NewWorkspaceScreen({
   });
 
   const availableHosts = useMemo(() => {
-    if (!selectedProject || selectedProject.hosts.length <= 1) {
+    if (!selectedProject || selectedProject.hosts.length === 0) {
       return allHosts;
     }
     const projectHostSet = new Set(selectedProject.hosts.map((h) => h.serverId));

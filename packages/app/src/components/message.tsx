@@ -340,6 +340,12 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[2],
     minWidth: 0,
     flexShrink: 1,
+    ...theme.shadow.sm,
+    ...(isWeb
+      ? {
+          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03), 0 1px 2px rgba(0, 0, 0, 0.02)",
+        }
+      : {}),
   },
   text: {
     color: theme.colors.foreground,

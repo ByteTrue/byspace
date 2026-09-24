@@ -1258,7 +1258,7 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
 
   if (isCompactLayout) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, styles.detailContainer]}>
         <BackHeader
           title={detailHeader?.title}
           titleAccessory={detailHeader?.titleAccessory}
@@ -1322,6 +1322,9 @@ const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
     backgroundColor: theme.colors.surfaceSidebar,
+  },
+  detailContainer: {
+    backgroundColor: theme.colors.surface0,
   },
   scrollView: {
     flex: 1,
@@ -1399,6 +1402,7 @@ const desktopStyles = StyleSheet.create((theme) => ({
   },
   contentPane: {
     flex: 1,
+    backgroundColor: theme.colors.surface0,
   },
   detailLeft: {
     gap: theme.spacing[2],

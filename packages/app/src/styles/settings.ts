@@ -1,4 +1,5 @@
 import { StyleSheet } from "react-native-unistyles";
+import { isWeb } from "@/constants/platform";
 
 export const settingsStyles = StyleSheet.create((theme) => ({
   section: {
@@ -31,6 +32,12 @@ export const settingsStyles = StyleSheet.create((theme) => ({
     borderWidth: 1,
     borderColor: theme.colors.border,
     overflow: "hidden",
+    ...theme.shadow.sm,
+    ...(isWeb
+      ? {
+          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)",
+        }
+      : {}),
   },
   row: {
     flexDirection: "row",

@@ -2128,7 +2128,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   cancelButton: {
     width: 28,
     height: 28,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.base,
     backgroundColor: theme.colors.palette.red[600],
     alignItems: "center",
     justifyContent: "center",
@@ -2149,7 +2149,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   realtimeVoiceButton: {
     width: 28,
     height: 28,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.base,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2209,7 +2209,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   queueActionButton: {
     width: 32,
     height: 32,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.base,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: theme.colors.surface2,

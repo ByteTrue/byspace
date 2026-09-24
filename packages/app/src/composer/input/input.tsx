@@ -1314,12 +1314,14 @@ const styles = StyleSheet.create((theme: Theme) => ({
     backgroundColor: theme.colors.surface1,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.base,
+    borderRadius: theme.borderRadius.lg,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
+    ...theme.shadow.md,
     ...(isWeb
       ? {
-          transitionProperty: "border-color",
+          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02)",
+          transitionProperty: "border-color, box-shadow",
           transitionDuration: "200ms",
           transitionTimingFunction: "ease-in-out",
         }
@@ -1389,7 +1391,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   attachButton: {
     width: 28,
     height: 28,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.base,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1402,7 +1404,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   sendButton: {
     width: 28,
     height: 28,
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.base,
     backgroundColor: theme.colors.accent,
     alignItems: "center",
     justifyContent: "center",
@@ -1412,7 +1414,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
     width: "auto",
     minWidth: 28,
     paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.md,
+    borderRadius: theme.borderRadius.base,
   },
   sendButtonLabel: {
     fontSize: theme.fontSize.base,

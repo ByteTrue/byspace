@@ -306,12 +306,12 @@ export function buildLightSemanticColors(tint: LightThemeConfig) {
 }
 
 const lightSemanticColors = buildLightSemanticColors({
-  surface0: "#f6f7f8",
+  surface0: "#ffffff",
   surface1: "#ffffff",
   surface2: "#f0f1f3",
   surface3: "#e5e7eb",
   surface4: "#d6d9de",
-  surfaceDiffEmpty: "#f6f7f8",
+  surfaceDiffEmpty: "#ffffff",
   surfaceSidebar: "#f6f7f8",
   foreground: "#201d1d",
   foregroundMuted: "#646262",
@@ -591,12 +591,13 @@ export const FONT_WEIGHT = {
 
 export const BORDER_RADIUS = {
   none: 0,
-  sm: 3,
-  base: 4,
-  md: 6,
-  lg: 8,
-  xl: 10,
-  "2xl": 12,
+  sm: 4,
+  base: 6,
+  md: 8,
+  lg: 12,
+  xl: 14,
+  "2xl": 16,
+  "3xl": 20,
   full: 9999,
 } as const;
 
@@ -718,17 +719,25 @@ const pureBlackDarkColors = buildDarkSemanticColors({
 
 export const darkPureBlackTheme = buildDarkTheme(pureBlackDarkColors);
 
-const noShadow = {
-  shadowColor: "transparent",
-  shadowOffset: { width: 0, height: 0 },
-  shadowRadius: 0,
-  elevation: 0,
-} as const;
-
 const lightShadow = {
-  sm: noShadow,
-  md: noShadow,
-  lg: noShadow,
+  sm: {
+    shadowColor: "rgba(0, 0, 0, 0.04)",
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  md: {
+    shadowColor: "rgba(0, 0, 0, 0.06)",
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 16,
+    elevation: 3,
+  },
+  lg: {
+    shadowColor: "rgba(0, 0, 0, 0.08)",
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 28,
+    elevation: 6,
+  },
 } as const;
 
 export function buildLightTheme(semanticColors: ReturnType<typeof buildLightSemanticColors>) {
