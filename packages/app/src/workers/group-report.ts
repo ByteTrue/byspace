@@ -36,6 +36,8 @@ export interface GroupWorkItem {
   workerName: string | null;
   title: string;
   state: WorkerTaskState;
+  /** The session this task ran in, so the report can open its conversation. */
+  agentId: string | null;
 }
 
 export interface GroupReport {
@@ -241,6 +243,7 @@ export function buildGroupReport(input: {
         workerName: nameById.get(task.workerId) ?? null,
         title: task.title,
         state: task.state,
+        agentId: task.agentId,
       })),
   );
 

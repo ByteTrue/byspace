@@ -494,6 +494,14 @@ export class WorkerService {
       task,
     });
 
+    // Bind the session to the task before recording the outcome, so a task that
+    // reached a state always knows which session got it there. The note is kept
+    // as well: the history is what a reader follows to see what happened, and
+    // it should not require a join.
+    if (outcome.agentId) {
+      this.getStore().setTaskAgent({ taskId, agentId: outcome.agentId });
+    }
+
     if (outcome.kind === "submitted") {
       return this.transitionTask({
         taskId,

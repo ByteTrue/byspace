@@ -42,6 +42,13 @@ export const WorkerTaskSummarySchema = z.object({
   taskId: z.string(),
   workerId: z.string(),
   title: z.string(),
+  /**
+   * The session that ran this task, once it has one.
+   *
+   * Null before the first run. A client uses it to open the task's
+   * conversation, which is the same session the run happened in.
+   */
+  agentId: z.string().nullable(),
   state: z.enum([
     "planned",
     "prepared",

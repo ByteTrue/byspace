@@ -1163,3 +1163,91 @@ describe("goal budget stops waking", () => {
     expect(store.getGoal("grp_1")?.turnUsed).toBe(1);
   });
 });
+
+describe("task sessions", () => {
+  it("binds a session to a task", () => {
+    // The session is what a follow-up turn is sent to, so "which session is
+    // this task" has to be answerable from the task rather than only from its
+    // history note.
+    const task = store.createTask({ taskId: "t1", workerId: "w1", title: "Work" });
+    expect(task.agentId).toBeNull();
+
+    const bound = store.setTaskAgent({ taskId: "t1", agentId: "agent_1" });
+    expect(bound.agentId).toBe("agent_1");
+    expect(store.getTask("t1")?.agentId).toBe("agent_1");
+  });
+
+  it("does not write history for binding a session", () => {
+    // Binding is not a state change; a history entry would put a non-event in
+    // the audit trail.
+    store.createTask({ taskId: "t1", workerId: "w1", title: "Work" });
+    store.setTaskAgent({ taskId: "t1", agentId: "agent_1" });
+    expect(store.listTaskHistory("t1")).toHaveLength(0);
+  });
+
+  it("refuses to replace a session once set", () => {
+    // Changing it would orphan the conversation the task already has.
+    store.createTask({ taskId: "t1", workerId: "w1", title: "Work" });
+    store.setTaskAgent({ taskId: "t1", agentId: "agent_1" });
+    expect(() => store.setTaskAgent({ taskId: "t1", agentId: "agent_2" })).toThrow(
+      /already bound to session agent_1/,
+    );
+    expect(store.getTask("t1")?.agentId).toBe("agent_1");
+  });
+
+  it("accepts the same session twice, so a retry is not an error", () => {
+    store.createTask({ taskId: "t1", workerId: "w1", title: "Work" });
+    store.setTaskAgent({ taskId: "t1", agentId: "agent_1" });
+    expect(() => store.setTaskAgent({ taskId: "t1", agentId: "agent_1" })).not.toThrow();
+  });
+
+  it("refuses a session for a task that does not exist", () => {
+    expect(() => store.setTaskAgent({ taskId: "missing", agentId: "agent_1" })).toThrow(
+      /unknown worker task/,
+    );
+  });
+
+  it("survives reopening the database", () => {
+    store.createTask({ taskId: "t1", workerId: "w1", title: "Work" });
+    store.setTaskAgent({ taskId: "t1", agentId: "agent_1" });
+    const databasePath = path.join(dir, "worker.db");
+    store.close();
+    store = new WorkerStore({ databasePath });
+    expect(store.getTask("t1")?.agentId).toBe("agent_1");
+  });
+});
+
+describe("schema v6 migration", () => {
+  it("adds the session column to an existing database", () => {
+    // Additive, but not free: CREATE TABLE IF NOT EXISTS does not add a column
+    // to a table that already exists.
+    const databasePath = path.join(dir, "v5.db");
+    const legacy = new DatabaseSync(databasePath);
+    legacy.exec(`
+      CREATE TABLE worker_schema_version (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
+      INSERT INTO worker_schema_version VALUES (5, '2026-09-24T00:00:00.000Z');
+      CREATE TABLE workers (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL, template_id TEXT NOT NULL,
+        workspace_path TEXT NOT NULL, status TEXT NOT NULL,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE worker_tasks (
+        task_id TEXT PRIMARY KEY, worker_id TEXT NOT NULL, title TEXT NOT NULL,
+        state TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      INSERT INTO workers VALUES ('w1','Alice','qa-engineer','/tmp/ws','online','2026-09-24T00:00:00.000Z','2026-09-24T00:00:00.000Z');
+      INSERT INTO worker_tasks VALUES ('t1','w1','Existing','in_progress','2026-09-24T00:00:00.000Z','2026-09-24T00:00:00.000Z');
+    `);
+    legacy.close();
+
+    const migrated = new WorkerStore({ databasePath });
+    try {
+      expect(migrated.getSchemaVersion()).toBe(SCHEMA_VERSION);
+      // The existing row is kept, and reads report no session rather than fail.
+      expect(migrated.getTask("t1")).toMatchObject({ title: "Existing", agentId: null });
+      expect(migrated.setTaskAgent({ taskId: "t1", agentId: "agent_1" }).agentId).toBe("agent_1");
+    } finally {
+      migrated.close();
+    }
+  });
+});

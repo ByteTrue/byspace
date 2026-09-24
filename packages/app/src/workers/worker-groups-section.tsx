@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, type ReactElement } from "react";
+import { router } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { Plus } from "lucide-react-native";
@@ -6,13 +7,14 @@ import { Plus } from "lucide-react-native";
 import { Button } from "@/components/ui/button";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { useProjects } from "@/hooks/use-projects";
+import { buildHostAgentDetailRoute } from "@/utils/host-routes";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import type {
   AggregatedWorker,
   AggregatedWorkerGroup,
   AggregatedWorkerTask,
 } from "@/workers/aggregated-workers";
-import { buildGroupReport, type GroupReport } from "@/workers/group-report";
+import { buildGroupReport, type GroupReport, type GroupWorkItem } from "@/workers/group-report";
 
 /**
  * Project groups: a roster of workers on one project.
@@ -136,13 +138,7 @@ function GroupRow({
     : "No coordinator";
 
   const workRows = report.work.map((item) => (
-    <View key={item.taskId} style={styles.workRow} testID={`group-work-${item.taskId}`}>
-      <Text style={styles.workState}>{item.state}</Text>
-      <Text style={styles.workTitle}>{item.title}</Text>
-      <Text style={styles.workOwner}>
-        {item.workerName ?? workerNames.get(`${report.serverId}:${item.workerId}`) ?? item.workerId}
-      </Text>
-    </View>
+    <WorkRow key={item.taskId} item={item} serverId={report.serverId} workerNames={workerNames} />
   ));
 
   return (
@@ -186,6 +182,57 @@ function GroupRow({
         )}
       </View>
     </View>
+  );
+}
+
+/**
+ * One item of a group's work.
+ *
+ * The task's conversation is the agent session its run happened in, so a task
+ * that has run opens it. One that has not is not pressable: there is nothing to
+ * open yet, and a row that looks actionable but is not is worse than a plain one.
+ */
+function WorkRow({
+  item,
+  serverId,
+  workerNames,
+}: {
+  item: GroupWorkItem;
+  serverId: string;
+  workerNames: Map<string, string>;
+}): ReactElement {
+  const owner = item.workerName ?? workerNames.get(`${serverId}:${item.workerId}`) ?? item.workerId;
+  const openConversation = useCallback(() => {
+    if (!item.agentId) return;
+    router.push(buildHostAgentDetailRoute(serverId, item.agentId));
+  }, [serverId, item.agentId]);
+
+  const content = (
+    <>
+      <Text style={styles.workState}>{item.state}</Text>
+      <Text style={styles.workTitle}>{item.title}</Text>
+      <Text style={styles.workOwner}>{owner}</Text>
+    </>
+  );
+
+  if (!item.agentId) {
+    return (
+      <View style={styles.workRow} testID={`group-work-${item.taskId}`}>
+        {content}
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      onPress={openConversation}
+      style={styles.workRow}
+      testID={`group-work-${item.taskId}`}
+      accessibilityRole="button"
+      accessibilityLabel={`Open the conversation for ${item.title}`}
+    >
+      {content}
+    </Pressable>
   );
 }
 

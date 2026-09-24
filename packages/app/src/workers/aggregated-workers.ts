@@ -61,6 +61,13 @@ export interface AggregatedWorkerTask {
   taskId: string;
   workerId: string;
   title: string;
+  /**
+   * The session that ran this task, once it has one.
+   *
+   * The conversation is that session, so this is what a task opens. Null before
+   * the first run: a task that has not run has nothing to talk to.
+   */
+  agentId: string | null;
   state: WorkerTaskSummary["state"];
   createdAt: string;
   updatedAt: string;
@@ -214,6 +221,7 @@ export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<
             taskId: task.taskId,
             workerId: task.workerId,
             title: task.title,
+            agentId: task.agentId,
             state: task.state,
             createdAt: task.createdAt,
             updatedAt: task.updatedAt,

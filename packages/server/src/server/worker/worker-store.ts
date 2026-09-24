@@ -28,7 +28,7 @@ import {
   type WorkerTaskState,
 } from "./worker-task-state.js";
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export interface WorkerRecord {
   id: string;
@@ -45,6 +45,14 @@ export interface WorkerTaskRecord {
   workerId: string;
   title: string;
   state: WorkerTaskState;
+  /**
+   * The agent session that ran this task, once it has one.
+   *
+   * Persisted rather than left in the history note because the conversation
+   * continues after the run: the session is what a follow-up turn is sent to,
+   * so "which session is this task" has to be answerable from the task.
+   */
+  agentId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -298,6 +306,7 @@ interface WorkerTaskRow {
   worker_id: string;
   title: string;
   state: string;
+  agent_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -370,6 +379,7 @@ export class WorkerStore {
         worker_id  TEXT NOT NULL REFERENCES workers(id) ON DELETE CASCADE,
         title      TEXT NOT NULL,
         state      TEXT NOT NULL,
+        agent_id   TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
@@ -527,6 +537,9 @@ export class WorkerStore {
     if (current.version < 5) {
       this.migrateGroupGoalToGoalEntity();
     }
+    if (current.version < 6) {
+      this.migrateTaskAgentId();
+    }
 
     // Recording the bump matters because these rows are how a step decides what
     // it still has to do; without it, an upgraded database would keep reporting
@@ -536,6 +549,19 @@ export class WorkerStore {
         .prepare("INSERT INTO worker_schema_version (version, applied_at) VALUES (?, ?)")
         .run(SCHEMA_VERSION, new Date().toISOString());
     }
+  }
+
+  /**
+   * v6: record the session a task ran in.
+   *
+   * Additive, but not free: `CREATE TABLE IF NOT EXISTS` does not add a column
+   * to a table that already exists, so this needs an explicit step even though
+   * nothing is being removed.
+   */
+  private migrateTaskAgentId(): void {
+    const columns = this.rawTableInfo("worker_tasks") as Array<{ name: string }>;
+    if (columns.some((column) => column.name === "agent_id")) return;
+    this.db.exec("ALTER TABLE worker_tasks ADD COLUMN agent_id TEXT");
   }
 
   /**
@@ -682,11 +708,37 @@ export class WorkerStore {
   getTask(taskId: string): WorkerTaskRecord | null {
     const row = this.db
       .prepare(
-        `SELECT task_id, worker_id, title, state, created_at, updated_at
+        `SELECT task_id, worker_id, title, state, agent_id, created_at, updated_at
          FROM worker_tasks WHERE task_id = ?`,
       )
       .get(taskId) as WorkerTaskRow | undefined;
     return row ? toTaskRecord(row) : null;
+  }
+
+  /**
+   * Record which session ran this task.
+   *
+   * Separate from `applyTaskTransition` because it is not a state change: the
+   * task is not considered to have moved when its session is remembered, and
+   * writing history for it would put a non-event in the audit trail.
+   *
+   * A session is not replaced once set. Changing it would orphan the
+   * conversation the task already has.
+   */
+  setTaskAgent(input: { taskId: string; agentId: string; updatedAt?: string }): WorkerTaskRecord {
+    const current = this.getTask(input.taskId);
+    if (!current) {
+      throw new Error(`unknown worker task: ${input.taskId}`);
+    }
+    if (current.agentId && current.agentId !== input.agentId) {
+      throw new Error(`worker task ${input.taskId} is already bound to session ${current.agentId}`);
+    }
+    this.db
+      .prepare("UPDATE worker_tasks SET agent_id = ?, updated_at = ? WHERE task_id = ?")
+      .run(input.agentId, input.updatedAt ?? new Date().toISOString(), input.taskId);
+    const updated = this.getTask(input.taskId);
+    if (!updated) throw new Error(`worker task ${input.taskId} vanished after binding a session`);
+    return updated;
   }
 
   /**
@@ -708,7 +760,7 @@ export class WorkerStore {
   listTasksForWorker(workerId: string): WorkerTaskRecord[] {
     const rows = this.db
       .prepare(
-        `SELECT task_id, worker_id, title, state, created_at, updated_at
+        `SELECT task_id, worker_id, title, state, agent_id, created_at, updated_at
          FROM worker_tasks WHERE worker_id = ?
          ORDER BY created_at ASC, task_id ASC`,
       )
@@ -720,7 +772,7 @@ export class WorkerStore {
   listAllTasks(): WorkerTaskRecord[] {
     const rows = this.db
       .prepare(
-        `SELECT task_id, worker_id, title, state, created_at, updated_at
+        `SELECT task_id, worker_id, title, state, agent_id, created_at, updated_at
          FROM worker_tasks
          ORDER BY updated_at DESC, task_id ASC`,
       )
@@ -1378,6 +1430,7 @@ function toTaskRecord(row: WorkerTaskRow): WorkerTaskRecord {
     workerId: row.worker_id,
     title: row.title,
     state: row.state as WorkerTaskState,
+    agentId: row.agent_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

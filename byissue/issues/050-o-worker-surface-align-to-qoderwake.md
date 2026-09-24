@@ -50,6 +50,16 @@ Epic 004 照搬的是 QoderWake 的**数据模型、命令面与协作机制**�
 - 建组模态的成员选择与 Leader 指定可在窄屏完成。
 - 起始提示来自角色模板能力，不是硬编码文案。
 
-## 已知风险
+## 已解决：对话面不需要新建（实测修正）
 
-- 上游的 waker 详情页承载"对话 + 任务 + 自动化"三者，而 BySpace 的 worker 任务当前是**异步运行、无对话面**的（`worker.task.run` 是阻塞式，没有交互回路）。照抄详情页需要先决定：**是否给 worker 加对话回合**。这是设计决定，不是排版决定，应先在 Design 里定下再动 UI。
+**原先我把它记成"需要先决定是否给 worker 加对话回合"的未决项。实测后发现前提是错的。**
+
+上游详情页右侧的表头是 **"New task"** —— 也就是说**对话就是那个任务**。而 BySpace 的任务本来就会起一个 agent session，`byspace agent send <id> <prompt>` 也早就存在。所以对话能力早就有了，**缺的只是任务没有记住自己的 session**（agent id 只躺在一条 history note 里）。
+
+改动因此很小：`worker_tasks.agent_id`（schema v5→v6，真实库上验过）、跑完记下 session、`WorkerTaskSummary` 带上它、组报告里的任务行可点开。
+
+**真机验证：** 点组视图里的任务 → 打开 `…/workspace/…` 的会话，能看到该 worker 的完整往来，并在同一条 session 上继续追问（`agent send` 走的是同一个会话）。**BySpace 已有会话面，这条路径是复用而不是新建。**
+
+顺带看到技能真的生效：worker 面对一个措辞含糊的任务时**没有猜**，而是报了 blocker 并反问三个问题 —— 这正是技能里写的「If you are blocked, say what is blocking you rather than claiming you started」。
+
+**剩余未抄的部分：** 名册卡片点进"该 waker 的列表 + 对话"那一整页（上游三栏）；建组模态的两栏成员选择；`@Waker` 与 `Autonomous Work` 两个入口（对应我们明确不做的自动化面）。

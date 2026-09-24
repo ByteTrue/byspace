@@ -20,6 +20,7 @@ function task(state: WorkerTaskState, overrides: Partial<AggregatedWorkerTask> =
     workerId: "wkr_1",
     title: `a ${state} task`,
     state,
+    agentId: null,
     createdAt: "2026-09-24T00:00:00.000Z",
     updatedAt: "2026-09-24T00:00:00.000Z",
     serverId: "srv_a",

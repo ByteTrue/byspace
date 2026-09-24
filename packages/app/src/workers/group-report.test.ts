@@ -47,6 +47,7 @@ function task(
     workerId,
     title: `Task ${id}`,
     state,
+    agentId: null,
     createdAt: "2026-09-24T00:00:00.000Z",
     updatedAt: "2026-09-24T00:00:00.000Z",
     serverId,
@@ -55,7 +56,14 @@ function task(
 }
 
 function item(state: AggregatedWorkerTask["state"], id = "t1"): GroupWorkItem {
-  return { taskId: id, workerId: "w1", workerName: "Alice", title: `Task ${id}`, state };
+  return {
+    taskId: id,
+    workerId: "w1",
+    workerName: "Alice",
+    title: `Task ${id}`,
+    state,
+    agentId: null,
+  };
 }
 
 function group(overrides: Partial<AggregatedWorkerGroup> = {}): AggregatedWorkerGroup {
