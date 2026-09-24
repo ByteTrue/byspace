@@ -43,6 +43,7 @@ import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { NetworkSection } from "@/screens/settings/network-section";
 import { DaemonServiceSection } from "@/screens/settings/daemon-service-section";
+import { MetadataGenerationPage } from "@/screens/settings/metadata-generation-page";
 import {
   getHostRuntimeStore,
   isHostRuntimeConnected,
@@ -244,22 +245,8 @@ export function HostConnectionsPage({ serverId }: { serverId: string }) {
     <View>
       <HostConnectionError serverId={serverId} />
       <ConnectionsSection host={host} />
-    </View>
-  );
-}
-
-export function HostPairDevicePage({ serverId }: { serverId: string }) {
-  const { t } = useTranslation();
-  const host = useHostProfile(serverId);
-
-  if (!host) {
-    return <HostNotFound />;
-  }
-
-  return (
-    <SettingsSection title={t("settings.host.pairDevices.title")}>
       <PairDeviceRow serverId={serverId} />
-    </SettingsSection>
+    </View>
   );
 }
 
@@ -286,30 +273,7 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
       )}
       <AgentSkillsSection serverId={serverId} />
       <AgentProfilesSection serverId={serverId} />
-    </View>
-  );
-}
-
-export function HostWorkspacesPage({ serverId }: { serverId: string }) {
-  const { t } = useTranslation();
-  const host = useHostProfile(serverId);
-  const isConnected = useHostRuntimeIsConnected(serverId);
-
-  if (!host) {
-    return <HostNotFound />;
-  }
-
-  return (
-    <View>
-      {isConnected ? (
-        <SettingsSection title={t("settings.hostSections.workspaces")}>
-          <AutoArchiveMergedWorkspacesCard serverId={serverId} />
-        </SettingsSection>
-      ) : (
-        <View style={[settingsStyles.card, styles.emptyCard]}>
-          <Text style={styles.emptyText}>{t("settings.host.workspaces.unavailable")}</Text>
-        </View>
-      )}
+      <MetadataGenerationPage serverId={serverId} />
     </View>
   );
 }
@@ -353,8 +317,10 @@ export function HostSettingsPage({
   serverId: string;
   onHostRemoved?: () => void;
 }) {
+  const { t } = useTranslation();
   const host = useHostProfile(serverId);
   const isLocalDaemon = useIsLocalDaemon(serverId);
+  const isConnected = useHostRuntimeIsConnected(serverId);
 
   if (!host) {
     return <HostNotFound />;
@@ -371,6 +337,15 @@ export function HostSettingsPage({
       <HostStatusBadges serverId={serverId} />
 
       <HostAppearanceSection host={host} />
+
+      {isConnected ? (
+        <SettingsSection
+          title={t("settings.hostSections.workspaces")}
+          testID="host-page-workspaces-section"
+        >
+          <AutoArchiveMergedWorkspacesCard serverId={serverId} />
+        </SettingsSection>
+      ) : null}
 
       <NetworkSection serverId={serverId} />
 

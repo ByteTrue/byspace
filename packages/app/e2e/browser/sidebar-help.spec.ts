@@ -146,7 +146,8 @@ test("searches keyboard shortcuts from the sidebar help menu", async ({ page }) 
 test("keeps diagnostics available from Settings after globalizing the sheet", async ({ page }) => {
   await gotoAppShell(page);
   await openSettings(page);
-  await openSettingsSection(page, "diagnostics");
+  // The Run diagnostic row lives on the About page since the settings consolidation.
+  await openSettingsSection(page, "about");
 
   await page.getByRole("button", { name: "Run", exact: true }).click();
   await expectDiagnosticReport(page);

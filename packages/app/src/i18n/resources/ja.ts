@@ -1758,18 +1758,10 @@ export const ja: TranslationResources = {
     sections: {
       general: "一般",
       appearance: "外観",
-      layout: en.settings.sections.layout,
-      editor: "エディター",
-      shortcuts: "ショートカット",
-      integrations: "連携",
       notifications: "通知",
-      permissions: "権限",
-      diagnostics: "診断",
       about: "アプリ情報",
     },
-    layout: en.settings.layout,
     editor: {
-      title: "エディター",
       vimKeybindings: "Vim キーバインド",
       vimHint: "Web とデスクトップのソースファイルに適用されます。",
     },
@@ -1808,11 +1800,10 @@ export const ja: TranslationResources = {
       },
     },
     hostSections: {
+      workspaces: "ワークスペース",
       projects: "プロジェクト",
       connections: "接続",
       agents: "エージェント",
-      metadata: "メタデータ",
-      workspaces: "ワークスペース",
       providers: "プロバイダー",
       usage: "使用状況",
       terminals: "ターミナル",
@@ -1904,7 +1895,6 @@ export const ja: TranslationResources = {
       },
     },
     diagnostics: {
-      title: "診断",
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",
@@ -2069,34 +2059,6 @@ export const ja: TranslationResources = {
           "テキストフィールドまたはターミナルにフォーカスがない場合に利用できます。",
       },
     },
-    integrations: {
-      title: "連携",
-      docs: {
-        cli: "CLIドキュメント",
-        openCli: "CLIドキュメントを開く",
-      },
-      commandLine: {
-        title: "コマンドライン",
-        description: "ターミナルからエージェントを制御し、スクリプトで操作",
-      },
-      actions: {
-        install: "インストール",
-        installing: "インストール中...",
-        installed: "インストール済み",
-      },
-    },
-    permissions: {
-      title: "権限",
-      microphone: "マイク",
-      refresh: "更新",
-      refreshing: "更新中...",
-      refreshAccessibility: "デスクトップの権限を更新",
-      actions: {
-        granted: "許可済み",
-        request: "許可を求める",
-        requesting: "許可を求めています...",
-      },
-    },
     host: {
       appearance: {
         title: "外観",
@@ -2150,7 +2112,6 @@ export const ja: TranslationResources = {
         timeout: "タイムアウト",
       },
       pairDevices: {
-        title: "デバイスをペアリング",
         rowTitle: "デバイスをペアリング",
         rowHint: "QRコードをスキャンするかリンクをコピーしてスマートフォンをこのホストに接続",
       },
@@ -2219,9 +2180,6 @@ export const ja: TranslationResources = {
       },
       agents: {
         unavailable: "エージェントを管理するにはこのホストに接続してください",
-      },
-      workspaces: {
-        unavailable: "ワークスペースを管理するにはこのホストに接続してください",
       },
       terminalDefaultShell: {
         sectionTitle: "デフォルトシェル",

@@ -1778,18 +1778,10 @@ export const es: TranslationResources = {
     sections: {
       general: "General",
       appearance: "Apariencia",
-      layout: en.settings.sections.layout,
-      editor: "Editor",
-      shortcuts: "Atajos",
-      integrations: "Integraciones",
       notifications: "Notificaciones",
-      permissions: "Permisos",
-      diagnostics: "Diagnóstico",
       about: "Acerca de",
     },
-    layout: en.settings.layout,
     editor: {
-      title: "Editor",
       vimKeybindings: "Atajos de Vim",
       vimHint: "Se aplica a archivos fuente en web y escritorio.",
     },
@@ -1829,11 +1821,10 @@ export const es: TranslationResources = {
       },
     },
     hostSections: {
+      workspaces: "Workspaces",
       projects: "Proyectos",
       connections: "Conexiones",
       agents: "Agents",
-      metadata: "Metadatos",
-      workspaces: "Workspaces",
       providers: "Proveedores",
       usage: "Uso",
       terminals: "Terminals",
@@ -1930,7 +1921,6 @@ export const es: TranslationResources = {
       },
     },
     diagnostics: {
-      title: "Diagnóstico",
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",
@@ -2095,34 +2085,6 @@ export const es: TranslationResources = {
         showKeyboardShortcuts: "Disponible cuando el foco no está en un campo de texto o terminal.",
       },
     },
-    integrations: {
-      title: "Integraciones",
-      docs: {
-        cli: "DocumentosCLI",
-        openCli: "Abrir la documentación deCLI",
-      },
-      commandLine: {
-        title: "línea de comando",
-        description: "Agentes de control y script desde tu terminal",
-      },
-      actions: {
-        install: "Instalar",
-        installing: "Instalando...",
-        installed: "Instalado",
-      },
-    },
-    permissions: {
-      title: "Permisos",
-      microphone: "Micrófono",
-      refresh: "Refrescar",
-      refreshing: "Refrescante...",
-      refreshAccessibility: "Actualizar permisos de escritorio",
-      actions: {
-        granted: "Otorgada",
-        request: "Pedido",
-        requesting: "Solicitando...",
-      },
-    },
     host: {
       appearance: {
         title: "Apariencia",
@@ -2176,7 +2138,6 @@ export const es: TranslationResources = {
         timeout: "Se acabó el tiempo",
       },
       pairDevices: {
-        title: "Emparejar dispositivos",
         rowTitle: "Emparejar un dispositivo",
         rowHint: "Escanee un códigoQRo copie un enlace para conectar su teléfono a este host",
       },
@@ -2245,9 +2206,6 @@ export const es: TranslationResources = {
       },
       agents: {
         unavailable: "Connect to this host to manage agents",
-      },
-      workspaces: {
-        unavailable: "Connect to this host to manage workspaces",
       },
       terminalDefaultShell: {
         sectionTitle: "Default shell",

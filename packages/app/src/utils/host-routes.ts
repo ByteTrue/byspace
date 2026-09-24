@@ -489,18 +489,7 @@ export function resolveKnownHostRoute(input: {
   return { kind: "redirect", href: "/welcome" };
 }
 
-export const SETTINGS_SECTION_SLUGS = [
-  "general",
-  "appearance",
-  "layout",
-  "editor",
-  "shortcuts",
-  "integrations",
-  "notifications",
-  "permissions",
-  "diagnostics",
-  "about",
-] as const;
+export const SETTINGS_SECTION_SLUGS = ["general", "appearance", "notifications", "about"] as const;
 
 export type SettingsSectionSlug = (typeof SETTINGS_SECTION_SLUGS)[number];
 
@@ -511,10 +500,7 @@ export function isSettingsSectionSlug(value: string): value is SettingsSectionSl
 export const HOST_SECTION_SLUGS = [
   "projects",
   "connections",
-  "pair-device",
   "agents",
-  "metadata",
-  "workspaces",
   "providers",
   "usage",
   "terminals",
@@ -529,6 +515,11 @@ const LEGACY_HOST_SECTION_SLUGS: Record<string, HostSectionSlug> = {
   // COMPAT(pluginsSection): plugin management retired in v0.14.x; old deep links
   // fall back to the host overview instead of an unknown section. Remove after 2027-09-15.
   plugins: "host",
+  // COMPAT(settingsConsolidation): sections folded in the 2026-09 settings
+  // consolidation (issue 050). Remove after 2027-09-24.
+  "pair-device": "connections",
+  metadata: "agents",
+  workspaces: "host",
 };
 
 export function isHostSectionSlug(value: string): value is HostSectionSlug {

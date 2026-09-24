@@ -154,7 +154,10 @@ export function MetadataGenerationPage({ serverId }: { serverId: string }) {
               isRetryingProvider={snapshot.isRefreshing}
               disabled={isSaving}
               serverId={serverId}
-              desktopPlacement="bottom-start"
+              // The section sits at the bottom of the Agents page; the combobox
+              // has no web-side flip, so a bottom placement clips the option
+              // list below the viewport.
+              desktopPlacement="top-start"
               desktopMinWidth={360}
             />
           </View>

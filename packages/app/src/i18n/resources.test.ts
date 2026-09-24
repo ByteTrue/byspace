@@ -251,18 +251,15 @@ describe("translation resources", () => {
   });
 
   it("includes Settings expansion keys for the Batch 3A migration", () => {
-    expect(en.settings.diagnostics.title).toBe("Diagnostics");
     expect(en.settings.about.title).toBe("About");
     expect(en.settings.appearance.theme.title).toBe("Theme");
     expect(en.settings.appearance.terminal.title).toBe("Terminal");
     expect(en.settings.appearance.terminal.options.match).toBe("Match app");
     expect(en.settings.appearance.fonts.interfaceFont).toBe("Interface font");
     expect(en.settings.shortcuts.actions.rebind).toBe("Rebind");
-    expect(en.settings.integrations.commandLine.title).toBe("Command line");
     expect(en.settings.notifications.playSound).toBe("Play sound");
     expect(en.settings.notifications.permission).toBe("Notification permission");
     expect(en.settings.notifications.sentTitle).toBe("Test notification sent");
-    expect(en.settings.permissions.actions.request).toBe("Request");
   });
 
   it("includes Settings expansion keys for the Batch 3B migration", () => {

@@ -1723,18 +1723,10 @@ export const zhCN: TranslationResources = {
     sections: {
       general: "通用",
       appearance: "外观",
-      layout: en.settings.sections.layout,
-      editor: "编辑器",
-      shortcuts: "快捷键",
-      integrations: "集成",
       notifications: "通知",
-      permissions: "权限",
-      diagnostics: "诊断",
       about: "关于",
     },
-    layout: en.settings.layout,
     editor: {
-      title: "编辑器",
       vimKeybindings: "Vim 键位",
       vimHint: "适用于网页和桌面端的源文件。",
     },
@@ -1772,11 +1764,10 @@ export const zhCN: TranslationResources = {
       },
     },
     hostSections: {
+      workspaces: "Workspaces",
       projects: "项目",
       connections: "连接",
       agents: "Agents",
-      metadata: "元数据",
-      workspaces: "Workspaces",
       providers: "Providers",
       usage: "使用情况",
       terminals: "Terminals",
@@ -1866,7 +1857,6 @@ export const zhCN: TranslationResources = {
       },
     },
     diagnostics: {
-      title: "诊断",
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",
@@ -2027,34 +2017,6 @@ export const zhCN: TranslationResources = {
         showKeyboardShortcuts: "焦点不在文本输入框或终端内时可用。",
       },
     },
-    integrations: {
-      title: "集成",
-      docs: {
-        cli: "CLI 文档",
-        openCli: "打开 CLI 文档",
-      },
-      commandLine: {
-        title: "命令行",
-        description: "从终端控制 Agent 并运行脚本",
-      },
-      actions: {
-        install: "安装",
-        installing: "正在安装...",
-        installed: "已安装",
-      },
-    },
-    permissions: {
-      title: "权限",
-      microphone: "麦克风",
-      refresh: "刷新",
-      refreshing: "正在刷新...",
-      refreshAccessibility: "刷新桌面端权限",
-      actions: {
-        granted: "已授权",
-        request: "请求",
-        requesting: "正在请求...",
-      },
-    },
     host: {
       appearance: {
         title: "外观",
@@ -2108,7 +2070,6 @@ export const zhCN: TranslationResources = {
         timeout: "超时",
       },
       pairDevices: {
-        title: "配对设备",
         rowTitle: "配对设备",
         rowHint: "扫描二维码或复制链接，将手机连接到这个 Host",
       },
@@ -2175,9 +2136,6 @@ export const zhCN: TranslationResources = {
       },
       agents: {
         unavailable: "连接到这个 Host 以管理 Agent",
-      },
-      workspaces: {
-        unavailable: "连接到这个 Host 以管理 Workspace",
       },
       terminalDefaultShell: {
         sectionTitle: "默认 shell",

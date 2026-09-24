@@ -1752,53 +1752,10 @@ export const en = {
     sections: {
       general: "General",
       appearance: "Appearance",
-      layout: "Layout",
-      editor: "Editor",
-      shortcuts: "Shortcuts",
-      integrations: "Integrations",
       notifications: "Notifications",
-      permissions: "Permissions",
-      diagnostics: "Diagnostics",
       about: "About",
     },
-    layout: {
-      openInSidePane: {
-        title: "Open location",
-        destinations: {
-          main: "Main panel",
-          side: "On the side",
-          explorer: "Explorer sidebar",
-        },
-        sources: {
-          explorerFiles: {
-            label: "Selecting a file in Explorer",
-            description: "Open files selected in the Explorer sidebar beside your work",
-          },
-          diffs: {
-            label: "Opening a diff",
-            description: "Open diffs from Explorer and agent conversations beside your work",
-          },
-          chatFiles: {
-            label: "Opening a file from an agent chat",
-            description: "Open file links and tool-call files beside the conversation",
-          },
-          diffFiles: {
-            label: "Opening a file from Changes",
-            description: "Open source files selected from a diff beside it",
-          },
-          subagents: {
-            label: "Opening a subagent",
-            description: "Open subagents beside their parent agent",
-          },
-          pullRequests: {
-            label: "Opening a pull request from Changes",
-            description: "Open pull request details beside Changes",
-          },
-        },
-      },
-    },
     editor: {
-      title: "Editor",
       vimKeybindings: "Vim keybindings",
       vimHint: "Applies to source files on web and desktop.",
     },
@@ -1837,11 +1794,10 @@ export const en = {
       },
     },
     hostSections: {
+      workspaces: "Workspaces",
       projects: "Projects",
       connections: "Connections",
       agents: "Agents",
-      metadata: "Metadata",
-      workspaces: "Workspaces",
       providers: "Providers",
       usage: "Usage",
       terminals: "Terminals",
@@ -1933,7 +1889,6 @@ export const en = {
       },
     },
     diagnostics: {
-      title: "Diagnostics",
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",
@@ -2095,34 +2050,6 @@ export const en = {
         showKeyboardShortcuts: "Available when focus is not in a text field or terminal.",
       },
     },
-    integrations: {
-      title: "Integrations",
-      docs: {
-        cli: "CLI docs",
-        openCli: "Open CLI documentation",
-      },
-      commandLine: {
-        title: "Command line",
-        description: "Control and script agents from your terminal",
-      },
-      actions: {
-        install: "Install",
-        installing: "Installing...",
-        installed: "Installed",
-      },
-    },
-    permissions: {
-      title: "Permissions",
-      microphone: "Microphone",
-      refresh: "Refresh",
-      refreshing: "Refreshing...",
-      refreshAccessibility: "Refresh desktop permissions",
-      actions: {
-        granted: "Granted",
-        request: "Request",
-        requesting: "Requesting...",
-      },
-    },
     host: {
       appearance: {
         title: "Appearance",
@@ -2176,7 +2103,6 @@ export const en = {
         timeout: "Timeout",
       },
       pairDevices: {
-        title: "Pair devices",
         rowTitle: "Pair a device",
         rowHint: "Scan a QR code or copy a link to connect your phone to this host",
       },
@@ -2247,9 +2173,6 @@ export const en = {
       },
       agents: {
         unavailable: "Connect to this host to manage agents",
-      },
-      workspaces: {
-        unavailable: "Connect to this host to manage workspaces",
       },
       terminalDefaultShell: {
         sectionTitle: "Default shell",

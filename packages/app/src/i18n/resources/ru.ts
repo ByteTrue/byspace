@@ -1762,18 +1762,10 @@ export const ru: TranslationResources = {
     sections: {
       general: "Основные",
       appearance: "Оформление",
-      layout: en.settings.sections.layout,
-      editor: "Редактор",
-      shortcuts: "Сочетания клавиш",
-      integrations: "Интеграции",
       notifications: "Уведомления",
-      permissions: "Разрешения",
-      diagnostics: "Диагностика",
       about: "О приложении",
     },
-    layout: en.settings.layout,
     editor: {
-      title: "Редактор",
       vimKeybindings: "Сочетания клавиш Vim",
       vimHint: "Применяется к исходным файлам в веб- и настольной версии.",
     },
@@ -1812,11 +1804,10 @@ export const ru: TranslationResources = {
       },
     },
     hostSections: {
+      workspaces: "Рабочие пространства",
       projects: "Проекты",
       connections: "Подключения",
       agents: "Агенты",
-      metadata: "Метаданные",
-      workspaces: "Рабочие пространства",
       providers: "Провайдеры",
       usage: "Использование",
       terminals: "Терминалы",
@@ -1912,7 +1903,6 @@ export const ru: TranslationResources = {
       },
     },
     diagnostics: {
-      title: "Диагностика",
       app: {
         title: "Диагностика приложения",
         rowTitle: "Диагностика приложения",
@@ -2078,34 +2068,6 @@ export const ru: TranslationResources = {
         showKeyboardShortcuts: "Доступно, когда фокус находится не в текстовом поле или терминале.",
       },
     },
-    integrations: {
-      title: "Интеграции",
-      docs: {
-        cli: "Документация CLI",
-        openCli: "Открыть документацию CLI",
-      },
-      commandLine: {
-        title: "Командная строка",
-        description: "Управляйте агентами и автоматизируйте их работу из терминала",
-      },
-      actions: {
-        install: "Установить",
-        installing: "Установка...",
-        installed: "Установлено",
-      },
-    },
-    permissions: {
-      title: "Разрешения",
-      microphone: "Микрофон",
-      refresh: "Обновить",
-      refreshing: "Обновление...",
-      refreshAccessibility: "Обновить разрешения рабочего стола",
-      actions: {
-        granted: "Предоставлено",
-        request: "Запросить",
-        requesting: "Запрашивается...",
-      },
-    },
     host: {
       appearance: {
         title: "Оформление",
@@ -2159,7 +2121,6 @@ export const ru: TranslationResources = {
         timeout: "Время ожидания истекло",
       },
       pairDevices: {
-        title: "Подключение устройств",
         rowTitle: "Подключить устройство",
         rowHint:
           "Отсканируйте QR-код или скопируйте ссылку, чтобы подключить телефон к этому хосту.",
@@ -2231,9 +2192,6 @@ export const ru: TranslationResources = {
       },
       agents: {
         unavailable: "Подключитесь к этому хосту, чтобы управлять агентами",
-      },
-      workspaces: {
-        unavailable: "Подключитесь к этому хосту, чтобы управлять рабочими пространствами",
       },
       terminalDefaultShell: {
         sectionTitle: "Оболочка по умолчанию",

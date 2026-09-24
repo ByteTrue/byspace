@@ -1749,18 +1749,10 @@ export const ko: TranslationResources = {
     sections: {
       general: "일반",
       appearance: "모양",
-      layout: en.settings.sections.layout,
-      editor: "편집기",
-      shortcuts: "단축키",
-      integrations: "통합",
       notifications: "알림",
-      permissions: "권한",
-      diagnostics: "진단",
       about: "정보",
     },
-    layout: en.settings.layout,
     editor: {
-      title: "편집기",
       vimKeybindings: "Vim 키 바인딩",
       vimHint: "웹 및 데스크톱의 소스 파일에 적용됩니다.",
     },
@@ -1798,11 +1790,10 @@ export const ko: TranslationResources = {
       },
     },
     hostSections: {
+      workspaces: "워크스페이스",
       projects: "프로젝트",
       connections: "연결",
       agents: "에이전트",
-      metadata: "메타데이터",
-      workspaces: "워크스페이스",
       providers: "프로바이더",
       usage: "사용량",
       terminals: "터미널",
@@ -1896,7 +1887,6 @@ export const ko: TranslationResources = {
       },
     },
     diagnostics: {
-      title: "진단",
       app: {
         title: "앱 진단",
         rowTitle: "앱 진단",
@@ -2058,34 +2048,6 @@ export const ko: TranslationResources = {
         showKeyboardShortcuts: "포커스가 텍스트 필드나 터미널에 있지 않을 때 사용할 수 있습니다.",
       },
     },
-    integrations: {
-      title: "통합",
-      docs: {
-        cli: "CLI 문서",
-        openCli: "CLI 문서 열기",
-      },
-      commandLine: {
-        title: "명령줄",
-        description: "터미널에서 에이전트를 제어하고 스크립팅합니다",
-      },
-      actions: {
-        install: "설치",
-        installing: "설치 중...",
-        installed: "설치됨",
-      },
-    },
-    permissions: {
-      title: "권한",
-      microphone: "마이크",
-      refresh: "새로고침",
-      refreshing: "새로고침 중...",
-      refreshAccessibility: "데스크톱 권한 새로고침",
-      actions: {
-        granted: "허용됨",
-        request: "요청",
-        requesting: "요청 중...",
-      },
-    },
     host: {
       appearance: {
         title: "모양",
@@ -2139,7 +2101,6 @@ export const ko: TranslationResources = {
         timeout: "시간 초과",
       },
       pairDevices: {
-        title: "기기 페어링",
         rowTitle: "기기 페어링",
         rowHint: "QR 코드를 스캔하거나 링크를 복사하여 휴대폰을 이 호스트에 연결하세요",
       },
@@ -2207,9 +2168,6 @@ export const ko: TranslationResources = {
       },
       agents: {
         unavailable: "에이전트를 관리하려면 이 호스트에 연결하세요",
-      },
-      workspaces: {
-        unavailable: "워크스페이스를 관리하려면 이 호스트에 연결하세요",
       },
       terminalDefaultShell: {
         sectionTitle: "기본 셸",

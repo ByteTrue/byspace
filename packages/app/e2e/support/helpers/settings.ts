@@ -21,11 +21,7 @@ interface SavedSettingsHostInput {
 const SECTION_LABELS = {
   general: "General",
   appearance: "Appearance",
-  editor: "Editor",
-  shortcuts: "Shortcuts",
-  integrations: "Integrations",
-  permissions: "Permissions",
-  diagnostics: "Diagnostics",
+  notifications: "Notifications",
   about: "About",
 } as const;
 
@@ -34,10 +30,7 @@ export type SettingsSection = keyof typeof SECTION_LABELS;
 type HostSection =
   | "projects"
   | "connections"
-  | "pair-device"
   | "agents"
-  | "metadata"
-  | "workspaces"
   | "providers"
   | "usage"
   | "terminals"
@@ -266,7 +259,7 @@ export async function expectDirectHostUriHidden(page: Page): Promise<void> {
   await expect(page.getByTestId("direct-host-uri-input")).toHaveCount(0);
 }
 
-export async function expectDiagnosticsContent(page: Page): Promise<void> {
+export async function expectDiagnosticsRow(page: Page): Promise<void> {
   await expect(page.getByRole("button", { name: "Run" })).toBeVisible();
 }
 
@@ -383,7 +376,7 @@ export async function expectRetiredSidebarSectionsAbsent(page: Page): Promise<vo
 
   // App group rows remain top-level.
   await expect(sidebar.getByRole("button", { name: "General", exact: true })).toBeVisible();
-  await expect(sidebar.getByRole("button", { name: "Diagnostics", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: "Diagnostics", exact: true })).toHaveCount(0);
   await expect(sidebar.getByRole("button", { name: "About", exact: true })).toBeVisible();
   await expect(sidebar.getByRole("button", { name: "Daemon", exact: true })).toHaveCount(0);
 
@@ -391,7 +384,6 @@ export async function expectRetiredSidebarSectionsAbsent(page: Page): Promise<vo
   await expect(sidebar.getByTestId("settings-host-section-connections")).toBeVisible();
   await expect(sidebar.getByTestId("settings-host-section-projects")).toBeVisible();
   await expect(sidebar.getByTestId("settings-host-section-agents")).toBeVisible();
-  await expect(sidebar.getByTestId("settings-host-section-workspaces")).toBeVisible();
   await expect(sidebar.getByTestId("settings-host-section-providers")).toBeVisible();
   await expect(sidebar.getByTestId("settings-host-section-usage")).toBeVisible();
   await expect(sidebar.getByTestId("settings-host-section-host")).toBeVisible();

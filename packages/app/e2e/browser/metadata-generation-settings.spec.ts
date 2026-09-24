@@ -13,8 +13,10 @@ async function openMetadataGenerationSettings(page: Page) {
   await gotoAppShell(page);
   await openSettings(page);
   await openSettingsHost(page, serverId);
-  await openHostSection(page, serverId, "metadata");
-  await expectSettingsHeader(page, "Metadata");
+  await openHostSection(page, serverId, "agents");
+  await expectSettingsHeader(page, "Agents");
+  // The metadata section renders inside the Agents page since the consolidation.
+  await expect(page.getByTestId("metadata-generation-settings")).toBeVisible();
 }
 
 async function openManualMetadataModelPicker(page: Page) {

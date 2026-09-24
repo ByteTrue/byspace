@@ -246,19 +246,19 @@ describe("global routes", () => {
 describe("host settings section slugs", () => {
   it("keeps current host settings sections", () => {
     expect(normalizeHostSectionSlug("connections")).toBe("connections");
-    expect(normalizeHostSectionSlug("pair-device")).toBe("pair-device");
     expect(normalizeHostSectionSlug("agents")).toBe("agents");
-    expect(normalizeHostSectionSlug("metadata")).toBe("metadata");
-    expect(normalizeHostSectionSlug("workspaces")).toBe("workspaces");
     expect(normalizeHostSectionSlug("projects")).toBe("projects");
     expect(normalizeHostSectionSlug("providers")).toBe("providers");
     expect(normalizeHostSectionSlug("usage")).toBe("usage");
     expect(normalizeHostSectionSlug("host")).toBe("host");
   });
 
-  it("maps old host settings sections to their new names", () => {
+  it("maps retired host settings sections to their consolidation targets", () => {
     expect(normalizeHostSectionSlug("orchestration")).toBe("agents");
     expect(normalizeHostSectionSlug("daemon")).toBe("host");
+    expect(normalizeHostSectionSlug("pair-device")).toBe("connections");
+    expect(normalizeHostSectionSlug("metadata")).toBe("agents");
+    expect(normalizeHostSectionSlug("workspaces")).toBe("host");
   });
 });
 
