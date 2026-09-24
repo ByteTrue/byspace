@@ -187,11 +187,17 @@ test.describe("Assistant fork menu", () => {
     await expect(page).toHaveURL(/\/new\?.*draftId=/, { timeout: 30_000 });
     await expectChatHistoryAttachment(page);
 
-    // Issue 049 scoping: the fork draft lands pre-selected on the source
-    // project, which only exists on the primary host, so the picker renders
-    // (two hosts seeded) but cannot leave that host. The attachment surviving
-    // a submit is pinned by the test below.
-    await expect(page.getByTestId("host-picker-trigger")).toBeDisabled();
+    // Issue 049 contract: after a project is pinned, hosts that do not have it
+    // must not appear in the host picker. The fork draft lands pre-selected on
+    // the source project, which only exists on the primary host, so the seeded
+    // secondary host (never added the project) is not offered.
+    await page.getByTestId("host-picker-trigger").click();
+    await expect(
+      page.getByTestId(`new-workspace-host-picker-option-${getServerId()}`),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("new-workspace-host-picker-option-secondary-assistant-fork-host"),
+    ).toHaveCount(0);
   });
 
   test("keeps the fork attachment after the new agent receives its user message", async ({

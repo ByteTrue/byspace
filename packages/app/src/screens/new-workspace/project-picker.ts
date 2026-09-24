@@ -36,6 +36,8 @@ interface NewWorkspaceProjectPickerState {
   selectedProjectOptionId: string;
   projectTriggerLabel: string;
   handleSelectProjectOption: (id: string) => void;
+  /** True when the user (or the route) pinned the project, scoping the host picker. */
+  isProjectSelectionLocked: boolean;
 }
 
 function projectOptionId(projectId: string): string {
@@ -196,5 +198,11 @@ export function useNewWorkspaceProjectPicker({
     selectedProjectOptionId: selectedProject ? projectOptionId(selectedProject.viewKey) : "",
     projectTriggerLabel: selectedProject?.projectName ?? "Choose project",
     handleSelectProjectOption,
+    // A manual pick or a routed project pins the project: the host picker must
+    // only offer hosts that have it. An automatically carried-over project
+    // (last-active / fallback) must not restrict the host list.
+    isProjectSelectionLocked:
+      projectSelection.source === "manual" ||
+      (projectSelection.source === "initial" && selectionContext.initialProjectSource === "route"),
   };
 }

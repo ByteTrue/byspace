@@ -1398,7 +1398,6 @@ interface NewWorkspaceFormStackInput {
 
 interface HostControlProps {
   showHostControl: boolean;
-  canSwitchHost: boolean;
   desktopControlStyle?: StyleProp<ViewStyle>;
   host: FormPickerControl & {
     allHosts: HostProfile[];
@@ -1417,7 +1416,6 @@ interface HostControlProps {
 function NewWorkspaceHostControl(props: HostControlProps): ReactElement | null {
   const {
     showHostControl,
-    canSwitchHost,
     desktopControlStyle,
     host,
     isPending,
@@ -1450,7 +1448,7 @@ function NewWorkspaceHostControl(props: HostControlProps): ReactElement | null {
               accessibilityRole="button"
               accessibilityLabel="Host"
               onPress={host.open}
-              disabled={isPending || !canSwitchHost}
+              disabled={isPending}
               style={badgePressableStyle}
               testID="host-picker-trigger"
             >
@@ -1460,7 +1458,7 @@ function NewWorkspaceHostControl(props: HostControlProps): ReactElement | null {
               <Text style={styles.badgeText} numberOfLines={1}>
                 {selectedHostLabel}
               </Text>
-              {canSwitchHost ? metaChevron : null}
+              {metaChevron}
             </Pressable>
           </TooltipTrigger>
           <TooltipContent side="top" align="center" offset={8}>
@@ -1481,7 +1479,6 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
   const selectedHostLabel =
     systemHosts.find((h) => h.serverId === host.selectedServerId)?.label ?? "Host";
   const showHostControl = systemHosts.length > 1;
-  const canSwitchHost = host.allHosts.length > 1;
   const isolationTriggerLabel = isolationLabel(t, isolation.effectiveIsolation);
   const addProjectAction = useMemo(
     () => <AddProjectPickerAction onPress={project.onAddProject} />,
@@ -1540,7 +1537,6 @@ function useNewWorkspaceFormStack(input: NewWorkspaceFormStackInput): ReactEleme
   const hostControl = (
     <NewWorkspaceHostControl
       showHostControl={showHostControl}
-      canSwitchHost={canSwitchHost}
       desktopControlStyle={desktopControlStyle}
       host={host}
       isPending={isPending}
@@ -1753,6 +1749,7 @@ export function NewWorkspaceScreen({
     selectedProjectOptionId,
     projectTriggerLabel,
     handleSelectProjectOption: selectProjectOption,
+    isProjectSelectionLocked,
   } = useNewWorkspaceProjectPicker({
     selectedServerId,
     projects,
@@ -1762,14 +1759,30 @@ export function NewWorkspaceScreen({
     allowAllProjects: supportsWorkspaceMultiplicity,
   });
 
+  // Host options: a pinned project (manual pick or routed context) only offers
+  // hosts that have it — including equivalent clones on other hosts (same
+  // projectKey). An auto-carried project never restricts the host list.
   const availableHosts = useMemo(() => {
-    if (!selectedProject || selectedProject.hosts.length === 0) {
+    if (!isProjectSelectionLocked || !selectedProject) {
       return allHosts;
     }
-    const projectHostSet = new Set(selectedProject.hosts.map((h) => h.serverId));
-    const matched = allHosts.filter((h) => projectHostSet.has(h.serverId));
+    const projectHostServerIds = new Set<string>();
+    for (const host of selectedProject.hosts) {
+      projectHostServerIds.add(host.serverId);
+    }
+    if (selectedProject.projectKey !== null) {
+      for (const project of projects) {
+        if (project.projectKey !== selectedProject.projectKey) {
+          continue;
+        }
+        for (const host of project.hosts) {
+          projectHostServerIds.add(host.serverId);
+        }
+      }
+    }
+    const matched = allHosts.filter((h) => projectHostServerIds.has(h.serverId));
     return matched.length > 0 ? matched : allHosts;
-  }, [allHosts, selectedProject]);
+  }, [allHosts, projects, selectedProject, isProjectSelectionLocked]);
 
   const projectIconTargets = useMemo(
     () => buildNewWorkspaceProjectIconTargets(projects, selectedServerId),
