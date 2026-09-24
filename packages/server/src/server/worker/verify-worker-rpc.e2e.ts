@@ -169,6 +169,33 @@ async function main(): Promise<void> {
     }
     checks.push({ name: "wrong action refused", detail: wrongAction.slice(0, 80) });
 
+    // A real run, through the real runner: this is the only check that proves
+    // the execution path is wired, since every other task check drives the
+    // state machine by hand. A fresh task is used so the assertions above are
+    // not disturbed by the run's own state changes.
+    //
+    // Either terminal outcome is accepted. A `submitted` task means pi ran and
+    // produced a result; a `blocked` one means it could not, and the run still
+    // reported honestly instead of hanging or losing the task. What must hold
+    // in both cases is that the task left `in_progress` and that the history
+    // records the attempt.
+    const runTask = await client.createWorkerTask({ workerId, title: "Say hello" });
+    const runResult = await client.runWorkerTask(runTask.task.taskId);
+    const runHistory = await client.getWorkerTaskHistory(runTask.task.taskId);
+    checks.push({
+      name: "run task",
+      detail: `${runResult.task.state} (${runHistory.entries
+        .map((entry) => `${entry.fromState}->${entry.toState}`)
+        .join(", ")})`,
+    });
+
+    if (!["submitted", "blocked"].includes(runResult.task.state)) {
+      throw new Error(`run left the task in an unexpected state: ${runResult.task.state}`);
+    }
+    if (!runHistory.entries.some((entry) => entry.toState === "in_progress")) {
+      throw new Error("a run must record that it started");
+    }
+
     for (const check of checks) {
       console.log(`  ok   ${check.name.padEnd(28)} ${check.detail}`);
     }
