@@ -147,6 +147,49 @@ export function assertWorkerTaskTransition(from: WorkerTaskState, to: WorkerTask
   }
 }
 /**
+ * A rejected action/transition pairing.
+ *
+ * The state graph says an edge is legal; this says the recorded action is not
+ * the one that produces it. Without this check the history is user-supplied
+ * text that merely accompanies a state change, which is not an audit trail.
+ */
+export class WorkerTaskActionMismatchError extends Error {
+  readonly from: WorkerTaskState;
+  readonly to: WorkerTaskState;
+  readonly action: string;
+
+  constructor(from: WorkerTaskState, to: WorkerTaskState, action: string, expected: string) {
+    super(
+      `Action '${action}' does not move a worker task from '${from}' to '${to}'. ` +
+        `Expected '${expected}'.`,
+    );
+    this.name = "WorkerTaskActionMismatchError";
+    this.from = from;
+    this.to = to;
+    this.action = action;
+  }
+}
+
+/**
+ * Check that `action` is the action that legitimately produces a state change.
+ *
+ * Only state-changing moves are judged here. A same-state move is a retry or a
+ * progress note, and deciding whether a given action is a legitimate retry
+ * requires the task's history, so the store answers that question.
+ */
+export function assertActionMatchesTransition(
+  from: WorkerTaskState,
+  to: WorkerTaskState,
+  action: WorkerTaskAction,
+): void {
+  if (from === to) return;
+  const expected = suggestedAction(from, to);
+  if (expected === null || expected !== action) {
+    throw new WorkerTaskActionMismatchError(from, to, action, expected ?? "(none)");
+  }
+}
+
+/**
  * Progress reports do not change state; they record that the task is still
  * moving. Modelled as a same-state entry so the history stays one shape.
  */

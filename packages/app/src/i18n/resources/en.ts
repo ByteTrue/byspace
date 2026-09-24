@@ -1094,6 +1094,7 @@ export const en = {
       sessions: "History",
       search: "Search",
       schedules: "Schedules",
+      workers: "Workers",
     },
     worktreeSetup: {
       title: "Set up worktree scripts",

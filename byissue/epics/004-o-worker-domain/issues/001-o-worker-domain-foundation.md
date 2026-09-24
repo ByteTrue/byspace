@@ -337,3 +337,64 @@ npx vitest run packages/protocol/src/messages.wire-compat.test.ts \
 ```
 
 **尚未完成：客户端方法与界面。** `DaemonClient` 已加 8 个方法，但 app 侧还没有路由、没有入口、没有屏幕。所以这个切片做成的是**可调用的后端**，不是用户能看见的功能。
+
+### 切片 006：入口与界面（已完成）
+
+按 Owner 最初的要求落地：侧栏一个新入口，跳到独立路由与独立屏幕。
+
+**入口。** `sidebar-nav/model.ts` 的 `BUILTIN_SIDEBAR_NAV_IDS` 加 `workers`，图标 `Users`，标签走 i18n（9 个 locale 全部补了 `sidebar.sections.workers`）。这一条是数据驱动的位置：新增一个 `BUILTIN_ROWS` 成员与一个图标就完成了，没有改侧栏主结构。
+
+**路由。** `packages/app/src/app/workers.tsx`，与 `schedules.tsx` 同形（`HostRouteBootstrapBoundary` 包一个 screen），并在 `_layout.tsx` 的 `shouldShowAppChrome` 里登记——漏掉这一步会得到没有 Chrome 的裸页面。
+
+**数据层。** `workers/aggregated-workers.ts` + `hooks/use-workers.ts`，沿用 schedules 的聚合加载形状：跨 host 扁平列表、单 host 失败不拖垮整屏。
+
+一个与 schedules 不同的语义：**“主机答了但列表为空”与“主机拒绝了请求”是两种状态**，分开报告。前者是“还没建过 worker”，后者是“这台主机不支持 worker”。混在一起会把协议不匹配显示成“空”。
+
+**屏幕。** `screens/workers-screen.tsx`：名册 + 新建卡片（选角色、填名字）。故意只做“看与建”：任务、群、协作都是后续切片，先摆出它们的空控件等于承诺这个域还做不到的事。
+
+**实现过程中撞到并修正的四件事**（都是按仓库实际约定改代码，不是改测试）：
+
+1. **token 名写错。** 用了 `theme.radius.md` 与 `theme.spacing[5]`，实际是 `theme.borderRadius.md`，且 spacing 没有 5 档。
+2. **原语签名弄错。** `Button` 用 `leftIcon`（且要传组件引用而非元素），`LoadingSpinner` 必须给 `color`，`EditingTextInput` 是非受控的（`initialValue` 而不是 `value`）。
+3. **react-perf 规则。** 内联 JSX 与内联函数作为 prop 会破坏 memoization；按仓库现有屏幕的写法改为组件引用与 memo 变量。
+4. **hook 放在提前 return 之后。** `useMemo` 写在条件返回之后会改变调用顺序，提到最前。
+
+**跨包声明陷阱（遇到一次）**：app 依赖 client 的 `dist` 声明，所以新加的 `DaemonClient` 方法在重建 `@bytetrue/client` 前对 app 不可见。`npm run build:client` 后消失。这是仓库已知的约束，不是代码问题。
+
+验证：
+
+```
+npm run typecheck                    → 0 errors
+npm run lint -- <改动文件>          → 0 warnings and 0 errors
+npx vitest run packages/app/src/sidebar-nav/model.test.ts \
+  packages/app/src/i18n/key-contract.test.ts \
+  packages/app/src/i18n/resources.test.ts --bail=1
+→ 3 files / 43 tests passed
+```
+
+i18n 的 key-contract 测试扫描 `t("…")` 字面量与 en 资源树的一致性，所以新增的标签不可能只在部分语言生效而无人发现。
+
+### 真实链路验证（发现并修掉一个真缺陷）
+
+构建产物没生成，所以浏览器里看不到页面。改为直接跑一遍**客户端真正走的那条路**：`verify-worker-rpc.e2e.ts` 起一个真实 daemon、真实 socket、真实 `DaemonClient`，两端都过真实协议 schema。
+
+```
+npx tsx src/server/worker/verify-worker-rpc.e2e.ts
+→ 13 项全通
+```
+
+**这次验证抓到一个真缺陷，而且是我自己写的代码里的。**
+
+原本我只校验“这条边合不合法”。于是 `submitted → completed`（合法边）配上**错误的动作名** `submit_task`（真正产生该转移的是 `accept_task_result`）也通过了——**历史里会记下一条不真实的动作**。audit trail 记的东西不是真发生的事，那它就不是 audit trail。
+
+修法：新增 `assertActionMatchesTransition`，要求动作必须是产生该转移的那个。
+
+改完之后一个既有用例失败了，它暴露了边界：**幂等重试是合法的**——对已 assigned 的任务重发 `assign_task` 应该放行。所以同一状态的到达分三种情况：
+
+- 动作等于**产生当前状态的那个动作** → 幂等重试，放行，不写历史；
+- 动作是 `report_progress` → 进度报告，放行，不写历史；
+- 其他 → 拒绝。它声称发生了没发生的事。
+
+判定“产生当前状态的动作”需要读历史，所以这个判断交给**唯一的状态写入入口**（它能读同一事务里的历史），而不是纯函数。
+
+新增 3 个用例：合法边配错动作被拒且状态与历史均不变；同一状态配无关动作被拒；in-flight 任务的进度报告放行。

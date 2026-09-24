@@ -9,6 +9,7 @@ import {
   History,
   Plus,
   Search,
+  Users,
   type LucideIcon,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -40,6 +41,7 @@ const BUILTIN_ICONS: Record<BuiltinSidebarNavId, LucideIcon> = {
   history: History,
   search: Search,
   schedules: CalendarClock,
+  workers: Users,
 };
 
 function NavIcon({ Icon, color = "" }: { Icon: LucideIcon; color?: string }) {

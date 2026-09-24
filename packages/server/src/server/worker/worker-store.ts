@@ -18,7 +18,10 @@ import { DatabaseSync } from "node:sqlite";
 import { resolveBySpaceHome } from "../byspace-home.js";
 import {
   IllegalWorkerTaskTransitionError,
+  WORKER_TASK_PROGRESS_ACTION,
   WORKER_TASK_PROGRESS_NOTE_MAX_LENGTH,
+  WorkerTaskActionMismatchError,
+  assertActionMatchesTransition,
   assertWorkerTaskTransition,
   isNoOpTransition,
   type WorkerTaskAction,
@@ -307,9 +310,25 @@ export class WorkerStore {
         throw new Error(`unknown worker task: ${input.taskId}`);
       }
       assertWorkerTaskTransition(current.state, input.toState);
+      // The state graph only says the edge exists. The recorded action must be
+      // the one that produces it, or the history is decoration rather than an
+      // account of what happened.
+      assertActionMatchesTransition(current.state, input.toState, input.action);
 
       if (isNoOpTransition(current.state, input.toState)) {
-        // Retries and progress reports must not fabricate a state change.
+        // A same-state arrival is a retry, and a retry is only idempotent if it
+        // repeats the action that produced the current state (or is a progress
+        // note). An unrelated action arriving here claims work that did not
+        // happen, so it is refused rather than recorded.
+        const lastAction = this.getLastHistoryAction(input.taskId);
+        if (input.action !== WORKER_TASK_PROGRESS_ACTION && input.action !== lastAction) {
+          throw new WorkerTaskActionMismatchError(
+            current.state,
+            input.toState,
+            input.action,
+            lastAction ?? "(no prior action)",
+          );
+        }
         this.db.exec("COMMIT");
         return { task: current, historyEntry: null };
       }
@@ -384,6 +403,20 @@ export class WorkerStore {
       note: row.note,
       recordedAt: row.recorded_at,
     }));
+  }
+
+  /**
+   * The action that produced the task's current state, used to tell an
+   * idempotent retry from an unrelated action arriving at the same state.
+   */
+  private getLastHistoryAction(taskId: string): string | null {
+    const row = this.db
+      .prepare(
+        `SELECT action FROM worker_task_history
+         WHERE task_id = ? ORDER BY seq DESC LIMIT 1`,
+      )
+      .get(taskId) as { action: string } | undefined;
+    return row?.action ?? null;
   }
 }
 

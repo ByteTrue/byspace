@@ -116,6 +116,78 @@ describe("worker store", () => {
     expect(store.listTaskHistory("t1")).toHaveLength(1);
   });
 
+  it("refuses a legal state change carrying the wrong action", () => {
+    // The graph allows submitted -> completed, but 'submit_task' is not the
+    // action that produces it. Recording it would put a false line in history.
+    store.createTask({ taskId: "t1", workerId: "w1", title: "Build it" });
+    store.applyTaskTransition({
+      taskId: "t1",
+      toState: "submitted",
+      action: "submit_task",
+      actor: "worker:w1",
+    });
+
+    expect(() =>
+      store.applyTaskTransition({
+        taskId: "t1",
+        toState: "completed",
+        action: "submit_task",
+        actor: "worker:lead",
+      }),
+    ).toThrow(/does not move a worker task from 'submitted' to 'completed'/);
+
+    // Refused means unchanged: state and history both stay put.
+    expect(store.getTask("t1")?.state).toBe("submitted");
+    expect(store.listTaskHistory("t1")).toHaveLength(1);
+  });
+
+  it("refuses a same-state arrival from an unrelated action", () => {
+    store.createTask({ taskId: "t1", workerId: "w1", title: "Build it" });
+    store.applyTaskTransition({
+      taskId: "t1",
+      toState: "assigned",
+      action: "assign_task",
+      actor: "lead",
+    });
+
+    // 'accept_task_result' arriving at 'assigned' claims work that did not
+    // happen; only a retry of the producing action or a progress note is fine.
+    expect(() =>
+      store.applyTaskTransition({
+        taskId: "t1",
+        toState: "assigned",
+        action: "accept_task_result",
+        actor: "lead",
+      }),
+    ).toThrow(/Expected 'assign_task'/);
+  });
+
+  it("accepts a progress note on a task in flight", () => {
+    store.createTask({ taskId: "t1", workerId: "w1", title: "Build it" });
+    store.applyTaskTransition({
+      taskId: "t1",
+      toState: "assigned",
+      action: "assign_task",
+      actor: "lead",
+    });
+    store.applyTaskTransition({
+      taskId: "t1",
+      toState: "in_progress",
+      action: "ack_task",
+      actor: "worker:w1",
+    });
+
+    expect(() =>
+      store.applyTaskTransition({
+        taskId: "t1",
+        toState: "in_progress",
+        action: "report_progress",
+        actor: "worker:w1",
+        note: "halfway",
+      }),
+    ).not.toThrow();
+  });
+
   it("numbers history monotonically across a full legal path", () => {
     store.createTask({ taskId: "t1", workerId: "w1", title: "Build it" });
     const path_: Array<[Parameters<typeof store.applyTaskTransition>[0]["toState"], string]> = [
