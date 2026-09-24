@@ -270,7 +270,6 @@ export const WorkerGroupSummarySchema = z.object({
   projectId: z.string(),
   /** Null until a workspace is chosen; the roster exists before one does. */
   workspaceId: z.string().nullable(),
-  goal: z.string().nullable(),
   status: z.enum(["active", "archived"]),
   members: z.array(
     z.object({
@@ -309,7 +308,6 @@ export const WorkerGroupCreateRequestSchema = z.object({
   name: z.string().min(1),
   projectId: z.string().min(1),
   workspaceId: z.string().min(1).nullable().optional(),
-  goal: z.string().min(1).nullable().optional(),
   /** The worker that owns the goal; it is added to the roster as coordinator. */
   coordinatorWorkerId: z.string().min(1).optional(),
   memberWorkerIds: z.array(z.string().min(1)).optional(),

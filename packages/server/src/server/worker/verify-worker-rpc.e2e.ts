@@ -96,7 +96,6 @@ async function main(): Promise<void> {
     const group = await client.createWorkerGroup({
       name: "Pricing page",
       projectId: "prj_verify",
-      goal: "Ship the pricing page",
       coordinatorWorkerId: workerId,
       memberWorkerIds: [created2.worker.id],
     });

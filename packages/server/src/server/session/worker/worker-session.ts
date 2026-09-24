@@ -226,7 +226,6 @@ export class WorkerSession {
         name: request.name,
         projectId: request.projectId,
         ...(request.workspaceId !== undefined ? { workspaceId: request.workspaceId } : {}),
-        ...(request.goal !== undefined ? { goal: request.goal } : {}),
         ...(request.coordinatorWorkerId !== undefined
           ? { coordinatorWorkerId: request.coordinatorWorkerId }
           : {}),

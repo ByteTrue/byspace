@@ -382,7 +382,6 @@ describe("worker group RPC", () => {
         name: "Pricing page",
         projectId: "prj_abc",
         workspaceId: "ws_1",
-        goal: "Ship the pricing page",
         coordinatorWorkerId: lead,
         memberWorkerIds: [alice, bob],
       }),
@@ -397,7 +396,6 @@ describe("worker group RPC", () => {
           name: string;
           projectId: string;
           workspaceId: string | null;
-          goal: string | null;
           status: string;
           members: Array<{ workerId: string; role: string }>;
         };
@@ -409,7 +407,6 @@ describe("worker group RPC", () => {
       name: "Pricing page",
       projectId: "prj_abc",
       workspaceId: "ws_1",
-      goal: "Ship the pricing page",
       status: "active",
     });
     // The coordinator is first, and named as such.

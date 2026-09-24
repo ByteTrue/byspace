@@ -28,7 +28,7 @@ import {
   type WorkerTaskState,
 } from "./worker-task-state.js";
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export interface WorkerRecord {
   id: string;
@@ -70,7 +70,6 @@ export interface WorkerGroupRecord {
   projectId: string;
   /** Null until a workspace is chosen; a roster is useful before that. */
   workspaceId: string | null;
-  goal: string | null;
   status: "active" | "archived";
   createdAt: string;
   updatedAt: string;
@@ -88,7 +87,6 @@ export interface CreateWorkerGroupInput {
   name: string;
   projectId: string;
   workspaceId?: string | null;
-  goal?: string | null;
   createdAt?: string;
 }
 
@@ -187,6 +185,8 @@ export type WorkerGoalPauseReason =
  */
 export const WORKER_GOAL_TURN_LIMIT_MIN = 1;
 export const WORKER_GOAL_TURN_LIMIT_MAX = 96;
+/** The reference product's default for a single-member job. */
+export const WORKER_GOAL_TURN_LIMIT_DEFAULT = 20;
 
 export interface WorkerGoalRecord {
   goalId: string;
@@ -384,7 +384,6 @@ export class WorkerStore {
         name          TEXT NOT NULL,
         project_id    TEXT NOT NULL,
         workspace_id  TEXT,
-        goal          TEXT,
         status        TEXT NOT NULL,
         created_at    TEXT NOT NULL,
         updated_at    TEXT NOT NULL
@@ -505,20 +504,74 @@ export class WorkerStore {
         .run(SCHEMA_VERSION, new Date().toISOString());
       return;
     }
-    // The CREATE statements above run on every open, so adding a table or index
-    // upgrades an existing database by itself. That is the whole migration
-    // story here: it covers additive changes and nothing else. A change to an
-    // existing column (rename, retype, drop) needs a real migration step and a
-    // version branch, which does not exist yet.
-    //
-    // Recording the bump matters because these rows are how such a step would
-    // decide what it still has to do; without it, an upgraded database would
-    // keep reporting the version it was created with.
+    // Additive changes need no step here: the CREATE statements above run on
+    // every open, so a new table or index appears by itself. Only a change to an
+    // existing column needs one, which is what the steps below are.
+    if (current.version < 5) {
+      this.migrateGroupGoalToGoalEntity();
+    }
+
+    // Recording the bump matters because these rows are how a step decides what
+    // it still has to do; without it, an upgraded database would keep reporting
+    // the version it was created with.
     if (current.version < SCHEMA_VERSION) {
       this.db
         .prepare("INSERT INTO worker_schema_version (version, applied_at) VALUES (?, ?)")
         .run(SCHEMA_VERSION, new Date().toISOString());
     }
+  }
+
+  /**
+   * v5: move a group's objective out of the group and onto the goal.
+   *
+   * `worker_groups.goal` was a second place the objective could live, alongside
+   * the goal entity that also carries its budget, status and version. Two homes
+   * for one fact drift, so the column goes and the goal owns it.
+   *
+   * Existing text is carried over rather than dropped, and the budget it needs
+   * is estimated from the roster size.
+   */
+  private migrateGroupGoalToGoalEntity(): void {
+    const hasColumn = (
+      this.db.prepare("PRAGMA table_info(worker_groups)").all() as Array<{ name: string }>
+    ).some((column) => column.name === "goal");
+    if (!hasColumn) return;
+
+    this.db.exec(`
+      INSERT INTO worker_goals
+        (goal_id, group_id, content, turn_limit, status, generation, revision,
+         pause_reason, result_message_id, generation_start_seq, created_at, updated_at)
+      SELECT 'goal_' || g.id, g.id, g.goal, ${suggestTurnLimitSql("(SELECT COUNT(*) FROM worker_group_members m WHERE m.group_id = g.id)")},
+             'active', 1, 1, NULL, NULL, 0, g.created_at, g.updated_at
+      FROM worker_groups g
+      WHERE g.goal IS NOT NULL AND TRIM(g.goal) <> ''
+        AND NOT EXISTS (SELECT 1 FROM worker_goals w WHERE w.group_id = g.id);
+
+      ALTER TABLE worker_groups DROP COLUMN goal;
+    `);
+  }
+
+  /**
+   * The turn budget to suggest for a roster of this size.
+   *
+   * The reference product's estimate: at least two public messages per
+   * independently assigned member (a receipt and a completion), plus headroom for
+   * handoffs, progress, coordination and the final delivery, with roughly 35%
+   * slack. It also says multi-member work must not reuse the default of 20,
+   * which is why the floor only applies to small rosters.
+   */
+  static suggestTurnLimit(memberCount: number): number {
+    const estimate = Math.ceil(2 * Math.max(memberCount, 1) * 1.35);
+    // The default applies to a single-member job only. Upstream is explicit that
+    // multi-member work must not reuse it, so applying it as a floor would make
+    // the estimate a constant for every roster small enough to matter.
+    const floor = memberCount <= 1 ? WORKER_GOAL_TURN_LIMIT_DEFAULT : WORKER_GOAL_TURN_LIMIT_MIN;
+    return Math.min(Math.max(estimate, floor), WORKER_GOAL_TURN_LIMIT_MAX);
+  }
+
+  /** Exposed for tests: the columns of a table, to assert a migration landed. */
+  rawTableInfo(table: string): unknown[] {
+    return this.db.prepare(`PRAGMA table_info(${table})`).all();
   }
 
   /** Exposed for tests that assert on the recorded schema version. */
@@ -776,18 +829,10 @@ export class WorkerStore {
     this.db
       .prepare(
         `INSERT INTO worker_groups
-           (id, name, project_id, workspace_id, goal, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'active', ?, ?)`,
+           (id, name, project_id, workspace_id, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'active', ?, ?)`,
       )
-      .run(
-        input.id,
-        input.name,
-        input.projectId,
-        input.workspaceId ?? null,
-        input.goal ?? null,
-        at,
-        at,
-      );
+      .run(input.id, input.name, input.projectId, input.workspaceId ?? null, at, at);
     const group = this.getGroup(input.id);
     if (!group) throw new Error(`worker group ${input.id} vanished immediately after insert`);
     return group;
@@ -796,7 +841,7 @@ export class WorkerStore {
   getGroup(groupId: string): WorkerGroupRecord | null {
     const row = this.db
       .prepare(
-        `SELECT id, name, project_id, workspace_id, goal, status, created_at, updated_at
+        `SELECT id, name, project_id, workspace_id, status, created_at, updated_at
          FROM worker_groups WHERE id = ?`,
       )
       .get(groupId) as WorkerGroupRow | undefined;
@@ -806,7 +851,7 @@ export class WorkerStore {
   listGroups(): WorkerGroupRecord[] {
     const rows = this.db
       .prepare(
-        `SELECT id, name, project_id, workspace_id, goal, status, created_at, updated_at
+        `SELECT id, name, project_id, workspace_id, status, created_at, updated_at
          FROM worker_groups WHERE status = 'active'
          ORDER BY created_at ASC, id ASC`,
       )
@@ -1298,7 +1343,6 @@ interface WorkerGroupRow {
   name: string;
   project_id: string;
   workspace_id: string | null;
-  goal: string | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -1329,6 +1373,14 @@ interface WorkerMessageRow {
   delivery_policy: string;
   reply_to_message_id: string | null;
   created_at: string;
+}
+
+/** The same estimate as `WorkerStore.suggestTurnLimit`, as a SQL expression. */
+function suggestTurnLimitSql(memberCountExpr: string): string {
+  return `MIN(${WORKER_GOAL_TURN_LIMIT_MAX}, MAX(
+    CASE WHEN ${memberCountExpr} <= 1 THEN ${WORKER_GOAL_TURN_LIMIT_DEFAULT} ELSE ${WORKER_GOAL_TURN_LIMIT_MIN} END,
+    CAST(2 * ${memberCountExpr} * 1.35 + 0.999 AS INTEGER)
+  ))`;
 }
 
 function assertTurnLimit(turnLimit: number): void {
@@ -1475,7 +1527,6 @@ function toGroupRecord(row: WorkerGroupRow): WorkerGroupRecord {
     name: row.name,
     projectId: row.project_id,
     workspaceId: row.workspace_id,
-    goal: row.goal,
     status: row.status as WorkerGroupRecord["status"],
     createdAt: row.created_at,
     updatedAt: row.updated_at,

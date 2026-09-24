@@ -269,7 +269,6 @@ export class WorkerService {
     name: string;
     projectId: string;
     workspaceId?: string | null;
-    goal?: string | null;
     coordinatorWorkerId?: string;
     memberWorkerIds?: readonly string[];
   }): WorkerGroupRecord {
@@ -279,7 +278,6 @@ export class WorkerService {
       name: input.name,
       projectId: input.projectId,
       workspaceId: input.workspaceId ?? null,
-      goal: input.goal ?? null,
     });
 
     try {

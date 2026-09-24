@@ -2621,7 +2621,6 @@ export class DaemonClient {
       name: string;
       projectId: string;
       workspaceId?: string | null;
-      goal?: string | null;
       coordinatorWorkerId?: string;
       memberWorkerIds?: string[];
     },
@@ -2634,7 +2633,6 @@ export class DaemonClient {
         name: input.name,
         projectId: input.projectId,
         ...(input.workspaceId !== undefined ? { workspaceId: input.workspaceId } : {}),
-        ...(input.goal !== undefined ? { goal: input.goal } : {}),
         ...(input.coordinatorWorkerId !== undefined
           ? { coordinatorWorkerId: input.coordinatorWorkerId }
           : {}),

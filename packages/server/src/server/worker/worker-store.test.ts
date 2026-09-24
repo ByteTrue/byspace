@@ -361,7 +361,6 @@ describe("worker groups", () => {
     name: "Pricing page",
     projectId: "prj_abc",
     workspaceId: "ws_1",
-    goal: "Ship the pricing page",
   };
 
   beforeEach(() => {
@@ -374,7 +373,6 @@ describe("worker groups", () => {
       name: "Pricing page",
       projectId: "prj_abc",
       workspaceId: "ws_1",
-      goal: "Ship the pricing page",
       status: "active",
     });
     expect(store.listGroups().map((g) => g.id)).toEqual(["grp_1"]);
@@ -384,7 +382,6 @@ describe("worker groups", () => {
     // The roster and channels are useful before a workspace is chosen.
     const group = store.createGroup({ id: "grp_2", name: "Unassigned", projectId: "prj_abc" });
     expect(group.workspaceId).toBeNull();
-    expect(group.goal).toBeNull();
   });
 
   it("keeps the roster ordered with the coordinator first", () => {
@@ -941,5 +938,134 @@ describe("worker goals", () => {
     store.close();
     store = new WorkerStore({ databasePath });
     expect(store.getGoal("grp_1")).toMatchObject({ content: "Ship the pricing page", turnUsed: 1 });
+  });
+});
+
+describe("schema v5 migration", () => {
+  function createV4Database(databasePath: string, groupGoal: string | null): void {
+    // A v4-shaped database: the group carries a goal text column that the goal
+    // entity later replaced. Built by hand because the current code can no
+    // longer produce this shape.
+    const db = new DatabaseSync(databasePath);
+    db.exec(`
+      CREATE TABLE worker_schema_version (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
+      INSERT INTO worker_schema_version VALUES (4, '2026-09-24T00:00:00.000Z');
+      CREATE TABLE workers (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL, template_id TEXT NOT NULL,
+        workspace_path TEXT NOT NULL, status TEXT NOT NULL,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE worker_groups (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL, project_id TEXT NOT NULL,
+        workspace_id TEXT, goal TEXT, status TEXT NOT NULL,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE worker_group_members (
+        group_id TEXT NOT NULL, worker_id TEXT NOT NULL, role TEXT NOT NULL,
+        joined_at TEXT NOT NULL, PRIMARY KEY (group_id, worker_id)
+      );
+      CREATE TABLE worker_messages (
+        message_id TEXT PRIMARY KEY, group_id TEXT NOT NULL, seq INTEGER NOT NULL,
+        sender_worker_id TEXT NOT NULL, body TEXT NOT NULL, intent TEXT NOT NULL,
+        delivery_policy TEXT NOT NULL, reply_to_message_id TEXT,
+        created_at TEXT NOT NULL, UNIQUE (group_id, seq)
+      );
+      CREATE TABLE worker_goals (
+        goal_id TEXT PRIMARY KEY, group_id TEXT NOT NULL, content TEXT NOT NULL,
+        turn_limit INTEGER NOT NULL, status TEXT NOT NULL, generation INTEGER NOT NULL,
+        revision INTEGER NOT NULL, pause_reason TEXT, result_message_id TEXT,
+        generation_start_seq INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+    `);
+    for (const id of ["w1", "w2", "w3"]) {
+      db.prepare(
+        "INSERT INTO workers VALUES (?, ?, 'qa-engineer', '/tmp/ws', 'online', '2026-09-24T00:00:00.000Z', '2026-09-24T00:00:00.000Z')",
+      ).run(id, id);
+    }
+    db.prepare(
+      "INSERT INTO worker_groups VALUES ('grp_old', 'Legacy', 'prj_1', NULL, ?, 'active', '2026-09-24T00:00:00.000Z', '2026-09-24T00:00:00.000Z')",
+    ).run(groupGoal);
+    for (const id of ["w1", "w2", "w3"]) {
+      db.prepare(
+        "INSERT INTO worker_group_members VALUES ('grp_old', ?, 'member', '2026-09-24T00:00:00.000Z')",
+      ).run(id);
+    }
+    db.close();
+  }
+
+  it("moves a group's objective onto the goal instead of dropping it", () => {
+    const databasePath = path.join(dir, "v4.db");
+    createV4Database(databasePath, "Ship the pricing page");
+
+    const migrated = new WorkerStore({ databasePath });
+    try {
+      expect(migrated.getSchemaVersion()).toBe(SCHEMA_VERSION);
+      expect(migrated.getGoal("grp_old")).toMatchObject({
+        content: "Ship the pricing page",
+        status: "active",
+        turnUsed: 0,
+      });
+      // The column is gone: one home for the objective.
+      const columns = (migrated.rawTableInfo("worker_groups") as Array<{ name: string }>).map(
+        (column) => column.name,
+      );
+      expect(columns).not.toContain("goal");
+    } finally {
+      migrated.close();
+    }
+  });
+
+  it("estimates a budget from the roster when migrating", () => {
+    // Three members: two public messages each plus 35% headroom, rounded up.
+    const databasePath = path.join(dir, "v4-budget.db");
+    createV4Database(databasePath, "Ship it");
+
+    const migrated = new WorkerStore({ databasePath });
+    try {
+      expect(migrated.getGoal("grp_old")?.turnLimit).toBe(9);
+    } finally {
+      migrated.close();
+    }
+  });
+
+  it("leaves a group with no objective without a goal", () => {
+    const databasePath = path.join(dir, "v4-empty.db");
+    createV4Database(databasePath, null);
+
+    const migrated = new WorkerStore({ databasePath });
+    try {
+      expect(migrated.getGoal("grp_old")).toBeNull();
+    } finally {
+      migrated.close();
+    }
+  });
+
+  it("treats a blank objective as none", () => {
+    const databasePath = path.join(dir, "v4-blank.db");
+    createV4Database(databasePath, "   ");
+
+    const migrated = new WorkerStore({ databasePath });
+    try {
+      expect(migrated.getGoal("grp_old")).toBeNull();
+    } finally {
+      migrated.close();
+    }
+  });
+});
+
+describe("suggested turn limits", () => {
+  it("uses the reference product's default for a single member", () => {
+    expect(WorkerStore.suggestTurnLimit(1)).toBe(20);
+  });
+
+  it("scales with the roster for multi-member work", () => {
+    // Upstream: two public messages per member plus about 35% headroom.
+    expect(WorkerStore.suggestTurnLimit(3)).toBe(9);
+    expect(WorkerStore.suggestTurnLimit(10)).toBe(27);
+  });
+
+  it("stays inside the allowed range", () => {
+    expect(WorkerStore.suggestTurnLimit(0)).toBeLessThanOrEqual(96);
+    expect(WorkerStore.suggestTurnLimit(1000)).toBe(96);
   });
 });

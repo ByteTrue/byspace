@@ -7,7 +7,12 @@ import { Button } from "@/components/ui/button";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { useProjects } from "@/hooks/use-projects";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
-import type { AggregatedWorker, AggregatedWorkerGroup } from "@/workers/aggregated-workers";
+import type {
+  AggregatedWorker,
+  AggregatedWorkerGroup,
+  AggregatedWorkerTask,
+} from "@/workers/aggregated-workers";
+import { buildGroupReport, type GroupReport } from "@/workers/group-report";
 
 /**
  * Project groups: a roster of workers on one project.
@@ -25,12 +30,14 @@ import type { AggregatedWorker, AggregatedWorkerGroup } from "@/workers/aggregat
 export interface WorkerGroupsSectionProps {
   groups: AggregatedWorkerGroup[];
   workers: AggregatedWorker[];
+  tasks: AggregatedWorkerTask[];
   onChanged: () => void;
 }
 
 export function WorkerGroupsSection({
   groups,
   workers,
+  tasks,
   onChanged,
 }: WorkerGroupsSectionProps): ReactElement {
   const [isCreating, setIsCreating] = useState(false);
@@ -40,6 +47,14 @@ export function WorkerGroupsSection({
     setIsCreating(false);
     onChanged();
   }, [onChanged]);
+
+  // One lookup for every group rather than one per group: names are needed for
+  // coordinators, members and task owners alike.
+  const workerNames = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const worker of workers) map.set(`${worker.serverId}:${worker.id}`, worker.name);
+    return map;
+  }, [workers]);
 
   const createAction = useMemo(
     () => (
@@ -52,10 +67,17 @@ export function WorkerGroupsSection({
 
   const groupRows = useMemo(
     () =>
-      groups.map((group) => (
-        <GroupRow key={`${group.serverId}:${group.id}`} group={group} workers={workers} />
-      )),
-    [groups, workers],
+      groups.map((group) => {
+        const report = buildGroupReport({ group, workers, tasks });
+        return (
+          <GroupRow
+            key={`${group.serverId}:${group.id}`}
+            report={report}
+            workerNames={workerNames}
+          />
+        );
+      }),
+    [groups, workers, tasks, workerNames],
   );
 
   return (
@@ -84,40 +106,80 @@ export function WorkerGroupsSection({
   );
 }
 
+/**
+ * A group's report.
+ *
+ * The reference product's delivery contract asks a coordinator to say how work
+ * was divided before handing it out, report progress without being asked, and on
+ * completion report the result alongside anything left unresolved. All of that
+ * is readable from the group's own state, so the screen derives it rather than
+ * showing a summary someone wrote and a person has to trust.
+ *
+ * The headline answers "how is this going" first, because that is the question
+ * the screen exists for; the objective and the work list are the evidence under
+ * it.
+ */
 function GroupRow({
-  group,
-  workers,
+  report,
+  workerNames,
 }: {
-  group: AggregatedWorkerGroup;
-  workers: AggregatedWorker[];
+  report: GroupReport;
+  workerNames: Map<string, string>;
 }): ReactElement {
-  const nameById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const worker of workers) map.set(`${worker.serverId}:${worker.id}`, worker.name);
-    return map;
-  }, [workers]);
+  const memberLine = `${report.members.length} member${report.members.length === 1 ? "" : "s"}`;
+  const coordinatorLine = report.coordinatorName
+    ? `Coordinator: ${report.coordinatorName}`
+    : "No coordinator";
 
-  const coordinator = group.members.find((member) => member.role === "coordinator") ?? null;
-  // Show the coordinator by name, and fall back to the id when the worker is
-  // gone: a departed coordinator is a fact about the group, not a rendering bug.
-  const coordinatorLabel = coordinator
-    ? (nameById.get(`${group.serverId}:${coordinator.workerId}`) ?? coordinator.workerId)
-    : "none";
-  const contributors = group.members.filter((member) => member.role !== "coordinator");
+  const workRows = report.work.map((item) => (
+    <View key={item.taskId} style={styles.workRow} testID={`group-work-${item.taskId}`}>
+      <Text style={styles.workState}>{item.state}</Text>
+      <Text style={styles.workTitle}>{item.title}</Text>
+      <Text style={styles.workOwner}>
+        {item.workerName ?? workerNames.get(`${report.serverId}:${item.workerId}`) ?? item.workerId}
+      </Text>
+    </View>
+  ));
 
   return (
-    <View style={styles.row} testID={`group-row-${group.id}`}>
-      <View style={styles.rowMain}>
-        <Text style={styles.rowTitle}>{group.name}</Text>
-        <Text style={styles.rowMeta}>{group.goal ?? "No goal set"}</Text>
+    <View style={styles.row} testID={`group-row-${report.groupId}`}>
+      <View style={styles.reportHeader}>
+        <View style={styles.reportHeaderText}>
+          <Text style={styles.rowTitle}>{report.name}</Text>
+          <Text style={styles.rowMeta}>{`Project: ${report.projectId}`}</Text>
+        </View>
+        <View style={styles.reportHeaderMeta}>
+          <Text style={styles.rowMeta}>{coordinatorLine}</Text>
+          <Text style={styles.rowMeta}>{memberLine}</Text>
+        </View>
       </View>
-      <View style={styles.rowTrailing}>
-        <Text style={styles.rowMeta}>{`Coordinator: ${coordinatorLabel}`}</Text>
-        <Text style={styles.rowMeta}>
-          {contributors.length === 0
-            ? "No other members"
-            : `+${contributors.length} member${contributors.length === 1 ? "" : "s"}`}
+
+      <View style={styles.progressBlock}>
+        <Text style={styles.progressHeadline} testID={`group-progress-${report.groupId}`}>
+          {report.progress.headline}
         </Text>
+        <Text style={styles.rowMeta}>{report.progress.detail}</Text>
+      </View>
+
+      <View style={styles.reportSection}>
+        <Text style={styles.fieldLabel}>Objective</Text>
+        <Text style={styles.rowMeta}>{report.objective ?? "No objective set for this group."}</Text>
+        {report.budgetLine ? (
+          <Text style={styles.rowMeta} testID={`group-budget-${report.groupId}`}>
+            {report.budgetLine}
+          </Text>
+        ) : null}
+      </View>
+
+      <View style={styles.reportSection}>
+        <Text style={styles.fieldLabel}>Work</Text>
+        {workRows.length > 0 ? (
+          workRows
+        ) : (
+          <Text style={styles.rowMeta}>
+            No tasks have been handed to this group&apos;s members.
+          </Text>
+        )}
       </View>
     </View>
   );
@@ -371,6 +433,33 @@ const styles = StyleSheet.create((theme) => ({
   },
   rowMain: { flexShrink: 1, gap: theme.spacing[1] },
   rowTrailing: { alignItems: "flex-end", gap: theme.spacing[1] },
+  reportHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: theme.spacing[3],
+  },
+  reportHeaderText: { flexShrink: 1, gap: theme.spacing[1] },
+  reportHeaderMeta: { alignItems: "flex-end", gap: theme.spacing[1] },
+  progressBlock: { gap: theme.spacing[1] },
+  progressHeadline: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
+    fontWeight: theme.fontWeight.medium,
+  },
+  reportSection: { gap: theme.spacing[2] },
+  workRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
+  },
+  workState: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    width: 88,
+  },
+  workTitle: { color: theme.colors.foreground, fontSize: theme.fontSize.sm, flexShrink: 1 },
+  workOwner: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   rowTitle: { color: theme.colors.foreground, fontSize: theme.fontSize.base },
   rowMeta: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   emptyPanel: {

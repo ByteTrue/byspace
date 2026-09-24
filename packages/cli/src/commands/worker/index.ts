@@ -185,7 +185,6 @@ export function createWorkerCommand(): Command {
       .description("Create a group, optionally with its whole roster")
       .requiredOption("--name <name>", "Group name")
       .requiredOption("--project-id <id>", "Project the group works on")
-      .option("--goal <goal>", "What the group is trying to achieve")
       .option("--coordinator <worker-id>", "Worker who leads the group")
       .option("--member <worker-id>", "Additional member (repeatable)", collectMultiple, [])
       .allowExcessArguments(false),

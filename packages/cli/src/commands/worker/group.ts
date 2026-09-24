@@ -42,7 +42,6 @@ export async function runGroupLsCommand(
 export interface GroupCreateOptions extends CommandOptions {
   name?: string;
   projectId?: string;
-  goal?: string;
   coordinator?: string;
   member?: string[];
 }
@@ -76,7 +75,6 @@ export async function runGroupCreateCommand(
     const payload = await client.createWorkerGroup({
       name,
       projectId,
-      ...(options.goal !== undefined ? { goal: options.goal } : {}),
       ...(options.coordinator !== undefined ? { coordinatorWorkerId: options.coordinator } : {}),
       ...(options.member !== undefined ? { memberWorkerIds: options.member } : {}),
     });

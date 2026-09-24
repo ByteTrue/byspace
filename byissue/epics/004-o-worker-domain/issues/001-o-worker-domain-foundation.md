@@ -656,3 +656,42 @@ typecheck 0 错误 / lint 0 错误 / format 通过
 ```
 
 **lint 两次拦下复杂度超限，都是真信号**（都抽函数而非调阈值）：`verifyGoal` 的"必须被拒"样板重复出现，抽成 `captureRefusal`（返回 `NOT REFUSED` 标记，避免"什么都没拒到"被当成通过）；`dispatchWorkerMessage` 被新 case 顶到 22，按主题拆成 registry（角色/worker/任务/guard）与 collab（组/消息/目标）两个 dispatch —— 该文件本来就是这个分层写法。
+
+### 切片 013：向用户汇报 + 收回重复的目标字段
+
+**上游的 Delivery 契约**（一手证据：`qoderwake-collab-group/protocol.md` 的 Delivery 与 Conversation Goal 两节）要求协调者：派活**前**先说清分工与下一步；**接到活就**先发一条非唤醒的简短更新（"不要等做完才第一次露面"）；有**实质进展**才说（不是定时汇报，否则生命周期更新会变成打卡噪音）；**完成时**报告做了什么、证据、未决问题、下一步。且"成功的唤醒只证明送达，不证明执行"。
+
+**BySpace 的汇报面把这些做成了派生而非自述。** 新增 `packages/app/src/workers/group-report.ts`：从组已有的状态（目标、预算、任务、名册）推出人读得懂的一份报告，而不是让协调者写一段总结让人去信。纯函数、可测。
+
+| 进度态                                | 何时                                     | 为什么这样排                                                 |
+| ------------------------------------- | ---------------------------------------- | ------------------------------------------------------------ |
+| `no-goal`                             | 组没有目标                               | 有账无目标，比空报告诚实                                     |
+| `waiting-on-you`                      | 有 `submitted`/`blocked`/`revision`      | **排在"进行中"之前** —— 没被听见的阻塞正是这个视图存在的理由 |
+| `not-started`                         | 有目标但没有任务                         |                                                              |
+| `working`                             | 有在飞的任务                             |                                                              |
+| `delivered` / `delivered-with-issues` | 目标 completed，**后者表示还有未决任务** | 完成是对**目标**的声明，不是对每个任务的声明                 |
+
+**收回重复字段（我自己在切片 008 埋的问题）。** `worker_groups.goal` 与切片 012 的目标实体是**同一个事实的两个家**，控制台那时显示的还是旧的那份。已删列，目标归目标实体所有（schema v4→v5）。
+
+迁移**保留数据**：旧文本转成目标实体，预算按上游的估算法从名册推算（每人至少 2 条公开消息 + 约 35% 余量）。**在真实 dev 库上验证过**：v4→v5，`goal` 列已删，切片 008 建的 "Ship it" 成了 `goal_grp_bab998fa92a8`，3 人 → 预算 9。
+
+`WorkerStore.suggestTurnLimit` 有测试。**它第一次是错的**：我给估算加了"不低于默认 20"的下限，但上游明写"**multi-member work must not reuse default 20**"——把默认当底线会让所有够小的名册都变成常数 20，估算就成了摆设。测试引用了上游原话，当场把这个自相矛盾抓出来。
+
+**浏览器里读出来的两个问题：**
+
+1. **我自己的语法 bug。** 报告渲染出 "1 task **need** a decision"、"judge **them** against"。英文的动词要跟数走，而我把动词留给调用方拼。改成返回整句并加测试。
+2. 四个真实组的报告与库中数据逐条核对一致（目标、协调者、成员数、任务状态、预算）。
+
+**验证：**
+
+```
+浏览器 /workers Groups  → 4 个组的报告全部渲染，与库中数据一致
+  "Waiting on you / 1 task needs a decision before the group can continue."
+  "Ship it / 0 of 9 public messages used, 9 left"
+迁移（真实 dev 库）      → v4→v5，goal 列删除，旧目标保全并估出预算
+group-report 测试        → 22 项（含语法一致性与"完成但有未决"）
+vitest                   → 100 files / 1097 tests
+typecheck 0 错误 / lint 0 错误 / format 通过
+```
+
+同时把上游 Delivery 那段契约写进 worker 技能（先露面再收工、报证据不报信心、完成才算完成）。

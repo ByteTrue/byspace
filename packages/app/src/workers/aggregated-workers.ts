@@ -1,5 +1,9 @@
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
-import type { WorkerGroupSummary, WorkerTaskSummary } from "@bytetrue/protocol/worker/rpc-schemas";
+import type {
+  WorkerGoalSummary,
+  WorkerGroupSummary,
+  WorkerTaskSummary,
+} from "@bytetrue/protocol/worker/rpc-schemas";
 import { toErrorMessage } from "@/utils/error-messages";
 
 /**
@@ -30,7 +34,7 @@ export interface WorkerRuntime {
     serverId: string,
   ): Pick<
     DaemonClient,
-    "listWorkers" | "listWorkerTemplates" | "listWorkerTasks" | "listWorkerGroups"
+    "listWorkers" | "listWorkerTemplates" | "listWorkerTasks" | "listWorkerGroups" | "getWorkerGoal"
   > | null;
   getSnapshot(serverId: string): WorkerRuntimeSnapshot | null | undefined;
 }
@@ -66,6 +70,13 @@ export interface AggregatedWorkerTask {
 export interface AggregatedWorkerGroup extends WorkerGroupSummary {
   serverId: string;
   serverName: string;
+  /**
+   * The group's objective, or null when none is set yet.
+   *
+   * Fetched per group rather than carried on the group: the objective lives in
+   * the goal entity, which also owns the budget and version.
+   */
+  goal: WorkerGoalSummary | null;
 }
 
 export interface WorkerTemplateOption {
@@ -114,7 +125,7 @@ function connectedClient(
   runtime: WorkerRuntime,
 ): Pick<
   DaemonClient,
-  "listWorkers" | "listWorkerTemplates" | "listWorkerTasks" | "listWorkerGroups"
+  "listWorkers" | "listWorkerTemplates" | "listWorkerTasks" | "listWorkerGroups" | "getWorkerGoal"
 > | null {
   const snapshot = runtime.getSnapshot(host.serverId);
   if (!snapshot || snapshot.connectionStatus !== "online") return null;
@@ -154,6 +165,18 @@ export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<
         ]);
         const taskResult = await client.listWorkerTasks().catch(() => ({ tasks: [] }));
         const groupResult = await client.listWorkerGroups().catch(() => ({ groups: [] }));
+        // Goals are best-effort like tasks: a group whose objective cannot be
+        // read should still appear with its roster.
+        const goalEntries = await Promise.all(
+          groupResult.groups.map(async (group) => {
+            const goal = await client
+              .getWorkerGoal(group.id)
+              .then((payload) => payload.goal)
+              .catch(() => null);
+            return [group.id, goal] as const;
+          }),
+        );
+        const goalsByGroup = new Map(goalEntries);
 
         const titleById = new Map(
           templateResult.templates.map((template) => [template.id, template.title]),
@@ -193,7 +216,12 @@ export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<
           });
         }
         for (const group of groupResult.groups) {
-          groups.push({ ...group, serverId: host.serverId, serverName: host.serverName });
+          groups.push({
+            ...group,
+            serverId: host.serverId,
+            serverName: host.serverName,
+            goal: goalsByGroup.get(group.id) ?? null,
+          });
         }
       } catch (error) {
         hostErrors.push({

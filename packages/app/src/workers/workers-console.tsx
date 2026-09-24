@@ -117,7 +117,12 @@ export function WorkersConsole({ onExit }: { onExit: () => void }): ReactElement
               />
             ) : null}
             {section === "groups" ? (
-              <WorkerGroupsSection groups={groups} workers={workers} onChanged={refetch} />
+              <WorkerGroupsSection
+                groups={groups}
+                workers={workers}
+                tasks={tasks}
+                onChanged={refetch}
+              />
             ) : null}
             {section === "capabilities" ? <CapabilitiesSection /> : null}
           </ScrollView>

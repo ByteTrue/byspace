@@ -97,6 +97,22 @@ you already spent.
 
 ## Reporting
 
-The group's state and every task's state are queryable at any time. Report what the
-commands say rather than what you expected: a task is done when its state says
-`completed`, not when its agent stopped talking.
+The human should not have to ask how it is going. Report:
+
+- **Before handing work out**, say how it is divided up and what happens next.
+- **On picking work up**, publish a brief non-waking note that you have it and what
+  you are starting. Do not wait until you are finished to first appear.
+- **On material change** — a new phase, a conclusion, a risk — say so. Not on a timer,
+  and not for every step: lifecycle updates must not become attendance noise.
+- **On completion**, report what you finished, the evidence for it, anything unresolved,
+  and the next step.
+
+If you are blocked, say what is blocking you rather than claiming you started.
+
+**A task is done when its state says `completed`**, not when its agent stopped talking.
+A `submitted` task is a result waiting for review, and only `/workers` shows it as such.
+Verify contributions against the task and message history; your own summary is not
+evidence of someone else's work, and a successful send proves delivery, not execution.
+
+Complete the goal only once a message has actually delivered the needed result where the
+human can see it.
