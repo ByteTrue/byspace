@@ -2,11 +2,18 @@ import { useCallback, useMemo, type ReactElement } from "react";
 import { Pressable, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { router } from "expo-router";
+import type { WorkerActivityDay } from "@bytetrue/protocol/worker/rpc-schemas";
 import { ArrowLeft } from "lucide-react-native";
 
 import { ICON_SIZE } from "@/styles/theme";
 import { buildHostAgentDetailRoute } from "@/utils/host-routes";
-import type { AggregatedWorker, AggregatedWorkerTask } from "@/workers/aggregated-workers";
+import type {
+  AggregatedWorker,
+  AggregatedWorkerTask,
+  WorkerTaskState,
+} from "@/workers/aggregated-workers";
+import { WorkerActivityHeatmap, WorkerTaskBreakdown } from "@/workers/worker-activity-chart";
+import { buildActivityGrid } from "@/workers/worker-activity";
 import { countWorkerTasks } from "@/workers/dashboard-derived";
 
 /**
@@ -25,12 +32,15 @@ import { countWorkerTasks } from "@/workers/dashboard-derived";
 export interface WorkerDetailSectionProps {
   worker: AggregatedWorker;
   tasks: AggregatedWorkerTask[];
+  /** Daily activity from the daemon; empty when the host could not report it. */
+  activityDays: readonly WorkerActivityDay[];
   onBack: () => void;
 }
 
 export function WorkerDetailSection({
   worker,
   tasks,
+  activityDays,
   onBack,
 }: WorkerDetailSectionProps): ReactElement {
   const own = useMemo(
@@ -58,6 +68,26 @@ export function WorkerDetailSection({
     () => own.map((task) => <WorkerTaskRow key={task.taskId} task={task} />),
     [own],
   );
+
+  // "Today" is read once per render rather than frozen: a screen left open
+  // overnight should move its window when something else re-renders it.
+  const grid = useMemo(
+    () => buildActivityGrid({ days: activityDays, today: new Date() }),
+    [activityDays],
+  );
+
+  // The breakdown answers "what is this worker spending its time on", which the
+  // four counts above answer as totals. The reference splits by trigger source;
+  // this domain has one source, so it splits by where the work stands.
+  const breakdown = useMemo(() => {
+    const byState = new Map<WorkerTaskState, number>();
+    for (const task of own) byState.set(task.state, (byState.get(task.state) ?? 0) + 1);
+    return TASK_STATE_ORDER.filter((state) => (byState.get(state) ?? 0) > 0).map((state) => ({
+      label: state.replace(/_/g, " "),
+      count: byState.get(state) ?? 0,
+      color: TASK_STATE_COLORS[state],
+    }));
+  }, [own]);
 
   return (
     <View style={styles.section} testID={`worker-detail-${worker.id}`}>
@@ -95,6 +125,16 @@ export function WorkerDetailSection({
             <Text style={styles.statLabel}>{card.label}</Text>
           </View>
         ))}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Work log</Text>
+        <WorkerActivityHeatmap grid={grid} />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Task types</Text>
+        <WorkerTaskBreakdown slices={breakdown} total={own.length} />
       </View>
 
       <View style={styles.section}>
@@ -217,3 +257,40 @@ const styles = StyleSheet.create((theme) => ({
   taskTitle: { color: theme.colors.foreground, fontSize: theme.fontSize.base },
   taskMeta: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
 }));
+
+/**
+ * The order the breakdown lists states in.
+ *
+ * Follows the task's own progression, so the legend reads as the work moving
+ * rather than as an arbitrary grouping.
+ */
+const TASK_STATE_ORDER: readonly WorkerTaskState[] = [
+  "planned",
+  "prepared",
+  "assigned",
+  "in_progress",
+  "submitted",
+  "completed",
+  "revision",
+  "blocked",
+  "cancelled",
+];
+
+/**
+ * A colour per state group.
+ *
+ * Grouped rather than one colour per state: nine distinct hues is a legend
+ * nobody reads, while three tells you whether the worker is moving, waiting, or
+ * finished.
+ */
+const TASK_STATE_COLORS: Record<WorkerTaskState, string> = {
+  planned: "#8f9bb3",
+  prepared: "#8f9bb3",
+  assigned: "#5b8def",
+  in_progress: "#5b8def",
+  submitted: "#e0a800",
+  completed: "#5cb870",
+  revision: "#e0a800",
+  blocked: "#d9534f",
+  cancelled: "#8f9bb3",
+};

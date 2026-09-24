@@ -41,6 +41,10 @@ import { ICON_SIZE } from "@/styles/theme";
 
 type Section = "dashboard" | "management" | "capabilities";
 
+/** Shared empties, so a state with nothing to report does not allocate. */
+const EMPTY_ACTIVITY: never[] = [];
+const EMPTY_ACTIVITY_MAP = new Map<string, never[]>();
+
 /**
  * The roster and the groups are two views of the same subject, so they share a
  * page and a segmented control. The reference product does this; two separate
@@ -82,6 +86,7 @@ export function WorkersConsole({ onExit }: { onExit: () => void }): ReactElement
   const templates = loadState.status === "loaded" ? loadState.templates : [];
   const tasks = loadState.status === "loaded" ? loadState.tasks : [];
   const groups = loadState.status === "loaded" ? loadState.groups : [];
+  const activity = loadState.status === "loaded" ? loadState.activity : EMPTY_ACTIVITY_MAP;
 
   // Counts sit on the roster and group rows only; a count on the other entries
   // would be a number with nothing behind it.
@@ -127,7 +132,14 @@ export function WorkersConsole({ onExit }: { onExit: () => void }): ReactElement
   // three chained ternaries.
   let managementPane: ReactElement;
   if (openWorker) {
-    managementPane = <WorkerDetailSection worker={openWorker} tasks={tasks} onBack={closeWorker} />;
+    managementPane = (
+      <WorkerDetailSection
+        worker={openWorker}
+        tasks={tasks}
+        activityDays={activity.get(`${openWorker.serverId}:${openWorker.id}`) ?? EMPTY_ACTIVITY}
+        onBack={closeWorker}
+      />
+    );
   } else if (managementView === "workers") {
     managementPane = (
       <ManagementSection

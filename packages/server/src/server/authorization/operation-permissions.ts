@@ -239,6 +239,8 @@ const INBOUND_PERMISSION = {
   "worker.goal.get.request": "workspace.read",
   "worker.goal.create.request": "workspace.write",
   "worker.goal.mutate.request": "workspace.write",
+  // A worker's own activity is inspection, like the rest of its record.
+  "worker.activity.request": "workspace.read",
 } as const satisfies Record<InboundOperation, PermissionRequirement>;
 
 const OUTBOUND_PERMISSION = {
@@ -476,6 +478,7 @@ const OUTBOUND_PERMISSION = {
   "worker.goal.get.response": "workspace.read",
   "worker.goal.create.response": "workspace.write",
   "worker.goal.mutate.response": "workspace.write",
+  "worker.activity.response": "workspace.read",
 } as const satisfies Record<OutboundOperation, PermissionRequirement>;
 
 export function requiredPermissionForInbound(operation: InboundOperation): PermissionRequirement {

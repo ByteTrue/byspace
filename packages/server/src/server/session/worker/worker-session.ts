@@ -371,6 +371,22 @@ export class WorkerSession {
     }
   }
 
+  // ------------------------------------------------------------- activity
+
+  async handleActivityRequest(
+    request: Extract<SessionInboundMessage, { type: "worker.activity.request" }>,
+  ): Promise<void> {
+    try {
+      const days = this.workerService.listTaskActivity(request.workerId);
+      this.host.emit({
+        type: "worker.activity.response",
+        payload: { requestId: request.requestId, days },
+      });
+    } catch (error) {
+      this.emitError(request, error);
+    }
+  }
+
   // ---------------------------------------------------------------- goals
 
   async handleGoalGetRequest(

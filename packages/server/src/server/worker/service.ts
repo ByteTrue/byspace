@@ -247,6 +247,12 @@ export class WorkerService {
     return this.getStore().createWorker(worker);
   }
 
+  /** A worker's daily activity, for the detail view's heatmap. */
+  listTaskActivity(workerId: string): Array<{ day: string; count: number }> {
+    this.getWorker(workerId);
+    return this.getStore().listTaskActivityByDay(workerId);
+  }
+
   listTasks(workerId: string): WorkerTaskRecord[] {
     this.getWorker(workerId);
     return this.getStore().listTasksForWorker(workerId);

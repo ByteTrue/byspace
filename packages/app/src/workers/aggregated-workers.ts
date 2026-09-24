@@ -1,5 +1,6 @@
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import type {
+  WorkerActivityDay,
   WorkerGoalSummary,
   WorkerGroupSummary,
   WorkerTaskSummary,
@@ -34,7 +35,12 @@ export interface WorkerRuntime {
     serverId: string,
   ): Pick<
     DaemonClient,
-    "listWorkers" | "listWorkerTemplates" | "listWorkerTasks" | "listWorkerGroups" | "getWorkerGoal"
+    | "listWorkers"
+    | "listWorkerTemplates"
+    | "listWorkerTasks"
+    | "listWorkerGroups"
+    | "getWorkerGoal"
+    | "getWorkerActivity"
   > | null;
   getSnapshot(serverId: string): WorkerRuntimeSnapshot | null | undefined;
 }
@@ -113,6 +119,13 @@ export type WorkerLoadState =
       templates: WorkerTemplateOption[];
       tasks: AggregatedWorkerTask[];
       groups: AggregatedWorkerGroup[];
+      /**
+       * Daily activity per worker, keyed by host and worker id.
+       *
+       * Fetched with the roster rather than when a detail view opens, so opening
+       * a worker does not wait on a round trip. One entry per day that had work.
+       */
+      activity: Map<string, WorkerActivityDay[]>;
       hostErrors: WorkerHostError[];
     };
 
@@ -130,13 +143,37 @@ function isHostSettling(snapshot: WorkerRuntimeSnapshot | null | undefined): boo
   return snapshot.connectionStatus === "connecting" || snapshot.connectionStatus === "idle";
 }
 
+/**
+ * Run something that is allowed to fail, with an empty result when it does.
+ *
+ * `.catch()` only handles a rejected promise; a method that throws before
+ * returning one escapes it. Every optional fetch here goes through this, so
+ * "best-effort" holds even when the call itself is the thing that fails.
+ *
+ * The empty value is a partial of the payload rather than a whole one: naming
+ * only the field this code reads means adding a field elsewhere cannot break it,
+ * and the caller decides what an empty list looks like for its own type.
+ */
+async function bestEffort<T>(run: () => Promise<T>, empty: Partial<T>): Promise<Partial<T>> {
+  try {
+    return await run();
+  } catch {
+    return empty;
+  }
+}
+
 /** A host that can be asked for workers right now. */
 function connectedClient(
   host: WorkerHostInput,
   runtime: WorkerRuntime,
 ): Pick<
   DaemonClient,
-  "listWorkers" | "listWorkerTemplates" | "listWorkerTasks" | "listWorkerGroups" | "getWorkerGoal"
+  | "listWorkers"
+  | "listWorkerTemplates"
+  | "listWorkerTasks"
+  | "listWorkerGroups"
+  | "getWorkerGoal"
+  | "getWorkerActivity"
 > | null {
   const snapshot = runtime.getSnapshot(host.serverId);
   if (!snapshot || snapshot.connectionStatus !== "online") return null;
@@ -159,6 +196,7 @@ export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<
   const templates: WorkerTemplateOption[] = [];
   const tasks: AggregatedWorkerTask[] = [];
   const groups: AggregatedWorkerGroup[] = [];
+  const activity = new Map<string, WorkerActivityDay[]>();
   const hostErrors: WorkerHostError[] = [];
 
   await Promise.all(
@@ -174,16 +212,15 @@ export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<
           client.listWorkers(),
           client.listWorkerTemplates(),
         ]);
-        const taskResult = await client.listWorkerTasks().catch(() => ({ tasks: [] }));
-        const groupResult = await client.listWorkerGroups().catch(() => ({ groups: [] }));
+        const taskResult = await bestEffort(() => client.listWorkerTasks(), { tasks: [] });
+        const groupResult = await bestEffort(() => client.listWorkerGroups(), { groups: [] });
         // Goals are best-effort like tasks: a group whose objective cannot be
         // read should still appear with its roster.
         const goalEntries = await Promise.all(
-          groupResult.groups.map(async (group) => {
-            const goal = await client
-              .getWorkerGoal(group.id)
-              .then((payload) => payload.goal)
-              .catch(() => null);
+          (groupResult.groups ?? []).map(async (group) => {
+            const goal = await bestEffort(() => client.getWorkerGoal(group.id), {}).then(
+              (payload) => payload.goal ?? null,
+            );
             return [group.id, goal] as const;
           }),
         );
@@ -216,7 +253,7 @@ export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<
             serverName: host.serverName,
           });
         }
-        for (const task of taskResult.tasks) {
+        for (const task of taskResult.tasks ?? []) {
           tasks.push({
             taskId: task.taskId,
             workerId: task.workerId,
@@ -229,7 +266,17 @@ export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<
             serverName: host.serverName,
           });
         }
-        for (const group of groupResult.groups) {
+        // Best-effort like tasks and goals: a host that cannot report activity
+        // should still show its roster.
+        const activityEntries = await Promise.all(
+          workerResult.workers.map(async (worker) => {
+            const payload = await bestEffort(() => client.getWorkerActivity(worker.id), {});
+            return [`${host.serverId}:${worker.id}`, payload.days ?? []] as const;
+          }),
+        );
+        for (const [key, days] of activityEntries) activity.set(key, days);
+
+        for (const group of groupResult.groups ?? []) {
           groups.push({
             ...group,
             serverId: host.serverId,
@@ -247,5 +294,5 @@ export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<
     }),
   );
 
-  return { status: "loaded", workers, templates, tasks, groups, hostErrors };
+  return { status: "loaded", workers, templates, tasks, groups, activity, hostErrors };
 }

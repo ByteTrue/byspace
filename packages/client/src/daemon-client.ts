@@ -595,6 +595,10 @@ type WorkerMessageDeliveryPayload = Extract<
   SessionOutboundMessage,
   { type: "worker.message.delivery.response" }
 >["payload"];
+type WorkerActivityPayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.activity.response" }
+>["payload"];
 type WorkerGoalGetPayload = Extract<
   SessionOutboundMessage,
   { type: "worker.goal.get.response" }
@@ -2756,6 +2760,20 @@ export class DaemonClient {
         state: input.state,
       },
       responseType: "worker.message.delivery.response",
+    });
+  }
+
+  /**
+   * A worker's daily activity.
+   *
+   * Days with no work are absent rather than zero, so the caller decides what
+   * range to render.
+   */
+  async getWorkerActivity(workerId: string, requestId?: string): Promise<WorkerActivityPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "worker.activity.request", workerId },
+      responseType: "worker.activity.response",
     });
   }
 

@@ -576,6 +576,34 @@ export const WorkerGoalMutateResponseSchema = z.object({
   }),
 });
 
+// ---------------------------------------------------------------- activity
+
+/**
+ * One day of a worker's activity.
+ *
+ * Days with nothing in them are absent rather than zero: the caller knows what
+ * a gap means, and sending every day in a range would make the server choose
+ * the range.
+ */
+export const WorkerActivityDaySchema = z.object({
+  day: z.string(),
+  count: z.number(),
+});
+
+export const WorkerActivityRequestSchema = z.object({
+  type: z.literal("worker.activity.request"),
+  requestId: z.string(),
+  workerId: z.string().min(1),
+});
+
+export const WorkerActivityResponseSchema = z.object({
+  type: z.literal("worker.activity.response"),
+  payload: z.object({
+    requestId: z.string(),
+    days: z.array(WorkerActivityDaySchema),
+  }),
+});
+
 // Inferred types, exported on demand rather than all at once: consumers need the
 // shapes, not the validators, and an export nobody imports drifts unnoticed.
 // `WorkerTaskSummary` is the one the app derives its task-state union from.
@@ -587,3 +615,4 @@ export type WorkerMessageDeliveryPolicy = z.infer<typeof WorkerMessageDeliveryPo
 export type WorkerMessageIntent = z.infer<typeof WorkerMessageIntentSchema>;
 export type WorkerGoalSummary = z.infer<typeof WorkerGoalSummarySchema>;
 export type WorkerGoalPauseReason = z.infer<typeof WorkerGoalPauseReasonSchema>;
+export type WorkerActivityDay = z.infer<typeof WorkerActivityDaySchema>;

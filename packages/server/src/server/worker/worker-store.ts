@@ -716,6 +716,33 @@ export class WorkerStore {
   }
 
   /**
+   * A worker's activity, counted per calendar day.
+   *
+   * Derived from the task history rather than from task timestamps: a task that
+   * moved four times in a day was worked on four times, and `updated_at` would
+   * report one. Days with no rows are absent from the result — the caller knows
+   * what a gap means (nothing happened), while filling them here would decide
+   * the range for it.
+   *
+   * Days are UTC, because the stored timestamps are. A per-viewer timezone
+   * would be a presentation decision, and making it here would put it in the
+   * data.
+   */
+  listTaskActivityByDay(workerId: string): Array<{ day: string; count: number }> {
+    const rows = this.db
+      .prepare(
+        `SELECT SUBSTR(h.recorded_at, 1, 10) AS day, COUNT(*) AS count
+         FROM worker_task_history h
+         JOIN worker_tasks t ON t.task_id = h.task_id
+         WHERE t.worker_id = ?
+         GROUP BY day
+         ORDER BY day ASC`,
+      )
+      .all(workerId) as Array<{ day: string; count: number }>;
+    return rows;
+  }
+
+  /**
    * Record which session ran this task.
    *
    * Separate from `applyTaskTransition` because it is not a state change: the
