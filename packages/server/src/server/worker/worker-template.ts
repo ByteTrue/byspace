@@ -37,6 +37,15 @@ export interface WorkerTemplate {
   id: string;
   /** Human-facing role name, from the first heading of IDENTITY.md. */
   title: string;
+  /**
+   * One-line summary of the role, from the first paragraph of IDENTITY.md.
+   *
+   * Derived rather than stored separately so the catalog and the prompt cannot
+   * describe the role differently. Empty when the template has no prose under
+   * its heading, which the reference products render as no description rather
+   * than as a placeholder.
+   */
+  description: string;
   parts: Record<WorkerTemplatePart, string>;
   /** Role-specific skill directories shipped alongside the template. */
   skills: string[];
@@ -72,6 +81,24 @@ function extractTitle(identity: string, fallback: string): string {
   const afterDash = heading.replace(/^#\s+/, "").split(/—|--/);
   const title = (afterDash.length > 1 ? afterDash[afterDash.length - 1] : afterDash[0]).trim();
   return title.length > 0 ? title : fallback;
+}
+
+/**
+ * The role's one-line summary: the first paragraph under the heading.
+ *
+ * Stops at the first blank line so a long identity document yields one sentence
+ * group rather than its whole text.
+ */
+function extractDescription(identity: string, fallback: string): string {
+  const lines = identity.split("\n");
+  const start = lines.findIndex((line) => line.trim().length > 0 && !line.startsWith("# "));
+  if (start === -1) return fallback;
+  const paragraph: string[] = [];
+  for (const line of lines.slice(start)) {
+    if (line.trim().length === 0) break;
+    paragraph.push(line.trim());
+  }
+  return paragraph.join(" ").trim() || fallback;
 }
 
 async function listSkillIds(templateDir: string): Promise<string[]> {
@@ -126,6 +153,7 @@ export async function loadWorkerTemplate(
   return {
     id,
     title: extractTitle(parts.IDENTITY, id),
+    description: extractDescription(parts.IDENTITY, ""),
     parts,
     skills: await listSkillIds(templateDir),
   };

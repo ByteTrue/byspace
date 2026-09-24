@@ -48,6 +48,29 @@ async function referencesSkillAnywhere(skill: string): Promise<boolean> {
   return false;
 }
 
+describe("role descriptions", () => {
+  it("takes the first paragraph under the heading, not the whole document", async () => {
+    // The roster card shows one summary line group. Returning the whole identity
+    // document would be a wall of text in a card.
+    const template = await loadWorkerTemplate("project-administrator");
+    expect(template.description.startsWith("You are an AI-native project administrator")).toBe(
+      true,
+    );
+    expect(template.description.split("\n")).toHaveLength(1);
+    // It stops before the document's own structure.
+    expect(template.description).not.toContain("Core Work");
+  });
+
+  it("gives every shipped template a description", async () => {
+    // The card renders an empty description as blank space, so a template
+    // without one is a silent hole in the roster.
+    for (const id of await listWorkerTemplateIds()) {
+      const template = await loadWorkerTemplate(id);
+      expect(template.description.length, `${id} has no description`).toBeGreaterThan(0);
+    }
+  });
+});
+
 describe("worker templates", () => {
   it("loads the shipped dev roles", async () => {
     const ids = await listWorkerTemplateIds(resolveWorkerTemplateRoot());

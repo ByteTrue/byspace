@@ -1,14 +1,22 @@
 import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { ArrowLeft, Blocks, LayoutDashboard, Plus, Users, UsersRound } from "lucide-react-native";
+import { ArrowLeft, Blocks, LayoutDashboard, Plus, Users } from "lucide-react-native";
 
 import { Button } from "@/components/ui/button";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useWorkers } from "@/hooks/use-workers";
-import type { AggregatedWorker, AggregatedWorkerTask } from "@/workers/aggregated-workers";
+import type {
+  AggregatedWorker,
+  AggregatedWorkerTask,
+  WorkerTemplateOption,
+} from "@/workers/aggregated-workers";
+
+/** A template tagged with its host; only the local shape is used here. */
+type AggregatedWorkerTemplate = WorkerTemplateOption;
 import {
   countWorkerTasks,
   describeRosterActivity,
@@ -30,7 +38,14 @@ import { ICON_SIZE } from "@/styles/theme";
  * destinations beside a scrolling content area with a title block.
  */
 
-type Section = "dashboard" | "management" | "groups" | "capabilities";
+type Section = "dashboard" | "management" | "capabilities";
+
+/**
+ * The roster and the groups are two views of the same subject, so they share a
+ * page and a segmented control. The reference product does this; two separate
+ * destinations implied they were unrelated.
+ */
+type ManagementView = "workers" | "groups";
 
 const NAV_GROUPS: { title: string; items: { id: Section; label: string; icon: typeof Users }[] }[] =
   [
@@ -39,7 +54,6 @@ const NAV_GROUPS: { title: string; items: { id: Section; label: string; icon: ty
       items: [
         { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
         { id: "management", label: "Worker management", icon: Users },
-        { id: "groups", label: "Groups", icon: UsersRound },
       ],
     },
     {
@@ -51,6 +65,7 @@ const NAV_GROUPS: { title: string; items: { id: Section; label: string; icon: ty
 export function WorkersConsole({ onExit }: { onExit: () => void }): ReactElement {
   const isCompact = useIsCompactFormFactor();
   const [section, setSection] = useState<Section>("dashboard");
+  const [managementView, setManagementView] = useState<ManagementView>("workers");
   const openManagement = useCallback(() => setSection("management"), []);
   const { loadState, hostErrors, refetch, isRefetching } = useWorkers();
 
@@ -62,8 +77,36 @@ export function WorkersConsole({ onExit }: { onExit: () => void }): ReactElement
   // Counts sit on the roster and group rows only; a count on the other entries
   // would be a number with nothing behind it.
   const sectionCounts = useMemo<Partial<Record<Section, number>>>(
-    () => ({ management: workers.length, groups: groups.length }),
+    () => ({ management: workers.length + groups.length }),
     [workers.length, groups.length],
+  );
+
+  const managementViews = useMemo(
+    () => [
+      {
+        value: "workers" as const,
+        label: `Workers (${workers.length})`,
+        testID: "console-view-workers",
+      },
+      {
+        value: "groups" as const,
+        label: `Groups (${groups.length})`,
+        testID: "console-view-groups",
+      },
+    ],
+    [workers.length, groups.length],
+  );
+
+  const managementViewSwitch = useMemo(
+    () => (
+      <SegmentedControl
+        options={managementViews}
+        value={managementView}
+        onValueChange={setManagementView}
+        testID="console-management-view"
+      />
+    ),
+    [managementViews, managementView],
   );
 
   // A fixed-width column beside the content needs room for both. Below that,
@@ -121,20 +164,26 @@ export function WorkersConsole({ onExit }: { onExit: () => void }): ReactElement
               <DashboardSection tasks={tasks} workers={workers} onOpenManagement={openManagement} />
             ) : null}
             {section === "management" ? (
-              <ManagementSection
-                workers={workers}
-                templates={templates}
-                isRefetching={isRefetching}
-                onCreated={refetch}
-              />
-            ) : null}
-            {section === "groups" ? (
-              <WorkerGroupsSection
-                groups={groups}
-                workers={workers}
-                tasks={tasks}
-                onChanged={refetch}
-              />
+              <View style={styles.section}>
+                {managementView === "workers" ? (
+                  <ManagementSection
+                    workers={workers}
+                    templates={templates}
+                    tasks={tasks}
+                    isRefetching={isRefetching}
+                    onCreated={refetch}
+                    viewSwitch={managementViewSwitch}
+                  />
+                ) : (
+                  <WorkerGroupsSection
+                    groups={groups}
+                    workers={workers}
+                    tasks={tasks}
+                    onChanged={refetch}
+                    viewSwitch={managementViewSwitch}
+                  />
+                )}
+              </View>
             ) : null}
             {section === "capabilities" ? <CapabilitiesSection /> : null}
           </ScrollView>
@@ -277,13 +326,18 @@ function TaskRow({ task }: { task: AggregatedWorkerTask }): ReactElement {
 function ManagementSection({
   workers,
   templates,
+  tasks,
   isRefetching,
   onCreated,
+  viewSwitch,
 }: {
   workers: AggregatedWorker[];
-  templates: { id: string; title: string; skills: string[]; serverId: string }[];
+  templates: AggregatedWorkerTemplate[];
+  tasks: AggregatedWorkerTask[];
   isRefetching: boolean;
   onCreated: () => void;
+  /** The Workers/Groups switch, rendered under the page title. */
+  viewSwitch: ReactElement;
 }): ReactElement {
   const [isCreating, setIsCreating] = useState(workers.length === 0);
   const openCreate = useCallback(() => setIsCreating(true), []);
@@ -306,38 +360,103 @@ function ManagementSection({
     <>
       <PageHeader
         title="Worker management"
-        subtitle="A worker is a long-lived role with its own workspace. Pick a role to start one."
+        subtitle="Select a worker to start a task, or create a new one to get to work."
         action={action}
       />
+      {viewSwitch}
+      <View style={styles.cardGrid}>
+        <CreateWorkerTile onPress={openCreate} />
+        {workers.map((worker) => (
+          <WorkerCard key={`${worker.serverId}:${worker.id}`} worker={worker} tasks={tasks} />
+        ))}
+      </View>
       {isCreating ? (
         <CreateWorkerCard templates={templates} onCancel={closeCreate} onCreated={handleCreated} />
       ) : null}
-      {workers.length === 0 && !isCreating ? (
-        <EmptyPanel
-          title="No workers yet"
-          body="Create a worker to handle a role and give it work."
-        />
-      ) : (
-        workers.map((worker) => (
-          <WorkerRow key={`${worker.serverId}:${worker.id}`} worker={worker} />
-        ))
-      )}
       {isRefetching ? <Text style={styles.refreshing}>Refreshing…</Text> : null}
     </>
   );
 }
 
-function WorkerRow({ worker }: { worker: AggregatedWorker }): ReactElement {
+/**
+ * One worker, as a card.
+ *
+ * A card rather than a row because a worker is an entity you pick, not a line
+ * you scan: the reference product lays its roster out this way, and the role
+ * summary is what tells you which one to pick. The footer carries the two facts
+ * that decide whether it is idle or busy.
+ */
+function WorkerCard({
+  worker,
+  tasks,
+}: {
+  worker: AggregatedWorker;
+  tasks: AggregatedWorkerTask[];
+}): ReactElement {
+  const own = tasks.filter(
+    (task) => task.serverId === worker.serverId && task.workerId === worker.id,
+  );
+  const lastRun = own.reduce<string | null>(
+    (latest, task) => (latest === null || task.updatedAt > latest ? task.updatedAt : latest),
+    null,
+  );
   return (
-    <View style={styles.workerRow} testID={`console-worker-${worker.id}`}>
-      <View style={styles.taskMain}>
-        <Text style={styles.taskTitle}>{worker.name}</Text>
-        {/* Fall back to the id: a role the host no longer ships is still a fact
-            about this worker, and hiding it would look like a bug. */}
-        <Text style={styles.taskMeta}>{worker.templateTitle ?? worker.templateId}</Text>
+    <View style={styles.workerCard} testID={`console-worker-${worker.id}`}>
+      <View style={styles.workerCardHeader}>
+        <View style={styles.workerAvatar}>
+          <Text style={styles.workerAvatarText}>{worker.name.slice(0, 1).toUpperCase()}</Text>
+        </View>
+        <Text style={styles.workerCardStatus}>{worker.status}</Text>
       </View>
-      <Text style={styles.taskMeta}>{worker.status}</Text>
+      <Text style={styles.workerCardName} numberOfLines={1}>
+        {worker.name}
+      </Text>
+      {/* Fall back to the id: a role the host no longer ships is still a fact
+          about this worker, and hiding it would look like a bug. */}
+      <Text style={styles.workerCardRole} numberOfLines={1}>
+        {worker.templateTitle ?? worker.templateId}
+      </Text>
+      <Text style={styles.workerCardDescription} numberOfLines={3}>
+        {worker.templateDescription ?? ""}
+      </Text>
+      <View style={styles.workerCardFooter}>
+        <Text style={styles.taskMeta}>{`Tasks ${own.length}`}</Text>
+        <Text style={styles.taskMeta}>
+          {lastRun === null ? "Last run never" : `Last run ${formatShortDate(lastRun)}`}
+        </Text>
+      </View>
     </View>
+  );
+}
+
+/**
+ * A compact date for the card footer.
+ *
+ * Deliberately coarse: the footer answers "has it run at all, and roughly
+ * when", and a precise timestamp there would be noise at card width.
+ */
+function formatShortDate(iso: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "unknown";
+  return at.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/**
+ * The grid's first cell: an invitation to create, in the same shape as the cards
+ * around it, so the roster never needs a separate action row.
+ */
+function CreateWorkerTile({ onPress }: { onPress: () => void }): ReactElement {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={styles.createTile}
+      testID="console-new-worker-tile"
+      accessibilityRole="button"
+      accessibilityLabel="New worker"
+    >
+      <Plus size={ICON_SIZE.md} />
+      <Text style={styles.taskMeta}>New worker</Text>
+    </Pressable>
   );
 }
 
@@ -346,7 +465,7 @@ function CreateWorkerCard({
   onCancel,
   onCreated,
 }: {
-  templates: { id: string; title: string; skills: string[]; serverId: string }[];
+  templates: AggregatedWorkerTemplate[];
   onCancel: () => void;
   onCreated: () => void;
 }): ReactElement {
@@ -724,17 +843,75 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface1,
   },
-  workerRow: {
+  cardGrid: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexWrap: "wrap",
     gap: theme.spacing[3],
-    paddingVertical: theme.spacing[4],
-    paddingHorizontal: theme.spacing[4],
+  },
+  createTile: {
+    // Sized to land four per row on a desktop width, like the reference, and to
+    // wrap down to one on a phone without a separate layout.
+    flexGrow: 1,
+    flexBasis: 240,
+    minHeight: 220,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing[2],
+    padding: theme.spacing[4],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: theme.colors.border,
+  },
+  workerCard: {
+    flexGrow: 1,
+    flexBasis: 240,
+    minHeight: 220,
+    gap: theme.spacing[2],
+    padding: theme.spacing[4],
     borderRadius: theme.borderRadius.md,
     borderWidth: 1,
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface1,
+  },
+  workerCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  workerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.surface2,
+  },
+  workerAvatarText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
+    fontWeight: theme.fontWeight.medium,
+  },
+  workerCardStatus: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  workerCardName: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
+    fontWeight: theme.fontWeight.medium,
+  },
+  workerCardRole: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  workerCardDescription: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    flexShrink: 1,
+  },
+  workerCardFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: "auto",
+    paddingTop: theme.spacing[3],
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
   },
   taskMain: { flexShrink: 1, gap: theme.spacing[1] },
   taskTitle: { color: theme.colors.foreground, fontSize: theme.fontSize.base },

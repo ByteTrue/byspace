@@ -350,3 +350,45 @@ AI 之前只把 QwenPaw 当作 tool_guard 的上游。实际不是：
 **暂不纳入：** IM 渠道、知识库、定时任务自动化、WakerFlow、插件与技能市场、云账号、跨设备远程 worker。
 
 **待办：** 定下 `/Users/zijie/workspace/refs/qoderwake-worker-assets/` 中模板进仓库的位置与命名（Issue 001 内的一项）。
+
+---
+
+## 6. 上线形态实测（2026-09-24，127.0.0.1:19820 实机）
+
+**Owner 强调：做任何 UI、交互、逻辑之前先来看这个，能抄就抄，视觉与交互也可以直接抄。** 以下为 agent-browser 实测，不是记忆。
+
+**信息架构与我的实现不同，且是结构性的：**
+
+| 上游                                                                                        | 我的实现                                                  | 差异                                                                                                   |
+| ------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| 导航：Dashboard / `@Waker` / Autonomous Work ｜ Waker Management / Capabilities & Resources | Dashboard / Worker management / **Groups** / Capabilities | **上游把 Group 做成 `Waker Management` 页内的分段控件（`Waker (11)` ｜ `Group (0)`），不是顶层导航项** |
+| `/work-management` `/at-waker` `/autonomous-work` `/management` `/resources`                | `/workers` 单页四个分区                                   | 上游一区一路由                                                                                         |
+| 每条 waker 有独立详情页 `/conversations/entry/latest?waker=<id>`                            | 只有名册列表                                              | 上游「点进一个 waker 做事」是主路径                                                                    |
+
+**Waker Management 列表形态**（我做成了一行行的表格）：
+
+- **卡片网格**（四列），不是行。第一格是**虚线边框的「+ New Waker」创建卡**。
+- 卡片内容：圆形头像（角色插画）· 右上角 `● Online` + `▣ Local` 两个徽标 · 名字（截断）· 角色徽标 · 三行描述（截断）· 分隔线 · 页脚 `Tasks 0 ｜ Last Run Never`。
+- 工具条：`Search name or role…` ｜ `Runtime status: Online` ｜ `Role: All roles` ｜ `Environment: All environments` ｜ `Sort by: Default`，右侧总数 `11 Wakers`。
+- 页头：大标题 + 副标题「Select a Waker to start a task, or create a new one to get to work.」，右侧动作 `Share Records` `Import Waker` `+ New Waker`（主按钮深色）。
+
+**建组是一个模态**，不是内联表单：
+
+- 标题 `Create group`；字段 `Group title`（默认填 `New group`，带清除 ×）。
+- `Waker members` 是**两栏主从**：左栏搜索框 + 复选框列表（头像 · 名字 · 角色 · `Local` 徽标），右栏是被选中者的配置面，初始提示「Select a Waker to configure its response model and workspace.」。
+- 提示文案：「Select multiple Wakers and choose one Leader for the group.」—— **Leader 从成员里选一个**（对应我们的 coordinator）。
+- 页脚：左侧计数 `0 Waker(s) configured`，右侧 `Cancel` ｜ `Create`（主按钮，未满足时禁用）。
+
+**Waker 详情页是三栏**（我完全没有这一层）：
+
+1. 应用导航；
+2. **该 waker 的上下文**：头像 + 名字 + `Manage` 链接，分段控件 `Tasks ｜ Automations`，`Total 0 tasks` + `+ New`，空态 `No conversation tasks yet`；
+3. **任务/对话面**：`New task` 标题（右上是 `Current Task`），空态是 waker 头像 + 「Hello, how can I help you today?」+ 该角色的自我介绍，下面是**三条起始提示**（从角色能力生成，如 Project Administrator 的「Turn this goal into a milestone plan with owners, dependencies, risks, and acceptance criteria」），底部输入框 placeholder「Type a message, @ to reference plugins, skills, or workspace files…」，操作条 `+` ｜ `Select Workspace` ｜ 模型 `Auto ▾` ｜ 发送。
+
+**交互模式因此不同**：上游是**「跟一个 waker 说话，它的活以任务形式出现在旁边」**；我实现的是「看名册和任务表」。这是主路径的差别，不只是样式。
+
+**空态范式**：居中，圆角虚线方框内一个图标，下面标题 + 一句说明 + 主按钮（`No groups yet` / `Create a group to collaborate with multiple Wakers.` / `+ New Group`）。
+
+**侧栏**：底部有身份区（头像 + 名字 + 套餐 `Pro Trial`）与帮助/设置两个图标按钮；名册区带 `Waker (11)` ｜ `Group (0)` 标签页和 `+ New …` 按钮。
+
+**结论**：我此前"照搬"的是**数据模型与命令面**，UI 与交互是我自己设计的，因此与上游在主路径上不同。按 Owner 的指示，下一批应改为照抄以上形态。

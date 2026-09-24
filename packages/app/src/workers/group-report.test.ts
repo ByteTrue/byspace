@@ -27,6 +27,7 @@ function worker(id: string, name: string, serverId = "s1"): AggregatedWorker {
     name,
     templateId: "qa-engineer",
     templateTitle: "QA Engineer",
+    templateDescription: "A quality assurance role.",
     status: "online",
     createdAt: "2026-09-24T00:00:00.000Z",
     updatedAt: "2026-09-24T00:00:00.000Z",

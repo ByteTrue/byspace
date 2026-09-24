@@ -47,6 +47,8 @@ export interface AggregatedWorker {
   templateId: string;
   /** Resolved role title when the host's catalog still has the template. */
   templateTitle: string | null;
+  /** The role's one-line summary, for the roster card. Null when the role is gone. */
+  templateDescription: string | null;
   status: "online" | "offline";
   createdAt: string;
   updatedAt: string;
@@ -82,6 +84,8 @@ export interface AggregatedWorkerGroup extends WorkerGroupSummary {
 export interface WorkerTemplateOption {
   id: string;
   title: string;
+  /** The role's own one-line summary, shown on the roster card. */
+  description: string;
   skills: string[];
   serverId: string;
   serverName: string;
@@ -178,13 +182,14 @@ export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<
         );
         const goalsByGroup = new Map(goalEntries);
 
-        const titleById = new Map(
-          templateResult.templates.map((template) => [template.id, template.title]),
+        const templateById = new Map(
+          templateResult.templates.map((template) => [template.id, template]),
         );
         for (const template of templateResult.templates) {
           templates.push({
             id: template.id,
             title: template.title,
+            description: template.description,
             skills: [...template.skills],
             serverId: host.serverId,
             serverName: host.serverName,
@@ -195,7 +200,8 @@ export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<
             id: worker.id,
             name: worker.name,
             templateId: worker.templateId,
-            templateTitle: titleById.get(worker.templateId) ?? null,
+            templateTitle: templateById.get(worker.templateId)?.title ?? null,
+            templateDescription: templateById.get(worker.templateId)?.description ?? null,
             status: worker.status,
             createdAt: worker.createdAt,
             updatedAt: worker.updatedAt,

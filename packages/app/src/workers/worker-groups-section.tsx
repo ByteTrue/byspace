@@ -32,6 +32,8 @@ export interface WorkerGroupsSectionProps {
   workers: AggregatedWorker[];
   tasks: AggregatedWorkerTask[];
   onChanged: () => void;
+  /** The Workers/Groups switch, rendered under the page title. */
+  viewSwitch: ReactElement;
 }
 
 export function WorkerGroupsSection({
@@ -39,6 +41,7 @@ export function WorkerGroupsSection({
   workers,
   tasks,
   onChanged,
+  viewSwitch,
 }: WorkerGroupsSectionProps): ReactElement {
   const [isCreating, setIsCreating] = useState(false);
   const openCreate = useCallback(() => setIsCreating(true), []);
@@ -84,13 +87,14 @@ export function WorkerGroupsSection({
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
         <View style={styles.sectionHeaderText}>
-          <Text style={styles.sectionTitle}>Groups</Text>
+          <Text style={styles.sectionTitle}>Worker management</Text>
           <Text style={styles.sectionSubtitle}>
-            A group is a team of workers on one project, with one coordinator.
+            Select a worker to start a task, or create a new one to get to work.
           </Text>
         </View>
         {createAction}
       </View>
+      {viewSwitch}
       {isCreating ? (
         <GroupCreateForm workers={workers} onCancel={closeCreate} onCreated={handleCreated} />
       ) : null}

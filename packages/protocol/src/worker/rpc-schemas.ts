@@ -22,6 +22,8 @@ export const WorkerTemplatePartSchema = z.enum(["IDENTITY", "PERSONA", "BIBLE"])
 export const WorkerTemplateSummarySchema = z.object({
   id: z.string(),
   title: z.string(),
+  /** The role's one-line summary, from its own identity document. */
+  description: z.string(),
   /** Skill ids the role ships with, sorted. */
   skills: z.array(z.string()),
 });
@@ -570,6 +572,7 @@ export const WorkerGoalMutateResponseSchema = z.object({
 // Inferred types, exported on demand rather than all at once: consumers need the
 // shapes, not the validators, and an export nobody imports drifts unnoticed.
 // `WorkerTaskSummary` is the one the app derives its task-state union from.
+export type WorkerTemplateSummary = z.infer<typeof WorkerTemplateSummarySchema>;
 export type WorkerTaskSummary = z.infer<typeof WorkerTaskSummarySchema>;
 export type WorkerGroupSummary = z.infer<typeof WorkerGroupSummarySchema>;
 export type WorkerMessageSummary = z.infer<typeof WorkerMessageSummarySchema>;

@@ -5,6 +5,9 @@ import { buildDaemonConnectionCommandError, connectToDaemon } from "../../utils/
 export interface WorkerTemplateRow {
   templateId: string;
   title: string;
+  /** What the role does. A worker's role is fixed at creation, so this is how
+   * a caller picks one without opening every template. */
+  description: string;
   skills: string;
 }
 
@@ -13,7 +16,7 @@ const schema: OutputSchema<WorkerTemplateRow> = {
   columns: [
     { header: "TEMPLATE ID", field: "templateId", width: 24 },
     { header: "TITLE", field: "title", width: 26 },
-    { header: "SKILLS", field: "skills", width: 44 },
+    { header: "DOES", field: "description", width: 52 },
   ],
 };
 
@@ -38,6 +41,7 @@ export async function runWorkerTemplateLsCommand(
       data: payload.templates.map((template) => ({
         templateId: template.id,
         title: template.title,
+        description: template.description,
         skills: template.skills.join(", "),
       })),
       schema,

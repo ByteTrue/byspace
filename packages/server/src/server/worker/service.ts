@@ -15,6 +15,8 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import type pino from "pino";
 
+import type { WorkerTemplateSummary } from "@bytetrue/protocol/worker/rpc-schemas";
+
 import { resolveBySpaceHome } from "../byspace-home.js";
 import {
   WorkerStore,
@@ -50,12 +52,6 @@ import {
   type GuardRule,
   type GuardSeverity,
 } from "./tool-guard/tool-guard.js";
-
-export interface WorkerTemplateSummary {
-  id: string;
-  title: string;
-  skills: string[];
-}
 
 export interface WorkerGuardVerdict {
   decision: GuardDecision;
@@ -199,7 +195,12 @@ export class WorkerService {
     const templates: WorkerTemplateSummary[] = [];
     for (const id of ids) {
       const template = await loadWorkerTemplate(id, this.templateRoot);
-      templates.push({ id: template.id, title: template.title, skills: template.skills });
+      templates.push({
+        id: template.id,
+        title: template.title,
+        description: template.description,
+        skills: template.skills,
+      });
     }
     return templates;
   }
