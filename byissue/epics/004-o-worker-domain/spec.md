@@ -141,10 +141,11 @@ BySpace 现在管的是**会话**：你选一个 workspace，起一个 agent，�
 | 009  | worker 执行接线：复用调度器的 create-agent/run/wait，结果映射到状态机    | `496494935` `f23ab1042` |
 | 010  | CLI `byspace worker`（对齐上游 waker/group）+ `byspace-worker-team` 技能 | `cb2ac0af4`             |
 | 011  | 群聊与路由：消息流 + 提及即唤醒 + 可见性与唤醒分离                       | `c78305e18`             |
+| 012  | 目标与预算：乐观并发（generation.revision）+ 公开消息预算 + 暂停/重开    | `65c7a147d`             |
 
 **第一批已完成，用户已经能看见并用。** 侧栏有 Workers，进去能看名册、能选角色建 worker。
 
-**下一批：** 目标与预算与汇报（上游 `qoderwake-collab-group/references/goal.md`：目标版本化、turn 预算、暂停/重开；以及向用户汇报）。
+**下一批：向用户汇报。** 目标与预算已完成（切片 012）；这条线剩下的最后一块是「协调者汇总并向用户汇报」，即让用户从一个地方看到「我托付的这件事现在怎么样了」。
 
 **已知不足（如实登记）：**
 
