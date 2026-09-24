@@ -95,7 +95,7 @@ created: 2026-09-24
 
 **UI 偏离修正（用户报告）**：Overview 页的自动归档卡片首版为裸卡片，无下边距，与 Network 小节标题贴死。根因：settings 规范要求每个区块用 `SettingsSection`（自带 margin），裸卡片是被禁止的模式。修法：包一层 `SettingsSection title=settings.hostSections.workspaces`（该 i18n 键从 HEAD 恢复回 9 语言，页内小节语义仍需要它），与 Agents 页的 Metadata 小节同款。卡片自身保留 `testID=host-page-auto-archive-merged-workspaces-card`，新增 section 级 `testID=host-page-workspaces-section`。
 
-**关闭候选**：project spec 无设置分类相关条目，无需毕业回写；预存在的 `providers-section.test.tsx` 主题 mock 失败建议另行开 ff 修复。
+**关闭候选**：project spec 无设置分类相关条目，无需毕业回写；预存在的 `providers-section.test.tsx` 主题 mock 缺 `shadow.sm` 失败，已在后续 commit（8efc8a825）补全 mock 三档 shadow 修复，该 suite 恢复全绿。
 
 ## 关闭回写与结论
 
