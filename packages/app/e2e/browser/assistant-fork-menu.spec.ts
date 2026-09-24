@@ -151,7 +151,7 @@ test.describe("Assistant fork menu", () => {
     await expect(userMessage).not.toContainText("Source agent:");
   });
 
-  test("forks an assistant turn into New Workspace and keeps the attachment across host changes", async ({
+  test("forks an assistant turn into New Workspace and locks the host picker to the source project", async ({
     page,
     seedForkWorkspace,
   }) => {
@@ -164,8 +164,8 @@ test.describe("Assistant fork menu", () => {
       {
         serverId: "secondary-assistant-fork-host",
         label: "Secondary host",
-        // The host does not need to be reachable; this pins that the draft-scoped
-        // attachment survives changing the selected target host.
+        // Rendered only so the host picker exists; the fork draft cannot target
+        // it because the source project does not exist there (issue 049 scoping).
         endpoint: "127.0.0.1:9",
       },
     ]);
@@ -187,11 +187,11 @@ test.describe("Assistant fork menu", () => {
     await expect(page).toHaveURL(/\/new\?.*draftId=/, { timeout: 30_000 });
     await expectChatHistoryAttachment(page);
 
-    await page.getByTestId("host-picker-trigger").click();
-    await page
-      .getByTestId("new-workspace-host-picker-option-secondary-assistant-fork-host")
-      .click();
-    await expectChatHistoryAttachment(page);
+    // Issue 049 scoping: the fork draft lands pre-selected on the source
+    // project, which only exists on the primary host, so the picker renders
+    // (two hosts seeded) but cannot leave that host. The attachment surviving
+    // a submit is pinned by the test below.
+    await expect(page.getByTestId("host-picker-trigger")).toBeDisabled();
   });
 
   test("keeps the fork attachment after the new agent receives its user message", async ({
