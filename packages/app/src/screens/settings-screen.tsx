@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import { Pressable, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
+import { Switch } from "@/components/ui/switch";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -17,19 +18,11 @@ import {
   Bot,
   Boxes,
   Gauge,
-  Keyboard,
-  Stethoscope,
   Info,
   Bell,
-  Shield,
-  Puzzle,
   Plus,
   FolderGit2,
   SquareTerminal,
-  Code2,
-  Smartphone,
-  Sparkles,
-  PanelsTopLeft,
   ChevronRight,
 } from "lucide-react-native";
 import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
@@ -61,13 +54,11 @@ import { AddHostMethodModal } from "@/components/add-host-method-modal";
 import { AddHostModal } from "@/components/add-host-modal";
 import { AddRemoteSshHostModal } from "@/components/add-remote-ssh-host-modal";
 import { PairLinkModal } from "@/components/pair-link-modal";
-import { EditorSection } from "@/screens/settings/editor-section";
 import { Button } from "@/components/ui/button";
 
 import { CommunityLinks } from "@/components/community-links";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { WebPushSection } from "@/screens/settings/web-push-section";
-import { isWebPushSupported } from "@/push-notifications";
 import { resolveAppVersion } from "@/utils/app-version";
 import { openChangelog } from "@/changelog";
 import { useAppDiagnosticStore } from "@/diagnostics/store";
@@ -81,15 +72,13 @@ import {
 } from "@/i18n/locales";
 import {
   HostConnectionsPage,
-  HostPairDevicePage,
   HostAgentsPage,
   HostSettingsPage,
   HostProvidersPage,
   HostUsagePage,
-  HostWorkspacesPage,
   HostTerminalsPage,
 } from "@/screens/settings/host-page";
-import { MetadataGenerationPage } from "@/screens/settings/metadata-generation-page";
+
 import ProjectsScreen from "@/screens/projects-screen";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
 import { SETTINGS_DESKTOP_SIDEBAR_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
@@ -102,7 +91,6 @@ import {
 } from "@/utils/host-routes";
 import { useLastWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { returnFromSettings, type SettingsView } from "@/navigation/settings-navigation";
-import { isWeb } from "@/constants/platform";
 
 // ---------------------------------------------------------------------------
 // View model
@@ -112,43 +100,12 @@ interface SidebarSectionItem {
   id: SettingsSectionSlug;
   labelKey: string;
   icon: ComponentType<{ size: number; color: string }>;
-  desktopOnly?: boolean;
-  webOnly?: boolean;
-  /** Keeps a desktop-only section visible in browsers that can do Web Push. */
-  orWebPush?: boolean;
 }
 
 const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
   { id: "general", labelKey: "settings.sections.general", icon: Settings },
   { id: "appearance", labelKey: "settings.sections.appearance", icon: Palette },
-  {
-    id: "layout",
-    labelKey: "settings.sections.layout",
-    icon: PanelsTopLeft,
-    desktopOnly: true,
-  },
-  { id: "editor", labelKey: "settings.sections.editor", icon: Code2, webOnly: true },
-  { id: "shortcuts", labelKey: "settings.sections.shortcuts", icon: Keyboard, desktopOnly: true },
-  {
-    id: "integrations",
-    labelKey: "settings.sections.integrations",
-    icon: Puzzle,
-    desktopOnly: true,
-  },
-  {
-    id: "notifications",
-    labelKey: "settings.sections.notifications",
-    icon: Bell,
-    desktopOnly: true,
-    orWebPush: true,
-  },
-  {
-    id: "permissions",
-    labelKey: "settings.sections.permissions",
-    icon: Shield,
-    desktopOnly: true,
-  },
-  { id: "diagnostics", labelKey: "settings.sections.diagnostics", icon: Stethoscope },
+  { id: "notifications", labelKey: "settings.sections.notifications", icon: Bell },
   { id: "about", labelKey: "settings.sections.about", icon: Info },
 ];
 
@@ -162,10 +119,7 @@ const HOST_SECTION_ITEMS: HostSectionItem[] = [
   { id: "host", labelKey: "settings.hostSections.host", icon: Server },
   { id: "projects", labelKey: "settings.hostSections.projects", icon: FolderGit2 },
   { id: "connections", labelKey: "settings.hostSections.connections", icon: Network },
-  { id: "pair-device", labelKey: "openProject.tiles.pairDevice.title", icon: Smartphone },
   { id: "agents", labelKey: "settings.hostSections.agents", icon: Bot },
-  { id: "metadata", labelKey: "settings.hostSections.metadata", icon: Sparkles },
-  { id: "workspaces", labelKey: "settings.hostSections.workspaces", icon: FolderGit2 },
   { id: "providers", labelKey: "settings.hostSections.providers", icon: Boxes },
   { id: "usage", labelKey: "settings.hostSections.usage", icon: Gauge },
   { id: "terminals", labelKey: "settings.hostSections.terminals", icon: SquareTerminal },
@@ -180,14 +134,8 @@ function renderHostSettingsContent(
       return <ProjectsScreen serverId={view.serverId} />;
     case "connections":
       return <HostConnectionsPage serverId={view.serverId} />;
-    case "pair-device":
-      return <HostPairDevicePage serverId={view.serverId} />;
     case "agents":
       return <HostAgentsPage serverId={view.serverId} />;
-    case "metadata":
-      return <MetadataGenerationPage serverId={view.serverId} />;
-    case "workspaces":
-      return <HostWorkspacesPage serverId={view.serverId} />;
     case "providers":
       return <HostProvidersPage serverId={view.serverId} />;
     case "usage":
@@ -241,6 +189,7 @@ interface GeneralSectionProps {
   handleSendBehaviorChange: (behavior: SendBehavior) => void;
   handleLanguageChange: (language: AppLanguage) => void;
   handleTerminalScrollbackLinesChange: (lines: number) => void;
+  handleVimKeybindingsChange: (enabled: boolean) => void;
 }
 
 interface SendBehaviorMenuItemProps {
@@ -290,6 +239,7 @@ function GeneralSection({
   handleSendBehaviorChange,
   handleLanguageChange,
   handleTerminalScrollbackLinesChange,
+  handleVimKeybindingsChange,
 }: GeneralSectionProps) {
   const { t, i18n } = useTranslation();
   const activeLocale = getActiveLocale(i18n.language);
@@ -409,25 +359,17 @@ function GeneralSection({
             accessibilityLabel={t("settings.general.terminalScrollback.accessibilityLabel")}
           />
         </View>
-      </View>
-    </SettingsSection>
-  );
-}
-
-function DiagnosticsSection() {
-  const { t } = useTranslation();
-  const openAppDiagnostic = useAppDiagnosticStore((state) => state.open);
-  return (
-    <SettingsSection title={t("settings.diagnostics.title")}>
-      <View style={settingsStyles.card}>
-        <View style={settingsStyles.row} testID="app-diagnostic-row">
+        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
           <View style={settingsStyles.rowContent}>
-            <Text style={settingsStyles.rowTitle}>{t("settings.diagnostics.app.rowTitle")}</Text>
-            <Text style={settingsStyles.rowHint}>{t("settings.diagnostics.app.rowHint")}</Text>
+            <Text style={settingsStyles.rowTitle}>{t("settings.editor.vimKeybindings")}</Text>
+            <Text style={settingsStyles.rowHint}>{t("settings.editor.vimHint")}</Text>
           </View>
-          <Button variant="secondary" size="sm" onPress={openAppDiagnostic}>
-            {t("settings.diagnostics.app.run")}
-          </Button>
+          <Switch
+            value={settings.vimKeybindings}
+            onValueChange={handleVimKeybindingsChange}
+            accessibilityLabel={t("settings.editor.vimKeybindings")}
+            testID="vim-keybindings-toggle"
+          />
         </View>
       </View>
     </SettingsSection>
@@ -441,6 +383,7 @@ interface AboutSectionProps {
 
 function AboutSection({ appVersion, appVersionText }: AboutSectionProps) {
   const { t } = useTranslation();
+  const openAppDiagnostic = useAppDiagnosticStore((state) => state.open);
   return (
     <>
       <SettingsSection title={t("settings.about.title")}>
@@ -453,6 +396,15 @@ function AboutSection({ appVersion, appVersionText }: AboutSectionProps) {
             <Text style={styles.aboutValue}>{appVersionText}</Text>
           </View>
           <WhatsNewRow />
+          <View style={[settingsStyles.row, settingsStyles.rowBorder]} testID="app-diagnostic-row">
+            <View style={settingsStyles.rowContent}>
+              <Text style={settingsStyles.rowTitle}>{t("settings.diagnostics.app.rowTitle")}</Text>
+              <Text style={settingsStyles.rowHint}>{t("settings.diagnostics.app.rowHint")}</Text>
+            </View>
+            <Button variant="secondary" size="sm" onPress={openAppDiagnostic}>
+              {t("settings.diagnostics.app.run")}
+            </Button>
+          </View>
         </View>
       </SettingsSection>
       <ConnectedHostsSection clientVersion={appVersion} />
@@ -788,16 +740,7 @@ function SettingsSidebar({
   const sortedHosts = useSortedHosts(hosts, localServerId);
   const hasHosts = sortedHosts.length > 0;
   const enableBuiltInDaemonOption = useEnableBuiltInDaemonOption();
-  const isDesktopApp = false;
-  const items = SIDEBAR_SECTION_ITEMS.filter((item) => {
-    if (item.webOnly && !isWeb) {
-      return false;
-    }
-    if (!item.desktopOnly || isDesktopApp) {
-      return true;
-    }
-    return item.orWebPush === true && isWebPushSupported();
-  });
+  const items = SIDEBAR_SECTION_ITEMS;
   const insets = useSafeAreaInsets();
   const isDesktop = layout === "desktop";
   const outerContainerStyle = useMemo(
@@ -989,6 +932,13 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     [updateSettings],
   );
 
+  const handleVimKeybindingsChange = useCallback(
+    (vimKeybindings: boolean) => {
+      void updateSettings({ vimKeybindings });
+    },
+    [updateSettings],
+  );
+
   const closeAddConnectionFlow = useCallback(() => {
     setIsAddHostMethodVisible(false);
     setIsDirectHostVisible(false);
@@ -1136,7 +1086,9 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   })();
 
   let content: ReactNode;
-  if (view.kind === "section" && view.section === "layout") {
+  if (view.kind === "section" && !SIDEBAR_SECTION_ITEMS.some((item) => item.id === view.section)) {
+    // Unknown/retired section slugs fall back to an empty page; the route layer
+    // already redirects unknown /settings/* to general.
     content = null;
   } else {
     content = (() => {
@@ -1162,22 +1114,13 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
                 handleSendBehaviorChange={handleSendBehaviorChange}
                 handleLanguageChange={handleLanguageChange}
                 handleTerminalScrollbackLinesChange={handleTerminalScrollbackLinesChange}
+                handleVimKeybindingsChange={handleVimKeybindingsChange}
               />
             );
           case "appearance":
             return <AppearanceSection />;
-          case "editor":
-            return isWeb ? <EditorSection /> : null;
-          case "shortcuts":
-            return null;
-          case "integrations":
-            return null;
           case "notifications":
             return <WebPushSection />;
-          case "permissions":
-            return null;
-          case "diagnostics":
-            return <DiagnosticsSection />;
           case "about":
             return <AboutSection appVersion={appVersion} appVersionText={appVersionText} />;
         }

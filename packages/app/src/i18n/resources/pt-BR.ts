@@ -1769,18 +1769,10 @@ export const ptBR: TranslationResources = {
     sections: {
       general: "Geral",
       appearance: "Aparência",
-      layout: en.settings.sections.layout,
-      editor: "Editor",
-      shortcuts: "Atalhos",
-      integrations: "Integrações",
       notifications: "Notificações",
-      permissions: "Permissões",
-      diagnostics: "Diagnósticos",
       about: "Sobre",
     },
-    layout: en.settings.layout,
     editor: {
-      title: "Editor",
       vimKeybindings: "Atalhos do Vim",
       vimHint: "Aplica-se a arquivos-fonte na web e no desktop.",
     },
@@ -1819,11 +1811,10 @@ export const ptBR: TranslationResources = {
       },
     },
     hostSections: {
+      workspaces: "Workspaces",
       projects: "Projetos",
       connections: "Conexões",
       agents: "Agentes",
-      metadata: "Metadados",
-      workspaces: "Workspaces",
       providers: "Provedores",
       usage: "Uso",
       terminals: "Terminais",
@@ -1918,7 +1909,6 @@ export const ptBR: TranslationResources = {
       },
     },
     diagnostics: {
-      title: "Diagnósticos",
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",
@@ -2082,34 +2072,6 @@ export const ptBR: TranslationResources = {
           "Disponível quando o foco não está em um campo de texto ou terminal.",
       },
     },
-    integrations: {
-      title: "Integrações",
-      docs: {
-        cli: "Docs da CLI",
-        openCli: "Abrir documentação da CLI",
-      },
-      commandLine: {
-        title: "Linha de comando",
-        description: "Controle agentes e execute scripts pelo terminal",
-      },
-      actions: {
-        install: "Instalar",
-        installing: "Instalando...",
-        installed: "Instalado",
-      },
-    },
-    permissions: {
-      title: "Permissões",
-      microphone: "Microfone",
-      refresh: "Atualizar",
-      refreshing: "Atualizando...",
-      refreshAccessibility: "Atualizar permissões do desktop",
-      actions: {
-        granted: "Concedida",
-        request: "Solicitar",
-        requesting: "Solicitando...",
-      },
-    },
     host: {
       appearance: {
         title: "Aparência",
@@ -2163,7 +2125,6 @@ export const ptBR: TranslationResources = {
         timeout: "Timeout",
       },
       pairDevices: {
-        title: "Parear dispositivos",
         rowTitle: "Parear um dispositivo",
         rowHint: "Escaneie um QR code ou copie um link para conectar seu celular a este host",
       },
@@ -2232,9 +2193,6 @@ export const ptBR: TranslationResources = {
       },
       agents: {
         unavailable: "Conecte-se a este host para gerenciar agentes",
-      },
-      workspaces: {
-        unavailable: "Conecte-se a este host para gerenciar workspaces",
       },
       terminalDefaultShell: {
         sectionTitle: "Shell padrão",

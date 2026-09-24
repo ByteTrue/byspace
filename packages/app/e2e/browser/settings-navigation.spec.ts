@@ -31,7 +31,7 @@ import {
   expectDirectHostSslEnabled,
   expectDirectHostUriValue,
   expectDirectHostUriHidden,
-  expectDiagnosticsContent,
+  expectDiagnosticsRow,
   expectAboutContent,
   expectGeneralContent,
   expectAppearanceContent,
@@ -57,13 +57,10 @@ test.describe("Settings sidebar navigation", () => {
     await gotoAppShell(page);
     await openSettings(page);
 
-    await openSettingsSection(page, "diagnostics");
-    await expectSettingsHeader(page, "Diagnostics");
-    await expectDiagnosticsContent(page);
-
     await openSettingsSection(page, "about");
     await expectSettingsHeader(page, "About");
     await expectAboutContent(page);
+    await expectDiagnosticsRow(page);
 
     await openSettingsSection(page, "general");
     await expectSettingsHeader(page, "General");
@@ -168,7 +165,7 @@ test.describe("Settings — compact master-detail", () => {
     await gotoAppShell(page);
     await openCompactSettings(page, buildOpenProjectRoute());
 
-    await expectSettingsSidebarSections(page, ["general", "diagnostics", "about"]);
+    await expectSettingsSidebarSections(page, ["general", "notifications", "about"]);
     await expectCompactSettingsList(page);
 
     await expectSettingsBackButton(page);
@@ -180,9 +177,9 @@ test.describe("Settings — compact master-detail", () => {
     await gotoAppShell(page);
     await openCompactSettings(page, buildOpenProjectRoute());
 
-    await openSettingsSection(page, "diagnostics");
-    await expectAppRoute(page, buildSettingsSectionRoute("diagnostics"));
-    await expectDiagnosticsContent(page);
+    await openSettingsSection(page, "about");
+    await expectAppRoute(page, buildSettingsSectionRoute("about"));
+    await expectDiagnosticsRow(page);
     await expectSettingsSidebarHidden(page);
     await expectSettingsBackButton(page);
   });

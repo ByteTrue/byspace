@@ -1740,18 +1740,10 @@ export const ar: TranslationResources = {
     sections: {
       general: "عام",
       appearance: "مظهر",
-      layout: en.settings.sections.layout,
-      editor: "المحرر",
-      shortcuts: "الاختصارات",
-      integrations: "التكامل",
       notifications: "الإشعارات",
-      permissions: "الأذونات",
-      diagnostics: "التشخيص",
       about: "عن",
     },
-    layout: en.settings.layout,
     editor: {
-      title: "المحرر",
       vimKeybindings: "اختصارات Vim",
       vimHint: "تنطبق على ملفات المصدر في الويب وسطح المكتب.",
     },
@@ -1789,11 +1781,10 @@ export const ar: TranslationResources = {
       },
     },
     hostSections: {
+      workspaces: "Workspaces",
       projects: "المشاريع",
       connections: "اتصالات",
       agents: "Agents",
-      metadata: "البيانات الوصفية",
-      workspaces: "Workspaces",
       providers: "مقدمي الخدمات",
       usage: "الاستخدام",
       terminals: "Terminals",
@@ -1886,7 +1877,6 @@ export const ar: TranslationResources = {
       },
     },
     diagnostics: {
-      title: "التشخيص",
       app: {
         title: "App diagnostic",
         rowTitle: "App diagnostic",
@@ -2049,34 +2039,6 @@ export const ar: TranslationResources = {
         showKeyboardShortcuts: "متاح عندما لا يكون التركيز في حقل نص أو محطة طرفية.",
       },
     },
-    integrations: {
-      title: "التكامل",
-      docs: {
-        cli: "مستندات CLI",
-        openCli: "افتح وثائق CLI",
-      },
-      commandLine: {
-        title: "سطر الأوامر",
-        description: "وكلاء التحكم والبرنامج النصي من المحطة الطرفية الخاصة بك",
-      },
-      actions: {
-        install: "ثَبَّتَ",
-        installing: "جارٍ التثبيت...",
-        installed: "تم التثبيت",
-      },
-    },
-    permissions: {
-      title: "الأذونات",
-      microphone: "ميكروفون",
-      refresh: "ينعش",
-      refreshing: "منعش...",
-      refreshAccessibility: "تحديث أذونات سطح المكتب",
-      actions: {
-        granted: "ممنوح",
-        request: "طلب",
-        requesting: "جارٍ الطلب...",
-      },
-    },
     host: {
       appearance: {
         title: "المظهر",
@@ -2130,7 +2092,6 @@ export const ar: TranslationResources = {
         timeout: "نفذ الوقت",
       },
       pairDevices: {
-        title: "إقران الأجهزة",
         rowTitle: "إقران جهاز",
         rowHint: "امسح رمز QR ضوئيًا أو انسخ رابطًا لتوصيل هاتفك بهذا المضيف",
       },
@@ -2197,9 +2158,6 @@ export const ar: TranslationResources = {
       },
       agents: {
         unavailable: "Connect to this host to manage agents",
-      },
-      workspaces: {
-        unavailable: "Connect to this host to manage workspaces",
       },
       terminalDefaultShell: {
         sectionTitle: "Default shell",
