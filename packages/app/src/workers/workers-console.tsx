@@ -22,6 +22,7 @@ import {
   describeRosterActivity,
   selectAttentionTasks,
 } from "@/workers/dashboard-derived";
+import { WorkerDetailSection } from "@/workers/worker-detail-section";
 import { WorkerGroupsSection } from "@/workers/worker-groups-section";
 import { ICON_SIZE } from "@/styles/theme";
 
@@ -66,6 +67,14 @@ export function WorkersConsole({ onExit }: { onExit: () => void }): ReactElement
   const isCompact = useIsCompactFormFactor();
   const [section, setSection] = useState<Section>("dashboard");
   const [managementView, setManagementView] = useState<ManagementView>("workers");
+  /**
+   * The worker whose detail is open, keyed by host and id.
+   *
+   * Held here rather than as a route because the console is a single page that
+   * does not mount in the app shell; a worker detail is a different view of it,
+   * not a different place.
+   */
+  const [openWorkerKey, setOpenWorkerKey] = useState<string | null>(null);
   const openManagement = useCallback(() => setSection("management"), []);
   const { loadState, hostErrors, refetch, isRefetching } = useWorkers();
 
@@ -97,6 +106,10 @@ export function WorkersConsole({ onExit }: { onExit: () => void }): ReactElement
     [workers.length, groups.length],
   );
 
+  const openWorker =
+    workers.find((worker) => `${worker.serverId}:${worker.id}` === openWorkerKey) ?? null;
+  const closeWorker = useCallback(() => setOpenWorkerKey(null), []);
+
   const managementViewSwitch = useMemo(
     () => (
       <SegmentedControl
@@ -108,6 +121,36 @@ export function WorkersConsole({ onExit }: { onExit: () => void }): ReactElement
     ),
     [managementViews, managementView],
   );
+
+  // Resolved before render rather than as a nested conditional: a worker detail
+  // replaces the page's content, and reading that as one value is clearer than
+  // three chained ternaries.
+  let managementPane: ReactElement;
+  if (openWorker) {
+    managementPane = <WorkerDetailSection worker={openWorker} tasks={tasks} onBack={closeWorker} />;
+  } else if (managementView === "workers") {
+    managementPane = (
+      <ManagementSection
+        workers={workers}
+        templates={templates}
+        tasks={tasks}
+        isRefetching={isRefetching}
+        onCreated={refetch}
+        viewSwitch={managementViewSwitch}
+        onOpenWorker={setOpenWorkerKey}
+      />
+    );
+  } else {
+    managementPane = (
+      <WorkerGroupsSection
+        groups={groups}
+        workers={workers}
+        tasks={tasks}
+        onChanged={refetch}
+        viewSwitch={managementViewSwitch}
+      />
+    );
+  }
 
   // A fixed-width column beside the content needs room for both. Below that,
   // the same destinations become a horizontal strip so the content keeps the
@@ -163,28 +206,7 @@ export function WorkersConsole({ onExit }: { onExit: () => void }): ReactElement
             {section === "dashboard" ? (
               <DashboardSection tasks={tasks} workers={workers} onOpenManagement={openManagement} />
             ) : null}
-            {section === "management" ? (
-              <View style={styles.section}>
-                {managementView === "workers" ? (
-                  <ManagementSection
-                    workers={workers}
-                    templates={templates}
-                    tasks={tasks}
-                    isRefetching={isRefetching}
-                    onCreated={refetch}
-                    viewSwitch={managementViewSwitch}
-                  />
-                ) : (
-                  <WorkerGroupsSection
-                    groups={groups}
-                    workers={workers}
-                    tasks={tasks}
-                    onChanged={refetch}
-                    viewSwitch={managementViewSwitch}
-                  />
-                )}
-              </View>
-            ) : null}
+            {section === "management" ? <View style={styles.section}>{managementPane}</View> : null}
             {section === "capabilities" ? <CapabilitiesSection /> : null}
           </ScrollView>
         )}
@@ -330,6 +352,7 @@ function ManagementSection({
   isRefetching,
   onCreated,
   viewSwitch,
+  onOpenWorker,
 }: {
   workers: AggregatedWorker[];
   templates: AggregatedWorkerTemplate[];
@@ -338,6 +361,8 @@ function ManagementSection({
   onCreated: () => void;
   /** The Workers/Groups switch, rendered under the page title. */
   viewSwitch: ReactElement;
+  /** Opens a worker's detail view. */
+  onOpenWorker: (key: string) => void;
 }): ReactElement {
   const [isCreating, setIsCreating] = useState(workers.length === 0);
   const openCreate = useCallback(() => setIsCreating(true), []);
@@ -367,7 +392,12 @@ function ManagementSection({
       <View style={styles.cardGrid}>
         <CreateWorkerTile onPress={openCreate} />
         {workers.map((worker) => (
-          <WorkerCard key={`${worker.serverId}:${worker.id}`} worker={worker} tasks={tasks} />
+          <WorkerCard
+            key={`${worker.serverId}:${worker.id}`}
+            worker={worker}
+            tasks={tasks}
+            onOpen={onOpenWorker}
+          />
         ))}
       </View>
       {isCreating ? (
@@ -389,9 +419,11 @@ function ManagementSection({
 function WorkerCard({
   worker,
   tasks,
+  onOpen,
 }: {
   worker: AggregatedWorker;
   tasks: AggregatedWorkerTask[];
+  onOpen: (key: string) => void;
 }): ReactElement {
   const own = tasks.filter(
     (task) => task.serverId === worker.serverId && task.workerId === worker.id,
@@ -400,8 +432,16 @@ function WorkerCard({
     (latest, task) => (latest === null || task.updatedAt > latest ? task.updatedAt : latest),
     null,
   );
+  const key = `${worker.serverId}:${worker.id}`;
+  const handlePress = useCallback(() => onOpen(key), [onOpen, key]);
   return (
-    <View style={styles.workerCard} testID={`console-worker-${worker.id}`}>
+    <Pressable
+      onPress={handlePress}
+      style={styles.workerCard}
+      testID={`console-worker-${worker.id}`}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${worker.name}`}
+    >
       <View style={styles.workerCardHeader}>
         <View style={styles.workerAvatar}>
           <Text style={styles.workerAvatarText}>{worker.name.slice(0, 1).toUpperCase()}</Text>
@@ -425,7 +465,7 @@ function WorkerCard({
           {lastRun === null ? "Last run never" : `Last run ${formatShortDate(lastRun)}`}
         </Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
