@@ -621,3 +621,38 @@ typecheck 0 错误 / lint 0 错误 / format 通过
 ```
 
 **lint 抓出一条真信号：** `createMessage` 复杂度 21（上限 20）—— 它同时做**校验**和**写入**两件事。已把参与者校验抽成 `validateMessageRecipients`，两件事各自独立。这种地方不该靠调高阈值糊过去。
+
+### 切片 012：目标与预算（照搬上游 goal）
+
+**上游的设计原样搬**（一手证据：`qoderwake-collab-group/references/goal.md`）。三个关键点：
+
+1. **乐观并发。** `update/complete/pause/reopen` 都必须回传**读到的** `id` + `generation` + `revision`；版本不匹配即被拒，上游的原话是"read again and reconsider instead of overwriting it"。`generation` 在 reopen 时 +1（新一次尝试），`revision` 在其余变更时 +1。
+2. **预算只数公开消息。** 上游："Private messages do not consume this budget." 范围 1..96。
+3. **`pause` 的六个理由是封闭集合**（`user_stop`/`awaiting_user`/`turn_limit`/`no_progress`/`execution_error`/`leader_unavailable`），且上游明写**不许为了绕过已耗尽的预算而调高 turn limit**。
+
+**存储上让并发约束真的成立**：比较与写入是**同一条 UPDATE 语句**（`WHERE goal_id = ? AND generation = ? AND revision = ?`），`changes === 0` 即报冲突。先读后写会留下一个两个 run 都以为自己是赢家的窗口。
+
+**测试抓出一个真缺陷，而且是设计层面的。** 预算窗口原本用**时间戳**（`created_at >= generation_started_at`）。"reopen 重置预算"这条用例红了 —— 消息与 reopen 落在**同一毫秒**时，上一轮的公开消息仍在被计数。时间戳**太粗**，无法定义"自上次尝试以来"。改成**序列边界**（`seq > generation_start_seq`）：消息序号是按组单调分配的，不存在同毫秒歧义。
+
+那条用例已改成**专门覆盖这个场景**（含"reopen 之后发的消息仍要计数"，防止边界变成"什么都不数"的幌子）。改用序列边界时 `worker_goals` 表尚未在任何库中创建，所以不需要迁移 —— 已先核对过（版本 3、无该表）才动手，而不是假定。
+
+**CLI 的可用性缺口也是真机验证发现的。** `message send` 只打印 SEQ/FROM/TO/BODY，**不打印 message id**，而 `goal mutate --result-message` 需要它 —— 两者串不起来。已给消息表加 `MESSAGE ID` 列。
+
+**验证（真实 daemon + 真实 CLI）：**
+
+```
+goal get（未设）      → "Group grp_… has no goal yet / Set one with: byspace worker goal create"
+goal create           → active 1.1 0/12
+mutate update (1.1)   → 1.2
+再用过期的 1.1 写     → "changed since it was read. Read it again rather than overwriting."
+公开 1 条 + 私密 1 条 → 预算 1/12（私密不计）
+complete 不带交付消息 → "requires the message that delivered the result"
+未知 pause reason     → 列出六个合法理由
+complete 带交付消息   → completed 1.3
+reopen                → active 2.4，预算归零
+e2e verifier          34 项全通（新增 7 项 goal）
+vitest                97 files / 1043 tests
+typecheck 0 错误 / lint 0 错误 / format 通过
+```
+
+**lint 两次拦下复杂度超限，都是真信号**（都抽函数而非调阈值）：`verifyGoal` 的"必须被拒"样板重复出现，抽成 `captureRefusal`（返回 `NOT REFUSED` 标记，避免"什么都没拒到"被当成通过）；`dispatchWorkerMessage` 被新 case 顶到 22，按主题拆成 registry（角色/worker/任务/guard）与 collab（组/消息/目标）两个 dispatch —— 该文件本来就是这个分层写法。

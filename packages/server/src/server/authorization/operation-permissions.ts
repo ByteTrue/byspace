@@ -233,6 +233,12 @@ const INBOUND_PERMISSION = {
   "worker.message.list.request": "workspace.read",
   "worker.inbox.list.request": "workspace.read",
   "worker.message.delivery.request": "workspace.read",
+  // The goal is what the group is trying to deliver and what it may spend.
+  // Setting or changing it directs the group's work, so it is a write; reading
+  // it is inspection.
+  "worker.goal.get.request": "workspace.read",
+  "worker.goal.create.request": "workspace.write",
+  "worker.goal.mutate.request": "workspace.write",
 } as const satisfies Record<InboundOperation, PermissionRequirement>;
 
 const OUTBOUND_PERMISSION = {
@@ -467,6 +473,9 @@ const OUTBOUND_PERMISSION = {
   "worker.message.list.response": "workspace.read",
   "worker.inbox.list.response": "workspace.read",
   "worker.message.delivery.response": "workspace.read",
+  "worker.goal.get.response": "workspace.read",
+  "worker.goal.create.response": "workspace.write",
+  "worker.goal.mutate.response": "workspace.write",
 } as const satisfies Record<OutboundOperation, PermissionRequirement>;
 
 export function requiredPermissionForInbound(operation: InboundOperation): PermissionRequirement {

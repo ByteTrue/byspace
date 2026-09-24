@@ -9,6 +9,7 @@ import {
   runGroupRemoveWorkerCommand,
 } from "./group.js";
 import { runWorkerLsCommand } from "./ls.js";
+import { runGoalCreateCommand, runGoalGetCommand, runGoalMutateCommand } from "./goal.js";
 import {
   runInboxListCommand,
   runMessageListCommand,
@@ -134,6 +135,43 @@ export function createWorkerCommand(): Command {
       .requiredOption("--worker-id <id>", "Worker who read it")
       .allowExcessArguments(false),
   ).action(withOutput(runMessageReadCommand));
+
+  // The group's objective and its budget. A mutation must echo the version the
+  // caller read, so two runs cannot silently overwrite each other.
+  const goal = worker.command("goal").description("What a group is delivering, and its budget");
+
+  addJsonAndDaemonHostOptions(
+    goal
+      .command("get")
+      .description("Read a group's goal and its current version")
+      .requiredOption("--group-id <id>", "Group to read")
+      .allowExcessArguments(false),
+  ).action(withOutput(runGoalGetCommand));
+
+  addJsonAndDaemonHostOptions(
+    goal
+      .command("create")
+      .description("Set a group's objective and budget")
+      .requiredOption("--group-id <id>", "Group to set it on")
+      .requiredOption("--content <text>", "The user-facing delivery objective")
+      .requiredOption("--turn-limit <n>", "Public message budget, 1..96")
+      .allowExcessArguments(false),
+  ).action(withOutput(runGoalCreateCommand));
+
+  addJsonAndDaemonHostOptions(
+    goal
+      .command("mutate")
+      .description("Update, complete, pause or reopen a goal")
+      .requiredOption("--group-id <id>", "Group the goal belongs to")
+      .requiredOption("--action <action>", "update | complete | pause | reopen")
+      .requiredOption("--generation <n>", "Generation from `goal get`")
+      .requiredOption("--revision <n>", "Revision from `goal get`")
+      .option("--content <text>", "New objective (update, reopen)")
+      .option("--turn-limit <n>", "New public message budget (update, reopen)")
+      .option("--reason <reason>", "Pause reason (pause)")
+      .option("--result-message <message-id>", "The message that delivered the result (complete)")
+      .allowExcessArguments(false),
+  ).action(withOutput(runGoalMutateCommand));
 
   const group = worker.command("group").description("Project groups: a team on one project");
 

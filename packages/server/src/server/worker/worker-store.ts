@@ -28,7 +28,7 @@ import {
   type WorkerTaskState,
 } from "./worker-task-state.js";
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export interface WorkerRecord {
   id: string;
@@ -160,6 +160,90 @@ export interface CreateWorkerMessageInput {
   audience?: string[];
   privateTo?: string[];
   createdAt?: string;
+}
+
+// -------------------------------------------------------------------- goals
+
+export type WorkerGoalStatus = "active" | "completed" | "paused";
+
+/**
+ * Why automatic work stopped.
+ *
+ * `turn_limit` is distinct from `no_progress` on purpose: one is a budget being
+ * spent, the other is work that is not converging, and they call for different
+ * responses.
+ */
+export type WorkerGoalPauseReason =
+  | "user_stop"
+  | "awaiting_user"
+  | "turn_limit"
+  | "no_progress"
+  | "execution_error"
+  | "leader_unavailable";
+
+/**
+ * The budget counts public messages. The reference product fixes the range, so
+ * the bounds are policy and live here rather than at each call site.
+ */
+export const WORKER_GOAL_TURN_LIMIT_MIN = 1;
+export const WORKER_GOAL_TURN_LIMIT_MAX = 96;
+
+export interface WorkerGoalRecord {
+  goalId: string;
+  groupId: string;
+  /** The user-facing delivery objective. */
+  content: string;
+  turnLimit: number;
+  status: WorkerGoalStatus;
+  /** Advances on reopen: a new attempt at the objective. */
+  generation: number;
+  /** Advances on every other change. */
+  revision: number;
+  pauseReason: WorkerGoalPauseReason | null;
+  resultMessageId: string | null;
+  /** Public messages must exceed this sequence to count against the budget. */
+  generationStartSeq: number;
+  createdAt: string;
+  updatedAt: string;
+  /** Public messages spent against the current generation. */
+  turnUsed: number;
+}
+
+/** The mutations a goal accepts. `create` is separate: it has nothing to compare against. */
+export type WorkerGoalAction = "update" | "complete" | "pause" | "reopen";
+
+export interface MutateWorkerGoalInput {
+  groupId: string;
+  action: WorkerGoalAction;
+  /**
+   * The generation and revision the caller read. A mismatch means someone else
+   * changed the goal first, and the mutation is refused rather than applied.
+   */
+  expectedGeneration: number;
+  expectedRevision: number;
+  content?: string;
+  turnLimit?: number;
+  pauseReason?: WorkerGoalPauseReason;
+  resultMessageId?: string;
+  now?: string;
+}
+
+/** A goal mutation was written against a state that is no longer current. */
+export class WorkerGoalConflictError extends Error {
+  constructor(groupId: string) {
+    super(
+      `Goal for group ${groupId} changed since it was read. Read it again rather than overwriting.`,
+    );
+    this.name = "WorkerGoalConflictError";
+  }
+}
+
+/** A goal mutation is not valid for the goal's current state. */
+export class WorkerGoalActionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WorkerGoalActionError";
+  }
 }
 
 /**
@@ -376,6 +460,40 @@ export class WorkerStore {
 
       CREATE INDEX IF NOT EXISTS idx_worker_message_deliveries_inbox
         ON worker_message_deliveries(worker_id, state, message_id);
+
+      -- What the group is trying to deliver, and how much it may spend doing it.
+      --
+      -- One goal per group: the stream has a single objective, and reopen
+      -- carries it forward rather than starting a second one. A unique index
+      -- says so, because "the goal" is singular in every read and a second row
+      -- would make that ambiguous.
+      --
+      -- Generation and revision together identify an exact state, so a
+      -- mutation written against a stale read is refused instead of silently
+      -- winning. Generation advances on reopen (a new attempt at the
+      -- objective); revision advances on every other change.
+      CREATE TABLE IF NOT EXISTS worker_goals (
+        goal_id           TEXT PRIMARY KEY,
+        group_id          TEXT NOT NULL REFERENCES worker_groups(id) ON DELETE CASCADE,
+        content           TEXT NOT NULL,
+        turn_limit        INTEGER NOT NULL,
+        status            TEXT NOT NULL,
+        generation        INTEGER NOT NULL,
+        revision          INTEGER NOT NULL,
+        pause_reason      TEXT,
+        result_message_id TEXT REFERENCES worker_messages(message_id) ON DELETE SET NULL,
+        -- The budget counts public messages with a sequence above this, so
+        -- reopening starts a new count rather than inheriting the previous
+        -- attempt's spend. A sequence boundary rather than a timestamp: message
+        -- sequence is allocated monotonically per group, so it cannot misjudge
+        -- a message that happens to share a millisecond with the reopen.
+        generation_start_seq INTEGER NOT NULL,
+        created_at        TEXT NOT NULL,
+        updated_at        TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_worker_goals_one_per_group
+        ON worker_goals(group_id);
     `);
 
     const current = this.db
@@ -985,6 +1103,152 @@ export class WorkerStore {
     });
   }
 
+  // ------------------------------------------------------------------ goals
+
+  /**
+   * Create a group's goal.
+   *
+   * One per group: the stream has a single objective, and `reopen` carries it
+   * forward rather than starting a second one. The unique index makes a second
+   * row unrepresentable; this check exists only to say so readably.
+   */
+  createGoal(input: {
+    goalId: string;
+    groupId: string;
+    content: string;
+    turnLimit: number;
+    now?: string;
+  }): WorkerGoalRecord {
+    if (!this.getGroup(input.groupId)) {
+      throw new Error(`unknown worker group: ${input.groupId}`);
+    }
+    if (this.getGoal(input.groupId)) {
+      throw new WorkerGoalActionError(
+        `Group ${input.groupId} already has a goal. Reopen it instead of creating another.`,
+      );
+    }
+    assertTurnLimit(input.turnLimit);
+
+    const startSeq = this.maxMessageSeq(input.groupId);
+    const at = input.now ?? new Date().toISOString();
+    this.db
+      .prepare(
+        `INSERT INTO worker_goals
+           (goal_id, group_id, content, turn_limit, status, generation, revision,
+            pause_reason, result_message_id, generation_start_seq, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'active', 1, 1, NULL, NULL, ?, ?, ?)`,
+      )
+      .run(input.goalId, input.groupId, input.content, input.turnLimit, startSeq, at, at);
+
+    const created = this.getGoal(input.groupId);
+    if (!created) throw new Error(`goal ${input.goalId} vanished immediately after insert`);
+    return created;
+  }
+
+  getGoal(groupId: string): WorkerGoalRecord | null {
+    const row = this.db
+      .prepare(
+        `SELECT goal_id, group_id, content, turn_limit, status, generation, revision,
+                pause_reason, result_message_id, generation_start_seq, created_at, updated_at
+         FROM worker_goals WHERE group_id = ?`,
+      )
+      .get(groupId) as WorkerGoalRow | undefined;
+    return row ? this.toGoalRecord(row) : null;
+  }
+
+  /**
+   * Apply one goal mutation, refusing a stale one.
+   *
+   * The comparison and the write are the same statement, so a mutation written
+   * against a state that has since changed updates nothing and is reported as a
+   * conflict. Reading first and then writing would leave a window in which two
+   * runs both believe they won.
+   */
+  mutateGoal(input: MutateWorkerGoalInput): WorkerGoalRecord {
+    const current = this.getGoal(input.groupId);
+    if (!current) {
+      throw new Error(`unknown worker goal for group: ${input.groupId}`);
+    }
+    const next = planGoalMutation(current, input, this.maxMessageSeq(input.groupId));
+    const at = input.now ?? new Date().toISOString();
+
+    const result = this.db
+      .prepare(
+        `UPDATE worker_goals
+         SET content = ?, turn_limit = ?, status = ?, generation = ?, revision = ?,
+             pause_reason = ?, result_message_id = ?, generation_start_seq = ?, updated_at = ?
+         WHERE goal_id = ? AND generation = ? AND revision = ?`,
+      )
+      .run(
+        next.content,
+        next.turnLimit,
+        next.status,
+        next.generation,
+        next.revision,
+        next.pauseReason,
+        next.resultMessageId,
+        next.generationStartSeq,
+        at,
+        current.goalId,
+        input.expectedGeneration,
+        input.expectedRevision,
+      );
+
+    if (result.changes === 0) {
+      throw new WorkerGoalConflictError(input.groupId);
+    }
+
+    const updated = this.getGoal(input.groupId);
+    if (!updated) throw new Error(`goal ${current.goalId} vanished after update`);
+    return updated;
+  }
+
+  /**
+   * Public messages counted against the current generation.
+   *
+   * Private messages are excluded because the budget is a bound on what the
+   * group says in public, not on what it takes to get there. The window starts
+   * at the generation, so reopening starts a fresh count.
+   */
+  private countGoalTurns(row: WorkerGoalRow): number {
+    const counted = this.db
+      .prepare(
+        `SELECT COUNT(*) AS turns FROM worker_messages m
+         WHERE m.group_id = ? AND m.seq > ?
+           AND NOT EXISTS (
+             SELECT 1 FROM worker_message_private_to p WHERE p.message_id = m.message_id
+           )`,
+      )
+      .get(row.group_id, row.generation_start_seq) as { turns: number };
+    return counted.turns;
+  }
+
+  /** The group's newest sequence, or 0 when nothing has been said yet. */
+  private maxMessageSeq(groupId: string): number {
+    const row = this.db
+      .prepare("SELECT COALESCE(MAX(seq), 0) AS seq FROM worker_messages WHERE group_id = ?")
+      .get(groupId) as { seq: number };
+    return row.seq;
+  }
+
+  private toGoalRecord(row: WorkerGoalRow): WorkerGoalRecord {
+    return {
+      goalId: row.goal_id,
+      groupId: row.group_id,
+      content: row.content,
+      turnLimit: row.turn_limit,
+      status: row.status as WorkerGoalStatus,
+      generation: row.generation,
+      revision: row.revision,
+      pauseReason: row.pause_reason as WorkerGoalPauseReason | null,
+      resultMessageId: row.result_message_id,
+      generationStartSeq: row.generation_start_seq,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      turnUsed: this.countGoalTurns(row),
+    };
+  }
+
   /**
    * Mark a delivery picked up, or finished.
    *
@@ -1040,6 +1304,21 @@ interface WorkerGroupRow {
   updated_at: string;
 }
 
+interface WorkerGoalRow {
+  goal_id: string;
+  group_id: string;
+  content: string;
+  turn_limit: number;
+  status: string;
+  generation: number;
+  revision: number;
+  pause_reason: string | null;
+  result_message_id: string | null;
+  generation_start_seq: number;
+  created_at: string;
+  updated_at: string;
+}
+
 interface WorkerMessageRow {
   message_id: string;
   group_id: string;
@@ -1050,6 +1329,117 @@ interface WorkerMessageRow {
   delivery_policy: string;
   reply_to_message_id: string | null;
   created_at: string;
+}
+
+function assertTurnLimit(turnLimit: number): void {
+  if (
+    !Number.isSafeInteger(turnLimit) ||
+    turnLimit < WORKER_GOAL_TURN_LIMIT_MIN ||
+    turnLimit > WORKER_GOAL_TURN_LIMIT_MAX
+  ) {
+    throw new WorkerGoalActionError(
+      `A goal's turn limit must be an integer between ${WORKER_GOAL_TURN_LIMIT_MIN} and ${WORKER_GOAL_TURN_LIMIT_MAX}.`,
+    );
+  }
+}
+
+/**
+ * Work out the goal's next state for one action.
+ *
+ * Kept separate from the write so the rules read as rules: each action is
+ * validated against the state it is allowed to act on, and the version it
+ * produces is decided here rather than by the caller.
+ */
+function planGoalMutation(
+  current: WorkerGoalRecord,
+  input: MutateWorkerGoalInput,
+  /** The group's newest message sequence, used as the new generation's boundary. */
+  latestSeq: number,
+): {
+  content: string;
+  turnLimit: number;
+  status: WorkerGoalStatus;
+  generation: number;
+  revision: number;
+  pauseReason: WorkerGoalPauseReason | null;
+  resultMessageId: string | null;
+  /** Public messages must exceed this sequence to count against the budget. */
+  generationStartSeq: number;
+} {
+  const base = {
+    content: current.content,
+    turnLimit: current.turnLimit,
+    status: current.status,
+    generation: current.generation,
+    revision: current.revision + 1,
+    pauseReason: current.pauseReason,
+    resultMessageId: current.resultMessageId,
+    generationStartSeq: current.generationStartSeq,
+  };
+
+  switch (input.action) {
+    case "update": {
+      requireActive(current, "update");
+      const content = input.content ?? current.content;
+      if (content.trim().length === 0) {
+        throw new WorkerGoalActionError("An update must keep a non-empty objective.");
+      }
+      const turnLimit = input.turnLimit ?? current.turnLimit;
+      assertTurnLimit(turnLimit);
+      return { ...base, content, turnLimit };
+    }
+    case "complete": {
+      requireActive(current, "complete");
+      if (!input.resultMessageId) {
+        throw new WorkerGoalActionError(
+          "Completing a goal requires the message that delivered the result.",
+        );
+      }
+      return {
+        ...base,
+        status: "completed",
+        resultMessageId: input.resultMessageId,
+        pauseReason: null,
+      };
+    }
+    case "pause": {
+      requireActive(current, "pause");
+      if (!input.pauseReason) {
+        throw new WorkerGoalActionError("Pausing a goal requires a reason.");
+      }
+      return { ...base, status: "paused", pauseReason: input.pauseReason };
+    }
+    case "reopen": {
+      if (current.status === "active") {
+        throw new WorkerGoalActionError("This goal is already active; update it instead.");
+      }
+      const content = input.content ?? current.content;
+      if (content.trim().length === 0) {
+        throw new WorkerGoalActionError("Reopening a goal requires a non-empty objective.");
+      }
+      const turnLimit = input.turnLimit ?? current.turnLimit;
+      assertTurnLimit(turnLimit);
+      // A new generation: a fresh attempt, and a fresh budget to spend on it.
+      return {
+        ...base,
+        content,
+        turnLimit,
+        status: "active",
+        generation: current.generation + 1,
+        pauseReason: null,
+        resultMessageId: null,
+        generationStartSeq: latestSeq,
+      };
+    }
+  }
+}
+
+function requireActive(current: WorkerGoalRecord, action: string): void {
+  if (current.status !== "active") {
+    throw new WorkerGoalActionError(
+      `Cannot ${action} a goal that is ${current.status}. Reopen it first.`,
+    );
+  }
 }
 
 function toMessageRecord(

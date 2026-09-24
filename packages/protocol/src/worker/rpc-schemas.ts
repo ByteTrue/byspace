@@ -475,6 +475,100 @@ export const WorkerMessageDeliveryMarkResponseSchema = z.object({
   }),
 });
 
+// -------------------------------------------------------------------- goals
+
+export const WorkerGoalStatusSchema = z.enum(["active", "completed", "paused"]);
+
+/** Why automatic work stopped. Each calls for a different response. */
+export const WorkerGoalPauseReasonSchema = z.enum([
+  "user_stop",
+  "awaiting_user",
+  "turn_limit",
+  "no_progress",
+  "execution_error",
+  "leader_unavailable",
+]);
+
+/**
+ * The group's objective.
+ *
+ * `turnUsed` and `turnLimit` travel with it so a caller can see how much budget
+ * is left without a second request, and `generation`/`revision` are what a
+ * mutation must echo back.
+ */
+export const WorkerGoalSummarySchema = z.object({
+  goalId: z.string(),
+  groupId: z.string(),
+  content: z.string(),
+  turnLimit: z.number(),
+  /** Public messages spent against the current generation. */
+  turnUsed: z.number(),
+  status: WorkerGoalStatusSchema,
+  generation: z.number(),
+  revision: z.number(),
+  pauseReason: WorkerGoalPauseReasonSchema.nullable(),
+  /** The message that delivered the result, once the goal is completed. */
+  resultMessageId: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const WorkerGoalGetRequestSchema = z.object({
+  type: z.literal("worker.goal.get.request"),
+  requestId: z.string(),
+  groupId: z.string().min(1),
+});
+
+export const WorkerGoalGetResponseSchema = z.object({
+  type: z.literal("worker.goal.get.response"),
+  payload: z.object({
+    requestId: z.string(),
+    /** Null when the group has no goal yet; a group may exist before one is set. */
+    goal: WorkerGoalSummarySchema.nullable(),
+  }),
+});
+
+export const WorkerGoalCreateRequestSchema = z.object({
+  type: z.literal("worker.goal.create.request"),
+  requestId: z.string(),
+  groupId: z.string().min(1),
+  content: z.string().min(1),
+  turnLimit: z.number().int().positive(),
+});
+
+export const WorkerGoalCreateResponseSchema = z.object({
+  type: z.literal("worker.goal.create.response"),
+  payload: z.object({
+    requestId: z.string(),
+    goal: WorkerGoalSummarySchema,
+  }),
+});
+
+export const WorkerGoalMutateRequestSchema = z.object({
+  type: z.literal("worker.goal.mutate.request"),
+  requestId: z.string(),
+  groupId: z.string().min(1),
+  action: z.enum(["update", "complete", "pause", "reopen"]),
+  /**
+   * What the caller read. A mutation against a stale pair is refused, so a
+   * second writer cannot silently overwrite the first.
+   */
+  expectedGeneration: z.number().int().nonnegative(),
+  expectedRevision: z.number().int().nonnegative(),
+  content: z.string().min(1).optional(),
+  turnLimit: z.number().int().positive().optional(),
+  pauseReason: WorkerGoalPauseReasonSchema.optional(),
+  resultMessageId: z.string().min(1).optional(),
+});
+
+export const WorkerGoalMutateResponseSchema = z.object({
+  type: z.literal("worker.goal.mutate.response"),
+  payload: z.object({
+    requestId: z.string(),
+    goal: WorkerGoalSummarySchema,
+  }),
+});
+
 // Inferred types, exported on demand rather than all at once: consumers need the
 // shapes, not the validators, and an export nobody imports drifts unnoticed.
 // `WorkerTaskSummary` is the one the app derives its task-state union from.
@@ -483,3 +577,5 @@ export type WorkerGroupSummary = z.infer<typeof WorkerGroupSummarySchema>;
 export type WorkerMessageSummary = z.infer<typeof WorkerMessageSummarySchema>;
 export type WorkerMessageDeliveryPolicy = z.infer<typeof WorkerMessageDeliveryPolicySchema>;
 export type WorkerMessageIntent = z.infer<typeof WorkerMessageIntentSchema>;
+export type WorkerGoalSummary = z.infer<typeof WorkerGoalSummarySchema>;
+export type WorkerGoalPauseReason = z.infer<typeof WorkerGoalPauseReasonSchema>;

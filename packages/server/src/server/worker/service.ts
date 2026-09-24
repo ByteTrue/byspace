@@ -19,6 +19,8 @@ import { resolveBySpaceHome } from "../byspace-home.js";
 import {
   WorkerStore,
   resolveWorkerDatabasePath,
+  type MutateWorkerGoalInput,
+  type WorkerGoalRecord,
   type WorkerGroupMemberRecord,
   type WorkerGroupMemberRole,
   type WorkerGroupRecord,
@@ -389,6 +391,48 @@ export class WorkerService {
   }): boolean {
     this.getWorker(input.workerId);
     return this.getStore().markDelivery(input);
+  }
+
+  // ------------------------------------------------------------------ goals
+
+  /** A group's goal, or null when it has none yet. */
+  getGoal(groupId: string): WorkerGoalRecord | null {
+    this.getGroup(groupId);
+    return this.getStore().getGoal(groupId);
+  }
+
+  /**
+   * Set the group's objective and its budget.
+   *
+   * One goal per group: the stream has a single objective, and reopening
+   * carries it forward rather than starting a second one.
+   */
+  createGoal(input: { groupId: string; content: string; turnLimit: number }): WorkerGoalRecord {
+    this.getGroup(input.groupId);
+    const goalId = `goal_${randomBytes(6).toString("hex")}`;
+    const goal = this.getStore().createGoal({
+      goalId,
+      groupId: input.groupId,
+      content: input.content,
+      turnLimit: input.turnLimit,
+    });
+    this.logger.info(
+      { goalId, groupId: input.groupId, turnLimit: input.turnLimit },
+      "Created worker goal",
+    );
+    return goal;
+  }
+
+  /**
+   * Change a goal, refusing a write based on a stale read.
+   *
+   * The caller must pass the generation and revision it read. A mismatch means
+   * another run changed the goal first, and the reference product's rule is to
+   * read again and reconsider rather than overwrite.
+   */
+  mutateGoal(input: MutateWorkerGoalInput): WorkerGoalRecord {
+    this.getGroup(input.groupId);
+    return this.getStore().mutateGoal(input);
   }
 
   // ------------------------------------------------------------------- runs

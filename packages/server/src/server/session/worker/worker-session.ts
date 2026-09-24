@@ -372,6 +372,67 @@ export class WorkerSession {
     }
   }
 
+  // ---------------------------------------------------------------- goals
+
+  async handleGoalGetRequest(
+    request: Extract<SessionInboundMessage, { type: "worker.goal.get.request" }>,
+  ): Promise<void> {
+    try {
+      this.host.emit({
+        type: "worker.goal.get.response",
+        payload: {
+          requestId: request.requestId,
+          goal: this.workerService.getGoal(request.groupId),
+        },
+      });
+    } catch (error) {
+      this.emitError(request, error);
+    }
+  }
+
+  async handleGoalCreateRequest(
+    request: Extract<SessionInboundMessage, { type: "worker.goal.create.request" }>,
+  ): Promise<void> {
+    try {
+      const goal = this.workerService.createGoal({
+        groupId: request.groupId,
+        content: request.content,
+        turnLimit: request.turnLimit,
+      });
+      this.host.emit({
+        type: "worker.goal.create.response",
+        payload: { requestId: request.requestId, goal },
+      });
+    } catch (error) {
+      this.emitError(request, error);
+    }
+  }
+
+  async handleGoalMutateRequest(
+    request: Extract<SessionInboundMessage, { type: "worker.goal.mutate.request" }>,
+  ): Promise<void> {
+    try {
+      const goal = this.workerService.mutateGoal({
+        groupId: request.groupId,
+        action: request.action,
+        expectedGeneration: request.expectedGeneration,
+        expectedRevision: request.expectedRevision,
+        ...(request.content !== undefined ? { content: request.content } : {}),
+        ...(request.turnLimit !== undefined ? { turnLimit: request.turnLimit } : {}),
+        ...(request.pauseReason !== undefined ? { pauseReason: request.pauseReason } : {}),
+        ...(request.resultMessageId !== undefined
+          ? { resultMessageId: request.resultMessageId }
+          : {}),
+      });
+      this.host.emit({
+        type: "worker.goal.mutate.response",
+        payload: { requestId: request.requestId, goal },
+      });
+    } catch (error) {
+      this.emitError(request, error);
+    }
+  }
+
   /** Groups always carry their roster: a group without one says nothing useful. */
   private toGroupSummary(
     group: ReturnType<WorkerService["getGroup"]>,

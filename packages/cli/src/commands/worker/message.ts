@@ -20,7 +20,11 @@ export interface WorkerMessageRow {
 export const workerMessageSchema: OutputSchema<WorkerMessageRow> = {
   idField: "messageId",
   columns: [
+    // The id is shown, not just carried as the row's id field: it is what
+    // `--reply-to` and `goal mutate --result-message` take, so a caller has to
+    // be able to read it off the output.
     { header: "SEQ", field: "seq", width: 5 },
+    { header: "MESSAGE ID", field: "messageId", width: 20 },
     { header: "FROM", field: "sender", width: 18 },
     { header: "POLICY", field: "policy", width: 11 },
     { header: "TO", field: "audience", width: 22 },

@@ -96,6 +96,12 @@ import {
   WorkerInboxListResponseSchema,
   WorkerMessageDeliveryMarkRequestSchema,
   WorkerMessageDeliveryMarkResponseSchema,
+  WorkerGoalGetRequestSchema,
+  WorkerGoalGetResponseSchema,
+  WorkerGoalCreateRequestSchema,
+  WorkerGoalCreateResponseSchema,
+  WorkerGoalMutateRequestSchema,
+  WorkerGoalMutateResponseSchema,
 } from "./worker/rpc-schemas.js";
 import { BrowserAutomationHostCapabilitySchema } from "./browser-automation/capabilities.js";
 import {
@@ -3447,6 +3453,9 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   WorkerMessageListRequestSchema,
   WorkerInboxListRequestSchema,
   WorkerMessageDeliveryMarkRequestSchema,
+  WorkerGoalGetRequestSchema,
+  WorkerGoalCreateRequestSchema,
+  WorkerGoalMutateRequestSchema,
 ]);
 
 export type SessionInboundMessage = z.infer<typeof SessionInboundMessageSchema>;
@@ -6904,6 +6913,9 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   WorkerMessageListResponseSchema,
   WorkerInboxListResponseSchema,
   WorkerMessageDeliveryMarkResponseSchema,
+  WorkerGoalGetResponseSchema,
+  WorkerGoalCreateResponseSchema,
+  WorkerGoalMutateResponseSchema,
 ]);
 
 export type SessionOutboundMessage = z.infer<typeof SessionOutboundMessageSchema>;

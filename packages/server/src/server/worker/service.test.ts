@@ -320,3 +320,135 @@ describe("worker service messages", () => {
     expect(service.listMessages({ groupId, viewerWorkerId: carol.id })).toHaveLength(0);
   });
 });
+
+describe("worker service goals", () => {
+  async function seedGroup(service: WorkerService) {
+    const alice = await service.createWorker({
+      name: "Alice",
+      templateId: "project-administrator",
+      workspacePath: join(home, "alice"),
+    });
+    const group = service.createGroup({
+      name: "Pricing page",
+      projectId: "prj_1",
+      coordinatorWorkerId: alice.id,
+    });
+    return { groupId: group.id, alice: alice.id };
+  }
+
+  it("creates a goal and reads it back", async () => {
+    const service = createService();
+    const { groupId } = await seedGroup(service);
+
+    service.createGoal({ groupId, content: "Ship the pricing page", turnLimit: 20 });
+
+    expect(service.getGoal(groupId)).toMatchObject({
+      content: "Ship the pricing page",
+      status: "active",
+      generation: 1,
+      revision: 1,
+      turnUsed: 0,
+    });
+  });
+
+  it("reports no goal rather than throwing for a group that has none", async () => {
+    // A group exists before its goal does, so this is a normal state.
+    const service = createService();
+    const { groupId } = await seedGroup(service);
+    expect(service.getGoal(groupId)).toBeNull();
+  });
+
+  it("refuses a goal on an unknown group", async () => {
+    const service = createService();
+    await seedGroup(service);
+    expect(() =>
+      service.createGoal({ groupId: "grp_missing", content: "x", turnLimit: 5 }),
+    ).toThrow(/Unknown worker group/);
+  });
+
+  it("counts only public messages against the budget", async () => {
+    const service = createService();
+    const { groupId, alice } = await seedGroup(service);
+    service.createGoal({ groupId, content: "Ship it", turnLimit: 20 });
+
+    service.sendMessage({ groupId, senderWorkerId: alice, body: "public" });
+    service.sendMessage({ groupId, senderWorkerId: alice, body: "private", privateTo: [alice] });
+
+    expect(service.getGoal(groupId)?.turnUsed).toBe(1);
+  });
+
+  it("refuses a mutation written against a stale version", async () => {
+    const service = createService();
+    const { groupId } = await seedGroup(service);
+    service.createGoal({ groupId, content: "Ship it", turnLimit: 20 });
+
+    service.mutateGoal({
+      groupId,
+      action: "update",
+      expectedGeneration: 1,
+      expectedRevision: 1,
+      content: "first wins",
+    });
+
+    expect(() =>
+      service.mutateGoal({
+        groupId,
+        action: "update",
+        expectedGeneration: 1,
+        expectedRevision: 1,
+        content: "stale writer",
+      }),
+    ).toThrow(/changed since it was read/);
+    expect(service.getGoal(groupId)?.content).toBe("first wins");
+  });
+
+  it("completes a goal with the message that delivered it", async () => {
+    const service = createService();
+    const { groupId, alice } = await seedGroup(service);
+    service.createGoal({ groupId, content: "Ship it", turnLimit: 20 });
+    const { message } = service.sendMessage({
+      groupId,
+      senderWorkerId: alice,
+      body: "Here is the pricing page",
+    });
+
+    const goal = service.mutateGoal({
+      groupId,
+      action: "complete",
+      expectedGeneration: 1,
+      expectedRevision: 1,
+      resultMessageId: message.messageId,
+    });
+
+    expect(goal).toMatchObject({ status: "completed", resultMessageId: message.messageId });
+  });
+
+  it("carries the goal forward on reopen with a fresh budget", async () => {
+    const service = createService();
+    const { groupId, alice } = await seedGroup(service);
+    service.createGoal({ groupId, content: "Ship it", turnLimit: 20 });
+    service.sendMessage({ groupId, senderWorkerId: alice, body: "public" });
+
+    service.mutateGoal({
+      groupId,
+      action: "pause",
+      expectedGeneration: 1,
+      expectedRevision: 1,
+      pauseReason: "awaiting_user",
+    });
+    const reopened = service.mutateGoal({
+      groupId,
+      action: "reopen",
+      expectedGeneration: 1,
+      expectedRevision: 2,
+      content: "Ship it, second attempt",
+    });
+
+    expect(reopened).toMatchObject({
+      content: "Ship it, second attempt",
+      generation: 2,
+      status: "active",
+      turnUsed: 0,
+    });
+  });
+});

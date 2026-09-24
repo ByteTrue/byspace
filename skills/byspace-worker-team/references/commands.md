@@ -99,3 +99,36 @@ message, which means it was not for them; that is an answer, not an error.
 Read a group's stream with your own `--viewer-worker-id` unless you mean to inspect the
 whole group. Without it you get the operator view, including messages you are not a
 reader of.
+
+## Goals
+
+A group has one goal: what it is delivering, and how many public messages it may
+spend doing it.
+
+```bash
+byspace worker goal get --group-id <id>
+byspace worker goal create --group-id <id> --content "<objective>" --turn-limit <n>
+byspace worker goal mutate --group-id <id> --action update|complete|pause|reopen \
+  --generation <n> --revision <n> [--content <text>] [--turn-limit <n>] \
+  [--reason <reason>] [--result-message <message-id>]
+```
+
+**Read before you write, and echo the version back.** Every mutation except `create`
+requires `--generation` and `--revision` exactly as `goal get` returned them. A write
+against a version that has since changed is refused, because another run changed the goal
+first. When that happens, read again and reconsider — do not retry with the same numbers.
+
+**Budget counts public messages only.** `turnUsed/turnLimit` bounds what the group says in
+public, not what it takes to get there, so private messages are free. The limit is 1..96.
+
+**Completing names what delivered the result.** `--action complete` requires
+`--result-message` pointing at the message that carried the result to the user. Completion
+is a claim about delivery, so it has to say what was delivered.
+
+**Reopening starts a new generation.** It carries the objective forward (or replaces it),
+clears the previous result, and resets the budget — a new attempt gets its own budget
+rather than inheriting the previous attempt's spend. Do not raise `--turn-limit` only to
+get around an exhausted budget; `pause --reason turn_limit` says so honestly.
+
+Pause reasons are `user_stop`, `awaiting_user`, `turn_limit`, `no_progress`,
+`execution_error`, and `leader_unavailable`. Anything else is rejected.

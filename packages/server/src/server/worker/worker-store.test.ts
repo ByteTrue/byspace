@@ -12,7 +12,12 @@ import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { IllegalWorkerTaskTransitionError } from "./worker-task-state.js";
-import { SCHEMA_VERSION, WorkerGroupCoordinatorError, WorkerStore } from "./worker-store.js";
+import {
+  SCHEMA_VERSION,
+  WorkerGoalConflictError,
+  WorkerGroupCoordinatorError,
+  WorkerStore,
+} from "./worker-store.js";
 
 let dir: string;
 let store: WorkerStore;
@@ -639,5 +644,302 @@ describe("worker messages", () => {
     store = new WorkerStore({ databasePath });
     expect(store.listMessages({ groupId: "grp_1" })[0]?.body).toBe("durable");
     expect(store.listInbox("w2")).toHaveLength(1);
+  });
+});
+
+describe("worker goals", () => {
+  const GROUP = { id: "grp_1", name: "Pricing page", projectId: "prj_abc" };
+
+  beforeEach(() => {
+    store.createWorker({ ...WORKER, id: "w2", name: "Bob" });
+    store.createGroup(GROUP);
+  });
+
+  function createGoal(overrides: Partial<Parameters<WorkerStore["createGoal"]>[0]> = {}) {
+    return store.createGoal({
+      goalId: "goal_1",
+      groupId: "grp_1",
+      content: "Ship the pricing page",
+      turnLimit: 20,
+      ...overrides,
+    });
+  }
+
+  function send(body: string, privateTo?: string[]) {
+    return store.createMessage({
+      messageId: `msg_${Math.random().toString(16).slice(2)}`,
+      groupId: "grp_1",
+      senderWorkerId: "w1",
+      body,
+      ...(privateTo !== undefined ? { privateTo, audience: privateTo } : {}),
+    });
+  }
+
+  it("starts active at generation 1", () => {
+    const goal = createGoal();
+    expect(goal).toMatchObject({
+      content: "Ship the pricing page",
+      turnLimit: 20,
+      status: "active",
+      generation: 1,
+      revision: 1,
+      turnUsed: 0,
+    });
+  });
+
+  it("refuses a second goal for the same group", () => {
+    // One objective per stream: `reopen` carries it forward.
+    createGoal();
+    expect(() => createGoal({ goalId: "goal_2" })).toThrow(/already has a goal/);
+  });
+
+  it("refuses a turn limit outside the allowed range", () => {
+    expect(() => createGoal({ turnLimit: 0 })).toThrow(/between 1 and 96/);
+    expect(() => createGoal({ turnLimit: 97 })).toThrow(/between 1 and 96/);
+    expect(() => createGoal({ turnLimit: 2.5 })).toThrow(/between 1 and 96/);
+  });
+
+  it("counts public messages against the budget", () => {
+    createGoal();
+    send("one");
+    send("two");
+    expect(store.getGoal("grp_1")?.turnUsed).toBe(2);
+  });
+
+  it("does not count private messages against the budget", () => {
+    // The budget bounds what the group says in public, not what it takes to
+    // get there.
+    createGoal();
+    send("public");
+    send("private", ["w2"]);
+    expect(store.getGoal("grp_1")?.turnUsed).toBe(1);
+  });
+
+  it("advances revision on update and keeps the generation", () => {
+    createGoal();
+    const updated = store.mutateGoal({
+      groupId: "grp_1",
+      action: "update",
+      expectedGeneration: 1,
+      expectedRevision: 1,
+      content: "Ship the pricing page and the docs",
+    });
+    expect(updated).toMatchObject({
+      content: "Ship the pricing page and the docs",
+      generation: 1,
+      revision: 2,
+      status: "active",
+    });
+  });
+
+  it("refuses a mutation written against a stale revision", () => {
+    // Two runs both read revision 1. The first wins; the second must not
+    // silently overwrite it.
+    createGoal();
+    store.mutateGoal({
+      groupId: "grp_1",
+      action: "update",
+      expectedGeneration: 1,
+      expectedRevision: 1,
+      content: "first writer wins",
+    });
+
+    expect(() =>
+      store.mutateGoal({
+        groupId: "grp_1",
+        action: "update",
+        expectedGeneration: 1,
+        expectedRevision: 1,
+        content: "second writer",
+      }),
+    ).toThrow(WorkerGoalConflictError);
+
+    expect(store.getGoal("grp_1")?.content).toBe("first writer wins");
+  });
+
+  it("refuses a mutation written against a stale generation", () => {
+    createGoal();
+    store.mutateGoal({
+      groupId: "grp_1",
+      action: "pause",
+      expectedGeneration: 1,
+      expectedRevision: 1,
+      pauseReason: "awaiting_user",
+    });
+    const reopened = store.mutateGoal({
+      groupId: "grp_1",
+      action: "reopen",
+      expectedGeneration: 1,
+      expectedRevision: 2,
+      content: "Second attempt",
+    });
+    expect(reopened.generation).toBe(2);
+
+    expect(() =>
+      store.mutateGoal({
+        groupId: "grp_1",
+        action: "update",
+        expectedGeneration: 1,
+        expectedRevision: 3,
+        content: "written against the old generation",
+      }),
+    ).toThrow(WorkerGoalConflictError);
+  });
+
+  it("requires the delivering message to complete a goal", () => {
+    // Completion is a claim about delivery, so it must name what delivered it.
+    createGoal();
+    expect(() =>
+      store.mutateGoal({
+        groupId: "grp_1",
+        action: "complete",
+        expectedGeneration: 1,
+        expectedRevision: 1,
+      }),
+    ).toThrow(/requires the message that delivered the result/);
+  });
+
+  it("completes with the delivering message", () => {
+    createGoal();
+    const delivered = send("here is the pricing page");
+    const goal = store.mutateGoal({
+      groupId: "grp_1",
+      action: "complete",
+      expectedGeneration: 1,
+      expectedRevision: 1,
+      resultMessageId: delivered.messageId,
+    });
+    expect(goal).toMatchObject({ status: "completed", resultMessageId: delivered.messageId });
+  });
+
+  it("refuses to update a goal that is not active", () => {
+    createGoal();
+    store.mutateGoal({
+      groupId: "grp_1",
+      action: "pause",
+      expectedGeneration: 1,
+      expectedRevision: 1,
+      pauseReason: "no_progress",
+    });
+    expect(() =>
+      store.mutateGoal({
+        groupId: "grp_1",
+        action: "update",
+        expectedGeneration: 1,
+        expectedRevision: 2,
+        content: "nope",
+      }),
+    ).toThrow(/not-progress|Cannot update a goal that is paused/);
+  });
+
+  it("resets the budget count on reopen", () => {
+    // A new generation is a new attempt, so it gets a fresh budget rather than
+    // inheriting the previous attempt's spend.
+    createGoal();
+    send("one");
+    send("two");
+    expect(store.getGoal("grp_1")?.turnUsed).toBe(2);
+
+    store.mutateGoal({
+      groupId: "grp_1",
+      action: "pause",
+      expectedGeneration: 1,
+      expectedRevision: 1,
+      pauseReason: "turn_limit",
+    });
+    const reopened = store.mutateGoal({
+      groupId: "grp_1",
+      action: "reopen",
+      expectedGeneration: 1,
+      expectedRevision: 2,
+      turnLimit: 10,
+    });
+
+    expect(reopened).toMatchObject({ generation: 2, status: "active", turnLimit: 10, turnUsed: 0 });
+  });
+
+  it("resets the budget even when the reopen shares a timestamp with the messages", () => {
+    // The budget window is a sequence boundary, not a timestamp. A timestamp
+    // window fails here: these sends and the reopen land in the same
+    // millisecond, so `created_at >= generation_started_at` would keep counting
+    // the previous attempt's messages.
+    createGoal();
+    const first = send("one");
+    send("two");
+
+    store.mutateGoal({
+      groupId: "grp_1",
+      action: "pause",
+      expectedGeneration: 1,
+      expectedRevision: 1,
+      pauseReason: "turn_limit",
+    });
+    const reopened = store.mutateGoal({
+      groupId: "grp_1",
+      action: "reopen",
+      expectedGeneration: 1,
+      expectedRevision: 2,
+    });
+
+    expect(reopened.turnUsed).toBe(0);
+    // And a message sent after the reopen does count, so the boundary is a
+    // boundary rather than a way of never counting anything.
+    send("three");
+    expect(store.getGoal("grp_1")?.turnUsed).toBe(1);
+    expect(first.seq).toBe(1);
+  });
+
+  it("clears the result and pause reason on reopen", () => {
+    createGoal();
+    const delivered = send("done");
+    store.mutateGoal({
+      groupId: "grp_1",
+      action: "complete",
+      expectedGeneration: 1,
+      expectedRevision: 1,
+      resultMessageId: delivered.messageId,
+    });
+    const reopened = store.mutateGoal({
+      groupId: "grp_1",
+      action: "reopen",
+      expectedGeneration: 1,
+      expectedRevision: 2,
+    });
+    expect(reopened.status).toBe("active");
+    expect(reopened.resultMessageId).toBeNull();
+    expect(reopened.pauseReason).toBeNull();
+  });
+
+  it("refuses to reopen a goal that is already active", () => {
+    createGoal();
+    expect(() =>
+      store.mutateGoal({
+        groupId: "grp_1",
+        action: "reopen",
+        expectedGeneration: 1,
+        expectedRevision: 1,
+      }),
+    ).toThrow(/already active/);
+  });
+
+  it("refuses a pause without a reason", () => {
+    createGoal();
+    expect(() =>
+      store.mutateGoal({
+        groupId: "grp_1",
+        action: "pause",
+        expectedGeneration: 1,
+        expectedRevision: 1,
+      }),
+    ).toThrow(/requires a reason/);
+  });
+
+  it("survives reopening the database", () => {
+    createGoal();
+    send("one");
+    const databasePath = path.join(dir, "worker.db");
+    store.close();
+    store = new WorkerStore({ databasePath });
+    expect(store.getGoal("grp_1")).toMatchObject({ content: "Ship the pricing page", turnUsed: 1 });
   });
 });

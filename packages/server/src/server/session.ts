@@ -2535,6 +2535,11 @@ export class Session {
   }
 
   private dispatchWorkerMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    return this.dispatchWorkerRegistryMessage(msg) ?? this.dispatchWorkerCollabMessage(msg);
+  }
+
+  /** Roles, workers, their tasks, and the tool guard. */
+  private dispatchWorkerRegistryMessage(msg: SessionInboundMessage): Promise<void> | undefined {
     switch (msg.type) {
       case "worker.template.list.request":
         return this.workerSession.handleTemplateListRequest(msg);
@@ -2556,10 +2561,22 @@ export class Session {
         return this.workerSession.handleTaskListRequest(msg);
       case "worker.guard.evaluate.request":
         return this.workerSession.handleGuardEvaluateRequest(msg);
+      default:
+        return undefined;
+    }
+  }
+
+  /** Groups, what they say, and the objective they say it in service of. */
+  private dispatchWorkerCollabMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
       case "worker.group.list.request":
         return this.workerSession.handleGroupListRequest(msg);
       case "worker.group.create.request":
         return this.workerSession.handleGroupCreateRequest(msg);
+      case "worker.group.add_member.request":
+        return this.workerSession.handleGroupAddMemberRequest(msg);
+      case "worker.group.remove_member.request":
+        return this.workerSession.handleGroupRemoveMemberRequest(msg);
       case "worker.message.send.request":
         return this.workerSession.handleMessageSendRequest(msg);
       case "worker.message.list.request":
@@ -2568,10 +2585,12 @@ export class Session {
         return this.workerSession.handleInboxListRequest(msg);
       case "worker.message.delivery.request":
         return this.workerSession.handleMessageDeliveryRequest(msg);
-      case "worker.group.add_member.request":
-        return this.workerSession.handleGroupAddMemberRequest(msg);
-      case "worker.group.remove_member.request":
-        return this.workerSession.handleGroupRemoveMemberRequest(msg);
+      case "worker.goal.get.request":
+        return this.workerSession.handleGoalGetRequest(msg);
+      case "worker.goal.create.request":
+        return this.workerSession.handleGoalCreateRequest(msg);
+      case "worker.goal.mutate.request":
+        return this.workerSession.handleGoalMutateRequest(msg);
       default:
         return undefined;
     }

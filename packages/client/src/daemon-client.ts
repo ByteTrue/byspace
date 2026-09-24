@@ -595,6 +595,18 @@ type WorkerMessageDeliveryPayload = Extract<
   SessionOutboundMessage,
   { type: "worker.message.delivery.response" }
 >["payload"];
+type WorkerGoalGetPayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.goal.get.response" }
+>["payload"];
+type WorkerGoalCreatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.goal.create.response" }
+>["payload"];
+type WorkerGoalMutatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.goal.mutate.response" }
+>["payload"];
 type WorkerGroupListPayload = Extract<
   SessionOutboundMessage,
   { type: "worker.group.list.response" }
@@ -2746,6 +2758,71 @@ export class DaemonClient {
         state: input.state,
       },
       responseType: "worker.message.delivery.response",
+    });
+  }
+
+  /** A group's goal, or null when it has none yet. */
+  async getWorkerGoal(groupId: string, requestId?: string): Promise<WorkerGoalGetPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "worker.goal.get.request", groupId },
+      responseType: "worker.goal.get.response",
+    });
+  }
+
+  async createWorkerGoal(
+    input: { groupId: string; content: string; turnLimit: number },
+    requestId?: string,
+  ): Promise<WorkerGoalCreatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "worker.goal.create.request",
+        groupId: input.groupId,
+        content: input.content,
+        turnLimit: input.turnLimit,
+      },
+      responseType: "worker.goal.create.response",
+    });
+  }
+
+  /**
+   * Change a goal.
+   *
+   * `expectedGeneration` and `expectedRevision` must be what the caller read.
+   * A mutation against a stale pair is refused rather than applied, so two
+   * writers cannot silently overwrite each other.
+   */
+  async mutateWorkerGoal(
+    input: {
+      groupId: string;
+      action: Extract<SessionInboundMessage, { type: "worker.goal.mutate.request" }>["action"];
+      expectedGeneration: number;
+      expectedRevision: number;
+      content?: string;
+      turnLimit?: number;
+      pauseReason?: Extract<
+        SessionInboundMessage,
+        { type: "worker.goal.mutate.request" }
+      >["pauseReason"];
+      resultMessageId?: string;
+    },
+    requestId?: string,
+  ): Promise<WorkerGoalMutatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "worker.goal.mutate.request",
+        groupId: input.groupId,
+        action: input.action,
+        expectedGeneration: input.expectedGeneration,
+        expectedRevision: input.expectedRevision,
+        ...(input.content !== undefined ? { content: input.content } : {}),
+        ...(input.turnLimit !== undefined ? { turnLimit: input.turnLimit } : {}),
+        ...(input.pauseReason !== undefined ? { pauseReason: input.pauseReason } : {}),
+        ...(input.resultMessageId !== undefined ? { resultMessageId: input.resultMessageId } : {}),
+      },
+      responseType: "worker.goal.mutate.response",
     });
   }
 

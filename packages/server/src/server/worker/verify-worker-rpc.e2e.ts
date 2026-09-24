@@ -205,6 +205,13 @@ async function main(): Promise<void> {
       outsiderWorkerId: outsider.worker.id,
     });
 
+    await verifyGoal({
+      client,
+      checks,
+      groupId: group.group.id,
+      coordinatorWorkerId: workerId,
+    });
+
     for (const check of checks) {
       console.log(`  ok   ${check.name.padEnd(28)} ${check.detail}`);
     }
@@ -222,6 +229,21 @@ async function main(): Promise<void> {
  * visible without waking anyone, and privacy filters reads without changing who
  * was woken.
  */
+/**
+ * Run something expected to be refused and return the refusal message.
+ *
+ * Returns a marker when nothing was refused, so a check can fail loudly on an
+ * absent refusal instead of passing because it caught nothing.
+ */
+async function captureRefusal(run: () => Promise<unknown>): Promise<string> {
+  try {
+    await run();
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  return "NOT REFUSED";
+}
+
 async function verifyMessaging(input: {
   client: DaemonClient;
   checks: Array<{ name: string; detail: string }>;
@@ -334,6 +356,143 @@ async function verifyMessaging(input: {
   });
   if (afterRead.entries.length !== 1) {
     throw new Error("only the read message should leave the inbox");
+  }
+}
+
+/**
+ * Goal checks.
+ *
+ * The two properties worth proving over a wire are that the version a caller
+ * read is what authorizes its write, and that the budget counts public messages
+ * only. A concurrency rule that is enforced in the daemon but not carried on the
+ * wire would leave a remote writer unable to detect its own staleness.
+ */
+async function verifyGoal(input: {
+  client: DaemonClient;
+  checks: Array<{ name: string; detail: string }>;
+  groupId: string;
+  coordinatorWorkerId: string;
+}): Promise<void> {
+  const { client, checks, groupId, coordinatorWorkerId } = input;
+
+  const created = await client.createWorkerGoal({
+    groupId,
+    content: "Deliver the pricing page to the user",
+    turnLimit: 12,
+  });
+  checks.push({
+    name: "create goal",
+    detail: `${created.goal.status} v${created.goal.generation}.${created.goal.revision} budget=${created.goal.turnUsed}/${created.goal.turnLimit}`,
+  });
+  if (created.goal.turnUsed !== 0) {
+    throw new Error("a fresh goal has spent nothing");
+  }
+
+  // A stale write must be refused: both callers read v1.1, only the first wins.
+  const won = await client.mutateWorkerGoal({
+    groupId,
+    action: "update",
+    expectedGeneration: created.goal.generation,
+    expectedRevision: created.goal.revision,
+    content: "Deliver the pricing page and the docs",
+  });
+  const staleRefused = await captureRefusal(() =>
+    client.mutateWorkerGoal({
+      groupId,
+      action: "update",
+      expectedGeneration: created.goal.generation,
+      expectedRevision: created.goal.revision,
+      content: "written against the version it no longer has",
+    }),
+  );
+  checks.push({ name: "stale goal write refused", detail: staleRefused.slice(0, 70) });
+  if (staleRefused === "NOT REFUSED") {
+    throw new Error("a mutation against a stale version must be refused");
+  }
+
+  const refetched = await client.getWorkerGoal(groupId);
+  checks.push({
+    name: "goal kept the winner",
+    detail: `${refetched.goal?.content} v${refetched.goal?.generation}.${refetched.goal?.revision}`,
+  });
+  if (refetched.goal?.content !== won.goal.content) {
+    throw new Error("the stale writer must not have overwritten the winner");
+  }
+
+  // Budget counts public messages only.
+  await client.sendWorkerMessage({
+    groupId,
+    senderWorkerId: coordinatorWorkerId,
+    body: "starting work",
+  });
+  await client.sendWorkerMessage({
+    groupId,
+    senderWorkerId: coordinatorWorkerId,
+    body: "private note to myself",
+    privateTo: [coordinatorWorkerId],
+  });
+  const afterSends = await client.getWorkerGoal(groupId);
+  checks.push({
+    name: "budget counts public only",
+    detail: `used=${afterSends.goal?.turnUsed} of ${afterSends.goal?.turnLimit}`,
+  });
+  // Exactly the one public message sent after the goal existed. The messaging
+  // checks ran before the goal was created, so their messages are below the
+  // generation boundary and correctly do not count against this budget; the
+  // private message sent just now is excluded for its own reason. Asserting a
+  // bare 1 keeps both exclusions under test at once.
+  if ((afterSends.goal?.turnUsed ?? 0) !== 1) {
+    throw new Error(`expected 1 public message counted, got ${afterSends.goal?.turnUsed}`);
+  }
+
+  // Completion must name what delivered the result.
+  const missingDelivery = await captureRefusal(() =>
+    client.mutateWorkerGoal({
+      groupId,
+      action: "complete",
+      expectedGeneration: afterSends.goal!.generation,
+      expectedRevision: afterSends.goal!.revision,
+    }),
+  );
+  checks.push({ name: "completion needs delivery", detail: missingDelivery.slice(0, 60) });
+  if (missingDelivery === "NOT REFUSED") {
+    throw new Error("completing without the delivering message must be refused");
+  }
+
+  const delivered = await client.sendWorkerMessage({
+    groupId,
+    senderWorkerId: coordinatorWorkerId,
+    body: "Here is the pricing page",
+  });
+  const completed = await client.mutateWorkerGoal({
+    groupId,
+    action: "complete",
+    expectedGeneration: afterSends.goal!.generation,
+    expectedRevision: afterSends.goal!.revision,
+    resultMessageId: delivered.message.messageId,
+  });
+  checks.push({
+    name: "complete goal",
+    detail: `${completed.goal.status} result=${completed.goal.resultMessageId === delivered.message.messageId}`,
+  });
+
+  // Reopening carries the objective forward with a fresh generation and budget.
+  const reopened = await client.mutateWorkerGoal({
+    groupId,
+    action: "reopen",
+    expectedGeneration: completed.goal.generation,
+    expectedRevision: completed.goal.revision,
+    content: "Add the annual billing page",
+  });
+  checks.push({
+    name: "reopen resets budget",
+    detail: `gen=${reopened.goal.generation} used=${reopened.goal.turnUsed} status=${reopened.goal.status}`,
+  });
+  if (reopened.goal.generation !== 2 || reopened.goal.turnUsed !== 0) {
+    throw new Error("reopening must start a new generation with a fresh budget");
+  }
+  if (reopened.goal.resultMessageId !== null) {
+    throw new Error("reopening must clear the previous result");
   }
 }
 

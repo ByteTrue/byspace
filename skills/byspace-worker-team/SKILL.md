@@ -76,6 +76,25 @@ Check your inbox when you are woken; mark a message read only once the work it a
 is actually done. Claiming a message keeps it in your inbox, so an interrupted job can be
 picked back up.
 
+## The goal
+
+A group has one goal: the objective, and a budget of public messages to spend on it.
+
+```bash
+byspace worker goal get --group-id <id>
+byspace worker goal create --group-id <id> --content "<objective>" --turn-limit <n>
+byspace worker goal mutate --group-id <id> --action <action> --generation <n> --revision <n> ...
+```
+
+Read the goal before changing it and pass the `generation` and `revision` you read. A
+write against a version that has since changed is refused — that means someone else
+changed the goal, so read again rather than retrying.
+
+Complete a goal only once a message has actually delivered the result to the user, and
+name that message. Pause it with a reason when you are waiting or stuck. Reopening starts
+a fresh generation with a fresh budget, so do not raise the limit to get around a budget
+you already spent.
+
 ## Reporting
 
 The group's state and every task's state are queryable at any time. Report what the
