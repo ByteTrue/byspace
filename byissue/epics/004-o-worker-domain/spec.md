@@ -1,0 +1,136 @@
+---
+kind: epic
+title: "worker 域：数字员工与项目组自协调"
+status: open
+owner_decision: approved
+created: 2026-09-24
+approval_evidence:
+  owner: "「在当前 byspace 比如左上角加个按钮，然后跳转到一个全新的路由，当做一个独立的新功能页来做」；「直接抄」；「我要的就是新增一个『数字员工』这套业务角色叙事」；「新做一套」；「术语就用 worker」（2026-09-24）"
+  scope_retraction: "「IM，知识库，定时任务自动化那一块不重要，可以放最后。我想要的是角色，群聊，角色自协调那块」；「先不引入其他项目吧，我们就先只看 qoder 或者说阿里这个生态的」（2026-09-24）"
+  talk: ../../talks/003-worker-domain-qoderwake-reference.md
+---
+
+# worker 域：数字员工与项目组自协调
+
+> **读者：** 在这条变化里对齐的人。要长出什么、为什么值得、只从谁那里取、哪些明确不碰、怎么排序、关了合回哪里。
+
+---
+
+## 这条线要改变什么
+
+BySpace 现在管的是**会话**：你选一个 workspace，起一个 agent，读它的时间线。agent 短暂、无身份、无记忆、彼此不知情。
+
+本 Epic 长出第二个产品面：**worker**。agent 成为长期对象，有名字、角色、工作区、记忆、技能与权限边界；多个 worker 组成**项目组**，在同一项目上协作，由一个协调者拉人、拆活、派活、汇总，最后向用户汇报。
+
+形态是「我给人提需求，人自己组队把事办了，回来汇报」，不是「我逐个操作 agent」。
+
+**这是新增，不是替换。** 结构化会话与 terminal 会话两条主线保持原样；worker 域是独立路由下的独立功能页，能力可复用，界面不耦合。见 `byissue/vision/index.md`「产品核心」与「参考产品」。
+
+- 来源 Vision：`byissue/vision/index.md`「参考产品」的 QoderWake 条目。
+- 关联 spec：本 Epic 不改 `agent-conversation.md`、`terminal.md`、`workspace.md` 描述的现有行为；关闭时产物合入一份新的 worker 规格。
+
+## 当前怎么理解（活规格）
+
+**为什么值得做。** 会话模型能回答「这个 agent 现在在做什么」，回答不了「我托付的这件事现在怎么样了」。要后者，agent 必须有跨会话的身份与记忆，任务必须有归属、目标与预算，协作必须有可见的消息流。QoderWake 把这件事做成了产品；本 Epic 在自己的架构里落地它。
+
+**只从这一条血缘链取。** 三者同源，各有分工：
+
+| 取什么             | 从哪取                    | 依据                                                                                                 |
+| ------------------ | ------------------------- | ---------------------------------------------------------------------------------------------------- |
+| 产品形态与信息架构 | QoderWake（运行实例观察） | 布局、交互流程照抄；样式用 BySpace token 重做                                                        |
+| 任务状态与通知机制 | AgentTeams（Apache-2.0）  | 转换表单入口、history 同批写入、机制化通知                                                           |
+| 权限策略模型       | QwenPaw（Apache-2.0）     | Tool Guard / Access Policy / File Guard，真源码可移植                                                |
+| 角色模板与技能     | 已收割资产                | 11 模板 61 技能，位于 `/Users/zijie/workspace/refs/qoderwake-worker-assets/`，见其 README 的许可说明 |
+
+**从 AgentTeams 取四个已验证的设计**（深挖结论见 talk `§7`）：
+
+1. **任务状态用一张转换表管，单一入口写。** 它自己踩过的坑：状态转换散在五个调用点、守卫宽严不一、没有历史、task 与节点状态会永久分叉。修法是一张 `states + transitions` 表作单一事实来源，全部变更走一个函数：校验 → 写状态 → 追加 history（封顶）→ 多层同批同步。同状态重入不记条目。
+2. **通知靠机制，不靠模型记得。** 它原先把“发完成消息”交给 Worker 自己记，结果上下文压缩后 Worker 忘了，Leader 收不到唤醒、下游任务卡在 `waiting`。改成机制自动发，并用稳定 txn id 幂等去重。**我们的协调者派活与成员汇报必须同构，不得依赖提示词。**
+3. **capability 与角色正交。** 角色回答“你是谁”，capability 回答“你能碰哪个敏感面”；完整顺序是 `角色基线 AND 范围匹配 AND 持有 capability`。并且跨范围拒绝返回 **404 而非 403**——403 会让人**枚举出**他看不见的对象。
+4. **写侧 deny-by-default 并用测试钉住。** 它只允许受限角色改一个字段，其余逐项拒绝，且有测试断言“请求类型的每个字段都必须被显式决定，不得因遗漏而变成可写”。
+
+**它没有的不抄：** AgentTeams 无任务板、无独立审批收件箱（审批在聊天房里）、**无回合预算机制**。这三块继续按 QoderWake 的设计走（看板 + Goal 预算）。
+
+**不引入这条链之外的任何开源项目。** Owner 已裁决：只看阿里 / agentscope 生态，避免多框架缝合。Paperclip、5dive、Kortix、Orca 等已调研并记录在 case，仅作背景认知，不进设计输入。
+
+**运行时用 pi，不做多 provider 适配。** QoderWake 驱动自己的 `qodercli`，我们不复制这条。`packages/server/src/server/agent/providers/pi/` 已有完整的结构化适配（`agent.ts`、`cli-runtime.ts`、`history-mapper.ts`、`tool-call-mapper.ts`、`session-descriptor.ts`），worker 的每次执行都通过它。
+
+**存储用 SQLite，落在 worker 域内。** 主域是文件 JSON + Zod，无迁移框架；worker 域自成一套，不试图统一，也不改动主域 store。
+
+**概念只做一个：项目组。** QoderWake 的 group 与 team 是同一个对象的旧名与新名——它做过 `RENAME COLUMN team_idempotency_key TO group_idempotency_key`，并保留 `normalizeLegacyTeamGroupRecord` 等兼容函数。它的 group 本身即 `project_id NOT NULL`，与 Owner 的直觉一致：最终都在项目上工作。因此不做两个概念。
+
+**自协调的四个原语**（取自 QoderWake，落点按 AgentTeams 的机制校正）：
+
+| 原语           | 作用                                                                 |
+| -------------- | -------------------------------------------------------------------- |
+| 项目组         | 绑 project 与 workspace 的协作容器，含协调者成员                     |
+| 目标（Goal）   | 总目标 + **成本闸**：有消息/回合预算，超预算停止自动唤醒而非静默继续 |
+| 计划与角色执行 | 协调者提计划 → 拆任务 → 成员按角色执行                               |
+| 路由           | **提及即唤醒**；不提及只是上下文，不消耗。可见性与唤醒是两件事       |
+
+**必须守住。**
+
+- 结构化会话与 terminal 会话行为不变；worker 域不修改它们的 spec。
+- 全部能力在浏览器可用，不得只做进某个外壳。
+- worker 不能批准自己的审批。高风险命令在 runtime 层拦截，不靠提示词。这条从第一天就有。
+- 成本有上界：并发数与预算上限明确，超限行为是停止而非静默继续。
+- worker 域的数据与权限不污染主域既有 store 与 permissions 结论。
+- 不依赖任何云账号；不依赖 IM 渠道。
+
+**质量承诺。**
+
+- 安全性：高风险命令在 runtime 层被拦截并可审计；worker 无法自批；跨范围拒绝不泄露对象是否存在。证明方式：命令注入、资源滥用、敏感文件、提权四类规则各有拦截用例，加一条跨范围 404 用例。
+- 资源效率：自协调的并发与预算有上界，且超限时停止自动唤醒。证明方式：构造超预算的往返协作，观察其停止而非扩散。
+- 可靠性：任务状态转换只有单一入口，越序转换被拒且有历史可查；daemon 重启后项目组的目标、消息与任务归属不丢、不重复派活。
+- 可用性：从「给需求」到「收到汇报」的主路径在窄屏可读可操作。
+- 可维护性：接入一个新角色成本是一次模板导入；新增一条角色技能不改 runtime 代码。
+
+**术语。**
+
+- **Worker（数字员工）：** 长期存在的 agent 实体，有身份、工作区、记忆、技能与权限边界。一次任务是它的一个 Session。
+- **项目组：** 多个 worker 在同一项目与工作区上协作的容器，含目标、计划与角色分工。
+- **协调者：** 项目组里负责拆解、派活、汇总与向用户汇报的成员。
+- **角色模板：** 一个 worker 的初始身份，由职责、人格、工作手册、能力清单与配套技能组成。
+- **提及即唤醒：** 只有被明确点名的成员会被唤醒；未点名只是可见的上下文。
+- **预算：** 一次协作可消耗的消息/回合上界，触顶即停止自动唤醒。
+
+## 现在推什么、先搁什么
+
+**可推进（第一批）：**
+
+1. **worker 域地基**：实体模型、SQLite schema、与 pi runtime 的装配方式、权限闸的落点。先设计后实现，受 AgentTeams 深挖结论校正。
+2. **角色模板导入**：把已收割的 11 模板与 61 技能收进仓库、去掉云端命名前缀、定下模板格式。
+3. **项目组**：绑 project 与 workspace，成员与协调者。
+4. **群聊与路由**：消息流、提及即唤醒、可见性与唤醒分离。
+5. **目标与协调者**：目标与预算、拆解、派活、汇总、向用户汇报。
+
+**Issues：**（位于同目录 `issues/`；编号仅在本 Epic 内有效）
+
+- [ ] `issues/001-o-worker-domain-foundation.md` — worker 域地基设计与首批切片 / 依赖 AgentTeams 深挖结论 / 验证：实体与 schema 定稿、权限闸落点明确、pi 装配路径可跑通
+
+**暂不推进：** IM 渠道与配对；知识库；定时任务与自动化触发；WakerFlow 式流程编排；插件与技能市场；云账号与额度；跨设备远程 worker；自主技能演进与能力回收。
+
+**不在本 Epic：** 主域架构整理（`byissue/issues/025-o-architecture-retention-audit.md`）；跨 workspace 编排入口（`byissue/issues/026-o-cross-workspace-orchestrator.md`，本 Epic 不替代它，两者的关系待第一批跑通后判断）。
+
+**明确不做：** 改动或弱化结构化会话与 terminal；把 worker 做成唯一入口；引入阿里生态之外的开源项目作为底座；移植 QoderWake 的 minified 代码。
+
+**未确认问题：**
+
+- 项目组与 workspace 的绑定粒度：一个组绑一个项目、每个 worker 每次任务开一个 worktree，是当前倾向，未拍板。
+- 记忆的载体与版本化方式：QoderWake 用工作区内的 Markdown 加 git 快照；是否照搬未定。
+- 技能的自演进（自动沉淀与回收）是否在后续批次引入。
+- 权限层移植的深度：只取策略模型，还是连规则目录与扫描器一并取。
+
+**关闭时要满足：** 第一批五项可推进内容完成并验证；四项质量承诺有证据；worker 域不侵入既有 spec 所描述的行为。
+
+**合并回 project spec 的候选：** 新增一份 worker 域规格（实体、项目组、协作协议、权限边界），并在 `spec/index.md` 的体验地图中加入条目。
+
+**Vision 同步检查：** 「参考产品」中 QoderWake 条目的实现程度；「演化地图」中本 Epic 状态；判断 worker 域是否要从「参考产品」升格为 vision 里并列的第二产品面。
+
+## 相关材料
+
+- `byissue/talks/003-worker-domain-qoderwake-reference.md` — 本 Epic 的全部来源：本机测绘、资产清单、权限层开源发现、群与自协调机制、取用边界。
+- `docs/permissions.md` — 现有 daemon 级权限模型；worker 域的权限闸与它并存，边界需写清。
+- `docs/data-model.md` — 主域的文件 JSON 与 store 规范；worker 域的 SQLite 自成一套。
+- `packages/server/src/server/agent/providers/pi/` — worker 执行的运行时。
+- `/Users/zijie/workspace/refs/qoderwake-worker-assets/` — 已收割的 11 模板与 61 技能，含来源、许可与校验和说明（尚未进仓库）。

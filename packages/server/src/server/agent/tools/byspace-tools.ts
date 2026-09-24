@@ -3102,6 +3102,9 @@ export function createBySpaceToolCatalog(options: BySpaceToolHostDependencies): 
         requestId,
         response,
         logger: childLogger,
+        // The catalog is built per calling agent, so this is the identity that
+        // may not be the subject of the request it is answering.
+        callerAgentId,
       });
       return {
         content: [],

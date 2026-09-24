@@ -894,6 +894,107 @@ describe("agent MCP tools", () => {
     }
   });
 
+  it("refuses to let an agent approve its own permission request", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager:
+        new BoundaryProviderSnapshotManagerFake() as unknown as ProviderSnapshotManager,
+      callerAgentId: "agent-1",
+      logger,
+    });
+    const client = await connectInMemoryMcpClient(server);
+
+    try {
+      const result = await client.callTool({
+        name: "respond_to_permission",
+        arguments: {
+          agentId: "agent-1",
+          requestId: "permission-1",
+          response: { behavior: "allow" },
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(JSON.stringify(result.content)).toContain(
+        "cannot respond to its own permission request",
+      );
+      // The refusal must precede the provider call, not follow it.
+      expect(spies.agentManager.respondToPermission).not.toHaveBeenCalled();
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("still lets an agent answer another agent's permission request", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager:
+        new BoundaryProviderSnapshotManagerFake() as unknown as ProviderSnapshotManager,
+      callerAgentId: "agent-lead",
+      logger,
+    });
+    const client = await connectInMemoryMcpClient(server);
+
+    try {
+      const result = await client.callTool({
+        name: "respond_to_permission",
+        arguments: {
+          agentId: "agent-1",
+          requestId: "permission-1",
+          response: { behavior: "allow" },
+        },
+      });
+
+      expect(result.isError).not.toBe(true);
+      expect(spies.agentManager.respondToPermission).toHaveBeenCalledWith(
+        "agent-1",
+        "permission-1",
+        {
+          behavior: "allow",
+        },
+      );
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("still lets a non-agent caller such as the console resolve a permission request", async () => {
+    const { agentManager, agentStorage, spies } = createTestDeps();
+    // No callerAgentId: the caller is the user, who is not an agent and so
+    // cannot be the subject of the request.
+    const server = await createAgentMcpServer({
+      agentManager,
+      agentStorage,
+      providerSnapshotManager:
+        new BoundaryProviderSnapshotManagerFake() as unknown as ProviderSnapshotManager,
+      logger,
+    });
+    const client = await connectInMemoryMcpClient(server);
+
+    try {
+      const result = await client.callTool({
+        name: "respond_to_permission",
+        arguments: {
+          agentId: "agent-1",
+          requestId: "permission-1",
+          response: { behavior: "allow" },
+        },
+      });
+
+      expect(result.isError).not.toBe(true);
+      expect(spies.agentManager.respondToPermission).toHaveBeenCalled();
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
   it("captures terminal output through the terminal manager authority", async () => {
     const { agentManager, agentStorage } = createTestDeps();
     const captureTerminal = vi.fn().mockResolvedValue({

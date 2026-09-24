@@ -52,7 +52,12 @@ BySpace 让你从任何一个浏览器查看和操控自己开发环境里的 AI
 
 **与上游的关系。** BySpace 以 Paseo 为基线，最后一次同步停在 Paseo v0.8.0（2026-09-11），此后不再追上游。Paseo 只作参考：取修复与我们要的能力，不取与本项目方向无关的部分。身份迁移已经改掉包作用域、wire 字面量与磁盘命名空间，不设兼容层，见 `docs/protocol-compatibility.md`。
 
-**参考产品。** orca 是 terminal agent 体验的吸收来源，只借交互，不借架构，按区域逐块吸收而不整体照搬。它 MIT 授权，移植代码需保留版权声明；栈不同，UI 按 BySpace 设计系统重做，daemon 侧逻辑可以移植。当前吸收工作在 Epic 003。
+**参考产品。** 两份，性质不同。
+
+- **orca** 是 terminal agent 体验的吸收来源，只借交互，不借架构，按区域逐块吸收而不整体照搬。它 MIT 授权，移植代码需保留版权声明；栈不同，UI 按 BySpace 设计系统重做，daemon 侧逻辑可以移植。当前吸收工作在 Epic 003。
+- **QoderWake** 是第二个产品面的完全参考。它与 BySpace 同为 daemon + web，但重心是"数字员工"：agent 从会话提升为有身份、记忆、技能、权限和自动化边界的长期对象，用户从操作 agent 转为审阅其产出。BySpace 的 worker 域按它的设计整体落地——布局、信息架构、交互流程照抄，样式用 BySpace token 与设计系统重做，术语用 `worker`，不做多 provider（运行时用 pi），不引入云账号与 IM 渠道依赖。它的角色模板与内置技能作为初始资产移植；权限与审批层从其上游 QwenPaw（Apache-2.0）移植，不从二进制反推。
+
+**与既有主线的关系。** worker 域是独立路由下的独立功能页，能力复用而界面不耦合；它不改变结构化会话与 terminal 两条主线，也不取代它们。取舍理由、范围与资产清单见 `byissue/talks/003-worker-domain-qoderwake-reference.md`。
 
 **探索中或候选：**
 
@@ -62,10 +67,12 @@ BySpace 让你从任何一个浏览器查看和操控自己开发环境里的 AI
 
 ## 演化地图
 
+- `byissue/epics/004-o-worker-domain/spec.md`：建设中。新增 worker 域——数字员工与项目组自协调，是 vision「参考产品」中 QoderWake 条目的落地。
 - `byissue/epics/003-o-orca-terminal-agent-experience/spec.md`：建设中。对照 orca 优化 terminal agent 体验，不改变结构化会话。
 - `byissue/issues/019-x-sync-upstream-to-0-8-0-beta.md`：已完成。同步上游到 `v0.8.0-beta.1`，结论已毕业到 `agent-conversation.md` 与 `connection.md`。
 - `byissue/spec/agent-conversation.md`、`terminal.md`、`workspace.md`、`connection.md`：当前真相，Epic 003 只扩展 terminal 一侧。
 - `byissue/talks/001-terminal-native-hard-fork.md`：一次关于"要不要转向 terminal-native 并独立 fork"的完整讨论，结论是撤回。想知道为什么两条路共存、为什么不以 orca 为底、为什么继续同步上游，读它。
+- `byissue/talks/003-worker-domain-qoderwake-reference.md`：worker 域与 QoderWake 参考的讨论记录。包含本机测绘、角色模板格式与资产清单、群与自协调机制、同类开源调研、已定决策与仍开放项。已落为 Epic 004。
 
 ## 用语与下一步读哪
 
@@ -74,6 +81,9 @@ BySpace 让你从任何一个浏览器查看和操控自己开发环境里的 AI
 - **活动状态：** 圆点与通知背后的粗粒度状态。terminal 一侧由 hook 上报，尽力而为。
 - **Hook：** 安装进 agent 配置目录、把事件转成活动状态发给 daemon 的小段代码。
 - **吸收：** 从 orca 借鉴交互做法，在 BySpace 自己的架构和设计系统里重做。
+- **Worker / 数字员工：** 长期存在的 agent 实体，有身份、工作区、记忆、技能、权限与自动化边界；一次任务是它的一个 Session。
+- **项目组：** 多个 worker 在同一项目与工作区上协作的容器，带目标、计划与角色分工。QoderWake 把它拆成 group 与 team 两个阶段，BySpace 只做一个概念。
 - 想理解方向怎么来的 → `byissue/talks/001-terminal-native-hard-fork.md`
+- 想理解 worker 域怎么定的 → `byissue/talks/003-worker-domain-qoderwake-reference.md`
 - 想知道现在能做什么 → `byissue/spec/index.md`
 - 想摘开发切片 → `byissue/epics/003-o-orca-terminal-agent-experience/spec.md` 与其 `issues/`

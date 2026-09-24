@@ -8,7 +8,7 @@ import type {
   AgentPermissionResponse,
 } from "./agent-sdk-types.js";
 import type { AgentStreamEvent } from "../messages.js";
-import { respondToAgentPermission } from "./permission-response.js";
+import { respondToAgentPermission, SelfPermissionApprovalError } from "./permission-response.js";
 
 class FakePermissionAgentManager {
   permissionResult: AgentPermissionResult | void;
@@ -138,5 +138,57 @@ describe("respondToAgentPermission", () => {
         prompt: "continue after approval",
       },
     ]);
+  });
+
+  describe("self-approval", () => {
+    test("refuses a response from the agent that raised the request", async () => {
+      const agentManager = new FakePermissionAgentManager();
+
+      await expect(
+        respondToAgentPermission({
+          agentManager,
+          agentId: "agent-1",
+          requestId: "permission-1",
+          response: { behavior: "allow" },
+          logger,
+          callerAgentId: "agent-1",
+        }),
+      ).rejects.toThrow(SelfPermissionApprovalError);
+
+      // The refusal must happen before the provider is told anything.
+      expect(agentManager.permissionResponses).toEqual([]);
+      expect(agentManager.streamRuns).toEqual([]);
+    });
+
+    test("allows a different agent to respond", async () => {
+      const agentManager = new FakePermissionAgentManager();
+
+      await respondToAgentPermission({
+        agentManager,
+        agentId: "agent-1",
+        requestId: "permission-1",
+        response: { behavior: "allow" },
+        logger,
+        callerAgentId: "agent-lead",
+      });
+
+      expect(agentManager.permissionResponses).toHaveLength(1);
+    });
+
+    test("allows a caller with no agent identity, such as the user's console", async () => {
+      const agentManager = new FakePermissionAgentManager();
+
+      await respondToAgentPermission({
+        agentManager,
+        agentId: "agent-1",
+        requestId: "permission-1",
+        response: { behavior: "allow" },
+        logger,
+      });
+
+      // Absence of an agent identity means the caller is not an agent, so it
+      // cannot be approving its own request.
+      expect(agentManager.permissionResponses).toHaveLength(1);
+    });
   });
 });
