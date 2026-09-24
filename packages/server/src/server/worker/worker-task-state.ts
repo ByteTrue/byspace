@@ -8,7 +8,7 @@
  * written. Add states and edges here, not at the call site.
  *
  * Borrowed shape from AgentTeams' TeamHarness task transition engine
- * (Apache-2.0); see byissue/epics/004-o-worker-domain/.
+ * (Apache-2.0); see byissue/epics/004-x-worker-domain/.
  */
 
 export const WORKER_TASK_STATES = [

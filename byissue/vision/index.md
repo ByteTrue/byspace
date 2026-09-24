@@ -69,7 +69,7 @@ BySpace 让你从任何一个浏览器查看和操控自己开发环境里的 AI
 
 ## 演化地图
 
-- `byissue/epics/004-o-worker-domain/spec.md`：**第一批已交付**（角色、项目组、群聊与路由、目标与预算、汇报）。规格已合入 `byissue/spec/worker.md`。
+- `byissue/epics/004-x-worker-domain/spec.md`：**已关闭**。第一批已交付（角色、项目组、群聊与路由、目标与预算、汇报），规格已毕业到 `byissue/spec/worker.md`。
 - `byissue/epics/003-o-orca-terminal-agent-experience/spec.md`：建设中。对照 orca 优化 terminal agent 体验，不改变结构化会话。
 - `byissue/issues/019-x-sync-upstream-to-0-8-0-beta.md`：已完成。同步上游到 `v0.8.0-beta.1`，结论已毕业到 `agent-conversation.md` 与 `connection.md`。
 - `byissue/spec/agent-conversation.md`、`terminal.md`、`workspace.md`、`connection.md`：当前真相，Epic 003 只扩展 terminal 一侧。

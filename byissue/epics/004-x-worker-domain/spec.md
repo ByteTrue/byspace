@@ -1,7 +1,7 @@
 ---
 kind: epic
 title: "worker 域：数字员工与项目组自协调"
-status: open
+status: closed
 owner_decision: approved
 created: 2026-09-24
 approval_evidence:
@@ -12,6 +12,12 @@ approval_evidence:
 
 # worker 域：数字员工与项目组自协调
 
+> **已关闭。** 第一批五项目标（角色、项目组、群聊与路由、目标与预算、汇报）已交付并验证。
+> **毕业去向：** `byissue/spec/worker.md`（词汇、长期边界与取舍、被排除方案、不属于的范围）与 `byissue/spec/index.md` 的体验地图条目。
+> **Vision：** 已按事实更新（worker 域从「参考产品」升格为并列的第二产品面）。
+> **沉淀：** `byissue/notes/003-checks-that-pass-without-testing.md`。
+> 切片过程、验证流水与关闭核对表留在本文件与 `issues/` 中，作为设计与验证历史。
+
 > **读者：** 在这条变化里对齐的人。要长出什么、为什么值得、只从谁那里取、哪些明确不碰、怎么排序、关了合回哪里。
 
 ---
@@ -19,6 +25,8 @@ approval_evidence:
 ## 取用原则（Owner 定，全 Epic 适用）
 
 **上游有的设计，直接照搬，不再逐个征询。** QoderWake 已经把这些决策验证过一遍；重新推演一遍只会花掉时间，还会长出与上游不一致的第二套做法。
+
+**QoderWake 在 http://127.0.0.1:19820/ 长期运行。** 做任何 UI、交互或逻辑之前，**先用 agent-browser 去看它现在长什么样、怎么走**。视觉与交互同样可以直接抄 —— 不只抄命令面与数据模型。看不到就去看它，不要凭记忆推。
 
 **不要为上游已经定下的选择新开决策点。** 命名、字段、默认值、错误码、命令形状、存储形状 —— 上游怎么定就怎么用。只有上游**没有**对应设计、且该选择会影响 BySpace 这一侧怎么落地时，才需要问。
 
@@ -125,7 +133,7 @@ BySpace 现在管的是**会话**：你选一个 workspace，起一个 agent，�
 
 **Issues：**（位于同目录 `issues/`；编号仅在本 Epic 内有效）
 
-- [ ] `issues/001-o-worker-domain-foundation.md` — worker 域地基与首批切片／**切片 001–002–004–005–006 已完成**／验证：实体与 schema、pi 装配、权限闸、协议、界面
+- [ ] `issues/001-x-worker-domain-foundation.md` — worker 域地基与首批切片／**切片 001–002–004–005–006 已完成**／验证：实体与 schema、pi 装配、权限闸、协议、界面
 
 **已完成（切片级成果，已提交）：**
 

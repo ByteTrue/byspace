@@ -8,7 +8,7 @@
  *
  * Rule data is ported from QwenPaw (agentscope-ai/QwenPaw, Apache-2.0) rather
  * than written here, because those patterns encode years of shell footguns. See
- * `rules.json` for provenance and `byissue/epics/004-o-worker-domain/` for why.
+ * `rules.json` for provenance and `byissue/epics/004-x-worker-domain/` for why.
  *
  * Deliberate scope: this evaluates a command string. It does not parse shell
  * grammar. Quote-aware scanning is approximated faithfully enough to catch the

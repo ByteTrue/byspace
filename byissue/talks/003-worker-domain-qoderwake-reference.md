@@ -341,7 +341,7 @@ AI 之前只把 QwenPaw 当作 tool_guard 的上游。实际不是：
 
 ## 出口
 
-**已执行：** 落为 Epic `byissue/epics/004-o-worker-domain/`（状态 open，owner_decision approved），首个 Issue `issues/001-o-worker-domain-foundation.md`。vision「参考产品」与「演化地图」已更新。
+**已执行：** 落为 Epic `byissue/epics/004-x-worker-domain/`（状态 open，owner_decision approved），首个 Issue `issues/001-x-worker-domain-foundation.md`。vision「参考产品」与「演化地图」已更新。
 
 **Epic 分五块：** worker 域 / worker runtime / 项目组自协调 / 控制台 UI / 审批闸。
 
