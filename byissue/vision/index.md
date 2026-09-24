@@ -55,9 +55,11 @@ BySpace 让你从任何一个浏览器查看和操控自己开发环境里的 AI
 **参考产品。** 两份，性质不同。
 
 - **orca** 是 terminal agent 体验的吸收来源，只借交互，不借架构，按区域逐块吸收而不整体照搬。它 MIT 授权，移植代码需保留版权声明；栈不同，UI 按 BySpace 设计系统重做，daemon 侧逻辑可以移植。当前吸收工作在 Epic 003。
-- **QoderWake** 是第二个产品面的完全参考。它与 BySpace 同为 daemon + web，但重心是"数字员工"：agent 从会话提升为有身份、记忆、技能、权限和自动化边界的长期对象，用户从操作 agent 转为审阅其产出。BySpace 的 worker 域按它的设计整体落地——布局、信息架构、交互流程照抄，样式用 BySpace token 与设计系统重做，术语用 `worker`，不做多 provider（运行时用 pi），不引入云账号与 IM 渠道依赖。它的角色模板与内置技能作为初始资产移植；权限与审批层从其上游 QwenPaw（Apache-2.0）移植，不从二进制反推。
+- **QoderWake** 是 worker 域的完全参考，该域已落地为 BySpace 的第二个产品面（见下）。它与 BySpace 同为 daemon + web，但重心是"数字员工"：agent 从会话提升为有身份、记忆、技能、权限和自动化边界的长期对象，用户从操作 agent 转为审阅其产出。BySpace 的 worker 域按它的设计整体落地——布局、信息架构、交互流程照抄，样式用 BySpace token 与设计系统重做，术语用 `worker`，不做多 provider（运行时用 pi），不引入云账号与 IM 渠道依赖。它的角色模板与内置技能作为初始资产移植；权限与审批层从其上游 QwenPaw（Apache-2.0）移植，不从二进制反推。
 
-**与既有主线的关系。** worker 域是独立路由下的独立功能页，能力复用而界面不耦合；它不改变结构化会话与 terminal 两条主线，也不取代它们。取舍理由、范围与资产清单见 `byissue/talks/003-worker-domain-qoderwake-reference.md`。
+**第二个产品面：worker。** agent 从"一次会话"变成**长期对象**——有名字、角色、工作区与权限边界；多个 worker 组成**项目组**，由**协调者**拉人、拆活、派活、汇总，并主动向用户汇报。用户的动作从"逐个操作 agent"变成"给一件事，然后读结果"。入口是独立路由 `/workers`，自带侧栏，不套工作区外壳。
+
+它与两条会话主线并列而不是替代：结构化会话与 terminal 都不变，能力复用而界面不耦合。规格见 `byissue/spec/worker.md`；取舍理由、范围与资产清单见 `byissue/talks/003-worker-domain-qoderwake-reference.md`。
 
 **探索中或候选：**
 
@@ -67,7 +69,7 @@ BySpace 让你从任何一个浏览器查看和操控自己开发环境里的 AI
 
 ## 演化地图
 
-- `byissue/epics/004-o-worker-domain/spec.md`：建设中。新增 worker 域——数字员工与项目组自协调，是 vision「参考产品」中 QoderWake 条目的落地。
+- `byissue/epics/004-o-worker-domain/spec.md`：**第一批已交付**（角色、项目组、群聊与路由、目标与预算、汇报）。规格已合入 `byissue/spec/worker.md`。
 - `byissue/epics/003-o-orca-terminal-agent-experience/spec.md`：建设中。对照 orca 优化 terminal agent 体验，不改变结构化会话。
 - `byissue/issues/019-x-sync-upstream-to-0-8-0-beta.md`：已完成。同步上游到 `v0.8.0-beta.1`，结论已毕业到 `agent-conversation.md` 与 `connection.md`。
 - `byissue/spec/agent-conversation.md`、`terminal.md`、`workspace.md`、`connection.md`：当前真相，Epic 003 只扩展 terminal 一侧。
@@ -81,8 +83,8 @@ BySpace 让你从任何一个浏览器查看和操控自己开发环境里的 AI
 - **活动状态：** 圆点与通知背后的粗粒度状态。terminal 一侧由 hook 上报，尽力而为。
 - **Hook：** 安装进 agent 配置目录、把事件转成活动状态发给 daemon 的小段代码。
 - **吸收：** 从 orca 借鉴交互做法，在 BySpace 自己的架构和设计系统里重做。
-- **Worker / 数字员工：** 长期存在的 agent 实体，有身份、工作区、记忆、技能、权限与自动化边界；一次任务是它的一个 Session。
-- **项目组：** 多个 worker 在同一项目与工作区上协作的容器，带目标、计划与角色分工。QoderWake 把它拆成 group 与 team 两个阶段，BySpace 只做一个概念。
+- **Worker / 数字员工：** 长期存在的 agent 实体，有身份、角色与工作区；一次任务是它的一个 Session。记忆尚未做。
+- **项目组：** 多个 worker 在同一项目上协作的容器，带目标与角色分工，**恰好一个协调者**。参考产品早期用过 `team`，后统一改名 `group`（其自有迁移里有 `team_idempotency_key` → `group_idempotency_key` 的重命名），所以两者是同一个概念，不是一个概念的两个阶段。
 - 想理解方向怎么来的 → `byissue/talks/001-terminal-native-hard-fork.md`
 - 想理解 worker 域怎么定的 → `byissue/talks/003-worker-domain-qoderwake-reference.md`
 - 想知道现在能做什么 → `byissue/spec/index.md`
