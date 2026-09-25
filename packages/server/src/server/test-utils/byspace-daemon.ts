@@ -16,6 +16,8 @@ interface TestBySpaceDaemonOptions {
   corsAllowedOrigins?: string[];
   listen?: string;
   logger?: Parameters<typeof createBySpaceDaemon>[1];
+  /** Start the worker wake loop in this daemon. Off unless a test asks. */
+  workerWakeLoop?: boolean;
   mcpEnabled?: boolean;
   mcpDebug?: boolean;
   isDev?: boolean;
@@ -94,6 +96,10 @@ export async function createTestBySpaceDaemon(
         daemonStatusRpc: options.daemonStatusRpcCapability,
         relayConfig: options.relayConfigCapability,
       },
+      // Off by default here: see the option's doc in bootstrap. A test that
+      // wants wakes executed has to ask for it, which is what makes the cost
+      // deliberate rather than incidental.
+      workerWakeLoop: options.workerWakeLoop ?? false,
     });
     try {
       await startDaemonWithTimeout(daemon, TEST_DAEMON_START_TIMEOUT_MS);

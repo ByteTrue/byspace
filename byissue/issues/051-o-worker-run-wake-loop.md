@@ -102,6 +102,21 @@ related_issue: byissue/issues/050-o-worker-surface-align-to-qoderwake.md
 
 **顺带证伪了我自己上一次的误报**：现在从 agent 会话里直接跑 `worker message send` 会被 daemon 拒绝（`Session … is not a worker run`）。也就是说"我用 CLI 冒充 worker 验证 B 跑通"这条路已经被关掉 —— 那类误报的成因没了。真实操作者（无 `BYSPACE_AGENT_ID` 的环境）仍可代发。
 
+## 闭环之后补的两道界（Owner 复核时指出）
+
+真机跑通之后发现一个未闭合的风险：Responder 的回复用的是 `wake` 策略，它叫醒了 Coord。**两个 worker 可以互相无限唤醒**，而 e2e 之所以 3 条就停，是模型自己选了 `store_only`，不是机制拦住的。
+
+上游有两道界，都已照搬：
+
+1. **行为层** —— `protocol.md`："a wake alone creates none"、"Acknowledgements never restart work"、"lifecycle updates must not become attendance noise"。写进 wake 的 framing（`worker-wake-prompt.ts`）和 skill 两处。**放两处是刻意的**：skill 按需读取，而"要不要回话"正是在被唤醒那一刻决定，所以 framing 里必须有。
+2. **结构层** —— 上游的 Goal **总是存在**（"When the runtime designates you to create a missing Goal"），预算因此天然给所有唤醒封顶。我们原本是 `if (goal && ...)`，**没有 goal 就没有界**。照上游做法：被唤醒的协调者在"确实有活要干"时被指派先建 goal。条件收成 `!hasGoal && isCoordinator && hasRequestedWork`，否则一句问话会被升级成一次规划任务。
+
+## 顺手修掉的三个真缺陷（都是实测逼出来的）
+
+- **`workerWakeLoop: false` 形同虚设**：我只挡住了 `start()` 里的定时器，但 `sendMessage → onWakeRequested → requestPass()` 会绕过 `start()` 直接驱动一趟 pass。改成**未启动的循环什么都不做**（`closed` 默认 true），并加了测试证明测试 daemon 不再花钱起真 agent。
+- **`runPass()` 契约不完整**：它承诺"跑一趟"，却在别人正在跑时立刻返回。`start()` 的开箱 pass 因此会把后续的显式 pass 合并掉再提前返回 —— 我的 wake-loop 测试就是这么红的。改成等待**含自己被合并那一轮**的整趟排空。
+- **`createBySpaceDaemon` 复杂度 21 超限**：我那个 `if` 是压垮它的最后一根。没有调阈值，而是把 runner + service + loop 抽成 `createWorkerSubsystem` 工厂（三者本就互相引用），巨函数里少了一个分支。**代价**：那两个 workspace helper 是 `createBySpaceDaemon` 里的闭包，工厂拿不到，只能作为参数注入。
+
 ## 判据
 
 - 一条 `--mention` 出去之后，**没有人类参与**，被点名的 worker 自己动起来并回复到组里。这是"自协调"的最低可验形态，也是本 Epic 一直没真正交付的那件事。

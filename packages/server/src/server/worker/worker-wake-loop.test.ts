@@ -37,6 +37,9 @@ function harness(runner: Partial<WorkerRunner>) {
     // Never on a clock: a test drives passes itself.
     schedule: () => () => {},
   });
+  // A loop that was never started runs no passes, so tests start it against the
+  // void schedule above: enabled, and never firing on its own.
+  loop.start();
   return { service, loop };
 }
 
@@ -329,6 +332,7 @@ describe("wake loop", () => {
       logger: silentLogger,
       schedule: () => () => {},
     });
+    loop.start();
     try {
       const { message } = service.sendMessage({
         groupId,

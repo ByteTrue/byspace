@@ -239,6 +239,7 @@ import { resolveGitProcessPolicy } from "../utils/git-process-scheduler.js";
 import { resolveFirstAgentPromptTitle } from "./agent/create-agent-title.js";
 import {
   createAgentCommand,
+  type BoundCreateAgentCommand,
   type CreateAgentCommandDependencies,
 } from "./agent/create-agent/create.js";
 
@@ -468,6 +469,18 @@ export interface BySpaceDaemonDependencies {
     daemonStatusRpc?: boolean;
     relayConfig?: boolean;
   };
+  /**
+   * Start the loop that turns a wake into an agent session. Defaults to true.
+   *
+   * A test daemon turns it off, because the alternative is worse than it looks:
+   * the loop runs on a timer, so an in-process daemon that receives a waking
+   * message during a test spawns a real agent session and spends real model
+   * budget at a moment no test asked for. It also races the test's own view of
+   * the inbox, which is the state the loop consumes. The loop's own behaviour is
+   * covered against a fake runner; what an RPC test needs is deterministic
+   * delivery state, and that lives in the store either way.
+   */
+  workerWakeLoop?: boolean;
 }
 
 function createBootstrapManagedProcessRegistry(
@@ -566,6 +579,69 @@ function createInitialMutableDaemonConfig(
   applyOptionalConfigLists(initialConfig, config);
 
   return initialConfig;
+}
+
+/**
+ * The worker subsystem: a runner, the service that owns worker state, and the
+ * loop that turns a wake into a run.
+ *
+ * Built as one unit because the three are mutually referring: the service needs
+ * the runner, the service tells the loop there may be work, and the loop needs
+ * the service to execute a wake with. Constructing them apart from the rest of
+ * startup also keeps a `workerWakeLoop === false` test switch out of a daemon
+ * assembly function that is already too large to follow.
+ *
+ * The runner is given the same create-agent command and agent manager the
+ * scheduler uses, so a worker run is an ordinary agent session with a role
+ * rather than a second execution path to keep working.
+ */
+function createWorkerSubsystem(input: {
+  byspaceHome: string;
+  logger: Logger;
+  createAgent: BoundCreateAgentCommand;
+  agentManager: AgentManager;
+  wakeLoopEnabled: boolean;
+  /** Resolves a directory to a known workspace id, or null when it is new. */
+  findWorkspaceIdForCwd: (cwd: string) => Promise<string | null>;
+  /** Adopts a directory as a workspace so a first run has somewhere to work. */
+  createDirectoryWorkspace: (input: {
+    cwd: string;
+    firstAgentContext: { prompt: string };
+  }) => Promise<{ workspaceId: string }>;
+}): { workerService: WorkerService; workerWakeLoop: WorkerWakeLoop } {
+  const runner = new WorkerRunner({
+    logger: input.logger,
+    createAgent: input.createAgent,
+    agentManager: input.agentManager,
+    resolveWorkspaceId: async ({ workspacePath, workerName }) => {
+      const existing = await input.findWorkspaceIdForCwd(workspacePath);
+      if (existing) return existing;
+      // A worker's own directory is created before any workspace exists for it,
+      // so the first run adopts it the same way a scheduled run would.
+      const workspace = await input.createDirectoryWorkspace({
+        cwd: workspacePath,
+        firstAgentContext: { prompt: workerName },
+      });
+      return workspace.workspaceId;
+    },
+  });
+
+  // The service and the loop refer to each other, so the loop is reached through
+  // a mutable reference: a send asks it to look, and it is the thing that turns a
+  // wake into a run.
+  let loop: WorkerWakeLoop | null = null;
+  const workerService = new WorkerService({
+    byspaceHome: input.byspaceHome,
+    logger: input.logger,
+    runner,
+    onWakeRequested: () => loop?.requestPass(),
+  });
+  loop = new WorkerWakeLoop({ service: workerService, logger: input.logger });
+  if (input.wakeLoopEnabled) {
+    loop.start();
+  }
+
+  return { workerService, workerWakeLoop: loop };
 }
 
 export async function createBySpaceDaemon(
@@ -1253,38 +1329,15 @@ export async function createBySpaceDaemon(
   await scheduleService.start();
   // Opened lazily: a daemon that never touches workers creates no database for
   // them, and a failure here must not stop sessions and terminals working.
-  //
-  // The runner is given the same create-agent command and agent manager the
-  // scheduler uses, so a worker run is an ordinary agent session with a role
-  // rather than a second execution path to keep working.
-  const workerRunner = new WorkerRunner({
+  const { workerService, workerWakeLoop } = createWorkerSubsystem({
+    byspaceHome: config.byspaceHome,
     logger,
     createAgent,
     agentManager,
-    resolveWorkspaceId: async ({ workspacePath, workerName }) => {
-      const existing = await findWorkspaceIdForCwdExternal(workspacePath);
-      if (existing) return existing;
-      // A worker's own directory is created before any workspace exists for it,
-      // so the first run adopts it the same way a scheduled run would.
-      const workspace = await createScheduleLocalWorkspaceExternal({
-        cwd: workspacePath,
-        firstAgentContext: { prompt: workerName },
-      });
-      return workspace.workspaceId;
-    },
+    wakeLoopEnabled: dependencies.workerWakeLoop !== false,
+    findWorkspaceIdForCwd: findWorkspaceIdForCwdExternal,
+    createDirectoryWorkspace: createScheduleLocalWorkspaceExternal,
   });
-  // The loop is handed to the service before it exists, so it is wired through a
-  // mutable reference: a send asks the loop to look, and the loop is the thing
-  // that turns a wake into a run.
-  let workerWakeLoop: WorkerWakeLoop | null = null;
-  const workerService = new WorkerService({
-    byspaceHome: config.byspaceHome,
-    logger,
-    runner: workerRunner,
-    onWakeRequested: () => workerWakeLoop?.requestPass(),
-  });
-  workerWakeLoop = new WorkerWakeLoop({ service: workerService, logger });
-  workerWakeLoop.start();
   agentManager.setAgentArchivedCallback(async (agentId) => {
     try {
       await scheduleService.completeForAgent(agentId);

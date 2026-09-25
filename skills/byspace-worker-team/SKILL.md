@@ -68,6 +68,12 @@ byspace worker inbox --worker-id <id>
 byspace worker message read --message-id <id> --worker-id <id>
 ```
 
+**A wake is not a reason to speak.** Answer what was asked and stop. Do not send an
+acknowledgement that mentions the person you are acknowledging: they were already done,
+and you have started a turn for them that starts one back. Nothing to hand on means
+`--not-mention`, which records it for anyone who reads the group later without waking
+them for it. Two workers who each confirm the other's confirmation will keep confirming.
+
 **Mentions wake; the rest of the text does not route.** Addressing a worker means
 `--mention`, not writing `@name` in the body. Use `--not-mention` to record something
 without waking anyone.
@@ -78,7 +84,10 @@ picked back up.
 
 ## The goal
 
-A group has one goal: the objective, and a budget of public messages to spend on it.
+A group has one goal: the objective, and a budget of public messages to spend on it. The
+budget is the only thing that caps how many wakes a group can spend, and every wake is a
+real session, so a group with no goal has no cap. If you are the coordinator and you are
+woken to work on something the group has no goal for, create one before delegating.
 
 ```bash
 byspace worker goal get --group-id <id>
@@ -89,6 +98,10 @@ byspace worker goal mutate --group-id <id> --action <action> --generation <n> --
 Read the goal before changing it and pass the `generation` and `revision` you read. A
 write against a version that has since changed is refused — that means someone else
 changed the goal, so read again rather than retrying.
+
+Estimate the budget rather than picking a number: at least two public messages per piece
+of member work (an acknowledgement that it started, and its result), plus handoffs, plus
+about a third for headroom. A group of three is not a default 20.
 
 Complete a goal only once a message has actually delivered the result to the user, and
 name that message. Pause it with a reason when you are waiting or stuck. Reopening starts

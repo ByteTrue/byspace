@@ -35,11 +35,18 @@ export class WorkerWakeLoop {
   private readonly intervalMs: number;
   private readonly schedule: (run: () => void) => () => void;
   private started = false;
+  /**
+   * A loop that was never started runs no passes.
+   *
+   * Started is not the only entry point: a send asks for a pass directly, so a
+   * guard on `start()` alone would still let an unstarted loop dispatch work. The
+   * disabled state therefore begins closed and `start()` opens it.
+   */
+  private closed = true;
   private unschedule: (() => void) | null = null;
-  /** One pass at a time; a pass can ask for the next while it is still running. */
-  private passInFlight = false;
+  /** The pass running right now, so another can join it rather than race it. */
+  private currentPass: Promise<void> | null = null;
   private passRequested = false;
-  private closed = false;
 
   /**
    * Which messages this process has already tried to wake each worker for.
@@ -99,28 +106,42 @@ export class WorkerWakeLoop {
   }
 
   /**
-   * One pass over the waiting work.
+   * One pass over the waiting work, awaited until the work is actually done.
    *
    * Coalesced: a pass asked for while one is running sets a flag instead of
-   * starting a second, and the running one picks up whatever arrived. Without
-   * that, a burst of messages would queue bursts of passes that all see the same
-   * empty candidate list.
+   * starting a second, so a burst of messages costs one extra round rather than
+   * a queue of passes that all see the same empty candidate list.
+   *
+   * A caller that joins an in-flight pass waits for *that* pass, which now
+   * includes the extra round its own request caused. Returning as soon as the
+   * request was noted would tell a caller its wake had been dispatched while it
+   * was still queued, and anything checking what happened afterwards would be
+   * reading a state that was about to change underneath it.
    */
   async runPass(): Promise<void> {
     if (this.closed) return;
-    if (this.passInFlight) {
+    const running = this.currentPass;
+    if (running) {
       this.passRequested = true;
+      await running;
       return;
     }
-    this.passInFlight = true;
+
+    const pass = this.drain();
+    this.currentPass = pass;
     try {
-      do {
-        this.passRequested = false;
-        await this.dispatchCandidates();
-      } while (this.passRequested);
+      await pass;
     } finally {
-      this.passInFlight = false;
+      this.currentPass = null;
     }
+  }
+
+  /** Keep dispatching until a round finds nothing left to ask for. */
+  private async drain(): Promise<void> {
+    do {
+      this.passRequested = false;
+      await this.dispatchCandidates();
+    } while (this.passRequested);
   }
 
   private async dispatchCandidates(): Promise<void> {

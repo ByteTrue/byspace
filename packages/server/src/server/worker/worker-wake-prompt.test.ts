@@ -44,6 +44,9 @@ function build(overrides: Partial<Parameters<typeof buildWakePrompt>[0]> = {}) {
     messages: [message()],
     members: MEMBERS,
     nameById: NAMES,
+    hasGoal: true,
+    isCoordinator: false,
+    hasRequestedWork: true,
     ...overrides,
   });
 }
@@ -99,6 +102,35 @@ describe("wake prompt", () => {
     // This is the behaviour the role's skill promises; the framing must not
     // contradict it by demanding a result.
     expect(build()).toContain("report a blocker rather than inventing an answer");
+  });
+
+  it("tells a woken worker that a wake alone is not a reason to speak", () => {
+    // Two workers who each acknowledge the other's acknowledgement wake each
+    // other forever. The reference product carries this rule explicitly, and it
+    // belongs in the framing rather than only in the skill, because the skill is
+    // read on demand and this is the moment the decision is made.
+    expect(build()).toContain("Being woken is not by itself a reason to speak");
+    expect(build()).toContain("--not-mention");
+  });
+
+  it("designates a leader without a goal only when work was assigned", () => {
+    // The bound is structural: without a goal nothing caps how many wakes a
+    // group spends, and every wake is a paid agent session. But designating over
+    // an errand would invent a planning task out of a one-word question.
+    expect(build({ hasGoal: false, isCoordinator: true, hasRequestedWork: true })).toContain(
+      "you are designated to set one now",
+    );
+    expect(build({ hasGoal: false, isCoordinator: true, hasRequestedWork: false })).not.toContain(
+      "designated to set one",
+    );
+    // A member is never told to set the group's goal; that is the leader's job.
+    expect(build({ hasGoal: false, isCoordinator: false, hasRequestedWork: true })).not.toContain(
+      "designated to set one",
+    );
+    // And a group that already has one is not asked to make a second.
+    expect(build({ hasGoal: true, isCoordinator: true, hasRequestedWork: true })).not.toContain(
+      "designated to set one",
+    );
   });
 
   it("instructs nothing when there is nothing to act on", () => {

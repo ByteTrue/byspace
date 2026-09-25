@@ -464,13 +464,21 @@ export class WorkerService {
       ]),
     );
 
+    const members = this.listGroupMembers(input.groupId);
     const wakePrompt = buildWakePrompt({
       workerName: worker.name,
       workerId: worker.id,
       groupId: input.groupId,
       messages,
-      members: this.listGroupMembers(input.groupId),
+      members,
       nameById,
+      hasGoal: store.getGoal(input.groupId) !== null,
+      isCoordinator: members.some(
+        (member) => member.workerId === worker.id && member.role === "coordinator",
+      ),
+      // An explicit request is what makes a group "working on something". A bare
+      // question or a status note does not open a task to plan for.
+      hasRequestedWork: messages.some((message) => message.intent === "request_action"),
     });
 
     const template = await this.loadTemplate(worker.templateId);
