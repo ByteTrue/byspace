@@ -28,7 +28,7 @@ import {
   type WorkerTaskState,
 } from "./worker-task-state.js";
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export interface WorkerRecord {
   id: string;
@@ -153,6 +153,52 @@ export interface WorkerMessageDeliveryRecord {
 export interface WorkerInboxEntry {
   message: WorkerMessageRecord;
   state: WorkerMessageDeliveryState;
+}
+
+// ---------------------------------------------------------------------- runs
+
+/**
+ * How a wake ended.
+ *
+ * `failed` and `cancelled` both release their messages back to `unread` rather
+ * than to a state of their own: the delivery states here are only
+ * unread/claimed/read, and inventing a fourth for "a run went wrong" would be
+ * a state no reader could distinguish from `unread` in practice. Releasing is
+ * the behaviour that matters — the work survives the run.
+ */
+export type WorkerRunState = "running" | "completed" | "failed" | "cancelled";
+
+export interface WorkerRunRecord {
+  runId: string;
+  groupId: string;
+  workerId: string;
+  /**
+   * The agent session carrying this run. Null until one is attached, which lets
+   * a run be recorded before its session exists.
+   */
+  sessionId: string | null;
+  state: WorkerRunState;
+  /** The messages that caused this wake. Empty for a run nothing woke. */
+  triggerMessageIds: string[];
+  failureReason: string | null;
+  startedAt: string;
+  endedAt: string | null;
+}
+
+export interface CreateWorkerRunInput {
+  runId: string;
+  groupId: string;
+  workerId: string;
+  triggerMessageIds?: readonly string[];
+  startedAt?: string;
+}
+
+/** A worker already has a run in flight, which the database refuses. */
+export class WorkerRunAlreadyActiveError extends Error {
+  constructor(workerId: string) {
+    super(`Worker ${workerId} already has a run in flight. A worker runs one at a time.`);
+    this.name = "WorkerRunAlreadyActiveError";
+  }
 }
 
 export interface CreateWorkerMessageInput {
@@ -520,6 +566,38 @@ export class WorkerStore {
 
       CREATE UNIQUE INDEX IF NOT EXISTS idx_worker_goals_one_per_group
         ON worker_goals(group_id);
+
+      -- One wake, one run.
+      --
+      -- This is the link between the two identity spaces. The CLI learns its
+      -- identity from the session id injected at launch (BYSPACE_AGENT_ID),
+      -- which is an agent session id rather than a wkr_ id; a message cannot be
+      -- attributed to a worker without a record that joins the two. Recording
+      -- the wake and the join in one row is why this exists instead of a second
+      -- lookup table: who woke up, because of which messages, in which session,
+      -- and how it ended is one fact about one event.
+      CREATE TABLE IF NOT EXISTS worker_runs (
+        run_id                TEXT PRIMARY KEY,
+        group_id              TEXT NOT NULL REFERENCES worker_groups(id) ON DELETE CASCADE,
+        worker_id             TEXT NOT NULL REFERENCES workers(id) ON DELETE CASCADE,
+        session_id            TEXT,
+        state                 TEXT NOT NULL,
+        trigger_message_ids   TEXT NOT NULL,
+        failure_reason        TEXT,
+        started_at            TEXT NOT NULL,
+        ended_at              TEXT
+      );
+
+      -- A worker has at most one run in flight. This is what makes the wake loop
+      -- safe to drive from several places at once, and it is the same rule the
+      -- service enforces for task runs.
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_worker_runs_one_in_flight
+        ON worker_runs(worker_id) WHERE state = 'running';
+
+      -- Identity resolution goes session -> worker, and it happens on every
+      -- message a worker sends.
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_worker_runs_session
+        ON worker_runs(session_id) WHERE session_id IS NOT NULL;
     `);
 
     const current = this.db
@@ -539,6 +617,9 @@ export class WorkerStore {
     }
     if (current.version < 6) {
       this.migrateTaskAgentId();
+    }
+    if (current.version < 7) {
+      this.migrateRunsTable();
     }
 
     // Recording the bump matters because these rows are how a step decides what
@@ -610,6 +691,19 @@ export class WorkerStore {
     // the estimate a constant for every roster small enough to matter.
     const floor = memberCount <= 1 ? WORKER_GOAL_TURN_LIMIT_DEFAULT : WORKER_GOAL_TURN_LIMIT_MIN;
     return Math.min(Math.max(estimate, floor), WORKER_GOAL_TURN_LIMIT_MAX);
+  }
+
+  /**
+   * v7: record each wake as a run.
+   *
+   * Additive, so the `CREATE TABLE IF NOT EXISTS` statements cover it; there is
+   * nothing to convert.
+   */
+  private migrateRunsTable(): void {
+    // Intentionally empty. Kept as the named seam because the version rows are
+    // how a future step decides what has already happened, and because a
+    // reader checking "does v7 need a step" should find the answer here rather
+    // than infer it from the absence of one.
   }
 
   /** Exposed for tests: the columns of a table, to assert a migration landed. */
@@ -1060,6 +1154,13 @@ export class WorkerStore {
    * read the message, is a caller mistake, and silently dropping either half
    * would hide it.
    */
+  private assertGroupMember(groupId: string, workerId: string): void {
+    const members = this.listGroupMembers(groupId);
+    if (!members.some((member) => member.workerId === workerId)) {
+      throw new Error(`worker ${workerId} is not a member of group ${groupId}`);
+    }
+  }
+
   private validateMessageRecipients(input: CreateWorkerMessageInput): {
     audience: string[];
     privateTo: string[];
@@ -1070,6 +1171,10 @@ export class WorkerStore {
     if (!this.getWorker(input.senderWorkerId)) {
       throw new Error(`unknown worker: ${input.senderWorkerId}`);
     }
+    // Existence is not belonging. Without this a worker that exists could write
+    // into a group it is not part of, and its name would appear in a
+    // conversation nobody added it to.
+    this.assertGroupMember(input.groupId, input.senderWorkerId);
 
     const audience = [...new Set(input.audience ?? [])];
     const privateTo = [...new Set(input.privateTo ?? [])];
@@ -1078,6 +1183,7 @@ export class WorkerStore {
       if (!this.getWorker(workerId)) {
         throw new Error(`unknown worker: ${workerId}`);
       }
+      this.assertGroupMember(input.groupId, workerId);
     }
 
     // Addressing someone who cannot read the message is contradictory.
@@ -1449,6 +1555,233 @@ export class WorkerStore {
             .run(at, at, input.messageId, input.workerId);
     return result.changes > 0;
   }
+
+  // ------------------------------------------------------------------- runs
+
+  /**
+   * Record a wake.
+   *
+   * The trigger messages are claimed here rather than by the caller, in the same
+   * transaction as the run row. A run that exists but does not own its messages
+   * would let a second wake pick up the same work, which is the double dispatch
+   * this table exists to prevent.
+   */
+  createRun(input: CreateWorkerRunInput): WorkerRunRecord {
+    if (!this.getGroup(input.groupId)) {
+      throw new Error(`unknown worker group: ${input.groupId}`);
+    }
+    if (!this.getWorker(input.workerId)) {
+      throw new Error(`unknown worker: ${input.workerId}`);
+    }
+    const triggers = [...new Set(input.triggerMessageIds ?? [])];
+    const startedAt = input.startedAt ?? new Date().toISOString();
+
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO worker_runs
+             (run_id, group_id, worker_id, session_id, state, trigger_message_ids,
+              failure_reason, started_at, ended_at)
+           VALUES (?, ?, ?, NULL, 'running', ?, NULL, ?, NULL)`,
+        )
+        .run(input.runId, input.groupId, input.workerId, JSON.stringify(triggers), startedAt);
+
+      if (triggers.length > 0) {
+        this.db
+          .prepare(
+            `UPDATE worker_message_deliveries SET state = 'claimed', claimed_at = ?
+             WHERE worker_id = ? AND state = 'unread'
+               AND message_id IN (` +
+              triggers.map(() => "?").join(",") +
+              `)`,
+          )
+          .run(startedAt, input.workerId, ...triggers);
+      }
+
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      if (isUniqueConstraintError(error)) {
+        throw new WorkerRunAlreadyActiveError(input.workerId);
+      }
+      throw error;
+    }
+
+    const created = this.getRun(input.runId);
+    if (!created) throw new Error(`run ${input.runId} vanished immediately after insert`);
+    return created;
+  }
+
+  getRun(runId: string): WorkerRunRecord | null {
+    const row = this.db.prepare(RUN_SELECT + " WHERE run_id = ?").get(runId) as
+      | WorkerRunRow
+      | undefined;
+    return row ? toRunRecord(row) : null;
+  }
+
+  /**
+   * Workers with unread deliveries, oldest message first.
+   *
+   * Unread alone is the whole signal: a `store_only` message writes no delivery
+   * row at all, so anything sitting here was addressed to wake somebody. No
+   * policy check is repeated here, because a second copy of that rule is a
+   * second place it can be wrong.
+   *
+   * Grouped by worker because a worker is woken once, with everything that
+   * arrived, rather than once per message.
+   */
+  listWakeCandidates(): Array<{ workerId: string; groupId: string; messageIds: string[] }> {
+    const rows = this.db
+      .prepare(
+        `SELECT d.worker_id AS worker_id,
+                m.group_id  AS group_id,
+                d.message_id AS message_id
+         FROM worker_message_deliveries d
+         JOIN worker_messages m ON m.message_id = d.message_id
+         WHERE d.state = 'unread'
+           AND NOT EXISTS (
+             SELECT 1 FROM worker_runs r
+             WHERE r.worker_id = d.worker_id AND r.state = 'running'
+           )
+         ORDER BY m.seq ASC, d.message_id ASC`,
+      )
+      .all() as Array<{ worker_id: string; group_id: string; message_id: string }>;
+
+    const byWake = new Map<string, { workerId: string; groupId: string; messageIds: string[] }>();
+    for (const row of rows) {
+      // Keyed by worker *and* group. A run belongs to exactly one group, so two
+      // groups that both addressed this worker are two wakes, not one wake with
+      // a mixed inbox and an arbitrary group on its run.
+      const key = `${row.worker_id}\u0000${row.group_id}`;
+      const existing = byWake.get(key);
+      if (existing) {
+        existing.messageIds.push(row.message_id);
+      } else {
+        byWake.set(key, {
+          workerId: row.worker_id,
+          groupId: row.group_id,
+          messageIds: [row.message_id],
+        });
+      }
+    }
+    return [...byWake.values()];
+  }
+
+  /**
+   * The task a session is currently working, if any.
+   *
+   * Only an in-progress task counts: the session speaks for the worker for the
+   * duration of the turn, and once the task is submitted or blocked the turn is
+   * over. Without that condition a worker could keep sending after its task
+   * finished, on a session id that is still valid.
+   */
+  getRunningTaskByAgent(agentId: string): WorkerTaskRecord | null {
+    const row = this.db
+      .prepare(
+        `SELECT task_id, worker_id, title, state, agent_id, created_at, updated_at
+         FROM worker_tasks WHERE agent_id = ? AND state = 'in_progress'`,
+      )
+      .get(agentId) as WorkerTaskRow | undefined;
+    return row ? toTaskRecord(row) : null;
+  }
+
+  /**
+   * Resolve a session back to the run and worker it belongs to.
+   *
+   * This is the lookup the identity model depends on. The CLI knows its agent
+   * session id, and only a run joins that to a worker, so without it a worker's
+   * message would carry a self-reported sender and nothing else.
+   */
+  getRunBySession(sessionId: string): WorkerRunRecord | null {
+    const row = this.db.prepare(RUN_SELECT + " WHERE session_id = ?").get(sessionId) as
+      | WorkerRunRow
+      | undefined;
+    return row ? toRunRecord(row) : null;
+  }
+
+  /** Runs still going, oldest first. Used to recover after a daemon restart. */
+  listRunningRuns(): WorkerRunRecord[] {
+    const rows = this.db
+      .prepare(RUN_SELECT + " WHERE state = 'running' ORDER BY started_at ASC, run_id ASC")
+      .all() as WorkerRunRow[];
+    return rows.map(toRunRecord);
+  }
+
+  /** Attach the session carrying a run, after it has been created. */
+  attachRunSession(input: { runId: string; sessionId: string }): WorkerRunRecord {
+    const run = this.getRun(input.runId);
+    if (!run) {
+      throw new Error(`unknown worker run: ${input.runId}`);
+    }
+    if (run.sessionId !== null && run.sessionId !== input.sessionId) {
+      throw new Error(`worker run ${input.runId} is already attached to session ${run.sessionId}`);
+    }
+    this.db
+      .prepare("UPDATE worker_runs SET session_id = ? WHERE run_id = ?")
+      .run(input.sessionId, input.runId);
+    const updated = this.getRun(input.runId);
+    if (!updated) throw new Error(`worker run ${input.runId} vanished after attaching a session`);
+    return updated;
+  }
+
+  /**
+   * Settle a run, and its messages with it.
+   *
+   * A completed run marks its deliveries read: the worker was woken by them and
+   * finished. A failed or cancelled one returns them to unread, because losing
+   * the claim is what lets the work be picked up again — a delivery stuck on
+   * `claimed` after a dead run is a message nobody will ever answer.
+   *
+   * Settling a settled run is a no-op, so a retry cannot move deliveries twice.
+   */
+  settleRun(input: {
+    runId: string;
+    state: Exclude<WorkerRunState, "running">;
+    failureReason?: string;
+    endedAt?: string;
+  }): WorkerRunRecord | null {
+    const run = this.getRun(input.runId);
+    if (!run) return null;
+    if (run.state !== "running") return run;
+    const endedAt = input.endedAt ?? new Date().toISOString();
+    const placeholders = run.triggerMessageIds.map(() => "?").join(",");
+
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.db
+        .prepare(
+          "UPDATE worker_runs SET state = ?, failure_reason = ?, ended_at = ? WHERE run_id = ?",
+        )
+        .run(input.state, input.failureReason ?? null, endedAt, input.runId);
+
+      if (run.triggerMessageIds.length > 0) {
+        const nextState = input.state === "completed" ? "read" : "unread";
+        this.db
+          .prepare(
+            `UPDATE worker_message_deliveries
+                SET state = ?, claimed_at = NULL, read_at = ?
+              WHERE worker_id = ? AND state = 'claimed'
+                AND message_id IN (` +
+              placeholders +
+              `)`,
+          )
+          .run(
+            nextState,
+            input.state === "completed" ? endedAt : null,
+            run.workerId,
+            ...run.triggerMessageIds,
+          );
+      }
+
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
+
+    return this.getRun(input.runId);
+  }
 }
 
 function toTaskRecord(row: WorkerTaskRow): WorkerTaskRecord {
@@ -1498,6 +1831,59 @@ interface WorkerMessageRow {
   delivery_policy: string;
   reply_to_message_id: string | null;
   created_at: string;
+}
+
+interface WorkerRunRow {
+  run_id: string;
+  group_id: string;
+  worker_id: string;
+  session_id: string | null;
+  state: string;
+  trigger_message_ids: string;
+  failure_reason: string | null;
+  started_at: string;
+  ended_at: string | null;
+}
+
+/**
+ * Every read of a run uses this column list, so a run row cannot end up shaped
+ * two different ways depending on which query found it.
+ */
+const RUN_SELECT = `SELECT run_id, group_id, worker_id, session_id, state,
+                          trigger_message_ids, failure_reason, started_at, ended_at
+                   FROM worker_runs`;
+
+function toRunRecord(row: WorkerRunRow): WorkerRunRecord {
+  // An unparseable stored list is a bug in the writer, not data to reason about,
+  // so it is reported as one rather than quietly read back as "no triggers".
+  const parsed: unknown = JSON.parse(row.trigger_message_ids);
+  if (!Array.isArray(parsed) || parsed.some((entry) => typeof entry !== "string")) {
+    throw new Error(`worker run ${row.run_id} has a malformed trigger list`);
+  }
+  return {
+    runId: row.run_id,
+    groupId: row.group_id,
+    workerId: row.worker_id,
+    sessionId: row.session_id,
+    state: row.state as WorkerRunState,
+    triggerMessageIds: parsed,
+    failureReason: row.failure_reason,
+    startedAt: row.started_at,
+    endedAt: row.ended_at,
+  };
+}
+
+/**
+ * Whether SQLite is reporting a unique constraint violation.
+ *
+ * The message names the offending table and column but not the index, so a
+ * partial unique index cannot be told apart from an ordinary one by text. Each
+ * caller therefore wraps a statement on a table where exactly one unique
+ * constraint could fire, which is what makes the translation sound.
+ */
+function isUniqueConstraintError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("UNIQUE constraint failed");
 }
 
 /** The same estimate as `WorkerStore.suggestTurnLimit`, as a SQL expression. */

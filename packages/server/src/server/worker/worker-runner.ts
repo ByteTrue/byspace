@@ -47,6 +47,63 @@ export interface WorkerRunnerOptions {
   }) => Promise<string | null>;
 }
 
+/**
+ * Launch a role session and give it one unit of work.
+ *
+ * A task run and a message wake are the same operation with a different prompt:
+ * the only difference is whether the session belongs to a task or to a run, and
+ * that is carried in the labels the caller supplies. Sharing this is what keeps
+ * the two from drifting apart.
+ */
+interface LaunchInput {
+  workerId: string;
+  workerName: string;
+  workspacePath: string;
+  template: WorkerTemplate;
+  /** Framing appended after the role prompt, describing this unit of work. */
+  prompt: string;
+  title: string;
+  labels: Record<string, string>;
+}
+
+type LaunchResult =
+  | { ok: true; agentId: string }
+  | { ok: false; agentId: string | null; reason: string };
+
+export interface WakeWorkerInput {
+  workerId: string;
+  workerName: string;
+  workspacePath: string;
+  template: WorkerTemplate;
+  groupId: string;
+  runId: string;
+  /** The wake framing: what arrived, and what the worker is expected to do. */
+  wakePrompt: string;
+  /**
+   * Called with the session id after the session exists and before it is given
+   * its turn.
+   *
+   * The caller uses this to attach the session to its run, and it has to happen
+   * in this window: a worker that tries to reply resolves its own identity from
+   * that attachment, so attaching after the turn starts would make the first
+   * reply fail to identify its sender.
+   */
+  onSessionCreated: (sessionId: string) => void;
+}
+
+/**
+ * How a wake ended.
+ *
+ * Distinct from a task outcome because the recovery differs: a task that blocks
+ * stays blocked for a person to notice, while a wake that does not finish must
+ * hand its messages back so the work is picked up again.
+ */
+export type WorkerWakeOutcome =
+  | { kind: "succeeded"; sessionId: string }
+  | { kind: "blocked"; sessionId: string; reason: string }
+  | { kind: "cancelled"; sessionId: string }
+  | { kind: "failed"; sessionId: string | null; reason: string };
+
 export interface RunWorkerTaskInput {
   workerId: string;
   workerName: string;
@@ -81,61 +138,24 @@ export class WorkerRunner {
    * configuration fault rather than a task outcome.
    */
   async run(input: RunWorkerTaskInput): Promise<WorkerRunOutcome> {
-    const workspaceId = await this.options.resolveWorkspaceId({
-      workspacePath: input.workspacePath,
+    const launched = await this.launch({
+      workerId: input.workerId,
       workerName: input.workerName,
-    });
-    if (!workspaceId) {
-      throw new WorkerWorkspaceUnresolvedError(input.workspacePath);
-    }
-
-    const { config } = buildWorkerSessionConfig({
+      workspacePath: input.workspacePath,
       template: input.template,
-      cwd: input.workspacePath,
-      taskPrompt: input.task.title,
+      prompt: input.task.title,
       title: input.task.title,
+      labels: {
+        // The label is how a session is traced back to the worker that owns
+        // it; without it a run is an anonymous agent in the workspace list.
+        "byspace.worker-id": input.workerId,
+        "byspace.worker-task": input.task.taskId,
+      },
     });
-
-    let created: CreateAgentCommandResult;
-    try {
-      created = await this.options.createAgent({
-        kind: "mcp",
-        provider: config.provider,
-        config,
-        cwd: input.workspacePath,
-        workspaceId,
-        title: input.task.title,
-        labels: {
-          // The label is how a session is traced back to the worker that owns
-          // it; without it a run is an anonymous agent in the workspace list.
-          "byspace.worker-id": input.workerId,
-          "byspace.worker-task": input.task.taskId,
-        },
-        unattended: true,
-        promptFailure: "return-error",
-        background: true,
-        notifyOnFinish: false,
-      });
-    } catch (error) {
-      return {
-        kind: "failed",
-        agentId: null,
-        reason: error instanceof Error ? error.message : String(error),
-      };
+    if (!launched.ok) {
+      return { kind: "failed", agentId: launched.agentId, reason: launched.reason };
     }
-
-    const agentId = created.snapshot.id;
-
-    if (created.initialPromptError) {
-      return {
-        kind: "failed",
-        agentId,
-        reason:
-          created.initialPromptError instanceof Error
-            ? created.initialPromptError.message
-            : String(created.initialPromptError),
-      };
-    }
+    const agentId = launched.agentId;
 
     const run = await this.options.agentManager.runAgent(agentId, input.task.title);
     const settled = await this.options.agentManager.waitForAgentEvent(agentId, {
@@ -158,5 +178,107 @@ export class WorkerRunner {
     }
 
     return { kind: "submitted", agentId };
+  }
+
+  /**
+   * Carry out one wake: give a woken worker its turn and report how it ended.
+   *
+   * The session id is reported even on failure where one exists, because the run
+   * has to be settled against the session that was created.
+   */
+  async wake(input: WakeWorkerInput): Promise<WorkerWakeOutcome> {
+    const launched = await this.launch({
+      workerId: input.workerId,
+      workerName: input.workerName,
+      workspacePath: input.workspacePath,
+      template: input.template,
+      prompt: input.wakePrompt,
+      title: input.wakePrompt.slice(0, 80),
+      labels: {
+        "byspace.worker-id": input.workerId,
+        "byspace.worker-group": input.groupId,
+        "byspace.worker-run": input.runId,
+      },
+    });
+    if (!launched.ok) {
+      return { kind: "failed", sessionId: launched.agentId, reason: launched.reason };
+    }
+    const sessionId = launched.agentId;
+    input.onSessionCreated(sessionId);
+
+    const run = await this.options.agentManager.runAgent(sessionId, input.wakePrompt);
+    if (run.canceled) {
+      return { kind: "cancelled", sessionId };
+    }
+    const settled = await this.options.agentManager.waitForAgentEvent(sessionId, {
+      waitForActive: true,
+    });
+
+    if (settled.permission) {
+      // A worker stopped mid-turn by a permission decision has not finished, so
+      // the wake has not either: its messages go back rather than read.
+      return {
+        kind: "blocked",
+        sessionId,
+        reason: "the worker is waiting for a permission decision",
+      };
+    }
+    return { kind: "succeeded", sessionId };
+  }
+
+  /** Create the session a task run or a wake executes in. */
+  private async launch(input: LaunchInput): Promise<LaunchResult> {
+    const workspaceId = await this.options.resolveWorkspaceId({
+      workspacePath: input.workspacePath,
+      workerName: input.workerName,
+    });
+    if (!workspaceId) {
+      throw new WorkerWorkspaceUnresolvedError(input.workspacePath);
+    }
+
+    const { config } = buildWorkerSessionConfig({
+      template: input.template,
+      cwd: input.workspacePath,
+      taskPrompt: input.prompt,
+      title: input.title,
+    });
+
+    let created: CreateAgentCommandResult;
+    try {
+      created = await this.options.createAgent({
+        kind: "mcp",
+        provider: config.provider,
+        config,
+        cwd: input.workspacePath,
+        workspaceId,
+        title: input.title,
+        labels: input.labels,
+        unattended: true,
+        promptFailure: "return-error",
+        background: true,
+        notifyOnFinish: false,
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        agentId: null,
+        reason: error instanceof Error ? error.message : String(error),
+      };
+    }
+
+    const agentId = created.snapshot.id;
+
+    if (created.initialPromptError) {
+      return {
+        ok: false,
+        agentId,
+        reason:
+          created.initialPromptError instanceof Error
+            ? created.initialPromptError.message
+            : String(created.initialPromptError),
+      };
+    }
+
+    return { ok: true, agentId };
   }
 }

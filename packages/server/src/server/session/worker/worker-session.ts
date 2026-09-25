@@ -299,9 +299,15 @@ export class WorkerSession {
     request: Extract<SessionInboundMessage, { type: "worker.message.send.request" }>,
   ): Promise<void> {
     try {
+      const senderWorkerId = this.workerService.resolveMessageSender({
+        ...(request.senderSessionId !== undefined
+          ? { senderSessionId: request.senderSessionId }
+          : {}),
+        ...(request.senderWorkerId !== undefined ? { senderWorkerId: request.senderWorkerId } : {}),
+      });
       const { message, woke } = this.workerService.sendMessage({
         groupId: request.groupId,
-        senderWorkerId: request.senderWorkerId,
+        senderWorkerId,
         body: request.body,
         ...(request.intent !== undefined ? { intent: request.intent } : {}),
         ...(request.deliveryPolicy !== undefined ? { deliveryPolicy: request.deliveryPolicy } : {}),

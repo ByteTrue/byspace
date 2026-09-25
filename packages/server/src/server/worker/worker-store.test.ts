@@ -17,7 +17,9 @@ import {
   WorkerGoalBudgetExhaustedError,
   WorkerGoalConflictError,
   WorkerGroupCoordinatorError,
+  WorkerRunAlreadyActiveError,
   WorkerStore,
+  type WorkerRunRecord,
 } from "./worker-store.js";
 
 let dir: string;
@@ -32,6 +34,23 @@ const WORKER = {
   createdAt: "2026-09-24T00:00:00.000Z",
   updatedAt: "2026-09-24T00:00:00.000Z",
 };
+
+/**
+ * Put a worker in a group.
+ *
+ * A message is only legal between members, so a fixture that sends has to join
+ * its workers first; doing it in one place keeps a test that forgets to fail for
+ * the reason it should rather than for membership.
+ */
+function joinGroup(groupId: string, workerIds: readonly string[]): void {
+  workerIds.forEach((workerId, index) => {
+    store.addGroupMember({
+      groupId,
+      workerId,
+      role: index === 0 ? "coordinator" : "member",
+    });
+  });
+}
 
 beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), "worker-store-"));
@@ -484,6 +503,7 @@ describe("worker messages", () => {
     store.createWorker({ ...WORKER, id: "w2", name: "Bob" });
     store.createWorker({ ...WORKER, id: "w3", name: "Carol" });
     store.createGroup(GROUP);
+    joinGroup("grp_1", ["w1", "w2", "w3"]);
   });
 
   function send(overrides: Partial<Parameters<WorkerStore["createMessage"]>[0]> = {}) {
@@ -505,6 +525,7 @@ describe("worker messages", () => {
 
   it("keeps sequence numbers independent per group", () => {
     store.createGroup({ id: "grp_2", name: "Other", projectId: "prj_abc" });
+    joinGroup("grp_2", ["w1"]);
     const other = send({ groupId: "grp_2" });
     expect(other.seq).toBe(1);
   });
@@ -515,6 +536,20 @@ describe("worker messages", () => {
 
   it("refuses a sender who is not a worker", () => {
     expect(() => send({ senderWorkerId: "w_missing" })).toThrow(/unknown worker/);
+  });
+
+  it("refuses a sender who is not in the group", () => {
+    // A worker that exists is not a member of every group. Without this, its
+    // name could appear in a conversation nobody added it to.
+    store.createWorker({ ...WORKER, id: "w9", name: "Stranger" });
+    expect(() => send({ senderWorkerId: "w9" })).toThrow(
+      /worker w9 is not a member of group grp_1/,
+    );
+  });
+
+  it("refuses to wake a worker outside the group", () => {
+    store.createWorker({ ...WORKER, id: "w9", name: "Stranger" });
+    expect(() => send({ audience: ["w9"] })).toThrow(/not a member of group/);
   });
 
   it("allocates sequence numbers without collision when interleaved", () => {
@@ -651,6 +686,7 @@ describe("worker goals", () => {
   beforeEach(() => {
     store.createWorker({ ...WORKER, id: "w2", name: "Bob" });
     store.createGroup(GROUP);
+    joinGroup("grp_1", ["w1", "w2"]);
   });
 
   function createGoal(overrides: Partial<Parameters<WorkerStore["createGoal"]>[0]> = {}) {
@@ -1077,6 +1113,7 @@ describe("goal budget stops waking", () => {
   beforeEach(() => {
     store.createWorker({ ...WORKER, id: "w2", name: "Bob" });
     store.createGroup(GROUP);
+    joinGroup("grp_1", ["w1", "w2"]);
   });
 
   function createGoal(turnLimit: number) {
@@ -1161,6 +1198,231 @@ describe("goal budget stops waking", () => {
 
     expect(() => send("wake")).not.toThrow();
     expect(store.getGoal("grp_1")?.turnUsed).toBe(1);
+  });
+});
+
+describe("worker runs", () => {
+  beforeEach(() => {
+    store.createWorker({ ...WORKER, id: "w2", name: "Bob" });
+    store.createGroup({ id: "grp_1", name: "Pricing page", projectId: "prj_abc" });
+    store.addGroupMember({ groupId: "grp_1", workerId: "w1", role: "coordinator" });
+    store.addGroupMember({ groupId: "grp_1", workerId: "w2", role: "member" });
+  });
+
+  /** A message that woke `w2`, which is what a run is normally created from. */
+  function wakeMessage(body = "need the schema"): WorkerMessageRecord {
+    return store.createMessage({
+      messageId: `msg_${Math.random().toString(16).slice(2)}`,
+      groupId: "grp_1",
+      senderWorkerId: "w1",
+      body,
+      audience: ["w2"],
+    });
+  }
+
+  function deliveryState(messageId: string, workerId: string): string | null {
+    const entry = store
+      .listInbox(workerId)
+      .find((candidate) => candidate.message.messageId === messageId);
+    return entry ? entry.state : null;
+  }
+
+  function createRun(overrides: Partial<Parameters<typeof store.createRun>[0]> = {}) {
+    return store.createRun({
+      runId: "run_1",
+      groupId: "grp_1",
+      workerId: "w2",
+      ...overrides,
+    });
+  }
+
+  it("records a wake against its group and worker", () => {
+    const message = wakeMessage();
+    const run = createRun({ triggerMessageIds: [message.messageId] });
+    expect(run).toMatchObject({
+      runId: "run_1",
+      groupId: "grp_1",
+      workerId: "w2",
+      state: "running",
+    });
+    expect(run.triggerMessageIds).toEqual([message.messageId]);
+    // No session yet: one is attached once the run is actually carrying work.
+    expect(run.sessionId).toBeNull();
+    expect(run.endedAt).toBeNull();
+  });
+
+  it("claims its trigger messages in the same act that creates it", () => {
+    // A run that did not own its messages would let a second wake pick up the
+    // same work, which is the double dispatch this table prevents.
+    const message = wakeMessage();
+    createRun({ triggerMessageIds: [message.messageId] });
+    expect(deliveryState(message.messageId, "w2")).toBe("claimed");
+  });
+
+  it("resolves a session back to the worker that owns it", () => {
+    // This is R1's reason to exist. The CLI knows its agent session id, not a
+    // wkr_ id; without this lookup a worker's message carries only a sender it
+    // declared itself.
+    const run = createRun();
+    store.attachRunSession({ runId: run.runId, sessionId: "sess_abc" });
+
+    const resolved = store.getRunBySession("sess_abc");
+    expect(resolved?.workerId).toBe("w2");
+    expect(resolved?.groupId).toBe("grp_1");
+    expect(resolved?.runId).toBe("run_1");
+  });
+
+  it("resolves nothing for a session it has never seen", () => {
+    createRun();
+    expect(store.getRunBySession("sess_unknown")).toBeNull();
+  });
+
+  it("refuses to move a run onto a different session", () => {
+    // Re-pointing it would attribute a later message to the wrong wake.
+    const run = createRun();
+    store.attachRunSession({ runId: run.runId, sessionId: "sess_abc" });
+    expect(() => store.attachRunSession({ runId: run.runId, sessionId: "sess_other" })).toThrow(
+      /already attached to session sess_abc/,
+    );
+    expect(store.getRun(run.runId)?.sessionId).toBe("sess_abc");
+  });
+
+  it("allows attaching the same session twice, so a retry is not an error", () => {
+    const run = createRun();
+    store.attachRunSession({ runId: run.runId, sessionId: "sess_abc" });
+    expect(() => store.attachRunSession({ runId: run.runId, sessionId: "sess_abc" })).not.toThrow();
+  });
+
+  it("keeps one run in flight per worker", () => {
+    // Enforced by a partial unique index, so it holds across processes rather
+    // than only when a single caller remembers to check.
+    createRun();
+    expect(() => createRun({ runId: "run_2" })).toThrow(WorkerRunAlreadyActiveError);
+  });
+
+  it("allows a second run for a different worker", () => {
+    createRun();
+    expect(() => createRun({ runId: "run_2", workerId: "w1" })).not.toThrow();
+  });
+
+  it("allows a new run once the previous one is settled", () => {
+    const first = createRun();
+    store.settleRun({ runId: first.runId, state: "completed" });
+    expect(() => createRun({ runId: "run_2" })).not.toThrow();
+  });
+
+  it("marks its messages read when it completes", () => {
+    const message = wakeMessage();
+    const run = createRun({ triggerMessageIds: [message.messageId] });
+    store.settleRun({ runId: run.runId, state: "completed" });
+
+    expect(store.getRun(run.runId)).toMatchObject({
+      state: "completed",
+      endedAt: expect.any(String),
+    });
+    // Read, and out of the inbox: the worker was woken by it and finished.
+    expect(deliveryState(message.messageId, "w2")).toBeNull();
+  });
+
+  it("returns its messages to the inbox when it fails", () => {
+    // The work must survive the run. A delivery stuck on `claimed` after a dead
+    // run is a message nobody will ever answer.
+    const message = wakeMessage();
+    const run = createRun({ triggerMessageIds: [message.messageId] });
+    store.settleRun({ runId: run.runId, state: "failed", failureReason: "provider down" });
+
+    expect(store.getRun(run.runId)).toMatchObject({
+      state: "failed",
+      failureReason: "provider down",
+    });
+    expect(deliveryState(message.messageId, "w2")).toBe("unread");
+  });
+
+  it("returns its messages to the inbox when it is cancelled", () => {
+    const message = wakeMessage();
+    const run = createRun({ triggerMessageIds: [message.messageId] });
+    store.settleRun({ runId: run.runId, state: "cancelled" });
+    expect(deliveryState(message.messageId, "w2")).toBe("unread");
+  });
+
+  it("settles only once, so a retry cannot move messages twice", () => {
+    // The wake loop can retry. A second settle that flipped a read delivery back
+    // to unread would wake the worker again for work it already did.
+    const message = wakeMessage();
+    const run = createRun({ triggerMessageIds: [message.messageId] });
+    store.settleRun({ runId: run.runId, state: "completed" });
+    const again = store.settleRun({ runId: run.runId, state: "failed" });
+
+    expect(again?.state).toBe("completed");
+    expect(deliveryState(message.messageId, "w2")).toBeNull();
+  });
+
+  it("settles a run with no triggers without touching anything", () => {
+    const run = createRun();
+    expect(store.settleRun({ runId: run.runId, state: "completed" })?.state).toBe("completed");
+  });
+
+  it("deduplicates the trigger list", () => {
+    const message = wakeMessage();
+    const run = createRun({
+      triggerMessageIds: [message.messageId, message.messageId],
+    });
+    expect(run.triggerMessageIds).toEqual([message.messageId]);
+  });
+
+  it("collects several messages into one wake", () => {
+    // Several mentions arriving before a worker is woken is one wake, not
+    // several, which is what keeps a busy group from serialising into noise.
+    const first = wakeMessage("a");
+    const second = wakeMessage("b");
+    const run = createRun({ triggerMessageIds: [first.messageId, second.messageId] });
+    expect(run.triggerMessageIds).toHaveLength(2);
+    expect(deliveryState(first.messageId, "w2")).toBe("claimed");
+    expect(deliveryState(second.messageId, "w2")).toBe("claimed");
+  });
+
+  it("refuses a run for an unknown group", () => {
+    expect(() => createRun({ groupId: "grp_missing" })).toThrow(/unknown worker group/);
+  });
+
+  it("refuses a run for an unknown worker", () => {
+    expect(() => createRun({ workerId: "wkr_missing" })).toThrow(/unknown worker/);
+  });
+
+  it("reports no runs when none are in flight", () => {
+    expect(store.listRunningRuns()).toEqual([]);
+  });
+
+  it("lists in-flight runs oldest first", () => {
+    createRun({ runId: "run_b", workerId: "w2", startedAt: "2026-09-24T02:00:00.000Z" });
+    store.settleRun({ runId: "run_b", state: "completed" });
+    createRun({ runId: "run_a", workerId: "w2", startedAt: "2026-09-24T01:00:00.000Z" });
+    createRun({ runId: "run_c", workerId: "w1", startedAt: "2026-09-24T03:00:00.000Z" });
+
+    expect(store.listRunningRuns().map((run: WorkerRunRecord) => run.runId)).toEqual([
+      "run_a",
+      "run_c",
+    ]);
+  });
+
+  it("survives reopening the database", () => {
+    const message = wakeMessage();
+    const run = createRun({ triggerMessageIds: [message.messageId] });
+    store.attachRunSession({ runId: run.runId, sessionId: "sess_abc" });
+
+    const databasePath = path.join(dir, "worker.db");
+    store.close();
+    store = new WorkerStore({ databasePath });
+
+    expect(store.getRun("run_1")).toMatchObject({ state: "running", sessionId: "sess_abc" });
+    expect(store.getRunBySession("sess_abc")?.workerId).toBe("w2");
+    expect(deliveryState(message.messageId, "w2")).toBe("claimed");
+  });
+
+  it("drops a group's runs when the group goes", () => {
+    createRun();
+    store.deleteGroup("grp_1");
+    expect(store.getRun("run_1")).toBeNull();
   });
 });
 
@@ -1249,5 +1511,127 @@ describe("schema v6 migration", () => {
     } finally {
       migrated.close();
     }
+  });
+});
+
+describe("wake candidates", () => {
+  beforeEach(() => {
+    store.createWorker({ ...WORKER, id: "w2", name: "Bob" });
+    store.createWorker({ ...WORKER, id: "w3", name: "Carol" });
+    store.createGroup({ id: "grp_1", name: "Pricing", projectId: "prj_a" });
+    store.createGroup({ id: "grp_2", name: "Other", projectId: "prj_b" });
+    for (const [groupId, workerId] of [
+      ["grp_1", "w1"],
+      ["grp_1", "w2"],
+      ["grp_1", "w3"],
+      // w1 coordinates both, so a message addressed to w2 can come from either
+      // group and the case below is the real shape: one worker, two conversations.
+      ["grp_2", "w1"],
+      ["grp_2", "w2"],
+    ] as const) {
+      store.addGroupMember({
+        groupId,
+        workerId,
+        role: workerId === "w1" ? "coordinator" : "member",
+      });
+    }
+  });
+
+  let messageCount = 0;
+  function send(input: {
+    groupId: string;
+    sender: string;
+    audience?: string[];
+    deliveryPolicy?: "wake" | "store_only";
+  }) {
+    messageCount += 1;
+    return store.createMessage({
+      messageId: `msg_${messageCount}`,
+      groupId: input.groupId,
+      senderWorkerId: input.sender,
+      body: "work",
+      ...(input.audience ? { audience: input.audience } : {}),
+      ...(input.deliveryPolicy ? { deliveryPolicy: input.deliveryPolicy } : {}),
+    });
+  }
+
+  it("is empty when nothing is waiting", () => {
+    expect(store.listWakeCandidates()).toEqual([]);
+  });
+
+  it("lists a woken worker with the message that woke it", () => {
+    const message = send({ groupId: "grp_1", sender: "w1", audience: ["w2"] });
+    expect(store.listWakeCandidates()).toEqual([
+      { workerId: "w2", groupId: "grp_1", messageIds: [message.messageId] },
+    ]);
+  });
+
+  it("ignores a store-only message, which woke nobody", () => {
+    // No delivery row is written for these at all, which is what makes "unread
+    // means a wake" true rather than a rule repeated in two places.
+    send({ groupId: "grp_1", sender: "w1", deliveryPolicy: "store_only" });
+    expect(store.listWakeCandidates()).toEqual([]);
+  });
+
+  it("collects several messages for one worker into one candidate", () => {
+    // A worker woken by two messages gets both, so it does not answer the first
+    // and then immediately wake again for the second.
+    const first = send({ groupId: "grp_1", sender: "w1", audience: ["w2"] });
+    const second = send({ groupId: "grp_1", sender: "w3", audience: ["w2"] });
+    expect(store.listWakeCandidates()).toEqual([
+      { workerId: "w2", groupId: "grp_1", messageIds: [first.messageId, second.messageId] },
+    ]);
+  });
+
+  it("keeps two groups apart for a worker in both", () => {
+    // A run belongs to exactly one group, so a mixed inbox with an arbitrary
+    // group on it would attribute the wake to the wrong conversation.
+    const inOne = send({ groupId: "grp_1", sender: "w1", audience: ["w2"] });
+    const inTwo = send({ groupId: "grp_2", sender: "w1", audience: ["w2"] });
+    const candidates = store.listWakeCandidates();
+    expect(candidates).toHaveLength(2);
+    expect(candidates.find((entry) => entry.groupId === "grp_1")?.messageIds).toEqual([
+      inOne.messageId,
+    ]);
+    expect(candidates.find((entry) => entry.groupId === "grp_2")?.messageIds).toEqual([
+      inTwo.messageId,
+    ]);
+  });
+
+  it("skips a worker with a run in flight", () => {
+    // One wake at a time, so the loop can be driven from several places without
+    // dispatching the same worker twice.
+    send({ groupId: "grp_1", sender: "w1", audience: ["w2"] });
+    store.createRun({ runId: "run_1", groupId: "grp_1", workerId: "w2" });
+    expect(store.listWakeCandidates()).toEqual([]);
+  });
+
+  it("offers the worker again once its run settles", () => {
+    const message = send({ groupId: "grp_1", sender: "w1", audience: ["w2"] });
+    const run = store.createRun({
+      runId: "run_1",
+      groupId: "grp_1",
+      workerId: "w2",
+      triggerMessageIds: [message.messageId],
+    });
+    expect(store.listWakeCandidates()).toEqual([]);
+    store.settleRun({ runId: run.runId, state: "completed" });
+    // Completed, so the delivery is read and there is nothing left to wake for.
+    expect(store.listWakeCandidates()).toEqual([]);
+  });
+
+  it("offers a failed run's messages again", () => {
+    // This is the recovery path: a wake that died must not consume its messages.
+    const message = send({ groupId: "grp_1", sender: "w1", audience: ["w2"] });
+    const run = store.createRun({
+      runId: "run_1",
+      groupId: "grp_1",
+      workerId: "w2",
+      triggerMessageIds: [message.messageId],
+    });
+    store.settleRun({ runId: run.runId, state: "failed", failureReason: "boom" });
+    expect(store.listWakeCandidates()).toEqual([
+      { workerId: "w2", groupId: "grp_1", messageIds: [message.messageId] },
+    ]);
   });
 });

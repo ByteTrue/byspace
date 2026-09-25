@@ -162,6 +162,7 @@ import {
 import { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import { ScheduleService } from "./schedule/service.js";
 import { WorkerService } from "./worker/service.js";
+import { WorkerWakeLoop } from "./worker/worker-wake-loop.js";
 import { WorkerRunner } from "./worker/worker-runner.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
 import { createOrchestrationSkills } from "./orchestration-skills/index.js";
@@ -1272,11 +1273,18 @@ export async function createBySpaceDaemon(
       return workspace.workspaceId;
     },
   });
+  // The loop is handed to the service before it exists, so it is wired through a
+  // mutable reference: a send asks the loop to look, and the loop is the thing
+  // that turns a wake into a run.
+  let workerWakeLoop: WorkerWakeLoop | null = null;
   const workerService = new WorkerService({
     byspaceHome: config.byspaceHome,
     logger,
     runner: workerRunner,
+    onWakeRequested: () => workerWakeLoop?.requestPass(),
   });
+  workerWakeLoop = new WorkerWakeLoop({ service: workerService, logger });
+  workerWakeLoop.start();
   agentManager.setAgentArchivedCallback(async (agentId) => {
     try {
       await scheduleService.completeForAgent(agentId);
@@ -1732,6 +1740,7 @@ export async function createBySpaceDaemon(
     await agentProviderRuntime.shutdown();
     terminalManager.killAll();
     await scheduleService.stop().catch(() => undefined);
+    workerWakeLoop?.stop();
     workerService.close();
     await relayRuntime?.stop().catch(() => undefined);
     if (wsServer) {

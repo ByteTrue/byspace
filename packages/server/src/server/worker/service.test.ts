@@ -493,3 +493,222 @@ describe("worker service goals", () => {
     });
   });
 });
+
+describe("message sender resolution", () => {
+  /** A group with two workers, so one can be named while the other speaks. */
+  async function twoWorkers(service: WorkerService) {
+    const alice = await service.createWorker({
+      name: "Alice",
+      templateId: "project-administrator",
+      workspacePath: join(home, "alice"),
+    });
+    const bob = await service.createWorker({
+      name: "Bob",
+      templateId: "backend-engineer",
+      workspacePath: join(home, "bob"),
+    });
+    const group = service.createGroup({
+      name: "Pricing",
+      projectId: "prj_a",
+      coordinatorWorkerId: alice.id,
+      memberWorkerIds: [bob.id],
+    });
+    return { alice, bob, group };
+  }
+
+  it("prefers the session over a matching worker id", async () => {
+    const service = createService();
+    const { bob, group } = await twoWorkers(service);
+    const run = service.getStore().createRun({
+      runId: "run_1",
+      groupId: group.id,
+      workerId: bob.id,
+    });
+    service.getStore().attachRunSession({ runId: run.runId, sessionId: "sess_bob" });
+
+    expect(
+      service.resolveMessageSender({ senderSessionId: "sess_bob", senderWorkerId: bob.id }),
+    ).toBe(bob.id);
+  });
+
+  it("refuses a worker that names somebody else as the sender", async () => {
+    // This is the case the whole identity model exists for. A worker could
+    // previously claim any sender it liked; now the session is checked, and a
+    // disagreement is refused rather than resolved in anyone's favour.
+    const service = createService();
+    const { alice, bob, group } = await twoWorkers(service);
+    const run = service.getStore().createRun({
+      runId: "run_1",
+      groupId: group.id,
+      workerId: bob.id,
+    });
+    service.getStore().attachRunSession({ runId: run.runId, sessionId: "sess_bob" });
+
+    expect(() =>
+      service.resolveMessageSender({ senderSessionId: "sess_bob", senderWorkerId: alice.id }),
+    ).toThrow(/does not match the session's worker/);
+  });
+
+  it("refuses a session that no run or task authorises", () => {
+    const service = createService();
+    expect(() => service.resolveMessageSender({ senderSessionId: "sess_stranger" })).toThrow(
+      /is not a worker run/,
+    );
+  });
+
+  it("accepts a bare worker id from outside a session", async () => {
+    // The console and an operator have no session; they name the worker. Only a
+    // worker that claims to be in one is held to it.
+    const service = createService();
+    const { alice } = await twoWorkers(service);
+    expect(service.resolveMessageSender({ senderWorkerId: alice.id })).toBe(alice.id);
+  });
+
+  it("refuses a send that names neither", () => {
+    const service = createService();
+    expect(() => service.resolveMessageSender({})).toThrow(/needs a sender/);
+  });
+
+  it("sends as the resolved worker, not the named one", async () => {
+    // End to end through sendMessage: the message that lands must carry the
+    // worker the session proves, whatever was asked for.
+    const service = createService();
+    const { bob, group } = await twoWorkers(service);
+    const run = service.getStore().createRun({
+      runId: "run_1",
+      groupId: group.id,
+      workerId: bob.id,
+    });
+    service.getStore().attachRunSession({ runId: run.runId, sessionId: "sess_bob" });
+
+    const sender = service.resolveMessageSender({
+      senderSessionId: "sess_bob",
+      senderWorkerId: bob.id,
+    });
+    const { message } = service.sendMessage({
+      groupId: group.id,
+      senderWorkerId: sender,
+      body: "reporting in",
+    });
+    expect(message.senderWorkerId).toBe(bob.id);
+  });
+});
+
+describe("sender resolution from a run", () => {
+  /** A group with a coordinator and a member who can be woken. */
+  async function seeded(service: WorkerService) {
+    const workspace = join(home, "repo");
+    const alice = await service.createWorker({
+      name: "Alice",
+      templateId: "project-administrator",
+      workspacePath: workspace,
+    });
+    const bob = await service.createWorker({
+      name: "Bob",
+      templateId: "backend-engineer",
+      workspacePath: join(home, "repo-bob"),
+    });
+    const group = service.createGroup({
+      name: "Pricing page",
+      projectId: "prj_abc",
+      coordinatorWorkerId: alice.id,
+      memberWorkerIds: [bob.id],
+    });
+    return { alice, bob, group };
+  }
+
+  it("resolves a running session to the worker it speaks for", async () => {
+    const service = createService();
+    const { bob, group } = await seeded(service);
+
+    const run = service.getStore().createRun({
+      runId: "run_1",
+      groupId: group.id,
+      workerId: bob.id,
+    });
+    service.getStore().attachRunSession({ runId: run.runId, sessionId: "sess_bob" });
+
+    expect(service.resolveSenderFromSession("sess_bob")).toEqual({
+      workerId: bob.id,
+      runId: "run_1",
+    });
+  });
+
+  it("refuses a session with no run at all", () => {
+    // The point of the check: an arbitrary agent id must not resolve to a worker.
+    const service = createService();
+    expect(() => service.resolveSenderFromSession("sess_stranger")).toThrow(
+      /is not a worker run, so it cannot send as a worker/,
+    );
+  });
+
+  it("refuses a session whose run has already finished", async () => {
+    // A worker that is not awake has no business sending, and the run is what
+    // says whether it is.
+    const service = createService();
+    const { bob, group } = await seeded(service);
+    const run = service.getStore().createRun({
+      runId: "run_1",
+      groupId: group.id,
+      workerId: bob.id,
+    });
+    service.getStore().attachRunSession({ runId: run.runId, sessionId: "sess_bob" });
+    service.getStore().settleRun({ runId: "run_1", state: "completed" });
+
+    expect(() => service.resolveSenderFromSession("sess_bob")).toThrow(
+      /belongs to a completed run, which can no longer send/,
+    );
+  });
+
+  it("resolves a session carrying an in-progress task", async () => {
+    // A worker reporting into its group while doing assigned work has a session
+    // and no run, so the task has to authorise it too.
+    const service = createService();
+    const { taskId } = await seedTask(service);
+    const task = service.getStore().getTask(taskId)!;
+    service.getStore().setTaskAgent({ taskId, agentId: "sess_task" });
+    service.getStore().applyTaskTransition({
+      taskId,
+      toState: "in_progress",
+      action: "ack_task",
+      actor: "test",
+    });
+
+    expect(service.resolveSenderFromSession("sess_task")).toEqual({
+      workerId: task.workerId,
+      runId: null,
+    });
+  });
+
+  it("refuses a task session whose task has finished", async () => {
+    // The authority is current. A submitted task means the turn is over, so the
+    // session may not keep sending on an id that is still valid.
+    const service = createService();
+    const { taskId } = await seedTask(service);
+    service.getStore().setTaskAgent({ taskId, agentId: "sess_done" });
+    service.getStore().applyTaskTransition({
+      taskId,
+      toState: "in_progress",
+      action: "ack_task",
+      actor: "test",
+    });
+    service.getStore().applyTaskTransition({
+      taskId,
+      toState: "submitted",
+      action: "submit_task",
+      actor: "test",
+    });
+
+    expect(() => service.resolveSenderFromSession("sess_done")).toThrow(
+      /is not a worker run, so it cannot send as a worker/,
+    );
+  });
+
+  it("refuses a run that has no session attached yet", async () => {
+    // Resolution is by session id, so an unattached run must not answer to any.
+    const service = createService();
+    const { bob, group } = await seeded(service);
+    service.getStore().createRun({ runId: "run_1", groupId: group.id, workerId: bob.id });
+    expect(() => service.resolveSenderFromSession("")).toThrow(/is not a worker run/);
+  });
+});

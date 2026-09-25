@@ -2687,7 +2687,8 @@ export class DaemonClient {
   async sendWorkerMessage(
     input: {
       groupId: string;
-      senderWorkerId: string;
+      senderWorkerId?: string;
+      senderSessionId?: string;
       body: string;
       intent?: Extract<SessionInboundMessage, { type: "worker.message.send.request" }>["intent"];
       deliveryPolicy?: Extract<
@@ -2705,7 +2706,8 @@ export class DaemonClient {
       message: {
         type: "worker.message.send.request",
         groupId: input.groupId,
-        senderWorkerId: input.senderWorkerId,
+        ...(input.senderWorkerId !== undefined ? { senderWorkerId: input.senderWorkerId } : {}),
+        ...(input.senderSessionId !== undefined ? { senderSessionId: input.senderSessionId } : {}),
         body: input.body,
         ...(input.intent !== undefined ? { intent: input.intent } : {}),
         ...(input.deliveryPolicy !== undefined ? { deliveryPolicy: input.deliveryPolicy } : {}),

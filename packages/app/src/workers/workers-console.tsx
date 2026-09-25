@@ -23,6 +23,15 @@ import {
   selectAttentionTasks,
 } from "@/workers/dashboard-derived";
 import { WorkerDetailSection } from "@/workers/worker-detail-section";
+import { WorkerFilterBar } from "@/workers/worker-filter-bar";
+import {
+  availableRoles,
+  DEFAULT_WORKER_FILTERS,
+  selectVisibleWorkers,
+  type WorkerFilters,
+  type WorkerSort,
+  type WorkerStatusFilter,
+} from "@/workers/worker-filters";
 import { WorkerGroupsSection } from "@/workers/worker-groups-section";
 import { ICON_SIZE } from "@/styles/theme";
 
@@ -393,6 +402,29 @@ function ManagementSection({
     [openCreate],
   );
 
+  const [filters, setFilters] = useState<WorkerFilters>(DEFAULT_WORKER_FILTERS);
+  const roles = useMemo(() => availableRoles(workers), [workers]);
+  const visibleWorkers = useMemo(
+    () => selectVisibleWorkers(workers, tasks, filters),
+    [workers, tasks, filters],
+  );
+  const onSearchChange = useCallback(
+    (value: string) => setFilters((current) => ({ ...current, search: value })),
+    [],
+  );
+  const onStatusChange = useCallback(
+    (status: WorkerStatusFilter) => setFilters((current) => ({ ...current, status })),
+    [],
+  );
+  const onRoleChange = useCallback(
+    (roleId: string | null) => setFilters((current) => ({ ...current, roleId })),
+    [],
+  );
+  const onSortChange = useCallback(
+    (sort: WorkerSort) => setFilters((current) => ({ ...current, sort })),
+    [],
+  );
+
   return (
     <>
       <PageHeader
@@ -401,9 +433,25 @@ function ManagementSection({
         action={action}
       />
       {viewSwitch}
+      <WorkerFilterBar
+        onSearchChange={onSearchChange}
+        status={filters.status}
+        onStatusChange={onStatusChange}
+        roleId={filters.roleId}
+        onRoleChange={onRoleChange}
+        roles={roles}
+        sort={filters.sort}
+        onSortChange={onSortChange}
+        visibleCount={visibleWorkers.length}
+      />
+      {/* An empty roster and an empty filtered view need different words: the
+          first is a thing to fix, the second is a thing to undo. */}
+      {visibleWorkers.length === 0 && workers.length > 0 ? (
+        <Text style={styles.noMatches}>No worker matches those filters.</Text>
+      ) : null}
       <View style={styles.cardGrid}>
         <CreateWorkerTile onPress={openCreate} />
-        {workers.map((worker) => (
+        {visibleWorkers.map((worker) => (
           <WorkerCard
             key={`${worker.serverId}:${worker.id}`}
             worker={worker}
@@ -895,6 +943,7 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface1,
   },
+  noMatches: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   cardGrid: {
     flexDirection: "row",
     flexWrap: "wrap",

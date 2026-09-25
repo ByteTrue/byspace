@@ -398,7 +398,23 @@ export const WorkerMessageSendRequestSchema = z.object({
   type: z.literal("worker.message.send.request"),
   requestId: z.string(),
   groupId: z.string().min(1),
-  senderWorkerId: z.string().min(1),
+  /**
+   * Who is sending.
+   *
+   * Optional because a worker does not know this about itself: it knows its
+   * agent session, and `senderSessionId` resolves the worker from that. A caller
+   * that is not a worker (the console) supplies the id directly.
+   */
+  senderWorkerId: z.string().min(1).optional(),
+  /**
+   * The agent session of a worker sending from inside a run or task.
+   *
+   * Preferred over `senderWorkerId` when present, because the daemon can check
+   * it: an in-flight run or in-progress task owns that session. A worker that
+   * names a different worker alongside it is refused rather than overruled, so a
+   * mistake shows up instead of being silently corrected.
+   */
+  senderSessionId: z.string().min(1).optional(),
   body: z.string().min(1),
   intent: WorkerMessageIntentSchema.optional(),
   deliveryPolicy: WorkerMessageDeliveryPolicySchema.optional(),

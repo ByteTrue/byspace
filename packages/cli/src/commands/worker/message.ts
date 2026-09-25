@@ -91,19 +91,38 @@ export interface MessageSendOptions extends CommandOptions {
  * Visibility is separate from waking: `--private-to` narrows who may read,
  * and it is orthogonal to whether anyone is woken.
  */
-export async function runMessageSendCommand(
-  options: MessageSendOptions,
-  _command: Command,
-): Promise<SingleResult<WorkerMessageRow>> {
+/** The validated send arguments, with the sender resolved from the flags. */
+interface ResolvedSend {
+  groupId: string;
+  senderWorkerId?: string;
+  senderSessionId?: string;
+  body: string;
+  mentions: string[];
+}
+
+/**
+ * Validate the flags and work out who is sending.
+ *
+ * Separate from the send itself: this decides what a caller is asking, and the
+ * daemon decides whether it is allowed. Keeping the two apart is what lets the
+ * sender logic be read as one rule rather than four.
+ */
+function resolveSend(options: MessageSendOptions): ResolvedSend {
   const groupId = options.groupId?.trim();
   if (!groupId) {
     throw { code: "MISSING_GROUP_ID", message: "--group-id is required" } satisfies CommandError;
   }
   const senderWorkerId = options.senderWorkerId?.trim();
-  if (!senderWorkerId) {
+  // Inside a worker session this is always sent, even alongside an explicit
+  // --sender-worker-id: the daemon resolves it and refuses a disagreement, which
+  // is what stops a worker from naming somebody else as the sender. Outside one,
+  // only the flag is available, and that is the operator path.
+  const senderSessionId = process.env.BYSPACE_AGENT_ID?.trim();
+  if (!senderWorkerId && !senderSessionId) {
     throw {
       code: "MISSING_SENDER",
-      message: "--sender-worker-id is required",
+      message: "--sender-worker-id is required outside a worker run",
+      details: "Inside a worker run the sender is resolved from the session.",
     } satisfies CommandError;
   }
   const body = options.body?.trim();
@@ -120,16 +139,32 @@ export async function runMessageSendCommand(
     } satisfies CommandError;
   }
 
+  return {
+    groupId,
+    ...(senderWorkerId ? { senderWorkerId } : {}),
+    ...(senderSessionId ? { senderSessionId } : {}),
+    body,
+    mentions,
+  };
+}
+
+export async function runMessageSendCommand(
+  options: MessageSendOptions,
+  _command: Command,
+): Promise<SingleResult<WorkerMessageRow>> {
+  const send = resolveSend(options);
+
   const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
     throw buildDaemonConnectionCommandError({ host: options.host, error });
   });
 
   try {
     const payload = await client.sendWorkerMessage({
-      groupId,
-      senderWorkerId,
-      body,
-      ...(mentions.length > 0 ? { audience: mentions } : {}),
+      groupId: send.groupId,
+      ...(send.senderWorkerId !== undefined ? { senderWorkerId: send.senderWorkerId } : {}),
+      ...(send.senderSessionId !== undefined ? { senderSessionId: send.senderSessionId } : {}),
+      body: send.body,
+      ...(send.mentions.length > 0 ? { audience: send.mentions } : {}),
       ...(options.notMention ? { deliveryPolicy: "store_only" as const } : {}),
       ...(options.privateTo !== undefined ? { privateTo: options.privateTo } : {}),
       ...(options.intent !== undefined ? { intent: options.intent as never } : {}),

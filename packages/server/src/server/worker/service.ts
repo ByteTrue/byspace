@@ -37,6 +37,7 @@ import {
 } from "./worker-store.js";
 import { WORKER_TASK_ACTIONS, type WorkerTaskAction } from "./worker-task-state.js";
 import type { WorkerRunner } from "./worker-runner.js";
+import { buildWakePrompt } from "./worker-wake-prompt.js";
 import {
   listWorkerTemplateIds,
   loadWorkerTemplate,
@@ -77,6 +78,23 @@ export class WorkerTaskNotFoundError extends Error {
   constructor(taskId: string) {
     super(`Unknown worker task: ${taskId}`);
     this.name = "WorkerTaskNotFoundError";
+  }
+}
+
+/**
+ * A session asked to speak for a worker and no run authorises it.
+ *
+ * The message names what to do about it rather than only what failed, because
+ * the common cause is a worker running a CLI command outside a wake.
+ */
+export class WorkerSenderNotResolvableError extends Error {
+  constructor(sessionId: string, state?: string) {
+    super(
+      state === undefined
+        ? `Session ${sessionId} is not a worker run, so it cannot send as a worker. Worker commands run inside a wake.`
+        : `Session ${sessionId} belongs to a ${state} run, which can no longer send. Worker commands run inside a wake.`,
+    );
+    this.name = "WorkerSenderNotResolvableError";
   }
 }
 
@@ -130,6 +148,14 @@ export interface WorkerServiceOptions {
    * to have run something.
    */
   runner?: WorkerRunner;
+  /**
+   * Called after a send that woke somebody.
+   *
+   * The wake loop also runs on a timer, so this is latency rather than
+   * correctness: without it a message waits up to one tick before its recipient
+   * is started at all.
+   */
+  onWakeRequested?: () => void;
 }
 
 export interface CreateWorkerInput {
@@ -158,6 +184,7 @@ export class WorkerService {
   private readonly databasePath: string;
   private readonly logger: pino.Logger;
   private readonly runner: WorkerRunner | null;
+  private readonly onWakeRequested: (() => void) | null;
   private store: WorkerStore | null = null;
   private rules: GuardRule[] | null = null;
 
@@ -172,6 +199,19 @@ export class WorkerService {
       });
     this.logger = options.logger;
     this.runner = options.runner ?? null;
+    this.onWakeRequested = options.onWakeRequested ?? null;
+  }
+
+  /**
+   * Tell the loop there may be work, if anything was actually woken.
+   *
+   * Only a send with a non-empty `woke` list asks. A store-only message wakes
+   * nobody, and poking the loop for it would make every chat message cost a pass
+   * over the candidate query.
+   */
+  private notifyWakes(woke: readonly string[]): void {
+    if (woke.length === 0) return;
+    this.onWakeRequested?.();
   }
 
   getStore(): WorkerStore {
@@ -355,6 +395,147 @@ export class WorkerService {
    * know whether anyone was actually addressed: an audience of zero wakes
    * nobody, which looks identical to a successful send from the message alone.
    */
+  /**
+   * Resolve the worker speaking, from the session it is running in.
+   *
+   * The CLI knows its agent session id (injected at launch) and cannot know
+   * which `wkr_` it is, so a message that carried a self-reported sender was
+   * trusting a string the sender chose. This turns that string into a fact the
+   * daemon checked.
+   *
+   * Two things authorise a session. A run is the daemon waking a worker to
+   * handle messages. An in-progress task is the worker doing the work it was
+   * assigned, which can include reporting into a group. Either way the authority
+   * is *current*: a finished task or a settled run no longer speaks, so a reused
+   * session id cannot keep sending after its turn ended.
+   */
+  resolveSenderFromSession(sessionId: string): { workerId: string; runId: string | null } {
+    const store = this.getStore();
+    const run = store.getRunBySession(sessionId);
+    if (run) {
+      if (run.state !== "running") {
+        throw new WorkerSenderNotResolvableError(sessionId, run.state);
+      }
+      return { workerId: run.workerId, runId: run.runId };
+    }
+
+    const task = store.getRunningTaskByAgent(sessionId);
+    if (task) {
+      return { workerId: task.workerId, runId: null };
+    }
+
+    throw new WorkerSenderNotResolvableError(sessionId);
+  }
+
+  /**
+   * Carry out one wake: hand a woken worker its messages and report how it ended.
+   *
+   * The caller has already created and claimed the run, because claiming has to
+   * be atomic with the decision to wake. This does the execution and reports the
+   * outcome; settling the run is the caller's, so a wake that never produced a
+   * session still releases what it claimed.
+   *
+   * `onSession` exists for the same reason the ordering matters: the session is
+   * attached before the worker gets its turn, because the worker's own first
+   * action can be sending a reply, and that resolves its identity from the
+   * attachment.
+   */
+  async executeWake(input: {
+    runId: string;
+    groupId: string;
+    workerId: string;
+    messageIds: readonly string[];
+    onSession: (sessionId: string) => void;
+  }): Promise<{ state: "completed" | "failed"; reason?: string }> {
+    if (!this.runner) {
+      throw new WorkerRunUnavailableError();
+    }
+
+    const worker = this.getWorker(input.workerId);
+    const store = this.getStore();
+    const messages = input.messageIds
+      .map((messageId) => store.getMessage(messageId))
+      .filter((message): message is NonNullable<typeof message> => message !== null);
+
+    const nameById = new Map(
+      this.listGroupMembers(input.groupId).map((member) => [
+        member.workerId,
+        this.getWorker(member.workerId).name,
+      ]),
+    );
+
+    const wakePrompt = buildWakePrompt({
+      workerName: worker.name,
+      workerId: worker.id,
+      groupId: input.groupId,
+      messages,
+      members: this.listGroupMembers(input.groupId),
+      nameById,
+    });
+
+    const template = await this.loadTemplate(worker.templateId);
+
+    const outcome = await this.runner.wake({
+      workerId: worker.id,
+      workerName: worker.name,
+      workspacePath: worker.workspacePath,
+      template,
+      groupId: input.groupId,
+      runId: input.runId,
+      wakePrompt,
+      onSessionCreated: input.onSession,
+    });
+
+    this.logger.info(
+      { runId: input.runId, workerId: input.workerId, kind: outcome.kind },
+      "Worker wake settled",
+    );
+
+    switch (outcome.kind) {
+      case "succeeded":
+        return { state: "completed" };
+      case "failed":
+        return { state: "failed", reason: outcome.reason };
+      // A wake that stopped short of finishing did not consume its messages.
+      // Reported as failed so the caller releases them; the loop's own record of
+      // what it has tried keeps that from becoming a retry storm.
+      case "blocked":
+        return { state: "failed", reason: outcome.reason };
+      case "cancelled":
+        return { state: "failed", reason: "the wake was cancelled" };
+    }
+  }
+
+  /**
+   * Work out who is sending a message.
+   *
+   * A session id is checked by the daemon; a worker id is not, so the session
+   * wins whenever it is supplied. Two ids that disagree are refused rather than
+   * resolved in favour of either: a caller naming one worker while speaking from
+   * another worker's session has a bug, and silently picking a winner would hide
+   * it.
+   *
+   * Lives here rather than in the RPC layer because it is a decision about who is
+   * allowed to speak, which is a domain rule.
+   */
+  resolveMessageSender(input: { senderSessionId?: string; senderWorkerId?: string }): string {
+    if (input.senderSessionId) {
+      const resolved = this.resolveSenderFromSession(input.senderSessionId);
+      if (input.senderWorkerId && input.senderWorkerId !== resolved.workerId) {
+        throw new Error(
+          `senderWorkerId ${input.senderWorkerId} does not match the session's worker ${resolved.workerId}`,
+        );
+      }
+      return resolved.workerId;
+    }
+    if (input.senderWorkerId) {
+      return input.senderWorkerId;
+    }
+    throw new Error(
+      "A message needs a sender: pass a session id from inside a worker run, or a worker id",
+    );
+  }
+
   sendMessage(input: {
     groupId: string;
     senderWorkerId: string;
@@ -386,6 +567,7 @@ export class WorkerService {
       { messageId, groupId: input.groupId, woke: woke.length },
       "Recorded worker message",
     );
+    this.notifyWakes(woke);
     return { message, woke };
   }
 
