@@ -2,7 +2,7 @@
 kind: issue
 title: "worker 的 Run 与唤醒闭环：让消息真的能叫醒一个 worker"
 type: feature
-status: open
+status: closed
 created: 2026-09-24
 related_issue: byissue/issues/050-x-worker-surface-align-to-qoderwake.md
 ---
@@ -144,3 +144,15 @@ related_issue: byissue/issues/050-x-worker-surface-align-to-qoderwake.md
 ## 验证
 
 真实 daemon、真实两个 worker、真实一条唤醒；**发起方是 worker 而不是我**。加一条 e2e：send → 轮询到 run 出现 → run 结束 → 对端收到回复消息。
+
+## 关闭记录（2026-09-24）
+
+判据三条全部以真机证据关闭：
+
+1. **无人参与的自协调** —— 一次唤醒后 Coord 自己回了 "Awake"，Responder 回了结果，协调者随后又自主完成两次带读任务的身份探测（`a3334a9fb` 的验证）。全程我只发初始消息。
+2. **run 记账完整** —— `worker_runs` 表：谁（worker_id）、因为哪些消息（trigger_message_ids 同事务认领）、跑了哪个 session（session_id）、结果（state + failure_reason）。
+3. **失败可重取** —— settle 失败/取消把 delivery 释放回 unread，loop 内存记住已试消息防烧钱重试；store 测试与 e2e 各有覆盖。
+
+**交付时序**：唤醒闭环（`2acfbc665`）→ 循环界（`3017cf9b5`）→ skill 落位（`1340b4fa8`）→ 无 goal 硬预算（`f45de8b8d`）→ pi 进程内工具守卫（`5451ea4b9`）→ 读面身份门（`a3334a9fb`）。
+
+**带着关闭的坑（进 harvest note）**：测试开关一度形同虚设（requestPass 绕过 start）；runPass 契约不完整（in-flight 时立刻返回）；"验证 B 跑通"的误报（我代跑被当成 worker 自跑）—— 三者都被真机探针逼出来。
