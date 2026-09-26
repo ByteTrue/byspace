@@ -117,6 +117,24 @@ related_issue: byissue/issues/050-o-worker-surface-align-to-qoderwake.md
 - **`runPass()` 契约不完整**：它承诺"跑一趟"，却在别人正在跑时立刻返回。`start()` 的开箱 pass 因此会把后续的显式 pass 合并掉再提前返回 —— 我的 wake-loop 测试就是这么红的。改成等待**含自己被合并那一轮**的整趟排空。
 - **`createBySpaceDaemon` 复杂度 21 超限**：我那个 `if` 是压垮它的最后一根。没有调阈值，而是把 runner + service + loop 抽成 `createWorkerSubsystem` 工厂（三者本就互相引用），巨函数里少了一个分支。**代价**：那两个 workspace helper 是 `createBySpaceDaemon` 里的闭包，工厂拿不到，只能作为参数注入。
 
+## worker 现在自己驱动 CLI 了（真机）
+
+装上 skill 之后（`1340b4fa8`）一个真实协调者自己跑了 `byspace worker goal get`、`group ls`、`message send` 并回报结果。这是这个域第一次由 worker 发起命令，不再是我代跑。
+
+## 两条未闭合，别当已解决
+
+**1. 结构界只是建议。** 没有 goal 时那 2 次唤醒、3 条消息照跑 —— 唯一的上界是**模型自愿去建 goal**。这次它明确决定不建，理由写在回报里：
+
+> "the goal command needs an estimate of real work items to budget messages against. With no confirmed scope and no builder on the roster, any number I set now would be invented, not estimated."
+
+而我的 prompt 自己留了那个出口（"If the work does not justify a goal, say so"）。所以这不是 bug，是**设计选择**：宁可让模型判断并说明，也不硬塞一个数。代价是**无 goal 的组没有界**。真要给界，得在无 goal 时也给一个默认上限（不是靠指派），那是下一个决定。
+
+**2. workspace 隔离是名义上的。** 我先怀疑 worker 的 cwd 没生效（日志里它 `cd` 到了仓库根）。**实测否证了这个怀疑**：`pwd` 就是它自己的 workspace，接线是对的，那个 `cd` 是模型自己选择的。
+
+但真实的洞在别处：worker 的 workspace 位于 `.dev/byspace-home/worker/workers/<id>`，**在仓库里面**，所以它天然能走到宿主项目（也确实去 `grep packages/app/src` 找 "pricing page" 了）。另外 pi 的**用户级** `~/.agents/skills` 是无条件加载的（其源码明说 "always treated as a trusted user resource"），那 47 个 `lark-*`/`agent-browser`/`bi` 从这里来，BySpace 侧无法屏蔽。
+
+**结论：边界不能靠 skill 可见性或目录位置，只能靠 daemon 权限层。** 这一条和"worker 不能自批权限"是同一个原则的两面。生产环境 `BYSPACE_HOME` 在 `~/.byspace`（仓库之外），第一条会自然消失；第二条在任何环境都在。
+
 ## 判据
 
 - 一条 `--mention` 出去之后，**没有人类参与**，被点名的 worker 自己动起来并回复到组里。这是"自协调"的最低可验形态，也是本 Epic 一直没真正交付的那件事。
