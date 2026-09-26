@@ -18,6 +18,7 @@ import type pino from "pino";
 import type { WorkerTemplateSummary } from "@bytetrue/protocol/worker/rpc-schemas";
 
 import { resolveBySpaceHome } from "../byspace-home.js";
+import { resolveBundledSkillsDir } from "../orchestration-skills/internal/paths.js";
 import {
   WorkerStore,
   resolveWorkerDatabasePath,
@@ -38,6 +39,7 @@ import {
 import { WORKER_TASK_ACTIONS, type WorkerTaskAction } from "./worker-task-state.js";
 import type { WorkerRunner } from "./worker-runner.js";
 import { buildWakePrompt } from "./worker-wake-prompt.js";
+import { materializeWorkerSkills } from "./worker-skills.js";
 import {
   listWorkerTemplateIds,
   loadWorkerTemplate,
@@ -135,6 +137,15 @@ export class WorkerTaskActionUnknownError extends Error {
     this.name = "WorkerTaskActionUnknownError";
   }
 }
+
+/**
+ * BySpace's own skills that every worker needs regardless of role.
+ *
+ * The coordination commands a worker uses to read its group, reply, and set a
+ * goal are the same for every role, so they live in the bundle rather than being
+ * copied into all eight templates.
+ */
+export const WORKER_SHARED_SKILLS: readonly string[] = ["byspace-worker-team"];
 
 export interface WorkerServiceOptions {
   byspaceHome?: string;
@@ -263,6 +274,38 @@ export class WorkerService {
     return worker;
   }
 
+  /**
+   * Put a worker's skills where its runtime discovers them.
+   *
+   * Failure here does not stop a worker being created: a worker with the wrong
+   * skills is still a worker, and refusing to create one because a copy failed
+   * would make an incidental problem fatal. The wake then reports what it could
+   * not do rather than the create pretending it never happened.
+   */
+  private async installSkills(input: { templateId: string; workspacePath: string }): Promise<void> {
+    try {
+      const result = await materializeWorkerSkills({
+        workspacePath: input.workspacePath,
+        templateSkillsDir: path.join(this.templateRoot, input.templateId, "skills"),
+        sharedSkills: {
+          sourceDir: resolveBundledSkillsDir(),
+          names: WORKER_SHARED_SKILLS,
+        },
+      });
+      if (result.installed.length > 0) {
+        this.logger.info(
+          { templateId: input.templateId, installed: result.installed.length },
+          "Installed worker skills",
+        );
+      }
+    } catch (error) {
+      this.logger.warn(
+        { err: error, templateId: input.templateId },
+        "Failed to install worker skills; the worker runs without them",
+      );
+    }
+  }
+
   async createWorker(input: CreateWorkerInput): Promise<WorkerRecord> {
     // Validate the template first: a worker pointing at a role that does not
     // exist would assemble an empty prompt and run as a generic agent.
@@ -272,6 +315,7 @@ export class WorkerService {
     const workspacePath =
       input.workspacePath ?? path.join(this.byspaceHome, "worker", "workers", id);
     await mkdir(workspacePath, { recursive: true });
+    await this.installSkills({ templateId: input.templateId, workspacePath });
 
     const now = new Date().toISOString();
     const worker: WorkerRecord = {
