@@ -147,6 +147,7 @@ export function WorkersConsole({ onExit }: { onExit: () => void }): ReactElement
         tasks={tasks}
         activityDays={activity.get(`${openWorker.serverId}:${openWorker.id}`) ?? EMPTY_ACTIVITY}
         onBack={closeWorker}
+        onTaskCreated={refetch}
       />
     );
   } else if (managementView === "workers") {

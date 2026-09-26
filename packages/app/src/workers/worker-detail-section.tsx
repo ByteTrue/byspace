@@ -15,6 +15,7 @@ import type {
 import { WorkerActivityHeatmap, WorkerTaskBreakdown } from "@/workers/worker-activity-chart";
 import { buildActivityGrid } from "@/workers/worker-activity";
 import { countWorkerTasks } from "@/workers/dashboard-derived";
+import { NewWorkerTaskForm } from "@/workers/new-worker-task-form";
 
 /**
  * One worker, in detail.
@@ -35,6 +36,8 @@ export interface WorkerDetailSectionProps {
   /** Daily activity from the daemon; empty when the host could not report it. */
   activityDays: readonly WorkerActivityDay[];
   onBack: () => void;
+  /** Called after a new task was created and run, so the list reflects it. */
+  onTaskCreated: () => void;
 }
 
 export function WorkerDetailSection({
@@ -42,6 +45,7 @@ export function WorkerDetailSection({
   tasks,
   activityDays,
   onBack,
+  onTaskCreated,
 }: WorkerDetailSectionProps): ReactElement {
   const own = useMemo(
     () =>
@@ -125,6 +129,11 @@ export function WorkerDetailSection({
             <Text style={styles.statLabel}>{card.label}</Text>
           </View>
         ))}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>New task</Text>
+        <NewWorkerTaskForm worker={worker} onCreated={onTaskCreated} />
       </View>
 
       <View style={styles.section}>
