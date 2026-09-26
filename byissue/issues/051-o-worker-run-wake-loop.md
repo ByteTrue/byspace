@@ -4,7 +4,7 @@ title: "worker 的 Run 与唤醒闭环：让消息真的能叫醒一个 worker"
 type: feature
 status: open
 created: 2026-09-24
-related_issue: byissue/issues/050-o-worker-surface-align-to-qoderwake.md
+related_issue: byissue/issues/050-x-worker-surface-align-to-qoderwake.md
 ---
 
 # worker 的 Run 与唤醒闭环

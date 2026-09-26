@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactElement } from "react";
+import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
@@ -32,6 +32,15 @@ export function NewWorkerTaskForm({
   const [error, setError] = useState<string | null>(null);
 
   const canSubmit = title.trim().length > 0 && !running;
+
+  // The starting prompt is derived from the role the worker actually carries,
+  // which is the reference product's rule: a hardcoded hint would tell every
+  // role the same story about the work it does. The description is one line, so
+  // the placeholder restates it as an invitation rather than quoting it.
+  const placeholder = useMemo(() => {
+    const line = worker.templateDescription?.split(".")[0]?.trim();
+    return line ? `${line} — describe what you need` : "Describe the work";
+  }, [worker.templateDescription]);
 
   const submit = useCallback(async () => {
     const trimmed = title.trim();
@@ -71,7 +80,7 @@ export function NewWorkerTaskForm({
       <EditingTextInput
         initialValue={title}
         onChangeText={setTitle}
-        placeholder="Describe the work"
+        placeholder={placeholder}
         style={styles.input}
       />
       {error !== null ? (

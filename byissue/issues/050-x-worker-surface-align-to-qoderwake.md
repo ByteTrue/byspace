@@ -2,7 +2,7 @@
 kind: issue
 title: "worker 面照搬 QoderWake 的上线形态：信息架构、卡片名册、waker 详情页与建组模态"
 type: feature
-status: open
+status: closed
 created: 2026-09-24
 related_issue: byissue/epics/004-x-worker-domain/spec.md
 ---
@@ -84,3 +84,9 @@ Epic 004 照搬的是 QoderWake 的**数据模型、命令面与协作机制**�
 **有意保留的差异：** 顶部保留了项目选择器（上游没有）—— 这是**模型差异而非遗漏**：本域把组绑到 project id 以便 checkout 移动后仍指向同一项目，上游绑 workspace。上游右侧的"响应模型"与"每成员工作区"没有抄：本域只跑一个 provider，工作区属于组，抄过来背后没有东西。
 
 **不在本 issue 范围：** `@Waker` 与 `Autonomous Work` 两个入口 —— Owner 定：本次不做，直接从范围去掉。
+
+## 关闭记录（2026-09-24）
+
+判据五条全部达成：两次点击内跟 worker 说话（名册 → 卡片 → New task → 对话，真机走通）；名册 1440 多列 / 390 不塌；Group 是 Management 内的分段控件；建组模态窄屏可用（主从纵向堆叠）；起始提示来自角色模板（placeholder 取 IDENTITY 第一句）。
+
+上游分区中本域无机制支撑的（Memory / Self-evolving Skill / Plugin / Connector / Knowledge）不做空壳 —— 判据里没有它们，且每个都没有数据源可接。等能力存在时再开新 issue，不在本 issue 留尾巴。
