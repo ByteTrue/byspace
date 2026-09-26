@@ -57,6 +57,7 @@ import {
   asDownloadTokenStore,
   asPushNotifications,
   asScheduleService,
+  asCollabSliceStore,
   asCheckoutDiffManager,
   asDaemonConfigStore,
   asTerminalManager,
@@ -702,6 +703,7 @@ function createSessionForWorkspaceTests(
       workspaceRegistry,
       filesystem: { isDirectory: async () => true },
       scheduleService: asScheduleService(),
+      collabSliceStore: asCollabSliceStore(),
       checkoutDiffManager: asCheckoutDiffManager({
         subscribe: async () => ({
           initial: { cwd: "/tmp", files: [], error: null },
@@ -1014,6 +1016,7 @@ test("create_agent_request keeps requested child cwd when grouped under an exist
         projectRegistry,
         workspaceRegistry,
         scheduleService: asScheduleService(),
+        collabSliceStore: asCollabSliceStore(),
         checkoutDiffManager: asCheckoutDiffManager({
           subscribe: async () => ({
             initial: { cwd: child, files: [], error: null },
@@ -1167,6 +1170,7 @@ test("create_agent_request launches from an exact subdirectory in a created work
       projectRegistry,
       workspaceRegistry,
       scheduleService: asScheduleService(),
+      collabSliceStore: asCollabSliceStore(),
       checkoutDiffManager: asCheckoutDiffManager({
         subscribe: async () => ({
           initial: { cwd: child, files: [], error: null },
@@ -1305,6 +1309,7 @@ test("create_agent_request does not title an existing workspace from the agent p
         projectRegistry,
         workspaceRegistry,
         scheduleService: asScheduleService(),
+        collabSliceStore: asCollabSliceStore(),
         checkoutDiffManager: asCheckoutDiffManager({
           subscribe: async () => ({
             initial: { cwd, files: [], error: null },
@@ -1635,6 +1640,7 @@ test("archive emits an authoritative agent_update upsert for subscribed clients"
         };
       })(),
       scheduleService: asScheduleService(),
+      collabSliceStore: asCollabSliceStore(),
       checkoutDiffManager: asCheckoutDiffManager({
         subscribe: async () => ({
           initial: { cwd: REPO_CWD, files: [], error: null },
@@ -2113,6 +2119,7 @@ test("close_items_request archives agents and kills terminals in one batch", asy
         };
       })(),
       scheduleService: asScheduleService(),
+      collabSliceStore: asCollabSliceStore(),
       checkoutDiffManager: asCheckoutDiffManager({
         subscribe: async () => ({
           initial: { cwd: "/tmp", files: [], error: null },
@@ -2299,6 +2306,7 @@ test("close_items_request archives stored agents that are not currently loaded",
         };
       })(),
       scheduleService: asScheduleService(),
+      collabSliceStore: asCollabSliceStore(),
       checkoutDiffManager: asCheckoutDiffManager({
         subscribe: async () => ({
           initial: { cwd: "/tmp", files: [], error: null },
@@ -2447,6 +2455,7 @@ test("close_items_request continues after an archive failure", async () => {
         };
       })(),
       scheduleService: asScheduleService(),
+      collabSliceStore: asCollabSliceStore(),
       checkoutDiffManager: asCheckoutDiffManager({
         subscribe: async () => ({
           initial: { cwd: "/tmp", files: [], error: null },
@@ -3702,6 +3711,7 @@ test("workspace update stream keeps persisted workspace visible after agents sto
         remove: async () => {},
       },
       scheduleService: asScheduleService(),
+      collabSliceStore: asCollabSliceStore(),
       checkoutDiffManager: asCheckoutDiffManager({
         subscribe: async () => ({
           initial: { cwd: "/tmp", files: [], error: null },

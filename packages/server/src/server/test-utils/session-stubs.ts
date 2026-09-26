@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { vi } from "vitest";
 
 import { getAgentProviderDefinition } from "@bytetrue/protocol/provider-manifest";
+
+import { CollabSliceStore } from "../../collab/store.js";
 
 import type { ProviderSnapshotEntry } from "../agent/agent-sdk-types.js";
 import type { ProviderSnapshot } from "../agent/provider-snapshot-manager.js";
@@ -55,6 +60,15 @@ export function asPushNotifications(
 
 export function asScheduleService(): SessionOptions["scheduleService"] {
   return createStub<SessionOptions["scheduleService"]>({});
+}
+
+let stubCollabHome: string | null = null;
+
+export function asCollabSliceStore(): SessionOptions["collabSliceStore"] {
+  // Shared temp home across stub stores: these are throwaway stubs and the
+  // temp dirs are never cleaned up individually.
+  stubCollabHome ??= mkdtempSync(join(tmpdir(), "collab-stub-"));
+  return new CollabSliceStore(stubCollabHome);
 }
 
 export function asCheckoutDiffManager(stub: {
