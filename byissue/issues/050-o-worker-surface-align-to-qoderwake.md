@@ -64,6 +64,14 @@ Epic 004 照搬的是 QoderWake 的**数据模型、命令面与协作机制**�
 
 ## 已完成（本 issue 范围内）
 
+**后来补齐的（issue 051 期间）：**
+
+- **筛选工具条**：搜索（名字与角色都匹配）/ Runtime status / Role / Sort，右侧计数 —— 筛选后的数量，与列表不会不一致。Role 选项由名册实际存在的角色生成。Environment 未做：本域没有 remote worker，是没有这个字段而不是没有数据。
+- **New task 表单**（worker 详情页，上游"New task"右栏同位）：建任务和跑是一步。浏览器全链路实测：提交 → in_progress → submitted（30s）→ 列表刷新 → 任务行可点进真实对话 → worker 自查汇报并反问澄清。底部 composer 即人追问的入口（既有会话面）。
+- **人的位置（有意不做的）**：人不进群聊。上游协议明说"人是 owner 不是群成员"、"Involve the human only when they request participation or indispensable input is missing"。人给活的方式是任务，收活的地方是对话。
+- **收件箱分区**（worker 详情页）：live 读、不进 roster 聚合 —— 收件箱是活队列，wake loop 秒级消费，聚合值必然陈旧。`claimed`（"a run has this work"）与 `unread`（"waiting for a wake"）语义分开；**留着的 unread 而无 run 在跑，才是人要管的事**（唤醒失败）。真机验过空态、消费中、回到空态三段。
+- **群聊消息流**（组卡片）：最近 3 条 + 更早计数。三条上游语义硬约束：结构化 audience 才路由（正文 @name 纯展示）、可见性与唤醒分开（点名一人 ≠ 私密）、console 是操作者视图（worker 间的私密消息**标注而非隐藏**）。
+
 - **worker 详情页**：卡片可点开，含 Back、身份头（头像/名字/角色/简介/状态·主机）、Work Log 四个计数、任务列表。任务行按同一条规则打开所在会话（没跑过的任务不可点）。
 - **Work Log 热力图与任务类型环图**：已按上游形态实现（53 列 × 7 天、月份条、Less/More 四档、同色阶）。计数取自本域的任务历史（**按事件而非 `updated_at`** —— 一天动过四次就是四次），档位相对最忙的一天，所以四个任务和四百个都能看出对比。
 
