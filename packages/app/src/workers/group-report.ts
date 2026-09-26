@@ -4,6 +4,7 @@ import type {
   AggregatedWorkerTask,
   WorkerTaskState,
 } from "@/workers/aggregated-workers";
+import { buildMessageStream, type DisplayMessage } from "@/workers/group-message-stream";
 
 /**
  * Turning a group's raw state into the report a person reads.
@@ -55,6 +56,23 @@ export interface GroupReport {
   coordinatorName: string | null;
   members: { workerId: string; name: string | null; role: string; isCoordinator: boolean }[];
   work: GroupWorkItem[];
+  /**
+   * How much the group has said.
+   *
+   * Counted rather than summarised: a card shows one number and the detail
+   * shows the stream, so a summary here would be a second thing to keep true.
+   */
+  messageCount: number;
+  /** How many of those were private between workers. */
+  privateCount: number;
+  /**
+   * The stream as it should be drawn, oldest first.
+   *
+   * Projected here rather than by the caller because this is where the host's
+   * worker names are already resolved: a second place doing that lookup is a
+   * second place that can attribute a message to the wrong person.
+   */
+  stream: DisplayMessage[];
 }
 
 /** States that mean the work is still moving. */
@@ -277,5 +295,10 @@ export function buildGroupReport(input: {
       isCoordinator: member.role === "coordinator",
     })),
     work,
+    stream: buildMessageStream(group.messages, nameById),
+    messageCount: group.messages.length,
+    // Counted off the same field the stream reads, so the card's "2 private"
+    // cannot disagree with what the detail labels.
+    privateCount: group.messages.filter((message) => message.privateTo.length > 0).length,
   };
 }

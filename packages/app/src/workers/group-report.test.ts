@@ -92,6 +92,7 @@ function group(overrides: Partial<AggregatedWorkerGroup> = {}): AggregatedWorker
       createdAt: "2026-09-24T00:00:00.000Z",
       updatedAt: "2026-09-24T00:00:00.000Z",
     },
+    messages: [],
     ...overrides,
   };
 }

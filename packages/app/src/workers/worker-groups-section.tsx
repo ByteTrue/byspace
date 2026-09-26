@@ -13,6 +13,11 @@ import type {
   AggregatedWorkerTask,
 } from "@/workers/aggregated-workers";
 import { buildGroupReport, type GroupReport, type GroupWorkItem } from "@/workers/group-report";
+import {
+  describeDelivery,
+  describeVisibility,
+  type DisplayMessage,
+} from "@/workers/group-message-stream";
 
 /**
  * Project groups: a roster of workers on one project.
@@ -142,6 +147,14 @@ function GroupRow({
     <WorkRow key={item.taskId} item={item} serverId={report.serverId} workerNames={workerNames} />
   ));
 
+  // The newest few. Someone scanning a roster wants what is being said now, and
+  // naming what was left out keeps a card from reading as the whole conversation.
+  const shown = report.stream.slice(-MESSAGES_PER_CARD);
+  const earlier = report.stream.length - shown.length;
+  const messageRows = shown.map((message) => (
+    <MessageRow key={message.messageId} message={message} />
+  ));
+
   return (
     <View style={styles.card} testID={`group-row-${report.groupId}`}>
       <View style={styles.reportHeader}>
@@ -172,6 +185,18 @@ function GroupRow({
         ) : null}
       </View>
 
+      {report.stream.length > 0 ? (
+        <View style={styles.reportSection}>
+          <Text style={styles.fieldLabel}>Conversation</Text>
+          {messageRows}
+          {earlier > 0 ? (
+            <Text style={styles.rowMeta} testID={`group-earlier-${report.groupId}`}>
+              {`${earlier} earlier message${earlier === 1 ? "" : "s"}`}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
       <View style={styles.reportSection}>
         <Text style={styles.fieldLabel}>Work</Text>
         {workRows.length > 0 ? (
@@ -193,6 +218,42 @@ function GroupRow({
  * that has run opens it. One that has not is not pressable: there is nothing to
  * open yet, and a row that looks actionable but is not is worse than a plain one.
  */
+/** How many messages a card shows before pointing at the rest. */
+const MESSAGES_PER_CARD = 3;
+
+/**
+ * One message in a group card.
+ *
+ * Nothing here is inferred. Who was woken comes from the structured audience —
+ * text mentioning a name is presentation and routes nothing — and visibility is
+ * stated apart from waking, because a message addressed to one worker is not a
+ * private one.
+ */
+function MessageRow({ message }: { message: DisplayMessage }): ReactElement {
+  const addressed = message.audience.map((entry) => entry.name).join(", ");
+  const deliveryLine = useMemo(() => describeDeliveryAndVisibility(message), [message]);
+  return (
+    <View style={styles.messageRow} testID={`group-message-${message.messageId}`}>
+      <Text style={styles.messageSender}>{message.sender.name}</Text>
+      <Text style={styles.messageBody}>{message.body}</Text>
+      <Text style={styles.rowMeta} testID={`group-message-delivery-${message.messageId}`}>
+        {deliveryLine}
+      </Text>
+      {message.replyToSeq !== null ? (
+        <Text style={styles.rowMeta}>{`in reply to #${message.replyToSeq}`}</Text>
+      ) : null}
+      {addressed.length > 0 ? <Text style={styles.rowMeta}>{`to ${addressed}`}</Text> : null}
+    </View>
+  );
+}
+
+function describeDeliveryAndVisibility(message: DisplayMessage): string {
+  const visibility = describeVisibility(message);
+  return visibility === null
+    ? describeDelivery(message)
+    : `${describeDelivery(message)} · ${visibility}`;
+}
+
 function WorkRow({
   item,
   serverId,
@@ -297,6 +358,15 @@ const styles = StyleSheet.create((theme) => ({
   },
   workTitle: { color: theme.colors.foreground, fontSize: theme.fontSize.sm, flexShrink: 1 },
   workOwner: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  messageRow: {
+    gap: 2,
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface1,
+  },
+  messageSender: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
+  messageBody: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
   rowTitle: { color: theme.colors.foreground, fontSize: theme.fontSize.base },
   rowMeta: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   emptyPanel: {

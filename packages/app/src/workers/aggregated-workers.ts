@@ -2,6 +2,7 @@ import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import type {
   WorkerActivityDay,
   WorkerGoalSummary,
+  WorkerMessageSummary,
   WorkerGroupSummary,
   WorkerTaskSummary,
 } from "@bytetrue/protocol/worker/rpc-schemas";
@@ -41,6 +42,7 @@ export interface WorkerRuntime {
     | "listWorkerGroups"
     | "getWorkerGoal"
     | "getWorkerActivity"
+    | "listWorkerMessages"
   > | null;
   getSnapshot(serverId: string): WorkerRuntimeSnapshot | null | undefined;
 }
@@ -92,6 +94,15 @@ export interface AggregatedWorkerGroup extends WorkerGroupSummary {
    * the goal entity, which also owns the budget and version.
    */
   goal: WorkerGoalSummary | null;
+  /**
+   * The group's message stream, oldest first.
+   *
+   * Read as the operator view, with no viewer id: a person watching a group is
+   * not one of its workers, and the private exchanges between workers belong to
+   * the record they came here to see. Each private one is labelled rather than
+   * hidden, because hiding it would make the stream read as complete.
+   */
+  messages: WorkerMessageSummary[];
 }
 
 export interface WorkerTemplateOption {
@@ -174,6 +185,7 @@ function connectedClient(
   | "listWorkerGroups"
   | "getWorkerGoal"
   | "getWorkerActivity"
+  | "listWorkerMessages"
 > | null {
   const snapshot = runtime.getSnapshot(host.serverId);
   if (!snapshot || snapshot.connectionStatus !== "online") return null;
@@ -276,12 +288,25 @@ export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<
         );
         for (const [key, days] of activityEntries) activity.set(key, days);
 
+        const messagesByGroup = new Map(
+          await Promise.all(
+            (groupResult.groups ?? []).map(async (group) => {
+              const payload = await bestEffort(
+                () => client.listWorkerMessages({ groupId: group.id }),
+                { messages: [] },
+              );
+              return [group.id, payload.messages ?? []] as const;
+            }),
+          ),
+        );
+
         for (const group of groupResult.groups ?? []) {
           groups.push({
             ...group,
             serverId: host.serverId,
             serverName: host.serverName,
             goal: goalsByGroup.get(group.id) ?? null,
+            messages: messagesByGroup.get(group.id) ?? [],
           });
         }
       } catch (error) {

@@ -39,6 +39,15 @@ function runtimeWith(input: {
           listWorkerGroups: async () => {
             throw new Error("worker_request_failed");
           },
+          getWorkerGoal: async () => {
+            throw new Error("worker_request_failed");
+          },
+          getWorkerActivity: async () => {
+            throw new Error("worker_request_failed");
+          },
+          listWorkerMessages: async () => {
+            throw new Error("worker_request_failed");
+          },
         };
       }
       return {
@@ -46,6 +55,9 @@ function runtimeWith(input: {
         listWorkerTemplates: async () => ({ templates: input.templates?.[serverId] ?? [] }),
         listWorkerTasks: async () => ({ tasks: input.tasks?.[serverId] ?? [] }),
         listWorkerGroups: async () => ({ groups: input.groups?.[serverId] ?? [] }),
+        getWorkerGoal: async () => ({ goal: null }),
+        getWorkerActivity: async () => ({ days: [] }),
+        listWorkerMessages: async () => ({ messages: [] }),
       } as never;
     },
   } as WorkerRuntime;
@@ -64,6 +76,19 @@ const WORKER = {
 };
 
 const TEMPLATE = { id: "frontend-developer", title: "Frontend Developer", skills: ["a", "b"] };
+
+const GROUP = {
+  id: "grp_1",
+  name: "Pricing page",
+  projectId: "prj_1",
+  workspaceId: null,
+  status: "active" as const,
+  members: [
+    { workerId: "wkr_1", role: "coordinator" as const, joinedAt: "2026-09-24T00:00:00.000Z" },
+  ],
+  createdAt: "2026-09-24T00:00:00.000Z",
+  updatedAt: "2026-09-24T00:00:00.000Z",
+};
 
 describe("fetchAggregatedWorkers", () => {
   it("reports connecting while no host is online", async () => {
@@ -134,6 +159,95 @@ describe("fetchAggregatedWorkers", () => {
       "srv_a:wkr_1",
       "srv_b:wkr_2",
     ]);
+  });
+
+  it("carries a group's goal, stream, and a worker's activity through the load", async () => {
+    // These three ride on separate best-effort calls, so a fixture that always
+    // answers empty would let a broken join pass every test in this file. Give
+    // each one real content and check it arrives.
+    const goal = {
+      goalId: "goal_1",
+      groupId: "grp_1",
+      content: "Ship it",
+      turnLimit: 9,
+      turnUsed: 1,
+      status: "active" as const,
+      generation: 1,
+      revision: 2,
+      pauseReason: null,
+      resultMessageId: null,
+      createdAt: "2026-09-24T00:00:00.000Z",
+      updatedAt: "2026-09-24T00:00:00.000Z",
+    };
+    const message = {
+      messageId: "msg_1",
+      groupId: "grp_1",
+      seq: 1,
+      senderWorkerId: "wkr_1",
+      body: "starting now",
+      intent: "chat" as const,
+      deliveryPolicy: "wake" as const,
+      replyToMessageId: null,
+      audience: ["wkr_1"],
+      privateTo: [],
+      createdAt: "2026-09-24T00:00:00.000Z",
+    };
+    const state = await fetchAggregatedWorkers({
+      hosts: [HOST_A],
+      runtime: {
+        getSnapshot: () => ({ connectionStatus: "online" }),
+        getClient: () =>
+          ({
+            listWorkers: async () => ({ workers: [WORKER] }),
+            listWorkerTemplates: async () => ({ templates: [TEMPLATE] }),
+            listWorkerTasks: async () => ({ tasks: [] }),
+            listWorkerGroups: async () => ({ groups: [GROUP] }),
+            getWorkerGoal: async () => ({ goal }),
+            getWorkerActivity: async () => ({ days: [{ day: "2026-09-24", count: 3 }] }),
+            listWorkerMessages: async () => ({ messages: [message] }),
+          }) as never,
+      } as WorkerRuntime,
+    });
+    if (state.status !== "loaded") throw new Error("expected loaded");
+
+    expect(state.groups[0]?.goal).toEqual(goal);
+    expect(state.groups[0]?.messages).toEqual([message]);
+    expect(state.activity.get("srv_a:wkr_1")).toEqual([{ day: "2026-09-24", count: 3 }]);
+  });
+
+  it("still loads the roster when the optional fetches fail", async () => {
+    // The other direction: goals, messages and activity are additions to a view
+    // that has to keep working without them.
+    const state = await fetchAggregatedWorkers({
+      hosts: [HOST_A],
+      runtime: {
+        getSnapshot: () => ({ connectionStatus: "online" }),
+        getClient: () =>
+          ({
+            listWorkers: async () => ({ workers: [WORKER] }),
+            listWorkerTemplates: async () => ({ templates: [TEMPLATE] }),
+            listWorkerTasks: async () => ({ tasks: [] }),
+            listWorkerGroups: async () => ({ groups: [GROUP] }),
+            getWorkerGoal: async () => {
+              throw new Error("no goals");
+            },
+            getWorkerActivity: async () => {
+              throw new Error("no activity");
+            },
+            listWorkerMessages: async () => {
+              throw new Error("no messages");
+            },
+          }) as never,
+      } as WorkerRuntime,
+    });
+    if (state.status !== "loaded") throw new Error("expected loaded");
+
+    expect(state.groups).toHaveLength(1);
+    expect(state.groups[0]?.goal).toBeNull();
+    expect(state.groups[0]?.messages).toEqual([]);
+    expect(state.activity.get("srv_a:wkr_1")).toEqual([]);
+    // Not written off as a failed host: only the optional data is missing.
+    expect(state.hostErrors).toEqual([]);
   });
 
   it("resolves the role title from the host's own catalog", async () => {

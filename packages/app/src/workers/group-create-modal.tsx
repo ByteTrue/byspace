@@ -155,6 +155,7 @@ export function GroupCreateModal({
         serverId: selectedProject.serverId,
         serverName: selectedProject.serverName,
         goal: null,
+        messages: [],
       });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
