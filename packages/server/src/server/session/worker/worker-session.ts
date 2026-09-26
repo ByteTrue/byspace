@@ -333,6 +333,9 @@ export class WorkerSession {
     try {
       const messages = this.workerService.listMessages({
         groupId: request.groupId,
+        ...(request.viewerSessionId !== undefined
+          ? { viewerSessionId: request.viewerSessionId }
+          : {}),
         ...(request.viewerWorkerId !== undefined ? { viewerWorkerId: request.viewerWorkerId } : {}),
         ...(request.limit !== undefined ? { limit: request.limit } : {}),
       });
@@ -349,7 +352,7 @@ export class WorkerSession {
     request: Extract<SessionInboundMessage, { type: "worker.inbox.list.request" }>,
   ): Promise<void> {
     try {
-      const entries = this.workerService.listInbox(request.workerId);
+      const entries = this.workerService.listInbox(request.workerId, request.viewerSessionId);
       this.host.emit({
         type: "worker.inbox.list.response",
         payload: { requestId: request.requestId, entries },
@@ -403,7 +406,7 @@ export class WorkerSession {
         type: "worker.goal.get.response",
         payload: {
           requestId: request.requestId,
-          goal: this.workerService.getGoal(request.groupId),
+          goal: this.workerService.getGoal(request.groupId, request.viewerSessionId),
         },
       });
     } catch (error) {

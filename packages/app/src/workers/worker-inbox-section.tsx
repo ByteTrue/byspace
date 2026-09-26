@@ -32,7 +32,9 @@ export function WorkerInboxSection({ worker }: { worker: AggregatedWorker }): Re
       if (!client) {
         throw new Error("Target host client is unavailable");
       }
-      return client.listWorkerInbox(worker.id);
+      // No viewer session: the console is the operator view, which reads
+      // everything.
+      return client.listWorkerInbox({ workerId: worker.id });
     },
     enabled: connectionStatus === "online",
     retry: false,

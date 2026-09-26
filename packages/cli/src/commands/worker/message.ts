@@ -210,8 +210,13 @@ export async function runMessageListCommand(
   });
 
   try {
+    // Sent whenever it exists, so a worker reading a group it is not in is
+    // refused by the daemon rather than trusted: the same rule the send path
+    // established, applied to the read path.
+    const viewerSessionId = process.env.BYSPACE_AGENT_ID?.trim();
     const payload = await client.listWorkerMessages({
       groupId,
+      ...(viewerSessionId !== undefined && viewerSessionId !== "" ? { viewerSessionId } : {}),
       ...(options.viewerWorkerId !== undefined ? { viewerWorkerId: options.viewerWorkerId } : {}),
       ...(limit !== undefined ? { limit } : {}),
     });
@@ -242,7 +247,13 @@ export async function runInboxListCommand(
   });
 
   try {
-    const payload = await client.listWorkerInbox(workerId);
+    // Same as the stream read: identity rides along, and the daemon decides
+    // whether this session may see the queue it asked for.
+    const viewerSessionId = process.env.BYSPACE_AGENT_ID?.trim();
+    const payload = await client.listWorkerInbox({
+      workerId,
+      ...(viewerSessionId !== undefined && viewerSessionId !== "" ? { viewerSessionId } : {}),
+    });
     return {
       type: "list",
       data: payload.entries.map((entry) => ({

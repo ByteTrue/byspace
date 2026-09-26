@@ -447,6 +447,13 @@ export const WorkerMessageListRequestSchema = z.object({
    * it is not a reader of.
    */
   viewerWorkerId: z.string().min(1).optional(),
+  /**
+   * The agent session reading, when the request comes from a worker. The
+   * viewer is resolved from this rather than trusted from `viewerWorkerId`:
+   * the same authority a send carries. A non-member read is refused as though
+   * the group did not exist, so a caller cannot probe which groups do.
+   */
+  viewerSessionId: z.string().min(1).optional(),
   limit: z.number().int().positive().optional(),
 });
 
@@ -462,6 +469,13 @@ export const WorkerInboxListRequestSchema = z.object({
   type: z.literal("worker.inbox.list.request"),
   requestId: z.string(),
   workerId: z.string().min(1),
+  /**
+   * The agent session reading, when the request comes from a worker. With it,
+   * the requested worker must be the one the session resolves to: a worker
+   * reading another worker's queue is refused as though that worker did not
+   * exist, so callers cannot probe.
+   */
+  viewerSessionId: z.string().min(1).optional(),
 });
 
 export const WorkerInboxListResponseSchema = z.object({
@@ -540,6 +554,12 @@ export const WorkerGoalGetRequestSchema = z.object({
   type: z.literal("worker.goal.get.request"),
   requestId: z.string(),
   groupId: z.string().min(1),
+  /**
+   * The agent session reading, when the request comes from a worker. With it,
+   * the reader must belong to the group, and a non-member read is refused as
+   * though the group did not exist.
+   */
+  viewerSessionId: z.string().min(1).optional(),
 });
 
 export const WorkerGoalGetResponseSchema = z.object({

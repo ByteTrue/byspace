@@ -12,10 +12,24 @@ import { join } from "node:path";
 import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { WorkerBusyError, WorkerRunUnavailableError, WorkerService } from "./service.js";
+import {
+  WorkerBusyError,
+  WorkerGroupNotFoundError,
+  WorkerRunUnavailableError,
+  WorkerService,
+} from "./service.js";
 import type { WorkerRunner } from "./worker-runner.js";
 
 const silentLogger = pino({ level: "silent" });
+
+function captureError(run: () => unknown): Error | null {
+  try {
+    run();
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+}
 
 let home: string;
 
@@ -710,5 +724,121 @@ describe("sender resolution from a run", () => {
     const { bob, group } = await seeded(service);
     service.getStore().createRun({ runId: "run_1", groupId: group.id, workerId: bob.id });
     expect(() => service.resolveSenderFromSession("")).toThrow(/is not a worker run/);
+  });
+});
+
+describe("scoped reads", () => {
+  /** A group and two sessions whose workers are and are not in it. */
+  async function scoped(service: WorkerService) {
+    const workspace = join(home, "repo");
+    const alice = await service.createWorker({
+      name: "Alice",
+      templateId: "frontend-developer",
+      workspacePath: workspace,
+    });
+    const bob = await service.createWorker({
+      name: "Bob",
+      templateId: "backend-engineer",
+      workspacePath: join(home, "repo-b"),
+    });
+    const group = service.createGroup({
+      name: "Scoped",
+      projectId: "prj_s",
+      coordinatorWorkerId: alice.id,
+      memberWorkerIds: [],
+    });
+    // Alice is in the group; Bob is not. One task session for each, so both
+    // have a resolvable identity.
+    const taskIn = service.createTask({ workerId: alice.id, title: "in" });
+    const taskOut = service.createTask({ workerId: bob.id, title: "out" });
+    service.runTasklessTransitionForTests?.(taskIn.taskId);
+    service.getStore().setTaskAgent({ taskId: taskIn.taskId, agentId: "sess_in" });
+    service.getStore().setTaskAgent({ taskId: taskOut.taskId, agentId: "sess_out" });
+    service.getStore().applyTaskTransition({
+      taskId: taskIn.taskId,
+      toState: "in_progress",
+      action: "ack_task",
+      actor: "test",
+    });
+    service.getStore().applyTaskTransition({
+      taskId: taskOut.taskId,
+      toState: "in_progress",
+      action: "ack_task",
+      actor: "test",
+    });
+    return { alice, bob, group, inTask: taskIn.taskId, outTask: taskOut.taskId };
+  }
+
+  it("refuses a non-member stream read exactly as an unknown group", async () => {
+    // The indistinguishability is the rule: a caller probing group ids cannot
+    // tell "does not exist" from "exists but is not yours".
+    const service = createService();
+    const { group } = await scoped(service);
+
+    const member = service.listMessages({ groupId: group.id, viewerSessionId: "sess_in" });
+    expect(member).toEqual([]);
+
+    const outsider = () => service.listMessages({ groupId: group.id, viewerSessionId: "sess_out" });
+    expect(outsider).toThrow(/Unknown worker group/);
+
+    // Indistinguishable means: for the SAME id, a non-member read and an
+    // unknown group produce identical messages. Same class, same wording —
+    // sharing the class is what keeps them identical as wording evolves.
+    const sameIdAsOutsider = () =>
+      service.listMessages({ groupId: "grp_missing", viewerSessionId: "sess_out" });
+    const nonexistent = () =>
+      service.listMessages({ groupId: "grp_missing", viewerSessionId: "sess_in" });
+    const refusedAsOutsider = captureError(sameIdAsOutsider);
+    const refusedAsMissing = captureError(nonexistent);
+    expect(refusedAsOutsider?.message).toBe(refusedAsMissing?.message);
+    expect(refusedAsMissing).toBeInstanceOf(WorkerGroupNotFoundError);
+  });
+
+  it("refuses a viewer that names somebody else", async () => {
+    // Same rule the send path established: a disagreement between the session
+    // and the declared worker is refused, not overruled.
+    const service = createService();
+    const { group, alice } = await scoped(service);
+    expect(() =>
+      service.listMessages({
+        groupId: group.id,
+        viewerSessionId: "sess_in",
+        viewerWorkerId: "wkr_somebody_else",
+      }),
+    ).toThrow(/does not match the session's worker/);
+    expect(alice.id).toContain("wkr_");
+  });
+
+  it("refuses a session that is not a worker's", async () => {
+    const service = createService();
+    const { group } = await scoped(service);
+    expect(() =>
+      service.listMessages({ groupId: group.id, viewerSessionId: "sess_stranger" }),
+    ).toThrow(/is not a worker run, so it cannot send as a worker/);
+  });
+
+  it("keeps the operator view when no session is given", async () => {
+    const service = createService();
+    const { group } = await scoped(service);
+    // No viewer session: reads everything, which is what the console does.
+    expect(service.listMessages({ groupId: group.id })).toEqual([]);
+    expect(service.getGoal(group.id)).toBeNull();
+  });
+
+  it("scopes an inbox read to the session's own worker", async () => {
+    const service = createService();
+    const { alice } = await scoped(service);
+    // Another worker's queue reads as though that worker did not exist.
+    expect(() => service.listInbox(alice.id, "sess_out")).toThrow(/unknown worker/);
+    expect(() => service.listInbox(alice.id, "sess_in")).not.toThrow();
+    // The operator still reads any queue.
+    expect(() => service.listInbox(alice.id)).not.toThrow();
+  });
+
+  it("scopes a goal read by membership, with the same wording", async () => {
+    const service = createService();
+    const { group } = await scoped(service);
+    expect(() => service.getGoal(group.id, "sess_out")).toThrow(/Unknown worker group/);
+    expect(service.getGoal(group.id, "sess_in")).toBeNull();
   });
 });

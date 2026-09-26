@@ -271,8 +271,8 @@ async function verifyMessaging(input: {
     throw new Error("the sender mentioned nobody but was woken");
   }
 
-  const addresseeInbox = await client.listWorkerInbox(memberWorkerId);
-  const senderInbox = await client.listWorkerInbox(coordinatorWorkerId);
+  const addresseeInbox = await client.listWorkerInbox({ workerId: memberWorkerId });
+  const senderInbox = await client.listWorkerInbox({ workerId: coordinatorWorkerId });
   checks.push({
     name: "inbox routing",
     detail: `addressee=${addresseeInbox.entries.length} sender=${senderInbox.entries.length}`,
@@ -288,7 +288,7 @@ async function verifyMessaging(input: {
     audience: [memberWorkerId],
     deliveryPolicy: "store_only",
   });
-  const afterStore = await client.listWorkerInbox(memberWorkerId);
+  const afterStore = await client.listWorkerInbox({ workerId: memberWorkerId });
   checks.push({
     name: "store-only does not wake",
     detail: `woke=${stored.woke.length} inbox=${afterStore.entries.length}`,
@@ -349,7 +349,7 @@ async function verifyMessaging(input: {
     throw new Error("delivery state must belong to the addressed pair");
   }
 
-  const afterRead = await client.listWorkerInbox(memberWorkerId);
+  const afterRead = await client.listWorkerInbox({ workerId: memberWorkerId });
   checks.push({
     name: "read clears the inbox",
     detail: `remaining=${afterRead.entries.length}`,
@@ -411,7 +411,7 @@ async function verifyGoal(input: {
     throw new Error("a mutation against a stale version must be refused");
   }
 
-  const refetched = await client.getWorkerGoal(groupId);
+  const refetched = await client.getWorkerGoal({ groupId });
   checks.push({
     name: "goal kept the winner",
     detail: `${refetched.goal?.content} v${refetched.goal?.generation}.${refetched.goal?.revision}`,
@@ -432,7 +432,7 @@ async function verifyGoal(input: {
     body: "private note to myself",
     privateTo: [coordinatorWorkerId],
   });
-  const afterSends = await client.getWorkerGoal(groupId);
+  const afterSends = await client.getWorkerGoal({ groupId });
   checks.push({
     name: "budget counts public only",
     detail: `used=${afterSends.goal?.turnUsed} of ${afterSends.goal?.turnLimit}`,

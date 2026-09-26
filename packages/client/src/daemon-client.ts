@@ -2722,7 +2722,13 @@ export class DaemonClient {
   }
 
   async listWorkerMessages(
-    input: { groupId: string; viewerWorkerId?: string; limit?: number },
+    input: {
+      groupId: string;
+      viewerWorkerId?: string;
+      /** The agent session reading, when the caller is a worker. */
+      viewerSessionId?: string;
+      limit?: number;
+    },
     requestId?: string,
   ): Promise<WorkerMessageListPayload> {
     return this.sendCorrelatedSessionRequest({
@@ -2731,16 +2737,24 @@ export class DaemonClient {
         type: "worker.message.list.request",
         groupId: input.groupId,
         ...(input.viewerWorkerId !== undefined ? { viewerWorkerId: input.viewerWorkerId } : {}),
+        ...(input.viewerSessionId !== undefined ? { viewerSessionId: input.viewerSessionId } : {}),
         ...(input.limit !== undefined ? { limit: input.limit } : {}),
       },
       responseType: "worker.message.list.response",
     });
   }
 
-  async listWorkerInbox(workerId: string, requestId?: string): Promise<WorkerInboxListPayload> {
+  async listWorkerInbox(
+    input: { workerId: string; viewerSessionId?: string },
+    requestId?: string,
+  ): Promise<WorkerInboxListPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
-      message: { type: "worker.inbox.list.request", workerId },
+      message: {
+        type: "worker.inbox.list.request",
+        workerId: input.workerId,
+        ...(input.viewerSessionId !== undefined ? { viewerSessionId: input.viewerSessionId } : {}),
+      },
       responseType: "worker.inbox.list.response",
     });
   }
@@ -2780,10 +2794,17 @@ export class DaemonClient {
   }
 
   /** A group's goal, or null when it has none yet. */
-  async getWorkerGoal(groupId: string, requestId?: string): Promise<WorkerGoalGetPayload> {
+  async getWorkerGoal(
+    input: { groupId: string; viewerSessionId?: string },
+    requestId?: string,
+  ): Promise<WorkerGoalGetPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
-      message: { type: "worker.goal.get.request", groupId },
+      message: {
+        type: "worker.goal.get.request",
+        groupId: input.groupId,
+        ...(input.viewerSessionId !== undefined ? { viewerSessionId: input.viewerSessionId } : {}),
+      },
       responseType: "worker.goal.get.response",
     });
   }

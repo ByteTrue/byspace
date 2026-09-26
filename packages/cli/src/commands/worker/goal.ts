@@ -78,7 +78,14 @@ export async function runGoalGetCommand(
   });
 
   try {
-    const payload = await client.getWorkerGoal(groupId);
+    // Reading a goal is scoped like reading the group's stream: a worker
+    // session is identified, and non-members read as though the group did not
+    // exist.
+    const viewerSessionId = process.env.BYSPACE_AGENT_ID?.trim();
+    const payload = await client.getWorkerGoal({
+      groupId,
+      ...(viewerSessionId !== undefined && viewerSessionId !== "" ? { viewerSessionId } : {}),
+    });
     if (!payload.goal) {
       throw {
         code: "WORKER_GOAL_NOT_SET",

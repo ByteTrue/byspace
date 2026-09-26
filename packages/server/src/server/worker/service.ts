@@ -623,13 +623,65 @@ export class WorkerService {
     return { message, woke };
   }
 
-  listMessages(input: { groupId: string; viewerWorkerId?: string; limit?: number }) {
+  /**
+   * Resolve the reader for a scoped read, and the group they may read.
+   *
+   * A request from a worker carries its session id, and the reader is resolved
+   * from that — the same authority a send carries, so a self-declared
+   * `viewerWorkerId` that disagrees with the session is refused rather than
+   * overruled. A worker may read only a group it belongs to, and a non-member
+   * read is refused exactly as an unknown group is, so a caller cannot probe
+   * which groups exist. That indistinguishability is the rule; a distinct
+   * "not a member" error would leak existence.
+   *
+   * With no session id the request is the operator's, and the operator reads
+   * everything — the console depends on that view.
+   */
+  private resolveScopedRead(input: {
+    viewerSessionId?: string;
+    viewerWorkerId?: string;
+    groupId: string;
+  }): { viewerWorkerId: string | undefined } {
+    if (!input.viewerSessionId) {
+      return { viewerWorkerId: input.viewerWorkerId };
+    }
+    const resolved = this.resolveSenderFromSession(input.viewerSessionId);
+    if (input.viewerWorkerId && input.viewerWorkerId !== resolved.workerId) {
+      throw new Error(
+        `viewerWorkerId ${input.viewerWorkerId} does not match the session's worker ${resolved.workerId}`,
+      );
+    }
+    // The typed not-found error, deliberately: a non-member read and an
+    // unknown group must be byte-identical on the wire, and sharing the class
+    // is what guarantees that as the wording evolves.
+    const members = this.listGroupMembers(input.groupId);
+    if (!members.some((member) => member.workerId === resolved.workerId)) {
+      throw new WorkerGroupNotFoundError(input.groupId);
+    }
+    return { viewerWorkerId: resolved.workerId };
+  }
+
+  listMessages(input: {
+    groupId: string;
+    viewerWorkerId?: string;
+    viewerSessionId?: string;
+    limit?: number;
+  }) {
+    const scoped = this.resolveScopedRead(input);
     this.getGroup(input.groupId);
-    return this.getStore().listMessages(input);
+    return this.getStore().listMessages({ ...input, viewerWorkerId: scoped.viewerWorkerId });
   }
 
   /** A worker's open inbox: messages that woke it and are not finished. */
-  listInbox(workerId: string): WorkerInboxEntry[] {
+  listInbox(workerId: string, viewerSessionId?: string): WorkerInboxEntry[] {
+    if (viewerSessionId !== undefined) {
+      const resolved = this.resolveSenderFromSession(viewerSessionId);
+      // Another worker's queue reads as though that worker did not exist.
+      // Same indistinguishability rule as a group read.
+      if (resolved.workerId !== workerId) {
+        throw new Error(`unknown worker: ${workerId}`);
+      }
+    }
     this.getWorker(workerId);
     return this.getStore().listInbox(workerId);
   }
@@ -652,7 +704,16 @@ export class WorkerService {
   // ------------------------------------------------------------------ goals
 
   /** A group's goal, or null when it has none yet. */
-  getGoal(groupId: string): WorkerGoalRecord | null {
+  getGoal(groupId: string, viewerSessionId?: string): WorkerGoalRecord | null {
+    if (viewerSessionId !== undefined) {
+      // Membership, refused as an unknown group when absent — a goal describes
+      // a group's work, so the read is scoped exactly like the stream.
+      const resolved = this.resolveSenderFromSession(viewerSessionId);
+      const members = this.listGroupMembers(groupId);
+      if (!members.some((member) => member.workerId === resolved.workerId)) {
+        throw new WorkerGroupNotFoundError(groupId);
+      }
+    }
     this.getGroup(groupId);
     return this.getStore().getGoal(groupId);
   }

@@ -230,9 +230,11 @@ export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<
         // read should still appear with its roster.
         const goalEntries = await Promise.all(
           (groupResult.groups ?? []).map(async (group) => {
-            const goal = await bestEffort(() => client.getWorkerGoal(group.id), {}).then(
-              (payload) => payload.goal ?? null,
-            );
+            // Operator view again: the console reads goals without a session.
+            const goal = await bestEffort(
+              () => client.getWorkerGoal({ groupId: group.id }),
+              {},
+            ).then((payload) => payload.goal ?? null);
             return [group.id, goal] as const;
           }),
         );
@@ -292,6 +294,7 @@ export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<
           await Promise.all(
             (groupResult.groups ?? []).map(async (group) => {
               const payload = await bestEffort(
+                // No viewer session: the roster aggregation is the operator view.
                 () => client.listWorkerMessages({ groupId: group.id }),
                 { messages: [] },
               );
