@@ -195,6 +195,16 @@ BySpace 现在管的是**会话**：你选一个 workspace，起一个 agent，�
 - 技能的自演进（自动沉淀与回收）是否在后续批次引入。
 - 权限层移植的深度：**已定**——只取规则数据与策略模型（已完成的 21 条），上游的规则目录扫描器与 skill scanner 是否引入待定。
 
+## 质量承诺对照（2026-09-24，逐条实机证据）
+
+- **安全性** ✅ —— 四类规则拦截用例齐（命令注入/资源滥用/敏感文件/提权，含结构守卫测试：缺类的规则集直接红）；工具守卫已在 pi 进程内武装（`5451ea4b9`，`sudo -n true` 真机被拦）；worker 无法自批（slice 001 三层测试）；跨范围拒绝不泄露存在性 —— 读面身份门（`a3334a9fb`）：真 worker 会话读非成员组报 `Unknown worker group`，与组不存在**逐字相同**，另有 byte-for-byte 测试钉住两分支共享同一 typed error。
+- **资源效率** ✅ —— 预算超限即停唤醒：goal 预算（e2e "budget stops waking"）+ 无 goal 组的估算硬上限（真机 6 条后第 7 条被拒，`f45de8b8d`）；一 worker 一并发 run（DB 部分唯一索引）。
+- **可靠性** ✅ —— 任务状态单一转换入口 + 越序拒绝（slice 001 起的转换表与穷举负测试）；daemon 重启后 goal/消息/任务归属不丢（v3 迁移真库验证过，9 workers/2 tasks 保留）。
+- **可用性** ✅ —— 给需求到收汇报全链窄屏可走：New task 表单（宽窄屏均验）、对话页 composer、Dashboard Needs attention、组消息流、收件箱三态。
+- **可维护性** ✅ —— 新角色 = 一次模板导入（8 角色已入仓，DANGLING_SKILLS 测试防断链）；新技能不改 runtime（`materializeWorkerSkills` 声明式复制）。
+
+**遗留（记录在案，非遗忘）：** pi 用户级 `~/.agents/skills` 无条件加载（lark-\*/agent-browser 等 47 个对 worker 可见），无法从 BySpace 侧屏蔽 —— 边界因此只能靠权限层（工具守卫已是其实体），这是长期约束而非待办。`@Waker`/`Autonomous Work` 按 Owner 决定不做。
+
 **关闭时要满足：** 第一批五项可推进内容完成并验证；**五项**质量承诺有证据（原文写「四项」但列了五项，以列出的为准）；worker 域不侵入既有 spec 所描述的行为。
 
 **合并回 project spec 的候选：** 新增一份 worker 域规格（实体、项目组、协作协议、权限边界），并在 `spec/index.md` 的体验地图中加入条目。
