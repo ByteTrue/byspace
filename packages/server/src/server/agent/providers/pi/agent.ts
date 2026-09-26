@@ -81,6 +81,10 @@ import type {
 } from "./rpc-types.js";
 import { PiUsagePoller, type PiUsagePollScheduler } from "./usage-poller.js";
 import {
+  createWorkerGuardExtensionFile,
+  type GuardExtensionFile,
+} from "../../../worker/worker-guard-extension.js";
+import {
   mapToolDetail,
   parseToolArgs,
   parseToolResult,
@@ -553,7 +557,13 @@ function buildResumeStartInput(input: {
   launchContext: AgentLaunchContext | undefined;
   mcpConfig: PiMcpConfigFile | null;
   byspaceExtension: PiTempFile | null;
+  /** The worker tool guard, when this resumed session is a worker's. */
+  guardExtension: GuardExtensionFile | null;
 }): PiStartSessionInput {
+  const extensionPaths = [
+    ...(input.byspaceExtension ? [input.byspaceExtension.path] : []),
+    ...(input.guardExtension ? [input.guardExtension.path] : []),
+  ];
   return {
     cwd: input.resumeConfig.cwd,
     env: input.launchContext?.env,
@@ -561,7 +571,7 @@ function buildResumeStartInput(input: {
     model: input.resumeConfig.model,
     thinkingOptionId: normalizePiThinkingOption(input.resumeConfig.thinkingOptionId) ?? undefined,
     mcpConfigPath: input.mcpConfig?.path,
-    extensionPaths: input.byspaceExtension ? [input.byspaceExtension.path] : undefined,
+    extensionPaths: extensionPaths.length > 0 ? extensionPaths : undefined,
   };
 }
 
@@ -2595,6 +2605,40 @@ export class PiRpcAgentClient implements AgentClient {
     this.usagePollScheduler = options.usagePollScheduler;
   }
 
+  /**
+   * Assemble the extensions a session loads.
+   *
+   * Every session loads the BySpace integration extension. A worker's session
+   * also loads the tool guard: a worker's shell commands never reach the daemon
+   * before executing, so the guard against dangerous ones runs inside the Pi
+   * process, and only for sessions carrying a worker identity — the same
+   * environment variable the runner injects to mark a session as a worker's.
+   *
+   * Rule loading happens here rather than at session start, so a rule file that
+   * cannot load stops the daemon instead of arming a guard with nothing in it.
+   */
+  private prepareSessionExtensions(
+    config: AgentSessionConfig,
+    env: Record<string, string> | undefined,
+  ): {
+    byspaceExtension: PiTempFile;
+    guardExtension: GuardExtensionFile | null;
+    paths: string[];
+  } {
+    const byspaceExtension = createPiBySpaceExtensionFile(
+      composeSystemPromptParts(config.systemPrompt, config.daemonAppendSystemPrompt),
+    );
+    const guardExtension = env?.BYSPACE_WORKER_ID ? createWorkerGuardExtensionFile() : null;
+    return {
+      byspaceExtension,
+      guardExtension,
+      paths: [
+        ...(byspaceExtension ? [byspaceExtension.path] : []),
+        ...(guardExtension ? [guardExtension.path] : []),
+      ],
+    };
+  }
+
   async createSession(
     config: AgentSessionConfig,
     launchContext?: AgentLaunchContext,
@@ -2604,9 +2648,9 @@ export class PiRpcAgentClient implements AgentClient {
       ...launchContext?.env,
     };
     const mcpConfig = await this.prepareMcpConfig(config.cwd, config.mcpServers, mcpEnv);
-    const byspaceExtension = createPiBySpaceExtensionFile(
-      composeSystemPromptParts(config.systemPrompt, config.daemonAppendSystemPrompt),
-    );
+    const extensions = this.prepareSessionExtensions(config, launchContext?.env);
+    const { byspaceExtension, guardExtension } = extensions;
+    const extensionPaths = extensions.paths;
     const launchModel = await this.resolveLaunchModel(
       config.cwd,
       launchContext?.env,
@@ -2625,11 +2669,12 @@ export class PiRpcAgentClient implements AgentClient {
         noSession: config.internal === true,
         env: launchContext?.env,
         mcpConfigPath: mcpConfig?.path,
-        extensionPaths: byspaceExtension ? [byspaceExtension.path] : undefined,
+        extensionPaths: extensionPaths.length > 0 ? extensionPaths : undefined,
       });
     } catch (error) {
       mcpConfig?.cleanup();
       byspaceExtension?.cleanup();
+      guardExtension?.cleanup();
       throw error;
     }
     try {
@@ -2638,7 +2683,11 @@ export class PiRpcAgentClient implements AgentClient {
         config: launchModel === config.model ? config : { ...config, model: launchModel },
         initialState: await runtimeSession.getState(),
         capabilities: capabilitiesForSession(mcpConfig !== null),
-        cleanup: combineCleanup([mcpConfig?.cleanup, byspaceExtension?.cleanup]),
+        cleanup: combineCleanup([
+          mcpConfig?.cleanup,
+          byspaceExtension?.cleanup,
+          guardExtension?.cleanup,
+        ]),
         extensionTimeoutMs: this.providerParams.extensionTimeoutMs,
         logger: this.logger,
         usagePollScheduler: this.usagePollScheduler,
@@ -2673,12 +2722,11 @@ export class PiRpcAgentClient implements AgentClient {
       resumeConfig.config.mcpServers,
       mcpEnv,
     );
-    const byspaceExtension = createPiBySpaceExtensionFile(
-      composeSystemPromptParts(
-        resumeConfig.config.systemPrompt,
-        resumeConfig.config.daemonAppendSystemPrompt,
-      ),
-    );
+    // Same assembly as the create path: a resumed worker session keeps the
+    // guard, because a worker that continues a conversation is still a worker,
+    // and the commands it runs next have the same teeth.
+    const extensions = this.prepareSessionExtensions(resumeConfig.config, launchContext?.env);
+    const { byspaceExtension, guardExtension } = extensions;
     const launchModel = await this.resolveLaunchModel(
       resumeConfig.cwd,
       launchContext?.env,
@@ -2701,6 +2749,7 @@ export class PiRpcAgentClient implements AgentClient {
           launchContext,
           mcpConfig,
           byspaceExtension,
+          guardExtension,
         }),
       );
     } catch (error) {
@@ -2714,7 +2763,11 @@ export class PiRpcAgentClient implements AgentClient {
         config: resumedConfig.config,
         initialState: await runtimeSession.getState(),
         capabilities: capabilitiesForSession(mcpConfig !== null),
-        cleanup: combineCleanup([mcpConfig?.cleanup, byspaceExtension?.cleanup]),
+        cleanup: combineCleanup([
+          mcpConfig?.cleanup,
+          byspaceExtension?.cleanup,
+          guardExtension?.cleanup,
+        ]),
         extensionTimeoutMs: this.providerParams.extensionTimeoutMs,
         logger: this.logger,
         usagePollScheduler: this.usagePollScheduler,

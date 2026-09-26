@@ -253,6 +253,10 @@ export class WorkerRunner {
         workspaceId,
         title: input.title,
         labels: input.labels,
+        // Marks the session as a worker's. The pi layer loads the tool guard
+        // only when this is present, so an ordinary session keeps its behaviour
+        // and a worker's cannot run unguarded shell.
+        env: { BYSPACE_WORKER_ID: input.workerId },
         unattended: true,
         promptFailure: "return-error",
         background: true,
