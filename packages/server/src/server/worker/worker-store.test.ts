@@ -17,6 +17,7 @@ import {
   WorkerGoalBudgetExhaustedError,
   WorkerGoalConflictError,
   WorkerGroupCoordinatorError,
+  WorkerGroupUnbudgetedError,
   WorkerRunAlreadyActiveError,
   WorkerStore,
   type WorkerRunRecord,
@@ -975,6 +976,84 @@ describe("worker goals", () => {
     store.close();
     store = new WorkerStore({ databasePath });
     expect(store.getGoal("grp_1")).toMatchObject({ content: "Ship the pricing page", turnUsed: 1 });
+  });
+});
+
+describe("a goal-less group still has a budget", () => {
+  const GROUP = { id: "grp_1", name: "Pricing page", projectId: "prj_abc" };
+
+  beforeEach(() => {
+    store.createWorker({ ...WORKER, id: "w2", name: "Bob" });
+    store.createGroup(GROUP);
+    store.addGroupMember({ groupId: "grp_1", workerId: "w1", role: "coordinator" });
+    store.addGroupMember({ groupId: "grp_1", workerId: "w2", role: "member" });
+  });
+
+  function send(overrides: Partial<Parameters<WorkerStore["createMessage"]>[0]> = {}) {
+    return store.createMessage({
+      messageId: `msg_${Math.random().toString(16).slice(2)}`,
+      groupId: "grp_1",
+      senderWorkerId: "w1",
+      body: "work",
+      ...overrides,
+    });
+  }
+
+  it("still wakes while under the roster's estimate", () => {
+    // Two members, so the estimate is ceil(2*2*1.35) = 6. The budget exists
+    // before the first message; it is not something a group grows into.
+    for (let i = 0; i < 5; i += 1) send({ audience: ["w2"] });
+    expect(() => send({ audience: ["w2"] })).not.toThrow();
+  });
+
+  it("refuses a wake at the estimate", () => {
+    // A coordinator that declines to set a goal — its choice, as a live run
+    // showed — must not leave the group unbounded.
+    for (let i = 0; i < 6; i += 1) send({ audience: ["w2"] });
+    expect(() => send({ audience: ["w2"] })).toThrow(WorkerGroupUnbudgetedError);
+  });
+
+  it("names the remedy, which is a goal rather than a reopen", () => {
+    for (let i = 0; i < 6; i += 1) send({ audience: ["w2"] });
+    try {
+      send({ audience: ["w2"] });
+      throw new Error("expected a refusal");
+    } catch (error) {
+      expect((error as Error).message).toContain("Create a goal");
+    }
+  });
+
+  it("does not count a private record against the cap", () => {
+    for (let i = 0; i < 6; i += 1) send({ audience: ["w2"] });
+    // Private messages never consumed a goal budget, and the same definition
+    // applies here. A private record addresses nobody, so it stores rather than
+    // wakes — a message that mentions someone is a turn however private it is,
+    // because a wake is a turn whatever its readers can see.
+    expect(() => send({ privateTo: ["w2"] })).not.toThrow();
+  });
+
+  it("keeps a stored message working once the cap is reached", () => {
+    for (let i = 0; i < 6; i += 1) send({ audience: ["w2"] });
+    // The budget stops wakes, not communication.
+    expect(() => send({ deliveryPolicy: "store_only" })).not.toThrow();
+  });
+
+  it("a group with a goal is still governed by the goal alone", () => {
+    // The estimate only stands in for a missing goal. With one present, even a
+    // tiny turn limit is the rule, and the estimate plays no part.
+    store.createGoal({ goalId: "goal_1", groupId: "grp_1", content: "Ship", turnLimit: 1 });
+    send({ audience: ["w2"] });
+    expect(() => send({ audience: ["w2"] })).toThrow(WorkerGoalBudgetExhaustedError);
+  });
+
+  it("counts the roster it has, not the roster it had", () => {
+    // Adding a member raises the estimate, because the estimate is derived from
+    // the current roster on every check rather than computed once.
+    for (let i = 0; i < 6; i += 1) send({ audience: ["w2"] });
+    store.createWorker({ ...WORKER, id: "w3", name: "Carol" });
+    store.addGroupMember({ groupId: "grp_1", workerId: "w3", role: "member" });
+    // Three members: ceil(2*3*1.35) = 9, so the 7th public message still wakes.
+    expect(() => send({ audience: ["w2"] })).not.toThrow();
   });
 });
 

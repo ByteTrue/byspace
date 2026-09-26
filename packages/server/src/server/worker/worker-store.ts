@@ -309,6 +309,22 @@ export class WorkerGoalBudgetExhaustedError extends Error {
   }
 }
 
+/**
+ * A goal-less group has reached the wakes its roster would have been budgeted.
+ *
+ * Named differently from the goal error because the remedy differs: there is no
+ * goal to reopen, so the way forward is to create one — which is what the
+ * coordinator was designated to do.
+ */
+export class WorkerGroupUnbudgetedError extends Error {
+  constructor(groupId: string, limit: number) {
+    super(
+      `Group ${groupId} has no goal and has spent the ${limit} public messages its roster would be budgeted, so it cannot wake anyone. Create a goal with an explicit budget to continue.`,
+    );
+    this.name = "WorkerGroupUnbudgetedError";
+  }
+}
+
 /** A goal mutation is not valid for the goal's current state. */
 export class WorkerGoalActionError extends Error {
   constructor(message: string) {
@@ -1222,10 +1238,28 @@ export class WorkerStore {
     // updates must not be dropped to save budget, and that no *wake* may be
     // created past the limit. So this refuses only waking sends, and only when
     // the budget is actually gone.
+    //
+    // A group with no goal still has a budget. Without one, the only cap on its
+    // wakes would be a coordinator choosing to set a goal — a choice, as a live
+    // run showed, the coordinator may decline for good reasons. The estimate
+    // `suggestTurnLimit` would have given that roster is the cap then, so a
+    // goal-less group runs on the budget it would have been given rather than
+    // on none.
     if (deliveryPolicy === "wake") {
       const goal = this.getGoal(input.groupId);
-      if (goal && goal.turnUsed >= goal.turnLimit) {
-        throw new WorkerGoalBudgetExhaustedError(input.groupId, goal.turnLimit);
+      if (goal) {
+        if (goal.turnUsed >= goal.turnLimit) {
+          throw new WorkerGoalBudgetExhaustedError(input.groupId, goal.turnLimit);
+        }
+      } else {
+        // The same definition of a turn the goal budget uses: every public
+        // message, private ones excluded. Two counts with different definitions
+        // would make the cap and the goal disagree about the same history.
+        const publicCount = this.countPublicTurns(input.groupId);
+        const limit = WorkerStore.suggestTurnLimit(this.listGroupMembers(input.groupId).length);
+        if (publicCount >= limit) {
+          throw new WorkerGroupUnbudgetedError(input.groupId, limit);
+        }
       }
     }
     const createdAt = input.createdAt ?? new Date().toISOString();
@@ -1496,6 +1530,25 @@ export class WorkerStore {
       )
       .get(row.group_id, row.generation_start_seq) as { turns: number };
     return counted.turns;
+  }
+
+  /**
+   * How many public messages a group has sent, private ones excluded.
+   *
+   * The goal's turn counter starts at a generation boundary; this one starts at
+   * zero, because a goal-less group has no generation to start from.
+   */
+  private countPublicTurns(groupId: string): number {
+    const row = this.db
+      .prepare(
+        `SELECT COUNT(*) AS turns FROM worker_messages m
+         WHERE m.group_id = ?
+           AND NOT EXISTS (
+             SELECT 1 FROM worker_message_private_to p WHERE p.message_id = m.message_id
+           )`,
+      )
+      .get(groupId) as { turns: number };
+    return row.turns;
   }
 
   /** The group's newest sequence, or 0 when nothing has been said yet. */
