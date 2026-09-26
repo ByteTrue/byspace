@@ -12,6 +12,7 @@ import {
   type SessionOutboundMessage,
 } from "@bytetrue/protocol/messages";
 import { Session, type SessionOptions } from "./session.js";
+import { CollabSliceStore } from "../collab/store.js";
 import { OWNER_PERMISSIONS } from "./authorization/index.js";
 import { DirectorySyncService } from "./directory-sync/index.js";
 import { createProviderSnapshotManagerStub } from "./test-utils/session-stubs.js";
@@ -227,6 +228,7 @@ function createSessionForWireCompatTest(options?: {
       new EmptyWorkspaceRegistry() as unknown as SessionOptions["workspaceRegistry"],
     directorySync: options?.directorySync,
     scheduleService: {} as SessionOptions["scheduleService"],
+    collabSliceStore: new CollabSliceStore("./.tmp-collab-wire-compat"),
     checkoutDiffManager: {
       scheduleRefreshForCwd() {},
       onWorkspaceStateMayHaveChanged() {},

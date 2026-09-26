@@ -10,6 +10,7 @@ import path from "node:path";
 import { expect, test, vi } from "vitest";
 
 import { Session, type SessionOptions } from "./session.js";
+import { CollabSliceStore } from "../collab/store.js";
 import { OWNER_PERMISSIONS } from "./authorization/index.js";
 import type { SessionOutboundMessage } from "@bytetrue/protocol/messages";
 import { createNoopWorkspaceGitService } from "./test-utils/workspace-git-service-stub.js";
@@ -163,6 +164,7 @@ function createHarness(input: {
     }),
     filesystem: { isDirectory: async () => true },
     scheduleService: createStub<SessionOptions["scheduleService"]>({}),
+    collabSliceStore: new CollabSliceStore(path.join(tmpdir(), "collab-invariants")),
     checkoutDiffManager: createStub<SessionOptions["checkoutDiffManager"]>({
       subscribe: async () => ({
         initial: { cwd: "/tmp", files: [], error: null },

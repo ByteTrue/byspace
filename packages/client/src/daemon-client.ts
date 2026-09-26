@@ -527,6 +527,14 @@ type ScheduleListPayload = Extract<
   SessionOutboundMessage,
   { type: "schedule/list/response" }
 >["payload"];
+type CollabSliceCreatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "collab.slice.create.response" }
+>["payload"];
+type CollabSliceListPayload = Extract<
+  SessionOutboundMessage,
+  { type: "collab.slice.list.response" }
+>["payload"];
 type ScheduleInspectPayload = Extract<
   SessionOutboundMessage,
   { type: "schedule/inspect/response" }
@@ -5404,6 +5412,28 @@ export class DaemonClient {
         type: "schedule/list",
       },
       responseType: "schedule/list/response",
+    });
+  }
+
+  async collabSliceCreate(input: {
+    title: string;
+    requestId?: string;
+  }): Promise<CollabSliceCreatePayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"collab.slice.create.response">({
+      requestId: input.requestId,
+      message: {
+        type: "collab.slice.create.request",
+        title: input.title,
+      },
+    });
+  }
+
+  async collabSliceList(requestId?: string): Promise<CollabSliceListPayload> {
+    return this.sendNamespacedCorrelatedSessionRequest<"collab.slice.list.response">({
+      requestId,
+      message: {
+        type: "collab.slice.list.request",
+      },
     });
   }
 

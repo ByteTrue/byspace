@@ -24,6 +24,13 @@ import {
   ChatWaitResponseSchema,
 } from "./chat/rpc-schemas.js";
 import {
+  CollabSliceCreateRequestSchema,
+  CollabSliceCreateResponseSchema,
+  CollabSliceListRequestSchema,
+  CollabSliceListResponseSchema,
+  CollabSliceRecordSchema,
+} from "./collab/rpc-schemas.js";
+import {
   ScheduleCreateRequestSchema,
   ScheduleListRequestSchema,
   ScheduleInspectRequestSchema,
@@ -3391,6 +3398,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   LoopInspectRequestSchema,
   LoopLogsRequestSchema,
   LoopStopRequestSchema,
+  CollabSliceCreateRequestSchema,
+  CollabSliceListRequestSchema,
 ]);
 
 export type SessionInboundMessage = z.infer<typeof SessionInboundMessageSchema>;
@@ -6828,6 +6837,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   LoopInspectResponseSchema,
   LoopLogsResponseSchema,
   LoopStopResponseSchema,
+  CollabSliceCreateResponseSchema,
+  CollabSliceListResponseSchema,
   DaemonUpdateProgressMessageSchema,
   DaemonUpdateResponseSchema,
 ]);
@@ -7059,6 +7070,11 @@ export type ChatPostRequest = z.infer<typeof ChatPostRequestSchema>;
 export type ChatReadRequest = z.infer<typeof ChatReadRequestSchema>;
 export type ChatWaitRequest = z.infer<typeof ChatWaitRequestSchema>;
 export type ScheduleCreateRequest = z.infer<typeof ScheduleCreateRequestSchema>;
+export type CollabSliceRecord = z.infer<typeof CollabSliceRecordSchema>;
+export type CollabSliceCreateRequest = z.infer<typeof CollabSliceCreateRequestSchema>;
+export type CollabSliceCreateResponse = z.infer<typeof CollabSliceCreateResponseSchema>;
+export type CollabSliceListRequest = z.infer<typeof CollabSliceListRequestSchema>;
+export type CollabSliceListResponse = z.infer<typeof CollabSliceListResponseSchema>;
 export type ScheduleListRequest = z.infer<typeof ScheduleListRequestSchema>;
 export type ScheduleInspectRequest = z.infer<typeof ScheduleInspectRequestSchema>;
 export type ScheduleLogsRequest = z.infer<typeof ScheduleLogsRequestSchema>;
