@@ -522,6 +522,23 @@ export class MulticaStore {
     return mapTaskRow(raw as never);
   }
 
+  /**
+   * Every task that has not settled yet — the board's "who is working"
+   * source. A task is working from the moment it is claimed (queued counts:
+   * the executor's one-run-per-agent bound means a queue slot is real
+   * intent), through dispatch and run.
+   */
+  listRunningTasks(): TaskRow[] {
+    const rows = this.#db
+      .prepare(
+        `SELECT ${TASK_SELECT} FROM agent_task_queue
+         WHERE status IN ('queued', 'dispatched', 'running')
+         ORDER BY created_at DESC`,
+      )
+      .all() as Record<string, unknown>[];
+    return rows.map(mapTaskRow);
+  }
+
   listTasksForIssue(issueId: string): TaskRow[] {
     const rows = this.#db
       .prepare(

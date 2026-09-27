@@ -1,18 +1,26 @@
-import { type ReactElement, useCallback, useMemo, useState } from "react";
+import { type ReactElement, type ReactNode, useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useRouter } from "expo-router";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { MarkdownRenderer } from "@/components/markdown/renderer";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { useFetchQuery } from "@/data/query";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 import { useIsCompactFormFactor } from "@/constants/layout";
+import { useMulticaCatalog } from "@/multica/multica-catalog";
 import { ActorAvatar, formatRelativeTime } from "@/multica/multica-activity";
 import type {
   MulticaCommentSummary,
   MulticaIssueSummary,
+  MulticaStatusSummary,
 } from "@bytetrue/protocol/multica/rpc-schemas";
 
 /**
@@ -21,18 +29,27 @@ import type {
  * comment stream as the issue's record, and a collapsible-feeling properties
  * pane — a right sidebar on wide screens, stacked on compact ones.
  */
-export function MulticaIssueDetail({
-  serverId,
-  issueId,
-}: {
-  serverId: string;
-  issueId: string;
-}): ReactElement {
+interface IssueDetailData {
+  issue: MulticaIssueSummary | null;
+  comments: readonly MulticaCommentSummary[];
+  agentNameById: ReadonlyMap<string, string>;
+  statuses: readonly MulticaStatusSummary[];
+  assigneeName: string | null;
+  assigneeType: string | null;
+  draft: string;
+  sending: boolean;
+  loading: boolean;
+  goBack: () => void;
+  setDraft: (text: string) => void;
+  send: () => void;
+  moveStatus: (status: string) => void;
+}
+
+function useIssueDetailData(serverId: string, issueId: string): IssueDetailData {
   const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
   const client = runtimeSnapshot?.client ?? null;
   const online = runtimeSnapshot?.connectionStatus === "online";
   const router = useRouter();
-  const isCompact = useIsCompactFormFactor();
 
   const issueQuery = useFetchQuery({
     queryKey: ["multicaIssue", serverId, issueId, runtimeSnapshot?.clientGeneration ?? 0],
@@ -60,25 +77,7 @@ export function MulticaIssueDetail({
     refetchInterval: 5_000,
   });
 
-  const agentsQuery = useFetchQuery({
-    queryKey: ["multicaAgents", serverId, runtimeSnapshot?.clientGeneration ?? 0],
-    queryFn: async () => {
-      if (!client) throw new Error("Target host client is unavailable");
-      return client.multicaAgentList();
-    },
-    enabled: online,
-    retry: false,
-    dataShape: "list",
-    staleTimeMs: 10_000,
-  });
-
-  const agentNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const agent of agentsQuery.data?.agents ?? []) {
-      map.set(agent.id, agent.name);
-    }
-    return map;
-  }, [agentsQuery.data]);
+  const catalog = useMulticaCatalog(serverId);
 
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -103,84 +102,92 @@ export function MulticaIssueDetail({
   }, [client, commentsQuery, draft, issueId, sending]);
 
   const issue = issueQuery.data?.issue ?? null;
-  const comments = useMemo(() => commentsQuery.data?.comments ?? [], [commentsQuery.data]);
 
   const moveStatus = useCallback(
-    async (status: string): Promise<void> => {
-      if (!client || !issue) return;
-      try {
-        await client.multicaIssueUpdate({
-          issueId: issue.id,
-          expectedRevision: issue.revision,
+    (status: string): void => {
+      const current = issueQuery.data?.issue ?? null;
+      if (!client || !current) return;
+      client
+        .multicaIssueUpdate({
+          issueId: current.id,
+          expectedRevision: current.revision,
           status,
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          void issueQuery.refetch();
         });
-        await issueQuery.refetch();
-      } catch {
-        await issueQuery.refetch();
-      }
     },
-    [client, issue, issueQuery],
+    [client, issueQuery],
   );
 
-  if (issueQuery.isLoading) {
+  const comments = useMemo(() => commentsQuery.data?.comments ?? [], [commentsQuery.data]);
+  const assigneeId = issue?.assigneeId ?? null;
+  const assigneeName = assigneeId ? (catalog.agentNameById.get(assigneeId) ?? null) : null;
+
+  return {
+    issue,
+    comments,
+    agentNameById: catalog.agentNameById,
+    statuses: catalog.statuses,
+    assigneeName,
+    assigneeType: issue?.assigneeType ?? null,
+    draft,
+    sending,
+    loading: issueQuery.isLoading,
+    goBack,
+    setDraft,
+    send,
+    moveStatus,
+  };
+}
+
+export function MulticaIssueDetail({
+  serverId,
+  issueId,
+}: {
+  serverId: string;
+  issueId: string;
+}): ReactElement {
+  const data = useIssueDetailData(serverId, issueId);
+  const isCompact = useIsCompactFormFactor();
+  if (data.loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator />
       </View>
     );
   }
-
-  const mainPane = (
-    <IssueMainPane
-      issue={issue}
-      comments={comments}
-      agentNameById={agentNameById}
-      goBack={goBack}
-      onDraftChange={setDraft}
-      onSend={send}
-      sending={sending}
-    />
-  );
-  const propertiesPane = <IssuePropertiesPane issue={issue} moveStatus={moveStatus} />;
-
+  if (isCompact) {
+    return (
+      <View style={styles.page}>
+        <View style={styles.compactStack}>
+          <IssueMainPane data={data} />
+          <IssuePropertiesPane data={data} />
+        </View>
+      </View>
+    );
+  }
   return (
     <View style={styles.page}>
-      {isCompact ? (
-        <View style={styles.compactStack}>
-          {mainPane}
-          {propertiesPane}
+      <View style={styles.wideSplit}>
+        <View style={styles.wideMain}>
+          <ScrollView contentContainerStyle={styles.wideMainContent}>
+            <IssueMainPane data={data} />
+          </ScrollView>
         </View>
-      ) : (
-        <View style={styles.wideSplit}>
-          <View style={styles.wideMain}>
-            <ScrollView contentContainerStyle={styles.wideMainContent}>{mainPane}</ScrollView>
-          </View>
-          <View style={styles.wideSide}>
-            <ScrollView contentContainerStyle={styles.wideSideContent}>{propertiesPane}</ScrollView>
-          </View>
+        <View style={styles.wideSide}>
+          <ScrollView contentContainerStyle={styles.wideSideContent}>
+            <IssuePropertiesPane data={data} />
+          </ScrollView>
         </View>
-      )}
+      </View>
     </View>
   );
 }
 
-function IssueMainPane({
-  issue,
-  comments,
-  agentNameById,
-  goBack,
-  onDraftChange,
-  onSend,
-  sending,
-}: {
-  issue: MulticaIssueSummary | null;
-  comments: readonly MulticaCommentSummary[];
-  agentNameById: ReadonlyMap<string, string>;
-  goBack: () => void;
-  onDraftChange: (text: string) => void;
-  onSend: () => void;
-  sending: boolean;
-}): ReactElement {
+function IssueMainPane({ data }: { data: IssueDetailData }): ReactElement {
+  const { issue, comments, agentNameById, goBack, sending } = data;
   return (
     <View style={styles.mainPane}>
       <Breadcrumb issue={issue} goBack={goBack} />
@@ -207,7 +214,7 @@ function IssueMainPane({
           <Text style={styles.hint}>No comments yet — say something to start.</Text>
         ) : null}
       </View>
-      <CommentComposer onDraftChange={onDraftChange} onSend={onSend} sending={sending} />
+      <CommentComposer onDraftChange={data.setDraft} onSend={data.send} sending={sending} />
     </View>
   );
 }
@@ -302,50 +309,113 @@ function CommentComposer({
   );
 }
 
-function IssuePropertiesPane({
-  issue,
-  moveStatus,
-}: {
-  issue: MulticaIssueSummary | null;
-  moveStatus: (status: string) => void;
-}): ReactElement {
+function IssuePropertiesPane({ data }: { data: IssueDetailData }): ReactElement {
+  const { issue, statuses, assigneeName, assigneeType, moveStatus } = data;
   const status = issue?.status ?? "";
   return (
     <View style={styles.properties}>
-      <Text style={styles.propertiesHeading}>Properties</Text>
-      <PropertyRow label="Status">
-        <View style={styles.statusRow}>
-          <View style={styles.statusChip}>
-            <View style={[styles.statusChipDot, { backgroundColor: statusColor(status) }]} />
-            <Text style={styles.statusChipText}>{status}</Text>
-          </View>
-          {issue && status !== "done" ? (
-            <QuickStatus label="In review" status="in_review" onPress={moveStatus} />
-          ) : null}
-          {issue && status !== "done" ? (
-            <QuickStatus label="Done" status="done" onPress={moveStatus} />
-          ) : null}
-        </View>
-      </PropertyRow>
-      <PropertyRow label="Priority">
-        <Text style={styles.propertyValue}>{issue?.priority ?? "none"}</Text>
-      </PropertyRow>
-      <PropertyRow label="Assignee">
-        <Text style={styles.propertyValue}>
-          {issue?.assigneeId
-            ? `${issue.assigneeType}: ${issue.assigneeId.slice(0, 8)}`
-            : "unassigned"}
-        </Text>
-      </PropertyRow>
-      <PropertyRow label="Revision">
-        <Text style={styles.propertyValue}>{String(issue?.revision ?? "-")}</Text>
-      </PropertyRow>
-      <PropertyRow label="Updated">
-        <Text style={styles.propertyValue}>
-          {issue ? formatRelativeTime(issue.updatedAt) : "-"}
-        </Text>
-      </PropertyRow>
+      <Section title="Properties">
+        <PropertyRow label="Status">
+          <StatusDropdown status={status} statuses={statuses} onMove={moveStatus} />
+        </PropertyRow>
+        <PropertyRow label="Priority">
+          <Text style={styles.propertyValue}>{issue?.priority ?? "none"}</Text>
+        </PropertyRow>
+        <PropertyRow label="Assignee">
+          {assigneeName && issue?.assigneeId ? (
+            <View style={styles.assigneeRow}>
+              <ActorAvatar name={assigneeName} id={issue.assigneeId} />
+              <Text style={styles.propertyValue}>{assigneeName}</Text>
+            </View>
+          ) : (
+            <Text style={styles.propertyValue}>
+              {assigneeType ? `${assigneeType} (unknown)` : "unassigned"}
+            </Text>
+          )}
+        </PropertyRow>
+      </Section>
+      <Section title="Details">
+        <PropertyRow label="Number">
+          <Text style={styles.propertyValue}>{issue ? `#${issue.number ?? "-"}` : "-"}</Text>
+        </PropertyRow>
+        <PropertyRow label="Revision">
+          <Text style={styles.propertyValue}>{String(issue?.revision ?? "-")}</Text>
+        </PropertyRow>
+        <PropertyRow label="Updated">
+          <Text style={styles.propertyValue}>
+            {issue ? formatRelativeTime(issue.updatedAt) : "-"}
+          </Text>
+        </PropertyRow>
+      </Section>
     </View>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }): ReactElement {
+  const [open, setOpen] = useState(true);
+  const toggle = useCallback(() => setOpen((value) => !value), []);
+  return (
+    <View style={styles.section}>
+      <Pressable onPress={toggle} style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        <Text style={styles.sectionChevron}>{open ? "▾" : "▸"}</Text>
+      </Pressable>
+      {open ? children : null}
+    </View>
+  );
+}
+
+function StatusMenuItem({
+  name,
+  statusKey,
+  selected,
+  onMove,
+}: {
+  name: string;
+  statusKey: string;
+  selected: boolean;
+  onMove: (status: string) => void;
+}): ReactElement {
+  const handleSelect = useCallback(() => onMove(statusKey), [onMove, statusKey]);
+  return (
+    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+      <Text style={styles.menuItemText}>{name}</Text>
+    </DropdownMenuItem>
+  );
+}
+
+function StatusDropdown({
+  status,
+  statuses,
+  onMove,
+}: {
+  status: string;
+  statuses: readonly MulticaStatusSummary[];
+  onMove: (status: string) => void;
+}): ReactElement {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        accessibilityRole="button"
+        accessibilityLabel="Change status"
+        testID="multica-status-dropdown"
+        style={styles.statusTrigger}
+      >
+        <View style={[styles.statusChipDot, { backgroundColor: statusColor(status) }]} />
+        <Text style={styles.statusChipText}>{status}</Text>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="bottom" align="start" offset={4} minWidth={160}>
+        {statuses.map((entry) => (
+          <StatusMenuItem
+            key={entry.key}
+            name={entry.name}
+            statusKey={entry.key}
+            selected={entry.key === status}
+            onMove={onMove}
+          />
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -355,25 +425,6 @@ function PropertyRow({ label, children }: { label: string; children: ReactElemen
       <Text style={styles.propertyLabel}>{label}</Text>
       {children}
     </View>
-  );
-}
-
-function QuickStatus({
-  label,
-  status,
-  onPress,
-}: {
-  label: string;
-  status: string;
-  onPress: (status: string) => void;
-}): ReactElement {
-  const handlePress = useCallback(() => {
-    void onPress(status);
-  }, [onPress, status]);
-  return (
-    <Pressable style={styles.quickStatus} onPress={handlePress} testID={`multica-quick-${status}`}>
-      <Text style={styles.quickStatusText}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -470,5 +521,24 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.border,
   },
   quickStatusText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  section: { gap: theme.spacing[2] },
+  sectionHeader: { flexDirection: "row", alignItems: "center", gap: theme.spacing[1] },
+  sectionTitle: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: "600",
+  },
+  sectionChevron: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  assigneeRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing[1] },
+  statusTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    paddingVertical: 2,
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: 999,
+    backgroundColor: theme.colors.surface2,
+  },
+  menuItemText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 }));

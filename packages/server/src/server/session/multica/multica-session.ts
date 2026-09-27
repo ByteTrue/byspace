@@ -177,6 +177,8 @@ export class MulticaSession {
           return this.#handleSquadList(msg);
         case "multica.squad.create.request":
           return this.#handleSquadCreate(msg);
+        case "multica.task.running.list.request":
+          return this.#handleTaskRunningList(msg);
         case "multica.task.list.request":
           return this.#handleTaskList(msg);
         default:
@@ -453,6 +455,15 @@ export class MulticaSession {
         squad: squadSummary(squad),
         members: members.map(memberSummary),
       },
+    });
+  }
+
+  #handleTaskRunningList(
+    msg: Extract<SessionInboundMessage, { type: "multica.task.running.list.request" }>,
+  ): void {
+    this.#emit({
+      type: "multica.task.running.list.response",
+      payload: { requestId: msg.requestId, tasks: this.#store.listRunningTasks().map(taskSummary) },
     });
   }
 

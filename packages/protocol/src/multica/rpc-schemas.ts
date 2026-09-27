@@ -306,6 +306,19 @@ export const MulticaTaskSummarySchema = z.object({
   error: z.string().nullable(),
 });
 
+export const MulticaTaskRunningListRequestSchema = z.object({
+  type: z.literal("multica.task.running.list.request"),
+  requestId: z.string(),
+});
+
+export const MulticaTaskRunningListResponseSchema = z.object({
+  type: z.literal("multica.task.running.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    tasks: z.array(MulticaTaskSummarySchema),
+  }),
+});
+
 export const MulticaTaskListRequestSchema = z.object({
   type: z.literal("multica.task.list.request"),
   requestId: z.string(),
@@ -327,4 +340,5 @@ export type MulticaIssueSummary = z.infer<typeof MulticaIssueSummarySchema>;
 export type MulticaCommentSummary = z.infer<typeof MulticaCommentSummarySchema>;
 export type MulticaSquadSummary = z.infer<typeof MulticaSquadSummarySchema>;
 export type MulticaSquadMemberSummary = z.infer<typeof MulticaSquadMemberSummarySchema>;
+export type MulticaStatusSummary = z.infer<typeof MulticaStatusSummarySchema>;
 export type MulticaTaskSummary = z.infer<typeof MulticaTaskSummarySchema>;

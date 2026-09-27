@@ -8,6 +8,7 @@ import { useFetchQuery } from "@/data/query";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 import type { MulticaIssueSummary } from "@bytetrue/protocol/multica/rpc-schemas";
 import { IssueMetaLine } from "@/multica/multica-activity";
+import { useMulticaCatalog } from "@/multica/multica-catalog";
 
 /**
  * The multica board: status columns with issue cards, after the reference
@@ -47,25 +48,28 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
     refetchInterval: 5_000,
   });
 
-  const agentsQuery = useFetchQuery({
-    queryKey: ["multicaAgents", serverId, runtimeSnapshot?.clientGeneration ?? 0],
+  const runningQuery = useFetchQuery({
+    queryKey: ["multicaRunningTasks", serverId, runtimeSnapshot?.clientGeneration ?? 0],
     queryFn: async () => {
       if (!client) throw new Error("Target host client is unavailable");
-      return client.multicaAgentList();
+      return client.multicaTaskRunningList();
     },
     enabled: online,
     retry: false,
-    dataShape: "list",
-    staleTimeMs: 10_000,
+    dataShape: "value",
+    staleTimeMs: 2_000,
+    refetchInterval: 3_000,
   });
 
-  const agentNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const agent of agentsQuery.data?.agents ?? []) {
-      map.set(agent.id, agent.name);
+  const workingAgentIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const task of runningQuery.data?.tasks ?? []) {
+      set.add(task.agentId);
     }
-    return map;
-  }, [agentsQuery.data]);
+    return set;
+  }, [runningQuery.data]);
+
+  const catalog = useMulticaCatalog(serverId);
 
   const openIssue = useCallback(
     (issueId: string) => {
@@ -101,6 +105,14 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
         <Text style={styles.headerCount}>
           {workIssues.length} {workIssues.length === 1 ? "issue" : "issues"}
         </Text>
+        {workingAgentIds.size > 0 ? (
+          <View style={styles.workingPill}>
+            <View style={styles.workingDot} />
+            <Text style={styles.workingPillText}>
+              {workingAgentIds.size} {workingAgentIds.size === 1 ? "agent" : "agents"} working
+            </Text>
+          </View>
+        ) : null}
         {office ? <OfficePill onPress={openIssue} issueId={office.id} /> : null}
       </View>
       <ScrollView horizontal contentContainerStyle={styles.lanes}>
@@ -110,7 +122,8 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
             title={status.name}
             color={status.color}
             issues={workIssues.filter((issue) => issue.status === status.key)}
-            agentNameById={agentNameById}
+            agentNameById={catalog.agentNameById}
+            workingAgentIds={workingAgentIds}
             selectedId={selected}
             onSelect={setSelected}
             onOpen={openIssue}
@@ -141,6 +154,7 @@ function BoardColumn({
   color,
   issues,
   agentNameById,
+  workingAgentIds,
   selectedId,
   onSelect,
   onOpen,
@@ -149,6 +163,7 @@ function BoardColumn({
   color: string;
   issues: readonly MulticaIssueSummary[];
   agentNameById: ReadonlyMap<string, string>;
+  workingAgentIds: ReadonlySet<string>;
   selectedId: string | null;
   onSelect: (issueId: string | null) => void;
   onOpen: (issueId: string) => void;
@@ -173,6 +188,7 @@ function BoardColumn({
             key={issue.id}
             issue={issue}
             agentName={issue.assigneeId ? (agentNameById.get(issue.assigneeId) ?? null) : null}
+            working={issue.assigneeId ? workingAgentIds.has(issue.assigneeId) : false}
             selected={selectedId === issue.id}
             onPress={handleSelect}
           />
@@ -186,11 +202,13 @@ function BoardColumn({
 function BoardCard({
   issue,
   agentName,
+  working,
   selected,
   onPress,
 }: {
   issue: MulticaIssueSummary;
   agentName: string | null;
+  working: boolean;
   selected: boolean;
   onPress: (issueId: string) => void;
 }): ReactElement {
@@ -208,6 +226,12 @@ function BoardCard({
         <Text style={styles.cardNumber}>#{issue.number ?? "—"}</Text>
         {issue.priority !== "none" && issue.priority !== null ? (
           <Text style={styles.cardPriority}>{issue.priority}</Text>
+        ) : null}
+        {working ? (
+          <View style={styles.cardWorking}>
+            <View style={styles.workingDot} />
+            <Text style={styles.cardWorkingText}>Working</Text>
+          </View>
         ) : null}
       </View>
       <IssueMetaLine actorName={agentName} actorId={issue.assigneeId} updatedAt={issue.updatedAt} />
@@ -271,5 +295,29 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     textTransform: "uppercase",
   },
+  workingPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    marginLeft: "auto",
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: 999,
+    backgroundColor: theme.colors.surface2,
+  },
+  workingPillText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
+  workingDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#f59e0b",
+  },
+  cardWorking: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    marginLeft: "auto",
+  },
+  cardWorkingText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 }));

@@ -571,6 +571,10 @@ type MulticaSquadCreatePayload = Extract<
   SessionOutboundMessage,
   { type: "multica.squad.create.response" }
 >["payload"];
+type MulticaTaskRunningListPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.task.running.list.response" }
+>["payload"];
 type MulticaTaskListPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.task.list.response" }
@@ -5617,6 +5621,13 @@ export class DaemonClient {
         members: options.members,
       },
       responseType: "multica.squad.create.response",
+    });
+  }
+
+  async multicaTaskRunningList(): Promise<MulticaTaskRunningListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.task.running.list.request" },
+      responseType: "multica.task.running.list.response",
     });
   }
 
