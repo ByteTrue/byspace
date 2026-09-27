@@ -216,6 +216,232 @@ export function mapAgentRow(raw: RawAgentRow): AgentRow {
   };
 }
 
+/** The squad columns in SELECT order. */
+export const SQUAD_SELECT = `id, name, description, leader_id, creator_type, creator_id,
+  created_at, updated_at, archived_at, archived_by, avatar_url, instructions`;
+
+export interface SquadRow {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly leaderId: string;
+  readonly creatorType: string;
+  readonly creatorId: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly archivedAt: string | null;
+  readonly archivedBy: string | null;
+  readonly avatarUrl: string | null;
+  readonly instructions: string;
+}
+
+export interface SquadMemberRow {
+  readonly id: string;
+  readonly squadId: string;
+  readonly memberType: string;
+  readonly memberId: string;
+  readonly role: string;
+  readonly createdAt: string;
+}
+
+interface RawSquadRow {
+  readonly id: unknown;
+  readonly name: unknown;
+  readonly description: unknown;
+  readonly leader_id: unknown;
+  readonly creator_type: unknown;
+  readonly creator_id: unknown;
+  readonly created_at: unknown;
+  readonly updated_at: unknown;
+  readonly archived_at: unknown;
+  readonly archived_by: unknown;
+  readonly avatar_url: unknown;
+  readonly instructions: unknown;
+}
+
+export function mapSquadRow(raw: RawSquadRow): SquadRow {
+  return {
+    id: text(raw.id),
+    name: text(raw.name),
+    description: text(raw.description),
+    leaderId: text(raw.leader_id),
+    creatorType: text(raw.creator_type),
+    creatorId: text(raw.creator_id),
+    createdAt: text(raw.created_at),
+    updatedAt: text(raw.updated_at),
+    archivedAt: textOrNull(raw.archived_at),
+    archivedBy: textOrNull(raw.archived_by),
+    avatarUrl: textOrNull(raw.avatar_url),
+    instructions: text(raw.instructions),
+  };
+}
+
+interface RawSquadMemberRow {
+  readonly id: unknown;
+  readonly squad_id: unknown;
+  readonly member_type: unknown;
+  readonly member_id: unknown;
+  readonly role: unknown;
+  readonly created_at: unknown;
+}
+
+export function mapSquadMemberRow(raw: RawSquadMemberRow): SquadMemberRow {
+  return {
+    id: text(raw.id),
+    squadId: text(raw.squad_id),
+    memberType: text(raw.member_type),
+    memberId: text(raw.member_id),
+    role: text(raw.role),
+    createdAt: text(raw.created_at),
+  };
+}
+
+/** The queue (run) columns in SELECT order. */
+export const TASK_SELECT = `id, agent_id, issue_id, status, priority, dispatched_at, started_at,
+  completed_at, result, error, autopilot_run_id, attempt, max_attempts, parent_task_id,
+  failure_reason, trigger_summary, force_fresh_session, context, session_id, work_dir,
+  trigger_comment_id, chat_session_id, wait_reason, initiator_user_id, runtime_mcp_overlay,
+  runtime_connected_apps, chat_input_task_id, chat_finalize_deferred_at, runtime_id, handoff_note,
+  prepare_lease_expires_at, escalation_for_task_id, fire_at, is_leader_task, squad_id,
+  originator_user_id, originator_source, delegated_from_task_id, retry_of_task_id, rerun_of_task_id,
+  rule_version_id, trigger_evidence_kind, trigger_evidence_ref_id, accountable_user_id,
+  coalesced_comment_ids, delivered_comment_ids, created_at, session_rollout_missing,
+  retired_session_id, quick_actions_disabled, regenerate_quick_actions_for, branch_name,
+  durable_work_dir, channel_context_revision, comment_thread_id, cancelled_by_type,
+  cancelled_by_id, cancelled_by_name, issue_snapshot`;
+
+export interface TaskRow {
+  readonly id: string;
+  readonly agentId: string;
+  readonly issueId: string;
+  readonly status: string;
+  readonly priority: number;
+  readonly dispatchedAt: string | null;
+  readonly startedAt: string | null;
+  readonly completedAt: string | null;
+  readonly result: string | null;
+  readonly error: string | null;
+  readonly autopilotRunId: string | null;
+  readonly attempt: number;
+  readonly maxAttempts: number;
+  readonly parentTaskId: string | null;
+  readonly failureReason: string | null;
+  readonly triggerSummary: string | null;
+  readonly forceFreshSession: boolean;
+  readonly context: string | null;
+  readonly sessionId: string | null;
+  readonly workDir: string | null;
+  readonly triggerCommentId: string | null;
+  readonly chatSessionId: string | null;
+  readonly waitReason: string | null;
+  readonly initiatorUserId: string | null;
+  readonly runtimeMcpOverlay: string | null;
+  readonly runtimeConnectedApps: string | null;
+  readonly chatInputTaskId: string | null;
+  readonly chatFinalizeDeferredAt: string | null;
+  readonly runtimeId: string | null;
+  readonly handoffNote: string | null;
+  readonly prepareLeaseExpiresAt: string | null;
+  readonly escalationForTaskId: string | null;
+  readonly fireAt: string | null;
+  readonly isLeaderTask: boolean;
+  readonly squadId: string | null;
+  readonly originatorUserId: string | null;
+  readonly originatorSource: string | null;
+  readonly delegatedFromTaskId: string | null;
+  readonly retryOfTaskId: string | null;
+  readonly rerunOfTaskId: string | null;
+  readonly ruleVersionId: string | null;
+  readonly triggerEvidenceKind: string | null;
+  readonly triggerEvidenceRefId: string | null;
+  readonly accountableUserId: string | null;
+  readonly coalescedCommentIds: string;
+  readonly deliveredCommentIds: string;
+  readonly createdAt: string;
+  readonly sessionRolloutMissing: boolean;
+  readonly retiredSessionId: string | null;
+  readonly quickActionsDisabled: boolean;
+  readonly regenerateQuickActionsFor: string | null;
+  readonly branchName: string | null;
+  readonly durableWorkDir: string | null;
+  readonly channelContextRevision: string | null;
+  readonly commentThreadId: string | null;
+  readonly cancelledByType: string | null;
+  readonly cancelledById: string | null;
+  readonly cancelledByName: string | null;
+  readonly issueSnapshot: string | null;
+}
+
+interface RawTaskRow {
+  readonly [key: string]: unknown;
+}
+
+const bool = (value: unknown): boolean => value === 1 || value === true;
+
+export function mapTaskRow(raw: RawTaskRow): TaskRow {
+  return {
+    id: text(raw.id),
+    agentId: text(raw.agent_id),
+    issueId: text(raw.issue_id),
+    status: text(raw.status),
+    priority: Number(raw.priority),
+    dispatchedAt: textOrNull(raw.dispatched_at),
+    startedAt: textOrNull(raw.started_at),
+    completedAt: textOrNull(raw.completed_at),
+    result: textOrNull(raw.result),
+    error: textOrNull(raw.error),
+    autopilotRunId: textOrNull(raw.autopilot_run_id),
+    attempt: Number(raw.attempt),
+    maxAttempts: Number(raw.max_attempts),
+    parentTaskId: textOrNull(raw.parent_task_id),
+    failureReason: textOrNull(raw.failure_reason),
+    triggerSummary: textOrNull(raw.trigger_summary),
+    forceFreshSession: bool(raw.force_fresh_session),
+    context: textOrNull(raw.context),
+    sessionId: textOrNull(raw.session_id),
+    workDir: textOrNull(raw.work_dir),
+    triggerCommentId: textOrNull(raw.trigger_comment_id),
+    chatSessionId: textOrNull(raw.chat_session_id),
+    waitReason: textOrNull(raw.wait_reason),
+    initiatorUserId: textOrNull(raw.initiator_user_id),
+    runtimeMcpOverlay: textOrNull(raw.runtime_mcp_overlay),
+    runtimeConnectedApps: textOrNull(raw.runtime_connected_apps),
+    chatInputTaskId: textOrNull(raw.chat_input_task_id),
+    chatFinalizeDeferredAt: textOrNull(raw.chat_finalize_deferred_at),
+    runtimeId: textOrNull(raw.runtime_id),
+    handoffNote: textOrNull(raw.handoff_note),
+    prepareLeaseExpiresAt: textOrNull(raw.prepare_lease_expires_at),
+    escalationForTaskId: textOrNull(raw.escalation_for_task_id),
+    fireAt: textOrNull(raw.fire_at),
+    isLeaderTask: bool(raw.is_leader_task),
+    squadId: textOrNull(raw.squad_id),
+    originatorUserId: textOrNull(raw.originator_user_id),
+    originatorSource: textOrNull(raw.originator_source),
+    delegatedFromTaskId: textOrNull(raw.delegated_from_task_id),
+    retryOfTaskId: textOrNull(raw.retry_of_task_id),
+    rerunOfTaskId: textOrNull(raw.rerun_of_task_id),
+    ruleVersionId: textOrNull(raw.rule_version_id),
+    triggerEvidenceKind: textOrNull(raw.trigger_evidence_kind),
+    triggerEvidenceRefId: textOrNull(raw.trigger_evidence_ref_id),
+    accountableUserId: textOrNull(raw.accountable_user_id),
+    coalescedCommentIds: text(raw.coalesced_comment_ids),
+    deliveredCommentIds: text(raw.delivered_comment_ids),
+    createdAt: text(raw.created_at),
+    sessionRolloutMissing: bool(raw.session_rollout_missing),
+    retiredSessionId: textOrNull(raw.retired_session_id),
+    quickActionsDisabled: bool(raw.quick_actions_disabled),
+    regenerateQuickActionsFor: textOrNull(raw.regenerate_quick_actions_for),
+    branchName: textOrNull(raw.branch_name),
+    durableWorkDir: textOrNull(raw.durable_work_dir),
+    channelContextRevision: textOrNull(raw.channel_context_revision),
+    commentThreadId: textOrNull(raw.comment_thread_id),
+    cancelledByType: textOrNull(raw.cancelled_by_type),
+    cancelledById: textOrNull(raw.cancelled_by_id),
+    cancelledByName: textOrNull(raw.cancelled_by_name),
+    issueSnapshot: textOrNull(raw.issue_snapshot),
+  };
+}
+
 interface RawIssueRow {
   readonly id: unknown;
   readonly title: unknown;

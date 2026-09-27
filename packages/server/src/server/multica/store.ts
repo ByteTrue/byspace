@@ -19,14 +19,22 @@ import type { DatabaseSync } from "node:sqlite";
 import { applyMigrations, type Migration } from "./migrations/runner.js";
 import {
   AGENT_SELECT,
+  SQUAD_SELECT,
+  TASK_SELECT,
   COMMENT_SELECT,
   ISSUE_SELECT,
   mapAgentRow,
   mapCommentRow,
   mapIssueRow,
+  mapSquadMemberRow,
+  mapSquadRow,
+  mapTaskRow,
   type AgentRow,
   type CommentRow,
   type IssueRow,
+  type SquadMemberRow,
+  type SquadRow,
+  type TaskRow,
 } from "./rows.js";
 
 export interface MulticaStoreOptions {
@@ -324,6 +332,196 @@ export class MulticaStore {
       )
       .all(issueId);
     return rows.map((row) => mapCommentRow(row as never));
+  }
+
+  // ------------------------------------------------------------- squads
+
+  createSquad(input: {
+    readonly name: string;
+    readonly description?: string;
+    readonly leaderId: string;
+    readonly creatorType: string;
+    readonly creatorId: string;
+    readonly instructions?: string;
+  }): SquadRow {
+    const id = randomUUID();
+    this.#db
+      .prepare(
+        `INSERT INTO squad (id, name, description, leader_id, creator_type, creator_id, instructions)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.name,
+        input.description ?? "",
+        input.leaderId,
+        input.creatorType,
+        input.creatorId,
+        input.instructions ?? "",
+      );
+    return this.getSquad(id);
+  }
+
+  getSquad(id: string): SquadRow {
+    const raw = this.#db.prepare(`SELECT ${SQUAD_SELECT} FROM squad WHERE id = ?`).get(id);
+    if (!raw) {
+      throw new Error(`squad not found: ${id}`);
+    }
+    return mapSquadRow(raw as never);
+  }
+
+  listSquads(): SquadRow[] {
+    // The source lists active squads, archived ones excluded.
+    const rows = this.#db
+      .prepare(
+        `SELECT ${SQUAD_SELECT} FROM squad WHERE archived_at IS NULL ORDER BY created_at DESC`,
+      )
+      .all();
+    return rows.map((row) => mapSquadRow(row as never));
+  }
+
+  addSquadMember(input: {
+    readonly squadId: string;
+    readonly memberType: string;
+    readonly memberId: string;
+    readonly role?: string;
+  }): SquadMemberRow {
+    const id = randomUUID();
+    this.#db
+      .prepare(
+        `INSERT INTO squad_member (id, squad_id, member_type, member_id, role) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(id, input.squadId, input.memberType, input.memberId, input.role ?? "");
+    return this.#db
+      .prepare(`SELECT * FROM squad_member WHERE id = ?`)
+      .get(id) as unknown as SquadMemberRow;
+  }
+
+  removeSquadMember(squadId: string, memberType: string, memberId: string): void {
+    const result = this.#db
+      .prepare(`DELETE FROM squad_member WHERE squad_id = ? AND member_type = ? AND member_id = ?`)
+      .run(squadId, memberType, memberId);
+    if (Number(result.changes) === 0) {
+      throw new Error(`squad member not found: ${memberType} ${memberId}`);
+    }
+  }
+
+  listSquadMembers(squadId: string): SquadMemberRow[] {
+    const rows = this.#db
+      .prepare(`SELECT * FROM squad_member WHERE squad_id = ? ORDER BY created_at ASC`)
+      .all(squadId);
+    return rows.map((row) => mapSquadMemberRow(row as never));
+  }
+
+  // ------------------------------------------------------------- run queue
+
+  /**
+   * Enqueue a run: the queue row every trigger path funnels into.
+   *
+   * Ported from CreateAgentTask. The source's id is a UUIDv7 so consecutive
+   * enqueues cluster in the primary-key range; the replica mints the same
+   * shape with crypto.randomUUID (the clustering argument is a B-tree concern
+   * the rowid index already provides). The workspace-teardown fence
+   * (lock_task_owner_rows) is the multitenancy circle cut away: no workspace
+   * rows exist to lock, and single-user means no teardown race.
+   */
+  createTask(input: {
+    readonly agentId: string;
+    readonly issueId: string;
+    readonly priority?: number;
+    readonly triggerCommentId?: string | null;
+    readonly triggerSummary?: string | null;
+    readonly isLeaderTask?: boolean;
+    readonly squadId?: string | null;
+    readonly handoffNote?: string | null;
+    readonly context?: Record<string, unknown> | null;
+  }): TaskRow {
+    const id = randomUUID();
+    this.#db
+      .prepare(
+        `INSERT INTO agent_task_queue (id, agent_id, issue_id, status, priority,
+           trigger_comment_id, trigger_summary, is_leader_task, squad_id, handoff_note, context)
+         VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.agentId,
+        input.issueId,
+        input.priority ?? 0,
+        input.triggerCommentId ?? null,
+        input.triggerSummary ?? null,
+        input.isLeaderTask ? 1 : 0,
+        input.squadId ?? null,
+        input.handoffNote ?? null,
+        input.context ? JSON.stringify(input.context) : null,
+      );
+    return this.getTask(id);
+  }
+
+  getTask(id: string): TaskRow {
+    const raw = this.#db
+      .prepare(`SELECT ${TASK_SELECT} FROM agent_task_queue WHERE id = ?`)
+      .get(id);
+    if (!raw) {
+      throw new Error(`task not found: ${id}`);
+    }
+    return mapTaskRow(raw as never);
+  }
+
+  listTasksForIssue(issueId: string): TaskRow[] {
+    const rows = this.#db
+      .prepare(
+        `SELECT ${TASK_SELECT} FROM agent_task_queue WHERE issue_id = ? ORDER BY created_at DESC`,
+      )
+      .all(issueId);
+    return rows.map((row) => mapTaskRow(row as never));
+  }
+
+  /**
+   * Move a run's status, stamping the state's timestamp.
+   *
+   * The queue's status enum is the run lifecycle (queued → dispatched →
+   * running → completed/failed/cancelled, plus deferred and
+   * waiting_local_directory). Each transition stamps its own timestamp column
+   * exactly as the source's per-state queries do.
+   */
+  updateTaskStatus(input: {
+    readonly id: string;
+    readonly status: string;
+    readonly error?: string | null;
+    readonly result?: string | null;
+  }): TaskRow {
+    const stamps: Record<string, string> = {
+      dispatched: "dispatched_at",
+      running: "started_at",
+      completed: "completed_at",
+      failed: "completed_at",
+      cancelled: "completed_at",
+    };
+    const stamp = stamps[input.status];
+    const errorClause = input.error !== undefined ? ", error = ?" : "";
+    const resultClause = input.result !== undefined ? ", result = ?" : "";
+    const params: unknown[] = [input.status];
+    if (stamp !== undefined) {
+      params.push(new Date().toISOString());
+    }
+    if (input.error !== undefined) {
+      params.push(input.error);
+    }
+    if (input.result !== undefined) {
+      params.push(JSON.stringify(input.result));
+    }
+    params.push(input.id);
+    const result = this.#db
+      .prepare(
+        `UPDATE agent_task_queue SET status = ?${stamp !== undefined ? `, ${stamp} = ?` : ""}${errorClause}${resultClause}
+         WHERE id = ?`,
+      )
+      .run(...params);
+    if (Number(result.changes) === 0) {
+      throw new Error(`task not found: ${input.id}`);
+    }
+    return this.getTask(input.id);
   }
 
   // ------------------------------------------------------------- status catalog
