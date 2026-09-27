@@ -9,10 +9,18 @@ function normalizeEndpoint(endpoint: string): string {
   return normalizeLoopbackToLocalhost(normalizeHostPort(endpoint));
 }
 
-function browserOriginHost(): string | null {
+export function browserOriginHost(): string | null {
   if (typeof window === "undefined") return null;
   const host = window.location?.host?.trim();
-  return host ? normalizeEndpoint(host) : null;
+  if (!host) return null;
+  // Default ports (https :443, http :80) are omitted from location.host, but
+  // parseHostPort requires an explicit host:port and throws otherwise. Re-attach
+  // the implied port so a default-port origin stays comparable instead of
+  // crashing the render tree.
+  const port = window.location?.port;
+  if (port) return normalizeEndpoint(host);
+  const defaultPort = window.location?.protocol === "https:" ? 443 : 80;
+  return normalizeEndpoint(`${host}:${defaultPort}`);
 }
 
 /**
