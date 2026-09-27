@@ -43,6 +43,15 @@ GitHub Release assets are the npm tarball and a container descriptor, each with 
    npm run release:publish:beta:dry-run     # prerelease
    ```
 
+   On Windows, two traps make this fail from Git Bash even though the packaging is fine:
+   - `release:publish:*:dry-run` uses bash command substitution (`$(node -p ...)`), which cmd.exe passes through literally — run the pack step (`npm run release:pack:bytetrue`) locally and let the CI **Publish npm** dry-run (`workflow_dispatch`, `publish=false`) cover the full verify on Linux.
+   - `release:pack:bytetrue` shells out to `tar`, and Git Bash's GNU tar treats `C:\...` paths as remote hosts. Shadow it with Windows' bsdtar in an isolated dir — prepending System32 itself breaks `bash.exe` resolution:
+
+     ```bash
+     mkdir -p /tmp/tarbin && cp /c/Windows/System32/tar.exe /tmp/tarbin/tar.exe
+     PATH="/tmp/tarbin:$PATH" npm run release:patch
+     ```
+
 ## Dry-runs
 
 Before tagging, run these workflows with `workflow_dispatch` on the current `main` SHA. Both build without publishing:

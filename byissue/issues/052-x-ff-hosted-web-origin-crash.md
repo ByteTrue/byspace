@@ -33,4 +33,4 @@ created: 2026-09-27
 
 ## 上线
 
-修复需随下一个 tag（`v*`）经 `deploy-app.yml` 部署到 Pages 后，线上恢复。
+随 v0.16.3（tag 5783c2a34）于 2026-09-27 发布：CI 绿、Publish npm / Deploy App / Docker / Release Notes Sync 全绿，npm latest 与 GitHub Release 均已就位，浏览器实测 `https://app.byspace.cc.cd` 首屏正常渲染，崩溃消失。
