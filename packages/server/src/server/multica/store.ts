@@ -17,7 +17,17 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
 import { applyMigrations, type Migration } from "./migrations/runner.js";
-import { ISSUE_SELECT, mapIssueRow, type IssueRow } from "./rows.js";
+import {
+  AGENT_SELECT,
+  COMMENT_SELECT,
+  ISSUE_SELECT,
+  mapAgentRow,
+  mapCommentRow,
+  mapIssueRow,
+  type AgentRow,
+  type CommentRow,
+  type IssueRow,
+} from "./rows.js";
 
 export interface MulticaStoreOptions {
   readonly migrations: readonly Migration[];
@@ -159,6 +169,161 @@ export class MulticaStore {
       );
     }
     return this.getIssue(input.id);
+  }
+
+  // ------------------------------------------------------------- agents
+
+  createAgent(input: {
+    readonly name: string;
+    readonly description?: string;
+    readonly instructions?: string;
+    readonly kind?: string;
+    readonly systemKey?: string | null;
+    readonly permissionMode?: string;
+  }): AgentRow {
+    const id = randomUUID();
+    this.#db
+      .prepare(
+        `INSERT INTO agent (id, name, runtime_mode, description, instructions, kind, system_key,
+           permission_mode)
+         VALUES (?, ?, 'local', ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.name,
+        input.description ?? "",
+        input.instructions ?? "",
+        input.kind ?? "user",
+        input.systemKey ?? null,
+        input.permissionMode ?? "private",
+      );
+    return this.getAgent(id);
+  }
+
+  getAgent(id: string): AgentRow {
+    const raw = this.#db.prepare(`SELECT ${AGENT_SELECT} FROM agent WHERE id = ?`).get(id);
+    if (!raw) {
+      throw new Error(`agent not found: ${id}`);
+    }
+    return mapAgentRow(raw as never);
+  }
+
+  listAgents(filter: { readonly includeArchived?: boolean } = {}): AgentRow[] {
+    // The source's ListAgents excludes system-kind rows (hidden execution
+    // carriers) and archived ones; ListAllAgentsAnyKind is the admin surface.
+    const clause = filter.includeArchived
+      ? " WHERE kind != 'system'"
+      : " WHERE kind != 'system' AND archived_at IS NULL";
+    const rows = this.#db
+      .prepare(`SELECT ${AGENT_SELECT} FROM agent${clause} ORDER BY created_at DESC`)
+      .all();
+    return rows.map((row) => mapAgentRow(row as never));
+  }
+
+  /**
+   * The built-in-agent lookup: find the row a system key stands for.
+   *
+   * The source resolves its Chief of Staff this way (MikaSystemKey), and the
+   * display name is never the identity — an owner may rename the agent and
+   * everything server-side keeps working.
+   */
+  getAgentBySystemKey(systemKey: string): AgentRow | null {
+    const raw = this.#db
+      .prepare(`SELECT ${AGENT_SELECT} FROM agent WHERE system_key = ? AND kind = 'system'`)
+      .get(systemKey);
+    return raw ? mapAgentRow(raw as never) : null;
+  }
+
+  updateAgentStatus(id: string, status: string): void {
+    const result = this.#db
+      .prepare(
+        `UPDATE agent SET status = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
+      )
+      .run(status, id);
+    if (Number(result.changes) === 0) {
+      throw new Error(`agent not found: ${id}`);
+    }
+  }
+
+  // ------------------------------------------------------------- comments
+
+  /**
+   * Create a comment and touch its issue, atomically.
+   *
+   * The source's CreateComment makes the two inseparable with a data-modifying
+   * CTE: the issue's updated_at, revision, and last_activity_at bump in the
+   * same statement as the insert, so an issue is never left with a stale
+   * updated_at after a comment persists, and a comment can only attach to an
+   * issue that actually exists. The same two guarantees, mapped to one
+   * IMMEDIATE transaction here; a missing issue fails the UPDATE's row count
+   * before any insert happens.
+   */
+  createComment(input: {
+    readonly issueId: string;
+    readonly authorType: string;
+    readonly authorId: string;
+    readonly content: string;
+    readonly type?: string;
+    readonly parentId?: string | null;
+    readonly sourceTaskId?: string | null;
+  }): CommentRow {
+    const id = randomUUID();
+    this.#db.exec("BEGIN IMMEDIATE");
+    try {
+      const touched = this.#db
+        .prepare(
+          `UPDATE issue SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+             revision = revision + 1,
+             last_activity_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+           WHERE id = ?`,
+        )
+        .run(input.issueId);
+      if (Number(touched.changes) === 0) {
+        throw new Error(`issue not found: ${input.issueId}`);
+      }
+      this.#db
+        .prepare(
+          `INSERT INTO comment (id, issue_id, author_type, author_id, content, type, parent_id, source_task_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          input.issueId,
+          input.authorType,
+          input.authorId,
+          input.content,
+          input.type ?? "comment",
+          input.parentId ?? null,
+          input.sourceTaskId ?? null,
+        );
+      this.#db.exec("COMMIT");
+    } catch (error) {
+      this.#db.exec("ROLLBACK");
+      throw error;
+    }
+    const raw = this.#db.prepare(`SELECT ${COMMENT_SELECT} FROM comment WHERE id = ?`).get(id);
+    return mapCommentRow(raw as never);
+  }
+
+  getComment(id: string): CommentRow {
+    const raw = this.#db.prepare(`SELECT ${COMMENT_SELECT} FROM comment WHERE id = ?`).get(id);
+    if (!raw) {
+      throw new Error(`comment not found: ${id}`);
+    }
+    return mapCommentRow(raw as never);
+  }
+
+  listCommentsForIssue(issueId: string): CommentRow[] {
+    // The source orders threads by updated_at desc (root position), children
+    // by created_at asc; the flat list here preserves the same root order and
+    // leaves threading to the reader.
+    const rows = this.#db
+      .prepare(
+        `SELECT ${COMMENT_SELECT} FROM comment WHERE issue_id = ? AND deleted_at IS NULL
+         ORDER BY (parent_id IS NULL) DESC, created_at ASC`,
+      )
+      .all(issueId);
+    return rows.map((row) => mapCommentRow(row as never));
   }
 
   // ------------------------------------------------------------- status catalog
