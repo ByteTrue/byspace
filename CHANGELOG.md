@@ -5,6 +5,22 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.16.2 - 2026-09-27
+
+### Changed
+
+- Consolidated the settings sidebar from 16 rows to 11: Vim mode joined General, diagnostics joined About, and host rows folded into Connections, Agents, and Overview
+- Reworked the light theme content area: pure white canvas, macOS-aligned concentric corner radii, and elevation shadows for cards, message bubbles, and the composer
+
+### Fixed
+
+- Fixed the New Workspace host picker offering hosts that do not have the selected project
+- Fixed hover and press feedback on git file headers being invisible in light theme
+- Fixed the Start at login setting never appearing when connected to the local daemon
+- Fixed the daemon update card always showing when connected to the local daemon
+- Fixed the terminal virtual keyboard paste slot being always empty on web
+- Fixed the command center showing the desktop overlay on compact widths instead of the bottom sheet
+
 ## 0.16.1 - 2026-09-23
 
 ### Fixed
