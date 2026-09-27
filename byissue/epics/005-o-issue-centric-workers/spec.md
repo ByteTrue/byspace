@@ -75,6 +75,17 @@ supersedes: byissue/epics/004-x-worker-domain/spec.md 的协作模型
 - 新线落位：`packages/server/src/server/multica/`（migrations runner + rebuild helper + 翻译件 + 5 个测试文件），干净 main 基线（v0.16.2），与练手线零耦合。
 - 41 tests / typecheck 0 / lint 0 / format 净。6xx 段已核对：剩余迁移全属砍除圈（channel/plugin/github/telemetry）。
 
+## 进度（2026-09-28，全链贯通）
+
+- **切片 ①②③④⑤⑥ 全部落地**（13 个提交）：
+  - **①schema**：120 个迁移三层审计对齐（批次翻译 → ADD COLUMN 并集 → models.go struct 对账），快照测试从活库生成；queue 59/59、agent 27/27 全表平。
+  - **②store+RPC**：五域 store（issue 取号/乐观并发、agent system-key、comment 原子 touch、squad RESTRICT、queue 生命周期时间戳）+ 11 对 RPC 全链接线（protocol→权限→handler→dispatch→bootstrap→client），真机 14 项验证。
+  - **③④引擎**：WillEnqueueRun 单一谓词（backlog 停车场/squad→leader/pending 去重）+ 评论触发（显式 mention 赢 @all/agent 作者无隐式路由）+ 执行器（agent-manager seam、一 agent 一并发、产物回写评论、workspace 走 schedule 的 provisioning 路径）。
+  - **⑤秘书**：内置 Chief of Staff（system key、幂等 seed、mika 工作模型全文），对话面 = 一个专属 issue（办公室频道）—— **零新机制**。
+  - **⑥CLI+console**：`byspace multica` 命令组（issue/agent/comment）+ app `/multica` 路由（issue 列表 + 办公室卡片 + 详情评论流 + composer）+ 侧栏入口（9 locale）。
+- 160 tests / typecheck 0 / lint 0 / format 净。
+- **真机端到端尚未跑**（RPC 验证器过的是 in-process daemon；owner→秘书→开 issue→run→回写的全链判据 1-7 需要真 daemon 跑一轮，是 epic 关闭前的收尾项）。
+
 ## 工程切法
 
 1. **盘点冻结**：从 551 个迁移提取最终 schema 快照（建表全集）→ Node 侧 schema + 迁移框架选型（PG/SQLite 此时定）
