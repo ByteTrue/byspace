@@ -237,8 +237,8 @@ export function runSupervisor(options: SupervisorOptions): SupervisorController 
         windowsHide: true,
       });
     } else {
-      // fork() forwards windowsHide to spawn(), but ForkOptions omits it. Without
-      // it the worker gets an allocated console window on Windows.
+      // Node documents windowsHide as default-true but is not here, and ForkOptions
+      // omits the field even though fork() forwards it to spawn().
       const workerForkOptions: ForkOptions & Pick<SpawnOptions, "windowsHide"> = {
         stdio: ["inherit", "pipe", "pipe", "ipc"],
         env: workerEnv,
