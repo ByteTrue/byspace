@@ -3,25 +3,23 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-nati
 import { StyleSheet } from "react-native-unistyles";
 import { useRouter } from "expo-router";
 
+import { Button } from "@/components/ui/button";
+import { MarkdownRenderer } from "@/components/markdown/renderer";
+import { EditingTextInput as TextInput } from "@/components/ui/text-input";
+import { useFetchQuery } from "@/data/query";
+import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
+import { useIsCompactFormFactor } from "@/constants/layout";
+import { ActorAvatar, formatRelativeTime } from "@/multica/multica-activity";
 import type {
   MulticaCommentSummary,
   MulticaIssueSummary,
 } from "@bytetrue/protocol/multica/rpc-schemas";
 
-import { Button } from "@/components/ui/button";
-import { EditingTextInput as TextInput } from "@/components/ui/text-input";
-import { useFetchQuery } from "@/data/query";
-import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
-import { useIsCompactFormFactor } from "@/constants/layout";
-
 /**
- * An issue's page, after the reference product's detail layout: a header with
- * the number and the editable title, the description, the comment stream that
- * is the issue's record, and a properties pane (status / priority / assignee
- * / timestamps) — a right sidebar on wide screens, stacked on compact ones.
- *
- * Status and field edits carry the revision the caller read; a stale write is
- * refused with a read-again error rather than silently overwriting.
+ * An issue's page, after the reference product's detail layout: a breadcrumb,
+ * the large editable-feeling title, the markdown-rendered description, the
+ * comment stream as the issue's record, and a collapsible-feeling properties
+ * pane — a right sidebar on wide screens, stacked on compact ones.
  */
 export function MulticaIssueDetail({
   serverId,
@@ -61,6 +59,26 @@ export function MulticaIssueDetail({
     staleTimeMs: 3_000,
     refetchInterval: 5_000,
   });
+
+  const agentsQuery = useFetchQuery({
+    queryKey: ["multicaAgents", serverId, runtimeSnapshot?.clientGeneration ?? 0],
+    queryFn: async () => {
+      if (!client) throw new Error("Target host client is unavailable");
+      return client.multicaAgentList();
+    },
+    enabled: online,
+    retry: false,
+    dataShape: "list",
+    staleTimeMs: 10_000,
+  });
+
+  const agentNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const agent of agentsQuery.data?.agents ?? []) {
+      map.set(agent.id, agent.name);
+    }
+    return map;
+  }, [agentsQuery.data]);
 
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -112,36 +130,33 @@ export function MulticaIssueDetail({
     );
   }
 
-  const isCompactView = isCompact && issue !== null;
+  const mainPane = (
+    <IssueMainPane
+      issue={issue}
+      comments={comments}
+      agentNameById={agentNameById}
+      goBack={goBack}
+      onDraftChange={setDraft}
+      onSend={send}
+      sending={sending}
+    />
+  );
+  const propertiesPane = <IssuePropertiesPane issue={issue} moveStatus={moveStatus} />;
 
   return (
     <View style={styles.page}>
-      {isCompactView ? (
+      {isCompact ? (
         <View style={styles.compactStack}>
-          <IssueMainPane
-            issue={issue}
-            comments={comments}
-            goBack={goBack}
-            onDraftChange={setDraft}
-            onSend={send}
-            sending={sending}
-          />
-          <IssuePropertiesPane issue={issue} moveStatus={moveStatus} />
+          {mainPane}
+          {propertiesPane}
         </View>
       ) : (
         <View style={styles.wideSplit}>
           <View style={styles.wideMain}>
-            <IssueMainPane
-              issue={issue}
-              comments={comments}
-              goBack={goBack}
-              onDraftChange={setDraft}
-              onSend={send}
-              sending={sending}
-            />
+            <ScrollView contentContainerStyle={styles.wideMainContent}>{mainPane}</ScrollView>
           </View>
           <View style={styles.wideSide}>
-            <IssuePropertiesPane issue={issue} moveStatus={moveStatus} />
+            <ScrollView contentContainerStyle={styles.wideSideContent}>{propertiesPane}</ScrollView>
           </View>
         </View>
       )}
@@ -152,6 +167,7 @@ export function MulticaIssueDetail({
 function IssueMainPane({
   issue,
   comments,
+  agentNameById,
   goBack,
   onDraftChange,
   onSend,
@@ -159,127 +175,105 @@ function IssueMainPane({
 }: {
   issue: MulticaIssueSummary | null;
   comments: readonly MulticaCommentSummary[];
+  agentNameById: ReadonlyMap<string, string>;
   goBack: () => void;
   onDraftChange: (text: string) => void;
   onSend: () => void;
   sending: boolean;
 }): ReactElement {
   return (
-    <ScrollView contentContainerStyle={styles.main}>
-      <Button variant="ghost" onPress={goBack}>
-        ← Board
-      </Button>
-      <View style={styles.header}>
-        <Text style={styles.number}>#{issue?.number ?? "—"}</Text>
-        <Text style={styles.title}>{issue?.title ?? "…"}</Text>
+    <View style={styles.mainPane}>
+      <Breadcrumb issue={issue} goBack={goBack} />
+      <View style={styles.titleRow}>
+        {issue ? <StatusDot status={issue.status} /> : null}
+        <Text style={styles.title} numberOfLines={2}>
+          {issue?.title ?? "…"}
+        </Text>
       </View>
-      <Text style={styles.description}>{issue?.description ?? "No description."}</Text>
+      {issue?.description ? (
+        <View style={styles.descriptionBlock}>
+          <MarkdownRenderer text={issue.description} compact />
+        </View>
+      ) : null}
       <View style={styles.stream}>
         {comments.map((comment) => (
-          <CommentRow key={comment.id} comment={comment} />
+          <CommentRow
+            key={comment.id}
+            comment={comment}
+            actorName={agentNameById.get(comment.authorId) ?? null}
+          />
         ))}
         {comments.length === 0 ? (
           <Text style={styles.hint}>No comments yet — say something to start.</Text>
         ) : null}
       </View>
       <CommentComposer onDraftChange={onDraftChange} onSend={onSend} sending={sending} />
-    </ScrollView>
+    </View>
   );
 }
 
-function IssuePropertiesPane({
+function Breadcrumb({
   issue,
-  moveStatus,
+  goBack,
 }: {
   issue: MulticaIssueSummary | null;
-  moveStatus: (status: string) => void;
+  goBack: () => void;
 }): ReactElement {
   return (
-    <ScrollView contentContainerStyle={styles.properties}>
-      <Text style={styles.propertiesHeading}>Properties</Text>
-      <PropertyRow label="Status">
-        <View style={styles.statusRow}>
-          <StatusChip status={issue?.status ?? ""} />
-          {issue && issue.status !== "done" ? (
-            <QuickStatus label="In review" status="in_review" onPress={moveStatus} />
-          ) : null}
-          {issue && issue.status !== "done" ? (
-            <QuickStatus label="Done" status="done" onPress={moveStatus} />
-          ) : null}
-        </View>
-      </PropertyRow>
-      <PropertyRow label="Priority">
-        <Text style={styles.propertyValue}>{issue?.priority ?? "none"}</Text>
-      </PropertyRow>
-      <PropertyRow label="Assignee">
-        <Text style={styles.propertyValue}>
-          {issue?.assigneeId
-            ? `${issue.assigneeType}: ${issue.assigneeId.slice(0, 8)}`
-            : "unassigned"}
-        </Text>
-      </PropertyRow>
-      <PropertyRow label="Revision">
-        <Text style={styles.propertyValue}>{issue?.revision ?? "—"}</Text>
-      </PropertyRow>
-      <PropertyRow label="Created">
-        <Text style={styles.propertyValue}>{issue?.createdAt.slice(0, 10) ?? "—"}</Text>
-      </PropertyRow>
-      <PropertyRow label="Updated">
-        <Text style={styles.propertyValue}>{issue?.updatedAt.slice(0, 10) ?? "—"}</Text>
-      </PropertyRow>
-      <Text style={styles.propertiesRuns}>Runs</Text>
-      <Text style={styles.hint}>Run history lands with the engine slice&apos;s task surface.</Text>
-    </ScrollView>
-  );
-}
-
-function StatusChip({ status }: { status: string }): ReactElement {
-  return (
-    <View style={styles.statusChip}>
-      <Text style={styles.statusChipText}>{status}</Text>
+    <View style={styles.breadcrumb}>
+      <Pressable onPress={goBack} testID="multica-breadcrumb-board">
+        <Text style={styles.breadcrumbLink}>Board</Text>
+      </Pressable>
+      <Text style={styles.breadcrumbSep}> / </Text>
+      <Text style={styles.breadcrumbCurrent} numberOfLines={1}>
+        {issue ? `#${issue.number ?? "—"}  ${issue.title}` : "…"}
+      </Text>
     </View>
   );
 }
 
-function QuickStatus({
-  label,
-  status,
-  onPress,
-}: {
-  label: string;
-  status: string;
-  onPress: (status: string) => void;
-}): ReactElement {
-  const handlePress = useCallback(() => {
-    void onPress(status);
-  }, [onPress, status]);
-  return (
-    <Pressable style={styles.quickStatus} onPress={handlePress} testID={`multica-quick-${status}`}>
-      <Text style={styles.quickStatusText}>{label}</Text>
-    </Pressable>
-  );
+function StatusDot({ status }: { status: string }): ReactElement {
+  return <View style={[styles.statusDot, { backgroundColor: statusColor(status) }]} />;
 }
 
-function PropertyRow({ label, children }: { label: string; children: ReactElement }): ReactElement {
-  return (
-    <View style={styles.propertyRow}>
-      <Text style={styles.propertyLabel}>{label}</Text>
-      {children}
-    </View>
-  );
+function statusColor(status: string): string {
+  switch (status) {
+    case "backlog":
+      return "#9ca3af";
+    case "todo":
+      return "#9ca3af";
+    case "in_progress":
+      return "#f59e0b";
+    case "in_review":
+      return "#10b981";
+    case "done":
+      return "#60a5fa";
+    case "blocked":
+      return "#ef4444";
+    default:
+      return "#9ca3af";
+  }
 }
 
 function CommentRow({
   comment,
+  actorName,
 }: {
-  comment: { id: string; authorType: string; authorId: string; content: string };
+  comment: MulticaCommentSummary;
+  actorName: string | null;
 }): ReactElement {
+  const isOwner = comment.authorType === "owner";
+  const displayName = isOwner ? "you" : (actorName ?? comment.authorId.slice(0, 8));
   return (
-    <View style={comment.authorType === "owner" ? styles.commentOwn : styles.comment}>
-      <Text style={styles.commentAuthor}>
-        {comment.authorType === "owner" ? "you" : comment.authorId.slice(0, 8)}
-      </Text>
-      <Text style={styles.commentBody}>{comment.content}</Text>
+    <View style={styles.comment}>
+      <View style={styles.commentHeader}>
+        <ActorAvatar name={displayName} id={comment.authorId} />
+        <Text style={styles.commentAuthor}>{displayName}</Text>
+        <Text style={styles.commentTime}>{formatRelativeTime(comment.createdAt)}</Text>
+      </View>
+      <View style={styles.commentBody}>
+        <MarkdownRenderer text={comment.content} compact />
+      </View>
     </View>
   );
 }
@@ -308,43 +302,124 @@ function CommentComposer({
   );
 }
 
+function IssuePropertiesPane({
+  issue,
+  moveStatus,
+}: {
+  issue: MulticaIssueSummary | null;
+  moveStatus: (status: string) => void;
+}): ReactElement {
+  const status = issue?.status ?? "";
+  return (
+    <View style={styles.properties}>
+      <Text style={styles.propertiesHeading}>Properties</Text>
+      <PropertyRow label="Status">
+        <View style={styles.statusRow}>
+          <View style={styles.statusChip}>
+            <View style={[styles.statusChipDot, { backgroundColor: statusColor(status) }]} />
+            <Text style={styles.statusChipText}>{status}</Text>
+          </View>
+          {issue && status !== "done" ? (
+            <QuickStatus label="In review" status="in_review" onPress={moveStatus} />
+          ) : null}
+          {issue && status !== "done" ? (
+            <QuickStatus label="Done" status="done" onPress={moveStatus} />
+          ) : null}
+        </View>
+      </PropertyRow>
+      <PropertyRow label="Priority">
+        <Text style={styles.propertyValue}>{issue?.priority ?? "none"}</Text>
+      </PropertyRow>
+      <PropertyRow label="Assignee">
+        <Text style={styles.propertyValue}>
+          {issue?.assigneeId
+            ? `${issue.assigneeType}: ${issue.assigneeId.slice(0, 8)}`
+            : "unassigned"}
+        </Text>
+      </PropertyRow>
+      <PropertyRow label="Revision">
+        <Text style={styles.propertyValue}>{String(issue?.revision ?? "-")}</Text>
+      </PropertyRow>
+      <PropertyRow label="Updated">
+        <Text style={styles.propertyValue}>
+          {issue ? formatRelativeTime(issue.updatedAt) : "-"}
+        </Text>
+      </PropertyRow>
+    </View>
+  );
+}
+
+function PropertyRow({ label, children }: { label: string; children: ReactElement }): ReactElement {
+  return (
+    <View style={styles.propertyRow}>
+      <Text style={styles.propertyLabel}>{label}</Text>
+      {children}
+    </View>
+  );
+}
+
+function QuickStatus({
+  label,
+  status,
+  onPress,
+}: {
+  label: string;
+  status: string;
+  onPress: (status: string) => void;
+}): ReactElement {
+  const handlePress = useCallback(() => {
+    void onPress(status);
+  }, [onPress, status]);
+  return (
+    <Pressable style={styles.quickStatus} onPress={handlePress} testID={`multica-quick-${status}`}>
+      <Text style={styles.quickStatusText}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create((theme) => ({
   page: { flex: 1, backgroundColor: theme.colors.background },
   compactStack: { flex: 1 },
   wideSplit: { flex: 1, flexDirection: "row" },
   wideMain: { flex: 1, borderRightWidth: 1, borderRightColor: theme.colors.border },
   wideSide: { width: 280 },
-  main: { padding: theme.spacing[4], gap: theme.spacing[2] },
-  header: { flexDirection: "row", alignItems: "baseline", gap: theme.spacing[2] },
-  number: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  wideMainContent: { padding: theme.spacing[4], alignItems: "center" },
+  wideSideContent: { padding: theme.spacing[4] },
+  mainPane: { width: "100%", maxWidth: 720, gap: theme.spacing[3] },
+  breadcrumb: { flexDirection: "row", alignItems: "center", gap: theme.spacing[1] },
+  breadcrumbLink: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  breadcrumbSep: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  breadcrumbCurrent: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    flex: 1,
+  },
+  titleRow: { flexDirection: "row", alignItems: "flex-start", gap: theme.spacing[2] },
+  statusDot: { width: 12, height: 12, borderRadius: 6, marginTop: 4 },
   title: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.lg,
     fontWeight: "600",
     flex: 1,
   },
-  description: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    paddingBottom: theme.spacing[2],
+  descriptionBlock: {
+    paddingVertical: theme.spacing[2],
   },
   stream: { gap: theme.spacing[2] },
   comment: {
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
+    padding: theme.spacing[2],
     borderRadius: theme.borderRadius.md,
     backgroundColor: theme.colors.surface1,
     gap: theme.spacing[1],
   },
-  commentOwn: {
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.surface2,
-    gap: theme.spacing[1],
+  commentHeader: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
+  commentAuthor: { color: theme.colors.foreground, fontSize: theme.fontSize.sm, fontWeight: "600" },
+  commentTime: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    marginLeft: "auto",
   },
-  commentAuthor: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
-  commentBody: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
+  commentBody: { paddingLeft: 24 },
   composer: {
     flexDirection: "row",
     gap: theme.spacing[2],
@@ -358,9 +433,10 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.md,
     padding: theme.spacing[2],
     color: theme.colors.foreground,
-    minHeight: 40,
+    minHeight: 72,
   },
-  properties: { padding: theme.spacing[4], gap: theme.spacing[3] },
+  hint: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  properties: { gap: theme.spacing[3] },
   propertiesHeading: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
@@ -376,11 +452,15 @@ const styles = StyleSheet.create((theme) => ({
     flexWrap: "wrap",
   },
   statusChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
     paddingVertical: 2,
     paddingHorizontal: theme.spacing[2],
     borderRadius: 999,
     backgroundColor: theme.colors.surface2,
   },
+  statusChipDot: { width: 8, height: 8, borderRadius: 4 },
   statusChipText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
   quickStatus: {
     paddingVertical: 2,
@@ -390,12 +470,5 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.border,
   },
   quickStatusText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
-  hint: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
-  propertiesRuns: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    fontWeight: "600",
-    marginTop: theme.spacing[4],
-  },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 }));

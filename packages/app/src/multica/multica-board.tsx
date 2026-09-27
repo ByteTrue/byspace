@@ -7,15 +7,13 @@ import { KanbanSquare } from "lucide-react-native";
 import { useFetchQuery } from "@/data/query";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 import type { MulticaIssueSummary } from "@bytetrue/protocol/multica/rpc-schemas";
+import { IssueMetaLine } from "@/multica/multica-activity";
 
 /**
- * The multica board: status columns with issue cards, per the reference
- * product's board layout. Columns read from the status catalog, cards carry
- * title, number, assignee, and priority badge; pressing a card opens the
- * issue's conversation.
- *
- * Column width and the horizontal scroll are the reference's shape — the
- * board is a lane row, not a grid.
+ * The multica board: status columns with issue cards, after the reference
+ * product's board layout. Column headers carry a single count against the
+ * name; cards carry title, number, priority badge, and the actor avatar with
+ * a relative update time. Pressing a card opens the issue's conversation.
  */
 export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
   const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
@@ -49,6 +47,26 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
     refetchInterval: 5_000,
   });
 
+  const agentsQuery = useFetchQuery({
+    queryKey: ["multicaAgents", serverId, runtimeSnapshot?.clientGeneration ?? 0],
+    queryFn: async () => {
+      if (!client) throw new Error("Target host client is unavailable");
+      return client.multicaAgentList();
+    },
+    enabled: online,
+    retry: false,
+    dataShape: "list",
+    staleTimeMs: 10_000,
+  });
+
+  const agentNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const agent of agentsQuery.data?.agents ?? []) {
+      map.set(agent.id, agent.name);
+    }
+    return map;
+  }, [agentsQuery.data]);
+
   const openIssue = useCallback(
     (issueId: string) => {
       router.push(`/multica/issue?serverId=${serverId}&issueId=${issueId}`);
@@ -78,8 +96,11 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
   return (
     <View style={styles.page}>
       <View style={styles.header}>
-        <KanbanSquare size={20} color="#888" />
+        <KanbanSquare size={18} color="#888" />
         <Text style={styles.heading}>Board</Text>
+        <Text style={styles.headerCount}>
+          {workIssues.length} {workIssues.length === 1 ? "issue" : "issues"}
+        </Text>
         {office ? <OfficePill onPress={openIssue} issueId={office.id} /> : null}
       </View>
       <ScrollView horizontal contentContainerStyle={styles.lanes}>
@@ -89,6 +110,7 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
             title={status.name}
             color={status.color}
             issues={workIssues.filter((issue) => issue.status === status.key)}
+            agentNameById={agentNameById}
             selectedId={selected}
             onSelect={setSelected}
             onOpen={openIssue}
@@ -118,6 +140,7 @@ function BoardColumn({
   title,
   color,
   issues,
+  agentNameById,
   selectedId,
   onSelect,
   onOpen,
@@ -125,6 +148,7 @@ function BoardColumn({
   title: string;
   color: string;
   issues: readonly MulticaIssueSummary[];
+  agentNameById: ReadonlyMap<string, string>;
   selectedId: string | null;
   onSelect: (issueId: string | null) => void;
   onOpen: (issueId: string) => void;
@@ -148,11 +172,12 @@ function BoardColumn({
           <BoardCard
             key={issue.id}
             issue={issue}
+            agentName={issue.assigneeId ? (agentNameById.get(issue.assigneeId) ?? null) : null}
             selected={selectedId === issue.id}
             onPress={handleSelect}
           />
         ))}
-        {issues.length === 0 ? <Text style={styles.columnEmpty}>—</Text> : null}
+        {issues.length === 0 ? null : null}
       </ScrollView>
     </View>
   );
@@ -160,10 +185,12 @@ function BoardColumn({
 
 function BoardCard({
   issue,
+  agentName,
   selected,
   onPress,
 }: {
   issue: MulticaIssueSummary;
+  agentName: string | null;
   selected: boolean;
   onPress: (issueId: string) => void;
 }): ReactElement {
@@ -174,16 +201,16 @@ function BoardCard({
       onPress={handlePress}
       testID={`multica-issue-${issue.id}`}
     >
-      <Text style={styles.cardTitle}>{issue.title}</Text>
-      <View style={styles.cardMetaRow}>
+      <Text style={styles.cardTitle} numberOfLines={2}>
+        {issue.title}
+      </Text>
+      <View style={styles.cardHeaderRow}>
         <Text style={styles.cardNumber}>#{issue.number ?? "—"}</Text>
         {issue.priority !== "none" && issue.priority !== null ? (
           <Text style={styles.cardPriority}>{issue.priority}</Text>
         ) : null}
-        <Text style={styles.cardAssignee} numberOfLines={1}>
-          {issue.assigneeId ? issue.assigneeId.slice(0, 8) : "unassigned"}
-        </Text>
       </View>
+      <IssueMetaLine actorName={agentName} actorId={issue.assigneeId} updatedAt={issue.updatedAt} />
     </Pressable>
   );
 }
@@ -196,7 +223,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     padding: theme.spacing[4],
   },
-  heading: { color: theme.colors.foreground, fontSize: theme.fontSize.lg, fontWeight: "600" },
+  heading: { color: theme.colors.foreground, fontSize: theme.fontSize.base, fontWeight: "600" },
+  headerCount: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   officePill: {
     marginLeft: "auto",
     paddingVertical: theme.spacing[1],
@@ -210,7 +238,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[4],
     paddingBottom: theme.spacing[4],
   },
-  column: { width: 264, gap: theme.spacing[2] },
+  column: { width: 252 },
   columnHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -225,30 +253,23 @@ const styles = StyleSheet.create((theme) => ({
     marginLeft: "auto",
   },
   columnBody: { flex: 1 },
-  columnList: { gap: theme.spacing[2] },
-  columnEmpty: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    padding: theme.spacing[2],
-  },
+  columnList: { gap: theme.spacing[1] },
   card: {
-    padding: theme.spacing[3],
+    padding: theme.spacing[2],
     borderRadius: theme.borderRadius.md,
     backgroundColor: theme.colors.surface1,
     gap: theme.spacing[1],
     borderWidth: 1,
-    borderColor: "transparent",
+    borderColor: theme.colors.border,
   },
   cardSelected: { borderColor: theme.colors.foreground },
-  cardTitle: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
-  cardMetaRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
-  cardNumber: { color: theme.colors.foregroundMuted, fontSize: 11 },
-  cardPriority: { color: theme.colors.foregroundMuted, fontSize: 11, textTransform: "uppercase" },
-  cardAssignee: {
+  cardTitle: { color: theme.colors.foreground, fontSize: theme.fontSize.sm, fontWeight: "500" },
+  cardHeaderRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
+  cardNumber: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  cardPriority: {
     color: theme.colors.foregroundMuted,
-    fontSize: 11,
-    marginLeft: "auto",
-    maxWidth: 120,
+    fontSize: theme.fontSize.sm,
+    textTransform: "uppercase",
   },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 }));
