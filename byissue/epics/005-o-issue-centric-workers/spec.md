@@ -50,7 +50,7 @@ supersedes: byissue/epics/004-x-worker-domain/spec.md 的协作模型
 | 砍多租户     | workspace/user/member/auth/billing/cloud-runtime/seat 全删；所有表去 workspace 维度；单用户即 daemon 属主 |
 | Node 复刻 Go | server 域→Node/TS（PG 保留与否见下）；执行层映射到 agent-manager                                          |
 
-**存储定 SQLite（Owner 决定，2026-09-26）**：multica 用 PG 是因为它部署在容器/服务端；BySpace 装在用户电脑上，要求用户装 PG 不成立。队列语义的映射：PG 的 `FOR UPDATE SKIP LOCKED`（daemon claim 防多机重复）→ SQLite 的 `BEGIN IMMEDIATE` 事务认领 —— 后者是 repo 内已验证的模式（worker store 的 wake 认领即此）。JSONB → TEXT 存 JSON（读侧用 Zod 校验，与主域一致）。
+**存储定 SQLite（Owner 决定，2026-09-26）**：multica 的 PG 是它容器/服务端部署形态的一部分（依赖 pgcrypto/pgvector/pg_bgm/pg_cron 四扩展，桌面端连远程 server，从不内嵌）；BySpace 装在用户电脑上，形态不同。1:1 复刻的对象是**架构设计**（表/域/触发/队列语义），不是部署形态 —— 砍多租户时已承认形态可异，存储跟着形态走。SQL 翻译对照：`SKIP LOCKED`→事务认领（数据库通用模式）、JSONB→TEXT+读侧 Zod、pgcrypto uuid→crypto 模块、pg_bgm→FTS5、pg_cron→进程内定时器、vector→暂砍（搜索后置）。**迁移仍按 multica 的 551 个一步步翻译**（不一次性凭最终快照重写），保复刻保真度。**不复用 worker-store 既有代码** —— 之前的一律当练手（Owner 指示：不为历史资产适配，避免架构被带偏）。
 
 ## 复刻产物落位
 
