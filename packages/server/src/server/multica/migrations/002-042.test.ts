@@ -51,6 +51,9 @@ describe("migration sequence 002–042", () => {
       "041_agent_custom_args",
       "042_autopilot",
       "084_squad",
+      "090_task_is_leader",
+      "096_autopilot_squad_assignee",
+      "127_task_squad_id",
       "332_issue_status",
       "333_issue_status_pkey_index",
       "334_issue_status_primary_key",
@@ -59,6 +62,7 @@ describe("migration sequence 002–042", () => {
       "337_issue_status_open_check",
       "338_issue_status_validate_format",
       "339_seed_issue_status_catalog",
+      "509_issue_wakeup",
     ];
     expect(versions).toEqual(expected);
   });
@@ -151,6 +155,8 @@ describe("migration sequence 002–042", () => {
       "trigger_payload",
       "result",
       "created_at",
+      // ALTER TABLE ADD appends: 096's squad_id lands at the tail.
+      "squad_id",
     ]);
     expect(columns("agent_task_queue")).toContain("autopilot_run_id");
     expect(columns("issue")).toContain("origin_type");
