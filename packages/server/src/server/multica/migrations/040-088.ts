@@ -388,6 +388,9 @@ export const migration066ForceFreshSession: Migration = {
 export const migration069CommentResolvedAt: Migration = {
   version: "069_comment_resolved_at",
   up: (db) => {
+    // 069_drop_task_last_heartbeat, same source number: the daemon's lease
+    // (055/124) replaced the heartbeat column.
+    db.exec("ALTER TABLE agent_task_queue DROP COLUMN last_heartbeat_at;");
     rebuildTableWithFksOff(db, {
       table: "comment",
       ddl: `CREATE TABLE comment (

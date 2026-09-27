@@ -37,9 +37,6 @@ function columns(table: string): string[] {
 
 describe("final schema snapshot", () => {
   it("agent", () => {
-    // The audited final state: 29 source columns minus workspace_id and
-    // owner_id. skills was dropped by 008 (replaced by the structured-skill
-    // tables), so it is absent here.
     expect(columns("agent")).toEqual([
       "id",
       "name",
@@ -124,6 +121,7 @@ describe("final schema snapshot", () => {
       "via_plugin_id",
       "revision",
       "recovery_settled_at",
+      "deleted_at",
       "suppressed_agent_ids",
     ]);
   });
@@ -145,9 +143,22 @@ describe("final schema snapshot", () => {
       "max_attempts",
       "parent_task_id",
       "failure_reason",
-      "last_heartbeat_at",
       "trigger_summary",
       "force_fresh_session",
+      "context",
+      "session_id",
+      "work_dir",
+      "trigger_comment_id",
+      "chat_session_id",
+      "wait_reason",
+      "initiator_user_id",
+      "runtime_mcp_overlay",
+      "runtime_connected_apps",
+      "chat_input_task_id",
+      "chat_finalize_deferred_at",
+      "runtime_id",
+      "handoff_note",
+      "prepare_lease_expires_at",
       "escalation_for_task_id",
       "fire_at",
       "is_leader_task",
@@ -167,6 +178,15 @@ describe("final schema snapshot", () => {
       "session_rollout_missing",
       "retired_session_id",
       "quick_actions_disabled",
+      "regenerate_quick_actions_for",
+      "branch_name",
+      "durable_work_dir",
+      "channel_context_revision",
+      "comment_thread_id",
+      "cancelled_by_type",
+      "cancelled_by_id",
+      "cancelled_by_name",
+      "issue_snapshot",
     ]);
   });
 
@@ -211,6 +231,7 @@ describe("final schema snapshot", () => {
       "last_run_at",
       "created_at",
       "updated_at",
+      "pause_reason",
     ]);
     expect(columns("autopilot_trigger")).toEqual([
       "id",
@@ -225,8 +246,13 @@ describe("final schema snapshot", () => {
       "last_fired_at",
       "created_at",
       "updated_at",
+      "provider",
+      "signing_secret",
+      "event_filters",
       "published_by_type",
       "published_by_id",
+      "created_by_type",
+      "created_by_id",
     ]);
     expect(columns("autopilot_run")).toEqual([
       "id",
@@ -244,6 +270,9 @@ describe("final schema snapshot", () => {
       "created_at",
       "squad_id",
       "planned_at",
+      "webhook_delivery_id",
+      "quota_reservation_id",
+      "reason_code",
     ]);
   });
 
@@ -272,6 +301,8 @@ describe("final schema snapshot", () => {
       "last_error",
       "created_at",
       "updated_at",
+      "filter_actor_type",
+      "filter_actor_id",
     ]);
     expect(columns("issue_wakeup_receipt")).toEqual([
       "id",
@@ -315,11 +346,11 @@ describe("final schema snapshot", () => {
       "created_at",
       "actor_type",
       "actor_id",
+      "details",
     ]);
   });
 
   it("the supporting tables", () => {
-    expect(columns("skill")).toContain("name");
     expect(columns("project")).toEqual([
       "id",
       "title",

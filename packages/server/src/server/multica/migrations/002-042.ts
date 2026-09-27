@@ -82,6 +82,8 @@ export const migration004AgentRuntimeLoop: Migration = {
         updated_at ${TS}
       );
       CREATE INDEX idx_agent_runtime_agent ON agent_runtime(agent_id);
+      -- The source also links the queue row to its runtime (004's other half).
+      ALTER TABLE agent_task_queue ADD COLUMN runtime_id TEXT REFERENCES agent_runtime(id) ON DELETE SET NULL;
     `);
   },
   down: (db) => {
