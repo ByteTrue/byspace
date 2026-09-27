@@ -17,6 +17,7 @@ import { buildActivityGrid } from "@/workers/worker-activity";
 import { countWorkerTasks } from "@/workers/dashboard-derived";
 import { NewWorkerTaskForm } from "@/workers/new-worker-task-form";
 import { WorkerInboxSection } from "@/workers/worker-inbox-section";
+import { WorkerMemorySection } from "@/workers/worker-memory-section";
 
 /**
  * One worker, in detail.
@@ -140,6 +141,11 @@ export function WorkerDetailSection({
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Inbox</Text>
         <WorkerInboxSection worker={worker} />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Memory</Text>
+        <WorkerMemorySection worker={worker} />
       </View>
 
       <View style={styles.section}>

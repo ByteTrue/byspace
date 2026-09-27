@@ -595,6 +595,11 @@ type WorkerMessageDeliveryPayload = Extract<
   SessionOutboundMessage,
   { type: "worker.message.delivery.response" }
 >["payload"];
+type WorkerMemoryGetPayload = Extract<
+  SessionOutboundMessage,
+  { type: "worker.memory.get.response" }
+>["payload"];
+
 type WorkerActivityPayload = Extract<
   SessionOutboundMessage,
   { type: "worker.activity.response" }
@@ -2785,6 +2790,14 @@ export class DaemonClient {
    * Days with no work are absent rather than zero, so the caller decides what
    * range to render.
    */
+  async getWorkerMemory(workerId: string, requestId?: string): Promise<WorkerMemoryGetPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "worker.memory.get.request", workerId },
+      responseType: "worker.memory.get.response",
+    });
+  }
+
   async getWorkerActivity(workerId: string, requestId?: string): Promise<WorkerActivityPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,

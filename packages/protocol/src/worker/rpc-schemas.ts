@@ -640,6 +640,33 @@ export const WorkerActivityResponseSchema = z.object({
   }),
 });
 
+export const WorkerMemoryRequestSchema = z.object({
+  type: z.literal("worker.memory.get.request"),
+  requestId: z.string(),
+  /**
+   * The worker whose memory is being read. Operator view: this reads a file the
+   * worker itself maintains, and a person checking what their worker has
+   * learned is the whole point of the surface.
+   */
+  workerId: z.string().min(1),
+});
+
+export const WorkerMemoryResponseSchema = z.object({
+  type: z.literal("worker.memory.get.response"),
+  payload: z.object({
+    requestId: z.string(),
+    /** MEMORY.md's contents, or null before the worker has written one. */
+    memory: z.string().nullable(),
+    /** Daily notes under memory/, newest first, each with its day and body. */
+    notes: z.array(
+      z.object({
+        day: z.string(),
+        body: z.string(),
+      }),
+    ),
+  }),
+});
+
 // Inferred types, exported on demand rather than all at once: consumers need the
 // shapes, not the validators, and an export nobody imports drifts unnoticed.
 // `WorkerTaskSummary` is the one the app derives its task-state union from.

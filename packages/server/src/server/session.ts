@@ -2551,6 +2551,8 @@ export class Session {
         return this.workerSession.handleWorkerGetRequest(msg);
       case "worker.activity.request":
         return this.workerSession.handleActivityRequest(msg);
+      case "worker.memory.get.request":
+        return this.workerSession.handleMemoryGetRequest(msg);
       case "worker.task.create.request":
         return this.workerSession.handleTaskCreateRequest(msg);
       case "worker.task.transition.request":

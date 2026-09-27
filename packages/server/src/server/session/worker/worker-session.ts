@@ -396,6 +396,20 @@ export class WorkerSession {
     }
   }
 
+  async handleMemoryGetRequest(
+    request: Extract<SessionInboundMessage, { type: "worker.memory.get.request" }>,
+  ): Promise<void> {
+    try {
+      const memory = await this.workerService.readWorkerMemory(request.workerId);
+      this.host.emit({
+        type: "worker.memory.get.response",
+        payload: { requestId: request.requestId, ...memory },
+      });
+    } catch (error) {
+      this.emitError(request, error);
+    }
+  }
+
   // ---------------------------------------------------------------- goals
 
   async handleGoalGetRequest(

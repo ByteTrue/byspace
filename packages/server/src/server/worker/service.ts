@@ -11,6 +11,7 @@
  * domain.
  */
 import { randomBytes } from "node:crypto";
+import { readdir, readFile } from "node:fs/promises";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import type pino from "pino";
@@ -39,6 +40,7 @@ import {
 import { WORKER_TASK_ACTIONS, type WorkerTaskAction } from "./worker-task-state.js";
 import type { WorkerRunner } from "./worker-runner.js";
 import { buildWakePrompt } from "./worker-wake-prompt.js";
+import { WORKER_MEMORY_FILENAME } from "./worker-memory.js";
 import { materializeWorkerSkills } from "./worker-skills.js";
 import {
   listWorkerTemplateIds,
@@ -699,6 +701,42 @@ export class WorkerService {
   }): boolean {
     this.getWorker(input.workerId);
     return this.getStore().markDelivery(input);
+  }
+
+  /**
+   * Read what a worker has remembered.
+   *
+   * The memory belongs to the worker's workspace and is written by the worker
+   * itself; this only reads it back. A read failure is a missing memory rather
+   * than an error — a worker that has never remembered anything is the normal
+   * first state, and an operator asking "what has it learned" deserves the
+   * honest empty answer, not a refusal.
+   */
+  async readWorkerMemory(workerId: string): Promise<{
+    memory: string | null;
+    notes: { day: string; body: string }[];
+  }> {
+    const worker = this.getWorker(workerId);
+    const memory = await readFile(
+      path.join(worker.workspacePath, WORKER_MEMORY_FILENAME),
+      "utf8",
+    ).catch(() => null);
+
+    const notesDir = path.join(worker.workspacePath, "memory");
+    const entries = await readdir(notesDir, { withFileTypes: true }).catch(() => []);
+    const notes: { day: string; body: string }[] = [];
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+      // The filename is the day by the memory rules' own convention; anything
+      // that is not one is left alone rather than guessed at.
+      const day = entry.name.replace(/\.md$/, "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
+      const body = await readFile(path.join(notesDir, entry.name), "utf8").catch(() => "");
+      notes.push({ day, body });
+    }
+    // Newest first: the recent notes are what a reader is looking for.
+    notes.sort((a, b) => b.day.localeCompare(a.day));
+    return { memory, notes };
   }
 
   // ------------------------------------------------------------------ goals
