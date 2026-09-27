@@ -208,7 +208,7 @@ BySpace 现在管的是**会话**：你选一个 workspace，起一个 agent，�
 - **跨任务记忆** ✅（`5b90a40a7`）—— MEMORY.md + memory/ 每日笔记，worker 自己维护（daemon 不代写摘要），启动注入于角色与任务之间。真机两任务闭环：任务 1 让它记两个事实 → 任务 2 零提示、零 shell 凭记忆答出。
 - **自动化触发（Schedule 面）** ✅（`99bff948a`，issue 052）—— schedule 可指定 worker 为执行器，到点派任务。Event(Hook)/API 触发与 `@Waker`（依赖 IM）明确不做。
 - **技能接线** ✅ —— `materializeWorkerSkills` 落位到 workspace 的 `.agents/skills`。
-- **名册轮询 vs 事件** ⬜ 仍开放 —— 前端靠 2s 轮询自愈，未根因解决 `useHostRuntimeConnectionStatuses` 的重渲染缺失；可作为独立 issue。
+- **名册轮询 vs 事件** ✅（`67784e4b7`）—— 根因是 query key 里没有任何随连接状态变化的东西（裸 `getSnapshot` 不订阅）。修复：key 携带全部 host 的状态摘要（`subscribeAll` 单订阅），掉线/回线即 re-key；2s 轮询删除。连带修掉"全 offline 返回空 loaded 名册"的旧决定（其"永远转圈"的辩护理由被 re-key 废除）。真机两半都验证：断线期 27 卡保持，回线 ~20s 自动恢复。
 
 **遗留（记录在案，非遗忘）：** pi 用户级 `~/.agents/skills` 无条件加载（lark-\*/agent-browser 等 47 个对 worker 可见），无法从 BySpace 侧屏蔽 —— 边界因此只能靠权限层（工具守卫已是其实体），这是长期约束而非待办。`@Waker`/`Autonomous Work` 按 Owner 决定不做。
 
