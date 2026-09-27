@@ -204,6 +204,21 @@ const INBOUND_PERMISSION = {
   workspace_setup_status_request: "workspace.read",
   "workspace.setup.run.request": "workspace.write",
   write_project_config_request: "workspace.write",
+
+  // multica replica: workspace-scoped reads and writes. The domain is the
+  // daemon owner's own single-user surface; reads and writes ride the same
+  // permission class as the workspace's.
+  "multica.agent.list.request": "workspace.read",
+  "multica.agent.create.request": "workspace.write",
+  "multica.issue.list.request": "workspace.read",
+  "multica.issue.create.request": "workspace.write",
+  "multica.issue.get.request": "workspace.read",
+  "multica.issue.status.update.request": "workspace.write",
+  "multica.comment.list.request": "workspace.read",
+  "multica.comment.create.request": "workspace.write",
+  "multica.squad.list.request": "workspace.read",
+  "multica.squad.create.request": "workspace.write",
+  "multica.task.list.request": "workspace.read",
 } as const satisfies Record<InboundOperation, PermissionRequirement>;
 
 const OUTBOUND_PERMISSION = {
@@ -420,6 +435,18 @@ const OUTBOUND_PERMISSION = {
   "workspace.setup.run.response": "workspace.write",
   workspace_update: ["workspace.read", "hub.execute"],
   write_project_config_response: "workspace.write",
+
+  "multica.agent.list.response": "workspace.read",
+  "multica.agent.create.response": "workspace.write",
+  "multica.issue.list.response": "workspace.read",
+  "multica.issue.create.response": "workspace.write",
+  "multica.issue.get.response": "workspace.read",
+  "multica.issue.status.update.response": "workspace.write",
+  "multica.comment.list.response": "workspace.read",
+  "multica.comment.create.response": "workspace.write",
+  "multica.squad.list.response": "workspace.read",
+  "multica.squad.create.response": "workspace.write",
+  "multica.task.list.response": "workspace.read",
 } as const satisfies Record<OutboundOperation, PermissionRequirement>;
 
 export function requiredPermissionForInbound(operation: InboundOperation): PermissionRequirement {

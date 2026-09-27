@@ -392,9 +392,8 @@ export class MulticaStore {
         `INSERT INTO squad_member (id, squad_id, member_type, member_id, role) VALUES (?, ?, ?, ?, ?)`,
       )
       .run(id, input.squadId, input.memberType, input.memberId, input.role ?? "");
-    return this.#db
-      .prepare(`SELECT * FROM squad_member WHERE id = ?`)
-      .get(id) as unknown as SquadMemberRow;
+    const raw = this.#db.prepare(`SELECT * FROM squad_member WHERE id = ?`).get(id);
+    return mapSquadMemberRow(raw as never);
   }
 
   removeSquadMember(squadId: string, memberType: string, memberId: string): void {

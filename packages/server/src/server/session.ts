@@ -204,6 +204,8 @@ import {
 import type { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import type pino from "pino";
 import { ScheduleService } from "./schedule/service.js";
+import type { MulticaStore } from "./multica/store.js";
+import { MulticaSession } from "./session/multica/multica-session.js";
 import {
   createGitHubService,
   GitHubAuthenticationError,
@@ -455,6 +457,7 @@ export interface SessionOptions {
   workspaceLabelService?: WorkspaceLabelService;
   filesystem?: SessionFileSystem;
   scheduleService: ScheduleService;
+  multicaStore?: MulticaStore;
   checkoutDiffManager: CheckoutDiffManager;
   github?: ForgeService;
   createAgentMcpTransport?: AgentMcpTransportFactory;
@@ -678,6 +681,7 @@ export class Session {
   private readonly workspaceDirectory: WorkspaceDirectory;
   private readonly checkoutSession: CheckoutSession;
   private readonly scheduleSession: ScheduleSession;
+  private readonly multicaSession: MulticaSession | null = null;
   private readonly providerCatalogSession: ProviderCatalogSession;
   private readonly workspaceFilesSession: WorkspaceFilesSession;
   private readonly agentConfigSession: AgentConfigSession;
@@ -713,6 +717,7 @@ export class Session {
       workspaceLabelService,
       filesystem,
       scheduleService,
+      multicaStore,
       checkoutDiffManager,
       github,
       renameCurrentBranch,
@@ -843,6 +848,12 @@ export class Session {
       scheduleService,
       logger: this.sessionLogger,
     });
+    if (multicaStore) {
+      this.multicaSession = new MulticaSession({
+        store: multicaStore,
+        host: { emit: (msg) => this.emit(msg) },
+      });
+    }
     this.providerCatalogSession = new ProviderCatalogSession({
       host: {
         emit: (msg) => this.emit(msg),
@@ -1866,6 +1877,7 @@ export class Session {
       this.dispatchPluginMessage(msg) ??
       this.dispatchTerminalMessage(msg) ??
       this.dispatchScheduleMessage(msg) ??
+      this.dispatchMulticaMessage(msg) ??
       this.dispatchMiscMessage(msg);
     if (promise) await promise;
   }
@@ -2521,6 +2533,14 @@ export class Session {
       default:
         return this.terminalController.dispatch(msg);
     }
+  }
+
+  private dispatchMulticaMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    if (!this.multicaSession || !msg.type.startsWith("multica.")) {
+      return undefined;
+    }
+    // The prefix check narrows at runtime; the cast asserts what it proved.
+    return this.multicaSession.handle(msg as Parameters<MulticaSession["handle"]>[0]);
   }
 
   private dispatchScheduleMessage(msg: SessionInboundMessage): Promise<void> | undefined {

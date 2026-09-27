@@ -44,6 +44,30 @@ import {
   ScheduleUpdateResponseSchema,
 } from "./schedule/rpc-schemas.js";
 import {
+  MulticaAgentListRequestSchema,
+  MulticaAgentListResponseSchema,
+  MulticaAgentCreateRequestSchema,
+  MulticaAgentCreateResponseSchema,
+  MulticaIssueListRequestSchema,
+  MulticaIssueListResponseSchema,
+  MulticaIssueCreateRequestSchema,
+  MulticaIssueCreateResponseSchema,
+  MulticaIssueGetRequestSchema,
+  MulticaIssueGetResponseSchema,
+  MulticaIssueStatusUpdateRequestSchema,
+  MulticaIssueStatusUpdateResponseSchema,
+  MulticaCommentListRequestSchema,
+  MulticaCommentListResponseSchema,
+  MulticaCommentCreateRequestSchema,
+  MulticaCommentCreateResponseSchema,
+  MulticaSquadListRequestSchema,
+  MulticaSquadListResponseSchema,
+  MulticaSquadCreateRequestSchema,
+  MulticaSquadCreateResponseSchema,
+  MulticaTaskListRequestSchema,
+  MulticaTaskListResponseSchema,
+} from "./multica/rpc-schemas.js";
+import {
   LoopRunRequestSchema,
   LoopListRequestSchema,
   LoopInspectRequestSchema,
@@ -3391,6 +3415,17 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   LoopInspectRequestSchema,
   LoopLogsRequestSchema,
   LoopStopRequestSchema,
+  MulticaAgentListRequestSchema,
+  MulticaAgentCreateRequestSchema,
+  MulticaIssueListRequestSchema,
+  MulticaIssueCreateRequestSchema,
+  MulticaIssueGetRequestSchema,
+  MulticaIssueStatusUpdateRequestSchema,
+  MulticaCommentListRequestSchema,
+  MulticaCommentCreateRequestSchema,
+  MulticaSquadListRequestSchema,
+  MulticaSquadCreateRequestSchema,
+  MulticaTaskListRequestSchema,
 ]);
 
 export type SessionInboundMessage = z.infer<typeof SessionInboundMessageSchema>;
@@ -6830,6 +6865,17 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   LoopStopResponseSchema,
   DaemonUpdateProgressMessageSchema,
   DaemonUpdateResponseSchema,
+  MulticaAgentListResponseSchema,
+  MulticaAgentCreateResponseSchema,
+  MulticaIssueListResponseSchema,
+  MulticaIssueCreateResponseSchema,
+  MulticaIssueGetResponseSchema,
+  MulticaIssueStatusUpdateResponseSchema,
+  MulticaCommentListResponseSchema,
+  MulticaCommentCreateResponseSchema,
+  MulticaSquadListResponseSchema,
+  MulticaSquadCreateResponseSchema,
+  MulticaTaskListResponseSchema,
 ]);
 
 export type SessionOutboundMessage = z.infer<typeof SessionOutboundMessageSchema>;

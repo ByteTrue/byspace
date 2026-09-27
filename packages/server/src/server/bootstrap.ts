@@ -161,6 +161,9 @@ import {
 } from "./workspace-registry.js";
 import { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import { ScheduleService } from "./schedule/service.js";
+import { MulticaStore } from "./multica/store.js";
+import { MIGRATIONS } from "./multica/migrations/index.js";
+import { openMulticaDatabase } from "./multica/database.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
 import { createOrchestrationSkills } from "./orchestration-skills/index.js";
 import { resolveConfigFromPersisted, type CliConfigOverrides } from "./config.js";
@@ -1256,6 +1259,15 @@ export async function createBySpaceDaemon(
     }
   });
   logger.info({ elapsed: elapsed() }, "Schedule service initialized");
+
+  // The multica replica's store: its own SQLite database under BySpace home,
+  // migrated on open. Failing to open must abort startup — a replica without
+  // its schema is not a degraded mode, it is a wrong one.
+  const multicaStore = new MulticaStore(
+    openMulticaDatabase(path.join(config.byspaceHome, "multica", "multica.db")),
+    { migrations: MIGRATIONS },
+  );
+  logger.info({ elapsed: elapsed() }, "Multica store initialized");
   logger.info({ elapsed: elapsed() }, "Loading persisted agent registry");
   const persistedRecords = await agentStorage.list();
   logger.info(
@@ -1596,6 +1608,7 @@ export async function createBySpaceDaemon(
               projectRegistry,
               workspaceRegistry,
               scheduleService,
+              multicaStore,
               checkoutDiffManager,
               serviceProxy,
               scriptRuntimeStore,

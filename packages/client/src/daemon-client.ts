@@ -523,6 +523,51 @@ type ScheduleCreatePayload = Extract<
   SessionOutboundMessage,
   { type: "schedule/create/response" }
 >["payload"];
+type MulticaAgentListPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.agent.list.response" }
+>["payload"];
+type MulticaAgentCreatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.agent.create.response" }
+>["payload"];
+type MulticaIssueListPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.issue.list.response" }
+>["payload"];
+type MulticaIssueCreatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.issue.create.response" }
+>["payload"];
+type MulticaIssueGetPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.issue.get.response" }
+>["payload"];
+type MulticaIssueStatusUpdatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.issue.status.update.response" }
+>["payload"];
+type MulticaCommentListPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.comment.list.response" }
+>["payload"];
+type MulticaCommentCreatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.comment.create.response" }
+>["payload"];
+type MulticaSquadListPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.squad.list.response" }
+>["payload"];
+type MulticaSquadCreatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.squad.create.response" }
+>["payload"];
+type MulticaTaskListPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.task.list.response" }
+>["payload"];
+
 type ScheduleListPayload = Extract<
   SessionOutboundMessage,
   { type: "schedule/list/response" }
@@ -5394,6 +5439,152 @@ export class DaemonClient {
         ...(typeof options.runOnCreate === "boolean" ? { runOnCreate: options.runOnCreate } : {}),
       },
       responseType: "schedule/create/response",
+    });
+  }
+
+  // ---------------------------------------------------------------- multica
+
+  async multicaAgentList(requestId?: string): Promise<MulticaAgentListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "multica.agent.list.request" },
+      responseType: "multica.agent.list.response",
+    });
+  }
+
+  async multicaAgentCreate(options: {
+    name: string;
+    description?: string;
+    instructions?: string;
+  }): Promise<MulticaAgentCreatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: {
+        type: "multica.agent.create.request",
+        name: options.name,
+        description: options.description,
+        instructions: options.instructions,
+      },
+      responseType: "multica.agent.create.response",
+    });
+  }
+
+  async multicaIssueList(
+    filter: {
+      status?: string;
+      assigneeId?: string;
+      projectId?: string;
+    } = {},
+  ): Promise<MulticaIssueListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: {
+        type: "multica.issue.list.request",
+        status: filter.status,
+        assigneeId: filter.assigneeId,
+        projectId: filter.projectId,
+      },
+      responseType: "multica.issue.list.response",
+    });
+  }
+
+  async multicaIssueCreate(options: {
+    title: string;
+    description?: string;
+    status?: string;
+    priority?: string;
+    assigneeType?: string;
+    assigneeId?: string;
+    projectId?: string;
+  }): Promise<MulticaIssueCreatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: {
+        type: "multica.issue.create.request",
+        title: options.title,
+        description: options.description,
+        status: options.status,
+        priority: options.priority,
+        assigneeType: options.assigneeType,
+        assigneeId: options.assigneeId,
+        projectId: options.projectId,
+      },
+      responseType: "multica.issue.create.response",
+    });
+  }
+
+  async multicaIssueGet(issueId: string): Promise<MulticaIssueGetPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.issue.get.request", issueId },
+      responseType: "multica.issue.get.response",
+    });
+  }
+
+  async multicaIssueStatusUpdate(options: {
+    issueId: string;
+    status: string;
+    expectedRevision: number;
+  }): Promise<MulticaIssueStatusUpdatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: {
+        type: "multica.issue.status.update.request",
+        issueId: options.issueId,
+        status: options.status,
+        expectedRevision: options.expectedRevision,
+      },
+      responseType: "multica.issue.status.update.response",
+    });
+  }
+
+  async multicaCommentList(issueId: string): Promise<MulticaCommentListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.comment.list.request", issueId },
+      responseType: "multica.comment.list.response",
+    });
+  }
+
+  async multicaCommentCreate(options: {
+    issueId: string;
+    content: string;
+    parentId?: string;
+  }): Promise<MulticaCommentCreatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: {
+        type: "multica.comment.create.request",
+        issueId: options.issueId,
+        content: options.content,
+        parentId: options.parentId,
+      },
+      responseType: "multica.comment.create.response",
+    });
+  }
+
+  async multicaSquadList(): Promise<MulticaSquadListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.squad.list.request" },
+      responseType: "multica.squad.list.response",
+    });
+  }
+
+  async multicaSquadCreate(options: {
+    name: string;
+    leaderId: string;
+    description?: string;
+    members?: Array<{ memberType: "agent" | "owner"; memberId: string }>;
+  }): Promise<MulticaSquadCreatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: {
+        type: "multica.squad.create.request",
+        name: options.name,
+        leaderId: options.leaderId,
+        description: options.description,
+        members: options.members,
+      },
+      responseType: "multica.squad.create.response",
+    });
+  }
+
+  async multicaTaskList(issueId: string): Promise<MulticaTaskListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.task.list.request", issueId },
+      responseType: "multica.task.list.response",
     });
   }
 
