@@ -82,8 +82,6 @@ export const migration096AutopilotSquadAssignee: Migration = {
         assignee_type TEXT NOT NULL DEFAULT 'agent'
           CHECK (assignee_type IN ('agent', 'squad')),
         assignee_id TEXT NOT NULL,
-        priority TEXT NOT NULL DEFAULT 'medium'
-          CHECK (priority IN ('urgent', 'high', 'medium', 'low', 'none')),
         status TEXT NOT NULL DEFAULT 'active'
           CHECK (status IN ('active', 'paused', 'archived')),
         execution_mode TEXT NOT NULL DEFAULT 'create_issue'
@@ -97,7 +95,7 @@ export const migration096AutopilotSquadAssignee: Migration = {
         created_at ${TS},
         updated_at ${TS}
       );
-      INSERT INTO autopilot_096 SELECT id, title, description, 'agent', assignee_id, priority, status,
+      INSERT INTO autopilot_096 SELECT id, title, description, 'agent', assignee_id, status,
         execution_mode, issue_title_template, concurrency_policy, created_by_type, created_by_id,
         last_run_at, created_at, updated_at FROM autopilot;
       DROP TABLE autopilot; ALTER TABLE autopilot_096 RENAME TO autopilot;
@@ -136,7 +134,7 @@ export const migration096AutopilotSquadAssignee: Migration = {
         created_at ${TS},
         updated_at ${TS}
       );
-      INSERT INTO autopilot_096d SELECT id, title, description, 'agent', assignee_id, priority, status,
+      INSERT INTO autopilot_096d SELECT id, title, description, 'agent', assignee_id, status,
         execution_mode, issue_title_template, concurrency_policy, created_by_type, created_by_id,
         last_run_at, created_at, updated_at FROM autopilot;
       DROP TABLE autopilot; ALTER TABLE autopilot_096d RENAME TO autopilot;
