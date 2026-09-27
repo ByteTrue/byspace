@@ -203,6 +203,13 @@ BySpace 现在管的是**会话**：你选一个 workspace，起一个 agent，�
 - **可用性** ✅ —— 给需求到收汇报全链窄屏可走：New task 表单（宽窄屏均验）、对话页 composer、Dashboard Needs attention、组消息流、收件箱三态。
 - **可维护性** ✅ —— 新角色 = 一次模板导入（8 角色已入仓，DANGLING_SKILLS 测试防断链）；新技能不改 runtime（`materializeWorkerSkills` 声明式复制）。
 
+**Epic 之后补齐的遗留 gap（2026-09-26）：**
+
+- **跨任务记忆** ✅（`5b90a40a7`）—— MEMORY.md + memory/ 每日笔记，worker 自己维护（daemon 不代写摘要），启动注入于角色与任务之间。真机两任务闭环：任务 1 让它记两个事实 → 任务 2 零提示、零 shell 凭记忆答出。
+- **自动化触发（Schedule 面）** ✅（`99bff948a`，issue 052）—— schedule 可指定 worker 为执行器，到点派任务。Event(Hook)/API 触发与 `@Waker`（依赖 IM）明确不做。
+- **技能接线** ✅ —— `materializeWorkerSkills` 落位到 workspace 的 `.agents/skills`。
+- **名册轮询 vs 事件** ⬜ 仍开放 —— 前端靠 2s 轮询自愈，未根因解决 `useHostRuntimeConnectionStatuses` 的重渲染缺失；可作为独立 issue。
+
 **遗留（记录在案，非遗忘）：** pi 用户级 `~/.agents/skills` 无条件加载（lark-\*/agent-browser 等 47 个对 worker 可见），无法从 BySpace 侧屏蔽 —— 边界因此只能靠权限层（工具守卫已是其实体），这是长期约束而非待办。`@Waker`/`Autonomous Work` 按 Owner 决定不做。
 
 **关闭时要满足：** 第一批五项可推进内容完成并验证；**五项**质量承诺有证据（原文写「四项」但列了五项，以列出的为准）；worker 域不侵入既有 spec 所描述的行为。
