@@ -210,6 +210,6 @@ export function uninstallWindowsTaskServer(label: string): void {
       "-Command",
       `Unregister-ScheduledTask -TaskPath '\\BySpace\\' -TaskName '${label}' -Confirm:$false -ErrorAction SilentlyContinue`,
     ],
-    { encoding: "utf8", timeout: 30_000 },
+    { encoding: "utf8", timeout: 30_000, windowsHide: true },
   );
 }

@@ -106,7 +106,9 @@ function windowsProbe(): ServiceManagerProbe {
             "-Command",
             `(Get-ScheduledTask -TaskPath '\\BySpace\\' -TaskName '${DAEMON_SERVICE_LABEL}' -ErrorAction SilentlyContinue) -ne $null`,
           ],
-          { encoding: "utf8", timeout: 15_000 },
+          // The daemon has no console, so a visible one is allocated for this
+          // child unless it is explicitly hidden. Runs on every daemon start.
+          { encoding: "utf8", timeout: 15_000, windowsHide: true },
         );
         return output.trim() === "True";
       } catch {
@@ -148,6 +150,7 @@ export function validateServiceOriginSync(): string | null {
     const npmPrefix = execFileSync("npm", ["prefix", "-g"], {
       encoding: "utf8",
       timeout: 15_000,
+      windowsHide: true,
     }).trim();
     const packagePath = path.join(npmPrefix, "lib", "node_modules", "@bytetrue", "byspace");
     const pkgJsonPath = path.join(packagePath, "package.json");

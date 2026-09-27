@@ -1,4 +1,4 @@
-import { fork, spawn, type ChildProcess } from "child_process";
+import { fork, spawn, type ChildProcess, type ForkOptions, type SpawnOptions } from "child_process";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { createStream as createRotatingFileStream } from "rotating-file-stream";
@@ -234,13 +234,18 @@ export function runSupervisor(options: SupervisorOptions): SupervisorController 
       child = spawn(spawnSpec.command, spawnSpec.args, {
         stdio: ["inherit", "pipe", "pipe", "ipc"],
         env: spawnSpec.env ?? workerEnv,
+        windowsHide: true,
       });
     } else {
-      child = fork(workerEntry, workerArgs, {
+      // fork() forwards windowsHide to spawn(), but ForkOptions omits it. Without
+      // it the worker gets an allocated console window on Windows.
+      const workerForkOptions: ForkOptions & Pick<SpawnOptions, "windowsHide"> = {
         stdio: ["inherit", "pipe", "pipe", "ipc"],
         env: workerEnv,
         execArgv: workerExecArgv,
-      });
+        windowsHide: true,
+      };
+      child = fork(workerEntry, workerArgs, workerForkOptions);
     }
 
     const currentChild = child;
