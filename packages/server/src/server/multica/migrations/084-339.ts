@@ -179,12 +179,14 @@ export const migration337IssueStatusOpenCheck: Migration = {
         stage INTEGER CHECK (stage IS NULL OR stage >= 1),
         start_date TEXT,
         metadata TEXT NOT NULL DEFAULT '{}',
+        properties TEXT NOT NULL DEFAULT '{}',
+        origin_id TEXT,
         created_at ${TS}, updated_at ${TS}
       );
       INSERT INTO issue_337 SELECT id, title, description, status, priority, assignee_type, assignee_id,
         creator_type, creator_id, parent_issue_id, acceptance_criteria, context_refs, position, due_date,
-        number, project_id, origin_type, first_executed_at, stage, start_date, metadata,
-        created_at, updated_at FROM issue;
+        number, project_id, origin_type, first_executed_at, stage, start_date, metadata, properties,
+        origin_id, created_at, updated_at FROM issue;
       DROP TABLE issue; ALTER TABLE issue_337 RENAME TO issue;
       CREATE UNIQUE INDEX idx_issue_number ON issue(number);
       CREATE INDEX idx_issue_assignee ON issue(assignee_type, assignee_id);

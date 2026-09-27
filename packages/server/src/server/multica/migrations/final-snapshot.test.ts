@@ -87,6 +87,8 @@ describe("final schema snapshot", () => {
       "stage",
       "start_date",
       "metadata",
+      "properties",
+      "origin_id",
       "created_at",
       "updated_at",
       "revision",

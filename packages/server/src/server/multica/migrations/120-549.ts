@@ -567,9 +567,17 @@ export const migration191IssueProperties: Migration = {
         PRIMARY KEY (issue_id, property_id)
       );
       CREATE INDEX idx_issue_to_property_property ON issue_to_property(property_id);
+      -- The JSONB value bag on each issue, keyed by property definition id —
+      -- structurally a sibling of metadata. TEXT json under translation.
+      ALTER TABLE issue ADD COLUMN properties TEXT NOT NULL DEFAULT '{}';
+      ALTER TABLE issue ADD COLUMN origin_id TEXT;
+      CREATE INDEX idx_issue_origin ON issue(origin_type, origin_id) WHERE origin_type IS NOT NULL;
     `);
   },
   down: (db) => {
+    db.exec(`DROP INDEX IF EXISTS idx_issue_origin;`);
+    db.exec(`ALTER TABLE issue DROP COLUMN origin_id;`);
+    db.exec(`ALTER TABLE issue DROP COLUMN properties;`);
     db.exec(`DROP TABLE IF EXISTS issue_to_property;`);
     db.exec(`DROP TABLE IF EXISTS issue_property;`);
   },
