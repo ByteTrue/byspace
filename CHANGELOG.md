@@ -5,6 +5,12 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.16.3 - 2026-09-27
+
+### Fixed
+
+- Fixed the hosted web app crashing on startup with "Invalid host:port" when served from a default-port origin (HTTPS behind a reverse proxy)
+
 ## 0.16.2 - 2026-09-27
 
 ### Changed
