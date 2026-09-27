@@ -44,14 +44,17 @@ describe("migration sequence 002–042", () => {
       "017_comment_parent_id",
       "018_comment_parent_cascade",
       "020_issue_number",
+      "021_agent_instructions",
       "026_comment_reactions",
       "027_issue_reactions",
       "029_attachment",
+      "031_agent_archive",
       "032_drop_agent_triggers",
       "034_projects",
       "040_agent_custom_env",
       "041_agent_custom_args",
       "042_autopilot",
+      "046_agent_mcp_config",
       "046_agent_unique_name",
       "050_agent_model",
       "050_issue_first_executed_at",
@@ -59,6 +62,7 @@ describe("migration sequence 002–042", () => {
       "058_drop_autopilot_priority_and_project_id",
       "059_label_timestamps",
       "060_agent_description_length",
+      "060_chat_session_runtime_id",
       "060_issue_origin_quick_create",
       "061_task_trigger_summary",
       "066_force_fresh_session",
@@ -71,6 +75,7 @@ describe("migration sequence 002–042", () => {
       "088_squad_instructions",
       "090_task_is_leader",
       "091_issue_start_date",
+      "095_agent_thinking_level",
       "096_autopilot_squad_assignee",
       "105_issue_metadata",
       "120_autopilot_subscriber",
@@ -113,6 +118,8 @@ describe("migration sequence 002–042", () => {
       "348_plugin_via_attribution",
       "351_issue_comment_revision",
       "360_issue_last_activity_at",
+      "404_agent_starter_prompts",
+      "432_agent_conversation_starters_rename",
       "444_comment_recovery_settled_at",
       "470_issue_status_icon",
       "483_issue_triage_state",
@@ -126,10 +133,12 @@ describe("migration sequence 002–042", () => {
     expect(versions).toEqual(expected);
   });
 
-  it("002+032 leave agent with description and skills, without tools/triggers", () => {
+  it("002+032 leave agent with description, without tools/triggers or skills", () => {
     applyMigrations(db, MIGRATIONS);
     expect(columns("agent")).toContain("description");
-    expect(columns("agent")).toContain("skills");
+    // 008 replaces the inline skills column with the structured-skill tables;
+    // 032 drops tools and triggers.
+    expect(columns("agent")).not.toContain("skills");
     expect(columns("agent")).not.toContain("tools");
     expect(columns("agent")).not.toContain("triggers");
   });

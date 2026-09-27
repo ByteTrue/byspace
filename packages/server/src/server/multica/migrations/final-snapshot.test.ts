@@ -37,8 +37,9 @@ function columns(table: string): string[] {
 
 describe("final schema snapshot", () => {
   it("agent", () => {
-    // The 046/060 rebuilds re-seat the base columns, then ALTER ADD appends
-    // the rest in migration order.
+    // The audited final state: 29 source columns minus workspace_id and
+    // owner_id. skills was dropped by 008 (replaced by the structured-skill
+    // tables), so it is absent here.
     expect(columns("agent")).toEqual([
       "id",
       "name",
@@ -49,18 +50,24 @@ describe("final schema snapshot", () => {
       "status",
       "max_concurrent_tasks",
       "description",
-      "skills",
+      "instructions",
+      "archived_at",
+      "archived_by",
       "custom_env",
       "custom_args",
+      "mcp_config",
       "model",
       "created_at",
       "updated_at",
+      "runtime_id",
+      "thinking_level",
       "composio_toolkit_allowlist",
       "permission_mode",
       "kind",
       "system_key",
       "disabled_runtime_skills",
       "service_tier",
+      "conversation_starters",
     ]);
   });
 

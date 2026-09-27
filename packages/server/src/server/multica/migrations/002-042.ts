@@ -121,6 +121,9 @@ export const migration008StructuredSkills: Migration = {
         created_at ${TS},
         PRIMARY KEY (agent_id, skill_id)
       );
+      -- The source's line 35: the structured-skill tables replace the inline
+      -- agent.skills text column.
+      ALTER TABLE agent DROP COLUMN skills;
     `);
   },
   down: (db) => {
@@ -354,11 +357,14 @@ export const migration032DropAgentTriggers: Migration = {
           CHECK (status IN ('idle', 'working', 'blocked', 'error', 'offline')),
         max_concurrent_tasks INTEGER NOT NULL DEFAULT 1,
         description TEXT NOT NULL DEFAULT '',
-        skills TEXT NOT NULL DEFAULT '',
+        instructions TEXT NOT NULL DEFAULT '',
+        archived_at TEXT,
+        archived_by TEXT,
         created_at ${TS}, updated_at ${TS}
       );
       INSERT INTO agent_032 SELECT id, name, avatar_url, runtime_mode, runtime_config, visibility,
-        status, max_concurrent_tasks, description, skills, created_at, updated_at FROM agent;
+        status, max_concurrent_tasks, description, instructions, archived_at, archived_by,
+        created_at, updated_at FROM agent;
       DROP TABLE agent; ALTER TABLE agent_032 RENAME TO agent;
     `);
     db.exec("PRAGMA foreign_keys = ON");
@@ -375,13 +381,12 @@ export const migration032DropAgentTriggers: Migration = {
           CHECK (status IN ('idle', 'working', 'blocked', 'error', 'offline')),
         max_concurrent_tasks INTEGER NOT NULL DEFAULT 1,
         description TEXT NOT NULL DEFAULT '',
-        skills TEXT NOT NULL DEFAULT '',
         tools TEXT NOT NULL DEFAULT '[]',
         triggers TEXT NOT NULL DEFAULT '[]',
         created_at ${TS}, updated_at ${TS}
       );
       INSERT INTO agent_032d SELECT id, name, avatar_url, runtime_mode, runtime_config, visibility,
-        status, max_concurrent_tasks, description, skills, '[]', '[]', created_at, updated_at FROM agent;
+        status, max_concurrent_tasks, description, '[]', '[]', created_at, updated_at FROM agent;
       DROP TABLE agent; ALTER TABLE agent_032d RENAME TO agent;
     `);
     db.exec("PRAGMA foreign_keys = ON");
@@ -461,7 +466,6 @@ export const migration041AgentCustomArgs: Migration = {
           CHECK (status IN ('idle', 'working', 'blocked', 'error', 'offline')),
         max_concurrent_tasks INTEGER NOT NULL DEFAULT 1,
         description TEXT NOT NULL DEFAULT '',
-        skills TEXT NOT NULL DEFAULT '',
         created_at ${TS}, updated_at ${TS}
       );
       INSERT INTO agent_041d SELECT id, name, avatar_url, runtime_mode, runtime_config, visibility,
