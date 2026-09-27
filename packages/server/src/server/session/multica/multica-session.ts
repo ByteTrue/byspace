@@ -148,7 +148,9 @@ export class MulticaSession {
    * wire type; this handler's contract is the multica subset, and the
    * dispatcher's switch is what guarantees it.
    */
-  async handle(msg: Extract<SessionInboundMessage, { type: `multica.${string}` }>): Promise<void> {
+  async handle(
+    msg: Extract<SessionInboundMessage, { type: `multica.${string}` }> & { requestId: string },
+  ): Promise<void> {
     try {
       switch (msg.type) {
         case "multica.agent.list.request":
@@ -161,6 +163,10 @@ export class MulticaSession {
           return this.#handleIssueCreate(msg);
         case "multica.issue.get.request":
           return this.#handleIssueGet(msg);
+        case "multica.status.list.request":
+          return this.#handleStatusList(msg);
+        case "multica.issue.update.request":
+          return this.#handleIssueUpdate(msg);
         case "multica.issue.status.update.request":
           return this.#handleIssueStatusUpdate(msg);
         case "multica.comment.list.request":
@@ -174,10 +180,9 @@ export class MulticaSession {
         case "multica.task.list.request":
           return this.#handleTaskList(msg);
         default:
-          // The shared dispatcher routes only multica.* here; anything else
-          // is a dispatcher bug worth surfacing, not silently swallowing.
-          const unexpected: { requestId: string } = msg satisfies never;
-          void unexpected;
+          // The switch is exhaustive over the multica subset; the dispatcher's
+          // prefix check is what routes here, so this arm is unreachable.
+          msg satisfies never;
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -297,6 +302,49 @@ export class MulticaSession {
     const issue = this.#store.getIssue(msg.issueId);
     this.#emit({
       type: "multica.issue.get.response",
+      payload: { requestId: msg.requestId, issue: issueSummary(issue) },
+    });
+  }
+
+  #handleStatusList(
+    msg: Extract<SessionInboundMessage, { type: "multica.status.list.request" }>,
+  ): void {
+    const statuses = this.#store.listIssueStatuses();
+    this.#emit({
+      type: "multica.status.list.response",
+      payload: { requestId: msg.requestId, statuses },
+    });
+  }
+
+  #handleIssueUpdate(
+    msg: Extract<SessionInboundMessage, { type: "multica.issue.update.request" }>,
+  ): void {
+    const before = this.#store.getIssue(msg.issueId);
+    const issue = this.#store.updateIssue({
+      id: msg.issueId,
+      expectedRevision: msg.expectedRevision,
+      status: msg.status,
+      priority: msg.priority,
+      assigneeType: msg.assigneeType,
+      assigneeId: msg.assigneeId,
+      title: msg.title,
+    });
+    // Field writes that the trigger engine cares about: a reassignment or a
+    // backlog departure can start a run, exactly as a create does.
+    const assigneeChanged =
+      (msg.assigneeType !== undefined && msg.assigneeType !== before.assigneeType) ||
+      (msg.assigneeId !== undefined && msg.assigneeId !== before.assigneeId);
+    const statusChanged = msg.status !== undefined && msg.status !== before.status;
+    if (assigneeChanged || statusChanged) {
+      this.#enqueueForIssueWrite(issue, {
+        isCreate: false,
+        assigneeChanged,
+        statusChanged,
+        prevStatus: before.status,
+      });
+    }
+    this.#emit({
+      type: "multica.issue.update.response",
       payload: { requestId: msg.requestId, issue: issueSummary(issue) },
     });
   }

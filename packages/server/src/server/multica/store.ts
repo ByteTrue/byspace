@@ -152,6 +152,61 @@ export class MulticaStore {
   }
 
   /**
+   * Update an issue's editable fields with revision-checked optimism.
+   *
+   * The source's UpdateAgent/UpdateIssue pattern: omitted fields keep their
+   * values, provided fields replace them (null clears where the field is
+   * nullable). A status change enqueues through the trigger engine by the
+   * handler, not here — the store owns the row, the handler owns the rules.
+   */
+  updateIssue(input: {
+    readonly id: string;
+    readonly expectedRevision: number;
+    readonly status?: string;
+    readonly priority?: string;
+    readonly assigneeType?: string | null;
+    readonly assigneeId?: string | null;
+    readonly title?: string;
+  }): IssueRow {
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    if (input.status !== undefined) {
+      sets.push("status = ?");
+      params.push(input.status);
+    }
+    if (input.priority !== undefined) {
+      sets.push("priority = ?");
+      params.push(input.priority);
+    }
+    if (input.assigneeType !== undefined) {
+      sets.push("assignee_type = ?");
+      params.push(input.assigneeType);
+    }
+    if (input.assigneeId !== undefined) {
+      sets.push("assignee_id = ?");
+      params.push(input.assigneeId);
+    }
+    if (input.title !== undefined) {
+      sets.push("title = ?");
+      params.push(input.title);
+    }
+    if (sets.length === 0) {
+      return this.getIssue(input.id);
+    }
+    sets.push("revision = revision + 1");
+    sets.push("updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')");
+    const result = this.#db
+      .prepare(`UPDATE issue SET ${sets.join(", ")} WHERE id = ? AND revision = ?`)
+      .run(...params, input.id, input.expectedRevision);
+    if (Number(result.changes) === 0) {
+      throw new Error(
+        `issue ${input.id} changed since revision ${input.expectedRevision}; read it again`,
+      );
+    }
+    return this.getIssue(input.id);
+  }
+
+  /**
    * Update an issue's status with revision-checked optimism.
    *
    * The source's UpdateIssueStatus updates under a row lock and bumps

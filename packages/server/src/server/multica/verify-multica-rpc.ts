@@ -46,13 +46,27 @@ async function main(): Promise<void> {
 
         // issue
         const issue = await client.multicaIssueCreate({ title: "Ship the board" });
+        // The secretary's office channel is seeded at startup and takes the
+        // first number, so this issue's number is not 1 — it is unique and higher.
         check(
-          "issue create allocates number 1",
-          issue.issue.number === 1,
+          "issue create allocates a unique number",
+          issue.issue.number !== null && issue.issue.number > 1,
           String(issue.issue.number),
         );
         const issues = await client.multicaIssueList({});
-        check("issue list sees it", issues.issues.length === 1);
+        check(
+          "issue list sees it alongside the office channel",
+          issues.issues.some((candidate) => candidate.id === issue.issue.id),
+        );
+        check(
+          "the office channel is present and assigned",
+          issues.issues.some(
+            (candidate) =>
+              candidate.title.startsWith("Office") &&
+              candidate.assigneeType === "agent" &&
+              candidate.assigneeId !== null,
+          ),
+        );
         const got = await client.multicaIssueGet(issue.issue.id);
         check("issue get round-trips", got.issue.title === "Ship the board");
 
@@ -105,6 +119,36 @@ async function main(): Promise<void> {
         // task list (empty — the engine slices enqueue)
         const tasks = await client.multicaTaskList(issue.issue.id);
         check("task list is empty before any run", tasks.tasks.length === 0);
+
+        // status catalog + field update with trigger
+        const statuses = await client.multicaStatusList();
+        check("status catalog lists the seven built-ins", statuses.statuses.length === 7);
+        // The comment creation above bumped the issue's revision (the atomic
+        // touch); read fresh before updating.
+        const beforeUpdate = await client.multicaIssueGet(issue.issue.id);
+        const moved = await client.multicaIssueUpdate({
+          issueId: issue.issue.id,
+          expectedRevision: beforeUpdate.issue.revision,
+          status: "in_review",
+        });
+        check("field update moves status and bumps revision", moved.issue.status === "in_review");
+        const renamed = await client.multicaIssueUpdate({
+          issueId: issue.issue.id,
+          expectedRevision: moved.issue.revision,
+          title: "Ship the board v2",
+        });
+        check("field update renames", renamed.issue.title === "Ship the board v2");
+        let staleUpdateRejected = false;
+        try {
+          await client.multicaIssueUpdate({
+            issueId: issue.issue.id,
+            expectedRevision: issue.issue.revision,
+            status: "done",
+          });
+        } catch {
+          staleUpdateRejected = true;
+        }
+        check("stale field update is refused", staleUpdateRejected);
 
         // unknown issue errors cleanly
         let unknownHandled = false;

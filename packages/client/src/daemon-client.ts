@@ -539,6 +539,14 @@ type MulticaIssueCreatePayload = Extract<
   SessionOutboundMessage,
   { type: "multica.issue.create.response" }
 >["payload"];
+type MulticaStatusListPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.status.list.response" }
+>["payload"];
+type MulticaIssueUpdatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.issue.update.response" }
+>["payload"];
 type MulticaIssueGetPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.issue.get.response" }
@@ -5507,6 +5515,37 @@ export class DaemonClient {
         projectId: options.projectId,
       },
       responseType: "multica.issue.create.response",
+    });
+  }
+
+  async multicaStatusList(): Promise<MulticaStatusListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.status.list.request" },
+      responseType: "multica.status.list.response",
+    });
+  }
+
+  async multicaIssueUpdate(options: {
+    issueId: string;
+    expectedRevision: number;
+    status?: string;
+    priority?: string;
+    assigneeType?: string | null;
+    assigneeId?: string | null;
+    title?: string;
+  }): Promise<MulticaIssueUpdatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: {
+        type: "multica.issue.update.request",
+        issueId: options.issueId,
+        expectedRevision: options.expectedRevision,
+        status: options.status,
+        priority: options.priority,
+        assigneeType: options.assigneeType ?? undefined,
+        assigneeId: options.assigneeId ?? undefined,
+        title: options.title,
+      },
+      responseType: "multica.issue.update.response",
     });
   }
 

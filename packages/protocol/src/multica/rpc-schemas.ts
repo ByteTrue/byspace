@@ -194,6 +194,49 @@ export const MulticaCommentCreateResponseSchema = z.object({
   }),
 });
 
+export const MulticaStatusSummarySchema = z.object({
+  key: z.string(),
+  name: z.string(),
+  category: z.string(),
+  color: z.string(),
+  isSystem: z.boolean(),
+  position: z.number(),
+});
+
+export const MulticaStatusListRequestSchema = z.object({
+  type: z.literal("multica.status.list.request"),
+  requestId: z.string(),
+});
+
+export const MulticaStatusListResponseSchema = z.object({
+  type: z.literal("multica.status.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    statuses: z.array(MulticaStatusSummarySchema),
+  }),
+});
+
+export const MulticaIssueUpdateRequestSchema = z.object({
+  type: z.literal("multica.issue.update.request"),
+  requestId: z.string(),
+  issueId: z.string().min(1),
+  /** The revision the caller read — optimistic concurrency. */
+  expectedRevision: z.number().int().positive(),
+  status: z.string().optional(),
+  priority: z.string().optional(),
+  assigneeType: z.string().nullable().optional(),
+  assigneeId: z.string().nullable().optional(),
+  title: z.string().min(1).optional(),
+});
+
+export const MulticaIssueUpdateResponseSchema = z.object({
+  type: z.literal("multica.issue.update.response"),
+  payload: z.object({
+    requestId: z.string(),
+    issue: MulticaIssueSummarySchema,
+  }),
+});
+
 // ---------------------------------------------------------------- squads
 
 export const MulticaSquadSummarySchema = z.object({
