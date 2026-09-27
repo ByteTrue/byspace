@@ -69,6 +69,12 @@ supersedes: byissue/epics/004-x-worker-domain/spec.md 的协作模型
 6. **打断安全**：run 中断 → issue/状态/队列不烂 → 再触发可继续
 7. **对照通过**：multica 源码里随便点一个行为（如 wakeup 重挂、squad 派发），我们的行为一致
 
+## 进度（2026-09-27）
+
+- **切片 ①（schema 冻结 + 迁移翻译）大部分完成**：从 577 个迁移筛出复刻集，翻译到 509 为止（001→509 中命中复刻表的 24 个迁移全部落地，含 squad、四类状态目录+7 内置种子、autopilot 三表、wakeup 双表、squad 派发记账三列）。523/530/532 是 PG 存储函数（wakeup 事件捕获），定性为行为而非 schema，随第④片触发引擎在 Node 实现。剩余：6xx 段核一遍是否有漏网复刻表（如 issue_number 相关、task_supplement——按砍除清单应排除）。
+- 新线落位：`packages/server/src/server/multica/`（migrations runner + 翻译件 + 测试），干净 main 基线（v0.16.2），与练手线零耦合。
+- 32 tests / typecheck 0 / lint 0。
+
 ## 工程切法
 
 1. **盘点冻结**：从 551 个迁移提取最终 schema 快照（建表全集）→ Node 侧 schema + 迁移框架选型（PG/SQLite 此时定）
