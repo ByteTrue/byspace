@@ -1,87 +1,104 @@
 ---
 kind: epic
-title: "worker 域 v2：issue 为协作中心（multica 架构），秘书为常驻入口"
+title: "worker 域 v2：复刻 multica —— issue 中心、秘书常驻、事件驱动跟进"
 status: open
 created: 2026-09-26
 supersedes: byissue/epics/004-x-worker-domain/spec.md 的协作模型
 ---
 
-# worker 域 v2：issue 为中心
+# worker 域 v2：复刻 multica
 
-> **读者：** 决定是否开工的人（Owner）。这是规格，不是任务清单：读完应知道新模型长什么样、旧模型的什么被替换、什么被继承、判据是什么。
+> **读者：** 决定是否开工的人（Owner），以及第一个动手实现的人。这是复刻规格：以 multica（multica-ai/multica，Apache-2.0，一手源码在 /tmp/multica-ref，参考用后归档到 ~/workspace/refs/）为准绳，**不再参考 QoderWake 的架构**。
 
 ## 结论先行
 
-Epic 004 交付了"agent 成为长期实体并自协调"，但**协作空间选错了**：群聊里干活，工作记录与对话分离——群里说了的，issue/任务没记。multica（multica-ai/multica，Apache-2.0，Go+TS，49k★，一手源码已审）证明了正确轴心：
+Owner 决定（2026-09-26）：**架构上直接复刻 multica。** Epic 004 当作练手 —— 它验证了执行底座（worker=长期 agent、pi session 复用、守卫、记忆），但它的协作模型（群聊中心）整个让位。
 
-- **issue 是唯一协作空间**。需求、讨论、进度、结果都在 issue 上；agents 在 issue 评论区说话；工作天然被记录。
-- **团队（squad）只是名单**。谁在组里、谁是 leader——不是聊天室。派给 squad 时 leader 先动，leader 决定分给谁。
-- **秘书（mika 形态）是常驻入口**。老板对它说话，它拆解、分派、跟进、汇清单要审批。**它不产出需求文档**——写 PRD 是产品经理的活，秘书协调的是事务。
+**从 QoderWake 保留的只有资产**：8 个角色模板（IDENTITY/BIBLE/PERSONA + 各自技能）。这些是提示词产物，与架构无关，直接搬进新模型当 agent 的"角色包"。
 
-**执行底座不换。** multica 的会话痛点（打断丢上下文、续不上、卡死）正是我们复用 BySpace agent session 的强项；Epic 004 的身份/预算/守卫/记忆是 multica 没有的。**换的是组织轴，不是执行轴。**
+**Epic 004 的东西分三类**：
 
-## 旧模型的处置（逐条）
+1. **复用**（架构正交，重命名后继续）：worker→agent、角色模板、workspace/记忆/守卫/skill 落位、pi session 执行链、schedule 触发
+2. **删除**（群聊中心的一切）：`worker.message.*` 全链路、inbox 投递、goal/预算闸载体 —— 预算思想迁移到 issue run 上限，但 goal/wake 机制不复刻
+3. **练手价值**：状态机单一入口、404 语义身份门、事务认领 —— 这些**教训**带进 v2，代码不搬
 
-| Epic 004 已交付                                   | 处置             | 理由                                                                                                          |
-| ------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------- |
-| worker / 角色 / 工作区 / 记忆 / 守卫 / skill 落位 | **继承**         | 与组织轴正交，全部继续有效                                                                                    |
-| 协调者拉人建组（squad=项目组，leader 先动）       | **继承并改名**   | 与 multica 的 squad 语义一致；"项目组"→ squad，协调者→ leader                                                 |
-| `worker.message.*` 群聊、投递、inbox              | **退役（删除）** | 对话空间换成 issue 评论区；群聊与工作记录分离是本 epic 要消灭的缺陷。**不保留兼容**                           |
-| 预算闸（turnLimit/估算上限）                      | **迁移**         | 闸住的是"唤醒烧钱"；issue 模型里等价物 = 每 issue 的 run 上限 + 名单规模上限。规则不变，载体搬家              |
-| `worker_tasks`（一次性 title）                    | **替换为 issue** | issue = 描述+讨论+指派+状态+评论再触发；任务是 issue 的一次 run                                               |
-| 提及唤醒                                          | **改造**         | @mention 出现在 issue 评论里：触发被点名 agent 的一次 run（不换 assignee，学 multica 的"handle one request"） |
-| schedule→worker 触发                              | **继承**         | 等价 multica autopilot 的 schedule 面                                                                         |
-| New task 表单 / 任务会话面                        | **改造**         | 表单建 issue；点开 issue 看时间线（会话 run + 评论流合一）                                                    |
+## 复刻目标（multica 的架构，逐件）
 
-## 新模型（照 multica，逐件）
+### 数据模型（照 001_init + 后续迁移）
 
-### 1. Issue
+```
+agent:        name, runtime(pi), visibility, status(idle/working/blocked/error/offline),
+              max_concurrent_tasks(=1，一 worker 一并发不变)
+issue:        title, description, status(四类), priority, assignee(member|agent|squad),
+              creator, parent_issue, acceptance_criteria, position(看板排序)
+issue_status: 四类生命周期 — unstarted(backlog|todo) / started(in_progress|in_review|blocked)
+              / done / closed(cancelled)；状态目录表，内置状态锁定
+comment:      issue_id, author(member|agent), content, type(comment|status_change|
+              progress_update|system)
+inbox_item:   recipient, type, severity(action_required|attention|info), issue, title, body
+              ← 秘书的"要老板拍板的清单"就住这里
+agent_task_queue (run): agent_id, issue_id, status(queued|dispatched|running|completed|
+              failed|cancelled), result, error ← 每 issue 触发一次 = 一行
+squad:        name, leader_id, members(agent|member)
+issue_wakeup: 挂在 issue 上，agent 自己注册 —— kind(event|at|every|cron),
+              event(task.completed/failed/cancelled), instruction
+```
 
-- 字段：标题、描述、assignee（member/agent/squad）、状态（四类生命周期：unstarted/started/done/closed，内置状态固定）、评论区、创建者
-- **评论区是唯一对话面**：老板、秘书、agents 都在评论里说话。agent 评论 = 一次 run 的产物（汇报、追问、blocker）
-- @agent 评论 → 该 agent 的一次 run（读取 issue 上下文）；改 assignee 或状态进入 started → 触发 assignee 的 run
-- issue 的每次触发 = 新 run；run 断了 issue 还在（打断/续跑走 BySpace session 既有能力）
+### 触发规则（multica 原文语义）
 
-### 2. Squad（原项目组）
+- **assign 即触发**：issue 指派给 agent/squad（或状态进入 started）→ assignee 的 run 入队；squad 则 leader 先动
+- **@mention 即一次 run**：评论里 @agent → 该 agent 一次 run（读 issue 全上下文，不换 assignee）
+- **wakeup 即自驱**：agent 给 issue 挂事件/定时唤醒（如 task.completed），事件到 → 注册者新 run —— **这是秘书自主跟进的机制**
+- run 的产物写回 issue：进度=progress_update 评论、结果=评论、状态变化=status_change 评论
 
-- 一张名单：leader + members（agents），绑一个项目
-- 派给 squad 的 issue → **leader 先动**：leader 判断拆不拆、分给谁（成员各自的 run），进度写回 issue
-- 预算闸的新家：**每 issue 的 run 数上限**（默认按名单规模估算，可调）
+### 秘书（Mika 形态，Chief of Staff）
 
-### 3. 秘书（Mika 形态，Chief of Staff）
+- **每 daemon 一个，内置**（MikaSystemKey：system key 标识、显示名可改、prompt 内嵌随版本更新、workspace notes 可追加）
+- 工作模型照 mika INSTRUCTIONS（已全文审）：
+  - "A member brings you a goal, not a routing decision" —— 自己路由，绝不把活推回给老板
+  - 一轮能答的当场答；要工具/仓库/多轮/留痕的开 issue
+  - 路由到最小够用者：自己 / 某 agent / 新专家 / squad（经 leader）/ autopilot
+  - 聊天轮内不 checkout、不写码、不产出交付物
+  - 建 agent/squad/改配置前给预览要确认；部署/花费/权限/敏感/破坏性前必须确认
+- **自主跟进（Owner 补充的关键能力）**：秘书给关键 issue 挂 event wakeup（run.completed/failed）。issue 一到新状态它自己醒：
+  - 需要老板决策的 → 写 inbox_item(action_required) 并在对话里汇报
+  - 不需要的 → 自己继续：评论、改状态、再指派、催办
+  - **不是被动客服，是事件驱动的参谋长**
 
-- **每工作区一个，内置**，随 daemon 创建（MikaSystemKey 形态：system key 标识身份、显示名可改、prompt 内嵌随版本更新）
-- **唯一老板入口**：老板对它说任何话——它拆解成 N 件事、逐件开 issue、选路由（自己/某 agent/某 squad）、跟进、汇总
-- **路由决策归它**（mika 原文："Never answer by naming the agent they should use…route it yourself"）：一轮能答的当场答；要工具/仓库/多轮/留痕的→开 issue；要人拍板的→**整理成一份清单**回来找老板
-- **确认门槛**（照 mika 原文）：建 agent/squad/改配置前给预览要确认；涉及部署/花费/权限/敏感数据/破坏性操作前必须确认
-- **禁区**（照 mika 原文）：聊天轮内不 checkout 仓库、不写代码、不产出交付物——开 issue 让 run 干
+### 人（老板）
 
-### 4. 人（老板）
+- 与秘书对话（唯一发起口）+ 看 issue + 处理 inbox 的 action_required
+- console：issue 看板（四类分列）+ issue 详情（时间线 = 评论 + run 记录 + 状态变化合一）
 
-- 只跟秘书对话 + 看 issue（自己的和被 @ 的）+ 处理秘书汇来的审批清单
-- 看板/console：issue 列表（按状态分列）、点开看时间线
+## 与 multica 的刻意差异（及理由）
 
-## 判据（可验的完成形态）
+| 差异                                                      | 理由                                                                                                                                                                     |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 执行=daemon 内 pi session（无 run queue 轮询/云端 claim） | multica 的会话痛点（打断丢上下文/续不上/卡死）正是其 daemon-claim 架构的；BySpace session 久经考验。run 仍是 agent_task_queue 一行（记账/上限用），只是执行不离开 daemon |
+| 无 workspace 多租户/云                                    | 单用户本地 daemon 是 BySpace 的形态；表结构去掉 workspace 维度                                                                                                           |
+| 角色=模板收割的 8 个 + 秘书                               | mika 的能力面照抄，角色资产来自 QoderWake 收割                                                                                                                           |
+| 预算=issue 的 run 上限（按 squad 名单估算）               | 闸住"烧钱 run"的思想延续；goal/turnLimit 机制不搬                                                                                                                        |
 
-1. **一段话 → 多 issue**：老板对秘书说一段含 3 件事的话 → 秘书澄清关键分歧 → 开出 3 个 issue 并各自指派 → 回复路由摘要
-2. **issue 即工作记录**：一个 squad issue 跑完 → issue 评论里能看到 leader 的拆解、每个成员的汇报、最终结果——**没有发生在群聊里的事**
-3. **审批清单**：两件事需要老板拍板 → 秘书在对话里给一份含两个决定的清单 → 老板答复 → 秘书执行
-4. **评论触发**：老板在 issue 里 @ 某 agent 提修改 → 该 agent 一次 run → 汇报写回评论
-5. **打断安全**：issue 的一个 run 被打断 → issue 不丢、下一个触发继续（multica 做不到的）
-6. **预算**：一个 issue 的 run 数到上限 → 新评论不再触发 run，秘书收到通知转告老板
+## 判据
 
-## 范围外（明确不做）
+1. **一段话 → 多 issue**：老板对秘书说 3 件事 → 澄清 → 3 个 issue 各自指派 → 路由摘要
+2. **issue 即完整记录**：squad issue 完成后，评论里有 leader 拆解 + 成员汇报 + 结果；**没有任何工作发生在 issue 之外**
+3. **审批清单**：两件事要拍板 → inbox 两个 action_required + 对话里一份清单 → 答复后执行
+4. **评论触发**：@agent 提修改 → 一次 run → 汇报进评论
+5. **自主跟进**：某 issue 的 run failed → 秘书自己醒 → 判断不需要老板 → 自己评论/重派 —— **老板全程未被通知**（对比：另一个需要决策的 issue，秘书主动汇报）
+6. **打断安全**：run 被打断 → issue 不丢、状态不烂、再触发可继续
+7. **run 上限**：一个 issue 的 run 到上限 → 新评论不再入队 → 秘书收到 inbox 通知
 
-- webhook/API 触发面（autpilot 的那两档）
-- GitHub 集成（fork/PR 流）
-- 跨 workspace/云同步；移动端
-- QoderWake 参考线归档：talk 003 与 vision 里的"完全参考 QoderWake"条目改记为"协作模型已被 multica 模型取代，UI/角色/守卫等资产仍源于 QoderWake 收割"
+## 工程切法
 
-## 工程切法（供排期，不是承诺）
+1. **issue/comment/run 数据层 + 状态机**（四类、单一转换入口、append-only 历史）
+2. **触发引擎**（assign/状态/@mention → run 入队；run 产物写回评论；run 执行绑 pi session）
+3. **秘书**（内置 agent + mika INSTRUCTIONS 适配 + inbox 产出 + 对话入口）
+4. **wakeup**（event/at/every/cron 四 kind；秘书的自主跟进建立在它上面）
+5. **squad 派发**（leader 先动；成员 run 各自写回）
+6. **inbox + console**（action_required 清单面、issue 看板/详情、删群聊 UI）
+7. **退役**（删 `worker.message.*`/goal/inbox-delivery 全链路 + 旧 UI；worker→agent 域重命名收尾）
 
-1. **issue 模型 + 状态机**（SQLite，四类生命周期，单一转换入口——沿袭 worker_tasks 的教训）
-2. **评论触发 + run 绑定**（@agent、assignee 变更；run 写回评论）
-3. **秘书**（内置 agent、INSTRUCTIONS 照 mika 适配、CLI/skill 配套）
-4. **squad 派发**（leader 先动；成员 run 写回）
-5. **预算迁移 + 群聊退役**（删 `worker.message.*` 全链路；预算迁到 issue run 上限）
-6. **console 改造**（issue 看板/详情；删群聊 UI）
+## 范围外
+
+webhook/API 触发、GitHub fork/PR 流、云/多租户、移动端、multica 的 board 视图高级功能（swimlane/保存视图）
