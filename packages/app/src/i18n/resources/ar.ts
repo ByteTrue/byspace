@@ -1068,6 +1068,7 @@ export const ar: TranslationResources = {
       hosts: "المضيفون",
       settings: "إعدادات",
       closeSidebar: "إغلاق الشريط الجانبي",
+      multica: "Multica",
     },
     help: {
       trigger: "المساعدة والدعم",

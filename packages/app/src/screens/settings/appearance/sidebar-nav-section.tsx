@@ -6,6 +6,7 @@ import {
   ArrowDown,
   ArrowUp,
   CalendarClock,
+  KanbanSquare,
   History,
   Plus,
   Search,
@@ -40,6 +41,7 @@ const BUILTIN_ICONS: Record<BuiltinSidebarNavId, LucideIcon> = {
   history: History,
   search: Search,
   schedules: CalendarClock,
+  multica: KanbanSquare,
 };
 
 function NavIcon({ Icon, color = "" }: { Icon: LucideIcon; color?: string }) {

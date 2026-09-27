@@ -1078,6 +1078,7 @@ export const en = {
       hosts: "Hosts",
       settings: "Settings",
       closeSidebar: "Close sidebar",
+      multica: "Multica",
     },
     help: {
       trigger: "Help and support",

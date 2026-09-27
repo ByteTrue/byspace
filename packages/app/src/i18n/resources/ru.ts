@@ -1082,6 +1082,7 @@ export const ru: TranslationResources = {
       hosts: "Хосты",
       settings: "Настройки",
       closeSidebar: "Закрыть боковую панель",
+      multica: "Multica",
     },
     help: {
       trigger: "Помощь и поддержка",

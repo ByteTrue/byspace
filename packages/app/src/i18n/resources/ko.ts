@@ -1075,6 +1075,7 @@ export const ko: TranslationResources = {
       hosts: "호스트",
       settings: "설정",
       closeSidebar: "사이드바 닫기",
+      multica: "Multica",
     },
     help: {
       trigger: "도움말 및 지원",

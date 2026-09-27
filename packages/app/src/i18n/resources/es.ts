@@ -1102,6 +1102,7 @@ export const es: TranslationResources = {
       hosts: "Hosts",
       settings: "Ajustes",
       closeSidebar: "Cerrar barra lateral",
+      multica: "Multica",
     },
     help: {
       trigger: "Ayuda y soporte",

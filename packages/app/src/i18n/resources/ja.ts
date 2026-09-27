@@ -1080,6 +1080,7 @@ export const ja: TranslationResources = {
       hosts: "ホスト",
       settings: "設定",
       closeSidebar: "サイドバーを閉じる",
+      multica: "Multica",
     },
     help: {
       trigger: "ヘルプとサポート",

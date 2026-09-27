@@ -1093,6 +1093,7 @@ export const ptBR: TranslationResources = {
       hosts: "Hosts",
       settings: "Configurações",
       closeSidebar: "Fechar barra lateral",
+      multica: "Multica",
     },
     help: {
       trigger: "Ajuda e suporte",

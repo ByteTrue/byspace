@@ -1059,6 +1059,7 @@ export const zhCN: TranslationResources = {
       hosts: "Hosts",
       settings: "设置",
       closeSidebar: "关闭侧边栏",
+      multica: "Multica",
     },
     help: {
       trigger: "帮助与支持",
