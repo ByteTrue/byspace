@@ -246,6 +246,8 @@ export const migration149IssueOriginAgentCreate: Migration = {
         origin_type TEXT CHECK (origin_type IN ('autopilot', 'quick_create', 'agent_create')),
         first_executed_at TEXT,
         stage INTEGER CHECK (stage IS NULL OR stage >= 1),
+        start_date TEXT,
+        metadata TEXT NOT NULL DEFAULT '{}',
         created_at ${TS}, updated_at ${TS}
       );`,
       carry: [
@@ -268,6 +270,8 @@ export const migration149IssueOriginAgentCreate: Migration = {
         "origin_type",
         "first_executed_at",
         "stage",
+        "start_date",
+        "metadata",
         "created_at",
         "updated_at",
       ],

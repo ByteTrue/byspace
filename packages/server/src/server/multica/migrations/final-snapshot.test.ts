@@ -85,8 +85,14 @@ describe("final schema snapshot", () => {
       "origin_type",
       "first_executed_at",
       "stage",
+      "start_date",
+      "metadata",
       "created_at",
       "updated_at",
+      "revision",
+      "last_activity_at",
+      "triage_state",
+      "duplicate_of_issue_id",
     ]);
   });
 
@@ -106,6 +112,10 @@ describe("final schema snapshot", () => {
       "updated_at",
       "source_task_id",
       "quick_action_id",
+      "via_plugin_id",
+      "revision",
+      "recovery_settled_at",
+      "suppressed_agent_ids",
     ]);
   });
 
@@ -267,7 +277,7 @@ describe("final schema snapshot", () => {
     ]);
   });
 
-  it("issue_status", () => {
+  it("issue_status and inbox_item", () => {
     expect(columns("issue_status")).toEqual([
       "id",
       "key",
@@ -280,6 +290,22 @@ describe("final schema snapshot", () => {
       "archived_at",
       "created_at",
       "updated_at",
+      "icon",
+    ]);
+    expect(columns("inbox_item")).toEqual([
+      "id",
+      "recipient_type",
+      "recipient_id",
+      "type",
+      "severity",
+      "issue_id",
+      "title",
+      "body",
+      "read",
+      "archived",
+      "created_at",
+      "actor_type",
+      "actor_id",
     ]);
   });
 
