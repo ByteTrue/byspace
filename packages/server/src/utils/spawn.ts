@@ -7,6 +7,7 @@ import {
   isWindowsCommandScript,
   quoteWindowsArgument,
   quoteWindowsCommand,
+  windowsCommandNeedsShell,
 } from "./windows-command.js";
 
 const execFileAsync = promisify(execFile);
@@ -41,6 +42,7 @@ function hasPathSeparator(value: string): boolean {
 
 function shouldUseWindowsShell(
   command: string,
+  env: Record<string, string | undefined>,
   requestedShell?: boolean | string,
 ): boolean | string {
   if (isWindowsCommandScript(command)) {
@@ -49,7 +51,12 @@ function shouldUseWindowsShell(
   if (requestedShell !== undefined) {
     return requestedShell;
   }
-  return process.platform === "win32" && !hasPathSeparator(command) && !extname(command);
+  if (process.platform !== "win32" || hasPathSeparator(command) || extname(command)) {
+    return false;
+  }
+  // cmd.exe ends its command line at the first newline, so only a name that
+  // genuinely needs it - a batch launcher - should get the shell.
+  return windowsCommandNeedsShell(command, env);
 }
 
 export function spawnProcess(
@@ -60,11 +67,6 @@ export function spawnProcess(
   const { baseEnv, env, envOverlay, ...spawnOptions } = options ?? {};
   const resolvedBaseEnv = env ?? baseEnv ?? process.env;
   const isWindows = process.platform === "win32";
-  const shell = shouldUseWindowsShell(command, spawnOptions.shell);
-
-  const shouldQuoteForShell = isWindows && shell !== false;
-  const resolvedCommand = shouldQuoteForShell ? quoteWindowsCommand(command) : command;
-  const resolvedArgs = shouldQuoteForShell ? args.map(quoteWindowsArgument) : args;
   const childEnv =
     options?.envMode === "internal"
       ? ({ ...resolvedBaseEnv, ...envOverlay } as NodeJS.ProcessEnv)
@@ -73,6 +75,11 @@ export function spawnProcess(
           resolvedBaseEnv,
           ...(envOverlay ? [envOverlay] : []),
         );
+  const shell = shouldUseWindowsShell(command, childEnv, spawnOptions.shell);
+
+  const shouldQuoteForShell = isWindows && shell !== false;
+  const resolvedCommand = shouldQuoteForShell ? quoteWindowsCommand(command) : command;
+  const resolvedArgs = shouldQuoteForShell ? args.map(quoteWindowsArgument) : args;
 
   return spawn(resolvedCommand, resolvedArgs, {
     ...spawnOptions,
@@ -91,10 +98,6 @@ export async function execCommand(
   const { baseEnv, env, envOverlay } = options ?? {};
   const resolvedBaseEnv = env ?? baseEnv ?? process.env;
   const isWindows = process.platform === "win32";
-  const shell = shouldUseWindowsShell(command, options?.shell);
-  const shouldQuoteForShell = isWindows && shell !== false;
-  const resolvedCommand = shouldQuoteForShell ? quoteWindowsCommand(command) : command;
-  const resolvedArgs = shouldQuoteForShell ? args.map(quoteWindowsArgument) : args;
   const childEnv =
     options?.envMode === "internal"
       ? ({ ...resolvedBaseEnv, ...envOverlay } as NodeJS.ProcessEnv)
@@ -103,6 +106,10 @@ export async function execCommand(
           resolvedBaseEnv,
           ...(envOverlay ? [envOverlay] : []),
         );
+  const shell = shouldUseWindowsShell(command, childEnv, options?.shell);
+  const shouldQuoteForShell = isWindows && shell !== false;
+  const resolvedCommand = shouldQuoteForShell ? quoteWindowsCommand(command) : command;
+  const resolvedArgs = shouldQuoteForShell ? args.map(quoteWindowsArgument) : args;
 
   return execFileAsync(resolvedCommand, resolvedArgs, {
     cwd: options?.cwd,

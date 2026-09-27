@@ -15,18 +15,10 @@ const CALL_NAMES = [
   "spawnSync",
 ] as const;
 
-// Binaries that only exist outside Windows, so they never allocate a console there.
-const POSIX_ONLY = new Set([
-  "launchctl",
-  "systemctl",
-  "loginctl",
-  "dscl",
-  "scutil",
-  "security",
-  "osascript",
-  "open",
-  "defaults",
-]);
+// Only binaries that cannot exist on Windows may be listed: a listed name is
+// skipped by the rule below, so a Windows call site hiding behind one would
+// re-open the console-window issue 053 removed.
+const POSIX_ONLY = new Set(["launchctl", "systemctl", "loginctl", "dscl", "security"]);
 
 const GUARDED_DIRS = ["src"];
 const GUARDED_FILES = ["scripts/supervisor.ts", "scripts/supervisor-entrypoint.ts"];
@@ -144,6 +136,7 @@ function childProcessCallSites(): CallSite[] {
           file: relative(serverRoot, path).replaceAll("\\", "/"),
           line: source.slice(0, at).split("\n").length,
           call: `${name}(${command.slice(0, 32) || "…"})`,
+          command,
           posixOnly: POSIX_ONLY.has(command),
           hidden: hidesConsole(source, args),
         });
@@ -176,5 +169,29 @@ describe("daemon-side child consoles", () => {
         "src/utils/spawn.ts:spawn(resolvedCommand)",
       ]),
     );
+  });
+
+  // The allowlist is what keeps the first test from being weakened by adding a
+  // name to it, so both directions are locked: a new exempted call site has to
+  // be listed here, and an allowlisted binary nobody calls is a dead exemption.
+  test("POSIX-only exemptions stay on the known call sites", () => {
+    const sites = childProcessCallSites();
+    const exempted = sites.filter((site) => site.posixOnly);
+    expect(exempted.map((site) => `${site.file}:${site.call}`).sort()).toEqual([
+      "src/server/session/daemon/daemon-service-install.ts:spawnSync(launchctl)",
+      "src/server/session/daemon/daemon-service-install.ts:spawnSync(systemctl)",
+      "src/server/session/daemon/daemon-service-install.ts:spawnSync(systemctl)",
+      "src/server/session/daemon/daemon-service-manager.ts:execFileSync(launchctl)",
+      "src/server/session/daemon/daemon-service-manager.ts:execFileSync(loginctl)",
+      "src/server/session/daemon/daemon-service-manager.ts:execFileSync(systemctl)",
+      "src/services/quota-fetcher/providers/claude.ts:execFileAsync(security)",
+      "src/terminal/shell-detect.ts:execFile(dscl)",
+    ]);
+    for (const binary of POSIX_ONLY) {
+      expect(
+        exempted.map((site) => site.command),
+        `${binary} is exempted but never called`,
+      ).toContain(binary);
+    }
   });
 });
