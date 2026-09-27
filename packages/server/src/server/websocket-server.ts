@@ -465,22 +465,24 @@ export class MissingDaemonVersionError extends Error {
 interface RequiredWebSocketServices {
   scheduleService: ScheduleService;
   multicaStore?: MulticaStore;
+  multicaOnEnqueued?: () => void;
   checkoutDiffManager: CheckoutDiffManager;
 }
 
 function requireWebSocketServices(params: {
   scheduleService?: ScheduleService;
   multicaStore?: MulticaStore;
+  multicaOnEnqueued?: () => void;
   checkoutDiffManager?: CheckoutDiffManager;
 }): RequiredWebSocketServices {
-  const { scheduleService, multicaStore, checkoutDiffManager } = params;
+  const { scheduleService, multicaStore, multicaOnEnqueued, checkoutDiffManager } = params;
   if (!scheduleService) {
     throw new Error("DaemonWebSocketServer requires a schedule service.");
   }
   if (!checkoutDiffManager) {
     throw new Error("DaemonWebSocketServer requires a checkout diff manager.");
   }
-  return { scheduleService, multicaStore, checkoutDiffManager };
+  return { scheduleService, multicaStore, multicaOnEnqueued, checkoutDiffManager };
 }
 
 /**
@@ -504,6 +506,7 @@ export class DaemonWebSocketServer {
   private readonly workspaceLabelService: WorkspaceLabelService | null;
   private readonly scheduleService: ScheduleService;
   private readonly multicaStore: MulticaStore | null;
+  private readonly multicaOnEnqueued: (() => void) | null;
   private readonly checkoutDiffManager: CheckoutDiffManager;
   private readonly github: ForgeService;
   private readonly workspaceGitService: WorkspaceGitService;
@@ -565,6 +568,7 @@ export class DaemonWebSocketServer {
     workspaceRegistry?: WorkspaceRegistry,
     scheduleService?: ScheduleService,
     multicaStore?: MulticaStore,
+    multicaOnEnqueued?: () => void,
     checkoutDiffManager?: CheckoutDiffManager,
     serviceProxy?: ServiceProxySubsystem | null,
     scriptRuntimeStore?: WorkspaceScriptRuntimeStore | null,
@@ -607,10 +611,12 @@ export class DaemonWebSocketServer {
     const requiredServices = requireWebSocketServices({
       scheduleService,
       multicaStore,
+      multicaOnEnqueued,
       checkoutDiffManager,
     });
     this.scheduleService = requiredServices.scheduleService;
     this.multicaStore = requiredServices.multicaStore ?? null;
+    this.multicaOnEnqueued = requiredServices.multicaOnEnqueued ?? null;
     this.checkoutDiffManager = requiredServices.checkoutDiffManager;
     this.github = github ?? createGitHubService();
     this.workspaceGitService = workspaceGitService ?? createFallbackWorkspaceGitService();
@@ -1302,6 +1308,7 @@ export class DaemonWebSocketServer {
       directorySync: this.directorySync,
       scheduleService: this.scheduleService,
       multicaStore: this.multicaStore ?? undefined,
+      multicaOnEnqueued: this.multicaOnEnqueued ?? undefined,
       checkoutDiffManager: this.checkoutDiffManager,
       github: this.github,
       workspaceGitService: this.workspaceGitService,

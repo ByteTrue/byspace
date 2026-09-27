@@ -476,6 +476,15 @@ export class MulticaStore {
     return rows.map((row) => mapTaskRow(row as never));
   }
 
+  listQueuedTasks(): TaskRow[] {
+    const rows = this.#db
+      .prepare(
+        `SELECT ${TASK_SELECT} FROM agent_task_queue WHERE status = 'queued' ORDER BY created_at ASC`,
+      )
+      .all();
+    return rows.map((row) => mapTaskRow(row as never));
+  }
+
   /**
    * Move a run's status, stamping the state's timestamp.
    *

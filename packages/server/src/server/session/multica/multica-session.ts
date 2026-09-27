@@ -8,6 +8,12 @@
  */
 import type { SessionInboundMessage, SessionOutboundMessage } from "@bytetrue/protocol/messages";
 import type { MulticaStore } from "../../multica/store.js";
+import {
+  commentTriggers,
+  hasPendingRun,
+  parseMentions,
+  willEnqueueRun,
+} from "../../multica/trigger-engine.js";
 import type {
   AgentRow,
   CommentRow,
@@ -124,10 +130,17 @@ function taskSummary(task: TaskRow): MulticaTaskSummary {
 export class MulticaSession {
   readonly #store: MulticaStore;
   readonly #host: MulticaSessionHost;
+  readonly #onEnqueued: (() => void) | null;
 
-  constructor(input: { store: MulticaStore; host: MulticaSessionHost }) {
+  constructor(input: {
+    store: MulticaStore;
+    host: MulticaSessionHost;
+    /** Notifies the executor that a run may be ready (kick a drain). */
+    onEnqueued?: () => void;
+  }) {
     this.#store = input.store;
     this.#host = input.host;
+    this.#onEnqueued = input.onEnqueued ?? null;
   }
 
   /**
@@ -238,10 +251,44 @@ export class MulticaSession {
       creatorType: "owner",
       creatorId: "owner",
     });
+    this.#enqueueForIssueWrite(issue, {
+      isCreate: true,
+      assigneeChanged: false,
+      statusChanged: false,
+      prevStatus: "backlog",
+    });
     this.#emit({
       type: "multica.issue.create.response",
       payload: { requestId: msg.requestId, issue: issueSummary(issue) },
     });
+  }
+
+  /**
+   * The issue-write trigger: when a write starts a run, enqueue it and kick
+   * the executor. The predicate is the engine's single source of truth.
+   */
+  #enqueueForIssueWrite(
+    issue: ReturnType<MulticaStore["getIssue"]>,
+    write: {
+      isCreate: boolean;
+      assigneeChanged: boolean;
+      statusChanged: boolean;
+      prevStatus: string;
+    },
+  ): void {
+    const decision = willEnqueueRun({ store: this.#store, issue, ...write });
+    if (!decision) {
+      return;
+    }
+    if (hasPendingRun(this.#store, issue.id, decision.agentId)) {
+      return;
+    }
+    this.#store.createTask({
+      agentId: decision.agentId,
+      issueId: issue.id,
+      triggerSummary: `${decision.source} → ${decision.assigneeType}`,
+    });
+    this.#onEnqueued?.();
   }
 
   #handleIssueGet(
@@ -257,10 +304,17 @@ export class MulticaSession {
   #handleIssueStatusUpdate(
     msg: Extract<SessionInboundMessage, { type: "multica.issue.status.update.request" }>,
   ): void {
+    const before = this.#store.getIssue(msg.issueId);
     const issue = this.#store.updateIssueStatus({
       id: msg.issueId,
       status: msg.status,
       expectedRevision: msg.expectedRevision,
+    });
+    this.#enqueueForIssueWrite(issue, {
+      isCreate: false,
+      assigneeChanged: false,
+      statusChanged: true,
+      prevStatus: before.status,
     });
     this.#emit({
       type: "multica.issue.status.update.response",
@@ -281,6 +335,7 @@ export class MulticaSession {
   #handleCommentCreate(
     msg: Extract<SessionInboundMessage, { type: "multica.comment.create.request" }>,
   ): void {
+    const issue = this.#store.getIssue(msg.issueId);
     const comment = this.#store.createComment({
       issueId: msg.issueId,
       authorType: "owner",
@@ -288,6 +343,28 @@ export class MulticaSession {
       content: msg.content,
       parentId: msg.parentId,
     });
+    // The comment trigger: explicit mentions wake who they name; a human
+    // comment on an assigned issue routes to the assignee.
+    const triggers = commentTriggers({
+      store: this.#store,
+      issue,
+      content: msg.content,
+      authorType: "owner",
+      authorId: "owner",
+      mentions: parseMentions(msg.content),
+    });
+    for (const trigger of triggers) {
+      if (hasPendingRun(this.#store, msg.issueId, trigger.agentId)) {
+        continue;
+      }
+      this.#store.createTask({
+        agentId: trigger.agentId,
+        issueId: msg.issueId,
+        triggerCommentId: comment.id,
+        triggerSummary: `comment ${trigger.reason}`,
+      });
+      this.#onEnqueued?.();
+    }
     this.#emit({
       type: "multica.comment.create.response",
       payload: { requestId: msg.requestId, comment: commentSummary(comment) },

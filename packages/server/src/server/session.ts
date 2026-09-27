@@ -458,6 +458,7 @@ export interface SessionOptions {
   filesystem?: SessionFileSystem;
   scheduleService: ScheduleService;
   multicaStore?: MulticaStore;
+  multicaOnEnqueued?: () => void;
   checkoutDiffManager: CheckoutDiffManager;
   github?: ForgeService;
   createAgentMcpTransport?: AgentMcpTransportFactory;
@@ -718,6 +719,7 @@ export class Session {
       filesystem,
       scheduleService,
       multicaStore,
+      multicaOnEnqueued,
       checkoutDiffManager,
       github,
       renameCurrentBranch,
@@ -852,6 +854,7 @@ export class Session {
       this.multicaSession = new MulticaSession({
         store: multicaStore,
         host: { emit: (msg) => this.emit(msg) },
+        onEnqueued: multicaOnEnqueued,
       });
     }
     this.providerCatalogSession = new ProviderCatalogSession({
