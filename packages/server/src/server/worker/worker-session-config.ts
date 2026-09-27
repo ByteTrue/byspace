@@ -10,6 +10,7 @@
  * template and the workspace path first.
  */
 import type { AgentSessionConfig } from "../agent/agent-sdk-types.js";
+import { buildMemorySections } from "./worker-memory.js";
 import { assembleWorkerSystemPrompt, type WorkerTemplate } from "./worker-template.js";
 
 /** The provider every worker runs on. Multi-provider support is deliberately absent. */
@@ -19,6 +20,12 @@ export interface BuildWorkerSessionConfigInput {
   template: WorkerTemplate;
   /** Working directory for the task; the project workspace, not the worker's home. */
   cwd: string;
+  /**
+   * The worker's long-term memory, already read by the caller. This module
+   * stays free of I/O, so the runner owns reading and this owns shaping: a
+   * worker with no memory yet passes null.
+   */
+  memory: string | null;
   /** Optional per-task framing, e.g. the delegated task title and description. */
   taskPrompt?: string;
   model?: string;
@@ -46,9 +53,14 @@ export function buildWorkerSessionConfig(
     throw new Error(`Worker template '${input.template.id}' assembled an empty role prompt.`);
   }
 
+  // Memory sits between the role and the task: the worker should know who it
+  // is, then what it remembers, then what this unit of work asks. Ordering the
+  // other way round would bury the role's rules under the memory's detail.
+  const memorySections = buildMemorySections({ memory: input.memory });
+  const withMemory = [rolePrompt, ...memorySections.sections].join("\n\n---\n\n");
   const systemPrompt = input.taskPrompt
-    ? `${rolePrompt}\n\n---\n\n${input.taskPrompt.trim()}`
-    : rolePrompt;
+    ? `${withMemory}\n\n---\n\n${input.taskPrompt.trim()}`
+    : withMemory;
 
   return {
     rolePrompt,

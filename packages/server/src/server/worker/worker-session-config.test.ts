@@ -22,26 +22,74 @@ const TEMPLATE: WorkerTemplate = {
 
 describe("worker session config", () => {
   it("runs workers on pi and nothing else", () => {
-    const { config } = buildWorkerSessionConfig({ template: TEMPLATE, cwd: "/repo" });
+    const { config } = buildWorkerSessionConfig({ template: TEMPLATE, cwd: "/repo", memory: null });
     expect(config.provider).toBe("pi");
   });
 
   it("puts the assembled role in the system prompt", () => {
-    const { config, rolePrompt } = buildWorkerSessionConfig({ template: TEMPLATE, cwd: "/repo" });
+    const { config, rolePrompt } = buildWorkerSessionConfig({
+      template: TEMPLATE,
+      cwd: "/repo",
+      memory: null,
+    });
 
-    expect(config.systemPrompt).toBe(rolePrompt);
+    expect(config.systemPrompt).toContain(rolePrompt);
     expect(rolePrompt).toContain("You build interfaces.");
     expect(rolePrompt).toContain("Direct and evidence-led.");
     expect(rolePrompt).toContain("Design before code.");
   });
 
+  it("carries remembered facts between the role and the task", () => {
+    // Order is the point: who the worker is, then what it remembers, then what
+    // this task asks. Memory before the role would bury the role's rules under
+    // remembered detail.
+    const { config } = buildWorkerSessionConfig({
+      template: TEMPLATE,
+      cwd: "/repo",
+      memory: "# Memory\n\n- The pricing page lives in packages/app/src/pricing.",
+      taskPrompt: "Ship the pricing page",
+    });
+
+    const roleAt = config.systemPrompt.indexOf("You build interfaces.");
+    const memoryAt = config.systemPrompt.indexOf("packages/app/src/pricing");
+    const taskAt = config.systemPrompt.indexOf("Ship the pricing page");
+    expect(roleAt).toBeGreaterThanOrEqual(0);
+    expect(memoryAt).toBeGreaterThan(roleAt);
+    expect(taskAt).toBeGreaterThan(memoryAt);
+  });
+
+  it("still teaches a memory-less worker that the mechanism exists", () => {
+    // First run ever: no memories, but the rules must ride along, or the
+    // worker will never start a memory of its own.
+    const { config } = buildWorkerSessionConfig({
+      template: TEMPLATE,
+      cwd: "/repo",
+      memory: null,
+    });
+    expect(config.systemPrompt).toContain("When to update your memory");
+    expect(config.systemPrompt).not.toContain("What you remember");
+  });
+
+  it("treats an empty memory file as no memory", () => {
+    const { config } = buildWorkerSessionConfig({
+      template: TEMPLATE,
+      cwd: "/repo",
+      memory: "   \n  ",
+    });
+    expect(config.systemPrompt).not.toContain("What you remember");
+  });
+
   it("does not set the daemon-level prompt, which is not a worker's business", () => {
-    const { config } = buildWorkerSessionConfig({ template: TEMPLATE, cwd: "/repo" });
+    const { config } = buildWorkerSessionConfig({ template: TEMPLATE, cwd: "/repo", memory: null });
     expect(config.daemonAppendSystemPrompt).toBeUndefined();
   });
 
   it("uses the task workspace as cwd, not the worker's home", () => {
-    const { config } = buildWorkerSessionConfig({ template: TEMPLATE, cwd: "/worktrees/task-1" });
+    const { config } = buildWorkerSessionConfig({
+      template: TEMPLATE,
+      cwd: "/worktrees/task-1",
+      memory: null,
+    });
     expect(config.cwd).toBe("/worktrees/task-1");
   });
 
@@ -50,15 +98,17 @@ describe("worker session config", () => {
       template: TEMPLATE,
       cwd: "/repo",
       taskPrompt: "  Build the pricing table.  ",
+      memory: null,
     });
 
-    expect(config.systemPrompt).toBe(`${rolePrompt}\n\n---\n\nBuild the pricing table.`);
-    // The role must still come first: the task is framed by who is doing it.
+    // The task lands after the role and the memory rules, framed by who is
+    // doing it.
+    expect(config.systemPrompt?.endsWith("Build the pricing table.")).toBe(true);
     expect(config.systemPrompt?.indexOf(rolePrompt)).toBe(0);
   });
 
   it("omits optional fields rather than passing empty strings", () => {
-    const { config } = buildWorkerSessionConfig({ template: TEMPLATE, cwd: "/repo" });
+    const { config } = buildWorkerSessionConfig({ template: TEMPLATE, cwd: "/repo", memory: null });
     expect(config.model).toBeUndefined();
     expect(config.title).toBeUndefined();
   });
@@ -88,7 +138,7 @@ describe("worker session config", () => {
   });
 
   it("does not leak template bookkeeping into the prompt", () => {
-    const { config } = buildWorkerSessionConfig({ template: TEMPLATE, cwd: "/repo" });
+    const { config } = buildWorkerSessionConfig({ template: TEMPLATE, cwd: "/repo", memory: null });
     // The id and title are catalog metadata, not instructions.
     expect(config.systemPrompt).not.toContain("frontend-developer");
   });

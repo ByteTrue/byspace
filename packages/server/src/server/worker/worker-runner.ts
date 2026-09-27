@@ -11,6 +11,9 @@
  * daemon's workspace handling, permission requests, cancellation, and
  * notification behaviour instead of reimplementing them.
  */
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
 import type { Logger } from "pino";
 
 import type { AgentPromptInput } from "../agent/agent-sdk-types.js";
@@ -20,6 +23,7 @@ import type {
 } from "../agent/create-agent/create.js";
 import type { WorkerTaskRecord } from "./worker-store.js";
 import { buildWorkerSessionConfig } from "./worker-session-config.js";
+import { WORKER_MEMORY_FILENAME } from "./worker-memory.js";
 import type { WorkerTemplate } from "./worker-template.js";
 
 /** The subset of AgentManager a worker run needs. Narrow so tests need no fake manager. */
@@ -236,11 +240,20 @@ export class WorkerRunner {
       throw new WorkerWorkspaceUnresolvedError(input.workspacePath);
     }
 
+    // Read here rather than in the config builder: that module is the mapping
+    // and this one is the machinery around it. A missing file is a null memory
+    // rather than an error — a worker that has never remembered anything is the
+    // normal first state, not a fault.
+    const memory = await readFile(
+      path.join(input.workspacePath, WORKER_MEMORY_FILENAME),
+      "utf8",
+    ).catch(() => null);
     const { config } = buildWorkerSessionConfig({
       template: input.template,
       cwd: input.workspacePath,
       taskPrompt: input.prompt,
       title: input.title,
+      memory,
     });
 
     let created: CreateAgentCommandResult;
