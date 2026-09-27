@@ -21,29 +21,37 @@ function writeEchoArgScript(): string {
   return scriptPath;
 }
 
-// Use the bare command name "node" (no extension, no path separator) so
-// `shouldUseWindowsShell` resolves to true on Windows. That routes the spawn
-// through cmd.exe and exercises `quoteWindowsArgument`, which is where the
-// %-doubling bug lives. Using `process.execPath` here would skip the shell
-// path entirely and silently pass the test.
-const COMMAND = "node";
+const FORMATS = [
+  { label: "a git for-each-ref --format atom", arg: "--format=%(refname)%09%(committerdate:unix)" },
+  { label: "a bare percent-prefixed token", arg: "%(refname)" },
+];
 
 describe("spawn argument escaping for % characters", () => {
-  test("delivers a git for-each-ref --format atom to the child verbatim", async () => {
-    const scriptPath = writeEchoArgScript();
-    const formatArg = "--format=%(refname)%09%(committerdate:unix)";
+  // A bare command name used to be routed through cmd.exe, which is where the
+  // %-doubling bug lived. It no longer is, so this covers the argv path.
+  for (const { label, arg } of FORMATS) {
+    test(`delivers ${label} to the child verbatim`, async () => {
+      const scriptPath = writeEchoArgScript();
 
-    const { stdout } = await execCommand(COMMAND, [scriptPath, formatArg]);
+      const { stdout } = await execCommand("node", [scriptPath, arg]);
 
-    expect(stdout).toBe(formatArg);
-  });
+      expect(stdout).toBe(arg);
+    });
+  }
 
-  test("delivers a bare percent-prefixed token to the child verbatim", async () => {
-    const scriptPath = writeEchoArgScript();
-    const arg = "%(refname)";
+  // cmd.exe is still how batch launchers run, so the %-escaping rules are
+  // asserted there too. `shell: true` is what puts the spawn behind cmd.exe;
+  // without it these calls would quietly stop exercising `quoteWindowsArgument`.
+  test.runIf(process.platform === "win32")(
+    "delivers % characters verbatim when the spawn goes through cmd.exe",
+    async () => {
+      const scriptPath = writeEchoArgScript();
 
-    const { stdout } = await execCommand(COMMAND, [scriptPath, arg]);
+      for (const { arg } of FORMATS) {
+        const { stdout } = await execCommand("node", [scriptPath, arg], { shell: true });
 
-    expect(stdout).toBe(arg);
-  });
+        expect(stdout).toBe(arg);
+      }
+    },
+  );
 });

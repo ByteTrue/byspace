@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { fork } from "node:child_process";
+import { fork, type ForkOptions, type SpawnOptions } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { assertAbsolutePath, isSameOrDescendantPath } from "../server/path-utils.js";
 import type { TerminalState } from "@bytetrue/protocol/messages";
@@ -144,11 +144,15 @@ function cloneTerminalInfo(info: RequiredWorkerTerminalInfo): RequiredWorkerTerm
 }
 
 function forkTerminalWorker(): TerminalWorkerProcess {
-  return fork(fileURLToPath(resolveWorkerUrl()), [], {
+  // fork() forwards windowsHide to spawn(), but ForkOptions omits it. Without it
+  // the worker gets an allocated console window on Windows.
+  const options: ForkOptions & Pick<SpawnOptions, "windowsHide"> = {
     execArgv: resolveWorkerExecArgv(),
     serialization: "advanced",
     stdio: ["ignore", "ignore", "inherit", "ipc"],
-  }) as TerminalWorkerProcess;
+    windowsHide: true,
+  };
+  return fork(fileURLToPath(resolveWorkerUrl()), [], options) as TerminalWorkerProcess;
 }
 
 export function createWorkerTerminalManager(

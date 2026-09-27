@@ -1,3 +1,5 @@
+import { execFile } from "node:child_process";
+
 import treeKill from "tree-kill";
 
 export interface TreeKillTarget {
@@ -64,8 +66,30 @@ export function signalProcessTree(child: TreeKillTarget, signal: NodeJS.Signals)
     return Promise.resolve();
   }
 
+  if (process.platform === "win32") {
+    return forceKillWindowsTree(child, pid, signal);
+  }
+
   return new Promise((resolve) => {
     treeKill(pid, signal, (error) => {
+      if (error) {
+        signalDirectChild(child, signal);
+      }
+      resolve();
+    });
+  });
+}
+
+// tree-kill shells taskkill through cmd.exe with no windowsHide, so the
+// console-less daemon pops a visible window on every kill. Its win32 branch
+// ignores the signal and always force-kills, so this is the same command.
+function forceKillWindowsTree(
+  child: TreeKillTarget,
+  pid: number,
+  signal: NodeJS.Signals,
+): Promise<void> {
+  return new Promise((resolve) => {
+    execFile("taskkill.exe", ["/pid", String(pid), "/T", "/F"], { windowsHide: true }, (error) => {
       if (error) {
         signalDirectChild(child, signal);
       }
