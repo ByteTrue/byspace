@@ -3,7 +3,7 @@ import type { AgentRequests } from "./agent/requests/index.js";
 import { isDeepStrictEqual as equal } from "node:util";
 import { randomUUID } from "node:crypto";
 import { lstat, mkdir, mkdtemp, rename, rm, stat } from "node:fs/promises";
-import { basename, resolve, sep } from "path";
+import { basename, join, resolve, sep } from "path";
 import { homedir } from "node:os";
 import { CLIENT_CAPS, type ClientCapability } from "@bytetrue/protocol/client-capabilities";
 import {
@@ -204,6 +204,7 @@ import {
 import type { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import type pino from "pino";
 import { ScheduleService } from "./schedule/service.js";
+import { SECRETARY_SYSTEM_KEY } from "./multica/secretary.js";
 import type { MulticaStore } from "./multica/store.js";
 import { MulticaSession } from "./session/multica/multica-session.js";
 import {
@@ -683,6 +684,7 @@ export class Session {
   private readonly checkoutSession: CheckoutSession;
   private readonly scheduleSession: ScheduleSession;
   private readonly multicaSession: MulticaSession | null = null;
+  private readonly multicaStore: MulticaStore | undefined;
   private readonly providerCatalogSession: ProviderCatalogSession;
   private readonly workspaceFilesSession: WorkspaceFilesSession;
   private readonly agentConfigSession: AgentConfigSession;
@@ -850,6 +852,7 @@ export class Session {
       scheduleService,
       logger: this.sessionLogger,
     });
+    this.multicaStore = multicaStore;
     if (multicaStore) {
       this.multicaSession = new MulticaSession({
         store: multicaStore,
@@ -3413,6 +3416,26 @@ export class Session {
     }
   }
 
+  /**
+   * The secretary's instructions when a new session opens inside its
+   * standing workspace, else null. Keyed on the directory because the
+   * workspace is the role: anything the owner starts there talks as the
+   * chief of staff.
+   */
+  private secretaryInstructionsFor(cwd: string): string | null {
+    const store = this.multicaStore;
+    if (!store) {
+      return null;
+    }
+    const dir = join(this.byspaceHome, "multica", "secretary");
+    if (cwd !== dir && !cwd.startsWith(dir + sep)) {
+      return null;
+    }
+    const agent = store.getAgentBySystemKey(SECRETARY_SYSTEM_KEY);
+    const instructions = agent?.instructions?.trim();
+    return instructions ? instructions : null;
+  }
+
   private async createSessionAgent(
     msg: CreateAgentRequestMessage,
     agentId?: string,
@@ -3474,6 +3497,15 @@ export class Session {
         throw new Error(`Working directory does not exist or is not a directory: ${resolvedCwd}`);
       }
 
+      // A session inside the secretary's standing workspace IS the
+      // secretary: its instructions ride the session's system prompt, the
+      // same seam the worker domain used. Sessions elsewhere are unaffected.
+      const secretaryInstructions = this.secretaryInstructionsFor(resolvedCwd);
+      const createConfig =
+        secretaryInstructions !== null && !resolvedIntent.config.systemPrompt
+          ? { ...resolvedIntent.config, systemPrompt: secretaryInstructions }
+          : resolvedIntent.config;
+
       const { snapshot, liveSnapshot } = await createAgentCommand(
         {
           agentManager: this.agentManager,
@@ -3486,7 +3518,7 @@ export class Session {
         {
           kind: "session",
           agentId,
-          config: resolvedIntent.config,
+          config: createConfig,
           workspaceId: resolvedIntent.intent.workspaceId,
           worktreeName,
           initialPrompt,
