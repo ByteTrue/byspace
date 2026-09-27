@@ -210,7 +210,7 @@ BySpace 现在管的是**会话**：你选一个 workspace，起一个 agent，�
 - **技能接线** ✅ —— `materializeWorkerSkills` 落位到 workspace 的 `.agents/skills`。
 - **名册轮询 vs 事件** ✅（`67784e4b7`）—— 根因是 query key 里没有任何随连接状态变化的东西（裸 `getSnapshot` 不订阅）。修复：key 携带全部 host 的状态摘要（`subscribeAll` 单订阅），掉线/回线即 re-key；2s 轮询删除。连带修掉"全 offline 返回空 loaded 名册"的旧决定（其"永远转圈"的辩护理由被 re-key 废除）。真机两半都验证：断线期 27 卡保持，回线 ~20s 自动恢复。
 
-**记忆可见面（2026-09-26 补齐）：** 详情页 Memory 分区（`2dfa91ad5`，按需取、空态诚实）+ CLI `worker memory --worker-id`（`df97c1b6d`，只读 —— 记忆唯一作者是 worker 本人，编辑命令会是第二作者）。**刻意不做**：dream 整理 / snapshot / rollback / export —— 记忆自维护的设计下，daemon 不代写也不代整理；要备份时用文件系统备份 workspace 即可。上游这些命令的存在不构成移植理由。
+**记忆可见面（2026-09-26 补齐）：** 详情页 Memory 分区（`2dfa91ad5`，按需取、空态诚实）+ CLI `worker memory --worker-id`（`df97c1b6d`，只读 —— 记忆唯一作者是 worker 本人，编辑命令会是第二作者）。**dream 的修正（Owner 指出，`d99c688d`）**：早先把 dream 一并归入"不做"是错的 —— dream 不是人整理，是**角色自己整理自己的记忆**，符合"记忆由角色自管理"的原则。已按最小形态移植：索引超过阈值（4k 字符）时，下一个任务的 prompt 在记忆与常驻规则之间插入整理请求；daemon 只发起，整理仍由 worker 本人做（合并/丢弃/移入每日笔记由它决定）。真机：60 条冗余灌到 10,168 字符 → 一个与整理无关的任务跑完，索引收到 384 字节，事实无损。**仍不做**：snapshot / rollback / export —— 那是文件版本化，文件系统本来就版本化这些文件。
 
 **遗留（记录在案，非遗忘）：** pi 用户级 `~/.agents/skills` 无条件加载（lark-\*/agent-browser 等 47 个对 worker 可见），无法从 BySpace 侧屏蔽 —— 边界因此只能靠权限层（工具守卫已是其实体），这是长期约束而非待办。`@Waker`/`Autonomous Work` 按 Owner 决定不做。
 
