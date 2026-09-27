@@ -61,6 +61,17 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
     refetchInterval: 3_000,
   });
 
+  // The badge answers "is anyone working on this issue right now", so it
+  // keys on the running task's issue — the card's assignee may be unset
+  // (work claimed by mention, like the reference product's comment flows).
+  const workingIssueIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const task of runningQuery.data?.tasks ?? []) {
+      set.add(task.issueId);
+    }
+    return set;
+  }, [runningQuery.data]);
+
   const workingAgentIds = useMemo(() => {
     const set = new Set<string>();
     for (const task of runningQuery.data?.tasks ?? []) {
@@ -123,7 +134,7 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
             color={status.color}
             issues={workIssues.filter((issue) => issue.status === status.key)}
             agentNameById={catalog.agentNameById}
-            workingAgentIds={workingAgentIds}
+            workingIssueIds={workingIssueIds}
             selectedId={selected}
             onSelect={setSelected}
             onOpen={openIssue}
@@ -154,7 +165,7 @@ function BoardColumn({
   color,
   issues,
   agentNameById,
-  workingAgentIds,
+  workingIssueIds,
   selectedId,
   onSelect,
   onOpen,
@@ -163,7 +174,7 @@ function BoardColumn({
   color: string;
   issues: readonly MulticaIssueSummary[];
   agentNameById: ReadonlyMap<string, string>;
-  workingAgentIds: ReadonlySet<string>;
+  workingIssueIds: ReadonlySet<string>;
   selectedId: string | null;
   onSelect: (issueId: string | null) => void;
   onOpen: (issueId: string) => void;
@@ -188,7 +199,7 @@ function BoardColumn({
             key={issue.id}
             issue={issue}
             agentName={issue.assigneeId ? (agentNameById.get(issue.assigneeId) ?? null) : null}
-            working={issue.assigneeId ? workingAgentIds.has(issue.assigneeId) : false}
+            working={workingIssueIds.has(issue.id)}
             selected={selectedId === issue.id}
             onPress={handleSelect}
           />
