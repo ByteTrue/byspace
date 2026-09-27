@@ -70,7 +70,35 @@ describe("migration sequence 002–042", () => {
       "088_squad_instructions",
       "090_task_is_leader",
       "096_autopilot_squad_assignee",
+      "120_autopilot_subscriber",
+      "122_task_handoff_note",
+      "123_issue_stage",
+      "124_autopilot_run_planned_at",
+      "124_task_prepare_lease",
       "127_task_squad_id",
+      "128_comment_routing_escalation",
+      "129_agent_composio_allowlist_and_task_originator",
+      "130_agent_invocation_permission",
+      "149_issue_origin_agent_create",
+      "150_agent_task_coalesced_comments",
+      "157_agent_task_delivered_comments",
+      "162_resource_labels",
+      "163_agent_builder",
+      "164_attachment_task_id",
+      "166_project_dates",
+      "184_agent_task_attribution",
+      "185_agent_task_accountable_user",
+      "186_autopilot_rule_version",
+      "189_autopilot_trigger_publisher",
+      "190_agent_task_attribution_invariant_check",
+      "191_issue_properties",
+      "206_agent_disabled_runtime_skills",
+      "212_agent_service_tier",
+      "224_agent_task_session_rollout_missing",
+      "234_agent_task_queue_retired_session_id",
+      "236_agent_task_quick_actions_disabled",
+      "239_comment_quick_action",
+      "249_issue_subscriber_delegated",
       "332_issue_status",
       "333_issue_status_pkey_index",
       "334_issue_status_primary_key",
@@ -80,6 +108,7 @@ describe("migration sequence 002–042", () => {
       "338_issue_status_validate_format",
       "339_seed_issue_status_catalog",
       "509_issue_wakeup",
+      "538_task_supplement",
     ];
     expect(versions).toEqual(expected);
   });
@@ -172,8 +201,9 @@ describe("migration sequence 002–042", () => {
       "trigger_payload",
       "result",
       "created_at",
-      // ALTER TABLE ADD appends: 096's squad_id lands at the tail.
+      // ALTER TABLE ADD appends: 096's squad_id and 124's planned_at at the tail.
       "squad_id",
+      "planned_at",
     ]);
     expect(columns("agent_task_queue")).toContain("autopilot_run_id");
     expect(columns("issue")).toContain("origin_type");

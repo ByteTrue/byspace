@@ -517,7 +517,10 @@ export const migration087SquadNameNotUnique: Migration = {
         creator_type TEXT NOT NULL CHECK (creator_type IN ('owner', 'agent')),
         creator_id TEXT NOT NULL,
         created_at ${TS},
-        updated_at ${TS}
+        updated_at ${TS},
+        archived_at TEXT,
+        archived_by TEXT,
+        avatar_url TEXT
       );`,
       carry: [
         "id",
@@ -528,6 +531,9 @@ export const migration087SquadNameNotUnique: Migration = {
         "creator_id",
         "created_at",
         "updated_at",
+        "archived_at",
+        "archived_by",
+        "avatar_url",
       ],
       // squad itself carries no secondary index; the squad_member indexes
       // belong to squad_member and survive a squad rebuild untouched.
