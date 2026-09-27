@@ -4,10 +4,12 @@ import {
   ScheduleRunSchema,
   ScheduleSummarySchema,
   StoredScheduleSchema,
-  ScheduleTargetSchema,
+  NewAgentScheduleTargetSchema,
 } from "./types.js";
 
-const ScheduleCreateNewAgentConfigSchema = ScheduleTargetSchema.options[1].shape.config;
+// Found by shape rather than by index: options[] ordering is not part of the
+// schema's contract, and a new variant would silently shift it.
+const ScheduleCreateNewAgentConfigSchema = NewAgentScheduleTargetSchema.shape.config;
 
 const ScheduleCreateTargetSchema = z.discriminatedUnion("type", [
   z.object({
@@ -17,6 +19,10 @@ const ScheduleCreateTargetSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("agent"),
     agentId: z.guid(),
+  }),
+  z.object({
+    type: z.literal("worker"),
+    workerId: z.string().min(1),
   }),
   z.object({
     type: z.literal("new-agent"),

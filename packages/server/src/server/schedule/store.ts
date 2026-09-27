@@ -58,6 +58,13 @@ function targetIdentity(target: ScheduleTarget): unknown {
     };
   }
 
+  if (target.type === "worker") {
+    return {
+      type: target.type,
+      workerId: target.workerId,
+    };
+  }
+
   return {
     type: target.type,
     config: target.config,

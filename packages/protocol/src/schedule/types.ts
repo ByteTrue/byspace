@@ -17,28 +17,46 @@ export const ScheduleCadenceSchema = z.discriminatedUnion("type", [
 ]);
 export type ScheduleCadence = z.infer<typeof ScheduleCadenceSchema>;
 
+/**
+ * The new-agent variant on its own, for callers that need its config shape.
+ * Named rather than re-declared so the union and the standalone schema cannot
+ * drift apart.
+ */
+export const NewAgentScheduleTargetSchema = z.object({
+  type: z.literal("new-agent"),
+  config: z.object({
+    provider: AgentProviderSchema,
+    cwd: z.string().trim().min(1),
+    modeId: z.string().trim().min(1).optional(),
+    model: z.string().trim().min(1).optional(),
+    thinkingOptionId: z.string().trim().min(1).optional(),
+    archiveOnFinish: z.boolean().optional(),
+    isolation: z.enum(["local", "worktree"]).optional(),
+    title: z.string().trim().min(1).nullable().optional(),
+    providerOptions: z.record(z.string(), z.json()).optional(),
+    featureValues: z.record(z.string(), z.unknown()).optional(),
+    systemPrompt: z.string().optional(),
+    mcpServers: z.record(z.string(), z.unknown()).optional(),
+  }),
+});
+export type NewAgentScheduleTarget = z.infer<typeof NewAgentScheduleTargetSchema>;
+
 export const ScheduleTargetSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("agent"),
     agentId: z.guid(),
   }),
   z.object({
-    type: z.literal("new-agent"),
-    config: z.object({
-      provider: AgentProviderSchema,
-      cwd: z.string().trim().min(1),
-      modeId: z.string().trim().min(1).optional(),
-      model: z.string().trim().min(1).optional(),
-      thinkingOptionId: z.string().trim().min(1).optional(),
-      archiveOnFinish: z.boolean().optional(),
-      isolation: z.enum(["local", "worktree"]).optional(),
-      title: z.string().trim().min(1).nullable().optional(),
-      providerOptions: z.record(z.string(), z.json()).optional(),
-      featureValues: z.record(z.string(), z.unknown()).optional(),
-      systemPrompt: z.string().optional(),
-      mcpServers: z.record(z.string(), z.unknown()).optional(),
-    }),
+    type: z.literal("worker"),
+    /**
+     * The worker the trigger hands its prompt to. A schedule firing becomes a
+     * task for this worker, created and run through the same path a person
+     * handing work over uses — so the task carries state, history, and a
+     * conversation to open, and the worker's guard and one-run invariant apply.
+     */
+    workerId: z.string().min(1),
   }),
+  NewAgentScheduleTargetSchema,
 ]);
 export type ScheduleTarget = z.infer<typeof ScheduleTargetSchema>;
 

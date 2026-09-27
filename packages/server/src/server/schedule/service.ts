@@ -240,6 +240,16 @@ export interface ScheduleServiceOptions {
   archiveWorkspace: (workspaceId: string) => Promise<void>;
   now?: () => Date;
   runner?: (schedule: StoredSchedule, runId: string) => Promise<ScheduleExecutionResult>;
+  /**
+   * Executes a worker-target schedule: hands the prompt to a worker as a task.
+   *
+   * Injected rather than imported because the worker domain sits beside this
+   * one, not under it: a schedule that hands work to a worker is a worker
+   * concern wearing a schedule, and the seam stays a callback so this service
+   * never learns how workers run. Absent means worker targets fail with a
+   * clear error — a schedule of that kind cannot silently do nothing.
+   */
+  runWorkerPrompt?: (workerId: string, prompt: string) => Promise<ScheduleExecutionResult>;
 }
 
 export class ScheduleService {
@@ -260,6 +270,9 @@ export class ScheduleService {
     schedule: StoredSchedule,
     runId: string,
   ) => Promise<ScheduleExecutionResult>;
+  private runWorkerPrompt:
+    | ((workerId: string, prompt: string) => Promise<ScheduleExecutionResult>)
+    | null;
   private readonly runningScheduleIds = new Set<string>();
   private tickTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -274,6 +287,20 @@ export class ScheduleService {
     this.archiveWorkspace = options.archiveWorkspace;
     this.now = options.now ?? (() => new Date());
     this.runner = options.runner ?? ((schedule, runId) => this.executeSchedule(schedule, runId));
+    this.runWorkerPrompt = options.runWorkerPrompt ?? null;
+  }
+
+  /**
+   * Provide (or replace) the executor for worker-target schedules.
+   *
+   * A setter rather than a constructor option because the worker subsystem is
+   * assembled after this service starts; the dependency is late the same way the
+   * wake loop's is.
+   */
+  setWorkerPromptRunner(
+    run: (workerId: string, prompt: string) => Promise<ScheduleExecutionResult>,
+  ): void {
+    this.runWorkerPrompt = run;
   }
 
   async start(): Promise<void> {
@@ -837,45 +864,12 @@ export class ScheduleService {
     schedule: StoredSchedule,
     runId: string,
   ): Promise<ScheduleExecutionResult> {
-    if (schedule.target.type === "agent") {
-      const wrappedPrompt = formatSystemNotificationPrompt(buildScheduleFireBody(schedule, runId));
-      const record = await this.agentStorage.get(schedule.target.agentId);
-      if (!record) {
-        throw new ScheduleTargetGoneError(`Agent ${schedule.target.agentId} no longer exists`);
-      }
-      if (record.archivedAt) {
-        throw new ScheduleTargetGoneError(`Agent ${schedule.target.agentId} is archived`);
-      }
+    if (schedule.target.type === "worker") {
+      return this.executeWorkerTarget(schedule, schedule.target);
+    }
 
-      const agent = await ensureAgentLoaded(schedule.target.agentId, {
-        agentManager: this.agentManager,
-        agentStorage: this.agentStorage,
-        logger: this.logger,
-      });
-      if (this.agentManager.hasInFlightRun(agent.id)) {
-        throw new Error(`Agent ${agent.id} already has an active run`);
-      }
-      await startAgentRun(this.agentManager, agent.id, wrappedPrompt, this.logger, {
-        replaceRunning: true,
-        activeTurnBehavior: "steer",
-      });
-      const waitResult = await this.agentManager.waitForAgentEvent(agent.id, {
-        waitForActive: true,
-      });
-      if (waitResult.permission) {
-        throw new Error(`Scheduled agent ${agent.id} is waiting for permission`);
-      }
-      if (waitResult.status === "error") {
-        throw new Error(waitResult.lastMessage ?? `Scheduled agent ${agent.id} failed`);
-      }
-      return {
-        agentId: agent.id,
-        output: buildRunOutput({
-          output: null,
-          timelineText: "",
-          finalText: waitResult.lastMessage ?? "",
-        }),
-      };
+    if (schedule.target.type === "agent") {
+      return this.executeAgentTarget(schedule, schedule.target.agentId, runId);
     }
 
     const config = schedule.target.type === "new-agent" ? schedule.target.config : null;
@@ -981,6 +975,71 @@ export class ScheduleService {
         return (await this.createBySpaceWorktreeWorkspace({ cwd: config.cwd, firstAgentContext }))
           .workspace;
     }
+  }
+
+  /** An existing agent runs the prompt in its own session. */
+  private async executeAgentTarget(
+    schedule: StoredSchedule,
+    agentId: string,
+    runId: string,
+  ): Promise<ScheduleExecutionResult> {
+    const wrappedPrompt = formatSystemNotificationPrompt(buildScheduleFireBody(schedule, runId));
+    const record = await this.agentStorage.get(agentId);
+    if (!record) {
+      throw new ScheduleTargetGoneError(`Agent ${agentId} no longer exists`);
+    }
+    if (record.archivedAt) {
+      throw new ScheduleTargetGoneError(`Agent ${agentId} is archived`);
+    }
+
+    const agent = await ensureAgentLoaded(agentId, {
+      agentManager: this.agentManager,
+      agentStorage: this.agentStorage,
+      logger: this.logger,
+    });
+    if (this.agentManager.hasInFlightRun(agent.id)) {
+      throw new Error(`Agent ${agent.id} already has an active run`);
+    }
+    await startAgentRun(this.agentManager, agent.id, wrappedPrompt, this.logger, {
+      replaceRunning: true,
+      activeTurnBehavior: "steer",
+    });
+    const waitResult = await this.agentManager.waitForAgentEvent(agent.id, {
+      waitForActive: true,
+    });
+    if (waitResult.permission) {
+      throw new Error(`Scheduled agent ${agent.id} is waiting for permission`);
+    }
+    if (waitResult.status === "error") {
+      throw new Error(waitResult.lastMessage ?? `Scheduled agent ${agent.id} failed`);
+    }
+    return {
+      agentId: agent.id,
+      output: buildRunOutput({
+        output: null,
+        timelineText: "",
+        finalText: waitResult.lastMessage ?? "",
+      }),
+    };
+  }
+
+  /**
+   * A worker target is a task handed to that worker: same path a person
+   * handing work over uses, so the task carries state, history, and a
+   * conversation to open, and the worker's guard and one-run invariant apply to
+   * it. Missing injection is an error rather than a skip: a schedule that
+   * cannot run must say so in its run history.
+   */
+  private async executeWorkerTarget(
+    schedule: StoredSchedule,
+    target: { workerId: string },
+  ): Promise<ScheduleExecutionResult> {
+    if (!this.runWorkerPrompt) {
+      throw new Error(
+        `Schedule ${schedule.id} targets worker ${target.workerId}, which this daemon cannot execute`,
+      );
+    }
+    return this.runWorkerPrompt(target.workerId, schedule.prompt);
   }
 
   private async assertNewAgentCwdDirectory(cwd: string): Promise<void> {

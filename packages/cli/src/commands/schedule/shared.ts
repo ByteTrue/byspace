@@ -70,6 +70,9 @@ export function formatTarget(target: ScheduleTarget | ScheduleListItem["target"]
   if (target.type === "self") {
     return `self:${target.agentId.slice(0, 7)}`;
   }
+  if (target.type === "worker") {
+    return `worker:${target.workerId.slice(0, 11)}`;
+  }
   if (target.type === "agent") {
     return `agent:${target.agentId.slice(0, 7)}`;
   }
@@ -117,6 +120,18 @@ function resolveScheduleTarget(args: {
       message: "--provider/--mode/--thinking can only be used with a new-agent target",
       details: "Use --target new-agent or omit --target to create a new agent schedule",
     } satisfies CommandError;
+  }
+
+  if (targetValue.startsWith("worker:")) {
+    const workerId = targetValue.slice("worker:".length).trim();
+    if (!workerId) {
+      throw {
+        code: "INVALID_TARGET",
+        message: "--target worker:<id> needs a worker id",
+        details: "List one with: byspace worker ls",
+      } satisfies CommandError;
+    }
+    return { type: "worker", workerId };
   }
 
   if (targetValue === "self") {

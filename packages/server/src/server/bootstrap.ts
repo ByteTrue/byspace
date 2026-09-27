@@ -1338,6 +1338,19 @@ export async function createBySpaceDaemon(
     findWorkspaceIdForCwd: findWorkspaceIdForCwdExternal,
     createDirectoryWorkspace: createScheduleLocalWorkspaceExternal,
   });
+  // A schedule targeting a worker hands its prompt over as a task: the worker
+  // path carries state, history, and the guard. Wired after the subsystem exists
+  // rather than at construction, because the schedule service starts first.
+  scheduleService.setWorkerPromptRunner(async (workerId, prompt) => {
+    const task = await workerService.createTask({ workerId, title: prompt });
+    const record = await workerService.runTask(task.taskId);
+    return {
+      agentId: record.agentId,
+      // The task's final state is the honest output of a trigger: submitted
+      // means there is something to review, blocked names what stopped it.
+      output: `task ${record.taskId} ${record.state}`,
+    };
+  });
   agentManager.setAgentArchivedCallback(async (agentId) => {
     try {
       await scheduleService.completeForAgent(agentId);

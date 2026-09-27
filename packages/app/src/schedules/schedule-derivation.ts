@@ -70,6 +70,11 @@ function resolveTarget(input: ResolveScheduleInput): ScheduleTargetResolution {
     }
     return { label: "Agent unavailable", provider: null };
   }
+  if (schedule.target.type === "worker") {
+    // A worker target has no cwd or provider of its own: the label is who the
+    // work is handed to, and the provider is the one workers always run on.
+    return { label: schedule.target.workerId, provider: null };
+  }
   return {
     label: describeScheduleCwd({ serverId, cwd: schedule.target.config.cwd, projectNameByCwd }),
     provider: schedule.target.config.provider,

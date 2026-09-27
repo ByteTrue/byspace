@@ -21,6 +21,10 @@ export type ScheduleTarget =
       agentId: string;
     }
   | {
+      type: "worker";
+      workerId: string;
+    }
+  | {
       type: "new-agent";
       config: {
         provider: string;

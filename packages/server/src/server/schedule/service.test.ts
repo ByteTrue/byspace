@@ -3277,4 +3277,103 @@ describe("ScheduleService", () => {
     expect(await service.completeForAgent(agentId)).toBe(1);
     expect(await service.completeForAgent(agentId)).toBe(0);
   });
+
+  describe("worker-target schedules", () => {
+    test("hands the prompt to the injected worker runner", async () => {
+      // A schedule targeting a worker does not create an agent itself: it hands
+      // the prompt over, and the worker path owns execution. What to pin here is
+      // the handoff — the worker id and the prompt arrive intact, and the run
+      // records what the worker path reported back.
+      const calls: Array<{ workerId: string; prompt: string }> = [];
+      const service = createScheduleService({
+        byspaceHome: tempDir,
+        logger: createTestLogger(),
+        agentManager: new AgentManager({ logger: createTestLogger() }),
+        runWorkerPrompt: async (workerId, prompt) => {
+          calls.push({ workerId, prompt });
+          return {
+            agentId: "1a2b3c4d-0000-4000-8000-000000000001",
+            output: "task wtk_1 submitted",
+          };
+        },
+      });
+      await service.start();
+      const schedule = await service.create({
+        name: "daily check",
+        prompt: "Check the pricing page",
+        cadence: { type: "cron", expression: "*/5 * * * *", timezone: "UTC" },
+        target: { type: "worker", workerId: "wkr_1" },
+      });
+
+      try {
+        await service.runOnce(schedule.id);
+
+        expect(calls).toEqual([{ workerId: "wkr_1", prompt: "Check the pricing page" }]);
+        const runs = (await service.inspect(schedule.id)).runs;
+        const last = runs[runs.length - 1];
+        expect(last?.status).toBe("succeeded");
+        expect(last?.agentId).toBe("1a2b3c4d-0000-4000-8000-000000000001");
+        expect(last?.output).toContain("submitted");
+      } finally {
+        await service.stop();
+      }
+    });
+
+    test("fails clearly when no worker runner is wired", async () => {
+      // A schedule that cannot run must say so in its run history rather than
+      // silently doing nothing.
+      const service = createScheduleService({
+        byspaceHome: tempDir,
+        logger: createTestLogger(),
+        agentManager: new AgentManager({ logger: createTestLogger() }),
+      });
+      await service.start();
+      const schedule = await service.create({
+        name: "orphan",
+        prompt: "Do the thing",
+        cadence: { type: "cron", expression: "*/5 * * * *", timezone: "UTC" },
+        target: { type: "worker", workerId: "wkr_gone" },
+      });
+
+      try {
+        await service.runOnce(schedule.id);
+
+        const runs = (await service.inspect(schedule.id)).runs;
+        const last = runs[runs.length - 1];
+        expect(last?.status).toBe("failed");
+        expect(last?.error).toContain("cannot execute");
+      } finally {
+        await service.stop();
+      }
+    });
+
+    test("a worker runner failure lands in the run history, not thrown", async () => {
+      const service = createScheduleService({
+        byspaceHome: tempDir,
+        logger: createTestLogger(),
+        agentManager: new AgentManager({ logger: createTestLogger() }),
+        runWorkerPrompt: async () => {
+          throw new Error("worker busy");
+        },
+      });
+      await service.start();
+      const schedule = await service.create({
+        name: "busy",
+        prompt: "Do the thing",
+        cadence: { type: "cron", expression: "*/5 * * * *", timezone: "UTC" },
+        target: { type: "worker", workerId: "wkr_busy" },
+      });
+
+      try {
+        await service.runOnce(schedule.id);
+
+        const runs = (await service.inspect(schedule.id)).runs;
+        const last = runs[runs.length - 1];
+        expect(last?.status).toBe("failed");
+        expect(last?.error).toContain("worker busy");
+      } finally {
+        await service.stop();
+      }
+    });
+  });
 });
