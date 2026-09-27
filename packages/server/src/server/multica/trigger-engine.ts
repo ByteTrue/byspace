@@ -204,7 +204,12 @@ function findSquadByName(
  * and a run of name characters.
  */
 export function parseMentions(content: string): string[] {
-  const matches = content.matchAll(/(?:^|\s)@([A-Za-z0-9_-]+)/g);
+  // A mention starts at a name boundary — the beginning of the text or any
+  // character that cannot be part of a name (not a letter, digit, underscore,
+  // or hyphen). Whitespace alone is wrong for CJK punctuation: a colon before
+  // the @ (「请回复：@Writer」) is a full-width character that \s does not
+  // match, and the mention would be silently dropped.
+  const matches = content.matchAll(/(?:^|[^A-Za-z0-9_-])@([A-Za-z0-9_-]+)/g);
   const names: string[] = [];
   for (const match of matches) {
     const name = match[1];

@@ -231,4 +231,11 @@ describe("parseMentions", () => {
     expect(parseMentions("hi @Foo and @Bar, cc @Foo again")).toEqual(["Foo", "Bar"]);
     expect(parseMentions("email user@host is not a mention")).toEqual([]);
   });
+
+  it("recognizes mentions after full-width punctuation", () => {
+    // CJK punctuation before the @ is a boundary: 请回复：@Writer must wake
+    // Writer, and a pure-whitespace boundary rule would silently drop it.
+    expect(parseMentions("请回复：@Writer")).toEqual(["Writer"]);
+    expect(parseMentions("任务（@Writer 负责）")).toEqual(["Writer"]);
+  });
 });

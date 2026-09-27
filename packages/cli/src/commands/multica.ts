@@ -221,6 +221,42 @@ export async function runMulticaCommentSendCommand(
   }
 }
 
+export async function runMulticaAgentCreateCommand(
+  options: CommandOptions & { name?: string; description?: string; instructions?: string },
+  _command: Command,
+): Promise<{ type: "list"; data: MulticaAgentRow[]; schema: OutputSchema<MulticaAgentRow> }> {
+  const name = options.name?.trim();
+  if (!name) {
+    throw { code: "MISSING_NAME", message: "--name is required" } satisfies CommandError;
+  }
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaAgentCreate({
+      name,
+      description: options.description,
+      instructions: options.instructions,
+    });
+    const created = payload.agent;
+    return {
+      type: "list",
+      data: [
+        {
+          name: created.name,
+          kind: created.kind,
+          status: created.status,
+          description: created.description,
+          agentId: created.id,
+        },
+      ],
+      schema: multicaAgentSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
 export function createMulticaCommand(): Command {
   const multica = new Command("multica").description("The issue-centric workspace");
 
@@ -245,9 +281,19 @@ export function createMulticaCommand(): Command {
       .allowExcessArguments(false),
   ).action(withOutput(runMulticaIssueCreateCommand));
 
+  const agent = multica.command("agent").description("Agents");
   addJsonAndDaemonHostOptions(
-    multica.command("agent").description("List agents").allowExcessArguments(false),
+    agent.command("ls").description("List agents").allowExcessArguments(false),
   ).action(withOutput(runMulticaAgentLsCommand));
+  addJsonAndDaemonHostOptions(
+    agent
+      .command("create")
+      .description("Create an agent")
+      .requiredOption("--name <name>", "Agent name")
+      .option("--description <text>", "Agent description")
+      .option("--instructions <text>", "Agent instructions")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaAgentCreateCommand));
 
   const comment = multica.command("comment").description("Comments on an issue");
   addJsonAndDaemonHostOptions(
