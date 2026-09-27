@@ -310,19 +310,36 @@ describe("fetchAggregatedWorkers", () => {
       } as WorkerRuntime,
     });
     expect(listWorkers).not.toHaveBeenCalled();
-    // A host that is offline is not \"still connecting\". Reporting it that way
-    // left the screen spinning forever, because nothing would ever change the
-    // answer once the host was gone.
-    expect(state.status).toBe("loaded");
+    // An offline host with hosts configured is waiting, not an answer: a
+    // loaded-empty roster here would erase a good one on every disconnect. The
+    // waiting terminates because the query key carries the status digest, so a
+    // host coming back online re-runs this immediately.
+    expect(state.status).toBe("connecting");
   });
 
-  it("reports a host that errored as loaded rather than as connecting", async () => {
+  it("reports an empty roster as loaded when no host is configured at all", async () => {
+    // With no hosts there is nothing to wait for: an empty roster is the
+    // honest answer rather than an eternal spinner.
     const state = await fetchAggregatedWorkers({
-      hosts: [HOST_A],
-      runtime: runtimeWith({ statuses: { srv_a: "error" } }),
+      hosts: [],
+      runtime: {
+        getSnapshot: () => null,
+        getClient: () => null,
+      } as WorkerRuntime,
     });
     expect(state.status).toBe("loaded");
     if (state.status !== "loaded") return;
     expect(state.workers).toEqual([]);
+  });
+
+  it("treats a host in error as waiting, for the same reason as offline", async () => {
+    // A host in error will retry and may come back; the digest re-keys when it
+    // does. Until then waiting keeps the last good roster on screen instead of
+    // replacing it with an empty one.
+    const state = await fetchAggregatedWorkers({
+      hosts: [HOST_A],
+      runtime: runtimeWith({ statuses: { srv_a: "error" } }),
+    });
+    expect(state.status).toBe("connecting");
   });
 });

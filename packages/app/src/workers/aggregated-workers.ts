@@ -146,15 +146,6 @@ export interface FetchWorkersInput {
 }
 
 /**
- * A host the runtime has not finished with yet. `idle` counts because a host
- * that has not started connecting is still expected to.
- */
-function isHostSettling(snapshot: WorkerRuntimeSnapshot | null | undefined): boolean {
-  if (!snapshot) return true;
-  return snapshot.connectionStatus === "connecting" || snapshot.connectionStatus === "idle";
-}
-
-/**
  * Run something that is allowed to fail, with an empty result when it does.
  *
  * `.catch()` only handles a rejected promise; a method that throws before
@@ -194,13 +185,14 @@ function connectedClient(
 
 export async function fetchAggregatedWorkers(input: FetchWorkersInput): Promise<WorkerLoadState> {
   const hasAskableHost = input.hosts.some((host) => connectedClient(host, input.runtime) !== null);
-  // Nothing askable and nothing settling means every host is genuinely unusable
-  // (offline, erroring). That is a loaded state with host errors, not "still
-  // connecting"; reporting it as connecting would spin forever.
-  const hasSettlingHost = input.hosts.some((host) =>
-    isHostSettling(input.runtime.getSnapshot(host.serverId)),
-  );
-  if (!hasAskableHost && hasSettlingHost) {
+  // Hosts exist but none is online — whether mid-handshake or dropped — is
+  // waiting, not an answer. Returning a loaded-empty roster here used to erase
+  // a good one on every disconnect, and the "spin forever" worry that kept this
+  // loaded no longer holds: the query key carries the hosts' status digest, so
+  // the moment one comes back online the query re-runs and this terminates.
+  // With no hosts configured at all there is nothing to wait for, and an empty
+  // roster is the honest answer.
+  if (input.hosts.length > 0 && !hasAskableHost) {
     return { status: "connecting" };
   }
 

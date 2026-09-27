@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useSyncExternalStore } from "react";
 import { useFetchQuery } from "@/data/query";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
 import {
@@ -11,8 +11,16 @@ import {
   type WorkerTemplateOption,
 } from "@/workers/aggregated-workers";
 
-export function workersQueryKey(serverIds: readonly string[]) {
-  return [...workersQueryBaseKey, [...serverIds].sort().join("|")] as const;
+export function workersQueryKey(serverIds: readonly string[], statuses?: readonly string[]) {
+  return [
+    ...workersQueryBaseKey,
+    [...serverIds].sort().join("|"),
+    // The status digest is what makes a host coming online re-key the query.
+    // Without it the key is only the host list, which does not change on a
+    // reconnect, and the roster serves its cached "still connecting" answer
+    // until something else happens to invalidate it.
+    ...(statuses ? [[...statuses].sort().join("|")] : []),
+  ] as const;
 }
 
 export interface UseWorkersResult {
@@ -35,6 +43,30 @@ export interface UseWorkersResult {
  * blip. So the last successful payload is held and preferred until a newer
  * successful one arrives.
  */
+/**
+ * The connection status of each host, in the order of the ids given.
+ *
+ * One subscription over all hosts rather than one hook per host: hooks cannot
+ * run in a loop over a dynamic list, and the store already has a global
+ * listener for exactly this shape. The snapshot is recomputed on any host's
+ * change, so a host coming online is seen the moment the store sees it.
+ */
+function useHostStatuses(serverIds: readonly string[]): string[] {
+  const store = getHostRuntimeStore();
+  const statuses = useSyncExternalStore(
+    (onStoreChange) => store.subscribeAll(onStoreChange),
+    () =>
+      serverIds
+        .map((serverId) => store.getSnapshot(serverId)?.connectionStatus ?? "unknown")
+        .join("|"),
+    () =>
+      serverIds
+        .map((serverId) => store.getSnapshot(serverId)?.connectionStatus ?? "unknown")
+        .join("|"),
+  );
+  return useMemo(() => statuses.split("|"), [statuses]);
+}
+
 export function useWorkers(): UseWorkersResult {
   const hosts = useHosts();
   const runtime = getHostRuntimeStore();
@@ -44,17 +76,18 @@ export function useWorkers(): UseWorkersResult {
   );
   const serverIds = useMemo(() => hostInputs.map((host) => host.serverId), [hostInputs]);
 
+  // One reactive read per host. getSnapshot(serverId) without this hook is a
+  // plain function call: nothing subscribes, and a status change never
+  // re-renders — which is exactly how the roster ended up on a 2-second
+  // self-healing poll instead of reacting to a host coming back.
+  const statuses = useHostStatuses(serverIds);
+  const statusDigest = useMemo(() => statuses.join("|"), [statuses]);
+
   const query = useFetchQuery({
-    queryKey: workersQueryKey(serverIds),
+    queryKey: workersQueryKey(serverIds, statusDigest ? [statusDigest] : undefined),
     queryFn: () => fetchAggregatedWorkers({ hosts: hostInputs, runtime }),
     dataShape: "list",
     staleTimeMs: 5_000,
-    // A screen opened while a host is still handshaking would otherwise cache
-    // that answer and never ask again: the connection status in the query key
-    // did not re-key reliably, so the roster stayed on the transient state.
-    // Polling until something loads is the self-healing version and it stops as
-    // soon as it succeeds.
-    refetchInterval: (state) => (state.state.data?.status === "loaded" ? false : 2_000),
   });
 
   // Written during render on purpose: the ref only ever holds the most recent
