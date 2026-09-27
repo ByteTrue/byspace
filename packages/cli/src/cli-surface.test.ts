@@ -91,5 +91,11 @@ describe("canonical CLI surface", () => {
     expect(groupCreate?.helpInformation()).toContain("--coordinator <worker-id>");
     expect(groupCreate?.helpInformation()).toContain("--member <worker-id>");
     expect(groupCreate?.helpInformation()).toContain("--project-id <id>");
+
+    const memory = worker?.commands.find((command) => command.name() === "memory");
+    // An operator's read of what a worker has learned; read-only, because the
+    // memory's one author is the worker itself.
+    expect(memory?.helpInformation()).toContain("Show what a worker has remembered");
+    expect(memory?.helpInformation()).toContain("--worker-id <id>");
   });
 });

@@ -22,6 +22,7 @@ import {
   runWorkerTaskRunCommand,
 } from "./task.js";
 import { runWorkerTemplateLsCommand } from "./templates.js";
+import { runWorkerMemoryShowCommand } from "./memory.js";
 
 /**
  * Worker and group management.
@@ -57,6 +58,14 @@ export function createWorkerCommand(): Command {
       .description("List the roles a worker can be created with")
       .allowExcessArguments(false),
   ).action(withOutput(runWorkerTemplateLsCommand));
+
+  addJsonAndDaemonHostOptions(
+    worker
+      .command("memory")
+      .description("Show what a worker has remembered")
+      .requiredOption("--worker-id <id>", "Worker whose memory to read")
+      .allowExcessArguments(false),
+  ).action(withOutput(runWorkerMemoryShowCommand));
 
   const task = worker.command("task").description("Tasks assigned to workers");
 
