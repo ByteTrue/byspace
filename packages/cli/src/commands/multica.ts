@@ -2,8 +2,9 @@
  * The multica CLI: the operator's terminal surface for the replica.
  *
  * Mirrors the reference product's command surface in shape (issue / agent /
- * squad / comment) with one BySpace-specific addition: `office` opens the
- * secretary's channel — comment there and the chief of staff routes.
+ * squad / comment). The secretary is not a command: the owner chats with it
+ * through the ordinary agent session of its standing workspace, and the
+ * secretary itself drives these commands from inside its own session.
  */
 import { Command } from "commander";
 import {

@@ -8,11 +8,25 @@
  */
 import type { AgentRow, CommentRow, IssueRow } from "./rows.js";
 
+/**
+ * The executing agent's own instructions, when it carries any. A run is a
+ * session in the agent's role; without its instructions a Chief of Staff run
+ * would be an amnesiac with a task list.
+ */
+function roleLines(agent: AgentRow): string[] {
+  const instructions = agent.instructions?.trim();
+  if (!instructions) {
+    return [];
+  }
+  return ["## Your standing instructions", "", instructions, ""];
+}
+
 export function createIssuePrompt(input: { issue: IssueRow; agent: AgentRow }): string {
   const { issue, agent } = input;
   return [
     `You are ${agent.name}. Work this issue and report back.`,
     "",
+    ...roleLines(agent),
     `# ${issue.title}`,
     "",
     issue.description ?? "(no description)",
@@ -32,6 +46,7 @@ export function createCommentPrompt(input: {
   return [
     `You are ${agent.name}. A comment on your issue needs your attention.`,
     "",
+    ...roleLines(agent),
     `# ${issue.title}`,
     "",
     issue.description ?? "(no description)",

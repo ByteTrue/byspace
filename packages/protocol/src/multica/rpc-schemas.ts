@@ -15,6 +15,13 @@ import { z } from "zod";
 
 // ---------------------------------------------------------------- agents
 
+/**
+ * The standing workspace the built-in secretary lives in. Shared because two
+ * surfaces must agree on it: the daemon seeds a workspace under this title,
+ * and the board resolves its front-door entry by it.
+ */
+export const MULTICA_SECRETARY_WORKSPACE_TITLE = "Chief of Staff";
+
 export const MulticaAgentSummarySchema = z.object({
   id: z.string(),
   name: z.string(),

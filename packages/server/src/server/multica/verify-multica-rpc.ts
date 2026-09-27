@@ -46,26 +46,21 @@ async function main(): Promise<void> {
 
         // issue
         const issue = await client.multicaIssueCreate({ title: "Ship the board" });
-        // The secretary's office channel is seeded at startup and takes the
-        // first number, so this issue's number is not 1 — it is unique and higher.
+        // No channel issue is seeded any more — the secretary lives in a
+        // workspace — so this issue's number is 1 unless a prior run left rows.
         check(
-          "issue create allocates a unique number",
-          issue.issue.number !== null && issue.issue.number > 1,
+          "issue create allocates number 1 (no channel issue is seeded)",
+          issue.issue.number === 1,
           String(issue.issue.number),
         );
         const issues = await client.multicaIssueList({});
         check(
-          "issue list sees it alongside the office channel",
+          "issue list sees it",
           issues.issues.some((candidate) => candidate.id === issue.issue.id),
         );
         check(
-          "the office channel is present and assigned",
-          issues.issues.some(
-            (candidate) =>
-              candidate.title.startsWith("Office") &&
-              candidate.assigneeType === "agent" &&
-              candidate.assigneeId !== null,
-          ),
+          "the retired office channel no longer reads as a live issue",
+          !issues.issues.some((candidate) => candidate.title.startsWith("Office")),
         );
         const got = await client.multicaIssueGet(issue.issue.id);
         check("issue get round-trips", got.issue.title === "Ship the board");

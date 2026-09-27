@@ -27,6 +27,10 @@ export interface MulticaSubsystemOptions {
     cwd: string;
     firstAgentContext: { prompt: string };
   }) => Promise<{ cwd: string; workspaceId: string }>;
+  readonly provisionSecretaryWorkspace: (input: {
+    cwd: string;
+    title: string;
+  }) => Promise<{ cwd: string; workspaceId: string }>;
   readonly logger: pino.Logger;
 }
 
@@ -83,10 +87,20 @@ export function createMulticaSubsystem(options: MulticaSubsystemOptions): {
   const timer = setInterval(drain, 30_000);
   timer.unref?.();
 
-  const seed = seedSecretary(store);
-  options.logger.info(
-    { agentId: seed.agentId, channelIssueId: seed.channelIssueId },
-    "Multica secretary seeded",
-  );
+  const seedSecretaryWorkspace = async (): Promise<void> => {
+    try {
+      const seed = await seedSecretary(
+        store,
+        options.provisionSecretaryWorkspace,
+        options.byspaceHome,
+      );
+      options.logger.info({ workspaceId: seed.workspaceId }, "Secretary workspace ready");
+    } catch (error) {
+      // The secretary's workspace is the owner's front door; a failure here
+      // must be loud, but a workspace hiccup must not take the daemon down.
+      options.logger.error({ err: error }, "Failed to seed the secretary workspace");
+    }
+  };
+  void seedSecretaryWorkspace();
   return { store, kickDrain };
 }

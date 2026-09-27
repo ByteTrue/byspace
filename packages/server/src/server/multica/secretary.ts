@@ -20,12 +20,15 @@
  *   - present a preview and obtain confirmation before creating or
  *     materially reconfiguring agents and squads.
  *
- * The conversation surface: one dedicated issue — the secretary's channel —
- * seeded at startup. The owner talks to the secretary by commenting there;
- * the engine the rest of this domain already has does the waking and the
- * writing back. Zero new mechanisms: the secretary is an agent, its channel
- * is an issue, and its self-direction is the comment trigger.
+ * The conversation surface is the repo's existing agent session UI: the
+ * secretary is an ordinary agent the owner chats with, and it acts on the
+ * multica domain through the CLI from inside its own session. Runs it
+ * dispatches carry its instructions and write results back to issues.
  */
+import path from "node:path";
+
+import { MULTICA_SECRETARY_WORKSPACE_TITLE } from "@bytetrue/protocol/multica/rpc-schemas";
+
 import type { MulticaStore } from "./store.js";
 
 export const SECRETARY_SYSTEM_KEY = "secretary";
@@ -36,11 +39,12 @@ const SECRETARY_INSTRUCTIONS = `You are the workspace's Chief of Staff — the o
 ## Working model
 
 - The owner brings you a goal, not a routing decision. Never answer by naming the agent they should use or the feature they should go find — route it yourself and tell them what you chose.
-- Answer here when one turn is enough and the answer itself is the deliverable — explaining, recalling, comparing options.
-- Create an issue when the work needs tools, more than one turn, or a record someone will return to. An issue carries ownership, status, and results; a reply here carries none of them.
+- Answer in this conversation when one turn is enough and the answer itself is the deliverable — explaining, recalling, comparing options.
+- Create an issue when the work needs tools, more than one turn, or a record someone will return to. An issue carries ownership, status, and results; a chat turn carries none of them.
 - When the two are close, say in one clause which you chose and continue. Do not make the owner pick.
 - Route each issue to the smallest thing that fits: yourself, when your own capabilities cover the work; a teammate agent, when it needs their role; a squad, when the work belongs to a standing group.
-- Never check out a repository, edit code, or produce a deliverable inside this conversation. Create the issue and let the assigned run do that work.
+- Never check out a repository, edit code, or produce a deliverable inside a chat turn. Create the issue and let the assigned run do that work.
+- You operate on this domain through the byspace CLI: multica issue/agent/comment/task commands. Read rather than assume — list before you create, and name ids exactly as the CLI returns them.
 - Present a concrete preview and obtain confirmation before creating or materially reconfiguring agents and squads.
 - Keep the owner oriented: concise updates, evidence-based claims, and a clear next action. When a run continues on an issue, say its state and point there for progress and results.
 
@@ -50,20 +54,40 @@ You have the multica CLI available for issues, agents, squads, and tasks. Load t
 
 export interface SecretarySeed {
   readonly agentId: string;
-  readonly channelIssueId: string;
+  readonly workspaceId: string;
 }
 
 /**
- * Seed the secretary at startup: the system agent and its channel issue.
- *
- * Idempotent by system key and issue title — a restart finds both and
- * returns them, so the channel never duplicates and the agent never reseeds.
+ * The standing workspace the secretary lives in. The owner talks to the
+ * secretary exactly like any other agent — the repo's own session surface,
+ * with its composer, new chats, and terminals — and the secretary acts on
+ * the multica domain through the CLI from inside that session. There is no
+ * bespoke chat UI and no channel issue: the workspace IS the office.
  */
-export function seedSecretary(store: MulticaStore): SecretarySeed {
+export const SECRETARY_WORKSPACE_TITLE = MULTICA_SECRETARY_WORKSPACE_TITLE;
+
+/**
+ * Seed the secretary at startup: the system agent and its standing
+ * workspace. Idempotent by system key and workspace title.
+ *
+ * An earlier form seeded a dedicated "Office" issue as the conversation
+ * channel; that surface duplicated what the session UI already is, so the
+ * seed now provisions the workspace instead and tombstones any leftover
+ * channel issue (its comments are real history — deleting the row would
+ * cascade-delete every run and comment recorded through it).
+ */
+export function seedSecretary(
+  store: MulticaStore,
+  provisionWorkspace: (input: {
+    cwd: string;
+    title: string;
+  }) => Promise<{ workspaceId: string; cwd: string }>,
+  byspaceHome: string,
+): Promise<SecretarySeed> {
   let agent = store.getAgentBySystemKey(SECRETARY_SYSTEM_KEY);
   if (!agent) {
     agent = store.createAgent({
-      name: "Chief of Staff",
+      name: SECRETARY_WORKSPACE_TITLE,
       instructions: SECRETARY_INSTRUCTIONS,
       kind: "system",
       systemKey: SECRETARY_SYSTEM_KEY,
@@ -71,21 +95,21 @@ export function seedSecretary(store: MulticaStore): SecretarySeed {
     });
   }
 
-  const existing = store
-    .listIssues({})
-    .find((issue) => issue.title === SECRETARY_CHANNEL_ISSUE_TITLE);
-  const channelIssueId =
-    existing?.id ??
-    store.createIssue({
-      title: SECRETARY_CHANNEL_ISSUE_TITLE,
-      description:
-        "The owner's standing channel to the chief of staff. Comment here; the secretary routes, follows up, and reports back.",
-      creatorType: "owner",
-      creatorId: "owner",
-      assigneeType: "agent",
-      assigneeId: agent.id,
-      status: "in_progress",
-    }).id;
+  // Tombstone the retired channel: keep the record, drop it from the board.
+  for (const issue of store.listIssues({})) {
+    if (issue.title === SECRETARY_CHANNEL_ISSUE_TITLE) {
+      store.updateIssue({
+        id: issue.id,
+        expectedRevision: issue.revision,
+        title: `[retired] ${SECRETARY_CHANNEL_ISSUE_TITLE}`,
+        status: "cancelled",
+      });
+    }
+  }
 
-  return { agentId: agent.id, channelIssueId };
+  const dir = path.join(byspaceHome, "multica", "secretary");
+  return provisionWorkspace({ cwd: dir, title: SECRETARY_WORKSPACE_TITLE }).then((workspace) => ({
+    agentId: agent!.id,
+    workspaceId: workspace.workspaceId,
+  }));
 }

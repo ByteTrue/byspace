@@ -1192,6 +1192,17 @@ export async function createBySpaceDaemon(
     await emitWorkspaceUpdatesExternal([workspace.workspaceId]);
     return workspace;
   };
+  const provisionSecretaryWorkspaceExternal = async (input: { cwd: string; title: string }) => {
+    // The secretary's standing workspace: a fixed directory under the daemon
+    // home, registered through the same provisioning path schedules use. No
+    // auto-name — the title is the role, not a guess from a prompt.
+    const workspace = await workspaceProvisioning.createWorkspaceForDirectory(
+      input.cwd,
+      input.title,
+    );
+    await emitWorkspaceUpdatesExternal([workspace.workspaceId]);
+    return workspace;
+  };
   const createScheduleBySpaceWorktreeExternal = async (input: {
     cwd: string;
     firstAgentContext: FirstAgentContext;
@@ -1263,6 +1274,7 @@ export async function createBySpaceDaemon(
     agentManager,
     createAgent,
     createWorkspaceForDirectory: createScheduleLocalWorkspaceExternal,
+    provisionSecretaryWorkspace: provisionSecretaryWorkspaceExternal,
     logger,
   });
   const { store: multicaStore, kickDrain: multicaKickDrain } = multica;

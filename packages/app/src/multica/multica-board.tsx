@@ -2,13 +2,16 @@ import { type ReactElement, useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useRouter } from "expo-router";
-import { KanbanSquare } from "lucide-react-native";
+import { KanbanSquare, UserRound } from "lucide-react-native";
+
+import { buildHostWorkspaceRoute } from "@/utils/host-routes";
 
 import { useFetchQuery } from "@/data/query";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 import type { MulticaIssueSummary } from "@bytetrue/protocol/multica/rpc-schemas";
 import { IssueMetaLine } from "@/multica/multica-activity";
 import { useMulticaCatalog } from "@/multica/multica-catalog";
+import { MULTICA_SECRETARY_WORKSPACE_TITLE } from "@bytetrue/protocol/multica/rpc-schemas";
 
 /**
  * The multica board: status columns with issue cards, after the reference
@@ -48,37 +51,7 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
     refetchInterval: 5_000,
   });
 
-  const runningQuery = useFetchQuery({
-    queryKey: ["multicaRunningTasks", serverId, runtimeSnapshot?.clientGeneration ?? 0],
-    queryFn: async () => {
-      if (!client) throw new Error("Target host client is unavailable");
-      return client.multicaTaskRunningList();
-    },
-    enabled: online,
-    retry: false,
-    dataShape: "value",
-    staleTimeMs: 2_000,
-    refetchInterval: 3_000,
-  });
-
-  // The badge answers "is anyone working on this issue right now", so it
-  // keys on the running task's issue — the card's assignee may be unset
-  // (work claimed by mention, like the reference product's comment flows).
-  const workingIssueIds = useMemo(() => {
-    const set = new Set<string>();
-    for (const task of runningQuery.data?.tasks ?? []) {
-      set.add(task.issueId);
-    }
-    return set;
-  }, [runningQuery.data]);
-
-  const workingAgentIds = useMemo(() => {
-    const set = new Set<string>();
-    for (const task of runningQuery.data?.tasks ?? []) {
-      set.add(task.agentId);
-    }
-    return set;
-  }, [runningQuery.data]);
+  const live = useMulticaLiveState(serverId);
 
   const catalog = useMulticaCatalog(serverId);
 
@@ -94,8 +67,10 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
       (issuesQuery.data?.issues ?? []).slice().sort((a, b) => (b.number ?? 0) - (a.number ?? 0)),
     [issuesQuery.data],
   );
-  const office = issues.find((issue) => issue.title.startsWith("Office"));
-  const workIssues = issues.filter((issue) => issue.id !== office?.id);
+  // Retired channel issues are tombstoned, not deleted — they keep their
+  // history but no longer belong on the board.
+  const workIssues = issues.filter((issue) => !issue.title.startsWith("[retired]"));
+  const secretaryWorkspaceId = live.secretaryWorkspaceId;
   const statuses = (statusesQuery.data?.statuses ?? []).filter(
     (status) => status.category !== "closed",
   );
@@ -116,15 +91,18 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
         <Text style={styles.headerCount}>
           {workIssues.length} {workIssues.length === 1 ? "issue" : "issues"}
         </Text>
-        {workingAgentIds.size > 0 ? (
+        {live.workingAgentIds.size > 0 ? (
           <View style={styles.workingPill}>
             <View style={styles.workingDot} />
             <Text style={styles.workingPillText}>
-              {workingAgentIds.size} {workingAgentIds.size === 1 ? "agent" : "agents"} working
+              {live.workingAgentIds.size} {live.workingAgentIds.size === 1 ? "agent" : "agents"}{" "}
+              working
             </Text>
           </View>
         ) : null}
-        {office ? <OfficePill onPress={openIssue} issueId={office.id} /> : null}
+        {secretaryWorkspaceId ? (
+          <SecretaryPill serverId={serverId} workspaceId={secretaryWorkspaceId} />
+        ) : null}
       </View>
       <ScrollView horizontal contentContainerStyle={styles.lanes}>
         {statuses.map((status) => (
@@ -134,7 +112,7 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
             color={status.color}
             issues={workIssues.filter((issue) => issue.status === status.key)}
             agentNameById={catalog.agentNameById}
-            workingIssueIds={workingIssueIds}
+            workingIssueIds={live.workingIssueIds}
             selectedId={selected}
             onSelect={setSelected}
             onOpen={openIssue}
@@ -145,17 +123,26 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
   );
 }
 
-function OfficePill({
-  issueId,
-  onPress,
+/**
+ * The owner's front door: the secretary's standing workspace. It opens the
+ * repo's ordinary workspace surface — chats, composer, terminals — because
+ * talking to the secretary is talking to an agent, not using a bespoke UI.
+ */
+function SecretaryPill({
+  serverId,
+  workspaceId,
 }: {
-  issueId: string;
-  onPress: (issueId: string) => void;
+  serverId: string;
+  workspaceId: string;
 }): ReactElement {
-  const handlePress = useCallback(() => onPress(issueId), [issueId, onPress]);
+  const router = useRouter();
+  const handlePress = useCallback(() => {
+    router.push(buildHostWorkspaceRoute(serverId, workspaceId));
+  }, [router, serverId, workspaceId]);
   return (
-    <Pressable style={styles.officePill} onPress={handlePress} testID="multica-office-card">
-      <Text style={styles.officePillText}>Office — Chief of Staff</Text>
+    <Pressable style={styles.officePill} onPress={handlePress} testID="multica-secretary-entry">
+      <UserRound size={13} color="#888" />
+      <Text style={styles.officePillText}>Chief of Staff</Text>
     </Pressable>
   );
 }
@@ -261,6 +248,9 @@ const styles = StyleSheet.create((theme) => ({
   heading: { color: theme.colors.foreground, fontSize: theme.fontSize.base, fontWeight: "600" },
   headerCount: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   officePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
     marginLeft: "auto",
     paddingVertical: theme.spacing[1],
     paddingHorizontal: theme.spacing[3],
@@ -332,3 +322,74 @@ const styles = StyleSheet.create((theme) => ({
   cardWorkingText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 }));
+
+/**
+ * The board's live layer: which issues have work in flight right now, and
+ * where the secretary's standing workspace lives. Both are lookups over
+ * existing surfaces (the task queue and the workspace registry) that the
+ * board alone consumes, so they sit next to the board rather than in the
+ * shared catalog.
+ */
+function useMulticaLiveState(serverId: string): {
+  workingIssueIds: ReadonlySet<string>;
+  workingAgentIds: ReadonlySet<string>;
+  secretaryWorkspaceId: string | null;
+} {
+  const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
+  const client = runtimeSnapshot?.client ?? null;
+  const online = runtimeSnapshot?.connectionStatus === "online";
+
+  const runningQuery = useFetchQuery({
+    queryKey: ["multicaRunningTasks", serverId, runtimeSnapshot?.clientGeneration ?? 0],
+    queryFn: async () => {
+      if (!client) throw new Error("Target host client is unavailable");
+      return client.multicaTaskRunningList();
+    },
+    enabled: online,
+    retry: false,
+    dataShape: "value",
+    staleTimeMs: 2_000,
+    refetchInterval: 3_000,
+  });
+
+  const workspacesQuery = useFetchQuery({
+    queryKey: ["multicaWorkspaces", serverId, runtimeSnapshot?.clientGeneration ?? 0],
+    queryFn: async () => {
+      if (!client) throw new Error("Target host client is unavailable");
+      return client.fetchWorkspaces();
+    },
+    enabled: online,
+    retry: false,
+    dataShape: "list",
+    staleTimeMs: 10_000,
+  });
+
+  // The badge answers "is anyone working on this issue right now", so it
+  // keys on the running task's issue — the card's assignee may be unset
+  // (work claimed by mention, like the reference product's comment flows).
+  const workingIssueIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const task of runningQuery.data?.tasks ?? []) {
+      set.add(task.issueId);
+    }
+    return set;
+  }, [runningQuery.data]);
+
+  const workingAgentIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const task of runningQuery.data?.tasks ?? []) {
+      set.add(task.agentId);
+    }
+    return set;
+  }, [runningQuery.data]);
+
+  const secretaryWorkspaceId = useMemo(
+    () =>
+      (workspacesQuery.data?.entries ?? []).find(
+        (workspace) => workspace.name === MULTICA_SECRETARY_WORKSPACE_TITLE,
+      )?.id ?? null,
+    [workspacesQuery.data],
+  );
+
+  return { workingIssueIds, workingAgentIds, secretaryWorkspaceId };
+}
