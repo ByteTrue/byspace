@@ -50,7 +50,7 @@ supersedes: byissue/epics/004-x-worker-domain/spec.md 的协作模型
 | 砍多租户     | workspace/user/member/auth/billing/cloud-runtime/seat 全删；所有表去 workspace 维度；单用户即 daemon 属主 |
 | Node 复刻 Go | server 域→Node/TS（PG 保留与否见下）；执行层映射到 agent-manager                                          |
 
-**PG vs SQLite 待第一个切片定**：multica 用 PG（SKIP LOCKED 队列、JSONB）。Node 复刻下 PG 客户端成熟（postgres.js），队列语义可 1:1；若 SQLite 需改用事务写锁替代 SKIP LOCKED —— 这是"架构不变"原则下的实现细节选择，开工时定并记录。
+**存储定 SQLite（Owner 决定，2026-09-26）**：multica 用 PG 是因为它部署在容器/服务端；BySpace 装在用户电脑上，要求用户装 PG 不成立。队列语义的映射：PG 的 `FOR UPDATE SKIP LOCKED`（daemon claim 防多机重复）→ SQLite 的 `BEGIN IMMEDIATE` 事务认领 —— 后者是 repo 内已验证的模式（worker store 的 wake 认领即此）。JSONB → TEXT 存 JSON（读侧用 Zod 校验，与主域一致）。
 
 ## 复刻产物落位
 
