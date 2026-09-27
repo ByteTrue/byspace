@@ -84,7 +84,14 @@ supersedes: byissue/epics/004-x-worker-domain/spec.md 的协作模型
   - **⑤秘书**：内置 Chief of Staff（system key、幂等 seed、mika 工作模型全文），对话面 = 一个专属 issue（办公室频道）—— **零新机制**。
   - **⑥CLI+console**：`byspace multica` 命令组（issue/agent/comment）+ app `/multica` 路由（issue 列表 + 办公室卡片 + 详情评论流 + composer）+ 侧栏入口（9 locale）。
 - 160 tests / typecheck 0 / lint 0 / format 净。
-- **真机端到端尚未跑**（RPC 验证器过的是 in-process daemon；owner→秘书→开 issue→run→回写的全链判据 1-7 需要真 daemon 跑一轮，是 epic 关闭前的收尾项）。
+- **真机端到端已完成**（2026-09-28，dev daemon + 真 pi + console/CLI 双入口，提交 5188cab91）：
+  1. owner 在办公室评论多任务 → 秘书被 assignee 触发唤醒 → 真读 daemon 日志（发现真实的 qoder provider 报错并总结根因）+ 真建 /tmp 文件，汇报写回 issue。
+  2. 「正式立项」请求 → 秘书自己开了 Issue #2（带描述），并诚实汇报无法指派的原因（agent ls 空 + CLI 无 agent create）——补上 CLI agent create 后闭环。
+  3. @Writer 认领 → mention 触发 → Writer 真核对目录实况后回报（README 已存在且与快照一致，无需重写）。
+  4. console 看板/详情真数据渲染 + composer 真发送真触发。
+  5. **真机抓到两个真缺陷并修复**：CJK 全角标点后的 @mention 被静默丢弃（`：@Writer` 不触发——中文场景的高频形态，边界从 ASCII 空白改为任何非名字字符，回归测试锁死）；CLI 缺 agent create（秘书自己报告的缺口）。
+  6. 数据跨 daemon 重启持久（SQLite）。
+  7. 验证过程排除的环境坑：6778 被练手线旧 daemon 占用导致 unknown_schema 误报（进程清理后消失）。
 
 ## 工程切法
 
