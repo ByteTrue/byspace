@@ -50,6 +50,15 @@ describe("migration sequence 002–042", () => {
       "034_projects",
       "041_agent_custom_args",
       "042_autopilot",
+      "084_squad",
+      "332_issue_status",
+      "333_issue_status_pkey_index",
+      "334_issue_status_primary_key",
+      "335_issue_status_workspace_key_index",
+      "336_issue_status_workspace_name_index",
+      "337_issue_status_open_check",
+      "338_issue_status_validate_format",
+      "339_seed_issue_status_catalog",
     ];
     expect(versions).toEqual(expected);
   });

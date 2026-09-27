@@ -12,6 +12,17 @@
  */
 import { migration001Init } from "./001-init.js";
 import {
+  migration084Squad,
+  migration332IssueStatus,
+  migration333IssueStatusPkeyIndex,
+  migration334IssueStatusPrimaryKey,
+  migration335IssueStatusWorkspaceKeyIndex,
+  migration336IssueStatusWorkspaceNameIndex,
+  migration337IssueStatusOpenCheck,
+  migration338IssueStatusValidateFormat,
+  migration339SeedIssueStatusCatalog,
+} from "./084-339.js";
+import {
   migration002AgentConfig,
   migration004AgentRuntimeLoop,
   migration008StructuredSkills,
@@ -45,4 +56,13 @@ export const MIGRATIONS: readonly Migration[] = [
   migration034Projects,
   migration041AgentCustomArgs,
   migration042Autopilot,
+  migration084Squad,
+  migration332IssueStatus,
+  migration333IssueStatusPkeyIndex,
+  migration334IssueStatusPrimaryKey,
+  migration335IssueStatusWorkspaceKeyIndex,
+  migration336IssueStatusWorkspaceNameIndex,
+  migration337IssueStatusOpenCheck,
+  migration338IssueStatusValidateFormat,
+  migration339SeedIssueStatusCatalog,
 ];
