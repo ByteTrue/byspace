@@ -20,7 +20,7 @@ export function useMulticaCatalog(serverId: string): {
     queryKey: ["multicaAgents", serverId, runtimeSnapshot?.clientGeneration ?? 0],
     queryFn: async () => {
       if (!client) throw new Error("Target host client is unavailable");
-      return client.multicaAgentList();
+      return client.multicaAgentList({ includeSystem: true });
     },
     enabled: online,
     retry: false,

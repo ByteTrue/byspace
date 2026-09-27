@@ -5456,10 +5456,17 @@ export class DaemonClient {
 
   // ---------------------------------------------------------------- multica
 
-  async multicaAgentList(requestId?: string): Promise<MulticaAgentListPayload> {
+  async multicaAgentList(
+    options?: { includeArchived?: boolean; includeSystem?: boolean },
+    requestId?: string,
+  ): Promise<MulticaAgentListPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
-      message: { type: "multica.agent.list.request" },
+      message: {
+        type: "multica.agent.list.request",
+        includeArchived: options?.includeArchived,
+        includeSystem: options?.includeSystem,
+      },
       responseType: "multica.agent.list.response",
     });
   }

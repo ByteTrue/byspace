@@ -53,6 +53,21 @@ describe("agent store", () => {
     expect(store.listAgents({ includeArchived: true })).toHaveLength(1);
   });
 
+  it("includeSystem widens the name-resolution surface to built-ins", () => {
+    // The secretary is kind=system: hidden from the default roster (it is an
+    // execution carrier, not a teammate) but present when a caller needs to
+    // resolve an assignee id to a name.
+    store.createAgent({ name: "Chief of Staff", kind: "system", systemKey: "chief_of_staff" });
+    store.createAgent({ name: "Writer", kind: "user" });
+    expect(store.listAgents().map((a) => a.name)).toEqual(["Writer"]);
+    expect(
+      store
+        .listAgents({ includeSystem: true })
+        .map((a) => a.name)
+        .sort(),
+    ).toEqual(["Chief of Staff", "Writer"]);
+  });
+
   it("updates status and refuses an unknown agent", () => {
     const a = store.createAgent({ name: "A" });
     store.updateAgentStatus(a.id, "working");

@@ -271,12 +271,17 @@ export class MulticaStore {
     return mapAgentRow(raw as never);
   }
 
-  listAgents(filter: { readonly includeArchived?: boolean } = {}): AgentRow[] {
+  listAgents(
+    filter: { readonly includeArchived?: boolean; readonly includeSystem?: boolean } = {},
+  ): AgentRow[] {
     // The source's ListAgents excludes system-kind rows (hidden execution
     // carriers) and archived ones; ListAllAgentsAnyKind is the admin surface.
-    const clause = filter.includeArchived
-      ? " WHERE kind != 'system'"
-      : " WHERE kind != 'system' AND archived_at IS NULL";
+    // Name resolution for assignees needs the system rows too (the secretary
+    // is one), so includeSystem widens just that half of the filter.
+    const kindClause = filter.includeSystem ? "" : "kind != 'system'";
+    const archivedClause = filter.includeArchived ? "" : "archived_at IS NULL";
+    const where = [kindClause, archivedClause].filter((part) => part !== "").join(" AND ");
+    const clause = where === "" ? "" : ` WHERE ${where}`;
     const rows = this.#db
       .prepare(`SELECT ${AGENT_SELECT} FROM agent${clause} ORDER BY created_at DESC`)
       .all();

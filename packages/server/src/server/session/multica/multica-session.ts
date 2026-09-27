@@ -207,7 +207,10 @@ export class MulticaSession {
   #handleAgentList(
     msg: Extract<SessionInboundMessage, { type: "multica.agent.list.request" }>,
   ): void {
-    const agents = this.#store.listAgents({ includeArchived: msg.includeArchived });
+    const agents = this.#store.listAgents({
+      includeArchived: msg.includeArchived ?? false,
+      includeSystem: msg.includeSystem ?? false,
+    });
     this.#emit({
       type: "multica.agent.list.response",
       payload: { requestId: msg.requestId, agents: agents.map(agentSummary) },

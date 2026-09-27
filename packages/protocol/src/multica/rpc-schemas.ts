@@ -35,6 +35,8 @@ export const MulticaAgentListRequestSchema = z.object({
   type: z.literal("multica.agent.list.request"),
   requestId: z.string(),
   includeArchived: z.boolean().optional(),
+  /** Include hidden system-kind agents (built-ins like the secretary). */
+  includeSystem: z.boolean().optional(),
 });
 
 export const MulticaAgentListResponseSchema = z.object({
