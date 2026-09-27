@@ -71,7 +71,7 @@ supersedes: byissue/epics/004-x-worker-domain/spec.md 的协作模型
 
 ## 进度（2026-09-27）
 
-- **切片 ① ✅ 完成**：从 577 个迁移筛出复刻集并**全部翻译落地**（63 个迁移，001→549 全部命中复刻表/列变更者：001 基础 9 表、002-042 演进、040-088 列链、084-088 squad 演进、090/096/127 派发记账、120-549 触发路由/归因瀑布/属性/supplement、332-339 状态目录、509 wakeup）。**终态快照测试**钉死每张表的最终列集与列序 —— 它在落地当天就抓出三个真实 carry 遗漏（337 丢 issue 两列、087 丢 squad 三列、128 丢自己刚 ADD 的两列）。PG 存储函数（523/530/532 wakeup 捕获、538 settle trigger）定性为行为，随第④片引擎实现。548/549 的 CONCURRENTLY 主键拆分塌缩为内联复合主键。
+- **切片 ① ✅ 完成（含全列审计收尾）**：从 577 个迁移筛出复刻集并全部翻译落地（**76 个迁移**）。收尾做了一次**全列审计**（每张复刻表在源 577 迁移中的 ADD COLUMN 并集 vs 复刻终态快照 diff），抓出批次间漏网的 13 个迁移：issue 的 revision 乐观并发列（351，update handler 的核心依赖）、start_date/metadata/triage/duplicate-of、comment 的 revision/recovery/suppressed、inbox actor 对、issue_status icon、191 的 issue.origin_id。**链位纪律**经受两次考验（149/337 两个 issue rebuild 各自只带它时刻的列）。**终态快照测试**钉死每张表最终列集列序，全程抓出 5 个真实 carry 遗漏。PG 存储函数（520/523/530/532 wakeup 捕获、538 settle trigger）定性为行为，随第④片引擎实现。
 - 新线落位：`packages/server/src/server/multica/`（migrations runner + rebuild helper + 翻译件 + 5 个测试文件），干净 main 基线（v0.16.2），与练手线零耦合。
 - 41 tests / typecheck 0 / lint 0 / format 净。6xx 段已核对：剩余迁移全属砍除圈（channel/plugin/github/telemetry）。
 
