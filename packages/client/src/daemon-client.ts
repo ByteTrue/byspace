@@ -583,6 +583,10 @@ type MulticaAutopilotTriggerPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.autopilot.trigger.response" }
 >["payload"];
+type MulticaIssueMinePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.issue.mine.response" }
+>["payload"];
 type MulticaLabelListPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.label.list.response" }
@@ -5924,6 +5928,15 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       message: { type: "multica.timeline.list.request", issueId },
       responseType: "multica.timeline.list.response",
+    });
+  }
+
+  async multicaIssueMine(
+    scope: "assigned" | "created" | "subscribed",
+  ): Promise<MulticaIssueMinePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.issue.mine.request", scope },
+      responseType: "multica.issue.mine.response",
     });
   }
 

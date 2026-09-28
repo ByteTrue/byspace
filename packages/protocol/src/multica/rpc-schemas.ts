@@ -99,6 +99,20 @@ export const MulticaIssueSummarySchema = z.object({
   lastActivityAt: z.string().nullable(),
 });
 
+export const MulticaIssueMineRequestSchema = z.object({
+  type: z.literal("multica.issue.mine.request"),
+  requestId: z.string(),
+  scope: z.enum(["assigned", "created", "subscribed"]),
+});
+export const MulticaIssueMineResponseSchema = z.object({
+  type: z.literal("multica.issue.mine.response"),
+  payload: z.object({
+    requestId: z.string(),
+    scope: z.enum(["assigned", "created", "subscribed"]),
+    issues: z.array(MulticaIssueSummarySchema),
+  }),
+});
+
 export const MulticaIssueListRequestSchema = z.object({
   type: z.literal("multica.issue.list.request"),
   requestId: z.string(),

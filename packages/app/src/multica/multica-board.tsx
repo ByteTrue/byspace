@@ -219,6 +219,7 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
             </Text>
           </View>
         ) : null}
+        <MinePill serverId={serverId} />
         <RostersPill serverId={serverId} />
         {live.secretaryWorkspaceId ? (
           <SecretaryPill serverId={serverId} workspaceId={live.secretaryWorkspaceId} />
@@ -471,7 +472,7 @@ function FilterChip({
   );
 }
 
-function IssueList({
+export function IssueList({
   issues,
   statusColorByKey,
   agentNameById,
@@ -521,6 +522,20 @@ function IssueRow({
       <Text style={styles.listRowAssignee} numberOfLines={1}>
         {agentName ?? "unassigned"}
       </Text>
+    </Pressable>
+  );
+}
+
+/** The owner's desk: the three my-issues scopes. */
+function MinePill({ serverId }: { serverId: string }): ReactElement {
+  const router = useRouter();
+  const handlePress = useCallback(() => {
+    router.push(`/multica/mine?serverId=${serverId}`);
+  }, [router, serverId]);
+  return (
+    <Pressable style={styles.officePill} onPress={handlePress} testID="multica-mine-entry">
+      <UserRound size={13} color="#888" />
+      <Text style={styles.officePillText}>My issues</Text>
     </Pressable>
   );
 }

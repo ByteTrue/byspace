@@ -774,6 +774,23 @@ export class MulticaStore {
     return this.getTask(id);
   }
 
+  /**
+   * The owner's three scopes, after the source's my-issues page translated
+   * to a single-user form: "me" is the owner, so assigned means assigned to
+   * the owner row, created means the owner's own creates, and subscribed
+   * means the owner's live subscription rows.
+   */
+  listMyIssues(scope: "assigned" | "created" | "subscribed"): IssueRow[] {
+    const where = scopeWhere(scope);
+    const rows = this.#db
+      .prepare(
+        `SELECT ${ISSUE_SELECT} FROM issue WHERE ${where}
+         ORDER BY position ASC, created_at DESC, number DESC`,
+      )
+      .all() as Record<string, unknown>[];
+    return rows.map((row) => mapIssueRow(row as never));
+  }
+
   /** A parent's children, in board order — the sub-issues read face. */
   listChildIssues(parentIssueId: string): IssueRow[] {
     const rows = this.#db
@@ -1831,4 +1848,15 @@ export class MulticaStore {
       position: row.position,
     }));
   }
+}
+
+function scopeWhere(scope: "assigned" | "created" | "subscribed"): string {
+  if (scope === "assigned") {
+    return "assignee_type = 'owner' AND assignee_id = 'owner'";
+  }
+  if (scope === "created") {
+    return "creator_type = 'owner' AND creator_id = 'owner'";
+  }
+  return `id IN (SELECT issue_id FROM issue_subscriber
+           WHERE user_type = 'owner' AND user_id = 'owner' AND unsubscribed_at IS NULL)`;
 }

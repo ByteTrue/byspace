@@ -284,7 +284,8 @@ type ReadMessage = Extract<
       | "multica.timeline.list.request"
       | "multica.subscriber.list.request"
       | "multica.subscriber.set.request"
-      | "multica.label.list.request";
+      | "multica.label.list.request"
+      | "multica.issue.mine.request";
   }
 >;
 
@@ -349,7 +350,8 @@ function isReadMessage(msg: MulticaInboundSubset): msg is ReadMessage {
     msg.type === "multica.subscriber.set.request" ||
     // The type predicate alone lies: without this runtime check a read
     // falls through to the write arm and is answered with silence.
-    msg.type === "multica.label.list.request"
+    msg.type === "multica.label.list.request" ||
+    msg.type === "multica.issue.mine.request"
   );
 }
 
@@ -1039,6 +1041,8 @@ export class MulticaSession {
         return this.#handleTaskList(msg);
       case "multica.timeline.list.request":
         return this.#handleTimelineList(msg);
+      case "multica.issue.mine.request":
+        return this.#handleIssueMine(msg);
       case "multica.label.list.request":
         return this.#handleLabelList(msg);
       case "multica.subscriber.list.request":
@@ -1174,6 +1178,21 @@ export class MulticaSession {
       payload: {
         requestId: msg.requestId,
         subscribers: this.#store.listActiveSubscribers(msg.issueId),
+      },
+    });
+  }
+
+  #handleIssueMine(
+    msg: Extract<SessionInboundMessage, { type: "multica.issue.mine.request" }>,
+  ): void {
+    this.#emit({
+      type: "multica.issue.mine.response",
+      payload: {
+        requestId: msg.requestId,
+        scope: msg.scope,
+        issues: this.#store
+          .listMyIssues(msg.scope)
+          .map((issue) => issueSummary(this.#store, issue)),
       },
     });
   }

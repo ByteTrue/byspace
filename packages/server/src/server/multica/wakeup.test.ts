@@ -245,13 +245,18 @@ describe("wakeup lifecycle", () => {
       mode: "continuous",
       intervalSeconds: 3600,
     });
-    expect(store.getWakeup(wakeup.id).nextFireAt).not.toBeNull();
-
-    const [ready] = store.listReadyWakeups(new Date("2026-09-28T13:00:00.000Z"));
-    store.dispatchWakeup(ready.wakeup, ready.evidence, new Date("2026-09-28T13:00:00.000Z"));
+    const base = store.getWakeup(wakeup.id).nextFireAt;
+    expect(base).not.toBeNull();
+    // Anchor the dispatch to the subscription's own first fire, not to a
+    // wall-clock constant: a fixed "13:00" made this test pass only while
+    // creation+interval stayed before 13:00 UTC, i.e. during one hour of the
+    // day. Advancing from base is the same semantics at any hour.
+    const dispatchAt = new Date(base as string);
+    const [ready] = store.listReadyWakeups(dispatchAt);
+    store.dispatchWakeup(ready.wakeup, ready.evidence, dispatchAt);
 
     const next = store.getWakeup(wakeup.id).nextFireAt;
-    expect(next).toBe("2026-09-28T14:00:00.000Z");
+    expect(next).toBe(new Date(dispatchAt.getTime() + 3_600_000).toISOString());
     expect(store.getWakeup(wakeup.id).enabled).toBe(true);
   });
 
