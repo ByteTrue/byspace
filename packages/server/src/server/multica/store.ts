@@ -14,6 +14,17 @@
  */
 import { randomUUID } from "node:crypto";
 
+import {
+  computeWakeupNextFire,
+  mapWakeupRow,
+  WAKEUP_SELECT,
+  type ReadyWakeup,
+  type WakeupCaptureInput,
+  type WakeupKind,
+  type WakeupMode,
+  type WakeupRow,
+} from "./wakeup.js";
+
 import type { DatabaseSync } from "node:sqlite";
 
 import { applyMigrations, type Migration } from "./migrations/runner.js";
@@ -168,6 +179,7 @@ export class MulticaStore {
     readonly assigneeId?: string | null;
     readonly title?: string;
   }): IssueRow {
+    const before = this.getIssue(input.id);
     const sets: string[] = [];
     const params: unknown[] = [];
     if (input.status !== undefined) {
@@ -203,6 +215,10 @@ export class MulticaStore {
         `issue ${input.id} changed since revision ${input.expectedRevision}; read it again`,
       );
     }
+    const after = this.getIssue(input.id);
+    if (input.status !== undefined && input.status !== before.status) {
+      this.#afterStatusWrite(input.id, before.status, after.revision, input.status);
+    }
     return this.getIssue(input.id);
   }
 
@@ -219,6 +235,7 @@ export class MulticaStore {
     readonly status: string;
     readonly expectedRevision: number;
   }): IssueRow {
+    const before = this.getIssue(input.id).status;
     const result = this.#db
       .prepare(
         `UPDATE issue SET status = ?, revision = revision + 1,
@@ -231,7 +248,9 @@ export class MulticaStore {
         `issue ${input.id} changed since revision ${input.expectedRevision}; read it again`,
       );
     }
-    return this.getIssue(input.id);
+    const updated = this.getIssue(input.id);
+    this.#afterStatusWrite(input.id, before, updated.revision, input.status);
+    return updated;
   }
 
   // ------------------------------------------------------------- agents
@@ -364,6 +383,17 @@ export class MulticaStore {
           input.parentId ?? null,
           input.sourceTaskId ?? null,
         );
+      // The capture rides inside the same transaction: a comment cannot
+      // land without offering itself to every matching subscription. The
+      // payload carries references only — never the body (source contract).
+      this.captureWakeups({
+        issueId: input.issueId,
+        type: "comment.created",
+        key: id,
+        agentId: input.authorType === "agent" ? input.authorId : null,
+        taskId: input.sourceTaskId ?? null,
+        payload: { comment_id: id, author_type: input.authorType },
+      });
       this.#db.exec("COMMIT");
     } catch (error) {
       this.#db.exec("ROLLBACK");
@@ -588,6 +618,318 @@ export class MulticaStore {
     return rows.map((row) => mapTaskRow(row as never));
   }
 
+  // ── wakeups ──────────────────────────────────────────────────────────
+
+  createWakeup(input: {
+    readonly issueId: string;
+    readonly agentId: string;
+    readonly createdBy: string;
+    readonly instruction: string;
+    readonly kind: WakeupKind;
+    readonly mode: WakeupMode;
+    readonly eventTypes?: readonly string[];
+    readonly filterAgentId?: string | null;
+    readonly filterTaskId?: string | null;
+    readonly intervalSeconds?: number | null;
+    readonly cronExpression?: string | null;
+    readonly timezone?: string;
+    readonly at?: string | null;
+    readonly sourceTaskId?: string | null;
+    readonly parentCommentId?: string | null;
+  }): WakeupRow {
+    const instruction = input.instruction.trim();
+    if (instruction === "" || instruction.length > 12_000) {
+      throw new Error("a wakeup needs an instruction of 1..12000 characters");
+    }
+    const timezone = input.timezone ?? "UTC";
+    const nextFireAt = computeWakeupNextFire(
+      {
+        kind: input.kind,
+        intervalSeconds: input.intervalSeconds ?? null,
+        cronExpression: input.cronExpression ?? null,
+        timezone,
+        at: input.at ?? null,
+      },
+      new Date(),
+    );
+    const id = randomUUID();
+    this.#db
+      .prepare(
+        `INSERT INTO issue_wakeup (id, issue_id, agent_id, created_by, source_task_id,
+           parent_comment_id, instruction, kind, mode, event_types, filter_agent_id,
+           filter_task_id, interval_seconds, cron_expression, timezone, next_fire_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.issueId,
+        input.agentId,
+        input.createdBy,
+        input.sourceTaskId ?? null,
+        input.parentCommentId ?? null,
+        instruction,
+        input.kind,
+        input.mode,
+        JSON.stringify(input.eventTypes ?? []),
+        input.filterAgentId ?? null,
+        input.filterTaskId ?? null,
+        input.intervalSeconds ?? null,
+        input.cronExpression ?? null,
+        timezone,
+        nextFireAt,
+      );
+    return this.getWakeup(id);
+  }
+
+  getWakeup(id: string): WakeupRow {
+    const row = this.#db
+      .prepare(`SELECT ${WAKEUP_SELECT} FROM issue_wakeup WHERE id = ?`)
+      .get(id) as Record<string, unknown> | undefined;
+    if (!row) {
+      throw new Error(`Unknown wakeup: ${id}`);
+    }
+    return mapWakeupRow(row);
+  }
+
+  listWakeupsForIssue(issueId: string): WakeupRow[] {
+    const rows = this.#db
+      .prepare(`SELECT ${WAKEUP_SELECT} FROM issue_wakeup WHERE issue_id = ? ORDER BY created_at`)
+      .all(issueId) as Record<string, unknown>[];
+    return rows.map((row) => mapWakeupRow(row));
+  }
+
+  disableWakeup(id: string): WakeupRow {
+    this.#db
+      .prepare(
+        `UPDATE issue_wakeup SET enabled = 0, disabled_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE id = ?`,
+      )
+      .run(id);
+    return this.getWakeup(id);
+  }
+
+  /**
+   * The event-capture entry: the Node translation of the source's
+   * capture_issue_wakeup stored function. Called from inside the write
+   * methods below, so a state change cannot happen without offering itself
+   * to every matching subscription.
+   */
+  captureWakeups(input: WakeupCaptureInput): number {
+    const issue = this.getIssue(input.issueId);
+    if (this.isIssueClosed(issue.status)) {
+      return 0;
+    }
+    const matches = this.#db
+      .prepare(
+        `SELECT ${WAKEUP_SELECT} FROM issue_wakeup
+         WHERE issue_id = ? AND enabled = 1 AND kind = 'event'
+           AND EXISTS (
+             SELECT 1 FROM json_each(event_types) WHERE json_each.value = ?
+           )
+           AND (filter_agent_id IS NULL OR filter_agent_id = ?)
+           AND (filter_task_id IS NULL OR filter_task_id = ?)
+           AND (source_task_id IS NULL OR source_task_id IS NOT ?)
+           AND NOT (
+             ? IS NOT NULL AND EXISTS (
+               SELECT 1 FROM agent_task_queue t
+               WHERE t.id = ? AND json_extract(t.context, '$.wakeup_id') = issue_wakeup.id
+             )
+           )`,
+      )
+      .all(
+        input.issueId,
+        input.type,
+        input.agentId,
+        input.taskId,
+        input.taskId,
+        input.taskId,
+        input.taskId,
+      ) as Record<string, unknown>[];
+    let captured = 0;
+    for (const raw of matches) {
+      const result = this.#db
+        .prepare(
+          `INSERT INTO issue_wakeup_receipt
+             (id, wakeup_id, revision, event_key, event_type, payload)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT DO NOTHING`,
+        )
+        .run(
+          randomUUID(),
+          raw.id as string,
+          raw.revision as number,
+          input.key,
+          input.type,
+          JSON.stringify(input.payload),
+        );
+      captured += Number(result.changes);
+    }
+    return captured;
+  }
+
+  /**
+   * Subscriptions with work to dispatch: event kinds with unprocessed
+   * receipts, time kinds whose next fire has arrived. The source's
+   * ListReadyWakeups, minus its fleet-oriented locking.
+   */
+  listReadyWakeups(now: Date): ReadyWakeup[] {
+    const iso = now.toISOString();
+    const eventRows = this.#db
+      .prepare(
+        `SELECT w.id FROM issue_wakeup w
+         WHERE w.enabled = 1 AND w.kind = 'event'
+           AND EXISTS (
+             SELECT 1 FROM issue_wakeup_receipt r
+             WHERE r.wakeup_id = w.id AND r.processed_at IS NULL
+           )`,
+      )
+      .all() as Array<{ id: string }>;
+    const timeRows = this.#db
+      .prepare(
+        `SELECT id FROM issue_wakeup
+         WHERE enabled = 1 AND kind IN ('at', 'every', 'cron')
+           AND next_fire_at IS NOT NULL AND next_fire_at <= ?`,
+      )
+      .all(iso) as Array<{ id: string }>;
+    const ready: ReadyWakeup[] = [];
+    for (const { id } of [...eventRows, ...timeRows]) {
+      const wakeup = this.getWakeup(id);
+      const evidence = (
+        this.#db
+          .prepare(
+            `SELECT payload FROM issue_wakeup_receipt
+             WHERE wakeup_id = ? AND processed_at IS NULL ORDER BY created_at`,
+          )
+          .all(id) as Array<{ payload: string }>
+      ).map((row) => JSON.parse(row.payload) as Record<string, unknown>);
+      ready.push({
+        wakeup,
+        evidence:
+          evidence.length > 0
+            ? evidence
+            : [{ event_type: "time.due", planned_at: wakeup.nextFireAt, kind: wakeup.kind }],
+      });
+    }
+    return ready;
+  }
+
+  /**
+   * Dispatch one ready wakeup: enqueue the run carrying the wakeup's
+   * identity in its context (the self-trigger guard reads it back), settle
+   * the receipts, and advance or retire the subscription.
+   */
+  dispatchWakeup(
+    wakeup: WakeupRow,
+    evidence: readonly Record<string, unknown>[],
+    now: Date,
+  ): string {
+    const task = this.createTask({
+      agentId: wakeup.agentId,
+      issueId: wakeup.issueId,
+      triggerSummary: `wakeup ${wakeup.kind}`,
+      context: {
+        wakeup_id: wakeup.id,
+        wakeup_revision: wakeup.revision,
+        wakeup_evidence: evidence,
+      },
+    });
+    this.#db
+      .prepare(
+        `UPDATE issue_wakeup_receipt
+         SET processed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), task_id = ?
+         WHERE wakeup_id = ? AND processed_at IS NULL`,
+      )
+      .run(task.id, wakeup.id);
+    // Stale receipts from an older revision are settled without dispatch:
+    // an edit to the subscription discards queued work it predates.
+    this.#db
+      .prepare(
+        `UPDATE issue_wakeup_receipt
+         SET processed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE wakeup_id = ? AND revision <> ? AND processed_at IS NULL`,
+      )
+      .run(wakeup.id, wakeup.revision);
+    if (wakeup.mode === "once" || wakeup.kind === "at") {
+      this.disableWakeup(wakeup.id);
+    } else if (wakeup.kind === "every" || wakeup.kind === "cron") {
+      const next = computeWakeupNextFire(
+        {
+          kind: wakeup.kind,
+          intervalSeconds: wakeup.intervalSeconds,
+          cronExpression: wakeup.cronExpression,
+          timezone: wakeup.timezone,
+        },
+        now,
+      );
+      this.#db
+        .prepare(
+          `UPDATE issue_wakeup SET next_fire_at = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+           WHERE id = ?`,
+        )
+        .run(next, wakeup.id);
+    }
+    return task.id;
+  }
+
+  /**
+   * A closed issue stops waking anyone: the source's StopClosedIssueWakeups,
+   * called from the status write below.
+   */
+  stopWakeupsForClosedIssue(issueId: string): number {
+    const result = this.#db
+      .prepare(
+        `UPDATE issue_wakeup
+         SET enabled = 0, disabled_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE issue_id = ? AND enabled = 1`,
+      )
+      .run(issueId);
+    return Number(result.changes);
+  }
+
+  /** Processed receipts age out after seven days, as the source's Tick does. */
+  purgeExpiredReceipts(now: Date): number {
+    const cutoff = new Date(now.getTime() - 7 * 24 * 3600 * 1000).toISOString();
+    const result = this.#db
+      .prepare(
+        `DELETE FROM issue_wakeup_receipt WHERE processed_at IS NOT NULL AND processed_at < ?`,
+      )
+      .run(cutoff);
+    return Number(result.changes);
+  }
+
+  /**
+   * The shared aftermath of any status write: offer the change to event
+   * subscribers and stop waking on a closed issue. Both status write paths
+   * (the status update and the field update that carries a status) call
+   * this — a status change that bypassed capture would silently deafen
+   * every subscription.
+   */
+  #afterStatusWrite(issueId: string, before: string, revision: number, to: string): void {
+    this.captureWakeups({
+      issueId,
+      type: "issue.status_changed",
+      key: `${issueId}:${revision}`,
+      agentId: null,
+      taskId: null,
+      payload: { from: before, to },
+    });
+    if (this.isIssueClosed(to)) {
+      this.stopWakeupsForClosedIssue(issueId);
+    }
+  }
+
+  isIssueClosed(status: string): boolean {
+    if (status === "done" || status === "cancelled") {
+      return true;
+    }
+    const row = this.#db.prepare("SELECT category FROM issue_status WHERE key = ?").get(status) as
+      | { category: string }
+      | undefined;
+    return row?.category === "done" || row?.category === "closed";
+  }
+
   /**
    * Move a run's status, stamping the state's timestamp.
    *
@@ -632,7 +974,19 @@ export class MulticaStore {
     if (Number(result.changes) === 0) {
       throw new Error(`task not found: ${input.id}`);
     }
-    return this.getTask(input.id);
+    // A run settling is exactly the fact a "run.completed"-style subscriber
+    // registered for. Capture rides the same write; the self-trigger guard
+    // keeps the run from waking the subscription it registered itself.
+    const row = this.getTask(input.id);
+    this.captureWakeups({
+      issueId: row.issueId,
+      type: `task.${input.status}`,
+      key: `${input.id}:${input.status}`,
+      agentId: row.agentId,
+      taskId: input.id,
+      payload: { task_id: input.id, status: input.status },
+    });
+    return row;
   }
 
   // ------------------------------------------------------------- status catalog

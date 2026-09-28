@@ -60,6 +60,29 @@ export interface MulticaCommentRow {
   readonly commentId: string;
 }
 
+export interface MulticaWakeupRow {
+  readonly id: string;
+  readonly kind: string;
+  readonly mode: string;
+  readonly enabled: string;
+  readonly agent: string;
+  readonly next: string;
+  readonly instruction: string;
+}
+
+export const multicaWakeupSchema: OutputSchema<MulticaWakeupRow> = {
+  idField: "id",
+  columns: [
+    { header: "ID", field: "id", width: 14 },
+    { header: "KIND", field: "kind", width: 8 },
+    { header: "MODE", field: "mode", width: 12 },
+    { header: "ON", field: "enabled", width: 4 },
+    { header: "AGENT", field: "agent", width: 10 },
+    { header: "NEXT", field: "next", width: 24 },
+    { header: "INSTRUCTION", field: "instruction", width: 40 },
+  ],
+};
+
 export const multicaCommentSchema: OutputSchema<MulticaCommentRow> = {
   idField: "commentId",
   columns: [
@@ -292,6 +315,39 @@ export function createMulticaCommand(): Command {
       .allowExcessArguments(false),
   ).action(withOutput(runMulticaIssueCreateCommand));
 
+  const wakeup = issue.command("wakeup").description("Wakeup subscriptions on an issue");
+  addJsonAndDaemonHostOptions(
+    wakeup
+      .command("ls")
+      .description("List an issue's wakeup subscriptions")
+      .requiredOption("--issue-id <id>", "Issue id")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaWakeupLsCommand));
+  addJsonAndDaemonHostOptions(
+    wakeup
+      .command("create")
+      .description("Register a wakeup (event|at|every|cron) on an issue")
+      .requiredOption("--issue-id <id>", "Issue id")
+      .requiredOption("--agent-id <id>", "Agent to wake")
+      .requiredOption("--instruction <text>", "What to do when woken")
+      .requiredOption("--kind <kind>", "event | at | every | cron")
+      .option("--mode <mode>", "once | continuous (default continuous)")
+      .option("--events <list>", "Comma-separated event types (event kind)")
+      .option("--every-seconds <n>", "Interval (every kind)")
+      .option("--cron <expr>", "Cron expression (cron kind)")
+      .option("--timezone <tz>", "Timezone for cron (default UTC)")
+      .option("--at <iso>", "One-shot fire time (at kind)")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaWakeupCreateCommand));
+  addJsonAndDaemonHostOptions(
+    wakeup
+      .command("disable")
+      .description("Retire a wakeup subscription")
+      .requiredOption("--issue-id <id>", "Issue id")
+      .requiredOption("--id <id>", "Wakeup id")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaWakeupDisableCommand));
+
   const agent = multica.command("agent").description("Agents");
   addJsonAndDaemonHostOptions(
     agent.command("ls").description("List agents").allowExcessArguments(false),
@@ -325,4 +381,180 @@ export function createMulticaCommand(): Command {
   ).action(withOutput(runMulticaCommentSendCommand));
 
   return multica;
+}
+
+export async function runMulticaWakeupLsCommand(
+  options: CommandOptions & { issueId?: string },
+  _command: Command,
+): Promise<ListResult<MulticaWakeupRow>> {
+  const issueId = options.issueId?.trim();
+  if (!issueId) {
+    throw { code: "MISSING_ISSUE_ID", message: "--issue-id is required" } satisfies CommandError;
+  }
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaWakeupList(issueId);
+    return {
+      type: "list",
+      data: payload.wakeups.map((wakeup) => ({
+        id: wakeup.id,
+        kind: wakeup.kind,
+        mode: wakeup.mode,
+        enabled: wakeup.enabled ? "yes" : "no",
+        agent: wakeup.agentId.slice(0, 8),
+        next: wakeup.nextFireAt ?? "-",
+        instruction: wakeup.instruction.slice(0, 60),
+      })),
+      schema: multicaWakeupSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaWakeupCreateCommand(
+  options: CommandOptions & {
+    issueId?: string;
+    agentId?: string;
+    instruction?: string;
+    kind?: string;
+    mode?: string;
+    events?: string;
+    everySeconds?: string;
+    cron?: string;
+    timezone?: string;
+    at?: string;
+  },
+  _command: Command,
+): Promise<ListResult<MulticaWakeupRow>> {
+  const issueId = options.issueId?.trim();
+  const agentId = options.agentId?.trim();
+  const instruction = options.instruction?.trim();
+  const kind = options.kind?.trim();
+  if (!issueId || !agentId || !instruction || !kind) {
+    throw {
+      code: "MISSING_ARGS",
+      message: "--issue-id, --agent-id, --instruction and --kind are required",
+    } satisfies CommandError;
+  }
+  const parsedKind = parseWakeupKind(kind);
+  const mode = parseWakeupMode(options.mode);
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    // Registering from inside a run: the session rides the request so the
+    // subscription records which run asked for it — the self-trigger guard
+    // reads that back.
+    const senderSessionId = process.env.BYSPACE_AGENT_ID?.trim() || undefined;
+    const payload = await client.multicaWakeupCreate({
+      issueId,
+      agentId,
+      instruction,
+      kind: parsedKind,
+      mode,
+      ...wakeupOptionalFields(options),
+      ...(senderSessionId ? { senderSessionId } : {}),
+    });
+    return {
+      type: "list",
+      data: [
+        {
+          id: payload.wakeup.id,
+          kind: payload.wakeup.kind,
+          mode: payload.wakeup.mode,
+          enabled: payload.wakeup.enabled ? "yes" : "no",
+          agent: payload.wakeup.agentId.slice(0, 8),
+          next: payload.wakeup.nextFireAt ?? "-",
+          instruction: payload.wakeup.instruction.slice(0, 60),
+        },
+      ],
+      schema: multicaWakeupSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaWakeupDisableCommand(
+  options: CommandOptions & { issueId?: string; id?: string },
+  _command: Command,
+): Promise<ListResult<MulticaWakeupRow>> {
+  const issueId = options.issueId?.trim();
+  const id = options.id?.trim();
+  if (!issueId || !id) {
+    throw {
+      code: "MISSING_ARGS",
+      message: "--issue-id and --id are required",
+    } satisfies CommandError;
+  }
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaWakeupDisable({ issueId, id });
+    return {
+      type: "list",
+      data: [
+        {
+          id: payload.wakeup.id,
+          kind: payload.wakeup.kind,
+          mode: payload.wakeup.mode,
+          enabled: payload.wakeup.enabled ? "yes" : "no",
+          agent: payload.wakeup.agentId.slice(0, 8),
+          next: payload.wakeup.nextFireAt ?? "-",
+          instruction: payload.wakeup.instruction.slice(0, 60),
+        },
+      ],
+      schema: multicaWakeupSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+function parseWakeupKind(kind: string): "event" | "at" | "every" | "cron" {
+  if (kind === "event" || kind === "at" || kind === "every" || kind === "cron") {
+    return kind;
+  }
+  throw { code: "BAD_KIND", message: "--kind must be event|at|every|cron" } satisfies CommandError;
+}
+
+function parseWakeupMode(mode: string | undefined): "once" | "continuous" {
+  const value = mode?.trim() ?? "continuous";
+  if (value === "once" || value === "continuous") {
+    return value;
+  }
+  throw { code: "BAD_MODE", message: "--mode must be once|continuous" } satisfies CommandError;
+}
+
+function wakeupOptionalFields(options: {
+  events?: string;
+  everySeconds?: string;
+  cron?: string;
+  timezone?: string;
+  at?: string;
+}): {
+  eventTypes?: string[];
+  intervalSeconds?: number;
+  cronExpression?: string;
+  timezone?: string;
+  at?: string;
+} {
+  return {
+    ...(options.events
+      ? {
+          eventTypes: options.events
+            .split(",")
+            .map((entry) => entry.trim())
+            .filter(Boolean),
+        }
+      : {}),
+    ...(options.everySeconds ? { intervalSeconds: Number(options.everySeconds) } : {}),
+    ...(options.cron ? { cronExpression: options.cron } : {}),
+    ...(options.timezone ? { timezone: options.timezone } : {}),
+    ...(options.at ? { at: options.at } : {}),
+  };
 }

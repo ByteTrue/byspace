@@ -119,6 +119,7 @@ import {
   migration127TaskSquadId,
   migration509IssueWakeup,
 } from "./090-509.js";
+import { migration514WakeupReceiptKey } from "./514-wakeup-receipt-key.js";
 import {
   migration084Squad,
   migration332IssueStatus,
@@ -264,6 +265,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration490DropTriageStatusKeyReservation,
   migration499AgentTaskIssueSnapshot,
   migration509IssueWakeup,
+  migration514WakeupReceiptKey,
   migration531WakeupActorFilter,
   migration536IssueDuplicateOf,
   migration537IssueDuplicateOfIndex,

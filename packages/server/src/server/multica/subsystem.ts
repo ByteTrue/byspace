@@ -84,6 +84,26 @@ export function createMulticaSubsystem(options: MulticaSubsystemOptions): {
       drain();
     }, 50);
   };
+  // The wakeup tick: subscriptions whose evidence or time has come. Same
+  // cadence family as the drain; the two are independent passes.
+  const tick = (): void => {
+    try {
+      store.purgeExpiredReceipts(new Date());
+      for (const { wakeup, evidence } of store.listReadyWakeups(new Date())) {
+        try {
+          store.dispatchWakeup(wakeup, evidence, new Date());
+          kickDrain();
+        } catch (error) {
+          options.logger.error({ err: error, wakeupId: wakeup.id }, "wakeup dispatch failed");
+        }
+      }
+    } catch (error) {
+      options.logger.error({ err: error }, "wakeup tick failed");
+    }
+  };
+  const wakeupTimer = setInterval(tick, 15_000);
+  wakeupTimer.unref?.();
+
   const timer = setInterval(drain, 30_000);
   timer.unref?.();
 

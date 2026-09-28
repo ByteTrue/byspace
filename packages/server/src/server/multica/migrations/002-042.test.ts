@@ -150,6 +150,7 @@ describe("migration sequence 002–042", () => {
       "490_drop_triage_status_key_reservation",
       "499_agent_task_issue_snapshot",
       "509_issue_wakeup",
+      "514_wakeup_receipt_key",
       "531_wakeup_actor_filter",
       "536_issue_duplicate_of",
       "537_issue_duplicate_of_index",

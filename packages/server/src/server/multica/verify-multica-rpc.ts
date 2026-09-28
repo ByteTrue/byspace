@@ -214,6 +214,58 @@ async function main(): Promise<void> {
 
         await verifyRunIdentity(client, daemon, issue, created);
 
+        const store = new MulticaStore(
+          openMulticaDatabase(path.join(daemon.byspaceHome, "multica", "multica.db")),
+          { migrations: MIGRATIONS },
+        );
+        try {
+          // Wakeups: register an event subscription, move the issue, and see
+          // the receipt appear; then dispatch and see the run carry the
+          // wakeup identity.
+          const wakeup = await client.multicaWakeupCreate({
+            issueId: issue.issue.id,
+            agentId: created.agent.id,
+            instruction: "verify: watch this issue's status",
+            kind: "event",
+            mode: "continuous",
+            eventTypes: ["issue.status_changed"],
+          });
+          check("wakeup create returns the subscription", wakeup.wakeup.enabled === true);
+          const listed = await client.multicaWakeupList(issue.issue.id);
+          check("wakeup list sees it", listed.wakeups.length === 1);
+          const beforeWakeupMove = await client.multicaIssueGet(issue.issue.id);
+          await client.multicaIssueUpdate({
+            issueId: issue.issue.id,
+            expectedRevision: beforeWakeupMove.issue.revision,
+            status: "blocked",
+          });
+          const afterMove = store.listReadyWakeups(new Date());
+          check(
+            "the status change produced exactly one ready wakeup",
+            afterMove.length === 1 && afterMove[0].wakeup.id === wakeup.wakeup.id,
+            String(afterMove.length),
+          );
+          const dispatchedId = store.dispatchWakeup(
+            afterMove[0].wakeup,
+            afterMove[0].evidence,
+            new Date(),
+          );
+          const dispatched = store.getTask(dispatchedId);
+          const context = JSON.parse(dispatched.context ?? "{}") as Record<string, unknown>;
+          check(
+            "the dispatched run carries the wakeup identity",
+            context.wakeup_id === wakeup.wakeup.id,
+          );
+          check("receipts settle after dispatch", store.listReadyWakeups(new Date()).length === 0);
+          const disabled = await client.multicaWakeupDisable({
+            issueId: issue.issue.id,
+            id: wakeup.wakeup.id,
+          });
+          check("wakeup disable retires it", disabled.wakeup.enabled === false);
+        } finally {
+          store.close();
+        }
+
         // unknown issue errors cleanly
         let unknownHandled = false;
         try {

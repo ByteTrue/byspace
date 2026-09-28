@@ -22,6 +22,7 @@ import type {
   SquadRow,
   TaskRow,
 } from "../../multica/rows.js";
+import type { WakeupRow } from "../../multica/wakeup.js";
 import type {
   MulticaAgentSummary,
   MulticaCommentSummary,
@@ -29,6 +30,7 @@ import type {
   MulticaSquadMemberSummary,
   MulticaSquadSummary,
   MulticaTaskSummary,
+  MulticaWakeupSummary,
 } from "@bytetrue/protocol/multica/rpc-schemas";
 
 export interface MulticaSessionHost {
@@ -111,6 +113,21 @@ function memberSummary(member: SquadMemberRow): MulticaSquadMemberSummary {
   };
 }
 
+function wakeupSummary(wakeup: WakeupRow): MulticaWakeupSummary {
+  return {
+    id: wakeup.id,
+    issueId: wakeup.issueId,
+    agentId: wakeup.agentId,
+    instruction: wakeup.instruction,
+    kind: wakeup.kind,
+    mode: wakeup.mode,
+    eventTypes: [...wakeup.eventTypes],
+    nextFireAt: wakeup.nextFireAt,
+    enabled: wakeup.enabled,
+    revision: wakeup.revision,
+  };
+}
+
 function taskSummary(task: TaskRow): MulticaTaskSummary {
   return {
     id: task.id,
@@ -177,6 +194,12 @@ export class MulticaSession {
           return this.#handleSquadList(msg);
         case "multica.squad.create.request":
           return this.#handleSquadCreate(msg);
+        case "multica.wakeup.list.request":
+          return this.#handleWakeupList(msg);
+        case "multica.wakeup.create.request":
+          return this.#handleWakeupCreate(msg);
+        case "multica.wakeup.disable.request":
+          return this.#handleWakeupDisable(msg);
         case "multica.task.running.list.request":
           return this.#handleTaskRunningList(msg);
         case "multica.task.list.request":
@@ -481,6 +504,62 @@ export class MulticaSession {
         squad: squadSummary(squad),
         members: members.map(memberSummary),
       },
+    });
+  }
+
+  #handleWakeupList(
+    msg: Extract<SessionInboundMessage, { type: "multica.wakeup.list.request" }>,
+  ): void {
+    this.#emit({
+      type: "multica.wakeup.list.response",
+      payload: {
+        requestId: msg.requestId,
+        wakeups: this.#store.listWakeupsForIssue(msg.issueId).map(wakeupSummary),
+      },
+    });
+  }
+
+  #handleWakeupCreate(
+    msg: Extract<SessionInboundMessage, { type: "multica.wakeup.create.request" }>,
+  ): void {
+    // A registering agent is resolved from its session exactly like a
+    // comment author: the subscription belongs to the run that asked for
+    // it, and the self-trigger guard reads that source task back.
+    let sourceTaskId: string | null = null;
+    if (msg.senderSessionId !== undefined) {
+      const task = this.#store.getTaskBySession(msg.senderSessionId);
+      if (!task) {
+        throw new Error(`Session ${msg.senderSessionId} is not a multica run`);
+      }
+      sourceTaskId = task.id;
+    }
+    const wakeup = this.#store.createWakeup({
+      issueId: msg.issueId,
+      agentId: msg.agentId,
+      createdBy: msg.senderSessionId !== undefined ? msg.agentId : "owner",
+      instruction: msg.instruction,
+      kind: msg.kind,
+      mode: msg.mode,
+      eventTypes: msg.eventTypes,
+      intervalSeconds: msg.intervalSeconds ?? null,
+      cronExpression: msg.cronExpression ?? null,
+      timezone: msg.timezone,
+      at: msg.at ?? null,
+      sourceTaskId,
+    });
+    this.#emit({
+      type: "multica.wakeup.create.response",
+      payload: { requestId: msg.requestId, wakeup: wakeupSummary(wakeup) },
+    });
+  }
+
+  #handleWakeupDisable(
+    msg: Extract<SessionInboundMessage, { type: "multica.wakeup.disable.request" }>,
+  ): void {
+    const wakeup = this.#store.disableWakeup(msg.id);
+    this.#emit({
+      type: "multica.wakeup.disable.response",
+      payload: { requestId: msg.requestId, wakeup: wakeupSummary(wakeup) },
     });
   }
 

@@ -59,3 +59,34 @@ export function createCommentPrompt(input: {
     "asks, and report the result as a reply. Reply in the issue's own language.",
   ].join("\n");
 }
+
+/**
+ * The prompt a wakeup-dispatched run carries, after the source's
+ * [WAKEUP] form: the trigger reports a fact, not business completion — the
+ * run decides for itself whether the instruction's goal is met, and may
+ * retire the subscription when the recurring work is done.
+ */
+export function createWakeupPrompt(input: {
+  issue: IssueRow;
+  agent: AgentRow;
+  wakeupId: string;
+  instruction: string;
+  evidence: readonly Record<string, unknown>[];
+}): string {
+  const { issue, agent } = input;
+  return [
+    `You are ${agent.name}. Your assigned issue is #${issue.number ?? "?"}: ${issue.title}.`,
+    "",
+    "[WAKEUP]",
+    input.instruction,
+    "",
+    "What woke you:",
+    ...input.evidence.map((item) => `- ${JSON.stringify(item)}`),
+    "",
+    "Read the issue's current state and comment threads before acting. The",
+    "trigger reports a fact, not business completion: decide yourself whether",
+    "the instruction's goal is met. If the recurring work is no longer needed,",
+    `retire the subscription: byspace multica issue wakeup disable --issue-id ${issue.id} --id ${input.wakeupId}.`,
+    "Report back as a comment on the issue, in the issue's own language.",
+  ].join("\n");
+}

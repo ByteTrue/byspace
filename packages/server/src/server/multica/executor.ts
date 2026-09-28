@@ -20,7 +20,7 @@ import type pino from "pino";
 import type { AgentManager } from "../agent/agent-manager.js";
 import { type BoundCreateAgentCommand } from "../agent/create-agent/create.js";
 import type { MulticaStore } from "./store.js";
-import { createCommentPrompt, createIssuePrompt } from "./run-prompt.js";
+import { createCommentPrompt, createIssuePrompt, createWakeupPrompt } from "./run-prompt.js";
 
 export interface MulticaExecutorOptions {
   store: MulticaStore;
@@ -93,14 +93,25 @@ export class MulticaExecutor {
         throw new Error(`no workspace resolved for issue ${task.issueId}`);
       }
 
-      const prompt =
-        task.triggerCommentId !== null
-          ? createCommentPrompt({
-              issue,
-              agent,
-              comment: this.#store.getComment(task.triggerCommentId),
-            })
-          : createIssuePrompt({ issue, agent });
+      const wakeup = readWakeupContext(task.context);
+      let prompt: string;
+      if (wakeup) {
+        prompt = createWakeupPrompt({
+          issue,
+          agent,
+          wakeupId: wakeup.wakeupId,
+          instruction: this.#store.getWakeup(wakeup.wakeupId).instruction,
+          evidence: wakeup.evidence,
+        });
+      } else if (task.triggerCommentId !== null) {
+        prompt = createCommentPrompt({
+          issue,
+          agent,
+          comment: this.#store.getComment(task.triggerCommentId),
+        });
+      } else {
+        prompt = createIssuePrompt({ issue, agent });
+      }
 
       this.#store.updateTaskStatus({ id: task.id, status: "running" });
       const created = await this.#createAgent({
@@ -160,4 +171,27 @@ export class MulticaExecutor {
       this.#store.updateTaskStatus({ id: task.id, status: "failed", error: message });
     }
   }
+}
+
+/** The wakeup identity a dispatched run carries in its context column. */
+function readWakeupContext(
+  contextJson: string | null | undefined,
+): { wakeupId: string; evidence: Record<string, unknown>[] } | null {
+  if (!contextJson) {
+    return null;
+  }
+  let context: Record<string, unknown>;
+  try {
+    context = JSON.parse(contextJson) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  const wakeupId = context.wakeup_id;
+  if (typeof wakeupId !== "string" || wakeupId === "") {
+    return null;
+  }
+  const evidence = Array.isArray(context.wakeup_evidence)
+    ? (context.wakeup_evidence as Record<string, unknown>[])
+    : [];
+  return { wakeupId, evidence };
 }

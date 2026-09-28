@@ -210,6 +210,64 @@ export const MulticaCommentCreateResponseSchema = z.object({
   }),
 });
 
+export const MulticaWakeupSummarySchema = z.object({
+  id: z.string(),
+  issueId: z.string(),
+  agentId: z.string(),
+  instruction: z.string(),
+  kind: z.string(),
+  mode: z.string(),
+  eventTypes: z.array(z.string()),
+  nextFireAt: z.string().nullable(),
+  enabled: z.boolean(),
+  revision: z.number().int(),
+});
+
+export const MulticaWakeupListRequestSchema = z.object({
+  type: z.literal("multica.wakeup.list.request"),
+  requestId: z.string(),
+  issueId: z.string().min(1),
+});
+
+export const MulticaWakeupListResponseSchema = z.object({
+  type: z.literal("multica.wakeup.list.response"),
+  payload: z.object({ requestId: z.string(), wakeups: z.array(MulticaWakeupSummarySchema) }),
+});
+
+export const MulticaWakeupCreateRequestSchema = z.object({
+  type: z.literal("multica.wakeup.create.request"),
+  requestId: z.string(),
+  issueId: z.string().min(1),
+  agentId: z.string().min(1),
+  instruction: z.string().min(1).max(12_000),
+  kind: z.enum(["event", "at", "every", "cron"]),
+  mode: z.enum(["once", "continuous"]),
+  eventTypes: z.array(z.string()).optional(),
+  intervalSeconds: z.number().int().positive().optional(),
+  cronExpression: z.string().optional(),
+  timezone: z.string().optional(),
+  at: z.string().optional(),
+  /** The session the registering caller speaks from; resolves to its run. */
+  senderSessionId: z.string().optional(),
+});
+
+export const MulticaWakeupCreateResponseSchema = z.object({
+  type: z.literal("multica.wakeup.create.response"),
+  payload: z.object({ requestId: z.string(), wakeup: MulticaWakeupSummarySchema }),
+});
+
+export const MulticaWakeupDisableRequestSchema = z.object({
+  type: z.literal("multica.wakeup.disable.request"),
+  requestId: z.string(),
+  issueId: z.string().min(1),
+  id: z.string().min(1),
+});
+
+export const MulticaWakeupDisableResponseSchema = z.object({
+  type: z.literal("multica.wakeup.disable.response"),
+  payload: z.object({ requestId: z.string(), wakeup: MulticaWakeupSummarySchema }),
+});
+
 export const MulticaStatusSummarySchema = z.object({
   key: z.string(),
   name: z.string(),
@@ -357,4 +415,5 @@ export type MulticaCommentSummary = z.infer<typeof MulticaCommentSummarySchema>;
 export type MulticaSquadSummary = z.infer<typeof MulticaSquadSummarySchema>;
 export type MulticaSquadMemberSummary = z.infer<typeof MulticaSquadMemberSummarySchema>;
 export type MulticaStatusSummary = z.infer<typeof MulticaStatusSummarySchema>;
+export type MulticaWakeupSummary = z.infer<typeof MulticaWakeupSummarySchema>;
 export type MulticaTaskSummary = z.infer<typeof MulticaTaskSummarySchema>;
