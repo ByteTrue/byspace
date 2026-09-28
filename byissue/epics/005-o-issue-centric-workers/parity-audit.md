@@ -47,18 +47,18 @@ multica（`~/workspace/refs/multica` @ `04cdd48`，一手读码）与本工程 `
 
 ## E. RPC / CLI 操作面
 
-| 面                                                     | 源        | 我们                                                                                                          | 状态                                          |
-| ------------------------------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| issue 读/写/状态                                       | REST      | 6 对 RPC（list/get/create/update/status.update）                                                              | ✅（update 与 status.update 语义重叠，见 F4） |
-| comment 读/写                                          | REST      | 2 对                                                                                                          | ⚠️ 写缺身份（F2）                             |
-| agent 读/写                                            | REST      | 2 对（list 含 includeSystem/includeArchived）                                                                 | ✅                                            |
-| squad 读/写                                            | REST      | 2 对（create 带 roster）                                                                                      | ⚠️ 无 update/archive                          |
-| task 读                                                | REST      | 2 对（list/running.list）                                                                                     | ✅                                            |
-| status 目录                                            | REST      | 1 对                                                                                                          | ✅                                            |
-| wakeup 注册/查询（agent 自登记事件唤醒）               | REST+CLI  | **0**（表在，行为无）                                                                                         | ❌                                            |
-| autopilot（schedule/webhook/api 触发器）               | REST+CLI  | schedule+api 两触发、两模式、skip/queue、run 审计、CLI 七动词、管理 UI（issue 006/011）；webhook/replace 欠账 | ⚠️                                            |
-| inbox（给人看的待办箱）                                | REST+页面 | 后端 5 对 RPC + CLI 五动词 + owner UI 面（issue 004/005）                                                     | ✅                                            |
-| CLI：issue ls/create、agent ls/create、comment ls/send | 全命令面  | issue 六动词（含 update/status/timeline/wakeup 三）、squad 四动词、autopilot 七、inbox 五（issue 014）        | ⚠️ 余 label/attachment 面                     |
+| 面                                                              | 源        | 我们                                                                                                          | 状态                                          |
+| --------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| issue 读/写/状态                                                | REST      | 6 对 RPC（list/get/create/update/status.update）                                                              | ✅（update 与 status.update 语义重叠，见 F4） |
+| comment 读/写                                                   | REST      | 2 对                                                                                                          | ⚠️ 写缺身份（F2）                             |
+| agent 读/写                                                     | REST      | 2 对（list 含 includeSystem/includeArchived）                                                                 | ✅                                            |
+| squad 读/写                                                     | REST      | 2 对（create 带 roster）                                                                                      | ⚠️ 无 update/archive                          |
+| task 读                                                         | REST      | 2 对（list/running.list）                                                                                     | ✅                                            |
+| status 目录                                                     | REST      | 1 对                                                                                                          | ✅                                            |
+| wakeup registration/lookup (agent self-registers event wakeups) | REST+CLI  | behavior layer fully built (capture/tick/dispatch/receipt, issue 003) + CLI three verbs                       | ✅                                            |
+| autopilot（schedule/webhook/api 触发器）                        | REST+CLI  | schedule+api 两触发、两模式、skip/queue、run 审计、CLI 七动词、管理 UI（issue 006/011）；webhook/replace 欠账 | ⚠️                                            |
+| inbox（给人看的待办箱）                                         | REST+页面 | 后端 5 对 RPC + CLI 五动词 + owner UI 面（issue 004/005）                                                     | ✅                                            |
+| CLI：issue ls/create、agent ls/create、comment ls/send          | 全命令面  | issue 六动词（含 update/status/timeline/wakeup 三）、squad 四动词、autopilot 七、inbox 五（issue 014）        | ⚠️ 余 label/attachment 面                     |
 
 ## F. UI / UX（对照官方截图）
 
@@ -76,13 +76,14 @@ multica（`~/workspace/refs/multica` @ `04cdd48`，一手读码）与本工程 `
 
 ## G. 秘书（Chief of Staff）
 
-| 环节                                        | 源（mika） | 我们                                              | 状态      |
-| ------------------------------------------- | ---------- | ------------------------------------------------- | --------- |
-| 内置 agent + 预设 INSTRUCTIONS              | 有         | 有（工作模型五条全文）                            | ✅        |
-| 对话面                                      | 产品 chat  | workspace 会话（composer/新聊天/Terminal 全复用） | 🔀 已批准 |
-| 会话携带角色提示词                          | 有         | 本轮补（workspace 内新建会话注入 instructions）   | ✅（新）  |
-| 自主跟进（自登记 wakeup：run.completed 等） | 有         | **无**（wakeup 行为层未建）                       | ❌ 见 E   |
-| 通过 CLI 操作域                             | 有         | 有（instructions 指向 CLI）                       | ✅        |
+| 环节                                                              | 源（mika）    | 我们                                                                          | 状态      |
+| ----------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------- | --------- |
+| 内置 agent + 预设 INSTRUCTIONS                                    | 有            | 有（工作模型五条全文）                                                        | ✅        |
+| 对话面                                                            | 产品 chat     | workspace 会话（composer/新聊天/Terminal 全复用）                             | 🔀 已批准 |
+| 会话携带角色提示词                                                | 有            | 本轮补（workspace 内新建会话注入 instructions）                               | ✅（新）  |
+| autonomous follow-up (self-registers wakeups: run.completed etc.) | present       | present (wakeup behavior layer + real-machine self-wake loop, issues 003/019) | ✅        |
+| 通过 CLI 操作域                                                   | 有            | 有（instructions 指向 CLI）                                                   | ✅        |
+| identity boundary on the owner queue (inbox member-surface only)  | requireUserID | owner-only gate (issue 021, before/after on real machine)                     | ✅        |
 
 ## 抄歪清单（按严重度）
 
