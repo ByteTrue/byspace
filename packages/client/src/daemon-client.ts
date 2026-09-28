@@ -583,6 +583,26 @@ type MulticaAutopilotTriggerPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.autopilot.trigger.response" }
 >["payload"];
+type MulticaAgentGetPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.agent.get.response" }
+>["payload"];
+type MulticaAgentStatusPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.agent.status.response" }
+>["payload"];
+type MulticaSquadGetPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.squad.get.response" }
+>["payload"];
+type MulticaSquadAddMemberPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.squad.add_member.response" }
+>["payload"];
+type MulticaSquadRemoveMemberPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.squad.remove_member.response" }
+>["payload"];
 type MulticaAutopilotStatusPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.autopilot.status.response" }
@@ -5822,10 +5842,60 @@ export class DaemonClient {
     });
   }
 
-  async multicaTaskList(issueId: string): Promise<MulticaTaskListPayload> {
+  async multicaTaskList(filter: {
+    issueId?: string;
+    agentId?: string;
+  }): Promise<MulticaTaskListPayload> {
     return this.sendCorrelatedSessionRequest({
-      message: { type: "multica.task.list.request", issueId },
+      message: { type: "multica.task.list.request", ...filter },
       responseType: "multica.task.list.response",
+    });
+  }
+
+  async multicaAgentGet(id: string): Promise<MulticaAgentGetPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.agent.get.request", id },
+      responseType: "multica.agent.get.response",
+    });
+  }
+
+  async multicaAgentStatus(
+    id: string,
+    status: "active" | "archived",
+  ): Promise<MulticaAgentStatusPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.agent.status.request", id, status },
+      responseType: "multica.agent.status.response",
+    });
+  }
+
+  async multicaSquadGet(id: string): Promise<MulticaSquadGetPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.squad.get.request", id },
+      responseType: "multica.squad.get.response",
+    });
+  }
+
+  async multicaSquadAddMember(options: {
+    squadId: string;
+    memberType: string;
+    memberId: string;
+    role?: string;
+  }): Promise<MulticaSquadAddMemberPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.squad.add_member.request", ...options },
+      responseType: "multica.squad.add_member.response",
+    });
+  }
+
+  async multicaSquadRemoveMember(options: {
+    squadId: string;
+    memberType: string;
+    memberId: string;
+  }): Promise<MulticaSquadRemoveMemberPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.squad.remove_member.request", ...options },
+      responseType: "multica.squad.remove_member.response",
     });
   }
 

@@ -356,6 +356,26 @@ export class MulticaStore {
     return raw ? mapAgentRow(raw as never) : null;
   }
 
+  /**
+   * The source's ArchiveAgent / its inverse: retiring an agent stamps
+   * archived_at (and who), restoring clears both. This is the agent's
+   * enable/disable — presence status (idle/working/…) is runtime state,
+   * not a switch.
+   */
+  setAgentArchived(id: string, archived: boolean, by = "owner"): AgentRow {
+    const result = this.#db
+      .prepare(
+        `UPDATE agent SET archived_at = ?, archived_by = ?,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE id = ?`,
+      )
+      .run(archived ? new Date().toISOString() : null, archived ? by : null, id);
+    if (Number(result.changes) === 0) {
+      throw new Error(`agent not found: ${id}`);
+    }
+    return this.getAgent(id);
+  }
+
   updateAgentStatus(id: string, status: string): void {
     const result = this.#db
       .prepare(
@@ -637,6 +657,17 @@ export class MulticaStore {
       .prepare(`SELECT ${TASK_SELECT} FROM agent_task_queue WHERE session_id = ?`)
       .get(sessionId) as Record<string, unknown> | undefined;
     return row ? mapTaskRow(row as never) : null;
+  }
+
+  /** One agent's recent queue history, newest first — the detail page's feed. */
+  listTasksForAgent(agentId: string, limit = 20): TaskRow[] {
+    const rows = this.#db
+      .prepare(
+        `SELECT ${TASK_SELECT} FROM agent_task_queue WHERE agent_id = ?
+         ORDER BY created_at DESC LIMIT ?`,
+      )
+      .all(agentId, limit) as Record<string, unknown>[];
+    return rows.map((row) => mapTaskRow(row));
   }
 
   listTasksForIssue(issueId: string): TaskRow[] {

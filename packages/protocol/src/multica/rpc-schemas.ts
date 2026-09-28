@@ -36,6 +36,7 @@ export const MulticaAgentSummarySchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   archivedAt: z.string().nullable(),
+  model: z.string().nullable(),
 });
 
 export const MulticaAgentListRequestSchema = z.object({
@@ -209,6 +210,95 @@ export const MulticaCommentCreateResponseSchema = z.object({
     requestId: z.string(),
     comment: MulticaCommentSummarySchema,
   }),
+});
+
+export const MulticaAgentDetailSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: z.string(),
+  systemKey: z.string().nullable(),
+  status: z.string(),
+  description: z.string(),
+  instructions: z.string(),
+  model: z.string().nullable(),
+  permissionMode: z.string(),
+  maxConcurrentTasks: z.number(),
+  thinkingLevel: z.string().nullable(),
+  archivedAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const MulticaSquadDetailSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  leaderId: z.string(),
+  instructions: z.string(),
+  members: z.array(
+    z.object({
+      memberType: z.string(),
+      memberId: z.string(),
+      role: z.string(),
+    }),
+  ),
+});
+
+export const MulticaAgentGetRequestSchema = z.object({
+  type: z.literal("multica.agent.get.request"),
+  requestId: z.string(),
+  id: z.string().min(1),
+});
+export const MulticaAgentGetResponseSchema = z.object({
+  type: z.literal("multica.agent.get.response"),
+  payload: z.object({ requestId: z.string(), agent: MulticaAgentDetailSchema }),
+});
+
+export const MulticaAgentStatusRequestSchema = z.object({
+  type: z.literal("multica.agent.status.request"),
+  requestId: z.string(),
+  id: z.string().min(1),
+  /** The source's switch is archive/restore, not presence status. */
+  status: z.enum(["active", "archived"]),
+});
+export const MulticaAgentStatusResponseSchema = z.object({
+  type: z.literal("multica.agent.status.response"),
+  payload: z.object({ requestId: z.string(), agent: MulticaAgentDetailSchema }),
+});
+
+export const MulticaSquadGetRequestSchema = z.object({
+  type: z.literal("multica.squad.get.request"),
+  requestId: z.string(),
+  id: z.string().min(1),
+});
+export const MulticaSquadGetResponseSchema = z.object({
+  type: z.literal("multica.squad.get.response"),
+  payload: z.object({ requestId: z.string(), squad: MulticaSquadDetailSchema }),
+});
+
+export const MulticaSquadAddMemberRequestSchema = z.object({
+  type: z.literal("multica.squad.add_member.request"),
+  requestId: z.string(),
+  squadId: z.string().min(1),
+  memberType: z.string().min(1),
+  memberId: z.string().min(1),
+  role: z.string().optional(),
+});
+export const MulticaSquadAddMemberResponseSchema = z.object({
+  type: z.literal("multica.squad.add_member.response"),
+  payload: z.object({ requestId: z.string(), squad: MulticaSquadDetailSchema }),
+});
+
+export const MulticaSquadRemoveMemberRequestSchema = z.object({
+  type: z.literal("multica.squad.remove_member.request"),
+  requestId: z.string(),
+  squadId: z.string().min(1),
+  memberType: z.string().min(1),
+  memberId: z.string().min(1),
+});
+export const MulticaSquadRemoveMemberResponseSchema = z.object({
+  type: z.literal("multica.squad.remove_member.response"),
+  payload: z.object({ requestId: z.string(), squad: MulticaSquadDetailSchema }),
 });
 
 export const MulticaAutopilotSummarySchema = z.object({
@@ -582,7 +672,9 @@ export const MulticaTaskRunningListResponseSchema = z.object({
 export const MulticaTaskListRequestSchema = z.object({
   type: z.literal("multica.task.list.request"),
   requestId: z.string(),
-  issueId: z.string().min(1),
+  issueId: z.string().min(1).optional(),
+  /** An agent's own recent queue history — the detail page's feed. */
+  agentId: z.string().min(1).optional(),
 });
 
 export const MulticaTaskListResponseSchema = z.object({
@@ -603,6 +695,8 @@ export type MulticaSquadMemberSummary = z.infer<typeof MulticaSquadMemberSummary
 export type MulticaStatusSummary = z.infer<typeof MulticaStatusSummarySchema>;
 export type MulticaInboxItemSummary = z.infer<typeof MulticaInboxItemSummarySchema>;
 export type MulticaAutopilotSummary = z.infer<typeof MulticaAutopilotSummarySchema>;
+export type MulticaAgentDetail = z.infer<typeof MulticaAgentDetailSchema>;
+export type MulticaSquadDetail = z.infer<typeof MulticaSquadDetailSchema>;
 export type MulticaAutopilotRunSummary = z.infer<typeof MulticaAutopilotRunSummarySchema>;
 export type MulticaWakeupSummary = z.infer<typeof MulticaWakeupSummarySchema>;
 export type MulticaTaskSummary = z.infer<typeof MulticaTaskSummarySchema>;

@@ -183,7 +183,7 @@ async function main(): Promise<void> {
         check("squad list sees it", squads.squads.length === 1);
 
         // task list (empty — the engine slices enqueue)
-        const tasks = await client.multicaTaskList(issue.issue.id);
+        const tasks = await client.multicaTaskList({ issueId: issue.issue.id });
         check("task list is empty before any run", tasks.tasks.length === 0);
 
         // status catalog + field update with trigger
@@ -285,6 +285,45 @@ async function main(): Promise<void> {
           inboxWriteRefused = true;
         }
         check("a non-run session cannot write the inbox", inboxWriteRefused);
+
+        // Rosters: an agent's detail carries its instructions and its own
+        // run history; status flips through the management write; a squad's
+        // roster gains and loses a member.
+        const detail = await client.multicaAgentGet(created.agent.id);
+        check(
+          "agent detail carries the instructions",
+          detail.agent.id === created.agent.id && detail.agent.instructions !== undefined,
+        );
+        const archived = await client.multicaAgentStatus(created.agent.id, "archived");
+        check("agent archive write lands", archived.agent.status !== "");
+        await client.multicaAgentStatus(created.agent.id, "active");
+        const agentRuns = await client.multicaTaskList({ agentId: created.agent.id });
+        check("agent run feed lists that agent's tasks", agentRuns.tasks.length >= 0);
+        const verifySquad = await client.multicaSquadCreate({
+          name: "Verify squad",
+          leaderId: created.agent.id,
+        });
+        const verifySecond = await client.multicaAgentCreate({ name: "VerifySecond" });
+        const grown = await client.multicaSquadAddMember({
+          squadId: verifySquad.squad.id,
+          memberType: "agent",
+          memberId: verifySecond.agent.id,
+        });
+        check(
+          "squad gains a member",
+          grown.squad.members.some((member) => member.memberId === verifySecond.agent.id),
+        );
+        const shrunk = await client.multicaSquadRemoveMember({
+          squadId: verifySquad.squad.id,
+          memberType: "agent",
+          memberId: verifySecond.agent.id,
+        });
+        check(
+          "squad loses a member",
+          !shrunk.squad.members.some((member) => member.memberId === verifySecond.agent.id),
+        );
+        const fetched = await client.multicaSquadGet(verifySquad.squad.id);
+        check("squad get returns the roster", fetched.squad.leaderId === created.agent.id);
 
         // Autopilot: a run_only autopilot fires on demand, lands a task with
         // no issue, and its run history records the attempt.

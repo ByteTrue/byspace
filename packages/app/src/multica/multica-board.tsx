@@ -13,7 +13,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Bell, KanbanSquare, List, UserRound } from "lucide-react-native";
+import { Bell, KanbanSquare, List, UserRound, UsersRound } from "lucide-react-native";
 
 import { buildHostWorkspaceRoute } from "@/utils/host-routes";
 
@@ -169,6 +169,7 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
             </Text>
           </View>
         ) : null}
+        <RostersPill serverId={serverId} />
         {live.secretaryWorkspaceId ? (
           <SecretaryPill serverId={serverId} workspaceId={live.secretaryWorkspaceId} />
         ) : null}
@@ -469,6 +470,20 @@ function IssueRow({
       <Text style={styles.listRowAssignee} numberOfLines={1}>
         {agentName ?? "unassigned"}
       </Text>
+    </Pressable>
+  );
+}
+
+/** The rosters' front door: agents and squads, the two management faces. */
+function RostersPill({ serverId }: { serverId: string }): ReactElement {
+  const router = useRouter();
+  const handlePress = useCallback(() => {
+    router.push(`/multica/agents?serverId=${serverId}`);
+  }, [router, serverId]);
+  return (
+    <Pressable style={styles.officePill} onPress={handlePress} testID="multica-rosters-entry">
+      <UsersRound size={13} color="#888" />
+      <Text style={styles.officePillText}>Rosters</Text>
     </Pressable>
   );
 }

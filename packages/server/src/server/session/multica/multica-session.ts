@@ -35,8 +35,10 @@ import type {
   MulticaSquadMemberSummary,
   MulticaSquadSummary,
   MulticaTaskSummary,
+  MulticaAgentDetail,
   MulticaAutopilotRunSummary,
   MulticaAutopilotSummary,
+  MulticaSquadDetail,
   MulticaInboxItemSummary,
   MulticaWakeupSummary,
 } from "@bytetrue/protocol/multica/rpc-schemas";
@@ -57,6 +59,7 @@ function agentSummary(agent: AgentRow): MulticaAgentSummary {
     systemKey: agent.systemKey,
     permissionMode: agent.permissionMode,
     maxConcurrentTasks: agent.maxConcurrentTasks,
+    model: agent.model,
     createdAt: agent.createdAt,
     updatedAt: agent.updatedAt,
     archivedAt: agent.archivedAt,
@@ -97,6 +100,41 @@ function commentSummary(comment: CommentRow): MulticaCommentSummary {
     updatedAt: comment.updatedAt,
     revision: comment.revision,
     sourceTaskId: comment.sourceTaskId,
+  };
+}
+
+function agentDetail(agent: AgentRow): MulticaAgentDetail {
+  return {
+    id: agent.id,
+    name: agent.name,
+    kind: agent.kind,
+    systemKey: agent.systemKey,
+    status: agent.status,
+    description: agent.description,
+    instructions: agent.instructions,
+    model: agent.model,
+    permissionMode: agent.permissionMode,
+    maxConcurrentTasks: agent.maxConcurrentTasks,
+    thinkingLevel: agent.thinkingLevel,
+    archivedAt: agent.archivedAt,
+    createdAt: agent.createdAt,
+    updatedAt: agent.updatedAt,
+  };
+}
+
+function squadDetail(store: MulticaStore, squadId: string): MulticaSquadDetail {
+  const squad = store.getSquad(squadId);
+  return {
+    id: squad.id,
+    name: squad.name,
+    description: squad.description,
+    leaderId: squad.leaderId,
+    instructions: squad.instructions,
+    members: store.listSquadMembers(squadId).map((member) => ({
+      memberType: member.memberType,
+      memberId: member.memberId,
+      role: member.role,
+    })),
   };
 }
 
@@ -222,6 +260,83 @@ type WakeupOrInboxMessage = Extract<
  * under the complexity ceiling; the predicate keeps both sides of the
  * narrowing exact, so exhaustiveness still fails closed.
  */
+type ReadMessage = Extract<
+  SessionInboundMessage,
+  {
+    type:
+      | "multica.agent.list.request"
+      | "multica.issue.list.request"
+      | "multica.issue.get.request"
+      | "multica.status.list.request"
+      | "multica.task.running.list.request"
+      | "multica.task.list.request";
+  }
+>;
+
+type CreateMessage = Extract<
+  SessionInboundMessage,
+  {
+    type:
+      | "multica.agent.create.request"
+      | "multica.issue.create.request"
+      | "multica.squad.create.request";
+  }
+>;
+
+type WriteMessage = Extract<
+  SessionInboundMessage,
+  {
+    type:
+      | "multica.issue.update.request"
+      | "multica.issue.status.update.request"
+      | "multica.comment.create.request"
+      | "multica.agent.status.request"
+      | "multica.squad.add_member.request"
+      | "multica.squad.remove_member.request";
+  }
+>;
+
+type RosterOrConversationMessage = Extract<
+  SessionInboundMessage,
+  {
+    type:
+      | "multica.agent.get.request"
+      | "multica.squad.get.request"
+      | "multica.squad.list.request"
+      | "multica.comment.list.request";
+  }
+>;
+
+function isReadMessage(msg: MulticaInboundSubset): msg is ReadMessage {
+  return (
+    msg.type === "multica.agent.list.request" ||
+    msg.type === "multica.issue.list.request" ||
+    msg.type === "multica.issue.get.request" ||
+    msg.type === "multica.status.list.request" ||
+    msg.type === "multica.task.running.list.request" ||
+    msg.type === "multica.task.list.request"
+  );
+}
+
+function isCreateMessage(msg: MulticaInboundSubset): msg is CreateMessage {
+  return (
+    msg.type === "multica.agent.create.request" ||
+    msg.type === "multica.issue.create.request" ||
+    msg.type === "multica.squad.create.request"
+  );
+}
+
+function isRosterOrConversationMessage(
+  msg: MulticaInboundSubset,
+): msg is RosterOrConversationMessage {
+  return (
+    msg.type === "multica.agent.get.request" ||
+    msg.type === "multica.squad.get.request" ||
+    msg.type === "multica.squad.list.request" ||
+    msg.type === "multica.comment.list.request"
+  );
+}
+
 function isWakeupOrInboxMessage(msg: MulticaInboundSubset): msg is WakeupOrInboxMessage {
   return (
     msg.type.startsWith("multica.inbox.") ||
@@ -256,40 +371,19 @@ export class MulticaSession {
       if (isWakeupOrInboxMessage(msg)) {
         return await this.#handleWakeupAndInbox(msg);
       }
-      switch (msg.type) {
-        case "multica.agent.list.request":
-          return this.#handleAgentList(msg);
-        case "multica.agent.create.request":
-          return this.#handleAgentCreate(msg);
-        case "multica.issue.list.request":
-          return this.#handleIssueList(msg);
-        case "multica.issue.create.request":
-          return this.#handleIssueCreate(msg);
-        case "multica.issue.get.request":
-          return this.#handleIssueGet(msg);
-        case "multica.status.list.request":
-          return this.#handleStatusList(msg);
-        case "multica.issue.update.request":
-          return this.#handleIssueUpdate(msg);
-        case "multica.issue.status.update.request":
-          return this.#handleIssueStatusUpdate(msg);
-        case "multica.comment.list.request":
-          return this.#handleCommentList(msg);
-        case "multica.comment.create.request":
-          return this.#handleCommentCreate(msg);
-        case "multica.squad.list.request":
-          return this.#handleSquadList(msg);
-        case "multica.squad.create.request":
-          return this.#handleSquadCreate(msg);
-        case "multica.task.running.list.request":
-          return this.#handleTaskRunningList(msg);
-        case "multica.task.list.request":
-          return this.#handleTaskList(msg);
-        default:
-          // The switch is exhaustive over the multica subset; the dispatcher's
-          // prefix check is what routes here, so this arm is unreachable.
-          msg satisfies never;
+      // Four arms by intent — reads, creates, writes, and the roster plus
+      // conversation surface — each with its own exhaustive sub-switch, so
+      // this entry point stays a directory, not a switchboard.
+      if (isReadMessage(msg)) {
+        return this.#handleReadMessage(msg);
       }
+      if (isCreateMessage(msg)) {
+        return this.#handleCreateMessage(msg);
+      }
+      if (isRosterOrConversationMessage(msg)) {
+        return this.#handleRosterMessage(msg);
+      }
+      return this.#handleWriteMessage(msg);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.#host.emit({
@@ -860,10 +954,136 @@ export class MulticaSession {
     });
   }
 
+  /** The pure reads: rosters, boards, catalogs, queues. */
+  #handleReadMessage(msg: ReadMessage): void {
+    switch (msg.type) {
+      case "multica.agent.list.request":
+        return this.#handleAgentList(msg);
+      case "multica.issue.list.request":
+        return this.#handleIssueList(msg);
+      case "multica.issue.get.request":
+        return this.#handleIssueGet(msg);
+      case "multica.status.list.request":
+        return this.#handleStatusList(msg);
+      case "multica.task.running.list.request":
+        return this.#handleTaskRunningList(msg);
+      case "multica.task.list.request":
+        return this.#handleTaskList(msg);
+      default:
+        msg satisfies never;
+    }
+  }
+
+  /** The three create surfaces. */
+  #handleCreateMessage(msg: CreateMessage): void {
+    switch (msg.type) {
+      case "multica.agent.create.request":
+        return this.#handleAgentCreate(msg);
+      case "multica.issue.create.request":
+        return this.#handleIssueCreate(msg);
+      case "multica.squad.create.request":
+        return this.#handleSquadCreate(msg);
+      default:
+        msg satisfies never;
+    }
+  }
+
+  /** The trigger-aware writes: issue fields, status, comments, roster membership. */
+  #handleWriteMessage(msg: WriteMessage): void {
+    switch (msg.type) {
+      case "multica.issue.update.request":
+        return this.#handleIssueUpdate(msg);
+      case "multica.issue.status.update.request":
+        return this.#handleIssueStatusUpdate(msg);
+      case "multica.comment.create.request":
+        return this.#handleCommentCreate(msg);
+      case "multica.agent.status.request":
+        return this.#handleAgentStatus(msg);
+      case "multica.squad.add_member.request":
+        return this.#handleSquadAddMember(msg);
+      case "multica.squad.remove_member.request":
+        return this.#handleSquadRemoveMember(msg);
+      default:
+        msg satisfies never;
+    }
+  }
+
+  /** The roster reads plus the conversation's read surface. */
+  #handleRosterMessage(msg: RosterOrConversationMessage): void {
+    switch (msg.type) {
+      case "multica.agent.get.request":
+        return this.#handleAgentGet(msg);
+      case "multica.squad.get.request":
+        return this.#handleSquadGet(msg);
+      case "multica.squad.list.request":
+        return this.#handleSquadList(msg);
+      case "multica.comment.list.request":
+        return this.#handleCommentList(msg);
+      default:
+        msg satisfies never;
+    }
+  }
+
+  #handleAgentGet(
+    msg: Extract<SessionInboundMessage, { type: "multica.agent.get.request" }>,
+  ): void {
+    this.#emit({
+      type: "multica.agent.get.response",
+      payload: { requestId: msg.requestId, agent: agentDetail(this.#store.getAgent(msg.id)) },
+    });
+  }
+
+  #handleAgentStatus(
+    msg: Extract<SessionInboundMessage, { type: "multica.agent.status.request" }>,
+  ): void {
+    this.#store.setAgentArchived(msg.id, msg.status === "archived");
+    this.#emit({
+      type: "multica.agent.status.response",
+      payload: { requestId: msg.requestId, agent: agentDetail(this.#store.getAgent(msg.id)) },
+    });
+  }
+
+  #handleSquadGet(
+    msg: Extract<SessionInboundMessage, { type: "multica.squad.get.request" }>,
+  ): void {
+    this.#emit({
+      type: "multica.squad.get.response",
+      payload: { requestId: msg.requestId, squad: squadDetail(this.#store, msg.id) },
+    });
+  }
+
+  #handleSquadAddMember(
+    msg: Extract<SessionInboundMessage, { type: "multica.squad.add_member.request" }>,
+  ): void {
+    this.#store.addSquadMember({
+      squadId: msg.squadId,
+      memberType: msg.memberType,
+      memberId: msg.memberId,
+      role: msg.role ?? "member",
+    });
+    this.#emit({
+      type: "multica.squad.add_member.response",
+      payload: { requestId: msg.requestId, squad: squadDetail(this.#store, msg.squadId) },
+    });
+  }
+
+  #handleSquadRemoveMember(
+    msg: Extract<SessionInboundMessage, { type: "multica.squad.remove_member.request" }>,
+  ): void {
+    this.#store.removeSquadMember(msg.squadId, msg.memberType, msg.memberId);
+    this.#emit({
+      type: "multica.squad.remove_member.response",
+      payload: { requestId: msg.requestId, squad: squadDetail(this.#store, msg.squadId) },
+    });
+  }
+
   #handleTaskList(
     msg: Extract<SessionInboundMessage, { type: "multica.task.list.request" }>,
   ): void {
-    const tasks = this.#store.listTasksForIssue(msg.issueId);
+    const tasks =
+      msg.agentId !== undefined
+        ? this.#store.listTasksForAgent(msg.agentId)
+        : this.#store.listTasksForIssue(msg.issueId ?? "");
     this.#emit({
       type: "multica.task.list.response",
       payload: { requestId: msg.requestId, tasks: tasks.map(taskSummary) },
