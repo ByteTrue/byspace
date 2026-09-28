@@ -599,6 +599,14 @@ type MulticaIssueLabelsSetPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.issue.labels.set.response" }
 >["payload"];
+type MulticaCommentUpdatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.comment.update.response" }
+>["payload"];
+type MulticaCommentDeletePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.comment.delete.response" }
+>["payload"];
 type MulticaReactionSetPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.reaction.set.response" }
@@ -5978,6 +5986,27 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       message: { type: "multica.issue.labels.set.request", ...options },
       responseType: "multica.issue.labels.set.response",
+    });
+  }
+
+  async multicaCommentUpdate(options: {
+    commentId: string;
+    content: string;
+    senderSessionId?: string;
+  }): Promise<MulticaCommentUpdatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.comment.update.request", ...options },
+      responseType: "multica.comment.update.response",
+    });
+  }
+
+  async multicaCommentDelete(options: {
+    commentId: string;
+    senderSessionId?: string;
+  }): Promise<MulticaCommentDeletePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.comment.delete.request", ...options },
+      responseType: "multica.comment.delete.response",
     });
   }
 

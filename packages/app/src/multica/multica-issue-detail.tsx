@@ -47,6 +47,7 @@ interface IssueDetailData {
   subscribed: boolean;
   toggleSubscription: () => void;
   react: (commentId: string, emoji: string, reacted: boolean) => void;
+  revise: (commentId: string, content: string | null) => void;
   mentionAgents: readonly { id: string; name: string }[];
   mentionSquads: readonly { id: string; name: string }[];
   refreshChildren: () => void;
@@ -60,6 +61,14 @@ interface IssueDetailData {
   goBack: () => void;
   send: (body: string) => void;
   moveStatus: (status: string) => void;
+  updateField: (fields: {
+    status?: string;
+    priority?: string;
+    title?: string;
+    description?: string;
+    assigneeType?: string | null;
+    assigneeId?: string | null;
+  }) => void;
 }
 
 function useIssueQueries(
@@ -218,6 +227,18 @@ function useIssueDetailData(serverId: string, issueId: string): IssueDetailData 
     void queries.refreshIssue();
   }, [queries]);
 
+  const revise = useCallback(
+    (commentId: string, content: string | null) => {
+      if (!client) return;
+      const call =
+        content === null
+          ? client.multicaCommentDelete({ commentId })
+          : client.multicaCommentUpdate({ commentId, content });
+      void call.then(() => queries.refreshTimeline()).catch(() => queries.refreshTimeline());
+    },
+    [client, queries],
+  );
+
   const react = useCallback(
     (commentId: string, emoji: string, reacted: boolean) => {
       if (!client) return;
@@ -229,21 +250,47 @@ function useIssueDetailData(serverId: string, issueId: string): IssueDetailData 
     [client, queries],
   );
 
+  const updateField = useCallback(
+    (fields: {
+      status?: string;
+      priority?: string;
+      title?: string;
+      description?: string;
+      assigneeType?: string | null;
+      assigneeId?: string | null;
+    }): void => {
+      const current = queries.issue;
+      if (!client || !current) return;
+      // Writes serialize through a fresh read: the cache's revision can lag
+      // a just-landed write, and a stale revision is a silent drop under
+      // optimistic concurrency — the user's click would vanish without a
+      // word. Read, write, and on conflict read again and retry once.
+      const attempt = (revision: number): Promise<unknown> =>
+        client
+          .multicaIssueUpdate({ issueId: current.id, expectedRevision: revision, ...fields })
+          .catch(async (error: unknown) => {
+            const conflicted =
+              error instanceof Error && /changed since revision/.test(error.message);
+            if (!conflicted) return undefined;
+            const fresh = await client.multicaIssueGet(current.id);
+            return client.multicaIssueUpdate({
+              issueId: current.id,
+              expectedRevision: fresh.issue.revision,
+              ...fields,
+            });
+          });
+      void attempt(current.revision).finally(() => {
+        void queries.refreshIssue();
+      });
+    },
+    [client, queries],
+  );
+
   const moveStatus = useCallback(
     (status: string): void => {
-      if (!client || !issue) return;
-      client
-        .multicaIssueUpdate({
-          issueId: issue.id,
-          expectedRevision: issue.revision,
-          status,
-        })
-        .catch(() => undefined)
-        .finally(() => {
-          void queries.refreshIssue();
-        });
+      updateField({ status });
     },
-    [client, issue, queries],
+    [updateField],
   );
 
   const assigneeId = issue?.assigneeId ?? null;
@@ -258,6 +305,7 @@ function useIssueDetailData(serverId: string, issueId: string): IssueDetailData 
     subscribed,
     toggleSubscription,
     react,
+    revise,
     refreshChildren,
     truncated,
     agentNameById: catalog.agentNameById,
@@ -271,6 +319,7 @@ function useIssueDetailData(serverId: string, issueId: string): IssueDetailData 
     mentionAgents: mentionRoster.agents,
     mentionSquads: mentionRoster.squads,
     moveStatus,
+    updateField,
   };
 }
 
@@ -319,6 +368,11 @@ export function MulticaIssueDetail({
 }
 
 function IssueMainPane({ data }: { data: IssueDetailData }): ReactElement {
+  const commitTitle = useCallback((title: string) => data.updateField({ title }), [data]);
+  const commitDescription = useCallback(
+    (description: string) => data.updateField({ description }),
+    [data],
+  );
   const mentionRosterProp = useMemo(
     () => ({ agents: data.mentionAgents, squads: data.mentionSquads }),
     [data.mentionAgents, data.mentionSquads],
@@ -329,15 +383,25 @@ function IssueMainPane({ data }: { data: IssueDetailData }): ReactElement {
       <Breadcrumb issue={issue} goBack={goBack} />
       <View style={styles.titleRow}>
         {issue ? <StatusDot status={issue.status} /> : null}
-        <Text style={styles.title} numberOfLines={2}>
-          {issue?.title ?? "…"}
-        </Text>
+        <InlineTextEditor
+          value={issue?.title ?? ""}
+          placeholder="Untitled"
+          textStyle={styles.title}
+          multiline={false}
+          markdown={false}
+          onCommit={commitTitle}
+          testID="multica-title-edit"
+        />
       </View>
-      {issue?.description ? (
-        <View style={styles.descriptionBlock}>
-          <MarkdownRenderer text={issue.description} compact />
-        </View>
-      ) : null}
+      <InlineTextEditor
+        value={issue?.description ?? ""}
+        placeholder="Add a description"
+        textStyle={styles.descriptionText}
+        multiline
+        markdown
+        onCommit={commitDescription}
+        testID="multica-description-edit"
+      />
       <View style={styles.stream}>
         {data.entries.map((entry) =>
           entry.kind === "comment" ? (
@@ -346,6 +410,7 @@ function IssueMainPane({ data }: { data: IssueDetailData }): ReactElement {
               entry={entry}
               actorName={entry.authorId ? (agentNameById.get(entry.authorId) ?? null) : null}
               onReact={data.react}
+              onRevise={data.revise}
             />
           ) : (
             <ActivityLine
@@ -363,6 +428,96 @@ function IssueMainPane({ data }: { data: IssueDetailData }): ReactElement {
       <CommentComposer onSend={data.send} sending={sending} roster={mentionRosterProp} />
     </View>
   );
+}
+
+/**
+ * Click-to-edit text, after the source's inline title/description editors:
+ * the resting face is the rendered value (markdown for the description),
+ * pressing it opens the input with the current value, and leaving commits
+ * when the text actually changed. Remounting per edit keeps the
+ * uncontrolled input honest — no stale DOM text survives a commit.
+ */
+function InlineTextEditor({
+  value,
+  placeholder,
+  textStyle,
+  multiline,
+  markdown,
+  onCommit,
+  testID,
+}: {
+  value: string;
+  placeholder: string;
+  textStyle: unknown;
+  multiline: boolean;
+  /** Resting face renders markdown (the description); plain text otherwise. */
+  markdown: boolean;
+  onCommit: (next: string) => void;
+  testID: string;
+}): ReactElement {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const start = useCallback(() => {
+    setDraft(value);
+    setEditing(true);
+  }, [value]);
+  const handleChange = useCallback((text: string) => setDraft(text), []);
+  const commit = useCallback(() => {
+    setEditing(false);
+    const next = draft.trim();
+    if (next !== value) {
+      onCommit(next);
+    }
+  }, [draft, value, onCommit]);
+  if (editing) {
+    return (
+      <TextInput
+        style={[styles.inlineEditor, multiline && styles.inlineEditorMulti]}
+        initialValue={value}
+        onChangeText={handleChange}
+        onBlur={commit}
+        placeholder={placeholder}
+        placeholderTextColor="gray"
+        multiline={multiline}
+        autoFocus
+        testID={`${testID}-input`}
+      />
+    );
+  }
+  return (
+    <Pressable onPress={start} style={styles.inlineEditorRest} testID={testID}>
+      <EditorRestingFace
+        value={value}
+        placeholder={placeholder}
+        markdown={markdown}
+        textStyle={textStyle}
+      />
+    </Pressable>
+  );
+}
+
+function EditorRestingFace({
+  value,
+  placeholder,
+  markdown,
+  textStyle,
+}: {
+  value: string;
+  placeholder: string;
+  markdown: boolean;
+  textStyle: unknown;
+}): ReactElement {
+  if (value === "") {
+    return <Text style={[textStyle as never, styles.placeholderText]}>{placeholder}</Text>;
+  }
+  if (markdown) {
+    return (
+      <View style={styles.descriptionBlock}>
+        <MarkdownRenderer text={value} compact />
+      </View>
+    );
+  }
+  return <Text style={textStyle as never}>{value}</Text>;
 }
 
 function Breadcrumb({
@@ -510,25 +665,96 @@ function CommentRow({
   entry,
   actorName,
   onReact,
+  onRevise,
 }: {
   entry: MulticaTimelineEntry;
   actorName: string | null;
   onReact: (commentId: string, emoji: string, reacted: boolean) => void;
+  onRevise: (commentId: string, content: string | null) => void;
 }): ReactElement {
   const isOwner = entry.authorType === "owner";
   const authorId = entry.authorId ?? "";
   const displayName = isOwner ? "you" : (actorName ?? authorId.slice(0, 8));
+  if (entry.deletedAt) {
+    // A tombstone keeps the thread's shape: the replies still hang here,
+    // the words are gone and say so.
+    return (
+      <View style={styles.comment}>
+        <Text style={styles.tombstone}>
+          comment deleted · {formatRelativeTime(entry.deletedAt)}
+        </Text>
+      </View>
+    );
+  }
   return (
     <View style={styles.comment}>
       <View style={styles.commentHeader}>
         <ActorAvatar name={displayName} id={authorId} />
         <Text style={styles.commentAuthor}>{displayName}</Text>
         <Text style={styles.commentTime}>{formatRelativeTime(entry.createdAt)}</Text>
+        {isOwner ? (
+          <CommentControls commentId={entry.id} content={entry.content ?? ""} onRevise={onRevise} />
+        ) : null}
       </View>
       <View style={styles.commentBody}>
         <MarkdownRenderer text={entry.content ?? ""} compact />
       </View>
       <ReactionBar entry={entry} onReact={onReact} />
+    </View>
+  );
+}
+
+/**
+ * The owner's controls over their own comments: inline edit (same
+ * click-to-edit shape as the title) and delete. A run's comments are not
+ * revisable from the console — the author guard on the daemon refuses
+ * anyway; the face simply does not offer what the mechanism denies.
+ */
+function CommentControls({
+  commentId,
+  content,
+  onRevise,
+}: {
+  commentId: string;
+  content: string;
+  onRevise: (commentId: string, content: string | null) => void;
+}): ReactElement {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(content);
+  const startEdit = useCallback(() => {
+    setDraft(content);
+    setEditing(true);
+  }, [content]);
+  const handleChange = useCallback((text: string) => setDraft(text), []);
+  const commitEdit = useCallback(() => {
+    setEditing(false);
+    const next = draft.trim();
+    if (next !== "" && next !== content) {
+      onRevise(commentId, next);
+    }
+  }, [draft, content, commentId, onRevise]);
+  const remove = useCallback(() => onRevise(commentId, null), [commentId, onRevise]);
+  if (editing) {
+    return (
+      <TextInput
+        style={styles.commentEditInput}
+        initialValue={content}
+        onChangeText={handleChange}
+        onBlur={commitEdit}
+        multiline
+        autoFocus
+        testID={`multica-comment-edit-input-${commentId}`}
+      />
+    );
+  }
+  return (
+    <View style={styles.commentControls}>
+      <Pressable onPress={startEdit} testID={`multica-comment-edit-${commentId}`}>
+        <Text style={styles.commentControlText}>edit</Text>
+      </Pressable>
+      <Pressable onPress={remove} testID={`multica-comment-delete-${commentId}`}>
+        <Text style={styles.commentControlText}>delete</Text>
+      </Pressable>
     </View>
   );
 }
@@ -671,7 +897,16 @@ function MentionRow({
 }
 
 function IssuePropertiesPane({ data }: { data: IssueDetailData }): ReactElement {
-  const { issue, statuses, assigneeName, assigneeType, moveStatus } = data;
+  const { issue, statuses, assigneeName, moveStatus } = data;
+  const pickPriority = useCallback((priority: string) => data.updateField({ priority }), [data]);
+  const pickAssignee = useCallback(
+    (assigneeId: string) => data.updateField({ assigneeType: "agent", assigneeId }),
+    [data],
+  );
+  const clearAssignee = useCallback(
+    () => data.updateField({ assigneeType: null, assigneeId: null }),
+    [data],
+  );
   const status = issue?.status ?? "";
   return (
     <View style={styles.properties}>
@@ -680,19 +915,16 @@ function IssuePropertiesPane({ data }: { data: IssueDetailData }): ReactElement 
           <StatusDropdown status={status} statuses={statuses} onMove={moveStatus} />
         </PropertyRow>
         <PropertyRow label="Priority">
-          <Text style={styles.propertyValue}>{issue?.priority ?? "none"}</Text>
+          <PriorityPick value={issue?.priority ?? "none"} onPick={pickPriority} />
         </PropertyRow>
         <PropertyRow label="Assignee">
-          {assigneeName && issue?.assigneeId ? (
-            <View style={styles.assigneeRow}>
-              <ActorAvatar name={assigneeName} id={issue.assigneeId} />
-              <Text style={styles.propertyValue}>{assigneeName}</Text>
-            </View>
-          ) : (
-            <Text style={styles.propertyValue}>
-              {assigneeType ? `${assigneeType} (unknown)` : "unassigned"}
-            </Text>
-          )}
+          <AssigneePick
+            agents={data.mentionAgents}
+            assigneeId={issue?.assigneeId ?? null}
+            assigneeName={assigneeName}
+            onPick={pickAssignee}
+            onClear={clearAssignee}
+          />
         </PropertyRow>
       </Section>
       <Section title="Labels">
@@ -945,6 +1177,104 @@ function AddSubIssueRow({
   );
 }
 
+const DETAIL_PRIORITY_OPTIONS = ["urgent", "high", "medium", "low", "none"] as const;
+
+function PriorityPick({
+  value,
+  onPick,
+}: {
+  value: string;
+  onPick: (priority: string) => void;
+}): ReactElement {
+  return (
+    <View style={styles.pickRow}>
+      {DETAIL_PRIORITY_OPTIONS.map((option) => (
+        <PriorityChip key={option} option={option} active={value === option} onPick={onPick} />
+      ))}
+    </View>
+  );
+}
+
+function PriorityChip({
+  option,
+  active,
+  onPick,
+}: {
+  option: string;
+  active: boolean;
+  onPick: (priority: string) => void;
+}): ReactElement {
+  const handlePress = useCallback(() => onPick(option), [option, onPick]);
+  return (
+    <Pressable
+      style={[styles.pickChip, active && styles.pickChipActive]}
+      onPress={handlePress}
+      testID={`multica-priority-${option}`}
+    >
+      <Text style={styles.pickChipText}>{option}</Text>
+    </Pressable>
+  );
+}
+
+function AssigneePick({
+  agents,
+  assigneeId,
+  assigneeName,
+  onPick,
+  onClear,
+}: {
+  agents: readonly { id: string; name: string }[];
+  assigneeId: string | null;
+  assigneeName: string | null;
+  onPick: (id: string) => void;
+  onClear: () => void;
+}): ReactElement {
+  return (
+    <View style={styles.pickRow}>
+      <Pressable
+        style={[styles.pickChip, assigneeId === null && styles.pickChipActive]}
+        onPress={onClear}
+        testID="multica-assignee-none"
+      >
+        <Text style={styles.pickChipText}>unassigned</Text>
+      </Pressable>
+      {agents.map((agent) => (
+        <AssigneeChip
+          key={agent.id}
+          agent={agent}
+          active={assigneeId === agent.id}
+          currentName={assigneeName}
+          onPick={onPick}
+        />
+      ))}
+    </View>
+  );
+}
+
+function AssigneeChip({
+  agent,
+  active,
+  currentName,
+  onPick,
+}: {
+  agent: { id: string; name: string };
+  active: boolean;
+  currentName: string | null;
+  onPick: (id: string) => void;
+}): ReactElement {
+  const handlePress = useCallback(() => onPick(agent.id), [agent.id, onPick]);
+  void currentName;
+  return (
+    <Pressable
+      style={[styles.pickChip, active && styles.pickChipActive]}
+      onPress={handlePress}
+      testID={`multica-assignee-${agent.id}`}
+    >
+      <Text style={styles.pickChipText}>{agent.name}</Text>
+    </Pressable>
+  );
+}
+
 function SubIssueRow({ child }: { child: MulticaIssueSummary }): ReactElement {
   const router = useRouter();
   const params = useLocalSearchParams<{ serverId: string }>();
@@ -1118,6 +1448,30 @@ const styles = StyleSheet.create((theme) => ({
     marginLeft: "auto",
   },
   commentBody: { paddingLeft: 24 },
+  inlineEditorRest: { flex: 1 },
+  inlineEditor: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+  },
+  inlineEditorMulti: { minHeight: 72 },
+  placeholderText: { color: theme.colors.foregroundMuted },
+  descriptionText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
+  pickRow: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
+  pickChip: {
+    paddingVertical: 1,
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  pickChipActive: { backgroundColor: theme.colors.surface2 },
+  pickChipText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
   mentionMenu: {
     position: "absolute",
     bottom: "100%",
@@ -1162,6 +1516,24 @@ const styles = StyleSheet.create((theme) => ({
   },
   activityDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#9ca3af" },
   activityText: { flex: 1, color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  tombstone: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    fontStyle: "italic",
+  },
+  commentControls: { flexDirection: "row", gap: theme.spacing[2], marginLeft: "auto" },
+  commentControlText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  commentEditInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 2,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    minHeight: 48,
+  },
   reactionBar: {
     flexDirection: "row",
     alignItems: "center",

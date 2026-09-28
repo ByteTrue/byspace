@@ -110,6 +110,7 @@ function commentSummary(
     updatedAt: comment.updatedAt,
     revision: comment.revision,
     sourceTaskId: comment.sourceTaskId,
+    deletedAt: comment.deletedAt,
     reactions,
   };
 }
@@ -311,7 +312,9 @@ type WriteMessage = Extract<
       | "multica.squad.remove_member.request"
       | "multica.reaction.set.request"
       | "multica.label.create.request"
-      | "multica.issue.labels.set.request";
+      | "multica.issue.labels.set.request"
+      | "multica.comment.update.request"
+      | "multica.comment.delete.request";
   }
 >;
 
@@ -1096,6 +1099,7 @@ export class MulticaSession {
         authorType: null,
         authorId: null,
         reactions: null,
+        deletedAt: null,
       })),
       ...comments.map((comment) => ({
         kind: "comment" as const,
@@ -1109,6 +1113,7 @@ export class MulticaSession {
         authorType: comment.authorType,
         authorId: comment.authorId,
         reactions: this.#ownerReactions(comment.id),
+        deletedAt: comment.deletedAt,
       })),
     ]
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
@@ -1154,6 +1159,10 @@ export class MulticaSession {
         return this.#handleSquadRemoveMember(msg);
       case "multica.reaction.set.request":
         return this.#handleReactionSet(msg);
+      case "multica.comment.update.request":
+        return this.#handleCommentUpdate(msg);
+      case "multica.comment.delete.request":
+        return this.#handleCommentDelete(msg);
       case "multica.label.create.request":
         return this.#handleLabelCreate(msg);
       case "multica.issue.labels.set.request":
@@ -1248,6 +1257,49 @@ export class MulticaSession {
         requestId: msg.requestId,
         labels: this.#store.listLabelsForIssue(msg.issueId).map(labelSummary),
       },
+    });
+  }
+
+  /**
+   * Editing and deleting are the author's own acts: the owner edits and
+   * deletes owner-authored comments, a run its own. An author mismatch is
+   * refused — the record is public, its revision is not.
+   */
+  #assertCommentAuthor(commentId: string, senderSessionId: string | undefined): CommentRow {
+    const comment = this.#store.getComment(commentId);
+    const author = this.#resolveCommentAuthor(senderSessionId);
+    const isOwner = comment.authorType === "owner";
+    const matches = isOwner
+      ? author.type === "owner"
+      : author.type === "agent" && author.id === comment.authorId;
+    if (!matches) {
+      throw new Error("only the comment's author can revise it");
+    }
+    return comment;
+  }
+
+  #handleCommentUpdate(
+    msg: Extract<SessionInboundMessage, { type: "multica.comment.update.request" }>,
+  ): void {
+    this.#assertCommentAuthor(msg.commentId, msg.senderSessionId);
+    const comment = this.#store.editComment(msg.commentId, msg.content);
+    this.#emit({
+      type: "multica.comment.update.response",
+      payload: {
+        requestId: msg.requestId,
+        comment: commentSummary(comment, this.#ownerReactions(comment.id)),
+      },
+    });
+  }
+
+  #handleCommentDelete(
+    msg: Extract<SessionInboundMessage, { type: "multica.comment.delete.request" }>,
+  ): void {
+    this.#assertCommentAuthor(msg.commentId, msg.senderSessionId);
+    this.#store.deleteComment(msg.commentId);
+    this.#emit({
+      type: "multica.comment.delete.response",
+      payload: { requestId: msg.requestId, deleted: true },
     });
   }
 

@@ -198,6 +198,7 @@ export const MulticaCommentSummarySchema = z.object({
   updatedAt: z.string(),
   revision: z.number().int(),
   sourceTaskId: z.string().nullable(),
+  deletedAt: z.string().nullable(),
   reactions: z.array(
     z.object({ emoji: z.string(), count: z.number(), reactedByViewer: z.boolean() }),
   ),
@@ -232,6 +233,29 @@ export const MulticaIssueLabelsSetRequestSchema = z.object({
 export const MulticaIssueLabelsSetResponseSchema = z.object({
   type: z.literal("multica.issue.labels.set.response"),
   payload: z.object({ requestId: z.string(), labels: z.array(MulticaLabelSummarySchema) }),
+});
+
+export const MulticaCommentUpdateRequestSchema = z.object({
+  type: z.literal("multica.comment.update.request"),
+  requestId: z.string(),
+  commentId: z.string().min(1),
+  content: z.string(),
+  senderSessionId: z.string().optional(),
+});
+export const MulticaCommentUpdateResponseSchema = z.object({
+  type: z.literal("multica.comment.update.response"),
+  payload: z.object({ requestId: z.string(), comment: MulticaCommentSummarySchema }),
+});
+
+export const MulticaCommentDeleteRequestSchema = z.object({
+  type: z.literal("multica.comment.delete.request"),
+  requestId: z.string(),
+  commentId: z.string().min(1),
+  senderSessionId: z.string().optional(),
+});
+export const MulticaCommentDeleteResponseSchema = z.object({
+  type: z.literal("multica.comment.delete.response"),
+  payload: z.object({ requestId: z.string(), deleted: z.boolean() }),
 });
 
 export const MulticaReactionSetRequestSchema = z.object({
@@ -432,6 +456,8 @@ export const MulticaTimelineEntrySchema = z.object({
   reactions: z
     .array(z.object({ emoji: z.string(), count: z.number(), reactedByViewer: z.boolean() }))
     .nullable(),
+  /** comment: tombstoned when deleted with replies still hanging off it. */
+  deletedAt: z.string().nullable(),
 });
 
 export const MulticaTimelineListRequestSchema = z.object({

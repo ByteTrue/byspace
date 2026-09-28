@@ -1,7 +1,11 @@
-import { type ReactElement, type Ref, useCallback, useMemo, useState } from "react";
+import { ReactElement, Ref, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { useRouter } from "expo-router";
+import {
+  EditingTextInput as TextInput,
+  type EditingTextInputHandle,
+} from "@/components/ui/text-input";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   DndContext,
   DragOverlay,
@@ -13,7 +17,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Bell, KanbanSquare, List, UserRound, UsersRound } from "lucide-react-native";
+import { Bell, KanbanSquare, List, Plus, UserRound, UsersRound } from "lucide-react-native";
 
 import { buildHostWorkspaceRoute } from "@/utils/host-routes";
 
@@ -82,6 +86,10 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
   const catalog = useMulticaCatalog(serverId);
 
   const labels = useMulticaLabels(serverId);
+
+  const refetchIssues = useCallback(() => {
+    void issuesQuery.refetch();
+  }, [issuesQuery]);
 
   const openIssue = useCallback(
     (issueId: string) => {
@@ -209,6 +217,7 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
             onPress={groupByAssignee}
           />
         </View>
+        <NewIssueButton onCreated={refetchIssues} />
         <InboxBell unread={live.inboxUnread} />
         {live.workingAgentIds.size > 0 ? (
           <View style={styles.workingPill}>
@@ -278,6 +287,8 @@ interface MulticaFilters {
   readonly priorities: readonly string[];
   readonly assignees: readonly string[];
   readonly labels: readonly string[];
+  /** Free text over titles — the source's header search box. */
+  readonly text: string;
 }
 
 const emptyFilters: MulticaFilters = {
@@ -285,6 +296,7 @@ const emptyFilters: MulticaFilters = {
   priorities: [],
   assignees: [],
   labels: [],
+  text: "",
 };
 
 const PRIORITY_OPTIONS = ["urgent", "high", "medium", "low", "none"] as const;
@@ -300,7 +312,8 @@ function filterIssues(
       (filters.assignees.length === 0 ||
         (issue.assigneeId !== null && filters.assignees.includes(issue.assigneeId))) &&
       (filters.labels.length === 0 ||
-        filters.labels.some((labelId) => issue.labels.some((label) => label.id === labelId))),
+        filters.labels.some((labelId) => issue.labels.some((label) => label.id === labelId))) &&
+      (filters.text === "" || issue.title.toLowerCase().includes(filters.text.toLowerCase())),
   );
 }
 
@@ -367,10 +380,12 @@ function FilterBar({
     filters.statuses.length > 0 ||
     filters.priorities.length > 0 ||
     filters.assignees.length > 0 ||
-    filters.labels.length > 0;
+    filters.labels.length > 0 ||
+    filters.text !== "";
   const handleClear = useCallback(() => onFilters(emptyFilters), [onFilters]);
   return (
     <ScrollView horizontal contentContainerStyle={styles.filterBar}>
+      <SearchBox onFilters={onFilters} filters={filters} />
       {statuses.map((status) => (
         <FilterChipToggle
           key={status.key}
@@ -427,6 +442,43 @@ function FilterBar({
   );
 }
 
+function SearchBox({
+  filters,
+  onFilters,
+}: {
+  filters: MulticaFilters;
+  onFilters: (filters: MulticaFilters) => void;
+}): ReactElement {
+  const inputRef = useRef<EditingTextInputHandle>(null);
+  const [typed, setTyped] = useState("");
+  const handleChange = useCallback(
+    (next: string) => {
+      setTyped(next);
+      onFilters({ ...filters, text: next });
+    },
+    [filters, onFilters],
+  );
+  // An external clear (the Clear chip) must also empty the visible box:
+  // the input is uncontrolled, so state alone would leave stale text.
+  useEffect(() => {
+    if (filters.text === "" && typed !== "") {
+      setTyped("");
+      inputRef.current?.reset();
+    }
+  }, [filters.text, typed]);
+  return (
+    <TextInput
+      ref={inputRef}
+      style={styles.searchBox}
+      initialValue=""
+      onChangeText={handleChange}
+      placeholder="Search issues"
+      placeholderTextColor="gray"
+      testID="multica-board-search"
+    />
+  );
+}
+
 function FilterChipToggle({
   label,
   group,
@@ -436,7 +488,7 @@ function FilterChipToggle({
   onFilters,
 }: {
   label: string;
-  group: keyof MulticaFilters;
+  group: "statuses" | "priorities" | "assignees" | "labels";
   value: string;
   active: boolean;
   filters: MulticaFilters;
@@ -552,6 +604,200 @@ function RostersPill({ serverId }: { serverId: string }): ReactElement {
       <Text style={styles.officePillText}>Rosters</Text>
     </Pressable>
   );
+}
+
+/**
+ * The board's creation face, as the source's onCreateIssue: a title and the
+ * rest of the issue's first facts in one small form. Status defaults to
+ * backlog like every other create path; assignee and priority ride the
+ * directory so a new issue can be routed at birth.
+ */
+function NewIssueButton({ onCreated }: { onCreated: () => void }): ReactElement {
+  const runtimeSnapshot = useLocalServerSnapshot();
+  const client = runtimeSnapshot?.client ?? null;
+  const catalog = useMulticaCatalog(runtimeSnapshot?.serverId ?? "");
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [assigneeId, setAssigneeId] = useState<string | null>(null);
+  const [priority, setPriority] = useState<string>("none");
+  const [saving, setSaving] = useState(false);
+
+  const toggleOpen = useCallback(() => setOpen((value) => !value), []);
+  const handleTitle = useCallback((text: string) => setTitle(text), []);
+  const handleDescription = useCallback((text: string) => setDescription(text), []);
+  const clearAssignee = useCallback(() => setAssigneeId(null), []);
+
+  const submit = useCallback(() => {
+    const trimmed = title.trim();
+    if (!client || trimmed === "" || saving) return;
+    setSaving(true);
+    void client
+      .multicaIssueCreate({
+        title: trimmed,
+        ...(description.trim() !== "" ? { description: description.trim() } : {}),
+        ...(assigneeId ? { assigneeType: "agent", assigneeId } : {}),
+        ...(priority !== "none" ? { priority } : {}),
+      })
+      .then(() => {
+        setTitle("");
+        setDescription("");
+        setAssigneeId(null);
+        setPriority("none");
+        setOpen(false);
+        onCreated();
+        return undefined;
+      })
+      .finally(() => setSaving(false));
+  }, [client, title, description, assigneeId, priority, saving, onCreated]);
+
+  if (!open) {
+    return (
+      <Pressable style={styles.newIssueButton} onPress={toggleOpen} testID="multica-new-issue">
+        <Plus size={13} color="#888" />
+        <Text style={styles.newIssueText}>New issue</Text>
+      </Pressable>
+    );
+  }
+  return (
+    <View style={styles.newIssueForm}>
+      <TextInput
+        style={styles.newIssueInput}
+        initialValue=""
+        onChangeText={handleTitle}
+        placeholder="Issue title"
+        placeholderTextColor="gray"
+        testID="multica-new-issue-title"
+      />
+      <TextInput
+        style={styles.newIssueInput}
+        initialValue=""
+        onChangeText={handleDescription}
+        placeholder="Description (optional)"
+        placeholderTextColor="gray"
+        multiline
+        testID="multica-new-issue-description"
+      />
+      <ScrollView horizontal contentContainerStyle={styles.newIssueRow}>
+        <AssigneePicker
+          agents={catalog.allAgents}
+          assigneeId={assigneeId}
+          onPick={setAssigneeId}
+          onClear={clearAssignee}
+        />
+        {PRIORITY_OPTIONS.map((option) => (
+          <PriorityPicker
+            key={option}
+            option={option}
+            active={priority === option}
+            onPick={setPriority}
+          />
+        ))}
+      </ScrollView>
+      <View style={styles.newIssueRow}>
+        <Pressable style={styles.newIssueButton} onPress={submit} testID="multica-new-issue-create">
+          <Text style={styles.newIssueText}>{saving ? "…" : "Create"}</Text>
+        </Pressable>
+        <Pressable
+          style={styles.newIssueCancel}
+          onPress={toggleOpen}
+          testID="multica-new-issue-cancel"
+        >
+          <Text style={styles.newIssueCancelText}>Cancel</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function AssigneePicker({
+  agents,
+  assigneeId,
+  onPick,
+  onClear,
+}: {
+  agents: readonly { id: string; name: string }[];
+  assigneeId: string | null;
+  onPick: (id: string) => void;
+  onClear: () => void;
+}): ReactElement {
+  return (
+    <>
+      <PickerChip
+        label={assigneeId ? (agents.find((a) => a.id === assigneeId)?.name ?? "—") : "unassigned"}
+        active={assigneeId !== null}
+        onPress={onClear}
+        testID="multica-new-issue-unassigned"
+      />
+      {agents.map((agent) => (
+        <PickerChipWithId
+          key={agent.id}
+          agent={agent}
+          active={assigneeId === agent.id}
+          onPick={onPick}
+        />
+      ))}
+    </>
+  );
+}
+
+function PickerChipWithId({
+  agent,
+  active,
+  onPick,
+}: {
+  agent: { id: string; name: string };
+  active: boolean;
+  onPick: (id: string) => void;
+}): ReactElement {
+  const handlePress = useCallback(() => onPick(agent.id), [agent.id, onPick]);
+  return <PickerChip label={agent.name} active={active} onPress={handlePress} />;
+}
+
+function PickerChip({
+  label,
+  active,
+  onPress,
+  testID,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  testID?: string;
+}): ReactElement {
+  return (
+    <Pressable
+      style={[styles.pickerChip, active && styles.pickerChipActive]}
+      onPress={onPress}
+      testID={testID}
+    >
+      <Text style={styles.pickerChipText}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function PriorityPicker({
+  option,
+  active,
+  onPick,
+}: {
+  option: string;
+  active: boolean;
+  onPick: (priority: string) => void;
+}): ReactElement {
+  const handlePress = useCallback(() => onPick(option), [option, onPick]);
+  return <PickerChip label={option} active={active} onPress={handlePress} />;
+}
+
+function useLocalServerSnapshot() {
+  const params = useLocalSearchParams<{ serverId: string }>();
+  const serverId = typeof params.serverId === "string" ? params.serverId : "";
+  const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
+  return { ...runtimeSnapshot, serverId } as
+    | (typeof runtimeSnapshot & {
+        serverId: string;
+      })
+    | null;
 }
 
 function InboxBell({ unread }: { unread: number }): ReactElement {
@@ -716,6 +962,56 @@ const styles = StyleSheet.create((theme) => ({
   viewToggleItemActive: { backgroundColor: theme.colors.surface2 },
   viewToggleText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   viewToggleTextActive: { color: theme.colors.foreground },
+  searchBox: {
+    width: 160,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 2,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    marginRight: theme.spacing[2],
+  },
+  newIssueButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface2,
+  },
+  newIssueText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
+  newIssueForm: {
+    gap: theme.spacing[2],
+    padding: theme.spacing[3],
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: theme.spacing[2],
+  },
+  newIssueInput: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+  },
+  newIssueRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
+  newIssueCancel: { paddingVertical: theme.spacing[1], paddingHorizontal: theme.spacing[3] },
+  newIssueCancelText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  pickerChip: {
+    paddingVertical: 2,
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  pickerChipActive: { backgroundColor: theme.colors.surface2 },
+  pickerChipText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
   filterBar: {
     flexDirection: "row",
     alignItems: "center",

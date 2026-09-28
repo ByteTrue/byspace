@@ -562,7 +562,10 @@ export class MulticaStore {
     // leaves threading to the reader.
     const rows = this.#db
       .prepare(
-        `SELECT ${COMMENT_SELECT} FROM comment WHERE issue_id = ? AND deleted_at IS NULL
+        // Tombstones ride the list: the source's timeline surfaces a deleted
+        // comment whose replies still hang off it, and hides nothing about
+        // the deletion — the stream reads as a record, not a highlight reel.
+        `SELECT ${COMMENT_SELECT} FROM comment WHERE issue_id = ?
          ORDER BY (parent_id IS NULL) DESC, created_at ASC`,
       )
       .all(issueId);
@@ -814,6 +817,60 @@ export class MulticaStore {
       )
       .all(parentIssueId) as Record<string, unknown>[];
     return rows.map((row) => mapIssueRow(row as never));
+  }
+
+  /** Edit a comment's content; the revision bump is the edit's mark. */
+  editComment(id: string, content: string): CommentRow {
+    const result = this.#db
+      .prepare(
+        `UPDATE comment SET content = ?, revision = revision + 1,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE id = ?`,
+      )
+      .run(content, id);
+    if (Number(result.changes) === 0) {
+      throw new Error(`comment not found: ${id}`);
+    }
+    return this.getComment(id);
+  }
+
+  /**
+   * Delete as the source does: a comment with replies becomes a tombstone
+   * (its shape holds the thread, its content is gone and its reactions are
+   * cleared); a reply-less comment is removed outright and its reactions
+   * cascade with it.
+   */
+  deleteComment(id: string): void {
+    this.#db.exec("BEGIN IMMEDIATE");
+    try {
+      const replies = this.#db
+        .prepare(`SELECT COUNT(*) AS n FROM comment WHERE parent_id = ?`)
+        .get(id) as { n: number };
+      if (Number(replies.n) > 0) {
+        this.#db
+          .prepare(
+            `UPDATE comment SET content = '', deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+               updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             WHERE id = ?`,
+          )
+          .run(id);
+        this.#db.prepare(`DELETE FROM comment_reaction WHERE comment_id = ?`).run(id);
+      } else {
+        this.#db.prepare(`DELETE FROM comment WHERE id = ?`).run(id);
+      }
+      this.#db.exec("COMMIT");
+    } catch (error) {
+      this.#db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  /** A tombstoned comment keeps its row for the thread, loses its words. */
+  isCommentDeleted(id: string): boolean {
+    const row = this.#db.prepare(`SELECT deleted_at FROM comment WHERE id = ?`).get(id) as
+      | { deleted_at: string | null }
+      | undefined;
+    return row?.deleted_at !== undefined && row !== undefined && row.deleted_at !== null;
   }
 
   /** One agent's recent queue history, newest first — the detail page's feed. */

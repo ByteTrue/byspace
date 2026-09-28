@@ -376,6 +376,8 @@ async function main(): Promise<void> {
 
         verifyLabels(client, issue.issue.id);
 
+        await verifyCommentRevision(client, comment.comment.id);
+
         // Autopilot: a run_only autopilot fires on demand, lands a task with
         // no issue, and its run history records the attempt.
         const autopilot = await client.multicaAutopilotCreate({
@@ -450,3 +452,29 @@ async function main(): Promise<void> {
 }
 
 await main();
+
+/** Comment revision: the owner edits and deletes their own comment; a
+ * stranger session is refused both. */
+async function verifyCommentRevision(client: DaemonClient, commentId: string): Promise<void> {
+  const edited = await client.multicaCommentUpdate({
+    commentId,
+    content: "first comment, revised",
+  });
+  check(
+    "editing a comment rewrites it and bumps its revision",
+    edited.comment.content === "first comment, revised" && edited.comment.revision === 2,
+  );
+  let strangerRefused = false;
+  try {
+    await client.multicaCommentUpdate({
+      commentId,
+      content: "not yours",
+      senderSessionId: "verify-stranger-session",
+    });
+  } catch {
+    strangerRefused = true;
+  }
+  check("a stranger session cannot revise a comment", strangerRefused);
+  const deleted = await client.multicaCommentDelete({ commentId });
+  check("the author's delete lands", deleted.deleted === true);
+}

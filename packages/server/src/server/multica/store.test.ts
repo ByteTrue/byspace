@@ -406,3 +406,43 @@ describe("labels", () => {
     expect(store.listLabelsForIssue(issue.id)).toHaveLength(1);
   });
 });
+
+describe("comment revision", () => {
+  it("editing bumps revision and deletes reply-less comments outright", () => {
+    const issue = store.createIssue({ title: "A", creatorType: "owner", creatorId: "owner" });
+    const comment = store.createComment({
+      issueId: issue.id,
+      authorType: "owner",
+      authorId: "owner",
+      content: "first words",
+    });
+    const edited = store.editComment(comment.id, "second words");
+    expect(edited.content).toBe("second words");
+    expect(edited.revision).toBe(comment.revision + 1);
+    store.deleteComment(comment.id);
+    expect(store.listCommentsForIssue(issue.id)).toHaveLength(0);
+  });
+
+  it("a comment with replies becomes a tombstone, keeping the thread", () => {
+    const issue = store.createIssue({ title: "A", creatorType: "owner", creatorId: "owner" });
+    const parent = store.createComment({
+      issueId: issue.id,
+      authorType: "owner",
+      authorId: "owner",
+      content: "root",
+    });
+    store.createComment({
+      issueId: issue.id,
+      authorType: "owner",
+      authorId: "owner",
+      content: "reply",
+      parentId: parent.id,
+    });
+    store.deleteComment(parent.id);
+    const rows = store.listCommentsForIssue(issue.id);
+    expect(rows).toHaveLength(2);
+    const tomb = rows.find((row) => row.id === parent.id);
+    expect(tomb?.content).toBe("");
+    expect(tomb?.deletedAt).not.toBeNull();
+  });
+});
