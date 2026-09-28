@@ -255,7 +255,7 @@ messages or transfers.
 - WebSocket schemas are append-only. Add fields, do not remove fields, and never make optional fields required.
 - New wire enum values must be gated at serialization with `session.supports(CLIENT_CAPS.someCapability)`.
 - `Session` stores client capabilities from the `hello` handshake and rehydrates them on reconnect, so the wire boundary can ask one question: `session.supports(...)`.
-- A new daemon-pushed event type must be registered in two places, or clients that hold `explicitEventSubscriptions` — every current client — silently never receive it: the `SessionEventSubscriptionSchema` enum (`packages/protocol/src/messages.ts`) and the per-source dispatch list in `Session.emit` (`packages/server/src/server/session.ts`). The enum alone only makes it subscribable; the dispatch list is what routes the message to the sources that asked for it.
+- A new daemon-pushed event type must be registered in three places, and each omission fails differently and silently. (1) `SessionEventSubscriptionSchema` (`packages/protocol/src/messages.ts`) makes it subscribable at all. (2) The hardcoded array in `DaemonClient.updateEventSubscriptions` (`packages/client/src/daemon-client.ts`) is what a client actually subscribes to; `on(type)` accepts any message type, but a type missing here is never requested, so `Session.wantsEvent` rejects it for every current client — the message simply never arrives. (3) The gated list in `Session.emit` (`packages/server/src/server/session.ts`) is what applies the subscription check; a type missing here skips that check and reaches `onMessage`, which broadcasts to every socket on the connection regardless of subscription. Nothing asserts the three lists agree.
 
 Example: adding a new enum value
 
