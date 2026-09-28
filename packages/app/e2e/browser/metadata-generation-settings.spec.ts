@@ -43,7 +43,9 @@ test("chooses a metadata model and can return to automatic selection", async ({
   });
 
   await openManualMetadataModelPicker(page);
-  await page.getByText("Mock Load Test", { exact: true }).click();
+  // Scope to the picker: the Providers section now renders on this same page and
+  // also carries the provider's label, so a page-wide text match is ambiguous.
+  await page.getByTestId("model-provider-mock").click();
   await expect(page.getByText("Ten second stream", { exact: true })).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath("metadata-model-picker.png"),

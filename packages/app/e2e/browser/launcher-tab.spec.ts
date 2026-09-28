@@ -258,7 +258,9 @@ test.describe("Tab creation", () => {
     await expect(editProfiles).toHaveAccessibleName("Edit profiles");
 
     await editProfiles.click();
-    await expect(page).toHaveURL(/\/settings\/hosts\/[^/]+\/terminals$/);
+    // Terminal profiles moved to the Agents page (issue 052); the launcher action
+    // deep-links to that section rather than the retired /terminals slug.
+    await expect(page).toHaveURL(/\/settings\/hosts\/[^/]+\/agents$/);
   });
 
   test("tab bar shows action buttons per pane", async ({ page }) => {
