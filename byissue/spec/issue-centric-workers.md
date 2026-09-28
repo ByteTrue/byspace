@@ -40,7 +40,7 @@ issue 的流不是"评论列表"，是 **activity 与 comment 按时间合排的
 - **附件**：attachment 行的 url 需要文件存储+静态服务基础设施（源是对象存储圈）；硬挂列即空壳。
 - **autopilot 的 webhook 触发与 replace 语义**：webhook 是公网面（端点+鉴权），与 IM 场景同源，均 defer。
 - **Token 面板**：无计量面；Execution log 读队列行已够"这 issue 跑过什么"。
-- **泳道行轴 / project 轴 / label 管理页 / agents 配置 tabs / skills 与 runtimes 页**：表在、行为或域不在；建壳即装饰。
+- **泳道行轴 / project 轴 / agents 配置 tabs / skills 与 runtimes 页**：表在、行为或域不在；建壳即装饰。label 管理面已建（025）。
 - **composer 的光标中间触发与键盘导航**：text-input 的 handle 只有写面（replaceText/reset），无光标读面；尾触发 v1 已闭环语法。
 
 ## 不承诺

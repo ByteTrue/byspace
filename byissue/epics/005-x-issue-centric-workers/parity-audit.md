@@ -95,4 +95,4 @@ multica（`~/workspace/refs/multica` @ `04cdd48`，一手读码）与本工程 `
 
 ## 未做但源有（不是歪，是欠）
 
-autopilot 的 webhook/replace/UI、task_supplement（defer，理由见 issue 010）、重试的延后与理由码抬高顶、泳道行轴与 project 轴、Token 面板、子树退订、issue_reaction/附件（存储基础设施 defer）、label 管理页已建（025）、agents 的配置 tabs/skills/runtimes/my-issues 页。全部有表无行为或有 RPC 无 UI —— 切片④⑤⑥之后的增量面。
+autopilot 的 webhook/replace/UI、task_supplement（defer，理由见 issue 010）、重试的延后与理由码抬高顶、泳道行轴与 project 轴、Token 面板、子树退订、issue_reaction/附件（存储基础设施 defer）、agents 的配置 tabs/skills/runtimes/my-issues 页。全部有表无行为或有 RPC 无 UI —— 切片④⑤⑥之后的增量面。
