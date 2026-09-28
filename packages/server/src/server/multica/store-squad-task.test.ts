@@ -42,9 +42,14 @@ describe("squad store", () => {
 
     const worker = store.createAgent({ name: "Worker" });
     store.addSquadMember({ squadId: squad.id, memberType: "agent", memberId: worker.id });
+    // The leader rides the roster from creation (the source's CreateSquad
+    // auto-adds it with role "leader"), so the roster is leader + worker.
     const roster = store.listSquadMembers(squad.id);
-    expect(roster).toHaveLength(1);
-    expect(roster[0].memberType).toBe("agent");
+    expect(roster).toHaveLength(2);
+    // Source shape: the leader's row carries role "leader"; a plain member's
+    // role is the schema's empty default (084), and the UI marks the leader
+    // by comparing against squad.leader_id, not by role.
+    expect(roster.map((entry) => entry.role).sort()).toEqual(["", "leader"]);
   });
 
   it("refuses deleting a squad's leader while the squad exists", () => {
@@ -73,7 +78,9 @@ describe("squad store", () => {
       store.addSquadMember({ squadId: squad.id, memberType: "agent", memberId: worker.id }),
     ).toThrow(/UNIQUE/);
     store.removeSquadMember(squad.id, "agent", worker.id);
-    expect(store.listSquadMembers(squad.id)).toHaveLength(0);
+    // The leader remains: removing a plain member leaves the roster's
+    // structural row in place.
+    expect(store.listSquadMembers(squad.id)).toHaveLength(1);
     expect(() => store.removeSquadMember(squad.id, "agent", worker.id)).toThrow(/not found/);
   });
 });
@@ -159,5 +166,24 @@ describe("run identity: session stamp and reverse resolution", () => {
     store.attachTaskSession(task.id, "sess-2");
     store.updateTaskStatus({ id: task.id, status: "running" });
     expect(store.getTaskBySession("sess-2")?.status).toBe("running");
+  });
+});
+
+describe("squad roster completeness", () => {
+  it("creating a squad puts its leader on the roster with role leader", () => {
+    const leader = store.createAgent({ name: "Lead" });
+    const member = store.createAgent({ name: "Follower" });
+    const squad = store.createSquad({
+      name: "Crew",
+      leaderId: leader.id,
+      creatorType: "owner",
+      creatorId: "owner",
+    });
+    store.addSquadMember({ squadId: squad.id, memberType: "agent", memberId: member.id });
+    const roles = new Map(
+      store.listSquadMembers(squad.id).map((entry) => [entry.memberId, entry.role]),
+    );
+    expect(roles.get(leader.id)).toBe("leader");
+    expect(roles.get(member.id)).not.toBe("leader");
   });
 });

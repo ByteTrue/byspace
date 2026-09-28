@@ -28,6 +28,18 @@ describe("multica CLI surface", () => {
     expect(names).toEqual(expect.arrayContaining(["ls", "create", "disable"]));
   });
 
+  it("offers the issue write and timeline verbs", () => {
+    const issue = command().commands.find((sub) => sub.name() === "issue");
+    const names = issue?.commands.map((sub) => sub.name()) ?? [];
+    expect(names).toEqual(expect.arrayContaining(["update", "status", "timeline", "wakeup"]));
+  });
+
+  it("offers the squad verbs", () => {
+    const squad = command().commands.find((sub) => sub.name() === "squad");
+    const names = squad?.commands.map((sub) => sub.name()) ?? [];
+    expect(names).toEqual(expect.arrayContaining(["ls", "get", "add-member", "remove-member"]));
+  });
+
   it("offers the autopilot verbs", () => {
     const autopilot = command().commands.find((sub) => sub.name() === "autopilot");
     const names = autopilot?.commands.map((sub) => sub.name()) ?? [];

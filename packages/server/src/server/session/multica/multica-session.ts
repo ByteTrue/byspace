@@ -696,19 +696,26 @@ export class MulticaSession {
       creatorType: "owner",
       creatorId: "owner",
     });
-    const members = (msg.members ?? []).map((member) =>
+    // The leader is already on the roster (createSquad adds it); a request
+    // that names the leader again must not collide with that row.
+    for (const member of msg.members ?? []) {
+      if (member.memberId === msg.leaderId) {
+        continue;
+      }
       this.#store.addSquadMember({
         squadId: squad.id,
         memberType: member.memberType,
         memberId: member.memberId,
-      }),
-    );
+      });
+    }
+    // The response carries the roster as stored — including the leader the
+    // create added — not the request's member list.
     this.#emit({
       type: "multica.squad.create.response",
       payload: {
         requestId: msg.requestId,
         squad: squadSummary(squad),
-        members: members.map(memberSummary),
+        members: this.#store.listSquadMembers(squad.id).map(memberSummary),
       },
     });
   }

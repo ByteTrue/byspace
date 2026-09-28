@@ -315,6 +315,67 @@ export function createMulticaCommand(): Command {
       .allowExcessArguments(false),
   ).action(withOutput(runMulticaIssueCreateCommand));
 
+  addJsonAndDaemonHostOptions(
+    issue
+      .command("update")
+      .description("Update an issue's fields (status, priority, assignee, title, position)")
+      .requiredOption("--id <id>", "Issue id")
+      .option("--status <key>", "New status key")
+      .option("--priority <p>", "New priority")
+      .option("--assignee-id <id>", "New assignee id (with --assignee-type)")
+      .option("--assignee-type <type>", "agent | squad (with --assignee-id)")
+      .option("--clear-assignee", "Unassign")
+      .option("--title <title>", "New title")
+      .option("--position <n>", "Drop slot (drag semantics)")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaIssueUpdateCommand));
+
+  addJsonAndDaemonHostOptions(
+    issue
+      .command("status")
+      .description("Move an issue's status")
+      .requiredOption("--id <id>", "Issue id")
+      .requiredOption("--status <key>", "Target status key")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaIssueStatusCommand));
+
+  addJsonAndDaemonHostOptions(
+    issue
+      .command("timeline")
+      .description("The issue's merged record: activities and comments")
+      .requiredOption("--id <id>", "Issue id")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaTimelineCommand));
+
+  const squad = multica.command("squad").description("Squads: rosters with a leader");
+  addJsonAndDaemonHostOptions(
+    squad.command("ls").description("List squads").allowExcessArguments(false),
+  ).action(withOutput(runMulticaSquadLsCommand));
+  addJsonAndDaemonHostOptions(
+    squad
+      .command("get")
+      .description("One squad with its roster")
+      .requiredOption("--id <id>", "Squad id")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaSquadGetCommand));
+  addJsonAndDaemonHostOptions(
+    squad
+      .command("add-member")
+      .description("Add a member to a squad")
+      .requiredOption("--squad <id>", "Squad id")
+      .requiredOption("--member <id>", "Member (agent) id")
+      .option("--role <role>", "Member role (default member)")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaSquadAddMemberCommand));
+  addJsonAndDaemonHostOptions(
+    squad
+      .command("remove-member")
+      .description("Remove a member from a squad")
+      .requiredOption("--squad <id>", "Squad id")
+      .requiredOption("--member <id>", "Member (agent) id")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaSquadRemoveMemberCommand));
+
   const wakeup = issue.command("wakeup").description("Wakeup subscriptions on an issue");
   addJsonAndDaemonHostOptions(
     wakeup
@@ -1105,4 +1166,317 @@ export async function runMulticaAutopilotStatusCommand(
   } finally {
     await client.close().catch(() => undefined);
   }
+}
+
+export async function runMulticaIssueUpdateCommand(
+  options: CommandOptions & {
+    id?: string;
+    status?: string;
+    priority?: string;
+    assigneeId?: string;
+    assigneeType?: string;
+    clearAssignee?: boolean;
+    title?: string;
+    position?: string;
+  },
+  _command: Command,
+): Promise<ListResult<MulticaIssueWriteRow>> {
+  const id = requireArg(options.id, "--id");
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const current = (await client.multicaIssueGet(id)).issue;
+    const senderSessionId = process.env.BYSPACE_AGENT_ID?.trim() || undefined;
+    const position = options.position !== undefined ? Number(options.position) : undefined;
+    const payload = await client.multicaIssueUpdate({
+      issueId: id,
+      expectedRevision: current.revision,
+      ...(options.status ? { status: options.status } : {}),
+      ...(options.priority ? { priority: options.priority } : {}),
+      ...(options.title ? { title: options.title } : {}),
+      ...(position !== undefined && !Number.isNaN(position) ? { position } : {}),
+      ...assigneePatchFromOptions(options),
+      ...(senderSessionId ? { senderSessionId } : {}),
+    });
+    return { type: "list", data: [issueRow(payload.issue)], schema: multicaIssueWriteSchema };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaIssueStatusCommand(
+  options: CommandOptions & { id?: string; status?: string },
+  _command: Command,
+): Promise<ListResult<MulticaIssueWriteRow>> {
+  const id = requireArg(options.id, "--id");
+  const status = requireArg(options.status, "--status");
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const current = (await client.multicaIssueGet(id)).issue;
+    const senderSessionId = process.env.BYSPACE_AGENT_ID?.trim() || undefined;
+    const payload = await client.multicaIssueStatusUpdate({
+      issueId: id,
+      status,
+      expectedRevision: current.revision,
+      ...(senderSessionId ? { senderSessionId } : {}),
+    });
+    return { type: "list", data: [issueRow(payload.issue)], schema: multicaIssueWriteSchema };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaTimelineCommand(
+  options: CommandOptions & { id?: string },
+  _command: Command,
+): Promise<ListResult<MulticaTimelineRow>> {
+  const id = requireArg(options.id, "--id");
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaTimelineList(id);
+    return {
+      type: "list",
+      data: payload.entries.map((entry) => ({
+        at: entry.createdAt,
+        kind: entry.kind,
+        who: entry.kind === "comment" ? (entry.authorType ?? "-") : (entry.actorType ?? "-"),
+        what:
+          entry.kind === "comment"
+            ? (entry.content ?? "").slice(0, 60)
+            : `${entry.action ?? "-"}${
+                entry.details &&
+                typeof entry.details.from === "string" &&
+                typeof entry.details.to === "string"
+                  ? ` ${entry.details.from}→${entry.details.to}`
+                  : ""
+              }`,
+      })),
+      schema: multicaTimelineSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaSquadLsCommand(
+  options: CommandOptions,
+  _command: Command,
+): Promise<ListResult<MulticaSquadRow>> {
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaSquadList();
+    return {
+      type: "list",
+      data: payload.squads.map((squad) => ({
+        id: squad.id,
+        name: squad.name,
+        leader: squad.leaderId.slice(0, 8),
+        description: squad.description.slice(0, 40),
+      })),
+      schema: multicaSquadSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaSquadGetCommand(
+  options: CommandOptions & { id?: string },
+  _command: Command,
+): Promise<ListResult<MulticaSquadMemberRow>> {
+  const id = requireArg(options.id, "--id");
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaSquadGet(id);
+    return {
+      type: "list",
+      data: payload.squad.members.map((member) => ({
+        member: member.memberId.slice(0, 8),
+        type: member.memberType,
+        role: member.role,
+        leader: member.memberId === payload.squad.leaderId ? "yes" : "no",
+      })),
+      schema: multicaSquadMemberSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaSquadAddMemberCommand(
+  options: CommandOptions & { squad?: string; member?: string; role?: string },
+  _command: Command,
+): Promise<ListResult<MulticaSquadMemberRow>> {
+  const squadId = requireArg(options.squad, "--squad");
+  const memberId = requireArg(options.member, "--member");
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaSquadAddMember({
+      squadId,
+      memberType: "agent",
+      memberId,
+      ...(options.role ? { role: options.role } : {}),
+    });
+    return {
+      type: "list",
+      data: payload.squad.members.map((member) => ({
+        member: member.memberId.slice(0, 8),
+        type: member.memberType,
+        role: member.role,
+        leader: member.memberId === payload.squad.leaderId ? "yes" : "no",
+      })),
+      schema: multicaSquadMemberSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaSquadRemoveMemberCommand(
+  options: CommandOptions & { squad?: string; member?: string },
+  _command: Command,
+): Promise<ListResult<MulticaSquadMemberRow>> {
+  const squadId = requireArg(options.squad, "--squad");
+  const memberId = requireArg(options.member, "--member");
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaSquadRemoveMember({
+      squadId,
+      memberType: "agent",
+      memberId,
+    });
+    return {
+      type: "list",
+      data: payload.squad.members.map((member) => ({
+        member: member.memberId.slice(0, 8),
+        type: member.memberType,
+        role: member.role,
+        leader: member.memberId === payload.squad.leaderId ? "yes" : "no",
+      })),
+      schema: multicaSquadMemberSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+interface MulticaIssueWriteRow {
+  readonly id: string;
+  readonly number: string;
+  readonly title: string;
+  readonly status: string;
+  readonly assignee: string;
+}
+
+interface MulticaTimelineRow {
+  readonly at: string;
+  readonly kind: string;
+  readonly who: string;
+  readonly what: string;
+}
+
+interface MulticaSquadRow {
+  readonly id: string;
+  readonly name: string;
+  readonly leader: string;
+  readonly description: string;
+}
+
+interface MulticaSquadMemberRow {
+  readonly member: string;
+  readonly type: string;
+  readonly role: string;
+  readonly leader: string;
+}
+
+function issueRow(issue: {
+  id: string;
+  number: number | null;
+  title: string;
+  status: string;
+  assigneeId: string | null;
+}): MulticaIssueWriteRow {
+  return {
+    id: issue.id,
+    number: issue.number === null ? "-" : String(issue.number),
+    title: issue.title.slice(0, 48),
+    status: issue.status,
+    assignee: issue.assigneeId ? issue.assigneeId.slice(0, 8) : "-",
+  };
+}
+
+function requireArg(value: string | undefined, flag: string): string {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    throw { code: "MISSING_ARG", message: `${flag} is required` } satisfies CommandError;
+  }
+  return trimmed;
+}
+
+const multicaIssueWriteSchema: OutputSchema<MulticaIssueWriteRow> = {
+  idField: "id",
+  columns: [
+    { header: "ID", field: "id", width: 14 },
+    { header: "#", field: "number", width: 5 },
+    { header: "TITLE", field: "title", width: 48 },
+    { header: "STATUS", field: "status", width: 14 },
+    { header: "ASSIGNEE", field: "assignee", width: 10 },
+  ],
+};
+
+const multicaTimelineSchema: OutputSchema<MulticaTimelineRow> = {
+  idField: "at",
+  columns: [
+    { header: "AT", field: "at", width: 26 },
+    { header: "KIND", field: "kind", width: 10 },
+    { header: "WHO", field: "who", width: 10 },
+    { header: "WHAT", field: "what", width: 60 },
+  ],
+};
+
+const multicaSquadSchema: OutputSchema<MulticaSquadRow> = {
+  idField: "id",
+  columns: [
+    { header: "ID", field: "id", width: 14 },
+    { header: "NAME", field: "name", width: 24 },
+    { header: "LEADER", field: "leader", width: 10 },
+    { header: "DESCRIPTION", field: "description", width: 40 },
+  ],
+};
+
+const multicaSquadMemberSchema: OutputSchema<MulticaSquadMemberRow> = {
+  idField: "member",
+  columns: [
+    { header: "MEMBER", field: "member", width: 10 },
+    { header: "TYPE", field: "type", width: 8 },
+    { header: "ROLE", field: "role", width: 12 },
+    { header: "LEADER", field: "leader", width: 8 },
+  ],
+};
+
+function assigneePatchFromOptions(options: {
+  clearAssignee?: boolean;
+  assigneeId?: string;
+  assigneeType?: string;
+}): { assigneeType: string | null; assigneeId: string | null } | Record<string, never> {
+  if (options.clearAssignee) {
+    return { assigneeType: null, assigneeId: null };
+  }
+  if (options.assigneeId) {
+    return { assigneeType: options.assigneeType ?? "agent", assigneeId: options.assigneeId };
+  }
+  return {};
 }

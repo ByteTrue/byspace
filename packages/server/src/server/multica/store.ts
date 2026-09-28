@@ -578,6 +578,15 @@ export class MulticaStore {
         input.creatorId,
         input.instructions ?? "",
       );
+    // The source's CreateSquad auto-adds the leader as a member with role
+    // "leader": the roster is where the leader is visible, and a squad whose
+    // leader is not on its own roster reads as leaderless.
+    this.addSquadMember({
+      squadId: id,
+      memberType: "agent",
+      memberId: input.leaderId,
+      role: "leader",
+    });
     return this.getSquad(id);
   }
 
