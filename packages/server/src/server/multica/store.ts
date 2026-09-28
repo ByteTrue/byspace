@@ -42,6 +42,7 @@ import {
   mapAgentRow,
   mapCommentRow,
   mapIssueRow,
+  mapLabelRow,
   mapSquadMemberRow,
   mapSquadRow,
   mapActivityRow,
@@ -53,6 +54,7 @@ import {
   type AgentRow,
   type CommentRow,
   type IssueRow,
+  type LabelRow,
   type SquadMemberRow,
   type SquadRow,
   type ActivityRow,
@@ -1034,6 +1036,64 @@ export class MulticaStore {
       summaries.push({ emoji, count: entry.count, reactedByViewer: entry.reactedByViewer });
     }
     return summaries;
+  }
+
+  createLabel(input: { readonly name: string; readonly color: string }): LabelRow {
+    const id = randomUUID();
+    this.#db
+      .prepare(`INSERT INTO issue_label (id, name, color) VALUES (?, ?, ?)`)
+      .run(id, input.name, input.color);
+    return this.getLabel(id);
+  }
+
+  getLabel(id: string): LabelRow {
+    const row = this.#db.prepare(`SELECT id, name, color FROM issue_label WHERE id = ?`).get(id) as
+      | Record<string, unknown>
+      | undefined;
+    if (!row) {
+      throw new Error(`Unknown label: ${id}`);
+    }
+    return mapLabelRow(row);
+  }
+
+  listLabels(): LabelRow[] {
+    const rows = this.#db
+      .prepare(`SELECT id, name, color FROM issue_label ORDER BY name ASC`)
+      .all() as Record<string, unknown>[];
+    return rows.map((row) => mapLabelRow(row));
+  }
+
+  /**
+   * Full replacement of an issue's label set — the relation's key is the
+   * whole semantics, so a set write deletes what is absent and adds what is
+   * new, idempotently.
+   */
+  setIssueLabels(issueId: string, labelIds: readonly string[]): void {
+    this.#db.exec("BEGIN IMMEDIATE");
+    try {
+      this.#db.prepare(`DELETE FROM issue_to_label WHERE issue_id = ?`).run(issueId);
+      const insert = this.#db.prepare(
+        `INSERT OR IGNORE INTO issue_to_label (issue_id, label_id) VALUES (?, ?)`,
+      );
+      for (const labelId of labelIds) {
+        insert.run(issueId, labelId);
+      }
+      this.#db.exec("COMMIT");
+    } catch (error) {
+      this.#db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  listLabelsForIssue(issueId: string): LabelRow[] {
+    const rows = this.#db
+      .prepare(
+        `SELECT l.id, l.name, l.color FROM issue_label l
+         JOIN issue_to_label j ON j.label_id = l.id
+         WHERE j.issue_id = ? ORDER BY l.name ASC`,
+      )
+      .all(issueId) as Record<string, unknown>[];
+    return rows.map((row) => mapLabelRow(row));
   }
 
   // ── autopilot ────────────────────────────────────────────────────────

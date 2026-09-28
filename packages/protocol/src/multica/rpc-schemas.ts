@@ -73,6 +73,12 @@ export const MulticaAgentCreateResponseSchema = z.object({
 
 // ---------------------------------------------------------------- issues
 
+export const MulticaLabelSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  color: z.string(),
+});
+
 export const MulticaIssueSummarySchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -87,6 +93,7 @@ export const MulticaIssueSummarySchema = z.object({
   projectId: z.string().nullable(),
   revision: z.number().int(),
   position: z.number(),
+  labels: z.array(MulticaLabelSummarySchema),
   createdAt: z.string(),
   updatedAt: z.string(),
   lastActivityAt: z.string().nullable(),
@@ -180,6 +187,37 @@ export const MulticaCommentSummarySchema = z.object({
   reactions: z.array(
     z.object({ emoji: z.string(), count: z.number(), reactedByViewer: z.boolean() }),
   ),
+});
+
+export const MulticaLabelListRequestSchema = z.object({
+  type: z.literal("multica.label.list.request"),
+  requestId: z.string(),
+});
+export const MulticaLabelListResponseSchema = z.object({
+  type: z.literal("multica.label.list.response"),
+  payload: z.object({ requestId: z.string(), labels: z.array(MulticaLabelSummarySchema) }),
+});
+
+export const MulticaLabelCreateRequestSchema = z.object({
+  type: z.literal("multica.label.create.request"),
+  requestId: z.string(),
+  name: z.string().min(1),
+  color: z.string().min(1),
+});
+export const MulticaLabelCreateResponseSchema = z.object({
+  type: z.literal("multica.label.create.response"),
+  payload: z.object({ requestId: z.string(), label: MulticaLabelSummarySchema }),
+});
+
+export const MulticaIssueLabelsSetRequestSchema = z.object({
+  type: z.literal("multica.issue.labels.set.request"),
+  requestId: z.string(),
+  issueId: z.string().min(1),
+  labelIds: z.array(z.string()),
+});
+export const MulticaIssueLabelsSetResponseSchema = z.object({
+  type: z.literal("multica.issue.labels.set.response"),
+  payload: z.object({ requestId: z.string(), labels: z.array(MulticaLabelSummarySchema) }),
 });
 
 export const MulticaReactionSetRequestSchema = z.object({
@@ -797,6 +835,7 @@ export type MulticaInboxItemSummary = z.infer<typeof MulticaInboxItemSummarySche
 export type MulticaAutopilotSummary = z.infer<typeof MulticaAutopilotSummarySchema>;
 export type MulticaTimelineEntry = z.infer<typeof MulticaTimelineEntrySchema>;
 export type MulticaAgentDetail = z.infer<typeof MulticaAgentDetailSchema>;
+export type MulticaLabelSummary = z.infer<typeof MulticaLabelSummarySchema>;
 export type MulticaReactionSummary = z.infer<
   typeof MulticaCommentSummarySchema
 >["reactions"][number];

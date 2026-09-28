@@ -583,6 +583,18 @@ type MulticaAutopilotTriggerPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.autopilot.trigger.response" }
 >["payload"];
+type MulticaLabelListPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.label.list.response" }
+>["payload"];
+type MulticaLabelCreatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.label.create.response" }
+>["payload"];
+type MulticaIssueLabelsSetPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.issue.labels.set.response" }
+>["payload"];
 type MulticaReactionSetPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.reaction.set.response" }
@@ -5912,6 +5924,33 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       message: { type: "multica.timeline.list.request", issueId },
       responseType: "multica.timeline.list.response",
+    });
+  }
+
+  async multicaLabelList(): Promise<MulticaLabelListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.label.list.request" },
+      responseType: "multica.label.list.response",
+    });
+  }
+
+  async multicaLabelCreate(options: {
+    name: string;
+    color: string;
+  }): Promise<MulticaLabelCreatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.label.create.request", ...options },
+      responseType: "multica.label.create.response",
+    });
+  }
+
+  async multicaIssueLabelsSet(options: {
+    issueId: string;
+    labelIds: string[];
+  }): Promise<MulticaIssueLabelsSetPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.issue.labels.set.request", ...options },
+      responseType: "multica.issue.labels.set.response",
     });
   }
 

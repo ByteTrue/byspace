@@ -602,6 +602,18 @@ function IssuePropertiesPane({ data }: { data: IssueDetailData }): ReactElement 
           )}
         </PropertyRow>
       </Section>
+      <Section title="Labels">
+        <LabelsPane issueId={data.issue?.id ?? ""} attached={data.issue?.labels ?? []} />
+      </Section>
+      <PropertiesLowerSections data={data} />
+    </View>
+  );
+}
+
+function PropertiesLowerSections({ data }: { data: IssueDetailData }): ReactElement {
+  const issue = data.issue;
+  return (
+    <>
       <Section title="Sub-issues">
         {data.children.map((child) => (
           <SubIssueRow key={child.id} child={child} />
@@ -644,7 +656,7 @@ function IssuePropertiesPane({ data }: { data: IssueDetailData }): ReactElement 
           </Text>
         </PropertyRow>
       </Section>
-    </View>
+    </>
   );
 }
 
@@ -653,6 +665,150 @@ function IssuePropertiesPane({ data }: { data: IssueDetailData }): ReactElement 
  * children. A sub-issue starts parked (backlog) like any issue; the parent
  * link is the only extra fact.
  */
+/**
+ * The label face on one issue: attached labels with a remove control, and
+ * the unattached directory to add from. A set write replaces the whole
+ * relation, so both controls send the resulting full list.
+ */
+function LabelsPane({
+  issueId,
+  attached,
+}: {
+  issueId: string;
+  attached: readonly { id: string; name: string; color: string }[];
+}): ReactElement {
+  const params = useLocalSearchParams<{ serverId: string }>();
+  const serverId = typeof params.serverId === "string" ? params.serverId : "";
+  const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
+  const client = runtimeSnapshot?.client ?? null;
+  const directory = useMulticaLabelsDirectory(serverId);
+  const setLabels = useCallback(
+    (labelIds: string[]) => {
+      if (!client || issueId === "") return;
+      void client.multicaIssueLabelsSet({ issueId, labelIds }).catch(() => undefined);
+    },
+    [client, issueId],
+  );
+  const attachedIds = useMemo(() => new Set(attached.map((label) => label.id)), [attached]);
+  return (
+    <>
+      {attached.map((label) => (
+        <AttachedLabelWithRemove
+          key={label.id}
+          label={label}
+          attached={attached}
+          setLabels={setLabels}
+        />
+      ))}
+      {directory
+        .filter((label) => !attachedIds.has(label.id))
+        .map((label) => (
+          <DirectoryLabelWithAdd
+            key={label.id}
+            label={label}
+            attached={attached}
+            setLabels={setLabels}
+          />
+        ))}
+      {directory.length === 0 ? <Text style={styles.propertyValue}>No labels yet.</Text> : null}
+    </>
+  );
+}
+
+function AttachedLabelWithRemove({
+  label,
+  attached,
+  setLabels,
+}: {
+  label: { id: string; name: string; color: string };
+  attached: readonly { id: string }[];
+  setLabels: (ids: string[]) => void;
+}): ReactElement {
+  const handleRemove = useCallback(() => {
+    setLabels(attached.filter((entry) => entry.id !== label.id).map((entry) => entry.id));
+  }, [attached, label.id, setLabels]);
+  return <AttachedLabelRow label={label} onRemove={handleRemove} />;
+}
+
+function DirectoryLabelWithAdd({
+  label,
+  attached,
+  setLabels,
+}: {
+  label: { id: string; name: string; color: string };
+  attached: readonly { id: string }[];
+  setLabels: (ids: string[]) => void;
+}): ReactElement {
+  const handleAdd = useCallback(() => {
+    setLabels([...attached.map((entry) => entry.id), label.id]);
+  }, [attached, label.id, setLabels]);
+  return <DirectoryLabelRow label={label} onAdd={handleAdd} />;
+}
+
+function AttachedLabelRow({
+  label,
+  onRemove,
+}: {
+  label: { id: string; name: string; color: string };
+  onRemove: () => void;
+}): ReactElement {
+  return (
+    <View style={styles.labelRow}>
+      <View style={[styles.labelDot, { backgroundColor: label.color }]} />
+      <Text style={styles.propertyValue}>{label.name}</Text>
+      <Pressable
+        style={styles.labelAction}
+        onPress={onRemove}
+        testID={`multica-label-remove-${label.id}`}
+      >
+        <Text style={styles.propertyValue}>×</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function DirectoryLabelRow({
+  label,
+  onAdd,
+}: {
+  label: { id: string; name: string; color: string };
+  onAdd: () => void;
+}): ReactElement {
+  return (
+    <View style={styles.labelRow}>
+      <View style={[styles.labelDot, { backgroundColor: label.color, opacity: 0.4 }]} />
+      <Text style={styles.propertyValue}>{label.name}</Text>
+      <Pressable
+        style={styles.labelAction}
+        onPress={onAdd}
+        testID={`multica-label-add-${label.id}`}
+      >
+        <Text style={styles.propertyValue}>+</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function useMulticaLabelsDirectory(
+  serverId: string,
+): readonly { id: string; name: string; color: string }[] {
+  const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
+  const client = runtimeSnapshot?.client ?? null;
+  const online = runtimeSnapshot?.connectionStatus === "online";
+  const query = useFetchQuery({
+    queryKey: ["multicaLabelsDetail", serverId, runtimeSnapshot?.clientGeneration ?? 0],
+    queryFn: async () => {
+      if (!client) throw new Error("Target host client is unavailable");
+      return client.multicaLabelList();
+    },
+    enabled: online,
+    retry: false,
+    dataShape: "value",
+    staleTimeMs: 30_000,
+  });
+  return useMemo(() => query.data?.labels ?? [], [query.data]);
+}
+
 function AddSubIssueRow({
   parentId,
   onCreated,
@@ -944,6 +1100,17 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.md,
     borderWidth: 1,
     borderColor: theme.colors.border,
+  },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingVertical: 2,
+  },
+  labelDot: { width: 8, height: 8, borderRadius: 4 },
+  labelAction: {
+    marginLeft: "auto",
+    paddingHorizontal: theme.spacing[1],
   },
   subscribeButton: {
     alignSelf: "flex-start",

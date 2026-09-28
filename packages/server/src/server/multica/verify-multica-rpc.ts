@@ -94,6 +94,28 @@ async function verifyRunIdentity(
 // run for real; no queued task may spawn a model session (notes/004).
 process.env.BYSPACE_MULTICA_EXECUTION = "off";
 
+async function verifyLabels(client: DaemonClient, issueId: string): Promise<void> {
+  // Labels: create two, set both on the issue, then replace with one —
+  // the set write is the whole relation.
+  const red = await client.multicaLabelCreate({ name: "bug", color: "#ef4444" });
+  const blue = await client.multicaLabelCreate({ name: "docs", color: "#3b82f6" });
+  const both = await client.multicaIssueLabelsSet({
+    issueId: issueId,
+    labelIds: [red.label.id, blue.label.id],
+  });
+  check("two labels attach", both.labels.length === 2);
+  const one = await client.multicaIssueLabelsSet({
+    issueId: issueId,
+    labelIds: [blue.label.id],
+  });
+  check(
+    "a set write replaces the relation",
+    one.labels.length === 1 && one.labels[0].name === "docs",
+  );
+  const labels = await client.multicaLabelList();
+  check("the directory lists both", labels.labels.length === 2);
+}
+
 async function verifyReactions(client: DaemonClient, commentId: string): Promise<void> {
   // Reactions: set, count, unset — the unique key is the toggle.
   const reacted = await client.multicaReactionSet({
@@ -351,6 +373,8 @@ async function main(): Promise<void> {
         check("squad get returns the roster", fetched.squad.leaderId === created.agent.id);
 
         verifyReactions(client, comment.comment.id);
+
+        verifyLabels(client, issue.issue.id);
 
         // Autopilot: a run_only autopilot fires on demand, lands a task with
         // no issue, and its run history records the attempt.

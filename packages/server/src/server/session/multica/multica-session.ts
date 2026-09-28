@@ -25,6 +25,7 @@ import type {
   AutopilotRow,
   AutopilotRunRow,
   InboxRow,
+  LabelRow,
   TaskRow,
 } from "../../multica/rows.js";
 import type { WakeupRow } from "../../multica/wakeup.js";
@@ -40,6 +41,7 @@ import type {
   MulticaAutopilotSummary,
   MulticaSquadDetail,
   MulticaInboxItemSummary,
+  MulticaLabelSummary,
   MulticaWakeupSummary,
 } from "@bytetrue/protocol/multica/rpc-schemas";
 
@@ -66,7 +68,11 @@ function agentSummary(agent: AgentRow): MulticaAgentSummary {
   };
 }
 
-function issueSummary(issue: IssueRow): MulticaIssueSummary {
+function labelSummary(label: LabelRow): MulticaLabelSummary {
+  return { id: label.id, name: label.name, color: label.color };
+}
+
+function issueSummary(store: MulticaStore, issue: IssueRow): MulticaIssueSummary {
   return {
     id: issue.id,
     title: issue.title,
@@ -81,6 +87,7 @@ function issueSummary(issue: IssueRow): MulticaIssueSummary {
     projectId: issue.projectId,
     revision: issue.revision,
     position: issue.position,
+    labels: store.listLabelsForIssue(issue.id).map(labelSummary),
     createdAt: issue.createdAt,
     updatedAt: issue.updatedAt,
     lastActivityAt: issue.lastActivityAt,
@@ -276,7 +283,8 @@ type ReadMessage = Extract<
       | "multica.task.list.request"
       | "multica.timeline.list.request"
       | "multica.subscriber.list.request"
-      | "multica.subscriber.set.request";
+      | "multica.subscriber.set.request"
+      | "multica.label.list.request";
   }
 >;
 
@@ -300,7 +308,9 @@ type WriteMessage = Extract<
       | "multica.agent.status.request"
       | "multica.squad.add_member.request"
       | "multica.squad.remove_member.request"
-      | "multica.reaction.set.request";
+      | "multica.reaction.set.request"
+      | "multica.label.create.request"
+      | "multica.issue.labels.set.request";
   }
 >;
 
@@ -336,7 +346,10 @@ function isReadMessage(msg: MulticaInboundSubset): msg is ReadMessage {
     msg.type === "multica.task.list.request" ||
     msg.type === "multica.timeline.list.request" ||
     msg.type === "multica.subscriber.list.request" ||
-    msg.type === "multica.subscriber.set.request"
+    msg.type === "multica.subscriber.set.request" ||
+    // The type predicate alone lies: without this runtime check a read
+    // falls through to the write arm and is answered with silence.
+    msg.type === "multica.label.list.request"
   );
 }
 
@@ -463,7 +476,10 @@ export class MulticaSession {
     });
     this.#emit({
       type: "multica.issue.list.response",
-      payload: { requestId: msg.requestId, issues: issues.map(issueSummary) },
+      payload: {
+        requestId: msg.requestId,
+        issues: issues.map((issue) => issueSummary(this.#store, issue)),
+      },
     });
   }
 
@@ -491,7 +507,7 @@ export class MulticaSession {
     });
     this.#emit({
       type: "multica.issue.create.response",
-      payload: { requestId: msg.requestId, issue: issueSummary(issue) },
+      payload: { requestId: msg.requestId, issue: issueSummary(this.#store, issue) },
     });
   }
 
@@ -531,8 +547,10 @@ export class MulticaSession {
       type: "multica.issue.get.response",
       payload: {
         requestId: msg.requestId,
-        issue: issueSummary(issue),
-        children: this.#store.listChildIssues(issue.id).map(issueSummary),
+        issue: issueSummary(this.#store, issue),
+        children: this.#store
+          .listChildIssues(issue.id)
+          .map((child) => issueSummary(this.#store, child)),
       },
     });
   }
@@ -577,7 +595,7 @@ export class MulticaSession {
     }
     this.#emit({
       type: "multica.issue.update.response",
-      payload: { requestId: msg.requestId, issue: issueSummary(issue) },
+      payload: { requestId: msg.requestId, issue: issueSummary(this.#store, issue) },
     });
   }
 
@@ -601,7 +619,7 @@ export class MulticaSession {
     });
     this.#emit({
       type: "multica.issue.status.update.response",
-      payload: { requestId: msg.requestId, issue: issueSummary(issue) },
+      payload: { requestId: msg.requestId, issue: issueSummary(this.#store, issue) },
     });
   }
 
@@ -1021,6 +1039,8 @@ export class MulticaSession {
         return this.#handleTaskList(msg);
       case "multica.timeline.list.request":
         return this.#handleTimelineList(msg);
+      case "multica.label.list.request":
+        return this.#handleLabelList(msg);
       case "multica.subscriber.list.request":
         return this.#handleSubscriberList(msg);
       case "multica.subscriber.set.request":
@@ -1111,6 +1131,10 @@ export class MulticaSession {
         return this.#handleSquadRemoveMember(msg);
       case "multica.reaction.set.request":
         return this.#handleReactionSet(msg);
+      case "multica.label.create.request":
+        return this.#handleLabelCreate(msg);
+      case "multica.issue.labels.set.request":
+        return this.#handleIssueLabelsSet(msg);
       default:
         msg satisfies never;
     }
@@ -1150,6 +1174,41 @@ export class MulticaSession {
       payload: {
         requestId: msg.requestId,
         subscribers: this.#store.listActiveSubscribers(msg.issueId),
+      },
+    });
+  }
+
+  #handleLabelList(
+    msg: Extract<SessionInboundMessage, { type: "multica.label.list.request" }>,
+  ): void {
+    this.#emit({
+      type: "multica.label.list.response",
+      payload: {
+        requestId: msg.requestId,
+        labels: this.#store.listLabels().map(labelSummary),
+      },
+    });
+  }
+
+  #handleLabelCreate(
+    msg: Extract<SessionInboundMessage, { type: "multica.label.create.request" }>,
+  ): void {
+    const label = this.#store.createLabel({ name: msg.name, color: msg.color });
+    this.#emit({
+      type: "multica.label.create.response",
+      payload: { requestId: msg.requestId, label: labelSummary(label) },
+    });
+  }
+
+  #handleIssueLabelsSet(
+    msg: Extract<SessionInboundMessage, { type: "multica.issue.labels.set.request" }>,
+  ): void {
+    this.#store.setIssueLabels(msg.issueId, msg.labelIds);
+    this.#emit({
+      type: "multica.issue.labels.set.response",
+      payload: {
+        requestId: msg.requestId,
+        labels: this.#store.listLabelsForIssue(msg.issueId).map(labelSummary),
       },
     });
   }

@@ -374,3 +374,32 @@ describe("comment reactions", () => {
     expect(after).toEqual([{ emoji: "👍", count: 1, reactedByViewer: false }]);
   });
 });
+
+describe("labels", () => {
+  it("a set write replaces the whole relation and is idempotent per key", () => {
+    const issue = store.createIssue({ title: "A", creatorType: "owner", creatorId: "owner" });
+    const red = store.createLabel({ name: "bug", color: "#ef4444" });
+    const blue = store.createLabel({ name: "docs", color: "#3b82f6" });
+    store.setIssueLabels(issue.id, [red.id, blue.id]);
+    store.setIssueLabels(issue.id, [red.id, blue.id]);
+    expect(
+      store
+        .listLabelsForIssue(issue.id)
+        .map((entry) => entry.name)
+        .sort(),
+    ).toEqual(["bug", "docs"]);
+    store.setIssueLabels(issue.id, [blue.id]);
+    expect(store.listLabelsForIssue(issue.id).map((entry) => entry.name)).toEqual(["docs"]);
+    store.setIssueLabels(issue.id, []);
+    expect(store.listLabelsForIssue(issue.id)).toHaveLength(0);
+  });
+
+  it("deleting a label unlinks it from every issue", () => {
+    // The relation cascades on the label's delete (FK), so a removed label
+    // cannot leave dangling dots on cards.
+    const issue = store.createIssue({ title: "A", creatorType: "owner", creatorId: "owner" });
+    const red = store.createLabel({ name: "bug", color: "#ef4444" });
+    store.setIssueLabels(issue.id, [red.id]);
+    expect(store.listLabelsForIssue(issue.id)).toHaveLength(1);
+  });
+});

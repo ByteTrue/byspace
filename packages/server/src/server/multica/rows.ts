@@ -643,6 +643,20 @@ export function mapActivityRow(raw: Record<string, unknown>): ActivityRow {
   };
 }
 
+export interface LabelRow {
+  readonly id: string;
+  readonly name: string;
+  readonly color: string;
+}
+
+export function mapLabelRow(raw: Record<string, unknown>): LabelRow {
+  return {
+    id: raw.id as string,
+    name: raw.name as string,
+    color: raw.color as string,
+  };
+}
+
 export function mapAutopilotRow(raw: Record<string, unknown>): AutopilotRow {
   return {
     id: raw.id as string,

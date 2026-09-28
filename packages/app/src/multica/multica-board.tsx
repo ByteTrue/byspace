@@ -81,6 +81,8 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
   const live = useMulticaLiveState(serverId);
   const catalog = useMulticaCatalog(serverId);
 
+  const labels = useMulticaLabels(serverId);
+
   const openIssue = useCallback(
     (issueId: string) => {
       router.push(`/multica/issue?serverId=${serverId}&issueId=${issueId}`);
@@ -226,6 +228,7 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
         statuses={statuses.map((status) => ({ key: status.key, name: status.name }))}
         filters={filters}
         agents={catalog.agents}
+        labels={labels}
         onFilters={setFilters}
       />
       {view === "board" ? (
@@ -273,9 +276,15 @@ interface MulticaFilters {
   readonly statuses: readonly string[];
   readonly priorities: readonly string[];
   readonly assignees: readonly string[];
+  readonly labels: readonly string[];
 }
 
-const emptyFilters: MulticaFilters = { statuses: [], priorities: [], assignees: [] };
+const emptyFilters: MulticaFilters = {
+  statuses: [],
+  priorities: [],
+  assignees: [],
+  labels: [],
+};
 
 const PRIORITY_OPTIONS = ["urgent", "high", "medium", "low", "none"] as const;
 
@@ -288,7 +297,9 @@ function filterIssues(
       (filters.statuses.length === 0 || filters.statuses.includes(issue.status)) &&
       (filters.priorities.length === 0 || filters.priorities.includes(issue.priority)) &&
       (filters.assignees.length === 0 ||
-        (issue.assigneeId !== null && filters.assignees.includes(issue.assigneeId))),
+        (issue.assigneeId !== null && filters.assignees.includes(issue.assigneeId))) &&
+      (filters.labels.length === 0 ||
+        filters.labels.some((labelId) => issue.labels.some((label) => label.id === labelId))),
   );
 }
 
@@ -342,15 +353,20 @@ function FilterBar({
   statuses,
   filters,
   agents,
+  labels,
   onFilters,
 }: {
   statuses: readonly { key: string; name: string }[];
   filters: MulticaFilters;
   agents: readonly { id: string; name: string }[];
+  labels: readonly { id: string; name: string }[];
   onFilters: (filters: MulticaFilters) => void;
 }): ReactElement {
   const hasFilters =
-    filters.statuses.length > 0 || filters.priorities.length > 0 || filters.assignees.length > 0;
+    filters.statuses.length > 0 ||
+    filters.priorities.length > 0 ||
+    filters.assignees.length > 0 ||
+    filters.labels.length > 0;
   const handleClear = useCallback(() => onFilters(emptyFilters), [onFilters]);
   return (
     <ScrollView horizontal contentContainerStyle={styles.filterBar}>
@@ -385,6 +401,18 @@ function FilterBar({
           group="assignees"
           value={agent.id}
           active={filters.assignees.includes(agent.id)}
+          filters={filters}
+          onFilters={onFilters}
+        />
+      ))}
+      <View style={styles.filterDivider} />
+      {labels.map((label) => (
+        <FilterChipToggle
+          key={label.id}
+          label={label.name}
+          group="labels"
+          value={label.id}
+          active={filters.labels.includes(label.id)}
           filters={filters}
           onFilters={onFilters}
         />
@@ -629,6 +657,13 @@ function DraggableCard({
             </View>
           ) : null}
         </View>
+        {issue.labels.length > 0 ? (
+          <View style={styles.labelRow}>
+            {issue.labels.map((label) => (
+              <View key={label.id} style={[styles.labelDot, { backgroundColor: label.color }]} />
+            ))}
+          </View>
+        ) : null}
         <IssueMetaLine
           actorName={agentName}
           actorId={issue.assigneeId}
@@ -740,6 +775,8 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     textTransform: "uppercase",
   },
+  labelRow: { flexDirection: "row", gap: 3 },
+  labelDot: { width: 8, height: 8, borderRadius: 4 },
   overlayCard: {
     width: 240,
     padding: theme.spacing[2],
@@ -802,6 +839,27 @@ const styles = StyleSheet.create((theme) => ({
   },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 }));
+
+/** The label directory: chips and card dots read it. */
+function useMulticaLabels(
+  serverId: string,
+): readonly { id: string; name: string; color: string }[] {
+  const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
+  const client = runtimeSnapshot?.client ?? null;
+  const online = runtimeSnapshot?.connectionStatus === "online";
+  const labelsQuery = useFetchQuery({
+    queryKey: ["multicaLabels", serverId, runtimeSnapshot?.clientGeneration ?? 0],
+    queryFn: async () => {
+      if (!client) throw new Error("Target host client is unavailable");
+      return client.multicaLabelList();
+    },
+    enabled: online,
+    retry: false,
+    dataShape: "value",
+    staleTimeMs: 30_000,
+  });
+  return useMemo(() => labelsQuery.data?.labels ?? [], [labelsQuery.data]);
+}
 
 /**
  * The board's live layer: which issues have work in flight right now, and
