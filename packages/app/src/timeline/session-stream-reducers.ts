@@ -955,6 +955,7 @@ function applyCanonicalForwardUnit(params: {
   head: StreamItem[];
   unit: TimelineUnit;
   epoch: string;
+  currentEndSeq?: number;
 }): { tail: StreamItem[]; head: StreamItem[]; acknowledgedClientMessageIds: string[] } {
   const { event, timestamp, seqEnd } = params.unit;
   const timelineCursor = { epoch: params.epoch, seq: seqEnd };
@@ -966,6 +967,10 @@ function applyCanonicalForwardUnit(params: {
       timestamp,
       source: "canonical",
       timelineCursor,
+      coveredThroughSeq:
+        params.currentEndSeq !== undefined && seqEnd <= params.currentEndSeq
+          ? params.currentEndSeq
+          : undefined,
     });
     return {
       tail: applied.tail,
@@ -1052,6 +1057,7 @@ function applyAcceptedForwardTimelineUnits(params: {
       head,
       unit,
       epoch: params.epoch,
+      currentEndSeq: params.currentEndSeq,
     });
     tail = applied.tail;
     head = applied.head;

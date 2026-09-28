@@ -1758,6 +1758,55 @@ describe("processTimelineResponse", () => {
     ).toEqual(["new prompt", "Hello"]);
   });
 
+  it("keeps a re-delivered canonical user row in place when an after page overlaps loaded history", () => {
+    const firstPrompt = createUserMessage({
+      id: "user-first",
+      clientMessageId: "client-first",
+      text: "first prompt",
+      timestamp: new Date(1000),
+      timelineCursor: { epoch: "epoch-1", seq: 1 },
+      turnId: "turn-1",
+    });
+    const priorAssistant: StreamItem = {
+      ...makeAssistantItem("analysis", "assistant-1"),
+      timelineCursor: { epoch: "epoch-1", seq: 2 },
+    };
+
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: [firstPrompt, priorAssistant],
+      currentHead: [],
+      currentCursor: { epoch: "epoch-1", startSeq: 1, endSeq: 2 },
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "after",
+        epoch: "epoch-1",
+        startCursor: { seq: 1 },
+        endCursor: { seq: 3 },
+        entries: [
+          {
+            ...makeTimelineEntry(1, "first prompt", "user_message"),
+            item: {
+              type: "user_message",
+              text: "first prompt",
+              messageId: "provider-first",
+              clientMessageId: "client-first",
+            },
+          },
+          {
+            ...makeTimelineEntry(2, "analysis", "assistant_message"),
+            item: { type: "assistant_message", text: "analysis", messageId: "assistant-1" },
+          },
+          makeTimelineEntry(3, "more analysis", "assistant_message"),
+        ],
+      },
+    });
+
+    expect(
+      result.tail.map((item) => (item.kind === "user_message" ? item.text : item.kind)),
+    ).toEqual(["first prompt", "assistant_message", "assistant_message"]);
+  });
+
   it("keeps a tail submitted prompt before a live head flushed by catch-up", () => {
     const prompt = makeSubmittedUserMessage("new prompt", "submitted-new-prompt");
 

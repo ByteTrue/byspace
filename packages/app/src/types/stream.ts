@@ -1980,6 +1980,71 @@ export interface ApplyStreamEventResult {
   acknowledgedClientMessageIds?: string[];
 }
 
+function mergeCoveredCanonicalUserMessage(input: {
+  tail: StreamItem[];
+  head: StreamItem[];
+  message: UserMessageItem;
+}): ApplyStreamEventResult | null {
+  const covered = upsertUserMessageAcrossStream({
+    tail: input.tail,
+    head: input.head,
+    message: input.message,
+    insert: "none",
+    presentation: "existing",
+  });
+  if (!covered.location) return null;
+  return {
+    tail: covered.tail,
+    head: covered.head,
+    changedTail: covered.changedTail,
+    changedHead: covered.changedHead,
+    acknowledgedClientMessageIds:
+      covered.location.matched && covered.location.message.clientMessageId
+        ? [covered.location.message.clientMessageId]
+        : [],
+  };
+}
+
+function upsertCanonicalUserMessageIntoHead(input: {
+  tail: StreamItem[];
+  head: StreamItem[];
+  canonical: UserMessageItem;
+  hasContent: boolean;
+  turnId: string | undefined;
+}): ApplyStreamEventResult {
+  const reconciled = upsertUserMessageAcrossStream({
+    tail: input.tail,
+    head: input.head,
+    message: input.canonical,
+    insert: input.hasContent ? "head" : "none",
+    presentation: "existing",
+  });
+  const reconciledTail = input.canonical.clientMessageId
+    ? reconcileCanonicalUserTurnMembership(
+        reconciled.tail,
+        input.canonical.clientMessageId,
+        input.turnId,
+      )
+    : reconciled.tail;
+  const reconciledHead = input.canonical.clientMessageId
+    ? reconcileCanonicalUserTurnMembership(
+        reconciled.head,
+        input.canonical.clientMessageId,
+        input.turnId,
+      )
+    : reconciled.head;
+  return {
+    tail: reconciledTail,
+    head: reconciledHead,
+    changedTail: reconciled.changedTail || reconciledTail !== reconciled.tail,
+    changedHead: reconciled.changedHead || reconciledHead !== reconciled.head,
+    acknowledgedClientMessageIds:
+      reconciled.location?.matched && reconciled.location.message.clientMessageId
+        ? [reconciled.location.message.clientMessageId]
+        : [],
+  };
+}
+
 function applyCanonicalUserMessageEvent(params: {
   tail: StreamItem[];
   head: StreamItem[];
@@ -1987,6 +2052,10 @@ function applyCanonicalUserMessageEvent(params: {
   timestamp: Date;
   timelineCursor?: TimelinePosition;
   unmatchedInsert?: "tail" | "head";
+  // Highest seq already covered by the loaded cursor. A canonical user row at or
+  // below it is a re-delivery of committed history: merge it where it lives
+  // instead of relocating it to the tail end.
+  coveredThroughSeq?: number;
 }): ApplyStreamEventResult | null {
   const { tail, head, event, timestamp, timelineCursor, unmatchedInsert = "tail" } = params;
   if (event.type !== "timeline" || event.item.type !== "user_message") return null;
@@ -2005,38 +2074,18 @@ function applyCanonicalUserMessageEvent(params: {
     text: normalized.chunk,
     timestamp,
   });
+  if (params.coveredThroughSeq !== undefined) {
+    const covered = mergeCoveredCanonicalUserMessage({ tail, head, message: canonical });
+    if (covered) return covered;
+  }
   if (unmatchedInsert === "head") {
-    const reconciled = upsertUserMessageAcrossStream({
+    return upsertCanonicalUserMessageIntoHead({
       tail,
       head,
-      message: canonical,
-      insert: normalized.hasContent ? "head" : "none",
-      presentation: "existing",
+      canonical,
+      hasContent: normalized.hasContent,
+      turnId: event.turnId,
     });
-    const reconciledTail = canonical.clientMessageId
-      ? reconcileCanonicalUserTurnMembership(
-          reconciled.tail,
-          canonical.clientMessageId,
-          event.turnId,
-        )
-      : reconciled.tail;
-    const reconciledHead = canonical.clientMessageId
-      ? reconcileCanonicalUserTurnMembership(
-          reconciled.head,
-          canonical.clientMessageId,
-          event.turnId,
-        )
-      : reconciled.head;
-    return {
-      tail: reconciledTail,
-      head: reconciledHead,
-      changedTail: reconciled.changedTail || reconciledTail !== reconciled.tail,
-      changedHead: reconciled.changedHead || reconciledHead !== reconciled.head,
-      acknowledgedClientMessageIds:
-        reconciled.location?.matched && reconciled.location.message.clientMessageId
-          ? [reconciled.location.message.clientMessageId]
-          : [],
-    };
   }
   const reconciled = placeCanonicalUserMessageAtTail(flushedTail, canonical, normalized.hasContent);
   const reconciledTail = canonical.clientMessageId
@@ -2077,6 +2126,7 @@ export function applyStreamEvent(params: {
   source?: StreamUpdateSource;
   timelineCursor?: TimelinePosition;
   unmatchedUserMessageInsert?: "tail" | "head";
+  coveredThroughSeq?: number;
 }): ApplyStreamEventResult {
   const { tail, head, event, timestamp } = params;
   const canonicalUserResult = applyCanonicalUserMessageEvent({
@@ -2086,6 +2136,7 @@ export function applyStreamEvent(params: {
     timestamp,
     timelineCursor: params.timelineCursor,
     unmatchedInsert: params.unmatchedUserMessageInsert,
+    coveredThroughSeq: params.coveredThroughSeq,
   });
   if (canonicalUserResult) return canonicalUserResult;
   const source = params.source ?? "live";
