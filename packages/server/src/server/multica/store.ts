@@ -432,6 +432,19 @@ export class MulticaStore {
     return this.getAgent(id);
   }
 
+  /** The seed's sync path: a built-in agent's instructions are product voice. */
+  updateAgentInstructions(id: string, instructions: string): void {
+    const result = this.#db
+      .prepare(
+        `UPDATE agent SET instructions = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE id = ?`,
+      )
+      .run(instructions, id);
+    if (Number(result.changes) === 0) {
+      throw new Error(`agent not found: ${id}`);
+    }
+  }
+
   updateAgentStatus(id: string, status: string): void {
     const result = this.#db
       .prepare(

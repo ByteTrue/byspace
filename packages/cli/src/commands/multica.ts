@@ -734,7 +734,10 @@ export async function runMulticaInboxLsCommand(
     throw buildDaemonConnectionCommandError({ host: options.host, error });
   });
   try {
-    const payload = await client.multicaInboxList({ archived: options.archived === true });
+    const payload = await client.multicaInboxList({
+      archived: options.archived === true,
+      ...ownerCaller(),
+    });
     return {
       type: "list",
       data: payload.items.map((item) => ({
@@ -764,7 +767,11 @@ export async function runMulticaInboxReadCommand(
     throw buildDaemonConnectionCommandError({ host: options.host, error });
   });
   try {
-    const payload = await client.multicaInboxMark({ id, read: options.unread !== true });
+    const payload = await client.multicaInboxMark({
+      id,
+      ...ownerCaller(),
+      read: options.unread !== true,
+    });
     return { type: "list", data: [inboxRow(payload.item)], schema: multicaInboxSchema };
   } finally {
     await client.close().catch(() => undefined);
@@ -783,7 +790,11 @@ export async function runMulticaInboxArchiveCommand(
     throw buildDaemonConnectionCommandError({ host: options.host, error });
   });
   try {
-    const payload = await client.multicaInboxArchive({ id, archived: options.unarchive !== true });
+    const payload = await client.multicaInboxArchive({
+      id,
+      ...ownerCaller(),
+      archived: options.unarchive !== true,
+    });
     return { type: "list", data: [inboxRow(payload.item)], schema: multicaInboxSchema };
   } finally {
     await client.close().catch(() => undefined);
@@ -798,7 +809,7 @@ export async function runMulticaInboxReadAllCommand(
     throw buildDaemonConnectionCommandError({ host: options.host, error });
   });
   try {
-    const payload = await client.multicaInboxMarkAll();
+    const payload = await client.multicaInboxMarkAll({ ...ownerCaller() });
     return {
       type: "list",
       data: [{ changed: String(payload.changed) }],
@@ -1540,4 +1551,14 @@ async function mentionMarkupFor(
   } finally {
     await client.close().catch(() => undefined);
   }
+}
+
+/**
+ * The owner's inbox is owner-only on the daemon; a run session carrying its
+ * id is refused there. Passing the id is what makes the refusal mechanical
+ * rather than a convention agents must remember.
+ */
+function ownerCaller(): { senderSessionId?: string } {
+  const senderSessionId = process.env.BYSPACE_AGENT_ID?.trim() || undefined;
+  return senderSessionId ? { senderSessionId } : {};
 }

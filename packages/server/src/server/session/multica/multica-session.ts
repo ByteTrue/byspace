@@ -891,9 +891,25 @@ export class MulticaSession {
     });
   }
 
+  /**
+   * The owner's queue has no agent face: a run session asking to read or
+   * file it is refused, as the source's member-only inbox handlers are.
+   * Creating an item is the one agent→owner direction and stays open.
+   */
+  #assertOwnerOnlyInbox(senderSessionId: string | undefined): void {
+    if (senderSessionId === undefined) {
+      return;
+    }
+    const task = this.#store.getTaskBySession(senderSessionId);
+    if (task !== null) {
+      throw new Error("the owner's inbox is not an agent surface");
+    }
+  }
+
   #handleInboxList(
     msg: Extract<SessionInboundMessage, { type: "multica.inbox.list.request" }>,
   ): void {
+    this.#assertOwnerOnlyInbox(msg.senderSessionId);
     this.#emit({
       type: "multica.inbox.list.response",
       payload: {
@@ -932,6 +948,7 @@ export class MulticaSession {
   #handleInboxMark(
     msg: Extract<SessionInboundMessage, { type: "multica.inbox.mark.request" }>,
   ): void {
+    this.#assertOwnerOnlyInbox(msg.senderSessionId);
     const item = this.#store.markInboxRead(msg.id, msg.read);
     this.#emit({
       type: "multica.inbox.mark.response",
@@ -942,6 +959,7 @@ export class MulticaSession {
   #handleInboxArchive(
     msg: Extract<SessionInboundMessage, { type: "multica.inbox.archive.request" }>,
   ): void {
+    this.#assertOwnerOnlyInbox(msg.senderSessionId);
     const item = this.#store.archiveInboxItem(msg.id, msg.archived);
     this.#emit({
       type: "multica.inbox.archive.response",
@@ -952,6 +970,7 @@ export class MulticaSession {
   #handleInboxMarkAll(
     msg: Extract<SessionInboundMessage, { type: "multica.inbox.mark_all.request" }>,
   ): void {
+    this.#assertOwnerOnlyInbox(msg.senderSessionId);
     const changed = this.#store.markAllInboxRead();
     this.#emit({
       type: "multica.inbox.mark_all.response",

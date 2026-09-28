@@ -5792,9 +5792,16 @@ export class DaemonClient {
     });
   }
 
-  async multicaInboxList(options?: { archived?: boolean }): Promise<MulticaInboxListPayload> {
+  async multicaInboxList(options?: {
+    archived?: boolean;
+    senderSessionId?: string;
+  }): Promise<MulticaInboxListPayload> {
     return this.sendCorrelatedSessionRequest({
-      message: { type: "multica.inbox.list.request", archived: options?.archived },
+      message: {
+        type: "multica.inbox.list.request",
+        archived: options?.archived,
+        senderSessionId: options?.senderSessionId,
+      },
       responseType: "multica.inbox.list.response",
     });
   }
@@ -5812,7 +5819,11 @@ export class DaemonClient {
     });
   }
 
-  async multicaInboxMark(options: { id: string; read: boolean }): Promise<MulticaInboxMarkPayload> {
+  async multicaInboxMark(options: {
+    id: string;
+    read: boolean;
+    senderSessionId?: string;
+  }): Promise<MulticaInboxMarkPayload> {
     return this.sendCorrelatedSessionRequest({
       message: { type: "multica.inbox.mark.request", ...options },
       responseType: "multica.inbox.mark.response",
@@ -5822,6 +5833,7 @@ export class DaemonClient {
   async multicaInboxArchive(options: {
     id: string;
     archived: boolean;
+    senderSessionId?: string;
   }): Promise<MulticaInboxArchivePayload> {
     return this.sendCorrelatedSessionRequest({
       message: { type: "multica.inbox.archive.request", ...options },
@@ -5829,9 +5841,11 @@ export class DaemonClient {
     });
   }
 
-  async multicaInboxMarkAll(): Promise<MulticaInboxMarkAllPayload> {
+  async multicaInboxMarkAll(options?: {
+    senderSessionId?: string;
+  }): Promise<MulticaInboxMarkAllPayload> {
     return this.sendCorrelatedSessionRequest({
-      message: { type: "multica.inbox.mark_all.request" },
+      message: { type: "multica.inbox.mark_all.request", ...options },
       responseType: "multica.inbox.mark_all.response",
     });
   }

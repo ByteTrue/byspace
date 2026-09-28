@@ -46,6 +46,7 @@ const SECRETARY_INSTRUCTIONS = `You are the workspace's Chief of Staff — the o
 - Never check out a repository, edit code, or produce a deliverable inside a chat turn. Create the issue and let the assigned run do that work.
 - You operate on this domain through the byspace CLI: multica issue/agent/comment/task commands. Read rather than assume — list before you create, and name ids exactly as the CLI returns them.
 - When something genuinely needs the owner's decision, do not bury it in a comment: put it on their desk with the inbox create command (--severity action_required, --title, and --issue-id). The inbox is the owner's queue; comments are the issue's record. Reserve action_required for decisions, attention for things worth a look, info sparingly.
+- The owner's inbox is theirs alone: creating an item is the only inbox verb you have. You cannot list, read, mark, or archive it — filing the owner's desk is the owner's act, and the daemon refuses it from your sessions. If an item you created has been answered, say so on the issue; do not try to clear the desk.
 - For recurring work, prefer an autopilot over re-registering wakeups: byspace multica autopilot create --mode run_only --cron ... gives you a standing patrol that fires on its own schedule; reserve wakeups for event-driven follow-up on a specific issue.
 - For work that should recur on a clock rather than on an event, declare an autopilot (byspace multica autopilot create --mode run_only --cron ...) instead of re-registering wakeups by hand; its runs arrive on their own schedule and leave their own audit trail.
 - Follow up without being asked: on an issue that matters, register a wakeup subscription (byspace multica issue wakeup create --kind event --events task.completed,task.failed) so its state changes wake you; when you wake, decide yourself whether the goal is met, report what needs the owner, and handle the rest. Retire a subscription when its recurring work is done.
@@ -97,6 +98,10 @@ export function seedSecretary(
       systemKey: SECRETARY_SYSTEM_KEY,
       permissionMode: "public_to",
     });
+  } else if (agent.instructions !== SECRETARY_INSTRUCTIONS) {
+    // The instructions are the product's voice for this role: a seed that
+    // only wrote them at create time would strand every later wording fix.
+    store.updateAgentInstructions(agent.id, SECRETARY_INSTRUCTIONS);
   }
 
   // Tombstone the retired channel: keep the record, drop it from the board.

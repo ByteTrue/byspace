@@ -575,6 +575,13 @@ export const MulticaInboxListRequestSchema = z.object({
   type: z.literal("multica.inbox.list.request"),
   requestId: z.string(),
   archived: z.boolean().optional(),
+  /**
+   * A session asking on the owner's behalf: when it resolves to a run, the
+   * request is refused — the owner's queue has no agent read or filing
+   * surface in the source, and an agent filing the owner's items empties
+   * the desk it was put on.
+   */
+  senderSessionId: z.string().optional(),
 });
 export const MulticaInboxListResponseSchema = z.object({
   type: z.literal("multica.inbox.list.response"),
@@ -603,6 +610,13 @@ export const MulticaInboxMarkRequestSchema = z.object({
   requestId: z.string(),
   id: z.string().min(1),
   read: z.boolean(),
+  /**
+   * A session asking on the owner's behalf: when it resolves to a run, the
+   * request is refused — the owner's queue has no agent read or filing
+   * surface in the source, and an agent filing the owner's items empties
+   * the desk it was put on.
+   */
+  senderSessionId: z.string().optional(),
 });
 export const MulticaInboxMarkResponseSchema = z.object({
   type: z.literal("multica.inbox.mark.response"),
@@ -613,6 +627,13 @@ export const MulticaInboxArchiveRequestSchema = z.object({
   requestId: z.string(),
   id: z.string().min(1),
   archived: z.boolean(),
+  /**
+   * A session asking on the owner's behalf: when it resolves to a run, the
+   * request is refused — the owner's queue has no agent read or filing
+   * surface in the source, and an agent filing the owner's items empties
+   * the desk it was put on.
+   */
+  senderSessionId: z.string().optional(),
 });
 export const MulticaInboxArchiveResponseSchema = z.object({
   type: z.literal("multica.inbox.archive.response"),
@@ -621,6 +642,13 @@ export const MulticaInboxArchiveResponseSchema = z.object({
 export const MulticaInboxMarkAllRequestSchema = z.object({
   type: z.literal("multica.inbox.mark_all.request"),
   requestId: z.string(),
+  /**
+   * A session asking on the owner's behalf: when it resolves to a run, the
+   * request is refused — the owner's queue has no agent read or filing
+   * surface in the source, and an agent filing the owner's items empties
+   * the desk it was put on.
+   */
+  senderSessionId: z.string().optional(),
 });
 export const MulticaInboxMarkAllResponseSchema = z.object({
   type: z.literal("multica.inbox.mark_all.response"),
