@@ -58,7 +58,7 @@ multica（`~/workspace/refs/multica` @ `04cdd48`，一手读码）与本工程 `
 | wakeup registration/lookup (agent self-registers event wakeups) | REST+CLI  | behavior layer fully built (capture/tick/dispatch/receipt, issue 003) + CLI three verbs                                                   | ✅                                            |
 | autopilot（schedule/webhook/api 触发器）                        | REST+CLI  | schedule+api 两触发、两模式、skip/queue、run 审计、CLI 七动词、管理 UI（issue 006/011）、archived 退出默认面（022）；webhook/replace 欠账 | ⚠️                                            |
 | inbox（给人看的待办箱）                                         | REST+页面 | 后端 5 对 RPC + CLI 五动词 + owner UI 面（issue 004/005）                                                                                 | ✅                                            |
-| CLI：issue ls/create、agent ls/create、comment ls/send          | 全命令面  | issue 六动词（含 update/status/timeline/wakeup 三）、squad 四动词、autopilot 七、inbox 五（issue 014）                                    | ⚠️ 余 label/attachment 面                     |
+| CLI：issue ls/create、agent ls/create、comment ls/send          | 全命令面  | issue 六动词（含 update/status/timeline/wakeup 三）、squad 四动词、autopilot 七、inbox 五（014）、label 四（025）                         | ⚠️ 余 attachment 面                           |
 
 ## F. UI / UX（对照官方截图）
 
