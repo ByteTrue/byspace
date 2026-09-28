@@ -9,6 +9,7 @@ const dockerWorkflowPath = new URL(".github/workflows/docker.yml", repoRoot);
 const deployAppWorkflowPath = new URL(".github/workflows/deploy-app.yml", repoRoot);
 const filtersPath = new URL(".github/ci-paths.yml", repoRoot);
 const serverTsconfigPath = new URL("packages/server/tsconfig.server.json", repoRoot);
+const rootVitestConfigPath = new URL("vitest.config.ts", repoRoot);
 
 const gatedCiJobs = new Map([
   ["format", { name: "format", contract: "format" }],
@@ -258,6 +259,37 @@ test("browser tests own their directory suite", () => {
   }
 
   assert.ok(filters.browser.length > 0);
+});
+
+test("the root vitest config never collects suites it cannot run", () => {
+  // The root config serves the packages with no config of their own and
+  // single-file runs from the repo root, so anything it collects is imported
+  // with the repo root as cwd. Three trees must stay out:
+  //
+  // - packages/cli/tests are `npx tsx` standalone scripts, not Vitest tests. They
+  //   run real `byspace` commands at module top level, so importing one starts
+  //   and stops a live daemon -- from the repo root that is the developer's own
+  //   on 6777. `npx vitest list` triggers it too, because listing imports modules.
+  // - scripts/*.test.mjs are `node --test` files; importing one runs it.
+  // - app e2e and perf are Playwright specs, and browser tests need the app
+  //   package's own browser project.
+  const source = readFileSync(rootVitestConfigPath, "utf8");
+  for (const required of [
+    "packages/cli/tests/**",
+    "scripts/**/*.test.mjs",
+    "packages/app/e2e/**",
+    "packages/app/perf/**",
+    "**/*.browser.{test,spec}.{ts,tsx}",
+  ]) {
+    // Quote-agnostic: the formatter owns the quoting, this guard owns the path.
+    assert.ok(source.includes(required), `root vitest config must exclude ${required}`);
+  }
+
+  // The exclusion has to be load-bearing: those trees still hold files Vitest's
+  // default glob would otherwise claim.
+  for (const directory of ["packages/cli/tests", "packages/app/e2e", "scripts"]) {
+    assert.ok(filesUnder(directory, () => true).length > 0, `${directory} should have files`);
+  }
 });
 
 // `node --test` exits 0 when a named file is missing as long as another file in the

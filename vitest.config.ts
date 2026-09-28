@@ -61,6 +61,30 @@ export default defineConfig({
     env: {
       BYSPACE_GIT_MAX_PROCESSES_PER_SECOND: "10000",
     },
-    exclude: [...configDefaults.exclude, "**/.claude/**", "**/.dev/**"],
+    // This file is shared by the packages with no config of their own (protocol,
+    // client, highlight, relay) and by single-file runs from the repo root, so
+    // when it is used the root *is* the repo root and everything below matches.
+    // Keep out the trees that must never be collected as tests from here:
+    //
+    // - packages/cli/tests holds `npx tsx` standalone scripts, not Vitest tests.
+    //   They run real `byspace` commands at module top level, so merely importing
+    //   them starts and stops a live daemon -- and from the repo root that is the
+    //   developer's own one on 6777. `npx vitest list` is enough to trigger it,
+    //   because listing imports the modules too. The CLI runs them through
+    //   tests/run-all.ts; Vitest never should.
+    // - scripts/*.test.mjs are `node --test` files (run by the CI contract step),
+    //   and importing one executes its assertions immediately.
+    // - app e2e/perf are Playwright specs, and browser tests need the app
+    //   package's own browser project. Nothing here can execute them.
+    exclude: [
+      ...configDefaults.exclude,
+      "**/.claude/**",
+      "**/.dev/**",
+      "packages/cli/tests/**",
+      "scripts/**/*.test.mjs",
+      "packages/app/e2e/**",
+      "packages/app/perf/**",
+      "**/*.browser.{test,spec}.{ts,tsx}",
+    ],
   },
 });
