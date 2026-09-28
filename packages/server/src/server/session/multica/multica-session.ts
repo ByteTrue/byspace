@@ -820,6 +820,10 @@ export class MulticaSession {
         return this.#handleAutopilotTrigger(msg);
       case "multica.autopilot.runs.request":
         return this.#handleAutopilotRuns(msg);
+      case "multica.autopilot.trigger_create.request":
+        return this.#handleAutopilotTriggerCreate(msg);
+      case "multica.autopilot.trigger_delete.request":
+        return this.#handleAutopilotTriggerDelete(msg);
       case "multica.autopilot.status.request":
         return this.#handleAutopilotStatus(msg);
       default:
@@ -907,6 +911,54 @@ export class MulticaSession {
         requestId: msg.requestId,
         runs: this.#store.listAutopilotRuns(msg.id).map(runSummary),
       },
+    });
+  }
+
+  /** A schedule trigger joins an existing autopilot: cron, timezone and an
+   * optional label. The next-fire stamp is computed at insert, so the new row
+   * is live from the moment it lands. */
+  #handleAutopilotTriggerCreate(
+    msg: Extract<SessionInboundMessage, { type: "multica.autopilot.trigger_create.request" }>,
+  ): void {
+    const timezone = msg.timezone ?? "UTC";
+    // A schedule row without its next-fire stamp is a trigger that never
+    // fires: compute it at insert, exactly as the create path does.
+    const nextRunAt = computeNextRunAt(
+      { type: "cron", expression: msg.cronExpression, timezone },
+      new Date(),
+    ).toISOString();
+    const trigger = this.#store.createAutopilotTrigger({
+      autopilotId: msg.autopilotId,
+      kind: "schedule",
+      cronExpression: msg.cronExpression,
+      timezone,
+      nextRunAt,
+      ...(msg.label !== undefined ? { label: msg.label } : {}),
+    });
+    this.#emit({
+      type: "multica.autopilot.trigger_create.response",
+      payload: {
+        requestId: msg.requestId,
+        trigger: {
+          id: trigger.id,
+          kind: trigger.kind,
+          enabled: trigger.enabled,
+          cronExpression: trigger.cronExpression,
+          timezone: trigger.timezone,
+          nextRunAt: trigger.nextRunAt,
+          label: trigger.label,
+        },
+      },
+    });
+  }
+
+  #handleAutopilotTriggerDelete(
+    msg: Extract<SessionInboundMessage, { type: "multica.autopilot.trigger_delete.request" }>,
+  ): void {
+    this.#store.deleteAutopilotTrigger(msg.id);
+    this.#emit({
+      type: "multica.autopilot.trigger_delete.response",
+      payload: { requestId: msg.requestId, deleted: true },
     });
   }
 

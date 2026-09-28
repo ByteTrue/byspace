@@ -659,3 +659,24 @@ describe("thread resolution", () => {
     expect(() => store.resolveComment(root.id, "owner", "owner")).toThrow(/deleted/);
   });
 });
+
+describe("autopilot trigger rows", () => {
+  it("a trigger row can be added to a live autopilot and deleted outright", () => {
+    const agent = store.createAgent({ name: "Patrol agent" });
+    const autopilot = store.createAutopilot({
+      title: "Patrol",
+      assigneeType: "agent",
+      assigneeId: agent.id,
+      executionMode: "run_only",
+    });
+    const trigger = store.createAutopilotTrigger({
+      autopilotId: autopilot.id,
+      kind: "schedule",
+      cronExpression: "0 9 * * 1-5",
+    });
+    expect(store.listAutopilotTriggers(autopilot.id)).toHaveLength(1);
+    store.deleteAutopilotTrigger(trigger.id);
+    expect(store.listAutopilotTriggers(autopilot.id)).toHaveLength(0);
+    expect(() => store.deleteAutopilotTrigger(trigger.id)).toThrow(/not found/);
+  });
+});

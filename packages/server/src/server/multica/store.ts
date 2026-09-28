@@ -1460,6 +1460,14 @@ export class MulticaStore {
     return mapAutopilotTriggerRow(row);
   }
 
+  /** Deleting a trigger row stops that firing schedule outright. */
+  deleteAutopilotTrigger(id: string): void {
+    const result = this.#db.prepare(`DELETE FROM autopilot_trigger WHERE id = ?`).run(id);
+    if (Number(result.changes) === 0) {
+      throw new Error(`autopilot trigger not found: ${id}`);
+    }
+  }
+
   listAutopilotTriggers(autopilotId: string): AutopilotTriggerRow[] {
     const rows = this.#db
       .prepare(`SELECT ${AUTOPILOT_TRIGGER_SELECT} FROM autopilot_trigger WHERE autopilot_id = ?`)

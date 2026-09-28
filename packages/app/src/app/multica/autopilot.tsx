@@ -1,4 +1,5 @@
-import { type ReactElement, useCallback } from "react";
+import { EditingTextInput as TextInput } from "@/components/ui/text-input";
+import { type ReactElement, useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -123,7 +124,7 @@ function AutopilotPage({
         onTrigger={triggerNow}
         onSetStatus={setStatus}
       />
-      <TriggersSection autopilot={autopilot} />
+      <TriggersSection autopilotId={autopilot.id} autopilot={autopilot} onChanged={refresh} />
       <RunsSection runs={runs} onOpenIssue={openIssue} />
     </ScrollView>
   );
@@ -204,8 +205,11 @@ function ActionsRow({
 }
 
 function TriggersSection({
+  autopilotId,
   autopilot,
+  onChanged,
 }: {
+  autopilotId: string;
   autopilot: {
     triggers: readonly {
       id: string;
@@ -215,20 +219,101 @@ function TriggersSection({
       nextRunAt: string | null;
     }[];
   };
+  onChanged: () => void;
 }): ReactElement {
   return (
     <>
       <Text style={styles.section}>Triggers</Text>
       {autopilot.triggers.map((trigger) => (
-        <Text key={trigger.id} style={styles.muted}>
-          {trigger.kind}
-          {trigger.cronExpression ? ` · ${trigger.cronExpression} (${trigger.timezone})` : ""} ·{" "}
-          {trigger.nextRunAt ? `next ${formatRelativeTime(trigger.nextRunAt)}` : "no next run"}
-        </Text>
+        <TriggerRow key={trigger.id} trigger={trigger} onChanged={onChanged} />
       ))}
       {autopilot.triggers.length === 0 ? <Text style={styles.muted}>Manual only.</Text> : null}
+      <AddTriggerRow autopilotId={autopilotId} onAdded={onChanged} />
     </>
   );
+}
+
+function TriggerRow({
+  trigger,
+  onChanged,
+}: {
+  trigger: {
+    id: string;
+    kind: string;
+    cronExpression: string | null;
+    timezone: string;
+    nextRunAt: string | null;
+  };
+  onChanged: () => void;
+}): ReactElement {
+  const runtimeSnapshot = useLocalRuntimeSnapshot();
+  const client = runtimeSnapshot?.client ?? null;
+  const remove = useCallback(() => {
+    if (!client) return;
+    void client.multicaAutopilotTriggerDelete({ id: trigger.id }).then(onChanged).catch(onChanged);
+  }, [client, trigger.id, onChanged]);
+  return (
+    <View style={styles.triggerRow}>
+      <Text style={styles.muted}>
+        {trigger.kind}
+        {trigger.cronExpression ? ` · ${trigger.cronExpression} (${trigger.timezone})` : ""} ·{" "}
+        {trigger.nextRunAt ? `next ${formatRelativeTime(trigger.nextRunAt)}` : "no next run"}
+      </Text>
+      <Pressable onPress={remove} testID={`multica-ap-trigger-delete-${trigger.id}`}>
+        <Text style={styles.triggerDelete}>delete</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/** The source's AddTriggerDialog, schedule-only: a webhook row without its
+ * dispatch surface would be a trigger that can never fire. */
+function AddTriggerRow({
+  autopilotId,
+  onAdded,
+}: {
+  autopilotId: string;
+  onAdded: () => void;
+}): ReactElement {
+  const runtimeSnapshot = useLocalRuntimeSnapshot();
+  const client = runtimeSnapshot?.client ?? null;
+  const [cron, setCron] = useState("");
+  const [saving, setSaving] = useState(false);
+  const handleCron = useCallback((text: string) => setCron(text), []);
+  const submit = useCallback(() => {
+    const trimmed = cron.trim();
+    if (!client || trimmed === "" || saving) return;
+    setSaving(true);
+    void client
+      .multicaAutopilotTriggerCreate({ autopilotId, cronExpression: trimmed })
+      .then(() => {
+        setCron("");
+        onAdded();
+        return undefined;
+      })
+      .finally(() => setSaving(false));
+  }, [client, cron, saving, autopilotId, onAdded]);
+  return (
+    <View style={styles.triggerAddRow}>
+      <TextInput
+        style={styles.triggerInput}
+        initialValue=""
+        onChangeText={handleCron}
+        placeholder="cron (e.g. 0 9 * * 1-5)"
+        placeholderTextColor="gray"
+        testID="multica-ap-trigger-cron"
+      />
+      <Pressable style={styles.newButton} onPress={submit} testID="multica-ap-trigger-add">
+        <Text style={styles.newButtonText}>{saving ? "…" : "Add trigger"}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function useLocalRuntimeSnapshot() {
+  const params = useLocalSearchParams<{ serverId: string }>();
+  const serverId = typeof params.serverId === "string" ? params.serverId : "";
+  return useHostRuntimeSnapshot(serverId);
 }
 
 function RunsSection({
@@ -317,6 +402,31 @@ const styles = StyleSheet.create((theme) => ({
   },
   actionText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
   muted: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  newButton: {
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface2,
+  },
+  newButtonText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
+  triggerRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
+  triggerDelete: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  triggerAddRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    marginTop: theme.spacing[1],
+  },
+  triggerInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 2,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+  },
   section: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,

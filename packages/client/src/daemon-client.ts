@@ -671,6 +671,14 @@ type MulticaAutopilotStatusPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.autopilot.status.response" }
 >["payload"];
+type MulticaAutopilotTriggerCreatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.autopilot.trigger_create.response" }
+>["payload"];
+type MulticaAutopilotTriggerDeletePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.autopilot.trigger_delete.response" }
+>["payload"];
 type MulticaAutopilotRunsPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.autopilot.runs.response" }
@@ -5851,6 +5859,27 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       message: { type: "multica.autopilot.status.request", ...options },
       responseType: "multica.autopilot.status.response",
+    });
+  }
+
+  async multicaAutopilotTriggerCreate(options: {
+    autopilotId: string;
+    cronExpression: string;
+    timezone?: string;
+    label?: string;
+  }): Promise<MulticaAutopilotTriggerCreatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.autopilot.trigger_create.request", ...options },
+      responseType: "multica.autopilot.trigger_create.response",
+    });
+  }
+
+  async multicaAutopilotTriggerDelete(options: {
+    id: string;
+  }): Promise<MulticaAutopilotTriggerDeletePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.autopilot.trigger_delete.request", ...options },
+      responseType: "multica.autopilot.trigger_delete.response",
     });
   }
 

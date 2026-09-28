@@ -531,6 +531,16 @@ export const MulticaTimelineListResponseSchema = z.object({
   }),
 });
 
+export const MulticaAutopilotTriggerSummarySchema = z.object({
+  id: z.string(),
+  kind: z.string(),
+  enabled: z.boolean(),
+  cronExpression: z.string().nullable(),
+  timezone: z.string(),
+  nextRunAt: z.string().nullable(),
+  label: z.string().nullable(),
+});
+
 export const MulticaAutopilotSummarySchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -542,17 +552,7 @@ export const MulticaAutopilotSummarySchema = z.object({
   issueTitleTemplate: z.string().nullable(),
   concurrencyPolicy: z.string(),
   lastRunAt: z.string().nullable(),
-  triggers: z.array(
-    z.object({
-      id: z.string(),
-      kind: z.string(),
-      enabled: z.boolean(),
-      cronExpression: z.string().nullable(),
-      timezone: z.string(),
-      nextRunAt: z.string().nullable(),
-      label: z.string().nullable(),
-    }),
-  ),
+  triggers: z.array(MulticaAutopilotTriggerSummarySchema),
 });
 
 export const MulticaAutopilotRunSummarySchema = z.object({
@@ -625,6 +625,31 @@ export const MulticaAutopilotStatusRequestSchema = z.object({
 export const MulticaAutopilotStatusResponseSchema = z.object({
   type: z.literal("multica.autopilot.status.response"),
   payload: z.object({ requestId: z.string(), autopilot: MulticaAutopilotSummarySchema }),
+});
+
+export const MulticaAutopilotTriggerCreateRequestSchema = z.object({
+  type: z.literal("multica.autopilot.trigger_create.request"),
+  requestId: z.string(),
+  autopilotId: z.string().min(1),
+  // Schedule only: a webhook or api row without its dispatch surface would
+  // be a trigger that can never fire.
+  cronExpression: z.string().min(1),
+  timezone: z.string().optional(),
+  label: z.string().optional(),
+});
+export const MulticaAutopilotTriggerCreateResponseSchema = z.object({
+  type: z.literal("multica.autopilot.trigger_create.response"),
+  payload: z.object({ requestId: z.string(), trigger: MulticaAutopilotTriggerSummarySchema }),
+});
+
+export const MulticaAutopilotTriggerDeleteRequestSchema = z.object({
+  type: z.literal("multica.autopilot.trigger_delete.request"),
+  requestId: z.string(),
+  id: z.string().min(1),
+});
+export const MulticaAutopilotTriggerDeleteResponseSchema = z.object({
+  type: z.literal("multica.autopilot.trigger_delete.response"),
+  payload: z.object({ requestId: z.string(), deleted: z.boolean() }),
 });
 
 export const MulticaAutopilotRunsRequestSchema = z.object({
