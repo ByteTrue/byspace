@@ -63,7 +63,11 @@ function AutopilotsPage({ serverId }: { serverId: string }): ReactElement {
       </View>
     );
   }
-  const autopilots = autopilotsQuery.data?.autopilots ?? [];
+  // The source's default face hides archived rows: retired declarations
+  // leave the grid rather than sitting in it as dead cards.
+  const autopilots = (autopilotsQuery.data?.autopilots ?? []).filter(
+    (entry) => entry.status !== "archived",
+  );
 
   return (
     <ScrollView contentContainerStyle={styles.page}>

@@ -115,21 +115,62 @@ function AutopilotPage({
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
+      <AutopilotHeader
+        autopilot={autopilot}
+        active={active}
+        archived={autopilot.status === "archived"}
+        assigneeName={catalog.agentNameById.get(autopilot.assigneeId) ?? null}
+        onTrigger={triggerNow}
+        onSetStatus={setStatus}
+      />
+      <TriggersSection autopilot={autopilot} />
+      <RunsSection runs={runs} onOpenIssue={openIssue} />
+    </ScrollView>
+  );
+}
+
+function AutopilotHeader({
+  autopilot,
+  active,
+  archived,
+  assigneeName,
+  onTrigger,
+  onSetStatus,
+}: {
+  autopilot: {
+    title: string;
+    executionMode: string;
+    concurrencyPolicy: string;
+    lastRunAt: string | null;
+    description: string | null;
+  };
+  active: boolean;
+  archived: boolean;
+  assigneeName: string | null;
+  onTrigger: () => void;
+  onSetStatus: (status: "active" | "paused") => () => void;
+}): ReactElement {
+  return (
+    <>
       <View style={styles.header}>
         <View style={[styles.dot, active && styles.dotOn]} />
         <Text style={styles.heading}>{autopilot.title}</Text>
         <Text style={styles.modeTag}>{autopilot.executionMode}</Text>
-        <ActionsRow active={active} onTrigger={triggerNow} onSetStatus={setStatus} />
+        {archived ? null : (
+          <ActionsRow active={active} onTrigger={onTrigger} onSetStatus={onSetStatus} />
+        )}
       </View>
+      {archived ? (
+        <Text style={styles.muted}>
+          Archived — retired declarations keep their history, not their controls.
+        </Text>
+      ) : null}
       <Text style={styles.muted}>
-        {catalog.agentNameById.get(autopilot.assigneeId) ?? "unassigned"} ·{" "}
-        {autopilot.concurrencyPolicy} ·{" "}
+        {assigneeName ?? "unassigned"} · {autopilot.concurrencyPolicy} ·{" "}
         {autopilot.lastRunAt ? `last run ${formatRelativeTime(autopilot.lastRunAt)}` : "never run"}
       </Text>
       {autopilot.description ? <Text style={styles.muted}>{autopilot.description}</Text> : null}
-      <TriggersSection autopilot={autopilot} />
-      <RunsSection runs={runs} onOpenIssue={openIssue} />
-    </ScrollView>
+    </>
   );
 }
 
