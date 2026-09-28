@@ -255,6 +255,7 @@ messages or transfers.
 - WebSocket schemas are append-only. Add fields, do not remove fields, and never make optional fields required.
 - New wire enum values must be gated at serialization with `session.supports(CLIENT_CAPS.someCapability)`.
 - `Session` stores client capabilities from the `hello` handshake and rehydrates them on reconnect, so the wire boundary can ask one question: `session.supports(...)`.
+- A new daemon-pushed event type must be registered in two places, or clients that hold `explicitEventSubscriptions` — every current client — silently never receive it: the `SessionEventSubscriptionSchema` enum (`packages/protocol/src/messages.ts`) and the per-source dispatch list in `Session.emit` (`packages/server/src/server/session.ts`). The enum alone only makes it subscribable; the dispatch list is what routes the message to the sources that asked for it.
 
 Example: adding a new enum value
 
@@ -350,6 +351,8 @@ All providers:
 - Expose provider-specific modes (plan, default, full-access)
 
 Providers that can accept native tool definitions should set `supportsNativeBySpaceTools` and read `launchContext.byspaceTools`. The daemon then passes the shared BySpace tool catalog directly and removes the internal MCP adapter from that provider launch config. Providers that only support MCP continue to receive the same tools through the MCP fallback at `/mcp/agents`.
+
+Tool scope is the calling agent's, not the daemon's. `list_agents` defaults to the caller's `cwd` and matches that directory and its descendants, so it answers "what else is running here", not "what exists on this host". An orchestrator that needs to see another project must pass an explicit `cwd`; treat the tool as workspace-scoped discovery, never as a global agent registry.
 
 ## Data flow: running an agent
 

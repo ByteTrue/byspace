@@ -51,3 +51,5 @@ type Grant = {
 A delegating principal can grant only authority it already possesses. A session may attenuate its principal's grants but cannot widen them.
 
 Workspace-scoped grants require every resource-bearing operation and outbound observation to enforce the same workspace boundary. File preview currently accepts any daemon-readable regular file, so it must gain resource enforcement before workspace-specific access ships.
+
+Inbound classification is exhaustive by construction: the permission map is declared `satisfies Record<InboundOperation, PermissionRequirement>` (`packages/server/src/server/authorization/operation-permissions.ts`), so adding an RPC fails typecheck until it is classified. There is no default entry and no fallthrough — the type, not a runtime check, is what keeps the map complete, so do not add an entry that is merely convenient for a new RPC; classify what the operation actually touches.

@@ -384,6 +384,8 @@ One file per schedule. ID is 8 hex characters.
 - `{ type: "cron", expression: string, timezone?: string }` — canonical cadence for new writes; absent `timezone` means UTC
 - `{ type: "every", everyMs: number }` — legacy rolling interval, still readable and executable during the compatibility window
 
+The `--every` flag is sugar over five-field cron, so it cannot express anything cron cannot: the duration must be whole minutes, and it must land on a cron-representable step — below an hour it divides 60 evenly (`2m` → `*/2 * * * *`; `7m` fails), at or above an hour it is whole hours dividing 24 evenly (`6h` → `0 */6 * * *`; `90m` and `5h` fail). Anything else exits with `UNREPRESENTABLE_CADENCE` and asks for `--cron`. The floor is one minute — there is no sub-minute schedule.
+
 ### Nested: ScheduleTarget (discriminated union on `type`)
 
 - `{ type: "agent", agentId: string }` — send to existing agent

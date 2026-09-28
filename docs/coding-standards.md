@@ -87,6 +87,8 @@ For testing rules, see [testing.md](testing.md).
 - No effect cascades — chains of effects setting state that triggers more effects almost always want React Query or a reducer.
 - `useRef` is for DOM refs and non-rendering identities (timer IDs, AbortController, latest-callback caches). If the value affects what renders next, it's state — model it explicitly with `useReducer` and a discriminated union.
 - Server state goes through React Query. Manual `useState` + `useEffect` + `isLoading` + `error` for fetched data is always worse.
+- A fetched-data query key never includes the host connection status. A reconnect window legitimately answers "still connecting", and keying on that status throws away data that is already loaded and re-fetches it for a state that resolves itself. `useFetchQuery` with `dataShape: "list"` applies `keepPreviousData` for this reason; the helper rejects `placeholderData` so a caller cannot reintroduce the flicker.
+- `HostRuntimeStore` mutations (`upsert`/`update`/`remove`) await `ensureHostRegistryLoaded()` before touching the registry. On a cold web load a pairing-offer URL can arrive before `boot()` finishes, and an upsert computed from an empty registry replaces every stored host instead of merging with them. A new mutation entry point follows the same pattern.
 - Components render and dispatch — they don't compute transitions. Two-plus interacting `useState`s → extract a reducer.
 - Never define components inside other components. Module-scope only.
 - Subscribe narrowly: select primitives from stores, pass `status` not `agent`, use `useShallow` / deep-equal when returning derived arrays/objects.

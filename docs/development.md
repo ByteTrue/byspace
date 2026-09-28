@@ -222,7 +222,18 @@ install.
 
 Use `npm run cli` to run the in-repo CLI from source (`npx tsx packages/cli/src/index.ts`). The script wraps the CLI with `scripts/dev-home.sh`, so it automatically uses this checkout's `.dev/byspace-home` and dev daemon endpoint unless you pass an explicit override. The globally installed `byspace` binary is the published npm package, not this checkout — use `npm run cli` when you want to talk to the CLI you are editing.
 
+The wrapper is also a target-selection trap: `dev-home.sh` injects `BYSPACE_LISTEN=127.0.0.1:6778`, and `BYSPACE_LISTEN` outranks `BYSPACE_HOME` when the CLI picks a daemon. So `npm run cli -- ...` reaches the **dev** daemon even when the agent or workspace you are aiming at lives in the real `~/.byspace` on 6777, and the write lands on the wrong daemon as an orphan that never triggers. To target the packaged daemon, bypass the wrapper and set both explicitly:
+
+```bash
+BYSPACE_HOME="$HOME/.byspace" BYSPACE_LISTEN=127.0.0.1:6777 \
+  npx tsx packages/cli/src/index.js <command>
+```
+
+Setting only `BYSPACE_HOME` is not enough — `BYSPACE_LISTEN` still pulls the connection back to 6778.
+
 Canonical automation uses `byspace project create/ls/rename/delete`, `byspace workspace create/ls/rename/archive`, `byspace heartbeat create/update/delete`, and the full `byspace schedule` group. MCP heartbeat automation is intentionally smaller: create and delete only. Detach remains an explicit user lifecycle action rather than an agent tool. `byspace run --new-workspace local|worktree` composes workspace creation with agent creation. The old `byspace worktree` and `byspace run --worktree` forms are hidden compatibility aliases.
+
+An agent cannot reach its own automation through MCP. The `/mcp/agents` catalog is scoped to the caller, and a currently-running agent has no policy entry, so the tool list comes back empty — only a stopped agent lists tools. Use the CLI to create a heartbeat for a live session, resolving the agent id by matching `runtimeInfo.sessionId` in `$BYSPACE_HOME/agents/*/*.json` against the session you are in.
 
 ```bash
 npm run cli -- ls -a -g              # List all agents globally

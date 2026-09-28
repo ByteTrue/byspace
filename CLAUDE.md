@@ -114,6 +114,8 @@ and updating `next`, integrating it after a release, and releasing a hotfix from
 ## Critical rules
 
 - **NEVER restart the BySpace daemon on port 6777 without permission** — it manages running agents. If you're an agent, restarting it can kill your own process.
+- **Never start a BySpace daemon to reproduce or isolate something.** `byspace daemon start --home <tmp> --port <n>` is not isolated — it ends up binding 6777 and crash-loops the real supervisor. Use the in-process harness in [docs/ad-hoc-daemon-testing.md](docs/ad-hoc-daemon-testing.md) or a Vitest run.
+- **Execute large multi-package removal/refactor batches in the main session, not a subagent.** Hand this kind of batch to a child session and it drifts; follow the batch step by step, verifying incrementally. Spawn subagents only when asked.
 - **NEVER assume a timeout means the service needs restarting** — timeouts can be transient.
 - **NEVER add auth checks to tests** — agent providers handle their own auth.
 - **Before changing app routes, startup routing, remembered workspace restore, or active workspace selection, read [docs/expo-router.md](docs/expo-router.md).**
