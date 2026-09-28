@@ -2337,7 +2337,7 @@ export const fr: TranslationResources = {
           errorTitle: "Impossible de mettre à jour les paramètres du service",
           confirmInstallTitle: "Activer la gestion du service ?",
           confirmInstallMessage:
-            "Le daemon de cette machine sera enregistré auprès du gestionnaire de services de l'OS et lancé à l'ouverture de session. Vous pourrez le désactiver plus tard via le même interrupteur.",
+            "Le daemon de {{host}} sera enregistré auprès du gestionnaire de services de l'OS et lancé à l'ouverture de session. Vous pourrez le désactiver plus tard via le même interrupteur.",
           confirmInstall: "Activer",
           confirmUninstallTitle: "Désactiver la gestion du service ?",
           confirmUninstallMessage:

@@ -2283,7 +2283,7 @@ export const ar: TranslationResources = {
           errorTitle: "تعذر تحديث إعدادات الخدمة",
           confirmInstallTitle: "تفعيل إدارة الخدمة؟",
           confirmInstallMessage:
-            "سيتم تسجيل daemon على هذا الجهاز لدى مدير خدمات النظام ليبدأ عند تسجيل الدخول. يمكنك إيقافه لاحقًا من نفس المفتاح.",
+            "سيتم تسجيل daemon على {{host}} لدى مدير خدمات النظام ليبدأ عند تسجيل الدخول. يمكنك إيقافه لاحقًا من نفس المفتاح.",
           confirmInstall: "تفعيل",
           confirmUninstallTitle: "تعطيل إدارة الخدمة؟",
           confirmUninstallMessage:

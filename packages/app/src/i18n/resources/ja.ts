@@ -2307,7 +2307,7 @@ export const ja: TranslationResources = {
           errorTitle: "サービス設定を更新できません",
           confirmInstallTitle: "サービス管理を有効にしますか？",
           confirmInstallMessage:
-            "このマシンの daemon を OS のサービスマネージャーに登録し、ログイン時に自動起動します。後で同じスイッチからオフにできます。",
+            "{{host}} の daemon を OS のサービスマネージャーに登録し、ログイン時に自動起動します。後で同じスイッチからオフにできます。",
           confirmInstall: "有効にする",
           confirmUninstallTitle: "サービス管理を無効にしますか？",
           confirmUninstallMessage:

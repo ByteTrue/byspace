@@ -111,6 +111,7 @@ describe("resolveLocalDaemonServerId", () => {
 });
 it("matches loopback literals across spellings", () => {
   expect(isLoopbackEndpoint("localhost:6777")).toBe(true);
+  expect(isLoopbackEndpoint("LocalHost:6777")).toBe(true);
   expect(isLoopbackEndpoint("127.0.0.1:6777")).toBe(true);
   expect(isLoopbackEndpoint("0.0.0.0:6777")).toBe(true);
   expect(isLoopbackEndpoint("[::1]:6777")).toBe(true);

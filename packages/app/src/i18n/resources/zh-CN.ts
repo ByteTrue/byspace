@@ -2260,7 +2260,7 @@ export const zhCN: TranslationResources = {
           errorTitle: "无法更新服务设置",
           confirmInstallTitle: "启用服务托管？",
           confirmInstallMessage:
-            "将把这台机器上的 daemon 注册到系统服务管理器，登录时自动启动。之后可通过同一开关关闭。",
+            "将把 {{host}} 上的 daemon 注册到系统服务管理器，登录时自动启动。之后可通过同一开关关闭。",
           confirmInstall: "启用",
           confirmUninstallTitle: "停用服务托管？",
           confirmUninstallMessage:

@@ -2321,7 +2321,7 @@ export const ptBR: TranslationResources = {
           errorTitle: "Não foi possível atualizar as configurações do serviço",
           confirmInstallTitle: "Ativar o gerenciamento do serviço?",
           confirmInstallMessage:
-            "O daemon desta máquina será registrado no gerenciador de serviços do SO e iniciará no login. Você pode desativar depois pelo mesmo interruptor.",
+            "O daemon de {{host}} será registrado no gerenciador de serviços do SO e iniciará no login. Você pode desativar depois pelo mesmo interruptor.",
           confirmInstall: "Ativar",
           confirmUninstallTitle: "Desativar o gerenciamento do serviço?",
           confirmUninstallMessage:

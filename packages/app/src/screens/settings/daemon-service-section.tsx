@@ -6,7 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { Alert as InlineAlert } from "@/components/ui/alert";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
-import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { useHostRuntimeClient, useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { settingsStyles } from "@/styles/settings";
 
@@ -42,6 +42,9 @@ export function DaemonServiceSection({ serverId }: { serverId: string }) {
   const { config } = useDaemonConfig(serverId);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The confirm copy names the host: with remote hosts now showing this section,
+  // "this machine" would read as the viewer's device (review finding, PR #10).
+  const hostLabel = useHosts().find((host) => host.serverId === serverId)?.label ?? serverId;
 
   const serviceView = useMemo(() => {
     const raw = (config as { service?: unknown } | undefined)?.service;
@@ -68,8 +71,8 @@ export function DaemonServiceSection({ serverId }: { serverId: string }) {
           ? t("settings.host.daemon.service.confirmInstallTitle")
           : t("settings.host.daemon.service.confirmUninstallTitle"),
         message: install
-          ? t("settings.host.daemon.service.confirmInstallMessage")
-          : t("settings.host.daemon.service.confirmUninstallMessage"),
+          ? t("settings.host.daemon.service.confirmInstallMessage", { host: hostLabel })
+          : t("settings.host.daemon.service.confirmUninstallMessage", { host: hostLabel }),
         confirmLabel: install
           ? t("settings.host.daemon.service.confirmInstall")
           : t("settings.host.daemon.service.confirmUninstall"),
@@ -86,7 +89,7 @@ export function DaemonServiceSection({ serverId }: { serverId: string }) {
         setIsBusy(false);
       }
     },
-    [client, t],
+    [client, hostLabel, t],
   );
 
   if (serviceFeature !== true) {

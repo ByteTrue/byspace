@@ -27,31 +27,28 @@ export function browserOriginHost(): string | null {
 /**
  * Whether a directTcp endpoint addresses the machine the app device runs on:
  * loopback literals only (localhost, 127.0.0.1, 0.0.0.0, ::1, ::) via the
- * shared protocol normalizer. An ssh tunnel mapping a remote daemon to a local
- * loopback port also matches here; the consumers are ordering/badge/redirect
+ * shared protocol normalizer. Host names are case-insensitive in DNS, so the
+ * comparison is too. An ssh tunnel mapping a remote daemon to a local loopback
+ * port also matches here; the consumers are ordering/badge/redirect
  * presentation, and the web platform has no stronger local-machine proof.
  */
 export function isLoopbackEndpoint(endpoint: string): boolean {
   try {
-    return normalizeEndpoint(endpoint).startsWith("localhost:");
+    return normalizeEndpoint(endpoint).toLowerCase().startsWith("localhost:");
   } catch {
     // Socket/pipe and other non host:port endpoints are never loopback.
     return false;
   }
 }
 
-function findLoopbackHostServerId(hosts: HostProfile[]): string | null {
+/** First host whose directTcp endpoint addresses this machine. */
+export function resolveLocalDaemonServerId(hosts: HostProfile[]): string | null {
   const match = hosts.find((host) =>
     host.connections.some(
       (connection) => connection.type === "directTcp" && isLoopbackEndpoint(connection.endpoint),
     ),
   );
   return match?.serverId ?? null;
-}
-
-/** Pure resolver behind `useLocalDaemonServerId` — first loopback-endpoint host. */
-export function resolveLocalDaemonServerId(hosts: HostProfile[]): string | null {
-  return findLoopbackHostServerId(hosts);
 }
 
 /**
@@ -61,7 +58,7 @@ export function resolveLocalDaemonServerId(hosts: HostProfile[]): string | null 
  */
 export function useLocalDaemonServerId(): string | null {
   const hosts = useHosts();
-  return useMemo(() => findLoopbackHostServerId(hosts), [hosts]);
+  return useMemo(() => resolveLocalDaemonServerId(hosts), [hosts]);
 }
 
 export type LocalDaemonServerIdState =
@@ -75,24 +72,13 @@ export function useLocalDaemonServerIdState(): LocalDaemonServerIdState {
   return { status: "resolved", serverId };
 }
 
-export function useIsLocalDaemon(serverId: string): boolean {
-  const normalizedServerId = serverId.trim();
-  const localServerId = useLocalDaemonServerId();
-
-  if (localServerId === null || normalizedServerId.length === 0) {
-    return false;
-  }
-
-  return localServerId === normalizedServerId;
-}
-
 /**
  * "The daemon serving this page" — the host whose directTcp endpoint equals the
  * browser origin. Only for decisions about the page itself (updating that
  * daemon restarts it and kills the page); never for machine-capability gating
  * (issue 057/058).
  */
-export function useServingDaemonServerId(): string | null {
+function useServingDaemonServerId(): string | null {
   const hosts = useHosts();
   return useMemo(() => {
     const origin = browserOriginHost();
@@ -105,17 +91,6 @@ export function useServingDaemonServerId(): string | null {
     );
     return match?.serverId ?? null;
   }, [hosts]);
-}
-
-export type ServingDaemonServerIdState =
-  | { status: "loading" }
-  | { status: "resolved"; serverId: string | null };
-
-export function useServingDaemonServerIdState(): ServingDaemonServerIdState {
-  const loaded = useHostRegistryLoaded();
-  const serverId = useServingDaemonServerId();
-  if (!loaded) return { status: "loading" };
-  return { status: "resolved", serverId };
 }
 
 export function useIsServingDaemon(serverId: string): boolean {

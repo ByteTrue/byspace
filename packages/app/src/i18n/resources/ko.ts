@@ -2294,7 +2294,7 @@ export const ko: TranslationResources = {
           errorTitle: "서비스 설정을 업데이트할 수 없습니다",
           confirmInstallTitle: "서비스 관리를 사용하시겠습니까?",
           confirmInstallMessage:
-            "이 머신의 daemon을 OS 서비스 관리자에 등록하여 로그인 시 자동 시작합니다. 나중에 같은 스위치에서 끌 수 있습니다.",
+            "{{host}}의 daemon을 OS 서비스 관리자에 등록하여 로그인 시 자동 시작합니다. 나중에 같은 스위치에서 끌 수 있습니다.",
           confirmInstall: "사용",
           confirmUninstallTitle: "서비스 관리를 해제하시겠습니까?",
           confirmUninstallMessage:

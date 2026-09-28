@@ -2299,7 +2299,7 @@ export const en = {
           errorTitle: "Unable to update service settings",
           confirmInstallTitle: "Enable service hosting?",
           confirmInstallMessage:
-            "The daemon on this machine will be registered with the OS service manager so it starts at login. You can turn it off later from the same switch.",
+            "The daemon on {{host}} will be registered with the OS service manager so it starts at login. You can turn it off later from the same switch.",
           confirmInstall: "Enable",
           confirmUninstallTitle: "Disable service hosting?",
           confirmUninstallMessage:
