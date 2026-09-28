@@ -2,7 +2,7 @@ import { type ReactElement, useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useRouter } from "expo-router";
-import { KanbanSquare, UserRound } from "lucide-react-native";
+import { Bell, KanbanSquare, UserRound } from "lucide-react-native";
 
 import { buildHostWorkspaceRoute } from "@/utils/host-routes";
 
@@ -91,6 +91,7 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
         <Text style={styles.headerCount}>
           {workIssues.length} {workIssues.length === 1 ? "issue" : "issues"}
         </Text>
+        <InboxBell unread={live.inboxUnread} />
         {live.workingAgentIds.size > 0 ? (
           <View style={styles.workingPill}>
             <View style={styles.workingDot} />
@@ -120,6 +121,23 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
         ))}
       </ScrollView>
     </View>
+  );
+}
+
+function InboxBell({ unread }: { unread: number }): ReactElement {
+  const router = useRouter();
+  const handlePress = useCallback(() => {
+    router.push("/multica-inbox");
+  }, [router]);
+  return (
+    <Pressable style={styles.bell} onPress={handlePress} testID="multica-inbox-entry">
+      <Bell size={15} color="#888" />
+      {unread > 0 ? (
+        <View style={styles.bellBadge}>
+          <Text style={styles.bellBadgeText}>{unread}</Text>
+        </View>
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -307,6 +325,19 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface2,
   },
   workingPillText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
+  bell: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: "auto",
+    padding: theme.spacing[1],
+  },
+  bellBadge: {
+    marginLeft: 3,
+    paddingHorizontal: 4,
+    borderRadius: 999,
+    backgroundColor: "#ef4444",
+  },
+  bellBadgeText: { color: "#fff", fontSize: 10, fontWeight: "600" },
   workingDot: {
     width: 7,
     height: 7,
@@ -334,6 +365,7 @@ function useMulticaLiveState(serverId: string): {
   workingIssueIds: ReadonlySet<string>;
   workingAgentIds: ReadonlySet<string>;
   secretaryWorkspaceId: string | null;
+  inboxUnread: number;
 } {
   const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
   const client = runtimeSnapshot?.client ?? null;
@@ -350,6 +382,19 @@ function useMulticaLiveState(serverId: string): {
     dataShape: "value",
     staleTimeMs: 2_000,
     refetchInterval: 3_000,
+  });
+
+  const inboxQuery = useFetchQuery({
+    queryKey: ["multicaInboxUnread", serverId, runtimeSnapshot?.clientGeneration ?? 0],
+    queryFn: async () => {
+      if (!client) throw new Error("Target host client is unavailable");
+      return client.multicaInboxList();
+    },
+    enabled: online,
+    retry: false,
+    dataShape: "value",
+    staleTimeMs: 2_000,
+    refetchInterval: 5_000,
   });
 
   const workspacesQuery = useFetchQuery({
@@ -391,5 +436,10 @@ function useMulticaLiveState(serverId: string): {
     [workspacesQuery.data],
   );
 
-  return { workingIssueIds, workingAgentIds, secretaryWorkspaceId };
+  return {
+    workingIssueIds,
+    workingAgentIds,
+    secretaryWorkspaceId,
+    inboxUnread: inboxQuery.data?.unread ?? 0,
+  };
 }

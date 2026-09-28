@@ -47,32 +47,32 @@ multica（`~/workspace/refs/multica` @ `04cdd48`，一手读码）与本工程 `
 
 ## E. RPC / CLI 操作面
 
-| 面                                                     | 源        | 我们                                             | 状态                                                |
-| ------------------------------------------------------ | --------- | ------------------------------------------------ | --------------------------------------------------- |
-| issue 读/写/状态                                       | REST      | 6 对 RPC（list/get/create/update/status.update） | ✅（update 与 status.update 语义重叠，见 F4）       |
-| comment 读/写                                          | REST      | 2 对                                             | ⚠️ 写缺身份（F2）                                   |
-| agent 读/写                                            | REST      | 2 对（list 含 includeSystem/includeArchived）    | ✅                                                  |
-| squad 读/写                                            | REST      | 2 对（create 带 roster）                         | ⚠️ 无 update/archive                                |
-| task 读                                                | REST      | 2 对（list/running.list）                        | ✅                                                  |
-| status 目录                                            | REST      | 1 对                                             | ✅                                                  |
-| wakeup 注册/查询（agent 自登记事件唤醒）               | REST+CLI  | **0**（表在，行为无）                            | ❌                                                  |
-| autopilot（schedule/webhook/api 触发器）               | REST+CLI  | **0**（3 表在，行为无）                          | ❌                                                  |
-| inbox（给人看的待办箱）                                | REST+页面 | **0**（表在）                                    | ❌                                                  |
-| CLI：issue ls/create、agent ls/create、comment ls/send | 全命令面  | 6 子命令                                         | ⚠️ 缺 issue update/status、squad、wakeup、autopilot |
+| 面                                                     | 源        | 我们                                                      | 状态                                                |
+| ------------------------------------------------------ | --------- | --------------------------------------------------------- | --------------------------------------------------- |
+| issue 读/写/状态                                       | REST      | 6 对 RPC（list/get/create/update/status.update）          | ✅（update 与 status.update 语义重叠，见 F4）       |
+| comment 读/写                                          | REST      | 2 对                                                      | ⚠️ 写缺身份（F2）                                   |
+| agent 读/写                                            | REST      | 2 对（list 含 includeSystem/includeArchived）             | ✅                                                  |
+| squad 读/写                                            | REST      | 2 对（create 带 roster）                                  | ⚠️ 无 update/archive                                |
+| task 读                                                | REST      | 2 对（list/running.list）                                 | ✅                                                  |
+| status 目录                                            | REST      | 1 对                                                      | ✅                                                  |
+| wakeup 注册/查询（agent 自登记事件唤醒）               | REST+CLI  | **0**（表在，行为无）                                     | ❌                                                  |
+| autopilot（schedule/webhook/api 触发器）               | REST+CLI  | **0**（3 表在，行为无）                                   | ❌                                                  |
+| inbox（给人看的待办箱）                                | REST+页面 | 后端 5 对 RPC + CLI 五动词 + owner UI 面（issue 004/005） | ✅                                                  |
+| CLI：issue ls/create、agent ls/create、comment ls/send | 全命令面  | 6 子命令                                                  | ⚠️ 缺 issue update/status、squad、wakeup、autopilot |
 
 ## F. UI / UX（对照官方截图）
 
-| 面                                                          | 源             | 我们                                               | 状态             |
-| ----------------------------------------------------------- | -------------- | -------------------------------------------------- | ---------------- |
-| 看板：状态列+卡片+计数+Working 徽章+顶部 working 汇总       | 有             | 有（徽章按 running task 的 issue 键）              | ✅               |
-| 看板：拖拽换列 / 列表视图 / Filter / Display / 泳道         | 有             | 无                                                 | ❌               |
-| issue 详情：面包屑+标题+Markdown 描述+评论流+composer       | 有             | 有（Markdown 走仓库 renderer）                     | ✅               |
-| issue 详情：Execution log + Token usage 面板                | 有             | 无（依赖 task_message/token 列，连带 F1）          | ❌               |
-| issue 详情：Properties 折叠组+状态下拉+assignee 头像名      | 有             | 有                                                 | ✅               |
-| 子 issue / subscriber / reactions / 附件                    | 有             | 表在，UI 无                                        | ❌               |
-| chat 面（Daily Tasks 助手）                                 | 有             | **不做**（Owner：体验差；对话留在 workspace 会话） | 🔀 已批准        |
-| agents/squads/autopilots/skills/runtimes/inbox/my-issues 页 | 有             | 无（仅 board+detail 两面）                         | ❌               |
-| 秘书入口                                                    | chat 里的 mika | 看板药丸 → **常驻 workspace**（普通会话 UI）       | 🔀 本轮改，见 F5 |
+| 面                                                     | 源             | 我们                                               | 状态             |
+| ------------------------------------------------------ | -------------- | -------------------------------------------------- | ---------------- |
+| 看板：状态列+卡片+计数+Working 徽章+顶部 working 汇总  | 有             | 有（徽章按 running task 的 issue 键）              | ✅               |
+| 看板：拖拽换列 / 列表视图 / Filter / Display / 泳道    | 有             | 无                                                 | ❌               |
+| issue 详情：面包屑+标题+Markdown 描述+评论流+composer  | 有             | 有（Markdown 走仓库 renderer）                     | ✅               |
+| issue 详情：Execution log + Token usage 面板           | 有             | 无（依赖 task_message/token 列，连带 F1）          | ❌               |
+| issue 详情：Properties 折叠组+状态下拉+assignee 头像名 | 有             | 有                                                 | ✅               |
+| 子 issue / subscriber / reactions / 附件               | 有             | 表在，UI 无                                        | ❌               |
+| chat 面（Daily Tasks 助手）                            | 有             | **不做**（Owner：体验差；对话留在 workspace 会话） | 🔀 已批准        |
+| agents/squads/autopilots/skills/runtimes/my-issues 页  | 有             | 无（board+detail+inbox 三面）                      | ❌               |
+| 秘书入口                                               | chat 里的 mika | 看板药丸 → **常驻 workspace**（普通会话 UI）       | 🔀 本轮改，见 F5 |
 
 ## G. 秘书（Chief of Staff）
 
@@ -94,4 +94,4 @@ multica（`~/workspace/refs/multica` @ `04cdd48`，一手读码）与本工程 `
 
 ## 未做但源有（不是歪，是欠）
 
-wakeup 行为层、autopilot、inbox、activity_log 写入、task_supplement、重试行为、拖拽/列表视图/筛选、Execution log/Token 面板、子 issue/subscriber/reactions/附件 UI、agents 等管理页。全部有表无行为或有 RPC 无 UI —— 切片④⑤⑥之后的增量面。
+autopilot、activity_log 写入、task_supplement、重试行为、拖拽/列表视图/筛选、Execution log/Token 面板、子 issue/subscriber/reactions/附件 UI、agents 等管理页。全部有表无行为或有 RPC 无 UI —— 切片④⑤⑥之后的增量面。
