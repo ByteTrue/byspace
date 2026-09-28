@@ -2,7 +2,7 @@
 kind: issue
 title: 漂移修正：task_message 去留与 claim 前提记录
 type: chore
-status: open
+status: closed
 created: 2026-09-28
 ---
 

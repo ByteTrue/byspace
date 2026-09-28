@@ -2,7 +2,7 @@
 kind: issue
 title: run 身份链与评论归属
 type: bug
-status: open
+status: closed
 created: 2026-09-28
 ---
 
