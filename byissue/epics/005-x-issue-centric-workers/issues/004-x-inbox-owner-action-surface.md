@@ -2,7 +2,7 @@
 kind: issue
 title: inbox：给老板的待办箱（审批与关注的载体）
 type: feature
-status: open
+status: closed
 created: 2026-09-28
 ---
 
@@ -37,6 +37,13 @@ created: 2026-09-28
 - handler 单测：run 会话写 / 无会话拒 / 陌生会话拒。
 - e2e verifier：失败 run → 条目出现 → mark read → count 归零。
 - 真机：制造一次失败 run，读老板 inbox 见 action_required。
+
+## 执行记录（关闭写回，2026-09-29）
+
+- 后端与 CLI 在 005 批次落地（audit E 行 ✅）：store 全读写面、executor 失败写 action_required、run 可写入口（senderSessionId 反解，陌生会话拒）、CLI 五动词。
+- owner UI 面在 005（issue 005）：Live/Needs you/Attention/Info 四 tab + 开 issue + mark/archive 控制。
+- **身份边界在 021 收紧**：读管面对 run 会话拒绝（owner-only 门）—— 本 issue 的"run 可写入口"保留为唯一 agent 方向；021 的真机证据（修前 run 会话可读队列）同时是本面边界成立的反证。
+- 叙事链末环（019）经此面闭环：秘书 escalate → 老板 console 归档。
 
 ## 执行记录
 

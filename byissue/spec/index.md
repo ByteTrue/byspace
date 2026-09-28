@@ -11,6 +11,7 @@ BySpace 让用户从手机 PWA、Web 或 CLI 查看和控制自己开发环境�
 - [Workspace](workspace.md) — 侧栏行内信息、分支与推送状态、hover 状态展示与 Agent 精炼命名。
 - [连接与发布通道](connection.md) — App 与 Relay 地址按通道选择、连接安全边界与配对 hostname。
 - [通知送达](notifications.md) — 各平台怎样收到「agent 需要你」的通知，Web Push 的凭据归属与加密边界，以及 PWA 与局域网直连的互斥。
+- [Issue-centric workers](issue-centric-workers.md) — 把需求交给秘书、它自己拆派并汇报的那套面：记录即 issue、收件箱是老板的桌面、以及复刻纪律留下的长期边界。
 
 系统架构、协议、发布和性能的工程约束仍由 `docs/` 中的主题文档负责。Project Spec 记录用户能依赖的当前产品行为；实现过程和验证证据留在已关闭 Issue。
 

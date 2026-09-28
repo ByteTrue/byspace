@@ -1,7 +1,7 @@
 ---
 kind: epic
 title: "worker 域 v2：Node 复刻 multica —— 一模一样，只砍多租户"
-status: open
+status: closed
 created: 2026-09-26
 supersedes: byissue/epics/004-x-worker-domain/spec.md 的协作模型
 ---
@@ -104,6 +104,10 @@ supersedes: byissue/epics/004-x-worker-domain/spec.md 的协作模型
 - **claim 前提**（Issue 002）：单 daemon per host 记入 executor 注释与本节边界。
 
 审计余下两处：F4 状态双入口（共用 `#enqueueForIssueWrite`，风险已控，观察）；F5 秘书入口（常驻 workspace，Owner 批准的偏离）。欠账面（wakeup/autopilot/inbox/管理页等）列在审计末节，未动。
+
+## 收尾（2026-09-29）
+
+23 个 issue 全 closed；端到端叙事链（019）真机全通：老板点名→秘书拆派建组→worker 回报→秘书自醒核对→需决策项上收件箱→老板归档。毕业 spec 在 `byissue/spec/issue-centric-workers.md`（只留代码重建不出的东西：词汇、长期边界、故意没有的面）；对照审计在 `parity-audit.md`，欠账行逐条带理由。
 
 ## 工程切法
 
