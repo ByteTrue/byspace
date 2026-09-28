@@ -87,7 +87,10 @@ function issueSummary(issue: IssueRow): MulticaIssueSummary {
   };
 }
 
-function commentSummary(comment: CommentRow): MulticaCommentSummary {
+function commentSummary(
+  comment: CommentRow,
+  reactions: MulticaCommentSummary["reactions"] = [],
+): MulticaCommentSummary {
   return {
     id: comment.id,
     issueId: comment.issueId,
@@ -100,6 +103,7 @@ function commentSummary(comment: CommentRow): MulticaCommentSummary {
     updatedAt: comment.updatedAt,
     revision: comment.revision,
     sourceTaskId: comment.sourceTaskId,
+    reactions,
   };
 }
 
@@ -295,7 +299,8 @@ type WriteMessage = Extract<
       | "multica.comment.create.request"
       | "multica.agent.status.request"
       | "multica.squad.add_member.request"
-      | "multica.squad.remove_member.request";
+      | "multica.squad.remove_member.request"
+      | "multica.reaction.set.request";
   }
 >;
 
@@ -627,7 +632,12 @@ export class MulticaSession {
     const comments = this.#store.listCommentsForIssue(msg.issueId);
     this.#emit({
       type: "multica.comment.list.response",
-      payload: { requestId: msg.requestId, comments: comments.map(commentSummary) },
+      payload: {
+        requestId: msg.requestId,
+        comments: comments.map((comment) =>
+          commentSummary(comment, this.#ownerReactions(comment.id)),
+        ),
+      },
     });
   }
 
@@ -672,7 +682,10 @@ export class MulticaSession {
     }
     this.#emit({
       type: "multica.comment.create.response",
-      payload: { requestId: msg.requestId, comment: commentSummary(comment) },
+      payload: {
+        requestId: msg.requestId,
+        comment: commentSummary(comment, this.#ownerReactions(comment.id)),
+      },
     });
   }
 
@@ -1039,6 +1052,7 @@ export class MulticaSession {
         content: null,
         authorType: null,
         authorId: null,
+        reactions: null,
       })),
       ...comments.map((comment) => ({
         kind: "comment" as const,
@@ -1051,6 +1065,7 @@ export class MulticaSession {
         content: comment.content,
         authorType: comment.authorType,
         authorId: comment.authorId,
+        reactions: this.#ownerReactions(comment.id),
       })),
     ]
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
@@ -1094,6 +1109,8 @@ export class MulticaSession {
         return this.#handleSquadAddMember(msg);
       case "multica.squad.remove_member.request":
         return this.#handleSquadRemoveMember(msg);
+      case "multica.reaction.set.request":
+        return this.#handleReactionSet(msg);
       default:
         msg satisfies never;
     }
@@ -1133,6 +1150,39 @@ export class MulticaSession {
       payload: {
         requestId: msg.requestId,
         subscribers: this.#store.listActiveSubscribers(msg.issueId),
+      },
+    });
+  }
+
+  /** The console is the reaction surface; its viewer is the owner. */
+  #ownerReactions(commentId: string): MulticaCommentSummary["reactions"] {
+    return this.#store.listCommentReactions(commentId, {
+      userType: "owner",
+      userId: "owner",
+    });
+  }
+
+  #handleReactionSet(
+    msg: Extract<SessionInboundMessage, { type: "multica.reaction.set.request" }>,
+  ): void {
+    const author = this.#resolveCommentAuthor(msg.senderSessionId);
+    const userType = author.type === "agent" ? ("agent" as const) : ("owner" as const);
+    const userId = author.type === "owner" ? "owner" : author.id;
+    this.#store.setCommentReaction({
+      commentId: msg.commentId,
+      userType,
+      userId,
+      emoji: msg.emoji,
+      reacted: msg.reacted,
+    });
+    this.#emit({
+      type: "multica.reaction.set.response",
+      payload: {
+        requestId: msg.requestId,
+        reactions: this.#store.listCommentReactions(msg.commentId, {
+          userType: "owner",
+          userId: "owner",
+        }),
       },
     });
   }

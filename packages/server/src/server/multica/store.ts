@@ -980,6 +980,62 @@ export class MulticaStore {
     }));
   }
 
+  /**
+   * Toggle one reaction. The unique key (comment, person, emoji) is the
+   * toggle's whole semantics: reacting inserts the row, un-reacting deletes
+   * it, and doing either twice is a no-op — the source's shape.
+   */
+  setCommentReaction(input: {
+    readonly commentId: string;
+    readonly userType: "owner" | "agent";
+    readonly userId: string;
+    readonly emoji: string;
+    readonly reacted: boolean;
+  }): void {
+    if (input.reacted) {
+      this.#db
+        .prepare(
+          `INSERT OR IGNORE INTO comment_reaction (id, comment_id, user_type, user_id, emoji)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(randomUUID(), input.commentId, input.userType, input.userId, input.emoji);
+      return;
+    }
+    this.#db
+      .prepare(
+        `DELETE FROM comment_reaction
+         WHERE comment_id = ? AND user_type = ? AND user_id = ? AND emoji = ?`,
+      )
+      .run(input.commentId, input.userType, input.userId, input.emoji);
+  }
+
+  /** Per-emoji counts for one comment, plus whether the asking person reacted. */
+  listCommentReactions(
+    commentId: string,
+    viewer?: { userType: "owner" | "agent"; userId: string },
+  ): Array<{ emoji: string; count: number; reactedByViewer: boolean }> {
+    const rows = this.#db
+      .prepare(
+        `SELECT emoji, user_type, user_id FROM comment_reaction WHERE comment_id = ?
+         ORDER BY created_at ASC`,
+      )
+      .all(commentId) as Array<{ emoji: string; user_type: string; user_id: string }>;
+    const grouped = new Map<string, { count: number; reactedByViewer: boolean }>();
+    for (const row of rows) {
+      const entry = grouped.get(row.emoji) ?? { count: 0, reactedByViewer: false };
+      entry.count += 1;
+      if (viewer && row.user_type === viewer.userType && row.user_id === viewer.userId) {
+        entry.reactedByViewer = true;
+      }
+      grouped.set(row.emoji, entry);
+    }
+    const summaries: Array<{ emoji: string; count: number; reactedByViewer: boolean }> = [];
+    for (const [emoji, entry] of grouped) {
+      summaries.push({ emoji, count: entry.count, reactedByViewer: entry.reactedByViewer });
+    }
+    return summaries;
+  }
+
   // ── autopilot ────────────────────────────────────────────────────────
 
   createAutopilot(input: {

@@ -38,6 +38,7 @@ interface IssueDetailData {
   subscribers: readonly { userType: string; userId: string; reason: string }[];
   subscribed: boolean;
   toggleSubscription: () => void;
+  react: (commentId: string, emoji: string, reacted: boolean) => void;
   truncated: boolean;
   agentNameById: ReadonlyMap<string, string>;
   statuses: readonly MulticaStatusSummary[];
@@ -194,6 +195,17 @@ function useIssueDetailData(serverId: string, issueId: string): IssueDetailData 
     }
   }, [client, queries, draft, issueId, sending]);
 
+  const react = useCallback(
+    (commentId: string, emoji: string, reacted: boolean) => {
+      if (!client) return;
+      void client.multicaReactionSet({ commentId, emoji, reacted }).then(() => {
+        void queries.refreshTimeline();
+        return undefined;
+      });
+    },
+    [client, queries],
+  );
+
   const moveStatus = useCallback(
     (status: string): void => {
       if (!client || !issue) return;
@@ -222,6 +234,7 @@ function useIssueDetailData(serverId: string, issueId: string): IssueDetailData 
     subscribers,
     subscribed,
     toggleSubscription,
+    react,
     truncated,
     agentNameById: catalog.agentNameById,
     statuses: catalog.statuses,
@@ -304,6 +317,7 @@ function IssueMainPane({ data }: { data: IssueDetailData }): ReactElement {
               key={entry.id}
               entry={entry}
               actorName={entry.authorId ? (agentNameById.get(entry.authorId) ?? null) : null}
+              onReact={data.react}
             />
           ) : (
             <ActivityLine
@@ -366,12 +380,112 @@ function statusColor(status: string): string {
   }
 }
 
+const REACTION_CHOICES = ["👍", "", "", "✅", "❤️", "🤔"] as const;
+
+/**
+ * The reaction face: count chips for what exists (mine outlined), and a
+ * fixed six-emoji chooser behind a "+". The source's free picker has no
+ * product claim in this form factor; a fixed set is the whole surface.
+ */
+function ReactionBar({
+  entry,
+  onReact,
+}: {
+  entry: MulticaTimelineEntry;
+  onReact: (commentId: string, emoji: string, reacted: boolean) => void;
+}): ReactElement {
+  const [choosing, setChoosing] = useState(false);
+  const reactions = entry.reactions ?? [];
+  const toggleChoosing = useCallback(() => setChoosing((value) => !value), []);
+  return (
+    <View style={styles.reactionBar}>
+      {reactions.map((reaction) => (
+        <ReactionChip
+          key={reaction.emoji}
+          emoji={reaction.emoji}
+          count={reaction.count}
+          mine={reaction.reactedByViewer}
+          onReact={onReact}
+          commentId={entry.id}
+        />
+      ))}
+      {choosing
+        ? REACTION_CHOICES.map((emoji) => (
+            <ReactionChooser key={emoji} emoji={emoji} onReact={onReact} commentId={entry.id} />
+          ))
+        : null}
+      <Pressable
+        style={styles.reactionAdd}
+        onPress={toggleChoosing}
+        testID={`multica-react-add-${entry.id}`}
+      >
+        <Text style={styles.reactionAddText}>+</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function ReactionChip({
+  emoji,
+  count,
+  mine,
+  commentId,
+  onReact,
+}: {
+  emoji: string;
+  count: number;
+  mine: boolean;
+  commentId: string;
+  onReact: (commentId: string, emoji: string, reacted: boolean) => void;
+}): ReactElement {
+  const handlePress = useCallback(() => {
+    // Tapping a chip I already own removes it; tapping someone else's adds
+    // mine alongside — the unique key is the toggle's whole semantics.
+    onReact(commentId, emoji, !mine);
+  }, [commentId, emoji, mine, onReact]);
+  return (
+    <Pressable
+      style={[styles.reactionChip, mine && styles.reactionChipMine]}
+      onPress={handlePress}
+      testID={`multica-react-${commentId}-${emoji}`}
+    >
+      <Text style={styles.reactionEmoji}>{emoji}</Text>
+      <Text style={styles.reactionCount}>{count}</Text>
+    </Pressable>
+  );
+}
+
+function ReactionChooser({
+  emoji,
+  commentId,
+  onReact,
+}: {
+  emoji: string;
+  commentId: string;
+  onReact: (commentId: string, emoji: string, reacted: boolean) => void;
+}): ReactElement {
+  const handlePress = useCallback(() => {
+    onReact(commentId, emoji, true);
+  }, [commentId, emoji, onReact]);
+  return (
+    <Pressable
+      style={styles.reactionChip}
+      onPress={handlePress}
+      testID={`multica-react-pick-${commentId}-${emoji}`}
+    >
+      <Text style={styles.reactionEmoji}>{emoji}</Text>
+    </Pressable>
+  );
+}
+
 function CommentRow({
   entry,
   actorName,
+  onReact,
 }: {
   entry: MulticaTimelineEntry;
   actorName: string | null;
+  onReact: (commentId: string, emoji: string, reacted: boolean) => void;
 }): ReactElement {
   const isOwner = entry.authorType === "owner";
   const authorId = entry.authorId ?? "";
@@ -386,6 +500,7 @@ function CommentRow({
       <View style={styles.commentBody}>
         <MarkdownRenderer text={entry.content ?? ""} compact />
       </View>
+      <ReactionBar entry={entry} onReact={onReact} />
     </View>
   );
 }
@@ -722,6 +837,36 @@ const styles = StyleSheet.create((theme) => ({
   },
   activityDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#9ca3af" },
   activityText: { flex: 1, color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  reactionBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: theme.spacing[1],
+    marginTop: theme.spacing[1],
+  },
+  reactionChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingVertical: 1,
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  reactionChipMine: { borderColor: theme.colors.foreground },
+  reactionEmoji: { fontSize: 12 },
+  reactionCount: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  reactionAdd: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  reactionAddText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   subscribeButton: {
     alignSelf: "flex-start",
     paddingVertical: 2,

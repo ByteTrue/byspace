@@ -329,3 +329,48 @@ describe("subscribers", () => {
     expect(store.listChildIssues(childA.id)).toHaveLength(0);
   });
 });
+
+describe("comment reactions", () => {
+  it("one row per person per emoji, toggling by the unique key", () => {
+    const issue = store.createIssue({ title: "A", creatorType: "owner", creatorId: "owner" });
+    const comment = store.createComment({
+      issueId: issue.id,
+      authorType: "owner",
+      authorId: "owner",
+      content: "hello",
+    });
+    store.setCommentReaction({
+      commentId: comment.id,
+      userType: "owner",
+      userId: "owner",
+      emoji: "👍",
+      reacted: true,
+    });
+    store.setCommentReaction({
+      commentId: comment.id,
+      userType: "owner",
+      userId: "owner",
+      emoji: "👍",
+      reacted: true,
+    });
+    const agent = store.createAgent({ name: "Reactor" });
+    store.setCommentReaction({
+      commentId: comment.id,
+      userType: "agent",
+      userId: agent.id,
+      emoji: "👍",
+      reacted: true,
+    });
+    const grouped = store.listCommentReactions(comment.id, { userType: "owner", userId: "owner" });
+    expect(grouped).toEqual([{ emoji: "👍", count: 2, reactedByViewer: true }]);
+    store.setCommentReaction({
+      commentId: comment.id,
+      userType: "owner",
+      userId: "owner",
+      emoji: "👍",
+      reacted: false,
+    });
+    const after = store.listCommentReactions(comment.id, { userType: "owner", userId: "owner" });
+    expect(after).toEqual([{ emoji: "👍", count: 1, reactedByViewer: false }]);
+  });
+});

@@ -94,6 +94,31 @@ async function verifyRunIdentity(
 // run for real; no queued task may spawn a model session (notes/004).
 process.env.BYSPACE_MULTICA_EXECUTION = "off";
 
+async function verifyReactions(client: DaemonClient, commentId: string): Promise<void> {
+  // Reactions: set, count, unset — the unique key is the toggle.
+  const reacted = await client.multicaReactionSet({
+    commentId: commentId,
+    emoji: "👍",
+    reacted: true,
+  });
+  check(
+    "a reaction counts once for one person",
+    reacted.reactions.length === 1 && reacted.reactions[0].count === 1,
+  );
+  const again = await client.multicaReactionSet({
+    commentId: commentId,
+    emoji: "👍",
+    reacted: true,
+  });
+  check("re-reacting is a no-op", again.reactions[0].count === 1);
+  const unset = await client.multicaReactionSet({
+    commentId: commentId,
+    emoji: "👍",
+    reacted: false,
+  });
+  check("un-reacting empties the chip", unset.reactions.length === 0);
+}
+
 async function main(): Promise<void> {
   const homeRoot = mkdtempSync(path.join(tmpdir(), "multica-verify-"));
   try {
@@ -324,6 +349,8 @@ async function main(): Promise<void> {
         );
         const fetched = await client.multicaSquadGet(verifySquad.squad.id);
         check("squad get returns the roster", fetched.squad.leaderId === created.agent.id);
+
+        verifyReactions(client, comment.comment.id);
 
         // Autopilot: a run_only autopilot fires on demand, lands a task with
         // no issue, and its run history records the attempt.

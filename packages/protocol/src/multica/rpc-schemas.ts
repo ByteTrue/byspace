@@ -177,6 +177,28 @@ export const MulticaCommentSummarySchema = z.object({
   updatedAt: z.string(),
   revision: z.number().int(),
   sourceTaskId: z.string().nullable(),
+  reactions: z.array(
+    z.object({ emoji: z.string(), count: z.number(), reactedByViewer: z.boolean() }),
+  ),
+});
+
+export const MulticaReactionSetRequestSchema = z.object({
+  type: z.literal("multica.reaction.set.request"),
+  requestId: z.string(),
+  commentId: z.string().min(1),
+  emoji: z.string().min(1),
+  reacted: z.boolean(),
+  /** The reacting session; absent means the owner. */
+  senderSessionId: z.string().optional(),
+});
+export const MulticaReactionSetResponseSchema = z.object({
+  type: z.literal("multica.reaction.set.response"),
+  payload: z.object({
+    requestId: z.string(),
+    reactions: z.array(
+      z.object({ emoji: z.string(), count: z.number(), reactedByViewer: z.boolean() }),
+    ),
+  }),
 });
 
 export const MulticaCommentListRequestSchema = z.object({
@@ -354,6 +376,10 @@ export const MulticaTimelineEntrySchema = z.object({
   content: z.string().nullable(),
   authorType: z.string().nullable(),
   authorId: z.string().nullable(),
+  /** comment: its reaction counts, viewer-relative. */
+  reactions: z
+    .array(z.object({ emoji: z.string(), count: z.number(), reactedByViewer: z.boolean() }))
+    .nullable(),
 });
 
 export const MulticaTimelineListRequestSchema = z.object({
@@ -771,6 +797,9 @@ export type MulticaInboxItemSummary = z.infer<typeof MulticaInboxItemSummarySche
 export type MulticaAutopilotSummary = z.infer<typeof MulticaAutopilotSummarySchema>;
 export type MulticaTimelineEntry = z.infer<typeof MulticaTimelineEntrySchema>;
 export type MulticaAgentDetail = z.infer<typeof MulticaAgentDetailSchema>;
+export type MulticaReactionSummary = z.infer<
+  typeof MulticaCommentSummarySchema
+>["reactions"][number];
 export type MulticaSquadDetail = z.infer<typeof MulticaSquadDetailSchema>;
 export type MulticaAutopilotRunSummary = z.infer<typeof MulticaAutopilotRunSummarySchema>;
 export type MulticaWakeupSummary = z.infer<typeof MulticaWakeupSummarySchema>;
