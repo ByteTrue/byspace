@@ -446,3 +446,30 @@ describe("comment revision", () => {
     expect(tomb?.deletedAt).not.toBeNull();
   });
 });
+
+describe("label directory management", () => {
+  it("rename and recolor keep the omitted field", () => {
+    const label = store.createLabel({ name: "bug", color: "#ef4444" });
+    const renamed = store.updateLabel(label.id, { name: "defect" });
+    expect(renamed.name).toBe("defect");
+    expect(renamed.color).toBe("#ef4444");
+    const recolored = store.updateLabel(label.id, { color: "#22c55e" });
+    expect(recolored.name).toBe("defect");
+    expect(recolored.color).toBe("#22c55e");
+  });
+
+  it("deleting a label cascades its attachments away", () => {
+    const issue = store.createIssue({ title: "A", creatorType: "owner", creatorId: "owner" });
+    const label = store.createLabel({ name: "temp", color: "#3b82f6" });
+    store.setIssueLabels(issue.id, [label.id]);
+    expect(store.listLabelsForIssue(issue.id)).toHaveLength(1);
+    store.deleteLabel(label.id);
+    expect(store.listLabelsForIssue(issue.id)).toHaveLength(0);
+    expect(store.listLabels()).toHaveLength(0);
+  });
+
+  it("unknown label ids error rather than no-op", () => {
+    expect(() => store.updateLabel("missing", { name: "x" })).toThrow(/label/i);
+    expect(() => store.deleteLabel("missing")).toThrow(/label/i);
+  });
+});

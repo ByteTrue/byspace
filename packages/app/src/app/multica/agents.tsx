@@ -2,7 +2,7 @@ import { type ReactElement, useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Bot, Timer, Users } from "lucide-react-native";
+import { Bot, Tag, Timer, Users } from "lucide-react-native";
 
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { useFetchQuery } from "@/data/query";
@@ -101,6 +101,8 @@ function RostersPage({ serverId }: { serverId: string }): ReactElement {
         <Text style={styles.headerCount}>{squads.length}</Text>
         <NewSquadButton agents={agents} onCreated={refresh} />
       </View>
+
+      <LabelsSection serverId={serverId} onCreated={refresh} />
       <View style={styles.grid}>
         {squads.map((squad) => (
           <SquadCard key={squad.id} squad={squad} onOpen={openSquad} />
@@ -268,6 +270,206 @@ function LeaderChip({
   );
 }
 
+/**
+ * The label directory's management face, after the source's settings tab:
+ * a row per label with its color, rename and recolor inline, delete at the
+ * row's end. Deleting cascades the attachments through the junction's FK —
+ * the source cleans them by hand for the same effect.
+ */
+const LABEL_PRESETS = [
+  "#6b7280",
+  "#ef4444",
+  "#f97316",
+  "#eab308",
+  "#22c55e",
+  "#14b8a6",
+  "#3b82f6",
+  "#6366f1",
+  "#a855f7",
+  "#ec4899",
+] as const;
+
+function LabelsSection({
+  serverId,
+  onCreated,
+}: {
+  serverId: string;
+  onCreated: () => void;
+}): ReactElement {
+  const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
+  const client = runtimeSnapshot?.client ?? null;
+  const online = runtimeSnapshot?.connectionStatus === "online";
+  const labelsQuery = useFetchQuery({
+    queryKey: ["multicaLabelsManage", serverId, runtimeSnapshot?.clientGeneration ?? 0],
+    queryFn: async () => {
+      if (!client) throw new Error("Target host client is unavailable");
+      return client.multicaLabelList();
+    },
+    enabled: online,
+    retry: false,
+    dataShape: "list",
+    staleTimeMs: 10_000,
+  });
+  const labels = labelsQuery.data?.labels ?? [];
+  const refresh = useCallback(() => {
+    void labelsQuery.refetch();
+    onCreated();
+  }, [labelsQuery, onCreated]);
+  const update = useCallback(
+    (labelId: string, fields: { name?: string; color?: string }) => {
+      if (!client) return;
+      void client
+        .multicaLabelUpdate({ labelId, ...fields })
+        .then(refresh)
+        .catch(refresh);
+    },
+    [client, refresh],
+  );
+  const remove = useCallback(
+    (labelId: string) => {
+      if (!client) return;
+      void client.multicaLabelDelete({ labelId }).then(refresh).catch(refresh);
+    },
+    [client, refresh],
+  );
+  const create = useCallback(
+    (name: string) => {
+      if (!client || name.trim() === "") return;
+      void client
+        .multicaLabelCreate({ name: name.trim(), color: LABEL_PRESETS[0] })
+        .then(refresh)
+        .catch(refresh);
+    },
+    [client, refresh],
+  );
+  return (
+    <>
+      <View style={styles.header}>
+        <Tag size={18} color="#888" />
+        <Text style={styles.heading}>Labels</Text>
+        <Text style={styles.headerCount}>{labels.length}</Text>
+      </View>
+      <ScrollView contentContainerStyle={styles.list}>
+        {labels.map((label) => (
+          <LabelRow key={label.id} label={label} onUpdate={update} onDelete={remove} />
+        ))}
+        {labels.length === 0 ? <Text style={styles.muted}>No labels yet.</Text> : null}
+        <LabelCreateRow onCreate={create} />
+      </ScrollView>
+    </>
+  );
+}
+
+function LabelRow({
+  label,
+  onUpdate,
+  onDelete,
+}: {
+  label: { id: string; name: string; color: string };
+  onUpdate: (id: string, fields: { name?: string; color?: string }) => void;
+  onDelete: (id: string) => void;
+}): ReactElement {
+  const [editing, setEditing] = useState(false);
+  const start = useCallback(() => setEditing(true), []);
+  const handleChange = useCallback(() => undefined, []);
+  const [draft, setDraft] = useState(label.name);
+  const handleDraft = useCallback((text: string) => setDraft(text), []);
+  const commit = useCallback(() => {
+    setEditing(false);
+    const next = draft.trim();
+    if (next !== "" && next !== label.name) {
+      onUpdate(label.id, { name: next });
+    }
+  }, [draft, label.id, label.name, onUpdate]);
+  const remove = useCallback(() => onDelete(label.id), [label.id, onDelete]);
+  void handleChange;
+  return (
+    <View style={styles.labelRow}>
+      <View style={[styles.labelDot, { backgroundColor: label.color }]} />
+      {editing ? (
+        <TextInput
+          style={styles.inlineInput}
+          initialValue={label.name}
+          onChangeText={handleDraft}
+          onBlur={commit}
+          autoFocus
+          testID={`multica-label-rename-${label.id}`}
+        />
+      ) : (
+        <Pressable
+          onPress={start}
+          style={styles.labelNamePress}
+          testID={`multica-label-${label.id}`}
+        >
+          <Text style={styles.labelName}>{label.name}</Text>
+        </Pressable>
+      )}
+      <View style={styles.inlineRow}>
+        {LABEL_PRESETS.map((preset) => (
+          <LabelColorChip
+            key={preset}
+            preset={preset}
+            labelId={label.id}
+            active={label.color === preset}
+            onPick={onUpdate}
+          />
+        ))}
+      </View>
+      <Pressable onPress={remove} testID={`multica-label-delete-${label.id}`}>
+        <Text style={styles.inlineCancelText}>delete</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function LabelColorChip({
+  preset,
+  labelId,
+  active,
+  onPick,
+}: {
+  preset: string;
+  labelId: string;
+  active: boolean;
+  onPick: (id: string, fields: { color: string }) => void;
+}): ReactElement {
+  const handlePress = useCallback(
+    () => onPick(labelId, { color: preset }),
+    [labelId, preset, onPick],
+  );
+  return (
+    <Pressable
+      style={[styles.labelDot, { backgroundColor: preset }, active && styles.labelDotActive]}
+      onPress={handlePress}
+      testID={`multica-label-color-${labelId}-${preset.slice(1)}`}
+    />
+  );
+}
+
+function LabelCreateRow({ onCreate }: { onCreate: (name: string) => void }): ReactElement {
+  const [name, setName] = useState("");
+  const handleChange = useCallback((text: string) => setName(text), []);
+  const submit = useCallback(() => {
+    onCreate(name);
+    setName("");
+  }, [name, onCreate]);
+  return (
+    <View style={styles.inlineRow}>
+      <TextInput
+        style={styles.inlineInput}
+        initialValue=""
+        onChangeText={handleChange}
+        placeholder="New label name"
+        placeholderTextColor="gray"
+        testID="multica-label-create-name"
+      />
+      <Pressable style={styles.newButton} onPress={submit} testID="multica-label-create">
+        <Text style={styles.newButtonText}>Add label</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 /** The declarations' door: standing work that fires on its own clock. */
 function AutopilotsPill({ serverId }: { serverId: string }): ReactElement {
   const router = useRouter();
@@ -347,6 +549,18 @@ const styles = StyleSheet.create((theme) => ({
     flexWrap: "wrap",
     gap: theme.spacing[3],
   },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+  },
+  labelDot: { width: 12, height: 12, borderRadius: 6 },
+  labelDotActive: { borderWidth: 2, borderColor: theme.colors.foreground },
+  labelNamePress: { minWidth: 120 },
+  labelName: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
+  list: { gap: theme.spacing[2] },
+  muted: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   card: {
     width: 260,
     padding: theme.spacing[3],

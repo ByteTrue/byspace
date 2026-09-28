@@ -1144,6 +1144,35 @@ export class MulticaStore {
     return mapLabelRow(row);
   }
 
+  /** Omitted fields keep their value, as the source's COALESCE update does. */
+  updateLabel(id: string, fields: { name?: string; color?: string }): LabelRow {
+    const row = this.getLabel(id);
+    const result = this.#db
+      .prepare(
+        `UPDATE issue_label SET name = ?, color = ?,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE id = ?`,
+      )
+      .run(fields.name ?? row.name, fields.color ?? row.color, id);
+    if (Number(result.changes) === 0) {
+      throw new Error(`label not found: ${id}`);
+    }
+    return this.getLabel(id);
+  }
+
+  /**
+   * Deleting a label removes its junction rows with it: our junction carries
+   * ON DELETE CASCADE, so the attachments clean themselves — the source does
+   * the same cleanup by hand in one transaction because its junction has no
+   * foreign keys.
+   */
+  deleteLabel(id: string): void {
+    const result = this.#db.prepare(`DELETE FROM issue_label WHERE id = ?`).run(id);
+    if (Number(result.changes) === 0) {
+      throw new Error(`label not found: ${id}`);
+    }
+  }
+
   listLabels(): LabelRow[] {
     const rows = this.#db
       .prepare(`SELECT id, name, color FROM issue_label ORDER BY name ASC`)

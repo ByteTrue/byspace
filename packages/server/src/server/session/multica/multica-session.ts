@@ -314,7 +314,9 @@ type WriteMessage = Extract<
       | "multica.label.create.request"
       | "multica.issue.labels.set.request"
       | "multica.comment.update.request"
-      | "multica.comment.delete.request";
+      | "multica.comment.delete.request"
+      | "multica.label.update.request"
+      | "multica.label.delete.request";
   }
 >;
 
@@ -1167,6 +1169,10 @@ export class MulticaSession {
         return this.#handleLabelCreate(msg);
       case "multica.issue.labels.set.request":
         return this.#handleIssueLabelsSet(msg);
+      case "multica.label.update.request":
+        return this.#handleLabelUpdate(msg);
+      case "multica.label.delete.request":
+        return this.#handleLabelDelete(msg);
       default:
         msg satisfies never;
     }
@@ -1244,6 +1250,32 @@ export class MulticaSession {
     this.#emit({
       type: "multica.label.create.response",
       payload: { requestId: msg.requestId, label: labelSummary(label) },
+    });
+  }
+
+  #handleLabelUpdate(
+    msg: Extract<SessionInboundMessage, { type: "multica.label.update.request" }>,
+  ): void {
+    const label = this.#store.updateLabel(msg.labelId, {
+      ...(msg.name !== undefined ? { name: msg.name } : {}),
+      ...(msg.color !== undefined ? { color: msg.color } : {}),
+    });
+    this.#emit({
+      type: "multica.label.update.response",
+      payload: {
+        requestId: msg.requestId,
+        label: { id: label.id, name: label.name, color: label.color },
+      },
+    });
+  }
+
+  #handleLabelDelete(
+    msg: Extract<SessionInboundMessage, { type: "multica.label.delete.request" }>,
+  ): void {
+    this.#store.deleteLabel(msg.labelId);
+    this.#emit({
+      type: "multica.label.delete.response",
+      payload: { requestId: msg.requestId, deleted: true },
     });
   }
 

@@ -372,11 +372,16 @@ async function main(): Promise<void> {
         const fetched = await client.multicaSquadGet(verifySquad.squad.id);
         check("squad get returns the roster", fetched.squad.leaderId === created.agent.id);
 
-        verifyReactions(client, comment.comment.id);
+        // Both are async; awaiting keeps their writes out of each other's
+        // read windows (the label directory check raced the management
+        // block's create/delete when these were left unawaited).
+        await verifyReactions(client, comment.comment.id);
 
-        verifyLabels(client, issue.issue.id);
+        await verifyLabels(client, issue.issue.id);
 
         await verifyCommentRevision(client, comment.comment.id);
+
+        await verifyLabelManagement(client, issue.issue.id);
 
         // Autopilot: a run_only autopilot fires on demand, lands a task with
         // no issue, and its run history records the attempt.
@@ -477,4 +482,35 @@ async function verifyCommentRevision(client: DaemonClient, commentId: string): P
   check("a stranger session cannot revise a comment", strangerRefused);
   const deleted = await client.multicaCommentDelete({ commentId });
   check("the author's delete lands", deleted.deleted === true);
+}
+
+/** The directory's management face: rename, recolor, and a delete whose
+ * attachments cascade away with the row. */
+async function verifyLabelManagement(client: DaemonClient, issueId: string): Promise<void> {
+  const created = await client.multicaLabelCreate({ name: "verify-label", color: "#3b82f6" });
+  await client.multicaIssueLabelsSet({ issueId, labelIds: [created.label.id] });
+  const renamed = await client.multicaLabelUpdate({
+    labelId: created.label.id,
+    name: "verify-renamed",
+  });
+  check(
+    "renaming a label keeps its color",
+    renamed.label.name === "verify-renamed" && renamed.label.color === "#3b82f6",
+  );
+  const recolored = await client.multicaLabelUpdate({
+    labelId: created.label.id,
+    color: "#22c55e",
+  });
+  check(
+    "recoloring a label keeps its name",
+    recolored.label.color === "#22c55e" && recolored.label.name === "verify-renamed",
+  );
+  const deleted = await client.multicaLabelDelete({ labelId: created.label.id });
+  check("deleting a label lands", deleted.deleted === true);
+  const after = await client.multicaIssueGet(issueId);
+  check(
+    "the deleted label's attachments cascade away",
+    after.issue.labels.length === 0,
+    String(after.issue.labels.length),
+  );
 }

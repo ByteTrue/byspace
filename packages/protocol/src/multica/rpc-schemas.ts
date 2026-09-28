@@ -213,6 +213,28 @@ export const MulticaLabelListResponseSchema = z.object({
   payload: z.object({ requestId: z.string(), labels: z.array(MulticaLabelSummarySchema) }),
 });
 
+export const MulticaLabelUpdateRequestSchema = z.object({
+  type: z.literal("multica.label.update.request"),
+  requestId: z.string(),
+  labelId: z.string().min(1),
+  name: z.string().min(1).optional(),
+  color: z.string().min(1).optional(),
+});
+export const MulticaLabelUpdateResponseSchema = z.object({
+  type: z.literal("multica.label.update.response"),
+  payload: z.object({ requestId: z.string(), label: MulticaLabelSummarySchema }),
+});
+
+export const MulticaLabelDeleteRequestSchema = z.object({
+  type: z.literal("multica.label.delete.request"),
+  requestId: z.string(),
+  labelId: z.string().min(1),
+});
+export const MulticaLabelDeleteResponseSchema = z.object({
+  type: z.literal("multica.label.delete.response"),
+  payload: z.object({ requestId: z.string(), deleted: z.boolean() }),
+});
+
 export const MulticaLabelCreateRequestSchema = z.object({
   type: z.literal("multica.label.create.request"),
   requestId: z.string(),

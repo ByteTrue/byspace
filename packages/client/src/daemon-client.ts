@@ -591,6 +591,14 @@ type MulticaLabelListPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.label.list.response" }
 >["payload"];
+type MulticaLabelUpdatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.label.update.response" }
+>["payload"];
+type MulticaLabelDeletePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.label.delete.response" }
+>["payload"];
 type MulticaLabelCreatePayload = Extract<
   SessionOutboundMessage,
   { type: "multica.label.create.response" }
@@ -5966,6 +5974,24 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       message: { type: "multica.label.list.request" },
       responseType: "multica.label.list.response",
+    });
+  }
+
+  async multicaLabelUpdate(options: {
+    labelId: string;
+    name?: string;
+    color?: string;
+  }): Promise<MulticaLabelUpdatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.label.update.request", ...options },
+      responseType: "multica.label.update.response",
+    });
+  }
+
+  async multicaLabelDelete(options: { labelId: string }): Promise<MulticaLabelDeletePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.label.delete.request", ...options },
+      responseType: "multica.label.delete.response",
     });
   }
 

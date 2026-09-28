@@ -547,6 +547,35 @@ export function createMulticaCommand(): Command {
       .allowExcessArguments(false),
   ).action(withOutput(runMulticaCommentSendCommand));
 
+  const label = multica.command("label").description("The label directory");
+  addJsonAndDaemonHostOptions(
+    label.command("ls").description("List the directory").allowExcessArguments(false),
+  ).action(withOutput(runMulticaLabelLsCommand));
+  addJsonAndDaemonHostOptions(
+    label
+      .command("create")
+      .description("Create a label")
+      .requiredOption("--name <name>", "Label name")
+      .option("--color <color>", "Hex color", "#888888")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaLabelCreateCommand));
+  addJsonAndDaemonHostOptions(
+    label
+      .command("update")
+      .description("Rename or recolor a label (omit a field to keep it)")
+      .requiredOption("--id <id>", "Label id")
+      .option("--name <name>", "New name")
+      .option("--color <color>", "New color")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaLabelUpdateCommand));
+  addJsonAndDaemonHostOptions(
+    label
+      .command("delete")
+      .description("Delete a label; its attachments go with it")
+      .requiredOption("--id <id>", "Label id")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaLabelDeleteCommand));
+
   return multica;
 }
 
@@ -822,6 +851,21 @@ export async function runMulticaInboxReadAllCommand(
     await client.close().catch(() => undefined);
   }
 }
+
+interface MulticaLabelRow {
+  id: string;
+  name: string;
+  color: string;
+}
+
+const multicaLabelSchema: OutputSchema<MulticaLabelRow> = {
+  idField: "id",
+  columns: [
+    { header: "ID", field: "id", width: 10 },
+    { header: "NAME", field: "name", width: 24 },
+    { header: "COLOR", field: "color", width: 10 },
+  ],
+};
 
 interface MulticaInboxRow {
   readonly id: string;
@@ -1561,4 +1605,115 @@ async function mentionMarkupFor(
 function ownerCaller(): { senderSessionId?: string } {
   const senderSessionId = process.env.BYSPACE_AGENT_ID?.trim() || undefined;
   return senderSessionId ? { senderSessionId } : {};
+}
+
+export async function runMulticaLabelLsCommand(
+  options: CommandOptions,
+  _command: Command,
+): Promise<ListResult<MulticaLabelRow>> {
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaLabelList();
+    return {
+      type: "list",
+      data: payload.labels.map((label) => ({
+        id: label.id,
+        name: label.name,
+        color: label.color,
+      })),
+      schema: multicaLabelSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaLabelCreateCommand(
+  options: CommandOptions & { name?: string; color?: string },
+  _command: Command,
+): Promise<ListResult<MulticaLabelRow>> {
+  const name = options.name?.trim();
+  if (!name) {
+    throw { code: "MISSING_NAME", message: "--name is required" } satisfies CommandError;
+  }
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaLabelCreate({
+      name,
+      color: options.color?.trim() || "#888888",
+    });
+    return {
+      type: "list",
+      data: [
+        {
+          id: payload.label.id.slice(0, 8),
+          name: payload.label.name,
+          color: payload.label.color,
+        },
+      ],
+      schema: multicaLabelSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaLabelUpdateCommand(
+  options: CommandOptions & { id?: string; name?: string; color?: string },
+  _command: Command,
+): Promise<ListResult<MulticaLabelRow>> {
+  const id = options.id?.trim();
+  if (!id) {
+    throw { code: "MISSING_ID", message: "--id is required" } satisfies CommandError;
+  }
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaLabelUpdate({
+      labelId: id,
+      ...(options.name ? { name: options.name.trim() } : {}),
+      ...(options.color ? { color: options.color.trim() } : {}),
+    });
+    return {
+      type: "list",
+      data: [
+        {
+          id: payload.label.id.slice(0, 8),
+          name: payload.label.name,
+          color: payload.label.color,
+        },
+      ],
+      schema: multicaLabelSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaLabelDeleteCommand(
+  options: CommandOptions & { id?: string },
+  _command: Command,
+): Promise<ListResult<MulticaLabelRow>> {
+  const id = options.id?.trim();
+  if (!id) {
+    throw { code: "MISSING_ID", message: "--id is required" } satisfies CommandError;
+  }
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaLabelDelete({ labelId: id });
+    return {
+      type: "list",
+      data: [{ id: id.slice(0, 8), name: payload.deleted ? "deleted" : "kept", color: "-" }],
+      schema: multicaLabelSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
 }
