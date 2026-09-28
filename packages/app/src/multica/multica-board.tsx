@@ -1,3 +1,4 @@
+import { MulticaShell } from "@/multica/multica-nav";
 import { ReactElement, Ref, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -17,9 +18,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Bell, KanbanSquare, List, Plus, UserRound, UsersRound } from "lucide-react-native";
-
-import { buildHostWorkspaceRoute } from "@/utils/host-routes";
+import { KanbanSquare, List, Plus } from "lucide-react-native";
 
 import { useFetchQuery } from "@/data/query";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
@@ -53,6 +52,8 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
   const router = useRouter();
 
   const [view, setView] = useState<"board" | "list">("board");
+  /** Which status the open create form defaults to; null means closed. */
+  const [newIssueStatus, setNewIssueStatus] = useState<string | null>(null);
   const [filters, setFilters] = useState<MulticaFilters>(emptyFilters);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [grouping, setGrouping] = useState<BoardGrouping>("status");
@@ -90,6 +91,9 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
   const refetchIssues = useCallback(() => {
     void issuesQuery.refetch();
   }, [issuesQuery]);
+
+  const openNewIssueAtBacklog = useCallback(() => setNewIssueStatus(""), []);
+  const closeNewIssue = useCallback(() => setNewIssueStatus(null), []);
 
   const openIssue = useCallback(
     (issueId: string) => {
@@ -198,87 +202,100 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
   }
 
   return (
-    <View style={styles.page}>
-      <View style={styles.header}>
-        <KanbanSquare size={18} color="#888" />
-        <Text style={styles.heading}>Board</Text>
-        <Text style={styles.headerCount}>
-          {issues.length} {issues.length === 1 ? "issue" : "issues"}
-        </Text>
-        <View style={styles.displayToggle}>
-          <ViewToggle active={view === "board"} label="Board" onPress={setViewToBoard} />
-          <ViewToggle active={view === "list"} label="List" onPress={setViewToList} />
-        </View>
-        <View style={styles.displayToggle}>
-          <ViewToggle active={grouping === "status"} label="By status" onPress={groupByStatus} />
-          <ViewToggle
-            active={grouping === "assignee"}
-            label="By assignee"
-            onPress={groupByAssignee}
-          />
-        </View>
-        <NewIssueButton onCreated={refetchIssues} />
-        <InboxBell unread={live.inboxUnread} />
-        {live.workingAgentIds.size > 0 ? (
-          <View style={styles.workingPill}>
-            <View style={styles.workingDot} />
-            <Text style={styles.workingPillText}>
-              {live.workingAgentIds.size} {live.workingAgentIds.size === 1 ? "agent" : "agents"}{" "}
-              working
-            </Text>
+    <MulticaShell serverId={serverId} active="board">
+      <View style={styles.page}>
+        <View style={styles.header}>
+          <KanbanSquare size={18} color="#888" />
+          <Text style={styles.heading}>Board</Text>
+          <Text style={styles.headerCount}>
+            {issues.length} {issues.length === 1 ? "issue" : "issues"}
+          </Text>
+          <View style={styles.displayToggle}>
+            <ViewToggle active={view === "board"} label="Board" onPress={setViewToBoard} />
+            <ViewToggle active={view === "list"} label="List" onPress={setViewToList} />
           </View>
-        ) : null}
-        <MinePill serverId={serverId} />
-        <RostersPill serverId={serverId} />
-        {live.secretaryWorkspaceId ? (
-          <SecretaryPill serverId={serverId} workspaceId={live.secretaryWorkspaceId} />
-        ) : null}
-      </View>
-      <FilterBar
-        statuses={statuses.map((status) => ({ key: status.key, name: status.name }))}
-        filters={filters}
-        agents={catalog.agents}
-        labels={labels}
-        onFilters={setFilters}
-      />
-      {view === "board" ? (
-        <DndContext
-          sensors={sensors}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onDragCancel={handleDragCancel}
-        >
-          <ScrollView horizontal contentContainerStyle={styles.lanes}>
-            {columns.map((column) => (
-              <BoardColumn
-                key={column.id}
-                column={column}
-                issues={issuesForColumn(column, issues)}
-                agentNameById={catalog.agentNameById}
-                workingIssueIds={live.workingIssueIds}
-                onOpen={openIssue}
-              />
-            ))}
-          </ScrollView>
-          <DragOverlay dropAnimation={null}>
-            {draggingIssue ? (
-              <View style={styles.overlayCard}>
-                <Text style={styles.cardTitle} numberOfLines={2}>
-                  {draggingIssue.title}
-                </Text>
-              </View>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
-      ) : (
-        <IssueList
-          issues={issues}
-          statusColorByKey={new Map(statuses.map((status) => [status.key, status.color]))}
-          agentNameById={catalog.agentNameById}
-          onOpen={openIssue}
+          <View style={styles.displayToggle}>
+            <ViewToggle active={grouping === "status"} label="By status" onPress={groupByStatus} />
+            <ViewToggle
+              active={grouping === "assignee"}
+              label="By assignee"
+              onPress={groupByAssignee}
+            />
+          </View>
+          {newIssueStatus === null ? (
+            <Pressable
+              style={styles.newIssueButton}
+              onPress={openNewIssueAtBacklog}
+              testID="multica-new-issue"
+            >
+              <Plus size={13} color="#888" />
+              <Text style={styles.newIssueText}>New issue</Text>
+            </Pressable>
+          ) : null}
+          {live.workingAgentIds.size > 0 ? (
+            <View style={styles.workingPill}>
+              <View style={styles.workingDot} />
+              <Text style={styles.workingPillText}>
+                {live.workingAgentIds.size} {live.workingAgentIds.size === 1 ? "agent" : "agents"}{" "}
+                working
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        <FilterBar
+          statuses={statuses.map((status) => ({ key: status.key, name: status.name }))}
+          filters={filters}
+          agents={catalog.agents}
+          labels={labels}
+          onFilters={setFilters}
         />
-      )}
-    </View>
+        {newIssueStatus !== null ? (
+          <NewIssueForm
+            defaultStatus={newIssueStatus}
+            onDone={closeNewIssue}
+            onCreated={refetchIssues}
+          />
+        ) : null}
+        {view === "board" ? (
+          <DndContext
+            sensors={sensors}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
+          >
+            <ScrollView horizontal contentContainerStyle={styles.lanes}>
+              {columns.map((column) => (
+                <BoardColumn
+                  key={column.id}
+                  column={column}
+                  issues={issuesForColumn(column, issues)}
+                  agentNameById={catalog.agentNameById}
+                  workingIssueIds={live.workingIssueIds}
+                  onOpen={openIssue}
+                  onCreateIn={setNewIssueStatus}
+                />
+              ))}
+            </ScrollView>
+            <DragOverlay dropAnimation={null}>
+              {draggingIssue ? (
+                <View style={styles.overlayCard}>
+                  <Text style={styles.cardTitle} numberOfLines={2}>
+                    {draggingIssue.title}
+                  </Text>
+                </View>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+        ) : (
+          <IssueList
+            issues={issues}
+            statusColorByKey={new Map(statuses.map((status) => [status.key, status.color]))}
+            agentNameById={catalog.agentNameById}
+            onOpen={openIssue}
+          />
+        )}
+      </View>
+    </MulticaShell>
   );
 }
 
@@ -579,32 +596,8 @@ function IssueRow({
 }
 
 /** The owner's desk: the three my-issues scopes. */
-function MinePill({ serverId }: { serverId: string }): ReactElement {
-  const router = useRouter();
-  const handlePress = useCallback(() => {
-    router.push(`/multica/mine?serverId=${serverId}`);
-  }, [router, serverId]);
-  return (
-    <Pressable style={styles.officePill} onPress={handlePress} testID="multica-mine-entry">
-      <UserRound size={13} color="#888" />
-      <Text style={styles.officePillText}>My issues</Text>
-    </Pressable>
-  );
-}
 
 /** The rosters' front door: agents and squads, the two management faces. */
-function RostersPill({ serverId }: { serverId: string }): ReactElement {
-  const router = useRouter();
-  const handlePress = useCallback(() => {
-    router.push(`/multica/agents?serverId=${serverId}`);
-  }, [router, serverId]);
-  return (
-    <Pressable style={styles.officePill} onPress={handlePress} testID="multica-rosters-entry">
-      <UsersRound size={13} color="#888" />
-      <Text style={styles.officePillText}>Rosters</Text>
-    </Pressable>
-  );
-}
 
 /**
  * The board's creation face, as the source's onCreateIssue: a title and the
@@ -612,18 +605,24 @@ function RostersPill({ serverId }: { serverId: string }): ReactElement {
  * backlog like every other create path; assignee and priority ride the
  * directory so a new issue can be routed at birth.
  */
-function NewIssueButton({ onCreated }: { onCreated: () => void }): ReactElement {
+function NewIssueForm({
+  defaultStatus,
+  onDone,
+  onCreated,
+}: {
+  defaultStatus: string;
+  onDone: () => void;
+  onCreated: () => void;
+}): ReactElement {
   const runtimeSnapshot = useLocalServerSnapshot();
   const client = runtimeSnapshot?.client ?? null;
   const catalog = useMulticaCatalog(runtimeSnapshot?.serverId ?? "");
-  const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [priority, setPriority] = useState<string>("none");
   const [saving, setSaving] = useState(false);
 
-  const toggleOpen = useCallback(() => setOpen((value) => !value), []);
   const handleTitle = useCallback((text: string) => setTitle(text), []);
   const handleDescription = useCallback((text: string) => setDescription(text), []);
   const clearAssignee = useCallback(() => setAssigneeId(null), []);
@@ -635,6 +634,7 @@ function NewIssueButton({ onCreated }: { onCreated: () => void }): ReactElement 
     void client
       .multicaIssueCreate({
         title: trimmed,
+        ...(defaultStatus !== "" ? { status: defaultStatus } : {}),
         ...(description.trim() !== "" ? { description: description.trim() } : {}),
         ...(assigneeId ? { assigneeType: "agent", assigneeId } : {}),
         ...(priority !== "none" ? { priority } : {}),
@@ -644,21 +644,13 @@ function NewIssueButton({ onCreated }: { onCreated: () => void }): ReactElement 
         setDescription("");
         setAssigneeId(null);
         setPriority("none");
-        setOpen(false);
+        onDone();
         onCreated();
         return undefined;
       })
       .finally(() => setSaving(false));
-  }, [client, title, description, assigneeId, priority, saving, onCreated]);
+  }, [client, title, description, assigneeId, priority, saving, defaultStatus, onDone, onCreated]);
 
-  if (!open) {
-    return (
-      <Pressable style={styles.newIssueButton} onPress={toggleOpen} testID="multica-new-issue">
-        <Plus size={13} color="#888" />
-        <Text style={styles.newIssueText}>New issue</Text>
-      </Pressable>
-    );
-  }
   return (
     <View style={styles.newIssueForm}>
       <TextInput
@@ -698,11 +690,7 @@ function NewIssueButton({ onCreated }: { onCreated: () => void }): ReactElement 
         <Pressable style={styles.newIssueButton} onPress={submit} testID="multica-new-issue-create">
           <Text style={styles.newIssueText}>{saving ? "…" : "Create"}</Text>
         </Pressable>
-        <Pressable
-          style={styles.newIssueCancel}
-          onPress={toggleOpen}
-          testID="multica-new-issue-cancel"
-        >
+        <Pressable style={styles.newIssueCancel} onPress={onDone} testID="multica-new-issue-cancel">
           <Text style={styles.newIssueCancelText}>Cancel</Text>
         </Pressable>
       </View>
@@ -800,46 +788,11 @@ function useLocalServerSnapshot() {
     | null;
 }
 
-function InboxBell({ unread }: { unread: number }): ReactElement {
-  const router = useRouter();
-  const handlePress = useCallback(() => {
-    router.push("/multica-inbox");
-  }, [router]);
-  return (
-    <Pressable style={styles.bell} onPress={handlePress} testID="multica-inbox-entry">
-      <Bell size={15} color="#888" />
-      {unread > 0 ? (
-        <View style={styles.bellBadge}>
-          <Text style={styles.bellBadgeText}>{unread}</Text>
-        </View>
-      ) : null}
-    </Pressable>
-  );
-}
-
 /**
  * The owner's front door: the secretary's standing workspace. It opens the
  * repo's ordinary workspace surface — chats, composer, terminals — because
  * talking to the secretary is talking to an agent, not using a bespoke UI.
  */
-function SecretaryPill({
-  serverId,
-  workspaceId,
-}: {
-  serverId: string;
-  workspaceId: string;
-}): ReactElement {
-  const router = useRouter();
-  const handlePress = useCallback(() => {
-    router.push(buildHostWorkspaceRoute(serverId, workspaceId));
-  }, [router, serverId, workspaceId]);
-  return (
-    <Pressable style={styles.officePill} onPress={handlePress} testID="multica-secretary-entry">
-      <UserRound size={13} color="#888" />
-      <Text style={styles.officePillText}>Chief of Staff</Text>
-    </Pressable>
-  );
-}
 
 function BoardColumn({
   column,
@@ -847,20 +800,36 @@ function BoardColumn({
   agentNameById,
   workingIssueIds,
   onOpen,
+  onCreateIn,
 }: {
   column: BoardColumnSpec;
   issues: readonly MulticaIssueSummary[];
   agentNameById: ReadonlyMap<string, string>;
   workingIssueIds: ReadonlySet<string>;
   onOpen: (issueId: string) => void;
+  onCreateIn: (statusKey: string) => void;
 }): ReactElement {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
+  const createHere = useCallback(() => {
+    if (column.statusKey) {
+      onCreateIn(column.statusKey);
+    }
+  }, [column.statusKey, onCreateIn]);
   return (
     <View style={styles.column}>
       <View style={styles.columnHeader}>
         <View style={[styles.columnDot, { backgroundColor: column.color }]} />
         <Text style={styles.columnTitle}>{column.title}</Text>
         <Text style={styles.columnCount}>{issues.length}</Text>
+        {column.statusKey ? (
+          <Pressable
+            style={styles.columnAdd}
+            onPress={createHere}
+            testID={`multica-column-add-${column.statusKey}`}
+          >
+            <Plus size={12} color="#888" />
+          </Pressable>
+        ) : null}
       </View>
       <View
         ref={setNodeRef as unknown as Ref<View>}
@@ -1054,6 +1023,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingBottom: theme.spacing[4],
   },
   column: { width: 252 },
+  columnAdd: { marginLeft: "auto", padding: 2 },
   columnHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -1179,7 +1149,7 @@ function useMulticaLabels(
  * board alone consumes, so they sit next to the board rather than in the
  * shared catalog.
  */
-function useMulticaLiveState(serverId: string): {
+export function useMulticaLiveState(serverId: string): {
   workingIssueIds: ReadonlySet<string>;
   workingAgentIds: ReadonlySet<string>;
   secretaryWorkspaceId: string | null;

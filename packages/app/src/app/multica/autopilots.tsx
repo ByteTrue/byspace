@@ -1,3 +1,4 @@
+import { MulticaShell } from "@/multica/multica-nav";
 import { type ReactElement, useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
@@ -70,37 +71,39 @@ function AutopilotsPage({ serverId }: { serverId: string }): ReactElement {
   );
 
   return (
-    <ScrollView contentContainerStyle={styles.page}>
-      <View style={styles.header}>
-        <Timer size={18} color="#888" />
-        <Text style={styles.heading}>Autopilots</Text>
-        <Text style={styles.headerCount}>{autopilots.length}</Text>
-        <Pressable style={styles.newButton} onPress={openCreate} testID="multica-autopilot-new">
-          <Text style={styles.newButtonText}>New autopilot</Text>
-        </Pressable>
-      </View>
-      <View style={styles.grid}>
-        {autopilots.map((autopilot) => (
-          <AutopilotCard
-            key={autopilot.id}
-            autopilot={autopilot}
-            assigneeName={catalog.agentNameById.get(autopilot.assigneeId) ?? null}
-            onOpen={openDetail}
+    <MulticaShell serverId={serverId} active="autopilots">
+      <ScrollView contentContainerStyle={styles.page}>
+        <View style={styles.header}>
+          <Timer size={18} color="#888" />
+          <Text style={styles.heading}>Autopilots</Text>
+          <Text style={styles.headerCount}>{autopilots.length}</Text>
+          <Pressable style={styles.newButton} onPress={openCreate} testID="multica-autopilot-new">
+            <Text style={styles.newButtonText}>New autopilot</Text>
+          </Pressable>
+        </View>
+        <View style={styles.grid}>
+          {autopilots.map((autopilot) => (
+            <AutopilotCard
+              key={autopilot.id}
+              autopilot={autopilot}
+              assigneeName={catalog.agentNameById.get(autopilot.assigneeId) ?? null}
+              onOpen={openDetail}
+            />
+          ))}
+          {autopilots.length === 0 ? (
+            <Text style={styles.empty}>No autopilots. A recurring task belongs here.</Text>
+          ) : null}
+        </View>
+        {creating ? (
+          <CreateAutopilotForm
+            serverId={serverId}
+            agents={catalog.agents}
+            onCancel={closeCreate}
+            onCreated={created}
           />
-        ))}
-        {autopilots.length === 0 ? (
-          <Text style={styles.empty}>No autopilots. A recurring task belongs here.</Text>
         ) : null}
-      </View>
-      {creating ? (
-        <CreateAutopilotForm
-          serverId={serverId}
-          agents={catalog.agents}
-          onCancel={closeCreate}
-          onCreated={created}
-        />
-      ) : null}
-    </ScrollView>
+      </ScrollView>
+    </MulticaShell>
   );
 }
 

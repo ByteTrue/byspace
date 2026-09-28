@@ -1,3 +1,4 @@
+import { MulticaShell } from "@/multica/multica-nav";
 import { type ReactElement, useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -127,14 +128,16 @@ export function MulticaInbox({ serverId }: { serverId: string }): ReactElement {
     );
   }
   return (
-    <View style={styles.page}>
-      <View style={styles.wideSplit}>
-        <View style={styles.wideList}>{listPane}</View>
-        <View style={styles.wideDetail}>
-          <ScrollView contentContainerStyle={styles.wideDetailContent}>{detailPane}</ScrollView>
+    <MulticaShell serverId={serverId} active="inbox">
+      <View style={styles.page}>
+        <View style={styles.wideSplit}>
+          <View style={styles.wideList}>{listPane}</View>
+          <View style={styles.wideDetail}>
+            <ScrollView contentContainerStyle={styles.wideDetailContent}>{detailPane}</ScrollView>
+          </View>
         </View>
       </View>
-    </View>
+    </MulticaShell>
   );
 }
 

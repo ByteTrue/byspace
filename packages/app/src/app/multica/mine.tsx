@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
+import { MulticaShell } from "@/multica/multica-nav";
 import { useFetchQuery } from "@/data/query";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 import { useMulticaCatalog } from "@/multica/multica-catalog";
@@ -65,23 +66,25 @@ function MinePage({ serverId }: { serverId: string }): ReactElement {
   const statusColorByKey = new Map(catalog.statuses.map((status) => [status.key, status.color]));
 
   return (
-    <View style={styles.page}>
-      <View style={styles.header}>
-        <Text style={styles.heading}>My issues</Text>
-        <View style={styles.tabs}>
-          <ScopeTab active={scope === "assigned"} label="Assigned" onPress={pickAssigned} />
-          <ScopeTab active={scope === "created"} label="Created" onPress={pickCreated} />
-          <ScopeTab active={scope === "subscribed"} label="Subscribed" onPress={pickSubscribed} />
+    <MulticaShell serverId={serverId} active="mine">
+      <View style={styles.page}>
+        <View style={styles.header}>
+          <Text style={styles.heading}>My issues</Text>
+          <View style={styles.tabs}>
+            <ScopeTab active={scope === "assigned"} label="Assigned" onPress={pickAssigned} />
+            <ScopeTab active={scope === "created"} label="Created" onPress={pickCreated} />
+            <ScopeTab active={scope === "subscribed"} label="Subscribed" onPress={pickSubscribed} />
+          </View>
+          <Text style={styles.count}>{issues.length}</Text>
         </View>
-        <Text style={styles.count}>{issues.length}</Text>
+        <IssueList
+          issues={issues}
+          statusColorByKey={statusColorByKey}
+          agentNameById={catalog.agentNameById}
+          onOpen={openIssue}
+        />
       </View>
-      <IssueList
-        issues={issues}
-        statusColorByKey={statusColorByKey}
-        agentNameById={catalog.agentNameById}
-        onOpen={openIssue}
-      />
-    </View>
+    </MulticaShell>
   );
 }
 

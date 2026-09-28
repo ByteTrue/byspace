@@ -1,3 +1,4 @@
+import { MulticaShell } from "@/multica/multica-nav";
 import { type ReactElement, useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -81,35 +82,37 @@ function RostersPage({ serverId }: { serverId: string }): ReactElement {
   const squads = squadsQuery.data?.squads ?? [];
 
   return (
-    <ScrollView contentContainerStyle={styles.page}>
-      <View style={styles.header}>
-        <Bot size={18} color="#888" />
-        <Text style={styles.heading}>Agents</Text>
-        <Text style={styles.headerCount}>{agents.length}</Text>
-        <NewAgentButton onCreated={refresh} />
-        <AutopilotsPill serverId={serverId} />
-      </View>
-      <View style={styles.grid}>
-        {agents.map((agent) => (
-          <AgentCard key={agent.id} agent={agent} onOpen={openAgent} />
-        ))}
-        {agents.length === 0 ? <Text style={styles.empty}>No agents yet.</Text> : null}
-      </View>
-      <View style={styles.header}>
-        <Users size={18} color="#888" />
-        <Text style={styles.heading}>Squads</Text>
-        <Text style={styles.headerCount}>{squads.length}</Text>
-        <NewSquadButton agents={agents} onCreated={refresh} />
-      </View>
+    <MulticaShell serverId={serverId} active="rosters">
+      <ScrollView contentContainerStyle={styles.page}>
+        <View style={styles.header}>
+          <Bot size={18} color="#888" />
+          <Text style={styles.heading}>Agents</Text>
+          <Text style={styles.headerCount}>{agents.length}</Text>
+          <NewAgentButton onCreated={refresh} />
+          <AutopilotsPill serverId={serverId} />
+        </View>
+        <View style={styles.grid}>
+          {agents.map((agent) => (
+            <AgentCard key={agent.id} agent={agent} onOpen={openAgent} />
+          ))}
+          {agents.length === 0 ? <Text style={styles.empty}>No agents yet.</Text> : null}
+        </View>
+        <View style={styles.header}>
+          <Users size={18} color="#888" />
+          <Text style={styles.heading}>Squads</Text>
+          <Text style={styles.headerCount}>{squads.length}</Text>
+          <NewSquadButton agents={agents} onCreated={refresh} />
+        </View>
 
-      <LabelsSection serverId={serverId} onCreated={refresh} />
-      <View style={styles.grid}>
-        {squads.map((squad) => (
-          <SquadCard key={squad.id} squad={squad} onOpen={openSquad} />
-        ))}
-        {squads.length === 0 ? <Text style={styles.empty}>No squads yet.</Text> : null}
-      </View>
-    </ScrollView>
+        <LabelsSection serverId={serverId} onCreated={refresh} />
+        <View style={styles.grid}>
+          {squads.map((squad) => (
+            <SquadCard key={squad.id} squad={squad} onOpen={openSquad} />
+          ))}
+          {squads.length === 0 ? <Text style={styles.empty}>No squads yet.</Text> : null}
+        </View>
+      </ScrollView>
+    </MulticaShell>
   );
 }
 
