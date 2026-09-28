@@ -915,16 +915,31 @@ function IssuePropertiesPane({ data }: { data: IssueDetailData }): ReactElement 
           <StatusDropdown status={status} statuses={statuses} onMove={moveStatus} />
         </PropertyRow>
         <PropertyRow label="Priority">
-          <PriorityPick value={issue?.priority ?? "none"} onPick={pickPriority} />
+          <PriorityDropdown value={issue?.priority ?? "none"} onPick={pickPriority} />
         </PropertyRow>
         <PropertyRow label="Assignee">
-          <AssigneePick
+          <AssigneeDropdown
             agents={data.mentionAgents}
             assigneeId={issue?.assigneeId ?? null}
             assigneeName={assigneeName}
             onPick={pickAssignee}
             onClear={clearAssignee}
           />
+        </PropertyRow>
+      </Section>
+      <Section title="Details">
+        <PropertyRow label="Created by">
+          <Text style={styles.propertyValue}>
+            {issue?.creatorType === "owner"
+              ? "you"
+              : (data.agentNameById.get(issue?.creatorId ?? "") ?? "agent")}
+          </Text>
+        </PropertyRow>
+        <PropertyRow label="Created">
+          <Text style={styles.propertyValue}>{shortDate(issue?.createdAt)}</Text>
+        </PropertyRow>
+        <PropertyRow label="Updated">
+          <Text style={styles.propertyValue}>{shortDate(issue?.updatedAt)}</Text>
         </PropertyRow>
       </Section>
       <Section title="Labels">
@@ -1179,7 +1194,13 @@ function AddSubIssueRow({
 
 const DETAIL_PRIORITY_OPTIONS = ["urgent", "high", "medium", "low", "none"] as const;
 
-function PriorityPick({
+/**
+ * Row-value dropdowns, the source's property shape: the trigger shows the
+ * current value and the menu lists the choices with the current one
+ * checked. The chip rows they replace showed every choice at once, which
+ * reads as a filter bar rather than a property.
+ */
+function PriorityDropdown({
   value,
   onPick,
 }: {
@@ -1187,36 +1208,47 @@ function PriorityPick({
   onPick: (priority: string) => void;
 }): ReactElement {
   return (
-    <View style={styles.pickRow}>
-      {DETAIL_PRIORITY_OPTIONS.map((option) => (
-        <PriorityChip key={option} option={option} active={value === option} onPick={onPick} />
-      ))}
-    </View>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        accessibilityRole="button"
+        accessibilityLabel="Change priority"
+        testID="multica-priority-dropdown"
+        style={styles.statusTrigger}
+      >
+        <Text style={styles.statusChipText}>{value}</Text>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="bottom" align="start" offset={4} minWidth={140}>
+        {DETAIL_PRIORITY_OPTIONS.map((option) => (
+          <PriorityMenuItem
+            key={option}
+            option={option}
+            selected={option === value}
+            onPick={onPick}
+          />
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
-function PriorityChip({
+function PriorityMenuItem({
   option,
-  active,
+  selected,
   onPick,
 }: {
   option: string;
-  active: boolean;
+  selected: boolean;
   onPick: (priority: string) => void;
 }): ReactElement {
-  const handlePress = useCallback(() => onPick(option), [option, onPick]);
+  const handleSelect = useCallback(() => onPick(option), [option, onPick]);
   return (
-    <Pressable
-      style={[styles.pickChip, active && styles.pickChipActive]}
-      onPress={handlePress}
-      testID={`multica-priority-${option}`}
-    >
-      <Text style={styles.pickChipText}>{option}</Text>
-    </Pressable>
+    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+      <Text style={styles.menuItemText}>{option}</Text>
+    </DropdownMenuItem>
   );
 }
 
-function AssigneePick({
+function AssigneeDropdown({
   agents,
   assigneeId,
   assigneeName,
@@ -1230,49 +1262,62 @@ function AssigneePick({
   onClear: () => void;
 }): ReactElement {
   return (
-    <View style={styles.pickRow}>
-      <Pressable
-        style={[styles.pickChip, assigneeId === null && styles.pickChipActive]}
-        onPress={onClear}
-        testID="multica-assignee-none"
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        accessibilityRole="button"
+        accessibilityLabel="Change assignee"
+        testID="multica-assignee-dropdown"
+        style={styles.statusTrigger}
       >
-        <Text style={styles.pickChipText}>unassigned</Text>
-      </Pressable>
-      {agents.map((agent) => (
-        <AssigneeChip
-          key={agent.id}
-          agent={agent}
-          active={assigneeId === agent.id}
-          currentName={assigneeName}
-          onPick={onPick}
-        />
-      ))}
-    </View>
+        {assigneeName ? (
+          <>
+            <ActorAvatar name={assigneeName} id={assigneeId ?? ""} />
+            <Text style={styles.statusChipText}>{assigneeName}</Text>
+          </>
+        ) : (
+          <Text style={styles.statusChipText}>unassigned</Text>
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="bottom" align="start" offset={4} minWidth={160}>
+        <DropdownMenuItem selected={assigneeId === null} onSelect={onClear}>
+          <Text style={styles.menuItemText}>unassigned</Text>
+        </DropdownMenuItem>
+        {agents.map((agent) => (
+          <AssigneeMenuItem
+            key={agent.id}
+            agent={agent}
+            selected={assigneeId === agent.id}
+            onPick={onPick}
+          />
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
-function AssigneeChip({
+function AssigneeMenuItem({
   agent,
-  active,
-  currentName,
+  selected,
   onPick,
 }: {
   agent: { id: string; name: string };
-  active: boolean;
-  currentName: string | null;
+  selected: boolean;
   onPick: (id: string) => void;
 }): ReactElement {
-  const handlePress = useCallback(() => onPick(agent.id), [agent.id, onPick]);
-  void currentName;
+  const handleSelect = useCallback(() => onPick(agent.id), [agent.id, onPick]);
   return (
-    <Pressable
-      style={[styles.pickChip, active && styles.pickChipActive]}
-      onPress={handlePress}
-      testID={`multica-assignee-${agent.id}`}
-    >
-      <Text style={styles.pickChipText}>{agent.name}</Text>
-    </Pressable>
+    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+      <Text style={styles.menuItemText}>{agent.name}</Text>
+    </DropdownMenuItem>
   );
+}
+
+/** "2026-09-28T…" → "Sep 28", the source's short date face. */
+function shortDate(iso: string | undefined | null): string {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function SubIssueRow({ child }: { child: MulticaIssueSummary }): ReactElement {
