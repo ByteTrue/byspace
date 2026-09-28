@@ -1,4 +1,4 @@
-import { type ReactElement, useCallback, useState } from "react";
+import { type ReactElement, useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -7,10 +7,15 @@ import { MulticaShell } from "@/multica/multica-nav";
 import { useFetchQuery } from "@/data/query";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 import { useMulticaCatalog } from "@/multica/multica-catalog";
-import { IssueList } from "@/multica/multica-board";
+import { BoardCanvas, statusesData, useMulticaLiveState } from "@/multica/multica-board";
+import { buildColumns } from "@/multica/multica-board-grouping";
 import type { MulticaIssueSummary } from "@bytetrue/protocol/multica/rpc-schemas";
 
-type MineScope = "assigned" | "created" | "subscribed";
+/**
+ * The source's four scopes; "involved" is what the source's UI calls
+ * "My Agents and Squads", and "subscribed" remains its old wire name.
+ */
+type MineScope = "assigned" | "created" | "involved" | "all";
 
 /**
  * The owner's desk: the three scopes the source's my-issues page reads, in
@@ -30,7 +35,7 @@ function MinePage({ serverId }: { serverId: string }): ReactElement {
   const client = runtimeSnapshot?.client ?? null;
   const online = runtimeSnapshot?.connectionStatus === "online";
   const catalog = useMulticaCatalog(serverId);
-  const [scope, setScope] = useState<MineScope>("created");
+  const [scope, setScope] = useState<MineScope>("assigned");
 
   const mineQuery = useFetchQuery({
     queryKey: ["multicaMine", serverId, scope, runtimeSnapshot?.clientGeneration ?? 0],
@@ -51,9 +56,57 @@ function MinePage({ serverId }: { serverId: string }): ReactElement {
     },
     [router, serverId],
   );
+  const pickAll = useCallback(() => setScope("all"), []);
   const pickAssigned = useCallback(() => setScope("assigned"), []);
   const pickCreated = useCallback(() => setScope("created"), []);
-  const pickSubscribed = useCallback(() => setScope("subscribed"), []);
+  const pickInvolved = useCallback(() => setScope("involved"), []);
+
+  const statusesQuery = useFetchQuery({
+    queryKey: ["multicaStatuses", serverId, runtimeSnapshot?.clientGeneration ?? 0],
+    queryFn: async () => {
+      if (!client) throw new Error("Target host client is unavailable");
+      return client.multicaStatusList();
+    },
+    enabled: online,
+    retry: false,
+    dataShape: "value",
+    staleTimeMs: 60_000,
+  });
+  const live = useMulticaLiveState(serverId);
+  const columns = useMemo(
+    () =>
+      buildColumns({
+        grouping: "status",
+        statuses: statusesData(statusesQuery.data?.statuses ?? []),
+        agents: catalog.agents,
+      }),
+    [statusesQuery.data, catalog.agents],
+  );
+  const moveIssue = useCallback(
+    (
+      issue: MulticaIssueSummary,
+      write: {
+        status: string | null;
+        assigneeId: string | null;
+        clearsAssignee: boolean;
+        position: number;
+      },
+    ) => {
+      if (!client) return;
+      void client
+        .multicaIssueUpdate({
+          issueId: issue.id,
+          expectedRevision: issue.revision,
+          ...(write.status !== null ? { status: write.status } : {}),
+          ...assigneePatch(write),
+          position: write.position,
+        })
+        .then(() => mineQuery.refetch())
+        .catch(() => mineQuery.refetch());
+    },
+    [client, mineQuery],
+  );
+  const createIn = useCallback((_statusKey: string) => undefined, []);
 
   if (mineQuery.isLoading) {
     return (
@@ -63,7 +116,6 @@ function MinePage({ serverId }: { serverId: string }): ReactElement {
     );
   }
   const issues: readonly MulticaIssueSummary[] = mineQuery.data?.issues ?? [];
-  const statusColorByKey = new Map(catalog.statuses.map((status) => [status.key, status.color]));
 
   return (
     <MulticaShell serverId={serverId} active="mine">
@@ -71,21 +123,44 @@ function MinePage({ serverId }: { serverId: string }): ReactElement {
         <View style={styles.header}>
           <Text style={styles.heading}>My issues</Text>
           <View style={styles.tabs}>
+            <ScopeTab active={scope === "all"} label="All" onPress={pickAll} />
             <ScopeTab active={scope === "assigned"} label="Assigned" onPress={pickAssigned} />
             <ScopeTab active={scope === "created"} label="Created" onPress={pickCreated} />
-            <ScopeTab active={scope === "subscribed"} label="Subscribed" onPress={pickSubscribed} />
+            <ScopeTab
+              active={scope === "involved"}
+              label="My agents and squads"
+              onPress={pickInvolved}
+            />
           </View>
           <Text style={styles.count}>{issues.length}</Text>
         </View>
-        <IssueList
+        <BoardCanvas
+          grouping="status"
+          columns={columns}
           issues={issues}
-          statusColorByKey={statusColorByKey}
           agentNameById={catalog.agentNameById}
+          workingIssueIds={live.workingIssueIds}
           onOpen={openIssue}
+          onCreateIn={createIn}
+          onMove={moveIssue}
         />
       </View>
     </MulticaShell>
   );
+}
+
+/** The drag's assignee intent as a protocol patch: clear, set, or omit. */
+function assigneePatch(write: {
+  assigneeId: string | null;
+  clearsAssignee: boolean;
+}): Record<string, string | null> {
+  if (write.clearsAssignee) {
+    return { assigneeType: null, assigneeId: null };
+  }
+  if (write.assigneeId !== null) {
+    return { assigneeType: "agent", assigneeId: write.assigneeId };
+  }
+  return {};
 }
 
 function ScopeTab({

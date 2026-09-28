@@ -5976,7 +5976,7 @@ export class DaemonClient {
   }
 
   async multicaIssueMine(
-    scope: "assigned" | "created" | "subscribed",
+    scope: "assigned" | "created" | "subscribed" | "all" | "involved",
   ): Promise<MulticaIssueMinePayload> {
     return this.sendCorrelatedSessionRequest({
       message: { type: "multica.issue.mine.request", scope },

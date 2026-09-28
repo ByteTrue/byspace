@@ -102,13 +102,17 @@ export const MulticaIssueSummarySchema = z.object({
 export const MulticaIssueMineRequestSchema = z.object({
   type: z.literal("multica.issue.mine.request"),
   requestId: z.string(),
-  scope: z.enum(["assigned", "created", "subscribed"]),
+  // Additive: the source's four scopes. "subscribed" stays as the old name
+  // of the involved relation so an old client's request still parses.
+  scope: z.enum(["assigned", "created", "subscribed", "all", "involved"]),
 });
 export const MulticaIssueMineResponseSchema = z.object({
   type: z.literal("multica.issue.mine.response"),
   payload: z.object({
     requestId: z.string(),
-    scope: z.enum(["assigned", "created", "subscribed"]),
+    // Additive: the source's four scopes. "subscribed" stays as the old name
+    // of the involved relation so an old client's request still parses.
+    scope: z.enum(["assigned", "created", "subscribed", "all", "involved"]),
     issues: z.array(MulticaIssueSummarySchema),
   }),
 });

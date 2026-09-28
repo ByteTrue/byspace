@@ -797,7 +797,7 @@ export class MulticaStore {
    * the owner row, created means the owner's own creates, and subscribed
    * means the owner's live subscription rows.
    */
-  listMyIssues(scope: "assigned" | "created" | "subscribed"): IssueRow[] {
+  listMyIssues(scope: MineScope): IssueRow[] {
     const where = scopeWhere(scope);
     const rows = this.#db
       .prepare(
@@ -1961,15 +1961,23 @@ export class MulticaStore {
   }
 }
 
-function scopeWhere(scope: "assigned" | "created" | "subscribed"): string {
+export type MineScope = "assigned" | "created" | "subscribed" | "all" | "involved";
+
+function scopeWhere(scope: MineScope): string {
+  if (scope === "all") {
+    return "1 = 1";
+  }
   if (scope === "assigned") {
     return "assignee_type = 'owner' AND assignee_id = 'owner'";
   }
   if (scope === "created") {
     return "creator_type = 'owner' AND creator_id = 'owner'";
   }
-  return `id IN (SELECT issue_id FROM issue_subscriber
-           WHERE user_type = 'owner' AND user_id = 'owner' AND unsubscribed_at IS NULL)`;
+  // involved is the source's "My Agents and Squads": what my team holds —
+  // the source's predicate is exactly assignee-is-my-agent-or-squad (no
+  // subscriber leg; subscriptions live on the issue's own pane). "subscribed"
+  // is our old name for this scope and reads the same set.
+  return `assignee_type IN ('agent', 'squad')`;
 }
 
 function mentionedIdFor(

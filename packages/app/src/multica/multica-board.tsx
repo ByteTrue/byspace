@@ -55,7 +55,6 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
   /** Which status the open create form defaults to; null means closed. */
   const [newIssueStatus, setNewIssueStatus] = useState<string | null>(null);
   const [filters, setFilters] = useState<MulticaFilters>(emptyFilters);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
   const [grouping, setGrouping] = useState<BoardGrouping>("status");
 
   const statusesQuery = useFetchQuery({
@@ -139,9 +138,6 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
     [client, issuesQuery],
   );
 
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    setDraggingId(String(event.active.id));
-  }, []);
   const columns = useMemo(
     () =>
       buildColumns({
@@ -152,42 +148,7 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
     [grouping, statusesQuery.data, catalog.agents],
   );
 
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      setDraggingId(null);
-      const issue = issues.find((entry) => entry.id === String(event.active.id));
-      const target = event.over
-        ? resolveDrop({
-            overId: String(event.over.id),
-            draggedId: String(event.active.id),
-            grouping,
-            columns,
-            issues,
-          })
-        : null;
-      if (!issue || !target) {
-        return;
-      }
-      if (
-        (target.status === null || target.status === issue.status) &&
-        !target.clearsAssignee &&
-        (target.assigneeId === null || target.assigneeId === issue.assigneeId) &&
-        issue.position === target.position
-      ) {
-        return;
-      }
-      moveIssue(issue, target);
-    },
-    [issues, columns, grouping, moveIssue],
-  );
-  const handleDragCancel = useCallback(() => setDraggingId(null), []);
-
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
-
   const statuses = statusesData(statusesQuery.data?.statuses ?? []);
-  const draggingIssue = draggingId
-    ? (issues.find((issue) => issue.id === draggingId) ?? null)
-    : null;
   const setViewToBoard = useCallback(() => setView("board"), []);
   const setViewToList = useCallback(() => setView("list"), []);
   const groupByStatus = useCallback(() => setGrouping("status"), []);
@@ -257,35 +218,16 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
           />
         ) : null}
         {view === "board" ? (
-          <DndContext
-            sensors={sensors}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            onDragCancel={handleDragCancel}
-          >
-            <ScrollView horizontal contentContainerStyle={styles.lanes}>
-              {columns.map((column) => (
-                <BoardColumn
-                  key={column.id}
-                  column={column}
-                  issues={issuesForColumn(column, issues)}
-                  agentNameById={catalog.agentNameById}
-                  workingIssueIds={live.workingIssueIds}
-                  onOpen={openIssue}
-                  onCreateIn={setNewIssueStatus}
-                />
-              ))}
-            </ScrollView>
-            <DragOverlay dropAnimation={null}>
-              {draggingIssue ? (
-                <View style={styles.overlayCard}>
-                  <Text style={styles.cardTitle} numberOfLines={2}>
-                    {draggingIssue.title}
-                  </Text>
-                </View>
-              ) : null}
-            </DragOverlay>
-          </DndContext>
+          <BoardCanvas
+            grouping={grouping}
+            columns={columns}
+            issues={issues}
+            agentNameById={catalog.agentNameById}
+            workingIssueIds={live.workingIssueIds}
+            onOpen={openIssue}
+            onCreateIn={setNewIssueStatus}
+            onMove={moveIssue}
+          />
         ) : (
           <IssueList
             issues={issues}
@@ -347,7 +289,7 @@ function assigneePatch(write: {
   return {};
 }
 
-function statusesData(
+export function statusesData(
   statuses: readonly { key: string; name: string; category: string; color: string }[],
 ): { key: string; name: string; color: string }[] {
   return statuses
@@ -605,7 +547,7 @@ function IssueRow({
  * backlog like every other create path; assignee and priority ride the
  * directory so a new issue can be routed at birth.
  */
-function NewIssueForm({
+export function NewIssueForm({
   defaultStatus,
   onDone,
   onCreated,
@@ -793,6 +735,108 @@ function useLocalServerSnapshot() {
  * repo's ordinary workspace surface — chats, composer, terminals — because
  * talking to the secretary is talking to an agent, not using a bespoke UI.
  */
+
+/**
+ * The board canvas both the board page and the my-issues page render: the
+ * droppable columns, the draggable cards and the drop resolution. One
+ * canvas keeps the two surfaces' drag semantics identical by construction.
+ */
+export function BoardCanvas({
+  grouping,
+  columns,
+  issues,
+  agentNameById,
+  workingIssueIds,
+  onOpen,
+  onCreateIn,
+  onMove,
+}: {
+  grouping: BoardGrouping;
+  columns: readonly BoardColumnSpec[];
+  issues: readonly MulticaIssueSummary[];
+  agentNameById: ReadonlyMap<string, string>;
+  workingIssueIds: ReadonlySet<string>;
+  onOpen: (issueId: string) => void;
+  onCreateIn: (statusKey: string) => void;
+  onMove: (
+    issue: MulticaIssueSummary,
+    write: {
+      status: string | null;
+      assigneeId: string | null;
+      clearsAssignee: boolean;
+      position: number;
+    },
+  ) => void;
+}): ReactElement {
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setDraggingId(String(event.active.id));
+  }, []);
+  const handleDragCancel = useCallback(() => setDraggingId(null), []);
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      setDraggingId(null);
+      const issue = issues.find((entry) => entry.id === String(event.active.id));
+      const target = event.over
+        ? resolveDrop({
+            overId: String(event.over.id),
+            draggedId: String(event.active.id),
+            grouping,
+            columns,
+            issues,
+          })
+        : null;
+      if (!issue || !target) {
+        return;
+      }
+      if (
+        (target.status === null || target.status === issue.status) &&
+        !target.clearsAssignee &&
+        (target.assigneeId === null || target.assigneeId === issue.assigneeId) &&
+        issue.position === target.position
+      ) {
+        return;
+      }
+      onMove(issue, target);
+    },
+    [issues, columns, grouping, onMove],
+  );
+  const draggingIssue = draggingId
+    ? (issues.find((issue) => issue.id === draggingId) ?? null)
+    : null;
+  return (
+    <DndContext
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
+      <ScrollView horizontal contentContainerStyle={styles.lanes}>
+        {columns.map((column) => (
+          <BoardColumn
+            key={column.id}
+            column={column}
+            issues={issuesForColumn(column, issues)}
+            agentNameById={agentNameById}
+            workingIssueIds={workingIssueIds}
+            onOpen={onOpen}
+            onCreateIn={onCreateIn}
+          />
+        ))}
+      </ScrollView>
+      <DragOverlay dropAnimation={null}>
+        {draggingIssue ? (
+          <View style={styles.overlayCard}>
+            <Text style={styles.cardTitle} numberOfLines={2}>
+              {draggingIssue.title}
+            </Text>
+          </View>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
+  );
+}
 
 function BoardColumn({
   column,

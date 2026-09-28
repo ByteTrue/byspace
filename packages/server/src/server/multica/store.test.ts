@@ -498,3 +498,47 @@ describe("inbox bulk archive", () => {
     expect(store.getInboxItem(second.id).archived).toBe(true);
   });
 });
+
+describe("my-issues scopes", () => {
+  it("the four scopes read their own sets, and subscribed aliases involved", () => {
+    const agent = store.createAgent({ name: "Mine agent" });
+    store.createIssue({
+      title: "on my desk",
+      creatorType: "owner",
+      creatorId: "owner",
+      assigneeType: "owner",
+      assigneeId: "owner",
+    });
+    store.createIssue({
+      title: "my agent holds it",
+      creatorType: "owner",
+      creatorId: "owner",
+      assigneeType: "agent",
+      assigneeId: agent.id,
+    });
+    const other = store.createIssue({
+      title: "unrelated",
+      creatorType: "owner",
+      creatorId: "owner",
+    });
+    store.addSubscriber({
+      issueId: other.id,
+      userType: "owner",
+      userId: "owner",
+      reason: "manual",
+    });
+
+    const titles = (scope: Parameters<typeof store.listMyIssues>[0]) =>
+      store
+        .listMyIssues(scope)
+        .map((row) => row.title)
+        .sort();
+    expect(titles("all")).toEqual(["my agent holds it", "on my desk", "unrelated"]);
+    expect(titles("assigned")).toEqual(["on my desk"]);
+    expect(titles("created")).toEqual(["my agent holds it", "on my desk", "unrelated"]);
+    // involved: what my team holds — the subscriber's own issue is not in it,
+    // exactly as the source's predicate reads.
+    expect(titles("involved")).toEqual(["my agent holds it"]);
+    expect(titles("subscribed")).toEqual(titles("involved"));
+  });
+});
