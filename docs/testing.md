@@ -131,6 +131,8 @@ Vitest picks up tests by suffix. The suffix tells the runner which category it b
 | `*.real.e2e.test.ts`  | E2E that hits a real provider (Claude/Codex/Copilot/OpenCode/Pi) — needs creds in `packages/server/.env.test` | `npm run test:integration:real` / `test:e2e:real`                                    |
 | `*.local.e2e.test.ts` | E2E that needs a local-only resource                                                                          | `npm run test:integration:local` / `test:e2e:local`                                  |
 
+The suffix table is about files Vitest runs. Not every file named `*.test.ts` is one: `packages/cli/tests/*.test.ts` are standalone `npx tsx` scripts driven by `packages/cli/tests/run-all.ts` via `npm run test:local`. They run real `byspace` commands at module top level and have no `describe`/`it`, so a runner that merely imports them executes them. That is why the root `vitest.config.ts` excludes that directory — see [Running tests locally](#running-tests-locally).
+
 Browser Playwright specs live in `packages/app/e2e/browser/`. Harness code the specs share lives in `packages/app/e2e/support/`. App Playwright specs that hit real providers use `*.real.spec.ts` and run through `npm run test:e2e:real --workspace=@bytetrue/app`; the default browser project ignores that suffix so CI does not need provider credentials.
 
 Live provider smoke tests belong in `*.real.e2e.test.ts`, not `*.test.ts`, even when guarded by environment variables. Default unit suites must use deterministic provider adapters/fakes so missing credits, auth outages, and upstream model drift do not block normal CI.

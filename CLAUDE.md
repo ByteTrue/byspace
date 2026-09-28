@@ -119,6 +119,7 @@ and updating `next`, integrating it after a release, and releasing a hotfix from
 - **Before changing app routes, startup routing, remembered workspace restore, or active workspace selection, read [docs/expo-router.md](docs/expo-router.md).**
 - **NEVER run the full test suite locally.** The test suites are heavy and will freeze the machine, especially if multiple agents run them in parallel. Rules:
   - Run only the specific test file you changed: `npx vitest run <file> --bail=1`
+  - **NEVER invoke Vitest from the repo root without a path filter.** The root `vitest.config.ts` is shared by the packages that have no config of their own, so a bare `npx vitest` or `npx vitest list` collects the entire repo — and collecting imports the modules. `packages/cli/tests/*.test.ts` are not Vitest tests but `npx tsx` scripts that run real `byspace` commands at import time, including `daemon restart` against the default listen address. Running one from the repo root stops the developer's live daemon on 6777. The root config now excludes that directory and the other un-runnable trees, guarded by `scripts/ci-workflow.test.mjs`; still pass a path.
   - Never run `npm run test` for an entire workspace unless explicitly asked.
   - If you must run a broad suite, pipe output to a file and read it afterward: `npx vitest run <file> --bail=1 > /tmp/test-output.txt 2>&1` then read the file.
   - Never re-run a test suite that another agent already ran and reported green — trust the result.
