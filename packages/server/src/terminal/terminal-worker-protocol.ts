@@ -4,6 +4,7 @@ import type {
   ClientMessage,
   TerminalStateSnapshot,
   TerminalStateSnapshotOptions,
+  ShellSpawnCommandMode,
 } from "./terminal.js";
 import type { TerminalState } from "@bytetrue/protocol/messages";
 import type { TerminalActivity, TerminalActivityState } from "@bytetrue/protocol/terminal-activity";
@@ -16,6 +17,8 @@ export interface WorkerTerminalInfo {
   workspaceId?: string;
   title?: string;
   activity: TerminalActivity | null;
+  /** How this shell takes its first command; see `getShellSpawnCommandMode`. */
+  spawnCommandMode: ShellSpawnCommandMode;
 }
 
 export interface WorkerCreateTerminalOptions {
@@ -30,6 +33,11 @@ export interface WorkerCreateTerminalOptions {
   shell?: string;
   command?: string;
   args?: string[];
+  /**
+   * A command the shell runs once it can accept one; how it reaches the shell
+   * depends on the shell's integration (see `getShellSpawnCommandMode`).
+   */
+  spawnCommand?: string;
   rows?: number;
   cols?: number;
   activityToken?: string;

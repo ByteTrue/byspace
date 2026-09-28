@@ -74,6 +74,8 @@ export interface TerminalActivityTransition {
   previous: TerminalActivity | null;
 }
 
+export type ShellSpawnCommandMode = "env-handoff" | "typed";
+
 export interface TerminalSession {
   id: string;
   name: string;
@@ -96,6 +98,16 @@ export interface TerminalSession {
   clearActivityAttention(): boolean;
   setTitle(title: string): void;
   getExitInfo(): TerminalExitInfo | null;
+  /**
+   * How this terminal runs the `spawnCommand` it was created with.
+   *
+   * `env-handoff`: the shell integration consumed it at spawn time; it will run
+   * without anything being typed. `typed`: nothing was handed off — the caller
+   * types the command after `waitForTerminalBootstrapReadiness`. See
+   * `withShellIntegrationArgs` for why PowerShell cannot be typed into
+   * reliably at startup.
+   */
+  getShellSpawnCommandMode(): ShellSpawnCommandMode;
   kill(): void;
   killAndWait(options?: { gracefulTimeoutMs?: number; forceTimeoutMs?: number }): Promise<void>;
 }
@@ -117,6 +129,14 @@ function parseCommandFinishedOsc(data: string): TerminalCommandFinishedInfo | nu
   return { exitCode: Number(parts[1]) };
 }
 
+/**
+ * Environment variable carrying a shell's first command. Shells whose
+ * integration hands it off run it as if typed; every other shell ignores it and
+ * the caller types the command instead. Consumed (unset) by the integration
+ * before the first prompt.
+ */
+export const TERMINAL_SPAWN_COMMAND_ENV_KEY = "BYSPACE_TERMINAL_SPAWN_COMMAND";
+
 export interface CreateTerminalOptions {
   id?: string;
   cwd: string;
@@ -130,6 +150,15 @@ export interface CreateTerminalOptions {
   title?: string;
   command?: string;
   args?: string[];
+  /**
+   * A command the shell runs once it can accept one. How it reaches the shell
+   * depends on the shell — see `getShellSpawnCommandMode`. Callers must check
+   * the mode instead of typing unconditionally: typing into a PowerShell shell
+   * that is also handed the command would run it twice.
+   */
+  spawnCommand?: string;
+  /** Overrides the packaged PowerShell integration directory; tests inject here. */
+  pwshShellIntegrationDir?: string;
 }
 
 function toTerminalActivity(snapshot: {
@@ -391,6 +420,113 @@ export function resolveZshShellIntegrationDir(): string {
   return fileURLToPath(new URL("./shell-integration/zsh", import.meta.url));
 }
 
+export function resolvePwshShellIntegrationDir(): string {
+  return fileURLToPath(new URL("./shell-integration/pwsh", import.meta.url));
+}
+
+/**
+ * PowerShell shell names that get the OSC 633 integration injected. Matched on
+ * the executable basename because the default shell may be a bare `pwsh`, a
+ * resolved absolute path, or `powershell.exe`.
+ */
+const POWERSHELL_EXECUTABLE_NAMES = new Set(["pwsh", "pwsh.exe", "powershell", "powershell.exe"]);
+
+/**
+ * Last path segment of a shell command, for both separator conventions.
+ * `node:path`'s `basename` follows the *host* platform, so it would not split a
+ * Windows path when classification runs on a POSIX host (tests do this).
+ */
+function shellExecutableName(command: string): string {
+  const segments = command.split(/[/\\]/);
+  return (segments[segments.length - 1] ?? command).toLowerCase();
+}
+
+function preparePwshShellIntegrationRuntimeDir(
+  sourceDir = resolvePwshShellIntegrationDir(),
+): string {
+  const readableSourceDir = resolveExternalProcessPath(sourceDir);
+  const runtimeDir = join(tmpdir(), `${currentUsername()}-byspace-pwsh-${process.pid}`);
+  mkdirSync(runtimeDir, { recursive: true, mode: 0o700 });
+  chmodSync(runtimeDir, 0o700);
+  const scriptPath = join(runtimeDir, "byspace-integration.ps1");
+  writePrivateFileAtomicSync(
+    scriptPath,
+    readFileSync(join(readableSourceDir, "byspace-integration.ps1")),
+  );
+  return scriptPath;
+}
+
+function currentUsername(): string {
+  try {
+    return userInfo().username || "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
+ * Quote a path for a PowerShell single-quoted string (the only escape is a
+ * doubled quote), then dot-source it so the integration runs in the session's
+ * own scope and can wrap the profile's `Prompt`.
+ *
+ * The load is wrapped in `try/catch` because it can legitimately fail to load —
+ * Windows PowerShell 5.1 defaults to `ExecutionPolicy Restricted`, where
+ * dot-sourcing any `.ps1` throws. Swallowing it keeps the user's shell usable
+ * without an error banner; the visible cost is that shell integration is absent
+ * there, which is exactly the state before this integration existed. VS Code
+ * wraps the same call for the same reason.
+ */
+function powershellDotSourceCommand(scriptPath: string): string {
+  return `try { . '${scriptPath.replace(/'/g, "''")}' } catch {}`;
+}
+
+/**
+ * Add the launch arguments a shell needs for shell integration, and report how
+ * the shell takes its first command.
+ *
+ * zsh needs no arguments: it loads the integration through `ZDOTDIR` in
+ * `buildTerminalEnvironment`, and its readline engages as the prompt renders, so
+ * the caller types the first command after bootstrap readiness.
+ *
+ * PowerShell has no startup-file environment hook, so the integration is
+ * dot-sourced with `-NoExit -Command`, which runs after the user's profile and
+ * therefore wraps the prompt that profile installed. Typing into it at startup
+ * is unreliable: PSReadLine renders the prompt long before it starts reading,
+ * and bytes that arrive in between are echoed by the cooked-mode line
+ * discipline, whose line discipline consumes the Enter — the command sits in
+ * the editor buffer and never runs. The integration therefore takes the first
+ * command from `TERMINAL_SPAWN_COMMAND_ENV_KEY` and submits it itself, exactly
+ * as if typed; the caller must not also type it.
+ *
+ * A command that already carries explicit args (a profile launch) is left
+ * alone: the caller asked for that exact invocation, and the integration is
+ * only meaningful for an interactive shell.
+ */
+export function withShellIntegrationArgs(
+  command: string,
+  args: string[] | string,
+  options: { pwshShellIntegrationDir?: string } = {},
+): { command: string; args: string[] | string; spawnCommandMode: ShellSpawnCommandMode } {
+  if (typeof args === "string" || args.length > 0) {
+    return { command, args, spawnCommandMode: "typed" };
+  }
+  if (!POWERSHELL_EXECUTABLE_NAMES.has(shellExecutableName(command))) {
+    return { command, args, spawnCommandMode: "typed" };
+  }
+
+  return {
+    command,
+    args: [
+      "-NoExit",
+      "-Command",
+      powershellDotSourceCommand(
+        preparePwshShellIntegrationRuntimeDir(options.pwshShellIntegrationDir),
+      ),
+    ],
+    spawnCommandMode: "env-handoff",
+  };
+}
+
 function resolveExternalProcessPath(filePath: string): string {
   return filePath.replace(/\.asar(?=[/\\]|$)/, ".asar.unpacked");
 }
@@ -480,13 +616,7 @@ function byspaceCliShimNames(): string[] {
 }
 
 function resolveZshShellIntegrationRuntimeDir(): string {
-  let username = "unknown";
-  try {
-    username = userInfo().username || username;
-  } catch {
-    // keep fallback
-  }
-  return join(tmpdir(), `${username}-byspace-zsh-${process.pid}`);
+  return join(tmpdir(), `${currentUsername()}-byspace-zsh-${process.pid}`);
 }
 
 function prepareZshShellIntegrationRuntimeDir(sourceDir = resolveZshShellIntegrationDir()): string {
@@ -925,6 +1055,10 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
   const activityTracker = new TerminalActivityTracker();
   const activityChangeListeners = new Set<(transition: TerminalActivityTransition) => void>();
   let titleChangeSubscription: { dispose(): void } | null = null;
+  // How the shell runs the spawn command: handed off through the environment at
+  // spawn time (PowerShell, consumed by its integration) or typed by the caller
+  // after bootstrap readiness. See withShellIntegrationArgs.
+  let spawnCommandMode: ShellSpawnCommandMode = "typed";
 
   // Create xterm.js headless terminal
   const terminal = new Terminal({
@@ -937,9 +1071,14 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
   ensureNodePtySpawnHelperExecutableForCurrentPlatform();
 
   // Create PTY
-  const { command: spawnCommand, args: spawnArgs } = command
+  const resolvedSpawn = command
     ? await resolveTerminalSpawnCommand(command, args)
     : { command: resolvedShell, args: [] as string[] };
+  const integration = withShellIntegrationArgs(resolvedSpawn.command, resolvedSpawn.args, {
+    pwshShellIntegrationDir: options.pwshShellIntegrationDir,
+  });
+  const { command: spawnCommand, args: spawnArgs } = integration;
+  spawnCommandMode = integration.spawnCommandMode;
   const ptyProcess = pty.spawn(spawnCommand, spawnArgs, {
     name: "xterm-256color",
     cols,
@@ -951,6 +1090,12 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
         ...env,
         ...activityEnv,
         BYSPACE_WORKSPACE_ID: workspaceId,
+        // Only consumed when the shell's integration supports it (mode
+        // "env-handoff"); every other shell ignores the variable and the caller
+        // types the command instead.
+        ...(options.spawnCommand && spawnCommandMode === "env-handoff"
+          ? { [TERMINAL_SPAWN_COMMAND_ENV_KEY]: options.spawnCommand }
+          : {}),
       },
     }),
   });
@@ -1455,6 +1600,10 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
     return exitInfo;
   }
 
+  function getShellSpawnCommandMode(): ShellSpawnCommandMode {
+    return spawnCommandMode;
+  }
+
   function kill(): void {
     if (!killed) {
       killed = true;
@@ -1563,6 +1712,7 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
     clearActivityAttention,
     setTitle,
     getExitInfo,
+    getShellSpawnCommandMode,
     kill,
     killAndWait,
   };
