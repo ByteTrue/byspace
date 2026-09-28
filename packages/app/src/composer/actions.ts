@@ -13,6 +13,7 @@ import {
   splitComposerAttachmentsForSubmit,
   type ComposerAttachmentSubmitFormat,
 } from "@/composer/attachments/submit";
+import { enforceImageWireBudget } from "@/composer/attachments/image-wire-budget";
 import { createUserMessage, generateMessageId, type UserMessageItem } from "@/types/stream";
 import type { MessageSubmissionRejectionOutcome } from "@/composer/submission/model";
 import type { PickedImageAttachmentInput } from "@/hooks/image-attachment-picker";
@@ -202,11 +203,18 @@ export async function dispatchComposerAgentMessage(
   input.submission.begin(input.agentId, userMessage);
   try {
     const imagesData = await input.encodeImages(wirePayload.images);
+    const budgeted = await enforceImageWireBudget({
+      client: input.client,
+      text: input.text,
+      images: imagesData ?? [],
+      attachments: wirePayload.attachments,
+      fileNames: wirePayload.images.map((metadata) => metadata.fileName),
+    });
     await input.client.sendAgentMessage(input.agentId, input.text, {
       messageId: clientMessageId,
       ...(input.activeTurnBehavior ? { activeTurnBehavior: input.activeTurnBehavior } : {}),
-      images: imagesData ?? [],
-      attachments: wirePayload.attachments,
+      images: budgeted.images,
+      attachments: budgeted.attachments,
     });
     input.submission.accept(input.agentId, clientMessageId);
   } catch (error) {

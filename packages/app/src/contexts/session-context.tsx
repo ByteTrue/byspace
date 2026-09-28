@@ -47,6 +47,7 @@ import {
   rejectInitDeferred,
 } from "@/utils/agent-initialization";
 import { encodeImages } from "@/utils/encode-images";
+import { enforceImageWireBudget } from "@/composer/attachments/image-wire-budget";
 import { derivePendingPermissionKey } from "@/utils/agent-snapshots";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { useToast } from "@/contexts/toast-context";
@@ -683,7 +684,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       config,
       initialPrompt,
       images,
-      attachments,
+      attachments: attachmentsInput,
       git,
       worktreeName,
       requestId,
@@ -707,10 +708,26 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       } catch (error) {
         console.error("[Session] Failed to prepare images for agent creation:", error);
       }
+      let attachments = attachmentsInput;
+      let budgetedImages = imagesData;
+      if (client && imagesData && imagesData.length > 0) {
+        try {
+          const budgeted = await enforceImageWireBudget({
+            client,
+            text: trimmedPrompt,
+            images: imagesData,
+            attachments: attachments ?? [],
+          });
+          budgetedImages = budgeted.images.length > 0 ? budgeted.images : undefined;
+          attachments = budgeted.attachments;
+        } catch (error) {
+          console.error("[Session] Failed to enforce image wire budget:", error);
+        }
+      }
       await client.createAgent({
         config,
         ...(trimmedPrompt ? { initialPrompt: trimmedPrompt } : {}),
-        ...(imagesData && imagesData.length > 0 ? { images: imagesData } : {}),
+        ...(budgetedImages && budgetedImages.length > 0 ? { images: budgetedImages } : {}),
         ...(attachments && attachments.length > 0 ? { attachments } : {}),
         ...(git ? { git } : {}),
         ...(worktreeName ? { worktreeName } : {}),

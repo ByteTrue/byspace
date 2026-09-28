@@ -48,6 +48,11 @@ Desktop、split pane 和 compact 布局都保持这一垂直关系。左侧状�
 - Import Session 支持选择 provider 并输入 session/thread ID，精确导入目标主会话；provider 不匹配、未知 ID、重复导入与 cwd 不匹配被拒绝并给出原因。
 - Agent 可按 bundled `byspace-project-setup` skill 检查项目能否在干净 worktree 中重复准备与并行开发，展示计划；只有用户确认后才写入脚本和 `byspace.json`，未确认前不写文件、不装依赖、不执行破坏性命令。
 
+## 图片与附件发送
+
+- Composer 发送的图片在上 wire 前自动压缩：超过 1 MiB 的 jpeg/png 降采样到长边 ≤ 2048、重编码 JPEG；GIF/SVG/WebP 不重编码。压缩失败回退原图，绝不阻断发送；附件 store 里的原图与预览不受影响。
+- 压缩后仍超出单帧内联预算的图片自动改走分块文件上传通道，作为 `uploaded_file` 附件（路径引用）发送；上传失败回退内联。用户不需要手动分条发送大图。
+
 ## 历史证据
 
 - [将 Agent stream 控件移到 Composer 操作行](../issues/003-x-composer-stream-controls.md)
@@ -55,4 +60,5 @@ Desktop、split pane 和 compact 布局都保持这一垂直关系。左侧状�
 - [修复 Windows 下思考加载图标定格与终端 OSC 8 链接打开无反应](../issues/008-x-ff-synced-loader-and-terminal-osc8-links.md)
 - [修复 Pi Agent 回复结束后客户端依然保持运行中状态的边界结算缺陷](../issues/009-x-ff-pi-turn-boundary-immediate-completion.md)
 - [扩展 custom message 全链路透传为 custom_message timeline 项](../issues/024-x-ff-custom-message-timeline-items.md)
+- [大图片消息超 Relay 帧上限：发送前压缩与分块上传兑底](../issues/057-x-image-message-relay-frame-limit.md)
 - [Epic 002 交付记录](../epics/002-x-retained-capabilities-delivery/spec.md)

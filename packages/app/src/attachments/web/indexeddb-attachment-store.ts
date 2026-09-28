@@ -155,6 +155,15 @@ export function createIndexedDbAttachmentStore(): AttachmentStore {
       };
     },
 
+    async loadBlob({ attachment }): Promise<Blob> {
+      const db = await openAttachmentDb();
+      try {
+        return await loadBlob(db, attachment.storageKey);
+      } finally {
+        db.close();
+      }
+    },
+
     async encodeBase64({ attachment }): Promise<string> {
       const db = await openAttachmentDb();
       try {

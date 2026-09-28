@@ -418,6 +418,45 @@ describe("pickAndPersistImages", () => {
 });
 
 describe("dispatchComposerAgentMessage", () => {
+  it("moves oversized images to the chunked upload channel before sending", async () => {
+    const uploads: Array<{ fileName: string; mimeType: string; bytes: Uint8Array }> = [];
+    const client: ComposerSendClient & { calls: FakeSendCall[] } = {
+      ...createFakeSendClient(),
+      uploadFile: async (input) => {
+        uploads.push(input);
+        return {
+          requestId: "req_1",
+          file: {
+            type: "uploaded_file",
+            id: "file_1",
+            fileName: input.fileName,
+            mimeType: input.mimeType,
+            size: input.bytes.byteLength,
+            path: "/uploads/file_1/screenshot.png",
+          },
+          error: null,
+        };
+      },
+    };
+    const stream = createFakeStream();
+    const bigImage = { data: "QUFB".repeat((17 * 1024 * 1024) / 4), mimeType: "image/png" };
+
+    await dispatchComposerAgentMessage({
+      client,
+      agentId: "agent",
+      text: "look at this",
+      attachments: [],
+      encodeImages: async () => [bigImage],
+      submission: stream,
+    });
+
+    expect(uploads).toHaveLength(1);
+    expect(client.calls[0]?.options.images).toEqual([]);
+    expect(client.calls[0]?.options.attachments).toMatchObject([
+      { type: "uploaded_file", id: "file_1" },
+    ]);
+  });
+
   it("forwards the configured active-turn intent without provider capability checks", async () => {
     const client = createFakeSendClient();
     const stream = createFakeStream();

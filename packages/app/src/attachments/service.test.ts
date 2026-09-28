@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { AttachmentMetadata, AttachmentStore, SaveAttachmentInput } from "@/attachments/types";
 import { __setAttachmentStoreForTests } from "./store";
+
+const MIB = 1024 * 1024;
+
 import {
   encodeAttachmentsForSend,
   garbageCollectAttachments,
@@ -96,6 +99,63 @@ describe("attachment service", () => {
 
     await expect(encodeAttachmentsForSend([attachment])).resolves.toEqual([
       { data: "att_send:base64", mimeType: "image/jpeg" },
+    ]);
+  });
+
+  it("falls back to original bytes when the store cannot produce a blob", async () => {
+    const store = createRecordingStore();
+    __setAttachmentStoreForTests(store);
+    const attachment = createAttachment({
+      id: "att_raw",
+      mimeType: "image/png",
+      byteSize: 8 * MIB,
+    });
+
+    await expect(encodeAttachmentsForSend([attachment])).resolves.toEqual([
+      { data: "att_raw:base64", mimeType: "image/png" },
+    ]);
+  });
+
+  it("sends small images without loading the blob", async () => {
+    const store = createRecordingStore();
+    let loadBlobCalls = 0;
+    const storeWithLoadBlob: AttachmentStore = {
+      ...store,
+      async loadBlob() {
+        loadBlobCalls += 1;
+        return new Blob(["small"], { type: "image/png" });
+      },
+    };
+    __setAttachmentStoreForTests(storeWithLoadBlob);
+    const attachment = createAttachment({
+      id: "att_small",
+      mimeType: "image/png",
+      byteSize: 100,
+    });
+
+    await expect(encodeAttachmentsForSend([attachment])).resolves.toEqual([
+      { data: "att_small:base64", mimeType: "image/png" },
+    ]);
+    expect(loadBlobCalls).toBe(0);
+  });
+
+  it("falls back to the original bytes when compression fails", async () => {
+    const store = createRecordingStore();
+    const storeWithFailingLoadBlob: AttachmentStore = {
+      ...store,
+      async loadBlob() {
+        throw new Error("IndexedDB unavailable");
+      },
+    };
+    __setAttachmentStoreForTests(storeWithFailingLoadBlob);
+    const attachment = createAttachment({
+      id: "att_fail",
+      mimeType: "image/png",
+      byteSize: 8 * MIB,
+    });
+
+    await expect(encodeAttachmentsForSend([attachment])).resolves.toEqual([
+      { data: "att_fail:base64", mimeType: "image/png" },
     ]);
   });
 
