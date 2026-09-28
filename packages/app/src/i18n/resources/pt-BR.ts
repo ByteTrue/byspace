@@ -1815,9 +1815,7 @@ export const ptBR: TranslationResources = {
       projects: "Projetos",
       connections: "Conexões",
       agents: "Agentes",
-      providers: "Provedores",
       usage: "Uso",
-      terminals: "Terminais",
       host: "Visão geral",
     },
     metadataGeneration: {
@@ -2226,6 +2224,18 @@ export const ptBR: TranslationResources = {
         save: "Salvar",
         emptyState:
           "Nenhum perfil ainda. Adicione um para abrir terminais com um comando específico.",
+        providerTitle: "Comando de inicialização",
+        providerHint: "O comando que o BySpace executa para abrir este agente em um terminal.",
+        providerEmpty: "Nenhum comando de inicialização",
+        providerMissingHint: "Adicione um para iniciar este agente pelo menu de terminal.",
+        addProfile: "Adicionar",
+      },
+      terminalAgentHooks: {
+        sectionTitle: "Hooks de agentes de terminal",
+        sectionHint: "Como o BySpace vê este agente rodando em um terminal.",
+        reportTitle: "Reportar status e notificações",
+        reportHint: "Instala um hook nos arquivos de configuração deste agente.",
+        updateErrorTitle: "Não foi possível atualizar os hooks de agentes de terminal",
       },
       agentProfiles: {
         sectionTitle: "Perfis de agente",
@@ -2392,6 +2402,7 @@ export const ptBR: TranslationResources = {
     },
     providers: {
       title: "Provedores",
+      enabledSummary: "{{enabled}} de {{total}} ativados",
       addProvider: "Adicionar provedor",
       providerDetails: "Detalhes do provedor {{name}}",
       enableProvider: "Ativar {{name}}",
@@ -2409,6 +2420,10 @@ export const ptBR: TranslationResources = {
         confirmMessage: "This deletes the provider entry from config.json. It cannot be undone.",
         confirm: "Remove",
         errorTitle: "Unable to remove provider",
+      },
+      tabs: {
+        agent: "Agente",
+        terminal: "Terminal",
       },
       statuses: {
         disabled: "Desativado",

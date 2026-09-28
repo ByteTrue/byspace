@@ -1827,9 +1827,7 @@ export const fr: TranslationResources = {
       projects: "Projets",
       connections: "Relations",
       agents: "Agents",
-      providers: "Fournisseurs",
       usage: "Utilisation",
-      terminals: "Terminals",
       host: "Aperçu",
     },
     metadataGeneration: {
@@ -2239,6 +2237,18 @@ export const fr: TranslationResources = {
         moveDown: "Move down",
         save: "Save",
         emptyState: "No profiles yet. Add one to launch terminals with a specific command.",
+        providerTitle: "Commande de lancement",
+        providerHint: "La commande que BySpace exécute pour ouvrir cet agent dans un terminal.",
+        providerEmpty: "Aucune commande de lancement",
+        providerMissingHint: "Ajoutez-en une pour lancer cet agent depuis le menu terminal.",
+        addProfile: "Ajouter",
+      },
+      terminalAgentHooks: {
+        sectionTitle: "Hooks d'agents terminal",
+        sectionHint: "Comment BySpace voit cet agent exécuté dans un terminal.",
+        reportTitle: "Signaler l'état et les notifications",
+        reportHint: "Installe un hook dans les fichiers de configuration de cet agent.",
+        updateErrorTitle: "Impossible de mettre à jour les hooks d'agents terminal",
       },
       agentProfiles: {
         sectionTitle: "Profils d'agent",
@@ -2410,6 +2420,7 @@ export const fr: TranslationResources = {
     },
     providers: {
       title: "Fournisseurs",
+      enabledSummary: "{{enabled}} sur {{total}} activés",
       addProvider: "Ajouter un fournisseur",
       providerDetails: "Détails du fournisseur{{name}}",
       enableProvider: "Activer{{name}}",
@@ -2427,6 +2438,10 @@ export const fr: TranslationResources = {
         confirmMessage: "This deletes the provider entry from config.json. It cannot be undone.",
         confirm: "Remove",
         errorTitle: "Unable to remove provider",
+      },
+      tabs: {
+        agent: "Agent",
+        terminal: "Terminal",
       },
       statuses: {
         disabled: "Désactivé",

@@ -323,20 +323,41 @@ export interface ProvidersSectionProps {
   serverId: string;
 }
 
+/**
+ * The provider list. Collapses when closed because it is the longest block on
+ * the Agents page and the agent-configuration sections below it are what people
+ * come here for; the collapsed summary keeps the count and the enabled state
+ * legible so nothing is hidden that is worth seeing at a glance.
+ */
 export function ProvidersSection({ serverId }: ProvidersSectionProps) {
   const { t } = useTranslation();
   const isConnected = useHostRuntimeIsConnected(serverId);
   const supportsProviderRemoval = useHostFeature(serverId, "providerRemoval");
-  const { entries, isLoading, refresh } = useProvidersSnapshot(serverId);
+  const { entries, isLoading } = useProvidersSnapshot(serverId);
   const { patchConfig } = useDaemonConfig(serverId);
   const openProviderSettings = useProviderSettingsStore((state) => state.open);
   const [pendingProviderId, setPendingProviderId] = useState<string | null>(null);
   const [removingProviderId, setRemovingProviderId] = useState<string | null>(null);
   const removingProviderIdRef = useRef<string | null>(null);
-  const [installingProviderId, setInstallingProviderId] = useState<string | null>(null);
 
   const providerDefinitions = useMemo(() => buildProviderDefinitions(entries), [entries]);
   const hasServer = serverId.length > 0;
+
+  const enabledCount = useMemo(
+    () =>
+      providerDefinitions.filter((def) => {
+        const entry = entries?.find((candidate) => candidate.provider === def.id);
+        return entry && (entry.enabled ?? true);
+      }).length,
+    [providerDefinitions, entries],
+  );
+  const collapsedSummary =
+    providerDefinitions.length > 0
+      ? t("settings.providers.enabledSummary", {
+          enabled: enabledCount,
+          total: providerDefinitions.length,
+        })
+      : undefined;
 
   const handleOpenProviderSettings = useCallback(
     (providerId: string) => {
@@ -394,6 +415,66 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
     [patchConfig, t],
   );
 
+  return (
+    <SettingsSection
+      title={t("settings.providers.title")}
+      testID="host-page-providers-card"
+      style={styles.sectionSpacing}
+      collapsible
+      collapsedSummary={collapsedSummary}
+    >
+      {!hasServer || !isConnected ? (
+        <View style={[settingsStyles.card, styles.emptyCard]}>
+          <Text style={styles.emptyText}>{t("settings.providers.unavailable")}</Text>
+        </View>
+      ) : null}
+      {hasServer && isConnected && isLoading ? (
+        <View style={[settingsStyles.card, styles.emptyCard]}>
+          <Text style={styles.emptyText}>{t("settings.providers.loading")}</Text>
+        </View>
+      ) : null}
+      {hasServer && isConnected && !isLoading && providerDefinitions.length > 0 ? (
+        <View style={settingsStyles.card}>
+          {providerDefinitions.map((def, index) => {
+            const entry = entries?.find((candidate) => candidate.provider === def.id);
+            if (!entry) return null;
+            return (
+              <ProviderRow
+                key={def.id}
+                serverId={serverId}
+                def={def}
+                entry={entry}
+                enabled={entry.enabled ?? true}
+                isToggling={pendingProviderId === def.id}
+                isRemoving={removingProviderId === def.id}
+                canRemove={supportsProviderRemoval && entry.source === "custom"}
+                isFirst={index === 0}
+                onPress={handleOpenProviderSettings}
+                onToggleEnabled={handleToggleEnabled}
+                onRemove={handleRemoveProvider}
+              />
+            );
+          })}
+        </View>
+      ) : null}
+    </SettingsSection>
+  );
+}
+
+/**
+ * The ACP provider catalog. Its own section, rendered last on the Agents page:
+ * adding a provider is a once-per-install errand, so it must never take the top
+ * of the page away from the provider list and the agent configuration below it.
+ * Collapsed by default for the same reason.
+ */
+export function AddProviderSection({ serverId }: ProvidersSectionProps) {
+  const { t } = useTranslation();
+  const isConnected = useHostRuntimeIsConnected(serverId);
+  const { refresh } = useProvidersSnapshot(serverId);
+  const { patchConfig } = useDaemonConfig(serverId);
+  const [installingProviderId, setInstallingProviderId] = useState<string | null>(null);
+  const hasServer = serverId.length > 0;
+
   const handleInstall = useCallback(
     async (entry: AcpProviderCatalogItem) => {
       if (installingProviderId) return;
@@ -413,63 +494,24 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
     [installingProviderId, patchConfig, refresh, t],
   );
 
-  return (
-    <>
-      <SettingsSection
-        title={t("settings.providers.title")}
-        testID="host-page-providers-card"
-        style={styles.sectionSpacing}
-      >
-        {!hasServer || !isConnected ? (
-          <View style={[settingsStyles.card, styles.emptyCard]}>
-            <Text style={styles.emptyText}>{t("settings.providers.unavailable")}</Text>
-          </View>
-        ) : null}
-        {hasServer && isConnected && isLoading ? (
-          <View style={[settingsStyles.card, styles.emptyCard]}>
-            <Text style={styles.emptyText}>{t("settings.providers.loading")}</Text>
-          </View>
-        ) : null}
-        {hasServer && isConnected && !isLoading && providerDefinitions.length > 0 ? (
-          <View style={settingsStyles.card}>
-            {providerDefinitions.map((def, index) => {
-              const entry = entries?.find((candidate) => candidate.provider === def.id);
-              if (!entry) return null;
-              return (
-                <ProviderRow
-                  key={def.id}
-                  serverId={serverId}
-                  def={def}
-                  entry={entry}
-                  enabled={entry.enabled ?? true}
-                  isToggling={pendingProviderId === def.id}
-                  isRemoving={removingProviderId === def.id}
-                  canRemove={supportsProviderRemoval && entry.source === "custom"}
-                  isFirst={index === 0}
-                  onPress={handleOpenProviderSettings}
-                  onToggleEnabled={handleToggleEnabled}
-                  onRemove={handleRemoveProvider}
-                />
-              );
-            })}
-          </View>
-        ) : null}
-      </SettingsSection>
+  if (!hasServer || !isConnected) {
+    return null;
+  }
 
-      {hasServer && isConnected ? (
-        <SettingsSection
-          title={t("settings.providers.addProvider")}
-          testID="host-page-add-provider-card"
-          style={styles.addProviderSection}
-        >
-          <ProviderCatalogList
-            serverId={serverId}
-            installingProviderId={installingProviderId}
-            onInstall={handleInstall}
-          />
-        </SettingsSection>
-      ) : null}
-    </>
+  return (
+    <SettingsSection
+      title={t("settings.providers.addProvider")}
+      testID="host-page-add-provider-card"
+      style={styles.addProviderSection}
+      collapsible
+      defaultCollapsed
+    >
+      <ProviderCatalogList
+        serverId={serverId}
+        installingProviderId={installingProviderId}
+        onInstall={handleInstall}
+      />
+    </SettingsSection>
   );
 }
 

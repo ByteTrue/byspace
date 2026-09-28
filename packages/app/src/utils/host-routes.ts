@@ -497,15 +497,7 @@ export function isSettingsSectionSlug(value: string): value is SettingsSectionSl
   return (SETTINGS_SECTION_SLUGS as readonly string[]).includes(value);
 }
 
-export const HOST_SECTION_SLUGS = [
-  "projects",
-  "connections",
-  "agents",
-  "providers",
-  "usage",
-  "terminals",
-  "host",
-] as const;
+export const HOST_SECTION_SLUGS = ["projects", "connections", "agents", "usage", "host"] as const;
 
 export type HostSectionSlug = (typeof HOST_SECTION_SLUGS)[number];
 

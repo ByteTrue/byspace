@@ -1808,9 +1808,7 @@ export const ru: TranslationResources = {
       projects: "Проекты",
       connections: "Подключения",
       agents: "Агенты",
-      providers: "Провайдеры",
       usage: "Использование",
-      terminals: "Терминалы",
       host: "Обзор",
     },
     metadataGeneration: {
@@ -2225,6 +2223,18 @@ export const ru: TranslationResources = {
         save: "Сохранить",
         emptyState:
           "Профилей пока нет. Добавьте профиль, чтобы запускать терминалы с заданной командой.",
+        providerTitle: "Команда запуска",
+        providerHint: "Команду, которую BySpace выполняет, чтобы открыть этого агента в терминале.",
+        providerEmpty: "Нет команды запуска",
+        providerMissingHint: "Добавьте её, чтобы запускать агента из меню терминала.",
+        addProfile: "Добавить",
+      },
+      terminalAgentHooks: {
+        sectionTitle: "Хуки терминальных агентов",
+        sectionHint: "Как BySpace видит этого агента, запущенного в терминале.",
+        reportTitle: "Сообщать о статусе и уведомлениях",
+        reportHint: "Устанавливает хук в файлы конфигурации этого агента.",
+        updateErrorTitle: "Не удалось обновить хуки терминальных агентов",
       },
       agentProfiles: {
         sectionTitle: "Профили агентов",
@@ -2390,6 +2400,7 @@ export const ru: TranslationResources = {
     },
     providers: {
       title: "Провайдеры",
+      enabledSummary: "{{enabled}} из {{total}} включено",
       addProvider: "Добавить провайдера",
       providerDetails: "Сведения о провайдере {{name}}",
       enableProvider: "Включить {{name}}",
@@ -2408,6 +2419,10 @@ export const ru: TranslationResources = {
           "Запись провайдера будет удалена из config.json. Это действие нельзя отменить.",
         confirm: "Удалить",
         errorTitle: "Не удалось удалить провайдера",
+      },
+      tabs: {
+        agent: "Агент",
+        terminal: "Терминал",
       },
       statuses: {
         disabled: "Отключён",

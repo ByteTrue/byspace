@@ -108,7 +108,7 @@ export function useWorkspaceTabLaunchCatalog(input: {
     [launcher],
   );
   const editTerminalProfiles = useCallback(() => {
-    router.push(buildSettingsHostSectionRoute(serverId, "terminals") as Href);
+    router.push(buildSettingsHostSectionRoute(serverId, "agents") as Href);
   }, [router, serverId]);
 
   return useMemo(() => {

@@ -50,7 +50,7 @@ export function OpenProjectScreen() {
     chooseHost({
       title: "Choose host",
       onChooseHost: (serverId) => {
-        router.push(buildSettingsHostSectionRoute(serverId, "providers"));
+        router.push(buildSettingsHostSectionRoute(serverId, "agents"));
       },
     });
   }, [chooseHost, router]);

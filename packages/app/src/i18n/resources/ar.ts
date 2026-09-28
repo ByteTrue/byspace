@@ -1785,9 +1785,7 @@ export const ar: TranslationResources = {
       projects: "المشاريع",
       connections: "اتصالات",
       agents: "Agents",
-      providers: "مقدمي الخدمات",
       usage: "الاستخدام",
-      terminals: "Terminals",
       host: "نظرة عامة",
     },
     metadataGeneration: {
@@ -2190,6 +2188,18 @@ export const ar: TranslationResources = {
         moveDown: "Move down",
         save: "Save",
         emptyState: "No profiles yet. Add one to launch terminals with a specific command.",
+        providerTitle: "أمر التشغيل",
+        providerHint: "الأمر الذي يشغّله BySpace لفتح هذا الوكيل في الطرفية.",
+        providerEmpty: "لا يوجد أمر تشغيل",
+        providerMissingHint: "أضف أمرًا لتشغيل هذا الوكيل من قائمة الطرفية.",
+        addProfile: "إضافة",
+      },
+      terminalAgentHooks: {
+        sectionTitle: "أخطاف وكلاء الطرفية",
+        sectionHint: "كيف يرى BySpace هذا الوكيل أثناء عمله في الطرفية.",
+        reportTitle: "الإبلاغ عن الحالة والإشعارات",
+        reportHint: "يثبّت أخطافًا في ملفات إعداد هذا الوكيل.",
+        updateErrorTitle: "تعذّر تحديث أخطاف وكلاء الطرفية",
       },
       agentProfiles: {
         sectionTitle: "ملفات تعريف الوكيل",
@@ -2350,6 +2360,7 @@ export const ar: TranslationResources = {
     },
     providers: {
       title: "مقدمي الخدمات",
+      enabledSummary: "{{enabled}} من {{total}} مُفعّل",
       addProvider: "إضافة مزود",
       providerDetails: "تفاصيل مزود{{name}}",
       enableProvider: "تمكين{{name}}",
@@ -2367,6 +2378,10 @@ export const ar: TranslationResources = {
         confirmMessage: "This deletes the provider entry from config.json. It cannot be undone.",
         confirm: "Remove",
         errorTitle: "Unable to remove provider",
+      },
+      tabs: {
+        agent: "Agent",
+        terminal: "Terminal",
       },
       statuses: {
         disabled: "عاجز",

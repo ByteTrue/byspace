@@ -1798,9 +1798,7 @@ export const en = {
       projects: "Projects",
       connections: "Connections",
       agents: "Agents",
-      providers: "Providers",
       usage: "Usage",
-      terminals: "Terminals",
       host: "Overview",
     },
     metadataGeneration: {
@@ -2205,6 +2203,18 @@ export const en = {
         moveDown: "Move down",
         save: "Save",
         emptyState: "No profiles yet. Add one to launch terminals with a specific command.",
+        providerTitle: "Launch command",
+        providerHint: "The command BySpace runs to open this agent in a terminal.",
+        providerEmpty: "No launch command",
+        providerMissingHint: "Add one to launch this agent from the terminal menu.",
+        addProfile: "Add",
+      },
+      terminalAgentHooks: {
+        sectionTitle: "Terminal agent hooks",
+        sectionHint: "How BySpace sees this agent running in a terminal.",
+        reportTitle: "Report status and notifications",
+        reportHint: "Installs a hook in this agent's config files.",
+        updateErrorTitle: "Unable to update terminal agent hooks",
       },
       agentProfiles: {
         sectionTitle: "Agent profiles",
@@ -2368,6 +2378,7 @@ export const en = {
     },
     providers: {
       title: "Providers",
+      enabledSummary: "{{enabled}} of {{total}} enabled",
       addProvider: "Add provider",
       providerDetails: "{{name}} provider details",
       enableProvider: "Enable {{name}}",
@@ -2385,6 +2396,10 @@ export const en = {
         confirmMessage: "This deletes the provider entry from config.json. It cannot be undone.",
         confirm: "Remove",
         errorTitle: "Unable to remove provider",
+      },
+      tabs: {
+        agent: "Agent",
+        terminal: "Terminal",
       },
       statuses: {
         disabled: "Disabled",

@@ -35,8 +35,8 @@ Alternate buffer、current grid 和 scrollback 都遵守同一 active-buffer 规
 
 - Terminal 完成通知优先使用最近一段非空输出摘要；空白尾行和无输出时保持稳定内容，不扩大既有通知数据边界。
 - Compact Web 支持长按选词、拖动扩展与复制；滚动、点击输入和面板手势保持原语义。
-- Agent 活动上报按 provider 独立配置：Claude、Codex、OpenCode 与 Pi extension 各自开关，请求串行、有界合并、latest-wins；历史 global 开启只继承给 Claude/Codex/OpenCode，Pi 必须用户显式启用。
-- Manage Terminal Profiles 精确打开所选 Host 的 Terminals 设置页。
+- Agent 活动上报按 provider 独立配置：Claude、Codex、OpenCode 与 Pi extension 各自开关，请求串行、有界合并、latest-wins；历史 global 开启只继承给 Claude/Codex/OpenCode，Pi 必须用户显式启用。开关入口在 provider 详情弹层的 Terminal tab，与 provider 是否启用无关（见 `../decisions/001-settings-taxonomy-and-integration-layers.md`）。
+- Manage Terminal Profiles 打开所选 Host 的 Agents 页；Terminal profiles 列表与 Agent profiles、Orchestration skills 并列，弹层里的启动命令编辑写回同一份列表。
 
 ## 重启恢复
 
@@ -50,7 +50,7 @@ Alternate buffer、current grid 和 scrollback 都遵守同一 active-buffer 规
 - 新终端的 shell 按优先级解析：请求显式 `command`（profile 启动）> daemon 配置 `daemon.terminalDefaultShell` > 自动解析（`$SHELL`，Windows `%ComSpec%`，兑底 `/bin/sh`）。配置缺省或为 null 即 Auto，即合并前的行为。
 - 注入点在 bootstrap 处的 terminalManager 包装层，请求显式 shell 时才透传；所有创建路径（客户端请求、ACP、重启恢复）统一生效，profile 启动（带 `command`）不受影响。
 - 探测（`terminal.shell.detect` RPC，权限 `daemon.read`）按 `$SHELL` → macOS `dscl` 登录 shell（2s 超时，域控挂起时降级）→ `/etc/shells` → 常见路径的顺序发现，existsSync 过滤后去重；Windows 为 `ComSpec` + pwsh/powershell/cmd 按 PATHEXT 后缀解析。任一来源失败降级继续，探测失败经 response `error` 返回，不抛出。
-- 设置 UI（Host → Terminals → Default shell）由 `server_info.features.terminalShellConfig` 门控；老 daemon 上隐藏。Auto 选项保存为 null patch，持久化为 null，读侧转回 auto。保存不做路径校验，无效路径在 spawn 时经 `create_terminal_response.error` 报错。
+- 设置 UI（Host → Overview → Default shell）由 `server_info.features.terminalShellConfig` 门控；老 daemon 上隐藏。Auto 选项保存为 null patch，持久化为 null，读侧转回 auto。保存不做路径校验，无效路径在 spawn 时经 `create_terminal_response.error` 报错。
 
 ## 边界
 
@@ -66,3 +66,4 @@ Alternate buffer、current grid 和 scrollback 都遵守同一 active-buffer 规
 - [复原 Terminal 首帧 post-WebGL 尺寸就绪与 250ms 被动合并机制](../issues/005-x-terminal-remote-resize-storm-and-fit.md)
 - [修复 Windows 下思考加载图标定格与终端 OSC 8 链接打开无反应](../issues/008-x-ff-synced-loader-and-terminal-osc8-links.md)
 - [Epic 002 交付记录](../epics/002-x-retained-capabilities-delivery/spec.md)
+- [Host 设置收敛：终端集成落 provider 弹层](../issues/052-x-host-settings-terminal-consolidation.md)

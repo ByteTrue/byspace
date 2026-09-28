@@ -219,7 +219,7 @@ export function WorkspaceHeaderMenuMobile({
   );
 
   const handleEditProfiles = useCallback(() => {
-    router.push(buildSettingsHostSectionRoute(normalizedServerId, "terminals") as Href);
+    router.push(buildSettingsHostSectionRoute(normalizedServerId, "agents") as Href);
   }, [normalizedServerId, router]);
 
   return (

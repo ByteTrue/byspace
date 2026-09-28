@@ -96,7 +96,7 @@ test.describe("New workspace entry points", () => {
     }
   });
 
-  test("Manage terminal profiles opens the selected host's Terminal settings", async ({
+  test("Manage terminal profiles opens the selected host's Agents settings", async ({
     page,
   }, testInfo) => {
     const seeded: SeededWorkspace = await seedWorkspace({ repoPrefix: "entry-manage-profiles-" });
@@ -132,7 +132,7 @@ test.describe("New workspace entry points", () => {
       const manageProfiles = page.getByTestId("new-workspace-launch-manage-profiles");
       await expect(manageProfiles).toBeVisible();
       const expectedUrl = new URL(
-        buildSettingsHostSectionRoute(selectedServerId, "terminals"),
+        buildSettingsHostSectionRoute(selectedServerId, "agents"),
         page.url(),
       ).href;
       await manageProfiles.click();
