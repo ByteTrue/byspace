@@ -211,6 +211,7 @@ export class MulticaStore {
     const before = this.getIssue(input.id);
     const sets: string[] = [];
     const params: unknown[] = [];
+    let positionWritten = false;
     if (input.status !== undefined) {
       sets.push("status = ?");
       params.push(input.status);
@@ -220,10 +221,14 @@ export class MulticaStore {
       if (input.status !== before.status) {
         sets.push("position = ?");
         params.push(this.#positionForStatusWrite(input.position, before.status, input.status));
-      } else if (input.position !== undefined && input.position !== null) {
-        sets.push("position = ?");
-        params.push(input.position);
+        positionWritten = true;
       }
+    }
+    // position is its own dimension (the source treats it independently of
+    // status): a same-status or status-less drag still re-slots the card.
+    if (!positionWritten && input.position !== undefined && input.position !== null) {
+      sets.push("position = ?");
+      params.push(input.position);
     }
     if (input.priority !== undefined) {
       sets.push("priority = ?");

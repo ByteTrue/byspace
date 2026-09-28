@@ -21,6 +21,13 @@ import { useFetchQuery } from "@/data/query";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 import type { MulticaIssueSummary } from "@bytetrue/protocol/multica/rpc-schemas";
 import { IssueMetaLine } from "@/multica/multica-activity";
+import {
+  type BoardColumnSpec,
+  type BoardGrouping,
+  buildColumns,
+  issuesForColumn,
+  resolveDrop,
+} from "@/multica/multica-board-grouping";
 import { useMulticaCatalog } from "@/multica/multica-catalog";
 import { MULTICA_SECRETARY_WORKSPACE_TITLE } from "@bytetrue/protocol/multica/rpc-schemas";
 
@@ -44,6 +51,7 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
   const [view, setView] = useState<"board" | "list">("board");
   const [filters, setFilters] = useState<MulticaFilters>(emptyFilters);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [grouping, setGrouping] = useState<BoardGrouping>("status");
 
   const statusesQuery = useFetchQuery({
     queryKey: ["multicaStatuses", serverId, runtimeSnapshot?.clientGeneration ?? 0],
@@ -92,16 +100,25 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
   }, [issuesQuery.data, filters]);
 
   const moveIssue = useCallback(
-    (issue: MulticaIssueSummary, status: string, position: number) => {
+    (
+      issue: MulticaIssueSummary,
+      write: {
+        status: string | null;
+        assigneeId: string | null;
+        clearsAssignee: boolean;
+        position: number;
+      },
+    ) => {
       if (!client) return;
-      const write = (): Promise<unknown> =>
+      const send = (): Promise<unknown> =>
         client.multicaIssueUpdate({
           issueId: issue.id,
           expectedRevision: issue.revision,
-          status,
-          position,
+          ...(write.status !== null ? { status: write.status } : {}),
+          ...assigneePatch(write),
+          position: write.position,
         });
-      void write()
+      void send()
         .then(() => issuesQuery.refetch())
         .catch(() => issuesQuery.refetch());
     },
@@ -111,33 +128,56 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setDraggingId(String(event.active.id));
   }, []);
+  const columns = useMemo(
+    () =>
+      buildColumns({
+        grouping,
+        statuses: statusesData(statusesQuery.data?.statuses ?? []),
+        agents: catalog.agents,
+      }),
+    [grouping, statusesQuery.data, catalog.agents],
+  );
+
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       setDraggingId(null);
       const issue = issues.find((entry) => entry.id === String(event.active.id));
-      const target = readDropTarget(event, issues);
+      const target = event.over
+        ? resolveDrop({
+            overId: String(event.over.id),
+            draggedId: String(event.active.id),
+            grouping,
+            columns,
+            issues,
+          })
+        : null;
       if (!issue || !target) {
         return;
       }
-      if (issue.status === target.status && issue.position === target.position) {
+      if (
+        (target.status === null || target.status === issue.status) &&
+        !target.clearsAssignee &&
+        (target.assigneeId === null || target.assigneeId === issue.assigneeId) &&
+        issue.position === target.position
+      ) {
         return;
       }
-      moveIssue(issue, target.status, target.position);
+      moveIssue(issue, target);
     },
-    [issues, moveIssue],
+    [issues, columns, grouping, moveIssue],
   );
   const handleDragCancel = useCallback(() => setDraggingId(null), []);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
-  const statuses = (statusesQuery.data?.statuses ?? []).filter(
-    (status) => status.category !== "closed",
-  );
+  const statuses = statusesData(statusesQuery.data?.statuses ?? []);
   const draggingIssue = draggingId
     ? (issues.find((issue) => issue.id === draggingId) ?? null)
     : null;
   const setViewToBoard = useCallback(() => setView("board"), []);
   const setViewToList = useCallback(() => setView("list"), []);
+  const groupByStatus = useCallback(() => setGrouping("status"), []);
+  const groupByAssignee = useCallback(() => setGrouping("assignee"), []);
 
   if (issuesQuery.isLoading) {
     return (
@@ -158,6 +198,14 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
         <View style={styles.displayToggle}>
           <ViewToggle active={view === "board"} label="Board" onPress={setViewToBoard} />
           <ViewToggle active={view === "list"} label="List" onPress={setViewToList} />
+        </View>
+        <View style={styles.displayToggle}>
+          <ViewToggle active={grouping === "status"} label="By status" onPress={groupByStatus} />
+          <ViewToggle
+            active={grouping === "assignee"}
+            label="By assignee"
+            onPress={groupByAssignee}
+          />
         </View>
         <InboxBell unread={live.inboxUnread} />
         {live.workingAgentIds.size > 0 ? (
@@ -188,13 +236,11 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
           onDragCancel={handleDragCancel}
         >
           <ScrollView horizontal contentContainerStyle={styles.lanes}>
-            {statuses.map((status) => (
+            {columns.map((column) => (
               <BoardColumn
-                key={status.key}
-                statusKey={status.key}
-                title={status.name}
-                color={status.color}
-                issues={issues.filter((issue) => issue.status === status.key)}
+                key={column.id}
+                column={column}
+                issues={issuesForColumn(column, issues)}
                 agentNameById={catalog.agentNameById}
                 workingIssueIds={live.workingIssueIds}
                 onOpen={openIssue}
@@ -246,48 +292,25 @@ function filterIssues(
   );
 }
 
-/**
- * Where a drop landed: a column body or a card. The position is the slot at
- * the insertion index — above the first, below the last, or the midpoint
- * between two neighbours; an empty column starts at the store's top slot.
- */
-function readDropTarget(
-  event: DragEndEvent,
-  issues: readonly MulticaIssueSummary[],
-): { status: string; position: number } | null {
-  const over = event.over;
-  if (!over) {
-    return null;
+function assigneePatch(write: {
+  assigneeId: string | null;
+  clearsAssignee: boolean;
+}): { assigneeType: string | null; assigneeId: string | null } | Record<string, never> {
+  if (write.clearsAssignee) {
+    return { assigneeType: null, assigneeId: null };
   }
-  const overId = String(over.id);
-  const draggedId = String(event.active.id);
-  if (overId.startsWith("column:")) {
-    const status = overId.slice("column:".length);
-    const column = issues.filter((issue) => issue.status === status && issue.id !== draggedId);
-    return { status, position: slotPosition(column, column.length) };
+  if (write.assigneeId !== null) {
+    return { assigneeType: "agent", assigneeId: write.assigneeId };
   }
-  const overIssue = issues.find((issue) => issue.id === overId);
-  if (!overIssue) {
-    return null;
-  }
-  const column = issues.filter(
-    (issue) => issue.status === overIssue.status && issue.id !== draggedId,
-  );
-  const index = column.findIndex((issue) => issue.id === overId);
-  return { status: overIssue.status, position: slotPosition(column, index) };
+  return {};
 }
 
-function slotPosition(column: readonly MulticaIssueSummary[], index: number): number {
-  if (column.length === 0) {
-    return -1;
-  }
-  if (index <= 0) {
-    return column[0].position - 1;
-  }
-  if (index >= column.length) {
-    return column[column.length - 1].position + 1;
-  }
-  return (column[index - 1].position + column[index].position) / 2;
+function statusesData(
+  statuses: readonly { key: string; name: string; category: string; color: string }[],
+): { key: string; name: string; color: string }[] {
+  return statuses
+    .filter((status) => status.category !== "closed")
+    .map((status) => ({ key: status.key, name: status.name, color: status.color }));
 }
 
 function ViewToggle({
@@ -530,34 +553,30 @@ function SecretaryPill({
 }
 
 function BoardColumn({
-  statusKey,
-  title,
-  color,
+  column,
   issues,
   agentNameById,
   workingIssueIds,
   onOpen,
 }: {
-  statusKey: string;
-  title: string;
-  color: string;
+  column: BoardColumnSpec;
   issues: readonly MulticaIssueSummary[];
   agentNameById: ReadonlyMap<string, string>;
   workingIssueIds: ReadonlySet<string>;
   onOpen: (issueId: string) => void;
 }): ReactElement {
-  const { setNodeRef, isOver } = useDroppable({ id: `column:${statusKey}` });
+  const { setNodeRef, isOver } = useDroppable({ id: column.id });
   return (
     <View style={styles.column}>
       <View style={styles.columnHeader}>
-        <View style={[styles.columnDot, { backgroundColor: color }]} />
-        <Text style={styles.columnTitle}>{title}</Text>
+        <View style={[styles.columnDot, { backgroundColor: column.color }]} />
+        <Text style={styles.columnTitle}>{column.title}</Text>
         <Text style={styles.columnCount}>{issues.length}</Text>
       </View>
       <View
         ref={setNodeRef as unknown as Ref<View>}
         style={[styles.columnBody, isOver && styles.columnBodyOver]}
-        testID={`multica-column-${statusKey}`}
+        testID={`multica-column-${column.id}`}
       >
         <ScrollView contentContainerStyle={styles.columnList}>
           {issues.map((issue) => (

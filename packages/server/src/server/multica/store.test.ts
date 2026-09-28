@@ -211,3 +211,43 @@ describe("activity log", () => {
     expect(actions).not.toContain("x");
   });
 });
+
+describe("position independent of status", () => {
+  it("a same-status drag re-slots the card", () => {
+    const a = store.createIssue({
+      title: "A",
+      creatorType: "owner",
+      creatorId: "owner",
+      status: "todo",
+    });
+    const b = store.createIssue({
+      title: "B",
+      creatorType: "owner",
+      creatorId: "owner",
+      status: "todo",
+    });
+    const moved = store.updateIssue({
+      id: a.id,
+      expectedRevision: a.revision,
+      status: "todo",
+      position: b.position + 5,
+    });
+    expect(moved.position).toBe(b.position + 5);
+    expect(moved.status).toBe("todo");
+  });
+
+  it("an assignee-only drag re-slots without touching status", () => {
+    const agent = store.createAgent({ name: "Mover" });
+    const a = store.createIssue({ title: "A", creatorType: "owner", creatorId: "owner" });
+    const moved = store.updateIssue({
+      id: a.id,
+      expectedRevision: a.revision,
+      assigneeType: "agent",
+      assigneeId: agent.id,
+      position: -9,
+    });
+    expect(moved.position).toBe(-9);
+    expect(moved.status).toBe(a.status);
+    expect(moved.assigneeId).toBe(agent.id);
+  });
+});

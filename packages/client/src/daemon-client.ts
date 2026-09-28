@@ -5629,9 +5629,12 @@ export class DaemonClient {
         expectedRevision: options.expectedRevision,
         status: options.status,
         priority: options.priority,
-        assigneeType: options.assigneeType ?? undefined,
-        assigneeId: options.assigneeId ?? undefined,
+        // Explicit null is a real write (clear the assignee); `?? undefined`
+        // would swallow it, since null is nullish.
+        assigneeType: options.assigneeType,
+        assigneeId: options.assigneeId,
         title: options.title,
+        position: options.position ?? undefined,
       },
       responseType: "multica.issue.update.response",
     });
