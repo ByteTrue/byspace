@@ -1,4 +1,4 @@
-import { expect, test } from "../support/fixtures";
+import { expect, test, type Page } from "../support/fixtures";
 import { gotoAppShell, openSettings } from "../support/helpers/app";
 import { getE2EDaemonPort } from "../support/helpers/daemon-port";
 import { TEST_HOST_LABEL } from "../support/helpers/daemon-registry";
@@ -19,6 +19,12 @@ import {
   expectHostPageVisible,
   seedSavedSettingsHosts,
 } from "../support/helpers/settings";
+
+async function closeProviderSheet(page: Page) {
+  const sheet = page.getByTestId("provider-settings-sheet");
+  await sheet.getByLabel("Close", { exact: true }).click();
+  await expect(sheet).not.toBeVisible({ timeout: 10_000 });
+}
 
 test.describe("Settings host page", () => {
   test("connections section shows the seeded connection endpoint", async ({ page }) => {
@@ -45,20 +51,35 @@ test.describe("Settings host page", () => {
     await expectHostInjectMcpCard(page);
   });
 
-  test("terminals section shows independent agent hook provider switches", async ({ page }) => {
+  test("a provider's Terminal tab exposes its agent hook switch", async ({ page }) => {
     const serverId = getServerId();
 
     await gotoAppShell(page);
     await openSettings(page);
     await openSettingsHost(page, serverId);
-    await openHostSection(page, serverId, "terminals");
+    await openHostSection(page, serverId, "agents");
 
-    await expectSettingsHeader(page, "Terminals");
-    await expect(page.getByTestId("host-page-terminal-agent-hooks-card")).toBeVisible();
-    for (const providerId of ["claude", "codex", "opencode", "pi"] as const) {
+    // Terminal integration lives in the provider detail sheet: one switch per
+    // provider, on the Terminal face of that provider. The switcher is in the
+    // header next to the provider name.
+    for (const [providerId, label] of [
+      ["claude", "Claude Code"],
+      ["codex", "Codex"],
+      ["opencode", "OpenCode"],
+      ["pi", "Pi"],
+    ] as const) {
+      await page.getByRole("button", { name: `${label} provider details` }).click();
+      const sheet = page.getByTestId("provider-settings-sheet");
+      await expect(sheet).toBeVisible();
+      await sheet
+        .getByTestId("provider-sheet-tabs")
+        .getByRole("button", { name: "Terminal" })
+        .click();
       await expect(
-        page.getByTestId(`host-page-terminal-agent-hooks-${providerId}-switch`),
+        page.getByTestId(`provider-terminal-hooks-${providerId}-switch`),
       ).toHaveAttribute("aria-checked", "false");
+      await closeProviderSheet(page);
+      await expect(sheet).toHaveCount(0);
     }
   });
 
@@ -70,7 +91,7 @@ test.describe("Settings host page", () => {
     await openSettingsHost(page, serverId);
 
     await expectHostProvidersCard(page, serverId);
-    await expectSettingsHeader(page, "Providers");
+    await expectSettingsHeader(page, "Agents");
   });
 
   test("host section shows the host label and restart/remove action cards", async ({ page }) => {

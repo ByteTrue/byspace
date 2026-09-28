@@ -27,14 +27,7 @@ const SECTION_LABELS = {
 
 export type SettingsSection = keyof typeof SECTION_LABELS;
 
-type HostSection =
-  | "projects"
-  | "connections"
-  | "agents"
-  | "providers"
-  | "usage"
-  | "terminals"
-  | "host";
+type HostSection = "projects" | "connections" | "agents" | "usage" | "host";
 
 export async function openSettingsSection(page: Page, section: SettingsSection): Promise<void> {
   const sidebar = page.getByTestId("settings-sidebar");
@@ -328,7 +321,8 @@ export async function expectHostActionCards(page: Page, serverId: string): Promi
 }
 
 export async function expectHostProvidersCard(page: Page, serverId: string): Promise<void> {
-  await openSettingsHostSection(page, serverId, "providers");
+  // Providers folded into the Agents page as the page's first section, expanded.
+  await openSettingsHostSection(page, serverId, "agents");
   await expect(page.getByTestId("host-page-providers-card")).toBeVisible();
 }
 
@@ -343,7 +337,10 @@ export async function serveJson(page: Page, url: string, body: unknown): Promise
 }
 
 export async function openAddProviderArea(page: Page): Promise<void> {
+  // The catalog sits last on the Agents page and is collapsed by default: adding
+  // a provider is a once-per-install errand.
   await page.getByTestId("host-page-add-provider-card").scrollIntoViewIfNeeded();
+  await page.getByTestId("host-page-add-provider-card-toggle").click();
   await expect(page.getByRole("textbox", { name: "Search providers" })).toBeVisible();
 }
 
@@ -384,7 +381,8 @@ export async function expectRetiredSidebarSectionsAbsent(page: Page): Promise<vo
   await expect(sidebar.getByTestId("settings-host-section-connections")).toBeVisible();
   await expect(sidebar.getByTestId("settings-host-section-projects")).toBeVisible();
   await expect(sidebar.getByTestId("settings-host-section-agents")).toBeVisible();
-  await expect(sidebar.getByTestId("settings-host-section-providers")).toBeVisible();
+  await expect(sidebar.getByTestId("settings-host-section-providers")).toHaveCount(0);
+  await expect(sidebar.getByTestId("settings-host-section-terminals")).toHaveCount(0);
   await expect(sidebar.getByTestId("settings-host-section-usage")).toBeVisible();
   await expect(sidebar.getByTestId("settings-host-section-host")).toBeVisible();
 

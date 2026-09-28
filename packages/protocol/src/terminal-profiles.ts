@@ -124,6 +124,25 @@ export function getTerminalProfileIcon(profile: TerminalProfile): string | undef
   return profile.icon ?? guessTerminalProfileIcon(profile.command);
 }
 
+/**
+ * The profile that launches this agent, if the user kept one.
+ *
+ * Keyed on the command's base name for the same reason `adoptPromptSentinel`
+ * is: profiles created through the settings UI get generated ids, so a real
+ * user's Codex profile is never id `codex`. A custom profile repointed at
+ * `claude` still counts as this agent's launcher.
+ *
+ * The provider list here is not the hook-capable list — see
+ * `TERMINAL_AGENT_HOOK_PROVIDER_IDS` for which agents get a Terminal tab at
+ * all. This helper is lookup, not capability.
+ */
+export function findTerminalProfileForProvider(
+  profiles: readonly TerminalProfile[],
+  providerId: string,
+): TerminalProfile | undefined {
+  return profiles.find((profile) => getCommandBaseName(profile.command) === providerId);
+}
+
 // Base command name to the sentinel-bearing args that command wants, derived
 // from the shipped defaults rather than written out again, so adding a default
 // profile later cannot silently miss the adoption below or get the wrong form.

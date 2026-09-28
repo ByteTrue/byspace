@@ -22,6 +22,10 @@ import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { settingsStyles } from "@/styles/settings";
 import { resolveProviderLabel } from "@/utils/provider-definitions";
+import { TERMINAL_AGENT_HOOK_PROVIDERS } from "@/screens/settings/terminal-agent-hooks-config";
+import type { TerminalAgentHookProviderId } from "@bytetrue/protocol/messages";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { ProviderTerminalIntegration } from "./provider-terminal-integration";
 import { formatTimeAgo } from "@/utils/time";
 import { compareMatchScores, scoreTextFields } from "@bytetrue/protocol/search/text-match";
 import type { AgentModelDefinition, AgentProvider } from "@bytetrue/protocol/agent-types";
@@ -578,6 +582,7 @@ export function ProviderDiagnosticSheet({
   const { entries: snapshotEntries, refresh, isRefreshing } = useProvidersSnapshot(serverId);
   const { config, patchConfig } = useDaemonConfig(serverId);
   const [query, setQuery] = useState("");
+  const [tab, setTab] = useState<"agent" | "terminal">("agent");
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   const [diagSheetOpen, setDiagSheetOpen] = useState(false);
   const [deletingModelId, setDeletingModelId] = useState<string | null>(null);
@@ -624,6 +629,7 @@ export function ProviderDiagnosticSheet({
   useEffect(() => {
     if (!visible) {
       setQuery("");
+      setTab("agent");
       setAddSheetOpen(false);
       setDiagSheetOpen(false);
     }
@@ -666,16 +672,43 @@ export function ProviderDiagnosticSheet({
     [additionalModels, patchConfig, provider, refresh],
   );
 
+  const isTerminalProvider = useMemo(
+    () =>
+      TERMINAL_AGENT_HOOK_PROVIDERS.some(
+        (candidate) => candidate.id === (provider as TerminalAgentHookProviderId),
+      ),
+    [provider],
+  );
+
+  // The switcher lives in the header next to the provider name, not as a bar
+  // above the body: the sheet is the provider's page, and the tab is which face
+  // of that one provider you are looking at. It sits before the close button,
+  // which is the only other thing the header owes the user.
   const sheetHeader = useMemo<SheetHeader>(
     () => ({
       title: providerLabel,
-      search: {
-        onChange: setQuery,
-        placeholder: t("settings.providers.models.searchPlaceholder"),
-        testID: "provider-settings-search",
-      },
+      actions: isTerminalProvider ? (
+        <SegmentedControl
+          options={[
+            { value: "agent", label: t("settings.providers.tabs.agent") },
+            { value: "terminal", label: t("settings.providers.tabs.terminal") },
+          ]}
+          value={tab}
+          onValueChange={setTab}
+          size="xs"
+          testID="provider-sheet-tabs"
+        />
+      ) : undefined,
+      search:
+        tab === "agent"
+          ? {
+              onChange: setQuery,
+              placeholder: t("settings.providers.models.searchPlaceholder"),
+              testID: "provider-settings-search",
+            }
+          : undefined,
     }),
-    [providerLabel, t],
+    [providerLabel, isTerminalProvider, tab, t],
   );
 
   return (
@@ -685,31 +718,47 @@ export function ProviderDiagnosticSheet({
         visible={visible}
         onClose={onClose}
         testID="provider-settings-sheet"
-        footer={renderProviderSheetFooter({
-          fetchedAtLabel,
-          isCompact,
-          modelsRefreshing,
-          t,
-          onOpenAddSheet: handleOpenAddSheet,
-          onOpenDiagSheet: handleOpenDiagSheet,
-          onRefreshModels: handleRefreshModels,
-        })}
+        footer={
+          tab === "agent"
+            ? renderProviderSheetFooter({
+                fetchedAtLabel,
+                isCompact,
+                modelsRefreshing,
+                t,
+                onOpenAddSheet: handleOpenAddSheet,
+                onOpenDiagSheet: handleOpenDiagSheet,
+                onRefreshModels: handleRefreshModels,
+              })
+            : undefined
+        }
         snapPoints={MAIN_SNAP_POINTS}
+        // Fixed height across both faces: the Agent tab is a long model list and
+        // the Terminal tab is two rows, so a content-sized card visibly resized
+        // and re-centred when the switcher was used. It matches the sheet's own
+        // open detent so desktop and compact agree on how tall a provider is.
+        desktopHeight={DESKTOP_SHEET_HEIGHT}
       >
-        <ProviderModalBody
-          discoveredCount={discoveredModels.length}
-          additionalCount={additionalModels.length}
-          providerSnapshotRefreshing={providerSnapshotRefreshing}
-          providerErrorMessage={providerErrorMessage}
-          modelsRefreshing={modelsRefreshing}
-          searchActive={Boolean(q)}
-          filteredDiscovered={filteredDiscovered}
-          filteredCustom={filteredCustom}
-          deletingModelId={deletingModelId}
-          onRefresh={handleRefreshModels}
-          onDeleteCustom={handleDeleteCustom}
-          theme={theme}
-        />
+        {isTerminalProvider && tab === "terminal" ? (
+          <ProviderTerminalIntegration
+            serverId={serverId}
+            provider={provider as TerminalAgentHookProviderId}
+          />
+        ) : (
+          <ProviderModalBody
+            discoveredCount={discoveredModels.length}
+            additionalCount={additionalModels.length}
+            providerSnapshotRefreshing={providerSnapshotRefreshing}
+            providerErrorMessage={providerErrorMessage}
+            modelsRefreshing={modelsRefreshing}
+            searchActive={Boolean(q)}
+            filteredDiscovered={filteredDiscovered}
+            filteredCustom={filteredCustom}
+            deletingModelId={deletingModelId}
+            onRefresh={handleRefreshModels}
+            onDeleteCustom={handleDeleteCustom}
+            theme={theme}
+          />
+        )}
       </AdaptiveModalSheet>
       <AddCustomModelSubSheet
         provider={provider}
@@ -866,6 +915,10 @@ const sheetStyles = StyleSheet.create((theme) => ({
   },
 }));
 
+// Open and expanded detents for the compact bottom sheet. The desktop card
+// pins to the first one so both faces of the sheet keep one height (see the
+// `desktopHeight` note on the sheet below).
 const MAIN_SNAP_POINTS = ["65%", "92%"];
+const DESKTOP_SHEET_HEIGHT = "65%";
 const ADD_SNAP_POINTS = ["40%"];
 const DIAGNOSTIC_SNAP_POINTS = ["50%", "85%"];

@@ -1794,9 +1794,7 @@ export const ko: TranslationResources = {
       projects: "프로젝트",
       connections: "연결",
       agents: "에이전트",
-      providers: "프로바이더",
       usage: "사용량",
-      terminals: "터미널",
       host: "개요",
     },
     metadataGeneration: {
@@ -2200,6 +2198,18 @@ export const ko: TranslationResources = {
         moveDown: "아래로 이동",
         save: "저장",
         emptyState: "아직 프로필이 없습니다. 특정 명령으로 터미널을 실행하려면 하나 추가하세요.",
+        providerTitle: "실행 명령어",
+        providerHint: "BySpace가 터미널에서 이 에이전트를 열 때 실행하는 명령어.",
+        providerEmpty: "실행 명령어 없음",
+        providerMissingHint: "터미널 메뉴에서 실행하려면 추가하세요.",
+        addProfile: "추가",
+      },
+      terminalAgentHooks: {
+        sectionTitle: "터미널 에이전트 후크",
+        sectionHint: "BySpace가 터미널에서 이 에이전트를 인식하는 방식.",
+        reportTitle: "상태 및 알림 보고",
+        reportHint: "이 에이전트의 설정 파일에 후크를 설치합니다.",
+        updateErrorTitle: "터미널 에이전트 후크를 갱신할 수 없음",
       },
       agentProfiles: {
         sectionTitle: "에이전트 프로필",
@@ -2364,6 +2374,7 @@ export const ko: TranslationResources = {
     },
     providers: {
       title: "프로바이더",
+      enabledSummary: "{{total}}개 중 {{enabled}}개 사용 중",
       addProvider: "프로바이더 추가",
       providerDetails: "{{name}} 프로바이더 세부 정보",
       enableProvider: "{{name}} 활성화",
@@ -2382,6 +2393,10 @@ export const ko: TranslationResources = {
           "config.json에서 프로바이더 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
         confirm: "제거",
         errorTitle: "프로바이더를 제거할 수 없습니다.",
+      },
+      tabs: {
+        agent: "에이전트",
+        terminal: "터미널",
       },
       statuses: {
         disabled: "비활성화됨",

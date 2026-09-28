@@ -69,7 +69,7 @@ test.describe("provider removal", () => {
       await gotoAppShell(page);
       await openSettings(page);
       await openSettingsHost(page, getServerId());
-      await openSettingsHostSection(page, getServerId(), "providers");
+      await openSettingsHostSection(page, getServerId(), "agents");
 
       await expect(page.getByTestId("provider-actions-claude")).toHaveCount(0);
       await openAddProviderArea(page);

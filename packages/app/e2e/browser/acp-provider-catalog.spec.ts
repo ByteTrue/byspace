@@ -30,7 +30,7 @@ test.describe("ACP provider catalog", () => {
       await gotoAppShell(page);
       await openSettings(page);
       await openSettingsHost(page, getServerId());
-      await openSettingsHostSection(page, getServerId(), "providers");
+      await openSettingsHostSection(page, getServerId(), "agents");
       await openAddProviderArea(page);
 
       await installAcpCatalogProvider(page, ACP_PROVIDER.name);

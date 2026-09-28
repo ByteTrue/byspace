@@ -1768,9 +1768,7 @@ export const zhCN: TranslationResources = {
       projects: "项目",
       connections: "连接",
       agents: "Agents",
-      providers: "Providers",
       usage: "使用情况",
-      terminals: "Terminals",
       host: "概览",
     },
     metadataGeneration: {
@@ -2168,6 +2166,18 @@ export const zhCN: TranslationResources = {
         moveDown: "Move down",
         save: "Save",
         emptyState: "No profiles yet. Add one to launch terminals with a specific command.",
+        providerTitle: "启动命令",
+        providerHint: "BySpace 在终端里打开这个 agent 时运行的命令。",
+        providerEmpty: "没有启动命令",
+        providerMissingHint: "添加一个，才能从终端菜单启动这个 agent。",
+        addProfile: "添加",
+      },
+      terminalAgentHooks: {
+        sectionTitle: "终端 agent 钩子",
+        sectionHint: "BySpace 如何在终端里看到这个 agent。",
+        reportTitle: "上报状态和通知",
+        reportHint: "在这个 agent 的配置文件中安装钩子。",
+        updateErrorTitle: "无法更新终端 agent 钩子",
       },
       agentProfiles: {
         sectionTitle: "Agent 配置",
@@ -2322,6 +2332,7 @@ export const zhCN: TranslationResources = {
     },
     providers: {
       title: "Providers",
+      enabledSummary: "已启用 {{enabled}}/{{total}}",
       addProvider: "添加 Provider",
       providerDetails: "{{name}} Provider 详情",
       enableProvider: "启用 {{name}}",
@@ -2339,6 +2350,10 @@ export const zhCN: TranslationResources = {
         confirmMessage: "This deletes the provider entry from config.json. It cannot be undone.",
         confirm: "Remove",
         errorTitle: "Unable to remove provider",
+      },
+      tabs: {
+        agent: "Agent",
+        terminal: "终端",
       },
       statuses: {
         disabled: "已禁用",

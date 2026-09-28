@@ -1804,9 +1804,7 @@ export const ja: TranslationResources = {
       projects: "プロジェクト",
       connections: "接続",
       agents: "エージェント",
-      providers: "プロバイダー",
       usage: "使用状況",
-      terminals: "ターミナル",
       host: "概要",
     },
     metadataGeneration: {
@@ -2213,6 +2211,18 @@ export const ja: TranslationResources = {
         save: "保存",
         emptyState:
           "プロファイルがまだありません。特定のコマンドでターミナルを起動するために追加してください。",
+        providerTitle: "起動コマンド",
+        providerHint: "BySpace がターミナルでこのエージェントを開くときに実行するコマンド。",
+        providerEmpty: "起動コマンドなし",
+        providerMissingHint: "ターミナルメニューから起動するには追加してください。",
+        addProfile: "追加",
+      },
+      terminalAgentHooks: {
+        sectionTitle: "ターミナルエージェントフック",
+        sectionHint: "BySpace がターミナル内のこのエージェントを認識する方法。",
+        reportTitle: "状態と通知を報告",
+        reportHint: "このエージェントの設定ファイルにフックをインストールします。",
+        updateErrorTitle: "ターミナルエージェントフックを更新できません",
       },
       agentProfiles: {
         sectionTitle: "エージェントプロファイル",
@@ -2376,6 +2386,7 @@ export const ja: TranslationResources = {
     },
     providers: {
       title: "プロバイダー",
+      enabledSummary: "{{total}} 件中 {{enabled}} 件が有効",
       addProvider: "プロバイダーを追加",
       providerDetails: "{{name}}プロバイダーの詳細",
       enableProvider: "{{name}}を有効にする",
@@ -2393,6 +2404,10 @@ export const ja: TranslationResources = {
         confirmMessage: "This deletes the provider entry from config.json. It cannot be undone.",
         confirm: "Remove",
         errorTitle: "Unable to remove provider",
+      },
+      tabs: {
+        agent: "エージェント",
+        terminal: "ターミナル",
       },
       statuses: {
         disabled: "無効",

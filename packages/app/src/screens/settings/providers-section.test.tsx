@@ -64,7 +64,11 @@ const { theme, snapshotState, configState, patchConfigMock, openProviderSettings
 );
 
 vi.mock("react-native", () => ({
-  Platform: { OS: "web" },
+  Platform: {
+    OS: "web",
+    // theme.ts resolves the default font stack through Platform.select.
+    select: (options: Record<string, unknown>) => options.default ?? options.ios,
+  },
   View: ({ children, testID }: { children?: React.ReactNode; testID?: string }) =>
     React.createElement("div", { "data-testid": testID }, children),
   Text: ({ children }: { children?: React.ReactNode }) =>
@@ -76,6 +80,7 @@ vi.mock("react-native", () => ({
     onHoverOut,
     accessibilityRole,
     accessibilityLabel,
+    accessibilityState,
     disabled,
     testID,
   }: {
@@ -87,6 +92,7 @@ vi.mock("react-native", () => ({
     onHoverOut?: () => void;
     accessibilityRole?: string;
     accessibilityLabel?: string;
+    accessibilityState?: { expanded?: boolean };
     disabled?: boolean;
     testID?: string;
   }) =>
@@ -95,6 +101,7 @@ vi.mock("react-native", () => ({
       {
         role: accessibilityRole,
         "aria-label": accessibilityLabel,
+        "aria-expanded": accessibilityState?.expanded,
         "aria-disabled": disabled ? "true" : undefined,
         "data-testid": testID,
         onClick: disabled ? undefined : onPress,
@@ -112,11 +119,15 @@ vi.mock("react-native-unistyles", () => ({
       typeof factory === "function" ? (factory as (t: typeof theme) => unknown)(theme) : factory,
   },
   useUnistyles: () => ({ theme, rt: { breakpoint: "md" } }),
+  // Pass-through: the themed-icon wrapper only injects uniProps, which these
+  // tests never assert on.
+  withUnistyles: (component: unknown) => component,
 }));
 
 vi.mock("lucide-react-native", () => {
   const icon = (name: string) => () => React.createElement("span", { "data-icon": name });
   return {
+    ChevronDown: icon("ChevronDown"),
     ChevronRight: icon("ChevronRight"),
     MoreHorizontal: icon("MoreHorizontal"),
     Trash2: icon("Trash2"),
@@ -128,6 +139,9 @@ vi.mock("react-i18next", () => ({
     t: (key: string, values?: Record<string, string | number>) =>
       (
         ({
+          "settings.providers.title": "Providers",
+          "settings.providers.enabledSummary": "{{enabled}} of {{total}} enabled",
+          "settings.providers.addProvider": "Add provider",
           "settings.providers.providerDetails": "{{name}} provider details",
           "settings.providers.enableProvider": "Enable {{name}}",
           "settings.providers.statuses.disabled": "Disabled",
@@ -150,7 +164,9 @@ vi.mock("react-i18next", () => ({
         })[key] ?? key
       )
         .replaceAll("{{name}}", String(values?.name ?? ""))
-        .replaceAll("{{count}}", String(values?.count ?? "")),
+        .replaceAll("{{count}}", String(values?.count ?? ""))
+        .replaceAll("{{enabled}}", String(values?.enabled ?? ""))
+        .replaceAll("{{total}}", String(values?.total ?? "")),
   }),
 }));
 
@@ -388,6 +404,39 @@ describe("ProvidersSection", () => {
       root?.render(<ProvidersSection serverId="server-1" />);
     });
   }
+
+  // The provider list opens expanded: it is the section people come to the
+  // Agents page for, so its rows are on screen without a tap. It can be folded
+  // when the page is long, and the count keeps its state readable while folded.
+  function collapseSection(): void {
+    const toggle = container?.querySelector<HTMLElement>(
+      '[data-testid="host-page-providers-card-toggle"]',
+    );
+    if (!toggle) throw new Error("Expected the providers section toggle");
+    act(() => {
+      toggle.click();
+    });
+  }
+
+  it("starts expanded and folds the provider rows on toggle", () => {
+    snapshotState.entries = [claudeEntry];
+    configState.config = makeConfig();
+
+    render();
+
+    const toggle = container?.querySelector<HTMLElement>(
+      '[data-testid="host-page-providers-card-toggle"]',
+    );
+    expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+    expect(findRow("Claude provider details")).toBeDefined();
+
+    collapseSection();
+
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+    expect(container?.querySelector('[role="button"][aria-label$="provider details"]')).toBeNull();
+    // The count summary keeps the section's state readable while it is folded.
+    expect(container?.textContent).toContain("1 of 1 enabled");
+  });
 
   function findRow(accessibilityLabel: string): HTMLElement {
     const row = container?.querySelector<HTMLElement>(

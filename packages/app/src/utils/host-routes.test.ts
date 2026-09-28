@@ -248,9 +248,16 @@ describe("host settings section slugs", () => {
     expect(normalizeHostSectionSlug("connections")).toBe("connections");
     expect(normalizeHostSectionSlug("agents")).toBe("agents");
     expect(normalizeHostSectionSlug("projects")).toBe("projects");
-    expect(normalizeHostSectionSlug("providers")).toBe("providers");
     expect(normalizeHostSectionSlug("usage")).toBe("usage");
     expect(normalizeHostSectionSlug("host")).toBe("host");
+  });
+
+  // Terminals and Providers folded into Agents/Overview. BySpace keeps no
+  // back-compat, so these are unknown slugs, not retired aliases: a stale deep
+  // link lands on the route's fallback instead of a mapping table.
+  it("rejects the folded host settings sections outright", () => {
+    expect(normalizeHostSectionSlug("providers")).toBeNull();
+    expect(normalizeHostSectionSlug("terminals")).toBeNull();
   });
 
   it("maps retired host settings sections to their consolidation targets", () => {

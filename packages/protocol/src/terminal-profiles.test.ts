@@ -5,6 +5,7 @@ import {
   formatResolvedCommand,
   getTerminalProfileIcon,
   guessTerminalProfileIcon,
+  findTerminalProfileForProvider,
   profileTakesPrompt,
   resolveTerminalProfileLaunch,
   resolveTerminalProfiles,
@@ -311,5 +312,35 @@ describe("formatResolvedCommand", () => {
 
   it("is just the command when there are no args", () => {
     expect(formatResolvedCommand({ command: "zsh", args: [] })).toBe("zsh");
+  });
+});
+
+describe("findTerminalProfileForProvider", () => {
+  it("matches a shipped default by its id-independent command name", () => {
+    const profiles = [
+      { id: "profile_abc_1", name: "Codex", command: "codex", args: [PROMPT_SENTINEL] },
+    ];
+    expect(findTerminalProfileForProvider(profiles, "codex")).toBe(profiles[0]);
+  });
+
+  it("matches a repointed custom profile by base name, not by name or id", () => {
+    const profiles = [
+      { id: "profile_abc_2", name: "My claude wrapper", command: "/usr/local/bin/claude" },
+    ];
+    expect(findTerminalProfileForProvider(profiles, "claude")).toBe(profiles[0]);
+    expect(findTerminalProfileForProvider(profiles, "codex")).toBeUndefined();
+  });
+
+  it("ignores profiles that launch nothing we have a hook for", () => {
+    const profiles = [{ id: "profile_abc_3", name: "Blank", command: "zsh" }];
+    expect(findTerminalProfileForProvider(profiles, "pi")).toBeUndefined();
+  });
+
+  it("returns the first match when duplicates exist", () => {
+    const profiles = [
+      { id: "a", name: "Pi one", command: "pi" },
+      { id: "b", name: "Pi two", command: "pi" },
+    ];
+    expect(findTerminalProfileForProvider(profiles, "pi")?.id).toBe("a");
   });
 });
