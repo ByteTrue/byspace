@@ -11,7 +11,9 @@ import {
   normalizeProcessTitle,
   resolveBySpaceCliBinDir,
   resolveBySpaceCliExecutablePath,
+  resolvePwshShellIntegrationDir,
   resolveZshShellIntegrationDir,
+  withShellIntegrationArgs,
   type TerminalSession,
 } from "./terminal.js";
 import {
@@ -20,6 +22,7 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   statSync,
@@ -33,6 +36,25 @@ import { setImmediate as waitForImmediate, setTimeout as delay } from "node:time
 import { stripVTControlCharacters } from "node:util";
 
 const hasZsh = existsSync("/bin/zsh");
+
+/**
+ * PowerShell is only the default shell on some Windows hosts, so the integration
+ * is exercised on a real pwsh wherever one is installed (windows-latest CI, a
+ * machine that opted into PowerShell 7) and skipped everywhere else.
+ */
+const pwshPath = (() => {
+  const probe = spawnSync(isPlatform("win32") ? "where" : "which", ["pwsh"], {
+    encoding: "utf8",
+  });
+  if (probe.status !== 0) {
+    return null;
+  }
+  const found = (probe.stdout ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  return found && existsSync(found) ? found : null;
+})();
 
 type TerminalRow = ReturnType<TerminalSession["getState"]>["grid"][number];
 
@@ -114,6 +136,25 @@ async function waitForTitle(
   throw new Error("Timeout waiting for terminal title predicate to match");
 }
 
+function hasPromptLine(state: ReturnType<TerminalSession["getState"]>): boolean {
+  return getLines(state).some((line) => line.includes("$"));
+}
+
+/** Waits for the shell's first command-finished event. */
+async function waitForCommandFinished(session: TerminalSession, timeoutMs: number): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      unsubscribe();
+      reject(new Error("timeout waiting for command-finished"));
+    }, timeoutMs);
+    const unsubscribe = session.onCommandFinished(() => {
+      clearTimeout(timer);
+      unsubscribe();
+      resolve();
+    });
+  });
+}
+
 if (isPlatform("win32") && !process.env.ComSpec && !process.env.COMSPEC) {
   process.env.ComSpec = "C:\\Windows\\System32\\cmd.exe";
 }
@@ -157,15 +198,18 @@ afterEach(async () => {
       try {
         rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 25 });
       } catch (error) {
+        // ENOTEMPTY: a descendant shell outliving the tested terminal recreated
+        // a file in it. EBUSY: Windows still holds the dying pwsh's cwd open.
+        // Both belong to processes we do not answer to; leave the directory.
         if (
           typeof error !== "object" ||
           error === null ||
           !("code" in error) ||
-          error.code !== "ENOTEMPTY"
+          (error.code !== "ENOTEMPTY" && error.code !== "EBUSY")
         ) {
           throw error;
         }
-        console.warn(`leaving temp dir behind after ENOTEMPTY retries: ${dir}`);
+        console.warn(`leaving temp dir behind after ${error.code} retries: ${dir}`);
       }
     }
   }
@@ -244,6 +288,150 @@ describe("createTerminal", () => {
       }),
     ).toBe("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
   });
+
+  describe("withShellIntegrationArgs", () => {
+    function integrationSourceDir(name: string): string {
+      const dir = mkdtempSync(join(tmpdir(), `terminal-${name}-integration-source-`));
+      temporaryDirs.push(dir);
+      writeFileSync(join(dir, "byspace-integration.ps1"), "# test integration\n");
+      return dir;
+    }
+
+    /** Pulls the dot-sourced path back out of the `-Command` argument. */
+    function dotSourcedPath(args: string[] | string): string {
+      if (typeof args === "string") {
+        throw new Error(`expected argv, got a command line: ${args}`);
+      }
+      const match = /^try \{ \. '(.*)' \} catch \{\}$/.exec(args[2] ?? "");
+      if (!match) {
+        throw new Error(`expected a dot-sourced integration, got ${JSON.stringify(args)}`);
+      }
+      return match[1];
+    }
+
+    it.each(["pwsh", "pwsh.exe", "powershell", "powershell.exe"])(
+      "enables the integration for %s",
+      (shell) => {
+        const sourceDir = integrationSourceDir(shell);
+        const resolved = withShellIntegrationArgs(shell, [], {
+          pwshShellIntegrationDir: sourceDir,
+        });
+
+        expect(resolved.spawnCommandMode).toBe("env-handoff");
+        expect(resolved.command).toBe(shell);
+        expect((resolved.args as string[]).slice(0, 2)).toEqual(["-NoExit", "-Command"]);
+        // The integration is copied out of the package before it is sourced, so
+        // the shell can read it even when the package lives in an asar archive.
+        expect(readFileSync(dotSourcedPath(resolved.args), "utf8")).toBe("# test integration\n");
+      },
+    );
+
+    it("recognizes a Windows PowerShell path on a POSIX host", () => {
+      const sourceDir = integrationSourceDir("winpath");
+      const resolved = withShellIntegrationArgs("C:\\Program Files\\PowerShell\\7\\pwsh.exe", [], {
+        pwshShellIntegrationDir: sourceDir,
+      });
+
+      expect((resolved.args as string[]).slice(0, 2)).toEqual(["-NoExit", "-Command"]);
+    });
+
+    it("leaves shells without a PowerShell integration untouched", () => {
+      for (const shell of [
+        "/bin/zsh",
+        "/bin/bash",
+        "/bin/fish",
+        "C:\\Windows\\System32\\cmd.exe",
+      ]) {
+        expect(withShellIntegrationArgs(shell, []).args).toEqual([]);
+      }
+    });
+
+    it("keeps explicit launch arguments, which belong to the caller", () => {
+      expect(withShellIntegrationArgs("pwsh", ["-l"]).args).toEqual(["-l"]);
+    });
+
+    it("keeps a cmd.exe command line built for a .cmd shim", () => {
+      const commandLine = '/d /s /c "C:\\npm\\claude.cmd --foo"';
+      expect(withShellIntegrationArgs("C:\\Windows\\System32\\cmd.exe", commandLine).args).toBe(
+        commandLine,
+      );
+    });
+
+    it("ships the PowerShell integration next to the packaged terminal code", () => {
+      expect(existsSync(join(resolvePwshShellIntegrationDir(), "byspace-integration.ps1"))).toBe(
+        true,
+      );
+    });
+  });
+
+  it.skipIf(!pwshPath)(
+    "runs a handed-off spawn command and reports its real exit code",
+    async () => {
+      const workingDir = mkdtempSync(join(tmpdir(), "terminal-pwsh-integration-"));
+      temporaryDirs.push(workingDir);
+      // A failing first command covers the exit-code path in one shell: PowerShell
+      // only exposes success/failure for the last statement, so the daemon-visible
+      // code is 1 rather than the thrown command's own code. The interactive
+      // command afterwards proves the shell stays a normal, usable prompt.
+      const session = trackSession(
+        await createTerminal({
+          workspaceId: "ws-test",
+          cwd: workingDir,
+          shell: pwshPath ?? undefined,
+          spawnCommand: `Write-Output byspace-ok; Get-Item -Path ${join(workingDir, "byspace-missing")}`,
+        }),
+      );
+
+      // Handoff shells must not also be typed into — that would run the
+      // command twice.
+      expect(session.getShellSpawnCommandMode()).toBe("env-handoff");
+
+      const completions: Array<number | null> = [];
+      const unsubscribeCommandFinished = session.onCommandFinished((info) => {
+        completions.push(info.exitCode);
+      });
+
+      await waitForCommandFinished(session, 30_000);
+      expect(completions).toEqual([1]);
+      const rendered = getLines(session.getState()).join("\n");
+      // Terminal columns wrap: an 80-col grid breaks a long line mid-word, so
+      // match a fragment short enough to survive wrapping (CI: "bys\npace-ok").
+      expect(rendered.replace(/\s+/g, "")).toContain("byspace-ok");
+      // The sequences must stay control traffic, not text on the grid.
+      expect(rendered).not.toContain("633;D");
+
+      session.send({ type: "input", data: "Write-Output interactive-ok\r" });
+      await waitForState(session, () => completions.includes(0), 20_000);
+      expect(getLines(session.getState()).join("\n").replace(/\s+/g, "")).toContain(
+        "interactive-ok",
+      );
+
+      unsubscribeCommandFinished();
+    },
+    60_000,
+  );
+
+  it.skipIf(isPlatform("win32"))(
+    "leaves shells without a handoff integration on the typed path",
+    async () => {
+      const session = trackSession(
+        await createTerminal({
+          workspaceId: "ws-test",
+          cwd: "/tmp",
+          shell: "/bin/sh",
+          env: { PS1: "$ " },
+          spawnCommand: "echo spawned-ok",
+        }),
+      );
+
+      expect(session.getShellSpawnCommandMode()).toBe("typed");
+
+      // The caller is responsible for typing on this path: nothing runs until it
+      // does, so the handed-off command must not have executed on its own.
+      await waitForState(session, hasPromptLine);
+      expect(getLines(session.getState()).join("\n")).not.toContain("spawned-ok");
+    },
+  );
 
   it("passes profile commands through untouched on non-Windows", async () => {
     const resolveExecutable = vi.fn(async () => "/usr/local/bin/claude");

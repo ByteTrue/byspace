@@ -82,6 +82,7 @@ function createStubTerminalManager(
         onTitleChange: () => () => {},
         getSize: () => ({ rows: 1, cols: 1 }),
         getTitle: () => undefined,
+        getShellSpawnCommandMode: () => "typed" as const,
         getExitInfo: () => null,
         killAndWait: async () => {},
       };

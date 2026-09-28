@@ -259,6 +259,7 @@ describe("runAsyncWorktreeBootstrap", () => {
             send: () => {
               sendAt = Date.now();
             },
+            getShellSpawnCommandMode: () => "typed" as const,
             subscribe: (listener) => {
               outputListener = (chunk) => listener({ type: "output", data: chunk.data });
               return () => {
@@ -391,6 +392,8 @@ describe("runAsyncWorktreeBootstrap", () => {
           getActivity: () => null,
           setActivity: () => {},
           getExitInfo: () => null,
+          // The stub shell has no handoff integration; the caller types.
+          getShellSpawnCommandMode: () => "typed" as const,
           killAndWait: async () => {},
         };
         sessionsById.set(terminalId, session);

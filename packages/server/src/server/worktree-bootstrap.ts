@@ -491,6 +491,25 @@ async function waitForTerminalBootstrapReadiness(
   });
 }
 
+/**
+ * Delivers a script/bootstrap command to its terminal. Handoff shells consumed
+ * the command at spawn time; a reused terminal is an existing shell already
+ * waiting for input, where typing is safe.
+ */
+async function sendBootstrapCommand(
+  terminal: TerminalSession,
+  reusableTerminal: TerminalSession | null,
+  command: string,
+): Promise<void> {
+  if (!reusableTerminal && terminal.getShellSpawnCommandMode() === "env-handoff") {
+    return;
+  }
+  if (!reusableTerminal) {
+    await waitForTerminalBootstrapReadiness(terminal);
+  }
+  terminal.send({ type: "input", data: `${command}\r` });
+}
+
 function terminalHasOutput(state: ReturnType<TerminalSession["getState"]>): boolean {
   for (const row of [...state.scrollback, ...state.grid]) {
     for (const cell of row) {
@@ -548,12 +567,9 @@ async function runWorktreeTerminalBootstrap(
           name: spec.name,
           env: runtimeEnv,
           workspaceId: options.workspaceId,
+          spawnCommand: spec.command,
         });
-        await waitForTerminalBootstrapReadiness(terminal);
-        terminal.send({
-          type: "input",
-          data: `${spec.command}\r`,
-        });
+        await sendBootstrapCommand(terminal, null, spec.command);
         return {
           name: terminal.name ?? spec.name ?? null,
           command: spec.command,
@@ -858,6 +874,7 @@ async function acquireWorkspaceScriptTerminal(params: {
   workspaceId: string;
   scriptName: string;
   env: Record<string, string> | undefined;
+  command: string;
 }): Promise<{ terminal: TerminalSession; reusableTerminal: TerminalSession | null }> {
   const {
     serviceScript,
@@ -867,6 +884,7 @@ async function acquireWorkspaceScriptTerminal(params: {
     workspaceId,
     scriptName,
     env,
+    command,
   } = params;
   let reusableTerminal: TerminalSession | null = null;
   if (!serviceScript && existingRuntimeEntry?.terminalId) {
@@ -880,6 +898,7 @@ async function acquireWorkspaceScriptTerminal(params: {
       name: scriptName,
       title: scriptName,
       env,
+      spawnCommand: command,
     }));
   return { terminal, reusableTerminal };
 }
@@ -958,6 +977,7 @@ export async function spawnWorkspaceScript(
       workspaceId,
       scriptName,
       env,
+      command: config.command,
     });
 
     runtimeStore.set({
@@ -1020,10 +1040,9 @@ export async function spawnWorkspaceScript(
       unsubscribeCommandFinished?.();
     };
 
-    if (!reusableTerminal) {
-      await waitForTerminalBootstrapReadiness(terminal);
-    }
-    terminal.send({ type: "input", data: `${config.command}\r` });
+    // Handoff shells consumed the command at spawn time; a reused terminal is
+    // an existing shell already waiting for input, where typing is safe.
+    await sendBootstrapCommand(terminal, reusableTerminal, config.command);
 
     logger?.info(
       {

@@ -358,6 +358,7 @@ describe.skipIf(isPlatform("win32"))("worktree-bootstrap POSIX-only", () => {
               onTitleChange: () => () => {},
               getSize: () => ({ rows: 1, cols: 1 }),
               getTitle: () => undefined,
+              getShellSpawnCommandMode: () => "typed" as const,
               getExitInfo: () => null,
               getState: () => ({
                 rows: 1,

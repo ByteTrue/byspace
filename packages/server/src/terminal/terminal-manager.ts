@@ -61,6 +61,7 @@ export interface TerminalManager {
     shell?: string;
     command?: string;
     args?: string[];
+    spawnCommand?: string;
     rows?: number;
     cols?: number;
     activityToken?: string;
@@ -319,6 +320,7 @@ export function createTerminalManager(
       shell?: string;
       command?: string;
       args?: string[];
+      spawnCommand?: string;
       rows?: number;
       cols?: number;
       activityToken?: string;
@@ -355,6 +357,7 @@ export function createTerminalManager(
             ...(options.shell && !options.command ? { shell: options.shell } : {}),
             ...(options.command ? { command: options.command } : {}),
             ...(options.args ? { args: options.args } : {}),
+            spawnCommand: options.spawnCommand,
             ...(options.rows !== undefined ? { rows: options.rows } : {}),
             ...(options.cols !== undefined ? { cols: options.cols } : {}),
             ...(mergedEnv ? { env: mergedEnv } : {}),

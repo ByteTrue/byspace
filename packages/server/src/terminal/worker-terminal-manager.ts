@@ -13,6 +13,7 @@ import type {
   TerminalExitInfo,
   TerminalSession,
   TerminalStateSnapshot,
+  ShellSpawnCommandMode,
 } from "./terminal.js";
 import type { CaptureTerminalLinesResult } from "./terminal-capture.js";
 import { TerminalOutputBacklog } from "./terminal-output-backlog.js";
@@ -140,6 +141,7 @@ function cloneTerminalInfo(info: RequiredWorkerTerminalInfo): RequiredWorkerTerm
     workspaceId: info.workspaceId,
     ...(info.title ? { title: info.title } : {}),
     activity: info.activity,
+    spawnCommandMode: info.spawnCommandMode,
   };
 }
 
@@ -325,6 +327,9 @@ export function createWorkerTerminalManager(
         return () => {
           record.activityChangeListeners.delete(listener);
         };
+      },
+      getShellSpawnCommandMode(): ShellSpawnCommandMode {
+        return record.info.spawnCommandMode;
       },
       getActivity(): TerminalActivity | null {
         return record.activity;

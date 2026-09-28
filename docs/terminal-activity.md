@@ -62,6 +62,8 @@ pasted content, while later provider idle events remain authoritative.
 A hooked agent that dies without reporting idle (SIGKILL, crash, a suspend that never resumes) has
 no provider event to clear it. The shell's OSC 633 `D` — the same signal that drives command
 finished — clears `working` when the foreground job ends, so the dot does not stay on forever.
+That fallback only exists where BySpace installs shell integration: zsh and PowerShell. See
+[terminal.md](../byissue/spec/terminal.md) for which shells emit it.
 
 Codex hook mapping:
 

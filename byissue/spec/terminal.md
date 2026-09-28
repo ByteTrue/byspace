@@ -52,6 +52,24 @@ Alternate buffer、current grid 和 scrollback 都遵守同一 active-buffer 规
 - 探测（`terminal.shell.detect` RPC，权限 `daemon.read`）按 `$SHELL` → macOS `dscl` 登录 shell（2s 超时，域控挂起时降级）→ `/etc/shells` → 常见路径的顺序发现，existsSync 过滤后去重；Windows 为 `ComSpec` + pwsh/powershell/cmd 按 PATHEXT 后缀解析。任一来源失败降级继续，探测失败经 response `error` 返回，不抛出。
 - 设置 UI（Host → Overview → Default shell）由 `server_info.features.terminalShellConfig` 门控；老 daemon 上隐藏。Auto 选项保存为 null patch，持久化为 null，读侧转回 auto。保存不做路径校验，无效路径在 spawn 时经 `create_terminal_response.error` 报错。
 
+## Shell integration 与命令结束
+
+- OSC 633 由 shell integration 发出。`D;<exitCode>` 同时是两个功能的唯一来源：workspace script 中非 service 那一类的结束判定（`worktree-bootstrap.ts` 的 `onCommandFinished`），以及「agent 被 SIGKILL／崩溃、没来得及上报 idle」时清掉终端的 `working`。两者都不能只靠 `onExit`：shell 回到提示符并不退出。
+- 覆盖两个 shell：
+  - zsh：`ZDOTDIR` 包装，加载 `shell-integration/zsh`。
+  - PowerShell（pwsh / Windows PowerShell）：`-NoExit -Command` 点源 `shell-integration/pwsh/byspace-integration.ps1`。PowerShell 没有开机文件环境变量，只能走启动参数；`-Command` 在用户 profile 之后执行，因此包裹的是 profile 装好的 `Prompt`，用户自定义提示符和它自己的 `$?` 逻辑都保留。加载包 `try/catch`：Windows PowerShell 5.1 默认 `ExecutionPolicy Restricted`，点源任何 `.ps1` 都会抛，吞掉错误保证 shell 可用（VS Code 同样处理）。
+- 判定 shell 用可执行文件 basename（大小写不敏感、同时切 `/` 与 `\`），因此 `pwsh`、`pwsh.exe`、绝对路径，以及 Windows 路径在 POSIX 宿主上的测试都能命中。
+- 两个 shell 都先把资源拷进进程私有临时目录再加载，因此 `app.asar` 这类可直接导入但不可读的打包路径也能工作。
+
+### PowerShell 首条命令走 env handoff，不敲键盘
+
+- PSReadLine 渲染提示符**早于**它开始读输入；落在两者之间的字节由 cooked-mode 行律回显、其 Enter 被吃掉，命令只停在编辑缓冲里永远不执行（实测注入率随负载在 0–60% 波动；zsh 同窗口极窄未观测到）。所以 PowerShell 的首条命令（workspace script、worktree 终端命令）不能靠「首输出就绪」后敲入。
+- 改为 spawn 时经 `BYSPACE_TERMINAL_SPAWN_COMMAND` 环境变量交给集成脚本；集成脚本在第一次 readline 把它作为返回值交给 host 执行 —— 与手打完全同路径：进历史、`$?` 真实、`D;<code>` 真实。消费后立即清掉该环境变量。
+- `getShellSpawnCommandMode()` 向调用方暴露能力：`env-handoff`（本次 spawn 已移交，禁止再敲，会执行两次）或 `typed`（调用方照旧等就绪后敲入）。复用的旧终端（plain script 重跑）一律 typed。zsh、cmd.exe 与所有未集成 shell 均为 typed，行为不变。
+- 已经带显式 args 的启动（profile 命令 / `.cmd` shim 的 cmd.exe 命令行）不注入集成。
+- PowerShell 只暴露成功/失败两态，`D` 报 `0`/`1` 而不是被调命令的真实退出码：`$LASTEXITCODE` 属于上一个 native 命令，cmdlet 失败时它是过期值。
+- 未覆盖 bash、fish 与 cmd.exe（cmd.exe 没有 preexec 等价钩子）。这些 shell 里的 plain script 不会自动结算，只有终端进程真的退出时才走 `onExit`；agent 被强杀时终端圆点也不会自动清掉。
+
 ## 边界
 
 - 字体、字号、主题和语法高亮属于 Appearance，不由快照恢复逻辑调整。
@@ -60,6 +78,7 @@ Alternate buffer、current grid 和 scrollback 都遵守同一 active-buffer 规
 
 ## 历史证据
 
+- [修复非 zsh shell 下 plain script 永远显示运行中](../issues/055-x-ff-powershell-shell-integration-command-finished.md)
 - [Terminal 中文快照回放间距](../issues/001-x-terminal-cjk-snapshot-spacing.md)
 - [Daemon 重启后 terminal 标签恢复](../issues/012-x-terminal-tab-persistence-across-daemon-restart.md)
 - [Terminal 默认 shell 配置与自动探测](../issues/013-x-terminal-default-shell-config.md)
