@@ -123,6 +123,7 @@ export async function runMulticaIssueCreateCommand(
     status?: string;
     assigneeId?: string;
     assigneeType?: string;
+    parent?: string;
   },
   _command: Command,
 ): Promise<ListResult<MulticaIssueRow>> {
@@ -140,6 +141,7 @@ export async function runMulticaIssueCreateCommand(
       status: options.status,
       assigneeId: options.assigneeId,
       assigneeType: options.assigneeType,
+      ...(options.parent ? { parentIssueId: options.parent.trim() } : {}),
     });
     const issue = payload.issue;
     return {
@@ -312,6 +314,7 @@ export function createMulticaCommand(): Command {
       .option("--status <key>", "Initial status (default backlog)")
       .option("--assignee-id <id>", "Assignee id")
       .option("--assignee-type <type>", "agent | squad")
+      .option("--parent <id>", "Parent issue id (makes this a sub-issue)")
       .allowExcessArguments(false),
   ).action(withOutput(runMulticaIssueCreateCommand));
 

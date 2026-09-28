@@ -39,6 +39,7 @@ interface IssueDetailData {
   subscribed: boolean;
   toggleSubscription: () => void;
   react: (commentId: string, emoji: string, reacted: boolean) => void;
+  refreshChildren: () => void;
   truncated: boolean;
   agentNameById: ReadonlyMap<string, string>;
   statuses: readonly MulticaStatusSummary[];
@@ -195,6 +196,10 @@ function useIssueDetailData(serverId: string, issueId: string): IssueDetailData 
     }
   }, [client, queries, draft, issueId, sending]);
 
+  const refreshChildren = useCallback(() => {
+    void queries.refreshIssue();
+  }, [queries]);
+
   const react = useCallback(
     (commentId: string, emoji: string, reacted: boolean) => {
       if (!client) return;
@@ -235,6 +240,7 @@ function useIssueDetailData(serverId: string, issueId: string): IssueDetailData 
     subscribed,
     toggleSubscription,
     react,
+    refreshChildren,
     truncated,
     agentNameById: catalog.agentNameById,
     statuses: catalog.statuses,
@@ -601,6 +607,7 @@ function IssuePropertiesPane({ data }: { data: IssueDetailData }): ReactElement 
           <SubIssueRow key={child.id} child={child} />
         ))}
         {data.children.length === 0 ? <Text style={styles.propertyValue}>None.</Text> : null}
+        <AddSubIssueRow parentId={data.issue?.id ?? ""} onCreated={data.refreshChildren} />
       </Section>
       <Section title="Execution log">
         {data.tasks.map((task) => (
@@ -637,6 +644,54 @@ function IssuePropertiesPane({ data }: { data: IssueDetailData }): ReactElement 
           </Text>
         </PropertyRow>
       </Section>
+    </View>
+  );
+}
+
+/**
+ * The creation face for the tree: one inline line under the parent's
+ * children. A sub-issue starts parked (backlog) like any issue; the parent
+ * link is the only extra fact.
+ */
+function AddSubIssueRow({
+  parentId,
+  onCreated,
+}: {
+  parentId: string;
+  onCreated: () => void;
+}): ReactElement {
+  const params = useLocalSearchParams<{ serverId: string }>();
+  const serverId = typeof params.serverId === "string" ? params.serverId : "";
+  const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
+  const client = runtimeSnapshot?.client ?? null;
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const submit = useCallback(() => {
+    const title = draft.trim();
+    if (!client || title === "" || parentId === "" || saving) return;
+    setSaving(true);
+    void client
+      .multicaIssueCreate({ title, parentIssueId: parentId })
+      .then(() => {
+        setDraft("");
+        onCreated();
+        return undefined;
+      })
+      .finally(() => setSaving(false));
+  }, [client, draft, parentId, saving, onCreated]);
+  return (
+    <View style={styles.addSubRow}>
+      <TextInput
+        style={styles.addSubInput}
+        initialValue=""
+        onChangeText={setDraft}
+        placeholder="Add a sub-issue"
+        placeholderTextColor="gray"
+        testID="multica-add-sub-input"
+      />
+      <Pressable style={styles.addSubButton} onPress={submit} testID="multica-add-sub-submit">
+        <Text style={styles.propertyValue}>{saving ? "…" : "Add"}</Text>
+      </Pressable>
     </View>
   );
 }
@@ -867,6 +922,29 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.border,
   },
   reactionAddText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  addSubRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    marginTop: theme.spacing[1],
+  },
+  addSubInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 2,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+  },
+  addSubButton: {
+    paddingVertical: 2,
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
   subscribeButton: {
     alignSelf: "flex-start",
     paddingVertical: 2,
