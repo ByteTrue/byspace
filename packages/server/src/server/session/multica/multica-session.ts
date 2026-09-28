@@ -375,6 +375,27 @@ export class MulticaSession {
     });
   }
 
+  /**
+   * Who is speaking. A session id that resolves to a run is that run's
+   * agent; a session id that resolves to nothing is refused (an agent speaks
+   * on an issue only through a run, so a stray id is a lie, not a human);
+   * no session id at all is the owner — the console and any human surface
+   * send nothing.
+   */
+  #resolveCommentAuthor(senderSessionId: string | undefined): {
+    type: "owner" | "agent";
+    id: string;
+  } {
+    if (senderSessionId === undefined) {
+      return { type: "owner", id: "owner" };
+    }
+    const task = this.#store.getTaskBySession(senderSessionId);
+    if (!task) {
+      throw new Error(`Session ${senderSessionId} is not a multica run`);
+    }
+    return { type: "agent", id: task.agentId };
+  }
+
   #handleCommentList(
     msg: Extract<SessionInboundMessage, { type: "multica.comment.list.request" }>,
   ): void {
@@ -389,21 +410,23 @@ export class MulticaSession {
     msg: Extract<SessionInboundMessage, { type: "multica.comment.create.request" }>,
   ): void {
     const issue = this.#store.getIssue(msg.issueId);
+    const author = this.#resolveCommentAuthor(msg.senderSessionId);
     const comment = this.#store.createComment({
       issueId: msg.issueId,
-      authorType: "owner",
-      authorId: "owner",
+      authorType: author.type,
+      authorId: author.id,
       content: msg.content,
       parentId: msg.parentId,
     });
     // The comment trigger: explicit mentions wake who they name; a human
-    // comment on an assigned issue routes to the assignee.
+    // comment on an assigned issue routes to the assignee. An agent's own
+    // comment never re-triggers itself.
     const triggers = commentTriggers({
       store: this.#store,
       issue,
       content: msg.content,
-      authorType: "owner",
-      authorId: "owner",
+      authorType: author.type,
+      authorId: author.id,
       mentions: parseMentions(msg.content),
     });
     for (const trigger of triggers) {

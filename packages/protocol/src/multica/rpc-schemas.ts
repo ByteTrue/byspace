@@ -193,6 +193,13 @@ export const MulticaCommentCreateRequestSchema = z.object({
   issueId: z.string().min(1),
   content: z.string().min(1),
   parentId: z.string().optional(),
+  /**
+   * The session the sender speaks from. An agent session is reverse-resolved
+   * to its run and the comment attributes to the run's agent; absent means a
+   * human (the owner). A value that resolves to no run is refused — an agent
+   * speaks on an issue only through a run.
+   */
+  senderSessionId: z.string().optional(),
 });
 
 export const MulticaCommentCreateResponseSchema = z.object({

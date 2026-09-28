@@ -129,3 +129,35 @@ describe("run queue", () => {
     expect(() => store.getTask("missing")).toThrow(/task not found/);
   });
 });
+
+describe("run identity: session stamp and reverse resolution", () => {
+  it("a stamped session resolves back to its run", () => {
+    const agent = store.createAgent({ name: "Writer" });
+    const issue = store.createIssue({
+      title: "Work",
+      creatorType: "owner",
+      creatorId: "owner",
+    });
+    const task = store.createTask({ issueId: issue.id, agentId: agent.id });
+    expect(store.getTaskBySession("sess-1")).toBeNull();
+
+    store.attachTaskSession(task.id, "sess-1");
+
+    const found = store.getTaskBySession("sess-1");
+    expect(found?.id).toBe(task.id);
+    expect(found?.agentId).toBe(agent.id);
+  });
+
+  it("the stamp survives status moves (it is a fact, not a transition)", () => {
+    const agent = store.createAgent({ name: "Writer" });
+    const issue = store.createIssue({
+      title: "Work",
+      creatorType: "owner",
+      creatorId: "owner",
+    });
+    const task = store.createTask({ issueId: issue.id, agentId: agent.id });
+    store.attachTaskSession(task.id, "sess-2");
+    store.updateTaskStatus({ id: task.id, status: "running" });
+    expect(store.getTaskBySession("sess-2")?.status).toBe("running");
+  });
+});

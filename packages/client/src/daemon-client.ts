@@ -5594,6 +5594,7 @@ export class DaemonClient {
     issueId: string;
     content: string;
     parentId?: string;
+    senderSessionId?: string;
   }): Promise<MulticaCommentCreatePayload> {
     return this.sendCorrelatedSessionRequest({
       message: {
@@ -5601,6 +5602,7 @@ export class DaemonClient {
         issueId: options.issueId,
         content: options.content,
         parentId: options.parentId,
+        senderSessionId: options.senderSessionId,
       },
       responseType: "multica.comment.create.response",
     });

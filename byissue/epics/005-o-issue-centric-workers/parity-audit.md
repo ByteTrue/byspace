@@ -86,8 +86,8 @@ multica（`~/workspace/refs/multica` @ `04cdd48`，一手读码）与本工程 `
 
 ## 抄歪清单（按严重度）
 
-1. **F2 run 身份链整体缺失**（C/D/E）：executor 不写 `queue.session_id`，故 daemon 无法把任意会话反解为 run/agent；连带 `comment.create` 无作者字段、CLI 不传身份、handler 硬编码 owner —— agent 说的话在记录里读作 owner 说的。源里 run 的每句话都归它自己，issue 的记录才读得懂"谁说的"。修法有现成模式：worker 域的 `attachRunSession` + `resolveSenderFromRun` —— executor 建会话后写 session_id；CLI 传 `BYSPACE_AGENT_ID`；handler 反解并拒绝自报与反解不一致。**这是记录层的正确性问题，不是装饰。**
-2. **F1 task_message 漂移**：基线文档列了 28 表含 task_message，迁移从未建。要么翻译（连带流式进度+Execution log 面板），要么从基线正式砍掉并记理由。现状是文档说谎。
+1. **F2 run 身份链整体缺失**（C/D/E）：已修（Epic Issue 001）。executor 写 session_id；`comment.create` 带 `senderSessionId`；handler 反解 run 归 agent，无字段归 owner，陌生会话拒绝；CLI 从 `BYSPACE_AGENT_ID` 发送身份。
+2. **F1 task_message 漂移**：已裁决砍除，基线改 27 表并记理由（Epic Issue 002）。
 3. **F3 claim 并发**：in-process Set 在单 daemon 下等价于 SKIP LOCKED，但"等价"依赖"永远单 daemon"这个前提未被记录。补一句约束即可。
 4. **F4 状态双入口**：`issue.update`（带 status 字段）与 `issue.status.update` 都做乐观并发+触发入队。源只有一个 update 面。留着是兼容我们的 UI 快捷下拉，但两个入口的触发语义要永远一致 —— 值得一个共用私有方法（现在恰好共用 `#enqueueForIssueWrite`，风险已控）。
 5. **F5 秘书入口形态**：从 Office issue 改为常驻 workspace（本轮）。与源的最大 UI 偏离，Owner 批准；代价是源的"chat 内 mika"体验我们没有对应物 —— 用 workspace 会话替代，功能等价、UI 零新增。

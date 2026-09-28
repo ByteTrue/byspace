@@ -11,6 +11,7 @@ import {
   withOutput,
   type CommandError,
   type CommandOptions,
+  type ListResult,
   type OutputSchema,
 } from "../output/index.js";
 import { buildDaemonConnectionCommandError, connectToDaemon } from "../utils/client.js";
@@ -71,7 +72,7 @@ export const multicaCommentSchema: OutputSchema<MulticaCommentRow> = {
 export async function runMulticaIssueLsCommand(
   options: CommandOptions & { status?: string },
   _command: Command,
-): Promise<{ type: "list"; data: MulticaIssueRow[]; schema: OutputSchema<MulticaIssueRow> }> {
+): Promise<ListResult<MulticaIssueRow>> {
   const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
     throw buildDaemonConnectionCommandError({ host: options.host, error });
   });
@@ -101,7 +102,7 @@ export async function runMulticaIssueCreateCommand(
     assigneeType?: string;
   },
   _command: Command,
-): Promise<{ type: "list"; data: MulticaIssueRow[]; schema: OutputSchema<MulticaIssueRow> }> {
+): Promise<ListResult<MulticaIssueRow>> {
   const title = options.title?.trim();
   if (!title) {
     throw { code: "MISSING_TITLE", message: "--title is required" } satisfies CommandError;
@@ -138,7 +139,7 @@ export async function runMulticaIssueCreateCommand(
 export async function runMulticaAgentLsCommand(
   options: CommandOptions,
   _command: Command,
-): Promise<{ type: "list"; data: MulticaAgentRow[]; schema: OutputSchema<MulticaAgentRow> }> {
+): Promise<ListResult<MulticaAgentRow>> {
   const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
     throw buildDaemonConnectionCommandError({ host: options.host, error });
   });
@@ -163,7 +164,7 @@ export async function runMulticaAgentLsCommand(
 export async function runMulticaCommentLsCommand(
   options: CommandOptions & { issueId?: string },
   _command: Command,
-): Promise<{ type: "list"; data: MulticaCommentRow[]; schema: OutputSchema<MulticaCommentRow> }> {
+): Promise<ListResult<MulticaCommentRow>> {
   const issueId = options.issueId?.trim();
   if (!issueId) {
     throw { code: "MISSING_ISSUE_ID", message: "--issue-id is required" } satisfies CommandError;
@@ -191,7 +192,7 @@ export async function runMulticaCommentLsCommand(
 export async function runMulticaCommentSendCommand(
   options: CommandOptions & { issueId?: string; body?: string },
   _command: Command,
-): Promise<{ type: "list"; data: MulticaCommentRow[]; schema: OutputSchema<MulticaCommentRow> }> {
+): Promise<ListResult<MulticaCommentRow>> {
   const issueId = options.issueId?.trim();
   if (!issueId) {
     throw { code: "MISSING_ISSUE_ID", message: "--issue-id is required" } satisfies CommandError;
@@ -204,12 +205,21 @@ export async function runMulticaCommentSendCommand(
     throw buildDaemonConnectionCommandError({ host: options.host, error });
   });
   try {
-    const payload = await client.multicaCommentCreate({ issueId, content: body });
+    // Speaking from inside an agent session means speaking as that run: the
+    // session id rides the request so the daemon attributes the comment to
+    // the run's agent. The daemon refuses ids it cannot resolve to a run, so
+    // a forged id fails loudly instead of attributing wrongly.
+    const senderSessionId = process.env.BYSPACE_AGENT_ID?.trim() || undefined;
+    const payload = await client.multicaCommentCreate({
+      issueId,
+      content: body,
+      ...(senderSessionId ? { senderSessionId } : {}),
+    });
     return {
       type: "list",
       data: [
         {
-          author: "you",
+          author: payload.comment.authorType === "owner" ? "you" : payload.comment.authorId,
           createdAt: payload.comment.createdAt,
           content: payload.comment.content,
           commentId: payload.comment.id,
@@ -225,7 +235,7 @@ export async function runMulticaCommentSendCommand(
 export async function runMulticaAgentCreateCommand(
   options: CommandOptions & { name?: string; description?: string; instructions?: string },
   _command: Command,
-): Promise<{ type: "list"; data: MulticaAgentRow[]; schema: OutputSchema<MulticaAgentRow> }> {
+): Promise<ListResult<MulticaAgentRow>> {
   const name = options.name?.trim();
   if (!name) {
     throw { code: "MISSING_NAME", message: "--name is required" } satisfies CommandError;

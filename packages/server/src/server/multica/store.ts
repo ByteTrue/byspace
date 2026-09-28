@@ -544,6 +544,32 @@ export class MulticaStore {
     return rows.map(mapTaskRow);
   }
 
+  /**
+   * Stamp the session a run executes in. The id is a fact about the task,
+   * not a state transition, so it rides its own writer rather than the
+   * status update — the same discipline the worker domain's attachRunSession
+   * established.
+   */
+  attachTaskSession(taskId: string, sessionId: string): void {
+    this.#db
+      .prepare("UPDATE agent_task_queue SET session_id = ? WHERE id = ?")
+      .run(sessionId, taskId);
+  }
+
+  /**
+   * Reverse-resolve a session to the run executing in it. The source does
+   * not index session_id (its indexes serve the chat-resume lookups), so
+   * this is a scan over the queue — small by construction: one row per run,
+   * and runs settle. A session with no run returns null: in this domain an
+   * agent speaks on an issue only through a run.
+   */
+  getTaskBySession(sessionId: string): TaskRow | null {
+    const row = this.#db
+      .prepare(`SELECT ${TASK_SELECT} FROM agent_task_queue WHERE session_id = ?`)
+      .get(sessionId) as Record<string, unknown> | undefined;
+    return row ? mapTaskRow(row as never) : null;
+  }
+
   listTasksForIssue(issueId: string): TaskRow[] {
     const rows = this.#db
       .prepare(

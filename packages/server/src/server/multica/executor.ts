@@ -54,6 +54,14 @@ export class MulticaExecutor {
    * agent.max_concurrent_tasks, which is 1 in this form factor). The in-flight
    * set enforces it in-process; the queue row's status is the durable guard.
    */
+  /**
+   * Claim and execute every queued run. The in-process in-flight set plus
+   * the queue row's status guard make a double-claim impossible here. That
+   * equivalence rests on one recorded premise: this replica deploys one
+   * daemon per host (the source's SKIP LOCKED exists for multi-daemon
+   * fleets). If a second daemon ever joins, claiming must move to a
+   * database-level atomic claim — not a second in-process set.
+   */
   async drain(): Promise<number> {
     let executed = 0;
     for (const task of this.#store.listQueuedTasks()) {
@@ -111,6 +119,10 @@ export class MulticaExecutor {
       if (created.initialPromptError) {
         throw created.initialPromptError;
       }
+      // The run's identity: from here the daemon can reverse-resolve any
+      // session to its run, which is how an agent's comments attribute to
+      // the agent rather than to the owner.
+      this.#store.attachTaskSession(task.id, created.snapshot.id);
       const result = await this.#agentManager.runAgent(created.snapshot.id, prompt);
       const waitResult = await this.#agentManager.waitForAgentEvent(created.snapshot.id, {
         waitForActive: true,

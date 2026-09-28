@@ -2,7 +2,7 @@
 
 > **读者：** 把 multica 的 PostgreSQL schema 翻译成 Node+SQLite 的人。源：~/workspace/refs/multica/server/migrations（577 个 up 迁移，commit 04cdd48）。本文是冻结的对照基线，不是设计——所有结构决定以 multica 为准，翻译规则见文末。
 
-## 复刻表清单（28 张，按依赖序）
+## 复刻表清单（27 张，按依赖序）
 
 ### 工作域核心
 
@@ -13,7 +13,6 @@
 | issue_status            | 332      | 四类状态目录（category: unstarted/started/done/closed + 内置锁定 + 自定义）                                                              | 是"四类生命周期"的载体表                                                                                  |
 | comment                 | 001      | author(member\|agent)/content/type(comment\|status_change\|progress_update\|system)                                                      | 017 comment_parent_id（线程回复）                                                                         |
 | agent_task_queue（run） | 001      | agent_id/issue_id/status(queued\|dispatched\|running\|completed\|failed\|cancelled)/priority/result(JSONB)/error                         | 090 is_leader_task；127 squad_id；549 task_supplement 关联                                                |
-| task_message            | 026      | run 执行中产出的进度消息（区别于 comment）                                                                                               |                                                                                                           |
 | inbox_item              | 001      | recipient/severity(action_required\|attention\|info)/issue_id/title/body/read/archived                                                   |                                                                                                           |
 | activity_log            | 001      | 全域审计流                                                                                                                               |                                                                                                           |
 | issue_subscriber        | 015      | issue 关注者                                                                                                                             |                                                                                                           |
@@ -51,6 +50,8 @@
 ## 砍除清单（多租户/云圈，Owner 批准）
 
 user、workspace、member、verification*code、personal_access_token、daemon_token、workspace_invitation、seat_capacity_outbox、contact_sales_inquiry、feedback（云端）、notification_preference、workspace_share_link、workspace_mcp_server、instance_telemetry_state、lark*\_/dingtalk\__/channel*\*（IM 渠道圈）、github*_（6 张，范围外）、cloudruntime 依赖表、plugin\_\_（10 张，范围外后置）、billing/usage 聚合表族（task_usage_daily/hourly/dashboard/rollup/dirty —— 云端计量，本地无意义）。
+
+task_message（源 026：run 流式进度消息）：本形态的 run 是普通 agent 会话，进度天然在会话时间线里（BySpace 会话 UI 一等公民）；源要它是因为 run 是黑盒子进程。Execution log 面读 agent_task_queue 行即可。
 
 **砍除的连带处理**：所有表的 workspace_id 列删；user/member 引用（creator_id/assignee member 型）收窄为"单用户=daemon 属主"常量或删列；agent.runtime_mode 只留 local。
 

@@ -45,6 +45,8 @@ supersedes: byissue/epics/004-x-worker-domain/spec.md 的协作模型
 
 ## 复刻边界（唯一两处偏离，均已 Owner 批准）
 
+补充边界（2026-09-28，对照审计 F3）：本复刻的部署形态是**单 daemon per host**；队列领取的 in-process 等价性依赖该前提。多 daemon 并发领取不在边界内，若将来需要，claim 必须改为 DB 级原子（源用 PG SKIP LOCKED 的原因即此）。
+
 | 偏离         | 内容                                                                                                      |
 | ------------ | --------------------------------------------------------------------------------------------------------- |
 | 砍多租户     | workspace/user/member/auth/billing/cloud-runtime/seat 全删；所有表去 workspace 维度；单用户即 daemon 属主 |
@@ -92,6 +94,16 @@ supersedes: byissue/epics/004-x-worker-domain/spec.md 的协作模型
   5. **真机抓到两个真缺陷并修复**：CJK 全角标点后的 @mention 被静默丢弃（`：@Writer` 不触发——中文场景的高频形态，边界从 ASCII 空白改为任何非名字字符，回归测试锁死）；CLI 缺 agent create（秘书自己报告的缺口）。
   6. 数据跨 daemon 重启持久（SQLite）。
   7. 验证过程排除的环境坑：6778 被练手线旧 daemon 占用导致 unknown_schema 误报（进程清理后消失）。
+
+## 进度（2026-09-28，对照审计与身份链）
+
+对照审计（`parity-audit.md`）把复刻与源逐层对了一遍，五处漂移中三处已修：
+
+- **run 身份链**（Issue 001）：executor 写 `queue.session_id`；`comment.create` 带 `senderSessionId`，handler 反解 run 归 agent、无字段归 owner、陌生会话拒绝；CLI 从 `BYSPACE_AGENT_ID` 发送身份。issue 的记录现在读得懂"谁说的"。
+- **task_message**（Issue 002）：正式砍除，基线 27 表；理由记在基线砍除清单。
+- **claim 前提**（Issue 002）：单 daemon per host 记入 executor 注释与本节边界。
+
+审计余下两处：F4 状态双入口（共用 `#enqueueForIssueWrite`，风险已控，观察）；F5 秘书入口（常驻 workspace，Owner 批准的偏离）。欠账面（wakeup/autopilot/inbox/管理页等）列在审计末节，未动。
 
 ## 工程切法
 

@@ -10,7 +10,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { DaemonClient } from "../test-utils/daemon-client.js";
+import { openMulticaDatabase } from "./database.js";
+import { MIGRATIONS } from "./migrations/index.js";
+import { MulticaStore } from "./store.js";
 import { createTestBySpaceDaemon } from "../test-utils/byspace-daemon.js";
+import type { TestBySpaceDaemon } from "../test-utils/byspace-daemon.js";
 
 interface Check {
   readonly name: string;
@@ -21,6 +25,69 @@ interface Check {
 const checks: Check[] = [];
 function check(name: string, ok: boolean, detail?: string): void {
   checks.push({ name, ok, detail });
+}
+
+/**
+ * Run identity over the real wire: a comment sent from a run's session
+ * attributes to the run's agent; a stranger session is refused; silence is
+ * the owner. The task row is stamped through the store (the same call the
+ * executor makes) and completed immediately so the in-process executor
+ * never drains it into a real session.
+ */
+async function verifyRunIdentity(
+  client: DaemonClient,
+  daemon: TestBySpaceDaemon,
+  issue: { issue: { id: string } },
+  created: { agent: { id: string } },
+): Promise<void> {
+  // Run identity: a comment sent from a run's session attributes to
+  // the run's agent; a stranger session is refused; silence is owner.
+  // The task row is stamped through the store (the same call the
+  // executor makes) and completed immediately so the in-process
+  // executor never drains it into a real session.
+  const store = new MulticaStore(
+    openMulticaDatabase(path.join(daemon.byspaceHome, "multica", "multica.db")),
+    { migrations: MIGRATIONS },
+  );
+  try {
+    const runTask = store.createTask({
+      issueId: issue.issue.id,
+      agentId: created.agent.id,
+    });
+    store.updateTaskStatus({ id: runTask.id, status: "completed" });
+    store.attachTaskSession(runTask.id, "verify-run-session");
+
+    const asRun = await client.multicaCommentCreate({
+      issueId: issue.issue.id,
+      content: "report from the run",
+      senderSessionId: "verify-run-session",
+    });
+    check(
+      "a run's session attributes its comment to the run's agent",
+      asRun.comment.authorType === "agent" && asRun.comment.authorId === created.agent.id,
+      `${asRun.comment.authorType}:${asRun.comment.authorId.slice(0, 8)}`,
+    );
+
+    let strangerRefused = false;
+    try {
+      await client.multicaCommentCreate({
+        issueId: issue.issue.id,
+        content: "trust me I am an agent",
+        senderSessionId: "verify-stranger-session",
+      });
+    } catch {
+      strangerRefused = true;
+    }
+    check("a session with no run is refused", strangerRefused);
+
+    const asOwner = await client.multicaCommentCreate({
+      issueId: issue.issue.id,
+      content: "and a human note",
+    });
+    check("a comment with no session is the owner", asOwner.comment.authorType === "owner");
+  } finally {
+    store.close();
+  }
 }
 
 async function main(): Promise<void> {
@@ -144,6 +211,8 @@ async function main(): Promise<void> {
           staleUpdateRejected = true;
         }
         check("stale field update is refused", staleUpdateRejected);
+
+        await verifyRunIdentity(client, daemon, issue, created);
 
         // unknown issue errors cleanly
         let unknownHandled = false;
