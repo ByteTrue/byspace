@@ -680,3 +680,16 @@ describe("autopilot trigger rows", () => {
     expect(() => store.deleteAutopilotTrigger(trigger.id)).toThrow(/not found/);
   });
 });
+
+describe("issue deletion", () => {
+  it("deleting an issue takes its queue rows with it", () => {
+    const issue = store.createIssue({ title: "Doomed", creatorType: "owner", creatorId: "owner" });
+    const agent = store.createAgent({ name: "Doomed runner" });
+    const task = store.createTask({ issueId: issue.id, agentId: agent.id });
+    expect(store.taskExists(task.id)).toBe(true);
+    store.deleteIssue(issue.id);
+    expect(store.taskExists(task.id)).toBe(false);
+    expect(() => store.getIssue(issue.id)).toThrow(/not found/);
+    expect(() => store.deleteIssue(issue.id)).toThrow(/not found/);
+  });
+});

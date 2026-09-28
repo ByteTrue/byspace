@@ -25,6 +25,12 @@ import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 import type { MulticaIssueSummary } from "@bytetrue/protocol/multica/rpc-schemas";
 import { IssueMetaLine } from "@/multica/multica-activity";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   type BoardColumnSpec,
   type BoardGrouping,
   buildColumns,
@@ -52,6 +58,20 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
   const router = useRouter();
 
   const [view, setView] = useState<"board" | "list">("board");
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const toggleSelect = useCallback((issueId: string) => {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(issueId)) {
+        next.delete(issueId);
+      } else {
+        next.add(issueId);
+      }
+      return next;
+    });
+  }, []);
+  const clearSelection = useCallback(() => setSelected(new Set()), []);
+
   /** Which status the open create form defaults to; null means closed. */
   const [newIssueStatus, setNewIssueStatus] = useState<string | null>(null);
   const [filters, setFilters] = useState<MulticaFilters>(emptyFilters);
@@ -81,6 +101,44 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
     staleTimeMs: 3_000,
     refetchInterval: 5_000,
   });
+  const selectedIds = useMemo(() => [...selected], [selected]);
+  const refreshIssues = useCallback(() => {
+    void issuesQuery.refetch();
+  }, [issuesQuery]);
+  const batchUpdate = useCallback(
+    (fields: {
+      status?: string;
+      priority?: string;
+      assigneeType?: string | null;
+      assigneeId?: string | null;
+    }) => {
+      if (!client || selectedIds.length === 0) return;
+      void client
+        .multicaIssueBatchUpdate({ ids: selectedIds, ...fields })
+        .then(() => {
+          clearSelection();
+          refreshIssues();
+          return undefined;
+        })
+        .catch(refreshIssues);
+    },
+    [client, selectedIds, clearSelection, refreshIssues],
+  );
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const askDelete = useCallback(() => setConfirmingDelete(true), []);
+  const cancelDelete = useCallback(() => setConfirmingDelete(false), []);
+  const batchDelete = useCallback(() => {
+    if (!client || selectedIds.length === 0) return;
+    void client
+      .multicaIssueBatchDelete({ ids: selectedIds })
+      .then(() => {
+        setConfirmingDelete(false);
+        clearSelection();
+        refreshIssues();
+        return undefined;
+      })
+      .catch(refreshIssues);
+  }, [client, selectedIds, clearSelection, refreshIssues]);
 
   const live = useMulticaLiveState(serverId);
   const catalog = useMulticaCatalog(serverId);
@@ -203,6 +261,20 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
             </View>
           ) : null}
         </View>
+        {selected.size > 0 ? (
+          <BatchToolbar
+            count={selected.size}
+            statuses={statuses}
+            agents={catalog.agents}
+            confirmingDelete={confirmingDelete}
+            onStatus={batchUpdate}
+            onAssign={batchUpdate}
+            onAskDelete={askDelete}
+            onCancelDelete={cancelDelete}
+            onDelete={batchDelete}
+            onClear={clearSelection}
+          />
+        ) : null}
         <FilterBar
           statuses={statuses.map((status) => ({ key: status.key, name: status.name }))}
           filters={filters}
@@ -227,6 +299,8 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
             onOpen={openIssue}
             onCreateIn={setNewIssueStatus}
             onMove={moveIssue}
+            selected={selected}
+            onToggleSelect={toggleSelect}
           />
         ) : (
           <IssueList
@@ -234,6 +308,8 @@ export function MulticaBoard({ serverId }: { serverId: string }): ReactElement {
             statusColorByKey={new Map(statuses.map((status) => [status.key, status.color]))}
             agentNameById={catalog.agentNameById}
             onOpen={openIssue}
+            selected={selected}
+            onToggleSelect={toggleSelect}
           />
         )}
       </View>
@@ -488,11 +564,15 @@ export function IssueList({
   statusColorByKey,
   agentNameById,
   onOpen,
+  selected,
+  onToggleSelect,
 }: {
   issues: readonly MulticaIssueSummary[];
   statusColorByKey: ReadonlyMap<string, string>;
   agentNameById: ReadonlyMap<string, string>;
   onOpen: (issueId: string) => void;
+  selected: ReadonlySet<string>;
+  onToggleSelect: (issueId: string) => void;
 }): ReactElement {
   return (
     <ScrollView contentContainerStyle={styles.listBody}>
@@ -503,6 +583,8 @@ export function IssueList({
           color={statusColorByKey.get(issue.status) ?? "#999"}
           agentName={issue.assigneeId ? (agentNameById.get(issue.assigneeId) ?? null) : null}
           onOpen={onOpen}
+          isSelected={selected.has(issue.id)}
+          onToggleSelect={onToggleSelect}
         />
       ))}
       {issues.length === 0 ? <Text style={styles.listEmpty}>Nothing matches.</Text> : null}
@@ -515,15 +597,20 @@ function IssueRow({
   color,
   agentName,
   onOpen,
+  isSelected,
+  onToggleSelect,
 }: {
   issue: MulticaIssueSummary;
   color: string;
   agentName: string | null;
   onOpen: (issueId: string) => void;
+  isSelected: boolean;
+  onToggleSelect: (issueId: string) => void;
 }): ReactElement {
   const handlePress = useCallback(() => onOpen(issue.id), [issue.id, onOpen]);
   return (
     <Pressable style={styles.listRow} onPress={handlePress} testID={`multica-list-row-${issue.id}`}>
+      <SelectTick issueId={issue.id} isSelected={isSelected} onToggle={onToggleSelect} />
       <View style={[styles.columnDot, { backgroundColor: color }]} />
       <Text style={styles.listRowTitle} numberOfLines={1}>
         {issue.title}
@@ -750,12 +837,16 @@ export function BoardCanvas({
   onOpen,
   onCreateIn,
   onMove,
+  selected,
+  onToggleSelect,
 }: {
   grouping: BoardGrouping;
   columns: readonly BoardColumnSpec[];
   issues: readonly MulticaIssueSummary[];
   agentNameById: ReadonlyMap<string, string>;
   workingIssueIds: ReadonlySet<string>;
+  selected: ReadonlySet<string>;
+  onToggleSelect: (issueId: string) => void;
   onOpen: (issueId: string) => void;
   onCreateIn: (statusKey: string) => void;
   onMove: (
@@ -822,6 +913,8 @@ export function BoardCanvas({
             workingIssueIds={workingIssueIds}
             onOpen={onOpen}
             onCreateIn={onCreateIn}
+            selected={selected}
+            onToggleSelect={onToggleSelect}
           />
         ))}
       </ScrollView>
@@ -845,12 +938,16 @@ function BoardColumn({
   workingIssueIds,
   onOpen,
   onCreateIn,
+  selected,
+  onToggleSelect,
 }: {
   column: BoardColumnSpec;
   issues: readonly MulticaIssueSummary[];
   agentNameById: ReadonlyMap<string, string>;
   workingIssueIds: ReadonlySet<string>;
   onOpen: (issueId: string) => void;
+  selected: ReadonlySet<string>;
+  onToggleSelect: (issueId: string) => void;
   onCreateIn: (statusKey: string) => void;
 }): ReactElement {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
@@ -888,6 +985,8 @@ function BoardColumn({
               agentName={issue.assigneeId ? (agentNameById.get(issue.assigneeId) ?? null) : null}
               working={workingIssueIds.has(issue.id)}
               onOpen={onOpen}
+              isSelected={selected.has(issue.id)}
+              onToggleSelect={onToggleSelect}
             />
           ))}
         </ScrollView>
@@ -896,16 +995,168 @@ function BoardColumn({
   );
 }
 
+/**
+ * The selection tick, the source's checkbox translated: a small square at
+ * the card's corner that joins the batch set without opening the issue.
+ */
+function SelectTick({
+  issueId,
+  isSelected,
+  onToggle,
+}: {
+  issueId: string;
+  isSelected: boolean;
+  onToggle: (issueId: string) => void;
+}): ReactElement {
+  const handlePress = useCallback(() => onToggle(issueId), [issueId, onToggle]);
+  return (
+    <Pressable
+      style={[styles.tick, isSelected && styles.tickOn]}
+      onPress={handlePress}
+      testID={`multica-select-${issueId}`}
+    />
+  );
+}
+
+/**
+ * The batch toolbar, the source's BatchActionToolbar: count, the field
+ * verbs and delete, plus clear. Delete is a two-step affordance (Delete
+ * then Confirm delete N) rather than the source's modal, since the repo
+ * has no dialog mechanism (033). Status and assignee apply directly, as
+ * the source applies status directly (MUL-4155).
+ */
+function BatchToolbar({
+  count,
+  statuses,
+  agents,
+  confirmingDelete,
+  onStatus,
+  onAssign,
+  onAskDelete,
+  onCancelDelete,
+  onDelete,
+  onClear,
+}: {
+  count: number;
+  statuses: readonly { key: string; name: string }[];
+  agents: readonly { id: string; name: string }[];
+  confirmingDelete: boolean;
+  onStatus: (fields: { status: string }) => void;
+  onAssign: (fields: { assigneeType: string; assigneeId: string }) => void;
+  onAskDelete: () => void;
+  onCancelDelete: () => void;
+  onDelete: () => void;
+  onClear: () => void;
+}): ReactElement {
+  return (
+    <View style={styles.batchBar}>
+      <Text style={styles.batchCount}>{count} selected</Text>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          accessibilityRole="button"
+          accessibilityLabel="Batch status"
+          style={styles.batchPick}
+          testID="multica-batch-status"
+        >
+          <Text style={styles.batchPickText}>Status</Text>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="bottom" align="start" offset={4} minWidth={140}>
+          {statuses.map((status) => (
+            <BatchStatusItem key={status.key} status={status} onPick={onStatus} />
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          accessibilityRole="button"
+          accessibilityLabel="Batch assignee"
+          style={styles.batchPick}
+          testID="multica-batch-assignee"
+        >
+          <Text style={styles.batchPickText}>Assignee</Text>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="bottom" align="start" offset={4} minWidth={140}>
+          {agents.map((agent) => (
+            <BatchAssigneeItem key={agent.id} agent={agent} onPick={onAssign} />
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {confirmingDelete ? (
+        <>
+          <Pressable
+            style={styles.batchDanger}
+            onPress={onDelete}
+            testID="multica-batch-delete-confirm"
+          >
+            <Text style={styles.batchDangerText}>Confirm delete {count}</Text>
+          </Pressable>
+          <Pressable
+            style={styles.batchPick}
+            onPress={onCancelDelete}
+            testID="multica-batch-delete-cancel"
+          >
+            <Text style={styles.batchPickText}>cancel</Text>
+          </Pressable>
+        </>
+      ) : (
+        <Pressable style={styles.batchPick} onPress={onAskDelete} testID="multica-batch-delete">
+          <Text style={styles.batchPickText}>Delete</Text>
+        </Pressable>
+      )}
+      <Pressable style={styles.batchPick} onPress={onClear} testID="multica-batch-clear">
+        <Text style={styles.batchPickText}>clear</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function BatchStatusItem({
+  status,
+  onPick,
+}: {
+  status: { key: string; name: string };
+  onPick: (fields: { status: string }) => void;
+}): ReactElement {
+  const handleSelect = useCallback(() => onPick({ status: status.key }), [status.key, onPick]);
+  return (
+    <DropdownMenuItem onSelect={handleSelect}>
+      <Text style={styles.batchMenuItem}>{status.name}</Text>
+    </DropdownMenuItem>
+  );
+}
+
+function BatchAssigneeItem({
+  agent,
+  onPick,
+}: {
+  agent: { id: string; name: string };
+  onPick: (fields: { assigneeType: string; assigneeId: string }) => void;
+}): ReactElement {
+  const handleSelect = useCallback(
+    () => onPick({ assigneeType: "agent", assigneeId: agent.id }),
+    [agent.id, onPick],
+  );
+  return (
+    <DropdownMenuItem onSelect={handleSelect}>
+      <Text style={styles.batchMenuItem}>{agent.name}</Text>
+    </DropdownMenuItem>
+  );
+}
+
 function DraggableCard({
   issue,
   agentName,
   working,
   onOpen,
+  isSelected,
+  onToggleSelect,
 }: {
   issue: MulticaIssueSummary;
   agentName: string | null;
   working: boolean;
   onOpen: (issueId: string) => void;
+  isSelected: boolean;
+  onToggleSelect: (issueId: string) => void;
 }): ReactElement {
   const { attributes, listeners, setNodeRef } = useDraggable({ id: issue.id });
   const handlePress = useCallback(() => onOpen(issue.id), [issue.id, onOpen]);
@@ -916,6 +1167,7 @@ function DraggableCard({
       {...(attributes as unknown as Record<string, unknown>)}
     >
       <Pressable style={styles.card} onPress={handlePress} testID={`multica-issue-${issue.id}`}>
+        <SelectTick issueId={issue.id} isSelected={isSelected} onToggle={onToggleSelect} />
         <Text style={styles.cardTitle} numberOfLines={2}>
           {issue.title}
         </Text>
@@ -1084,6 +1336,45 @@ const styles = StyleSheet.create((theme) => ({
   columnBody: { minHeight: 120 },
   columnBodyOver: { backgroundColor: theme.colors.surface2, borderRadius: theme.borderRadius.md },
   columnList: { gap: theme.spacing[1] },
+  tick: {
+    width: 12,
+    height: 12,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    marginRight: theme.spacing[1],
+  },
+  tickOn: { backgroundColor: theme.colors.surface3 },
+  batchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface2,
+  },
+  batchCount: { color: theme.colors.foreground, fontSize: theme.fontSize.sm, fontWeight: "600" },
+  batchPick: {
+    paddingVertical: 2,
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  batchPickText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
+  batchDanger: {
+    paddingVertical: 2,
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface3,
+  },
+  batchDangerText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: "600",
+  },
+  batchMenuItem: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
   card: {
     padding: theme.spacing[2],
     borderRadius: theme.borderRadius.md,

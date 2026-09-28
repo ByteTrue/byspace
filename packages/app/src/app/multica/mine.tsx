@@ -23,6 +23,9 @@ type MineScope = "assigned" | "created" | "involved" | "all";
  * the rows are the board's shared list shape so the two surfaces cannot
  * drift apart.
  */
+const EMPTY_SELECTION: ReadonlySet<string> = new Set();
+function noopToggle(_issueId: string): void {}
+
 export default function MulticaMineRoute(): ReactElement {
   const params = useLocalSearchParams<{ serverId: string }>();
   const serverId = typeof params.serverId === "string" ? params.serverId : "";
@@ -143,6 +146,8 @@ function MinePage({ serverId }: { serverId: string }): ReactElement {
           onOpen={openIssue}
           onCreateIn={createIn}
           onMove={moveIssue}
+          selected={EMPTY_SELECTION}
+          onToggleSelect={noopToggle}
         />
       </View>
     </MulticaShell>

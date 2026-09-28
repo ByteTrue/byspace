@@ -543,6 +543,18 @@ type MulticaStatusListPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.status.list.response" }
 >["payload"];
+type MulticaIssueDeletePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.issue.delete.response" }
+>["payload"];
+type MulticaIssueBatchUpdatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.issue.batch_update.response" }
+>["payload"];
+type MulticaIssueBatchDeletePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.issue.batch_delete.response" }
+>["payload"];
 type MulticaIssueUpdatePayload = Extract<
   SessionOutboundMessage,
   { type: "multica.issue.update.response" }
@@ -5691,6 +5703,36 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       message: { type: "multica.status.list.request" },
       responseType: "multica.status.list.response",
+    });
+  }
+
+  async multicaIssueDelete(options: { id: string }): Promise<MulticaIssueDeletePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.issue.delete.request", ...options },
+      responseType: "multica.issue.delete.response",
+    });
+  }
+
+  async multicaIssueBatchUpdate(options: {
+    ids: string[];
+    expectedRevisions?: Record<string, number>;
+    status?: string;
+    priority?: string;
+    assigneeType?: string | null;
+    assigneeId?: string | null;
+  }): Promise<MulticaIssueBatchUpdatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.issue.batch_update.request", ...options },
+      responseType: "multica.issue.batch_update.response",
+    });
+  }
+
+  async multicaIssueBatchDelete(options: {
+    ids: string[];
+  }): Promise<MulticaIssueBatchDeletePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.issue.batch_delete.request", ...options },
+      responseType: "multica.issue.batch_delete.response",
     });
   }
 

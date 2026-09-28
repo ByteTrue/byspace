@@ -206,6 +206,20 @@ export class MulticaExecutor {
       this.#settleLinkedRun(task, "completed", null);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      // The issue can be deleted while a run is in flight: the source
+      // cancels the run inside the same transaction as the delete, so its
+      // task rows vanish with the issue. Our delete cancels first, but a
+      // run already past claim holds no such promise — settling against a
+      // vanished row would throw and leave the drain loop holding a dead
+      // agent slot. Drop the settlement instead; the record went with the
+      // issue, by the owner's own hand.
+      if (!this.#store.taskExists(task.id)) {
+        this.#logger.warn(
+          { taskId: task.id, issueId: task.issueId },
+          "multica run's task row vanished mid-run (issue deleted); dropping settlement",
+        );
+        return;
+      }
       this.#logger.warn({ err: error, taskId: task.id }, "multica run failed");
       this.#store.updateTaskStatus({ id: task.id, status: "failed", error: message });
       if (startupFailed) {

@@ -281,6 +281,24 @@ type MulticaInboundSubset = Extract<SessionInboundMessage, { type: `multica.${st
   requestId: string;
 };
 
+type IssueAdminMessage = Extract<
+  SessionInboundMessage,
+  {
+    type:
+      | "multica.issue.delete.request"
+      | "multica.issue.batch_update.request"
+      | "multica.issue.batch_delete.request";
+  }
+>;
+
+function isIssueAdminMessage(msg: MulticaInboundSubset): msg is IssueAdminMessage {
+  return (
+    msg.type === "multica.issue.delete.request" ||
+    msg.type === "multica.issue.batch_update.request" ||
+    msg.type === "multica.issue.batch_delete.request"
+  );
+}
+
 type WakeupOrInboxMessage = Extract<
   SessionInboundMessage,
   {
@@ -435,6 +453,9 @@ export class MulticaSession {
    */
   async handle(msg: MulticaInboundSubset): Promise<void> {
     try {
+      if (isIssueAdminMessage(msg)) {
+        return this.#handleIssueAdminMessage(msg);
+      }
       if (isWakeupOrInboxMessage(msg)) {
         return await this.#handleWakeupAndInbox(msg);
       }
@@ -597,26 +618,38 @@ export class MulticaSession {
     });
   }
 
-  #handleIssueUpdate(
-    msg: Extract<SessionInboundMessage, { type: "multica.issue.update.request" }>,
-  ): void {
-    const before = this.#store.getIssue(msg.issueId);
+  /**
+   * One issue field write plus the trigger it can start. The batch surface
+   * and the single-issue surface share this so a batched status move
+   * behaves exactly like N single moves — same re-rank, same wake rules.
+   */
+  #applyIssueWrite(input: {
+    issueId: string;
+    expectedRevision: number;
+    status?: string;
+    priority?: string;
+    assigneeType?: string | null;
+    assigneeId?: string | null;
+    title?: string;
+    position?: number | null;
+  }): IssueRow {
+    const before = this.#store.getIssue(input.issueId);
     const issue = this.#store.updateIssue({
-      id: msg.issueId,
-      expectedRevision: msg.expectedRevision,
-      position: msg.position ?? null,
-      status: msg.status,
-      priority: msg.priority,
-      assigneeType: msg.assigneeType,
-      assigneeId: msg.assigneeId,
-      title: msg.title,
+      id: input.issueId,
+      expectedRevision: input.expectedRevision,
+      position: input.position ?? null,
+      status: input.status,
+      priority: input.priority,
+      assigneeType: input.assigneeType,
+      assigneeId: input.assigneeId,
+      title: input.title,
     });
     // Field writes that the trigger engine cares about: a reassignment or a
     // backlog departure can start a run, exactly as a create does.
     const assigneeChanged =
-      (msg.assigneeType !== undefined && msg.assigneeType !== before.assigneeType) ||
-      (msg.assigneeId !== undefined && msg.assigneeId !== before.assigneeId);
-    const statusChanged = msg.status !== undefined && msg.status !== before.status;
+      (input.assigneeType !== undefined && input.assigneeType !== before.assigneeType) ||
+      (input.assigneeId !== undefined && input.assigneeId !== before.assigneeId);
+    const statusChanged = input.status !== undefined && input.status !== before.status;
     if (assigneeChanged || statusChanged) {
       this.#enqueueForIssueWrite(issue, {
         isCreate: false,
@@ -625,9 +658,85 @@ export class MulticaSession {
         prevStatus: before.status,
       });
     }
+    return issue;
+  }
+
+  #handleIssueUpdate(
+    msg: Extract<SessionInboundMessage, { type: "multica.issue.update.request" }>,
+  ): void {
+    const issue = this.#applyIssueWrite({
+      issueId: msg.issueId,
+      expectedRevision: msg.expectedRevision,
+      status: msg.status,
+      priority: msg.priority,
+      assigneeType: msg.assigneeType,
+      assigneeId: msg.assigneeId,
+      title: msg.title,
+      position: msg.position ?? null,
+    });
     this.#emit({
       type: "multica.issue.update.response",
       payload: { requestId: msg.requestId, issue: issueSummary(this.#store, issue) },
+    });
+  }
+
+  #handleIssueAdminMessage(msg: IssueAdminMessage): void {
+    switch (msg.type) {
+      case "multica.issue.delete.request":
+        return this.#handleIssueDelete(msg);
+      case "multica.issue.batch_update.request":
+        return this.#handleIssueBatchUpdate(msg);
+      case "multica.issue.batch_delete.request":
+        return this.#handleIssueBatchDelete(msg);
+      default:
+        msg satisfies never;
+    }
+  }
+
+  #handleIssueDelete(
+    msg: Extract<SessionInboundMessage, { type: "multica.issue.delete.request" }>,
+  ): void {
+    this.#store.deleteIssue(msg.id);
+    this.#emit({
+      type: "multica.issue.delete.response",
+      payload: { requestId: msg.requestId, deleted: true },
+    });
+  }
+
+  /** The batch surface is N single writes through the same path, per the
+   * source's batch endpoint: each row gets its own revision check and its
+   * own trigger decision, and a losing row errors the batch like any write. */
+  #handleIssueBatchUpdate(
+    msg: Extract<SessionInboundMessage, { type: "multica.issue.batch_update.request" }>,
+  ): void {
+    const issues = msg.ids.map((id) =>
+      this.#applyIssueWrite({
+        issueId: id,
+        expectedRevision: msg.expectedRevisions?.[id] ?? this.#store.getIssue(id).revision,
+        status: msg.status,
+        priority: msg.priority,
+        assigneeType: msg.assigneeType,
+        assigneeId: msg.assigneeId,
+      }),
+    );
+    this.#emit({
+      type: "multica.issue.batch_update.response",
+      payload: {
+        requestId: msg.requestId,
+        issues: issues.map((issue) => issueSummary(this.#store, issue)),
+      },
+    });
+  }
+
+  #handleIssueBatchDelete(
+    msg: Extract<SessionInboundMessage, { type: "multica.issue.batch_delete.request" }>,
+  ): void {
+    for (const id of msg.ids) {
+      this.#store.deleteIssue(id);
+    }
+    this.#emit({
+      type: "multica.issue.batch_delete.response",
+      payload: { requestId: msg.requestId, deleted: msg.ids.length },
     });
   }
 

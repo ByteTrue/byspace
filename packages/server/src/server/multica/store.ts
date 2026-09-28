@@ -824,6 +824,24 @@ export class MulticaStore {
    * the executor's one-run-per-agent bound means a queue slot is real
    * intent), through dispatch and run.
    */
+  /**
+   * Deleting an issue takes its record with it: the FKs cascade the
+   * comments, activities, labels and the queue rows themselves, as in the
+   * source (issue_id ON DELETE CASCADE). The source cancels the in-flight
+   * runs inside the same transaction because its settlement rides an
+   * outbox; here the cascade removes the rows outright and a run already
+   * past claim finds no home at settle -- the executor drops that
+   * settlement and logs it. Autopilot runs lose their issue link
+   * (SET NULL) rather than failing; failing them needs run-failure
+   * semantics this domain has not built, recorded.
+   */
+  deleteIssue(id: string): void {
+    const result = this.#db.prepare(`DELETE FROM issue WHERE id = ?`).run(id);
+    if (Number(result.changes) === 0) {
+      throw new Error(`issue not found: ${id}`);
+    }
+  }
+
   listRunningTasks(): TaskRow[] {
     const rows = this.#db
       .prepare(
@@ -2050,6 +2068,12 @@ export class MulticaStore {
    * waiting_local_directory). Each transition stamps its own timestamp column
    * exactly as the source's per-state queries do.
    */
+  /** Whether a task row still exists — the executor's mid-run home check. */
+  taskExists(id: string): boolean {
+    const row = this.#db.prepare(`SELECT 1 AS n FROM agent_task_queue WHERE id = ?`).get(id);
+    return row !== undefined;
+  }
+
   updateTaskStatus(input: {
     readonly id: string;
     readonly status: string;

@@ -170,6 +170,42 @@ export const MulticaIssueGetResponseSchema = z.object({
   }),
 });
 
+export const MulticaIssueDeleteRequestSchema = z.object({
+  type: z.literal("multica.issue.delete.request"),
+  requestId: z.string(),
+  id: z.string().min(1),
+});
+export const MulticaIssueDeleteResponseSchema = z.object({
+  type: z.literal("multica.issue.delete.response"),
+  payload: z.object({ requestId: z.string(), deleted: z.boolean() }),
+});
+
+export const MulticaIssueBatchUpdateRequestSchema = z.object({
+  type: z.literal("multica.issue.batch_update.request"),
+  requestId: z.string(),
+  ids: z.array(z.string().min(1)).min(1),
+  /** Per-issue revision the caller read; absent rows read fresh. */
+  expectedRevisions: z.record(z.string(), z.number().int()).optional(),
+  status: z.string().optional(),
+  priority: z.string().optional(),
+  assigneeType: z.string().nullable().optional(),
+  assigneeId: z.string().nullable().optional(),
+});
+export const MulticaIssueBatchUpdateResponseSchema = z.object({
+  type: z.literal("multica.issue.batch_update.response"),
+  payload: z.object({ requestId: z.string(), issues: z.array(MulticaIssueSummarySchema) }),
+});
+
+export const MulticaIssueBatchDeleteRequestSchema = z.object({
+  type: z.literal("multica.issue.batch_delete.request"),
+  requestId: z.string(),
+  ids: z.array(z.string().min(1)).min(1),
+});
+export const MulticaIssueBatchDeleteResponseSchema = z.object({
+  type: z.literal("multica.issue.batch_delete.response"),
+  payload: z.object({ requestId: z.string(), deleted: z.number().int() }),
+});
+
 export const MulticaIssueStatusUpdateRequestSchema = z.object({
   type: z.literal("multica.issue.status.update.request"),
   requestId: z.string(),
