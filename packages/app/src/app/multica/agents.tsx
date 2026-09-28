@@ -2,7 +2,7 @@ import { type ReactElement, useCallback } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Bot, Users } from "lucide-react-native";
+import { Bot, Timer, Users } from "lucide-react-native";
 
 import { useFetchQuery } from "@/data/query";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
@@ -80,6 +80,7 @@ function RostersPage({ serverId }: { serverId: string }): ReactElement {
         <Bot size={18} color="#888" />
         <Text style={styles.heading}>Agents</Text>
         <Text style={styles.headerCount}>{agents.length}</Text>
+        <AutopilotsPill serverId={serverId} />
       </View>
       <View style={styles.grid}>
         {agents.map((agent) => (
@@ -112,6 +113,20 @@ interface AgentCardData {
   readonly model: string | null;
   readonly permissionMode: string;
   readonly archivedAt: string | null;
+}
+
+/** The declarations' door: standing work that fires on its own clock. */
+function AutopilotsPill({ serverId }: { serverId: string }): ReactElement {
+  const router = useRouter();
+  const handlePress = useCallback(() => {
+    router.push(`/multica/autopilots?serverId=${serverId}`);
+  }, [router, serverId]);
+  return (
+    <Pressable style={styles.pill} onPress={handlePress} testID="multica-autopilots-entry">
+      <Timer size={13} color="#888" />
+      <Text style={styles.pillText}>Autopilots</Text>
+    </Pressable>
+  );
 }
 
 function AgentCard({
@@ -204,5 +219,16 @@ const styles = StyleSheet.create((theme) => ({
   cardDesc: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   cardMeta: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   empty: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    marginLeft: "auto",
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: 999,
+    backgroundColor: theme.colors.surface2,
+  },
+  pillText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 }));
