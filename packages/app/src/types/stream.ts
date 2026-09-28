@@ -1984,6 +1984,7 @@ function mergeCoveredCanonicalUserMessage(input: {
   tail: StreamItem[];
   head: StreamItem[];
   message: UserMessageItem;
+  turnId: string | undefined;
 }): ApplyStreamEventResult | null {
   const covered = upsertUserMessageAcrossStream({
     tail: input.tail,
@@ -1993,11 +1994,25 @@ function mergeCoveredCanonicalUserMessage(input: {
     presentation: "existing",
   });
   if (!covered.location) return null;
+  const reconciledTail = input.message.clientMessageId
+    ? reconcileCanonicalUserTurnMembership(
+        covered.tail,
+        input.message.clientMessageId,
+        input.turnId,
+      )
+    : covered.tail;
+  const reconciledHead = input.message.clientMessageId
+    ? reconcileCanonicalUserTurnMembership(
+        covered.head,
+        input.message.clientMessageId,
+        input.turnId,
+      )
+    : covered.head;
   return {
-    tail: covered.tail,
-    head: covered.head,
-    changedTail: covered.changedTail,
-    changedHead: covered.changedHead,
+    tail: reconciledTail,
+    head: reconciledHead,
+    changedTail: covered.changedTail || reconciledTail !== covered.tail,
+    changedHead: covered.changedHead || reconciledHead !== covered.head,
     acknowledgedClientMessageIds:
       covered.location.matched && covered.location.message.clientMessageId
         ? [covered.location.message.clientMessageId]
@@ -2075,7 +2090,12 @@ function applyCanonicalUserMessageEvent(params: {
     timestamp,
   });
   if (params.coveredThroughSeq !== undefined) {
-    const covered = mergeCoveredCanonicalUserMessage({ tail, head, message: canonical });
+    const covered = mergeCoveredCanonicalUserMessage({
+      tail,
+      head,
+      message: canonical,
+      turnId: event.turnId,
+    });
     if (covered) return covered;
   }
   if (unmatchedInsert === "head") {
