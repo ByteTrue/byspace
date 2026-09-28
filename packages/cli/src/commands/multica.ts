@@ -215,7 +215,7 @@ export async function runMulticaCommentLsCommand(
 }
 
 export async function runMulticaCommentSendCommand(
-  options: CommandOptions & { issueId?: string; body?: string },
+  options: CommandOptions & { issueId?: string; body?: string; mention?: string | string[] },
   _command: Command,
 ): Promise<ListResult<MulticaCommentRow>> {
   const issueId = options.issueId?.trim();
@@ -226,6 +226,8 @@ export async function runMulticaCommentSendCommand(
   if (!body) {
     throw { code: "MISSING_BODY", message: "--body is required" } satisfies CommandError;
   }
+  const mentionMarkup = await mentionMarkupFor(options.mention, options.host);
+  const content = mentionMarkup === "" ? body : `${mentionMarkup} ${body}`;
   const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
     throw buildDaemonConnectionCommandError({ host: options.host, error });
   });
@@ -237,7 +239,7 @@ export async function runMulticaCommentSendCommand(
     const senderSessionId = process.env.BYSPACE_AGENT_ID?.trim() || undefined;
     const payload = await client.multicaCommentCreate({
       issueId,
-      content: body,
+      content,
       ...(senderSessionId ? { senderSessionId } : {}),
     });
     return {
@@ -535,9 +537,13 @@ export function createMulticaCommand(): Command {
   addJsonAndDaemonHostOptions(
     comment
       .command("send")
-      .description("Comment on an issue (wakes @mentions and the assignee)")
+      .description("Comment on an issue (wakes mentions and the assignee)")
       .requiredOption("--issue-id <id>", "Issue to comment on")
       .requiredOption("--body <text>", "Comment body")
+      .option(
+        "--mention <name>",
+        "Wake an agent or squad by name (repeatable; emits the source's mention markup)",
+      )
       .allowExcessArguments(false),
   ).action(withOutput(runMulticaCommentSendCommand));
 
@@ -1482,4 +1488,56 @@ function assigneePatchFromOptions(options: {
     return { assigneeType: options.assigneeType ?? "agent", assigneeId: options.assigneeId };
   }
   return {};
+}
+
+/**
+ * The source's mention grammar is markdown markup carrying the target's id;
+ * a bare @name truncates on spaces. The CLI resolves names to ids here so
+ * multi-word agent names wake whole.
+ */
+async function mentionMarkupFor(
+  mention: string | string[] | undefined,
+  host: string | undefined,
+): Promise<string> {
+  if (mention === undefined) {
+    return "";
+  }
+  const names = Array.isArray(mention) ? mention : [mention];
+  if (names.length === 0) {
+    return "";
+  }
+  const client = await connectToDaemon({ host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host, error });
+  });
+  try {
+    const [agents, squads] = await Promise.all([
+      client.multicaAgentList({ includeSystem: true }),
+      client.multicaSquadList(),
+    ]);
+    const parts: string[] = [];
+    for (const name of names) {
+      const trimmed = name.trim();
+      if (trimmed === "all") {
+        parts.push("[@all](mention://all/all)");
+        continue;
+      }
+      const agent = agents.agents.find((entry) => entry.name === trimmed);
+      if (agent) {
+        parts.push(`[@${agent.name}](mention://agent/${agent.id})`);
+        continue;
+      }
+      const squad = squads.squads.find((entry) => entry.name === trimmed);
+      if (squad) {
+        parts.push(`[@${squad.name}](mention://squad/${squad.id})`);
+        continue;
+      }
+      throw {
+        code: "UNKNOWN_MENTION",
+        message: `no agent or squad named ${trimmed}`,
+      } satisfies CommandError;
+    }
+    return parts.join(" ");
+  } finally {
+    await client.close().catch(() => undefined);
+  }
 }

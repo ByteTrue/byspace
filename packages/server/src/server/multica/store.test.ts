@@ -271,8 +271,11 @@ describe("subscribers", () => {
       issueId: issue.id,
       authorType: "agent",
       authorId: commenter.id,
-      content: "note @Mentioned",
-      mentions: ["Mentioned"],
+      content: "note [@Mentioned](mention://agent/x)",
+      mentions: [
+        { kind: "agent" as const, id: mentioned.id, name: null },
+        { kind: "name" as const, id: null, name: "Mentioned" },
+      ],
       agentIdByName: new Map([["Mentioned", mentioned.id]]),
     });
     const reasons = store

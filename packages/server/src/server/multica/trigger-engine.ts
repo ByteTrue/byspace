@@ -119,14 +119,14 @@ export function commentTriggers(input: {
   content: string;
   authorType: string;
   authorId: string;
-  /** Mentions parsed from the content: `@name` forms. */
-  mentions: readonly string[];
+  /** Mentions parsed from the content: markup or bare-name aliases. */
+  mentions: readonly ParsedMention[];
 }): Array<{ agentId: string; reason: "mention" | "assignee" }> {
   const { store, issue, authorType, mentions } = input;
   const results: Array<{ agentId: string; reason: "mention" | "assignee" }> = [];
   const seen = new Set<string>();
   const hasAgentOrSquadMention = mentions.length > 0;
-  const hasMentionAll = mentions.includes("all");
+  const hasMentionAll = mentions.some((mention) => mention.kind === "all");
 
   const push = (agentId: string, reason: "mention" | "assignee") => {
     if (seen.has(agentId)) {
@@ -137,22 +137,10 @@ export function commentTriggers(input: {
   };
 
   if (hasAgentOrSquadMention) {
-    // Explicit mentions: resolve each name to an agent or a squad (whose
-    // leader runs), and fall back to the issue's assignee when a mention
-    // names the assignee itself (the source's assignee-mention route).
-    for (const mention of mentions) {
-      if (mention === "all") {
-        continue;
-      }
-      const agent = findAgentByName(store, mention);
-      if (agent !== null) {
-        push(agent, "mention");
-        continue;
-      }
-      const squad = findSquadByName(store, mention);
-      if (squad !== null) {
-        push(squad.leaderId, "mention");
-      }
+    // Explicit mentions wake their targets; the markup carries ids, bare
+    // names resolve through the rosters.
+    for (const agentId of mentionWakeTargets(store, mentions)) {
+      push(agentId, "mention");
     }
     return results;
   }
@@ -203,21 +191,86 @@ function findSquadByName(
  * plain text, so the parser takes `@word` tokens — a word boundary, an @,
  * and a run of name characters.
  */
-export function parseMentions(content: string): string[] {
-  // A mention starts at a name boundary — the beginning of the text or any
-  // character that cannot be part of a name (not a letter, digit, underscore,
-  // or hyphen). Whitespace alone is wrong for CJK punctuation: a colon before
-  // the @ (「请回复：@Writer」) is a full-width character that \s does not
-  // match, and the mention would be silently dropped.
-  const matches = content.matchAll(/(?:^|[^A-Za-z0-9_-])@([A-Za-z0-9_-]+)/g);
-  const names: string[] = [];
-  for (const match of matches) {
+export interface ParsedMention {
+  /** markup carries the target directly; a bare @name is a legacy alias. */
+  readonly kind: "agent" | "squad" | "all" | "name";
+  readonly id: string | null;
+  readonly name: string | null;
+}
+
+/**
+ * Mentions, in the source's grammar: markdown markup
+ * `[@Label](mention://agent|squad|all/<id|all>)` — the form its composer
+ * emits and its MentionRe matches. A bare `@Name` remains readable as an
+ * alias (single name token), because our CLI and older comments wrote it;
+ * multi-word names need the markup, which carries the id and never
+ * truncates on a space.
+ */
+export function parseMentions(content: string): ParsedMention[] {
+  const out: ParsedMention[] = [];
+  const markup = /\[@?[^\]]*\]\(mention:\/\/(member|agent|squad|issue|all)\/([0-9a-fA-F-]+|all)\)/g;
+  for (const match of content.matchAll(markup)) {
+    const kind = match[1];
+    const id = match[2];
+    if (kind === "all" || id === "all") {
+      out.push({ kind: "all", id: null, name: null });
+      continue;
+    }
+    if (kind === "agent") {
+      out.push({ kind: "agent", id, name: null });
+    } else if (kind === "squad") {
+      out.push({ kind: "squad", id, name: null });
+    }
+    // member and issue mentions name humans and records: nothing to wake.
+  }
+  const stripped = content.replace(markup, " ");
+  const bare = /(?:^|[^A-Za-z0-9_-])@([A-Za-z0-9_-]+)/g;
+  for (const match of stripped.matchAll(bare)) {
     const name = match[1];
-    if (!names.includes(name)) {
-      names.push(name);
+    if (!out.some((entry) => entry.name === name)) {
+      out.push({ kind: "name", id: null, name });
     }
   }
-  return names;
+  return out;
+}
+
+/** Which agents a comment's mentions wake: markup ids straight, names resolved. */
+export function mentionWakeTargets(
+  store: MulticaStore,
+  mentions: readonly ParsedMention[],
+): string[] {
+  const targets: string[] = [];
+  const push = (id: string): void => {
+    if (!targets.includes(id)) {
+      targets.push(id);
+    }
+  };
+  for (const mention of mentions) {
+    if (mention.kind === "agent" && mention.id !== null) {
+      push(mention.id);
+      continue;
+    }
+    if (mention.kind === "squad" && mention.id !== null) {
+      try {
+        push(store.getSquad(mention.id).leaderId);
+      } catch {
+        // An unknown squad names nobody.
+      }
+      continue;
+    }
+    if (mention.kind === "name" && mention.name !== null) {
+      const agent = findAgentByName(store, mention.name);
+      if (agent !== null) {
+        push(agent);
+        continue;
+      }
+      const squad = findSquadByName(store, mention.name);
+      if (squad !== null) {
+        push(squad.leaderId);
+      }
+    }
+  }
+  return targets;
 }
 
 /**

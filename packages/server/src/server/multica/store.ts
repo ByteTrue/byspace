@@ -28,6 +28,7 @@ import {
 import type { DatabaseSync } from "node:sqlite";
 
 import { applyMigrations, type Migration } from "./migrations/runner.js";
+import type { ParsedMention } from "./trigger-engine.js";
 import {
   AGENT_SELECT,
   SQUAD_SELECT,
@@ -463,9 +464,9 @@ export class MulticaStore {
     readonly type?: string;
     readonly parentId?: string | null;
     readonly sourceTaskId?: string | null;
-    /** Names mentioned in the body; each becomes a `mentioned` subscriber. */
-    readonly mentions?: readonly string[];
-    /** id→name, so a mentioned name resolves to the agent it names. */
+    /** Mentions parsed from the body; each woken agent subscribes as `mentioned`. */
+    readonly mentions?: readonly ParsedMention[];
+    /** name→id, so a bare-name mention resolves to the agent it names. */
     readonly agentIdByName?: ReadonlyMap<string, string>;
   }): CommentRow {
     const id = randomUUID();
@@ -514,8 +515,8 @@ export class MulticaStore {
         userId: input.authorId,
         reason: "commenter",
       });
-      for (const name of input.mentions ?? []) {
-        const mentionedId = input.agentIdByName?.get(name);
+      for (const mention of input.mentions ?? []) {
+        const mentionedId = mentionedIdFor(mention, input.agentIdByName);
         if (mentionedId) {
           this.addSubscriber({
             issueId: input.issueId,
@@ -1859,4 +1860,17 @@ function scopeWhere(scope: "assigned" | "created" | "subscribed"): string {
   }
   return `id IN (SELECT issue_id FROM issue_subscriber
            WHERE user_type = 'owner' AND user_id = 'owner' AND unsubscribed_at IS NULL)`;
+}
+
+function mentionedIdFor(
+  mention: ParsedMention,
+  agentIdByName: ReadonlyMap<string, string> | undefined,
+): string | null {
+  if (mention.kind === "agent" && mention.id !== null) {
+    return mention.id;
+  }
+  if (mention.kind === "name" && mention.name !== null) {
+    return agentIdByName?.get(mention.name) ?? null;
+  }
+  return null;
 }
