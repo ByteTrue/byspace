@@ -203,6 +203,8 @@ export const MulticaCommentSummarySchema = z.object({
   revision: z.number().int(),
   sourceTaskId: z.string().nullable(),
   deletedAt: z.string().nullable(),
+  /** The thread's resolution stamp; fold and the banner read it. Additive. */
+  resolvedAt: z.string().nullable(),
   reactions: z.array(
     z.object({ emoji: z.string(), count: z.number(), reactedByViewer: z.boolean() }),
   ),
@@ -270,6 +272,18 @@ export const MulticaCommentUpdateRequestSchema = z.object({
 });
 export const MulticaCommentUpdateResponseSchema = z.object({
   type: z.literal("multica.comment.update.response"),
+  payload: z.object({ requestId: z.string(), comment: MulticaCommentSummarySchema }),
+});
+
+export const MulticaCommentResolveRequestSchema = z.object({
+  type: z.literal("multica.comment.resolve.request"),
+  requestId: z.string(),
+  commentId: z.string().min(1),
+  resolved: z.boolean(),
+  senderSessionId: z.string().optional(),
+});
+export const MulticaCommentResolveResponseSchema = z.object({
+  type: z.literal("multica.comment.resolve.response"),
   payload: z.object({ requestId: z.string(), comment: MulticaCommentSummarySchema }),
 });
 
@@ -499,6 +513,8 @@ export const MulticaTimelineEntrySchema = z.object({
     .nullable(),
   /** comment: tombstoned when deleted with replies still hanging off it. */
   deletedAt: z.string().nullable(),
+  /** comment: the thread's resolution stamp; fold and banner read it. Additive. */
+  resolvedAt: z.string().nullable(),
 });
 
 export const MulticaTimelineListRequestSchema = z.object({

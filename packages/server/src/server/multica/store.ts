@@ -919,6 +919,47 @@ export class MulticaStore {
     return rows.map((row) => mapIssueRow(row as never));
   }
 
+  /**
+   * Thread resolution, the source's semantics: COALESCE keeps the first
+   * resolver and the original stamp across re-resolves; the revision bumps
+   * only when the state actually flips; a tombstone cannot be a resolution.
+   */
+  resolveComment(id: string, resolverType: string, resolverId: string): CommentRow {
+    const row = this.getComment(id);
+    if (row.deletedAt !== null) {
+      throw new Error("a deleted comment cannot be a resolution");
+    }
+    this.#db
+      .prepare(
+        `UPDATE comment SET
+           resolved_at = COALESCE(resolved_at, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+           resolved_by_type = COALESCE(resolved_by_type, ?),
+           resolved_by_id = COALESCE(resolved_by_id, ?),
+           revision = revision + CASE WHEN resolved_at IS NULL THEN 1 ELSE 0 END,
+           updated_at = CASE WHEN resolved_at IS NULL
+             THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') ELSE updated_at END
+         WHERE id = ?`,
+      )
+      .run(resolverType, resolverId, id);
+    return this.getComment(id);
+  }
+
+  /** Idempotent: clearing an already-open thread is a no-op that does not
+   * bump the revision. */
+  unresolveComment(id: string): CommentRow {
+    this.#db
+      .prepare(
+        `UPDATE comment SET
+           resolved_at = NULL, resolved_by_type = NULL, resolved_by_id = NULL,
+           revision = revision + CASE WHEN resolved_at IS NOT NULL THEN 1 ELSE 0 END,
+           updated_at = CASE WHEN resolved_at IS NOT NULL
+             THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') ELSE updated_at END
+         WHERE id = ?`,
+      )
+      .run(id);
+    return this.getComment(id);
+  }
+
   /** Edit a comment's content; the revision bump is the edit's mark. */
   editComment(id: string, content: string): CommentRow {
     const result = this.#db

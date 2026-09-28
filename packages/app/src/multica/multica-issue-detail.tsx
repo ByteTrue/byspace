@@ -1,3 +1,4 @@
+import { foldThreads } from "@/multica/multica-thread-fold";
 import { type ReactElement, type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -48,6 +49,7 @@ interface IssueDetailData {
   toggleSubscription: () => void;
   react: (commentId: string, emoji: string, reacted: boolean) => void;
   revise: (commentId: string, content: string | null) => void;
+  resolve: (commentId: string, resolved: boolean) => void;
   mentionAgents: readonly { id: string; name: string }[];
   mentionSquads: readonly { id: string; name: string }[];
   refreshChildren: () => void;
@@ -243,6 +245,17 @@ function useIssueDetailData(serverId: string, issueId: string): IssueDetailData 
     [client, queries],
   );
 
+  const resolve = useCallback(
+    (commentId: string, resolved: boolean) => {
+      if (!client) return;
+      void client
+        .multicaCommentResolve({ commentId, resolved })
+        .then(() => queries.refreshTimeline())
+        .catch(() => queries.refreshTimeline());
+    },
+    [client, queries],
+  );
+
   const react = useCallback(
     (commentId: string, emoji: string, reacted: boolean) => {
       if (!client) return;
@@ -310,6 +323,7 @@ function useIssueDetailData(serverId: string, issueId: string): IssueDetailData 
     toggleSubscription,
     react,
     revise,
+    resolve,
     refreshChildren,
     truncated,
     agentNameById: catalog.agentNameById,
@@ -424,6 +438,7 @@ function IssueMainPane({ data }: { data: IssueDetailData }): ReactElement {
               onReact={data.react}
               onRevise={data.revise}
               onReplyTarget={setReplyTarget}
+              onResolve={data.resolve}
             />
           ) : (
             <ActivityLine
@@ -693,24 +708,45 @@ function ReactionChooser({
 interface ThreadNode {
   entry: MulticaTimelineEntry;
   replies: MulticaTimelineEntry[];
+  /** Replies the fold hid under this root; the show toggle reveals them. */
+  folded: MulticaTimelineEntry[];
 }
 
+/**
+ * Threads over the full stream, with the source's fold computed per root:
+ * the visible replies are what the fold keeps, and the folded ones stay on
+ * the node so a show toggle can reveal them without another read. Activity
+ * lines interleave in timeline order; roots keep their order.
+ */
 function threadedEntries(entries: readonly MulticaTimelineEntry[]): ThreadNode[] {
+  const comments = entries.filter((entry) => entry.kind === "comment");
+  const fold = foldThreads(comments);
+  const visibleIds = new Set(fold.visible.map((entry) => entry.id));
+  const nodes = new Map<string, ThreadNode>();
   const roots: ThreadNode[] = [];
-  const byRoot = new Map<string, MulticaTimelineEntry[]>();
   for (const entry of entries) {
     if (entry.kind !== "comment") {
-      roots.push({ entry, replies: [] });
+      roots.push({ entry, replies: [], folded: [] });
       continue;
     }
     if (entry.parentId === null) {
-      const node: ThreadNode = { entry, replies: byRoot.get(entry.id) ?? [] };
-      byRoot.set(entry.id, node.replies);
+      const node: ThreadNode = { entry, replies: [], folded: [] };
+      nodes.set(entry.id, node);
       roots.push(node);
+      continue;
+    }
+    let rootId = entry.parentId;
+    for (let hop = 0; hop < entries.length; hop += 1) {
+      const parent = comments.find((candidate) => candidate.id === rootId);
+      if (!parent || parent.parentId === null) break;
+      rootId = parent.parentId;
+    }
+    const node = nodes.get(rootId);
+    if (!node) continue;
+    if (visibleIds.has(entry.id)) {
+      node.replies.push(entry);
     } else {
-      const bucket = byRoot.get(entry.parentId) ?? [];
-      bucket.push(entry);
-      byRoot.set(entry.parentId, bucket);
+      node.folded.push(entry);
     }
   }
   return roots;
@@ -722,14 +758,27 @@ function CommentThread({
   onReact,
   onRevise,
   onReplyTarget,
+  onResolve,
 }: {
   node: ThreadNode;
   agentNameById: ReadonlyMap<string, string>;
   onReact: (commentId: string, emoji: string, reacted: boolean) => void;
   onRevise: (commentId: string, content: string | null) => void;
   onReplyTarget: (commentId: string | null) => void;
+  onResolve: (commentId: string, resolved: boolean) => void;
 }): ReactElement {
   const reply = useCallback(() => onReplyTarget(node.entry.id), [node.entry.id, onReplyTarget]);
+  const [showFolded, setShowFolded] = useState(false);
+  const toggleShow = useCallback(() => setShowFolded((value) => !value), []);
+  const resolved = node.entry.resolvedAt !== null;
+  const resolveVerb = useCallback(() => {
+    onResolve(node.entry.id, !resolved);
+  }, [node.entry.id, resolved, onResolve]);
+  const shownReplies = showFolded
+    ? node.replies
+        .concat(node.folded)
+        .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+    : node.replies;
   return (
     <View>
       <CommentRow
@@ -739,7 +788,24 @@ function CommentThread({
         onRevise={onRevise}
         onReply={reply}
       />
-      {node.replies.map((replyEntry) => (
+      <View style={styles.threadControls}>
+        <Pressable onPress={resolveVerb} testID={`multica-thread-resolve-${node.entry.id}`}>
+          <Text style={styles.threadControlText}>
+            {resolved ? "Unresolve thread" : "Resolve thread"}
+          </Text>
+        </Pressable>
+        {node.folded.length > 0 && !showFolded ? (
+          <Pressable onPress={toggleShow} testID={`multica-thread-show-${node.entry.id}`}>
+            <Text style={styles.threadControlText}>{node.folded.length} folded · show</Text>
+          </Pressable>
+        ) : null}
+        {node.folded.length > 0 && showFolded ? (
+          <Pressable onPress={toggleShow} testID={`multica-thread-hide-${node.entry.id}`}>
+            <Text style={styles.threadControlText}>hide folded</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {shownReplies.map((replyEntry) => (
         <View key={replyEntry.id} style={styles.threadReply}>
           <CommentRow
             entry={replyEntry}
@@ -1696,6 +1762,8 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 48,
   },
   threadReply: { marginLeft: theme.spacing[6] },
+  threadControls: { flexDirection: "row", gap: theme.spacing[3], paddingLeft: theme.spacing[2] },
+  threadControlText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   replyLink: { alignSelf: "flex-start", marginTop: 2 },
   replyLinkText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   replyBanner: {

@@ -616,3 +616,46 @@ describe("squad management writes", () => {
     expect(renamed.description).toBe("the crew");
   });
 });
+
+describe("thread resolution", () => {
+  it("resolve keeps the first resolver and stamps once; unresolve is idempotent", () => {
+    const issue = store.createIssue({ title: "R", creatorType: "owner", creatorId: "owner" });
+    const comment = store.createComment({
+      issueId: issue.id,
+      authorType: "owner",
+      authorId: "owner",
+      content: "discuss",
+    });
+    const first = store.resolveComment(comment.id, "owner", "owner");
+    expect(first.resolvedAt).not.toBeNull();
+    expect(first.revision).toBe(comment.revision + 1);
+    // A second resolve must not overwrite the original stamp or bump again.
+    const second = store.resolveComment(comment.id, "agent", "someone");
+    expect(second.resolvedByType).toBe("owner");
+    expect(second.revision).toBe(first.revision);
+    const opened = store.unresolveComment(comment.id);
+    expect(opened.resolvedAt).toBeNull();
+    expect(opened.revision).toBe(second.revision + 1);
+    const again = store.unresolveComment(comment.id);
+    expect(again.revision).toBe(opened.revision);
+  });
+
+  it("a tombstone cannot be a resolution", () => {
+    const issue = store.createIssue({ title: "R2", creatorType: "owner", creatorId: "owner" });
+    const root = store.createComment({
+      issueId: issue.id,
+      authorType: "owner",
+      authorId: "owner",
+      content: "root",
+    });
+    store.createComment({
+      issueId: issue.id,
+      authorType: "owner",
+      authorId: "owner",
+      content: "reply",
+      parentId: root.id,
+    });
+    store.deleteComment(root.id);
+    expect(() => store.resolveComment(root.id, "owner", "owner")).toThrow(/deleted/);
+  });
+});

@@ -111,6 +111,7 @@ function commentSummary(
     revision: comment.revision,
     sourceTaskId: comment.sourceTaskId,
     deletedAt: comment.deletedAt,
+    resolvedAt: comment.resolvedAt,
     reactions,
   };
 }
@@ -339,7 +340,8 @@ type WriteMessage = Extract<
       | "multica.label.delete.request"
       | "multica.agent.update.request"
       | "multica.squad.update.request"
-      | "multica.squad.member_role.request";
+      | "multica.squad.member_role.request"
+      | "multica.comment.resolve.request";
   }
 >;
 
@@ -1204,6 +1206,7 @@ export class MulticaSession {
         parentId: null,
         reactions: null,
         deletedAt: null,
+        resolvedAt: null,
       })),
       ...comments.map((comment) => ({
         kind: "comment" as const,
@@ -1219,6 +1222,7 @@ export class MulticaSession {
         parentId: comment.parentId,
         reactions: this.#ownerReactions(comment.id),
         deletedAt: comment.deletedAt,
+        resolvedAt: comment.resolvedAt,
       })),
     ]
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
@@ -1274,6 +1278,8 @@ export class MulticaSession {
         return this.#handleCommentUpdate(msg);
       case "multica.comment.delete.request":
         return this.#handleCommentDelete(msg);
+      case "multica.comment.resolve.request":
+        return this.#handleCommentResolve(msg);
       case "multica.label.create.request":
         return this.#handleLabelCreate(msg);
       case "multica.issue.labels.set.request":
@@ -1426,6 +1432,28 @@ export class MulticaSession {
     const comment = this.#store.editComment(msg.commentId, msg.content);
     this.#emit({
       type: "multica.comment.update.response",
+      payload: {
+        requestId: msg.requestId,
+        comment: commentSummary(comment, this.#ownerReactions(comment.id)),
+      },
+    });
+  }
+
+  /** Resolve/unresolve as one RPC with a flag: the source's two endpoints
+   * share the store shape; attribution follows the comment discipline. */
+  #handleCommentResolve(
+    msg: Extract<SessionInboundMessage, { type: "multica.comment.resolve.request" }>,
+  ): void {
+    const author = this.#resolveCommentAuthor(msg.senderSessionId);
+    const comment = msg.resolved
+      ? this.#store.resolveComment(
+          msg.commentId,
+          author.type,
+          author.type === "agent" ? author.id : "owner",
+        )
+      : this.#store.unresolveComment(msg.commentId);
+    this.#emit({
+      type: "multica.comment.resolve.response",
       payload: {
         requestId: msg.requestId,
         comment: commentSummary(comment, this.#ownerReactions(comment.id)),

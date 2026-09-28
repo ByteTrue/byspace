@@ -215,7 +215,12 @@ export async function runMulticaCommentLsCommand(
 }
 
 export async function runMulticaCommentSendCommand(
-  options: CommandOptions & { issueId?: string; body?: string; mention?: string | string[] },
+  options: CommandOptions & {
+    issueId?: string;
+    body?: string;
+    mention?: string | string[];
+    parentId?: string;
+  },
   _command: Command,
 ): Promise<ListResult<MulticaCommentRow>> {
   const issueId = options.issueId?.trim();
@@ -241,6 +246,7 @@ export async function runMulticaCommentSendCommand(
       issueId,
       content,
       ...(senderSessionId ? { senderSessionId } : {}),
+      ...(options.parentId ? { parentId: options.parentId.trim() } : {}),
     });
     return {
       type: "list",
@@ -560,6 +566,7 @@ export function createMulticaCommand(): Command {
       .description("Comment on an issue (wakes mentions and the assignee)")
       .requiredOption("--issue-id <id>", "Issue to comment on")
       .requiredOption("--body <text>", "Comment body")
+      .option("--parent-id <id>", "Reply under this comment (the thread's parent)")
       .option(
         "--mention <name>",
         "Wake an agent or squad by name (repeatable; emits the source's mention markup)",

@@ -619,6 +619,10 @@ type MulticaCommentUpdatePayload = Extract<
   SessionOutboundMessage,
   { type: "multica.comment.update.response" }
 >["payload"];
+type MulticaCommentResolvePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.comment.resolve.response" }
+>["payload"];
 type MulticaCommentDeletePayload = Extract<
   SessionOutboundMessage,
   { type: "multica.comment.delete.response" }
@@ -6112,6 +6116,17 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       message: { type: "multica.comment.update.request", ...options },
       responseType: "multica.comment.update.response",
+    });
+  }
+
+  async multicaCommentResolve(options: {
+    commentId: string;
+    resolved: boolean;
+    senderSessionId?: string;
+  }): Promise<MulticaCommentResolvePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.comment.resolve.request", ...options },
+      responseType: "multica.comment.resolve.response",
     });
   }
 
