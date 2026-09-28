@@ -12,6 +12,10 @@ export function useMulticaCatalog(serverId: string): {
   agentNameById: ReadonlyMap<string, string>;
   /** The roster the assignee filter chips render from. */
   agents: readonly { id: string; name: string }[];
+  /** Every agent, internal included — the mention menu's roster. */
+  allAgents: readonly { id: string; name: string }[];
+  /** Squads — a mention wakes their leader. */
+  squads: readonly { id: string; name: string }[];
   statuses: readonly import("@bytetrue/protocol/multica/rpc-schemas").MulticaStatusSummary[];
 } {
   const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
@@ -38,6 +42,32 @@ export function useMulticaCatalog(serverId: string): {
     [agentsQuery.data],
   );
 
+  /**
+   * The mention menu's roster: unlike the assignee picker it includes the
+   * internal agents (the secretary is a nameable teammate) and the squads,
+   * whose leaders a mention wakes.
+   */
+  const allAgents = useMemo(
+    () => (agentsQuery.data?.agents ?? []).map((agent) => ({ id: agent.id, name: agent.name })),
+    [agentsQuery.data],
+  );
+
+  const squadsQuery = useFetchQuery({
+    queryKey: ["multicaSquadsCatalog", serverId, runtimeSnapshot?.clientGeneration ?? 0],
+    queryFn: async () => {
+      if (!client) throw new Error("Target host client is unavailable");
+      return client.multicaSquadList();
+    },
+    enabled: online,
+    retry: false,
+    dataShape: "value",
+    staleTimeMs: 10_000,
+  });
+  const squads = useMemo(
+    () => (squadsQuery.data?.squads ?? []).map((squad) => ({ id: squad.id, name: squad.name })),
+    [squadsQuery.data],
+  );
+
   const statusesQuery = useFetchQuery({
     queryKey: ["multicaStatuses", serverId, runtimeSnapshot?.clientGeneration ?? 0],
     queryFn: async () => {
@@ -58,5 +88,11 @@ export function useMulticaCatalog(serverId: string): {
     return map;
   }, [agentsQuery.data]);
 
-  return { agentNameById, agents, statuses: statusesQuery.data?.statuses ?? [] };
+  return {
+    agentNameById,
+    agents,
+    allAgents,
+    squads,
+    statuses: statusesQuery.data?.statuses ?? [],
+  };
 }

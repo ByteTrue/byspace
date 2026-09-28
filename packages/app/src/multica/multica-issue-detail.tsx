@@ -1,4 +1,4 @@
-import { type ReactElement, type ReactNode, useCallback, useMemo, useState } from "react";
+import { type ReactElement, type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -11,12 +11,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MarkdownRenderer } from "@/components/markdown/renderer";
-import { EditingTextInput as TextInput } from "@/components/ui/text-input";
+import {
+  EditingTextInput as TextInput,
+  type EditingTextInputHandle,
+} from "@/components/ui/text-input";
 import { useFetchQuery } from "@/data/query";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useMulticaCatalog } from "@/multica/multica-catalog";
 import { ActorAvatar, formatRelativeTime } from "@/multica/multica-activity";
+import {
+  type MentionCandidate,
+  applyMentionChoice,
+  mentionMenuState,
+} from "@/multica/multica-mention-menu";
 import type {
   MulticaIssueSummary,
   MulticaStatusSummary,
@@ -39,18 +47,18 @@ interface IssueDetailData {
   subscribed: boolean;
   toggleSubscription: () => void;
   react: (commentId: string, emoji: string, reacted: boolean) => void;
+  mentionAgents: readonly { id: string; name: string }[];
+  mentionSquads: readonly { id: string; name: string }[];
   refreshChildren: () => void;
   truncated: boolean;
   agentNameById: ReadonlyMap<string, string>;
   statuses: readonly MulticaStatusSummary[];
   assigneeName: string | null;
   assigneeType: string | null;
-  draft: string;
   sending: boolean;
   loading: boolean;
   goBack: () => void;
-  setDraft: (text: string) => void;
-  send: () => void;
+  send: (body: string) => void;
   moveStatus: (status: string) => void;
 }
 
@@ -123,6 +131,14 @@ function useIssueQueries(
 }
 
 /** The subscription face: who is on the list, and whether the owner is. */
+function useMentionRoster(serverId: string): {
+  agents: readonly { id: string; name: string }[];
+  squads: readonly { id: string; name: string }[];
+} {
+  const catalog = useMulticaCatalog(serverId);
+  return { agents: catalog.allAgents, squads: catalog.squads };
+}
+
 function useSubscribers(
   serverId: string,
   issueId: string,
@@ -173,28 +189,30 @@ function useIssueDetailData(serverId: string, issueId: string): IssueDetailData 
   const { subscribers, subscribed, toggleSubscription } = subscription;
 
   const catalog = useMulticaCatalog(serverId);
+  const mentionRoster = useMentionRoster(serverId);
 
-  const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
 
   const goBack = useCallback(() => {
     router.push("/multica");
   }, [router]);
 
-  const send = useCallback(async (): Promise<void> => {
-    const body = draft.trim();
-    if (body === "" || client === null || sending) {
-      return;
-    }
-    setSending(true);
-    try {
-      await client.multicaCommentCreate({ issueId, content: body });
-      setDraft("");
-      await queries.refreshTimeline();
-    } finally {
-      setSending(false);
-    }
-  }, [client, queries, draft, issueId, sending]);
+  const send = useCallback(
+    async (body: string): Promise<void> => {
+      const trimmed = body.trim();
+      if (trimmed === "" || client === null || sending) {
+        return;
+      }
+      setSending(true);
+      try {
+        await client.multicaCommentCreate({ issueId, content: trimmed });
+        await queries.refreshTimeline();
+      } finally {
+        setSending(false);
+      }
+    },
+    [client, queries, sending, issueId],
+  );
 
   const refreshChildren = useCallback(() => {
     void queries.refreshIssue();
@@ -246,12 +264,12 @@ function useIssueDetailData(serverId: string, issueId: string): IssueDetailData 
     statuses: catalog.statuses,
     assigneeName,
     assigneeType: issue?.assigneeType ?? null,
-    draft,
     sending,
     loading: queries.loading,
     goBack,
-    setDraft,
     send,
+    mentionAgents: mentionRoster.agents,
+    mentionSquads: mentionRoster.squads,
     moveStatus,
   };
 }
@@ -301,6 +319,10 @@ export function MulticaIssueDetail({
 }
 
 function IssueMainPane({ data }: { data: IssueDetailData }): ReactElement {
+  const mentionRosterProp = useMemo(
+    () => ({ agents: data.mentionAgents, squads: data.mentionSquads }),
+    [data.mentionAgents, data.mentionSquads],
+  );
   const { issue, agentNameById, goBack, sending } = data;
   return (
     <View style={styles.mainPane}>
@@ -338,7 +360,7 @@ function IssueMainPane({ data }: { data: IssueDetailData }): ReactElement {
         ) : null}
         {data.truncated ? <Text style={styles.hint}>Earlier history truncated.</Text> : null}
       </View>
-      <CommentComposer onDraftChange={data.setDraft} onSend={data.send} sending={sending} />
+      <CommentComposer onSend={data.send} sending={sending} roster={mentionRosterProp} />
     </View>
   );
 }
@@ -553,27 +575,98 @@ function ActivityLine({
   );
 }
 
+/**
+ * The composer owns its draft so the mention menu can rewrite its tail:
+ * an open @ at the end lists the nameable roster (agents, internal
+ * included, plus squads), and choosing one replaces the fragment with the
+ * source's markup. The menu is click-driven; keyboard navigation waits on a
+ * cursor read face the text input does not have yet.
+ */
 function CommentComposer({
-  onDraftChange,
   onSend,
   sending,
+  roster,
 }: {
-  onDraftChange: (text: string) => void;
-  onSend: () => void;
+  onSend: (draft: string) => void;
   sending: boolean;
+  roster: {
+    agents: readonly { id: string; name: string }[];
+    squads: readonly { id: string; name: string }[];
+  };
 }): ReactElement {
+  const inputRef = useRef<EditingTextInputHandle>(null);
+  const [draft, setDraft] = useState("");
+  const menu = useMemo(
+    () =>
+      mentionMenuState(draft, {
+        agents: roster.agents.map((agent) => ({ ...agent, kind: "agent" as const })),
+        squads: roster.squads.map((squad) => ({ ...squad, kind: "squad" as const })),
+      }),
+    [draft, roster],
+  );
+  const handleDraft = useCallback((text: string) => setDraft(text), []);
+  const handleSend = useCallback(() => {
+    onSend(draft);
+    setDraft("");
+    // The input is uncontrolled: clearing state alone leaves the typed text
+    // in the DOM; reset() is the component's own clear.
+    inputRef.current?.reset();
+  }, [draft, onSend]);
+  const choose = useCallback((candidate: MentionCandidate) => {
+    setDraft((current) => {
+      const next = applyMentionChoice(current, candidate);
+      // The input is uncontrolled: state alone would leave the visible text
+      // at the old fragment, so the rewrite goes through the handle's write
+      // face as well.
+      inputRef.current?.replaceText(next);
+      return next;
+    });
+  }, []);
   return (
     <View style={styles.composer}>
+      {menu && menu.candidates.length > 0 ? (
+        <View style={styles.mentionMenu}>
+          {menu.candidates.map((candidate) => (
+            <MentionRow
+              key={`${candidate.kind}:${candidate.id}`}
+              candidate={candidate}
+              onChoose={choose}
+            />
+          ))}
+        </View>
+      ) : null}
       <TextInput
+        ref={inputRef}
         style={styles.input}
         initialValue=""
-        onChangeText={onDraftChange}
-        placeholder="Comment — @mention wakes an agent"
+        onChangeText={handleDraft}
+        placeholder="Comment — @ opens the mention menu"
         placeholderTextColor="gray"
         multiline
+        testID="multica-composer"
       />
-      <Button onPress={onSend}>{sending ? "…" : "Send"}</Button>
+      <Button onPress={handleSend}>{sending ? "…" : "Send"}</Button>
     </View>
+  );
+}
+
+function MentionRow({
+  candidate,
+  onChoose,
+}: {
+  candidate: MentionCandidate;
+  onChoose: (candidate: MentionCandidate) => void;
+}): ReactElement {
+  const handlePress = useCallback(() => onChoose(candidate), [candidate, onChoose]);
+  return (
+    <Pressable
+      style={styles.mentionRow}
+      onPress={handlePress}
+      testID={`multica-mention-${candidate.kind}-${candidate.id}`}
+    >
+      <Text style={styles.mentionName}>{candidate.name}</Text>
+      <Text style={styles.mentionKind}>{candidate.kind}</Text>
+    </Pressable>
   );
 }
 
@@ -1025,6 +1118,27 @@ const styles = StyleSheet.create((theme) => ({
     marginLeft: "auto",
   },
   commentBody: { paddingLeft: 24 },
+  mentionMenu: {
+    position: "absolute",
+    bottom: "100%",
+    left: 0,
+    right: 0,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface1,
+    overflow: "hidden",
+  },
+  mentionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+  },
+  mentionName: { flex: 1, color: theme.colors.foreground, fontSize: theme.fontSize.sm },
+  mentionKind: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   composer: {
     flexDirection: "row",
     gap: theme.spacing[2],
