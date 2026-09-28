@@ -1,3 +1,4 @@
+import { type ActivityBlockData, groupActivityBlocks } from "@/multica/multica-activity-fold";
 import { foldThreads } from "@/multica/multica-thread-fold";
 import { type ReactElement, type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
@@ -50,6 +51,10 @@ interface IssueDetailData {
   react: (commentId: string, emoji: string, reacted: boolean) => void;
   revise: (commentId: string, content: string | null) => void;
   resolve: (commentId: string, resolved: boolean) => void;
+  updateChild: (
+    child: MulticaIssueSummary,
+    fields: { status?: string; assigneeType?: string | null; assigneeId?: string | null },
+  ) => void;
   mentionAgents: readonly { id: string; name: string }[];
   mentionSquads: readonly { id: string; name: string }[];
   refreshChildren: () => void;
@@ -245,6 +250,20 @@ function useIssueDetailData(serverId: string, issueId: string): IssueDetailData 
     [client, queries],
   );
 
+  const updateChild = useCallback(
+    (
+      child: MulticaIssueSummary,
+      fields: { status?: string; assigneeType?: string | null; assigneeId?: string | null },
+    ) => {
+      if (!client) return;
+      void client
+        .multicaIssueUpdate({ issueId: child.id, expectedRevision: child.revision, ...fields })
+        .then(refreshChildren)
+        .catch(refreshChildren);
+    },
+    [client, refreshChildren],
+  );
+
   const resolve = useCallback(
     (commentId: string, resolved: boolean) => {
       if (!client) return;
@@ -324,6 +343,7 @@ function useIssueDetailData(serverId: string, issueId: string): IssueDetailData 
     react,
     revise,
     resolve,
+    updateChild,
     refreshChildren,
     truncated,
     agentNameById: catalog.agentNameById,
@@ -393,6 +413,19 @@ function IssueMainPane({ data }: { data: IssueDetailData }): ReactElement {
     [data],
   );
   const clearReplyTarget = useCallback(() => setReplyTarget(null), []);
+  const [expandedBlocks, setExpandedBlocks] = useState<Record<string, boolean>>({});
+  const [shownOlder, setShownOlder] = useState<Record<string, boolean>>({});
+  const toggleBlock = useCallback(
+    (entryId: string) => () =>
+      setExpandedBlocks((current) => ({ ...current, [entryId]: current[entryId] !== true })),
+    [],
+  );
+  const toggleOlder = useCallback(
+    (entryId: string) => () =>
+      setShownOlder((current) => ({ ...current, [entryId]: current[entryId] !== true })),
+    [],
+  );
+  const streamNodes = useMemo(() => buildStreamNodes(data.entries), [data.entries]);
   const replyAuthorName = useMemo(() => {
     if (replyTarget === null) return null;
     const entry = data.entries.find((candidate) => candidate.id === replyTarget);
@@ -429,11 +462,11 @@ function IssueMainPane({ data }: { data: IssueDetailData }): ReactElement {
         testID="multica-description-edit"
       />
       <View style={styles.stream}>
-        {threadedEntries(data.entries).map((node) =>
-          node.entry.kind === "comment" ? (
+        {streamNodes.map((node) =>
+          node.kind === "thread" ? (
             <CommentThread
-              key={node.entry.id}
-              node={node}
+              key={node.id}
+              node={node.thread}
               agentNameById={agentNameById}
               onReact={data.react}
               onRevise={data.revise}
@@ -441,12 +474,14 @@ function IssueMainPane({ data }: { data: IssueDetailData }): ReactElement {
               onResolve={data.resolve}
             />
           ) : (
-            <ActivityLine
-              key={node.entry.id}
-              entry={node.entry}
-              actorName={
-                node.entry.actorId ? (agentNameById.get(node.entry.actorId) ?? null) : null
-              }
+            <ActivityBlockView
+              key={node.id}
+              block={node.block}
+              expanded={expandedBlocks[node.id] === true}
+              showOlder={shownOlder[node.id] === true}
+              onToggle={toggleBlock(node.id)}
+              onToggleOlder={toggleOlder(node.id)}
+              agentNameById={agentNameById}
             />
           ),
         )}
@@ -941,6 +976,123 @@ const ACTION_PHRASES: Record<string, string> = {
  * carries a change. The record is the point — work and conversation read as
  * one history.
  */
+interface StreamThreadNode {
+  readonly kind: "thread";
+  readonly id: string;
+  readonly thread: ThreadNode;
+}
+interface StreamBlockNode {
+  readonly kind: "block";
+  readonly id: string;
+  readonly block: ActivityBlockData<MulticaTimelineEntry>;
+}
+type StreamNode = StreamThreadNode | StreamBlockNode;
+
+/**
+ * The stream as the source reads it: comment threads in timeline order, and
+ * activity collapsed into blocks — one render node per block, headed by the
+ * block's first entry, so the fold state lives on a stable identity.
+ */
+function buildStreamNodes(entries: readonly MulticaTimelineEntry[]): StreamNode[] {
+  const threads = threadedEntries(entries);
+  const threadById = new Map(threads.map((thread) => [thread.entry.id, thread]));
+  const blocks = groupActivityBlocks(entries);
+  const nodes: StreamNode[] = [];
+  const seenBlocks = new Set<number>();
+  for (const entry of entries) {
+    if (entry.kind === "comment") {
+      if (entry.parentId === null) {
+        const thread = threadById.get(entry.id);
+        if (thread) {
+          nodes.push({ kind: "thread", id: entry.id, thread });
+        }
+      }
+      continue;
+    }
+    const blockIndex = blocks.findIndex((block) => block.entries[0]?.id === entry.id);
+    if (blockIndex === -1 || seenBlocks.has(blockIndex)) {
+      continue;
+    }
+    seenBlocks.add(blockIndex);
+    nodes.push({ kind: "block", id: entry.id, block: blocks[blockIndex] });
+  }
+  return nodes;
+}
+
+/**
+ * One activity block's face: folded blocks read as a single "N activities"
+ * line that expands in place; the trailing block shows its recent entries
+ * with the older run behind a show-more line. Both toggles are local — the
+ * fold is a projection, not a read.
+ */
+function blockShownEntries(
+  block: ActivityBlockData<MulticaTimelineEntry>,
+  showOlder: boolean,
+): readonly MulticaTimelineEntry[] {
+  if (!block.trailing) {
+    return block.entries;
+  }
+  return showOlder ? block.entries : block.visible;
+}
+
+function ActivityBlockView({
+  block,
+  expanded,
+  showOlder,
+  onToggle,
+  onToggleOlder,
+  agentNameById,
+}: {
+  block: ActivityBlockData<MulticaTimelineEntry>;
+  expanded: boolean;
+  showOlder: boolean;
+  onToggle: () => void;
+  onToggleOlder: () => void;
+  agentNameById: ReadonlyMap<string, string>;
+}): ReactElement {
+  if (!block.trailing && !expanded) {
+    return (
+      <Pressable style={styles.blockSummary} onPress={onToggle} testID="multica-activity-block">
+        <Text style={styles.blockSummaryText}>
+          {block.entries.length} {block.entries.length === 1 ? "activity" : "activities"}
+        </Text>
+      </Pressable>
+    );
+  }
+  const shown = blockShownEntries(block, showOlder);
+  return (
+    <View>
+      {block.trailing && block.folded.length > 0 && !showOlder ? (
+        <Pressable
+          style={styles.blockSummary}
+          onPress={onToggleOlder}
+          testID="multica-activity-more"
+        >
+          <Text style={styles.blockSummaryText}>
+            Show {block.folded.length} more {block.folded.length === 1 ? "activity" : "activities"}
+          </Text>
+        </Pressable>
+      ) : null}
+      {shown.map((entry) => (
+        <ActivityLine
+          key={entry.id}
+          entry={entry}
+          actorName={entry.actorId ? (agentNameById.get(entry.actorId) ?? null) : null}
+        />
+      ))}
+      {!block.trailing ? (
+        <Pressable
+          style={styles.blockSummary}
+          onPress={onToggle}
+          testID="multica-activity-collapse"
+        >
+          <Text style={styles.blockSummaryText}>collapse</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 function ActivityLine({
   entry,
   actorName,
@@ -1138,7 +1290,13 @@ function PropertiesLowerSections({ data }: { data: IssueDetailData }): ReactElem
     <>
       <Section title="Sub-issues">
         {data.children.map((child) => (
-          <SubIssueRow key={child.id} child={child} />
+          <SubIssueRow
+            key={child.id}
+            child={child}
+            statuses={data.statuses}
+            agents={data.mentionAgents}
+            onUpdate={data.updateChild}
+          />
         ))}
         {data.children.length === 0 ? <Text style={styles.propertyValue}>None.</Text> : null}
         <AddSubIssueRow parentId={data.issue?.id ?? ""} onCreated={data.refreshChildren} />
@@ -1502,20 +1660,155 @@ function shortDate(iso: string | undefined | null): string {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function SubIssueRow({ child }: { child: MulticaIssueSummary }): ReactElement {
+function SubIssueRow({
+  child,
+  statuses,
+  agents,
+  onUpdate,
+}: {
+  child: MulticaIssueSummary;
+  statuses: readonly MulticaStatusSummary[];
+  agents: readonly { id: string; name: string }[];
+  onUpdate: (
+    child: MulticaIssueSummary,
+    fields: { status?: string; assigneeType?: string | null; assigneeId?: string | null },
+  ) => void;
+}): ReactElement {
   const router = useRouter();
   const params = useLocalSearchParams<{ serverId: string }>();
   const serverId = typeof params.serverId === "string" ? params.serverId : "";
   const handlePress = useCallback(() => {
     router.push(`/multica/issue?serverId=${serverId}&issueId=${child.id}`);
   }, [router, serverId, child.id]);
+  const pickStatus = useCallback(
+    (status: string) => onUpdate(child, { status }),
+    [child, onUpdate],
+  );
+  const pickAssignee = useCallback(
+    (assigneeId: string) => onUpdate(child, { assigneeType: "agent", assigneeId }),
+    [child, onUpdate],
+  );
   return (
-    <Pressable style={styles.executionRow} onPress={handlePress} testID={`multica-sub-${child.id}`}>
-      <View style={[styles.executionDot, { backgroundColor: statusColor(child.status) }]} />
-      <Text style={styles.propertyValue} numberOfLines={1}>
-        {child.title} #{child.number ?? "-"}
-      </Text>
-    </Pressable>
+    <View style={styles.executionRow}>
+      <Pressable
+        style={styles.subIssueMain}
+        onPress={handlePress}
+        testID={`multica-sub-${child.id}`}
+      >
+        <View style={[styles.executionDot, { backgroundColor: statusColor(child.status) }]} />
+        <Text style={styles.propertyValue} numberOfLines={1}>
+          {child.title} #{child.number ?? "-"}
+        </Text>
+      </Pressable>
+      <SubIssueStatusPick child={child} statuses={statuses} onPick={pickStatus} />
+      <SubIssueAssigneePick child={child} agents={agents} onPick={pickAssignee} />
+    </View>
+  );
+}
+
+function SubIssueStatusPick({
+  child,
+  statuses,
+  onPick,
+}: {
+  child: MulticaIssueSummary;
+  statuses: readonly MulticaStatusSummary[];
+  onPick: (status: string) => void;
+}): ReactElement {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        accessibilityRole="button"
+        accessibilityLabel="Sub-issue status"
+        style={styles.subPick}
+        testID={`multica-sub-status-${child.id}`}
+      >
+        <Text style={styles.subPickText}>{child.status}</Text>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="bottom" align="start" offset={4} minWidth={140}>
+        {statuses.map((status) => (
+          <SubStatusItem
+            key={status.key}
+            statusKey={status.key}
+            name={status.name}
+            selected={status.key === child.status}
+            onPick={onPick}
+          />
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function SubStatusItem({
+  statusKey,
+  name,
+  selected,
+  onPick,
+}: {
+  statusKey: string;
+  name: string;
+  selected: boolean;
+  onPick: (status: string) => void;
+}): ReactElement {
+  const handleSelect = useCallback(() => onPick(statusKey), [statusKey, onPick]);
+  return (
+    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+      <Text style={styles.menuItemText}>{name}</Text>
+    </DropdownMenuItem>
+  );
+}
+
+function SubIssueAssigneePick({
+  child,
+  agents,
+  onPick,
+}: {
+  child: MulticaIssueSummary;
+  agents: readonly { id: string; name: string }[];
+  onPick: (assigneeId: string) => void;
+}): ReactElement {
+  const current = child.assigneeId
+    ? (agents.find((agent) => agent.id === child.assigneeId)?.name ?? "—")
+    : "unassigned";
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        accessibilityRole="button"
+        accessibilityLabel="Sub-issue assignee"
+        style={styles.subPick}
+        testID={`multica-sub-assignee-${child.id}`}
+      >
+        <Text style={styles.subPickText}>{current}</Text>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="bottom" align="start" offset={4} minWidth={140}>
+        {agents.map((agent) => (
+          <SubAssigneeItem
+            key={agent.id}
+            agent={agent}
+            selected={child.assigneeId === agent.id}
+            onPick={onPick}
+          />
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function SubAssigneeItem({
+  agent,
+  selected,
+  onPick,
+}: {
+  agent: { id: string; name: string };
+  selected: boolean;
+  onPick: (assigneeId: string) => void;
+}): ReactElement {
+  const handleSelect = useCallback(() => onPick(agent.id), [agent.id, onPick]);
+  return (
+    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+      <Text style={styles.menuItemText}>{agent.name}</Text>
+    </DropdownMenuItem>
   );
 }
 
@@ -1762,6 +2055,17 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 48,
   },
   threadReply: { marginLeft: theme.spacing[6] },
+  blockSummary: { paddingVertical: 2 },
+  blockSummaryText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  subIssueMain: { flex: 1, flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
+  subPick: {
+    paddingVertical: 1,
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  subPickText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   threadControls: { flexDirection: "row", gap: theme.spacing[3], paddingLeft: theme.spacing[2] },
   threadControlText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   replyLink: { alignSelf: "flex-start", marginTop: 2 },
