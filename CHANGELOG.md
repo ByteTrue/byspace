@@ -5,6 +5,21 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.16.4 - 2026-09-28
+
+### Changed
+
+- Consolidated host settings from 7 sections to 5; per-provider terminal hooks and launch command moved into the provider detail sheet as Agent/Terminal tabs
+- Moved terminal profiles to the Agents page, with Default shell staying on Overview
+
+### Fixed
+
+- Fixed scripts staying "running" in the Scripts menu on Windows PowerShell after the command finished
+- Fixed script startup intermittently hanging on Windows PowerShell when keystrokes landed before the prompt was ready to read input
+- Fixed an empty console window staying open while the daemon runs on Windows, plus window flashes at startup and when stopping agents
+- Fixed GitHub merge status showing "forge facts unavailable" on Windows daemons because multi-line command arguments were truncated
+- Fixed the model/thinking picker silently falling back to the catalog's first entry while a provider snapshot was loading or stale, which made running sessions look like their model had been switched
+
 ## 0.16.3 - 2026-09-27
 
 ### Fixed

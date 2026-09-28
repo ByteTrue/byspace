@@ -82,7 +82,13 @@ function pickSelectedModel(
   if (!models || !preferredModelId) {
     return fallbackModel;
   }
-  return findModelById(models, preferredModelId) ?? fallbackModel;
+  // A live session with a concrete model id must not silently adopt another
+  // catalog entry (isDefault/first). While a provider snapshot is loading or
+  // stale, the session's model can be absent from the rows; substituting the
+  // fallback makes the picker render a model the session is not using and
+  // reads as "my model was changed". Keep the reference unresolved instead —
+  // callers fall back to the raw id for display and selection.
+  return findModelById(models, preferredModelId);
 }
 
 function resolveThinkingId(
@@ -97,13 +103,46 @@ function resolveThinkingId(
 
 type ThinkingOption = NonNullable<AgentModelDefinition["thinkingOptions"]>[number];
 
-function resolveEffectiveThinking(
-  thinkingOptions: ThinkingOption[] | null,
-  resolvedThinkingId: string | null,
-): ThinkingOption | null {
+// A model whose catalog entry is missing the agent's configured thinking level
+// must not silently render as the lowest available option: showing "Low" for a
+// session configured at "max" reads as the model having been changed. Keep the
+// configured id selected and let the display format it as a label instead.
+export function resolveThinkingSelection(input: {
+  thinkingOptions: ThinkingOption[] | null;
+  resolvedThinkingId: string | null;
+}): { effectiveThinking: ThinkingOption | null; selectedThinkingId: string | null } {
+  const { thinkingOptions, resolvedThinkingId } = input;
+  if (!resolvedThinkingId) {
+    return {
+      effectiveThinking: thinkingOptions?.[0] ?? null,
+      selectedThinkingId: thinkingOptions?.[0]?.id ?? null,
+    };
+  }
   const selectedThinking =
     thinkingOptions?.find((option) => option.id === resolvedThinkingId) ?? null;
-  return selectedThinking ?? thinkingOptions?.[0] ?? null;
+  return {
+    effectiveThinking: selectedThinking,
+    selectedThinkingId: resolvedThinkingId,
+  };
+}
+
+// The thinking trigger must never silently render the lowest option when the
+// configured level is not in the loaded options: a session set to "max" on a
+// model that currently lists [low, medium] should show "Max", not "Low".
+// Otherwise the agent looks like its model settings were changed behind the
+// user's back (observed while a remote host's catalog was reloading).
+export function resolveThinkingTriggerLabel(input: {
+  options: ReadonlyArray<{ id: string; label: string }> | undefined;
+  selectedId: string | undefined;
+  unknownLabel: string;
+}): string {
+  const { options, selectedId, unknownLabel } = input;
+  if (!options || options.length === 0) {
+    return selectedId ? formatThinkingOptionLabel({ id: selectedId }) : unknownLabel;
+  }
+  const selected = options.find((option) => option.id === selectedId);
+  if (selected) return selected.label;
+  return selectedId ? formatThinkingOptionLabel({ id: selectedId }) : unknownLabel;
 }
 
 function resolveModelDisplay(
@@ -163,8 +202,10 @@ export function resolveAgentModelSelection(input: {
 
   const thinkingOptions = selectedModel?.thinkingOptions ?? null;
   const resolvedThinkingId = resolveThinkingId(explicitThinkingOptionId, selectedModel);
-  const effectiveThinking = resolveEffectiveThinking(thinkingOptions, resolvedThinkingId);
-  const selectedThinkingId = effectiveThinking?.id ?? null;
+  const { effectiveThinking, selectedThinkingId } = resolveThinkingSelection({
+    thinkingOptions,
+    resolvedThinkingId,
+  });
   const displayThinking = resolveThinkingDisplay(
     effectiveThinking,
     selectedThinkingId,

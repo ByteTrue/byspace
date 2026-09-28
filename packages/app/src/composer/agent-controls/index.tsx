@@ -58,6 +58,7 @@ import {
   getFeatureTooltip,
   getAgentControlHintKey,
   resolveAgentModelSelection,
+  resolveThinkingTriggerLabel,
 } from "@/composer/agent-controls/utils";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { readMeasuredWidth } from "@/hooks/use-container-width";
@@ -533,11 +534,11 @@ function ControlledAgentControls({
     () => toThinkingControlOptions(thinkingOptions),
     [thinkingOptions],
   );
-  const displayThinking = findOptionLabel(
-    formattedThinkingOptions,
-    selectedThinkingOptionId,
-    formattedThinkingOptions[0]?.label ?? t("agentControls.thinking.unknown"),
-  );
+  const displayThinking = resolveThinkingTriggerLabel({
+    options: formattedThinkingOptions,
+    selectedId: selectedThinkingOptionId,
+    unknownLabel: t("agentControls.thinking.unknown"),
+  });
 
   const hasAnyControl = resolveHasAnyControl({
     providerOptions,

@@ -5,6 +5,7 @@ import {
   getAgentControlHintKey,
   normalizeModelId,
   resolveAgentModelSelection,
+  resolveThinkingTriggerLabel,
 } from "./utils";
 
 describe("getAgentControlHintKey", () => {
@@ -185,5 +186,113 @@ describe("resolveAgentModelSelection", () => {
     expect(selection.displayModel).toBe("Default (Sonnet 4.6)");
     expect(selection.selectedThinkingId).toBe("low");
     expect(selection.displayThinking).toBe("Low");
+  });
+
+  it("keeps a session model absent from the catalog instead of adopting the fallback entry", () => {
+    const selection = resolveAgentModelSelection({
+      models: [
+        {
+          id: "qwen3.8-max",
+          provider: "pi",
+          label: "Qwen3.8 Max",
+          isDefault: true,
+          thinkingOptions: [
+            { id: "low", label: "Low" },
+            { id: "medium", label: "Medium" },
+          ],
+        },
+      ],
+      runtimeModelId: "glm-5.3-flash",
+      configuredModelId: "glm-5.3-flash",
+      explicitThinkingOptionId: "high",
+    });
+
+    // The session runs glm-5.3-flash, which the (still loading or stale)
+    // catalog does not list. The picker must not render Qwen3.8 Max — the
+    // raw id stays selected so the trigger shows the session's real model.
+    expect(selection.selectedModel).toBeNull();
+    expect(selection.activeModelId).toBe("glm-5.3-flash");
+    expect(selection.displayModel).toBe("glm-5.3-flash");
+    expect(selection.thinkingOptions).toBeNull();
+  });
+
+  it("keeps the configured thinking level instead of silently rendering the lowest option", () => {
+    const selection = resolveAgentModelSelection({
+      models: [
+        {
+          id: "qwen3.8-max",
+          provider: "pi",
+          label: "Qwen3.8 Max",
+          thinkingOptions: [
+            { id: "low", label: "Low" },
+            { id: "medium", label: "Medium" },
+            { id: "xhigh", label: "Extra high" },
+          ],
+        },
+      ],
+      runtimeModelId: "qwen3.8-max",
+      configuredModelId: "qwen3.8-max",
+      // The session was configured at "max"; the catalog lists no "max".
+      // Displaying "Low" (options[0]) reads as the setting being changed.
+      explicitThinkingOptionId: "max",
+    });
+
+    expect(selection.selectedThinkingId).toBe("max");
+    expect(selection.displayThinking).toBe("Max");
+  });
+
+  it("falls back to the first option only when no explicit level is configured", () => {
+    const selection = resolveAgentModelSelection({
+      models: [
+        {
+          id: "qwen3.8-max",
+          provider: "pi",
+          label: "Qwen3.8 Max",
+          thinkingOptions: [
+            { id: "low", label: "Low" },
+            { id: "medium", label: "Medium" },
+          ],
+        },
+      ],
+      runtimeModelId: "qwen3.8-max",
+      configuredModelId: null,
+      explicitThinkingOptionId: null,
+    });
+
+    expect(selection.selectedThinkingId).toBe("low");
+    expect(selection.displayThinking).toBe("Low");
+  });
+
+  it("formats a configured but unloaded thinking level as its label", () => {
+    const label = resolveThinkingTriggerLabel({
+      options: undefined,
+      selectedId: "max",
+      unknownLabel: "Unknown",
+    });
+
+    expect(label).toBe("Max");
+  });
+
+  it("shows the unknown label when nothing is selected", () => {
+    const label = resolveThinkingTriggerLabel({
+      options: [{ id: "low", label: "Low" }],
+      selectedId: undefined,
+      unknownLabel: "Unknown",
+    });
+
+    expect(label).toBe("Unknown");
+  });
+
+  it("renders the raw selected id when it is not among the loaded options", () => {
+    const label = resolveThinkingTriggerLabel({
+      options: [
+        { id: "low", label: "Low" },
+        { id: "medium", label: "Medium" },
+      ],
+      selectedId: "xhigh",
+      unknownLabel: "Unknown",
+    });
+
+    expect(label).toBe("Extra high");
   });
 });
