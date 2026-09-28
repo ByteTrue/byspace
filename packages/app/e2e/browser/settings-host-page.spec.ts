@@ -63,12 +63,14 @@ test.describe("Settings host page", () => {
     // provider, on the Terminal face of that provider. The switcher is in the
     // header next to the provider name.
     for (const [providerId, label] of [
-      ["claude", "Claude Code"],
+      ["claude", "Claude"],
       ["codex", "Codex"],
       ["opencode", "OpenCode"],
       ["pi", "Pi"],
     ] as const) {
-      await page.getByRole("button", { name: `${label} provider details` }).click();
+      // Exact: the accessible-name match is a substring by default, so "Pi"
+      // would also resolve "Oh My Pi".
+      await page.getByRole("button", { name: `${label} provider details`, exact: true }).click();
       const sheet = page.getByTestId("provider-settings-sheet");
       await expect(sheet).toBeVisible();
       await sheet
