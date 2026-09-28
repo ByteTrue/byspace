@@ -2305,6 +2305,14 @@ export const ja: TranslationResources = {
           sectionTitle: "サービス管理",
           unavailable: "このホストに接続してサービス設定を管理してください",
           errorTitle: "サービス設定を更新できません",
+          confirmInstallTitle: "サービス管理を有効にしますか？",
+          confirmInstallMessage:
+            "このマシンの daemon を OS のサービスマネージャーに登録し、ログイン時に自動起動します。後で同じスイッチからオフにできます。",
+          confirmInstall: "有効にする",
+          confirmUninstallTitle: "サービス管理を無効にしますか？",
+          confirmUninstallMessage:
+            "OS サービスの登録を解除します。daemon は現在も動作し続けますが、ログイン時に自動起動しなくなります。",
+          confirmUninstall: "無効にする",
           toggle: {
             title: "ログイン時に起動",
             hint: "daemon を OS のサービスマネージャーに登録し、ターミナルを終了しても継続します",

@@ -2258,6 +2258,14 @@ export const zhCN: TranslationResources = {
           sectionTitle: "服务托管",
           unavailable: "连接到此主机后才能管理服务设置",
           errorTitle: "无法更新服务设置",
+          confirmInstallTitle: "启用服务托管？",
+          confirmInstallMessage:
+            "将把这台机器上的 daemon 注册到系统服务管理器，登录时自动启动。之后可通过同一开关关闭。",
+          confirmInstall: "启用",
+          confirmUninstallTitle: "停用服务托管？",
+          confirmUninstallMessage:
+            "将移除系统服务注册。daemon 当前继续运行，但不再在登录时自动启动。",
+          confirmUninstall: "停用",
           toggle: {
             title: "登录时启动",
             hint: "把 daemon 交给系统服务管理器托管，终端退出后仍继续运行",

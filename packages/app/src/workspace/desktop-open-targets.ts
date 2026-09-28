@@ -12,7 +12,7 @@ export interface DesktopOpenTargetIcon {
   [key: string]: unknown;
 }
 
-export function useDesktopOpenTargets(_input: Record<string, unknown>): {
+export function useDesktopOpenTargets(): {
   targets: DesktopOpenTarget[];
   isAvailable: false;
 } {

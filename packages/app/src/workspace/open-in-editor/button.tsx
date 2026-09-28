@@ -15,7 +15,6 @@ import {
 import { useToast } from "@/contexts/toast-context";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useCheckoutPrStatusQuery } from "@/git/use-pr-status-query";
-import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { resolvePreferredEditorId, usePreferredEditor } from "@/hooks/use-preferred-editor";
 import { openExternalUrl } from "@/utils/open-external-url";
@@ -93,12 +92,9 @@ export function WorkspaceOpenInEditorButton({
   const { t } = useTranslation();
   const toast = useToast();
   const isConnected = useHostRuntimeIsConnected(serverId);
-  const isLocalDaemon = useIsLocalDaemon(serverId);
   const { preferredEditorId, updatePreferredEditor } = usePreferredEditor();
   const { targets: desktopOpenTargets, isAvailable: isDesktopOpenAvailable } =
-    useDesktopOpenTargets({
-      isLocalExecution: isLocalDaemon,
-    });
+    useDesktopOpenTargets();
 
   const resolvedFile = useMemo(
     () =>
@@ -130,7 +126,6 @@ export function WorkspaceOpenInEditorButton({
         resolvedActiveFile: resolvedFile,
         desktopTargets: desktopOpenTargets,
         canUseDesktopBridge: isDesktopOpenAvailable,
-        isLocalExecution: isLocalDaemon,
         checkoutStatus,
         forge: resolvedForge,
       }).map((target) => {
@@ -163,7 +158,6 @@ export function WorkspaceOpenInEditorButton({
       desktopOpenTargets,
       resolvedForge,
       isDesktopOpenAvailable,
-      isLocalDaemon,
       resolvedFile,
     ],
   );
