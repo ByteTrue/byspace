@@ -413,6 +413,19 @@ export function createMulticaCommand(): Command {
       .requiredOption("--id <id>", "Wakeup id")
       .allowExcessArguments(false),
   ).action(withOutput(runMulticaWakeupDisableCommand));
+  addJsonAndDaemonHostOptions(
+    wakeup
+      .command("enable")
+      .description("Revive a retired wakeup subscription")
+      .requiredOption("--id <id>", "Wakeup id")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaWakeupEnableCommand));
+  addJsonAndDaemonHostOptions(
+    wakeup
+      .command("ls-all")
+      .description("The workspace's whole wakeup registry (the wakeups tab)")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaWakeupWorkspaceLsCommand));
 
   const autopilot = multica.command("autopilot").description("Declarative recurring work");
   addJsonAndDaemonHostOptions(
@@ -681,6 +694,81 @@ export async function runMulticaWakeupCreateCommand(
   }
 }
 
+export async function runMulticaWakeupEnableCommand(
+  options: CommandOptions & { id?: string },
+  _command: Command,
+): Promise<ListResult<MulticaWakeupRow>> {
+  const id = options.id?.trim();
+  if (!id) {
+    throw { code: "MISSING_ID", message: "--id is required" } satisfies CommandError;
+  }
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const senderSessionId = process.env.BYSPACE_AGENT_ID?.trim() || undefined;
+    const payload = await client.multicaWakeupEnable({
+      id,
+      ...(senderSessionId ? { senderSessionId } : {}),
+    });
+    return {
+      type: "list",
+      data: [
+        {
+          id: payload.wakeup.id,
+          kind: payload.wakeup.kind,
+          mode: payload.wakeup.mode,
+          enabled: payload.wakeup.enabled ? "yes" : "no",
+          agent: payload.wakeup.agentId.slice(0, 8),
+          next: payload.wakeup.nextFireAt ?? "-",
+          instruction: payload.wakeup.instruction.slice(0, 60),
+        },
+      ],
+      schema: multicaWakeupSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaWakeupWorkspaceLsCommand(
+  options: CommandOptions,
+  _command: Command,
+): Promise<ListResult<MulticaWakeupRow & { issue: string }>> {
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaWakeupWorkspaceList();
+    return {
+      type: "list",
+      data: payload.wakeups.map((wakeup) => ({
+        id: wakeup.id.slice(0, 8),
+        kind: wakeup.kind,
+        mode: wakeup.mode,
+        enabled: wakeup.enabled ? "yes" : "no",
+        agent: wakeup.agentId.slice(0, 8),
+        next: wakeup.nextFireAt ?? "-",
+        instruction: wakeup.instruction.slice(0, 40),
+        issue: wakeup.issueTitle ?? wakeup.issueId.slice(0, 8),
+      })),
+      schema: {
+        idField: "id",
+        columns: [
+          { header: "ID", field: "id", width: 10 },
+          { header: "ISSUE", field: "issue", width: 26 },
+          { header: "KIND", field: "kind", width: 8 },
+          { header: "ENABLED", field: "enabled", width: 8 },
+          { header: "AGENT", field: "agent", width: 10 },
+          { header: "INSTRUCTION", field: "instruction", width: 42 },
+        ],
+      },
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
 export async function runMulticaWakeupDisableCommand(
   options: CommandOptions & { issueId?: string; id?: string },
   _command: Command,
@@ -697,7 +785,12 @@ export async function runMulticaWakeupDisableCommand(
     throw buildDaemonConnectionCommandError({ host: options.host, error });
   });
   try {
-    const payload = await client.multicaWakeupDisable({ issueId, id });
+    const senderSessionId = process.env.BYSPACE_AGENT_ID?.trim() || undefined;
+    const payload = await client.multicaWakeupDisable({
+      issueId,
+      id,
+      ...(senderSessionId ? { senderSessionId } : {}),
+    });
     return {
       type: "list",
       data: [

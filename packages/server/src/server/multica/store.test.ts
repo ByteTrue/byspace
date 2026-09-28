@@ -542,3 +542,26 @@ describe("my-issues scopes", () => {
     expect(titles("subscribed")).toEqual(titles("involved"));
   });
 });
+
+describe("wakeup registry", () => {
+  it("enable revives a disabled row without duplicating it", () => {
+    const issue = store.createIssue({ title: "W", creatorType: "owner", creatorId: "owner" });
+    const agent = store.createAgent({ name: "Watcher" });
+    const wakeup = store.createWakeup({
+      issueId: issue.id,
+      agentId: agent.id,
+      createdBy: "owner",
+      instruction: "watch this issue's status",
+      kind: "event",
+      mode: "continuous",
+      eventTypes: ["issue.status_changed"],
+    });
+    const off = store.disableWakeup(wakeup.id);
+    expect(off.enabled).toBe(false);
+    const on = store.enableWakeup(wakeup.id);
+    expect(on.enabled).toBe(true);
+    expect(on.disabledAt).toBeNull();
+    expect(store.listWakeupsForIssue(issue.id)).toHaveLength(1);
+    expect(store.listWorkspaceWakeups()).toHaveLength(1);
+  });
+});

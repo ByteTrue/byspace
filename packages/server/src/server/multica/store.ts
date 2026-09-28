@@ -1633,6 +1633,34 @@ export class MulticaStore {
     return rows.map((row) => mapWakeupRow(row));
   }
 
+  /**
+   * The source's enable is the same save path with enabled flipped back and
+   * the disabled stamp cleared; a disabled row keeps its identity, so
+   * re-enabling never duplicates the subscription.
+   */
+  enableWakeup(id: string): WakeupRow {
+    const row = this.getWakeup(id);
+    if (row.enabled) {
+      return row;
+    }
+    this.#db
+      .prepare(
+        `UPDATE issue_wakeup SET enabled = 1, disabled_at = NULL,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE id = ?`,
+      )
+      .run(id);
+    return this.getWakeup(id);
+  }
+
+  /** The workspace's whole wakeup registry, the source's wakeups tab. */
+  listWorkspaceWakeups(): WakeupRow[] {
+    const rows = this.#db
+      .prepare(`SELECT ${WAKEUP_SELECT} FROM issue_wakeup ORDER BY created_at DESC`)
+      .all() as Record<string, unknown>[];
+    return rows.map((row) => mapWakeupRow(row));
+  }
+
   disableWakeup(id: string): WakeupRow {
     this.#db
       .prepare(

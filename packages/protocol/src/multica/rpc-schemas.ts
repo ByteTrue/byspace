@@ -765,11 +765,38 @@ export const MulticaWakeupCreateResponseSchema = z.object({
   payload: z.object({ requestId: z.string(), wakeup: MulticaWakeupSummarySchema }),
 });
 
+export const MulticaWakeupWorkspaceListRequestSchema = z.object({
+  type: z.literal("multica.wakeup.workspace_list.request"),
+  requestId: z.string(),
+});
+export const MulticaWakeupWorkspaceListResponseSchema = z.object({
+  type: z.literal("multica.wakeup.workspace_list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    wakeups: z.array(MulticaWakeupSummarySchema.extend({ issueTitle: z.string().nullable() })),
+  }),
+});
+
+export const MulticaWakeupEnableRequestSchema = z.object({
+  type: z.literal("multica.wakeup.enable.request"),
+  requestId: z.string(),
+  id: z.string().min(1),
+  senderSessionId: z.string().optional(),
+});
+export const MulticaWakeupEnableResponseSchema = z.object({
+  type: z.literal("multica.wakeup.enable.response"),
+  payload: z.object({ requestId: z.string(), wakeup: MulticaWakeupSummarySchema }),
+});
+
+// senderSessionId is additive: it lets the daemon require a live human
+// originator — the source refuses these writes from a finished run, and an
+// old client simply sends no session and reads as the owner surface.
 export const MulticaWakeupDisableRequestSchema = z.object({
   type: z.literal("multica.wakeup.disable.request"),
   requestId: z.string(),
   issueId: z.string().min(1),
   id: z.string().min(1),
+  senderSessionId: z.string().optional(),
 });
 
 export const MulticaWakeupDisableResponseSchema = z.object({

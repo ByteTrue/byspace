@@ -683,6 +683,14 @@ type MulticaInboxMarkAllPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.inbox.mark_all.response" }
 >["payload"];
+type MulticaWakeupWorkspaceListPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.wakeup.workspace_list.response" }
+>["payload"];
+type MulticaWakeupEnablePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.wakeup.enable.response" }
+>["payload"];
 type MulticaWakeupListPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.wakeup.list.response" }
@@ -5880,6 +5888,23 @@ export class DaemonClient {
     });
   }
 
+  async multicaWakeupWorkspaceList(): Promise<MulticaWakeupWorkspaceListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.wakeup.workspace_list.request" },
+      responseType: "multica.wakeup.workspace_list.response",
+    });
+  }
+
+  async multicaWakeupEnable(options: {
+    id: string;
+    senderSessionId?: string;
+  }): Promise<MulticaWakeupEnablePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.wakeup.enable.request", ...options },
+      responseType: "multica.wakeup.enable.response",
+    });
+  }
+
   async multicaWakeupList(issueId: string): Promise<MulticaWakeupListPayload> {
     return this.sendCorrelatedSessionRequest({
       message: { type: "multica.wakeup.list.request", issueId },
@@ -5909,6 +5934,7 @@ export class DaemonClient {
   async multicaWakeupDisable(options: {
     issueId: string;
     id: string;
+    senderSessionId?: string;
   }): Promise<MulticaWakeupDisablePayload> {
     return this.sendCorrelatedSessionRequest({
       message: { type: "multica.wakeup.disable.request", ...options },

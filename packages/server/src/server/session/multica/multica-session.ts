@@ -225,6 +225,26 @@ function inboxSummary(item: InboxRow): MulticaInboxItemSummary {
   };
 }
 
+function workspaceWakeupSummary(
+  wakeup: WakeupRow,
+  issueTitle: string | null,
+): MulticaWakeupSummary & { issueTitle: string | null } {
+  const base = wakeupSummary(wakeup);
+  return {
+    id: base.id,
+    issueId: base.issueId,
+    agentId: base.agentId,
+    instruction: base.instruction,
+    kind: base.kind,
+    mode: base.mode,
+    eventTypes: base.eventTypes,
+    nextFireAt: base.nextFireAt,
+    enabled: base.enabled,
+    revision: base.revision,
+    issueTitle,
+  };
+}
+
 function wakeupSummary(wakeup: WakeupRow): MulticaWakeupSummary {
   return {
     id: wakeup.id,
@@ -783,6 +803,10 @@ export class MulticaSession {
         return this.#handleWakeupCreate(msg);
       case "multica.wakeup.disable.request":
         return this.#handleWakeupDisable(msg);
+      case "multica.wakeup.workspace_list.request":
+        return this.#handleWakeupWorkspaceList(msg);
+      case "multica.wakeup.enable.request":
+        return this.#handleWakeupEnable(msg);
       case "multica.autopilot.list.request":
         return this.#handleAutopilotList(msg);
       case "multica.autopilot.create.request":
@@ -1048,9 +1072,64 @@ export class MulticaSession {
     });
   }
 
+  /** The registry the source's wakeups tab lists: every issue's
+   * subscriptions across the workspace, with the issue's title for reading. */
+  #handleWakeupWorkspaceList(
+    msg: Extract<SessionInboundMessage, { type: "multica.wakeup.workspace_list.request" }>,
+  ): void {
+    this.#emit({
+      type: "multica.wakeup.workspace_list.response",
+      payload: {
+        requestId: msg.requestId,
+        wakeups: this.#store
+          .listWorkspaceWakeups()
+          .map((wakeup) => workspaceWakeupSummary(wakeup, this.#issueTitleFor(wakeup.issueId))),
+      },
+    });
+  }
+
+  #handleWakeupEnable(
+    msg: Extract<SessionInboundMessage, { type: "multica.wakeup.enable.request" }>,
+  ): void {
+    this.#assertLiveOriginator(msg.senderSessionId);
+    const wakeup = this.#store.enableWakeup(msg.id);
+    this.#emit({
+      type: "multica.wakeup.enable.response",
+      payload: { requestId: msg.requestId, wakeup: wakeupSummary(wakeup) },
+    });
+  }
+
+  #issueTitleFor(issueId: string): string | null {
+    try {
+      return this.#store.getIssue(issueId).title;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * The source's wakeup control writes need a human originator: a member, or
+   * a run still in flight carrying one. A finished run's session resolves to
+   * nobody — its words cannot retire or revive a subscription after the run
+   * is over.
+   */
+  #assertLiveOriginator(senderSessionId: string | undefined): void {
+    if (senderSessionId === undefined) {
+      return;
+    }
+    const task = this.#store.getTaskBySession(senderSessionId);
+    if (!task) {
+      throw new Error(`Session ${senderSessionId} is not a multica run`);
+    }
+    if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
+      throw new Error("a finished run cannot control wakeups");
+    }
+  }
+
   #handleWakeupDisable(
     msg: Extract<SessionInboundMessage, { type: "multica.wakeup.disable.request" }>,
   ): void {
+    this.#assertLiveOriginator(msg.senderSessionId);
     const wakeup = this.#store.disableWakeup(msg.id);
     this.#emit({
       type: "multica.wakeup.disable.response",
