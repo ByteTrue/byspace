@@ -110,8 +110,8 @@ export class MulticaStore {
         .prepare(
           `INSERT INTO issue (id, title, description, status, priority, assignee_type, assignee_id,
              creator_type, creator_id, parent_issue_id, number, project_id, origin_type,
-             last_activity_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+             position, last_activity_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
         )
         .run(
           id,
@@ -127,6 +127,7 @@ export class MulticaStore {
           number,
           input.projectId ?? null,
           input.originType ?? null,
+          this.#nextTopPosition(input.status ?? "backlog"),
         );
       this.#db.exec("COMMIT");
     } catch (error) {
@@ -187,6 +188,8 @@ export class MulticaStore {
   updateIssue(input: {
     readonly id: string;
     readonly expectedRevision: number;
+    /** The drag's drop slot; wins over the re-rank when present. */
+    readonly position?: number | null;
     readonly status?: string;
     readonly priority?: string;
     readonly assigneeType?: string | null;
@@ -199,6 +202,16 @@ export class MulticaStore {
     if (input.status !== undefined) {
       sets.push("status = ?");
       params.push(input.status);
+      // The same re-rank rule as updateIssueStatus: an explicit position is
+      // the drag's slot; without one the status change sends the issue to
+      // the top of its new column.
+      if (input.status !== before.status) {
+        sets.push("position = ?");
+        params.push(this.#positionForStatusWrite(input.position, before.status, input.status));
+      } else if (input.position !== undefined && input.position !== null) {
+        sets.push("position = ?");
+        params.push(input.position);
+      }
     }
     if (input.priority !== undefined) {
       sets.push("priority = ?");
@@ -248,15 +261,23 @@ export class MulticaStore {
     readonly id: string;
     readonly status: string;
     readonly expectedRevision: number;
+    /**
+     * The drag's drop slot. An explicit position wins; without one a status
+     * change re-ranks the issue to the top of its new column, because a
+     * position only ranks within one column (source UpdateIssue CASE).
+     */
+    readonly position?: number | null;
   }): IssueRow {
     const before = this.getIssue(input.id).status;
+    const position = this.#positionForStatusWrite(input.position, before, input.status);
     const result = this.#db
       .prepare(
-        `UPDATE issue SET status = ?, revision = revision + 1,
+        `UPDATE issue SET status = ?, position = COALESCE(?, position),
+           revision = revision + 1,
            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
          WHERE id = ? AND revision = ?`,
       )
-      .run(input.status, input.id, input.expectedRevision);
+      .run(input.status, position, input.id, input.expectedRevision);
     if (Number(result.changes) === 0) {
       throw new Error(
         `issue ${input.id} changed since revision ${input.expectedRevision}; read it again`,
@@ -634,6 +655,37 @@ export class MulticaStore {
       )
       .all();
     return rows.map((row) => mapTaskRow(row as never));
+  }
+
+  /**
+   * The source's NextTopPosition: a column's top is MIN(position)-1, so a
+   * new or freshly-moved issue lands above everything already ranked there.
+   * An empty column's MIN is taken as 0, giving -1.
+   */
+  #nextTopPosition(status: string): number {
+    const row = this.#db
+      .prepare("SELECT COALESCE(MIN(position), 0) AS min FROM issue WHERE status = ?")
+      .get(status) as { min: number };
+    return row.min - 1;
+  }
+
+  /**
+   * The UpdateIssue CASE as a function: an explicit position is the drop
+   * slot and wins; otherwise a status change re-ranks to the target
+   * column's top; a same-status write keeps its rank.
+   */
+  #positionForStatusWrite(
+    explicit: number | null | undefined,
+    before: string,
+    next: string,
+  ): number | null {
+    if (explicit !== undefined && explicit !== null) {
+      return explicit;
+    }
+    if (before !== next) {
+      return this.#nextTopPosition(next);
+    }
+    return null;
   }
 
   // ── autopilot ────────────────────────────────────────────────────────

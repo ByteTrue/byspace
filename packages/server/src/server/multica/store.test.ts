@@ -120,3 +120,63 @@ describe("status catalog", () => {
     expect(statuses.every((status) => status.isSystem)).toBe(true);
   });
 });
+
+describe("position semantics", () => {
+  it("a new issue lands on top of its column", () => {
+    const first = store.createIssue({ title: "A", creatorType: "owner", creatorId: "owner" });
+    const second = store.createIssue({ title: "B", creatorType: "owner", creatorId: "owner" });
+    expect(second.position).toBeLessThan(first.position);
+    expect(store.listIssues({})[0].title).toBe("B");
+  });
+
+  it("a status change without a position re-ranks to the top of the target column", () => {
+    const a = store.createIssue({ title: "A", creatorType: "owner", creatorId: "owner" });
+    const b = store.createIssue({ title: "B", creatorType: "owner", creatorId: "owner" });
+    // A sits below B in backlog; move A to todo, then B to todo: B must land
+    // above A, not inherit A's backlog rank.
+    store.updateIssueStatus({ id: a.id, status: "todo", expectedRevision: a.revision });
+    store.updateIssueStatus({ id: b.id, status: "todo", expectedRevision: b.revision });
+    const todo = store.listIssues({}).filter((issue) => issue.status === "todo");
+    expect(todo.map((issue) => issue.title)).toEqual(["B", "A"]);
+  });
+
+  it("an explicit position is the drop slot", () => {
+    const a = store.createIssue({ title: "A", creatorType: "owner", creatorId: "owner" });
+    const b = store.createIssue({ title: "B", creatorType: "owner", creatorId: "owner" });
+    // Drop A between nothing and B's rank: an explicit position wins even
+    // though the status also changes.
+    store.updateIssueStatus({
+      id: a.id,
+      status: "in_progress",
+      expectedRevision: a.revision,
+      position: b.position + 100,
+    });
+    expect(store.getIssue(a.id).position).toBe(b.position + 100);
+  });
+
+  it("same-column moves with an explicit position never tie", () => {
+    const a = store.createIssue({
+      title: "A",
+      creatorType: "owner",
+      creatorId: "owner",
+      status: "todo",
+    });
+    const b = store.createIssue({
+      title: "B",
+      creatorType: "owner",
+      creatorId: "owner",
+      status: "todo",
+    });
+    const moved = store.updateIssue({
+      id: b.id,
+      expectedRevision: b.revision,
+      position: a.position - 0.5,
+    });
+    expect(moved.position).toBeLessThan(a.position);
+    const order = store
+      .listIssues({})
+      .filter((issue) => issue.status === "todo")
+      .map((issue) => issue.title);
+    expect(order).toEqual(["B", "A"]);
+  });
+});

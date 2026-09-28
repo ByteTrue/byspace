@@ -77,6 +77,7 @@ function issueSummary(issue: IssueRow): MulticaIssueSummary {
     number: issue.number,
     projectId: issue.projectId,
     revision: issue.revision,
+    position: issue.position,
     createdAt: issue.createdAt,
     updatedAt: issue.updatedAt,
     lastActivityAt: issue.lastActivityAt,
@@ -431,6 +432,7 @@ export class MulticaSession {
     const issue = this.#store.updateIssue({
       id: msg.issueId,
       expectedRevision: msg.expectedRevision,
+      position: msg.position ?? null,
       status: msg.status,
       priority: msg.priority,
       assigneeType: msg.assigneeType,

@@ -94,4 +94,4 @@ multica（`~/workspace/refs/multica` @ `04cdd48`，一手读码）与本工程 `
 
 ## 未做但源有（不是歪，是欠）
 
-autopilot 的 webhook/replace/UI、activity_log 写入、task_supplement、重试行为、拖拽/列表视图/筛选、Execution log/Token 面板、子 issue/subscriber/reactions/附件 UI、agents 等管理页。全部有表无行为或有 RPC 无 UI —— 切片④⑤⑥之后的增量面。
+autopilot 的 webhook/replace/UI、activity_log 写入、task_supplement、重试行为、泳道分组与 label/project 过滤、Execution log/Token 面板、子 issue/subscriber/reactions/附件 UI、agents 等管理页。全部有表无行为或有 RPC 无 UI —— 切片④⑤⑥之后的增量面。

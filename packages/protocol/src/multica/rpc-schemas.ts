@@ -85,6 +85,7 @@ export const MulticaIssueSummarySchema = z.object({
   number: z.number().int().nullable(),
   projectId: z.string().nullable(),
   revision: z.number().int(),
+  position: z.number(),
   createdAt: z.string(),
   updatedAt: z.string(),
   lastActivityAt: z.string().nullable(),
@@ -480,6 +481,11 @@ export const MulticaIssueUpdateRequestSchema = z.object({
   assigneeType: z.string().nullable().optional(),
   assigneeId: z.string().nullable().optional(),
   title: z.string().min(1).optional(),
+  /**
+   * The drag's drop slot: an explicit position wins over the re-rank a bare
+   * status change performs (the source's UpdateIssue CASE, first branch).
+   */
+  position: z.number().optional(),
 });
 
 export const MulticaIssueUpdateResponseSchema = z.object({

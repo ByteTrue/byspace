@@ -10,6 +10,8 @@ import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
  */
 export function useMulticaCatalog(serverId: string): {
   agentNameById: ReadonlyMap<string, string>;
+  /** The roster the assignee filter chips render from. */
+  agents: readonly { id: string; name: string }[];
   statuses: readonly import("@bytetrue/protocol/multica/rpc-schemas").MulticaStatusSummary[];
 } {
   const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
@@ -27,6 +29,14 @@ export function useMulticaCatalog(serverId: string): {
     dataShape: "list",
     staleTimeMs: 10_000,
   });
+
+  const agents = useMemo(
+    () =>
+      (agentsQuery.data?.agents ?? [])
+        .filter((agent) => agent.kind !== "system")
+        .map((agent) => ({ id: agent.id, name: agent.name })),
+    [agentsQuery.data],
+  );
 
   const statusesQuery = useFetchQuery({
     queryKey: ["multicaStatuses", serverId, runtimeSnapshot?.clientGeneration ?? 0],
@@ -48,5 +58,5 @@ export function useMulticaCatalog(serverId: string): {
     return map;
   }, [agentsQuery.data]);
 
-  return { agentNameById, statuses: statusesQuery.data?.statuses ?? [] };
+  return { agentNameById, agents, statuses: statusesQuery.data?.statuses ?? [] };
 }

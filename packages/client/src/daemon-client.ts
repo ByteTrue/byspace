@@ -5596,6 +5596,7 @@ export class DaemonClient {
     assigneeType?: string | null;
     assigneeId?: string | null;
     title?: string;
+    position?: number;
   }): Promise<MulticaIssueUpdatePayload> {
     return this.sendCorrelatedSessionRequest({
       message: {
