@@ -2,6 +2,8 @@
 
 Spin up an isolated in-process daemon test harness without touching the main daemon on port 6777.
 
+**Do not spawn a real daemon to reproduce something.** `byspace daemon start --home <tmp> --port <n>` is not actually isolated: it ends up binding the default listen address, so the developer's supervisor on 6777 crash-loops on `EADDRINUSE`, the temporary daemon takes over the port, the app shows empty data under a new server id, and the two `byspace.pid` files describe each other. Recovering means killing the interloper first so the real supervisor can reclaim the port; nothing is deleted, but it looks like data loss. Use this in-process harness, or a Vitest run, instead.
+
 This is for test code only. Executable daemon processes must start through
 `scripts/supervisor-entrypoint.ts` or `dist/scripts/supervisor-entrypoint.js`;
 do not use `createBySpaceDaemon` as a product launch path.
