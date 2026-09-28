@@ -58,7 +58,7 @@ wakeup（issue 003）是**事件驱动**：某个 issue 的状态/评论变化�
 - 验证：引擎 7 测（两模式/skip 记录/queue/paused/tick 推进/时区插值）；551 修复测（旧形状→松约束→全列保序→幂等）；verifier 37/37（含 skip 第二发与执行暗置两断言）；multica 域 14 文件 112 测 + surface 5 测。
 - 真机（2026-09-29）：Minute patrol（cron 每分钟、run_only）到点自跑：run completed、task completed、result 是真 wc -l 读数（16 行）；next_run_at 推进、last_fired_at 落戳；随后 pause。无人叫它。
 - 过程抓到的真缺陷（全部真机或测试暴露）：① 旧 033 漂移使 createTask 抛 NOT NULL；② dispatch 抛错不留痕 → run 卡 in-flight → skip 永久沉默；③ skip 插同槽行撞唯一索引（源语义是槽行复用，改 getAutopilotRunForSlot 复用）；④ tick 抛错不推进 → 同槽热重试。
-- 欠账：pause/disable 的 RPC+CLI 面未建（真机用 SQL pause 收尾，记此）；webhook dispatch、replace 策略、autopilot UI 未做（issue 范围已记）。
+- 后续补：pause/enable/archive 的 RPC+CLI 面（setAutopilotStatus 的暴露，真机验证时的 SQL 收尾改由该面完成）；webhook dispatch、replace 策略、autopilot UI 仍未做（issue 范围已记）。
 
 ## 关闭回写
 

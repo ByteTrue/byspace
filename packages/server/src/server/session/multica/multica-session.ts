@@ -618,6 +618,8 @@ export class MulticaSession {
         return this.#handleAutopilotTrigger(msg);
       case "multica.autopilot.runs.request":
         return this.#handleAutopilotRuns(msg);
+      case "multica.autopilot.status.request":
+        return this.#handleAutopilotStatus(msg);
       default:
         msg satisfies never;
     }
@@ -702,6 +704,23 @@ export class MulticaSession {
       payload: {
         requestId: msg.requestId,
         runs: this.#store.listAutopilotRuns(msg.id).map(runSummary),
+      },
+    });
+  }
+
+  #handleAutopilotStatus(
+    msg: Extract<SessionInboundMessage, { type: "multica.autopilot.status.request" }>,
+  ): void {
+    const autopilot = this.#store.setAutopilotStatus({
+      id: msg.id,
+      status: msg.status,
+      pauseReason: msg.pauseReason ?? null,
+    });
+    this.#emit({
+      type: "multica.autopilot.status.response",
+      payload: {
+        requestId: msg.requestId,
+        autopilot: autopilotSummary(this.#store, autopilot),
       },
     });
   }

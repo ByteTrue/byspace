@@ -294,6 +294,18 @@ export const MulticaAutopilotTriggerResponseSchema = z.object({
   }),
 });
 
+export const MulticaAutopilotStatusRequestSchema = z.object({
+  type: z.literal("multica.autopilot.status.request"),
+  requestId: z.string(),
+  id: z.string().min(1),
+  status: z.enum(["active", "paused", "archived"]),
+  pauseReason: z.string().optional(),
+});
+export const MulticaAutopilotStatusResponseSchema = z.object({
+  type: z.literal("multica.autopilot.status.response"),
+  payload: z.object({ requestId: z.string(), autopilot: MulticaAutopilotSummarySchema }),
+});
+
 export const MulticaAutopilotRunsRequestSchema = z.object({
   type: z.literal("multica.autopilot.runs.request"),
   requestId: z.string(),

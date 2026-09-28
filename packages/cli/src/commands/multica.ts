@@ -376,6 +376,28 @@ export function createMulticaCommand(): Command {
   ).action(withOutput(runMulticaAutopilotTriggerCommand));
   addJsonAndDaemonHostOptions(
     autopilot
+      .command("pause")
+      .description("Pause an autopilot")
+      .requiredOption("--id <id>", "Autopilot id")
+      .option("--reason <text>", "Why")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaAutopilotStatusCommand.bind(null, "paused")));
+  addJsonAndDaemonHostOptions(
+    autopilot
+      .command("enable")
+      .description("Resume a paused autopilot")
+      .requiredOption("--id <id>", "Autopilot id")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaAutopilotStatusCommand.bind(null, "active")));
+  addJsonAndDaemonHostOptions(
+    autopilot
+      .command("archive")
+      .description("Retire an autopilot")
+      .requiredOption("--id <id>", "Autopilot id")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaAutopilotStatusCommand.bind(null, "archived")));
+  addJsonAndDaemonHostOptions(
+    autopilot
       .command("runs")
       .description("An autopilot's run history")
       .requiredOption("--id <id>", "Autopilot id")
@@ -1042,4 +1064,45 @@ function parseAutopilotCreateOptions(options: {
     } satisfies CommandError;
   }
   return { title, assigneeType, assigneeId, mode, concurrency };
+}
+
+export async function runMulticaAutopilotStatusCommand(
+  status: "active" | "paused" | "archived",
+  options: CommandOptions & { id?: string; reason?: string },
+  _command: Command,
+): Promise<ListResult<MulticaAutopilotRow>> {
+  const id = options.id?.trim();
+  if (!id) {
+    throw { code: "MISSING_ID", message: "--id is required" } satisfies CommandError;
+  }
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaAutopilotStatus({
+      id,
+      status,
+      ...(options.reason ? { pauseReason: options.reason } : {}),
+    });
+    const autopilot = payload.autopilot;
+    return {
+      type: "list",
+      data: [
+        {
+          id: autopilot.id,
+          title: autopilot.title,
+          mode: autopilot.executionMode,
+          status: autopilot.status,
+          assignee: autopilot.assigneeId.slice(0, 8),
+          schedule:
+            autopilot.triggers.find((trigger) => trigger.kind === "schedule")?.cronExpression ??
+            "-",
+          lastRun: autopilot.lastRunAt ?? "-",
+        },
+      ],
+      schema: multicaAutopilotSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
 }

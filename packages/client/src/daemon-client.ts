@@ -583,6 +583,10 @@ type MulticaAutopilotTriggerPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.autopilot.trigger.response" }
 >["payload"];
+type MulticaAutopilotStatusPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.autopilot.status.response" }
+>["payload"];
 type MulticaAutopilotRunsPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.autopilot.runs.response" }
@@ -5709,6 +5713,17 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       message: { type: "multica.autopilot.trigger.request", id },
       responseType: "multica.autopilot.trigger.response",
+    });
+  }
+
+  async multicaAutopilotStatus(options: {
+    id: string;
+    status: "active" | "paused" | "archived";
+    pauseReason?: string;
+  }): Promise<MulticaAutopilotStatusPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.autopilot.status.request", ...options },
+      responseType: "multica.autopilot.status.response",
     });
   }
 

@@ -31,13 +31,9 @@ describe("multica CLI surface", () => {
   it("offers the autopilot verbs", () => {
     const autopilot = command().commands.find((sub) => sub.name() === "autopilot");
     const names = autopilot?.commands.map((sub) => sub.name()) ?? [];
-    expect(names).toEqual(expect.arrayContaining(["ls", "create", "trigger", "runs"]));
-  });
-
-  it("offers the autopilot face", () => {
-    const autopilot = command().commands.find((sub) => sub.name() === "autopilot");
-    const names = autopilot?.commands.map((sub) => sub.name()) ?? [];
-    expect(names).toEqual(expect.arrayContaining(["ls", "create", "trigger", "runs"]));
+    expect(names).toEqual(
+      expect.arrayContaining(["ls", "create", "trigger", "runs", "pause", "enable", "archive"]),
+    );
   });
 
   it("offers the inbox reading and filing verbs", () => {
