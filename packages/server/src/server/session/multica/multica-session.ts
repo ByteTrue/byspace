@@ -7,6 +7,8 @@
  * emission), those land with their engine slices, not here.
  */
 import type { SessionInboundMessage, SessionOutboundMessage } from "@bytetrue/protocol/messages";
+import { dispatchAutopilot } from "../../multica/autopilot.js";
+import { computeNextRunAt } from "../../schedule/cron.js";
 import type { MulticaStore } from "../../multica/store.js";
 import {
   commentTriggers,
@@ -20,6 +22,8 @@ import type {
   IssueRow,
   SquadMemberRow,
   SquadRow,
+  AutopilotRow,
+  AutopilotRunRow,
   InboxRow,
   TaskRow,
 } from "../../multica/rows.js";
@@ -31,6 +35,8 @@ import type {
   MulticaSquadMemberSummary,
   MulticaSquadSummary,
   MulticaTaskSummary,
+  MulticaAutopilotRunSummary,
+  MulticaAutopilotSummary,
   MulticaInboxItemSummary,
   MulticaWakeupSummary,
 } from "@bytetrue/protocol/multica/rpc-schemas";
@@ -115,6 +121,43 @@ function memberSummary(member: SquadMemberRow): MulticaSquadMemberSummary {
   };
 }
 
+function autopilotSummary(store: MulticaStore, autopilot: AutopilotRow): MulticaAutopilotSummary {
+  return {
+    id: autopilot.id,
+    title: autopilot.title,
+    description: autopilot.description,
+    assigneeType: autopilot.assigneeType,
+    assigneeId: autopilot.assigneeId,
+    status: autopilot.status,
+    executionMode: autopilot.executionMode,
+    issueTitleTemplate: autopilot.issueTitleTemplate,
+    concurrencyPolicy: autopilot.concurrencyPolicy,
+    lastRunAt: autopilot.lastRunAt,
+    triggers: store.listAutopilotTriggers(autopilot.id).map((trigger) => ({
+      id: trigger.id,
+      kind: trigger.kind,
+      enabled: trigger.enabled,
+      cronExpression: trigger.cronExpression,
+      timezone: trigger.timezone,
+      nextRunAt: trigger.nextRunAt,
+      label: trigger.label,
+    })),
+  };
+}
+
+function runSummary(run: AutopilotRunRow): MulticaAutopilotRunSummary {
+  return {
+    id: run.id,
+    autopilotId: run.autopilotId,
+    source: run.source,
+    status: run.status,
+    issueId: run.issueId,
+    taskId: run.taskId,
+    triggeredAt: run.triggeredAt,
+    failureReason: run.failureReason,
+  };
+}
+
 function inboxSummary(item: InboxRow): MulticaInboxItemSummary {
   return {
     id: item.id,
@@ -168,7 +211,9 @@ type MulticaInboundSubset = Extract<SessionInboundMessage, { type: `multica.${st
 
 type WakeupOrInboxMessage = Extract<
   SessionInboundMessage,
-  { type: `multica.inbox.${string}` | `multica.wakeup.${string}` }
+  {
+    type: `multica.inbox.${string}` | `multica.wakeup.${string}` | `multica.autopilot.${string}`;
+  }
 > & { requestId: string };
 
 /**
@@ -177,7 +222,11 @@ type WakeupOrInboxMessage = Extract<
  * narrowing exact, so exhaustiveness still fails closed.
  */
 function isWakeupOrInboxMessage(msg: MulticaInboundSubset): msg is WakeupOrInboxMessage {
-  return msg.type.startsWith("multica.inbox.") || msg.type.startsWith("multica.wakeup.");
+  return (
+    msg.type.startsWith("multica.inbox.") ||
+    msg.type.startsWith("multica.wakeup.") ||
+    msg.type.startsWith("multica.autopilot.")
+  );
 }
 
 export class MulticaSession {
@@ -561,9 +610,100 @@ export class MulticaSession {
         return this.#handleWakeupCreate(msg);
       case "multica.wakeup.disable.request":
         return this.#handleWakeupDisable(msg);
+      case "multica.autopilot.list.request":
+        return this.#handleAutopilotList(msg);
+      case "multica.autopilot.create.request":
+        return this.#handleAutopilotCreate(msg);
+      case "multica.autopilot.trigger.request":
+        return this.#handleAutopilotTrigger(msg);
+      case "multica.autopilot.runs.request":
+        return this.#handleAutopilotRuns(msg);
       default:
         msg satisfies never;
     }
+  }
+
+  #handleAutopilotList(
+    msg: Extract<SessionInboundMessage, { type: "multica.autopilot.list.request" }>,
+  ): void {
+    this.#emit({
+      type: "multica.autopilot.list.response",
+      payload: {
+        requestId: msg.requestId,
+        autopilots: this.#store
+          .listAutopilots()
+          .map((autopilot) => autopilotSummary(this.#store, autopilot)),
+      },
+    });
+  }
+
+  #handleAutopilotCreate(
+    msg: Extract<SessionInboundMessage, { type: "multica.autopilot.create.request" }>,
+  ): void {
+    const autopilot = this.#store.createAutopilot({
+      title: msg.title,
+      description: msg.description ?? null,
+      assigneeType: msg.assigneeType,
+      assigneeId: msg.assigneeId,
+      executionMode: msg.executionMode,
+      issueTitleTemplate: msg.issueTitleTemplate ?? null,
+      concurrencyPolicy: msg.concurrencyPolicy ?? "skip",
+    });
+    if (msg.cron !== undefined) {
+      const nextRunAt = computeNextRunAt(
+        { type: "cron", expression: msg.cron, timezone: msg.timezone ?? "UTC" },
+        new Date(),
+      ).toISOString();
+      this.#store.createAutopilotTrigger({
+        autopilotId: autopilot.id,
+        kind: "schedule",
+        cronExpression: msg.cron,
+        timezone: msg.timezone ?? "UTC",
+        nextRunAt,
+      });
+    }
+    this.#emit({
+      type: "multica.autopilot.create.response",
+      payload: {
+        requestId: msg.requestId,
+        autopilot: autopilotSummary(this.#store, this.#store.getAutopilot(autopilot.id)),
+      },
+    });
+  }
+
+  #handleAutopilotTrigger(
+    msg: Extract<SessionInboundMessage, { type: "multica.autopilot.trigger.request" }>,
+  ): void {
+    const autopilot = this.#store.getAutopilot(msg.id);
+    const result = dispatchAutopilot({
+      store: this.#store,
+      autopilot,
+      trigger: null,
+      source: "manual",
+      now: new Date(),
+    });
+    this.#onEnqueued?.();
+    this.#emit({
+      type: "multica.autopilot.trigger.response",
+      payload: {
+        requestId: msg.requestId,
+        run: runSummary(result.run),
+        fired: result.fired,
+        reason: result.reason,
+      },
+    });
+  }
+
+  #handleAutopilotRuns(
+    msg: Extract<SessionInboundMessage, { type: "multica.autopilot.runs.request" }>,
+  ): void {
+    this.#emit({
+      type: "multica.autopilot.runs.response",
+      payload: {
+        requestId: msg.requestId,
+        runs: this.#store.listAutopilotRuns(msg.id).map(runSummary),
+      },
+    });
   }
 
   #handleInboxList(

@@ -31,6 +31,9 @@ import { applyMigrations, type Migration } from "./migrations/runner.js";
 import {
   AGENT_SELECT,
   SQUAD_SELECT,
+  AUTOPILOT_RUN_SELECT,
+  AUTOPILOT_SELECT,
+  AUTOPILOT_TRIGGER_SELECT,
   INBOX_SELECT,
   TASK_SELECT,
   COMMENT_SELECT,
@@ -40,6 +43,9 @@ import {
   mapIssueRow,
   mapSquadMemberRow,
   mapSquadRow,
+  mapAutopilotRow,
+  mapAutopilotRunRow,
+  mapAutopilotTriggerRow,
   mapInboxRow,
   mapTaskRow,
   type AgentRow,
@@ -47,6 +53,10 @@ import {
   type IssueRow,
   type SquadMemberRow,
   type SquadRow,
+  type AutopilotRow,
+  type AutopilotRunRow,
+  type AutopilotRunStatus,
+  type AutopilotTriggerRow,
   type InboxRow,
   type InboxSeverity,
   type TaskRow,
@@ -520,7 +530,8 @@ export class MulticaStore {
    */
   createTask(input: {
     readonly agentId: string;
-    readonly issueId: string;
+    /** Null for run_only autopilot tasks (033 made this representable). */
+    readonly issueId: string | null;
     readonly priority?: number;
     readonly triggerCommentId?: string | null;
     readonly triggerSummary?: string | null;
@@ -528,13 +539,15 @@ export class MulticaStore {
     readonly squadId?: string | null;
     readonly handoffNote?: string | null;
     readonly context?: Record<string, unknown> | null;
+    readonly autopilotRunId?: string | null;
   }): TaskRow {
     const id = randomUUID();
     this.#db
       .prepare(
         `INSERT INTO agent_task_queue (id, agent_id, issue_id, status, priority,
-           trigger_comment_id, trigger_summary, is_leader_task, squad_id, handoff_note, context)
-         VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?)`,
+           trigger_comment_id, trigger_summary, is_leader_task, squad_id, handoff_note, context,
+           autopilot_run_id)
+         VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -547,6 +560,7 @@ export class MulticaStore {
         input.squadId ?? null,
         input.handoffNote ?? null,
         input.context ? JSON.stringify(input.context) : null,
+        input.autopilotRunId ?? null,
       );
     return this.getTask(id);
   }
@@ -620,6 +634,238 @@ export class MulticaStore {
       )
       .all();
     return rows.map((row) => mapTaskRow(row as never));
+  }
+
+  // ── autopilot ────────────────────────────────────────────────────────
+
+  createAutopilot(input: {
+    readonly title: string;
+    readonly description?: string | null;
+    readonly assigneeType: "agent" | "squad";
+    readonly assigneeId: string;
+    readonly executionMode: "create_issue" | "run_only";
+    readonly issueTitleTemplate?: string | null;
+    readonly concurrencyPolicy?: "skip" | "queue" | "replace";
+    readonly createdByType?: string;
+    readonly createdById?: string;
+  }): AutopilotRow {
+    const id = randomUUID();
+    this.#db
+      .prepare(
+        `INSERT INTO autopilot (id, title, description, assignee_type, assignee_id,
+           execution_mode, issue_title_template, concurrency_policy, created_by_type, created_by_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.title,
+        input.description ?? null,
+        input.assigneeType,
+        input.assigneeId,
+        input.executionMode,
+        input.issueTitleTemplate ?? null,
+        input.concurrencyPolicy ?? "skip",
+        input.createdByType ?? "owner",
+        input.createdById ?? "owner",
+      );
+    return this.getAutopilot(id);
+  }
+
+  getAutopilot(id: string): AutopilotRow {
+    const row = this.#db
+      .prepare(`SELECT ${AUTOPILOT_SELECT} FROM autopilot WHERE id = ?`)
+      .get(id) as Record<string, unknown> | undefined;
+    if (!row) {
+      throw new Error(`Unknown autopilot: ${id}`);
+    }
+    return mapAutopilotRow(row);
+  }
+
+  /**
+   * The source's pause/enable/archive verbs in one write: status is the
+   * whole switch, pause_reason is the audit of why.
+   */
+  setAutopilotStatus(input: {
+    readonly id: string;
+    readonly status: "active" | "paused" | "archived";
+    readonly pauseReason?: string | null;
+  }): AutopilotRow {
+    this.#db
+      .prepare(
+        `UPDATE autopilot SET status = ?, pause_reason = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE id = ?`,
+      )
+      .run(input.status, input.pauseReason ?? null, input.id);
+    return this.getAutopilot(input.id);
+  }
+
+  listAutopilots(): AutopilotRow[] {
+    const rows = this.#db
+      .prepare(`SELECT ${AUTOPILOT_SELECT} FROM autopilot ORDER BY created_at`)
+      .all() as Record<string, unknown>[];
+    return rows.map((row) => mapAutopilotRow(row));
+  }
+
+  createAutopilotTrigger(input: {
+    readonly autopilotId: string;
+    readonly kind: "schedule" | "webhook" | "api";
+    readonly cronExpression?: string | null;
+    readonly timezone?: string;
+    readonly label?: string | null;
+    readonly nextRunAt?: string | null;
+  }): AutopilotTriggerRow {
+    const id = randomUUID();
+    this.#db
+      .prepare(
+        `INSERT INTO autopilot_trigger (id, autopilot_id, kind, cron_expression, timezone, label, next_run_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.autopilotId,
+        input.kind,
+        input.cronExpression ?? null,
+        input.timezone ?? "UTC",
+        input.label ?? null,
+        input.nextRunAt ?? null,
+      );
+    return this.getAutopilotTrigger(id);
+  }
+
+  getAutopilotTrigger(id: string): AutopilotTriggerRow {
+    const row = this.#db
+      .prepare(`SELECT ${AUTOPILOT_TRIGGER_SELECT} FROM autopilot_trigger WHERE id = ?`)
+      .get(id) as Record<string, unknown> | undefined;
+    if (!row) {
+      throw new Error(`Unknown autopilot trigger: ${id}`);
+    }
+    return mapAutopilotTriggerRow(row);
+  }
+
+  listAutopilotTriggers(autopilotId: string): AutopilotTriggerRow[] {
+    const rows = this.#db
+      .prepare(`SELECT ${AUTOPILOT_TRIGGER_SELECT} FROM autopilot_trigger WHERE autopilot_id = ?`)
+      .all(autopilotId) as Record<string, unknown>[];
+    return rows.map((row) => mapAutopilotTriggerRow(row));
+  }
+
+  /** Schedule triggers whose time has come: the tick's work list. */
+  listDueAutopilotTriggers(now: Date): AutopilotTriggerRow[] {
+    const rows = this.#db
+      .prepare(
+        `SELECT ${AUTOPILOT_TRIGGER_SELECT} FROM autopilot_trigger
+         WHERE enabled = 1 AND kind = 'schedule' AND next_run_at IS NOT NULL AND next_run_at <= ?`,
+      )
+      .all(now.toISOString()) as Record<string, unknown>[];
+    return rows.map((row) => mapAutopilotTriggerRow(row));
+  }
+
+  /** Advance a schedule trigger after firing, and stamp last_fired_at. */
+  advanceAutopilotTrigger(triggerId: string, nextRunAt: string | null, now: Date): void {
+    this.#db
+      .prepare(
+        `UPDATE autopilot_trigger
+         SET next_run_at = ?, last_fired_at = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(nextRunAt, now.toISOString(), now.toISOString(), triggerId);
+  }
+
+  /**
+   * The (trigger, planned_at) slot's row, if one exists: a slot has exactly
+   * one run row (the source's unique index), so a skip or a retry reuses it
+   * instead of inserting a second.
+   */
+  getAutopilotRunForSlot(triggerId: string, plannedAt: string): AutopilotRunRow | null {
+    const row = this.#db
+      .prepare(
+        `SELECT ${AUTOPILOT_RUN_SELECT} FROM autopilot_run
+         WHERE trigger_id = ? AND planned_at = ?`,
+      )
+      .get(triggerId, plannedAt) as Record<string, unknown> | undefined;
+    return row ? mapAutopilotRunRow(row) : null;
+  }
+
+  createAutopilotRun(input: {
+    readonly autopilotId: string;
+    readonly triggerId?: string | null;
+    readonly source: "schedule" | "manual" | "webhook" | "api";
+    readonly plannedAt?: string | null;
+  }): AutopilotRunRow {
+    const id = randomUUID();
+    this.#db
+      .prepare(
+        `INSERT INTO autopilot_run (id, autopilot_id, trigger_id, source, planned_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(id, input.autopilotId, input.triggerId ?? null, input.source, input.plannedAt ?? null);
+    return this.getAutopilotRun(id);
+  }
+
+  getAutopilotRun(id: string): AutopilotRunRow {
+    const row = this.#db
+      .prepare(`SELECT ${AUTOPILOT_RUN_SELECT} FROM autopilot_run WHERE id = ?`)
+      .get(id) as Record<string, unknown> | undefined;
+    if (!row) {
+      throw new Error(`Unknown autopilot run: ${id}`);
+    }
+    return mapAutopilotRunRow(row);
+  }
+
+  listAutopilotRuns(autopilotId: string): AutopilotRunRow[] {
+    const rows = this.#db
+      .prepare(
+        `SELECT ${AUTOPILOT_RUN_SELECT} FROM autopilot_run WHERE autopilot_id = ?
+         ORDER BY created_at DESC`,
+      )
+      .all(autopilotId) as Record<string, unknown>[];
+    return rows.map((row) => mapAutopilotRunRow(row));
+  }
+
+  updateAutopilotRun(input: {
+    readonly id: string;
+    readonly status?: AutopilotRunStatus;
+    readonly issueId?: string | null;
+    readonly taskId?: string | null;
+    readonly failureReason?: string | null;
+    readonly result?: string | null;
+  }): AutopilotRunRow {
+    const current = this.getAutopilotRun(input.id);
+    this.#db
+      .prepare(
+        `UPDATE autopilot_run
+         SET status = ?, issue_id = ?, task_id = ?, failure_reason = ?, result = ?,
+             completed_at = CASE WHEN ? IN ('completed', 'failed', 'skipped')
+               THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') ELSE completed_at END
+         WHERE id = ?`,
+      )
+      .run(
+        input.status ?? current.status,
+        input.issueId !== undefined ? input.issueId : current.issueId,
+        input.taskId !== undefined ? input.taskId : current.taskId,
+        input.failureReason !== undefined ? input.failureReason : current.failureReason,
+        input.result !== undefined ? input.result : current.result,
+        input.status ?? current.status,
+        input.id,
+      );
+    return this.getAutopilotRun(input.id);
+  }
+
+  /** Runs of one autopilot that have not settled — the skip policy reads these. */
+  listInFlightAutopilotRuns(autopilotId: string): AutopilotRunRow[] {
+    const rows = this.#db
+      .prepare(
+        `SELECT ${AUTOPILOT_RUN_SELECT} FROM autopilot_run
+         WHERE autopilot_id = ? AND status IN ('issue_created', 'running')`,
+      )
+      .all(autopilotId) as Record<string, unknown>[];
+    return rows.map((row) => mapAutopilotRunRow(row));
+  }
+
+  touchAutopilotLastRun(id: string, now: Date): void {
+    this.#db
+      .prepare(`UPDATE autopilot SET last_run_at = ?, updated_at = ? WHERE id = ?`)
+      .run(now.toISOString(), now.toISOString(), id);
   }
 
   // ── inbox ────────────────────────────────────────────────────────────
@@ -1079,14 +1325,18 @@ export class MulticaStore {
     // registered for. Capture rides the same write; the self-trigger guard
     // keeps the run from waking the subscription it registered itself.
     const row = this.getTask(input.id);
-    this.captureWakeups({
-      issueId: row.issueId,
-      type: `task.${input.status}`,
-      key: `${input.id}:${input.status}`,
-      agentId: row.agentId,
-      taskId: input.id,
-      payload: { task_id: input.id, status: input.status },
-    });
+    // A run_only autopilot task has no issue, so there is no subscription
+    // surface to offer the event to.
+    if (row.issueId !== null) {
+      this.captureWakeups({
+        issueId: row.issueId,
+        type: `task.${input.status}`,
+        key: `${input.id}:${input.status}`,
+        agentId: row.agentId,
+        taskId: input.id,
+        payload: { task_id: input.id, status: input.status },
+      });
+    }
     return row;
   }
 

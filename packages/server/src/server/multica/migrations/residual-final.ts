@@ -17,6 +17,7 @@
  * (176) and quota_reservation_id/reason_code (352) port for the same reason —
  * shape parity with cut features, values null.
  */
+import { rebuildTableWithFksOff } from "./rebuild.js";
 import type { Migration } from "./runner.js";
 
 export const migration003TaskContext: Migration = {
@@ -67,8 +68,48 @@ export const migration033Chat: Migration = {
   version: "033_chat",
   up: (db) => {
     // The chat tables are cut; the queue's chat linkage column ports for
-    // shape parity and stays null.
-    db.exec(`ALTER TABLE agent_task_queue ADD COLUMN chat_session_id TEXT;`);
+    // shape parity and stays null. The source's other half — issue_id
+    // dropping NOT NULL, because chat tasks and run_only autopilot runs
+    // carry no issue — rides a rebuild: SQLite cannot relax a constraint in
+    // place. Carry order is the table's shape at 033.
+    rebuildTableWithFksOff(db, {
+      table: "agent_task_queue",
+      ddl: `CREATE TABLE agent_task_queue (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL REFERENCES agent(id) ON DELETE CASCADE,
+        issue_id TEXT REFERENCES issue(id) ON DELETE CASCADE,
+        status TEXT NOT NULL DEFAULT 'queued',
+        priority INTEGER NOT NULL DEFAULT 0,
+        dispatched_at TEXT, started_at TEXT, completed_at TEXT,
+        result TEXT, error TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        context TEXT,
+        runtime_id TEXT,
+        session_id TEXT,
+        work_dir TEXT,
+        trigger_comment_id TEXT,
+        chat_session_id TEXT
+      )`,
+      carry: [
+        "id",
+        "agent_id",
+        "issue_id",
+        "status",
+        "priority",
+        "dispatched_at",
+        "started_at",
+        "completed_at",
+        "result",
+        "error",
+        "created_at",
+        "context",
+        "runtime_id",
+        "session_id",
+        "work_dir",
+        "trigger_comment_id",
+      ],
+      indexes: [`CREATE INDEX idx_agent_task_queue_agent ON agent_task_queue(agent_id, status)`],
+    });
   },
   down: (db) => {
     db.exec(`ALTER TABLE agent_task_queue DROP COLUMN chat_session_id;`);
@@ -301,4 +342,54 @@ export const migration531WakeupActorFilter: Migration = {
     db.exec(`ALTER TABLE issue_wakeup DROP COLUMN filter_actor_id;`);
     db.exec(`ALTER TABLE issue_wakeup DROP COLUMN filter_actor_type;`);
   },
+};
+
+/**
+ * Repair for databases that applied the pre-rebuild 033 (ADD COLUMN only):
+ * their agent_task_queue.issue_id is still NOT NULL, which run_only
+ * autopilot tasks and the source's chat tasks both need nullable (033's
+ * other half). Fresh databases already carry the relaxed shape, so this is
+ * a conditional no-op there.
+ */
+export const migration551QueueIssueNullableRepair: Migration = {
+  version: "551_queue_issue_nullable_repair",
+  up: (db) => {
+    const columns = db.prepare("PRAGMA table_info(agent_task_queue)").all() as Array<{
+      name: string;
+      notnull: number;
+    }>;
+    const issueColumn = columns.find((entry) => entry.name === "issue_id");
+    if (!issueColumn || issueColumn.notnull === 0) {
+      // Fresh databases already carry 033's relaxed shape.
+      return;
+    }
+    // Constraint-only change: rebuild from the table's own current DDL with
+    // the NOT NULL relaxed, carrying every column in its current order and
+    // re-creating the table's own indexes. A hand-written column list here
+    // is exactly how a repair drops the columns added after it.
+    const shape = db
+      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'agent_task_queue'")
+      .get() as { sql: string };
+    const relaxed = shape.sql.replace(
+      "issue_id TEXT NOT NULL REFERENCES issue(id) ON DELETE CASCADE",
+      "issue_id TEXT REFERENCES issue(id) ON DELETE CASCADE",
+    );
+    if (relaxed === shape.sql) {
+      return;
+    }
+    const indexes = (
+      db
+        .prepare(
+          "SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'agent_task_queue' AND sql IS NOT NULL",
+        )
+        .all() as Array<{ sql: string }>
+    ).map((row) => row.sql);
+    rebuildTableWithFksOff(db, {
+      table: "agent_task_queue",
+      ddl: relaxed,
+      carry: columns.map((entry) => entry.name),
+      indexes,
+    });
+  },
+  down: () => undefined,
 };

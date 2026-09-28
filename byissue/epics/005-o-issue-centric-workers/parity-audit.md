@@ -47,18 +47,18 @@ multica（`~/workspace/refs/multica` @ `04cdd48`，一手读码）与本工程 `
 
 ## E. RPC / CLI 操作面
 
-| 面                                                     | 源        | 我们                                                      | 状态                                                |
-| ------------------------------------------------------ | --------- | --------------------------------------------------------- | --------------------------------------------------- |
-| issue 读/写/状态                                       | REST      | 6 对 RPC（list/get/create/update/status.update）          | ✅（update 与 status.update 语义重叠，见 F4）       |
-| comment 读/写                                          | REST      | 2 对                                                      | ⚠️ 写缺身份（F2）                                   |
-| agent 读/写                                            | REST      | 2 对（list 含 includeSystem/includeArchived）             | ✅                                                  |
-| squad 读/写                                            | REST      | 2 对（create 带 roster）                                  | ⚠️ 无 update/archive                                |
-| task 读                                                | REST      | 2 对（list/running.list）                                 | ✅                                                  |
-| status 目录                                            | REST      | 1 对                                                      | ✅                                                  |
-| wakeup 注册/查询（agent 自登记事件唤醒）               | REST+CLI  | **0**（表在，行为无）                                     | ❌                                                  |
-| autopilot（schedule/webhook/api 触发器）               | REST+CLI  | **0**（3 表在，行为无）                                   | ❌                                                  |
-| inbox（给人看的待办箱）                                | REST+页面 | 后端 5 对 RPC + CLI 五动词 + owner UI 面（issue 004/005） | ✅                                                  |
-| CLI：issue ls/create、agent ls/create、comment ls/send | 全命令面  | 6 子命令                                                  | ⚠️ 缺 issue update/status、squad、wakeup、autopilot |
+| 面                                                     | 源        | 我们                                                                                                | 状态                                          |
+| ------------------------------------------------------ | --------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| issue 读/写/状态                                       | REST      | 6 对 RPC（list/get/create/update/status.update）                                                    | ✅（update 与 status.update 语义重叠，见 F4） |
+| comment 读/写                                          | REST      | 2 对                                                                                                | ⚠️ 写缺身份（F2）                             |
+| agent 读/写                                            | REST      | 2 对（list 含 includeSystem/includeArchived）                                                       | ✅                                            |
+| squad 读/写                                            | REST      | 2 对（create 带 roster）                                                                            | ⚠️ 无 update/archive                          |
+| task 读                                                | REST      | 2 对（list/running.list）                                                                           | ✅                                            |
+| status 目录                                            | REST      | 1 对                                                                                                | ✅                                            |
+| wakeup 注册/查询（agent 自登记事件唤醒）               | REST+CLI  | **0**（表在，行为无）                                                                               | ❌                                            |
+| autopilot（schedule/webhook/api 触发器）               | REST+CLI  | schedule+api 两触发、两模式、skip/queue、run 审计、CLI 四动词（issue 006）；webhook/replace/UI 欠账 | ⚠️                                            |
+| inbox（给人看的待办箱）                                | REST+页面 | 后端 5 对 RPC + CLI 五动词 + owner UI 面（issue 004/005）                                           | ✅                                            |
+| CLI：issue ls/create、agent ls/create、comment ls/send | 全命令面  | 6 子命令                                                                                            | ⚠️ 缺 issue update/status、squad              |
 
 ## F. UI / UX（对照官方截图）
 
@@ -94,4 +94,4 @@ multica（`~/workspace/refs/multica` @ `04cdd48`，一手读码）与本工程 `
 
 ## 未做但源有（不是歪，是欠）
 
-autopilot、activity_log 写入、task_supplement、重试行为、拖拽/列表视图/筛选、Execution log/Token 面板、子 issue/subscriber/reactions/附件 UI、agents 等管理页。全部有表无行为或有 RPC 无 UI —— 切片④⑤⑥之后的增量面。
+autopilot 的 webhook/replace/UI、activity_log 写入、task_supplement、重试行为、拖拽/列表视图/筛选、Execution log/Token 面板、子 issue/subscriber/reactions/附件 UI、agents 等管理页。全部有表无行为或有 RPC 无 UI —— 切片④⑤⑥之后的增量面。

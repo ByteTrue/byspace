@@ -33,7 +33,12 @@ export interface RebuildSpec {
 export function rebuildTable(db: DatabaseSync, spec: RebuildSpec): void {
   const temp = `${spec.table}__rebuild`;
   db.exec(`DROP TABLE IF EXISTS ${temp};`);
-  db.exec(spec.ddl.replace(`CREATE TABLE ${spec.table} (`, `CREATE TABLE ${temp} (`));
+  // sqlite_master-sourced DDL carries quoted names; accept both forms.
+  db.exec(
+    spec.ddl
+      .replace(`CREATE TABLE "${spec.table}" (`, `CREATE TABLE ${temp} (`)
+      .replace(`CREATE TABLE ${spec.table} (`, `CREATE TABLE ${temp} (`),
+  );
   db.exec(
     `INSERT INTO ${temp} (${spec.carry.join(", ")}) SELECT ${spec.carry.join(", ")} FROM ${spec.table};`,
   );

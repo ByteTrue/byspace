@@ -156,6 +156,7 @@ describe("migration sequence 002–042", () => {
       "537_issue_duplicate_of_index",
       "538_task_supplement",
       "550_comment_suppressed_agents",
+      "551_queue_issue_nullable_repair",
     ];
     expect(versions).toEqual(expected);
   });

@@ -90,6 +90,10 @@ async function verifyRunIdentity(
   }
 }
 
+// Execution stays dark for the whole pass: dispatch, capture and the store
+// run for real; no queued task may spawn a model session (notes/004).
+process.env.BYSPACE_MULTICA_EXECUTION = "off";
+
 async function main(): Promise<void> {
   const homeRoot = mkdtempSync(path.join(tmpdir(), "multica-verify-"));
   try {
@@ -281,6 +285,51 @@ async function main(): Promise<void> {
           inboxWriteRefused = true;
         }
         check("a non-run session cannot write the inbox", inboxWriteRefused);
+
+        // Autopilot: a run_only autopilot fires on demand, lands a task with
+        // no issue, and its run history records the attempt.
+        const autopilot = await client.multicaAutopilotCreate({
+          title: "Verify patrol",
+          description: "report the state of the queue",
+          assigneeType: "agent",
+          assigneeId: created.agent.id,
+          executionMode: "run_only",
+        });
+        check("autopilot create registers", autopilot.autopilot.status === "active");
+        const fired = await client.multicaAutopilotTrigger(autopilot.autopilot.id);
+        check("manual trigger fires", fired.fired === true && fired.run.status === "running");
+        check(
+          "the run_only task carries no issue",
+          fired.run.issueId === null,
+          String(fired.run.issueId),
+        );
+        const runs = await client.multicaAutopilotRuns(autopilot.autopilot.id);
+        check("run history records the attempt", runs.runs.length === 1);
+        // With execution dark (BYSPACE_MULTICA_EXECUTION=off) the fired task
+        // must still be sitting in the queue — proof the switch holds, and
+        // that this pass costs no model sessions.
+        const probeStore = new MulticaStore(
+          openMulticaDatabase(path.join(daemon.byspaceHome, "multica", "multica.db")),
+          { migrations: MIGRATIONS },
+        );
+        try {
+          const queuedTasks = probeStore.listQueuedTasks();
+          check(
+            "execution stays dark: the fired task is still queued",
+            queuedTasks.some((task) => task.id === fired.run.taskId),
+          );
+        } finally {
+          probeStore.close();
+        }
+        // skip policy: a second firing while the first is in flight is a
+        // recorded skip, not a second run.
+        const second = await client.multicaAutopilotTrigger(autopilot.autopilot.id);
+        check(
+          "the skip policy suppresses the second firing",
+          second.fired === false && second.run.status === "skipped",
+        );
+        const afterSkip = await client.multicaAutopilotRuns(autopilot.autopilot.id);
+        check("skipped firings are still rows", afterSkip.runs.length === 2);
 
         // unknown issue errors cleanly
         let unknownHandled = false;

@@ -16,6 +16,7 @@ import type { BoundCreateAgentCommand } from "../agent/create-agent/create.js";
 import { openMulticaDatabase } from "./database.js";
 import { MulticaExecutor } from "./executor.js";
 import { MIGRATIONS } from "./migrations/index.js";
+import { tickAutopilots } from "./autopilot.js";
 import { seedSecretary } from "./secretary.js";
 import { MulticaStore } from "./store.js";
 
@@ -31,6 +32,14 @@ export interface MulticaSubsystemOptions {
     cwd: string;
     title: string;
   }) => Promise<{ cwd: string; workspaceId: string }>;
+  /**
+   * Whether the executor actually runs queued tasks. Production: true.
+   * Verification harnesses set BYSPACE_MULTICA_EXECUTION=off so a scripted
+   * end-to-end pass never spawns real model sessions — dispatch and the
+   * store stay fully live, only execution is dark (notes/004: a verifier
+   * that silently pays for real runs is not a verifier).
+   */
+  readonly executionEnabled?: boolean;
   readonly logger: pino.Logger;
 }
 
@@ -63,6 +72,15 @@ export function createMulticaSubsystem(options: MulticaSubsystemOptions): {
       });
       return { cwd: workspace.cwd, workspaceId: workspace.workspaceId };
     },
+    resolveAutopilotWorkspace: async (autopilotId: string) => {
+      const dir = path.join(options.byspaceHome, "multica", "autopilot", autopilotId);
+      await mkdir(dir, { recursive: true });
+      const workspace = await options.createWorkspaceForDirectory({
+        cwd: dir,
+        firstAgentContext: { prompt: `multica autopilot ${autopilotId}` },
+      });
+      return { cwd: workspace.cwd, workspaceId: workspace.workspaceId };
+    },
     logger: options.logger,
   });
 
@@ -74,8 +92,9 @@ export function createMulticaSubsystem(options: MulticaSubsystemOptions): {
       options.logger.warn({ err: error }, "multica drain failed");
     });
   };
+  const executionEnabled = options.executionEnabled ?? true;
   const kickDrain = (): void => {
-    if (drainScheduled) {
+    if (!executionEnabled || drainScheduled) {
       return;
     }
     drainScheduled = true;
@@ -89,6 +108,18 @@ export function createMulticaSubsystem(options: MulticaSubsystemOptions): {
   const tick = (): void => {
     try {
       store.purgeExpiredReceipts(new Date());
+      for (const result of tickAutopilots({
+        store,
+        now: new Date(),
+        onEnqueued: kickDrain,
+      })) {
+        if (!result.fired && result.reason) {
+          options.logger.info(
+            { autopilotId: result.run.autopilotId, reason: result.reason },
+            "autopilot firing skipped",
+          );
+        }
+      }
       for (const { wakeup, evidence } of store.listReadyWakeups(new Date())) {
         try {
           store.dispatchWakeup(wakeup, evidence, new Date());
@@ -104,8 +135,10 @@ export function createMulticaSubsystem(options: MulticaSubsystemOptions): {
   const wakeupTimer = setInterval(tick, 15_000);
   wakeupTimer.unref?.();
 
-  const timer = setInterval(drain, 30_000);
-  timer.unref?.();
+  if (executionEnabled) {
+    const timer = setInterval(drain, 30_000);
+    timer.unref?.();
+  }
 
   const seedSecretaryWorkspace = async (): Promise<void> => {
     try {

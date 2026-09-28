@@ -21,7 +21,12 @@ import type { AgentManager } from "../agent/agent-manager.js";
 import { type BoundCreateAgentCommand } from "../agent/create-agent/create.js";
 import type { MulticaStore } from "./store.js";
 import type { TaskRow } from "./rows.js";
-import { createCommentPrompt, createIssuePrompt, createWakeupPrompt } from "./run-prompt.js";
+import {
+  createAutopilotRunOnlyPrompt,
+  createCommentPrompt,
+  createIssuePrompt,
+  createWakeupPrompt,
+} from "./run-prompt.js";
 
 export interface MulticaExecutorOptions {
   store: MulticaStore;
@@ -29,6 +34,10 @@ export interface MulticaExecutorOptions {
   createAgent: BoundCreateAgentCommand;
   /** Resolves the working directory for an issue's runs. */
   resolveWorkspace: (issueId: string) => Promise<{ cwd: string; workspaceId: string } | null>;
+  /** Resolves the working directory for an autopilot's run_only runs. */
+  resolveAutopilotWorkspace: (
+    autopilotId: string,
+  ) => Promise<{ cwd: string; workspaceId: string } | null>;
   logger: pino.Logger;
 }
 
@@ -37,6 +46,7 @@ export class MulticaExecutor {
   readonly #agentManager: AgentManager;
   readonly #createAgent: BoundCreateAgentCommand;
   readonly #resolveWorkspace: MulticaExecutorOptions["resolveWorkspace"];
+  readonly #resolveAutopilotWorkspace: MulticaExecutorOptions["resolveAutopilotWorkspace"];
   readonly #logger: pino.Logger;
   readonly #inFlight = new Set<string>();
 
@@ -45,6 +55,7 @@ export class MulticaExecutor {
     this.#agentManager = options.agentManager;
     this.#createAgent = options.createAgent;
     this.#resolveWorkspace = options.resolveWorkspace;
+    this.#resolveAutopilotWorkspace = options.resolveAutopilotWorkspace;
     this.#logger = options.logger;
   }
 
@@ -87,9 +98,13 @@ export class MulticaExecutor {
     }
     this.#store.updateTaskStatus({ id: task.id, status: "dispatched" });
     try {
-      const issue = this.#store.getIssue(task.issueId);
+      if (task.issueId === null && task.autopilotRunId !== null) {
+        await this.#executeAutopilotRunOnly(task);
+        return;
+      }
+      const issue = this.#store.getIssue(task.issueId as string);
       const agent = this.#store.getAgent(task.agentId);
-      const workspace = await this.#resolveWorkspace(task.issueId);
+      const workspace = await this.#resolveWorkspace(task.issueId as string);
       if (!workspace) {
         throw new Error(`no workspace resolved for issue ${task.issueId}`);
       }
@@ -156,7 +171,7 @@ export class MulticaExecutor {
       // The run's report is a comment on the issue, attributed to the agent
       // and linked to the task — the record the issue is.
       this.#store.createComment({
-        issueId: task.issueId,
+        issueId: issue.id,
         authorType: "agent",
         authorId: task.agentId,
         content: output,
@@ -167,12 +182,100 @@ export class MulticaExecutor {
         status: "completed",
         result: output,
       });
+      this.#settleLinkedRun(task, "completed", null);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.#logger.warn({ err: error, taskId: task.id }, "multica run failed");
       this.#store.updateTaskStatus({ id: task.id, status: "failed", error: message });
+      this.#settleLinkedRun(task, "failed", message);
       this.#noteFailureForOwner(task, message);
     }
+  }
+
+  /**
+   * A run_only autopilot task: no issue exists, the brief is the autopilot's
+   * instructions, and the run row — not a comment — is the record.
+   */
+  async #executeAutopilotRunOnly(task: TaskRow): Promise<void> {
+    const run = this.#store.getAutopilotRun(task.autopilotRunId as string);
+    const autopilot = this.#store.getAutopilot(run.autopilotId);
+    const agent = this.#store.getAgent(task.agentId);
+    const workspace = await this.#resolveAutopilotWorkspace(autopilot.id);
+    if (!workspace) {
+      throw new Error(`no workspace resolved for autopilot ${autopilot.id}`);
+    }
+    const prompt = createAutopilotRunOnlyPrompt({
+      agent,
+      autopilotId: autopilot.id,
+      autopilotTitle: autopilot.title,
+      autopilotDescription: autopilot.description,
+      runId: run.id,
+      source: run.source,
+    });
+    const created = await this.#createAgent({
+      kind: "mcp",
+      provider: "pi",
+      config: {},
+      cwd: workspace.cwd,
+      workspaceId: workspace.workspaceId,
+      title: `${autopilot.title} — ${agent.name}`,
+      labels: { "multica.task-id": task.id, "multica.autopilot-run-id": run.id },
+      unattended: true,
+      promptFailure: "return-error",
+      background: true,
+      notifyOnFinish: false,
+    });
+    if (created.initialPromptError) {
+      throw created.initialPromptError;
+    }
+    this.#store.attachTaskSession(task.id, created.snapshot.id);
+    const result = await this.#agentManager.runAgent(created.snapshot.id, prompt);
+    const waitResult = await this.#agentManager.waitForAgentEvent(created.snapshot.id, {
+      waitForActive: true,
+    });
+    if (result.canceled) {
+      this.#store.updateTaskStatus({ id: task.id, status: "cancelled", error: "canceled" });
+      this.#store.updateAutopilotRun({ id: run.id, status: "failed", failureReason: "canceled" });
+      return;
+    }
+    if (waitResult.permission) {
+      this.#store.updateTaskStatus({
+        id: task.id,
+        status: "failed",
+        error: "waiting for permission",
+      });
+      this.#store.updateAutopilotRun({
+        id: run.id,
+        status: "failed",
+        failureReason: "waiting for permission",
+      });
+      this.#noteFailureForOwner(task, "waiting for permission");
+      return;
+    }
+    const output = waitResult.lastMessage ?? result.finalText ?? "";
+    this.#store.updateTaskStatus({ id: task.id, status: "completed", result: output });
+    this.#store.updateAutopilotRun({ id: run.id, status: "completed", result: output });
+  }
+
+  /**
+   * A task linked to an autopilot run settles it with the task's outcome:
+   * the run row is the autopilot's audit trail (the source's
+   * SyncRunFromTask).
+   */
+  #settleLinkedRun(
+    task: TaskRow,
+    status: "completed" | "failed",
+    failureReason: string | null,
+  ): void {
+    if (task.autopilotRunId === null) {
+      return;
+    }
+    this.#store.updateAutopilotRun({
+      id: task.autopilotRunId,
+      status,
+      ...(failureReason !== null ? { failureReason } : {}),
+      ...(status === "completed" ? { result: task.result } : {}),
+    });
   }
 
   /**
@@ -181,11 +284,16 @@ export class MulticaExecutor {
    * "needs your decision" lives.
    */
   #noteFailureForOwner(task: TaskRow, message: string): void {
+    // A run_only task has no issue: the inbox item then points at the
+    // autopilot run instead.
     this.#store.createInboxItem({
       type: "run.failed",
       severity: "action_required",
       issueId: task.issueId,
-      title: `Run failed on issue ${task.issueId.slice(0, 8)}`,
+      title:
+        task.issueId !== null
+          ? `Run failed on issue ${task.issueId.slice(0, 8)}`
+          : `Run failed (autopilot run ${task.autopilotRunId?.slice(0, 8) ?? "?"})`,
       body: message.slice(0, 2000),
       actorType: "agent",
       actorId: task.agentId,

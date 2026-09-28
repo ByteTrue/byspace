@@ -128,7 +128,9 @@ export const migration128CommentRoutingEscalation: Migration = {
       ddl: `CREATE TABLE agent_task_queue (
         id TEXT PRIMARY KEY,
         agent_id TEXT NOT NULL REFERENCES agent(id) ON DELETE CASCADE,
-        issue_id TEXT NOT NULL REFERENCES issue(id) ON DELETE CASCADE,
+        -- 033 dropped NOT NULL here (chat and run_only autopilot tasks
+        -- carry no issue); the rebuilds must not re-introduce it.
+        issue_id TEXT REFERENCES issue(id) ON DELETE CASCADE,
         status TEXT NOT NULL DEFAULT 'queued'
           CHECK (status IN ('queued', 'dispatched', 'running', 'completed', 'failed', 'cancelled',
                             'deferred', 'waiting_local_directory')),
@@ -480,7 +482,9 @@ export const migration190AgentTaskAttributionInvariantCheck: Migration = {
       ddl: `CREATE TABLE agent_task_queue (
         id TEXT PRIMARY KEY,
         agent_id TEXT NOT NULL REFERENCES agent(id) ON DELETE CASCADE,
-        issue_id TEXT NOT NULL REFERENCES issue(id) ON DELETE CASCADE,
+        -- 033 dropped NOT NULL here (chat and run_only autopilot tasks
+        -- carry no issue); the rebuilds must not re-introduce it.
+        issue_id TEXT REFERENCES issue(id) ON DELETE CASCADE,
         status TEXT NOT NULL DEFAULT 'queued'
           CHECK (status IN ('queued', 'dispatched', 'running', 'completed', 'failed', 'cancelled',
                             'deferred', 'waiting_local_directory')),

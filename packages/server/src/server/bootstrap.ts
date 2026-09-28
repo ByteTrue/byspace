@@ -1275,6 +1275,7 @@ export async function createBySpaceDaemon(
     createAgent,
     createWorkspaceForDirectory: createScheduleLocalWorkspaceExternal,
     provisionSecretaryWorkspace: provisionSecretaryWorkspaceExternal,
+    executionEnabled: process.env.BYSPACE_MULTICA_EXECUTION !== "off",
     logger,
   });
   const { store: multicaStore, kickDrain: multicaKickDrain } = multica;

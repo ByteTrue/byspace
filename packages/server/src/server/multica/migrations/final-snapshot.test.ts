@@ -15,6 +15,9 @@ import { DatabaseSync } from "node:sqlite";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { migration551QueueIssueNullableRepair } from "./residual-final.js";
+import { rebuildTableWithFksOff } from "./rebuild.js";
+
 import { MIGRATIONS } from "./index.js";
 import { applyMigrations } from "./runner.js";
 
@@ -385,5 +388,59 @@ describe("final schema snapshot", () => {
       "created_at",
       "unsubscribed_at",
     ]);
+  });
+});
+
+describe("551 queue nullable repair", () => {
+  it("relaxes issue_id on a database that applied the old 033 and carries every column", () => {
+    // Simulate the pre-rebuild 033: apply the chain, then re-tighten
+    // issue_id through a rebuild (the old translation's shape) and drop a
+    // late column's twin — the repair must undo only the constraint.
+    const scratch = new DatabaseSync(":memory:");
+    applyMigrations(scratch, MIGRATIONS);
+    const before = scratch.prepare("PRAGMA table_info(agent_task_queue)").all() as Array<{
+      name: string;
+      notnull: number;
+    }>;
+    // Force the old shape: rebuild with NOT NULL restored.
+    const shape = (
+      db
+        .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'agent_task_queue'")
+        .get() as { sql: string }
+    ).sql.replace(
+      "issue_id TEXT REFERENCES issue(id) ON DELETE CASCADE",
+      "issue_id TEXT NOT NULL REFERENCES issue(id) ON DELETE CASCADE",
+    );
+    rebuildTableWithFksOff(scratch, {
+      table: "agent_task_queue",
+      ddl: shape,
+      carry: before.map((entry) => entry.name),
+      indexes: [`CREATE INDEX idx_agent_task_queue_agent ON agent_task_queue(agent_id, status)`],
+    });
+    const tightened = (
+      scratch.prepare("PRAGMA table_info(agent_task_queue)").all() as Array<{
+        name: string;
+        notnull: number;
+      }>
+    ).find((entry) => entry.name === "issue_id");
+    expect(tightened?.notnull).toBe(1);
+
+    migration551QueueIssueNullableRepair.up(scratch);
+
+    const after = scratch.prepare("PRAGMA table_info(agent_task_queue)").all() as Array<{
+      name: string;
+      notnull: number;
+    }>;
+    expect(after.find((entry) => entry.name === "issue_id")?.notnull).toBe(0);
+    // Every column the chain built survives the repair.
+    expect(after.map((entry) => entry.name)).toEqual(before.map((entry) => entry.name));
+    // Idempotent: a second pass is a no-op.
+    migration551QueueIssueNullableRepair.up(scratch);
+    const twice = scratch.prepare("PRAGMA table_info(agent_task_queue)").all() as Array<{
+      name: string;
+      notnull: number;
+    }>;
+    expect(twice.map((entry) => entry.name)).toEqual(before.map((entry) => entry.name));
+    scratch.close();
   });
 });

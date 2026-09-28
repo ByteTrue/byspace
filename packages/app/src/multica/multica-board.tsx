@@ -415,7 +415,10 @@ function useMulticaLiveState(serverId: string): {
   const workingIssueIds = useMemo(() => {
     const set = new Set<string>();
     for (const task of runningQuery.data?.tasks ?? []) {
-      set.add(task.issueId);
+      // run_only autopilot tasks carry no issue: they put no badge anywhere.
+      if (task.issueId !== null) {
+        set.add(task.issueId);
+      }
     }
     return set;
   }, [runningQuery.data]);

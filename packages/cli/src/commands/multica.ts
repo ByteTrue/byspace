@@ -348,6 +348,40 @@ export function createMulticaCommand(): Command {
       .allowExcessArguments(false),
   ).action(withOutput(runMulticaWakeupDisableCommand));
 
+  const autopilot = multica.command("autopilot").description("Declarative recurring work");
+  addJsonAndDaemonHostOptions(
+    autopilot.command("ls").description("List autopilots").allowExcessArguments(false),
+  ).action(withOutput(runMulticaAutopilotLsCommand));
+  addJsonAndDaemonHostOptions(
+    autopilot
+      .command("create")
+      .description("Create an autopilot (optionally with a cron schedule trigger)")
+      .requiredOption("--title <title>", "Autopilot title")
+      .option("--description <text>", "The brief each run carries")
+      .requiredOption("--assignee-type <type>", "agent | squad")
+      .requiredOption("--assignee-id <id>", "Who runs it")
+      .requiredOption("--mode <mode>", "create_issue | run_only")
+      .option("--issue-title-template <tpl>", "Template for created issues ({{date}})")
+      .option("--concurrency <policy>", "skip | queue (default skip)")
+      .option("--cron <expr>", "Schedule trigger (cron)")
+      .option("--timezone <tz>", "Timezone for the cron (default UTC)")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaAutopilotCreateCommand));
+  addJsonAndDaemonHostOptions(
+    autopilot
+      .command("trigger")
+      .description("Fire an autopilot now")
+      .requiredOption("--id <id>", "Autopilot id")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaAutopilotTriggerCommand));
+  addJsonAndDaemonHostOptions(
+    autopilot
+      .command("runs")
+      .description("An autopilot's run history")
+      .requiredOption("--id <id>", "Autopilot id")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaAutopilotRunsCommand));
+
   const inbox = multica.command("inbox").description("The owner's action inbox");
   addJsonAndDaemonHostOptions(
     inbox
@@ -772,4 +806,240 @@ export async function runMulticaInboxCreateCommand(
   } finally {
     await client.close().catch(() => undefined);
   }
+}
+
+export async function runMulticaAutopilotLsCommand(
+  options: CommandOptions,
+  _command: Command,
+): Promise<ListResult<MulticaAutopilotRow>> {
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaAutopilotList();
+    return {
+      type: "list",
+      data: payload.autopilots.map((autopilot) => ({
+        id: autopilot.id,
+        title: autopilot.title,
+        mode: autopilot.executionMode,
+        status: autopilot.status,
+        assignee: autopilot.assigneeId.slice(0, 8),
+        schedule:
+          autopilot.triggers.find((trigger) => trigger.kind === "schedule")?.cronExpression ?? "-",
+        lastRun: autopilot.lastRunAt ?? "-",
+      })),
+      schema: multicaAutopilotSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaAutopilotCreateCommand(
+  options: CommandOptions & {
+    title?: string;
+    description?: string;
+    assigneeType?: string;
+    assigneeId?: string;
+    mode?: string;
+    issueTitleTemplate?: string;
+    concurrency?: string;
+    cron?: string;
+    timezone?: string;
+  },
+  _command: Command,
+): Promise<ListResult<MulticaAutopilotRow>> {
+  const parsed = parseAutopilotCreateOptions(options);
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaAutopilotCreate({
+      title: parsed.title,
+      assigneeType: parsed.assigneeType,
+      assigneeId: parsed.assigneeId,
+      executionMode: parsed.mode,
+      concurrencyPolicy: parsed.concurrency,
+      ...(options.description ? { description: options.description } : {}),
+      ...(options.issueTitleTemplate ? { issueTitleTemplate: options.issueTitleTemplate } : {}),
+      ...(options.cron ? { cron: options.cron } : {}),
+      ...(options.timezone ? { timezone: options.timezone } : {}),
+    });
+    const autopilot = payload.autopilot;
+    return {
+      type: "list",
+      data: [
+        {
+          id: autopilot.id,
+          title: autopilot.title,
+          mode: autopilot.executionMode,
+          status: autopilot.status,
+          assignee: autopilot.assigneeId.slice(0, 8),
+          schedule:
+            autopilot.triggers.find((trigger) => trigger.kind === "schedule")?.cronExpression ??
+            "-",
+          lastRun: autopilot.lastRunAt ?? "-",
+        },
+      ],
+      schema: multicaAutopilotSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaAutopilotTriggerCommand(
+  options: CommandOptions & { id?: string },
+  _command: Command,
+): Promise<ListResult<MulticaAutopilotRunRow>> {
+  const id = options.id?.trim();
+  if (!id) {
+    throw { code: "MISSING_ID", message: "--id is required" } satisfies CommandError;
+  }
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaAutopilotTrigger(id);
+    return {
+      type: "list",
+      data: [runRow(payload.run, payload.fired, payload.reason)],
+      schema: multicaAutopilotRunSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaAutopilotRunsCommand(
+  options: CommandOptions & { id?: string },
+  _command: Command,
+): Promise<ListResult<MulticaAutopilotRunRow>> {
+  const id = options.id?.trim();
+  if (!id) {
+    throw { code: "MISSING_ID", message: "--id is required" } satisfies CommandError;
+  }
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaAutopilotRuns(id);
+    return {
+      type: "list",
+      data: payload.runs.map((run) => runRow(run, run.status !== "skipped", null)),
+      schema: multicaAutopilotRunSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+interface MulticaAutopilotRow {
+  readonly id: string;
+  readonly title: string;
+  readonly mode: string;
+  readonly status: string;
+  readonly assignee: string;
+  readonly schedule: string;
+  readonly lastRun: string;
+}
+
+interface MulticaAutopilotRunRow {
+  readonly id: string;
+  readonly source: string;
+  readonly status: string;
+  readonly fired: string;
+  readonly issue: string;
+  readonly reason: string;
+}
+
+function runRow(
+  run: {
+    id: string;
+    source: string;
+    status: string;
+    issueId: string | null;
+  },
+  fired: boolean,
+  reason: string | null,
+): MulticaAutopilotRunRow {
+  return {
+    id: run.id,
+    source: run.source,
+    status: run.status,
+    fired: fired ? "yes" : "no",
+    issue: run.issueId ? run.issueId.slice(0, 8) : "-",
+    reason: reason ?? "-",
+  };
+}
+
+const multicaAutopilotSchema: OutputSchema<MulticaAutopilotRow> = {
+  idField: "id",
+  columns: [
+    { header: "ID", field: "id", width: 14 },
+    { header: "TITLE", field: "title", width: 30 },
+    { header: "MODE", field: "mode", width: 14 },
+    { header: "STATUS", field: "status", width: 10 },
+    { header: "ASSIGNEE", field: "assignee", width: 10 },
+    { header: "SCHEDULE", field: "schedule", width: 16 },
+    { header: "LAST RUN", field: "lastRun", width: 24 },
+  ],
+};
+
+const multicaAutopilotRunSchema: OutputSchema<MulticaAutopilotRunRow> = {
+  idField: "id",
+  columns: [
+    { header: "ID", field: "id", width: 14 },
+    { header: "SOURCE", field: "source", width: 10 },
+    { header: "STATUS", field: "status", width: 14 },
+    { header: "FIRED", field: "fired", width: 6 },
+    { header: "ISSUE", field: "issue", width: 10 },
+    { header: "REASON", field: "reason", width: 40 },
+  ],
+};
+
+function parseAutopilotCreateOptions(options: {
+  title?: string;
+  assigneeType?: string;
+  assigneeId?: string;
+  mode?: string;
+  concurrency?: string;
+}): {
+  title: string;
+  assigneeType: "agent" | "squad";
+  assigneeId: string;
+  mode: "create_issue" | "run_only";
+  concurrency: "skip" | "queue";
+} {
+  const title = options.title?.trim();
+  const assigneeId = options.assigneeId?.trim();
+  const assigneeType = options.assigneeType?.trim();
+  const mode = options.mode?.trim();
+  if (!title || !assigneeId || !assigneeType || !mode) {
+    throw {
+      code: "MISSING_ARGS",
+      message: "--title, --assignee-type, --assignee-id and --mode are required",
+    } satisfies CommandError;
+  }
+  if (assigneeType !== "agent" && assigneeType !== "squad") {
+    throw {
+      code: "BAD_ASSIGNEE",
+      message: "--assignee-type must be agent|squad",
+    } satisfies CommandError;
+  }
+  if (mode !== "create_issue" && mode !== "run_only") {
+    throw {
+      code: "BAD_MODE",
+      message: "--mode must be create_issue|run_only",
+    } satisfies CommandError;
+  }
+  const concurrency = options.concurrency?.trim() ?? "skip";
+  if (concurrency !== "skip" && concurrency !== "queue") {
+    throw {
+      code: "BAD_POLICY",
+      message: "--concurrency must be skip|queue",
+    } satisfies CommandError;
+  }
+  return { title, assigneeType, assigneeId, mode, concurrency };
 }

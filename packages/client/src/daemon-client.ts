@@ -571,6 +571,22 @@ type MulticaSquadCreatePayload = Extract<
   SessionOutboundMessage,
   { type: "multica.squad.create.response" }
 >["payload"];
+type MulticaAutopilotListPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.autopilot.list.response" }
+>["payload"];
+type MulticaAutopilotCreatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.autopilot.create.response" }
+>["payload"];
+type MulticaAutopilotTriggerPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.autopilot.trigger.response" }
+>["payload"];
+type MulticaAutopilotRunsPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.autopilot.runs.response" }
+>["payload"];
 type MulticaInboxListPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.inbox.list.response" }
@@ -5662,6 +5678,44 @@ export class DaemonClient {
         members: options.members,
       },
       responseType: "multica.squad.create.response",
+    });
+  }
+
+  async multicaAutopilotList(): Promise<MulticaAutopilotListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.autopilot.list.request" },
+      responseType: "multica.autopilot.list.response",
+    });
+  }
+
+  async multicaAutopilotCreate(options: {
+    title: string;
+    description?: string;
+    assigneeType: "agent" | "squad";
+    assigneeId: string;
+    executionMode: "create_issue" | "run_only";
+    issueTitleTemplate?: string;
+    concurrencyPolicy?: "skip" | "queue";
+    cron?: string;
+    timezone?: string;
+  }): Promise<MulticaAutopilotCreatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.autopilot.create.request", ...options },
+      responseType: "multica.autopilot.create.response",
+    });
+  }
+
+  async multicaAutopilotTrigger(id: string): Promise<MulticaAutopilotTriggerPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.autopilot.trigger.request", id },
+      responseType: "multica.autopilot.trigger.response",
+    });
+  }
+
+  async multicaAutopilotRuns(id: string): Promise<MulticaAutopilotRunsPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.autopilot.runs.request", id },
+      responseType: "multica.autopilot.runs.response",
     });
   }
 

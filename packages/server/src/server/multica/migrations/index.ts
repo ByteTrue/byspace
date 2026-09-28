@@ -17,6 +17,7 @@ import {
   migration020TaskSession,
   migration028TaskTriggerComment,
   migration033Chat,
+  migration551QueueIssueNullableRepair,
   migration093WebhookDeliveries,
   migration109AgentTaskWaitingLocalDirectory,
   migration110AutopilotTriggerEventFilters,
@@ -271,4 +272,5 @@ export const MIGRATIONS: readonly Migration[] = [
   migration537IssueDuplicateOfIndex,
   migration538TaskSupplement,
   migration550CommentSuppressedAgents,
+  migration551QueueIssueNullableRepair,
 ];

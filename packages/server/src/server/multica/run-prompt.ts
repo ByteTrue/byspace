@@ -90,3 +90,39 @@ export function createWakeupPrompt(input: {
     "Report back as a comment on the issue, in the issue's own language.",
   ].join("\n");
 }
+
+/**
+ * The prompt a run_only autopilot task carries, after the source's
+ * buildAutopilotPrompt: there is no issue for this run, so the brief states
+ * that plainly and hands over the autopilot's own instructions.
+ */
+export function createAutopilotRunOnlyPrompt(input: {
+  agent: AgentRow;
+  autopilotId: string;
+  autopilotTitle: string;
+  autopilotDescription: string | null;
+  runId: string;
+  source: string;
+}): string {
+  const { agent } = input;
+  const instructions = (input.autopilotDescription ?? "").trim();
+  return [
+    `You are ${agent.name}.`,
+    "",
+    "This task was triggered by an Autopilot in run-only mode. There is no",
+    "assigned issue for this run.",
+    "",
+    `Autopilot run ID: ${input.runId}`,
+    `Autopilot ID: ${input.autopilotId}`,
+    `Autopilot title: ${input.autopilotTitle}`,
+    `Trigger source: ${input.source}`,
+    "",
+    "Autopilot instructions:",
+    instructions !== ""
+      ? instructions
+      : "(none — inspect the autopilot's configuration before proceeding)",
+    "",
+    "Complete the instructions above and report what you did as your final",
+    "message; it is recorded as the run's result.",
+  ].join("\n");
+}

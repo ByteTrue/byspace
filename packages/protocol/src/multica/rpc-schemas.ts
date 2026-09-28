@@ -210,6 +210,103 @@ export const MulticaCommentCreateResponseSchema = z.object({
   }),
 });
 
+export const MulticaAutopilotSummarySchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string().nullable(),
+  assigneeType: z.string(),
+  assigneeId: z.string(),
+  status: z.string(),
+  executionMode: z.string(),
+  issueTitleTemplate: z.string().nullable(),
+  concurrencyPolicy: z.string(),
+  lastRunAt: z.string().nullable(),
+  triggers: z.array(
+    z.object({
+      id: z.string(),
+      kind: z.string(),
+      enabled: z.boolean(),
+      cronExpression: z.string().nullable(),
+      timezone: z.string(),
+      nextRunAt: z.string().nullable(),
+      label: z.string().nullable(),
+    }),
+  ),
+});
+
+export const MulticaAutopilotRunSummarySchema = z.object({
+  id: z.string(),
+  autopilotId: z.string(),
+  source: z.string(),
+  status: z.string(),
+  issueId: z.string().nullable(),
+  taskId: z.string().nullable(),
+  triggeredAt: z.string(),
+  failureReason: z.string().nullable(),
+});
+
+export const MulticaAutopilotListRequestSchema = z.object({
+  type: z.literal("multica.autopilot.list.request"),
+  requestId: z.string(),
+});
+export const MulticaAutopilotListResponseSchema = z.object({
+  type: z.literal("multica.autopilot.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    autopilots: z.array(MulticaAutopilotSummarySchema),
+  }),
+});
+
+export const MulticaAutopilotCreateRequestSchema = z.object({
+  type: z.literal("multica.autopilot.create.request"),
+  requestId: z.string(),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  assigneeType: z.enum(["agent", "squad"]),
+  assigneeId: z.string().min(1),
+  executionMode: z.enum(["create_issue", "run_only"]),
+  issueTitleTemplate: z.string().optional(),
+  concurrencyPolicy: z.enum(["skip", "queue"]).optional(),
+  /** Optional schedule trigger: cron expression plus timezone. */
+  cron: z.string().optional(),
+  timezone: z.string().optional(),
+});
+export const MulticaAutopilotCreateResponseSchema = z.object({
+  type: z.literal("multica.autopilot.create.response"),
+  payload: z.object({
+    requestId: z.string(),
+    autopilot: MulticaAutopilotSummarySchema,
+  }),
+});
+
+export const MulticaAutopilotTriggerRequestSchema = z.object({
+  type: z.literal("multica.autopilot.trigger.request"),
+  requestId: z.string(),
+  id: z.string().min(1),
+});
+export const MulticaAutopilotTriggerResponseSchema = z.object({
+  type: z.literal("multica.autopilot.trigger.response"),
+  payload: z.object({
+    requestId: z.string(),
+    run: MulticaAutopilotRunSummarySchema,
+    fired: z.boolean(),
+    reason: z.string().nullable(),
+  }),
+});
+
+export const MulticaAutopilotRunsRequestSchema = z.object({
+  type: z.literal("multica.autopilot.runs.request"),
+  requestId: z.string(),
+  id: z.string().min(1),
+});
+export const MulticaAutopilotRunsResponseSchema = z.object({
+  type: z.literal("multica.autopilot.runs.response"),
+  payload: z.object({
+    requestId: z.string(),
+    runs: z.array(MulticaAutopilotRunSummarySchema),
+  }),
+});
+
 export const MulticaInboxItemSummarySchema = z.object({
   id: z.string(),
   type: z.string(),
@@ -439,7 +536,8 @@ export const MulticaSquadCreateResponseSchema = z.object({
 export const MulticaTaskSummarySchema = z.object({
   id: z.string(),
   agentId: z.string(),
-  issueId: z.string(),
+  // run_only autopilot tasks carry no issue (033 made it representable).
+  issueId: z.string().nullable(),
   status: z.string(),
   isLeaderTask: z.boolean(),
   squadId: z.string().nullable(),
@@ -486,5 +584,7 @@ export type MulticaSquadSummary = z.infer<typeof MulticaSquadSummarySchema>;
 export type MulticaSquadMemberSummary = z.infer<typeof MulticaSquadMemberSummarySchema>;
 export type MulticaStatusSummary = z.infer<typeof MulticaStatusSummarySchema>;
 export type MulticaInboxItemSummary = z.infer<typeof MulticaInboxItemSummarySchema>;
+export type MulticaAutopilotSummary = z.infer<typeof MulticaAutopilotSummarySchema>;
+export type MulticaAutopilotRunSummary = z.infer<typeof MulticaAutopilotRunSummarySchema>;
 export type MulticaWakeupSummary = z.infer<typeof MulticaWakeupSummarySchema>;
 export type MulticaTaskSummary = z.infer<typeof MulticaTaskSummarySchema>;

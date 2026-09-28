@@ -313,7 +313,7 @@ export const TASK_SELECT = `id, agent_id, issue_id, status, priority, dispatched
 export interface TaskRow {
   readonly id: string;
   readonly agentId: string;
-  readonly issueId: string;
+  readonly issueId: string | null;
   readonly status: string;
   readonly priority: number;
   readonly dispatchedAt: string | null;
@@ -382,7 +382,7 @@ export function mapTaskRow(raw: RawTaskRow): TaskRow {
   return {
     id: text(raw.id),
     agentId: text(raw.agent_id),
-    issueId: text(raw.issue_id),
+    issueId: textOrNull(raw.issue_id),
     status: text(raw.status),
     priority: Number(raw.priority),
     dispatchedAt: textOrNull(raw.dispatched_at),
@@ -550,4 +550,149 @@ export function mapInboxRow(raw: Record<string, unknown>): InboxRow {
     actorId: (raw.actor_id as string | null) ?? null,
     details: JSON.parse((raw.details as string) || "{}") as Record<string, unknown>,
   };
+}
+
+// ── autopilot ──────────────────────────────────────────────────────────
+
+export const AUTOPILOT_SELECT = `id, title, description, assignee_type, assignee_id,
+  status, execution_mode, issue_title_template, concurrency_policy, created_by_type,
+  created_by_id, last_run_at, created_at, updated_at, pause_reason`;
+
+export const AUTOPILOT_TRIGGER_SELECT = `id, autopilot_id, kind, enabled, cron_expression,
+  timezone, next_run_at, webhook_token, label, last_fired_at, created_at, updated_at`;
+
+export const AUTOPILOT_RUN_SELECT = `id, autopilot_id, trigger_id, source, status, issue_id,
+  task_id, triggered_at, completed_at, failure_reason, trigger_payload, result, created_at,
+  planned_at`;
+
+export type AutopilotExecutionMode = "create_issue" | "run_only";
+export type AutopilotConcurrencyPolicy = "skip" | "queue" | "replace";
+export type AutopilotRunStatus = "issue_created" | "running" | "completed" | "failed" | "skipped";
+
+export interface AutopilotRow {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string | null;
+  readonly assigneeType: "agent" | "squad";
+  readonly assigneeId: string;
+  readonly status: "active" | "paused" | "archived";
+  readonly executionMode: AutopilotExecutionMode;
+  readonly issueTitleTemplate: string | null;
+  readonly concurrencyPolicy: AutopilotConcurrencyPolicy;
+  readonly createdByType: string;
+  readonly createdById: string;
+  readonly lastRunAt: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly pauseReason: string | null;
+}
+
+export interface AutopilotTriggerRow {
+  readonly id: string;
+  readonly autopilotId: string;
+  readonly kind: "schedule" | "webhook" | "api";
+  readonly enabled: boolean;
+  readonly cronExpression: string | null;
+  readonly timezone: string;
+  readonly nextRunAt: string | null;
+  readonly webhookToken: string | null;
+  readonly label: string | null;
+  readonly lastFiredAt: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface AutopilotRunRow {
+  readonly id: string;
+  readonly autopilotId: string;
+  readonly triggerId: string | null;
+  readonly source: "schedule" | "manual" | "webhook" | "api";
+  readonly status: AutopilotRunStatus;
+  readonly issueId: string | null;
+  readonly taskId: string | null;
+  readonly triggeredAt: string;
+  readonly completedAt: string | null;
+  readonly failureReason: string | null;
+  readonly triggerPayload: string | null;
+  readonly result: string | null;
+  readonly createdAt: string;
+  readonly plannedAt: string | null;
+}
+
+export function mapAutopilotRow(raw: Record<string, unknown>): AutopilotRow {
+  return {
+    id: raw.id as string,
+    title: raw.title as string,
+    description: (raw.description as string | null) ?? null,
+    assigneeType: raw.assignee_type as "agent" | "squad",
+    assigneeId: raw.assignee_id as string,
+    status: raw.status as AutopilotRow["status"],
+    executionMode: raw.execution_mode as AutopilotExecutionMode,
+    issueTitleTemplate: (raw.issue_title_template as string | null) ?? null,
+    concurrencyPolicy: raw.concurrency_policy as AutopilotConcurrencyPolicy,
+    createdByType: raw.created_by_type as string,
+    createdById: raw.created_by_id as string,
+    lastRunAt: (raw.last_run_at as string | null) ?? null,
+    createdAt: raw.created_at as string,
+    updatedAt: raw.updated_at as string,
+    pauseReason: (raw.pause_reason as string | null) ?? null,
+  };
+}
+
+export function mapAutopilotTriggerRow(raw: Record<string, unknown>): AutopilotTriggerRow {
+  return {
+    id: raw.id as string,
+    autopilotId: raw.autopilot_id as string,
+    kind: raw.kind as AutopilotTriggerRow["kind"],
+    enabled: (raw.enabled as number) === 1,
+    cronExpression: (raw.cron_expression as string | null) ?? null,
+    timezone: (raw.timezone as string | null) ?? "UTC",
+    nextRunAt: (raw.next_run_at as string | null) ?? null,
+    webhookToken: (raw.webhook_token as string | null) ?? null,
+    label: (raw.label as string | null) ?? null,
+    lastFiredAt: (raw.last_fired_at as string | null) ?? null,
+    createdAt: raw.created_at as string,
+    updatedAt: raw.updated_at as string,
+  };
+}
+
+export function mapAutopilotRunRow(raw: Record<string, unknown>): AutopilotRunRow {
+  return {
+    id: raw.id as string,
+    autopilotId: raw.autopilot_id as string,
+    triggerId: (raw.trigger_id as string | null) ?? null,
+    source: raw.source as AutopilotRunRow["source"],
+    status: raw.status as AutopilotRunStatus,
+    issueId: (raw.issue_id as string | null) ?? null,
+    taskId: (raw.task_id as string | null) ?? null,
+    triggeredAt: raw.triggered_at as string,
+    completedAt: (raw.completed_at as string | null) ?? null,
+    failureReason: (raw.failure_reason as string | null) ?? null,
+    triggerPayload: (raw.trigger_payload as string | null) ?? null,
+    result: (raw.result as string | null) ?? null,
+    createdAt: raw.created_at as string,
+    plannedAt: (raw.planned_at as string | null) ?? null,
+  };
+}
+
+/**
+ * The one placeholder the source supports in an issue title template
+ * (`SupportedIssueTitleTemplateVariables`): {{date}}, in the trigger's
+ * timezone. Whitespace inside the braces is tolerated, as the source does.
+ */
+export function interpolateIssueTitle(template: string, now: Date, timezone: string): string {
+  return template.replace(/\{\{\s*date\s*\}\}/g, formatDateInZone(now, timezone));
+}
+
+function formatDateInZone(date: Date, timezone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date);
+  } catch {
+    return date.toISOString().slice(0, 10);
+  }
 }
