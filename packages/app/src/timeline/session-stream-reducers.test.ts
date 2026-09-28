@@ -1758,6 +1758,144 @@ describe("processTimelineResponse", () => {
     ).toEqual(["new prompt", "Hello"]);
   });
 
+  it("keeps a re-delivered canonical user row in place when an after page overlaps loaded history", () => {
+    const firstPrompt = createUserMessage({
+      id: "user-first",
+      clientMessageId: "client-first",
+      text: "first prompt",
+      timestamp: new Date(1000),
+      timelineCursor: { epoch: "epoch-1", seq: 1 },
+      turnId: "turn-1",
+    });
+    const priorAssistant: StreamItem = {
+      ...makeAssistantItem("analysis", "assistant-1"),
+      timelineCursor: { epoch: "epoch-1", seq: 2 },
+    };
+
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: [firstPrompt, priorAssistant],
+      currentHead: [],
+      currentCursor: { epoch: "epoch-1", startSeq: 1, endSeq: 2 },
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "after",
+        epoch: "epoch-1",
+        startCursor: { seq: 1 },
+        endCursor: { seq: 3 },
+        entries: [
+          {
+            ...makeTimelineEntry(1, "first prompt", "user_message"),
+            item: {
+              type: "user_message",
+              text: "first prompt",
+              messageId: "provider-first",
+              clientMessageId: "client-first",
+            },
+          },
+          {
+            ...makeTimelineEntry(2, "analysis", "assistant_message"),
+            item: { type: "assistant_message", text: "analysis", messageId: "assistant-1" },
+          },
+          makeTimelineEntry(3, "more analysis", "assistant_message"),
+        ],
+      },
+    });
+
+    expect(
+      result.tail.map((item) => (item.kind === "user_message" ? item.text : item.kind)),
+    ).toEqual(["first prompt", "assistant_message", "assistant_message"]);
+  });
+
+  it("adopts the canonical turnId when a covered re-delivery reconciles an optimistic row", () => {
+    const optimistic = createUserMessage({
+      clientMessageId: "client-first",
+      text: "first prompt",
+      timestamp: new Date(1000),
+      turnId: "provisional-turn",
+      timelineCursor: { epoch: "epoch-1", seq: 1 },
+    });
+
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: [optimistic],
+      currentHead: [],
+      currentCursor: { epoch: "epoch-1", startSeq: 1, endSeq: 2 },
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "after",
+        epoch: "epoch-1",
+        startCursor: { seq: 1 },
+        endCursor: { seq: 3 },
+        entries: [
+          {
+            ...makeTimelineEntry(1, "first prompt", "user_message"),
+            turnId: "canonical-turn",
+            item: {
+              type: "user_message",
+              text: "first prompt",
+              clientMessageId: "client-first",
+            },
+          },
+        ],
+      },
+    });
+
+    const row = result.tail.find(
+      (item): item is Extract<StreamItem, { kind: "user_message" }> => item.kind === "user_message",
+    );
+    expect(row?.turnId).toBe("canonical-turn");
+  });
+
+  it("keeps a covered re-delivered prompt in the head lane ahead of a live assistant", () => {
+    const optimistic = createUserMessage({
+      clientMessageId: "client-first",
+      text: "first prompt",
+      timestamp: new Date(1000),
+      turnId: "provisional-turn",
+      timelineCursor: { epoch: "epoch-1", seq: 1 },
+    });
+    const liveAssistant: StreamItem = {
+      ...makeAssistantItem("Live response", "answer-1"),
+      messageId: "answer-1",
+    };
+
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: [],
+      currentHead: [optimistic, liveAssistant],
+      currentCursor: { epoch: "epoch-1", startSeq: 1, endSeq: 2 },
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "after",
+        epoch: "epoch-1",
+        startCursor: { seq: 1 },
+        endCursor: { seq: 3 },
+        entries: [
+          {
+            ...makeTimelineEntry(1, "first prompt", "user_message"),
+            turnId: "canonical-turn",
+            item: {
+              type: "user_message",
+              text: "first prompt",
+              clientMessageId: "client-first",
+            },
+          },
+        ],
+      },
+    });
+
+    const promptRow = result.head.find(
+      (item): item is Extract<StreamItem, { kind: "user_message" }> => item.kind === "user_message",
+    );
+    expect(promptRow?.turnId).toBe("canonical-turn");
+    expect(
+      [...result.tail, ...result.head]
+        .filter((item) => item.kind === "user_message" || item.kind === "assistant_message")
+        .map((item) => item.kind),
+    ).toEqual(["user_message", "assistant_message"]);
+  });
+
   it("keeps a tail submitted prompt before a live head flushed by catch-up", () => {
     const prompt = makeSubmittedUserMessage("new prompt", "submitted-new-prompt");
 
