@@ -11,13 +11,17 @@
  * there would be a dead door.
  */
 import type { ReactElement, ReactNode } from "react";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { type Href, useRouter } from "expo-router";
 import { Bell, Bot, KanbanSquare, ListTodo, Timer, Users, UsersRound } from "lucide-react-native";
 import { StyleSheet } from "react-native-unistyles";
 
+import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { useIsCompactFormFactor } from "@/constants/layout";
+import { useFetchQuery } from "@/data/query";
+import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
+import { useMulticaCatalog } from "@/multica/multica-catalog";
 import { buildHostWorkspaceRoute } from "@/utils/host-routes";
 
 import { useMulticaLiveState } from "./multica-board";
@@ -98,6 +102,9 @@ function MulticaNavRail({
 }): ReactElement {
   const router = useRouter();
   const live = useMulticaLiveState(serverId);
+  const [query, setQuery] = useState("");
+  const handleQuery = useCallback((text: string) => setQuery(text), []);
+  const clearQuery = useCallback(() => setQuery(""), []);
   const groups: string[] = [];
   for (const entry of NAV_ENTRIES) {
     if (!groups.includes(entry.group)) {
@@ -111,6 +118,19 @@ function MulticaNavRail({
   }, [live.secretaryWorkspaceId, router, serverId]);
   return (
     <>
+      <View style={styles.searchBoxWrap}>
+        <TextInput
+          style={styles.searchInput}
+          initialValue=""
+          onChangeText={handleQuery}
+          placeholder="Search…"
+          placeholderTextColor="gray"
+          testID="multica-rail-search"
+        />
+      </View>
+      {query.trim() !== "" ? (
+        <RailSearchResults serverId={serverId} query={query.trim()} onNavigate={clearQuery} />
+      ) : null}
       {groups.map((group) => (
         <View key={group} style={compact ? styles.stripGroup : styles.railGroup}>
           {!compact ? <Text style={styles.railGroupLabel}>{group}</Text> : null}
@@ -139,6 +159,161 @@ function MulticaNavRail({
         </Pressable>
       ) : null}
     </>
+  );
+}
+
+/**
+ * The rail's search, the source's ⌘K dialog translated without a dialog:
+ * the source has a cmdk overlay the repo has no mechanism for (its only
+ * overlay is the bottom sheet), so typing filters inline and the results
+ * list sits under the box. Same reach, one fewer mechanism.
+ */
+function RailSearchResults({
+  serverId,
+  query,
+  onNavigate,
+}: {
+  serverId: string;
+  query: string;
+  onNavigate: () => void;
+}): ReactElement {
+  const router = useRouter();
+  const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
+  const client = runtimeSnapshot?.client ?? null;
+  const online = runtimeSnapshot?.connectionStatus === "online";
+  const catalog = useMulticaCatalog(serverId);
+  const issuesQuery = useFetchQuery({
+    queryKey: ["multicaRailSearch", serverId, runtimeSnapshot?.clientGeneration ?? 0],
+    queryFn: async () => {
+      if (!client) throw new Error("Target host client is unavailable");
+      return client.multicaIssueList({});
+    },
+    enabled: online,
+    retry: false,
+    dataShape: "list",
+    staleTimeMs: 5_000,
+  });
+  const needle = query.toLowerCase();
+  const issues = (issuesQuery.data?.issues ?? [])
+    .filter((issue) => issue.title.toLowerCase().includes(needle))
+    .slice(0, 6);
+  const agents = catalog.agents
+    .filter((agent) => agent.name.toLowerCase().includes(needle))
+    .slice(0, 4);
+  const squads = catalog.squads
+    .filter((squad) => squad.name.toLowerCase().includes(needle))
+    .slice(0, 4);
+  const openIssue = useCallback(
+    (id: string) => {
+      onNavigate();
+      router.push(`/multica/issue?serverId=${serverId}&issueId=${id}`);
+    },
+    [onNavigate, router, serverId],
+  );
+  const openAgent = useCallback(
+    (id: string) => {
+      onNavigate();
+      router.push(`/multica/agent?serverId=${serverId}&agentId=${id}`);
+    },
+    [onNavigate, router, serverId],
+  );
+  const openSquad = useCallback(
+    (id: string) => {
+      onNavigate();
+      router.push(`/multica/squad?serverId=${serverId}&squadId=${id}`);
+    },
+    [onNavigate, router, serverId],
+  );
+  return (
+    <View style={styles.searchResults}>
+      {issues.map((issue) => (
+        <IssueSearchRow key={`i:${issue.id}`} issue={issue} onOpen={openIssue} />
+      ))}
+      {agents.map((agent) => (
+        <AgentSearchRow key={`a:${agent.id}`} agent={agent} onOpen={openAgent} />
+      ))}
+      {squads.map((squad) => (
+        <SquadSearchRow key={`s:${squad.id}`} squad={squad} onOpen={openSquad} />
+      ))}
+      {issues.length + agents.length + squads.length === 0 ? (
+        <Text style={styles.searchNone}>No matches.</Text>
+      ) : null}
+    </View>
+  );
+}
+
+function IssueSearchRow({
+  issue,
+  onOpen,
+}: {
+  issue: { id: string; title: string; number: number | null };
+  onOpen: (id: string) => void;
+}): ReactElement {
+  const handlePress = useCallback(() => onOpen(issue.id), [issue.id, onOpen]);
+  return (
+    <SearchResultRow
+      label={issue.title}
+      kind={`#${issue.number ?? ""}`}
+      onPress={handlePress}
+      testID={`multica-search-issue-${issue.id}`}
+    />
+  );
+}
+
+function AgentSearchRow({
+  agent,
+  onOpen,
+}: {
+  agent: { id: string; name: string };
+  onOpen: (id: string) => void;
+}): ReactElement {
+  const handlePress = useCallback(() => onOpen(agent.id), [agent.id, onOpen]);
+  return (
+    <SearchResultRow
+      label={agent.name}
+      kind="agent"
+      onPress={handlePress}
+      testID={`multica-search-agent-${agent.id}`}
+    />
+  );
+}
+
+function SquadSearchRow({
+  squad,
+  onOpen,
+}: {
+  squad: { id: string; name: string };
+  onOpen: (id: string) => void;
+}): ReactElement {
+  const handlePress = useCallback(() => onOpen(squad.id), [squad.id, onOpen]);
+  return (
+    <SearchResultRow
+      label={squad.name}
+      kind="squad"
+      onPress={handlePress}
+      testID={`multica-search-squad-${squad.id}`}
+    />
+  );
+}
+
+function SearchResultRow({
+  label,
+  kind,
+  onPress,
+  testID,
+}: {
+  label: string;
+  kind: string;
+  onPress: () => void;
+  testID: string;
+}): ReactElement {
+  return (
+    <Pressable style={styles.searchRow} onPress={onPress} testID={testID}>
+      <Text style={styles.searchRowLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      <Text style={styles.searchRowKind}>{kind}</Text>
+    </Pressable>
   );
 }
 
@@ -196,6 +371,36 @@ function NavRow({
 }
 
 const styles = StyleSheet.create((theme) => ({
+  searchBoxWrap: { paddingHorizontal: theme.spacing[2], paddingBottom: theme.spacing[2] },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 2,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+  },
+  searchResults: {
+    paddingHorizontal: theme.spacing[2],
+    paddingBottom: theme.spacing[2],
+    gap: 2,
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingVertical: 3,
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+  },
+  searchRowLabel: { flex: 1, color: theme.colors.foreground, fontSize: theme.fontSize.sm },
+  searchRowKind: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  searchNone: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    paddingHorizontal: theme.spacing[2],
+  },
   shell: { flex: 1, flexDirection: "row", backgroundColor: theme.colors.surface0 },
   rail: {
     width: 176,
