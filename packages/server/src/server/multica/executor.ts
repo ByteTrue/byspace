@@ -182,11 +182,28 @@ export class MulticaExecutor {
         status: "completed",
         result: output,
       });
+      if (task.issueId !== null) {
+        this.#store.recordActivity({
+          issueId: task.issueId,
+          actorType: "agent",
+          actorId: task.agentId,
+          action: "task_completed",
+        });
+      }
       this.#settleLinkedRun(task, "completed", null);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.#logger.warn({ err: error, taskId: task.id }, "multica run failed");
       this.#store.updateTaskStatus({ id: task.id, status: "failed", error: message });
+      if (task.issueId !== null) {
+        this.#store.recordActivity({
+          issueId: task.issueId,
+          actorType: "agent",
+          actorId: task.agentId,
+          action: "task_failed",
+          details: { error: message.slice(0, 500) },
+        });
+      }
       this.#settleLinkedRun(task, "failed", message);
       this.#noteFailureForOwner(task, message);
     }

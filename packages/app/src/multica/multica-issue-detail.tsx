@@ -18,9 +18,10 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { useMulticaCatalog } from "@/multica/multica-catalog";
 import { ActorAvatar, formatRelativeTime } from "@/multica/multica-activity";
 import type {
-  MulticaCommentSummary,
   MulticaIssueSummary,
   MulticaStatusSummary,
+  MulticaTaskSummary,
+  MulticaTimelineEntry,
 } from "@bytetrue/protocol/multica/rpc-schemas";
 
 /**
@@ -31,7 +32,9 @@ import type {
  */
 interface IssueDetailData {
   issue: MulticaIssueSummary | null;
-  comments: readonly MulticaCommentSummary[];
+  entries: readonly MulticaTimelineEntry[];
+  tasks: readonly MulticaTaskSummary[];
+  truncated: boolean;
   agentNameById: ReadonlyMap<string, string>;
   statuses: readonly MulticaStatusSummary[];
   assigneeName: string | null;
@@ -45,12 +48,21 @@ interface IssueDetailData {
   moveStatus: (status: string) => void;
 }
 
-function useIssueDetailData(serverId: string, issueId: string): IssueDetailData {
+function useIssueQueries(
+  serverId: string,
+  issueId: string,
+): {
+  issue: MulticaIssueSummary | null;
+  entries: readonly MulticaTimelineEntry[];
+  tasks: readonly MulticaTaskSummary[];
+  truncated: boolean;
+  loading: boolean;
+  refreshTimeline: () => Promise<unknown>;
+  refreshIssue: () => Promise<unknown>;
+} {
   const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
   const client = runtimeSnapshot?.client ?? null;
   const online = runtimeSnapshot?.connectionStatus === "online";
-  const router = useRouter();
-
   const issueQuery = useFetchQuery({
     queryKey: ["multicaIssue", serverId, issueId, runtimeSnapshot?.clientGeneration ?? 0],
     queryFn: async () => {
@@ -63,19 +75,52 @@ function useIssueDetailData(serverId: string, issueId: string): IssueDetailData 
     staleTimeMs: 3_000,
     refetchInterval: 5_000,
   });
-
-  const commentsQuery = useFetchQuery({
-    queryKey: ["multicaComments", serverId, issueId, runtimeSnapshot?.clientGeneration ?? 0],
+  const timelineQuery = useFetchQuery({
+    queryKey: ["multicaTimeline", serverId, issueId, runtimeSnapshot?.clientGeneration ?? 0],
     queryFn: async () => {
       if (!client) throw new Error("Target host client is unavailable");
-      return client.multicaCommentList(issueId);
+      return client.multicaTimelineList(issueId);
     },
     enabled: online && issueId !== "",
     retry: false,
-    dataShape: "list",
+    dataShape: "value",
     staleTimeMs: 3_000,
     refetchInterval: 5_000,
   });
+  const tasksQuery = useFetchQuery({
+    queryKey: ["multicaIssueTasks", serverId, issueId, runtimeSnapshot?.clientGeneration ?? 0],
+    queryFn: async () => {
+      if (!client) throw new Error("Target host client is unavailable");
+      return client.multicaTaskList({ issueId });
+    },
+    enabled: online && issueId !== "",
+    retry: false,
+    dataShape: "value",
+    staleTimeMs: 3_000,
+    refetchInterval: 5_000,
+  });
+  const entries = useMemo(() => timelineQuery.data?.entries ?? [], [timelineQuery.data]);
+  const tasks = useMemo(() => tasksQuery.data?.tasks ?? [], [tasksQuery.data]);
+  const refreshTimeline = useCallback(() => timelineQuery.refetch(), [timelineQuery]);
+  const refreshIssue = useCallback(() => issueQuery.refetch(), [issueQuery]);
+  return {
+    issue: issueQuery.data?.issue ?? null,
+    entries,
+    tasks,
+    truncated: timelineQuery.data?.truncated ?? false,
+    loading: issueQuery.isLoading,
+    refreshTimeline,
+    refreshIssue,
+  };
+}
+
+function useIssueDetailData(serverId: string, issueId: string): IssueDetailData {
+  const router = useRouter();
+  const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
+  const client = runtimeSnapshot?.client ?? null;
+
+  const queries = useIssueQueries(serverId, issueId);
+  const { issue, entries, tasks, truncated } = queries;
 
   const catalog = useMulticaCatalog(serverId);
 
@@ -95,46 +140,44 @@ function useIssueDetailData(serverId: string, issueId: string): IssueDetailData 
     try {
       await client.multicaCommentCreate({ issueId, content: body });
       setDraft("");
-      await commentsQuery.refetch();
+      await queries.refreshTimeline();
     } finally {
       setSending(false);
     }
-  }, [client, commentsQuery, draft, issueId, sending]);
-
-  const issue = issueQuery.data?.issue ?? null;
+  }, [client, queries, draft, issueId, sending]);
 
   const moveStatus = useCallback(
     (status: string): void => {
-      const current = issueQuery.data?.issue ?? null;
-      if (!client || !current) return;
+      if (!client || !issue) return;
       client
         .multicaIssueUpdate({
-          issueId: current.id,
-          expectedRevision: current.revision,
+          issueId: issue.id,
+          expectedRevision: issue.revision,
           status,
         })
         .catch(() => undefined)
         .finally(() => {
-          void issueQuery.refetch();
+          void queries.refreshIssue();
         });
     },
-    [client, issueQuery],
+    [client, issue, queries],
   );
 
-  const comments = useMemo(() => commentsQuery.data?.comments ?? [], [commentsQuery.data]);
   const assigneeId = issue?.assigneeId ?? null;
   const assigneeName = assigneeId ? (catalog.agentNameById.get(assigneeId) ?? null) : null;
 
   return {
     issue,
-    comments,
+    entries,
+    tasks,
+    truncated,
     agentNameById: catalog.agentNameById,
     statuses: catalog.statuses,
     assigneeName,
     assigneeType: issue?.assigneeType ?? null,
     draft,
     sending,
-    loading: issueQuery.isLoading,
+    loading: queries.loading,
     goBack,
     setDraft,
     send,
@@ -187,7 +230,7 @@ export function MulticaIssueDetail({
 }
 
 function IssueMainPane({ data }: { data: IssueDetailData }): ReactElement {
-  const { issue, comments, agentNameById, goBack, sending } = data;
+  const { issue, agentNameById, goBack, sending } = data;
   return (
     <View style={styles.mainPane}>
       <Breadcrumb issue={issue} goBack={goBack} />
@@ -203,16 +246,25 @@ function IssueMainPane({ data }: { data: IssueDetailData }): ReactElement {
         </View>
       ) : null}
       <View style={styles.stream}>
-        {comments.map((comment) => (
-          <CommentRow
-            key={comment.id}
-            comment={comment}
-            actorName={agentNameById.get(comment.authorId) ?? null}
-          />
-        ))}
-        {comments.length === 0 ? (
-          <Text style={styles.hint}>No comments yet — say something to start.</Text>
+        {data.entries.map((entry) =>
+          entry.kind === "comment" ? (
+            <CommentRow
+              key={entry.id}
+              entry={entry}
+              actorName={entry.authorId ? (agentNameById.get(entry.authorId) ?? null) : null}
+            />
+          ) : (
+            <ActivityLine
+              key={entry.id}
+              entry={entry}
+              actorName={entry.actorId ? (agentNameById.get(entry.actorId) ?? null) : null}
+            />
+          ),
+        )}
+        {data.entries.length === 0 ? (
+          <Text style={styles.hint}>Nothing here yet — say something to start.</Text>
         ) : null}
+        {data.truncated ? <Text style={styles.hint}>Earlier history truncated.</Text> : null}
       </View>
       <CommentComposer onDraftChange={data.setDraft} onSend={data.send} sending={sending} />
     </View>
@@ -263,24 +315,67 @@ function statusColor(status: string): string {
 }
 
 function CommentRow({
-  comment,
+  entry,
   actorName,
 }: {
-  comment: MulticaCommentSummary;
+  entry: MulticaTimelineEntry;
   actorName: string | null;
 }): ReactElement {
-  const isOwner = comment.authorType === "owner";
-  const displayName = isOwner ? "you" : (actorName ?? comment.authorId.slice(0, 8));
+  const isOwner = entry.authorType === "owner";
+  const authorId = entry.authorId ?? "";
+  const displayName = isOwner ? "you" : (actorName ?? authorId.slice(0, 8));
   return (
     <View style={styles.comment}>
       <View style={styles.commentHeader}>
-        <ActorAvatar name={displayName} id={comment.authorId} />
+        <ActorAvatar name={displayName} id={authorId} />
         <Text style={styles.commentAuthor}>{displayName}</Text>
-        <Text style={styles.commentTime}>{formatRelativeTime(comment.createdAt)}</Text>
+        <Text style={styles.commentTime}>{formatRelativeTime(entry.createdAt)}</Text>
       </View>
       <View style={styles.commentBody}>
-        <MarkdownRenderer text={comment.content} compact />
+        <MarkdownRenderer text={entry.content ?? ""} compact />
       </View>
+    </View>
+  );
+}
+
+const ACTION_PHRASES: Record<string, string> = {
+  created: "created this issue",
+  status_changed: "moved it",
+  priority_changed: "re-prioritised it",
+  assignee_changed: "re-assigned it",
+  title_changed: "renamed it",
+  description_updated: "edited the description",
+  task_completed: "finished a run",
+  task_failed: "had a run fail",
+};
+
+/**
+ * One audit line in the stream: who did what, with from→to when the action
+ * carries a change. The record is the point — work and conversation read as
+ * one history.
+ */
+function ActivityLine({
+  entry,
+  actorName,
+}: {
+  entry: MulticaTimelineEntry;
+  actorName: string | null;
+}): ReactElement {
+  const isOwner = entry.actorType === "owner";
+  const actorId = entry.actorId ?? "";
+  const displayName = isOwner ? "you" : (actorName ?? (actorId.slice(0, 8) || "system"));
+  const details = entry.details ?? {};
+  const from = typeof details.from === "string" ? details.from : null;
+  const to = typeof details.to === "string" ? details.to : null;
+  const phrase = ACTION_PHRASES[entry.action ?? ""] ?? entry.action ?? "acted";
+  return (
+    <View style={styles.activity}>
+      <View style={styles.activityDot} />
+      <Text style={styles.activityText}>
+        {displayName} {phrase}
+        {from !== null && to !== null ? ` ${from} → ${to}` : ""} ·{" "}
+        {formatRelativeTime(entry.createdAt)}
+      </Text>
     </View>
   );
 }
@@ -334,6 +429,12 @@ function IssuePropertiesPane({ data }: { data: IssueDetailData }): ReactElement 
           )}
         </PropertyRow>
       </Section>
+      <Section title="Execution log">
+        {data.tasks.map((task) => (
+          <ExecutionRow key={task.id} task={task} agentNameById={data.agentNameById} />
+        ))}
+        {data.tasks.length === 0 ? <Text style={styles.propertyValue}>No runs.</Text> : null}
+      </Section>
       <Section title="Details">
         <PropertyRow label="Number">
           <Text style={styles.propertyValue}>{issue ? `#${issue.number ?? "-"}` : "-"}</Text>
@@ -347,6 +448,24 @@ function IssuePropertiesPane({ data }: { data: IssueDetailData }): ReactElement 
           </Text>
         </PropertyRow>
       </Section>
+    </View>
+  );
+}
+
+function ExecutionRow({
+  task,
+  agentNameById,
+}: {
+  task: MulticaTaskSummary;
+  agentNameById: ReadonlyMap<string, string>;
+}): ReactElement {
+  const name = agentNameById.get(task.agentId) ?? task.agentId.slice(0, 8);
+  return (
+    <View style={styles.executionRow}>
+      <View style={[styles.executionDot, task.status === "completed" && styles.statusDotDone]} />
+      <Text style={styles.propertyValue}>
+        {name} · {task.status} · {formatRelativeTime(task.createdAt)}
+      </Text>
     </View>
   );
 }
@@ -486,6 +605,22 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     minHeight: 72,
   },
+  activity: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+  },
+  activityDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#9ca3af" },
+  activityText: { flex: 1, color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  executionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingVertical: 2,
+  },
+  executionDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#9ca3af" },
+  statusDotDone: { backgroundColor: "#22c55e" },
   hint: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   properties: { gap: theme.spacing[3] },
   propertiesHeading: {

@@ -149,6 +149,7 @@ export const MulticaIssueStatusUpdateRequestSchema = z.object({
   status: z.string().min(1),
   /** The revision the caller read — optimistic concurrency. */
   expectedRevision: z.number().int().positive(),
+  senderSessionId: z.string().optional(),
 });
 
 export const MulticaIssueStatusUpdateResponseSchema = z.object({
@@ -299,6 +300,36 @@ export const MulticaSquadRemoveMemberRequestSchema = z.object({
 export const MulticaSquadRemoveMemberResponseSchema = z.object({
   type: z.literal("multica.squad.remove_member.response"),
   payload: z.object({ requestId: z.string(), squad: MulticaSquadDetailSchema }),
+});
+
+export const MulticaTimelineEntrySchema = z.object({
+  /** The discriminator the detail stream renders on. */
+  kind: z.enum(["activity", "comment"]),
+  id: z.string(),
+  createdAt: z.string(),
+  /** activity: what happened. */
+  action: z.string().nullable(),
+  actorType: z.string().nullable(),
+  actorId: z.string().nullable(),
+  details: z.record(z.string(), z.unknown()).nullable(),
+  /** comment: what was said. */
+  content: z.string().nullable(),
+  authorType: z.string().nullable(),
+  authorId: z.string().nullable(),
+});
+
+export const MulticaTimelineListRequestSchema = z.object({
+  type: z.literal("multica.timeline.list.request"),
+  requestId: z.string(),
+  issueId: z.string().min(1),
+});
+export const MulticaTimelineListResponseSchema = z.object({
+  type: z.literal("multica.timeline.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    entries: z.array(MulticaTimelineEntrySchema),
+    truncated: z.boolean(),
+  }),
 });
 
 export const MulticaAutopilotSummarySchema = z.object({
@@ -566,6 +597,11 @@ export const MulticaIssueUpdateRequestSchema = z.object({
   issueId: z.string().min(1),
   /** The revision the caller read — optimistic concurrency. */
   expectedRevision: z.number().int().positive(),
+  /**
+   * The writing session; resolved to an agent, or refused when it names a
+   * non-run. Absent means the owner, same rule as comment.create.
+   */
+  senderSessionId: z.string().optional(),
   status: z.string().optional(),
   priority: z.string().optional(),
   assigneeType: z.string().nullable().optional(),
@@ -695,6 +731,7 @@ export type MulticaSquadMemberSummary = z.infer<typeof MulticaSquadMemberSummary
 export type MulticaStatusSummary = z.infer<typeof MulticaStatusSummarySchema>;
 export type MulticaInboxItemSummary = z.infer<typeof MulticaInboxItemSummarySchema>;
 export type MulticaAutopilotSummary = z.infer<typeof MulticaAutopilotSummarySchema>;
+export type MulticaTimelineEntry = z.infer<typeof MulticaTimelineEntrySchema>;
 export type MulticaAgentDetail = z.infer<typeof MulticaAgentDetailSchema>;
 export type MulticaSquadDetail = z.infer<typeof MulticaSquadDetailSchema>;
 export type MulticaAutopilotRunSummary = z.infer<typeof MulticaAutopilotRunSummarySchema>;

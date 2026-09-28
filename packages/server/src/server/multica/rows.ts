@@ -619,6 +619,30 @@ export interface AutopilotRunRow {
   readonly plannedAt: string | null;
 }
 
+export interface ActivityRow {
+  readonly id: string;
+  readonly issueId: string | null;
+  readonly actorType: "owner" | "agent" | "system";
+  readonly actorId: string | null;
+  readonly action: string;
+  readonly details: string;
+  readonly createdAt: string;
+}
+
+export const ACTIVITY_SELECT = `id, issue_id, actor_type, actor_id, action, details, created_at`;
+
+export function mapActivityRow(raw: Record<string, unknown>): ActivityRow {
+  return {
+    id: raw.id as string,
+    issueId: (raw.issue_id as string | null) ?? null,
+    actorType: raw.actor_type as ActivityRow["actorType"],
+    actorId: (raw.actor_id as string | null) ?? null,
+    action: raw.action as string,
+    details: raw.details as string,
+    createdAt: raw.created_at as string,
+  };
+}
+
 export function mapAutopilotRow(raw: Record<string, unknown>): AutopilotRow {
   return {
     id: raw.id as string,

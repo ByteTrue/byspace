@@ -31,6 +31,7 @@ import { applyMigrations, type Migration } from "./migrations/runner.js";
 import {
   AGENT_SELECT,
   SQUAD_SELECT,
+  ACTIVITY_SELECT,
   AUTOPILOT_RUN_SELECT,
   AUTOPILOT_SELECT,
   AUTOPILOT_TRIGGER_SELECT,
@@ -43,6 +44,7 @@ import {
   mapIssueRow,
   mapSquadMemberRow,
   mapSquadRow,
+  mapActivityRow,
   mapAutopilotRow,
   mapAutopilotRunRow,
   mapAutopilotTriggerRow,
@@ -53,6 +55,7 @@ import {
   type IssueRow,
   type SquadMemberRow,
   type SquadRow,
+  type ActivityRow,
   type AutopilotRow,
   type AutopilotRunRow,
   type AutopilotRunStatus,
@@ -129,6 +132,12 @@ export class MulticaStore {
           input.originType ?? null,
           this.#nextTopPosition(input.status ?? "backlog"),
         );
+      this.recordActivity({
+        issueId: id,
+        actorType: input.creatorType === "agent" ? "agent" : "owner",
+        actorId: input.creatorId,
+        action: "created",
+      });
       this.#db.exec("COMMIT");
     } catch (error) {
       this.#db.exec("ROLLBACK");
@@ -190,6 +199,9 @@ export class MulticaStore {
     readonly expectedRevision: number;
     /** The drag's drop slot; wins over the re-rank when present. */
     readonly position?: number | null;
+    /** Who is writing — resolved by the handler from the session, if any. */
+    readonly actorType?: "owner" | "agent" | "system";
+    readonly actorId?: string | null;
     readonly status?: string;
     readonly priority?: string;
     readonly assigneeType?: string | null;
@@ -246,6 +258,10 @@ export class MulticaStore {
     if (input.status !== undefined && input.status !== before.status) {
       this.#afterStatusWrite(input.id, before.status, after.revision, input.status);
     }
+    this.#recordFieldChanges(before, after, {
+      type: input.actorType ?? "owner",
+      id: input.actorId ?? null,
+    });
     return this.getIssue(input.id);
   }
 
@@ -261,6 +277,8 @@ export class MulticaStore {
     readonly id: string;
     readonly status: string;
     readonly expectedRevision: number;
+    readonly actorType?: "owner" | "agent" | "system";
+    readonly actorId?: string | null;
     /**
      * The drag's drop slot. An explicit position wins; without one a status
      * change re-ranks the issue to the top of its new column, because a
@@ -268,7 +286,8 @@ export class MulticaStore {
      */
     readonly position?: number | null;
   }): IssueRow {
-    const before = this.getIssue(input.id).status;
+    const beforeRow = this.getIssue(input.id);
+    const before = beforeRow.status;
     const position = this.#positionForStatusWrite(input.position, before, input.status);
     const result = this.#db
       .prepare(
@@ -285,6 +304,10 @@ export class MulticaStore {
     }
     const updated = this.getIssue(input.id);
     this.#afterStatusWrite(input.id, before, updated.revision, input.status);
+    this.#recordFieldChanges(beforeRow, updated, {
+      type: input.actorType ?? "owner",
+      id: input.actorId ?? null,
+    });
     return updated;
   }
 
@@ -705,6 +728,43 @@ export class MulticaStore {
    * slot and wins; otherwise a status change re-ranks to the target
    * column's top; a same-status write keeps its rank.
    */
+  /**
+   * One audit row per changed field, after the source's per-field activity
+   * listeners: status_changed, priority_changed, assignee_changed,
+   * title_changed, description_updated. An unchanged field writes nothing —
+   * the timeline must not narrate writes that did not happen.
+   */
+  #recordFieldChanges(
+    before: IssueRow,
+    after: IssueRow,
+    actor: { type: "owner" | "agent" | "system"; id: string | null },
+  ): void {
+    const record = (action: string, from: unknown, to: unknown): void => {
+      this.recordActivity({
+        issueId: after.id,
+        actorType: actor.type,
+        actorId: actor.id,
+        action,
+        details: { from, to },
+      });
+    };
+    if (after.status !== before.status) {
+      record("status_changed", before.status, after.status);
+    }
+    if (after.priority !== before.priority) {
+      record("priority_changed", before.priority, after.priority);
+    }
+    if (after.assigneeId !== before.assigneeId || after.assigneeType !== before.assigneeType) {
+      record("assignee_changed", before.assigneeId, after.assigneeId);
+    }
+    if (after.title !== before.title) {
+      record("title_changed", before.title, after.title);
+    }
+    if (after.description !== before.description) {
+      record("description_updated", null, null);
+    }
+  }
+
   #positionForStatusWrite(
     explicit: number | null | undefined,
     before: string,
@@ -717,6 +777,44 @@ export class MulticaStore {
       return this.#nextTopPosition(next);
     }
     return null;
+  }
+
+  /**
+   * One audit row, written inside the caller's write transaction — the
+   * source records these from event listeners after the fact; recording
+   * them in the same transaction is the translation, and it cannot lose an
+   * entry the way a listener can.
+   */
+  recordActivity(input: {
+    readonly issueId: string | null;
+    readonly actorType: "owner" | "agent" | "system";
+    readonly actorId: string | null;
+    readonly action: string;
+    readonly details?: Record<string, unknown>;
+  }): void {
+    this.#db
+      .prepare(
+        `INSERT INTO activity_log (id, issue_id, actor_type, actor_id, action, details)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        randomUUID(),
+        input.issueId,
+        input.actorType,
+        input.actorId,
+        input.action,
+        JSON.stringify(input.details ?? {}),
+      );
+  }
+
+  listActivitiesForIssue(issueId: string): ActivityRow[] {
+    const rows = this.#db
+      .prepare(
+        `SELECT ${ACTIVITY_SELECT} FROM activity_log WHERE issue_id = ?
+         ORDER BY created_at ASC`,
+      )
+      .all(issueId) as Record<string, unknown>[];
+    return rows.map((row) => mapActivityRow(row));
   }
 
   // ── autopilot ────────────────────────────────────────────────────────

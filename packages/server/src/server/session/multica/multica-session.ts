@@ -269,7 +269,8 @@ type ReadMessage = Extract<
       | "multica.issue.get.request"
       | "multica.status.list.request"
       | "multica.task.running.list.request"
-      | "multica.task.list.request";
+      | "multica.task.list.request"
+      | "multica.timeline.list.request";
   }
 >;
 
@@ -307,6 +308,17 @@ type RosterOrConversationMessage = Extract<
   }
 >;
 
+const TIMELINE_CAP = 200;
+
+function parseJsonRecord(raw: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
 function isReadMessage(msg: MulticaInboundSubset): msg is ReadMessage {
   return (
     msg.type === "multica.agent.list.request" ||
@@ -314,7 +326,8 @@ function isReadMessage(msg: MulticaInboundSubset): msg is ReadMessage {
     msg.type === "multica.issue.get.request" ||
     msg.type === "multica.status.list.request" ||
     msg.type === "multica.task.running.list.request" ||
-    msg.type === "multica.task.list.request"
+    msg.type === "multica.task.list.request" ||
+    msg.type === "multica.timeline.list.request"
   );
 }
 
@@ -557,10 +570,13 @@ export class MulticaSession {
     msg: Extract<SessionInboundMessage, { type: "multica.issue.status.update.request" }>,
   ): void {
     const before = this.#store.getIssue(msg.issueId);
+    const author = this.#resolveCommentAuthor(msg.senderSessionId);
     const issue = this.#store.updateIssueStatus({
       id: msg.issueId,
       status: msg.status,
       expectedRevision: msg.expectedRevision,
+      actorType: author.type,
+      actorId: author.type === "owner" ? null : author.id,
     });
     this.#enqueueForIssueWrite(issue, {
       isCreate: false,
@@ -969,9 +985,59 @@ export class MulticaSession {
         return this.#handleTaskRunningList(msg);
       case "multica.task.list.request":
         return this.#handleTaskList(msg);
+      case "multica.timeline.list.request":
+        return this.#handleTimelineList(msg);
       default:
         msg satisfies never;
     }
+  }
+
+  /**
+   * The issue's record as one stream: activities and comments interleaved
+   * by time, as the source's timeline merges them. Comments keep their full
+   * shape; activities carry what changed.
+   */
+  #handleTimelineList(
+    msg: Extract<SessionInboundMessage, { type: "multica.timeline.list.request" }>,
+  ): void {
+    const activities = this.#store.listActivitiesForIssue(msg.issueId);
+    const comments = this.#store.listCommentsForIssue(msg.issueId);
+    const entries = [
+      ...activities.map((activity) => ({
+        kind: "activity" as const,
+        id: activity.id,
+        createdAt: activity.createdAt,
+        action: activity.action,
+        actorType: activity.actorType,
+        actorId: activity.actorId,
+        details: parseJsonRecord(activity.details),
+        content: null,
+        authorType: null,
+        authorId: null,
+      })),
+      ...comments.map((comment) => ({
+        kind: "comment" as const,
+        id: comment.id,
+        createdAt: comment.createdAt,
+        action: null,
+        actorType: null,
+        actorId: null,
+        details: null,
+        content: comment.content,
+        authorType: comment.authorType,
+        authorId: comment.authorId,
+      })),
+    ]
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .slice(0, TIMELINE_CAP);
+    this.#emit({
+      type: "multica.timeline.list.response",
+      payload: {
+        requestId: msg.requestId,
+        entries,
+        truncated: activities.length + comments.length > TIMELINE_CAP,
+      },
+    });
   }
 
   /** The three create surfaces. */

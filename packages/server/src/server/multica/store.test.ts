@@ -180,3 +180,34 @@ describe("position semantics", () => {
     expect(order).toEqual(["B", "A"]);
   });
 });
+
+describe("activity log", () => {
+  it("records creation and each changed field, and nothing else", () => {
+    const issue = store.createIssue({ title: "A", creatorType: "owner", creatorId: "owner" });
+    store.updateIssue({
+      id: issue.id,
+      expectedRevision: issue.revision,
+      status: "todo",
+      title: "A", // unchanged: must not appear
+    });
+    const actions = store.listActivitiesForIssue(issue.id).map((entry) => entry.action);
+    expect(actions).toEqual(["created", "status_changed"]);
+    const statusEntry = store.listActivitiesForIssue(issue.id)[1];
+    expect(JSON.parse(statusEntry.details)).toEqual({ from: "backlog", to: "todo" });
+  });
+
+  it("records task outcomes only for tasks that have an issue", () => {
+    const agent = store.createAgent({ name: "Log" });
+    const issue = store.createIssue({ title: "A", creatorType: "owner", creatorId: "owner" });
+    store.recordActivity({
+      issueId: issue.id,
+      actorType: "agent",
+      actorId: agent.id,
+      action: "task_completed",
+    });
+    store.recordActivity({ issueId: null, actorType: "agent", actorId: agent.id, action: "x" });
+    const actions = store.listActivitiesForIssue(issue.id).map((entry) => entry.action);
+    expect(actions).toContain("task_completed");
+    expect(actions).not.toContain("x");
+  });
+});
