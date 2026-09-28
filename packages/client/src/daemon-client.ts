@@ -675,6 +675,10 @@ type MulticaInboxArchivePayload = Extract<
   SessionOutboundMessage,
   { type: "multica.inbox.archive.response" }
 >["payload"];
+type MulticaInboxArchiveAllPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.inbox.archive_all.response" }
+>["payload"];
 type MulticaInboxMarkAllPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.inbox.mark_all.response" }
@@ -5863,6 +5867,16 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       message: { type: "multica.inbox.mark_all.request", ...options },
       responseType: "multica.inbox.mark_all.response",
+    });
+  }
+
+  async multicaInboxArchiveAll(options?: {
+    readOnly?: boolean;
+    senderSessionId?: string;
+  }): Promise<MulticaInboxArchiveAllPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.inbox.archive_all.request", ...options },
+      responseType: "multica.inbox.archive_all.response",
     });
   }
 

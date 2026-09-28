@@ -3,8 +3,22 @@ import { type ReactElement, useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useRouter } from "expo-router";
-import { Archive, ArchiveRestore, Bell, Check } from "lucide-react-native";
+import {
+  Archive,
+  ArchiveRestore,
+  Bell,
+  Check,
+  Filter,
+  Inbox,
+  MoreHorizontal,
+} from "lucide-react-native";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { MarkdownRenderer } from "@/components/markdown/renderer";
 import { useFetchQuery } from "@/data/query";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
@@ -31,7 +45,10 @@ export function MulticaInbox({ serverId }: { serverId: string }): ReactElement {
   const catalog = useMulticaCatalog(serverId);
 
   const [archivedView, setArchivedView] = useState(false);
-  const [severityFilter, setSeverityFilter] = useState<string | null>(null);
+  const [filters, setFilters] = useState<{ severities: string[]; unreadOnly: boolean }>({
+    severities: [],
+    unreadOnly: false,
+  });
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const inboxQuery = useFetchQuery({
@@ -50,9 +67,11 @@ export function MulticaInbox({ serverId }: { serverId: string }): ReactElement {
   const items = useMemo(
     () =>
       (inboxQuery.data?.items ?? []).filter(
-        (item) => severityFilter === null || item.severity === severityFilter,
+        (item) =>
+          (filters.severities.length === 0 || filters.severities.includes(item.severity)) &&
+          (!filters.unreadOnly || !item.read),
       ),
-    [inboxQuery.data, severityFilter],
+    [inboxQuery.data, filters],
   );
   const selected = items.find((item) => item.id === selectedId) ?? null;
 
@@ -61,6 +80,18 @@ export function MulticaInbox({ serverId }: { serverId: string }): ReactElement {
       if (!client) return;
       await client.multicaInboxMark({ id: item.id, read });
       await inboxQuery.refetch();
+    },
+    [client, inboxQuery],
+  );
+
+  const bulk = useCallback(
+    (verb: "read-all" | "archive-all" | "archive-all-read") => {
+      if (!client) return;
+      const call =
+        verb === "read-all"
+          ? client.multicaInboxMarkAll()
+          : client.multicaInboxArchiveAll({ readOnly: verb === "archive-all-read" });
+      void call.then(() => inboxQuery.refetch()).catch(() => inboxQuery.refetch());
     },
     [client, inboxQuery],
   );
@@ -93,11 +124,12 @@ export function MulticaInbox({ serverId }: { serverId: string }): ReactElement {
       items={items}
       unread={inboxQuery.data?.unread ?? 0}
       archivedView={archivedView}
-      severityFilter={severityFilter}
+      filters={filters}
       selectedId={selectedId}
       agentNameById={catalog.agentNameById}
       onToggleView={toggleView}
-      onFilter={setSeverityFilter}
+      onFilters={setFilters}
+      onBulk={bulk}
       onSelect={setSelectedId}
     />
   );
@@ -145,24 +177,26 @@ function InboxListPane({
   items,
   unread,
   archivedView,
-  severityFilter,
+  filters,
   selectedId,
   agentNameById,
   onToggleView,
-  onFilter,
+  onFilters,
+  onBulk,
   onSelect,
 }: {
   items: readonly MulticaInboxItemSummary[];
   unread: number;
   archivedView: boolean;
-  severityFilter: string | null;
+  filters: { severities: string[]; unreadOnly: boolean };
   selectedId: string | null;
   agentNameById: ReadonlyMap<string, string>;
   onToggleView: () => void;
-  onFilter: (severity: string | null) => void;
+  onFilters: (filters: { severities: string[]; unreadOnly: boolean }) => void;
   onSelect: (id: string | null) => void;
+  onBulk: (verb: "read-all" | "archive-all" | "archive-all-read") => void;
 }): ReactElement {
-  const emptyBecauseFiltered = severityFilter !== null;
+  const emptyBecauseFiltered = filters.severities.length > 0 || filters.unreadOnly;
   return (
     <View style={styles.listPane}>
       <View style={styles.listHeader}>
@@ -173,24 +207,8 @@ function InboxListPane({
             <Text style={styles.unreadBadgeText}>{unread}</Text>
           </View>
         ) : null}
-        <Pressable
-          style={styles.viewToggle}
-          onPress={onToggleView}
-          testID="multica-inbox-view-toggle"
-        >
-          <Text style={styles.viewToggleText}>{archivedView ? "Archived" : "Live"}</Text>
-        </Pressable>
-      </View>
-      <View style={styles.filterRow}>
-        {SEVERITIES.map((severity) => (
-          <SeverityChip
-            key={severity.key}
-            label={severity.label}
-            severityKey={severity.key}
-            active={severityFilter === severity.key}
-            onFilter={onFilter}
-          />
-        ))}
+        <InboxFilterMenu filters={filters} onFilters={onFilters} />
+        <InboxBulkMenu onBulk={onBulk} />
       </View>
       <ScrollView contentContainerStyle={styles.listBody}>
         {items.map((item) => (
@@ -207,6 +225,27 @@ function InboxListPane({
             {emptyListMessage(emptyBecauseFiltered, archivedView)}
           </Text>
         ) : null}
+        {!archivedView ? (
+          <Pressable
+            style={styles.archivedRow}
+            onPress={onToggleView}
+            testID="multica-inbox-archived-row"
+          >
+            <Archive size={14} color="#888" />
+            <Text style={styles.archivedRowText}>Archived</Text>
+            <Text style={styles.archivedRowChevron}>›</Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            style={styles.archivedRow}
+            onPress={onToggleView}
+            testID="multica-inbox-live-row"
+          >
+            <Inbox size={14} color="#888" />
+            <Text style={styles.archivedRowText}>Live</Text>
+            <Text style={styles.archivedRowChevron}>›</Text>
+          </Pressable>
+        )}
       </ScrollView>
     </View>
   );
@@ -225,31 +264,112 @@ const SEVERITIES = [
   { key: "info", label: "Info" },
 ] as const;
 
-function SeverityChip({
+/**
+ * The source's filter menu: a funnel in the list header opens the
+ * dimensions (unread only, plus the severity set) instead of a row of
+ * always-visible chips. Fewer visible controls, the same filter power.
+ */
+function InboxFilterMenu({
+  filters,
+  onFilters,
+}: {
+  filters: { severities: string[]; unreadOnly: boolean };
+  onFilters: (filters: { severities: string[]; unreadOnly: boolean }) => void;
+}): ReactElement {
+  const activeCount = filters.severities.length + (filters.unreadOnly ? 1 : 0);
+  const toggleUnread = useCallback(() => {
+    onFilters({ ...filters, unreadOnly: !filters.unreadOnly });
+  }, [filters, onFilters]);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        accessibilityRole="button"
+        accessibilityLabel="Filter inbox"
+        testID="multica-inbox-filter"
+        style={styles.menuIconButton}
+      >
+        <Filter size={14} color="#888" />
+        {activeCount > 0 ? <View style={styles.filterDot} /> : null}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="bottom" align="start" offset={4} minWidth={180}>
+        <DropdownMenuItem selected={filters.unreadOnly} onSelect={toggleUnread}>
+          <Text style={styles.menuItemText}>Unread only</Text>
+        </DropdownMenuItem>
+        {SEVERITIES.map((severity) => (
+          <SeverityMenuItem
+            key={severity.key}
+            label={severity.label}
+            severityKey={severity.key}
+            active={filters.severities.includes(severity.key)}
+            filters={filters}
+            onFilters={onFilters}
+          />
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function SeverityMenuItem({
   label,
   severityKey,
   active,
-  onFilter,
+  filters,
+  onFilters,
 }: {
   label: string;
   severityKey: string;
   active: boolean;
-  onFilter: (severity: string | null) => void;
+  filters: { severities: string[]; unreadOnly: boolean };
+  onFilters: (filters: { severities: string[]; unreadOnly: boolean }) => void;
 }): ReactElement {
-  const handlePress = useCallback(
-    () => onFilter(active ? null : severityKey),
-    [active, onFilter, severityKey],
-  );
+  const handleSelect = useCallback(() => {
+    onFilters({
+      ...filters,
+      severities: active
+        ? filters.severities.filter((key) => key !== severityKey)
+        : [...filters.severities, severityKey],
+    });
+  }, [active, filters, onFilters, severityKey]);
   return (
-    <Pressable
-      style={[styles.severityChip, active && styles.severityChipActive]}
-      onPress={handlePress}
-      testID={`multica-inbox-filter-${label}`}
-    >
-      <Text style={[styles.severityChipText, active && styles.severityChipTextActive]}>
-        {label}
-      </Text>
-    </Pressable>
+    <DropdownMenuItem selected={active} onSelect={handleSelect}>
+      <Text style={styles.menuItemText}>{label}</Text>
+    </DropdownMenuItem>
+  );
+}
+
+/** The header's bulk verbs, the source's `…` menu: read all, archive all,
+ * archive the read ones. */
+function InboxBulkMenu({
+  onBulk,
+}: {
+  onBulk: (verb: "read-all" | "archive-all" | "archive-all-read") => void;
+}): ReactElement {
+  const readAll = useCallback(() => onBulk("read-all"), [onBulk]);
+  const archiveAll = useCallback(() => onBulk("archive-all"), [onBulk]);
+  const archiveAllRead = useCallback(() => onBulk("archive-all-read"), [onBulk]);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        accessibilityRole="button"
+        accessibilityLabel="Inbox actions"
+        testID="multica-inbox-bulk"
+        style={styles.menuIconButton}
+      >
+        <MoreHorizontal size={14} color="#888" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="bottom" align="end" offset={4} minWidth={180}>
+        <DropdownMenuItem onSelect={readAll}>
+          <Text style={styles.menuItemText}>Mark all read</Text>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={archiveAll}>
+          <Text style={styles.menuItemText}>Archive all</Text>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={archiveAllRead}>
+          <Text style={styles.menuItemText}>Archive all read</Text>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -435,6 +555,32 @@ const styles = StyleSheet.create((theme) => ({
   severityChipActive: { backgroundColor: theme.colors.surface2 },
   severityChipText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   severityChipTextActive: { color: theme.colors.foreground },
+  menuIconButton: {
+    padding: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
+  },
+  filterDot: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: theme.colors.accent,
+  },
+  menuItemText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
+  archivedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    marginTop: theme.spacing[2],
+  },
+  archivedRowText: { flex: 1, color: theme.colors.foreground, fontSize: theme.fontSize.sm },
+  archivedRowChevron: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   listBody: { padding: theme.spacing[3], gap: theme.spacing[1] },
   listEmpty: {
     color: theme.colors.foregroundMuted,

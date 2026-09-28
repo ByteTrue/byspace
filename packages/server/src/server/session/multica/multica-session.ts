@@ -775,6 +775,8 @@ export class MulticaSession {
         return this.#handleInboxArchive(msg);
       case "multica.inbox.mark_all.request":
         return this.#handleInboxMarkAll(msg);
+      case "multica.inbox.archive_all.request":
+        return this.#handleInboxArchiveAll(msg);
       case "multica.wakeup.list.request":
         return this.#handleWakeupList(msg);
       case "multica.wakeup.create.request":
@@ -969,6 +971,23 @@ export class MulticaSession {
     this.#emit({
       type: "multica.inbox.archive.response",
       payload: { requestId: msg.requestId, item: inboxSummary(item) },
+    });
+  }
+
+  /**
+   * The two bulk archive verbs as one RPC with a flag: archive everything
+   * live, or only what is already read — the source carries them as two
+   * endpoints over the same store shape.
+   */
+  #handleInboxArchiveAll(
+    msg: Extract<SessionInboundMessage, { type: "multica.inbox.archive_all.request" }>,
+  ): void {
+    this.#assertOwnerOnlyInbox(msg.senderSessionId);
+    const changed =
+      msg.readOnly === true ? this.#store.archiveAllReadInbox() : this.#store.archiveAllInbox();
+    this.#emit({
+      type: "multica.inbox.archive_all.response",
+      payload: { requestId: msg.requestId, changed },
     });
   }
 

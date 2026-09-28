@@ -473,3 +473,28 @@ describe("label directory management", () => {
     expect(() => store.deleteLabel("missing")).toThrow(/label/i);
   });
 });
+
+describe("inbox bulk archive", () => {
+  it("archive-all files every live item; archive-all-read only the read ones", () => {
+    const first = store.createInboxItem({
+      type: "run_failed",
+      severity: "info",
+      title: "one",
+      actorType: "agent",
+      actorId: "a1",
+    });
+    const second = store.createInboxItem({
+      type: "run_failed",
+      severity: "info",
+      title: "two",
+      actorType: "agent",
+      actorId: "a1",
+    });
+    store.markInboxRead(first.id, true);
+    expect(store.archiveAllReadInbox()).toBe(1);
+    expect(store.getInboxItem(first.id).archived).toBe(true);
+    expect(store.getInboxItem(second.id).archived).toBe(false);
+    expect(store.archiveAllInbox()).toBe(1);
+    expect(store.getInboxItem(second.id).archived).toBe(true);
+  });
+});

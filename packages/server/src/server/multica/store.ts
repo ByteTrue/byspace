@@ -1532,6 +1532,17 @@ export class MulticaStore {
     return Number(result.changes);
   }
 
+  /** The source's archive-all: every live item goes to the archive. */
+  archiveAllInbox(): number {
+    const result = this.#db
+      .prepare(
+        `UPDATE inbox_item SET archived = 1
+         WHERE recipient_type = 'owner' AND archived = 0`,
+      )
+      .run();
+    return Number(result.changes);
+  }
+
   archiveAllReadInbox(): number {
     const result = this.#db
       .prepare(

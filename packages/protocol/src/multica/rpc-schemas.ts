@@ -703,6 +703,18 @@ export const MulticaInboxMarkAllResponseSchema = z.object({
   payload: z.object({ requestId: z.string(), changed: z.number().int() }),
 });
 
+export const MulticaInboxArchiveAllRequestSchema = z.object({
+  type: z.literal("multica.inbox.archive_all.request"),
+  requestId: z.string(),
+  /** Only read items, as the source's archive-all-read verb does. */
+  readOnly: z.boolean().optional(),
+  senderSessionId: z.string().optional(),
+});
+export const MulticaInboxArchiveAllResponseSchema = z.object({
+  type: z.literal("multica.inbox.archive_all.response"),
+  payload: z.object({ requestId: z.string(), changed: z.number().int() }),
+});
+
 export const MulticaWakeupSummarySchema = z.object({
   id: z.string(),
   issueId: z.string(),

@@ -506,6 +506,13 @@ export function createMulticaCommand(): Command {
   ).action(withOutput(runMulticaInboxCreateCommand));
   addJsonAndDaemonHostOptions(
     inbox
+      .command("archive-all")
+      .description("Archive every live item (--read-only: only the read ones)")
+      .option("--read-only", "Archive only items already read")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaInboxArchiveAllCommand));
+  addJsonAndDaemonHostOptions(
+    inbox
       .command("read-all")
       .description("Mark every unread item read")
       .allowExcessArguments(false),
@@ -825,6 +832,31 @@ export async function runMulticaInboxArchiveCommand(
       archived: options.unarchive !== true,
     });
     return { type: "list", data: [inboxRow(payload.item)], schema: multicaInboxSchema };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaInboxArchiveAllCommand(
+  options: CommandOptions & { readOnly?: boolean },
+  _command: Command,
+): Promise<ListResult<{ changed: string }>> {
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaInboxArchiveAll({
+      ...(options.readOnly === true ? { readOnly: true } : {}),
+      ...ownerCaller(),
+    });
+    return {
+      type: "list",
+      data: [{ changed: String(payload.changed) }],
+      schema: {
+        idField: "changed",
+        columns: [{ header: "CHANGED", field: "changed", width: 10 }],
+      },
+    };
   } finally {
     await client.close().catch(() => undefined);
   }
