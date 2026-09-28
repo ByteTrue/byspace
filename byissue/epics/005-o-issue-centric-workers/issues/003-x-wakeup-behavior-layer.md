@@ -2,7 +2,7 @@
 kind: issue
 title: wakeup 行为层：issue 状态变化自己叫醒订阅者
 type: feature
-status: open
+status: closed
 created: 2026-09-28
 ---
 
