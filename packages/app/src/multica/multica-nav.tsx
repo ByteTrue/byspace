@@ -14,7 +14,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useCallback } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { type Href, useRouter } from "expo-router";
-import { Bell, Bot, KanbanSquare, ListTodo, Timer, UsersRound } from "lucide-react-native";
+import { Bell, Bot, KanbanSquare, ListTodo, Timer, Users, UsersRound } from "lucide-react-native";
 import { StyleSheet } from "react-native-unistyles";
 
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -22,7 +22,7 @@ import { buildHostWorkspaceRoute } from "@/utils/host-routes";
 
 import { useMulticaLiveState } from "./multica-board";
 
-export type MulticaNavKey = "board" | "mine" | "inbox" | "rosters" | "autopilots";
+export type MulticaNavKey = "board" | "mine" | "inbox" | "rosters" | "squads" | "autopilots";
 
 interface NavEntry {
   readonly key: MulticaNavKey | "secretary";
@@ -34,7 +34,8 @@ const NAV_ENTRIES: readonly NavEntry[] = [
   { key: "board", label: "Board", group: "Work" },
   { key: "mine", label: "My issues", group: "Work" },
   { key: "inbox", label: "Inbox", group: "Work" },
-  { key: "rosters", label: "Agents & squads", group: "AI team" },
+  { key: "rosters", label: "Agents", group: "AI team" },
+  { key: "squads", label: "Squads", group: "AI team" },
   { key: "autopilots", label: "Autopilots", group: "AI team" },
 ];
 
@@ -48,6 +49,8 @@ function routeFor(key: MulticaNavKey, serverId: string): Href {
       return `/multica-inbox?serverId=${serverId}`;
     case "rosters":
       return `/multica/agents?serverId=${serverId}`;
+    case "squads":
+      return `/multica/squads?serverId=${serverId}`;
     case "autopilots":
       return `/multica/autopilots?serverId=${serverId}`;
   }
@@ -149,6 +152,8 @@ function NavIcon({ entryKey }: { entryKey: string }): ReactElement {
       return <Bell size={14} color="#888" />;
     case "rosters":
       return <UsersRound size={14} color="#888" />;
+    case "squads":
+      return <Users size={14} color="#888" />;
     default:
       return <Timer size={14} color="#888" />;
   }

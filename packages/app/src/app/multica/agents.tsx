@@ -4,7 +4,7 @@ import { type ReactElement, useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Bot, Tag, Timer, Users } from "lucide-react-native";
+import { Bot, Tag, Timer } from "lucide-react-native";
 
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { useFetchQuery } from "@/data/query";
@@ -41,40 +41,18 @@ function RostersPage({ serverId }: { serverId: string }): ReactElement {
     staleTimeMs: 10_000,
   });
 
-  const squadsQuery = useFetchQuery({
-    queryKey: ["multicaSquadsManage", serverId, runtimeSnapshot?.clientGeneration ?? 0],
-    queryFn: async () => {
-      if (!client) throw new Error("Target host client is unavailable");
-      return client.multicaSquadList();
-    },
-    enabled: online,
-    retry: false,
-    dataShape: "list",
-    staleTimeMs: 10_000,
-  });
-
   const openAgent = useCallback(
     (id: string) => {
       router.push(`/multica/agent?serverId=${serverId}&agentId=${id}`);
     },
     [router, serverId],
   );
-  const openSquad = useCallback(
-    (id: string) => {
-      router.push(`/multica/squad?serverId=${serverId}&squadId=${id}`);
-    },
-    [router, serverId],
-  );
-
   const refresh = useCallback(() => {
     void agentsQuery.refetch();
-    void squadsQuery.refetch();
-  }, [agentsQuery, squadsQuery]);
+  }, [agentsQuery]);
 
   const [agentFormSignal, setAgentFormSignal] = useState(0);
-  const [squadFormSignal, setSquadFormSignal] = useState(0);
   const openAgentForm = useCallback(() => setAgentFormSignal((value) => value + 1), []);
-  const openSquadForm = useCallback(() => setSquadFormSignal((value) => value + 1), []);
 
   if (agentsQuery.isLoading) {
     return (
@@ -85,7 +63,6 @@ function RostersPage({ serverId }: { serverId: string }): ReactElement {
   }
 
   const agents = agentsQuery.data?.agents ?? [];
-  const squads = squadsQuery.data?.squads ?? [];
 
   return (
     <MulticaShell serverId={serverId} active="rosters">
@@ -115,29 +92,7 @@ function RostersPage({ serverId }: { serverId: string }): ReactElement {
             />
           ) : null}
         </View>
-        <View style={styles.header}>
-          <Users size={18} color="#888" />
-          <Text style={styles.heading}>Squads</Text>
-          <Text style={styles.headerCount}>{squads.length}</Text>
-          <NewSquadButton agents={agents} onCreated={refresh} openSignal={squadFormSignal} />
-        </View>
-
         <LabelsSection serverId={serverId} onCreated={refresh} />
-        <View style={styles.grid}>
-          {squads.map((squad) => (
-            <SquadCard key={squad.id} squad={squad} onOpen={openSquad} />
-          ))}
-          {squads.length === 0 ? (
-            <MulticaEmptyState
-              iconKey="squad"
-              title="No squads yet."
-              description="A squad is a leader plus the members it can send."
-              actionLabel="+ New squad"
-              onAction={openSquadForm}
-              testID="multica-squads-empty"
-            />
-          ) : null}
-        </View>
       </ScrollView>
     </MulticaShell>
   );
@@ -220,102 +175,6 @@ function NewAgentButton({
         <Text style={styles.inlineCancelText}>Cancel</Text>
       </Pressable>
     </View>
-  );
-}
-
-function NewSquadButton({
-  agents,
-  onCreated,
-  openSignal,
-}: {
-  agents: readonly { id: string; name: string; kind: string }[];
-  onCreated: () => void;
-  openSignal: number;
-}): ReactElement {
-  const params = useLocalSearchParams<{ serverId: string }>();
-  const serverId = typeof params.serverId === "string" ? params.serverId : "";
-  const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
-  const client = runtimeSnapshot?.client ?? null;
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [leaderId, setLeaderId] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const toggle = useCallback(() => setOpen((value) => !value), []);
-  useEffect(() => {
-    if (openSignal > 0) {
-      setOpen(true);
-    }
-  }, [openSignal]);
-  const handleName = useCallback((text: string) => setName(text), []);
-  const submit = useCallback(() => {
-    const trimmed = name.trim();
-    if (!client || trimmed === "" || leaderId === null || saving) return;
-    setSaving(true);
-    void client
-      .multicaSquadCreate({ name: trimmed, leaderId })
-      .then(() => {
-        setName("");
-        setLeaderId(null);
-        setOpen(false);
-        onCreated();
-        return undefined;
-      })
-      .finally(() => setSaving(false));
-  }, [client, name, leaderId, saving, onCreated]);
-  const leaders = agents.filter((agent) => agent.kind !== "system");
-  if (!open) {
-    return (
-      <Pressable style={styles.newButton} onPress={toggle} testID="multica-new-squad">
-        <Text style={styles.newButtonText}>New squad</Text>
-      </Pressable>
-    );
-  }
-  return (
-    <View style={styles.inlineForm}>
-      <TextInput
-        style={styles.inlineInput}
-        initialValue=""
-        onChangeText={handleName}
-        placeholder="Squad name"
-        placeholderTextColor="gray"
-        testID="multica-new-squad-name"
-      />
-      <ScrollView horizontal contentContainerStyle={styles.inlineRow}>
-        {leaders.map((agent) => (
-          <LeaderChip
-            key={agent.id}
-            agent={agent}
-            active={leaderId === agent.id}
-            onPick={setLeaderId}
-          />
-        ))}
-      </ScrollView>
-      <View style={styles.inlineRow}>
-        <Pressable style={styles.newButton} onPress={submit} testID="multica-new-squad-create">
-          <Text style={styles.newButtonText}>{saving ? "…" : "Create"}</Text>
-        </Pressable>
-        <Pressable style={styles.inlineCancel} onPress={toggle} testID="multica-new-squad-cancel">
-          <Text style={styles.inlineCancelText}>Cancel</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function LeaderChip({
-  agent,
-  active,
-  onPick,
-}: {
-  agent: { id: string; name: string };
-  active: boolean;
-  onPick: (id: string) => void;
-}): ReactElement {
-  const handlePress = useCallback(() => onPick(agent.id), [agent.id, onPick]);
-  return (
-    <Pressable style={[styles.choice, active && styles.choiceActive]} onPress={handlePress}>
-      <Text style={styles.choiceText}>{agent.name}</Text>
-    </Pressable>
   );
 }
 
@@ -568,30 +427,6 @@ function AgentCard({
       </Text>
       <Text style={styles.cardMeta}>
         {agent.model ?? "default model"} · {agent.permissionMode}
-      </Text>
-    </Pressable>
-  );
-}
-
-interface SquadCardData {
-  readonly id: string;
-  readonly name: string;
-  readonly description: string;
-}
-
-function SquadCard({
-  squad,
-  onOpen,
-}: {
-  squad: SquadCardData;
-  onOpen: (id: string) => void;
-}): ReactElement {
-  const handlePress = useCallback(() => onOpen(squad.id), [squad.id, onOpen]);
-  return (
-    <Pressable style={styles.card} onPress={handlePress} testID={`multica-squad-${squad.id}`}>
-      <Text style={styles.cardName}>{squad.name}</Text>
-      <Text style={styles.cardDesc} numberOfLines={2}>
-        {squad.description || "—"}
       </Text>
     </Pressable>
   );
