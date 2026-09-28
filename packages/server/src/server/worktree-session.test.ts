@@ -240,6 +240,7 @@ function createTerminalManagerStub(options?: {
             getTitle: () => undefined,
             getActivity: () => null,
             setActivity: () => {},
+            getShellSpawnCommandMode: () => "typed" as const,
             getExitInfo: () => null,
           } satisfies TerminalSession;
           terminals.push({
