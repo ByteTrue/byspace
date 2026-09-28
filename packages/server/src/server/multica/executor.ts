@@ -38,6 +38,8 @@ export interface MulticaExecutorOptions {
   resolveAutopilotWorkspace: (
     autopilotId: string,
   ) => Promise<{ cwd: string; workspaceId: string } | null>;
+  /** Notified when the executor itself enqueues new work (a retry child). */
+  onEnqueued?: () => void;
   logger: pino.Logger;
 }
 
@@ -47,6 +49,7 @@ export class MulticaExecutor {
   readonly #createAgent: BoundCreateAgentCommand;
   readonly #resolveWorkspace: MulticaExecutorOptions["resolveWorkspace"];
   readonly #resolveAutopilotWorkspace: MulticaExecutorOptions["resolveAutopilotWorkspace"];
+  readonly #onEnqueued: (() => void) | undefined;
   readonly #logger: pino.Logger;
   readonly #inFlight = new Set<string>();
 
@@ -56,6 +59,7 @@ export class MulticaExecutor {
     this.#createAgent = options.createAgent;
     this.#resolveWorkspace = options.resolveWorkspace;
     this.#resolveAutopilotWorkspace = options.resolveAutopilotWorkspace;
+    this.#onEnqueued = options.onEnqueued;
     this.#logger = options.logger;
   }
 
@@ -97,6 +101,7 @@ export class MulticaExecutor {
       return;
     }
     this.#store.updateTaskStatus({ id: task.id, status: "dispatched" });
+    let startupFailed = false;
     try {
       if (task.issueId === null && task.autopilotRunId !== null) {
         await this.#executeAutopilotRunOnly(task);
@@ -130,21 +135,29 @@ export class MulticaExecutor {
       }
 
       this.#store.updateTaskStatus({ id: task.id, status: "running" });
-      const created = await this.#createAgent({
-        kind: "mcp",
-        provider: "pi",
-        config: {},
-        cwd: workspace.cwd,
-        workspaceId: workspace.workspaceId,
-        title: `${issue.title} — ${agent.name}`,
-        labels: { "multica.task-id": task.id, "multica.issue-id": issue.id },
-        unattended: true,
-        promptFailure: "return-error",
-        background: true,
-        notifyOnFinish: false,
-      });
-      if (created.initialPromptError) {
-        throw created.initialPromptError;
+      let created;
+      try {
+        created = await this.#createAgent({
+          kind: "mcp",
+          provider: "pi",
+          config: {},
+          cwd: workspace.cwd,
+          workspaceId: workspace.workspaceId,
+          title: `${issue.title} — ${agent.name}`,
+          labels: { "multica.task-id": task.id, "multica.issue-id": issue.id },
+          unattended: true,
+          promptFailure: "return-error",
+          background: true,
+          notifyOnFinish: false,
+        });
+        if (created.initialPromptError) {
+          throw created.initialPromptError;
+        }
+      } catch (error) {
+        // The environment never came up: the source retries exactly this
+        // class (runtime recovery / offline), and never a mid-run error.
+        startupFailed = true;
+        throw error;
       }
       // The run's identity: from here the daemon can reverse-resolve any
       // session to its run, which is how an agent's comments attribute to
@@ -195,6 +208,9 @@ export class MulticaExecutor {
       const message = error instanceof Error ? error.message : String(error);
       this.#logger.warn({ err: error, taskId: task.id }, "multica run failed");
       this.#store.updateTaskStatus({ id: task.id, status: "failed", error: message });
+      if (startupFailed) {
+        this.#spawnRetryChild(task);
+      }
       if (task.issueId !== null) {
         this.#store.recordActivity({
           issueId: task.issueId,
@@ -272,6 +288,27 @@ export class MulticaExecutor {
     const output = waitResult.lastMessage ?? result.finalText ?? "";
     this.#store.updateTaskStatus({ id: task.id, status: "completed", result: output });
     this.#store.updateAutopilotRun({ id: run.id, status: "completed", result: output });
+  }
+
+  /**
+   * The retry lineage: a startup-phase failure enqueues a child — attempt
+   * plus one, pointing at its parent — up to the attempt ceiling. Past the
+   * ceiling the failure stands as the final word and reaches the owner's
+   * inbox like any other failure. Cancelled runs and permission gates never
+   * arrive here (they return, they do not throw), and mid-run errors carry
+   * no structured reason code, so retrying them would gamble an expensive
+   * loop on luck — the source retries only its enumerated transient reasons.
+   */
+  #spawnRetryChild(task: TaskRow): void {
+    if (task.attempt >= task.maxAttempts) {
+      return;
+    }
+    const child = this.#store.createRetryTask(task);
+    this.#logger.info(
+      { parentTaskId: task.id, childTaskId: child.id, attempt: child.attempt },
+      "multica run retry enqueued",
+    );
+    this.#onEnqueued?.();
   }
 
   /**

@@ -682,6 +682,36 @@ export class MulticaStore {
     return row ? mapTaskRow(row as never) : null;
   }
 
+  /**
+   * The retry lineage's child, after the source's CreateRetryTask: attempt
+   * is the parent's plus one, the child points at its parent, and the
+   * attempt ceiling rides along so the lineage knows when to stop. A child
+   * is never created past the ceiling — the caller decides, this only writes.
+   */
+  createRetryTask(parent: TaskRow): TaskRow {
+    const id = randomUUID();
+    this.#db
+      .prepare(
+        `INSERT INTO agent_task_queue (id, agent_id, issue_id, status, priority, attempt,
+           max_attempts, retry_of_task_id, trigger_summary, autopilot_run_id, handoff_note, context)
+         VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        parent.agentId,
+        parent.issueId,
+        parent.priority,
+        parent.attempt + 1,
+        parent.maxAttempts,
+        parent.id,
+        parent.triggerSummary,
+        parent.autopilotRunId,
+        parent.handoffNote,
+        parent.context,
+      );
+    return this.getTask(id);
+  }
+
   /** One agent's recent queue history, newest first — the detail page's feed. */
   listTasksForAgent(agentId: string, limit = 20): TaskRow[] {
     const rows = this.#db

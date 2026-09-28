@@ -59,31 +59,6 @@ export function createMulticaSubsystem(options: MulticaSubsystemOptions): {
   // directory, registered through the same workspace provisioning path the
   // schedule service uses, so a run's agent is a first-class workspace agent.
   // Project-bound checkouts are later engine-slice work.
-  const executor = new MulticaExecutor({
-    store,
-    agentManager: options.agentManager,
-    createAgent: options.createAgent,
-    resolveWorkspace: async (issueId: string) => {
-      const dir = path.join(options.byspaceHome, "multica", "work", issueId);
-      await mkdir(dir, { recursive: true });
-      const workspace = await options.createWorkspaceForDirectory({
-        cwd: dir,
-        firstAgentContext: { prompt: `multica issue ${issueId}` },
-      });
-      return { cwd: workspace.cwd, workspaceId: workspace.workspaceId };
-    },
-    resolveAutopilotWorkspace: async (autopilotId: string) => {
-      const dir = path.join(options.byspaceHome, "multica", "autopilot", autopilotId);
-      await mkdir(dir, { recursive: true });
-      const workspace = await options.createWorkspaceForDirectory({
-        cwd: dir,
-        firstAgentContext: { prompt: `multica autopilot ${autopilotId}` },
-      });
-      return { cwd: workspace.cwd, workspaceId: workspace.workspaceId };
-    },
-    logger: options.logger,
-  });
-
   // Kicked on enqueue (the fast path) and on a timer (the crash-recovery
   // path: a task left queued by a restart is picked up on the next tick).
   let drainScheduled = false;
@@ -103,6 +78,32 @@ export function createMulticaSubsystem(options: MulticaSubsystemOptions): {
       drain();
     }, 50);
   };
+  const executor = new MulticaExecutor({
+    store,
+    agentManager: options.agentManager,
+    createAgent: options.createAgent,
+    resolveWorkspace: async (issueId: string) => {
+      const dir = path.join(options.byspaceHome, "multica", "work", issueId);
+      await mkdir(dir, { recursive: true });
+      const workspace = await options.createWorkspaceForDirectory({
+        cwd: dir,
+        firstAgentContext: { prompt: `multica issue ${issueId}` },
+      });
+      return { cwd: workspace.cwd, workspaceId: workspace.workspaceId };
+    },
+    onEnqueued: kickDrain,
+    resolveAutopilotWorkspace: async (autopilotId: string) => {
+      const dir = path.join(options.byspaceHome, "multica", "autopilot", autopilotId);
+      await mkdir(dir, { recursive: true });
+      const workspace = await options.createWorkspaceForDirectory({
+        cwd: dir,
+        firstAgentContext: { prompt: `multica autopilot ${autopilotId}` },
+      });
+      return { cwd: workspace.cwd, workspaceId: workspace.workspaceId };
+    },
+    logger: options.logger,
+  });
+
   // The wakeup tick: subscriptions whose evidence or time has come. Same
   // cadence family as the drain; the two are independent passes.
   const tick = (): void => {
