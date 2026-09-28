@@ -207,14 +207,18 @@ function useIssueDetailData(serverId: string, issueId: string): IssueDetailData 
   }, [router]);
 
   const send = useCallback(
-    async (body: string): Promise<void> => {
+    async (body: string, parentId: string | null = null): Promise<void> => {
       const trimmed = body.trim();
       if (trimmed === "" || client === null || sending) {
         return;
       }
       setSending(true);
       try {
-        await client.multicaCommentCreate({ issueId, content: trimmed });
+        await client.multicaCommentCreate({
+          issueId,
+          content: trimmed,
+          ...(parentId ? { parentId } : {}),
+        });
         await queries.refreshTimeline();
       } finally {
         setSending(false);
@@ -368,11 +372,19 @@ export function MulticaIssueDetail({
 }
 
 function IssueMainPane({ data }: { data: IssueDetailData }): ReactElement {
+  const [replyTarget, setReplyTarget] = useState<string | null>(null);
   const commitTitle = useCallback((title: string) => data.updateField({ title }), [data]);
   const commitDescription = useCallback(
     (description: string) => data.updateField({ description }),
     [data],
   );
+  const clearReplyTarget = useCallback(() => setReplyTarget(null), []);
+  const replyAuthorName = useMemo(() => {
+    if (replyTarget === null) return null;
+    const entry = data.entries.find((candidate) => candidate.id === replyTarget);
+    if (!entry || entry.kind !== "comment") return null;
+    return entry.authorId ? (data.agentNameById.get(entry.authorId) ?? null) : null;
+  }, [replyTarget, data.entries, data.agentNameById]);
   const mentionRosterProp = useMemo(
     () => ({ agents: data.mentionAgents, squads: data.mentionSquads }),
     [data.mentionAgents, data.mentionSquads],
@@ -403,20 +415,23 @@ function IssueMainPane({ data }: { data: IssueDetailData }): ReactElement {
         testID="multica-description-edit"
       />
       <View style={styles.stream}>
-        {data.entries.map((entry) =>
-          entry.kind === "comment" ? (
-            <CommentRow
-              key={entry.id}
-              entry={entry}
-              actorName={entry.authorId ? (agentNameById.get(entry.authorId) ?? null) : null}
+        {threadedEntries(data.entries).map((node) =>
+          node.entry.kind === "comment" ? (
+            <CommentThread
+              key={node.entry.id}
+              node={node}
+              agentNameById={agentNameById}
               onReact={data.react}
               onRevise={data.revise}
+              onReplyTarget={setReplyTarget}
             />
           ) : (
             <ActivityLine
-              key={entry.id}
-              entry={entry}
-              actorName={entry.actorId ? (agentNameById.get(entry.actorId) ?? null) : null}
+              key={node.entry.id}
+              entry={node.entry}
+              actorName={
+                node.entry.actorId ? (agentNameById.get(node.entry.actorId) ?? null) : null
+              }
             />
           ),
         )}
@@ -425,7 +440,14 @@ function IssueMainPane({ data }: { data: IssueDetailData }): ReactElement {
         ) : null}
         {data.truncated ? <Text style={styles.hint}>Earlier history truncated.</Text> : null}
       </View>
-      <CommentComposer onSend={data.send} sending={sending} roster={mentionRosterProp} />
+      <CommentComposer
+        onSend={data.send}
+        sending={sending}
+        roster={mentionRosterProp}
+        replyTarget={replyTarget}
+        replyAuthorName={replyAuthorName}
+        onClearReply={clearReplyTarget}
+      />
     </View>
   );
 }
@@ -661,16 +683,91 @@ function ReactionChooser({
   );
 }
 
+/**
+ * The stream's thread shape, after the source's nested replies: roots render
+ * in timeline order among the activity lines, and each root carries its
+ * replies indented beneath it. The source folds long reply runs behind a
+ * "show replies" affordance; we render them flat under the root — the fold
+ * is a reading aid for very long threads, not thread semantics.
+ */
+interface ThreadNode {
+  entry: MulticaTimelineEntry;
+  replies: MulticaTimelineEntry[];
+}
+
+function threadedEntries(entries: readonly MulticaTimelineEntry[]): ThreadNode[] {
+  const roots: ThreadNode[] = [];
+  const byRoot = new Map<string, MulticaTimelineEntry[]>();
+  for (const entry of entries) {
+    if (entry.kind !== "comment") {
+      roots.push({ entry, replies: [] });
+      continue;
+    }
+    if (entry.parentId === null) {
+      const node: ThreadNode = { entry, replies: byRoot.get(entry.id) ?? [] };
+      byRoot.set(entry.id, node.replies);
+      roots.push(node);
+    } else {
+      const bucket = byRoot.get(entry.parentId) ?? [];
+      bucket.push(entry);
+      byRoot.set(entry.parentId, bucket);
+    }
+  }
+  return roots;
+}
+
+function CommentThread({
+  node,
+  agentNameById,
+  onReact,
+  onRevise,
+  onReplyTarget,
+}: {
+  node: ThreadNode;
+  agentNameById: ReadonlyMap<string, string>;
+  onReact: (commentId: string, emoji: string, reacted: boolean) => void;
+  onRevise: (commentId: string, content: string | null) => void;
+  onReplyTarget: (commentId: string | null) => void;
+}): ReactElement {
+  const reply = useCallback(() => onReplyTarget(node.entry.id), [node.entry.id, onReplyTarget]);
+  return (
+    <View>
+      <CommentRow
+        entry={node.entry}
+        actorName={node.entry.authorId ? (agentNameById.get(node.entry.authorId) ?? null) : null}
+        onReact={onReact}
+        onRevise={onRevise}
+        onReply={reply}
+      />
+      {node.replies.map((replyEntry) => (
+        <View key={replyEntry.id} style={styles.threadReply}>
+          <CommentRow
+            entry={replyEntry}
+            actorName={
+              replyEntry.authorId ? (agentNameById.get(replyEntry.authorId) ?? null) : null
+            }
+            onReact={onReact}
+            onRevise={onRevise}
+            onReply={reply}
+          />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function CommentRow({
   entry,
   actorName,
   onReact,
   onRevise,
+  onReply,
 }: {
   entry: MulticaTimelineEntry;
   actorName: string | null;
   onReact: (commentId: string, emoji: string, reacted: boolean) => void;
   onRevise: (commentId: string, content: string | null) => void;
+  onReply: () => void;
 }): ReactElement {
   const isOwner = entry.authorType === "owner";
   const authorId = entry.authorId ?? "";
@@ -700,6 +797,9 @@ function CommentRow({
         <MarkdownRenderer text={entry.content ?? ""} compact />
       </View>
       <ReactionBar entry={entry} onReact={onReact} />
+      <Pressable onPress={onReply} style={styles.replyLink} testID={`multica-reply-${entry.id}`}>
+        <Text style={styles.replyLinkText}>reply</Text>
+      </Pressable>
     </View>
   );
 }
@@ -812,13 +912,19 @@ function CommentComposer({
   onSend,
   sending,
   roster,
+  replyTarget,
+  replyAuthorName,
+  onClearReply,
 }: {
-  onSend: (draft: string) => void;
+  onSend: (draft: string, parentId: string | null) => void;
   sending: boolean;
   roster: {
     agents: readonly { id: string; name: string }[];
     squads: readonly { id: string; name: string }[];
   };
+  replyTarget: string | null;
+  replyAuthorName: string | null;
+  onClearReply: () => void;
 }): ReactElement {
   const inputRef = useRef<EditingTextInputHandle>(null);
   const [draft, setDraft] = useState("");
@@ -832,12 +938,12 @@ function CommentComposer({
   );
   const handleDraft = useCallback((text: string) => setDraft(text), []);
   const handleSend = useCallback(() => {
-    onSend(draft);
+    onSend(draft, replyTarget);
     setDraft("");
     // The input is uncontrolled: clearing state alone leaves the typed text
     // in the DOM; reset() is the component's own clear.
     inputRef.current?.reset();
-  }, [draft, onSend]);
+  }, [draft, onSend, replyTarget]);
   const choose = useCallback((candidate: MentionCandidate) => {
     setDraft((current) => {
       const next = applyMentionChoice(current, candidate);
@@ -850,6 +956,16 @@ function CommentComposer({
   }, []);
   return (
     <View style={styles.composer}>
+      {replyTarget ? (
+        <View style={styles.replyBanner}>
+          <Text style={styles.replyBannerText} numberOfLines={1}>
+            Replying to {replyAuthorName ?? "a comment"}
+          </Text>
+          <Pressable onPress={onClearReply} testID="multica-reply-cancel">
+            <Text style={styles.replyBannerCancel}>cancel</Text>
+          </Pressable>
+        </View>
+      ) : null}
       {menu && menu.candidates.length > 0 ? (
         <View style={styles.mentionMenu}>
           {menu.candidates.map((candidate) => (
@@ -1579,6 +1695,17 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     minHeight: 48,
   },
+  threadReply: { marginLeft: theme.spacing[6] },
+  replyLink: { alignSelf: "flex-start", marginTop: 2 },
+  replyLinkText: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  replyBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+  },
+  replyBannerText: { flex: 1, color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  replyBannerCancel: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   reactionBar: {
     flexDirection: "row",
     alignItems: "center",

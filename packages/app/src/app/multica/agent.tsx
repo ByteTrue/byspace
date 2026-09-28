@@ -1,5 +1,6 @@
 import { type ReactElement, useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { StyleSheet } from "react-native-unistyles";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
@@ -71,6 +72,10 @@ function AgentPage({ serverId, agentId }: { serverId: string; agentId: string })
     [router, serverId],
   );
 
+  const refreshAgent = useCallback(() => {
+    void agentQuery.refetch();
+  }, [agentQuery]);
+
   if (agentQuery.isLoading) {
     return (
       <View style={styles.center}>
@@ -91,14 +96,134 @@ function AgentPage({ serverId, agentId }: { serverId: string; agentId: string })
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
+      <AgentProfileEditor serverId={serverId} agent={agent} onChanged={refreshAgent} />
       <AgentHeader agent={agent} enabled={enabled} toggling={toggling} onToggle={toggleStatus} />
       <Text style={styles.meta}>
         {agent.model ?? "default model"} · {agent.permissionMode} · up to {agent.maxConcurrentTasks}{" "}
         at once
       </Text>
-      {agent.description !== "" ? <Text style={styles.muted}>{agent.description}</Text> : null}
       <AgentBody agent={agent} tasks={tasks} onOpenIssue={openIssue} />
     </ScrollView>
+  );
+}
+
+/**
+ * The inspector's profile face, translated: name and description are
+ * click-to-edit fields that commit on leaving the input, and the
+ * concurrency bound is a small stepper. The source autosaves on blur; ours
+ * commits on the same gesture through the same update RPC.
+ */
+function AgentProfileEditor({
+  serverId,
+  agent,
+  onChanged,
+}: {
+  serverId: string;
+  agent: { id: string; name: string; description: string; maxConcurrentTasks: number };
+  onChanged: () => void;
+}): ReactElement {
+  const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
+  const client = runtimeSnapshot?.client ?? null;
+  const update = useCallback(
+    (fields: { name?: string; description?: string; maxConcurrentTasks?: number }) => {
+      if (!client) return;
+      void client
+        .multicaAgentUpdate({ id: agent.id, ...fields })
+        .then(onChanged)
+        .catch(onChanged);
+    },
+    [client, agent.id, onChanged],
+  );
+  const commitName = useCallback((name: string) => update({ name }), [update]);
+  const commitDescription = useCallback((description: string) => update({ description }), [update]);
+  const bumpConcurrency = useCallback(() => {
+    update({ maxConcurrentTasks: agent.maxConcurrentTasks + 1 });
+  }, [update, agent.maxConcurrentTasks]);
+  const lowerConcurrency = useCallback(() => {
+    if (agent.maxConcurrentTasks > 1) {
+      update({ maxConcurrentTasks: agent.maxConcurrentTasks - 1 });
+    }
+  }, [update, agent.maxConcurrentTasks]);
+  return (
+    <View style={styles.profileBlock}>
+      <InlineEditField
+        value={agent.name}
+        placeholder="Agent name"
+        multiline={false}
+        onCommit={commitName}
+        testID="multica-agent-name-edit"
+      />
+      <InlineEditField
+        value={agent.description}
+        placeholder="Add a description"
+        multiline
+        onCommit={commitDescription}
+        testID="multica-agent-description-edit"
+      />
+      <View style={styles.concurrencyRow}>
+        <Text style={styles.concurrencyLabel}>Concurrency</Text>
+        <Pressable onPress={lowerConcurrency} testID="multica-agent-concurrency-down">
+          <Text style={styles.concurrencyButton}>−</Text>
+        </Pressable>
+        <Text style={styles.concurrencyValue}>{agent.maxConcurrentTasks}</Text>
+        <Pressable onPress={bumpConcurrency} testID="multica-agent-concurrency-up">
+          <Text style={styles.concurrencyButton}>+</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function InlineEditField({
+  value,
+  placeholder,
+  multiline,
+  onCommit,
+  testID,
+}: {
+  value: string;
+  placeholder: string;
+  multiline: boolean;
+  onCommit: (next: string) => void;
+  testID: string;
+}): ReactElement {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const start = useCallback(() => {
+    setDraft(value);
+    setEditing(true);
+  }, [value]);
+  const handleChange = useCallback((text: string) => setDraft(text), []);
+  const commit = useCallback(() => {
+    setEditing(false);
+    const next = draft.trim();
+    if (next !== value) {
+      onCommit(next);
+    }
+  }, [draft, value, onCommit]);
+  if (editing) {
+    return (
+      <TextInput
+        style={[styles.inlineEditor, multiline && styles.inlineEditorMulti]}
+        initialValue={value}
+        onChangeText={handleChange}
+        onBlur={commit}
+        placeholder={placeholder}
+        placeholderTextColor="gray"
+        multiline={multiline}
+        autoFocus
+        testID={`${testID}-input`}
+      />
+    );
+  }
+  return (
+    <Pressable onPress={start} testID={testID}>
+      {value === "" ? (
+        <Text style={styles.inlinePlaceholder}>{placeholder}</Text>
+      ) : (
+        <Text style={styles.inlineValue}>{value}</Text>
+      )}
+    </Pressable>
   );
 }
 
@@ -200,6 +325,23 @@ function TaskRow({
 }
 
 const styles = StyleSheet.create((theme) => ({
+  profileBlock: { gap: theme.spacing[2], marginBottom: theme.spacing[2] },
+  inlineEditor: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+  },
+  inlineEditorMulti: { minHeight: 56 },
+  inlinePlaceholder: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  inlineValue: { color: theme.colors.foreground, fontSize: theme.fontSize.lg, fontWeight: "600" },
+  concurrencyRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
+  concurrencyLabel: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  concurrencyButton: { color: theme.colors.foreground, fontSize: theme.fontSize.lg },
+  concurrencyValue: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
   page: { padding: theme.spacing[4], gap: theme.spacing[2], maxWidth: 760 },
   header: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
   heading: { color: theme.colors.foreground, fontSize: theme.fontSize.base, fontWeight: "600" },

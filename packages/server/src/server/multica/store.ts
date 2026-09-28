@@ -445,6 +445,38 @@ export class MulticaStore {
     }
   }
 
+  /**
+   * The inspector's profile writes: name, description and the concurrency
+   * bound, omit-keeps like every other field update here. The source caps
+   * the description at 255 characters; the cap is enforced at the write so
+   * a too-long draft cannot land half-silently.
+   */
+  updateAgent(
+    id: string,
+    fields: { name?: string; description?: string; maxConcurrentTasks?: number },
+  ): AgentRow {
+    const current = this.getAgent(id);
+    const description = fields.description ?? current.description ?? "";
+    if (description.length > 255) {
+      throw new Error("agent description exceeds 255 characters");
+    }
+    const name = fields.name ?? current.name;
+    if (name.trim() === "") {
+      throw new Error("an agent needs a name");
+    }
+    const result = this.#db
+      .prepare(
+        `UPDATE agent SET name = ?, description = ?, max_concurrent_tasks = ?,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE id = ?`,
+      )
+      .run(name, description, fields.maxConcurrentTasks ?? current.maxConcurrentTasks, id);
+    if (Number(result.changes) === 0) {
+      throw new Error(`agent not found: ${id}`);
+    }
+    return this.getAgent(id);
+  }
+
   updateAgentStatus(id: string, status: string): void {
     const result = this.#db
       .prepare(
@@ -641,6 +673,74 @@ export class MulticaStore {
       .run(id, input.squadId, input.memberType, input.memberId, input.role ?? "");
     const raw = this.#db.prepare(`SELECT * FROM squad_member WHERE id = ?`).get(id);
     return mapSquadMemberRow(raw as never);
+  }
+
+  /**
+   * The squad profile write, after the source's UpdateSquad: omit-keeps on
+   * name/description/instructions, and a leader rotation that auto-adds the
+   * new leader as a member when they are not one yet (role "leader", as the
+   * source's create does). The old leader's member row keeps its role — the
+   * source does not demote it either; who leads is read off leader_id. The
+   * source's pause cascade for unbound-leader squads has no counterpart in
+   * this runtime shape and is recorded as a divergence.
+   */
+  updateSquad(
+    id: string,
+    fields: { name?: string; description?: string; instructions?: string; leaderId?: string },
+  ): SquadRow {
+    this.#db.exec("BEGIN IMMEDIATE");
+    try {
+      const current = this.getSquad(id);
+      const leaderId = fields.leaderId ?? current.leaderId;
+      if (fields.leaderId) {
+        const isMember = this.#db
+          .prepare(
+            `SELECT COUNT(*) AS n FROM squad_member
+              WHERE squad_id = ? AND member_type = 'agent' AND member_id = ?`,
+          )
+          .get(id, fields.leaderId) as { n: number };
+        if (Number(isMember.n) === 0) {
+          this.addSquadMember({
+            squadId: id,
+            memberType: "agent",
+            memberId: fields.leaderId,
+            role: "leader",
+          });
+        }
+      }
+      const result = this.#db
+        .prepare(
+          `UPDATE squad SET name = ?, description = ?, instructions = ?, leader_id = ?,
+             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+           WHERE id = ?`,
+        )
+        .run(
+          fields.name ?? current.name,
+          fields.description ?? current.description,
+          fields.instructions ?? current.instructions,
+          leaderId,
+          id,
+        );
+      if (Number(result.changes) === 0) {
+        throw new Error(`squad not found: ${id}`);
+      }
+      this.#db.exec("COMMIT");
+    } catch (error) {
+      this.#db.exec("ROLLBACK");
+      throw error;
+    }
+    return this.getSquad(id);
+  }
+
+  updateSquadMemberRole(squadId: string, memberType: string, memberId: string, role: string): void {
+    const result = this.#db
+      .prepare(
+        `UPDATE squad_member SET role = ? WHERE squad_id = ? AND member_type = ? AND member_id = ?`,
+      )
+      .run(role, squadId, memberType, memberId);
+    if (Number(result.changes) === 0) {
+      throw new Error(`squad member not found: ${squadId}/${memberId}`);
+    }
   }
 
   removeSquadMember(squadId: string, memberType: string, memberId: string): void {

@@ -563,6 +563,14 @@ type MulticaCommentCreatePayload = Extract<
   SessionOutboundMessage,
   { type: "multica.comment.create.response" }
 >["payload"];
+type MulticaSquadUpdatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.squad.update.response" }
+>["payload"];
+type MulticaSquadMemberRolePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.squad.member_role.response" }
+>["payload"];
 type MulticaSquadListPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.squad.list.response" }
@@ -634,6 +642,10 @@ type MulticaTimelineListPayload = Extract<
 type MulticaAgentGetPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.agent.get.response" }
+>["payload"];
+type MulticaAgentUpdatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.agent.update.response" }
 >["payload"];
 type MulticaAgentStatusPayload = Extract<
   SessionOutboundMessage,
@@ -5746,6 +5758,31 @@ export class DaemonClient {
     });
   }
 
+  async multicaSquadUpdate(options: {
+    squadId: string;
+    name?: string;
+    description?: string;
+    instructions?: string;
+    leaderId?: string;
+  }): Promise<MulticaSquadUpdatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.squad.update.request", ...options },
+      responseType: "multica.squad.update.response",
+    });
+  }
+
+  async multicaSquadMemberRole(options: {
+    squadId: string;
+    memberType: string;
+    memberId: string;
+    role: string;
+  }): Promise<MulticaSquadMemberRolePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.squad.member_role.request", ...options },
+      responseType: "multica.squad.member_role.response",
+    });
+  }
+
   async multicaSquadList(): Promise<MulticaSquadListPayload> {
     return this.sendCorrelatedSessionRequest({
       message: { type: "multica.squad.list.request" },
@@ -5963,6 +6000,18 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       message: { type: "multica.agent.get.request", id },
       responseType: "multica.agent.get.response",
+    });
+  }
+
+  async multicaAgentUpdate(options: {
+    id: string;
+    name?: string;
+    description?: string;
+    maxConcurrentTasks?: number;
+  }): Promise<MulticaAgentUpdatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.agent.update.request", ...options },
+      responseType: "multica.agent.update.response",
     });
   }
 

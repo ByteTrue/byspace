@@ -382,6 +382,19 @@ export const MulticaAgentGetResponseSchema = z.object({
   payload: z.object({ requestId: z.string(), agent: MulticaAgentDetailSchema }),
 });
 
+export const MulticaAgentUpdateRequestSchema = z.object({
+  type: z.literal("multica.agent.update.request"),
+  requestId: z.string(),
+  id: z.string().min(1),
+  name: z.string().optional(),
+  description: z.string().optional(),
+  maxConcurrentTasks: z.number().int().optional(),
+});
+export const MulticaAgentUpdateResponseSchema = z.object({
+  type: z.literal("multica.agent.update.response"),
+  payload: z.object({ requestId: z.string(), agent: MulticaAgentSummarySchema }),
+});
+
 export const MulticaAgentStatusRequestSchema = z.object({
   type: z.literal("multica.agent.status.request"),
   requestId: z.string(),
@@ -478,6 +491,8 @@ export const MulticaTimelineEntrySchema = z.object({
   content: z.string().nullable(),
   authorType: z.string().nullable(),
   authorId: z.string().nullable(),
+  /** comment: the thread root it answers; null means it is itself a root. Additive. */
+  parentId: z.string().nullable(),
   /** comment: its reaction counts, viewer-relative. */
   reactions: z
     .array(z.object({ emoji: z.string(), count: z.number(), reactedByViewer: z.boolean() }))
@@ -875,6 +890,33 @@ export const MulticaSquadMemberSummarySchema = z.object({
   memberType: z.string(),
   memberId: z.string(),
   role: z.string(),
+});
+
+export const MulticaSquadUpdateRequestSchema = z.object({
+  type: z.literal("multica.squad.update.request"),
+  requestId: z.string(),
+  squadId: z.string().min(1),
+  name: z.string().optional(),
+  description: z.string().optional(),
+  instructions: z.string().optional(),
+  leaderId: z.string().optional(),
+});
+export const MulticaSquadUpdateResponseSchema = z.object({
+  type: z.literal("multica.squad.update.response"),
+  payload: z.object({ requestId: z.string(), squad: MulticaSquadDetailSchema }),
+});
+
+export const MulticaSquadMemberRoleRequestSchema = z.object({
+  type: z.literal("multica.squad.member_role.request"),
+  requestId: z.string(),
+  squadId: z.string().min(1),
+  memberType: z.string().min(1),
+  memberId: z.string().min(1),
+  role: z.string(),
+});
+export const MulticaSquadMemberRoleResponseSchema = z.object({
+  type: z.literal("multica.squad.member_role.response"),
+  payload: z.object({ requestId: z.string(), squad: MulticaSquadDetailSchema }),
 });
 
 export const MulticaSquadListRequestSchema = z.object({

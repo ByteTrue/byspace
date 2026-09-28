@@ -565,3 +565,54 @@ describe("wakeup registry", () => {
     expect(store.listWorkspaceWakeups()).toHaveLength(1);
   });
 });
+
+describe("squad management writes", () => {
+  it("rotating the leader auto-adds a non-member with role leader", () => {
+    const leader = store.createAgent({ name: "Lead" });
+    const outsider = store.createAgent({ name: "Outsider" });
+    const squad = store.createSquad({
+      name: "Crew",
+      leaderId: leader.id,
+      creatorType: "owner",
+      creatorId: "owner",
+    });
+    const rotated = store.updateSquad(squad.id, { leaderId: outsider.id });
+    expect(rotated.leaderId).toBe(outsider.id);
+    const members = store.listSquadMembers(squad.id);
+    expect(
+      members.some((member) => member.memberId === outsider.id && member.role === "leader"),
+    ).toBe(true);
+  });
+
+  it("the member role write changes only that row", () => {
+    const leader = store.createAgent({ name: "Lead2" });
+    const worker = store.createAgent({ name: "Worker2" });
+    const squad = store.createSquad({
+      name: "Crew2",
+      leaderId: leader.id,
+      creatorType: "owner",
+      creatorId: "owner",
+    });
+    store.addSquadMember({ squadId: squad.id, memberType: "agent", memberId: worker.id });
+    store.updateSquadMemberRole(squad.id, "agent", worker.id, "reviewer");
+    const members = store.listSquadMembers(squad.id);
+    const row = members.find((member) => member.memberId === worker.id);
+    expect(row?.role).toBe("reviewer");
+    const leadRow = members.find((member) => member.memberId === leader.id);
+    expect(leadRow?.role).toBe("leader");
+  });
+
+  it("the profile write keeps omitted fields", () => {
+    const leader = store.createAgent({ name: "Lead3" });
+    const squad = store.createSquad({
+      name: "Crew3",
+      leaderId: leader.id,
+      creatorType: "owner",
+      creatorId: "owner",
+    });
+    store.updateSquad(squad.id, { description: "the crew" });
+    const renamed = store.updateSquad(squad.id, { name: "Crew3b" });
+    expect(renamed.name).toBe("Crew3b");
+    expect(renamed.description).toBe("the crew");
+  });
+});

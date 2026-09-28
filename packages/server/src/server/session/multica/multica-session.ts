@@ -336,7 +336,10 @@ type WriteMessage = Extract<
       | "multica.comment.update.request"
       | "multica.comment.delete.request"
       | "multica.label.update.request"
-      | "multica.label.delete.request";
+      | "multica.label.delete.request"
+      | "multica.agent.update.request"
+      | "multica.squad.update.request"
+      | "multica.squad.member_role.request";
   }
 >;
 
@@ -1198,6 +1201,7 @@ export class MulticaSession {
         content: null,
         authorType: null,
         authorId: null,
+        parentId: null,
         reactions: null,
         deletedAt: null,
       })),
@@ -1212,6 +1216,7 @@ export class MulticaSession {
         content: comment.content,
         authorType: comment.authorType,
         authorId: comment.authorId,
+        parentId: comment.parentId,
         reactions: this.#ownerReactions(comment.id),
         deletedAt: comment.deletedAt,
       })),
@@ -1253,10 +1258,16 @@ export class MulticaSession {
         return this.#handleCommentCreate(msg);
       case "multica.agent.status.request":
         return this.#handleAgentStatus(msg);
+      case "multica.agent.update.request":
+        return this.#handleAgentUpdate(msg);
       case "multica.squad.add_member.request":
         return this.#handleSquadAddMember(msg);
       case "multica.squad.remove_member.request":
         return this.#handleSquadRemoveMember(msg);
+      case "multica.squad.update.request":
+        return this.#handleSquadUpdate(msg);
+      case "multica.squad.member_role.request":
+        return this.#handleSquadMemberRole(msg);
       case "multica.reaction.set.request":
         return this.#handleReactionSet(msg);
       case "multica.comment.update.request":
@@ -1490,6 +1501,22 @@ export class MulticaSession {
     });
   }
 
+  #handleAgentUpdate(
+    msg: Extract<SessionInboundMessage, { type: "multica.agent.update.request" }>,
+  ): void {
+    const agent = this.#store.updateAgent(msg.id, {
+      ...(msg.name !== undefined ? { name: msg.name } : {}),
+      ...(msg.description !== undefined ? { description: msg.description } : {}),
+      ...(msg.maxConcurrentTasks !== undefined
+        ? { maxConcurrentTasks: msg.maxConcurrentTasks }
+        : {}),
+    });
+    this.#emit({
+      type: "multica.agent.update.response",
+      payload: { requestId: msg.requestId, agent: agentSummary(agent) },
+    });
+  }
+
   #handleAgentStatus(
     msg: Extract<SessionInboundMessage, { type: "multica.agent.status.request" }>,
   ): void {
@@ -1521,6 +1548,32 @@ export class MulticaSession {
     this.#emit({
       type: "multica.squad.add_member.response",
       payload: { requestId: msg.requestId, squad: squadDetail(this.#store, msg.squadId) },
+    });
+  }
+
+  #handleSquadUpdate(
+    msg: Extract<SessionInboundMessage, { type: "multica.squad.update.request" }>,
+  ): void {
+    const squad = this.#store.updateSquad(msg.squadId, {
+      ...(msg.name !== undefined ? { name: msg.name } : {}),
+      ...(msg.description !== undefined ? { description: msg.description } : {}),
+      ...(msg.instructions !== undefined ? { instructions: msg.instructions } : {}),
+      ...(msg.leaderId !== undefined ? { leaderId: msg.leaderId } : {}),
+    });
+    this.#emit({
+      type: "multica.squad.update.response",
+      payload: { requestId: msg.requestId, squad: squadDetail(this.#store, squad.id) },
+    });
+  }
+
+  #handleSquadMemberRole(
+    msg: Extract<SessionInboundMessage, { type: "multica.squad.member_role.request" }>,
+  ): void {
+    this.#store.updateSquadMemberRole(msg.squadId, msg.memberType, msg.memberId, msg.role);
+    const squad = this.#store.getSquad(msg.squadId);
+    this.#emit({
+      type: "multica.squad.member_role.response",
+      payload: { requestId: msg.requestId, squad: squadDetail(this.#store, squad.id) },
     });
   }
 
