@@ -198,15 +198,18 @@ afterEach(async () => {
       try {
         rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 25 });
       } catch (error) {
+        // ENOTEMPTY: a descendant shell outliving the tested terminal recreated
+        // a file in it. EBUSY: Windows still holds the dying pwsh's cwd open.
+        // Both belong to processes we do not answer to; leave the directory.
         if (
           typeof error !== "object" ||
           error === null ||
           !("code" in error) ||
-          error.code !== "ENOTEMPTY"
+          (error.code !== "ENOTEMPTY" && error.code !== "EBUSY")
         ) {
           throw error;
         }
-        console.warn(`leaving temp dir behind after ENOTEMPTY retries: ${dir}`);
+        console.warn(`leaving temp dir behind after ${error.code} retries: ${dir}`);
       }
     }
   }
@@ -391,37 +394,44 @@ describe("createTerminal", () => {
       await waitForCommandFinished(session, 30_000);
       expect(completions).toEqual([1]);
       const rendered = getLines(session.getState()).join("\n");
-      expect(rendered).toContain("byspace-ok");
+      // Terminal columns wrap: an 80-col grid breaks a long line mid-word, so
+      // match a fragment short enough to survive wrapping (CI: "bys\npace-ok").
+      expect(rendered.replace(/\s+/g, "")).toContain("byspace-ok");
       // The sequences must stay control traffic, not text on the grid.
       expect(rendered).not.toContain("633;D");
 
       session.send({ type: "input", data: "Write-Output interactive-ok\r" });
       await waitForState(session, () => completions.includes(0), 20_000);
-      expect(getLines(session.getState()).join("\n")).toContain("interactive-ok");
+      expect(getLines(session.getState()).join("\n").replace(/\s+/g, "")).toContain(
+        "interactive-ok",
+      );
 
       unsubscribeCommandFinished();
     },
     60_000,
   );
 
-  it("leaves shells without a handoff integration on the typed path", async () => {
-    const session = trackSession(
-      await createTerminal({
-        workspaceId: "ws-test",
-        cwd: "/tmp",
-        shell: "/bin/sh",
-        env: { PS1: "$ " },
-        spawnCommand: "echo spawned-ok",
-      }),
-    );
+  it.skipIf(isPlatform("win32"))(
+    "leaves shells without a handoff integration on the typed path",
+    async () => {
+      const session = trackSession(
+        await createTerminal({
+          workspaceId: "ws-test",
+          cwd: "/tmp",
+          shell: "/bin/sh",
+          env: { PS1: "$ " },
+          spawnCommand: "echo spawned-ok",
+        }),
+      );
 
-    expect(session.getShellSpawnCommandMode()).toBe("typed");
+      expect(session.getShellSpawnCommandMode()).toBe("typed");
 
-    // The caller is responsible for typing on this path: nothing runs until it
-    // does, so the handed-off command must not have executed on its own.
-    await waitForState(session, hasPromptLine);
-    expect(getLines(session.getState()).join("\n")).not.toContain("spawned-ok");
-  });
+      // The caller is responsible for typing on this path: nothing runs until it
+      // does, so the handed-off command must not have executed on its own.
+      await waitForState(session, hasPromptLine);
+      expect(getLines(session.getState()).join("\n")).not.toContain("spawned-ok");
+    },
+  );
 
   it("passes profile commands through untouched on non-Windows", async () => {
     const resolveExecutable = vi.fn(async () => "/usr/local/bin/claude");
