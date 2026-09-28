@@ -1,3 +1,4 @@
+import { MulticaEmptyState } from "@/multica/multica-empty";
 import { MulticaShell } from "@/multica/multica-nav";
 import { type ReactElement, useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
@@ -91,7 +92,14 @@ function AutopilotsPage({ serverId }: { serverId: string }): ReactElement {
             />
           ))}
           {autopilots.length === 0 ? (
-            <Text style={styles.empty}>No autopilots. A recurring task belongs here.</Text>
+            <MulticaEmptyState
+              iconKey="autopilot"
+              title="No autopilots yet"
+              description="Schedule recurring work for your AI agents."
+              actionLabel={null}
+              onAction={null}
+              testID="multica-autopilots-empty"
+            />
           ) : null}
         </View>
         {creating ? (

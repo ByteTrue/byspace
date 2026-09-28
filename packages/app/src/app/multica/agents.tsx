@@ -1,5 +1,6 @@
+import { MulticaEmptyState } from "@/multica/multica-empty";
 import { MulticaShell } from "@/multica/multica-nav";
-import { type ReactElement, useCallback, useState } from "react";
+import { type ReactElement, useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -70,6 +71,11 @@ function RostersPage({ serverId }: { serverId: string }): ReactElement {
     void squadsQuery.refetch();
   }, [agentsQuery, squadsQuery]);
 
+  const [agentFormSignal, setAgentFormSignal] = useState(0);
+  const [squadFormSignal, setSquadFormSignal] = useState(0);
+  const openAgentForm = useCallback(() => setAgentFormSignal((value) => value + 1), []);
+  const openSquadForm = useCallback(() => setSquadFormSignal((value) => value + 1), []);
+
   if (agentsQuery.isLoading) {
     return (
       <View style={styles.center}>
@@ -87,21 +93,33 @@ function RostersPage({ serverId }: { serverId: string }): ReactElement {
         <View style={styles.header}>
           <Bot size={18} color="#888" />
           <Text style={styles.heading}>Agents</Text>
+          <Text style={styles.tagline} numberOfLines={1}>
+            AI teammates that pick up issues, comment, and update status.
+          </Text>
           <Text style={styles.headerCount}>{agents.length}</Text>
-          <NewAgentButton onCreated={refresh} />
+          <NewAgentButton onCreated={refresh} openSignal={agentFormSignal} />
           <AutopilotsPill serverId={serverId} />
         </View>
         <View style={styles.grid}>
           {agents.map((agent) => (
             <AgentCard key={agent.id} agent={agent} onOpen={openAgent} />
           ))}
-          {agents.length === 0 ? <Text style={styles.empty}>No agents yet.</Text> : null}
+          {agents.length === 0 ? (
+            <MulticaEmptyState
+              iconKey="agent"
+              title="No agents yet"
+              description="Create an agent, then assign it issues."
+              actionLabel="+ New agent"
+              onAction={openAgentForm}
+              testID="multica-agents-empty"
+            />
+          ) : null}
         </View>
         <View style={styles.header}>
           <Users size={18} color="#888" />
           <Text style={styles.heading}>Squads</Text>
           <Text style={styles.headerCount}>{squads.length}</Text>
-          <NewSquadButton agents={agents} onCreated={refresh} />
+          <NewSquadButton agents={agents} onCreated={refresh} openSignal={squadFormSignal} />
         </View>
 
         <LabelsSection serverId={serverId} onCreated={refresh} />
@@ -109,7 +127,16 @@ function RostersPage({ serverId }: { serverId: string }): ReactElement {
           {squads.map((squad) => (
             <SquadCard key={squad.id} squad={squad} onOpen={openSquad} />
           ))}
-          {squads.length === 0 ? <Text style={styles.empty}>No squads yet.</Text> : null}
+          {squads.length === 0 ? (
+            <MulticaEmptyState
+              iconKey="squad"
+              title="No squads yet."
+              description="A squad is a leader plus the members it can send."
+              actionLabel="+ New squad"
+              onAction={openSquadForm}
+              testID="multica-squads-empty"
+            />
+          ) : null}
         </View>
       </ScrollView>
     </MulticaShell>
@@ -133,7 +160,13 @@ interface AgentCardData {
  * name (defaults make it private and local); a squad needs a name and a
  * leader, whose choice is what makes a roster a roster.
  */
-function NewAgentButton({ onCreated }: { onCreated: () => void }): ReactElement {
+function NewAgentButton({
+  onCreated,
+  openSignal,
+}: {
+  onCreated: () => void;
+  openSignal: number;
+}): ReactElement {
   const params = useLocalSearchParams<{ serverId: string }>();
   const serverId = typeof params.serverId === "string" ? params.serverId : "";
   const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
@@ -142,6 +175,12 @@ function NewAgentButton({ onCreated }: { onCreated: () => void }): ReactElement 
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const toggle = useCallback(() => setOpen((value) => !value), []);
+  // The empty state's button opens the same form from elsewhere.
+  useEffect(() => {
+    if (openSignal > 0) {
+      setOpen(true);
+    }
+  }, [openSignal]);
   const handleName = useCallback((text: string) => setName(text), []);
   const submit = useCallback(() => {
     const trimmed = name.trim();
@@ -187,9 +226,11 @@ function NewAgentButton({ onCreated }: { onCreated: () => void }): ReactElement 
 function NewSquadButton({
   agents,
   onCreated,
+  openSignal,
 }: {
   agents: readonly { id: string; name: string; kind: string }[];
   onCreated: () => void;
+  openSignal: number;
 }): ReactElement {
   const params = useLocalSearchParams<{ serverId: string }>();
   const serverId = typeof params.serverId === "string" ? params.serverId : "";
@@ -200,6 +241,11 @@ function NewSquadButton({
   const [leaderId, setLeaderId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const toggle = useCallback(() => setOpen((value) => !value), []);
+  useEffect(() => {
+    if (openSignal > 0) {
+      setOpen(true);
+    }
+  }, [openSignal]);
   const handleName = useCallback((text: string) => setName(text), []);
   const submit = useCallback(() => {
     const trimmed = name.trim();
@@ -356,7 +402,16 @@ function LabelsSection({
         {labels.map((label) => (
           <LabelRow key={label.id} label={label} onUpdate={update} onDelete={remove} />
         ))}
-        {labels.length === 0 ? <Text style={styles.muted}>No labels yet.</Text> : null}
+        {labels.length === 0 ? (
+          <MulticaEmptyState
+            iconKey="label"
+            title="No labels yet"
+            description="Labels group issues across the board."
+            actionLabel={null}
+            onAction={null}
+            testID="multica-labels-empty"
+          />
+        ) : null}
         <LabelCreateRow onCreate={create} />
       </ScrollView>
     </>
@@ -563,7 +618,6 @@ const styles = StyleSheet.create((theme) => ({
   labelNamePress: { minWidth: 120 },
   labelName: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
   list: { gap: theme.spacing[2] },
-  muted: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   card: {
     width: 260,
     padding: theme.spacing[3],
@@ -573,6 +627,7 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.border,
     gap: theme.spacing[1],
   },
+  tagline: { flex: 1, color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   cardHead: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
   statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#9ca3af" },
   statusDotOn: { backgroundColor: "#22c55e" },
