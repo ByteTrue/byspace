@@ -348,6 +348,47 @@ export function createMulticaCommand(): Command {
       .allowExcessArguments(false),
   ).action(withOutput(runMulticaWakeupDisableCommand));
 
+  const inbox = multica.command("inbox").description("The owner's action inbox");
+  addJsonAndDaemonHostOptions(
+    inbox
+      .command("ls")
+      .description("List inbox items (unread first face: the live queue)")
+      .option("--archived", "List archived items instead")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaInboxLsCommand));
+  addJsonAndDaemonHostOptions(
+    inbox
+      .command("read")
+      .description("Mark an item read (or --unread to undo)")
+      .requiredOption("--id <id>", "Inbox item id")
+      .option("--unread", "Mark unread instead of read")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaInboxReadCommand));
+  addJsonAndDaemonHostOptions(
+    inbox
+      .command("archive")
+      .description("Archive an item (or --unarchive)")
+      .requiredOption("--id <id>", "Inbox item id")
+      .option("--unarchive", "Unarchive instead")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaInboxArchiveCommand));
+  addJsonAndDaemonHostOptions(
+    inbox
+      .command("create")
+      .description("Escalate to the owner (run sessions only)")
+      .requiredOption("--severity <s>", "action_required | attention | info")
+      .requiredOption("--title <text>", "One-line summary for the owner")
+      .option("--body <text>", "Detail")
+      .option("--issue-id <id>", "Issue this concerns")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaInboxCreateCommand));
+  addJsonAndDaemonHostOptions(
+    inbox
+      .command("read-all")
+      .description("Mark every unread item read")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaInboxReadAllCommand));
+
   const agent = multica.command("agent").description("Agents");
   addJsonAndDaemonHostOptions(
     agent.command("ls").description("List agents").allowExcessArguments(false),
@@ -557,4 +598,178 @@ function wakeupOptionalFields(options: {
     ...(options.timezone ? { timezone: options.timezone } : {}),
     ...(options.at ? { at: options.at } : {}),
   };
+}
+
+export async function runMulticaInboxLsCommand(
+  options: CommandOptions & { archived?: boolean },
+  _command: Command,
+): Promise<ListResult<MulticaInboxRow>> {
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaInboxList({ archived: options.archived === true });
+    return {
+      type: "list",
+      data: payload.items.map((item) => ({
+        id: item.id,
+        severity: item.severity,
+        read: item.read ? "read" : "unread",
+        title: item.title,
+        issue: item.issueId ? item.issueId.slice(0, 8) : "-",
+        actor: item.actorId ? item.actorId.slice(0, 8) : "-",
+      })),
+      schema: multicaInboxSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaInboxReadCommand(
+  options: CommandOptions & { id?: string; unread?: boolean },
+  _command: Command,
+): Promise<ListResult<MulticaInboxRow>> {
+  const id = options.id?.trim();
+  if (!id) {
+    throw { code: "MISSING_ID", message: "--id is required" } satisfies CommandError;
+  }
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaInboxMark({ id, read: options.unread !== true });
+    return { type: "list", data: [inboxRow(payload.item)], schema: multicaInboxSchema };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaInboxArchiveCommand(
+  options: CommandOptions & { id?: string; unarchive?: boolean },
+  _command: Command,
+): Promise<ListResult<MulticaInboxRow>> {
+  const id = options.id?.trim();
+  if (!id) {
+    throw { code: "MISSING_ID", message: "--id is required" } satisfies CommandError;
+  }
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaInboxArchive({ id, archived: options.unarchive !== true });
+    return { type: "list", data: [inboxRow(payload.item)], schema: multicaInboxSchema };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaInboxReadAllCommand(
+  options: CommandOptions,
+  _command: Command,
+): Promise<ListResult<{ changed: string }>> {
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaInboxMarkAll();
+    return {
+      type: "list",
+      data: [{ changed: String(payload.changed) }],
+      schema: {
+        idField: "changed",
+        columns: [{ header: "MARKED READ", field: "changed", width: 12 }],
+      },
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+interface MulticaInboxRow {
+  readonly id: string;
+  readonly severity: string;
+  readonly read: string;
+  readonly title: string;
+  readonly issue: string;
+  readonly actor: string;
+}
+
+function inboxRow(item: {
+  id: string;
+  severity: string;
+  read: boolean;
+  title: string;
+  issueId: string | null;
+  actorId: string | null;
+}): MulticaInboxRow {
+  return {
+    id: item.id,
+    severity: item.severity,
+    read: item.read ? "read" : "unread",
+    title: item.title,
+    issue: item.issueId ? item.issueId.slice(0, 8) : "-",
+    actor: item.actorId ? item.actorId.slice(0, 8) : "-",
+  };
+}
+
+const multicaInboxSchema: OutputSchema<MulticaInboxRow> = {
+  idField: "id",
+  columns: [
+    { header: "ID", field: "id", width: 14 },
+    { header: "SEVERITY", field: "severity", width: 16 },
+    { header: "READ", field: "read", width: 8 },
+    { header: "TITLE", field: "title", width: 50 },
+    { header: "ISSUE", field: "issue", width: 10 },
+    { header: "ACTOR", field: "actor", width: 10 },
+  ],
+};
+
+export async function runMulticaInboxCreateCommand(
+  options: CommandOptions & {
+    severity?: string;
+    title?: string;
+    body?: string;
+    issueId?: string;
+  },
+  _command: Command,
+): Promise<ListResult<MulticaInboxRow>> {
+  const severity = options.severity?.trim();
+  const title = options.title?.trim();
+  if (!severity || !title) {
+    throw {
+      code: "MISSING_ARGS",
+      message: "--severity and --title are required",
+    } satisfies CommandError;
+  }
+  if (!["action_required", "attention", "info"].includes(severity)) {
+    throw {
+      code: "BAD_SEVERITY",
+      message: "--severity must be action_required|attention|info",
+    } satisfies CommandError;
+  }
+  // The inbox is the owner's desk; only a run may put something on it, and
+  // the session is the proof. Outside a run there is nothing to prove with.
+  const senderSessionId = process.env.BYSPACE_AGENT_ID?.trim();
+  if (!senderSessionId) {
+    throw {
+      code: "NOT_A_RUN",
+      message: "inbox create is for runs: it needs the session identity the daemon injects",
+    } satisfies CommandError;
+  }
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaInboxCreate({
+      severity: severity as "action_required" | "attention" | "info",
+      title,
+      senderSessionId,
+      ...(options.body ? { body: options.body } : {}),
+      ...(options.issueId ? { issueId: options.issueId.trim() } : {}),
+    });
+    return { type: "list", data: [inboxRow(payload.item)], schema: multicaInboxSchema };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
 }

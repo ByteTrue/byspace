@@ -102,3 +102,62 @@ describe("comment attribution", () => {
     expect(store.listCommentsForIssue(issue.id)).toHaveLength(0);
   });
 });
+
+describe("inbox writes are run-only", () => {
+  it("a run may put an item on the owner's desk", async () => {
+    const agent = store.createAgent({ name: "Secretary" });
+    const issue = store.createIssue({ title: "Work", creatorType: "owner", creatorId: "owner" });
+    const task = store.createTask({ issueId: issue.id, agentId: agent.id });
+    store.attachTaskSession(task.id, "sess-inbox");
+
+    await session.handle({
+      type: "multica.inbox.create.request",
+      requestId: "i1",
+      severity: "action_required",
+      issueId: issue.id,
+      title: "needs your decision",
+      senderSessionId: "sess-inbox",
+    });
+
+    const listed = emitted.filter(
+      (m): m is Extract<SessionOutboundMessage, { type: "multica.inbox.create.response" }> =>
+        m.type === "multica.inbox.create.response",
+    );
+    expect(listed).toHaveLength(1);
+    expect(listed[0].payload.item.severity).toBe("action_required");
+    expect(listed[0].payload.item.actorId).toBe(agent.id);
+    expect(store.countUnreadInbox()).toBe(1);
+  });
+
+  it("a session that resolves to no run is refused", async () => {
+    await session.handle({
+      type: "multica.inbox.create.request",
+      requestId: "i2",
+      severity: "info",
+      title: "trust me",
+      senderSessionId: "sess-stranger",
+    });
+    const errors = emitted.filter((m) => m.type === "rpc_error");
+    expect(errors).toHaveLength(1);
+    expect(store.countUnreadInbox()).toBe(0);
+  });
+
+  it("read and mark-all settle the queue", async () => {
+    const agent = store.createAgent({ name: "Secretary" });
+    const issue = store.createIssue({ title: "Work", creatorType: "owner", creatorId: "owner" });
+    const task = store.createTask({ issueId: issue.id, agentId: agent.id });
+    store.attachTaskSession(task.id, "sess-inbox2");
+    await session.handle({
+      type: "multica.inbox.create.request",
+      requestId: "i3",
+      severity: "attention",
+      issueId: issue.id,
+      title: "look at this",
+      senderSessionId: "sess-inbox2",
+    });
+    expect(store.countUnreadInbox()).toBe(1);
+    const changed = store.markAllInboxRead();
+    expect(changed).toBe(1);
+    expect(store.countUnreadInbox()).toBe(0);
+  });
+});

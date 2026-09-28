@@ -20,6 +20,7 @@ import type {
   IssueRow,
   SquadMemberRow,
   SquadRow,
+  InboxRow,
   TaskRow,
 } from "../../multica/rows.js";
 import type { WakeupRow } from "../../multica/wakeup.js";
@@ -30,6 +31,7 @@ import type {
   MulticaSquadMemberSummary,
   MulticaSquadSummary,
   MulticaTaskSummary,
+  MulticaInboxItemSummary,
   MulticaWakeupSummary,
 } from "@bytetrue/protocol/multica/rpc-schemas";
 
@@ -113,6 +115,22 @@ function memberSummary(member: SquadMemberRow): MulticaSquadMemberSummary {
   };
 }
 
+function inboxSummary(item: InboxRow): MulticaInboxItemSummary {
+  return {
+    id: item.id,
+    type: item.type,
+    severity: item.severity,
+    issueId: item.issueId,
+    title: item.title,
+    body: item.body,
+    read: item.read,
+    archived: item.archived,
+    createdAt: item.createdAt,
+    actorType: item.actorType,
+    actorId: item.actorId,
+  };
+}
+
 function wakeupSummary(wakeup: WakeupRow): MulticaWakeupSummary {
   return {
     id: wakeup.id,
@@ -144,6 +162,24 @@ function taskSummary(task: TaskRow): MulticaTaskSummary {
   };
 }
 
+type MulticaInboundSubset = Extract<SessionInboundMessage, { type: `multica.${string}` }> & {
+  requestId: string;
+};
+
+type WakeupOrInboxMessage = Extract<
+  SessionInboundMessage,
+  { type: `multica.inbox.${string}` | `multica.wakeup.${string}` }
+> & { requestId: string };
+
+/**
+ * The two newest families route by prefix so the top-level switch stays
+ * under the complexity ceiling; the predicate keeps both sides of the
+ * narrowing exact, so exhaustiveness still fails closed.
+ */
+function isWakeupOrInboxMessage(msg: MulticaInboundSubset): msg is WakeupOrInboxMessage {
+  return msg.type.startsWith("multica.inbox.") || msg.type.startsWith("multica.wakeup.");
+}
+
 export class MulticaSession {
   readonly #store: MulticaStore;
   readonly #host: MulticaSessionHost;
@@ -165,10 +201,11 @@ export class MulticaSession {
    * wire type; this handler's contract is the multica subset, and the
    * dispatcher's switch is what guarantees it.
    */
-  async handle(
-    msg: Extract<SessionInboundMessage, { type: `multica.${string}` }> & { requestId: string },
-  ): Promise<void> {
+  async handle(msg: MulticaInboundSubset): Promise<void> {
     try {
+      if (isWakeupOrInboxMessage(msg)) {
+        return await this.#handleWakeupAndInbox(msg);
+      }
       switch (msg.type) {
         case "multica.agent.list.request":
           return this.#handleAgentList(msg);
@@ -194,12 +231,6 @@ export class MulticaSession {
           return this.#handleSquadList(msg);
         case "multica.squad.create.request":
           return this.#handleSquadCreate(msg);
-        case "multica.wakeup.list.request":
-          return this.#handleWakeupList(msg);
-        case "multica.wakeup.create.request":
-          return this.#handleWakeupCreate(msg);
-        case "multica.wakeup.disable.request":
-          return this.#handleWakeupDisable(msg);
         case "multica.task.running.list.request":
           return this.#handleTaskRunningList(msg);
         case "multica.task.list.request":
@@ -504,6 +535,102 @@ export class MulticaSession {
         squad: squadSummary(squad),
         members: members.map(memberSummary),
       },
+    });
+  }
+
+  /**
+   * The wakeup and inbox families each carry their own switch so the top
+   * dispatcher stays under the complexity ceiling; the two groups arrived
+   * together and share no state.
+   */
+  async #handleWakeupAndInbox(msg: WakeupOrInboxMessage): Promise<void> {
+    switch (msg.type) {
+      case "multica.inbox.list.request":
+        return this.#handleInboxList(msg);
+      case "multica.inbox.create.request":
+        return this.#handleInboxCreate(msg);
+      case "multica.inbox.mark.request":
+        return this.#handleInboxMark(msg);
+      case "multica.inbox.archive.request":
+        return this.#handleInboxArchive(msg);
+      case "multica.inbox.mark_all.request":
+        return this.#handleInboxMarkAll(msg);
+      case "multica.wakeup.list.request":
+        return this.#handleWakeupList(msg);
+      case "multica.wakeup.create.request":
+        return this.#handleWakeupCreate(msg);
+      case "multica.wakeup.disable.request":
+        return this.#handleWakeupDisable(msg);
+      default:
+        msg satisfies never;
+    }
+  }
+
+  #handleInboxList(
+    msg: Extract<SessionInboundMessage, { type: "multica.inbox.list.request" }>,
+  ): void {
+    this.#emit({
+      type: "multica.inbox.list.response",
+      payload: {
+        requestId: msg.requestId,
+        items: this.#store.listInbox({ archived: msg.archived ?? false }).map(inboxSummary),
+        unread: this.#store.countUnreadInbox(),
+      },
+    });
+  }
+
+  #handleInboxCreate(
+    msg: Extract<SessionInboundMessage, { type: "multica.inbox.create.request" }>,
+  ): void {
+    // Only a run may put something on the owner's desk: resolve like a
+    // comment author, and refuse what does not resolve.
+    const task = this.#store.getTaskBySession(msg.senderSessionId);
+    if (!task) {
+      throw new Error(`Session ${msg.senderSessionId} is not a multica run`);
+    }
+    const item = this.#store.createInboxItem({
+      type: "agent.escalation",
+      severity: msg.severity,
+      issueId: msg.issueId ?? null,
+      title: msg.title,
+      body: msg.body ?? null,
+      actorType: "agent",
+      actorId: task.agentId,
+      details: { task_id: task.id },
+    });
+    this.#emit({
+      type: "multica.inbox.create.response",
+      payload: { requestId: msg.requestId, item: inboxSummary(item) },
+    });
+  }
+
+  #handleInboxMark(
+    msg: Extract<SessionInboundMessage, { type: "multica.inbox.mark.request" }>,
+  ): void {
+    const item = this.#store.markInboxRead(msg.id, msg.read);
+    this.#emit({
+      type: "multica.inbox.mark.response",
+      payload: { requestId: msg.requestId, item: inboxSummary(item) },
+    });
+  }
+
+  #handleInboxArchive(
+    msg: Extract<SessionInboundMessage, { type: "multica.inbox.archive.request" }>,
+  ): void {
+    const item = this.#store.archiveInboxItem(msg.id, msg.archived);
+    this.#emit({
+      type: "multica.inbox.archive.response",
+      payload: { requestId: msg.requestId, item: inboxSummary(item) },
+    });
+  }
+
+  #handleInboxMarkAll(
+    msg: Extract<SessionInboundMessage, { type: "multica.inbox.mark_all.request" }>,
+  ): void {
+    const changed = this.#store.markAllInboxRead();
+    this.#emit({
+      type: "multica.inbox.mark_all.response",
+      payload: { requestId: msg.requestId, changed },
     });
   }
 

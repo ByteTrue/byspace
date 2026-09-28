@@ -20,6 +20,7 @@ import type pino from "pino";
 import type { AgentManager } from "../agent/agent-manager.js";
 import { type BoundCreateAgentCommand } from "../agent/create-agent/create.js";
 import type { MulticaStore } from "./store.js";
+import type { TaskRow } from "./rows.js";
 import { createCommentPrompt, createIssuePrompt, createWakeupPrompt } from "./run-prompt.js";
 
 export interface MulticaExecutorOptions {
@@ -148,6 +149,7 @@ export class MulticaExecutor {
           status: "failed",
           error: "waiting for permission",
         });
+        this.#noteFailureForOwner(task, "waiting for permission");
         return;
       }
       const output = waitResult.lastMessage ?? result.finalText ?? "";
@@ -169,7 +171,26 @@ export class MulticaExecutor {
       const message = error instanceof Error ? error.message : String(error);
       this.#logger.warn({ err: error, taskId: task.id }, "multica run failed");
       this.#store.updateTaskStatus({ id: task.id, status: "failed", error: message });
+      this.#noteFailureForOwner(task, message);
     }
+  }
+
+  /**
+   * A failed run is the owner's problem, not the issue's alone: the source
+   * writes an action_required inbox item on run failure. The inbox is where
+   * "needs your decision" lives.
+   */
+  #noteFailureForOwner(task: TaskRow, message: string): void {
+    this.#store.createInboxItem({
+      type: "run.failed",
+      severity: "action_required",
+      issueId: task.issueId,
+      title: `Run failed on issue ${task.issueId.slice(0, 8)}`,
+      body: message.slice(0, 2000),
+      actorType: "agent",
+      actorId: task.agentId,
+      details: { task_id: task.id },
+    });
   }
 }
 

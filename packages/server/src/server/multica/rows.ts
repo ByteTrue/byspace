@@ -510,3 +510,44 @@ export function mapIssueRow(raw: RawIssueRow): IssueRow {
     duplicateOfIssueId: textOrNull(raw.duplicate_of_issue_id),
   };
 }
+
+export const INBOX_SELECT = `id, recipient_type, recipient_id, type, severity, issue_id,
+  title, body, read, archived, created_at, actor_type, actor_id, details`;
+
+export type InboxSeverity = "action_required" | "attention" | "info";
+
+export interface InboxRow {
+  readonly id: string;
+  readonly recipientType: string;
+  readonly recipientId: string;
+  readonly type: string;
+  readonly severity: InboxSeverity;
+  readonly issueId: string | null;
+  readonly title: string;
+  readonly body: string | null;
+  readonly read: boolean;
+  readonly archived: boolean;
+  readonly createdAt: string;
+  readonly actorType: string | null;
+  readonly actorId: string | null;
+  readonly details: Record<string, unknown>;
+}
+
+export function mapInboxRow(raw: Record<string, unknown>): InboxRow {
+  return {
+    id: raw.id as string,
+    recipientType: raw.recipient_type as string,
+    recipientId: raw.recipient_id as string,
+    type: raw.type as string,
+    severity: raw.severity as InboxSeverity,
+    issueId: (raw.issue_id as string | null) ?? null,
+    title: raw.title as string,
+    body: (raw.body as string | null) ?? null,
+    read: (raw.read as number) === 1,
+    archived: (raw.archived as number) === 1,
+    createdAt: raw.created_at as string,
+    actorType: (raw.actor_type as string | null) ?? null,
+    actorId: (raw.actor_id as string | null) ?? null,
+    details: JSON.parse((raw.details as string) || "{}") as Record<string, unknown>,
+  };
+}

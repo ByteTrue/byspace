@@ -210,6 +210,76 @@ export const MulticaCommentCreateResponseSchema = z.object({
   }),
 });
 
+export const MulticaInboxItemSummarySchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  severity: z.string(),
+  issueId: z.string().nullable(),
+  title: z.string(),
+  body: z.string().nullable(),
+  read: z.boolean(),
+  archived: z.boolean(),
+  createdAt: z.string(),
+  actorType: z.string().nullable(),
+  actorId: z.string().nullable(),
+});
+
+export const MulticaInboxListRequestSchema = z.object({
+  type: z.literal("multica.inbox.list.request"),
+  requestId: z.string(),
+  archived: z.boolean().optional(),
+});
+export const MulticaInboxListResponseSchema = z.object({
+  type: z.literal("multica.inbox.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    items: z.array(MulticaInboxItemSummarySchema),
+    unread: z.number().int(),
+  }),
+});
+export const MulticaInboxCreateRequestSchema = z.object({
+  type: z.literal("multica.inbox.create.request"),
+  requestId: z.string(),
+  severity: z.enum(["action_required", "attention", "info"]),
+  issueId: z.string().optional(),
+  title: z.string().min(1),
+  body: z.string().optional(),
+  /** Only a run may write the owner's inbox; resolves like a comment author. */
+  senderSessionId: z.string(),
+});
+export const MulticaInboxCreateResponseSchema = z.object({
+  type: z.literal("multica.inbox.create.response"),
+  payload: z.object({ requestId: z.string(), item: MulticaInboxItemSummarySchema }),
+});
+export const MulticaInboxMarkRequestSchema = z.object({
+  type: z.literal("multica.inbox.mark.request"),
+  requestId: z.string(),
+  id: z.string().min(1),
+  read: z.boolean(),
+});
+export const MulticaInboxMarkResponseSchema = z.object({
+  type: z.literal("multica.inbox.mark.response"),
+  payload: z.object({ requestId: z.string(), item: MulticaInboxItemSummarySchema }),
+});
+export const MulticaInboxArchiveRequestSchema = z.object({
+  type: z.literal("multica.inbox.archive.request"),
+  requestId: z.string(),
+  id: z.string().min(1),
+  archived: z.boolean(),
+});
+export const MulticaInboxArchiveResponseSchema = z.object({
+  type: z.literal("multica.inbox.archive.response"),
+  payload: z.object({ requestId: z.string(), item: MulticaInboxItemSummarySchema }),
+});
+export const MulticaInboxMarkAllRequestSchema = z.object({
+  type: z.literal("multica.inbox.mark_all.request"),
+  requestId: z.string(),
+});
+export const MulticaInboxMarkAllResponseSchema = z.object({
+  type: z.literal("multica.inbox.mark_all.response"),
+  payload: z.object({ requestId: z.string(), changed: z.number().int() }),
+});
+
 export const MulticaWakeupSummarySchema = z.object({
   id: z.string(),
   issueId: z.string(),
@@ -415,5 +485,6 @@ export type MulticaCommentSummary = z.infer<typeof MulticaCommentSummarySchema>;
 export type MulticaSquadSummary = z.infer<typeof MulticaSquadSummarySchema>;
 export type MulticaSquadMemberSummary = z.infer<typeof MulticaSquadMemberSummarySchema>;
 export type MulticaStatusSummary = z.infer<typeof MulticaStatusSummarySchema>;
+export type MulticaInboxItemSummary = z.infer<typeof MulticaInboxItemSummarySchema>;
 export type MulticaWakeupSummary = z.infer<typeof MulticaWakeupSummarySchema>;
 export type MulticaTaskSummary = z.infer<typeof MulticaTaskSummarySchema>;

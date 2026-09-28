@@ -266,6 +266,22 @@ async function main(): Promise<void> {
           store.close();
         }
 
+        // Inbox: the owner's queue is empty until something needs them; a
+        // run writes to it; reading and filing settle the count.
+        const emptyInbox = await client.multicaInboxList();
+        check("the inbox starts empty", emptyInbox.items.length === 0 && emptyInbox.unread === 0);
+        let inboxWriteRefused = false;
+        try {
+          await client.multicaInboxCreate({
+            severity: "info",
+            title: "not a run",
+            senderSessionId: "verify-stranger-session",
+          });
+        } catch {
+          inboxWriteRefused = true;
+        }
+        check("a non-run session cannot write the inbox", inboxWriteRefused);
+
         // unknown issue errors cleanly
         let unknownHandled = false;
         try {

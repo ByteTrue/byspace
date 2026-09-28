@@ -31,6 +31,7 @@ import { applyMigrations, type Migration } from "./migrations/runner.js";
 import {
   AGENT_SELECT,
   SQUAD_SELECT,
+  INBOX_SELECT,
   TASK_SELECT,
   COMMENT_SELECT,
   ISSUE_SELECT,
@@ -39,12 +40,15 @@ import {
   mapIssueRow,
   mapSquadMemberRow,
   mapSquadRow,
+  mapInboxRow,
   mapTaskRow,
   type AgentRow,
   type CommentRow,
   type IssueRow,
   type SquadMemberRow,
   type SquadRow,
+  type InboxRow,
+  type InboxSeverity,
   type TaskRow,
 } from "./rows.js";
 
@@ -616,6 +620,103 @@ export class MulticaStore {
       )
       .all();
     return rows.map((row) => mapTaskRow(row as never));
+  }
+
+  // ── inbox ────────────────────────────────────────────────────────────
+
+  createInboxItem(input: {
+    readonly type: string;
+    readonly severity: InboxSeverity;
+    readonly issueId?: string | null;
+    readonly title: string;
+    readonly body?: string | null;
+    readonly actorType?: string | null;
+    readonly actorId?: string | null;
+    readonly details?: Record<string, unknown>;
+  }): InboxRow {
+    const id = randomUUID();
+    this.#db
+      .prepare(
+        `INSERT INTO inbox_item (id, recipient_type, recipient_id, type, severity,
+           issue_id, title, body, actor_type, actor_id, details)
+         VALUES (?, 'owner', 'owner', ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.type,
+        input.severity,
+        input.issueId ?? null,
+        input.title,
+        input.body ?? null,
+        input.actorType ?? null,
+        input.actorId ?? null,
+        JSON.stringify(input.details ?? {}),
+      );
+    return this.getInboxItem(id);
+  }
+
+  getInboxItem(id: string): InboxRow {
+    const row = this.#db.prepare(`SELECT ${INBOX_SELECT} FROM inbox_item WHERE id = ?`).get(id) as
+      | Record<string, unknown>
+      | undefined;
+    if (!row) {
+      throw new Error(`Unknown inbox item: ${id}`);
+    }
+    return mapInboxRow(row);
+  }
+
+  listInbox(input: { readonly archived: boolean }): InboxRow[] {
+    const rows = this.#db
+      .prepare(
+        `SELECT ${INBOX_SELECT} FROM inbox_item
+         WHERE recipient_type = 'owner' AND archived = ? ORDER BY created_at DESC`,
+      )
+      .all(input.archived ? 1 : 0) as Record<string, unknown>[];
+    return rows.map((row) => mapInboxRow(row));
+  }
+
+  countUnreadInbox(): number {
+    const row = this.#db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM inbox_item
+         WHERE recipient_type = 'owner' AND read = 0 AND archived = 0`,
+      )
+      .get() as { n: number | bigint };
+    return Number(row.n);
+  }
+
+  markInboxRead(id: string, read: boolean): InboxRow {
+    this.#db
+      .prepare(`UPDATE inbox_item SET read = ? WHERE id = ? AND recipient_type = 'owner'`)
+      .run(read ? 1 : 0, id);
+    return this.getInboxItem(id);
+  }
+
+  archiveInboxItem(id: string, archived: boolean): InboxRow {
+    this.#db
+      .prepare(`UPDATE inbox_item SET archived = ? WHERE id = ? AND recipient_type = 'owner'`)
+      .run(archived ? 1 : 0, id);
+    return this.getInboxItem(id);
+  }
+
+  markAllInboxRead(): number {
+    const result = this.#db
+      .prepare(
+        `UPDATE inbox_item SET read = 1
+         WHERE recipient_type = 'owner' AND read = 0 AND archived = 0`,
+      )
+      .run();
+    return Number(result.changes);
+  }
+
+  archiveAllReadInbox(): number {
+    const result = this.#db
+      .prepare(
+        `UPDATE inbox_item SET archived = 1
+         WHERE recipient_type = 'owner' AND read = 1 AND archived = 0`,
+      )
+      .run();
+    return Number(result.changes);
   }
 
   // ── wakeups ──────────────────────────────────────────────────────────

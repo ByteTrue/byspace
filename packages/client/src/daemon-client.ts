@@ -571,6 +571,26 @@ type MulticaSquadCreatePayload = Extract<
   SessionOutboundMessage,
   { type: "multica.squad.create.response" }
 >["payload"];
+type MulticaInboxListPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.inbox.list.response" }
+>["payload"];
+type MulticaInboxCreatePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.inbox.create.response" }
+>["payload"];
+type MulticaInboxMarkPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.inbox.mark.response" }
+>["payload"];
+type MulticaInboxArchivePayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.inbox.archive.response" }
+>["payload"];
+type MulticaInboxMarkAllPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.inbox.mark_all.response" }
+>["payload"];
 type MulticaWakeupListPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.wakeup.list.response" }
@@ -5642,6 +5662,50 @@ export class DaemonClient {
         members: options.members,
       },
       responseType: "multica.squad.create.response",
+    });
+  }
+
+  async multicaInboxList(options?: { archived?: boolean }): Promise<MulticaInboxListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.inbox.list.request", archived: options?.archived },
+      responseType: "multica.inbox.list.response",
+    });
+  }
+
+  async multicaInboxCreate(options: {
+    severity: "action_required" | "attention" | "info";
+    issueId?: string;
+    title: string;
+    body?: string;
+    senderSessionId: string;
+  }): Promise<MulticaInboxCreatePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.inbox.create.request", ...options },
+      responseType: "multica.inbox.create.response",
+    });
+  }
+
+  async multicaInboxMark(options: { id: string; read: boolean }): Promise<MulticaInboxMarkPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.inbox.mark.request", ...options },
+      responseType: "multica.inbox.mark.response",
+    });
+  }
+
+  async multicaInboxArchive(options: {
+    id: string;
+    archived: boolean;
+  }): Promise<MulticaInboxArchivePayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.inbox.archive.request", ...options },
+      responseType: "multica.inbox.archive.response",
+    });
+  }
+
+  async multicaInboxMarkAll(): Promise<MulticaInboxMarkAllPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.inbox.mark_all.request" },
+      responseType: "multica.inbox.mark_all.response",
     });
   }
 
