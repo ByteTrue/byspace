@@ -138,6 +138,20 @@ export class MulticaStore {
         actorId: input.creatorId,
         action: "created",
       });
+      this.addSubscriber({
+        issueId: id,
+        userType: input.creatorType === "agent" ? "agent" : "owner",
+        userId: input.creatorId,
+        reason: "creator",
+      });
+      if (input.assigneeType && input.assigneeId) {
+        this.addSubscriber({
+          issueId: id,
+          userType: input.assigneeType === "agent" ? "agent" : "owner",
+          userId: input.assigneeId,
+          reason: "assignee",
+        });
+      }
       this.#db.exec("COMMIT");
     } catch (error) {
       this.#db.exec("ROLLBACK");
@@ -267,6 +281,17 @@ export class MulticaStore {
       type: input.actorType ?? "owner",
       id: input.actorId ?? null,
     });
+    if (
+      after.assigneeId !== null &&
+      (after.assigneeId !== before.assigneeId || after.assigneeType !== before.assigneeType)
+    ) {
+      this.addSubscriber({
+        issueId: after.id,
+        userType: after.assigneeType === "agent" ? "agent" : "owner",
+        userId: after.assigneeId,
+        reason: "assignee",
+      });
+    }
     return this.getIssue(input.id);
   }
 
@@ -436,6 +461,10 @@ export class MulticaStore {
     readonly type?: string;
     readonly parentId?: string | null;
     readonly sourceTaskId?: string | null;
+    /** Names mentioned in the body; each becomes a `mentioned` subscriber. */
+    readonly mentions?: readonly string[];
+    /** id→name, so a mentioned name resolves to the agent it names. */
+    readonly agentIdByName?: ReadonlyMap<string, string>;
   }): CommentRow {
     const id = randomUUID();
     this.#db.exec("BEGIN IMMEDIATE");
@@ -477,6 +506,23 @@ export class MulticaStore {
         taskId: input.sourceTaskId ?? null,
         payload: { comment_id: id, author_type: input.authorType },
       });
+      this.addSubscriber({
+        issueId: input.issueId,
+        userType: input.authorType === "agent" ? "agent" : "owner",
+        userId: input.authorId,
+        reason: "commenter",
+      });
+      for (const name of input.mentions ?? []) {
+        const mentionedId = input.agentIdByName?.get(name);
+        if (mentionedId) {
+          this.addSubscriber({
+            issueId: input.issueId,
+            userType: "agent",
+            userId: mentionedId,
+            reason: "mentioned",
+          });
+        }
+      }
       this.#db.exec("COMMIT");
     } catch (error) {
       this.#db.exec("ROLLBACK");
@@ -717,6 +763,17 @@ export class MulticaStore {
     return this.getTask(id);
   }
 
+  /** A parent's children, in board order — the sub-issues read face. */
+  listChildIssues(parentIssueId: string): IssueRow[] {
+    const rows = this.#db
+      .prepare(
+        `SELECT ${ISSUE_SELECT} FROM issue WHERE parent_issue_id = ?
+         ORDER BY position ASC, created_at DESC, number DESC`,
+      )
+      .all(parentIssueId) as Record<string, unknown>[];
+    return rows.map((row) => mapIssueRow(row as never));
+  }
+
   /** One agent's recent queue history, newest first — the detail page's feed. */
   listTasksForAgent(agentId: string, limit = 20): TaskRow[] {
     const rows = this.#db
@@ -850,6 +907,68 @@ export class MulticaStore {
       )
       .all(issueId) as Record<string, unknown>[];
     return rows.map((row) => mapActivityRow(row));
+  }
+
+  /**
+   * One subscription row. An implicit trigger on a soft-unsubscribed row
+   * revives it (the source's AddIssueSubscriber clears the stamp); a manual
+   * subscribe of an already-active row rewrites the same reason.
+   */
+  addSubscriber(input: {
+    readonly issueId: string;
+    readonly userType: "owner" | "agent";
+    readonly userId: string;
+    readonly reason:
+      | "creator"
+      | "assignee"
+      | "commenter"
+      | "mentioned"
+      | "manual"
+      | "autopilot"
+      | "delegated";
+  }): void {
+    this.#db
+      .prepare(
+        `INSERT INTO issue_subscriber (issue_id, user_type, user_id, reason, unsubscribed_at)
+         VALUES (?, ?, ?, ?, NULL)
+         ON CONFLICT (issue_id, user_type, user_id) DO UPDATE SET
+           unsubscribed_at = NULL, reason = excluded.reason`,
+      )
+      .run(input.issueId, input.userType, input.userId, input.reason);
+  }
+
+  /** Soft unsubscribe: the row keeps its history, the stamp hides it. */
+  unsubscribe(input: {
+    readonly issueId: string;
+    readonly userType: "owner" | "agent";
+    readonly userId: string;
+  }): void {
+    this.#db
+      .prepare(
+        `UPDATE issue_subscriber
+         SET unsubscribed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE issue_id = ? AND user_type = ? AND user_id = ?`,
+      )
+      .run(input.issueId, input.userType, input.userId);
+  }
+
+  listActiveSubscribers(issueId: string): Array<{
+    userType: "owner" | "agent";
+    userId: string;
+    reason: string;
+  }> {
+    const rows = this.#db
+      .prepare(
+        `SELECT user_type, user_id, reason FROM issue_subscriber
+         WHERE issue_id = ? AND unsubscribed_at IS NULL
+         ORDER BY created_at ASC`,
+      )
+      .all(issueId) as Array<{ user_type: string; user_id: string; reason: string }>;
+    return rows.map((row) => ({
+      userType: row.user_type as "owner" | "agent",
+      userId: row.user_id,
+      reason: row.reason,
+    }));
   }
 
   // ── autopilot ────────────────────────────────────────────────────────

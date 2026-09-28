@@ -251,3 +251,81 @@ describe("position independent of status", () => {
     expect(moved.assigneeId).toBe(agent.id);
   });
 });
+
+describe("subscribers", () => {
+  it("implicit reasons land on their writes, one row per person", () => {
+    // Distinct people per reason: a person triggered twice keeps one row
+    // with the newest reason (the row key is (issue, person), as the
+    // source's).
+    const assignee = store.createAgent({ name: "Assignee" });
+    const commenter = store.createAgent({ name: "Commenter" });
+    const mentioned = store.createAgent({ name: "Mentioned" });
+    const issue = store.createIssue({ title: "A", creatorType: "owner", creatorId: "owner" });
+    store.updateIssue({
+      id: issue.id,
+      expectedRevision: issue.revision,
+      assigneeType: "agent",
+      assigneeId: assignee.id,
+    });
+    store.createComment({
+      issueId: issue.id,
+      authorType: "agent",
+      authorId: commenter.id,
+      content: "note @Mentioned",
+      mentions: ["Mentioned"],
+      agentIdByName: new Map([["Mentioned", mentioned.id]]),
+    });
+    const reasons = store
+      .listActiveSubscribers(issue.id)
+      .map((entry) => entry.reason)
+      .sort();
+    expect(reasons).toEqual(["assignee", "commenter", "creator", "mentioned"]);
+  });
+
+  it("a person triggered twice keeps one row with the newest reason", () => {
+    const issue = store.createIssue({ title: "A", creatorType: "owner", creatorId: "owner" });
+    store.createComment({
+      issueId: issue.id,
+      authorType: "owner",
+      authorId: "owner",
+      content: "me again",
+    });
+    const subs = store.listActiveSubscribers(issue.id);
+    expect(subs).toHaveLength(1);
+    expect(subs[0].reason).toBe("commenter");
+  });
+
+  it("soft unsubscribe keeps the row and a later comment revives it", () => {
+    const issue = store.createIssue({ title: "A", creatorType: "owner", creatorId: "owner" });
+    store.unsubscribe({ issueId: issue.id, userType: "owner", userId: "owner" });
+    expect(store.listActiveSubscribers(issue.id)).toHaveLength(0);
+    store.createComment({
+      issueId: issue.id,
+      authorType: "owner",
+      authorId: "owner",
+      content: "back again",
+    });
+    const subs = store.listActiveSubscribers(issue.id);
+    expect(subs).toHaveLength(1);
+    expect(subs[0].reason).toBe("commenter");
+  });
+
+  it("the sub-issues read face returns a parent's children in board order", () => {
+    const parent = store.createIssue({ title: "P", creatorType: "owner", creatorId: "owner" });
+    const childA = store.createIssue({
+      title: "childA",
+      creatorType: "owner",
+      creatorId: "owner",
+      parentIssueId: parent.id,
+    });
+    const childB = store.createIssue({
+      title: "childB",
+      creatorType: "owner",
+      creatorId: "owner",
+      parentIssueId: parent.id,
+    });
+    const children = store.listChildIssues(parent.id).map((entry) => entry.id);
+    expect(children).toEqual([childB.id, childA.id]); // newest on top
+    expect(store.listChildIssues(childA.id)).toHaveLength(0);
+  });
+});

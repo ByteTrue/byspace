@@ -118,6 +118,7 @@ export const MulticaIssueCreateRequestSchema = z.object({
   assigneeType: z.string().optional(),
   assigneeId: z.string().optional(),
   projectId: z.string().optional(),
+  parentIssueId: z.string().optional(),
 });
 
 export const MulticaIssueCreateResponseSchema = z.object({
@@ -139,6 +140,8 @@ export const MulticaIssueGetResponseSchema = z.object({
   payload: z.object({
     requestId: z.string(),
     issue: MulticaIssueSummarySchema,
+    /** The parent's children — the sub-issues read face. */
+    children: z.array(MulticaIssueSummarySchema),
   }),
 });
 
@@ -300,6 +303,41 @@ export const MulticaSquadRemoveMemberRequestSchema = z.object({
 export const MulticaSquadRemoveMemberResponseSchema = z.object({
   type: z.literal("multica.squad.remove_member.response"),
   payload: z.object({ requestId: z.string(), squad: MulticaSquadDetailSchema }),
+});
+
+export const MulticaSubscriberSummarySchema = z.object({
+  userType: z.string(),
+  userId: z.string(),
+  reason: z.string(),
+});
+
+export const MulticaSubscriberListRequestSchema = z.object({
+  type: z.literal("multica.subscriber.list.request"),
+  requestId: z.string(),
+  issueId: z.string().min(1),
+});
+export const MulticaSubscriberListResponseSchema = z.object({
+  type: z.literal("multica.subscriber.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    subscribers: z.array(MulticaSubscriberSummarySchema),
+  }),
+});
+
+export const MulticaSubscriberSetRequestSchema = z.object({
+  type: z.literal("multica.subscriber.set.request"),
+  requestId: z.string(),
+  issueId: z.string().min(1),
+  subscribed: z.boolean(),
+  /** The subscribing session; absent means the owner. */
+  senderSessionId: z.string().optional(),
+});
+export const MulticaSubscriberSetResponseSchema = z.object({
+  type: z.literal("multica.subscriber.set.response"),
+  payload: z.object({
+    requestId: z.string(),
+    subscribers: z.array(MulticaSubscriberSummarySchema),
+  }),
 });
 
 export const MulticaTimelineEntrySchema = z.object({

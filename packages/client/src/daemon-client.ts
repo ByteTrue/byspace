@@ -583,6 +583,14 @@ type MulticaAutopilotTriggerPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.autopilot.trigger.response" }
 >["payload"];
+type MulticaSubscriberListPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.subscriber.list.response" }
+>["payload"];
+type MulticaSubscriberSetPayload = Extract<
+  SessionOutboundMessage,
+  { type: "multica.subscriber.set.response" }
+>["payload"];
 type MulticaTimelineListPayload = Extract<
   SessionOutboundMessage,
   { type: "multica.timeline.list.response" }
@@ -5589,6 +5597,7 @@ export class DaemonClient {
     assigneeType?: string;
     assigneeId?: string;
     projectId?: string;
+    parentIssueId?: string;
   }): Promise<MulticaIssueCreatePayload> {
     return this.sendCorrelatedSessionRequest({
       message: {
@@ -5600,6 +5609,7 @@ export class DaemonClient {
         assigneeType: options.assigneeType,
         assigneeId: options.assigneeId,
         projectId: options.projectId,
+        parentIssueId: options.parentIssueId,
       },
       responseType: "multica.issue.create.response",
     });
@@ -5873,6 +5883,24 @@ export class DaemonClient {
     return this.sendCorrelatedSessionRequest({
       message: { type: "multica.agent.status.request", id, status },
       responseType: "multica.agent.status.response",
+    });
+  }
+
+  async multicaSubscriberList(issueId: string): Promise<MulticaSubscriberListPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.subscriber.list.request", issueId },
+      responseType: "multica.subscriber.list.response",
+    });
+  }
+
+  async multicaSubscriberSet(options: {
+    issueId: string;
+    subscribed: boolean;
+    senderSessionId?: string;
+  }): Promise<MulticaSubscriberSetPayload> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.subscriber.set.request", ...options },
+      responseType: "multica.subscriber.set.response",
     });
   }
 

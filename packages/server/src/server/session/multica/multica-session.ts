@@ -270,7 +270,9 @@ type ReadMessage = Extract<
       | "multica.status.list.request"
       | "multica.task.running.list.request"
       | "multica.task.list.request"
-      | "multica.timeline.list.request";
+      | "multica.timeline.list.request"
+      | "multica.subscriber.list.request"
+      | "multica.subscriber.set.request";
   }
 >;
 
@@ -327,7 +329,9 @@ function isReadMessage(msg: MulticaInboundSubset): msg is ReadMessage {
     msg.type === "multica.status.list.request" ||
     msg.type === "multica.task.running.list.request" ||
     msg.type === "multica.task.list.request" ||
-    msg.type === "multica.timeline.list.request"
+    msg.type === "multica.timeline.list.request" ||
+    msg.type === "multica.subscriber.list.request" ||
+    msg.type === "multica.subscriber.set.request"
   );
 }
 
@@ -471,6 +475,8 @@ export class MulticaSession {
       projectId: msg.projectId,
       creatorType: "owner",
       creatorId: "owner",
+
+      parentIssueId: msg.parentIssueId,
     });
     this.#enqueueForIssueWrite(issue, {
       isCreate: true,
@@ -518,7 +524,11 @@ export class MulticaSession {
     const issue = this.#store.getIssue(msg.issueId);
     this.#emit({
       type: "multica.issue.get.response",
-      payload: { requestId: msg.requestId, issue: issueSummary(issue) },
+      payload: {
+        requestId: msg.requestId,
+        issue: issueSummary(issue),
+        children: this.#store.listChildIssues(issue.id).map(issueSummary),
+      },
     });
   }
 
@@ -631,6 +641,10 @@ export class MulticaSession {
       authorType: author.type,
       authorId: author.id,
       content: msg.content,
+      mentions: parseMentions(msg.content),
+      agentIdByName: new Map(
+        this.#store.listAgents({ includeSystem: true }).map((agent) => [agent.name, agent.id]),
+      ),
       parentId: msg.parentId,
     });
     // The comment trigger: explicit mentions wake who they name; a human
@@ -987,6 +1001,10 @@ export class MulticaSession {
         return this.#handleTaskList(msg);
       case "multica.timeline.list.request":
         return this.#handleTimelineList(msg);
+      case "multica.subscriber.list.request":
+        return this.#handleSubscriberList(msg);
+      case "multica.subscriber.set.request":
+        return this.#handleSubscriberSet(msg);
       default:
         msg satisfies never;
     }
@@ -1075,6 +1093,43 @@ export class MulticaSession {
   }
 
   /** The roster reads plus the conversation's read surface. */
+  #handleSubscriberList(
+    msg: Extract<SessionInboundMessage, { type: "multica.subscriber.list.request" }>,
+  ): void {
+    this.#emit({
+      type: "multica.subscriber.list.response",
+      payload: {
+        requestId: msg.requestId,
+        subscribers: this.#store.listActiveSubscribers(msg.issueId),
+      },
+    });
+  }
+
+  #handleSubscriberSet(
+    msg: Extract<SessionInboundMessage, { type: "multica.subscriber.set.request" }>,
+  ): void {
+    const author = this.#resolveCommentAuthor(msg.senderSessionId);
+    const userType = author.type === "agent" ? "agent" : "owner";
+    const userId = author.type === "owner" ? "owner" : author.id;
+    if (msg.subscribed) {
+      this.#store.addSubscriber({
+        issueId: msg.issueId,
+        userType,
+        userId,
+        reason: "manual",
+      });
+    } else {
+      this.#store.unsubscribe({ issueId: msg.issueId, userType, userId });
+    }
+    this.#emit({
+      type: "multica.subscriber.set.response",
+      payload: {
+        requestId: msg.requestId,
+        subscribers: this.#store.listActiveSubscribers(msg.issueId),
+      },
+    });
+  }
+
   #handleRosterMessage(msg: RosterOrConversationMessage): void {
     switch (msg.type) {
       case "multica.agent.get.request":

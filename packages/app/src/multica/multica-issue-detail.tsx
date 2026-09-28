@@ -1,7 +1,7 @@
 import { type ReactElement, type ReactNode, useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -32,8 +32,12 @@ import type {
  */
 interface IssueDetailData {
   issue: MulticaIssueSummary | null;
+  children: readonly MulticaIssueSummary[];
   entries: readonly MulticaTimelineEntry[];
   tasks: readonly MulticaTaskSummary[];
+  subscribers: readonly { userType: string; userId: string; reason: string }[];
+  subscribed: boolean;
+  toggleSubscription: () => void;
   truncated: boolean;
   agentNameById: ReadonlyMap<string, string>;
   statuses: readonly MulticaStatusSummary[];
@@ -55,6 +59,7 @@ function useIssueQueries(
   issue: MulticaIssueSummary | null;
   entries: readonly MulticaTimelineEntry[];
   tasks: readonly MulticaTaskSummary[];
+  children: readonly MulticaIssueSummary[];
   truncated: boolean;
   loading: boolean;
   refreshTimeline: () => Promise<unknown>;
@@ -105,6 +110,7 @@ function useIssueQueries(
   const refreshIssue = useCallback(() => issueQuery.refetch(), [issueQuery]);
   return {
     issue: issueQuery.data?.issue ?? null,
+    children: issueQuery.data?.children ?? [],
     entries,
     tasks,
     truncated: timelineQuery.data?.truncated ?? false,
@@ -114,13 +120,55 @@ function useIssueQueries(
   };
 }
 
+/** The subscription face: who is on the list, and whether the owner is. */
+function useSubscribers(
+  serverId: string,
+  issueId: string,
+): {
+  subscribers: readonly { userType: string; userId: string; reason: string }[];
+  subscribed: boolean;
+  toggleSubscription: () => void;
+} {
+  const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
+  const client = runtimeSnapshot?.client ?? null;
+  const online = runtimeSnapshot?.connectionStatus === "online";
+  const subscribersQuery = useFetchQuery({
+    queryKey: ["multicaSubscribers", serverId, issueId, runtimeSnapshot?.clientGeneration ?? 0],
+    queryFn: async () => {
+      if (!client) throw new Error("Target host client is unavailable");
+      return client.multicaSubscriberList(issueId);
+    },
+    enabled: online && issueId !== "",
+    retry: false,
+    dataShape: "value",
+    staleTimeMs: 5_000,
+  });
+  const subscribers = useMemo(
+    () => subscribersQuery.data?.subscribers ?? [],
+    [subscribersQuery.data],
+  );
+  const subscribed = useMemo(
+    () => subscribers.some((entry) => entry.userType === "owner" && entry.userId === "owner"),
+    [subscribers],
+  );
+  const toggleSubscription = useCallback(() => {
+    if (!client) return;
+    void client
+      .multicaSubscriberSet({ issueId, subscribed: !subscribed })
+      .then(() => subscribersQuery.refetch());
+  }, [client, issueId, subscribed, subscribersQuery]);
+  return { subscribers, subscribed, toggleSubscription };
+}
+
 function useIssueDetailData(serverId: string, issueId: string): IssueDetailData {
   const router = useRouter();
   const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
   const client = runtimeSnapshot?.client ?? null;
 
   const queries = useIssueQueries(serverId, issueId);
-  const { issue, entries, tasks, truncated } = queries;
+  const subscription = useSubscribers(serverId, issueId);
+  const { issue, children, entries, tasks, truncated } = queries;
+  const { subscribers, subscribed, toggleSubscription } = subscription;
 
   const catalog = useMulticaCatalog(serverId);
 
@@ -168,8 +216,12 @@ function useIssueDetailData(serverId: string, issueId: string): IssueDetailData 
 
   return {
     issue,
+    children,
     entries,
     tasks,
+    subscribers,
+    subscribed,
+    toggleSubscription,
     truncated,
     agentNameById: catalog.agentNameById,
     statuses: catalog.statuses,
@@ -429,11 +481,33 @@ function IssuePropertiesPane({ data }: { data: IssueDetailData }): ReactElement 
           )}
         </PropertyRow>
       </Section>
+      <Section title="Sub-issues">
+        {data.children.map((child) => (
+          <SubIssueRow key={child.id} child={child} />
+        ))}
+        {data.children.length === 0 ? <Text style={styles.propertyValue}>None.</Text> : null}
+      </Section>
       <Section title="Execution log">
         {data.tasks.map((task) => (
           <ExecutionRow key={task.id} task={task} agentNameById={data.agentNameById} />
         ))}
         {data.tasks.length === 0 ? <Text style={styles.propertyValue}>No runs.</Text> : null}
+      </Section>
+      <Section title="Subscribers">
+        <Pressable
+          style={styles.subscribeButton}
+          onPress={data.toggleSubscription}
+          testID="multica-subscribe-toggle"
+        >
+          <Text style={styles.propertyValue}>{data.subscribed ? "Unsubscribe" : "Subscribe"}</Text>
+        </Pressable>
+        {data.subscribers.map((subscriber) => (
+          <SubscriberRow
+            key={`${subscriber.userType}:${subscriber.userId}`}
+            subscriber={subscriber}
+            agentNameById={data.agentNameById}
+          />
+        ))}
       </Section>
       <Section title="Details">
         <PropertyRow label="Number">
@@ -449,6 +523,41 @@ function IssuePropertiesPane({ data }: { data: IssueDetailData }): ReactElement 
         </PropertyRow>
       </Section>
     </View>
+  );
+}
+
+function SubIssueRow({ child }: { child: MulticaIssueSummary }): ReactElement {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ serverId: string }>();
+  const serverId = typeof params.serverId === "string" ? params.serverId : "";
+  const handlePress = useCallback(() => {
+    router.push(`/multica/issue?serverId=${serverId}&issueId=${child.id}`);
+  }, [router, serverId, child.id]);
+  return (
+    <Pressable style={styles.executionRow} onPress={handlePress} testID={`multica-sub-${child.id}`}>
+      <View style={[styles.executionDot, { backgroundColor: statusColor(child.status) }]} />
+      <Text style={styles.propertyValue} numberOfLines={1}>
+        {child.title} #{child.number ?? "-"}
+      </Text>
+    </Pressable>
+  );
+}
+
+function SubscriberRow({
+  subscriber,
+  agentNameById,
+}: {
+  subscriber: { userType: string; userId: string; reason: string };
+  agentNameById: ReadonlyMap<string, string>;
+}): ReactElement {
+  const name =
+    subscriber.userType === "owner"
+      ? "you"
+      : (agentNameById.get(subscriber.userId) ?? subscriber.userId.slice(0, 8));
+  return (
+    <Text style={styles.propertyValue}>
+      {name} · {subscriber.reason}
+    </Text>
   );
 }
 
@@ -613,6 +722,15 @@ const styles = StyleSheet.create((theme) => ({
   },
   activityDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#9ca3af" },
   activityText: { flex: 1, color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  subscribeButton: {
+    alignSelf: "flex-start",
+    paddingVertical: 2,
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    marginBottom: theme.spacing[1],
+  },
   executionRow: {
     flexDirection: "row",
     alignItems: "center",
