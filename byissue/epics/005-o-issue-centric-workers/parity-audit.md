@@ -16,13 +16,13 @@ multica（`~/workspace/refs/multica` @ `04cdd48`，一手读码）与本工程 `
 
 ## B. 触发引擎（"谁该被叫醒"）
 
-| 规则                                                          | 源                 | 我们                                                     | 状态           |
-| ------------------------------------------------------------- | ------------------ | -------------------------------------------------------- | -------------- |
-| 单一判定谓词（backlog 停车场 / squad→leader / pending 去重）  | 分散但语义固定     | `WillEnqueueRun` 单一函数                                | ✅             |
-| 评论 mention 触发（markup 语法；显式赢 @all；作者不隐式路由） | 有                 | markup+裸名别名（issue 020）；composer 菜单欠账          | ⚠️             |
-| assign/status 变更触发（离开 backlog 才唤醒）                 | 有                 | `#enqueueForIssueWrite`，create/update/status 三入口共用 | ✅             |
-| 评论作者身份解析（run 的评论归 agent）                        | run token          | 见 D1 —— **RPC/CLI 评论硬编码 owner**                    | ⚠️ 抄歪，见 F2 |
-| 全角标点后的 mention（中文高频形态）                          | 源无此问题（英文） | 修过（边界=非名字字符）                                  | ✅ 超出源      |
+| 规则                                                          | 源                 | 我们                                                                                              | 状态           |
+| ------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------- | -------------- |
+| 单一判定谓词（backlog 停车场 / squad→leader / pending 去重）  | 分散但语义固定     | `WillEnqueueRun` 单一函数                                                                         | ✅             |
+| 评论 mention 触发（markup 语法；显式赢 @all；作者不隐式路由） | 有                 | markup+裸名别名（020）+CLI --mention+composer @ 菜单（023，尾触发 v1）；光标中间触发/键盘导航欠账 | ⚠️             |
+| assign/status 变更触发（离开 backlog 才唤醒）                 | 有                 | `#enqueueForIssueWrite`，create/update/status 三入口共用                                          | ✅             |
+| 评论作者身份解析（run 的评论归 agent）                        | run token          | 见 D1 —— **RPC/CLI 评论硬编码 owner**                                                             | ⚠️ 抄歪，见 F2 |
+| 全角标点后的 mention（中文高频形态）                          | 源无此问题（英文） | 修过（边界=非名字字符）                                                                           | ✅ 超出源      |
 
 ## C. 执行器（run）
 
