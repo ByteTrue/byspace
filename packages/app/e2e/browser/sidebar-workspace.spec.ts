@@ -347,6 +347,34 @@ test.describe("Workspace menu visibility", () => {
       await expect(page).toHaveURL(/\/sessions(?:$|\?)/, { timeout: 30_000 });
       await expectMobileAgentSidebarHidden(page);
     });
+
+    test("starts folded again the next time the panel opens", async ({ page }) => {
+      await gotoAppShell(page);
+      await openMobileAgentSidebar(page);
+      await expectMobileAgentSidebarVisible(page);
+
+      const trigger = page.getByTestId("sidebar-nav-menu-trigger");
+      await trigger.click();
+      await expect(page.getByTestId("sidebar-sessions")).toHaveCount(1);
+
+      // Close with the ✕, which navigates nowhere. The panel is retained rather than unmounted,
+      // so without an explicit reset the disclosure state would outlive it and the rows would
+      // still be covering the workspace list on the next open — the thing folding them prevents.
+      await closeMobileAgentSidebar(page);
+      await expectMobileAgentSidebarHidden(page);
+
+      await openMobileAgentSidebar(page);
+      await expectMobileAgentSidebarVisible(page);
+      await expect(trigger).toHaveAttribute("aria-expanded", "false");
+      for (const testID of [
+        "sidebar-global-new-workspace",
+        "sidebar-sessions",
+        "sidebar-search",
+        "sidebar-schedules",
+      ]) {
+        await expect(page.getByTestId(testID)).toHaveCount(0);
+      }
+    });
   });
 
   test.describe("wide Web", () => {
@@ -516,7 +544,8 @@ test.describe("Half-screen desktop layout", () => {
 
     // An inline disclosure, not a floating surface: the destinations are sidebar rows, and
     // they appear *below* the button, pushing the workspace list down rather than covering it.
-    await expect(page.getByTestId("sidebar-nav-menu")).toHaveCount(0);
+    // A floating menu would portal them outside the sidebar; assert they are inside it.
+    await expect(pinnedSidebar(page).getByTestId("sidebar-global-new-workspace")).toHaveCount(1);
     for (const testID of [
       "sidebar-global-new-workspace",
       "sidebar-sessions",

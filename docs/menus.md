@@ -183,9 +183,11 @@ to sit beside.
 
 Use an inline disclosure instead: a `Pressable` row that toggles state and renders the rows
 below itself, in the flow. `SidebarNavMenuTrigger` in
-`packages/app/src/components/sidebar/sidebar-nav-menu.tsx` is the example — it is a
-`SidebarHeaderRow` with a `ChevronRight`/`ChevronDown` icon, and the revealed entries are the
-same row component both sidebars render.
+`packages/app/src/components/sidebar/sidebar-nav-menu.tsx` is the example — a title-bar-shaped
+button whose label is centred and whose disclosure chevron is pinned to its right edge. The
+revealed entries are the same row component both sidebars render. It is deliberately _not_ a
+`SidebarHeaderRow`: see the third bullet below for why sharing the row with another control rules
+out a leading chevron.
 
 The trigger's leading edge has to be deliberate once it shares its line with another control — a
 window control, a collapse toggle. That neighbour's gap decides where a leading chevron lands, so

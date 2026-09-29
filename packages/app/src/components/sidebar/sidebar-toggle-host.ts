@@ -17,8 +17,3 @@ export interface SidebarToggleHostInput {
 export function resolveSidebarToggleHost(input: SidebarToggleHostInput): SidebarToggleHost {
   return input.isCompact || !input.desktopSidebarVisible ? "content" : "sidebar";
 }
-
-/** The pinned sidebar's copy renders only when it owns the toggle. */
-export function sidebarHostRendersToggle(input: SidebarToggleHostInput): boolean {
-  return resolveSidebarToggleHost(input) === "sidebar";
-}

@@ -49,3 +49,18 @@ closed: 2026-09-29
 - 右侧两个 host 的按钮纵向差 0.5px：内容标题栏的行是 36px 含 1px 下边框（内容盒 35px），dock 标签栏 36px 无边框（内容盒 36px），居中的结果天然差半像素。这是两条栏历史上就有的差异，不是本次引入，未为它加透明边框 hack。（左侧两 host 已按盒模型对齐：行高取 `HEADER_INNER_HEIGHT - borderWidth`，与 `ScreenHeader` 同为 35px 内容盒。）
 - `docs/design.md` 里 `DESKTOP_TRAFFIC_LIGHT_WIDTH/HEIGHT` 常量仍零引用（025 退役遗留），未在本次清理。
 - `packages/app/src/components/desktop-sidebar-layout.ts` 的 `resolveDesktopAppChromeLayout`（返回 `sidebarToggleOwner: "window" | "content"`）只剩单测引用，生产侧零调用——它正是本次手写 owner 的 Electron 时代前身。建议随 025/047 残遗一并删除。
+
+## Review 轮（开 PR 后）
+
+**CI 抓到两处我自己的回归**，都是「用 accessible name 点导航行」，而我本地只 grep 了 testID：
+
+- `e2e/browser/schedules-project-target.spec.ts` — `getByRole("button", { name: "Schedules" })`（shard 6 红）
+- `e2e/support/helpers/workspace-setup.ts` — `leaveWorkspaceViaHistory` 里的 `{ name: "History", exact: true }`（shard 8 红）
+
+两处都改走 `clickTopLevelNavItem`。教训：把默认可见的行折叠起来时，要同时 grep **可访问名**，光找 testID 会漏。
+
+**CR 抓到一个真实功能缺陷**（已在浏览器复现）：compact 面板是 retained（`RetainedPanelActivity` + `RetainedPanel` 以 `display:none` 保活），所以 `useSidebarNavDisclosure` 的状态活过面板关闭；展开一次后，下次打开面板四行仍是展开的，直接推翻本需求的目的。修法：在 `MobileSidebar` 里用面板自身的 `active` 标志（`active = visible && isMobileActive`）在关闭时调 `collapse()`，覆盖 ✕ / backdrop / 手势 / 导航全部关闭路径（比只在 `onBeforeNavigate` 里收更全）。已加回归测试。CR 同时给出「helper 断言用了一个从无组件设置过的 testID，恒真」——已改为断言行位于 `left-sidebar` 内部。
+
+**同轮修掉的自身遗留**（Ponytail review + CR，均先核实零引用）：`sidebarHostRendersToggle` 死导出、`SIDEBAR_NAV_MENU_TRIGGER_TEST_ID` 无用导出、`SidebarNavEntry.key` 与 `id` 重复、`useSidebarNavDisclosure` 的 `initialExpanded` 无人传、BySpace 触发器为取 `length===0` 把四个快捷键订阅都拉起来、`handleToggle` 空包、`hostState` memo + 冗余三元、三行 early return；文档与注释同步：`docs/menus.md` 把 `SidebarNavMenuTrigger` 误写为 `SidebarHeaderRow`、`sidebar-nav-rows.tsx` 的「Compact only」、`sidebar-chrome.ts` helper 里「compact 直接渲染」的陈述。另补 compact 关闭按钮在「四个导航项全隐藏」时补 `marginLeft: auto`（否则会漂到左侧）。
+
+**未修、留作后续**（都不是本 PR 引入）：`desktop-sidebar-layout.ts` 的 `resolveDesktopAppChromeLayout` 仅剩单测引用、`docs/design.md` 的 `DESKTOP_TRAFFIC_LIGHT_*` 零引用（025/047 残遗）；右侧两 host 的按钮纵向 0.5px 历史差异；dock 谓词在 `SplitContainer` 与新 resolver 各写一遍（当前一致，是漂移风险）；`command-center-scroll.ts` 里 import 写在函数之后（风格）。

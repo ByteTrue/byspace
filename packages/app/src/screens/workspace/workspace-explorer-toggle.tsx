@@ -52,9 +52,7 @@ export function resolveIsExplorerDockRendered({
   isFocusModeEnabled: boolean;
   isExplorerSidebarShowing: boolean;
 }): boolean {
-  if (isFocusModeEnabled) return false;
-  if (!canRenderDesktopPaneSplits) return false;
-  return isExplorerSidebarShowing;
+  return !isFocusModeEnabled && canRenderDesktopPaneSplits && isExplorerSidebarShowing;
 }
 
 export function WorkspaceExplorerToggle({

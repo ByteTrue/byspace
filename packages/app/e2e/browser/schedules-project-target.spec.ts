@@ -12,6 +12,7 @@ import { escapeRegex } from "../support/helpers/regex";
 import { expectNoTruncation } from "../support/helpers/no-truncation";
 import { expectSettled, expectStableHeight } from "../support/helpers/settled";
 import { waitForSidebarHydration } from "../support/helpers/workspace-ui";
+import { clickTopLevelNavItem } from "../support/helpers/sidebar-chrome";
 import { buildSchedulesRoute } from "../../src/utils/host-routes";
 
 const MOBILE_SHEET_VIEWPORT = { width: 390, height: 844 };
@@ -186,7 +187,7 @@ test.describe("Schedules project target", () => {
     await gotoAppShell(page);
     await waitForSidebarHydration(page);
 
-    await page.getByRole("button", { name: "Schedules" }).click();
+    await clickTopLevelNavItem(page, "sidebar-schedules");
     await expect(page).toHaveURL(/\/schedules$/);
     await expect(page).not.toHaveURL(/\/h\//);
     await expect(page.getByTestId("schedules-empty")).toBeVisible();

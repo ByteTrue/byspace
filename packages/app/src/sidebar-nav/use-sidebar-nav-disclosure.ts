@@ -13,13 +13,8 @@ export interface SidebarNavDisclosure {
   collapse: () => void;
 }
 
-/**
- * `initialExpanded` exists for the shells' different first impressions: the pinned desktop
- * sidebar has room to introduce the destinations, while a compact overlay is opened *for* one of
- * them, so it starts collapsed and keeps the panel short.
- */
-export function useSidebarNavDisclosure(initialExpanded = false): SidebarNavDisclosure {
-  const [expanded, setExpanded] = useState(initialExpanded);
+export function useSidebarNavDisclosure(): SidebarNavDisclosure {
+  const [expanded, setExpanded] = useState(false);
 
   const toggle = useCallback(() => setExpanded((current) => !current), []);
   const collapse = useCallback(() => setExpanded(false), []);

@@ -1,17 +1,22 @@
-import { useCallback, useMemo, type ReactElement } from "react";
+import { useMemo, type ReactElement } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { isWeb } from "@/constants/platform";
 import { ICON_SIZE } from "@/styles/theme";
-import { useSidebarNavEntries } from "@/sidebar-nav/use-sidebar-nav-entries";
+import { useSidebarNavItems } from "@/sidebar-nav/use-sidebar-nav-items";
 import type { Theme } from "@/styles/theme";
 
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 
-export const SIDEBAR_NAV_MENU_TRIGGER_TEST_ID = "sidebar-nav-menu-trigger";
+const TRIGGER_TEST_ID = "sidebar-nav-menu-trigger";
+
+/** Hoisted: it closes over nothing, so it must not be recreated per render. */
+function triggerButtonStyle({ hovered }: PressableStateCallbackType & { hovered?: boolean }) {
+  return [styles.button, Boolean(hovered) && styles.buttonHovered];
+}
 
 interface SidebarNavMenuTriggerProps {
   expanded: boolean;
@@ -34,12 +39,13 @@ export function SidebarNavMenuTrigger({
   onToggle,
 }: SidebarNavMenuTriggerProps): ReactElement | null {
   const { t } = useTranslation();
-  const entries = useSidebarNavEntries();
+  // Only the count matters here, so read the preference rather than resolving every entry —
+  // that would subscribe to four shortcuts and look up the active workspace on every render.
+  const items = useSidebarNavItems().items;
   const ThemedChevron = useMemo(
     () => withUnistyles(expanded ? ChevronDown : ChevronRight),
     [expanded],
   );
-  const handleToggle = useCallback(() => onToggle(), [onToggle]);
   const label = t("sidebar.appMenu.label");
   const accessibilityState = useMemo(() => ({ expanded }), [expanded]);
 
@@ -49,26 +55,18 @@ export function SidebarNavMenuTrigger({
     ? ({ "aria-expanded": expanded } as Record<string, boolean>)
     : null;
 
-  const buttonStyle = useCallback(
-    ({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
-      styles.button,
-      Boolean(hovered) && styles.buttonHovered,
-    ],
-    [],
-  );
-
-  if (entries.length === 0) return null;
+  if (!items.some((item) => item.visible)) return null;
 
   return (
     <Pressable
-      onPress={handleToggle}
-      testID={SIDEBAR_NAV_MENU_TRIGGER_TEST_ID}
+      onPress={onToggle}
+      testID={TRIGGER_TEST_ID}
       accessible
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={accessibilityState}
       {...ariaExpandedProps}
-      style={buttonStyle}
+      style={triggerButtonStyle}
     >
       {({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => (
         <>

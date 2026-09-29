@@ -543,6 +543,19 @@ function MobileSidebar({
   const { gesture: closeGesture, gestureRef: closeGestureRef } = useCloseAgentListGesture();
   const navDisclosure = useSidebarNavDisclosure();
 
+  /**
+   * Collapses the disclosure whenever the panel is closed.
+   *
+   * `MobileSidebar` is retained — `RetainedPanelActivity` keeps it mounted behind `display: none` —
+   * so this state outlives the panel. Resetting on the panel's own `active` flag covers every close
+   * path (the ✕, the backdrop, the close gesture, navigating away), and without it the rows would
+   * still be revealed the next time the panel opens, which is what folding them prevents.
+   */
+  const collapseNavDisclosure = navDisclosure.collapse;
+  useEffect(() => {
+    if (!active) collapseNavDisclosure();
+  }, [active, collapseNavDisclosure]);
+
   const handleWorkspacePress = useCallback(() => {
     closeSidebar();
   }, [closeSidebar]);
@@ -984,6 +997,10 @@ const styles = StyleSheet.create((theme) => ({
   mobileCloseButton: {
     // The 16px X paints farther inside its 32px hit target than the 14px Settings2 glyph.
     // This optical inset puts their painted right edges on the same sidebar rail.
+    //
+    // `marginLeft: "auto"` keeps it there when the BySpace button is absent (every nav entry
+    // hidden), which would otherwise leave this the only child of a left-aligned row.
+    marginLeft: "auto",
     marginRight: 1.5,
     width: 32,
     height: 32,

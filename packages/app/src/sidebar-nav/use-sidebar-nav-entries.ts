@@ -23,7 +23,6 @@ import type { ShortcutKey } from "@/utils/format-shortcut";
 
 export interface SidebarNavEntry {
   id: BuiltinSidebarNavId;
-  key: string;
   icon: LucideIcon;
   label: string;
   shortcutKeys: ShortcutKey[][] | null;
@@ -111,7 +110,6 @@ export function useSidebarNavEntries(): SidebarNavEntry[] {
     () => ({
       "new-workspace": {
         id: "new-workspace",
-        key: "new-workspace",
         icon: SIDEBAR_NAV_ICONS["new-workspace"],
         label: t(builtinSidebarNavLabelKey("new-workspace")),
         shortcutKeys: newWorkspaceShortcut,
@@ -120,7 +118,6 @@ export function useSidebarNavEntries(): SidebarNavEntry[] {
       },
       history: {
         id: "history",
-        key: "history",
         icon: SIDEBAR_NAV_ICONS.history,
         label: t(builtinSidebarNavLabelKey("history")),
         shortcutKeys: historyShortcut,
@@ -129,7 +126,6 @@ export function useSidebarNavEntries(): SidebarNavEntry[] {
       },
       search: {
         id: "search",
-        key: "search",
         icon: SIDEBAR_NAV_ICONS.search,
         label: t(builtinSidebarNavLabelKey("search")),
         shortcutKeys: searchShortcut,
@@ -139,7 +135,6 @@ export function useSidebarNavEntries(): SidebarNavEntry[] {
       },
       schedules: {
         id: "schedules",
-        key: "schedules",
         icon: SIDEBAR_NAV_ICONS.schedules,
         label: t(builtinSidebarNavLabelKey("schedules")),
         shortcutKeys: schedulesShortcut,

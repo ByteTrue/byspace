@@ -29,11 +29,11 @@ async function isVisible(locator: Locator): Promise<boolean> {
 }
 
 /**
- * Reveals the top-level destinations behind the desktop BySpace button.
+ * Reveals the top-level destinations behind the BySpace button.
  *
- * A no-op in two cases: the compact sidebar renders the destinations directly and has no
- * trigger, and an all-hidden preference set hides the trigger along with the entries, so
- * there is nothing to reveal.
+ * A no-op when the button is absent: with every entry hidden, both shells render neither the
+ * button nor the rows, so there is nothing to reveal. Compact is *not* a no-op — it folds the
+ * same entries behind the same trigger, so this clicks that one too.
  *
  * Waits for the shell toggle first: the sidebar, and with it the trigger, mounts after the
  * first paint, so a caller that measured immediately would read an absent disclosure rather

@@ -135,14 +135,9 @@ export function SidebarMenuToggle({
   const resolvedStyle = useMemo(() => [styles.leadingToggle, style], [style]);
   // One source for both hosts: the pinned sidebar shows it while it is visible, a content
   // header only while it is not, so `menu-button` exists exactly once in every state.
-  const hostState = useMemo(
-    () => ({ isCompact: isMobile, desktopSidebarVisible }),
-    [isMobile, desktopSidebarVisible],
-  );
-  const rendersHere =
-    resolveSidebarToggleHost(hostState) === (host === "sidebar" ? "sidebar" : "content");
+  const owner = resolveSidebarToggleHost({ isCompact: isMobile, desktopSidebarVisible });
 
-  if (!rendersHere) return null;
+  if (owner !== host) return null;
 
   return <SidebarMenuToggleButton {...props} isMobile={isMobile} resolvedStyle={resolvedStyle} />;
 }

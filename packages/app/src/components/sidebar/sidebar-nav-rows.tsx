@@ -18,8 +18,8 @@ interface SidebarNavRowsProps {
  * `sidebarNavItems` preference. Renders nothing — not even the bordered group wrapper —
  * when every item is hidden.
  *
- * Compact only. The pinned desktop sidebar folds the same entries into its BySpace menu
- * (`sidebar-nav-menu.tsx`); both read `useSidebarNavEntries` so the two cannot drift.
+ * Both sidebars render these, from the same `useSidebarNavEntries` source: the compact shell
+ * inside its BySpace disclosure, the pinned shell inside the one in its top row.
  */
 export function SidebarNavRows({ style, onBeforeNavigate }: SidebarNavRowsProps) {
   const entries = useSidebarNavEntries();
@@ -29,7 +29,7 @@ export function SidebarNavRows({ style, onBeforeNavigate }: SidebarNavRowsProps)
   return (
     <View style={style}>
       {entries.map((entry) => (
-        <SidebarNavRow key={entry.key} entry={entry} onBeforeNavigate={onBeforeNavigate} />
+        <SidebarNavRow key={entry.id} entry={entry} onBeforeNavigate={onBeforeNavigate} />
       ))}
     </View>
   );
