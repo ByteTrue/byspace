@@ -126,6 +126,7 @@ function agentDetail(agent: AgentRow): MulticaAgentDetail {
     description: agent.description,
     instructions: agent.instructions,
     model: agent.model,
+    customEnv: agent.customEnv === null ? null : String(agent.customEnv),
     permissionMode: agent.permissionMode,
     maxConcurrentTasks: agent.maxConcurrentTasks,
     thinkingLevel: agent.thinkingLevel,
@@ -1699,6 +1700,8 @@ export class MulticaSession {
       ...(msg.maxConcurrentTasks !== undefined
         ? { maxConcurrentTasks: msg.maxConcurrentTasks }
         : {}),
+      ...(msg.model !== undefined ? { model: msg.model } : {}),
+      ...(msg.customEnv !== undefined ? { customEnv: msg.customEnv } : {}),
     });
     this.#emit({
       type: "multica.agent.update.response",

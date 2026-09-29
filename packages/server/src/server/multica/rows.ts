@@ -137,7 +137,7 @@ export interface AgentRow {
   readonly instructions: string;
   readonly archivedAt: string | null;
   readonly archivedBy: string | null;
-  readonly customEnv: string;
+  readonly customEnv: string | null;
   readonly customArgs: string;
   readonly mcpConfig: string | null;
   readonly model: string | null;
@@ -198,7 +198,7 @@ export function mapAgentRow(raw: RawAgentRow): AgentRow {
     instructions: text(raw.instructions),
     archivedAt: textOrNull(raw.archived_at),
     archivedBy: textOrNull(raw.archived_by),
-    customEnv: text(raw.custom_env),
+    customEnv: textOrNull(raw.custom_env),
     customArgs: text(raw.custom_args),
     mcpConfig: textOrNull(raw.mcp_config),
     model: textOrNull(raw.model),

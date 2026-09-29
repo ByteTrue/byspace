@@ -453,7 +453,13 @@ export class MulticaStore {
    */
   updateAgent(
     id: string,
-    fields: { name?: string; description?: string; maxConcurrentTasks?: number },
+    fields: {
+      name?: string;
+      description?: string;
+      maxConcurrentTasks?: number;
+      model?: string | null;
+      customEnv?: Record<string, string> | null;
+    },
   ): AgentRow {
     const current = this.getAgent(id);
     const description = fields.description ?? current.description ?? "";
@@ -464,13 +470,31 @@ export class MulticaStore {
     if (name.trim() === "") {
       throw new Error("an agent needs a name");
     }
+    // The chosen model rides the run's session config; the custom env is
+    // stored as the JSON text the executor parses, NULL when empty.
+    const model = fields.model !== undefined ? fields.model : current.model;
+    let customEnv = current.customEnv;
+    if (fields.customEnv !== undefined) {
+      customEnv =
+        fields.customEnv === null || Object.keys(fields.customEnv).length === 0
+          ? null
+          : JSON.stringify(fields.customEnv);
+    }
     const result = this.#db
       .prepare(
         `UPDATE agent SET name = ?, description = ?, max_concurrent_tasks = ?,
+           model = ?, custom_env = ?,
            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
          WHERE id = ?`,
       )
-      .run(name, description, fields.maxConcurrentTasks ?? current.maxConcurrentTasks, id);
+      .run(
+        name,
+        description,
+        fields.maxConcurrentTasks ?? current.maxConcurrentTasks,
+        model,
+        customEnv,
+        id,
+      );
     if (Number(result.changes) === 0) {
       throw new Error(`agent not found: ${id}`);
     }
@@ -1967,19 +1991,21 @@ export class MulticaStore {
     this.#db
       .prepare(
         `UPDATE issue_wakeup_receipt
-         SET processed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), task_id = ?
+         SET processed_at = ?, task_id = ?
          WHERE wakeup_id = ? AND processed_at IS NULL`,
       )
-      .run(task.id, wakeup.id);
+      .run(now.toISOString(), task.id, wakeup.id);
     // Stale receipts from an older revision are settled without dispatch:
-    // an edit to the subscription discards queued work it predates.
+    // an edit to the subscription discards queued work it predates. Both
+    // stamps use the injected now — the receipt's clock is the same
+    // decision clock the rest of the dispatch uses, never the wall.
     this.#db
       .prepare(
         `UPDATE issue_wakeup_receipt
-         SET processed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         SET processed_at = ?
          WHERE wakeup_id = ? AND revision <> ? AND processed_at IS NULL`,
       )
-      .run(wakeup.id, wakeup.revision);
+      .run(now.toISOString(), wakeup.id, wakeup.revision);
     if (wakeup.mode === "once" || wakeup.kind === "at") {
       this.disableWakeup(wakeup.id);
     } else if (wakeup.kind === "every" || wakeup.kind === "cron") {

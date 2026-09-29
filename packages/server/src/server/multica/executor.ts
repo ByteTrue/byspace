@@ -43,6 +43,36 @@ export interface MulticaExecutorOptions {
   logger: pino.Logger;
 }
 
+/**
+ * The agent's custom environment for a run: the JSON column parsed here
+ * rather than at the read boundary so a broken stored value fails this run
+ * loudly (and gets logged) instead of poisoning every read of the row.
+ */
+export function agentEnvForRun(raw: string | null): Record<string, string> | undefined {
+  if (raw === null || raw.trim() === "" || raw === "null") {
+    return undefined;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`agent custom_env is not valid JSON: ${String(error)}`, {
+      cause: error,
+    });
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("agent custom_env is not a JSON object");
+  }
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value !== "string") {
+      throw new Error(`agent custom_env value for ${key} is not a string`);
+    }
+    env[key] = value;
+  }
+  return env;
+}
+
 export class MulticaExecutor {
   readonly #store: MulticaStore;
   readonly #agentManager: AgentManager;
@@ -137,12 +167,17 @@ export class MulticaExecutor {
       this.#store.updateTaskStatus({ id: task.id, status: "running" });
       let created;
       try {
+        // The agent's execution facts ride the session: its chosen model and
+        // its custom environment, exactly the columns the source's daemon
+        // layers into the child process. Env rows are JSON objects; a broken
+        // one fails the run rather than silently running without it.
         created = await this.#createAgent({
           kind: "mcp",
           provider: "pi",
-          config: {},
+          config: agent.model ? { model: agent.model } : {},
           cwd: workspace.cwd,
           workspaceId: workspace.workspaceId,
+          env: agentEnvForRun(agent.customEnv),
           title: `${issue.title} — ${agent.name}`,
           labels: { "multica.task-id": task.id, "multica.issue-id": issue.id },
           unattended: true,
@@ -262,9 +297,10 @@ export class MulticaExecutor {
     const created = await this.#createAgent({
       kind: "mcp",
       provider: "pi",
-      config: {},
+      config: agent.model ? { model: agent.model } : {},
       cwd: workspace.cwd,
       workspaceId: workspace.workspaceId,
+      env: agentEnvForRun(agent.customEnv),
       title: `${autopilot.title} — ${agent.name}`,
       labels: { "multica.task-id": task.id, "multica.autopilot-run-id": run.id },
       unattended: true,

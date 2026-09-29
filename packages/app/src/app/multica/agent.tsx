@@ -119,13 +119,26 @@ function AgentProfileEditor({
   onChanged,
 }: {
   serverId: string;
-  agent: { id: string; name: string; description: string; maxConcurrentTasks: number };
+  agent: {
+    id: string;
+    name: string;
+    description: string;
+    maxConcurrentTasks: number;
+    model: string | null;
+    customEnv: string | null;
+  };
   onChanged: () => void;
 }): ReactElement {
   const runtimeSnapshot = useHostRuntimeSnapshot(serverId);
   const client = runtimeSnapshot?.client ?? null;
   const update = useCallback(
-    (fields: { name?: string; description?: string; maxConcurrentTasks?: number }) => {
+    (fields: {
+      name?: string;
+      description?: string;
+      maxConcurrentTasks?: number;
+      model?: string | null;
+      customEnv?: Record<string, string> | null;
+    }) => {
       if (!client) return;
       void client
         .multicaAgentUpdate({ id: agent.id, ...fields })
@@ -135,6 +148,35 @@ function AgentProfileEditor({
     [client, agent.id, onChanged],
   );
   const commitName = useCallback((name: string) => update({ name }), [update]);
+  const commitModel = useCallback(
+    (model: string) => update({ model: model === "" ? null : model }),
+    [update],
+  );
+  const commitEnv = useCallback(
+    (draft: string) => {
+      if (draft.trim() === "") {
+        update({ customEnv: null });
+        return;
+      }
+      try {
+        const parsed: unknown = JSON.parse(draft);
+        if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+          return;
+        }
+        const env: Record<string, string> = {};
+        for (const [key, value] of Object.entries(parsed)) {
+          if (typeof value !== "string") {
+            return;
+          }
+          env[key] = value;
+        }
+        update({ customEnv: env });
+      } catch {
+        // A broken JSON draft is not committed; the field keeps its text.
+      }
+    },
+    [update],
+  );
   const commitDescription = useCallback((description: string) => update({ description }), [update]);
   const bumpConcurrency = useCallback(() => {
     update({ maxConcurrentTasks: agent.maxConcurrentTasks + 1 });
@@ -159,6 +201,20 @@ function AgentProfileEditor({
         multiline
         onCommit={commitDescription}
         testID="multica-agent-description-edit"
+      />
+      <InlineEditField
+        value={agent.model ?? ""}
+        placeholder="default model"
+        multiline={false}
+        onCommit={commitModel}
+        testID="multica-agent-model-edit"
+      />
+      <InlineEditField
+        value={agent.customEnv ?? "{}"}
+        placeholder='Custom env as JSON, e.g. {"TZ": "UTC"}'
+        multiline
+        onCommit={commitEnv}
+        testID="multica-agent-env-edit"
       />
       <View style={styles.concurrencyRow}>
         <Text style={styles.concurrencyLabel}>Concurrency</Text>

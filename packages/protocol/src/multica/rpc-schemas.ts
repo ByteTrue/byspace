@@ -399,6 +399,8 @@ export const MulticaAgentDetailSchema = z.object({
   description: z.string(),
   instructions: z.string(),
   model: z.string().nullable(),
+  /** Env rows as stored JSON text; the executor parses it for each run. */
+  customEnv: z.string().nullable(),
   permissionMode: z.string(),
   maxConcurrentTasks: z.number(),
   thinkingLevel: z.string().nullable(),
@@ -439,6 +441,10 @@ export const MulticaAgentUpdateRequestSchema = z.object({
   name: z.string().optional(),
   description: z.string().optional(),
   maxConcurrentTasks: z.number().int().optional(),
+  /** The model override the run's session carries. */
+  model: z.string().nullable().optional(),
+  /** Extra env rows for the run, validated as an object on the wire. */
+  customEnv: z.record(z.string(), z.string()).nullable().optional(),
 });
 export const MulticaAgentUpdateResponseSchema = z.object({
   type: z.literal("multica.agent.update.response"),
