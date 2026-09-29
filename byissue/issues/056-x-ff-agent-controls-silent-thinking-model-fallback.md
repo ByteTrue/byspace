@@ -6,6 +6,9 @@ created: 2026-09-28
 closed: 2026-09-28
 ---
 
+> [!warning] 真相修正（2026-09-29）
+> 本文「会话本体从未被改」的结论在 09-29 晨复发时**失效一次**：当次会话本体确实被 pi 扩展 pi-advisor-flow 篡改（resume 时 alwaysOn 接管为 executor 模型）。本 issue 修复的显示层回退链仍然成立且必要，但它是第二写入源之外的第一层。完整机制与排查路径见 `byissue/notes/004-pi-advisor-flow-silent-model-takeover.md`。
+
 # 切回会话时模型/思考档位被静默回退渲染
 
 ## 做了什么
