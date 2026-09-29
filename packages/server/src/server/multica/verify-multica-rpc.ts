@@ -157,9 +157,15 @@ async function main(): Promise<void> {
           `${created.agent.kind}/${created.agent.permissionMode}`,
         );
         const list = await client.multicaAgentList();
+        // The roster carries the built-in seed now, so membership is the
+        // assertion — an exact count would freeze the catalog in the wire.
         check(
           "agent list sees it",
-          list.agents.length === 1 && list.agents[0].name === "Frontend Dev",
+          list.agents.some((agent) => agent.name === "Frontend Dev" && agent.kind === "user"),
+        );
+        check(
+          "the built-in roster seeds at boot",
+          list.agents.some((agent) => agent.systemKey === "frontend-developer"),
         );
 
         // issue
