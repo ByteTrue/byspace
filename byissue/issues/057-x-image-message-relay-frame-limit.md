@@ -77,6 +77,19 @@ closed: 2026-09-29
 - 汇总：`npx vitest run`（四文件）63/63；`npm run typecheck` 0 错误；`npm run lint` 0 警告；`npm run format` 完成。
 - 端到端验证留待浏览器：同一连接下发多张压缩后仍超 16 MiB 的图，确认 daemon 收到 uploaded_file 附件且 agent 能读盘。
 
+## 评审后追加（同一 PR，commit dd6006431）
+
+CR 与过度工程评审（PR #9 合并前，subagent 执行）判定可合并，无 blocker，并指出两点：
+
+- 第四条 `createAgent` 路径 `workspace-setup-dialog.tsx` `handleCreateChatAgent` 未接预算。该对话框当前无生产调用方（6362d429c 移除了最后调用者），属休眠陷阱而非活回归；已接入 `enforceImageWireBudget`，避免复活时静默重现帧超限。至此四条发送路径全部接入。
+- `budgetBytes?` 参数仅测试注入（实际用例未使用）——已删，预算改为常量。
+
+顺带采纳的过度工程清理（无行为变化）：`base64ToBytes` 一行化、`defaultImageFileName` 查表化、`encodeAttachmentForSend` 三处重复回退块提取为单一 `original()`。净减 4 行。
+
+验证：image-wire-budget / service / actions 三测试文件 58/58 通过；根级与 app workspace 级 typecheck、lint、format 全绿。
+
+未做：`session-context.tsx` 九个 `_` 前缀 dead handler（含 `_createAgent`，本 PR 的预算接线在其中是惰性的）——全部是 main 既有死代码，属独立清理事项，不混入本 PR。
+
 ## 关闭候选
 
 - 压缩参数（1 MiB 阈值 / 2048px / q0.85）进 spec 或 notes。
