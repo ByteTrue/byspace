@@ -64,3 +64,7 @@ closed: 2026-09-29
 **同轮修掉的自身遗留**（Ponytail review + CR，均先核实零引用）：`sidebarHostRendersToggle` 死导出、`SIDEBAR_NAV_MENU_TRIGGER_TEST_ID` 无用导出、`SidebarNavEntry.key` 与 `id` 重复、`useSidebarNavDisclosure` 的 `initialExpanded` 无人传、BySpace 触发器为取 `length===0` 把四个快捷键订阅都拉起来、`handleToggle` 空包、`hostState` memo + 冗余三元、三行 early return；文档与注释同步：`docs/menus.md` 把 `SidebarNavMenuTrigger` 误写为 `SidebarHeaderRow`、`sidebar-nav-rows.tsx` 的「Compact only」、`sidebar-chrome.ts` helper 里「compact 直接渲染」的陈述。另补 compact 关闭按钮在「四个导航项全隐藏」时补 `marginLeft: auto`（否则会漂到左侧）。
 
 **未修、留作后续**（都不是本 PR 引入）：`desktop-sidebar-layout.ts` 的 `resolveDesktopAppChromeLayout` 仅剩单测引用、`docs/design.md` 的 `DESKTOP_TRAFFIC_LIGHT_*` 零引用（025/047 残遗）；右侧两 host 的按钮纵向 0.5px 历史差异；dock 谓词在 `SplitContainer` 与新 resolver 各写一遍（当前一致，是漂移风险）；`command-center-scroll.ts` 里 import 写在函数之后（风格）。
+
+**追加**：修 compact 泄漏时发现**桌面侧同样中招**——`DesktopSidebar` 也是 retained（`desktopSidebarMounted` 由 `useLatchedBoolean` 锁存，收起时只是 `display:none`），所以收起再展开侧栏，BySpace 仍是展开的。与其在两个 shell 各写一份重置，把这条不变式收进 hook 本身：`useSidebarNavDisclosure(panelActive)`，面板不在时自动收起。这样「揭示区只活在面板可见期间」只写一遍，两个 shell 首次印象一致（收起）。
+
+桌面侧已加回归测试「starts folded again after the pinned sidebar is collapsed and reopened」。**该测试做过变异验证**：临时删掉 hook 里的重置后它确实失败（`aria-expanded` 停在 `true`），恢复后通过——不是恒真断言。

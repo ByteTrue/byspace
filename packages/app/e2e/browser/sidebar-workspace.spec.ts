@@ -604,6 +604,30 @@ test.describe("Half-screen desktop layout", () => {
     await expect(page.getByTestId("sidebar-sessions")).toHaveCount(0);
   });
 
+  test("starts folded again after the pinned sidebar is collapsed and reopened", async ({
+    page,
+  }) => {
+    await gotoAppShell(page);
+    await expect(pinnedSidebar(page)).toBeVisible();
+
+    await page.getByTestId("sidebar-nav-menu-trigger").click();
+    await expect(page.getByTestId("sidebar-sessions")).toHaveCount(1);
+
+    // The sidebar is retained behind `display: none` rather than unmounted, so the disclosure
+    // state would survive collapsing it. Without the reset the rows would still be covering the
+    // workspace list on the next open.
+    await page.getByTestId("menu-button").click();
+    await expect(pinnedSidebar(page)).toHaveCount(0);
+
+    await page.getByTestId("menu-button").click();
+    await expect(pinnedSidebar(page)).toBeVisible();
+    await expect(page.getByTestId("sidebar-nav-menu-trigger")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    await expect(page.getByTestId("sidebar-sessions")).toHaveCount(0);
+  });
+
   test("yields app navigation to the settings split", async ({ page }) => {
     await gotoAppShell(page);
     await page.getByTestId("sidebar-settings").click();

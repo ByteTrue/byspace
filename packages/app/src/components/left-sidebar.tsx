@@ -541,20 +541,7 @@ function MobileSidebar({
 }: MobileSidebarProps) {
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const { gesture: closeGesture, gestureRef: closeGestureRef } = useCloseAgentListGesture();
-  const navDisclosure = useSidebarNavDisclosure();
-
-  /**
-   * Collapses the disclosure whenever the panel is closed.
-   *
-   * `MobileSidebar` is retained — `RetainedPanelActivity` keeps it mounted behind `display: none` —
-   * so this state outlives the panel. Resetting on the panel's own `active` flag covers every close
-   * path (the ✕, the backdrop, the close gesture, navigating away), and without it the rows would
-   * still be revealed the next time the panel opens, which is what folding them prevents.
-   */
-  const collapseNavDisclosure = navDisclosure.collapse;
-  useEffect(() => {
-    if (!active) collapseNavDisclosure();
-  }, [active, collapseNavDisclosure]);
+  const navDisclosure = useSidebarNavDisclosure(active);
 
   const handleWorkspacePress = useCallback(() => {
     closeSidebar();
@@ -744,7 +731,7 @@ function DesktopSidebar({
     () => [styles.desktopSidebarBorder, { flex: 1, paddingTop: insetsTop }],
     [insetsTop],
   );
-  const navDisclosure = useSidebarNavDisclosure();
+  const navDisclosure = useSidebarNavDisclosure(active);
   return (
     <Animated.View
       accessibilityElementsHidden={!active}
