@@ -96,3 +96,5 @@ multica（`~/workspace/refs/multica` @ `04cdd48`，一手读码）与本工程 `
 ## 未做但源有（不是歪，是欠）
 
 autopilot 的 webhook/replace/UI、task_supplement（defer，理由见 issue 010）、重试的延后与理由码抬高顶、泳道行轴与 project 轴、Token 面板、子树退订、issue_reaction/附件（存储基础设施 defer）、agents 的配置 tabs/skills/runtimes/my-issues 页。全部有表无行为或有 RPC 无 UI —— 切片④⑤⑥之后的增量面。
+
+**lease 回收（源 prepare_lease_expires_at/lease 列）**：daemon 重启后 running/dispatched 的 task 变孤儿，无回收路径。2026-09-29 真发一次：role 探针 run 被我重启 daemon 抛孤，手工结算为 failed 并在 failure_reason 写明真因。源用 lease 过期扫描重领或判死；我们欠这个扫描 —— 重启 dev daemon 是常态操作，这条欠账的利息比表里其余项高。
