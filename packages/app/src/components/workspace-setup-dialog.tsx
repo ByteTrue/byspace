@@ -22,6 +22,7 @@ import { useWorkspaceSetupStore } from "@/stores/workspace-setup-store";
 import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import { applyLegacyDaemonWorkspaceOwnership } from "@/workspace/legacy-daemon-workspaces";
 import { encodeImages } from "@/utils/encode-images";
+import { enforceImageWireBudget } from "@/composer/attachments/image-wire-budget";
 import { toErrorMessage } from "@/utils/error-messages";
 import {
   resolveComposerAttachmentSubmitFormat,
@@ -321,7 +322,13 @@ export function WorkspaceSetupDialog() {
             supportsForgeAttachments: supportsForgeSearch,
           }),
         });
-        const encodedImages = await encodeImages(wirePayload.images);
+        const budgeted = await enforceImageWireBudget({
+          client: connectedClient,
+          text,
+          images: (await encodeImages(wirePayload.images)) ?? [],
+          attachments: wirePayload.attachments,
+          fileNames: wirePayload.images.map((metadata) => metadata.fileName),
+        });
         const workspaceDirectory = requireWorkspaceDirectory({
           workspaceId: ensuredWorkspace.id,
           workspaceDirectory: ensuredWorkspace.workspaceDirectory,
@@ -330,8 +337,8 @@ export function WorkspaceSetupDialog() {
           buildCreateAgentOptions({
             composerState,
             text,
-            attachments: wirePayload.attachments,
-            encodedImages: encodedImages ?? null,
+            attachments: budgeted.attachments,
+            encodedImages: budgeted.images.length > 0 ? budgeted.images : null,
             workspaceDirectory,
             workspaceId: ensuredWorkspace.id,
             provider: composerState.selectedProvider,

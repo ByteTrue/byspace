@@ -30,25 +30,17 @@ function utf8ByteLength(value: string): number {
 }
 
 function base64ToBytes(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return bytes;
+  return Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
 }
 
+const IMAGE_FILE_EXTENSIONS: Record<string, string> = {
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+
 function defaultImageFileName(mimeType: string): string {
-  if (mimeType === "image/png") {
-    return "image.png";
-  }
-  if (mimeType === "image/webp") {
-    return "image.webp";
-  }
-  if (mimeType === "image/gif") {
-    return "image.gif";
-  }
-  return "image.jpg";
+  return `image.${IMAGE_FILE_EXTENSIONS[mimeType] ?? "jpg"}`;
 }
 
 /**
@@ -60,9 +52,8 @@ export function selectInlineImages(input: {
   images: InlineImagePayload[];
   textByteLength: number;
   attachmentsByteLength: number;
-  budgetBytes?: number;
 }): { inlineIndexes: number[]; overflowIndexes: number[] } {
-  const budget = input.budgetBytes ?? IMAGE_INLINE_WIRE_BUDGET_BYTES;
+  const budget = IMAGE_INLINE_WIRE_BUDGET_BYTES;
   const usable =
     budget - NON_IMAGE_WIRE_ALLOWANCE_BYTES - input.textByteLength - input.attachmentsByteLength;
 

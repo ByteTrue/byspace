@@ -133,21 +133,22 @@ async function encodeAttachmentForSend(
   store: Awaited<ReturnType<typeof getAttachmentStore>>,
   attachment: AttachmentMetadata,
 ): Promise<{ data: string; mimeType: string }> {
+  // Compression is an optimization; every path falls back to the original
+  // bytes so a failure here never blocks the send.
+  const original = async () => ({
+    data: await store.encodeBase64({ attachment }),
+    mimeType: attachment.mimeType,
+  });
+
   if (!store.loadBlob || !shouldCompressImage(attachment.mimeType, attachment.byteSize)) {
-    return {
-      data: await store.encodeBase64({ attachment }),
-      mimeType: attachment.mimeType,
-    };
+    return await original();
   }
 
   try {
     const blob = await store.loadBlob({ attachment });
     const compressed = await compressImageBlob({ blob, mimeType: attachment.mimeType });
     if (!compressed) {
-      return {
-        data: await store.encodeBase64({ attachment }),
-        mimeType: attachment.mimeType,
-      };
+      return await original();
     }
     return {
       data: await blobToBase64(compressed.blob),
@@ -158,10 +159,7 @@ async function encodeAttachmentForSend(
       id: attachment.id,
       error,
     });
-    return {
-      data: await store.encodeBase64({ attachment }),
-      mimeType: attachment.mimeType,
-    };
+    return await original();
   }
 }
 
