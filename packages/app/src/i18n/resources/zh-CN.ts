@@ -997,6 +997,9 @@ export const zhCN: TranslationResources = {
     },
   },
   sidebar: {
+    appMenu: {
+      label: "BySpace",
+    },
     sortProjects: {
       label: "整理项目顺序",
     },

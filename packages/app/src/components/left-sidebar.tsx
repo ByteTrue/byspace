@@ -31,6 +31,9 @@ import {
 import { HostPicker } from "@/components/hosts/host-picker";
 import { SidebarDisplayPreferencesMenu } from "@/components/sidebar/display-preferences/menu";
 import { SidebarNavRows } from "@/components/sidebar/sidebar-nav-rows";
+import { SidebarNavMenuTrigger } from "@/components/sidebar/sidebar-nav-menu";
+import { useSidebarNavDisclosure } from "@/sidebar-nav/use-sidebar-nav-disclosure";
+import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { SidebarHelpMenu } from "@/components/sidebar/sidebar-help-menu";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
 import { Shortcut } from "@/components/ui/shortcut";
@@ -538,6 +541,7 @@ function MobileSidebar({
 }: MobileSidebarProps) {
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const { gesture: closeGesture, gestureRef: closeGestureRef } = useCloseAgentListGesture();
+  const navDisclosure = useSidebarNavDisclosure();
 
   const handleWorkspacePress = useCallback(() => {
     closeSidebar();
@@ -559,25 +563,35 @@ function MobileSidebar({
       panelStyle={mobileSidebarInsetStyle}
     >
       <View style={styles.sidebarContent} pointerEvents="auto">
-        <SidebarNavRows style={styles.sidebarHeaderGroup} onBeforeNavigate={closeSidebar} />
-        <View style={styles.mobileCloseButtonRow}>
-          <Pressable
-            style={styles.mobileCloseButton}
-            onPress={closeSidebar}
-            testID="sidebar-close"
-            nativeID="sidebar-close"
-            accessible
-            accessibilityRole="button"
-            accessibilityLabel={labels.closeSidebar}
-            hitSlop={8}
-          >
-            {({ hovered, pressed }) => (
-              <X
-                size={theme.iconSize.md}
-                color={hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted}
-              />
-            )}
-          </Pressable>
+        <View style={styles.compactHeaderArea}>
+          <View style={styles.compactTopRow}>
+            <SidebarNavMenuTrigger
+              expanded={navDisclosure.expanded}
+              onToggle={navDisclosure.toggle}
+            />
+            <Pressable
+              style={styles.mobileCloseButton}
+              onPress={closeSidebar}
+              testID="sidebar-close"
+              nativeID="sidebar-close"
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel={labels.closeSidebar}
+              hitSlop={8}
+            >
+              {({ hovered, pressed }) => (
+                <X
+                  size={theme.iconSize.md}
+                  color={
+                    hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted
+                  }
+                />
+              )}
+            </Pressable>
+          </View>
+          {navDisclosure.expanded ? (
+            <SidebarNavRows style={styles.compactNavRows} onBeforeNavigate={closeSidebar} />
+          ) : null}
         </View>
 
         {isInitialLoad && !hasActiveHostFilter ? (
@@ -717,21 +731,24 @@ function DesktopSidebar({
     () => [styles.desktopSidebarBorder, { flex: 1, paddingTop: insetsTop }],
     [insetsTop],
   );
-  const sidebarHeaderGroupStyle = useMemo(
-    () => [styles.sidebarHeaderGroup, DEV_BUILD_LABEL && styles.sidebarHeaderGroupBelowChrome],
-    [],
-  );
+  const navDisclosure = useSidebarNavDisclosure();
   return (
     <Animated.View
       accessibilityElementsHidden={!active}
       importantForAccessibility={active ? "auto" : "no-hide-descendants"}
       pointerEvents={active ? "auto" : "none"}
+      testID="left-sidebar"
       style={desktopSidebarStyle}
     >
       <View style={desktopSidebarBorderStyle}>
-        <View style={styles.sidebarDragArea}>
-          {DEV_BUILD_LABEL ? (
-            <View style={styles.desktopChromeRow}>
+        <View style={styles.sidebarHeaderArea}>
+          <View style={styles.sidebarTopRow}>
+            <SidebarMenuToggle host="sidebar" tooltipSide="bottom" />
+            <SidebarNavMenuTrigger
+              expanded={navDisclosure.expanded}
+              onToggle={navDisclosure.toggle}
+            />
+            {DEV_BUILD_LABEL ? (
               <View
                 pointerEvents="none"
                 style={styles.devBuildBadge}
@@ -743,9 +760,11 @@ function DesktopSidebar({
                   {DEV_BUILD_LABEL}
                 </Text>
               </View>
-            </View>
+            ) : null}
+          </View>
+          {navDisclosure.expanded ? (
+            <SidebarNavRows onBeforeNavigate={navDisclosure.collapse} />
           ) : null}
-          <SidebarNavRows style={sidebarHeaderGroupStyle} />
         </View>
 
         {isInitialLoad && !hasActiveHostFilter ? (
@@ -895,16 +914,6 @@ const staticStyles = RNStyleSheet.create({
 });
 
 const styles = StyleSheet.create((theme) => ({
-  sidebarHeaderGroup: {
-    paddingTop: theme.spacing[2],
-    gap: 2,
-    paddingBottom: theme.spacing[2],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  sidebarHeaderGroupBelowChrome: {
-    paddingTop: 0,
-  },
   workspacesSectionHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -945,19 +954,37 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minHeight: 0,
   },
-  mobileCloseButtonRow: {
-    position: "absolute",
-    top: theme.spacing[3],
-    left: 0,
-    right: 0,
-    zIndex: 2,
-    alignItems: "flex-end",
-    pointerEvents: "box-none",
+  /**
+   * The compact sidebar's header: the BySpace button beside the close button, then whatever the
+   * button has revealed.
+   *
+   * The same shape as the pinned sidebar's corner row, with the close button where the collapse
+   * toggle sits. No horizontal padding here, so the revealed rows keep the inset they already
+   * own — adding one would step them a further `spacing[2]` inward and off the button's own rail.
+   *
+   * The rows no longer show on their own — that is the point of the button — but the close button
+   * is not part of that disclosure, so it always stays put.
+   */
+  compactHeaderArea: {
+    paddingTop: theme.spacing[2],
+    paddingBottom: theme.spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  compactTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+  },
+  compactNavRows: {
+    gap: 2,
+    paddingTop: theme.spacing[1],
   },
   mobileCloseButton: {
     // The 16px X paints farther inside its 32px hit target than the 14px Settings2 glyph.
     // This optical inset puts their painted right edges on the same sidebar rail.
-    marginRight: theme.spacing[2] + 1.5,
+    marginRight: 1.5,
     width: 32,
     height: 32,
     alignItems: "center",
@@ -970,21 +997,42 @@ const styles = StyleSheet.create((theme) => ({
     borderRightColor: theme.colors.border,
     backgroundColor: theme.colors.surfaceSidebar,
   },
-  sidebarDragArea: {
-    position: "relative",
+  /**
+   * The pinned sidebar's header area: the corner row (toggle + app menu), then whatever the
+   * app menu has revealed. The bottom hairline belongs to the whole area rather than to the top
+   * row, so the app menu and its entries read as one group.
+   *
+   * No horizontal padding of its own — each child owns its inset. That is what lets the corner
+   * row and the revealed rows put their left edges on the same `spacing[2]` rail.
+   */
+  sidebarHeaderArea: {
+    paddingBottom: theme.spacing[2],
+    borderBottomWidth: theme.borderWidth[1],
+    borderBottomColor: theme.colors.border,
   },
-  desktopChromeRow: {
-    position: "relative",
-    height: HEADER_INNER_HEIGHT,
+  /**
+   * The corner row: the collapse toggle and the app menu side by side.
+   *
+   * `spacing[3]` padding matches a content header's row, so the shared `leadingToggle` pull-back
+   * leaves the toggle on the same pixel in both hosts — and that pixel is the sidebar's row rail,
+   * where every row below starts.
+   *
+   * The box model also mirrors `ScreenHeader`: the row plus the header area's hairline adds up to
+   * `HEADER_INNER_HEIGHT`, leaving the same 35px content box a content header centers in, so the
+   * two hairlines stay on one line whether or not the pinned sidebar is showing.
+   */
+  sidebarTopRow: {
+    height: HEADER_INNER_HEIGHT - theme.borderWidth[1],
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
+    gap: theme.spacing[1],
     paddingHorizontal: theme.spacing[3],
-    borderBottomWidth: theme.borderWidth[1],
-    borderBottomColor: "transparent",
   },
   devBuildBadge: {
-    maxWidth: "60%",
+    marginLeft: "auto",
+    maxWidth: "45%",
+    flexShrink: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],

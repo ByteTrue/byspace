@@ -134,6 +134,7 @@ import {
 } from "@/screens/workspace/workspace-tab-menu";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
 import {
+  resolveIsExplorerDockRendered,
   resolveWorkspaceExplorerToggleOwner,
   WorkspaceExplorerToggle,
   WorkspaceExplorerSidebarToggle,
@@ -1518,9 +1519,7 @@ function WorkspaceScreenContent({
   const _insets = useSafeAreaInsets();
   const toast = useToast();
   const isMobile = useIsCompactFormFactor();
-  const explorerToggleOwner = resolveWorkspaceExplorerToggleOwner({
-    isMobile,
-  });
+  const canRenderDesktopPaneSplits = supportsDesktopPaneSplits();
   const isFocusModeEnabled = usePanelStore((state) => state.desktop.focusModeEnabled);
   const toggleFocusMode = usePanelStore((state) => state.toggleFocusMode);
 
@@ -1759,6 +1758,17 @@ function WorkspaceScreenContent({
   const isExplorerSidebarShowing = useIsExplorerSidebarOpen({
     isCompact: isMobile,
     workspaceKey: persistenceKey,
+  });
+  // The toggle holds the window's top-right corner, so it is hosted by whichever surface
+  // reaches that corner: the dock's tab rail while the dock renders, else the content
+  // header. Both are gated here rather than inside the two hosts, so exactly one shows.
+  const explorerToggleOwner = resolveWorkspaceExplorerToggleOwner({
+    isMobile,
+    isDockRendered: resolveIsExplorerDockRendered({
+      canRenderDesktopPaneSplits,
+      isFocusModeEnabled,
+      isExplorerSidebarShowing,
+    }),
   });
   const explorerSidebarToggleAccessibilityState = useMemo(
     () => ({ expanded: isExplorerSidebarShowing }),
@@ -3401,7 +3411,6 @@ function WorkspaceScreenContent({
       }),
     [activeFileLineEnd, activeFileLineStart, activeFilePath],
   );
-  const canRenderDesktopPaneSplits = supportsDesktopPaneSplits();
   const shouldRenderDesktopPaneFallback = useMemo(
     () => !isMobile && !canRenderDesktopPaneSplits,
     [isMobile, canRenderDesktopPaneSplits],
@@ -3748,6 +3757,7 @@ function WorkspaceScreenContent({
         tooltipLabel={t("workspace.tabs.explorerSidebar.toggle")}
         tooltipKeys={EXPLORER_TOGGLE_KEYS}
         accessibilityState={explorerSidebarToggleAccessibilityState}
+        style={styles.explorerSidebarToggleSlot}
       />
     ),
     [
@@ -4135,6 +4145,14 @@ const styles = StyleSheet.create((theme) => ({
       xs: 0,
       md: -theme.spacing[2],
     },
+  },
+  /**
+   * The Explorer toggle's right inset when the dock hosts it. The dock's rail trailing slot
+   * carries `spacing[3]`, the same as a content header's padding; pulling back by `spacing[2]`
+   * puts this copy's frame on the same pixel as the content header's copy.
+   */
+  explorerSidebarToggleSlot: {
+    marginRight: -theme.spacing[2],
   },
   compactHeaderMenuCluster: {
     flexDirection: "row",

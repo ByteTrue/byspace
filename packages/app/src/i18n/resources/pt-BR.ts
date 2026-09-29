@@ -1031,6 +1031,9 @@ export const ptBR: TranslationResources = {
     },
   },
   sidebar: {
+    appMenu: {
+      label: "BySpace",
+    },
     sortProjects: {
       label: "Ordenar projetos",
     },

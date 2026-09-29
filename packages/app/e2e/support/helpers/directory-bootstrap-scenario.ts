@@ -1,6 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import { buildHostAgentDetailRoute } from "@/utils/host-routes";
 import { installDaemonWebSocketGate } from "./daemon-websocket-gate";
+import { clickTopLevelNavItem } from "./sidebar-chrome";
 import { seedWorkspace, type SeededWorkspace } from "./seed-client";
 import { getServerId } from "./server-id";
 import { waitForWorkspaceTabsVisible } from "./workspace-tabs";
@@ -34,7 +35,7 @@ async function createRunningMockAgent(
 }
 
 async function openCommandCenter(page: Page): Promise<void> {
-  await page.getByTestId("sidebar-search").click();
+  await clickTopLevelNavItem(page, "sidebar-search");
 }
 
 export class DirectoryBootstrapScenario {

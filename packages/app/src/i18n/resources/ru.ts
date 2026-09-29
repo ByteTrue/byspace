@@ -1019,6 +1019,9 @@ export const ru: TranslationResources = {
     },
   },
   sidebar: {
+    appMenu: {
+      label: "BySpace",
+    },
     sortProjects: {
       label: "Сортировать проекты",
     },

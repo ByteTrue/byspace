@@ -1006,6 +1006,9 @@ export const ar: TranslationResources = {
     },
   },
   sidebar: {
+    appMenu: {
+      label: "BySpace",
+    },
     sortProjects: {
       label: "ترتيب المشاريع",
     },

@@ -21,14 +21,40 @@ interface WorkspaceExplorerToggleProps {
   style?: StyleProp<ViewStyle>;
 }
 
-export type WorkspaceExplorerToggleOwner = "mobile" | "header";
+export type WorkspaceExplorerToggleOwner = "mobile" | "content" | "dock";
 
+/**
+ * The Explorer toggle holds one position at the window's top-right corner, so whichever
+ * surface reaches that corner hosts it: the content header while the dock is closed, the
+ * dock's own tab rail while it is open.
+ *
+ * Pure, because "exactly one host" is the whole invariant: the inputs are read once here so
+ * neither host has to know about the other, and a resolver test can assert the full table.
+ */
 export function resolveWorkspaceExplorerToggleOwner({
   isMobile,
+  isDockRendered,
 }: {
   isMobile: boolean;
+  isDockRendered: boolean;
 }): WorkspaceExplorerToggleOwner {
-  return isMobile ? "mobile" : "header";
+  if (isMobile) return "mobile";
+  return isDockRendered ? "dock" : "content";
+}
+
+/** Whether the Explorer dock — the surface that reaches the window's top-right corner. */
+export function resolveIsExplorerDockRendered({
+  canRenderDesktopPaneSplits,
+  isFocusModeEnabled,
+  isExplorerSidebarShowing,
+}: {
+  canRenderDesktopPaneSplits: boolean;
+  isFocusModeEnabled: boolean;
+  isExplorerSidebarShowing: boolean;
+}): boolean {
+  if (isFocusModeEnabled) return false;
+  if (!canRenderDesktopPaneSplits) return false;
+  return isExplorerSidebarShowing;
 }
 
 export function WorkspaceExplorerToggle({
@@ -66,13 +92,14 @@ interface DesktopWorkspaceExplorerToggleProps extends Omit<WorkspaceExplorerTogg
   owner: WorkspaceExplorerToggleOwner;
 }
 
+/** Host: the workspace's content header. */
 export function WorkspaceHeaderExplorerToggle({
   owner,
   accessibilityState,
   style,
   ...toggleProps
 }: DesktopWorkspaceExplorerToggleProps) {
-  if (owner === "mobile") return null;
+  if (owner !== "content") return null;
   return (
     <WorkspaceExplorerToggle
       {...toggleProps}
@@ -83,6 +110,20 @@ export function WorkspaceHeaderExplorerToggle({
   );
 }
 
-export function WorkspaceExplorerSidebarToggle(_props: DesktopWorkspaceExplorerToggleProps) {
-  return null;
+/** Host: the Explorer dock's tab rail. */
+export function WorkspaceExplorerSidebarToggle({
+  owner,
+  accessibilityState,
+  style,
+  ...toggleProps
+}: DesktopWorkspaceExplorerToggleProps) {
+  if (owner !== "dock") return null;
+  return (
+    <WorkspaceExplorerToggle
+      {...toggleProps}
+      accessibilityState={accessibilityState}
+      mobile={false}
+      style={style}
+    />
+  );
 }

@@ -75,6 +75,7 @@ import { useAppSettings } from "@/hooks/use-settings";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { useOpenAgentListGesture } from "@/mobile-panels/gestures";
 import { MobilePanelsProvider, useIsMobilePanelActive } from "@/mobile-panels/provider";
+import { DesktopSidebarVisibilityProvider } from "@/contexts/desktop-sidebar-visibility-context";
 import { I18nProvider } from "@/i18n/provider";
 import {
   KeyboardActionDispatcherProvider,
@@ -497,7 +498,13 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     surface
   );
 
-  return <CommandCenterProvider>{content}</CommandCenterProvider>;
+  return (
+    <CommandCenterProvider>
+      <DesktopSidebarVisibilityProvider visible={desktopSidebarVisible}>
+        {content}
+      </DesktopSidebarVisibilityProvider>
+    </CommandCenterProvider>
+  );
 }
 
 function SidebarChrome({

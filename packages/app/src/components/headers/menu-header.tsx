@@ -7,9 +7,26 @@ import { ScreenHeader } from "./screen-header";
 import { ScreenTitle } from "./screen-title";
 import { HeaderToggleButton } from "./header-toggle-button";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
+import { useDesktopSidebarVisible } from "@/contexts/desktop-sidebar-visibility-context";
+import { resolveSidebarToggleHost } from "@/components/sidebar/sidebar-toggle-host";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { getShortcutOs } from "@/utils/shortcut-platform";
 import { iconButtonChromeGlyphSize } from "@/components/ui/icon-button-chrome";
+import { HEADER_CONTROL_HEIGHT } from "@/components/ui/control-geometry";
+import { ICON_SIZE, SPACING } from "@/styles/theme";
+
+/**
+ * What lines up with the sidebar's row icons is the toggle's *glyph*, not its frame.
+ *
+ * A row's icon sits `spacing[2]` inside its own inset, putting every row icon on the rail at
+ * `spacing[4]`. The toggle centers a 16px glyph in a 26px frame, so its glyph sits
+ * `TOGGLE_GLYPH_INSET` in from the frame. Pulling the frame back by the gap between those two
+ * puts the visible icon on the rail — matching frames instead would leave the glyph 3px left of
+ * every row below it. Both hosts apply this same value, which is what keeps the toggle on one
+ * pixel as the sidebar opens and closes.
+ */
+const TOGGLE_GLYPH_INSET = (HEADER_CONTROL_HEIGHT - ICON_SIZE.md) / 2;
+const SIDEBAR_ROW_ICON_RAIL = SPACING[4];
 
 interface MenuHeaderProps {
   title?: string;
@@ -22,6 +39,11 @@ interface SidebarMenuToggleProps {
   tooltipSide?: "left" | "right" | "top" | "bottom";
   testID?: string;
   nativeID?: string;
+  /**
+   * Which host renders this instance. The sidebar's own top row and a content header both
+   * put the toggle at the window's top-left corner; exactly one of them owns it at a time.
+   */
+  host?: "content" | "sidebar";
 }
 
 const MOBILE_MENU_LINE_WIDTH = 16;
@@ -103,9 +125,24 @@ function SidebarMenuToggleButton({
   );
 }
 
-export function SidebarMenuToggle({ style, ...props }: SidebarMenuToggleProps = {}) {
+export function SidebarMenuToggle({
+  style,
+  host = "content",
+  ...props
+}: SidebarMenuToggleProps = {}) {
   const isMobile = useIsCompactFormFactor();
+  const desktopSidebarVisible = useDesktopSidebarVisible();
   const resolvedStyle = useMemo(() => [styles.leadingToggle, style], [style]);
+  // One source for both hosts: the pinned sidebar shows it while it is visible, a content
+  // header only while it is not, so `menu-button` exists exactly once in every state.
+  const hostState = useMemo(
+    () => ({ isCompact: isMobile, desktopSidebarVisible }),
+    [isMobile, desktopSidebarVisible],
+  );
+  const rendersHere =
+    resolveSidebarToggleHost(hostState) === (host === "sidebar" ? "sidebar" : "content");
+
+  if (!rendersHere) return null;
 
   return <SidebarMenuToggleButton {...props} isMobile={isMobile} resolvedStyle={resolvedStyle} />;
 }
@@ -130,7 +167,7 @@ const styles = StyleSheet.create((theme) => ({
   leadingToggle: {
     marginLeft: {
       xs: 0,
-      md: -theme.spacing[2],
+      md: SIDEBAR_ROW_ICON_RAIL - TOGGLE_GLYPH_INSET - theme.spacing[3],
     },
   },
   left: {

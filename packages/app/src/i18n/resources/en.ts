@@ -1016,6 +1016,9 @@ export const en = {
     },
   },
   sidebar: {
+    appMenu: {
+      label: "BySpace",
+    },
     sortProjects: {
       label: "Sort projects",
     },
