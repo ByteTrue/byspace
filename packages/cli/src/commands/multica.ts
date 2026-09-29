@@ -278,6 +278,49 @@ export async function runMulticaCommentSendCommand(
   }
 }
 
+async function runAgentStatus(
+  options: CommandOptions & { id?: string },
+  status: "active" | "archived",
+): Promise<ListResult<MulticaAgentRow>> {
+  const id = requireArg(options.id, "--id");
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaAgentStatus(id, status);
+    const agent = payload.agent;
+    return {
+      type: "list",
+      data: [
+        {
+          name: agent.name,
+          kind: agent.kind,
+          status: agent.status,
+          description: agent.description,
+          agentId: agent.id,
+        },
+      ],
+      schema: multicaAgentSchema,
+    };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+export async function runMulticaAgentArchiveCommand(
+  options: CommandOptions & { id?: string },
+  _command: Command,
+): Promise<ListResult<MulticaAgentRow>> {
+  return runAgentStatus(options, "archived");
+}
+
+export async function runMulticaAgentRestoreCommand(
+  options: CommandOptions & { id?: string },
+  _command: Command,
+): Promise<ListResult<MulticaAgentRow>> {
+  return runAgentStatus(options, "active");
+}
+
 export async function runMulticaAgentRolesCommand(
   options: CommandOptions,
   _command: Command,
@@ -590,6 +633,20 @@ export function createMulticaCommand(): Command {
   addJsonAndDaemonHostOptions(
     agent.command("roles").description("List the built-in role keys").allowExcessArguments(false),
   ).action(withOutput(runMulticaAgentRolesCommand));
+  addJsonAndDaemonHostOptions(
+    agent
+      .command("archive")
+      .description("Retire an agent (the source's switch; restore reverses it)")
+      .requiredOption("--id <id>", "Agent id")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaAgentArchiveCommand));
+  addJsonAndDaemonHostOptions(
+    agent
+      .command("restore")
+      .description("Bring an archived agent back onto the roster")
+      .requiredOption("--id <id>", "Agent id")
+      .allowExcessArguments(false),
+  ).action(withOutput(runMulticaAgentRestoreCommand));
 
   const comment = multica.command("comment").description("Comments on an issue");
   addJsonAndDaemonHostOptions(

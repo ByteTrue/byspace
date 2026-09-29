@@ -497,6 +497,19 @@ export class MulticaStore {
   }
 
   /**
+   * The seed's idempotency lookup: system_key regardless of kind. The
+   * secretary is a system row; the built-in roster rows are ordinary
+   * assignable teammates that merely carry a stable key so a console
+   * rename never breaks re-seeding.
+   */
+  findAgentBySystemKey(systemKey: string): AgentRow | null {
+    const raw = this.#db
+      .prepare(`SELECT ${AGENT_SELECT} FROM agent WHERE system_key = ?`)
+      .get(systemKey);
+    return raw ? mapAgentRow(raw as never) : null;
+  }
+
+  /**
    * The source's ArchiveAgent / its inverse: retiring an agent stamps
    * archived_at (and who), restoring clears both. This is the agent's
    * enable/disable — presence status (idle/working/…) is runtime state,

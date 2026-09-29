@@ -18,6 +18,7 @@ import { MulticaExecutor } from "./executor.js";
 import { MIGRATIONS } from "./migrations/index.js";
 import { tickAutopilots } from "./autopilot.js";
 import { seedSecretary } from "./secretary.js";
+import { seedBuiltinRoster } from "./builtin-roster-seed.js";
 import { MulticaStore } from "./store.js";
 
 export interface MulticaSubsystemOptions {
@@ -156,5 +157,16 @@ export function createMulticaSubsystem(options: MulticaSubsystemOptions): {
     }
   };
   void seedSecretaryWorkspace();
+
+  // The built-in roster: the eight roles the practice line earned become
+  // assignable teammates at first boot, the same seed discipline the
+  // secretary's own row set. Idempotent by system_key; a failure here is
+  // loud but never fatal, the same rule as the secretary's workspace.
+  try {
+    const seeded = seedBuiltinRoster(store);
+    options.logger.info({ seeded }, "Built-in role roster seeded");
+  } catch (error) {
+    options.logger.error({ err: error }, "Failed to seed the built-in roster");
+  }
   return { store, kickDrain };
 }

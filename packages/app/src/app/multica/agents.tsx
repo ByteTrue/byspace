@@ -68,7 +68,12 @@ function RostersPage({ serverId }: { serverId: string }): ReactElement {
     );
   }
 
-  const agents = agentsQuery.data?.agents ?? [];
+  const all = agentsQuery.data?.agents ?? [];
+  // The source's default scope hides archived rows (agents-page: an
+  // archived agent leaves the roster until someone opens the archived
+  // scope); the header count is the live roster, same as the source's
+  // totalCount. Restoring lives on the detail page, so nothing is lost.
+  const agents = all.filter((agent) => agent.archivedAt === null);
 
   return (
     <MulticaShell serverId={serverId} active="rosters">
