@@ -160,6 +160,15 @@ export interface EncodeAttachmentInput {
   attachment: AttachmentMetadata;
 }
 
+/**
+ * Raw attachment bytes, when the store can produce a Blob. Send-time image
+ * compression uses this; stores that cannot return Blobs simply omit it and
+ * compression is skipped.
+ */
+export interface LoadBlobInput {
+  attachment: AttachmentMetadata;
+}
+
 export interface DeleteAttachmentInput {
   attachment: AttachmentMetadata;
 }
@@ -175,6 +184,7 @@ export interface GarbageCollectInput {
 export interface AttachmentStore {
   readonly storageType: AttachmentStorageType;
   save(input: SaveAttachmentInput): Promise<AttachmentMetadata>;
+  loadBlob?(input: LoadBlobInput): Promise<Blob>;
   encodeBase64(input: EncodeAttachmentInput): Promise<string>;
   resolvePreviewUrl(input: ResolvePreviewUrlInput): Promise<string>;
   releasePreviewUrl?(input: ReleasePreviewUrlInput): Promise<void>;

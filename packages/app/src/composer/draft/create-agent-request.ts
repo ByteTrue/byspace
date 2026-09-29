@@ -2,6 +2,7 @@ import type { AgentSessionConfig } from "@bytetrue/protocol/agent-types";
 import type { AgentSnapshotPayload, CreateAgentRequestMessage } from "@bytetrue/protocol/messages";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import { encodeImages } from "@/utils/encode-images";
+import { enforceImageWireBudget } from "@/composer/attachments/image-wire-budget";
 import type { UserMessageImageAttachment } from "@/types/stream";
 
 export interface WorkspaceDraftAgentRequest {
@@ -21,15 +22,20 @@ export async function requestWorkspaceDraftAgent(
   client: DaemonClient,
   request: WorkspaceDraftAgentRequest,
 ): Promise<AgentSnapshotPayload> {
-  const images = await encodeImages(request.images);
+  const encoded = await encodeImages(request.images);
+  const budgeted = await enforceImageWireBudget({
+    client,
+    text: request.text,
+    images: encoded ?? [],
+    attachments: request.attachments ?? [],
+    fileNames: (request.images ?? []).map((metadata) => metadata.fileName),
+  });
   return await client.createAgent({
     config: request.config,
     workspaceId: request.workspaceId,
     clientMessageId: request.clientMessageId,
     ...(request.text ? { initialPrompt: request.text } : {}),
-    ...(images && images.length > 0 ? { images } : {}),
-    ...(request.attachments && request.attachments.length > 0
-      ? { attachments: request.attachments }
-      : {}),
+    ...(budgeted.images.length > 0 ? { images: budgeted.images } : {}),
+    ...(budgeted.attachments.length > 0 ? { attachments: budgeted.attachments } : {}),
   });
 }

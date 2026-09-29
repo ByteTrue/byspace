@@ -1,5 +1,7 @@
 import { collectRetainedAttachmentIds } from "@/attachments/gc-retention";
 import { getAttachmentStore } from "@/attachments/store";
+import { compressImageBlob, shouldCompressImage } from "@/attachments/compress-image";
+import { blobToBase64 } from "@/attachments/utils";
 import type { AttachmentMetadata, SaveAttachmentInput } from "@/attachments/types";
 
 const activePersistence = new Set<Promise<AttachmentMetadata>>();
@@ -103,11 +105,7 @@ export async function encodeAttachmentsForSend(
   const encoded = await Promise.all(
     attachments.map(async (attachment) => {
       try {
-        const data = await store.encodeBase64({ attachment });
-        return {
-          data,
-          mimeType: attachment.mimeType,
-        };
+        return await encodeAttachmentForSend(store, attachment);
       } catch (error) {
         console.error("[attachments] Failed to encode attachment for send", {
           id: attachment.id,
@@ -122,6 +120,47 @@ export async function encodeAttachmentsForSend(
     (entry): entry is { data: string; mimeType: string } => entry !== null,
   );
   return valid.length > 0 ? valid : undefined;
+}
+
+/**
+ * Wire encoding for one attachment. Large images are downscaled and
+ * re-encoded before base64 so a single send_agent_message frame stays under
+ * the relay's frame limit; every failure path falls back to the original
+ * bytes. The returned mimeType reflects the bytes that were actually
+ * encoded, so providers never see a mislabeled payload.
+ */
+async function encodeAttachmentForSend(
+  store: Awaited<ReturnType<typeof getAttachmentStore>>,
+  attachment: AttachmentMetadata,
+): Promise<{ data: string; mimeType: string }> {
+  // Compression is an optimization; every path falls back to the original
+  // bytes so a failure here never blocks the send.
+  const original = async () => ({
+    data: await store.encodeBase64({ attachment }),
+    mimeType: attachment.mimeType,
+  });
+
+  if (!store.loadBlob || !shouldCompressImage(attachment.mimeType, attachment.byteSize)) {
+    return await original();
+  }
+
+  try {
+    const blob = await store.loadBlob({ attachment });
+    const compressed = await compressImageBlob({ blob, mimeType: attachment.mimeType });
+    if (!compressed) {
+      return await original();
+    }
+    return {
+      data: await blobToBase64(compressed.blob),
+      mimeType: compressed.mimeType,
+    };
+  } catch (error) {
+    console.error("[attachments] Image compression failed; sending original", {
+      id: attachment.id,
+      error,
+    });
+    return await original();
+  }
 }
 
 export async function resolveAttachmentPreviewUrl(attachment: AttachmentMetadata): Promise<string> {
