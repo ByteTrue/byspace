@@ -11,6 +11,11 @@ import { dispatchAutopilot } from "../../multica/autopilot.js";
 import { computeNextRunAt } from "../../schedule/cron.js";
 import type { MulticaStore } from "../../multica/store.js";
 import {
+  builtinRoleInstructions,
+  getBuiltinRole,
+  listBuiltinRoles,
+} from "../../multica/builtin-roles.js";
+import {
   commentTriggers,
   hasPendingRun,
   parseMentions,
@@ -328,6 +333,7 @@ type ReadMessage = Extract<
   {
     type:
       | "multica.agent.list.request"
+      | "multica.role.list.request"
       | "multica.issue.list.request"
       | "multica.issue.get.request"
       | "multica.status.list.request"
@@ -411,7 +417,8 @@ function isReadMessage(msg: MulticaInboundSubset): msg is ReadMessage {
     // The type predicate alone lies: without this runtime check a read
     // falls through to the write arm and is answered with silence.
     msg.type === "multica.label.list.request" ||
-    msg.type === "multica.issue.mine.request"
+    msg.type === "multica.issue.mine.request" ||
+    msg.type === "multica.role.list.request"
   );
 }
 
@@ -525,6 +532,20 @@ export class MulticaSession {
       description: msg.description,
       instructions: msg.instructions,
     });
+    // A built-in role seeds its voice and its skill set in one act: the
+    // instructions are the role's three persona files, and its skills become
+    // builtin rows linked to this agent, which the executor materializes
+    // into each run workspace.
+    if (msg.role) {
+      const role = getBuiltinRole(msg.role);
+      this.#store.updateAgentInstructions(agent.id, builtinRoleInstructions(role));
+      for (const skill of role.skills) {
+        this.#store.linkAgentSkill(
+          agent.id,
+          this.#store.seedBuiltinSkill(skill.name, skill.description, skill.files),
+        );
+      }
+    }
     this.#emit({
       type: "multica.agent.create.response",
       payload: { requestId: msg.requestId, agent: agentSummary(agent) },
@@ -1331,6 +1352,20 @@ export class MulticaSession {
   /** The pure reads: rosters, boards, catalogs, queues. */
   #handleReadMessage(msg: ReadMessage): void {
     switch (msg.type) {
+      case "multica.role.list.request": {
+        this.#emit({
+          type: "multica.role.list.response",
+          payload: {
+            requestId: msg.requestId,
+            roles: listBuiltinRoles().map((role) => ({
+              key: role.key,
+              name: role.name,
+              description: role.description,
+            })),
+          },
+        });
+        return;
+      }
       case "multica.agent.list.request":
         return this.#handleAgentList(msg);
       case "multica.issue.list.request":

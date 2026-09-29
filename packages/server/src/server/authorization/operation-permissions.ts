@@ -209,6 +209,7 @@ const INBOUND_PERMISSION = {
   // daemon owner's own single-user surface; reads and writes ride the same
   // permission class as the workspace's.
   "multica.agent.list.request": "workspace.read",
+  "multica.role.list.request": "workspace.read",
   "multica.agent.create.request": "workspace.write",
   "multica.issue.list.request": "workspace.read",
   "multica.issue.create.request": "workspace.write",
@@ -482,6 +483,7 @@ const OUTBOUND_PERMISSION = {
   write_project_config_response: "workspace.write",
 
   "multica.agent.list.response": "workspace.read",
+  "multica.role.list.response": "workspace.read",
   "multica.agent.create.response": "workspace.write",
   "multica.issue.list.response": "workspace.read",
   "multica.issue.create.response": "workspace.write",

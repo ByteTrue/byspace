@@ -55,12 +55,36 @@ export const MulticaAgentListResponseSchema = z.object({
   }),
 });
 
+export const MulticaRoleSummarySchema = z.object({
+  key: z.string(),
+  name: z.string(),
+  description: z.string(),
+});
+
+export const MulticaRoleListRequestSchema = z.object({
+  type: z.literal("multica.role.list.request"),
+  requestId: z.string(),
+});
+
+export const MulticaRoleListResponseSchema = z.object({
+  type: z.literal("multica.role.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    roles: z.array(MulticaRoleSummarySchema),
+  }),
+});
+
 export const MulticaAgentCreateRequestSchema = z.object({
   type: z.literal("multica.agent.create.request"),
   requestId: z.string(),
   name: z.string().min(1),
   description: z.string().max(255).optional(),
   instructions: z.string().optional(),
+  /**
+   * A built-in role key: seeds the agent's instructions from the role's
+   * persona files and links its skill set as builtin skill rows.
+   */
+  role: z.string().optional(),
 });
 
 export const MulticaAgentCreateResponseSchema = z.object({

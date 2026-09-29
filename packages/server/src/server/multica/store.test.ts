@@ -751,3 +751,37 @@ describe("duplicate marks", () => {
     expect(after.duplicateOfIssueId).toBeNull();
   });
 });
+
+describe("builtin skill rows", () => {
+  it("seeding is keyed by name: a second seed returns the same row and keeps its files", () => {
+    const first = store.seedBuiltinSkill("front-design", "Design.", [
+      { path: "SKILL.md", content: "# front-design" },
+      { path: "references/one.md", content: "one" },
+    ]);
+    const second = store.seedBuiltinSkill("front-design", "ignored", [
+      { path: "SKILL.md", content: "DIFFERENT" },
+    ]);
+    expect(second).toBe(first);
+    const bundles = store.listSkillBundlesForAgent(
+      (() => {
+        const agent = store.createAgent({ name: "Seeded" });
+        store.linkAgentSkill(agent.id, first);
+        store.linkAgentSkill(agent.id, second);
+        return agent.id;
+      })(),
+    );
+    expect(bundles).toHaveLength(1);
+    expect(bundles[0].files.map((file) => file.path).sort()).toEqual([
+      "SKILL.md",
+      "references/one.md",
+    ]);
+  });
+
+  it("linking twice is a no-op and a disabled skill leaves the bundle list", () => {
+    const skill = store.seedBuiltinSkill("qa-check", "", [{ path: "SKILL.md", content: "x" }]);
+    const agent = store.createAgent({ name: "Linked" });
+    store.linkAgentSkill(agent.id, skill);
+    store.linkAgentSkill(agent.id, skill);
+    expect(store.listSkillBundlesForAgent(agent.id)).toHaveLength(1);
+  });
+});

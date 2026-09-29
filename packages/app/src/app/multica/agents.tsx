@@ -6,6 +6,12 @@ import { StyleSheet } from "react-native-unistyles";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Bot, Tag, Timer } from "lucide-react-native";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { useFetchQuery } from "@/data/query";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
@@ -129,7 +135,33 @@ function NewAgentButton({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [roles, setRoles] = useState<readonly { key: string; name: string; description: string }[]>(
+    [],
+  );
+  const [roleKey, setRoleKey] = useState<string | null>(null);
   const toggle = useCallback(() => setOpen((value) => !value), []);
+  // The role catalog arrives on open — it is small, stable, and the form is
+  // the only place it is picked.
+  useEffect(() => {
+    if (!open || !client) return;
+    void client
+      .multicaRoleList()
+      .then((payload) => {
+        setRoles(payload.roles);
+        return undefined;
+      })
+      .catch(() => undefined);
+  }, [open, client]);
+  const pickRole = useCallback(
+    (key: string) => {
+      setRoleKey(key);
+      const role = roles.find((entry) => entry.key === key);
+      if (role) {
+        setName(role.name);
+      }
+    },
+    [roles],
+  );
   // The empty state's button opens the same form from elsewhere.
   useEffect(() => {
     if (openSignal > 0) {
@@ -142,7 +174,7 @@ function NewAgentButton({
     if (!client || trimmed === "" || saving) return;
     setSaving(true);
     void client
-      .multicaAgentCreate({ name: trimmed })
+      .multicaAgentCreate({ name: trimmed, role: roleKey ?? undefined })
       .then(() => {
         setName("");
         setOpen(false);
@@ -150,7 +182,7 @@ function NewAgentButton({
         return undefined;
       })
       .finally(() => setSaving(false));
-  }, [client, name, saving, onCreated]);
+  }, [client, name, saving, onCreated, roleKey]);
   if (!open) {
     return (
       <Pressable style={styles.newButton} onPress={toggle} testID="multica-new-agent">
@@ -168,6 +200,7 @@ function NewAgentButton({
         placeholderTextColor="gray"
         testID="multica-new-agent-name"
       />
+      <RoleChoice roles={roles} roleKey={roleKey} onPick={pickRole} />
       <Pressable style={styles.newButton} onPress={submit} testID="multica-new-agent-create">
         <Text style={styles.newButtonText}>{saving ? "…" : "Create"}</Text>
       </Pressable>
@@ -175,6 +208,58 @@ function NewAgentButton({
         <Text style={styles.inlineCancelText}>Cancel</Text>
       </Pressable>
     </View>
+  );
+}
+
+/**
+ * The built-in role picker on the create form: choosing a role seeds the
+ * agent's voice and skill set server-side (the role's three persona files
+ * become its instructions, its skills become builtin rows), so picking one
+ * is the whole configuration act.
+ */
+function RoleChoice({
+  roles,
+  roleKey,
+  onPick,
+}: {
+  roles: readonly { key: string; name: string; description: string }[];
+  roleKey: string | null;
+  onPick: (key: string) => void;
+}): ReactElement {
+  const chosen = roles.find((role) => role.key === roleKey);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger style={styles.roleTrigger} testID="multica-new-agent-role">
+        <Text style={styles.roleTriggerText}>{chosen ? chosen.name : "Role (optional)"}</Text>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent>
+        {roles.map((role) => (
+          <RoleChoiceItem
+            key={role.key}
+            role={role}
+            selected={role.key === roleKey}
+            onPick={onPick}
+          />
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function RoleChoiceItem({
+  role,
+  selected,
+  onPick,
+}: {
+  role: { key: string; name: string; description: string };
+  selected: boolean;
+  onPick: (key: string) => void;
+}): ReactElement {
+  const handleSelect = useCallback(() => onPick(role.key), [onPick, role.key]);
+  return (
+    <DropdownMenuItem selected={selected} onSelect={handleSelect}>
+      {role.name}
+    </DropdownMenuItem>
   );
 }
 
@@ -486,6 +571,14 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface2,
   },
   newButtonText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
+  roleTrigger: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+  },
+  roleTriggerText: { color: theme.colors.foreground, fontSize: theme.fontSize.sm },
   inlineForm: {
     flexDirection: "row",
     flexWrap: "wrap",

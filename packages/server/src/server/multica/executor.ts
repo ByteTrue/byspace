@@ -20,6 +20,8 @@ import type pino from "pino";
 import type { AgentManager } from "../agent/agent-manager.js";
 import { type BoundCreateAgentCommand } from "../agent/create-agent/create.js";
 import type { MulticaStore } from "./store.js";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { TaskRow } from "./rows.js";
 import {
   createAutopilotRunOnlyPrompt,
@@ -164,6 +166,14 @@ export class MulticaExecutor {
         prompt = createIssuePrompt({ issue, agent });
       }
 
+      // Materialize the agent's skill bundles into the run workspace so
+      // native discovery finds them. The source's execenv writes the Pi row
+      // to {workDir}/.pi/skills; our runtime's project-level discovery walks
+      // ancestors for .agents/skills, so that directory is the translation
+      // of the same intent — a run that began without its skills would
+      // silently run unskilled. Written before the session starts.
+      this.#materializeSkills(workspace.cwd, task.agentId);
+
       this.#store.updateTaskStatus({ id: task.id, status: "running" });
       let created;
       try {
@@ -271,6 +281,23 @@ export class MulticaExecutor {
       }
       this.#settleLinkedRun(task, "failed", message);
       this.#noteFailureForOwner(task, message);
+    }
+  }
+
+  /**
+   * The agent's skill bundles as workspace files under .agents/skills —
+   * this runtime's native project-level discovery directory (the source's
+   * Pi row uses .pi/skills for its fork). A bundle whose file fails to write
+   * fails the run rather than running unskilled.
+   */
+  #materializeSkills(cwd: string, agentId: string): void {
+    const bundles = this.#store.listSkillBundlesForAgent(agentId);
+    for (const bundle of bundles) {
+      for (const file of bundle.files) {
+        const target = join(cwd, ".agents", "skills", bundle.name, file.path);
+        mkdirSync(join(target, ".."), { recursive: true });
+        writeFileSync(target, file.content, "utf8");
+      }
     }
   }
 

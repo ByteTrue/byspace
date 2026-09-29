@@ -5639,10 +5639,20 @@ export class DaemonClient {
     });
   }
 
+  async multicaRoleList(): Promise<{
+    roles: { key: string; name: string; description: string }[];
+  }> {
+    return this.sendCorrelatedSessionRequest({
+      message: { type: "multica.role.list.request" },
+      responseType: "multica.role.list.response",
+    }).then((payload) => ({ roles: payload.roles }));
+  }
+
   async multicaAgentCreate(options: {
     name: string;
     description?: string;
     instructions?: string;
+    role?: string;
   }): Promise<MulticaAgentCreatePayload> {
     return this.sendCorrelatedSessionRequest({
       message: {
@@ -5650,6 +5660,7 @@ export class DaemonClient {
         name: options.name,
         description: options.description,
         instructions: options.instructions,
+        role: options.role,
       },
       responseType: "multica.agent.create.response",
     });

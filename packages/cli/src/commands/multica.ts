@@ -42,6 +42,15 @@ export interface MulticaAgentRow {
   readonly agentId: string;
 }
 
+export const multicaRoleSchema: OutputSchema<{ key: string; name: string; description: string }> = {
+  idField: "key",
+  columns: [
+    { header: "KEY", field: "key", width: 22 },
+    { header: "NAME", field: "name", width: 22 },
+    { header: "DOES", field: "description", width: 60 },
+  ],
+};
+
 export const multicaAgentSchema: OutputSchema<MulticaAgentRow> = {
   idField: "agentId",
   columns: [
@@ -269,8 +278,28 @@ export async function runMulticaCommentSendCommand(
   }
 }
 
+export async function runMulticaAgentRolesCommand(
+  options: CommandOptions,
+  _command: Command,
+): Promise<ListResult<{ key: string; name: string; description: string }>> {
+  const client = await connectToDaemon({ host: options.host }).catch((error: unknown) => {
+    throw buildDaemonConnectionCommandError({ host: options.host, error });
+  });
+  try {
+    const payload = await client.multicaRoleList();
+    return { type: "list", data: payload.roles, schema: multicaRoleSchema };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
 export async function runMulticaAgentCreateCommand(
-  options: CommandOptions & { name?: string; description?: string; instructions?: string },
+  options: CommandOptions & {
+    name?: string;
+    description?: string;
+    instructions?: string;
+    role?: string;
+  },
   _command: Command,
 ): Promise<ListResult<MulticaAgentRow>> {
   const name = options.name?.trim();
@@ -285,6 +314,7 @@ export async function runMulticaAgentCreateCommand(
       name,
       description: options.description,
       instructions: options.instructions,
+      role: options.role?.trim() || undefined,
     });
     const created = payload.agent;
     return {
@@ -554,8 +584,12 @@ export function createMulticaCommand(): Command {
       .requiredOption("--name <name>", "Agent name")
       .option("--description <text>", "Agent description")
       .option("--instructions <text>", "Agent instructions")
+      .option("--role <key>", "Built-in role key (seeds instructions + skills; see roles ls)")
       .allowExcessArguments(false),
   ).action(withOutput(runMulticaAgentCreateCommand));
+  addJsonAndDaemonHostOptions(
+    agent.command("roles").description("List the built-in role keys").allowExcessArguments(false),
+  ).action(withOutput(runMulticaAgentRolesCommand));
 
   const comment = multica.command("comment").description("Comments on an issue");
   addJsonAndDaemonHostOptions(

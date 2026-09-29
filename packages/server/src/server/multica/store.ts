@@ -1047,6 +1047,73 @@ export class MulticaStore {
     return rows.map((row) => mapIssueRow(row as never));
   }
 
+  /**
+   * Seed the built-in role skills once, keyed by skill name: the skill table's
+   * UNIQUE(name) makes a re-run a no-op, and one row can serve many agents
+   * (roles share skills like front-design). source_type 'builtin' marks rows
+   * the product owns, exactly the source's third enum value.
+   */
+  seedBuiltinSkill(
+    name: string,
+    description: string,
+    files: readonly { path: string; content: string }[],
+  ): string {
+    const existing = this.#db.prepare(`SELECT id FROM skill WHERE name = ?`).get(name) as
+      | { id: string }
+      | undefined;
+    if (existing) {
+      return existing.id;
+    }
+    const id = randomUUID();
+    this.#db.exec("BEGIN IMMEDIATE");
+    try {
+      this.#db
+        .prepare(
+          `INSERT INTO skill (id, name, description, source_type) VALUES (?, ?, ?, 'builtin')`,
+        )
+        .run(id, name, description);
+      for (const file of files) {
+        this.#db
+          .prepare(`INSERT INTO skill_file (id, skill_id, path, content) VALUES (?, ?, ?, ?)`)
+          .run(randomUUID(), id, file.path, file.content);
+      }
+      this.#db.exec("COMMIT");
+    } catch (error) {
+      this.#db.exec("ROLLBACK");
+      throw error;
+    }
+    return id;
+  }
+
+  /** Attach a skill row to an agent; the pair primary key makes this idempotent. */
+  linkAgentSkill(agentId: string, skillId: string): void {
+    this.#db
+      .prepare(`INSERT OR IGNORE INTO agent_skill (agent_id, skill_id) VALUES (?, ?)`)
+      .run(agentId, skillId);
+  }
+
+  /**
+   * The agent's skill bundles — name plus every file, the shape the
+   * executor materializes into the run workspace under .pi/skills.
+   */
+  listSkillBundlesForAgent(
+    agentId: string,
+  ): { name: string; files: { path: string; content: string }[] }[] {
+    const skills = this.#db
+      .prepare(
+        `SELECT s.id, s.name FROM skill s
+           JOIN agent_skill a ON a.skill_id = s.id
+          WHERE a.agent_id = ? AND s.enabled = 1`,
+      )
+      .all(agentId) as { id: string; name: string }[];
+    return skills.map((skill) => ({
+      name: skill.name,
+      files: this.#db
+        .prepare(`SELECT path, content FROM skill_file WHERE skill_id = ? ORDER BY path`)
+        .all(skill.id) as { path: string; content: string }[],
+    }));
+  }
+
   /** System comments on an issue — the barrier's observable trace. */
   listSystemComments(issueId: string): { id: string; content: string }[] {
     return this.#db
