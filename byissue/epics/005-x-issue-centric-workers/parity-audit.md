@@ -97,4 +97,6 @@ multica（`~/workspace/refs/multica` @ `04cdd48`，一手读码）与本工程 `
 
 autopilot 的 webhook/replace/UI、task_supplement（defer，理由见 issue 010）、重试的延后与理由码抬高顶、泳道行轴与 project 轴、Token 面板、子树退订、issue_reaction/附件（存储基础设施 defer）、agents 的配置 tabs/skills/runtimes/my-issues 页。全部有表无行为或有 RPC 无 UI —— 切片④⑤⑥之后的增量面。
 
-**lease 回收（源 prepare_lease_expires_at/lease 列）**：daemon 重启后 running/dispatched 的 task 变孤儿，无回收路径。2026-09-29 真发一次：role 探针 run 被我重启 daemon 抛孤，手工结算为 failed 并在 failure_reason 写明真因。源用 lease 过期扫描重领或判死；我们欠这个扫描 —— 重启 dev daemon 是常态操作，这条欠账的利息比表里其余项高。
+**lease 回收（源 prepare_lease_expires_at/lease 列）**：daemon 死后 running/dispatched 的 task 变孤儿，无回收路径。2026-09-28 真发一次：multica-replica worktree 的 daemon 被杀，其 in-flight run（task 7e8949e0）无人结算，搁置一天后由本次清理手工判死并在 failure_reason 写明真因。源用 lease 过期扫描重领或判死；我们欠这个扫描 —— 重启 dev daemon 是常态操作，这条欠账的利息比表里其余项高。
+
+**判定教训（同 notes/003 族）**：手工结算孤儿行前必须把 in-flight 全集逐行对照**活 daemon 的会话表**（agent ls 的 running 行）——我第一次把**活**的探针 run 当孤儿判死（它 16 分钟前才起、会话在跑），第二次又把"我判错了"当成结论去翻案。两次错同源：拿 stats 的聚合计数（agents.total=1）对单个 task 下结论，而不把 task.session_id 与活会话逐一对照。单数对单数，聚合对聚合。
