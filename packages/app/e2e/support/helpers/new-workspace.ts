@@ -5,6 +5,7 @@ import { decodeWorkspaceIdFromPathSegment } from "@/utils/host-routes";
 import { connectDaemonClient } from "./daemon-client-loader";
 import { daemonWsRoutePattern } from "./daemon-port";
 import { projectEquivalenceViewKey } from "./project-view-key";
+import { clickTopLevelNavItem } from "./sidebar-chrome";
 import { expectWorkspaceHeader } from "./workspace-ui";
 import { withProjectOwnership } from "./project-ownership";
 
@@ -197,7 +198,7 @@ export async function openNewWorkspaceComposer(
 }
 
 export async function openGlobalNewWorkspaceComposer(page: Page): Promise<void> {
-  await page.getByTestId("sidebar-global-new-workspace").click();
+  await clickTopLevelNavItem(page, "sidebar-global-new-workspace");
 
   await expect(page).toHaveURL(/\/new(?:\?.*)?$/, {
     timeout: 30_000,

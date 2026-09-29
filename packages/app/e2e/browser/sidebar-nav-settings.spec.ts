@@ -1,5 +1,9 @@
-import { expect, test } from "../support/fixtures";
+import { expect, test, type Page } from "../support/fixtures";
 import { gotoAppShell } from "../support/helpers/app";
+import {
+  expectMobileAgentSidebarVisible,
+  openMobileAgentSidebar,
+} from "../support/helpers/sidebar";
 import {
   expectSidebarItemHidden,
   expectSidebarNavSettingsOrder,
@@ -12,6 +16,16 @@ import {
   seedSidebarNavPreferences,
   setSidebarNavItemVisible,
 } from "../support/helpers/sidebar-nav-settings";
+
+/**
+ * The compact close button's painted right edge, or -1 while it has no box. Read through a
+ * poll rather than once, because the panel slides in via transform and a single measurement
+ * can catch it mid-flight.
+ */
+async function closeButtonRightEdge(page: Page): Promise<number> {
+  const box = await page.getByTestId("sidebar-close").boundingBox();
+  return box ? box.x + box.width : -1;
+}
 
 test.describe("Sidebar items in Appearance settings", () => {
   test("owner reorders and hides top-level sidebar items", async ({ page }) => {
@@ -104,5 +118,36 @@ test.describe("Sidebar items in Appearance settings", () => {
     await expectSidebarItemHidden(page, "history");
     await expectSidebarItemHidden(page, "search");
     await expectSidebarItemHidden(page, "schedules");
+
+    // With nothing to reveal, the BySpace button goes with the rows; the collapse toggle is
+    // unaffected because it is the shell's, not the disclosure's.
+    await expect(page.getByTestId("sidebar-nav-menu-trigger")).toHaveCount(0);
+    await expect(page.getByTestId("menu-button")).toBeVisible();
+  });
+});
+
+// Its own describe so the poll below sits under a single wrapper: `max-nested-callbacks` counts
+// describe/test/poll as three levels.
+test.describe("Compact sidebar with every nav item turned off", () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test("keeps the close button on its right rail", async ({ page }) => {
+    await seedSidebarNavPreferences(page, [
+      { key: "new-workspace", visible: false },
+      { key: "history", visible: false },
+      { key: "search", visible: false },
+      { key: "schedules", visible: false },
+    ]);
+    await gotoAppShell(page);
+    await openMobileAgentSidebar(page);
+    await expectMobileAgentSidebarVisible(page);
+
+    await expect(page.getByTestId("sidebar-nav-menu-trigger")).toHaveCount(0);
+
+    const viewport = page.viewportSize();
+    expect(viewport).not.toBeNull();
+    await expect
+      .poll(() => closeButtonRightEdge(page), { timeout: 10_000 })
+      .toBeGreaterThan(viewport!.width - 24);
   });
 });

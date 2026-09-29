@@ -1040,6 +1040,9 @@ export const es: TranslationResources = {
     },
   },
   sidebar: {
+    appMenu: {
+      label: "BySpace",
+    },
     sortProjects: {
       label: "Ordenar proyectos",
     },

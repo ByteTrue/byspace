@@ -405,7 +405,10 @@ const styles = StyleSheet.create((theme) => ({
     paddingRight: theme.spacing[2],
   },
   trailingAccessory: {
-    marginRight: theme.spacing[1.5],
+    // Matches a content header's horizontal padding. The Explorer toggle pulls itself back
+    // by the same amount in both hosts, so the button keeps one window-corner position
+    // whether the dock or the content header is showing it.
+    marginRight: theme.spacing[3],
   },
   tabSlot: {
     position: "relative",

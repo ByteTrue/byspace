@@ -1017,6 +1017,9 @@ export const ja: TranslationResources = {
     },
   },
   sidebar: {
+    appMenu: {
+      label: "BySpace",
+    },
     sortProjects: {
       label: "プロジェクト順序を整理",
     },

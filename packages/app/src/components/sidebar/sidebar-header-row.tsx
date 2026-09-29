@@ -30,7 +30,6 @@ interface SidebarHeaderRowProps {
   variant?: SidebarHeaderRowVariant;
   shortcutKeys?: ShortcutKey[][] | null;
 }
-
 export function SidebarHeaderRow({
   icon: Icon,
   label,

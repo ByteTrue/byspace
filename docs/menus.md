@@ -174,6 +174,42 @@ Independent toggles stay on their page as a checkmark list. A pick-one group can
 below a `MenuSeparator`; make selecting the checked row clear it, so "none" doesn't need a row of
 its own.
 
+## When a list of destinations should not be a menu
+
+A set of destinations that already has a row treatment is not a menu. Folding it into one means
+creating a button, then restyling the same rows inside a floating surface and anchoring them to
+the trigger — two presentations of one list, plus a popover that covers the content it was meant
+to sit beside.
+
+Use an inline disclosure instead: a `Pressable` row that toggles state and renders the rows
+below itself, in the flow. `SidebarNavMenuTrigger` in
+`packages/app/src/components/sidebar/sidebar-nav-menu.tsx` is the example — a title-bar-shaped
+button whose label is centred and whose disclosure chevron is pinned to its right edge. The
+revealed entries are the same row component both sidebars render. It is deliberately _not_ a
+`SidebarHeaderRow`: see the third bullet below for why sharing the row with another control rules
+out a leading chevron.
+
+The trigger's leading edge has to be deliberate once it shares its line with another control — a
+window control, a collapse toggle. That neighbour's gap decides where a leading chevron lands, so
+the revealed rows end up on a different rail. Three ways out:
+
+- Give the trigger its own line. Every leading slot in the group then shares a rail.
+- Keep the shared line and align the neighbour to the rail the rows use. Cheapest when the rows
+  are full-width and the trigger is one more row among them. Align the neighbour's _glyph_, not
+  its frame: a framed icon button centres a smaller glyph inside a wider box, so matching frames
+  leaves the visible icon a few pixels off. A frame that hangs past the rail is only a hit area.
+- Drop the leading chevron. Centre the label and pin the disclosure chevron to the button's right
+  edge. The question disappears, at the cost of the label no longer sharing the rows' left rail —
+  which is what the pinned sidebar's BySpace button does.
+
+The disclosure's box model matters too: the row plus the hairline under its group has to add up
+to the row height a content header uses, or the control shifts by the border width when the two
+hosts swap.
+
+Reach for a menu when the items are actions, when the surface must escape its container (a
+clipped or scrolled ancestor), or when the list is long enough that leaving it open would push
+the page around.
+
 ## Gotchas
 
 - **Released height.** Reanimated's web entering animation leaves an inline height snapshot on

@@ -6,6 +6,12 @@ import { seedMockAgentWorkspace } from "../support/helpers/mock-agent";
 import { getServerId } from "../support/helpers/server-id";
 import { projectEquivalenceViewKey } from "../support/helpers/project-view-key";
 import { selectSidebarStatusGrouping } from "../support/helpers/sidebar";
+import {
+  closeTopLevelNavMenu,
+  openTopLevelNavMenu,
+  pinnedSidebar,
+  topLevelNavItem,
+} from "../support/helpers/sidebar-chrome";
 import { waitForSidebarHydration } from "../support/helpers/workspace-ui";
 import { getVisibleWorkspaceAgentTabIds } from "../support/helpers/workspace-tabs";
 
@@ -76,11 +82,13 @@ test.describe("Model B sidebar shape", () => {
         timeout: 30_000,
       });
 
-      // The global new-workspace button is the universal entry — present for both
-      // kinds regardless of their per-row affordance.
-      await expect(page.getByTestId("sidebar-global-new-workspace")).toBeVisible({
+      // The global new-workspace entry is the universal one — present for both kinds
+      // regardless of their per-row affordance.
+      await openTopLevelNavMenu(page);
+      await expect(topLevelNavItem(page, "sidebar-global-new-workspace")).toBeVisible({
         timeout: 30_000,
       });
+      await closeTopLevelNavMenu(page);
     } finally {
       await gitProject.cleanup();
       await nonGitProject.cleanup();
@@ -106,7 +114,8 @@ test.describe("Model B sidebar shape", () => {
 
       // The deepest level inside the sidebar is the workspace row: no tab,
       // agent, or terminal element appears as a sidebar descendant.
-      const sidebar = page.getByTestId("sidebar-sessions").filter({ visible: true }).first();
+      const sidebar = pinnedSidebar(page);
+      await expect(sidebar).toBeVisible({ timeout: 30_000 });
       await expect(workspaceRow(page, mock.workspaceId).first()).toBeVisible({ timeout: 30_000 });
       await expect(sidebar.locator('[data-testid^="workspace-tab-"]')).toHaveCount(0);
       await expect(sidebar.locator('[data-testid^="sidebar-agent-row-"]')).toHaveCount(0);
@@ -135,7 +144,8 @@ test.describe("Model B sidebar shape", () => {
       // Switch to status grouping.
       await selectSidebarStatusGrouping(page);
 
-      const sidebar = page.getByTestId("sidebar-sessions").filter({ visible: true }).first();
+      const sidebar = pinnedSidebar(page);
+      await expect(sidebar).toBeVisible({ timeout: 30_000 });
 
       // The idle workspace lands in the Done bucket; the busy mock-agent workspace
       // lands in the Working bucket. Each workspace is bucketed independently.

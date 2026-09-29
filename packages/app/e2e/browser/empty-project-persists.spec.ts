@@ -13,6 +13,11 @@ import { getServerId } from "../support/helpers/server-id";
 import { projectEquivalenceViewKey } from "../support/helpers/project-view-key";
 import { createTempGitRepo } from "../support/helpers/workspace";
 import { waitForSidebarHydration } from "../support/helpers/workspace-ui";
+import {
+  closeTopLevelNavMenu,
+  openTopLevelNavMenu,
+  topLevelNavItem,
+} from "../support/helpers/sidebar-chrome";
 
 function workspaceRowTestId(workspaceId: string): string {
   return `sidebar-workspace-row-${getServerId()}:${workspaceId}`;
@@ -157,7 +162,7 @@ test.describe("Project with no workspaces persists", () => {
       const newWorkspaceRow = page.getByTestId(
         `sidebar-project-new-workspace-row-${projectViewKey}`,
       );
-      const globalNewWorkspace = page.getByTestId("sidebar-global-new-workspace");
+      const globalNewWorkspaceTestID = "sidebar-global-new-workspace";
 
       await gotoAppShell(page);
       await waitForSidebarHydration(page);
@@ -179,7 +184,12 @@ test.describe("Project with no workspaces persists", () => {
       expect(existsSync(workspace.repoPath)).toBe(true);
       await expect(projectRow).toBeVisible({ timeout: 30_000 });
       await expect(newWorkspaceRow).toHaveCount(0);
-      await expect(globalNewWorkspace).toBeVisible({ timeout: 30_000 });
+      // The global creation entry survives archiving the last workspace.
+      await openTopLevelNavMenu(page);
+      await expect(topLevelNavItem(page, globalNewWorkspaceTestID)).toBeVisible({
+        timeout: 30_000,
+      });
+      await closeTopLevelNavMenu(page);
 
       // The project survives a reload after its last workspace is archived.
       await page.reload();

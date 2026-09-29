@@ -9,6 +9,7 @@ import { expectWorkspaceTabVisible, openSessions } from "../support/helpers/arch
 import { daemonWsRoutePattern } from "../support/helpers/daemon-port";
 import { getServerId } from "../support/helpers/server-id";
 import { switchWorkspaceViaSidebar } from "../support/helpers/workspace-ui";
+import { clickTopLevelNavItem, pinnedSidebar } from "../support/helpers/sidebar-chrome";
 
 const TEST_COMMANDS = [
   {
@@ -195,7 +196,7 @@ async function installDelayedListCommandsStub(page: Page, delayMs: number): Prom
 }
 
 async function openAppWideNewWorkspace(page: Page): Promise<void> {
-  await page.getByTestId("sidebar-global-new-workspace").first().click();
+  await clickTopLevelNavItem(page, "sidebar-global-new-workspace");
   await page.waitForURL((url) => url.pathname === "/new", { timeout: 30_000 });
 }
 
@@ -674,7 +675,7 @@ test.describe("Composer autocomplete", () => {
     const agent = await openReadyMockAgent(page);
 
     try {
-      await expect(page.getByTestId("sidebar-sessions")).toBeVisible({ timeout: 30_000 });
+      await expect(pinnedSidebar(page)).toBeVisible({ timeout: 30_000 });
       const input = composerLocator(page);
       await expect(input).toBeEditable({ timeout: 30_000 });
 
@@ -739,7 +740,9 @@ test.describe("Composer autocomplete", () => {
         });
 
         await page.getByRole("button", { name: "Open menu" }).click();
-        await expect(page.getByTestId("sidebar-sessions")).toBeInViewport({ timeout: 5_000 });
+        // The compact panel's header carries the close button and the BySpace disclosure; the nav
+        // rows it holds stay folded, so the close button is what marks the panel as open.
+        await expect(page.getByTestId("sidebar-close")).toBeInViewport({ timeout: 5_000 });
         await page.waitForTimeout(300);
 
         const popoverBox = await popover.boundingBox();

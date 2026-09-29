@@ -1013,6 +1013,9 @@ export const ko: TranslationResources = {
     },
   },
   sidebar: {
+    appMenu: {
+      label: "BySpace",
+    },
     sortProjects: {
       label: "프로젝트 순서 정렬",
     },

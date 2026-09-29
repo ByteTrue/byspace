@@ -1,10 +1,16 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import { openSettings } from "./app";
+import { closeTopLevelNavMenu, openTopLevelNavMenu, topLevelNavItem } from "./sidebar-chrome";
 import { clickSettingsBackToWorkspace, openSettingsSection } from "./settings";
 
 const APP_SETTINGS_KEY = "@byspace:app-settings";
 
-/** Persisted nav key -> the testID the app shell renders that item with. */
+/**
+ * Persisted nav key -> the testID the app shell renders that item with. Mirrors the app's
+ * `SIDEBAR_NAV_TEST_IDS`; the desktop shell renders them under the BySpace button, the
+ * compact shell directly, and both keep the same ids so this table does not care which is
+ * showing.
+ */
 const SHELL_ROW_TEST_IDS = {
   "new-workspace": "sidebar-global-new-workspace",
   history: "sidebar-sessions",
@@ -20,9 +26,7 @@ export interface SidebarNavPreference {
 }
 
 function shellRow(page: Page, key: SidebarNavKey): Locator {
-  // `:visible` rather than a plain testID: the shell keeps a compact copy of the
-  // sidebar mounted, so the pinned row is the first visible match.
-  return page.locator(`[data-testid="${SHELL_ROW_TEST_IDS[key]}"]:visible`).first();
+  return topLevelNavItem(page, SHELL_ROW_TEST_IDS[key]);
 }
 
 function settingsRow(page: Page, key: SidebarNavKey): Locator {
@@ -102,11 +106,22 @@ export async function expectSidebarNavSettingsOrder(
 }
 
 export async function expectSidebarOrder(page: Page, keys: SidebarNavKey[]): Promise<void> {
-  await expectVerticalOrder(keys, (key) => shellRow(page, key), "app shell sidebar rows");
+  // The desktop shell keeps these inside the BySpace menu; the compact shell renders rows.
+  await openTopLevelNavMenu(page);
+  try {
+    await expectVerticalOrder(keys, (key) => shellRow(page, key), "app shell sidebar rows");
+  } finally {
+    await closeTopLevelNavMenu(page);
+  }
 }
 
 export async function expectSidebarItemHidden(page: Page, key: SidebarNavKey): Promise<void> {
-  await expect(page.locator(`[data-testid="${SHELL_ROW_TEST_IDS[key]}"]:visible`)).toHaveCount(0);
+  await openTopLevelNavMenu(page);
+  try {
+    await expect(topLevelNavItem(page, SHELL_ROW_TEST_IDS[key])).toHaveCount(0);
+  } finally {
+    await closeTopLevelNavMenu(page);
+  }
 }
 
 export async function expectStoredSidebarNav(

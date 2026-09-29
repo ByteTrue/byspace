@@ -14,6 +14,7 @@ import { getServerId } from "../support/helpers/server-id";
 import { projectEquivalenceViewKey } from "../support/helpers/project-view-key";
 import { escapeRegex } from "../support/helpers/regex";
 import { openFilesPanel } from "../support/helpers/workspace-tabs";
+import { pinnedSidebar } from "../support/helpers/sidebar-chrome";
 import { seedMockAgentWorkspace } from "../support/helpers/mock-agent";
 
 const GITHUB_REMOTE_URL = "https://github.com/test-owner/test-repo.git";
@@ -294,6 +295,86 @@ test.describe("Workspace menu visibility", () => {
         await workspace.cleanup();
       }
     });
+
+    test("folds the top-level nav into the BySpace button", async ({ page }) => {
+      await gotoAppShell(page);
+      await openMobileAgentSidebar(page);
+      await expectMobileAgentSidebarVisible(page);
+
+      const navTestIDs = [
+        "sidebar-global-new-workspace",
+        "sidebar-sessions",
+        "sidebar-search",
+        "sidebar-schedules",
+      ];
+
+      // Folding is the point of the button: the panel opens with the destinations away, so the
+      // workspace list is not pushed below four rows nobody asked for on a phone.
+      for (const testID of navTestIDs) {
+        await expect(page.getByTestId(testID)).toHaveCount(0);
+      }
+
+      const trigger = page.getByTestId("sidebar-nav-menu-trigger");
+      await expect(trigger).toBeVisible();
+      await expect(trigger).toHaveAccessibleName("BySpace");
+      await expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+      await trigger.click();
+      await expect(trigger).toHaveAttribute("aria-expanded", "true");
+
+      for (const testID of navTestIDs) {
+        await expect(page.getByTestId(testID)).toHaveCount(1);
+      }
+
+      // The revealed rows sit below the button and on its rail, so the group reads as one list
+      // even though the close button shares the button's row.
+      const triggerBox = await trigger.boundingBox();
+      const firstRowBox = await page.getByTestId("sidebar-global-new-workspace").boundingBox();
+      expect(triggerBox).not.toBeNull();
+      expect(firstRowBox).not.toBeNull();
+      expect(firstRowBox!.y).toBeGreaterThan(triggerBox!.y);
+      expect(firstRowBox!.x).toBe(triggerBox!.x);
+
+      const labelBox = await trigger.getByText("BySpace", { exact: true }).boundingBox();
+      expect(labelBox).not.toBeNull();
+      expect(labelBox!.x + labelBox!.width / 2).toBeCloseTo(
+        triggerBox!.x + triggerBox!.width / 2,
+        0,
+      );
+
+      // Choosing a destination closes the panel behind it.
+      await page.getByTestId("sidebar-sessions").click();
+      await expect(page).toHaveURL(/\/sessions(?:$|\?)/, { timeout: 30_000 });
+      await expectMobileAgentSidebarHidden(page);
+    });
+
+    test("starts folded again the next time the panel opens", async ({ page }) => {
+      await gotoAppShell(page);
+      await openMobileAgentSidebar(page);
+      await expectMobileAgentSidebarVisible(page);
+
+      const trigger = page.getByTestId("sidebar-nav-menu-trigger");
+      await trigger.click();
+      await expect(page.getByTestId("sidebar-sessions")).toHaveCount(1);
+
+      // Close with the ✕, which navigates nowhere. The panel is retained rather than unmounted,
+      // so without an explicit reset the disclosure state would outlive it and the rows would
+      // still be covering the workspace list on the next open — the thing folding them prevents.
+      await closeMobileAgentSidebar(page);
+      await expectMobileAgentSidebarHidden(page);
+
+      await openMobileAgentSidebar(page);
+      await expectMobileAgentSidebarVisible(page);
+      await expect(trigger).toHaveAttribute("aria-expanded", "false");
+      for (const testID of [
+        "sidebar-global-new-workspace",
+        "sidebar-sessions",
+        "sidebar-search",
+        "sidebar-schedules",
+      ]) {
+        await expect(page.getByTestId(testID)).toHaveCount(0);
+      }
+    });
   });
 
   test.describe("wide Web", () => {
@@ -397,10 +478,10 @@ test.describe("Half-screen desktop layout", () => {
       expect(scrollTop).toBe(160);
 
       await page.getByTestId("menu-button").click();
-      await expect(page.getByTestId("sidebar-global-new-workspace")).not.toBeVisible();
+      await expect(pinnedSidebar(page)).toHaveCount(0);
 
       await page.getByTestId("menu-button").click();
-      await expect(page.getByTestId("sidebar-global-new-workspace")).toBeVisible();
+      await expect(pinnedSidebar(page)).toHaveCount(1);
       await expect(sidebarScroll).toHaveJSProperty("scrollTop", scrollTop);
     } finally {
       await workspace.cleanup();
@@ -409,30 +490,142 @@ test.describe("Half-screen desktop layout", () => {
 
   test("keeps the pinned sidebar at half of a 14-inch Mac display", async ({ page }) => {
     await gotoAppShell(page);
-    await expect(page.getByTestId("sidebar-global-new-workspace")).toBeVisible();
+    await expect(pinnedSidebar(page)).toBeVisible();
     await expect(page.getByTestId("agent-list-backdrop")).not.toBeVisible();
   });
 
-  test("keeps the left toggle center-owned without left window controls", async ({ page }) => {
+  test("keeps the sidebar toggle pinned to the window's top-left corner", async ({ page }) => {
     await gotoAppShell(page);
 
+    // The toggle holds one position, so collapsing the sidebar must not move the target.
+    await expect(pinnedSidebar(page)).toBeVisible();
     const openToggle = page.getByTestId("menu-button");
-    const openIcon = openToggle.locator("svg").first();
-    await expect(openIcon).toBeVisible();
-    const openBounds = await openIcon.boundingBox();
+    await expect(openToggle).toBeVisible();
+    const openBounds = await openToggle.boundingBox();
     expect(openBounds).not.toBeNull();
-    expect(openBounds?.x).toBeGreaterThan(12);
+    expect(openBounds?.x).toBeLessThan(12);
+    expect(openBounds?.y).toBeLessThan(12);
 
     await openToggle.click();
-    await expect(page.getByTestId("sidebar-global-new-workspace")).not.toBeVisible();
+    await expect(pinnedSidebar(page)).toHaveCount(0);
 
     const closedToggle = page.getByTestId("menu-button");
-    const closedIcon = closedToggle.locator("svg").first();
-    await expect(closedIcon).toBeVisible();
-    const closedBounds = await closedIcon.boundingBox();
+    await expect(closedToggle).toBeVisible();
+    const closedBounds = await closedToggle.boundingBox();
     expect(closedBounds).not.toBeNull();
-    expect(closedBounds?.x).toBeCloseTo(9, 0);
+    expect(closedBounds?.x).toBe(openBounds?.x);
     expect(closedBounds?.y).toBe(openBounds?.y);
+
+    // Exactly one host at a time: never two toggles, never none.
+    await expect(page.getByTestId("menu-button")).toHaveCount(1);
+  });
+
+  test("reveals the top-level nav as rows under the BySpace button", async ({ page }) => {
+    await gotoAppShell(page);
+
+    await expect(pinnedSidebar(page)).toBeVisible();
+    // The destinations start hidden; the pinned sidebar shows the button instead.
+    for (const testID of [
+      "sidebar-global-new-workspace",
+      "sidebar-sessions",
+      "sidebar-search",
+      "sidebar-schedules",
+    ]) {
+      await expect(page.getByTestId(testID)).toHaveCount(0);
+    }
+
+    const trigger = page.getByTestId("sidebar-nav-menu-trigger");
+    await expect(trigger).toBeVisible();
+    await expect(trigger).toHaveAccessibleName("BySpace");
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+    await trigger.click();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+
+    // An inline disclosure, not a floating surface: the destinations are sidebar rows, and
+    // they appear *below* the button, pushing the workspace list down rather than covering it.
+    // A floating menu would portal them outside the sidebar; assert they are inside it.
+    await expect(pinnedSidebar(page).getByTestId("sidebar-global-new-workspace")).toHaveCount(1);
+    for (const testID of [
+      "sidebar-global-new-workspace",
+      "sidebar-sessions",
+      "sidebar-search",
+      "sidebar-schedules",
+    ]) {
+      await expect(page.getByTestId(testID)).toHaveCount(1);
+    }
+
+    const triggerBox = await trigger.boundingBox();
+    const firstRowBox = await page.getByTestId("sidebar-global-new-workspace").boundingBox();
+    expect(triggerBox).not.toBeNull();
+    expect(firstRowBox).not.toBeNull();
+    expect(firstRowBox!.y).toBeGreaterThan(triggerBox!.y);
+
+    // The revealed rows match one another, so the group reads as one list.
+    const rowBox = await page.getByTestId("sidebar-sessions").boundingBox();
+    expect(rowBox).not.toBeNull();
+    expect(rowBox!.x).toBe(firstRowBox!.x);
+    expect(rowBox!.height).toBe(firstRowBox!.height);
+
+    // The corner row carries both controls: the toggle and the app menu share it.
+    const toggleBox = await page.getByTestId("menu-button").boundingBox();
+    expect(toggleBox).not.toBeNull();
+    expect(toggleBox!.y).toBeLessThan(triggerBox!.y + triggerBox!.height);
+    expect(toggleBox!.y + toggleBox!.height).toBeGreaterThan(triggerBox!.y);
+
+    // Align the glyph, not the frame: the toggle's frame is wider than the 16px glyph it
+    // centers, so matching frames would leave the visible icon a few pixels off the rail.
+    const glyphX = async (testID: string) => {
+      const box = await page.getByTestId(testID).locator("svg").first().boundingBox();
+      expect(box, `${testID} has no leading icon`).not.toBeNull();
+      return box!.x;
+    };
+    expect(await glyphX("menu-button")).toBe(await glyphX("sidebar-global-new-workspace"));
+    expect(await glyphX("menu-button")).toBe(await glyphX("sidebar-sessions"));
+
+    // The app menu is a title-bar shape, not a nav row: its label is centred on the button and
+    // its chevron hugs the button's right edge. Neither has to line up with the rows below —
+    // sharing the corner row with the toggle makes that impossible anyway.
+    const labelBox = await trigger.getByText("BySpace", { exact: true }).boundingBox();
+    expect(labelBox).not.toBeNull();
+    const buttonCentre = triggerBox!.x + triggerBox!.width / 2;
+    expect(labelBox!.x + labelBox!.width / 2).toBeCloseTo(buttonCentre, 0);
+
+    const chevronBox = await trigger.locator("svg").first().boundingBox();
+    expect(chevronBox).not.toBeNull();
+    const chevronRightInset =
+      triggerBox!.x + triggerBox!.width - (chevronBox!.x + chevronBox!.width);
+    expect(chevronRightInset).toBeLessThan(12);
+    expect(chevronRightInset).toBeGreaterThanOrEqual(0);
+
+    // Choosing a destination navigates and collapses the disclosure behind it.
+    await page.getByTestId("sidebar-sessions").click();
+    await expect(page).toHaveURL(/\/sessions(?:$|\?)/, { timeout: 30_000 });
+    await expect(page.getByTestId("sidebar-sessions")).toHaveCount(0);
+  });
+
+  test("starts folded again after the pinned sidebar is collapsed and reopened", async ({
+    page,
+  }) => {
+    await gotoAppShell(page);
+    await expect(pinnedSidebar(page)).toBeVisible();
+
+    await page.getByTestId("sidebar-nav-menu-trigger").click();
+    await expect(page.getByTestId("sidebar-sessions")).toHaveCount(1);
+
+    // The sidebar is retained behind `display: none` rather than unmounted, so the disclosure
+    // state would survive collapsing it. Without the reset the rows would still be covering the
+    // workspace list on the next open.
+    await page.getByTestId("menu-button").click();
+    await expect(pinnedSidebar(page)).toHaveCount(0);
+
+    await page.getByTestId("menu-button").click();
+    await expect(pinnedSidebar(page)).toBeVisible();
+    await expect(page.getByTestId("sidebar-nav-menu-trigger")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    await expect(page.getByTestId("sidebar-sessions")).toHaveCount(0);
   });
 
   test("yields app navigation to the settings split", async ({ page }) => {
@@ -453,12 +646,14 @@ test.describe("Half-screen desktop layout", () => {
       await openWorkspaceFromSidebar(page, workspace.workspaceId);
 
       await openFilesPanel(page);
-      const explorerToggle = page.getByTestId("workspace-explorer-toggle").first();
+      const explorerToggle = page
+        .locator('[data-testid="workspace-explorer-toggle"]:visible')
+        .first();
       await expect(
         page.getByTestId("explorer-sidebar-tab-files").filter({ visible: true }),
       ).toBeVisible();
       await expect(explorerToggle).toHaveAccessibleName("Close Explorer sidebar");
-      await expect(page.getByTestId("sidebar-global-new-workspace")).toBeVisible();
+      await expect(pinnedSidebar(page)).toBeVisible();
       await expect(page.getByTestId("explorer-sidebar-tab-rail")).toBeVisible();
       await expect(page.getByTestId("workspace-tabs-row").filter({ visible: true })).toHaveCount(1);
 
@@ -467,7 +662,40 @@ test.describe("Half-screen desktop layout", () => {
         page.getByTestId("explorer-sidebar-tab-files").filter({ visible: true }),
       ).toHaveCount(0);
       await expect(explorerToggle).toHaveAccessibleName("Open Explorer sidebar");
-      await expect(page.getByTestId("sidebar-global-new-workspace")).toBeVisible();
+      await expect(pinnedSidebar(page)).toBeVisible();
+    } finally {
+      await workspace.cleanup();
+    }
+  });
+
+  test("keeps the Explorer toggle pinned to the window's top-right corner", async ({ page }) => {
+    const workspace = await seedWorkspace({ repoPrefix: "sidebar-explorer-toggle-pinned-" });
+
+    try {
+      await gotoAppShell(page);
+      await waitForSidebarProject(page, path.basename(workspace.repoPath));
+      await openWorkspaceFromSidebar(page, workspace.workspaceId);
+
+      const viewport = page.viewportSize();
+      expect(viewport).not.toBeNull();
+      const toggle = () =>
+        page.locator('[data-testid="workspace-explorer-toggle"]:visible').first();
+
+      // With the dock closed the content header hosts the toggle, at the window's corner.
+      await expect(toggle()).toBeVisible({ timeout: 30_000 });
+      const closedBounds = await toggle().boundingBox();
+      expect(closedBounds).not.toBeNull();
+      expect(closedBounds!.x + closedBounds!.width).toBeGreaterThan(viewport!.width - 12);
+
+      // Opening the dock hands the same control to the dock's tab rail, unmoved.
+      await openFilesPanel(page);
+      await expect(
+        page.getByTestId("explorer-sidebar-tab-files").filter({ visible: true }),
+      ).toBeVisible();
+      const openBounds = await toggle().boundingBox();
+      expect(openBounds).not.toBeNull();
+      expect(openBounds!.x).toBe(closedBounds!.x);
+      await expect(page.getByTestId("workspace-explorer-toggle")).toHaveCount(1);
     } finally {
       await workspace.cleanup();
     }

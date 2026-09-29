@@ -3,6 +3,7 @@ import { expect, type Page } from "@playwright/test";
 import type { DaemonClient as InternalDaemonClient } from "@bytetrue/client/internal/daemon-client";
 import { parseHostWorkspaceRouteFromPathname } from "../../../src/utils/host-routes";
 import { gotoAppShell } from "./app";
+import { clickTopLevelNavItem } from "./sidebar-chrome";
 import { connectDaemonClient } from "./daemon-client-loader";
 import { getServerId } from "./server-id";
 import { withProjectOwnership } from "./project-ownership";
@@ -277,7 +278,7 @@ export async function navigateToWorkspaceViaSidebar(
 }
 
 export async function leaveWorkspaceViaHistory(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "History", exact: true }).click();
+  await clickTopLevelNavItem(page, "sidebar-sessions");
   await expect(page).toHaveURL(/\/sessions$/, { timeout: 30_000 });
 }
 

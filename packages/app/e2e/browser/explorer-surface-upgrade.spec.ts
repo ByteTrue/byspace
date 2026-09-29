@@ -96,7 +96,7 @@ test.describe("explorer surface after upgrading from the docked sidebar", () => 
       await gotoWorkspace(page, workspace.workspaceId);
       await waitForWorkspaceTabsVisible(page);
 
-      const agentList = visible(page, "sidebar-sessions");
+      const agentList = visible(page, "left-sidebar");
       const toggle = visible(page, "workspace-explorer-toggle").first();
 
       await test.step("open the explorer so both sides are showing", async () => {

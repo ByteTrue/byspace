@@ -57,8 +57,11 @@ export async function observeCommandCenterScroll(page: Page): Promise<void> {
   });
 }
 
+import { openTopLevelNavMenu, topLevelNavItem } from "./sidebar-chrome";
+
 export async function openCommandCenterWithKeyboard(page: Page): Promise<Locator> {
-  await expect(page.getByTestId("sidebar-search")).toBeVisible({ timeout: 30_000 });
+  await openTopLevelNavMenu(page);
+  await expect(topLevelNavItem(page, "sidebar-search")).toBeVisible({ timeout: 30_000 });
   await page.keyboard.press("Meta+K");
   const panel = page.getByTestId("command-center-panel");
   await expect(panel).toBeVisible({ timeout: 30_000 });

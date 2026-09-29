@@ -1039,6 +1039,9 @@ export const fr: TranslationResources = {
     },
   },
   sidebar: {
+    appMenu: {
+      label: "BySpace",
+    },
     sortProjects: {
       label: "Trier les projets",
     },
