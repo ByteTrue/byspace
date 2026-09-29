@@ -693,3 +693,61 @@ describe("issue deletion", () => {
     expect(() => store.deleteIssue(issue.id)).toThrow(/not found/);
   });
 });
+
+describe("duplicate marks", () => {
+  it("a mark forces cancelled and remembers its original", () => {
+    const original = store.createIssue({ title: "O", creatorType: "owner", creatorId: "owner" });
+    const twin = store.createIssue({ title: "T", creatorType: "owner", creatorId: "owner" });
+    const marked = store.updateIssue({
+      id: twin.id,
+      expectedRevision: twin.revision,
+      duplicateOf: original.id,
+    });
+    expect(marked.status).toBe("cancelled");
+    expect(marked.duplicateOfIssueId).toBe(original.id);
+  });
+
+  it("a target that is itself a duplicate is refused, and so is a marked original", () => {
+    const a = store.createIssue({ title: "A", creatorType: "owner", creatorId: "owner" });
+    const b = store.createIssue({ title: "B", creatorType: "owner", creatorId: "owner" });
+    const c = store.createIssue({ title: "C", creatorType: "owner", creatorId: "owner" });
+    store.updateIssue({ id: b.id, expectedRevision: b.revision, duplicateOf: a.id });
+    expect(() =>
+      store.updateIssue({ id: c.id, expectedRevision: c.revision, duplicateOf: b.id }),
+    ).toThrow(/is itself a duplicate/);
+    expect(() =>
+      store.updateIssue({ id: a.id, expectedRevision: a.revision, duplicateOf: c.id }),
+    ).toThrow(/marked as duplicates of this issue/);
+  });
+
+  it("leaving cancelled drops the mark; cancelling again does not revive it", () => {
+    const original = store.createIssue({ title: "O2", creatorType: "owner", creatorId: "owner" });
+    const twin = store.createIssue({ title: "T2", creatorType: "owner", creatorId: "owner" });
+    const marked = store.updateIssue({
+      id: twin.id,
+      expectedRevision: twin.revision,
+      duplicateOf: original.id,
+    });
+    const reopened = store.updateIssue({
+      id: twin.id,
+      expectedRevision: marked.revision,
+      status: "in_progress",
+    });
+    expect(reopened.duplicateOfIssueId).toBeNull();
+    const recancelled = store.updateIssue({
+      id: twin.id,
+      expectedRevision: reopened.revision,
+      status: "cancelled",
+    });
+    expect(recancelled.duplicateOfIssueId).toBeNull();
+  });
+
+  it("deleting the original detaches its duplicates", () => {
+    const original = store.createIssue({ title: "O3", creatorType: "owner", creatorId: "owner" });
+    const twin = store.createIssue({ title: "T3", creatorType: "owner", creatorId: "owner" });
+    store.updateIssue({ id: twin.id, expectedRevision: twin.revision, duplicateOf: original.id });
+    store.deleteIssue(original.id);
+    const after = store.getIssue(twin.id);
+    expect(after.duplicateOfIssueId).toBeNull();
+  });
+});

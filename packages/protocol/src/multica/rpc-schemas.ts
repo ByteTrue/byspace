@@ -94,6 +94,8 @@ export const MulticaIssueSummarySchema = z.object({
   revision: z.number().int(),
   position: z.number(),
   labels: z.array(MulticaLabelSummarySchema),
+  /** The issue this cancelled issue duplicates; null unless both live. */
+  duplicateOf: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
   lastActivityAt: z.string().nullable(),
@@ -945,6 +947,8 @@ export const MulticaIssueUpdateRequestSchema = z.object({
    * status change performs (the source's UpdateIssue CASE, first branch).
    */
   position: z.number().optional(),
+  /** Present forces a cancelled status write that stamps the mark. */
+  duplicateOf: z.string().optional(),
 });
 
 export const MulticaIssueUpdateResponseSchema = z.object({

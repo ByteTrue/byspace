@@ -7,3 +7,5 @@ daemon 注入给 agent 会话的 `byspace` 命令解析到 `node_modules/.bin/by
 - 验证任何"agent 自己用 CLI"的能力前，先确认 dist 时间戳晚于源码改动。
 
 两次踩中：worker 域（2026-09 的 skill/CLI 批）与 multica 域 run 身份链真机验证（Writer 报告 multica 子命令不存在，重建后闭环才通）。同源教训：daemon 本身（strip-types 直跑源码）有热感知错觉，但**它 spawn 出去的 agent 会话走的是构建产物**，两者的"新代码"定义不同。
+
+- 第 5 处 client 透传漏（040）：client 方法逐字段构造 message 时，新字段要加两处——options 类型和 message 字段行。只加类型静默丢字段；用"应抛的探针"（如自引用 mark）一次定位。

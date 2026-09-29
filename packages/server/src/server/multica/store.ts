@@ -224,45 +224,23 @@ export class MulticaStore {
     readonly assigneeType?: string | null;
     readonly assigneeId?: string | null;
     readonly title?: string;
+    /**
+     * MUL-7349: present forces a status write to cancelled and stamps the
+     * pointer. A duplicate is an ordinary cancelled issue that remembers
+     * its original — there is no duplicate status. The mark only lives
+     * while the issue is cancelled: any write leaving cancelled drops it.
+     */
+    readonly duplicateOf?: string;
   }): IssueRow {
     const before = this.getIssue(input.id);
-    const sets: string[] = [];
-    const params: unknown[] = [];
-    let positionWritten = false;
-    if (input.status !== undefined) {
-      sets.push("status = ?");
-      params.push(input.status);
-      // The same re-rank rule as updateIssueStatus: an explicit position is
-      // the drag's slot; without one the status change sends the issue to
-      // the top of its new column.
-      if (input.status !== before.status) {
-        sets.push("position = ?");
-        params.push(this.#positionForStatusWrite(input.position, before.status, input.status));
-        positionWritten = true;
-      }
+    let status = input.status;
+    if (input.duplicateOf !== undefined) {
+      // The mark shares the status resolution of cancelling by hand: forced
+      // to cancelled, validated at both ends of the relation.
+      status = "cancelled";
+      this.#validateDuplicateMark(input.id, input.duplicateOf, input.status);
     }
-    // position is its own dimension (the source treats it independently of
-    // status): a same-status or status-less drag still re-slots the card.
-    if (!positionWritten && input.position !== undefined && input.position !== null) {
-      sets.push("position = ?");
-      params.push(input.position);
-    }
-    if (input.priority !== undefined) {
-      sets.push("priority = ?");
-      params.push(input.priority);
-    }
-    if (input.assigneeType !== undefined) {
-      sets.push("assignee_type = ?");
-      params.push(input.assigneeType);
-    }
-    if (input.assigneeId !== undefined) {
-      sets.push("assignee_id = ?");
-      params.push(input.assigneeId);
-    }
-    if (input.title !== undefined) {
-      sets.push("title = ?");
-      params.push(input.title);
-    }
+    const { sets, params } = this.#issueWriteSets(input, before, status, input.duplicateOf);
     if (sets.length === 0) {
       return this.getIssue(input.id);
     }
@@ -277,8 +255,8 @@ export class MulticaStore {
       );
     }
     const after = this.getIssue(input.id);
-    if (input.status !== undefined && input.status !== before.status) {
-      this.#afterStatusWrite(input.id, before.status, after.revision, input.status);
+    if (status !== undefined && status !== before.status) {
+      this.#afterStatusWrite(input.id, before.status, after.revision, status);
     }
     this.#recordFieldChanges(before, after, {
       type: input.actorType ?? "owner",
@@ -342,6 +320,105 @@ export class MulticaStore {
       id: input.actorId ?? null,
     });
     return updated;
+  }
+
+  /**
+   * The update's column sets: omit-keeps on every field, the re-rank a bare
+   * status change performs, position as its own dimension, and the duplicate
+   * pointer's stamp-or-drop pair.
+   */
+  #issueWriteSets(
+    input: {
+      position?: number | null;
+      priority?: string;
+      assigneeType?: string | null;
+      assigneeId?: string | null;
+      title?: string;
+      duplicateOf?: string;
+    },
+    before: IssueRow,
+    status: string | undefined,
+    duplicateOf: string | undefined,
+  ): { sets: string[]; params: unknown[] } {
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    let positionWritten = false;
+    if (status !== undefined) {
+      sets.push("status = ?");
+      params.push(status);
+      // The same re-rank rule as updateIssueStatus: an explicit position is
+      // the drag's slot; without one the status change sends the issue to
+      // the top of its new column.
+      if (status !== before.status) {
+        sets.push("position = ?");
+        params.push(this.#positionForStatusWrite(input.position, before.status, status));
+        positionWritten = true;
+      }
+    }
+    // position is its own dimension (the source treats it independently of
+    // status): a same-status or status-less drag still re-slots the card.
+    if (!positionWritten && input.position !== undefined && input.position !== null) {
+      sets.push("position = ?");
+      params.push(input.position);
+    }
+    if (input.priority !== undefined) {
+      sets.push("priority = ?");
+      params.push(input.priority);
+    }
+    if (input.assigneeType !== undefined) {
+      sets.push("assignee_type = ?");
+      params.push(input.assigneeType);
+    }
+    if (input.assigneeId !== undefined) {
+      sets.push("assignee_id = ?");
+      params.push(input.assigneeId);
+    }
+    if (input.title !== undefined) {
+      sets.push("title = ?");
+      params.push(input.title);
+    }
+    if (duplicateOf !== undefined) {
+      sets.push("duplicate_of_issue_id = ?");
+      params.push(duplicateOf);
+    } else if (status !== undefined && status !== before.status && status !== "cancelled") {
+      // A write that leaves cancelled drops the mark: reopening an issue is
+      // how a mark is removed, and cancelling again does not bring it back.
+      sets.push("duplicate_of_issue_id = NULL");
+    }
+    return { sets, params };
+  }
+
+  /**
+   * A mark's two checks, both inside the same write as the pointer: the
+   * relation stays one level deep in both directions, and a mark never
+   * rides a status other than cancelled.
+   */
+  #validateDuplicateMark(id: string, duplicateOf: string, requestedStatus?: string): void {
+    if (duplicateOf === id) {
+      throw new Error("an issue cannot be a duplicate of itself");
+    }
+    if (requestedStatus !== undefined && requestedStatus !== "cancelled") {
+      throw new Error("a duplicate is cancelled; status must be cancelled or omitted");
+    }
+    const target = this.#db
+      .prepare(`SELECT id, duplicate_of_issue_id FROM issue WHERE id = ?`)
+      .get(duplicateOf) as { id: string; duplicate_of_issue_id: string | null } | undefined;
+    if (!target) {
+      throw new Error("duplicate target not found");
+    }
+    if (target.duplicate_of_issue_id !== null) {
+      throw new Error(
+        "the target issue is itself a duplicate; mark this issue as a duplicate of its original instead",
+      );
+    }
+    const pointed = this.#db
+      .prepare(`SELECT COUNT(*) AS n FROM issue WHERE duplicate_of_issue_id = ?`)
+      .get(id) as { n: number };
+    if (Number(pointed.n) > 0) {
+      throw new Error(
+        "other issues are marked as duplicates of this issue; remove those marks first",
+      );
+    }
   }
 
   // ------------------------------------------------------------- agents
@@ -843,12 +920,6 @@ export class MulticaStore {
   }
 
   /**
-   * Every task that has not settled yet — the board's "who is working"
-   * source. A task is working from the moment it is claimed (queued counts:
-   * the executor's one-run-per-agent bound means a queue slot is real
-   * intent), through dispatch and run.
-   */
-  /**
    * Deleting an issue takes its record with it: the FKs cascade the
    * comments, activities, labels and the queue rows themselves, as in the
    * source (issue_id ON DELETE CASCADE). The source cancels the in-flight
@@ -860,12 +931,31 @@ export class MulticaStore {
    * semantics this domain has not built, recorded.
    */
   deleteIssue(id: string): void {
-    const result = this.#db.prepare(`DELETE FROM issue WHERE id = ?`).run(id);
-    if (Number(result.changes) === 0) {
-      throw new Error(`issue not found: ${id}`);
+    this.#db.exec("BEGIN IMMEDIATE");
+    try {
+      // Deleting an original detaches its duplicates the way deleting a
+      // parent detaches children (no FK, repository rule — the pointer
+      // never outlives the row it names).
+      this.#db
+        .prepare(`UPDATE issue SET duplicate_of_issue_id = NULL WHERE duplicate_of_issue_id = ?`)
+        .run(id);
+      const result = this.#db.prepare(`DELETE FROM issue WHERE id = ?`).run(id);
+      if (Number(result.changes) === 0) {
+        throw new Error(`issue not found: ${id}`);
+      }
+      this.#db.exec("COMMIT");
+    } catch (error) {
+      this.#db.exec("ROLLBACK");
+      throw error;
     }
   }
 
+  /**
+   * Every task that has not settled yet — the board's "who is working"
+   * source. A task is working from the moment it is claimed (queued counts:
+   * the executor's one-run-per-agent bound means a queue slot is real
+   * intent), through dispatch and run.
+   */
   listRunningTasks(): TaskRow[] {
     const rows = this.#db
       .prepare(
@@ -2094,6 +2184,11 @@ export class MulticaStore {
    * waiting_local_directory). Each transition stamps its own timestamp column
    * exactly as the source's per-state queries do.
    */
+  /** Whether an issue row still exists — the duplicate mark's liveness read. */
+  issueExists(id: string): boolean {
+    return this.#db.prepare(`SELECT 1 AS n FROM issue WHERE id = ?`).get(id) !== undefined;
+  }
+
   /** Whether a task row still exists — the executor's mid-run home check. */
   taskExists(id: string): boolean {
     const row = this.#db.prepare(`SELECT 1 AS n FROM agent_task_queue WHERE id = ?`).get(id);

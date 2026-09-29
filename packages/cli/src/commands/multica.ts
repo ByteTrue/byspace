@@ -338,6 +338,7 @@ export function createMulticaCommand(): Command {
       .option("--clear-assignee", "Unassign")
       .option("--title <title>", "New title")
       .option("--position <n>", "Drop slot (drag semantics)")
+      .option("--duplicate-of <id>", "Mark as a duplicate of this issue (forces cancelled)")
       .allowExcessArguments(false),
   ).action(withOutput(runMulticaIssueUpdateCommand));
 
@@ -1368,6 +1369,7 @@ export async function runMulticaIssueUpdateCommand(
   options: CommandOptions & {
     id?: string;
     status?: string;
+    duplicateOf?: string;
     priority?: string;
     assigneeId?: string;
     assigneeType?: string;
@@ -1392,6 +1394,7 @@ export async function runMulticaIssueUpdateCommand(
       ...(options.priority ? { priority: options.priority } : {}),
       ...(options.title ? { title: options.title } : {}),
       ...(position !== undefined && !Number.isNaN(position) ? { position } : {}),
+      ...(options.duplicateOf ? { duplicateOf: options.duplicateOf.trim() } : {}),
       ...assigneePatchFromOptions(options),
       ...(senderSessionId ? { senderSessionId } : {}),
     });

@@ -88,10 +88,20 @@ function issueSummary(store: MulticaStore, issue: IssueRow): MulticaIssueSummary
     revision: issue.revision,
     position: issue.position,
     labels: store.listLabelsForIssue(issue.id).map(labelSummary),
+    // The mark reads only while it counts: a cancelled issue whose
+    // original still exists. Anything else renders null (MUL-7349).
+    duplicateOf: liveDuplicateOf(store, issue),
     createdAt: issue.createdAt,
     updatedAt: issue.updatedAt,
     lastActivityAt: issue.lastActivityAt,
   };
+}
+
+function liveDuplicateOf(store: MulticaStore, issue: IssueRow): string | null {
+  if (issue.status !== "cancelled" || issue.duplicateOfIssueId === null) {
+    return null;
+  }
+  return store.issueExists(issue.duplicateOfIssueId) ? issue.duplicateOfIssueId : null;
 }
 
 function commentSummary(
@@ -633,6 +643,7 @@ export class MulticaSession {
     assigneeId?: string | null;
     title?: string;
     position?: number | null;
+    duplicateOf?: string;
   }): IssueRow {
     const before = this.#store.getIssue(input.issueId);
     const issue = this.#store.updateIssue({
@@ -644,6 +655,7 @@ export class MulticaSession {
       assigneeType: input.assigneeType,
       assigneeId: input.assigneeId,
       title: input.title,
+      duplicateOf: input.duplicateOf,
     });
     // Field writes that the trigger engine cares about: a reassignment or a
     // backlog departure can start a run, exactly as a create does.
@@ -674,6 +686,7 @@ export class MulticaSession {
       assigneeId: msg.assigneeId,
       title: msg.title,
       position: msg.position ?? null,
+      duplicateOf: msg.duplicateOf,
     });
     this.#emit({
       type: "multica.issue.update.response",

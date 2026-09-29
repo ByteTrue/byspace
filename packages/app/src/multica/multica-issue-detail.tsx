@@ -72,6 +72,8 @@ interface IssueDetailData {
     status?: string;
     priority?: string;
     title?: string;
+    /** Present forces a cancelled status write that stamps the mark. */
+    duplicateOf?: string;
     description?: string;
     assigneeType?: string | null;
     assigneeId?: string | null;
@@ -1260,6 +1262,9 @@ function IssuePropertiesPane({ data }: { data: IssueDetailData }): ReactElement 
             onClear={clearAssignee}
           />
         </PropertyRow>
+        <PropertyRow label="Duplicate of">
+          <DuplicateMarkRow data={data} />
+        </PropertyRow>
       </Section>
       <Section title="Details">
         <PropertyRow label="Created by">
@@ -1281,6 +1286,83 @@ function IssuePropertiesPane({ data }: { data: IssueDetailData }): ReactElement 
       </Section>
       <PropertiesLowerSections data={data} />
     </View>
+  );
+}
+
+/**
+ * The duplicate mark row: reads the live pointer, offers a mark by id (the
+ * source's picker modal translated to the repo's only affordance — an
+ * inline field), and removes the mark by reopening, exactly the source's
+ * removal path.
+ */
+function DuplicateMarkRow({ data }: { data: IssueDetailData }): ReactElement {
+  const issue = data.issue;
+  const [marking, setMarking] = useState(false);
+  const [draft, setDraft] = useState("");
+  const toggleMarking = useCallback(() => setMarking((value) => !value), []);
+  const handleDraft = useCallback((text: string) => setDraft(text), []);
+  const markDuplicate = useCallback(
+    (duplicateOf: string) => {
+      if (!issue || duplicateOf.trim() === "") return;
+      data.updateField({ duplicateOf: duplicateOf.trim() });
+      setMarking(false);
+      setDraft("");
+    },
+    [issue, data],
+  );
+  const reopen = useCallback(() => {
+    if (issue && issue.status === "cancelled") {
+      data.updateField({ status: "backlog" });
+    }
+  }, [issue, data]);
+  if (!issue) {
+    return <Text style={styles.propertyValue}>—</Text>;
+  }
+  if (issue.duplicateOf !== null) {
+    return (
+      <Pressable
+        onPress={reopen}
+        testID={`multica-duplicate-${issue.duplicateOf}`}
+        style={styles.duplicateChip}
+      >
+        <Text style={styles.propertyValue}>Duplicate — reopen to clear</Text>
+      </Pressable>
+    );
+  }
+  if (!marking) {
+    return (
+      <Pressable onPress={toggleMarking} testID="multica-duplicate-mark">
+        <Text style={styles.propertyMuted}>—</Text>
+      </Pressable>
+    );
+  }
+  return (
+    <View style={styles.duplicateMarkRow}>
+      <TextInput
+        style={styles.duplicateInput}
+        initialValue=""
+        onChangeText={handleDraft}
+        placeholder="original issue id"
+        placeholderTextColor="gray"
+        testID="multica-duplicate-input"
+      />
+      <DuplicateConfirmButton draft={draft} onMark={markDuplicate} />
+    </View>
+  );
+}
+
+function DuplicateConfirmButton({
+  draft,
+  onMark,
+}: {
+  draft: string;
+  onMark: (duplicateOf: string) => void;
+}): ReactElement {
+  const handlePress = useCallback(() => onMark(draft), [draft, onMark]);
+  return (
+    <Button variant="secondary" size="sm" onPress={handlePress} testID="multica-duplicate-confirm">
+      Mark
+    </Button>
   );
 }
 
@@ -2160,6 +2242,24 @@ const styles = StyleSheet.create((theme) => ({
   executionDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#9ca3af" },
   statusDotDone: { backgroundColor: "#22c55e" },
   hint: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  duplicateChip: {
+    paddingVertical: 2,
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface2,
+  },
+  duplicateMarkRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing[2] },
+  duplicateInput: {
+    width: 160,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 1,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+  },
+  propertyMuted: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
   properties: { gap: theme.spacing[3] },
   propertiesHeading: {
     color: theme.colors.foreground,

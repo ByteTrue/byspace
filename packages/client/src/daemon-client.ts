@@ -5745,6 +5745,7 @@ export class DaemonClient {
     assigneeId?: string | null;
     title?: string;
     position?: number;
+    duplicateOf?: string;
   }): Promise<MulticaIssueUpdatePayload> {
     return this.sendCorrelatedSessionRequest({
       message: {
@@ -5759,6 +5760,7 @@ export class DaemonClient {
         assigneeId: options.assigneeId,
         title: options.title,
         position: options.position ?? undefined,
+        duplicateOf: options.duplicateOf,
       },
       responseType: "multica.issue.update.response",
     });
