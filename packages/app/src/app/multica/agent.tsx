@@ -5,6 +5,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { useFetchQuery } from "@/data/query";
+import { MulticaShell } from "@/multica/multica-nav";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 
 /**
@@ -21,7 +22,11 @@ export default function MulticaAgentRoute(): ReactElement {
   const params = useLocalSearchParams<{ serverId: string; agentId: string }>();
   const serverId = typeof params.serverId === "string" ? params.serverId : "";
   const agentId = typeof params.agentId === "string" ? params.agentId : "";
-  return <AgentPage serverId={serverId} agentId={agentId} />;
+  return (
+    <MulticaShell serverId={serverId} active="rosters">
+      <AgentPage serverId={serverId} agentId={agentId} />
+    </MulticaShell>
+  );
 }
 
 function AgentPage({ serverId, agentId }: { serverId: string; agentId: string }): ReactElement {

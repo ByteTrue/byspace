@@ -608,7 +608,11 @@ function AppWithSidebar({ children }: { children: ReactNode }) {
       pathname === "/new" ||
       pathname === "/sessions" ||
       pathname === "/schedules" ||
-      pathname === "/multica" ||
+      // The whole multica face keeps the workspace sidebar: it is a face of
+      // BySpace, not a standalone app, so every one of its routes reads
+      // like the board does — chrome left, multica rail, content. An exact
+      // "/multica" match here is what made the sub-routes lose the sidebar.
+      pathname.startsWith("/multica") ||
       routeHasKnownHost);
 
   return <AppContainer chromeEnabled={shouldShowAppChrome}>{children}</AppContainer>;

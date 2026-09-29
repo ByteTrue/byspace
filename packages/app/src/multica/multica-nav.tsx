@@ -14,16 +14,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useCallback, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { type Href, useRouter } from "expo-router";
-import {
-  Bell,
-  Bot,
-  KanbanSquare,
-  ListTodo,
-  Timer,
-  Users,
-  UsersRound,
-  ArrowLeft,
-} from "lucide-react-native";
+import { Bell, Bot, KanbanSquare, ListTodo, Timer, Users, UsersRound } from "lucide-react-native";
 import { StyleSheet } from "react-native-unistyles";
 
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
@@ -125,26 +116,8 @@ function MulticaNavRail({
       router.push(buildHostWorkspaceRoute(serverId, live.secretaryWorkspaceId));
     }
   }, [live.secretaryWorkspaceId, router, serverId]);
-  const exitToBySpace = useCallback(() => {
-    router.replace("/");
-  }, [router]);
   return (
     <>
-      {/*
-       * The source is a standalone app and has no exit; this face lives
-       * inside BySpace, so the rail carries the door back — the same
-       * handleExit the practice line's console had, in rail form.
-       */}
-      <Pressable
-        style={[styles.railRow, compact && styles.stripRow]}
-        onPress={exitToBySpace}
-        testID="multica-nav-exit"
-      >
-        <ArrowLeft size={14} color="#888" />
-        <Text style={styles.railLabel} numberOfLines={1}>
-          BySpace
-        </Text>
-      </Pressable>
       <View style={styles.searchBoxWrap}>
         <TextInput
           style={styles.searchInput}

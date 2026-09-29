@@ -5,6 +5,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { useLocalSearchParams } from "expo-router";
 
 import { useFetchQuery } from "@/data/query";
+import { MulticaShell } from "@/multica/multica-nav";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 import { useMulticaCatalog } from "@/multica/multica-catalog";
 
@@ -17,7 +18,11 @@ export default function MulticaSquadRoute(): ReactElement {
   const params = useLocalSearchParams<{ serverId: string; squadId: string }>();
   const serverId = typeof params.serverId === "string" ? params.serverId : "";
   const squadId = typeof params.squadId === "string" ? params.squadId : "";
-  return <SquadPage serverId={serverId} squadId={squadId} />;
+  return (
+    <MulticaShell serverId={serverId} active="squads">
+      <SquadPage serverId={serverId} squadId={squadId} />
+    </MulticaShell>
+  );
 }
 
 function SquadPage({ serverId, squadId }: { serverId: string; squadId: string }): ReactElement {

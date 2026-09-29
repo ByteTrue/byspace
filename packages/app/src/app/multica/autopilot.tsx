@@ -5,6 +5,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { useFetchQuery } from "@/data/query";
+import { MulticaShell } from "@/multica/multica-nav";
 import { useHostRuntimeSnapshot } from "@/runtime/host-runtime";
 import { useMulticaCatalog } from "@/multica/multica-catalog";
 import { formatRelativeTime } from "@/multica/multica-activity";
@@ -18,7 +19,11 @@ export default function MulticaAutopilotRoute(): ReactElement {
   const params = useLocalSearchParams<{ serverId: string; autopilotId: string }>();
   const serverId = typeof params.serverId === "string" ? params.serverId : "";
   const autopilotId = typeof params.autopilotId === "string" ? params.autopilotId : "";
-  return <AutopilotPage serverId={serverId} autopilotId={autopilotId} />;
+  return (
+    <MulticaShell serverId={serverId} active="autopilots">
+      <AutopilotPage serverId={serverId} autopilotId={autopilotId} />
+    </MulticaShell>
+  );
 }
 
 function AutopilotPage({
