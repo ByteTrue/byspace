@@ -29,7 +29,6 @@ describe("planWorkspaceOpenTargets", () => {
       activeFile: { path: "src/app.ts", lineStart: 3, lineEnd: 5 },
       desktopTargets,
       canUseDesktopBridge: true,
-      isLocalExecution: true,
     });
 
     expect(targets[0]).toMatchObject({
@@ -50,7 +49,6 @@ describe("planWorkspaceOpenTargets", () => {
       activeFile: { path: "src/app.ts" },
       desktopTargets,
       canUseDesktopBridge: true,
-      isLocalExecution: true,
     });
 
     expect(targets[1]).toMatchObject({
@@ -69,7 +67,6 @@ describe("planWorkspaceOpenTargets", () => {
       workspaceDirectory: "/repo",
       desktopTargets,
       canUseDesktopBridge: true,
-      isLocalExecution: true,
     });
 
     expect(targets[0]).toMatchObject({
@@ -97,7 +94,6 @@ describe("planWorkspaceOpenTargets", () => {
         },
       ],
       canUseDesktopBridge: true,
-      isLocalExecution: true,
     });
 
     expect(targets).toEqual([
@@ -128,7 +124,6 @@ describe("planWorkspaceOpenTargets", () => {
         },
       ],
       canUseDesktopBridge: true,
-      isLocalExecution: true,
     });
 
     expect(targets).toEqual([
@@ -153,14 +148,12 @@ describe("planWorkspaceOpenTargets", () => {
       activeFile: { path: "src/app.ts", lineStart: 3, lineEnd: 5 },
       desktopTargets: [],
       canUseDesktopBridge: false,
-      isLocalExecution: false,
       checkoutStatus,
     });
     const treeTargets = planWorkspaceOpenTargets({
       workspaceDirectory: "/repo",
       desktopTargets: [],
       canUseDesktopBridge: false,
-      isLocalExecution: false,
       checkoutStatus,
     });
 
@@ -190,7 +183,6 @@ describe("planWorkspaceOpenTargets", () => {
       activeFile: { path: "src/app.ts", lineStart: 3, lineEnd: 5 },
       desktopTargets: [],
       canUseDesktopBridge: false,
-      isLocalExecution: false,
       checkoutStatus: {
         isGit: true,
         remoteUrl: "git@gitlab.com:group/project.git",
@@ -215,19 +207,6 @@ describe("planWorkspaceOpenTargets", () => {
       workspaceDirectory: "/repo",
       desktopTargets,
       canUseDesktopBridge: false,
-      isLocalExecution: true,
-      checkoutStatus,
-    });
-
-    expect(targets.map((target) => target.id)).toEqual(["github"]);
-  });
-
-  it("suppresses desktop targets for remote execution paths", () => {
-    const targets = planWorkspaceOpenTargets({
-      workspaceDirectory: "/repo",
-      desktopTargets,
-      canUseDesktopBridge: true,
-      isLocalExecution: false,
       checkoutStatus,
     });
 

@@ -2319,6 +2319,14 @@ export const ptBR: TranslationResources = {
           sectionTitle: "Gerenciamento do serviço",
           unavailable: "Conecte-se a este host para gerenciar as configurações do serviço",
           errorTitle: "Não foi possível atualizar as configurações do serviço",
+          confirmInstallTitle: "Ativar o gerenciamento do serviço?",
+          confirmInstallMessage:
+            "O daemon de {{host}} será registrado no gerenciador de serviços do SO e iniciará no login. Você pode desativar depois pelo mesmo interruptor.",
+          confirmInstall: "Ativar",
+          confirmUninstallTitle: "Desativar o gerenciamento do serviço?",
+          confirmUninstallMessage:
+            "O registro do serviço no SO será removido. O daemon continua em execução, mas não iniciará mais no login.",
+          confirmUninstall: "Desativar",
           toggle: {
             title: "Iniciar no login",
             hint: "Deixa o daemon sob o gerenciador de serviços do SO; ele sobrevive ao fechamento do terminal",

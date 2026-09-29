@@ -1,13 +1,11 @@
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "@/contexts/toast-context";
-import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { resolvePreferredEditorId, usePreferredEditor } from "@/hooks/use-preferred-editor";
 import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-open-targets";
 import { planWorkspaceOpenTargets } from "@/workspace/open-in-editor/planner";
 
 interface UseOpenDirectoryInEditorInput {
-  serverId: string;
   workspaceDirectory: string;
 }
 
@@ -17,14 +15,12 @@ interface OpenDirectoryInEditorAction {
 }
 
 export function useOpenDirectoryInEditor({
-  serverId,
   workspaceDirectory,
 }: UseOpenDirectoryInEditorInput): OpenDirectoryInEditorAction | null {
   const { t } = useTranslation();
   const toast = useToast();
-  const isLocalExecution = useIsLocalDaemon(serverId);
   const { preferredEditorId } = usePreferredEditor();
-  const { targets, isAvailable } = useDesktopOpenTargets({ isLocalExecution });
+  const { targets, isAvailable } = useDesktopOpenTargets();
   const editorTargets = useMemo(
     () => targets.filter((target) => target.kind === "editor"),
     [targets],
@@ -47,7 +43,6 @@ export function useOpenDirectoryInEditor({
         directoryPath,
         desktopTargets: [preferredTarget],
         canUseDesktopBridge: isAvailable,
-        isLocalExecution,
       }).find((candidate) => candidate.source === "desktop");
       if (!target) {
         return;
@@ -58,7 +53,7 @@ export function useOpenDirectoryInEditor({
         );
       });
     },
-    [isAvailable, isLocalExecution, preferredTarget, t, toast, workspaceDirectory],
+    [isAvailable, preferredTarget, t, toast, workspaceDirectory],
   );
 
   return useMemo(

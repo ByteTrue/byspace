@@ -2281,6 +2281,14 @@ export const ar: TranslationResources = {
           sectionTitle: "إدارة الخدمة",
           unavailable: "اتصل بهذا المضيف لإدارة إعدادات الخدمة",
           errorTitle: "تعذر تحديث إعدادات الخدمة",
+          confirmInstallTitle: "تفعيل إدارة الخدمة؟",
+          confirmInstallMessage:
+            "سيتم تسجيل daemon على {{host}} لدى مدير خدمات النظام ليبدأ عند تسجيل الدخول. يمكنك إيقافه لاحقًا من نفس المفتاح.",
+          confirmInstall: "تفعيل",
+          confirmUninstallTitle: "تعطيل إدارة الخدمة؟",
+          confirmUninstallMessage:
+            "سيُزال تسجيل خدمة النظام. يستمر daemon في العمل، لكنه لن يبدأ عند تسجيل الدخول بعد الآن.",
+          confirmUninstall: "تعطيل",
           toggle: {
             title: "التشغيل عند تسجيل الدخول",
             hint: "يوضع daemon تحت إدارة خدمات النظام؛ يستمر بعد إغلاق الطرفية",

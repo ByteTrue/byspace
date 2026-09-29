@@ -42,7 +42,6 @@ export interface PlanWorkspaceOpenTargetsInput {
   resolvedActiveFile?: ResolvedWorkspaceFilePaths | null;
   desktopTargets: readonly DesktopOpenTarget[];
   canUseDesktopBridge: boolean;
-  isLocalExecution: boolean;
   checkoutStatus?: CheckoutStatusForOpenTarget | null;
   forge?: Forge | null;
 }
@@ -71,9 +70,8 @@ function planDesktopOpenTargets(input: {
   resolvedFile: ResolvedWorkspaceFilePaths | null;
   desktopTargets: readonly DesktopOpenTarget[];
   canUseDesktopBridge: boolean;
-  isLocalExecution: boolean;
 }): PlannedDesktopOpenTarget[] {
-  if (!input.canUseDesktopBridge || !input.isLocalExecution) {
+  if (!input.canUseDesktopBridge) {
     return [];
   }
 

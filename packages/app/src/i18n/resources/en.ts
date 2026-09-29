@@ -2297,6 +2297,14 @@ export const en = {
           sectionTitle: "Service hosting",
           unavailable: "Connect to this host to manage service settings",
           errorTitle: "Unable to update service settings",
+          confirmInstallTitle: "Enable service hosting?",
+          confirmInstallMessage:
+            "The daemon on {{host}} will be registered with the OS service manager so it starts at login. You can turn it off later from the same switch.",
+          confirmInstall: "Enable",
+          confirmUninstallTitle: "Disable service hosting?",
+          confirmUninstallMessage:
+            "The OS service registration will be removed. The daemon keeps running, but will no longer start at login.",
+          confirmUninstall: "Disable",
           toggle: {
             title: "Start at login",
             hint: "Hosts the daemon with the OS service manager so it survives terminal exit",

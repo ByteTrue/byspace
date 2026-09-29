@@ -1,11 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
+import { confirmDialog } from "@/utils/confirm-dialog";
 import { Switch } from "@/components/ui/switch";
 import { Alert as InlineAlert } from "@/components/ui/alert";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
-import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { useHostRuntimeClient, useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { settingsStyles } from "@/styles/settings";
 
@@ -24,10 +25,11 @@ interface ServiceView {
 }
 
 /**
- * Host settings toggle for daemon service hosting (issue 043). Only rendered for the
- * local daemon with the daemonServiceInstall capability: the install must run in the
- * daemon's own process with its install-origin context, so remote hosts never show
- * this switch.
+ * Host settings toggle for daemon service hosting (issue 043, visibility relaxed in
+ * issue 057). Rendered for any host whose daemon has the daemonServiceInstall
+ * capability: the install runs inside the daemon's own process on its host machine,
+ * so where the browser is open is irrelevant. Old daemons without the capability
+ * hide the section instead of faking success.
  *
  * The switch reads the daemon-probed service state, never local memory. Unknown state
  * leaves the switch visible but off, with the unknown hint instead of a fake verdict.
@@ -40,6 +42,9 @@ export function DaemonServiceSection({ serverId }: { serverId: string }) {
   const { config } = useDaemonConfig(serverId);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The confirm copy names the host: with remote hosts now showing this section,
+  // "this machine" would read as the viewer's device (review finding, PR #10).
+  const hostLabel = useHosts().find((host) => host.serverId === serverId)?.label ?? serverId;
 
   const serviceView = useMemo(() => {
     const raw = (config as { service?: unknown } | undefined)?.service;
@@ -61,6 +66,19 @@ export function DaemonServiceSection({ serverId }: { serverId: string }) {
   const handleToggle = useCallback(
     async (install: boolean) => {
       if (!client) return;
+      const confirmed = await confirmDialog({
+        title: install
+          ? t("settings.host.daemon.service.confirmInstallTitle")
+          : t("settings.host.daemon.service.confirmUninstallTitle"),
+        message: install
+          ? t("settings.host.daemon.service.confirmInstallMessage", { host: hostLabel })
+          : t("settings.host.daemon.service.confirmUninstallMessage", { host: hostLabel }),
+        confirmLabel: install
+          ? t("settings.host.daemon.service.confirmInstall")
+          : t("settings.host.daemon.service.confirmUninstall"),
+        cancelLabel: t("common.actions.cancel"),
+      });
+      if (!confirmed) return;
       setIsBusy(true);
       setError(null);
       try {
@@ -71,7 +89,7 @@ export function DaemonServiceSection({ serverId }: { serverId: string }) {
         setIsBusy(false);
       }
     },
-    [client],
+    [client, hostLabel, t],
   );
 
   if (serviceFeature !== true) {

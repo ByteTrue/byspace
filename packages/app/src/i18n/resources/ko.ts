@@ -2292,6 +2292,14 @@ export const ko: TranslationResources = {
           sectionTitle: "서비스 관리",
           unavailable: "서비스 설정을 관리하려면 이 호스트에 연결하세요",
           errorTitle: "서비스 설정을 업데이트할 수 없습니다",
+          confirmInstallTitle: "서비스 관리를 사용하시겠습니까?",
+          confirmInstallMessage:
+            "{{host}}의 daemon을 OS 서비스 관리자에 등록하여 로그인 시 자동 시작합니다. 나중에 같은 스위치에서 끌 수 있습니다.",
+          confirmInstall: "사용",
+          confirmUninstallTitle: "서비스 관리를 해제하시겠습니까?",
+          confirmUninstallMessage:
+            "OS 서비스 등록을 제거합니다. daemon은 계속 실행되지만 로그인 시 자동 시작되지 않습니다.",
+          confirmUninstall: "해제",
           toggle: {
             title: "로그인 시 시작",
             hint: "daemon을 OS 서비스 관리자에 등록해 터미널을 종료해도 계속 실행됩니다",

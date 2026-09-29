@@ -2335,6 +2335,14 @@ export const fr: TranslationResources = {
           sectionTitle: "Gestion du service",
           unavailable: "Connectez-vous à cet hôte pour gérer les paramètres du service",
           errorTitle: "Impossible de mettre à jour les paramètres du service",
+          confirmInstallTitle: "Activer la gestion du service ?",
+          confirmInstallMessage:
+            "Le daemon de {{host}} sera enregistré auprès du gestionnaire de services de l'OS et lancé à l'ouverture de session. Vous pourrez le désactiver plus tard via le même interrupteur.",
+          confirmInstall: "Activer",
+          confirmUninstallTitle: "Désactiver la gestion du service ?",
+          confirmUninstallMessage:
+            "L'enregistrement du service OS sera supprimé. Le daemon continue de tourner, mais ne se lancera plus à l'ouverture de session.",
+          confirmUninstall: "Désactiver",
           toggle: {
             title: "Lancer à l'ouverture de session",
             hint: "Confie le daemon au gestionnaire de services de l'OS ; il survit à la fermeture du terminal",

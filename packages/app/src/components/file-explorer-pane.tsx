@@ -60,7 +60,6 @@ import { FileActionsContextMenuContent } from "@/components/file-actions-menu";
 import { ContextMenu, ContextMenuTrigger, useContextMenu } from "@/components/ui/context-menu";
 import { useFileDownload } from "@/hooks/use-file-download";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
-import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { buildWorkspaceExplorerStateKey } from "@/hooks/use-file-explorer-actions";
 import { usePanelStore, type ExpandedPathsUpdate, type SortOption } from "@/stores/panel-store";
 import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
@@ -445,13 +444,9 @@ export function FileExplorerPane({
     workspaceRoot: normalizedWorkspaceRoot,
   });
   const toast = useToast();
-  const isLocalDaemon = useIsLocalDaemon(serverId);
-  const { targets: desktopOpenTargets } = useDesktopOpenTargets({
-    isLocalExecution: isLocalDaemon,
-  });
+  const { targets: desktopOpenTargets } = useDesktopOpenTargets();
   const fileManagerTarget = desktopOpenTargets.find((target) => target.kind === "file-manager");
   const openDirectoryInEditor = useOpenDirectoryInEditor({
-    serverId,
     workspaceDirectory: normalizedWorkspaceRoot,
   });
   // COMPAT(fsEntryOps): added in v0.3.0, remove gate after 2027-02-08.

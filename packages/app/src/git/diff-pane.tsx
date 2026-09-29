@@ -60,7 +60,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import * as Clipboard from "expo-clipboard";
 import { useFileDownload } from "@/hooks/use-file-download";
-import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
 import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { GitActionsSplitButton } from "@/git/actions-split-button";
@@ -1605,10 +1604,7 @@ export function ChangesSurface({
   const codeFontSize = appSettings.codeFontSize;
 
   const toast = useToast();
-  const isLocalDaemon = useIsLocalDaemon(serverId);
-  const { targets: desktopOpenTargets } = useDesktopOpenTargets({
-    isLocalExecution: isLocalDaemon,
-  });
+  const { targets: desktopOpenTargets } = useDesktopOpenTargets();
   const fileManagerTarget = desktopOpenTargets.find((target) => target.kind === "file-manager");
   const {
     openDiff: handleOpenDiff,

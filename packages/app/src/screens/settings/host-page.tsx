@@ -36,7 +36,7 @@ import {
 } from "@/screens/settings/terminal-profile-edit-modal";
 import { PairDeviceModal } from "@/settings/pair-device-modal";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
-import { useIsLocalDaemon } from "@/hooks/use-is-local-daemon";
+import { useIsServingDaemon } from "@/hooks/use-is-local-daemon";
 import { NetworkSection } from "@/screens/settings/network-section";
 import { DaemonServiceSection } from "@/screens/settings/daemon-service-section";
 import { MetadataGenerationPage } from "@/screens/settings/metadata-generation-page";
@@ -299,7 +299,7 @@ export function HostSettingsPage({
 }) {
   const { t } = useTranslation();
   const host = useHostProfile(serverId);
-  const isLocalDaemon = useIsLocalDaemon(serverId);
+  const isServingDaemon = useIsServingDaemon(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
 
   if (!host) {
@@ -331,11 +331,11 @@ export function HostSettingsPage({
 
       <NetworkSection serverId={serverId} />
 
-      {isLocalDaemon ? <DaemonServiceSection serverId={serverId} /> : null}
+      <DaemonServiceSection serverId={serverId} />
 
-      {!isLocalDaemon ? <UpdateDaemonCard key={host.serverId} host={host} /> : null}
+      {!isServingDaemon ? <UpdateDaemonCard key={host.serverId} host={host} /> : null}
 
-      <RemoveHostSection host={host} isLocalDaemon={isLocalDaemon} onRemoved={onHostRemoved} />
+      <RemoveHostSection host={host} isServingDaemon={isServingDaemon} onRemoved={onHostRemoved} />
     </View>
   );
 }
@@ -1153,11 +1153,11 @@ function PairDeviceRow({ serverId }: { serverId: string }) {
 
 function RemoveHostSection({
   host,
-  isLocalDaemon,
+  isServingDaemon,
   onRemoved,
 }: {
   host: HostProfile;
-  isLocalDaemon: boolean;
+  isServingDaemon: boolean;
   onRemoved?: () => void;
 }) {
   const { t } = useTranslation();
@@ -1167,11 +1167,11 @@ function RemoveHostSection({
   const [isRemoving, setIsRemoving] = useState(false);
   const removeHostHeader = useMemo<SheetHeader>(
     () => ({
-      title: isLocalDaemon
+      title: isServingDaemon
         ? t("settings.host.daemon.remove.localConfirmTitle")
         : t("settings.host.daemon.remove.title"),
     }),
-    [isLocalDaemon, t],
+    [isServingDaemon, t],
   );
 
   const destructiveTextStyle = useMemo(
@@ -1202,13 +1202,13 @@ function RemoveHostSection({
         console.error("[HostPage] Failed to remove host", error);
         Alert.alert(
           t("settings.host.daemon.remove.errorTitle"),
-          isLocalDaemon
+          isServingDaemon
             ? t("settings.host.daemon.remove.localErrorMessage")
             : t("settings.host.daemon.remove.errorMessage"),
         );
       })
       .finally(() => setIsRemoving(false));
-  }, [host.serverId, isLocalDaemon, onRemoved, removeHost, t]);
+  }, [host.serverId, isServingDaemon, onRemoved, removeHost, t]);
 
   const removeIcon = useMemo(
     () => <Trash2 size={theme.iconSize.sm} color={theme.colors.destructive} />,
@@ -1226,12 +1226,12 @@ function RemoveHostSection({
         <View style={settingsStyles.row}>
           <View style={settingsStyles.rowContent}>
             <Text style={settingsStyles.rowTitle}>
-              {isLocalDaemon
+              {isServingDaemon
                 ? t("settings.host.daemon.remove.localTitle")
                 : t("settings.host.daemon.remove.title")}
             </Text>
             <Text style={settingsStyles.rowHint}>
-              {isLocalDaemon
+              {isServingDaemon
                 ? t("settings.host.daemon.remove.localHint")
                 : t("settings.host.daemon.remove.hint")}
             </Text>
@@ -1257,7 +1257,7 @@ function RemoveHostSection({
           testID="remove-host-confirm-modal"
         >
           <Text style={styles.confirmText}>
-            {isLocalDaemon
+            {isServingDaemon
               ? t("settings.host.daemon.remove.localConfirmMessage")
               : t("settings.host.daemon.remove.confirmMessage", { name: host.label })}
           </Text>
