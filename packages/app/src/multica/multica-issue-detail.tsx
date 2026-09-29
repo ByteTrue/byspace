@@ -1371,15 +1371,12 @@ function PropertiesLowerSections({ data }: { data: IssueDetailData }): ReactElem
   return (
     <>
       <Section title="Sub-issues">
-        {data.children.map((child) => (
-          <SubIssueRow
-            key={child.id}
-            child={child}
-            statuses={data.statuses}
-            agents={data.mentionAgents}
-            onUpdate={data.updateChild}
-          />
-        ))}
+        <StagedChildren
+          items={data.children}
+          statuses={data.statuses}
+          agents={data.mentionAgents}
+          onUpdate={data.updateChild}
+        />
         {data.children.length === 0 ? <Text style={styles.propertyValue}>None.</Text> : null}
         <AddSubIssueRow parentId={data.issue?.id ?? ""} onCreated={data.refreshChildren} />
       </Section>
@@ -1569,6 +1566,71 @@ function useMulticaLabelsDirectory(
     staleTimeMs: 30_000,
   });
   return useMemo(() => query.data?.labels ?? [], [query.data]);
+}
+
+/**
+ * The staged rendering of a parent's children (MUL-3508): unstaged children
+ * first as one plain list, then each stage as its own group headed by its
+ * live progress — the barrier the parent's wake waits on, visible.
+ */
+function StagedChildren({
+  items,
+  statuses,
+  agents,
+  onUpdate,
+}: {
+  items: readonly MulticaIssueSummary[];
+  statuses: readonly MulticaStatusSummary[];
+  agents: readonly { id: string; name: string }[];
+  onUpdate: (
+    child: MulticaIssueSummary,
+    fields: { status?: string; assigneeType?: string | null; assigneeId?: string | null },
+  ) => void;
+}): ReactElement {
+  const unstaged = items.filter((child) => child.stage === null);
+  const stageKeys = [
+    ...new Set(items.filter((child) => child.stage !== null).map((child) => child.stage as number)),
+  ].sort((a, b) => a - b);
+  return (
+    <>
+      {unstaged.map((child) => (
+        <SubIssueRow
+          key={child.id}
+          child={child}
+          statuses={statuses}
+          agents={agents}
+          onUpdate={onUpdate}
+        />
+      ))}
+      {stageKeys.map((stage) => {
+        const inStage = items.filter((child) => child.stage === stage);
+        const closed = inStage.every(
+          (child) => child.status === "done" || child.status === "cancelled",
+        );
+        return (
+          <View key={`stage-${stage}`} style={styles.stageGroup}>
+            <Text style={styles.stageHeader} testID={`multica-stage-${stage}`}>
+              Stage {stage} ·{" "}
+              {
+                inStage.filter((child) => child.status === "done" || child.status === "cancelled")
+                  .length
+              }
+              /{inStage.length} {closed ? "closed" : "open"}
+            </Text>
+            {inStage.map((child) => (
+              <SubIssueRow
+                key={child.id}
+                child={child}
+                statuses={statuses}
+                agents={agents}
+                onUpdate={onUpdate}
+              />
+            ))}
+          </View>
+        );
+      })}
+    </>
+  );
 }
 
 function AddSubIssueRow({
@@ -2260,6 +2322,13 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
   },
   propertyMuted: { color: theme.colors.foregroundMuted, fontSize: theme.fontSize.sm },
+  stageGroup: { marginTop: theme.spacing[2] },
+  stageHeader: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    fontWeight: "600",
+    marginBottom: theme.spacing[1],
+  },
   properties: { gap: theme.spacing[3] },
   propertiesHeading: {
     color: theme.colors.foreground,

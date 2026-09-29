@@ -91,6 +91,7 @@ function issueSummary(store: MulticaStore, issue: IssueRow): MulticaIssueSummary
     // The mark reads only while it counts: a cancelled issue whose
     // original still exists. Anything else renders null (MUL-7349).
     duplicateOf: liveDuplicateOf(store, issue),
+    stage: issue.stage,
     createdAt: issue.createdAt,
     updatedAt: issue.updatedAt,
     lastActivityAt: issue.lastActivityAt,
@@ -562,6 +563,7 @@ export class MulticaSession {
       creatorId: "owner",
 
       parentIssueId: msg.parentIssueId,
+      stage: msg.stage ?? null,
     });
     this.#enqueueForIssueWrite(issue, {
       isCreate: true,

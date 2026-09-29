@@ -99,6 +99,8 @@ export const MulticaIssueSummarySchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   lastActivityAt: z.string().nullable(),
+  /** Ordered barrier group under the parent; null = unstaged (MUL-3508). */
+  stage: z.number().int().nullable(),
 });
 
 export const MulticaIssueMineRequestSchema = z.object({
@@ -146,6 +148,7 @@ export const MulticaIssueCreateRequestSchema = z.object({
   assigneeId: z.string().optional(),
   projectId: z.string().optional(),
   parentIssueId: z.string().optional(),
+  stage: z.number().int().optional(),
 });
 
 export const MulticaIssueCreateResponseSchema = z.object({

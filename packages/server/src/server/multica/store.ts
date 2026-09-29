@@ -98,6 +98,12 @@ export class MulticaStore {
     readonly creatorType: string;
     readonly creatorId: string;
     readonly parentIssueId?: string | null;
+    /**
+     * The ordered barrier group this child belongs to under its parent
+     * (123 migration). Null = unstaged: the issue does not participate in
+     * staged grouping and closes no barrier in a staged set.
+     */
+    readonly stage?: number | null;
     readonly projectId?: string | null;
     readonly originType?: string | null;
   }): IssueRow {
@@ -115,9 +121,9 @@ export class MulticaStore {
       this.#db
         .prepare(
           `INSERT INTO issue (id, title, description, status, priority, assignee_type, assignee_id,
-             creator_type, creator_id, parent_issue_id, number, project_id, origin_type,
+             creator_type, creator_id, parent_issue_id, stage, number, project_id, origin_type,
              position, last_activity_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
         )
         .run(
           id,
@@ -130,6 +136,7 @@ export class MulticaStore {
           input.creatorType,
           input.creatorId,
           input.parentIssueId ?? null,
+          input.stage ?? null,
           number,
           input.projectId ?? null,
           input.originType ?? null,
@@ -1038,6 +1045,13 @@ export class MulticaStore {
       )
       .all() as Record<string, unknown>[];
     return rows.map((row) => mapIssueRow(row as never));
+  }
+
+  /** System comments on an issue — the barrier's observable trace. */
+  listSystemComments(issueId: string): { id: string; content: string }[] {
+    return this.#db
+      .prepare(`SELECT id, content FROM comment WHERE issue_id = ? AND author_type = 'system'`)
+      .all(issueId) as { id: string; content: string }[];
   }
 
   /** A parent's children, in board order — the sub-issues read face. */
@@ -2163,7 +2177,170 @@ export class MulticaStore {
     });
     if (this.isIssueClosed(to)) {
       this.stopWakeupsForClosedIssue(issueId);
+      // A child entering terminal state may close its stage barrier — the
+      // parent's wake gate (MUL-3508). Best-effort by the source's own
+      // rule: a failure here warns and never rolls back the status write.
+      try {
+        this.#notifyChildDone(issueId, before);
+      } catch (error) {
+        // The store cannot log; the caller's run surfaces the state and
+        // the missed wake repairs on the next sibling's completion.
+        void error;
+      }
     }
+  }
+
+  /**
+   * The stage barrier (MUL-3508, issue_child_done.go translated). When a
+   * child enters a terminal status, the parent earns a system comment and
+   * an assignee wake only when this completion CLOSES the lowest unfinished
+   * stage: every staged sibling at or below this child's stage is terminal.
+   * An unstaged sibling set is one implicit stage, so the wake fires once
+   * when the last child finishes instead of on every child (#4320).
+   */
+  #notifyChildDone(childId: string, before: string): void {
+    const child = this.getIssue(childId);
+    if (child.parentIssueId === null) {
+      return;
+    }
+    // Only the entering transition fires; terminal -> terminal is a no-op
+    // (a later cancelled -> done edit must not produce a lagging wake).
+    if (this.isIssueClosed(before)) {
+      return;
+    }
+    const parent = this.getIssue(child.parentIssueId);
+    const parentStatus = parent.status;
+    // A closed parent has no follow-up to drive; a backlog parent is
+    // deliberately parked and must not be auto-activated (#4320/MUL-3497);
+    // a human assignee reads their own timeline — the comment is noise.
+    if (parentStatus === "done" || parentStatus === "cancelled") {
+      return;
+    }
+    if (parentStatus === "backlog") {
+      return;
+    }
+    if (parent.assigneeType === "owner") {
+      return;
+    }
+    const children = this.listChildIssues(parent.id);
+    const staged = children.some((row) => row.stage !== null);
+    if (staged) {
+      // An unstaged completed child closes nothing in a staged set.
+      if (child.stage === null) {
+        return;
+      }
+      const childStage = child.stage as number;
+      const frontier = children.every(
+        (row) => row.stage === null || row.stage > childStage || this.isIssueClosed(row.status),
+      );
+      if (!frontier) {
+        return;
+      }
+    } else {
+      const allTerminal = children.every((row) => this.isIssueClosed(row.status));
+      if (!allTerminal) {
+        return;
+      }
+    }
+    // The barrier closed. The system comment names the barrier (and the
+    // next unfinished stage when one remains) and mentions the parent's
+    // assignee — the wake rides that mention, exactly as the source's
+    // dispatchParentAssigneeTrigger does, with no self-trigger guard
+    // (MUL-2808: a lone agent decomposing its own parent has no other
+    // wake path; pending-task dedup holds the runaway).
+    const closedStage = staged ? (child.stage as number) : null;
+    const assigneeName = this.getAgent(parent.assigneeId as string).name;
+    const content = this.#childDoneComment(children, child, staged, closedStage);
+    const comment = this.createComment({
+      issueId: parent.id,
+      authorType: "system",
+      authorId: "system",
+      content,
+      mentions:
+        parent.assigneeType === "agent" && parent.assigneeId !== null
+          ? [
+              {
+                kind: "agent",
+                id: parent.assigneeId,
+                name: assigneeName,
+              },
+            ]
+          : [],
+    });
+    if (parent.assigneeType === "agent" && parent.assigneeId !== null) {
+      this.createTask({
+        agentId: parent.assigneeId,
+        issueId: parent.id,
+        triggerCommentId: comment.id,
+        triggerSummary: "child_done",
+        context: {
+          child_done: {
+            parentId: parent.id,
+            childId: child.id,
+            closedStage,
+            staged,
+          },
+        },
+      });
+    } else if (parent.assigneeType === "squad" && parent.assigneeId !== null) {
+      // A squad assignee routes to its leader, the same routing a mention
+      // of the squad performs.
+      const squad = this.getSquad(parent.assigneeId);
+      this.createTask({
+        agentId: squad.leaderId,
+        issueId: parent.id,
+        triggerCommentId: comment.id,
+        triggerSummary: "child_done",
+        squadId: squad.id,
+        isLeaderTask: true,
+        context: {
+          child_done: {
+            parentId: parent.id,
+            childId: child.id,
+            closedStage,
+            staged,
+          },
+        },
+      });
+    }
+  }
+
+  /**
+   * The barrier-closed comment's body: the closed stage, its terminal
+   * count, the next unfinished stage (or the review instruction when none
+   * remains), and the child that closed it.
+   */
+  #childDoneComment(
+    children: readonly IssueRow[],
+    child: IssueRow,
+    staged: boolean,
+    closedStage: number | null,
+  ): string {
+    const nextStage = this.#nextOpenStage(children, closedStage);
+    const doneCount = children.filter(
+      (row) => row.status === "done" || this.isIssueClosed(row.status),
+    ).length;
+    const summary = staged
+      ? `Stage ${closedStage} of this issue is complete (${doneCount}/${children.length} sub-issues terminal).`
+      : `All sub-issues are complete (${doneCount}/${children.length}).`;
+    const advance =
+      nextStage !== null
+        ? ` Next unfinished stage: ${nextStage}.`
+        : ` If nothing remains, move this issue to in_review.`;
+    return `${summary}${advance} (barrier closed by #${child.number ?? "—"} — "${child.title}")`;
+  }
+
+  /** The lowest stage above the closed one that still has non-terminal children. */
+  #nextOpenStage(children: readonly IssueRow[], closedStage: number | null): number | null {
+    const open = children
+      .filter((row) => row.stage !== null && !this.isIssueClosed(row.status))
+      .map((row) => row.stage as number);
+    if (open.length === 0) {
+      return null;
+    }
+    const floor = closedStage ?? -Infinity;
+    const above = open.filter((stage) => stage > floor);
+    return above.length > 0 ? Math.min(...above) : null;
   }
 
   isIssueClosed(status: string): boolean {

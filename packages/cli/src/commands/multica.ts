@@ -124,6 +124,7 @@ export async function runMulticaIssueCreateCommand(
     assigneeId?: string;
     assigneeType?: string;
     parent?: string;
+    stage?: string;
   },
   _command: Command,
 ): Promise<ListResult<MulticaIssueRow>> {
@@ -142,6 +143,9 @@ export async function runMulticaIssueCreateCommand(
       assigneeId: options.assigneeId,
       assigneeType: options.assigneeType,
       ...(options.parent ? { parentIssueId: options.parent.trim() } : {}),
+      ...(options.stage !== undefined && !Number.isNaN(Number(options.stage))
+        ? { stage: Number(options.stage) }
+        : {}),
     });
     const issue = payload.issue;
     return {
@@ -323,6 +327,7 @@ export function createMulticaCommand(): Command {
       .option("--assignee-id <id>", "Assignee id")
       .option("--assignee-type <type>", "agent | squad")
       .option("--parent <id>", "Parent issue id (makes this a sub-issue)")
+      .option("--stage <n>", "Barrier group under the parent (with --parent)")
       .allowExcessArguments(false),
   ).action(withOutput(runMulticaIssueCreateCommand));
 

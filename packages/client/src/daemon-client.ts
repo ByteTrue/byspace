@@ -5682,6 +5682,7 @@ export class DaemonClient {
     assigneeId?: string;
     projectId?: string;
     parentIssueId?: string;
+    stage?: number;
   }): Promise<MulticaIssueCreatePayload> {
     return this.sendCorrelatedSessionRequest({
       message: {
@@ -5694,6 +5695,7 @@ export class DaemonClient {
         assigneeId: options.assigneeId,
         projectId: options.projectId,
         parentIssueId: options.parentIssueId,
+        stage: options.stage,
       },
       responseType: "multica.issue.create.response",
     });

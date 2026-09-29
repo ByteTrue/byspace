@@ -351,6 +351,42 @@ export const migration531WakeupActorFilter: Migration = {
  * other half). Fresh databases already carry the relaxed shape, so this is
  * a conditional no-op there.
  */
+export const migration552CommentSystemAuthor: Migration = {
+  version: "552_comment_system_author",
+  up: (db) => {
+    const columns = db.prepare("PRAGMA table_info(comment)").all() as Array<{
+      name: string;
+    }>;
+    const shape = db
+      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'comment'")
+      .get() as { sql: string };
+    // Source 107: the platform posts child-done parent notifications as
+    // author_type='system' rows (zero UUID author_id, still NOT NULL). Our
+    // 001 froze the two-value CHECK; widen it in place via the rebuild.
+    const widened = shape.sql.replace(
+      "author_type TEXT NOT NULL CHECK (author_type IN ('owner', 'agent'))",
+      "author_type TEXT NOT NULL CHECK (author_type IN ('owner', 'agent', 'system'))",
+    );
+    if (widened === shape.sql) {
+      return;
+    }
+    const indexes = (
+      db
+        .prepare(
+          "SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'comment' AND sql IS NOT NULL",
+        )
+        .all() as Array<{ sql: string }>
+    ).map((row) => row.sql);
+    rebuildTableWithFksOff(db, {
+      table: "comment",
+      ddl: widened,
+      carry: columns.map((entry) => entry.name),
+      indexes,
+    });
+  },
+  down: () => undefined,
+};
+
 export const migration551QueueIssueNullableRepair: Migration = {
   version: "551_queue_issue_nullable_repair",
   up: (db) => {
