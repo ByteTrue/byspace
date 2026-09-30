@@ -5,6 +5,20 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.16.5 - 2026-10-01
+
+### Changed
+
+- Sidebar collapse toggles stay pinned to their window corners instead of moving when a panel opens
+- The sidebar's top-level navigation rows (New workspace, History, Search, Schedules) fold into a single BySpace button
+- Images over 1 MiB are compressed before sending, and oversized images upload in chunks instead of failing over remote connections
+
+### Fixed
+
+- Fixed the daemon service toggle and other local-daemon features not appearing when managing your own machine's daemon from the cloud web app
+- Fixed a user message card jumping to the end of the conversation after switching away from the window for a few minutes and back
+- Fixed pi codemode nested tool calls each appearing as their own row in the agent timeline
+
 ## 0.16.4 - 2026-09-28
 
 ### Changed
