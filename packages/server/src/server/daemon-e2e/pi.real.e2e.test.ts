@@ -439,11 +439,10 @@ test(
   async () => {
     const cwd = tmpCwd();
     const filename = "pi-read.txt";
-
-    writePiSettings(cwd, { defaultTools: PI_DIRECT_TOOLS });
     const expectedContent = "PI_READ_CONTENT_12345";
 
     try {
+      writePiSettings(cwd, { defaultTools: PI_DIRECT_TOOLS });
       writeFileSync(path.join(cwd, filename), expectedContent, "utf8");
 
       await withConnectedPiDaemon(async ({ client }) => {
@@ -490,11 +489,11 @@ test(
   async () => {
     const cwd = tmpCwd();
     const filename = "pi-test-write.txt";
-
-    writePiSettings(cwd, { defaultTools: PI_DIRECT_TOOLS });
     const expectedContent = "PI_WRITE_CONTENT_67890";
 
     try {
+      writePiSettings(cwd, { defaultTools: PI_DIRECT_TOOLS });
+
       await withConnectedPiDaemon(async ({ client }) => {
         const agent = await client.createAgent({
           cwd,
@@ -534,11 +533,10 @@ test(
   async () => {
     const cwd = tmpCwd();
     const filename = "pi-edit.txt";
-
-    writePiSettings(cwd, { defaultTools: PI_DIRECT_TOOLS });
     const filePath = path.join(cwd, filename);
 
     try {
+      writePiSettings(cwd, { defaultTools: PI_DIRECT_TOOLS });
       writeFileSync(filePath, "BEFORE_EDIT", "utf8");
 
       await withConnectedPiDaemon(async ({ client }) => {
@@ -581,8 +579,14 @@ test(
 
     try {
       // `mode: "only"` hides the direct tools from the model, so bash is reachable only through a
-      // codemode script and every nested call arrives with a parentToolCallId.
-      writePiSettings(cwd, { defaultTools: ["+codemode"], codemode: { mode: "only" } });
+      // codemode script and every nested call arrives with a parentToolCallId. The tool list is
+      // plain rather than `["+codemode"]`: a list of modifiers is appended to the host's global
+      // `defaultTools` instead of replacing it, which would leave bash inactive — and therefore
+      // unreachable from the script — on a host whose global selection omits it.
+      writePiSettings(cwd, {
+        defaultTools: [...PI_DIRECT_TOOLS, "codemode"],
+        codemode: { mode: "only" },
+      });
 
       await withConnectedPiDaemon(async ({ client }) => {
         const agent = await client.createAgent({
@@ -603,9 +607,15 @@ test(
         const items = await fetchCanonicalTimeline(client, agent.id);
         const toolCalls = items.filter((item): item is ToolCallItem => item.type === "tool_call");
 
-        expect(
-          toolCalls.some((item) => item.name === "codemode" && item.status === "completed"),
-        ).toBe(true);
+        const codemodeRow = toolCalls.find(
+          (item) => item.name === "codemode" && item.status === "completed",
+        );
+        expect(codemodeRow).toBeDefined();
+        // The echoed marker is what makes the assertion below non-vacuous: without it the test
+        // would also pass on a host where the script never reached bash.
+        if (codemodeRow?.detail.type === "unknown") {
+          expect(JSON.stringify(codemodeRow.detail.output)).toContain("HELLO_PI_TEST");
+        }
         // The nested bash call belongs to the codemode row, exactly as the pi TUI renders it.
         expect(toolCalls.filter((item) => item.name !== "codemode")).toEqual([]);
       });

@@ -2366,9 +2366,10 @@ export class PiRpcAgentSession implements AgentSession {
   private handleToolExecutionEnd(
     event: Extract<PiAgentSessionEvent, { type: "tool_execution_end" }>,
   ): void {
-    // Nested calls (from codemode scripts) render inside their parent's row and never enter the
-    // transcript, so they must not become timeline entries of their own. The pi TUI skips them the
-    // same way. The update case needs no check: start never registered the id.
+    // Nested calls (from codemode scripts) are not timeline entries of their own: they never enter
+    // the transcript and the parent row does not expand them. The pi TUI lists them under the
+    // parent; here only the parent is shown. The update case needs no check: start never registered
+    // the id.
     if (event.parentToolCallId) {
       return;
     }
