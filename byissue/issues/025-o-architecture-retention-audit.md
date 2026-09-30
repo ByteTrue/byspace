@@ -16,7 +16,7 @@ Owner 于 2026-09-11 确认 Web/PWA + daemon 路线：移动原生与 Electron �
 
 - **审计基线：** 静态审计在 `6e8e98a1042e1161dd6512ea3df1d531f69a04ab`（v0.13.0），SSH 补充核对在 `a54087a1d14c6bff45064dd678b572c6263e4344`。**当前基线：** `8ce02b66707dad700eea9104ecd308a35779316c`（Paseo v0.8.0 同步合并后，PR #34），关键路径已复核，见下。
 - **上游状态：** 最后一次 Paseo `0.8.0` 正式版同步已于 2026-09-11 完成并合并。此后 BySpace 独立发展，上游仅作参考，不再追版本。局域网连接用 daemon 监听局域网地址 + 内置 Web UI 同源直连；远程走 Relay；SSH 已改判移除（见 A5 修订）。
-- **优先级：** 先整理架构，[Orchestrator](026-o-cross-workspace-orchestrator.md) 暂不启动；不为未来助手或插件工具箱预建框架。
+- **优先级：** 先整理架构；不为未来助手或插件工具箱预建框架。Orchestrator 方向已放弃，见 [026-d](026-d-cross-workspace-orchestrator.md)。
 - **本轮行为：** 只读源码、文档、包清单和构建配置，维护审计与决策记录。不改运行时，不读取个人配置或凭据，不控制 daemon，不查询或改动线上部署。
 - **证据边界：** 有静态调用和配置证据；没有本轮真机 PWA、运行时性能、产物体积、CI 计费或删除后回归证据。下文的成本等级指改动范围与验证难度，不是工时报价。
 
@@ -107,10 +107,10 @@ Web UI：可由 daemon 内置提供，也可使用托管版本
 | C1  | Agent Providers、会话与时间线                            | **保留当前能力，不以清理名义只留某一个 provider** | 已有 provider 与原生 Terminal 并存的决策仍有效。停止上游同步不会消除 provider SDK/CLI 的变化成本；是否缩减 provider 支持需单独确认。                                                                                                                                                                |
 | C2  | Terminal、PTY、活动 hooks、Windows 适配                  | **保留**                                          | Electron 退出不代表 Windows daemon 或浏览器 Terminal 退出。背压、revision 恢复、粘贴、中文和尺寸同步是既有正确性约束，不是平台冗余。                                                                                                                                                                |
 | C3  | Workspace、worktree、文件、Git/Forge、布局与持久化       | **保留现有主干**                                  | 它们服务当前开发工作流，也供 UI、CLI 和工具调用复用。清理不得修改用户仓库、重建会话 ID、丢弃布局或搬迁用户数据。                                                                                                                                                                                    |
-| C4  | MCP、注入工具与异步结果回传                              | **保留现有能力，不扩 Orchestrator**               | 当前编排原语已有用途；上层统一跟进另由 Issue 026 负责。它们不能因“未来不采用上游插件系统”而一起删掉。                                                                                                                                                                                               |
+| C4  | MCP、注入工具与异步结果回传                              | **保留现有能力，不扩 Orchestrator**               | 当前编排原语已有用途；上层统一跟进原定由 Issue 026 负责（已放弃）。它们不能因“未来不采用上游插件系统”而一起删掉。                                                                                                                                                                                   |
 | C5  | Schedules / Heartbeats、workspace 脚本                   | **首批保留**                                      | 后台自动化独立于客户端壳，也是已有产品能力。避免为了暂不实施的新助手先拆旧能力，再重造相同调度基础；本轮不预建新调度器。                                                                                                                                                                            |
 | C6  | 上游插件系统与 SDK                                       | **已确认完整移除，待执行授权**                    | Owner 已确认不是工具箱方向，且 provider 扩展路径改走 `config.json` custom provider + skill/提示词适配（见 C9）。删除运行时、SDK、客户端表面、plugin-examples、脚手架与专属文档；保留 wire 解析契约与 protocol 字段（旧客户端可解析）。独立发展后不再承担上游插件 API 的兼容包袱。                   |
-| C7  | Paseo Hub 接入                                           | **已确认移除专用集成，待执行授权**                | 这是 daemon 主动连接外部 Hub 服务的集成，有登录、关系存储、权限与执行恢复；不经 Relay，也不等于 Issue 026 的本地编排者。删除专用 UI/CLI/连接与执行入口，保留共用的 Agent 生命周期、权限和 wire 解析契约；不另造 BySpace Hub 服务。                                                                  |
+| C7  | Paseo Hub 接入                                           | **已确认移除专用集成，待执行授权**                | 这是 daemon 主动连接外部 Hub 服务的集成，有登录、关系存储、权限与执行恢复；不经 Relay，也不等于 Issue 026 设想的本地编排者（已放弃）。删除专用 UI/CLI/连接与执行入口，保留共用的 Agent 生命周期、权限和 wire 解析契约；不另造 BySpace Hub 服务。                                                    |
 | C8  | 语音输入、STT/TTS 与实时语音                             | **已确认全部移除（方案 C），待执行授权**          | 听写、实时语音对话、TTS、daemon speech provider（local sherpa-onnx + openai）、音频双声道包与相关配置一并退出。删除时注意与手机轻量入口解耦：PWA 仍可用浏览器原生输入法。追踪 `packages/expo-two-way-audio`、`server/speech/`、app 端 voice/audio 模块与协议事件。                                  |
 | C9  | Relay、安全、协议与恢复                                  | **保留主干契约**                                  | 去掉壳或断开上游不消除托管 Web、CLI 与 daemon 的版本漂移。保留 wire 解析兼容、capability gate、认证、DNS rebinding 和 E2EE；不用放宽安全规则换取接入方便。                                                                                                                                          |
 | C11 | 内建 agent provider 收缩（claude/codex/opencode/pi/omp） | **已确认收缩，待执行授权**                        | 保留 claude、codex、opencode、pi、omp；移除 cursor、kimi、kiro、trae、copilot、generic ACP、mock load test 等其余内建适配器。用户适配新 agent 走 `config.json` custom provider（ACP 接入/自定义二进制/API 端点/profiles，独立于插件系统）+ skill/提示词指导；单独成批执行，不动 provider 注册框架。 |
@@ -187,7 +187,7 @@ Web UI：可由 daemon 内置提供，也可使用托管版本
 
 **仍待决定：** 无。方向全部定案；所有删除批次进入影响报告与执行授权阶段。
 
-本 Issue 保持 open，作为执行批次的追踪入口；方向已全部确认，未启动任何删除。执行批次仍需精确影响报告、归档和授权；Issue 026 继续暂缓。
+本 Issue 保持 open，作为执行批次的追踪入口；方向已全部确认，未启动任何删除。执行批次仍需精确影响报告、归档和授权；Issue 026 已放弃（2026-09-30）。
 
 ## 原生客户端残留补审（2026-09-23）
 
