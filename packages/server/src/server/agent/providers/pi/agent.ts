@@ -2271,6 +2271,9 @@ export class PiRpcAgentSession implements AgentSession {
         this.handleMessageUpdate(event, turnId);
         return;
       case "tool_execution_start": {
+        if (event.parentToolCallId) {
+          return;
+        }
         const toolCall = parseToolArgs(event.toolName, event.args);
         this.activeToolCalls.set(event.toolCallId, toolCall);
         this.activeAskUserDialog = readActiveAskUserDialog(event.toolName, event.args);
@@ -2363,6 +2366,13 @@ export class PiRpcAgentSession implements AgentSession {
   private handleToolExecutionEnd(
     event: Extract<PiAgentSessionEvent, { type: "tool_execution_end" }>,
   ): void {
+    // Nested calls (from codemode scripts) render inside their parent's row and never enter the
+    // transcript, so they must not become timeline entries of their own. The pi TUI skips them the
+    // same way. The update case needs no check: start never registered the id.
+    if (event.parentToolCallId) {
+      return;
+    }
+
     const toolCall =
       this.activeToolCalls.get(event.toolCallId) ?? parseToolArgs(event.toolName, null);
     this.activeToolCalls.delete(event.toolCallId);

@@ -178,6 +178,10 @@ export type PiAgentSessionEvent =
       toolCallId: string;
       toolName: string;
       args: unknown;
+      // Set when a tool runs another tool through ctx.executeTool() (codemode scripts). The id is
+      // `<parent id>/<n>` and never reaches the transcript, so these events render inside the
+      // parent's row instead of becoming timeline entries of their own.
+      parentToolCallId?: string;
     }
   | {
       type: "tool_execution_update";
@@ -185,6 +189,7 @@ export type PiAgentSessionEvent =
       toolName: string;
       args?: unknown;
       partialResult: unknown;
+      parentToolCallId?: string;
     }
   | {
       type: "tool_execution_end";
@@ -192,6 +197,7 @@ export type PiAgentSessionEvent =
       toolName: string;
       result: unknown;
       isError?: boolean;
+      parentToolCallId?: string;
     }
   | { type: "compaction_start"; reason?: "manual" | "threshold" | "overflow" | string }
   | { type: "compaction_end"; reason?: string; errorMessage?: string; aborted?: boolean }

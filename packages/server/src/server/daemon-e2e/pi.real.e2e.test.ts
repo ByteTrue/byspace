@@ -40,12 +40,21 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Plain tool names replace the user's global `defaultTools` selection, so a test project can pin
+// the direct tools it exercises instead of inheriting whatever codemode arrangement the machine
+// running the suite is configured with.
+const PI_DIRECT_TOOLS = ["read", "bash", "edit", "write", "grep", "find", "ls"];
+
+function writePiSettings(cwd: string, settings: Record<string, unknown>): void {
+  mkdirSync(path.join(cwd, ".pi"), { recursive: true });
+  writeFileSync(path.join(cwd, ".pi/settings.json"), JSON.stringify(settings, null, 2));
+}
+
 function writePiCompactionSettings(
   cwd: string,
   compaction: { enabled: boolean; reserveTokens?: number; keepRecentTokens?: number },
 ): void {
-  mkdirSync(path.join(cwd, ".pi"), { recursive: true });
-  writeFileSync(path.join(cwd, ".pi/settings.json"), JSON.stringify({ compaction }, null, 2));
+  writePiSettings(cwd, { compaction });
 }
 
 function createPiClient(): AgentClient {
@@ -385,6 +394,8 @@ test(
     const cwd = tmpCwd();
 
     try {
+      writePiSettings(cwd, { defaultTools: PI_DIRECT_TOOLS });
+
       await withConnectedPiDaemon(async ({ client }) => {
         const agent = await client.createAgent({
           cwd,
@@ -428,6 +439,8 @@ test(
   async () => {
     const cwd = tmpCwd();
     const filename = "pi-read.txt";
+
+    writePiSettings(cwd, { defaultTools: PI_DIRECT_TOOLS });
     const expectedContent = "PI_READ_CONTENT_12345";
 
     try {
@@ -477,6 +490,8 @@ test(
   async () => {
     const cwd = tmpCwd();
     const filename = "pi-test-write.txt";
+
+    writePiSettings(cwd, { defaultTools: PI_DIRECT_TOOLS });
     const expectedContent = "PI_WRITE_CONTENT_67890";
 
     try {
@@ -519,6 +534,8 @@ test(
   async () => {
     const cwd = tmpCwd();
     const filename = "pi-edit.txt";
+
+    writePiSettings(cwd, { defaultTools: PI_DIRECT_TOOLS });
     const filePath = path.join(cwd, filename);
 
     try {
@@ -549,6 +566,48 @@ test(
         expect(toolCall).toBeDefined();
         expect(toolCall?.detail.type).toBe("edit");
         expect(readFileSync(filePath, "utf8")).toContain("AFTER_EDIT");
+      });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  },
+  PI_TEST_TIMEOUT_MS,
+);
+
+test(
+  "codemode-only project keeps nested tool calls out of the timeline",
+  async () => {
+    const cwd = tmpCwd();
+
+    try {
+      // `mode: "only"` hides the direct tools from the model, so bash is reachable only through a
+      // codemode script and every nested call arrives with a parentToolCallId.
+      writePiSettings(cwd, { defaultTools: ["+codemode"], codemode: { mode: "only" } });
+
+      await withConnectedPiDaemon(async ({ client }) => {
+        const agent = await client.createAgent({
+          cwd,
+          title: "pi-codemode-nested-calls",
+          provider: "pi",
+          model: PI_REAL_TEST_MODEL,
+        });
+
+        await client.sendMessage(
+          agent.id,
+          "Use the bash tool and run this exact bash command: echo HELLO_PI_TEST",
+        );
+
+        const finish = await client.waitForFinish(agent.id, PI_TEST_TIMEOUT_MS);
+        expect(finish.status).toBe("idle");
+
+        const items = await fetchCanonicalTimeline(client, agent.id);
+        const toolCalls = items.filter((item): item is ToolCallItem => item.type === "tool_call");
+
+        expect(
+          toolCalls.some((item) => item.name === "codemode" && item.status === "completed"),
+        ).toBe(true);
+        // The nested bash call belongs to the codemode row, exactly as the pi TUI renders it.
+        expect(toolCalls.filter((item) => item.name !== "codemode")).toEqual([]);
       });
     } finally {
       rmSync(cwd, { recursive: true, force: true });
