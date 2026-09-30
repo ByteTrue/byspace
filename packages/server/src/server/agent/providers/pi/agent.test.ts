@@ -771,6 +771,78 @@ describe("PiRpcAgentSession", () => {
     ]);
   });
 
+  test("ignores nested tool calls that codemode scripts run", async () => {
+    const { pi, session, events } = await createSession();
+    const fakeSession = pi.latestSession();
+
+    await session.startTurn("count the files");
+    fakeSession.emit({
+      type: "tool_execution_start",
+      toolCallId: "call-1",
+      toolName: "codemode",
+      args: { code: "await tools.bash({ command: 'wc -l *.md' })" },
+    });
+    fakeSession.emit({
+      type: "tool_execution_start",
+      toolCallId: "call-1/0",
+      toolName: "bash",
+      args: { command: "wc -l *.md" },
+      parentToolCallId: "call-1",
+    });
+    fakeSession.emit({
+      type: "tool_execution_update",
+      toolCallId: "call-1/0",
+      toolName: "bash",
+      partialResult: { output: "3", exitCode: 0 },
+      parentToolCallId: "call-1",
+    });
+    fakeSession.emit({
+      type: "tool_execution_end",
+      toolCallId: "call-1/0",
+      toolName: "bash",
+      result: { output: "3\n", exitCode: 0 },
+      isError: false,
+      parentToolCallId: "call-1",
+    });
+    fakeSession.emit({
+      type: "tool_execution_end",
+      toolCallId: "call-1",
+      toolName: "codemode",
+      result: { content: [{ type: "text", text: "3" }] },
+      isError: false,
+    });
+    fakeSession.finishTurn();
+
+    await events.nextTurnCompletion();
+
+    expect(events.timelineItems()).toEqual([
+      {
+        type: "tool_call",
+        callId: "call-1",
+        name: "codemode",
+        status: "running",
+        detail: {
+          type: "unknown",
+          input: { code: "await tools.bash({ command: 'wc -l *.md' })" },
+          output: null,
+        },
+        error: null,
+      },
+      {
+        type: "tool_call",
+        callId: "call-1",
+        name: "codemode",
+        status: "completed",
+        detail: {
+          type: "unknown",
+          input: { code: "await tools.bash({ command: 'wc -l *.md' })" },
+          output: { content: [{ type: "text", text: "3" }] },
+        },
+        error: null,
+      },
+    ]);
+  });
+
   test("streams Pi task calls as sub-agent cards with lifecycle status", async () => {
     const { pi, session, events } = await createSession();
     const fakeSession = pi.latestSession();
