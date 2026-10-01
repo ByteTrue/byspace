@@ -76,7 +76,7 @@ For full setup and configuration, see:
 
 ### Self-hosting with Docker
 
-Self-host the web UI (and optionally the relay) with the official containers. The daemon is not in them — it runs on your own machine, installed via npm:
+Self-host the web UI and relay with the official container. The daemon is not in it — it runs on your own machine, installed via npm:
 
 ```bash
 curl -O https://raw.githubusercontent.com/ByteTrue/byspace/main/docker/compose.yml
@@ -84,7 +84,7 @@ curl -O https://raw.githubusercontent.com/ByteTrue/byspace/main/docker/Caddyfile
 docker compose up -d
 ```
 
-Open `http://localhost:8080` and follow the connect guide to pair your daemon. Add `--profile relay` for a self-hosted relay, `--profile tls` plus `BYSPACE_DOMAIN` for automatic TLS. See the [self-hosting documentation](docs/docker.md) for details.
+Open `http://localhost:8080` and follow the connect guide to pair your daemon. The relay is in the same container; add `--profile tls` plus `BYSPACE_DOMAIN` for automatic TLS (one domain covers both the web UI and the relay). See the [self-hosting documentation](docs/docker.md) for details.
 
 ## CLI
 

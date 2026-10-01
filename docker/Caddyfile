@@ -1,12 +1,8 @@
-# TLS termination for the self-hosted BySpace compose stack.
+# TLS termination for the self-hosted BySpace container.
 # Enabled with `--profile tls`; requires BYSPACE_DOMAIN.
-# To terminate TLS for the relay as well, uncomment the block below and set
-# RELAY_DOMAIN (requires `--profile relay`).
+# One site address covers both the web UI and the relay WebSocket
+# (wss://<domain>/ws), so a single certificate is enough.
 
 ${BYSPACE_DOMAIN} {
-	reverse_proxy web:8080
+	reverse_proxy byspace:8080
 }
-
-#${RELAY_DOMAIN} {
-#	reverse_proxy relay:8080
-#}

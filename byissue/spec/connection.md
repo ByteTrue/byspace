@@ -17,11 +17,12 @@ App 与 Relay 的地址按发布通道选择；用户的自定义配置始终优
 
 ## 自托管部署
 
-自托管的发布物是一个 compose、两个容器：静态 web（nginx + 构建产物）与可选 relay（Node 实现）。daemon 不出镜像，只从 npm 安装 `@bytetrue/byspace`。agent 跑的是用户本机的项目工具链，自带 daemon 的容器会把「控制本机」误导成「部署一个服务」；确实想在容器里跑 daemon 的人装同一个 npm 包，见 `docs/docker.md`。
+自托管的发布物是一个容器（`ghcr.io/bytetrue/byspace`）：web 静态资源与 relay 在同一镜像、同一端口（`https://host/` 与 `wss://host/ws`，TLS 反代下一张证书同时罩住两者）。daemon 不出镜像，只从 npm 安装 `@bytetrue/byspace`。agent 跑的是用户本机的项目工具链，自带 daemon 的容器会把「控制本机」误导成「部署一个服务」；确实想在容器里跑 daemon 的人装同一个 npm 包，见 `docs/docker.md`。
 
 - **配对链接跟随 `app.baseUrl`**。自托管 origin 下 `byspace onboard --web-origin <origin>` 一次设好 `app.baseUrl` 与 `daemon.cors.allowedOrigins`，之后生成的配对链接指向该 origin。命令幂等，daemon 已在跑时走热更新。`--hostnames` 是 Host header 检查（DNS rebinding 防护），与 CORS 无关，两者不合并。
 - **App 侧没有 relay 白名单。** relay 是每个 host 的连接属性，随 pairing offer 流入——认证材料（E2EE 公钥）只能这样传递。因此不提供手动添加 relay，也不在 host 设置里编辑 relay：首次部署与迁移是同一个漏斗，部署 compose → 打开自托管 web → 弹窗给出命令 → 粘贴配对链接。
 - **默认 HTTP，TLS 可选。** 局域网明文直连可用，代价来自非安全上下文：terminal 剪贴板、Service Worker/PWA、Web Push 失效，密码明文过线。这与上文的「PWA 与局域网明文互斥」是同一条约束。
+- **自托管 relay 必须在 TLS 反代后面。** 托管 web 是 HTTPS 页面，浏览器拒绝非 loopback 的裸 `ws://`（mixed content），所以「手机走官方 web + 自己的 relay」这条路线里 relay 一定要有证书。全自托管时同一个域名一张证书同时给 web 与 relay。
 - **Relay 线协议冻结在 v1/v2 握手语义。** 旧 relay 镜像必须能服务新 app/daemon，因此 `/ws` 握手参数、错误文案、席位与关闭语义、帧类型都是契约的一部分，完整条款见 `docs/protocol-compatibility.md`。
 
 ## 历史证据

@@ -2,11 +2,12 @@
 
 BySpace has no server to babysit: the daemon runs on your own machine (npm
 package `@bytetrue/byspace`), and the web UI is static files. What you can
-self-host are the two published containers:
+self-host is one container, `ghcr.io/bytetrue/byspace`, which serves the web
+UI and the relay from the same port:
 
-- `ghcr.io/bytetrue/byspace-web` — the web UI behind unprivileged nginx.
-- `ghcr.io/bytetrue/byspace-relay` — the relay as a Node service, if you prefer
-  your own relay over the hosted one.
+- `https://your-host/` — the web UI (static build, no daemon inside).
+- `wss://your-host/ws` — the relay, for clients that prefer your relay over
+  the hosted one.
 
 The daemon image that used to bundle daemon + web was retired: agents need
 your real dev environment, so the daemon belongs on your machine. Already
@@ -35,14 +36,28 @@ first.
 
 ## What is where
 
-| Piece  | Runs where                                            | Notes                                                                                                                       |
-| ------ | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Web UI | container `web`, nginx on `:8080`                     | static build, no daemon inside                                                                                              |
-| Daemon | your machine, npm package                             | `byspace onboard --web-origin http://your-host:8080` points pairing links at your web (see the connect guide in the web UI) |
-| Relay  | container `relay` (optional) or `relay.byspace.cc.cd` | the daemon normally uses the hosted relay; a self-hosted one needs `--relay` at onboard time                                |
+| Piece  | Runs where                               | Notes                                                                                                                       |
+| ------ | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Web UI | container `byspace`, port `:8080`        | static build, no daemon inside                                                                                              |
+| Daemon | your machine, npm package                | `byspace onboard --web-origin http://your-host:8080` points pairing links at your web (see the connect guide in the web UI) |
+| Relay  | same container, or `relay.byspace.cc.cd` | the daemon normally uses the hosted relay; a self-hosted one needs `--relay` at onboard time                                |
 
-Sessions on the self-hosted relay live in memory only; restarting the relay
+Sessions on a self-hosted relay live in memory only; restarting the container
 just forces reconnects.
+
+## Using only the relay
+
+The web UI is optional. If you use the hosted web UI (`app.byspace.cc.cd`)
+and only want your own relay, point the daemon at it:
+
+```bash
+byspace onboard --relay-endpoint your-host:443
+```
+
+Behind the hosted HTTPS web UI, browsers refuse non-loopback `ws://`
+connections, so a self-hosted relay must sit behind TLS — see the next
+section. The endpoint defaults to `wss://` (port 443); pass `ws://host:port`
+if your relay is plain HTTP (that only works from non-HTTPS pages).
 
 ## Version pinning
 
@@ -57,27 +72,23 @@ BYSPACE_VERSION=0.16.4 docker compose up -d
 ## TLS
 
 Enable the `tls` profile and set a domain; caddy terminates TLS with
-automatic certificates for the web UI:
+automatic certificates. One domain covers both the web UI and the relay
+WebSocket — `https://your-host/` and `wss://your-host/ws` from one cert:
 
 ```bash
 BYSPACE_DOMAIN=app.example.com docker compose --profile tls up -d
 ```
 
-To terminate TLS for the relay too, uncomment the relay block in `Caddyfile`,
-set `RELAY_DOMAIN`, and run with `--profile relay --profile tls`. Then point
-the daemon at the relay when you onboard it:
+With TLS on, onboard the daemon fully self-hosted:
 
 ```bash
-byspace onboard --relay-endpoint relay.example.com:443
+byspace onboard --web-origin https://app.example.com --relay-endpoint app.example.com:443
 ```
 
-The endpoint defaults to `wss://` (port 443); pass `ws://host:port` if your
-relay is plain HTTP.
-
 Already behind your own reverse proxy? Forward normal HTTP and WebSocket
-upgrades to the web container's `:8080` and terminate TLS yourself. If you
-reach the daemon by DNS name, allow that host header with `BYSPACE_HOSTNAMES`
-on the daemon.
+upgrades to the container's `:8080` and terminate TLS yourself. If you reach
+the daemon by DNS name, allow that host header with `BYSPACE_HOSTNAMES` on
+the daemon.
 
 TLS also matters for what the browser allows — see the next section.
 
@@ -116,8 +127,8 @@ whenever the port is reachable beyond loopback.
 
 ## Security
 
-- The web UI container serves static files only. Daemon auth applies when the
-  web UI talks to your daemon, exactly as with the hosted web UI.
+- The container serves static files and the relay. Daemon auth applies when
+  the web UI talks to your daemon, exactly as with the hosted web UI.
 - The relay is untrusted by design; all relay traffic is end-to-end encrypted
   (see [SECURITY.md](../SECURITY.md)).
 - Set `BYSPACE_PASSWORD` on the daemon for any direct connection that leaves
@@ -128,10 +139,11 @@ See [SECURITY.md](../SECURITY.md) for the full trust model.
 ## Building locally
 
 ```bash
-docker build -f docker/web.Dockerfile -t byspace-web:local .
-docker build -f docker/relay.Dockerfile -t byspace-relay:local .
+docker build -f docker/Dockerfile -t byspace:local .
 ```
 
-Both builds compile from source in this checkout. `BYSPACE_VERSION` is an
-optional build arg that asserts the source-tree version. On release tags, CI
-publishes both images multi-arch (amd64/arm64) to `ghcr.io/bytetrue/`.
+The build compiles from source in this checkout: the web UI is exported, the
+relay package is packed, and one runtime image carries both. `BYSPACE_VERSION`
+is an optional build arg that asserts the source-tree version. On release
+tags, CI publishes the image multi-arch (amd64/arm64) to
+`ghcr.io/bytetrue/byspace`.

@@ -1,10 +1,11 @@
 # syntax=docker/dockerfile:1
 
-# Self-hosted BySpace relay (Node). Wire-compatible with the hosted
-# Cloudflare Worker in packages/relay/src/cloudflare-adapter.ts.
+# BySpace self-hosted edge: one container serving the static web export and
+# the Node relay on the same origin (one domain, one certificate, one port).
+# The daemon is NOT included - it runs on your own machine via npm.
 
 ARG NODE_IMAGE=node:22-bookworm-slim
-FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS relay-pack
+FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS build
 
 ARG BYSPACE_VERSION
 
@@ -12,7 +13,7 @@ ENV ONNXRUNTIME_NODE_INSTALL=skip
 
 WORKDIR /tmp/byspace-src
 
-# Manifests first so `npm ci` layer survives source-only changes (issue 027).
+# Manifests first so the `npm ci` layer survives source-only changes (issue 027).
 COPY package.json package-lock.json ./
 COPY packages/highlight/package.json packages/highlight/
 COPY packages/protocol/package.json packages/protocol/
@@ -38,13 +39,16 @@ RUN set -eux; \
     if [ -n "${BYSPACE_VERSION:-}" ]; then \
       test "$(node -p "require('./package.json').version")" = "${BYSPACE_VERSION}"; \
     fi; \
+    npm run build:web --workspace=@bytetrue/app; \
+    test -f packages/app/dist/index.html; \
+    test -f packages/app/dist/schemas/byspace.config.v1.json; \
     mkdir -p /tmp/byspace-packs; \
     npm pack --workspace=@bytetrue/relay --pack-destination /tmp/byspace-packs
 
 FROM ${NODE_IMAGE}
 LABEL org.opencontainers.image.source="https://github.com/ByteTrue/byspace"
 
-COPY --from=relay-pack /tmp/byspace-packs /tmp/byspace-packs
+COPY --from=build /tmp/byspace-packs /tmp/byspace-packs
 RUN set -eux; \
     npm install -g /tmp/byspace-packs/*.tgz; \
     rm -rf /tmp/byspace-packs; \
@@ -52,7 +56,10 @@ RUN set -eux; \
     test -f /usr/local/lib/node_modules/@bytetrue/relay/dist/node-main.js; \
     node --check /usr/local/lib/node_modules/@bytetrue/relay/dist/node-main.js
 
-# The relay is stateless: sessions live in memory only.
+COPY --from=build /tmp/byspace-src/packages/app/dist /opt/byspace/web
+ENV BYSPACE_WEB_DIR=/opt/byspace/web
+
+# The relay and web UI are stateless: sessions live in memory only.
 USER node
 
 EXPOSE 8080

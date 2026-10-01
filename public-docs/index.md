@@ -33,7 +33,7 @@ Configuration and local state live under `BYSPACE_HOME` (defaults to `~/.byspace
 
 ## Docker
 
-Self-host the web UI (and optionally the relay) with the official containers:
+Self-host the web UI and relay with the official container:
 
 ```bash
 curl -O https://raw.githubusercontent.com/ByteTrue/byspace/main/docker/compose.yml
@@ -41,7 +41,7 @@ curl -O https://raw.githubusercontent.com/ByteTrue/byspace/main/docker/Caddyfile
 docker compose up -d
 ```
 
-Then open `http://localhost:8080` and follow the connect guide to pair your daemon. The daemon is not in the containers — it runs on your own machine, installed via npm. See [Docker](/docs/docker) for TLS, version pinning, and security notes.
+Then open `http://localhost:8080` and follow the connect guide to pair your daemon. The daemon is not in the container — it runs on your own machine, installed via npm. See [Docker](/docs/docker) for TLS, version pinning, and security notes.
 
 ## Where next
 

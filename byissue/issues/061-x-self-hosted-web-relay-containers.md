@@ -76,6 +76,23 @@ closed: 2026-10-01
 
 ## 执行记录
 
+### 2026-10-01 · 终局调整：两容器合并为单容器
+
+PR #13 落地后，围绕「局域网无域名 HTTPS」的产品讨论收敛（talk 005 后续）：容器的价值判据是解决用户自己搞不定的部署问题——web 是纯静态（官方已托管，自托管只是把 CDN 换成 nginx）、daemon 必须贴用户工具链跑，两者都没有网络拓扑价值；**relay 是唯一有价值的自托管件**（内网 daemon ↔ 外网手机的双向可达点）。因此发布物收缩为一个镜像：`ghcr.io/bytetrue/byspace`，web 静态资源与 relay 同镜像同端口，`https://host/` 与 `wss://host/ws` 一个域名一张证书。
+
+两种用法都成立：只用 relay（手机走官方 web，`onboard --relay-endpoint host:443`，注意官方 web 是 HTTPS 页面、自托管 relay 必须在 TLS 反代后面）；全自托管（`onboard --web-origin https://host --relay-endpoint host:443`，即批次 4/5 建好的链路）。
+
+改动：
+
+- `packages/relay/src/web-static.ts`（新）—— 纯 `node:http` 移植 `packages/server/src/server/web-ui.ts` 的静态服务规则（immutable 哈希资产、no-cache schemas/sw.js、SPA fallback、.br/.gz 伴生文件、穿越防护）；不移植 `__BYSPACE_INITIAL_DAEMON_CONNECTION__` 注入（daemon 直连提示，relay 场景无关）。`web-static.test.ts` 8/8。
+- `packages/relay/src/node-adapter.ts` / `node-main.ts` —— `webDir` 选项与 `BYSPACE_WEB_DIR` 环境变量；`/health` → 静态 → 404 的处理链，`/ws` upgrade 不变。无 index.html 时静态服务关闭（relay-only 模式）。
+- `docker/Dockerfile`（替换 `web.Dockerfile` + `relay.Dockerfile`；删 `web-nginx.conf`）—— build 阶段沿用原 web 构建全套（manifests-first npm ci → strip 钩子 → `build:web` + 产物断言）加 `npm pack @bytetrue/relay`；运行时 `node:22-bookworm-slim`，`/opt/byspace/web` + `BYSPACE_WEB_DIR`。
+- `docker/compose.yml` 单服务 + tls profile；`Caddyfile` 单站点单 upstream。
+- `.github/workflows/docker.yml` 撤掉双 matrix，单镜像，digest 资产名回到 `BySpace-<v>-container.txt`，冒烟 curl `/health` 和 `/`。
+- 文档全链路单容器化：`docs/docker.md`、`docker/README.md`、`public-docs/docker.md`、`public-docs/index.md`、`README.md`/`README.ko.md`、`SECURITY.md`、`docs/release.md`、`byissue/spec/connection.md`「自托管部署」节。
+
+验证：本地 `docker build` 成功（81s）；容器冒烟 `/health`、`/`、`/schemas/byspace.config.v1.json`、`/sw.js`、SPA fallback 全 200；缓存头逐条对上原 nginx 规则（index no-store、哈希资产 immutable）；`/ws` upgrade 正常（静态与 WebSocket 同源同端口共存）。relay 全套 24/24。actionlint 干净。
+
 ### 2026-09-30 · 自托管成功路径 e2e（引导弹窗粘贴真实 offer）
 
 批次 5 的弹窗当时只做过 Playwright 视觉冒烟（人工看截图），成功路径没有自动化证据。补上两个文件：

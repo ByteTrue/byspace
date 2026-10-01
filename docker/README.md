@@ -1,19 +1,16 @@
-# Self-hosted BySpace containers
+# Self-hosted BySpace container
 
-The published containers are two small images:
-
-- `ghcr.io/bytetrue/byspace-web` — static web UI behind nginx (unprivileged). The daemon is **not** included; it runs on your own machine, installed via npm.
-- `ghcr.io/bytetrue/byspace-relay` — the relay as a Node service, for users who want to self-host the relay instead of using the hosted one.
-
-Start the stack:
+The published container is one image, `ghcr.io/bytetrue/byspace`, that serves
+the static web UI and the relay from the same port. The daemon is **not**
+included — it runs on your own machine, installed via npm.
 
 ```bash
-docker compose up -d                                  # web only, HTTP on :8080
-docker compose --profile relay up -d                   # + self-hosted relay on :8081
+docker compose up -d          # web + relay, HTTP on :8080
 ```
 
-See [docs/docker.md](../docs/docker.md) for TLS (caddy profile), version pinning,
-connecting your daemon, and the HTTP-secure-context tradeoffs.
+For TLS (one domain covers both the web UI and the relay WebSocket), see the
+`tls` profile in [docs/docker.md](../docs/docker.md). That doc also covers
+version pinning, connecting your daemon, and the plain-HTTP tradeoffs.
 
 Want the daemon in a container instead? Install the npm package in your own image:
 
@@ -24,5 +21,5 @@ EXPOSE 6777
 CMD ["byspace", "daemon", "start"]
 ```
 
-Container images are built by [.github/workflows/docker.yml](../.github/workflows/docker.yml),
+The image is built by [.github/workflows/docker.yml](../.github/workflows/docker.yml),
 multi-arch (amd64/arm64), published on release tags.

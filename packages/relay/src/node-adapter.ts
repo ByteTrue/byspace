@@ -5,6 +5,7 @@
  * `cloudflare-adapter.ts`). Serves:
  * - GET /health -> { "status": "ok" }
  * - GET /ws?serverId&role&v[&connectionId] -> WebSocket upgrade
+ * - other GET paths -> static web export (when built with a webDir)
  *
  * Sessions (one per serverId per protocol version) live in memory. Run one
  * replica per endpoint; the relay is a single-process service.
@@ -12,6 +13,7 @@
 
 import http from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
+import { createStaticWebHandler } from "./web-static.js";
 import {
   CURRENT_RELAY_VERSION,
   LEGACY_RELAY_VERSION,
@@ -32,6 +34,8 @@ export interface NodeRelayServerOptions {
   port?: number;
   host?: string;
   onLog?: (line: string) => void;
+  /** Directory of the web static export. Serves the app on the relay origin. */
+  webDir?: string | null;
 }
 
 export interface NodeRelayServer {
@@ -41,6 +45,14 @@ export interface NodeRelayServer {
 
 export function createNodeRelayServer(options: NodeRelayServerOptions = {}): NodeRelayServer {
   const log = options.onLog ?? (() => {});
+  const staticWeb = options.webDir ? createStaticWebHandler(options.webDir) : null;
+  if (options.webDir) {
+    log(
+      staticWeb
+        ? `[relay] serving web UI from ${options.webDir}`
+        : `[relay] web UI disabled: no index.html in ${options.webDir}`,
+    );
+  }
 
   // relay-v{version}:{serverId} -> session, mirroring the DO naming scheme.
   const sessions = new Map<string, RelaySession<WebSocket>>();
@@ -52,6 +64,10 @@ export function createNodeRelayServer(options: NodeRelayServerOptions = {}): Nod
     if (url.pathname === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ status: "ok" }));
+      return;
+    }
+
+    if (staticWeb && staticWeb(req, res)) {
       return;
     }
 
