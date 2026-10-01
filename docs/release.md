@@ -14,7 +14,7 @@ Stable Web releases deploy to `app.byspace.cc.cd`. Versions with a prerelease su
 
 `@bytetrue/byspace` is the only published package. The `@bytetrue/*` workspaces are packed into it as bundled dependencies; they are not published separately and have no dist-tags to maintain.
 
-GitHub Release assets are the npm tarball and a container descriptor, each with a `.sha256` sibling:
+GitHub Release assets are the npm tarball and one container descriptor, each with a `.sha256` sibling:
 
 - `BySpace-<version>-npm.tgz`, `BySpace-<version>-npm.tgz.sha256`
 - `BySpace-<version>-container.txt`, `BySpace-<version>-container.txt.sha256`
@@ -101,8 +101,8 @@ yet it stops with that message — wait for CI and re-run `npm run release:push`
 
 Tag pushes start three workflows: **Publish npm**, **Deploy App**, and **Docker**.
 Stable `vX.Y.Z` tag pushes publish `ghcr.io/bytetrue/byspace:X.Y.Z` and
-`ghcr.io/bytetrue/byspace:latest`; prerelease `vX.Y.Z-beta.N` tag pushes publish only
-`ghcr.io/bytetrue/byspace:X.Y.Z-beta.N` and never move `latest`.
+`latest`; prerelease `vX.Y.Z-beta.N` tag pushes publish only the exact
+prerelease tag and never move `latest`.
 
 After the tag push, **Release Notes Sync** sets the GitHub Release body from the
 changelog automatically; confirm it landed (see **Release notes**). Then confirm every

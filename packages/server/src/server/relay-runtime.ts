@@ -27,6 +27,13 @@ interface RelayRuntimeOptions {
 export interface RelayRuntime {
   getConfig(): RelayRuntimeConfig;
   setEnabled(enabled: boolean): void;
+  /**
+   * Hot-applies a new relay endpoint from a daemon config patch. The transport
+   * bakes the endpoint at start, so a running transport is stopped and replaced.
+   * Public fields follow the endpoint: the mutable config does not distinguish
+   * them and pairing offers must not keep advertising the previous relay.
+   */
+  setEndpoint(endpoint: string, useTls: boolean): void;
   stop(): Promise<void>;
 }
 
@@ -62,6 +69,26 @@ export function createRelayRuntime(options: RelayRuntimeOptions): RelayRuntime {
     });
   }
 
+  function setEndpoint(endpoint: string, useTls: boolean): void {
+    if (config.endpoint === endpoint && config.useTls === useTls) return;
+    const current = transport;
+    transport = null;
+    if (current) {
+      void current.stop().catch((error) => {
+        options.logger.warn({ err: error }, "Failed to stop relay transport");
+      });
+    }
+    config = { ...config, endpoint, publicEndpoint: endpoint, useTls, publicUseTls: useTls };
+    if (!config.enabled) return;
+    try {
+      start();
+    } catch (error) {
+      // Mirror setEnabled: a failed restart leaves relay disabled.
+      config = { ...config, enabled: false };
+      throw error;
+    }
+  }
+
   async function stop(): Promise<void> {
     const current = transport;
     transport = null;
@@ -73,6 +100,7 @@ export function createRelayRuntime(options: RelayRuntimeOptions): RelayRuntime {
   return {
     getConfig: () => config,
     setEnabled,
+    setEndpoint,
     stop,
   };
 }

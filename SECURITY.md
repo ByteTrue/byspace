@@ -54,9 +54,11 @@ When BySpace checks out a change request from a different repository, it does no
 
 If you expose the daemon beyond loopback, such as by binding to `0.0.0.0`, forwarding it through a tunnel or reverse proxy, or publishing it from a Docker container, you are responsible for restricting and securing that access. Setting a password is strongly recommended in that case.
 
-In Docker, the official image runs the daemon and agents as the non-root
-`byspace` user by default. Mounted workspaces and credentials are still fully
-available to anything the agents run inside the container.
+The official container serves the web UI (static files) and an optional
+self-hosted relay from one image. It runs no agents, so it holds no
+credentials. If you run the daemon in your own container (see
+[docs/docker.md](docs/docker.md)), it runs as whatever user your image chooses;
+the same loopback-trust and password rules apply.
 
 For remote access, use the relay connection. It is the supported path for reaching the daemon off-machine, and it adds end-to-end encryption plus a pairing handshake before commands are accepted.
 

@@ -510,6 +510,17 @@ function resolveExpressTrustProxySetting(config: BySpaceDaemonConfig): true | st
   return config.trustedProxies ?? ["loopback"];
 }
 
+// COMPAT(relayEndpointConfig): added in v0.17.0, remove after 2027-03-30 once
+// daemon floor >= v0.17.0. A launch override owns the relay endpoint when the
+// config reload machinery already controls it; onboard must not fight it.
+function isRelayEndpointMutable(config: BySpaceDaemonConfig): boolean {
+  const overridden = config.configReload?.overrideControlledPaths ?? [];
+  return !overridden.some(
+    (controlledPath) =>
+      controlledPath === "daemon.relay.endpoint" || controlledPath === "daemon.relay.useTls",
+  );
+}
+
 function applyOptionalConfigLists(
   initialConfig: MutableDaemonConfig,
   config: BySpaceDaemonConfig,
@@ -532,7 +543,14 @@ function createInitialMutableDaemonConfig(
   const providers = config.providerOverrides ?? {};
 
   const initialConfig: MutableDaemonConfig = {
-    relay: { enabled: config.relayEnabled ?? true },
+    // COMPAT(relayEndpointConfig): added in v0.17.0, remove after 2027-03-30 once
+    // daemon floor >= v0.17.0. Endpoint/useTls join the mutable relay view so
+    // config patches, reload diffs, and get_daemon_config all observe them.
+    relay: {
+      enabled: config.relayEnabled ?? true,
+      endpoint: config.relayEndpoint,
+      useTls: config.relayUseTls,
+    },
     mcp: {
       enabled: config.mcpEnabled ?? true,
       injectIntoAgents: config.mcpInjectIntoAgents ?? true,
@@ -592,6 +610,7 @@ export async function createBySpaceDaemon(
     logger,
     {
       relayEnabledMutable: config.relayEnabledMutable ?? true,
+      relayEndpointMutable: isRelayEndpointMutable(config),
       startupPersisted: config.configReload?.startupPersisted,
       networkControls: {
         getTcpPort: () => (boundListenTarget?.type === "tcp" ? boundListenTarget.port : null),
@@ -1660,6 +1679,19 @@ export async function createBySpaceDaemon(
             daemonConfigStore.onFieldChange("relay.enabled", (value) => {
               relayRuntime?.setEnabled(value === true);
             });
+            // COMPAT(relayEndpointConfig): added in v0.17.0, remove after
+            // 2027-03-30 once daemon floor >= v0.17.0. Endpoint changes hot-swap
+            // the transport.
+            const syncRelayEndpoint = () => {
+              const relay = daemonConfigStore.get().relay;
+              if (!relay?.endpoint) return;
+              relayRuntime?.setEndpoint(
+                relay.endpoint,
+                relay.useTls ?? isBySpaceHostedRelayEndpoint(relay.endpoint),
+              );
+            };
+            daemonConfigStore.onFieldChange("relay.endpoint", syncRelayEndpoint);
+            daemonConfigStore.onFieldChange("relay.useTls", syncRelayEndpoint);
           };
 
           logAndResolve().then(resolve, reject);

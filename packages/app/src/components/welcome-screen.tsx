@@ -3,13 +3,15 @@ import { useTranslation } from "react-i18next";
 import { Pressable, Text, View, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-import { QrCode, Link2, ClipboardPaste, Settings } from "lucide-react-native";
+import { QrCode, Link2, ClipboardPaste, Settings, Terminal } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { HostProfile } from "@/types/host-connection";
 import { getHostRuntimeStore, isHostRuntimeConnected, useHosts } from "@/runtime/host-runtime";
+import { isBySpaceHostedAppBaseUrl } from "@bytetrue/protocol/release-channel";
 import { AddHostModal } from "./add-host-modal";
 import { AddRemoteSshHostModal } from "./add-remote-ssh-host-modal";
 import { PairLinkModal } from "./pair-link-modal";
+import { SetupGuideModal } from "./setup-guide-modal";
 import { Button } from "@/components/ui/button";
 import { resolveAppVersion } from "@/utils/app-version";
 import { formatVersionWithPrefix } from "@/utils/format-version";
@@ -18,7 +20,7 @@ import { BySpaceLogo } from "@/components/icons/byspace-logo";
 import { isWeb } from "@/constants/platform";
 
 interface WelcomeAction {
-  key: "scan-qr" | "direct-connection" | "remote-ssh" | "paste-pairing-link";
+  key: "scan-qr" | "direct-connection" | "remote-ssh" | "paste-pairing-link" | "setup-guide";
   label: string;
   testID: string;
   primary: boolean;
@@ -166,6 +168,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
   const [isDirectOpen, setIsDirectOpen] = useState(false);
   const [isRemoteSshOpen, setIsRemoteSshOpen] = useState(false);
   const [isPasteLinkOpen, setIsPasteLinkOpen] = useState(false);
+  const [isSetupGuideOpen, setIsSetupGuideOpen] = useState(false);
   const hosts = useHosts();
   const anyOnlineServerId = useAnyHostOnline(hosts.map((h) => h.serverId));
 
@@ -187,6 +190,8 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
   const handleCloseRemoteSsh = useCallback(() => setIsRemoteSshOpen(false), []);
   const handleOpenPasteLink = useCallback(() => setIsPasteLinkOpen(true), []);
   const handleClosePasteLink = useCallback(() => setIsPasteLinkOpen(false), []);
+  const handleOpenSetupGuide = useCallback(() => setIsSetupGuideOpen(true), []);
+  const handleCloseSetupGuide = useCallback(() => setIsSetupGuideOpen(false), []);
   const handleScanQr = useCallback(() => {
     router.push("/pair-scan?source=onboarding");
   }, [router]);
@@ -199,13 +204,27 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
     [onHostAdded, finishOnboarding],
   );
 
+  // Web-only API: read inside component scope, never at module scope.
+  const isHostedWeb =
+    typeof window !== "undefined" && isBySpaceHostedAppBaseUrl(window.location?.origin ?? "");
+
+  const setupGuideAction: WelcomeAction = {
+    key: "setup-guide",
+    label: t("pairing.connectionMethods.setupGuide.title"),
+    testID: "welcome-setup-guide",
+    primary: isWeb && !isHostedWeb,
+    icon: Terminal,
+    onPress: handleOpenSetupGuide,
+  };
+
   const actions: WelcomeAction[] = isWeb
     ? [
+        ...(isHostedWeb ? [] : [setupGuideAction]),
         {
           key: "direct-connection",
           label: t("pairing.connectionMethods.direct.title"),
           testID: "welcome-direct-connection",
-          primary: true,
+          primary: isHostedWeb,
           icon: Link2,
           onPress: handleOpenDirect,
         },
@@ -217,6 +236,7 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
           icon: ClipboardPaste,
           onPress: handleOpenPasteLink,
         },
+        ...(isHostedWeb ? [setupGuideAction] : []),
       ]
     : [
         {
@@ -299,6 +319,12 @@ export function WelcomeScreen({ onHostAdded }: WelcomeScreenProps) {
         <PairLinkModal
           visible={isPasteLinkOpen}
           onClose={handleClosePasteLink}
+          onSaved={handleHostSaved}
+        />
+
+        <SetupGuideModal
+          visible={isSetupGuideOpen}
+          onClose={handleCloseSetupGuide}
           onSaved={handleHostSaved}
         />
       </ScrollView>

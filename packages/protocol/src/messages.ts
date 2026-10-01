@@ -188,9 +188,15 @@ const MutableBrowserToolsConfigSchema = z
     enabled: z.boolean().optional(),
   })
   .passthrough();
+// COMPAT(relayEndpointConfig): added in v0.17.0, remove after 2027-03-30 once
+// daemon floor >= v0.17.0. Endpoint/useTls are optional; old daemons drop
+// these patch fields (passthrough strips them server-side). Set by
+// `byspace onboard --relay-endpoint`: points the daemon at a self-hosted relay.
 const MutableRelayConfigSchema = z
   .object({
     enabled: z.boolean(),
+    endpoint: z.string().min(1).optional(),
+    useTls: z.boolean().optional(),
   })
   .passthrough();
 
@@ -357,6 +363,16 @@ export const MutableDaemonConfigPatchSchema = z
     service: z
       .object({
         install: z.boolean().optional(),
+      })
+      .passthrough()
+      .optional(),
+    // COMPAT(webOriginConfig): added in v0.17.0, remove after 2027-03-30 once
+    // daemon floor >= v0.17.0. Old daemons drop these patches. Set by `byspace onboard --web-origin`: pairing links point at a self-hosted
+    // web app and its origin is allowlisted for WebSocket upgrades.
+    app: z.object({ baseUrl: z.string().optional() }).passthrough().optional(),
+    cors: z
+      .object({
+        allowedOrigins: z.array(z.string()).optional(),
       })
       .passthrough()
       .optional(),

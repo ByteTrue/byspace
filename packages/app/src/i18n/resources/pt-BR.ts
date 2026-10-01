@@ -1418,6 +1418,11 @@ export const ptBR: TranslationResources = {
   },
   pairing: {
     connectionMethods: {
+      setupGuide: {
+        title: "Configurar um novo daemon",
+        description: "Instale e pareie em três passos.",
+      },
+
       title: "Adicionar conexão",
       direct: {
         title: "Conexão direta",
@@ -1532,6 +1537,34 @@ export const ptBR: TranslationResources = {
         pairing: "Pareando...",
       },
     },
+    setupGuide: {
+      title: "Conectar um daemon",
+      subtitle: "Configure uma nova máquina em três passos.",
+      steps: {
+        install: "Instale o daemon",
+        onboard: "Execute o onboarding",
+        pair: "Cole o link de pareamento",
+      },
+      descriptions: {
+        onboard:
+          "Este comando adiciona este app web à lista de permissões, ativa a conexão por relay e aponta os links de pareamento para o seu relay.",
+        onboardHosted: "Este comando ativa a conexão por relay.",
+        pair: "Ao terminar, o onboarding imprime um link de pareamento. Cole abaixo para conectar.",
+      },
+      fields: {
+        relayEndpoint: "Endpoint do relay (opcional)",
+        relayEndpointPlaceholder: "relay.example.com:443",
+        relayEndpointHelper: "Deixe vazio para usar o relay hospedado.",
+        pairingLink: "Link de pareamento",
+      },
+      actions: {
+        copy: "Copiar",
+        copied: "Copiado",
+        copyFailed: "Falha ao copiar",
+        cancel: "Cancelar",
+      },
+    },
+
     scan: {
       title: "Escanear QR",
       webUnavailableTitle: "Indisponível na web",

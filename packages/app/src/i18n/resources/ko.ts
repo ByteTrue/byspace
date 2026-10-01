@@ -1400,6 +1400,11 @@ export const ko: TranslationResources = {
   },
   pairing: {
     connectionMethods: {
+      setupGuide: {
+        title: "새 데몬 설정",
+        description: "3단계로 설치하고 페어링하세요.",
+      },
+
       title: "연결 추가",
       direct: {
         title: "직접 연결",
@@ -1512,6 +1517,34 @@ export const ko: TranslationResources = {
         pairing: "페어링 중...",
       },
     },
+    setupGuide: {
+      title: "데몬 연결",
+      subtitle: "3단계로 새 머신을 설정합니다.",
+      steps: {
+        install: "데몬 설치",
+        onboard: "온보딩 실행",
+        pair: "페어링 링크 붙여넣기",
+      },
+      descriptions: {
+        onboard:
+          "이 명령은 이 웹 앱을 허용 목록에 추가하고, 릴레이 연결을 켜고, 페어링 링크가 가리키는 릴레이를 지정합니다.",
+        onboardHosted: "이 명령은 릴레이 연결을 켭니다.",
+        pair: "온보딩이 끝나면 페어링 링크가 출력됩니다. 아래에 붙여넣어 연결하세요.",
+      },
+      fields: {
+        relayEndpoint: "릴레이 엔드포인트 (선택)",
+        relayEndpointPlaceholder: "relay.example.com:443",
+        relayEndpointHelper: "비워 두면 호스티드 릴레이를 사용합니다.",
+        pairingLink: "페어링 링크",
+      },
+      actions: {
+        copy: "복사",
+        copied: "복사됨",
+        copyFailed: "복사 실패",
+        cancel: "취소",
+      },
+    },
+
     scan: {
       title: "QR 스캔",
       webUnavailableTitle: "웹에서 사용할 수 없습니다",

@@ -26,6 +26,12 @@
       "node": "./dist/cloudflare-adapter.js",
       "import": "./src/cloudflare-adapter.ts",
       "default": "./src/cloudflare-adapter.ts"
+    },
+    "./node": {
+      "types": "./dist/node-adapter.d.ts",
+      "node": "./dist/node-adapter.js",
+      "import": "./src/node-adapter.ts",
+      "default": "./src/node-adapter.ts"
     }
   },
   "publishConfig": {

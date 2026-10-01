@@ -1,30 +1,25 @@
-# BySpace Docker Image
+# Self-hosted BySpace container
 
-This directory contains the BySpace daemon image.
-
-The image runs the daemon headless and serves the bundled web UI from the same
-HTTP origin. Start it, then open the daemon URL in a browser.
+The published container is one image, `ghcr.io/bytetrue/byspace`, that serves
+the static web UI and the relay from the same port. The daemon is **not**
+included — it runs on your own machine, installed via npm.
 
 ```bash
-docker run -d --name byspace \
-  -p 6777:6777 \
-  -e BYSPACE_PASSWORD=change-me \
-  -v "$PWD/byspace-home:/home/byspace" \
-  -v "$PWD:/workspace" \
-  ghcr.io/bytetrue/byspace:0.7.0-beta.2
+docker compose up -d          # web + relay, HTTP on :8080
 ```
 
-Then open `http://localhost:6777`.
+For TLS (one domain covers both the web UI and the relay WebSocket), see the
+`tls` profile in [docs/docker.md](../docs/docker.md). That doc also covers
+version pinning, connecting your daemon, and the plain-HTTP tradeoffs.
 
-The base image intentionally does not bundle agent CLIs. Extend it with the
-agents you use:
+Want the daemon in a container instead? Install the npm package in your own image:
 
 ```Dockerfile
-FROM ghcr.io/bytetrue/byspace:0.7.0-beta.2
-
-USER root
-RUN npm install -g @openai/codex @anthropic-ai/claude-code
+FROM node:22
+RUN npm install -g @bytetrue/byspace
+EXPOSE 6777
+CMD ["byspace", "daemon", "start"]
 ```
 
-See [docs/docker.md](../docs/docker.md) for Compose, reverse proxy, security,
-agent auth, and troubleshooting notes.
+The image is built by [.github/workflows/docker.yml](../.github/workflows/docker.yml),
+multi-arch (amd64/arm64), published on release tags.

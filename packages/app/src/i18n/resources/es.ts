@@ -1427,6 +1427,11 @@ export const es: TranslationResources = {
   },
   pairing: {
     connectionMethods: {
+      setupGuide: {
+        title: "Configurar un nuevo daemon",
+        description: "Instala y empareja en tres pasos.",
+      },
+
       title: "Agregar conexión",
       direct: {
         title: "Conexión directa",
@@ -1541,6 +1546,34 @@ export const es: TranslationResources = {
         pairing: "Emparejamiento...",
       },
     },
+    setupGuide: {
+      title: "Conectar un daemon",
+      subtitle: "Configura una máquina nueva en tres pasos.",
+      steps: {
+        install: "Instala el daemon",
+        onboard: "Ejecuta el onboarding",
+        pair: "Pega el enlace de emparejamiento",
+      },
+      descriptions: {
+        onboard:
+          "Este comando añade esta aplicación web a la lista de permitidos, activa la conexión por relay y apunta los enlaces de emparejamiento a tu relay.",
+        onboardHosted: "Este comando activa la conexión por relay.",
+        pair: "Al terminar, el onboarding imprime un enlace de emparejamiento. Pégalo abajo para conectar.",
+      },
+      fields: {
+        relayEndpoint: "Endpoint del relay (opcional)",
+        relayEndpointPlaceholder: "relay.example.com:443",
+        relayEndpointHelper: "Déjalo vacío para usar el relay alojado.",
+        pairingLink: "Enlace de emparejamiento",
+      },
+      actions: {
+        copy: "Copiar",
+        copied: "Copiado",
+        copyFailed: "Error al copiar",
+        cancel: "Cancelar",
+      },
+    },
+
     scan: {
       title: "EscanearQR",
       webUnavailableTitle: "No disponible en la web",

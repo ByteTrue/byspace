@@ -1,0 +1,8 @@
+# TLS termination for the self-hosted BySpace container.
+# Enabled with `--profile tls`; requires BYSPACE_DOMAIN.
+# One site address covers both the web UI and the relay WebSocket
+# (wss://<domain>/ws), so a single certificate is enough.
+
+${BYSPACE_DOMAIN} {
+	reverse_proxy byspace:8080
+}
