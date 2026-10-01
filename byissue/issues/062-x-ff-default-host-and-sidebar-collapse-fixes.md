@@ -25,6 +25,10 @@ Status: ff (fast, 快交付)
 - local host 排在 lastActiveProject 之前：用户意图是"有本机就默认本机"，不要求本机有可选项目。
 - 自动迁移规则与既有的 "switches to the remembered online host after it hydrates" 模式一致（useSettings 异步 hydrate 竞态）。
 
+**hydrate 语义**（已确认）：useNewWorkspaceInitialContext 的 localServerId/pinnedServerId 都是响应式读取（useLocalDaemonServerId + useSettings），mount 时 settings 未加载则先按 lastActive/local 预选，hydrate 后 defaultServerId 重算并经 resolveNewWorkspaceAutomaticServerId 平滑迁移到 pin——不会固化在 mount 时刻；manual 选择不受迁移影响。用户可能看到一次预选切换（与既有 remembered-host hydrate 行为相同）。
+
+**陈旧 pin 展示**：pin 的 host 被删/离线时，解析器按 known+online 校验直接忽略；项目设置的 SelectField 因 options 中无匹配回落显示 placeholder（Automatic）。defaultHostByProject 不做主动 GC（每项目一条，量级可忽略；选 Automatic 即删键）。
+
 ### 测试
 
 packages/app/src/screens/new-workspace-initial-context.test.ts 新增 4 用例：pinned > local > lastActive、local offline 回落、automatic hydrate 迁移。storage.test.ts 既有用例覆盖新默认字段。
