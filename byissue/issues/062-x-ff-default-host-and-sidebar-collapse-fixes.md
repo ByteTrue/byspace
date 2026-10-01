@@ -38,15 +38,18 @@ packages/app/src/screens/new-workspace-initial-context.test.ts 新增 4 用例�
 用户抱怨四点，逐条修：
 
 1. **排版层级两层收敛**：
-   - 标题层（`BySpace` 与工作区标题）：统一为 `fontSize.base`（14px）、`fontWeight: { xs: "400", md: "300" }`、`color: theme.colors.foreground`。
+   - 标题层：`BySpace` 用 `fontSize.base`（14px）、`fontWeight.semibold`（600）、`color: theme.colors.foreground`。此前是 `{ xs: "400", md: "300" }`——标题比它下面的导航行（400）还轻，层级是反的，用户要求加粗。
    - 徽标层（开发分支徽标 `devBuildBadge` 与项目徽标 `headerProjectTitle`）：统一为 `fontSize.sm`（12px）、`fontWeight.normal`（400）、`color: theme.colors.foregroundMuted`、`backgroundColor: theme.colors.surface2`、`borderRadius.sm`（4px），去掉了原开发徽标突兀的纯黑实心底色。
-2. **箭头靠右与文字居中（尊重设计决策）**：保留用户的明确设计决策——`BySpace` 文本在整个顶栏宽度中绝对居中，右侧展开箭头 `>` / `v`（`ICON_SIZE.sm` = 14px）贴靠最右侧（`right: 8px`）。
+2. **箭头靠右与文字居中（尊重设计决策）**：`BySpace` 文本相对**整个 sidebar 宽度**居中（不是相对按钮——左侧的折叠按钮与移动端关闭按钮会占据行内空间，按按钮居中会把标题推离 sidebar 轴），右侧展开箭头 `>` / `v`（`ICON_SIZE.md` = 16px，不小于 Sort 按钮的 14px）贴靠最右侧（`right: 8px`）。做法：label 从 trigger 的 Pressable 内移出，与 trigger 同层，作为绝对定位全宽层（`labelLayer`）居中；trigger 内只剩绝对定位的右侧 chevron。
 3. **开发分支名移出顶栏**：原本在顶栏右侧挤占位置的开发分支徽标 `devBuildBadge` 移到左下侧 `+ Add project` 的正上方（`SidebarFooter` 上方），作为安静低调的次级徽标展示；顶栏不再有分支名干扰，彻底还原用户在真实生产环境看到的视图。
-4. **文字比图标低 1px 的光学中线纠偏**：因 Web 系统字体度量中 baseline 和 leading 偏向下方，导致居中行内文字视觉重心比几何图标略低。给 `SidebarNavMenuTrigger` 的标题以及下方 4 个导航按钮（`SidebarHeaderRow`）统一加上 `marginTop: -1` 光学微调，文字中轴线与两端/左侧图标高度彻底拉齐。
-5. **折叠时底线对齐**：移除了 `sidebarHeaderArea` 的额外 `paddingBottom`，折叠时底部分隔线精准落在 `36px` 基准线上，与右侧 `ScreenHeader` 的底部分隔线完全对齐。
+4. **标签光学中线提取为共享样式**：新增 packages/app/src/styles/sidebar.ts，导出 `SIDEBAR_LABEL_OPTICAL_OFFSET` 与 `sidebarLabelStyles.{title,row,rowHighlighted}`。`SidebarNavMenuTrigger` 的标题层与四个导航行（`SidebarHeaderRow`）的标签层都从这里取偏移，新增导航行不会漏加。偏移值由 DOM 实测决定（probe19，六行一致）：无偏移时标签的 ink box（罩住 cap height **和** workspace/History/Schedules 的降部）中线比图标中心低 1px，因此取 -3，让 cap band 落在图标中心上方 1px、x-height band 落在下方 0.5px，两者夹住图标中心。
+5. **折叠时底线对齐**：移除了 `sidebarHeaderArea` 的额外 `paddingBottom`（它破坏了 row + hairline = `HEADER_INNER_HEIGHT` 这个不变量），折叠时底部分隔线精准落在 `36px` 基准线上，与右侧 `ScreenHeader` 的底部分隔线完全对齐。
 
 ## 验证
 
 - typecheck 通过；lint 0/0（含全仓 lint，complexity 22→提取 helper 后通过）。
 - vitest：new-workspace-initial-context.test.ts (19) + use-settings/storage.test.ts (68) 全过。
-- 待人工 e2e：折叠态对齐（第二张截图场景）、默认 host picker 行为。
+- packages/app/e2e/browser/sidebar-workspace.spec.ts：label 移出 trigger 后，两处 `trigger.getByText("BySpace")` 改为 `page.getByTestId("sidebar-nav-menu-label")`，并与角行（`trigger.locator("xpath=..")`）中心比对居中——断言的仍是"相对整个 sidebar 行居中"，不是相对按钮。
+- packages/app/e2e/browser/sidebar-workspace.spec.ts 全绿：21 passed（2.0m）。
+- 浏览器实测（agent-browser，DOM 几何）：标签中心 159.5 vs sidebar 中心 160（trigger 中心是 174，所以"相对按钮居中"会偏 14px）；chevron 右缘 299 / sidebar 右缘 320；折叠态 sidebar hairline bottom = 36 = 右侧 ScreenHeader hairline bottom。
+- 待人工 e2e：默认 host picker 行为。

@@ -64,6 +64,7 @@ import { sortProjectsByRules } from "@/utils/sidebar-sort-projects";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarCalloutSlot } from "./sidebar-callout-slot";
 import { SidebarWorkspaceList } from "./sidebar-workspace-list";
+import { sidebarLabelStyles } from "@/styles/sidebar";
 import type { Theme } from "@/styles/theme";
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
@@ -363,8 +364,9 @@ function FooterAddProjectButton({
                 <Text
                   numberOfLines={1}
                   style={[
+                    sidebarLabelStyles.row,
                     styles.footerAddProjectLabel,
-                    isHovered && styles.footerAddProjectLabelHovered,
+                    isHovered && sidebarLabelStyles.rowHighlighted,
                   ]}
                 >
                   {label}
@@ -1098,15 +1100,11 @@ const styles = StyleSheet.create((theme) => ({
   footerAddProjectButtonHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
+  // Size, weight, colour and the optical offset come from the shared sidebar label style, so
+  // this label cannot drift from the nav rows above it.
   footerAddProjectLabel: {
     minWidth: 0,
     flexShrink: 1,
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.normal,
-    color: theme.colors.foregroundMuted,
-  },
-  footerAddProjectLabelHovered: {
-    color: theme.colors.foreground,
   },
   footerIconButton: {
     width: 28,

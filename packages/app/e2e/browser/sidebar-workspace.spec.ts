@@ -335,12 +335,13 @@ test.describe("Workspace menu visibility", () => {
       expect(firstRowBox!.y).toBeGreaterThan(triggerBox!.y);
       expect(firstRowBox!.x).toBe(triggerBox!.x);
 
-      const labelBox = await trigger.getByText("BySpace", { exact: true }).boundingBox();
+      // The label is centred on the sidebar row, not on the button: the close button shares the
+      // row, so centring inside the button would push the title off the sidebar's axis.
+      const cornerBox = await trigger.locator("xpath=..").boundingBox();
+      const labelBox = await page.getByTestId("sidebar-nav-menu-label").boundingBox();
+      expect(cornerBox).not.toBeNull();
       expect(labelBox).not.toBeNull();
-      expect(labelBox!.x + labelBox!.width / 2).toBeCloseTo(
-        triggerBox!.x + triggerBox!.width / 2,
-        0,
-      );
+      expect(labelBox!.x + labelBox!.width / 2).toBeCloseTo(cornerBox!.x + cornerBox!.width / 2, 0);
 
       // Choosing a destination closes the panel behind it.
       await page.getByTestId("sidebar-sessions").click();
@@ -583,13 +584,15 @@ test.describe("Half-screen desktop layout", () => {
     expect(await glyphX("menu-button")).toBe(await glyphX("sidebar-global-new-workspace"));
     expect(await glyphX("menu-button")).toBe(await glyphX("sidebar-sessions"));
 
-    // The app menu is a title-bar shape, not a nav row: its label is centred on the button and
-    // its chevron hugs the button's right edge. Neither has to line up with the rows below —
-    // sharing the corner row with the toggle makes that impossible anyway.
-    const labelBox = await trigger.getByText("BySpace", { exact: true }).boundingBox();
+    // The app menu is a title-bar shape, not a nav row: its label is centred on the sidebar row
+    // (the toggle shares the row, so the button's own centre is not the sidebar's), and its
+    // chevron hugs the row's right edge.
+    const cornerBox = await trigger.locator("xpath=..").boundingBox();
+    const labelBox = await page.getByTestId("sidebar-nav-menu-label").boundingBox();
+    expect(cornerBox).not.toBeNull();
     expect(labelBox).not.toBeNull();
-    const buttonCentre = triggerBox!.x + triggerBox!.width / 2;
-    expect(labelBox!.x + labelBox!.width / 2).toBeCloseTo(buttonCentre, 0);
+    const rowCentre = cornerBox!.x + cornerBox!.width / 2;
+    expect(labelBox!.x + labelBox!.width / 2).toBeCloseTo(rowCentre, 0);
 
     const chevronBox = await trigger.locator("svg").first().boundingBox();
     expect(chevronBox).not.toBeNull();
