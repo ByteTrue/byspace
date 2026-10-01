@@ -163,40 +163,36 @@ release-bound work out of the current release, not as a guarded branch.
 
 If `main` contains changes you do not want to release, branch from the affected release tag and cherry-pick only the required fixes. Run CI on that branch, then use the normal release flow with it as the explicit source, choosing a new patch or beta version. Ensure the fixes and changelog also reach `main` and any active `next`, preserving newer development and version changes there. This is a short-lived hotfix branch, not another maintained release track.
 
-## Release completion and heartbeat
+## Release completion
 
 A release is **in progress** after npm publication and tag push. Report it as
 **shipped** only after every applicable build, publication, asset, and deployment
 passes the completion checklist.
 
-Immediately after every beta, stable, or promotion tag push, create a heartbeat
-that resumes the release in the current conversation. Create it automatically
-with `create_heartbeat`. The heartbeat owns the release until it either reaches
-the completion checklist or finds a failure that needs new user authority.
+Poll the release from the conversation that pushed the tag until it passes the
+checklist or hits a failure that needs new user authority. A tag push starts four
+workflows that take several minutes; ending the turn on the push reports an
+unverified release.
 
-Each heartbeat checks the release tag commit, all GitHub Actions runs for the
-release tag, npm dist-tags, the GitHub Release body and assets, and the deployed
-web app. Inspect the GitHub Release itself and confirm both the npm tarball and
-container descriptor are present with their `.sha256` siblings.
+Polling means waiting on the tag's GitHub Actions runs until none are still
+running, then checking the release tag commit, npm dist-tags, the GitHub Release
+body and assets, and the deployed web app. Inspect the GitHub Release itself and
+confirm both the npm tarball and container descriptor are present with their
+`.sha256` siblings.
 
-Delete the heartbeat only after every applicable checklist item passes, then
-report the release as shipped.
-
-Pattern:
-
-```jsonc
-// mcp__byspace__create_heartbeat arguments
-{
-  "name": "vX.Y.Z release babysit heartbeat",
-  "cron": "*/10 * * * *",
-  "timezone": "UTC",
-  "maxRuns": 120,
-  "expiresIn": "24h",
-}
+```bash
+# Wait for every run on the tag to settle, then list the conclusions.
+for i in $(seq 1 90); do
+  PENDING=$(gh run list --branch vX.Y.Z --limit 20 \
+    --json status --jq '[.[] | select(.status != "completed")] | length')
+  [ "$PENDING" = "0" ] && break
+  sleep 30
+done
+gh run list --branch vX.Y.Z --limit 20 --json workflowName,status,conclusion
 ```
 
-Run an immediate status check after creating the heartbeat. The heartbeat handles
-later transitions and stops itself when the release is complete.
+Run the loop as a background task. A release takes longer than a foreground
+command's timeout, and a killed foreground poll leaves the release unverified.
 
 ## Release notes on GitHub
 
@@ -398,7 +394,7 @@ Each beta entry records what its testers receive. Promotion produces the single 
 - [ ] The GitHub prerelease is marked as a prerelease
 - [ ] Docker published the versioned beta image without moving `latest`
 - [ ] **Release Notes Sync** overwrote the prerelease body with the changelog entry
-- [ ] The release heartbeat was created after the tag push and deleted only after every item above passed
+- [ ] The tag's pipelines were polled to a terminal state, and every item above passed before the release was reported as shipped
 
 ### Stable release
 
@@ -418,5 +414,5 @@ Each beta entry records what its testers receive. Promotion produces the single 
 - [ ] Docker published both the versioned and `latest` images
 - [ ] **Deploy App** deployed the stable web build to `app.byspace.cc.cd`
 - [ ] **Release Notes Sync** overwrote the Release body with the changelog entry
-- [ ] The release heartbeat was created after the tag push and deleted only after every item above passed
+- [ ] The tag's pipelines were polled to a terminal state, and every item above passed before the release was reported as shipped
 - [ ] `PINNED_DAEMON_VERSION` in `packages/app/e2e/browser/agent-timeline-pagination-old-daemon.spec.ts` names a release published **after** the identity migration, and that spec passes instead of skipping. Pre-migration daemons speak the old wire names and are not supported peers; a pin naming one skips forever.
