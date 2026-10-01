@@ -49,6 +49,53 @@ describe("resolveNewWorkspaceInitialServerId", () => {
     ).toBe("offline");
   });
 
+  it("prefers an online pinned host over the local host and the last active project", () => {
+    expect(
+      resolveNewWorkspaceInitialServerId({
+        allServerIds: ["local", "remote", "pinned"],
+        routeServerId: null,
+        lastActiveProject: projectFor("remote"),
+        projects: [projectFor("remote"), projectFor("local")],
+        hostConnectionStatusByServerId: statuses({
+          local: "online",
+          remote: "online",
+          pinned: "online",
+        }),
+        workspaceMultiplicityByServerId: multiplicity(),
+        pinnedServerId: "pinned",
+        localServerId: "local",
+      }),
+    ).toBe("pinned");
+  });
+
+  it("prefers the online local host over the remembered online project", () => {
+    expect(
+      resolveNewWorkspaceInitialServerId({
+        allServerIds: ["local", "remote"],
+        routeServerId: null,
+        lastActiveProject: projectFor("remote"),
+        projects: [projectFor("remote"), projectFor("local")],
+        hostConnectionStatusByServerId: statuses({ local: "online", remote: "online" }),
+        workspaceMultiplicityByServerId: multiplicity(),
+        localServerId: "local",
+      }),
+    ).toBe("local");
+  });
+
+  it("falls back to the last active project when the local host is offline", () => {
+    expect(
+      resolveNewWorkspaceInitialServerId({
+        allServerIds: ["local", "remote"],
+        routeServerId: null,
+        lastActiveProject: projectFor("remote"),
+        projects: [projectFor("remote"), projectFor("local")],
+        hostConnectionStatusByServerId: statuses({ local: "offline", remote: "online" }),
+        workspaceMultiplicityByServerId: multiplicity(),
+        localServerId: "local",
+      }),
+    ).toBe("remote");
+  });
+
   it("prefers the sole online host over a stale offline project", () => {
     expect(
       resolveNewWorkspaceInitialServerId({
@@ -269,6 +316,24 @@ describe("resolveNewWorkspaceAutomaticServerId", () => {
         nextServerId: "with-project",
       }),
     ).toBe("with-project");
+  });
+
+  it("migrates the automatic selection to the pinned host once it hydrates", () => {
+    // useSettings loads async: the screen mounts before the pin arrives, then the default
+    // changes to the pinned host — the automatic selection must follow it.
+    expect(
+      resolveNewWorkspaceAutomaticServerId({
+        allServerIds: ["remote", "pinned"],
+        routeServerId: null,
+        lastActiveProject: projectFor("remote"),
+        projects: [projectFor("remote"), projectFor("pinned")],
+        hostConnectionStatusByServerId: statuses({ remote: "online", pinned: "online" }),
+        workspaceMultiplicityByServerId: multiplicity(),
+        pinnedServerId: "pinned",
+        currentServerId: "remote",
+        nextServerId: "pinned",
+      }),
+    ).toBe("pinned");
   });
 
   it("does not switch from an online host to an offline cached project", () => {

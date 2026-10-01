@@ -1109,6 +1109,11 @@ export const ru: TranslationResources = {
       openProjectSettings: "Открыть настройки проекта",
     },
     project: {
+      defaultHost: {
+        label: "Хост по умолчанию для новых рабочих пространств",
+        automatic: "Автоматически",
+        hint: "Предварительно выбирается при создании рабочего пространства для этого проекта",
+      },
       actions: {
         menu: "Действия проекта",
         openSettings: "Открыть настройки проекта",

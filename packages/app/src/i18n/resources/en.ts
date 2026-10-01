@@ -1105,6 +1105,11 @@ export const en = {
       openProjectSettings: "Open project settings",
     },
     project: {
+      defaultHost: {
+        label: "Default host for new workspaces",
+        automatic: "Automatic",
+        hint: "Preselected when creating a workspace for this project",
+      },
       actions: {
         menu: "Project actions",
         openSettings: "Open project settings",

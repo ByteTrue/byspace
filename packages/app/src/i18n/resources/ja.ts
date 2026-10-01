@@ -1107,6 +1107,11 @@ export const ja: TranslationResources = {
       openProjectSettings: "プロジェクト設定を開く",
     },
     project: {
+      defaultHost: {
+        label: "新規ワークスペースのデフォルトホスト",
+        automatic: "自動",
+        hint: "このプロジェクトのワークスペース作成時に事前選択されるホスト",
+      },
       actions: {
         menu: "プロジェクトアクション",
         openSettings: "プロジェクト設定を開く",

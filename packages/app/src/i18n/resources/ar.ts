@@ -1095,6 +1095,11 @@ export const ar: TranslationResources = {
       openProjectSettings: "افتح إعدادات المشروع",
     },
     project: {
+      defaultHost: {
+        label: "المضيف الافتراضي لمساحات العمل الجديدة",
+        automatic: "تلقائي",
+        hint: "يُختار مسبقًا عند إنشاء مساحة عمل لهذا المشروع",
+      },
       actions: {
         menu: "إجراءات المشروع",
         openSettings: "افتح إعدادات المشروع",

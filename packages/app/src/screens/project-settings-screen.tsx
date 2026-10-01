@@ -30,8 +30,10 @@ import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-moda
 import { ProjectEditSheet } from "@/components/project-edit-sheet";
 import { EditingTextInput as TextInput } from "@/components/ui/text-input";
 import { SettingsTextAreaCard } from "@/components/settings-textarea";
+import { SelectField } from "@/components/ui/select-field";
 import { SettingsGroup } from "@/components/settings/headings/settings-group";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
+import { persistAppSettings, useSettings } from "@/hooks/use-settings";
 import { settingsStyles } from "@/styles/settings";
 import { useProjects } from "@/hooks/use-projects";
 import type { ProjectEditFormSnapshot } from "@/projects/edit-form";
@@ -146,6 +148,80 @@ export default function ProjectSettingsScreen({
       onBackToProjects={onBackToProjects}
       showBackToProjects={showBackToProjects}
     />
+  );
+}
+
+const AUTOMATIC_HOST_VALUE = "";
+
+/**
+ * App-side preference (not host config): which host "New workspace" preselects for this
+ * project. Shown only when the project exists on more than one host — with one host there is
+ * nothing to choose. Lives above the host-config groups so it renders even when reading the
+ * host config fails.
+ */
+function DefaultHostSection({ project }: { project: ProjectSummary }) {
+  const { t } = useTranslation();
+  const defaultHostByProject = useSettings((settings) => settings.defaultHostByProject);
+  const pinnedServerId = defaultHostByProject[project.viewKey] ?? AUTOMATIC_HOST_VALUE;
+
+  const options = useMemo(
+    () => [
+      {
+        id: "automatic",
+        value: AUTOMATIC_HOST_VALUE,
+        label: t("settings.project.defaultHost.automatic"),
+      },
+      ...project.hosts.map((host) => ({
+        id: host.serverId,
+        value: host.serverId,
+        label: host.serverName,
+      })),
+    ],
+    [project.hosts, t],
+  );
+
+  const handleChange = useCallback(
+    (value: string) => {
+      void (async () => {
+        const next = { ...defaultHostByProject };
+        if (value === AUTOMATIC_HOST_VALUE) {
+          delete next[project.viewKey];
+        } else {
+          next[project.viewKey] = value;
+        }
+        await persistAppSettings({ defaultHostByProject: next });
+      })();
+    },
+    [defaultHostByProject, project.viewKey],
+  );
+
+  const selectedOption = options.find((option) => option.value === pinnedServerId) ?? null;
+  const selectedDisplay = useMemo(
+    () => (selectedOption ? { label: selectedOption.label } : null),
+    [selectedOption],
+  );
+
+  return (
+    <SettingsSection
+      title={t("settings.project.defaultHost.label")}
+      info={t("settings.project.defaultHost.hint")}
+      testID="default-host-section"
+    >
+      <View style={settingsStyles.card} testID="default-host-card">
+        <SelectField<string>
+          label={t("settings.project.defaultHost.label")}
+          value={pinnedServerId}
+          selectedDisplay={selectedDisplay}
+          options={options}
+          onChange={handleChange}
+          placeholder={t("settings.project.defaultHost.automatic")}
+          emptyText={t("settings.project.defaultHost.automatic")}
+          field={false}
+          testID="default-host-field"
+          triggerTestID="default-host-trigger"
+        />
+      </View>
+    </SettingsSection>
   );
 }
 
@@ -309,6 +385,8 @@ function ProjectSettingsBody({
         supportsCustomIcon={supportsCustomIcon}
         snapshot={editSnapshot}
       />
+
+      <DefaultHostSection project={project} />
 
       {renderContent({
         readQuery,

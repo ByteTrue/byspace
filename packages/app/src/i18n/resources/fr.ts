@@ -1129,6 +1129,11 @@ export const fr: TranslationResources = {
       openProjectSettings: "Ouvrir les paramètres du projet",
     },
     project: {
+      defaultHost: {
+        label: "Hôte par défaut des nouveaux espaces",
+        automatic: "Automatique",
+        hint: "Présélectionné lors de la création d'un espace de travail pour ce projet",
+      },
       actions: {
         menu: "Actions du projet",
         openSettings: "Ouvrir les paramètres du projet",

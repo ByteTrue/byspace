@@ -1120,6 +1120,11 @@ export const ptBR: TranslationResources = {
       openProjectSettings: "Abrir configurações do projeto",
     },
     project: {
+      defaultHost: {
+        label: "Host padrão para novos espaços",
+        automatic: "Automático",
+        hint: "Pré-selecionado ao criar um espaço de trabalho para este projeto",
+      },
       actions: {
         menu: "Ações do projeto",
         openSettings: "Abrir configurações do projeto",

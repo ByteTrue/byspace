@@ -78,7 +78,7 @@ export function SidebarNavMenuTrigger({
           </Text>
           <View pointerEvents="none" style={styles.chevronSlot}>
             <ThemedChevron
-              size={ICON_SIZE.xs}
+              size={ICON_SIZE.md}
               uniProps={hovered ? foregroundColorMapping : foregroundMutedColorMapping}
             />
           </View>
@@ -116,7 +116,11 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[4],
     textAlign: "center",
     fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.normal,
+    // Same type as the workspace title across the top row: the two headers read as one line.
+    fontWeight: {
+      xs: "400",
+      md: "300",
+    },
     color: theme.colors.foregroundMuted,
   },
   labelHighlighted: {
