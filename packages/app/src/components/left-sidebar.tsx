@@ -748,19 +748,6 @@ function DesktopSidebar({
               expanded={navDisclosure.expanded}
               onToggle={navDisclosure.toggle}
             />
-            {DEV_BUILD_LABEL ? (
-              <View
-                pointerEvents="none"
-                style={styles.devBuildBadge}
-                testID="dev-build-label"
-                accessibilityLabel={`Development build: ${DEV_BUILD_LABEL}`}
-              >
-                <GitBranch size={12} color={theme.colors.foregroundMuted} />
-                <Text numberOfLines={1} ellipsizeMode="tail" style={styles.devBuildBadgeText}>
-                  {DEV_BUILD_LABEL}
-                </Text>
-              </View>
-            ) : null}
           </View>
           {navDisclosure.expanded ? (
             <SidebarNavRows
@@ -792,6 +779,22 @@ function DesktopSidebar({
         )}
 
         <SidebarCalloutSlot />
+
+        {DEV_BUILD_LABEL ? (
+          <View style={styles.devBuildFooterRow}>
+            <View
+              pointerEvents="none"
+              style={styles.devBuildBadge}
+              testID="dev-build-label"
+              accessibilityLabel={`Development build: ${DEV_BUILD_LABEL}`}
+            >
+              <GitBranch size={12} color={theme.colors.foregroundMuted} />
+              <Text numberOfLines={1} ellipsizeMode="tail" style={styles.devBuildBadgeText}>
+                {DEV_BUILD_LABEL}
+              </Text>
+            </View>
+          </View>
+        ) : null}
 
         <SidebarFooter
           theme={theme}
@@ -1044,11 +1047,13 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     paddingHorizontal: theme.spacing[3],
   },
+  devBuildFooterRow: {
+    paddingHorizontal: theme.spacing[2],
+    paddingBottom: theme.spacing[1.5],
+    alignItems: "flex-start",
+  },
   devBuildBadge: {
-    marginLeft: "auto",
-    maxWidth: "45%",
-    flexShrink: 1,
-    minWidth: 0,
+    maxWidth: "100%",
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],

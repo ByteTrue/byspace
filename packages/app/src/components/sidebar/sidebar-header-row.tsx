@@ -167,6 +167,8 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
+    // Optical vertical centering: seats the text visual axis on the icon center.
+    marginTop: -1,
   },
   labelHighlighted: {
     color: theme.colors.foreground,

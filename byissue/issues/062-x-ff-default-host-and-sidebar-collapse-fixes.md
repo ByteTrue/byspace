@@ -40,9 +40,10 @@ packages/app/src/screens/new-workspace-initial-context.test.ts 新增 4 用例�
 1. **排版层级两层收敛**：
    - 标题层（`BySpace` 与工作区标题）：统一为 `fontSize.base`（14px）、`fontWeight: { xs: "400", md: "300" }`、`color: theme.colors.foreground`。
    - 徽标层（开发分支徽标 `devBuildBadge` 与项目徽标 `headerProjectTitle`）：统一为 `fontSize.sm`（12px）、`fontWeight.normal`（400）、`color: theme.colors.foregroundMuted`、`backgroundColor: theme.colors.surface2`、`borderRadius.sm`（4px），去掉了原开发徽标突兀的纯黑实心底色。
-2. **箭头与文本内联贴合**：去掉 chevron 的绝对定位右靠齐，改为与 `BySpace` 文本内联排列（`gap: 4px`），形成紧凑自然的下拉标题触发器，不再出现中间突兀的大段留白。
-3. **高度与中线完全对齐**：触发器按钮高度统一为 `HEADER_CONTROL_HEIGHT`（26px），与左侧折叠按钮及右侧更多按钮尺寸完全对齐；所有元素垂直中线严格锁定在 `17.5px`。
-4. **折叠时底线对齐**：移除了 `sidebarHeaderArea` 的额外 `paddingBottom`，折叠时底部分隔线精准落在 `36px` 基准线上，与右侧 `ScreenHeader` 的底部分隔线完全对齐。
+2. **箭头靠右与文字居中（尊重设计决策）**：保留用户的明确设计决策——`BySpace` 文本在整个顶栏宽度中绝对居中，右侧展开箭头 `>` / `v`（`ICON_SIZE.sm` = 14px）贴靠最右侧（`right: 8px`）。
+3. **开发分支名移出顶栏**：原本在顶栏右侧挤占位置的开发分支徽标 `devBuildBadge` 移到左下侧 `+ Add project` 的正上方（`SidebarFooter` 上方），作为安静低调的次级徽标展示；顶栏不再有分支名干扰，彻底还原用户在真实生产环境看到的视图。
+4. **文字比图标低 1px 的光学中线纠偏**：因 Web 系统字体度量中 baseline 和 leading 偏向下方，导致居中行内文字视觉重心比几何图标略低。给 `SidebarNavMenuTrigger` 的标题以及下方 4 个导航按钮（`SidebarHeaderRow`）统一加上 `marginTop: -1` 光学微调，文字中轴线与两端/左侧图标高度彻底拉齐。
+5. **折叠时底线对齐**：移除了 `sidebarHeaderArea` 的额外 `paddingBottom`，折叠时底部分隔线精准落在 `36px` 基准线上，与右侧 `ScreenHeader` 的底部分隔线完全对齐。
 
 ## 验证
 

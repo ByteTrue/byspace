@@ -1,5 +1,5 @@
 import { useMemo, type ReactElement } from "react";
-import { Pressable, Text, type PressableStateCallbackType } from "react-native";
+import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -74,10 +74,12 @@ export function SidebarNavMenuTrigger({
           <Text style={styles.label} numberOfLines={1}>
             {label}
           </Text>
-          <ThemedChevron
-            size={ICON_SIZE.xs}
-            uniProps={hovered ? foregroundColorMapping : foregroundMutedColorMapping}
-          />
+          <View pointerEvents="none" style={styles.chevronSlot}>
+            <ThemedChevron
+              size={ICON_SIZE.sm}
+              uniProps={hovered ? foregroundColorMapping : foregroundMutedColorMapping}
+            />
+          </View>
         </>
       )}
     </Pressable>
@@ -86,13 +88,13 @@ export function SidebarNavMenuTrigger({
 
 const styles = StyleSheet.create((theme) => ({
   button: {
+    position: "relative",
     flex: 1,
     minWidth: 0,
     height: HEADER_CONTROL_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: theme.spacing[1],
     paddingHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius.md,
     userSelect: "none",
@@ -101,12 +103,25 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
   label: {
+    flex: 1,
+    paddingHorizontal: theme.spacing[4],
+    textAlign: "center",
     fontSize: theme.fontSize.base,
-    // Unified with ScreenTitle on the right: same font size, weight, and color.
     fontWeight: {
       xs: "400",
       md: "300",
     },
     color: theme.colors.foreground,
+    // Optical vertical centering: in font metrics, text visual midline sits ~1px lower
+    // than geometric icon centers in flexbox rows.
+    marginTop: -1,
+  },
+  chevronSlot: {
+    position: "absolute",
+    right: theme.spacing[2],
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
   },
 }));
