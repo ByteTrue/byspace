@@ -755,7 +755,7 @@ function DesktopSidebar({
                 testID="dev-build-label"
                 accessibilityLabel={`Development build: ${DEV_BUILD_LABEL}`}
               >
-                <GitBranch size={12} color={theme.colors.accentForeground} />
+                <GitBranch size={12} color={theme.colors.foregroundMuted} />
                 <Text numberOfLines={1} ellipsizeMode="tail" style={styles.devBuildBadgeText}>
                   {DEV_BUILD_LABEL}
                 </Text>
@@ -1052,17 +1052,17 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
+    paddingHorizontal: theme.spacing[1.5],
     paddingVertical: 2,
-    borderRadius: theme.borderRadius.base,
-    backgroundColor: theme.colors.accent,
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: theme.colors.surface2,
   },
   devBuildBadgeText: {
     minWidth: 0,
     flexShrink: 1,
-    color: theme.colors.accentForeground,
+    color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
+    fontWeight: theme.fontWeight.normal,
   },
   sidebarFooter: {
     flexDirection: "row",

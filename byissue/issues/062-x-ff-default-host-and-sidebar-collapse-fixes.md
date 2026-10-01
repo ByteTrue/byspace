@@ -37,10 +37,12 @@ packages/app/src/screens/new-workspace-initial-context.test.ts 新增 4 用例�
 
 用户抱怨四点，逐条修：
 
-1. **BySpace 字大不协调** → packages/app/src/components/sidebar/sidebar-nav-menu.tsx label fontWeight 匹配 ScreenTitle 的 `{xs:"400", md:"300"}`（原来 normal=400 恒定，桌面档缺 300）。
-2. **不在同一行** → 与 #3 同根因。
-3. **折叠时分隔线与右侧不齐** → packages/app/src/components/left-sidebar.tsx `sidebarHeaderArea` 的 `paddingBottom: spacing[2]` 破坏了 "row+hairline=HEADER_INNER_HEIGHT(36)" 不变量（PR#11 自留 bug）。paddingBottom 移到新增 `expandedNavRows` 样式，只挂展开态的 SidebarNavRows 上；折叠时 hairline 回到 insetsTop+35+1=36，与 ScreenHeader 对齐；内容 center 两侧同为 17.5，#2 随之解决。
-4. **折叠箭头太小** → chevron `ICON_SIZE.xs(12)` → `ICON_SIZE.md(16)`，与 toggle 的 PanelLeft 图标一致。
+1. **排版层级两层收敛**：
+   - 标题层（`BySpace` 与工作区标题）：统一为 `fontSize.base`（14px）、`fontWeight: { xs: "400", md: "300" }`、`color: theme.colors.foreground`。
+   - 徽标层（开发分支徽标 `devBuildBadge` 与项目徽标 `headerProjectTitle`）：统一为 `fontSize.sm`（12px）、`fontWeight.normal`（400）、`color: theme.colors.foregroundMuted`、`backgroundColor: theme.colors.surface2`、`borderRadius.sm`（4px），去掉了原开发徽标突兀的纯黑实心底色。
+2. **箭头与文本内联贴合**：去掉 chevron 的绝对定位右靠齐，改为与 `BySpace` 文本内联排列（`gap: 4px`），形成紧凑自然的下拉标题触发器，不再出现中间突兀的大段留白。
+3. **高度与中线完全对齐**：触发器按钮高度统一为 `HEADER_CONTROL_HEIGHT`（26px），与左侧折叠按钮及右侧更多按钮尺寸完全对齐；所有元素垂直中线严格锁定在 `17.5px`。
+4. **折叠时底线对齐**：移除了 `sidebarHeaderArea` 的额外 `paddingBottom`，折叠时底部分隔线精准落在 `36px` 基准线上，与右侧 `ScreenHeader` 的底部分隔线完全对齐。
 
 ## 验证
 

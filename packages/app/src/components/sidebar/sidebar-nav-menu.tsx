@@ -1,10 +1,11 @@
 import { useMemo, type ReactElement } from "react";
-import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
+import { Pressable, Text, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { isWeb } from "@/constants/platform";
 import { ICON_SIZE } from "@/styles/theme";
+import { HEADER_CONTROL_HEIGHT } from "@/components/ui/control-geometry";
 import { useSidebarNavItems } from "@/sidebar-nav/use-sidebar-nav-items";
 import type { Theme } from "@/styles/theme";
 
@@ -70,18 +71,13 @@ export function SidebarNavMenuTrigger({
     >
       {({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => (
         <>
-          <Text
-            style={[styles.label, Boolean(hovered) && styles.labelHighlighted]}
-            numberOfLines={1}
-          >
+          <Text style={styles.label} numberOfLines={1}>
             {label}
           </Text>
-          <View pointerEvents="none" style={styles.chevronSlot}>
-            <ThemedChevron
-              size={ICON_SIZE.md}
-              uniProps={hovered ? foregroundColorMapping : foregroundMutedColorMapping}
-            />
-          </View>
+          <ThemedChevron
+            size={ICON_SIZE.xs}
+            uniProps={hovered ? foregroundColorMapping : foregroundMutedColorMapping}
+          />
         </>
       )}
     </Pressable>
@@ -90,49 +86,27 @@ export function SidebarNavMenuTrigger({
 
 const styles = StyleSheet.create((theme) => ({
   button: {
-    position: "relative",
     flex: 1,
     minWidth: 0,
+    height: HEADER_CONTROL_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 32,
-    paddingVertical: theme.spacing[1.5],
+    gap: theme.spacing[1],
     paddingHorizontal: theme.spacing[2],
-    borderRadius: theme.borderRadius.base,
-    overflow: "hidden",
+    borderRadius: theme.borderRadius.md,
     userSelect: "none",
   },
   buttonHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
-  /**
-   * The label fills the button so `textAlign: "center"` puts the word on the button's midpoint,
-   * independent of the chevron. The horizontal padding is only a buffer that keeps a longer
-   * label clear of the chevron, which is out of flow and so cannot shift the centre.
-   */
   label: {
-    flex: 1,
-    paddingHorizontal: theme.spacing[4],
-    textAlign: "center",
     fontSize: theme.fontSize.base,
-    // Same type as the workspace title across the top row: the two headers read as one line.
+    // Unified with ScreenTitle on the right: same font size, weight, and color.
     fontWeight: {
       xs: "400",
       md: "300",
     },
-    color: theme.colors.foregroundMuted,
-  },
-  labelHighlighted: {
     color: theme.colors.foreground,
-  },
-  /** Pinned to the button's right edge; the row of the button just centres it vertically. */
-  chevronSlot: {
-    position: "absolute",
-    right: theme.spacing[2],
-    top: 0,
-    bottom: 0,
-    justifyContent: "center",
-    alignItems: "center",
   },
 }));
