@@ -15,6 +15,15 @@ App 与 Relay 的地址按发布通道选择；用户的自定义配置始终优
 - 配对 offer 携带可读 hostname，新 Host 首次保存时默认采用；缺少 hostname 的旧 offer 与旧客户端保持双向兼容。
 - **局域网监听以密码为前提**：daemon 默认只监听 loopback；在设置里放开局域网（`daemon.listen` 改写为 `0.0.0.0:<port>`）前必须先设置访问密码，服务端强制此不变量，清密码同理被拒绝。密码只在 patch 时以明文进入，落盘与回读只有 bcrypt 哈希与 `passwordSet` 视图字段。网络与密码改动统一重启生效；`BYSPACE_LISTEN` / `BYSPACE_PASSWORD` 启动 override 存在时，对应设置被拒而非静默失效。能力声明为 `features.daemonNetworkConfig`。
 
+## 自托管部署
+
+自托管的发布物是一个 compose、两个容器：静态 web（nginx + 构建产物）与可选 relay（Node 实现）。daemon 不出镜像，只从 npm 安装 `@bytetrue/byspace`。agent 跑的是用户本机的项目工具链，自带 daemon 的容器会把「控制本机」误导成「部署一个服务」；确实想在容器里跑 daemon 的人装同一个 npm 包，见 `docs/docker.md`。
+
+- **配对链接跟随 `app.baseUrl`**。自托管 origin 下 `byspace onboard --web-origin <origin>` 一次设好 `app.baseUrl` 与 `daemon.cors.allowedOrigins`，之后生成的配对链接指向该 origin。命令幂等，daemon 已在跑时走热更新。`--hostnames` 是 Host header 检查（DNS rebinding 防护），与 CORS 无关，两者不合并。
+- **App 侧没有 relay 白名单。** relay 是每个 host 的连接属性，随 pairing offer 流入——认证材料（E2EE 公钥）只能这样传递。因此不提供手动添加 relay，也不在 host 设置里编辑 relay：首次部署与迁移是同一个漏斗，部署 compose → 打开自托管 web → 弹窗给出命令 → 粘贴配对链接。
+- **默认 HTTP，TLS 可选。** 局域网明文直连可用，代价来自非安全上下文：terminal 剪贴板、Service Worker/PWA、Web Push 失效，密码明文过线。这与上文的「PWA 与局域网明文互斥」是同一条约束。
+- **Relay 线协议冻结在 v1/v2 握手语义。** 旧 relay 镜像必须能服务新 app/daemon，因此 `/ws` 握手参数、错误文案、席位与关闭语义、帧类型都是契约的一部分，完整条款见 `docs/protocol-compatibility.md`。
+
 ## 历史证据
 
 - [Epic 002 交付记录](../epics/002-x-retained-capabilities-delivery/spec.md)

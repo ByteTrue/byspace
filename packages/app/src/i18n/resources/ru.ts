@@ -1409,6 +1409,11 @@ export const ru: TranslationResources = {
   },
   pairing: {
     connectionMethods: {
+      setupGuide: {
+        title: "Настроить новый демон",
+        description: "Установка и сопряжение в три шага.",
+      },
+
       title: "Добавить подключение",
       direct: {
         title: "Прямое подключение",
@@ -1523,6 +1528,34 @@ export const ru: TranslationResources = {
         pairing: "Сопряжение...",
       },
     },
+    setupGuide: {
+      title: "Подключить демон",
+      subtitle: "Настройте новую машину за три шага.",
+      steps: {
+        install: "Установите демон",
+        onboard: "Запустите онбординг",
+        pair: "Вставьте ссылку сопряжения",
+      },
+      descriptions: {
+        onboard:
+          "Эта команда добавляет это веб-приложение в список разрешённых, включает relay-подключение и направляет ссылки сопряжения на ваш relay.",
+        onboardHosted: "Эта команда включает relay-подключение.",
+        pair: "По завершении онбординг выводит ссылку сопряжения. Вставьте её ниже, чтобы подключиться.",
+      },
+      fields: {
+        relayEndpoint: "Адрес relay (необязательно)",
+        relayEndpointPlaceholder: "relay.example.com:443",
+        relayEndpointHelper: "Оставьте пустым, чтобы использовать размещённый relay.",
+        pairingLink: "Ссылка сопряжения",
+      },
+      actions: {
+        copy: "Копировать",
+        copied: "Скопировано",
+        copyFailed: "Не удалось скопировать",
+        cancel: "Отмена",
+      },
+    },
+
     scan: {
       title: "Сканировать QR-код",
       webUnavailableTitle: "Недоступно в веб-версии",

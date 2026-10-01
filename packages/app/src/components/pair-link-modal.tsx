@@ -6,9 +6,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { Link } from "lucide-react-native";
 import type { HostProfile } from "@/types/host-connection";
 import { useHosts, useHostMutations } from "@/runtime/host-runtime";
-import { decodeOfferFragmentPayload, normalizeHostPort } from "@/utils/daemon-endpoints";
-import { connectToDaemon } from "@/utils/test-daemon-connection";
-import { ConnectionOfferSchema } from "@bytetrue/protocol/connection-offer";
+import { pairWithOfferUrl, parsePairingOfferUrl } from "@/utils/pair-offer";
 import { AdaptiveModalSheet, AdaptiveTextInput, type SheetHeader } from "./adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import type { EditingTextInputHandle } from "@/components/ui/text-input";
@@ -99,35 +97,13 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
   const handleSave = useCallback(async () => {
     if (isSaving) return;
     const raw = offerUrlRef.current.trim();
-    if (!raw) {
-      setErrorMessage(t("pairing.link.errors.required"));
-      return;
-    }
-    if (!raw.includes("#offer=")) {
-      setErrorMessage(t("pairing.link.errors.missingOffer"));
-      return;
-    }
-
-    const parsedOffer = (() => {
-      try {
-        const idx = raw.indexOf("#offer=");
-        const encoded = raw.slice(idx + "#offer=".length).trim();
-        if (!encoded) {
-          throw new Error(t("pairing.link.errors.emptyOffer"));
-        }
-        const payload = decodeOfferFragmentPayload(encoded);
-        return ConnectionOfferSchema.parse(payload);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : t("pairing.link.errors.invalid");
-        setErrorMessage(message);
-        if (!isMobile) {
-          Alert.alert(t("pairing.link.alert.failedTitle"), message);
-        }
-        return null;
+    const parsed = parsePairingOfferUrl(raw);
+    if (!parsed.ok) {
+      const message = t(`pairing.link.errors.${parsed.errorKey}`);
+      setErrorMessage(message);
+      if (!isMobile) {
+        Alert.alert(t("pairing.link.alert.failedTitle"), message);
       }
-    })();
-
-    if (!parsedOffer) {
       return;
     }
 
@@ -135,21 +111,13 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
       setIsSaving(true);
       setErrorMessage("");
 
-      const { client, hostname } = await connectToDaemon(
-        {
-          id: "probe",
-          type: "relay",
-          relayEndpoint: normalizeHostPort(parsedOffer.relay.endpoint),
-          useTls: parsedOffer.relay.useTls,
-          daemonPublicKeyB64: parsedOffer.daemonPublicKeyB64,
-        },
-        { serverId: parsedOffer.serverId },
-      );
-      await client.close().catch(() => undefined);
-
-      const isNewHost = !daemons.some((daemon) => daemon.serverId === parsedOffer.serverId);
-      const profile = await upsertDaemonFromOfferUrl(raw, hostname ?? undefined);
-      onSaved?.({ profile, serverId: parsedOffer.serverId, hostname, isNewHost });
+      const { profile, hostname, isNewHost } = await pairWithOfferUrl({
+        rawUrl: raw,
+        offer: parsed.offer,
+        knownServerIds: daemons.map((daemon) => daemon.serverId),
+        upsert: upsertDaemonFromOfferUrl,
+      });
+      onSaved?.({ profile, serverId: parsed.offer.serverId, hostname, isNewHost });
       handleClose();
     } catch (error) {
       const message =

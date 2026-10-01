@@ -76,18 +76,15 @@ BySpace는 기본적으로 `127.0.0.1:6777`에서 시작합니다. 암호화 릴
 
 ### Docker
 
-Docker에서 BySpace 데몬과 셀프 호스팅 웹 UI를 실행하세요:
+공식 컨테이너로 웹 UI(및 선택적으로 릴레이)를 셀프 호스팅하세요. 데몬은 컨테이너에 포함되지 않습니다 — npm으로 여러분의 머신에 설치합니다:
 
 ```bash
-docker run -d --name byspace \
-  -p 6777:6777 \
-  -e BYSPACE_PASSWORD=change-me \
-  -v "$PWD/byspace-home:/home/byspace" \
-  -v "$PWD:/workspace" \
-  ghcr.io/bytetrue/byspace:0.7.0-beta.2
+curl -O https://raw.githubusercontent.com/ByteTrue/byspace/main/docker/compose.yml
+curl -O https://raw.githubusercontent.com/ByteTrue/byspace/main/docker/Caddyfile
+docker compose up -d
 ```
 
-컨테이너가 시작되면 `http://localhost:6777`을 여세요. 사용하는 에이전트 CLI를 기본 이미지에 추가한 뒤, 환경 변수나 영구 `/home/byspace` 볼륨으로 인증 정보를 설정하세요. 자세한 내용은 [Docker 문서](docs/docker.md)를 참고하세요.
+`http://localhost:8080`을 열고 데몬과 페어링하세요. 셀프 호스팅 릴레이는 `--profile relay`, 자동 TLS는 `--profile tls`와 `BYSPACE_DOMAIN`을 추가하세요. 자세한 내용은 [셀프 호스팅 문서](docs/docker.md)를 참고하세요.
 
 ## CLI
 

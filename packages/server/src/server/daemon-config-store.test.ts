@@ -24,6 +24,8 @@ function reloadableConfig(
   return {
     relay: {
       enabled: relay.enabled ?? options.relayEnabledFallback ?? true,
+      endpoint: relay.endpoint,
+      useTls: relay.useTls,
     },
     mcp: { enabled: true, injectIntoAgents: false },
     providers: (agents.providers ?? {}) as MutableDaemonConfig["providers"],
@@ -727,6 +729,144 @@ describe("DaemonConfigStore", () => {
     expect(persisted.daemon?.appendSystemPrompt).toBe("Prefer terse replies.");
   });
 
+  test("patch persists web origin app/cors fields into config.json", () => {
+    const byspaceHome = mkdtempSync(path.join(tmpdir(), "byspace-daemon-config-store-"));
+    tempDirs.push(byspaceHome);
+
+    const store = new DaemonConfigStore(
+      byspaceHome,
+      {
+        mcp: { injectIntoAgents: false },
+        providers: {},
+        metadataGeneration: { providers: [] },
+        autoArchiveAfterMerge: false,
+        enableTerminalAgentHooks: false,
+        appendSystemPrompt: "",
+      },
+      undefined,
+    );
+
+    const next = store.patch({
+      app: { baseUrl: "http://192.168.1.10:8080" },
+      cors: { allowedOrigins: ["https://app.byspace.cc.cd", "http://192.168.1.10:8080"] },
+    });
+
+    expect(next.app?.baseUrl).toBe("http://192.168.1.10:8080");
+    expect(next.cors?.allowedOrigins).toContain("http://192.168.1.10:8080");
+
+    const persisted = loadPersistedConfig(byspaceHome);
+    expect(persisted.app?.baseUrl).toBe("http://192.168.1.10:8080");
+    expect(persisted.daemon?.cors?.allowedOrigins).toContain("http://192.168.1.10:8080");
+  });
+
+  test("patch hot-applies cors origin changes through field change handlers", () => {
+    const byspaceHome = mkdtempSync(path.join(tmpdir(), "byspace-daemon-config-store-"));
+    tempDirs.push(byspaceHome);
+
+    const store = new DaemonConfigStore(
+      byspaceHome,
+      {
+        cors: { allowedOrigins: [] },
+        app: { baseUrl: "https://app.byspace.cc.cd" },
+        mcp: { injectIntoAgents: false },
+        providers: {},
+        metadataGeneration: { providers: [] },
+        autoArchiveAfterMerge: false,
+        enableTerminalAgentHooks: false,
+        appendSystemPrompt: "",
+      },
+      undefined,
+    );
+
+    const seen: unknown[] = [];
+    store.onFieldChange("cors.allowedOrigins", (value) => seen.push(value));
+
+    store.patch({ cors: { allowedOrigins: ["http://192.168.1.10:8080"] } });
+
+    expect(seen).toEqual([["http://192.168.1.10:8080"]]);
+  });
+
+  test("patch persists relay endpoint and useTls into config.json", () => {
+    const byspaceHome = mkdtempSync(path.join(tmpdir(), "byspace-daemon-config-store-"));
+    tempDirs.push(byspaceHome);
+
+    const store = new DaemonConfigStore(
+      byspaceHome,
+      {
+        mcp: { injectIntoAgents: false },
+        providers: {},
+        metadataGeneration: { providers: [] },
+        autoArchiveAfterMerge: false,
+        enableTerminalAgentHooks: false,
+        appendSystemPrompt: "",
+      },
+      undefined,
+    );
+
+    const next = store.patch({
+      relay: { enabled: true, endpoint: "relay-b.example.test:8080", useTls: false },
+    });
+
+    expect(next.relay?.endpoint).toBe("relay-b.example.test:8080");
+    expect(next.relay?.useTls).toBe(false);
+
+    const persisted = loadPersistedConfig(byspaceHome);
+    expect(persisted.daemon?.relay?.endpoint).toBe("relay-b.example.test:8080");
+    expect(persisted.daemon?.relay?.useTls).toBe(false);
+  });
+
+  test("patch hot-applies relay endpoint changes through field change handlers", () => {
+    const byspaceHome = mkdtempSync(path.join(tmpdir(), "byspace-daemon-config-store-"));
+    tempDirs.push(byspaceHome);
+
+    const store = new DaemonConfigStore(
+      byspaceHome,
+      {
+        relay: { enabled: false, endpoint: "relay-a.example.test:443", useTls: true },
+        mcp: { injectIntoAgents: false },
+        providers: {},
+        metadataGeneration: { providers: [] },
+        autoArchiveAfterMerge: false,
+        enableTerminalAgentHooks: false,
+        appendSystemPrompt: "",
+      },
+      undefined,
+    );
+
+    const endpoints: unknown[] = [];
+    store.onFieldChange("relay.endpoint", (value) => endpoints.push(value));
+    const tlsFlags: unknown[] = [];
+    store.onFieldChange("relay.useTls", (value) => tlsFlags.push(value));
+
+    store.patch({ relay: { endpoint: "relay-b.example.test:8080", useTls: false } });
+
+    expect(endpoints).toEqual(["relay-b.example.test:8080"]);
+    expect(tlsFlags).toEqual([false]);
+  });
+
+  test("patch rejects relay endpoint when endpoint override controls it", () => {
+    const byspaceHome = mkdtempSync(path.join(tmpdir(), "byspace-daemon-config-store-"));
+    tempDirs.push(byspaceHome);
+
+    const store = new DaemonConfigStore(
+      byspaceHome,
+      {
+        mcp: { injectIntoAgents: false },
+        providers: {},
+        metadataGeneration: { providers: [] },
+        autoArchiveAfterMerge: false,
+        enableTerminalAgentHooks: false,
+        appendSystemPrompt: "",
+      },
+      undefined,
+      { relayEndpointMutable: false },
+    );
+
+    expect(() => store.patch({ relay: { endpoint: "relay-b.example.test:8080" } })).toThrow(
+      /Relay endpoint is controlled by a daemon launch override/,
+    );
+  });
+
   test("patch persists provider additional models into config.json", () => {
     const byspaceHome = mkdtempSync(path.join(tmpdir(), "byspace-daemon-config-store-"));
     tempDirs.push(byspaceHome);
@@ -1296,8 +1436,8 @@ describe("DaemonConfigStore reload", () => {
     });
 
     expect(store.reload()).toEqual({
-      appliedPaths: ["daemon.relay.enabled"],
-      restartRequiredPaths: ["daemon.relay.endpoint", "daemon.relay.useTls"],
+      appliedPaths: ["daemon.relay.enabled", "daemon.relay.endpoint", "daemon.relay.useTls"],
+      restartRequiredPaths: [],
       overrideControlledPaths: [],
     });
   });
@@ -1324,11 +1464,9 @@ describe("DaemonConfigStore reload", () => {
     writeConfig(byspaceHome, { version: 1 });
 
     expect(store.reload()).toEqual({
-      appliedPaths: ["daemon.appendSystemPrompt"],
+      appliedPaths: ["daemon.appendSystemPrompt", "daemon.relay.endpoint", "daemon.relay.useTls"],
       restartRequiredPaths: [
         "daemon.listen",
-        "daemon.relay.endpoint",
-        "daemon.relay.useTls",
         "daemon.serviceProxy.listen",
         "daemon.serviceProxy.publicBaseUrl",
       ],
@@ -1345,13 +1483,17 @@ describe("DaemonConfigStore reload", () => {
     writeConfig(byspaceHome, {
       version: 1,
       daemon: {
-        relay: { enabled: false, endpoint: "relay.example.test:443" },
+        relay: {
+          enabled: false,
+          endpoint: "relay.example.test:443",
+          publicEndpoint: "relay-public.example.test:443",
+        },
       },
     });
 
     expect(store.reload()).toEqual({
       appliedPaths: [],
-      restartRequiredPaths: ["daemon.relay.endpoint"],
+      restartRequiredPaths: ["daemon.relay.publicEndpoint"],
       overrideControlledPaths: ["daemon.relay.enabled"],
     });
   });

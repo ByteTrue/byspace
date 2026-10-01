@@ -1403,6 +1403,11 @@ export const en = {
   },
   pairing: {
     connectionMethods: {
+      setupGuide: {
+        title: "Set up a new daemon",
+        description: "Install and pair in three steps.",
+      },
+
       title: "Add connection",
       direct: {
         title: "Direct connection",
@@ -1516,6 +1521,34 @@ export const en = {
         pairing: "Pairing...",
       },
     },
+    setupGuide: {
+      title: "Connect a daemon",
+      subtitle: "Set up a new machine in three steps.",
+      steps: {
+        install: "Install the daemon",
+        onboard: "Run onboarding",
+        pair: "Paste the pairing link",
+      },
+      descriptions: {
+        onboard:
+          "This allowlists this web app, enables the relay connection, and points pairing links at your relay.",
+        onboardHosted: "This enables the relay connection.",
+        pair: "When onboarding finishes, it prints a pairing link. Paste it below to connect.",
+      },
+      fields: {
+        relayEndpoint: "Relay endpoint (optional)",
+        relayEndpointPlaceholder: "relay.example.com:443",
+        relayEndpointHelper: "Leave empty to use the hosted relay.",
+        pairingLink: "Pairing link",
+      },
+      actions: {
+        copy: "Copy",
+        copied: "Copied",
+        copyFailed: "Copy failed",
+        cancel: "Cancel",
+      },
+    },
+
     scan: {
       title: "Scan QR",
       webUnavailableTitle: "Not available on web",

@@ -1,7 +1,9 @@
 import { cancel, intro, log, note, outro, spinner } from "@clack/prompts";
 import { Command, Option } from "commander";
 import path from "node:path";
+import type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@bytetrue/protocol/messages";
 import { resolveBySpaceHostedAppBaseUrl } from "@bytetrue/protocol/release-channel";
+import { getOrCreateServerId } from "@bytetrue/server";
 import {
   resolveLocalBySpaceHome,
   resolveLocalDaemonState,
@@ -21,6 +23,8 @@ import { resolveCliVersion } from "../version.js";
 
 interface OnboardOptions extends DaemonStartOptions {
   timeout?: string;
+  webOrigin?: string;
+  relayEndpoint?: string;
 }
 
 type RawOnboardOptions = OnboardOptions & {
@@ -53,6 +57,289 @@ function parseTimeoutMs(raw: string | undefined): number {
   }
 
   return Math.ceil(seconds * 1000);
+}
+
+export interface WebOriginTarget {
+  baseUrl: string;
+  corsOrigin: string;
+}
+
+export function parseWebOrigin(raw: string): WebOriginTarget {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(`Invalid --web-origin value: ${raw} (expected an http:// or https:// URL)`);
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error(
+      `Invalid --web-origin value: ${raw} (only http:// and https:// URLs are supported)`,
+    );
+  }
+  const pathname = url.pathname.replace(/\/+$/, "");
+  return {
+    baseUrl: url.origin + pathname,
+    corsOrigin: url.origin,
+  };
+}
+
+export function buildWebOriginPatch(
+  target: WebOriginTarget,
+  config: Pick<MutableDaemonConfig, "app" | "cors"> | null | undefined,
+): MutableDaemonConfigPatch | null {
+  const baseUrlMatches = config?.app?.baseUrl === target.baseUrl;
+  const originAllowed = config?.cors?.allowedOrigins?.includes(target.corsOrigin) === true;
+  if (baseUrlMatches && originAllowed) {
+    return null;
+  }
+  return {
+    app: { baseUrl: target.baseUrl },
+    // The daemon replaces the allowedOrigins array wholesale, so the patch
+    // must carry the full merged list.
+    ...(originAllowed
+      ? {}
+      : { cors: { allowedOrigins: [...(config?.cors?.allowedOrigins ?? []), target.corsOrigin] } }),
+  };
+}
+
+export interface RelayEndpointTarget {
+  endpoint: string;
+  useTls: boolean;
+}
+
+/**
+ * --relay-endpoint implies relay: the user is pointing the daemon at their
+ * own relay, so the enable-relay prompt and the hosted default are moot.
+ * Rejects the contradictory --no-relay combination.
+ */
+function resolveRelayEnabled(options: OnboardOptions): boolean | undefined {
+  if (options.relayEndpoint === undefined) {
+    return options.relay;
+  }
+  if (options.relay === false) {
+    cancel("Cannot use --no-relay together with --relay-endpoint");
+    process.exit(1);
+  }
+  return true;
+}
+
+function defaultRelayPort(scheme: string | null): number {
+  return scheme === "ws" || scheme === "http" ? 80 : 443;
+}
+
+/**
+ * Parses --relay-endpoint. Accepts host[:port] or ws(s)://host[:port];
+ * the scheme implies useTls, and a missing port defaults to 443 (TLS) or 80.
+ */
+export function parseRelayEndpoint(raw: string): RelayEndpointTarget {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new Error("Invalid --relay-endpoint value: endpoint is required");
+  }
+  let scheme: string | null = null;
+  let hostPort = trimmed;
+  const schemeMatch = trimmed.match(/^(wss|ws|https|http):\/\/(.+)$/);
+  if (schemeMatch) {
+    scheme = schemeMatch[1];
+    hostPort = schemeMatch[2].replace(/\/+$/, "");
+  }
+  let host: string;
+  let port: number;
+  if (/^\[[^\]]+\]/.test(hostPort)) {
+    // IPv6 literal: brackets required when a port is present.
+    const match = hostPort.match(/^\[([^\]]+)\](?::(\d{1,5}))?$/);
+    if (!match) {
+      throw new Error(`Invalid --relay-endpoint value: ${raw} (expected [host]:port)`);
+    }
+    host = `[${match[1]}]`;
+    port = match[2] ? Number(match[2]) : defaultRelayPort(scheme);
+  } else {
+    const colonIndex = hostPort.lastIndexOf(":");
+    if (colonIndex === -1) {
+      host = hostPort;
+      port = defaultRelayPort(scheme);
+    } else {
+      host = hostPort.slice(0, colonIndex);
+      port = Number(hostPort.slice(colonIndex + 1));
+    }
+  }
+  if (host.includes(":") && !host.startsWith("[")) {
+    throw new Error(
+      `Invalid --relay-endpoint value: ${raw} (wrap IPv6 hosts in brackets, e.g. [::1]:8081)`,
+    );
+  }
+  if (!host || !Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(
+      `Invalid --relay-endpoint value: ${raw} (expected host[:port] or ws(s)://host[:port])`,
+    );
+  }
+  const useTls = scheme ? scheme === "wss" || scheme === "https" : port === 443;
+  return {
+    endpoint: host.includes(":") && !host.startsWith("[") ? `[${host}]:${port}` : `${host}:${port}`,
+    useTls,
+  };
+}
+
+export function buildRelayEndpointPatch(
+  target: RelayEndpointTarget,
+  config: Pick<MutableDaemonConfig, "relay"> | null | undefined,
+): MutableDaemonConfigPatch | null {
+  const endpointMatches = config?.relay?.endpoint === target.endpoint;
+  const useTlsMatches = config?.relay?.useTls === target.useTls;
+  if (endpointMatches && useTlsMatches) {
+    return null;
+  }
+  return {
+    relay: {
+      ...(endpointMatches ? {} : { endpoint: target.endpoint }),
+      ...(useTlsMatches ? {} : { useTls: target.useTls }),
+    },
+  };
+}
+
+const WEB_ORIGIN_RPC_TIMEOUT_MS = 1500;
+
+/**
+ * Parses --web-origin and applies it to the daemon. Exits the process on
+ * invalid input or daemon errors, mirroring the other onboard failure paths.
+ * Returns null when --web-origin was not provided.
+ */
+async function configureWebOrigin(args: {
+  rawWebOrigin: string | undefined;
+  listen: string;
+  byspaceHome: string;
+}): Promise<WebOriginTarget | null> {
+  if (!args.rawWebOrigin) {
+    return null;
+  }
+  let target: WebOriginTarget;
+  try {
+    target = parseWebOrigin(args.rawWebOrigin);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    cancel(message);
+    process.exit(1);
+  }
+  try {
+    await applyWebOrigin({ listen: args.listen, byspaceHome: args.byspaceHome, target });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    log.error(message);
+    process.exit(1);
+  }
+  return target;
+}
+
+async function applyWebOrigin(args: {
+  listen: string;
+  byspaceHome: string;
+  target: WebOriginTarget;
+}): Promise<void> {
+  const expectedServerId = getOrCreateServerId(args.byspaceHome);
+  const client = await tryConnectToDaemon({
+    host: args.listen,
+    timeout: WEB_ORIGIN_RPC_TIMEOUT_MS,
+  });
+  if (!client) {
+    throw new Error("Could not connect to the daemon to apply --web-origin.");
+  }
+  try {
+    const serverInfo = client.getLastServerInfoMessage();
+    if (serverInfo?.serverId.trim() !== expectedServerId) {
+      throw new Error(
+        "The reachable daemon belongs to a different BySpace home. Check --home or the daemon listen configuration.",
+      );
+    }
+    const { config } = await client.getDaemonConfig();
+    const patch = buildWebOriginPatch(args.target, config);
+    if (!patch) {
+      log.message(`Web app already configured: ${args.target.baseUrl}`);
+      return;
+    }
+    const result = await client.patchDaemonConfig(patch);
+    if (
+      result.config.app?.baseUrl !== args.target.baseUrl ||
+      result.config.cors?.allowedOrigins?.includes(args.target.corsOrigin) !== true
+    ) {
+      log.warn(
+        "The daemon did not apply the web origin config. Update the daemon and re-run onboard.",
+      );
+      return;
+    }
+    log.success(`Web app configured: ${args.target.baseUrl}`);
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
+/**
+ * Parses --relay-endpoint and applies it to the daemon. Exits the process on
+ * invalid input or daemon errors, mirroring the other onboard failure paths.
+ * Returns null when --relay-endpoint was not provided.
+ */
+async function configureRelayEndpoint(args: {
+  rawRelayEndpoint: string | undefined;
+  listen: string;
+  byspaceHome: string;
+}): Promise<RelayEndpointTarget | null> {
+  if (!args.rawRelayEndpoint) {
+    return null;
+  }
+  let target: RelayEndpointTarget;
+  try {
+    target = parseRelayEndpoint(args.rawRelayEndpoint);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    cancel(message);
+    process.exit(1);
+  }
+  try {
+    await applyRelayEndpoint({ listen: args.listen, byspaceHome: args.byspaceHome, target });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    log.error(message);
+    process.exit(1);
+  }
+  return target;
+}
+
+async function applyRelayEndpoint(args: {
+  listen: string;
+  byspaceHome: string;
+  target: RelayEndpointTarget;
+}): Promise<void> {
+  const expectedServerId = getOrCreateServerId(args.byspaceHome);
+  const client = await tryConnectToDaemon({
+    host: args.listen,
+    timeout: WEB_ORIGIN_RPC_TIMEOUT_MS,
+  });
+  if (!client) {
+    throw new Error("Could not connect to the daemon to apply --relay-endpoint.");
+  }
+  try {
+    const serverInfo = client.getLastServerInfoMessage();
+    if (serverInfo?.serverId.trim() !== expectedServerId) {
+      throw new Error(
+        "The reachable daemon belongs to a different BySpace home. Check --home or the daemon listen configuration.",
+      );
+    }
+    const { config } = await client.getDaemonConfig();
+    const patch = buildRelayEndpointPatch(args.target, config);
+    if (!patch) {
+      log.message(`Relay endpoint already configured: ${args.target.endpoint}`);
+      return;
+    }
+    const result = await client.patchDaemonConfig(patch);
+    if (result.config.relay?.endpoint !== args.target.endpoint) {
+      log.warn(
+        "The daemon did not apply the relay endpoint config. Update the daemon and re-run onboard.",
+      );
+      return;
+    }
+    log.success(`Relay endpoint configured: ${args.target.endpoint}`);
+  } finally {
+    await client.close().catch(() => undefined);
+  }
 }
 
 type ProbeResult = { kind: "ready"; listen: string; host: string | null } | { kind: "pending" };
@@ -146,9 +433,14 @@ async function waitForDaemonReady(args: {
   return poll({ lastStatus: "", lastPrintedAt: 0 });
 }
 
-function printNextSteps(pairingUrl: string | null, byspaceHome: string, richUi: boolean): void {
+function printNextSteps(
+  pairingUrl: string | null,
+  byspaceHome: string,
+  richUi: boolean,
+  webBaseUrl: string | null = null,
+): void {
   const daemonLogPath = path.join(byspaceHome, "daemon.log");
-  const appBaseUrl = resolveBySpaceHostedAppBaseUrl(resolveCliVersion());
+  const appBaseUrl = webBaseUrl ?? resolveBySpaceHostedAppBaseUrl(resolveCliVersion());
   const nextStepsLines = [
     pairingUrl
       ? "1. Open BySpace and scan the QR code above, or paste the pairing link."
@@ -198,6 +490,14 @@ export function onboardCommand(): Command {
     )
     .addOption(new Option("--allowed-hosts <hosts>").hideHelp())
     .option("--timeout <seconds>", "Max time to wait for daemon readiness (default: 600)")
+    .option(
+      "--web-origin <url>",
+      "Self-hosted web app URL (e.g. http://192.168.1.10:8080): allowlists its origin and points pairing links at it",
+    )
+    .option(
+      "--relay-endpoint <endpoint>",
+      "Self-hosted relay endpoint (host[:port] or ws(s)://host[:port]): persists it and points pairing links at it",
+    )
     .action(async (options: RawOnboardOptions) => {
       await runOnboard({
         ...options,
@@ -298,29 +598,43 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
   }
 
   await ensureDaemonStarted(options, richUi);
-  await waitForDaemonReadyWithUi({
+  const readyState = await waitForDaemonReadyWithUi({
     home: options.home ?? byspaceHome,
     timeoutMs,
     richUi,
   });
 
-  if (options.relay === false) {
+  const webOriginTarget = await configureWebOrigin({
+    rawWebOrigin: options.webOrigin,
+    listen: readyState.listen,
+    byspaceHome,
+  });
+  const webBaseUrl = webOriginTarget?.baseUrl ?? null;
+  await configureRelayEndpoint({
+    rawRelayEndpoint: options.relayEndpoint,
+    listen: readyState.listen,
+    byspaceHome,
+  });
+
+  const relayEnabled = resolveRelayEnabled(options);
+
+  if (relayEnabled === false) {
     log.message("Relay pairing skipped because --no-relay was provided.");
-    printNextSteps(null, byspaceHome, richUi);
+    printNextSteps(null, byspaceHome, richUi, webBaseUrl);
     if (richUi) outro("BySpace daemon is running.");
     return;
   }
 
   let pairing = await resolveLocalPairingOffer({
     byspaceHome,
-    enableRelay: options.relay === true,
+    enableRelay: relayEnabled === true,
   });
 
   if (!pairing.relayEnabled) {
     const shouldEnable = richUi ? await confirmRelayPairing() : false;
     if (!shouldEnable) {
       printDirectConnectionGuidance();
-      printNextSteps(null, byspaceHome, richUi);
+      printNextSteps(null, byspaceHome, richUi, webBaseUrl);
       if (richUi) outro("BySpace daemon is running.");
       return;
     }
@@ -330,7 +644,7 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
 
   if (!pairing.url) {
     log.warn("Relay pairing URL is unavailable for this daemon configuration.");
-    printNextSteps(null, byspaceHome, richUi);
+    printNextSteps(null, byspaceHome, richUi, webBaseUrl);
     if (richUi) {
       outro("BySpace daemon is running.");
     }
@@ -344,7 +658,7 @@ export async function runOnboard(options: OnboardOptions): Promise<void> {
       columns: process.stdout.columns,
     }),
   );
-  printNextSteps(pairing.url, byspaceHome, richUi);
+  printNextSteps(pairing.url, byspaceHome, richUi, webBaseUrl);
   if (richUi) {
     outro("BySpace is ready!");
   }

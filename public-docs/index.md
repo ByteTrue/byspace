@@ -33,25 +33,20 @@ Configuration and local state live under `BYSPACE_HOME` (defaults to `~/.byspace
 
 ## Docker
 
-For servers, dev boxes, NAS devices, or homelab hosts, run the official image:
+Self-host the web UI (and optionally the relay) with the official containers:
 
 ```bash
-docker run -d --name byspace \
-  -p 6777:6777 \
-  -e BYSPACE_PASSWORD=change-me \
-  -v "$PWD/byspace-home:/home/byspace" \
-  -v "$PWD:/workspace" \
-  ghcr.io/bytetrue/byspace:0.7.0-beta.2
+curl -O https://raw.githubusercontent.com/ByteTrue/byspace/main/docker/compose.yml
+curl -O https://raw.githubusercontent.com/ByteTrue/byspace/main/docker/Caddyfile
+docker compose up -d
 ```
 
-Then open `http://localhost:6777`.
-
-The image runs the daemon and serves the bundled web UI. It does not bundle agent CLIs, so extend it with the agents you use. See [Docker](/docs/docker) for Compose, reverse proxy, agent install, and security examples.
+Then open `http://localhost:8080` and follow the connect guide to pair your daemon. The daemon is not in the containers — it runs on your own machine, installed via npm. See [Docker](/docs/docker) for TLS, version pinning, and security notes.
 
 ## Where next
 
 - [Connectivity](/docs/connectivity), connect through the relay or Tailscale.
-- [Docker](/docs/docker), run the daemon and bundled web UI in a container.
+- [Docker](/docs/docker), self-host the web UI and relay with the official containers.
 - [Workspaces](/docs/workspaces), the project, workspace, and session model BySpace is built around.
 - [Providers](/docs/providers), what a provider is and how BySpace wraps existing CLIs.
 - [Orchestration](/docs/orchestration), let one agent delegate work to other providers and models.

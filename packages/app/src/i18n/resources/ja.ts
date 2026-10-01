@@ -1405,6 +1405,11 @@ export const ja: TranslationResources = {
   },
   pairing: {
     connectionMethods: {
+      setupGuide: {
+        title: "新しいデーモンをセットアップ",
+        description: "3 ステップでインストールとペアリング。",
+      },
+
       title: "接続を追加",
       direct: {
         title: "直接接続",
@@ -1519,6 +1524,34 @@ export const ja: TranslationResources = {
         pairing: "ペアリング中...",
       },
     },
+    setupGuide: {
+      title: "デーモンを接続",
+      subtitle: "3 ステップで新しいマシンをセットアップします。",
+      steps: {
+        install: "デーモンをインストール",
+        onboard: "オンボーディングを実行",
+        pair: "ペアリングリンクを貼り付け",
+      },
+      descriptions: {
+        onboard:
+          "このコマンドはこの web アプリを許可リストに追加し、リレー接続を有効にして、ペアリングリンクをあなたのリレーに向けます。",
+        onboardHosted: "このコマンドはリレー接続を有効にします。",
+        pair: "オンボーディングの完了時にペアリングリンクが出力されます。下に貼り付けて接続してください。",
+      },
+      fields: {
+        relayEndpoint: "リレーエンドポイント（任意）",
+        relayEndpointPlaceholder: "relay.example.com:443",
+        relayEndpointHelper: "空欄の場合はホストされたリレーを使用します。",
+        pairingLink: "ペアリングリンク",
+      },
+      actions: {
+        copy: "コピー",
+        copied: "コピーしました",
+        copyFailed: "コピーに失敗しました",
+        cancel: "キャンセル",
+      },
+    },
+
     scan: {
       title: "QRをスキャン",
       webUnavailableTitle: "Webでは利用できません",

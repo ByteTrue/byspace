@@ -46,11 +46,10 @@ jobs:
       actions: read
       contents: read
     outputs:
-      image: ${{ steps.values.outputs.image }}
+      image_prefix: ${{ steps.values.outputs.image_prefix }}
       install_version: ${{ steps.values.outputs.install_version }}
       publish: ${{ steps.values.outputs.publish }}
-      check_tag: ${{ steps.values.outputs.check_tag }}
-      publish_tags: ${{ steps.values.outputs.publish_tags }}
+      publish_latest: ${{ steps.values.outputs.publish_latest }}
       release_sha: ${{ steps.values.outputs.release_sha }}
     steps:
       - uses: actions/checkout@v6
@@ -67,7 +66,7 @@ jobs:
           set -euo pipefail
 
           owner="$(printf '%s' "${REPO_OWNER}" | tr '[:upper:]' '[:lower:]')"
-          image="ghcr.io/${owner}/byspace"
+          image_prefix="ghcr.io/${owner}/byspace"
           package_version="$(node -p "require('./package.json').version")"
           install_version="${INPUT_BYSPACE_VERSION:-${package_version}}"
           release_sha="$(git rev-parse HEAD)"
@@ -87,24 +86,15 @@ jobs:
             fi
           fi
 
-          check_tag="${image}:check-${GITHUB_SHA::12}"
-          publish_tags="${image}:${install_version}"
-          if [[ "${publish_latest}" == "true" ]]; then
-            publish_tags="${publish_tags}"$'\n'"${image}:latest"
-          fi
-
           {
-            echo "image=${image}"
+            echo "image_prefix=${image_prefix}"
             echo "install_version=${install_version}"
             echo "publish=${publish}"
-            echo "check_tag=${check_tag}"
+            echo "publish_latest=${publish_latest}"
             echo "release_sha=${release_sha}"
-            echo "publish_tags<<EOF"
-            echo "${publish_tags}"
-            echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-          echo "Resolved image=${image} install_version=${install_version} publish=${publish}"
+          echo "Resolved image_prefix=${image_prefix} install_version=${install_version} publish=${publish}"
 
   build:
     needs: setup
@@ -112,6 +102,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suffix: web
+            file: docker/web.Dockerfile
+          - suffix: relay
+            file: docker/relay.Dockerfile
     steps:
       - uses: actions/checkout@v6
 
@@ -121,15 +119,15 @@ jobs:
       - uses: docker/build-push-action@v7
         with:
           context: .
-          file: docker/base/Dockerfile
+          file: ${{ matrix.file }}
           platforms: ${{ env.PLATFORMS }}
           build-args: |
             BYSPACE_VERSION=${{ needs.setup.outputs.install_version }}
-          tags: ${{ needs.setup.outputs.check_tag }}
+          tags: ${{ needs.setup.outputs.image_prefix }}-${{ matrix.suffix }}:check-${{ github.sha }}
           push: false
           provenance: false
-          cache-from: type=gha,scope=byspace
-          cache-to: type=gha,scope=byspace,mode=max
+          cache-from: type=gha,scope=byspace-${{ matrix.suffix }}
+          cache-to: type=gha,scope=byspace-${{ matrix.suffix }},mode=max
 
   publish:
     needs: setup
@@ -138,6 +136,16 @@ jobs:
     permissions:
       contents: write
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suffix: web
+            file: docker/web.Dockerfile
+            smoke_path: /
+          - suffix: relay
+            file: docker/relay.Dockerfile
+            smoke_path: /health
     steps:
       - uses: actions/checkout@v6
         with:
@@ -163,40 +171,58 @@ jobs:
           git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --force
           test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$EXPECTED_SHA"
 
+      - name: Resolve publish tags
+        env:
+          IMAGE_PREFIX: ${{ needs.setup.outputs.image_prefix }}
+          VERSION: ${{ needs.setup.outputs.install_version }}
+          PUBLISH_LATEST: ${{ needs.setup.outputs.publish_latest }}
+        run: |
+          set -euo pipefail
+          image="$IMAGE_PREFIX-${{ matrix.suffix }}"
+          tags="$image:$VERSION"
+          if [[ "$PUBLISH_LATEST" == "true" ]]; then
+            tags="$tags"$'\n'"$image:latest"
+          fi
+          {
+            echo "TAGS<<EOF"
+            echo "$tags"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
       - uses: docker/build-push-action@v7
         with:
           context: .
-          file: docker/base/Dockerfile
+          file: ${{ matrix.file }}
           platforms: ${{ env.PLATFORMS }}
           build-args: |
             BYSPACE_VERSION=${{ needs.setup.outputs.install_version }}
-          tags: ${{ needs.setup.outputs.publish_tags }}
+          tags: ${{ env.TAGS }}
           push: true
           provenance: false
-          cache-from: type=gha,scope=byspace
-          cache-to: type=gha,scope=byspace,mode=max
+          cache-from: type=gha,scope=byspace-${{ matrix.suffix }}
+          cache-to: type=gha,scope=byspace-${{ matrix.suffix }},mode=max
 
       - name: Verify multi-arch manifest and container smoke
         env:
-          IMAGE: ${{ needs.setup.outputs.image }}
+          IMAGE: ${{ needs.setup.outputs.image_prefix }}-${{ matrix.suffix }}
           VERSION: ${{ needs.setup.outputs.install_version }}
+          SUFFIX: ${{ matrix.suffix }}
+          SMOKE_PATH: ${{ matrix.smoke_path }}
         run: |
           set -euo pipefail
-          # shellcheck disable=SC2153
           image="$IMAGE:$VERSION"
           manifest="$RUNNER_TEMP/manifest.json"
           docker buildx imagetools inspect "$image" --raw > "$manifest"
           jq -e '[.manifests[].platform | "\(.os)/\(.architecture)"] | index("linux/amd64") and index("linux/arm64")' "$manifest" >/dev/null
 
-          container="byspace-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          container="byspace-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$SUFFIX"
           cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
           trap cleanup EXIT
           docker run -d --name "$container" --platform linux/amd64 \
-            -e BYSPACE_PASSWORD=byspace-ci-smoke \
-            -p 127.0.0.1::6777 "$image" >/dev/null
-          host_port="$(docker port "$container" 6777/tcp | sed 's/.*://')"
+            -p 127.0.0.1::8080 "$image" >/dev/null
+          host_port="$(docker port "$container" 8080/tcp | sed 's/.*://')"
           for attempt in {1..60}; do
-            if curl --fail --silent "http://127.0.0.1:$host_port/" >/dev/null; then
+            if curl --fail --silent "http://127.0.0.1:$host_port$SMOKE_PATH" >/dev/null; then
               break
             fi
             if [[ "$attempt" == 60 ]]; then
@@ -205,31 +231,37 @@ jobs:
             fi
             sleep 2
           done
-          docker logs "$container" 2>&1 | grep -F 'starting daemon on 0.0.0.0:6777'
 
       - name: Attach immutable container digest
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          IMAGE: ${{ needs.setup.outputs.image }}
+          IMAGE: ${{ needs.setup.outputs.image_prefix }}-${{ matrix.suffix }}
           RELEASE_TAG: ${{ github.ref_name }}
           VERSION: ${{ needs.setup.outputs.install_version }}
+          SUFFIX: ${{ matrix.suffix }}
         run: |
           set -euo pipefail
           # shellcheck disable=SC2153
           image="$IMAGE:$VERSION"
           digest="$(docker buildx imagetools inspect "$image" | awk '/^Digest:/ { print $2; exit }')"
           test -n "$digest"
-          asset="$RUNNER_TEMP/BySpace-$VERSION-container.txt"
+          asset="$RUNNER_TEMP/BySpace-$VERSION-$SUFFIX-container.txt"
           printf 'image=%s\ndigest=%s\nplatforms=%s\nsource=%s\n' \
             "$image" "$digest" "$PLATFORMS" "${{ needs.setup.outputs.release_sha }}" > "$asset"
           node scripts/write-sha256.mjs "$asset"
           notes_file=".github/release/$RELEASE_TAG.md"
           if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "BySpace $RELEASE_TAG")
-            [[ -f "$notes_file" ]] && args+=(--notes-file "$notes_file") || args+=(--generate-notes)
-            [[ "$RELEASE_TAG" == *-* ]] && args+=(--prerelease)
-            gh "${args[@]}"
+            if [[ -f "$notes_file" ]]; then
+              args+=(--notes-file "$notes_file")
+            else
+              args+=(--generate-notes)
+            fi
+            if [[ "$RELEASE_TAG" == *-* ]]; then
+              args+=(--prerelease)
+            fi
+            gh "${args[@]}" || gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
           fi
           scripts/upload-release-asset.sh "$RELEASE_TAG" "$asset" "${{ needs.setup.outputs.release_sha }}"
           scripts/upload-release-asset.sh "$RELEASE_TAG" "$asset.sha256" "${{ needs.setup.outputs.release_sha }}"

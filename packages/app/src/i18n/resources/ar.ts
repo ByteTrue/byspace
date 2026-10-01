@@ -1391,6 +1391,11 @@ export const ar: TranslationResources = {
   },
   pairing: {
     connectionMethods: {
+      setupGuide: {
+        title: "إعداد daemon جديد",
+        description: "ثبّت وقارن في ثلاث خطوات.",
+      },
+
       title: "إضافة اتصال",
       direct: {
         title: "اتصال مباشر",
@@ -1505,6 +1510,34 @@ export const ar: TranslationResources = {
         pairing: "الاقتران...",
       },
     },
+    setupGuide: {
+      title: "اتصال daemon",
+      subtitle: "أعدّ جهازًا جديدًا في ثلاث خطوات.",
+      steps: {
+        install: "ثبّت daemon",
+        onboard: "شغّل الإعداد",
+        pair: "الصق رابط الاقتران",
+      },
+      descriptions: {
+        onboard:
+          "يضيف هذا الأمر تطبيق الويب هذا إلى قائمة السماح، ويفعّل اتصال المرحّل، ويوجّه روابط الاقتران إلى مرحّلك.",
+        onboardHosted: "يفعّل هذا الأمر اتصال المرحّل.",
+        pair: "عند انتهاء الإعداد يُطبع رابط اقتران. الصقه أدناه للاتصال.",
+      },
+      fields: {
+        relayEndpoint: "عنوان المرحّل (اختياري)",
+        relayEndpointPlaceholder: "relay.example.com:443",
+        relayEndpointHelper: "اتركه فارغًا لاستخدام المرحّل المستضاف.",
+        pairingLink: "رابط الاقتران",
+      },
+      actions: {
+        copy: "نسخ",
+        copied: "تم النسخ",
+        copyFailed: "فشل النسخ",
+        cancel: "إلغاء",
+      },
+    },
+
     scan: {
       title: "مسح QR",
       webUnavailableTitle: "غير متوفر على شبكة الإنترنت",

@@ -1378,6 +1378,11 @@ export const zhCN: TranslationResources = {
   },
   pairing: {
     connectionMethods: {
+      setupGuide: {
+        title: "设置新 daemon",
+        description: "三步完成安装与配对。",
+      },
+
       title: "添加连接",
       direct: {
         title: "直接连接",
@@ -1490,6 +1495,33 @@ export const zhCN: TranslationResources = {
         pairing: "正在配对...",
       },
     },
+    setupGuide: {
+      title: "连接 daemon",
+      subtitle: "三步接入一台新机器。",
+      steps: {
+        install: "安装 daemon",
+        onboard: "运行引导",
+        pair: "粘贴配对链接",
+      },
+      descriptions: {
+        onboard: "此命令会把当前 web 应用加入白名单、开启中继连接，并让配对链接指向你的中继。",
+        onboardHosted: "此命令会开启中继连接。",
+        pair: "引导完成后会打印一条配对链接，粘贴到下方即可连接。",
+      },
+      fields: {
+        relayEndpoint: "中继端点（可选）",
+        relayEndpointPlaceholder: "relay.example.com:443",
+        relayEndpointHelper: "留空则使用官方托管中继。",
+        pairingLink: "配对链接",
+      },
+      actions: {
+        copy: "复制",
+        copied: "已复制",
+        copyFailed: "复制失败",
+        cancel: "取消",
+      },
+    },
+
     scan: {
       title: "扫描二维码",
       webUnavailableTitle: "Web 上不可用",

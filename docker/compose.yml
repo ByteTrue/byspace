@@ -1,0 +1,51 @@
+# Self-hosted BySpace: web (default) + optional relay, optional TLS.
+#
+#   docker compose up -d                                  web only, HTTP
+#   docker compose --profile relay up -d                   + self-hosted relay
+#   BYSPACE_DOMAIN=app.example.com \
+#     docker compose --profile relay --profile tls up -d   + caddy TLS
+#
+# Pin BYSPACE_VERSION for reproducible deploys (e.g. 0.16.4); `latest`
+# follows the newest stable release.
+#
+# After `up`, open http://localhost:8080 and follow the connect guide:
+# the daemon runs on your own machine, installed via npm.
+
+services:
+  web:
+    image: ghcr.io/bytetrue/byspace-web:${BYSPACE_VERSION:-latest}
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+
+  relay:
+    image: ghcr.io/bytetrue/byspace-relay:${BYSPACE_VERSION:-latest}
+    profiles: ["relay"]
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+
+  tls:
+    image: caddy:2
+    profiles: ["tls"]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    # Required with --profile tls. Docker interpolates the whole file
+    # regardless of active profiles, so a hard `:?` error would break the
+    # default (no-TLS) usage; Caddy fails fast on an empty site address.
+    environment:
+      BYSPACE_DOMAIN: ${BYSPACE_DOMAIN:-}
+      RELAY_DOMAIN: ${RELAY_DOMAIN:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -34,7 +34,11 @@ type MutableDaemonConfigPatch = import("@bytetrue/protocol/messages").MutableDae
 type ProviderOverride = import("./agent/provider-launch-config.js").ProviderOverride;
 
 interface SupportedMutableConfigPatch {
-  relay?: { enabled?: boolean };
+  relay?: { enabled?: boolean; endpoint?: string; useTls?: boolean };
+  // COMPAT(relayEndpointConfig): added in v0.17.0, remove after 2027-03-30 once
+  // daemon floor >= v0.17.0. Relay.endpoint/useTls join the patchable set so
+  // onboard --relay-endpoint can persist a relay.
+  // Guarded by relayEndpointMutable the same way enabled is by relayEnabledMutable.
   mcp?: { injectIntoAgents?: boolean };
   providers?: MutableDaemonConfig["providers"];
   removeProviders?: string[];
@@ -59,6 +63,11 @@ interface SupportedMutableConfigPatch {
   // COMPAT(daemonServiceInstall): added in v0.14.7. Execute-only: install runs the
   // service-manager registration and never lands in the mutable config view.
   service?: { install?: boolean };
+  // COMPAT(webOriginConfig): added in v0.17.0, remove after 2027-03-30 once
+  // daemon floor >= v0.17.0. Set by `byspace onboard --web-origin`;
+  // hot-applied via the "app.baseUrl" / "cors.allowedOrigins" field change handlers.
+  app?: { baseUrl?: string };
+  cors?: { allowedOrigins?: string[] };
 }
 
 /** Translated form of the network/auth patch used only by the persisted merge. */
@@ -214,6 +223,8 @@ function isEqualValue(a: unknown, b: unknown): boolean {
 
 const RELOADABLE_PATHS = [
   "daemon.relay.enabled",
+  "daemon.relay.endpoint",
+  "daemon.relay.useTls",
   "daemon.mcp.enabled",
   "daemon.mcp.injectIntoAgents",
   "daemon.hostnames",
@@ -237,6 +248,8 @@ const RELOADABLE_PATHS = [
 
 const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
   ["daemon.relay.enabled", "relay.enabled"],
+  ["daemon.relay.endpoint", "relay.endpoint"],
+  ["daemon.relay.useTls", "relay.useTls"],
   ["daemon.mcp.enabled", "mcp.enabled"],
   ["daemon.mcp.injectIntoAgents", "mcp.injectIntoAgents"],
   ["daemon.hostnames", "hostnames"],
@@ -295,7 +308,7 @@ function compactOwnedPaths(paths: readonly string[], owners: readonly string[]):
 
 function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMutableConfigPatch {
   return {
-    ...(patch.relay?.enabled !== undefined ? { relay: { enabled: patch.relay.enabled } } : {}),
+    ...pickRelayPatchFields(patch),
     ...(patch.mcp?.injectIntoAgents !== undefined
       ? { mcp: { injectIntoAgents: patch.mcp.injectIntoAgents } }
       : {}),
@@ -323,8 +336,49 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
     ...(patch.agentProfiles !== undefined ? { agentProfiles: patch.agentProfiles } : {}),
     ...(patch.pluginsEnabled !== undefined ? { pluginsEnabled: patch.pluginsEnabled } : {}),
     ...(patch.plugins !== undefined ? { plugins: patch.plugins } : {}),
+    ...pickWebOriginPatchFields(patch),
     ...pickNetworkAuthPatchFields(patch),
     ...(patch.service !== undefined ? { service: patch.service } : {}),
+  };
+}
+
+function applyPersistedRelayEndpointPatch(
+  next: NonNullable<PersistedConfig["daemon"]>,
+  patch: Omit<SupportedMutableConfigPatch, "removeProviders">,
+): void {
+  if (patch.relay?.endpoint !== undefined) {
+    next.relay = { ...next.relay, endpoint: patch.relay.endpoint };
+  }
+  if (patch.relay?.useTls !== undefined) {
+    next.relay = { ...next.relay, useTls: patch.relay.useTls };
+  }
+}
+
+function applyPersistedCorsPatch(
+  next: NonNullable<PersistedConfig["daemon"]>,
+  patch: Omit<SupportedMutableConfigPatch, "removeProviders">,
+): void {
+  if (patch.cors?.allowedOrigins === undefined) return;
+  next.cors = { ...next.cors, allowedOrigins: patch.cors.allowedOrigins };
+}
+
+function pickRelayPatchFields(patch: MutableDaemonConfigPatch): SupportedMutableConfigPatch {
+  const relay = patch.relay;
+  if (relay === undefined) return {};
+  const picked: { enabled?: boolean; endpoint?: string; useTls?: boolean } = {};
+  if (relay.enabled !== undefined) picked.enabled = relay.enabled;
+  if (relay.endpoint !== undefined) picked.endpoint = relay.endpoint;
+  if (relay.useTls !== undefined) picked.useTls = relay.useTls;
+  if (Object.keys(picked).length === 0) return {};
+  return { relay: picked };
+}
+
+function pickWebOriginPatchFields(patch: MutableDaemonConfigPatch): SupportedMutableConfigPatch {
+  return {
+    ...(patch.app?.baseUrl !== undefined ? { app: { baseUrl: patch.app.baseUrl } } : {}),
+    ...(patch.cors?.allowedOrigins !== undefined
+      ? { cors: { allowedOrigins: patch.cors.allowedOrigins } }
+      : {}),
   };
 }
 
@@ -455,6 +509,7 @@ export class DaemonConfigStore {
   private readonly applyListeners = new Set<ConfigApplyListener>();
   private readonly fieldChangeHandlers = new Map<string, Set<FieldChangeHandler>>();
   private readonly relayEnabledMutable: boolean;
+  private readonly relayEndpointMutable: boolean;
   private readonly reloadSource: DaemonConfigReloadSource | undefined;
   private readonly startupPersisted: PersistedConfig;
   private readonly networkControls: DaemonNetworkControls | undefined;
@@ -466,6 +521,7 @@ export class DaemonConfigStore {
     logger?: LoggerLike,
     options: {
       relayEnabledMutable?: boolean;
+      relayEndpointMutable?: boolean;
       reloadSource?: DaemonConfigReloadSource;
       startupPersisted?: PersistedConfig;
       networkControls?: DaemonNetworkControls;
@@ -478,6 +534,7 @@ export class DaemonConfigStore {
       relay: initial.relay ?? { enabled: true },
     });
     this.relayEnabledMutable = options.relayEnabledMutable ?? true;
+    this.relayEndpointMutable = options.relayEndpointMutable ?? true;
     this.reloadSource = options.reloadSource;
     this.networkControls = options.networkControls;
     this.startupPersisted =
@@ -501,12 +558,22 @@ export class DaemonConfigStore {
     return this.applySupportedPatch({ skills: { selection } });
   }
 
-  private applySupportedPatch(parsedPatch: SupportedMutableConfigPatch): MutableDaemonConfig {
+  private assertRelayPatchMutable(parsedPatch: SupportedMutableConfigPatch): void {
     if (parsedPatch.relay?.enabled !== undefined && !this.relayEnabledMutable) {
       throw new Error(
         "Relay is controlled by a daemon launch override. Remove BYSPACE_RELAY_ENABLED or the relay CLI flag before changing it here.",
       );
     }
+    if (parsedPatch.relay?.endpoint === undefined && parsedPatch.relay?.useTls === undefined)
+      return;
+    if (this.relayEndpointMutable) return;
+    throw new Error(
+      "Relay endpoint is controlled by a daemon launch override. Remove BYSPACE_RELAY_ENDPOINT or BYSPACE_RELAY_USE_TLS before changing it here.",
+    );
+  }
+
+  private applySupportedPatch(parsedPatch: SupportedMutableConfigPatch): MutableDaemonConfig {
+    this.assertRelayPatchMutable(parsedPatch);
     // The network/auth patch never lands in the mutable view verbatim: the
     // plaintext password and listen semantics are translated below, and only
     // the derived view fields (allowLanAccess / passwordSet) surface to clients.
@@ -914,6 +981,9 @@ function mergeMutablePatchIntoPersistedConfig(params: {
   const agents = mergeMutableAgentPatch(persisted.agents, patch, removeProviders);
   return {
     ...persisted,
+    ...(patch.app?.baseUrl !== undefined
+      ? { app: { ...persisted.app, baseUrl: patch.app.baseUrl } }
+      : {}),
     ...(patch.pluginsEnabled !== undefined ? { pluginsEnabled: patch.pluginsEnabled } : {}),
     ...(patch.plugins !== undefined ? { plugins: patch.plugins } : {}),
     ...(daemon ? { daemon } : { daemon: undefined }),
@@ -1027,6 +1097,11 @@ function mergeMutableDaemonPatch(
   if (persistRelayEnabled && patch.relay?.enabled !== undefined) {
     next.relay = { ...next.relay, enabled: patch.relay.enabled };
   }
+  // COMPAT(relayEndpointConfig): added in v0.17.0, remove after 2027-03-30 once
+  // daemon floor >= v0.17.0. Endpoint/useTls persist unconditionally of the
+  // enabled guard — the mutable check happens in applySupportedPatch; the
+  // public fields are not persisted and follow the endpoint on resolve.
+  applyPersistedRelayEndpointPatch(next, patch);
   if (patch.mcp?.injectIntoAgents !== undefined) {
     next.mcp = { ...next.mcp, injectIntoAgents: patch.mcp.injectIntoAgents };
   }
@@ -1050,5 +1125,6 @@ function mergeMutableDaemonPatch(
     next.terminalDefaultShell = patch.terminalDefaultShell;
   }
   if (patch.agentProfiles !== undefined) next.agentProfiles = patch.agentProfiles;
+  applyPersistedCorsPatch(next, patch);
   return Object.keys(next).length > 0 ? next : undefined;
 }

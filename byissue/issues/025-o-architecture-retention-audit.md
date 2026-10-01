@@ -12,7 +12,7 @@ created: 2026-09-10
 
 **执行状态（2026-09-12）：** 除批次 7（provider 收缩，Owner 指示暂缓）外全部执行完毕——Web UI 默认开启（399d5a210c）、原生移动端退出（da626db362）、Electron 退出（b1c37223af）、Hub 移除（446bc38a3d）、插件系统移除（a5c6bb6588）、语音移除（8d96875115）、Nix 与营销站移除（e61194ccd1）。归档 ref：archive/pre-{mobile,electron,hub,plugin,voice,nix-website}-removal。
 
-Owner 于 2026-09-11 确认 Web/PWA + daemon 路线：移动原生与 Electron 退出，现有网页技术暂不更换；内嵌浏览器不保留，SSH 移除（同日修订，见 A5），Hub 移除，Docker 保留。本 Issue 记录已确认方向、待决项与执行门槛；不代表已经取得精确删除批次、数据迁移或停部署的执行授权。
+Owner 于 2026-09-11 确认 Web/PWA + daemon 路线：移动原生与 Electron 退出，现有网页技术暂不更换；内嵌浏览器不保留，SSH 移除（同日修订，见 A5），Hub 移除，Docker 保留（**2026-09-30 修订为 daemon 镜像退役、双容器自托管，见 D6**）。本 Issue 记录已确认方向、待决项与执行门槛；不代表已经取得精确删除批次、数据迁移或停部署的执行授权。
 
 - **审计基线：** 静态审计在 `6e8e98a1042e1161dd6512ea3df1d531f69a04ab`（v0.13.0），SSH 补充核对在 `a54087a1d14c6bff45064dd678b572c6263e4344`。**当前基线：** `8ce02b66707dad700eea9104ecd308a35779316c`（Paseo v0.8.0 同步合并后，PR #34），关键路径已复核，见下。
 - **上游状态：** 最后一次 Paseo `0.8.0` 正式版同步已于 2026-09-11 完成并合并。此后 BySpace 独立发展，上游仅作参考，不再追版本。局域网连接用 daemon 监听局域网地址 + 内置 Web UI 同源直连；远程走 Relay；SSH 已改判移除（见 A5 修订）。
@@ -126,17 +126,17 @@ Web UI：可由 daemon 内置提供，也可使用托管版本
 
 ## D · 发布、依赖与维护承诺
 
-| ID  | 表面                                           | 建议                                                | 影响、恢复与成本                                                                                                                                                                                                                                                                                                 |
-| --- | ---------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D1  | `@bytetrue/byspace` npm 包与 CLI               | **保留为安装主线**                                  | 当前已聚合内部包，内置 Web 也随版本打包。不为“独立项目”批量改所有内部包名；先保住可安装、可启动、可升级与不依赖上游 registry 的验证。                                                                                                                                                                            |
-| D2  | 托管 Stable/Beta Web                           | **保留现有双通道**                                  | 是既有 B01 决策；与 daemon 内置 UI 共用源代码。退出原生分发不意味着停托管域名，也不要求新增独立手机站。线上域名/部署变化需另行确认。                                                                                                                                                                             |
-| D3  | 单 Relay 通道                                  | **保留现有远程入口及适配器**                        | 当前配置使用 `relay.byspace.cc.cd:443`，仓库有 BySpace Worker 入口。旧文档另称生产是上游 Elixir 服务；本轮没有查询控制台确认线上映射，不能据此删 Cloudflare adapter。远程入口仍有域名、TLS、运行配额与运维成本。                                                                                                 |
-| D4  | iOS / Android / Electron 发布流程              | **随 A2/A3 验收与执行授权后退出**                   | 涉及三个当前 workflow，以及构建依赖、平台测试、版本元数据和更新协议。先满足 SSH 等保留能力的前置条件，再清理退出产品的发布链；不删除历史 Release、签名密钥或用户安装数据。                                                                                                                                       |
-| D5  | Website 源码                                   | **已确认移除，待执行授权**                          | 没有当前部署 workflow，但 package 内 `deploy` 仍可调用，不能说已物理禁用；Wrangler 仍留上游站点身份。保留 `public-docs`，迁走 README 引用的截图并修链接。移除源码不授权删线上域名、站点或 Cloudflare 配置。                                                                                                      |
-| D6  | Docker                                         | **已确认保留**                                      | 当前构建 amd64/arm64 daemon + Web 镜像，默认启用内置 UI，不预装 agent CLI。它复用同一份 Web，不引入另一套客户端栈。                                                                                                                                                                                              |
-| D7  | Nix                                            | **已确认移除，待执行授权**                          | Owner 不使用 Nix/NixOS；npm-deps.hash 随依赖变更频繁过期是持续负担（本次同步已破过一次）。移除 flake.nix/lock、nix/ 目录（daemon 包、module、desktop 包）、`update-nix.sh`/`fix-lockfile.mjs` 的 nix 部分、`.github/workflows/nix.yml` 与 npm-deps.hash 维护链。Linux daemon 支持不受影响（npm/Docker 仍提供）。 |
-| D8  | EAS / 商店 / Fastlane / F-Droid 元数据与旧说明 | **先区分仍活跃的 APK 生成链与遗留内容，再成组清理** | F-Droid changelog 当前仍接在根 `version` 生命周期；不是删目录即可。若 Android 退出，连同钩子、校验、版本推导和对应文档一起处理。商店集成的线上状态本轮未查询。                                                                                                                                                   |
-| D9  | 质量门禁与发布文档                             | **跟随批准后的支持矩阵收缩，保留剩余行为覆盖**      | 更新 root scripts、workspace 列表、lockfile、CI 路径路由与 release 完成清单。只删除已退出产品的专用门禁；Web、daemon 三 OS、Relay、CLI 的测试不能连带减少。                                                                                                                                                      |
+| ID  | 表面                                           | 建议                                                              | 影响、恢复与成本                                                                                                                                                                                                                                                                                                 |
+| --- | ---------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | `@bytetrue/byspace` npm 包与 CLI               | **保留为安装主线**                                                | 当前已聚合内部包，内置 Web 也随版本打包。不为“独立项目”批量改所有内部包名；先保住可安装、可启动、可升级与不依赖上游 registry 的验证。                                                                                                                                                                            |
+| D2  | 托管 Stable/Beta Web                           | **保留现有双通道**                                                | 是既有 B01 决策；与 daemon 内置 UI 共用源代码。退出原生分发不意味着停托管域名，也不要求新增独立手机站。线上域名/部署变化需另行确认。                                                                                                                                                                             |
+| D3  | 单 Relay 通道                                  | **保留现有远程入口及适配器**                                      | 当前配置使用 `relay.byspace.cc.cd:443`，仓库有 BySpace Worker 入口。旧文档另称生产是上游 Elixir 服务；本轮没有查询控制台确认线上映射，不能据此删 Cloudflare adapter。远程入口仍有域名、TLS、运行配额与运维成本。                                                                                                 |
+| D4  | iOS / Android / Electron 发布流程              | **随 A2/A3 验收与执行授权后退出**                                 | 涉及三个当前 workflow，以及构建依赖、平台测试、版本元数据和更新协议。先满足 SSH 等保留能力的前置条件，再清理退出产品的发布链；不删除历史 Release、签名密钥或用户安装数据。                                                                                                                                       |
+| D5  | Website 源码                                   | **已确认移除，待执行授权**                                        | 没有当前部署 workflow，但 package 内 `deploy` 仍可调用，不能说已物理禁用；Wrangler 仍留上游站点身份。保留 `public-docs`，迁走 README 引用的截图并修链接。移除源码不授权删线上域名、站点或 Cloudflare 配置。                                                                                                      |
+| D6  | Docker                                         | **已确认改为双容器自托管形态（2026-09-30 修订，原「保留」作废）** | daemon 不出镜像，npm 包唯一分发——agent 需要用户真实工具链，合体镜像暗示「部署一个服务」误导大于便利。发布物改为 `byspace-web`（nginx+静态 web）与 `byspace-relay`（Node relay，issue 061）两镜像 + compose，多架构沿用。执行见 [061](061-x-self-hosted-web-relay-containers.md)。                                |
+| D7  | Nix                                            | **已确认移除，待执行授权**                                        | Owner 不使用 Nix/NixOS；npm-deps.hash 随依赖变更频繁过期是持续负担（本次同步已破过一次）。移除 flake.nix/lock、nix/ 目录（daemon 包、module、desktop 包）、`update-nix.sh`/`fix-lockfile.mjs` 的 nix 部分、`.github/workflows/nix.yml` 与 npm-deps.hash 维护链。Linux daemon 支持不受影响（npm/Docker 仍提供）。 |
+| D8  | EAS / 商店 / Fastlane / F-Droid 元数据与旧说明 | **先区分仍活跃的 APK 生成链与遗留内容，再成组清理**               | F-Droid changelog 当前仍接在根 `version` 生命周期；不是删目录即可。若 Android 退出，连同钩子、校验、版本推导和对应文档一起处理。商店集成的线上状态本轮未查询。                                                                                                                                                   |
+| D9  | 质量门禁与发布文档                             | **跟随批准后的支持矩阵收缩，保留剩余行为覆盖**                    | 更新 root scripts、workspace 列表、lockfile、CI 路径路由与 release 完成清单。只删除已退出产品的专用门禁；Web、daemon 三 OS、Relay、CLI 的测试不能连带减少。                                                                                                                                                      |
 
 ### 已确认的文档漂移
 
@@ -152,7 +152,7 @@ Web UI：可由 daemon 内置提供，也可使用托管版本
 
 本节是建议顺序，不是本轮要执行的任务。
 
-1. **剩余取舍已全部确认。** 主干路线、浏览器退出、SSH 保留、Hub 移除、Docker 保留、插件系统完整移除、语音全移除、provider 收缩至五家、Nix 移除、营销站移除、内置 Web 默认开启均已定案；后续批次只做影响报告与执行授权，不再重新审批方向。
+1. **剩余取舍已全部确认。** 主干路线、浏览器退出、SSH 保留、Hub 移除、Docker 保留（后修订为 daemon 镜像退役，见 D6）、插件系统完整移除、语音全移除、provider 收缩至五家、Nix 移除、营销站移除、内置 Web 默认开启均已定案；后续批次只做影响报告与执行授权，不再重新审批方向。
 2. **完成最后一次上游同步，重新定基线。** 重新检查本清单涉及的源代码与构建依赖，不重放旧版本的删除脚本。仓库迁移如果也要做，单独安排窗口。
 3. **给出执行前影响报告。** 精确 SHA、文件/能力清单、数据边界、验证命令、发布影响、远程归档 ref 与恢复步骤全部列齐，再请求执行授权。SSH 明确承接机器和鉴权边界。本轮没有创建远程归档或操作分支。
 4. **退出桌面壳。** 按批准批次裁剪原生移动端、Electron 及其构建、更新、依赖、门禁和说明，不长期留下半退出状态。SSH 不再是前置条件（A5 已改判移除）。
@@ -181,7 +181,7 @@ Web UI：可由 daemon 内置提供，也可使用托管版本
 
 ## 已确认与待决项
 
-**已确认方向：** Web/PWA + daemon 为主干；移动原生与 Electron 退出；现有网页技术暂不替换；内嵌浏览器不保留；SSH 移除（局域网走内置 Web UI 同源直连，远程走 Relay）；Hub 移除；Docker 保留；上游插件系统完整移除（provider 扩展改走 config custom provider + skill 适配）；语音全部移除；内建 provider 收缩至 claude/codex/opencode/pi/omp；Nix 移除；营销站源码移除；daemon 内置 Web UI 改默认开启。
+**已确认方向：** Web/PWA + daemon 为主干；移动原生与 Electron 退出；现有网页技术暂不替换；内嵌浏览器不保留；SSH 移除（局域网走内置 Web UI 同源直连，远程走 Relay）；Hub 移除；Docker 保留后修订为 daemon 镜像退役、web/relay 双容器自托管（见 D6）；上游插件系统完整移除（provider 扩展改走 config custom provider + skill 适配）；语音全部移除；内建 provider 收缩至 claude/codex/opencode/pi/omp；Nix 移除；营销站源码移除；daemon 内置 Web UI 改默认开启。
 
 **不自动改变：** CLI、现有 Relay 和双 Web 通道、daemon 的 macOS/Linux/Windows 支持、Schedules/Heartbeats、MCP 注入工具、Workspace/Git、Appearance、协议和安全边界。
 
