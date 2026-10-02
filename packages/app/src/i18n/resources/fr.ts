@@ -1133,6 +1133,7 @@ export const fr: TranslationResources = {
         label: "Hôte par défaut des nouveaux espaces",
         automatic: "Automatique",
         hint: "Présélectionné lors de la création d'un espace de travail pour ce projet",
+        saveFailed: "Impossible d'enregistrer l'hôte par défaut",
       },
       actions: {
         menu: "Actions du projet",

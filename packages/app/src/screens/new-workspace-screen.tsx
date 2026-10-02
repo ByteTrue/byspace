@@ -1325,10 +1325,23 @@ function useNewWorkspaceInitialContext({
   const workspaceMultiplicityByServerId = useHostFeatureMap(allServerIds, "workspaceMultiplicity");
   const localServerId = useLocalDaemonServerId();
   const defaultHostByProject = useSettings((settings) => settings.defaultHostByProject);
+  // The settings screen writes the pin under the cross-host view key from the project list. A
+  // project built from one workspace carries a placement key instead, so resolve the remembered
+  // one against that list first — its own key would never match the stored pin.
+  const lastActiveProjectKey = useMemo(() => {
+    if (!lastActiveProject || !lastWorkspaceServerId) return null;
+    return (
+      resolveHostProjectCandidate({
+        candidate: lastActiveProject,
+        projects,
+        serverId: lastWorkspaceServerId,
+      })?.viewKey ?? lastActiveProject.viewKey
+    );
+  }, [lastActiveProject, lastWorkspaceServerId, projects]);
   // Route placement first: opening "New workspace" from a project targets that project even
-  // when the last active one differs. The pin key is the cross-host view key both sides share.
-  const pinProject = routeProject ?? lastActiveProject;
-  const pinnedServerId = (pinProject && defaultHostByProject[pinProject.viewKey]) || null;
+  // when the last active one differs.
+  const pinViewKey = routeProject?.viewKey ?? lastActiveProjectKey;
+  const pinnedServerId = (pinViewKey && defaultHostByProject[pinViewKey]) || null;
   const {
     selectedServerId,
     hostPickerOpen,

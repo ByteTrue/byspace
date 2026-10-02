@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 import { execSync } from "node:child_process";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import spawn from "cross-spawn";
-import { configureDevBySpaceHome, resolveDevDaemonEndpoint } from "./dev-home.mjs";
+import {
+  configureDevBySpaceHome,
+  prependNodeModulesBin,
+  resolveDevDaemonEndpoint,
+  runDevChild,
+} from "./dev-home.mjs";
 
 const rootDir = resolve(fileURLToPath(import.meta.url), "../..");
 
-// Prepend node_modules/.bin to PATH
-const binDir = join(rootDir, "node_modules/.bin");
-if (process.env.PATH && !process.env.PATH.includes(binDir)) {
-  process.env.PATH = `${binDir}${process.platform === "win32" ? ";" : ":"}${process.env.PATH}`;
-}
+prependNodeModulesBin(rootDir);
 
 // In a BySpace worktree service, BYSPACE_SERVICE_DAEMON_PORT is the port of the daemon peer service.
 if (process.env.BYSPACE_SERVICE_DAEMON_PORT && !process.env.BYSPACE_LISTEN) {
@@ -29,11 +29,9 @@ configureDevBySpaceHome();
 // In a BySpace worktree service, BYSPACE_PORT is the port allocated for this service (app).
 const expoPort = process.env.EXPO_PORT || process.env.BYSPACE_PORT || "8081";
 
-const daemonEndpoint =
-  process.env.BYSPACE_DEV_DAEMON_ENDPOINT ||
-  (process.env.BYSPACE_SERVICE_DAEMON_PORT
-    ? `localhost:${process.env.BYSPACE_SERVICE_DAEMON_PORT}`
-    : resolveDevDaemonEndpoint(process.env.BYSPACE_LISTEN));
+// BYSPACE_LISTEN already carries the daemon peer's address in a service, and
+// resolveDevDaemonEndpoint maps its wildcard host to localhost.
+const daemonEndpoint = resolveDevDaemonEndpoint(process.env.BYSPACE_LISTEN);
 
 let devBuildLabel = "";
 try {
@@ -60,20 +58,7 @@ const env = {
   EXPO_PUBLIC_LOCAL_DAEMON: daemonEndpoint,
 };
 
-const child = spawn(
-  "npm",
-  ["run", "start:expo", "--workspace=@bytetrue/app", "--", "--port", expoPort],
-  {
-    cwd: rootDir,
-    stdio: "inherit",
-    env,
-  },
-);
-
-child.on("exit", (code, signal) => {
-  if (signal) {
-    process.kill(process.pid, signal);
-  } else {
-    process.exit(code ?? 0);
-  }
+runDevChild("npm", ["run", "start:expo", "--workspace=@bytetrue/app", "--", "--port", expoPort], {
+  cwd: rootDir,
+  env,
 });

@@ -336,6 +336,29 @@ describe("resolveNewWorkspaceAutomaticServerId", () => {
     ).toBe("pinned");
   });
 
+  it("leaves an offline pinned host behind for the online local host", () => {
+    // The pin's host is still in the registry, just unreachable. It must not hold the selection
+    // open the way an online pin does — the local host takes over.
+    expect(
+      resolveNewWorkspaceAutomaticServerId({
+        allServerIds: ["local", "pinned", "remote"],
+        routeServerId: null,
+        lastActiveProject: null,
+        projects: [],
+        hostConnectionStatusByServerId: statuses({
+          local: "online",
+          pinned: "offline",
+          remote: "online",
+        }),
+        workspaceMultiplicityByServerId: multiplicity(),
+        pinnedServerId: "pinned",
+        localServerId: "local",
+        currentServerId: "remote",
+        nextServerId: "local",
+      }),
+    ).toBe("local");
+  });
+
   it("does not switch from an online host to an offline cached project", () => {
     expect(
       resolveNewWorkspaceAutomaticServerId({

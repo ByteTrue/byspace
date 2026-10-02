@@ -16,11 +16,11 @@ byspace.json 中的 daemon、app、ios-simulator 之前使用 POSIX 风格的命
 遵循 docs/development.md 原有规范（“Put that logic in a Node script that reads what it needs from process.env”），本修改不侵入 BySpace 核心协议和守护进程代码，而是将开发脚本与环境准备逻辑改用 Node.js（.mjs）跨平台实现：
 
 1. **scripts/dev-home.mjs**：替代 scripts/dev-home.sh，跨平台完成 BYSPACE_HOME 目录创建、元数据种子复制（复用 Node cpSync）、config.json 守护进程监听与 CORS 配置，以及端点解析；直接执行时作为 CLI 包装器启动传入命令。
-2. **scripts/dev-daemon.mjs**：替代 scripts/dev-daemon.sh，自动读取 BySpace 服务注入的 BYSPACE_PORT 并设置监听、创建语音模型目录、执行构建依赖与 watch。
+2. **scripts/dev-daemon.mjs**：读取 BySpace 服务注入的 BYSPACE_SERVICE_DAEMON_PORT 并设置监听、创建语音模型目录、执行构建依赖与 watch。
 3. **scripts/dev-app.mjs**：替代 scripts/dev-app.sh，自动读取 BYSPACE_SERVICE_DAEMON_PORT 与分配的端口，解析端点并启动 Expo。
 4. **byspace.json**：所有服务脚本统一改为直接调用 node ./scripts/<name>.mjs，完全消除 Shell 语法差异，在 Windows（PowerShell/cmd）与 POSIX（bash/zsh）下表现完全一致。
 5. **package.json**：dev:server、dev:app 与 cli 同步改用 node ./scripts/...，同时修复 Windows 下 npm run cli 因 ./scripts/dev-home.sh 无法被 cmd 识别而失败的问题。
-6. 旧有的 .sh 脚本保留并代理至对应 .mjs，确保任何从外部调用原有脚本的途径保持兼容。
+6. 三个旧 .sh 壳（dev-home.sh / dev-daemon.sh / dev-app.sh）已在 PR #14 删除：全仓无调用者，只是 exec node 转发。
 
 ## 改了哪些
 
@@ -31,9 +31,7 @@ byspace.json 中的 daemon、app、ios-simulator 之前使用 POSIX 风格的命
 - scripts/dev-daemon.mjs（新增）
 - scripts/dev-app.mjs（新增）
 - scripts/dev-home.test.mjs（新增）
-- scripts/dev-home.sh
-- scripts/dev-daemon.sh
-- scripts/dev-app.sh
+- scripts/dev-home.sh、scripts/dev-daemon.sh、scripts/dev-app.sh（PR #14 删除）
 
 ## 怎么验证的
 

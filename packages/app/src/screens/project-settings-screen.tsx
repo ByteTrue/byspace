@@ -161,6 +161,7 @@ const AUTOMATIC_HOST_VALUE = "";
  */
 function DefaultHostSection({ project }: { project: ProjectSummary }) {
   const { t } = useTranslation();
+  const toast = useToast();
   const defaultHostByProject = useSettings((settings) => settings.defaultHostByProject);
   const pinnedServerId = defaultHostByProject[project.viewKey] ?? AUTOMATIC_HOST_VALUE;
 
@@ -189,13 +190,19 @@ function DefaultHostSection({ project }: { project: ProjectSummary }) {
         } else {
           next[project.viewKey] = value;
         }
-        await persistAppSettings({ defaultHostByProject: next });
+        try {
+          await persistAppSettings({ defaultHostByProject: next });
+        } catch (err) {
+          console.error("[ProjectSettings] Failed to save the default host pin:", err);
+          toast.error(t("settings.project.defaultHost.saveFailed"));
+        }
       })();
     },
-    [defaultHostByProject, project.viewKey],
+    [defaultHostByProject, project.viewKey, t, toast],
   );
 
   const selectedOption = options.find((option) => option.value === pinnedServerId) ?? null;
+  // oxlint wants the object prop memoized, not rebuilt on every render.
   const selectedDisplay = useMemo(
     () => (selectedOption ? { label: selectedOption.label } : null),
     [selectedOption],
@@ -386,7 +393,7 @@ function ProjectSettingsBody({
         snapshot={editSnapshot}
       />
 
-      <DefaultHostSection project={project} />
+      {project.hostCount > 1 ? <DefaultHostSection project={project} /> : null}
 
       {renderContent({
         readQuery,

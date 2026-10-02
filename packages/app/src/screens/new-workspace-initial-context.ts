@@ -200,7 +200,8 @@ export function resolveNewWorkspaceInitialServerId(input: NewWorkspaceInitialSer
 /**
  * The project pin and the local host outrank the remembered project, so once their settings or
  * the host registry hydrate the automatic selection migrates to them while they are reachable —
- * manual selections never reach this resolver.
+ * manual selections never reach this resolver. A pin whose host is offline does not count: the
+ * local host takes its place rather than an unreachable pin holding the selection.
  */
 function isPreferredPinOrLocalServer(
   input: NewWorkspaceInitialServerInput,
@@ -208,8 +209,11 @@ function isPreferredPinOrLocalServer(
   nextServerId: string,
   hasOnlineServer: boolean,
 ): boolean {
+  const pinnedServerId = knownServerId(serverIds, input.pinnedServerId);
+  const pinnedIsOnline =
+    pinnedServerId !== null && isOnline(input.hostConnectionStatusByServerId, pinnedServerId);
   const preferredServerId =
-    knownServerId(serverIds, input.pinnedServerId) ?? knownServerId(serverIds, input.localServerId);
+    (pinnedIsOnline ? pinnedServerId : null) ?? knownServerId(serverIds, input.localServerId);
   return (
     nextServerId === preferredServerId &&
     (isOnline(input.hostConnectionStatusByServerId, nextServerId) || !hasOnlineServer)

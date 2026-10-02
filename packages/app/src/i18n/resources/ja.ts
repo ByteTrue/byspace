@@ -1111,6 +1111,7 @@ export const ja: TranslationResources = {
         label: "新規ワークスペースのデフォルトホスト",
         automatic: "自動",
         hint: "このプロジェクトのワークスペース作成時に事前選択されるホスト",
+        saveFailed: "デフォルトホストを保存できませんでした",
       },
       actions: {
         menu: "プロジェクトアクション",

@@ -78,6 +78,17 @@ export function seedWorktreeBySpaceHome(sourceHome, targetHome) {
   console.log(`  Seed:    copied metadata from ${source}`);
 }
 
+/**
+ * Put this checkout's node_modules/.bin on PATH so npm scripts resolve the local toolchain.
+ */
+export function prependNodeModulesBin(rootDir) {
+  const binDir = join(rootDir, "node_modules/.bin");
+  if (!process.env.PATH || process.env.PATH.includes(binDir)) return;
+
+  const separator = process.platform === "win32" ? ";" : ":";
+  process.env.PATH = `${binDir}${separator}${process.env.PATH}`;
+}
+
 export function configureDevDaemonConfig(byspaceHome, listen = process.env.BYSPACE_LISTEN) {
   if (!listen) return;
 
@@ -150,22 +161,37 @@ export function configureDevCommandEnv() {
   return configureDevBySpaceHome();
 }
 
+/**
+ * Run a dev command as this wrapper's own process. The exit status is forwarded, and the signals
+ * that stop the wrapper are forwarded to the child: without them a stopped wrapper would leave
+ * Metro or the server watch running.
+ */
+export function runDevChild(command, args, options = {}) {
+  const child = spawn(command, args, { stdio: "inherit", ...options });
+  const onSigint = () => child.kill("SIGINT");
+  const onSigterm = () => child.kill("SIGTERM");
+  process.on("SIGINT", onSigint);
+  process.on("SIGTERM", onSigterm);
+
+  child.on("exit", (code, signal) => {
+    process.off("SIGINT", onSigint);
+    process.off("SIGTERM", onSigterm);
+    if (signal) {
+      process.kill(process.pid, signal);
+    } else {
+      process.exit(code ?? 0);
+    }
+  });
+
+  return child;
+}
+
 if (isMainModule(import.meta.url)) {
   const args = process.argv.slice(2);
   if (args.length > 0) {
     configureDevCommandEnv();
     const [cmd, ...cmdArgs] = args;
-    const child = spawn(cmd, cmdArgs, {
-      stdio: "inherit",
-      env: process.env,
-    });
-    child.on("exit", (code, signal) => {
-      if (signal) {
-        process.kill(process.pid, signal);
-      } else {
-        process.exit(code ?? 0);
-      }
-    });
+    runDevChild(cmd, cmdArgs, { env: process.env });
   } else {
     configureDevBySpaceHome();
   }

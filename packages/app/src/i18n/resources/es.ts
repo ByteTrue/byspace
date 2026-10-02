@@ -1133,6 +1133,7 @@ export const es: TranslationResources = {
         label: "Host predeterminado para nuevos espacios",
         automatic: "Automático",
         hint: "Preseleccionado al crear un espacio de trabajo para este proyecto",
+        saveFailed: "No se pudo guardar el host predeterminado",
       },
       actions: {
         menu: "Acciones del proyecto",

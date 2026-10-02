@@ -3,12 +3,13 @@ import { StyleSheet } from "react-native-unistyles";
 /**
  * The optical vertical offset every sidebar label shares.
  *
- * Measured against the icon's centre: with no offset a label's ink box (cap height _and_ the
- * descenders in "workspace", "History", "Schedules") centres 1px below the icon's centre, which
- * reads as the text sitting low. -1px is what the ink box needs; the extra pixel covers the fact
- * that the ascending glyphs carry more visual weight than the descenders, so the eye reads the
- * cap band as the text's middle. The cap band then sits 1px above the icon's centre and the
- * x-height band 0.5px below, straddling it.
+ * It is a `marginTop`, and a negative margin on a label inside a centred flex container moves the
+ * text by about half its value: -3 renders as roughly 1.5px of lift.
+ *
+ * That is the lift a row wants. With no offset a label's ink box (cap height _and_ the descenders
+ * in "workspace", "History", "Schedules") centres 1px below the icon's centre, and the ascending
+ * glyphs carry more visual weight than the descenders, so the eye reads the ink as sitting low.
+ * Six sidebar rows measured against their icons settled on -3 (issue 062, probe19).
  *
  * Every sidebar label layer takes the offset from here, so a new nav row cannot forget it and the
  * value moves in one place.

@@ -1089,6 +1089,7 @@ export const zhCN: TranslationResources = {
         label: "新建工作区的默认主机",
         automatic: "自动",
         hint: "为该项目创建工作区时预先选中的主机",
+        saveFailed: "无法保存默认主机",
       },
       actions: {
         menu: "Project 操作",

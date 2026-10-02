@@ -4,19 +4,16 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import spawn from "cross-spawn";
-import { configureDevBySpaceHome } from "./dev-home.mjs";
+import { configureDevBySpaceHome, prependNodeModulesBin, runDevChild } from "./dev-home.mjs";
 
 const rootDir = resolve(fileURLToPath(import.meta.url), "../..");
 
-// Prepend node_modules/.bin to PATH
-const binDir = join(rootDir, "node_modules/.bin");
-if (process.env.PATH && !process.env.PATH.includes(binDir)) {
-  process.env.PATH = `${binDir}${process.platform === "win32" ? ";" : ":"}${process.env.PATH}`;
-}
+prependNodeModulesBin(rootDir);
 
-// In a BySpace worktree service, BYSPACE_PORT is set by the service runner.
-if (process.env.BYSPACE_PORT && !process.env.BYSPACE_LISTEN) {
-  process.env.BYSPACE_LISTEN = `0.0.0.0:${process.env.BYSPACE_PORT}`;
+// In a BySpace worktree service, the runner injects BYSPACE_SERVICE_<NAME>_PORT for every peer,
+// including this daemon, so that is the port to bind.
+if (process.env.BYSPACE_SERVICE_DAEMON_PORT && !process.env.BYSPACE_LISTEN) {
+  process.env.BYSPACE_LISTEN = `0.0.0.0:${process.env.BYSPACE_SERVICE_DAEMON_PORT}`;
 } else {
   process.env.BYSPACE_LISTEN = process.env.BYSPACE_LISTEN || "127.0.0.1:6778";
 }
@@ -46,7 +43,8 @@ process.env.BYSPACE_NODE_INSPECT = process.env.BYSPACE_NODE_INSPECT || "--inspec
 // When spawned as a BySpace service, setup already built server deps.
 const skipBuild =
   process.env.BYSPACE_SKIP_DEV_SERVER_BUILD === "1" ||
-  (process.env.BYSPACE_PORT !== undefined && process.env.BYSPACE_SKIP_DEV_SERVER_BUILD !== "0");
+  (process.env.BYSPACE_SERVICE_DAEMON_PORT !== undefined &&
+    process.env.BYSPACE_SKIP_DEV_SERVER_BUILD !== "0");
 
 if (!skipBuild) {
   const build = spawn.sync("npm", ["run", "build:server-deps"], {
@@ -59,16 +57,4 @@ if (!skipBuild) {
   }
 }
 
-const child = spawn("npm", ["run", "dev:server:watch"], {
-  cwd: rootDir,
-  stdio: "inherit",
-  env: process.env,
-});
-
-child.on("exit", (code, signal) => {
-  if (signal) {
-    process.kill(process.pid, signal);
-  } else {
-    process.exit(code ?? 0);
-  }
-});
+runDevChild("npm", ["run", "dev:server:watch"], { cwd: rootDir, env: process.env });

@@ -1099,6 +1099,7 @@ export const ar: TranslationResources = {
         label: "المضيف الافتراضي لمساحات العمل الجديدة",
         automatic: "تلقائي",
         hint: "يُختار مسبقًا عند إنشاء مساحة عمل لهذا المشروع",
+        saveFailed: "تعذّر حفظ المضيف الافتراضي",
       },
       actions: {
         menu: "إجراءات المشروع",

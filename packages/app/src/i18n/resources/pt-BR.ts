@@ -1124,6 +1124,7 @@ export const ptBR: TranslationResources = {
         label: "Host padrão para novos espaços",
         automatic: "Automático",
         hint: "Pré-selecionado ao criar um espaço de trabalho para este projeto",
+        saveFailed: "Não foi possível salvar o host padrão",
       },
       actions: {
         menu: "Ações do projeto",
