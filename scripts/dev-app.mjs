@@ -58,7 +58,11 @@ const env = {
   EXPO_PUBLIC_LOCAL_DAEMON: daemonEndpoint,
 };
 
-runDevChild("npm", ["run", "start:expo", "--workspace=@bytetrue/app", "--", "--port", expoPort], {
-  cwd: rootDir,
-  env,
-});
+await runDevChild(
+  "npm",
+  ["run", "start:expo", "--workspace=@bytetrue/app", "--", "--port", expoPort],
+  {
+    cwd: rootDir,
+    env,
+  },
+);

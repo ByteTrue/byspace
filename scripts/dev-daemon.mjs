@@ -57,4 +57,4 @@ if (!skipBuild) {
   }
 }
 
-runDevChild("npm", ["run", "dev:server:watch"], { cwd: rootDir, env: process.env });
+await runDevChild("npm", ["run", "dev:server:watch"], { cwd: rootDir, env: process.env });

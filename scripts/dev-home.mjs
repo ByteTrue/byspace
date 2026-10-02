@@ -12,7 +12,6 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import spawn from "cross-spawn";
 import { isMainModule } from "./is-main-module.mjs";
 
 export function defaultDevBySpaceRoot() {
@@ -166,7 +165,10 @@ export function configureDevCommandEnv() {
  * that stop the wrapper are forwarded to the child: without them a stopped wrapper would leave
  * Metro or the server watch running.
  */
-export function runDevChild(command, args, options = {}) {
+export async function runDevChild(command, args, options = {}) {
+  // Imported here rather than at module scope: the CI contract step runs this module's test on a
+  // job with no node_modules, and cross-spawn is only needed by the paths that actually spawn.
+  const { default: spawn } = await import("cross-spawn");
   const child = spawn(command, args, { stdio: "inherit", ...options });
   const onSigint = () => child.kill("SIGINT");
   const onSigterm = () => child.kill("SIGTERM");
@@ -191,7 +193,7 @@ if (isMainModule(import.meta.url)) {
   if (args.length > 0) {
     configureDevCommandEnv();
     const [cmd, ...cmdArgs] = args;
-    runDevChild(cmd, cmdArgs, { env: process.env });
+    await runDevChild(cmd, cmdArgs, { env: process.env });
   } else {
     configureDevBySpaceHome();
   }
