@@ -34,6 +34,8 @@ import { useForgeSearchQuery } from "@/git/use-forge-search-query";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { ensureCheckoutStatus } from "@/git/checkout-status-cache";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
+import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
+import { useSettings } from "@/hooks/use-settings";
 import { resolveTerminalProfiles } from "@bytetrue/protocol/terminal-profiles";
 import type { TerminalProfile } from "@bytetrue/protocol/messages";
 import { LaunchControl } from "@/new-workspace-launch/launch-control";
@@ -1149,6 +1151,8 @@ function useNewWorkspaceHostSelector(input: {
   lastActiveProject: HostProjectListItem | null;
   hostConnectionStatusByServerId: ReadonlyMap<string, HostRuntimeConnectionStatus>;
   workspaceMultiplicityByServerId: ReadonlyMap<string, boolean>;
+  pinnedServerId: string | null;
+  localServerId: string | null;
 }) {
   const routeServerId = input.initialServerId.trim();
   const defaultServerId = useMemo(
@@ -1160,6 +1164,8 @@ function useNewWorkspaceHostSelector(input: {
         projects: input.projects,
         hostConnectionStatusByServerId: input.hostConnectionStatusByServerId,
         workspaceMultiplicityByServerId: input.workspaceMultiplicityByServerId,
+        pinnedServerId: input.pinnedServerId,
+        localServerId: input.localServerId,
       }),
     [
       input.allServerIds,
@@ -1168,6 +1174,8 @@ function useNewWorkspaceHostSelector(input: {
       input.lastActiveProject,
       input.projects,
       input.workspaceMultiplicityByServerId,
+      input.pinnedServerId,
+      input.localServerId,
     ],
   );
   const [automaticSelection, setAutomaticSelection] = useState(() => ({
@@ -1191,6 +1199,8 @@ function useNewWorkspaceHostSelector(input: {
               projects: input.projects,
               hostConnectionStatusByServerId: input.hostConnectionStatusByServerId,
               workspaceMultiplicityByServerId: input.workspaceMultiplicityByServerId,
+              pinnedServerId: input.pinnedServerId,
+              localServerId: input.localServerId,
               currentServerId: current.serverId,
               nextServerId: defaultServerId,
             })
@@ -1210,6 +1220,8 @@ function useNewWorkspaceHostSelector(input: {
     input.lastActiveProject,
     input.projects,
     input.workspaceMultiplicityByServerId,
+    input.pinnedServerId,
+    input.localServerId,
     routeServerId,
   ]);
 
@@ -1311,6 +1323,25 @@ function useNewWorkspaceInitialContext({
   );
   const hostConnectionStatusByServerId = useHostRuntimeConnectionStatuses(allServerIds);
   const workspaceMultiplicityByServerId = useHostFeatureMap(allServerIds, "workspaceMultiplicity");
+  const localServerId = useLocalDaemonServerId();
+  const defaultHostByProject = useSettings((settings) => settings.defaultHostByProject);
+  // The settings screen writes the pin under the cross-host view key from the project list. A
+  // project built from one workspace carries a placement key instead, so resolve the remembered
+  // one against that list first — its own key would never match the stored pin.
+  const lastActiveProjectKey = useMemo(() => {
+    if (!lastActiveProject || !lastWorkspaceServerId) return null;
+    return (
+      resolveHostProjectCandidate({
+        candidate: lastActiveProject,
+        projects,
+        serverId: lastWorkspaceServerId,
+      })?.viewKey ?? lastActiveProject.viewKey
+    );
+  }, [lastActiveProject, lastWorkspaceServerId, projects]);
+  // Route placement first: opening "New workspace" from a project targets that project even
+  // when the last active one differs.
+  const pinViewKey = routeProject?.viewKey ?? lastActiveProjectKey;
+  const pinnedServerId = (pinViewKey && defaultHostByProject[pinViewKey]) || null;
   const {
     selectedServerId,
     hostPickerOpen,
@@ -1324,6 +1355,8 @@ function useNewWorkspaceInitialContext({
     lastActiveProject,
     hostConnectionStatusByServerId,
     workspaceMultiplicityByServerId,
+    pinnedServerId,
+    localServerId,
   });
 
   return {

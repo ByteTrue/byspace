@@ -64,6 +64,7 @@ import { sortProjectsByRules } from "@/utils/sidebar-sort-projects";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarCalloutSlot } from "./sidebar-callout-slot";
 import { SidebarWorkspaceList } from "./sidebar-workspace-list";
+import { sidebarLabelStyles } from "@/styles/sidebar";
 import type { Theme } from "@/styles/theme";
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
@@ -363,8 +364,9 @@ function FooterAddProjectButton({
                 <Text
                   numberOfLines={1}
                   style={[
+                    sidebarLabelStyles.row,
                     styles.footerAddProjectLabel,
-                    isHovered && styles.footerAddProjectLabelHovered,
+                    isHovered && sidebarLabelStyles.rowHighlighted,
                   ]}
                 >
                   {label}
@@ -748,22 +750,12 @@ function DesktopSidebar({
               expanded={navDisclosure.expanded}
               onToggle={navDisclosure.toggle}
             />
-            {DEV_BUILD_LABEL ? (
-              <View
-                pointerEvents="none"
-                style={styles.devBuildBadge}
-                testID="dev-build-label"
-                accessibilityLabel={`Development build: ${DEV_BUILD_LABEL}`}
-              >
-                <GitBranch size={12} color={theme.colors.accentForeground} />
-                <Text numberOfLines={1} ellipsizeMode="tail" style={styles.devBuildBadgeText}>
-                  {DEV_BUILD_LABEL}
-                </Text>
-              </View>
-            ) : null}
           </View>
           {navDisclosure.expanded ? (
-            <SidebarNavRows onBeforeNavigate={navDisclosure.collapse} />
+            <SidebarNavRows
+              style={styles.expandedNavRows}
+              onBeforeNavigate={navDisclosure.collapse}
+            />
           ) : null}
         </View>
 
@@ -789,6 +781,22 @@ function DesktopSidebar({
         )}
 
         <SidebarCalloutSlot />
+
+        {DEV_BUILD_LABEL ? (
+          <View style={styles.devBuildFooterRow}>
+            <View
+              pointerEvents="none"
+              style={styles.devBuildBadge}
+              testID="dev-build-label"
+              accessibilityLabel={`Development build: ${DEV_BUILD_LABEL}`}
+            >
+              <GitBranch size={12} color={theme.colors.foregroundMuted} />
+              <Text numberOfLines={1} ellipsizeMode="tail" style={styles.devBuildBadgeText}>
+                {DEV_BUILD_LABEL}
+              </Text>
+            </View>
+          </View>
+        ) : null}
 
         <SidebarFooter
           theme={theme}
@@ -1010,9 +1018,17 @@ const styles = StyleSheet.create((theme) => ({
    * row and the revealed rows put their left edges on the same `spacing[2]` rail.
    */
   sidebarHeaderArea: {
-    paddingBottom: theme.spacing[2],
     borderBottomWidth: theme.borderWidth[1],
     borderBottomColor: theme.colors.border,
+  },
+  /**
+   * The gap between the revealed nav rows and the header area's hairline lives on the rows
+   * group, not on the header area: collapsed, the rows are absent and the hairline has to sit
+   * directly under the corner row so it lands on the same line as the content header's
+   * hairline (HEADER_INNER_HEIGHT in total, same as ScreenHeader).
+   */
+  expandedNavRows: {
+    paddingBottom: theme.spacing[2],
   },
   /**
    * The corner row: the collapse toggle and the app menu side by side.
@@ -1023,7 +1039,8 @@ const styles = StyleSheet.create((theme) => ({
    *
    * The box model also mirrors `ScreenHeader`: the row plus the header area's hairline adds up to
    * `HEADER_INNER_HEIGHT`, leaving the same 35px content box a content header centers in, so the
-   * two hairlines stay on one line whether or not the pinned sidebar is showing.
+   * two hairlines stay on one line while the app menu is collapsed. Expanded, the revealed rows
+   * push the hairline down and own the spacing above it (`expandedNavRows`).
    */
   sidebarTopRow: {
     height: HEADER_INNER_HEIGHT - theme.borderWidth[1],
@@ -1032,25 +1049,27 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     paddingHorizontal: theme.spacing[3],
   },
+  devBuildFooterRow: {
+    paddingHorizontal: theme.spacing[2],
+    paddingBottom: theme.spacing[1.5],
+    alignItems: "flex-start",
+  },
   devBuildBadge: {
-    marginLeft: "auto",
-    maxWidth: "45%",
-    flexShrink: 1,
-    minWidth: 0,
+    maxWidth: "100%",
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
+    paddingHorizontal: theme.spacing[1.5],
     paddingVertical: 2,
-    borderRadius: theme.borderRadius.base,
-    backgroundColor: theme.colors.accent,
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: theme.colors.surface2,
   },
   devBuildBadgeText: {
     minWidth: 0,
     flexShrink: 1,
-    color: theme.colors.accentForeground,
+    color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
+    fontWeight: theme.fontWeight.normal,
   },
   sidebarFooter: {
     flexDirection: "row",
@@ -1081,15 +1100,11 @@ const styles = StyleSheet.create((theme) => ({
   footerAddProjectButtonHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
+  // Size, weight, colour and the optical offset come from the shared sidebar label style, so
+  // this label cannot drift from the nav rows above it.
   footerAddProjectLabel: {
     minWidth: 0,
     flexShrink: 1,
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.normal,
-    color: theme.colors.foregroundMuted,
-  },
-  footerAddProjectLabelHovered: {
-    color: theme.colors.foreground,
   },
   footerIconButton: {
     width: 28,

@@ -1102,6 +1102,12 @@ export const ko: TranslationResources = {
       openProjectSettings: "프로젝트 설정 열기",
     },
     project: {
+      defaultHost: {
+        label: "새 작업 공간의 기본 호스트",
+        automatic: "자동",
+        hint: "이 프로젝트의 작업 공간을 만들 때 미리 선택되는 호스트",
+        saveFailed: "기본 호스트를 저장하지 못했습니다",
+      },
       actions: {
         menu: "프로젝트 작업",
         openSettings: "프로젝트 설정 열기",

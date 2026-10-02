@@ -6,6 +6,7 @@ import { HEADER_INNER_HEIGHT, HEADER_INNER_HEIGHT_MOBILE } from "@/constants/lay
 import { ICON_SIZE } from "@/styles/theme";
 import type { Theme } from "@/styles/theme";
 import { Shortcut } from "@/components/ui/shortcut";
+import { sidebarLabelStyles } from "@/styles/sidebar";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
@@ -105,7 +106,7 @@ function SidebarHeaderRowLabel({
   isHighlighted: boolean;
 }) {
   const labelStyle = useMemo(
-    () => [styles.label, isHighlighted && styles.labelHighlighted],
+    () => [sidebarLabelStyles.row, isHighlighted && sidebarLabelStyles.rowHighlighted],
     [isHighlighted],
   );
   return <Text style={labelStyle}>{label}</Text>;
@@ -162,14 +163,6 @@ const styles = StyleSheet.create((theme) => ({
     width: 3,
     borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.foreground,
-  },
-  label: {
-    fontSize: theme.fontSize.base,
-    fontWeight: theme.fontWeight.normal,
-    color: theme.colors.foregroundMuted,
-  },
-  labelHighlighted: {
-    color: theme.colors.foreground,
   },
   shortcut: {
     marginLeft: "auto",

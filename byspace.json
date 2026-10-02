@@ -5,15 +5,15 @@
   "scripts": {
     "daemon": {
       "type": "service",
-      "command": "BYSPACE_DEV_MANAGED_HOME=1 BYSPACE_DEV_ROOT=\"${BYSPACE_WORKTREE_PATH:-$PWD}\" BYSPACE_HOME=\"${BYSPACE_WORKTREE_PATH:-$PWD}/.dev/byspace-home\" BYSPACE_SKIP_DEV_SERVER_BUILD=1 BYSPACE_LISTEN=0.0.0.0:${BYSPACE_PORT:-6778} ./scripts/dev-daemon.sh"
+      "command": "node ./scripts/dev-daemon.mjs"
     },
     "app": {
       "type": "service",
-      "command": "BYSPACE_DEV_MANAGED_HOME=1 BYSPACE_DEV_ROOT=\"${BYSPACE_WORKTREE_PATH:-$PWD}\" BYSPACE_HOME=\"${BYSPACE_WORKTREE_PATH:-$PWD}/.dev/byspace-home\" BYSPACE_LISTEN=0.0.0.0:${BYSPACE_SERVICE_DAEMON_PORT:-6778} BYSPACE_DEV_DAEMON_ENDPOINT=localhost:${BYSPACE_SERVICE_DAEMON_PORT:-6778} EXPO_PORT=${BYSPACE_PORT:-} ./scripts/dev-app.sh"
+      "command": "node ./scripts/dev-app.mjs"
     },
     "ios-simulator": {
       "type": "service",
-      "command": "BYSPACE_DEV_MANAGED_HOME=1 BYSPACE_DEV_ROOT=\"$PWD\" BYSPACE_HOME=\"$PWD/.dev/byspace-home\" BYSPACE_LISTEN=0.0.0.0:${BYSPACE_SERVICE_DAEMON_PORT} BYSPACE_DEV_DAEMON_ENDPOINT=localhost:${BYSPACE_SERVICE_DAEMON_PORT} ./scripts/byspace-ios-simulator-service.sh"
+      "command": "node ./scripts/byspace-ios-simulator-service.mjs"
     },
     "typecheck": {
       "command": "npm run typecheck"

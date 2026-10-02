@@ -220,9 +220,9 @@ install.
 
 ## CLI reference
 
-Use `npm run cli` to run the in-repo CLI from source (`npx tsx packages/cli/src/index.ts`). The script wraps the CLI with `scripts/dev-home.sh`, so it automatically uses this checkout's `.dev/byspace-home` and dev daemon endpoint unless you pass an explicit override. The globally installed `byspace` binary is the published npm package, not this checkout — use `npm run cli` when you want to talk to the CLI you are editing.
+Use `npm run cli` to run the in-repo CLI from source (`npx tsx packages/cli/src/index.ts`). The script wraps the CLI with `scripts/dev-home.mjs`, so it automatically uses this checkout's `.dev/byspace-home` and dev daemon endpoint unless you pass an explicit override. The globally installed `byspace` binary is the published npm package, not this checkout — use `npm run cli` when you want to talk to the CLI you are editing.
 
-The wrapper is also a target-selection trap: `dev-home.sh` injects `BYSPACE_LISTEN=127.0.0.1:6778`, and `BYSPACE_LISTEN` outranks `BYSPACE_HOME` when the CLI picks a daemon. So `npm run cli -- ...` reaches the **dev** daemon even when the agent or workspace you are aiming at lives in the real `~/.byspace` on 6777, and the write lands on the wrong daemon as an orphan that never triggers. To target the packaged daemon, bypass the wrapper and set both explicitly:
+The wrapper is also a target-selection trap: `dev-home.mjs` injects `BYSPACE_LISTEN=127.0.0.1:6778`, and `BYSPACE_LISTEN` outranks `BYSPACE_HOME` when the CLI picks a daemon. So `npm run cli -- ...` reaches the **dev** daemon even when the agent or workspace you are aiming at lives in the real `~/.byspace` on 6777, and the write lands on the wrong daemon as an orphan that never triggers. To target the packaged daemon, bypass the wrapper and set both explicitly:
 
 ```bash
 BYSPACE_HOME="$HOME/.byspace" BYSPACE_LISTEN=127.0.0.1:6777 \

@@ -1129,6 +1129,12 @@ export const es: TranslationResources = {
       openProjectSettings: "Abrir la configuración del proyecto",
     },
     project: {
+      defaultHost: {
+        label: "Host predeterminado para nuevos espacios",
+        automatic: "Automático",
+        hint: "Preseleccionado al crear un espacio de trabajo para este proyecto",
+        saveFailed: "No se pudo guardar el host predeterminado",
+      },
       actions: {
         menu: "Acciones del proyecto",
         openSettings: "Abrir la configuración del proyecto",

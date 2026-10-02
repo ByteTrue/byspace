@@ -79,6 +79,8 @@ export interface AppSettings {
   /** Desktop-only preferences for implicit opens into the ordinary side pane. */
   openInSidePane: OpenInSidePanePreferences;
   pullRequestOpenLocation: PullRequestOpenLocation;
+  /** Project view key → server id to preselect in New workspace's host picker; "" key unused. */
+  defaultHostByProject: Record<string, string>;
 }
 
 export type AppSettingsUpdate =
@@ -130,6 +132,7 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   vimKeybindings: false,
   openInSidePane: DEFAULT_OPEN_IN_SIDE_PANE_PREFERENCES,
   pullRequestOpenLocation: "explorer",
+  defaultHostByProject: {},
 };
 
 export const DEFAULT_APP_SETTINGS: Settings = {
@@ -245,6 +248,7 @@ const StoredAppSettingsSchema = z
         legacyPullRequestsInSidePane: undefined,
       }),
     pullRequestOpenLocation: z.enum(["main", "side", "explorer"]).optional(),
+    defaultHostByProject: z.record(z.string(), z.string()).catch({}),
     // COMPAT(explorerSidebarRouting): replaced by source-specific side-pane preferences in v0.6.
     openSupportingTabsInSidePanel: z.boolean().optional().catch(undefined),
     // COMPAT(rendererRecord<string, never>): these fields used to share this renderer-owned key.

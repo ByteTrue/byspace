@@ -13,6 +13,10 @@ export interface NewWorkspaceInitialServerInput {
   projects: readonly HostProjectListItem[];
   hostConnectionStatusByServerId: ReadonlyMap<string, HostRuntimeConnectionStatus>;
   workspaceMultiplicityByServerId: ReadonlyMap<string, boolean>;
+  /** Project-pinned host from project settings (viewKey → serverId); wins when online. */
+  pinnedServerId?: string | null | undefined;
+  /** The local daemon's host, when one is connected; preferred over the remembered project. */
+  localServerId?: string | null | undefined;
 }
 
 function knownServerId(serverIds: ReadonlySet<string>, serverId: string | null | undefined) {
@@ -121,6 +125,11 @@ export function resolveNewWorkspaceInitialServerId(input: NewWorkspaceInitialSer
     return routeServerId;
   }
 
+  const pinnedServerId = knownServerId(serverIds, input.pinnedServerId);
+  if (pinnedServerId && isOnline(input.hostConnectionStatusByServerId, pinnedServerId)) {
+    return pinnedServerId;
+  }
+
   const onlineServerIds = input.allServerIds.filter((serverId) =>
     isOnline(input.hostConnectionStatusByServerId, serverId),
   );
@@ -138,6 +147,13 @@ export function resolveNewWorkspaceInitialServerId(input: NewWorkspaceInitialSer
       workspaceMultiplicityByServerId: input.workspaceMultiplicityByServerId,
     }),
   );
+
+  // The local host outranks the remembered project: a loopback daemon is this machine, so
+  // "New workspace" opens against it even when the last workspace lived on a remote host.
+  const localServerId = knownServerId(serverIds, input.localServerId);
+  if (localServerId && isOnline(input.hostConnectionStatusByServerId, localServerId)) {
+    return localServerId;
+  }
 
   const lastActiveProjectServerId = findLastActiveProjectServerId({
     serverIds,
@@ -179,6 +195,29 @@ export function resolveNewWorkspaceInitialServerId(input: NewWorkspaceInitialSer
   }
 
   return input.allServerIds[0] ?? "";
+}
+
+/**
+ * The project pin and the local host outrank the remembered project, so once their settings or
+ * the host registry hydrate the automatic selection migrates to them while they are reachable —
+ * manual selections never reach this resolver. A pin whose host is offline does not count: the
+ * local host takes its place rather than an unreachable pin holding the selection.
+ */
+function isPreferredPinOrLocalServer(
+  input: NewWorkspaceInitialServerInput,
+  serverIds: ReadonlySet<string>,
+  nextServerId: string,
+  hasOnlineServer: boolean,
+): boolean {
+  const pinnedServerId = knownServerId(serverIds, input.pinnedServerId);
+  const pinnedIsOnline =
+    pinnedServerId !== null && isOnline(input.hostConnectionStatusByServerId, pinnedServerId);
+  const preferredServerId =
+    (pinnedIsOnline ? pinnedServerId : null) ?? knownServerId(serverIds, input.localServerId);
+  return (
+    nextServerId === preferredServerId &&
+    (isOnline(input.hostConnectionStatusByServerId, nextServerId) || !hasOnlineServer)
+  );
 }
 
 export function resolveNewWorkspaceAutomaticServerId(
@@ -237,6 +276,10 @@ export function resolveNewWorkspaceAutomaticServerId(
     nextHasProject &&
     !isKnownUnreachable(input.hostConnectionStatusByServerId, nextServerId)
   ) {
+    return nextServerId;
+  }
+
+  if (isPreferredPinOrLocalServer(input, serverIds, nextServerId, hasOnlineServer)) {
     return nextServerId;
   }
   if (
