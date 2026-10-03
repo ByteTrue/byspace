@@ -2275,7 +2275,9 @@ export class PiRpcAgentSession implements AgentSession {
         const toolCall = parseToolArgs(event.toolName, event.args);
         this.activeToolCalls.set(event.toolCallId, toolCall);
         this.activeAskUserDialog = readActiveAskUserDialog(event.toolName, event.args);
-        this.emitToolCallEvent(event.toolCallId, toolCall, "running", null, null);
+        this.emitToolCallEvent(event.toolCallId, toolCall, "running", null, null, {
+          parentToolCallId: event.parentToolCallId,
+        });
         return;
       }
       case "tool_execution_update": {
@@ -2285,7 +2287,9 @@ export class PiRpcAgentSession implements AgentSession {
         }
 
         const partialResult = parseToolResult(event.partialResult);
-        this.emitToolCallEvent(event.toolCallId, toolCall, "running", partialResult, null);
+        this.emitToolCallEvent(event.toolCallId, toolCall, "running", partialResult, null, {
+          parentToolCallId: event.parentToolCallId,
+        });
         return;
       }
       case "tool_execution_end": {
@@ -2376,7 +2380,9 @@ export class PiRpcAgentSession implements AgentSession {
     const result = parseToolResult(event.result);
     const error = event.isError ? event.result : null;
     const status = event.isError ? "failed" : "completed";
-    this.emitToolCallEvent(event.toolCallId, toolCall, status, result, error);
+    this.emitToolCallEvent(event.toolCallId, toolCall, status, result, error, {
+      parentToolCallId: event.parentToolCallId,
+    });
   }
 
   private emitCompactionTimeline(input: {
@@ -2494,13 +2500,17 @@ export class PiRpcAgentSession implements AgentSession {
     status: "running" | "completed" | "failed",
     result: PiToolResult,
     error: unknown,
+    parent?: { parentToolCallId?: string },
   ): boolean {
     const turnId = this.currentTurnIdForEvent();
     const detail = this.mapToolDetail(toolCallId, toolCall, result);
     if (!detail) {
       return false;
     }
-    const metadata = buildPiNestedToolCallMetadata(toolCallId);
+    const metadata = buildPiNestedToolCallMetadata({
+      toolCallId,
+      parentToolCallId: parent?.parentToolCallId,
+    });
     const baseItem = {
       type: "tool_call" as const,
       callId: toolCallId,

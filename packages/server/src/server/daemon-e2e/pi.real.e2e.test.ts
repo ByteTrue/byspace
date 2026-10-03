@@ -616,9 +616,10 @@ test(
         if (codemodeRow?.detail.type === "unknown") {
           expect(JSON.stringify(codemodeRow.detail.output)).toContain("HELLO_PI_TEST");
         }
-        // Nested calls surface as their own shell row so the timeline shows what the script did;
-        // the metadata is what the app folds them by. History replay only has the parent because
-        // nested ids never enter the transcript — the parent row replays with a nestedSummary.
+        // Nested calls surface as their own shell row so the timeline shows what the script did,
+        // and the metadata naming the codemode row is what the app folds them by. A transcript
+        // recorded before pi reported nested calls only has the parent; that row then replays with
+        // a nestedSummary instead of children.
         const nestedRow = toolCalls.find(
           (item) =>
             item.name === "bash" &&
@@ -626,11 +627,9 @@ test(
             item.detail.command.includes("echo HELLO_PI_TEST"),
         );
         expect(nestedRow).toBeDefined();
-        if (nestedRow) {
+        if (nestedRow && codemodeRow) {
           expect(nestedRow.callId).toContain("/");
-          expect(nestedRow.metadata?.parentToolCallId).toBe(
-            nestedRow.callId.slice(0, nestedRow.callId.indexOf("/")),
-          );
+          expect(nestedRow.metadata?.parentToolCallId).toBe(codemodeRow.callId);
         }
       });
     } finally {

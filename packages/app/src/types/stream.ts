@@ -1245,7 +1245,7 @@ function appendAgentToolCall(input: AppendAgentToolCallInput): StreamItem[] {
 
   const item: ToolCallItem = {
     kind: "tool_call",
-    id: `agent_tool_${identity}`,
+    id: agentToolCallItemId({ callId: data.callId, turnId }),
     ...(timelineCursor ? { timelineCursor } : {}),
     ...(turnId ? { turnId } : {}),
     timestamp,

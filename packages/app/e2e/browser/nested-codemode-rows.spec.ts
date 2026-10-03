@@ -28,25 +28,27 @@ test("renders nested codemode rows expanded under an indented parent", async ({
     const childBadge = badges.filter({ hasText: "npx vitest run --bail=1" }).first();
     await expect(childBadge).toBeVisible({ timeout: 30_000 });
     await expect(badges.filter({ hasText: "nested-codemode.ts" }).first()).toBeVisible();
+    await expect(badges.filter({ hasText: "*.test.ts" }).first()).toBeVisible();
 
     const parentBox = await parentBadge.boundingBox();
     const childBox = await childBadge.boundingBox();
-    expect(parentBox).not.toBeNull();
-    expect(childBox).not.toBeNull();
-    expect((childBox?.x ?? 0) - (parentBox?.x ?? 0)).toBeGreaterThanOrEqual(16);
+    if (!parentBox || !childBox) {
+      throw new Error("Nested codemode rows did not render with a measurable box");
+    }
+    // Indented to the right of the parent, and below it: the children read as the script's calls,
+    // not as calls the agent made on its own.
+    expect(childBox.x - parentBox.x).toBeGreaterThanOrEqual(16);
+    expect(childBox.y).toBeGreaterThanOrEqual(parentBox.y + parentBox.height);
 
-    const zoomBox = await badges.filter({ hasText: "Codemode" }).first().boundingBox();
     await testInfo.attach("nested-codemode-rows", {
       body: await page.screenshot({
         path: testInfo.outputPath("nested-codemode-rows.png"),
-        clip: zoomBox
-          ? {
-              x: zoomBox.x - 24,
-              y: zoomBox.y - 12,
-              width: 460,
-              height: (childBox?.y ?? zoomBox.y) - zoomBox.y + (childBox?.height ?? 0) + 24,
-            }
-          : undefined,
+        clip: {
+          x: parentBox.x - 24,
+          y: parentBox.y - 12,
+          width: 460,
+          height: childBox.y + childBox.height - parentBox.y + 24,
+        },
       }),
       contentType: "image/png",
     });

@@ -64,8 +64,8 @@ export type PiAgentMessage =
       content: unknown;
       isError?: boolean;
       details?: unknown;
-      // COMPAT(piNestedToolCalls): pi >=0.99 attaches a { calls, complete } snapshot of codemode
-      // nested tool calls to the persisted tool result message; older pi omits it.
+      // pi >=0.99 attaches a { calls, complete } snapshot of codemode nested tool calls to the
+      // persisted tool result message; older pi omits it.
       nestedCalls?: unknown;
     }
   | {
@@ -181,8 +181,9 @@ export type PiAgentSessionEvent =
       toolCallId: string;
       toolName: string;
       args: unknown;
-      // COMPAT(piNestedToolCalls): pi >=0.99 sets this on calls nested inside a codemode run;
-      // older pi omits it. Optional keeps both wire shapes parseable.
+      // pi >=0.99 sets this on calls nested inside a codemode run; older pi omits it. Optional
+      // keeps both wire shapes parseable. It names the caller one level up, which for deeper runs
+      // is another nested call rather than the codemode row itself.
       parentToolCallId?: string;
     }
   | {

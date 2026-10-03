@@ -557,10 +557,23 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         }),
       [effectiveStreamItems, effectiveStreamHead],
     );
-    // Keep retained history outside the 48ms live-head flush path.
+    // Nested parents whose group is still running have to revise their history row on every
+    // flush: the children fold into that row, and the row's own item identity never changes while
+    // the script runs.
+    const nestedLiveParentItemIds = useMemo(() => {
+      const ids = new Set<string>();
+      for (const [parentItemId, group] of nestedCodemodeProjection.groupsByParentItemId) {
+        if (group.isLoading) {
+          ids.add(parentItemId);
+        }
+      }
+      return ids;
+    }, [nestedCodemodeProjection]);
+    // Keep retained history outside the 48ms live-head flush path: depend on the projected tail
+    // array, not on the projection object, which a head-only flush replaces every time.
     const preparedToolCallHistory = useMemo(
       () => prepareToolCallHistory(toolCallDetailLevel, nestedCodemodeProjection.tail),
-      [nestedCodemodeProjection, toolCallDetailLevel],
+      [nestedCodemodeProjection.tail, toolCallDetailLevel],
     );
     const projectedToolCalls = useMemo(
       () =>
@@ -878,9 +891,12 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           <React.Fragment>
             {parentRow}
             <View style={stylesheet.nestedCodemodeChildren}>
-              {childCalls.map((call) => (
+              {childCalls.map((call, index) => (
                 <React.Fragment key={call.id}>
-                  {renderSingleToolCallRow(call, false)}
+                  {renderSingleToolCallRow(
+                    call,
+                    index === childCalls.length - 1 && isLastInSequence,
+                  )}
                 </React.Fragment>
               ))}
             </View>
@@ -1158,9 +1174,11 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const historyContentRevisionIds = useMemo(
       () => ({
         has: (id: string) =>
-          collapseRevision > 0 || projectedToolCalls.historyGroupUpdatesByHostId.has(id),
+          collapseRevision > 0 ||
+          projectedToolCalls.historyGroupUpdatesByHostId.has(id) ||
+          nestedLiveParentItemIds.has(id),
       }),
-      [collapseRevision, projectedToolCalls.historyGroupUpdatesByHostId],
+      [collapseRevision, nestedLiveParentItemIds, projectedToolCalls.historyGroupUpdatesByHostId],
     );
     const historyRowRevision = useMemo(
       () => ({
@@ -1727,6 +1745,8 @@ const stylesheet = StyleSheet.create((theme) => ({
   // Nested codemode rows: the rail hangs off the parent badge glyph column, and the child
   // rows indent one step past it.
   nestedCodemodeChildren: {
+    // The rail drops from the centre of the parent's glyph: the badge box pulls out by 13 and pads
+    // by 8, so the parent glyph occupies x = -5..17 in this coordinate space and its centre is 6.
     marginLeft: theme.spacing[1.5],
     paddingLeft: theme.spacing[3],
     borderLeftWidth: theme.borderWidth[1],

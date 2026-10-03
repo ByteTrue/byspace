@@ -147,10 +147,12 @@ describe("nested codemode projection", () => {
         },
       },
     );
+    // pi names the immediate caller, not the root, so this id points at the nested codemode row
+    // that is itself folded away.
     const grandchild = toolCall(
       "call-1/0/2",
       { type: "shell", command: "inner" },
-      { name: "bash", turnId: "turn-1", metadata: { parentToolCallId: "call-1" } },
+      { name: "bash", turnId: "turn-1", metadata: { parentToolCallId: "call-1/0" } },
     );
     const tail = [parent, nestedCodemode, grandchild];
 
@@ -164,6 +166,35 @@ describe("nested codemode projection", () => {
       nestedCodemode.id,
       grandchild.id,
     ]);
+  });
+
+  it("matches the parent on the call id when the two rows disagree about the turn", () => {
+    const parent = toolCall(
+      "call-1",
+      { type: "unknown", input: { code: "..." }, output: null },
+      { name: "codemode", status: "completed" },
+    );
+    const child = nestedChild("0");
+    const tail = [parent, child];
+
+    const projection = projectNestedCodemodeCalls({ tail });
+
+    expect(projection.tail).toEqual([parent]);
+    const group = projection.groupsByParentItemId.get(parent.id);
+    expect(group?.run.calls.map((call) => call.id)).toEqual([parent.id, child.id]);
+  });
+
+  it("keeps a nested row in place when its caller never reached the stream", () => {
+    const grandchild = toolCall(
+      "call-1/0/2",
+      { type: "shell", command: "inner" },
+      { name: "bash", turnId: "turn-1", metadata: { parentToolCallId: "call-1/0" } },
+    );
+
+    const projection = projectNestedCodemodeCalls({ tail: [grandchild] });
+
+    expect(projection.tail).toEqual([grandchild]);
+    expect(projection.groupsByParentItemId.size).toBe(0);
   });
 
   it("returns the same stream references when nothing is nested", () => {

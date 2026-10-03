@@ -2979,7 +2979,7 @@ export const ToolCall = memo(function ToolCall({
       openToolCall({
         toolName,
         displayName: presentation.displayName,
-        summary: summaryOverride ?? presentation.summary,
+        summary: presentation.summary,
         detail: effectiveDetail,
         errorText: presentation.errorText,
         icon: presentation.icon,
@@ -2992,7 +2992,6 @@ export const ToolCall = memo(function ToolCall({
     shouldRenderInline,
     openToolCall,
     toolName,
-    summaryOverride,
     presentation.displayName,
     presentation.summary,
     presentation.errorText,

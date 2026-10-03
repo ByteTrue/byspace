@@ -672,83 +672,72 @@ function buildCycleQueue(turnId: string, cycle: number): CycleEvent[] {
     detail: codemodeDetail,
   });
 
-  const nestedFindId = `${codemodeId}/0`;
-  const nestedFindDetail: ToolCallDetail = {
-    type: "search",
-    query: "*.test.ts",
-    toolName: "glob",
-  };
-  queue.push({
-    kind: "tool_running",
-    callId: nestedFindId,
-    name: "find",
-    detail: nestedFindDetail,
-    metadata: { parentToolCallId: codemodeId },
-  });
-  queue.push({
-    kind: "tool_completed",
-    callId: nestedFindId,
-    name: "find",
-    detail: {
-      ...nestedFindDetail,
-      filePaths: [
-        "packages/app/src/agent-stream/view.test.tsx",
-        "packages/app/src/tool-calls/detail-level/nested-codemode.test.ts",
-      ],
-      numFiles: 2,
+  const nestedCalls: Array<{
+    suffix: string;
+    name: string;
+    detail: ToolCallDetail;
+    completedDetail: ToolCallDetail;
+  }> = [
+    {
+      suffix: "0",
+      name: "find",
+      detail: { type: "search", query: "*.test.ts", toolName: "glob" },
+      completedDetail: {
+        type: "search",
+        query: "*.test.ts",
+        toolName: "glob",
+        filePaths: [
+          "packages/app/src/agent-stream/view.test.tsx",
+          "packages/app/src/tool-calls/detail-level/nested-codemode.test.ts",
+        ],
+        numFiles: 2,
+      },
     },
-    metadata: { parentToolCallId: codemodeId },
-  });
-
-  const nestedReadId = `${codemodeId}/1`;
-  const nestedReadDetail: ToolCallDetail = {
-    type: "read",
-    filePath: "packages/app/src/tool-calls/detail-level/nested-codemode.ts",
-  };
-  queue.push({
-    kind: "tool_running",
-    callId: nestedReadId,
-    name: "read",
-    detail: nestedReadDetail,
-    metadata: { parentToolCallId: codemodeId },
-  });
-  queue.push({
-    kind: "tool_completed",
-    callId: nestedReadId,
-    name: "read",
-    detail: {
-      ...nestedReadDetail,
-      content:
-        "export interface NestedCodemodeProjection {\n  tail: StreamItem[];\n  head: StreamItem[] | null;\n  groupsByParentItemId: Map<string, OverviewToolCallGroup>;\n}",
+    {
+      suffix: "1",
+      name: "read",
+      detail: {
+        type: "read",
+        filePath: "packages/app/src/tool-calls/detail-level/nested-codemode.ts",
+      },
+      completedDetail: {
+        type: "read",
+        filePath: "packages/app/src/tool-calls/detail-level/nested-codemode.ts",
+        content:
+          "export interface NestedCodemodeProjection {\n  tail: StreamItem[];\n  head: StreamItem[] | null;\n  groupsByParentItemId: Map<string, OverviewToolCallGroup>;\n}",
+      },
     },
-    metadata: { parentToolCallId: codemodeId },
-  });
-
-  const nestedBashId = `${codemodeId}/2`;
-  const nestedBashDetail: ToolCallDetail = {
-    type: "shell",
-    command: "npx vitest run --bail=1",
-    cwd: "/tmp/byspace-mock-load",
-  };
-  queue.push({
-    kind: "tool_running",
-    callId: nestedBashId,
-    name: "bash",
-    detail: nestedBashDetail,
-    metadata: { parentToolCallId: codemodeId },
-  });
-  queue.push({
-    kind: "tool_completed",
-    callId: nestedBashId,
-    name: "bash",
-    detail: {
-      ...nestedBashDetail,
-      output: "✓ 2 tests passed (450ms)\n",
-      exitCode: 0,
+    {
+      suffix: "2",
+      name: "bash",
+      detail: { type: "shell", command: "npx vitest run --bail=1", cwd: "/tmp/byspace-mock-load" },
+      completedDetail: {
+        type: "shell",
+        command: "npx vitest run --bail=1",
+        cwd: "/tmp/byspace-mock-load",
+        output: "✓ 2 tests passed (450ms)\n",
+        exitCode: 0,
+      },
     },
-    metadata: { parentToolCallId: codemodeId },
-  });
-
+  ];
+  for (const nested of nestedCalls) {
+    const metadata = { parentToolCallId: codemodeId };
+    const callId = `${codemodeId}/${nested.suffix}`;
+    queue.push({
+      kind: "tool_running",
+      callId,
+      name: nested.name,
+      detail: nested.detail,
+      metadata,
+    });
+    queue.push({
+      kind: "tool_completed",
+      callId,
+      name: nested.name,
+      detail: nested.completedDetail,
+      metadata,
+    });
+  }
   queue.push({
     kind: "tool_completed",
     callId: codemodeId,

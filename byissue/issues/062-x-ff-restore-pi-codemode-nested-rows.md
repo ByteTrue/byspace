@@ -19,7 +19,7 @@ closed: 2026-10-01
 - 改动：`packages/server/src/server/agent/providers/pi/rpc-types.ts` — 三个 `tool_execution_*` 变体删除 `parentToolCallId?: string`（无消费方，回到 061 之前的类型形状）。
 - 改动：`packages/server/src/server/agent/providers/pi/agent.test.ts` — 「ignores nested tool calls」翻转为「streams nested tool calls that codemode scripts run as their own rows」，钉住恢复后的行为，防止未来再被无感收敛掉。
 - 改动：`packages/server/src/server/daemon-e2e/pi.real.e2e.test.ts` — codemode-only 用例改断言嵌套 bash 行出现（含 `echo HELLO_PI_TEST` 的 shell 行），名称改为 streams nested tool calls as their own rows。061 加的 `writePiSettings`/`PI_DIRECT_TOOLS` 设置钉扎全部保留，与本次行为无关。
-- 保留的已知差异：嵌套 id 不进 transcript，重载回放只显示父行——实时流与回放不一致是有意的取舍（可读性 > 一致性）。
+- 当时以为的差异：嵌套 id 不进 pi transcript，重载回放只显示父行。这条后来被证伪——BySpace 自己把嵌套行记进 durable timeline，重启后按父行归档照常渲染；`nestedSummary` 只是「行到了但子行没到」时的兜底。
 - 验证：`npm run typecheck` 过；4 个改动文件 `npm run lint` 0 警告；`npx vitest run packages/server/src/server/agent/providers/pi/agent.test.ts --bail=1` 97 例全绿；真实 e2e（`PI_REAL_TEST_MODEL=bytetrueapi/deepseek-flash`，本地 23000 代理，pi 0.99.2）单跑 codemode-only 用例通过——canonical timeline 再次出现嵌套 shell 行。
 - byissue：`byissue/spec/agent-conversation.md` 嵌套调用契约改回独立行显示并注明实时/回放差异；061 追加回退指针；证据列表加本文链接。
 
@@ -30,7 +30,7 @@ closed: 2026-10-01
 **打标（daemon，协议零改动——timeline payload 的 `metadata` 已是开放 record）**
 
 - `rpc-types.ts`：`tool_execution_*` 三变体加 `parentToolCallId?: string`，`PiAgentMessage` toolResult 分支加 `nestedCalls?: unknown`（均 COMPAT(piNestedToolCalls)：pi ≥0.99 才带，可选键向后兼容）。
-- `tool-call-mapper.ts`：`buildPiNestedToolCallMetadata(toolCallId, nestedCalls?)`——id 含 `/` 则 `parentToolCallId` 取根祖先（`slice(0, indexOf("/"))`，孙调用直接归到顶层调用）；`nestedCalls.calls` 非空则算 `nestedSummary`（edited/command/read/search/other/byspace 计数，与 overview 摘要同口径）。
+- `tool-call-mapper.ts`：`buildPiNestedToolCallMetadata(...)` 写 `parentToolCallId`；`nestedCalls.calls` 非空则算 `nestedSummary`（edited/command/read/search/other/byspace 计数）。初版只从 id 切片取根祖先，且分类逻辑在服务端另写一份（见「追加：审查修正」）。
 - `agent.ts` `emitToolCallEvent`：实时行接 metadata（实时时 result 还没有 nestedCalls，只有 parentToolCallId）。
 - `history-mapper.ts`：回放父行从 tool result 顶层 `nestedCalls`（pi 把嵌套列表记在 toolResult message 上，且晚于 `tool_execution_end`——实时父行拿不到，只有回放有）算 `nestedSummary` 写进 metadata。踩坑：nestedCalls 不能塞进 `parseToolResult`，passthrough 会把它整个保留进 `detail.output`。
 
@@ -54,3 +54,19 @@ closed: 2026-10-01
 **验证（本版）**：`npm run typecheck` 六包全过；全量 `npm run lint` 3383 文件 0 警告、`npm run format:check` 过；`summary.test.ts` 4 例 + `nested-codemode.test.ts` 6 例全绿；新增 e2e `packages/app/e2e/browser/nested-codemode-rows.spec.ts` 通过——父行徽标带「ran 1 command」，glob/read/bash 三行子行无需点击即可见，子行 x 比父行缩进 ≥16px，并截图留证。
 
 **验证（折叠版）**：typecheck、lint（3360 文件 0 警告）、format 过；`agent.test.ts` 97 绿（断言子行带 `parentToolCallId`）、`history-mapper.test.ts` 6 绿（新增 nestedCalls→nestedSummary 回放用例）、`nested-codemode.test.ts` 6 绿（新建，折叠/孤儿/归根/回放兜底）；真实 e2e（`PI_REAL_TEST_MODEL=bytetrueapi/deepseek-flash`）codemode 用例断言嵌套行 `metadata.parentToolCallId` 出现在 canonical timeline，通过（首跑 fail 是 finally 清理临时目录 rmSync EPERM 的 Windows 句柄抖动，重跑绿）。
+
+## 追加：审查修正
+
+两轮子代理审查（正确性 + 过度工程）提出的问题，逐条修完：
+
+- **分类只有一处实现**：新建 `packages/protocol/src/tool-call-category.ts` 的 `categorizeToolCall({ name, detail })`，App 的 `buildOverviewGroup` 与服务端的 `summarizeNestedToolCalls` 都改走它。此前服务端按 pi 原始工具名分类、App 按 `ToolCallDetail.type` 分类，同一个嵌套 `ls` 直播算 search、回放掉进 other，徽标漂移；现在服务端先把嵌套调用经 `parseToolArgs` + `mapToolDetail` 映射成 detail 再分类。
+- **`parentToolCallId` 用事件上的权威字段**：pi 在 `tool_execution_*` 上给的是直接调用者（逐层套娃时是另一个嵌套行），服务端现在原样透传，不再用 `indexOf("/")` 切片假装归根；App 侧 `resolveAncestorItemId` 沿父链上溯到流里留存的那一行。history 路径没有事件字段，仍回退 id 切片。
+- **投影的三种漏算**：父子 turnId 不一致时按 callId 兜底匹配（`resolveParentItemId`）；子行的父行自身也被吸收时上溯到未被吸收的祖先，不再把行吸出流后不渲染；扫描结果按数组身份缓存（`scanCache`），直播 flush 不再重扫整条 retained tail。
+- **父 history 行不再冻结**：`view.tsx` 收集正在运行的嵌套父行 id（`nestedLiveParentItemIds`）并入 `historyContentRevisionIds`，脚本跑动期间父行及其子行按 flush 修订；此前 detailed 模式下父行身份不变，三个子行要等父行 `tool_execution_end` 才一次性出现。
+- **渲染细节**：末位子行吃到 `isLastInSequence`；compact 下点徽标打开的 tool-call sheet 头不再被嵌套摘要替换（`summaryOverride` 只服务徽标副标签）；竖轨的注释改成真实几何（父徽标容器外拉 13、内边距 8，父图标列在 x = -5..17，竖轨落在中线上）。
+- **`COMPAT(piNestedToolCalls)` 标签删掉**：这几处是 provider 的 TS 类型、不是 wire shim，留着会被 `rg "COMPAT\("` 当成待清理的兼容层。
+- **测试**：`tool-call-category.test.ts` 6 例；`tool-call-mapper.test.ts` 新增 5 例钉住嵌套 metadata（权威 caller 优先、回退切片、`ls` 算 search、edit/write 按路径去重、无可计数项→null）；`nested-codemode.test.ts` 扩到 8 例（补 turnId 不一致、调用者不在流里）；`pi.real.e2e.test.ts` 的断言改为「子行的 `parentToolCallId` 等于 codemode 行的 callId」，不再重述 id 切片实现；`nested-codemode-rows.spec.ts` 补上「子行整体在父行下方」（`childBox.y >= parentBox.y + parentBox.height`）与三行子行都可见，截图裁剪也不再复用父徽标那个元素。
+- **导出面收窄**：`PiNestedToolCallSummary` 只在本文件当返回类型用，去掉 `export`。
+- **未改**（评估后判定不值得动）：`summarizeNestedToolCalls` 忽略 `call.status`——live 口径也不看状态，两边一致才算得上口径统一；`estimateStreamItemHeight` 把嵌套组估成 40px，靠 `measureElement` 自纠；深度 >1 在渲染上压平是产品语义。
+
+CI：`gh pr checks 15` 只有 `server-tests (windows-latest)` 红，失败点 `packages/server/src/server/workspace-git-service.observation.test.ts:895` 在 main 上同样红（gh run 37022109223），属既有 Windows flake，与本次改动无关。

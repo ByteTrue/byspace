@@ -216,7 +216,10 @@ export class PiHistoryMapper {
         isError: Boolean(message.isError),
         detail,
         errorText: extractTextFromToolResult(result) ?? "Tool call failed",
-        metadata: buildPiNestedToolCallMetadata(callId, message.nestedCalls),
+        metadata: buildPiNestedToolCallMetadata({
+          toolCallId: callId,
+          nestedCalls: message.nestedCalls,
+        }),
       }),
     };
   }
