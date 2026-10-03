@@ -1,8 +1,5 @@
-import { isBySpaceToolName } from "@bytetrue/protocol/tool-name-normalization";
+import { categorizeToolCall } from "@bytetrue/protocol/tool-call-category";
 import { describeToolCall, type ToolCallRun } from "../grouping";
-
-const DIRECT_BYSPACE_TOOL_PREFIX = "byspace_";
-const DIRECT_SEARCH_TOOL_SUFFIX_PATTERN = /(?:^|[_.:/])(?:web_search|llm_context)$/;
 
 export interface OverviewSummary {
   editedFileCount: number;
@@ -20,14 +17,11 @@ export interface OverviewToolCallGroup {
   isLoading: boolean;
 }
 
-function isBySpaceCall(name: string, normalizedName: string): boolean {
-  return isBySpaceToolName(name) || normalizedName.startsWith(DIRECT_BYSPACE_TOOL_PREFIX);
-}
-
-function isSearchCall(name: string): boolean {
-  return DIRECT_SEARCH_TOOL_SUFFIX_PATTERN.test(name);
-}
-
+/**
+ * Counts a run of tool calls for its badge. Categories come from the protocol so the daemon
+ * summarizes nested codemode calls through the same rules and a replayed badge cannot drift
+ * from the rows it stands for.
+ */
 export function buildOverviewGroup(run: ToolCallRun): OverviewToolCallGroup {
   const editedFiles = new Set<string>();
   const readFiles = new Set<string>();
@@ -39,18 +33,18 @@ export function buildOverviewGroup(run: ToolCallRun): OverviewToolCallGroup {
 
   for (const call of run.calls) {
     const descriptor = describeToolCall(call);
-    const normalizedName = descriptor.name.trim().toLowerCase();
     isLoading ||= descriptor.status === "running" || descriptor.status === "executing";
-    if (isBySpaceCall(descriptor.name, normalizedName)) {
-      byspaceCallCount += 1;
-    } else if (descriptor.detail.type === "edit" || descriptor.detail.type === "write") {
-      editedFiles.add(descriptor.detail.filePath);
-    } else if (descriptor.detail.type === "shell") {
+    const match = categorizeToolCall({ name: descriptor.name, detail: descriptor.detail });
+    if (match.category === "edited") {
+      editedFiles.add(match.filePath);
+    } else if (match.category === "read") {
+      readFiles.add(match.filePath);
+    } else if (match.category === "command") {
       commandCount += 1;
-    } else if (descriptor.detail.type === "read") {
-      readFiles.add(descriptor.detail.filePath);
-    } else if (descriptor.detail.type === "search" || isSearchCall(normalizedName)) {
+    } else if (match.category === "search") {
       searchCount += 1;
+    } else if (match.category === "byspace") {
+      byspaceCallCount += 1;
     } else {
       otherToolCount += 1;
     }

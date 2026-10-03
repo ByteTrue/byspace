@@ -573,16 +573,16 @@ test(
 );
 
 test(
-  "codemode-only project keeps nested tool calls out of the timeline",
+  "codemode-only project streams nested tool calls as rows tagged with the parent codemode call",
   async () => {
     const cwd = tmpCwd();
 
     try {
       // `mode: "only"` hides the direct tools from the model, so bash is reachable only through a
-      // codemode script and every nested call arrives with a parentToolCallId. The tool list is
-      // plain rather than `["+codemode"]`: a list of modifiers is appended to the host's global
-      // `defaultTools` instead of replacing it, which would leave bash inactive — and therefore
-      // unreachable from the script — on a host whose global selection omits it.
+      // codemode script. The tool list is plain rather than `["+codemode"]`: a list of modifiers
+      // is appended to the host's global `defaultTools` instead of replacing it, which would
+      // leave bash inactive — and therefore unreachable from the script — on a host whose global
+      // selection omits it.
       writePiSettings(cwd, {
         defaultTools: [...PI_DIRECT_TOOLS, "codemode"],
         codemode: { mode: "only" },
@@ -616,8 +616,21 @@ test(
         if (codemodeRow?.detail.type === "unknown") {
           expect(JSON.stringify(codemodeRow.detail.output)).toContain("HELLO_PI_TEST");
         }
-        // The nested bash call belongs to the codemode row, exactly as the pi TUI renders it.
-        expect(toolCalls.filter((item) => item.name !== "codemode")).toEqual([]);
+        // Nested calls surface as their own shell row so the timeline shows what the script did,
+        // and the metadata naming the codemode row is what the app folds them by. A transcript
+        // recorded before pi reported nested calls only has the parent; that row then replays with
+        // a nestedSummary instead of children.
+        const nestedRow = toolCalls.find(
+          (item) =>
+            item.name === "bash" &&
+            item.detail.type === "shell" &&
+            item.detail.command.includes("echo HELLO_PI_TEST"),
+        );
+        expect(nestedRow).toBeDefined();
+        if (nestedRow && codemodeRow) {
+          expect(nestedRow.callId).toContain("/");
+          expect(nestedRow.metadata?.parentToolCallId).toBe(codemodeRow.callId);
+        }
       });
     } finally {
       rmSync(cwd, { recursive: true, force: true });

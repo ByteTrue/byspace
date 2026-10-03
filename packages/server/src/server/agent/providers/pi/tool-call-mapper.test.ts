@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  buildPiNestedToolCallMetadata,
   mapToolDetail,
   parseToolArgs,
   parseToolResult,
@@ -191,5 +192,88 @@ describe("Pi tool call mapper", () => {
     });
 
     expect(resolveToolCallName(toolCall, result)).toBe("byspace.list_models");
+  });
+
+  describe("nested codemode metadata", () => {
+    function nestedCalls(calls: Array<{ name: string; arguments?: unknown }>): unknown {
+      return {
+        complete: true,
+        calls: calls.map((call, index) => ({
+          id: `call-1/${index}`,
+          status: "ok",
+          ...call,
+        })),
+      };
+    }
+
+    test("keeps the caller the event names, including one nested level up", () => {
+      expect(
+        buildPiNestedToolCallMetadata({ toolCallId: "call-1/0", parentToolCallId: "call-1" }),
+      ).toEqual({ parentToolCallId: "call-1" });
+      expect(
+        buildPiNestedToolCallMetadata({ toolCallId: "call-1/0/2", parentToolCallId: "call-1/0" }),
+      ).toEqual({ parentToolCallId: "call-1/0" });
+    });
+
+    test("falls back to the id segment when the event carries no caller", () => {
+      expect(buildPiNestedToolCallMetadata({ toolCallId: "call-1/0" })).toEqual({
+        parentToolCallId: "call-1",
+      });
+      expect(buildPiNestedToolCallMetadata({ toolCallId: "call-1" })).toBeNull();
+    });
+
+    test("summarizes nested calls with the same categories the live rows use", () => {
+      const metadata = buildPiNestedToolCallMetadata({
+        toolCallId: "call-1",
+        nestedCalls: nestedCalls([
+          { name: "ls", arguments: { path: "src" } },
+          { name: "bash", arguments: { command: "wc -l *.md" } },
+          { name: "read", arguments: { path: "note.txt" } },
+          { name: "web_search", arguments: { query: "pi" } },
+          { name: "mystery" },
+        ]),
+      });
+
+      expect(metadata?.nestedSummary).toEqual({
+        editedFileCount: 0,
+        commandCount: 1,
+        readFileCount: 1,
+        searchCount: 2,
+        otherToolCount: 1,
+        byspaceCallCount: 0,
+      });
+    });
+
+    test("counts edited files once per path and recognizes byspace calls", () => {
+      const metadata = buildPiNestedToolCallMetadata({
+        toolCallId: "call-1",
+        nestedCalls: nestedCalls([
+          { name: "edit", arguments: { path: "a.ts", edits: [] } },
+          { name: "write", arguments: { path: "a.ts", content: "x" } },
+          { name: "byspace_agent_list", arguments: {} },
+        ]),
+      });
+
+      expect(metadata?.nestedSummary).toEqual({
+        editedFileCount: 1,
+        commandCount: 0,
+        readFileCount: 0,
+        searchCount: 0,
+        otherToolCount: 0,
+        byspaceCallCount: 1,
+      });
+    });
+
+    test("omits the summary when nothing countable is nested", () => {
+      expect(
+        buildPiNestedToolCallMetadata({
+          toolCallId: "call-1",
+          nestedCalls: { complete: true, calls: [{ id: "call-1/0", status: "ok" }] },
+        }),
+      ).toBeNull();
+      expect(
+        buildPiNestedToolCallMetadata({ toolCallId: "call-1", nestedCalls: { calls: [] } }),
+      ).toBeNull();
+    });
   });
 });

@@ -36,7 +36,7 @@ Desktop、split pane 和 compact 布局都保持这一垂直关系。左侧状�
 - 会话 turn 运行/思考指示器（`SyncedLoader`）承载关键的运行时存活反馈，不因操作系统的 `prefers-reduced-motion` 策略而冻结在初始静止帧，确保用户能明确感知 Agent 处于活跃执行状态而非崩溃死锁。
 - Pi Provider 的 Turn 边界结算按**发起方**区分。客户端发起的 turn 在 `agent_end` 即时触发 `turn_completed` 并转入 `idle`，不等扩展层异步后处理（Watchdog、LSP、自动压缩）延迟发射的 `agent_settled`，保证模型输出完毕瞬间输入框与操作按钮即刻解锁；随后到来的 `agent_settled` 幂等忽略。
 - 三种情况仍等待 `agent_settled`，因为它们的后续工作属于同一个 turn：Pi 标记将要重试或本次运行正在从重试中恢复；有 stop 在途，由取消决定结果；运行是自主的、没有客户端发起的 turn，扩展可能继续它。自主轮次是上游 v0.8.0 引入的能力。
-- Pi 工具通过 `ctx.executeTool()` 跑出的嵌套调用（codemode 脚本里的 `tools.bash(...)` 等）不单独成为时间线条目，只显示父工具行。判定依据是事件上的 `parentToolCallId`；这些 id 不进 transcript，因此历史回放天然只有父行。父行不展开嵌套调用列表——上游把它记在 tool result 的 `nestedCalls` 上，此仓库尚未读取。
+- Pi 工具通过 `ctx.executeTool()` 跑出的嵌套调用（codemode 脚本里的 `tools.bash(...)` 等）作为独立时间线行流出，行上带 `metadata.parentToolCallId`——pi 在事件上给的是**直接调用者**，逐层套娃时它不是顶层行，由 App 沿父链走到流里留存的那个祖先。App 呈现层把它们摘出、按父行分桶，渲染为父行 + 缩进竖轨下的子行，默认可见。整屏 codemode 与看不出包含关系都不接受：061 的纯 daemon 过滤和 062 初版的折叠徽标都因此被推翻。父行徽标带着子调用摘要作副标签（首字母小写），摘要的归类只有一处实现：`packages/protocol/src/tool-call-category.ts` 的 `categorizeToolCall`，直播行与回放徽标都走它，否则同一段脚本两处口径会漂。BySpace 的 durable timeline 自己会记下这些嵌套行，重载后照常按父行归档；`metadata.nestedSummary` 是**没有子行可归**（pi 还没上报嵌套调用时录下的 transcript、或走 provider hydration/导入）时的兜底，父行从 tool result 顶层的 `nestedCalls` 列表算出它。
 
 ## 时间线恢复与同步
 
@@ -60,7 +60,8 @@ Desktop、split pane 和 compact 布局都保持这一垂直关系。左侧状�
 - [Pi 启动注入项目信任并完善斜杠补全加载态](../issues/004-x-pi-project-skills-and-autocomplete-loading.md)
 - [修复 Windows 下思考加载图标定格与终端 OSC 8 链接打开无反应](../issues/008-x-ff-synced-loader-and-terminal-osc8-links.md)
 - [修复 Pi Agent 回复结束后客户端依然保持运行中状态的边界结算缺陷](../issues/009-x-ff-pi-turn-boundary-immediate-completion.md)
-- [pi codemode 的嵌套工具调用不再重复显示成独立工具行](../issues/061-x-ff-pi-codemode-nested-tool-call-dedup.md)
+- [pi codemode 的嵌套工具调用不再重复显示成独立工具行](../issues/061-x-ff-pi-codemode-nested-tool-call-dedup.md)（其实时过滤已回退，见下条）
+- [回退 061 的 pi codemode 嵌套调用过滤，恢复独立工具行显示](../issues/062-x-ff-restore-pi-codemode-nested-rows.md)
 - [扩展 custom message 全链路透传为 custom_message timeline 项](../issues/024-x-ff-custom-message-timeline-items.md)
 - [大图片消息超 Relay 帧上限：发送前压缩与分块上传兑底](../issues/057-x-image-message-relay-frame-limit.md)
 - [Epic 002 交付记录](../epics/002-x-retained-capabilities-delivery/spec.md)

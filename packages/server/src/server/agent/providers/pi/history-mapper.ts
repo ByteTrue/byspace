@@ -2,6 +2,7 @@ import type { AgentStreamEvent, AgentTimelineItem, ToolCallDetail } from "../../
 import { limitTimelineDetails } from "../../agent-timeline-content.js";
 import type { PiAgentMessage, PiImageContent, PiTextContent } from "./rpc-types.js";
 import {
+  buildPiNestedToolCallMetadata,
   extractTextFromToolResult,
   mapToolDetail,
   parseToolArgs,
@@ -205,15 +206,20 @@ export class PiHistoryMapper {
     if (!detail) {
       return null;
     }
+    const callId = this.resolveToolCallId(message.toolCallId, tracked);
     return {
       type: "timeline",
       provider: this.provider,
       item: toToolResultTimelineItem({
-        callId: this.resolveToolCallId(message.toolCallId, tracked),
+        callId,
         name: resolveToolCallName(tracked, result),
         isError: Boolean(message.isError),
         detail,
         errorText: extractTextFromToolResult(result) ?? "Tool call failed",
+        metadata: buildPiNestedToolCallMetadata({
+          toolCallId: callId,
+          nestedCalls: message.nestedCalls,
+        }),
       }),
     };
   }
@@ -275,6 +281,7 @@ function toToolResultTimelineItem(input: {
   isError: boolean;
   detail: ToolCallDetail;
   errorText: string;
+  metadata?: Record<string, unknown> | null;
 }): AgentTimelineItem {
   if (input.isError) {
     return {
@@ -284,6 +291,7 @@ function toToolResultTimelineItem(input: {
       status: "failed",
       detail: input.detail,
       error: input.errorText,
+      ...(input.metadata ? { metadata: input.metadata } : {}),
     };
   }
   return {
@@ -293,5 +301,6 @@ function toToolResultTimelineItem(input: {
     status: "completed",
     detail: input.detail,
     error: null,
+    ...(input.metadata ? { metadata: input.metadata } : {}),
   };
 }

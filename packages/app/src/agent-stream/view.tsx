@@ -65,7 +65,10 @@ import {
   prepareToolCallHistory,
   projectToolCallDetailLevel,
 } from "@/tool-calls/detail-level/projection";
+import { projectNestedCodemodeCalls } from "@/tool-calls/detail-level/nested-codemode";
 import { OverviewToolCallGroupView } from "@/tool-calls/detail-level/overview/view";
+import type { OverviewToolCallGroup } from "@/tool-calls/detail-level/overview/model";
+import { formatOverviewSummary } from "@/tool-calls/detail-level/overview/summary";
 import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "./model";
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
 import { type StreamSegmentRenderers, type StreamViewportHandle } from "./strategy";
@@ -544,27 +547,44 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const effectiveStreamHead = useRetainedValue(streamHead, isActive);
     const effectiveTurnPresentation = useRetainedValue(turnPresentation, isActive);
     const isTurnActive = effectiveTurnPresentation.isActive;
-    // Keep retained history outside the 48ms live-head flush path.
+    // Fold nested codemode calls (pi >=0.99) into their parent codemode row before any
+    // tool-call grouping; the outline keeps the raw stream since nested rows have no cursor.
+    const nestedCodemodeProjection = useMemo(
+      () =>
+        projectNestedCodemodeCalls({
+          tail: effectiveStreamItems,
+          head: effectiveStreamHead,
+        }),
+      [effectiveStreamItems, effectiveStreamHead],
+    );
+    // Nested parents whose group is still running have to revise their history row on every
+    // flush: the children fold into that row, and the row's own item identity never changes while
+    // the script runs.
+    const nestedLiveParentItemIds = useMemo(() => {
+      const ids = new Set<string>();
+      for (const [parentItemId, group] of nestedCodemodeProjection.groupsByParentItemId) {
+        if (group.isLoading) {
+          ids.add(parentItemId);
+        }
+      }
+      return ids;
+    }, [nestedCodemodeProjection]);
+    // Keep retained history outside the 48ms live-head flush path: depend on the projected tail
+    // array, not on the projection object, which a head-only flush replaces every time.
     const preparedToolCallHistory = useMemo(
-      () => prepareToolCallHistory(toolCallDetailLevel, effectiveStreamItems),
-      [effectiveStreamItems, toolCallDetailLevel],
+      () => prepareToolCallHistory(toolCallDetailLevel, nestedCodemodeProjection.tail),
+      [nestedCodemodeProjection.tail, toolCallDetailLevel],
     );
     const projectedToolCalls = useMemo(
       () =>
         projectToolCallDetailLevel({
           level: toolCallDetailLevel,
-          tail: effectiveStreamItems,
-          head: effectiveStreamHead ?? EMPTY_STREAM_HEAD,
+          tail: nestedCodemodeProjection.tail,
+          head: nestedCodemodeProjection.head ?? EMPTY_STREAM_HEAD,
           preparedHistory: preparedToolCallHistory,
           isTurnActive,
         }),
-      [
-        effectiveStreamHead,
-        effectiveStreamItems,
-        isTurnActive,
-        preparedToolCallHistory,
-        toolCallDetailLevel,
-      ],
+      [nestedCodemodeProjection, isTurnActive, preparedToolCallHistory, toolCallDetailLevel],
     );
     // Plugin timeline projection was removed with the plugin system (issue 025
     // C6); the stream renders tool-call output directly.
@@ -785,11 +805,12 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       [autoExpandReasoning, collapsedReasoningIds, collapseRevision, setInlineDetailsExpanded],
     );
 
-    const renderSingleToolCallItem = useCallback(
+    const renderSingleToolCallRow = useCallback(
       (
         item: Extract<StreamItem, { kind: "tool_call" }>,
         isLastInSequence: boolean,
         maxDetailHeight?: number,
+        summaryOverride?: string,
       ) => {
         const { payload } = item;
 
@@ -818,6 +839,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               detail={data.detail}
               cwd={context.cwd}
               metadata={data.metadata}
+              summaryOverride={summaryOverride}
               isLastInSequence={isLastInSequence}
               onOpenFilePath={handleToolCallOpenFile}
               maxDetailHeight={maxDetailHeight}
@@ -842,6 +864,62 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         );
       },
       [collapseRevision, context.cwd, setInlineDetailsExpanded, handleToolCallOpenFile],
+    );
+
+    const getNestedToolCallGroup = useStableEvent((itemId: string) =>
+      nestedCodemodeProjection.groupsByParentItemId.get(itemId),
+    );
+    const renderNestedToolCallGroup = useCallback(
+      (group: OverviewToolCallGroup, isLastInSequence: boolean) => {
+        const [parentCall, ...childCalls] = group.run.calls;
+        if (!parentCall) {
+          return null;
+        }
+        const summaryText = formatOverviewSummary(group.summary, t, { capitalize: false });
+        const parentRow = renderSingleToolCallRow(
+          parentCall,
+          childCalls.length === 0 && isLastInSequence,
+          undefined,
+          summaryText.length > 0 ? summaryText : undefined,
+        );
+        if (childCalls.length === 0) {
+          return parentRow;
+        }
+        // The nested rows stay visible and hang off the parent on an indent rail, so the
+        // containment reads without expanding anything and the parent keeps its own row.
+        return (
+          <React.Fragment>
+            {parentRow}
+            <View style={stylesheet.nestedCodemodeChildren}>
+              {childCalls.map((call, index) => (
+                <React.Fragment key={call.id}>
+                  {renderSingleToolCallRow(
+                    call,
+                    index === childCalls.length - 1 && isLastInSequence,
+                  )}
+                </React.Fragment>
+              ))}
+            </View>
+          </React.Fragment>
+        );
+      },
+      [renderSingleToolCallRow, t],
+    );
+    const renderSingleToolCallItem = useCallback(
+      (
+        item: Extract<StreamItem, { kind: "tool_call" }>,
+        isLastInSequence: boolean,
+        maxDetailHeight?: number,
+      ) => {
+        if (item.payload.source === "agent") {
+          const nestedGroup = getNestedToolCallGroup(item.id);
+          if (nestedGroup) {
+            return renderNestedToolCallGroup(nestedGroup, isLastInSequence);
+          }
+        }
+        return renderSingleToolCallRow(item, isLastInSequence, maxDetailHeight);
+      },
+      [getNestedToolCallGroup, renderNestedToolCallGroup, renderSingleToolCallRow],
     );
 
     // Read through a stable event so live group updates do not change the renderer identity
@@ -1096,9 +1174,11 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const historyContentRevisionIds = useMemo(
       () => ({
         has: (id: string) =>
-          collapseRevision > 0 || projectedToolCalls.historyGroupUpdatesByHostId.has(id),
+          collapseRevision > 0 ||
+          projectedToolCalls.historyGroupUpdatesByHostId.has(id) ||
+          nestedLiveParentItemIds.has(id),
       }),
-      [collapseRevision, projectedToolCalls.historyGroupUpdatesByHostId],
+      [collapseRevision, nestedLiveParentItemIds, projectedToolCalls.historyGroupUpdatesByHostId],
     );
     const historyRowRevision = useMemo(
       () => ({
@@ -1661,6 +1741,17 @@ const stylesheet = StyleSheet.create((theme) => ({
     maxWidth: MAX_CONTENT_WIDTH,
     alignSelf: "center",
     paddingHorizontal: theme.spacing[2],
+  },
+  // Nested codemode rows: the rail hangs off the parent badge glyph column, and the child
+  // rows indent one step past it.
+  nestedCodemodeChildren: {
+    // The rail drops from the centre of the parent's glyph: the badge box pulls out by 13 and pads
+    // by 8, so the parent glyph occupies x = -5..17 in this coordinate space and its centre is 6.
+    marginLeft: theme.spacing[1.5],
+    paddingLeft: theme.spacing[3],
+    borderLeftWidth: theme.borderWidth[1],
+    borderLeftColor: theme.colors.border,
+    gap: theme.spacing[1],
   },
   emptyState: {
     flex: 1,
