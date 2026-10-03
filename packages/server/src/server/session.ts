@@ -6619,6 +6619,7 @@ export class Session {
             this.terminalController.killTerminalsForWorkspace(workspaceId),
           releaseWorkspaceWatchers: (cwd) => this.workspaceGitService.releaseWatchersForCwd(cwd),
           closeDiffWatchersForCwd: (cwd) => this.checkoutDiffManager.closeForCwd(cwd),
+          closeFileWatchersForCwd: (cwd) => this.workspaceFilesSession.closeFileWatchersForCwd(cwd),
           stopWorkspaceSetup: (workspaceId) => this.workspaceSetupRuntime.stop(workspaceId),
           sessionLogger: this.sessionLogger,
         },

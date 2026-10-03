@@ -55,6 +55,7 @@ export interface ArchiveDependencies {
   // before the directory is deleted. Optional so tests can omit them.
   releaseWorkspaceWatchers?: (cwd: string) => void;
   closeDiffWatchersForCwd?: (cwd: string) => void;
+  closeFileWatchersForCwd?: (cwd: string) => void;
   stopWorkspaceSetup?: (workspaceId: string) => Promise<void>;
   assertWorkspaceAutomationAllowed?: (workspaceId: string) => Promise<void>;
   sessionLogger?: Logger;
@@ -421,6 +422,7 @@ async function maybeRemoveDirectory(
   // behind.
   try {
     dependencies.closeDiffWatchersForCwd?.(backing.path);
+    dependencies.closeFileWatchersForCwd?.(backing.path);
     dependencies.releaseWorkspaceWatchers?.(backing.path);
   } catch (error) {
     dependencies.sessionLogger?.warn(

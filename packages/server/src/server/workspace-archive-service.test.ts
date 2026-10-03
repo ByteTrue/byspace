@@ -219,6 +219,44 @@ describe("archiveByScope", () => {
     expect(existsSync(worktree.worktreePath)).toBe(false);
   });
 
+  test("releases the daemon's watchers before removing the worktree directory", async () => {
+    const { tempDir, repoDir } = createGitRepo();
+    const byspaceHome = path.join(tempDir, ".byspace");
+    const worktree = await createBySpaceOwnedWorktree(repoDir, byspaceHome, "watcher-release");
+    const workspaceId = "ws-watcher-release";
+
+    const released: string[] = [];
+    let directoryPresentAtRelease = true;
+    const recordRelease = (label: string) => (cwd: string) => {
+      released.push(label);
+      directoryPresentAtRelease = directoryPresentAtRelease && existsSync(cwd);
+    };
+
+    const result = await archiveByScope(
+      {
+        ...createArchiveDeps({
+          byspaceHome,
+          activeWorkspaces: [{ workspaceId, cwd: worktree.worktreePath, kind: "worktree" }],
+        }),
+        closeDiffWatchersForCwd: recordRelease("diff"),
+        closeFileWatchersForCwd: recordRelease("file"),
+        releaseWorkspaceWatchers: recordRelease("git"),
+      },
+      {
+        scope: { kind: "workspace", workspaceId },
+        requestId: "req-watcher-release",
+      },
+    );
+
+    assertArchiveResult(result, {
+      archivedWorkspaceIds: [workspaceId],
+      removedDirectory: true,
+    });
+    expect(released).toEqual(["diff", "file", "git"]);
+    expect(directoryPresentAtRelease).toBe(true);
+    expect(existsSync(worktree.worktreePath)).toBe(false);
+  });
+
   test("workspace scope runs teardown while keeping a directory referenced by a sibling", async () => {
     const { tempDir, repoDir } = createGitRepo();
     writeFileSync(

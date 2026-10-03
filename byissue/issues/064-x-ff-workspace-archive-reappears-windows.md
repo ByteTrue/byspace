@@ -39,6 +39,7 @@ Windows 独有的原因：删 worktree 的 `removeDirectoryWithRetries`（`packa
 - `packages/protocol/src/messages.ts`：`ArchiveWorkspaceResponseMessageSchema` 加可选 `directoryError`（旧 daemon 不带该字段，wire 兼容）。
 - `packages/server/src/server/websocket-server.ts`：fallback noop 桩补 `releaseWatchersForCwd`。
 - `packages/app/src/workspace/workspace-archive.ts` + `use-workspace-archive.ts`：daemon 回 `directoryError` 时抛 `WorkspaceDirectoryRemovalError`——工作区保持归档不回滚，toast 提示用户手动清理（i18n key `sidebar.workspace.toasts.archiveDirectoryRemovalFailed`，9 locale 全部补齐）。
+- `packages/server/src/server/file-explorer/observer.ts`：新增 `closeForCwd(cwd)`——file-explorer 按文件订阅也持 worktree 内目录的 fs.watch 句柄，是继 workspace-git-service、checkout-diff-manager 之后的第三个持有者，前两轮漏掉；`WorkspaceFilesSession.closeFileWatchersForCwd` 透传，归档服务在删目录前调用。新增测试断言三个释放回调都在目录删除前、以正确顺序被调用。
 
 句柄链条核对（为何 teardown 不用再改）：`teardownArchivedWorkspace`（session.ts:5147）→ workspace-git-observer `removeForWorkspaceId` → `removeForCwd` → `registerWorkspace` 的 `unsubscribe` → `removeWorkspaceListener` → `closeWorkspaceTarget` → `removeWorkspaceWorkingTreeLink`，workspace listener 清空时 working-tree target 的 `workspaceKeys` 已同步清空。`releaseWatchersForCwd` 是删目录前的强制兜底。
 
