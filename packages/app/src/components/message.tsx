@@ -1176,29 +1176,21 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
     height: 14,
   },
   detailWrapper: {
-    borderBottomLeftRadius: theme.borderRadius.lg,
-    borderBottomRightRadius: theme.borderRadius.lg,
-    borderWidth: theme.borderWidth[1],
-    borderTopWidth: 0,
-    borderColor: theme.colors.border,
-    padding: 0,
-    gap: 0,
+    borderLeftWidth: theme.borderWidth[1],
+    borderLeftColor: theme.colors.border,
+    // Align guide line with icon center: pressable padding (8) + half icon (11)
+    marginLeft: 19,
+    paddingLeft: theme.spacing[3],
+    paddingTop: theme.spacing[1],
+    paddingBottom: theme.spacing[2],
     flexShrink: 1,
     minWidth: 0,
     overflow: "hidden",
     ...(isWeb ? { cursor: "auto" as const, userSelect: "text" as const } : {}),
   },
-  pressableExpanded: {
-    backgroundColor: theme.colors.surface1,
-  },
-  pressableExpandedAttached: {
-    borderColor: theme.colors.border,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-  },
-  detailWrapperBorderless: {
-    borderWidth: 0,
-  },
+  pressableExpanded: {},
+
+  detailWrapperBorderless: {},
   shimmerOverlay: {
     position: "absolute",
     top: 0,
@@ -2740,10 +2732,8 @@ export const ExpandableBadge = memo(function ExpandableBadge({
     () => [
       expandableBadgeStylesheet.pressable,
       isPressed && isInteractive ? expandableBadgeStylesheet.pressablePressed : null,
-      isExpanded && expandableBadgeStylesheet.pressableExpanded,
-      isExpanded && !borderlessWhenExpanded && expandableBadgeStylesheet.pressableExpandedAttached,
     ],
-    [borderlessWhenExpanded, isExpanded, isInteractive, isPressed],
+    [isInteractive, isPressed],
   );
 
   const detailWrapperStyle = useMemo(

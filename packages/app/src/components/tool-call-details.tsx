@@ -903,17 +903,12 @@ const styles = StyleSheet.create((theme) => {
       fontSize: theme.fontSize.sm,
     },
     diffContainer: {
-      borderWidth: theme.borderWidth[1],
-      borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.base,
       overflow: "hidden",
-      backgroundColor: theme.colors.surface2,
     },
     fullBleedBlock: {
       borderWidth: 0,
       borderRadius: 0,
       overflow: "hidden",
-      backgroundColor: theme.colors.surface1,
     },
     codeVerticalScroll: {},
     codeVerticalContent: {
@@ -928,19 +923,14 @@ const styles = StyleSheet.create((theme) => {
       paddingHorizontal: insets.padding,
       paddingVertical: insets.padding,
     },
-    scrollArea: {
-      borderWidth: theme.borderWidth[1],
-      borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.base,
-      backgroundColor: theme.colors.surface2,
-    },
+    scrollArea: {},
     scrollContent: {
       padding: insets.padding,
     },
     scrollText: {
       fontFamily: theme.fontFamily.mono,
       fontSize: theme.fontSize.code,
-      color: theme.colors.foreground,
+      color: theme.colors.foregroundMuted,
       lineHeight: 18,
       ...(isWeb
         ? {
@@ -980,15 +970,8 @@ const styles = StyleSheet.create((theme) => {
       color: theme.colors.foreground,
       lineHeight: 18,
     },
-    jsonScroll: {
-      borderWidth: theme.borderWidth[1],
-      borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.base,
-      backgroundColor: theme.colors.surface2,
-    },
-    jsonScrollError: {
-      borderColor: theme.colors.destructive,
-    },
+    jsonScroll: {},
+    jsonScrollError: {},
     jsonContent: {
       padding: insets.padding,
     },
