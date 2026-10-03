@@ -69,4 +69,4 @@ closed: 2026-10-01
 - **导出面收窄**：`PiNestedToolCallSummary` 只在本文件当返回类型用，去掉 `export`。
 - **未改**（评估后判定不值得动）：`summarizeNestedToolCalls` 忽略 `call.status`——live 口径也不看状态，两边一致才算得上口径统一；`estimateStreamItemHeight` 把嵌套组估成 40px，靠 `measureElement` 自纠；深度 >1 在渲染上压平是产品语义。
 
-CI：`gh pr checks 15` 只有 `server-tests (windows-latest)` 红，失败点 `packages/server/src/server/workspace-git-service.observation.test.ts:895` 在 main 上同样红（gh run 37022109223），属既有 Windows flake，与本次改动无关。
+CI：`gh pr checks 15` 首次只有 `server-tests (windows-latest)` 红，失败点 `packages/server/src/server/workspace-git-service.observation.test.ts:895` 在 main 上同样红（gh run 37022109223），本机单跑 41 例通过；push 修正后该 job 也绿了，确认是既有 Windows flake，与本次改动无关。

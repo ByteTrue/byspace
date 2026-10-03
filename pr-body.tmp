@@ -1,0 +1,82 @@
+### Linked issue
+
+Closes `byissue/issues/062-x-ff-restore-pi-codemode-nested-rows.md`
+
+### Type of change
+
+- [x] Bug fix
+- [ ] New feature
+- [ ] Enhancement
+- [ ] Refactor
+- [ ] Docs
+
+### Reasoning
+
+The daemon runs an agent's code-mode script as one tool call that spawns nested shell, read and search
+calls. 484446b7a stopped those nested calls from streaming as their own rows, to quiet the transcript,
+and gave the parent a collapsible summary badge instead. Both halves read wrong in use: collapsed, the
+badge was the only thing on screen and it hid what the script actually did; expanded, the children sat
+in the same column as the parent, so a glob plus a read plus a test run looked like three separate
+top-level actions the agent took on its own.
+
+This PR reverts the row suppression and fixes the presentational problem the revert exposes. The nested
+calls stream as rows again, and the app buckets them under their parent: the parent badge keeps its own
+label and carries the child call counts as its secondary text, and the children render indented behind a
+rail, always visible. The containment is legible at a glance without any interaction, which is what the
+user needs from a transcript they are monitoring from a phone.
+
+### Goals
+
+- Nested tool calls inside a code-mode script stream as their own rows again, so nothing is lost from the
+  transcript and nothing has to be expanded to be seen.
+- The app shows the parent and its children as one unit: parent badge reads `Codemode  ran 1 command, read
+  1 file, and searched 1 time`, children sit indented behind a vertical rail.
+- The parent row still degrades to a readable summary on reload, where the nested rows are gone from the
+  stored transcript: the replay path rebuilds the summary from `metadata.nestedSummary` on the parent's
+  tool result.
+- The mock load-test agent emits a code-mode call with nested children, so the layout can be reviewed
+  without a provider key.
+
+### Non-goals
+
+- No protocol change. `parentToolCallId` and `nestedSummary` ride in the tool call's open `metadata`
+  record (`packages/protocol/src/messages.ts`), which is tagged `COMPAT(piNestedToolCalls)` on the
+  server side.
+- No new interaction. Nested groups have no expand/collapse state at all; `expandedToolCallGroupIds`
+  still serves only the top-level overview groups, whose existing testIDs are untouched.
+- Child rows are not persisted as their own transcript entries on the reload path. Restoring them would
+  mean writing nested ids into the canonical timeline; the parent summary covers that case for now.
+
+### QA
+
+Automated, and the visual claim is asserted rather than eyeballed:
+
+- New e2e `packages/app/e2e/browser/nested-codemode-rows.spec.ts` drives the mock provider and asserts
+  the transcript itself — the parent badge is visible and contains `ran 1 command`, `npx vitest run
+  --bail=1` and `nested-codemode.ts` rows are visible with nothing clicked, and the child row's x is at
+  least 16px right of the parent's. It screenshots the region as an artifact. 1 passed.
+- `packages/app/e2e/browser/tool-call-overview-sheet.spec.ts` (2 cases) and `tool-call-shimmer.spec.ts`
+  (1 case) still pass alongside it: 4 passed total in one run, browser project. This is the check that
+  the new nested rendering did not disturb the top-level overview groups it shares `ExpandableBadge`
+  and the summary formatter with.
+- `packages/app/src/tool-calls/detail-level/overview/summary.test.ts` 4 cases (empty summary, singular vs
+  plural, serial comma, capitalization) and `nested-codemode.test.ts` 6 cases pass.
+- Server side: `packages/server/src/server/agent/providers/pi/agent.test.ts` 97 passed (nested rows carry
+  `parentToolCallId`), `history-mapper.test.ts` 6 passed (nestedCalls to nestedSummary on replay),
+  `mock-load-test-agent.test.ts` 18 passed. The real pi e2e case asserting the nested row reaches the
+  canonical timeline passed with `PI_REAL_TEST_MODEL=bytetrueapi/deepseek-flash`.
+- `npm run typecheck` (six workspaces), `npm run lint` (3383 files, 0 warnings) and `npm run
+  format:check` clean.
+
+Observed on web, the only platform this app builds for. The transcript reads: `Edit
+packages/app/src/hooks/use-scroll-anchor.ts`, `Shell node scripts/simulate-stream-burst.mjs`, then
+`Codemode  ran 1 command, read 1 file, and searched 1 time` with the three nested rows indented under it.
+
+### Checklist
+
+- [x] One focused change
+- [x] `npm run typecheck` passes
+- [x] `npm run lint` passes
+- [x] `npm run format` passes
+- [x] QA evidence
+- [x] Tests added or updated where it made sense
