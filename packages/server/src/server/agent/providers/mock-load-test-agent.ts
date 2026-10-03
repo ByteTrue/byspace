@@ -201,8 +201,20 @@ interface ActiveTurn {
 type CycleEvent =
   | { kind: "assistant_token"; text: string }
   | { kind: "reasoning_token"; text: string }
-  | { kind: "tool_running"; callId: string; name: string; detail: ToolCallDetail }
-  | { kind: "tool_completed"; callId: string; name: string; detail: ToolCallDetail }
+  | {
+      kind: "tool_running";
+      callId: string;
+      name: string;
+      detail: ToolCallDetail;
+      metadata?: Record<string, unknown>;
+    }
+  | {
+      kind: "tool_completed";
+      callId: string;
+      name: string;
+      detail: ToolCallDetail;
+      metadata?: Record<string, unknown>;
+    }
   | { kind: "usage" };
 
 interface LargeAgentStreamPayloadRequest {
@@ -640,6 +652,130 @@ function buildCycleQueue(turnId: string, cycle: number): CycleEvent[] {
   queue.push({ kind: "tool_running", callId: shellId, name: "bash", detail: shellDetail });
   queue.push({ kind: "tool_completed", callId: shellId, name: "bash", detail: shellDetail });
 
+  const codemodeId = `${turnId}:codemode:${cycle}`;
+  const codemodeScript = [
+    "// Run verification script via Code Mode",
+    "const testFiles = await tools.find({ pattern: '*.test.ts' });",
+    "const config = await tools.read({ path: 'packages/app/src/tool-calls/detail-level/nested-codemode.ts' });",
+    "const testResult = await tools.bash({ command: 'npx vitest run --bail=1' });",
+    "return { testCount: testFiles.length, passed: testResult.exitCode === 0 };",
+  ].join("\n");
+  const codemodeDetail: ToolCallDetail = {
+    type: "unknown",
+    input: { code: codemodeScript },
+    output: null,
+  };
+  queue.push({
+    kind: "tool_running",
+    callId: codemodeId,
+    name: "codemode",
+    detail: codemodeDetail,
+  });
+
+  const nestedFindId = `${codemodeId}/0`;
+  const nestedFindDetail: ToolCallDetail = {
+    type: "search",
+    query: "*.test.ts",
+    toolName: "glob",
+  };
+  queue.push({
+    kind: "tool_running",
+    callId: nestedFindId,
+    name: "find",
+    detail: nestedFindDetail,
+    metadata: { parentToolCallId: codemodeId },
+  });
+  queue.push({
+    kind: "tool_completed",
+    callId: nestedFindId,
+    name: "find",
+    detail: {
+      ...nestedFindDetail,
+      filePaths: [
+        "packages/app/src/agent-stream/view.test.tsx",
+        "packages/app/src/tool-calls/detail-level/nested-codemode.test.ts",
+      ],
+      numFiles: 2,
+    },
+    metadata: { parentToolCallId: codemodeId },
+  });
+
+  const nestedReadId = `${codemodeId}/1`;
+  const nestedReadDetail: ToolCallDetail = {
+    type: "read",
+    filePath: "packages/app/src/tool-calls/detail-level/nested-codemode.ts",
+  };
+  queue.push({
+    kind: "tool_running",
+    callId: nestedReadId,
+    name: "read",
+    detail: nestedReadDetail,
+    metadata: { parentToolCallId: codemodeId },
+  });
+  queue.push({
+    kind: "tool_completed",
+    callId: nestedReadId,
+    name: "read",
+    detail: {
+      ...nestedReadDetail,
+      content:
+        "export interface NestedCodemodeProjection {\n  tail: StreamItem[];\n  head: StreamItem[] | null;\n  groupsByParentItemId: Map<string, OverviewToolCallGroup>;\n}",
+    },
+    metadata: { parentToolCallId: codemodeId },
+  });
+
+  const nestedBashId = `${codemodeId}/2`;
+  const nestedBashDetail: ToolCallDetail = {
+    type: "shell",
+    command: "npx vitest run --bail=1",
+    cwd: "/tmp/byspace-mock-load",
+  };
+  queue.push({
+    kind: "tool_running",
+    callId: nestedBashId,
+    name: "bash",
+    detail: nestedBashDetail,
+    metadata: { parentToolCallId: codemodeId },
+  });
+  queue.push({
+    kind: "tool_completed",
+    callId: nestedBashId,
+    name: "bash",
+    detail: {
+      ...nestedBashDetail,
+      output: "✓ 2 tests passed (450ms)\n",
+      exitCode: 0,
+    },
+    metadata: { parentToolCallId: codemodeId },
+  });
+
+  queue.push({
+    kind: "tool_completed",
+    callId: codemodeId,
+    name: "codemode",
+    detail: {
+      ...codemodeDetail,
+      output: {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ testCount: 2, passed: true }, null, 2),
+          },
+        ],
+      },
+    },
+    metadata: {
+      nestedSummary: {
+        editedFileCount: 0,
+        commandCount: 1,
+        readFileCount: 1,
+        searchCount: 1,
+        otherToolCount: 0,
+        byspaceCallCount: 0,
+      },
+    },
+  });
+
   for (const tok of tokenize(buildClosingParagraph())) {
     queue.push({ kind: "assistant_token", text: tok });
   }
@@ -660,6 +796,7 @@ function createToolCall(input: {
   name: string;
   status: ToolCallTimelineItem["status"];
   detail: ToolCallDetail;
+  metadata?: Record<string, unknown>;
 }): ToolCallTimelineItem {
   return {
     type: "tool_call",
@@ -668,6 +805,7 @@ function createToolCall(input: {
     status: input.status,
     error: null,
     detail: input.detail,
+    ...(input.metadata ? { metadata: input.metadata } : {}),
   };
 }
 
@@ -1700,6 +1838,7 @@ export class MockLoadTestAgentSession implements AgentSession {
             name: event.name,
             status: event.kind === "tool_running" ? "running" : "completed",
             detail: event.detail,
+            metadata: event.metadata,
           }),
         );
         return;

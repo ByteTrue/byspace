@@ -1058,6 +1058,12 @@ function agentToolCallIdentity(input: AgentToolCallIdentityInput): string {
   return `turn:${encodeURIComponent(input.turnId)}/${encodeURIComponent(input.callId)}`;
 }
 
+// Stream item id of the agent tool call row for a given callId/turnId pair. Used by projections
+// that need to point at a parent row without scanning the stream (e.g. nested codemode calls).
+export function agentToolCallItemId(input: AgentToolCallIdentityInput): string {
+  return `agent_tool_${agentToolCallIdentity(input)}`;
+}
+
 function findExistingTimelineIdentityIndex(state: StreamItem[], identity: string): number {
   return state.findIndex((entry) => streamTimelineItemIdentity(entry) === identity);
 }

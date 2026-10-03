@@ -64,6 +64,9 @@ export type PiAgentMessage =
       content: unknown;
       isError?: boolean;
       details?: unknown;
+      // COMPAT(piNestedToolCalls): pi >=0.99 attaches a { calls, complete } snapshot of codemode
+      // nested tool calls to the persisted tool result message; older pi omits it.
+      nestedCalls?: unknown;
     }
   | {
       role: "bashExecution";
@@ -178,9 +181,8 @@ export type PiAgentSessionEvent =
       toolCallId: string;
       toolName: string;
       args: unknown;
-      // Set when a tool runs another tool through ctx.executeTool() (codemode scripts). The id is
-      // `<parent id>/<n>` and never reaches the transcript, so these events render inside the
-      // parent's row instead of becoming timeline entries of their own.
+      // COMPAT(piNestedToolCalls): pi >=0.99 sets this on calls nested inside a codemode run;
+      // older pi omits it. Optional keeps both wire shapes parseable.
       parentToolCallId?: string;
     }
   | {

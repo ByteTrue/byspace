@@ -771,7 +771,7 @@ describe("PiRpcAgentSession", () => {
     ]);
   });
 
-  test("ignores nested tool calls that codemode scripts run", async () => {
+  test("streams nested tool calls as rows tagged with the parent codemode call", async () => {
     const { pi, session, events } = await createSession();
     const fakeSession = pi.latestSession();
 
@@ -827,6 +827,33 @@ describe("PiRpcAgentSession", () => {
           output: null,
         },
         error: null,
+      },
+      {
+        type: "tool_call",
+        callId: "call-1/0",
+        name: "bash",
+        status: "running",
+        detail: { type: "shell", command: "wc -l *.md" },
+        error: null,
+        metadata: { parentToolCallId: "call-1" },
+      },
+      {
+        type: "tool_call",
+        callId: "call-1/0",
+        name: "bash",
+        status: "running",
+        detail: { type: "shell", command: "wc -l *.md", output: "3", exitCode: 0 },
+        error: null,
+        metadata: { parentToolCallId: "call-1" },
+      },
+      {
+        type: "tool_call",
+        callId: "call-1/0",
+        name: "bash",
+        status: "completed",
+        detail: { type: "shell", command: "wc -l *.md", output: "3\n", exitCode: 0 },
+        error: null,
+        metadata: { parentToolCallId: "call-1" },
       },
       {
         type: "tool_call",

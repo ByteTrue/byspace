@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { isBySpaceToolName } from "@bytetrue/protocol/tool-name-normalization";
+
 import type { ToolCallDetail } from "../../agent-sdk-types.js";
 
 interface BashToolInput {
@@ -55,6 +57,15 @@ interface PiToolResultObject {
   exitCode?: number;
   code?: number;
   details?: PiToolResultDetails;
+}
+
+export interface PiNestedToolCallSummary {
+  editedFileCount: number;
+  commandCount: number;
+  readFileCount: number;
+  searchCount: number;
+  otherToolCount: number;
+  byspaceCallCount: number;
 }
 
 interface PiToolResultDetails {
@@ -533,4 +544,99 @@ function mapLsToolDetail(args: LsToolInput, result: PiToolResult): ToolCallDetai
     query: args.path ?? "ls",
     content: typeof result === "string" ? result : undefined,
   };
+}
+
+const DIRECT_BYSPACE_TOOL_PREFIX = "byspace_";
+const DIRECT_SEARCH_TOOL_SUFFIX_PATTERN = /(?:^|[_.:/])(?:web_search|llm_context)$/;
+
+function nestedCallPath(call: Record<string, unknown>): string | null {
+  const args = call.arguments;
+  if (!isRecord(args)) {
+    return null;
+  }
+  const path = args.path;
+  return typeof path === "string" && path.length > 0 ? path : null;
+}
+
+function summarizeNestedToolCalls(calls: readonly unknown[]): PiNestedToolCallSummary | null {
+  const editedFiles = new Set<string>();
+  const readFiles = new Set<string>();
+  const summary: PiNestedToolCallSummary = {
+    editedFileCount: 0,
+    commandCount: 0,
+    readFileCount: 0,
+    searchCount: 0,
+    otherToolCount: 0,
+    byspaceCallCount: 0,
+  };
+  let counted = 0;
+  for (const rawCall of calls) {
+    if (!isRecord(rawCall)) {
+      continue;
+    }
+    const rawName = rawCall.name;
+    const name = typeof rawName === "string" ? rawName.trim().toLowerCase() : "";
+    if (!name) {
+      continue;
+    }
+    counted += 1;
+    if (isBySpaceToolName(name) || name.startsWith(DIRECT_BYSPACE_TOOL_PREFIX)) {
+      summary.byspaceCallCount += 1;
+    } else if (name === "bash") {
+      summary.commandCount += 1;
+    } else if (name === "edit" || name === "write") {
+      const path = nestedCallPath(rawCall);
+      if (path) {
+        editedFiles.add(path);
+      } else {
+        summary.otherToolCount += 1;
+      }
+    } else if (name === "read") {
+      const path = nestedCallPath(rawCall);
+      if (path) {
+        readFiles.add(path);
+      } else {
+        summary.otherToolCount += 1;
+      }
+    } else if (name === "find" || name === "grep" || DIRECT_SEARCH_TOOL_SUFFIX_PATTERN.test(name)) {
+      summary.searchCount += 1;
+    } else {
+      summary.otherToolCount += 1;
+    }
+  }
+  if (counted === 0) {
+    return null;
+  }
+  return {
+    ...summary,
+    editedFileCount: editedFiles.size,
+    readFileCount: readFiles.size,
+  };
+}
+
+// Builds the metadata that folds pi codemode nested calls into the parent row:
+// - nested call ids look like "<rootCallId>/<n>" (grandchildren normalize to the root ancestor),
+//   so their rows carry parentToolCallId pointing at the top-level codemode call;
+// - nestedCalls is the { calls, complete } snapshot pi attaches to the persisted tool result
+//   message (never to the live tool_execution_end result), summarized so replayed rows can
+//   show a badge without the child rows that never hit the transcript.
+export function buildPiNestedToolCallMetadata(
+  toolCallId: string,
+  nestedCalls?: unknown,
+): Record<string, unknown> | null {
+  const metadata: Record<string, unknown> = {};
+  const separatorIndex = toolCallId.indexOf("/");
+  if (separatorIndex > 0) {
+    metadata.parentToolCallId = toolCallId.slice(0, separatorIndex);
+  }
+  if (isRecord(nestedCalls)) {
+    const calls = nestedCalls.calls;
+    if (Array.isArray(calls) && calls.length > 0) {
+      const summary = summarizeNestedToolCalls(calls);
+      if (summary) {
+        metadata.nestedSummary = summary;
+      }
+    }
+  }
+  return Object.keys(metadata).length > 0 ? metadata : null;
 }

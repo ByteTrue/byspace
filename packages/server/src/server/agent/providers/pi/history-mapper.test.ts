@@ -128,6 +128,91 @@ describe("Pi history mapper", () => {
     ]);
   });
 
+  test("replays a codemode result with nestedCalls as a row carrying the nested summary", async () => {
+    await expect(
+      collectHistory([
+        {
+          role: "assistant",
+          responseId: "response-1",
+          content: [
+            {
+              type: "toolCall",
+              id: "call-1",
+              name: "codemode",
+              arguments: { code: "await tools.bash({ command: 'wc -l *.md' })" },
+            },
+          ],
+        },
+        {
+          role: "toolResult",
+          toolCallId: "call-1",
+          toolName: "codemode",
+          content: [{ type: "text", text: "3" }],
+          nestedCalls: {
+            complete: true,
+            calls: [
+              {
+                id: "call-1/0",
+                name: "bash",
+                status: "ok",
+                arguments: { command: "wc -l *.md" },
+              },
+              {
+                id: "call-1/1",
+                name: "read",
+                status: "ok",
+                arguments: { path: "note.txt" },
+              },
+            ],
+          },
+        },
+      ]),
+    ).resolves.toEqual([
+      {
+        type: "timeline",
+        provider: "pi",
+        item: {
+          type: "tool_call",
+          callId: "call-1",
+          name: "codemode",
+          status: "running",
+          detail: {
+            type: "unknown",
+            input: { code: "await tools.bash({ command: 'wc -l *.md' })" },
+            output: null,
+          },
+          error: null,
+        },
+      },
+      {
+        type: "timeline",
+        provider: "pi",
+        item: {
+          type: "tool_call",
+          callId: "call-1",
+          name: "codemode",
+          status: "completed",
+          detail: {
+            type: "unknown",
+            input: { code: "await tools.bash({ command: 'wc -l *.md' })" },
+            output: { content: [{ type: "text", text: "3" }], details: undefined },
+          },
+          error: null,
+          metadata: {
+            nestedSummary: {
+              editedFileCount: 0,
+              commandCount: 1,
+              readFileCount: 1,
+              searchCount: 0,
+              otherToolCount: 0,
+              byspaceCallCount: 0,
+            },
+          },
+        },
+      },
+    ]);
+  });
+
   test("replays non-notice custom messages as custom_message items, matching the live path", async () => {
     await expect(
       collectHistory([

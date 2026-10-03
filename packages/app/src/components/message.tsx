@@ -2910,6 +2910,8 @@ interface ToolCallProps {
   defaultExpanded?: boolean;
   forceInline?: boolean;
   maxDetailHeight?: number;
+  /** Replaces the badge's secondary text; nested codemode rows summarize the calls the script ran. */
+  summaryOverride?: string;
 }
 
 export const ToolCall = memo(function ToolCall({
@@ -2921,6 +2923,7 @@ export const ToolCall = memo(function ToolCall({
   detail,
   cwd,
   metadata,
+  summaryOverride,
   isLastInSequence = false,
   disableOuterSpacing,
   onInlineDetailsHoverChange,
@@ -2976,7 +2979,7 @@ export const ToolCall = memo(function ToolCall({
       openToolCall({
         toolName,
         displayName: presentation.displayName,
-        summary: presentation.summary,
+        summary: summaryOverride ?? presentation.summary,
         detail: effectiveDetail,
         errorText: presentation.errorText,
         icon: presentation.icon,
@@ -2989,6 +2992,7 @@ export const ToolCall = memo(function ToolCall({
     shouldRenderInline,
     openToolCall,
     toolName,
+    summaryOverride,
     presentation.displayName,
     presentation.summary,
     presentation.errorText,
@@ -3059,7 +3063,7 @@ export const ToolCall = memo(function ToolCall({
     <ExpandableBadge
       testID="tool-call-badge"
       label={presentation.displayName}
-      secondaryLabel={presentation.summary}
+      secondaryLabel={summaryOverride ?? presentation.summary}
       icon={presentation.icon}
       isExpanded={shouldRenderInline && isExpanded}
       onToggle={presentation.canOpenDetails ? handleToggle : undefined}
@@ -3083,6 +3087,7 @@ function areToolCallPropsEqual(previous: ToolCallProps, next: ToolCallProps) {
   if (previous.detail !== next.detail) return false;
   if (previous.cwd !== next.cwd) return false;
   if (previous.metadata !== next.metadata) return false;
+  if (previous.summaryOverride !== next.summaryOverride) return false;
   if (previous.isLastInSequence !== next.isLastInSequence) return false;
   if (previous.disableOuterSpacing !== next.disableOuterSpacing) return false;
   if (previous.onOpenFilePath !== next.onOpenFilePath) return false;

@@ -65,7 +65,10 @@ import {
   prepareToolCallHistory,
   projectToolCallDetailLevel,
 } from "@/tool-calls/detail-level/projection";
+import { projectNestedCodemodeCalls } from "@/tool-calls/detail-level/nested-codemode";
 import { OverviewToolCallGroupView } from "@/tool-calls/detail-level/overview/view";
+import type { OverviewToolCallGroup } from "@/tool-calls/detail-level/overview/model";
+import { formatOverviewSummary } from "@/tool-calls/detail-level/overview/summary";
 import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "./model";
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
 import { type StreamSegmentRenderers, type StreamViewportHandle } from "./strategy";
@@ -544,27 +547,31 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const effectiveStreamHead = useRetainedValue(streamHead, isActive);
     const effectiveTurnPresentation = useRetainedValue(turnPresentation, isActive);
     const isTurnActive = effectiveTurnPresentation.isActive;
+    // Fold nested codemode calls (pi >=0.99) into their parent codemode row before any
+    // tool-call grouping; the outline keeps the raw stream since nested rows have no cursor.
+    const nestedCodemodeProjection = useMemo(
+      () =>
+        projectNestedCodemodeCalls({
+          tail: effectiveStreamItems,
+          head: effectiveStreamHead,
+        }),
+      [effectiveStreamItems, effectiveStreamHead],
+    );
     // Keep retained history outside the 48ms live-head flush path.
     const preparedToolCallHistory = useMemo(
-      () => prepareToolCallHistory(toolCallDetailLevel, effectiveStreamItems),
-      [effectiveStreamItems, toolCallDetailLevel],
+      () => prepareToolCallHistory(toolCallDetailLevel, nestedCodemodeProjection.tail),
+      [nestedCodemodeProjection, toolCallDetailLevel],
     );
     const projectedToolCalls = useMemo(
       () =>
         projectToolCallDetailLevel({
           level: toolCallDetailLevel,
-          tail: effectiveStreamItems,
-          head: effectiveStreamHead ?? EMPTY_STREAM_HEAD,
+          tail: nestedCodemodeProjection.tail,
+          head: nestedCodemodeProjection.head ?? EMPTY_STREAM_HEAD,
           preparedHistory: preparedToolCallHistory,
           isTurnActive,
         }),
-      [
-        effectiveStreamHead,
-        effectiveStreamItems,
-        isTurnActive,
-        preparedToolCallHistory,
-        toolCallDetailLevel,
-      ],
+      [nestedCodemodeProjection, isTurnActive, preparedToolCallHistory, toolCallDetailLevel],
     );
     // Plugin timeline projection was removed with the plugin system (issue 025
     // C6); the stream renders tool-call output directly.
@@ -785,11 +792,12 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       [autoExpandReasoning, collapsedReasoningIds, collapseRevision, setInlineDetailsExpanded],
     );
 
-    const renderSingleToolCallItem = useCallback(
+    const renderSingleToolCallRow = useCallback(
       (
         item: Extract<StreamItem, { kind: "tool_call" }>,
         isLastInSequence: boolean,
         maxDetailHeight?: number,
+        summaryOverride?: string,
       ) => {
         const { payload } = item;
 
@@ -818,6 +826,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               detail={data.detail}
               cwd={context.cwd}
               metadata={data.metadata}
+              summaryOverride={summaryOverride}
               isLastInSequence={isLastInSequence}
               onOpenFilePath={handleToolCallOpenFile}
               maxDetailHeight={maxDetailHeight}
@@ -842,6 +851,59 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         );
       },
       [collapseRevision, context.cwd, setInlineDetailsExpanded, handleToolCallOpenFile],
+    );
+
+    const getNestedToolCallGroup = useStableEvent((itemId: string) =>
+      nestedCodemodeProjection.groupsByParentItemId.get(itemId),
+    );
+    const renderNestedToolCallGroup = useCallback(
+      (group: OverviewToolCallGroup, isLastInSequence: boolean) => {
+        const [parentCall, ...childCalls] = group.run.calls;
+        if (!parentCall) {
+          return null;
+        }
+        const summaryText = formatOverviewSummary(group.summary, t, { capitalize: false });
+        const parentRow = renderSingleToolCallRow(
+          parentCall,
+          childCalls.length === 0 && isLastInSequence,
+          undefined,
+          summaryText.length > 0 ? summaryText : undefined,
+        );
+        if (childCalls.length === 0) {
+          return parentRow;
+        }
+        // The nested rows stay visible and hang off the parent on an indent rail, so the
+        // containment reads without expanding anything and the parent keeps its own row.
+        return (
+          <React.Fragment>
+            {parentRow}
+            <View style={stylesheet.nestedCodemodeChildren}>
+              {childCalls.map((call) => (
+                <React.Fragment key={call.id}>
+                  {renderSingleToolCallRow(call, false)}
+                </React.Fragment>
+              ))}
+            </View>
+          </React.Fragment>
+        );
+      },
+      [renderSingleToolCallRow, t],
+    );
+    const renderSingleToolCallItem = useCallback(
+      (
+        item: Extract<StreamItem, { kind: "tool_call" }>,
+        isLastInSequence: boolean,
+        maxDetailHeight?: number,
+      ) => {
+        if (item.payload.source === "agent") {
+          const nestedGroup = getNestedToolCallGroup(item.id);
+          if (nestedGroup) {
+            return renderNestedToolCallGroup(nestedGroup, isLastInSequence);
+          }
+        }
+        return renderSingleToolCallRow(item, isLastInSequence, maxDetailHeight);
+      },
+      [getNestedToolCallGroup, renderNestedToolCallGroup, renderSingleToolCallRow],
     );
 
     // Read through a stable event so live group updates do not change the renderer identity
@@ -1661,6 +1723,15 @@ const stylesheet = StyleSheet.create((theme) => ({
     maxWidth: MAX_CONTENT_WIDTH,
     alignSelf: "center",
     paddingHorizontal: theme.spacing[2],
+  },
+  // Nested codemode rows: the rail hangs off the parent badge glyph column, and the child
+  // rows indent one step past it.
+  nestedCodemodeChildren: {
+    marginLeft: theme.spacing[1.5],
+    paddingLeft: theme.spacing[3],
+    borderLeftWidth: theme.borderWidth[1],
+    borderLeftColor: theme.colors.border,
+    gap: theme.spacing[1],
   },
   emptyState: {
     flex: 1,
