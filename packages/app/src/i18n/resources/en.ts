@@ -1197,6 +1197,8 @@ export const en = {
         hostDisconnected: "Host is not connected",
         hideFailed: "Failed to hide workspace",
         archiveFailed: "Failed to archive workspace",
+        archiveDirectoryRemovalFailed:
+          "Workspace archived, but its folder could not be fully removed. Close programs using it and delete the folder manually.",
       },
     },
   },

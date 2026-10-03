@@ -13,11 +13,38 @@ export interface WorkspaceArchiveTarget {
 }
 
 interface WorkspaceArchiveClient {
-  archiveWorkspace: (workspaceId: string) => Promise<{ error: string | null }>;
+  archiveWorkspace: (workspaceId: string) => Promise<{
+    error: string | null;
+    directoryError?: string | null;
+  }>;
 }
 
 interface OptimisticWorkspaceArchiveSnapshot {
   workspace: WorkspaceDescriptor | null;
+}
+
+/**
+ * The daemon received the archive request and refused it. That is a decision, so
+ * the workspace goes back into the sidebar.
+ *
+ * Failures without this shape (RPC timeout, dropped connection) are undecided:
+ * the daemon may have archived the workspace after the client stopped waiting,
+ * and on Windows that is the normal case — teardown, git worktree removal and
+ * retried directory deletion push a worktree archive past 60s.
+ */
+class WorkspaceArchiveRejectedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WorkspaceArchiveRejectedError";
+  }
+}
+
+/** Archive succeeded; only the on-disk removal failed. Not a reason to restore the workspace. */
+export class WorkspaceDirectoryRemovalError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WorkspaceDirectoryRemovalError";
+  }
 }
 
 export interface WorkspaceArchiveFailure {
@@ -75,7 +102,32 @@ async function archiveWorkspaceOrThrow(input: {
 }): Promise<void> {
   const payload = await input.client.archiveWorkspace(input.workspaceId);
   if (payload.error) {
-    throw new Error(payload.error);
+    throw new WorkspaceArchiveRejectedError(payload.error);
+  }
+  // The archive itself succeeded, but the backing directory could not be
+  // deleted (a file handle kept the tree busy on Windows). The workspace is
+  // gone from the sidebar either way; surface the residue so the user can act.
+  if (payload.directoryError) {
+    throw new WorkspaceDirectoryRemovalError(payload.directoryError);
+  }
+}
+
+/**
+ * The archive outcome is unknown: keep the workspace hidden and let the daemon
+ * decide. Clearing the pending mark lets the refresh result through, so a
+ * workspace the daemon still lists as active comes back on its own.
+ */
+async function reconcileUndecidedWorkspaceArchive(
+  workspace: WorkspaceArchiveTarget,
+): Promise<void> {
+  clearWorkspaceArchivePending({
+    serverId: workspace.serverId,
+    workspaceId: workspace.workspaceId,
+  });
+  try {
+    await getHostRuntimeStore().refreshWorkspaceDirectory({ serverId: workspace.serverId });
+  } catch {
+    // No live runtime or no connection; the next directory refresh settles it.
   }
 }
 
@@ -91,11 +143,15 @@ export async function archiveWorkspaceOptimistically(input: {
       workspaceId: input.workspace.workspaceId,
     });
   } catch (error) {
-    restoreOptimisticallyHiddenWorkspace({
-      serverId: input.workspace.serverId,
-      workspaceId: input.workspace.workspaceId,
-      snapshot,
-    });
+    if (error instanceof WorkspaceArchiveRejectedError) {
+      restoreOptimisticallyHiddenWorkspace({
+        serverId: input.workspace.serverId,
+        workspaceId: input.workspace.workspaceId,
+        snapshot,
+      });
+    } else if (!(error instanceof WorkspaceDirectoryRemovalError)) {
+      await reconcileUndecidedWorkspaceArchive(input.workspace);
+    }
     throw error;
   }
 }

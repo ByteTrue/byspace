@@ -1186,7 +1186,11 @@ async function removeDirectoryWithRetries(path: string): Promise<void> {
     return;
   }
 
-  const delaysMs = [0, 100, 300, 700, 1500];
+  // Windows keeps directory/file handles alive briefly after watchers close and
+  // child processes exit, so early attempts fail with EBUSY/EPERM and later ones
+  // succeed. The backoff tops out around 19s; POSIX failures are permanent and
+  // just pay the tail once.
+  const delaysMs = [0, 100, 300, 700, 1500, 3000, 5000, 8000];
   let lastError: unknown = null;
   for (const delay of delaysMs) {
     if (delay > 0) {

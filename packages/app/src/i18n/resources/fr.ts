@@ -1221,6 +1221,8 @@ export const fr: TranslationResources = {
         hostDisconnected: "Hostn'est pas connecté",
         hideFailed: "Échec du masquage de l'espace de travail",
         archiveFailed: "Échec de l'archivage de l'espace de travail",
+        archiveDirectoryRemovalFailed:
+          "L'espace de travail a été archivé, mais son dossier n'a pas pu être supprimé entièrement. Fermez les programmes qui l'utilisent et supprimez le dossier manuellement.",
       },
     },
   },

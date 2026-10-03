@@ -21,12 +21,14 @@ type ArchiveWorkspacePayload = Awaited<ReturnType<DaemonClient["archiveWorkspace
 function archivePayload(input: {
   workspaceId: string;
   error?: string | null;
+  directoryError?: string | null;
 }): ArchiveWorkspacePayload {
   return {
     requestId: "request",
     workspaceId: input.workspaceId,
     archivedAt: null,
     error: input.error ?? null,
+    ...(input.directoryError ? { directoryError: input.directoryError } : {}),
   };
 }
 
@@ -147,6 +149,57 @@ describe("archiveWorkspaceOptimistically", () => {
         workspaceId: archived.id,
       }),
     ).toBe(false);
+  });
+
+  it("keeps the workspace hidden when the archive outcome is unknown", async () => {
+    const archived = workspace();
+    getHostRuntimeStore().acceptWorkspaceSnapshots(SERVER_ID, [archived]);
+    const client = createClient(
+      vi.fn(async () => {
+        throw new Error("Timeout waiting for message (300000ms)");
+      }),
+    );
+
+    await expect(
+      archiveWorkspaceOptimistically({
+        client,
+        workspace: target(),
+      }),
+    ).rejects.toThrow("Timeout waiting for message (300000ms)");
+
+    // A timeout is not a refusal: the daemon may have archived the workspace
+    // after the client stopped waiting, so the sidebar must not put it back.
+    expect(storedWorkspace(archived.id)).toBeUndefined();
+    expect(
+      isWorkspaceArchivePending({
+        serverId: SERVER_ID,
+        workspaceId: archived.id,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps the workspace hidden when the archive succeeded but the directory removal failed", async () => {
+    const archived = workspace();
+    getHostRuntimeStore().acceptWorkspaceSnapshots(SERVER_ID, [archived]);
+    const client = createClient(
+      vi.fn(async (workspaceId) =>
+        archivePayload({
+          workspaceId,
+          directoryError: "Directory still present after rm: C:/repo/.byspace/worktrees/x",
+        }),
+      ),
+    );
+
+    await expect(
+      archiveWorkspaceOptimistically({
+        client,
+        workspace: target(),
+      }),
+    ).rejects.toThrow("Directory still present after rm");
+
+    // The archive is authoritative: the workspace stays out of the sidebar even
+    // though its folder is still on disk. The residue is reported, not restored.
+    expect(storedWorkspace(archived.id)).toBeUndefined();
   });
 });
 

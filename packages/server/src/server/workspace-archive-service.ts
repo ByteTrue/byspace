@@ -50,6 +50,11 @@ export interface ArchiveDependencies {
   markWorkspaceArchiving: (workspaceIds: Iterable<string>, archivingAt: string) => void;
   clearWorkspaceArchiving: (workspaceIds: Iterable<string>) => void;
   killTerminalsForWorkspace: (workspaceId: string) => Promise<void>;
+  // The daemon's own fs.watch subscriptions keep handles on the worktree tree;
+  // on Windows those handles turn the archive's rmdir into EBUSY. Release them
+  // before the directory is deleted. Optional so tests can omit them.
+  releaseWorkspaceWatchers?: (cwd: string) => void;
+  closeDiffWatchersForCwd?: (cwd: string) => void;
   stopWorkspaceSetup?: (workspaceId: string) => Promise<void>;
   assertWorkspaceAutomationAllowed?: (workspaceId: string) => Promise<void>;
   sessionLogger?: Logger;
@@ -69,6 +74,10 @@ export interface ArchiveResult {
   archivedAgentIds: string[];
   archivedWorkspaceIds: string[];
   removedDirectory: boolean;
+  // Present when the workspace record was archived but the backing directory
+  // could not be removed from disk (e.g. a file handle kept the tree busy on
+  // Windows). The workspace stays archived; this only reports the residue.
+  directoryError?: string;
 }
 
 export interface ArchiveByScopeRequest {
@@ -141,6 +150,7 @@ async function archiveByScopeWithPriority(
   }
 
   let removedDirectory = false;
+  let directoryError: string | undefined;
 
   try {
     if (targetWorkspaceIds.length > 0) {
@@ -168,18 +178,21 @@ async function archiveByScopeWithPriority(
     }
 
     if (target.backing !== null) {
-      removedDirectory = await maybeRemoveDirectory(
+      const removal = await maybeRemoveDirectory(
         dependencies,
         request,
         target,
         archivedWorkspaceIds,
       );
+      removedDirectory = removal.removed;
+      directoryError = removal.directoryError;
     }
 
     return {
       archivedAgentIds: Array.from(archivedAgents),
       archivedWorkspaceIds,
       removedDirectory,
+      ...(directoryError ? { directoryError } : {}),
     };
   } finally {
     if (targetWorkspaceIds.length > 0) {
@@ -352,10 +365,10 @@ async function maybeRemoveDirectory(
   request: Pick<ArchiveByScopeRequest, "requestId">,
   target: ArchiveTarget,
   archivedWorkspaceIds: string[],
-): Promise<boolean> {
+): Promise<{ removed: boolean; directoryError?: string }> {
   const backing = target.backing;
   if (!backing?.isBySpaceOwnedWorktree) {
-    return false;
+    return { removed: false };
   }
 
   const archivedWorkspaceIdSet = new Set(archivedWorkspaceIds);
@@ -382,7 +395,10 @@ async function maybeRemoveDirectory(
         { err: error, targetPath: backing.path, requestId: request.requestId },
         "Worktree teardown failed during archive; workspace already archived",
       );
-      return false;
+      return {
+        removed: false,
+        directoryError: error.message,
+      };
     }
     throw error;
   }
@@ -396,7 +412,21 @@ async function maybeRemoveDirectory(
       dependencies,
     ))
   ) {
-    return false;
+    return { removed: false };
+  }
+
+  // Drop the daemon's own watchers before the rm: on Windows an open fs.watch
+  // handle on the tree makes every rmdir attempt fail with EBUSY. Without this
+  // the deletion fights the daemon itself and the worktree directory is left
+  // behind.
+  try {
+    dependencies.closeDiffWatchersForCwd?.(backing.path);
+    dependencies.releaseWorkspaceWatchers?.(backing.path);
+  } catch (error) {
+    dependencies.sessionLogger?.warn(
+      { err: error, targetPath: backing.path, requestId: request.requestId },
+      "Failed to release workspace watchers before worktree removal",
+    );
   }
 
   try {
@@ -409,13 +439,16 @@ async function maybeRemoveDirectory(
       worktreesBaseRoot: dependencies.byspaceWorktreesBaseRoot,
     });
     dependencies.github.invalidate({ cwd: backing.path });
-    return true;
+    return { removed: true };
   } catch (error) {
     dependencies.sessionLogger?.warn(
       { err: error, targetPath: backing.path, requestId: request.requestId },
       "Worktree disk removal failed during archive; workspace already archived",
     );
-    return false;
+    return {
+      removed: false,
+      directoryError: error instanceof Error ? error.message : String(error),
+    };
   }
 }
 

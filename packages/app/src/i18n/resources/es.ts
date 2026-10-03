@@ -1221,6 +1221,8 @@ export const es: TranslationResources = {
         hostDisconnected: "Hostno está conectado",
         hideFailed: "No se pudo ocultar el espacio de trabajo",
         archiveFailed: "No se pudo archivar el espacio de trabajo",
+        archiveDirectoryRemovalFailed:
+          "El espacio de trabajo se archivó, pero no se pudo eliminar su carpeta por completo. Cierra los programas que la usen y elimínala manualmente.",
       },
     },
   },
