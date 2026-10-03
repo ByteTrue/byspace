@@ -45,8 +45,6 @@ interface DetailStyles {
   codeVerticalScrollStyle: StyleProp<ViewStyle>;
   scrollAreaFillStyle: StyleProp<ViewStyle>;
   scrollAreaStyle: StyleProp<ViewStyle>;
-  jsonScrollCombined: StyleProp<ViewStyle>;
-  jsonScrollErrorCombined: StyleProp<ViewStyle>;
   fullBleedContainerStyle: StyleProp<ViewStyle>;
   loadingContainerStyle: StyleProp<ViewStyle>;
   resolvedMaxHeight: number | undefined;
@@ -74,15 +72,13 @@ function useDetailStyles(
 ): DetailStyles {
   const isFullBleed = resolveIsFullBleed(detail);
   const shouldFill = resolveShouldFill(detail, fillAvailableHeight);
-  const codeBlockStyle = isFullBleed ? styles.fullBleedBlock : styles.diffContainer;
-
   const sectionFillStyle = useMemo(
     () => [styles.section, shouldFill && styles.fillHeight],
     [shouldFill],
   );
   const codeBlockFillStyle = useMemo(
-    () => [codeBlockStyle, shouldFill && styles.fillHeight],
-    [codeBlockStyle, shouldFill],
+    () => [styles.diffContainer, shouldFill && styles.fillHeight],
+    [shouldFill],
   );
   const codeVerticalScrollStyle = useMemo(
     () => [
@@ -94,7 +90,6 @@ function useDetailStyles(
   );
   const scrollAreaFillStyle = useMemo(
     () => [
-      styles.scrollArea,
       resolvedMaxHeight !== undefined && inlineUnistylesStyle({ maxHeight: resolvedMaxHeight }),
       shouldFill && styles.fillHeight,
     ],
@@ -102,13 +97,10 @@ function useDetailStyles(
   );
   const scrollAreaStyle = useMemo(
     () => [
-      styles.scrollArea,
       resolvedMaxHeight !== undefined && inlineUnistylesStyle({ maxHeight: resolvedMaxHeight }),
     ],
     [resolvedMaxHeight],
   );
-  const jsonScrollCombined = styles.jsonScroll;
-  const jsonScrollErrorCombined = [styles.jsonScroll, styles.jsonScrollError];
   const fullBleedContainerStyle = useMemo(
     () => [
       isFullBleed ? styles.fullBleedContainer : styles.paddedContainer,
@@ -127,8 +119,6 @@ function useDetailStyles(
     codeVerticalScrollStyle,
     scrollAreaFillStyle,
     scrollAreaStyle,
-    jsonScrollCombined,
-    jsonScrollErrorCombined,
     fullBleedContainerStyle,
     loadingContainerStyle,
     resolvedMaxHeight,
@@ -617,7 +607,6 @@ function buildUnknownSections(detail: UnknownDetail, ds: DetailStyles, t: TFunct
         <ScrollView
           horizontal
           nestedScrollEnabled
-          style={ds.jsonScrollCombined}
           contentContainerStyle={styles.jsonContent}
           showsHorizontalScrollIndicator={true}
         >
@@ -746,7 +735,7 @@ function buildDetailSections(
   return [];
 }
 
-function ErrorSection({ errorText, ds }: { errorText: string; ds: DetailStyles }) {
+function ErrorSection({ errorText }: { errorText: string }) {
   const { t } = useTranslation();
   return (
     <View style={styles.section}>
@@ -754,7 +743,6 @@ function ErrorSection({ errorText, ds }: { errorText: string; ds: DetailStyles }
       <ScrollView
         horizontal
         nestedScrollEnabled
-        style={ds.jsonScrollErrorCombined}
         contentContainerStyle={styles.jsonContent}
         showsHorizontalScrollIndicator={true}
       >
@@ -796,7 +784,7 @@ export function ToolCallDetailsContent({
   const sections: ReactNode[] = buildDetailSections(toolName, detail, diffLines, ds, t);
 
   if (errorText) {
-    sections.push(<ErrorSection key="error" errorText={errorText} ds={ds} />);
+    sections.push(<ErrorSection key="error" errorText={errorText} />);
   }
 
   if (sections.length === 0) {
@@ -905,11 +893,6 @@ const styles = StyleSheet.create((theme) => {
     diffContainer: {
       overflow: "hidden",
     },
-    fullBleedBlock: {
-      borderWidth: 0,
-      borderRadius: 0,
-      overflow: "hidden",
-    },
     codeVerticalScroll: {},
     codeVerticalContent: {
       flexGrow: 1,
@@ -923,7 +906,6 @@ const styles = StyleSheet.create((theme) => {
       paddingHorizontal: insets.padding,
       paddingVertical: insets.padding,
     },
-    scrollArea: {},
     scrollContent: {
       padding: insets.padding,
     },
@@ -970,8 +952,6 @@ const styles = StyleSheet.create((theme) => {
       color: theme.colors.foreground,
       lineHeight: 18,
     },
-    jsonScroll: {},
-    jsonScrollError: {},
     jsonContent: {
       padding: insets.padding,
     },

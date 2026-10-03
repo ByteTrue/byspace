@@ -1188,9 +1188,6 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
     overflow: "hidden",
     ...(isWeb ? { cursor: "auto" as const, userSelect: "text" as const } : {}),
   },
-  pressableExpanded: {},
-
-  detailWrapperBorderless: {},
   shimmerOverlay: {
     position: "absolute",
     top: 0,
@@ -2262,7 +2259,6 @@ interface ExpandableBadgeProps {
   isError?: boolean;
   isLastInSequence?: boolean;
   disableOuterSpacing?: boolean;
-  borderlessWhenExpanded?: boolean;
   testID?: string;
 }
 
@@ -2584,7 +2580,6 @@ export const ExpandableBadge = memo(function ExpandableBadge({
   isError = false,
   isLastInSequence = false,
   disableOuterSpacing,
-  borderlessWhenExpanded = false,
   testID,
 }: ExpandableBadgeProps) {
   const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
@@ -2736,13 +2731,7 @@ export const ExpandableBadge = memo(function ExpandableBadge({
     [isInteractive, isPressed],
   );
 
-  const detailWrapperStyle = useMemo(
-    () => [
-      expandableBadgeStylesheet.detailWrapper,
-      borderlessWhenExpanded && expandableBadgeStylesheet.detailWrapperBorderless,
-    ],
-    [borderlessWhenExpanded],
-  );
+  const detailWrapperStyle = expandableBadgeStylesheet.detailWrapper;
 
   const accessibilityState = useMemo(
     () => (isInteractive ? { expanded: isExpanded } : undefined),
@@ -2874,7 +2863,6 @@ function areExpandableBadgePropsEqual(previous: ExpandableBadgeProps, next: Expa
   if (previous.isError !== next.isError) return false;
   if (previous.isLastInSequence !== next.isLastInSequence) return false;
   if (previous.disableOuterSpacing !== next.disableOuterSpacing) return false;
-  if (previous.borderlessWhenExpanded !== next.borderlessWhenExpanded) return false;
   if (previous.testID !== next.testID) return false;
   if (previous.onToggle !== next.onToggle) return false;
   if (previous.onOpenFile !== next.onOpenFile) return false;
