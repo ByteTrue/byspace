@@ -10,7 +10,10 @@ import {
 import type { WorkspaceDescriptor } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
-import { archiveWorkspaceOptimistically } from "@/workspace/workspace-archive";
+import {
+  archiveWorkspaceOptimistically,
+  WorkspaceDirectoryRemovalError,
+} from "@/workspace/workspace-archive";
 
 function purgeArchivedWorkspaceState(input: { serverId: string; workspaceId: string }): void {
   const workspaceKey = buildWorkspaceTabPersistenceKey(input);
@@ -70,9 +73,13 @@ export function useWorkspaceArchive(input: ArchiveWorkspaceInput): WorkspaceArch
       });
       purgeArchivedWorkspaceState({ serverId, workspaceId });
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : t("sidebar.workspace.toasts.archiveFailed"),
-      );
+      if (error instanceof WorkspaceDirectoryRemovalError) {
+        toast.error(t("sidebar.workspace.toasts.archiveDirectoryRemovalFailed"));
+      } else {
+        toast.error(
+          error instanceof Error ? error.message : t("sidebar.workspace.toasts.archiveFailed"),
+        );
+      }
     } finally {
       onSetHiding?.(false);
     }

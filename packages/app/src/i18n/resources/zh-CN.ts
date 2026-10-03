@@ -1174,6 +1174,8 @@ export const zhCN: TranslationResources = {
         hostDisconnected: "Host 未连接",
         hideFailed: "隐藏 workspace 失败",
         archiveFailed: "归档工作区失败",
+        archiveDirectoryRemovalFailed:
+          "工作区已归档，但其文件夹未能完全删除。请关闭占用它的程序后手动删除该文件夹。",
       },
     },
   },

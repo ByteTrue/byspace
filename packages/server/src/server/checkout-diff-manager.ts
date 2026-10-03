@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+
 import type pino from "pino";
 import type { SubscribeCheckoutDiffRequest, SessionOutboundMessage } from "./messages.js";
 import type { WorkspaceGitRuntimeSnapshot, WorkspaceGitService } from "./workspace-git-service.js";
@@ -110,6 +112,24 @@ export class CheckoutDiffManager {
     } catch (error) {
       unsubscribe();
       throw error;
+    }
+  }
+
+  /**
+   * Close every diff target rooted at a directory that is about to be deleted.
+   * The fs watcher behind a target keeps a handle on the tree on Windows, which
+   * turns the archive's rmdir into EBUSY. Clients holding the closed targets
+   * re-subscribe through subscribe_checkout_diff_request if they need the diff
+   * of some other workspace on the same checkout.
+   */
+  closeForCwd(cwd: string): void {
+    const resolvedCwd = resolve(cwd);
+    for (const [key, target] of this.targets) {
+      if (target.cwd !== resolvedCwd && target.diffCwd !== resolvedCwd) {
+        continue;
+      }
+      this.closeTarget(target);
+      this.targets.delete(key);
     }
   }
 

@@ -1194,6 +1194,8 @@ export const ko: TranslationResources = {
         hostDisconnected: "호스트가 연결되어 있지 않습니다",
         hideFailed: "워크스페이스를 숨기지 못했습니다",
         archiveFailed: "워크스페이스를 보관하지 못했습니다.",
+        archiveDirectoryRemovalFailed:
+          "워크스페이스는 보관되었지만 폴더를 완전히 삭제하지 못했습니다. 사용 중인 프로그램을 닫고 폴더를 수동으로 삭제하세요.",
       },
     },
   },

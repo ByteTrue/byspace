@@ -1212,6 +1212,8 @@ export const ptBR: TranslationResources = {
         hostDisconnected: "Host não está conectado",
         hideFailed: "Falha ao ocultar workspace",
         archiveFailed: "Falha ao arquivar workspace",
+        archiveDirectoryRemovalFailed:
+          "O workspace foi arquivado, mas a pasta não pôde ser totalmente removida. Feche os programas que a estão usando e exclua a pasta manualmente.",
       },
     },
   },

@@ -1186,6 +1186,8 @@ export const ar: TranslationResources = {
         hostDisconnected: "Host غير متصل",
         hideFailed: "فشل في إخفاء مساحة العمل",
         archiveFailed: "فشل في أرشفة مساحة العمل",
+        archiveDirectoryRemovalFailed:
+          "تم أرشفة مساحة العمل، لكن تعذّر حذف مجلدها بالكامل. أغلق البرامج التي تستخدمه واحذف المجلد يدويًا.",
       },
     },
   },

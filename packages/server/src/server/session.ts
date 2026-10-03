@@ -622,6 +622,7 @@ export class Session {
   private readonly github: ForgeService;
   private readonly renameCurrentBranch: typeof renameCurrentBranchDefault;
   private readonly workspaceGitService: WorkspaceGitService;
+  private readonly checkoutDiffManager: CheckoutDiffManager;
   private readonly workspaceAutoName: WorkspaceAutoName;
   private readonly gitMutation: GitMutationService;
   private readonly workspaceProvisioning: WorkspaceProvisioningService;
@@ -780,6 +781,7 @@ export class Session {
     this.github = github ?? createGitHubService();
     this.renameCurrentBranch = renameCurrentBranch ?? renameCurrentBranchDefault;
     this.workspaceGitService = workspaceGitService;
+    this.checkoutDiffManager = checkoutDiffManager;
     this.gitMutation = createGitMutationService({
       workspaceGitService: this.workspaceGitService,
       logger: this.sessionLogger,
@@ -6594,7 +6596,7 @@ export class Session {
         throw new Error(`Workspace not found: ${request.workspaceId}`);
       }
 
-      await archiveByScope(
+      const archiveResult = await archiveByScope(
         {
           byspaceHome: this.byspaceHome,
           byspaceWorktreesBaseRoot: this.worktreesRoot,
@@ -6615,6 +6617,9 @@ export class Session {
             assertWorkspaceAutomationAllowedForWorkspace(this.workspaceRegistry, workspaceId),
           killTerminalsForWorkspace: (workspaceId) =>
             this.terminalController.killTerminalsForWorkspace(workspaceId),
+          releaseWorkspaceWatchers: (cwd) => this.workspaceGitService.releaseWatchersForCwd(cwd),
+          closeDiffWatchersForCwd: (cwd) => this.checkoutDiffManager.closeForCwd(cwd),
+          closeFileWatchersForCwd: (cwd) => this.workspaceFilesSession.closeFileWatchersForCwd(cwd),
           stopWorkspaceSetup: (workspaceId) => this.workspaceSetupRuntime.stop(workspaceId),
           sessionLogger: this.sessionLogger,
         },
@@ -6633,6 +6638,7 @@ export class Session {
           workspaceId: request.workspaceId,
           archivedAt,
           error: null,
+          directoryError: archiveResult?.directoryError ?? null,
         },
       });
     } catch (error) {
