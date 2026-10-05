@@ -88,7 +88,6 @@ export const OverviewToolCallGroupView = memo(function OverviewToolCallGroupView
       isLastInSequence={isLastInSequence}
       onToggle={toggle}
       renderDetails={renderDetails}
-      borderlessWhenExpanded
     />
   );
 });

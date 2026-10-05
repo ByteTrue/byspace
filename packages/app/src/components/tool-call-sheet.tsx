@@ -231,10 +231,12 @@ const styles = StyleSheet.create((theme) => ({
   closeButton: {
     padding: theme.spacing[2],
   },
+  // surface1 (page-like) instead of the sheet surface2: detail blocks are flat
+  // on their background now, so they need a page-colored surface to read on.
   content: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface1,
   },
   contentContainer: {
     padding: 0,
