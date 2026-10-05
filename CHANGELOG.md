@@ -5,6 +5,27 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.17.0 - 2026-10-05
+
+### Added
+
+- Self-hosted BySpace ships as one container (`ghcr.io/bytetrue/byspace`) serving the web app and the relay on the same port, with the daemon installed from npm on your own machine ([#13](https://github.com/ByteTrue/byspace/pull/13))
+- Added a three-step setup guide on the welcome screen for self-hosted origins, and pasting a pairing link connects the host ([#13](https://github.com/ByteTrue/byspace/pull/13))
+- Added `byspace onboard --web-origin` to point pairing links at a self-hosted web app and `--relay-endpoint` to point the daemon at a self-hosted relay ([#13](https://github.com/ByteTrue/byspace/pull/13))
+- Added a **Default host** project setting, and new workspaces start on the local daemon instead of the last active host ([#14](https://github.com/ByteTrue/byspace/pull/14))
+
+### Changed
+
+- Nested tool calls inside a codemode script render as rows indented under their parent call instead of being collapsed into a badge ([#15](https://github.com/ByteTrue/byspace/pull/15))
+- Expanded thinking and tool call details hang off a guide line on the page background instead of nested gray boxes ([#17](https://github.com/ByteTrue/byspace/pull/17))
+- The sidebar title and nav rows share one alignment rail, and the BySpace title sits above the rows in weight ([#14](https://github.com/ByteTrue/byspace/pull/14))
+- `npm run dev`, `dev:app`, and `cli` run under PowerShell as well as bash ([#14](https://github.com/ByteTrue/byspace/pull/14))
+
+### Fixed
+
+- Fixed archiving a worktree on Windows failing with a busy directory because the daemon's own file watchers held the folder ([#16](https://github.com/ByteTrue/byspace/pull/16))
+- Fixed an archived workspace reappearing in the sidebar after its archive request timed out ([#16](https://github.com/ByteTrue/byspace/pull/16))
+
 ## 0.16.5 - 2026-10-01
 
 ### Changed
