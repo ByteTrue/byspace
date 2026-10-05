@@ -94,25 +94,38 @@ async function fetchCanonicalTimeline(
   return timeline.entries.map((entry) => entry.item);
 }
 
+async function waitForCondition<T>(
+  read: () => Promise<T>,
+  predicate: (value: T) => boolean,
+  timeoutMessage: (last: T) => string,
+  timeoutMs = PI_TEST_TIMEOUT_MS,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  let last = await read();
+  while (!predicate(last)) {
+    if (Date.now() >= deadline) {
+      throw new Error(timeoutMessage(last));
+    }
+    await sleep(250);
+    last = await read();
+  }
+  return last;
+}
+
 async function waitForTimelineItem(
   client: DaemonClient,
   agentId: string,
   predicate: (item: AgentTimelineItem) => boolean,
   timeoutMs = PI_TEST_TIMEOUT_MS,
 ): Promise<AgentTimelineItem> {
-  const deadline = Date.now() + timeoutMs;
-  let lastItems: AgentTimelineItem[] = [];
-  while (Date.now() < deadline) {
-    lastItems = await fetchCanonicalTimeline(client, agentId);
-    const item = lastItems.find(predicate);
-    if (item) {
-      return item;
-    }
-    await sleep(250);
-  }
-  throw new Error(
-    `Timed out waiting for Pi timeline item. Last timeline: ${JSON.stringify(lastItems)}`,
+  const items = await waitForCondition(
+    () => fetchCanonicalTimeline(client, agentId),
+    (timeline) => timeline.some(predicate),
+    (timeline) =>
+      `Timed out waiting for Pi timeline item. Last timeline: ${JSON.stringify(timeline)}`,
+    timeoutMs,
   );
+  return items.find(predicate)!;
 }
 
 async function withConnectedPiDaemon(
@@ -134,6 +147,73 @@ async function withConnectedPiDaemon(
     await client.close().catch(() => undefined);
     await daemon.close().catch(() => undefined);
   }
+}
+
+// A dependency-free stdio MCP server. Pi spawns it from a temp directory, so it cannot resolve
+// the repo's node_modules, and it only has to prove the server BySpace registered got connected.
+const PI_MCP_PROBE_SERVER_SOURCE = `import { appendFileSync } from "node:fs";
+
+const logPath = process.argv[2];
+
+function log(line) {
+  appendFileSync(logPath, line + "\\n");
+}
+
+function send(message) {
+  process.stdout.write(JSON.stringify(message) + "\\n");
+}
+
+let buffer = "";
+
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let newline = buffer.indexOf("\\n");
+  while (newline !== -1) {
+    const line = buffer.slice(0, newline).trim();
+    buffer = buffer.slice(newline + 1);
+    newline = buffer.indexOf("\\n");
+    if (!line) continue;
+    let message;
+    try {
+      message = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    log("recv: " + (message.method ?? "response"));
+    if (message.method === "initialize") {
+      send({
+        jsonrpc: "2.0",
+        id: message.id,
+        result: {
+          protocolVersion: message.params?.protocolVersion ?? "2024-11-05",
+          capabilities: { tools: {} },
+          serverInfo: { name: "pi-mcp-probe", version: "1.0.0" },
+        },
+      });
+    } else if (message.method === "tools/list") {
+      send({ jsonrpc: "2.0", id: message.id, result: { tools: [] } });
+    } else if (message.id !== undefined) {
+      send({ jsonrpc: "2.0", id: message.id, result: {} });
+    }
+  }
+});
+`;
+
+// Pi connects registered MCP servers when the session starts, before any prompt reaches the model,
+// so injection can be asserted without spending a model turn.
+async function waitForPiMcpProbeRequest(
+  logPath: string,
+  request: string,
+  timeoutMs = PI_TEST_TIMEOUT_MS,
+): Promise<string> {
+  return waitForCondition(
+    async () => (existsSync(logPath) ? readFileSync(logPath, "utf8") : ""),
+    (log) => log.includes(request),
+    (log) =>
+      `Timed out waiting for the Pi MCP probe to log ${request}. Last probe log: ${JSON.stringify(log)}`,
+    timeoutMs,
+  );
 }
 
 let canRun = false;
@@ -916,6 +996,45 @@ test(
       } finally {
         await session.close();
       }
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  },
+  PI_TEST_TIMEOUT_MS,
+);
+
+test(
+  "real Pi daemon connects MCP servers BySpace registers from its generated extension",
+  async () => {
+    const cwd = tmpCwd("pi-mcp-injection-");
+    const probeServerPath = path.join(cwd, "mcp-probe-server.mjs");
+    const probeLogPath = path.join(cwd, "mcp-probe.log");
+
+    try {
+      writeFileSync(probeServerPath, PI_MCP_PROBE_SERVER_SOURCE);
+
+      await withConnectedPiDaemon(async ({ client }) => {
+        const agent = await client.createAgent({
+          cwd,
+          title: "pi-mcp-injection",
+          provider: "pi",
+          model: PI_REAL_TEST_MODEL,
+          mcpServers: {
+            pi_probe: {
+              type: "stdio",
+              command: process.execPath,
+              args: [probeServerPath, probeLogPath],
+            },
+          },
+        });
+
+        // createAgent throws "Provider 'pi' does not support MCP servers" when the session
+        // capability is false, so reaching here already proves the gate opened.
+        expect(agent.capabilities.supportsMcpServers).toBe(true);
+
+        const probeLog = await waitForPiMcpProbeRequest(probeLogPath, "tools/list");
+        expect(probeLog).toContain("recv: initialize");
+      });
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

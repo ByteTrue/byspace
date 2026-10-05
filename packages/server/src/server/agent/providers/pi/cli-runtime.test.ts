@@ -151,26 +151,6 @@ describe("PiCliRuntime", () => {
     ]);
   });
 
-  test("passes an MCP config path to Pi", async () => {
-    const child = createPiChild();
-    replyToCommands(child, () => ({}));
-    const launches: PiRuntimeLaunch[] = [];
-    const runtime = createRuntime(child, launches);
-
-    await runtime.startSession({
-      cwd: "/workspace/project",
-      mcpConfigPath: "/tmp/byspace-pi-mcp/mcp.json",
-    });
-
-    expect(launches).toEqual([
-      expect.objectContaining({
-        cwd: "/workspace/project",
-        mcpConfigPath: "/tmp/byspace-pi-mcp/mcp.json",
-        argv: ["pi", "--mode", "rpc", "--mcp-config", "/tmp/byspace-pi-mcp/mcp.json", "--approve"],
-      }),
-    ]);
-  });
-
   test("uses the configured command when resuming a session", async () => {
     const child = createPiChild();
     replyToCommands(child, () => ({}));

@@ -1,14 +1,4 @@
-import {
-  closeSync,
-  existsSync,
-  fstatSync,
-  mkdirSync,
-  mkdtempSync,
-  openSync,
-  readSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import pino from "pino";
@@ -83,43 +73,64 @@ class ManualUsagePollScheduler implements PiUsagePollScheduler {
   }
 }
 
-function readUtf8File(pathname: string): string {
-  const fd = openSync(pathname, "r");
-  try {
-    const buffer = Buffer.alloc(fstatSync(fd).size);
-    const bytesRead = readSync(fd, buffer, 0, buffer.length, 0);
-    return buffer.subarray(0, bytesRead).toString("utf8");
-  } finally {
-    closeSync(fd);
-  }
-}
-
 type BySpaceExtensionListener = (event: unknown, context?: unknown) => unknown;
 
-async function loadBySpaceExtensionListeners(
+const BUILTIN_MCP_COMMAND = { name: "mcp", sourceInfo: { path: "builtin:mcp" } };
+
+async function loadBySpaceExtension(
   extensionPath: string,
-): Promise<Map<string, BySpaceExtensionListener>> {
+  options: {
+    registerMcpServer?: (name: string, config: unknown) => void;
+    getCommands?: () => unknown[];
+  } = {},
+) {
   const listeners = new Map<string, BySpaceExtensionListener>();
+  const commands: string[] = [];
+  const mcpServers: Record<string, unknown> = {};
   const extension = (await import(pathToFileURL(extensionPath).href)) as {
-    default: (piApi: {
-      on: (event: string, listener: BySpaceExtensionListener) => void;
-      registerCommand: () => void;
-    }) => void;
+    default: (piApi: unknown) => void;
   };
   extension.default({
-    on: (event, listener) => listeners.set(event, listener),
-    registerCommand: () => undefined,
+    on: (event: string, listener: BySpaceExtensionListener) => listeners.set(event, listener),
+    registerCommand: (name: string) => commands.push(name),
+    registerMcpServer: (name: string, config: unknown) => {
+      options.registerMcpServer?.(name, config);
+      mcpServers[name] = config;
+    },
+    getCommands: options.getCommands ?? (() => [BUILTIN_MCP_COMMAND]),
   });
-  return listeners;
+  return { listeners, commands, mcpServers };
 }
 
 async function applyBySpaceExtensionSystemPrompt(
   extensionPath: string,
   systemPrompt: string,
 ): Promise<string | undefined> {
-  const listeners = await loadBySpaceExtensionListeners(extensionPath);
+  const { listeners } = await loadBySpaceExtension(extensionPath);
   const result = await listeners.get("before_agent_start")?.({ systemPrompt });
   return (result as { systemPrompt?: string } | undefined)?.systemPrompt;
+}
+
+async function runBySpaceSessionStart(
+  listeners: Map<string, BySpaceExtensionListener>,
+): Promise<Array<{ message: string; level: string | undefined }>> {
+  const notifications: Array<{ message: string; level: string | undefined }> = [];
+  await listeners.get("session_start")?.(
+    {},
+    {
+      sessionManager: { getEntries: () => [] },
+      ui: {
+        notify: (message: string, level?: string) => notifications.push({ message, level }),
+      },
+    },
+  );
+  return notifications;
+}
+
+function warningNotifications(
+  notifications: Array<{ message: string; level: string | undefined }>,
+): string[] {
+  return notifications.filter((n) => n.level === "warning").map((n) => n.message);
 }
 
 async function flushTurnScheduling(): Promise<void> {
@@ -1706,7 +1717,7 @@ describe("PiRpcAgentSession", () => {
     const session = await client.createSession(createConfig());
     const extensionPath = pi.recordedLaunches[0]?.extensionPaths[0];
     expect(extensionPath).toBeDefined();
-    const listeners = await loadBySpaceExtensionListeners(extensionPath!);
+    const { listeners } = await loadBySpaceExtension(extensionPath!);
     const submittedMessage = { role: "user", content: "new prompt" };
     const entries: Array<{
       type: string;
@@ -2934,30 +2945,8 @@ describe("PiRpcAgentClient", () => {
     expect(pi.latestSession().treeNavigationRequests).toEqual(["entry-1"]);
   });
 
-  test("injects MCP servers without replacing the Pi global MCP config", async () => {
-    const agentDir = mkdtempSync(path.join(tmpdir(), "byspace-pi-agent-"));
-    onTestFinished(() => rmSync(agentDir, { recursive: true, force: true }));
-    writeFileSync(
-      path.join(agentDir, "mcp.json"),
-      JSON.stringify({
-        settings: { toolPrefix: "none", disableProxyTool: true },
-        "mcp-servers": {
-          "brave-search": {
-            url: "https://example.com/mcp/brave",
-            directTools: ["brave_llm_context"],
-          },
-        },
-      }),
-    );
+  test("registers injected MCP servers from the BySpace extension", async () => {
     const pi = new FakePi();
-    pi.queueCommands([
-      {
-        name: "mcp",
-        description: "Show MCP server status",
-        source: "extension",
-        sourceInfo: { source: "npm:pi-mcp-adapter" },
-      },
-    ]);
     const client = createClient(pi);
 
     const session = await client.createSession(
@@ -2975,15 +2964,10 @@ describe("PiRpcAgentClient", () => {
           },
         },
       }),
-      { env: { PI_CODING_AGENT_DIR: agentDir } },
     );
 
-    expect(pi.recordedLaunches).toHaveLength(2);
-    expect(pi.recordedLaunches[0]).toMatchObject({
-      cwd: "/tmp/byspace-pi-rpc-test",
-      argv: ["pi", "--mode", "rpc", "--approve"],
-    });
-    const actualLaunch = pi.recordedLaunches[1]!;
+    expect(pi.recordedLaunches).toHaveLength(1);
+    const actualLaunch = pi.recordedLaunches[0]!;
     expect(actualLaunch.extensionPaths).toHaveLength(1);
     expect(actualLaunch.argv).toEqual([
       "pi",
@@ -2991,67 +2975,67 @@ describe("PiRpcAgentClient", () => {
       "rpc",
       "--thinking",
       "medium",
-      "--mcp-config",
-      actualLaunch.mcpConfigPath,
       "--extension",
       actualLaunch.extensionPaths[0],
       "--approve",
     ]);
     expect(session.capabilities.supportsMcpServers).toBe(true);
 
-    const configPath = actualLaunch.mcpConfigPath;
-    expect(configPath).toEqual(expect.any(String));
-    const injectedConfig = JSON.parse(readUtf8File(configPath!)) as {
-      mcpServers: Record<string, unknown>;
-    };
-    expect(injectedConfig).toEqual({
-      settings: { toolPrefix: "none", disableProxyTool: true },
-      mcpServers: {
-        "brave-search": {
-          url: "https://example.com/mcp/brave",
-          directTools: ["brave_llm_context"],
-        },
-        byspace: {
-          url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=agent-1",
-          auth: false,
-          oauth: false,
-        },
-        localSecret: {
-          command: "node",
-          args: ["secret-server.js"],
-          env: { SECRET_NUMBER: "314159" },
-        },
+    const extensionPath = actualLaunch.extensionPaths[0]!;
+    const extension = await loadBySpaceExtension(extensionPath);
+    expect(extension.mcpServers).toEqual({
+      byspace: { url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=agent-1" },
+      localSecret: {
+        command: "node",
+        args: ["secret-server.js"],
+        env: { SECRET_NUMBER: "314159" },
       },
     });
+    expect(warningNotifications(await runBySpaceSessionStart(extension.listeners))).toEqual([]);
 
     await session.close();
-    expect(existsSync(configPath!)).toBe(false);
+    expect(existsSync(extensionPath)).toBe(false);
   });
 
-  test("reports the path of a malformed Pi global MCP config", async () => {
-    const agentDir = mkdtempSync(path.join(tmpdir(), "byspace-pi-agent-"));
-    onTestFinished(() => rmSync(agentDir, { recursive: true, force: true }));
-    const configPath = path.join(agentDir, "mcp.json");
-    writeFileSync(configPath, "{ invalid");
+  test("keeps the BySpace extension bridges when Pi rejects one MCP registration", async () => {
     const pi = new FakePi();
-    pi.queueCommands([{ name: "mcp", source: "extension" }]);
     const client = createClient(pi);
 
-    await expect(
-      client.createSession(
-        createConfig({
-          mcpServers: {
-            byspace: { type: "http", url: "http://127.0.0.1:6767/mcp/agents" },
+    const session = await client.createSession(
+      createConfig({
+        mcpServers: {
+          rejected: {
+            type: "http",
+            url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=agent-1",
           },
-        }),
-        { env: { PI_CODING_AGENT_DIR: agentDir } },
-      ),
-    ).rejects.toThrow(`Failed to parse Pi MCP config: ${configPath}`);
+          accepted: { type: "stdio", command: "node", args: ["ok-server.js"] },
+        },
+      }),
+    );
+
+    const extension = await loadBySpaceExtension(pi.recordedLaunches[0]!.extensionPaths[0]!, {
+      registerMcpServer: (name) => {
+        if (name === "rejected") {
+          throw new Error("Invalid MCP server registered by extension");
+        }
+      },
+    });
+    expect([...extension.listeners.keys()]).toEqual(
+      expect.arrayContaining(["session_start", "turn_end"]),
+    );
+    expect(extension.commands).toEqual(["byspace_capture_entries", "byspace_tree"]);
+    expect(extension.mcpServers).toEqual({
+      accepted: { command: "node", args: ["ok-server.js"] },
+    });
+    expect(warningNotifications(await runBySpaceSessionStart(extension.listeners))).toEqual([
+      'BySpace could not register MCP server "rejected": Invalid MCP server registered by extension',
+    ]);
+
+    await session.close();
   });
 
-  test("does not pass MCP config when pi-mcp-adapter is not loaded", async () => {
+  test("warns when Pi has no built-in MCP support to connect the registered servers", async () => {
     const pi = new FakePi();
-    pi.queueCommands([]);
     const client = createClient(pi);
 
     const session = await client.createSession(
@@ -3065,21 +3049,47 @@ describe("PiRpcAgentClient", () => {
       }),
     );
 
-    expect(pi.recordedLaunches).toHaveLength(2);
-    const actualLaunch = pi.recordedLaunches[1]!;
-    expect(actualLaunch.extensionPaths).toHaveLength(1);
-    expect(actualLaunch.argv).toEqual([
-      "pi",
-      "--mode",
-      "rpc",
-      "--thinking",
-      "medium",
-      "--extension",
-      actualLaunch.extensionPaths[0],
-      "--approve",
+    const extension = await loadBySpaceExtension(pi.recordedLaunches[0]!.extensionPaths[0]!, {
+      getCommands: () => [
+        { name: "mcp", sourceInfo: { path: "/tmp/replaced-by-another-extension" } },
+      ],
+    });
+    expect(warningNotifications(await runBySpaceSessionStart(extension.listeners))).toEqual([
+      "Pi's built-in MCP support is not loaded, so the MCP servers BySpace registered for this agent are not connected. Another extension may have replaced it.",
     ]);
-    expect(actualLaunch.mcpConfigPath).toBeUndefined();
-    expect(session.capabilities.supportsMcpServers).toBe(false);
+
+    await session.close();
+  });
+
+  test("keeps quiet when Pi's built-in MCP support is loaded", async () => {
+    const pi = new FakePi();
+    const client = createClient(pi);
+
+    const session = await client.createSession(
+      createConfig({
+        mcpServers: {
+          byspace: {
+            type: "http",
+            url: "http://127.0.0.1:6767/mcp/agents?callerAgentId=agent-1",
+          },
+        },
+      }),
+    );
+
+    const extension = await loadBySpaceExtension(pi.recordedLaunches[0]!.extensionPaths[0]!);
+    expect(warningNotifications(await runBySpaceSessionStart(extension.listeners))).toEqual([]);
+
+    await session.close();
+  });
+
+  test("registers no MCP server for a session without injected servers", async () => {
+    const { pi, session } = await createSession();
+
+    const extension = await loadBySpaceExtension(pi.recordedLaunches[0]!.extensionPaths[0]!);
+    expect(extension.mcpServers).toEqual({});
+    expect(warningNotifications(await runBySpaceSessionStart(extension.listeners))).toEqual([]);
+
+    await session.close();
   });
 });
 
