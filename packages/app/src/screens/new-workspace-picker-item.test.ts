@@ -6,7 +6,9 @@ import {
   buildBranchPickerItems,
   buildPickerOptionData,
   defaultBasePickerItem,
+  pinnedBasePickerItem,
   pickerItemToCheckoutRequest,
+  resolveNewWorkspaceBaseItem,
   type PickerItem,
 } from "./new-workspace-picker-item";
 
@@ -338,5 +340,96 @@ describe("defaultBasePickerItem", () => {
 
   it("has no default for detached HEAD", () => {
     expect(defaultBasePickerItem({ currentBranch: null })).toBeNull();
+  });
+});
+
+describe("pinnedBasePickerItem", () => {
+  const detail = (overrides: Partial<BranchPickerDetail>): BranchPickerDetail => ({
+    name: "main",
+    committerDate: 0,
+    ...overrides,
+  });
+
+  it("prefers the remote-tracking ref when the branch has one", () => {
+    expect(
+      pinnedBasePickerItem([detail({ hasLocal: true, hasRemote: true })], "main"),
+    ).toMatchObject({ kind: "branch", refName: "refs/remotes/origin/main", name: "main" });
+  });
+
+  it("uses the local ref when the branch has no remote", () => {
+    expect(pinnedBasePickerItem([detail({ hasLocal: true })], "main")).toMatchObject({
+      refName: "refs/heads/main",
+    });
+  });
+
+  it("uses the bare name when provenance is unknown", () => {
+    expect(pinnedBasePickerItem([detail({})], "main")).toMatchObject({
+      refName: "main",
+    });
+  });
+
+  it("returns null when the pinned branch is missing from the host", () => {
+    expect(pinnedBasePickerItem([detail({ name: "other" })], "main")).toBeNull();
+    expect(pinnedBasePickerItem([], "main")).toBeNull();
+  });
+
+  it("returns null without a pin", () => {
+    expect(pinnedBasePickerItem([detail({})], null)).toBeNull();
+    expect(pinnedBasePickerItem([detail({})], "  ")).toBeNull();
+  });
+});
+
+describe("resolveNewWorkspaceBaseItem", () => {
+  const detail = (overrides: Partial<BranchPickerDetail>): BranchPickerDetail => ({
+    name: "main",
+    committerDate: 0,
+    ...overrides,
+  });
+
+  it("prefers the manual picker selection over the pin and the checkout default", () => {
+    const pinned = pinnedBasePickerItem([detail({ hasRemote: true })], "main");
+    expect(pinned).not.toBeNull();
+    expect(
+      resolveNewWorkspaceBaseItem({
+        selectedItem: {
+          kind: "branch",
+          name: "dev",
+          refName: "refs/heads/dev",
+          accessibilityLabel: "dev",
+        },
+        pinnedBaseItem: pinned,
+        checkoutStatus: { currentBranch: "main" },
+      }),
+    ).toMatchObject({ name: "dev" });
+  });
+
+  it("falls back to the project pin before the checkout default", () => {
+    expect(
+      resolveNewWorkspaceBaseItem({
+        selectedItem: null,
+        pinnedBaseItem: pinnedBasePickerItem([detail({ hasLocal: true })], "main"),
+        checkoutStatus: { currentBranch: "main" },
+      }),
+    ).toMatchObject({ refName: "refs/heads/main" });
+  });
+
+  it("uses the checkout default when no selection and no pin resolve", () => {
+    expect(
+      resolveNewWorkspaceBaseItem({
+        selectedItem: null,
+        pinnedBaseItem: null,
+        checkoutStatus: { currentBranch: "main" },
+      }),
+    ).toMatchObject({ refName: "refs/heads/main" });
+  });
+
+  it("returns null when nothing can resolve", () => {
+    expect(
+      resolveNewWorkspaceBaseItem({
+        selectedItem: null,
+        pinnedBaseItem: null,
+        checkoutStatus: null,
+      }),
+    ).toBeNull();
   });
 });

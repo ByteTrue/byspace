@@ -1107,12 +1107,6 @@ export const ja: TranslationResources = {
       openProjectSettings: "プロジェクト設定を開く",
     },
     project: {
-      defaultHost: {
-        label: "新規ワークスペースのデフォルトホスト",
-        automatic: "自動",
-        hint: "このプロジェクトのワークスペース作成時に事前選択されるホスト",
-        saveFailed: "デフォルトホストを保存できませんでした",
-      },
       actions: {
         menu: "プロジェクトアクション",
         openSettings: "プロジェクト設定を開く",
@@ -2506,6 +2500,24 @@ export const ja: TranslationResources = {
       },
     },
     project: {
+      defaultHost: {
+        label: "新規ワークスペースのデフォルトホスト",
+        automatic: "自動",
+        hint: "このプロジェクトのワークスペース作成時に事前選択されるホスト",
+        saveFailed: "デフォルトホストを保存できませんでした",
+      },
+      defaultIsolation: {
+        label: "新規ワークスペースのデフォルト分離",
+        automatic: "自動",
+        hint: "このプロジェクトのワークスペース作成時に事前選択される分離方式",
+        saveFailed: "デフォルト分離を保存できませんでした",
+      },
+      defaultBaseBranch: {
+        label: "新規 worktree のデフォルトベースブランチ",
+        automatic: "自動",
+        hint: "このプロジェクトの worktree 作成時に基準となるブランチ",
+        saveFailed: "デフォルトベースブランチを保存できませんでした",
+      },
       noEditableTarget: "このホストではこのプロジェクトを編集できません。",
       backToProjects: "プロジェクトに戻る",
       edit: {

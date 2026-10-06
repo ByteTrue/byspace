@@ -1102,12 +1102,6 @@ export const ko: TranslationResources = {
       openProjectSettings: "프로젝트 설정 열기",
     },
     project: {
-      defaultHost: {
-        label: "새 작업 공간의 기본 호스트",
-        automatic: "자동",
-        hint: "이 프로젝트의 작업 공간을 만들 때 미리 선택되는 호스트",
-        saveFailed: "기본 호스트를 저장하지 못했습니다",
-      },
       actions: {
         menu: "프로젝트 작업",
         openSettings: "프로젝트 설정 열기",
@@ -2495,6 +2489,24 @@ export const ko: TranslationResources = {
       },
     },
     project: {
+      defaultHost: {
+        label: "새 작업 공간의 기본 호스트",
+        automatic: "자동",
+        hint: "이 프로젝트의 작업 공간을 만들 때 미리 선택되는 호스트",
+        saveFailed: "기본 호스트를 저장하지 못했습니다",
+      },
+      defaultIsolation: {
+        label: "새 작업 공간의 기본 격리 방식",
+        automatic: "자동",
+        hint: "이 프로젝트의 작업 공간을 만들 때 미리 선택되는 격리 방식",
+        saveFailed: "기본 격리 방식을 저장하지 못했습니다",
+      },
+      defaultBaseBranch: {
+        label: "새 worktree의 기본 베이스 브랜치",
+        automatic: "자동",
+        hint: "이 프로젝트의 worktree를 만들 때 기준이 되는 브랜치",
+        saveFailed: "기본 베이스 브랜치를 저장하지 못했습니다",
+      },
       noEditableTarget: "이 호스트에서는 이 프로젝트를 편집할 수 없습니다.",
       backToProjects: "프로젝트로 돌아가기",
       edit: {

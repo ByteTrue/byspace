@@ -1129,12 +1129,6 @@ export const es: TranslationResources = {
       openProjectSettings: "Abrir la configuración del proyecto",
     },
     project: {
-      defaultHost: {
-        label: "Host predeterminado para nuevos espacios",
-        automatic: "Automático",
-        hint: "Preseleccionado al crear un espacio de trabajo para este proyecto",
-        saveFailed: "No se pudo guardar el host predeterminado",
-      },
       actions: {
         menu: "Acciones del proyecto",
         openSettings: "Abrir la configuración del proyecto",
@@ -2537,6 +2531,24 @@ export const es: TranslationResources = {
       },
     },
     project: {
+      defaultHost: {
+        label: "Host predeterminado para nuevos espacios",
+        automatic: "Automático",
+        hint: "Preseleccionado al crear un espacio de trabajo para este proyecto",
+        saveFailed: "No se pudo guardar el host predeterminado",
+      },
+      defaultIsolation: {
+        label: "Aislamiento predeterminado para nuevos espacios",
+        automatic: "Automático",
+        hint: "Preseleccionado al crear un espacio de trabajo para este proyecto",
+        saveFailed: "No se pudo guardar el aislamiento predeterminado",
+      },
+      defaultBaseBranch: {
+        label: "Rama base predeterminada para nuevos worktrees",
+        automatic: "Automática",
+        hint: "Los nuevos worktrees de este proyecto se crean desde esta rama",
+        saveFailed: "No se pudo guardar la rama base predeterminada",
+      },
       noEditableTarget: "Este proyecto no se puede editar en este host.",
       backToProjects: "Volver a proyectos",
       edit: {

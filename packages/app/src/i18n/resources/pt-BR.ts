@@ -1120,12 +1120,6 @@ export const ptBR: TranslationResources = {
       openProjectSettings: "Abrir configurações do projeto",
     },
     project: {
-      defaultHost: {
-        label: "Host padrão para novos espaços",
-        automatic: "Automático",
-        hint: "Pré-selecionado ao criar um espaço de trabalho para este projeto",
-        saveFailed: "Não foi possível salvar o host padrão",
-      },
       actions: {
         menu: "Ações do projeto",
         openSettings: "Abrir configurações do projeto",
@@ -2522,6 +2516,24 @@ export const ptBR: TranslationResources = {
       },
     },
     project: {
+      defaultHost: {
+        label: "Host padrão para novos espaços",
+        automatic: "Automático",
+        hint: "Pré-selecionado ao criar um espaço de trabalho para este projeto",
+        saveFailed: "Não foi possível salvar o host padrão",
+      },
+      defaultIsolation: {
+        label: "Isolamento padrão para novos espaços",
+        automatic: "Automático",
+        hint: "Pré-selecionado ao criar um espaço de trabalho para este projeto",
+        saveFailed: "Não foi possível salvar o isolamento padrão",
+      },
+      defaultBaseBranch: {
+        label: "Branch base padrão para novos worktrees",
+        automatic: "Automático",
+        hint: "Novos worktrees deste projeto partem deste branch",
+        saveFailed: "Não foi possível salvar o branch base padrão",
+      },
       noEditableTarget: "Este projeto não pode ser editado neste host.",
       backToProjects: "Voltar para projetos",
       edit: {
