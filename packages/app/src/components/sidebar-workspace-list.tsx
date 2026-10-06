@@ -40,7 +40,13 @@ import * as Clipboard from "expo-clipboard";
 import { ExternalLink, Settings, MoreVertical, Plus, Trash2 } from "lucide-react-native";
 import { DraggableList, type DraggableRenderItemInfo } from "./draggable-list";
 import type { DraggableListDragHandleProps } from "./draggable-list.types";
-import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
+import {
+  getHostRuntimeStore,
+  useHostRuntimeConnectionStatuses,
+  useHosts,
+} from "@/runtime/host-runtime";
+import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
+import { useSettings } from "@/hooks/use-settings";
 import type { PinnedSidebarGroups } from "@/hooks/use-sidebar-pins";
 import {
   useSidebarWorkspacePinController,
@@ -126,7 +132,9 @@ import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { useWorkspaceReadState } from "@/hooks/use-workspace-read-state";
 import type { PrHint } from "@/git/use-pr-status-query";
 import {
+  buildPreferredServerIdsByProjectViewKey,
   buildSidebarProjectRowModel,
+  isSamePreferredServerIds,
   type SidebarProjectHostTarget,
   type SidebarProjectIconTarget,
 } from "@/utils/sidebar-project-row-model";
@@ -1448,6 +1456,7 @@ function ProjectBlock({
   autoHostLabelProjectKeys,
   supportsMultiplicityByServerId,
   supportsPinningByServerId,
+  preferredServerIdsByProjectViewKey,
   onToggleWorkspacePin,
 }: {
   project: SidebarProjectEntry;
@@ -1471,6 +1480,7 @@ function ProjectBlock({
   autoHostLabelProjectKeys: ReadonlySet<string>;
   supportsMultiplicityByServerId: ReadonlyMap<string, boolean>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
+  preferredServerIdsByProjectViewKey: ReadonlyMap<string, readonly string[]>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
 }) {
   const {
@@ -1484,8 +1494,9 @@ function ProjectBlock({
       buildSidebarProjectRowModel({
         project,
         supportsMultiplicityByServerId,
+        preferredServerIds: preferredServerIdsByProjectViewKey.get(project.viewKey),
       }),
-    [project, supportsMultiplicityByServerId],
+    [project, supportsMultiplicityByServerId, preferredServerIdsByProjectViewKey],
   );
 
   const active = isProjectSelectedByRoute({
@@ -1714,6 +1725,7 @@ function areProjectBlockPropsEqual(previous: ProjectBlockProps, next: ProjectBlo
     previous.autoHostLabelProjectKeys === next.autoHostLabelProjectKeys &&
     previous.supportsMultiplicityByServerId === next.supportsMultiplicityByServerId &&
     previous.supportsPinningByServerId === next.supportsPinningByServerId &&
+    previous.preferredServerIdsByProjectViewKey === next.preferredServerIdsByProjectViewKey &&
     previous.onToggleWorkspacePin === next.onToggleWorkspacePin &&
     previous.parentGestureRef === next.parentGestureRef &&
     previous.onWorkspacePress === next.onWorkspacePress &&
@@ -1789,6 +1801,27 @@ export function SidebarWorkspaceList({
   const serverIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
   const supportsMultiplicityByServerId = useHostFeatureMap(serverIds, "workspaceMultiplicity");
   const supportsPinningByServerId = useHostFeatureMap(serverIds, "workspacePinning");
+  const hostConnectionStatusByServerId = useHostRuntimeConnectionStatuses(serverIds);
+  const localServerId = useLocalDaemonServerId();
+  const defaultHostByProject = useSettings((settings) => settings.defaultHostByProject);
+  // The trailing "+" writes its target host into the new-workspace route, and the screen's
+  // resolver honors a known route serverId unconditionally — so the 062 default-host
+  // preference (project pin, then the local daemon host) is resolved here; offline hosts
+  // don't count, matching the screen's stale-pin rule.
+  const preferredRef = useRef(new Map<string, string[]>());
+  const preferredServerIdsByProjectViewKey = useMemo(() => {
+    const next = buildPreferredServerIdsByProjectViewKey({
+      projects,
+      defaultHostByProject,
+      hostConnectionStatusByServerId,
+      localServerId,
+    });
+    // The status hook emits a fresh Map on every host-runtime tick; keep the previous
+    // instance unless content changed so unrelated agent traffic doesn't re-render rows.
+    if (isSamePreferredServerIds(preferredRef.current, next)) return preferredRef.current;
+    preferredRef.current = next;
+    return next;
+  }, [projects, defaultHostByProject, hostConnectionStatusByServerId, localServerId]);
   const onToggleWorkspacePin = useSidebarWorkspacePinController();
   const getPinnedWorkspaceOrder = useSidebarOrderStore((state) => state.getPinnedWorkspaceOrder);
   const setPinnedWorkspaceOrder = useSidebarOrderStore((state) => state.setPinnedWorkspaceOrder);
@@ -1875,6 +1908,7 @@ export function SidebarWorkspaceList({
         autoHostLabelProjectKeys={autoHostLabelProjectKeys}
         supportsMultiplicityByServerId={supportsMultiplicityByServerId}
         supportsPinningByServerId={supportsPinningByServerId}
+        preferredServerIdsByProjectViewKey={preferredServerIdsByProjectViewKey}
         onToggleWorkspacePin={onToggleWorkspacePin}
         onPinnedWorkspaceReorder={handlePinnedWorkspaceReorder}
       />
@@ -1973,6 +2007,7 @@ function ProjectModeList({
   autoHostLabelProjectKeys,
   supportsMultiplicityByServerId,
   supportsPinningByServerId,
+  preferredServerIdsByProjectViewKey,
   onToggleWorkspacePin,
   onPinnedWorkspaceReorder,
 }: Omit<
@@ -1992,6 +2027,7 @@ function ProjectModeList({
   autoHostLabelProjectKeys: ReadonlySet<string>;
   supportsMultiplicityByServerId: ReadonlyMap<string, boolean>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
+  preferredServerIdsByProjectViewKey: ReadonlyMap<string, readonly string[]>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   onPinnedWorkspaceReorder: (workspaces: SidebarWorkspacePlacement[]) => void;
 }) {
@@ -2176,6 +2212,7 @@ function ProjectModeList({
           autoHostLabelProjectKeys={autoHostLabelProjectKeys}
           supportsMultiplicityByServerId={supportsMultiplicityByServerId}
           supportsPinningByServerId={supportsPinningByServerId}
+          preferredServerIdsByProjectViewKey={preferredServerIdsByProjectViewKey}
           onToggleWorkspacePin={onToggleWorkspacePin}
         />
       );
@@ -2188,6 +2225,7 @@ function ProjectModeList({
       autoHostLabelProjectKeys,
       supportsMultiplicityByServerId,
       supportsPinningByServerId,
+      preferredServerIdsByProjectViewKey,
       onToggleWorkspacePin,
       onWorkspacePress,
       parentGestureRef,

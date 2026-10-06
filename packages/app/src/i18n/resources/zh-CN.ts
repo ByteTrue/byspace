@@ -1085,12 +1085,6 @@ export const zhCN: TranslationResources = {
       openProjectSettings: "打开 project 设置",
     },
     project: {
-      defaultHost: {
-        label: "新建工作区的默认主机",
-        automatic: "自动",
-        hint: "为该项目创建工作区时预先选中的主机",
-        saveFailed: "无法保存默认主机",
-      },
       actions: {
         menu: "Project 操作",
         openSettings: "打开 project 设置",
@@ -2451,6 +2445,24 @@ export const zhCN: TranslationResources = {
       },
     },
     project: {
+      defaultHost: {
+        label: "新建工作区的默认主机",
+        automatic: "自动",
+        hint: "为该项目创建工作区时预先选中的主机",
+        saveFailed: "无法保存默认主机",
+      },
+      defaultIsolation: {
+        label: "新建工作区的默认隔离方式",
+        automatic: "自动",
+        hint: "为该项目创建工作区时预先选中的隔离方式",
+        saveFailed: "无法保存默认隔离方式",
+      },
+      defaultBaseBranch: {
+        label: "新建 worktree 的默认基础分支",
+        automatic: "自动",
+        hint: "为该项目创建 worktree 时默认基于的分支",
+        saveFailed: "无法保存默认基础分支",
+      },
       noEditableTarget: "此项目无法在这个 Host 上编辑。",
       backToProjects: "返回 Projects",
       edit: {

@@ -1095,12 +1095,6 @@ export const ar: TranslationResources = {
       openProjectSettings: "افتح إعدادات المشروع",
     },
     project: {
-      defaultHost: {
-        label: "المضيف الافتراضي لمساحات العمل الجديدة",
-        automatic: "تلقائي",
-        hint: "يُختار مسبقًا عند إنشاء مساحة عمل لهذا المشروع",
-        saveFailed: "تعذّر حفظ المضيف الافتراضي",
-      },
       actions: {
         menu: "إجراءات المشروع",
         openSettings: "افتح إعدادات المشروع",
@@ -2480,6 +2474,24 @@ export const ar: TranslationResources = {
       },
     },
     project: {
+      defaultHost: {
+        label: "المضيف الافتراضي لمساحات العمل الجديدة",
+        automatic: "تلقائي",
+        hint: "يُختار مسبقًا عند إنشاء مساحة عمل لهذا المشروع",
+        saveFailed: "تعذّر حفظ المضيف الافتراضي",
+      },
+      defaultIsolation: {
+        label: "العزل الافتراضي لمساحات العمل الجديدة",
+        automatic: "تلقائي",
+        hint: "يُختار مسبقًا عند إنشاء مساحة عمل لهذا المشروع",
+        saveFailed: "تعذّر حفظ العزل الافتراضي",
+      },
+      defaultBaseBranch: {
+        label: "الفرع الأساسي الافتراضي لـ worktree الجديدة",
+        automatic: "تلقائي",
+        hint: "تُنشأ worktree جديدة لهذا المشروع من هذا الفرع",
+        saveFailed: "تعذّر حفظ الفرع الأساسي الافتراضي",
+      },
       noEditableTarget: "هذا المشروع غير متاح للتحرير على هذا المضيف.",
       backToProjects: "العودة إلى المشاريع",
       edit: {

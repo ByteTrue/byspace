@@ -1105,12 +1105,6 @@ export const en = {
       openProjectSettings: "Open project settings",
     },
     project: {
-      defaultHost: {
-        label: "Default host for new workspaces",
-        automatic: "Automatic",
-        hint: "Preselected when creating a workspace for this project",
-        saveFailed: "Could not save the default host",
-      },
       actions: {
         menu: "Project actions",
         openSettings: "Open project settings",
@@ -2498,6 +2492,24 @@ export const en = {
       },
     },
     project: {
+      defaultHost: {
+        label: "Default host for new workspaces",
+        automatic: "Automatic",
+        hint: "Preselected when creating a workspace for this project",
+        saveFailed: "Could not save the default host",
+      },
+      defaultIsolation: {
+        label: "Default isolation for new workspaces",
+        automatic: "Automatic",
+        hint: "Preselected when creating a workspace for this project",
+        saveFailed: "Could not save the default isolation",
+      },
+      defaultBaseBranch: {
+        label: "Default base branch for new worktrees",
+        automatic: "Automatic",
+        hint: "New worktrees for this project branch off this branch",
+        saveFailed: "Could not save the default base branch",
+      },
       noEditableTarget: "This project isn't editable on this host.",
       backToProjects: "Back to projects",
       edit: {

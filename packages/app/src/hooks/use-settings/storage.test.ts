@@ -860,6 +860,40 @@ describe("appearance settings", () => {
 
     expect((await loadAppSettingsFromStorage(deps)).syntaxTheme).toBe("one");
   });
+
+  it("round-trips the per-project new-workspace defaults", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({
+          newWorkspaceIsolationByProject: { '["placement","srv","prj"]': "worktree" },
+          defaultBaseBranchByProject: { '["placement","srv","prj"]': "main" },
+        }),
+      }),
+    });
+
+    const loaded = await loadAppSettingsFromStorage(deps);
+    expect(loaded.newWorkspaceIsolationByProject).toEqual({
+      '["placement","srv","prj"]': "worktree",
+    });
+    expect(loaded.defaultBaseBranchByProject).toEqual({
+      '["placement","srv","prj"]': "main",
+    });
+  });
+
+  it("drops invalid per-project new-workspace defaults to empty maps", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({
+          newWorkspaceIsolationByProject: { prj: "sometimes" },
+          defaultBaseBranchByProject: { prj: 42 },
+        }),
+      }),
+    });
+
+    const loaded = await loadAppSettingsFromStorage(deps);
+    expect(loaded.newWorkspaceIsolationByProject).toEqual({});
+    expect(loaded.defaultBaseBranchByProject).toEqual({});
+  });
 });
 
 describe("parseClampedFontSize", () => {

@@ -39,7 +39,11 @@ import { useProjects } from "@/hooks/use-projects";
 import type { ProjectEditFormSnapshot } from "@/projects/edit-form";
 import { useProjectIcons } from "@/projects/icons";
 import { createProjectIconTarget } from "@/projects/icon-target";
-import { useHostRuntimeClient, useHostRuntimeSnapshot } from "@/runtime/host-runtime";
+import {
+  useHostRuntimeClient,
+  useHostRuntimeIsConnected,
+  useHostRuntimeSnapshot,
+} from "@/runtime/host-runtime";
 import { useHostFeature } from "@/runtime/host-features";
 import { buildNewWorkspaceDraftKey, generateDraftId } from "@/stores/draft-keys";
 import { useDraftStore } from "@/stores/draft-store";
@@ -154,6 +158,29 @@ export default function ProjectSettingsScreen({
 const AUTOMATIC_HOST_VALUE = "";
 
 /**
+ * Persist one app-settings payload, reporting failure through console + toast. Shared by the
+ * three project-preference sections; callers build their payload and own their copy keys.
+ */
+function useProjectRecordPersist() {
+  const toast = useToast();
+  return useCallback(
+    async (input: {
+      payload: Parameters<typeof persistAppSettings>[0];
+      saveFailedText: string;
+      logLabel: string;
+    }) => {
+      try {
+        await persistAppSettings(input.payload);
+      } catch (err) {
+        console.error(`[ProjectSettings] Failed to save ${input.logLabel}:`, err);
+        toast.error(input.saveFailedText);
+      }
+    },
+    [toast],
+  );
+}
+
+/**
  * App-side preference (not host config): which host "New workspace" preselects for this
  * project. Shown only when the project exists on more than one host — with one host there is
  * nothing to choose. Lives above the host-config groups so it renders even when reading the
@@ -161,7 +188,7 @@ const AUTOMATIC_HOST_VALUE = "";
  */
 function DefaultHostSection({ project }: { project: ProjectSummary }) {
   const { t } = useTranslation();
-  const toast = useToast();
+  const persistRecord = useProjectRecordPersist();
   const defaultHostByProject = useSettings((settings) => settings.defaultHostByProject);
   const pinnedServerId = defaultHostByProject[project.viewKey] ?? AUTOMATIC_HOST_VALUE;
 
@@ -190,15 +217,14 @@ function DefaultHostSection({ project }: { project: ProjectSummary }) {
         } else {
           next[project.viewKey] = value;
         }
-        try {
-          await persistAppSettings({ defaultHostByProject: next });
-        } catch (err) {
-          console.error("[ProjectSettings] Failed to save the default host pin:", err);
-          toast.error(t("settings.project.defaultHost.saveFailed"));
-        }
+        await persistRecord({
+          payload: { defaultHostByProject: next },
+          saveFailedText: t("settings.project.defaultHost.saveFailed"),
+          logLabel: "the default host pin",
+        });
       })();
     },
-    [defaultHostByProject, project.viewKey, t, toast],
+    [defaultHostByProject, persistRecord, project.viewKey, t],
   );
 
   const selectedOption = options.find((option) => option.value === pinnedServerId) ?? null;
@@ -226,6 +252,190 @@ function DefaultHostSection({ project }: { project: ProjectSummary }) {
           field={false}
           testID="default-host-field"
           triggerTestID="default-host-trigger"
+        />
+      </View>
+    </SettingsSection>
+  );
+}
+
+/**
+ * App-side preference (issue 068): which isolation mode "New workspace" preselects for this
+ * project — local directory or a new worktree. Automatic defers to the remembered global
+ * choice; an unsupported host falls back to local at creation time regardless of the pin.
+ */
+function DefaultIsolationSection({ project }: { project: ProjectSummary }) {
+  const { t } = useTranslation();
+  const persistRecord = useProjectRecordPersist();
+  const isolationByProject = useSettings((settings) => settings.newWorkspaceIsolationByProject);
+  const pinnedIsolation = isolationByProject[project.viewKey] ?? AUTOMATIC_HOST_VALUE;
+
+  const options = useMemo(
+    () => [
+      {
+        id: AUTOMATIC_HOST_VALUE,
+        value: AUTOMATIC_HOST_VALUE,
+        label: t("settings.project.defaultIsolation.automatic"),
+      },
+      { id: "local", value: "local", label: t("newWorkspace.isolation.local") },
+      {
+        id: "worktree",
+        value: "worktree",
+        label: t("newWorkspace.isolation.worktree"),
+      },
+    ],
+    [t],
+  );
+
+  const selectedOption = options.find((option) => option.value === pinnedIsolation) ?? null;
+  // oxlint wants the object prop memoized, not rebuilt on every render.
+  const selectedDisplay = useMemo(
+    () => (selectedOption ? { label: selectedOption.label } : null),
+    [selectedOption],
+  );
+
+  const handleChange = useCallback(
+    (value: string) => {
+      void (async () => {
+        const next = { ...isolationByProject };
+        if (value === AUTOMATIC_HOST_VALUE) {
+          delete next[project.viewKey];
+        } else {
+          next[project.viewKey] = value === "worktree" ? "worktree" : "local";
+        }
+        await persistRecord({
+          payload: { newWorkspaceIsolationByProject: next },
+          saveFailedText: t("settings.project.defaultIsolation.saveFailed"),
+          logLabel: "the default isolation",
+        });
+      })();
+    },
+    [isolationByProject, persistRecord, project.viewKey, t],
+  );
+
+  return (
+    <SettingsSection
+      title={t("settings.project.defaultIsolation.label")}
+      info={t("settings.project.defaultIsolation.hint")}
+      testID="default-isolation-section"
+    >
+      <View style={settingsStyles.card} testID="default-isolation-card">
+        <SelectField<string>
+          label={t("settings.project.defaultIsolation.label")}
+          value={pinnedIsolation}
+          selectedDisplay={selectedDisplay}
+          options={options}
+          onChange={handleChange}
+          placeholder={t("settings.project.defaultIsolation.automatic")}
+          emptyText={t("settings.project.defaultIsolation.automatic")}
+          field={false}
+          testID="default-isolation-field"
+          triggerTestID="default-isolation-trigger"
+        />
+      </View>
+    </SettingsSection>
+  );
+}
+
+/**
+ * App-side preference (issue 068): the branch new worktrees of this project start from.
+ * Branch options come from the host the workspace would be created on — the pinned host
+ * when one is set, else the first host carrying the project. A pin whose branch is gone
+ * falls back to the checkout's own default when the workspace is created.
+ */
+function DefaultBaseBranchSection({ project }: { project: ProjectSummary }) {
+  const { t } = useTranslation();
+  const persistRecord = useProjectRecordPersist();
+  const defaultHostByProject = useSettings((settings) => settings.defaultHostByProject);
+  const branchByProject = useSettings((settings) => settings.defaultBaseBranchByProject);
+  const pinnedBranch = branchByProject[project.viewKey] ?? AUTOMATIC_HOST_VALUE;
+
+  const targetHost = useMemo(
+    () =>
+      project.hosts.find((host) => host.serverId === defaultHostByProject[project.viewKey]) ??
+      project.hosts[0] ??
+      null,
+    [defaultHostByProject, project.hosts, project.viewKey],
+  );
+  const serverId = targetHost?.serverId ?? "";
+  const client = useHostRuntimeClient(serverId);
+  const isConnected = useHostRuntimeIsConnected(serverId);
+
+  const branchesQuery = useQuery({
+    queryKey: ["project-default-base-branches", serverId, targetHost?.repoRoot],
+    queryFn: async () => {
+      if (!client || !targetHost) {
+        throw new Error("Host is not available");
+      }
+      return client.getBranchSuggestions({ cwd: targetHost.repoRoot, limit: 50 });
+    },
+    enabled: Boolean(client) && isConnected && Boolean(targetHost?.repoRoot),
+    staleTime: 15_000,
+  });
+
+  const branchNames = useMemo(() => {
+    const details = branchesQuery.data?.branchDetails;
+    if (details && details.length > 0) {
+      return [...new Set(details.map((detail) => detail.name))];
+    }
+    return branchesQuery.data?.branches ?? [];
+  }, [branchesQuery.data]);
+
+  const options = useMemo(
+    () => [
+      {
+        id: AUTOMATIC_HOST_VALUE,
+        value: AUTOMATIC_HOST_VALUE,
+        label: t("settings.project.defaultBaseBranch.automatic"),
+      },
+      ...branchNames.map((name) => ({ id: name, value: name, label: name })),
+    ],
+    [branchNames, t],
+  );
+
+  const selectedOption = options.find((option) => option.value === pinnedBranch) ?? null;
+  // oxlint wants the object prop memoized, not rebuilt on every render.
+  const selectedDisplay = useMemo(
+    () => (selectedOption ? { label: selectedOption.label } : null),
+    [selectedOption],
+  );
+
+  const handleChange = useCallback(
+    (value: string) => {
+      void (async () => {
+        const next = { ...branchByProject };
+        if (value === AUTOMATIC_HOST_VALUE) {
+          delete next[project.viewKey];
+        } else {
+          next[project.viewKey] = value;
+        }
+        await persistRecord({
+          payload: { defaultBaseBranchByProject: next },
+          saveFailedText: t("settings.project.defaultBaseBranch.saveFailed"),
+          logLabel: "the default base branch",
+        });
+      })();
+    },
+    [branchByProject, persistRecord, project.viewKey, t],
+  );
+
+  return (
+    <SettingsSection
+      title={t("settings.project.defaultBaseBranch.label")}
+      info={t("settings.project.defaultBaseBranch.hint")}
+      testID="default-base-branch-section"
+    >
+      <View style={settingsStyles.card} testID="default-base-branch-card">
+        <SelectField<string>
+          label={t("settings.project.defaultBaseBranch.label")}
+          value={pinnedBranch}
+          selectedDisplay={selectedDisplay}
+          options={options}
+          onChange={handleChange}
+          placeholder={t("settings.project.defaultBaseBranch.automatic")}
+          emptyText={t("settings.project.defaultBaseBranch.automatic")}
+          field={false}
+          testID="default-base-branch-field"
+          triggerTestID="default-base-branch-trigger"
         />
       </View>
     </SettingsSection>
@@ -394,6 +604,8 @@ function ProjectSettingsBody({
       />
 
       {project.hostCount > 1 ? <DefaultHostSection project={project} /> : null}
+      <DefaultIsolationSection project={project} />
+      <DefaultBaseBranchSection project={project} />
 
       {renderContent({
         readQuery,

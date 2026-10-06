@@ -1129,12 +1129,6 @@ export const fr: TranslationResources = {
       openProjectSettings: "Ouvrir les paramètres du projet",
     },
     project: {
-      defaultHost: {
-        label: "Hôte par défaut des nouveaux espaces",
-        automatic: "Automatique",
-        hint: "Présélectionné lors de la création d'un espace de travail pour ce projet",
-        saveFailed: "Impossible d'enregistrer l'hôte par défaut",
-      },
       actions: {
         menu: "Actions du projet",
         openSettings: "Ouvrir les paramètres du projet",
@@ -2540,6 +2534,24 @@ export const fr: TranslationResources = {
       },
     },
     project: {
+      defaultHost: {
+        label: "Hôte par défaut des nouveaux espaces",
+        automatic: "Automatique",
+        hint: "Présélectionné lors de la création d'un espace de travail pour ce projet",
+        saveFailed: "Impossible d'enregistrer l'hôte par défaut",
+      },
+      defaultIsolation: {
+        label: "Isolation par défaut des nouveaux espaces",
+        automatic: "Automatique",
+        hint: "Présélectionné lors de la création d'un espace pour ce projet",
+        saveFailed: "Impossible d'enregistrer l'isolation par défaut",
+      },
+      defaultBaseBranch: {
+        label: "Branche de base par défaut des nouveaux worktrees",
+        automatic: "Automatique",
+        hint: "Les nouveaux worktrees de ce projet partent de cette branche",
+        saveFailed: "Impossible d'enregistrer la branche de base par défaut",
+      },
       noEditableTarget: "Ce projet n'est pas modifiable sur cet hôte.",
       backToProjects: "Retour aux projets",
       edit: {

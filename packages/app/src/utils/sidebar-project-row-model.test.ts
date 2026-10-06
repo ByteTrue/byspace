@@ -4,7 +4,9 @@ import type {
   SidebarWorkspaceEntry,
 } from "@/hooks/use-sidebar-workspaces-list";
 import {
+  buildPreferredServerIdsByProjectViewKey,
   buildSidebarProjectRowModel,
+  isSamePreferredServerIds,
   resolveSidebarProjectIconTarget,
   resolveSidebarProjectIconTargets,
   resolveSidebarProjectLocalPath,
@@ -269,5 +271,159 @@ describe("buildSidebarProjectRowModel", () => {
         target: { serverId: "srv", projectId: "project-srv", iconWorkingDir: "/repo" },
       },
     });
+  });
+
+  it("targets the preferred host over project.hosts order", () => {
+    const result = buildSidebarProjectRowModel({
+      project: project({
+        hosts: [
+          { serverId: "host-b", iconWorkingDir: "/repo/b", worktreeSupport: "supported" as const },
+          { serverId: "host-a", iconWorkingDir: "/repo/a", worktreeSupport: "supported" as const },
+        ],
+      }),
+      preferredServerIds: ["host-a", "host-b"],
+    });
+
+    expect(result).toMatchObject({
+      trailingAction: {
+        kind: "new_workspace",
+        target: { serverId: "host-a", iconWorkingDir: "/repo/a" },
+      },
+    });
+  });
+
+  it("ranks the project pin ahead of the local host when both are preferred", () => {
+    const result = buildSidebarProjectRowModel({
+      project: project({
+        hosts: [
+          {
+            serverId: "local",
+            iconWorkingDir: "/repo/local",
+            worktreeSupport: "supported" as const,
+          },
+          {
+            serverId: "pinned",
+            iconWorkingDir: "/repo/pinned",
+            worktreeSupport: "supported" as const,
+          },
+        ],
+      }),
+      preferredServerIds: ["pinned", "local"],
+    });
+
+    expect(result).toMatchObject({
+      trailingAction: {
+        kind: "new_workspace",
+        target: { serverId: "pinned", iconWorkingDir: "/repo/pinned" },
+      },
+    });
+  });
+
+  it("ignores a preferred host that does not carry the project", () => {
+    const result = buildSidebarProjectRowModel({
+      project: project({
+        hosts: [
+          { serverId: "host-b", iconWorkingDir: "/repo/b", worktreeSupport: "supported" as const },
+        ],
+      }),
+      preferredServerIds: ["host-missing"],
+    });
+
+    expect(result).toMatchObject({
+      trailingAction: {
+        kind: "new_workspace",
+        target: { serverId: "host-b", iconWorkingDir: "/repo/b" },
+      },
+    });
+  });
+
+  it("skips a preferred host that cannot host a new workspace", () => {
+    const result = buildSidebarProjectRowModel({
+      project: project({
+        projectKind: "directory",
+        hosts: [
+          {
+            serverId: "host-a",
+            iconWorkingDir: "/repo/a",
+            worktreeSupport: "unsupported" as const,
+          },
+          {
+            serverId: "host-b",
+            iconWorkingDir: "/repo/b",
+            worktreeSupport: "unsupported" as const,
+          },
+        ],
+      }),
+      supportsMultiplicityByServerId: new Map([["host-b", true]]),
+      preferredServerIds: ["host-a", "host-b"],
+    });
+
+    expect(result).toMatchObject({
+      trailingAction: {
+        kind: "new_workspace",
+        target: { serverId: "host-b", iconWorkingDir: "/repo/b" },
+      },
+    });
+  });
+});
+
+describe("buildPreferredServerIdsByProjectViewKey", () => {
+  const statuses = (entries: Array<[string, string]>) => new Map(entries);
+
+  it("lists the pinned host first, then the local host when different and online", () => {
+    const map = buildPreferredServerIdsByProjectViewKey({
+      projects: [{ viewKey: "p1" }],
+      defaultHostByProject: { p1: "pin" },
+      hostConnectionStatusByServerId: statuses([
+        ["pin", "online"],
+        ["local", "online"],
+      ]),
+      localServerId: "local",
+    });
+    expect(map.get("p1")).toEqual(["pin", "local"]);
+  });
+
+  it("skips offline pins, keeps the local fallback, and skips the local host when it is the pin", () => {
+    const map = buildPreferredServerIdsByProjectViewKey({
+      projects: [{ viewKey: "p1" }, { viewKey: "p2" }],
+      defaultHostByProject: { p1: "pin", p2: "local" },
+      hostConnectionStatusByServerId: statuses([
+        ["pin", "offline"],
+        ["local", "online"],
+      ]),
+      localServerId: "local",
+    });
+    // The offline pin is dropped but the online local host still backs the "+" entry.
+    expect(map.get("p1")).toEqual(["local"]);
+    expect(map.get("p2")).toEqual(["local"]);
+  });
+
+  it("omits projects with no online preferred host", () => {
+    const map = buildPreferredServerIdsByProjectViewKey({
+      projects: [{ viewKey: "p1" }],
+      defaultHostByProject: {},
+      hostConnectionStatusByServerId: new Map(),
+      localServerId: null,
+    });
+    expect(map.size).toBe(0);
+  });
+});
+
+describe("isSamePreferredServerIds", () => {
+  it("compares size and per-key entries by content", () => {
+    const a = new Map([["p1", ["pin", "local"]]]);
+    expect(isSamePreferredServerIds(a, new Map([["p1", ["pin", "local"]]]))).toBe(true);
+    expect(isSamePreferredServerIds(a, new Map([["p1", ["local", "pin"]]]))).toBe(false);
+    expect(isSamePreferredServerIds(a, new Map([["p1", ["pin"]]]))).toBe(false);
+    expect(
+      isSamePreferredServerIds(
+        a,
+        new Map([
+          ["p1", ["pin", "local"]],
+          ["p2", ["x"]],
+        ]),
+      ),
+    ).toBe(false);
+    expect(isSamePreferredServerIds(a, new Map())).toBe(false);
   });
 });
