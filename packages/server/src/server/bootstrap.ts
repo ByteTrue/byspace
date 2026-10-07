@@ -312,9 +312,9 @@ const PiSubagentReportSchema = z.object({
 });
 
 /**
- * Local, token-gated snapshots reported by the byspace pi-subagent extension; deliberately
- * skips daemon auth. The manager is created after route mounting, so it resolves through a
- * getter filled in once construction finishes (503 until then).
+ * Local, token-gated snapshots reported by the BySpace-installed subagent extension;
+ * deliberately skips daemon auth. The manager is created after route mounting, so it resolves
+ * through a getter filled in once construction finishes (503 until then).
  */
 export function createPiSubagentReportRouteHandler(
   getAgentManager: () => AgentManager | null,
@@ -331,7 +331,7 @@ export function createPiSubagentReportRouteHandler(
     }
     const parsed = PiSubagentReportSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: "Invalid pi subagent report" });
+      res.status(400).json({ error: "Invalid subagent report" });
       return;
     }
     const { token, observations } = parsed.data;
@@ -838,13 +838,13 @@ export async function createBySpaceDaemon(
     createTerminalActivityRouteHandler(terminalManager),
   );
 
-  // Pi subagent progress snapshots reported by the byspace pi-subagent extension. Local,
-  // token-gated per agent launch; deliberately skips daemon auth. The route must mount
-  // before the bearer middleware below, but the manager is created later in this function,
-  // so it resolves through a holder filled in right after construction.
+  // Subagent progress snapshots reported by the BySpace-installed subagent extension. Local,
+  // token-gated per agent launch; deliberately skips daemon auth. The route must mount before
+  // the bearer middleware below, but the manager is created later in this function, so it
+  // resolves through a holder filled in right after construction.
   let piSubagentReportAgentManager: AgentManager | null = null;
   app.post(
-    "/api/pi-subagent-report",
+    "/api/subagent-report",
     express.json(),
     createPiSubagentReportRouteHandler(() => piSubagentReportAgentManager),
   );

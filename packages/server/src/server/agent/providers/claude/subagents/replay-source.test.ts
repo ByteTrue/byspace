@@ -6,7 +6,10 @@ import {
   type ProviderSubagentDescriptor,
 } from "../../../provider-subagents/store.js";
 import { ClaudeTaskProtocolSource } from "./live-source.js";
-import { foldSubagentObservations, type SubagentObservation } from "./observation.js";
+import {
+  foldSubagentObservations,
+  type SubagentObservation,
+} from "../../../provider-subagents/observation.js";
 import {
   observeReplaySubagents,
   parseClaudeSubagentMeta,

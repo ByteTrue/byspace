@@ -5218,7 +5218,7 @@ export class AgentManager {
       this.piSubagentReportTokens.set(agentId, reportToken);
       context.env = {
         ...context.env,
-        BYSPACE_SUBAGENT_REPORT_URL: `${this.piSubagentReportBaseUrl}/api/pi-subagent-report`,
+        BYSPACE_SUBAGENT_REPORT_URL: `${this.piSubagentReportBaseUrl}/api/subagent-report`,
         BYSPACE_SUBAGENT_REPORT_TOKEN: reportToken,
       };
     }
