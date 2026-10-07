@@ -88,3 +88,9 @@ Owner 在真机验收通过后质疑：为什么 issue 还是 Open 状态就推�
 按 ByIssue 默认"关闭需要授权"，我当时把关闭推迟成了独立步骤。Owner 的纠偏确立了本项目的节奏：**请求 PR 授权的同一轮，把关闭授权一起要；关闭完再推。** 代价已发生：关闭 commit 多跑一趟 CI（本次即最后一趟）。
 
 同批记录一个 CI 空档：tsgo 的 server typecheck 配置不覆盖 test 文件，observation.ts 上移时两处 stale import（`./observation.js`）只有 vitest 运行时才炸。教训：移动共享模块后，除了 typecheck 必须把同目录兄弟测试套件跑一遍。
+
+## 合并守门修正（2026-10-07，Owner 抓到的第二个流程缺陷）
+
+合入 PR #20 时后台监控脚本只盯了一个 workflow run（`gh run list --limit 1` 拿到 Docker run，success 即合并），同一 push 触发的 CI run（playwright shard 5 flake 失败）被无视。Owner 抓住：**CI 失败为什么合了。**
+
+修正为守门规则：**合并前必须核对该 push 触发的全部 workflow run 均为 success**（`gh pr checks` 无非 pass 项，而不是单 run 视角）。已知的 playwright flake（`new-workspace-launch-memory` terminal-surface 断言）按「重跑 --failed-only 通过 + main 上同 sha 复核」处理，不作为可合入信号。本次后果较轻（main 上合并提交 CI 全绿、flake 与改动无关），但守门本身错了两次（关闭顺序、单 run 合并），同一会话内——后续凡是有自动决策的脚本，判定条件必须覆盖全部信号源。
