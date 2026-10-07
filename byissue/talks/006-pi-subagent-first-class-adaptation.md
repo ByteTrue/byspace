@@ -73,3 +73,10 @@ Owner（2026-10-06）：「都按你建议来吧。」
 ## 审查记录（2026-10-06，issue 001+002 未提交改动）
 
 用户新流程：施工完成后先派两个子代理并行审查再算完——一个正确性审查，一个 ponytail 过度设计审查，仲裁后统一落地修复。结论与施工清单见 issue 002 审查修复记录。要点：终态 latch 放 daemon 应用点而非 store（store 保持纯）；sessionFile 从扩展上报（推翻 ponytail 删字段的建议，正确性 M4 优先）；app 侧 selector/binding/comparator 三处 memo 失效是审查最大的捕获。
+
+## 发版与交付（2026-10-07）
+
+- **L5 端点测试补齐**：路由 handler 提取为 `createPiSubagentReportRouteHandler(getAgentManager)` 导出工厂（getter 注入 holder，一次挂载——回应 ponytail 对每请求重建的异议）；新 `packages/server/src/server/pi-subagent-report-route.test.ts` 5 用例钉住状态码阶梯（503 holder / 403 非 loopback / 400 缺 token 或空 observations / 403 错 token / 204 观测透传）。
+- **BySpace 侧交付**：issue 001+002 + 审查修复 + L5 已提交并推分支 `pi-subagent-ui-adaptation`，PR #20（base main）。typecheck 0 错、oxlint 0 警告、全部触达套件绿。
+- **pi-subagent 0.14.0 发版**：mono 仓库 release commit + tag `pi-subagent-v0.14.0`，CI OIDC 发布成功，npm 已可见；本地 `~/.pi/agent/npm` 已升到 0.14.0（byspace-report.ts 就位）。注意 `pi install` 需 `npm:` 前缀，裸包名会被当本地路径。
+- **真机闭环待验**：下次真会话 launch pi agent 时 descriptor/sessionFile 上报应自动出现；浏览器核对行内状态点、点击开只读 tab、子会话 timeline 增量。
