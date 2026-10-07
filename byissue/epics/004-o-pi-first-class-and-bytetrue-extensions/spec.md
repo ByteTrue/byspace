@@ -62,7 +62,7 @@ BySpace 的 provider 适配目前是均等的：五个 provider 谁都接，谁�
 
 **Issues：**（位于同目录 `issues/`；编号仅在本 Epic 内有效）
 
-- [x] `issues/001-o-pi-subagent-track-vertical-slice.md` — 垂直切片：上报端点 + descriptor 通道 + jsonl 只读 tab / 无依赖 / 验证：真机 e2e 起 pi + pi-subagent 断言 descriptor 序列与 tab timeline
-- [x] `issues/002-o-pi-subagent-inline-tool-card.md` — 时间线嵌套行实时卡片 / 依赖 001 / 验证：组件三态测试 + 真机场景行内进度可见（三态测试完成；真机核对待 pi-subagent 发版，见 issue 002 验证记录）
+- [x] `issues/001-x-pi-subagent-track-vertical-slice.md` — 垂直切片：上报端点 + descriptor 通道 + jsonl 只读 tab / 无依赖 / 验证：真机 e2e 起 pi + pi-subagent 断言 descriptor 序列与 tab timeline
+- [x] `issues/002-x-pi-subagent-inline-tool-card.md` — 时间线嵌套行实时卡片 / 依赖 001 / 验证：组件三态测试 + 真机场景行内进度可见（Owner 真机验收通过，pi-subagent 0.14.0）
 
 **不在本 Epic：** 其余五个白名单扩展的适配（各自开 issue 时评估）；track 行写操作；terminal 会话侧的 subagent 展示。

@@ -80,3 +80,11 @@ Owner（2026-10-06）：「都按你建议来吧。」
 - **BySpace 侧交付**：issue 001+002 + 审查修复 + L5 已提交并推分支 `pi-subagent-ui-adaptation`，PR #20（base main）。typecheck 0 错、oxlint 0 警告、全部触达套件绿。
 - **pi-subagent 0.14.0 发版**：mono 仓库 release commit + tag `pi-subagent-v0.14.0`，CI OIDC 发布成功，npm 已可见；本地 `~/.pi/agent/npm` 已升到 0.14.0（byspace-report.ts 就位）。注意 `pi install` 需 `npm:` 前缀，裸包名会被当本地路径。
 - **真机闭环待验**：下次真会话 launch pi agent 时 descriptor/sessionFile 上报应自动出现；浏览器核对行内状态点、点击开只读 tab、子会话 timeline 增量。
+
+## 流程修正（2026-10-07，Owner 纠偏）
+
+Owner 在真机验收通过后质疑：为什么 issue 还是 Open 状态就推送开 PR——正确顺序是**关闭（含毕业回写）在第一次 push 之前完成**，让关闭改动搭同一趟 CI；否则关闭 commit 再推一次，CI 白跑一遍。
+
+按 ByIssue 默认"关闭需要授权"，我当时把关闭推迟成了独立步骤。Owner 的纠偏确立了本项目的节奏：**请求 PR 授权的同一轮，把关闭授权一起要；关闭完再推。** 代价已发生：关闭 commit 多跑一趟 CI（本次即最后一趟）。
+
+同批记录一个 CI 空档：tsgo 的 server typecheck 配置不覆盖 test 文件，observation.ts 上移时两处 stale import（`./observation.js`）只有 vitest 运行时才炸。教训：移动共享模块后，除了 typecheck 必须把同目录兄弟测试套件跑一遍。

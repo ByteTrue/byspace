@@ -2,7 +2,8 @@
 kind: issue
 title: "Pi subagent 接入 provider_subagents 通道：上报端点 + descriptor + jsonl 只读 tab"
 type: feature
-status: done
+status: closed
+closed: 2026-10-07
 created: 2026-10-06
 ---
 
@@ -44,12 +45,12 @@ pi-subagent 是白名单一等扩展，但在结构化会话里是黑盒：subag
 原方案四点全部落地，差异与定稿：
 
 - **env 名**：`BYSPACE_SUBAGENT_REPORT_URL` + `BYSPACE_SUBAGENT_REPORT_TOKEN`，经 `launchContext.env` 直通 pi 进程（agent-manager `buildLaunchContext`）。不需要 parent 标识 env——token 32 字节 base64url per launch，daemon 用 `resolvePiSubagentReportAgentId(token)` 反查 agent。
-- **端点**：`POST /api/pi-subagent-report`，body `{ token, observations: [record...] }`，record = `{ id, status, sessionId?, cwd? }`。loopback-only + token 校验 + 静默失败，参照 terminal-activity。
+- **端点**：`POST /api/subagent-report`（CI 后由 `/api/pi-subagent-report` 改名——bootstrap 守卫测试拒绝任何 provider 词），body `{ token, observations: [record...] }`，record = `{ id, status, sessionId?, cwd?, sessionFile? }`。loopback-only + token 校验 + 静默失败，参照 terminal-activity。
 - **descriptor 三源**：① launch 工具结果 details（tool_execution_end，立即建行不等上报）② HTTP 快照（状态推进 + 带子会话引用）③ `subagent-exit` custom message（转录内，负责回放）。共用 `providers/pi/agent-subagents.ts` 的 observation 词汇，经上移到 `provider-subagents/observation.ts` 的 fold 进入 Claude 同款通道。
 - **timeline**：`PiSubagentSessionTailers`（`providers/pi/subagent-session-tailer.ts`）单 timer 轮询子会话 jsonl 增量，喂 `PiHistoryMapper`，timeline 行走 `applyExternalProviderSubagentObservation`。sessionFile 优先、sessionId 扫 `resolvePiSessionsDir` 兜底；终态后宽限 3s 停 tail；agent 删除/discard 时清理。**不是**只在 tab 打开时 tail——descriptor 状态机需要 timeline 行先落 store（tab 打开前也可能已有内容）。
 - **回放**：`streamHistory` 里 `replayPiSubagentObservations` 从 runtime 转录重建 descriptor（launch details + exit message）；timeline 行来自子会话 jsonl 文件本身（不随转录走）。
 - **App 侧零改动**，验证成立。冒烟：上报→descriptor 翻转→list RPC；伪造子会话 jsonl→回放 user 行→增量 assistant 行→终态停 tail，全通过。
-- **pi-subagent 侧**（v0.13.1 → 需发版）：`src/byspace-report.ts`，running 快照去重、终态必发，fire-and-forget。
+- **pi-subagent 侧**（0.14.0 已发布）：`src/byspace-report.ts`，running 快照去重、终态必发，fire-and-forget；sessionFile 经 sessionLogPath 注入上报。
 
 ## 不在本 issue
 
@@ -57,4 +58,4 @@ pi-subagent 是白名单一等扩展，但在结构化会话里是黑盒：subag
 
 ## 关闭回写
 
-`byissue/spec/agent-conversation.md` 的 subagent 展示语义；`docs/providers.md` Pi 一节；本节「名字实现时定」的 env 名与端点。
+已毕业：`byissue/spec/agent-conversation.md` 的 subagent 展示语义；`docs/providers.md` Pi 一节；env 名（BYSPACE_SUBAGENT_REPORT_URL/TOKEN）与端点（/api/subagent-report）。
