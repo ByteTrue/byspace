@@ -675,12 +675,23 @@ export function replaceWithCanonicalStream(
   }
 
   const retainedTailMessages: UserMessageItem[] = [];
+  const precedingTailMessages: UserMessageItem[] = [];
   for (const local of unmatchedTailMessages) {
     const preserveLocal = input.preserveContinuity
       ? isUnreconciledLocalUserMessage(local)
       : local.clientMessageId !== undefined && sendingClientMessageIds.has(local.clientMessageId);
     if (preserveLocal) {
-      nextTail.push(local);
+      // A preserved local echo submitted before the canonical page's first row
+      // prompted that content: keep it ahead of the rebuilt page. Appending it
+      // at the tail end relocates the user's message card below the reply it
+      // started (the jump-to-the-end regression when a detached window catches
+      // up past a page of new rows and the provider never echoed the row).
+      const pageFirstAt = input.canonical[0]?.timestamp.getTime();
+      if (pageFirstAt !== undefined && local.timestamp.getTime() < pageFirstAt) {
+        precedingTailMessages.push(local);
+      } else {
+        nextTail.push(local);
+      }
     } else if (
       input.preserveContinuity &&
       local.timelineCursor &&
@@ -689,6 +700,7 @@ export function replaceWithCanonicalStream(
       retainedTailMessages.push(local);
     }
   }
+  nextTail.unshift(...precedingTailMessages);
   nextHead = [...retainedTailMessages, ...nextHead];
 
   const replacement = preserveReplacementHead(
