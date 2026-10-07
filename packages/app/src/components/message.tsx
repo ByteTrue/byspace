@@ -13,6 +13,11 @@ import {
 } from "react-native";
 import { useTranslation } from "react-i18next";
 import { MarkdownParagraphView, MarkdownTextSpan } from "@/components/markdown-text";
+import {
+  isToolCallSubagentEqual,
+  resolveJoinedSubagentRow,
+  type ToolCallSubagentBinding,
+} from "@/components/tool-call-subagent-row";
 import * as React from "react";
 import {
   useState,
@@ -2871,6 +2876,13 @@ function areExpandableBadgePropsEqual(previous: ExpandableBadgeProps, next: Expa
   return true;
 }
 
+/**
+ * Live provider-subagent state joined onto a timeline tool row by call id. When present the row
+ * stops being a static launch record: status comes from the descriptor, the secondary label shows
+ * the provider-owned subtitle, and pressing opens the subagent's read-only tab.
+ */
+export type { ToolCallSubagentBinding } from "./tool-call-subagent-row";
+
 interface ToolCallProps {
   toolName: string;
   args?: unknown;
@@ -2890,6 +2902,7 @@ interface ToolCallProps {
   maxDetailHeight?: number;
   /** Replaces the badge's secondary text; nested codemode rows summarize the calls the script ran. */
   summaryOverride?: string;
+  subagent?: ToolCallSubagentBinding;
 }
 
 export const ToolCall = memo(function ToolCall({
@@ -2902,6 +2915,7 @@ export const ToolCall = memo(function ToolCall({
   cwd,
   metadata,
   summaryOverride,
+  subagent,
   isLastInSequence = false,
   disableOuterSpacing,
   onInlineDetailsHoverChange,
@@ -3026,6 +3040,17 @@ export const ToolCall = memo(function ToolCall({
     maxDetailHeight,
   ]);
 
+  const joinedRow = resolveJoinedSubagentRow(
+    subagent,
+    status,
+    presentation.canOpenDetails,
+    handleToggle,
+  );
+  const isLoading = joinedRow.isLoading;
+  const isError = joinedRow.isError;
+  const secondaryLabel = subagent?.secondaryLabel ?? summaryOverride ?? presentation.summary;
+  const handlePress = joinedRow.handlePress;
+
   if (presentation.isPlan && effectiveDetail?.type === "plan") {
     return (
       <PlanCard
@@ -3040,14 +3065,16 @@ export const ToolCall = memo(function ToolCall({
     <ExpandableBadge
       testID="tool-call-badge"
       label={presentation.displayName}
-      secondaryLabel={summaryOverride ?? presentation.summary}
+      secondaryLabel={secondaryLabel}
       icon={presentation.icon}
-      isExpanded={shouldRenderInline && isExpanded}
-      onToggle={presentation.canOpenDetails ? handleToggle : undefined}
+      isExpanded={shouldRenderInline && isExpanded && !subagent}
+      onToggle={handlePress}
       onOpenFile={handleOpenFile}
-      renderDetails={presentation.canOpenDetails && shouldRenderInline ? renderDetails : undefined}
-      isLoading={status === "running" || status === "executing"}
-      isError={status === "failed"}
+      renderDetails={
+        presentation.canOpenDetails && shouldRenderInline && !subagent ? renderDetails : undefined
+      }
+      isLoading={isLoading}
+      isError={isError}
       isLastInSequence={isLastInSequence}
       disableOuterSpacing={disableOuterSpacing}
       onDetailHoverChange={onInlineDetailsHoverChange}
@@ -3065,6 +3092,7 @@ function areToolCallPropsEqual(previous: ToolCallProps, next: ToolCallProps) {
   if (previous.cwd !== next.cwd) return false;
   if (previous.metadata !== next.metadata) return false;
   if (previous.summaryOverride !== next.summaryOverride) return false;
+  if (!isToolCallSubagentEqual(previous, next)) return false;
   if (previous.isLastInSequence !== next.isLastInSequence) return false;
   if (previous.disableOuterSpacing !== next.disableOuterSpacing) return false;
   if (previous.onOpenFilePath !== next.onOpenFilePath) return false;

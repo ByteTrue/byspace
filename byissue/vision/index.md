@@ -12,7 +12,7 @@ BySpace 让你从任何一个浏览器查看和操控自己开发环境里的 AI
 
 **Agent 有两条并行的运行方式，都是一等公民。**
 
-- **结构化会话。** BySpace 与 provider 的协议对接，把时间线、工具调用、权限批准、subagent 拆成界面元素。换来的是移动端和窄屏上真正可读可操作的体验，代价是每个 provider 都要维护适配。
+- **结构化会话。** BySpace 与 provider 的协议对接，把时间线、工具调用、权限批准、subagent 拆成界面元素。换来的是移动端和窄屏上真正可读可操作的体验，代价是每个 provider 都要维护适配。适配分先后：Pi 是一等公民，界面新能力先适配 Pi，其余 provider 维护为 best-effort；Pi 的扩展适配只认 @bytetrue/\* 白名单。见 `byissue/decisions/003-pi-first-class-and-bytetrue-extension-whitelist.md`。
 - **Terminal 会话。** agent 以自己的 TUI 在 PTY 里运行，BySpace 提供宿主、活动提示和通知。换来的是任何 agent 都能跑、没有第二份状态真相，代价是全屏 TUI 在手机上很难用。
 
 两条路解决的是不同场景，不是过渡关系，谁也不取代谁。选哪条由 provider 支持情况和当前设备决定。
@@ -65,6 +65,7 @@ BySpace 让你从任何一个浏览器查看和操控自己开发环境里的 AI
 ## 演化地图
 
 - `byissue/epics/003-o-orca-terminal-agent-experience/spec.md`：建设中。对照 orca 优化 terminal agent 体验，不改变结构化会话。
+- `byissue/epics/004-o-pi-first-class-and-bytetrue-extensions/spec.md`：建设中。Pi 升为一等公民 provider 后的首批交付：pi-subagent 的 subagents track 与时间线适配。
 - `byissue/issues/019-x-sync-upstream-to-0-8-0-beta.md`：已完成。同步上游到 `v0.8.0-beta.1`，结论已毕业到 `agent-conversation.md` 与 `connection.md`。
 - `byissue/spec/agent-conversation.md`、`terminal.md`、`workspace.md`、`connection.md`：当前真相，Epic 003 只扩展 terminal 一侧。
 - `byissue/talks/001-terminal-native-hard-fork.md`：一次关于"要不要转向 terminal-native 并独立 fork"的完整讨论，结论是撤回。想知道为什么两条路共存、为什么不以 orca 为底、为什么继续同步上游，读它。

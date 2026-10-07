@@ -66,6 +66,9 @@ import {
   projectToolCallDetailLevel,
 } from "@/tool-calls/detail-level/projection";
 import { projectNestedCodemodeCalls } from "@/tool-calls/detail-level/nested-codemode";
+import { useProviderSubagentsByToolCallId } from "@/subagents/select";
+import type { ToolCallSubagentBinding } from "@/components/message";
+import type { ProviderSubagentDescriptorPayload } from "@bytetrue/protocol/messages";
 import { OverviewToolCallGroupView } from "@/tool-calls/detail-level/overview/view";
 import type { OverviewToolCallGroup } from "@/tool-calls/detail-level/overview/model";
 import { formatOverviewSummary } from "@/tool-calls/detail-level/overview/summary";
@@ -291,6 +294,8 @@ export interface AgentStreamViewProps {
   toast?: ToastApi | null;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
   readOnly?: boolean;
+  /** Opens the provider subagent tab for a launch row's descriptor (pi inline cards). */
+  onOpenProviderSubagent?: (parentAgentId: string, subagentId: string) => void;
   showScrollToBottomButton?: boolean;
   onScrollToBottomVisibilityChange?: (visible: boolean) => void;
   historyPagination?: {
@@ -354,6 +359,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       bottomOverlayControlClearance,
       toast,
       onOpenWorkspaceFile,
+      onOpenProviderSubagent,
       readOnly = false,
       showScrollToBottomButton = true,
       onScrollToBottomVisibilityChange,
@@ -556,6 +562,36 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           head: effectiveStreamHead,
         }),
       [effectiveStreamItems, effectiveStreamHead],
+    );
+    // Provider subagents (pi) join onto their launch tool rows by call id: the row shows live
+    // status and opens the subagent's tab. Empty when the feature is off or nothing launched.
+    const subagentsByToolCallId = useProviderSubagentsByToolCallId({
+      serverId: resolvedServerId,
+      parentAgentId: agentId,
+    });
+    // Bindings are cached per descriptor: the memo comparator on tool rows compares onOpen by
+    // identity, so a fresh closure per lookup would defeat it and re-render every row.
+    const subagentBindingCache = useRef(
+      new WeakMap<ProviderSubagentDescriptorPayload, ToolCallSubagentBinding>(),
+    );
+    const getSubagentBinding = useStableEvent(
+      (callId: string): ToolCallSubagentBinding | undefined => {
+        const descriptor = subagentsByToolCallId.get(callId);
+        if (!descriptor) {
+          return undefined;
+        }
+        let binding = subagentBindingCache.current.get(descriptor);
+        if (!binding) {
+          binding = {
+            status: descriptor.status,
+            secondaryLabel:
+              descriptor.subtitle ?? descriptor.description ?? descriptor.title ?? null,
+            onOpen: () => onOpenProviderSubagent?.(agentId, descriptor.id),
+          };
+          subagentBindingCache.current.set(descriptor, binding);
+        }
+        return binding;
+      },
     );
     // Nested parents whose group is still running have to revise their history row on every
     // flush: the children fold into that row, and the row's own item identity never changes while
@@ -828,6 +864,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             );
           }
 
+          const subagent = data.callId ? getSubagentBinding(data.callId) : undefined;
           return (
             <ToolCallSlot
               key={collapseRevision}
@@ -840,6 +877,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               cwd={context.cwd}
               metadata={data.metadata}
               summaryOverride={summaryOverride}
+              subagent={subagent}
               isLastInSequence={isLastInSequence}
               onOpenFilePath={handleToolCallOpenFile}
               maxDetailHeight={maxDetailHeight}
@@ -863,7 +901,13 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           />
         );
       },
-      [collapseRevision, context.cwd, setInlineDetailsExpanded, handleToolCallOpenFile],
+      [
+        collapseRevision,
+        context.cwd,
+        setInlineDetailsExpanded,
+        handleToolCallOpenFile,
+        getSubagentBinding,
+      ],
     );
 
     const getNestedToolCallGroup = useStableEvent((itemId: string) =>
@@ -1360,6 +1404,9 @@ function agentStreamViewPropsEqual(
   }
   if (left.toast !== right.toast) reasons.push("toast");
   if (left.onOpenWorkspaceFile !== right.onOpenWorkspaceFile) reasons.push("onOpenWorkspaceFile");
+  if (left.onOpenProviderSubagent !== right.onOpenProviderSubagent) {
+    reasons.push("onOpenProviderSubagent");
+  }
   if (left.readOnly !== right.readOnly) reasons.push("readOnly");
   if (left.showScrollToBottomButton !== right.showScrollToBottomButton) {
     reasons.push("showScrollToBottomButton");

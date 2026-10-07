@@ -29,7 +29,7 @@ export interface ProviderSubagentTimelineState {
   rows: Map<number, ProviderSubagentTimelineRow>;
 }
 
-interface ProviderSubagentState {
+export interface ProviderSubagentState {
   descriptors: Map<string, ProviderSubagentDescriptorPayload>;
   timelines: Map<string, ProviderSubagentTimelineState>;
   hiddenFromTrack: Set<string>;

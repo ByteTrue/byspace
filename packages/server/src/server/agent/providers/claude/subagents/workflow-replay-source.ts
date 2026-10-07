@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { AgentTimelineItem } from "../../../agent-sdk-types.js";
 import { normalizeProviderReplayTimestamp } from "../../../provider-history-timestamps.js";
 import type { ProviderSubagentStatus } from "../../../provider-subagents/store.js";
-import type { SubagentObservation } from "./observation.js";
+import type { SubagentObservation } from "../../../provider-subagents/observation.js";
 import { buildClaudeSubagentSubtitle } from "./presentation.js";
 import type { ClaudeReplayEntry } from "./replay-source.js";
 import { formatClaudeWorkflowResult } from "./workflow-output.js";

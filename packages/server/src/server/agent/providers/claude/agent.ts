@@ -55,7 +55,10 @@ import {
   type ClaudeReplayParentFacts,
   type ClaudeSubagentMeta,
 } from "./subagents/replay-source.js";
-import { foldSubagentObservations, type SubagentObservation } from "./subagents/observation.js";
+import {
+  foldSubagentObservations,
+  type SubagentObservation,
+} from "../../provider-subagents/observation.js";
 import {
   observeReplayWorkflows,
   parseClaudeWorkflowRun,
