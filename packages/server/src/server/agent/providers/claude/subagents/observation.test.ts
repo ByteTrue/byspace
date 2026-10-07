@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { ProviderSubagentStore } from "../../../provider-subagents/store.js";
-import { foldSubagentObservations, type SubagentObservation } from "./observation.js";
+import {
+  foldSubagentObservations,
+  type SubagentObservation,
+} from "../../../provider-subagents/observation.js";
 
 describe("foldSubagentObservations", () => {
   it("turns a declaration into a running upsert carrying the task", () => {

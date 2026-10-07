@@ -89,6 +89,14 @@ import {
   type PiToolResult,
   type PiTrackedToolCall,
 } from "./tool-call-mapper.js";
+import { foldSubagentObservations } from "../../provider-subagents/observation.js";
+import {
+  isPiSubagentToolName,
+  observePiSubagentExit,
+  observePiSubagentLaunch,
+  observePiSubagentRecord,
+  replayPiSubagentObservations,
+} from "./agent-subagents.js";
 
 const PI_PROVIDER = "pi";
 const DEFAULT_PI_THINKING_LEVEL: PiThinkingLevel = "medium";
@@ -1439,6 +1447,13 @@ export class PiRpcAgentSession implements AgentSession {
       await this.runtimeSession.getMessages(),
       this.capturedUserEntries,
     );
+    // Background subagent lifecycle lives in the transcript as tool result details and
+    // subagent-exit custom messages, not in a sidechain — derive it from the same messages.
+    for (const subagentEvent of foldSubagentObservations(
+      replayPiSubagentObservations(await this.runtimeSession.getMessages()),
+    )) {
+      yield { type: "provider_subagent", provider: this.provider, event: subagentEvent };
+    }
   }
 
   async getRuntimeInfo(): Promise<AgentRuntimeInfo> {
@@ -2317,6 +2332,29 @@ export class PiRpcAgentSession implements AgentSession {
     this.emitToolCallEvent(event.toolCallId, toolCall, status, result, error, {
       parentToolCallId: event.parentToolCallId,
     });
+    this.emitPiSubagentToolObservations(event.toolCallId, toolCall, result);
+  }
+
+  /** Background subagents announce themselves through tool result details, not the stream. */
+  private emitPiSubagentToolObservations(
+    toolCallId: string,
+    toolCall: PiTrackedToolCall,
+    result: PiToolResult,
+  ): void {
+    if (!isPiSubagentToolName(toolCall.toolName)) {
+      return;
+    }
+    const details = typeof result === "object" && result !== null ? result.details : undefined;
+    const observation =
+      toolCall.toolName === "subagent"
+        ? observePiSubagentLaunch({ toolCallId, args: toolCall.args, details })
+        : observePiSubagentRecord(details);
+    if (!observation) {
+      return;
+    }
+    for (const event of foldSubagentObservations([observation])) {
+      this.emit({ type: "provider_subagent", provider: this.provider, event });
+    }
   }
 
   private emitCompactionTimeline(input: {
@@ -2403,6 +2441,13 @@ export class PiRpcAgentSession implements AgentSession {
       // Pi extension sendMessage() payloads surface as custom messages. display=false
       // means context-only (Pi's TUI hides them too). display is optional on older
       // runtimes; treat missing as true so exit notifications still surface.
+      if (event.message.customType === "subagent-exit") {
+        for (const subagentEvent of foldSubagentObservations(
+          observePiSubagentExit(event.message.details),
+        )) {
+          this.emit({ type: "provider_subagent", provider: this.provider, event: subagentEvent });
+        }
+      }
       if (event.message.display !== false) {
         const text = getUserMessageText(event.message.content);
         const details = limitTimelineDetails(event.message.details);

@@ -258,6 +258,14 @@ function resolveAgentMcpClientHost(host: string): string {
   return host;
 }
 
+function createLocalApiBaseUrl(listenTarget: ListenTarget | null): string | null {
+  if (!listenTarget || listenTarget.type !== "tcp") {
+    return null;
+  }
+  const host = resolveAgentMcpClientHost(listenTarget.host);
+  return `http://${formatHostForHttpUrl(host)}:${listenTarget.port}`;
+}
+
 function createAgentMcpBaseUrl(listenTarget: ListenTarget | null): string | null {
   if (!listenTarget || listenTarget.type !== "tcp") {
     return null;
@@ -296,6 +304,44 @@ const LOOPBACK_REMOTE_ADDRESSES = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1
 
 function isLoopbackRemoteAddress(remoteAddress: string | undefined): boolean {
   return remoteAddress !== undefined && LOOPBACK_REMOTE_ADDRESSES.has(remoteAddress);
+}
+
+const PiSubagentReportSchema = z.object({
+  token: z.string().min(1),
+  observations: z.array(z.record(z.string(), z.unknown())).min(1),
+});
+
+/**
+ * Local, token-gated snapshots reported by the BySpace-installed subagent extension;
+ * deliberately skips daemon auth. The manager is created after route mounting, so it resolves
+ * through a getter filled in once construction finishes (503 until then).
+ */
+export function createPiSubagentReportRouteHandler(
+  getAgentManager: () => AgentManager | null,
+): express.RequestHandler {
+  return async (req, res) => {
+    const agentManager = getAgentManager();
+    if (!agentManager) {
+      res.status(503).json({ error: "Daemon is still starting" });
+      return;
+    }
+    if (!isLoopbackRemoteAddress(req.socket.remoteAddress)) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    const parsed = PiSubagentReportSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid subagent report" });
+      return;
+    }
+    const { token, observations } = parsed.data;
+    const outcome = agentManager.applyPiSubagentReport(token, observations);
+    if (outcome === "unauthorized") {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    res.status(204).end();
+  };
 }
 
 export function createTerminalActivityRouteHandler(
@@ -792,6 +838,17 @@ export async function createBySpaceDaemon(
     createTerminalActivityRouteHandler(terminalManager),
   );
 
+  // Subagent progress snapshots reported by the BySpace-installed subagent extension. Local,
+  // token-gated per agent launch; deliberately skips daemon auth. The route must mount before
+  // the bearer middleware below, but the manager is created later in this function, so it
+  // resolves through a holder filled in right after construction.
+  let piSubagentReportAgentManager: AgentManager | null = null;
+  app.post(
+    "/api/subagent-report",
+    express.json(),
+    createPiSubagentReportRouteHandler(() => piSubagentReportAgentManager),
+  );
+
   // Serve the bundled browser web UI when enabled. Mounted after service-proxy
   // classification and host/CORS handling, but before daemon bearer auth, so
   // static app files load without the daemon password while API/WebSocket calls
@@ -960,6 +1017,7 @@ export async function createBySpaceDaemon(
       resolveBySpaceToolPolicy(provider, daemonConfigStore.get().providers),
     logger,
   });
+  piSubagentReportAgentManager = agentManager;
   const detachAgentStoragePersistence = attachAgentStoragePersistence(
     logger,
     agentManager,
@@ -1539,6 +1597,7 @@ export async function createBySpaceDaemon(
             agentMcpBaseUrl =
               !mcpEnabled || config.mcpInjectIntoAgents === false ? null : mcpBaseUrl;
             agentManager.setMcpBaseUrl(agentMcpBaseUrl);
+            agentManager.setPiSubagentReportBaseUrl(createLocalApiBaseUrl(boundListenTarget));
             agentManager.setBySpaceToolsEnabled(mcpEnabled && config.mcpInjectIntoAgents !== false);
             daemonConfigStore.onFieldChange("mcp.enabled", (value) => {
               mcpEnabled = value !== false;

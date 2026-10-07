@@ -1505,6 +1505,13 @@ const AgentStreamSection = memo(function AgentStreamSection({
   onScrollToBottomVisibilityChange: (visible: boolean) => void;
 }) {
   const isCompactFormFactor = useIsCompactFormFactor();
+  const { openPreferredTarget } = usePaneContext();
+  const handleOpenProviderSubagent = useCallback(
+    (parentAgentId: string, subagentId: string) => {
+      openPreferredTarget({ kind: "provider_subagent", parentAgentId, subagentId }, "subagents");
+    },
+    [openPreferredTarget],
+  );
   const hasWorkspaceDiffStat = useWorkspaceHasDiffStat(serverId, workspaceId);
   const hasVisibleComposerTracks =
     hasActiveComposer && (hasVisibleAgentTracks || hasWorkspaceDiffStat);
@@ -1575,6 +1582,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
       pendingMessageSubmissions={pendingMessageSubmissions}
       turnPresentation={turnPresentation}
       onOpenWorkspaceFile={onOpenWorkspaceFile}
+      onOpenProviderSubagent={handleOpenProviderSubagent}
       showScrollToBottomButton={!hasActiveComposer}
       onScrollToBottomVisibilityChange={onScrollToBottomVisibilityChange}
     />

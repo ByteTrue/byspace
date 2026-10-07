@@ -3,7 +3,11 @@ import { usePendingArchiveAgentIds } from "@/hooks/use-archive-agent";
 import equal from "fast-deep-equal";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useSessionStore, type Agent } from "@/stores/session-store";
-import { refreshProviderSubagents, useProviderSubagentStore } from "./provider-store";
+import {
+  refreshProviderSubagents,
+  useProviderSubagentStore,
+  type ProviderSubagentState,
+} from "./provider-store";
 import type { ProviderSubagentDescriptorPayload } from "@bytetrue/protocol/messages";
 
 export interface BySpaceSubagentRow {
@@ -38,6 +42,8 @@ export interface ProviderSubagentRow {
 }
 
 export type SubagentRow = BySpaceSubagentRow | ProviderSubagentRow;
+
+const EMPTY_SUBAGENTS_BY_CALL_ID = new Map<string, ProviderSubagentDescriptorPayload>();
 
 type SessionStoreSnapshot = ReturnType<typeof useSessionStore.getState>;
 type ProviderSubagentStoreSnapshot = ReturnType<typeof useProviderSubagentStore.getState>;
@@ -130,6 +136,62 @@ export function selectProviderSubagentsForParent(
   }
   rows.sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
   return rows;
+}
+
+/**
+ * Descriptors for one parent agent indexed by their launch tool call id — the join key between a
+ * timeline tool row (`AgentToolCallItem.payload.data.callId`) and its live subagent state.
+ */
+export function selectProviderSubagentsByToolCallId(
+  state: ProviderSubagentState,
+  serverId: string,
+  parentAgentId: string,
+): Map<string, ProviderSubagentDescriptorPayload> {
+  const prefix = `${serverId}\0${parentAgentId}\0`;
+  const byCallId = new Map<string, ProviderSubagentDescriptorPayload>();
+  for (const [key, subagent] of state.descriptors) {
+    if (!key.startsWith(prefix) || !subagent.toolCallId) {
+      continue;
+    }
+    byCallId.set(subagent.toolCallId, subagent);
+  }
+  return byCallId;
+}
+
+/** Same-size, same-member map: descriptor objects are stable references from the store. */
+function mapsShallowEqual(
+  left: Map<string, ProviderSubagentDescriptorPayload>,
+  right: Map<string, ProviderSubagentDescriptorPayload>,
+): boolean {
+  if (left.size !== right.size) return false;
+  for (const [key, value] of left) {
+    if (right.get(key) !== value) return false;
+  }
+  return true;
+}
+
+/**
+ * Live provider-subagent descriptors for one parent agent, keyed by the call id of the tool row
+ * that launched them. Timeline rows look their descriptor up here to render inline status; an
+ * empty map (feature off, no reports) leaves rows untouched. The selector allocates a fresh map
+ * per call, so equality is shallow — otherwise any provider-subagent event anywhere re-renders
+ * every subscribed stream.
+ */
+export function useProviderSubagentsByToolCallId(params: {
+  serverId: string;
+  parentAgentId: string;
+}): Map<string, ProviderSubagentDescriptorPayload> {
+  const supported = useSessionStore(
+    (state) => state.sessions[params.serverId]?.serverInfo?.features?.providerSubagents === true,
+  );
+  return useStoreWithEqualityFn(
+    useProviderSubagentStore,
+    (state) =>
+      supported
+        ? selectProviderSubagentsByToolCallId(state, params.serverId, params.parentAgentId)
+        : EMPTY_SUBAGENTS_BY_CALL_ID,
+    mapsShallowEqual,
+  );
 }
 
 export function useSubagentsForParent(params: SelectSubagentsParams): SubagentRow[] {
