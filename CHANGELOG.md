@@ -5,6 +5,19 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.18.0 - 2026-10-07
+
+### Added
+
+- Pi subagents show live status as inline cards in the agent timeline and open as read-only child-session tabs ([#20](https://github.com/ByteTrue/byspace/pull/20))
+- Project settings gain default isolation (Local / New worktree) and default base branch for new workspaces ([#19](https://github.com/ByteTrue/byspace/pull/19))
+
+### Fixed
+
+- Fixed new workspaces starting on an unrelated host instead of the project's default host ([#19](https://github.com/ByteTrue/byspace/pull/19))
+- Fixed Pi MCP servers never connecting and Pi agents with mcpServers failing to start ([#18](https://github.com/ByteTrue/byspace/pull/18))
+- Fixed a user message card jumping below the reply it started after switching away for more than a page of new rows and returning
+
 ## 0.17.0 - 2026-10-05
 
 ### Added
