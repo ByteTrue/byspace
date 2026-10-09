@@ -162,3 +162,69 @@ D1 以 **client 角色**经现有 relay 连 D2 的 serverId，复用 E2EE（Curv
 - **判断**：四个批次全部交付并验证——协议（8 组 RPC + 二进制帧 + mutable config 链）、D2 目标端（双门槛 + 帧泵）、D1 发起端（内嵌客户端 + 本地 listener + 持久化 registry）、app GUI（独立路由 + 白名单 + 添加 sheet + 9 locale）、spec/docs 回写。范围未暗扩：agent 跨机、反向隧道、relay 成员网络、CLI 入口均未做。
 - **验证证据**：server e2e 5/5（含 relay 重启恢复、三拒绝路径）+ 单测 9/9 + registry 5/5；protocol 帧测试 6/6；GUI e2e 1/1（真实双 daemon + relay + 浏览器，字节级断言）；回归（relay 74、config-store 53、authorization 7、i18n/command-center 55）全绿；typecheck/lint/format 0 违规。
 - **毕业去向**：connection.md 已回写；supervisor 优先 dist、ws factory 无 protocols 静默挂死两条坑已记录在本 issue 执行记录，可作为 note 候选。
+
+## 双机真实验证交接（Win 机器上执行）
+
+> **读者：** 在 Windows + WSL 开发机上完成 issue 062 最后一层验证的人或接手会话。前情读本 issue 上方执行记录；spec 见 `byissue/spec/connection.md` 的「Daemon 隧道」节。
+> 已完成验证：本地 relay 三层（单元 15 / in-process e2e 5 / supervisor+浏览器 GUI e2e 1）+ 公网 CF relay 一层（`RUN_LIVE_RELAY_E2E=1 npx vitest run src/server/tunnel.live-relay.e2e.test.ts`，1 passed）。**唯一剩余：真双机。**
+
+### 角色与网络
+
+- **D2（目标机）= WSL**：daemon + dev server 都在 WSL 内，出站连 `relay.byspace.cc.cd:443`。WSL2 有独立网络命名空间，其 loopback 与 Windows 宿主隔离，网络路径上与真远程机等价（仅共享硬件、无物理 WAN 延迟——后者已被 live e2e 覆盖）。
+- **D1（发起机）= Windows 宿主或另一台机**：daemon 出站连同一 relay，把 D2 白名单端口映射为本机 `127.0.0.1:<动态端口>`。
+- 两侧**不需要互访**：各自只出站连公网 relay；D1 转发到的 `127.0.0.1:3000` 由 D2 daemon 在 WSL 内自己拨号（目标机视角），这正是产品语义。
+
+### D2 侧（WSL 内，Node 22）
+
+```bash
+# 1. 取代码（分支 research/relay-cross-site-networking，两 commit：72450d511 + 204e2f726）
+git clone -b research/relay-cross-site-networking https://github.com/ByteTrue/byspace.git && cd byspace
+npm install
+npm run build:server          # supervisor 优先加载 dist，必须 build（见 notes/007）
+
+# 2. 起一个真实 dev server（被转发对象），记下端口，例如 3000
+python3 -m http.server 3000   # 或任意 HTTP 服务
+
+# 3. D2 daemon：独立 home + config（密码 + 白名单 + 公网 relay）
+mkdir -p ~/d2-home
+node -e "console.log(require('bcryptjs').hashSync('D2密码', 12))"   # 生成哈希填入下块
+cat > ~/d2-home/config.json <<'EOF'
+{
+  "version": 1,
+  "daemon": {
+    "auth": { "password": "<bcrypt 哈希>" },
+    "tunnel": { "allowedPorts": [3000] },
+    "relay": { "enabled": true, "endpoint": "relay.byspace.cc.cd:443", "useTls": true }
+  }
+}
+EOF
+
+# 4. 起 D2 daemon 并出 offer
+BYSPACE_HOME=$HOME/d2-home BYSPACE_LISTEN=127.0.0.1:16777 \
+  npx tsx packages/server/scripts/supervisor-entrypoint.ts --dev &
+sleep 5
+BYSPACE_HOME=$HOME/d2-home npx tsx packages/cli/src/index.ts daemon pair   # 打印 pairing link
+```
+
+`daemon pair` 生成的 offer 自带 relay endpoint 与 D2 公钥，把它交给 D1 侧。
+
+### D1 侧（Windows 宿主或另一台机）
+
+1. 同仓库同分支，`npm install && npm run build:server`；独立 home（`%USERPROFILE%\d1-home`）写同款 config（**密码用 D1 自己的 bcrypt 哈希**，无需 tunnel/relay 字段）。
+2. 起 D1 daemon：`BYSPACE_HOME=%USERPROFILE%\d1-home BYSPACE_LISTEN=127.0.0.1:16778 npx tsx packages/server/scripts/supervisor-entrypoint.ts --dev`（PowerShell 用 `$env:` 设环境变量）。
+3. **走产品 UI 验证**：浏览器开 `http://127.0.0.1:16778`（daemon 内置 web UI）→ 连接 D1 → 命令中心或侧栏进 **Tunnels** → **Add tunnel** → 粘贴 WSL 的 pairing link + D2 密码 + 远端端口 3000 → 提交。
+4. outbound 行出现后，浏览器开 `http://127.0.0.1:<行内本地端口>` ——应显示 WSL dev server 的页面（HMR WebSocket 也走隧道）。
+
+### 验证清单（全过即真双机验证完成）
+
+- [ ] D2 (WSL) daemon 在线、offer 生成（输出含 `#offer=`）。
+- [ ] D1 add-tunnel 成功、outbound 行 state=connected。
+- [ ] 本地端口返回 WSL dev server 内容，与 WSL 内 `curl 127.0.0.1:3000` 一致。
+- [ ] 杀 D2 daemon 或断 WSL 网 → 行转 disconnected；恢复后自动回 connected。
+- [ ] 白名单外端口（如 9999）转发被拒，错误含 allowlist。
+- [ ] HMR：Vite/webpack 类 dev server 改文件，本机浏览器热更新生效。
+- [ ] 结果回写本 issue 执行记录（一句通过/失败 + 现象）。
+
+### 已知坑（notes/007，本流程已规避）
+
+- supervisor 的 worker 优先加载 `packages/server/dist`——**改源码后必须 `npm run build`（server）**再跑，否则真进程执行旧代码。
