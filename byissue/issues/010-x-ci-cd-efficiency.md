@@ -2,7 +2,6 @@
 kind: issue
 title: "CI/CD 治理：成功率、时长与发布纪律"
 type: chore
-status: closed
 created: 2026-09-04
 ---
 

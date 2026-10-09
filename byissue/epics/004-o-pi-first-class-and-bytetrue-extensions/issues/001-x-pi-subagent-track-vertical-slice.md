@@ -2,8 +2,6 @@
 kind: issue
 title: "Pi subagent 接入 provider_subagents 通道：上报端点 + descriptor + jsonl 只读 tab"
 type: feature
-status: closed
-closed: 2026-10-07
 created: 2026-10-06
 ---
 

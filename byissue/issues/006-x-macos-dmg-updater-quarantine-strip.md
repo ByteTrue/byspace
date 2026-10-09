@@ -2,9 +2,7 @@
 kind: issue
 title: "macOS DMG 更新器自动清除 com.apple.quarantine 隔离属性"
 type: bug
-status: closed
 created: 2026-09-02
-closed: 2026-09-02
 ---
 
 # macOS DMG 更新器自动清除 com.apple.quarantine 隔离属性

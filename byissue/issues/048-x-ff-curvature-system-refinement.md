@@ -2,7 +2,6 @@
 kind: issue
 title: "对齐 macOS 黄金 12px 窗口/卡片曲率、提亮主内容区为纯白并引入全局悬浮层级"
 type: ff
-status: closed
 created: 2026-09-24
 ---
 

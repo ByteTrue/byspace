@@ -2,7 +2,6 @@
 kind: issue
 title: "切回窗口后用户消息不再跳到会话流末尾"
 type: ff
-status: closed
 created: 2026-06-19
 ---
 

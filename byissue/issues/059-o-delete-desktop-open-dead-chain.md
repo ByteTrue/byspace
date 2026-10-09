@@ -2,7 +2,6 @@
 kind: issue
 title: "删除 desktop-open 死链：Electron 退役 shim 及其全部消费管道"
 type: refactor
-status: open
 created: 2026-09-28
 ---
 

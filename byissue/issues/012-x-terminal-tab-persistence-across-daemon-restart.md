@@ -2,7 +2,6 @@
 kind: issue
 title: "Daemon 重启后 workspace terminal 标签全部消失"
 type: bug
-status: closed
 created: 2026-06-11
 ---
 

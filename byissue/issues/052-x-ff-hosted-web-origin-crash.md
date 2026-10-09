@@ -2,7 +2,6 @@
 kind: issue
 title: "修复线上 Web 在默认端口 origin 下启动即崩溃"
 type: ff
-status: closed
 created: 2026-09-27
 ---
 

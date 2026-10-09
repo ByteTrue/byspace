@@ -2,7 +2,6 @@
 kind: issue
 title: 合并时间线显示设置为四档并让流式思考跟随滚动
 type: feature
-status: closed
 created: 2026-10-10
 ---
 

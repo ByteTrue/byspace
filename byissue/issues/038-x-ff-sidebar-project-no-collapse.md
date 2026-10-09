@@ -2,9 +2,7 @@
 kind: issue
 title: "左侧边栏项目行不再折叠，恒展开"
 type: ff
-status: closed
 created: 2026-09-16
-closed: 2026-09-20
 ---
 
 # 左侧边栏项目行不再折叠，恒展开

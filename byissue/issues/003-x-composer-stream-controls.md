@@ -2,9 +2,7 @@
 kind: issue
 title: "将 Agent stream 控件移到 Composer 操作行"
 type: feature
-status: closed
 created: 2026-09-02
-closed: 2026-09-02
 ---
 
 # 将 Agent stream 控件移到 Composer 操作行

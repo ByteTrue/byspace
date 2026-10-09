@@ -2,7 +2,6 @@
 kind: issue
 title: "Daemon 网络设置：局域网访问开关与密码管理"
 type: feature
-status: closed
 created: 2026-07-14
 ---
 

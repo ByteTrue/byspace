@@ -1,6 +1,11 @@
-# 062 · ff · New Workspace 默认 Host 偏好 + 侧栏折叠 UI 修复
+---
+kind: issue
+title: "New Workspace 默认 Host 偏好 + 侧栏折叠 UI 修复"
+type: ff
+created: 2026-10-02
+---
 
-Status: ff (fast, 快交付)
+# New Workspace 默认 Host 偏好 + 侧栏折叠 UI 修复
 
 ## 需求 A：New Workspace 默认 Host
 

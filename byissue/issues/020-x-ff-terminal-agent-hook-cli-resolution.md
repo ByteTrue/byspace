@@ -2,7 +2,6 @@
 id: "020"
 type: ff
 title: 修复终端 Agent Hook CLI 路径解析与 command not found
-status: closed
 date: 2026-09-09
 ---
 

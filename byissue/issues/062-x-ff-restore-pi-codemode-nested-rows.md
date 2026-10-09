@@ -2,9 +2,7 @@
 kind: issue
 title: "回退 061 的 pi codemode 嵌套调用过滤：恢复独立工具行显示"
 type: ff
-status: closed
 created: 2026-10-01
-closed: 2026-10-01
 ---
 
 <!-- 快改痕迹：轻。读者只要 30 秒扫完。禁止迷你 Design。 -->

@@ -2,7 +2,6 @@
 kind: issue
 title: "全仓 Paseo 命名迁移"
 type: chore
-status: open
 created: 2026-09-17
 ---
 

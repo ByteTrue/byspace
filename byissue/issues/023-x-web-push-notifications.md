@@ -2,7 +2,6 @@
 kind: issue
 title: "Web Push 通知"
 type: feature
-status: closed
 created: 2026-09-10
 ---
 

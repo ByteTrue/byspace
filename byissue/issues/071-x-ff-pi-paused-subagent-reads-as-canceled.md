@@ -2,7 +2,6 @@
 kind: issue
 title: "修复 pi paused 子代理永远显示 running（pill 常驻 1 working）"
 type: ff
-status: closed
 created: 2026-10-09
 ---
 

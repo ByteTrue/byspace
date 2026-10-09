@@ -2,7 +2,6 @@
 kind: issue
 title: "跨 workspace 的统一编排入口（已放弃）"
 type: feature
-status: closed
 created: 2026-09-10
 ---
 

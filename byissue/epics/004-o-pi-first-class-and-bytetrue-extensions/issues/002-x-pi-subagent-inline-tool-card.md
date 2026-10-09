@@ -2,8 +2,6 @@
 kind: issue
 title: "Pi subagent 时间线行内卡片：嵌套行按 toolCallId 订阅 descriptor 实时增强"
 type: feature
-status: closed
-closed: 2026-10-07
 created: 2026-10-06
 ---
 

@@ -2,8 +2,6 @@
 kind: issue
 title: "修复 reload 后 pi codemode 嵌套工具行全部消失（回放重建子行）"
 type: ff
-status: closed
-closed: 2026-10-07
 created: 2026-10-07
 ---
 

@@ -2,7 +2,6 @@
 kind: issue
 title: "时间线 Notification 卡片做工精细化与 Markdown 标题解析"
 type: ff
-status: closed
 created: 2026-09-16
 ---
 

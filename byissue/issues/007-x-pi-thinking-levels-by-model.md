@@ -2,9 +2,7 @@
 kind: issue
 title: "Pi Provider 基于 model.thinkingLevelMap 精确过滤思考等级"
 type: bug
-status: closed
 created: 2026-09-02
-closed: 2026-09-02
 ---
 
 # Pi Provider 基于 model.thinkingLevelMap 精确过滤思考等级

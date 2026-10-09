@@ -2,9 +2,7 @@
 kind: issue
 title: "自托管发布形态：web/relay 容器、Node relay、daemon 镜像退役与引导弹窗"
 type: feature
-status: closed
 created: 2026-09-30
-closed: 2026-10-01
 ---
 
 <!-- 读者：跨会话接手的人。目标与范围 · 根因证据 · 现状怎么工作 · 影响面 · 方案 · 验证 · 关闭回写 -->

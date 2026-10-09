@@ -2,9 +2,7 @@
 kind: issue
 title: "将开发环境启动脚本重构为跨平台 Node 脚本，修复 Windows/PowerShell 下执行失败"
 type: ff
-status: closed
 created: 2026-10-01
-closed: 2026-10-01
 ---
 
 # 将开发环境启动脚本重构为跨平台 Node 脚本，修复 Windows/PowerShell 下执行失败

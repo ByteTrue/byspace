@@ -2,7 +2,6 @@
 kind: issue
 title: "全局 New workspace 入口尊重默认 Host 偏好（pin → 本机）"
 type: ff
-status: closed
 created: 2026-10-07
 ---
 

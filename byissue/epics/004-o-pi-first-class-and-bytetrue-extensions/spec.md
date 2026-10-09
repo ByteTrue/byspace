@@ -1,7 +1,6 @@
 ---
 kind: epic
 title: "Pi 一等公民与 ByteTrue 扩展适配"
-status: open
 owner_decision: approved
 created: 2026-10-06
 amended_at: 2026-10-06

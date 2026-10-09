@@ -2,7 +2,6 @@
 kind: issue
 title: "修正 defaultHost 设置的 i18n key 路径错位（sidebar.project → settings.project）"
 type: ff
-status: closed
 created: 2026-10-06
 ---
 

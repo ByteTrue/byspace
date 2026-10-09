@@ -2,7 +2,6 @@
 kind: issue
 title: "侧栏新建 Workspace 尊重默认 Host 偏好（项目 pin → 本机）"
 type: ff
-status: closed
 created: 2026-10-06
 ---
 

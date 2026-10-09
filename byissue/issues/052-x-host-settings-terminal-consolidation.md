@@ -2,7 +2,6 @@
 kind: issue
 title: "Host 设置收敛：终端集成落 provider 弹层，Terminals 与 Providers 页取消"
 type: refactor
-status: closed
 created: 2026-09-24
 ---
 

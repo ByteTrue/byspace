@@ -2,7 +2,6 @@
 kind: issue
 title: 工作区 archive 后在 Windows 上又出现
 type: ff
-status: closed
 created: 2026-10-03
 ---
 

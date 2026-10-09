@@ -2,7 +2,6 @@
 kind: issue
 title: "精简设置侧栏分类并清理僵尸代码"
 type: refactor
-status: closed
 created: 2026-09-24
 ---
 

@@ -2,7 +2,6 @@
 kind: issue
 title: "Terminal 默认 shell 配置与自动探测"
 type: feature
-status: closed
 created: 2026-02-13
 ---
 

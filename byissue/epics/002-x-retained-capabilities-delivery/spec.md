@@ -1,6 +1,5 @@
 ---
 title: 保留能力交付路线
-status: closed
 kind: epic
 owner_decision: approved
 approved_at: 2026-08-31T05:01:54Z

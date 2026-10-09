@@ -2,7 +2,6 @@
 kind: issue
 title: "Pi provider 改用内置 MCP：扩展内 registerMcpServer 替代 pi-mcp-adapter 探测"
 type: refactor
-status: closed
 created: 2026-10-05
 ---
 

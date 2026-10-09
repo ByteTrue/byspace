@@ -2,8 +2,6 @@
 kind: issue
 title: "Project 设置：新建 Workspace 的项目级默认（隔离模式、基础分支）"
 type: feature
-status: closed
-closed: 2026-10-06
 created: 2026-10-06
 ---
 

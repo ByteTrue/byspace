@@ -1,9 +1,7 @@
 ---
 type: ff
-status: closed
 title: 切回会话时模型/思考档位被静默回退渲染
 created: 2026-09-28
-closed: 2026-09-28
 ---
 
 > [!warning] 真相修正（2026-09-29）

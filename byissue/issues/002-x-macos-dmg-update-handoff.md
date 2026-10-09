@@ -2,9 +2,7 @@
 kind: issue
 title: "macOS 更新改为 DMG 手动覆盖交接"
 type: feature
-status: closed
 created: 2026-09-02
-closed: 2026-09-02
 ---
 
 # macOS 更新改为 DMG 手动覆盖交接

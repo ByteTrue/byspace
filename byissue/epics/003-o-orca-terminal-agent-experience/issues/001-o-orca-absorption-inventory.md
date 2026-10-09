@@ -2,7 +2,6 @@
 kind: issue
 title: "产出 orca terminal agent 体验吸收清单"
 type: chore
-status: open
 created: 2026-09-09
 ---
 

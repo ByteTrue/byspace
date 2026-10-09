@@ -2,7 +2,6 @@
 kind: issue
 title: "修正真实版本标签指向、清理旧定制线的标签与 Release"
 type: ff
-status: closed
 created: 2026-09-10
 ---
 

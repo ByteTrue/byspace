@@ -2,7 +2,6 @@
 kind: issue
 title: "本地 daemon 判定重做：回环 endpoint 语义取代页面 origin 语义，清死代码"
 type: refactor
-status: closed
 created: 2026-09-28
 ---
 

@@ -2,7 +2,6 @@
 kind: issue
 title: "Daemon 服务开关放开本机限制：能力门控 + 确认弹层"
 type: feature
-status: closed
 created: 2026-09-28
 ---
 

@@ -2,7 +2,6 @@
 kind: issue
 title: 评审驱动的展开块样式清理
 type: ff
-status: closed
 created: 2026-10-10
 ---
 

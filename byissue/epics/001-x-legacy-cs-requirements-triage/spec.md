@@ -1,6 +1,5 @@
 ---
 title: 旧 CodeStable 需求盘点与去留决策
-status: accepted
 kind: epic
 owner_decision: approved
 approved_revision: c7ca9c333af7983cb327be16c8b492ca38b345cf0a85a655e8ad528309a650cb

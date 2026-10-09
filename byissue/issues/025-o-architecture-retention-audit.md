@@ -2,7 +2,6 @@
 kind: issue
 title: "架构去留审计与清理决策"
 type: chore
-status: open
 created: 2026-09-10
 ---
 

@@ -1,6 +1,5 @@
 ---
 title: 保留能力交付路线 · Work
-status: approved
 amended_at: 2026-09-01T17:40:09Z
 phase: pr-ready
 spec: ../epics/002-x-retained-capabilities-delivery/spec.md

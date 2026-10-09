@@ -2,7 +2,6 @@
 kind: issue
 title: "过度设计审计与分批清理"
 type: chore
-status: closed
 created: 2026-09-17
 ---
 

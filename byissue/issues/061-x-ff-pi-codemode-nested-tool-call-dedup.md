@@ -2,9 +2,7 @@
 kind: issue
 title: "pi codemode 的嵌套工具调用在 BySpace 里重复显示成独立工具行"
 type: ff
-status: closed
 created: 2026-09-30
-closed: 2026-09-30
 ---
 
 <!-- 快改痕迹：轻。读者只要 30 秒扫完。禁止迷你 Design。 -->

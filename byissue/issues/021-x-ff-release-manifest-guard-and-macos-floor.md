@@ -2,7 +2,6 @@
 kind: issue
 title: "补发布前 manifest 校验、macOS 13 下限通知与本地标签对齐"
 type: ff
-status: closed
 created: 2026-09-10
 ---
 

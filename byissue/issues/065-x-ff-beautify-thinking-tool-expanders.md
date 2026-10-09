@@ -2,7 +2,6 @@
 kind: issue
 title: 美化 thinking 与工具调用展开块
 type: ff
-status: closed
 created: 2026-10-09
 ---
 

@@ -2,7 +2,6 @@
 kind: issue
 title: "修复 daemon 重启后恢复的终端缺失 activity URL，导致 agent 状态不上报"
 type: ff
-status: closed
 created: 2026-09-09
 ---
 

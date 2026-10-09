@@ -2,9 +2,7 @@
 kind: issue
 title: "修复 Windows 下思考加载图标定格与终端 OSC 8 链接打开无反应"
 type: ff
-status: closed
 created: 2026-09-03
-closed: 2026-09-03
 ---
 
 # 修复 Windows 下思考加载图标定格与终端 OSC 8 链接打开无反应

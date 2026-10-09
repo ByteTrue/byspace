@@ -2,9 +2,7 @@
 kind: issue
 title: "清理 034 审计的两项遗留：WS server 改名与 desktop 孤儿 i18n"
 type: ff
-status: closed
 created: 2026-09-15
-closed: 2026-09-15
 ---
 
 # 清理 034 审计的两项遗留

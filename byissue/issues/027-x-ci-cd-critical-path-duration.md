@@ -2,7 +2,6 @@
 kind: issue
 title: "CI/CD 关键路径耗时优化"
 type: chore
-status: closed
 created: 2026-09-14
 ---
 

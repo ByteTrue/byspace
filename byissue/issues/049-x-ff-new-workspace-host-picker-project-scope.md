@@ -2,7 +2,6 @@
 kind: issue
 title: "修复 New Workspace 在单宿主项目下错误展示其它 Host 选项"
 type: ff
-status: closed
 created: 2026-09-24
 ---
 

@@ -2,9 +2,7 @@
 kind: issue
 title: "自托管 config schema，去掉对上游 URL 的依赖"
 type: chore
-status: closed
 created: 2026-09-18
-closed: 2026-09-18
 ---
 
 # 自托管 config schema，去掉对上游 URL 的依赖

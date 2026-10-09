@@ -2,9 +2,7 @@
 kind: issue
 title: "复原 Terminal 首帧 post-WebGL 尺寸就绪与 250ms 被动合并机制"
 type: bug
-status: closed
 created: 2026-09-02
-closed: 2026-09-02
 ---
 
 # 复原 Terminal 首帧 post-WebGL 尺寸就绪与 250ms 被动合并机制

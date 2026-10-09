@@ -2,9 +2,7 @@
 kind: issue
 title: "修复 Terminal 中文快照回放间距"
 type: bug
-status: closed
 created: 2026-09-02
-closed: 2026-09-02
 ---
 
 # 修复 Terminal 中文快照回放间距
