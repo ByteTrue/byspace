@@ -1202,6 +1202,7 @@ export const ja: TranslationResources = {
     title: "トンネル",
     add: "トンネルを追加",
     empty: "トンネルはまだありません",
+    emptyDescription: "ペアリング済みデーモンの許可ポートをこのマシンに転送します。",
     noLocalDaemon: "このマシンの daemon に接続するとトンネルを管理できます",
     inboundFrom: "受信 → ポート {{port}}",
     outboundSubtitle: "ローカルポート {{localPort}} · {{host}}",

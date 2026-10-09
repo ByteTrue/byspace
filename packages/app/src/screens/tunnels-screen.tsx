@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
-import { AdaptiveTextInput } from "@/components/adaptive-text-input";
+import { Field, FormTextInput } from "@/components/ui/form-field";
 import { parsePairingOfferUrl, type PairOfferErrorKey } from "@/utils/pair-offer";
 import { buildRelayWebSocketUrl } from "@bytetrue/protocol/daemon-endpoints";
 import { useTunnels, type AggregatedTunnelEntry, type TunnelLoadState } from "@/hooks/use-tunnels";
@@ -133,13 +133,14 @@ function TunnelsEnabledBody({
   return (
     <View style={styles.enabledBody}>
       <View style={styles.toolbarRow}>
-        <Text style={styles.experimentalCaption}>{t("tunnels.experimental")}</Text>
+        <StatusBadge label={t("tunnels.experimental")} variant="muted" />
         <AddTunnelButton onPress={onAddTunnel} />
       </View>
       <TunnelsListBody
         localDaemonServerId={localDaemonServerId}
         loadState={loadState}
         entries={entries}
+        onAddTunnel={onAddTunnel}
         onRemoved={onRemoved}
       />
       <AllowlistSection serverId={localDaemonServerId} />
@@ -166,7 +167,7 @@ function TunnelEnableCard({ serverId }: { serverId: string }): ReactElement {
 
   return (
     <View style={settingsStyles.card} testID="tunnels-enable-card">
-      <View style={styles.enableCardRow}>
+      <View style={[settingsStyles.row, styles.enableCardRow]}>
         <View style={styles.rowContent}>
           <Text style={styles.sectionLabel}>{t("tunnels.enable.title")}</Text>
           <Text style={styles.hint}>{t("tunnels.enable.description")}</Text>
@@ -195,7 +196,7 @@ function resolveBadgeVariant(state: AggregatedTunnelEntry["state"]): "success" |
 function AddTunnelButton({ onPress }: { onPress: () => void }): ReactElement {
   const { t } = useTranslation();
   return (
-    <Button variant="secondary" size="sm" leftIcon={Plus} onPress={onPress} testID="tunnels-add">
+    <Button variant="outline" size="sm" leftIcon={Plus} onPress={onPress} testID="tunnels-add">
       {t("tunnels.add")}
     </Button>
   );
@@ -205,11 +206,13 @@ function TunnelsListBody({
   localDaemonServerId,
   loadState,
   entries,
+  onAddTunnel,
   onRemoved,
 }: {
   localDaemonServerId: string | null;
   loadState: TunnelLoadState;
   entries: AggregatedTunnelEntry[];
+  onAddTunnel: () => void;
   onRemoved: () => void;
 }): ReactElement {
   const { t } = useTranslation();
@@ -218,14 +221,35 @@ function TunnelsListBody({
   }
   if (loadState.status !== "loaded") {
     return (
-      <View style={styles.loadingRow}>
-        <ThemedLoadingSpinner size={14} />
-        <Text style={styles.hint}>{t("common.states.loading")}</Text>
+      <View style={settingsStyles.card}>
+        <View style={styles.loadingRow}>
+          <ThemedLoadingSpinner size={14} />
+          <Text style={styles.hint}>{t("common.states.loading")}</Text>
+        </View>
       </View>
     );
   }
   if (entries.length === 0) {
-    return <Text style={styles.hint}>{t("tunnels.empty")}</Text>;
+    return (
+      <View style={settingsStyles.card}>
+        <View style={styles.emptyState}>
+          <ArrowRightLeft size={styles.emptyIcon.width} color={styles.emptyIcon.color} />
+          <View style={styles.emptyTextStack}>
+            <Text style={styles.emptyTitle}>{t("tunnels.empty")}</Text>
+            <Text style={styles.emptyDescription}>{t("tunnels.emptyDescription")}</Text>
+          </View>
+          <Button
+            variant="outline"
+            size="sm"
+            leftIcon={Plus}
+            onPress={onAddTunnel}
+            testID="tunnels-empty-add"
+          >
+            {t("tunnels.add")}
+          </Button>
+        </View>
+      </View>
+    );
   }
   return (
     <View style={settingsStyles.card}>
@@ -387,7 +411,9 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
       <Text style={styles.sectionLabel}>{t("tunnels.allowlist.title")}</Text>
       <View style={settingsStyles.card}>
         {allowedPorts.length === 0 ? (
-          <Text style={styles.allowlistEmpty}>{t("tunnels.allowlist.empty")}</Text>
+          <Text style={[settingsStyles.row, styles.allowlistEmptyText]}>
+            {t("tunnels.allowlist.empty")}
+          </Text>
         ) : (
           allowedPorts.map((port, index) => (
             <View
@@ -409,13 +435,14 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
             </View>
           ))
         )}
-        <View style={[settingsStyles.row, styles.allowlistInputRow]}>
-          <AdaptiveTextInput
+        <View style={[settingsStyles.row, settingsStyles.rowBorder, styles.allowlistInputRow]}>
+          <FormTextInput
+            size="sm"
             style={styles.portInput}
             onChangeText={setDraft}
             placeholder={t("tunnels.allowlist.portPlaceholder")}
             keyboardType="number-pad"
-            variant="default"
+            testID="tunnels-allowlist-input"
           />
           <Button
             variant="secondary"
@@ -506,31 +533,31 @@ function AddTunnelSheet({
 
   return (
     <AdaptiveModalSheet header={header} visible onClose={onClose} testID="tunnels-add-sheet">
-      <Text style={styles.fieldLabel}>{t("tunnels.addForm.offerLabel")}</Text>
-      <AdaptiveTextInput
-        style={styles.textInput}
-        onChangeText={setOfferUrl}
-        placeholder={t("tunnels.addForm.offerPlaceholder")}
-        autoCapitalize="none"
-        autoCorrect={false}
-        variant="default"
-      />
-      <Text style={styles.fieldLabel}>{t("tunnels.addForm.passwordLabel")}</Text>
-      <AdaptiveTextInput
-        style={styles.textInput}
-        onChangeText={setPassword}
-        placeholder={t("tunnels.addForm.passwordPlaceholder")}
-        secureTextEntry
-        variant="default"
-      />
-      <Text style={styles.fieldLabel}>{t("tunnels.addForm.remotePortLabel")}</Text>
-      <AdaptiveTextInput
-        style={styles.textInput}
-        onChangeText={setRemotePort}
-        placeholder="3000"
-        keyboardType="number-pad"
-        variant="default"
-      />
+      <Field label={t("tunnels.addForm.offerLabel")}>
+        <FormTextInput
+          onChangeText={setOfferUrl}
+          placeholder={t("tunnels.addForm.offerPlaceholder")}
+          autoCapitalize="none"
+          autoCorrect={false}
+          testID="tunnels-add-offer-input"
+        />
+      </Field>
+      <Field label={t("tunnels.addForm.passwordLabel")}>
+        <FormTextInput
+          onChangeText={setPassword}
+          placeholder={t("tunnels.addForm.passwordPlaceholder")}
+          secureTextEntry
+          testID="tunnels-add-password-input"
+        />
+      </Field>
+      <Field label={t("tunnels.addForm.remotePortLabel")}>
+        <FormTextInput
+          onChangeText={setRemotePort}
+          placeholder="3000"
+          keyboardType="number-pad"
+          testID="tunnels-add-port-input"
+        />
+      </Field>
       {error ? <Text style={styles.inlineError}>{error}</Text> : undefined}
       <Text style={styles.hint}>{t("tunnels.addForm.hint")}</Text>
       <View style={styles.sheetActions}>
@@ -570,19 +597,37 @@ const styles = StyleSheet.create((theme) => {
       alignItems: "center",
       justifyContent: "space-between",
     },
-    experimentalCaption: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.foregroundMuted,
-    },
     enableCardRow: {
-      ...settingsStyles.row,
       gap: theme.spacing[3],
     },
     loadingRow: {
       flexDirection: "row",
       alignItems: "center",
       gap: theme.spacing[2],
-      padding: theme.spacing[2],
+      padding: theme.spacing[4],
+    },
+    emptyState: {
+      alignItems: "center",
+      gap: theme.spacing[4],
+      paddingVertical: theme.spacing[6],
+      paddingHorizontal: theme.spacing[4],
+    },
+    emptyTextStack: {
+      alignItems: "center",
+      gap: theme.spacing[1],
+    },
+    emptyTitle: {
+      fontSize: theme.fontSize.base,
+      color: theme.colors.foreground,
+    },
+    emptyDescription: {
+      fontSize: theme.fontSize.sm,
+      color: theme.colors.foregroundMuted,
+      textAlign: "center",
+    },
+    emptyIcon: {
+      width: theme.iconSize.lg,
+      color: theme.colors.foregroundMuted,
     },
     hint: {
       fontSize: theme.fontSize.sm,
@@ -633,25 +678,16 @@ const styles = StyleSheet.create((theme) => {
       marginTop: theme.spacing[2],
       gap: theme.spacing[2],
     },
-    allowlistEmpty: {
-      ...settingsStyles.row,
+    allowlistEmptyText: {
       fontSize: theme.fontSize.sm,
       color: theme.colors.foregroundMuted,
     },
     allowlistInputRow: {
-      gap: theme.spacing[2],
+      gap: theme.spacing[3],
     },
     portInput: {
       flex: 1,
-    },
-    fieldLabel: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.medium,
-      color: theme.colors.foreground,
-      marginBottom: theme.spacing[1],
-    },
-    textInput: {
-      marginBottom: theme.spacing[3],
+      minWidth: 0,
     },
     sheetActions: {
       flexDirection: "row",

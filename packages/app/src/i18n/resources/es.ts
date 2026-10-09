@@ -1224,6 +1224,7 @@ export const es: TranslationResources = {
     title: "Túneles",
     add: "Añadir túnel",
     empty: "Aún no hay túneles",
+    emptyDescription: "Reenvía a esta máquina los puertos permitidos de un daemon emparejado.",
     noLocalDaemon: "Conecta un daemon en esta máquina para gestionar túneles",
     inboundFrom: "Entrante → puerto {{port}}",
     outboundSubtitle: "Puerto local {{localPort}} · {{host}}",
