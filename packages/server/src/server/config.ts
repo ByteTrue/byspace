@@ -552,6 +552,12 @@ interface ResolveConfigFromPersistedOptions {
   releaseVersion?: string;
 }
 
+function resolveTunnelConfig(persisted: PersistedConfig): {
+  allowedPorts: number[];
+} {
+  return { allowedPorts: persisted.daemon?.tunnel?.allowedPorts ?? [] };
+}
+
 export function resolveConfigFromPersisted(
   byspaceHome: string,
   persisted: PersistedConfig,
@@ -636,6 +642,7 @@ export function resolveConfigFromPersisted(
     webUi,
     appBaseUrl,
     auth: resolveAuthConfig(env, persisted),
+    tunnel: resolveTunnelConfig(persisted),
     agentProviderSettings: extractAgentProviderSettings(providerOverrides),
     providerCatalogRefreshTimeoutMs: persisted.agents?.catalogRefreshTimeoutMs,
     metadataGeneration: persisted.agents?.metadataGeneration,

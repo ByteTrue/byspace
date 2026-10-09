@@ -28,6 +28,7 @@ import type {
   TerminalWorkspaceContributionChangedEvent,
 } from "../terminal/terminal-manager.js";
 import { TerminalSessionController } from "../terminal/terminal-session-controller.js";
+import { TunnelSession } from "./session/tunnel/tunnel-session.js";
 import type { TerminalActivity } from "@bytetrue/protocol/terminal-activity";
 import type { BinaryFrame } from "@bytetrue/protocol/binary-frames/index";
 import { CursorError } from "./pagination/cursor.js";
@@ -486,6 +487,8 @@ export interface SessionOptions {
   daemonVersion?: string;
   daemonRuntimeConfig?: DaemonRuntimeConfig;
   getWebSocketRuntimeMetrics?: () => DaemonWebSocketRuntimeDiagnosticSnapshot | null;
+  /** D1-side tunnel management (issue 062); null when no tunnels exist. */
+  tunnelOutbound?: import("./tunnel-registry.js").TunnelRegistryService | null;
 }
 
 export type SessionLifecycleIntent =
@@ -683,6 +686,7 @@ export class Session {
   private readonly agentConfigSession: AgentConfigSession;
   private readonly projectConfigSession: ProjectConfigSession;
   private readonly daemonSession: DaemonSession;
+  private readonly tunnelSession: TunnelSession;
   private readonly workspaceScripts: WorkspaceScriptsService;
   private readonly agentRequests: Pick<AgentRequests, "create" | "send">;
   private readonly createAgentLifecycleDispatch: CreateAgentLifecycleDispatch;
@@ -736,6 +740,7 @@ export class Session {
       daemonVersion,
       daemonRuntimeConfig,
       getWebSocketRuntimeMetrics,
+      tunnelOutbound,
     } = options;
     this.clientId = clientId;
     this.authorization = new SessionAuthorization(permissions);
@@ -907,6 +912,19 @@ export class Session {
       reloadConfig: () => daemonConfigStore.reload(),
     });
     this.daemonConfigStore = daemonConfigStore;
+    this.tunnelSession = new TunnelSession({
+      host: {
+        emit: (msg) => this.emit(msg),
+        emitBinary: (frame) => this.emitBinary(frame),
+      },
+      getAllowedPorts: () =>
+        (daemonConfigStore.get().tunnel?.allowedPorts ?? []).filter((port) =>
+          Number.isInteger(port),
+        ),
+      isPasswordSet: () => daemonConfigStore.get().auth?.passwordSet === true,
+      logger: this.sessionLogger,
+      outbound: tunnelOutbound ?? null,
+    });
     this.terminalManager = terminalManager;
     this.terminalController = new TerminalSessionController({
       terminalManager,
@@ -2257,6 +2275,17 @@ export class Session {
         return this.agentConfigSession.handleSetAgentThinkingRequest(msg);
       case "agent.config.apply.request":
         return this.agentConfigSession.handleAgentConfigApplyRequest(msg);
+      case "read_project_config_request":
+        return this.projectConfigSession.handleReadProjectConfigRequest(msg);
+      case "write_project_config_request":
+        return this.projectConfigSession.handleWriteProjectConfigRequest(msg);
+      default:
+        return this.dispatchDaemonManagementMessage(msg);
+    }
+  }
+
+  private dispatchDaemonManagementMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
       case "get_daemon_config_request":
         this.emit({
           type: "get_daemon_config_response",
@@ -2275,6 +2304,13 @@ export class Session {
       case "hub.management.daemon.disconnect.request":
       case "hub.management.daemon.permissions.update.request":
         return this.daemonSession.handleHubRelationshipRequest(msg);
+      case "tunnel.open.request":
+      case "tunnel.close.request":
+      case "tunnel.list.request":
+      case "tunnel.stats.request":
+      case "tunnel.create.request":
+      case "tunnel.remove.request":
+        return this.tunnelSession.dispatchTunnelMessage(msg);
       case "diagnostics.request":
         return this.daemonSession.handleDiagnosticsRequest(msg);
       case "daemon.update.request":
@@ -2288,10 +2324,6 @@ export class Session {
           },
         });
         return undefined;
-      case "read_project_config_request":
-        return this.projectConfigSession.handleReadProjectConfigRequest(msg);
-      case "write_project_config_request":
-        return this.projectConfigSession.handleWriteProjectConfigRequest(msg);
       default:
         return undefined;
     }
@@ -2578,6 +2610,13 @@ export class Session {
   }
 
   public async handleBinaryFrame(binaryFrame: BinaryFrame): Promise<void> {
+    if (binaryFrame.kind === "tunnel") {
+      if (!this.authorization.allowsPermission("tunnel.manage")) {
+        return;
+      }
+      this.tunnelSession.handleBinaryFrame(binaryFrame.frame);
+      return;
+    }
     if (!this.authorization.allowsPermission("workspace.write")) {
       return;
     }
@@ -7665,6 +7704,7 @@ export class Session {
 
     this.workspaceGitObserver.dispose();
     this.workspaceFilesSession.dispose();
+    this.tunnelSession.cleanup();
   }
 }
 

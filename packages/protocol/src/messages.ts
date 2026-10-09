@@ -299,6 +299,14 @@ export const MutableDaemonConfigSchema = z
       })
       .passthrough()
       .optional(),
+    // Daemon tunnel (issue 062): ports a paired peer daemon may forward to
+    // this host. Patchable from the app; persisted to daemon.tunnel.allowedPorts.
+    tunnel: z
+      .object({
+        allowedPorts: z.array(z.number().int().min(1).max(65535)),
+      })
+      .passthrough()
+      .optional(),
     // COMPAT(daemonServiceInstall): added in v0.14.7. Derived view of the OS service
     // manager state; the daemon re-queries it lazily, never caches a stale verdict.
     service: z
@@ -354,6 +362,14 @@ export const MutableDaemonConfigPatchSchema = z
     auth: z
       .object({
         password: z.string().min(1).nullable().optional(),
+      })
+      .passthrough()
+      .optional(),
+    // Daemon tunnel (issue 062): ports a paired peer daemon may forward to
+    // this host.
+    tunnel: z
+      .object({
+        allowedPorts: z.array(z.number().int().min(1).max(65535)).optional(),
       })
       .passthrough()
       .optional(),
@@ -1566,6 +1582,73 @@ export const HubManagementDaemonPermissionsUpdateRequestSchema = z.object({
 export const DiagnosticsRequestSchema = z.object({
   type: z.literal("diagnostics.request"),
   requestId: z.string(),
+});
+
+// --- Daemon tunnel (D2D port forwarding) -----------------------------------
+// D1 (initiator daemon) opens an outbound client connection to D2 (target
+// daemon) — direct or via relay with E2EE — and forwards local TCP bytes to
+// whitelisted ports on the D2 host. Control RPCs are plain session messages;
+// byte streams ride dedicated binary frames (binary-frames/tunnel.ts).
+
+export const TunnelEntrySchema = z.object({
+  tunnelId: z.string(),
+  // "outbound": this daemon initiated the tunnel (D1 view, carries localPort).
+  // "inbound": a peer daemon connected to this daemon (D2 view).
+  direction: z.enum(["outbound", "inbound"]),
+  remotePort: z.number().int(),
+  localPort: z.number().int().nullable().optional(),
+  peerHostname: z.string().nullable().optional(),
+  state: z.enum(["connecting", "connected", "disconnected", "error"]),
+  lastError: z.string().nullable().optional(),
+});
+
+export const TunnelListRequestSchema = z.object({
+  type: z.literal("tunnel.list.request"),
+  requestId: z.string(),
+});
+
+export const TunnelOpenRequestSchema = z.object({
+  type: z.literal("tunnel.open.request"),
+  requestId: z.string(),
+  // Port on the D2 host (127.0.0.1:<remotePort>) to forward to.
+  remotePort: z.number().int().min(1).max(65535),
+});
+
+export const TunnelCloseRequestSchema = z.object({
+  type: z.literal("tunnel.close.request"),
+  requestId: z.string(),
+  tunnelId: z.string().min(1),
+});
+
+export const TunnelStatsRequestSchema = z.object({
+  type: z.literal("tunnel.stats.request"),
+  requestId: z.string(),
+});
+
+export const TunnelCreateRequestSchema = z.object({
+  type: z.literal("tunnel.create.request"),
+  requestId: z.string(),
+  config: z.object({
+    peerId: z.string().min(1),
+    peerHostname: z.string().optional(),
+    url: z.string().min(1),
+    password: z.string().min(1),
+    daemonPublicKeyB64: z.string().optional(),
+    forwards: z
+      .array(
+        z.object({
+          remotePort: z.number().int().min(1).max(65535),
+          label: z.string().optional(),
+        }),
+      )
+      .min(1),
+  }),
+});
+
+export const TunnelRemoveRequestSchema = z.object({
+  type: z.literal("tunnel.remove.request"),
+  requestId: z.string(),
+  peerId: z.string().min(1),
 });
 
 export const PluginCatalogGetRequestSchema = z.object({
@@ -3249,6 +3332,12 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   HubManagementDaemonGetStatusRequestSchema,
   HubManagementDaemonDisconnectRequestSchema,
   HubManagementDaemonPermissionsUpdateRequestSchema,
+  TunnelListRequestSchema,
+  TunnelOpenRequestSchema,
+  TunnelCloseRequestSchema,
+  TunnelStatsRequestSchema,
+  TunnelCreateRequestSchema,
+  TunnelRemoveRequestSchema,
   DiagnosticsRequestSchema,
   PluginCatalogGetRequestSchema,
   PluginListRequestSchema,
@@ -4968,6 +5057,68 @@ export const HubManagementDaemonDisconnectResponseSchema = z.object({
 export const HubManagementDaemonPermissionsUpdateResponseSchema = z.object({
   type: z.literal("hub.management.daemon.permissions.update.response"),
   payload: z.object({ requestId: z.string(), status: HubRelationshipStatusSchema }),
+});
+
+export const TunnelListResponseSchema = z.object({
+  type: z.literal("tunnel.list.response"),
+  payload: z.object({
+    requestId: z.string(),
+    entries: z.array(TunnelEntrySchema),
+  }),
+});
+
+export const TunnelOpenResponseSchema = z.object({
+  type: z.literal("tunnel.open.response"),
+  payload: z.object({
+    requestId: z.string(),
+    tunnelId: z.string(),
+    remotePort: z.number().int(),
+    allowed: z.boolean(),
+    reason: z.string().optional(),
+  }),
+});
+
+export const TunnelCloseResponseSchema = z.object({
+  type: z.literal("tunnel.close.response"),
+  payload: z.object({
+    requestId: z.string(),
+    tunnelId: z.string(),
+  }),
+});
+
+export const TunnelStatsResponseSchema = z.object({
+  type: z.literal("tunnel.stats.response"),
+  payload: z.object({
+    requestId: z.string(),
+    entries: z.array(
+      z.object({
+        tunnelId: z.string(),
+        remotePort: z.number().int(),
+        bytesUp: z.number().int().nonnegative(),
+        bytesDown: z.number().int().nonnegative(),
+      }),
+    ),
+  }),
+});
+
+export const TunnelCreateResponseSchema = z.object({
+  type: z.literal("tunnel.create.response"),
+  payload: z.object({
+    requestId: z.string(),
+    peerId: z.string(),
+    ok: z.boolean(),
+    error: z.string().optional(),
+  }),
+});
+
+export const TunnelRemoveResponseSchema = z.object({
+  type: z.literal("tunnel.remove.response"),
+  payload: z.object({
+    requestId: z.string(),
+    peerId: z.string(),
+    ok: z.boolean(),
+    error: z.string().optional(),
+  }),
 });
 
 export const DaemonGetPairingOfferResponseSchema = z.object({
@@ -6727,6 +6878,12 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   DaemonGetPairingOfferResponseSchema,
   DaemonConfigReloadResponseSchema,
   HubManagementDaemonConnectResponseSchema,
+  TunnelListResponseSchema,
+  TunnelOpenResponseSchema,
+  TunnelCloseResponseSchema,
+  TunnelStatsResponseSchema,
+  TunnelCreateResponseSchema,
+  TunnelRemoveResponseSchema,
   HubManagementDaemonGetStatusResponseSchema,
   HubManagementDaemonDisconnectResponseSchema,
   HubManagementDaemonPermissionsUpdateResponseSchema,
@@ -7220,6 +7377,19 @@ export type WorkspaceGithubSearchRepositoriesRequest = z.infer<
 >;
 export type ProjectGithubCloneRequest = z.infer<typeof ProjectGithubCloneRequestSchema>;
 export type ProjectGithubCloneProtocol = z.infer<typeof ProjectGithubCloneProtocolSchema>;
+export type TunnelEntry = z.infer<typeof TunnelEntrySchema>;
+export type TunnelListRequest = z.infer<typeof TunnelListRequestSchema>;
+export type TunnelOpenRequest = z.infer<typeof TunnelOpenRequestSchema>;
+export type TunnelCloseRequest = z.infer<typeof TunnelCloseRequestSchema>;
+export type TunnelStatsRequest = z.infer<typeof TunnelStatsRequestSchema>;
+export type TunnelListResponse = z.infer<typeof TunnelListResponseSchema>;
+export type TunnelOpenResponse = z.infer<typeof TunnelOpenResponseSchema>;
+export type TunnelCloseResponse = z.infer<typeof TunnelCloseResponseSchema>;
+export type TunnelStatsResponse = z.infer<typeof TunnelStatsResponseSchema>;
+export type TunnelCreateRequest = z.infer<typeof TunnelCreateRequestSchema>;
+export type TunnelRemoveRequest = z.infer<typeof TunnelRemoveRequestSchema>;
+export type TunnelCreateResponse = z.infer<typeof TunnelCreateResponseSchema>;
+export type TunnelRemoveResponse = z.infer<typeof TunnelRemoveResponseSchema>;
 export type ArchiveWorkspaceRequest = z.infer<typeof ArchiveWorkspaceRequestSchema>;
 export type WorkspaceClearAttentionRequest = z.infer<typeof WorkspaceClearAttentionRequestSchema>;
 export type WorkspaceMarkUnreadRequest = z.infer<typeof WorkspaceMarkUnreadRequestSchema>;

@@ -35,6 +35,7 @@ type ProviderOverride = import("./agent/provider-launch-config.js").ProviderOver
 
 interface SupportedMutableConfigPatch {
   relay?: { enabled?: boolean; endpoint?: string; useTls?: boolean };
+  tunnel?: { allowedPorts?: number[] };
   // COMPAT(relayEndpointConfig): added in v0.17.0, remove after 2027-03-30 once
   // daemon floor >= v0.17.0. Relay.endpoint/useTls join the patchable set so
   // onboard --relay-endpoint can persist a relay.
@@ -225,6 +226,7 @@ const RELOADABLE_PATHS = [
   "daemon.relay.enabled",
   "daemon.relay.endpoint",
   "daemon.relay.useTls",
+  "daemon.tunnel.allowedPorts",
   "daemon.mcp.enabled",
   "daemon.mcp.injectIntoAgents",
   "daemon.hostnames",
@@ -250,6 +252,7 @@ const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
   ["daemon.relay.enabled", "relay.enabled"],
   ["daemon.relay.endpoint", "relay.endpoint"],
   ["daemon.relay.useTls", "relay.useTls"],
+  ["daemon.tunnel.allowedPorts", "tunnel.allowedPorts"],
   ["daemon.mcp.enabled", "mcp.enabled"],
   ["daemon.mcp.injectIntoAgents", "mcp.injectIntoAgents"],
   ["daemon.hostnames", "hostnames"],
@@ -339,7 +342,22 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
     ...pickWebOriginPatchFields(patch),
     ...pickNetworkAuthPatchFields(patch),
     ...(patch.service !== undefined ? { service: patch.service } : {}),
+    ...pickTunnelPatchFields(patch),
   };
+}
+
+function pickTunnelPatchFields(patch: MutableDaemonConfigPatch): SupportedMutableConfigPatch {
+  if (patch.tunnel?.allowedPorts === undefined) return {};
+  return { tunnel: { allowedPorts: patch.tunnel.allowedPorts } };
+}
+
+function applyPersistedTunnelPatch(
+  next: NonNullable<PersistedConfig["daemon"]>,
+  patch: Omit<SupportedMutableConfigPatch, "removeProviders">,
+): void {
+  if (patch.tunnel?.allowedPorts !== undefined) {
+    next.tunnel = { allowedPorts: patch.tunnel.allowedPorts };
+  }
 }
 
 function applyPersistedRelayEndpointPatch(
@@ -1102,6 +1120,7 @@ function mergeMutableDaemonPatch(
   // enabled guard — the mutable check happens in applySupportedPatch; the
   // public fields are not persisted and follow the endpoint on resolve.
   applyPersistedRelayEndpointPatch(next, patch);
+  applyPersistedTunnelPatch(next, patch);
   if (patch.mcp?.injectIntoAgents !== undefined) {
     next.mcp = { ...next.mcp, injectIntoAgents: patch.mcp.injectIntoAgents };
   }

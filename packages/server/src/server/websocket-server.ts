@@ -540,6 +540,7 @@ export class DaemonWebSocketServer {
   private readonly advertiseRelayConfig: boolean;
   private readonly directorySync = new DirectorySyncService();
   private readonly orchestrationSkills: SessionOptions["orchestrationSkills"];
+  private readonly tunnelOutbound: SessionOptions["tunnelOutbound"];
 
   constructor(
     server: HTTPServer,
@@ -580,6 +581,7 @@ export class DaemonWebSocketServer {
     workspaceSetupRuntime: WorkspaceSetupRuntime = new WorkspaceSetupRuntime(),
     orchestrationSkills?: SessionOptions["orchestrationSkills"],
     workspaceLabelService?: WorkspaceLabelService,
+    tunnelOutbound?: SessionOptions["tunnelOutbound"],
   ) {
     this.logger = logger.child({ module: "websocket-server" });
     this.workspaceSetupRuntime = workspaceSetupRuntime;
@@ -593,6 +595,7 @@ export class DaemonWebSocketServer {
     this.daemonVersion = daemonVersion.trim();
     this.daemonRuntimeConfig = daemonRuntimeConfig;
     this.orchestrationSkills = orchestrationSkills;
+    this.tunnelOutbound = tunnelOutbound ?? null;
     this.agentManager = agentManager;
     this.agentStorage = agentStorage;
     this.agentRequests = new AgentRequests(join(byspaceHome, "agent-requests"));
@@ -1300,6 +1303,7 @@ export class DaemonWebSocketServer {
       workspaceAutoName: this.workspaceAutoName,
       daemonConfigStore: this.daemonConfigStore,
       orchestrationSkills: this.orchestrationSkills,
+      tunnelOutbound: this.tunnelOutbound,
       mcpBaseUrl: this.mcpBaseUrl,
       terminalManager: this.terminalManager,
       providerSnapshotManager: this.providerSnapshotManager,

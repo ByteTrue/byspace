@@ -70,6 +70,25 @@ byspace daemon pair
 
 Confirm when prompted. BySpace prints a QR code and pairing link. Scan the QR code with BySpace on your phone, or choose **Paste pairing link** in the phone app.
 
+## Daemon tunnels
+
+A daemon tunnel forwards a port on a remote daemon's machine to a local port on
+your machine — for example, a dev server running in another studio. The tunnel
+travels the same relay path as app connections, end-to-end encrypted.
+
+Requirements:
+
+- Both daemons have a password set.
+- The remote daemon lists the port in its tunnel allowlist (Settings → the
+  host → Tunnels on the remote machine, or `daemon.tunnel.allowedPorts` in
+  its `config.json`).
+
+To create one, open **Tunnels** (command center or `/tunnels`) on the machine
+where you want the local port, press **Add tunnel**, and paste the remote
+daemon's pairing link (`byspace daemon pair` prints it) with its password and
+the remote port. The tunnel is persistent: it reconnects on its own after
+either daemon or the relay restarts.
+
 ## Tailscale
 
 Install [Tailscale](https://tailscale.com/download) on the daemon machine and your phone. Sign in to the same tailnet on both devices.
