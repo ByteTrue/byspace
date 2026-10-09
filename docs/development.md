@@ -119,18 +119,17 @@ so the port may already be bound. `portScript` takes precedence when both values
 
 > The user-facing guide for this feature (enabling it, reverse proxy, TLS, tunnels, security) lives at [public-docs/web-ui.md](../public-docs/web-ui.md). This section is the contributor/build reference: how the artifact is produced and bundled.
 
-The daemon can optionally serve the browser web client from the same HTTP server. This is disabled by default.
+The daemon serves the browser web client from the same HTTP server. This is on by default; no flag needed.
 
-Enable it for a running daemon with:
+Disable it for a running daemon with:
 
 ```bash
-byspace daemon start --web-ui
+byspace daemon start --no-web-ui
 ```
 
 Or set the environment variable:
 
 ```bash
-# The bundled web UI is on by default; no flag needed. To disable it:
 BYSPACE_WEB_UI_ENABLED=false byspace daemon start
 ```
 

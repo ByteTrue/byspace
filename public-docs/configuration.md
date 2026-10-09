@@ -93,18 +93,18 @@ Relative paths are resolved against `BYSPACE_HOME`. Existing worktrees remain wh
 
 ## Bundled web UI
 
-The daemon can serve the browser web client from the same HTTP server. This is enabled in the official Docker image and disabled by default for normal CLI and desktop-managed daemons.
+The daemon serves the browser web client from the same HTTP server. It is on by default; explicit config, CLI flags, and `BYSPACE_WEB_UI_ENABLED` override it.
 
-Enable it from the CLI:
+Turn it off from the CLI:
 
 ```bash
-byspace daemon start --web-ui
+byspace daemon start --no-web-ui
 ```
 
 Or set the environment variable:
 
 ```bash
-BYSPACE_WEB_UI_ENABLED=true byspace daemon start
+BYSPACE_WEB_UI_ENABLED=false byspace daemon start
 ```
 
 Or persist it in `config.json`:
@@ -113,7 +113,7 @@ Or persist it in `config.json`:
 {
   "features": {
     "webUi": {
-      "enabled": true
+      "enabled": false
     }
   }
 }
