@@ -143,7 +143,7 @@ async function configureOverviewToolCalls(page: Page): Promise<void> {
   await page.addInitScript(() => {
     localStorage.setItem(
       "@byspace:app-settings",
-      JSON.stringify({ toolCallDetailLevel: "overview" }),
+      JSON.stringify({ timelineDetailLevel: "overview" }),
     );
   });
 }

@@ -526,6 +526,17 @@ function buildReasoningText(): string {
   return "Need to find the scroll container, the layout effect that watches for new messages, and any gesture handler that might fight with programmatic scrolling. Probably a ref on the FlatList plus a near-bottom threshold.";
 }
 
+/** Extra reasoning text repeated per cycle when mockReasoningText is set. */
+function buildLongReasoningText(): string {
+  return [
+    "Tracing the stream pipeline: tokens arrive coalesced, so per-frame work must stay bounded.",
+    "The reveal pacing lives in the text-reveal module; the scroll pin has to respect its cuts.",
+    "A content-size observer is the only reliable growth signal across web and native runtimes.",
+    "Guard the pin with a near-bottom check so a reading user is never yanked back to the tail.",
+    "Pin the detail scroll to its tail on growth; release as soon as the reader scrolls up.",
+  ].join(" ");
+}
+
 function buildMidParagraph(): string {
   return [
     "Now I have a clearer picture. The auto-scroll uses a ref on the FlatList and tracks whether the user has scrolled away from the bottom by comparing the offset against the content size. There are a few subtle issues worth flagging before we change anything:",
@@ -573,14 +584,18 @@ function buildSyntheticCustomMessageContent(): string {
   ].join("\n");
 }
 
-function buildCycleQueue(turnId: string, cycle: number): CycleEvent[] {
+function buildCycleQueue(turnId: string, cycle: number, reasoningRepeat = 1): CycleEvent[] {
   const queue: CycleEvent[] = [];
 
   for (const tok of tokenize(buildIntroParagraph(cycle))) {
     queue.push({ kind: "assistant_token", text: tok });
   }
 
-  for (const tok of tokenize(buildReasoningText())) {
+  const reasoningText = Array.from(
+    { length: Math.max(1, reasoningRepeat) },
+    () => buildReasoningText() + (reasoningRepeat > 1 ? " " + buildLongReasoningText() : ""),
+  ).join(" ");
+  for (const tok of tokenize(reasoningText)) {
     queue.push({ kind: "reasoning_token", text: tok });
   }
 
@@ -880,6 +895,7 @@ export class MockLoadTestAgentSession implements AgentSession {
   private readonly streamingAssistantResponse: string | null;
   private readonly streamingAssistantIntervalMs: number;
   private readonly rewindError: string | null;
+  private readonly reasoningRepeat: number;
   private remainingPromptRejections: number;
   private remainingSteerFailures: number;
 
@@ -908,6 +924,9 @@ export class MockLoadTestAgentSession implements AgentSession {
       typeof options.config.featureValues?.mockRewindError === "string"
         ? options.config.featureValues.mockRewindError
         : null;
+    this.reasoningRepeat = getPositiveFeatureInteger(
+      options.config.featureValues?.mockReasoningRepeat,
+    );
     const requestedPromptRejections = options.config.featureValues?.mockPromptRejections;
     this.remainingPromptRejections =
       typeof requestedPromptRejections === "number" &&
@@ -1787,7 +1806,7 @@ export class MockLoadTestAgentSession implements AgentSession {
         turn.cycle += 1;
         turn.queue = turn.burst
           ? buildBurstyStreamQueue(turn.cycle)
-          : buildCycleQueue(turn.turnId, turn.cycle);
+          : buildCycleQueue(turn.turnId, turn.cycle, this.reasoningRepeat);
       }
       const event = turn.queue.shift();
       if (!event) {

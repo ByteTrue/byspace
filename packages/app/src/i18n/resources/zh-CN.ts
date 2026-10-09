@@ -1861,17 +1861,15 @@ export const zhCN: TranslationResources = {
         description: "内置终端缓冲区保留的行数",
         accessibilityLabel: "终端回滚行数",
       },
-      autoExpandReasoning: {
-        label: "始终展开推理过程",
-        description: "默认情况下完全展开 AI 的思考和推理过程",
-      },
-      toolCallDetail: {
-        label: "工具调用显示",
-        description: "工具调用在时间线中的显示方式",
-        accessibilityLabel: "选择工具调用显示方式（{{value}}）",
+      timelineDetail: {
+        label: "时间线显示",
+        description: "思考与工具调用在时间线中的显示方式",
+        accessibilityLabel: "选择时间线显示方式（{{value}}）",
         options: {
-          overview: "摘要",
-          detailed: "完整详情",
+          overview: "全部折叠",
+          detailed: "折叠详情",
+          live: "显示最新思考",
+          expanded: "全部展开",
         },
       },
       language: {

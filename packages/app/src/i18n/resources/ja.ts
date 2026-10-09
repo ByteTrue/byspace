@@ -1900,17 +1900,15 @@ export const ja: TranslationResources = {
         description: "組み込みターミナルバッファに保持する行数",
         accessibilityLabel: "ターミナルスクロールバック行数",
       },
-      autoExpandReasoning: {
-        label: "常に思考プロセスを展開",
-        description: "デフォルトでAIのエージェント思考・推論ブロックを完全に展開して表示します",
-      },
-      toolCallDetail: {
-        label: "ツール呼び出しの表示",
-        description: "タイムラインでのツール呼び出しの表示方法",
-        accessibilityLabel: "ツール呼び出しの表示を選択（{{value}}）",
+      timelineDetail: {
+        label: "タイムライン表示",
+        description: "思考とツール呼び出しをタイムラインに表示する方法",
+        accessibilityLabel: "タイムライン表示を選択（{{value}}）",
         options: {
-          overview: "要約",
-          detailed: "すべての詳細",
+          overview: "すべて折りたたむ",
+          detailed: "詳細を折りたたむ",
+          live: "最新の思考を表示",
+          expanded: "すべて展開",
         },
       },
       language: {

@@ -55,6 +55,7 @@ import { useRevealedText } from "@/hooks/use-revealed-text";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
 import { useSettings } from "@/hooks/use-settings";
+import { toToolCallDetailLevel } from "@/hooks/use-settings/storage";
 import type { ToastApi } from "@/components/toast-host";
 import { returnToTimelineTail } from "./timeline-tail-navigation";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
@@ -368,8 +369,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     ref,
   ) {
     const { t } = useTranslation();
-    const autoExpandReasoning = useSettings((settings) => settings.autoExpandReasoning);
-    const toolCallDetailLevel = useSettings((settings) => settings.toolCallDetailLevel);
+    const timelineDetailLevel = useSettings((settings) => settings.timelineDetailLevel);
+    const toolCallDetailLevel = toToolCallDetailLevel(timelineDetailLevel);
     const chatOutlineEnabled = useSettings((settings) => settings.chatOutlineEnabled);
     const viewportRef = useRef<StreamViewportHandle | null>(null);
     const pendingClientMessageIds = useMemo(
@@ -395,7 +396,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const [collapsedReasoningIds, setCollapsedReasoningIds] = useState<ReadonlySet<string>>(
       new Set(),
     );
-
     // Get serverId (fallback to agent's serverId if not provided)
     const resolvedServerId = serverId ?? context.serverId ?? "";
 
@@ -676,6 +676,24 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const handleTimelineHistoryLoadError = useCallback(() => {
       toast?.error(t("agentStream.historyLoadFailed"));
     }, [t, toast]);
+    // Newest thinking block in timeline order; live mode keeps it expanded so the model's
+    // current action stays visible.
+    const latestThoughtId = useMemo(() => {
+      // Scan the live segment first, then history; no combined allocation per token.
+      for (let index = streamLayout.liveHead.length - 1; index >= 0; index--) {
+        const entry = streamLayout.liveHead[index];
+        if (entry?.item.kind === "thought") {
+          return entry.item.id;
+        }
+      }
+      for (let index = streamLayout.history.length - 1; index >= 0; index--) {
+        const entry = streamLayout.history[index];
+        if (entry?.item.kind === "thought") {
+          return entry.item.id;
+        }
+      }
+      return null;
+    }, [streamLayout.history, streamLayout.liveHead]);
     const visibleHistoryItemIds = useMemo(
       () =>
         new Set(
@@ -828,17 +846,33 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "thought" }>) => {
         return (
           <ThoughtSlot
-            key={collapseRevision}
+            // ToolCall reads defaultExpanded only at mount, so the key carries everything that
+            // changes what "default expanded" means: the level (fold/expand-all switches) and,
+            // in live mode, whether this row is the newest thought (old latest folds, new
+            // latest expands — per-row so manual expansion elsewhere survives a retarget).
+            key={`${collapseRevision}:${timelineDetailLevel}:${
+              timelineDetailLevel === "live" && item.id === latestThoughtId
+            }`}
             itemId={item.id}
             onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
             text={item.text}
             status={item.status}
             isLastInSequence={layoutItem.isLastInToolSequence}
-            defaultExpanded={autoExpandReasoning && !collapsedReasoningIds.has(item.id)}
+            defaultExpanded={
+              !collapsedReasoningIds.has(item.id) &&
+              (timelineDetailLevel === "expanded" ||
+                (timelineDetailLevel === "live" && item.id === latestThoughtId))
+            }
           />
         );
       },
-      [autoExpandReasoning, collapsedReasoningIds, collapseRevision, setInlineDetailsExpanded],
+      [
+        timelineDetailLevel,
+        collapsedReasoningIds,
+        collapseRevision,
+        latestThoughtId,
+        setInlineDetailsExpanded,
+      ],
     );
 
     const renderSingleToolCallRow = useCallback(
@@ -1451,16 +1485,18 @@ function ThoughtSlot({
   defaultExpanded,
 }: ThoughtSlotProps) {
   const revealedText = useRevealedText(text, status === "ready" ? "complete" : "streaming");
+  const isStreaming = status !== "ready";
   return (
     <ToolCallSlot
       itemId={itemId}
       onInlineDetailsExpandedChangeByItemId={onInlineDetailsExpandedChangeByItemId}
       toolName="thinking"
       args={revealedText}
-      status={status === "ready" ? "completed" : "executing"}
+      status={isStreaming ? "executing" : "completed"}
       isLastInSequence={isLastInSequence}
       defaultExpanded={defaultExpanded}
       forceInline={defaultExpanded}
+      followTail={defaultExpanded && isStreaming}
     />
   );
 }

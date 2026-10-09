@@ -1925,18 +1925,15 @@ export const es: TranslationResources = {
         description: "Líneas mantenidas en el búfer de terminal incorporado",
         accessibilityLabel: "Líneas del historial de terminal",
       },
-      autoExpandReasoning: {
-        label: "Siempre expandir razonamiento",
-        description:
-          "Mostrar los bloques de pensamiento y razonamiento del agente totalmente expandidos de forma predeterminada",
-      },
-      toolCallDetail: {
-        label: "Visualización de llamadas a herramientas",
-        description: "Cómo aparecen las llamadas a herramientas en la cronología",
-        accessibilityLabel: "Seleccionar visualización de llamadas a herramientas ({{value}})",
+      timelineDetail: {
+        label: "Nivel de detalle de la cronología",
+        description: "Cómo aparecen el razonamiento y las llamadas a herramientas en la cronología",
+        accessibilityLabel: "Seleccionar nivel de detalle de la cronología ({{value}})",
         options: {
-          overview: "Resumen",
-          detailed: "Detalle completo",
+          overview: "Plegar todo",
+          detailed: "Plegar detalles",
+          live: "Mostrar el razonamiento más reciente",
+          expanded: "Expandir todo",
         },
       },
       language: {

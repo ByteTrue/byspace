@@ -2900,6 +2900,8 @@ interface ToolCallProps {
   defaultExpanded?: boolean;
   forceInline?: boolean;
   maxDetailHeight?: number;
+  /** Streaming content (thinking) keeps its detail scroll pinned to the newest lines. */
+  followTail?: boolean;
   /** Replaces the badge's secondary text; nested codemode rows summarize the calls the script ran. */
   summaryOverride?: string;
   subagent?: ToolCallSubagentBinding;
@@ -2924,6 +2926,7 @@ export const ToolCall = memo(function ToolCall({
   defaultExpanded,
   forceInline = false,
   maxDetailHeight = 400,
+  followTail = false,
 }: ToolCallProps) {
   const { openToolCall } = useToolCallSheet();
   const [isExpanded, setIsExpanded] = useState(defaultExpanded ?? false);
@@ -3029,6 +3032,7 @@ export const ToolCall = memo(function ToolCall({
         errorText={presentation.errorText}
         maxHeight={maxDetailHeight}
         showLoadingSkeleton={presentation.isLoadingDetails}
+        followTail={followTail}
       />
     );
   }, [
@@ -3038,6 +3042,7 @@ export const ToolCall = memo(function ToolCall({
     presentation.errorText,
     presentation.isLoadingDetails,
     maxDetailHeight,
+    followTail,
   ]);
 
   const joinedRow = resolveJoinedSubagentRow(
@@ -3099,5 +3104,6 @@ function areToolCallPropsEqual(previous: ToolCallProps, next: ToolCallProps) {
   if (previous.defaultExpanded !== next.defaultExpanded) return false;
   if (previous.forceInline !== next.forceInline) return false;
   if (previous.maxDetailHeight !== next.maxDetailHeight) return false;
+  if (previous.followTail !== next.followTail) return false;
   return true;
 }
