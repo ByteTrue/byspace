@@ -53,3 +53,7 @@ created: 2026-10-09
 **验证：** server 75/75（新增 open-disabled、add-disabled、boot-disabled、setEnabled 热启停 4 用例）；GUI e2e 1/1（Enable 卡 → UI 开启 → add → 字节转发，6.4s）；live 公网 relay e2e 1/1；i18n 51/51；typecheck/lint/format 0 违规。062 交接手册 config 已同步加 `enabled: true`。
 
 **遗留：** 无阻塞项。Win 双机验证按 062 手册（已更新）进行。
+
+### 2026-10-09 · 补充：性能实测与对比（→ note 008）
+
+Owner 追问「前端 B 机高频打后端 A 机顶得住吗」与「对比 CF Tunnel/Tailscale」。跑了一组实测（本地 relay vs 官方 CF relay）并完成三方对比，结论沉淀 [`byissue/notes/008-tunnel-performance-and-relay-vs-p2p.md`](../notes/008-tunnel-performance-and-relay-vs-p2p.md)：栈开销 <0.5ms（2379 RPS / 62.7 MiB/s）不是瓶颈；公网 449ms/请求是 4 段 RTT 的物理绕路；owner 网络环境打洞永远不成功（拍板），强制 relay 架构反而落在「稳定 > 延迟」的目标主场；自托管 relay 就近部署是延迟正解。
