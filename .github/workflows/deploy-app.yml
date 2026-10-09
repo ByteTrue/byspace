@@ -36,10 +36,8 @@ jobs:
           fi
           test -n "$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --commit "$sha" --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
           if [[ "$version" == *-* ]]; then
-            echo "PAGES_PROJECT=byspace-beta" >> "$GITHUB_ENV"
             echo "RELEASE_CHANNEL=beta" >> "$GITHUB_ENV"
           else
-            echo "PAGES_PROJECT=byspace" >> "$GITHUB_ENV"
             echo "RELEASE_CHANNEL=stable" >> "$GITHUB_ENV"
           fi
           echo "EXPECTED_SHA=$sha" >> "$GITHUB_ENV"
@@ -64,15 +62,14 @@ jobs:
       - name: Build Web app
         run: npm run build:web --workspace=@bytetrue/app
 
-      - name: Deploy release channel to Cloudflare Pages
-        working-directory: packages/app
-        run: >-
-          npx wrangler pages deploy dist
-          --project-name "$PAGES_PROJECT"
-          --branch main
-          --commit-hash "$EXPECTED_SHA"
-          --commit-message "v$RELEASE_VERSION ($RELEASE_CHANNEL)"
-          --commit-dirty=false
+      - name: Deploy release channel to the relay Worker
+        working-directory: packages/relay
+        run: |
+          if [[ "$RELEASE_CHANNEL" == "beta" ]]; then
+            npx wrangler deploy --env beta
+          else
+            npx wrangler deploy
+          fi
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

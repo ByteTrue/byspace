@@ -54,6 +54,8 @@
     "build:daemon-web-ui": "node scripts/build-daemon-web-ui.mjs",
     "build:config-schema": "npm run generate:config-schema --workspace=@bytetrue/server",
     "build:app-deps": "npm run build:highlight && npm run build:client",
+    "deploy:hosted": "npm run deploy --workspace=@bytetrue/relay",
+    "deploy:hosted:beta": "npm run deploy:beta --workspace=@bytetrue/relay",
     "build:app-deps:clean": "npm run build:highlight:clean && npm run build:client:clean",
     "watch:protocol": "npm run watch --workspace=@bytetrue/protocol",
     "watch:client": "tsc -p packages/client/tsconfig.json --watch --preserveWatchOutput",

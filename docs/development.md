@@ -305,12 +305,15 @@ Do NOT use browser history (back/forward). Always navigate by clicking UI elemen
 
 ## App web deploys
 
-`packages/app` exports a single-page Expo web app and deploys the `dist/`
-directory to Cloudflare Pages with `npm run deploy:web --workspace=@bytetrue/app`.
+`packages/app` exports a single-page Expo web app. The export in `dist/` is
+served by the hosted relay Worker (issue 073) from the same origin as the
+relay — deploy with `npm run deploy:hosted` (or `:beta`) from the repo root,
+which builds the web export and runs `wrangler deploy` in `packages/relay`.
+The Docker container serves the same shape from the Node relay.
 
 PWA install metadata lives in `packages/app/public/manifest.json` and is linked
 from `packages/app/public/index.html`. Keep the install icons in `public/` so
-Cloudflare serves them from stable root URLs after `expo export`.
+the export serves them from stable root URLs.
 
 Do not add service-worker caching casually. BySpace is a live control surface for
 agents, and an aggressive service worker can strand installed users on stale web

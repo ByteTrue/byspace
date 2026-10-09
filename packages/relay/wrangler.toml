@@ -3,15 +3,57 @@ account_id = "10ed39a1dbf316e30abd0c409bed40d6"
 main = "src/cloudflare-adapter.ts"
 compatibility_date = "2024-12-01"
 
+# relay.byspace.cc.cd is the long-standing relay address (daemon/client
+# connections in the field must keep working). app.byspace.cc.cd moves from
+# Cloudflare Pages to this Worker: same origin serves the PWA and wss://…/ws.
+# Cutover (issue 073): unbind the domain from the Pages project first, then
+# uncomment the app route and run wrangler deploy — deploying while Pages
+# still holds the domain fails the route creation.
 routes = [{ pattern = "relay.byspace.cc.cd", custom_domain = true }]
+# { pattern = "app.byspace.cc.cd", custom_domain = true },
 
 [observability]
 enabled = true
+
+# The web PWA is served from this Worker on the same origin as the relay:
+# / serves packages/app/dist, /ws and /health always run the relay script
+# (run_worker_first — otherwise the SPA fallback would swallow them).
+# Asset requests are free and unlimited on Cloudflare; only /ws and /health
+# hit Worker code (workers/platform/pricing, static-assets/billing).
+[assets]
+directory = "../app/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/ws", "/health"]
 
 [[durable_objects.bindings]]
 name = "RELAY"
 class_name = "RelayDurableObject"
 
 [[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RelayDurableObject"]
+
+[env.beta]
+name = "byspace-relay-beta"
+# Cutover (issue 073): unbind app-beta.byspace.cc.cd from the byspace-beta
+# Pages project, then uncomment. Until then beta deploys serve the workers.dev
+# preview URL only.
+# routes = [{ pattern = "app-beta.byspace.cc.cd", custom_domain = true }]
+
+[env.beta.observability]
+enabled = true
+
+[env.beta.assets]
+directory = "../app/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/ws", "/health"]
+
+[[env.beta.durable_objects.bindings]]
+name = "RELAY"
+class_name = "RelayDurableObject"
+
+[[env.beta.migrations]]
 tag = "v1"
 new_sqlite_classes = ["RelayDurableObject"]

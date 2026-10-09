@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { WebSocket } from "ws";
 import net from "node:net";
 import { spawn, type ChildProcess } from "node:child_process";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { Buffer } from "node:buffer";
 import { dirname, resolve as resolvePath } from "node:path";
@@ -49,7 +50,26 @@ function rawToText(raw: unknown): string {
   return "";
 }
 
+// The relay Worker serves the web export from ../app/dist (wrangler.toml
+// [assets]); wrangler refuses to start when that directory is missing, and CI
+// never builds the web app before the relay suite. Seed a minimal fixture so
+// the production wrangler.toml stays the only config under test.
+function ensureWebAssetsFixture(): void {
+  const distIndex = resolvePath(relayPackageRoot, "../app/dist/index.html");
+  if (existsSync(distIndex)) return;
+  mkdirSync(dirname(distIndex), { recursive: true });
+  writeFileSync(
+    distIndex,
+    [
+      "<!doctype html>",
+      '<html lang="en"><head><meta charset="utf-8" /><title>BySpace relay e2e</title></head>',
+      "<body>relay e2e asset fixture; run npm run build:web for the real app</body></html>",
+    ].join("\n"),
+  );
+}
+
 function spawnRelayDevServer(port: number): ChildProcess {
+  ensureWebAssetsFixture();
   return spawn(
     process.execPath,
     [
@@ -225,6 +245,25 @@ async function stopRelayProcess(relayProcess: ChildProcess): Promise<void> {
       relayProcess = null;
     }
   }, SHUTDOWN_TIMEOUT_MS);
+
+  it("serves the web export on the relay origin and keeps /ws off the SPA fallback", async () => {
+    const rootResponse = await fetch(`http://127.0.0.1:${relayPort}/`);
+    expect(rootResponse.status).toBe(200);
+    expect(rootResponse.headers.get("content-type")).toContain("text/html");
+    await rootResponse.arrayBuffer();
+
+    // SPA fallback: unknown paths serve index.html, matching Pages behavior.
+    const fallbackResponse = await fetch(`http://127.0.0.1:${relayPort}/nonexistent-route`);
+    expect(fallbackResponse.status).toBe(200);
+    expect(fallbackResponse.headers.get("content-type")).toContain("text/html");
+    await fallbackResponse.arrayBuffer();
+
+    // run_worker_first guard: /ws must reach the relay script (400 without
+    // serverId) — never the SPA fallback (200 index.html).
+    const wsResponse = await fetch(`http://127.0.0.1:${relayPort}/ws`);
+    expect(wsResponse.status).toBe(400);
+    await wsResponse.arrayBuffer();
+  }, 30_000);
 
   it(
     "full flow: daemon and client exchange encrypted messages through relay",

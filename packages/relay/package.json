@@ -43,6 +43,8 @@
     "build:clean": "npm run clean && npm run build",
     "prepack": "npm run build:clean",
     "typecheck": "tsgo --noEmit",
+    "deploy": "npm --prefix ../app run build:web && wrangler deploy",
+    "deploy:beta": "npm --prefix ../app run build:web && wrangler deploy --env beta",
     "test": "vitest run",
     "test:watch": "vitest"
   },

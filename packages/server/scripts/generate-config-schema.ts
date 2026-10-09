@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 
 function main() {
   const repoRoot = path.resolve(__dirname, "../../..");
-  // Served by the Cloudflare Pages deployment of the web app, so editors can
+  // Served by the hosted relay Worker, so editors can
   // resolve $schema to a URL that describes BySpace's config, not upstream's.
   const outPath = path.join(repoRoot, "packages/app/public/schemas/byspace.config.v1.json");
   fs.mkdirSync(path.dirname(outPath), { recursive: true });

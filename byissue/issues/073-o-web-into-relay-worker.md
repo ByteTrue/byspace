@@ -66,6 +66,53 @@ issues/061-x-self-hosted-web-relay-containers.md（PR #13）把自托管产物�
 - `rg -i 'cloudflare pages|pages deploy'` 无活文档残留；release checklist 与新事实一致。
 - beta 渠道有明确处置结果（保留 `[env.beta]` 或删除，二选一落地）。
 
+## 执行记录（2026-10-10，批次 1–3 代码全部落地，未部署）
+
+### 穿刺结果
+
+| 风险点                            | 打通判据                                                                                                   | 结果                          |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| SPA 回落吞掉 `/ws`                | `/ws` 无 upgrade 时返回 400 "Missing serverId"（worker 拿到），不是 200 index.html                         | ✅ 实证 + e2e 回归断言钉住    |
+| CI 无 app dist 时 wrangler dev 挂 | `wrangler dev` 对缺失 assets 目录 exit 1（实证）；e2e 起服务前自写最小 fixture 到 `../app/dist/index.html` | ✅ fixture-only 模式 e2e 全绿 |
+| `[env.beta]` 继承语义             | dry-run 实证：DO/migrations/routes/assets 均不继承，beta env 全量显式声明后 bindings 完整                  | ✅                            |
+
+### 落地内容
+
+- 批次 1：`wrangler.toml` `[assets]`（`binding = "ASSETS"`、SPA、`run_worker_first = ["/ws", "/health"]`）；`cloudflare-adapter.ts` 尾部 404 改为 `env.ASSETS.fetch` 回落（对齐 node-adapter）；e2e 增加 fixture 自举 + 静态服务回归测试。
+- 批次 2：`packages/relay` 增 `deploy` / `deploy:beta`（构建 app dist → `wrangler deploy [--env beta]`）；根目录 `deploy:hosted` 别名；app 侧 Pages 脚本删除；`deploy-app.yml` 改部署 Worker；`ci-workflow.test.mjs` 合同同步改写。
+- 批次 3：`docs/development.md`（App web deploys 段）、`docs/release.md`（发布矩阵行 + relay 约定段——「无 workflow 部署 relay」约定正式反转为「Deploy App 部署 Worker，紧急修复可手动」）、`docs/architecture.md`（生产 relay 段）、`generate-config-schema.ts` 注释。
+
+### 待查事实钉死
+
+- **public-docs 未部署**：线上 `app.byspace.cc.cd/docs/*` 现在是 SPA 回落兜的 index.html（与 `/` 同 body），`packages/client/README.md` 与 SECURITY.md 引用的 SDK 文档链接当前就是坏链。public-docs 的部署链路不在仓库任何 workflow 里。**这是独立新事项**（部署 public-docs 或改链接），不阻塞本 issue。
+- **免费层**：官方 pricing 原文 "Requests to static assets are free and unlimited"——只有 `/ws` `/health` 计入 Worker 请求额度，个人用量远低于任何档位。
+
+### 与设计的偏差
+
+- 预览验证不走 workers.dev，改为**先部署到 `relay.byspace.cc.cd` 同源**（app 域名仍在 Pages，两边同时可用）——真实域名真实 TLS，验证更充分，且不动 app.byspace.cc.cd 一根毫毛。
+- `app.byspace.cc.cd` / `app-beta.byspace.cc.cd` 两个 route 以注释形式放在 `wrangler.toml`：Pages 持域期间 active route 会让 workflow 的 `wrangler deploy` 在 route 创建时失败、炸掉发版管线。cutover 时取消注释。
+- 待拍板两项按 issue 内建议执行：beta 保留（`[env.beta]` + workers.dev 预览 URL 过渡）、部署命令放 `packages/relay`。
+
+### 验证
+
+- relay typecheck ✅；relay 套件 75 tests（真实 dist 与 fixture-only 两种模式）✅；`wrangler deploy --dry-run`（main + beta env）✅；ci-workflow 守卫 11+2 ✅；docs-links ✅；server typecheck ✅；format ✅。
+
+### Cutover runbook（待用户授权，按序执行）
+
+1. `npm run deploy:hosted` — Worker 上线新版本，`relay.byspace.cc.cd/` 开始服务 web UI（`/ws` `/health` 不变）。
+2. 手机/浏览器打开 `relay.byspace.cc.cd` 验证完整 app 可用、同源 relay 连接正常。
+3. 低峰窗口：Cloudflare 控制台把 `app.byspace.cc.cd` 从 Pages 项目 `byspace` 解绑 → 取消注释 `wrangler.toml` 里的 app route → 再跑 `npm run deploy:hosted`。
+4. 验证 `app.byspace.cc.cd`（域名未变：已装 PWA、localStorage host 配置、`#offer` 配对链接全部不受影响）。
+5. beta 同理（解绑 `app-beta` → 取消注释 → `npm run deploy:hosted:beta`），或拍板退役 beta 渠道。
+6. Pages 两项目删除或保留一段只读期。
+
+出问题回退：`wrangler rollback`（UI+relay 整体回退）；域名可随时从 Worker 解绑回 Pages。
+
+### 关闭候选
+
+- 关闭时把 cutover 完成事实写回 `docs/release.md` checklist 与 `docs/architecture.md`。
+- 新事项建议：public-docs 部署链路（`/docs/*` 坏链）。
+
 ## 决策记录
 
 - **2026-10-10** 用户拍板：合并有价值，核心动机是官方托管产物与自托管产物形态统一；无账号系统、不商业化、从简。脉络：multica 对比讨论（账号系统否决）→ Docker 镜像现状核对（当日修复 5 处文档残留：CLAUDE.md 文档表行、public-docs/security.md Docker 段、public-docs/web-ui.md 默认值、public-docs/configuration.md 默认值、docs/development.md 默认值）→ 本 issue。
