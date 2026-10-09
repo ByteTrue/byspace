@@ -153,6 +153,10 @@ D1 以 **client 角色**经现有 relay 连 D2 的 serverId，复用 E2EE（Curv
 - `docs/permissions.md`：`tunnel.manage` 的 authority 描述扩为含 daemon tunnels（tunnel.\* RPC 权限分类已在 exhaustive map 落地）。
 - `public-docs/connectivity.md`：新增 Daemon tunnels 用户节（双端密码 + 远端白名单前提、添加流程指向 `byspace daemon pair`、持久重连语义）；docs-links 测试通过。
 
+### 2026-10-09 · 关闭后补充：live 公网 relay 验证
+
+用户关闭后追问「做过真实端到端验证吗」——已有的三层 e2e（vitest in-process / supervisor 双进程 + 本地 relay / 浏览器 GUI）全部走本地 Node relay，缺公网链路一跳。补 `tunnel.live-relay.e2e.test.ts`（仿 live-relay.e2e.test.ts 的 `RUN_LIVE_RELAY_E2E=1` 门控）：双 in-process daemon，D2 的 relay 指向真实 `relay.byspace.cc.cd:443`（Cloudflare Worker、TLS、公网往返），D1 侧 TunnelManager 连同一公网 relay，验证完整转发——**1 passed（24.8s）**，`hello from live d2 path=/live` 字节级断言通过。至此验证矩阵闭合：本地 Node relay（3 层）+ 官方公网 CF relay（1 层）。
+
 ## 关闭结论（候选，待用户授权关闭）
 
 - **判断**：四个批次全部交付并验证——协议（8 组 RPC + 二进制帧 + mutable config 链）、D2 目标端（双门槛 + 帧泵）、D1 发起端（内嵌客户端 + 本地 listener + 持久化 registry）、app GUI（独立路由 + 白名单 + 添加 sheet + 9 locale）、spec/docs 回写。范围未暗扩：agent 跨机、反向隧道、relay 成员网络、CLI 入口均未做。
