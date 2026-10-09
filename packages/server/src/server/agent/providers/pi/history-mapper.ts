@@ -79,13 +79,9 @@ export class PiHistoryMapper {
         case "assistant":
           events.push(...this.mapAssistantMessage(message));
           break;
-        case "toolResult": {
-          const event = this.mapToolResultMessage(message);
-          if (event) {
-            events.push(event);
-          }
+        case "toolResult":
+          events.push(...this.mapToolResultMessage(message));
           break;
-        }
         case "bashExecution":
           events.push(this.mapBashExecutionMessage(message));
           break;
@@ -197,17 +193,20 @@ export class PiHistoryMapper {
 
   private mapToolResultMessage(
     message: Extract<PiAgentMessage, { role: "toolResult" }>,
-  ): AgentStreamEvent | null {
+  ): AgentStreamEvent[] {
     const tracked =
       this.pendingToolCalls.get(message.toolCallId) ?? parseToolArgs(message.toolName, null);
     this.pendingToolCalls.delete(message.toolCallId);
     const result = parseToolResult({ content: message.content, details: message.details });
     const detail = this.mapToolDetail(message.toolCallId, tracked, result);
     if (!detail) {
-      return null;
+      return [];
     }
     const callId = this.resolveToolCallId(message.toolCallId, tracked);
-    return {
+    // Nested rows go before the parent result row: live, they streamed while the parent was
+    // still running, so this keeps the replayed sequence identical to the recorded one.
+    const events = this.replayedNestedCallEvents(message.nestedCalls);
+    events.push({
       type: "timeline",
       provider: this.provider,
       item: toToolResultTimelineItem({
@@ -221,7 +220,55 @@ export class PiHistoryMapper {
           nestedCalls: message.nestedCalls,
         }),
       }),
-    };
+    });
+    return events;
+  }
+
+  // pi persists the tool calls a tool made through ctx.executeTool() (codemode scripts and
+  // alike) only as a nestedCalls snapshot on the parent's result message — the tool_execution_*
+  // rows they streamed live are not in the transcript. Rebuilds those rows so a reload groups
+  // them under the parent exactly like the live stream did. Records keep pi's hierarchical ids
+  // ("<callerId>/<n>"), so the direct caller for the metadata is the id up to the last separator,
+  // and codemode-in-codemode intermediates resolve to the top ancestor in the app's projection
+  // like live rows do. The ids are transcript-original: this assumes the pi replay path never
+  // enables the resolveToolCallId hook (it does not today), otherwise rewritten parent callIds
+  // would orphan these rows into the nestedSummary fallback.
+  private replayedNestedCallEvents(nestedCalls: unknown): AgentStreamEvent[] {
+    if (!isRecord(nestedCalls) || !Array.isArray(nestedCalls.calls)) {
+      return [];
+    }
+    const events: AgentStreamEvent[] = [];
+    for (const record of nestedCalls.calls) {
+      if (!isRecord(record)) {
+        continue;
+      }
+      const name = typeof record.name === "string" ? record.name.trim() : "";
+      const id = typeof record.id === "string" ? record.id : "";
+      const parentToolCallId = directCallerFromNestedId(id);
+      if (!name || !parentToolCallId) {
+        continue;
+      }
+      const toolCall = parseToolArgs(name, record.arguments ?? null);
+      const detail = this.mapToolDetail(id, toolCall, null);
+      if (!detail) {
+        continue;
+      }
+      events.push({
+        type: "timeline",
+        provider: this.provider,
+        item: {
+          type: "tool_call",
+          callId: id,
+          // Live names also rename through result details (xdev write); nested results are not
+          // persisted, so only args-driven renames (mcp server.tool) apply here.
+          name: resolveToolCallName(toolCall, null),
+          ...replayedNestedCallStatus(record),
+          detail,
+          metadata: { parentToolCallId },
+        },
+      });
+    }
+    return events;
   }
 
   private mapBashExecutionMessage(
@@ -273,6 +320,39 @@ export async function* streamPiHistory(
       yield event;
     }
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// "unfinished" means pi recorded the start but the call never finished — an interrupted script.
+function replayedNestedCallStatus(
+  record: Record<string, unknown>,
+):
+  | { status: "completed"; error: null }
+  | { status: "failed"; error: string }
+  | { status: "canceled"; error: null } {
+  if (record.status === "error") {
+    return {
+      status: "failed",
+      error:
+        typeof record.error === "string" && record.error.trim().length > 0
+          ? record.error
+          : "Tool call failed",
+    };
+  }
+  if (record.status === "ok") {
+    return { status: "completed", error: null };
+  }
+  return { status: "canceled", error: null };
+}
+
+// The nested call id is "<callerId>/<n>" and the caller may itself be nested, so the direct
+// caller is everything before the last separator.
+function directCallerFromNestedId(id: string): string | null {
+  const separatorIndex = id.lastIndexOf("/");
+  return separatorIndex > 0 ? id.slice(0, separatorIndex) : null;
 }
 
 function toToolResultTimelineItem(input: {
