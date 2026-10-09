@@ -26,7 +26,7 @@ describe("mapPiSubagentStatus", () => {
   it("maps extension statuses onto descriptor statuses", () => {
     expect(mapPiSubagentStatus("running")).toBe("running");
     expect(mapPiSubagentStatus("pending")).toBe("running");
-    expect(mapPiSubagentStatus("paused")).toBe("running");
+    expect(mapPiSubagentStatus("paused")).toBe("canceled");
     expect(mapPiSubagentStatus("succeeded")).toBe("completed");
     expect(mapPiSubagentStatus("failed")).toBe("failed");
     expect(mapPiSubagentStatus("cancelled")).toBe("canceled");

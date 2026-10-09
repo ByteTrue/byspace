@@ -28,21 +28,24 @@ export function isPiSubagentToolName(toolName: string): boolean {
 }
 
 /**
- * The descriptor has no paused state and paused is not terminal, so it reads as running.
+ * Paused maps to canceled, not running: pi-subagent pauses by killing the child process
+ * (timeout / max turns), the exit message carrying "paused" is that task's last update, and
+ * resuming builds a new task id with its own row — so a paused row that reads as running never
+ * resolves and pins the track's "N working" pill forever.
  * Unknown statuses map to undefined: the caller's upsert then preserves the stored status.
  */
 export function mapPiSubagentStatus(status: unknown): ProviderSubagentStatus | undefined {
   switch (status) {
     case "running":
     case "pending":
-    case "paused":
       return "running";
+    case "paused":
+    case "cancelled":
+      return "canceled";
     case "succeeded":
       return "completed";
     case "failed":
       return "failed";
-    case "cancelled":
-      return "canceled";
     default:
       return undefined;
   }

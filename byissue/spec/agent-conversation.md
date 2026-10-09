@@ -37,7 +37,7 @@ Desktop、split pane 和 compact 布局都保持这一垂直关系。左侧状�
 - Pi Provider 的 Turn 边界结算按**发起方**区分。客户端发起的 turn 在 `agent_end` 即时触发 `turn_completed` 并转入 `idle`，不等扩展层异步后处理（Watchdog、LSP、自动压缩）延迟发射的 `agent_settled`，保证模型输出完毕瞬间输入框与操作按钮即刻解锁；随后到来的 `agent_settled` 幂等忽略。
 - 三种情况仍等待 `agent_settled`，因为它们的后续工作属于同一个 turn：Pi 标记将要重试或本次运行正在从重试中恢复；有 stop 在途，由取消决定结果；运行是自主的、没有客户端发起的 turn，扩展可能继续它。自主轮次是上游 v0.8.0 引入的能力。
 - Pi 工具通过 `ctx.executeTool()` 跑出的嵌套调用（codemode 脚本里的 `tools.bash(...)` 等）作为独立时间线行流出，行上带 `metadata.parentToolCallId`——pi 在事件上给的是**直接调用者**，逐层套娃时它不是顶层行，由 App 沿父链走到流里留存的那个祖先。App 呈现层把它们摘出、按父行分桶，渲染为父行 + 缩进竖轨下的子行，默认可见。整屏 codemode 与看不出包含关系都不接受：061 的纯 daemon 过滤和 062 初版的折叠徽标都因此被推翻。父行徽标带着子调用摘要作副标签（首字母小写），摘要的归类只有一处实现：`packages/protocol/src/tool-call-category.ts` 的 `categorizeToolCall`，直播行与回放徽标都走它，否则同一段脚本两处口径会漂。BySpace 的 durable timeline 自己会记下这些嵌套行，重载后照常按父行归档；`metadata.nestedSummary` 是**没有子行可归**（pi 还没上报嵌套调用时录下的 transcript、或走 provider hydration/导入）时的兜底，父行从 tool result 顶层的 `nestedCalls` 列表算出它。
-- Pi 的 `@bytetrue/pi-subagent` 子代理走与 Claude 相同的 subagents track + 只读 tab（`agent.provider_subagents.*` 通道），descriptor 来自三个源：launch 工具结果（立即建行）、运行中 HTTP 快照、转录内 `subagent-exit` 消息（负责回放）。状态枚举不扩：`paused`/`pending` 显示为 running。只读 tab 的内容是 daemon 对子会话 jsonl 的增量 tail；旧版 pi-subagent 不上报时退化为黑盒工具行，不算坏。
+- Pi 的 `@bytetrue/pi-subagent` 子代理走与 Claude 相同的 subagents track + 只读 tab（`agent.provider_subagents.*` 通道），descriptor 来自三个源：launch 工具结果（立即建行）、运行中 HTTP 快照、转录内 `subagent-exit` 消息（负责回放）。状态枚举不扩：`pending` 显示为 running；`paused` 显示为 canceled——pi-subagent 暂停即杀进程，exit 消息就是该任务最后一条更新，恢复走新任务 id 产生新行，旧行读作 running 会永远卡住「N working」徽标。只读 tab 的内容是 daemon 对子会话 jsonl 的增量 tail；旧版 pi-subagent 不上报时退化为黑盒工具行，不算坏。
 
 ## 时间线恢复与同步
 
