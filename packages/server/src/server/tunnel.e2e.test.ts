@@ -77,7 +77,7 @@ beforeAll(async () => {
         version: 1,
         daemon: {
           auth: { password: passwordHash },
-          tunnel: { allowedPorts: [servicePort] },
+          tunnel: { enabled: true, allowedPorts: [servicePort] },
         },
       },
       null,

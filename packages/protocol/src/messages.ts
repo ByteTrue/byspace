@@ -299,10 +299,11 @@ export const MutableDaemonConfigSchema = z
       })
       .passthrough()
       .optional(),
-    // Daemon tunnel (issue 062): ports a paired peer daemon may forward to
-    // this host. Patchable from the app; persisted to daemon.tunnel.allowedPorts.
+    // Daemon tunnel (issue 062/063): experimental, off by default. Patchable
+    // from the app; persisted to daemon.tunnel.{enabled,allowedPorts}.
     tunnel: z
       .object({
+        enabled: z.boolean().default(false),
         allowedPorts: z.array(z.number().int().min(1).max(65535)),
       })
       .passthrough()
@@ -365,10 +366,10 @@ export const MutableDaemonConfigPatchSchema = z
       })
       .passthrough()
       .optional(),
-    // Daemon tunnel (issue 062): ports a paired peer daemon may forward to
-    // this host.
+    // Daemon tunnel (issue 062/063): experimental, off by default.
     tunnel: z
       .object({
+        enabled: z.boolean().optional(),
         allowedPorts: z.array(z.number().int().min(1).max(65535)).optional(),
       })
       .passthrough()

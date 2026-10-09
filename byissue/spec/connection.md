@@ -18,7 +18,9 @@ App 与 Relay 的地址按发布通道选择；用户的自定义配置始终优
 ## Daemon 隧道（远端端口的本地转发）
 
 - **形态**：本机 daemon（D1）以配对客户端身份经 relay 连远端 daemon（D2，E2EE + bearer 密码双因子），把 D2 白名单端口的 TCP 服务呈现为本机 `127.0.0.1:<动态端口>`；每个本地 TCP 流独立隧道。与 workspace/agent 零耦合，裸 daemon 可用。
+- **实验性，默认关闭（063）**：`daemon.tunnel.enabled` 缺省 false。未开启时 D2 拒绝一切 `tunnel.open`、D1 拒绝 `tunnel.create`；app `/tunnels` 显示 Enable 卡（开启走 config patch 热生效，D1 侧热启停已配置的 peers）。开启后的界面带 Experimental 标注。
 - **启用门槛（服务端强制）**：两端 daemon 都设密码；D2 侧 `daemon.tunnel.allowedPorts` 白名单外的端口拒绝转发。配置经 config patch 通道热生效。
+- **relay 归属**：隧道走 D2 pairing offer 携带的 `relayPublicEndpoint`（自托管 relay 用户的流量天然走自己的 relay，与 app 客户端同一条信任模型——E2EE 不依赖 relay）。
 - **生命周期**：daemon 级常驻（`tunnels.json` 持久化，boot 恢复），内嵌客户端复用 DaemonClient 重连；app 不在线时隧道照常工作。
 - **交互面**：app 的 `/tunnels` 独立路由（类比 Schedules）——添加隧道（粘贴 D2 pairing offer + 密码 + 端口）、outbound/inbound 列表、白名单 GUI。入口仅本机（回环）daemon 在场时显示。
 - **范围边界**：手动互导 offer，无 relay 成员网络；不做 agent 工具跨机与反向隧道。

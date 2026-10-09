@@ -1220,6 +1220,7 @@ export const es: TranslationResources = {
     },
   },
   tunnels: {
+    experimental: "Experimental",
     title: "Túneles",
     add: "Añadir túnel",
     empty: "Aún no hay túneles",
@@ -1256,6 +1257,14 @@ export const es: TranslationResources = {
       failed: "No se pudo crear el túnel",
       submitting: "Añadiendo...",
       hint: "Ambos daemon necesitan contraseña. Los puertos remotos deben estar en su lista de permitidos.",
+    },
+    enable: {
+      title: "Túneles de daemon",
+      description:
+        "Reenvía los puertos permitidos de este daemon a un daemon remoto emparejado. Función experimental, desactivada por defecto.",
+      action: "Activar",
+      enabling: "Activando...",
+      failed: "No se pudieron activar los túneles",
     },
   },
   newWorkspace: {

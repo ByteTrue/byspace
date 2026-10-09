@@ -1185,6 +1185,7 @@ export const ar: TranslationResources = {
     },
   },
   tunnels: {
+    experimental: "تجريبي",
     title: "الأنفاق",
     add: "إضافة نفق",
     empty: "لا توجد أنفاق بعد",
@@ -1221,6 +1222,14 @@ export const ar: TranslationResources = {
       failed: "تعذر إنشاء النفق",
       submitting: "جارٍ الإضافة...",
       hint: "يجب تعيين كلمة مرور لكلا الـ daemon. يجب أن تكون المنافذ البعيدة في قائمة السماح.",
+    },
+    enable: {
+      title: "أنفاق daemon",
+      description:
+        "يعيد توجيه المنافذ المسموح بها لهذا daemon إلى daemon بعيد متزاوج. ميزة تجريبية ومعطلة افتراضيًا.",
+      action: "تمكين",
+      enabling: "جارٍ التمكين...",
+      failed: "تعذر تمكين الأنفاق",
     },
   },
   newWorkspace: {

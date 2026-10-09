@@ -425,8 +425,8 @@ export interface BySpaceDaemonConfig {
   };
   appBaseUrl?: string;
   auth?: DaemonAuthConfig;
-  /** Daemon tunnel (issue 062): ports a paired peer daemon may forward here. */
-  tunnel?: { allowedPorts?: number[] };
+  /** Daemon tunnel (issue 062/063): experimental, off by default. */
+  tunnel?: { enabled?: boolean; allowedPorts?: number[] };
   downloadTokenTtlMs?: number;
   agentProviderSettings?: AgentProviderRuntimeSettingsMap;
   providerCatalogRefreshTimeoutMs?: number;
@@ -539,6 +539,13 @@ function applyOptionalConfigLists(
   }
 }
 
+function createTunnelView(config: BySpaceDaemonConfig): MutableDaemonConfig["tunnel"] {
+  return {
+    enabled: config.tunnel?.enabled ?? false,
+    allowedPorts: config.tunnel?.allowedPorts ?? [],
+  };
+}
+
 function createInitialMutableDaemonConfig(
   config: BySpaceDaemonConfig,
   defaultAppBaseUrl: string,
@@ -579,7 +586,7 @@ function createInitialMutableDaemonConfig(
     skills: { selection: config.skillSelection },
     network: createNetworkView(config),
     auth: { passwordSet: config.auth?.password !== undefined },
-    tunnel: { allowedPorts: config.tunnel?.allowedPorts ?? [] },
+    tunnel: createTunnelView(config),
   };
 
   applyOptionalConfigLists(initialConfig, config);
@@ -651,6 +658,7 @@ export async function createBySpaceDaemon(
   const tunnelRegistry = new TunnelRegistryService({
     byspaceHome: config.byspaceHome,
     logger,
+    isInitiallyEnabled: () => config.tunnel?.enabled === true,
   });
   const managedProcesses = createBootstrapManagedProcessRegistry(config, logger);
   // Reconcile the helper-process ledger in the background so it never blocks the
@@ -1693,6 +1701,9 @@ export async function createBySpaceDaemon(
             });
             daemonConfigStore.onFieldChange("relay.enabled", (value) => {
               relayRuntime?.setEnabled(value === true);
+            });
+            daemonConfigStore.onFieldChange("tunnel.enabled", (value) => {
+              tunnelRegistry.setEnabled(value === true);
             });
             // COMPAT(relayEndpointConfig): added in v0.17.0, remove after
             // 2027-03-30 once daemon floor >= v0.17.0. Endpoint changes hot-swap

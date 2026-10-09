@@ -1220,6 +1220,7 @@ export const fr: TranslationResources = {
     },
   },
   tunnels: {
+    experimental: "Expérimental",
     title: "Tunnels",
     add: "Ajouter un tunnel",
     empty: "Aucun tunnel pour l'instant",
@@ -1256,6 +1257,14 @@ export const fr: TranslationResources = {
       failed: "Impossible de créer le tunnel",
       submitting: "Ajout...",
       hint: "Les deux daemon doivent avoir un mot de passe. Les ports distants doivent figurer dans la liste autorisée.",
+    },
+    enable: {
+      title: "Tunnels de daemon",
+      description:
+        "Transfère les ports autorisés de ce daemon vers un daemon distant appairé. Fonction expérimentale, désactivée par défaut.",
+      action: "Activer",
+      enabling: "Activation...",
+      failed: "Impossible d'activer les tunnels",
     },
   },
   newWorkspace: {

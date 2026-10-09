@@ -1173,6 +1173,7 @@ export const zhCN: TranslationResources = {
     },
   },
   tunnels: {
+    experimental: "实验性",
     title: "隧道",
     add: "添加隧道",
     empty: "暂无隧道",
@@ -1209,6 +1210,13 @@ export const zhCN: TranslationResources = {
       failed: "无法创建隧道",
       submitting: "添加中...",
       hint: "两台 daemon 都需要设置密码。远端 daemon 的端口必须在其允许列表中。",
+    },
+    enable: {
+      title: "Daemon 隧道",
+      description: "把此 daemon 的白名单端口转发给已配对的远端 daemon。实验性功能，默认关闭。",
+      action: "开启",
+      enabling: "开启中...",
+      failed: "无法开启 daemon 隧道",
     },
   },
   newWorkspace: {

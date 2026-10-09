@@ -57,16 +57,59 @@ export class TunnelRegistryService {
   private registry: TunnelRegistry;
   private managers = new Map<string, TunnelManager>();
   private stopped = false;
+  /** Experimental gate (issue 063): tunnels stay off until the user opts in. */
+  private enabled: boolean;
 
-  constructor(options: { byspaceHome: string; logger: pino.Logger }) {
+  constructor(options: {
+    byspaceHome: string;
+    logger: pino.Logger;
+    /** Read once at boot; hot changes arrive through setEnabled. */
+    isInitiallyEnabled?: () => boolean;
+  }) {
     this.byspaceHome = options.byspaceHome;
     this.logger = options.logger.child({ module: "tunnel-registry" });
     this.registry = loadRegistry(options.byspaceHome, this.logger);
+    this.enabled = options.isInitiallyEnabled?.() ?? false;
   }
 
-  /** Start all configured peers at daemon boot. */
+  /**
+   * Hot-switch the experimental gate. Enabling starts every persisted peer
+   * that is not running; disabling stops all managers. Wired through
+   * onFieldChange("tunnel.enabled"), mirroring relayRuntime.setEnabled.
+   */
+  setEnabled(value: boolean): void {
+    if (this.stopped || this.enabled === value) return;
+    this.enabled = value;
+    this.logger.info({ enabled: value }, "Tunnel registry gate changed");
+    if (!value) {
+      for (const [peerId, manager] of this.managers) {
+        void manager
+          .stop()
+          .catch((error: unknown) => {
+            this.logger.warn({ err: error, peerId }, "Failed to stop tunnel manager");
+          })
+          .finally(() => this.managers.delete(peerId));
+      }
+      return;
+    }
+    for (const peer of this.registry.peers) {
+      if (this.managers.has(peer.peerId)) continue;
+      void this.startManager(peer).catch((error: unknown) => {
+        this.logger.warn(
+          { err: error, peerId: peer.peerId },
+          "Failed to start tunnel manager after enable",
+        );
+      });
+    }
+  }
+
+  /** Start all configured peers at daemon boot (only when enabled). */
   async start(): Promise<void> {
-    this.logger.info({ peers: this.registry.peers.length }, "Tunnel registry starting");
+    this.logger.info(
+      { peers: this.registry.peers.length, enabled: this.enabled },
+      "Tunnel registry starting",
+    );
+    if (!this.enabled) return;
     for (const peer of this.registry.peers) {
       await this.startManager(peer).catch((error: unknown) => {
         this.logger.warn(
@@ -109,6 +152,9 @@ export class TunnelRegistryService {
     daemonPublicKeyB64?: string;
     forwards: Array<{ remotePort: number; label?: string }>;
   }): Promise<void> {
+    if (!this.enabled) {
+      throw new Error("Daemon tunnels are disabled. Enable them in the Tunnels page first.");
+    }
     if (this.managers.has(config.peerId)) {
       throw new Error(`A tunnel to peer ${config.peerId} already exists`);
     }

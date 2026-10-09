@@ -10,16 +10,22 @@ import { TunnelSession } from "./tunnel-session.js";
 
 const logger = pino({ level: "silent" });
 
-function createHarness(options?: { allowedPorts?: number[]; passwordSet?: boolean }) {
+function createHarness(options?: {
+  allowedPorts?: number[];
+  passwordSet?: boolean;
+  tunnelEnabled?: boolean;
+}) {
   const emitted: SessionOutboundMessage[] = [];
   const binaryFrames: Uint8Array[] = [];
   let allowedPorts = options?.allowedPorts ?? [];
   let passwordSet = options?.passwordSet ?? true;
+  let tunnelEnabled = options?.tunnelEnabled ?? true;
   const session = new TunnelSession({
     host: {
       emit: (msg) => emitted.push(msg),
       emitBinary: (frame) => binaryFrames.push(frame),
     },
+    isTunnelEnabled: () => tunnelEnabled,
     getAllowedPorts: () => allowedPorts,
     isPasswordSet: () => passwordSet,
     logger,
@@ -82,6 +88,18 @@ afterEach(async () => {
 });
 
 describe("TunnelSession (target side)", () => {
+  it("denies open when tunnels are disabled (experimental gate)", async () => {
+    const h = createHarness({
+      allowedPorts: [echoPort],
+      passwordSet: true,
+      tunnelEnabled: false,
+    });
+    await h.session.handleOpenRequest(openRequest(echoPort));
+    const response = h.openResponse();
+    expect(response?.payload.allowed).toBe(false);
+    expect(response?.payload.reason).toContain("disabled");
+  });
+
   it("denies open when the daemon has no password", async () => {
     const h = createHarness({ allowedPorts: [echoPort], passwordSet: false });
     await h.session.handleOpenRequest(openRequest(echoPort));

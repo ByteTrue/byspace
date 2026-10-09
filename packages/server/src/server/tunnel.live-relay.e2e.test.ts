@@ -57,7 +57,7 @@ beforeAll(async () => {
         version: 1,
         daemon: {
           auth: { password: hashSync(D2_PASSWORD, 12) },
-          tunnel: { allowedPorts: [servicePort] },
+          tunnel: { enabled: true, allowedPorts: [servicePort] },
         },
       },
       null,

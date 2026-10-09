@@ -74,14 +74,22 @@ Confirm when prompted. BySpace prints a QR code and pairing link. Scan the QR co
 
 A daemon tunnel forwards a port on a remote daemon's machine to a local port on
 your machine — for example, a dev server running in another studio. The tunnel
-travels the same relay path as app connections, end-to-end encrypted.
+travels the same relay path as app connections, end-to-end encrypted. **This is
+an experimental feature and is off by default.**
 
 Requirements:
 
 - Both daemons have a password set.
-- The remote daemon lists the port in its tunnel allowlist (Settings → the
-  host → Tunnels on the remote machine, or `daemon.tunnel.allowedPorts` in
-  its `config.json`).
+- Tunnels are enabled on both daemons (experimental). Open **Tunnels** on each
+  machine and press **Enable**, or set `daemon.tunnel.enabled: true` in
+  `config.json`.
+- The remote daemon lists the port in its tunnel allowlist (**Tunnels** page on
+  the remote machine, or `daemon.tunnel.allowedPorts` in its `config.json`).
+
+Tunnels use the relay that the remote daemon's pairing link carries — the same
+relay your app connections use. If the remote daemon is paired through a
+self-hosted relay, tunnels go through that relay too; traffic stays
+end-to-end encrypted either way.
 
 To create one, open **Tunnels** (command center or `/tunnels`) on the machine
 where you want the local port, press **Add tunnel**, and paste the remote

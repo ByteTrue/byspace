@@ -1200,6 +1200,7 @@ export const ru: TranslationResources = {
     },
   },
   tunnels: {
+    experimental: "Экспериментально",
     title: "Туннели",
     add: "Добавить туннель",
     empty: "Туннелей пока нет",
@@ -1236,6 +1237,14 @@ export const ru: TranslationResources = {
       failed: "Не удалось создать туннель",
       submitting: "Добавление...",
       hint: "Оба daemon должны иметь пароль. Удалённые порты должны быть в списке разрешённых.",
+    },
+    enable: {
+      title: "Туннели daemon",
+      description:
+        "Перенаправляет разрешённые порты этого daemon на сопряжённый удалённый daemon. Экспериментальная функция, по умолчанию выключена.",
+      action: "Включить",
+      enabling: "Включение...",
+      failed: "Не удалось включить туннели",
     },
   },
   newWorkspace: {

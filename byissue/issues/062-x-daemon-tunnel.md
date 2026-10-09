@@ -193,7 +193,7 @@ cat > ~/d2-home/config.json <<'EOF'
   "version": 1,
   "daemon": {
     "auth": { "password": "<bcrypt 哈希>" },
-    "tunnel": { "allowedPorts": [3000] },
+    "tunnel": { "enabled": true, "allowedPorts": [3000] },
     "relay": { "enabled": true, "endpoint": "relay.byspace.cc.cd:443", "useTls": true }
   }
 }
@@ -210,7 +210,7 @@ BYSPACE_HOME=$HOME/d2-home npx tsx packages/cli/src/index.ts daemon pair   # 打
 
 ### D1 侧（Windows 宿主或另一台机）
 
-1. 同仓库同分支，`npm install && npm run build:server`；独立 home（`%USERPROFILE%\d1-home`）写同款 config（**密码用 D1 自己的 bcrypt 哈希**，无需 tunnel/relay 字段）。
+1. 同仓库同分支，`npm install && npm run build:server`；独立 home（`%USERPROFILE%\d1-home`）写同款 config（**密码用 D1 自己的 bcrypt 哈希**；063 起隧道默认关闭——D1 也需 `"tunnel": { "enabled": true }`，或在 app 的 Tunnels 页点 Enable）。
 2. 起 D1 daemon：`BYSPACE_HOME=%USERPROFILE%\d1-home BYSPACE_LISTEN=127.0.0.1:16778 npx tsx packages/server/scripts/supervisor-entrypoint.ts --dev`（PowerShell 用 `$env:` 设环境变量）。
 3. **走产品 UI 验证**：浏览器开 `http://127.0.0.1:16778`（daemon 内置 web UI）→ 连接 D1 → 命令中心或侧栏进 **Tunnels** → **Add tunnel** → 粘贴 WSL 的 pairing link + D2 密码 + 远端端口 3000 → 提交。
 4. outbound 行出现后，浏览器开 `http://127.0.0.1:<行内本地端口>` ——应显示 WSL dev server 的页面（HMR WebSocket 也走隧道）。

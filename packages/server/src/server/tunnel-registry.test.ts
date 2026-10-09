@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import pino from "pino";
 
 import { TunnelRegistryService } from "./tunnel-registry.js";
@@ -38,13 +38,16 @@ const unreachablePeerConfig = {
 };
 
 describe("TunnelRegistryService", () => {
+  const enabled = () =>
+    new TunnelRegistryService({ byspaceHome, logger, isInitiallyEnabled: () => true });
+
   it("starts empty and lists nothing", () => {
     const registry = new TunnelRegistryService({ byspaceHome, logger });
     expect(registry.list()).toEqual([]);
   });
 
   it("persists added peers to tunnels.json and reloads them on a fresh instance", async () => {
-    const registry = new TunnelRegistryService({ byspaceHome, logger });
+    const registry = enabled();
     await registry.add(unreachablePeerConfig);
     await registry.stop();
 
@@ -53,7 +56,7 @@ describe("TunnelRegistryService", () => {
     expect(raw.peers[0].peerId).toBe(unreachablePeerConfig.peerId);
     expect(raw.peers[0].password).toBe("pw");
 
-    const reopened = new TunnelRegistryService({ byspaceHome, logger });
+    const reopened = enabled();
     await reopened.start();
     const listed = reopened.list();
     expect(listed).toHaveLength(1);
@@ -62,14 +65,14 @@ describe("TunnelRegistryService", () => {
   });
 
   it("rejects duplicate peer adds", async () => {
-    const registry = new TunnelRegistryService({ byspaceHome, logger });
+    const registry = enabled();
     await registry.add(unreachablePeerConfig);
     await expect(registry.add(unreachablePeerConfig)).rejects.toThrow(/already exists/);
     await registry.stop();
   });
 
   it("remove persists the removal and is idempotent for unknown peers", async () => {
-    const registry = new TunnelRegistryService({ byspaceHome, logger });
+    const registry = enabled();
     await registry.add(unreachablePeerConfig);
     await registry.remove(unreachablePeerConfig.peerId);
     expect(registry.list()).toEqual([]);
@@ -85,6 +88,48 @@ describe("TunnelRegistryService", () => {
     await writeFile(path.join(byspaceHome, "tunnels.json"), "{not json", "utf8");
     const registry = new TunnelRegistryService({ byspaceHome, logger });
     expect(registry.list()).toEqual([]);
+    await registry.stop();
+  });
+
+  it("rejects add and skips boot start while disabled (experimental gate)", async () => {
+    const registry = new TunnelRegistryService({ byspaceHome, logger });
+    await expect(registry.add(unreachablePeerConfig)).rejects.toThrow(/disabled/);
+    await registry.start();
+    expect(registry.list()).toEqual([]);
+
+    // Persist a peer out-of-band; a disabled boot still starts nothing.
+    await writeFile(
+      path.join(byspaceHome, "tunnels.json"),
+      JSON.stringify({ v: 1, peers: [unreachablePeerConfig] }),
+      "utf8",
+    );
+    const disabled = new TunnelRegistryService({ byspaceHome, logger });
+    await disabled.start();
+    expect(disabled.list()).toEqual([]);
+    await disabled.stop();
+    await registry.stop();
+  });
+
+  it("setEnabled(true) hot-starts persisted peers", async () => {
+    await writeFile(
+      path.join(byspaceHome, "tunnels.json"),
+      JSON.stringify({ v: 1, peers: [unreachablePeerConfig] }),
+      "utf8",
+    );
+    const registry = new TunnelRegistryService({ byspaceHome, logger });
+    await registry.start();
+    expect(registry.list()).toEqual([]);
+
+    registry.setEnabled(true);
+    await vi.waitFor(() => {
+      expect(registry.list()).toHaveLength(1);
+    });
+    expect(registry.list()[0].peerId).toBe(unreachablePeerConfig.peerId);
+
+    registry.setEnabled(false);
+    await vi.waitFor(() => {
+      expect(registry.list()).toEqual([]);
+    });
     await registry.stop();
   });
 });

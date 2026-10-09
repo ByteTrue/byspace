@@ -35,7 +35,7 @@ type ProviderOverride = import("./agent/provider-launch-config.js").ProviderOver
 
 interface SupportedMutableConfigPatch {
   relay?: { enabled?: boolean; endpoint?: string; useTls?: boolean };
-  tunnel?: { allowedPorts?: number[] };
+  tunnel?: { enabled?: boolean; allowedPorts?: number[] };
   // COMPAT(relayEndpointConfig): added in v0.17.0, remove after 2027-03-30 once
   // daemon floor >= v0.17.0. Relay.endpoint/useTls join the patchable set so
   // onboard --relay-endpoint can persist a relay.
@@ -226,6 +226,7 @@ const RELOADABLE_PATHS = [
   "daemon.relay.enabled",
   "daemon.relay.endpoint",
   "daemon.relay.useTls",
+  "daemon.tunnel.enabled",
   "daemon.tunnel.allowedPorts",
   "daemon.mcp.enabled",
   "daemon.mcp.injectIntoAgents",
@@ -252,6 +253,7 @@ const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
   ["daemon.relay.enabled", "relay.enabled"],
   ["daemon.relay.endpoint", "relay.endpoint"],
   ["daemon.relay.useTls", "relay.useTls"],
+  ["daemon.tunnel.enabled", "tunnel.enabled"],
   ["daemon.tunnel.allowedPorts", "tunnel.allowedPorts"],
   ["daemon.mcp.enabled", "mcp.enabled"],
   ["daemon.mcp.injectIntoAgents", "mcp.injectIntoAgents"],
@@ -347,16 +349,30 @@ function pickSupportedPatchFields(patch: MutableDaemonConfigPatch): SupportedMut
 }
 
 function pickTunnelPatchFields(patch: MutableDaemonConfigPatch): SupportedMutableConfigPatch {
-  if (patch.tunnel?.allowedPorts === undefined) return {};
-  return { tunnel: { allowedPorts: patch.tunnel.allowedPorts } };
+  if (patch.tunnel?.allowedPorts === undefined && patch.tunnel?.enabled === undefined) {
+    return {};
+  }
+  return {
+    tunnel: {
+      ...(patch.tunnel?.enabled !== undefined ? { enabled: patch.tunnel.enabled } : {}),
+      ...(patch.tunnel?.allowedPorts !== undefined
+        ? { allowedPorts: patch.tunnel.allowedPorts }
+        : {}),
+    },
+  };
 }
 
 function applyPersistedTunnelPatch(
   next: NonNullable<PersistedConfig["daemon"]>,
   patch: Omit<SupportedMutableConfigPatch, "removeProviders">,
 ): void {
-  if (patch.tunnel?.allowedPorts !== undefined) {
-    next.tunnel = { allowedPorts: patch.tunnel.allowedPorts };
+  if (patch.tunnel?.enabled !== undefined || patch.tunnel?.allowedPorts !== undefined) {
+    const tunnel = next.tunnel ?? {};
+    if (patch.tunnel?.enabled !== undefined) tunnel.enabled = patch.tunnel.enabled;
+    if (patch.tunnel?.allowedPorts !== undefined) {
+      tunnel.allowedPorts = patch.tunnel.allowedPorts;
+    }
+    next.tunnel = tunnel;
   }
 }
 

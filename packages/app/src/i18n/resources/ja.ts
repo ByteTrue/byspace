@@ -1198,6 +1198,7 @@ export const ja: TranslationResources = {
     },
   },
   tunnels: {
+    experimental: "実験的",
     title: "トンネル",
     add: "トンネルを追加",
     empty: "トンネルはまだありません",
@@ -1234,6 +1235,14 @@ export const ja: TranslationResources = {
       failed: "トンネルを作成できません",
       submitting: "追加中...",
       hint: "両方の daemon にパスワードが必要です。リモート側のポートは許可リストに含まれている必要があります。",
+    },
+    enable: {
+      title: "daemon トンネル",
+      description:
+        "この daemon の許可ポートをペアリング済みのリモート daemon へ転送します。実験的機能で、デフォルトは無効です。",
+      action: "有効化",
+      enabling: "有効化中...",
+      failed: "daemon トンネルを有効化できません",
     },
   },
   newWorkspace: {

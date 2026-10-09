@@ -1196,6 +1196,7 @@ export const en = {
     },
   },
   tunnels: {
+    experimental: "Experimental",
     title: "Tunnels",
     add: "Add tunnel",
     empty: "No tunnels yet",
@@ -1232,6 +1233,14 @@ export const en = {
       failed: "Unable to create the tunnel",
       submitting: "Adding...",
       hint: "Both daemons need a password set. The remote daemon's ports must be in its allowlist.",
+    },
+    enable: {
+      title: "Daemon tunnels",
+      description:
+        "Forward whitelisted ports on this daemon to a paired peer daemon. Experimental and off by default.",
+      action: "Enable",
+      enabling: "Enabling...",
+      failed: "Unable to enable daemon tunnels",
     },
   },
   newWorkspace: {

@@ -17,6 +17,7 @@ import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { settingsStyles } from "@/styles/settings";
+import type { MutableDaemonConfig } from "@bytetrue/protocol/messages";
 
 type FormState = { mode: "closed" } | { mode: "create" };
 
@@ -40,9 +41,11 @@ function TunnelsScreenContent(): ReactElement {
   const { t } = useTranslation();
   const localDaemonServerId = useLocalDaemonServerId();
   const { loadState, refetch } = useTunnels();
+  const { config, isLoading: configLoading } = useDaemonConfig(localDaemonServerId);
   const [formState, setFormState] = useState<FormState>({ mode: "closed" });
 
   const entries = loadState.status === "loaded" ? loadState.data : [];
+  const tunnelsEnabled = config?.tunnel?.enabled === true;
 
   const openCreateForm = useCallback(() => {
     setFormState({ mode: "create" });
@@ -55,26 +58,130 @@ function TunnelsScreenContent(): ReactElement {
     <View style={styles.container}>
       <MenuHeader title={t("tunnels.title")} />
       <ScrollView contentContainerStyle={styles.content}>
-        {localDaemonServerId ? (
-          <View style={styles.toolbar}>
-            <AddTunnelButton onPress={openCreateForm} />
-          </View>
-        ) : undefined}
-        <TunnelsListBody
+        <TunnelsScreenBody
           localDaemonServerId={localDaemonServerId}
-          loadState={loadState}
+          config={config}
+          configLoading={configLoading}
+          tunnelsEnabled={tunnelsEnabled}
           entries={entries}
+          loadState={loadState}
+          onAddTunnel={openCreateForm}
           onRemoved={refetch}
         />
-        {localDaemonServerId ? <AllowlistSection serverId={localDaemonServerId} /> : undefined}
       </ScrollView>
-      {formState.mode === "create" && localDaemonServerId ? (
+      {formState.mode === "create" && localDaemonServerId && tunnelsEnabled ? (
         <AddTunnelSheet
           serverId={localDaemonServerId}
           onClose={closeCreateForm}
           onCreated={refetch}
         />
       ) : undefined}
+    </View>
+  );
+}
+
+function TunnelsScreenBody(props: {
+  localDaemonServerId: string | null;
+  config: MutableDaemonConfig | null;
+  configLoading: boolean;
+  tunnelsEnabled: boolean;
+  entries: AggregatedTunnelEntry[];
+  loadState: TunnelLoadState;
+  onAddTunnel: () => void;
+  onRemoved: () => void;
+}): ReactElement {
+  const { t } = useTranslation();
+  if (!props.localDaemonServerId) {
+    return <Text style={styles.hint}>{t("tunnels.noLocalDaemon")}</Text>;
+  }
+  if (props.configLoading && !props.config) {
+    return (
+      <View style={styles.loadingRow}>
+        <ThemedLoadingSpinner size={14} />
+        <Text style={styles.hint}>{t("common.states.loading")}</Text>
+      </View>
+    );
+  }
+  if (!props.tunnelsEnabled) {
+    return <TunnelEnableCard serverId={props.localDaemonServerId} />;
+  }
+  return (
+    <TunnelsEnabledBody
+      entries={props.entries}
+      loadState={props.loadState}
+      localDaemonServerId={props.localDaemonServerId}
+      onAddTunnel={props.onAddTunnel}
+      onRemoved={props.onRemoved}
+    />
+  );
+}
+
+function TunnelsEnabledBody({
+  entries,
+  loadState,
+  localDaemonServerId,
+  onAddTunnel,
+  onRemoved,
+}: {
+  entries: AggregatedTunnelEntry[];
+  loadState: TunnelLoadState;
+  localDaemonServerId: string;
+  onAddTunnel: () => void;
+  onRemoved: () => void;
+}): ReactElement {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.enabledBody}>
+      <View style={styles.toolbarRow}>
+        <Text style={styles.experimentalCaption}>{t("tunnels.experimental")}</Text>
+        <AddTunnelButton onPress={onAddTunnel} />
+      </View>
+      <TunnelsListBody
+        localDaemonServerId={localDaemonServerId}
+        loadState={loadState}
+        entries={entries}
+        onRemoved={onRemoved}
+      />
+      <AllowlistSection serverId={localDaemonServerId} />
+    </View>
+  );
+}
+
+function TunnelEnableCard({ serverId }: { serverId: string }): ReactElement {
+  const { t } = useTranslation();
+  const { patchConfig } = useDaemonConfig(serverId);
+  const [enabling, setEnabling] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const enable = useCallback(() => {
+    setEnabling(true);
+    patchConfig({ tunnel: { enabled: true } })
+      .catch(() => {
+        setError(t("tunnels.enable.failed"));
+      })
+      .finally(() => {
+        setEnabling(false);
+      });
+  }, [patchConfig, t]);
+
+  return (
+    <View style={settingsStyles.card} testID="tunnels-enable-card">
+      <View style={styles.enableCardRow}>
+        <View style={styles.rowContent}>
+          <Text style={styles.sectionLabel}>{t("tunnels.enable.title")}</Text>
+          <Text style={styles.hint}>{t("tunnels.enable.description")}</Text>
+          {error ? <Text style={styles.inlineError}>{error}</Text> : undefined}
+        </View>
+        <Button
+          variant="secondary"
+          size="sm"
+          onPress={enable}
+          disabled={enabling}
+          testID="tunnels-enable"
+        >
+          {enabling ? t("tunnels.enable.enabling") : t("tunnels.enable.action")}
+        </Button>
+      </View>
     </View>
   );
 }
@@ -454,6 +561,22 @@ const styles = StyleSheet.create((theme) => {
     toolbar: {
       flexDirection: "row",
       justifyContent: "flex-end",
+    },
+    enabledBody: {
+      gap: theme.spacing[4],
+    },
+    toolbarRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    experimentalCaption: {
+      fontSize: theme.fontSize.sm,
+      color: theme.colors.foregroundMuted,
+    },
+    enableCardRow: {
+      ...settingsStyles.row,
+      gap: theme.spacing[3],
     },
     loadingRow: {
       flexDirection: "row",

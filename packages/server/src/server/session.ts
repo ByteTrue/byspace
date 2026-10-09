@@ -917,6 +917,7 @@ export class Session {
         emit: (msg) => this.emit(msg),
         emitBinary: (frame) => this.emitBinary(frame),
       },
+      isTunnelEnabled: () => daemonConfigStore.get().tunnel?.enabled === true,
       getAllowedPorts: () =>
         (daemonConfigStore.get().tunnel?.allowedPorts ?? []).filter((port) =>
           Number.isInteger(port),

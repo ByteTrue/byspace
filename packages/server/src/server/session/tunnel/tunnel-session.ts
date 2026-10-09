@@ -66,6 +66,8 @@ export interface TunnelOutboundController {
 
 export interface TunnelSessionOptions {
   host: TunnelSessionHost;
+  /** Experimental feature gate (issue 063): tunnels are off until the user opts in. */
+  isTunnelEnabled: () => boolean;
   /** Ports this host allows to be forwarded. Read live; config changes apply to new opens. */
   getAllowedPorts: () => number[];
   /** Feature gate: the daemon must have a password set before any open is granted. */
@@ -91,6 +93,7 @@ let tunnelIdCounter = 0;
 
 export class TunnelSession {
   private readonly host: TunnelSessionHost;
+  private readonly isTunnelEnabled: () => boolean;
   private readonly getAllowedPorts: () => number[];
   private readonly isPasswordSet: () => boolean;
   private readonly targetHost: string;
@@ -100,6 +103,7 @@ export class TunnelSession {
 
   constructor(options: TunnelSessionOptions) {
     this.host = options.host;
+    this.isTunnelEnabled = options.isTunnelEnabled;
     this.getAllowedPorts = options.getAllowedPorts;
     this.isPasswordSet = options.isPasswordSet;
     this.targetHost = options.targetHost ?? "127.0.0.1";
@@ -153,6 +157,11 @@ export class TunnelSession {
       });
     };
 
+    if (!this.isTunnelEnabled()) {
+      this.logger.warn({ remotePort }, "Tunnel open denied: tunnels are disabled");
+      deny("Daemon tunnels are disabled. Enable them in the Tunnels page on that host.");
+      return;
+    }
     if (!this.isPasswordSet()) {
       this.logger.warn({ remotePort }, "Tunnel open denied: daemon has no password");
       deny("Daemon password is not set. Set a daemon password to enable tunnels.");
@@ -241,6 +250,19 @@ export class TunnelSession {
           peerId: msg.config.peerId,
           ok: false,
           error: "This daemon has no tunnel manager.",
+        },
+      });
+      return;
+    }
+    // Issue 063 gate: tunnels are experimental and off until opted in.
+    if (!this.isTunnelEnabled()) {
+      this.host.emit({
+        type: "tunnel.create.response",
+        payload: {
+          requestId: msg.requestId,
+          peerId: msg.config.peerId,
+          ok: false,
+          error: "Daemon tunnels are disabled. Enable them in the Tunnels page first.",
         },
       });
       return;

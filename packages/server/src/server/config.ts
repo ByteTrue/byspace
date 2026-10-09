@@ -553,9 +553,13 @@ interface ResolveConfigFromPersistedOptions {
 }
 
 function resolveTunnelConfig(persisted: PersistedConfig): {
+  enabled: boolean;
   allowedPorts: number[];
 } {
-  return { allowedPorts: persisted.daemon?.tunnel?.allowedPorts ?? [] };
+  return {
+    enabled: persisted.daemon?.tunnel?.enabled ?? false,
+    allowedPorts: persisted.daemon?.tunnel?.allowedPorts ?? [],
+  };
 }
 
 export function resolveConfigFromPersisted(

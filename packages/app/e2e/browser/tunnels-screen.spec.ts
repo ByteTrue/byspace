@@ -33,7 +33,7 @@ test("creates a tunnel from the GUI and forwards bytes", async ({ page }) => {
     mutableRelay: { enabled: true, endpoint: relay.endpoint },
     daemonConfig: {
       auth: { password: hashSync(PASSWORD, 4) },
-      tunnel: { allowedPorts: [servicePort] },
+      tunnel: { enabled: true, allowedPorts: [servicePort] },
     },
   });
   const d1 = await startIsolatedHostDaemon(D1_ID, {
@@ -83,6 +83,13 @@ test("creates a tunnel from the GUI and forwards bytes", async ({ page }) => {
     );
 
     await page.goto("/tunnels");
+
+    // Experimental gate (issue 063): the page opens on the enable card.
+    const enableCard = page.getByTestId("tunnels-enable-card");
+    await expect(enableCard).toBeVisible({ timeout: 30_000 });
+    await page.getByTestId("tunnels-enable").click();
+    await expect(enableCard).not.toBeVisible({ timeout: 15_000 });
+
     await expect(page.getByTestId("tunnels-add")).toBeVisible({ timeout: 30_000 });
 
     // Open the add-tunnel sheet and fill in D2's offer, password, and port.

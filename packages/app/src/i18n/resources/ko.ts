@@ -1193,6 +1193,7 @@ export const ko: TranslationResources = {
     },
   },
   tunnels: {
+    experimental: "실험적",
     title: "터널",
     add: "터널 추가",
     empty: "아직 터널이 없습니다",
@@ -1229,6 +1230,14 @@ export const ko: TranslationResources = {
       failed: "터널을 생성할 수 없습니다",
       submitting: "추가 중...",
       hint: "두 daemon 모두 비밀번호가 설정되어야 합니다. 원격 포트는 허용 목록에 있어야 합니다.",
+    },
+    enable: {
+      title: "daemon 터널",
+      description:
+        "이 daemon의 허용 포트를 페어링된 원격 daemon으로 전달합니다. 실험적 기능이며 기본적으로 꺼져 있습니다.",
+      action: "활성화",
+      enabling: "활성화 중...",
+      failed: "daemon 터널을 활성화할 수 없습니다",
     },
   },
   newWorkspace: {

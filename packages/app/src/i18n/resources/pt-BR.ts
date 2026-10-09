@@ -1211,6 +1211,7 @@ export const ptBR: TranslationResources = {
     },
   },
   tunnels: {
+    experimental: "Experimental",
     title: "Túneis",
     add: "Adicionar túnel",
     empty: "Ainda não há túneis",
@@ -1247,6 +1248,14 @@ export const ptBR: TranslationResources = {
       failed: "Não foi possível criar o túnel",
       submitting: "Adicionando...",
       hint: "Ambos os daemon precisam de senha. As portas remotas devem estar na lista de permitidas.",
+    },
+    enable: {
+      title: "Túneis do daemon",
+      description:
+        "Encaminha as portas permitidas deste daemon para um daemon remoto pareado. Recurso experimental, desativado por padrão.",
+      action: "Ativar",
+      enabling: "Ativando...",
+      failed: "Não foi possível ativar os túneis",
     },
   },
   newWorkspace: {
