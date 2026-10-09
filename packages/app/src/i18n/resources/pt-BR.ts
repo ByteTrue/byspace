@@ -1913,18 +1913,15 @@ export const ptBR: TranslationResources = {
         description: "Linhas mantidas no buffer do terminal integrado",
         accessibilityLabel: "Linhas do scrollback do terminal",
       },
-      autoExpandReasoning: {
-        label: "Sempre expandir raciocínio",
-        description:
-          "Mostrar os blocos de pensamento e raciocínio do agente totalmente expandidos por padrão",
-      },
-      toolCallDetail: {
-        label: "Exibição de chamadas de ferramentas",
-        description: "Como as chamadas de ferramentas aparecem na linha do tempo",
-        accessibilityLabel: "Selecionar exibição de chamadas de ferramentas ({{value}})",
+      timelineDetail: {
+        label: "Nível de detalhe da linha do tempo",
+        description: "Como o raciocínio e as chamadas de ferramentas aparecem na linha do tempo",
+        accessibilityLabel: "Selecionar nível de detalhe da linha do tempo ({{value}})",
         options: {
-          overview: "Resumo",
-          detailed: "Detalhes completos",
+          overview: "Recolher tudo",
+          detailed: "Recolher detalhes",
+          live: "Mostrar o raciocínio mais recente",
+          expanded: "Expandir tudo",
         },
       },
       language: {

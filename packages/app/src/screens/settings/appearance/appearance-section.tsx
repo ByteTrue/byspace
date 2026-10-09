@@ -30,6 +30,8 @@ import {
   sanitizeFontFamily,
   useAppSettings,
   type AppSettings,
+  TIMELINE_DETAIL_LEVELS,
+  type TimelineDetailLevel,
 } from "@/hooks/use-settings";
 import {
   DEFAULT_MONO_FONT_STACK,
@@ -262,23 +264,6 @@ function TerminalAppearanceRow({ value, onChange }: TerminalAppearanceRowProps) 
   );
 }
 
-interface AutoExpandReasoningRowProps {
-  value: boolean;
-  onChange: (value: boolean) => void;
-}
-
-function AutoExpandReasoningRow({ value, onChange }: AutoExpandReasoningRowProps) {
-  const { t } = useTranslation();
-  return (
-    <SettingsSwitch
-      label={t("settings.general.autoExpandReasoning.label")}
-      hint={t("settings.general.autoExpandReasoning.description")}
-      value={value}
-      onValueChange={onChange}
-    />
-  );
-}
-
 interface ChatOutlineRowProps {
   value: boolean;
   onChange: (value: boolean) => void;
@@ -296,54 +281,46 @@ function ChatOutlineRow({ value, onChange }: ChatOutlineRowProps) {
   );
 }
 
-const TOOL_CALL_DETAIL_LEVELS: readonly AppSettings["toolCallDetailLevel"][] = [
-  "detailed",
-  "overview",
-];
-
-function getToolCallDetailLevelLabel(
-  t: TFunction,
-  value: AppSettings["toolCallDetailLevel"],
-): string {
-  return t(`settings.general.toolCallDetail.options.${value}`);
+function getTimelineDetailLevelLabel(t: TFunction, value: TimelineDetailLevel): string {
+  return t(`settings.general.timelineDetail.options.${value}`);
 }
 
-interface ToolCallDetailMenuItemProps {
-  value: AppSettings["toolCallDetailLevel"];
+interface TimelineDetailMenuItemProps {
+  value: TimelineDetailLevel;
   selected: boolean;
-  onChange: (value: AppSettings["toolCallDetailLevel"]) => void;
+  onChange: (value: TimelineDetailLevel) => void;
 }
 
-function ToolCallDetailMenuItem({ value, selected, onChange }: ToolCallDetailMenuItemProps) {
+function TimelineDetailMenuItem({ value, selected, onChange }: TimelineDetailMenuItemProps) {
   const { t } = useTranslation();
   const handleSelect = useCallback(() => onChange(value), [onChange, value]);
   return (
     <DropdownMenuItem selected={selected} onSelect={handleSelect}>
-      {getToolCallDetailLevelLabel(t, value)}
+      {getTimelineDetailLevelLabel(t, value)}
     </DropdownMenuItem>
   );
 }
 
-interface ToolCallDetailRowProps {
-  value: AppSettings["toolCallDetailLevel"];
-  onChange: (value: AppSettings["toolCallDetailLevel"]) => void;
+interface TimelineDetailRowProps {
+  value: TimelineDetailLevel;
+  onChange: (value: TimelineDetailLevel) => void;
 }
 
-function ToolCallDetailRow({ value, onChange }: ToolCallDetailRowProps) {
+function TimelineDetailRow({ value, onChange }: TimelineDetailRowProps) {
   const { t } = useTranslation();
-  const selectedLabel = getToolCallDetailLevelLabel(t, value);
+  const selectedLabel = getTimelineDetailLevelLabel(t, value);
   return (
     <View style={settingsStyles.row}>
       <View style={settingsStyles.rowContent}>
-        <Text style={settingsStyles.rowTitle}>{t("settings.general.toolCallDetail.label")}</Text>
+        <Text style={settingsStyles.rowTitle}>{t("settings.general.timelineDetail.label")}</Text>
         <Text style={settingsStyles.rowHint}>
-          {t("settings.general.toolCallDetail.description")}
+          {t("settings.general.timelineDetail.description")}
         </Text>
       </View>
       <DropdownMenu>
         <DropdownMenuTrigger
           style={dropdownTriggerStyle}
-          accessibilityLabel={t("settings.general.toolCallDetail.accessibilityLabel", {
+          accessibilityLabel={t("settings.general.timelineDetail.accessibilityLabel", {
             value: selectedLabel,
           })}
         >
@@ -351,8 +328,8 @@ function ToolCallDetailRow({ value, onChange }: ToolCallDetailRowProps) {
           <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="end" width={200}>
-          {TOOL_CALL_DETAIL_LEVELS.map((option) => (
-            <ToolCallDetailMenuItem
+          {TIMELINE_DETAIL_LEVELS.map((option) => (
+            <TimelineDetailMenuItem
               key={option}
               value={option}
               selected={value === option}
@@ -586,16 +563,9 @@ export function AppearanceSection() {
     [updateSettings],
   );
 
-  const handleAutoExpandReasoningChange = useCallback(
-    (autoExpandReasoning: boolean) => {
-      void updateSettings({ autoExpandReasoning });
-    },
-    [updateSettings],
-  );
-
-  const handleToolCallDetailLevelChange = useCallback(
-    (toolCallDetailLevel: AppSettings["toolCallDetailLevel"]) => {
-      void updateSettings({ toolCallDetailLevel });
+  const handleTimelineDetailLevelChange = useCallback(
+    (timelineDetailLevel: TimelineDetailLevel) => {
+      void updateSettings({ timelineDetailLevel });
     },
     [updateSettings],
   );
@@ -710,13 +680,9 @@ export function AppearanceSection() {
       </SettingsSection>
       <SettingsSection title={t("settings.appearance.detailLevel.title")}>
         <SettingsCard>
-          <AutoExpandReasoningRow
-            value={settings.autoExpandReasoning}
-            onChange={handleAutoExpandReasoningChange}
-          />
-          <ToolCallDetailRow
-            value={settings.toolCallDetailLevel}
-            onChange={handleToolCallDetailLevelChange}
+          <TimelineDetailRow
+            value={settings.timelineDetailLevel}
+            onChange={handleTimelineDetailLevelChange}
           />
           <ChatOutlineRow value={settings.chatOutlineEnabled} onChange={handleChatOutlineChange} />
         </SettingsCard>

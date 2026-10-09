@@ -1926,17 +1926,16 @@ export const fr: TranslationResources = {
         description: "Lignes conservées dans le tampon du terminal intégré",
         accessibilityLabel: "Lignes de défilementTerminal",
       },
-      autoExpandReasoning: {
-        label: "Toujours afficher le raisonnement",
-        description: "Afficher le raisonnement de l'agent entièrement développé par défaut",
-      },
-      toolCallDetail: {
-        label: "Affichage des appels d’outils",
-        description: "Comment les appels d’outils apparaissent dans la chronologie",
-        accessibilityLabel: "Sélectionner l’affichage des appels d’outils ({{value}})",
+      timelineDetail: {
+        label: "Niveau de détail de la chronologie",
+        description:
+          "Comment le raisonnement et les appels d’outils apparaissent dans la chronologie",
+        accessibilityLabel: "Sélectionner le niveau de détail de la chronologie ({{value}})",
         options: {
-          overview: "Résumé",
-          detailed: "Détails complets",
+          overview: "Tout replier",
+          detailed: "Replier les détails",
+          live: "Afficher le dernier raisonnement",
+          expanded: "Tout déplier",
         },
       },
       language: {

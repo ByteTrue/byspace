@@ -1882,17 +1882,15 @@ export const ar: TranslationResources = {
         description: "يتم الاحتفاظ بالخطوط في المخزن المؤقت الطرفي المدمج",
         accessibilityLabel: "خطوط التمرير Terminal",
       },
-      autoExpandReasoning: {
-        label: "عرض التفكير دائماً",
-        description: "إظهار تفكير الوكيل وخطوات الاستدلال بشكل كامل بشكل افتراضي",
-      },
-      toolCallDetail: {
-        label: "عرض استدعاءات الأدوات",
-        description: "كيفية ظهور استدعاءات الأدوات في المخطط الزمني",
-        accessibilityLabel: "حدد عرض استدعاءات الأدوات ({{value}})",
+      timelineDetail: {
+        label: "تفاصيل المخطط الزمني",
+        description: "كيفية ظهور التفكير واستدعاءات الأدوات في المخطط الزمني",
+        accessibilityLabel: "حدد تفاصيل المخطط الزمني ({{value}})",
         options: {
-          overview: "ملخص",
-          detailed: "التفاصيل الكاملة",
+          overview: "طي الكل",
+          detailed: "طي التفاصيل",
+          live: "عرض أحدث التفكير",
+          expanded: "توسيع الكل",
         },
       },
       language: {

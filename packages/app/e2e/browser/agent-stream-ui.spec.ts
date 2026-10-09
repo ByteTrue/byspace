@@ -247,7 +247,7 @@ test.describe("Agent stream UI", () => {
     await page.addInitScript(() => {
       const key = "@byspace:app-settings";
       const stored = JSON.parse(localStorage.getItem(key) ?? "{}");
-      localStorage.setItem(key, JSON.stringify({ ...stored, autoExpandReasoning: true }));
+      localStorage.setItem(key, JSON.stringify({ ...stored, timelineDetailLevel: "expanded" }));
     });
     const agent = await seedMockAgentWorkspace({
       repoPrefix: "stream-pane-header-controls-",

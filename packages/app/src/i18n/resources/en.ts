@@ -1894,17 +1894,15 @@ export const en = {
         description: "Lines kept in the built-in terminal buffer",
         accessibilityLabel: "Terminal scrollback lines",
       },
-      autoExpandReasoning: {
-        label: "Always expand reasoning",
-        description: "Show agent thinking and chain-of-thought blocks fully expanded by default",
-      },
-      toolCallDetail: {
-        label: "Tool call display",
-        description: "How tool calls appear in the timeline",
-        accessibilityLabel: "Select tool call display ({{value}})",
+      timelineDetail: {
+        label: "Timeline detail",
+        description: "How thinking and tool calls appear in the timeline",
+        accessibilityLabel: "Select timeline detail ({{value}})",
         options: {
-          overview: "Summary",
-          detailed: "Full detail",
+          overview: "Collapse all",
+          detailed: "Collapse details",
+          live: "Show latest thinking",
+          expanded: "Expand all",
         },
       },
       language: {

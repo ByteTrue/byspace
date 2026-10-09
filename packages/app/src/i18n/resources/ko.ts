@@ -1892,17 +1892,15 @@ export const ko: TranslationResources = {
         description: "내장 터미널 버퍼에 보관되는 줄 수",
         accessibilityLabel: "터미널 스크롤백 줄 수",
       },
-      autoExpandReasoning: {
-        label: "추론 항상 펼치기",
-        description: "에이전트의 사고 및 추론 블록을 기본적으로 모두 펼쳐 표시합니다.",
-      },
-      toolCallDetail: {
-        label: "도구 호출 표시",
-        description: "타임라인에 도구 호출이 표시되는 방식",
-        accessibilityLabel: "도구 호출 표시 선택({{value}})",
+      timelineDetail: {
+        label: "타임라인 표시",
+        description: "타임라인에 생각과 도구 호출이 표시되는 방식",
+        accessibilityLabel: "타임라인 표시 선택({{value}})",
         options: {
-          overview: "요약",
-          detailed: "전체 세부정보",
+          overview: "모두 접기",
+          detailed: "세부정보 접기",
+          live: "최신 생각 표시",
+          expanded: "모두 펼치기",
         },
       },
       language: {
