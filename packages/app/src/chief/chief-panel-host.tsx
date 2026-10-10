@@ -1,0 +1,87 @@
+import { memo, useCallback, useMemo, type ReactElement } from "react";
+import { View } from "react-native";
+import { usePathname } from "expo-router";
+import { useHosts } from "@/runtime/host-runtime";
+import { useIsCompactFormFactor } from "@/constants/layout";
+import { useRouter } from "expo-router";
+import { useChiefStore } from "./chief-store";
+import { useChiefAgent } from "./use-chief-agent";
+import { ChiefFab } from "./chief-fab";
+import { ChiefFloatingWindow } from "./chief-floating-window";
+
+/**
+ * Orchestrates the Chief FAB + floating window. Mounted once in the root
+ * layout; renders on every screen.
+ *
+ * Route suppression: hidden when the current route shows the Chief agent
+ * full-page (the floating copy would show the same session).
+ */
+export const ChiefPanelHost = memo(function ChiefPanelHost(): ReactElement | null {
+  const pathname = usePathname();
+  const router = useRouter();
+  const hosts = useHosts();
+  const isCompact = useIsCompactFormFactor();
+  const isOpen = useChiefStore((state) => state.isOpen);
+  const toggle = useChiefStore((state) => state.toggle);
+  const close = useChiefStore((state) => state.close);
+
+  // Use the first connected host as the "current" host. The host switcher in
+  // the floating window navigates to a different host root.
+  const currentServerId = useMemo(() => {
+    // Extract from path if we're on a host route.
+    const match = pathname.match(/^\/h\/([^/]+)/);
+    if (match) return match[1];
+    // Fall back to the first host.
+    return hosts[0]?.serverId ?? null;
+  }, [pathname, hosts]);
+
+  const chiefState = useChiefAgent(currentServerId);
+  const agent = chiefState.tag === "ready" ? chiefState.agent : null;
+
+  const handleFabPress = useCallback(() => {
+    if (isCompact) {
+      // On mobile, navigate directly to the agent page instead of a floating window.
+      if (agent && currentServerId) {
+        router.push(`/h/${currentServerId}/agent/${agent.agentId}`);
+      }
+      return;
+    }
+    toggle();
+  }, [isCompact, agent, currentServerId, router, toggle]);
+
+  // Route suppression: don't show the floating window when the agent page is
+  // already showing this Chief agent.
+  const isOnChiefAgentPage = useMemo(() => {
+    if (!agent || !currentServerId) return false;
+    return pathname.includes(`/agent/${agent.agentId}`);
+  }, [pathname, agent, currentServerId]);
+
+  if (!currentServerId) return null;
+
+  const showWindow = isOpen && !isCompact && !isOnChiefAgentPage;
+
+  return (
+    <View style={containerStyle} pointerEvents="box-none">
+      {showWindow ? (
+        <ChiefFloatingWindow serverId={currentServerId} agent={agent} onClose={close} />
+      ) : null}
+      {!showWindow ? (
+        <ChiefFab
+          serverId={currentServerId}
+          agentId={agent?.agentId ?? null}
+          onPress={handleFabPress}
+        />
+      ) : null}
+    </View>
+  );
+});
+
+const containerStyle = {
+  position: "absolute" as const,
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  pointerEvents: "none" as const,
+  zIndex: 900,
+};

@@ -179,6 +179,11 @@ export const ja: TranslationResources = {
       on: "オン",
       off: "オフ",
     },
+    role: {
+      select: "Select agent role",
+      none: "No role",
+      chief: "Chief",
+    },
     mode: {
       title: "モード",
       searchPlaceholder: "モードを検索...",
@@ -205,6 +210,11 @@ export const ja: TranslationResources = {
       question: "どのように続けますか？",
       proposedPlan: "提案されたプラン",
     },
+  },
+  chief: {
+    switchHost: "Switch host",
+    maximize: "Open in full page",
+    close: "Close Chief",
   },
   agentPanel: {
     states: {

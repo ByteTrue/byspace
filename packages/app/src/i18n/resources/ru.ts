@@ -179,6 +179,11 @@ export const ru: TranslationResources = {
       on: "Включено",
       off: "Выключено",
     },
+    role: {
+      select: "Select agent role",
+      none: "No role",
+      chief: "Chief",
+    },
     mode: {
       title: "Режим",
       searchPlaceholder: "Поиск режимов...",
@@ -205,6 +210,11 @@ export const ru: TranslationResources = {
       question: "Как бы вы хотели продолжить?",
       proposedPlan: "Предлагаемый план",
     },
+  },
+  chief: {
+    switchHost: "Switch host",
+    maximize: "Open in full page",
+    close: "Close Chief",
   },
   agentPanel: {
     states: {

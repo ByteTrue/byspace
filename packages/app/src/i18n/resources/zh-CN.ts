@@ -179,6 +179,11 @@ export const zhCN: TranslationResources = {
       on: "开启",
       off: "关闭",
     },
+    role: {
+      select: "选择角色",
+      none: "无角色",
+      chief: "Chief",
+    },
     mode: {
       title: "Mode",
       searchPlaceholder: "搜索 modes...",
@@ -205,6 +210,11 @@ export const zhCN: TranslationResources = {
       question: "你想如何继续？",
       proposedPlan: "建议计划",
     },
+  },
+  chief: {
+    switchHost: "切换主机",
+    maximize: "全屏打开",
+    close: "关闭 Chief",
   },
   agentPanel: {
     states: {

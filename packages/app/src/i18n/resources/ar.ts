@@ -179,6 +179,11 @@ export const ar: TranslationResources = {
       on: "على",
       off: "عن",
     },
+    role: {
+      select: "Select agent role",
+      none: "No role",
+      chief: "Chief",
+    },
     mode: {
       title: "وضع",
       searchPlaceholder: "أوضاع البحث...",
@@ -205,6 +210,11 @@ export const ar: TranslationResources = {
       question: "كيف تريد المتابعة؟",
       proposedPlan: "الخطة المقترحة",
     },
+  },
+  chief: {
+    switchHost: "Switch host",
+    maximize: "Open in full page",
+    close: "Close Chief",
   },
   agentPanel: {
     states: {

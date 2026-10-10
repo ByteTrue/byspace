@@ -177,6 +177,11 @@ export const en = {
       on: "On",
       off: "Off",
     },
+    role: {
+      select: "Select agent role",
+      none: "No role",
+      chief: "Chief",
+    },
     mode: {
       title: "Mode",
       searchPlaceholder: "Search modes...",
@@ -203,6 +208,11 @@ export const en = {
       question: "How would you like to proceed?",
       proposedPlan: "Proposed plan",
     },
+  },
+  chief: {
+    switchHost: "Switch host",
+    maximize: "Open in full page",
+    close: "Close Chief",
   },
   agentPanel: {
     states: {

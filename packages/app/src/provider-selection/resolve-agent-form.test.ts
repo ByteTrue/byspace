@@ -94,6 +94,7 @@ function makeState(
       modeId: "",
       model: "",
       thinkingOptionId: "",
+      role: "",
 
       ...overrides,
     },
@@ -556,6 +557,7 @@ describe("resolveFormState", () => {
         modeId: true,
         model: true,
         thinkingOptionId: true,
+        role: false,
       },
       makeState({
         provider: "codex",

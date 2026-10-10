@@ -179,6 +179,11 @@ export const ptBR: TranslationResources = {
       on: "Ativado",
       off: "Desativado",
     },
+    role: {
+      select: "Select agent role",
+      none: "No role",
+      chief: "Chief",
+    },
     mode: {
       title: "Modo",
       searchPlaceholder: "Buscar modos...",
@@ -205,6 +210,11 @@ export const ptBR: TranslationResources = {
       question: "Como você quer prosseguir?",
       proposedPlan: "Plano proposto",
     },
+  },
+  chief: {
+    switchHost: "Switch host",
+    maximize: "Open in full page",
+    close: "Close Chief",
   },
   agentPanel: {
     states: {

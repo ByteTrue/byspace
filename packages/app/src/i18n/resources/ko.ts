@@ -179,6 +179,11 @@ export const ko: TranslationResources = {
       on: "켜짐",
       off: "꺼짐",
     },
+    role: {
+      select: "Select agent role",
+      none: "No role",
+      chief: "Chief",
+    },
     mode: {
       title: "모드",
       searchPlaceholder: "모드 검색...",
@@ -205,6 +210,11 @@ export const ko: TranslationResources = {
       question: "어떻게 진행할까요?",
       proposedPlan: "제안된 계획",
     },
+  },
+  chief: {
+    switchHost: "Switch host",
+    maximize: "Open in full page",
+    close: "Close Chief",
   },
   agentPanel: {
     states: {
