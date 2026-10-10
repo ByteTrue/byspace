@@ -1030,13 +1030,14 @@ const styles = StyleSheet.create((theme) => ({
    * leaves the toggle on the same pixel in both hosts — and that pixel is the sidebar's row rail,
    * where every row below starts.
    *
-   * The box model mirrors `ScreenHeader` exactly: a `HEADER_INNER_HEIGHT` row followed by the
-   * header area's hairline, so the two bottom hairlines sit on one pixel whether or not the pinned
-   * sidebar is showing. `ScreenHeader` owns one side of that contract — this file must not add
-   * vertical padding of its own outside the revealed nav rows.
+   * The box model mirrors `ScreenHeader` exactly: the row plus the header area's hairline add up
+   * to `HEADER_INNER_HEIGHT`, so the two bottom hairlines and the toggle glyph sit on the same
+   * pixels whether or not the pinned sidebar is showing. `ScreenHeader` owns one side of that
+   * contract — this file must not add vertical padding of its own outside the revealed nav rows
+   * (a constant bottom padding here breaks both alignments when the nav is collapsed).
    */
   sidebarTopRow: {
-    height: HEADER_INNER_HEIGHT,
+    height: HEADER_INNER_HEIGHT - theme.borderWidth[1],
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
