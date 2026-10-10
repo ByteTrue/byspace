@@ -11,7 +11,7 @@ identity migration renamed the wire names (`isPaseoOwnedWorktree` →
 `isBySpaceOwnedWorktree`, the `paseo_worktree_*` RPCs, the `paseo.bearer.*`
 subprotocol, the old package scope), so a daemon released before that migration
 is not a supported peer. There is no shim for it. See
-`byissue/issues/042-o-paseo-identity-migration.md`.
+`byissue/issues/042-x-paseo-identity-migration.md`.
 
 ## The protocol contract: always compatible
 

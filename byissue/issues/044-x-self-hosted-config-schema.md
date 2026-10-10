@@ -20,7 +20,7 @@ created: 2026-09-18
 
 **范围：** 生成脚本 + 构建接线 + 3 处 URL。
 **不包含：** daemon 侧的 `/schemas` 路由（见「为什么不做」）；`$schema` 字段的运行时行为（daemon 一直忽略它）。
-**归属：** 根 `issues/`。是 [042](042-o-paseo-identity-migration.md) 的执行中发现物：042 的批量改名把 3 处 URL 改成了不存在的 `byspace.config.v1.json`（404），回退到上游 URL 后又暴露出「我们其实在指别人的产品」这个更根本的问题。
+**归属：** 根 `issues/`。是 [042](042-x-paseo-identity-migration.md) 的执行中发现物：042 的批量改名把 3 处 URL 改成了不存在的 `byspace.config.v1.json`（404），回退到上游 URL 后又暴露出「我们其实在指别人的产品」这个更根本的问题。
 
 ## 为什么现在做
 
