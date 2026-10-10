@@ -29,13 +29,28 @@ Pages 时代它同样是坏链（同一回落行为），所以这不是 073 引
 - 引用坏链的位置：`packages/client/README.md`（`app.byspace.cc.cd/docs/sdk`）、`SECURITY.md`、`public-docs/web-ui.md` 内部互链（`/docs/connectivity` 等）。
 - 托管侧（073 后）：`byspace-relay` Worker 的 `[assets]` 只服务 `packages/app/dist`；`/docs/*` 落进 SPA 回落。
 
-## 影响面与方案（待设计拍板）
+## 方案（已拍板：并入 relay Worker，同一域名同一部署单元）
 
-三选一（按倾向排序）：
+`app.byspace.cc.cd/docs/*` 与 `/changelog` 由 `byspace-relay` Worker 的同一份 `[assets]` 服务——不新建 Worker、不新域名、不引文档框架。与 073 的「一个部署单元」哲学一致，发布链零改动（`build:web` 之后 `wrangler deploy`，docs 随发版原子上线）。
 
-1. **并入 relay Worker**：构建静态文档产物进 assets（例如 starlight/astro build 到 `dist/docs`，或极简自研 md→html）。与 073 的"一个部署单元"哲学一致；代价是引入一个文档框架依赖。
-2. **独立 Worker/Pages**：文档站单独部署。代价是回到两个部署物。
-3. **砍掉 public-docs**：文档全部并入 app 内置（设置页/帮助页）或 GitHub README。最省，但丢独立文档 URL。
+技术可行性三事实（2026-10-10 实证）：
+
+- relay Worker 只处理 `/ws` `/health`，`/docs/*` 落 assets 路由，有真实文件时优先于 SPA 回落——这正是修复坏链的机制。
+- `sw.js` 是 push-only、无 fetch handler（文件头注释写明刻意如此），不会劫持 `/docs` 导航。
+- 同 origin 无 CORS；`markdown-it` 已是 app 依赖，35 个 md 渲染为纯静态 HTML，无需 Astro/Starlight（体量不配，且违背从简原则）。
+
+实现要点：
+
+- **渲染管线**：小 mjs 脚本（读 `public-docs/` + `CHANGELOG.md`，markdown-it 渲染，frontmatter `title/nav/order/category` 生成导航与 SEO 头），输出 `packages/app/dist/docs/` 与 `dist/changelog.html`；挂在 `build:web` 之后（`build:docs` 或并入同一步）。
+- **模板**：每页极简 HTML（站点头 + 导航 + 内容 + 内联小 `<style>`，色板复用 app 主题 tokens，不依赖 app bundle）。
+- **`docs-links.test.mjs`**：`EXTERNAL_ROUTES` 里删 `/docs`、`/changelog`；`/docs/thing` 按仓库内 `public-docs/thing.md` 校验（现有行为），修掉「external site」的误导注释。
+- **`/download` 显式不做**：目前无真正可直接下载的产物（只有 npm 包与容器镜像，无 GitHub Release 二进制），空壳页比坏链更差。等有可下产物时再开（引用处维持指向 GitHub Releases 或直接删链接）。
+
+遗留边界（实现时处理）：
+
+- `packages/client/README.md`、`SECURITY.md` 里的 `/docs/sdk` 引用 URL 验证。
+- `public-docs/sdk/` 的相对链接在渲染后的路径正确性。
+- `CHANGELOG.md` 大小（渲染单页可能偏大，必要时分版本截断——实现时看产物体积再定）。
 
 ## 验收
 
