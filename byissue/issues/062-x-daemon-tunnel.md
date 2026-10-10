@@ -157,6 +157,18 @@ D1 以 **client 角色**经现有 relay 连 D2 的 serverId，复用 E2EE（Curv
 
 用户关闭后追问「做过真实端到端验证吗」——已有的三层 e2e（vitest in-process / supervisor 双进程 + 本地 relay / 浏览器 GUI）全部走本地 Node relay，缺公网链路一跳。补 `tunnel.live-relay.e2e.test.ts`（仿 live-relay.e2e.test.ts 的 `RUN_LIVE_RELAY_E2E=1` 门控）：双 in-process daemon，D2 的 relay 指向真实 `relay.byspace.cc.cd:443`（Cloudflare Worker、TLS、公网往返），D1 侧 TunnelManager 连同一公网 relay，验证完整转发——**1 passed（24.8s）**，`hello from live d2 path=/live` 字节级断言通过。至此验证矩阵闭合：本地 Node relay（3 层）+ 官方公网 CF relay（1 层）。
 
+### 2026-10-09 · 关闭后补充：Owner UI 走查修复（tunnels 页 + add-tunnel sheet）
+
+Owner 真实浏览器走查两轮，暴露的都不是逻辑 bug 而是输入面视觉缺失，逐项修复（verify 分支 a5451e866）：
+
+- **顶栏 hairline 错位 7px**：侧栏顶行与 `ScreenHeader` 各写各的高度（44 vs 37）。修法：侧栏顶行精确取 `HEADER_INNER_HEIGHT`，展开态 nav 行的下边距拆到独立样式——收起时两行 hairline 落在同一像素（DOM 实测 36.7 vs 36.7）。
+- **allowlist 空态文字糊在卡片边上**：`{...settingsStyles.row}` 把 Unistyles 样式跨 `StyleSheet.create` spread,padding 全部丢失。修法：渲染时数组组合 `[settingsStyles.row, styles.allowlistEmptyText]`。**教训：Unistyles 样式对象禁止跨表 spread**（`docs/unistyles.md` 的 `?? "connecting"` 家族坑,enable-card 行此前同病）。
+- **add-tunnel sheet 三个输入框全是裸文本**:062 批次 3 用裸 `AdaptiveTextInput` 而不是表单原语——Owner 原话"一眼看上去都不知道哪里能输入"。修法:整 sheet 换 `Field` + `FormTextInput`(schedule 表单同款),allowlist 添加行同步。自查全仓其余调用点,均有自带 chrome,tunnels 是唯一漏网。
+- **冷深链 /tunnels 永远 Loading**:查询把 `{status:"connecting"}` 缓存后无人 refetch。修法照 `useSchedules` 契约:connectionStatus 进 queryKey。
+- 页面结构:Experimental 变 StatusBadge、空态进卡片(icon+描述+CTA)、工具栏按钮转 outline、允许的端口添加行加分隔线。
+
+验证:typecheck/lint/format 0 违规,i18n 54/54,DOM 实测(内边距 16px、接缝对齐、chrome 生效)。
+
 ### 2026-10-09 · 关闭后补充：真双机验证（Windows 宿主 D1 + WSL D2，公网 CF relay）——全项通过
 
 环境：D2 = WSL2 Ubuntu-24.04（Node 22.20，repo 的 .mise.toml 自动接管；仓库在 WSL ext4 `~/byspace-tunnel`，commit fd0229dd9）；D1 = Windows 宿主（worktree，同 commit）。两侧 `npm install && npm run build:server`，D1 另跑 `build:daemon-web-ui`。独立 BYSPACE_HOME 各持 bcrypt 密码 + `tunnel.enabled` + D2 白名单 [3000] + relay `relay.byspace.cc.cd:443`；D2 起 vite :3000 作为被转发服务；D1 用真实 Edge 浏览器走产品 UI（Welcome → Direct connection → 命令中心 → Tunnels → Add tunnel）。
