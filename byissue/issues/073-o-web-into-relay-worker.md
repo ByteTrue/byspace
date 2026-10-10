@@ -111,11 +111,13 @@ issues/061-x-self-hosted-web-relay-containers.md（PR #13）把自托管产物�
 | ----------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `relay.byspace.cc.cd`               | Worker `byspace-relay`      | `/` 200、`/ws` 400（worker-first）、live-relay E2E 握手通过                                                                                         |
 | `app.byspace.cc.cd`                 | Worker `byspace-relay`      | 全路由 200 + live-relay E2EE 握手（`BYSPACE_LIVE_RELAY_URL=wss://app.byspace.cc.cd`）通过；origin 未变，已装 PWA/localStorage/`#offer` 链接不受影响 |
-| `app.byspace.zijieapi.de5.net`      | Worker `byspace-relay`      | 200（paseo 时代备用域名，迁到 Worker 保活而非砍掉）                                                                                                 |
+| `app.byspace.zijieapi.de5.net`      | Worker `byspace-relay`      | （已砍）用户拍板废弃 zijieapi.de5.net，routes 移除                                                                                                  |
 | `app-beta.byspace.cc.cd`            | Worker `byspace-relay-beta` | 200；Workers env 隔离，DO 独立命名空间                                                                                                              |
-| `app-beta.byspace.zijieapi.de5.net` | Worker `byspace-relay-beta` | 200（DNS 传播后）                                                                                                                                   |
+| `app-beta.byspace.zijieapi.de5.net` | Worker `byspace-relay-beta` | （已砍）同上                                                                                                                                        |
 
-Pages 项目 `byspace` / `byspace-beta` 已删除（`*.pages.dev` 域名随之 530 失效）；`byspace-landing`（着陆页）与 `paseo-*`（另一产品遗留）不动。三域 `/` body hash 一致（同一份产物）。
+Pages 项目 `byspace` / `byspace-beta` 已删除（`*.pages.dev` 域名随之 530 失效）；`byspace-landing`（着陆页）保留。三域 `/` body hash 一致（同一份产物）。
+
+**后续追加（同日）**：用户拍板砍掉 zijieapi.de5.net 的 byspace 子域（wrangler.toml routes 移除并重新部署）；paseo 残留一并清理——`paseo-relay` / `paseo-website` Workers 与 `paseo-zijieapi-de5-net` Pages 项目删除、`paseo` CNAME 删除。de5.net 的 `*` 通配符（用户自有隧道服务）与 MX（邮件路由）按用户要求保留。账号终态：Workers = byspace-relay / byspace-relay-beta / mailfree，Pages = byspace-landing。
 
 回退：`wrangler rollback`（UI+relay 整体）；域名可从 Worker 解绑（但 Pages 项目已删，如需回 Pages 需重建项目）。
 
