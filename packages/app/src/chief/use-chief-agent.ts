@@ -83,7 +83,6 @@ export function useChiefAgent(serverId: string | null): ChiefAgentState {
     inFlightRef.current = true;
     try {
       const workspaces = await client.fetchWorkspaces();
-
       const home = workspaces.entries.find((entry) => isHomeWorkspace(entry));
       if (!home) {
         setState({ tag: "no_home_workspace" });
