@@ -96,6 +96,10 @@ import type {
   DaemonGetPairingOfferResponse,
   DaemonConfigReloadResponse,
   DaemonPermission,
+  TunnelOpenResponse,
+  TunnelListResponse,
+  TunnelCreateResponse,
+  TunnelRemoveResponse,
   DiagnosticsResponse,
   AgentRewindResponseMessage,
   ListTerminalsResponse,
@@ -142,9 +146,12 @@ import {
   decodeFileTransferFrame,
   encodeFileTransferFrame,
   decodeTerminalStreamFrame,
+  decodeTunnelFrame,
+  encodeTunnelFrame,
   FileTransferOpcode,
   TerminalStreamOpcode,
   type FileTransferFrame,
+  type TunnelFrame,
 } from "@bytetrue/protocol/binary-frames/index";
 import {
   createRelayE2eeTransportFactory,
@@ -5316,6 +5323,154 @@ export class DaemonClient {
     });
   }
 
+  // ============================================================================
+  // Tunnel binary frames (daemon-to-daemon port forwarding)
+  // ============================================================================
+
+  private tunnelFrameListeners: Set<(frame: TunnelFrame) => void> = new Set();
+
+  onTunnelFrame(handler: (frame: TunnelFrame) => void): () => void {
+    this.tunnelFrameListeners.add(handler);
+    return () => {
+      this.tunnelFrameListeners.delete(handler);
+    };
+  }
+
+  private handleTunnelFrame(frame: TunnelFrame): void {
+    for (const handler of this.tunnelFrameListeners) {
+      try {
+        handler(frame);
+      } catch (error) {
+        this.logger.error({ err: error }, "Tunnel frame listener failed");
+      }
+    }
+  }
+
+  sendTunnelFrame(
+    opcode: TunnelFrame["opcode"],
+    tunnelId: string,
+    payload?: Uint8Array | ArrayBuffer | string,
+  ): void {
+    this.sendBinaryFrame(encodeTunnelFrame({ opcode, tunnelId, payload }));
+  }
+
+  // ============================================================================
+  // Tunnel RPCs (daemon-to-daemon port forwarding)
+  // ============================================================================
+
+  async openTunnel(remotePort: number, requestId?: string): Promise<TunnelOpenResponse["payload"]> {
+    const resolvedRequestId = this.createRequestId(requestId);
+    const message = SessionInboundMessageSchema.parse({
+      type: "tunnel.open.request",
+      remotePort,
+      requestId: resolvedRequestId,
+    });
+    const response = await this.sendRequest({
+      requestId: resolvedRequestId,
+      message,
+      options: { skipQueue: true },
+      select: (msg) => {
+        if (msg.type !== "tunnel.open.response") return null;
+        if (msg.payload.requestId !== resolvedRequestId) return null;
+        return msg.payload;
+      },
+    });
+    return response;
+  }
+
+  async listTunnels(
+    requestId?: string,
+  ): Promise<Extract<TunnelListResponse, { type: "tunnel.list.response" }>["payload"]> {
+    const resolvedRequestId = this.createRequestId(requestId);
+    const message = SessionInboundMessageSchema.parse({
+      type: "tunnel.list.request",
+      requestId: resolvedRequestId,
+    });
+    const response = await this.sendRequest({
+      requestId: resolvedRequestId,
+      message,
+      options: { skipQueue: true },
+      select: (msg) => {
+        if (msg.type !== "tunnel.list.response") return null;
+        if (msg.payload.requestId !== resolvedRequestId) return null;
+        return msg.payload;
+      },
+    });
+    return response;
+  }
+
+  async createTunnel(
+    config: {
+      peerId: string;
+      peerHostname?: string;
+      url: string;
+      password: string;
+      daemonPublicKeyB64?: string;
+      forwards: Array<{ remotePort: number; label?: string }>;
+    },
+    requestId?: string,
+  ): Promise<Extract<TunnelCreateResponse, { type: "tunnel.create.response" }>["payload"]> {
+    const resolvedRequestId = this.createRequestId(requestId);
+    const message = SessionInboundMessageSchema.parse({
+      type: "tunnel.create.request",
+      config,
+      requestId: resolvedRequestId,
+    });
+    const response = await this.sendRequest({
+      requestId: resolvedRequestId,
+      message,
+      options: { skipQueue: true },
+      select: (msg) => {
+        if (msg.type !== "tunnel.create.response") return null;
+        if (msg.payload.requestId !== resolvedRequestId) return null;
+        return msg.payload;
+      },
+    });
+    return response;
+  }
+
+  async removeTunnel(
+    peerId: string,
+    requestId?: string,
+  ): Promise<Extract<TunnelRemoveResponse, { type: "tunnel.remove.response" }>["payload"]> {
+    const resolvedRequestId = this.createRequestId(requestId);
+    const message = SessionInboundMessageSchema.parse({
+      type: "tunnel.remove.request",
+      peerId,
+      requestId: resolvedRequestId,
+    });
+    const response = await this.sendRequest({
+      requestId: resolvedRequestId,
+      message,
+      options: { skipQueue: true },
+      select: (msg) => {
+        if (msg.type !== "tunnel.remove.response") return null;
+        if (msg.payload.requestId !== resolvedRequestId) return null;
+        return msg.payload;
+      },
+    });
+    return response;
+  }
+
+  async closeTunnel(tunnelId: string, requestId?: string): Promise<void> {
+    const resolvedRequestId = this.createRequestId(requestId);
+    const message = SessionInboundMessageSchema.parse({
+      type: "tunnel.close.request",
+      tunnelId,
+      requestId: resolvedRequestId,
+    });
+    await this.sendRequest({
+      requestId: resolvedRequestId,
+      message,
+      options: { skipQueue: true },
+      select: (msg) => {
+        if (msg.type !== "tunnel.close.response") return null;
+        if (msg.payload.requestId !== resolvedRequestId) return null;
+        return msg.payload;
+      },
+    });
+  }
+
   sendTerminalInput(terminalId: string, message: TerminalInput["message"]): void {
     const frame = this.terminalStreams.encodeInput(terminalId, message);
     if (frame) {
@@ -5736,6 +5891,13 @@ export class DaemonClient {
   private tryHandleBinaryFrame(rawBytes: Uint8Array): boolean {
     const traceEnabled = this.config.trace?.isEnabled() === true;
     const receivedAtMs = traceEnabled ? perfNow() : 0;
+    const tunnelFrame = decodeTunnelFrame(rawBytes);
+    if (tunnelFrame) {
+      this.lastInboundAtMs = perfNow();
+      this.handleTunnelFrame(tunnelFrame);
+      this.runtimeMetrics?.recordBinaryFrame("other", rawBytes.byteLength, 0);
+      return true;
+    }
     const fileFrame = decodeFileTransferFrame(rawBytes);
     if (fileFrame) {
       this.traceInstant("byspace.ws.message.inbound", {

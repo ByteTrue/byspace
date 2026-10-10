@@ -743,7 +743,12 @@ function DesktopSidebar({
       style={desktopSidebarStyle}
     >
       <View style={desktopSidebarBorderStyle}>
-        <View style={styles.sidebarHeaderArea}>
+        <View
+          style={[
+            styles.sidebarHeaderArea,
+            navDisclosure.expanded ? styles.sidebarHeaderAreaExpanded : undefined,
+          ]}
+        >
           <View style={styles.sidebarTopRow}>
             <SidebarMenuToggle host="sidebar" tooltipSide="bottom" />
             <SidebarNavMenuTrigger
@@ -1020,6 +1025,11 @@ const styles = StyleSheet.create((theme) => ({
   sidebarHeaderArea: {
     borderBottomWidth: theme.borderWidth[1],
     borderBottomColor: theme.colors.border,
+  },
+  // Bottom breathing room for the revealed nav rows; the collapsed top row must stay
+  // flush with the hairline so it totals `HEADER_INNER_HEIGHT` + hairline like ScreenHeader.
+  sidebarHeaderAreaExpanded: {
+    paddingBottom: theme.spacing[2],
   },
   /**
    * The gap between the revealed nav rows and the header area's hairline lives on the rows
