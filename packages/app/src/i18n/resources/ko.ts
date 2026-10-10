@@ -423,7 +423,6 @@ export const ko: TranslationResources = {
       openToSide: "옆에 열기",
       copyPath: "경로 복사",
       copyRelativePath: "상대 경로 복사",
-      revealIn: "{{target}}에서 보기",
       download: "다운로드",
       addToChat: "채팅에 추가",
       moreActions: "추가 작업",
@@ -480,7 +479,6 @@ export const ko: TranslationResources = {
         createFailed: "항목을 만들지 못했습니다",
         renameFailed: "항목 이름을 바꾸지 못했습니다",
         duplicateFailed: "항목을 복제하지 못했습니다",
-        revealFailed: "항목을 표시하지 못했습니다",
         deleteFailed: "항목을 삭제하지 못했습니다",
       },
       draft: {

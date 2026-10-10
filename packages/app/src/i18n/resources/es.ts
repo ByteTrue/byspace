@@ -426,7 +426,6 @@ export const es: TranslationResources = {
       openToSide: "Abrir al lado",
       copyPath: "Copiar ruta",
       copyRelativePath: "Copiar ruta relativa",
-      revealIn: "Mostrar en {{target}}",
       download: "Descargar",
       addToChat: "Añadir al chat",
       moreActions: "Más acciones",
@@ -483,7 +482,6 @@ export const es: TranslationResources = {
         createFailed: "No se pudo crear la entrada",
         renameFailed: "No se pudo renombrar la entrada",
         duplicateFailed: "No se pudo duplicar la entrada",
-        revealFailed: "No se pudo mostrar la entrada",
         deleteFailed: "No se pudo eliminar la entrada",
       },
       draft: {

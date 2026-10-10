@@ -422,7 +422,6 @@ export const zhCN: TranslationResources = {
       openToSide: "在侧边打开",
       copyPath: "复制路径",
       copyRelativePath: "复制相对路径",
-      revealIn: "在 {{target}} 中显示",
       download: "下载",
       addToChat: "添加到聊天",
       moreActions: "更多操作",
@@ -479,7 +478,6 @@ export const zhCN: TranslationResources = {
         createFailed: "创建条目失败",
         renameFailed: "重命名条目失败",
         duplicateFailed: "复制条目失败",
-        revealFailed: "显示条目失败",
         deleteFailed: "删除条目失败",
       },
       draft: {

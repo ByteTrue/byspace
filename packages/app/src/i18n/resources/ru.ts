@@ -425,7 +425,6 @@ export const ru: TranslationResources = {
       openToSide: "Открыть сбоку",
       copyPath: "Копировать путь",
       copyRelativePath: "Копировать относительный путь",
-      revealIn: "Показать в {{target}}",
       download: "Скачать",
       addToChat: "Добавить в чат",
       moreActions: "Дополнительные действия",
@@ -482,7 +481,6 @@ export const ru: TranslationResources = {
         createFailed: "Не удалось создать элемент",
         renameFailed: "Не удалось переименовать элемент",
         duplicateFailed: "Не удалось создать копию элемента",
-        revealFailed: "Не удалось показать расположение элемента",
         deleteFailed: "Не удалось удалить элемент",
       },
       draft: {

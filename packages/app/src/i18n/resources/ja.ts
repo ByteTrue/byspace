@@ -426,7 +426,6 @@ export const ja: TranslationResources = {
       openToSide: "横に開く",
       copyPath: "パスをコピー",
       copyRelativePath: "相対パスをコピー",
-      revealIn: "{{target}}で表示",
       download: "ダウンロード",
       addToChat: "チャットに追加",
       moreActions: "その他のアクション",
@@ -483,7 +482,6 @@ export const ja: TranslationResources = {
         createFailed: "エントリの作成に失敗しました",
         renameFailed: "エントリの名前変更に失敗しました",
         duplicateFailed: "エントリの複製に失敗しました",
-        revealFailed: "エントリの表示に失敗しました",
         deleteFailed: "エントリの削除に失敗しました",
       },
       draft: {

@@ -1,10 +1,5 @@
 import { type Forge, forgeFromRemoteUrl, getForgePresentation } from "@/git/forge";
 import {
-  type DesktopOpenTargetIcon,
-  DesktopOpenTarget,
-  OpenDesktopTargetInput,
-} from "@/workspace/desktop-open-targets";
-import {
   type ResolvedWorkspaceFilePaths,
   resolveWorkspaceFilePaths,
   type WorkspaceFileLocation,
@@ -16,15 +11,6 @@ interface CheckoutStatusForOpenTarget {
   currentBranch?: string | null;
 }
 
-export interface PlannedDesktopOpenTarget {
-  source: "desktop";
-  id: string;
-  label: string;
-  editorId: string;
-  icon: DesktopOpenTargetIcon | undefined;
-  openInput: OpenDesktopTargetInput;
-}
-
 export interface PlannedForgeOpenTarget {
   source: "forge";
   forge: Forge;
@@ -33,15 +19,12 @@ export interface PlannedForgeOpenTarget {
   url: string;
 }
 
-export type PlannedWorkspaceOpenTarget = PlannedDesktopOpenTarget | PlannedForgeOpenTarget;
+export type PlannedWorkspaceOpenTarget = PlannedForgeOpenTarget;
 
 export interface PlanWorkspaceOpenTargetsInput {
   workspaceDirectory: string;
-  directoryPath?: string | null;
   activeFile?: WorkspaceFileLocation | null;
   resolvedActiveFile?: ResolvedWorkspaceFilePaths | null;
-  desktopTargets: readonly DesktopOpenTarget[];
-  canUseDesktopBridge: boolean;
   checkoutStatus?: CheckoutStatusForOpenTarget | null;
   forge?: Forge | null;
 }
@@ -61,59 +44,6 @@ function resolveActiveFileForOpenTargets(
         workspaceRoot: input.workspaceDirectory,
       })
     : null;
-}
-
-function planDesktopOpenTargets(input: {
-  workspaceDirectory: string;
-  directoryPath?: string | null;
-  activeFile?: WorkspaceFileLocation | null;
-  resolvedFile: ResolvedWorkspaceFilePaths | null;
-  desktopTargets: readonly DesktopOpenTarget[];
-  canUseDesktopBridge: boolean;
-}): PlannedDesktopOpenTarget[] {
-  if (!input.canUseDesktopBridge) {
-    return [];
-  }
-
-  const resolvedDirectory =
-    input.directoryPath === undefined || input.directoryPath === null
-      ? null
-      : resolveWorkspaceFilePaths({
-          path: input.directoryPath,
-          workspaceRoot: input.workspaceDirectory,
-        });
-  if (input.directoryPath !== undefined && input.directoryPath !== null) {
-    if (!resolvedDirectory?.relativePath) {
-      return [];
-    }
-  }
-  const workspacePath = resolvedDirectory?.absolutePath ?? input.workspaceDirectory;
-
-  return input.desktopTargets.map((target) => {
-    if (!input.resolvedFile) {
-      return {
-        source: "desktop",
-        id: target.id,
-        label: target.label,
-        editorId: target.id,
-        icon: target.icon as DesktopOpenTargetIcon | undefined,
-        openInput: { editorId: target.id, workspacePath },
-      };
-    }
-    return {
-      source: "desktop",
-      id: target.id,
-      label: target.label,
-      editorId: target.id,
-      icon: target.icon as DesktopOpenTargetIcon | undefined,
-      openInput: {
-        editorId: target.id,
-        workspacePath,
-        filePath: input.resolvedFile.absolutePath,
-        ...(input.activeFile?.lineStart ? { line: input.activeFile.lineStart } : {}),
-      },
-    };
-  });
 }
 
 function buildForgeWebUrl(
@@ -182,7 +112,6 @@ export function planWorkspaceOpenTargets(
   input: PlanWorkspaceOpenTargetsInput,
 ): PlannedWorkspaceOpenTarget[] {
   const resolvedFile = resolveActiveFileForOpenTargets(input);
-  const desktopTargets = planDesktopOpenTargets({ ...input, resolvedFile });
   const forgeTarget = planForgeOpenTarget({ ...input, resolvedFile });
-  return forgeTarget ? [...desktopTargets, forgeTarget] : desktopTargets;
+  return forgeTarget ? [forgeTarget] : [];
 }

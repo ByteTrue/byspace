@@ -421,7 +421,6 @@ export const en = {
       openToSide: "Open to the side",
       copyPath: "Copy path",
       copyRelativePath: "Copy relative path",
-      revealIn: "Reveal in {{target}}",
       download: "Download",
       addToChat: "Add to chat",
       moreActions: "More actions",
@@ -478,7 +477,6 @@ export const en = {
         createFailed: "Failed to create entry",
         renameFailed: "Failed to rename entry",
         duplicateFailed: "Failed to duplicate entry",
-        revealFailed: "Failed to reveal entry",
         deleteFailed: "Failed to delete entry",
       },
       draft: {

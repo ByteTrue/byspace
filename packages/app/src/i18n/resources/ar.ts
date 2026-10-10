@@ -422,7 +422,6 @@ export const ar: TranslationResources = {
       openToSide: "فتح إلى الجانب",
       copyPath: "نسخ المسار",
       copyRelativePath: "نسخ المسار النسبي",
-      revealIn: "إظهار في {{target}}",
       download: "تحميل",
       addToChat: "إضافة إلى الدردشة",
       moreActions: "المزيد من الإجراءات",
@@ -479,7 +478,6 @@ export const ar: TranslationResources = {
         createFailed: "فشل إنشاء العنصر",
         renameFailed: "فشل إعادة تسمية العنصر",
         duplicateFailed: "فشل تكرار العنصر",
-        revealFailed: "فشل إظهار العنصر",
         deleteFailed: "فشل حذف العنصر",
       },
       draft: {

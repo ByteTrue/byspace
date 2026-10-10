@@ -5,7 +5,6 @@ import { Pressable, Text, View, type PressableStateCallbackType } from "react-na
 import { useMutation } from "@tanstack/react-query";
 import { Check, ChevronDown } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { EditorTargetIcon } from "@/components/icons/editor-target-icon";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,11 +19,6 @@ import { resolvePreferredEditorId, usePreferredEditor } from "@/hooks/use-prefer
 import { openExternalUrl } from "@/utils/open-external-url";
 import { isAbsolutePath } from "@/utils/path";
 import { isWeb } from "@/constants/platform";
-import {
-  type DesktopOpenTargetIcon,
-  openDesktopTarget,
-  useDesktopOpenTargets,
-} from "@/workspace/desktop-open-targets";
 import { resolveWorkspaceFilePaths, type WorkspaceFileLocation } from "@/workspace/file-open";
 import { planWorkspaceOpenTargets } from "@/workspace/open-in-editor/planner";
 import type { Theme } from "@/styles/theme";
@@ -48,7 +42,6 @@ interface OpenTarget {
 }
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
-const ThemedEditorTargetIcon = withUnistyles(EditorTargetIcon);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedCheckIcon = withUnistyles(Check);
 
@@ -93,8 +86,6 @@ export function WorkspaceOpenInEditorButton({
   const toast = useToast();
   const isConnected = useHostRuntimeIsConnected(serverId);
   const { preferredEditorId, updatePreferredEditor } = usePreferredEditor();
-  const { targets: desktopOpenTargets, isAvailable: isDesktopOpenAvailable } =
-    useDesktopOpenTargets();
 
   const resolvedFile = useMemo(
     () =>
@@ -124,42 +115,18 @@ export function WorkspaceOpenInEditorButton({
         workspaceDirectory: cwd,
         activeFile,
         resolvedActiveFile: resolvedFile,
-        desktopTargets: desktopOpenTargets,
-        canUseDesktopBridge: isDesktopOpenAvailable,
         checkoutStatus,
         forge: resolvedForge,
       }).map((target) => {
-        if (target.source === "forge") {
-          const presentation = getForgePresentation(target.forge);
-          return {
-            id: target.id,
-            label: target.label,
-            icon: renderForgeOpenTargetIcon(presentation.icon),
-            onOpen: () => openExternalUrl(target.url),
-          };
-        }
+        const presentation = getForgePresentation(target.forge);
         return {
           id: target.id,
           label: target.label,
-          icon: (
-            <ThemedEditorTargetIcon
-              icon={target.icon as DesktopOpenTargetIcon | undefined}
-              size={16}
-              uniProps={mutedColorMapping}
-            />
-          ),
-          onOpen: () => openDesktopTarget(target.openInput),
+          icon: renderForgeOpenTargetIcon(presentation.icon),
+          onOpen: () => openExternalUrl(target.url),
         };
       }),
-    [
-      activeFile,
-      checkoutStatus,
-      cwd,
-      desktopOpenTargets,
-      resolvedForge,
-      isDesktopOpenAvailable,
-      resolvedFile,
-    ],
+    [activeFile, checkoutStatus, cwd, resolvedForge, resolvedFile],
   );
 
   const targetIds = useMemo(() => targets.map((target) => target.id), [targets]);

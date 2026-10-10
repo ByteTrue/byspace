@@ -426,7 +426,6 @@ export const ptBR: TranslationResources = {
       openToSide: "Abrir ao lado",
       copyPath: "Copiar caminho",
       copyRelativePath: "Copiar caminho relativo",
-      revealIn: "Mostrar no {{target}}",
       download: "Baixar",
       addToChat: "Adicionar ao chat",
       moreActions: "Mais ações",
@@ -483,7 +482,6 @@ export const ptBR: TranslationResources = {
         createFailed: "Falha ao criar entrada",
         renameFailed: "Falha ao renomear entrada",
         duplicateFailed: "Falha ao duplicar entrada",
-        revealFailed: "Falha ao mostrar entrada",
         deleteFailed: "Falha ao excluir entrada",
       },
       draft: {
