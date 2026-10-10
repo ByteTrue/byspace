@@ -1189,6 +1189,7 @@ export const ar: TranslationResources = {
     title: "الأنفاق",
     add: "إضافة نفق",
     empty: "لا توجد أنفاق بعد",
+    emptyDescription: "يوجّه المنافذ المسموح بها من daemon مقترن إلى هذا الجهاز.",
     noLocalDaemon: "اتصل بـ daemon على هذا الجهاز لإدارة الأنفاق",
     inboundFrom: "وارد → منفذ {{port}}",
     outboundSubtitle: "منفذ محلي {{localPort}} · {{host}}",

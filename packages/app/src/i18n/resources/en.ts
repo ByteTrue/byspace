@@ -1200,6 +1200,7 @@ export const en = {
     title: "Tunnels",
     add: "Add tunnel",
     empty: "No tunnels yet",
+    emptyDescription: "Forward a paired daemon's allowed ports to this machine.",
     noLocalDaemon: "Connect a daemon on this machine to manage tunnels",
     inboundFrom: "Inbound → port {{port}}",
     outboundSubtitle: "Local port {{localPort}} · {{host}}",

@@ -157,6 +157,38 @@ D1 以 **client 角色**经现有 relay 连 D2 的 serverId，复用 E2EE（Curv
 
 用户关闭后追问「做过真实端到端验证吗」——已有的三层 e2e（vitest in-process / supervisor 双进程 + 本地 relay / 浏览器 GUI）全部走本地 Node relay，缺公网链路一跳。补 `tunnel.live-relay.e2e.test.ts`（仿 live-relay.e2e.test.ts 的 `RUN_LIVE_RELAY_E2E=1` 门控）：双 in-process daemon，D2 的 relay 指向真实 `relay.byspace.cc.cd:443`（Cloudflare Worker、TLS、公网往返），D1 侧 TunnelManager 连同一公网 relay，验证完整转发——**1 passed（24.8s）**，`hello from live d2 path=/live` 字节级断言通过。至此验证矩阵闭合：本地 Node relay（3 层）+ 官方公网 CF relay（1 层）。
 
+### 2026-10-09 · 关闭后补充：Owner UI 走查修复（tunnels 页 + add-tunnel sheet）
+
+Owner 真实浏览器走查两轮，暴露的都不是逻辑 bug 而是输入面视觉缺失，逐项修复（verify 分支 a5451e866）：
+
+- **顶栏 hairline 错位 7px**：侧栏顶行与 `ScreenHeader` 各写各的高度（44 vs 37）。修法：侧栏顶行精确取 `HEADER_INNER_HEIGHT`，展开态 nav 行的下边距拆到独立样式——收起时两行 hairline 落在同一像素（DOM 实测 36.7 vs 36.7）。
+- **allowlist 空态文字糊在卡片边上**：`{...settingsStyles.row}` 把 Unistyles 样式跨 `StyleSheet.create` spread,padding 全部丢失。修法：渲染时数组组合 `[settingsStyles.row, styles.allowlistEmptyText]`。**教训：Unistyles 样式对象禁止跨表 spread**（`docs/unistyles.md` 的 `?? "connecting"` 家族坑,enable-card 行此前同病）。
+- **add-tunnel sheet 三个输入框全是裸文本**:062 批次 3 用裸 `AdaptiveTextInput` 而不是表单原语——Owner 原话"一眼看上去都不知道哪里能输入"。修法:整 sheet 换 `Field` + `FormTextInput`(schedule 表单同款),allowlist 添加行同步。自查全仓其余调用点,均有自带 chrome,tunnels 是唯一漏网。
+- **冷深链 /tunnels 永远 Loading**:查询把 `{status:"connecting"}` 缓存后无人 refetch。修法照 `useSchedules` 契约:connectionStatus 进 queryKey。
+- 页面结构:Experimental 变 StatusBadge、空态进卡片(icon+描述+CTA)、工具栏按钮转 outline、允许的端口添加行加分隔线。
+
+验证:typecheck/lint/format 0 违规,i18n 54/54,DOM 实测(内边距 16px、接缝对齐、chrome 生效)。
+
+### 2026-10-09 · 关闭后补充：真双机验证（Windows 宿主 D1 + WSL D2，公网 CF relay）——全项通过
+
+环境：D2 = WSL2 Ubuntu-24.04（Node 22.20，repo 的 .mise.toml 自动接管；仓库在 WSL ext4 `~/byspace-tunnel`，commit fd0229dd9）；D1 = Windows 宿主（worktree，同 commit）。两侧 `npm install && npm run build:server`，D1 另跑 `build:daemon-web-ui`。独立 BYSPACE_HOME 各持 bcrypt 密码 + `tunnel.enabled` + D2 白名单 [3000] + relay `relay.byspace.cc.cd:443`；D2 起 vite :3000 作为被转发服务；D1 用真实 Edge 浏览器走产品 UI（Welcome → Direct connection → 命令中心 → Tunnels → Add tunnel）。
+
+- [x] D2 在线、offer 生成（`daemon pair --json`，serverId srv_MGwoebz9oZB8）。坑：daemon 设密码后 CLI 连本机 daemon 也要密码，手册命令需加 `BYSPACE_PASSWORD`（已回填本手册 D2 块）。
+- [x] D1 add-tunnel（GUI 表单）成功，outbound 行 state=connected；D1 日志 `Tunnel local listener ready remotePort=3000 localPort=51787` → `connected`；D2 日志确认对端 `transport:relay clientId:byspace-tunnel-srv_…`，`tunnel.open.request` → response 1ms。
+- [x] Windows 侧 `curl 127.0.0.1:51787` 与浏览器渲染均返回 WSL vite 页面，内容与 WSL 内 `curl 127.0.0.1:3000` 一致。
+- [x] 杀 D2 daemon → 约 1s 内行转 disconnected（D1 日志），期间本地端口连接被 reset（已知行为复现）；D2 重启 → 约 3s 自动 connecting → connected，51787 恢复 200，零人工干预。
+- [x] 白名单拒绝：用 9999（白名单外）重建隧道，`curl 127.0.0.1:58849` → 连接被接受后 open 被拒、Empty reply；D2 日志 `Tunnel open denied: port not in allowlist`（level 40）；UI 行态 Connecting，lastError 已入库（tunnels-screen.tsx:306 渲染路径存在，本机未观察到文案，连接态聚合规则见 tunnel-registry aggregateState）。
+- [x] HMR：vite client 经隧道端口注入并建 WebSocket（ws://127.0.0.1:51787）；WSL 内改 main.js → Windows 浏览器无刷新热更（v1→v2），点击状态 count 保留，证明是 HMR 而非整页 reload。
+
+现象（非阻塞，记录在案）：
+
+1. **深链/刷新 `/tunnels` 可能停 Loading**：host runtime 尚在 connecting 时 useTunnels 首跑立即 resolve `{status:"connecting"}` 并被 react-query 缓存，host 上线后无 push 事件触发 refetch（`refetchOnMount:"always"` 只在挂载时生效）。真实用户路径（先落首页等在线，再 SPA 导航进 Tunnels）正常。候选 note：错峰进入 fetch 类页面的通病，schedules 可能同样中招。
+2. 隧道建立后、对端首连前访问本地端口被拒——批次 3 已记录的已知行为，本次复现一致。
+
+环境坑（复现双机验证用）：WSL 内 git clone gnutls 偶发 TLS 失败（用本地克隆绕开）；repo `.mise.toml` 在新路径需 `mise trust`；git-bash 调 wsl.exe 时 `$HOME` 被外层展开，`BYSPACE_HOME` 必须写 WSL 绝对路径；Edge 密码管理器扩展会在 CDP 往密码框填充后锁住该 tab（automation 侧坑，非产品问题）。
+
+**结论：双机真实验证全项通过。验证矩阵闭合：本地 Node relay 三层 + 公网 CF relay live e2e + 真双机经公网 relay。**
+
 ## 关闭结论（候选，待用户授权关闭）
 
 - **判断**：四个批次全部交付并验证——协议（8 组 RPC + 二进制帧 + mutable config 链）、D2 目标端（双门槛 + 帧泵）、D1 发起端（内嵌客户端 + 本地 listener + 持久化 registry）、app GUI（独立路由 + 白名单 + 添加 sheet + 9 locale）、spec/docs 回写。范围未暗扩：agent 跨机、反向隧道、relay 成员网络、CLI 入口均未做。
@@ -203,7 +235,8 @@ EOF
 BYSPACE_HOME=$HOME/d2-home BYSPACE_LISTEN=127.0.0.1:16777 \
   npx tsx packages/server/scripts/supervisor-entrypoint.ts --dev &
 sleep 5
-BYSPACE_HOME=$HOME/d2-home npx tsx packages/cli/src/index.ts daemon pair   # 打印 pairing link
+# daemon 设了密码时 CLI 也要密码才能连上本机 daemon 取 offer：
+BYSPACE_HOME=$HOME/d2-home BYSPACE_PASSWORD='<D2密码明文>' npx tsx packages/cli/src/index.ts daemon pair   # 打印 pairing link
 ```
 
 `daemon pair` 生成的 offer 自带 relay endpoint 与 D2 公钥，把它交给 D1 侧。

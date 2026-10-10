@@ -1197,6 +1197,7 @@ export const ko: TranslationResources = {
     title: "터널",
     add: "터널 추가",
     empty: "아직 터널이 없습니다",
+    emptyDescription: "페어링된 데몬의 허용 포트를 이 머신으로 전달합니다.",
     noLocalDaemon: "이 머신의 daemon에 연결하면 터널을 관리할 수 있습니다",
     inboundFrom: "인바운드 → 포트 {{port}}",
     outboundSubtitle: "로컬 포트 {{localPort}} · {{host}}",

@@ -1,6 +1,10 @@
 import { useMemo } from "react";
 import { useFetchQuery } from "@/data/query";
-import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
+import {
+  getHostRuntimeStore,
+  useHostRuntimeConnectionStatuses,
+  useHosts,
+} from "@/runtime/host-runtime";
 import {
   fetchAggregatedTunnels,
   tunnelsQueryBaseKey,
@@ -17,8 +21,16 @@ export function useTunnels(): {
   const hosts = useHosts();
   const runtime = getHostRuntimeStore();
   const serverIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
+  // Connection statuses live in the query key (same contract as useSchedules):
+  // a cold deep-link would otherwise cache the aggregate's {status:"connecting"}
+  // result and nothing would refetch once a host actually connects.
+  const connectionStatuses = useHostRuntimeConnectionStatuses(serverIds);
+  const connectionStatusKey = useMemo(
+    () => serverIds.map((serverId) => connectionStatuses.get(serverId) ?? "connecting").join("|"),
+    [connectionStatuses, serverIds],
+  );
   const query = useFetchQuery({
-    queryKey: [...tunnelsQueryBaseKey, [...serverIds].sort().join("|")],
+    queryKey: [...tunnelsQueryBaseKey, [...serverIds].sort().join("|"), connectionStatusKey],
     queryFn: () =>
       fetchAggregatedTunnels({
         hosts: hosts.map((host) => ({ serverId: host.serverId, serverName: host.label })),

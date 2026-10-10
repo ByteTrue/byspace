@@ -84,6 +84,9 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  // Tests leave the opened tunnel socket connected to the echo server; close()
+  // waits for existing connections and would hang without this.
+  echoServer.closeAllConnections();
   await new Promise<void>((resolve) => echoServer.close(() => resolve()));
 });
 
