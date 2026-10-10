@@ -4,7 +4,7 @@ import { usePathname } from "expo-router";
 import { useHosts } from "@/runtime/host-runtime";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useRouter } from "expo-router";
-import { useEarliestOnlineHostServerId } from "@/app/_layout";
+import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { parseServerIdFromPathname } from "@/utils/host-routes";
 import { useChiefStore } from "./chief-store";
 import { useChiefAgent } from "./use-chief-agent";
@@ -30,7 +30,7 @@ export const ChiefPanelHost = memo(function ChiefPanelHost(): ReactElement | nul
   // Use the first connected host as the "current" host. The host switcher in
   // the floating window navigates to a different host root.
   const pathServerId = useMemo(() => parseServerIdFromPathname(pathname), [pathname]);
-  const earliestOnlineServerId = useEarliestOnlineHostServerId();
+  const earliestOnlineServerId = getHostRuntimeStore().getEarliestOnlineHostServerId();
   const currentServerId = useMemo(() => {
     if (pathServerId && hosts.some((host) => host.serverId === pathServerId)) {
       return pathServerId;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { getHostRuntimeStore, useHostRuntimeClient } from "@/runtime/host-runtime";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 
@@ -71,12 +71,27 @@ async function createChiefAgent(
  */
 export function useChiefAgent(serverId: string | null): ChiefAgentState {
   const store = getHostRuntimeStore();
-  const hosts = store.getHosts();
   const client = useHostRuntimeClient(serverId ?? "");
-  // The URL host may hold an expired serverId (daemon restarts generate a
-  // new one). Fall back to any host that has a live client.
-  const effectiveClient =
-    client ?? hosts.map((h) => store.getClient(h.serverId)).find((c) => c !== null) ?? null;
+  // Reactively find the first live client across all hosts. The URL host's
+  // serverId may be stale after a daemon restart; the runtime reconciles
+  // serverIds on reconnect, and a global listen catches the rekey.
+  const subscribeAll = useCallback(
+    (onStoreChange: () => void) => store.subscribeAll(onStoreChange),
+    [store],
+  );
+  const effectiveClient = useSyncExternalStore(
+    subscribeAll,
+    () => {
+      if (client) return client;
+      for (const host of store.getHosts()) {
+        const c = store.getClient(host.serverId);
+        if (c) return c;
+      }
+      return null;
+    },
+    () => null,
+  );
+
   const isClientReady = effectiveClient !== null;
 
   const [state, setState] = useState<ChiefAgentState>({ tag: "loading" });
