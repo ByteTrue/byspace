@@ -97,16 +97,27 @@ issues/061-x-self-hosted-web-relay-containers.md（PR #13）把自托管产物�
 
 - relay typecheck ✅；relay 套件 75 tests（真实 dist 与 fixture-only 两种模式）✅；`wrangler deploy --dry-run`（main + beta env）✅；ci-workflow 守卫 11+2 ✅；docs-links ✅；server typecheck ✅；format ✅。
 
-### Cutover runbook（待用户授权，按序执行）
+### Cutover runbook（2026-10-10 已执行完毕）
 
-1. `npm run deploy:hosted` — Worker 上线新版本，`relay.byspace.cc.cd/` 开始服务 web UI（`/ws` `/health` 不变）。
-2. 手机/浏览器打开 `relay.byspace.cc.cd` 验证完整 app 可用、同源 relay 连接正常。
-3. 低峰窗口：Cloudflare 控制台把 `app.byspace.cc.cd` 从 Pages 项目 `byspace` 解绑 → 取消注释 `wrangler.toml` 里的 app route → 再跑 `npm run deploy:hosted`。
-4. 验证 `app.byspace.cc.cd`（域名未变：已装 PWA、localStorage host 配置、`#offer` 配对链接全部不受影响）。
-5. beta 同理（解绑 `app-beta` → 取消注释 → `npm run deploy:hosted:beta`），或拍板退役 beta 渠道。
-6. Pages 两项目删除或保留一段只读期。
+实际执行与计划的偏差：
 
-出问题回退：`wrangler rollback`（UI+relay 整体回退）；域名可随时从 Worker 解绑回 Pages。
+- **`wrangler.toml` 的 `account_id` 一直是错的**（`10ed39a1…`，v0.10.0 写入；真实账号 `835cd580…`）。本机从未成功过 `wrangler deploy`——「手动部署 relay」的约定实际从未在本机发生。已修正。
+- Workers 自定义域拒绝挂载到「有外部 DNS 记录」的主机名：Pages 解绑不清理 DNS，需要先删 zone 里的 CNAME。wrangler OAuth token 没有 `dns_records` 写权限，这步用 browser-skill 在控制台完成（两次，cc.cd 与 de5.net 各一）。
+- 用户授权跳过低峰窗口（唯一用户），cutover 一步到底。
+
+执行结果（当日全绿）：
+
+| 域名                                | 归属                        | 验证                                                                                                                                                |
+| ----------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `relay.byspace.cc.cd`               | Worker `byspace-relay`      | `/` 200、`/ws` 400（worker-first）、live-relay E2E 握手通过                                                                                         |
+| `app.byspace.cc.cd`                 | Worker `byspace-relay`      | 全路由 200 + live-relay E2EE 握手（`BYSPACE_LIVE_RELAY_URL=wss://app.byspace.cc.cd`）通过；origin 未变，已装 PWA/localStorage/`#offer` 链接不受影响 |
+| `app.byspace.zijieapi.de5.net`      | Worker `byspace-relay`      | 200（paseo 时代备用域名，迁到 Worker 保活而非砍掉）                                                                                                 |
+| `app-beta.byspace.cc.cd`            | Worker `byspace-relay-beta` | 200；Workers env 隔离，DO 独立命名空间                                                                                                              |
+| `app-beta.byspace.zijieapi.de5.net` | Worker `byspace-relay-beta` | 200（DNS 传播后）                                                                                                                                   |
+
+Pages 项目 `byspace` / `byspace-beta` 已删除（`*.pages.dev` 域名随之 530 失效）；`byspace-landing`（着陆页）与 `paseo-*`（另一产品遗留）不动。三域 `/` body hash 一致（同一份产物）。
+
+回退：`wrangler rollback`（UI+relay 整体）；域名可从 Worker 解绑（但 Pages 项目已删，如需回 Pages 需重建项目）。
 
 ### 关闭候选
 
