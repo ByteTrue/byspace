@@ -51,7 +51,10 @@ function rewriteLinks(token) {
     const mdMatch = href.match(/^(?:\.\/)?([^#]*\.md)(#.*)?$/);
     if (mdMatch) {
       const stripped = mdMatch[1].replace(/\.md$/, "").replace(/^\.\//, "");
-      child.attrSet("href", "/docs/" + (REWRITE_DIR ? REWRITE_DIR + "/" : "") + stripped + (mdMatch[2] ?? ""));
+      child.attrSet(
+        "href",
+        "/docs/" + (REWRITE_DIR ? REWRITE_DIR + "/" : "") + stripped + (mdMatch[2] ?? ""),
+      );
     }
   }
 }
@@ -159,7 +162,11 @@ async function main() {
   const sortedGroups = [...groups.entries()]
     .map(([name, list]) => ({
       name,
-      list: list.sort((a, b) => Number(a.fm.order ?? 999) - Number(b.fm.order ?? 999) || String(a.fm.nav ?? "").localeCompare(String(b.fm.nav ?? ""))),
+      list: list.sort(
+        (a, b) =>
+          Number(a.fm.order ?? 999) - Number(b.fm.order ?? 999) ||
+          String(a.fm.nav ?? "").localeCompare(String(b.fm.nav ?? "")),
+      ),
     }))
     .sort((a, b) => {
       const min = (g) => Math.min(...g.list.map((p) => Number(p.fm.order ?? 999)));
@@ -170,16 +177,16 @@ async function main() {
     .map(
       (group) =>
         `<h3>${esc(group.name)}</h3>` +
-        group.list.map((p) => {
-          // Directory index routes collapse to the directory with a trailing
-          // slash ("sdk/index" -> "/docs/sdk/", top "index" -> "/docs/") so
-          // Workers assets serves them directly instead of a 307 hop.
-          const href =
-            p.route === "index"
-              ? "/docs/"
-              : "/docs/" + p.route.replace(/\/index$/, "/");
-          return `<a href="${esc(href)}">${esc(p.fm.nav ?? p.fm.title ?? p.route)}</a>`;
-        }).join(""),
+        group.list
+          .map((p) => {
+            // Directory index routes collapse to the directory with a trailing
+            // slash ("sdk/index" -> "/docs/sdk/", top "index" -> "/docs/") so
+            // Workers assets serves them directly instead of a 307 hop.
+            const href =
+              p.route === "index" ? "/docs/" : "/docs/" + p.route.replace(/\/index$/, "/");
+            return `<a href="${esc(href)}">${esc(p.fm.nav ?? p.fm.title ?? p.route)}</a>`;
+          })
+          .join(""),
     )
     .join("");
 
@@ -196,9 +203,7 @@ async function main() {
     const outFile = join(OUT_DOCS, page.route + ".html");
     // Canonical nav href for this page, matching the rewrite above.
     const activeHref =
-      page.route === "index"
-        ? "/docs/"
-        : "/docs/" + page.route.replace(/\/index$/, "/");
+      page.route === "index" ? "/docs/" : "/docs/" + page.route.replace(/\/index$/, "/");
     const navWithActive = navHtml.replace(
       'href="' + esc(activeHref) + '"',
       'class="active" href="' + esc(activeHref) + '"',

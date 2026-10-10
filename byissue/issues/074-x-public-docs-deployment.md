@@ -58,6 +58,16 @@ Pages 时代它同样是坏链（同一回落行为），所以这不是 073 引
 - `docs-links.test.mjs` 的 EXTERNAL_ROUTES 与真实部署位置一致。
 - 发布流程（release.md）覆盖文档更新路径。
 
+## 执行记录（2026-10-10，当日交付并上线）
+
+- `packages/app/scripts/build-public-docs.mjs`：markdown-it 渲染 35 页 + CHANGELOG → `dist/docs/` + `dist/changelog.html`，挂进 `build:web`（`build:docs`）；链接重写（`./x.md#anchor` → `/docs/x#anchor`）、frontmatter 生成侧栏导航与分组、目录型路由带尾斜杠（省 307）、active 高亮按规范化 href 匹配。
+- `docs-links.test.mjs`：EXTERNAL_ROUTES 只剩 `/download`，误导注释修正。Dockerfile 断言 docs 产物存在——自托管容器随发版自动获得 `/docs`（同形状哲学延伸，零配置）。
+- 顺手修：`public-docs/cli.md` 的坏 frontmatter（`category: Orchestration---`）。
+- 遗留边界处置：`/docs/sdk` 引用 URL 生产验证 200 真实文档；`./events.md#anchor` 重写已覆盖；CHANGELOG 单页 231KB（gzip 后更小，可接受，不分页）。
+- v1 取舍：code 块无语法高亮、单页 changelog；需要时再加。
+- 验证：本地 wrangler dev 全路由（含 307 规范化）→ 生产 `/docs` `/docs/sdk` `/changelog` 200 + title/h2 内容真实 + body hash 与 app index.html 不同；deploy 途中 asset upload 网络瞬态由 wrangler 重试自愈。
+- 用户手机验收通过。
+
 ## 决策记录
 
 - **2026-10-10** 用户拍板：从 issues/073-x-web-into-relay-worker.md 的尾巴独立成 issue，发现现场保留在其执行记录里。
