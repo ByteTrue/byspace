@@ -2,7 +2,6 @@
 kind: issue
 title: "修复 .mise.toml 在 Windows 原生终端下 HOME 未定义及路径不兼容"
 type: ff
-status: closed
 created: 2026-09-09
 ---
 

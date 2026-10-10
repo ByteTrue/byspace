@@ -107,19 +107,9 @@ We still recommend the relay for mobile access, it combines authentication with 
 
 ## Docker self-hosting
 
-The official Docker image runs the daemon and bundled web UI in one container. It binds to `0.0.0.0:6777` inside the container so Docker port publishing and reverse proxies work normally.
+The official container serves the web UI (static files) and a self-hosted relay from one image. It runs no agents, so it holds no credentials. See [Docker](/docs/docker) for Compose, TLS, and connecting your daemon.
 
-For Docker deployments:
-
-- Set `BYSPACE_PASSWORD` before publishing the port to a LAN, VPN, or public address.
-- Use HTTPS at your reverse proxy for browser access outside localhost.
-- Set `BYSPACE_HOSTNAMES` for any DNS names you use to reach the container.
-- Keep `/workspace` mounts scoped to repositories the agents should be able to read and write.
-- Treat `/home/byspace` as sensitive, it can contain daemon state and provider credentials.
-
-The image runs the daemon and launched agents as the non-root `byspace` user, but container user isolation is not a substitute for careful mounts. Agents can still access whatever code and credentials you mount into the container.
-
-See [Docker](/docs/docker) for Compose and reverse proxy examples.
+If you run the daemon itself in a container (see [Running the daemon in a container](/docs/docker#running-the-daemon-in-a-container)), it runs as whatever user your image chooses. Container user isolation is not a substitute for careful mounts: agents can access whatever code and credentials you mount into the container. Set a password before publishing the daemon port, and keep mounts scoped to what the agents should reach.
 
 ## Agent authentication
 

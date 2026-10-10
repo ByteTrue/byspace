@@ -1,7 +1,6 @@
 ---
 kind: epic
 title: "吸收 orca 的 terminal agent 体验"
-status: open
 owner_decision: approved
 created: 2026-09-09
 amended_at: 2026-09-09

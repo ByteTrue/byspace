@@ -421,7 +421,6 @@ export const en = {
       openToSide: "Open to the side",
       copyPath: "Copy path",
       copyRelativePath: "Copy relative path",
-      revealIn: "Reveal in {{target}}",
       download: "Download",
       addToChat: "Add to chat",
       moreActions: "More actions",
@@ -478,7 +477,6 @@ export const en = {
         createFailed: "Failed to create entry",
         renameFailed: "Failed to rename entry",
         duplicateFailed: "Failed to duplicate entry",
-        revealFailed: "Failed to reveal entry",
         deleteFailed: "Failed to delete entry",
       },
       draft: {
@@ -1192,6 +1190,8 @@ export const en = {
         hostDisconnected: "Host is not connected",
         hideFailed: "Failed to hide workspace",
         archiveFailed: "Failed to archive workspace",
+        archiveDirectoryRemovalFailed:
+          "Workspace archived, but its folder could not be fully removed. Close programs using it and delete the folder manually.",
       },
     },
   },
@@ -1942,17 +1942,15 @@ export const en = {
         description: "Lines kept in the built-in terminal buffer",
         accessibilityLabel: "Terminal scrollback lines",
       },
-      autoExpandReasoning: {
-        label: "Always expand reasoning",
-        description: "Show agent thinking and chain-of-thought blocks fully expanded by default",
-      },
-      toolCallDetail: {
-        label: "Tool call display",
-        description: "How tool calls appear in the timeline",
-        accessibilityLabel: "Select tool call display ({{value}})",
+      timelineDetail: {
+        label: "Timeline detail",
+        description: "How thinking and tool calls appear in the timeline",
+        accessibilityLabel: "Select timeline detail ({{value}})",
         options: {
-          overview: "Summary",
-          detailed: "Full detail",
+          overview: "Collapse all",
+          detailed: "Collapse details",
+          live: "Show latest thinking",
+          expanded: "Expand all",
         },
       },
       language: {
@@ -2540,6 +2538,24 @@ export const en = {
       },
     },
     project: {
+      defaultHost: {
+        label: "Default host for new workspaces",
+        automatic: "Automatic",
+        hint: "Preselected when creating a workspace for this project",
+        saveFailed: "Could not save the default host",
+      },
+      defaultIsolation: {
+        label: "Default isolation for new workspaces",
+        automatic: "Automatic",
+        hint: "Preselected when creating a workspace for this project",
+        saveFailed: "Could not save the default isolation",
+      },
+      defaultBaseBranch: {
+        label: "Default base branch for new worktrees",
+        automatic: "Automatic",
+        hint: "New worktrees for this project branch off this branch",
+        saveFailed: "Could not save the default base branch",
+      },
       noEditableTarget: "This project isn't editable on this host.",
       backToProjects: "Back to projects",
       edit: {

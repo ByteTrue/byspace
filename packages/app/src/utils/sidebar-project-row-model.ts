@@ -84,14 +84,23 @@ export function resolveSidebarProjectLocalPath(
 function resolveNewWorkspaceTarget(
   project: SidebarProjectEntry,
   supportsMultiplicityByServerId: ReadonlyMap<string, boolean>,
+  preferredServerIds: readonly string[],
 ): SidebarProjectHostTarget | null {
-  for (const host of project.hosts) {
-    if (
-      host.worktreeSupport === "unsupported" &&
-      !supportsMultiplicityByServerId.get(host.serverId)
-    ) {
-      continue;
-    }
+  const eligibleHosts = project.hosts.filter(
+    (host) =>
+      host.worktreeSupport !== "unsupported" ||
+      supportsMultiplicityByServerId.get(host.serverId) === true,
+  );
+  // The trailing action's host becomes the new-workspace route's serverId, and the
+  // screen's resolver honors a known route serverId unconditionally — so the 062
+  // default-host preference (project pin, then the local daemon host) has to be
+  // applied here. A preferred host that does not carry the project is skipped.
+  for (const preferredServerId of preferredServerIds) {
+    const host = eligibleHosts.find((candidate) => candidate.serverId === preferredServerId);
+    const target = host ? hostTarget(host) : null;
+    if (target) return target;
+  }
+  for (const host of eligibleHosts) {
     const target = hostTarget(host);
     if (target) return target;
   }
@@ -101,20 +110,77 @@ function resolveNewWorkspaceTarget(
 function projectTrailingAction(
   project: SidebarProjectEntry,
   supportsMultiplicityByServerId: ReadonlyMap<string, boolean>,
+  preferredServerIds: readonly string[],
 ): SidebarProjectTrailingAction {
-  const target = resolveNewWorkspaceTarget(project, supportsMultiplicityByServerId);
+  const target = resolveNewWorkspaceTarget(
+    project,
+    supportsMultiplicityByServerId,
+    preferredServerIds,
+  );
   return target ? { kind: "new_workspace", target } : { kind: "none" };
+}
+
+// Preferred hosts for the sidebar's "+" entry (issue 067): the project's pinned host when
+// online, then the local daemon host when online and different. Offline hosts don't count,
+// matching the new-workspace screen's stale-pin rule.
+export function buildPreferredServerIdsByProjectViewKey(input: {
+  projects: ReadonlyArray<{ viewKey: string }>;
+  defaultHostByProject: Record<string, string | undefined>;
+  hostConnectionStatusByServerId: ReadonlyMap<string, string>;
+  localServerId: string | null;
+}): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (const project of input.projects) {
+    const pinnedServerId = input.defaultHostByProject[project.viewKey];
+    const preferred: string[] = [];
+    if (pinnedServerId && input.hostConnectionStatusByServerId.get(pinnedServerId) === "online") {
+      preferred.push(pinnedServerId);
+    }
+    if (
+      input.localServerId &&
+      input.localServerId !== pinnedServerId &&
+      input.hostConnectionStatusByServerId.get(input.localServerId) === "online"
+    ) {
+      preferred.push(input.localServerId);
+    }
+    if (preferred.length > 0) {
+      map.set(project.viewKey, preferred);
+    }
+  }
+  return map;
+}
+
+// Content equality for the map above. The connection-status hook returns a fresh Map on
+// every host-runtime emit (agent output bumps the aggregate version), so the sidebar's
+// memo must reuse the previous instance unless a preferred id actually changed —
+// otherwise every unrelated emit re-renders the whole project list.
+export function isSamePreferredServerIds(
+  prev: ReadonlyMap<string, readonly string[]>,
+  next: ReadonlyMap<string, readonly string[]>,
+): boolean {
+  if (prev.size !== next.size) return false;
+  for (const [viewKey, ids] of next) {
+    const prevIds = prev.get(viewKey);
+    if (!prevIds || prevIds.length !== ids.length) return false;
+    for (let index = 0; index < ids.length; index++) {
+      if (prevIds[index] !== ids[index]) return false;
+    }
+  }
+  return true;
 }
 
 export function buildSidebarProjectRowModel(input: {
   project: SidebarProjectEntry;
   supportsMultiplicityByServerId?: ReadonlyMap<string, boolean>;
+  /** Hosts tried before project.hosts order: the project's pinned host, then the local daemon host. Callers drop offline ones (issue 062 stale-pin rule). */
+  preferredServerIds?: readonly string[];
 }): SidebarProjectRowModel {
   return {
     kind: "project_section",
     trailingAction: projectTrailingAction(
       input.project,
       input.supportsMultiplicityByServerId ?? EMPTY_MULTIPLICITY_MAP,
+      input.preferredServerIds ?? [],
     ),
   };
 }

@@ -75,8 +75,6 @@ import {
 import { useWorkspaceFileDragSource } from "@/attachments/use-workspace-file-drag-source";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { useToast } from "@/contexts/toast-context";
-import { openDesktopTarget, useDesktopOpenTargets } from "@/workspace/desktop-open-targets";
-import { useOpenDirectoryInEditor } from "@/workspace/open-in-editor/directory";
 
 const SORT_OPTIONS: { value: SortOption }[] = [
   { value: "name" },
@@ -113,10 +111,6 @@ interface TreeRowItemProps {
   onSelectEntry: (entry: ExplorerEntry) => void;
   onCopyPath: (path: string) => void;
   onCopyRelativePath: (path: string) => void;
-  onOpenInEditor?: (entry: ExplorerEntry) => void;
-  editorTargetName?: string;
-  onRevealEntry?: (entry: ExplorerEntry) => void;
-  revealTargetName?: string;
   onDownloadEntry: (entry: ExplorerEntry) => void;
   onAddToChat?: (path: string) => void;
   onOpenFileToSide?: (path: string) => void;
@@ -239,10 +233,6 @@ function TreeRowItem({
   onSelectEntry,
   onCopyPath,
   onCopyRelativePath,
-  onOpenInEditor,
-  editorTargetName,
-  onRevealEntry,
-  revealTargetName,
   onDownloadEntry,
   onAddToChat,
   onOpenFileToSide,
@@ -293,14 +283,6 @@ function TreeRowItem({
   const handleCopyRelativePath = useCallback(() => {
     onCopyRelativePath(entry.path);
   }, [onCopyRelativePath, entry.path]);
-
-  const handleOpenInEditor = useCallback(() => {
-    onOpenInEditor?.(entry);
-  }, [entry, onOpenInEditor]);
-
-  const handleReveal = useCallback(() => {
-    onRevealEntry?.(entry);
-  }, [onRevealEntry, entry]);
 
   const handleDownload = useCallback(() => {
     onDownloadEntry(entry);
@@ -374,12 +356,8 @@ function TreeRowItem({
       </ContextMenuTrigger>
       <FileActionsContextMenuContent
         fileKind={entry.kind}
-        onOpenInEditor={isDirectory && onOpenInEditor ? handleOpenInEditor : undefined}
-        editorTargetName={editorTargetName}
         onCopyPath={handleCopy}
         onCopyRelativePath={handleCopyRelativePath}
-        onReveal={onRevealEntry ? handleReveal : undefined}
-        revealTargetName={revealTargetName}
         onDownload={handleDownload}
         onAddToChat={onAddToChat ? handleAddToChat : undefined}
         onOpenToSide={!isDirectory && onOpenFileToSide ? handleOpenToSide : undefined}
@@ -444,11 +422,6 @@ export function FileExplorerPane({
     workspaceRoot: normalizedWorkspaceRoot,
   });
   const toast = useToast();
-  const { targets: desktopOpenTargets } = useDesktopOpenTargets();
-  const fileManagerTarget = desktopOpenTargets.find((target) => target.kind === "file-manager");
-  const openDirectoryInEditor = useOpenDirectoryInEditor({
-    workspaceDirectory: normalizedWorkspaceRoot,
-  });
   // COMPAT(fsEntryOps): added in v0.3.0, remove gate after 2027-02-08.
   const fsEntryOpsEnabled = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.fsEntryOps === true,
@@ -594,34 +567,6 @@ export function FileExplorerPane({
   const handleCopyRelativePath = useCallback(async (path: string) => {
     await Clipboard.setStringAsync(path);
   }, []);
-
-  const handleRevealEntry = useCallback(
-    async (entry: ExplorerEntry) => {
-      if (!fileManagerTarget) {
-        return;
-      }
-      try {
-        await openDesktopTarget({
-          editorId: fileManagerTarget.id,
-          workspacePath: normalizedWorkspaceRoot,
-          filePath: buildAbsoluteExplorerPath({
-            workspaceRoot: normalizedWorkspaceRoot,
-            entryPath: entry.path,
-          }),
-        });
-      } catch (cause) {
-        toast.error(
-          cause instanceof Error ? cause.message : t("workspace.fileExplorer.errors.revealFailed"),
-        );
-      }
-    },
-    [fileManagerTarget, normalizedWorkspaceRoot, t, toast],
-  );
-
-  const handleOpenDirectoryInEditor = useCallback(
-    (entry: ExplorerEntry) => openDirectoryInEditor?.open(entry.path),
-    [openDirectoryInEditor],
-  );
 
   const handleDownloadEntry = useCallback(
     (entry: ExplorerEntry) => {
@@ -974,10 +919,6 @@ export function FileExplorerPane({
           onSelectEntry={handleSelectEntry}
           onCopyPath={handleCopyPath}
           onCopyRelativePath={handleCopyRelativePath}
-          onOpenInEditor={openDirectoryInEditor ? handleOpenDirectoryInEditor : undefined}
-          editorTargetName={openDirectoryInEditor?.targetName}
-          onRevealEntry={fileManagerTarget ? handleRevealEntry : undefined}
-          revealTargetName={fileManagerTarget?.label}
           onDownloadEntry={handleDownloadEntry}
           onAddToChat={onAddToChat}
           onOpenFileToSide={onOpenFileToSide}
@@ -996,7 +937,6 @@ export function FileExplorerPane({
       handleCollapseDirectory,
       handleCopyPath,
       handleCopyRelativePath,
-      handleOpenDirectoryInEditor,
       handleDeleteEntry,
       handleDownloadEntry,
       handleDraftCommit,
@@ -1006,11 +946,8 @@ export function FileExplorerPane({
       handleNewEntry,
       handleRenameCommit,
       handleRenameEntry,
-      handleRevealEntry,
       handleSelectEntry,
       isDirectoryLoading,
-      fileManagerTarget,
-      openDirectoryInEditor,
       selectedEntryPath,
       onAddToChat,
       onOpenFileToSide,
@@ -1443,10 +1380,6 @@ function TreeRowDispatcher({
   onSelectEntry,
   onCopyPath,
   onCopyRelativePath,
-  onOpenInEditor,
-  editorTargetName,
-  onRevealEntry,
-  revealTargetName,
   onDownloadEntry,
   onAddToChat,
   onOpenFileToSide,
@@ -1467,10 +1400,6 @@ function TreeRowDispatcher({
   onSelectEntry: (entry: ExplorerEntry) => void;
   onCopyPath: (path: string) => void | Promise<void>;
   onCopyRelativePath: (path: string) => void | Promise<void>;
-  onOpenInEditor?: (entry: ExplorerEntry) => void;
-  editorTargetName?: string;
-  onRevealEntry?: (entry: ExplorerEntry) => void;
-  revealTargetName?: string;
   onDownloadEntry: (entry: ExplorerEntry) => void;
   onAddToChat?: (path: string) => void;
   onOpenFileToSide?: (path: string) => void;
@@ -1500,10 +1429,6 @@ function TreeRowDispatcher({
       onSelectEntry={onSelectEntry}
       onCopyPath={onCopyPath}
       onCopyRelativePath={onCopyRelativePath}
-      onOpenInEditor={onOpenInEditor}
-      editorTargetName={editorTargetName}
-      onRevealEntry={onRevealEntry}
-      revealTargetName={revealTargetName}
       onDownloadEntry={onDownloadEntry}
       onAddToChat={onAddToChat}
       onOpenFileToSide={onOpenFileToSide}

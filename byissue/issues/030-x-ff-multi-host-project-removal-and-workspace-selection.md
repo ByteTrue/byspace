@@ -2,7 +2,6 @@
 kind: issue
 title: "多 Host 聚合 Project 移除选择与 New Workspace 项目优先联动"
 type: ff
-status: closed
 created: 2026-09-15
 ---
 

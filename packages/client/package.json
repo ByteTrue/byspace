@@ -1,6 +1,6 @@
 {
   "name": "@bytetrue/client",
-  "version": "0.16.5",
+  "version": "0.19.0",
   "description": "BySpace client SDK package",
   "files": [
     "dist",
@@ -39,8 +39,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@bytetrue/protocol": "0.16.5",
-    "@bytetrue/relay": "0.16.5",
+    "@bytetrue/protocol": "0.19.0",
+    "@bytetrue/relay": "0.19.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

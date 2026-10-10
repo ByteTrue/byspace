@@ -13,6 +13,11 @@ import {
 } from "react-native";
 import { useTranslation } from "react-i18next";
 import { MarkdownParagraphView, MarkdownTextSpan } from "@/components/markdown-text";
+import {
+  isToolCallSubagentEqual,
+  resolveJoinedSubagentRow,
+  type ToolCallSubagentBinding,
+} from "@/components/tool-call-subagent-row";
 import * as React from "react";
 import {
   useState,
@@ -1176,28 +1181,17 @@ const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
     height: 14,
   },
   detailWrapper: {
-    borderBottomLeftRadius: theme.borderRadius.lg,
-    borderBottomRightRadius: theme.borderRadius.lg,
-    borderWidth: theme.borderWidth[1],
-    borderTopWidth: 0,
-    borderColor: theme.colors.border,
-    padding: 0,
-    gap: 0,
+    borderLeftWidth: theme.borderWidth[1],
+    borderLeftColor: theme.colors.border,
+    // Align guide line with icon center: pressable padding (8) + half icon (11)
+    marginLeft: 19,
+    paddingLeft: theme.spacing[3],
+    paddingTop: theme.spacing[1],
+    paddingBottom: theme.spacing[2],
     flexShrink: 1,
     minWidth: 0,
     overflow: "hidden",
     ...(isWeb ? { cursor: "auto" as const, userSelect: "text" as const } : {}),
-  },
-  pressableExpanded: {
-    backgroundColor: theme.colors.surface1,
-  },
-  pressableExpandedAttached: {
-    borderColor: theme.colors.border,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-  },
-  detailWrapperBorderless: {
-    borderWidth: 0,
   },
   shimmerOverlay: {
     position: "absolute",
@@ -2270,7 +2264,6 @@ interface ExpandableBadgeProps {
   isError?: boolean;
   isLastInSequence?: boolean;
   disableOuterSpacing?: boolean;
-  borderlessWhenExpanded?: boolean;
   testID?: string;
 }
 
@@ -2592,7 +2585,6 @@ export const ExpandableBadge = memo(function ExpandableBadge({
   isError = false,
   isLastInSequence = false,
   disableOuterSpacing,
-  borderlessWhenExpanded = false,
   testID,
 }: ExpandableBadgeProps) {
   const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
@@ -2740,19 +2732,11 @@ export const ExpandableBadge = memo(function ExpandableBadge({
     () => [
       expandableBadgeStylesheet.pressable,
       isPressed && isInteractive ? expandableBadgeStylesheet.pressablePressed : null,
-      isExpanded && expandableBadgeStylesheet.pressableExpanded,
-      isExpanded && !borderlessWhenExpanded && expandableBadgeStylesheet.pressableExpandedAttached,
     ],
-    [borderlessWhenExpanded, isExpanded, isInteractive, isPressed],
+    [isInteractive, isPressed],
   );
 
-  const detailWrapperStyle = useMemo(
-    () => [
-      expandableBadgeStylesheet.detailWrapper,
-      borderlessWhenExpanded && expandableBadgeStylesheet.detailWrapperBorderless,
-    ],
-    [borderlessWhenExpanded],
-  );
+  const detailWrapperStyle = expandableBadgeStylesheet.detailWrapper;
 
   const accessibilityState = useMemo(
     () => (isInteractive ? { expanded: isExpanded } : undefined),
@@ -2884,7 +2868,6 @@ function areExpandableBadgePropsEqual(previous: ExpandableBadgeProps, next: Expa
   if (previous.isError !== next.isError) return false;
   if (previous.isLastInSequence !== next.isLastInSequence) return false;
   if (previous.disableOuterSpacing !== next.disableOuterSpacing) return false;
-  if (previous.borderlessWhenExpanded !== next.borderlessWhenExpanded) return false;
   if (previous.testID !== next.testID) return false;
   if (previous.onToggle !== next.onToggle) return false;
   if (previous.onOpenFile !== next.onOpenFile) return false;
@@ -2892,6 +2875,13 @@ function areExpandableBadgePropsEqual(previous: ExpandableBadgeProps, next: Expa
   if (previous.renderDetails !== next.renderDetails) return false;
   return true;
 }
+
+/**
+ * Live provider-subagent state joined onto a timeline tool row by call id. When present the row
+ * stops being a static launch record: status comes from the descriptor, the secondary label shows
+ * the provider-owned subtitle, and pressing opens the subagent's read-only tab.
+ */
+export type { ToolCallSubagentBinding } from "./tool-call-subagent-row";
 
 interface ToolCallProps {
   toolName: string;
@@ -2910,6 +2900,11 @@ interface ToolCallProps {
   defaultExpanded?: boolean;
   forceInline?: boolean;
   maxDetailHeight?: number;
+  /** Streaming content (thinking) keeps its detail scroll pinned to the newest lines. */
+  followTail?: boolean;
+  /** Replaces the badge's secondary text; nested codemode rows summarize the calls the script ran. */
+  summaryOverride?: string;
+  subagent?: ToolCallSubagentBinding;
 }
 
 export const ToolCall = memo(function ToolCall({
@@ -2921,6 +2916,8 @@ export const ToolCall = memo(function ToolCall({
   detail,
   cwd,
   metadata,
+  summaryOverride,
+  subagent,
   isLastInSequence = false,
   disableOuterSpacing,
   onInlineDetailsHoverChange,
@@ -2929,6 +2926,7 @@ export const ToolCall = memo(function ToolCall({
   defaultExpanded,
   forceInline = false,
   maxDetailHeight = 400,
+  followTail = false,
 }: ToolCallProps) {
   const { openToolCall } = useToolCallSheet();
   const [isExpanded, setIsExpanded] = useState(defaultExpanded ?? false);
@@ -3034,6 +3032,7 @@ export const ToolCall = memo(function ToolCall({
         errorText={presentation.errorText}
         maxHeight={maxDetailHeight}
         showLoadingSkeleton={presentation.isLoadingDetails}
+        followTail={followTail}
       />
     );
   }, [
@@ -3043,7 +3042,19 @@ export const ToolCall = memo(function ToolCall({
     presentation.errorText,
     presentation.isLoadingDetails,
     maxDetailHeight,
+    followTail,
   ]);
+
+  const joinedRow = resolveJoinedSubagentRow(
+    subagent,
+    status,
+    presentation.canOpenDetails,
+    handleToggle,
+  );
+  const isLoading = joinedRow.isLoading;
+  const isError = joinedRow.isError;
+  const secondaryLabel = subagent?.secondaryLabel ?? summaryOverride ?? presentation.summary;
+  const handlePress = joinedRow.handlePress;
 
   if (presentation.isPlan && effectiveDetail?.type === "plan") {
     return (
@@ -3059,14 +3070,16 @@ export const ToolCall = memo(function ToolCall({
     <ExpandableBadge
       testID="tool-call-badge"
       label={presentation.displayName}
-      secondaryLabel={presentation.summary}
+      secondaryLabel={secondaryLabel}
       icon={presentation.icon}
-      isExpanded={shouldRenderInline && isExpanded}
-      onToggle={presentation.canOpenDetails ? handleToggle : undefined}
+      isExpanded={shouldRenderInline && isExpanded && !subagent}
+      onToggle={handlePress}
       onOpenFile={handleOpenFile}
-      renderDetails={presentation.canOpenDetails && shouldRenderInline ? renderDetails : undefined}
-      isLoading={status === "running" || status === "executing"}
-      isError={status === "failed"}
+      renderDetails={
+        presentation.canOpenDetails && shouldRenderInline && !subagent ? renderDetails : undefined
+      }
+      isLoading={isLoading}
+      isError={isError}
       isLastInSequence={isLastInSequence}
       disableOuterSpacing={disableOuterSpacing}
       onDetailHoverChange={onInlineDetailsHoverChange}
@@ -3083,11 +3096,14 @@ function areToolCallPropsEqual(previous: ToolCallProps, next: ToolCallProps) {
   if (previous.detail !== next.detail) return false;
   if (previous.cwd !== next.cwd) return false;
   if (previous.metadata !== next.metadata) return false;
+  if (previous.summaryOverride !== next.summaryOverride) return false;
+  if (!isToolCallSubagentEqual(previous, next)) return false;
   if (previous.isLastInSequence !== next.isLastInSequence) return false;
   if (previous.disableOuterSpacing !== next.disableOuterSpacing) return false;
   if (previous.onOpenFilePath !== next.onOpenFilePath) return false;
   if (previous.defaultExpanded !== next.defaultExpanded) return false;
   if (previous.forceInline !== next.forceInline) return false;
   if (previous.maxDetailHeight !== next.maxDetailHeight) return false;
+  if (previous.followTail !== next.followTail) return false;
   return true;
 }

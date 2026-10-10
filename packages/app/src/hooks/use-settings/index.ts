@@ -28,6 +28,7 @@ import {
   parseTerminalScrollbackLines,
   sanitizeFontFamily,
   saveAppSettings as saveAppSettingsPure,
+  TIMELINE_DETAIL_LEVELS,
   type AppSettings,
   type AppSettingsUpdate,
   type OpenInSidePanePreferences,
@@ -40,6 +41,7 @@ import {
   type SidebarWorkspaceTrailing,
   type SettingsDeps,
   type TerminalAppearance,
+  type TimelineDetailLevel,
   type WorkspaceTitleSource,
 } from "./storage";
 
@@ -63,6 +65,7 @@ export {
   parseClampedFontSize,
   parseTerminalScrollbackLines,
   sanitizeFontFamily,
+  TIMELINE_DETAIL_LEVELS,
 };
 export type {
   AppSettings,
@@ -78,6 +81,7 @@ export type {
   SettingsDeps,
   SidebarWorkspaceTrailing,
   TerminalAppearance,
+  TimelineDetailLevel,
   WorkspaceTitleSource,
 };
 

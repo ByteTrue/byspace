@@ -222,6 +222,8 @@ export interface WorkspaceGitService {
     onChange: () => void,
   ): Promise<{ repoRoot: string | null; unsubscribe: () => void }>;
   scheduleRefreshForCwd(cwd: string): void;
+  /** Drops this service's watchers on a directory the archive is about to delete. */
+  releaseWatchersForCwd(cwd: string): void;
   onWorkspaceStateMayHaveChanged(cwd: string): void;
   invalidateForge(cwd: string): void;
   getMetrics(): WorkspaceGitServiceMetrics;
@@ -935,6 +937,29 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     const target = this.workspaceTargets.get(cwd);
     if (target) {
       this.scheduleWorkspaceRefresh(target, { queueIfBusy: false });
+    }
+  }
+
+  /**
+   * Drop every watcher this service holds on a directory that is about to be
+   * deleted. On Windows the fs.watch subscription keeps a handle on the tree, so
+   * an rmdir of a watched worktree fails with EBUSY. Workspaces that still share
+   * the checkout keep their watchers — only unreferenced targets are closed.
+   */
+  releaseWatchersForCwd(cwd: string): void {
+    this.assertNotDisposed();
+    const resolvedCwd = resolve(cwd);
+
+    const workingTreeTarget = this.workingTreeWatchTargets.get(resolvedCwd);
+    if (workingTreeTarget && workingTreeTarget.workspaceKeys.size === 0) {
+      this.closeWorkingTreeWatchTarget(workingTreeTarget);
+      this.workingTreeWatchTargets.delete(resolvedCwd);
+    }
+
+    const workspaceTarget = this.workspaceTargets.get(resolvedCwd);
+    if (workspaceTarget && workspaceTarget.listeners.size === 0) {
+      this.closeWorkspaceTarget(workspaceTarget);
+      this.workspaceTargets.delete(resolvedCwd);
     }
   }
 

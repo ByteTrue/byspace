@@ -174,7 +174,7 @@ Enables remote access when the daemon is behind a firewall.
 - Optional E2EE capability negotiation preserves application frame kind: text plaintext uses base64 ciphertext text frames, while binary plaintext uses raw ciphertext binary frames; mixed-version peers remain base64-only
 - Self-hosted relays opt into TLS with `daemon.relay.useTls` or `BYSPACE_RELAY_USE_TLS=true`; the public (client-facing) TLS setting can be overridden independently via `daemon.relay.publicUseTls` or `BYSPACE_RELAY_PUBLIC_USE_TLS`.
 
-The production relay is the Cloudflare Worker in `packages/relay`, deployed by hand as `byspace-relay` at `relay.byspace.cc.cd`. `BYSPACE_RELAY_UPSTREAM` in the Worker env proxies all traffic to another relay instead; it is unset in production. No workflow in this repository deploys the relay — run `wrangler deploy` from `packages/relay` after a relay change.
+The production relay is the Cloudflare Worker in `packages/relay`, deployed as `byspace-relay` at `relay.byspace.cc.cd`. Since issue 073 it also serves the hosted web UI at `app.byspace.cc.cd` from the same origin (`[assets]` in `wrangler.toml`; `/ws` and `/health` stay on the worker via `run_worker_first`), and the Deploy App workflow deploys it on web releases. `BYSPACE_RELAY_UPSTREAM` in the Worker env proxies all traffic to another relay instead; it is unset in production.
 
 See [SECURITY.md](../SECURITY.md) for the full threat model.
 

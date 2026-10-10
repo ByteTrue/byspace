@@ -2,7 +2,6 @@
 kind: issue
 title: "CustomMessage 时间线卡片改用 ExpandableBadge + mock 场景覆盖"
 type: ff
-status: closed
 created: 2026-09-14
 ---
 

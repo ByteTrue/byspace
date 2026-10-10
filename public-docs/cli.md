@@ -4,7 +4,7 @@ title: CLI reference
 description: "BySpace CLI reference: manage projects, workspaces, agents, scripts, schedules, daemons, and permissions from your terminal."
 nav: CLI reference
 order: 35
-category: Orchestration---
+category: Orchestration
 
 # CLI reference
 

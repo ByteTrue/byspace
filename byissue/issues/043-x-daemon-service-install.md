@@ -2,7 +2,6 @@
 kind: issue
 title: "Daemon 系统服务部署：CLI 与设置页可选开机自启"
 type: feature
-status: closed
 created: 2026-09-18
 ---
 

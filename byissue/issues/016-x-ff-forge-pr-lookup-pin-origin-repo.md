@@ -2,7 +2,6 @@
 id: "015"
 type: ff
 title: Forge PR 直读显式锚定 origin 仓库
-status: closed
 date: 2026-09-07
 ---
 

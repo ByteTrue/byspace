@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { basename, resolve } from "node:path";
 import { stat } from "node:fs/promises";
 import {
@@ -85,8 +85,19 @@ import { isBySpaceToolPolicyEnabled } from "./byspace-tool-policy.js";
 import {
   ProviderSubagentStore,
   type ProviderSubagentDescriptor,
+  type ProviderSubagentInputEvent,
   type ProviderSubagentStoreEvent,
 } from "./provider-subagents/store.js";
+import {
+  foldSubagentObservations,
+  type SubagentObservation,
+} from "./provider-subagents/observation.js";
+import { observePiSubagentRecord } from "./providers/pi/agent-subagents.js";
+import {
+  PI_SUBAGENT_TERMINAL_STATUSES,
+  parsePiSubagentTailerSnapshot,
+  PiSubagentSessionTailers,
+} from "./providers/pi/subagent-session-tailer.js";
 import { withTimeout } from "../../utils/promise-timeout.js";
 
 const RELOAD_SESSION_CLOSE_TIMEOUT_MS = 3_000;
@@ -696,6 +707,13 @@ export class AgentManager {
   private readonly agents = new Map<string, LiveManagedAgent>();
   private readonly timelineStore = new InMemoryAgentTimelineStore();
   private readonly providerSubagents = new ProviderSubagentStore();
+  private readonly piSubagentReportTokens = new Map<string, string>();
+  private piSubagentReportBaseUrl: string | null = null;
+  private readonly piSubagentTailers = new PiSubagentSessionTailers({
+    emit: (agentId, observation) => {
+      this.applyExternalProviderSubagentObservation(agentId, "pi", observation);
+    },
+  });
   private readonly agentsAwaitingInitialSnapshotPersist = new Set<string>();
   private readonly sessionEventTails = new Map<string, Promise<void>>();
   private readonly steerEventBarriers = new Map<string, SteerEventBarrier>();
@@ -825,8 +843,98 @@ export class AgentManager {
     this.mcpBaseUrl = url;
   }
 
+  setPiSubagentReportBaseUrl(url: string | null): void {
+    this.piSubagentReportBaseUrl = url;
+    if (!url) {
+      this.piSubagentReportTokens.clear();
+    }
+  }
+
+  /**
+   * Resolve the agent a pi-subagent report token was minted for. Tokens are random
+   * per pi launch, so the token alone identifies the agent — the reporter extension
+   * never needs to know its own BySpace agent id.
+   */
+  resolvePiSubagentReportAgentId(token: string): string | null {
+    if (!token) return null;
+    for (const [agentId, minted] of this.piSubagentReportTokens) {
+      if (minted === token && this.agents.has(agentId)) return agentId;
+    }
+    return null;
+  }
+
+  /**
+   * Apply a provider-subagent store event with the terminal latch: a running upsert for an
+   * already-terminal subagent is dropped. HTTP reports and transcript replays have no ordering
+   * guarantee, so a stale running snapshot must not reopen a finished subagent. New launches
+   * get fresh ids and are unaffected.
+   */
+  private applyProviderSubagentEvent(
+    agentId: string,
+    provider: AgentProvider,
+    event: ProviderSubagentInputEvent,
+  ): ProviderSubagentStoreEvent | null {
+    if (event.type === "upsert" && event.status === "running") {
+      const current = this.providerSubagents.get(agentId, event.id)?.status;
+      if (current && (PI_SUBAGENT_TERMINAL_STATUSES as readonly string[]).includes(current)) {
+        return null;
+      }
+    }
+    return this.providerSubagents.apply(agentId, provider, event);
+  }
+
+  /**
+   * Apply a provider-subagent observation reported from outside the agent stream (the pi
+   * subagent extension POSTs progress snapshots over loopback) and dispatch the resulting
+   * store event.
+   */
+  applyExternalProviderSubagentObservation(
+    agentId: string,
+    provider: AgentProvider,
+    observation: SubagentObservation,
+  ): boolean {
+    const agent = this.agents.get(agentId);
+    if (!agent) {
+      return false;
+    }
+    const [event] = foldSubagentObservations([observation]);
+    if (!event) {
+      return false;
+    }
+    const update = this.applyProviderSubagentEvent(agentId, provider, event);
+    if (!update) {
+      return false;
+    }
+    this.dispatch({ type: "provider_subagent", event: update });
+    return true;
+  }
+
+  /**
+   * Apply a pi-subagent progress report POSTed by the pi-subagent extension over loopback:
+   * verify the per-launch token, fold each record into a provider-subagent observation, and
+   * feed session references to the jsonl tailers that stream child-session timelines.
+   */
+  applyPiSubagentReport(token: string, records: readonly unknown[]): "ok" | "unauthorized" {
+    const agentId = this.resolvePiSubagentReportAgentId(token);
+    if (!agentId) {
+      return "unauthorized";
+    }
+    for (const record of records) {
+      const observation = observePiSubagentRecord(record);
+      if (observation) {
+        this.applyExternalProviderSubagentObservation(agentId, "pi", observation);
+      }
+      const snapshot = parsePiSubagentTailerSnapshot(record);
+      if (snapshot) {
+        this.piSubagentTailers.update(agentId, snapshot);
+      }
+    }
+    return "ok";
+  }
+
   prepareForShutdown(): void {
     this.acceptingAgentRegistrations = false;
+    this.piSubagentTailers.dispose();
   }
 
   setBySpaceToolsEnabled(enabled: boolean): void {
@@ -1439,8 +1547,10 @@ export class AgentManager {
         publishWhenReady: true,
       });
       for (const event of imported.providerSubagentEvents ?? []) {
-        const update = this.providerSubagents.apply(agent.id, event.provider, event.event);
-        this.dispatch({ type: "provider_subagent", event: update });
+        const update = this.applyProviderSubagentEvent(agent.id, event.provider, event.event);
+        if (update) {
+          this.dispatch({ type: "provider_subagent", event: update });
+        }
       }
       return agent;
     } finally {
@@ -3608,6 +3718,10 @@ export class AgentManager {
     this.agentStreamCoalescer.flushAndDiscard(agent.id);
     this.agents.delete(agent.id);
     this.previousStatuses.delete(agent.id);
+    // Child-session tailers and report tokens are live-process state: on close (and reload,
+    // whose new process re-reports) they have no owner and would poll until daemon shutdown.
+    this.piSubagentReportTokens.delete(agent.id);
+    this.piSubagentTailers.removeAgent(agent.id);
     if (agent.unsubscribeSession) {
       agent.unsubscribeSession();
       agent.unsubscribeSession = null;
@@ -3639,6 +3753,8 @@ export class AgentManager {
   private discardRetainedAgentState(agentId: string): void {
     this.timelineStore.delete(agentId);
     this.byspaceToolPolicies.delete(agentId);
+    this.piSubagentReportTokens.delete(agentId);
+    this.piSubagentTailers.removeAgent(agentId);
     for (const event of this.providerSubagents.deleteParent(agentId)) {
       this.dispatch({ type: "provider_subagent", event });
     }
@@ -3742,8 +3858,10 @@ export class AgentManager {
     event: AgentStreamEvent,
   ): Promise<void> {
     if (event.type === "provider_subagent") {
-      const update = this.providerSubagents.apply(agent.id, event.provider, event.event);
-      this.dispatch({ type: "provider_subagent", event: update });
+      const update = this.applyProviderSubagentEvent(agent.id, event.provider, event.event);
+      if (update) {
+        this.dispatch({ type: "provider_subagent", event: update });
+      }
       return;
     }
     const turnId = getAgentStreamEventTurnId(event);
@@ -3929,8 +4047,8 @@ export class AgentManager {
       }
     }
     for (const event of providerSubagentEvents) {
-      const update = this.providerSubagents.apply(agent.id, event.provider, event.event);
-      if (broadcast) {
+      const update = this.applyProviderSubagentEvent(agent.id, event.provider, event.event);
+      if (update && broadcast) {
         this.dispatch({ type: "provider_subagent", event: update });
       }
     }
@@ -3967,7 +4085,8 @@ export class AgentManager {
       for await (const rawEvent of agent.session.streamHistory()) {
         const event = limitAgentStreamEventContent(rawEvent);
         if (event.type === "provider_subagent") {
-          const update = this.providerSubagents.apply(agent.id, event.provider, event.event);
+          const update = this.applyProviderSubagentEvent(agent.id, event.provider, event.event);
+          if (!update) continue;
           const managerEvent: AgentManagerEvent = { type: "provider_subagent", event: update };
           if (deferredBroadcast) {
             providerSubagentEvents.push(managerEvent);
@@ -5094,6 +5213,15 @@ export class AgentManager {
         BYSPACE_AGENT_CWD: cwd,
       },
     };
+    if (client.provider === "pi" && this.piSubagentReportBaseUrl) {
+      const reportToken = randomBytes(32).toString("base64url");
+      this.piSubagentReportTokens.set(agentId, reportToken);
+      context.env = {
+        ...context.env,
+        BYSPACE_SUBAGENT_REPORT_URL: `${this.piSubagentReportBaseUrl}/api/subagent-report`,
+        BYSPACE_SUBAGENT_REPORT_TOKEN: reportToken,
+      };
+    }
     if (
       this.byspaceToolsEnabled &&
       isBySpaceToolPolicyEnabled(byspaceToolPolicy) &&

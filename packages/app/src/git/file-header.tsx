@@ -47,8 +47,6 @@ export interface FileHeaderProps {
   onAddToChat?: (path: string) => void;
   onCopyPath?: (path: string) => void;
   onCopyRelativePath?: (path: string) => void;
-  onReveal?: (path: string) => void;
-  revealTargetName?: string;
   onDownload?: (path: string) => void;
   onDuplicate?: (path: string) => void;
   onRevert?: (path: string, oldPath?: string) => void;
@@ -141,8 +139,6 @@ function FileHeaderMenu({
   onAddToChat,
   onCopyPath,
   onCopyRelativePath,
-  onReveal,
-  revealTargetName,
   onDownload,
   onDuplicate,
   onRevert,
@@ -156,7 +152,6 @@ function FileHeaderMenu({
     () => onCopyRelativePath?.(file.path),
     [file.path, onCopyRelativePath],
   );
-  const reveal = useCallback(() => onReveal?.(file.path), [file.path, onReveal]);
   const download = useCallback(() => onDownload?.(file.path), [file.path, onDownload]);
   const duplicate = useCallback(() => onDuplicate?.(file.path), [file.path, onDuplicate]);
   const revert = useCallback(
@@ -171,8 +166,6 @@ function FileHeaderMenu({
       onOpenToSide={onOpenToSide ? openToSide : undefined}
       onCopyPath={onCopyPath ? copyPath : undefined}
       onCopyRelativePath={onCopyRelativePath ? copyRelativePath : undefined}
-      onReveal={onReveal ? reveal : undefined}
-      revealTargetName={revealTargetName}
       onDownload={onDownload ? download : undefined}
       onAddToChat={onAddToChat ? addToChat : undefined}
       onDuplicate={!file.isDeleted && onDuplicate ? duplicate : undefined}

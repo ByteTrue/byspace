@@ -4,13 +4,15 @@ Use Node 22.20.0 and npm 10.9.3. Run release commands from a clean `main` checko
 
 ## Published targets
 
-| Target  | Publication path                                               |
-| ------- | -------------------------------------------------------------- |
-| npm     | `@bytetrue/byspace` with the `beta` or `latest` dist-tag       |
-| Web/PWA | Cloudflare Pages (`byspace` stable, `byspace-beta` prerelease) |
-| Docker  | `ghcr.io/bytetrue/byspace:<version>`                           |
+| Target  | Publication path                                                       |
+| ------- | ---------------------------------------------------------------------- |
+| npm     | `@bytetrue/byspace` with the `beta` or `latest` dist-tag               |
+| Web/PWA | Relay Worker (`byspace-relay` stable, `byspace-relay-beta` prerelease) |
+| Docker  | `ghcr.io/bytetrue/byspace:<version>`                                   |
 
 Stable Web releases deploy to `app.byspace.cc.cd`. Versions with a prerelease suffix deploy to `app-beta.byspace.cc.cd`.
+
+**Deploy App** deploys the Worker with the `CLOUDFLARE_API_TOKEN` secret. That token needs Zone → Workers Routes → Edit, with `byspace.cc.cd` in its zone resources. `wrangler deploy` uploads the Worker and its assets before it publishes the custom-domain routes from `packages/relay/wrangler.toml`, so a token scoped to a different zone, or missing the permission, fails the run with `No access to the specified resource` after the new build is already live.
 
 `@bytetrue/byspace` is the only published package. The `@bytetrue/*` workspaces are packed into it as bundled dependencies; they are not published separately and have no dist-tags to maintain.
 
@@ -247,7 +249,7 @@ Tag pushes are the one supported way to rebuild a release: `git tag -f vX.Y.Z HE
 - `version:all:*` bumps root + syncs workspace versions and `@bytetrue/*` dependency versions
 - `release:prepare` refreshes workspace `node_modules` links to prevent stale types
 - A stable run leaves `beta` where it is. `latest` moves on publish; `@bytetrue/byspace@beta` only moves when a prerelease publishes with `--tag beta`
-- The public relay is the Cloudflare Worker in `packages/relay`, deployed by hand as `byspace-relay` at `relay.byspace.cc.cd`. BySpace releases do not deploy it and no workflow in this repository does — run `wrangler deploy` from `packages/relay` after a relay change. `packages/relay` also holds the client transport and E2E encryption used by the daemon
+- The public relay and hosted web UI are the same Cloudflare Worker in `packages/relay` (`byspace-relay`, serving `relay.byspace.cc.cd` and `app.byspace.cc.cd`). Since issue 073 the Deploy App workflow deploys it on every web release — UI and relay go out atomically. For an emergency relay-only fix outside a release, run `npm run deploy:hosted` from the repo root or `wrangler deploy` from `packages/relay`. `packages/relay` also holds the client transport and E2E encryption used by the daemon
 
 ## Changelog format
 

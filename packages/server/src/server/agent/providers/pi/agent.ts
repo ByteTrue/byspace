@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join, resolve as resolvePath } from "node:path";
+import { join } from "node:path";
 import type { Logger } from "pino";
 import stripAnsi from "strip-ansi";
 import { z } from "zod";
@@ -81,6 +81,7 @@ import type {
 } from "./rpc-types.js";
 import { PiUsagePoller, type PiUsagePollScheduler } from "./usage-poller.js";
 import {
+  buildPiNestedToolCallMetadata,
   mapToolDetail,
   parseToolArgs,
   parseToolResult,
@@ -88,6 +89,14 @@ import {
   type PiToolResult,
   type PiTrackedToolCall,
 } from "./tool-call-mapper.js";
+import { foldSubagentObservations } from "../../provider-subagents/observation.js";
+import {
+  isPiSubagentToolName,
+  observePiSubagentExit,
+  observePiSubagentLaunch,
+  observePiSubagentRecord,
+  replayPiSubagentObservations,
+} from "./agent-subagents.js";
 
 const PI_PROVIDER = "pi";
 const DEFAULT_PI_THINKING_LEVEL: PiThinkingLevel = "medium";
@@ -161,7 +170,7 @@ const PI_CAPABILITIES: AgentCapabilityFlags = {
   supportsSessionPersistence: true,
   supportsSessionListing: true,
   supportsDynamicModes: true,
-  supportsMcpServers: false,
+  supportsMcpServers: true,
   supportsReasoningStream: true,
   supportsToolInvocations: true,
   supportsRewindConversation: true,
@@ -209,14 +218,6 @@ interface PiPersistenceMetadata {
   systemPrompt?: string;
 }
 
-function capabilitiesForClient(): AgentCapabilityFlags {
-  return withPiCapabilities(false);
-}
-
-function capabilitiesForSession(hasMcpConfig: boolean): AgentCapabilityFlags {
-  return withPiCapabilities(hasMcpConfig);
-}
-
 interface StartTurnResult {
   turnId: string;
 }
@@ -262,13 +263,6 @@ interface PiMcpServerConfig {
   env?: Record<string, string>;
   url?: string;
   headers?: Record<string, string>;
-  auth?: false;
-  oauth?: false;
-}
-
-interface PiMcpConfigFile {
-  path: string;
-  cleanup: () => void;
 }
 
 interface PiTempFile {
@@ -551,7 +545,6 @@ function buildResumeStartInput(input: {
   resumeConfig: PiResumeConfig;
   sessionFile: string;
   launchContext: AgentLaunchContext | undefined;
-  mcpConfig: PiMcpConfigFile | null;
   byspaceExtension: PiTempFile | null;
 }): PiStartSessionInput {
   return {
@@ -560,7 +553,6 @@ function buildResumeStartInput(input: {
     session: input.sessionFile,
     model: input.resumeConfig.model,
     thinkingOptionId: normalizePiThinkingOption(input.resumeConfig.thinkingOptionId) ?? undefined,
-    mcpConfigPath: input.mcpConfig?.path,
     extensionPaths: input.byspaceExtension ? [input.byspaceExtension.path] : undefined,
   };
 }
@@ -577,81 +569,16 @@ function toPiMcpConfig(config: McpServerConfig): PiMcpServerConfig {
   return {
     url: config.url,
     ...(config.headers ? { headers: config.headers } : {}),
-    auth: false,
-    oauth: false,
   };
 }
 
-function resolvePiAgentDir(env: Record<string, string> | undefined): string {
-  const configured = env?.PI_CODING_AGENT_DIR?.trim() || process.env.PI_CODING_AGENT_DIR?.trim();
-  if (!configured) {
-    return join(homedir(), ".pi", "agent");
-  }
-  if (configured === "~") {
-    return homedir();
-  }
-  if (configured.startsWith("~/")) {
-    return resolvePath(homedir(), configured.slice(2));
-  }
-  return resolvePath(configured);
-}
-
-function readPiGlobalMcpConfig(env: Record<string, string> | undefined): Record<string, unknown> {
-  const globalConfigPath = join(resolvePiAgentDir(env), "mcp.json");
-  if (!existsSync(globalConfigPath)) {
-    return {};
-  }
-
-  let globalConfig: unknown;
-  try {
-    globalConfig = JSON.parse(readFileSync(globalConfigPath, "utf8")) as unknown;
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      throw new Error(`Failed to parse Pi MCP config: ${globalConfigPath}`, { cause: error });
-    }
-    throw error;
-  }
-  if (!isRecord(globalConfig)) {
-    throw new Error(`Pi MCP config must contain a JSON object: ${globalConfigPath}`);
-  }
-  return globalConfig;
-}
-
-function createPiMcpConfigFile(
-  servers: Record<string, McpServerConfig>,
-  options?: {
-    piGlobalConfigEnv?: Record<string, string>;
-  },
-): PiMcpConfigFile {
-  const globalConfig = options?.piGlobalConfigEnv
-    ? readPiGlobalMcpConfig(options.piGlobalConfigEnv)
-    : {};
-  let configuredServers: Record<string, unknown> = {};
-  if (isRecord(globalConfig.mcpServers)) {
-    configuredServers = globalConfig.mcpServers;
-  } else if (isRecord(globalConfig["mcp-servers"])) {
-    configuredServers = globalConfig["mcp-servers"];
-  }
-  const mcpServers: Record<string, unknown> = { ...configuredServers };
-  for (const [name, serverConfig] of Object.entries(servers)) {
-    mcpServers[name] = toPiMcpConfig(serverConfig);
-  }
-
-  const dir = mkdtempSync(join(tmpdir(), "byspace-pi-mcp-"));
-  const filePath = join(dir, "mcp.json");
-  const mergedConfig: Record<string, unknown> = { ...globalConfig, mcpServers };
-  delete mergedConfig["mcp-servers"];
-  writeFileSync(filePath, `${JSON.stringify(mergedConfig, null, 2)}\n`, {
-    encoding: "utf8",
-    mode: 0o600,
-  });
-  return {
-    path: filePath,
-    cleanup: () => rmSync(dir, { recursive: true, force: true }),
-  };
-}
-
-function createPiBySpaceExtensionFile(systemPrompt?: string): PiTempFile {
+function createPiBySpaceExtensionFile(
+  systemPrompt?: string,
+  mcpServers?: Record<string, McpServerConfig>,
+): PiTempFile {
+  const byspaceMcpServers = Object.fromEntries(
+    Object.entries(mcpServers ?? {}).map(([name, config]) => [name, toPiMcpConfig(config)]),
+  );
   const dir = mkdtempSync(join(tmpdir(), "byspace-pi-extension-"));
   const filePath = join(dir, "byspace-integration.mjs");
   writeFileSync(
@@ -705,6 +632,50 @@ function createPiBySpaceExtensionFile(systemPrompt?: string): PiTempFile {
 	}
 
 	export default function byspaceIntegration(pi) {
+	  const byspaceMcpServers = ${JSON.stringify(byspaceMcpServers)};
+	  const rejectedMcpServers = [];
+	  if (typeof pi.registerMcpServer === "function") {
+	    for (const [name, config] of Object.entries(byspaceMcpServers)) {
+	      // A duplicate name or an invalid config throws; the rest of this extension must still load.
+	      try {
+	        pi.registerMcpServer(name, config);
+	      } catch (error) {
+	        rejectedMcpServers.push({ name, message: error && error.message ? error.message : String(error) });
+	      }
+	    }
+	  }
+
+	  // Pi only connects registered MCP servers while its built-in MCP support is loaded. Another
+	  // extension that owns the "mcp" command replaces it, leaving these registrations stranded.
+	  function reportMcpInjection(ctx) {
+	    for (const rejected of rejectedMcpServers) {
+	      ctx.ui.notify(
+	        'BySpace could not register MCP server "' + rejected.name + '": ' + rejected.message,
+	        "warning",
+	      );
+	    }
+	    const registeredCount = Object.keys(byspaceMcpServers).length;
+	    if (registeredCount === 0 || rejectedMcpServers.length === registeredCount) {
+	      return;
+	    }
+	    if (typeof pi.getCommands !== "function") {
+	      return;
+	    }
+	    const builtinMcpLoaded = pi.getCommands().some(
+	      (command) =>
+	        command &&
+	        command.name === "mcp" &&
+	        command.sourceInfo &&
+	        command.sourceInfo.path === "builtin:mcp",
+	    );
+	    if (!builtinMcpLoaded) {
+	      ctx.ui.notify(
+	        "Pi's built-in MCP support is not loaded, so the MCP servers BySpace registered for this agent are not connected. Another extension may have replaced it.",
+	        "warning",
+	      );
+	    }
+	  }
+
 	  const submittedUserMessages = [];
 
 	  function emitSubmittedUserEntries(ctx) {
@@ -739,6 +710,7 @@ function createPiBySpaceExtensionFile(systemPrompt?: string): PiTempFile {
 
 	  pi.on("session_start", async (_event, ctx) => {
 	    emitEntryCapture(ctx, "session_start");
+	    reportMcpInjection(ctx);
 	  });
 
 	  pi.on("message_end", async (event) => {
@@ -788,35 +760,6 @@ function createPiBySpaceExtensionFile(systemPrompt?: string): PiTempFile {
   return {
     path: filePath,
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
-  };
-}
-
-function combineCleanup(cleanups: Array<(() => void) | undefined>): (() => void) | undefined {
-  const activeCleanups = cleanups.filter((cleanup): cleanup is () => void => Boolean(cleanup));
-  if (activeCleanups.length === 0) {
-    return undefined;
-  }
-  return () => {
-    for (const cleanup of activeCleanups) {
-      cleanup();
-    }
-  };
-}
-
-function isPiMcpAdapterCommand(command: PiRpcSlashCommand): boolean {
-  if (command.source !== "extension" || !/^mcp(?::\d+)?$/.test(command.name)) {
-    return false;
-  }
-  if (!command.sourceInfo) {
-    return true;
-  }
-  return JSON.stringify(command.sourceInfo).includes("pi-mcp-adapter");
-}
-
-function withPiCapabilities(supportsMcpServers: boolean): AgentCapabilityFlags {
-  return {
-    ...PI_CAPABILITIES,
-    supportsMcpServers,
   };
 }
 
@@ -1504,6 +1447,13 @@ export class PiRpcAgentSession implements AgentSession {
       await this.runtimeSession.getMessages(),
       this.capturedUserEntries,
     );
+    // Background subagent lifecycle lives in the transcript as tool result details and
+    // subagent-exit custom messages, not in a sidechain — derive it from the same messages.
+    for (const subagentEvent of foldSubagentObservations(
+      replayPiSubagentObservations(await this.runtimeSession.getMessages()),
+    )) {
+      yield { type: "provider_subagent", provider: this.provider, event: subagentEvent };
+    }
   }
 
   async getRuntimeInfo(): Promise<AgentRuntimeInfo> {
@@ -2271,13 +2221,12 @@ export class PiRpcAgentSession implements AgentSession {
         this.handleMessageUpdate(event, turnId);
         return;
       case "tool_execution_start": {
-        if (event.parentToolCallId) {
-          return;
-        }
         const toolCall = parseToolArgs(event.toolName, event.args);
         this.activeToolCalls.set(event.toolCallId, toolCall);
         this.activeAskUserDialog = readActiveAskUserDialog(event.toolName, event.args);
-        this.emitToolCallEvent(event.toolCallId, toolCall, "running", null, null);
+        this.emitToolCallEvent(event.toolCallId, toolCall, "running", null, null, {
+          parentToolCallId: event.parentToolCallId,
+        });
         return;
       }
       case "tool_execution_update": {
@@ -2287,7 +2236,9 @@ export class PiRpcAgentSession implements AgentSession {
         }
 
         const partialResult = parseToolResult(event.partialResult);
-        this.emitToolCallEvent(event.toolCallId, toolCall, "running", partialResult, null);
+        this.emitToolCallEvent(event.toolCallId, toolCall, "running", partialResult, null, {
+          parentToolCallId: event.parentToolCallId,
+        });
         return;
       }
       case "tool_execution_end": {
@@ -2366,14 +2317,6 @@ export class PiRpcAgentSession implements AgentSession {
   private handleToolExecutionEnd(
     event: Extract<PiAgentSessionEvent, { type: "tool_execution_end" }>,
   ): void {
-    // Nested calls (from codemode scripts) are not timeline entries of their own: they never enter
-    // the transcript and the parent row does not expand them. The pi TUI lists them under the
-    // parent; here only the parent is shown. The update case needs no check: start never registered
-    // the id.
-    if (event.parentToolCallId) {
-      return;
-    }
-
     const toolCall =
       this.activeToolCalls.get(event.toolCallId) ?? parseToolArgs(event.toolName, null);
     this.activeToolCalls.delete(event.toolCallId);
@@ -2386,7 +2329,32 @@ export class PiRpcAgentSession implements AgentSession {
     const result = parseToolResult(event.result);
     const error = event.isError ? event.result : null;
     const status = event.isError ? "failed" : "completed";
-    this.emitToolCallEvent(event.toolCallId, toolCall, status, result, error);
+    this.emitToolCallEvent(event.toolCallId, toolCall, status, result, error, {
+      parentToolCallId: event.parentToolCallId,
+    });
+    this.emitPiSubagentToolObservations(event.toolCallId, toolCall, result);
+  }
+
+  /** Background subagents announce themselves through tool result details, not the stream. */
+  private emitPiSubagentToolObservations(
+    toolCallId: string,
+    toolCall: PiTrackedToolCall,
+    result: PiToolResult,
+  ): void {
+    if (!isPiSubagentToolName(toolCall.toolName)) {
+      return;
+    }
+    const details = typeof result === "object" && result !== null ? result.details : undefined;
+    const observation =
+      toolCall.toolName === "subagent"
+        ? observePiSubagentLaunch({ toolCallId, args: toolCall.args, details })
+        : observePiSubagentRecord(details);
+    if (!observation) {
+      return;
+    }
+    for (const event of foldSubagentObservations([observation])) {
+      this.emit({ type: "provider_subagent", provider: this.provider, event });
+    }
   }
 
   private emitCompactionTimeline(input: {
@@ -2473,6 +2441,13 @@ export class PiRpcAgentSession implements AgentSession {
       // Pi extension sendMessage() payloads surface as custom messages. display=false
       // means context-only (Pi's TUI hides them too). display is optional on older
       // runtimes; treat missing as true so exit notifications still surface.
+      if (event.message.customType === "subagent-exit") {
+        for (const subagentEvent of foldSubagentObservations(
+          observePiSubagentExit(event.message.details),
+        )) {
+          this.emit({ type: "provider_subagent", provider: this.provider, event: subagentEvent });
+        }
+      }
       if (event.message.display !== false) {
         const text = getUserMessageText(event.message.content);
         const details = limitTimelineDetails(event.message.details);
@@ -2504,17 +2479,23 @@ export class PiRpcAgentSession implements AgentSession {
     status: "running" | "completed" | "failed",
     result: PiToolResult,
     error: unknown,
+    parent?: { parentToolCallId?: string },
   ): boolean {
     const turnId = this.currentTurnIdForEvent();
     const detail = this.mapToolDetail(toolCallId, toolCall, result);
     if (!detail) {
       return false;
     }
+    const metadata = buildPiNestedToolCallMetadata({
+      toolCallId,
+      parentToolCallId: parent?.parentToolCallId,
+    });
     const baseItem = {
       type: "tool_call" as const,
       callId: toolCallId,
       name: resolveToolCallName(toolCall, result),
       detail,
+      ...(metadata ? { metadata } : {}),
     };
     const item =
       status === "failed" ? { ...baseItem, status, error } : { ...baseItem, status, error: null };
@@ -2596,7 +2577,7 @@ export class PiRpcAgentClient implements AgentClient {
 
   constructor(options: PiRpcAgentClientOptions) {
     this.provider = PI_PROVIDER;
-    this.capabilities = capabilitiesForClient();
+    this.capabilities = PI_CAPABILITIES;
     this.logger = options.logger;
     this.runtimeSettings = options.runtimeSettings;
     this.providerParams = PiProviderParamsSchema.parse(options.providerParams ?? {});
@@ -2610,13 +2591,9 @@ export class PiRpcAgentClient implements AgentClient {
     config: AgentSessionConfig,
     launchContext?: AgentLaunchContext,
   ): Promise<AgentSession> {
-    const mcpEnv = {
-      ...this.runtimeSettings?.env,
-      ...launchContext?.env,
-    };
-    const mcpConfig = await this.prepareMcpConfig(config.cwd, config.mcpServers, mcpEnv);
     const byspaceExtension = createPiBySpaceExtensionFile(
       composeSystemPromptParts(config.systemPrompt, config.daemonAppendSystemPrompt),
+      config.mcpServers,
     );
     const launchModel = await this.resolveLaunchModel(
       config.cwd,
@@ -2635,11 +2612,9 @@ export class PiRpcAgentClient implements AgentClient {
           normalizePiThinkingOption(config.thinkingOptionId) ?? DEFAULT_PI_THINKING_LEVEL,
         noSession: config.internal === true,
         env: launchContext?.env,
-        mcpConfigPath: mcpConfig?.path,
         extensionPaths: byspaceExtension ? [byspaceExtension.path] : undefined,
       });
     } catch (error) {
-      mcpConfig?.cleanup();
       byspaceExtension?.cleanup();
       throw error;
     }
@@ -2648,15 +2623,14 @@ export class PiRpcAgentClient implements AgentClient {
         runtimeSession,
         config: launchModel === config.model ? config : { ...config, model: launchModel },
         initialState: await runtimeSession.getState(),
-        capabilities: capabilitiesForSession(mcpConfig !== null),
-        cleanup: combineCleanup([mcpConfig?.cleanup, byspaceExtension?.cleanup]),
+        capabilities: PI_CAPABILITIES,
+        cleanup: byspaceExtension?.cleanup,
         extensionTimeoutMs: this.providerParams.extensionTimeoutMs,
         logger: this.logger,
         usagePollScheduler: this.usagePollScheduler,
       });
     } catch (error) {
       await runtimeSession.close().catch(() => undefined);
-      mcpConfig?.cleanup();
       byspaceExtension?.cleanup();
       throw error;
     }
@@ -2675,20 +2649,12 @@ export class PiRpcAgentClient implements AgentClient {
     const persistenceMetadata = parsePersistenceMetadata(handle.metadata);
     const resumeConfig = buildResumeConfig(persistenceMetadata, overrides, this.provider);
 
-    const mcpEnv = {
-      ...this.runtimeSettings?.env,
-      ...launchContext?.env,
-    };
-    const mcpConfig = await this.prepareMcpConfig(
-      resumeConfig.cwd,
-      resumeConfig.config.mcpServers,
-      mcpEnv,
-    );
     const byspaceExtension = createPiBySpaceExtensionFile(
       composeSystemPromptParts(
         resumeConfig.config.systemPrompt,
         resumeConfig.config.daemonAppendSystemPrompt,
       ),
+      resumeConfig.config.mcpServers,
     );
     const launchModel = await this.resolveLaunchModel(
       resumeConfig.cwd,
@@ -2710,12 +2676,10 @@ export class PiRpcAgentClient implements AgentClient {
           resumeConfig: resumedConfig,
           sessionFile,
           launchContext,
-          mcpConfig,
           byspaceExtension,
         }),
       );
     } catch (error) {
-      mcpConfig?.cleanup();
       byspaceExtension?.cleanup();
       throw error;
     }
@@ -2724,15 +2688,14 @@ export class PiRpcAgentClient implements AgentClient {
         runtimeSession,
         config: resumedConfig.config,
         initialState: await runtimeSession.getState(),
-        capabilities: capabilitiesForSession(mcpConfig !== null),
-        cleanup: combineCleanup([mcpConfig?.cleanup, byspaceExtension?.cleanup]),
+        capabilities: PI_CAPABILITIES,
+        cleanup: byspaceExtension?.cleanup,
         extensionTimeoutMs: this.providerParams.extensionTimeoutMs,
         logger: this.logger,
         usagePollScheduler: this.usagePollScheduler,
       });
     } catch (error) {
       await runtimeSession.close().catch(() => undefined);
-      mcpConfig?.cleanup();
       byspaceExtension?.cleanup();
       throw error;
     }
@@ -2914,38 +2877,6 @@ export class PiRpcAgentClient implements AgentClient {
       return null;
     } finally {
       await probeSession.close().catch(() => undefined);
-    }
-  }
-
-  private async prepareMcpConfig(
-    cwd: string,
-    servers: Record<string, McpServerConfig> | undefined,
-    env: Record<string, string> | undefined,
-  ): Promise<PiMcpConfigFile | null> {
-    if (!servers || Object.keys(servers).length === 0) {
-      return null;
-    }
-    if (!(await this.detectMcpAdapter(cwd, env))) {
-      return null;
-    }
-    return createPiMcpConfigFile(servers, { piGlobalConfigEnv: env });
-  }
-
-  private async detectMcpAdapter(cwd: string, env?: Record<string, string>): Promise<boolean> {
-    const runtimeSession = await this.runtime.startSession({ cwd, env }).catch((error) => {
-      this.logger.debug({ err: error, cwd }, "Pi MCP adapter probe failed to start");
-      return null;
-    });
-    if (!runtimeSession) {
-      return false;
-    }
-    try {
-      return (await runtimeSession.getCommands()).some(isPiMcpAdapterCommand);
-    } catch (error) {
-      this.logger.debug({ err: error, cwd }, "Pi MCP adapter probe failed");
-      return false;
-    } finally {
-      await runtimeSession.close().catch(() => undefined);
     }
   }
 

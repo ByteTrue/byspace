@@ -2,9 +2,7 @@
 kind: issue
 title: "终端深浅色可独立于应用主题配置"
 type: ff
-status: closed
 created: 2026-09-15
-closed: 2026-09-15
 ---
 
 # 终端深浅色可独立于应用主题配置

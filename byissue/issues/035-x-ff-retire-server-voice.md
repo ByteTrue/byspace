@@ -2,9 +2,7 @@
 kind: issue
 title: "退役 server 侧 voice 运行时与 CLI voice onboard"
 type: ff
-status: closed
 created: 2026-09-15
-closed: 2026-09-15
 ---
 
 # 退役 server 侧 voice 运行时与 CLI voice onboard

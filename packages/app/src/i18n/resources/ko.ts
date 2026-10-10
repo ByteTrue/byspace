@@ -423,7 +423,6 @@ export const ko: TranslationResources = {
       openToSide: "옆에 열기",
       copyPath: "경로 복사",
       copyRelativePath: "상대 경로 복사",
-      revealIn: "{{target}}에서 보기",
       download: "다운로드",
       addToChat: "채팅에 추가",
       moreActions: "추가 작업",
@@ -480,7 +479,6 @@ export const ko: TranslationResources = {
         createFailed: "항목을 만들지 못했습니다",
         renameFailed: "항목 이름을 바꾸지 못했습니다",
         duplicateFailed: "항목을 복제하지 못했습니다",
-        revealFailed: "항목을 표시하지 못했습니다",
         deleteFailed: "항목을 삭제하지 못했습니다",
       },
       draft: {
@@ -1189,6 +1187,8 @@ export const ko: TranslationResources = {
         hostDisconnected: "호스트가 연결되어 있지 않습니다",
         hideFailed: "워크스페이스를 숨기지 못했습니다",
         archiveFailed: "워크스페이스를 보관하지 못했습니다.",
+        archiveDirectoryRemovalFailed:
+          "워크스페이스는 보관되었지만 폴더를 완전히 삭제하지 못했습니다. 사용 중인 프로그램을 닫고 폴더를 수동으로 삭제하세요.",
       },
     },
   },
@@ -1940,17 +1940,15 @@ export const ko: TranslationResources = {
         description: "내장 터미널 버퍼에 보관되는 줄 수",
         accessibilityLabel: "터미널 스크롤백 줄 수",
       },
-      autoExpandReasoning: {
-        label: "추론 항상 펼치기",
-        description: "에이전트의 사고 및 추론 블록을 기본적으로 모두 펼쳐 표시합니다.",
-      },
-      toolCallDetail: {
-        label: "도구 호출 표시",
-        description: "타임라인에 도구 호출이 표시되는 방식",
-        accessibilityLabel: "도구 호출 표시 선택({{value}})",
+      timelineDetail: {
+        label: "타임라인 표시",
+        description: "타임라인에 생각과 도구 호출이 표시되는 방식",
+        accessibilityLabel: "타임라인 표시 선택({{value}})",
         options: {
-          overview: "요약",
-          detailed: "전체 세부정보",
+          overview: "모두 접기",
+          detailed: "세부정보 접기",
+          live: "최신 생각 표시",
+          expanded: "모두 펼치기",
         },
       },
       language: {
@@ -2537,6 +2535,24 @@ export const ko: TranslationResources = {
       },
     },
     project: {
+      defaultHost: {
+        label: "새 작업 공간의 기본 호스트",
+        automatic: "자동",
+        hint: "이 프로젝트의 작업 공간을 만들 때 미리 선택되는 호스트",
+        saveFailed: "기본 호스트를 저장하지 못했습니다",
+      },
+      defaultIsolation: {
+        label: "새 작업 공간의 기본 격리 방식",
+        automatic: "자동",
+        hint: "이 프로젝트의 작업 공간을 만들 때 미리 선택되는 격리 방식",
+        saveFailed: "기본 격리 방식을 저장하지 못했습니다",
+      },
+      defaultBaseBranch: {
+        label: "새 worktree의 기본 베이스 브랜치",
+        automatic: "자동",
+        hint: "이 프로젝트의 worktree를 만들 때 기준이 되는 브랜치",
+        saveFailed: "기본 베이스 브랜치를 저장하지 못했습니다",
+      },
       noEditableTarget: "이 호스트에서는 이 프로젝트를 편집할 수 없습니다.",
       backToProjects: "프로젝트로 돌아가기",
       edit: {

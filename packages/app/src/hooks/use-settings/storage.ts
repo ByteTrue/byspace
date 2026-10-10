@@ -29,6 +29,25 @@ export type PullRequestOpenLocation = "main" | "side" | "explorer";
 /** What a sidebar workspace row shows in the space to the right of its title. */
 export type SidebarWorkspaceTrailing = "diff" | "timestamp" | "none";
 export type ToolCallDetailLevel = "overview" | "detailed";
+/**
+ * How much of the agent timeline renders expanded; the merged replacement for the retired
+ * autoExpandReasoning toggle + toolCallDetailLevel picker.
+ * - "overview": tool calls grouped into per-turn summaries, thinking collapsed ("Collapse all")
+ * - "detailed": tool calls individually expandable, thinking collapsed ("Collapse details")
+ * - "live": detailed + the newest thinking block expanded and pinned to its tail ("Show latest thinking")
+ * - "expanded": detailed + every thinking block expanded ("Expand all")
+ */
+export type TimelineDetailLevel = "overview" | "detailed" | "live" | "expanded";
+export const TIMELINE_DETAIL_LEVELS: readonly TimelineDetailLevel[] = [
+  "overview",
+  "detailed",
+  "live",
+  "expanded",
+];
+/** The projection/grouping machinery only cares about tool calls, not thinking. */
+export function toToolCallDetailLevel(level: TimelineDetailLevel): ToolCallDetailLevel {
+  return level === "overview" ? "overview" : "detailed";
+}
 /** Terminal scheme independent of the app theme: "match" follows the app theme. */
 export type TerminalAppearance = "match" | "dark" | "light";
 
@@ -72,13 +91,18 @@ export interface AppSettings {
   sidebarChecksDisplay: SidebarChecksDisplay;
   /** Top-level sidebar rows in display order; empty means the default order, all visible. */
   sidebarNavItems: SidebarNavPreference[];
-  autoExpandReasoning: boolean;
-  toolCallDetailLevel: ToolCallDetailLevel;
+  timelineDetailLevel: TimelineDetailLevel;
   chatOutlineEnabled: boolean;
   vimKeybindings: boolean;
   /** Desktop-only preferences for implicit opens into the ordinary side pane. */
   openInSidePane: OpenInSidePanePreferences;
   pullRequestOpenLocation: PullRequestOpenLocation;
+  /** Project view key → server id to preselect in New workspace's host picker; "" key unused. */
+  defaultHostByProject: Record<string, string>;
+  /** Project view key → isolation mode to preselect in New workspace; "" key unused. */
+  newWorkspaceIsolationByProject: Record<string, "local" | "worktree">;
+  /** Project view key → base branch to preselect for new worktrees; "" key unused. */
+  defaultBaseBranchByProject: Record<string, string>;
 }
 
 export type AppSettingsUpdate =
@@ -124,12 +148,14 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   sidebarRowItems: DEFAULT_SIDEBAR_ROW_ITEMS,
   sidebarChecksDisplay: DEFAULT_SIDEBAR_CHECKS_DISPLAY,
   sidebarNavItems: [],
-  autoExpandReasoning: false,
-  toolCallDetailLevel: "detailed",
+  timelineDetailLevel: "detailed",
   chatOutlineEnabled: true,
   vimKeybindings: false,
   openInSidePane: DEFAULT_OPEN_IN_SIDE_PANE_PREFERENCES,
   pullRequestOpenLocation: "explorer",
+  defaultHostByProject: {},
+  newWorkspaceIsolationByProject: {},
+  defaultBaseBranchByProject: {},
 };
 
 export const DEFAULT_APP_SETTINGS: Settings = {
@@ -212,12 +238,19 @@ const StoredAppSettingsSchema = z
       .optional()
       .catch(DEFAULT_SIDEBAR_CHECKS_DISPLAY),
     sidebarNavItems: z.array(z.object({ key: z.string(), visible: z.boolean() })).catch([]),
-    autoExpandReasoning: z.boolean().catch(false),
+    timelineDetailLevel: z
+      .enum(["overview", "detailed", "live", "expanded"])
+      .optional()
+      .catch(undefined),
+    // COMPAT(timelineDetailLevel): replaced autoExpandReasoning + toolCallDetailLevel in v0.6,
+    // remove after 2027-10-10.
+    autoExpandReasoning: z.boolean().optional().catch(undefined),
+    // COMPAT(timelineDetailLevel): see above.
     toolCallDetailLevel: z
       .enum(["overview", "detailed"])
       .or(z.literal("concise").transform(() => "overview" as const))
       .optional()
-      .catch("detailed"),
+      .catch(undefined),
     // COMPAT(compactToolCalls): migrated in v0.1.105, remove after 2027-01-12.
     compactToolCalls: z.boolean().optional().catch(undefined),
     chatOutlineEnabled: z.boolean().catch(true),
@@ -245,6 +278,9 @@ const StoredAppSettingsSchema = z
         legacyPullRequestsInSidePane: undefined,
       }),
     pullRequestOpenLocation: z.enum(["main", "side", "explorer"]).optional(),
+    defaultHostByProject: z.record(z.string(), z.string()).catch({}),
+    newWorkspaceIsolationByProject: z.record(z.string(), z.enum(["local", "worktree"])).catch({}),
+    defaultBaseBranchByProject: z.record(z.string(), z.string()).catch({}),
     // COMPAT(explorerSidebarRouting): replaced by source-specific side-pane preferences in v0.6.
     openSupportingTabsInSidePanel: z.boolean().optional().catch(undefined),
     // COMPAT(rendererRecord<string, never>): these fields used to share this renderer-owned key.
@@ -255,7 +291,10 @@ const StoredAppSettingsSchema = z
     const { legacyPullRequestsInSidePane, ...openInSidePane } = stored.openInSidePane;
     const needsWrite =
       (stored.uiBaseFontSize === undefined && stored.uiFontSize !== undefined) ||
-      stored.contentFontSize === undefined;
+      stored.contentFontSize === undefined ||
+      // Persist the level derived from the retired autoExpandReasoning/toolCallDetailLevel
+      // fields so the legacy mapping runs exactly once.
+      stored.timelineDetailLevel === undefined;
     const uiBaseFontSize =
       stored.uiBaseFontSize ??
       (stored.uiFontSize === undefined
@@ -266,10 +305,14 @@ const StoredAppSettingsSchema = z
       (isChecksHiddenByLegacyRowItem(stored.sidebarRowItems)
         ? "none"
         : DEFAULT_SIDEBAR_CHECKS_DISPLAY);
-    const toolCallDetailLevel =
-      stored.toolCallDetailLevel ?? (stored.compactToolCalls ? "overview" : "detailed");
+    const timelineDetailLevel =
+      stored.timelineDetailLevel ??
+      (stored.autoExpandReasoning
+        ? "expanded"
+        : (stored.toolCallDetailLevel ?? (stored.compactToolCalls ? "overview" : "detailed")));
     return {
       ...stored,
+      timelineDetailLevel,
       openInSidePane,
       pullRequestOpenLocation:
         stored.pullRequestOpenLocation ?? (legacyPullRequestsInSidePane ? "side" : "explorer"),
@@ -282,7 +325,6 @@ const StoredAppSettingsSchema = z
           stored.sidebarRowItems.services ??
           (stored.sidebarRowItems.scripts === false ? false : DEFAULT_SIDEBAR_ROW_ITEMS.services),
       },
-      toolCallDetailLevel,
       needsWrite,
     };
   })
@@ -385,6 +427,10 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     releaseChannel: _releaseChannel,
     compactToolCalls: _compactToolCalls,
     uiFontSize: _uiFontSize,
+    // COMPAT(timelineDetailLevel): retired fields folded into timelineDetailLevel, remove
+    // after 2027-10-10.
+    autoExpandReasoning: _autoExpandReasoning,
+    toolCallDetailLevel: _toolCallDetailLevel,
     ...settings
   } = StoredAppSettingsSchema.parse(value);
   return settings;

@@ -2,7 +2,6 @@
 kind: issue
 title: "全量 UI 审计与做工精细化（对齐基线、呼吸空间与视觉韵律）"
 type: refactor
-status: closed
 created: 2026-09-21
 ---
 

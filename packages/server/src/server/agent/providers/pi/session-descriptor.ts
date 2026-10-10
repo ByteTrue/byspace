@@ -106,7 +106,7 @@ export async function readPiImportSessionConfig(filePath: string): Promise<PiImp
   return toPiImportSessionConfig(descriptor);
 }
 
-async function resolvePiSessionsDir(options: PiSessionDescriptorOptions): Promise<string> {
+export async function resolvePiSessionsDir(options: PiSessionDescriptorOptions): Promise<string> {
   const env = options.env ?? process.env;
   const homeDir = options.homeDir ?? homedir();
   const baseDir = options.cwd ?? process.cwd();
@@ -182,7 +182,7 @@ function resolveConfigPath(value: string, options: { baseDir: string; homeDir: s
   return path.isAbsolute(value) ? value : path.resolve(options.baseDir, value);
 }
 
-async function walkJsonlFiles(root: string): Promise<string[]> {
+export async function walkJsonlFiles(root: string): Promise<string[]> {
   let entries: Dirent[];
   try {
     entries = await readdir(root, { withFileTypes: true });

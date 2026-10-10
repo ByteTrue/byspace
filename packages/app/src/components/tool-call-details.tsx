@@ -1,8 +1,10 @@
-import React, { useMemo, type ReactNode } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import {
   View,
   Text,
   ScrollView as RNScrollView,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
@@ -37,6 +39,8 @@ interface ToolCallDetailsContentProps {
   maxHeight?: number;
   fillAvailableHeight?: boolean;
   showLoadingSkeleton?: boolean;
+  /** Streaming content (thinking) keeps the scroll pinned to its newest lines. */
+  followTail?: boolean;
 }
 
 interface DetailStyles {
@@ -45,8 +49,6 @@ interface DetailStyles {
   codeVerticalScrollStyle: StyleProp<ViewStyle>;
   scrollAreaFillStyle: StyleProp<ViewStyle>;
   scrollAreaStyle: StyleProp<ViewStyle>;
-  jsonScrollCombined: StyleProp<ViewStyle>;
-  jsonScrollErrorCombined: StyleProp<ViewStyle>;
   fullBleedContainerStyle: StyleProp<ViewStyle>;
   loadingContainerStyle: StyleProp<ViewStyle>;
   resolvedMaxHeight: number | undefined;
@@ -74,15 +76,13 @@ function useDetailStyles(
 ): DetailStyles {
   const isFullBleed = resolveIsFullBleed(detail);
   const shouldFill = resolveShouldFill(detail, fillAvailableHeight);
-  const codeBlockStyle = isFullBleed ? styles.fullBleedBlock : styles.diffContainer;
-
   const sectionFillStyle = useMemo(
     () => [styles.section, shouldFill && styles.fillHeight],
     [shouldFill],
   );
   const codeBlockFillStyle = useMemo(
-    () => [codeBlockStyle, shouldFill && styles.fillHeight],
-    [codeBlockStyle, shouldFill],
+    () => [styles.diffContainer, shouldFill && styles.fillHeight],
+    [shouldFill],
   );
   const codeVerticalScrollStyle = useMemo(
     () => [
@@ -94,7 +94,6 @@ function useDetailStyles(
   );
   const scrollAreaFillStyle = useMemo(
     () => [
-      styles.scrollArea,
       resolvedMaxHeight !== undefined && inlineUnistylesStyle({ maxHeight: resolvedMaxHeight }),
       shouldFill && styles.fillHeight,
     ],
@@ -102,13 +101,10 @@ function useDetailStyles(
   );
   const scrollAreaStyle = useMemo(
     () => [
-      styles.scrollArea,
       resolvedMaxHeight !== undefined && inlineUnistylesStyle({ maxHeight: resolvedMaxHeight }),
     ],
     [resolvedMaxHeight],
   );
-  const jsonScrollCombined = styles.jsonScroll;
-  const jsonScrollErrorCombined = [styles.jsonScroll, styles.jsonScrollError];
   const fullBleedContainerStyle = useMemo(
     () => [
       isFullBleed ? styles.fullBleedContainer : styles.paddedContainer,
@@ -127,8 +123,6 @@ function useDetailStyles(
     codeVerticalScrollStyle,
     scrollAreaFillStyle,
     scrollAreaStyle,
-    jsonScrollCombined,
-    jsonScrollErrorCombined,
     fullBleedContainerStyle,
     loadingContainerStyle,
     resolvedMaxHeight,
@@ -511,6 +505,85 @@ function ScrollablePlainTextSection({ text, ds }: { text: string; ds: DetailStyl
   );
 }
 
+/**
+ * Structural view of the platform ScrollView instance; both the react-native-web and
+ * gesture-handler ScrollViews expose scrollToEnd at runtime.
+ */
+interface FollowableScrollViewRef {
+  scrollToEnd: (options?: { animated?: boolean }) => void;
+}
+
+/** Within this distance of the tail a scroll counts as "at the bottom". */
+const TAIL_FOLLOW_THRESHOLD_PX = 32;
+
+/**
+ * Thinking text while the model streams it. Without the pin, the capped-height scroll area
+ * stays at the top while the newest reasoning pours in below the fold; the pin keeps the tail
+ * visible until the user scrolls up, and resumes when they return to the bottom.
+ */
+function ThinkingDetailSection({
+  text,
+  ds,
+  followTail = false,
+}: {
+  text: string;
+  ds: DetailStyles;
+  followTail?: boolean;
+}) {
+  const scrollRef = useRef<FollowableScrollViewRef | null>(null);
+  const followTailRef = useRef(followTail);
+  followTailRef.current = followTail;
+  const stickToBottomRef = useRef(true);
+
+  const attachScrollView = useCallback((instance: FollowableScrollViewRef | null) => {
+    scrollRef.current = instance;
+  }, []);
+
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+    stickToBottomRef.current = distanceFromBottom < TAIL_FOLLOW_THRESHOLD_PX;
+  }, []);
+
+  const handleContentSizeChange = useCallback(() => {
+    if (!followTailRef.current || !stickToBottomRef.current) {
+      return;
+    }
+    scrollRef.current?.scrollToEnd({ animated: false });
+  }, []);
+
+  // First paint of a streaming block can already be taller than the cap; later growth is
+  // followed by onContentSizeChange. Toggling followTail (a folded-then-reopened block)
+  // restarts pinned instead of inheriting a stale release.
+  useEffect(() => {
+    if (!followTail) {
+      stickToBottomRef.current = true;
+      return;
+    }
+    scrollRef.current?.scrollToEnd({ animated: false });
+  }, [followTail]);
+
+  return (
+    <View style={styles.section}>
+      <ScrollView
+        ref={attachScrollView}
+        testID="thinking-detail-scroll"
+        style={ds.scrollAreaStyle}
+        contentContainerStyle={styles.scrollContent}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator
+        onScroll={handleScroll}
+        onContentSizeChange={handleContentSizeChange}
+        scrollEventThrottle={16}
+      >
+        <Text selectable style={styles.plainText}>
+          {text}
+        </Text>
+      </ScrollView>
+    </View>
+  );
+}
+
 interface SearchDetail {
   query?: string;
   content?: string;
@@ -617,7 +690,6 @@ function buildUnknownSections(detail: UnknownDetail, ds: DetailStyles, t: TFunct
         <ScrollView
           horizontal
           nestedScrollEnabled
-          style={ds.jsonScrollCombined}
           contentContainerStyle={styles.jsonContent}
           showsHorizontalScrollIndicator={true}
         >
@@ -746,7 +818,7 @@ function buildDetailSections(
   return [];
 }
 
-function ErrorSection({ errorText, ds }: { errorText: string; ds: DetailStyles }) {
+function ErrorSection({ errorText }: { errorText: string }) {
   const { t } = useTranslation();
   return (
     <View style={styles.section}>
@@ -754,7 +826,6 @@ function ErrorSection({ errorText, ds }: { errorText: string; ds: DetailStyles }
       <ScrollView
         horizontal
         nestedScrollEnabled
-        style={ds.jsonScrollErrorCombined}
         contentContainerStyle={styles.jsonContent}
         showsHorizontalScrollIndicator={true}
       >
@@ -787,16 +858,29 @@ export function ToolCallDetailsContent({
   maxHeight,
   fillAvailableHeight = false,
   showLoadingSkeleton = false,
+  followTail = false,
 }: ToolCallDetailsContentProps) {
   const { t } = useTranslation();
   const resolvedMaxHeight = fillAvailableHeight ? undefined : (maxHeight ?? 300);
   const ds = useDetailStyles(detail, resolvedMaxHeight, fillAvailableHeight);
   const diffLines = useDiffLines(detail);
 
-  const sections: ReactNode[] = buildDetailSections(toolName, detail, diffLines, ds, t);
+  // Thinking renders its own section: while the block streams, its scroll area pins to the
+  // newest lines instead of sitting at the top.
+  const sections: ReactNode[] =
+    toolName === "thinking" && detail?.type === "unknown" && typeof detail.input === "string"
+      ? [
+          <ThinkingDetailSection
+            key="thinking"
+            text={detail.input}
+            ds={ds}
+            followTail={followTail}
+          />,
+        ]
+      : buildDetailSections(toolName, detail, diffLines, ds, t);
 
   if (errorText) {
-    sections.push(<ErrorSection key="error" errorText={errorText} ds={ds} />);
+    sections.push(<ErrorSection key="error" errorText={errorText} />);
   }
 
   if (sections.length === 0) {
@@ -903,17 +987,7 @@ const styles = StyleSheet.create((theme) => {
       fontSize: theme.fontSize.sm,
     },
     diffContainer: {
-      borderWidth: theme.borderWidth[1],
-      borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.base,
       overflow: "hidden",
-      backgroundColor: theme.colors.surface2,
-    },
-    fullBleedBlock: {
-      borderWidth: 0,
-      borderRadius: 0,
-      overflow: "hidden",
-      backgroundColor: theme.colors.surface1,
     },
     codeVerticalScroll: {},
     codeVerticalContent: {
@@ -928,19 +1002,13 @@ const styles = StyleSheet.create((theme) => {
       paddingHorizontal: insets.padding,
       paddingVertical: insets.padding,
     },
-    scrollArea: {
-      borderWidth: theme.borderWidth[1],
-      borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.base,
-      backgroundColor: theme.colors.surface2,
-    },
     scrollContent: {
       padding: insets.padding,
     },
     scrollText: {
       fontFamily: theme.fontFamily.mono,
       fontSize: theme.fontSize.code,
-      color: theme.colors.foreground,
+      color: theme.colors.foregroundMuted,
       lineHeight: 18,
       ...(isWeb
         ? {
@@ -979,15 +1047,6 @@ const styles = StyleSheet.create((theme) => {
       fontSize: theme.fontSize.code,
       color: theme.colors.foreground,
       lineHeight: 18,
-    },
-    jsonScroll: {
-      borderWidth: theme.borderWidth[1],
-      borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.base,
-      backgroundColor: theme.colors.surface2,
-    },
-    jsonScrollError: {
-      borderColor: theme.colors.destructive,
     },
     jsonContent: {
       padding: insets.padding,

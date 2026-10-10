@@ -218,6 +218,11 @@ export class WorkspaceFilesSession {
     this.fileSubscriptions.clear();
   }
 
+  /** Drop file watches under a directory the archive is about to delete. */
+  closeFileWatchersForCwd(cwd: string): void {
+    this.fileObserver.closeForCwd(cwd);
+  }
+
   async handleFileExplorerRequest(request: FileExplorerRequest, source?: object): Promise<void> {
     const { cwd: workspaceCwd, path: requestedPath = ".", mode, requestId } = request;
     const cwd = workspaceCwd.trim();

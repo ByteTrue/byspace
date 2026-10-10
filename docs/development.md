@@ -119,18 +119,17 @@ so the port may already be bound. `portScript` takes precedence when both values
 
 > The user-facing guide for this feature (enabling it, reverse proxy, TLS, tunnels, security) lives at [public-docs/web-ui.md](../public-docs/web-ui.md). This section is the contributor/build reference: how the artifact is produced and bundled.
 
-The daemon can optionally serve the browser web client from the same HTTP server. This is disabled by default.
+The daemon serves the browser web client from the same HTTP server. This is on by default; no flag needed.
 
-Enable it for a running daemon with:
+Disable it for a running daemon with:
 
 ```bash
-byspace daemon start --web-ui
+byspace daemon start --no-web-ui
 ```
 
 Or set the environment variable:
 
 ```bash
-# The bundled web UI is on by default; no flag needed. To disable it:
 BYSPACE_WEB_UI_ENABLED=false byspace daemon start
 ```
 
@@ -220,9 +219,9 @@ install.
 
 ## CLI reference
 
-Use `npm run cli` to run the in-repo CLI from source (`npx tsx packages/cli/src/index.ts`). The script wraps the CLI with `scripts/dev-home.sh`, so it automatically uses this checkout's `.dev/byspace-home` and dev daemon endpoint unless you pass an explicit override. The globally installed `byspace` binary is the published npm package, not this checkout — use `npm run cli` when you want to talk to the CLI you are editing.
+Use `npm run cli` to run the in-repo CLI from source (`npx tsx packages/cli/src/index.ts`). The script wraps the CLI with `scripts/dev-home.mjs`, so it automatically uses this checkout's `.dev/byspace-home` and dev daemon endpoint unless you pass an explicit override. The globally installed `byspace` binary is the published npm package, not this checkout — use `npm run cli` when you want to talk to the CLI you are editing.
 
-The wrapper is also a target-selection trap: `dev-home.sh` injects `BYSPACE_LISTEN=127.0.0.1:6778`, and `BYSPACE_LISTEN` outranks `BYSPACE_HOME` when the CLI picks a daemon. So `npm run cli -- ...` reaches the **dev** daemon even when the agent or workspace you are aiming at lives in the real `~/.byspace` on 6777, and the write lands on the wrong daemon as an orphan that never triggers. To target the packaged daemon, bypass the wrapper and set both explicitly:
+The wrapper is also a target-selection trap: `dev-home.mjs` injects `BYSPACE_LISTEN=127.0.0.1:6778`, and `BYSPACE_LISTEN` outranks `BYSPACE_HOME` when the CLI picks a daemon. So `npm run cli -- ...` reaches the **dev** daemon even when the agent or workspace you are aiming at lives in the real `~/.byspace` on 6777, and the write lands on the wrong daemon as an orphan that never triggers. To target the packaged daemon, bypass the wrapper and set both explicitly:
 
 ```bash
 BYSPACE_HOME="$HOME/.byspace" BYSPACE_LISTEN=127.0.0.1:6777 \
@@ -306,12 +305,15 @@ Do NOT use browser history (back/forward). Always navigate by clicking UI elemen
 
 ## App web deploys
 
-`packages/app` exports a single-page Expo web app and deploys the `dist/`
-directory to Cloudflare Pages with `npm run deploy:web --workspace=@bytetrue/app`.
+`packages/app` exports a single-page Expo web app. The export in `dist/` is
+served by the hosted relay Worker (issue 073) from the same origin as the
+relay — deploy with `npm run deploy:hosted` (or `:beta`) from the repo root,
+which builds the web export and runs `wrangler deploy` in `packages/relay`.
+The Docker container serves the same shape from the Node relay.
 
 PWA install metadata lives in `packages/app/public/manifest.json` and is linked
 from `packages/app/public/index.html`. Keep the install icons in `public/` so
-Cloudflare serves them from stable root URLs after `expo export`.
+the export serves them from stable root URLs.
 
 Do not add service-worker caching casually. BySpace is a live control surface for
 agents, and an aggressive service worker can strand installed users on stale web

@@ -426,7 +426,6 @@ export const fr: TranslationResources = {
       openToSide: "Ouvrir sur le côté",
       copyPath: "Copier le chemin",
       copyRelativePath: "Copier le chemin relatif",
-      revealIn: "Afficher dans {{target}}",
       download: "Télécharger",
       addToChat: "Ajouter au chat",
       moreActions: "Plus de propositions",
@@ -483,7 +482,6 @@ export const fr: TranslationResources = {
         createFailed: "Échec de la création de l'entrée",
         renameFailed: "Échec du renommage de l'entrée",
         duplicateFailed: "Échec de la duplication de l'entrée",
-        revealFailed: "Échec de l'affichage de l'entrée",
         deleteFailed: "Échec de la suppression de l'entrée",
       },
       draft: {
@@ -1216,6 +1214,8 @@ export const fr: TranslationResources = {
         hostDisconnected: "Hostn'est pas connecté",
         hideFailed: "Échec du masquage de l'espace de travail",
         archiveFailed: "Échec de l'archivage de l'espace de travail",
+        archiveDirectoryRemovalFailed:
+          "L'espace de travail a été archivé, mais son dossier n'a pas pu être supprimé entièrement. Fermez les programmes qui l'utilisent et supprimez le dossier manuellement.",
       },
     },
   },
@@ -1974,17 +1974,16 @@ export const fr: TranslationResources = {
         description: "Lignes conservées dans le tampon du terminal intégré",
         accessibilityLabel: "Lignes de défilementTerminal",
       },
-      autoExpandReasoning: {
-        label: "Toujours afficher le raisonnement",
-        description: "Afficher le raisonnement de l'agent entièrement développé par défaut",
-      },
-      toolCallDetail: {
-        label: "Affichage des appels d’outils",
-        description: "Comment les appels d’outils apparaissent dans la chronologie",
-        accessibilityLabel: "Sélectionner l’affichage des appels d’outils ({{value}})",
+      timelineDetail: {
+        label: "Niveau de détail de la chronologie",
+        description:
+          "Comment le raisonnement et les appels d’outils apparaissent dans la chronologie",
+        accessibilityLabel: "Sélectionner le niveau de détail de la chronologie ({{value}})",
         options: {
-          overview: "Résumé",
-          detailed: "Détails complets",
+          overview: "Tout replier",
+          detailed: "Replier les détails",
+          live: "Afficher le dernier raisonnement",
+          expanded: "Tout déplier",
         },
       },
       language: {
@@ -2582,6 +2581,24 @@ export const fr: TranslationResources = {
       },
     },
     project: {
+      defaultHost: {
+        label: "Hôte par défaut des nouveaux espaces",
+        automatic: "Automatique",
+        hint: "Présélectionné lors de la création d'un espace de travail pour ce projet",
+        saveFailed: "Impossible d'enregistrer l'hôte par défaut",
+      },
+      defaultIsolation: {
+        label: "Isolation par défaut des nouveaux espaces",
+        automatic: "Automatique",
+        hint: "Présélectionné lors de la création d'un espace pour ce projet",
+        saveFailed: "Impossible d'enregistrer l'isolation par défaut",
+      },
+      defaultBaseBranch: {
+        label: "Branche de base par défaut des nouveaux worktrees",
+        automatic: "Automatique",
+        hint: "Les nouveaux worktrees de ce projet partent de cette branche",
+        saveFailed: "Impossible d'enregistrer la branche de base par défaut",
+      },
       noEditableTarget: "Ce projet n'est pas modifiable sur cet hôte.",
       backToProjects: "Retour aux projets",
       edit: {

@@ -2,7 +2,6 @@
 kind: issue
 title: "实时流中 tool_call 类任务工具（如 Pi todowrite）同步发布 taskSnapshot"
 type: ff
-status: closed
 created: 2026-09-15
 ---
 

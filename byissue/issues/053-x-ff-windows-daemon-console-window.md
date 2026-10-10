@@ -2,7 +2,6 @@
 kind: issue
 title: "Windows：daemon 启动不再弹出控制台窗口"
 type: ff
-status: closed
 created: 2026-09-27
 ---
 

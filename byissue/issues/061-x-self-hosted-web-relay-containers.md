@@ -2,9 +2,7 @@
 kind: issue
 title: "自托管发布形态：web/relay 容器、Node relay、daemon 镜像退役与引导弹窗"
 type: feature
-status: closed
 created: 2026-09-30
-closed: 2026-10-01
 ---
 
 <!-- 读者：跨会话接手的人。目标与范围 · 根因证据 · 现状怎么工作 · 影响面 · 方案 · 验证 · 关闭回写 -->
@@ -241,7 +239,7 @@ PR #13 落地后，围绕「局域网无域名 HTTPS」的产品讨论收敛（t
 **契约与制度记忆**
 
 - docs/protocol-compatibility.md — 新增「Relay wire compatibility」节：/ws 握手参数冻结（role/serverId/v）、固定 400 文案、v1/v2 语义（单席位替换 1008、connected/disconnected 通知、缓冲上限 200）、行为规约指向 cloudflare-adapter.ts + node-adapter.ts + node e2e parity。
-- byissue/issues/025-o-architecture-retention-audit.md — D6 修订四处：D 表行（保留→双容器自托管，原「保留」作废，注明 2026-09-30）、开头 Owner 确认句、执行顺序第 1 条、已确认方向汇总句。修订理由：agent 需要用户真实工具链，合体镜像误导大于便利；npm 唯一分发。
+- byissue/issues/025-x-architecture-retention-audit.md — D6 修订四处：D 表行（保留→双容器自托管，原「保留」作废，注明 2026-09-30）、开头 Owner 确认句、执行顺序第 1 条、已确认方向汇总句。修订理由：agent 需要用户真实工具链，合体镜像误导大于便利；npm 唯一分发。
 
 **验证**
 

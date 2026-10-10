@@ -426,7 +426,6 @@ export const es: TranslationResources = {
       openToSide: "Abrir al lado",
       copyPath: "Copiar ruta",
       copyRelativePath: "Copiar ruta relativa",
-      revealIn: "Mostrar en {{target}}",
       download: "Descargar",
       addToChat: "Añadir al chat",
       moreActions: "Más acciones",
@@ -483,7 +482,6 @@ export const es: TranslationResources = {
         createFailed: "No se pudo crear la entrada",
         renameFailed: "No se pudo renombrar la entrada",
         duplicateFailed: "No se pudo duplicar la entrada",
-        revealFailed: "No se pudo mostrar la entrada",
         deleteFailed: "No se pudo eliminar la entrada",
       },
       draft: {
@@ -1216,6 +1214,8 @@ export const es: TranslationResources = {
         hostDisconnected: "Hostno está conectado",
         hideFailed: "No se pudo ocultar el espacio de trabajo",
         archiveFailed: "No se pudo archivar el espacio de trabajo",
+        archiveDirectoryRemovalFailed:
+          "El espacio de trabajo se archivó, pero no se pudo eliminar su carpeta por completo. Cierra los programas que la usen y elimínala manualmente.",
       },
     },
   },
@@ -1973,18 +1973,15 @@ export const es: TranslationResources = {
         description: "Líneas mantenidas en el búfer de terminal incorporado",
         accessibilityLabel: "Líneas del historial de terminal",
       },
-      autoExpandReasoning: {
-        label: "Siempre expandir razonamiento",
-        description:
-          "Mostrar los bloques de pensamiento y razonamiento del agente totalmente expandidos de forma predeterminada",
-      },
-      toolCallDetail: {
-        label: "Visualización de llamadas a herramientas",
-        description: "Cómo aparecen las llamadas a herramientas en la cronología",
-        accessibilityLabel: "Seleccionar visualización de llamadas a herramientas ({{value}})",
+      timelineDetail: {
+        label: "Nivel de detalle de la cronología",
+        description: "Cómo aparecen el razonamiento y las llamadas a herramientas en la cronología",
+        accessibilityLabel: "Seleccionar nivel de detalle de la cronología ({{value}})",
         options: {
-          overview: "Resumen",
-          detailed: "Detalle completo",
+          overview: "Plegar todo",
+          detailed: "Plegar detalles",
+          live: "Mostrar el razonamiento más reciente",
+          expanded: "Expandir todo",
         },
       },
       language: {
@@ -2579,6 +2576,24 @@ export const es: TranslationResources = {
       },
     },
     project: {
+      defaultHost: {
+        label: "Host predeterminado para nuevos espacios",
+        automatic: "Automático",
+        hint: "Preseleccionado al crear un espacio de trabajo para este proyecto",
+        saveFailed: "No se pudo guardar el host predeterminado",
+      },
+      defaultIsolation: {
+        label: "Aislamiento predeterminado para nuevos espacios",
+        automatic: "Automático",
+        hint: "Preseleccionado al crear un espacio de trabajo para este proyecto",
+        saveFailed: "No se pudo guardar el aislamiento predeterminado",
+      },
+      defaultBaseBranch: {
+        label: "Rama base predeterminada para nuevos worktrees",
+        automatic: "Automática",
+        hint: "Los nuevos worktrees de este proyecto se crean desde esta rama",
+        saveFailed: "No se pudo guardar la rama base predeterminada",
+      },
       noEditableTarget: "Este proyecto no se puede editar en este host.",
       backToProjects: "Volver a proyectos",
       edit: {

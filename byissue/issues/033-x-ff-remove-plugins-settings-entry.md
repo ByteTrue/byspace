@@ -2,9 +2,7 @@
 kind: issue
 title: "移除设置页遗留的 Plugins 空入口"
 type: ff
-status: closed
 created: 2026-09-15
-closed: 2026-09-15
 ---
 
 # 移除设置页遗留的 Plugins 空入口

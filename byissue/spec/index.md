@@ -23,7 +23,8 @@ BySpace 让用户从手机 PWA、Web 或 CLI 查看和控制自己开发环境�
 
 ## 边界与考量
 
-- 实现跨浏览器与手机 PWA；原生移动端与 Electron 已退出（见 [025](../issues/025-o-architecture-retention-audit.md)），只有平台能力确实不同才分流。
+- 实现跨浏览器与手机 PWA；原生移动端与 Electron 已退出（见 [025](../issues/025-x-architecture-retention-audit.md)），只有平台能力确实不同才分流。
 - App 与 daemon 可以异步更新，wire protocol 保持双向兼容。
 - Terminal、Agent stream 和移动面板的性能优化不得以删除现有用户能力为代价。
 - BySpace 使用统一 Data Relay；Relay 只转发 E2EE 数据，不解析 Agent 会话内容。
+- **已决定不做的方向**：原生移动 App、Electron 桌面壳、SSH 接入、Hub 集成、插件系统（provider 扩展改走 custom provider）。决策理由、替代路径与移除批次见 [025](../issues/025-x-architecture-retention-audit.md)；跨 workspace 编排的放弃理由见 [026](../issues/026-d-cross-workspace-orchestrator.md)。

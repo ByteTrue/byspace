@@ -426,7 +426,6 @@ export const ptBR: TranslationResources = {
       openToSide: "Abrir ao lado",
       copyPath: "Copiar caminho",
       copyRelativePath: "Copiar caminho relativo",
-      revealIn: "Mostrar no {{target}}",
       download: "Baixar",
       addToChat: "Adicionar ao chat",
       moreActions: "Mais ações",
@@ -483,7 +482,6 @@ export const ptBR: TranslationResources = {
         createFailed: "Falha ao criar entrada",
         renameFailed: "Falha ao renomear entrada",
         duplicateFailed: "Falha ao duplicar entrada",
-        revealFailed: "Falha ao mostrar entrada",
         deleteFailed: "Falha ao excluir entrada",
       },
       draft: {
@@ -1207,6 +1205,8 @@ export const ptBR: TranslationResources = {
         hostDisconnected: "Host não está conectado",
         hideFailed: "Falha ao ocultar workspace",
         archiveFailed: "Falha ao arquivar workspace",
+        archiveDirectoryRemovalFailed:
+          "O workspace foi arquivado, mas a pasta não pôde ser totalmente removida. Feche os programas que a estão usando e exclua a pasta manualmente.",
       },
     },
   },
@@ -1961,18 +1961,15 @@ export const ptBR: TranslationResources = {
         description: "Linhas mantidas no buffer do terminal integrado",
         accessibilityLabel: "Linhas do scrollback do terminal",
       },
-      autoExpandReasoning: {
-        label: "Sempre expandir raciocínio",
-        description:
-          "Mostrar os blocos de pensamento e raciocínio do agente totalmente expandidos por padrão",
-      },
-      toolCallDetail: {
-        label: "Exibição de chamadas de ferramentas",
-        description: "Como as chamadas de ferramentas aparecem na linha do tempo",
-        accessibilityLabel: "Selecionar exibição de chamadas de ferramentas ({{value}})",
+      timelineDetail: {
+        label: "Nível de detalhe da linha do tempo",
+        description: "Como o raciocínio e as chamadas de ferramentas aparecem na linha do tempo",
+        accessibilityLabel: "Selecionar nível de detalhe da linha do tempo ({{value}})",
         options: {
-          overview: "Resumo",
-          detailed: "Detalhes completos",
+          overview: "Recolher tudo",
+          detailed: "Recolher detalhes",
+          live: "Mostrar o raciocínio mais recente",
+          expanded: "Expandir tudo",
         },
       },
       language: {
@@ -2564,6 +2561,24 @@ export const ptBR: TranslationResources = {
       },
     },
     project: {
+      defaultHost: {
+        label: "Host padrão para novos espaços",
+        automatic: "Automático",
+        hint: "Pré-selecionado ao criar um espaço de trabalho para este projeto",
+        saveFailed: "Não foi possível salvar o host padrão",
+      },
+      defaultIsolation: {
+        label: "Isolamento padrão para novos espaços",
+        automatic: "Automático",
+        hint: "Pré-selecionado ao criar um espaço de trabalho para este projeto",
+        saveFailed: "Não foi possível salvar o isolamento padrão",
+      },
+      defaultBaseBranch: {
+        label: "Branch base padrão para novos worktrees",
+        automatic: "Automático",
+        hint: "Novos worktrees deste projeto partem deste branch",
+        saveFailed: "Não foi possível salvar o branch base padrão",
+      },
       noEditableTarget: "Este projeto não pode ser editado neste host.",
       backToProjects: "Voltar para projetos",
       edit: {

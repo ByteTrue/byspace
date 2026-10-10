@@ -2,9 +2,7 @@
 kind: issue
 title: "修复 PowerShell 上 plain script 命令结束不上报、UI 永远显示运行中"
 type: ff
-status: closed
 created: 2026-09-28
-closed: 2026-09-28
 ---
 
 <!-- 快改痕迹：轻。读者只要 30 秒扫完。禁止迷你 Design。 -->

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ProviderSubagentStore } from "../../../provider-subagents/store.js";
-import { foldSubagentObservations } from "./observation.js";
+import { foldSubagentObservations } from "../../../provider-subagents/observation.js";
 import {
   observeReplayWorkflows,
   parseClaudeWorkflowRun,

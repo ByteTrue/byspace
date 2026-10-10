@@ -34,6 +34,8 @@ import { useForgeSearchQuery } from "@/git/use-forge-search-query";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { ensureCheckoutStatus } from "@/git/checkout-status-cache";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
+import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
+import { useSettings } from "@/hooks/use-settings";
 import { resolveTerminalProfiles } from "@bytetrue/protocol/terminal-profiles";
 import type { TerminalProfile } from "@bytetrue/protocol/messages";
 import { LaunchControl } from "@/new-workspace-launch/launch-control";
@@ -102,9 +104,10 @@ import {
 } from "./new-workspace-fork-context";
 import {
   buildPickerOptionData,
-  defaultBasePickerItem,
+  pinnedBasePickerItem,
   pickerItemLabel,
   pickerItemToCheckoutRequest,
+  resolveNewWorkspaceBaseItem,
   type BranchPickerDetail,
   type PickerCheckoutRequest,
   type PickerItem,
@@ -706,14 +709,15 @@ interface WorkspaceIsolationState {
 function useWorkspaceIsolation(input: {
   supportsMultiplicity: boolean;
   worktreeSupport: "supported" | "unsupported" | "unknown";
+  projectIsolation?: "local" | "worktree" | null;
 }): WorkspaceIsolationState {
-  const { supportsMultiplicity, worktreeSupport } = input;
-  // The last isolation choice is remembered alongside the other New Workspace
-  // form preferences (provider, model, mode). A manual in-screen pick overrides
-  // the remembered default until the screen remounts.
+  const { supportsMultiplicity, worktreeSupport, projectIsolation } = input;
+  // Precedence: manual pick > project default (issue 068) > remembered global choice.
+  // A manual in-screen pick overrides the defaults until the screen remounts.
   const { preferences, updatePreferences } = useFormPreferences();
   const [manualIsolation, setManualIsolation] = useState<"local" | "worktree" | null>(null);
-  const isolation = manualIsolation ?? preferences.isolation ?? "local";
+  // Precedence: manual pick > project default (issue 068) > remembered global choice > local.
+  const isolation = manualIsolation ?? projectIsolation ?? preferences.isolation ?? "local";
   const canCreateWorktree = supportsMultiplicity && worktreeSupport !== "unsupported";
   const isWorktree = isolation === "worktree" && canCreateWorktree;
 
@@ -1149,6 +1153,8 @@ function useNewWorkspaceHostSelector(input: {
   lastActiveProject: HostProjectListItem | null;
   hostConnectionStatusByServerId: ReadonlyMap<string, HostRuntimeConnectionStatus>;
   workspaceMultiplicityByServerId: ReadonlyMap<string, boolean>;
+  pinnedServerId: string | null;
+  localServerId: string | null;
 }) {
   const routeServerId = input.initialServerId.trim();
   const defaultServerId = useMemo(
@@ -1160,6 +1166,8 @@ function useNewWorkspaceHostSelector(input: {
         projects: input.projects,
         hostConnectionStatusByServerId: input.hostConnectionStatusByServerId,
         workspaceMultiplicityByServerId: input.workspaceMultiplicityByServerId,
+        pinnedServerId: input.pinnedServerId,
+        localServerId: input.localServerId,
       }),
     [
       input.allServerIds,
@@ -1168,6 +1176,8 @@ function useNewWorkspaceHostSelector(input: {
       input.lastActiveProject,
       input.projects,
       input.workspaceMultiplicityByServerId,
+      input.pinnedServerId,
+      input.localServerId,
     ],
   );
   const [automaticSelection, setAutomaticSelection] = useState(() => ({
@@ -1191,6 +1201,8 @@ function useNewWorkspaceHostSelector(input: {
               projects: input.projects,
               hostConnectionStatusByServerId: input.hostConnectionStatusByServerId,
               workspaceMultiplicityByServerId: input.workspaceMultiplicityByServerId,
+              pinnedServerId: input.pinnedServerId,
+              localServerId: input.localServerId,
               currentServerId: current.serverId,
               nextServerId: defaultServerId,
             })
@@ -1210,6 +1222,8 @@ function useNewWorkspaceHostSelector(input: {
     input.lastActiveProject,
     input.projects,
     input.workspaceMultiplicityByServerId,
+    input.pinnedServerId,
+    input.localServerId,
     routeServerId,
   ]);
 
@@ -1260,6 +1274,8 @@ interface NewWorkspaceInitialContextState {
   routeProject: HostProjectListItem | null;
   routeProjectContextViewKey: string | null;
   lastActiveProject: HostProjectListItem | null;
+  /** Route project's view key, falling back to the remembered one — the per-project settings key. */
+  pinViewKey: string | null;
 }
 
 function useNewWorkspaceInitialContext({
@@ -1311,6 +1327,25 @@ function useNewWorkspaceInitialContext({
   );
   const hostConnectionStatusByServerId = useHostRuntimeConnectionStatuses(allServerIds);
   const workspaceMultiplicityByServerId = useHostFeatureMap(allServerIds, "workspaceMultiplicity");
+  const localServerId = useLocalDaemonServerId();
+  const defaultHostByProject = useSettings((settings) => settings.defaultHostByProject);
+  // The settings screen writes the pin under the cross-host view key from the project list. A
+  // project built from one workspace carries a placement key instead, so resolve the remembered
+  // one against that list first — its own key would never match the stored pin.
+  const lastActiveProjectKey = useMemo(() => {
+    if (!lastActiveProject || !lastWorkspaceServerId) return null;
+    return (
+      resolveHostProjectCandidate({
+        candidate: lastActiveProject,
+        projects,
+        serverId: lastWorkspaceServerId,
+      })?.viewKey ?? lastActiveProject.viewKey
+    );
+  }, [lastActiveProject, lastWorkspaceServerId, projects]);
+  // Route placement first: opening "New workspace" from a project targets that project even
+  // when the last active one differs.
+  const pinViewKey = routeProject?.viewKey ?? lastActiveProjectKey;
+  const pinnedServerId = (pinViewKey && defaultHostByProject[pinViewKey]) || null;
   const {
     selectedServerId,
     hostPickerOpen,
@@ -1324,6 +1359,8 @@ function useNewWorkspaceInitialContext({
     lastActiveProject,
     hostConnectionStatusByServerId,
     workspaceMultiplicityByServerId,
+    pinnedServerId,
+    localServerId,
   });
 
   return {
@@ -1337,6 +1374,7 @@ function useNewWorkspaceInitialContext({
     routeProject,
     routeProjectContextViewKey: routePlacement?.viewKey ?? null,
     lastActiveProject,
+    pinViewKey,
   };
 }
 
@@ -1669,12 +1707,26 @@ export function NewWorkspaceScreen({
     routeProject,
     routeProjectContextViewKey,
     lastActiveProject,
+    pinViewKey,
   } = useNewWorkspaceInitialContext({
     serverId,
     sourceDirectory: sourceDirectoryProp,
     projectId,
     displayName: displayNameProp,
   });
+  // Per-project New workspace defaults (issue 068): the settings screen writes them under the
+  // cross-host view key, the same key the host pin uses.
+  const newWorkspaceIsolationByProject = useSettings(
+    (settings) => settings.newWorkspaceIsolationByProject,
+  );
+  const defaultBaseBranchByProject = useSettings((settings) => settings.defaultBaseBranchByProject);
+  const { projectIsolation, pinnedBaseBranch } = useMemo(
+    () => ({
+      projectIsolation: (pinViewKey && newWorkspaceIsolationByProject[pinViewKey]) || null,
+      pinnedBaseBranch: (pinViewKey && defaultBaseBranchByProject[pinViewKey]) || null,
+    }),
+    [defaultBaseBranchByProject, newWorkspaceIsolationByProject, pinViewKey],
+  );
   // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
   const supportsWorkspaceMultiplicity = useHostFeature(selectedServerId, "workspaceMultiplicity");
   const supportsForgeSearch = useHostFeature(selectedServerId, "forgeSearch");
@@ -1851,6 +1903,7 @@ export function NewWorkspaceScreen({
     useWorkspaceIsolation({
       supportsMultiplicity: supportsWorkspaceMultiplicity,
       worktreeSupport,
+      projectIsolation,
     });
 
   const branchSuggestionsQuery = useQuery({
@@ -1875,6 +1928,31 @@ export function NewWorkspaceScreen({
     staleTime: 15_000,
   });
 
+  // The project's pinned base branch (issue 068) resolves through its own exact-name query
+  // rather than the picker's list: that list is search-filtered and capped at 20, so a pin
+  // ranked below the window or absent from the current search would silently fall back to
+  // the checkout's default. The server filters suggestions by substring, so the exact name
+  // matches as long as the branch still exists.
+  const pinnedBaseQueryEnabled = useMemo(
+    () => Boolean(pinnedBaseBranch) && clientReady && hasSelectedSourceDirectory,
+    [pinnedBaseBranch, clientReady, hasSelectedSourceDirectory],
+  );
+  const pinnedBaseBranchQuery = useQuery({
+    queryKey: ["pinned-base-branch", selectedServerId, selectedSourceDirectory, pinnedBaseBranch],
+    queryFn: async () => {
+      if (!selectedSourceDirectory || !pinnedBaseBranch) {
+        throw new Error("No pinned base branch");
+      }
+      return withConnectedClient().getBranchSuggestions({
+        cwd: selectedSourceDirectory,
+        query: pinnedBaseBranch,
+        limit: 20,
+      });
+    },
+    enabled: pinnedBaseQueryEnabled,
+    staleTime: 15_000,
+  });
+
   const githubPrSearchQuery = useForgeSearchQuery({
     client,
     serverId: selectedServerId,
@@ -1896,9 +1974,14 @@ export function NewWorkspaceScreen({
     return githubPrSearchQuery.data?.items ?? [];
   }, [forgeSearchAuthenticated, githubPrSearchQuery.data?.items]);
 
+  const pinnedBaseItem = useMemo(
+    () =>
+      pinnedBasePickerItem(normalizeBranchDetails(pinnedBaseBranchQuery.data), pinnedBaseBranch),
+    [pinnedBaseBranch, pinnedBaseBranchQuery.data],
+  );
   const baseItem = useMemo(
-    () => selectedItem ?? (checkoutStatus ? defaultBasePickerItem(checkoutStatus) : null),
-    [checkoutStatus, selectedItem],
+    () => resolveNewWorkspaceBaseItem({ selectedItem, pinnedBaseItem, checkoutStatus }),
+    [checkoutStatus, pinnedBaseItem, selectedItem],
   );
   const { options, itemById, selectedOptionId }: PickerOptionData = useMemo(
     () =>
@@ -2142,7 +2225,11 @@ export function NewWorkspaceScreen({
         : null;
       const checkoutRequest = checkoutStatusForCreate
         ? pickerItemToCheckoutRequest(
-            selectedItem ?? defaultBasePickerItem(checkoutStatusForCreate),
+            resolveNewWorkspaceBaseItem({
+              selectedItem,
+              pinnedBaseItem,
+              checkoutStatus: checkoutStatusForCreate,
+            }),
           )
         : undefined;
       const normalizedWorkspace = supportsWorkspaceMultiplicity
@@ -2175,6 +2262,7 @@ export function NewWorkspaceScreen({
       effectiveIsolation,
       mergeWorkspaces,
       queryClient,
+      pinnedBaseItem,
       selectedItem,
       selectedProject,
       selectedServerId,

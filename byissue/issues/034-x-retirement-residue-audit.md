@@ -2,9 +2,7 @@
 kind: issue
 title: "退役面残留全面审计（browser/voice/hub/plugin/desktop）"
 type: feature
-status: closed
 created: 2026-09-15
-closed: 2026-09-15
 ---
 
 # 退役面残留全面审计

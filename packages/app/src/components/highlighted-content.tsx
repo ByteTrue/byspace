@@ -6,8 +6,8 @@ import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { syntaxTokenStyleFor } from "@/styles/syntax-token-styles";
 import type { KeyedLine, KeyedToken } from "@/utils/highlight-cache";
 
-// Line height kept in sync with the plain `scrollText` style in
-// tool-call-details so a highlighted block lines up with an unhighlighted
+// Line height and base text color kept in sync with the plain `scrollText`
+// style in tool-call-details so a highlighted block matches its unhighlighted
 // fallback and blank lines keep their height.
 const CODE_LINE_HEIGHT = 18;
 const ZERO_WIDTH = "​";
@@ -92,7 +92,7 @@ const styles = StyleSheet.create((theme) => ({
   lineText: {
     fontFamily: theme.fontFamily.mono,
     fontSize: theme.fontSize.code,
-    color: theme.colors.foreground,
+    color: theme.colors.foregroundMuted,
     lineHeight: CODE_LINE_HEIGHT,
     ...(isWeb
       ? {

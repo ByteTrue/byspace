@@ -2,7 +2,6 @@
 kind: issue
 title: "Windows：裸命令名不再经 cmd.exe，多行参数不再被截断"
 type: ff
-status: closed
 created: 2026-09-27
 ---
 

@@ -56,6 +56,29 @@ async function workspace() {
 }
 
 describe("FileObserver", () => {
+  test("closeForCwd closes only the watchers rooted at the given cwd", async () => {
+    const rootA = await workspace();
+    const rootB = await workspace();
+    const controls = new ObservationControls();
+    const observer = new FileObserver(controls);
+
+    const subA = await observer.subscribe({ cwd: rootA, path: "file.txt" }, () => {});
+    await observer.subscribe({ cwd: rootB, path: "file.txt" }, () => {});
+    expect(controls.watches).toBe(2);
+
+    observer.closeForCwd(rootA);
+
+    expect(controls.closes).toBe(1);
+    // The surviving subscription keeps publishing.
+    controls.fileChanged("file.txt");
+    // Re-subscribing at the closed root sets up a fresh watcher.
+    const subA2 = await observer.subscribe({ cwd: rootA, path: "file.txt" }, () => {});
+    expect(controls.watches).toBe(3);
+
+    subA.unsubscribe();
+    subA2.unsubscribe();
+  });
+
   test("shares one parent watcher and publishes each real version once", async () => {
     const root = await workspace();
     const controls = new ObservationControls();

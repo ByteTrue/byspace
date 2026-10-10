@@ -2,12 +2,8 @@ import { useCallback, useMemo } from "react";
 import { usePathname, router } from "expo-router";
 import { CalendarClock, History, Plus, Search, type LucideIcon } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { canCreateWorktreeForProjectKind } from "@/projects/host-projects";
-import { useHostFeature } from "@/runtime/host-features";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
-import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
-import { useWorkspace } from "@/stores/session-store-hooks";
 import {
   builtinSidebarNavLabelKey,
   builtinSidebarNavShortcutAction,
@@ -60,39 +56,16 @@ export function useSidebarNavEntries(): SidebarNavEntry[] {
   const pathname = usePathname();
   const setCommandCenterOpen = useKeyboardShortcutsStore((state) => state.setCommandCenterOpen);
 
-  const activeWorkspaceSelection = useActiveWorkspaceSelection();
-  const activeWorkspaceServerId = activeWorkspaceSelection?.serverId ?? null;
-  const activeWorkspaceId = activeWorkspaceSelection?.workspaceId ?? null;
-  const activeWorkspace = useWorkspace(activeWorkspaceServerId, activeWorkspaceId);
-  const supportsWorkspaceMultiplicity = useHostFeature(
-    activeWorkspaceServerId,
-    "workspaceMultiplicity",
-  );
-  const canUseActiveWorkspaceContext = Boolean(
-    activeWorkspace &&
-    (supportsWorkspaceMultiplicity || canCreateWorktreeForProjectKind(activeWorkspace.projectKind)),
-  );
-
   const newWorkspaceShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("new-workspace"));
   const historyShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("history"));
   const searchShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("search"));
   const schedulesShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("schedules"));
 
+  // Route without a host: the screen resolver owns the initial host. A known route serverId
+  // would bypass that chain, so this entry must not carry the active workspace's host.
   const onNewWorkspace = useCallback(() => {
-    router.push(
-      activeWorkspaceServerId
-        ? buildNewWorkspaceRoute(
-            activeWorkspace && canUseActiveWorkspaceContext
-              ? {
-                  serverId: activeWorkspaceServerId,
-                  sourceDirectory: activeWorkspace.projectRootPath,
-                  projectId: activeWorkspace.projectId,
-                }
-              : { serverId: activeWorkspaceServerId },
-          )
-        : buildNewWorkspaceRoute(),
-    );
-  }, [activeWorkspace, activeWorkspaceServerId, canUseActiveWorkspaceContext]);
+    router.push(buildNewWorkspaceRoute());
+  }, []);
 
   const onHistory = useCallback(() => {
     router.push(buildSessionsRoute());

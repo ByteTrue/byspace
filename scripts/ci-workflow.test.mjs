@@ -114,14 +114,15 @@ test("change gating allows superseded workflow runs to cancel", () => {
   }
 });
 
-test("Web releases deploy stable and prerelease versions to separate Pages projects", () => {
+test("Web releases deploy stable and prerelease versions to separate relay Workers", () => {
   const source = readFileSync(deployAppWorkflowPath, "utf8");
 
   assert.match(source, /if \[\[ "\$version" == \*-\* \]\]/);
-  assert.match(source, /PAGES_PROJECT=byspace-beta/);
-  assert.match(source, /PAGES_PROJECT=byspace/);
-  assert.match(source, /--project-name "\$PAGES_PROJECT"/);
-  assert.match(source, /--commit-hash "\$EXPECTED_SHA"/);
+  assert.match(source, /RELEASE_CHANNEL=beta/);
+  assert.match(source, /RELEASE_CHANNEL=stable/);
+  assert.match(source, /wrangler deploy --env beta/);
+  assert.doesNotMatch(source, /pages deploy/);
+  assert.match(source, /working-directory: packages\/relay/);
   assert.match(source, /CLOUDFLARE_ACCOUNT_ID: \$\{\{ secrets\.CLOUDFLARE_ACCOUNT_ID \}\}/);
   assert.match(source, /RELEASE_TAG: \$\{\{ github\.ref_name \}\}/);
   assert.match(source, /git rev-list -n 1 "\$RELEASE_TAG"/);

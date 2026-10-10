@@ -1,9 +1,7 @@
 ---
 type: ff
-status: closed
 title: Pi 会话导入在模型配置变更后失败
 created: 2026-09-07
-closed: 2026-09-07
 ---
 
 # Pi 会话导入在模型配置变更后失败

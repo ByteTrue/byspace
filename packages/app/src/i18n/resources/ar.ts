@@ -422,7 +422,6 @@ export const ar: TranslationResources = {
       openToSide: "فتح إلى الجانب",
       copyPath: "نسخ المسار",
       copyRelativePath: "نسخ المسار النسبي",
-      revealIn: "إظهار في {{target}}",
       download: "تحميل",
       addToChat: "إضافة إلى الدردشة",
       moreActions: "المزيد من الإجراءات",
@@ -479,7 +478,6 @@ export const ar: TranslationResources = {
         createFailed: "فشل إنشاء العنصر",
         renameFailed: "فشل إعادة تسمية العنصر",
         duplicateFailed: "فشل تكرار العنصر",
-        revealFailed: "فشل إظهار العنصر",
         deleteFailed: "فشل حذف العنصر",
       },
       draft: {
@@ -1181,6 +1179,8 @@ export const ar: TranslationResources = {
         hostDisconnected: "Host غير متصل",
         hideFailed: "فشل في إخفاء مساحة العمل",
         archiveFailed: "فشل في أرشفة مساحة العمل",
+        archiveDirectoryRemovalFailed:
+          "تم أرشفة مساحة العمل، لكن تعذّر حذف مجلدها بالكامل. أغلق البرامج التي تستخدمه واحذف المجلد يدويًا.",
       },
     },
   },
@@ -1930,17 +1930,15 @@ export const ar: TranslationResources = {
         description: "يتم الاحتفاظ بالخطوط في المخزن المؤقت الطرفي المدمج",
         accessibilityLabel: "خطوط التمرير Terminal",
       },
-      autoExpandReasoning: {
-        label: "عرض التفكير دائماً",
-        description: "إظهار تفكير الوكيل وخطوات الاستدلال بشكل كامل بشكل افتراضي",
-      },
-      toolCallDetail: {
-        label: "عرض استدعاءات الأدوات",
-        description: "كيفية ظهور استدعاءات الأدوات في المخطط الزمني",
-        accessibilityLabel: "حدد عرض استدعاءات الأدوات ({{value}})",
+      timelineDetail: {
+        label: "تفاصيل المخطط الزمني",
+        description: "كيفية ظهور التفكير واستدعاءات الأدوات في المخطط الزمني",
+        accessibilityLabel: "حدد تفاصيل المخطط الزمني ({{value}})",
         options: {
-          overview: "ملخص",
-          detailed: "التفاصيل الكاملة",
+          overview: "طي الكل",
+          detailed: "طي التفاصيل",
+          live: "عرض أحدث التفكير",
+          expanded: "توسيع الكل",
         },
       },
       language: {
@@ -2522,6 +2520,24 @@ export const ar: TranslationResources = {
       },
     },
     project: {
+      defaultHost: {
+        label: "المضيف الافتراضي لمساحات العمل الجديدة",
+        automatic: "تلقائي",
+        hint: "يُختار مسبقًا عند إنشاء مساحة عمل لهذا المشروع",
+        saveFailed: "تعذّر حفظ المضيف الافتراضي",
+      },
+      defaultIsolation: {
+        label: "العزل الافتراضي لمساحات العمل الجديدة",
+        automatic: "تلقائي",
+        hint: "يُختار مسبقًا عند إنشاء مساحة عمل لهذا المشروع",
+        saveFailed: "تعذّر حفظ العزل الافتراضي",
+      },
+      defaultBaseBranch: {
+        label: "الفرع الأساسي الافتراضي لـ worktree الجديدة",
+        automatic: "تلقائي",
+        hint: "تُنشأ worktree جديدة لهذا المشروع من هذا الفرع",
+        saveFailed: "تعذّر حفظ الفرع الأساسي الافتراضي",
+      },
       noEditableTarget: "هذا المشروع غير متاح للتحرير على هذا المضيف.",
       backToProjects: "العودة إلى المشاريع",
       edit: {

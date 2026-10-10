@@ -426,7 +426,6 @@ export const ja: TranslationResources = {
       openToSide: "横に開く",
       copyPath: "パスをコピー",
       copyRelativePath: "相対パスをコピー",
-      revealIn: "{{target}}で表示",
       download: "ダウンロード",
       addToChat: "チャットに追加",
       moreActions: "その他のアクション",
@@ -483,7 +482,6 @@ export const ja: TranslationResources = {
         createFailed: "エントリの作成に失敗しました",
         renameFailed: "エントリの名前変更に失敗しました",
         duplicateFailed: "エントリの複製に失敗しました",
-        revealFailed: "エントリの表示に失敗しました",
         deleteFailed: "エントリの削除に失敗しました",
       },
       draft: {
@@ -1194,6 +1192,8 @@ export const ja: TranslationResources = {
         hostDisconnected: "ホストが接続されていません",
         hideFailed: "ワークスペースの非表示に失敗しました",
         archiveFailed: "ワークスペースのアーカイブに失敗しました",
+        archiveDirectoryRemovalFailed:
+          "ワークスペースはアーカイブされましたが、フォルダーを完全に削除できませんでした。使用中のプログラムを閉じて、フォルダーを手動で削除してください。",
       },
     },
   },
@@ -1948,17 +1948,15 @@ export const ja: TranslationResources = {
         description: "組み込みターミナルバッファに保持する行数",
         accessibilityLabel: "ターミナルスクロールバック行数",
       },
-      autoExpandReasoning: {
-        label: "常に思考プロセスを展開",
-        description: "デフォルトでAIのエージェント思考・推論ブロックを完全に展開して表示します",
-      },
-      toolCallDetail: {
-        label: "ツール呼び出しの表示",
-        description: "タイムラインでのツール呼び出しの表示方法",
-        accessibilityLabel: "ツール呼び出しの表示を選択（{{value}}）",
+      timelineDetail: {
+        label: "タイムライン表示",
+        description: "思考とツール呼び出しをタイムラインに表示する方法",
+        accessibilityLabel: "タイムライン表示を選択（{{value}}）",
         options: {
-          overview: "要約",
-          detailed: "すべての詳細",
+          overview: "すべて折りたたむ",
+          detailed: "詳細を折りたたむ",
+          live: "最新の思考を表示",
+          expanded: "すべて展開",
         },
       },
       language: {
@@ -2548,6 +2546,24 @@ export const ja: TranslationResources = {
       },
     },
     project: {
+      defaultHost: {
+        label: "新規ワークスペースのデフォルトホスト",
+        automatic: "自動",
+        hint: "このプロジェクトのワークスペース作成時に事前選択されるホスト",
+        saveFailed: "デフォルトホストを保存できませんでした",
+      },
+      defaultIsolation: {
+        label: "新規ワークスペースのデフォルト分離",
+        automatic: "自動",
+        hint: "このプロジェクトのワークスペース作成時に事前選択される分離方式",
+        saveFailed: "デフォルト分離を保存できませんでした",
+      },
+      defaultBaseBranch: {
+        label: "新規 worktree のデフォルトベースブランチ",
+        automatic: "自動",
+        hint: "このプロジェクトの worktree 作成時に基準となるブランチ",
+        saveFailed: "デフォルトベースブランチを保存できませんでした",
+      },
       noEditableTarget: "このホストではこのプロジェクトを編集できません。",
       backToProjects: "プロジェクトに戻る",
       edit: {

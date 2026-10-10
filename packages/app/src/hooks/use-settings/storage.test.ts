@@ -66,7 +66,15 @@ describe("loadAppSettingsFromStorage", () => {
     expect(result.theme).toBe("dark");
     expect(result.sendBehavior).toBe(DEFAULT_CLIENT_SETTINGS.sendBehavior);
     expect(result.sidebarRowItems.host).toBe(false);
-    expect(JSON.parse(deps.storage.entries.get(APP_SETTINGS_KEY) ?? "null")).toEqual(stored);
+    // The missing timelineDetailLevel makes the read persist the derived default alongside
+    // whatever unknown fields the other build wrote; nothing is dropped.
+    expect(JSON.parse(deps.storage.entries.get(APP_SETTINGS_KEY) ?? "null")).toEqual({
+      ...DEFAULT_CLIENT_SETTINGS,
+      theme: "dark",
+      contentFontSize: 16,
+      sidebarRowItems: { ...DEFAULT_SIDEBAR_ROW_ITEMS, host: false, futureRowItem: true },
+      futureSetting: { enabled: true },
+    });
   });
   it("migrates a stored interrupt to steer and persists it", async () => {
     const deps = makeDeps({
@@ -554,7 +562,7 @@ describe("saveAppSettings", () => {
       ...DEFAULT_CLIENT_SETTINGS,
       theme: "light",
       contentFontSize: DEFAULT_UI_BASE_FONT_SIZE,
-      toolCallDetailLevel: "overview",
+      timelineDetailLevel: "overview",
     });
   });
 
@@ -607,7 +615,7 @@ describe("appearance settings", () => {
     expect(result.contentFontSize).toBe(DEFAULT_UI_BASE_FONT_SIZE);
     expect(result.codeFontSize).toBe(DEFAULT_CODE_FONT_SIZE);
     expect(result.syntaxTheme).toBe("one");
-    expect(result.toolCallDetailLevel).toBe("detailed");
+    expect(result.timelineDetailLevel).toBe("detailed");
   });
 
   it("migrates the enabled compact tool call preference to overview", async () => {
@@ -617,7 +625,45 @@ describe("appearance settings", () => {
       }),
     });
 
-    expect((await loadAppSettingsFromStorage(deps)).toolCallDetailLevel).toBe("overview");
+    expect((await loadAppSettingsFromStorage(deps)).timelineDetailLevel).toBe("overview");
+  });
+
+  it("maps the retired toolCallDetailLevel onto the timeline detail level", async () => {
+    for (const [stored, expected] of [
+      ["overview", "overview"],
+      ["detailed", "detailed"],
+    ] as const) {
+      const deps = makeDeps({
+        storage: createInMemoryKeyValueStorage({
+          [APP_SETTINGS_KEY]: JSON.stringify({ toolCallDetailLevel: stored }),
+        }),
+      });
+
+      expect((await loadAppSettingsFromStorage(deps)).timelineDetailLevel).toBe(expected);
+    }
+  });
+
+  it("maps the retired always-expand-reasoning toggle to expand-all", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ autoExpandReasoning: true }),
+      }),
+    });
+
+    expect((await loadAppSettingsFromStorage(deps)).timelineDetailLevel).toBe("expanded");
+  });
+
+  it("prefers the retired always-expand-reasoning toggle over the tool call level", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({
+          autoExpandReasoning: true,
+          toolCallDetailLevel: "overview",
+        }),
+      }),
+    });
+
+    expect((await loadAppSettingsFromStorage(deps)).timelineDetailLevel).toBe("expanded");
   });
 
   it("clears settings with an unrecognized tool call detail level", async () => {
@@ -627,7 +673,7 @@ describe("appearance settings", () => {
       }),
     });
 
-    expect((await loadAppSettingsFromStorage(deps)).toolCallDetailLevel).toBe("detailed");
+    expect((await loadAppSettingsFromStorage(deps)).timelineDetailLevel).toBe("detailed");
   });
 
   it("migrates a switched-off checks row item to the hidden checks display", async () => {
@@ -859,6 +905,40 @@ describe("appearance settings", () => {
     });
 
     expect((await loadAppSettingsFromStorage(deps)).syntaxTheme).toBe("one");
+  });
+
+  it("round-trips the per-project new-workspace defaults", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({
+          newWorkspaceIsolationByProject: { '["placement","srv","prj"]': "worktree" },
+          defaultBaseBranchByProject: { '["placement","srv","prj"]': "main" },
+        }),
+      }),
+    });
+
+    const loaded = await loadAppSettingsFromStorage(deps);
+    expect(loaded.newWorkspaceIsolationByProject).toEqual({
+      '["placement","srv","prj"]': "worktree",
+    });
+    expect(loaded.defaultBaseBranchByProject).toEqual({
+      '["placement","srv","prj"]': "main",
+    });
+  });
+
+  it("drops invalid per-project new-workspace defaults to empty maps", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({
+          newWorkspaceIsolationByProject: { prj: "sometimes" },
+          defaultBaseBranchByProject: { prj: 42 },
+        }),
+      }),
+    });
+
+    const loaded = await loadAppSettingsFromStorage(deps);
+    expect(loaded.newWorkspaceIsolationByProject).toEqual({});
+    expect(loaded.defaultBaseBranchByProject).toEqual({});
   });
 });
 

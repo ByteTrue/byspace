@@ -2,7 +2,6 @@
 kind: issue
 title: "删除 desktop-open 死链：Electron 退役 shim 及其全部消费管道"
 type: refactor
-status: open
 created: 2026-09-28
 ---
 
@@ -36,6 +35,32 @@ Ponytail review（PR #10，2026-09-28）确认该链 100% 死代码，净删约 
 - `rg "desktop-open-targets|useDesktopOpenTargets|openDesktopTarget|ThemedEditorTargetIcon|planDesktopOpenTargets|revealIn|Reveal in"` 零命中（除本 issue 与 025 记录）
 - 相关 vitest：planner、file-explorer 相关测试文件
 - 浏览器抽查：文件管理器菜单无「Reveal in」残留项，diff 面板正常
+
+## 执行记录（2026-10-10，当日完成并关闭）
+
+**净删减：22 文件，+15 / −546 行**（含 i18n 18 键、3 个整文件）。
+
+清单逐项落地：
+
+1. 删 `desktop-open-targets.ts`（34 行整文件）、`open-in-editor/directory.ts`（63 行整文件）、`components/icons/editor-target-icon.tsx`（27 行整文件）。
+2. `planner.ts` 剥掉 desktop 分支：删 `planDesktopOpenTargets`、`PlannedDesktopOpenTarget`、`source: "desktop"` union 成员、`desktopTargets`/`canUseDesktopBridge` 入参；`planWorkspaceOpenTargets` 只剩 forge 源。
+3. `button.tsx`：删 `useDesktopOpenTargets`/`isDesktopOpenAvailable`/`ThemedEditorTargetIcon` 与 desktop 分支，forge map 内联（不再需要 source 判别）。
+4. `file-explorer-pane.tsx`：删 `onOpenInEditor`/`editorTargetName`/`onRevealEntry`/`revealTargetName` 四个 props 及其 handler、dispatcher 转发与 deps。
+5. `diff-pane.tsx`：删 `fileManagerTarget`/`handleRevealPath` 与 mode 的 `onReveal`/`revealTargetName`；删 JSX 两处转发。
+6. `file-actions-menu.tsx`：删 `reveal` 菜单项与两 props；顺带删孤儿 import `FolderOpen`。
+7. `file-header.tsx`、`diff-folder-row.tsx`、`diff-document/types.ts`、`diff-document/document-file-header.tsx`：删 props 线程与 memo 比较器两项。
+8. i18n：9 locale × 2 键（`workspace.fileActions.revealIn`、`workspace.fileExplorer.errors.revealFailed`）= 18 键删除。
+
+**与 059 清单的一处偏差：** `planner.test.ts` 未在清单中，但它 8 个用例里 5 个测 desktop 规划——按 ponytail 的「测试跟着行为走」原则重写为只留 forge 三例（blob/tree URL、forge 推断、无 git 时为空）。
+
+**验证：**
+
+- `tsgo --noEmit` 全绿；`oxlint` 0 error 0 warning；`format` 全绿。
+- 测试：open-in-editor + file-actions-menu + diff-document 95 绿；i18n 54 绿（含 key-contract 的 9 locale 对称性）；file-header 6 绿；diff-tree + explorer-paths 20 绿。
+- 零命中：`desktop-open-targets|useDesktopOpenTargets|openDesktopTarget|planDesktopOpenTargets|ThemedEditorTargetIcon|onRevealEntry|revealTargetName|useOpenDirectoryInEditor|revealIn|revealFailed` 全仓（除 byissue 历史）。
+- **浏览器抽查（真实 dev 环境，daemon 6778 + expo 8081）**：文件管理器上下文菜单为 `Open file / Open to the side / Copy path / Copy relative path / Download / Add to chat / Duplicate / Discard changes`，**无「Reveal in」项**；diff 面板文件头菜单同样无该项且面板渲染正常。保留面确认：`Open workspace in GitHub` 按钮仍在（forge 源未受影响）。
+
+完成后 `desktop-open` 主题归零，025 的退役残留再少一条。
 
 ## 制度记忆影响
 

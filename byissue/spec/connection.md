@@ -24,6 +24,15 @@ App 与 Relay 的地址按发布通道选择；用户的自定义配置始终优
 - **生命周期**：daemon 级常驻（`tunnels.json` 持久化，boot 恢复），内嵌客户端复用 DaemonClient 重连；app 不在线时隧道照常工作。
 - **交互面**：app 的 `/tunnels` 独立路由（类比 Schedules）——添加隧道（粘贴 D2 pairing offer + 密码 + 端口）、outbound/inbound 列表、白名单 GUI。入口仅本机（回环）daemon 在场时显示。
 - **范围边界**：手动互导 offer，无 relay 成员网络；不做 agent 工具跨机与反向隧道。
+- **入口**：BySpace 菜单（侧栏第一行）新增 Tunnels 行，与 Schedules 同级；命令中心保留同名动作。
+
+## 托管部署
+
+- **托管产物是一个 Worker。** 自 073 起，`app.byspace.cc.cd`（stable）、`app-beta.byspace.cc.cd`（prerelease）与 `relay.byspace.cc.cd` 由 `packages/relay` 的同一个 Worker（`byspace-relay` / `byspace-relay-beta`）从同一 origin 服务：`/` 静态 web 导出、`/docs/*` 与 `/changelog` 文档（`build:web` 链内由 markdown-it 渲染 `public-docs/` 与 `CHANGELOG.md`）、`/ws` `/health` 走 relay 逻辑（`run_worker_first` 保证不被 SPA 回落吞掉）。与自托管容器是同一形状、同一 relay 核心（runtime-agnostic session core，Node/CF 两个 adapter，parity 由测试钉住）。`/download` 不设页面——无可直下产物（见 074）。
+- **UI 与 relay 原子发布。** `deploy-app.yml` 在 web 发版时 `wrangler deploy` 一次部署两者；出问题 `wrangler rollback` 整体回退。发版流程外的紧急 relay 修复可手动 `npm run deploy:hosted`。
+- **域名与 origin 稳定性。** cutover 保持域名不变（从 Pages 解绑再挂 Worker），已装 PWA、localStorage host 配置、`#offer` 配对链接全部不受影响。Workers 自定义域要求 hostname 无外部 DNS 记录——Pages 解绑不清理 DNS，迁移时必须先删 zone 里的遗留 CNAME。
+- **`wrangler.toml` 的 account_id 曾长期是错的**（v0.10.0 写入的 ID 与真实账号不符，本机 deploy 从未成功过）——已修正。对「约定说手动部署、实际从未部署成功」这类漂移保持警惕。
+- **beta 与 stable 是两个 Worker**（独立 DO 命名空间），不是同一 Worker 的两个 route。zijieapi.de5.net 时代的 byspace 子域已废弃，routes 已移除。
 
 ## 自托管部署
 

@@ -2,9 +2,7 @@
 kind: issue
 title: "修复 Pi Agent 回复结束后客户端依然保持运行中状态的边界结算缺陷"
 type: ff
-status: closed
 created: 2026-09-03
-closed: 2026-09-03
 ---
 
 # 修复 Pi Agent 回复结束后客户端依然保持运行中状态的边界结算缺陷

@@ -2,9 +2,7 @@
 kind: issue
 title: "侧栏支持一键按规则整理 Project 顺序"
 type: ff
-status: closed
 created: 2026-09-14
-closed: 2026-09-14
 ---
 
 # 侧栏支持一键按规则整理 Project 顺序

@@ -422,7 +422,6 @@ export const zhCN: TranslationResources = {
       openToSide: "在侧边打开",
       copyPath: "复制路径",
       copyRelativePath: "复制相对路径",
-      revealIn: "在 {{target}} 中显示",
       download: "下载",
       addToChat: "添加到聊天",
       moreActions: "更多操作",
@@ -479,7 +478,6 @@ export const zhCN: TranslationResources = {
         createFailed: "创建条目失败",
         renameFailed: "重命名条目失败",
         duplicateFailed: "复制条目失败",
-        revealFailed: "显示条目失败",
         deleteFailed: "删除条目失败",
       },
       draft: {
@@ -1169,6 +1167,8 @@ export const zhCN: TranslationResources = {
         hostDisconnected: "Host 未连接",
         hideFailed: "隐藏 workspace 失败",
         archiveFailed: "归档工作区失败",
+        archiveDirectoryRemovalFailed:
+          "工作区已归档，但其文件夹未能完全删除。请关闭占用它的程序后手动删除该文件夹。",
       },
     },
   },
@@ -1908,17 +1908,15 @@ export const zhCN: TranslationResources = {
         description: "内置终端缓冲区保留的行数",
         accessibilityLabel: "终端回滚行数",
       },
-      autoExpandReasoning: {
-        label: "始终展开推理过程",
-        description: "默认情况下完全展开 AI 的思考和推理过程",
-      },
-      toolCallDetail: {
-        label: "工具调用显示",
-        description: "工具调用在时间线中的显示方式",
-        accessibilityLabel: "选择工具调用显示方式（{{value}}）",
+      timelineDetail: {
+        label: "时间线显示",
+        description: "思考与工具调用在时间线中的显示方式",
+        accessibilityLabel: "选择时间线显示方式（{{value}}）",
         options: {
-          overview: "摘要",
-          detailed: "完整详情",
+          overview: "全部折叠",
+          detailed: "折叠详情",
+          live: "显示最新思考",
+          expanded: "全部展开",
         },
       },
       language: {
@@ -2492,6 +2490,24 @@ export const zhCN: TranslationResources = {
       },
     },
     project: {
+      defaultHost: {
+        label: "新建工作区的默认主机",
+        automatic: "自动",
+        hint: "为该项目创建工作区时预先选中的主机",
+        saveFailed: "无法保存默认主机",
+      },
+      defaultIsolation: {
+        label: "新建工作区的默认隔离方式",
+        automatic: "自动",
+        hint: "为该项目创建工作区时预先选中的隔离方式",
+        saveFailed: "无法保存默认隔离方式",
+      },
+      defaultBaseBranch: {
+        label: "新建 worktree 的默认基础分支",
+        automatic: "自动",
+        hint: "为该项目创建 worktree 时默认基于的分支",
+        saveFailed: "无法保存默认基础分支",
+      },
       noEditableTarget: "此项目无法在这个 Host 上编辑。",
       backToProjects: "返回 Projects",
       edit: {

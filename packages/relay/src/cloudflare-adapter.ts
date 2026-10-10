@@ -99,6 +99,8 @@ function getGlobalWebSocketPair(): (new () => WebSocketPair) | undefined {
 interface Env {
   RELAY: DurableObjectNamespace;
   BYSPACE_RELAY_UPSTREAM?: string;
+  /** Static assets binding (packages/app/dist). Serves the web PWA on this origin. */
+  ASSETS: Fetcher;
 }
 
 interface DurableObjectNamespace {
@@ -111,6 +113,10 @@ interface DurableObjectId {
 }
 
 interface DurableObjectStub {
+  fetch(request: Request): Promise<Response>;
+}
+
+interface Fetcher {
   fetch(request: Request): Promise<Response>;
 }
 
@@ -609,6 +615,9 @@ export default {
       return stub.fetch(normalizedRequest);
     }
 
-    return new Response("Not found", { status: 404 });
+    // Static web UI on this origin (mirrors node-adapter's webDir fallback).
+    // Requests that reach here are asset paths not matched by the assets
+    // router — hand them back to ASSETS so the SPA not_found_handling applies.
+    return env.ASSETS.fetch(request);
   },
 };

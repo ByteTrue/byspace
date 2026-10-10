@@ -2,9 +2,7 @@
 kind: issue
 title: "退役 browser tools 功能与设置残留"
 type: ff
-status: closed
 created: 2026-09-15
-closed: 2026-09-15
 ---
 
 # 退役 browser tools 功能与设置残留

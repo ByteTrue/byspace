@@ -2,10 +2,8 @@
 kind: issue
 title: "同步上游到 Paseo v0.8.0-beta.1"
 type: chore
-status: closed
 created: 2026-09-09
 amended: 2026-09-09
-closed: 2026-09-10
 ---
 
 # 同步上游到 Paseo v0.8.0-beta.1

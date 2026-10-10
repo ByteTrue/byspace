@@ -2,7 +2,6 @@
 id: "014"
 type: ff
 title: App 更新不再停止外部 daemon
-status: closed
 date: 2026-09-07
 ---
 

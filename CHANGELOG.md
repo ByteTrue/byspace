@@ -5,6 +5,58 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.19.0 - 2026-10-11
+
+### Added
+
+- The hosted web app and the relay are one Cloudflare Worker on one origin: `app.byspace.cc.cd` serves the PWA, the `/ws` relay, and `/health`
+- Added the user and SDK documentation at `app.byspace.cc.cd/docs` and the release history at `/changelog`, which previously resolved to the app shell
+
+### Changed
+
+- Merged the "Always expand reasoning" toggle and the Tool call display picker into one Timeline detail setting with four levels: Collapse all, Collapse details, Show latest thinking, Expand all ([#24](https://github.com/ByteTrue/byspace/pull/24))
+- A streaming thinking block keeps its scroll area pinned to the newest lines until you scroll up ([#24](https://github.com/ByteTrue/byspace/pull/24))
+
+### Fixed
+
+- Fixed codemode sub-tool rows disappearing from a Pi session after reloading it ([#21](https://github.com/ByteTrue/byspace/pull/21))
+- Fixed the subagents track keeping a working badge for a subagent pi had already stopped ([#22](https://github.com/ByteTrue/byspace/pull/22))
+- Fixed New workspace opening on the active workspace's host instead of following the project host preference chain ([#23](https://github.com/ByteTrue/byspace/pull/23))
+
+## 0.18.0 - 2026-10-07
+
+### Added
+
+- Pi subagents show live status as inline cards in the agent timeline and open as read-only child-session tabs ([#20](https://github.com/ByteTrue/byspace/pull/20))
+- Project settings gain default isolation (Local / New worktree) and default base branch for new workspaces ([#19](https://github.com/ByteTrue/byspace/pull/19))
+
+### Fixed
+
+- Fixed new workspaces starting on an unrelated host instead of the project's default host ([#19](https://github.com/ByteTrue/byspace/pull/19))
+- Fixed Pi MCP servers never connecting and Pi agents with mcpServers failing to start ([#18](https://github.com/ByteTrue/byspace/pull/18))
+- Fixed a user message card jumping below the reply it started after switching away for more than a page of new rows and returning
+
+## 0.17.0 - 2026-10-05
+
+### Added
+
+- Self-hosted BySpace ships as one container (`ghcr.io/bytetrue/byspace`) serving the web app and the relay on the same port, with the daemon installed from npm on your own machine ([#13](https://github.com/ByteTrue/byspace/pull/13))
+- Added a three-step setup guide on the welcome screen for self-hosted origins, and pasting a pairing link connects the host ([#13](https://github.com/ByteTrue/byspace/pull/13))
+- Added `byspace onboard --web-origin` to point pairing links at a self-hosted web app and `--relay-endpoint` to point the daemon at a self-hosted relay ([#13](https://github.com/ByteTrue/byspace/pull/13))
+- Added a **Default host** project setting, and new workspaces start on the local daemon instead of the last active host ([#14](https://github.com/ByteTrue/byspace/pull/14))
+
+### Changed
+
+- Nested tool calls inside a codemode script render as rows indented under their parent call instead of being collapsed into a badge ([#15](https://github.com/ByteTrue/byspace/pull/15))
+- Expanded thinking and tool call details hang off a guide line on the page background instead of nested gray boxes ([#17](https://github.com/ByteTrue/byspace/pull/17))
+- The sidebar title and nav rows share one alignment rail, and the BySpace title sits above the rows in weight ([#14](https://github.com/ByteTrue/byspace/pull/14))
+- `npm run dev`, `dev:app`, and `cli` run under PowerShell as well as bash ([#14](https://github.com/ByteTrue/byspace/pull/14))
+
+### Fixed
+
+- Fixed archiving a worktree on Windows failing with a busy directory because the daemon's own file watchers held the folder ([#16](https://github.com/ByteTrue/byspace/pull/16))
+- Fixed an archived workspace reappearing in the sidebar after its archive request timed out ([#16](https://github.com/ByteTrue/byspace/pull/16))
+
 ## 0.16.5 - 2026-10-01
 
 ### Changed

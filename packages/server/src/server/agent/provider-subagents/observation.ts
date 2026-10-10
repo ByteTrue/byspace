@@ -1,8 +1,5 @@
-import type { AgentTimelineItem } from "../../../agent-sdk-types.js";
-import type {
-  ProviderSubagentInputEvent,
-  ProviderSubagentStatus,
-} from "../../../provider-subagents/store.js";
+import type { AgentTimelineItem } from "../agent-sdk-types.js";
+import type { ProviderSubagentInputEvent, ProviderSubagentStatus } from "./store.js";
 
 /**
  * A single fact a provider observed about one subagent.

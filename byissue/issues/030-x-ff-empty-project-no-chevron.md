@@ -2,9 +2,7 @@
 kind: issue
 title: "空项目行不再显示展开/折叠 chevron"
 type: ff
-status: closed
 created: 2026-09-15
-closed: 2026-09-15
 ---
 
 # 空项目行不再显示展开/折叠 chevron

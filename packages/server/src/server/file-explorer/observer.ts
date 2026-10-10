@@ -108,6 +108,22 @@ export class FileObserver {
     this.observed.clear();
   }
 
+  /**
+   * Close every observation rooted at a directory that is about to be deleted.
+   * The per-file fs.watch handle keeps a hold on the tree on Windows, which
+   * turns the archive's rmdir into EBUSY. Clients still holding file
+   * subscriptions re-subscribe through fs.file.subscribe if they need a file
+   * somewhere else.
+   */
+  closeForCwd(cwd: string): void {
+    const resolvedCwd = path.resolve(cwd);
+    for (const [target, observed] of this.observed) {
+      if (path.resolve(observed.cwd) !== resolvedCwd) continue;
+      this.stopWatching(observed);
+      this.observed.delete(target);
+    }
+  }
+
   private startWatching(target: string, directory: string, observed: ObservedFile): void {
     try {
       observed.watcher = this.dependencies.watchDirectory(

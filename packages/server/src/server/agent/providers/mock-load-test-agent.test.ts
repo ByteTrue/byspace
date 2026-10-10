@@ -283,6 +283,28 @@ describe("MockLoadTestAgentClient", () => {
     expect(completedNames).toContain("grep");
     expect(completedNames).toContain("edit");
     expect(completedNames).toContain("bash");
+    expect(completedNames).toContain("codemode");
+
+    // Codemode includes nested tool calls with parentToolCallId metadata.
+    const nestedCalls = toolCalls.filter(
+      (item) => item.type === "tool_call" && item.metadata?.parentToolCallId !== undefined,
+    );
+    expect(nestedCalls.length).toBeGreaterThan(0);
+    expect(nestedCalls.some((item) => item.type === "tool_call" && item.name === "find")).toBe(
+      true,
+    );
+    expect(nestedCalls.some((item) => item.type === "tool_call" && item.name === "bash")).toBe(
+      true,
+    );
+
+    // Completed codemode row carries nestedSummary.
+    const completedCodemode = toolCalls.find(
+      (item) =>
+        item.type === "tool_call" && item.name === "codemode" && item.status === "completed",
+    );
+    expect(
+      completedCodemode?.type === "tool_call" && completedCodemode.metadata?.nestedSummary,
+    ).toBeDefined();
   });
 
   test("interrupt cancels the active foreground turn and stops future chunks", async () => {

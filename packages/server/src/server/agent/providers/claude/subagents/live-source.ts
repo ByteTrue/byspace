@@ -3,7 +3,7 @@ import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { AgentMetadata } from "../../../agent-sdk-types.js";
 import type { ProviderSubagentStatus } from "../../../provider-subagents/store.js";
 import { resolveObservedClaudeModelId } from "../models.js";
-import type { SubagentObservation } from "./observation.js";
+import type { SubagentObservation } from "../../../provider-subagents/observation.js";
 import {
   buildClaudeSubagentSubtitle,
   type ClaudeSubagentPresentationFacts,

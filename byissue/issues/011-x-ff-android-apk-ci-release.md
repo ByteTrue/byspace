@@ -2,7 +2,6 @@
 kind: issue
 title: "ff: Android APK 发布 CI 化（android-apk-release.yml）"
 type: ff
-status: closed
 created: 2026-09-05
 ---
 

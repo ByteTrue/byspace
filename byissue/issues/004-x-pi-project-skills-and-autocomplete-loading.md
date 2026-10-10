@@ -2,9 +2,7 @@
 kind: issue
 title: "Pi 启动注入项目信任并完善斜杠补全加载态"
 type: bug
-status: closed
 created: 2026-09-02
-closed: 2026-09-02
 ---
 
 # Pi 启动注入项目信任并完善斜杠补全加载态

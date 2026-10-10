@@ -1,6 +1,6 @@
 {
   "name": "@bytetrue/relay",
-  "version": "0.16.5",
+  "version": "0.19.0",
   "description": "BySpace relay for bridging daemon and client connections",
   "files": [
     "dist",
@@ -43,6 +43,8 @@
     "build:clean": "npm run clean && npm run build",
     "prepack": "npm run build:clean",
     "typecheck": "tsgo --noEmit",
+    "deploy": "npm --prefix ../app run build:web && wrangler deploy --env=\"\"",
+    "deploy:beta": "npm --prefix ../app run build:web && wrangler deploy --env beta",
     "test": "vitest run",
     "test:watch": "vitest"
   },

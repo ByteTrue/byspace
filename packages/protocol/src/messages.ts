@@ -4685,6 +4685,9 @@ export const ArchiveWorkspaceResponseMessageSchema = z.object({
     workspaceId: z.string(),
     archivedAt: z.string().nullable(),
     error: z.string().nullable(),
+    // Set when the workspace was archived but its backing directory could not
+    // be removed from disk. Optional so older daemons stay wire-compatible.
+    directoryError: z.string().nullable().optional(),
   }),
 });
 

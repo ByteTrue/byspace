@@ -2,9 +2,7 @@
 kind: issue
 title: "侧栏折叠按钮固定在窗口角，左上四个导航项并入 BySpace 按钮内就地展开"
 type: ff
-status: closed
 created: 2026-09-29
-closed: 2026-09-29
 ---
 
 <!-- 快改痕迹：轻。读者只要 30 秒扫完。禁止迷你 Design。 -->

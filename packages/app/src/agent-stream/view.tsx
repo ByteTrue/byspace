@@ -55,6 +55,7 @@ import { useRevealedText } from "@/hooks/use-revealed-text";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
 import { useSettings } from "@/hooks/use-settings";
+import { toToolCallDetailLevel } from "@/hooks/use-settings/storage";
 import type { ToastApi } from "@/components/toast-host";
 import { returnToTimelineTail } from "./timeline-tail-navigation";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
@@ -65,7 +66,13 @@ import {
   prepareToolCallHistory,
   projectToolCallDetailLevel,
 } from "@/tool-calls/detail-level/projection";
+import { projectNestedCodemodeCalls } from "@/tool-calls/detail-level/nested-codemode";
+import { useProviderSubagentsByToolCallId } from "@/subagents/select";
+import type { ToolCallSubagentBinding } from "@/components/message";
+import type { ProviderSubagentDescriptorPayload } from "@bytetrue/protocol/messages";
 import { OverviewToolCallGroupView } from "@/tool-calls/detail-level/overview/view";
+import type { OverviewToolCallGroup } from "@/tool-calls/detail-level/overview/model";
+import { formatOverviewSummary } from "@/tool-calls/detail-level/overview/summary";
 import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "./model";
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
 import { type StreamSegmentRenderers, type StreamViewportHandle } from "./strategy";
@@ -288,6 +295,8 @@ export interface AgentStreamViewProps {
   toast?: ToastApi | null;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
   readOnly?: boolean;
+  /** Opens the provider subagent tab for a launch row's descriptor (pi inline cards). */
+  onOpenProviderSubagent?: (parentAgentId: string, subagentId: string) => void;
   showScrollToBottomButton?: boolean;
   onScrollToBottomVisibilityChange?: (visible: boolean) => void;
   historyPagination?: {
@@ -351,6 +360,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       bottomOverlayControlClearance,
       toast,
       onOpenWorkspaceFile,
+      onOpenProviderSubagent,
       readOnly = false,
       showScrollToBottomButton = true,
       onScrollToBottomVisibilityChange,
@@ -359,8 +369,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     ref,
   ) {
     const { t } = useTranslation();
-    const autoExpandReasoning = useSettings((settings) => settings.autoExpandReasoning);
-    const toolCallDetailLevel = useSettings((settings) => settings.toolCallDetailLevel);
+    const timelineDetailLevel = useSettings((settings) => settings.timelineDetailLevel);
+    const toolCallDetailLevel = toToolCallDetailLevel(timelineDetailLevel);
     const chatOutlineEnabled = useSettings((settings) => settings.chatOutlineEnabled);
     const viewportRef = useRef<StreamViewportHandle | null>(null);
     const pendingClientMessageIds = useMemo(
@@ -386,7 +396,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const [collapsedReasoningIds, setCollapsedReasoningIds] = useState<ReadonlySet<string>>(
       new Set(),
     );
-
     // Get serverId (fallback to agent's serverId if not provided)
     const resolvedServerId = serverId ?? context.serverId ?? "";
 
@@ -544,27 +553,74 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const effectiveStreamHead = useRetainedValue(streamHead, isActive);
     const effectiveTurnPresentation = useRetainedValue(turnPresentation, isActive);
     const isTurnActive = effectiveTurnPresentation.isActive;
-    // Keep retained history outside the 48ms live-head flush path.
+    // Fold nested codemode calls (pi >=0.99) into their parent codemode row before any
+    // tool-call grouping; the outline keeps the raw stream since nested rows have no cursor.
+    const nestedCodemodeProjection = useMemo(
+      () =>
+        projectNestedCodemodeCalls({
+          tail: effectiveStreamItems,
+          head: effectiveStreamHead,
+        }),
+      [effectiveStreamItems, effectiveStreamHead],
+    );
+    // Provider subagents (pi) join onto their launch tool rows by call id: the row shows live
+    // status and opens the subagent's tab. Empty when the feature is off or nothing launched.
+    const subagentsByToolCallId = useProviderSubagentsByToolCallId({
+      serverId: resolvedServerId,
+      parentAgentId: agentId,
+    });
+    // Bindings are cached per descriptor: the memo comparator on tool rows compares onOpen by
+    // identity, so a fresh closure per lookup would defeat it and re-render every row.
+    const subagentBindingCache = useRef(
+      new WeakMap<ProviderSubagentDescriptorPayload, ToolCallSubagentBinding>(),
+    );
+    const getSubagentBinding = useStableEvent(
+      (callId: string): ToolCallSubagentBinding | undefined => {
+        const descriptor = subagentsByToolCallId.get(callId);
+        if (!descriptor) {
+          return undefined;
+        }
+        let binding = subagentBindingCache.current.get(descriptor);
+        if (!binding) {
+          binding = {
+            status: descriptor.status,
+            secondaryLabel:
+              descriptor.subtitle ?? descriptor.description ?? descriptor.title ?? null,
+            onOpen: () => onOpenProviderSubagent?.(agentId, descriptor.id),
+          };
+          subagentBindingCache.current.set(descriptor, binding);
+        }
+        return binding;
+      },
+    );
+    // Nested parents whose group is still running have to revise their history row on every
+    // flush: the children fold into that row, and the row's own item identity never changes while
+    // the script runs.
+    const nestedLiveParentItemIds = useMemo(() => {
+      const ids = new Set<string>();
+      for (const [parentItemId, group] of nestedCodemodeProjection.groupsByParentItemId) {
+        if (group.isLoading) {
+          ids.add(parentItemId);
+        }
+      }
+      return ids;
+    }, [nestedCodemodeProjection]);
+    // Keep retained history outside the 48ms live-head flush path: depend on the projected tail
+    // array, not on the projection object, which a head-only flush replaces every time.
     const preparedToolCallHistory = useMemo(
-      () => prepareToolCallHistory(toolCallDetailLevel, effectiveStreamItems),
-      [effectiveStreamItems, toolCallDetailLevel],
+      () => prepareToolCallHistory(toolCallDetailLevel, nestedCodemodeProjection.tail),
+      [nestedCodemodeProjection.tail, toolCallDetailLevel],
     );
     const projectedToolCalls = useMemo(
       () =>
         projectToolCallDetailLevel({
           level: toolCallDetailLevel,
-          tail: effectiveStreamItems,
-          head: effectiveStreamHead ?? EMPTY_STREAM_HEAD,
+          tail: nestedCodemodeProjection.tail,
+          head: nestedCodemodeProjection.head ?? EMPTY_STREAM_HEAD,
           preparedHistory: preparedToolCallHistory,
           isTurnActive,
         }),
-      [
-        effectiveStreamHead,
-        effectiveStreamItems,
-        isTurnActive,
-        preparedToolCallHistory,
-        toolCallDetailLevel,
-      ],
+      [nestedCodemodeProjection, isTurnActive, preparedToolCallHistory, toolCallDetailLevel],
     );
     // Plugin timeline projection was removed with the plugin system (issue 025
     // C6); the stream renders tool-call output directly.
@@ -620,6 +676,24 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const handleTimelineHistoryLoadError = useCallback(() => {
       toast?.error(t("agentStream.historyLoadFailed"));
     }, [t, toast]);
+    // Newest thinking block in timeline order; live mode keeps it expanded so the model's
+    // current action stays visible.
+    const latestThoughtId = useMemo(() => {
+      // Scan the live segment first, then history; no combined allocation per token.
+      for (let index = streamLayout.liveHead.length - 1; index >= 0; index--) {
+        const entry = streamLayout.liveHead[index];
+        if (entry?.item.kind === "thought") {
+          return entry.item.id;
+        }
+      }
+      for (let index = streamLayout.history.length - 1; index >= 0; index--) {
+        const entry = streamLayout.history[index];
+        if (entry?.item.kind === "thought") {
+          return entry.item.id;
+        }
+      }
+      return null;
+    }, [streamLayout.history, streamLayout.liveHead]);
     const visibleHistoryItemIds = useMemo(
       () =>
         new Set(
@@ -772,24 +846,41 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "thought" }>) => {
         return (
           <ThoughtSlot
-            key={collapseRevision}
+            // ToolCall reads defaultExpanded only at mount, so the key carries everything that
+            // changes what "default expanded" means: the level (fold/expand-all switches) and,
+            // in live mode, whether this row is the newest thought (old latest folds, new
+            // latest expands — per-row so manual expansion elsewhere survives a retarget).
+            key={`${collapseRevision}:${timelineDetailLevel}:${
+              timelineDetailLevel === "live" && item.id === latestThoughtId
+            }`}
             itemId={item.id}
             onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
             text={item.text}
             status={item.status}
             isLastInSequence={layoutItem.isLastInToolSequence}
-            defaultExpanded={autoExpandReasoning && !collapsedReasoningIds.has(item.id)}
+            defaultExpanded={
+              !collapsedReasoningIds.has(item.id) &&
+              (timelineDetailLevel === "expanded" ||
+                (timelineDetailLevel === "live" && item.id === latestThoughtId))
+            }
           />
         );
       },
-      [autoExpandReasoning, collapsedReasoningIds, collapseRevision, setInlineDetailsExpanded],
+      [
+        timelineDetailLevel,
+        collapsedReasoningIds,
+        collapseRevision,
+        latestThoughtId,
+        setInlineDetailsExpanded,
+      ],
     );
 
-    const renderSingleToolCallItem = useCallback(
+    const renderSingleToolCallRow = useCallback(
       (
         item: Extract<StreamItem, { kind: "tool_call" }>,
         isLastInSequence: boolean,
         maxDetailHeight?: number,
+        summaryOverride?: string,
       ) => {
         const { payload } = item;
 
@@ -807,6 +898,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             );
           }
 
+          const subagent = data.callId ? getSubagentBinding(data.callId) : undefined;
           return (
             <ToolCallSlot
               key={collapseRevision}
@@ -818,6 +910,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               detail={data.detail}
               cwd={context.cwd}
               metadata={data.metadata}
+              summaryOverride={summaryOverride}
+              subagent={subagent}
               isLastInSequence={isLastInSequence}
               onOpenFilePath={handleToolCallOpenFile}
               maxDetailHeight={maxDetailHeight}
@@ -841,7 +935,69 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           />
         );
       },
-      [collapseRevision, context.cwd, setInlineDetailsExpanded, handleToolCallOpenFile],
+      [
+        collapseRevision,
+        context.cwd,
+        setInlineDetailsExpanded,
+        handleToolCallOpenFile,
+        getSubagentBinding,
+      ],
+    );
+
+    const getNestedToolCallGroup = useStableEvent((itemId: string) =>
+      nestedCodemodeProjection.groupsByParentItemId.get(itemId),
+    );
+    const renderNestedToolCallGroup = useCallback(
+      (group: OverviewToolCallGroup, isLastInSequence: boolean) => {
+        const [parentCall, ...childCalls] = group.run.calls;
+        if (!parentCall) {
+          return null;
+        }
+        const summaryText = formatOverviewSummary(group.summary, t, { capitalize: false });
+        const parentRow = renderSingleToolCallRow(
+          parentCall,
+          childCalls.length === 0 && isLastInSequence,
+          undefined,
+          summaryText.length > 0 ? summaryText : undefined,
+        );
+        if (childCalls.length === 0) {
+          return parentRow;
+        }
+        // The nested rows stay visible and hang off the parent on an indent rail, so the
+        // containment reads without expanding anything and the parent keeps its own row.
+        return (
+          <React.Fragment>
+            {parentRow}
+            <View style={stylesheet.nestedCodemodeChildren}>
+              {childCalls.map((call, index) => (
+                <React.Fragment key={call.id}>
+                  {renderSingleToolCallRow(
+                    call,
+                    index === childCalls.length - 1 && isLastInSequence,
+                  )}
+                </React.Fragment>
+              ))}
+            </View>
+          </React.Fragment>
+        );
+      },
+      [renderSingleToolCallRow, t],
+    );
+    const renderSingleToolCallItem = useCallback(
+      (
+        item: Extract<StreamItem, { kind: "tool_call" }>,
+        isLastInSequence: boolean,
+        maxDetailHeight?: number,
+      ) => {
+        if (item.payload.source === "agent") {
+          const nestedGroup = getNestedToolCallGroup(item.id);
+          if (nestedGroup) {
+            return renderNestedToolCallGroup(nestedGroup, isLastInSequence);
+          }
+        }
+        return renderSingleToolCallRow(item, isLastInSequence, maxDetailHeight);
+      },
+      [getNestedToolCallGroup, renderNestedToolCallGroup, renderSingleToolCallRow],
     );
 
     // Read through a stable event so live group updates do not change the renderer identity
@@ -1096,9 +1252,11 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const historyContentRevisionIds = useMemo(
       () => ({
         has: (id: string) =>
-          collapseRevision > 0 || projectedToolCalls.historyGroupUpdatesByHostId.has(id),
+          collapseRevision > 0 ||
+          projectedToolCalls.historyGroupUpdatesByHostId.has(id) ||
+          nestedLiveParentItemIds.has(id),
       }),
-      [collapseRevision, projectedToolCalls.historyGroupUpdatesByHostId],
+      [collapseRevision, nestedLiveParentItemIds, projectedToolCalls.historyGroupUpdatesByHostId],
     );
     const historyRowRevision = useMemo(
       () => ({
@@ -1280,6 +1438,9 @@ function agentStreamViewPropsEqual(
   }
   if (left.toast !== right.toast) reasons.push("toast");
   if (left.onOpenWorkspaceFile !== right.onOpenWorkspaceFile) reasons.push("onOpenWorkspaceFile");
+  if (left.onOpenProviderSubagent !== right.onOpenProviderSubagent) {
+    reasons.push("onOpenProviderSubagent");
+  }
   if (left.readOnly !== right.readOnly) reasons.push("readOnly");
   if (left.showScrollToBottomButton !== right.showScrollToBottomButton) {
     reasons.push("showScrollToBottomButton");
@@ -1324,16 +1485,18 @@ function ThoughtSlot({
   defaultExpanded,
 }: ThoughtSlotProps) {
   const revealedText = useRevealedText(text, status === "ready" ? "complete" : "streaming");
+  const isStreaming = status !== "ready";
   return (
     <ToolCallSlot
       itemId={itemId}
       onInlineDetailsExpandedChangeByItemId={onInlineDetailsExpandedChangeByItemId}
       toolName="thinking"
       args={revealedText}
-      status={status === "ready" ? "completed" : "executing"}
+      status={isStreaming ? "executing" : "completed"}
       isLastInSequence={isLastInSequence}
       defaultExpanded={defaultExpanded}
       forceInline={defaultExpanded}
+      followTail={defaultExpanded && isStreaming}
     />
   );
 }
@@ -1661,6 +1824,17 @@ const stylesheet = StyleSheet.create((theme) => ({
     maxWidth: MAX_CONTENT_WIDTH,
     alignSelf: "center",
     paddingHorizontal: theme.spacing[2],
+  },
+  // Nested codemode rows: the rail hangs off the parent badge glyph column, and the child
+  // rows indent one step past it.
+  nestedCodemodeChildren: {
+    // The rail drops from the centre of the parent's glyph: the badge box pulls out by 13 and pads
+    // by 8, so the parent glyph occupies x = -5..17 in this coordinate space and its centre is 6.
+    marginLeft: theme.spacing[1.5],
+    paddingLeft: theme.spacing[3],
+    borderLeftWidth: theme.borderWidth[1],
+    borderLeftColor: theme.colors.border,
+    gap: theme.spacing[1],
   },
   emptyState: {
     flex: 1,

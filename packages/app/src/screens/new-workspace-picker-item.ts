@@ -178,6 +178,48 @@ export function defaultBasePickerItem(status: BaseRefCheckoutStatus): PickerItem
   };
 }
 
+// The project's configured base branch (issue 068) as a picker item, or null when the
+// branch no longer exists on the selected host — the checkout then falls back to the
+// checkout's own default (upstream/current). Ref preference mirrors buildBranchPickerItems:
+// the remote-tracking ref wins because branching off the local ref carries unpushed commits.
+export function pinnedBasePickerItem(
+  branchDetails: readonly BranchPickerDetail[],
+  pinnedBranch: string | null | undefined,
+): PickerItem | null {
+  const name = pinnedBranch?.trim();
+  if (!name) return null;
+  const detail = branchDetails.find((entry) => entry.name === name);
+  if (!detail) return null;
+  let refName = name;
+  if (detail.hasRemote === true) {
+    refName = `refs/remotes/origin/${name}`;
+  } else if (detail.hasLocal === true) {
+    refName = `refs/heads/${name}`;
+  }
+  return {
+    kind: "branch",
+    name,
+    refName,
+    accessibilityLabel: `${name}, branch`,
+    committerDate: detail.committerDate,
+  };
+}
+
+// One owner of the base-item chain: the manual pick, else the project's pinned branch
+// (issue 068), else the checkout's own default. The create request and the picker's
+// checked row must read the same item.
+export function resolveNewWorkspaceBaseItem(input: {
+  selectedItem: PickerItem | null;
+  pinnedBaseItem: PickerItem | null;
+  checkoutStatus: BaseRefCheckoutStatus | null;
+}): PickerItem | null {
+  return (
+    input.selectedItem ??
+    input.pinnedBaseItem ??
+    (input.checkoutStatus ? defaultBasePickerItem(input.checkoutStatus) : null)
+  );
+}
+
 export function pickerItemToCheckoutRequest(
   item: PickerItem | null,
 ): PickerCheckoutRequest | undefined {

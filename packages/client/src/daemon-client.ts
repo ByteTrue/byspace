@@ -202,6 +202,16 @@ const PROJECT_GITHUB_CLONE_TIMEOUT_MS = 5 * 60 * 1000;
  */
 const CHECKOUT_GIT_METADATA_TIMEOUT_MS = 5 * 60 * 1000;
 
+/**
+ * Archiving a worktree runs teardown commands, a forced git worktree removal
+ * and retried directory deletion on the daemon before it answers. On Windows
+ * those deletes hit EBUSY while another process still holds handles in the
+ * tree, which pushed a real archive past the 60s default session RPC timeout.
+ * The client timed out first, reported a failure, and rolled its optimistic
+ * hide back while the daemon still archived the workspace.
+ */
+const ARCHIVE_WORKSPACE_TIMEOUT_MS = 5 * 60 * 1000;
+
 interface ImportAgentInputBase {
   cwd?: string;
   workspaceId?: string;
@@ -2448,6 +2458,7 @@ export class DaemonClient {
         workspaceId,
       },
       responseType: "archive_workspace_response",
+      timeout: ARCHIVE_WORKSPACE_TIMEOUT_MS,
     });
   }
 

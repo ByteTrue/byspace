@@ -2,7 +2,6 @@
 kind: issue
 title: "左侧栏顶部移除 Electron 退役后残留的空 chrome 行"
 type: ff
-status: closed
 created: 2026-09-14
 ---
 

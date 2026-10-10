@@ -2,7 +2,6 @@
 kind: issue
 title: "Pi/OMP 扩展 custom message 全链路透传为 custom_message timeline 项"
 type: ff
-status: closed
 created: 2026-09-11
 ---
 

@@ -9,7 +9,6 @@ import {
   FilePlus,
   FileText,
   FolderMinus,
-  FolderOpen,
   FolderPlus,
   MessageSquarePlus,
   Pencil,
@@ -57,8 +56,6 @@ interface FileActionsContextMenuContentProps {
   onOpenToSide?: () => void;
   onCopyPath?: () => void;
   onCopyRelativePath?: () => void;
-  onReveal?: () => void;
-  revealTargetName?: string;
   onDownload?: () => void;
   onAddToChat?: () => void;
   onNewFile?: () => void;
@@ -84,8 +81,6 @@ export function FileActionsContextMenuContent({
   onOpenToSide,
   onCopyPath,
   onCopyRelativePath,
-  onReveal,
-  revealTargetName,
   onDownload,
   onAddToChat,
   onNewFile,
@@ -175,15 +170,6 @@ export function FileActionsContextMenuContent({
             onSelect: onCopyRelativePath,
           }
         : null,
-      onReveal && revealTargetName
-        ? {
-            key: "reveal",
-            group: "reference",
-            label: t("workspace.fileActions.revealIn", { target: revealTargetName }),
-            icon: FolderOpen,
-            onSelect: onReveal,
-          }
-        : null,
       availableFile && onDownload
         ? {
             key: "download",
@@ -264,9 +250,7 @@ export function FileActionsContextMenuContent({
     openInEditorAction,
     onOpenToSide,
     onRename,
-    onReveal,
     onRevert,
-    revealTargetName,
     t,
     testIDPrefix,
   ]);

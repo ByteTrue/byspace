@@ -2,9 +2,7 @@
 kind: issue
 title: "大图片消息超 Relay 帧上限：发送前客户端压缩，超限图片走分块上传"
 type: feature
-status: closed
 created: 2026-09-29
-closed: 2026-09-29
 ---
 
 # 大图片消息超 Relay 帧上限：发送前客户端压缩，超限图片走分块上传

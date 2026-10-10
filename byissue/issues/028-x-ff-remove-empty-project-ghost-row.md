@@ -2,9 +2,7 @@
 kind: issue
 title: "移除无 workspace 项目下的占位新建按钮行"
 type: ff
-status: closed
 created: 2026-09-14
-closed: 2026-09-14
 ---
 
 # 移除无 workspace 项目下的占位新建按钮行

@@ -45,8 +45,6 @@ export const DocumentFileHeader = memo(function DocumentFileHeader({
       onAddToChat={working?.onAddToChat}
       onCopyPath={working?.onCopyPath}
       onCopyRelativePath={working?.onCopyRelativePath}
-      onReveal={working?.onReveal}
-      revealTargetName={working?.revealTargetName}
       onDownload={working?.onDownload}
       onDuplicate={working?.onDuplicate}
       onRevert={working?.onRevert}
@@ -71,8 +69,6 @@ function documentFileHeaderPropsEqual(
     previous.mode.onAddToChat === next.mode.onAddToChat &&
     previous.mode.onCopyPath === next.mode.onCopyPath &&
     previous.mode.onCopyRelativePath === next.mode.onCopyRelativePath &&
-    previous.mode.onReveal === next.mode.onReveal &&
-    previous.mode.revealTargetName === next.mode.revealTargetName &&
     previous.mode.onDownload === next.mode.onDownload &&
     previous.mode.onDuplicate === next.mode.onDuplicate &&
     previous.mode.onRevert === next.mode.onRevert

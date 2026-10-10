@@ -1,6 +1,10 @@
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 import { afterEach, describe, expect, it } from "vitest";
-import { selectProviderSubagentsForParent, selectSubagentsForParent } from "./select";
+import {
+  selectProviderSubagentsByToolCallId,
+  selectProviderSubagentsForParent,
+  selectSubagentsForParent,
+} from "./select";
 import { useProviderSubagentStore } from "./provider-store";
 import { useSessionStore, type Agent } from "@/stores/session-store";
 
@@ -433,5 +437,65 @@ describe("selectSubagentsForParent", () => {
         EMPTY_PENDING_ARCHIVE_IDS,
       ),
     );
+  });
+});
+
+describe("selectProviderSubagentsByToolCallId", () => {
+  function upsert(subagent: {
+    id?: string;
+    parentAgentId?: string;
+    toolCallId?: string | null;
+    status?: "running" | "completed" | "failed" | "canceled";
+  }) {
+    useProviderSubagentStore.getState().applyUpdate(SERVER_ID, {
+      kind: "upsert",
+      subagent: {
+        id: subagent.id ?? "child-1",
+        parentAgentId: subagent.parentAgentId ?? "parent-a",
+        provider: "pi",
+        title: "Explore",
+        description: null,
+        subtitle: null,
+        status: subagent.status ?? "running",
+        createdAt: "2026-03-08T10:01:00.000Z",
+        updatedAt: "2026-03-08T10:02:00.000Z",
+        toolCallId: subagent.toolCallId ?? null,
+      },
+    });
+  }
+
+  it("indexes descriptors by the tool row call id for one parent", () => {
+    upsert({ id: "child-1", toolCallId: "call-1" });
+    upsert({ id: "child-2", toolCallId: "call-2", status: "failed" });
+
+    const byCallId = selectProviderSubagentsByToolCallId(
+      useProviderSubagentStore.getState(),
+      SERVER_ID,
+      "parent-a",
+    );
+    expect(byCallId.get("call-1")?.id).toBe("child-1");
+    expect(byCallId.get("call-2")?.status).toBe("failed");
+    expect(byCallId.size).toBe(2);
+  });
+
+  it("isolates parents and skips descriptors without a call id", () => {
+    upsert({ id: "child-1", toolCallId: "call-1" });
+    upsert({ id: "other-parent", parentAgentId: "parent-b", toolCallId: "call-1" });
+    upsert({ id: "no-call", toolCallId: null });
+
+    const byCallId = selectProviderSubagentsByToolCallId(
+      useProviderSubagentStore.getState(),
+      SERVER_ID,
+      "parent-a",
+    );
+    expect(byCallId.size).toBe(1);
+    expect(byCallId.get("call-1")?.id).toBe("child-1");
+  });
+
+  it("returns an empty map when nothing matches", () => {
+    expect(
+      selectProviderSubagentsByToolCallId(useProviderSubagentStore.getState(), SERVER_ID, "missing")
+        .size,
+    ).toBe(0);
   });
 });

@@ -1,6 +1,6 @@
 {
   "name": "@bytetrue/app",
-  "version": "0.16.5",
+  "version": "0.19.0",
   "private": true,
   "main": "index.ts",
   "scripts": {
@@ -19,14 +19,13 @@
     "test:e2e:relay-deployment": "npm --prefix ../.. run build:server && npm --prefix ../.. run build:daemon-web-ui && cross-env E2E_FORK_BYSPACE_HOME_FROM=../../.dev/byspace-home playwright test --project=relay-deployment e2e/browser/relay-deployment-reconnect.real.spec.ts",
     "test:e2e:ui": "playwright test --ui",
     "build": "npm run build:web",
-    "build:web": "npm --prefix ../.. run build:app-deps && npm --prefix ../.. run build:config-schema && expo export --platform web",
+    "build:docs": "node scripts/build-public-docs.mjs",
+    "build:web": "npm --prefix ../.. run build:app-deps && npm --prefix ../.. run build:config-schema && expo export --platform web && npm run build:docs",
     "profile:composer-typing": "node ./scripts/profile-composer-typing.mjs",
     "profile:explorer-toggle": "node ./scripts/profile-explorer-toggle.mjs",
     "profile:side-pane": "playwright test --config playwright.profile.config.ts side-pane-performance.spec.ts",
     "profile:workspace-switching": "node ./scripts/profile-workspace-switching.mjs",
     "profile:workspace-tabs": "node ./scripts/profile-workspace-tabs.mjs",
-    "deploy:web": "npm run build:web && wrangler pages deploy dist --project-name byspace --branch main",
-    "deploy:web:beta": "npm run build:web && wrangler pages deploy dist --project-name byspace-beta --branch main",
     "build:terminal-webview": "node ./scripts/build-terminal-webview-html.mjs",
     "build:mermaid-runtime": "node ./src/components/markdown/fence/mermaid/build-runtime.mjs"
   },

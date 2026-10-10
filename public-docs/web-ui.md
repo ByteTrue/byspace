@@ -18,18 +18,17 @@ This is useful when you want to:
 
 The web app ships inside the daemon package, so the UI you serve always matches your daemon version. There's no separate build to keep in sync and no UI-vs-daemon version skew to manage.
 
-## Enable it
+## Enable or disable it
 
-The bundled web UI is off by default. Turn it on when you start the daemon:
+The bundled web UI is on by default; no flag needed. To turn it off:
 
 ```bash
-byspace daemon start --web-ui
+byspace daemon start --no-web-ui
 ```
 
 Or with an environment variable:
 
 ```bash
-# The web UI is on by default. To turn it off:
 BYSPACE_WEB_UI_ENABLED=false byspace daemon start
 ```
 
@@ -51,7 +50,7 @@ Then open the daemon's address in a browser:
 http://localhost:6777/
 ```
 
-If your daemon doesn't recognize `--web-ui`, update it; the flag was added with the bundled web UI.
+If your daemon serves nothing at `/`, update it; the bundled web UI is on by default in current versions.
 
 ## How the connection works
 
@@ -74,7 +73,7 @@ The rest of this page builds from local to public. **Verify a direct connection 
 By default the daemon listens on `127.0.0.1:6777`, reachable only from the same machine. To reach it from other devices, bind it to a network interface:
 
 ```bash
-byspace daemon start --web-ui --listen 0.0.0.0:6777
+byspace daemon start --listen 0.0.0.0:6777
 ```
 
 > **Anyone who can reach the listening address can use your agents.** Before you bind beyond localhost, set a password and review your host allowlist. The relay pairing path avoids this entirely by keeping the daemon bound to localhost, see [Security](/docs/security).
@@ -84,7 +83,7 @@ Two things to configure when you expose the daemon directly:
 1. **Set a password** so only authorized clients can connect:
 
    ```bash
-   BYSPACE_PASSWORD=my-secret byspace daemon start --web-ui --listen 0.0.0.0:6777
+   BYSPACE_PASSWORD=my-secret byspace daemon start --listen 0.0.0.0:6777
    ```
 
    See [password authentication](/docs/configuration#password-authentication) for the persistent setup. Password auth controls access; it does not encrypt traffic, put TLS in front of it (below) on any untrusted network.
@@ -92,7 +91,7 @@ Two things to configure when you expose the daemon directly:
 2. **Allow your hostname** so the daemon's DNS-rebinding protection accepts requests for your domain:
 
    ```bash
-   byspace daemon start --web-ui --listen 0.0.0.0:6777 --hostnames ".example.com"
+   byspace daemon start --listen 0.0.0.0:6777 --hostnames ".example.com"
    ```
 
    See [DNS rebinding protection](/docs/security#dns-rebinding-protection) for how the host allowlist works.
@@ -180,7 +179,7 @@ If your proxy reaches the daemon from another address, as in some Docker, LAN, o
 `BYSPACE_TRUSTED_PROXIES` accepts the same comma-separated values:
 
 ```bash
-BYSPACE_TRUSTED_PROXIES=loopback,172.16.0.0/12 byspace daemon start --web-ui
+BYSPACE_TRUSTED_PROXIES=loopback,172.16.0.0/12 byspace daemon start
 ```
 
 Only use `trustedProxies: true` when your final trusted proxy overwrites client-supplied `X-Forwarded-*` headers. Otherwise a client could spoof forwarded header values.
@@ -222,7 +221,7 @@ For the full threat model, relay encryption, and DNS-rebinding details, see [Sec
 
 ## Troubleshooting
 
-- **Blank page or 404 at `/`.** The web UI isn't enabled. Start the daemon with `--web-ui` and confirm with `byspace daemon status` that it's the daemon you're hitting.
+- **Blank page or 404 at `/`.** The web UI is on by default, so an old daemon is the usual cause. Update it, and confirm with `byspace daemon status` that it's the daemon you're hitting.
 - **Page loads but never connects.** The proxy isn't forwarding the WebSocket upgrade, or it's stripping the `Host` header. Check the upgrade headers in your proxy config.
 - **Connects, then output freezes.** Response buffering is on, or read timeouts are too short. Disable buffering and raise the timeouts.
 - **"Mixed content" / connection blocked over HTTPS.** The app fell back to `ws://`. Either the proxy isn't sending `X-Forwarded-Proto: https`, or the daemon doesn't trust the proxy address. Forward the header and configure `daemon.trustedProxies` if the proxy is not loopback.

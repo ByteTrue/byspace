@@ -1281,12 +1281,48 @@ describe("processTimelineResponse", () => {
     });
 
     expect(result.tail).toEqual([
+      local,
       expect.objectContaining({
         kind: "assistant_message",
         text: "another client's response",
       }),
-      local,
     ]);
+  });
+
+  it("keeps an unreconciled local row ahead of a resume tail page submitted later", () => {
+    const local = createUserMessage({
+      clientMessageId: "client-never-echoed",
+      text: "帮我发一个正式版",
+      timestamp: new Date(1000),
+    });
+    const earlyReply = makeAssistantItem("streamed before detaching", "assistant-early");
+
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      currentTail: [local, earlyReply],
+      currentHead: [],
+      currentCursor: { epoch: "epoch-1", startSeq: 1, endSeq: 2 },
+      sendingClientMessageIds: [],
+      payload: {
+        ...baseTimelineInput.payload,
+        direction: "tail",
+        epoch: "epoch-1",
+        window: { minSeq: 1, maxSeq: 69, nextSeq: 70 },
+        startCursor: { seq: 50 },
+        endCursor: { seq: 69 },
+        entries: [
+          makeTimelineEntry(50, "reply page row 50"),
+          makeTimelineEntry(51, "reply page row 51"),
+        ],
+        hasOlder: true,
+        hasNewer: false,
+      },
+    });
+
+    expect(result.tail[0]).toBe(local);
+    expect(
+      result.tail.filter((item) => item.kind === "user_message").map((item) => item.text),
+    ).toEqual(["帮我发一个正式版"]);
   });
 
   it("keeps an unreconciled local presentation during non-reset bootstrap", () => {
@@ -1433,6 +1469,7 @@ describe("processTimelineResponse", () => {
         text: "text" in item ? item.text : undefined,
       })),
     ).toEqual([
+      { kind: "user_message", id: "client-first", text: "first submission" },
       { kind: "user_message", id: "provider-second", text: "second submission" },
       { kind: "user_message", id: "provider-third", text: "third submission" },
       {
@@ -1440,7 +1477,6 @@ describe("processTimelineResponse", () => {
         id: "assistant-response",
         text: "response to canonical submissions",
       },
-      { kind: "user_message", id: "client-first", text: "first submission" },
     ]);
   });
 

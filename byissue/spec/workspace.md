@@ -3,6 +3,11 @@
 侧栏把 Workspace 按 Project 组织，行内呈现分支与宿主信息；行级操作走 hover 与菜单。
 侧栏提供一键整理 Project 顺序操作，按活跃（running/attention/needs_input/failed）、有 Workspace（全 done）、无 Workspace 三层排列，各层内按名称首字母 A–Z 升序。
 
+## 新建 Workspace 默认值
+
+- 新建 Workspace 的初始 Host 跟随 Project 设置的默认 Host（须在线），未设置或离线时回落本机 daemon；任何入口都不默认选一个无关 Host。Project 设置可为单个项目指定默认 Host、隔离模式（Local / New worktree）与新建 worktree 的基础分支，留 Automatic 表示不设偏好。
+- 这些默认只决定创建时的初始值，不改变已有 Workspace；指定的基础分支在目标 Host 的仓库里不存在时按无偏好处理，回落 checkout 默认。
+
 ## 分支与推送状态
 
 - BranchSwitcher 区分 Local、Remote、Both 并用可辨识图标分组；远端名不硬编码为 `origin`。

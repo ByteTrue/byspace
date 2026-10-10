@@ -242,6 +242,7 @@ function createFallbackWorkspaceGitService(): WorkspaceGitService {
       unsubscribe: () => {},
     }),
     peekSnapshot: () => null,
+    releaseWatchersForCwd: () => {},
     getCheckout: async (cwd: string) => ({
       cwd,
       isGit: false,

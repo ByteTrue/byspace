@@ -64,6 +64,6 @@
 **相关：**
 
 - `byissue/issues/041-x-over-engineering-audit.md` — 本轮审计的执行记录与被推翻的条目。
-- `byissue/issues/025-o-architecture-retention-audit.md`、`034-x-retirement-residue-audit.md` — 退役面的前两轮。
+- `byissue/issues/025-x-architecture-retention-audit.md`、`034-x-retirement-residue-audit.md` — 退役面的前两轮。
 - 本仓库把 Node 版本钉在 `.tool-versions`；改依赖替换类改动时以此为准。
 - 本轮 CI 失败实例：run `35209611531`（`package.json`/lockfile 不同步，22 个 job 全挂）；修复 `bc5c72fc4`。

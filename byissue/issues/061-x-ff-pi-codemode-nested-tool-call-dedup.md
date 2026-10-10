@@ -2,9 +2,7 @@
 kind: issue
 title: "pi codemode 的嵌套工具调用在 BySpace 里重复显示成独立工具行"
 type: ff
-status: closed
 created: 2026-09-30
-closed: 2026-09-30
 ---
 
 <!-- 快改痕迹：轻。读者只要 30 秒扫完。禁止迷你 Design。 -->
@@ -38,3 +36,4 @@ pi 的 `codemode` 脚本里 `await tools.bash(...)` 时，BySpace 会多显示�
 - 未做：`docs/extensions.md:148` 说的嵌套调用列表（上游记在 tool result 的 `nestedCalls` 上，含 name/arguments/status/durationMs）本仓库未读取，父行不展开它。上游 `NestedCallRecorder` 有 maxCalls 256、maxArgumentBytesPerCall 8KiB、maxArgumentBytesTotal 32KiB 的上限。
 - 已知残留：宿主若装了 `exposure: "codemode"` 的 MCP server，pi 会自行激活 codemode 工具（`dist/extensions/mcp/index.js:255-285` `ensureDiscoveryActive`），绕过项目 `defaultTools`；那是宿主配置差异，不为它加防御代码。
 - byissue：`byissue/spec/agent-conversation.md`「运行与加载指示」新增一条嵌套调用契约（不单独成条目、只显示父行、id 不进 transcript 故历史回放天然只有父行），历史证据列表加本文链接。
+- **后续（2026-10-01）**：本文的实时流过滤因可读性回退——折叠时间线只剩 codemode 行，看不出模型实际做了什么。嵌套行恢复独立显示，实时/回放差异成为有意取舍，见 [062](062-x-ff-restore-pi-codemode-nested-rows.md)。
