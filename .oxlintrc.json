@@ -108,6 +108,16 @@
                 "name": "react-native-unistyles",
                 "importNames": ["useUnistyles"],
                 "message": "useUnistyles is banned by docs/unistyles.md. Grandfathered files may only leave the override burn-down list."
+              },
+              {
+                "name": "@/components/adaptive-modal-sheet",
+                "importNames": ["AdaptiveTextInput"],
+                "message": "Form inputs go through FormTextInput/Field from @/components/ui/form-field. Bare AdaptiveTextInput renders borderless text that reads as body copy."
+              },
+              {
+                "name": "@/components/adaptive-text-input",
+                "importNames": ["AdaptiveTextInput"],
+                "message": "Form inputs go through FormTextInput/Field from @/components/ui/form-field. Bare AdaptiveTextInput renders borderless text that reads as body copy."
               }
             ]
           }
@@ -322,6 +332,38 @@
       "files": ["**/e2e/**/fixtures.ts"],
       "rules": {
         "no-empty-pattern": "off"
+      }
+    },
+    // FormTextInput burn-down: 8 files still import bare AdaptiveTextInput directly. They
+    // predate the primitive (issue 062 owner review) and keep bespoke input chrome; new code
+    // must use FormTextInput/Field from @/components/ui/form-field. Files may only shrink
+    // out of this exemption. The primitive itself and its re-export live here too.
+    {
+      "files": [
+        "packages/app/src/components/adaptive-text-input.tsx",
+        "packages/app/src/components/adaptive-modal-sheet.tsx",
+        "packages/app/src/components/ui/form-field.tsx",
+        "packages/app/src/components/add-host-modal.tsx",
+        "packages/app/src/components/pair-link-modal.tsx",
+        "packages/app/src/components/provider-diagnostic-sheet.tsx",
+        "packages/app/src/components/rename-modal.tsx",
+        "packages/app/src/components/setup-guide-modal.tsx",
+        "packages/app/src/components/ui/combobox.tsx",
+        "packages/app/src/components/ui/menu/menu-item.tsx"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "react-native",
+                "importNames": ["TextInput"],
+                "message": "Use EditingTextInput from @/components/ui/text-input. Raw TextInput bypasses editing-surface authority and IME safety."
+              }
+            ]
+          }
+        ]
       }
     }
   ]
