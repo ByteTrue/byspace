@@ -15,6 +15,14 @@ App 与 Relay 的地址按发布通道选择；用户的自定义配置始终优
 - 配对 offer 携带可读 hostname，新 Host 首次保存时默认采用；缺少 hostname 的旧 offer 与旧客户端保持双向兼容。
 - **局域网监听以密码为前提**：daemon 默认只监听 loopback；在设置里放开局域网（`daemon.listen` 改写为 `0.0.0.0:<port>`）前必须先设置访问密码，服务端强制此不变量，清密码同理被拒绝。密码只在 patch 时以明文进入，落盘与回读只有 bcrypt 哈希与 `passwordSet` 视图字段。网络与密码改动统一重启生效；`BYSPACE_LISTEN` / `BYSPACE_PASSWORD` 启动 override 存在时，对应设置被拒而非静默失效。能力声明为 `features.daemonNetworkConfig`。
 
+## 托管部署
+
+- **托管产物是一个 Worker。** 自 073 起，`app.byspace.cc.cd`（stable）、`app-beta.byspace.cc.cd`（prerelease）与 `relay.byspace.cc.cd` 由 `packages/relay` 的同一个 Worker（`byspace-relay` / `byspace-relay-beta`）从同一 origin 服务：`/` 静态 web 导出、`/ws` `/health` 走 relay 逻辑（`run_worker_first` 保证不被 SPA 回落吞掉）。与自托管容器是同一形状（`/` + `/ws` + `/health`）、同一 relay 核心（runtime-agnostic session core，Node/CF 两个 adapter，parity 由测试钉住）。
+- **UI 与 relay 原子发布。** `deploy-app.yml` 在 web 发版时 `wrangler deploy` 一次部署两者；出问题 `wrangler rollback` 整体回退。发版流程外的紧急 relay 修复可手动 `npm run deploy:hosted`。
+- **域名与 origin 稳定性。** cutover 保持域名不变（从 Pages 解绑再挂 Worker），已装 PWA、localStorage host 配置、`#offer` 配对链接全部不受影响。Workers 自定义域要求 hostname 无外部 DNS 记录——Pages 解绑不清理 DNS，迁移时必须先删 zone 里的遗留 CNAME。
+- **`wrangler.toml` 的 account_id 曾长期是错的**（v0.10.0 写入的 ID 与真实账号不符，本机 deploy 从未成功过）——已修正。对「约定说手动部署、实际从未部署成功」这类漂移保持警惕。
+- **beta 与 stable 是两个 Worker**（独立 DO 命名空间），不是同一 Worker 的两个 route。zijieapi.de5.net 时代的 byspace 子域已废弃，routes 已移除。
+
 ## 自托管部署
 
 自托管的发布物是一个容器（`ghcr.io/bytetrue/byspace`）：web 静态资源与 relay 在同一镜像、同一端口（`https://host/` 与 `wss://host/ws`，TLS 反代下一张证书同时罩住两者）。daemon 不出镜像，只从 npm 安装 `@bytetrue/byspace`。agent 跑的是用户本机的项目工具链，自带 daemon 的容器会把「控制本机」误导成「部署一个服务」；确实想在容器里跑 daemon 的人装同一个 npm 包，见 `docs/docker.md`。

@@ -12,9 +12,9 @@ created: 2026-10-10
 
 ## 为什么做
 
-073 cutover 期间钉死的事实：`public-docs/`（用户文档 + SDK 文档源）**没有任何部署链路**——不在任何 workflow、任何构建脚本里。线上 `app.byspace.cc.cd/docs/*`（被 `packages/client/README.md`、`SECURITY.md` 引用的 SDK 文档 URL）现在被 SPA 回落兜成 index.html，是**功能性坏链**：用户点开文档链接，得到的是 BySpace app 本体。
+issues/073-x-web-into-relay-worker.md cutover 期间钉死的事实：`public-docs/`（用户文档 + SDK 文档源）**没有任何部署链路**——不在任何 workflow、任何构建脚本里。线上 `app.byspace.cc.cd/docs/*`（被 `packages/client/README.md`、`SECURITY.md` 引用的 SDK 文档 URL）现在被 SPA 回落兜成 index.html，是**功能性坏链**：用户点开文档链接，得到的是 BySpace app 本体。
 
-Pages 时代它同样是坏链（同一回落行为），所以这不是 073 引入的回归——073 只是让这个真空显形了。
+Pages 时代它同样是坏链（同一回落行为），所以这不是 073 引入的回归——它只是让这个真空显形了。
 
 ## 做成以后是什么样
 
@@ -45,4 +45,4 @@ Pages 时代它同样是坏链（同一回落行为），所以这不是 073 引
 
 ## 决策记录
 
-- **2026-10-10** 用户拍板：从 073 的尾巴独立成 issue。073 执行记录里保留了发现现场。
+- **2026-10-10** 用户拍板：从 issues/073-x-web-into-relay-worker.md 的尾巴独立成 issue，发现现场保留在其执行记录里。
