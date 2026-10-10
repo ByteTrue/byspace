@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useHostRuntimeClient } from "@/runtime/host-runtime";
+import { getHostRuntimeStore, useHostRuntimeClient } from "@/runtime/host-runtime";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 
 export interface ChiefAgentInfo {
@@ -70,31 +70,37 @@ async function createChiefAgent(
  * store may not have synced the Home workspace yet.
  */
 export function useChiefAgent(serverId: string | null): ChiefAgentState {
+  const store = getHostRuntimeStore();
+  const hosts = store.getHosts();
   const client = useHostRuntimeClient(serverId ?? "");
-  const isClientReady = client !== null;
+  // The URL host may hold an expired serverId (daemon restarts generate a
+  // new one). Fall back to any host that has a live client.
+  const effectiveClient =
+    client ?? hosts.map((h) => store.getClient(h.serverId)).find((c) => c !== null) ?? null;
+  const isClientReady = effectiveClient !== null;
 
   const [state, setState] = useState<ChiefAgentState>({ tag: "loading" });
   const inFlightRef = useRef(false);
   const resolvedServerIdRef = useRef<string | null>(null);
 
   const resolve = useCallback(async () => {
-    if (!client) return;
+    if (!effectiveClient) return;
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     try {
-      const workspaces = await client.fetchWorkspaces();
+      const workspaces = await effectiveClient.fetchWorkspaces();
       const home = workspaces.entries.find((entry) => isHomeWorkspace(entry));
       if (!home) {
         setState({ tag: "no_home_workspace" });
         return;
       }
       const cwd = home.workspaceDirectory ?? home.projectRootPath;
-      const existing = await findChiefAgent(client, home.id);
+      const existing = await findChiefAgent(effectiveClient, home.id);
       if (existing) {
         setState({ tag: "ready", agent: existing });
         return;
       }
-      const created = await createChiefAgent(client, home.id, cwd);
+      const created = await createChiefAgent(effectiveClient, home.id, cwd);
       setState({ tag: "ready", agent: created });
     } catch (error) {
       setState({
@@ -104,15 +110,15 @@ export function useChiefAgent(serverId: string | null): ChiefAgentState {
     } finally {
       inFlightRef.current = false;
     }
-  }, [client]);
+  }, [effectiveClient]);
 
   useEffect(() => {
-    if (!serverId || !isClientReady) return;
-    if (resolvedServerIdRef.current === serverId) return;
-    resolvedServerIdRef.current = serverId;
+    if (!isClientReady) return;
+    if (resolvedServerIdRef.current) return;
+    resolvedServerIdRef.current = "__resolved__";
     setState({ tag: "loading" });
     void resolve();
-  }, [serverId, isClientReady, client, resolve]);
+  }, [isClientReady, resolve]);
 
   return state;
 }
