@@ -5,6 +5,24 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.19.0 - 2026-10-11
+
+### Added
+
+- The hosted web app and the relay are one Cloudflare Worker on one origin: `app.byspace.cc.cd` serves the PWA, the `/ws` relay, and `/health`
+- Added the user and SDK documentation at `app.byspace.cc.cd/docs` and the release history at `/changelog`, which previously resolved to the app shell
+
+### Changed
+
+- Merged the "Always expand reasoning" toggle and the Tool call display picker into one Timeline detail setting with four levels: Collapse all, Collapse details, Show latest thinking, Expand all ([#24](https://github.com/ByteTrue/byspace/pull/24))
+- A streaming thinking block keeps its scroll area pinned to the newest lines until you scroll up ([#24](https://github.com/ByteTrue/byspace/pull/24))
+
+### Fixed
+
+- Fixed codemode sub-tool rows disappearing from a Pi session after reloading it ([#21](https://github.com/ByteTrue/byspace/pull/21))
+- Fixed the subagents track keeping a working badge for a subagent pi had already stopped ([#22](https://github.com/ByteTrue/byspace/pull/22))
+- Fixed New workspace opening on the active workspace's host instead of following the project host preference chain ([#23](https://github.com/ByteTrue/byspace/pull/23))
+
 ## 0.18.0 - 2026-10-07
 
 ### Added
