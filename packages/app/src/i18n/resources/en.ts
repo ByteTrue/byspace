@@ -213,6 +213,11 @@ export const en = {
     switchHost: "Switch host",
     maximize: "Open in full page",
     close: "Close Chief",
+    suggestions: {
+      whatCanYouDo: "What can you do?",
+      checkWorkspaces: "Check my workspaces",
+      recentActivity: "Any recent activity?",
+    },
   },
   agentPanel: {
     states: {

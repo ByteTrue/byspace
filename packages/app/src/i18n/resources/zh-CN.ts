@@ -215,6 +215,11 @@ export const zhCN: TranslationResources = {
     switchHost: "切换主机",
     maximize: "全屏打开",
     close: "关闭 Chief",
+    suggestions: {
+      whatCanYouDo: "你能帮我做什么？",
+      checkWorkspaces: "看看我的工作区",
+      recentActivity: "最近有什么活动？",
+    },
   },
   agentPanel: {
     states: {

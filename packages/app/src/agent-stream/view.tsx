@@ -203,10 +203,29 @@ function renderStreamItemWithTurnFooter(input: {
   );
 }
 
+function SuggestionChip({
+  label,
+  prompt,
+  onSelect,
+}: {
+  label: string;
+  prompt: string;
+  onSelect?: (prompt: string) => void;
+}) {
+  const handlePress = useCallback(() => onSelect?.(prompt), [onSelect, prompt]);
+  return (
+    <Pressable onPress={handlePress} style={stylesheet.suggestionChip}>
+      <Text style={stylesheet.suggestionChipText}>{label}</Text>
+    </Pressable>
+  );
+}
+
 function renderListEmptyComponent(input: {
   renderModel: AgentStreamRenderModel;
   emptyStateStyle: StyleProp<ViewStyle>;
   emptyText: string;
+  suggestions?: { label: string; prompt: string }[];
+  onSuggestionSelect?: (prompt: string) => void;
 }): ReactNode {
   if (
     input.renderModel.boundary.hasVirtualizedHistory ||
@@ -221,6 +240,18 @@ function renderListEmptyComponent(input: {
   return (
     <View style={input.emptyStateStyle}>
       <Text style={stylesheet.emptyStateText}>{input.emptyText}</Text>
+      {input.suggestions && input.suggestions.length > 0 ? (
+        <View style={stylesheet.emptySuggestions}>
+          {input.suggestions.map((s) => (
+            <SuggestionChip
+              key={s.label}
+              label={s.label}
+              prompt={s.prompt}
+              onSelect={input.onSuggestionSelect}
+            />
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -299,6 +330,10 @@ export interface AgentStreamViewProps {
   onOpenProviderSubagent?: (parentAgentId: string, subagentId: string) => void;
   showScrollToBottomButton?: boolean;
   onScrollToBottomVisibilityChange?: (visible: boolean) => void;
+  /** Suggestion chips rendered in the empty state. Tapping one calls onSelect
+   *  with the prompt text. Rendered below the empty text. */
+  emptySuggestions?: { label: string; prompt: string }[];
+  onEmptySuggestionSelect?: (prompt: string) => void;
   historyPagination?: {
     hasOlder: boolean;
     isLoadingOlder: boolean;
@@ -364,6 +399,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       readOnly = false,
       showScrollToBottomButton = true,
       onScrollToBottomVisibilityChange,
+      emptySuggestions,
+      onEmptySuggestionSelect,
       historyPagination,
     },
     ref,
@@ -1166,8 +1203,10 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           renderModel,
           emptyStateStyle,
           emptyText: t("agentStream.empty"),
+          suggestions: emptySuggestions,
+          onSuggestionSelect: onEmptySuggestionSelect,
         }),
-      [renderModel, emptyStateStyle, t],
+      [renderModel, emptyStateStyle, t, emptySuggestions, onEmptySuggestionSelect],
     );
 
     const { boundary, auxiliary } = renderModel;
@@ -1841,6 +1880,22 @@ const stylesheet = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: theme.spacing[12],
+  },
+  emptySuggestions: {
+    marginTop: theme.spacing[4],
+    gap: theme.spacing[2],
+    alignItems: "center",
+  },
+  suggestionChip: {
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.base,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+  },
+  suggestionChipText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.foreground,
   },
   permissionsContainer: {
     gap: theme.spacing[2],

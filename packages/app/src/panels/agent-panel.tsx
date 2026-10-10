@@ -1477,6 +1477,8 @@ function DockedChatSurface({ children, disabled }: { children: ReactNode; disabl
   );
 }
 
+const CHIEF_ROLE_LABEL = "byspace.agent-role";
+
 const AgentStreamSection = memo(function AgentStreamSection({
   streamViewRef,
   serverId,
@@ -1504,8 +1506,42 @@ const AgentStreamSection = memo(function AgentStreamSection({
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
   onScrollToBottomVisibilityChange: (visible: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const isCompactFormFactor = useIsCompactFormFactor();
   const { openPreferredTarget } = usePaneContext();
+  const client = useHostRuntimeClient(serverId);
+  const agentLabels = useSessionStore((state) => {
+    if (!agentId) return null;
+    return state.sessions[serverId]?.agents.get(agentId)?.labels ?? null;
+  });
+  const isChiefAgent = agentLabels?.[CHIEF_ROLE_LABEL] === "chief";
+  const handleSuggestionSelect = useCallback(
+    (prompt: string) => {
+      if (!client || !agentId) return;
+      void client.sendMessage(agentId, prompt);
+    },
+    [client, agentId],
+  );
+  const emptySuggestions = useMemo(
+    () =>
+      isChiefAgent
+        ? [
+            {
+              label: t("chief.suggestions.whatCanYouDo"),
+              prompt: t("chief.suggestions.whatCanYouDo"),
+            },
+            {
+              label: t("chief.suggestions.checkWorkspaces"),
+              prompt: t("chief.suggestions.checkWorkspaces"),
+            },
+            {
+              label: t("chief.suggestions.recentActivity"),
+              prompt: t("chief.suggestions.recentActivity"),
+            },
+          ]
+        : undefined,
+    [isChiefAgent, t],
+  );
   const handleOpenProviderSubagent = useCallback(
     (parentAgentId: string, subagentId: string) => {
       openPreferredTarget({ kind: "provider_subagent", parentAgentId, subagentId }, "subagents");
@@ -1585,6 +1621,8 @@ const AgentStreamSection = memo(function AgentStreamSection({
       onOpenProviderSubagent={handleOpenProviderSubagent}
       showScrollToBottomButton={!hasActiveComposer}
       onScrollToBottomVisibilityChange={onScrollToBottomVisibilityChange}
+      emptySuggestions={emptySuggestions}
+      onEmptySuggestionSelect={handleSuggestionSelect}
     />
   );
 });
