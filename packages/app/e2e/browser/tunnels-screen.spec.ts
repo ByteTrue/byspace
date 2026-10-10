@@ -4,6 +4,7 @@ import { test, expect } from "../support/fixtures";
 import { connectDaemonClient } from "../support/helpers/daemon-client-loader";
 import { startIsolatedHostDaemon } from "../support/helpers/isolated-host-daemon";
 import { startLocalNodeRelay } from "../support/helpers/local-node-relay";
+import { openTopLevelNavMenu, topLevelNavItem } from "../support/helpers/sidebar-chrome";
 
 const D1_ID = "tunnels-gui-d1";
 const D2_ID = "tunnels-gui-d2";
@@ -82,7 +83,11 @@ test("creates a tunnel from the GUI and forwards bytes", async ({ page }) => {
       { endpoint: "127.0.0.1:" + d1.port, password: PASSWORD },
     );
 
-    await page.goto("/tunnels");
+    // Enter the way a user does: the BySpace menu's Tunnels row. The registry write above
+    // only lands after a fresh load, so reload before walking the menu.
+    await page.goto("/");
+    await openTopLevelNavMenu(page);
+    await topLevelNavItem(page, "sidebar-tunnels").click();
 
     // Experimental gate (issue 063): the page opens on the enable card.
     const enableCard = page.getByTestId("tunnels-enable-card");

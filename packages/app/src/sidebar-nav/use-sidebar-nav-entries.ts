@@ -1,6 +1,13 @@
 import { useCallback, useMemo } from "react";
 import { usePathname, router } from "expo-router";
-import { CalendarClock, History, Plus, Search, type LucideIcon } from "lucide-react-native";
+import {
+  ArrowRightLeft,
+  CalendarClock,
+  History,
+  Plus,
+  Search,
+  type LucideIcon,
+} from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
@@ -14,6 +21,7 @@ import {
   buildNewWorkspaceRoute,
   buildSchedulesRoute,
   buildSessionsRoute,
+  buildTunnelsRoute,
 } from "@/utils/host-routes";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 
@@ -31,6 +39,7 @@ export const SIDEBAR_NAV_ICONS: Record<BuiltinSidebarNavId, LucideIcon> = {
   history: History,
   search: Search,
   schedules: CalendarClock,
+  tunnels: ArrowRightLeft,
 };
 
 /** testIDs for the compact sidebar rows. The desktop menu renders the same ids on its items. */
@@ -39,16 +48,17 @@ export const SIDEBAR_NAV_TEST_IDS: Record<BuiltinSidebarNavId, string> = {
   history: "sidebar-sessions",
   search: "sidebar-search",
   schedules: "sidebar-schedules",
+  tunnels: "sidebar-tunnels",
 };
 
 /**
  * The one source for the top-level navigation entries — New workspace, History, Search,
- * Schedules — in the user's order and visibility.
+ * Schedules, Tunnels — in the user's order and visibility.
  *
  * Two surfaces render these: the compact sidebar's rows and the desktop sidebar's BySpace
  * menu. They differ in presentation only, so label, icon, shortcut badge, active state, and
  * the press target are resolved once here. Every hook below is called unconditionally for
- * all four builtins, so the order stays fixed while the returned list tracks the preference.
+ * every builtin, so the order stays fixed while the returned list tracks the preference.
  */
 export function useSidebarNavEntries(): SidebarNavEntry[] {
   const { t } = useTranslation();
@@ -60,6 +70,7 @@ export function useSidebarNavEntries(): SidebarNavEntry[] {
   const historyShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("history"));
   const searchShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("search"));
   const schedulesShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("schedules"));
+  const tunnelsShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("tunnels"));
 
   // Route without a host: the screen resolver owns the initial host. A known route serverId
   // would bypass that chain, so this entry must not carry the active workspace's host.
@@ -77,6 +88,10 @@ export function useSidebarNavEntries(): SidebarNavEntry[] {
 
   const onSchedules = useCallback(() => {
     router.push(buildSchedulesRoute());
+  }, []);
+
+  const onTunnels = useCallback(() => {
+    router.push(buildTunnelsRoute());
   }, []);
 
   const resolved = useMemo<Record<BuiltinSidebarNavId, SidebarNavEntry>>(
@@ -114,6 +129,14 @@ export function useSidebarNavEntries(): SidebarNavEntry[] {
         isActive: pathname.includes("/schedules"),
         onSelect: onSchedules,
       },
+      tunnels: {
+        id: "tunnels",
+        icon: SIDEBAR_NAV_ICONS.tunnels,
+        label: t(builtinSidebarNavLabelKey("tunnels")),
+        shortcutKeys: tunnelsShortcut,
+        isActive: pathname.includes("/tunnels"),
+        onSelect: onTunnels,
+      },
     }),
     [
       historyShortcut,
@@ -122,10 +145,12 @@ export function useSidebarNavEntries(): SidebarNavEntry[] {
       onNewWorkspace,
       onSchedules,
       onSearch,
+      onTunnels,
       pathname,
       schedulesShortcut,
       searchShortcut,
       t,
+      tunnelsShortcut,
     ],
   );
 

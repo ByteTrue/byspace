@@ -91,8 +91,8 @@ relay your app connections use. If the remote daemon is paired through a
 self-hosted relay, tunnels go through that relay too; traffic stays
 end-to-end encrypted either way.
 
-To create one, open **Tunnels** (command center or `/tunnels`) on the machine
-where you want the local port, press **Add tunnel**, and paste the remote
+To create one, open **Tunnels** — the row in the sidebar's BySpace menu, or the
+command center action, or `/tunnels` — on the machine where you want the local port, press **Add tunnel**, and paste the remote
 daemon's pairing link (`byspace daemon pair` prints it) with its password and
 the remote port. The tunnel is persistent: it reconnects on its own after
 either daemon or the relay restarts.

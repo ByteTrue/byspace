@@ -22,9 +22,8 @@ App 与 Relay 的地址按发布通道选择；用户的自定义配置始终优
 - **启用门槛（服务端强制）**：两端 daemon 都设密码；D2 侧 `daemon.tunnel.allowedPorts` 白名单外的端口拒绝转发。配置经 config patch 通道热生效。
 - **relay 归属**：隧道走 D2 pairing offer 携带的 `relayPublicEndpoint`（自托管 relay 用户的流量天然走自己的 relay，与 app 客户端同一条信任模型——E2EE 不依赖 relay）。
 - **生命周期**：daemon 级常驻（`tunnels.json` 持久化，boot 恢复），内嵌客户端复用 DaemonClient 重连；app 不在线时隧道照常工作。
-- **交互面**：app 的 `/tunnels` 独立路由（类比 Schedules）——添加隧道（粘贴 D2 pairing offer + 密码 + 端口）、outbound/inbound 列表、白名单 GUI。入口仅本机（回环）daemon 在场时显示。
+- **交互面**：app 的 `/tunnels` 独立路由（类比 Schedules）——添加隧道（粘贴 D2 pairing offer + 密码 + 端口）、outbound/inbound 列表、白名单 GUI。入口是侧栏 BySpace 菜单里的 Tunnels 行（内置导航项，可在 Appearance 里排序/隐藏），命令中心保留同名动作。
 - **范围边界**：手动互导 offer，无 relay 成员网络；不做 agent 工具跨机与反向隧道。
-- **入口**：BySpace 菜单（侧栏第一行）新增 Tunnels 行，与 Schedules 同级；命令中心保留同名动作。
 
 ## 托管部署
 

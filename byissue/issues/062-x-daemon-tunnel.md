@@ -195,6 +195,23 @@ Owner 真实浏览器走查两轮，暴露的都不是逻辑 bug 而是输入面
 - **验证证据**：server e2e 5/5（含 relay 重启恢复、三拒绝路径）+ 单测 9/9 + registry 5/5；protocol 帧测试 6/6；GUI e2e 1/1（真实双 daemon + relay + 浏览器，字节级断言）；回归（relay 74、config-store 53、authorization 7、i18n/command-center 55）全绿；typecheck/lint/format 0 违规。
 - **毕业去向**：connection.md 已回写；supervisor 优先 dist、ws factory 无 protocols 静默挂死两条坑已记录在本 issue 执行记录，可作为 note 候选。
 
+### 2026-10-10 · 收尾：合流 main、补侧栏入口、修合并区既有回归
+
+**背景**：v0.19.0 从 main 发出，用户装生产版后找不到 tunnel 入口——main 里根本没有 tunnel（17 个相关文件全在 `research/relay-cross-site-networking`）。同时发现入口本身也有缺口：只有命令中心可搜到，侧栏/设置里没有。
+
+**补入口**：`tunnels` 成为第五个 builtin 侧栏导航项（`sidebar-nav/model.ts` 的 `BUILTIN_SIDEBAR_NAV_IDS`），跟着 BySpace 菜单渲染，可在 Appearance 的 Sidebar 分区排序/隐藏；命令中心动作保留。改动面：model（id/label key/shortcut）、`use-sidebar-nav-entries`（icon/testID/`buildTunnelsRoute`/active）、`sidebar-nav-section`（图标表）、e2e helper 与 spec、glossary 的 Sidebar items 清单、connectivity.md 的进入路径。
+
+**合流 main**：`git merge origin/main` 只有两个真冲突——`byissue/spec/connection.md`（隧道节 vs 新增托管部署节，两边都保留）与 `left-sidebar.tsx`（盒模型注释措辞，代码两侧一致，取 main 原文）。i18n 9 个、messages.ts、bootstrap 全部自动合。
+
+**合并暴露的既有回归**：`tunnel-session.test.ts` 的 afterEach 挂死（`server.close()` 等隧道 socket），base 上 100% 复现，修法是先 `closeAllConnections()`。
+
+**验证**：app 单测 4 文件 101 passed（model/i18n key contract/locales/storage）；sidebar-nav-settings e2e 3/3；lint 0 违规、typecheck（重建 protocol/client/highlight 后）0 错。tunnels-screen GUI e2e 在本机跑不通（Enable 卡不消失），已用独立探针证明 `patchDaemonConfig({tunnel:{enabled:true}})` 往返正常（`src/probe-tunnel-patch.test.ts`，通过），且 **merge 前的 5fcb87d94 上同一 spec 同样失败**——与本次改动无关，属本地 e2e 环境问题，留给 CI 判定。
+
+> 探针文件仅为本次诊断，不提交。
+
+- **教训**：worktree 里用 junction 挂 `node_modules` 会连 `node_modules/@bytetrue/*` 的 workspace symlink 一起指回主 checkout——编译的是主 checkout 的包，报出的类型错全是假的。跨分支 worktree 必须真 `npm install`。
+- **教训**：新内置导航项有 6 个必须同步的 `Record<BuiltinSidebarNavId, …>` 映射（label key、shortcut action、icon、testID、settings 图标表、e2e helper 表），漏一个 typecheck 就会挡。
+
 ## 双机真实验证交接（Win 机器上执行）
 
 > **读者：** 在 Windows + WSL 开发机上完成 issue 062 最后一层验证的人或接手会话。前情读本 issue 上方执行记录；spec 见 `byissue/spec/connection.md` 的「Daemon 隧道」节。
