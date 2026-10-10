@@ -12,6 +12,8 @@ Use Node 22.20.0 and npm 10.9.3. Run release commands from a clean `main` checko
 
 Stable Web releases deploy to `app.byspace.cc.cd`. Versions with a prerelease suffix deploy to `app-beta.byspace.cc.cd`.
 
+**Deploy App** deploys the Worker with the `CLOUDFLARE_API_TOKEN` secret. That token needs Zone → Workers Routes → Edit, with `byspace.cc.cd` in its zone resources. `wrangler deploy` uploads the Worker and its assets before it publishes the custom-domain routes from `packages/relay/wrangler.toml`, so a token scoped to a different zone, or missing the permission, fails the run with `No access to the specified resource` after the new build is already live.
+
 `@bytetrue/byspace` is the only published package. The `@bytetrue/*` workspaces are packed into it as bundled dependencies; they are not published separately and have no dist-tags to maintain.
 
 GitHub Release assets are the npm tarball and one container descriptor, each with a `.sha256` sibling:
