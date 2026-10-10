@@ -616,6 +616,12 @@ export interface AgentSessionConfig {
    */
   systemPrompt?: string;
   /**
+   * Optional built-in role name (e.g. "chief"). Persisted as a name only; the
+   * daemon resolves the role's prompt from its embedded registry at launch so
+   * daemon updates refresh role behavior in place. Unknown names are ignored.
+   */
+  role?: string;
+  /**
    * Daemon-level instructions appended at runtime. This is deliberately not
    * persisted into agent config so daemon setting changes apply cleanly.
    */

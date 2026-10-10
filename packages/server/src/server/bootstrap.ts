@@ -152,6 +152,7 @@ import {
 } from "./agent/tools/byspace-tools.js";
 import type { BySpaceToolRuntimeContext } from "./agent/tools/types.js";
 import { createAgentProviderRuntime } from "./agent/provider-runtime.js";
+import { ensureHomeWorkspace } from "./home-workspace.js";
 import { bootstrapWorkspaceRegistries } from "./workspace-registry-bootstrap.js";
 import { WorkspaceReconciliationService } from "./workspace-reconciliation-service.js";
 import {
@@ -1032,6 +1033,13 @@ export async function createBySpaceDaemon(
     projectRegistry,
     workspaceRegistry,
     workspaceGitService,
+    logger,
+  });
+  await ensureHomeWorkspace({
+    byspaceHome: config.byspaceHome,
+    workspaceRegistry,
+    projectRegistry,
+    provisioning: workspaceProvisioning,
     logger,
   });
   await workspaceLabelService.initialize();

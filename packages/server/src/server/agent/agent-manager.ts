@@ -50,6 +50,7 @@ import {
   type ListImportableSessionsOptions,
 } from "./agent-sdk-types.js";
 import { buildArchivedAgentRecord, type ArchivedStoredAgentRecord } from "./agent-archive.js";
+import { AGENT_ROLE_LABEL, getAgentRole, getAgentRoleSystemPrompt } from "./agent-roles.js";
 import type { StoredAgentRecord, AgentStorage } from "./agent-storage.js";
 import type { AgentOwner } from "./agent-owner.js";
 import {
@@ -1374,8 +1375,12 @@ export class AgentManager {
     const createOptions = this.buildCreateSessionOptions(options);
     const session = await client.createSession(providerLaunchConfig, launchContext, createOptions);
     await this.requireExternalMcpSupport(session, storedConfig);
+    // Stamp the resolved role onto labels so the app can recognize a role
+    // agent without re-deriving it from config. Unknown roles degrade to a
+    // plain agent: no label, no prompt.
+    const role = getAgentRole(storedConfig.role);
     const agent = await this.registerSession(session, storedConfig, resolvedAgentId, {
-      labels: options.labels,
+      labels: role ? { ...options.labels, [AGENT_ROLE_LABEL]: role.name } : options.labels,
       initialTitle: options.initialTitle,
       workspaceId: options.workspaceId,
       owner: options.owner,
@@ -5181,9 +5186,17 @@ export class AgentManager {
   }
 
   private applyDaemonAppendSystemPrompt(config: AgentSessionConfig): AgentSessionConfig {
-    const daemonAppendSystemPrompt = this.appendSystemPrompt.trim();
     const next = { ...config };
     delete next.daemonAppendSystemPrompt;
+
+    // Two append sources, both resolved fresh at launch (never persisted as
+    // text): the daemon-wide setting, then the agent's built-in role prompt.
+    const parts = [this.appendSystemPrompt.trim()];
+    const rolePrompt = getAgentRoleSystemPrompt(next.role)?.trim();
+    if (rolePrompt) {
+      parts.push(rolePrompt);
+    }
+    const daemonAppendSystemPrompt = parts.filter(Boolean).join("\n\n");
 
     return daemonAppendSystemPrompt
       ? {

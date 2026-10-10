@@ -27,6 +27,9 @@ const SERIALIZABLE_CONFIG_SCHEMA = z
       .nullable()
       .optional(),
     systemPrompt: z.string().nullable().optional(),
+    // Role name survives daemon restart; the prompt text is re-resolved from
+    // the embedded registry at launch (never persisted as text).
+    role: z.string().nullable().optional(),
     mcpServers: z.record(z.string(), z.any()).nullable().optional(),
   })
   .nullable()
@@ -86,6 +89,7 @@ export type SerializableAgentConfig = Pick<
   | "providerOptions"
   | "toolPolicy"
   | "systemPrompt"
+  | "role"
   | "mcpServers"
 >;
 

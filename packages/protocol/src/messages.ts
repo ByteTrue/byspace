@@ -594,6 +594,10 @@ const AgentSessionConfigSchema = z.object({
   providerOptions: ProviderOptionsSchema.optional(),
   toolPolicy: ToolPolicySchema.optional(),
   systemPrompt: z.string().optional(),
+  // Optional built-in role name (e.g. "chief"). The daemon resolves the role's
+  // system prompt from its embedded registry at launch; only the name is
+  // persisted, so daemon updates refresh role behavior in place.
+  role: z.string().optional(),
   mcpServers: z.record(z.string(), McpServerConfigSchema).optional(),
 });
 
