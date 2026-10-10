@@ -42,6 +42,8 @@ RUN set -eux; \
     npm run build:web --workspace=@bytetrue/app; \
     test -f packages/app/dist/index.html; \
     test -f packages/app/dist/schemas/byspace.config.v1.json; \
+    test -f packages/app/dist/docs/index.html; \
+    test -f packages/app/dist/changelog.html; \
     mkdir -p /tmp/byspace-packs; \
     npm pack --workspace=@bytetrue/relay --pack-destination /tmp/byspace-packs
 

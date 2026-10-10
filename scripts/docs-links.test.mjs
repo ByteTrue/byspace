@@ -34,8 +34,10 @@ const SCANNED = [
 ];
 
 const EXTERNAL = /^(https?:|mailto:|tel:|#|data:)/;
-// Docs routes that are served by an external site rather than a public-docs file.
-const EXTERNAL_ROUTES = new Set(["/changelog", "/download", "/docs", "/docs/"]);
+// Routes rendered by packages/app/scripts/build-public-docs.mjs (served from the
+// relay Worker assets) that have no 1:1 public-docs source file.
+// /download stays out: no directly downloadable artifacts exist (issue 074).
+const EXTERNAL_ROUTES = new Set(["/download"]);
 
 function markdownFiles(root) {
   const absolute = join(repoRoot, root);
