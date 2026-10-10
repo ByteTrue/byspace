@@ -4,6 +4,8 @@ import { usePathname } from "expo-router";
 import { useHosts } from "@/runtime/host-runtime";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useRouter } from "expo-router";
+import { useEarliestOnlineHostServerId } from "@/app/_layout";
+import { parseServerIdFromPathname } from "@/utils/host-routes";
 import { useChiefStore } from "./chief-store";
 import { useChiefAgent } from "./use-chief-agent";
 import { ChiefFab } from "./chief-fab";
@@ -27,13 +29,14 @@ export const ChiefPanelHost = memo(function ChiefPanelHost(): ReactElement | nul
 
   // Use the first connected host as the "current" host. The host switcher in
   // the floating window navigates to a different host root.
+  const pathServerId = useMemo(() => parseServerIdFromPathname(pathname), [pathname]);
+  const earliestOnlineServerId = useEarliestOnlineHostServerId();
   const currentServerId = useMemo(() => {
-    // Extract from path if we're on a host route.
-    const match = pathname.match(/^\/h\/([^/]+)/);
-    if (match) return match[1];
-    // Fall back to the first host.
-    return hosts[0]?.serverId ?? null;
-  }, [pathname, hosts]);
+    if (pathServerId && hosts.some((host) => host.serverId === pathServerId)) {
+      return pathServerId;
+    }
+    return earliestOnlineServerId ?? hosts[0]?.serverId ?? pathServerId;
+  }, [pathServerId, earliestOnlineServerId, hosts]);
 
   const chiefState = useChiefAgent(currentServerId);
   const agent = chiefState.tag === "ready" ? chiefState.agent : null;

@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSessionStore } from "@/stores/session-store";
-import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
 
 export interface ChiefAgentInfo {
@@ -18,12 +17,17 @@ export type ChiefAgentState =
 const HOME_WORKSPACE_TITLE = "Home";
 const HOME_DIR_NAME = ".byspace";
 
-function isHomeWorkspace(workspace: {
+interface WorkspaceLike {
   title?: string | null;
-  workspaceDirectory: string;
-}): boolean {
+  workspaceDirectory?: string;
+  cwd?: string;
+  projectRootPath?: string;
+}
+
+function isHomeWorkspace(workspace: WorkspaceLike): boolean {
   if (workspace.title === HOME_WORKSPACE_TITLE) return true;
-  const normalized = workspace.workspaceDirectory.replace(/\\/g, "/").replace(/\/+$/, "");
+  const dir = workspace.workspaceDirectory ?? workspace.cwd ?? workspace.projectRootPath ?? "";
+  const normalized = dir.replace(/\\/g, "/").replace(/\/+$/, "");
   return normalized.endsWith("/" + HOME_DIR_NAME);
 }
 
@@ -62,40 +66,36 @@ async function createChiefAgent(
 /**
  * Find or create the Chief agent on the given host. The Home workspace must
  * already exist (daemon auto-creates it at boot); this hook only handles the
- * agent.
+ * agent. Fetches workspaces directly from the daemon because the replica
+ * store may not have synced the Home workspace yet.
  */
 export function useChiefAgent(serverId: string | null): ChiefAgentState {
   const client = useHostRuntimeClient(serverId ?? "");
-  const isConnected = useHostRuntimeIsConnected(serverId ?? "");
-  const workspaces = useSessionStore((state) =>
-    serverId ? state.sessions[serverId]?.workspaces : undefined,
-  );
+  const isClientReady = client !== null;
+
   const [state, setState] = useState<ChiefAgentState>({ tag: "loading" });
   const inFlightRef = useRef(false);
-
-  const homeWorkspace = useMemo(() => {
-    if (!workspaces) return null;
-    for (const ws of workspaces.values()) {
-      if (isHomeWorkspace(ws)) return ws;
-    }
-    return null;
-  }, [workspaces]);
+  const resolvedServerIdRef = useRef<string | null>(null);
 
   const resolve = useCallback(async () => {
-    if (!client || !isConnected || !homeWorkspace) return;
+    if (!client) return;
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     try {
-      const existing = await findChiefAgent(client, homeWorkspace.id);
+      const workspaces = await client.fetchWorkspaces();
+
+      const home = workspaces.entries.find((entry) => isHomeWorkspace(entry));
+      if (!home) {
+        setState({ tag: "no_home_workspace" });
+        return;
+      }
+      const cwd = home.workspaceDirectory ?? home.projectRootPath;
+      const existing = await findChiefAgent(client, home.id);
       if (existing) {
         setState({ tag: "ready", agent: existing });
         return;
       }
-      const created = await createChiefAgent(
-        client,
-        homeWorkspace.id,
-        homeWorkspace.workspaceDirectory,
-      );
+      const created = await createChiefAgent(client, home.id, cwd);
       setState({ tag: "ready", agent: created });
     } catch (error) {
       setState({
@@ -105,17 +105,15 @@ export function useChiefAgent(serverId: string | null): ChiefAgentState {
     } finally {
       inFlightRef.current = false;
     }
-  }, [client, isConnected, homeWorkspace]);
+  }, [client]);
 
   useEffect(() => {
-    if (!serverId || !isConnected || !homeWorkspace) {
-      if (!homeWorkspace && workspaces && workspaces.size > 0) {
-        setState({ tag: "no_home_workspace" });
-      }
-      return;
-    }
+    if (!serverId || !isClientReady) return;
+    if (resolvedServerIdRef.current === serverId) return;
+    resolvedServerIdRef.current = serverId;
+    setState({ tag: "loading" });
     void resolve();
-  }, [serverId, isConnected, homeWorkspace, workspaces, resolve]);
+  }, [serverId, isClientReady, client, resolve]);
 
   return state;
 }
