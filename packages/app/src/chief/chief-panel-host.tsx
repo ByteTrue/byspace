@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, type ReactElement } from "react";
+import { memo, useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import { View } from "react-native";
 import { usePathname } from "expo-router";
 import { useHosts } from "@/runtime/host-runtime";
@@ -11,15 +11,43 @@ import { useChiefAgent } from "./use-chief-agent";
 import { ChiefFab } from "./chief-fab";
 import { ChiefFloatingWindow } from "./chief-floating-window";
 
+const E2E_STORAGE_KEY = "@byspace:e2e";
+
+function useIsE2E(): boolean {
+  const [isE2E, setIsE2E] = useState(() => {
+    try {
+      return globalThis.localStorage?.getItem(E2E_STORAGE_KEY) != null;
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    const check = () => {
+      try {
+        setIsE2E(globalThis.localStorage?.getItem(E2E_STORAGE_KEY) != null);
+      } catch {
+        // storage unavailable; keep the initial value
+      }
+    };
+    globalThis.addEventListener?.("storage", check);
+    return () => globalThis.removeEventListener?.("storage", check);
+  }, []);
+  return isE2E;
+}
+
 /**
  * Orchestrates the Chief FAB + floating window. Mounted once in the root
  * layout; renders on every screen.
  *
  * Route suppression: hidden when the current route shows the Chief agent
  * full-page (the floating copy would show the same session).
+ *
+ * E2E: hidden entirely — specs seed localStorage "@byspace:e2e" and the FAB
+ * would otherwise intercept pointer events over the composer area.
  */
 export const ChiefPanelHost = memo(function ChiefPanelHost(): ReactElement | null {
   const pathname = usePathname();
+  const isE2E = useIsE2E();
   const router = useRouter();
   const hosts = useHosts();
   const isCompact = useIsCompactFormFactor();
@@ -68,7 +96,7 @@ export const ChiefPanelHost = memo(function ChiefPanelHost(): ReactElement | nul
     return pathname.includes(`/agent/${agent.agentId}`);
   }, [pathname, agent, currentServerId]);
 
-  if (!currentServerId) return null;
+  if (!currentServerId || isE2E) return null;
 
   const showWindow = isOpen && !isCompact && !isOnChiefAgentPage;
 
