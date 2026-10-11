@@ -262,6 +262,23 @@
             }
           },
           "additionalProperties": false
+        },
+        "tunnel": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "allowedPorts": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              }
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

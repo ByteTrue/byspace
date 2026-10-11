@@ -15,6 +15,16 @@ App 与 Relay 的地址按发布通道选择；用户的自定义配置始终优
 - 配对 offer 携带可读 hostname，新 Host 首次保存时默认采用；缺少 hostname 的旧 offer 与旧客户端保持双向兼容。
 - **局域网监听以密码为前提**：daemon 默认只监听 loopback；在设置里放开局域网（`daemon.listen` 改写为 `0.0.0.0:<port>`）前必须先设置访问密码，服务端强制此不变量，清密码同理被拒绝。密码只在 patch 时以明文进入，落盘与回读只有 bcrypt 哈希与 `passwordSet` 视图字段。网络与密码改动统一重启生效；`BYSPACE_LISTEN` / `BYSPACE_PASSWORD` 启动 override 存在时，对应设置被拒而非静默失效。能力声明为 `features.daemonNetworkConfig`。
 
+## Daemon 隧道（远端端口的本地转发）
+
+- **形态**：本机 daemon（D1）以配对客户端身份经 relay 连远端 daemon（D2，E2EE + bearer 密码双因子），把 D2 白名单端口的 TCP 服务呈现为本机 `127.0.0.1:<动态端口>`；每个本地 TCP 流独立隧道。与 workspace/agent 零耦合，裸 daemon 可用。
+- **实验性，默认关闭（063）**：`daemon.tunnel.enabled` 缺省 false。未开启时 D2 拒绝一切 `tunnel.open`、D1 拒绝 `tunnel.create`；app `/tunnels` 显示 Enable 卡（开启走 config patch 热生效，D1 侧热启停已配置的 peers）。开启后的界面带 Experimental 标注。
+- **启用门槛（服务端强制）**：两端 daemon 都设密码；D2 侧 `daemon.tunnel.allowedPorts` 白名单外的端口拒绝转发。配置经 config patch 通道热生效。
+- **relay 归属**：隧道走 D2 pairing offer 携带的 `relayPublicEndpoint`（自托管 relay 用户的流量天然走自己的 relay，与 app 客户端同一条信任模型——E2EE 不依赖 relay）。
+- **生命周期**：daemon 级常驻（`tunnels.json` 持久化，boot 恢复），内嵌客户端复用 DaemonClient 重连；app 不在线时隧道照常工作。
+- **交互面**：app 的 `/tunnels` 独立路由（类比 Schedules）——添加隧道（粘贴 D2 pairing offer + 密码 + 端口）、outbound/inbound 列表、白名单 GUI。入口是侧栏 BySpace 菜单里的 Tunnels 行（内置导航项，可在 Appearance 里排序/隐藏），命令中心保留同名动作。
+- **范围边界**：手动互导 offer，无 relay 成员网络；不做 agent 工具跨机与反向隧道。
+
 ## 托管部署
 
 - **托管产物是一个 Worker。** 自 073 起，`app.byspace.cc.cd`（stable）、`app-beta.byspace.cc.cd`（prerelease）与 `relay.byspace.cc.cd` 由 `packages/relay` 的同一个 Worker（`byspace-relay` / `byspace-relay-beta`）从同一 origin 服务：`/` 静态 web 导出、`/docs/*` 与 `/changelog` 文档（`build:web` 链内由 markdown-it 渲染 `public-docs/` 与 `CHANGELOG.md`）、`/ws` `/health` 走 relay 逻辑（`run_worker_first` 保证不被 SPA 回落吞掉）。与自托管容器是同一形状、同一 relay 核心（runtime-agnostic session core，Node/CF 两个 adapter，parity 由测试钉住）。`/download` 不设页面——无可直下产物（见 074）。

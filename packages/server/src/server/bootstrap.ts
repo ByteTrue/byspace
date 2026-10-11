@@ -187,6 +187,7 @@ import { loadOrCreateDaemonKeyPair } from "./daemon-keypair.js";
 import { createRelayRuntime, type RelayRuntime } from "./relay-runtime.js";
 import type { PushNotificationSender } from "./push/index.js";
 import { getOrCreateServerId } from "./server-id.js";
+import { TunnelRegistryService } from "./tunnel-registry.js";
 import { resolveDaemonVersion } from "./daemon-version.js";
 import {
   DEFAULT_RELAY_ENDPOINT,
@@ -470,6 +471,8 @@ export interface BySpaceDaemonConfig {
   };
   appBaseUrl?: string;
   auth?: DaemonAuthConfig;
+  /** Daemon tunnel (issue 062/063): experimental, off by default. */
+  tunnel?: { enabled?: boolean; allowedPorts?: number[] };
   downloadTokenTtlMs?: number;
   agentProviderSettings?: AgentProviderRuntimeSettingsMap;
   providerCatalogRefreshTimeoutMs?: number;
@@ -582,6 +585,13 @@ function applyOptionalConfigLists(
   }
 }
 
+function createTunnelView(config: BySpaceDaemonConfig): MutableDaemonConfig["tunnel"] {
+  return {
+    enabled: config.tunnel?.enabled ?? false,
+    allowedPorts: config.tunnel?.allowedPorts ?? [],
+  };
+}
+
 function createInitialMutableDaemonConfig(
   config: BySpaceDaemonConfig,
   defaultAppBaseUrl: string,
@@ -622,6 +632,7 @@ function createInitialMutableDaemonConfig(
     skills: { selection: config.skillSelection },
     network: createNetworkView(config),
     auth: { passwordSet: config.auth?.password !== undefined },
+    tunnel: createTunnelView(config),
   };
 
   applyOptionalConfigLists(initialConfig, config);
@@ -687,6 +698,14 @@ export async function createBySpaceDaemon(
   });
   const serverId = getOrCreateServerId(config.byspaceHome, { logger });
   const daemonKeyPair = await loadOrCreateDaemonKeyPair(config.byspaceHome, logger);
+  // Daemon-level outbound tunnels (issue 062). Started once the listener is
+  // accepting; stopped with the daemon. Tunnels run with or without app
+  // clients connected, like the relay transport.
+  const tunnelRegistry = new TunnelRegistryService({
+    byspaceHome: config.byspaceHome,
+    logger,
+    isInitiallyEnabled: () => config.tunnel?.enabled === true,
+  });
   const managedProcesses = createBootstrapManagedProcessRegistry(config, logger);
   // Reconcile the helper-process ledger in the background so it never blocks the
   // daemon from coming up; terminating a live leftover can take a few seconds.
@@ -1705,6 +1724,7 @@ export async function createBySpaceDaemon(
               workspaceSetupRuntime,
               orchestrationSkills,
               workspaceLabelService,
+              tunnelRegistry,
             );
             // Restored terminals must spawn after boundListenTarget is set,
             // otherwise createTerminal bakes a null activity URL into their
@@ -1719,6 +1739,9 @@ export async function createBySpaceDaemon(
               logger,
             });
             wsServer.beginAcceptingConnections();
+            await tunnelRegistry.start().catch((error: unknown) => {
+              logger.warn({ err: error }, "Failed to start daemon tunnels at boot");
+            });
             relayRuntime = createRelayRuntime({
               config: {
                 enabled: relayEnabled,
@@ -1737,6 +1760,9 @@ export async function createBySpaceDaemon(
             });
             daemonConfigStore.onFieldChange("relay.enabled", (value) => {
               relayRuntime?.setEnabled(value === true);
+            });
+            daemonConfigStore.onFieldChange("tunnel.enabled", (value) => {
+              tunnelRegistry.setEnabled(value === true);
             });
             // COMPAT(relayEndpointConfig): added in v0.17.0, remove after
             // 2027-03-30 once daemon floor >= v0.17.0. Endpoint changes hot-swap
@@ -1794,6 +1820,7 @@ export async function createBySpaceDaemon(
     terminalManager.killAll();
     await scheduleService.stop().catch(() => undefined);
     await relayRuntime?.stop().catch(() => undefined);
+    await tunnelRegistry.stop().catch(() => undefined);
     if (wsServer) {
       await wsServer.close();
     }

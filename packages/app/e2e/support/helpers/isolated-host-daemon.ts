@@ -47,9 +47,41 @@ export interface IsolatedHostDaemonOptions {
     enabled: boolean;
     endpoint?: string;
   };
+  /** Merged over the mutableRelay daemon block (auth, tunnel, ...). */
+  daemonConfig?: Record<string, unknown>;
   byspaceHome?: string;
   preserveHome?: boolean;
   publishedVersion?: string;
+}
+
+async function writeIsolatedDaemonConfig(
+  byspaceHome: string,
+  options: IsolatedHostDaemonOptions,
+): Promise<void> {
+  if (!options.mutableRelay && !options.daemonConfig) return;
+  const endpoint =
+    options.mutableRelay?.endpoint ??
+    (process.env.E2E_RELAY_PORT ? `127.0.0.1:${process.env.E2E_RELAY_PORT}` : "127.0.0.1:9");
+  await writeFile(
+    path.join(byspaceHome, "config.json"),
+    `${JSON.stringify({
+      version: 1,
+      daemon: {
+        ...(options.mutableRelay
+          ? {
+              relay: {
+                enabled: options.mutableRelay.enabled,
+                endpoint,
+                publicEndpoint: endpoint,
+                useTls: false,
+                publicUseTls: false,
+              },
+            }
+          : {}),
+        ...options.daemonConfig,
+      },
+    })}\n`,
+  );
 }
 
 async function getAvailablePort(): Promise<number> {
@@ -153,26 +185,7 @@ export async function startIsolatedHostDaemon(
       throw error;
     }
   }
-  if (options.mutableRelay) {
-    const endpoint =
-      options.mutableRelay.endpoint ??
-      (process.env.E2E_RELAY_PORT ? `127.0.0.1:${process.env.E2E_RELAY_PORT}` : "127.0.0.1:9");
-    await writeFile(
-      path.join(byspaceHome, "config.json"),
-      `${JSON.stringify({
-        version: 1,
-        daemon: {
-          relay: {
-            enabled: options.mutableRelay.enabled,
-            endpoint,
-            publicEndpoint: endpoint,
-            useTls: false,
-            publicUseTls: false,
-          },
-        },
-      })}\n`,
-    );
-  }
+  await writeIsolatedDaemonConfig(byspaceHome, options);
   const serverDir = publishedPackageRoot
     ? resolvePublishedServerDir(publishedPackageRoot)
     : path.resolve(__dirname, "../../../../server");

@@ -21,7 +21,7 @@ A pairing invitation is neither. It is an expiring, single-use exchange that cre
 | ------------------- | -------------------------------------------------------------------------- |
 | `daemon.read`       | Daemon status, diagnostics, configuration, and provider information        |
 | `daemon.manage`     | Restart, update, configuration changes, providers, skills, and plugins     |
-| `tunnel.manage`     | Relay, service tunnel, and public endpoint relationships                   |
+| `tunnel.manage`     | Relay, service tunnel, public endpoint relationships, and daemon tunnels   |
 | `access.manage`     | Pairing invitations, principals, credentials, grants, and revocation       |
 | `workspace.read`    | Projects, workspaces, agents, timelines, files, diffs, and terminal output |
 | `workspace.write`   | Prompts, agent control, files, terminals, git operations, and scripts      |

@@ -32,7 +32,13 @@ test.describe("Sidebar items in Appearance settings", () => {
     await gotoAppShell(page);
 
     await test.step("the sidebar starts in the default order", async () => {
-      await expectSidebarOrder(page, ["new-workspace", "history", "search", "schedules"]);
+      await expectSidebarOrder(page, [
+        "new-workspace",
+        "history",
+        "search",
+        "schedules",
+        "tunnels",
+      ]);
     });
 
     await test.step("the Sidebar section lists every item in the same order", async () => {
@@ -46,6 +52,7 @@ test.describe("Sidebar items in Appearance settings", () => {
         "history",
         "search",
         "schedules",
+        "tunnels",
       ]);
       await expectSidebarNavSettingsRow(page, {
         key: "history",
@@ -87,6 +94,7 @@ test.describe("Sidebar items in Appearance settings", () => {
         { key: "schedules", visible: true },
         { key: "history", visible: false },
         { key: "search", visible: true },
+        { key: "tunnels", visible: true },
       ]);
 
       await leaveSettings(page);
@@ -107,6 +115,7 @@ test.describe("Sidebar items in Appearance settings", () => {
       { key: "history", visible: false },
       { key: "search", visible: false },
       { key: "schedules", visible: false },
+      { key: "tunnels", visible: false },
     ]);
     await gotoAppShell(page);
 
@@ -118,6 +127,7 @@ test.describe("Sidebar items in Appearance settings", () => {
     await expectSidebarItemHidden(page, "history");
     await expectSidebarItemHidden(page, "search");
     await expectSidebarItemHidden(page, "schedules");
+    await expectSidebarItemHidden(page, "tunnels");
 
     // With nothing to reveal, the BySpace button goes with the rows; the collapse toggle is
     // unaffected because it is the shell's, not the disclosure's.
@@ -137,6 +147,7 @@ test.describe("Compact sidebar with every nav item turned off", () => {
       { key: "history", visible: false },
       { key: "search", visible: false },
       { key: "schedules", visible: false },
+      { key: "tunnels", visible: false },
     ]);
     await gotoAppShell(page);
     await openMobileAgentSidebar(page);

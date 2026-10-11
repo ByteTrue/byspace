@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { router, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import {
+  ArrowRightLeft,
   CalendarClock,
   CircleDashed,
   Folder,
@@ -29,6 +30,7 @@ import { clearCommandCenterFocusRestoreElement } from "@/utils/command-center-fo
 import {
   buildOpenProjectRoute,
   buildSchedulesRoute,
+  buildTunnelsRoute,
   buildSessionsRoute,
   buildSettingsRoute,
 } from "@/utils/host-routes";
@@ -45,6 +47,9 @@ const ThemedHistory = withUnistyles(History, (theme) => ({
   color: theme.colors.foregroundMuted,
 }));
 const ThemedCalendarClock = withUnistyles(CalendarClock, (theme) => ({
+  color: theme.colors.foregroundMuted,
+}));
+const ThemedArrowRightLeft = withUnistyles(ArrowRightLeft, (theme) => ({
   color: theme.colors.foregroundMuted,
 }));
 const ThemedKeyboard = withUnistyles(Keyboard, (theme) => ({
@@ -83,6 +88,10 @@ function SchedulesIcon({ size }: CommandCenterIconProps) {
   return <ThemedCalendarClock size={size} strokeWidth={2.2} />;
 }
 
+function TunnelsIcon({ size }: CommandCenterIconProps) {
+  return <ThemedArrowRightLeft size={size} strokeWidth={2.2} />;
+}
+
 function KeyboardIcon({ size }: CommandCenterIconProps) {
   return <ThemedKeyboard size={size} strokeWidth={2.2} />;
 }
@@ -118,6 +127,7 @@ export function CommandCenterRootActions() {
   const homeRoute = useMemo<Href>(() => buildOpenProjectRoute(), []);
   const sessionsRoute = useMemo<Href>(() => buildSessionsRoute(), []);
   const schedulesRoute = useMemo<Href>(() => buildSchedulesRoute(), []);
+  const tunnelsRoute = useMemo<Href>(() => buildTunnelsRoute(), []);
   const setShortcutsDialogOpen = useKeyboardShortcutsStore((state) => state.setShortcutsDialogOpen);
   // Narrow selector on purpose: a whole-store subscription would re-register every root action
   // each time host filters are reconciled.
@@ -243,10 +253,28 @@ export function CommandCenterRootActions() {
         },
       },
       {
-        id: "settings",
+        id: "tunnels",
         group: "actions",
         groupRank: 0,
         rank: 6,
+        keywords: ["tunnels", "tunnel", "networking", "forwarding", "ports"],
+        visibility: "always",
+        run: () => {
+          clearCommandCenterFocusRestoreElement();
+          router.push(tunnelsRoute);
+        },
+        presentation: {
+          kind: "action",
+          title: t("sidebar.sections.tunnels"),
+          sectionTitle: t("shell.commandCenter.actions"),
+          icon: TunnelsIcon,
+        },
+      },
+      {
+        id: "settings",
+        group: "actions",
+        groupRank: 0,
+        rank: 7,
         keywords: ["settings", "preferences", "config", "configuration"],
         visibility: "always",
         run: () => {
@@ -297,7 +325,7 @@ export function CommandCenterRootActions() {
         id: "keyboard-shortcuts",
         group: "actions",
         groupRank: 0,
-        rank: 7,
+        rank: 8,
         keywords: ["keyboard", "shortcuts", "keys", "hotkeys"],
         visibility: "always",
         run: () => setShortcutsDialogOpen(true),
@@ -343,6 +371,7 @@ export function CommandCenterRootActions() {
     shortcutsAvailable,
     t,
     toggleAgentList,
+    tunnelsRoute,
   ]);
 
   useCommandCenterActions({ sourceId: "root", enabled: true, actions });

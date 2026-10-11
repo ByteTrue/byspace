@@ -306,6 +306,15 @@ export const PersistedConfigSchema = z
           .strict()
           .optional(),
         auth: DaemonAuthSchema.optional(),
+        tunnel: z
+          .object({
+            // Experimental (issue 063): off until the user opts in.
+            enabled: z.boolean().optional(),
+            // Ports a paired peer daemon may forward to this host (127.0.0.1:<port>).
+            allowedPorts: z.array(z.number().int().min(1).max(65535)).optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .transform(({ allowedHosts, ...daemon }) => {
