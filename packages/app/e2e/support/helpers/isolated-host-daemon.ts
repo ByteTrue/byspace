@@ -187,6 +187,9 @@ export async function startIsolatedHostDaemon(
       BYSPACE_CORS_ORIGINS: `http://localhost:${metroPort}`,
       BYSPACE_RELAY_ENABLED: options.mutableRelay ? undefined : "0",
       BYSPACE_NODE_ENV: "development",
+      // Specs assume exact workspace counts; the daemon-owned Home workspace
+      // would shift them by one.
+      BYSPACE_DISABLE_HOME_WORKSPACE: "1",
     };
     const spawnOptions: SpawnOptions = {
       cwd: serverDir,

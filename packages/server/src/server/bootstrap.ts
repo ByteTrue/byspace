@@ -160,6 +160,7 @@ import {
   FileBackedWorkspaceRegistry,
   type WorkspaceArchiveContext,
 } from "./workspace-registry.js";
+import { ensureHomeWorkspaceUnlessDisabled } from "./home-workspace.js";
 import { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import { ScheduleService } from "./schedule/service.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
@@ -1036,6 +1037,13 @@ export async function createBySpaceDaemon(
     logger,
   });
 
+  await ensureHomeWorkspaceUnlessDisabled({
+    byspaceHome: config.byspaceHome,
+    workspaceRegistry,
+    projectRegistry,
+    provisioning: workspaceProvisioning,
+    logger,
+  });
   await workspaceLabelService.initialize();
   logger.info({ elapsed: elapsed() }, "Workspace registries bootstrapped");
   const teardownArchivedWorkspaceRuntime = (workspaceId: string): void => {

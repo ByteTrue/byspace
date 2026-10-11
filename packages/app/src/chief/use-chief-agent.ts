@@ -64,10 +64,11 @@ async function createChiefAgent(
 }
 
 /**
- * Find or create the Chief agent on the given host. The Home workspace must
- * already exist (daemon auto-creates it at boot); this hook only handles the
- * agent. Fetches workspaces directly from the daemon because the replica
- * store may not have synced the Home workspace yet.
+ * Find or create the Chief agent on the given host. The daemon owns Home
+ * workspace creation at boot (disabled under BYSPACE_DISABLE_HOME_WORKSPACE
+ * in test harnesses); this hook only resolves the agent. Fetches workspaces
+ * directly from the daemon because the replica store may not have synced the
+ * Home workspace yet.
  */
 export function useChiefAgent(serverId: string | null): ChiefAgentState {
   const store = getHostRuntimeStore();
@@ -112,9 +113,7 @@ export function useChiefAgent(serverId: string | null): ChiefAgentState {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     try {
-      console.log("[useChiefAgent] fetching workspaces...");
       const workspaces = await effectiveClient.fetchWorkspaces();
-      console.log("[useChiefAgent] entries:", workspaces.entries.length);
       const home = workspaces.entries.find((entry) => isHomeWorkspace(entry));
       if (!home) {
         setState({ tag: "no_home_workspace" });
