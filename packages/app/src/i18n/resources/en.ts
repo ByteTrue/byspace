@@ -1956,6 +1956,7 @@ export const en = {
           overview: "Collapse all",
           detailed: "Collapse details",
           live: "Show latest thinking",
+          thinking: "Expand all thinking",
           expanded: "Expand all",
         },
       },

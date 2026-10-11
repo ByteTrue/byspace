@@ -1944,6 +1944,7 @@ export const ar: TranslationResources = {
           overview: "طي الكل",
           detailed: "طي التفاصيل",
           live: "عرض أحدث التفكير",
+          thinking: "توسيع كل التفكير",
           expanded: "توسيع الكل",
         },
       },

@@ -1989,6 +1989,7 @@ export const fr: TranslationResources = {
           overview: "Tout replier",
           detailed: "Replier les détails",
           live: "Afficher le dernier raisonnement",
+          thinking: "Tout le raisonnement déplié",
           expanded: "Tout déplier",
         },
       },

@@ -1922,6 +1922,7 @@ export const zhCN: TranslationResources = {
           overview: "全部折叠",
           detailed: "折叠详情",
           live: "显示最新思考",
+          thinking: "展开所有思考",
           expanded: "全部展开",
         },
       },

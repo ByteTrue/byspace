@@ -1954,6 +1954,7 @@ export const ko: TranslationResources = {
           overview: "모두 접기",
           detailed: "세부정보 접기",
           live: "최신 생각 표시",
+          thinking: "모든 생각 펼치기",
           expanded: "모두 펼치기",
         },
       },

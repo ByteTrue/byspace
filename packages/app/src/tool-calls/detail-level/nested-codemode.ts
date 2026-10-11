@@ -200,6 +200,23 @@ function buildReplayedGroup(
   });
 }
 
+/**
+ * Every row a nested group renders: the parent followed by the children lifted out of the stream.
+ * The rows that need the level's fold applied come from exactly here, so fold and render cannot
+ * drift apart.
+ */
+export function nestedGroupRowIds(
+  groupsByParentItemId: NestedCodemodeProjection["groupsByParentItemId"],
+): string[] {
+  const ids: string[] = [];
+  for (const group of groupsByParentItemId.values()) {
+    for (const call of group.run.calls) {
+      ids.push(call.id);
+    }
+  }
+  return ids;
+}
+
 export function projectNestedCodemodeCalls(input: {
   tail: StreamItem[];
   head?: StreamItem[] | null;

@@ -34,19 +34,30 @@ export type ToolCallDetailLevel = "overview" | "detailed";
  * autoExpandReasoning toggle + toolCallDetailLevel picker.
  * - "overview": tool calls grouped into per-turn summaries, thinking collapsed ("Collapse all")
  * - "detailed": tool calls individually expandable, thinking collapsed ("Collapse details")
- * - "live": detailed + the newest thinking block expanded and pinned to its tail ("Show latest thinking")
- * - "expanded": detailed + every thinking block expanded ("Expand all")
+ * - "live": detailed + the thinking block at the tail expanded and pinned to its tail ("Show latest thinking")
+ * - "thinking": detailed + every thinking block expanded ("Expand all thinking")
+ * - "expanded": detailed + every thinking and tool call block expanded ("Expand all")
  */
-export type TimelineDetailLevel = "overview" | "detailed" | "live" | "expanded";
-export const TIMELINE_DETAIL_LEVELS: readonly TimelineDetailLevel[] = [
+export type TimelineDetailLevel = "overview" | "detailed" | "live" | "thinking" | "expanded";
+/** Every level, in the order the picker shows them. Also the schema's single source of truth. */
+export const TIMELINE_DETAIL_LEVELS: [TimelineDetailLevel, ...TimelineDetailLevel[]] = [
   "overview",
   "detailed",
   "live",
+  "thinking",
   "expanded",
 ];
 /** The projection/grouping machinery only cares about tool calls, not thinking. */
 export function toToolCallDetailLevel(level: TimelineDetailLevel): ToolCallDetailLevel {
   return level === "overview" ? "overview" : "detailed";
+}
+/** Levels that open every thinking block on their own. */
+export function expandsThinking(level: TimelineDetailLevel): boolean {
+  return level === "thinking" || level === "expanded";
+}
+/** Levels that open tool call details on their own. "Expand all" only, not the thinking levels. */
+export function expandsToolDetail(level: TimelineDetailLevel): boolean {
+  return level === "expanded";
 }
 /** Terminal scheme independent of the app theme: "match" follows the app theme. */
 export type TerminalAppearance = "match" | "dark" | "light";
@@ -238,10 +249,7 @@ const StoredAppSettingsSchema = z
       .optional()
       .catch(DEFAULT_SIDEBAR_CHECKS_DISPLAY),
     sidebarNavItems: z.array(z.object({ key: z.string(), visible: z.boolean() })).catch([]),
-    timelineDetailLevel: z
-      .enum(["overview", "detailed", "live", "expanded"])
-      .optional()
-      .catch(undefined),
+    timelineDetailLevel: z.enum(TIMELINE_DETAIL_LEVELS).optional().catch(undefined),
     // COMPAT(timelineDetailLevel): replaced autoExpandReasoning + toolCallDetailLevel in v0.6,
     // remove after 2027-10-10.
     autoExpandReasoning: z.boolean().optional().catch(undefined),

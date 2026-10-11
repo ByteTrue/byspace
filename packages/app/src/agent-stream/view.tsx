@@ -55,7 +55,12 @@ import { useRevealedText } from "@/hooks/use-revealed-text";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { useLoadOlderAgentHistory } from "@/hooks/use-load-older-agent-history";
 import { useSettings } from "@/hooks/use-settings";
-import { toToolCallDetailLevel } from "@/hooks/use-settings/storage";
+import {
+  expandsThinking,
+  expandsToolDetail,
+  toToolCallDetailLevel,
+  type TimelineDetailLevel,
+} from "@/hooks/use-settings/storage";
 import type { ToastApi } from "@/components/toast-host";
 import { returnToTimelineTail } from "./timeline-tail-navigation";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
@@ -66,7 +71,10 @@ import {
   prepareToolCallHistory,
   projectToolCallDetailLevel,
 } from "@/tool-calls/detail-level/projection";
-import { projectNestedCodemodeCalls } from "@/tool-calls/detail-level/nested-codemode";
+import {
+  nestedGroupRowIds,
+  projectNestedCodemodeCalls,
+} from "@/tool-calls/detail-level/nested-codemode";
 import { useProviderSubagentsByToolCallId } from "@/subagents/select";
 import type { ToolCallSubagentBinding } from "@/components/message";
 import type { ProviderSubagentDescriptorPayload } from "@bytetrue/protocol/messages";
@@ -320,6 +328,8 @@ const AGENT_CAPABILITY_FLAG_KEYS: (keyof AgentCapabilityFlags)[] = [
 ];
 
 const EMPTY_STREAM_HEAD: StreamItem[] = [];
+/** Shared empty ledger: no row was folded by "collapse all" for the current level. */
+const EMPTY_DETAIL_IDS: ReadonlySet<string> = new Set();
 
 function useRetainedValue<T>(value: T, active: boolean): T {
   const retainedRef = useRef(value);
@@ -393,9 +403,18 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       new Set(),
     );
     const [collapseRevision, setCollapseRevision] = useState(0);
-    const [collapsedReasoningIds, setCollapsedReasoningIds] = useState<ReadonlySet<string>>(
-      new Set(),
-    );
+    // Rows the user folded through "collapse all". The levels that open details on their own read
+    // this at mount, so a fold outlives the remount the revision bump forces. The level is part of
+    // the state: switching levels invalidates the fold by derivation instead of letting it follow
+    // the user across and veto the new level's defaults.
+    const [collapsedDetailState, setCollapsedDetailState] = useState<{
+      level: TimelineDetailLevel;
+      ids: ReadonlySet<string>;
+    }>(() => ({ level: timelineDetailLevel, ids: EMPTY_DETAIL_IDS }));
+    const collapsedDetailIds =
+      collapsedDetailState.level === timelineDetailLevel
+        ? collapsedDetailState.ids
+        : EMPTY_DETAIL_IDS;
     // Get serverId (fallback to agent's serverId if not provided)
     const resolvedServerId = serverId ?? context.serverId ?? "";
 
@@ -452,7 +471,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       setExpandedInlineToolCallIds(new Set());
       setExpandedToolCallGroupIds(new Set());
       setCollapseRevision(0);
-      setCollapsedReasoningIds(new Set());
+      setCollapsedDetailState((current) => ({ ...current, ids: EMPTY_DETAIL_IDS }));
     }, [agentId]);
 
     const handleInlinePathPress = useStableEvent(
@@ -676,23 +695,14 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const handleTimelineHistoryLoadError = useCallback(() => {
       toast?.error(t("agentStream.historyLoadFailed"));
     }, [t, toast]);
-    // Newest thinking block in timeline order; live mode keeps it expanded so the model's
-    // current action stays visible.
-    const latestThoughtId = useMemo(() => {
-      // Scan the live segment first, then history; no combined allocation per token.
-      for (let index = streamLayout.liveHead.length - 1; index >= 0; index--) {
-        const entry = streamLayout.liveHead[index];
-        if (entry?.item.kind === "thought") {
-          return entry.item.id;
-        }
-      }
-      for (let index = streamLayout.history.length - 1; index >= 0; index--) {
-        const entry = streamLayout.history[index];
-        if (entry?.item.kind === "thought") {
-          return entry.item.id;
-        }
-      }
-      return null;
+    // Live mode expands a thinking block only while it is the last item of the timeline: the
+    // moment a tool call or a message lands below it the model has moved on, and the block folds
+    // instead of staying open while the newer rows pile up under it. The live head is the newest
+    // segment, so its last entry is the tail whenever it is non-empty.
+    const liveThoughtId = useMemo(() => {
+      const tailItem =
+        streamLayout.liveHead.at(-1)?.item ?? streamLayout.history.at(-1)?.item ?? null;
+      return tailItem?.kind === "thought" ? tailItem.id : null;
     }, [streamLayout.history, streamLayout.liveHead]);
     const visibleHistoryItemIds = useMemo(
       () =>
@@ -740,19 +750,30 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           setExpandedInlineToolCallIds(new Set());
           setExpandedToolCallGroupIds(new Set());
           setCollapseRevision((current) => current + 1);
-          setCollapsedReasoningIds(
-            new Set(
-              [...streamLayout.history, ...streamLayout.liveHead]
-                .filter(({ item }) => item.kind === "thought")
-                .map(({ item }) => item.id),
-            ),
-          );
+          const collapsedIds = new Set<string>();
+          for (const { item } of [...streamLayout.history, ...streamLayout.liveHead]) {
+            if (item.kind === "thought" || item.kind === "tool_call") {
+              collapsedIds.add(item.id);
+            }
+          }
+          // Nested children are lifted out of the stream, so they are absent from the layout and
+          // would keep the level default without this.
+          for (const id of nestedGroupRowIds(nestedCodemodeProjection.groupsByParentItemId)) {
+            collapsedIds.add(id);
+          }
+          setCollapsedDetailState({ level: timelineDetailLevel, ids: collapsedIds });
         },
         prepareForViewportChange() {
           viewportRef.current?.prepareForViewportChange();
         },
       }),
-      [scrollToBottom, streamLayout.history, streamLayout.liveHead],
+      [
+        scrollToBottom,
+        streamLayout.history,
+        streamLayout.liveHead,
+        nestedCodemodeProjection,
+        timelineDetailLevel,
+      ],
     );
 
     const scrollToBottomVisible = resolveScrollToBottomVisibility(isNearBottom, isTimelineDetached);
@@ -844,33 +865,31 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     const renderThoughtItem = useCallback(
       (layoutItem: StreamLayoutItem, item: Extract<StreamItem, { kind: "thought" }>) => {
+        const isLiveThought = timelineDetailLevel === "live" && item.id === liveThoughtId;
         return (
           <ThoughtSlot
             // ToolCall reads defaultExpanded only at mount, so the key carries everything that
             // changes what "default expanded" means: the level (fold/expand-all switches) and,
-            // in live mode, whether this row is the newest thought (old latest folds, new
-            // latest expands — per-row so manual expansion elsewhere survives a retarget).
-            key={`${collapseRevision}:${timelineDetailLevel}:${
-              timelineDetailLevel === "live" && item.id === latestThoughtId
-            }`}
+            // in live mode, whether this row is the tail (the previous target folds, the new one
+            // expands — per-row so manual expansion elsewhere survives a retarget).
+            key={`${collapseRevision}:${timelineDetailLevel}:${isLiveThought}`}
             itemId={item.id}
             onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
             text={item.text}
             status={item.status}
             isLastInSequence={layoutItem.isLastInToolSequence}
             defaultExpanded={
-              !collapsedReasoningIds.has(item.id) &&
-              (timelineDetailLevel === "expanded" ||
-                (timelineDetailLevel === "live" && item.id === latestThoughtId))
+              !collapsedDetailIds.has(item.id) &&
+              (expandsThinking(timelineDetailLevel) || isLiveThought)
             }
           />
         );
       },
       [
         timelineDetailLevel,
-        collapsedReasoningIds,
+        collapsedDetailIds,
         collapseRevision,
-        latestThoughtId,
+        liveThoughtId,
         setInlineDetailsExpanded,
       ],
     );
@@ -882,6 +901,11 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         maxDetailHeight?: number,
         summaryOverride?: string,
       ) => {
+        // Only "Expand all" opens tool call details on its own; the thinking levels leave every
+        // tool row collapsed until it is pressed. A row "collapse all" folded stays folded
+        // because the level default is suppressed for it.
+        const detailExpandedByLevel =
+          expandsToolDetail(timelineDetailLevel) && !collapsedDetailIds.has(item.id);
         const { payload } = item;
 
         if (payload.source === "agent") {
@@ -901,7 +925,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           const subagent = data.callId ? getSubagentBinding(data.callId) : undefined;
           return (
             <ToolCallSlot
-              key={collapseRevision}
+              key={`${collapseRevision}:${detailExpandedByLevel}`}
               itemId={item.id}
               onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
               toolName={data.name}
@@ -915,6 +939,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               isLastInSequence={isLastInSequence}
               onOpenFilePath={handleToolCallOpenFile}
               maxDetailHeight={maxDetailHeight}
+              defaultExpanded={detailExpandedByLevel}
             />
           );
         }
@@ -922,7 +947,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         const data = payload.data;
         return (
           <ToolCallSlot
-            key={collapseRevision}
+            key={`${collapseRevision}:${detailExpandedByLevel}`}
             itemId={item.id}
             onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
             toolName={data.toolName}
@@ -932,12 +957,15 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             isLastInSequence={isLastInSequence}
             onOpenFilePath={handleToolCallOpenFile}
             maxDetailHeight={maxDetailHeight}
+            defaultExpanded={detailExpandedByLevel}
           />
         );
       },
       [
         collapseRevision,
+        collapsedDetailIds,
         context.cwd,
+        timelineDetailLevel,
         setInlineDetailsExpanded,
         handleToolCallOpenFile,
         getSubagentBinding,
@@ -1495,7 +1523,6 @@ function ThoughtSlot({
       status={isStreaming ? "executing" : "completed"}
       isLastInSequence={isLastInSequence}
       defaultExpanded={defaultExpanded}
-      forceInline={defaultExpanded}
       followTail={defaultExpanded && isStreaming}
     />
   );
@@ -1510,7 +1537,15 @@ function ToolCallSlot({
     (expanded: boolean) => onInlineDetailsExpandedChangeByItemId(itemId, expanded),
     [onInlineDetailsExpandedChangeByItemId, itemId],
   );
-  return <ToolCall {...rest} onInlineDetailsExpandedChange={handleExpandedChange} />;
+  return (
+    <ToolCall
+      {...rest}
+      // A row the level opens by default renders inline even on compact widths; a sheet behind a
+      // press would contradict the level.
+      forceInline={rest.forceInline ?? rest.defaultExpanded}
+      onInlineDetailsExpandedChange={handleExpandedChange}
+    />
+  );
 }
 
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);

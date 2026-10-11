@@ -1962,6 +1962,7 @@ export const ja: TranslationResources = {
           overview: "すべて折りたたむ",
           detailed: "詳細を折りたたむ",
           live: "最新の思考を表示",
+          thinking: "すべての思考を展開",
           expanded: "すべて展開",
         },
       },

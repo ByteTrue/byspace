@@ -299,8 +299,11 @@ test.describe("Agent stream UI", () => {
         .filter({ hasNotText: "Thinking" })
         .getByRole("button");
       await expect.poll(async () => toolCalls.count()).toBeGreaterThan(0);
-      await toolCalls.first().click();
+      // "Expand all" opens tool call details along with the thinking blocks, so the row starts
+      // open; the press folds it, and "collapse all" below is what puts every row back.
       await expect(toolCalls.first()).toHaveAttribute("aria-expanded", "true");
+      await toolCalls.first().click();
+      await expect(toolCalls.first()).toHaveAttribute("aria-expanded", "false");
 
       const expandableToolCalls = page.locator(
         '[data-testid="tool-call-badge"] [role="button"][aria-expanded]',

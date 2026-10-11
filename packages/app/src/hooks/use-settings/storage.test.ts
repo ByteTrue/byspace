@@ -643,6 +643,16 @@ describe("appearance settings", () => {
     }
   });
 
+  it("keeps the expand-all-thinking level across a reload", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({ timelineDetailLevel: "thinking" }),
+      }),
+    });
+
+    expect((await loadAppSettingsFromStorage(deps)).timelineDetailLevel).toBe("thinking");
+  });
+
   it("maps the retired always-expand-reasoning toggle to expand-all", async () => {
     const deps = makeDeps({
       storage: createInMemoryKeyValueStorage({

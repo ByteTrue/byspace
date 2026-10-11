@@ -1987,6 +1987,7 @@ export const es: TranslationResources = {
           overview: "Plegar todo",
           detailed: "Plegar detalles",
           live: "Mostrar el razonamiento más reciente",
+          thinking: "Expandir todo el razonamiento",
           expanded: "Expandir todo",
         },
       },
