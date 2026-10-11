@@ -84,16 +84,82 @@ describe("Pi terminal agent hooks", () => {
     expect(readFileSync(extensionPath, "utf8")).toBe(foreignSource);
   });
 
+  // ui_prompt_end is deliberately absent: its reported state depends on run
+  // activity inside the extension, covered by the two behavioral tests below.
   it.each([
     ["agent_start", "running"],
     ["ui_prompt_start", "needs-input"],
-    ["ui_prompt_end", "running"],
     ["agent_settled", "idle"],
     ["session_shutdown", "idle"],
   ] as const)("maps %s to %s", async (event, state) => {
     await expect(
       piAgentHookProvider.resolveActivity({ event, input: { read: async () => null } }),
     ).resolves.toBe(state);
+  });
+
+  it("reports idle after an idle-time ui dialog closes instead of wedging working", async () => {
+    // A dialog opened with no run behind it (extension picker, config prompt) used
+    // to report needs-input then running on close; nothing ever settles running
+    // because no run exists and Pi stays in the foreground.
+    delete process.env.BYSPACE_PI_TERMINAL_HOOK_OWNER_PID;
+    process.env.BYSPACE_TERMINAL_ACTIVITY_URL = "http://127.0.0.1/activity";
+    process.env.BYSPACE_TERMINAL_ID = "terminal-1";
+    process.env.BYSPACE_ACTIVITY_TOKEN = "token-1";
+
+    const fetchMock = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const extension = await loadInstalledExtension();
+    const handlers = new Map<string, (...args: unknown[]) => unknown>();
+    extension.default({
+      on(event, handler) {
+        handlers.set(event, handler);
+      },
+    });
+
+    handlers.get("ui_prompt_start")?.();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    handlers.get("ui_prompt_end")?.();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    const states = fetchMock.mock.calls.map(([, init]) => {
+      return JSON.parse(String((init as RequestInit).body)).state;
+    });
+    expect(states).toEqual(["needs-input", "idle"]);
+  });
+
+  it("keeps reporting running after an in-run dialog closes", async () => {
+    // Inside a run, ui_prompt_end must keep the existing running report: the run
+    // itself will settle the terminal when it finishes.
+    delete process.env.BYSPACE_PI_TERMINAL_HOOK_OWNER_PID;
+    process.env.BYSPACE_TERMINAL_ACTIVITY_URL = "http://127.0.0.1/activity";
+    process.env.BYSPACE_TERMINAL_ID = "terminal-1";
+    process.env.BYSPACE_ACTIVITY_TOKEN = "token-1";
+
+    const fetchMock = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const extension = await loadInstalledExtension();
+    const handlers = new Map<string, (...args: unknown[]) => unknown>();
+    extension.default({
+      on(event, handler) {
+        handlers.set(event, handler);
+      },
+    });
+
+    handlers.get("agent_start")?.();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    handlers.get("ui_prompt_start")?.();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    handlers.get("ui_prompt_end")?.();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    handlers.get("agent_settled")?.();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+
+    const states = fetchMock.mock.calls.map(([, init]) => {
+      return JSON.parse(String((init as RequestInit).body)).state;
+    });
+    expect(states).toEqual(["running", "needs-input", "running", "idle"]);
   });
 
   it("keeps one report in flight and sends only the latest queued state", async () => {
