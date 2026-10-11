@@ -23,3 +23,15 @@ Chief 会话空状态呈现三条写死的建议按钮，点击即以用户消�
 ## 验证
 
 - 新会话空状态出现三条建议；点击发送后 Chief 正常作答。
+
+## 验证限制
+
+同 issue 002——BSK/browser 环境下 WebSocket 不稳定导致连接验证无法完成。开场建议的 UI 在空状态正确渲染（SuggestionChip 组件 + AgentStreamView props），逻辑已在单元测试和类型层面验证。
+
+## 执行记录
+
+- `AgentStreamView` 加 `emptySuggestions` + `onEmptySuggestionSelect` 可选 props。
+- `renderListEmptyComponent` 在空状态文本下方渲染 `SuggestionChip` 按钮组。
+- `AgentStreamSection` 检测 `byspace.agent-role === "chief"`，为 Chief 组装三条建议（i18n），点击经 `client.sendMessage` 发送。
+- 建议内容走 i18n，全语言。
+- typecheck 0 error，lint 0 error。
