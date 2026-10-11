@@ -83,20 +83,24 @@ export function useChiefAgent(serverId: string | null): ChiefAgentState {
   // rekeys controllers on hello, so the live client may sit under a different
   // serverId than the one in the current URL. Resolve both together so the
   // PaneContext always uses the serverId that actually owns the connection.
-  const effective = useSyncExternalStore(
+  // Return the client instance directly so useSyncExternalStore sees a stable
+  // reference across re-renders and doesn't loop.
+  const effectiveClient = useSyncExternalStore(
     subscribeAll,
     () => {
-      if (serverId && client) return { serverId, client };
+      if (serverId && client) return client;
       for (const host of store.getHosts()) {
         const c = store.getClient(host.serverId);
-        if (c) return { serverId: host.serverId, client: c };
+        if (c) return c;
       }
       return null;
     },
     () => null,
   );
-  const effectiveClient = effective?.client ?? null;
-  const effectiveServerId = effective?.serverId ?? null;
+  const effectiveServerId = effectiveClient
+    ? (store.getHosts().find((h) => store.getClient(h.serverId) === effectiveClient)?.serverId ??
+      null)
+    : null;
   const isClientReady = effectiveClient !== null;
 
   const [state, setState] = useState<ChiefAgentState>({ tag: "loading" });
