@@ -76,6 +76,8 @@ export interface UseAgentFormStateResult {
   setProviderAndModelFromUser: (provider: AgentProvider, modelId: string) => void;
   applyProfileFromUser: (profile: MaterializedAgentProfile) => void;
   clearProviderSelectionFromUser: () => void;
+  selectedRole: string;
+  setRoleFromUser: (role: string) => void;
   workingDirIsEmpty: boolean;
   persistFormPreferences: () => Promise<void>;
 }
@@ -172,7 +174,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
   );
 
   const [{ form: formState, userModified, resolution }, dispatch] = useReducer(resolveAgentForm, {
-    form: { provider: null, modeId: "", model: "", thinkingOptionId: "" },
+    form: { provider: null, modeId: "", model: "", thinkingOptionId: "", role: "" },
     userModified: INITIAL_USER_MODIFIED,
     resolution: INITIAL_AGENT_FORM_RESOLUTION,
   });
@@ -413,6 +415,10 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
     [availableModels, formState.provider, updateCurrentPreferences],
   );
 
+  const setRoleFromUser = useCallback((role: string) => {
+    dispatch({ type: "SET_ROLE_FROM_USER", role });
+  }, []);
+
   const setThinkingOptionFromUser = useCallback(
     (thinkingOptionId: string) => {
       dispatch({ type: "SET_THINKING_OPTION_FROM_USER", thinkingOptionId });
@@ -500,6 +506,8 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
       setProviderAndModelFromUser,
       applyProfileFromUser,
       clearProviderSelectionFromUser,
+      selectedRole: formState.role,
+      setRoleFromUser,
       workingDirIsEmpty,
       persistFormPreferences,
     }),
@@ -509,6 +517,8 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
       formState.modeId,
       formState.model,
       formState.thinkingOptionId,
+      formState.role,
+      setRoleFromUser,
       workingDir,
       setModeFromUser,
       setModelFromUser,

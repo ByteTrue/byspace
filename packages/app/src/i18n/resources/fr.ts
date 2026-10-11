@@ -181,6 +181,11 @@ export const fr: TranslationResources = {
       on: "Sur",
       off: "Désactivé",
     },
+    role: {
+      select: "Select agent role",
+      none: "No role",
+      chief: "Chief",
+    },
     mode: {
       title: "Mode",
       searchPlaceholder: "Modes de recherche...",
@@ -206,6 +211,19 @@ export const fr: TranslationResources = {
       implement: "Mettre en œuvre",
       question: "Comment souhaitez-vous procéder?",
       proposedPlan: "Plan proposé",
+    },
+  },
+  chief: {
+    switchHost: "Changer d'hôte",
+    maximize: "Ouvrir en page entière",
+    close: "Fermer Chief",
+    retry: "Réessayer",
+    noHomeWorkspace:
+      "Chief nécessite l'espace de travail Home du daemon. Mettez à jour votre daemon BySpace puis réessayez.",
+    suggestions: {
+      whatCanYouDo: "Que peux-tu faire pour moi ?",
+      checkWorkspaces: "Vérifie mes espaces de travail",
+      recentActivity: "Une activité récente ?",
     },
   },
   agentPanel: {

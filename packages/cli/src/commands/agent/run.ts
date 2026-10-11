@@ -74,6 +74,7 @@ export function addRunOptions(cmd: Command): Command {
         collectMultiple,
         [],
       )
+      .option("--role <role>", "Built-in agent role (e.g., chief)")
       .option(
         "--wait-timeout <duration>",
         "Maximum time to wait for agent to finish (e.g., 30s, 5m, 1h). Default: no limit",
@@ -129,6 +130,7 @@ export interface AgentRunOptions extends CommandOptions {
   cwd?: string;
   env?: string[];
   label?: string[];
+  role?: string;
   waitTimeout?: string;
   outputSchema?: string;
 }
@@ -637,6 +639,7 @@ export async function runRunCommand(
             modeId: options.mode,
             model: resolvedProviderModel.model,
             thinkingOptionId,
+            role: options.role,
             initialPrompt: structuredPrompt,
             outputSchema,
             images,
@@ -708,6 +711,7 @@ export async function runRunCommand(
       modeId: options.mode,
       model: resolvedProviderModel.model,
       thinkingOptionId,
+      role: options.role,
       initialPrompt: prompt,
       images,
       env: requestEnv,

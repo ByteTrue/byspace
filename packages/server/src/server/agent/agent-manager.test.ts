@@ -49,6 +49,7 @@ import type {
 } from "./agent-sdk-types.js";
 import type { BySpaceToolCatalog } from "./tools/types.js";
 import type { ProviderDefinition } from "./provider-registry.js";
+import { updateAgentCommand } from "./lifecycle-command.js";
 
 const DESKTOP_OPEN_AGENT_TAB_LABEL = getOpenAgentTabLabel("desktop-client");
 const MOBILE_OPEN_AGENT_TAB_LABEL = getOpenAgentTabLabel("mobile-client");
@@ -2236,6 +2237,132 @@ test("daemon append system prompt is injected into Pi configs", async () => {
   );
 
   expect(client.createdConfigs[0]?.daemonAppendSystemPrompt).toBe("Daemon instructions.");
+});
+
+test("role prompt is appended after the daemon append prompt", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const client = new TestAgentClient();
+  const manager = new AgentManager({
+    clients: { codex: client },
+    registry: storage,
+    logger,
+    appendSystemPrompt: "Daemon instructions.",
+    idFactory: () => "00000000-0000-4000-8000-000000000105",
+  });
+
+  const snapshot = await manager.createAgent(
+    { provider: "codex", cwd: workdir, role: "chief" },
+    undefined,
+    { workspaceId: undefined },
+  );
+  const record = await storage.get(snapshot.id);
+
+  const injected = client.createdConfigs[0]?.daemonAppendSystemPrompt ?? "";
+  expect(injected).toContain("Daemon instructions.");
+  expect(injected).toContain("You are Chief");
+  // Daemon-wide instructions come first, role prompt after.
+  expect(injected.indexOf("Daemon instructions.")).toBeLessThan(injected.indexOf("You are Chief"));
+  // Role name persists; prompt text never does.
+  expect(record?.config?.role).toBe("chief");
+  expect(record?.config).not.toHaveProperty("daemonAppendSystemPrompt");
+  expect(record?.labels?.["byspace.agent-role"]).toBe("chief");
+});
+
+test("agent without a role gets no role prompt", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const client = new TestAgentClient();
+  const manager = new AgentManager({
+    clients: { codex: client },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000106",
+  });
+
+  const snapshot = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+    workspaceId: undefined,
+  });
+  const record = await storage.get(snapshot.id);
+
+  expect(client.createdConfigs[0]?.daemonAppendSystemPrompt).toBeUndefined();
+  expect(record?.labels?.["byspace.agent-role"]).toBeUndefined();
+});
+
+test("unknown role degrades to a plain agent without a role label", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const client = new TestAgentClient();
+  const manager = new AgentManager({
+    clients: { codex: client },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000107",
+  });
+
+  const snapshot = await manager.createAgent(
+    { provider: "codex", cwd: workdir, role: "does-not-exist" },
+    undefined,
+    { workspaceId: undefined },
+  );
+  const record = await storage.get(snapshot.id);
+
+  expect(client.createdConfigs[0]?.daemonAppendSystemPrompt).toBeUndefined();
+  expect(record?.labels?.["byspace.agent-role"]).toBeUndefined();
+});
+
+test("client-supplied reserved role labels are stripped on create", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000132",
+  });
+
+  const snapshot = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+    workspaceId: undefined,
+    labels: {
+      "user.custom": "keep",
+      "byspace.agent-role": "chief",
+      "byspace.parent-agent-id": "parent-1",
+    },
+  });
+  const record = await storage.get(snapshot.id);
+
+  expect(record?.labels).toEqual({
+    "user.custom": "keep",
+    "byspace.parent-agent-id": "parent-1",
+  });
+});
+
+test("updateAgentCommand cannot forge a reserved role label", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const manager = new AgentManager({
+    clients: { codex: new TestAgentClient() },
+    registry: storage,
+    logger,
+    idFactory: () => "00000000-0000-4000-8000-000000000133",
+  });
+
+  const snapshot = await manager.createAgent({ provider: "codex", cwd: workdir }, undefined, {
+    workspaceId: undefined,
+  });
+  await manager.closeAgent(snapshot.id);
+
+  const result = await updateAgentCommand(
+    { agentManager: manager },
+    {
+      agentId: snapshot.id,
+      labels: { "user.custom": "keep", "byspace.agent-role": "chief" },
+    },
+  );
+  expect(result.accepted).toBe(true);
+  const record = await storage.get(snapshot.id);
+
+  expect(record?.labels).toEqual({ "user.custom": "keep" });
 });
 
 test("setAgentMode persists the selected mode across session reload", async () => {

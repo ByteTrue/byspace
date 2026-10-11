@@ -179,6 +179,11 @@ export const ru: TranslationResources = {
       on: "Включено",
       off: "Выключено",
     },
+    role: {
+      select: "Select agent role",
+      none: "No role",
+      chief: "Chief",
+    },
     mode: {
       title: "Режим",
       searchPlaceholder: "Поиск режимов...",
@@ -204,6 +209,19 @@ export const ru: TranslationResources = {
       implement: "Реализовать",
       question: "Как бы вы хотели продолжить?",
       proposedPlan: "Предлагаемый план",
+    },
+  },
+  chief: {
+    switchHost: "Сменить хост",
+    maximize: "Открыть на всю страницу",
+    close: "Закрыть Chief",
+    retry: "Повторить",
+    noHomeWorkspace:
+      "Для Chief требуется рабочее пространство Home демона. Обновите демон BySpace и повторите попытку.",
+    suggestions: {
+      whatCanYouDo: "Что ты умеешь?",
+      checkWorkspaces: "Проверь мои рабочие пространства",
+      recentActivity: "Есть недавняя активность?",
     },
   },
   agentPanel: {

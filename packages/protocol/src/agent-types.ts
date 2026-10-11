@@ -522,6 +522,12 @@ export interface AgentSessionConfig {
   title?: string | null;
   providerOptions?: ProviderOptions;
   toolPolicy?: ToolPolicy;
+  /**
+   * Optional built-in role name (e.g. "chief"). The daemon resolves the role's
+   * system prompt from its embedded registry at launch; only the name is
+   * persisted, so daemon updates refresh role behavior in place.
+   */
+  role?: string;
   mcpServers?: Record<string, McpServerConfig>;
   /**
    * Internal agents are hidden from listings and don't trigger notifications.

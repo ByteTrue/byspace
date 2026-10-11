@@ -6,6 +6,7 @@ import {
   type ManagedAgent,
 } from "./agent-manager.js";
 import type { StoredAgentRecord } from "./agent-storage.js";
+import { stripReservedLabels } from "./agent-roles.js";
 import type { AgentProviderNotice } from "./agent-sdk-types.js";
 
 export type LifecycleAgentSnapshot = Pick<ManagedAgent, "id" | "cwd" | "lifecycle">;
@@ -165,7 +166,10 @@ export async function updateAgentCommand(
   },
 ): Promise<UpdateAgentResult> {
   const title = input.name?.trim();
-  const labels = input.labels && Object.keys(input.labels).length > 0 ? input.labels : undefined;
+  // Reserved byspace.* keys are daemon-owned (e.g. the Chief role stamp);
+  // client-supplied copies are dropped before they reach agent metadata.
+  const sanitizedLabels = stripReservedLabels(input.labels);
+  const labels = Object.keys(sanitizedLabels).length > 0 ? sanitizedLabels : undefined;
 
   if (!title && !labels) {
     return {

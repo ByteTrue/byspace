@@ -335,6 +335,9 @@ function buildSerializableConfig(config: AgentSessionConfig): SerializableAgentC
   if (config.systemPrompt) {
     serializable.systemPrompt = config.systemPrompt;
   }
+  if (config.role) {
+    serializable.role = config.role;
+  }
   if (config.mcpServers) {
     serializable.mcpServers = config.mcpServers;
   }

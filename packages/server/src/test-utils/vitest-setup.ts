@@ -8,6 +8,10 @@ dotenv.config({ path: path.resolve(serverRoot, ".env.test"), override: true });
 dotenv.config({ path: path.resolve(serverRoot, "../.env") });
 
 process.env.BYSPACE_SUPERVISED = "0";
+// Bootstrap tests assert exact workspace registries and Windows teardown hits
+// EBUSY on the watched home dir, so server tests never create the Home
+// workspace.
+process.env.BYSPACE_DISABLE_HOME_WORKSPACE = "1";
 process.env.GIT_TERMINAL_PROMPT = "0";
 process.env.GIT_SSH_COMMAND = "ssh -oBatchMode=yes";
 process.env.SSH_ASKPASS = "/usr/bin/false";

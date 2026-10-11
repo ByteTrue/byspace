@@ -147,6 +147,7 @@ async function submitDraftCreateRequest(input: {
   autoSubmitConfig: AutoSubmitConfig | null;
   composerState: {
     selectedProvider: string | null;
+    selectedRole: string;
     selectedMode: string;
     modeOptions: readonly { id: string }[];
     effectiveModelId: string | null;
@@ -192,6 +193,7 @@ async function submitDraftCreateRequest(input: {
     thinkingOptionId:
       autoSubmitConfig?.thinkingOptionId ?? (composerState.effectiveThinkingOptionId || undefined),
     featureValues: autoSubmitConfig?.featureValues ?? composerState.featureValues,
+    ...(composerState.selectedRole ? { role: composerState.selectedRole } : {}),
   });
 
   const attachmentsArray = Array.isArray(attachments) ? attachments : undefined;

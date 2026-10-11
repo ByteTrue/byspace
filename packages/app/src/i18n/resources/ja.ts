@@ -179,6 +179,11 @@ export const ja: TranslationResources = {
       on: "オン",
       off: "オフ",
     },
+    role: {
+      select: "Select agent role",
+      none: "No role",
+      chief: "Chief",
+    },
     mode: {
       title: "モード",
       searchPlaceholder: "モードを検索...",
@@ -204,6 +209,19 @@ export const ja: TranslationResources = {
       implement: "実装",
       question: "どのように続けますか？",
       proposedPlan: "提案されたプラン",
+    },
+  },
+  chief: {
+    switchHost: "ホストを切り替える",
+    maximize: "フルページで開く",
+    close: "Chief を閉じる",
+    retry: "再試行",
+    noHomeWorkspace:
+      "Chief には daemon の Home ワークスペースが必要です。BySpace daemon を更新してから再試行してください。",
+    suggestions: {
+      whatCanYouDo: "あなたに何ができる？",
+      checkWorkspaces: "ワークスペースを確認して",
+      recentActivity: "最近の活動はある？",
     },
   },
   agentPanel: {

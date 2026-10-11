@@ -29,6 +29,8 @@ export function buildDraftAgentControls(input: {
   return {
     providerDefinitions: formState.providerDefinitions,
     selectedProvider: formState.selectedProvider,
+    selectedRole: formState.selectedRole,
+    onSelectRole: formState.setRoleFromUser,
     modeOptions: formState.modeOptions,
     selectedMode: formState.selectedMode,
     onSelectMode: formState.setModeFromUser,

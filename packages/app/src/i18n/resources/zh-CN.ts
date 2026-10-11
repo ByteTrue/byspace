@@ -179,6 +179,11 @@ export const zhCN: TranslationResources = {
       on: "开启",
       off: "关闭",
     },
+    role: {
+      select: "选择角色",
+      none: "无角色",
+      chief: "Chief",
+    },
     mode: {
       title: "Mode",
       searchPlaceholder: "搜索 modes...",
@@ -204,6 +209,18 @@ export const zhCN: TranslationResources = {
       implement: "实施",
       question: "你想如何继续？",
       proposedPlan: "建议计划",
+    },
+  },
+  chief: {
+    switchHost: "切换主机",
+    maximize: "全屏打开",
+    close: "关闭 Chief",
+    retry: "重试",
+    noHomeWorkspace: "Chief 需要 daemon 的 Home workspace。请更新 BySpace daemon 后重试。",
+    suggestions: {
+      whatCanYouDo: "你能帮我做什么？",
+      checkWorkspaces: "看看我的工作区",
+      recentActivity: "最近有什么活动？",
     },
   },
   agentPanel: {

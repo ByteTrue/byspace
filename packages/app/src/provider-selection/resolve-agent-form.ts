@@ -16,6 +16,7 @@ export interface FormInitialValues {
   modeId?: string | null;
   model?: string | null;
   thinkingOptionId?: string | null;
+  role?: string | null;
 }
 
 export interface FormState {
@@ -23,6 +24,7 @@ export interface FormState {
   modeId: string;
   model: string;
   thinkingOptionId: string;
+  role: string;
 }
 
 export interface UserModifiedFields {
@@ -30,6 +32,7 @@ export interface UserModifiedFields {
   modeId: boolean;
   model: boolean;
   thinkingOptionId: boolean;
+  role: boolean;
 }
 
 export type ProviderModelsByProvider = Map<AgentProvider, AgentModelDefinition[] | null>;
@@ -52,6 +55,7 @@ export const INITIAL_USER_MODIFIED: UserModifiedFields = {
   modeId: false,
   model: false,
   thinkingOptionId: false,
+  role: false,
 };
 
 export const PENDING_AGENT_FORM_RESOLUTION: AgentFormResolutionState = { status: "pending" };
@@ -115,6 +119,7 @@ export type AgentFormAction =
     }
   | { type: "CLEAR_PROVIDER_SELECTION_FROM_USER" }
   | { type: "SET_THINKING_OPTION_FROM_USER"; thinkingOptionId: string }
+  | { type: "SET_ROLE_FROM_USER"; role: string }
   | { type: "RESET" };
 
 type CompleteResolutionAction = Extract<AgentFormAction, { type: "COMPLETE_RESOLUTION" }>;
@@ -713,6 +718,13 @@ export function resolveAgentForm(
         ...state,
         form: { ...state.form, thinkingOptionId: action.thinkingOptionId },
         userModified: { ...state.userModified, thinkingOptionId: true },
+      };
+
+    case "SET_ROLE_FROM_USER":
+      return {
+        ...state,
+        form: { ...state.form, role: action.role },
+        userModified: { ...state.userModified, role: true },
       };
 
     case "RESET":

@@ -179,6 +179,11 @@ export const ar: TranslationResources = {
       on: "على",
       off: "عن",
     },
+    role: {
+      select: "Select agent role",
+      none: "No role",
+      chief: "Chief",
+    },
     mode: {
       title: "وضع",
       searchPlaceholder: "أوضاع البحث...",
@@ -204,6 +209,19 @@ export const ar: TranslationResources = {
       implement: "ينفذ",
       question: "كيف تريد المتابعة؟",
       proposedPlan: "الخطة المقترحة",
+    },
+  },
+  chief: {
+    switchHost: "تبديل المضيف",
+    maximize: "فتح في صفحة كاملة",
+    close: "إغلاق Chief",
+    retry: "إعادة المحاولة",
+    noHomeWorkspace:
+      "يحتاج Chief إلى مساحة عمل Home الخاصة بالـ daemon. حدّث BySpace daemon ثم أعد المحاولة.",
+    suggestions: {
+      whatCanYouDo: "ما الذي يمكنك فعله؟",
+      checkWorkspaces: "تحقق من مساحات عملي",
+      recentActivity: "هل من نشاط حديث؟",
     },
   },
   agentPanel: {

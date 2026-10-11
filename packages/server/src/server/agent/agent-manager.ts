@@ -50,6 +50,12 @@ import {
   type ListImportableSessionsOptions,
 } from "./agent-sdk-types.js";
 import { buildArchivedAgentRecord, type ArchivedStoredAgentRecord } from "./agent-archive.js";
+import {
+  AGENT_ROLE_LABEL,
+  getAgentRole,
+  getAgentRoleSystemPrompt,
+  stripReservedLabels,
+} from "./agent-roles.js";
 import type { StoredAgentRecord, AgentStorage } from "./agent-storage.js";
 import type { AgentOwner } from "./agent-owner.js";
 import {
@@ -92,6 +98,7 @@ import {
   foldSubagentObservations,
   type SubagentObservation,
 } from "./provider-subagents/observation.js";
+import { ACPAgentClient } from "./providers/acp-agent.js";
 import { observePiSubagentRecord } from "./providers/pi/agent-subagents.js";
 import {
   PI_SUBAGENT_TERMINAL_STATUSES,
@@ -1370,12 +1377,19 @@ export class AgentManager {
       options?.env,
       { reason: "create", purpose: "interactive", workspaceId: options.workspaceId ?? null },
     );
+    this.warnIfRolePromptUnsupported(resolvedAgentId, client, launchConfig);
     const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
     const createOptions = this.buildCreateSessionOptions(options);
     const session = await client.createSession(providerLaunchConfig, launchContext, createOptions);
     await this.requireExternalMcpSupport(session, storedConfig);
+    // Stamp the resolved role onto labels so the app can recognize a role
+    // agent without re-deriving it from config. Unknown roles degrade to a
+    // plain agent: no label, no prompt.
+    const role = getAgentRole(storedConfig.role);
     const agent = await this.registerSession(session, storedConfig, resolvedAgentId, {
-      labels: options.labels,
+      labels: role
+        ? { ...stripReservedLabels(options.labels), [AGENT_ROLE_LABEL]: role.name }
+        : stripReservedLabels(options.labels),
       initialTitle: options.initialTitle,
       workspaceId: options.workspaceId,
       owner: options.owner,
@@ -1463,6 +1477,7 @@ export class AgentManager {
         workspaceId: options?.workspaceId ?? null,
       },
     );
+    this.warnIfRolePromptUnsupported(resolvedAgentId, client, launchConfig);
     const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
     const session = await client.resumeSession(
       handle,
@@ -1519,6 +1534,7 @@ export class AgentManager {
       undefined,
       { reason: "import", purpose: "interactive", workspaceId: input.workspaceId },
     );
+    this.warnIfRolePromptUnsupported(resolvedAgentId, client, launchConfig);
     const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
     const imported = await client.importSession(
       {
@@ -1616,6 +1632,7 @@ export class AgentManager {
       undefined,
       { reason: "refresh", purpose: "interactive", workspaceId: existing.workspaceId },
     );
+    this.warnIfRolePromptUnsupported(agentId, client, launchConfig);
     const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
     if (
       Object.keys(storedConfig.mcpServers ?? {}).length > 0 &&
@@ -5181,9 +5198,17 @@ export class AgentManager {
   }
 
   private applyDaemonAppendSystemPrompt(config: AgentSessionConfig): AgentSessionConfig {
-    const daemonAppendSystemPrompt = this.appendSystemPrompt.trim();
     const next = { ...config };
     delete next.daemonAppendSystemPrompt;
+
+    // Two append sources, both resolved fresh at launch (never persisted as
+    // text): the daemon-wide setting, then the agent's built-in role prompt.
+    const parts = [this.appendSystemPrompt.trim()];
+    const rolePrompt = getAgentRoleSystemPrompt(next.role)?.trim();
+    if (rolePrompt) {
+      parts.push(rolePrompt);
+    }
+    const daemonAppendSystemPrompt = parts.filter(Boolean).join("\n\n");
 
     return daemonAppendSystemPrompt
       ? {
@@ -5191,6 +5216,24 @@ export class AgentManager {
           daemonAppendSystemPrompt,
         }
       : next;
+  }
+
+  /**
+   * ACP-based providers have no system-prompt channel (NewSessionRequest
+   * carries cwd + mcpServers only), so a built-in role prompt launched on one
+   * is dropped. Warn instead of failing the launch: the role label still
+   * identifies the agent, only the prompt is lost.
+   */
+  private warnIfRolePromptUnsupported(
+    agentId: string,
+    client: AgentClient,
+    config: AgentSessionConfig,
+  ): void {
+    if (!config.role || !(client instanceof ACPAgentClient)) return;
+    this.logger.warn(
+      { agentId, provider: client.provider, role: config.role },
+      "Role prompt is not supported by ACP-based providers and will be dropped",
+    );
   }
 
   private async buildLaunchContext(
@@ -5213,6 +5256,7 @@ export class AgentManager {
         BYSPACE_AGENT_CWD: cwd,
       },
     };
+
     if (client.provider === "pi" && this.piSubagentReportBaseUrl) {
       const reportToken = randomBytes(32).toString("base64url");
       this.piSubagentReportTokens.set(agentId, reportToken);

@@ -104,6 +104,9 @@ const EMPTY_AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [];
 interface ControlledAgentControlsProps {
   provider: string;
   providerOptions?: AgentControlOption[];
+  /** Selected built-in role name, or empty string. Only shown in draft mode. */
+  selectedRole?: string;
+  onSelectRole?: (role: string) => void;
   selectedProviderId?: string;
   onSelectProvider?: (providerId: string) => void;
   modelOptions?: AgentControlOption[];
@@ -135,6 +138,9 @@ interface ControlledAgentControlsProps {
 export interface DraftAgentControlsProps {
   providerDefinitions: AgentProviderDefinition[];
   selectedProvider: AgentProvider | null;
+  /** Currently selected built-in role (e.g. "chief"), or empty string. */
+  selectedRole: string;
+  onSelectRole: (role: string) => void;
   modeOptions: AgentMode[];
   selectedMode: string;
   onSelectMode: (modeId: string) => void;
@@ -244,19 +250,22 @@ function resolveHasAnyControl({
   thinkingOptions,
   features,
   hasMode,
+  hasRole,
 }: {
   providerOptions: AgentControlOption[] | undefined;
   canSelectModel: boolean;
   thinkingOptions: AgentControlOption[] | undefined;
   features: AgentFeature[] | undefined;
   hasMode: boolean;
+  hasRole?: boolean;
 }) {
   return (
     Boolean(providerOptions?.length) ||
     canSelectModel ||
     Boolean(thinkingOptions?.length) ||
     Boolean(features?.length) ||
-    hasMode
+    hasMode ||
+    Boolean(hasRole)
   );
 }
 
@@ -476,6 +485,8 @@ function ControlledAgentControls({
   providerOptions,
   selectedProviderId,
   onSelectProvider,
+  selectedRole = "",
+  onSelectRole,
   modelOptions,
   selectedModelId,
   onSelectModel,
@@ -546,6 +557,7 @@ function ControlledAgentControls({
     thinkingOptions,
     features,
     hasMode: modeControl !== null && modeControl !== undefined,
+    hasRole: Boolean(selectedRole),
   });
   const featureControls = useMemo(
     () =>
@@ -784,6 +796,8 @@ function ControlledAgentControls({
             handleOpenSheet={handleOpenSheet}
             handleCloseSheet={handleCloseSheet}
             modelSelectorServerId={modelSelectorServerId}
+            selectedRole={selectedRole}
+            onSelectRole={onSelectRole}
           />
         ) : (
           <SheetAgentControlsContent
@@ -884,6 +898,9 @@ interface DesktopAgentControlsContentProps {
   handleOpenSheet: (sheet: Exclude<ActiveSheet, null>) => void;
   handleCloseSheet: () => void;
   modelSelectorServerId: string | null;
+  /** Selected built-in role, or empty string. Only rendered when onSelectRole is provided (draft mode). */
+  selectedRole?: string;
+  onSelectRole?: (role: string) => void;
 }
 
 const DESKTOP_SEARCH_THRESHOLD = 6;
@@ -941,6 +958,8 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
     handleOpenSheet,
     handleCloseSheet,
     modelSelectorServerId,
+    selectedRole = "",
+    onSelectRole,
   } = props;
   const modelToolbar = useMemo(
     () => ({ glyphSize, showCaret: presentation.showCarets }),
@@ -951,6 +970,11 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
     [t],
   );
   const handleOpenFeatures = useCallback(() => handleOpenSheet("features"), [handleOpenSheet]);
+  const handleRoleToggle = useCallback(() => {
+    // Toggle between "chief" and no role. When more roles exist this becomes a
+    // dropdown; for now a single press toggles the only available role.
+    onSelectRole?.(selectedRole ? "" : "chief");
+  }, [onSelectRole, selectedRole]);
   return (
     <>
       {providerOptions && providerOptions.length > 0 ? (
@@ -978,6 +1002,20 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
             desktopPlacement="top-start"
           />
         </>
+      ) : null}
+
+      {onSelectRole ? (
+        <Pressable
+          onPress={handleRoleToggle}
+          style={[styles.modeBadge, selectedRole ? styles.roleBadgeActive : undefined]}
+          accessibilityRole="button"
+          accessibilityLabel={t("agentControls.role.select")}
+          testID="agent-role-selector"
+        >
+          <Text style={styles.modeBadgeText}>
+            {selectedRole ? t("agentControls.role.chief") : t("agentControls.role.none")}
+          </Text>
+        </Pressable>
       ) : null}
 
       {canSelectModel ? (
@@ -1833,6 +1871,8 @@ export function DraftAgentControls({
   disabled = false,
   modelSelectorServerId = null,
   isCompactLayout,
+  selectedRole,
+  onSelectRole,
 }: DraftAgentControlsProps) {
   const mappedThinkingOptions = useMemo<AgentControlOption[]>(() => {
     return toThinkingControlOptions(thinkingOptions);
@@ -1921,6 +1961,8 @@ export function DraftAgentControls({
         modeControl={modeControl}
         modelSelectorServerId={modelSelectorServerId}
         isCompactLayout={isCompactLayout}
+        selectedRole={selectedRole}
+        onSelectRole={onSelectRole}
       />
     </>
   );
@@ -1969,6 +2011,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   modeBadgePressed: {
     backgroundColor: theme.colors.surface0,
+  },
+  roleBadgeActive: {
+    backgroundColor: theme.colors.surface2,
   },
   disabledBadge: {
     opacity: 0.5,

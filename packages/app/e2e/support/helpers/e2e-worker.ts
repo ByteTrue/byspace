@@ -203,6 +203,9 @@ export async function startE2EWorker(
         NODE_ENV: "development",
         PATH: `${fakeEditorBin}${path.delimiter}${process.env.PATH ?? ""}`,
         BYSPACE_E2E_EDITOR_RECORD_PATH: editorRecordPath,
+        // Specs assume exact workspace counts; the daemon-owned Home
+        // workspace would shift them by one.
+        BYSPACE_DISABLE_HOME_WORKSPACE: "1",
         ...options.environment,
       },
     });

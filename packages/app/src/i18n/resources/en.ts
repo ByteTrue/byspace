@@ -177,6 +177,11 @@ export const en = {
       on: "On",
       off: "Off",
     },
+    role: {
+      select: "Select agent role",
+      none: "No role",
+      chief: "Chief",
+    },
     mode: {
       title: "Mode",
       searchPlaceholder: "Search modes...",
@@ -202,6 +207,19 @@ export const en = {
       implement: "Implement",
       question: "How would you like to proceed?",
       proposedPlan: "Proposed plan",
+    },
+  },
+  chief: {
+    switchHost: "Switch host",
+    maximize: "Open in full page",
+    close: "Close Chief",
+    retry: "Retry",
+    noHomeWorkspace:
+      "Chief needs the daemon's Home workspace. Update your BySpace daemon and try again.",
+    suggestions: {
+      whatCanYouDo: "What can you do?",
+      checkWorkspaces: "Check my workspaces",
+      recentActivity: "Any recent activity?",
     },
   },
   agentPanel: {

@@ -796,6 +796,7 @@ interface WorkspaceDraftSubmissionConfig {
   model: string | null;
   thinkingOptionId: string | null;
   featureValues: Record<string, unknown> | undefined;
+  role: string | null;
   target: WorkspaceTabTarget;
 }
 
@@ -1041,6 +1042,7 @@ function resolveWorkspaceDraftSubmissionConfig(input: {
       model: initialSetup.model,
       thinkingOptionId: initialSetup.thinkingOptionId,
       featureValues: initialSetup.featureValues,
+      role: composerState.selectedRole || null,
       target: { kind: "draft", draftId, setup: initialSetup },
     };
   }
@@ -1051,6 +1053,7 @@ function resolveWorkspaceDraftSubmissionConfig(input: {
     model: composerState.effectiveModelId || null,
     thinkingOptionId: composerState.effectiveThinkingOptionId || null,
     featureValues: composerState.featureValues,
+    role: composerState.selectedRole || null,
     target: { kind: "draft", draftId },
   };
 }
@@ -1100,6 +1103,7 @@ async function submitWorkspaceDraft(input: SubmitDraftInput): Promise<SubmitOutc
               ? { thinkingOptionId: submission.thinkingOptionId }
               : {}),
             ...(submission.featureValues ? { featureValues: submission.featureValues } : {}),
+            ...(submission.role ? { role: submission.role } : {}),
           }),
           text: text.trim(),
           clientMessageId,

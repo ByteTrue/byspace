@@ -1528,6 +1528,8 @@ export class DaemonWebSocketServer {
         pluginTimelineItems: true,
         // COMPAT(skillManagement): added in v0.4.0, remove gate after 2027-08-16.
         skillManagement: true,
+        // COMPAT(agentRoles): added in v0.18.0, remove gate after 2027-04-11.
+        agentRoles: true,
         // COMPAT(projectSetupSkill): added in v0.7.1, remove gate after 2027-09-15.
         projectSetupSkill: true,
         // COMPAT(terminalAgentHookProviders): added in v0.7.1, remove gate after 2027-09-01.
