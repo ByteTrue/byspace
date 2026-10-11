@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useFetchQuery } from "@/data/query";
 import {
   getHostRuntimeStore,
+  useHostRuntimeClientReadyKey,
   useHostRuntimeConnectionStatuses,
   useHosts,
 } from "@/runtime/host-runtime";
@@ -29,8 +30,18 @@ export function useTunnels(): {
     () => serverIds.map((serverId) => connectionStatuses.get(serverId) ?? "connecting").join("|"),
     [connectionStatuses, serverIds],
   );
+  // The status alone is not enough: a host reads "online" a tick before its
+  // client is attached, and the aggregate refuses to answer in that window. If
+  // the key did not change when the client lands, that non-answer would be
+  // cached for good (issue 076).
+  const clientReadyKey = useHostRuntimeClientReadyKey(serverIds);
   const query = useFetchQuery({
-    queryKey: [...tunnelsQueryBaseKey, [...serverIds].sort().join("|"), connectionStatusKey],
+    queryKey: [
+      ...tunnelsQueryBaseKey,
+      [...serverIds].sort().join("|"),
+      connectionStatusKey,
+      clientReadyKey,
+    ],
     queryFn: () =>
       fetchAggregatedTunnels({
         hosts: hosts.map((host) => ({ serverId: host.serverId, serverName: host.label })),

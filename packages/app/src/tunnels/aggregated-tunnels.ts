@@ -34,32 +34,35 @@ export async function fetchAggregatedTunnels(input: {
   hosts: readonly TunnelHostInput[];
   runtime: TunnelRuntime;
 }): Promise<TunnelLoadState> {
-  const hasSettlingHost = input.hosts.some(
-    (host) => input.runtime.getSnapshot(host.serverId)?.connectionStatus === "connecting",
+  // Read each host's view once. The runtime publishes the connection status and
+  // the client separately, so two reads in one pass can disagree.
+  const views = input.hosts.map((host) => ({
+    host,
+    snapshot: input.runtime.getSnapshot(host.serverId),
+    client: input.runtime.getClient(host.serverId),
+  }));
+
+  const hasAskableHost = views.some(
+    (view) => view.snapshot?.connectionStatus === "online" && view.client,
   );
-  const hasAskableHost = input.hosts.some(
-    (host) =>
-      input.runtime.getSnapshot(host.serverId)?.connectionStatus === "online" &&
-      input.runtime.getClient(host.serverId),
-  );
+  const hasSettlingHost = views.some((view) => isTunnelHostSettling(view.snapshot, view.client));
 
   if (!hasAskableHost && hasSettlingHost) {
     return { status: "connecting" };
   }
 
   const results = await Promise.all(
-    input.hosts.map(async (host) => {
-      const client = input.runtime.getClient(host.serverId);
-      if (!client) return null;
-      if (input.runtime.getSnapshot(host.serverId)?.connectionStatus !== "online") {
+    views.map(async (view) => {
+      if (!view.client) return null;
+      if (view.snapshot?.connectionStatus !== "online") {
         return null;
       }
       try {
-        const response = await client.listTunnels();
+        const response = await view.client.listTunnels();
         return response.entries.map((entry) =>
           Object.assign(entry, {
-            serverId: host.serverId,
-            serverName: host.serverName,
+            serverId: view.host.serverId,
+            serverName: view.host.serverName,
           }),
         );
       } catch {
@@ -69,5 +72,40 @@ export async function fetchAggregatedTunnels(input: {
   );
 
   const data = results.flatMap((entries) => entries ?? []);
+
+  // Nothing to show and a host has not answered yet: that is not an empty
+  // answer, it is an unfinished one. Without this the aggregate reports
+  // "loaded, no tunnels" whenever one host answers empty while another is
+  // still settling, and the caller caches it (issue 076). Schedules carries
+  // the same guard for the same reason.
+  if (data.length === 0 && hasSettlingHost) {
+    return { status: "connecting" };
+  }
+
   return { status: "loaded", data };
+}
+
+/**
+ * A host whose answer is still coming, so the aggregate must not treat its
+ * silence as "no tunnels".
+ *
+ * The runtime publishes a host's connection status and its client in separate
+ * ticks: the status can already read "online" while the client has not been
+ * attached to the snapshot yet. Reading that window as an answer caches an
+ * empty list, and because the query key is built from the connection statuses,
+ * the settled key never changes again — the list stays empty until a reload
+ * (issue 076). A missing snapshot means the runtime has no controller for the
+ * host yet, which is the same kind of not-yet.
+ */
+function isTunnelHostSettling(
+  snapshot: { connectionStatus: string } | null | undefined,
+  client: unknown,
+): boolean {
+  if (!snapshot) {
+    return true;
+  }
+  if (snapshot.connectionStatus === "connecting" || snapshot.connectionStatus === "idle") {
+    return true;
+  }
+  return snapshot.connectionStatus === "online" && !client;
 }

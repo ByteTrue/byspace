@@ -2487,9 +2487,39 @@ export function useHostRuntimeConnectionStatus(serverId: string): HostRuntimeCon
   );
 }
 
+/**
+ * Whether each host has a client attached, as a key-friendly string.
+ *
+ * The runtime publishes a host's connection status and its client in separate
+ * ticks, so "online" can be observable before the client lands in the snapshot.
+ * Aggregates that build their query key from connection status alone cannot see
+ * that second tick, so a fetch that ran during the gap stays cached and never
+ * refetches (issue 076). Include this in the key to make the gap a distinct key.
+ */
+export function useHostRuntimeClientReadyKey(serverIds: readonly string[]): string {
+  // The compiler cannot see that store.getClient() reads mutable state, so it
+  // hoists the memo below and the key freezes at its first value.
+  "use no memo";
+  const store = getHostRuntimeStore();
+  const version = useSyncExternalStore(
+    (onStoreChange) => store.subscribeAll(onStoreChange),
+    () => store.getVersion(),
+    () => store.getVersion(),
+  );
+
+  // `version` is the reactivity trigger: the store exposes no observable
+  // snapshot object, so every read is re-done on each tick.
+  const readyStates = serverIds.map((serverId) => (store.getClient(serverId) ? "1" : "0"));
+  void version;
+  return readyStates.join("|");
+}
+
 export function useHostRuntimeConnectionStatuses(
   serverIds: readonly string[],
 ): ReadonlyMap<string, HostRuntimeConnectionStatus> {
+  // The compiler cannot see that store.getSnapshot() reads mutable state, so
+  // it caches the memo below and the map freezes at its first value.
+  "use no memo";
   const store = getHostRuntimeStore();
   const version = useSyncExternalStore(
     (onStoreChange) => store.subscribeAll(onStoreChange),
