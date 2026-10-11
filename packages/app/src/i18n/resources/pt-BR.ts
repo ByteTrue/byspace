@@ -1975,6 +1975,7 @@ export const ptBR: TranslationResources = {
           overview: "Recolher tudo",
           detailed: "Recolher detalhes",
           live: "Mostrar o raciocínio mais recente",
+          thinking: "Expandir todo o raciocínio",
           expanded: "Expandir tudo",
         },
       },

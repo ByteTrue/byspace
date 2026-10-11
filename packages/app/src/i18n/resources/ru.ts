@@ -1969,6 +1969,7 @@ export const ru: TranslationResources = {
           overview: "Свернуть всё",
           detailed: "Свернуть подробности",
           live: "Показывать последние размышления",
+          thinking: "Развернуть все размышления",
           expanded: "Развернуть всё",
         },
       },
