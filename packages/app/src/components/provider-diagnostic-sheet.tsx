@@ -576,6 +576,11 @@ export function ProviderDiagnosticSheet({
   onClose,
   serverId,
 }: ProviderDiagnosticSheetProps) {
+  // The compiler drops `void clockTick;` as dead code and would cache the
+  // "fetched N ago" label. It bails on this function today for an unrelated
+  // reason; the directive keeps a future refactor from un-bailing it.
+  // See docs/react-compiler.md.
+  "use no memo";
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const isCompact = useIsCompactFormFactor();

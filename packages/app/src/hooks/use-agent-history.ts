@@ -297,6 +297,9 @@ export function useAgentHistory(options: {
   enabled?: boolean;
   search?: string;
 }): AgentHistoryResult {
+  // The compiler drops `void runtimeVersion;` as dead code and caches the memo
+  // below, so the target hosts freeze at their first value. See docs/react-compiler.md.
+  "use no memo";
   const { t } = useTranslation();
   const daemons = useHosts();
   const runtime = getHostRuntimeStore();

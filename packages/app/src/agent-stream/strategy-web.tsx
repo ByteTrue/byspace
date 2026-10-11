@@ -279,6 +279,11 @@ function isScrollContainerOverscrolledPastBottom(
 }
 
 function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: boolean }) {
+  // The compiler drops `void liveHeadRowRevision;` as dead code and would cache
+  // the live-head rows at their first value. It bails on this function today for
+  // an unrelated reason; the directive keeps a future refactor from un-bailing it.
+  // See docs/react-compiler.md.
+  "use no memo";
   const {
     segments: inputSegments,
     historyRowRevision,

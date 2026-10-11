@@ -134,6 +134,10 @@ function useProjectHostRuntimeStates(
   serverIds: readonly string[],
   enabled: boolean,
 ): ProjectHostRuntimeState[] {
+  // The compiler derives memo dependencies by data flow and cannot see that
+  // runtime.getSnapshot() reads mutable state; it caches the memo and the states
+  // freeze at their first value. See docs/react-compiler.md.
+  "use no memo";
   const runtime = getHostRuntimeStore();
   const previousStatesRef = useRef<ProjectHostRuntimeState[]>([]);
   const subscribe = useCallback(
