@@ -215,6 +215,9 @@ export const ru: TranslationResources = {
     switchHost: "Switch host",
     maximize: "Open in full page",
     close: "Close Chief",
+    retry: "Повторить",
+    noHomeWorkspace:
+      "Для Chief требуется рабочее пространство Home демона. Обновите демон BySpace и повторите попытку.",
     suggestions: {
       whatCanYouDo: "What can you do?",
       checkWorkspaces: "Check my workspaces",

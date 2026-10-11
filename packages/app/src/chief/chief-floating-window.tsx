@@ -23,6 +23,58 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useTranslation } from "react-i18next";
 import type { ChiefAgentInfo } from "./use-chief-agent";
 
+const stateStyles = StyleSheet.create((theme) => ({
+  stateContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+    gap: 12,
+  } as const,
+  stateText: {
+    fontSize: 13,
+    textAlign: "center",
+    color: theme.colors.foregroundMuted,
+  } as const,
+  retryButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface1,
+  } as const,
+  retryText: {
+    fontSize: 12,
+    color: theme.colors.foreground,
+  } as const,
+}));
+
+function ChiefStateMessage({
+  message,
+  retryLabel,
+  onRetry,
+}: {
+  message: string;
+  retryLabel?: string;
+  onRetry?: () => void;
+}): ReactElement {
+  return (
+    <View style={stateStyles.stateContainer}>
+      <Text style={stateStyles.stateText}>{message}</Text>
+      {retryLabel && onRetry ? (
+        <Pressable
+          onPress={onRetry}
+          style={stateStyles.retryButton}
+          accessibilityLabel={retryLabel}
+        >
+          <Text style={stateStyles.retryText}>{retryLabel}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 function ChiefPaneContent({ serverId, agent }: { serverId: string; agent: ChiefAgentInfo }) {
   const paneContextValue = useMemo<PaneContextValue>(
     () => ({
@@ -60,12 +112,18 @@ function ChiefPaneContent({ serverId, agent }: { serverId: string; agent: ChiefA
 export interface ChiefFloatingWindowProps {
   serverId: string;
   agent: ChiefAgentInfo | null;
+  error: string | null;
+  noHomeWorkspace: boolean;
+  onRetry: () => void;
   onClose: () => void;
 }
 
 export const ChiefFloatingWindow = memo(function ChiefFloatingWindow({
   serverId,
   agent,
+  error,
+  noHomeWorkspace,
+  onRetry,
   onClose,
 }: ChiefFloatingWindowProps): ReactElement {
   const { t } = useTranslation();
@@ -84,6 +142,23 @@ export const ChiefFloatingWindow = memo(function ChiefFloatingWindow({
       router.push(buildHostAgentDetailRoute(serverId, agent.agentId, agent.workspaceId));
     }
   }, [agent, serverId, router, onClose]);
+
+  const renderChiefBody = useCallback((): ReactElement => {
+    if (agent) {
+      return <ChiefPaneContent serverId={serverId} agent={agent} />;
+    }
+    if (error) {
+      return <ChiefStateMessage message={error} retryLabel={t("chief.retry")} onRetry={onRetry} />;
+    }
+    if (noHomeWorkspace) {
+      return <ChiefStateMessage message={t("chief.noHomeWorkspace")} />;
+    }
+    return (
+      <View style={styles.loadingContainer}>
+        <LoadingSpinner size="large" color={styles.spinner.color} />
+      </View>
+    );
+  }, [agent, error, noHomeWorkspace, serverId, onRetry, t]);
 
   const handleSwitchHost = useCallback(() => {
     openHostChooser({
@@ -132,15 +207,7 @@ export const ChiefFloatingWindow = memo(function ChiefFloatingWindow({
         </View>
       </View>
 
-      <View style={styles.content}>
-        {agent ? (
-          <ChiefPaneContent serverId={serverId} agent={agent} />
-        ) : (
-          <View style={styles.loadingContainer}>
-            <LoadingSpinner size="large" color={styles.spinner.color} />
-          </View>
-        )}
-      </View>
+      <View style={styles.content}>{renderChiefBody()}</View>
     </View>
   );
 });
@@ -152,6 +219,8 @@ const styles = StyleSheet.create((theme) => ({
     right: 20,
     width: 420,
     height: 560,
+    maxWidth: "95%",
+    maxHeight: "80%",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: theme.colors.border,
@@ -208,6 +277,30 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  stateContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+    gap: 12,
+  },
+  stateText: {
+    fontSize: 13,
+    textAlign: "center",
+    color: theme.colors.foregroundMuted,
+  },
+  retryButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface1,
+  },
+  retryText: {
+    fontSize: 12,
+    color: theme.colors.foreground,
   },
   spinner: {
     color: theme.colors.foregroundMuted,

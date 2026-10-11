@@ -1,24 +1,20 @@
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
 
 interface ChiefState {
   isOpen: boolean;
+  /** Bumped by the retry button so the resolve effect in useChiefAgent re-runs. */
+  retryCount: number;
   toggle: () => void;
   open: () => void;
   close: () => void;
+  requestRetry: () => void;
 }
 
-export const useChiefStore = create<ChiefState>()(
-  persist(
-    (set) => ({
-      isOpen: false,
-      toggle: () => set((state) => ({ isOpen: !state.isOpen })),
-      open: () => set({ isOpen: true }),
-      close: () => set({ isOpen: false }),
-    }),
-    {
-      name: "byspace.chief",
-      storage: createJSONStorage(() => localStorage),
-    },
-  ),
-);
+export const useChiefStore = create<ChiefState>()((set) => ({
+  isOpen: false,
+  retryCount: 0,
+  toggle: () => set((state) => ({ isOpen: !state.isOpen })),
+  open: () => set({ isOpen: true }),
+  close: () => set({ isOpen: false }),
+  requestRetry: () => set((state) => ({ retryCount: state.retryCount + 1 })),
+}));

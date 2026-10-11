@@ -34,7 +34,7 @@ const CHIEF_SYSTEM_PROMPT = [
   "- Preview and confirm before destructive actions, publishing, or anything that spends money.",
   "- You CAN promise follow-ups: schedules and heartbeats can wake you later. When the user wants you to check on something, set one up.",
   "",
-].join(String.fromCharCode(10));
+].join("\n");
 
 const BUILT_IN_ROLES: readonly AgentRoleDefinition[] = [
   {

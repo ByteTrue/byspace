@@ -5,7 +5,8 @@ import { useHosts } from "@/runtime/host-runtime";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useRouter } from "expo-router";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
-import { parseServerIdFromPathname } from "@/utils/host-routes";
+import { buildHostAgentDetailRoute, parseServerIdFromPathname } from "@/utils/host-routes";
+import { useSessionStore } from "@/stores/session-store";
 import { useChiefStore } from "./chief-store";
 import { useChiefAgent } from "./use-chief-agent";
 import { ChiefFab } from "./chief-fab";
@@ -52,6 +53,7 @@ export const ChiefPanelHost = memo(function ChiefPanelHost(): ReactElement | nul
   const hosts = useHosts();
   const isCompact = useIsCompactFormFactor();
   const isOpen = useChiefStore((state) => state.isOpen);
+  const retryCount = useChiefStore((state) => state.retryCount);
   const toggle = useChiefStore((state) => state.toggle);
   const close = useChiefStore((state) => state.close);
 
@@ -72,6 +74,7 @@ export const ChiefPanelHost = memo(function ChiefPanelHost(): ReactElement | nul
   // e2e directory-start accounting.
   const chiefState = useChiefAgent(currentServerId, {
     enabled: isOpen || isCompact,
+    retryCount,
   });
   const agent = chiefState.tag === "ready" ? chiefState.agent : null;
   // When the hook fell back to a different host, use that host's id for the
@@ -81,13 +84,19 @@ export const ChiefPanelHost = memo(function ChiefPanelHost(): ReactElement | nul
   const handleFabPress = useCallback(() => {
     if (isCompact) {
       // On mobile, navigate directly to the agent page instead of a floating window.
-      if (agent && currentServerId) {
-        router.push(`/h/${currentServerId}/agent/${agent.agentId}`);
+      if (agent && effectiveServerId) {
+        router.push(buildHostAgentDetailRoute(effectiveServerId, agent.agentId, agent.workspaceId));
       }
       return;
     }
     toggle();
-  }, [isCompact, agent, currentServerId, router, toggle]);
+  }, [isCompact, agent, effectiveServerId, router, toggle]);
+
+  // Manual retry for transient daemon errors: a retry counter in the chief
+  // store re-triggers the resolve effect in the hook.
+  const handleRetry = useCallback(() => {
+    useChiefStore.getState().requestRetry();
+  }, []);
 
   // Route suppression: don't show the floating window when the agent page is
   // already showing this Chief agent.
@@ -96,18 +105,31 @@ export const ChiefPanelHost = memo(function ChiefPanelHost(): ReactElement | nul
     return pathname.includes(`/agent/${agent.agentId}`);
   }, [pathname, agent, currentServerId]);
 
-  if (!currentServerId || isE2E) return null;
+  // Feature gate: daemons without built-in agent roles have no Chief to
+  // open — hide the entry point entirely instead of showing a dead FAB.
+  const supportsAgentRoles = useSessionStore((state) =>
+    Boolean(state.sessions[currentServerId]?.serverInfo?.features?.agentRoles),
+  );
+
+  if (!currentServerId || isE2E || !supportsAgentRoles) return null;
 
   const showWindow = isOpen && !isCompact && !isOnChiefAgentPage;
 
   return (
     <View style={containerStyle} pointerEvents="box-none">
       {showWindow ? (
-        <ChiefFloatingWindow serverId={effectiveServerId} agent={agent} onClose={close} />
+        <ChiefFloatingWindow
+          serverId={effectiveServerId}
+          agent={agent}
+          error={chiefState.tag === "error" ? chiefState.message : null}
+          noHomeWorkspace={chiefState.tag === "no_home_workspace"}
+          onRetry={handleRetry}
+          onClose={close}
+        />
       ) : null}
-      {!showWindow ? (
+      {!showWindow && !isOnChiefAgentPage ? (
         <ChiefFab
-          serverId={currentServerId}
+          serverId={effectiveServerId}
           agentId={agent?.agentId ?? null}
           onPress={handleFabPress}
         />

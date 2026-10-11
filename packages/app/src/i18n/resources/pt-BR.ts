@@ -215,6 +215,9 @@ export const ptBR: TranslationResources = {
     switchHost: "Switch host",
     maximize: "Open in full page",
     close: "Close Chief",
+    retry: "Tentar novamente",
+    noHomeWorkspace:
+      "O Chief precisa do workspace Home do daemon. Atualize seu daemon BySpace e tente novamente.",
     suggestions: {
       whatCanYouDo: "What can you do?",
       checkWorkspaces: "Check my workspaces",

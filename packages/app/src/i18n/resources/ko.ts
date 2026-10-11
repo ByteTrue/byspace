@@ -215,6 +215,9 @@ export const ko: TranslationResources = {
     switchHost: "Switch host",
     maximize: "Open in full page",
     close: "Close Chief",
+    retry: "재시도",
+    noHomeWorkspace:
+      "Chief에는 daemon의 Home 워크스페이스가 필요합니다. BySpace daemon을 업데이트한 후 다시 시도하세요.",
     suggestions: {
       whatCanYouDo: "What can you do?",
       checkWorkspaces: "Check my workspaces",

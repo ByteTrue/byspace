@@ -213,6 +213,9 @@ export const en = {
     switchHost: "Switch host",
     maximize: "Open in full page",
     close: "Close Chief",
+    retry: "Retry",
+    noHomeWorkspace:
+      "Chief needs the daemon's Home workspace. Update your BySpace daemon and try again.",
     suggestions: {
       whatCanYouDo: "What can you do?",
       checkWorkspaces: "Check my workspaces",

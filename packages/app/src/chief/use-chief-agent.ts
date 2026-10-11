@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { getHostRuntimeStore, useHostRuntimeClient } from "@/runtime/host-runtime";
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
+import type { AgentProvider } from "@bytetrue/protocol/agent-types";
 
 export interface ChiefAgentInfo {
   agentId: string;
@@ -18,6 +19,7 @@ const HOME_WORKSPACE_TITLE = "Home";
 const HOME_DIR_NAME = ".byspace";
 
 interface WorkspaceLike {
+  id: string;
   title?: string | null;
   workspaceDirectory?: string;
   cwd?: string;
@@ -31,22 +33,28 @@ function isHomeWorkspace(workspace: WorkspaceLike): boolean {
   return normalized.endsWith("/" + HOME_DIR_NAME);
 }
 
+/** Pick the first ready provider from the daemon snapshot so Chief follows the
+ * user's provider configuration instead of a hard-coded provider. */
+async function resolveChiefProvider(client: DaemonClient): Promise<AgentProvider | null> {
+  const snapshot = await client.getProvidersSnapshot({});
+  const entry = snapshot.entries.find((e) => e.enabled && e.status === "ready");
+  return entry?.provider ?? null;
+}
+
 async function findChiefAgent(
   client: DaemonClient,
-  workspaceId: string,
+  homeWorkspaceId: string,
 ): Promise<ChiefAgentInfo | null> {
   const result = await client.fetchAgents({
     filter: { labels: { "byspace.agent-role": "chief" } },
-    page: { limit: 1 },
+    page: { limit: 50 },
   });
-  const entry = result.entries[0];
+  // Only a Chief agent in the Home workspace owns the floating window; a chief
+  // role session started elsewhere (e.g. via the CLI) must not be picked up.
+  const entry = result.entries.find((e) => e.agent.workspaceId === homeWorkspaceId);
   if (!entry) return null;
   const agent = entry.agent;
-  return {
-    agentId: agent.id,
-    workspaceId: agent.workspaceId ?? workspaceId,
-    cwd: agent.cwd,
-  };
+  return { agentId: agent.id, workspaceId: homeWorkspaceId, cwd: agent.cwd };
 }
 
 async function createChiefAgent(
@@ -54,11 +62,15 @@ async function createChiefAgent(
   workspaceId: string,
   cwd: string,
 ): Promise<ChiefAgentInfo> {
+  const provider = await resolveChiefProvider(client);
+  if (!provider) {
+    throw new Error("No ready agent provider found on the daemon");
+  }
   const snapshot = await client.createAgent({
-    provider: "pi",
+    provider,
     cwd,
     workspaceId,
-    config: { provider: "pi", cwd, role: "chief" },
+    config: { provider, cwd, role: "chief" },
   });
   return { agentId: snapshot.id, workspaceId, cwd };
 }
@@ -72,9 +84,10 @@ async function createChiefAgent(
  */
 export function useChiefAgent(
   serverId: string | null,
-  options?: { enabled?: boolean },
+  options?: { enabled?: boolean; retryCount?: number },
 ): ChiefAgentState {
   const enabled = options?.enabled ?? true;
+  const retryCount = options?.retryCount ?? 0;
   const store = getHostRuntimeStore();
   const client = useHostRuntimeClient(serverId ?? "");
   // Reactively find the first live client across all hosts. The URL host's
@@ -110,10 +123,13 @@ export function useChiefAgent(
 
   const [state, setState] = useState<ChiefAgentState>({ tag: "loading" });
   const inFlightRef = useRef(false);
+  // Guarded by the serverId the last resolve ran against (not a sentinel), so
+  // host switches re-resolve and the floating window always tracks the host
+  // that actually owns the connection.
   const resolvedServerIdRef = useRef<string | null>(null);
 
   const resolve = useCallback(async () => {
-    if (!effectiveClient) return;
+    if (!effectiveClient || !effectiveServerId) return;
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     try {
@@ -126,12 +142,17 @@ export function useChiefAgent(
       const cwd = home.workspaceDirectory ?? home.projectRootPath;
       const existing = await findChiefAgent(effectiveClient, home.id);
       if (existing) {
-        setState({ tag: "ready", agent: existing, serverId: effectiveServerId! });
+        setState({ tag: "ready", agent: existing, serverId: effectiveServerId });
         return;
       }
       const created = await createChiefAgent(effectiveClient, home.id, cwd);
-      setState({ tag: "ready", agent: created, serverId: effectiveServerId! });
+      setState({ tag: "ready", agent: created, serverId: effectiveServerId });
     } catch (error) {
+      // Allow a later enabled/serverId change to retry instead of locking the
+      // error state in.
+      if (resolvedServerIdRef.current === effectiveServerId) {
+        resolvedServerIdRef.current = null;
+      }
       setState({
         tag: "error",
         message: error instanceof Error ? error.message : "Failed to set up Chief",
@@ -141,14 +162,17 @@ export function useChiefAgent(
     }
   }, [effectiveClient, effectiveServerId]);
 
+  const lastRetryRef = useRef(-1);
   useEffect(() => {
     if (!enabled) return;
     if (!isClientReady) return;
-    if (resolvedServerIdRef.current) return;
-    resolvedServerIdRef.current = "__resolved__";
+    if (lastRetryRef.current === retryCount) return;
+    lastRetryRef.current = retryCount;
+    if (resolvedServerIdRef.current === effectiveServerId) return;
+    resolvedServerIdRef.current = effectiveServerId;
     setState({ tag: "loading" });
     void resolve();
-  }, [enabled, isClientReady, resolve]);
+  }, [enabled, isClientReady, effectiveServerId, retryCount, resolve]);
 
   return state;
 }

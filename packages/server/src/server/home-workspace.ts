@@ -24,29 +24,6 @@ export interface EnsureHomeWorkspaceResult {
  * for a first conversation before any project exists
  * (byissue/epics/005-o-chief-floating-assistant).
  */
-/**
- * Same as ensureHomeWorkspace but reads the test-harness kill switch first:
- * BYSPACE_DISABLE_HOME_WORKSPACE=1 (set by server vitest setup and e2e
- * daemon helpers) skips creation so specs keep assuming exact workspace
- * counts and Windows teardown avoids EBUSY on the watched home dir.
- */
-export async function ensureHomeWorkspaceUnlessDisabled(deps: {
-  byspaceHome: string;
-  workspaceRegistry: WorkspaceRegistry;
-  projectRegistry: ProjectRegistry;
-  provisioning: {
-    createWorkspaceForDirectory(
-      cwd: string,
-      title?: string | null,
-      projectId?: string,
-    ): Promise<{ workspaceId: string }>;
-  };
-  logger: Logger;
-}): Promise<EnsureHomeWorkspaceResult | null> {
-  if (process.env.BYSPACE_DISABLE_HOME_WORKSPACE === "1") return null;
-  return ensureHomeWorkspace(deps);
-}
-
 export async function ensureHomeWorkspace(deps: {
   byspaceHome: string;
   workspaceRegistry: WorkspaceRegistry;
@@ -83,4 +60,27 @@ export async function ensureHomeWorkspace(deps: {
     deps.logger.warn({ err: error, cwd: homeCwd }, "Failed to ensure home workspace");
     return null;
   }
+}
+
+/**
+ * Same as ensureHomeWorkspace but reads the test-harness kill switch first:
+ * BYSPACE_DISABLE_HOME_WORKSPACE=1 (set by server vitest setup and e2e
+ * daemon helpers) skips creation so specs keep assuming exact workspace
+ * counts and Windows teardown avoids EBUSY on the watched home dir.
+ */
+export async function ensureHomeWorkspaceUnlessDisabled(deps: {
+  byspaceHome: string;
+  workspaceRegistry: WorkspaceRegistry;
+  projectRegistry: ProjectRegistry;
+  provisioning: {
+    createWorkspaceForDirectory(
+      cwd: string,
+      title?: string | null,
+      projectId?: string,
+    ): Promise<{ workspaceId: string }>;
+  };
+  logger: Logger;
+}): Promise<EnsureHomeWorkspaceResult | null> {
+  if (process.env.BYSPACE_DISABLE_HOME_WORKSPACE === "1") return null;
+  return ensureHomeWorkspace(deps);
 }

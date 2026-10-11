@@ -19,4 +19,24 @@ describe("workspace-draft-agent-config", () => {
       thinkingOptionId: "high",
     });
   });
+
+  it("carries a selected agent role into the config", () => {
+    expect(
+      buildWorkspaceDraftAgentConfig({
+        provider: "pi",
+        cwd: "/tmp/project",
+        role: "chief",
+      }),
+    ).toEqual({
+      provider: "pi",
+      cwd: "/tmp/project",
+      role: "chief",
+    });
+  });
+
+  it("omits the role key when no role is selected", () => {
+    const config = buildWorkspaceDraftAgentConfig({ provider: "codex", cwd: "/tmp/project" });
+    expect(config).toEqual({ provider: "codex", cwd: "/tmp/project" });
+    expect("role" in config).toBe(false);
+  });
 });

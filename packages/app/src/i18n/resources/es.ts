@@ -215,6 +215,9 @@ export const es: TranslationResources = {
     switchHost: "Switch host",
     maximize: "Open in full page",
     close: "Close Chief",
+    retry: "Reintentar",
+    noHomeWorkspace:
+      "Chief necesita el espacio de trabajo Home del daemon. Actualiza tu daemon de BySpace e inténtalo de nuevo.",
     suggestions: {
       whatCanYouDo: "What can you do?",
       checkWorkspaces: "Check my workspaces",
