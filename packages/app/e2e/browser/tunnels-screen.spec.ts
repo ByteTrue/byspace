@@ -4,6 +4,7 @@ import { test, expect } from "../support/fixtures";
 import { connectDaemonClient } from "../support/helpers/daemon-client-loader";
 import { startIsolatedHostDaemon } from "../support/helpers/isolated-host-daemon";
 import { startLocalNodeRelay } from "../support/helpers/local-node-relay";
+import { parseConnectionOfferFromUrl } from "@bytetrue/protocol/connection-offer";
 import { openTopLevelNavMenu, topLevelNavItem } from "../support/helpers/sidebar-chrome";
 
 const D1_ID = "tunnels-gui-d1";
@@ -13,8 +14,8 @@ const PASSWORD = "tunnel-gui-password";
 // The /tunnels screen manages daemon-to-daemon port forwarding (issue 062).
 // This walks the real GUI path: a loopback D1 daemon in the app's host
 // registry, a relay-paired D2 with a password and a port allowlist, and the
-// add-tunnel sheet pasting D2's pairing offer. Success means the outbound row
-// lists a local port that serves D2's bytes.
+// add-tunnel sheet picking D2 out of the paired hosts. Success means the
+// outbound row lists a local port that serves D2's bytes.
 test("creates a tunnel from the GUI and forwards bytes", async ({ page }) => {
   test.setTimeout(180_000);
   const relay = await startLocalNodeRelay();
@@ -50,16 +51,24 @@ test("creates a tunnel from the GUI and forwards bytes", async ({ page }) => {
     });
     const offer = await d2Client.getDaemonPairingOffer();
     expect(offer.url).toContain("#offer=");
+    // The registry entry for D2 mirrors what the pairing flow stores: the relay
+    // endpoint and the daemon's public key, decoded from the offer itself.
+    const offerPayload = parseConnectionOfferFromUrl(offer.url);
+    if (!offerPayload) throw new Error("Expected a decodable pairing offer");
 
-    // Replace the default seeded host registry with the isolated loopback D1.
+    // Replace the default seeded host registry with the two isolated daemons:
+    // D1 as the local directTcp host that owns the tunnels, and D2 as an
+    // ordinary relay-paired host. The add-tunnel sheet must be able to pick D2
+    // from that registry entry alone — no pasted pairing link.
     // The e2e auto-seed writes on every navigation; use its disable-once flag.
     await page.goto("/");
     await page.evaluate(
-      ({ endpoint, password }) => {
+      ({ endpoint, password, d2Id, relayEndpoint, relayUseTls, daemonPublicKeyB64 }) => {
         const nonce = window.localStorage.getItem("@byspace:e2e-seed-nonce");
         if (!nonce) throw new Error("Expected the e2e seed nonce before replacing the registry.");
         const nowIso = new Date().toISOString();
         const connectionId = "direct:" + endpoint;
+        const relayConnectionId = "relay:" + relayEndpoint;
         const registry = [
           {
             serverId: "tunnels-gui-d1",
@@ -76,11 +85,34 @@ test("creates a tunnel from the GUI and forwards bytes", async ({ page }) => {
             createdAt: nowIso,
             updatedAt: nowIso,
           },
+          {
+            serverId: d2Id,
+            label: "Tunnels D2",
+            connections: [
+              {
+                id: relayConnectionId,
+                type: "relay",
+                relayEndpoint,
+                useTls: relayUseTls,
+                daemonPublicKeyB64,
+              },
+            ],
+            preferredConnectionId: relayConnectionId,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+          },
         ];
         window.localStorage.setItem("@byspace:daemon-registry", JSON.stringify(registry));
         window.localStorage.setItem("@byspace:e2e-disable-default-seed-once", nonce);
       },
-      { endpoint: "127.0.0.1:" + d1.port, password: PASSWORD },
+      {
+        endpoint: "127.0.0.1:" + d1.port,
+        password: PASSWORD,
+        d2Id: D2_ID,
+        relayEndpoint: offerPayload.relay.endpoint,
+        relayUseTls: offerPayload.relay.useTls ?? false,
+        daemonPublicKeyB64: offerPayload.daemonPublicKeyB64,
+      },
     );
 
     // Enter the way a user does: the BySpace menu's Tunnels row. The registry write above
@@ -97,15 +129,20 @@ test("creates a tunnel from the GUI and forwards bytes", async ({ page }) => {
 
     await expect(page.getByTestId("tunnels-add")).toBeVisible({ timeout: 30_000 });
 
-    // Open the add-tunnel sheet and fill in D2's offer, password, and port.
+    // Open the add-tunnel sheet and configure it from the paired-host picker:
+    // pick D2, then its password and the port. No pairing link is pasted.
     await page.getByTestId("tunnels-add").click();
     const sheet = page.getByTestId("tunnels-add-sheet");
     await expect(sheet).toBeVisible();
 
+    await sheet.getByTestId("tunnels-add-peer-trigger").click();
+    await page.getByTestId("tunnels-add-peer-option-" + D2_ID).click();
+    // Selecting a host replaces the paste field, so only password and port remain.
+    await expect(sheet.getByTestId("tunnels-add-offer-input")).toHaveCount(0);
+
     const inputs = sheet.locator("input");
-    await inputs.nth(0).fill(offer.url);
-    await inputs.nth(1).fill(PASSWORD);
-    await inputs.nth(2).fill(String(servicePort));
+    await inputs.nth(0).fill(PASSWORD);
+    await inputs.nth(1).fill(String(servicePort));
 
     await sheet.getByRole("button", { name: /Add tunnel/i }).click();
 

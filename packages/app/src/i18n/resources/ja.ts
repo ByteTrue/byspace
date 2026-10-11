@@ -1226,6 +1226,12 @@ export const ja: TranslationResources = {
     },
     addForm: {
       title: "トンネルを追加",
+      peerLabel: "ペアリング済みホスト",
+      peerPlaceholder: "ペアリング済みホストを選択",
+      peerViaRelay: "リレー経由",
+      peerDirect: "直接接続",
+      pasteOffer: "ペアリングリンクを貼り付け",
+      pasteOfferDescription: "まだ追加されていないホスト用",
       offerLabel: "ペアリングリンク",
       offerPlaceholder: "リモート daemon のペアリングリンクを貼り付け",
       passwordLabel: "リモート daemon のパスワード",

@@ -1239,6 +1239,12 @@ export const ptBR: TranslationResources = {
     },
     addForm: {
       title: "Adicionar túnel",
+      peerLabel: "Host pareado",
+      peerPlaceholder: "Selecione um host pareado",
+      peerViaRelay: "Via relay",
+      peerDirect: "Conexão direta",
+      pasteOffer: "Colar um link de pareamento",
+      pasteOfferDescription: "Para um host ainda não adicionado",
       offerLabel: "Link de pareamento",
       offerPlaceholder: "Cole o link de pareamento do daemon remoto",
       passwordLabel: "Senha do daemon remoto",

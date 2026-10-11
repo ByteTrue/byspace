@@ -1248,6 +1248,12 @@ export const es: TranslationResources = {
     },
     addForm: {
       title: "Añadir túnel",
+      peerLabel: "Host emparejado",
+      peerPlaceholder: "Selecciona un host emparejado",
+      peerViaRelay: "Vía relay",
+      peerDirect: "Conexión directa",
+      pasteOffer: "Pegar un enlace de emparejamiento",
+      pasteOfferDescription: "Para un host que aún no se ha añadido",
       offerLabel: "Enlace de emparejamiento",
       offerPlaceholder: "Pega el enlace de emparejamiento del daemon remoto",
       passwordLabel: "Contraseña del daemon remoto",

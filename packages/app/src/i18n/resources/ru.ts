@@ -1228,6 +1228,12 @@ export const ru: TranslationResources = {
     },
     addForm: {
       title: "Добавить туннель",
+      peerLabel: "Сопряжённый хост",
+      peerPlaceholder: "Выберите сопряжённый хост",
+      peerViaRelay: "Через relay",
+      peerDirect: "Прямое подключение",
+      pasteOffer: "Вставить ссылку сопряжения",
+      pasteOfferDescription: "Для хоста, который ещё не добавлен",
       offerLabel: "Ссылка сопряжения",
       offerPlaceholder: "Вставьте ссылку сопряжения удалённого daemon",
       passwordLabel: "Пароль удалённого daemon",

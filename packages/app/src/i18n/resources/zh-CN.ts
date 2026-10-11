@@ -1201,6 +1201,12 @@ export const zhCN: TranslationResources = {
     },
     addForm: {
       title: "添加隧道",
+      peerLabel: "已配对主机",
+      peerPlaceholder: "选择一个已配对主机",
+      peerViaRelay: "经 relay",
+      peerDirect: "直连",
+      pasteOffer: "粘贴配对链接",
+      pasteOfferDescription: "用于尚未添加的主机",
       offerLabel: "配对链接",
       offerPlaceholder: "粘贴远端 daemon 的配对链接",
       passwordLabel: "远端 daemon 密码",

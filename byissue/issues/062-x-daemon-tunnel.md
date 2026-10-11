@@ -212,6 +212,25 @@ Owner 真实浏览器走查两轮，暴露的都不是逻辑 bug 而是输入面
 - **教训**：worktree 里用 junction 挂 `node_modules` 会连 `node_modules/@bytetrue/*` 的 workspace symlink 一起指回主 checkout——编译的是主 checkout 的包，报出的类型错全是假的。跨分支 worktree 必须真 `npm install`。
 - **教训**：新内置导航项有 6 个必须同步的 `Record<BuiltinSidebarNavId, …>` 映射（label key、shortcut action、icon、testID、settings 图标表、e2e helper 表），漏一个 typecheck 就会挡。
 
+### 2026-10-10 · 补充：Add tunnel 改为从已配对 Host 选择
+
+**背景**：Owner 走查提出——隧道目标不该要求用户去另一台机器跑 `byspace daemon pair` 再粘链接，应该直接列出已配对的 Host。
+
+**实现**：
+
+- `packages/app/src/tunnels/tunnel-peer-targets.ts`（新）：`HostProfile` → 隧道连接参数的纯函数。relay 优先（带上 `daemonPublicKeyB64`，E2EE 才成立），directTcp 兜底（带上 registry 里存的 password）。返回 `url` / `serverId` / `label` / `viaRelay`。
+- `tunnels-screen.tsx`：Add tunnel sheet 的第一个字段从「配对链接输入框」换成 `SelectField` 的 Host 选择器（列表项标注 Via relay / Direct connection）；**保留粘贴链接作为 fallback**（选中「Paste a pairing link」时那个输入框才出现），覆盖"对端还没加为 Host"的情况。本机 daemon 自己不出现在列表里——它是隧道的本地端。
+- 9 个 locale 加 6 个 key（`peerLabel`/`peerPlaceholder`/`peerViaRelay`/`peerDirect`/`pasteOffer`/`pasteOfferDescription`）。
+- e2e 改成走新路径：D2 以 relay Host 身份 seed 进 registry，然后**从选择器里选它**（断言选中后粘贴框消失），不再粘链接。
+
+**密码为什么不自动填**：`RelayHostConnection` schema 里没有 password 字段，这是有意的——relay 连接靠 E2EE 公钥建立信任，密码每次输入、daemon 侧只存 bcrypt 哈希。directTcp 连接存了密码，选中时会自动预填。要连 relay 的密码也省掉，得改 schema 或加独立凭据库，属安全决定，未做。
+
+**验证**：`tunnel-peer-targets.test.ts` 6/6（relay URL + 公钥、relay 优先、direct + 存密码、无密码、不可用 host、顺序保持）；i18n 契约 23/23；typecheck 0 错；lint 0 违规。GUI e2e 走新路径 1 passed（真实双 daemon + relay + 浏览器，选 Host → 填密码端口 → 建隧道 → 本地端口取到对端字节）。
+
+**真双机实测（Windows D1 + WSL D2，公网 CF relay）**：侧栏入口 → 选择器列出 D2 → 建成隧道（daemon 日志 `Tunnel local listener ready remotePort=3000 localPort=65379`）→ `curl 127.0.0.1:65379` 返回 WSL 内服务内容，与 WSL 内直连逐字一致 → 杀 D2 后 `disconnected`，3 秒自动恢复 `connected`。
+
+**发现的独立问题（未修，另开 issue 跟进）**：隧道**列表首次加载卡 Loading**。同一时刻 `tunnel.list` RPC 直查正常返回（`state: connected`, `localPort: 65379`），说明是前端查询层的问题而非 RPC。刷新页面同样复现，不是长驻页面状态。既有 GUI e2e 未覆盖这条路径——它断言的是添加流程（添加后走 `refetch`），不是列表首次渲染。与本批次改动无关（`use-tunnels.ts`、query 层、`aggregated-tunnels.ts` 均未改动）。
+
 ## 双机真实验证交接（Win 机器上执行）
 
 > **读者：** 在 Windows + WSL 开发机上完成 issue 062 最后一层验证的人或接手会话。前情读本 issue 上方执行记录；spec 见 `byissue/spec/connection.md` 的「Daemon 隧道」节。

@@ -1224,6 +1224,12 @@ export const en = {
     },
     addForm: {
       title: "Add tunnel",
+      peerLabel: "Paired host",
+      peerPlaceholder: "Select a paired host",
+      peerViaRelay: "Via relay",
+      peerDirect: "Direct connection",
+      pasteOffer: "Paste a pairing link",
+      pasteOfferDescription: "For a host that has not been added yet",
       offerLabel: "Pairing link",
       offerPlaceholder: "Paste the remote daemon's pairing link",
       passwordLabel: "Remote daemon password",

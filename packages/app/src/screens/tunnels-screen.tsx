@@ -15,7 +15,9 @@ import { buildRelayWebSocketUrl } from "@bytetrue/protocol/daemon-endpoints";
 import { useTunnels, type AggregatedTunnelEntry, type TunnelLoadState } from "@/hooks/use-tunnels";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
-import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { useHosts, useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { SelectField, type SelectFieldDisplay } from "@/components/ui/select-field";
+import { resolveTunnelPeerTargets, type TunnelPeerTarget } from "@/tunnels/tunnel-peer-targets";
 import { settingsStyles } from "@/styles/settings";
 import type { MutableDaemonConfig } from "@bytetrue/protocol/messages";
 
@@ -460,6 +462,47 @@ function AllowlistSection({ serverId }: { serverId: string }): ReactElement | nu
   );
 }
 
+/** Sentinel id for the "paste a pairing link instead" option in the peer picker. */
+const PASTE_OFFER_OPTION_ID = "paste-offer";
+
+/**
+ * Create a tunnel from a pasted pairing link. The registry path (a paired host)
+ * is the common case; this covers a peer that has not been added as a host yet.
+ */
+async function createTunnelFromOffer(input: {
+  client: NonNullable<ReturnType<typeof useHostRuntimeClient>>;
+  offerUrl: string;
+  password: string;
+  remotePort: number;
+}): Promise<{ ok: boolean; error?: string }> {
+  const parsed = parsePairingOfferUrl(input.offerUrl);
+  if (!parsed.ok) {
+    return { ok: false };
+  }
+  const offer = parsed.offer;
+  return input.client.createTunnel({
+    peerId: offer.serverId,
+    peerHostname: offer.hostname,
+    url: buildRelayWebSocketUrl({
+      endpoint: offer.relay.endpoint,
+      useTls: offer.relay.useTls ?? true,
+      serverId: offer.serverId,
+      role: "client",
+    }),
+    password: input.password,
+    daemonPublicKeyB64: offer.daemonPublicKeyB64,
+    forwards: [{ remotePort: input.remotePort }],
+  });
+}
+
+/**
+ * The target a submit will dial: either a paired host from the registry, or the
+ * daemon described by a pasted pairing link.
+ */
+type TunnelPeerSelection =
+  | { kind: "host"; target: TunnelPeerTarget }
+  | { kind: "offer"; url: string };
+
 function AddTunnelSheet({
   serverId,
   onClose,
@@ -471,20 +514,92 @@ function AddTunnelSheet({
 }): ReactElement {
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
+  const hosts = useHosts();
+  const peerTargets = useMemo(() => resolveTunnelPeerTargets(hosts), [hosts]);
+  // The daemon we are configuring is the tunnel's local end, so it can never be
+  // the peer: a host is only listed once the registry knows about another one.
+  const selectableTargets = useMemo(
+    () => peerTargets.filter((target) => target.serverId !== serverId),
+    [peerTargets, serverId],
+  );
+
+  const [selectedPeerId, setSelectedPeerId] = useState<string>(PASTE_OFFER_OPTION_ID);
   const [offerUrl, setOfferUrl] = useState("");
   const [password, setPassword] = useState("");
   const [remotePort, setRemotePort] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const submitAsync = useCallback(async () => {
-    if (!client) {
-      setError(t("workspace.terminal.hostDisconnected"));
-      return;
+  const selectedTarget = useMemo(
+    () => selectableTargets.find((target) => target.serverId === selectedPeerId) ?? null,
+    [selectableTargets, selectedPeerId],
+  );
+  const isPastingOffer = selectedTarget === null;
+
+  const peerOptions = useMemo(
+    () => [
+      ...selectableTargets.map((target) => ({
+        id: target.serverId,
+        value: target.serverId,
+        label: target.label,
+        description: target.viaRelay
+          ? t("tunnels.addForm.peerViaRelay")
+          : t("tunnels.addForm.peerDirect"),
+        testID: "tunnels-add-peer-option-" + target.serverId,
+      })),
+      {
+        id: PASTE_OFFER_OPTION_ID,
+        value: PASTE_OFFER_OPTION_ID,
+        label: t("tunnels.addForm.pasteOffer"),
+        description: t("tunnels.addForm.pasteOfferDescription"),
+        testID: "tunnels-add-peer-option-paste",
+      },
+    ],
+    [selectableTargets, t],
+  );
+
+  const selectedPeerDisplay = useMemo<SelectFieldDisplay>(() => {
+    if (!selectedTarget) {
+      return {
+        label: t("tunnels.addForm.pasteOffer"),
+        description: t("tunnels.addForm.pasteOfferDescription"),
+      };
+    }
+    return {
+      label: selectedTarget.label,
+      description: selectedTarget.viaRelay
+        ? t("tunnels.addForm.peerViaRelay")
+        : t("tunnels.addForm.peerDirect"),
+    };
+  }, [selectedTarget, t]);
+
+  const handlePeerChange = useCallback(
+    (value: string) => {
+      setSelectedPeerId(value);
+      setError(null);
+      const target = selectableTargets.find((candidate) => candidate.serverId === value);
+      // A host that stores its password (direct TCP) fills the field so the user
+      // does not retype a credential the registry already holds.
+      setPassword(target?.password ?? "");
+    },
+    [selectableTargets],
+  );
+
+  const resolveSelection = useCallback((): TunnelPeerSelection | null => {
+    if (selectedTarget) {
+      return { kind: "host", target: selectedTarget };
     }
     const parsed = parsePairingOfferUrl(offerUrl);
     if (!parsed.ok) {
       setError(t("pairing.link.errors." + (parsed.errorKey as PairOfferErrorKey)));
+      return null;
+    }
+    return { kind: "offer", url: offerUrl };
+  }, [offerUrl, selectedTarget, t]);
+
+  const submitAsync = useCallback(async () => {
+    if (!client) {
+      setError(t("workspace.terminal.hostDisconnected"));
       return;
     }
     const port = Number.parseInt(remotePort.trim(), 10);
@@ -496,23 +611,29 @@ function AddTunnelSheet({
       setError(t("tunnels.addForm.passwordRequired"));
       return;
     }
+    const selection = resolveSelection();
+    if (!selection) return;
+
     setSubmitting(true);
     try {
-      const offer = parsed.offer;
-      const url = buildRelayWebSocketUrl({
-        endpoint: offer.relay.endpoint,
-        useTls: offer.relay.useTls ?? true,
-        serverId: offer.serverId,
-        role: "client",
-      });
-      const response = await client.createTunnel({
-        peerId: offer.serverId,
-        peerHostname: offer.hostname,
-        url,
-        password,
-        daemonPublicKeyB64: offer.daemonPublicKeyB64,
-        forwards: [{ remotePort: port }],
-      });
+      const response =
+        selection.kind === "host"
+          ? await client.createTunnel({
+              peerId: selection.target.serverId,
+              peerHostname: selection.target.label,
+              url: selection.target.url,
+              password,
+              ...(selection.target.daemonPublicKeyB64
+                ? { daemonPublicKeyB64: selection.target.daemonPublicKeyB64 }
+                : {}),
+              forwards: [{ remotePort: port }],
+            })
+          : await createTunnelFromOffer({
+              client,
+              offerUrl: selection.url,
+              password,
+              remotePort: port,
+            });
       if (!response.ok) {
         setError(response.error ?? t("tunnels.addForm.failed"));
         return;
@@ -523,7 +644,7 @@ function AddTunnelSheet({
     } finally {
       setSubmitting(false);
     }
-  }, [client, offerUrl, password, remotePort, onCreated, t]);
+  }, [client, password, remotePort, onCreated, resolveSelection, t]);
 
   const submit = useCallback(() => {
     void submitAsync();
@@ -533,15 +654,29 @@ function AddTunnelSheet({
 
   return (
     <AdaptiveModalSheet header={header} visible onClose={onClose} testID="tunnels-add-sheet">
-      <Field label={t("tunnels.addForm.offerLabel")}>
-        <FormTextInput
-          onChangeText={setOfferUrl}
-          placeholder={t("tunnels.addForm.offerPlaceholder")}
-          autoCapitalize="none"
-          autoCorrect={false}
-          testID="tunnels-add-offer-input"
-        />
-      </Field>
+      <SelectField
+        label={t("tunnels.addForm.peerLabel")}
+        value={selectedPeerId}
+        selectedDisplay={selectedPeerDisplay}
+        options={peerOptions}
+        onChange={handlePeerChange}
+        placeholder={t("tunnels.addForm.peerPlaceholder")}
+        emptyText={t("common.empty.noOptionsMatchSearch")}
+        searchable={selectableTargets.length > 6}
+        testID="tunnels-add-peer"
+        triggerTestID="tunnels-add-peer-trigger"
+      />
+      {isPastingOffer ? (
+        <Field label={t("tunnels.addForm.offerLabel")}>
+          <FormTextInput
+            onChangeText={setOfferUrl}
+            placeholder={t("tunnels.addForm.offerPlaceholder")}
+            autoCapitalize="none"
+            autoCorrect={false}
+            testID="tunnels-add-offer-input"
+          />
+        </Field>
+      ) : undefined}
       <Field label={t("tunnels.addForm.passwordLabel")}>
         <FormTextInput
           onChangeText={setPassword}

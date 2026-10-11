@@ -1248,6 +1248,12 @@ export const fr: TranslationResources = {
     },
     addForm: {
       title: "Ajouter un tunnel",
+      peerLabel: "Hôte appairé",
+      peerPlaceholder: "Sélectionnez un hôte appairé",
+      peerViaRelay: "Via le relais",
+      peerDirect: "Connexion directe",
+      pasteOffer: "Coller un lien d'appairage",
+      pasteOfferDescription: "Pour un hôte pas encore ajouté",
       offerLabel: "Lien d'appairage",
       offerPlaceholder: "Collez le lien d'appairage du daemon distant",
       passwordLabel: "Mot de passe du daemon distant",

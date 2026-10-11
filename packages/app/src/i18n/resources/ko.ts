@@ -1221,6 +1221,12 @@ export const ko: TranslationResources = {
     },
     addForm: {
       title: "터널 추가",
+      peerLabel: "페어링된 호스트",
+      peerPlaceholder: "페어링된 호스트를 선택하세요",
+      peerViaRelay: "릴레이 경유",
+      peerDirect: "직접 연결",
+      pasteOffer: "페어링 링크 붙여넣기",
+      pasteOfferDescription: "아직 추가되지 않은 호스트용",
       offerLabel: "페어링 링크",
       offerPlaceholder: "원격 daemon의 페어링 링크를 붙여넣으세요",
       passwordLabel: "원격 daemon 비밀번호",

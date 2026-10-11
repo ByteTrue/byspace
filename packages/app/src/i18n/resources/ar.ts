@@ -1213,6 +1213,12 @@ export const ar: TranslationResources = {
     },
     addForm: {
       title: "إضافة نفق",
+      peerLabel: "مضيف مقترن",
+      peerPlaceholder: "اختر مضيفًا مقترنًا",
+      peerViaRelay: "عبر المرحّل",
+      peerDirect: "اتصال مباشر",
+      pasteOffer: "الصق رابط اقتران",
+      pasteOfferDescription: "لمضيف لم تتم إضافته بعد",
       offerLabel: "رابط الاقتران",
       offerPlaceholder: "الصق رابط اقتران daemon البعيد",
       passwordLabel: "كلمة مرور daemon البعيد",
