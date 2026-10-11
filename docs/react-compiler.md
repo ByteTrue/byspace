@@ -62,7 +62,7 @@ The `void <counter>;` idiom exists because the store exposes no observable snaps
 rg "void (version|revision|tick|Revision|Tick|Version);" packages/app/src
 ```
 
-Sites the compiler compiles are the ones that break. Two were frozen when this doc was written (`use-agent-history.ts`, `panel-instance-attributes.ts`); others in the same grep are safe only because the compiler bails on their enclosing function for an unrelated reason — refs read during render, an incompatible library, a `finally` clause.
+Sites the compiler compiles are the ones that break. Three were frozen when this doc was written (`use-agent-history.ts`, `panel-instance-attributes.ts`, `schedules-screen.tsx`); the rest are safe only because the compiler bails on their enclosing function for an unrelated reason — refs read during render, an incompatible library, a `finally` clause.
 
 **Bailing is incidental.** A refactor that removes the bail condition silently turns a working memo into a frozen one. Treat every `void <counter>;` site as a defect to fix with `"use no memo"`, not as a site to check.
 

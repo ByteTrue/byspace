@@ -63,6 +63,10 @@ export function SchedulesScreen(): ReactElement {
 }
 
 function SchedulesScreenContent(): ReactElement {
+  // The compiler drops `void runtimeVersion;` as dead code and caches the
+  // agent-directory-readiness memo below, so hosts that load later stay marked
+  // not-ready. See docs/react-compiler.md.
+  "use no memo";
   const { loadState, hostErrors, isError, refetch } = useSchedules();
   const schedules = loadState.status === "loaded" ? loadState.data : EMPTY_SCHEDULES;
   const { agents } = useAggregatedAgents({ includeArchived: true });

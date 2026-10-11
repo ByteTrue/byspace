@@ -56,22 +56,26 @@ created: 2026-10-11
 
 ## 同类风险（已在本 issue 一并处理）
 
-`void <counter>;` 当依赖提示的写法还有 6 处，已全部加上 `"use no memo"`。逐一编译验证的结果：
+`void <counter>;` 当依赖提示的写法还有 8 处，已全部加上 `"use no memo"`。逐一编译验证的结果：
 
 | 文件                                       | 编译器是否处理该函数             | 处理前状态                                                     |
 | ------------------------------------------ | -------------------------------- | -------------------------------------------------------------- |
 | `hooks/use-agent-history.ts`               | 是                               | **真冻结**（`runtimeVersion` 在编译产物里只剩声明处 1 个引用） |
 | `panels/panel-instance-attributes.ts`      | 是                               | **真冻结**（`revision` 同上）                                  |
+| `screens/schedules-screen.tsx`             | 是                               | **真冻结**（首轮 grep 被 `head` 截断漏掉，复核时补）           |
 | `hooks/use-projects.ts`                    | 否（bail：render 期间读 ref）    | 侥幸安全                                                       |
 | `hooks/use-aggregated-agents.ts`           | 否（bail：同上，11 处）          | 侥幸安全                                                       |
 | `agent-stream/strategy-web.tsx`            | 否（bail：incompatible library） | 侥幸安全                                                       |
 | `components/provider-diagnostic-sheet.tsx` | 否（bail：所在函数含 `finally`） | 侥幸安全                                                       |
+| `screens/workspace/use-mounted-tab-set.ts` | 否（bail）                       | 侥幸安全                                                       |
 
-**bail 是偶然的，不是设计**：只要未来某个重构去掉了触发 bail 的条件（比如把读 ref 挪出去、换个库），这些 memo 就会静默变成冻结的。所以 6 处都加了指令，而不是只修那 2 处。
+**bail 是偶然的，不是设计**：只要未来某个重构去掉了触发 bail 的条件（比如把读 ref 挪出去、换个库），这些 memo 就会静默变成冻结的。所以 8 处都加了指令，而不是只修真冻结的那 3 处。
+
+**验收口径**：不写死文件清单，改为枚举全仓带该写法的文件（排除测试），逐个编译后检查每个 revision 变量在产物里的引用数——只剩声明处即为冻结。当前 ALL SAFE。
 
 ## 关闭结论
 
-三个缺陷都已修复并验证：aggregate 的收尾保护、queryKey 的 client 就绪信号、以及 React Compiler 对 key 计算的冻结（含既有的 `useHostRuntimeConnectionStatuses`）。同类风险的 6 处已一并加指令。
+三个缺陷都已修复并验证：aggregate 的收尾保护、queryKey 的 client 就绪信号、以及 React Compiler 对 key 计算的冻结（含既有的 `useHostRuntimeConnectionStatuses`）。同类风险的 8 处已一并加指令。
 
 **质量证据**：`tunnels-list-first-load.spec.ts`（修复前稳定失败 → 修复后通过）与既有添加流程 spec 均通过；`src/hooks` + `src/tunnels` + `src/panels` + `src/schedules` 424 个单测通过；typecheck / lint / format:check 全绿。`agent-stream-ui.spec.ts` 的 3 例失败已在 stash 掉全部改动后复现于基线，确认非本 issue 引入。
 
