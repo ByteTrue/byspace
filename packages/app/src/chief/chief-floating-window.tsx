@@ -23,12 +23,6 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useTranslation } from "react-i18next";
 import type { ChiefAgentInfo } from "./use-chief-agent";
 
-interface ChiefFloatingWindowProps {
-  serverId: string;
-  agent: ChiefAgentInfo | null;
-  onClose: () => void;
-}
-
 function ChiefPaneContent({ serverId, agent }: { serverId: string; agent: ChiefAgentInfo }) {
   const paneContextValue = useMemo<PaneContextValue>(
     () => ({
@@ -61,6 +55,12 @@ function ChiefPaneContent({ serverId, agent }: { serverId: string; agent: ChiefA
       </PaneFocusProvider>
     </PaneProvider>
   );
+}
+
+export interface ChiefFloatingWindowProps {
+  serverId: string;
+  agent: ChiefAgentInfo | null;
+  onClose: () => void;
 }
 
 export const ChiefFloatingWindow = memo(function ChiefFloatingWindow({
