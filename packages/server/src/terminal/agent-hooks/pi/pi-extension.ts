@@ -74,10 +74,25 @@ export default function byspaceTerminalActivity(pi) {
   if (ownerPid && ownerPid !== String(process.pid) && ownerIsLive(ownerPid)) return;
   process.env[ownerPidKey] = String(process.pid);
 
-  pi.on("agent_start", () => void report("running"));
+  // A ui_prompt_end with no run behind it means the user just closed an idle-time
+  // dialog (extension pickers, config prompts). Reporting "running" there used to
+  // wedge the terminal in working forever: no later run exists to settle it, and
+  // Pi stays in the foreground so the shell's command-finished signal never fires.
+  let runActive = false;
+
+  pi.on("agent_start", () => {
+    runActive = true;
+    void report("running");
+  });
   pi.on("ui_prompt_start", () => void report("needs-input"));
-  pi.on("ui_prompt_end", () => void report("running"));
-  pi.on("agent_settled", () => void report("idle"));
-  pi.on("session_shutdown", () => report("idle"));
+  pi.on("ui_prompt_end", () => void report(runActive ? "running" : "idle"));
+  pi.on("agent_settled", () => {
+    runActive = false;
+    void report("idle");
+  });
+  pi.on("session_shutdown", () => {
+    runActive = false;
+    return report("idle");
+  });
 }
 `;

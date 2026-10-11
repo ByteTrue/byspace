@@ -89,7 +89,7 @@ Pi uses an auto-discovered extension:
 
 - `agent_start` → `running`
 - `ui_prompt_start` → `needs-input`
-- `ui_prompt_end` → `running`
+- `ui_prompt_end` → `running` while a run is active, otherwise `idle` — a dialog closed with no run behind it (extension pickers, config prompts) has no later `agent_settled` to settle it, and Pi stays in the foreground so the shell's command-finished signal never fires
 - `agent_settled`, `session_shutdown` → `idle`
 
 The Pi extension keeps one activity request in flight and only the newest pending state. Child Pi processes inherit an owner marker and do not register a second reporter for the same terminal. The marker names a pid, not a boolean, because a stale marker left in a terminal or agent environment would otherwise mute every later Pi in it; a marker whose pid is gone is ignored. The daemon also strips the marker from every spawned process (`RUNTIME_CONTROL_ENV_KEYS` in `packages/server/src/server/byspace-env.ts`), so fresh terminals and agents never inherit it.
