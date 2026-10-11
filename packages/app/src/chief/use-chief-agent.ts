@@ -10,7 +10,7 @@ export interface ChiefAgentInfo {
 
 export type ChiefAgentState =
   | { tag: "loading" }
-  | { tag: "ready"; agent: ChiefAgentInfo }
+  | { tag: "ready"; agent: ChiefAgentInfo; serverId: string }
   | { tag: "no_home_workspace" }
   | { tag: "error"; message: string };
 
@@ -79,19 +79,24 @@ export function useChiefAgent(serverId: string | null): ChiefAgentState {
     (onStoreChange: () => void) => store.subscribeAll(onStoreChange),
     [store],
   );
-  const effectiveClient = useSyncExternalStore(
+  // The URL host's serverId may be stale after a daemon restart; the runtime
+  // rekeys controllers on hello, so the live client may sit under a different
+  // serverId than the one in the current URL. Resolve both together so the
+  // PaneContext always uses the serverId that actually owns the connection.
+  const effective = useSyncExternalStore(
     subscribeAll,
     () => {
-      if (client) return client;
+      if (serverId && client) return { serverId, client };
       for (const host of store.getHosts()) {
         const c = store.getClient(host.serverId);
-        if (c) return c;
+        if (c) return { serverId: host.serverId, client: c };
       }
       return null;
     },
     () => null,
   );
-
+  const effectiveClient = effective?.client ?? null;
+  const effectiveServerId = effective?.serverId ?? null;
   const isClientReady = effectiveClient !== null;
 
   const [state, setState] = useState<ChiefAgentState>({ tag: "loading" });
@@ -103,7 +108,9 @@ export function useChiefAgent(serverId: string | null): ChiefAgentState {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     try {
+      console.log("[useChiefAgent] fetching workspaces...");
       const workspaces = await effectiveClient.fetchWorkspaces();
+      console.log("[useChiefAgent] entries:", workspaces.entries.length);
       const home = workspaces.entries.find((entry) => isHomeWorkspace(entry));
       if (!home) {
         setState({ tag: "no_home_workspace" });
@@ -112,11 +119,11 @@ export function useChiefAgent(serverId: string | null): ChiefAgentState {
       const cwd = home.workspaceDirectory ?? home.projectRootPath;
       const existing = await findChiefAgent(effectiveClient, home.id);
       if (existing) {
-        setState({ tag: "ready", agent: existing });
+        setState({ tag: "ready", agent: existing, serverId: effectiveServerId! });
         return;
       }
       const created = await createChiefAgent(effectiveClient, home.id, cwd);
-      setState({ tag: "ready", agent: created });
+      setState({ tag: "ready", agent: created, serverId: effectiveServerId! });
     } catch (error) {
       setState({
         tag: "error",
@@ -125,7 +132,7 @@ export function useChiefAgent(serverId: string | null): ChiefAgentState {
     } finally {
       inFlightRef.current = false;
     }
-  }, [effectiveClient]);
+  }, [effectiveClient, effectiveServerId]);
 
   useEffect(() => {
     if (!isClientReady) return;

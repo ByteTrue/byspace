@@ -40,6 +40,9 @@ export const ChiefPanelHost = memo(function ChiefPanelHost(): ReactElement | nul
 
   const chiefState = useChiefAgent(currentServerId);
   const agent = chiefState.tag === "ready" ? chiefState.agent : null;
+  // When the hook fell back to a different host, use that host's id for the
+  // pane content so the embedded panel can resolve its daemon connection.
+  const effectiveServerId = chiefState.tag === "ready" ? chiefState.serverId : currentServerId;
 
   const handleFabPress = useCallback(() => {
     if (isCompact) {
@@ -66,7 +69,7 @@ export const ChiefPanelHost = memo(function ChiefPanelHost(): ReactElement | nul
   return (
     <View style={containerStyle} pointerEvents="box-none">
       {showWindow ? (
-        <ChiefFloatingWindow serverId={currentServerId} agent={agent} onClose={close} />
+        <ChiefFloatingWindow serverId={effectiveServerId} agent={agent} onClose={close} />
       ) : null}
       {!showWindow ? (
         <ChiefFab
