@@ -44,6 +44,7 @@ created: 2026-10-11
 - **nested 子行 id 收集**：从 view 搬进 `tool-calls/detail-level/nested-codemode.ts` 的 `nestedGroupRowIds()`，渲染与折叠同源。
 - **e2e**：原先要求「最新思考恰好展开」的断言在窄窗口上结构性 flaky，改为只在尾项是 thinking 时断言；新增设置面板用例（5 档可选、选择落到存储）与 `thinking` 档持久化单测。
   评审建议把 live 的两条断言并进同一用例省一次 agent 启动，试过一次后放弃：既有用例要 `mockReasoningRepeat: 12` 才能撑出贴底跟随需要的高度，而这么长的 reasoning 会把工具调用推到回合结束之外，「尾项变成工具行」采样不到（`tail-still-thinking`）。两条断言需要相反的 mock 参数，保留两个用例并在代码里注明原因。
+- 评审顺手发现、**未处理**的三项已单独立项：`077-o-agent-stream-dead-links-and-single-impl-strategy`（web 上不可达的内联展开链路、只剩单实现的策略转发层、`areToolCallPropsEqual` 手工比较器）。其中策略层收敛正是 041 退出范围、未建 Issue 的遗留，且它的前提（`platform` 门控）已经消失。
 - 评审确认不做的：按「思考展开 × 工具展开」两个正交维度重构档位（档位是单条序、存储是标量，收益只有省两个布尔）；把 `ToolCall` 的挂载期 `useState` 提成受控 prop（会改行组件的公共契约，超出本次范围）。
 
 ## 对 byissue/ 的影响
