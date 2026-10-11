@@ -5,7 +5,12 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import pino from "pino";
 
-import { ensureHomeWorkspace, HOME_WORKSPACE_TITLE } from "./home-workspace.js";
+import {
+  ensureHomeWorkspace,
+  ensureHomeWorkspaceUnlessDisabled,
+  HOME_WORKSPACE_LABEL,
+  HOME_WORKSPACE_TITLE,
+} from "./home-workspace.js";
 import { FileBackedProjectRegistry, FileBackedWorkspaceRegistry } from "./workspace-registry.js";
 import type { PersistedWorkspaceRecord } from "./workspace-registry.js";
 
@@ -133,6 +138,79 @@ describe("ensureHomeWorkspace", () => {
     expect(second!.created).toBe(false);
     expect(provisioning.callCount).toBe(1); // no duplicate creation
     expect(await workspaceRegistry.list()).toHaveLength(1);
+  });
+
+  it("stamps the reserved home-workspace label on creation", async () => {
+    const workdir = mkdtempSync(join(tmpdir(), "home-ws-"));
+    const { workspaceRegistry, projectRegistry } = createRegistries(workdir);
+    const provisioning = createStubProvisioning(workspaceRegistry, projectRegistry);
+
+    await ensureHomeWorkspace({
+      byspaceHome: join(workdir, ".byspace"),
+      workspaceRegistry,
+      projectRegistry,
+      provisioning,
+      logger,
+    });
+
+    const [workspace] = await workspaceRegistry.list();
+    expect(workspace.labels).toContain(HOME_WORKSPACE_LABEL);
+  });
+
+  it("backfills the label on an existing Home workspace that predates it", async () => {
+    const workdir = mkdtempSync(join(tmpdir(), "home-ws-"));
+    const { workspaceRegistry, projectRegistry } = createRegistries(workdir);
+    const provisioning = createStubProvisioning(workspaceRegistry, projectRegistry);
+    const homeDir = join(workdir, ".byspace");
+
+    await ensureHomeWorkspace({
+      byspaceHome: homeDir,
+      workspaceRegistry,
+      projectRegistry,
+      provisioning,
+      logger,
+    });
+    // Simulate a daemon upgrade: strip the label, then re-ensure.
+    const [record] = await workspaceRegistry.list();
+    await workspaceRegistry.upsert({ ...record, labels: [] });
+
+    await ensureHomeWorkspace({
+      byspaceHome: homeDir,
+      workspaceRegistry,
+      projectRegistry,
+      provisioning,
+      logger,
+    });
+
+    const [after] = await workspaceRegistry.list();
+    expect(after.labels).toContain(HOME_WORKSPACE_LABEL);
+    expect(provisioning.callCount).toBe(1);
+  });
+
+  it("ensureHomeWorkspaceUnlessDisabled skips creation under the kill switch", async () => {
+    const workdir = mkdtempSync(join(tmpdir(), "home-ws-"));
+    const { workspaceRegistry, projectRegistry } = createRegistries(workdir);
+    const provisioning = createStubProvisioning(workspaceRegistry, projectRegistry);
+    const previous = process.env.BYSPACE_DISABLE_HOME_WORKSPACE;
+    process.env.BYSPACE_DISABLE_HOME_WORKSPACE = "1";
+    try {
+      const result = await ensureHomeWorkspaceUnlessDisabled({
+        byspaceHome: join(workdir, ".byspace"),
+        workspaceRegistry,
+        projectRegistry,
+        provisioning,
+        logger,
+      });
+      expect(result).toBeNull();
+      expect(provisioning.callCount).toBe(0);
+      expect(await workspaceRegistry.list()).toHaveLength(0);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.BYSPACE_DISABLE_HOME_WORKSPACE;
+      } else {
+        process.env.BYSPACE_DISABLE_HOME_WORKSPACE = previous;
+      }
+    }
   });
 
   it("returns null instead of throwing when provisioning fails", async () => {

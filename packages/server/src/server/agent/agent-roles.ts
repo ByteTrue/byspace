@@ -10,6 +10,28 @@
 
 export const AGENT_ROLE_LABEL = "byspace.agent-role";
 
+/**
+ * Daemon-owned label keys a client may not set: built-in identity stamps, not
+ * the whole byspace.* namespace (relationship labels like parent-agent-id flow
+ * through internal paths that also strip client input). Client-supplied
+ * copies are stripped before they reach agent records so a client cannot forge
+ * a built-in identity (e.g. stamp itself as Chief).
+ */
+export const RESERVED_LABEL_KEYS: ReadonlySet<string> = new Set([AGENT_ROLE_LABEL]);
+
+/** Drop daemon-reserved label keys from a client-supplied label map. */
+export function stripReservedLabels(
+  labels: Record<string, string> | undefined,
+): Record<string, string> {
+  if (!labels) return {};
+  const stripped: Record<string, string> = {};
+  for (const [key, value] of Object.entries(labels)) {
+    if (RESERVED_LABEL_KEYS.has(key)) continue;
+    stripped[key] = value;
+  }
+  return stripped;
+}
+
 export interface AgentRoleDefinition {
   /** Stable identifier carried on agent labels and the wire. */
   name: string;

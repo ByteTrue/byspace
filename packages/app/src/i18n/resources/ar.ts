@@ -212,16 +212,16 @@ export const ar: TranslationResources = {
     },
   },
   chief: {
-    switchHost: "Switch host",
-    maximize: "Open in full page",
-    close: "Close Chief",
+    switchHost: "تبديل المضيف",
+    maximize: "فتح في صفحة كاملة",
+    close: "إغلاق Chief",
     retry: "إعادة المحاولة",
     noHomeWorkspace:
       "يحتاج Chief إلى مساحة عمل Home الخاصة بالـ daemon. حدّث BySpace daemon ثم أعد المحاولة.",
     suggestions: {
-      whatCanYouDo: "What can you do?",
-      checkWorkspaces: "Check my workspaces",
-      recentActivity: "Any recent activity?",
+      whatCanYouDo: "ما الذي يمكنك فعله؟",
+      checkWorkspaces: "تحقق من مساحات عملي",
+      recentActivity: "هل من نشاط حديث؟",
     },
   },
   agentPanel: {

@@ -212,16 +212,16 @@ export const ko: TranslationResources = {
     },
   },
   chief: {
-    switchHost: "Switch host",
-    maximize: "Open in full page",
-    close: "Close Chief",
+    switchHost: "호스트 전환",
+    maximize: "전체 페이지로 열기",
+    close: "Chief 닫기",
     retry: "재시도",
     noHomeWorkspace:
       "Chief에는 daemon의 Home 워크스페이스가 필요합니다. BySpace daemon을 업데이트한 후 다시 시도하세요.",
     suggestions: {
-      whatCanYouDo: "What can you do?",
-      checkWorkspaces: "Check my workspaces",
-      recentActivity: "Any recent activity?",
+      whatCanYouDo: "무엇을 도와줄 수 있어?",
+      checkWorkspaces: "내 워크스페이스 확인해 줘",
+      recentActivity: "최근 활동 있어?",
     },
   },
   agentPanel: {

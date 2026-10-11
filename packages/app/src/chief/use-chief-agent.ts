@@ -17,6 +17,8 @@ export type ChiefAgentState =
 
 const HOME_WORKSPACE_TITLE = "Home";
 const HOME_DIR_NAME = ".byspace";
+/** Reserved label the daemon stamps on its Home workspace. */
+const HOME_WORKSPACE_LABEL = "byspace.home-workspace";
 
 interface WorkspaceLike {
   id: string;
@@ -24,9 +26,15 @@ interface WorkspaceLike {
   workspaceDirectory?: string;
   cwd?: string;
   projectRootPath?: string;
+  labels?: string[];
 }
 
-function isHomeWorkspace(workspace: WorkspaceLike): boolean {
+/** Exported for tests. */
+export function isHomeWorkspace(workspace: WorkspaceLike): boolean {
+  // The reserved label is authoritative: user renames and custom BYSPACE_HOME
+  // paths both defeat title/path heuristics. Title/path matching is the
+  // fallback for daemons whose Home workspace predates the label.
+  if (workspace.labels?.includes(HOME_WORKSPACE_LABEL)) return true;
   if (workspace.title === HOME_WORKSPACE_TITLE) return true;
   const dir = workspace.workspaceDirectory ?? workspace.cwd ?? workspace.projectRootPath ?? "";
   const normalized = dir.replace(/\\/g, "/").replace(/\/+$/, "");
@@ -35,14 +43,18 @@ function isHomeWorkspace(workspace: WorkspaceLike): boolean {
 
 /** Pick the first ready provider from the daemon snapshot so Chief follows the
  * user's provider configuration instead of a hard-coded provider. */
-async function resolveChiefProvider(client: DaemonClient): Promise<AgentProvider | null> {
+/** Exported for tests. */
+export async function resolveChiefProvider(
+  client: Pick<DaemonClient, "getProvidersSnapshot">,
+): Promise<AgentProvider | null> {
   const snapshot = await client.getProvidersSnapshot({});
   const entry = snapshot.entries.find((e) => e.enabled && e.status === "ready");
   return entry?.provider ?? null;
 }
 
-async function findChiefAgent(
-  client: DaemonClient,
+/** Exported for tests. */
+export async function findChiefAgent(
+  client: Pick<DaemonClient, "fetchAgents">,
   homeWorkspaceId: string,
 ): Promise<ChiefAgentInfo | null> {
   const result = await client.fetchAgents({

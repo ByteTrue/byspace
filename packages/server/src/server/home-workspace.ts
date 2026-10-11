@@ -7,9 +7,32 @@ import type { WorkspaceRegistry, ProjectRegistry } from "./workspace-registry.js
 /** Display title of the daemon-owned home workspace. */
 export const HOME_WORKSPACE_TITLE = "Home";
 
+/**
+ * Reserved workspace label marking the daemon-owned Home workspace. The app
+ * matches Chief to the Home workspace by this label instead of guessing from
+ * titles or paths (user renames and custom BYSPACE_HOME would both defeat a
+ * title/path heuristic). Reserved `byspace.*` labels are stripped from
+ * user-initiated workspace.create payloads.
+ */
+export const HOME_WORKSPACE_LABEL = "byspace.home-workspace";
+
 export interface EnsureHomeWorkspaceResult {
   workspaceId: string;
   created: boolean;
+}
+
+interface EnsureHomeWorkspaceDeps {
+  byspaceHome: string;
+  workspaceRegistry: WorkspaceRegistry;
+  projectRegistry: ProjectRegistry;
+  provisioning: {
+    createWorkspaceForDirectory(
+      cwd: string,
+      title?: string | null,
+      projectId?: string,
+    ): Promise<{ workspaceId: string }>;
+  };
+  logger: Logger;
 }
 
 /**
@@ -24,24 +47,15 @@ export interface EnsureHomeWorkspaceResult {
  * for a first conversation before any project exists
  * (byissue/epics/005-o-chief-floating-assistant).
  */
-export async function ensureHomeWorkspace(deps: {
-  byspaceHome: string;
-  workspaceRegistry: WorkspaceRegistry;
-  projectRegistry: ProjectRegistry;
-  provisioning: {
-    createWorkspaceForDirectory(
-      cwd: string,
-      title?: string | null,
-      projectId?: string,
-    ): Promise<{ workspaceId: string }>;
-  };
-  logger: Logger;
-}): Promise<EnsureHomeWorkspaceResult | null> {
+export async function ensureHomeWorkspace(
+  deps: EnsureHomeWorkspaceDeps,
+): Promise<EnsureHomeWorkspaceResult | null> {
   const homeCwd = path.resolve(deps.byspaceHome);
   const existing = (await deps.workspaceRegistry.list()).find(
     (workspace) => path.resolve(workspace.cwd) === homeCwd,
   );
   if (existing) {
+    await ensureHomeWorkspaceLabel(deps, existing.workspaceId, existing.labels);
     return { workspaceId: existing.workspaceId, created: false };
   }
   try {
@@ -49,6 +63,7 @@ export async function ensureHomeWorkspace(deps: {
       homeCwd,
       HOME_WORKSPACE_TITLE,
     );
+    await ensureHomeWorkspaceLabel(deps, workspace.workspaceId, undefined);
     deps.logger.info(
       { workspaceId: workspace.workspaceId, cwd: homeCwd },
       "Home workspace ensured",
@@ -68,19 +83,31 @@ export async function ensureHomeWorkspace(deps: {
  * daemon helpers) skips creation so specs keep assuming exact workspace
  * counts and Windows teardown avoids EBUSY on the watched home dir.
  */
-export async function ensureHomeWorkspaceUnlessDisabled(deps: {
-  byspaceHome: string;
-  workspaceRegistry: WorkspaceRegistry;
-  projectRegistry: ProjectRegistry;
-  provisioning: {
-    createWorkspaceForDirectory(
-      cwd: string,
-      title?: string | null,
-      projectId?: string,
-    ): Promise<{ workspaceId: string }>;
-  };
-  logger: Logger;
-}): Promise<EnsureHomeWorkspaceResult | null> {
+export async function ensureHomeWorkspaceUnlessDisabled(
+  deps: EnsureHomeWorkspaceDeps,
+): Promise<EnsureHomeWorkspaceResult | null> {
   if (process.env.BYSPACE_DISABLE_HOME_WORKSPACE === "1") return null;
   return ensureHomeWorkspace(deps);
+}
+
+/**
+ * Backfill the reserved Home label on daemons whose Home workspace predates
+ * it. Idempotent and best-effort: a labeling failure never blocks boot.
+ */
+async function ensureHomeWorkspaceLabel(
+  deps: EnsureHomeWorkspaceDeps,
+  workspaceId: string,
+  labels: readonly string[] | undefined,
+): Promise<void> {
+  if (labels?.includes(HOME_WORKSPACE_LABEL)) return;
+  const record = (await deps.workspaceRegistry.list()).find((w) => w.workspaceId === workspaceId);
+  if (!record) return;
+  try {
+    await deps.workspaceRegistry.upsert({
+      ...record,
+      labels: [...new Set([...(record.labels ?? []), HOME_WORKSPACE_LABEL])],
+    });
+  } catch (error) {
+    deps.logger.warn({ err: error, workspaceId }, "Failed to backfill home workspace label");
+  }
 }

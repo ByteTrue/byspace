@@ -214,16 +214,16 @@ export const fr: TranslationResources = {
     },
   },
   chief: {
-    switchHost: "Switch host",
-    maximize: "Open in full page",
-    close: "Close Chief",
+    switchHost: "Changer d'hôte",
+    maximize: "Ouvrir en page entière",
+    close: "Fermer Chief",
     retry: "Réessayer",
     noHomeWorkspace:
       "Chief nécessite l'espace de travail Home du daemon. Mettez à jour votre daemon BySpace puis réessayez.",
     suggestions: {
-      whatCanYouDo: "What can you do?",
-      checkWorkspaces: "Check my workspaces",
-      recentActivity: "Any recent activity?",
+      whatCanYouDo: "Que peux-tu faire pour moi ?",
+      checkWorkspaces: "Vérifie mes espaces de travail",
+      recentActivity: "Une activité récente ?",
     },
   },
   agentPanel: {

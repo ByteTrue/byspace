@@ -212,16 +212,16 @@ export const ptBR: TranslationResources = {
     },
   },
   chief: {
-    switchHost: "Switch host",
-    maximize: "Open in full page",
-    close: "Close Chief",
+    switchHost: "Trocar de host",
+    maximize: "Abrir em página completa",
+    close: "Fechar o Chief",
     retry: "Tentar novamente",
     noHomeWorkspace:
       "O Chief precisa do workspace Home do daemon. Atualize seu daemon BySpace e tente novamente.",
     suggestions: {
-      whatCanYouDo: "What can you do?",
-      checkWorkspaces: "Check my workspaces",
-      recentActivity: "Any recent activity?",
+      whatCanYouDo: "O que você pode fazer?",
+      checkWorkspaces: "Verifique meus workspaces",
+      recentActivity: "Alguma atividade recente?",
     },
   },
   agentPanel: {

@@ -212,16 +212,16 @@ export const ja: TranslationResources = {
     },
   },
   chief: {
-    switchHost: "Switch host",
-    maximize: "Open in full page",
-    close: "Close Chief",
+    switchHost: "ホストを切り替える",
+    maximize: "フルページで開く",
+    close: "Chief を閉じる",
     retry: "再試行",
     noHomeWorkspace:
       "Chief には daemon の Home ワークスペースが必要です。BySpace daemon を更新してから再試行してください。",
     suggestions: {
-      whatCanYouDo: "What can you do?",
-      checkWorkspaces: "Check my workspaces",
-      recentActivity: "Any recent activity?",
+      whatCanYouDo: "あなたに何ができる？",
+      checkWorkspaces: "ワークスペースを確認して",
+      recentActivity: "最近の活動はある？",
     },
   },
   agentPanel: {

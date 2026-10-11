@@ -212,16 +212,16 @@ export const ru: TranslationResources = {
     },
   },
   chief: {
-    switchHost: "Switch host",
-    maximize: "Open in full page",
-    close: "Close Chief",
+    switchHost: "Сменить хост",
+    maximize: "Открыть на всю страницу",
+    close: "Закрыть Chief",
     retry: "Повторить",
     noHomeWorkspace:
       "Для Chief требуется рабочее пространство Home демона. Обновите демон BySpace и повторите попытку.",
     suggestions: {
-      whatCanYouDo: "What can you do?",
-      checkWorkspaces: "Check my workspaces",
-      recentActivity: "Any recent activity?",
+      whatCanYouDo: "Что ты умеешь?",
+      checkWorkspaces: "Проверь мои рабочие пространства",
+      recentActivity: "Есть недавняя активность?",
     },
   },
   agentPanel: {
