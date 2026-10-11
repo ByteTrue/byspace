@@ -9,7 +9,12 @@ const ThemedMaximize = withUnistyles(Maximize2, (theme) => ({
 }));
 const ThemedServer = withUnistyles(Server, (theme) => ({ color: theme.colors.foregroundMuted }));
 const ThemedX = withUnistyles(X, (theme) => ({ color: theme.colors.foregroundMuted }));
-import { PaneProvider, type PaneContextValue } from "@/panels/pane-context";
+import {
+  PaneProvider,
+  PaneFocusProvider,
+  createPaneFocusContextValue,
+  type PaneContextValue,
+} from "@/panels/pane-context";
 import { AgentConversationPanel } from "@/panels/agent-panel";
 import { useHosts } from "@/runtime/host-runtime";
 import { useHostChooser } from "@/hosts/host-chooser";
@@ -44,10 +49,16 @@ function ChiefPaneContent({ serverId, agent }: { serverId: string; agent: ChiefA
     }),
     [serverId, agent],
   );
+  const paneFocusValue = useMemo(
+    () => createPaneFocusContextValue({ isWorkspaceFocused: true, isPaneFocused: true }),
+    [],
+  );
 
   return (
     <PaneProvider value={paneContextValue}>
-      <AgentConversationPanel />
+      <PaneFocusProvider value={paneFocusValue}>
+        <AgentConversationPanel />
+      </PaneFocusProvider>
     </PaneProvider>
   );
 }
