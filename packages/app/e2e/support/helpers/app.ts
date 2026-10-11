@@ -139,7 +139,9 @@ export const setWorkingDirectory = async (page: Page, directory: string) => {
   if (trimmedDirectory.startsWith("/private/var/")) {
     directoryCandidates.add(trimmedDirectory.replace(/^\/private/, ""));
   }
-  const basename = trimmedDirectory.split("/").findLast(Boolean) ?? trimmedDirectory;
+  // Split on both separators so a Windows directory yields its basename.
+  const directorySegments = trimmedDirectory.split(/[\\/]/u).filter(Boolean);
+  const basename = directorySegments[directorySegments.length - 1] ?? trimmedDirectory;
 
   await expect
     .poll(
