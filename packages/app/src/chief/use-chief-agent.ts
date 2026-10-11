@@ -70,7 +70,11 @@ async function createChiefAgent(
  * directly from the daemon because the replica store may not have synced the
  * Home workspace yet.
  */
-export function useChiefAgent(serverId: string | null): ChiefAgentState {
+export function useChiefAgent(
+  serverId: string | null,
+  options?: { enabled?: boolean },
+): ChiefAgentState {
+  const enabled = options?.enabled ?? true;
   const store = getHostRuntimeStore();
   const client = useHostRuntimeClient(serverId ?? "");
   // Reactively find the first live client across all hosts. The URL host's
@@ -138,12 +142,13 @@ export function useChiefAgent(serverId: string | null): ChiefAgentState {
   }, [effectiveClient, effectiveServerId]);
 
   useEffect(() => {
+    if (!enabled) return;
     if (!isClientReady) return;
     if (resolvedServerIdRef.current) return;
     resolvedServerIdRef.current = "__resolved__";
     setState({ tag: "loading" });
     void resolve();
-  }, [isClientReady, resolve]);
+  }, [enabled, isClientReady, resolve]);
 
   return state;
 }

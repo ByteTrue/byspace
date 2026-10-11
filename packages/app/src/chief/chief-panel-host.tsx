@@ -38,7 +38,13 @@ export const ChiefPanelHost = memo(function ChiefPanelHost(): ReactElement | nul
     return earliestOnlineServerId ?? hosts[0]?.serverId ?? pathServerId;
   }, [pathServerId, earliestOnlineServerId, hosts]);
 
-  const chiefState = useChiefAgent(currentServerId);
+  // Resolve the Chief agent only once the window is open (or on compact
+  // layouts where the FAB navigates straight to the agent page): the hook's
+  // workspace/agent fetches otherwise fire on every app load and disturb
+  // e2e directory-start accounting.
+  const chiefState = useChiefAgent(currentServerId, {
+    enabled: isOpen || isCompact,
+  });
   const agent = chiefState.tag === "ready" ? chiefState.agent : null;
   // When the hook fell back to a different host, use that host's id for the
   // pane content so the embedded panel can resolve its daemon connection.
