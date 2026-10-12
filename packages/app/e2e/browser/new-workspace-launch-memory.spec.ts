@@ -21,18 +21,19 @@ import {
   type TerminalProfileSeed,
 } from "../support/helpers/new-workspace-launch";
 
-// Wait for input until project cleanup kills the terminal. A fixed lifetime
-// can expire before a busy browser attaches or finishes revisiting the composer.
 // Runs Node instead of `/bin/sh`, which does not exist on Windows (issue 078).
 // `argv[1]` is the prompt slot: with `-e`, argv is [node, ...args], and the
-// sentinel arg is dropped when empty. The stdin pipe replaces `exec cat`.
+// sentinel arg is dropped when empty. A long timer replaces `exec cat`: the
+// test only reads the printed line, and unlike a stdin pipe the timer keeps the
+// process alive even when the PTY delivers no input (which is what killed the
+// first version of this fix on Linux CI).
 const PROMPT_PROFILE: TerminalProfile = {
   id: "e2e-memory-profile",
   name: "Memory Profile",
   command: process.execPath,
   args: [
     "-e",
-    'console.log("remembered:", process.argv[1]); process.stdin.pipe(process.stdout);',
+    'console.log("remembered:", process.argv[1]); setTimeout(() => {}, 600_000);',
     "{{{prompt}}}",
   ],
 };

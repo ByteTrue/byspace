@@ -27,15 +27,16 @@ import {
 // The sentinel becomes a positional argument (never interpolated into the script
 // source), so the prompt reaches the process exactly as typed with no injection
 // risk. `argv[1]` is the prompt slot: with `-e`, argv is [node, ...args], and the
-// sentinel arg is dropped when empty. The stdin pipe replaces `exec cat`, which
-// waits for input until cleanup kills the terminal.
+// sentinel arg is dropped when empty. A long timer replaces `exec cat`: the tests
+// only read the printed line, and unlike a stdin pipe the timer keeps the process
+// alive even when the PTY delivers no input.
 const PROMPT_PROFILE: TerminalProfile = {
   id: "e2e-echo-prompt",
   name: "Echo Prompt",
   command: process.execPath,
   args: [
     "-e",
-    'console.log("captured:", process.argv[1]); process.stdin.pipe(process.stdout);',
+    'console.log("captured:", process.argv[1]); setTimeout(() => {}, 600_000);',
     "{{{prompt}}}",
   ],
 };
@@ -46,7 +47,7 @@ const BARE_PROFILE: TerminalProfile = {
   id: "e2e-echo-bare",
   name: "Bare Echo",
   command: process.execPath,
-  args: ["-e", 'console.log("bare-launch-static-line"); process.stdin.pipe(process.stdout);'],
+  args: ["-e", 'console.log("bare-launch-static-line"); setTimeout(() => {}, 600_000);'],
 };
 
 test.describe("New workspace: launching a terminal", () => {
