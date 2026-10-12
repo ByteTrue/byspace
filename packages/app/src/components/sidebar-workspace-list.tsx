@@ -266,6 +266,7 @@ interface WorkspaceRowInnerProps {
   workspace: SidebarWorkspaceEntry;
   hostBadge?: HostBadgeModel | null;
   leadingProjectName?: string | null;
+  leadingProjectNameCue?: string | null;
   leadingProjectIconDataUri?: string | null;
   selected: boolean;
   shortcutNumber: number | null;
@@ -1000,6 +1001,7 @@ function WorkspaceRowInner({
   workspace,
   hostBadge,
   leadingProjectName,
+  leadingProjectNameCue,
   leadingProjectIconDataUri,
   selected,
   shortcutNumber,
@@ -1120,6 +1122,7 @@ function WorkspaceRowInner({
                 workspace={workspace}
                 hostBadge={hostBadge}
                 leadingProjectName={leadingProjectName}
+                leadingProjectNameCue={leadingProjectNameCue}
                 leadingProjectIconDataUri={leadingProjectIconDataUri}
                 serviceSummary={serviceSummary}
                 backdrop={backdrop}
@@ -1165,6 +1168,7 @@ function WorkspaceRowWithMenu({
   workspace,
   hostBadge,
   leadingProjectName,
+  leadingProjectNameCue,
   leadingProjectIconDataUri,
   selected,
   shortcutNumber,
@@ -1182,6 +1186,7 @@ function WorkspaceRowWithMenu({
   workspace: SidebarWorkspaceEntry;
   hostBadge?: HostBadgeModel | null;
   leadingProjectName?: string | null;
+  leadingProjectNameCue?: string | null;
   leadingProjectIconDataUri?: string | null;
   selected: boolean;
   shortcutNumber: number | null;
@@ -1299,6 +1304,7 @@ function WorkspaceRowWithMenu({
         workspace={workspace}
         hostBadge={hostBadge}
         leadingProjectName={leadingProjectName}
+        leadingProjectNameCue={leadingProjectNameCue}
         leadingProjectIconDataUri={leadingProjectIconDataUri}
         selected={selected}
         shortcutNumber={shortcutNumber}
@@ -1340,6 +1346,7 @@ interface WorkspaceRowItemProps {
   workspaceEntry: SidebarWorkspaceEntry | null;
   hostBadge?: HostBadgeModel | null;
   leadingProjectName?: string | null;
+  leadingProjectNameCue?: string | null;
   leadingProjectIconDataUri?: string | null;
   shortcutNumber: number | null;
   showShortcutBadge: boolean;
@@ -1361,6 +1368,7 @@ function WorkspaceRowItem({
   workspaceEntry,
   hostBadge,
   leadingProjectName,
+  leadingProjectNameCue,
   leadingProjectIconDataUri,
   shortcutNumber,
   showShortcutBadge,
@@ -1389,6 +1397,7 @@ function WorkspaceRowItem({
       workspaceEntry={workspaceEntry}
       hostBadge={hostBadge}
       leadingProjectName={leadingProjectName}
+      leadingProjectNameCue={leadingProjectNameCue}
       leadingProjectIconDataUri={leadingProjectIconDataUri}
       shortcutNumber={shortcutNumber}
       showShortcutBadge={showShortcutBadge}
@@ -1432,6 +1441,7 @@ function areWorkspaceRowItemPropsEqual(
     previous.workspaceEntry === next.workspaceEntry &&
     previous.hostBadge === next.hostBadge &&
     previous.leadingProjectName === next.leadingProjectName &&
+    previous.leadingProjectNameCue === next.leadingProjectNameCue &&
     previous.leadingProjectIconDataUri === next.leadingProjectIconDataUri &&
     previous.shortcutNumber === next.shortcutNumber &&
     previous.showShortcutBadge === next.showShortcutBadge &&
@@ -1454,6 +1464,7 @@ function WorkspaceRow({
   workspaceEntry,
   hostBadge,
   leadingProjectName,
+  leadingProjectNameCue,
   leadingProjectIconDataUri,
   shortcutNumber,
   showShortcutBadge,
@@ -1471,6 +1482,7 @@ function WorkspaceRow({
   workspaceEntry: SidebarWorkspaceEntry | null;
   hostBadge?: HostBadgeModel | null;
   leadingProjectName?: string | null;
+  leadingProjectNameCue?: string | null;
   leadingProjectIconDataUri?: string | null;
   shortcutNumber: number | null;
   showShortcutBadge: boolean;
@@ -1494,6 +1506,7 @@ function WorkspaceRow({
       workspace={workspaceEntry}
       hostBadge={hostBadge}
       leadingProjectName={leadingProjectName}
+      leadingProjectNameCue={leadingProjectNameCue}
       leadingProjectIconDataUri={leadingProjectIconDataUri}
       selected={selected}
       shortcutNumber={shortcutNumber}
@@ -1973,6 +1986,7 @@ export function SidebarWorkspaceList({
         onWorkspacePress={onWorkspacePress}
         hostBadgeByServerId={hostBadgeByServerId}
         autoHostLabelProjectKeys={autoHostLabelProjectKeys}
+        projectNameCueByViewKey={projectNameCueByViewKey}
         supportsPinningByServerId={supportsPinningByServerId}
         onToggleWorkspacePin={onToggleWorkspacePin}
         onPinnedWorkspaceReorder={handlePinnedWorkspaceReorder}
@@ -2027,6 +2041,7 @@ function SidebarGroupedModeList({
   onWorkspacePress,
   hostBadgeByServerId,
   autoHostLabelProjectKeys,
+  projectNameCueByViewKey,
   supportsPinningByServerId,
   onToggleWorkspacePin,
   onPinnedWorkspaceReorder,
@@ -2043,6 +2058,7 @@ function SidebarGroupedModeList({
   onWorkspacePress?: () => void;
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
   autoHostLabelProjectKeys: ReadonlySet<string>;
+  projectNameCueByViewKey: ReadonlyMap<string, string>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   onPinnedWorkspaceReorder: (workspaces: SidebarWorkspacePlacement[]) => void;
@@ -2071,6 +2087,7 @@ function SidebarGroupedModeList({
       onWorkspacePress={onWorkspacePress}
       hostBadgeByServerId={hostBadgeByServerId}
       autoHostLabelProjectKeys={autoHostLabelProjectKeys}
+      projectNameCueByViewKey={projectNameCueByViewKey}
       supportsPinningByServerId={supportsPinningByServerId}
       onToggleWorkspacePin={onToggleWorkspacePin}
       onPinnedWorkspaceReorder={onPinnedWorkspaceReorder}
@@ -2362,6 +2379,10 @@ function ProjectModeList({
             showAutoLabel: autoHostLabelProjectKeys.has(workspace.projectViewKey),
           })}
           leadingProjectName={workspace.projectName}
+          // Pinned rows are hoisted out of their project block, so the header that would have
+          // explained a colliding name is not above them — this row is the only place the cue can
+          // appear. Inline project-mode rows are left alone: their header is right there.
+          leadingProjectNameCue={projectNameCueByViewKey.get(workspace.projectViewKey) ?? null}
           leadingProjectIconDataUri={
             projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null
           }
@@ -2386,6 +2407,7 @@ function ProjectModeList({
       creatingWorkspaceIds,
       hostBadgeByServerId,
       onWorkspacePress,
+      projectNameCueByViewKey,
       selectionEnabled,
       shortcutIndexByWorkspaceKey,
       showShortcutBadges,

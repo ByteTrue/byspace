@@ -33,6 +33,12 @@ created: 2026-10-11
 
 ## review 修正（独立审查后同一分支追加）
 
-- **P2，已知缺口**：线索只加在 project 模式的项目行上（`ProjectHeaderRow`）。status / label 模式下同名项目渲染成 workspace 行，那里带的是 `leadingProjectName`，没有线索，歧义仍在。本轮范围就到此为止，需要时另开。
+- **P2（已修，同一分支追加）**：线索一开始只加在 project 模式的项目行上（`ProjectHeaderRow`）。status / label 模式下同名项目渲染成 workspace 行，那里带的是 `leadingProjectName`，没有线索，歧义仍在。补法是把线索**挂到项目名上而不是当同行的一个新条目**：
+  - `meta-items.ts` — `MetaRowItem` 的 `project` 变体带上 `cue`，由 `selectMetaRowItems` 从新入参 `projectNameCue` 填。挂在 name 上而不是加一个 peer item，是因为「display item」里 `project` 默认关闭：关掉名字之后，解释名字的那句话没有存在的理由。
+  - `workspace-meta-row/index.tsx` — `IdentityItem` 渲染 `名字 · 线索`，线索用 `foregroundExtraMuted`，与项目行上「标题 + 线索」同一组 token 关系；新增 `identityCue` 样式。
+  - `sidebar-workspace-row-content.tsx`、`sidebar-status-list.tsx` — 透传 `projectNameCueByViewKey`。status 那侧本来就已经有 `workspace.projectViewKey`，所以碰撞判定和 project 模式复用同一份 `buildProjectRowCues` 结果。
+  - `sidebar-workspace-list.tsx` — project 模式的**置顶（pinned）区**也要传：那些行被提到项目块之外，名字上方没有 header 可以解释它，是这条线索唯一能出现的地方。项目块内的行不传，header 就在旁边。
+
+  覆盖：`meta-items.test.ts` 新增 3 例（线索挂在 project item 上、无碰撞时不带、关闭 project item 时随名字一起消失）；新增 e2e `sidebar-project-name-cue.spec.ts` 4 例（同名两行各自有线索、唯一名字无线索、过滤到只剩一个时线索消失、status 分组下线索随名字出现在行内）。
 
 顺手发现：`docs/hover.md` 的规范在本次没被违反（tooltip 走 `Tooltip` 组件而非裸 `onPointerEnter`），但 `sidebar-workspace-list.tsx` 里 project 行的 hover 仍是 `onPointerEnter` 直接挂在容器 `View` 上，属于该规范允许的形状，未动。

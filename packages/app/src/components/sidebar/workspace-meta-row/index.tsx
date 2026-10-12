@@ -63,6 +63,7 @@ const dangerMapping = (theme: Theme) => ({ color: theme.colors.statusDanger });
 export function WorkspaceMetaRow({
   currentBranch,
   projectName,
+  projectNameCue = null,
   hostBadge,
   prHint,
   serviceSummary,
@@ -70,6 +71,8 @@ export function WorkspaceMetaRow({
 }: {
   currentBranch: string | null;
   projectName: string | null;
+  /** See `selectMetaRowItems.projectNameCue`. */
+  projectNameCue?: string | null;
   hostBadge: HostBadgeModel | null;
   prHint: PrHint | null;
   serviceSummary: WorkspaceServiceSummary | null;
@@ -79,6 +82,7 @@ export function WorkspaceMetaRow({
   const items = selectMetaRowItems({
     currentBranch,
     projectName,
+    projectNameCue,
     hasHostBadge: hostBadge !== null,
     prHint,
     serviceSummary,
@@ -115,7 +119,7 @@ function MetaItemNode({
     return <IdentityItem kind="branch" name={item.name} />;
   }
   if (item.kind === "project") {
-    return <IdentityItem kind="project" name={item.name} />;
+    return <IdentityItem kind="project" name={item.name} cue={item.cue} />;
   }
   if (item.kind === "host") {
     return hostBadge ? <HostBadge badge={hostBadge} /> : null;
@@ -132,7 +136,15 @@ function MetaItemNode({
   return <ServiceItem summary={item.summary} />;
 }
 
-function IdentityItem({ kind, name }: { kind: "branch" | "project"; name: string }) {
+function IdentityItem({
+  kind,
+  name,
+  cue = null,
+}: {
+  kind: "branch" | "project";
+  name: string;
+  cue?: string | null;
+}) {
   const Icon = kind === "branch" ? ThemedGitBranch : ThemedFolder;
   return (
     <View style={styles.identityItem} testID={`sidebar-workspace-${kind}`}>
@@ -142,6 +154,19 @@ function IdentityItem({ kind, name }: { kind: "branch" | "project"; name: string
       <Text style={styles.identityText} numberOfLines={1}>
         {name}
       </Text>
+      {cue ? (
+        // Same relationship the project row draws between its title and this line — the name in
+        // `foregroundMuted`, the cue behind it in `foregroundExtraMuted` — because it is the same
+        // sentence, and in these modes the name it explains has already been folded onto this line
+        // rather than given one of its own. The dot groups it with the name it qualifies: without it
+        // the cue would read as the next peer fact.
+        <>
+          <Text style={styles.separator}>·</Text>
+          <Text style={styles.identityCue} numberOfLines={1} testID="sidebar-workspace-project-cue">
+            {cue}
+          </Text>
+        </>
+      ) : null}
     </View>
   );
 }
@@ -337,6 +362,15 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     lineHeight: 16,
+    flexShrink: 1,
+  },
+  // Behind the name rather than beside it, exactly like the project row's cue — same token, so the
+  // two ways of saying "which one is this" can't drift apart.
+  identityCue: {
+    color: theme.colors.foregroundExtraMuted,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 16,
+    minWidth: 0,
     flexShrink: 1,
   },
   itemPressed: {
