@@ -41,11 +41,18 @@ const CONTEXT = {
   mimeType: "application/json",
   buffer: Buffer.from('{"preserve":"attachment"}'),
 };
+// Runs Node instead of `/bin/sh`, which does not exist on Windows (issue 078).
+// `argv[1]` is the prompt slot: with `-e`, argv is [node, ...args], and the
+// sentinel arg is dropped when empty. The timer replaces `sleep 120`.
 const PROFILE: TerminalProfile = {
   id: "e2e-nav-guard-echo",
   name: "Nav Guard Echo",
-  command: "/bin/sh",
-  args: ["-c", 'echo captured: "$0"; sleep 120', "{{{prompt}}}"],
+  command: process.execPath,
+  args: [
+    "-e",
+    'console.log("captured:", process.argv[1]); setTimeout(() => {}, 120_000);',
+    "{{{prompt}}}",
+  ],
 };
 
 export async function verifyDelayedWorkspaceCreation(
@@ -142,7 +149,10 @@ export async function verifyDelayedWorkspaceCreation(
             model: "ten-second-stream",
             modeId: "load-test",
             thinkingOptionId: "low",
-            cwd: created.workspaceDirectory,
+            // The daemon reports the cwd in normalized (forward-slash) form, so a raw
+            // Windows path would not match on the backslash side. Compare separators
+            // insensitively; the value itself is already asserted by the equality.
+            cwd: created.workspaceDirectory.replaceAll("\\", "/"),
           },
           attachments: [
             expect.objectContaining({

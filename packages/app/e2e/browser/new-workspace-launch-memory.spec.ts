@@ -23,11 +23,18 @@ import {
 
 // Wait for input until project cleanup kills the terminal. A fixed lifetime
 // can expire before a busy browser attaches or finishes revisiting the composer.
+// Runs Node instead of `/bin/sh`, which does not exist on Windows (issue 078).
+// `argv[1]` is the prompt slot: with `-e`, argv is [node, ...args], and the
+// sentinel arg is dropped when empty. The stdin pipe replaces `exec cat`.
 const PROMPT_PROFILE: TerminalProfile = {
   id: "e2e-memory-profile",
   name: "Memory Profile",
-  command: "/bin/sh",
-  args: ["-c", 'echo remembered: "$0"; exec cat', "{{{prompt}}}"],
+  command: process.execPath,
+  args: [
+    "-e",
+    'console.log("remembered:", process.argv[1]); process.stdin.pipe(process.stdout);',
+    "{{{prompt}}}",
+  ],
 };
 
 function hasLeftNewWorkspaceRoute(url: URL): boolean {

@@ -23,23 +23,30 @@ import {
 // resolved command with their prompt substituted in — no mocking BySpace's own
 // code, the "profile" here is a real, harmless binary the daemon really runs.
 //
-// The sentinel becomes `$0` (a positional shell parameter, not string
-// interpolation into the script source), so the prompt reaches the process
-// exactly as typed with no injection risk. `cat` waits for input until project
-// cleanup kills the terminal, so attachment does not race a fixed process lifetime.
+// Runs Node instead of `/bin/sh`, which does not exist on Windows (issue 078).
+// The sentinel becomes a positional argument (never interpolated into the script
+// source), so the prompt reaches the process exactly as typed with no injection
+// risk. `argv[1]` is the prompt slot: with `-e`, argv is [node, ...args], and the
+// sentinel arg is dropped when empty. The stdin pipe replaces `exec cat`, which
+// waits for input until cleanup kills the terminal.
 const PROMPT_PROFILE: TerminalProfile = {
   id: "e2e-echo-prompt",
   name: "Echo Prompt",
-  command: "/bin/sh",
-  args: ["-c", 'echo captured: "$0"; exec cat', "{{{prompt}}}"],
+  command: process.execPath,
+  args: [
+    "-e",
+    'console.log("captured:", process.argv[1]); process.stdin.pipe(process.stdout);',
+    "{{{prompt}}}",
+  ],
 };
 
 // No sentinel anywhere: takes no prompt, composer goes read-only.
+// Runs Node instead of `/bin/sh`, which does not exist on Windows (issue 078).
 const BARE_PROFILE: TerminalProfile = {
   id: "e2e-echo-bare",
   name: "Bare Echo",
-  command: "/bin/sh",
-  args: ["-c", "echo bare-launch-static-line; exec cat"],
+  command: process.execPath,
+  args: ["-e", 'console.log("bare-launch-static-line"); process.stdin.pipe(process.stdout);'],
 };
 
 test.describe("New workspace: launching a terminal", () => {
@@ -87,7 +94,13 @@ test.describe("New workspace: launching a terminal", () => {
       });
       await selectLaunchOption(page, BARE_PROFILE.id);
       await expect(terminalPromptInput(page)).toHaveCount(0);
-      await expectTerminalPreviewCommand(page, "/bin/sh -c echo bare-launch-static-line; exec cat");
+      // Derived from the profile rather than hardcoded: the preview shows the
+      // resolved command, so a literal here would drift whenever the profile's
+      // binary changes (the Node switch for Windows, issue 078).
+      await expectTerminalPreviewCommand(
+        page,
+        [BARE_PROFILE.command, ...(BARE_PROFILE.args ?? [])].join(" "),
+      );
       await expect(terminalLaunchSubmit(page)).toHaveText("Launch");
     });
 
