@@ -81,17 +81,20 @@ const daemonTest = metroTest.extend<
   ],
   projectOwnership: [
     async ({ e2eWorkerClient }, provide, testInfo) => {
-      const before = new Set(
-        (await e2eWorkerClient.fetchWorkspaces()).entries.map((workspace) => workspace.projectId),
-      );
+      // Diff project records, not workspaces. A project whose last workspace was archived still
+      // exists on the daemon and still shows a sidebar row, but it has no entry in
+      // `fetchWorkspaces` — diffing those entries reported those projects as clean and left them
+      // behind for every spec that ran later on the same worker.
+      const projectIds = async (): Promise<Set<string>> =>
+        new Set(
+          (await e2eWorkerClient.listProjects()).projects.map((project) => project.projectId),
+        );
+
+      const before = await projectIds();
 
       await provide();
 
-      const leaked = [
-        ...new Set(
-          (await e2eWorkerClient.fetchWorkspaces()).entries.map((workspace) => workspace.projectId),
-        ),
-      ].filter((projectId) => !before.has(projectId));
+      const leaked = [...(await projectIds())].filter((projectId) => !before.has(projectId));
       for (const projectId of leaked) {
         await e2eWorkerClient.removeProject(projectId).catch(() => undefined);
       }

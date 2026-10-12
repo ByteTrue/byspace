@@ -280,6 +280,29 @@ export async function seedWorkspace(options: {
   }
 }
 
+/**
+ * Resolves the daemon project id for a directory the UI already registered.
+ *
+ * A sidebar project row's `data-testid` is keyed by the project *view key*, which for an
+ * equivalence view is the project key — not the daemon project id. Passing that suffix to
+ * `removeProject` rejects, and cleanup written as `.catch(() => undefined)` hides the failure,
+ * leaving the project on the worker's daemon for every later spec file to trip over.
+ *
+ * `project.add.request` is find-or-create (`findOrCreateProjectForDirectory`), so asking again
+ * for a path the UI already added returns the existing record rather than creating a second one.
+ */
+export async function resolveProjectId(
+  client: SeedDaemonClient,
+  projectPath: string,
+): Promise<string> {
+  const lookup = await client.addProject(projectPath);
+  const projectId = lookup.project?.projectId;
+  if (!projectId) {
+    throw new Error(lookup.error ?? `Could not resolve project id for ${projectPath}`);
+  }
+  return projectId;
+}
+
 function loadAppVersion(): string {
   const packageJsonPath = path.resolve(__dirname, "../../../package.json");
   const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { version?: unknown };

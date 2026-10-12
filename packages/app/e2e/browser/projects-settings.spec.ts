@@ -1,7 +1,7 @@
 import { chmod, readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test as base, type Page } from "../support/fixtures";
-import { connectSeedClient, seedWorkspace } from "../support/helpers/seed-client";
+import { connectSeedClient, resolveProjectId, seedWorkspace } from "../support/helpers/seed-client";
 import {
   blockBySpaceConfigWrites,
   bumpBySpaceConfigOnDisk,
@@ -168,6 +168,9 @@ async function readProjectConfigFile(project: ProjectsSettingsProject): Promise<
   return readFile(path.join(project.path, "byspace.json"), "utf8");
 }
 
+// Returns the project's *view key* — what the sidebar keys its rows by, which for an
+// equivalence view is the project key and not the daemon project id. Daemon calls need
+// `resolveProjectId` instead.
 async function addProjectFromSidebar(page: Page, projectPath: string): Promise<string> {
   await openAddProjectFlow(page);
   await chooseAddProjectMethod(page, "directory-search");
@@ -274,8 +277,10 @@ test.describe("Projects settings", () => {
     try {
       await gotoAppShell(page);
 
-      projectId = await addProjectFromSidebar(page, repo.path);
-      await openProjectSettingsFromSidebar(page, projectId);
+      const projectViewKey = await addProjectFromSidebar(page, repo.path);
+      // Resolve before asserting: a failure below must still leave cleanup a real id to remove.
+      projectId = await resolveProjectId(client, repo.path);
+      await openProjectSettingsFromSidebar(page, projectViewKey);
 
       await expectProjectSettingsFormVisible(page);
       await expect(page.getByTestId("project-settings-back-button")).not.toBeVisible();

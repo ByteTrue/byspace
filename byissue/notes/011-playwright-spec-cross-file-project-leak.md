@@ -1,42 +1,42 @@
 ---
 kind: note
-title: "空项目会绕过 e2e 的泄漏守卫，并串到后面的 spec 文件"
+title: "e2e 项目泄漏：守卫只差 workspace、testid 给的是 viewKey"
 created: 2026-10-12
 ---
 
-# 空项目会绕过 e2e 的泄漏守卫，并串到后面的 spec 文件
+# e2e 项目泄漏：守卫只差 workspace、testid 给的是 viewKey
 
-> **读者：** 本地跑两三个 app Playwright spec，某条「只有一个项目 / 项目数恰好为 N」的断言莫名变红，单跑又绿——先读这条，别急着改代码。
+> **读者：** 跑两三个 app Playwright spec 时某条断言莫名变红，或 `projectOwnership` 报了一个不该报的 leak——先读这条。
 
-## 事实
+## 结论
 
-两个独立问题叠在一起。
+本地默认 `workers: 1`（`packages/app/playwright.config.ts:25`），**一个 worker 顺序跑很多 spec 文件，共用一个 daemon 和 `BYSPACE_HOME`**。隔离单位是 worker 不是文件名，所以前一个文件留下的项目，后面每个文件都看得见。
 
-**一、`projectOwnership` 守卫看不见没有 workspace 的项目。** `packages/app/e2e/support/fixtures.ts:82` 的自动 fixture 用 `fetchWorkspaces().entries.map(w => w.projectId)` 求前后差集来判定泄漏（`:84-97`）。一个**没有任何 workspace 的项目**不在 `entries` 里，于是守卫认为没泄漏，项目留在 daemon 上。
+拦住这件事的是 `projectOwnership` 自动 fixture（`packages/app/e2e/support/fixtures.ts:87`）。它原先用 `fetchWorkspaces().entries` 求项目差集，**两个缺口**叠在一起让它形同虚设：
 
-**二、隔离单位是 worker，不是 spec 文件。** `docs/testing.md` 写「Spec files run concurrently without exposing one file's projects ... to another worker」。前半句的隔离在 worker 层，同一 worker 里的多个 spec 文件共享一个 daemon 与 `BYSPACE_HOME`，所以上一个文件留下的空项目，下一个文件数得到。
+1. **零 workspace 的项目不在 `entries` 里。** 一个项目的最后一个 workspace 被归档后，项目记录还在 daemon 上、侧栏还渲染它，但它没有 workspace 条目，差集算不出来。已改为 diff `listProjects()`（`session.ts:5604` 的 `project.list.request` 只过滤 `archivedAt`，零 workspace 的项目在里面）。
+2. **侧栏项目行的 testid 是 viewKey，不是 projectId。** `sidebar-project-row-<viewKey>`（`sidebar-workspace-list.tsx:952`），equivalence 形态下 viewKey 就是 projectKey（`workspace-structure.ts:120`），只有 placement 形态才是 `JSON.stringify([serverId, projectId])`。把 testid 后缀当 projectId 传给 `removeProject` 会被 daemon 拒绝，而调用点普遍写作 `.catch(() => undefined)`——失败被吞掉，项目留下。
 
-复现（本地默认单 worker）：
+修好第 1 条后守卫立刻抓到了第 2 条的实例：`empty-project-persists.spec.ts` 的 `adding a project starts with only the project header row`，泄漏 `prj_*`。用 `addProject` 解析出真正的 projectId 后转绿。
 
-```bash
-cd packages/app
-npx playwright test --project=browser \
-  e2e/browser/empty-project-persists.spec.ts \
-  e2e/browser/sidebar-project-filter.spec.ts
-```
+## 为什么这些一直没被发现
 
-`sidebar-project-filter.spec.ts` 的 `hides the filter row when there is only one project` 变红：`sidebar-display-project-filter` 行出现了，因为侧栏数到两个项目。失败时的页面快照里那个多余的项目就是 `empty-project-add-*`——`empty-project-persists.spec.ts` 里专门验证「项目在没有 workspace 时也要活下来」的用例留下的，它的主题就是残留。
+几个叠加的原因：
 
-两个文件各自单跑都绿。已确认与本次改动无关：在干净树上（`git stash` 掉全部改动）同样复现。`sidebar-workspace` + `sidebar-project-filter` 不复现；最小组合就是上面这两个文件。
+- 守卫本来就漏报（缺口 1），失败又被 `.catch()` 吞掉（缺口 2），两个错误互相掩护。
+- CI 的分片布局与本地单 worker 不同（`.github/workflows/ci.yml` 每个 shard 是独立 job），文件与 worker 的绑定不一样，本地能复现的跨文件污染在 CI 上未必出现。**CI 绿不代表本地那次是幻觉。**
+- 表现是「单跑绿、合跑红」，很容易被判断为 flake。
+
+已复现的最短组合：`empty-project-persists.spec.ts` 后接 `sidebar-project-filter.spec.ts`，后者 `hides the filter row when there is only one project` 会红——它数到两个项目。修掉上面的泄漏后该组合转绿（8/8）。
 
 ## 怎么用
 
-- 跑多个 spec 时看到「单跑绿、合跑红」，先怀疑这个。用 `--grep` 或单文件跑确认，不要直接改产品代码。
-- 写「只有一个项目 / 项目数恰好为 N」这类断言时，别依赖「我前面没人」：断言前先清掉无关项目，或把文件放到 `empty-project-persists` 之外。
-- 别因为 CI 绿就认为本地那次是幻觉。CI 用 `E2E_WORKERS=2` 分片，文件与 worker 的绑定与本地单 worker 不同，同一失败未必出现。
-- 新增「以残留为断言对象」的用例时，它天然与「数项目个数」的断言互斥；要么清理干净，要么在注释里写清它有意留下什么。
+- 看到 `Test leaked daemon project records: prj_*` 时，这是**真泄漏**，去查那个用例的 cleanup，不要调宽守卫。
+- cleanup 里要用 daemon projectId。从 UI 拿到的 testid 后缀是 viewKey，用 `addProject(path)` → 读 `lookup.project.projectId` 解析（`addProject` 是 find-or-create，不会重复建）。
+- 写「项目数恰好为 N」这类断言时别依赖「我前面没人」，断言前先清掉无关项目。
+- `removeProject(...).catch(() => undefined)` 会吞掉失败。要么别吞，要么至少确认参数是 projectId。
 
 ## 边界
 
-- 没验证 worker 之间是否真的完全隔离；这条只覆盖「同一 worker 内、文件之间」。
-- 没验证 `projectOwnership` 守卫对「有 workspace 但项目被归档」等其他残留形态是否有效，只确认了「零 workspace 的项目」这一种绕过。
+- 没验证 worker 之间是否完全隔离；这条只覆盖「同一 worker 内、文件之间」。
+- 没逐一排查全部 spec 的 cleanup，只修了修复守卫后报出来的那些。

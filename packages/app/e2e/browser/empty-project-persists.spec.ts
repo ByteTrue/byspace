@@ -8,7 +8,7 @@ import {
   openAddProjectFlow,
 } from "../support/helpers/add-project-flow";
 import { expectOpenedProject } from "../support/helpers/project-picker-ui";
-import { connectSeedClient, seedWorkspace } from "../support/helpers/seed-client";
+import { connectSeedClient, resolveProjectId, seedWorkspace } from "../support/helpers/seed-client";
 import { getServerId } from "../support/helpers/server-id";
 import { projectEquivalenceViewKey } from "../support/helpers/project-view-key";
 import { createTempGitRepo } from "../support/helpers/workspace";
@@ -52,6 +52,9 @@ async function removeProjectFromSidebar(page: Page, projectViewKey: string): Pro
   await removeItem.click();
 }
 
+// Returns the project's *view key* — what the sidebar keys its rows by, which for an
+// equivalence view is the project key and not the daemon project id. Daemon calls need
+// `resolveProjectId` instead.
 async function addProjectFromPicker(page: Page, projectPath: string): Promise<string> {
   await openAddProjectFlow(page);
   await chooseAddProjectMethod(page, "directory-search");
@@ -127,13 +130,17 @@ test.describe("Project with no workspaces persists", () => {
       await gotoAppShell(page);
       await waitForSidebarProjectListReady(page);
 
-      projectId = await addProjectFromPicker(page, repo.path);
-      const projectRow = page.getByTestId(`sidebar-project-row-${projectId}`);
+      const projectViewKey = await addProjectFromPicker(page, repo.path);
+      // Resolve before asserting: a failure below must still leave cleanup a real id to remove.
+      projectId = await resolveProjectId(client, repo.path);
+      const projectRow = page.getByTestId(`sidebar-project-row-${projectViewKey}`);
       await expect(projectRow).toBeVisible({ timeout: 30_000 });
       await expect(projectRow).toContainText(path.basename(repo.path));
-      await expect(page.getByTestId(`sidebar-workspace-list-${projectId}`)).toHaveCount(0);
+      await expect(page.getByTestId(`sidebar-workspace-list-${projectViewKey}`)).toHaveCount(0);
 
-      const newWorkspaceRow = page.getByTestId(`sidebar-project-new-workspace-row-${projectId}`);
+      const newWorkspaceRow = page.getByTestId(
+        `sidebar-project-new-workspace-row-${projectViewKey}`,
+      );
       await expect(newWorkspaceRow).toHaveCount(0);
 
       const workspaces = await client.fetchWorkspaces({ filter: { projectId } });
