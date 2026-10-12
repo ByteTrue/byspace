@@ -9,6 +9,7 @@ import {
 import {
   cloneGithubRepoDefaultBranchOnly,
   createTempGithubRepo,
+  canCreateGithubFixtures,
 } from "../support/helpers/github-fixtures";
 import {
   archiveWorkspaceFromDaemon,
@@ -27,6 +28,8 @@ test.describe("Auto-archive after pull request merge", () => {
   test("manual restore latches and keeps a merged pull request workspace active", async ({
     page,
   }) => {
+    test.skip(!canCreateGithubFixtures(), "Requires gh auth with the delete_repo scope");
+
     const scenario = await createMergedPullRequestScenario();
 
     try {

@@ -47,7 +47,7 @@ import {
   createLocalGithubPrFixture,
   cloneGithubRepoDefaultBranchOnly,
   createTempGithubRepo,
-  hasGithubAuth,
+  canCreateGithubFixtures,
   type LocalGhPrFixture,
 } from "../support/helpers/github-fixtures";
 import { getServerId } from "../support/helpers/server-id";
@@ -942,7 +942,7 @@ test.describe("New workspace flow", () => {
   });
 
   test("selected GitHub PR shows PR context in the trigger and composer", async ({ page }) => {
-    test.skip(!hasGithubAuth(), "Requires GitHub authentication (gh auth login)");
+    test.skip(!canCreateGithubFixtures(), "Requires gh auth with the delete_repo scope");
 
     const ghRepo = await createTempGithubRepo({
       category: "new-workspace-pr-ref",
@@ -1083,7 +1083,7 @@ test.describe("New workspace flow", () => {
   test("selected GitHub PR creates the worktree from the PR head even when the head branch is not fetched", async ({
     page,
   }) => {
-    test.skip(!hasGithubAuth(), "Requires GitHub authentication (gh auth login)");
+    test.skip(!canCreateGithubFixtures(), "Requires gh auth with the delete_repo scope");
 
     const ghRepo = await createTempGithubRepo({
       category: "new-workspace-pr-worktree",

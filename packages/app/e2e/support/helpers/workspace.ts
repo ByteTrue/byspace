@@ -3,8 +3,12 @@ import { mkdtemp, readFile, writeFile, rm, mkdir, realpath } from "node:fs/promi
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-const TEMP_CLEANUP_RETRIES = 5;
-const TEMP_CLEANUP_RETRY_DELAY_MS = 100;
+// The per-worker daemon keeps a native watcher on every fixture repo, and a
+// 9-spec batch leaves several being torn down at once. Windows releases those
+// handles asynchronously, so rm races the watcher and fails EBUSY. A 500ms budget
+// (5 x 100ms) loses that race on roughly 5 of 73 tests; 1.5s does not.
+export const TEMP_CLEANUP_RETRIES = 15;
+export const TEMP_CLEANUP_RETRY_DELAY_MS = 100;
 
 interface TempRepo {
   path: string;
