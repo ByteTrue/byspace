@@ -9,6 +9,7 @@ import {
   locatePiSubagentSessionFile,
   parsePiSubagentTailerSnapshot,
   PiSubagentSessionTailers,
+  readPiSubagentSessionTimeline,
 } from "./subagent-session-tailer.js";
 
 function sessionEntry(sessionId: string, cwd: string): string {
@@ -57,6 +58,47 @@ describe("parsePiSubagentTailerSnapshot", () => {
       status: "failed",
     });
     expect(parsePiSubagentTailerSnapshot({ id: "sub_abc", output: "x" })).toBeNull();
+  });
+});
+
+describe("readPiSubagentSessionTimeline", () => {
+  let root = "";
+  beforeEach(async () => {
+    root = await mkdtemp(path.join(tmpdir(), "pi-subagent-read-"));
+  });
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it("maps a whole child session file to timestamped timeline items", async () => {
+    const file = path.join(root, "1000_abc.jsonl");
+    await writeFile(
+      file,
+      [
+        sessionEntry("abc", "/repo"),
+        messageEntry({ role: "user", content: "do the thing" }),
+        messageEntry(
+          { role: "assistant", content: [{ type: "text", text: "done" }] },
+          "2026-01-01T00:00:02.000Z",
+        ),
+      ].join("\n") + "\n",
+      "utf8",
+    );
+    const rows = await readPiSubagentSessionTimeline(file, "pi");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toEqual({
+      item: { type: "user_message", text: "do the thing" },
+      timestamp: "2026-01-01T00:00:01.000Z",
+    });
+    expect(rows[1]?.item).toMatchObject({ type: "assistant_message", text: "done" });
+    expect(rows[1]?.timestamp).toBe("2026-01-01T00:00:02.000Z");
+  });
+
+  it("returns an empty array for a missing or malformed file", async () => {
+    expect(await readPiSubagentSessionTimeline(path.join(root, "missing.jsonl"), "pi")).toEqual([]);
+    const file = path.join(root, "bad.jsonl");
+    await writeFile(file, "{not json\n", "utf8");
+    expect(await readPiSubagentSessionTimeline(file, "pi")).toEqual([]);
   });
 });
 
