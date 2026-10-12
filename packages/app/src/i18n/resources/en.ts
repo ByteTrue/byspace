@@ -2056,7 +2056,7 @@ export const en = {
       },
       sidebar: {
         title: "Sidebar",
-        description: "Choose which items appear at the top of the sidebar and in what order",
+        description: "Choose which items appear in the sidebar and in what order",
         moveUp: "Move up",
         moveDown: "Move down",
       },

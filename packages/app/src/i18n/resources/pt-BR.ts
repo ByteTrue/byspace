@@ -2075,7 +2075,7 @@ export const ptBR: TranslationResources = {
       },
       sidebar: {
         title: "Barra lateral",
-        description: "Escolha quais itens aparecem no topo da barra lateral e em que ordem",
+        description: "Escolha quais itens aparecem na barra lateral e em que ordem",
         moveUp: "Mover para cima",
         moveDown: "Mover para baixo",
       },

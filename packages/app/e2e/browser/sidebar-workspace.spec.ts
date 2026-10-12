@@ -301,16 +301,16 @@ test.describe("Workspace menu visibility", () => {
       await openMobileAgentSidebar(page);
       await expectMobileAgentSidebarVisible(page);
 
-      const navTestIDs = [
-        "sidebar-global-new-workspace",
-        "sidebar-sessions",
-        "sidebar-search",
-        "sidebar-schedules",
-      ];
+      // New workspace and History are on the Workspaces header, so they are on screen from the
+      // start — folding them behind the button was what the header move undid.
+      await expect(page.getByTestId("sidebar-global-new-workspace")).toHaveCount(1);
+      await expect(page.getByTestId("sidebar-sessions")).toHaveCount(1);
 
-      // Folding is the point of the button: the panel opens with the destinations away, so the
-      // workspace list is not pushed below four rows nobody asked for on a phone.
-      for (const testID of navTestIDs) {
+      const disclosureTestIDs = ["sidebar-search", "sidebar-schedules"];
+
+      // Folding is the point of the button: the panel opens with the remaining destinations away,
+      // so the workspace list is not pushed below rows nobody asked for on a phone.
+      for (const testID of disclosureTestIDs) {
         await expect(page.getByTestId(testID)).toHaveCount(0);
       }
 
@@ -322,14 +322,14 @@ test.describe("Workspace menu visibility", () => {
       await trigger.click();
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
 
-      for (const testID of navTestIDs) {
+      for (const testID of disclosureTestIDs) {
         await expect(page.getByTestId(testID)).toHaveCount(1);
       }
 
       // The revealed rows sit below the button and on its rail, so the group reads as one list
       // even though the close button shares the button's row.
       const triggerBox = await trigger.boundingBox();
-      const firstRowBox = await page.getByTestId("sidebar-global-new-workspace").boundingBox();
+      const firstRowBox = await page.getByTestId("sidebar-search").boundingBox();
       expect(triggerBox).not.toBeNull();
       expect(firstRowBox).not.toBeNull();
       expect(firstRowBox!.y).toBeGreaterThan(triggerBox!.y);
@@ -358,7 +358,7 @@ test.describe("Workspace menu visibility", () => {
 
       const trigger = page.getByTestId("sidebar-nav-menu-trigger");
       await trigger.click();
-      await expect(page.getByTestId("sidebar-sessions")).toHaveCount(1);
+      await expect(page.getByTestId("sidebar-search")).toHaveCount(1);
 
       // Close with the ✕, which navigates nowhere. The panel is retained rather than unmounted,
       // so without an explicit reset the disclosure state would outlive it and the rows would
@@ -369,12 +369,7 @@ test.describe("Workspace menu visibility", () => {
       await openMobileAgentSidebar(page);
       await expectMobileAgentSidebarVisible(page);
       await expect(trigger).toHaveAttribute("aria-expanded", "false");
-      for (const testID of [
-        "sidebar-global-new-workspace",
-        "sidebar-sessions",
-        "sidebar-search",
-        "sidebar-schedules",
-      ]) {
+      for (const testID of ["sidebar-search", "sidebar-schedules"]) {
         await expect(page.getByTestId(testID)).toHaveCount(0);
       }
     });
@@ -527,15 +522,13 @@ test.describe("Half-screen desktop layout", () => {
     await gotoAppShell(page);
 
     await expect(pinnedSidebar(page)).toBeVisible();
-    // The destinations start hidden; the pinned sidebar shows the button instead.
-    for (const testID of [
-      "sidebar-global-new-workspace",
-      "sidebar-sessions",
-      "sidebar-search",
-      "sidebar-schedules",
-    ]) {
+    // The disclosure starts folded. New workspace and History are not part of it — the
+    // Workspaces header owns them and they are on screen from the start.
+    for (const testID of ["sidebar-search", "sidebar-schedules"]) {
       await expect(page.getByTestId(testID)).toHaveCount(0);
     }
+    await expect(page.getByTestId("sidebar-global-new-workspace")).toHaveCount(1);
+    await expect(page.getByTestId("sidebar-sessions")).toHaveCount(1);
 
     const trigger = page.getByTestId("sidebar-nav-menu-trigger");
     await expect(trigger).toBeVisible();
@@ -548,24 +541,19 @@ test.describe("Half-screen desktop layout", () => {
     // An inline disclosure, not a floating surface: the destinations are sidebar rows, and
     // they appear *below* the button, pushing the workspace list down rather than covering it.
     // A floating menu would portal them outside the sidebar; assert they are inside it.
-    await expect(pinnedSidebar(page).getByTestId("sidebar-global-new-workspace")).toHaveCount(1);
-    for (const testID of [
-      "sidebar-global-new-workspace",
-      "sidebar-sessions",
-      "sidebar-search",
-      "sidebar-schedules",
-    ]) {
+    await expect(pinnedSidebar(page).getByTestId("sidebar-search")).toHaveCount(1);
+    for (const testID of ["sidebar-search", "sidebar-schedules"]) {
       await expect(page.getByTestId(testID)).toHaveCount(1);
     }
 
     const triggerBox = await trigger.boundingBox();
-    const firstRowBox = await page.getByTestId("sidebar-global-new-workspace").boundingBox();
+    const firstRowBox = await page.getByTestId("sidebar-search").boundingBox();
     expect(triggerBox).not.toBeNull();
     expect(firstRowBox).not.toBeNull();
     expect(firstRowBox!.y).toBeGreaterThan(triggerBox!.y);
 
     // The revealed rows match one another, so the group reads as one list.
-    const rowBox = await page.getByTestId("sidebar-sessions").boundingBox();
+    const rowBox = await page.getByTestId("sidebar-schedules").boundingBox();
     expect(rowBox).not.toBeNull();
     expect(rowBox!.x).toBe(firstRowBox!.x);
     expect(rowBox!.height).toBe(firstRowBox!.height);
@@ -583,8 +571,15 @@ test.describe("Half-screen desktop layout", () => {
       expect(box, `${testID} has no leading icon`).not.toBeNull();
       return box!.x;
     };
-    expect(await glyphX("menu-button")).toBe(await glyphX("sidebar-global-new-workspace"));
-    expect(await glyphX("menu-button")).toBe(await glyphX("sidebar-sessions"));
+    expect(await glyphX("menu-button")).toBe(await glyphX("sidebar-search"));
+    expect(await glyphX("menu-button")).toBe(await glyphX("sidebar-schedules"));
+
+    // The two the header owns are not part of this group: they sit in the Workspaces section
+    // below the whole header area, on the section's own rail rather than the nav rows' icon rail.
+    const headerBox = await page.getByTestId("sidebar-global-new-workspace").boundingBox();
+    expect(headerBox).not.toBeNull();
+    expect(headerBox!.y).toBeGreaterThan(firstRowBox!.y + firstRowBox!.height);
+    expect(headerBox!.x).not.toBe(firstRowBox!.x);
 
     // The app menu is a title-bar shape, not a nav row: its label is centred on the sidebar (the
     // toggle shares the row, so the button's own centre is not the sidebar's), and its chevron
@@ -604,9 +599,24 @@ test.describe("Half-screen desktop layout", () => {
     expect(chevronRightInset).toBeGreaterThanOrEqual(0);
 
     // Choosing a destination navigates and collapses the disclosure behind it.
+    await page.getByTestId("sidebar-schedules").click();
+    await expect(page).toHaveURL(/\/schedules(?:$|\?)/, { timeout: 30_000 });
+    await expect(page.getByTestId("sidebar-schedules")).toHaveCount(0);
+  });
+
+  test("reaches History from the Workspaces header without opening the disclosure", async ({
+    page,
+  }) => {
+    await gotoAppShell(page);
+    await expect(pinnedSidebar(page)).toBeVisible();
+
+    // The point of moving it out of the disclosure: one click, not two.
+    await expect(page.getByTestId("sidebar-nav-menu-trigger")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
     await page.getByTestId("sidebar-sessions").click();
     await expect(page).toHaveURL(/\/sessions(?:$|\?)/, { timeout: 30_000 });
-    await expect(page.getByTestId("sidebar-sessions")).toHaveCount(0);
   });
 
   test("starts folded again after the pinned sidebar is collapsed and reopened", async ({
@@ -616,7 +626,7 @@ test.describe("Half-screen desktop layout", () => {
     await expect(pinnedSidebar(page)).toBeVisible();
 
     await page.getByTestId("sidebar-nav-menu-trigger").click();
-    await expect(page.getByTestId("sidebar-sessions")).toHaveCount(1);
+    await expect(page.getByTestId("sidebar-search")).toHaveCount(1);
 
     // The sidebar is retained behind `display: none` rather than unmounted, so the disclosure
     // state would survive collapsing it. Without the reset the rows would still be covering the
@@ -630,7 +640,7 @@ test.describe("Half-screen desktop layout", () => {
       "aria-expanded",
       "false",
     );
-    await expect(page.getByTestId("sidebar-sessions")).toHaveCount(0);
+    await expect(page.getByTestId("sidebar-search")).toHaveCount(0);
   });
 
   test("yields app navigation to the settings split", async ({ page }) => {

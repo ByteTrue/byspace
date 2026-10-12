@@ -2089,7 +2089,7 @@ export const fr: TranslationResources = {
       },
       sidebar: {
         title: "Barre latérale",
-        description: "Choisissez les éléments affichés en haut de la barre latérale et leur ordre",
+        description: "Choisissez les éléments affichés dans la barre latérale et leur ordre",
         moveUp: "Déplacer vers le haut",
         moveDown: "Déplacer vers le bas",
       },

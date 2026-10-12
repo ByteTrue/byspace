@@ -15,11 +15,7 @@ import { getE2EDaemonPort } from "../support/helpers/daemon-port";
 import { seedWorkspace, type SeededWorkspace } from "../support/helpers/seed-client";
 import { seedSavedSettingsHosts } from "../support/helpers/settings";
 import { getServerId } from "../support/helpers/server-id";
-import {
-  closeTopLevelNavMenu,
-  openTopLevelNavMenu,
-  topLevelNavItem,
-} from "../support/helpers/sidebar-chrome";
+import { topLevelNavItem } from "../support/helpers/sidebar-chrome";
 import { projectEquivalenceViewKey } from "../support/helpers/project-view-key";
 import {
   clickArchiveWorkspaceMenuItem,
@@ -82,10 +78,10 @@ test.describe("New workspace entry points", () => {
         workspaceId: seeded.workspaceId,
       });
 
-      const globalButtonTestID = "sidebar-global-new-workspace";
-      await openTopLevelNavMenu(page);
-      await expect(topLevelNavItem(page, globalButtonTestID)).toBeVisible({ timeout: 30_000 });
-      await closeTopLevelNavMenu(page);
+      // The global creation entry is on the Workspaces header, so it needs no disclosure.
+      await expect(topLevelNavItem(page, "sidebar-global-new-workspace")).toBeVisible({
+        timeout: 30_000,
+      });
 
       await openGlobalNewWorkspaceComposer(page);
       await expect(page.getByTestId("host-chooser")).toHaveCount(0);

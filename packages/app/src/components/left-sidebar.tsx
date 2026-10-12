@@ -32,6 +32,11 @@ import { HostPicker } from "@/components/hosts/host-picker";
 import { SidebarDisplayPreferencesMenu } from "@/components/sidebar/display-preferences/menu";
 import { SidebarNavRows } from "@/components/sidebar/sidebar-nav-rows";
 import { SidebarNavMenuTrigger } from "@/components/sidebar/sidebar-nav-menu";
+import {
+  SIDEBAR_NAV_TEST_IDS,
+  useSidebarHeaderNavEntries,
+  type SidebarNavEntry,
+} from "@/sidebar-nav/use-sidebar-nav-entries";
 import { useSidebarNavDisclosure } from "@/sidebar-nav/use-sidebar-nav-disclosure";
 import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { SidebarHelpMenu } from "@/components/sidebar/sidebar-help-menu";
@@ -81,7 +86,6 @@ interface SidebarSharedProps {
   pinnedGroups: PinnedSidebarGroups;
   projects: SidebarProjectEntry[];
   hasProjectsBeforeFilter: boolean;
-  hasActiveProjectFilter: boolean;
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   isInitialLoad: boolean;
   isRevalidating: boolean;
@@ -128,7 +132,6 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
   const {
     projects,
     hasProjectsBeforeFilter,
-    resolvedProjectFilters,
     workspaceEntriesByKey,
     isInitialLoad,
     isRevalidating,
@@ -220,7 +223,6 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
     pinnedGroups,
     projects,
     hasProjectsBeforeFilter,
-    hasActiveProjectFilter: resolvedProjectFilters.length > 0,
     workspaceEntriesByKey,
     isInitialLoad,
     isRevalidating,
@@ -523,7 +525,6 @@ function MobileSidebar({
   pinnedGroups,
   projects,
   hasProjectsBeforeFilter,
-  hasActiveProjectFilter,
   workspaceEntriesByKey,
   isInitialLoad,
   isRevalidating,
@@ -548,6 +549,14 @@ function MobileSidebar({
   const handleWorkspacePress = useCallback(() => {
     closeSidebar();
   }, [closeSidebar]);
+
+  // The header's navigation entries are on screen whether or not the disclosure is open, so they
+  // need their own dismissal: without it, choosing History from a phone leaves the panel covering
+  // the page it just navigated to.
+  const compactSectionHeader = useMemo(
+    () => <WorkspacesSectionHeader onBeforeNavigate={closeSidebar} />,
+    [closeSidebar],
+  );
 
   const mobileSidebarInsetStyle = useMemo(
     () => ({
@@ -607,7 +616,6 @@ function MobileSidebar({
             pinnedGroups={pinnedGroups}
             projects={projects}
             hasProjectsBeforeFilter={hasProjectsBeforeFilter}
-            hasActiveProjectFilter={hasActiveProjectFilter}
             workspaceEntriesByKey={workspaceEntriesByKey}
             isRefreshing={isManualRefresh && isRevalidating}
             onRefresh={handleRefresh}
@@ -616,7 +624,7 @@ function MobileSidebar({
             onImportSession={handleImportSession}
             parentGestureRef={closeGestureRef}
             dragGestureHostActive={active}
-            listHeaderComponent={workspacesSectionHeaderElement}
+            listHeaderComponent={compactSectionHeader}
           />
         )}
 
@@ -641,7 +649,6 @@ function DesktopSidebar({
   pinnedGroups,
   projects,
   hasProjectsBeforeFilter,
-  hasActiveProjectFilter,
   workspaceEntriesByKey,
   isInitialLoad,
   isRevalidating,
@@ -775,13 +782,12 @@ function DesktopSidebar({
             pinnedGroups={pinnedGroups}
             projects={projects}
             hasProjectsBeforeFilter={hasProjectsBeforeFilter}
-            hasActiveProjectFilter={hasActiveProjectFilter}
             workspaceEntriesByKey={workspaceEntriesByKey}
             isRefreshing={isManualRefresh && isRevalidating}
             onRefresh={handleRefresh}
             onAddProject={handleOpenProject}
             onImportSession={handleImportSession}
-            listHeaderComponent={workspacesSectionHeaderElement}
+            listHeaderComponent={desktopWorkspacesSectionHeaderElement}
           />
         )}
 
@@ -821,6 +827,65 @@ function DesktopSidebar({
         />
       </View>
     </Animated.View>
+  );
+}
+
+/**
+ * One of the two destinations the Workspaces header owns: New workspace and History.
+ *
+ * Same 28pt button as Sort and Display beside it, and the same tooltip — the header is a rail of
+ * icon controls over the list, so all four read as one family. The active state is carried by the
+ * glyph colour rather than a background: a filled pill here would read as a fourth menu button
+ * rather than as "you are on this page".
+ */
+function HeaderNavButton({
+  entry,
+  onBeforeNavigate,
+}: {
+  entry: SidebarNavEntry;
+  onBeforeNavigate?: () => void;
+}) {
+  const ThemedIcon = useMemo(() => withUnistyles(entry.icon), [entry.icon]);
+  // The same rule the disclosure's rows follow: choosing a destination dismisses the compact
+  // panel that was covering the page you chose. The pinned sidebar passes nothing, because
+  // collapsing it is not what a navigation means there.
+  const handlePress = useCallback(() => {
+    onBeforeNavigate?.();
+    entry.onSelect();
+  }, [entry, onBeforeNavigate]);
+  const buttonStyle = useCallback(
+    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.headerActionButton,
+      hovered && styles.headerActionButtonHovered,
+      pressed && styles.headerActionButtonPressed,
+    ],
+    [],
+  );
+
+  return (
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger asChild>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={entry.label}
+          onPress={handlePress}
+          style={buttonStyle}
+          testID={SIDEBAR_NAV_TEST_IDS[entry.id]}
+        >
+          {({ hovered }) => (
+            <ThemedIcon
+              size={14}
+              uniProps={
+                hovered || entry.isActive ? foregroundColorMapping : foregroundMutedColorMapping
+              }
+            />
+          )}
+        </Pressable>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" align="center" offset={8}>
+        <IconTooltipContent label={entry.label} shortcutKeys={entry.shortcutKeys} />
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -889,30 +954,59 @@ function SortProjectsButton() {
   );
 }
 
-function WorkspacesSectionHeader() {
+/**
+ * The section header over the workspace list.
+ *
+ * It carries two kinds of thing: the navigation entries that are meaningful on their own (New
+ * workspace, History) and the controls over the list beneath it (Sort, Display), which act on rows
+ * that may not exist. The nav entries therefore keep the header rendered with no projects at all,
+ * and the list controls drop out in that case rather than opening menus over nothing.
+ */
+function WorkspacesSectionHeader({ onBeforeNavigate }: { onBeforeNavigate?: () => void }) {
+  const headerEntries = useSidebarHeaderNavEntries();
+  const { allProjects } = useSidebarModel();
+  const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
+  // `allProjects`, not the filtered list, and the host filter ORed in on top of it. The display
+  // menu is the only way back out of a filter, so it has to outlive the rows the filter hid:
+  // narrowing to a host that carries no projects empties `allProjects` and would otherwise
+  // unmount the one control that can undo it. Every other filter resolves against a non-empty
+  // list, so this is the only term that can be true with nothing to show.
+  const hasListControls = allProjects.length > 0 || hasActiveHostFilter;
+
   return (
     <View style={styles.workspacesSectionHeader}>
-      <Text style={styles.workspacesSectionTitle}>Workspaces</Text>
+      <Text style={styles.workspacesSectionTitle} numberOfLines={1}>
+        Workspaces
+      </Text>
       <View style={styles.workspacesSectionActions}>
-        <SortProjectsButton />
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>
-            <View>
-              <SidebarDisplayPreferencesMenu />
-            </View>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" align="center" offset={8}>
-            <IconTooltipContent label="Display preferences" />
-          </TooltipContent>
-        </Tooltip>
+        {headerEntries.map((entry) => (
+          <HeaderNavButton key={entry.id} entry={entry} onBeforeNavigate={onBeforeNavigate} />
+        ))}
+        {hasListControls ? (
+          <>
+            <SortProjectsButton />
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <View>
+                  <SidebarDisplayPreferencesMenu />
+                </View>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" align="center" offset={8}>
+                <IconTooltipContent label="Display preferences" />
+              </TooltipContent>
+            </Tooltip>
+          </>
+        ) : null}
       </View>
     </View>
   );
 }
 
-// Stable element so the sidebar list's listHeaderComponent prop keeps identity across
-// renders (WorkspacesSectionHeader takes no props).
-const workspacesSectionHeaderElement = <WorkspacesSectionHeader />;
+// Stable element for the pinned sidebar, whose header takes no dismiss callback: collapsing the
+// sidebar is not what choosing a destination means there. The compact shell builds its own with
+// `closeSidebar`, since choosing a destination has to dismiss the panel covering the page it
+// navigated to.
+const desktopWorkspacesSectionHeaderElement = <WorkspacesSectionHeader />;
 
 // Static styles for Animated.Views — must NOT use Unistyles dynamic theme to
 // avoid the "Unable to find node on an unmounted component" crash when Unistyles
@@ -940,10 +1034,15 @@ const styles = StyleSheet.create((theme) => ({
     paddingTop: theme.spacing[3],
     paddingBottom: theme.spacing[1.5],
   },
+  // Yields to the buttons beside it rather than pushing them off the rail: at the sidebar's
+  // 200pt minimum the four controls plus the title do not fit, and the title is the part whose
+  // absence the rows below already make up for.
   workspacesSectionTitle: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
+    flexShrink: 1,
+    minWidth: 0,
   },
   workspacesSectionActions: {
     flexDirection: "row",

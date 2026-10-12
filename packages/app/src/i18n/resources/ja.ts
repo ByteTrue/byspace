@@ -2062,7 +2062,7 @@ export const ja: TranslationResources = {
       },
       sidebar: {
         title: "サイドバー",
-        description: "サイドバー上部に表示する項目とその順序を選択します",
+        description: "サイドバーに表示する項目とその順序を選択します",
         moveUp: "上に移動",
         moveDown: "下に移動",
       },

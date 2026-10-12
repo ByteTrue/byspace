@@ -2054,7 +2054,7 @@ export const ko: TranslationResources = {
       },
       sidebar: {
         title: "사이드바",
-        description: "사이드바 상단에 표시할 항목과 순서를 선택하세요",
+        description: "사이드바에 표시할 항목과 순서를 선택하세요",
         moveUp: "위로 이동",
         moveDown: "아래로 이동",
       },

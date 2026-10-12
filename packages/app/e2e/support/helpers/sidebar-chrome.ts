@@ -1,8 +1,13 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
 const TRIGGER_TEST_ID = "sidebar-nav-menu-trigger";
-/** Any entry works as a probe: the disclosure reveals and hides them together. */
-const PROBE_ITEM_TEST_ID = "sidebar-global-new-workspace";
+/**
+ * Any entry works as a probe: the disclosure reveals and hides them together. It must be one of
+ * the entries the disclosure actually owns — New workspace and History moved to the Workspaces
+ * header, where they are visible whether or not the disclosure is open, so probing with either
+ * of them would report "already open" forever.
+ */
+const PROBE_ITEM_TEST_ID = "sidebar-search";
 
 /**
  * The pinned desktop sidebar. The shell can keep a hidden copy mounted, so always read it
@@ -13,8 +18,9 @@ export function pinnedSidebar(page: Page): Locator {
 }
 
 /**
- * A top-level sidebar destination, however the current form factor presents it: a row under
- * the desktop BySpace button, or a row in the compact sidebar's overlay.
+ * A top-level sidebar destination, however the current form factor presents it: an icon button on
+ * the Workspaces header, a row under the desktop BySpace button, or a row in the compact sidebar's
+ * overlay.
  */
 export function topLevelNavItem(page: Page, testID: string): Locator {
   return page.locator(`[data-testid="${testID}"]:visible`).first();
@@ -60,9 +66,15 @@ export async function closeTopLevelNavMenu(page: Page): Promise<void> {
   await expect(topLevelNavItem(page, PROBE_ITEM_TEST_ID)).toHaveCount(0);
 }
 
-/** Reveals the disclosure when needed, then clicks the destination. */
+/**
+ * Clicks a top-level destination, revealing the disclosure only when the destination is not
+ * already on screen. New workspace and History live on the Workspaces header and are visible
+ * either way, so opening the BySpace menu for them would expand a disclosure nobody asked for.
+ */
 export async function clickTopLevelNavItem(page: Page, testID: string): Promise<void> {
-  await openTopLevelNavMenu(page);
+  if (!(await isVisible(topLevelNavItem(page, testID)))) {
+    await openTopLevelNavMenu(page);
+  }
   const item = topLevelNavItem(page, testID);
   await expect(item).toBeVisible({ timeout: 30_000 });
   await item.click();
