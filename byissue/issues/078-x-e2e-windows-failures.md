@@ -57,6 +57,12 @@ CI 上 14.6s 通过，本机 mock 慢（10s 才出现 612）就超时 —— 典
 
 `new-workspace-navigation.ts` 断言 agent 请求的 `cwd` 等于 `created.workspaceDirectory`。daemon 返回归一化（正斜杠）形式，Windows 上拿反斜杠的原始路径去比必然不等。改为比较前统一分隔符。
 
+## 未覆盖的改动（记在这里以免被当成已验证）
+
+修根因 1 时一并改了 `e2e/support/helpers/app.ts` 的 `setWorkingDirectory`（同一处按 `/` 分割的写法）。这次验收**没有跑到它**：它只被同文件的 `createAgentWithConfig` / `createAgentInRepo` 调用，而这两个 helper 没有任何 spec 使用（`rg` 全仓无调用方）。
+
+改动本身按同一规则处理分隔符，与 `projectNameFromPath` 一致；但「没有任何测试执行过这条路径」是事实，下列改动不属于已验证范围。
+
 ## 为什么 CI 没挡住
 
 `.github/workflows/ci.yml` 的 8 个 playwright shard 全部 `runs-on: ubuntu-latest`；Windows 上跑的是 server-tests 和 terminal-performance。这三类问题都需要真实 Windows 环境才暴露。

@@ -81,9 +81,9 @@ created: 2026-10-11
 
 **回写位置**：坑点进 [docs/react-compiler.md](../../docs/react-compiler.md)（新文档，AGENTS.md 表加索引）；本 issue 留执行历史与验证证据。前端查询层没有对应的 project spec 章节，无可毕业的稳定结论。
 
-**遗留**：下面那 2 例既有 e2e 失败 + 1 例 flaky 未记录在任何 issue 里，需单独跟进。
+**遗留**：下面那 3 例已在 `078-x-e2e-windows-failures.md` 中定位并修复（属于该 issue 的根因 2 和 3），本 issue 不再跟踪。
 
-## 验收时发现的既有失败（与本 issue 无关）
+## 验收时发现的既有失败（已由 078 修复）
 
 `agent-stream-ui.spec.ts` 有 2 例在**基线（stash 掉本 issue 全部改动）上同样失败**，已排除为本 issue 引入：
 
