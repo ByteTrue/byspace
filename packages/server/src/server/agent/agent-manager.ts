@@ -721,6 +721,9 @@ export class AgentManager {
       this.applyExternalProviderSubagentObservation(agentId, "pi", observation);
     },
   });
+  // In-flight cold-start timeline rebuilds, keyed agentId\u0000subagentId. Values are the
+  // promises themselves so concurrent fetches join the rebuild instead of racing it.
+  private readonly providerSubagentRebuilds = new Map<string, Promise<void>>();
   private readonly agentsAwaitingInitialSnapshotPersist = new Set<string>();
   private readonly sessionEventTails = new Map<string, Promise<void>>();
   private readonly steerEventBarriers = new Map<string, SteerEventBarrier>();
@@ -1334,13 +1337,83 @@ export class AgentManager {
     return this.providerSubagents.get(parentAgentId, subagentId);
   }
 
-  fetchProviderSubagentTimeline(
+  async fetchProviderSubagentTimeline(
     parentAgentId: string,
     subagentId: string,
     options?: AgentTimelineFetchOptions,
-  ): AgentTimelineFetchResult {
+  ): Promise<AgentTimelineFetchResult> {
     this.requirePublicAgent(parentAgentId);
+    await this.rebuildProviderSubagentTimelineIfEmpty(parentAgentId, subagentId);
     return this.providerSubagents.fetchTimeline(parentAgentId, subagentId, options);
+  }
+
+  /**
+   * The subagent timeline store is daemon memory; after a restart the tailer state is gone
+   * and the only durable source is the child session jsonl on disk (pointers recorded by
+   * pi-subagent >= 0.18 in the parent transcript). Rebuild once per (agent, subagent) when
+   * a client asks for a timeline the store cannot serve. Running children stay exclusive to
+   * the live tailer — it replays the same file from offset 0, and a second producer would
+   * double-write rows. Silent on any failure: the fetch then returns what the store has.
+   */
+  private async rebuildProviderSubagentTimelineIfEmpty(
+    parentAgentId: string,
+    subagentId: string,
+  ): Promise<void> {
+    const key = `${parentAgentId}\u0000${subagentId}`;
+    // Descriptor presence first: the timeline store initializes alongside the descriptor,
+    // and fetchTimeline throws on an unknown key.
+    const descriptor = this.providerSubagents.get(parentAgentId, subagentId);
+    if (!descriptor || descriptor.status === "running") {
+      return;
+    }
+    if (this.providerSubagents.fetchTimeline(parentAgentId, subagentId).rows.length > 0) {
+      return;
+    }
+    const agent = this.agents.get(parentAgentId);
+    const rebuild = agent?.session.rebuildProviderSubagentTimeline?.bind(agent.session);
+    if (typeof rebuild !== "function") {
+      return;
+    }
+    const inFlight = this.providerSubagentRebuilds.get(key);
+    if (inFlight) {
+      // A concurrent fetch already owns the rebuild; joining it means this caller's
+      // response is written after the rows land, never an empty page racing the append.
+      await inFlight.catch(() => undefined);
+      return;
+    }
+    const owned = (async () => {
+      try {
+        const items = await rebuild(subagentId);
+        if (this.providerSubagents.get(parentAgentId, subagentId)?.id !== subagentId) {
+          return;
+        }
+        // The live tailer may have appended while the file was being read (exit report
+        // landed, grace window still draining). Rows present means the disk replay would
+        // double-write; the tailer keeps the authority in that case.
+        if (this.providerSubagents.fetchTimeline(parentAgentId, subagentId).rows.length > 0) {
+          return;
+        }
+        for (const { item, timestamp } of items) {
+          this.applyExternalProviderSubagentObservation(parentAgentId, "pi", {
+            kind: "timeline",
+            id: subagentId,
+            item,
+            ...(timestamp ? { timestamp } : {}),
+          });
+        }
+      } catch {
+        // The child jsonl may be gone or unreadable; the store stays empty and the client
+        // renders its empty state. Do not latch: a later fetch may succeed.
+      }
+    })();
+    this.providerSubagentRebuilds.set(key, owned);
+    try {
+      await owned;
+    } finally {
+      if (this.providerSubagentRebuilds.get(key) === owned) {
+        this.providerSubagentRebuilds.delete(key);
+      }
+    }
   }
 
   createAgent(
@@ -4040,6 +4113,8 @@ export class AgentManager {
   ): Promise<void> {
     const historyEvents: Extract<AgentStreamEvent, { type: "timeline" }>[] = [];
     const providerSubagentEvents: Extract<AgentStreamEvent, { type: "provider_subagent" }>[] = [];
+    // Force-hydration (rewind) replays against the live runtime: subagents launched by
+    // this very process may still be running, so no processReplaced sweep here.
     for await (const rawEvent of agent.session.streamHistory()) {
       const event = limitAgentStreamEventContent(rawEvent);
       if (event.type === "timeline") {
@@ -4099,7 +4174,12 @@ export class AgentManager {
     const providerSubagentEvents: AgentManagerEvent[] = [];
     agent.historyPrimed = false;
     try {
-      for await (const rawEvent of agent.session.streamHistory()) {
+      // Every non-force hydration follows a fresh session object (resume, unarchive,
+      // restore-from-storage, reload-with-rehydrate): the process that produced the old
+      // transcript is gone, so a running tail in it can be closed out as canceled.
+      for await (const rawEvent of agent.session.streamHistory({
+        processReplaced: true,
+      })) {
         const event = limitAgentStreamEventContent(rawEvent);
         if (event.type === "provider_subagent") {
           const update = this.applyProviderSubagentEvent(agent.id, event.provider, event.event);

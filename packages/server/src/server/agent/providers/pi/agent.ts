@@ -90,13 +90,20 @@ import {
   type PiTrackedToolCall,
 } from "./tool-call-mapper.js";
 import { foldSubagentObservations } from "../../provider-subagents/observation.js";
+import type { PiSubagentSessionPointer } from "./agent-subagents.js";
+import type { RebuiltProviderSubagentTimelineItem } from "../../agent-sdk-types.js";
 import {
   isPiSubagentToolName,
   observePiSubagentExit,
   observePiSubagentLaunch,
   observePiSubagentRecord,
-  replayPiSubagentObservations,
+  parsePiSubagentRecordDetails,
+  replayPiSubagentSession,
 } from "./agent-subagents.js";
+import {
+  locatePiSubagentSessionFile,
+  readPiSubagentSessionTimeline,
+} from "./subagent-session-tailer.js";
 
 const PI_PROVIDER = "pi";
 const DEFAULT_PI_THINKING_LEVEL: PiThinkingLevel = "medium";
@@ -1247,6 +1254,10 @@ export class PiRpcAgentSession implements AgentSession {
   // Pi publishes the terminal before acknowledging abort. Autonomous runs have no
   // turn ID; retain their errors too until the cancellation request settles.
   private interruptingTurn: { turnId: string | undefined; error: string | null } | null = null;
+  // Child session pointers per subagent id, from the transcript replay and the live tool
+  // results. The manager's timeline rebuild reads these after a daemon restart wiped the
+  // in-memory subagent store — the jsonl on disk is the only durable timeline source.
+  private readonly subagentSessionPointers = new Map<string, PiSubagentSessionPointer>();
 
   constructor(options: PiRpcAgentSessionOptions) {
     this.runtimeSession = options.runtimeSession;
@@ -1440,20 +1451,41 @@ export class PiRpcAgentSession implements AgentSession {
     };
   }
 
-  async *streamHistory(): AsyncGenerator<AgentStreamEvent> {
+  async *streamHistory(options?: { processReplaced?: boolean }): AsyncGenerator<AgentStreamEvent> {
     await this.requestEntryCapture("history");
-    yield* streamPiHistory(
-      this.provider,
-      await this.runtimeSession.getMessages(),
-      this.capturedUserEntries,
-    );
+    const messages = await this.runtimeSession.getMessages();
+    yield* streamPiHistory(this.provider, messages, this.capturedUserEntries);
     // Background subagent lifecycle lives in the transcript as tool result details and
     // subagent-exit custom messages, not in a sidechain — derive it from the same messages.
-    for (const subagentEvent of foldSubagentObservations(
-      replayPiSubagentObservations(await this.runtimeSession.getMessages()),
-    )) {
+    // closeRunningAsCanceled only on the post-restart replay: against a live process
+    // (rewind's forced re-hydration) a running child is genuinely still running.
+    const replay = replayPiSubagentSession(messages, {
+      closeRunningAsCanceled: options?.processReplaced === true,
+    });
+    for (const [id, pointer] of replay.sessionPointers) {
+      this.subagentSessionPointers.set(id, { ...this.subagentSessionPointers.get(id), ...pointer });
+    }
+    for (const subagentEvent of foldSubagentObservations(replay.observations)) {
       yield { type: "provider_subagent", provider: this.provider, event: subagentEvent };
     }
+  }
+
+  async rebuildProviderSubagentTimeline(
+    subagentId: string,
+  ): Promise<RebuiltProviderSubagentTimelineItem[]> {
+    const pointer = this.subagentSessionPointers.get(subagentId);
+    if (!pointer) {
+      return [];
+    }
+    const file =
+      pointer.sessionFile ??
+      (pointer.sessionId
+        ? await locatePiSubagentSessionFile(pointer.sessionId, { cwd: pointer.cwd })
+        : null);
+    if (!file) {
+      return [];
+    }
+    return readPiSubagentSessionTimeline(file, this.provider);
   }
 
   async getRuntimeInfo(): Promise<AgentRuntimeInfo> {
@@ -2345,6 +2377,15 @@ export class PiRpcAgentSession implements AgentSession {
       return;
     }
     const details = typeof result === "object" && result !== null ? result.details : undefined;
+    const parsed = parsePiSubagentRecordDetails(details);
+    if (parsed && (parsed.sessionId || parsed.cwd || parsed.sessionFile)) {
+      this.subagentSessionPointers.set(parsed.id, {
+        ...this.subagentSessionPointers.get(parsed.id),
+        ...(parsed.sessionId ? { sessionId: parsed.sessionId } : {}),
+        ...(parsed.cwd ? { cwd: parsed.cwd } : {}),
+        ...(parsed.sessionFile ? { sessionFile: parsed.sessionFile } : {}),
+      });
+    }
     const observation =
       toolCall.toolName === "subagent"
         ? observePiSubagentLaunch({ toolCallId, args: toolCall.args, details })
@@ -2442,6 +2483,19 @@ export class PiRpcAgentSession implements AgentSession {
       // means context-only (Pi's TUI hides them too). display is optional on older
       // runtimes; treat missing as true so exit notifications still surface.
       if (event.message.customType === "subagent-exit") {
+        for (const record of Array.isArray(event.message.details)
+          ? event.message.details
+          : [event.message.details]) {
+          const parsed = parsePiSubagentRecordDetails(record);
+          if (parsed && (parsed.sessionId || parsed.cwd || parsed.sessionFile)) {
+            this.subagentSessionPointers.set(parsed.id, {
+              ...this.subagentSessionPointers.get(parsed.id),
+              ...(parsed.sessionId ? { sessionId: parsed.sessionId } : {}),
+              ...(parsed.cwd ? { cwd: parsed.cwd } : {}),
+              ...(parsed.sessionFile ? { sessionFile: parsed.sessionFile } : {}),
+            });
+          }
+        }
         for (const subagentEvent of foldSubagentObservations(
           observePiSubagentExit(event.message.details),
         )) {

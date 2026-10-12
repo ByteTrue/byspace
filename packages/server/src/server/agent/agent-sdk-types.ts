@@ -673,6 +673,12 @@ export interface AgentPermissionResult {
   followUpPrompt?: AgentPromptInput;
 }
 
+/** One rebuilt timeline row plus the jsonl line timestamp the child session carried. */
+export interface RebuiltProviderSubagentTimelineItem {
+  item: AgentTimelineItem;
+  timestamp?: string;
+}
+
 export interface AgentSession {
   readonly provider: AgentProvider;
   readonly id: string | null;
@@ -682,7 +688,26 @@ export interface AgentSession {
   startTurn(prompt: AgentPromptInput, options?: AgentRunOptions): Promise<{ turnId: string }>;
   steerActiveTurn?(prompt: AgentPromptInput, options: SteerActiveTurnOptions): Promise<SteerResult>;
   subscribe(callback: (event: AgentStreamEvent) => void): () => void;
-  streamHistory(): AsyncGenerator<AgentStreamEvent>;
+  /**
+   * `options.processReplaced` marks the post-restart replay: the runtime process that
+   * produced these messages is gone (process replacement killed its child trees), so a
+   * transcript that still ends on a running provider subagent can be closed out as
+   * canceled. Replay paths that run against a live process — rewind's forced
+   * re-hydration, anything else holding the same runtime — must not pass it, or they
+   * flip genuinely running subagents to canceled and the terminal latch stalls the row
+   * until the child actually exits.
+   */
+  streamHistory(options?: { processReplaced?: boolean }): AsyncGenerator<AgentStreamEvent>;
+  /**
+   * Pi only: rebuild one provider subagent's timeline from its child session jsonl on
+   * disk, using the session pointer the transcript replay collected. Returns the items
+   * in order, or an empty array when no pointer exists or the file is unreadable. Only
+   * meaningful for a settled (non-running) child — a running one is covered by the
+   * live tailer from offset 0, and a second producer would double-write rows.
+   */
+  rebuildProviderSubagentTimeline?(
+    subagentId: string,
+  ): Promise<RebuiltProviderSubagentTimelineItem[]>;
   getRuntimeInfo(): Promise<AgentRuntimeInfo>;
   getAvailableModes(): Promise<AgentMode[]>;
   getCurrentMode(): Promise<string | null>;
