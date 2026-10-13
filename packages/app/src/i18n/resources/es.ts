@@ -2087,8 +2087,7 @@ export const es: TranslationResources = {
       },
       sidebar: {
         title: "Barra lateral",
-        description:
-          "Elige qué elementos aparecen en la parte superior de la barra lateral y en qué orden",
+        description: "Elige qué elementos aparecen en la barra lateral y en qué orden",
         moveUp: "Mover hacia arriba",
         moveDown: "Mover hacia abajo",
       },

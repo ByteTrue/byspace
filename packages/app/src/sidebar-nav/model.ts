@@ -7,6 +7,27 @@ export const BUILTIN_SIDEBAR_NAV_IDS = [
 ] as const;
 export type BuiltinSidebarNavId = (typeof BUILTIN_SIDEBAR_NAV_IDS)[number];
 
+/**
+ * The items the Workspaces header carries as its own icon buttons.
+ *
+ * They are still builtins — same labels, same routes, same visibility switches — but their place
+ * is fixed by the surface that draws them rather than by the disclosure's order, so the Sidebar
+ * section in Appearance offers no Move up/down for them. Folding them into the BySpace menu put
+ * the two most-used destinations behind a click, which is the cost the disclosure was supposed to
+ * pay for the two least-used ones.
+ */
+export const HEADER_SIDEBAR_NAV_IDS = ["new-workspace", "history"] as const;
+export type HeaderSidebarNavId = (typeof HEADER_SIDEBAR_NAV_IDS)[number];
+
+export function isHeaderSidebarNavId(id: BuiltinSidebarNavId): id is HeaderSidebarNavId {
+  return (HEADER_SIDEBAR_NAV_IDS as readonly string[]).includes(id);
+}
+
+/** The entries that remain inside the BySpace disclosure, in the user's stored order. */
+export function isDisclosureSidebarNavId(id: BuiltinSidebarNavId): boolean {
+  return !isHeaderSidebarNavId(id);
+}
+
 /** Persisted shape. Array order is the display order. */
 export interface SidebarNavPreference {
   key: string;
@@ -123,20 +144,34 @@ export function setSidebarNavItemVisible(input: {
   return toPreferences(items, input.previous);
 }
 
+/**
+ * Moves one entry within the disclosure's run.
+ *
+ * The header's items keep their slots, so an "up" that would have stepped past one of them lands
+ * where it would have without them. That matters because the user cannot see the header items in
+ * this list: an up that moved an entry past an invisible neighbour would look like nothing
+ * happened.
+ */
 export function moveSidebarNavItem(input: {
   items: readonly SidebarNavItem[];
   key: string;
   direction: "up" | "down";
   previous: readonly SidebarNavPreference[];
 }): SidebarNavPreference[] {
-  const from = input.items.findIndex((item) => item.key === input.key);
+  const reorderable = input.items.filter((item) => !isHeaderSidebarNavId(item.id));
+  const from = reorderable.findIndex((item) => item.key === input.key);
   const to = input.direction === "up" ? from - 1 : from + 1;
-  const canMove = from !== -1 && to >= 0 && to < input.items.length;
+  const canMove = from !== -1 && to >= 0 && to < reorderable.length;
   if (!canMove) {
     return toPreferences(input.items, input.previous);
   }
-  const items = [...input.items];
-  const [moved] = items.splice(from, 1);
-  items.splice(to, 0, moved);
+  const reordered = [...reorderable];
+  const [moved] = reordered.splice(from, 1);
+  reordered.splice(to, 0, moved);
+
+  let cursor = 0;
+  const items = input.items.map((item) =>
+    isHeaderSidebarNavId(item.id) ? item : reordered[cursor++],
+  );
   return toPreferences(items, input.previous);
 }

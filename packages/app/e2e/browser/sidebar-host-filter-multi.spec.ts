@@ -46,6 +46,13 @@ test.describe("Sidebar host filter (multi-select)", () => {
       await toggleHostFilter(page, serverId);
       await expect(workspaceRow).toHaveCount(0, { timeout: 10_000 });
 
+      // The sidebar is now empty, and the display menu is the only way back out of that filter.
+      // It has to outlive the rows the filter hid: if the section header dropped it here, the
+      // filter would be unrecoverable without editing stored state.
+      await expect(page.getByTestId("sidebar-display-preferences-menu")).toBeVisible({
+        timeout: 10_000,
+      });
+
       // Back to all hosts — the workspace returns.
       await selectAllHostsFilter(page);
       await expect(workspaceRow).toBeVisible({ timeout: 10_000 });

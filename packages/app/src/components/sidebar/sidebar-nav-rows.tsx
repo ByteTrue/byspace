@@ -3,7 +3,7 @@ import { View, type StyleProp, type ViewStyle } from "react-native";
 import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
 import {
   SIDEBAR_NAV_TEST_IDS,
-  useSidebarNavEntries,
+  useSidebarNavDisclosureEntries,
   type SidebarNavEntry,
 } from "@/sidebar-nav/use-sidebar-nav-entries";
 
@@ -18,11 +18,12 @@ interface SidebarNavRowsProps {
  * `sidebarNavItems` preference. Renders nothing — not even the bordered group wrapper —
  * when every item is hidden.
  *
- * Both sidebars render these, from the same `useSidebarNavEntries` source: the compact shell
- * inside its BySpace disclosure, the pinned shell inside the one in its top row.
+ * Both sidebars render these, from the same `useSidebarNavDisclosureEntries` source: the compact
+ * shell inside its BySpace disclosure, the pinned shell inside the one in its top row. New
+ * workspace and History are not here — the Workspaces header owns them now.
  */
 export function SidebarNavRows({ style, onBeforeNavigate }: SidebarNavRowsProps) {
-  const entries = useSidebarNavEntries();
+  const entries = useSidebarNavDisclosureEntries();
 
   if (entries.length === 0) return null;
 

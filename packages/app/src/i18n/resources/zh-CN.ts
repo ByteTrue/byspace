@@ -2021,7 +2021,7 @@ export const zhCN: TranslationResources = {
       },
       sidebar: {
         title: "侧边栏",
-        description: "选择侧边栏顶部显示的项目及其顺序",
+        description: "选择侧边栏中显示的项目及其顺序",
         moveUp: "上移",
         moveDown: "下移",
       },

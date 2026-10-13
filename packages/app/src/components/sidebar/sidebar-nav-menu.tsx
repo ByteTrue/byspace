@@ -6,6 +6,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { isWeb } from "@/constants/platform";
 import { ICON_SIZE } from "@/styles/theme";
 import { HEADER_CONTROL_HEIGHT } from "@/components/ui/control-geometry";
+import { isDisclosureSidebarNavId } from "@/sidebar-nav/model";
 import { useSidebarNavItems } from "@/sidebar-nav/use-sidebar-nav-items";
 import { sidebarLabelStyles } from "@/styles/sidebar";
 import type { Theme } from "@/styles/theme";
@@ -46,7 +47,10 @@ export function SidebarNavMenuTrigger({
 }: SidebarNavMenuTriggerProps): ReactElement | null {
   const { t } = useTranslation();
   // Only the count matters here, so read the preference rather than resolving every entry —
-  // that would subscribe to four shortcuts and look up the active workspace on every render.
+  // that would subscribe to four shortcuts and look up the active workspace on every render. The
+  // count is of the entries this button reveals, not of the whole nav: New workspace and History
+  // are visible whether or not the disclosure is open, so counting them would keep a trigger that
+  // opens onto nothing.
   const items = useSidebarNavItems().items;
   const ThemedChevron = useMemo(
     () => withUnistyles(expanded ? ChevronDown : ChevronRight),
@@ -61,7 +65,7 @@ export function SidebarNavMenuTrigger({
     ? ({ "aria-expanded": expanded } as Record<string, boolean>)
     : null;
 
-  if (!items.some((item) => item.visible)) return null;
+  if (!items.some((item) => item.visible && isDisclosureSidebarNavId(item.id))) return null;
 
   return (
     <>

@@ -64,16 +64,41 @@ describe("setSidebarNavItemVisible", () => {
 });
 
 describe("moveSidebarNavItem", () => {
-  it("moves an item up when possible", () => {
+  it("moves a disclosure item up within the disclosure", () => {
     const all = resolveSidebarNavItems({ preferences: [] });
-    const target = all[1];
+    // Schedules starts below Search; moving it up swaps the two.
     const preferences = moveSidebarNavItem({
       items: all,
-      key: target.key,
+      key: "schedules",
       direction: "up",
       previous: [],
     });
-    expect(preferences[0]?.key).toBe(target.key);
+    const keys = preferences.map((preference) => preference.key);
+    expect(keys.indexOf("schedules")).toBeLessThan(keys.indexOf("search"));
+  });
+
+  it("steps over the header items rather than past them", () => {
+    const all = resolveSidebarNavItems({ preferences: [] });
+    // Search is the first disclosure item. Moving it up cannot leave the disclosure, so it stays
+    // put instead of trading places with an entry the user cannot see in this list.
+    const preferences = moveSidebarNavItem({
+      items: all,
+      key: "search",
+      direction: "up",
+      previous: [],
+    });
+    expect(preferences.map((preference) => preference.key)).toEqual(all.map((item) => item.key));
+  });
+
+  it("refuses to move a header item", () => {
+    const all = resolveSidebarNavItems({ preferences: [] });
+    const preferences = moveSidebarNavItem({
+      items: all,
+      key: "history",
+      direction: "down",
+      previous: [],
+    });
+    expect(preferences.map((preference) => preference.key)).toEqual(all.map((item) => item.key));
   });
 });
 

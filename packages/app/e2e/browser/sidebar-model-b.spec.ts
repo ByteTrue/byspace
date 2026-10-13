@@ -6,12 +6,7 @@ import { seedMockAgentWorkspace } from "../support/helpers/mock-agent";
 import { getServerId } from "../support/helpers/server-id";
 import { projectEquivalenceViewKey } from "../support/helpers/project-view-key";
 import { selectSidebarStatusGrouping } from "../support/helpers/sidebar";
-import {
-  closeTopLevelNavMenu,
-  openTopLevelNavMenu,
-  pinnedSidebar,
-  topLevelNavItem,
-} from "../support/helpers/sidebar-chrome";
+import { pinnedSidebar, topLevelNavItem } from "../support/helpers/sidebar-chrome";
 import { waitForSidebarHydration } from "../support/helpers/workspace-ui";
 import { getVisibleWorkspaceAgentTabIds } from "../support/helpers/workspace-tabs";
 
@@ -83,12 +78,10 @@ test.describe("Model B sidebar shape", () => {
       });
 
       // The global new-workspace entry is the universal one — present for both kinds
-      // regardless of their per-row affordance.
-      await openTopLevelNavMenu(page);
+      // regardless of their per-row affordance. It lives on the Workspaces header.
       await expect(topLevelNavItem(page, "sidebar-global-new-workspace")).toBeVisible({
         timeout: 30_000,
       });
-      await closeTopLevelNavMenu(page);
     } finally {
       await gitProject.cleanup();
       await nonGitProject.cleanup();

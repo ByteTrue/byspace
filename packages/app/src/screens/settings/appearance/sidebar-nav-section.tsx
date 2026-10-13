@@ -21,6 +21,7 @@ import { SettingsSection } from "@/components/settings/headings/settings-section
 import {
   builtinSidebarNavLabelKey,
   builtinSidebarNavShortcutAction,
+  isHeaderSidebarNavId,
   type BuiltinSidebarNavId,
   type SidebarNavItem,
 } from "@/sidebar-nav/model";
@@ -86,6 +87,10 @@ function SidebarNavRow({
 }: SidebarNavRowProps): ReactElement {
   const { t } = useTranslation();
   const label = navItemLabel(t, item);
+  // The two the Workspaces header owns have a place the layout decides, not the user, so a
+  // reorder control on their rows would be a control that does nothing. Visibility still
+  // applies — switching them off removes them from the header.
+  const reorderable = !isHeaderSidebarNavId(item.id);
 
   const handleMoveUp = useCallback(() => onMove(item.key, "up"), [item.key, onMove]);
   const handleMoveDown = useCallback(() => onMove(item.key, "down"), [item.key, onMove]);
@@ -109,26 +114,28 @@ function SidebarNavRow({
         <NavItemShortcut item={item} />
       </View>
       <View style={styles.rowActions}>
-        <View style={styles.reorderCluster}>
-          <Button
-            variant="ghost"
-            size="xs"
-            leftIcon={moveUpIcon}
-            onPress={handleMoveUp}
-            disabled={isFirst}
-            accessibilityLabel={t("settings.appearance.sidebar.moveUp")}
-            testID={`sidebar-nav-move-up-${item.key}`}
-          />
-          <Button
-            variant="ghost"
-            size="xs"
-            leftIcon={moveDownIcon}
-            onPress={handleMoveDown}
-            disabled={isLast}
-            accessibilityLabel={t("settings.appearance.sidebar.moveDown")}
-            testID={`sidebar-nav-move-down-${item.key}`}
-          />
-        </View>
+        {reorderable ? (
+          <View style={styles.reorderCluster}>
+            <Button
+              variant="ghost"
+              size="xs"
+              leftIcon={moveUpIcon}
+              onPress={handleMoveUp}
+              disabled={isFirst}
+              accessibilityLabel={t("settings.appearance.sidebar.moveUp")}
+              testID={`sidebar-nav-move-up-${item.key}`}
+            />
+            <Button
+              variant="ghost"
+              size="xs"
+              leftIcon={moveDownIcon}
+              onPress={handleMoveDown}
+              disabled={isLast}
+              accessibilityLabel={t("settings.appearance.sidebar.moveDown")}
+              testID={`sidebar-nav-move-down-${item.key}`}
+            />
+          </View>
+        ) : null}
         <Switch
           value={item.visible}
           onValueChange={handleVisibleChange}
@@ -143,6 +150,13 @@ function SidebarNavRow({
 export function SidebarNavSection(): ReactElement {
   const { t } = useTranslation();
   const { items, setVisible, move } = useSidebarNavItems();
+  // The ends of the *reorderable* run, not of the list: the header's two items sit in the same
+  // list but hold no reorder control, and counting them would leave the first reorderable row's
+  // Move up enabled at the top of a run it cannot move within.
+  const reorderableKeys = useMemo(
+    () => items.filter((item) => !isHeaderSidebarNavId(item.id)).map((item) => item.key),
+    [items],
+  );
 
   return (
     <SettingsSection
@@ -151,12 +165,12 @@ export function SidebarNavSection(): ReactElement {
       testID="sidebar-nav-section"
     >
       <View style={settingsStyles.card}>
-        {items.map((item, index) => (
+        {items.map((item) => (
           <SidebarNavRow
             key={item.key}
             item={item}
-            isFirst={index === 0}
-            isLast={index === items.length - 1}
+            isFirst={reorderableKeys.indexOf(item.key) === 0}
+            isLast={reorderableKeys.indexOf(item.key) === reorderableKeys.length - 1}
             onMove={move}
             onSetVisible={setVisible}
           />

@@ -139,6 +139,7 @@ import {
   type SidebarProjectIconTarget,
 } from "@/utils/sidebar-project-row-model";
 import { redirectIfArchivingActiveWorkspace } from "@/utils/sidebar-workspace-archive-redirect";
+import { buildProjectRowCues, buildProjectRowPathLines } from "@/utils/project-row-cue";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { useWorkspaceArchive } from "@/workspace/use-workspace-archive";
 import {
@@ -220,8 +221,6 @@ interface SidebarWorkspaceListProps {
   pinnedGroups: PinnedSidebarGroups;
   projects: SidebarProjectEntry[];
   hasProjectsBeforeFilter: boolean;
-  /** Whether a project filter is actually being applied — the resolved list, not the stored one. */
-  hasActiveProjectFilter: boolean;
   workspaceEntriesByKey: ReadonlyMap<string, SidebarWorkspaceEntry>;
   shortcutIndexByWorkspaceKey: Map<string, number>;
   groupMode: SidebarGroupMode;
@@ -242,7 +241,11 @@ interface SidebarWorkspaceListProps {
 interface ProjectHeaderRowProps {
   project: SidebarProjectEntry;
   displayName: string;
+  /** Which one this is, when another project renders the same name. Null when it doesn't. */
+  nameCue: string | null;
   iconDataUri: string | null;
+  /** Resolves the host half of the row's path tooltip. */
+  hostLabelByServerId: ReadonlyMap<string, string>;
   selected?: boolean;
   worktreeTarget: SidebarProjectHostTarget | null;
   isProjectActive?: boolean;
@@ -743,10 +746,90 @@ function NewWorktreeButton({
   );
 }
 
+/**
+ * A project row's leading half: the icon, the name, and — when the name is ambiguous — the line
+ * that says which one this is.
+ *
+ * Split out from the row because the row's path tooltip needs the title as its trigger, and
+ * nesting that inside the row's pressable pushes the JSX past the depth limit.
+ *
+ * The full path is not on the row and never was: a project row says which project, not where it
+ * lives. Hovering the *name* is where the path answers the question the name raises — the trigger
+ * is the title, not the whole row, so crossing the row on the way to its kebab does not summon a
+ * tooltip nobody asked for.
+ */
+function ProjectRowLeading({
+  project,
+  displayName,
+  nameCue,
+  iconDataUri,
+  isArchiving,
+  hostLabelByServerId,
+}: {
+  project: SidebarProjectEntry;
+  displayName: string;
+  nameCue: string | null;
+  iconDataUri: string | null;
+  isArchiving: boolean;
+  hostLabelByServerId: ReadonlyMap<string, string>;
+}) {
+  const pathLines = useMemo(
+    () => buildProjectRowPathLines({ project, hostLabelByServerId }),
+    [project, hostLabelByServerId],
+  );
+
+  return (
+    <View style={styles.projectRowLeft}>
+      <ProjectLeadingVisual
+        displayName={displayName}
+        iconDataUri={iconDataUri}
+        projectViewKey={project.viewKey}
+        isArchiving={isArchiving}
+      />
+
+      <Tooltip delayDuration={300} enabledOnDesktop enabledOnMobile={false}>
+        <TooltipTrigger asChild>
+          <View style={styles.projectTitleGroup}>
+            <Text style={styles.projectTitle} numberOfLines={1}>
+              {displayName}
+            </Text>
+            {nameCue ? (
+              // Second line, not a sibling of the title: the trailing slot is where the hover
+              // actions live, so a cue on that rail would be squeezed out exactly when the row
+              // is hovered. Below the title it competes with nothing.
+              <Text
+                style={styles.projectNameCue}
+                numberOfLines={1}
+                testID={`sidebar-project-name-cue-${project.viewKey}`}
+              >
+                {nameCue}
+              </Text>
+            ) : null}
+          </View>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" align="start" offset={6}>
+          <View
+            style={styles.projectPathTooltip}
+            testID={`sidebar-project-path-${project.viewKey}`}
+          >
+            {pathLines.map((line) => (
+              <Text key={line.serverId} style={styles.projectPathTooltipLine} numberOfLines={2}>
+                {line.text}
+              </Text>
+            ))}
+          </View>
+        </TooltipContent>
+      </Tooltip>
+    </View>
+  );
+}
+
 function ProjectHeaderRow({
   project,
   displayName,
+  nameCue,
   iconDataUri,
+  hostLabelByServerId,
   selected = false,
   worktreeTarget,
   isProjectActive = false,
@@ -822,20 +905,14 @@ function ProjectHeaderRow({
 
   const rowChildren = (
     <>
-      <View style={styles.projectRowLeft}>
-        <ProjectLeadingVisual
-          displayName={displayName}
-          iconDataUri={iconDataUri}
-          projectViewKey={project.viewKey}
-          isArchiving={isArchiving}
-        />
-
-        <View style={styles.projectTitleGroup}>
-          <Text style={styles.projectTitle} numberOfLines={1}>
-            {displayName}
-          </Text>
-        </View>
-      </View>
+      <ProjectRowLeading
+        project={project}
+        displayName={displayName}
+        nameCue={nameCue}
+        iconDataUri={iconDataUri}
+        isArchiving={isArchiving}
+        hostLabelByServerId={hostLabelByServerId}
+      />
       <ProjectRowTrailingActions
         projectViewKey={project.viewKey}
         displayName={displayName}
@@ -1454,6 +1531,8 @@ function ProjectBlock({
   activeWorkspaceSelection,
   hostBadgeByServerId,
   autoHostLabelProjectKeys,
+  hostLabelByServerId,
+  projectNameCueByViewKey,
   supportsMultiplicityByServerId,
   supportsPinningByServerId,
   preferredServerIdsByProjectViewKey,
@@ -1478,6 +1557,8 @@ function ProjectBlock({
   activeWorkspaceSelection: ActiveWorkspaceSelection | null;
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
   autoHostLabelProjectKeys: ReadonlySet<string>;
+  hostLabelByServerId: ReadonlyMap<string, string>;
+  projectNameCueByViewKey: ReadonlyMap<string, string>;
   supportsMultiplicityByServerId: ReadonlyMap<string, boolean>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   preferredServerIdsByProjectViewKey: ReadonlyMap<string, readonly string[]>;
@@ -1677,7 +1758,9 @@ function ProjectBlock({
       <ProjectHeaderRow
         project={project}
         displayName={displayName}
+        nameCue={projectNameCueByViewKey.get(project.viewKey) ?? null}
         iconDataUri={iconDataUri}
+        hostLabelByServerId={hostLabelByServerId}
         selected={false}
         worktreeTarget={
           rowModel.trailingAction.kind === "new_workspace" ? rowModel.trailingAction.target : null
@@ -1723,6 +1806,8 @@ function areProjectBlockPropsEqual(previous: ProjectBlockProps, next: ProjectBlo
     previous.shortcutIndexByWorkspaceKey === next.shortcutIndexByWorkspaceKey &&
     previous.hostBadgeByServerId === next.hostBadgeByServerId &&
     previous.autoHostLabelProjectKeys === next.autoHostLabelProjectKeys &&
+    previous.hostLabelByServerId === next.hostLabelByServerId &&
+    previous.projectNameCueByViewKey === next.projectNameCueByViewKey &&
     previous.supportsMultiplicityByServerId === next.supportsMultiplicityByServerId &&
     previous.supportsPinningByServerId === next.supportsPinningByServerId &&
     previous.preferredServerIdsByProjectViewKey === next.preferredServerIdsByProjectViewKey &&
@@ -1774,7 +1859,6 @@ export function SidebarWorkspaceList({
   pinnedGroups,
   projects,
   hasProjectsBeforeFilter,
-  hasActiveProjectFilter,
   workspaceEntriesByKey,
   shortcutIndexByWorkspaceKey,
   groupMode,
@@ -1794,6 +1878,16 @@ export function SidebarWorkspaceList({
   const autoHostLabelProjectKeys = useMemo(
     () => new Set(projects.filter(shouldShowProjectHostLabels).map((project) => project.viewKey)),
     [projects],
+  );
+  const hostLabelByServerId = useMemo(
+    () => new Map(hosts.map((host) => [host.serverId, host.label.trim() || host.serverId])),
+    [hosts],
+  );
+  // Against the rows the sidebar is actually showing, so narrowing the list to one of the two
+  // same-named projects also drops the cue that was explaining the pair.
+  const projectNameCueByViewKey = useMemo(
+    () => buildProjectRowCues({ projects, hostLabelByServerId }),
+    [projects, hostLabelByServerId],
   );
   // The global Display-item switch is the only outer gate. Automatic visibility is resolved per
   // project at each row seam, while explicit name/icon/hidden choices remain authoritative.
@@ -1900,12 +1994,13 @@ export function SidebarWorkspaceList({
         listFooterComponent={listFooterComponent}
         listHeaderComponent={listHeaderComponent}
         sidebarFilterEmpty={sidebarFilterEmpty}
-        hasActiveProjectFilter={hasActiveProjectFilter}
         parentGestureRef={parentGestureRef}
         dragGestureHostActive={dragGestureHostActive}
         pathname={pathname}
         hostBadgeByServerId={hostBadgeByServerId}
         autoHostLabelProjectKeys={autoHostLabelProjectKeys}
+        hostLabelByServerId={hostLabelByServerId}
+        projectNameCueByViewKey={projectNameCueByViewKey}
         supportsMultiplicityByServerId={supportsMultiplicityByServerId}
         supportsPinningByServerId={supportsPinningByServerId}
         preferredServerIdsByProjectViewKey={preferredServerIdsByProjectViewKey}
@@ -1999,12 +2094,13 @@ function ProjectModeList({
   listFooterComponent,
   listHeaderComponent,
   sidebarFilterEmpty,
-  hasActiveProjectFilter,
   parentGestureRef,
   dragGestureHostActive,
   pathname,
   hostBadgeByServerId,
   autoHostLabelProjectKeys,
+  hostLabelByServerId,
+  projectNameCueByViewKey,
   supportsMultiplicityByServerId,
   supportsPinningByServerId,
   preferredServerIdsByProjectViewKey,
@@ -2025,13 +2121,14 @@ function ProjectModeList({
   pathname: string;
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
   autoHostLabelProjectKeys: ReadonlySet<string>;
+  hostLabelByServerId: ReadonlyMap<string, string>;
+  projectNameCueByViewKey: ReadonlyMap<string, string>;
   supportsMultiplicityByServerId: ReadonlyMap<string, boolean>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   preferredServerIdsByProjectViewKey: ReadonlyMap<string, readonly string[]>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   onPinnedWorkspaceReorder: (workspaces: SidebarWorkspacePlacement[]) => void;
 }) {
-  const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const [creatingWorkspaceIds, setCreatingWorkspaceIds] = useState<Set<string>>(() => new Set());
   const creatingWorkspaceTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
@@ -2210,6 +2307,8 @@ function ProjectModeList({
           activeWorkspaceSelection={activeWorkspaceSelection}
           hostBadgeByServerId={hostBadgeByServerId}
           autoHostLabelProjectKeys={autoHostLabelProjectKeys}
+          hostLabelByServerId={hostLabelByServerId}
+          projectNameCueByViewKey={projectNameCueByViewKey}
           supportsMultiplicityByServerId={supportsMultiplicityByServerId}
           supportsPinningByServerId={supportsPinningByServerId}
           preferredServerIdsByProjectViewKey={preferredServerIdsByProjectViewKey}
@@ -2223,6 +2322,8 @@ function ProjectModeList({
       handleWorkspaceReorder,
       hostBadgeByServerId,
       autoHostLabelProjectKeys,
+      hostLabelByServerId,
+      projectNameCueByViewKey,
       supportsMultiplicityByServerId,
       supportsPinningByServerId,
       preferredServerIdsByProjectViewKey,
@@ -2345,18 +2446,10 @@ function ProjectModeList({
           )}
         </View>
       ) : null}
-      {/* The header carries the display menu, which is the only way back out of a filter, so it
-        stays for as long as a filter is what emptied the list. It is absent only when the
-        sidebar is genuinely empty, where a section heading would sit over nothing.
-        Every filter that can empty this branch needs a term here: a project filter pinned to a
-        project whose chats are all pinned leaves `unpinnedProjects` empty, and without its term
-        the header would go with it, taking the only route back to the filter page. */}
-      {unpinnedProjects.length > 0 ||
-      hasActiveHostFilter ||
-      hasActiveProjectFilter ||
-      sidebarFilterEmpty
-        ? listHeaderComponent
-        : null}
+      {/* Always rendered. It used to be conditional — absent when nothing was left to head — but
+        it now carries New workspace and History, which are meaningful with no projects at all.
+        The list controls inside it drop out in that case instead; see WorkspacesSectionHeader. */}
+      {listHeaderComponent}
       {sidebarFilterEmpty ? <SidebarFilterEmptyState /> : projectBody}
       {listFooterComponent}
     </>
@@ -2442,10 +2535,11 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
   },
+  // A column when the row carries a name cue and a plain row otherwise: a one-line row must
+  // not gain a second line's worth of height just because the slot exists.
   projectTitleGroup: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
+    flexDirection: "column",
+    gap: 1,
     flex: 1,
     minWidth: 0,
   },
@@ -2453,6 +2547,23 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
     fontWeight: "400",
+    minWidth: 0,
+    flexShrink: 1,
+  },
+  projectPathTooltip: {
+    gap: theme.spacing[0.5],
+  },
+  projectPathTooltipLine: {
+    color: theme.colors.popoverForeground,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 16,
+  },
+  // Quieter than the title it explains, and one step smaller: the cue answers a question the
+  // title raised rather than adding a second thing to read.
+  projectNameCue: {
+    color: theme.colors.foregroundExtraMuted,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 14,
     minWidth: 0,
     flexShrink: 1,
   },

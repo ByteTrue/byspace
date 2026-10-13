@@ -14,6 +14,8 @@ import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import {
   builtinSidebarNavLabelKey,
   builtinSidebarNavShortcutAction,
+  HEADER_SIDEBAR_NAV_IDS,
+  isHeaderSidebarNavId,
   type BuiltinSidebarNavId,
 } from "@/sidebar-nav/model";
 import { useSidebarNavItems } from "@/sidebar-nav/use-sidebar-nav-items";
@@ -55,14 +57,14 @@ export const SIDEBAR_NAV_TEST_IDS: Record<BuiltinSidebarNavId, string> = {
  * The one source for the top-level navigation entries — New workspace, History, Search,
  * Schedules, Tunnels — in the user's order and visibility.
  *
- * Two surfaces render these: the compact sidebar's rows and the desktop sidebar's BySpace
- * menu. They differ in presentation only, so label, icon, shortcut badge, active state, and
- * the press target are resolved once here. Every hook below is called unconditionally for
- * every builtin, so the order stays fixed while the returned list tracks the preference.
+ * Three surfaces render these: the Workspaces header's icon buttons, the compact sidebar's rows,
+ * and the desktop sidebar's BySpace menu. They differ in presentation only, so label, icon,
+ * shortcut badge, active state, and the press target are resolved once here. Every hook below is
+ * called unconditionally for every builtin, so the order stays fixed while the returned list
+ * tracks the preference.
  */
-export function useSidebarNavEntries(): SidebarNavEntry[] {
+function useSidebarNavEntryMap(): Record<BuiltinSidebarNavId, SidebarNavEntry> {
   const { t } = useTranslation();
-  const { items } = useSidebarNavItems();
   const pathname = usePathname();
   const setCommandCenterOpen = useKeyboardShortcutsStore((state) => state.setCommandCenterOpen);
 
@@ -154,8 +156,40 @@ export function useSidebarNavEntries(): SidebarNavEntry[] {
     ],
   );
 
+  return resolved;
+}
+
+/**
+ * Visibility, resolved the same way for every surface: an item the user switched off is absent
+ * everywhere it could have appeared.
+ */
+function useVisibleSidebarNavEntries(): SidebarNavEntry[] {
+  const { items } = useSidebarNavItems();
+  const entriesById = useSidebarNavEntryMap();
   return useMemo(
-    () => items.filter((item) => item.visible).map((item) => resolved[item.id]),
-    [items, resolved],
+    () => items.filter((item) => item.visible).map((item) => entriesById[item.id]),
+    [items, entriesById],
   );
+}
+
+/** What the BySpace disclosure reveals: the stored order, minus the two the header owns. */
+export function useSidebarNavDisclosureEntries(): SidebarNavEntry[] {
+  const entries = useVisibleSidebarNavEntries();
+  return useMemo(() => entries.filter((entry) => !isHeaderSidebarNavId(entry.id)), [entries]);
+}
+
+/**
+ * The Workspaces header's two icon buttons, in a fixed order rather than the stored one.
+ *
+ * The header is a row of controls over one list, so the two entries appear where the layout puts
+ * them; a user-set order between two icons nobody sees side by side would be an order nobody
+ * could observe. Visibility still applies — see the Appearance section.
+ */
+export function useSidebarHeaderNavEntries(): SidebarNavEntry[] {
+  const { items } = useSidebarNavItems();
+  const entriesById = useSidebarNavEntryMap();
+  return useMemo(() => {
+    const visible = new Set(items.filter((item) => item.visible).map((item) => item.id));
+    return HEADER_SIDEBAR_NAV_IDS.filter((id) => visible.has(id)).map((id) => entriesById[id]);
+  }, [items, entriesById]);
 }

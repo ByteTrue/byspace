@@ -5,6 +5,8 @@ import {
   openMobileAgentSidebar,
 } from "../support/helpers/sidebar";
 import {
+  HEADER_NAV_KEYS,
+  expectHeaderNavOrder,
   expectSidebarItemHidden,
   expectSidebarNavSettingsOrder,
   expectSidebarNavSettingsRow,
@@ -31,14 +33,10 @@ test.describe("Sidebar items in Appearance settings", () => {
   test("owner reorders and hides top-level sidebar items", async ({ page }) => {
     await gotoAppShell(page);
 
-    await test.step("the sidebar starts in the default order", async () => {
-      await expectSidebarOrder(page, [
-        "new-workspace",
-        "history",
-        "search",
-        "schedules",
-        "tunnels",
-      ]);
+    await test.step("the sidebar starts in the default shape", async () => {
+      // New workspace and History are on the Workspaces header; the disclosure holds the rest.
+      await expectHeaderNavOrder(page, HEADER_NAV_KEYS);
+      await expectSidebarOrder(page, ["search", "schedules", "tunnels"]);
     });
 
     await test.step("the Sidebar section lists every item in the same order", async () => {
@@ -66,46 +64,58 @@ test.describe("Sidebar items in Appearance settings", () => {
       ).toBeVisible();
     });
 
-    await test.step("moving Schedules up twice lifts it above History", async () => {
+    await test.step("the header items offer no reorder control", async () => {
+      // They are placed by the header's layout, so a Move up/down there would do nothing.
+      await expect(page.getByTestId("sidebar-nav-move-up-new-workspace")).toHaveCount(0);
+      await expect(page.getByTestId("sidebar-nav-move-up-history")).toHaveCount(0);
+      await expect(page.getByTestId("sidebar-nav-move-up-search")).toBeVisible();
+    });
+
+    await test.step("Search cannot move up past the header items, and Schedules can lift above it", async () => {
+      // Search is first in the disclosure. The header items sit above it in this list but are not
+      // part of its run, so there is nothing above it to trade places with.
+      await expect(
+        page
+          .getByTestId("sidebar-nav-item-search")
+          .getByRole("button", { name: "Move up", exact: true }),
+      ).toBeDisabled();
+
       await moveSidebarNavItemUp(page, "schedules");
       await expectSidebarNavSettingsOrder(page, [
         "new-workspace",
         "history",
         "schedules",
         "search",
-      ]);
-      await moveSidebarNavItemUp(page, "schedules");
-      await expectSidebarNavSettingsOrder(page, [
-        "new-workspace",
-        "schedules",
-        "history",
-        "search",
+        "tunnels",
       ]);
 
       await leaveSettings(page);
-      await expectSidebarOrder(page, ["new-workspace", "schedules", "history", "search"]);
+      await expectHeaderNavOrder(page, HEADER_NAV_KEYS);
+      await expectSidebarOrder(page, ["schedules", "search", "tunnels"]);
     });
 
-    await test.step("turning History off removes it from the sidebar", async () => {
+    await test.step("turning History off removes it from the header", async () => {
       await openSidebarNavSettings(page);
       await setSidebarNavItemVisible(page, "history", false);
       await expectStoredSidebarNav(page, [
         { key: "new-workspace", visible: true },
-        { key: "schedules", visible: true },
         { key: "history", visible: false },
+        { key: "schedules", visible: true },
         { key: "search", visible: true },
         { key: "tunnels", visible: true },
       ]);
 
       await leaveSettings(page);
-      await expectSidebarItemHidden(page, "history");
-      await expectSidebarOrder(page, ["new-workspace", "schedules", "search"]);
+      await expect(page.getByTestId("sidebar-sessions")).toHaveCount(0);
+      await expectHeaderNavOrder(page, ["new-workspace"]);
+      await expectSidebarOrder(page, ["schedules", "search", "tunnels"]);
     });
 
     await test.step("the sidebar keeps that shape across a reload", async () => {
       await page.reload();
-      await expectSidebarItemHidden(page, "history");
-      await expectSidebarOrder(page, ["new-workspace", "schedules", "search"]);
+      await expect(page.getByTestId("sidebar-sessions")).toHaveCount(0);
+      await expectHeaderNavOrder(page, ["new-workspace"]);
+      await expectSidebarOrder(page, ["schedules", "search", "tunnels"]);
     });
   });
 

@@ -107,6 +107,13 @@ export async function expectSidebarNavSettingsOrder(
   await expectVerticalOrder(keys, (key) => settingsRow(page, key), "sidebar nav settings rows");
 }
 
+/**
+ * The order of the entries inside the BySpace disclosure.
+ *
+ * New workspace and History are deliberately not accepted here: they live on the Workspaces
+ * header, which sits *below* the disclosure, so including them would compare two columns that are
+ * not one list. Use `expectHeaderNavOrder` for those.
+ */
 export async function expectSidebarOrder(page: Page, keys: SidebarNavKey[]): Promise<void> {
   // The desktop shell keeps these inside the BySpace menu; the compact shell renders rows.
   await openTopLevelNavMenu(page);
@@ -117,6 +124,39 @@ export async function expectSidebarOrder(page: Page, keys: SidebarNavKey[]): Pro
   }
 }
 
+/**
+ * The Workspaces header's icon buttons: always on screen, in a fixed left-to-right order.
+ *
+ * Horizontal, unlike every other order assertion here — these are one row of controls, so reading
+ * them top-to-bottom would compare a number they all share.
+ */
+export async function expectHeaderNavOrder(
+  page: Page,
+  keys: readonly SidebarNavKey[],
+): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const measured = await Promise.all(
+          keys.map(async (key) => {
+            const box = await shellRow(page, key).boundingBox();
+            return { key, left: box?.x ?? null };
+          }),
+        );
+        if (
+          !measured.every(
+            (entry): entry is { key: SidebarNavKey; left: number } => entry.left !== null,
+          )
+        ) {
+          return null;
+        }
+        return measured.sort((a, b) => a.left - b.left).map((entry) => entry.key);
+      },
+      { message: "Expected the Workspaces header buttons in order", timeout: 15_000 },
+    )
+    .toEqual(keys);
+}
+
 export async function expectSidebarItemHidden(page: Page, key: SidebarNavKey): Promise<void> {
   await openTopLevelNavMenu(page);
   try {
@@ -125,6 +165,9 @@ export async function expectSidebarItemHidden(page: Page, key: SidebarNavKey): P
     await closeTopLevelNavMenu(page);
   }
 }
+
+/** The two the Workspaces header owns, in the order the header draws them. */
+export const HEADER_NAV_KEYS: readonly SidebarNavKey[] = ["new-workspace", "history"];
 
 export async function expectStoredSidebarNav(
   page: Page,

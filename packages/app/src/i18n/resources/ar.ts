@@ -2044,7 +2044,7 @@ export const ar: TranslationResources = {
       },
       sidebar: {
         title: "الشريط الجانبي",
-        description: "اختر العناصر التي تظهر أعلى الشريط الجانبي وترتيبها",
+        description: "اختر العناصر التي تظهر في الشريط الجانبي وترتيبها",
         moveUp: "نقل لأعلى",
         moveDown: "نقل لأسفل",
       },
