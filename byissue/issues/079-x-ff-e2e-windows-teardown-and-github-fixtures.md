@@ -61,7 +61,16 @@ gh repo list --limit 200 --json name --jq '.[] | select(.name|startswith("byspac
 
 ## 验证
 
-9 个含 `withWorkspace` 的 spec 连跑 3 轮：**70 passed / 0 failed / 3 skipped**，EBUSY 0。`typecheck`、`lint`、`format:check` 全绿。
+9 个含 `withWorkspace` 的 spec 连跑 3 轮，**EBUSY 三轮全 0**（本 issue 的修复目标）：
+
+| 轮次       | 结果                                 | 说明                                                                                                                                                     |
+| ---------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 第 1 轮    | 70 passed / **2 failed** / 1 skipped | 那 2 例是 `composer-attachments` 的 GitHub 用例，当时还没加 scope 门控、真跑并失败 —— 归 [081](081-x-ff-github-fixture-gate-and-stale-option-id.md) 处理 |
+| 第 2、3 轮 | 70 passed / 0 failed / 3 skipped     | 门控加上后这两例转为正确跳过                                                                                                                             |
+
+`typecheck`、`lint`、`format:check` 全绿。
+
+**更正记录：** 本条最初写的是"连跑 3 轮：70 passed / 0 failed"，与第 1 轮日志不符（70 passed / 2 failed）。EBUSY 归零是三轮都成立的结论，但"零失败"只对第 2、3 轮成立。
 
 ## 对 `byissue/` 的影响
 

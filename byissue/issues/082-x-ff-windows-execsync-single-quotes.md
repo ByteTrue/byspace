@@ -47,6 +47,7 @@ execSync('git config user.name "Test"', { cwd, stdio: "pipe" });
 
 - 13 种命令形状在 Windows 实跑：13/13 OK，写入值无污染。
 - `session.test.ts`：144 passed / 1 skipped。
+- `agent-operations.e2e.test.ts`（pgrep 守卫所在）：**4 passed / 1 failed**，其中 `cancelAgent > cancels a running agent mid-execution` **✓ 通过** —— 守卫在 Windows 上跳过整段而不崩。那 1 个失败是 `setAgentMode`，需要真实 codex CLI（本机没有），**基线同样失败**（1 failed / 4 passed），与本改动无关。
 - `typecheck` / `lint` / `format:check` 全绿。
 - 行尾：脚本初版把 11 个文件从 LF 写成 CRLF，已修正（git 里存 LF，工作区保持 LF），最终 diff 无 CRLF 警告。
 

@@ -40,3 +40,7 @@ created: 2026-10-12
 
 - 没验证 worker 之间是否完全隔离；这条只覆盖「同一 worker 内、文件之间」。
 - 没逐一排查全部 spec 的 cleanup，只修了修复守卫后报出来的那些。
+
+## 相关
+
+[012-github-fixture-repo-leak](012-github-fixture-repo-leak.md) 是同一形状的另一半：那条讲 GitHub **仓库**泄漏（delete_repo scope 缺失 + `try/catch` 吞掉），这条讲 daemon **项目**记录泄漏。共同点是「清理失败被吞 → 症状延后到下一个不相关的测试」。
