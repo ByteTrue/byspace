@@ -6,6 +6,7 @@ import path from "path";
 import { z } from "zod";
 
 import {
+  canCreateTempGithubRepos,
   createDaemonTestContext,
   createTempGithubRepoName,
   type DaemonTestContext,
@@ -28,35 +29,7 @@ function tmpCwd(prefix: string): string {
   return realpathSync(mkdtempSync(path.join(tmpdir(), prefix)));
 }
 
-function hasGitHubCliAuth(): boolean {
-  try {
-    execSync("gh auth status -h github.com", { stdio: "pipe" });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function hasGitHubCliDeleteRepoScope(): boolean {
-  try {
-    const status = execSync("gh auth status -h github.com 2>&1", { stdio: "pipe" }).toString();
-    const scopesLine = status.split(/\r?\n/).find((line) => /token[- ]scopes?:/i.test(line));
-    const hasDeleteRepoScope = scopesLine?.includes("delete_repo") ?? false;
-
-    if (!hasDeleteRepoScope) {
-      console.warn(
-        "Skipping checkout PR merge e2e: gh auth token is missing the delete_repo scope required to clean up temporary GitHub repos.",
-      );
-    }
-
-    return hasDeleteRepoScope;
-  } catch {
-    return false;
-  }
-}
-
-const hasRequiredGitHubCliAuth = hasGitHubCliAuth() && hasGitHubCliDeleteRepoScope();
-const testWithGitHubCliAuth = hasRequiredGitHubCliAuth ? test : test.skip;
+const testWithGitHubCliAuth = canCreateTempGithubRepos() ? test : test.skip;
 
 function initGitRepo(repoDir: string): void {
   execSync("git init -b main", { cwd: repoDir, stdio: "pipe" });

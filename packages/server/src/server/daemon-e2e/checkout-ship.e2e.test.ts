@@ -5,6 +5,7 @@ import path from "path";
 import { execSync } from "child_process";
 
 import {
+  canCreateTempGithubRepos,
   createDaemonTestContext,
   createTempGithubRepoName,
   type DaemonTestContext,
@@ -51,16 +52,7 @@ function tmpCwd(prefix: string): string {
   return realpathSync(mkdtempSync(path.join(tmpdir(), prefix)));
 }
 
-function hasGitHubCliAuth(): boolean {
-  try {
-    execSync("gh auth status -h github.com", { stdio: "pipe" });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const testWithGitHubCliAuth = hasGitHubCliAuth() ? test : test.skip;
+const testWithGitHubCliAuth = canCreateTempGithubRepos() ? test : test.skip;
 
 function initGitRepo(repoDir: string): void {
   execSync("git init -b main", { cwd: repoDir, stdio: "pipe" });

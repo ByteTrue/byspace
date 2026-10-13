@@ -9,4 +9,8 @@ export {
 } from "./daemon-client.js";
 export { createDaemonTestContext, type DaemonTestContext } from "./daemon-test-context.js";
 export { useTempClaudeConfigDir } from "./claude-config.js";
-export { TEMP_GITHUB_REPO_PREFIX, createTempGithubRepoName } from "./temp-github-repo.js";
+export {
+  TEMP_GITHUB_REPO_PREFIX,
+  canCreateTempGithubRepos,
+  createTempGithubRepoName,
+} from "./temp-github-repo.js";

@@ -111,6 +111,8 @@ test.describe("Composer attachments", () => {
       category: "attach-issue",
       issues: [{ title: "fix: attach-issue-unique-alpha" }],
       prs: [{ title: "feat: attach-issue-dummy-pr", state: "open" }],
+      // The picker searches by title; GitHub indexes a new issue seconds later.
+      waitForSearchIndex: true,
     });
     const handle = await openGithubWorkspace(page, ghRepo.prs[0].localPath);
     try {
@@ -142,13 +144,20 @@ test.describe("Composer attachments", () => {
     const ghRepo = await createTempGithubRepo({
       category: "attach-pr",
       prs: [{ title: "feat: attach-pr-unique-beta", state: "open" }],
+      waitForSearchIndex: true,
     });
     const handle = await openGithubWorkspace(page, ghRepo.prs[0].localPath);
     try {
       await clickNewChat(page);
       await expectComposerVisible(page);
 
-      await selectGithubOption(page, "attach-pr-unique-beta", `pr:${ghRepo.prs[0].number}`);
+      // The option id is built from the forge search kind, which is
+      // "change_request" for a PR (not "pr").
+      await selectGithubOption(
+        page,
+        "attach-pr-unique-beta",
+        `change_request:${ghRepo.prs[0].number}`,
+      );
 
       await expectGithubAttachmentPill(page, {
         number: ghRepo.prs[0].number,

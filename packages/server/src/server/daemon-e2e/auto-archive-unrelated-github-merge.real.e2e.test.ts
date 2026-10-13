@@ -6,6 +6,7 @@ import { afterEach, expect, test } from "vitest";
 
 import { createWorktree } from "../../utils/worktree.js";
 import {
+  canCreateTempGithubRepos,
   createDaemonTestContext,
   createTempGithubRepoName,
   type DaemonTestContext,
@@ -19,16 +20,7 @@ function run(cwd: string, command: string, args: string[]): string {
   return execFileSync(command, args, { cwd, stdio: "pipe" }).toString().trim();
 }
 
-function hasGitHubTestAccess(): boolean {
-  try {
-    const auth = run(process.cwd(), "gh", ["auth", "status", "-h", "github.com"]);
-    return auth.length >= 0;
-  } catch {
-    return false;
-  }
-}
-
-const githubTest = hasGitHubTestAccess() ? test : test.skip;
+const githubTest = canCreateTempGithubRepos() ? test : test.skip;
 
 async function activeWorkspaceIds(context: DaemonTestContext): Promise<string[]> {
   return (await context.client.fetchWorkspaces()).entries.map((workspace) => workspace.id);

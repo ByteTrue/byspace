@@ -1,7 +1,52 @@
 import { execFileSync, execSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { resolveTempRoot } from "./workspace";
+import { TEMP_CLEANUP_RETRIES, TEMP_CLEANUP_RETRY_DELAY_MS, resolveTempRoot } from "./workspace";
+
+const RETRY = {
+  maxRetries: TEMP_CLEANUP_RETRIES,
+  retryDelay: TEMP_CLEANUP_RETRY_DELAY_MS,
+} as const;
+
+// GitHub's search index lags issue and PR creation: measured 6-12s, and one run
+// went past the picker's 15s wait. A spec that creates a fixture and immediately
+// searches for its title finds nothing and times out looking at an empty list.
+const GITHUB_SEARCH_INDEX_TIMEOUT_MS = 60_000;
+const GITHUB_SEARCH_INDEX_POLL_MS = 2_000;
+
+/**
+ * Poll until GitHub can find a just-created fixture. Use the same command the
+ * daemon runs (`gh issue list --search` / `gh pr list --search`), because
+ * `search/issues` lags longer and would report indexed while the app still sees
+ * an empty list.
+ */
+async function waitForGithubSearchIndex(args: {
+  cwd: string;
+  query: string;
+  kind: "issue" | "change_request";
+}): Promise<void> {
+  const listArgs =
+    args.kind === "issue"
+      ? ["issue", "list", "--search", args.query, "--json", "number", "--limit", "5"]
+      : ["pr", "list", "--search", args.query, "--json", "number", "--limit", "5"];
+  const deadline = Date.now() + GITHUB_SEARCH_INDEX_TIMEOUT_MS;
+  for (;;) {
+    let indexed = false;
+    try {
+      const raw = gh(listArgs, { cwd: args.cwd });
+      indexed = raw.length > 0 && raw !== "[]";
+    } catch {
+      // A transient API error means the same as "not indexed yet".
+    }
+    if (indexed) {
+      return;
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`GitHub search never indexed ${args.kind} "${args.query}"`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, GITHUB_SEARCH_INDEX_POLL_MS));
+  }
+}
 
 /**
  * True when this machine can run the live GitHub specs. These create a temporary
@@ -11,13 +56,13 @@ import { resolveTempRoot } from "./workspace";
  * "You have created too many repositories, too quickly" — a failure that looks
  * like a fixture bug and is not one.
  *
- * `packages/server/src/server/daemon-e2e/checkout-pr-merge.e2e.test.ts` gates on
- * the same scope for the same reason.
+ * The server suite has the same gate as `canCreateTempGithubRepos()`
+ * (`packages/server/src/server/test-utils/temp-github-repo.ts`). The app does not
+ * depend on the server package, so the two are copies: fix both.
  */
 export function canCreateGithubFixtures(): boolean {
   try {
-    // gh prints the scope line to stderr.
-    const status = execSync("gh auth status -h github.com 2>&1", { stdio: "pipe" }).toString();
+    const status = execSync("gh auth status -h github.com", { stdio: "pipe" }).toString();
     const scopesLine = status.split(/\r?\n/).find((line) => /token[- ]scopes?:/i.test(line));
     return scopesLine?.includes("delete_repo") ?? false;
   } catch {
@@ -189,8 +234,13 @@ export async function createTempGithubRepo(options: {
   category: string;
   prs?: PrSpec[];
   issues?: IssueSpec[];
+  /**
+   * Wait until every seeded issue and PR is searchable before returning. Set this
+   * in specs that search for a fixture's title; it costs the index lag (6-20s).
+   */
+  waitForSearchIndex?: boolean;
 }): Promise<GhRepoFixture> {
-  const { category, prs = [], issues = [] } = options;
+  const { category, prs = [], issues = [], waitForSearchIndex = false } = options;
   const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const repoName = `${TEMP_GITHUB_REPO_PREFIX}${category}-${uniqueSuffix}`;
   const defaultBranch = "main";
@@ -257,6 +307,17 @@ export async function createTempGithubRepo(options: {
     issueFixtures.push(seedIssue({ spec, basePath }));
   }
 
+  if (waitForSearchIndex) {
+    await Promise.all([
+      ...issueFixtures.map((issue) =>
+        waitForGithubSearchIndex({ cwd: basePath, query: issue.title, kind: "issue" }),
+      ),
+      ...prFixtures.map((pr) =>
+        waitForGithubSearchIndex({ cwd: pr.localPath, query: pr.title, kind: "change_request" }),
+      ),
+    ]);
+  }
+
   return {
     owner,
     name: repoName,
@@ -271,8 +332,8 @@ export async function createTempGithubRepo(options: {
         // Best-effort cleanup
       }
       await Promise.all([
-        rm(basePath, { recursive: true, force: true }),
-        ...localPaths.map((p) => rm(p, { recursive: true, force: true })),
+        rm(basePath, { recursive: true, force: true, ...RETRY }),
+        ...localPaths.map((p) => rm(p, { recursive: true, force: true, ...RETRY })),
       ]);
     },
   };
@@ -299,7 +360,7 @@ export async function cloneGithubRepoDefaultBranchOnly(
   return {
     path: clonePath,
     cleanup: async () => {
-      await rm(clonePath, { recursive: true, force: true });
+      await rm(clonePath, { recursive: true, force: true, ...RETRY });
     },
   };
 }
@@ -355,7 +416,7 @@ export async function createLocalGithubPrFixture(): Promise<LocalGhPrFixture> {
       cleanup: async () => {},
     },
     cleanup: async () => {
-      await rm(fixtureRoot, { recursive: true, force: true });
+      await rm(fixtureRoot, { recursive: true, force: true, ...RETRY });
     },
   };
 }
