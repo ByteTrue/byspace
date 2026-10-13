@@ -48,14 +48,19 @@ Spec 建完 issue/PR 立刻在 picker 里搜标题。实测索引延迟 6~12s，
 ## 验证
 
 - 两个 gate 函数用 Node 直接验：有 scope → true；无 scope / 未认证 → false。
-- `pr:` → `change_request:`：against 协议 schema 确认（`z.enum(["issue","change_request"])`），并在补齐 scope 后跑通 issue 例。
+- `composer-attachments.spec.ts -g "GitHub"`：**4 passed / 0 failed / 0 skipped**。这覆盖了 issue 例与 PR 例，即 `pr:` → `change_request:` 的修正端到端跑通。
+- 清理：跑完 0 个 `byspacetmp-*` 残留，四个 fixture 的仓库都删掉了。
 - `typecheck` / `lint` / `format:check` 全绿。
 
-**未验证：** PR 例的端到端通过与否没验到 —— 本机因当天反复建仓触发了 GitHub 的二级限流（`You have created too many repositories, too quickly`），持续 15 分钟以上未解除。限流是环境状态，不是代码问题；清理已归零（跑完 0 残留）。
+**（补记）验证曾受阻：** 首次尝试时本机因当天反复建仓触发 GitHub 二级限流（`You have created too many repositories, too quickly`），15 分钟以上未解除，当时只验到 issue 例。限流是环境状态不是代码问题；等它自行解除后补跑，PR 例通过。
 
 ## 顺手发现（不在本次范围）
 
-`server/src/server/daemon-e2e/*.e2e.test.ts` 里大量 `execSync("git ... -m 'Initial commit'")` 用单引号。Windows `cmd.exe` 不认单引号，`checkout-ship.e2e.test.ts` 的两例因此在 Windows 上必红（`error: pathspec 'commit'' did not match`）。全仓同类写法 67 处，散布 12 个文件（`git-operations.e2e.test.ts` 一个文件占 31 处）。这与 079 的「Windows 测试基建」是同一主题，但影响面更大，需要单独一次处理。
+`server/src/server/daemon-e2e/*.e2e.test.ts` 里大量 `execSync("git ... -m 'Initial commit'")` 用单引号。Windows 上 `execSync` 走 `cmd.exe`，它不把 `'` 当引号 —— 用 Node 复现过，命令变成 `git commit -m 'Initial commit'` 直接把 `commit'` 当 pathspec，报 `error: pathspec 'commit'' did not match`。`checkout-ship.e2e.test.ts` 的两例因此在 Windows 上必红。
+
+全仓同类写法 **67 处，散布 12 个文件**（`git-operations.e2e.test.ts` 一个文件占 31 处）。
+
+**严重度限定：** 这 67 处所在的文件**都不在 CI 的 server-tests 列表里**（`npm run test:integration` 是一份固定文件清单，不含这些 `daemon-e2e/*.e2e.test.ts`；Windows job 只跑 PTY benchmark）。所以它不影响 CI 绿，只影响在 Windows 上手动跑这些 e2e 的人。修法与 079 的「Windows 测试基建」同主题，需要单独一次处理。
 
 ## 对 `byissue/` 的影响
 
