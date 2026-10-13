@@ -15,6 +15,7 @@ import { buildRelayWebSocketUrl } from "@bytetrue/protocol/daemon-endpoints";
 import { useTunnels, type AggregatedTunnelEntry, type TunnelLoadState } from "@/hooks/use-tunnels";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
+import { useHostFeature } from "@/runtime/host-features";
 import { useHosts, useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { SelectField, type SelectFieldDisplay } from "@/components/ui/select-field";
 import { resolveTunnelPeerTargets, type TunnelPeerTarget } from "@/tunnels/tunnel-peer-targets";
@@ -44,6 +45,7 @@ function TunnelsScreenContent(): ReactElement {
   const localDaemonServerId = useLocalDaemonServerId();
   const { loadState, refetch } = useTunnels();
   const { config, isLoading: configLoading } = useDaemonConfig(localDaemonServerId);
+  const localDaemonSupportsTunnels = useHostFeature(localDaemonServerId, "daemonTunnels");
   const [formState, setFormState] = useState<FormState>({ mode: "closed" });
 
   const entries = loadState.status === "loaded" ? loadState.data : [];
@@ -65,6 +67,7 @@ function TunnelsScreenContent(): ReactElement {
           config={config}
           configLoading={configLoading}
           tunnelsEnabled={tunnelsEnabled}
+          localDaemonSupportsTunnels={localDaemonSupportsTunnels}
           entries={entries}
           loadState={loadState}
           onAddTunnel={openCreateForm}
@@ -87,6 +90,7 @@ function TunnelsScreenBody(props: {
   config: MutableDaemonConfig | null;
   configLoading: boolean;
   tunnelsEnabled: boolean;
+  localDaemonSupportsTunnels: boolean;
   entries: AggregatedTunnelEntry[];
   loadState: TunnelLoadState;
   onAddTunnel: () => void;
@@ -95,6 +99,12 @@ function TunnelsScreenBody(props: {
   const { t } = useTranslation();
   if (!props.localDaemonServerId) {
     return <Text style={styles.hint}>{t("tunnels.noLocalDaemon")}</Text>;
+  }
+  // Capability before state: a host without the tunnel RPCs has no config field
+  // to enable, so the Enable card would patch nothing and leave the screen as it
+  // was. See docs/protocol-compatibility.md.
+  if (!props.localDaemonSupportsTunnels) {
+    return <Text style={styles.hint}>{t("tunnels.hostTooOld")}</Text>;
   }
   if (props.configLoading && !props.config) {
     return (

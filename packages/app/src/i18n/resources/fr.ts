@@ -1244,6 +1244,7 @@ export const fr: TranslationResources = {
     empty: "Aucun tunnel pour l'instant",
     emptyDescription: "Transfère vers cette machine les ports autorisés d'un daemon appairé.",
     noLocalDaemon: "Connectez un daemon sur cette machine pour gérer les tunnels",
+    hostTooOld: "Mettez à jour cet hôte pour utiliser les tunnels",
     inboundFrom: "Entrant → port {{port}}",
     outboundSubtitle: "Port local {{localPort}} · {{host}}",
     inboundSubtitle: "{{host}} · entrant",

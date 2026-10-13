@@ -441,7 +441,29 @@ function mergeModelAdditions(
   );
 }
 
-export function wrapSessionProvider(provider: AgentProvider, inner: AgentSession): AgentSession {
+/** Optional `AgentSession` members (method-shaped, so the wrapper can bind them). */
+type OptionalAgentSessionMethodName = {
+  [K in keyof AgentSession]-?: undefined extends AgentSession[K]
+    ? NonNullable<AgentSession[K]> extends (...args: never[]) => unknown
+      ? K
+      : never
+    : never;
+}[keyof AgentSession];
+
+/**
+ * The wrapper must forward every optional `AgentSession` method, so the mapped
+ * member below makes each one a required key of what the builder returns.
+ * Adding an optional member without forwarding it is then a `typecheck` error
+ * at the return statement. The manager probes these with
+ * `typeof x === "function"` and degrades silently when one is absent, so a
+ * dropped entry is a lost capability on every provider that goes through the
+ * wrapper (custom providers and model overrides — `createResolvedProviderClient`).
+ */
+type WrappedAgentSession = AgentSession & {
+  [K in OptionalAgentSessionMethodName]: AgentSession[K] | undefined;
+};
+
+function buildWrappedSession(provider: AgentProvider, inner: AgentSession): WrappedAgentSession {
   return {
     provider,
     id: inner.id,
@@ -466,6 +488,8 @@ export function wrapSessionProvider(provider: AgentProvider, inner: AgentSession
     describePersistence: () => mapPersistenceHandle(provider, inner.describePersistence()),
     interrupt: () => inner.interrupt(),
     close: () => inner.close(),
+    steerActiveTurn: inner.steerActiveTurn?.bind(inner),
+    rebuildProviderSubagentTimeline: inner.rebuildProviderSubagentTimeline?.bind(inner),
     listCommands: inner.listCommands?.bind(inner),
     setModel: inner.setModel?.bind(inner),
     setThinkingOption: inner.setThinkingOption?.bind(inner),
@@ -475,6 +499,10 @@ export function wrapSessionProvider(provider: AgentProvider, inner: AgentSession
     revertBoth: inner.revertBoth?.bind(inner),
     tryHandleOutOfBand: inner.tryHandleOutOfBand?.bind(inner),
   };
+}
+
+export function wrapSessionProvider(provider: AgentProvider, inner: AgentSession): AgentSession {
+  return buildWrappedSession(provider, inner);
 }
 
 function wrapClientProvider(

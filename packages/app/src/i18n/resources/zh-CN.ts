@@ -1196,6 +1196,7 @@ export const zhCN: TranslationResources = {
     empty: "暂无隧道",
     emptyDescription: "把已配对 daemon 白名单内的端口转发到本机。",
     noLocalDaemon: "在本机连接一个 daemon 后才能管理隧道",
+    hostTooOld: "更新此主机以使用隧道",
     inboundFrom: "入站 → 端口 {{port}}",
     outboundSubtitle: "本地端口 {{localPort}} · {{host}}",
     inboundSubtitle: "{{host}} · 入站",

@@ -30,27 +30,22 @@ describe("isHomeWorkspace", () => {
     ).toBe(true);
   });
 
-  it("falls back to the Home title for daemons predating the label", () => {
+  it("leaves a user workspace titled Home alone", () => {
     expect(isHomeWorkspace({ id: "w", title: "Home", workspaceDirectory: "/custom/home" })).toBe(
-      true,
+      false,
     );
   });
 
-  it("falls back to the byspace directory suffix", () => {
+  it("leaves a user workspace on a .byspace directory alone", () => {
+    // The daemon's own Home directory is .byspace, so a path suffix is exactly
+    // the signal that would claim a workspace the user opened there.
     expect(isHomeWorkspace({ id: "w", title: null, workspaceDirectory: "/home/z/.byspace" })).toBe(
-      true,
+      false,
     );
   });
 
-  it("does not match a user-titled Home lookalike without the label when paths differ", () => {
-    // A user workspace titled "Home" predating the label still matches by
-    // title (intentional fallback); a workspace with neither signal must not.
+  it("does not match a workspace with neither the label nor a Home-shaped name", () => {
     expect(isHomeWorkspace({ id: "w", title: "Work", workspaceDirectory: "/repo" })).toBe(false);
-  });
-
-  it("normalizes windows separators", () => {
-    const windowsPath = "C:\\Users\\z\\.byspace";
-    expect(isHomeWorkspace({ id: "w", title: null, workspaceDirectory: windowsPath })).toBe(true);
   });
 });
 

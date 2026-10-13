@@ -1224,6 +1224,7 @@ export const ru: TranslationResources = {
     empty: "Туннелей пока нет",
     emptyDescription: "Пробрасывает разрешённые порты сопряжённого демона на этот компьютер.",
     noLocalDaemon: "Подключите daemon на этой машине, чтобы управлять туннелями",
+    hostTooOld: "Обновите этот хост, чтобы использовать туннели",
     inboundFrom: "Входящий → порт {{port}}",
     outboundSubtitle: "Локальный порт {{localPort}} · {{host}}",
     inboundSubtitle: "{{host}} · входящий",

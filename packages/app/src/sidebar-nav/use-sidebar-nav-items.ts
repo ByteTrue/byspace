@@ -1,6 +1,8 @@
 import { useCallback, useMemo } from "react";
 import { useAppSettings } from "@/hooks/use-settings";
+import { useTunnelsAvailable } from "@/tunnels/availability";
 import {
+  filterUnavailableSidebarNavItems,
   moveSidebarNavItem,
   resolveSidebarNavItems,
   setSidebarNavItemVisible,
@@ -17,13 +19,14 @@ export interface UseSidebarNavItemsReturn {
 export function useSidebarNavItems(): UseSidebarNavItemsReturn {
   const { settings, updateSettings } = useAppSettings();
   const preferences = settings.sidebarNavItems;
+  const tunnelsAvailable = useTunnelsAvailable();
 
   const items = useMemo(
     () =>
-      resolveSidebarNavItems({
-        preferences,
+      filterUnavailableSidebarNavItems(resolveSidebarNavItems({ preferences }), {
+        tunnels: tunnelsAvailable,
       }),
-    [preferences],
+    [preferences, tunnelsAvailable],
   );
 
   const setVisible = useCallback(

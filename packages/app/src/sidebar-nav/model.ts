@@ -76,6 +76,29 @@ function isBuiltinSidebarNavId(key: string): key is BuiltinSidebarNavId {
   return (BUILTIN_SIDEBAR_NAV_IDS as readonly string[]).includes(key);
 }
 
+/**
+ * Capability the connected daemons advertise, per builtin entry that has one.
+ * A builtin absent from this map is always available.
+ */
+export interface SidebarNavAvailability {
+  tunnels: boolean;
+}
+
+/**
+ * Drops the entries no connected daemon can serve.
+ *
+ * This runs after `resolveSidebarNavItems` and before every surface that renders
+ * the list, so the sidebar rows, the BySpace disclosure, and the Appearance
+ * section agree. It is not persisted: `toPreferences` keeps keys it cannot place,
+ * so a hidden entry returns in its stored slot once a capable host connects.
+ */
+export function filterUnavailableSidebarNavItems(
+  items: readonly SidebarNavItem[],
+  availability: SidebarNavAvailability,
+): SidebarNavItem[] {
+  return items.filter((item) => item.id !== "tunnels" || availability.tunnels);
+}
+
 export function resolveSidebarNavItems(input: {
   preferences: readonly SidebarNavPreference[];
 }): SidebarNavItem[] {

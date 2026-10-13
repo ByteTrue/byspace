@@ -1209,6 +1209,7 @@ export const ar: TranslationResources = {
     empty: "لا توجد أنفاق بعد",
     emptyDescription: "يوجّه المنافذ المسموح بها من daemon مقترن إلى هذا الجهاز.",
     noLocalDaemon: "اتصل بـ daemon على هذا الجهاز لإدارة الأنفاق",
+    hostTooOld: "حدّث هذا المضيف لاستخدام الأنفاق",
     inboundFrom: "وارد → منفذ {{port}}",
     outboundSubtitle: "منفذ محلي {{localPort}} · {{host}}",
     inboundSubtitle: "{{host}} · وارد",

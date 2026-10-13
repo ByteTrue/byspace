@@ -1235,6 +1235,7 @@ export const ptBR: TranslationResources = {
     empty: "Ainda não há túneis",
     emptyDescription: "Encaminha para esta máquina as portas permitidas de um daemon pareado.",
     noLocalDaemon: "Conecte um daemon nesta máquina para gerenciar túneis",
+    hostTooOld: "Atualize este host para usar túneis",
     inboundFrom: "Entrada → porta {{port}}",
     outboundSubtitle: "Porta local {{localPort}} · {{host}}",
     inboundSubtitle: "{{host}} · entrada",

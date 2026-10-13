@@ -40,8 +40,13 @@ interface EnsureHomeWorkspaceDeps {
  * workspace rooted at the BySpace home directory, created through the same
  * provisioning path as a user's workspace.create without a projectId — which
  * materializes a containing project for `~/.byspace`. Idempotent: matches by
- * resolved cwd, including archived workspaces (an archived Home is left alone;
- * resurrecting it is a user action, not bootstrap's).
+ * the reserved label, including archived workspaces (an archived Home is left
+ * alone; resurrecting it is a user action, not bootstrap's).
+ *
+ * The label, not the cwd, is the identity. A workspace the user opened on the
+ * BySpace home directory is theirs: claiming it by path would relabel it as Home
+ * and hand Chief a session inside a workspace the user owns. With no labeled
+ * Home present the daemon creates its own, and the user's record is left alone.
  *
  * The workspace hosts the built-in Chief agent so a fresh daemon has somewhere
  * for a first conversation before any project exists
@@ -51,11 +56,10 @@ export async function ensureHomeWorkspace(
   deps: EnsureHomeWorkspaceDeps,
 ): Promise<EnsureHomeWorkspaceResult | null> {
   const homeCwd = path.resolve(deps.byspaceHome);
-  const existing = (await deps.workspaceRegistry.list()).find(
-    (workspace) => path.resolve(workspace.cwd) === homeCwd,
+  const existing = (await deps.workspaceRegistry.list()).find((workspace) =>
+    workspace.labels?.includes(HOME_WORKSPACE_LABEL),
   );
   if (existing) {
-    await ensureHomeWorkspaceLabel(deps, existing.workspaceId, existing.labels);
     return { workspaceId: existing.workspaceId, created: false };
   }
   try {
@@ -63,7 +67,7 @@ export async function ensureHomeWorkspace(
       homeCwd,
       HOME_WORKSPACE_TITLE,
     );
-    await ensureHomeWorkspaceLabel(deps, workspace.workspaceId, undefined);
+    await ensureHomeWorkspaceLabel(deps, workspace.workspaceId);
     deps.logger.info(
       { workspaceId: workspace.workspaceId, cwd: homeCwd },
       "Home workspace ensured",
@@ -91,15 +95,13 @@ export async function ensureHomeWorkspaceUnlessDisabled(
 }
 
 /**
- * Backfill the reserved Home label on daemons whose Home workspace predates
- * it. Idempotent and best-effort: a labeling failure never blocks boot.
+ * Stamp the reserved Home label on the workspace the daemon just created.
+ * Best-effort: a labeling failure never blocks boot.
  */
 async function ensureHomeWorkspaceLabel(
   deps: EnsureHomeWorkspaceDeps,
   workspaceId: string,
-  labels: readonly string[] | undefined,
 ): Promise<void> {
-  if (labels?.includes(HOME_WORKSPACE_LABEL)) return;
   const record = (await deps.workspaceRegistry.list()).find((w) => w.workspaceId === workspaceId);
   if (!record) return;
   try {

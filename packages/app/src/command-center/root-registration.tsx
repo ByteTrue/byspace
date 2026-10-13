@@ -26,6 +26,7 @@ import { resolveShortcutKeysForAction } from "@/keyboard/keyboard-shortcuts";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { usePanelStore } from "@/stores/panel-store";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
+import { useTunnelsAvailable } from "@/tunnels/availability";
 import { clearCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
 import {
   buildOpenProjectRoute,
@@ -134,6 +135,7 @@ export function CommandCenterRootActions() {
   const groupMode = useSidebarViewStore((state) => state.groupMode);
   const setGroupMode = useSidebarViewStore((state) => state.setGroupMode);
   const isCompact = useIsCompactFormFactor();
+  const tunnelsAvailable = useTunnelsAvailable();
   const toggleMobileAgentList = usePanelStore((state) => state.toggleMobileAgentList);
   const toggleDesktopAgentList = usePanelStore((state) => state.toggleDesktopAgentList);
   const toggleAgentList = isCompact ? toggleMobileAgentList : toggleDesktopAgentList;
@@ -252,24 +254,31 @@ export function CommandCenterRootActions() {
           icon: SchedulesIcon,
         },
       },
-      {
-        id: "tunnels",
-        group: "actions",
-        groupRank: 0,
-        rank: 6,
-        keywords: ["tunnels", "tunnel", "networking", "forwarding", "ports"],
-        visibility: "always",
-        run: () => {
-          clearCommandCenterFocusRestoreElement();
-          router.push(tunnelsRoute);
-        },
-        presentation: {
-          kind: "action",
-          title: t("sidebar.sections.tunnels"),
-          sectionTitle: t("shell.commandCenter.actions"),
-          icon: TunnelsIcon,
-        },
-      },
+      // Only offered while a connected host implements the tunnel RPCs; the
+      // route itself would render the same "update this host" hint the sidebar
+      // entry is absent for. Same gate as the sidebar list (tunnels/availability).
+      ...(tunnelsAvailable
+        ? [
+            {
+              id: "tunnels",
+              group: "actions",
+              groupRank: 0,
+              rank: 6,
+              keywords: ["tunnels", "tunnel", "networking", "forwarding", "ports"],
+              visibility: "always" as const,
+              run: () => {
+                clearCommandCenterFocusRestoreElement();
+                router.push(tunnelsRoute);
+              },
+              presentation: {
+                kind: "action" as const,
+                title: t("sidebar.sections.tunnels"),
+                sectionTitle: t("shell.commandCenter.actions"),
+                icon: TunnelsIcon,
+              },
+            },
+          ]
+        : []),
       {
         id: "settings",
         group: "actions",
@@ -371,6 +380,7 @@ export function CommandCenterRootActions() {
     shortcutsAvailable,
     t,
     toggleAgentList,
+    tunnelsAvailable,
     tunnelsRoute,
   ]);
 

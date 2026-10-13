@@ -3756,7 +3756,7 @@ export const ServerInfoStatusPayloadSchema = z
         agentTimelinePromptIndex: z.boolean().optional(),
         // COMPAT(agentHistorySearch): added in v0.3.0, remove gate after 2027-02-07.
         agentHistorySearch: z.boolean().optional(),
-        // COMPAT(agentRoles): added in v0.18.0, remove gate after 2027-04-11.
+        // COMPAT(agentRoles): added in v0.20.0, remove gate after 2027-04-13.
         // Gates the Chief floating assistant: the daemon owns the built-in role
         // registry and the Home workspace it launches against.
         agentRoles: z.boolean().optional(),
@@ -3792,6 +3792,11 @@ export const ServerInfoStatusPayloadSchema = z
         agentForkContextCursor: z.boolean().optional(),
         // COMPAT(providerSubagents): added in v0.1.107, remove gate after 2027-01-12.
         providerSubagents: z.boolean().optional(),
+        // COMPAT(daemonTunnels): added in v0.20.0, remove gate after 2027-05-13.
+        // Gates the Tunnels surface: the daemon owns the tunnel registry and the
+        // tunnel.* RPCs, so an older host has nowhere to put a tunnel and no
+        // config field to enable one.
+        daemonTunnels: z.boolean().optional(),
         // COMPAT(providerSubagentNesting): added in v0.7, remove gate after 2027-03-04.
         providerSubagentNesting: z.boolean().optional(),
         // COMPAT(workspacePinning): added in v0.1.107, remove gate after 2027-01-12.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   builtinSidebarNavShortcutAction,
+  filterUnavailableSidebarNavItems,
   moveSidebarNavItem,
   resolveSidebarNavItems,
   setSidebarNavItemVisible,
@@ -34,6 +35,59 @@ describe("resolveSidebarNavItems", () => {
     const preferences: SidebarNavPreference[] = [{ key: "plugin/old/entry", visible: true }];
     const items = resolveSidebarNavItems({ preferences });
     expect(items.every((item) => item.kind === "builtin")).toBe(true);
+  });
+});
+
+describe("filterUnavailableSidebarNavItems", () => {
+  it("keeps every entry when the connected hosts implement them", () => {
+    const items = resolveSidebarNavItems({ preferences: [] });
+    expect(filterUnavailableSidebarNavItems(items, { tunnels: true })).toEqual(items);
+  });
+
+  it("drops tunnels when no connected host implements it", () => {
+    const items = resolveSidebarNavItems({ preferences: [] });
+    const filtered = filterUnavailableSidebarNavItems(items, { tunnels: false });
+    expect(filtered.map((item) => item.id)).not.toContain("tunnels");
+    // The rest of the list is untouched, so an unrelated edit still reads the
+    // user's order for the entries that remain.
+    expect(filtered).toEqual(items.filter((item) => item.id !== "tunnels"));
+  });
+
+  it("drops a hidden tunnels entry too, rather than only reordering it", () => {
+    const all = resolveSidebarNavItems({ preferences: [] });
+    const preferences = setSidebarNavItemVisible({
+      items: all,
+      key: "tunnels",
+      visible: false,
+      previous: [],
+    });
+    const items = resolveSidebarNavItems({ preferences });
+    expect(items.find((item) => item.id === "tunnels")?.visible).toBe(false);
+    expect(
+      filterUnavailableSidebarNavItems(items, { tunnels: false }).some(
+        (item) => item.id === "tunnels",
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps the stored tunnels preference so the entry returns in its slot", () => {
+    const all = resolveSidebarNavItems({ preferences: [] });
+    const moved = moveSidebarNavItem({
+      items: all,
+      key: "tunnels",
+      direction: "up",
+      previous: [],
+    });
+    const items = resolveSidebarNavItems({ preferences: moved });
+    expect(filterUnavailableSidebarNavItems(items, { tunnels: false })).not.toContainEqual(
+      expect.objectContaining({ id: "tunnels" }),
+    );
+    // Re-resolving with the capability back proves the preference survived.
+    const restored = filterUnavailableSidebarNavItems(
+      resolveSidebarNavItems({ preferences: moved }),
+      { tunnels: true },
+    );
+    expect(restored.map((item) => item.id)).toEqual(items.map((item) => item.id));
   });
 });
 

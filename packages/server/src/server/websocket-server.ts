@@ -1528,8 +1528,13 @@ export class DaemonWebSocketServer {
         pluginTimelineItems: true,
         // COMPAT(skillManagement): added in v0.4.0, remove gate after 2027-08-16.
         skillManagement: true,
-        // COMPAT(agentRoles): added in v0.18.0, remove gate after 2027-04-11.
+        // COMPAT(agentRoles): added in v0.20.0, remove gate after 2027-04-13.
         agentRoles: true,
+        // COMPAT(daemonTunnels): added in v0.20.0, remove gate after 2027-05-13.
+        // Advertised unconditionally: the feature is the RPC surface, not the
+        // experimental gate in daemon.tunnel.enabled (the /tunnels screen reads
+        // that config to decide between Enable card and the enabled UI).
+        daemonTunnels: true,
         // COMPAT(projectSetupSkill): added in v0.7.1, remove gate after 2027-09-15.
         projectSetupSkill: true,
         // COMPAT(terminalAgentHookProviders): added in v0.7.1, remove gate after 2027-09-01.

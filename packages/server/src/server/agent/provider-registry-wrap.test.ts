@@ -9,33 +9,11 @@ import type {
 } from "./agent-sdk-types.js";
 import { wrapSessionProvider } from "./provider-registry.js";
 
-type OptionalAgentSessionMethodName = {
-  [K in keyof AgentSession]-?: undefined extends AgentSession[K]
-    ? NonNullable<AgentSession[K]> extends (...args: never[]) => unknown
-      ? K
-      : never
-    : never;
-}[keyof AgentSession];
-
-const OPTIONAL_AGENT_SESSION_METHOD_NAMES = [
-  "listCommands",
-  "setModel",
-  "setThinkingOption",
-  "setFeature",
-  "revertConversation",
-  "revertFiles",
-  "revertBoth",
-  "tryHandleOutOfBand",
-] as const satisfies readonly OptionalAgentSessionMethodName[];
-
-type MissingOptionalAgentSessionMethod = Exclude<
-  OptionalAgentSessionMethodName,
-  (typeof OPTIONAL_AGENT_SESSION_METHOD_NAMES)[number]
->;
-
-const _allOptionalAgentSessionMethodsAreCovered: MissingOptionalAgentSessionMethod extends never
-  ? true
-  : never = true;
+// Coverage of the optional surface is enforced by `WrappedAgentSession` in
+// provider-registry.ts, which the server typecheck compiles. The exhaustive
+// list that used to live here could not fail: this file is excluded from
+// `tsconfig.server.json`, so its `satisfies` said nothing in CI. All this test
+// has to prove is that the explicit forwarders reach the wrapped session.
 
 const CAPABILITIES: AgentCapabilityFlags = {
   supportsStreaming: true,
@@ -122,6 +100,16 @@ class FakeSession implements AgentSession {
     this.recordedCalls.push("close");
   }
 
+  async steerActiveTurn() {
+    this.recordedCalls.push("steerActiveTurn");
+    return { status: "accepted" as const };
+  }
+
+  async rebuildProviderSubagentTimeline() {
+    this.recordedCalls.push("rebuildProviderSubagentTimeline");
+    return [];
+  }
+
   async listCommands() {
     this.recordedCalls.push("listCommands");
     return [];
@@ -172,6 +160,8 @@ describe("wrapSessionProvider", () => {
     const session = new FakeSession();
     const wrapped = wrapSessionProvider("custom-claude", session);
 
+    await wrapped.steerActiveTurn?.("continue", { expectedTurnId: "turn-1" });
+    await wrapped.rebuildProviderSubagentTimeline?.("subagent-1");
     await wrapped.listCommands?.();
     await wrapped.setModel?.("sonnet");
     await wrapped.setThinkingOption?.("high");
@@ -183,6 +173,8 @@ describe("wrapSessionProvider", () => {
     await handler?.run({ emit: () => {} });
 
     expect(session.recordedCalls).toEqual([
+      "steerActiveTurn",
+      "rebuildProviderSubagentTimeline",
       "listCommands",
       "setModel",
       "setThinkingOption",

@@ -15,8 +15,6 @@ export type ChiefAgentState =
   | { tag: "no_home_workspace" }
   | { tag: "error"; message: string };
 
-const HOME_WORKSPACE_TITLE = "Home";
-const HOME_DIR_NAME = ".byspace";
 /** Reserved label the daemon stamps on its Home workspace. */
 const HOME_WORKSPACE_LABEL = "byspace.home-workspace";
 
@@ -31,14 +29,12 @@ interface WorkspaceLike {
 
 /** Exported for tests. */
 export function isHomeWorkspace(workspace: WorkspaceLike): boolean {
-  // The reserved label is authoritative: user renames and custom BYSPACE_HOME
-  // paths both defeat title/path heuristics. Title/path matching is the
-  // fallback for daemons whose Home workspace predates the label.
-  if (workspace.labels?.includes(HOME_WORKSPACE_LABEL)) return true;
-  if (workspace.title === HOME_WORKSPACE_TITLE) return true;
-  const dir = workspace.workspaceDirectory ?? workspace.cwd ?? workspace.projectRootPath ?? "";
-  const normalized = dir.replace(/\\/g, "/").replace(/\/+$/, "");
-  return normalized.endsWith("/" + HOME_DIR_NAME);
+  // The reserved label is the identity, and the only one. Matching titles or
+  // paths here would claim a workspace the user opened themselves — a "Home"
+  // title, or any directory ending in .byspace — and hang Chief's session off
+  // it. The daemon stamps the label on the Home it creates and on nothing else
+  // (packages/server/src/server/home-workspace.ts).
+  return workspace.labels?.includes(HOME_WORKSPACE_LABEL) === true;
 }
 
 /** Pick the first ready provider from the daemon snapshot so Chief follows the
