@@ -5,6 +5,30 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.20.0 - 2026-10-13
+
+### Added
+
+- Daemon tunnels forward a port on a remote daemon's machine to a local port over the relay, end-to-end encrypted and off by default ([#25](https://github.com/ByteTrue/byspace/pull/25), [#26](https://github.com/ByteTrue/byspace/pull/26))
+- Added Tunnels to the sidebar's BySpace menu, and Add tunnel now picks an already-paired host instead of requiring a pasted pairing link ([#26](https://github.com/ByteTrue/byspace/pull/26))
+- Chief, a floating assistant available from every screen, backed by a built-in Chief role on a daemon-created Home workspace ([#28](https://github.com/ByteTrue/byspace/pull/28))
+- `byspace agent run --role` starts an agent with a built-in role ([#28](https://github.com/ByteTrue/byspace/pull/28))
+- Sidebar project rows that share a name get a `host · path` cue to tell them apart ([#31](https://github.com/ByteTrue/byspace/pull/31), [#32](https://github.com/ByteTrue/byspace/pull/32))
+- Added "Expand all thinking" to Timeline detail, between "Show latest thinking" and "Expand all" ([#27](https://github.com/ByteTrue/byspace/pull/27))
+
+### Changed
+
+- "Expand all" now opens tool call details, which no level did before ([#27](https://github.com/ByteTrue/byspace/pull/27))
+- New workspace and History moved from the BySpace menu onto the Workspaces section header ([#31](https://github.com/ByteTrue/byspace/pull/31))
+
+### Fixed
+
+- Fixed the tunnels list staying on Loading when a tunnel already existed at first load
+- Fixed a thinking block staying expanded under "Show latest thinking" after a tool call landed below it ([#27](https://github.com/ByteTrue/byspace/pull/27))
+- Fixed a Pi terminal tab stuck on working after a dialog opened and closed while no run was active ([#29](https://github.com/ByteTrue/byspace/pull/29))
+- Fixed a pi provider subagent tab opening blank with a spinner forever after the daemon restarted ([#30](https://github.com/ByteTrue/byspace/pull/30))
+- Fixed views that froze at their first render: Schedules keeping hosts marked not ready, History's target hosts, and the modified-tab indicator
+
 ## 0.19.0 - 2026-10-11
 
 ### Added
