@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { StreamItem } from "@/types/stream";
 import { buildAgentStreamRenderModel } from "./model";
 import { layoutStream } from "./layout";
-import { resolveStreamRenderStrategy } from "./strategy-resolver";
+import { createWebStreamStrategy } from "./strategy-web";
 import { continuesTurn } from "./turn-membership";
 
 function at(second: number): Date {
@@ -48,7 +48,7 @@ function layoutFor(items: StreamItem[], isTurnActive: boolean) {
   return {
     model,
     layout: layoutStream({
-      strategy: resolveStreamRenderStrategy({ isMobileBreakpoint: false }),
+      strategy: createWebStreamStrategy({ isMobileBreakpoint: false }),
       isTurnActive,
       history: model.segments.historyMounted,
       liveHead: model.segments.liveHead,

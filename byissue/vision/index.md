@@ -58,13 +58,13 @@ BySpace 让你从任何一个浏览器查看和操控自己开发环境里的 AI
 
 **探索中或候选：**
 
-- terminal 会话的转录投影视图：从 agent 写在磁盘上的会话转录派生只读对话，压在活的 PTY 之上，发送回 PTY。orca 用它解决全屏 TUI 在手机上不可读的问题，但其支持列表不含 Pi。候选，待 Epic 003 排序。
+- terminal 会话的转录投影视图：从 agent 写在磁盘上的会话转录派生只读对话，压在活的 PTY 之上，发送回 PTY。orca 用它解决全屏 TUI 在手机上不可读的问题，但其支持列表不含 Pi。随 Epic 003 drop 放弃。
 - 侧栏 project → worktree → agent 行的模型。候选。
 - 语音听写进 terminal 输入栏。候选。
 
 ## 演化地图
 
-- `byissue/epics/003-o-orca-terminal-agent-experience/spec.md`：建设中。对照 orca 优化 terminal agent 体验，不改变结构化会话。
+- `byissue/epics/003-d-orca-terminal-agent-experience/spec.md`：已放弃。Owner 于 2026-10-14 决定 drop，不再推进 terminal agent 体验的 orca 吸收。
 - `byissue/epics/004-o-pi-first-class-and-bytetrue-extensions/spec.md`：建设中。Pi 升为一等公民 provider 后的首批交付：pi-subagent 的 subagents track 与时间线适配。
 - `byissue/issues/019-x-sync-upstream-to-0-8-0-beta.md`：已完成。同步上游到 `v0.8.0-beta.1`，结论已毕业到 `agent-conversation.md` 与 `connection.md`。
 - `byissue/spec/agent-conversation.md`、`terminal.md`、`workspace.md`、`connection.md`：当前真相，Epic 003 只扩展 terminal 一侧。
@@ -79,4 +79,4 @@ BySpace 让你从任何一个浏览器查看和操控自己开发环境里的 AI
 - **吸收：** 从 orca 借鉴交互做法，在 BySpace 自己的架构和设计系统里重做。
 - 想理解方向怎么来的 → `byissue/talks/001-terminal-native-hard-fork.md`
 - 想知道现在能做什么 → `byissue/spec/index.md`
-- 想摘开发切片 → `byissue/epics/003-o-orca-terminal-agent-experience/spec.md` 与其 `issues/`
+- 想摘开发切片 → `byissue/epics/004-o-pi-first-class-and-bytetrue-extensions/spec.md` 与根 `issues/`

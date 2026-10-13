@@ -14,8 +14,9 @@ import {
 import { useTranslation } from "react-i18next";
 import { MarkdownParagraphView, MarkdownTextSpan } from "@/components/markdown-text";
 import {
-  isToolCallSubagentEqual,
+  areToolCallPropsEqual,
   resolveJoinedSubagentRow,
+  type ToolCallProps,
   type ToolCallSubagentBinding,
 } from "@/components/tool-call-subagent-row";
 import * as React from "react";
@@ -2881,31 +2882,8 @@ function areExpandableBadgePropsEqual(previous: ExpandableBadgeProps, next: Expa
  * stops being a static launch record: status comes from the descriptor, the secondary label shows
  * the provider-owned subtitle, and pressing opens the subagent's read-only tab.
  */
-export type { ToolCallSubagentBinding } from "./tool-call-subagent-row";
-
-interface ToolCallProps {
-  toolName: string;
-  args?: unknown;
-  result?: unknown;
-  error?: unknown;
-  status: "executing" | "running" | "completed" | "failed" | "canceled";
-  detail?: ToolCallDetail;
-  cwd?: string;
-  metadata?: Record<string, unknown>;
-  isLastInSequence?: boolean;
-  disableOuterSpacing?: boolean;
-  onInlineDetailsHoverChange?: (hovered: boolean) => void;
-  onInlineDetailsExpandedChange?: (expanded: boolean) => void;
-  onOpenFilePath?: (filePath: string) => void;
-  defaultExpanded?: boolean;
-  forceInline?: boolean;
-  maxDetailHeight?: number;
-  /** Streaming content (thinking) keeps its detail scroll pinned to the newest lines. */
-  followTail?: boolean;
-  /** Replaces the badge's secondary text; nested codemode rows summarize the calls the script ran. */
-  summaryOverride?: string;
-  subagent?: ToolCallSubagentBinding;
-}
+export type { ToolCallProps, ToolCallSubagentBinding } from "./tool-call-subagent-row";
+export { areToolCallPropsEqual } from "./tool-call-subagent-row";
 
 export const ToolCall = memo(function ToolCall({
   toolName,
@@ -2921,7 +2899,6 @@ export const ToolCall = memo(function ToolCall({
   isLastInSequence = false,
   disableOuterSpacing,
   onInlineDetailsHoverChange,
-  onInlineDetailsExpandedChange,
   onOpenFilePath,
   defaultExpanded,
   forceInline = false,
@@ -3002,26 +2979,6 @@ export const ToolCall = memo(function ToolCall({
     onInlineDetailsHoverChange(false);
   }, [isExpanded, shouldRenderInline, onInlineDetailsHoverChange]);
 
-  useEffect(() => {
-    if (!onInlineDetailsExpandedChange) {
-      return;
-    }
-    if (!shouldRenderInline) {
-      onInlineDetailsExpandedChange(false);
-      return;
-    }
-    onInlineDetailsExpandedChange(isExpanded);
-  }, [isExpanded, shouldRenderInline, onInlineDetailsExpandedChange]);
-
-  useEffect(() => {
-    if (!onInlineDetailsExpandedChange) {
-      return () => {};
-    }
-    return () => {
-      onInlineDetailsExpandedChange(false);
-    };
-  }, [onInlineDetailsExpandedChange]);
-
   // Render inline details for desktop
   const renderDetails = useCallback(() => {
     if (!shouldRenderInline) return null;
@@ -3086,24 +3043,3 @@ export const ToolCall = memo(function ToolCall({
     />
   );
 }, areToolCallPropsEqual);
-
-function areToolCallPropsEqual(previous: ToolCallProps, next: ToolCallProps) {
-  if (previous.toolName !== next.toolName) return false;
-  if (previous.args !== next.args) return false;
-  if (previous.result !== next.result) return false;
-  if (previous.error !== next.error) return false;
-  if (previous.status !== next.status) return false;
-  if (previous.detail !== next.detail) return false;
-  if (previous.cwd !== next.cwd) return false;
-  if (previous.metadata !== next.metadata) return false;
-  if (previous.summaryOverride !== next.summaryOverride) return false;
-  if (!isToolCallSubagentEqual(previous, next)) return false;
-  if (previous.isLastInSequence !== next.isLastInSequence) return false;
-  if (previous.disableOuterSpacing !== next.disableOuterSpacing) return false;
-  if (previous.onOpenFilePath !== next.onOpenFilePath) return false;
-  if (previous.defaultExpanded !== next.defaultExpanded) return false;
-  if (previous.forceInline !== next.forceInline) return false;
-  if (previous.maxDetailHeight !== next.maxDetailHeight) return false;
-  if (previous.followTail !== next.followTail) return false;
-  return true;
-}

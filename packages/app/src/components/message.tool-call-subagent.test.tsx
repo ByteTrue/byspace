@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  areToolCallPropsEqual,
   isToolCallSubagentEqual,
   resolveJoinedSubagentRow,
+  type ToolCallProps,
   type ToolCallSubagentBinding,
 } from "./tool-call-subagent-row";
 
@@ -100,5 +102,75 @@ describe("isToolCallSubagentEqual", () => {
 
   it("treats two missing bindings as equal", () => {
     expect(isToolCallSubagentEqual(base, base)).toBe(true);
+  });
+});
+
+describe("areToolCallPropsEqual", () => {
+  const hoverFn = vi.fn();
+  const openFileFn = vi.fn();
+  const subagentOnOpen = vi.fn();
+
+  const baseProps: Required<ToolCallProps> = {
+    toolName: "bash",
+    args: { command: "ls" },
+    result: "file.txt",
+    error: null,
+    status: "completed",
+    detail: { type: "unknown", input: null, output: null },
+    cwd: "/workspace",
+    metadata: { key: "value" },
+    isLastInSequence: true,
+    disableOuterSpacing: false,
+    onInlineDetailsHoverChange: hoverFn,
+    onOpenFilePath: openFileFn,
+    defaultExpanded: false,
+    forceInline: false,
+    maxDetailHeight: 300,
+    followTail: false,
+    summaryOverride: "summary",
+    subagent: {
+      status: "running",
+      secondaryLabel: "subagent label",
+      onOpen: subagentOnOpen,
+    },
+  };
+
+  it("returns true when all props are identical", () => {
+    expect(areToolCallPropsEqual(baseProps, { ...baseProps })).toBe(true);
+  });
+
+  it("detects changes to each prop in ToolCallProps", () => {
+    const mutations: Record<keyof ToolCallProps, unknown> = {
+      toolName: "other_tool",
+      args: { command: "pwd" },
+      result: "other_result",
+      error: new Error("err"),
+      status: "failed",
+      detail: { type: "plain_text", text: "hi" },
+      cwd: "/other",
+      metadata: { key: "new" },
+      isLastInSequence: false,
+      disableOuterSpacing: true,
+      onInlineDetailsHoverChange: vi.fn(),
+      onOpenFilePath: vi.fn(),
+      defaultExpanded: true,
+      forceInline: true,
+      maxDetailHeight: 500,
+      followTail: true,
+      summaryOverride: "new_summary",
+      subagent: {
+        status: "completed",
+        secondaryLabel: "done",
+        onOpen: subagentOnOpen,
+      },
+    };
+
+    for (const key of Object.keys(mutations) as (keyof ToolCallProps)[]) {
+      const nextProps = { ...baseProps, [key]: mutations[key] };
+      expect(
+        areToolCallPropsEqual(baseProps, nextProps),
+        `areToolCallPropsEqual should return false when '${key}' changes`,
+      ).toBe(false);
+    }
   });
 });

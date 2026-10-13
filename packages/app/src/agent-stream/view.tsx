@@ -82,7 +82,7 @@ import { OverviewToolCallGroupView } from "@/tool-calls/detail-level/overview/vi
 import type { OverviewToolCallGroup } from "@/tool-calls/detail-level/overview/model";
 import { formatOverviewSummary } from "@/tool-calls/detail-level/overview/summary";
 import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "./model";
-import { resolveStreamRenderStrategy } from "./strategy-resolver";
+import { createWebStreamStrategy } from "./strategy-web";
 import { type StreamSegmentRenderers, type StreamViewportHandle } from "./strategy";
 import { ChatOutlineRail } from "@/agent-stream/chat-outline/rail";
 import { useChatOutline } from "@/agent-stream/chat-outline/use-chat-outline";
@@ -427,15 +427,12 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const isMobile = useIsCompactFormFactor();
     const streamRenderStrategy = useMemo(
       () =>
-        resolveStreamRenderStrategy({
+        createWebStreamStrategy({
           isMobileBreakpoint: isMobile,
         }),
       [isMobile],
     );
     const [isNearBottom, setIsNearBottom] = useState(true);
-    const [expandedInlineToolCallIds, setExpandedInlineToolCallIds] = useState<Set<string>>(
-      new Set(),
-    );
     const [expandedToolCallGroupIds, setExpandedToolCallGroupIds] = useState<Set<string>>(
       new Set(),
     );
@@ -505,7 +502,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     useEffect(() => {
       setIsNearBottom(true);
-      setExpandedInlineToolCallIds(new Set());
       setExpandedToolCallGroupIds(new Set());
       setCollapseRevision(0);
       setCollapsedDetailState((current) => ({ ...current, ids: EMPTY_DETAIL_IDS }));
@@ -784,7 +780,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       () => ({
         scrollToBottom,
         collapseAll() {
-          setExpandedInlineToolCallIds(new Set());
           setExpandedToolCallGroupIds(new Set());
           setCollapseRevision((current) => current + 1);
           const collapsedIds = new Set<string>();
@@ -818,24 +813,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     useEffect(() => {
       onScrollToBottomVisibilityChange?.(scrollToBottomVisible);
     }, [onScrollToBottomVisibilityChange, scrollToBottomVisible]);
-
-    const setInlineDetailsExpanded = useCallback(
-      (itemId: string, expanded: boolean) => {
-        if (!streamRenderStrategy.shouldDisableParentScrollOnInlineDetailsExpansion()) {
-          return;
-        }
-        setExpandedInlineToolCallIds((previous) => {
-          const next = new Set(previous);
-          if (expanded) {
-            next.add(itemId);
-          } else {
-            next.delete(itemId);
-          }
-          return next;
-        });
-      },
-      [streamRenderStrategy],
-    );
 
     const setToolCallGroupExpanded = useCallback((groupId: string, expanded: boolean) => {
       setExpandedToolCallGroupIds((previous) => {
@@ -910,8 +887,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             // in live mode, whether this row is the tail (the previous target folds, the new one
             // expands — per-row so manual expansion elsewhere survives a retarget).
             key={`${collapseRevision}:${timelineDetailLevel}:${isLiveThought}`}
-            itemId={item.id}
-            onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
             text={item.text}
             status={item.status}
             isLastInSequence={layoutItem.isLastInToolSequence}
@@ -922,13 +897,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           />
         );
       },
-      [
-        timelineDetailLevel,
-        collapsedDetailIds,
-        collapseRevision,
-        liveThoughtId,
-        setInlineDetailsExpanded,
-      ],
+      [timelineDetailLevel, collapsedDetailIds, collapseRevision, liveThoughtId],
     );
 
     const renderSingleToolCallRow = useCallback(
@@ -963,8 +932,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           return (
             <ToolCallSlot
               key={`${collapseRevision}:${detailExpandedByLevel}`}
-              itemId={item.id}
-              onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
               toolName={data.name}
               error={data.error}
               status={data.status}
@@ -985,8 +952,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         return (
           <ToolCallSlot
             key={`${collapseRevision}:${detailExpandedByLevel}`}
-            itemId={item.id}
-            onInlineDetailsExpandedChangeByItemId={setInlineDetailsExpanded}
             toolName={data.toolName}
             args={data.arguments}
             result={data.result}
@@ -1003,7 +968,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         collapsedDetailIds,
         context.cwd,
         timelineDetailLevel,
-        setInlineDetailsExpanded,
         handleToolCallOpenFile,
         getSubagentBinding,
       ],
@@ -1313,9 +1277,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       ],
     );
 
-    const streamScrollEnabled =
-      !streamRenderStrategy.shouldDisableParentScrollOnInlineDetailsExpansion() ||
-      expandedInlineToolCallIds.size === 0;
     const historyContentRevisionIds = useMemo(
       () => ({
         has: (id: string) =>
@@ -1359,7 +1320,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               isLoadingOlderHistory: isLoadingOlder,
               hasOlderHistory: hasOlder,
               olderHistoryProgressKey: progressKey,
-              scrollEnabled: streamScrollEnabled,
+              scrollEnabled: true,
               listStyle: stylesheet.list,
               baseListContentContainerStyle: stylesheet.listContentContainer,
               forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
@@ -1525,17 +1486,9 @@ function agentStreamViewPropsEqual(
 export const AgentStreamView = memo(AgentStreamViewComponent, agentStreamViewPropsEqual);
 AgentStreamView.displayName = "AgentStreamView";
 
-interface ToolCallSlotProps extends Omit<
-  ComponentProps<typeof ToolCall>,
-  "onInlineDetailsExpandedChange"
-> {
-  itemId: string;
-  onInlineDetailsExpandedChangeByItemId: (itemId: string, expanded: boolean) => void;
-}
+type ToolCallSlotProps = ComponentProps<typeof ToolCall>;
 
 interface ThoughtSlotProps {
-  itemId: string;
-  onInlineDetailsExpandedChangeByItemId: (itemId: string, expanded: boolean) => void;
   text: string;
   status: Extract<StreamItem, { kind: "thought" }>["status"];
   isLastInSequence: boolean;
@@ -1543,20 +1496,11 @@ interface ThoughtSlotProps {
 }
 
 // Reasoning text is paced the same way assistant text is; see @/hooks/use-revealed-text.
-function ThoughtSlot({
-  itemId,
-  onInlineDetailsExpandedChangeByItemId,
-  text,
-  status,
-  isLastInSequence,
-  defaultExpanded,
-}: ThoughtSlotProps) {
+function ThoughtSlot({ text, status, isLastInSequence, defaultExpanded }: ThoughtSlotProps) {
   const revealedText = useRevealedText(text, status === "ready" ? "complete" : "streaming");
   const isStreaming = status !== "ready";
   return (
     <ToolCallSlot
-      itemId={itemId}
-      onInlineDetailsExpandedChangeByItemId={onInlineDetailsExpandedChangeByItemId}
       toolName="thinking"
       args={revealedText}
       status={isStreaming ? "executing" : "completed"}
@@ -1567,22 +1511,13 @@ function ThoughtSlot({
   );
 }
 
-function ToolCallSlot({
-  itemId,
-  onInlineDetailsExpandedChangeByItemId,
-  ...rest
-}: ToolCallSlotProps) {
-  const handleExpandedChange = useCallback(
-    (expanded: boolean) => onInlineDetailsExpandedChangeByItemId(itemId, expanded),
-    [onInlineDetailsExpandedChangeByItemId, itemId],
-  );
+function ToolCallSlot(props: ToolCallSlotProps) {
   return (
     <ToolCall
-      {...rest}
+      {...props}
       // A row the level opens by default renders inline even on compact widths; a sheet behind a
       // press would contradict the level.
-      forceInline={rest.forceInline ?? rest.defaultExpanded}
-      onInlineDetailsExpandedChange={handleExpandedChange}
+      forceInline={props.forceInline ?? props.defaultExpanded}
     />
   );
 }

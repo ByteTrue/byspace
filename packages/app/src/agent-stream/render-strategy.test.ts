@@ -1,19 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StreamItem } from "@/types/stream";
-import {
-  collectAssistantResponseContentForStreamRenderStrategy,
-  getBottomOffsetForStreamRenderStrategy,
-  getHistoryLiveBoundaryIndexForStreamRenderStrategy,
-  getLiveHeadHistoryBoundaryIndexForStreamRenderStrategy,
-  getStreamEdgeSlotProps,
-  getStreamNeighborIndex,
-  getStreamNeighborItem,
-  isNearBottomForStreamRenderStrategy,
-  orderHeadForStreamRenderStrategy,
-  orderTailForStreamRenderStrategy,
-  resolveBottomAnchorTransportBehavior,
-} from "./strategy";
-import { resolveStreamRenderStrategy } from "./strategy-resolver";
+import { createWebStreamStrategy } from "./strategy-web";
 
 function createTimestamp(seed: number): Date {
   return new Date(`2026-01-01T00:00:0${seed}.000Z`);
@@ -55,9 +42,9 @@ function toolCall(id: string, seed: number): StreamItem {
   };
 }
 
-describe("resolveStreamRenderStrategy", () => {
+describe("createWebStreamStrategy", () => {
   it("uses forward_stream on web", () => {
-    const strategy = resolveStreamRenderStrategy({
+    const strategy = createWebStreamStrategy({
       isMobileBreakpoint: false,
     });
 
@@ -66,22 +53,6 @@ describe("resolveStreamRenderStrategy", () => {
     expect(strategy.getOverlayScrollbarInverted()).toBe(false);
     expect(strategy.shouldAnchorBottomOnContentSizeChange()).toBe(true);
     expect(strategy.getBottomAnchorTransportBehavior()).toEqual({
-      verificationDelayFrames: 0,
-      verificationRetryMode: "rescroll",
-    });
-  });
-
-  it("does not inflate forward-stream verification delays during web resize", () => {
-    const strategy = resolveStreamRenderStrategy({
-      isMobileBreakpoint: false,
-    });
-
-    expect(
-      resolveBottomAnchorTransportBehavior({
-        strategy,
-        isViewportSettling: true,
-      }),
-    ).toEqual({
       verificationDelayFrames: 0,
       verificationRetryMode: "rescroll",
     });
@@ -96,12 +67,12 @@ describe("stream ordering", () => {
   ];
 
   it("keeps forward_stream order unchanged for tail and head", () => {
-    const strategy = resolveStreamRenderStrategy({
+    const strategy = createWebStreamStrategy({
       isMobileBreakpoint: false,
     });
 
-    const tail = orderTailForStreamRenderStrategy({ strategy, streamItems });
-    const head = orderHeadForStreamRenderStrategy({ strategy, streamHead: streamItems });
+    const tail = strategy.orderTail(streamItems);
+    const head = strategy.orderHead(streamItems);
 
     expect(tail.map((item) => item.id)).toEqual(["u1", "a1", "a2"]);
     expect(head.map((item) => item.id)).toEqual(["u1", "a1", "a2"]);
@@ -110,12 +81,12 @@ describe("stream ordering", () => {
 
 describe("neighbor and traversal semantics", () => {
   it("maps above/below indices", () => {
-    const strategy = resolveStreamRenderStrategy({
+    const strategy = createWebStreamStrategy({
       isMobileBreakpoint: false,
     });
 
-    expect(getStreamNeighborIndex({ strategy, index: 3, relation: "above" })).toBe(2);
-    expect(getStreamNeighborIndex({ strategy, index: 3, relation: "below" })).toBe(4);
+    expect(strategy.getNeighborIndex(3, "above")).toBe(2);
+    expect(strategy.getNeighborIndex(3, "below")).toBe(4);
   });
 
   it("collects assistant response content with strategy traversal direction", () => {
@@ -126,17 +97,13 @@ describe("neighbor and traversal semantics", () => {
       userMessage("u2", "user-2", 4),
     ];
 
-    const forward = resolveStreamRenderStrategy({
+    const forward = createWebStreamStrategy({
       isMobileBreakpoint: false,
     });
     const forwardStartIndex = chronological.findIndex((item) => item.id === "a2");
-    expect(
-      collectAssistantResponseContentForStreamRenderStrategy({
-        strategy: forward,
-        items: chronological,
-        startIndex: forwardStartIndex,
-      }),
-    ).toBe("assistant-1\n\nassistant-2");
+    expect(forward.collectAssistantResponseContent(chronological, forwardStartIndex)).toBe(
+      "assistant-1\n\nassistant-2",
+    );
   });
 
   it("collects copy content across adjacent turns without a visible prompt", () => {
@@ -145,51 +112,32 @@ describe("neighbor and traversal semantics", () => {
       { ...toolCall("tool", 2), turnId: "turn-2" },
       { ...assistantMessage("a2", "second turn", 3), turnId: "turn-2" },
     ];
-    const strategy = resolveStreamRenderStrategy({ isMobileBreakpoint: false });
+    const strategy = createWebStreamStrategy({ isMobileBreakpoint: false });
 
-    expect(
-      collectAssistantResponseContentForStreamRenderStrategy({
-        strategy,
-        items: chronological,
-        startIndex: 2,
-      }),
-    ).toBe("first turn\n\nsecond turn");
+    expect(strategy.collectAssistantResponseContent(chronological, 2)).toBe(
+      "first turn\n\nsecond turn",
+    );
   });
 
   it("returns undefined neighbor when index would be out of bounds", () => {
-    const forward = resolveStreamRenderStrategy({
+    const forward = createWebStreamStrategy({
       isMobileBreakpoint: false,
     });
     const items: StreamItem[] = [userMessage("u1", "user-1", 1)];
 
-    expect(
-      getStreamNeighborItem({
-        strategy: forward,
-        items,
-        index: 0,
-        relation: "above",
-      }),
-    ).toBeUndefined();
-    expect(
-      getStreamNeighborItem({
-        strategy: forward,
-        items,
-        index: 0,
-        relation: "below",
-      }),
-    ).toBeUndefined();
+    expect(forward.getNeighborItem(items, 0, "above")).toBeUndefined();
+    expect(forward.getNeighborItem(items, 0, "below")).toBeUndefined();
   });
 });
 
 describe("scroll/bottom calculations", () => {
   it("computes near-bottom using forward_stream distance-from-bottom math", () => {
-    const strategy = resolveStreamRenderStrategy({
+    const strategy = createWebStreamStrategy({
       isMobileBreakpoint: false,
     });
 
     expect(
-      isNearBottomForStreamRenderStrategy({
-        strategy,
+      strategy.isNearBottom({
         offsetY: 680,
         viewportHeight: 300,
         contentHeight: 1000,
@@ -197,8 +145,7 @@ describe("scroll/bottom calculations", () => {
       }),
     ).toBe(true);
     expect(
-      isNearBottomForStreamRenderStrategy({
-        strategy,
+      strategy.isNearBottom({
         offsetY: 600,
         viewportHeight: 300,
         contentHeight: 1000,
@@ -208,13 +155,12 @@ describe("scroll/bottom calculations", () => {
   });
 
   it("maps scroll-to-bottom to max offset for forward_stream", () => {
-    const strategy = resolveStreamRenderStrategy({
+    const strategy = createWebStreamStrategy({
       isMobileBreakpoint: false,
     });
 
     expect(
-      getBottomOffsetForStreamRenderStrategy({
-        strategy,
+      strategy.getBottomOffset({
         viewportHeight: 320,
         contentHeight: 1000,
       }),
@@ -225,17 +171,11 @@ describe("scroll/bottom calculations", () => {
 describe("edge slot semantics", () => {
   it("uses the footer slot", () => {
     const EdgeSlot = () => null;
-    const strategy = resolveStreamRenderStrategy({
+    const strategy = createWebStreamStrategy({
       isMobileBreakpoint: false,
     });
 
-    expect(
-      getStreamEdgeSlotProps({
-        strategy,
-        component: EdgeSlot,
-        gapSize: 4,
-      }),
-    ).toEqual({
+    expect(strategy.getEdgeSlotProps(EdgeSlot, 4)).toEqual({
       ListFooterComponent: EdgeSlot,
       ListFooterComponentStyle: { marginTop: 4 },
     });
@@ -249,35 +189,22 @@ describe("layout strategy edges", () => {
   ];
 
   it("uses the newest history edge as the history/live boundary", () => {
-    const strategy = resolveStreamRenderStrategy({
+    const strategy = createWebStreamStrategy({
       isMobileBreakpoint: false,
     });
 
-    const history = orderTailForStreamRenderStrategy({ strategy, streamItems });
+    const history = strategy.orderTail(streamItems);
 
-    expect(
-      getHistoryLiveBoundaryIndexForStreamRenderStrategy({
-        strategy,
-        history,
-      }),
-    ).toBe(1);
+    expect(strategy.getHistoryLiveBoundaryIndex(history)).toBe(1);
   });
 
   it("uses the oldest live-head edge as the live-head/history boundary", () => {
-    const strategy = resolveStreamRenderStrategy({
+    const strategy = createWebStreamStrategy({
       isMobileBreakpoint: false,
     });
 
-    const liveHead = orderHeadForStreamRenderStrategy({
-      strategy,
-      streamHead: streamItems,
-    });
+    const liveHead = strategy.orderHead(streamItems);
 
-    expect(
-      getLiveHeadHistoryBoundaryIndexForStreamRenderStrategy({
-        strategy,
-        liveHead,
-      }),
-    ).toBe(0);
+    expect(strategy.getLiveHeadHistoryBoundaryIndex(liveHead)).toBe(0);
   });
 });

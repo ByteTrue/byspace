@@ -3,8 +3,7 @@ import { deriveStreamTurnTiming, type StreamTurnTiming } from "@/timeline/turn-t
 import type { StreamItem } from "@/types/stream";
 import { findMountedWindowStart, getMountedRecentStreamItems } from "./history-window";
 import { getWebPartialVirtualizationThreshold } from "./web-virtualization";
-import { orderHeadForStreamRenderStrategy, orderTailForStreamRenderStrategy } from "./strategy";
-import { resolveStreamRenderStrategy } from "./strategy-resolver";
+import { createWebStreamStrategy } from "./strategy-web";
 
 export interface StreamRenderSegments {
   historyVirtualized: StreamItem[];
@@ -159,7 +158,7 @@ function getTurnTiming(params: {
 export function buildAgentStreamRenderModel(
   input: BuildAgentStreamRenderModelInput,
 ): AgentStreamRenderModel {
-  const strategy = resolveStreamRenderStrategy({
+  const strategy = createWebStreamStrategy({
     isMobileBreakpoint: input.isMobileBreakpoint,
   });
   const orderingCacheKey = `${input.isMobileBreakpoint}`;
@@ -168,21 +167,13 @@ export function buildAgentStreamRenderModel(
     cache: orderedTailCache,
     source: renderedTail,
     cacheKey: orderingCacheKey,
-    order: (items) =>
-      orderTailForStreamRenderStrategy({
-        strategy,
-        streamItems: items,
-      }),
+    order: (items) => strategy.orderTail(items),
   });
   const orderedHead = getOrderedItems({
     cache: orderedHeadCache,
     source: input.head,
     cacheKey: orderingCacheKey,
-    order: (items) =>
-      orderHeadForStreamRenderStrategy({
-        strategy,
-        streamHead: items,
-      }),
+    order: (items) => strategy.orderHead(items),
   });
   const splitHistory = splitOrderedTail({
     orderedTail,

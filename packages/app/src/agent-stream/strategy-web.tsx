@@ -19,9 +19,10 @@ import {
   estimateStreamItemHeight,
   shouldAdjustScrollForVirtualRowResize,
 } from "./web-virtualization";
+import type { StreamItem } from "@/types/stream";
 import type { StreamRenderInput, StreamStrategy, StreamViewportHandle } from "./strategy";
 import { useRevisedHistoryRows } from "./history-row-revision";
-import { createStreamStrategy } from "./strategy";
+import { continuesResponse } from "./turn-membership";
 import {
   abandonHistoryStartPaginationRequest,
   createHistoryStartPaginationState,
@@ -1287,7 +1288,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
 }
 
 export function createWebStreamStrategy(input: CreateWebStreamStrategyInput): StreamStrategy {
-  return createStreamStrategy({
+  return {
     render: (renderInput) => (
       <WebStreamViewport
         key={renderInput.agentId}
@@ -1295,24 +1296,31 @@ export function createWebStreamStrategy(input: CreateWebStreamStrategyInput): St
         isMobileBreakpoint={input.isMobileBreakpoint}
       />
     ),
-    orderTailReverse: false,
-    orderHeadReverse: false,
-    assistantTurnTraversalStep: -1,
-    edgeSlot: "footer",
-    historyLiveBoundaryEdge: "last",
-    liveHeadHistoryBoundaryEdge: "first",
-    frameChildOrder: "content-then-footer",
-    flatListInverted: false,
-    overlayScrollbarInverted: false,
-    maintainVisibleContentPosition: undefined,
-    bottomAnchorTransportBehavior: {
-      verificationDelayFrames: 0,
-      verificationRetryMode: "rescroll",
+    orderTail: (streamItems) => streamItems,
+    orderHead: (streamHead) => streamHead,
+    getNeighborIndex: (index, relation) => (relation === "above" ? index - 1 : index + 1),
+    getNeighborItem: (items, index, relation) => {
+      const neighborIndex = relation === "above" ? index - 1 : index + 1;
+      if (neighborIndex < 0 || neighborIndex >= items.length) {
+        return undefined;
+      }
+      return items[neighborIndex];
     },
-    disableParentScrollOnInlineDetailsExpansion: false,
-    anchorBottomOnContentSizeChange: true,
-    animateManualScrollToBottom: false,
-    useVirtualizedList: false,
+    collectAssistantResponseContent: (items, startIndex) => {
+      const messages: string[] = [];
+      let laterItem: StreamItem | null = null;
+      for (let index = startIndex; index >= 0 && index < items.length; index -= 1) {
+        const currentItem = items[index];
+        if (!currentItem || (laterItem && !continuesResponse(currentItem, laterItem))) {
+          break;
+        }
+        if (currentItem.kind === "assistant_message") {
+          messages.push(currentItem.text);
+        }
+        laterItem = currentItem;
+      }
+      return messages.toReversed().join("\n\n");
+    },
     isNearBottom: (inputMetrics) => {
       const distanceFromBottom = Math.max(
         0,
@@ -1321,5 +1329,23 @@ export function createWebStreamStrategy(input: CreateWebStreamStrategyInput): St
       return distanceFromBottom <= inputMetrics.threshold;
     },
     getBottomOffset: (metrics) => Math.max(0, metrics.contentHeight - metrics.viewportHeight),
-  });
+    getEdgeSlotProps: (component, gapSize) => ({
+      ListFooterComponent: component,
+      ListFooterComponentStyle: { marginTop: gapSize },
+    }),
+    getMaintainVisibleContentPosition: () => undefined,
+    getBottomAnchorTransportBehavior: () => ({
+      verificationDelayFrames: 0,
+      verificationRetryMode: "rescroll",
+    }),
+    getHistoryLiveBoundaryIndex: (history) => (history.length === 0 ? null : history.length - 1),
+    getLiveHeadHistoryBoundaryIndex: (liveHead) => (liveHead.length === 0 ? null : 0),
+    getLatestItemIndex: (items) => (items.length === 0 ? null : items.length - 1),
+    getFrameChildOrder: () => "content-then-footer",
+    getFlatListInverted: () => false,
+    getOverlayScrollbarInverted: () => false,
+    shouldAnchorBottomOnContentSizeChange: () => true,
+    shouldAnimateManualScrollToBottom: () => false,
+    shouldUseVirtualizedList: () => false,
+  };
 }

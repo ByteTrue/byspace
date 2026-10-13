@@ -2,7 +2,6 @@
 kind: issue
 title: "清掉 agent-stream 的死链路与单实现抽象"
 type: chore
-status: open
 created: 2026-10-11
 ---
 
@@ -62,4 +61,11 @@ web strategy 把 `disableParentScrollOnInlineDetailsExpansion` 硬编码为 `fal
 
 ## 执行记录
 
-（实现时在此追加：实际改了什么、跑了什么、与方案的偏差。）
+- **2026-10-14 实现完成：**
+  - **死链路清理：** 删除了 `disableParentScrollOnInlineDetailsExpansion` 接口与配置、`view.tsx` 中恒为 false 守卫的 `expandedInlineToolCallIds` 状态及 `setInlineDetailsExpanded` 上报链路，移除了 `ToolCallSlot` / `ThoughtSlot` 的 `itemId` 与 `onInlineDetailsExpandedChangeByItemId`，删除了 `message.tsx` 中 `ToolCall` 的 `onInlineDetailsExpandedChange` 及其两个副作用监听。
+  - **单实现策略折叠：** 将 `createStreamStrategy` 配置直接内联进 `strategy-web.tsx` 的 `createWebStreamStrategy`；`strategy.ts` 彻底纯化为仅包含类型定义，清理了过时的 wrapper 转发函数；删除了只做单行转发的 `strategy-resolver.ts`，调用点统一收敛为直接使用 `createWebStreamStrategy`。
+  - **属性比较器收敛（选定路线 2）：** 为避免破坏已有 WeakMap 缓存机制及引入复杂依赖，保留并强化手工比较；将 `ToolCallProps` 与 `areToolCallPropsEqual` 收敛至 `tool-call-subagent-row.ts`，补齐对 `onInlineDetailsHoverChange` 的比较，并在 props 接口加注警示注释；在 `message.tool-call-subagent.test.tsx` 中编写全字段遍历突变断言，任何未加入比较器的新属性均会直接中断测试。
+  - **验证：**
+    - `npm run typecheck`、`npm run lint`、`npm run format:check` 均通过。
+    - `agent-stream` 与 `message` 相关单测共 9 个文件、108 个测试用例全部通过。
+    - `timeline-detail-level.spec.ts`（5 个用例全部通过）与 `agent-stream-ui.spec.ts`（8 个用例全部通过）两条 Playwright e2e 全部通过。

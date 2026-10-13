@@ -1,12 +1,13 @@
 ---
 kind: epic
 title: "吸收 orca 的 terminal agent 体验"
-owner_decision: approved
+owner_decision: dropped
 created: 2026-09-09
-amended_at: 2026-09-09
+amended_at: 2026-10-14
 approval_evidence:
   owner: "“开始 terminal agent 体验优化，看 orca 有哪些值得我们吸收的。我们只做吸收吧”（2026-09-09）"
   scope_retraction: "Owner 撤回 terminal-native 迁移与删除适配器；UI 与 terminal 共存，保存现状（2026-09-09）"
+  drop: "Owner 决定放弃（“003 直接 drop 吧”，2026-10-14）"
   talk: ../../talks/001-terminal-native-hard-fork.md
 ---
 
@@ -62,15 +63,13 @@ BySpace 的 terminal 会话目前只是「一个能跑 TUI 的终端」加一层
 
 **术语。** Terminal 会话：agent 以自己的 TUI 在 PTY 里运行的会话。活动状态：hook 上报的粗粒度状态。吸收：借鉴 orca 的交互做法，在 BySpace 的架构与设计系统里重做。
 
-## 现在推什么、先搁什么
+## 状态（已放弃）
 
-**可推进：**
-
-- 产出吸收清单：逐项对照 orca 与本仓库现状，判断值不值得、代价多大、依赖什么，给出排序。清单出来之前不动实现。
+**2026-10-14 放弃记录：** Owner 决定直接 drop 本 Epic（“003 直接 drop 吧”），不再推进 terminal agent 体验的 orca 吸收。下属 Issue 随之放弃。
 
 **Issues：**（位于同目录 `issues/`；编号仅在本 Epic 内有效）
 
-- [ ] `issues/001-o-orca-absorption-inventory.md` — 产出带排序的吸收清单 / 无依赖 / 验证：每项有现状、orca 做法、代价与建议
+- [d] `issues/001-d-orca-absorption-inventory.md` — 产出带排序的吸收清单（已放弃）
 
 **暂不推进：** 具体吸收项的实现，等清单排序。转录投影视图的 Pi 解析器可行性，作为清单中的一项评估。
 

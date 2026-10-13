@@ -1,12 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { TurnTiming } from "@/timeline/turn-time";
 import type { StreamItem } from "@/types/stream";
-import {
-  orderHeadForStreamRenderStrategy,
-  orderTailForStreamRenderStrategy,
-  type StreamStrategy,
-} from "./strategy";
-import { resolveStreamRenderStrategy } from "./strategy-resolver";
+import type { StreamStrategy } from "./strategy";
+import { createWebStreamStrategy } from "./strategy-web";
 import { layoutStream, type StreamLayout, type StreamLayoutItem } from "./layout";
 
 function timestamp(seed: number): Date {
@@ -80,7 +76,7 @@ function timingFor(...ids: string[]): Map<string, TurnTiming> {
 }
 
 function strategyFor(): StreamStrategy {
-  return resolveStreamRenderStrategy({ isMobileBreakpoint: false });
+  return createWebStreamStrategy({ isMobileBreakpoint: false });
 }
 
 function layoutFor(input: {
@@ -93,14 +89,8 @@ function layoutFor(input: {
   return layoutStream({
     strategy,
     isTurnActive: input.isTurnActive ?? false,
-    history: orderTailForStreamRenderStrategy({
-      strategy,
-      streamItems: input.tail,
-    }),
-    liveHead: orderHeadForStreamRenderStrategy({
-      strategy,
-      streamHead: input.head ?? [],
-    }),
+    history: strategy.orderTail(input.tail),
+    liveHead: strategy.orderHead(input.head ?? []),
     timingByAssistantId: timingFor(...(input.timingIds ?? [])),
   });
 }
