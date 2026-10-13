@@ -14,7 +14,7 @@ import {
 import { gotoAppShell } from "../support/helpers/app";
 import {
   createTempGithubRepo,
-  hasGithubAuth,
+  canCreateGithubFixtures,
   type GhRepoFixture,
 } from "../support/helpers/github-fixtures";
 import { expectOpenedProject } from "../support/helpers/project-picker-ui";
@@ -27,7 +27,7 @@ test.describe("Add Project GitHub flow", () => {
   test("searches the host's repositories and clones into a clearly shown final path", async ({
     page,
   }) => {
-    test.skip(!hasGithubAuth(), "Requires GitHub authentication (gh auth login)");
+    test.skip(!canCreateGithubFixtures(), "Requires gh auth with the delete_repo scope");
 
     let repository: GhRepoFixture | null = null;
     const parentDirectory = await mkdtemp(path.join(tmpdir(), "byspace-e2e-github-clone-"));

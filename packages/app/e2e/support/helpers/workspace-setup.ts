@@ -67,7 +67,11 @@ export async function seedProjectForWorkspaceSetup(
 }
 
 export function projectNameFromPath(repoPath: string): string {
-  return repoPath.replace(/\/+$/, "").split("/").findLast(Boolean) ?? repoPath;
+  // Split on both separators: the sidebar renders the basename, and a Windows
+  // path split on "/" alone yields the whole path, so hasText never matches.
+  // Mirrors lastPathSegment in packages/server/src/server/project-key.ts.
+  const segments = repoPath.split(/[\\/]/u).filter(Boolean);
+  return segments[segments.length - 1] ?? repoPath;
 }
 
 export async function openHomeWithProject(page: Page, repoPath: string): Promise<void> {

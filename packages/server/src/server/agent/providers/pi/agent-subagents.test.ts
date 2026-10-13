@@ -7,6 +7,7 @@ import {
   mapPiSubagentStatus,
   observePiSubagentExit,
   observePiSubagentLaunch,
+  replayPiSubagentSessionPointers,
   observePiSubagentRecord,
   replayPiSubagentObservations,
 } from "./agent-subagents.js";
@@ -205,9 +206,87 @@ describe("replayPiSubagentObservations", () => {
         details: { id: "sub_9", status: "running" },
       },
     ];
+    // Live-process replay keeps the running tail as-is; the post-restart replay closes
+    // it as canceled (issue 078). The sweep applies regardless of which origin reported
+    // the running state.
     expect(replayPiSubagentObservations(messages)).toEqual([
       { kind: "status", id: "sub_9", status: "running" },
     ]);
+    expect(replayPiSubagentObservations(messages, { closeRunningAsCanceled: true })).toEqual([
+      { kind: "status", id: "sub_9", status: "running" },
+      { kind: "status", id: "sub_9", status: "canceled" },
+    ]);
+  });
+
+  it("closes a transcript that ends on a running child with canceled when asked (issue 078)", () => {
+    const messages: PiAgentMessage[] = [
+      {
+        role: "assistant",
+        content: [{ type: "toolCall", id: "t1", name: "subagent", arguments: { task: "x" } }],
+      },
+      {
+        role: "toolResult",
+        toolCallId: "t1",
+        toolName: "subagent",
+        content: "started",
+        details: { id: "sub_z", status: "running" },
+      },
+    ];
+    expect(replayPiSubagentObservations(messages, { closeRunningAsCanceled: true })).toEqual([
+      { kind: "declared", id: "sub_z", toolCallId: "t1", description: "x" },
+      { kind: "status", id: "sub_z", status: "canceled" },
+    ]);
+  });
+
+  it("extracts child session pointers from launch and record results (issue 078)", () => {
+    const messages: PiAgentMessage[] = [
+      {
+        role: "assistant",
+        content: [{ type: "toolCall", id: "t1", name: "subagent", arguments: { task: "x" } }],
+      },
+      {
+        role: "toolResult",
+        toolCallId: "t1",
+        toolName: "subagent",
+        content: "started",
+        details: { id: "sub_p", status: "running", sessionId: "sub_s1", cwd: "/tmp/w" },
+      },
+      {
+        role: "assistant",
+        content: [
+          { type: "toolCall", id: "t2", name: "subagent_status", arguments: { id: "sub_p" } },
+        ],
+      },
+      {
+        role: "toolResult",
+        toolCallId: "t2",
+        toolName: "subagent_status",
+        content: "status",
+        details: { id: "sub_p", status: "succeeded", sessionFile: "/logs/sub_s1.jsonl" },
+      },
+    ];
+    expect(replayPiSubagentSessionPointers(messages)).toEqual(
+      new Map([
+        ["sub_p", { sessionId: "sub_s1", cwd: "/tmp/w", sessionFile: "/logs/sub_s1.jsonl" }],
+      ]),
+    );
+  });
+
+  it("returns no pointer for transcripts that predate session pointers", () => {
+    const messages: PiAgentMessage[] = [
+      {
+        role: "assistant",
+        content: [{ type: "toolCall", id: "t1", name: "subagent", arguments: { task: "x" } }],
+      },
+      {
+        role: "toolResult",
+        toolCallId: "t1",
+        toolName: "subagent",
+        content: "started",
+        details: { id: "sub_old", status: "running" },
+      },
+    ];
+    expect(replayPiSubagentSessionPointers(messages)).toEqual(new Map());
   });
 });
 

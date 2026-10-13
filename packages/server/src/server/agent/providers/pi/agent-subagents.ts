@@ -56,6 +56,21 @@ interface PiSubagentRecordDetails {
   status?: string;
   description?: string;
   agent?: string;
+  /**
+   * Child session pointer, written into every record by pi-subagent releases carrying
+   * the transcript self-description change (pi-package-mono issue 115). Older releases
+   * omit the fields; absent means "not known".
+   */
+  sessionId?: string;
+  cwd?: string;
+  sessionFile?: string;
+}
+
+/** Where the child's pi session jsonl lives — the durable timeline authority. */
+export interface PiSubagentSessionPointer {
+  sessionId?: string;
+  cwd?: string;
+  sessionFile?: string;
 }
 
 /**
@@ -76,6 +91,13 @@ export function parsePiSubagentRecordDetails(details: unknown): PiSubagentRecord
     ...(typeof record.status === "string" ? { status: record.status } : {}),
     ...(typeof record.description === "string" ? { description: record.description } : {}),
     ...(typeof record.agent === "string" && record.agent.length > 0 ? { agent: record.agent } : {}),
+    ...(typeof record.sessionId === "string" && record.sessionId
+      ? { sessionId: record.sessionId }
+      : {}),
+    ...(typeof record.cwd === "string" && record.cwd ? { cwd: record.cwd } : {}),
+    ...(typeof record.sessionFile === "string" && record.sessionFile
+      ? { sessionFile: record.sessionFile }
+      : {}),
   };
 }
 
@@ -142,12 +164,53 @@ export function observePiSubagentExit(details: unknown): SubagentObservation[] {
  * The transcript carries all three origins: assistant toolCall blocks with their toolResult
  * messages (launch and record results), and `subagent-exit` custom messages. Tool calls
  * precede their results in an assistant turn, so a single pass with a pending map pairs them.
+ *
+ * A child whose last transcript record still reads running gets a closing `canceled`: replay
+ * happens in a fresh pi process, process replacement killed the old tree, and the exit message
+ * that would have carried the terminal state never made it to disk. Without this the replayed
+ * row pins "running" forever with an empty timeline — the blank-spinner subagent tab.
  */
-export function replayPiSubagentObservations(
+export interface PiSubagentReplay {
+  observations: SubagentObservation[];
+  /** Child session pointer per subagent id; later origins win over earlier ones. */
+  sessionPointers: Map<string, PiSubagentSessionPointer>;
+}
+
+/** Record details to a cumulative pointer; records without any pointer field (pre-0.18
+ * transcripts) contribute nothing. Later origins win — the exit record's sessionFile is
+ * the most precise form. */
+function absorbSessionPointer(
+  pointers: Map<string, PiSubagentSessionPointer>,
+  details: unknown,
+): void {
+  const record = parsePiSubagentRecordDetails(details);
+  if (!record) return;
+  const session: PiSubagentSessionPointer = {
+    ...(record.sessionId ? { sessionId: record.sessionId } : {}),
+    ...(record.cwd ? { cwd: record.cwd } : {}),
+    ...(record.sessionFile ? { sessionFile: record.sessionFile } : {}),
+  };
+  if (Object.keys(session).length === 0) return;
+  pointers.set(record.id, { ...pointers.get(record.id), ...session });
+}
+
+/**
+ * Single-pass replay: the observations the descriptor store needs plus the child session
+ * pointers the timeline rebuild reads. `options.closeRunningAsCanceled` closes out
+ * subagents whose last transcript record still reads running — only sound when the
+ * process that produced these messages is gone (see streamHistory's processReplaced).
+ * See each public wrapper below for the rest of the semantics.
+ */
+export function replayPiSubagentSession(
   messages: readonly PiAgentMessage[],
-): SubagentObservation[] {
+  options?: { closeRunningAsCanceled?: boolean },
+): PiSubagentReplay {
   const observations: SubagentObservation[] = [];
+  const sessionPointers = new Map<string, PiSubagentSessionPointer>();
   const pendingLaunches = new Map<string, { name: string; args: unknown }>();
+  // Last status observation seen per subagent id, in transcript order. Non-running statuses
+  // are removed: a later record (e.g. a fresh subagent_status poll) can report running again.
+  const lastStatus = new Map<string, ProviderSubagentStatus>();
 
   for (const message of messages) {
     if (message.role === "assistant") {
@@ -164,6 +227,8 @@ export function replayPiSubagentObservations(
       if (!launch) {
         continue;
       }
+      // Launch and record results both carry the pointer; one parse covers both.
+      absorbSessionPointer(sessionPointers, message.details);
       if (launch.name === PI_SUBAGENT_LAUNCH_TOOL) {
         const observation = observePiSubagentLaunch({
           toolCallId: message.toolCallId,
@@ -172,19 +237,56 @@ export function replayPiSubagentObservations(
         });
         if (observation) {
           observations.push(observation);
+          lastStatus.set(observation.id, "running");
         }
         continue;
       }
       const observation = observePiSubagentRecord(message.details);
-      if (observation) {
+      if (observation?.kind === "status") {
         observations.push(observation);
+        lastStatus.set(observation.id, observation.status);
       }
       continue;
     }
     if (message.role === "custom" && message.customType === PI_SUBAGENT_EXIT_CUSTOM_TYPE) {
-      observations.push(...observePiSubagentExit(message.details));
+      for (const observation of observePiSubagentExit(message.details)) {
+        if (observation.kind !== "status") continue;
+        observations.push(observation);
+        lastStatus.set(observation.id, observation.status);
+      }
     }
   }
 
-  return observations;
+  // lastStatus only holds ids that produced a status-carrying observation; declared ids
+  // were seeded with "running" at their launch record.
+  if (options?.closeRunningAsCanceled) {
+    for (const [id, status] of lastStatus) {
+      if (status === "running") {
+        observations.push({ kind: "status", id, status: "canceled" });
+      }
+    }
+  }
+
+  return { observations, sessionPointers };
+}
+
+export function replayPiSubagentObservations(
+  messages: readonly PiAgentMessage[],
+  options?: { closeRunningAsCanceled?: boolean },
+): SubagentObservation[] {
+  return replayPiSubagentSession(messages, options).observations;
+}
+
+/**
+ * Child session pointers per subagent id, from the same single transcript pass as the
+ * observations: launch records (pi-subagent >= 0.18) and record details (subagent_status /
+ * subagent_stop results, exit messages) both carry them. Later origins win — the exit
+ * record's sessionFile is the most precise form. Older transcripts have no pointer; timeline
+ * rebuild then degrades to the pre-115 behavior (no timeline, descriptor closed out as
+ * canceled by the replay sweep).
+ */
+export function replayPiSubagentSessionPointers(
+  messages: readonly PiAgentMessage[],
+): Map<string, PiSubagentSessionPointer> {
+  return replayPiSubagentSession(messages).sessionPointers;
 }

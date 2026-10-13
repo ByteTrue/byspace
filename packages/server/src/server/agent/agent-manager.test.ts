@@ -4403,7 +4403,7 @@ test("importProviderSession imports the selected session without listing and pub
   expect(manager.listProviderSubagents(imported.id)).toEqual([
     expect.objectContaining({ id: "thread-child", title: "Imported child", status: "completed" }),
   ]);
-  expect(manager.fetchProviderSubagentTimeline(imported.id, "thread-child").rows).toEqual([
+  expect((await manager.fetchProviderSubagentTimeline(imported.id, "thread-child")).rows).toEqual([
     expect.objectContaining({ item: { type: "assistant_message", text: "Child result" } }),
   ]);
   expect(events).toHaveLength(3);
@@ -7775,9 +7775,9 @@ test("subscribe hides provider subagents of internal parents from global subscri
   expect(() => manager.getProviderSubagent(internalAgentId, "hidden-child")).toThrow(
     `Unknown agent '${internalAgentId}'`,
   );
-  expect(() => manager.fetchProviderSubagentTimeline(internalAgentId, "hidden-child")).toThrow(
-    `Unknown agent '${internalAgentId}'`,
-  );
+  await expect(
+    manager.fetchProviderSubagentTimeline(internalAgentId, "hidden-child"),
+  ).rejects.toThrow(`Unknown agent '${internalAgentId}'`);
   expect(manager.listProviderSubagentActivity()).toEqual([]);
 });
 
@@ -11186,4 +11186,174 @@ test("onWorkspaceStateMayHaveChanged is not called for running shell tool calls"
   await manager.runAgent(snapshot.id, { text: "merge it" });
 
   expect(onWorkspaceStateMayHaveChanged).not.toHaveBeenCalled();
+});
+
+test("rebuilds an empty provider subagent timeline from disk once when fetched (issue 078)", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-subagent-rebuild-"));
+  const storagePath = join(workdir, "agents");
+  const storage = new AgentStorage(storagePath, logger);
+  class RebuildingSession extends TestAgentSession {
+    rebuildCalls = 0;
+    override async *streamHistory(): AsyncGenerator<AgentStreamEvent> {
+      // Replay reports a settled child with no timeline rows: the state the daemon
+      // is in after a restart, before the disk rebuild fills the store.
+      yield {
+        type: "provider_subagent",
+        provider: this.provider,
+        event: { type: "upsert", id: "sub_r", title: "Rebuilt child", status: "completed" },
+      };
+    }
+    override async rebuildProviderSubagentTimeline(subagentId: string) {
+      this.rebuildCalls += 1;
+      if (subagentId !== "sub_r") return [];
+      return [
+        {
+          item: { type: "user_message" as const, text: "child input" },
+          timestamp: "2026-01-02T00:00:00.000Z",
+        },
+        {
+          item: { type: "assistant_message" as const, text: "child output" },
+          timestamp: "2026-01-02T00:00:01.000Z",
+        },
+      ];
+    }
+  }
+  const session = new RebuildingSession({ provider: "codex", cwd: workdir });
+  const subagentId = "sub_r";
+  const title = "Rebuilt child";
+  const status = "completed" as const;
+  class ImportClient extends TestAgentClient {
+    async listImportableSessions() {
+      return [];
+    }
+    override async importSession(input: ImportProviderSessionInput) {
+      // eslint-disable-line
+      return {
+        session,
+        config: { provider: "codex" as const, cwd: workdir },
+        persistence: {
+          provider: "codex" as const,
+          sessionId: input.providerHandleId,
+          nativeHandle: input.providerHandleId,
+          metadata: { provider: "codex", cwd: workdir },
+        },
+        timeline: [],
+        providerSubagentEvents: [
+          {
+            type: "provider_subagent" as const,
+            provider: "codex" as const,
+            event: {
+              type: "upsert" as const,
+              id: subagentId,
+              title: title,
+              status: status,
+            },
+          },
+        ],
+      };
+    }
+  }
+  const manager = new AgentManager({
+    clients: { codex: new ImportClient() },
+    registry: storage,
+    logger,
+  });
+  try {
+    const imported = await manager.importProviderSession({
+      provider: "codex",
+      providerHandleId: "thread-rebuild",
+      cwd: workdir,
+      workspaceId: "ws-rebuild",
+    });
+
+    // First fetch triggers the rebuild and returns the disk rows.
+    const first = await manager.fetchProviderSubagentTimeline(imported.id, "sub_r");
+    expect(session.rebuildCalls).toBe(1);
+    expect(first.rows.map((row) => row.item)).toEqual([
+      { type: "user_message", text: "child input" },
+      { type: "assistant_message", text: "child output" },
+    ]);
+
+    // Second fetch finds rows in the store: no second rebuild.
+    const second = await manager.fetchProviderSubagentTimeline(imported.id, "sub_r");
+    expect(session.rebuildCalls).toBe(1);
+    expect(second.rows).toHaveLength(2);
+  } finally {
+    rmSync(workdir, { recursive: true, force: true });
+  }
+});
+
+test("skips the disk rebuild for running children (issue 078)", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-subagent-rebuild-skip-"));
+  const storagePath = join(workdir, "agents");
+  const storage = new AgentStorage(storagePath, logger);
+  class RunningSession extends TestAgentSession {
+    rebuildCalls = 0;
+    override async *streamHistory(): AsyncGenerator<AgentStreamEvent> {
+      yield {
+        type: "provider_subagent",
+        provider: this.provider,
+        event: { type: "upsert", id: "sub_live", title: "Live child", status: "running" },
+      };
+    }
+    override async rebuildProviderSubagentTimeline(): Promise<
+      Array<{ item: AgentTimelineItem; timestamp?: string }>
+    > {
+      this.rebuildCalls += 1;
+      return [];
+    }
+  }
+  const session = new RunningSession({ provider: "codex", cwd: workdir });
+  const subagentId = "sub_live";
+  const title = "Live child";
+  const status = "running" as const;
+  class ImportClient extends TestAgentClient {
+    async listImportableSessions() {
+      return [];
+    }
+    override async importSession(input: ImportProviderSessionInput) {
+      // eslint-disable-line
+      return {
+        session,
+        config: { provider: "codex" as const, cwd: workdir },
+        persistence: {
+          provider: "codex" as const,
+          sessionId: input.providerHandleId,
+          nativeHandle: input.providerHandleId,
+          metadata: { provider: "codex", cwd: workdir },
+        },
+        timeline: [],
+        providerSubagentEvents: [
+          {
+            type: "provider_subagent" as const,
+            provider: "codex" as const,
+            event: {
+              type: "upsert" as const,
+              id: subagentId,
+              title: title,
+              status: status,
+            },
+          },
+        ],
+      };
+    }
+  }
+  const manager = new AgentManager({
+    clients: { codex: new ImportClient() },
+    registry: storage,
+    logger,
+  });
+  try {
+    const imported = await manager.importProviderSession({
+      provider: "codex",
+      providerHandleId: "thread-live",
+      cwd: workdir,
+      workspaceId: "ws-live",
+    });
+    const result = await manager.fetchProviderSubagentTimeline(imported.id, "sub_live");
+    expect(result.rows).toEqual([]);
+    expect(session.rebuildCalls).toBe(0);
+  } finally {
+    rmSync(workdir, { recursive: true, force: true });
+  }
 });

@@ -106,11 +106,16 @@ export function createWithWorkspace(page: Page): WithWorkspaceHandle {
           // Best-effort cleanup so the original test failure is preserved.
         }
       }
-      for (const repo of repos) {
-        await repo.cleanup();
-      }
+      // Release the daemon's hold on the fixture directories before deleting them.
+      // While this client is open the daemon still has a watcher on each repo, and
+      // on Windows an open handle makes rmdir fail EBUSY. repo.cleanup() retries on
+      // top of this for the handles the daemon has not dropped yet.
       if (client) {
         await client.close().catch(() => undefined);
+        client = null;
+      }
+      for (const repo of repos) {
+        await repo.cleanup();
       }
     },
   };

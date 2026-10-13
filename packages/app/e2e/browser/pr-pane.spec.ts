@@ -8,7 +8,7 @@ import {
 } from "../support/helpers/pr-pane";
 import { gotoWorkspace } from "../support/helpers/launcher";
 import {
-  hasGithubAuth,
+  canCreateGithubFixtures,
   createTempGithubRepo,
   type GhRepoFixture,
 } from "../support/helpers/github-fixtures";
@@ -18,7 +18,7 @@ import {
   type WorkspaceSetupDaemonClient,
 } from "../support/helpers/workspace-setup";
 
-const GITHUB_AUTH = hasGithubAuth();
+const CAN_CREATE_GITHUB_FIXTURES = canCreateGithubFixtures();
 
 test.describe("PR pane", () => {
   test.describe.configure({ retries: 1 });
@@ -28,7 +28,7 @@ test.describe("PR pane", () => {
   const workspaceByTitle = new Map<string, string>();
 
   test.beforeAll(async () => {
-    if (!GITHUB_AUTH) return;
+    if (!CAN_CREATE_GITHUB_FIXTURES) return;
 
     seedClient = await connectWorkspaceSetupClient();
 
@@ -65,7 +65,7 @@ test.describe("PR pane", () => {
   });
 
   test.beforeEach(async () => {
-    test.skip(!GITHUB_AUTH, "Requires GitHub authentication (gh auth login)");
+    test.skip(!CAN_CREATE_GITHUB_FIXTURES, "Requires gh auth with the delete_repo scope");
     test.setTimeout(60_000);
   });
 

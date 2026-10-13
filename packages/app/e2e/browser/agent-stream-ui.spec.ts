@@ -64,6 +64,15 @@ test.describe("Agent stream UI", () => {
     });
     try {
       await awaitAssistantMessage(page);
+      // Wait until the transcript actually overflows before measuring growth.
+      // The mock takes seconds to produce enough text for that, and until it
+      // does, scrollHeight equals clientHeight: the container is not yet
+      // scrollable, readScrollMetrics reports the frozen viewport height, and
+      // the growth poll below times out on slower machines (issue 078).
+      await waitForScrollableChat(page, {
+        minScrollableDistance: SCROLL_AWAY_MIN_SCROLLABLE_DISTANCE,
+        timeout: 60_000,
+      });
       await expectScrollFollowsNewContent(page);
     } finally {
       await agent.cleanup();

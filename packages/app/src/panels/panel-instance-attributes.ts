@@ -52,6 +52,9 @@ export function useModifiedPanelTabIds(input: {
   workspaceId: string;
   tabIds: string[];
 }): Set<string> {
+  // The compiler drops `void revision;` as dead code and caches the memo below,
+  // so the modified-tab set freezes at its first value. See docs/react-compiler.md.
+  "use no memo";
   const revision = useSyncExternalStore(
     useCallback((listener: () => void) => {
       allListeners.add(listener);

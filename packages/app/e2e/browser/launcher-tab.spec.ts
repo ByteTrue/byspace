@@ -39,11 +39,21 @@ import { getServerId } from "../support/helpers/server-id";
 let workspace: SeededWorkspace;
 let secondWorkspaceId: string | null = null;
 
+// Spawns the Node binary rather than `/bin/sh`: the daemon runs on Windows too,
+// where `/bin/sh` does not exist and the terminal reports "File not found"
+// (issue 078). `process.argv.length - 2` mirrors the shell's `$#`: the first
+// argv entry is the binary and the second is the name slot, leaving the count
+// of real arguments — so an empty prompt that gets dropped reads 0.
 const EMPTY_PROMPT_PROFILE: TerminalProfile = {
   id: "e2e-empty-prompt",
   name: "Empty Prompt",
-  command: "/bin/sh",
-  args: ["-c", 'echo prompt-args: "$#"; sleep 10', "profile-name", "{{{prompt}}}"],
+  command: process.execPath,
+  args: [
+    "-e",
+    'console.log("prompt-args:", process.argv.length - 2); setTimeout(() => {}, 10_000);',
+    "profile-name",
+    "{{{prompt}}}",
+  ],
 };
 
 async function tabTestIds(tabs: Locator): Promise<(string | null)[]> {

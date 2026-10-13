@@ -1,11 +1,25 @@
 import { execFileSync, execSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { resolveTempRoot } from "./workspace";
 
-export function hasGithubAuth(): boolean {
+/**
+ * True when this machine can run the live GitHub specs. These create a temporary
+ * repository and delete it afterwards, so the token needs the `delete_repo`
+ * scope as well as authentication. Without the scope the cleanup 403s, every run
+ * leaks a repository, and GitHub eventually answers the next `repo create` with
+ * "You have created too many repositories, too quickly" — a failure that looks
+ * like a fixture bug and is not one.
+ *
+ * `packages/server/src/server/daemon-e2e/checkout-pr-merge.e2e.test.ts` gates on
+ * the same scope for the same reason.
+ */
+export function canCreateGithubFixtures(): boolean {
   try {
-    execSync("gh auth status", { stdio: "ignore" });
-    return true;
+    // gh prints the scope line to stderr.
+    const status = execSync("gh auth status -h github.com 2>&1", { stdio: "pipe" }).toString();
+    const scopesLine = status.split(/\r?\n/).find((line) => /token[- ]scopes?:/i.test(line));
+    return scopesLine?.includes("delete_repo") ?? false;
   } catch {
     return false;
   }
@@ -138,7 +152,7 @@ async function seedPr(args: {
     gh(["pr", "close", String(prNumber)], { cwd: basePath });
   }
 
-  const localPath = await mkdtemp(path.join("/tmp", `${repoName}-ws-${index}-`));
+  const localPath = await mkdtemp(path.join(await resolveTempRoot(), `${repoName}-ws-${index}-`));
   git(["clone", authedUrl, localPath, "--quiet", "-b", branch], basePath);
   // Clean remote URL (no embedded token) so gh can parse owner/repo
   git(["remote", "set-url", "origin", `https://github.com/${fullName}.git`], localPath);
@@ -182,7 +196,7 @@ export async function createTempGithubRepo(options: {
   const defaultBranch = "main";
 
   // Bootstrap local git repo
-  const basePath = await mkdtemp(path.join("/tmp", `${repoName}-base-`));
+  const basePath = await mkdtemp(path.join(await resolveTempRoot(), `${repoName}-base-`));
   git(["init", "-b", defaultBranch], basePath);
   git(["config", "user.email", "e2e@byspace.test"], basePath);
   git(["config", "user.name", "BySpace E2E"], basePath);
@@ -269,7 +283,9 @@ export async function cloneGithubRepoDefaultBranchOnly(
 ): Promise<GhDefaultBranchClone> {
   const token = gh(["auth", "token"]);
   const authedUrl = `https://x-access-token:${token}@github.com/${repo.fullName}.git`;
-  const clonePath = await mkdtemp(path.join("/tmp", `${repo.name}-${repo.defaultBranch}-only-`));
+  const clonePath = await mkdtemp(
+    path.join(await resolveTempRoot(), `${repo.name}-${repo.defaultBranch}-only-`),
+  );
 
   execFileSync(
     "git",
@@ -289,7 +305,9 @@ export async function cloneGithubRepoDefaultBranchOnly(
 }
 
 export async function createLocalGithubPrFixture(): Promise<LocalGhPrFixture> {
-  const fixtureRoot = await mkdtemp(path.join("/tmp", "byspace-e2e-local-github-pr-"));
+  const fixtureRoot = await mkdtemp(
+    path.join(await resolveTempRoot(), "byspace-e2e-local-github-pr-"),
+  );
   const basePath = path.join(fixtureRoot, "base");
   const remotePath = path.join(fixtureRoot, "remote.git");
   const checkoutPath = path.join(fixtureRoot, "main-only");

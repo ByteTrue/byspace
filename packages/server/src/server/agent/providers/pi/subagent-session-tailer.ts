@@ -118,6 +118,56 @@ async function drainPiSessionTailer(
   }
 }
 
+/**
+ * Read a child session jsonl end to end and map every message to timeline items — the
+ * cold-start rebuild behind `rebuildProviderSubagentTimeline`. Same line format and mapper
+ * as the incremental tailer; the only difference is one whole-file pass and that the
+ * caller receives the items instead of streaming them into the live store.
+ * Memory: reads the whole file in one buffer (~2x file size peak, file + split strings).
+ * Child sessions are bounded in practice; if giant transcripts ever matter, switch to a
+ * streamed line reader — the mapper is already incremental.
+ */
+export async function readPiSubagentSessionTimeline(
+  file: string,
+  provider: string,
+): Promise<Array<{ item: AgentTimelineItem; timestamp: string | undefined }>> {
+  const info = await stat(file).catch(() => null);
+  if (!info?.isFile()) return [];
+  const handle = await open(file, "r").catch(() => null);
+  if (!handle) return [];
+  const mapper = new PiHistoryMapper(provider);
+  const rows: Array<{ item: AgentTimelineItem; timestamp: string | undefined }> = [];
+  try {
+    const buffer = Buffer.alloc(info.size);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    const text = buffer.toString("utf8", 0, bytesRead);
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      let entry: unknown;
+      try {
+        entry = JSON.parse(trimmed);
+      } catch {
+        continue;
+      }
+      if (typeof entry !== "object" || entry === null) continue;
+      const message = (entry as PiSubagentMessageEntry).message;
+      if (typeof message !== "object" || message === null) continue;
+      const timestamp = readString((entry as PiSubagentMessageEntry).timestamp) ?? undefined;
+      for (const event of mapper.mapMessages([message as PiAgentMessage])) {
+        if (event.type === "timeline") {
+          rows.push({ item: event.item, timestamp });
+        }
+      }
+    }
+  } catch {
+    // Unreadable mid-file (rotation, permissions): return what was parsed.
+  } finally {
+    await handle.close().catch(() => undefined);
+  }
+  return rows;
+}
+
 export async function locatePiSubagentSessionFile(
   sessionId: string,
   options: { cwd?: string | null; env?: NodeJS.ProcessEnv; homeDir?: string } = {},

@@ -35,7 +35,7 @@ import {
   switchWorkspaceViaSidebar,
 } from "../support/helpers/workspace-ui";
 import { seedWorkspace } from "../support/helpers/seed-client";
-import { hasGithubAuth, createTempGithubRepo } from "../support/helpers/github-fixtures";
+import { canCreateGithubFixtures, createTempGithubRepo } from "../support/helpers/github-fixtures";
 import { getServerId } from "../support/helpers/server-id";
 import { openFileExplorer } from "../support/helpers/file-explorer";
 
@@ -103,8 +103,8 @@ test.describe("Composer attachments", () => {
 
   test("GitHub issue attachment pill visible after search and selection", async ({ page }) => {
     test.setTimeout(120_000);
-    if (!hasGithubAuth()) {
-      test.skip(true, "GitHub auth not available in this environment");
+    if (!canCreateGithubFixtures()) {
+      test.skip(true, "Requires gh auth with the delete_repo scope");
     }
 
     const ghRepo = await createTempGithubRepo({
@@ -135,8 +135,8 @@ test.describe("Composer attachments", () => {
 
   test("GitHub PR attachment pill visible after search and selection", async ({ page }) => {
     test.setTimeout(120_000);
-    if (!hasGithubAuth()) {
-      test.skip(true, "GitHub auth not available in this environment");
+    if (!canCreateGithubFixtures()) {
+      test.skip(true, "Requires gh auth with the delete_repo scope");
     }
 
     const ghRepo = await createTempGithubRepo({

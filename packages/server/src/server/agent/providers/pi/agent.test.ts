@@ -3124,3 +3124,47 @@ describe("transformPiModels", () => {
     ]);
   });
 });
+
+test("streamHistory closes running pi subagents as canceled only when the process is replaced (issue 078)", async () => {
+  const launchDetails = { id: "sub_live", status: "running", sessionId: "sub_s1", cwd: "/repo" };
+  const transcript = [
+    {
+      role: "assistant" as const,
+      content: [
+        { type: "toolCall" as const, id: "t1", name: "subagent", arguments: { task: "x" } },
+      ],
+    },
+    {
+      role: "toolResult" as const,
+      toolCallId: "t1",
+      toolName: "subagent",
+      content: "started",
+      details: launchDetails,
+    },
+  ];
+  const pi = new FakePi();
+  pi.queueSessionSetup((session) => {
+    session.messages = transcript;
+  });
+  const { session } = await createSession(pi);
+
+  // Live-process replay (rewind force-hydration): the running tail stays running.
+  const liveEvents: AgentStreamEvent[] = [];
+  for await (const event of session.streamHistory()) {
+    liveEvents.push(event);
+  }
+  const liveUpserts = liveEvents.flatMap((event) =>
+    event.type === "provider_subagent" && event.event.type === "upsert" ? [event.event] : [],
+  );
+  expect(liveUpserts.at(-1)).toMatchObject({ id: "sub_live", status: "running" });
+
+  // Post-restart replay (process replaced): the running tail is closed as canceled.
+  const restartEvents: AgentStreamEvent[] = [];
+  for await (const event of session.streamHistory({ processReplaced: true })) {
+    restartEvents.push(event);
+  }
+  const restartUpserts = restartEvents.flatMap((event) =>
+    event.type === "provider_subagent" && event.event.type === "upsert" ? [event.event] : [],
+  );
+  expect(restartUpserts.at(-1)).toMatchObject({ id: "sub_live", status: "canceled" });
+});

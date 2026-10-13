@@ -23,6 +23,10 @@ export function useAggregatedAgents(options?: {
   includeArchived?: boolean;
   demand?: boolean;
 }): AggregatedAgentsResult {
+  // The compiler derives memo dependencies by data flow and cannot see that
+  // runtime.getSnapshot() reads mutable state, so the agent list would freeze at
+  // its first value. See docs/react-compiler.md.
+  "use no memo";
   const daemons = useHosts();
   const runtime = getHostRuntimeStore();
   const includeArchived = options?.includeArchived ?? false;

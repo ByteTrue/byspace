@@ -20,11 +20,15 @@ import {
   type TerminalProfileSeed,
 } from "../support/helpers/new-workspace-launch";
 
+// Runs Node instead of `/bin/echo`, which does not exist on Windows (issue 078).
+// Printing `argv[1]` is what `echo {{{prompt}}}` did (with `-e`, argv is
+// [node, ...args]); the sentinel arg is dropped when there is no prompt, so
+// an empty launch prints an empty line.
 const PROFILE: TerminalProfile = {
   id: "e2e-composer-profile",
   name: "Composer Profile",
-  command: "/bin/echo",
-  args: ["{{{prompt}}}"],
+  command: process.execPath,
+  args: ["-e", 'console.log(process.argv[1] ?? "");', "{{{prompt}}}"],
 };
 
 test.describe("New workspace: the composer is one control in two modes", () => {
