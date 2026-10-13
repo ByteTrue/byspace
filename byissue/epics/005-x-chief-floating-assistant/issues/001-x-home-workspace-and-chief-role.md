@@ -44,7 +44,7 @@ created: 2026-10-10
 - `packages/server/src/server/agent/agent-sdk-types.ts`：`AgentSessionConfig.role` 字段。
 - `packages/server/src/server/agent/agent-storage.ts`：`SERIALIZABLE_CONFIG_SCHEMA` 加 `role`；`SerializableAgentConfig` Pick 列表加 `"role"`。
 - `packages/server/src/server/agent/agent-projections.ts`：`buildSerializableConfig` 加 `role` 持久化。
-- `packages/server/src/server/home-workspace.ts`（新）：`ensureHomeWorkspace`，按 cwd 查重、失败降级为 warn 不阻塞启动。
+- `packages/server/src/server/home-workspace.ts`（新）：`ensureHomeWorkspace`，按保留 label `byspace.home-workspace` 查重（**不是按 cwd**——用户自己在 `~/.byspace` 打开的 workspace 是他的，按路径认领会把它改标为 Home 并把 Chief 挂上去）、失败降级为 warn 不阻塞启动。
 - `packages/server/src/server/bootstrap.ts`：daemon 启动时调用 `ensureHomeWorkspace`。
 
 **关键设计决策。** 角色提示词不持久化文本——每次启动从注册表重新解析，daemon 升级即生效。角色 label 只在创建时写入，不回流到 config，避免重复注入。
