@@ -2,7 +2,7 @@
 kind: issue
 title: "Daemon tunnel 实验性门控（默认关闭）与自定义 relay 说明"
 type: feature
-status: open
+status: closed
 created: 2026-10-09
 ---
 
@@ -57,3 +57,18 @@ created: 2026-10-09
 ### 2026-10-09 · 补充：性能实测与对比（→ note 008）
 
 Owner 追问「前端 B 机高频打后端 A 机顶得住吗」与「对比 CF Tunnel/Tailscale」。跑了一组实测（本地 relay vs 官方 CF relay）并完成三方对比，结论沉淀 [`byissue/notes/008-tunnel-performance-and-relay-vs-p2p.md`](../notes/008-tunnel-performance-and-relay-vs-p2p.md)：栈开销 <0.5ms（2379 RPS / 62.7 MiB/s）不是瓶颈；公网 449ms/请求是 4 段 RTT 的物理绕路；owner 网络环境打洞永远不成功（拍板），强制 relay 架构反而落在「稳定 > 延迟」的目标主场；自托管 relay 就近部署是延迟正解。
+
+### 2026-10-13 · 关闭：逐项复核（owner 授权「完工就关」）
+
+执行记录写于 10-09，关闭前在当时的 main 上重核了全部 7 项产物：
+
+| 产物                                         | 位置                                                                                                          |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `daemon.tunnel.enabled` schema（缺省 false） | `server/persisted-config.ts`、`server/config.ts:560`                                                          |
+| D2 `tunnel.open` 拒绝                        | `session/tunnel/tunnel-session.ts:160`（"Enable them in the Tunnels page on that host"）                      |
+| D1 `tunnel.create` 拒绝                      | `server/tunnel-registry.ts:156`（"Enable them in the Tunnels page first"）                                    |
+| boot 不起 + 热切换                           | `bootstrap.ts:592`（boot 读 config）、`bootstrap.ts:1774`（`onFieldChange("tunnel.enabled")` → `setEnabled`） |
+| app Enable 卡                                | `app/src/screens/tunnels-screen.tsx`（`tunnels-enable-card`）                                                 |
+| 自托管 relay 说明                            | `byissue/spec/connection.md:23`（relay 归属）、`public-docs/connectivity.md`                                  |
+
+7/7 在 main 上成立，未发现漂移。**遗留：** 无。Win 双机实测按 062 手册进行，属人工验证，不阻塞关闭 —— 实现与门控本身已有单测与 e2e 覆盖。
