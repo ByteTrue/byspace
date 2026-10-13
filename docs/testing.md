@@ -181,6 +181,15 @@ Test suites in this repo are heavy. Running them in bulk freezes the machine, es
 
 PR checks are routed by the behavior each suite proves, using `.github/ci-paths.yml`. A package does not inherit every test suite of its runtime consumers: app changes do not run CLI or Electron-wrapper tests, and protocol changes do not run every package that imports the protocol. Cross-package static compatibility belongs to `typecheck`; full integration coverage runs after merge on main and in manual CI runs.
 
+A routed-out job is reported as **success**, not skipped — the job keeps its required-check name while its test step is skipped. So a green run does not by itself mean the suite ran. When a change spans packages, confirm the step, not the job:
+
+```bash
+gh run view <run-id> --json jobs \
+  --jq '.jobs[] | select(.name|startswith("server-tests")) | .steps[] | "\(.conclusion)  \(.name)"'
+```
+
+`Run server tests  skipped` is the signal that this run proved nothing about the server. The same applies to a run cancelled by a later push (`cancel-in-progress`), whose conclusion is `cancelled` rather than green.
+
 Required matrix legs are declared as statically named jobs. Their shared steps use YAML anchors, while job-level `if` conditions let GitHub report an unaffected leg as genuinely skipped without allocating a runner or losing the exact required-check name.
 
 The smallest meaningful contract wins over package ownership. Tiny structural invariants such as daemon launch supervision run unconditionally in the always-running routing job instead of maintaining a transitive file list; this check reads source entrypoints and builds no product. Routed integration contracts use stable domain directories. Browser changes select the required Playwright shards; desktop changes select the existing required desktop jobs, with renderer, real-Electron, and packaged-app coverage together in the Ubuntu leg. Repository scripts and the shared Vitest configuration run every PR contract because they are cross-cutting toolchain inputs.

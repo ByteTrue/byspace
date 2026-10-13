@@ -33,6 +33,9 @@ export function canCreateTempGithubRepos(): boolean {
     const status = execFileSync("gh", ["auth", "status", "-h", "github.com"], {
       stdio: ["ignore", "pipe", "pipe"],
       encoding: "utf8",
+      // This file sits under src/, so the daemon-side console guard in
+      // hidden-daemon-children.test.ts requires it (issue 053).
+      windowsHide: true,
     });
     const scopesLine = status.split(/\r?\n/).find((line) => /token[- ]scopes?:/i.test(line));
     return scopesLine?.includes("delete_repo") ?? false;
