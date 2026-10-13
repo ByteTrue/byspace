@@ -53,7 +53,7 @@ execSync('git config user.name "Test"', { cwd, stdio: "pipe" });
 
 ## 顺手发现（不在本次范围）
 
-`session.test.ts:4036` 等处的 `commit -m init` 用了**无引号**单词值 —— 本次没动，它在两个平台都正常。若将来值含空格，同样要注意。
+`session.test.ts:4037` 等处的 `commit -m init` 用了**无引号**单词值 —— 本次没动，它在两个平台都正常。若将来值含空格，同样要注意。
 
 ## 对 `byissue/` 的影响
 
