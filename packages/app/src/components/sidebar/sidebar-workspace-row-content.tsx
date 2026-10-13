@@ -91,6 +91,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   workspace,
   hostBadge,
   leadingProjectName = null,
+  leadingProjectNameCue = null,
   leadingProjectIconDataUri = null,
   serviceSummary = null,
   backdrop,
@@ -106,6 +107,8 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   hostBadge?: HostBadgeModel | null;
   /** Hoisted rows use their project icon as the leading visual because no project row contains them. */
   leadingProjectName?: string | null;
+  /** The same-name disambiguation line for `leadingProjectName`, when that name collides. */
+  leadingProjectNameCue?: string | null;
   leadingProjectIconDataUri?: string | null;
   serviceSummary?: WorkspaceServiceSummary | null;
   /** The row's current background, so the project status badge can knock out of it. */
@@ -166,6 +169,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
           <WorkspaceMetaRow
             currentBranch={workspace.currentBranch}
             projectName={leadingProjectName}
+            projectNameCue={leadingProjectNameCue}
             hostBadge={hostBadge ?? null}
             prHint={workspace.prHint}
             serviceSummary={serviceSummary}

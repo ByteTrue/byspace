@@ -122,6 +122,7 @@ interface StatusWorkspaceListProps {
   onWorkspacePress?: () => void;
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
   autoHostLabelProjectKeys: ReadonlySet<string>;
+  projectNameCueByViewKey: ReadonlyMap<string, string>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
   onPinnedWorkspaceReorder: (workspaces: SidebarWorkspaceEntry[]) => void;
@@ -141,6 +142,7 @@ export function SidebarStatusWorkspaceList({
   onWorkspacePress,
   hostBadgeByServerId,
   autoHostLabelProjectKeys,
+  projectNameCueByViewKey,
   supportsPinningByServerId,
   onToggleWorkspacePin,
   onPinnedWorkspaceReorder,
@@ -178,6 +180,7 @@ export function SidebarStatusWorkspaceList({
         {...buildStatusRowProjectPresentation({
           workspace,
           projectIconByProjectViewKey,
+          projectNameCueByViewKey,
           hostBadgeByServerId,
           autoHostLabelProjectKeys,
         })}
@@ -198,6 +201,7 @@ export function SidebarStatusWorkspaceList({
       onToggleWorkspacePin,
       onWorkspacePress,
       projectIconByProjectViewKey,
+      projectNameCueByViewKey,
       showShortcutBadges,
       statusShortcutIndex,
       supportsPinningByServerId,
@@ -245,6 +249,7 @@ export function SidebarStatusWorkspaceList({
           onWorkspacePress={onWorkspacePress}
           hostBadgeByServerId={hostBadgeByServerId}
           autoHostLabelProjectKeys={autoHostLabelProjectKeys}
+          projectNameCueByViewKey={projectNameCueByViewKey}
           supportsPinningByServerId={supportsPinningByServerId}
           onToggleWorkspacePin={onToggleWorkspacePin}
         />
@@ -275,6 +280,7 @@ function StatusGroupList({
   onWorkspacePress,
   hostBadgeByServerId,
   autoHostLabelProjectKeys,
+  projectNameCueByViewKey,
   supportsPinningByServerId,
   onToggleWorkspacePin,
 }: {
@@ -286,6 +292,7 @@ function StatusGroupList({
   onWorkspacePress?: () => void;
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
   autoHostLabelProjectKeys: ReadonlySet<string>;
+  projectNameCueByViewKey: ReadonlyMap<string, string>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
 }) {
@@ -302,6 +309,7 @@ function StatusGroupList({
           onWorkspacePress={onWorkspacePress}
           hostBadgeByServerId={hostBadgeByServerId}
           autoHostLabelProjectKeys={autoHostLabelProjectKeys}
+          projectNameCueByViewKey={projectNameCueByViewKey}
           supportsPinningByServerId={supportsPinningByServerId}
           onToggleWorkspacePin={onToggleWorkspacePin}
         />
@@ -319,6 +327,7 @@ function StatusGroupRows({
   onWorkspacePress,
   hostBadgeByServerId,
   autoHostLabelProjectKeys,
+  projectNameCueByViewKey,
   supportsPinningByServerId,
   onToggleWorkspacePin,
 }: {
@@ -330,6 +339,7 @@ function StatusGroupRows({
   onWorkspacePress?: () => void;
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
   autoHostLabelProjectKeys: ReadonlySet<string>;
+  projectNameCueByViewKey: ReadonlyMap<string, string>;
   supportsPinningByServerId: ReadonlyMap<string, boolean>;
   onToggleWorkspacePin: ToggleSidebarWorkspacePin;
 }) {
@@ -355,6 +365,7 @@ function StatusGroupRows({
               {...buildStatusRowProjectPresentation({
                 workspace,
                 projectIconByProjectViewKey,
+                projectNameCueByViewKey,
                 hostBadgeByServerId,
                 autoHostLabelProjectKeys,
               })}
@@ -382,17 +393,20 @@ function StatusGroupRows({
 interface StatusRowProjectPresentation {
   hostBadge: HostBadgeModel | null;
   projectName: string;
+  projectNameCue: string | null;
   projectIconDataUri: string | null;
 }
 
 function buildStatusRowProjectPresentation({
   workspace,
   projectIconByProjectViewKey,
+  projectNameCueByViewKey,
   hostBadgeByServerId,
   autoHostLabelProjectKeys,
 }: {
   workspace: SidebarWorkspaceEntry;
   projectIconByProjectViewKey: ReadonlyMap<string, string | null>;
+  projectNameCueByViewKey: ReadonlyMap<string, string>;
   hostBadgeByServerId: ReadonlyMap<string, HostBadgeModel>;
   autoHostLabelProjectKeys: ReadonlySet<string>;
 }): StatusRowProjectPresentation {
@@ -402,6 +416,9 @@ function buildStatusRowProjectPresentation({
       showAutoLabel: autoHostLabelProjectKeys.has(workspace.projectViewKey),
     }),
     projectName: workspace.projectName,
+    // These modes have no project row to carry the cue, and the name they show is the same string
+    // the project row would, so the same collision applies to them.
+    projectNameCue: projectNameCueByViewKey.get(workspace.projectViewKey) ?? null,
     projectIconDataUri: projectIconByProjectViewKey.get(workspace.projectViewKey) ?? null,
   };
 }
@@ -498,6 +515,7 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
   workspace,
   hostBadge,
   projectName,
+  projectNameCue,
   projectIconDataUri,
   shortcutNumber,
   showShortcutBadge,
@@ -513,6 +531,7 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
   workspace: SidebarWorkspaceEntry;
   hostBadge: HostBadgeModel | null;
   projectName: string;
+  projectNameCue: string | null;
   projectIconDataUri: string | null;
   shortcutNumber: number | null;
   showShortcutBadge: boolean;
@@ -545,6 +564,7 @@ const StatusWorkspaceRow = memo(function StatusWorkspaceRow({
       workspace={workspace}
       hostBadge={hostBadge}
       projectName={projectName}
+      projectNameCue={projectNameCue}
       projectIconDataUri={projectIconDataUri}
       selected={selected}
       shortcutNumber={shortcutNumber}
@@ -565,6 +585,7 @@ function StatusWorkspaceRowWithMenu({
   workspace,
   hostBadge,
   projectName,
+  projectNameCue,
   projectIconDataUri,
   selected,
   shortcutNumber,
@@ -581,6 +602,7 @@ function StatusWorkspaceRowWithMenu({
   workspace: SidebarWorkspaceEntry;
   hostBadge: HostBadgeModel | null;
   projectName: string;
+  projectNameCue: string | null;
   projectIconDataUri: string | null;
   selected: boolean;
   shortcutNumber: number | null;
@@ -680,6 +702,7 @@ function StatusWorkspaceRowWithMenu({
         workspace={workspace}
         hostBadge={hostBadge}
         projectName={projectName}
+        projectNameCue={projectNameCue}
         projectIconDataUri={projectIconDataUri}
         selected={selected}
         shortcutNumber={shortcutNumber}
@@ -718,6 +741,7 @@ interface StatusWorkspaceRowInnerProps {
   workspace: SidebarWorkspaceEntry;
   hostBadge: HostBadgeModel | null;
   projectName: string;
+  projectNameCue: string | null;
   projectIconDataUri: string | null;
   selected: boolean;
   shortcutNumber: number | null;
@@ -765,6 +789,7 @@ function StatusWorkspaceRowInnerContent({
   workspace,
   hostBadge,
   projectName,
+  projectNameCue,
   projectIconDataUri,
   selected,
   shortcutNumber,
@@ -898,6 +923,7 @@ function StatusWorkspaceRowInnerContent({
                 workspace={workspace}
                 hostBadge={hostBadge}
                 leadingProjectName={projectName}
+                leadingProjectNameCue={projectNameCue}
                 leadingProjectIconDataUri={projectIconDataUri}
                 serviceSummary={serviceSummary}
                 backdrop={backdrop}

@@ -17,7 +17,12 @@ import type { WorkspaceServiceSummary } from "./service-summary";
  */
 export type MetaRowItem =
   | { kind: "branch"; name: string }
-  | { kind: "project"; name: string }
+  /**
+   * `cue` is the same "which one is this" line a project row carries under its title, for the
+   * modes that have no project row. It rides on the name rather than beside it as a peer: it
+   * explains the name, so it disappears with it when the project item is switched off.
+   */
+  | { kind: "project"; name: string; cue: string | null }
   | { kind: "host" }
   | { kind: "changeRequest"; hint: PrHint }
   | { kind: "checks"; summary: CheckSummary; label: boolean }
@@ -37,6 +42,12 @@ export type MetaRowItem =
 export function selectMetaRowItems(input: {
   currentBranch: string | null;
   projectName: string | null;
+  /**
+   * The same-name disambiguation line, when this project's name collides with another visible
+   * one. Passed as part of the project item rather than as a peer, because it explains the name:
+   * with the project item switched off there is no name for it to sit behind.
+   */
+  projectNameCue?: string | null;
   hasHostBadge: boolean;
   prHint: PrHint | null;
   serviceSummary: WorkspaceServiceSummary | null;
@@ -47,6 +58,7 @@ export function selectMetaRowItems(input: {
   const {
     currentBranch,
     projectName,
+    projectNameCue,
     hasHostBadge,
     prHint,
     serviceSummary,
@@ -60,7 +72,7 @@ export function selectMetaRowItems(input: {
     items.push({ kind: "branch", name: currentBranch });
   }
   if (projectName && visible.project) {
-    items.push({ kind: "project", name: projectName });
+    items.push({ kind: "project", name: projectName, cue: projectNameCue ?? null });
   }
   if (hasHostBadge) {
     items.push({ kind: "host" });

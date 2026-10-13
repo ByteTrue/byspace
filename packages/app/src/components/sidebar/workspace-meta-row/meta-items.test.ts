@@ -142,4 +142,26 @@ describe("selectMetaRowItems", () => {
     const items = select({ prHint: { ...PR_HINT, checksStatus: undefined } });
     expect(kinds(items)).toEqual(["host", "changeRequest", "services", "labels"]);
   });
+
+  it("hangs the same-name cue on the project item, not beside it as a peer", () => {
+    // The cue explains the name, so it travels with it: a peer item would survive the project
+    // item being switched off and leave a sentence with nothing to explain.
+    const visible = { ...DEFAULT_SIDEBAR_ROW_ITEMS, project: true };
+    expect(select({ visible, projectNameCue: "mac-mini · ~/dev/chat" })).toContainEqual({
+      kind: "project",
+      name: "BySpace",
+      cue: "mac-mini · ~/dev/chat",
+    });
+  });
+
+  it("carries no cue when the name is unambiguous", () => {
+    const visible = { ...DEFAULT_SIDEBAR_ROW_ITEMS, project: true };
+    expect(select({ visible })).toContainEqual({ kind: "project", name: "BySpace", cue: null });
+  });
+
+  it("drops the cue with the project item", () => {
+    const visible = { ...DEFAULT_SIDEBAR_ROW_ITEMS, project: false };
+    const items = select({ visible, projectNameCue: "mac-mini · ~/dev/chat" });
+    expect(items.some((item) => item.kind === "project")).toBe(false);
+  });
 });
