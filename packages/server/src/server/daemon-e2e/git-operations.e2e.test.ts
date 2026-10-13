@@ -158,14 +158,14 @@ test("returns diff for modified file in git repo", async () => {
   // Initialize git repo
   const { execSync } = await import("child_process");
   execSync("git init -b main", { cwd, stdio: "pipe" });
-  execSync("git config user.email 'test@test.com'", { cwd, stdio: "pipe" });
-  execSync("git config user.name 'Test'", { cwd, stdio: "pipe" });
+  execSync('git config user.email "test@test.com"', { cwd, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd, stdio: "pipe" });
 
   // Create and commit a file
   const testFile = path.join(cwd, "test.txt");
   writeFileSync(testFile, "original content\n");
   execSync("git add test.txt", { cwd, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'Initial commit'", {
+  execSync('git -c commit.gpgsign=false commit -m "Initial commit"', {
     cwd,
     stdio: "pipe",
   });
@@ -188,14 +188,14 @@ test("returns empty diff when no changes", async () => {
   // Initialize git repo with clean state
   const { execSync } = await import("child_process");
   execSync("git init -b main", { cwd, stdio: "pipe" });
-  execSync("git config user.email 'test@test.com'", { cwd, stdio: "pipe" });
-  execSync("git config user.name 'Test'", { cwd, stdio: "pipe" });
+  execSync('git config user.email "test@test.com"', { cwd, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd, stdio: "pipe" });
 
   // Create and commit a file
   const testFile = path.join(cwd, "test.txt");
   writeFileSync(testFile, "content\n");
   execSync("git add test.txt", { cwd, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'Initial commit'", {
+  execSync('git -c commit.gpgsign=false commit -m "Initial commit"', {
     cwd,
     stdio: "pipe",
   });
@@ -230,14 +230,14 @@ test.skipIf(isPlatform("win32"))(
     // Initialize git repo
     const { execSync } = await import("child_process");
     execSync("git init -b main", { cwd, stdio: "pipe" });
-    execSync("git config user.email 'test@test.com'", { cwd, stdio: "pipe" });
-    execSync("git config user.name 'Test'", { cwd, stdio: "pipe" });
+    execSync('git config user.email "test@test.com"', { cwd, stdio: "pipe" });
+    execSync('git config user.name "Test"', { cwd, stdio: "pipe" });
 
     // Create and commit a file
     const testFile = path.join(cwd, "test.txt");
     writeFileSync(testFile, "original content\n");
     execSync("git add test.txt", { cwd, stdio: "pipe" });
-    execSync("git -c commit.gpgsign=false commit -m 'Initial commit'", {
+    execSync('git -c commit.gpgsign=false commit -m "Initial commit"', {
       cwd,
       stdio: "pipe",
     });
@@ -281,14 +281,14 @@ test("returns clean state when no uncommitted changes", async () => {
   // Initialize git repo with clean state
   const { execSync } = await import("child_process");
   execSync("git init -b main", { cwd, stdio: "pipe" });
-  execSync("git config user.email 'test@test.com'", { cwd, stdio: "pipe" });
-  execSync("git config user.name 'Test'", { cwd, stdio: "pipe" });
+  execSync('git config user.email "test@test.com"', { cwd, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd, stdio: "pipe" });
 
   // Create and commit a file (no uncommitted changes)
   const testFile = path.join(cwd, "test.txt");
   writeFileSync(testFile, "content\n");
   execSync("git add test.txt", { cwd, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'Initial commit'", {
+  execSync('git -c commit.gpgsign=false commit -m "Initial commit"', {
     cwd,
     stdio: "pipe",
   });
@@ -347,15 +347,15 @@ test("runs byspace.json setup asynchronously and reports status via timeline too
 
   const { execSync } = await import("child_process");
   execSync("git init -b main", { cwd: repoRoot, stdio: "pipe" });
-  execSync("git config user.email 'test@test.com'", {
+  execSync('git config user.email "test@test.com"', {
     cwd: repoRoot,
     stdio: "pipe",
   });
-  execSync("git config user.name 'Test'", { cwd: repoRoot, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd: repoRoot, stdio: "pipe" });
 
   writeFileSync(path.join(repoRoot, "file.txt"), "hello\n");
   execSync("git add .", { cwd: repoRoot, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'initial'", {
+  execSync('git -c commit.gpgsign=false commit -m "initial"', {
     cwd: repoRoot,
     stdio: "pipe",
   });
@@ -368,7 +368,7 @@ test("runs byspace.json setup asynchronously and reports status via timeline too
     JSON.stringify({ worktree: { setup: [setupCommand] } }),
   );
   execSync("git add byspace.json", { cwd: repoRoot, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'add byspace.json'", {
+  execSync('git -c commit.gpgsign=false commit -m "add byspace.json"', {
     cwd: repoRoot,
     stdio: "pipe",
   });
@@ -422,15 +422,15 @@ test("bootstraps configured worktree terminals after setup succeeds", async () =
 
     const { execSync } = await import("child_process");
     execSync("git init -b main", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git config user.email 'test@test.com'", {
+    execSync('git config user.email "test@test.com"', {
       cwd: repoRoot,
       stdio: "pipe",
     });
-    execSync("git config user.name 'Test'", { cwd: repoRoot, stdio: "pipe" });
+    execSync('git config user.name "Test"', { cwd: repoRoot, stdio: "pipe" });
 
     writeFileSync(path.join(repoRoot, "file.txt"), "hello\n");
     execSync("git add .", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git -c commit.gpgsign=false commit -m 'initial'", {
+    execSync('git -c commit.gpgsign=false commit -m "initial"', {
       cwd: repoRoot,
       stdio: "pipe",
     });
@@ -456,7 +456,7 @@ test("bootstraps configured worktree terminals after setup succeeds", async () =
       }),
     );
     execSync("git add byspace.json", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git -c commit.gpgsign=false commit -m 'add setup and terminals'", {
+    execSync('git -c commit.gpgsign=false commit -m "add setup and terminals"', {
       cwd: repoRoot,
       stdio: "pipe",
     });
@@ -563,15 +563,15 @@ test("reports failures via timeline tool_call without deleting the created workt
 
   const { execSync } = await import("child_process");
   execSync("git init -b main", { cwd: repoRoot, stdio: "pipe" });
-  execSync("git config user.email 'test@test.com'", {
+  execSync('git config user.email "test@test.com"', {
     cwd: repoRoot,
     stdio: "pipe",
   });
-  execSync("git config user.name 'Test'", { cwd: repoRoot, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd: repoRoot, stdio: "pipe" });
 
   writeFileSync(path.join(repoRoot, "file.txt"), "hello\n");
   execSync("git add .", { cwd: repoRoot, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'initial'", {
+  execSync('git -c commit.gpgsign=false commit -m "initial"', {
     cwd: repoRoot,
     stdio: "pipe",
   });
@@ -594,7 +594,7 @@ test("reports failures via timeline tool_call without deleting the created workt
     }),
   );
   execSync("git add byspace.json", { cwd: repoRoot, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'add failing setup'", {
+  execSync('git -c commit.gpgsign=false commit -m "add failing setup"', {
     cwd: repoRoot,
     stdio: "pipe",
   });
@@ -658,13 +658,13 @@ test("creates agent in ~/.byspace/worktrees/{hash} when worktree is requested", 
 
   const { execSync } = await import("child_process");
   execSync("git init -b main", { cwd, stdio: "pipe" });
-  execSync("git config user.email 'test@test.com'", { cwd, stdio: "pipe" });
-  execSync("git config user.name 'Test'", { cwd, stdio: "pipe" });
+  execSync('git config user.email "test@test.com"', { cwd, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd, stdio: "pipe" });
 
   const testFile = path.join(cwd, "test.txt");
   writeFileSync(testFile, "content\n");
   execSync("git add test.txt", { cwd, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'Initial commit'", {
+  execSync('git -c commit.gpgsign=false commit -m "Initial commit"', {
     cwd,
     stdio: "pipe",
   });
@@ -700,15 +700,15 @@ test("archiving a worktree shuts down its terminals but leaves the worktree on d
 
   const { execSync } = await import("child_process");
   execSync("git init -b main", { cwd: repoRoot, stdio: "pipe" });
-  execSync("git config user.email 'test@test.com'", {
+  execSync('git config user.email "test@test.com"', {
     cwd: repoRoot,
     stdio: "pipe",
   });
-  execSync("git config user.name 'Test'", { cwd: repoRoot, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd: repoRoot, stdio: "pipe" });
 
   writeFileSync(path.join(repoRoot, "file.txt"), "hello\n");
   execSync("git add .", { cwd: repoRoot, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'initial'", {
+  execSync('git -c commit.gpgsign=false commit -m "initial"', {
     cwd: repoRoot,
     stdio: "pipe",
   });
@@ -730,7 +730,7 @@ test("archiving a worktree shuts down its terminals but leaves the worktree on d
     }),
   );
   execSync("git add byspace.json", { cwd: repoRoot, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'add worktree terminal + teardown'", {
+  execSync('git -c commit.gpgsign=false commit -m "add worktree terminal + teardown"', {
     cwd: repoRoot,
     stdio: "pipe",
   });

@@ -17,15 +17,15 @@ function tmpCwd(): string {
 
 function initGitRepo(cwd: string): void {
   execSync("git init -b main", { cwd, stdio: "pipe" });
-  execSync("git config user.email 'test@test.com'", { cwd, stdio: "pipe" });
-  execSync("git config user.name 'Test'", { cwd, stdio: "pipe" });
+  execSync('git config user.email "test@test.com"', { cwd, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd, stdio: "pipe" });
 }
 
 function commitFile(cwd: string, fileName: string, content: string): void {
   const filePath = path.join(cwd, fileName);
   writeFileSync(filePath, content);
   execSync(`git add "${fileName}"`, { cwd, stdio: "pipe" });
-  execSync("git -c commit.gpgsign=false commit -m 'Initial commit'", {
+  execSync('git -c commit.gpgsign=false commit -m "Initial commit"', {
     cwd,
     stdio: "pipe",
   });

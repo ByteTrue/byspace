@@ -1558,16 +1558,16 @@ test("supports git and file operations", async () => {
   const cwd = tmpCwd();
 
   execSync("git init -b main", { cwd, stdio: "pipe" });
-  execSync("git config user.email 'test@test.com'", {
+  execSync('git config user.email "test@test.com"', {
     cwd,
     stdio: "pipe",
   });
-  execSync("git config user.name 'Test'", { cwd, stdio: "pipe" });
+  execSync('git config user.name "Test"', { cwd, stdio: "pipe" });
 
   const testFile = path.join(cwd, "test.txt");
   writeFileSync(testFile, "original content\n");
   execSync("git add test.txt", { cwd, stdio: "pipe" });
-  execSync("git -c commit.gpgSign=false commit -m 'Initial commit'", {
+  execSync('git -c commit.gpgSign=false commit -m "Initial commit"', {
     cwd,
     stdio: "pipe",
   });

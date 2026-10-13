@@ -753,11 +753,11 @@ describe("agent MCP end-to-end (offline)", () => {
     try {
       const { execSync } = await import("node:child_process");
       execSync("git init -b main", { cwd: repoRoot, stdio: "pipe" });
-      execSync("git config user.email 'test@test.com'", { cwd: repoRoot, stdio: "pipe" });
-      execSync("git config user.name 'Test'", { cwd: repoRoot, stdio: "pipe" });
+      execSync('git config user.email "test@test.com"', { cwd: repoRoot, stdio: "pipe" });
+      execSync('git config user.name "Test"', { cwd: repoRoot, stdio: "pipe" });
       await writeFile(path.join(repoRoot, "file.txt"), "hello\n", "utf8");
       execSync("git add .", { cwd: repoRoot, stdio: "pipe" });
-      execSync("git -c commit.gpgsign=false commit -m 'initial'", { cwd: repoRoot, stdio: "pipe" });
+      execSync('git -c commit.gpgsign=false commit -m "initial"', { cwd: repoRoot, stdio: "pipe" });
 
       const setupCommand =
         'while [ ! -f "$BYSPACE_WORKTREE_PATH/allow-setup" ]; do sleep 0.05; done; echo "done" > "$BYSPACE_WORKTREE_PATH/setup-done.txt"';
@@ -777,7 +777,7 @@ describe("agent MCP end-to-end (offline)", () => {
         "utf8",
       );
       execSync("git add byspace.json", { cwd: repoRoot, stdio: "pipe" });
-      execSync("git -c commit.gpgsign=false commit -m 'add worktree config'", {
+      execSync('git -c commit.gpgsign=false commit -m "add worktree config"', {
         cwd: repoRoot,
         stdio: "pipe",
       });

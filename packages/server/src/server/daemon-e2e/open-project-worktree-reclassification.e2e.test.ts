@@ -47,11 +47,11 @@ test("openProject preserves a worktree's exact-root project without rehoming it"
     cleanupPaths.add(byspaceHomeRoot);
 
     execSync("git init -b main", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git config user.email 'test@byspace.dev'", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git config user.name 'BySpace Test'", { cwd: repoRoot, stdio: "pipe" });
+    execSync('git config user.email "test@byspace.dev"', { cwd: repoRoot, stdio: "pipe" });
+    execSync('git config user.name "BySpace Test"', { cwd: repoRoot, stdio: "pipe" });
     writeFileSync(path.join(repoRoot, "README.md"), "# repo\n", "utf8");
     execSync("git add README.md", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git -c commit.gpgSign=false commit -m 'initial'", { cwd: repoRoot, stdio: "pipe" });
+    execSync('git -c commit.gpgSign=false commit -m "initial"', { cwd: repoRoot, stdio: "pipe" });
     execSync("git branch feature/desktop-daemon-settings", { cwd: repoRoot, stdio: "pipe" });
     execSync(`git worktree add ${JSON.stringify(worktreeRoot)} feature/desktop-daemon-settings`, {
       cwd: repoRoot,

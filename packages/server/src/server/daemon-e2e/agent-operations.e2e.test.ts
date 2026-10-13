@@ -176,21 +176,25 @@ describe("cancelAgent", () => {
     // Verify agent is now idle or error
     expect(["idle", "error"]).toContain(afterCancel.status);
 
-    // Verify no zombie sleep processes left (check for sleep 30)
-    const { execSync } = await import("child_process");
-    try {
-      const result = execSync("pgrep -f 'sleep 30'", {
-        encoding: "utf8",
-        timeout: 2000,
-      });
-      // If pgrep succeeds, there are zombie processes
-      if (result.trim()) {
-        // Kill them and fail the test
-        execSync("pkill -f 'sleep 30'");
-        expect.fail("Found zombie sleep processes after cancel");
+    // Verify no zombie sleep processes left (check for sleep 30). pgrep and
+    // pkill are POSIX-only; on Windows the spawn would ENOENT and the catch
+    // below would swallow it, turning the check into a silent no-op.
+    if (process.platform !== "win32") {
+      const { execSync } = await import("child_process");
+      try {
+        const result = execSync("pgrep -f 'sleep 30'", {
+          encoding: "utf8",
+          timeout: 2000,
+        });
+        // If pgrep succeeds, there are zombie processes
+        if (result.trim()) {
+          // Kill them and fail the test
+          execSync("pkill -f 'sleep 30'");
+          expect.fail("Found zombie sleep processes after cancel");
+        }
+      } catch {
+        // pgrep returns non-zero when no processes found - this is expected
       }
-    } catch {
-      // pgrep returns non-zero when no processes found - this is expected
     }
 
     // Cleanup

@@ -44,11 +44,11 @@ test("project.add creates a project without creating a workspace", async () => {
     cleanupPaths.add(byspaceHomeRoot);
 
     execSync("git init -b main", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git config user.email 'test@byspace.dev'", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git config user.name 'BySpace Test'", { cwd: repoRoot, stdio: "pipe" });
+    execSync('git config user.email "test@byspace.dev"', { cwd: repoRoot, stdio: "pipe" });
+    execSync('git config user.name "BySpace Test"', { cwd: repoRoot, stdio: "pipe" });
     writeFileSync(path.join(repoRoot, "README.md"), "# repo\n", "utf8");
     execSync("git add README.md", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git -c commit.gpgSign=false commit -m 'initial'", { cwd: repoRoot, stdio: "pipe" });
+    execSync('git -c commit.gpgSign=false commit -m "initial"', { cwd: repoRoot, stdio: "pipe" });
 
     const daemon = await createTestBySpaceDaemon({ byspaceHomeRoot, cleanup: false });
     cleanupDaemons.add(daemon);
@@ -96,11 +96,11 @@ test("archiving the last workspace leaves the project parent with no workspaces"
     cleanupPaths.add(byspaceHomeRoot);
 
     execSync("git init -b main", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git config user.email 'test@byspace.dev'", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git config user.name 'BySpace Test'", { cwd: repoRoot, stdio: "pipe" });
+    execSync('git config user.email "test@byspace.dev"', { cwd: repoRoot, stdio: "pipe" });
+    execSync('git config user.name "BySpace Test"', { cwd: repoRoot, stdio: "pipe" });
     writeFileSync(path.join(repoRoot, "README.md"), "# repo\n", "utf8");
     execSync("git add README.md", { cwd: repoRoot, stdio: "pipe" });
-    execSync("git -c commit.gpgSign=false commit -m 'initial'", { cwd: repoRoot, stdio: "pipe" });
+    execSync('git -c commit.gpgSign=false commit -m "initial"', { cwd: repoRoot, stdio: "pipe" });
 
     const byspaceHome = path.join(byspaceHomeRoot, ".byspace");
     const projectsPath = path.join(byspaceHome, "projects", "projects.json");
