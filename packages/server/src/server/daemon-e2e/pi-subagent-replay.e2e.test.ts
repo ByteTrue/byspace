@@ -31,6 +31,18 @@ process.env.BYSPACE_SUPERVISED = "0";
  * and a test that leaned on the snapshot would prove nothing.
  */
 
+/**
+ * The daemon gates a provider on `client.isAvailable()`, and the real client answers that by
+ * probing for the pi binary. This test never runs one — the session comes from `FakePi` — and CI
+ * has no pi installed, so the probe would mark the provider unavailable and fail `createAgent`
+ * on exactly the machine the regression most needs catching on.
+ */
+class AlwaysAvailablePiRpcAgentClient extends PiRpcAgentClient {
+  override async isAvailable(): Promise<boolean> {
+    return true;
+  }
+}
+
 /** A fake runtime whose every session starts with the transcript already "on disk". */
 class TranscriptPi extends FakePi {
   constructor(private readonly transcript: readonly PiAgentMessage[]) {
@@ -185,7 +197,7 @@ describe("daemon E2E - pi subagent descriptors rebuilt from the persisted transc
     const pi = new TranscriptPi(transcript);
     launches = pi.recordedLaunches;
     daemon = await createTestBySpaceDaemon({
-      agentClients: { pi: new PiRpcAgentClient({ logger, runtime: pi }) },
+      agentClients: { pi: new AlwaysAvailablePiRpcAgentClient({ logger, runtime: pi }) },
       logger,
     });
     client = new DaemonClient({ url: `ws://127.0.0.1:${daemon.port}/ws` });
