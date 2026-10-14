@@ -100,6 +100,16 @@ reviewer 说 fixture 里的嵌套调用形状是编的。**实测证伪**：采�
 - 无名 launch 在当前版本是否仍可达：可达，见上面实测。
 - live 路径（`agent.ts` 的 `tool_execution_*` + HTTP report）是否有对称的洞：没有。live 的名字取自事件的 `args`，而当前 pi-subagent 的 `task` 是必填，匿名 launch 只可能来自旧转录 → 回放这条路径 —— 正是本次修的那条。
 
+## 上 CI 才暴露的第三个洞（2026-10-14）
+
+把 e2e 接进 `test:integration` 后 CI 立刻红：`Provider 'pi' is not available`，3 例全挂。
+
+原因：daemon 用 `client.isAvailable()` 决定一个 provider 注册不注册，而**真** `PiRpcAgentClient` 的实现是去探 pi 二进制。这个测试从不跑 pi 进程（会话来自 `FakePi`），CI 也没装 pi，于是探针失败 → provider 不注册 → `createAgent` 直接拒。本机有 pi，所以永远发现不了。
+
+修法：测试里用一个把 `isAvailable()` 直接返回 true 的 client 子类。验证方式是把 pi 从环境里摘掉再跑 —— `PI_COMMAND=/nonexistent/pi npx vitest run ...`，旧写法 3 红（错误与 CI 一致），改完 3 绿；再用同样的环境跑完整的 `test:integration` 命令，全绿。
+
+**通用教训**：给 daemon 级测试注入假 runtime 时，别忘了 provider 的可用性门控是**另一条路径**，它探的是真实二进制，不看你注入了什么。凡是要在 CI 上跑的 provider e2e，都得把这一层也接管掉。
+
 ## 已知缺口（本次不做）
 
 - record 的 `description` 是 pi-subagent 的 60 字一行摘要（带 `agent:` 前缀），不是 launch 那种完整 task 文本。无名变有名已解决，摘要比顶层调用短一截是可接受的次优。
