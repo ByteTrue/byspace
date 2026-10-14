@@ -28,6 +28,8 @@ created: 2026-10-14
 
 **待用户裁决：** `BySpace-WorkSpace` 这个拼写来自用户口述，落盘时未改动大小写；若要统一的 kebab-case 或别的写法，改名一行常量即可（已是 customName 的记录需要一次性改写，daemon 只在 `customName === null` 时注入）。
 
+**改名撞坏了 e2e（CI 抓到，已修）。** 侧栏那一行的可访问名是把行内所有子控件标签拼起来的，改名后成了 `B BySpace-WorkSpace Create a new workspace for BySpace-WorkSpace Project actions`——末尾正好拼出子串 `WorkSpace Project`。而 `getByRole("button", { name: ... })` 默认是**大小写不敏感的子串匹配**，于是这一行和新建页真正的 picker（`accessibilityLabel="Workspace project"`）同时命中，Playwright strict mode 报两个元素，`workspace-model-restart.spec.ts` 红。触发条件是「项目名以 `Workspace` 结尾」，任何这样命名的用户项目都会踩，所以这是定位器的问题、不是名字的问题：修法是那 6 处加 `exact: true`（`project-grouping.ts` 早已这么写）。**本地单测全绿也发现不了它**——只有那个 spec 自起 daemon 且没设 `BYSPACE_DISABLE_HOME_WORKSPACE`，别的 e2e 都把 Home 关掉了，是本地与 CI 的真实差异。
+
 ## 对 `byissue/` 的影响
 
 已同步 `docs/timeline-sync.md`「Selective and legacy delivery」：可见性是各界面自行登记的，不从 workspace 布局推断；未登记的 agent 既无订阅也无追赶，而首屏门等它。这是比代码位置更值得留的约束。
