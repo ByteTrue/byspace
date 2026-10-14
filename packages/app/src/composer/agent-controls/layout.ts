@@ -4,6 +4,8 @@ export interface ComposerControlPresence {
   hasModel: boolean;
   hasThinking: boolean;
   hasMode: boolean;
+  /** The draft role picker. Absent means the surface does not offer roles. */
+  hasRole?: boolean;
   features: readonly ComposerFeatureControlPresence[];
   fontScale: number;
 }
@@ -14,6 +16,9 @@ export interface ComposerControlPresentation {
   showCarets: boolean;
   showThinkingLabel: boolean;
   showModeLabel: boolean;
+  /** The role picker's value. It carries the state ("no role" is a choice), so it
+   * drops only at the tightest density, after the mode label. */
+  showRoleLabel: boolean;
   aggregateFeatures: boolean;
 }
 
@@ -62,6 +67,7 @@ function resolveCondensedFloor(controls: ComposerControlPresence): number {
   if (controls.hasModel) widths.push(36 + 60 * fontScale);
   if (controls.hasThinking) widths.push(COMPOSER_TOOLBAR_GEOMETRY.controlSize);
   if (controls.hasMode) widths.push(36 + 96 * fontScale);
+  if (controls.hasRole) widths.push(36 + 56 * fontScale);
   if (controls.features.length > 0) widths.push(COMPOSER_TOOLBAR_GEOMETRY.controlSize);
   return sumControlWidths(widths);
 }
@@ -72,6 +78,7 @@ function resolveFullFloor(controls: ComposerControlPresence): number {
   if (controls.hasModel) widths.push(50 + 70 * fontScale);
   if (controls.hasThinking) widths.push(54 + 48 * fontScale);
   if (controls.hasMode) widths.push(54 + 96 * fontScale);
+  if (controls.hasRole) widths.push(54 + 60 * fontScale);
   for (const feature of controls.features) {
     widths.push(resolveFeatureControlWidth(feature, fontScale));
   }
@@ -110,6 +117,7 @@ export function resolveComposerControlPresentation(
       showCarets: true,
       showThinkingLabel: true,
       showModeLabel: true,
+      showRoleLabel: true,
       aggregateFeatures: false,
     };
   }
@@ -118,6 +126,7 @@ export function resolveComposerControlPresentation(
       showCarets: false,
       showThinkingLabel: false,
       showModeLabel: true,
+      showRoleLabel: true,
       aggregateFeatures: true,
     };
   }
@@ -125,6 +134,7 @@ export function resolveComposerControlPresentation(
     showCarets: false,
     showThinkingLabel: false,
     showModeLabel: false,
+    showRoleLabel: false,
     aggregateFeatures: true,
   };
 }

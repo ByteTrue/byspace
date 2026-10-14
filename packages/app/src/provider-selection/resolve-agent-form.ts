@@ -276,6 +276,22 @@ function resolveProvider(input: {
   return initialValues?.provider ?? preferences?.provider ?? currentProvider;
 }
 
+/**
+ * The role a tab was created with. Unlike provider/mode/model there is no
+ * preference to fall back to: "no role" is a real choice, so only an explicit
+ * initial value applies, and a role can never be seeded from the user's last
+ * session the way a model is.
+ */
+function resolveRole(input: {
+  currentRole: string;
+  userModified: boolean;
+  initialValues: FormInitialValues | undefined;
+}): string {
+  const { currentRole, userModified, initialValues } = input;
+  if (userModified) return currentRole;
+  return initialValues?.role ?? currentRole;
+}
+
 function resolveModeId(input: {
   provider: AgentProvider | null;
   userModified: boolean;
@@ -401,6 +417,12 @@ export function resolveFormState(
     initialValues,
     providerPrefs,
     availableModels,
+  });
+
+  result.role = resolveRole({
+    currentRole: result.role,
+    userModified: userModified.role,
+    initialValues,
   });
 
   result.thinkingOptionId = resolveThinkingOption({
@@ -586,7 +608,8 @@ function sameInitialValues(left: FormInitialValues = {}, right: FormInitialValue
     left.provider === right.provider &&
     left.model === right.model &&
     left.modeId === right.modeId &&
-    left.thinkingOptionId === right.thinkingOptionId
+    left.thinkingOptionId === right.thinkingOptionId &&
+    left.role === right.role
   );
 }
 

@@ -69,6 +69,14 @@ const BUILT_IN_ROLES: readonly AgentRoleDefinition[] = [
 
 const ROLE_BY_NAME = new Map(BUILT_IN_ROLES.map((role) => [role.name, role]));
 
+/**
+ * Built-in role names in display order, for the catalog the daemon advertises
+ * on server_info. Clients render their own labels; the wire carries names.
+ */
+export function listAgentRoleNames(): string[] {
+  return BUILT_IN_ROLES.map((role) => role.name);
+}
+
 /** Resolve a built-in role by wire name. Unknown names resolve to null so a
  * stale client or a removed role degrades to a plain agent instead of
  * failing creation. */

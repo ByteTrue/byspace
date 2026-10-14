@@ -42,6 +42,7 @@ The app checks for the capability and either runs the feature or tells the user 
 - **No fallback paths.** Don't build a degraded version of the feature for old daemons. Don't fan out across legacy RPCs to simulate a capability that isn't there. The user updates or doesn't get the feature.
 - **No defensive branches spread through the feature.** Detection happens in one place, and everything downstream reads a clean shape.
 - Capability flags live in `features` on the `server_info` message (`packages/protocol/src/messages.ts`, the `server_info` schema).
+- **A boolean gate is for presence; a list is for membership.** When the client needs to know _what_ the host offers, not just _whether_ it offers something, advertise the names of the things. A boolean forces the app to ship its own copy of a list the daemon owns, and the two drift the moment the daemon gains an entry the app release predates. `features.agentRoleNames` is the worked example: the daemon owns its built-in role registry, so it advertises the catalog, and the app labels the roles it has copy for and humanizes the rest.
 
 Existing functionality keeps working across versions because of the protocol contract. Gating a new feature never substitutes for that.
 

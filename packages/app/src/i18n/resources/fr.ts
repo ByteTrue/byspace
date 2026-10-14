@@ -163,13 +163,12 @@ export const fr: TranslationResources = {
   agentControls: {
     provider: {
       fallback: "Fournisseur",
-      select: "Sélectionnez le fournisseur d'agent",
+      selectWithValue: "Sélectionnez le fournisseur d'agent ({{value}})",
     },
     thinking: {
       title: "Pensée",
       unknown: "Inconnu",
       extraHigh: "Très haut",
-      select: "Sélectionnez l'option de réflexion",
       selectWithValue: "Sélectionnez l'option de réflexion ({{value}})",
     },
     model: {
@@ -183,6 +182,7 @@ export const fr: TranslationResources = {
     },
     role: {
       select: "Select agent role",
+      selectWithValue: "Select agent role ({{value}})",
       none: "No role",
       chief: "Chief",
     },
@@ -216,6 +216,7 @@ export const fr: TranslationResources = {
   chief: {
     switchHost: "Changer d'hôte",
     maximize: "Ouvrir en page entière",
+    open: "Ouvrir Chief",
     close: "Fermer Chief",
     retry: "Réessayer",
     noHomeWorkspace:

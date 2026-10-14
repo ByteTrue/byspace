@@ -1,4 +1,5 @@
 import { AgentRequests } from "./agent/requests/index.js";
+import { listAgentRoleNames } from "./agent/agent-roles.js";
 import { WebSocket, WebSocketServer } from "ws";
 import type { IncomingMessage, Server as HTTPServer } from "http";
 import { join } from "path";
@@ -1529,7 +1530,10 @@ export class DaemonWebSocketServer {
         // COMPAT(skillManagement): added in v0.4.0, remove gate after 2027-08-16.
         skillManagement: true,
         // COMPAT(agentRoles): added in v0.20.0, remove gate after 2027-04-13.
+        // Kept for clients released before agentRoleNames existed, which read
+        // it as "this daemon has roles".
         agentRoles: true,
+        agentRoleNames: listAgentRoleNames(),
         // COMPAT(daemonTunnels): added in v0.20.0, remove gate after 2027-05-13.
         // Advertised unconditionally: the feature is the RPC surface, not the
         // experimental gate in daemon.tunnel.enabled (the /tunnels screen reads

@@ -866,6 +866,11 @@ describe("relay external socket reconnect behavior", () => {
     expect(serverInfo.features?.["terminal-size-ownership"]).toBe(true);
     expect(serverInfo.features?.workspaceAgentRename).toBe(true);
     expect(serverInfo.features?.projectSetupSkill).toBe(true);
+    // The role catalog is what the app reads to decide which roles exist; the
+    // boolean is the pre-catalog gate. Asserting the adverts here is what makes
+    // deleting either line fail a test rather than silently downgrade clients.
+    expect(serverInfo.features?.agentRoles).toBe(true);
+    expect(serverInfo.features?.agentRoleNames).toContain("chief");
     expect(serverInfo.features?.agentTurnIdentity).toBeUndefined();
     expect(serverInfo.permissions).toEqual(DAEMON_PERMISSIONS);
     await server.close();

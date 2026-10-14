@@ -36,6 +36,7 @@ describe("resolveAgentControlsMode", () => {
         onApplyAgentProfile: () => undefined,
         selectedRole: "",
         onSelectRole: () => undefined,
+        roleNames: ["chief"],
       }),
     ).toBe("draft");
   });

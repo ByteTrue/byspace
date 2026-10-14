@@ -85,7 +85,7 @@ export async function expectNewWorkspaceForAddedProject(
   expect(url.searchParams.get("serverId")).toBe(input.serverId);
   expect(url.searchParams.get("projectId")).toBe(input.projectId);
   expect(url.searchParams.get("dir")).toBe(input.projectPath);
-  await expect(page.getByRole("button", { name: "Workspace project" })).toContainText(
+  await expect(page.getByRole("button", { name: "Workspace project", exact: true })).toContainText(
     input.projectName,
     { timeout: 30_000 },
   );

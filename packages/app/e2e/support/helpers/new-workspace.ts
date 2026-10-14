@@ -219,8 +219,18 @@ export async function openMissingProjectNewWorkspaceComposer(
   await expect(page).toHaveURL(/\/new\?.*projectId=/u, { timeout: 30_000 });
 }
 
+// The picker's own accessibility label is exactly "Workspace project", while a
+// sidebar project row's accessible name runs the project name into the labels of
+// the buttons inside it ("... Create a new workspace for X Project actions"). An
+// unanchored name filter therefore also matches that row whenever a project is
+// named something ending in "Workspace", and Playwright fails the locator as
+// ambiguous. Anchor it.
+function newWorkspaceProjectPicker(page: Page) {
+  return page.getByRole("button", { name: "Workspace project", exact: true });
+}
+
 export async function expectNewWorkspaceControlsEnabled(page: Page): Promise<void> {
-  await expect(page.getByRole("button", { name: "Workspace project" })).toBeEnabled({
+  await expect(newWorkspaceProjectPicker(page)).toBeEnabled({
     timeout: 30_000,
   });
   await expect(page.getByRole("textbox", { name: "Message agent..." })).toBeEditable({
@@ -240,7 +250,7 @@ export async function expectNewWorkspaceProjectSelected(
   page: Page,
   projectDisplayName: string,
 ): Promise<void> {
-  const projectPicker = page.getByRole("button", { name: "Workspace project" });
+  const projectPicker = newWorkspaceProjectPicker(page);
   await expect(projectPicker).toBeVisible({ timeout: 30_000 });
   await expect(projectPicker).toContainText(projectDisplayName);
 }
@@ -249,7 +259,7 @@ export async function expectNewWorkspaceTriggerLabelsAligned(
   page: Page,
   input: { projectLabel: string; hostLabel: string },
 ): Promise<void> {
-  const projectTrigger = page.getByRole("button", { name: "Workspace project" });
+  const projectTrigger = newWorkspaceProjectPicker(page);
   const hostTrigger = page.getByRole("button", { name: "Host", exact: true });
   const projectLabel = projectTrigger.getByText(input.projectLabel, { exact: true });
   const hostLabel = hostTrigger.getByText(input.hostLabel, { exact: true });
