@@ -238,6 +238,249 @@ describe("replayPiSubagentObservations", () => {
     ]);
   });
 
+  it("names a codemode-nested child from its own task record", () => {
+    // pi persists a codemode script's nested subagent call only as arguments on the parent's
+    // result — the launch result is never written — so the exit record is the only origin
+    // that names the child. Without this the row replays with no title and no task text.
+    const messages: PiAgentMessage[] = [
+      {
+        role: "assistant",
+        content: [{ type: "toolCall", id: "c1", name: "codemode", arguments: { code: "…" } }],
+      },
+      {
+        role: "toolResult",
+        toolCallId: "c1",
+        toolName: "codemode",
+        content: "ok",
+        details: {
+          calls: [{ id: "c1/1", name: "subagent", args: '{"agent":"reviewer","task":"x"}' }],
+        },
+      },
+      {
+        role: "custom",
+        customType: "subagent-exit",
+        content: "done",
+        details: {
+          id: "sub_nested",
+          agent: "reviewer",
+          description: "reviewer: 你是对抗性审查者",
+          status: "succeeded",
+          sessionId: "sub_child",
+          cwd: "/tmp/w",
+          sessionFile: "/logs/sub_child.jsonl",
+        },
+      },
+    ];
+
+    expect(replayPiSubagentObservations(messages)).toEqual([
+      {
+        kind: "declared",
+        id: "sub_nested",
+        title: "reviewer",
+        description: "reviewer: 你是对抗性审查者",
+      },
+      { kind: "status", id: "sub_nested", status: "completed" },
+    ]);
+    // The same record is the child's only session pointer, so its tab can still rebuild.
+    expect(replayPiSubagentSessionPointers(messages)).toEqual(
+      new Map([
+        [
+          "sub_nested",
+          { sessionId: "sub_child", cwd: "/tmp/w", sessionFile: "/logs/sub_child.jsonl" },
+        ],
+      ]),
+    );
+  });
+
+  it("names every child of a batched exit message and absorbs each pointer", () => {
+    // The extension batches exits when several children finish together. Each entry is its own
+    // child, so both the naming and the pointer absorption have to walk the array — not treat it
+    // as one record.
+    const messages: PiAgentMessage[] = [
+      {
+        role: "custom",
+        customType: "subagent-exit",
+        content: "done",
+        details: [
+          {
+            id: "sub_batch_a",
+            agent: "explore",
+            description: "explore: first",
+            status: "succeeded",
+            sessionId: "child_a",
+            cwd: "/tmp/a",
+            sessionFile: "/logs/child_a.jsonl",
+          },
+          {
+            id: "sub_batch_b",
+            agent: "reviewer",
+            description: "reviewer: second",
+            status: "paused",
+            sessionId: "child_b",
+            cwd: "/tmp/b",
+            sessionFile: "/logs/child_b.jsonl",
+          },
+          "junk",
+        ],
+      },
+    ];
+
+    expect(replayPiSubagentObservations(messages)).toEqual([
+      { kind: "declared", id: "sub_batch_a", title: "explore", description: "explore: first" },
+      { kind: "status", id: "sub_batch_a", status: "completed" },
+      { kind: "declared", id: "sub_batch_b", title: "reviewer", description: "reviewer: second" },
+      { kind: "status", id: "sub_batch_b", status: "canceled" },
+    ]);
+    expect(replayPiSubagentSessionPointers(messages)).toEqual(
+      new Map([
+        [
+          "sub_batch_a",
+          { sessionId: "child_a", cwd: "/tmp/a", sessionFile: "/logs/child_a.jsonl" },
+        ],
+        [
+          "sub_batch_b",
+          { sessionId: "child_b", cwd: "/tmp/b", sessionFile: "/logs/child_b.jsonl" },
+        ],
+      ]),
+    );
+  });
+
+  it("names a child whose launch record states no name at all", () => {
+    // The legacy `subagent` argument shape is `{ tasks: [...] }` — no `agent`, no `task` — and
+    // its result details carry no description either, so the launch declares an id with nothing
+    // in it. That anonymous declaration must not claim the id, or the exit record's name can
+    // never land and the row replays as a spinner labelled "Loading..." — the bug in issue 084.
+    const messages: PiAgentMessage[] = [
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "toolCall",
+            id: "t1",
+            name: "subagent",
+            arguments: { tasks: [{ task: "a" }, { task: "b" }], async: false },
+          },
+        ],
+      },
+      {
+        role: "toolResult",
+        toolCallId: "t1",
+        toolName: "subagent",
+        content: "started",
+        details: { id: "sub_legacy", status: "running", count: 4 },
+      },
+      {
+        role: "custom",
+        customType: "subagent-exit",
+        content: "done",
+        details: {
+          id: "sub_legacy",
+          agent: "scout",
+          description: "4 tasks (parallel)",
+          status: "succeeded",
+        },
+      },
+    ];
+
+    expect(replayPiSubagentObservations(messages)).toEqual([
+      { kind: "declared", id: "sub_legacy", toolCallId: "t1" },
+      {
+        kind: "declared",
+        id: "sub_legacy",
+        title: "scout",
+        description: "4 tasks (parallel)",
+      },
+      { kind: "status", id: "sub_legacy", status: "completed" },
+    ]);
+  });
+
+  it("names a child from its record for every origin, once", () => {
+    // subagent_status results carry the same record fields; whichever origin arrives first
+    // names the row, and a later one must not push a second declaration.
+    const messages: PiAgentMessage[] = [
+      {
+        role: "assistant",
+        content: [
+          { type: "toolCall", id: "t1", name: "subagent_status", arguments: { id: "sub_s" } },
+        ],
+      },
+      {
+        role: "toolResult",
+        toolCallId: "t1",
+        toolName: "subagent_status",
+        content: "status",
+        details: {
+          id: "sub_s",
+          agent: "explore",
+          description: "explore: trace it",
+          status: "running",
+        },
+      },
+      {
+        role: "custom",
+        customType: "subagent-exit",
+        content: "done",
+        details: {
+          id: "sub_s",
+          agent: "explore",
+          description: "explore: trace it",
+          status: "succeeded",
+        },
+      },
+    ];
+
+    expect(replayPiSubagentObservations(messages)).toEqual([
+      { kind: "declared", id: "sub_s", title: "explore", description: "explore: trace it" },
+      { kind: "status", id: "sub_s", status: "running" },
+      { kind: "status", id: "sub_s", status: "completed" },
+    ]);
+  });
+
+  it("keeps the launch record's full task over a record's one-liner", () => {
+    const messages: PiAgentMessage[] = [
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "toolCall",
+            id: "t1",
+            name: "subagent",
+            arguments: { task: "the full task text", agent: "explore" },
+          },
+        ],
+      },
+      {
+        role: "toolResult",
+        toolCallId: "t1",
+        toolName: "subagent",
+        content: "started",
+        details: { id: "sub_launch", status: "running" },
+      },
+      {
+        role: "custom",
+        customType: "subagent-exit",
+        content: "done",
+        details: {
+          id: "sub_launch",
+          agent: "explore",
+          description: "explore: the full ta…",
+          status: "succeeded",
+        },
+      },
+    ];
+
+    expect(replayPiSubagentObservations(messages)).toEqual([
+      {
+        kind: "declared",
+        id: "sub_launch",
+        toolCallId: "t1",
+        title: "explore",
+        description: "the full task text",
+      },
+      { kind: "status", id: "sub_launch", status: "completed" },
+    ]);
+  });
+
   it("extracts child session pointers from launch and record results (issue 078)", () => {
     const messages: PiAgentMessage[] = [
       {

@@ -14,6 +14,10 @@ import type { PiAgentMessage } from "./rpc-types.js";
  * The extension strips live objects before details cross the wire, so every field here is
  * clone-safe JSON. Both the live event stream and the persisted session replay read through
  * these functions, so a fact is derived once for both paths.
+ *
+ * A child launched from inside a codemode script (`tools.subagent(...)`) has no launch record
+ * in the transcript at all — pi persists a nested call only as arguments on the parent's result
+ * — so `replayPiSubagentSession` names it from its task records (see `declarationFromRecord`).
  */
 
 /** Tool the extension registers to launch a background child. */
@@ -143,18 +147,46 @@ export function observePiSubagentRecord(details: unknown): SubagentObservation |
   return { kind: "status", id: record.id, status };
 }
 
-/**
- * Exit custom messages carry one record, or an array when several children finished before
- * the extension could deliver the notification (its exit-batch path).
- */
+/** Exit custom messages carry one record, or an array when several children finished before
+ * the extension could deliver the notification (its exit-batch path). */
+function recordList(details: unknown): unknown[] {
+  return Array.isArray(details) ? details : [details];
+}
+
 export function observePiSubagentExit(details: unknown): SubagentObservation[] {
-  if (Array.isArray(details)) {
-    return details
-      .map((entry) => observePiSubagentRecord(entry))
-      .filter((observation): observation is SubagentObservation => observation !== null);
+  return recordList(details)
+    .map((entry) => observePiSubagentRecord(entry))
+    .filter((observation): observation is SubagentObservation => observation !== null);
+}
+
+/**
+ * The declaration a task record states about its own child: the subagent type and the
+ * extension's one-line task summary, for a child the transcript never declared through a launch
+ * record. That is the norm for a subagent pi launched from inside a codemode script, where the
+ * nested call survives only as arguments on the parent's result. The live stream reads those
+ * children off the `tool_execution_*` events a codemode run emits, which the transcript drops;
+ * the replay has nothing but the records.
+ *
+ * The summary is the extension's own wording (60 characters, prefixed with the agent), not the
+ * full task text a launch record carries — a row named this way still beats the nameless row the
+ * replay would otherwise leave behind.
+ */
+function declarationFromRecord(details: unknown): SubagentObservation | null {
+  const record = parsePiSubagentRecordDetails(details);
+  if (!record) {
+    return null;
   }
-  const observation = observePiSubagentRecord(details);
-  return observation ? [observation] : [];
+  const title = readStringArg(record.agent);
+  const description = readStringArg(record.description);
+  if (!title && !description) {
+    return null;
+  }
+  return {
+    kind: "declared",
+    id: record.id,
+    ...(title ? { title } : {}),
+    ...(description ? { description } : {}),
+  };
 }
 
 /**
@@ -194,6 +226,89 @@ function absorbSessionPointer(
   pointers.set(record.id, { ...pointers.get(record.id), ...session });
 }
 
+/** Accumulator of the single transcript pass, one field per derived fact. */
+interface MutableReplay {
+  observations: SubagentObservation[];
+  sessionPointers: Map<string, PiSubagentSessionPointer>;
+  pendingLaunches: Map<string, { name: string; args: unknown }>;
+  /**
+   * Last status observation seen per subagent id, in transcript order — the sweep's input. Keyed
+   * by id, so a later record overwrites an earlier one and only the final word counts.
+   */
+  lastStatus: Map<string, ProviderSubagentStatus>;
+  /**
+   * Ids that already carry a name. A launch stating neither `agent` nor `task` — the legacy
+   * `{ tasks: [...] }` argument shape, or details without a description — does not join this
+   * set, so a later record can still name the child.
+   */
+  declared: Set<string>;
+}
+
+/**
+ * Name an id from its own record, once, and only where nothing named it yet. A record's one-liner
+ * is shorter than a launch's task text, so a named launch wins when both exist.
+ */
+function declareFromRecord(replay: MutableReplay, details: unknown): void {
+  const declaration = declarationFromRecord(details);
+  if (!declaration || replay.declared.has(declaration.id)) {
+    return;
+  }
+  replay.declared.add(declaration.id);
+  replay.observations.push(declaration);
+}
+
+/** Launch and record tool results: both absorb the pointer, and each names its child the way
+ * its own payload knows how — the launch from the call arguments, a record from its fields. */
+function applyToolResultMessage(
+  replay: MutableReplay,
+  message: Extract<PiAgentMessage, { role: "toolResult" }>,
+): void {
+  const launch = replay.pendingLaunches.get(message.toolCallId);
+  replay.pendingLaunches.delete(message.toolCallId);
+  if (!launch) {
+    return;
+  }
+  // Launch and record results both carry the pointer; one parse covers both.
+  absorbSessionPointer(replay.sessionPointers, message.details);
+  if (launch.name === PI_SUBAGENT_LAUNCH_TOOL) {
+    const observation = observePiSubagentLaunch({
+      toolCallId: message.toolCallId,
+      args: launch.args,
+      details: message.details,
+    });
+    if (observation) {
+      // Only a launch that actually states a name blocks the record fallback. An anonymous one
+      // (legacy `tasks[]` arguments, or details without a description) must not, or the child
+      // stays nameless for good — the very bug this replay path exists to fix.
+      if (observation.kind === "declared" && (observation.title || observation.description)) {
+        replay.declared.add(observation.id);
+      }
+      replay.observations.push(observation);
+      replay.lastStatus.set(observation.id, "running");
+    }
+    return;
+  }
+  applyRecord(replay, message.details);
+}
+
+/**
+ * One full task record: name the child if nothing has yet, then report its status.
+ *
+ * A record with a name but a status this provider does not map (a future pi-subagent state)
+ * declares nothing, on purpose. A `declared` folds to `status: "running"`, so declaring a
+ * child the record itself says has finished would drag it back to running and pin the track's
+ * "N working" pill — the failure issue 071 fixed. Losing the name is the smaller harm.
+ */
+function applyRecord(replay: MutableReplay, details: unknown): void {
+  const observation = observePiSubagentRecord(details);
+  if (observation?.kind !== "status") {
+    return;
+  }
+  declareFromRecord(replay, details);
+  replay.observations.push(observation);
+  replay.lastStatus.set(observation.id, observation.status);
+}
+
 /**
  * Single-pass replay: the observations the descriptor store needs plus the child session
  * pointers the timeline rebuild reads. `options.closeRunningAsCanceled` closes out
@@ -205,54 +320,36 @@ export function replayPiSubagentSession(
   messages: readonly PiAgentMessage[],
   options?: { closeRunningAsCanceled?: boolean },
 ): PiSubagentReplay {
-  const observations: SubagentObservation[] = [];
-  const sessionPointers = new Map<string, PiSubagentSessionPointer>();
-  const pendingLaunches = new Map<string, { name: string; args: unknown }>();
-  // Last status observation seen per subagent id, in transcript order. Non-running statuses
-  // are removed: a later record (e.g. a fresh subagent_status poll) can report running again.
-  const lastStatus = new Map<string, ProviderSubagentStatus>();
+  const replay: MutableReplay = {
+    observations: [],
+    sessionPointers: new Map(),
+    pendingLaunches: new Map(),
+    lastStatus: new Map(),
+    declared: new Set(),
+  };
 
   for (const message of messages) {
     if (message.role === "assistant") {
       for (const content of message.content) {
         if (content.type === "toolCall" && isPiSubagentToolName(content.name)) {
-          pendingLaunches.set(content.id, { name: content.name, args: content.arguments });
+          replay.pendingLaunches.set(content.id, {
+            name: content.name,
+            args: content.arguments,
+          });
         }
       }
       continue;
     }
     if (message.role === "toolResult") {
-      const launch = pendingLaunches.get(message.toolCallId);
-      pendingLaunches.delete(message.toolCallId);
-      if (!launch) {
-        continue;
-      }
-      // Launch and record results both carry the pointer; one parse covers both.
-      absorbSessionPointer(sessionPointers, message.details);
-      if (launch.name === PI_SUBAGENT_LAUNCH_TOOL) {
-        const observation = observePiSubagentLaunch({
-          toolCallId: message.toolCallId,
-          args: launch.args,
-          details: message.details,
-        });
-        if (observation) {
-          observations.push(observation);
-          lastStatus.set(observation.id, "running");
-        }
-        continue;
-      }
-      const observation = observePiSubagentRecord(message.details);
-      if (observation?.kind === "status") {
-        observations.push(observation);
-        lastStatus.set(observation.id, observation.status);
-      }
+      applyToolResultMessage(replay, message);
       continue;
     }
     if (message.role === "custom" && message.customType === PI_SUBAGENT_EXIT_CUSTOM_TYPE) {
-      for (const observation of observePiSubagentExit(message.details)) {
-        if (observation.kind !== "status") continue;
-        observations.push(observation);
-        lastStatus.set(observation.id, observation.status);
+      for (const record of recordList(message.details)) {
+        // The exit record is also where a child's session pointer lives, and for a
+        // codemode-nested launch it is the only origin that carries one.
+        absorbSessionPointer(replay.sessionPointers, record);
+        applyRecord(replay, record);
       }
     }
   }
@@ -260,14 +357,14 @@ export function replayPiSubagentSession(
   // lastStatus only holds ids that produced a status-carrying observation; declared ids
   // were seeded with "running" at their launch record.
   if (options?.closeRunningAsCanceled) {
-    for (const [id, status] of lastStatus) {
+    for (const [id, status] of replay.lastStatus) {
       if (status === "running") {
-        observations.push({ kind: "status", id, status: "canceled" });
+        replay.observations.push({ kind: "status", id, status: "canceled" });
       }
     }
   }
 
-  return { observations, sessionPointers };
+  return { observations: replay.observations, sessionPointers: replay.sessionPointers };
 }
 
 export function replayPiSubagentObservations(
