@@ -161,13 +161,12 @@ export const ar: TranslationResources = {
   agentControls: {
     provider: {
       fallback: "مزود",
-      select: "حدد مزود الوكيل",
+      selectWithValue: "حدد مزود الوكيل ({{value}})",
     },
     thinking: {
       title: "التفكير",
       unknown: "مجهول",
       extraHigh: "ارتفاع إضافي",
-      select: "حدد خيار التفكير",
       selectWithValue: "حدد خيار التفكير ({{value}})",
     },
     model: {
@@ -181,6 +180,7 @@ export const ar: TranslationResources = {
     },
     role: {
       select: "Select agent role",
+      selectWithValue: "Select agent role ({{value}})",
       none: "No role",
       chief: "Chief",
     },
@@ -214,6 +214,7 @@ export const ar: TranslationResources = {
   chief: {
     switchHost: "تبديل المضيف",
     maximize: "فتح في صفحة كاملة",
+    open: "فتح Chief",
     close: "إغلاق Chief",
     retry: "إعادة المحاولة",
     noHomeWorkspace:

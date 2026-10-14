@@ -3757,9 +3757,14 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(agentHistorySearch): added in v0.3.0, remove gate after 2027-02-07.
         agentHistorySearch: z.boolean().optional(),
         // COMPAT(agentRoles): added in v0.20.0, remove gate after 2027-04-13.
-        // Gates the Chief floating assistant: the daemon owns the built-in role
-        // registry and the Home workspace it launches against.
+        // Read only by clients released before agentRoleNames existed, which
+        // treat it as "this daemon has roles".
         agentRoles: z.boolean().optional(),
+        // Not a shim: the catalog is the permanent shape of this feature. The
+        // daemon's built-in role registry, in display order — a new built-in
+        // role needs no protocol change and reaches the composer's role picker
+        // without an app release. Names only; labels are the app's i18n.
+        agentRoleNames: z.array(z.string()).optional(),
         // COMPAT(checkoutRefresh): added in v0.1.86, remove gate after 2026-11-29.
         checkoutRefresh: z.boolean().optional(),
         // COMPAT(workspaceAgentRename): added in v0.7.1, remove gate after 2027-09-01.

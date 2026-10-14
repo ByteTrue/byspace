@@ -909,6 +909,7 @@ function buildWorkspaceDraftSetupFromComposer(input: {
     modeId: input.composerState.selectedMode || null,
     model: input.composerState.effectiveModelId || null,
     thinkingOptionId: input.composerState.effectiveThinkingOptionId || null,
+    role: input.composerState.selectedRole || null,
     featureValues: input.composerState.featureValues ?? {},
   };
 }
@@ -942,6 +943,7 @@ function buildComposerInitialValues(input: {
       modeId: input.initialSetup.modeId,
       model: input.initialSetup.model,
       thinkingOptionId: input.initialSetup.thinkingOptionId,
+      role: input.initialSetup.role,
     };
   }
   return undefined;
@@ -1139,6 +1141,7 @@ async function submitWorkspaceDraft(input: SubmitDraftInput): Promise<SubmitOutc
     ...(submission.model ? { model: submission.model } : {}),
     ...(submission.thinkingOptionId ? { thinkingOptionId: submission.thinkingOptionId } : {}),
     ...(submission.featureValues ? { featureValues: submission.featureValues } : {}),
+    role: submission.role,
     allowEmptyText: true,
   });
   clearDraft("sent");

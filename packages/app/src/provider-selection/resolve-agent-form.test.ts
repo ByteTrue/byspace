@@ -387,6 +387,36 @@ describe("buildProviderDefinitions", () => {
 });
 
 describe("resolveFormState", () => {
+  it("adopts the role a draft was created with", () => {
+    // The creation screen picks a role before the tab exists and hands it over as
+    // an initial value. Ignoring it here creates a plain agent while the picker
+    // still showed the role.
+    const resolved = resolveFormState(
+      { provider: "codex", role: "chief" },
+      {},
+      CODEX_MODELS,
+      INITIAL_USER_MODIFIED,
+      makeState({ provider: "codex" }).form,
+      codexProviderMap,
+    );
+
+    expect(resolved.role).toBe("chief");
+  });
+
+  it("keeps a role the user picked over the one the draft started with", () => {
+    // userModified.role wins: the picker's choice is the newer one.
+    const resolved = resolveFormState(
+      { provider: "codex", role: "chief" },
+      {},
+      CODEX_MODELS,
+      { ...INITIAL_USER_MODIFIED, role: true },
+      makeState({ provider: "codex" }).form,
+      codexProviderMap,
+    );
+
+    expect(resolved.role).toBe("");
+  });
+
   it("keeps provider, mode, and model unset on first open without preferences or explicit values", () => {
     const resolved = resolveFormState(
       undefined,

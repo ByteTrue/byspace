@@ -159,13 +159,12 @@ export const en = {
   agentControls: {
     provider: {
       fallback: "Provider",
-      select: "Select agent provider",
+      selectWithValue: "Select agent provider ({{value}})",
     },
     thinking: {
       title: "Thinking",
       unknown: "Unknown",
       extraHigh: "Extra high",
-      select: "Select thinking option",
       selectWithValue: "Select thinking option ({{value}})",
     },
     model: {
@@ -179,6 +178,7 @@ export const en = {
     },
     role: {
       select: "Select agent role",
+      selectWithValue: "Select agent role ({{value}})",
       none: "No role",
       chief: "Chief",
     },
@@ -212,6 +212,7 @@ export const en = {
   chief: {
     switchHost: "Switch host",
     maximize: "Open in full page",
+    open: "Open Chief",
     close: "Close Chief",
     retry: "Retry",
     noHomeWorkspace:

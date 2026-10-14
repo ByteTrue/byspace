@@ -23,6 +23,7 @@ Desktop、split pane 和 compact 布局都保持这一垂直关系。左侧状�
 - 扩展注入的 custom 消息（Pi `sendMessage`、OMP custom）渲染为带 `[customType]` 标签的独立通知卡，不与 agent 正文混排；`display: false` 的消息从时间线隐藏。该项由 `custom_timeline_messages` client capability 门控。
 - Archived 或 read-only stream 没有 active Composer，继续使用时间线内的 floating 返回底部操作。
 - Pane header 不为这组控件保留 host 或空白宽度。
+- **角色选择器只在 draft Composer 出现，默认「无角色」，且是列表不是开关。** 「无角色」是一个选项而非空态：未选角色不得让选择器消失。已运行的会话不能改角色——角色在创建时决定提示词注入，改它等于换一个 agent。
 
 这些控件只调用 Agent stream 的现有 owner，不建立第二份 scroll、collapse 或 timeline 状态。
 

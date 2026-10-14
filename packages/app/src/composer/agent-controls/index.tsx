@@ -44,6 +44,10 @@ import {
   useLiveAgentModeControl,
   type AgentModeControlValue,
 } from "@/composer/agent-controls/mode-control";
+import {
+  AgentRoleControl,
+  type AgentRoleControlValue,
+} from "@/composer/agent-controls/role-control";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type {
@@ -80,6 +84,7 @@ import {
 import { ComposerControlLayoutProvider } from "@/composer/agent-controls/layout-context";
 import { ComposerToolbarGlyph } from "@/composer/agent-controls/glyph";
 import { AgentControlTrigger } from "@/composer/agent-controls/control";
+import { ComposerOptionControl } from "@/composer/agent-controls/option-control";
 import { CompactModelSheet } from "@/composer/agent-controls/model-sheet";
 import {
   useAgentProfileEditor,
@@ -97,6 +102,8 @@ interface AgentControlOption {
   label: string;
 }
 
+// The selectors arbitrated through the shared open state. The role picker owns
+// its open state the way the mode picker does, so it is not a member.
 type AgentControlSelector = "provider" | "mode" | "model" | "thinking" | `feature-${string}`;
 
 const EMPTY_AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [];
@@ -104,9 +111,11 @@ const EMPTY_AGENT_PROVIDER_DEFINITIONS: AgentProviderDefinition[] = [];
 interface ControlledAgentControlsProps {
   provider: string;
   providerOptions?: AgentControlOption[];
-  /** Selected built-in role name, or empty string. Only shown in draft mode. */
+  /** Selected built-in role name, or empty string. Only set in draft mode. */
   selectedRole?: string;
   onSelectRole?: (role: string) => void;
+  /** Built-in roles the host offers. Empty hides the role picker entirely. */
+  roleNames?: readonly string[];
   selectedProviderId?: string;
   onSelectProvider?: (providerId: string) => void;
   modelOptions?: AgentControlOption[];
@@ -141,6 +150,8 @@ export interface DraftAgentControlsProps {
   /** Currently selected built-in role (e.g. "chief"), or empty string. */
   selectedRole: string;
   onSelectRole: (role: string) => void;
+  /** Built-in roles the host offers. Empty hides the role picker entirely. */
+  roleNames: readonly string[];
   modeOptions: AgentMode[];
   selectedMode: string;
   onSelectMode: (modeId: string) => void;
@@ -250,14 +261,14 @@ function resolveHasAnyControl({
   thinkingOptions,
   features,
   hasMode,
-  hasRole,
+  canSelectRole,
 }: {
   providerOptions: AgentControlOption[] | undefined;
   canSelectModel: boolean;
   thinkingOptions: AgentControlOption[] | undefined;
   features: AgentFeature[] | undefined;
   hasMode: boolean;
-  hasRole?: boolean;
+  canSelectRole?: boolean;
 }) {
   return (
     Boolean(providerOptions?.length) ||
@@ -265,7 +276,7 @@ function resolveHasAnyControl({
     Boolean(thinkingOptions?.length) ||
     Boolean(features?.length) ||
     hasMode ||
-    Boolean(hasRole)
+    Boolean(canSelectRole)
   );
 }
 
@@ -487,6 +498,7 @@ function ControlledAgentControls({
   onSelectProvider,
   selectedRole = "",
   onSelectRole,
+  roleNames,
   modelOptions,
   selectedModelId,
   onSelectModel,
@@ -526,7 +538,6 @@ function ControlledAgentControls({
 
   const providerAnchorRef = useRef<View>(null);
   const _modelAnchorRef = useRef<View>(null);
-  const thinkingAnchorRef = useRef<View>(null);
 
   const canSelectProvider = Boolean(
     onSelectProvider && providerOptions && providerOptions.length > 0,
@@ -551,13 +562,21 @@ function ControlledAgentControls({
     unknownLabel: t("agentControls.thinking.unknown"),
   });
 
+  const roleControl = useMemo<AgentRoleControlValue | null>(() => {
+    // Keyed on the host offering roles, not on a selected role: "no role" is a
+    // choice, not an empty state, so an unset role must not hide the picker and
+    // a host without roles must not show it.
+    if (!onSelectRole || !roleNames || roleNames.length === 0) return null;
+    return { roleNames, selectedRole, onSelectRole };
+  }, [onSelectRole, roleNames, selectedRole]);
+
   const hasAnyControl = resolveHasAnyControl({
     providerOptions,
     canSelectModel,
     thinkingOptions,
     features,
     hasMode: modeControl !== null && modeControl !== undefined,
-    hasRole: Boolean(selectedRole),
+    canSelectRole: roleControl !== null,
   });
   const featureControls = useMemo(
     () =>
@@ -576,10 +595,11 @@ function ControlledAgentControls({
       hasModel: canSelectModel,
       hasThinking: canSelectThinking,
       hasMode: modeControl !== null && modeControl !== undefined,
+      hasRole: roleControl !== null,
       features: featureControls,
       fontScale,
     }),
-    [canSelectModel, canSelectThinking, featureControls, fontScale, modeControl],
+    [canSelectModel, canSelectThinking, featureControls, fontScale, modeControl, roleControl],
   );
   const presentation = useMemo(() => resolveComposerControlPresentation(density), [density]);
   const layoutContextValue = useMemo(
@@ -663,10 +683,6 @@ function ControlledAgentControls({
 
   const handleProviderPress = useCallback(() => {
     handleOpenChange("provider")(openSelector !== "provider");
-  }, [handleOpenChange, openSelector]);
-
-  const handleThinkingPress = useCallback(() => {
-    handleOpenChange("thinking")(openSelector !== "thinking");
   }, [handleOpenChange, openSelector]);
 
   const handleProviderOpenChange = useMemo(() => handleOpenChange("provider"), [handleOpenChange]);
@@ -777,10 +793,8 @@ function ControlledAgentControls({
             displayThinking={displayThinking}
             openSelector={openSelector}
             providerAnchorRef={providerAnchorRef}
-            thinkingAnchorRef={thinkingAnchorRef}
             providerPressableStyle={providerPressableStyle}
             handleProviderPress={handleProviderPress}
-            handleThinkingPress={handleThinkingPress}
             handleProviderSelect={handleProviderSelect}
             handleThinkingSelect={handleThinkingSelect}
             handleDesktopModelSelect={handleDesktopModelSelect}
@@ -796,8 +810,7 @@ function ControlledAgentControls({
             handleOpenSheet={handleOpenSheet}
             handleCloseSheet={handleCloseSheet}
             modelSelectorServerId={modelSelectorServerId}
-            selectedRole={selectedRole}
-            onSelectRole={onSelectRole}
+            roleControl={roleControl}
           />
         ) : (
           <SheetAgentControlsContent
@@ -835,6 +848,7 @@ function ControlledAgentControls({
             glyphSize={layoutContextValue.glyphSize}
             modelSelectorServerId={modelSelectorServerId}
             canSwitchProvider={Boolean(onSelectProviderAndModel)}
+            roleControl={roleControl}
           />
         )}
       </View>
@@ -874,10 +888,8 @@ interface DesktopAgentControlsContentProps {
   displayThinking: string;
   openSelector: AgentControlSelector | null;
   providerAnchorRef: RefObject<View | null>;
-  thinkingAnchorRef: RefObject<View | null>;
   providerPressableStyle: (state: PressableStateCallbackType) => StyleProp<ViewStyle>;
   handleProviderPress: () => void;
-  handleThinkingPress: () => void;
   handleProviderSelect: (id: string) => void;
   handleThinkingSelect: (id: string) => void;
   handleDesktopModelSelect: (providerId: string, modelId: string) => void;
@@ -898,9 +910,8 @@ interface DesktopAgentControlsContentProps {
   handleOpenSheet: (sheet: Exclude<ActiveSheet, null>) => void;
   handleCloseSheet: () => void;
   modelSelectorServerId: string | null;
-  /** Selected built-in role, or empty string. Only rendered when onSelectRole is provided (draft mode). */
-  selectedRole?: string;
-  onSelectRole?: (role: string) => void;
+  /** Draft-mode role picker, or null when this host offers no roles. */
+  roleControl?: AgentRoleControlValue | null;
 }
 
 const DESKTOP_SEARCH_THRESHOLD = 6;
@@ -939,10 +950,8 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
     displayThinking,
     openSelector,
     providerAnchorRef,
-    thinkingAnchorRef,
     providerPressableStyle,
     handleProviderPress,
-    handleThinkingPress,
     handleProviderSelect,
     handleThinkingSelect,
     handleDesktopModelSelect,
@@ -958,8 +967,7 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
     handleOpenSheet,
     handleCloseSheet,
     modelSelectorServerId,
-    selectedRole = "",
-    onSelectRole,
+    roleControl = null,
   } = props;
   const modelToolbar = useMemo(
     () => ({ glyphSize, showCaret: presentation.showCarets }),
@@ -970,11 +978,6 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
     [t],
   );
   const handleOpenFeatures = useCallback(() => handleOpenSheet("features"), [handleOpenSheet]);
-  const handleRoleToggle = useCallback(() => {
-    // Toggle between "chief" and no role. When more roles exist this becomes a
-    // dropdown; for now a single press toggles the only available role.
-    onSelectRole?.(selectedRole ? "" : "chief");
-  }, [onSelectRole, selectedRole]);
   return (
     <>
       {providerOptions && providerOptions.length > 0 ? (
@@ -986,7 +989,9 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
             onPress={handleProviderPress}
             style={providerPressableStyle}
             accessibilityRole="button"
-            accessibilityLabel={t("agentControls.provider.select")}
+            accessibilityLabel={t("agentControls.provider.selectWithValue", {
+              value: displayProvider,
+            })}
             testID="agent-provider-selector"
           >
             <Text style={styles.modeBadgeText}>{displayProvider}</Text>
@@ -1004,18 +1009,8 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
         </>
       ) : null}
 
-      {onSelectRole ? (
-        <Pressable
-          onPress={handleRoleToggle}
-          style={[styles.modeBadge, selectedRole ? styles.roleBadgeActive : undefined]}
-          accessibilityRole="button"
-          accessibilityLabel={t("agentControls.role.select")}
-          testID="agent-role-selector"
-        >
-          <Text style={styles.modeBadgeText}>
-            {selectedRole ? t("agentControls.role.chief") : t("agentControls.role.none")}
-          </Text>
-        </Pressable>
+      {roleControl ? (
+        <AgentRoleControl {...roleControl} disabled={disabled} onClose={onDropdownClose} />
       ) : null}
 
       {canSelectModel ? (
@@ -1052,43 +1047,28 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
       ) : null}
 
       {thinkingOptions && thinkingOptions.length > 0 ? (
-        <>
-          <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
-            <TooltipTrigger asChild triggerRefProp="ref">
-              <AgentControlTrigger
-                ref={thinkingAnchorRef}
-                icon={ThinkingIcon}
-                surface="toolbar"
-                label={t("agentControls.thinking.title")}
-                value={displayThinking}
-                showToolbarLabel={presentation.showThinkingLabel}
-                showCaret={presentation.showCarets}
-                open={openSelector === "thinking"}
-                disabled={disabled || !canSelectThinking}
-                onPress={handleThinkingPress}
-                accessibilityLabel={t("agentControls.thinking.selectWithValue", {
-                  value: displayThinking,
-                })}
-                testID="agent-thinking-selector"
-              />
-            </TooltipTrigger>
-            <TooltipContent side="top" align="center" offset={8}>
-              <Text style={styles.tooltipText}>{t(getAgentControlHintKey("thinking"))}</Text>
-            </TooltipContent>
-          </Tooltip>
-          <Combobox
-            options={comboboxThinkingOptions}
-            value={selectedThinkingOptionId ?? ""}
-            onSelect={handleThinkingSelect}
-            searchable={comboboxThinkingOptions.length > DESKTOP_SEARCH_THRESHOLD}
-            open={openSelector === "thinking"}
-            onOpenChange={handleThinkingOpenChange}
-            anchorRef={thinkingAnchorRef}
-            desktopPlacement="top-start"
-            desktopMinWidth={200}
-            renderOption={renderThinkingOption}
-          />
-        </>
+        <ComposerOptionControl
+          icon={ThinkingIcon}
+          surface="toolbar"
+          label={t("agentControls.thinking.title")}
+          value={displayThinking}
+          showToolbarLabel={presentation.showThinkingLabel}
+          showCaret={presentation.showCarets}
+          disabled={disabled || !canSelectThinking}
+          accessibilityLabel={t("agentControls.thinking.selectWithValue", {
+            value: displayThinking,
+          })}
+          testID="agent-thinking-selector"
+          hint={t(getAgentControlHintKey("thinking"))}
+          options={comboboxThinkingOptions}
+          selectedId={selectedThinkingOptionId ?? ""}
+          onSelect={handleThinkingSelect}
+          searchable={comboboxThinkingOptions.length > DESKTOP_SEARCH_THRESHOLD}
+          open={openSelector === "thinking"}
+          onOpenChange={handleThinkingOpenChange}
+          desktopMinWidth={200}
+          renderOption={renderThinkingOption}
+        />
       ) : null}
 
       {modeControl ? <AgentModeControl {...modeControl} onClose={onDropdownClose} /> : null}
@@ -1182,6 +1162,8 @@ interface SheetAgentControlsContentProps {
   glyphSize: number;
   modelSelectorServerId: string | null;
   canSwitchProvider: boolean;
+  /** Draft-mode role picker, or null when this host offers no roles. */
+  roleControl?: AgentRoleControlValue | null;
 }
 
 function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
@@ -1221,13 +1203,11 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
     glyphSize,
     modelSelectorServerId,
     canSwitchProvider,
+    roleControl = null,
   } = props;
-
-  const thinkingAnchorRef = useRef<View | null>(null);
 
   const hasThinking = comboboxThinkingOptions.length > 0;
 
-  const handleOpenThinking = useCallback(() => handleOpenSheet("thinking"), [handleOpenSheet]);
   const handleThinkingSheetOpenChange = useCallback(
     (nextOpen: boolean) => {
       if (nextOpen) {
@@ -1242,37 +1222,38 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
   const sheetControls = (
     <View style={styles.combinedSheetControls} testID="agent-controls-combined-sheet-controls">
       {hasThinking ? (
-        <>
-          <AgentControlTrigger
-            ref={thinkingAnchorRef}
-            icon={ThinkingIcon}
-            surface="sheet"
-            label={t("agentControls.thinking.title")}
-            value={displayThinking}
-            open={activeSheet === "thinking"}
-            onPress={handleOpenThinking}
-            disabled={disabled || !canSelectThinking}
-            accessibilityLabel={t("agentControls.thinking.selectWithValue", {
-              value: displayThinking,
-            })}
-            testID="agent-controls-thinking"
-          />
-          <Combobox
-            options={comboboxThinkingOptions}
-            value={selectedThinkingOptionId ?? ""}
-            onSelect={handleSelectThinkingAndClose}
-            searchable={false}
-            title={t("agentControls.thinking.title")}
-            open={activeSheet === "thinking"}
-            onOpenChange={handleThinkingSheetOpenChange}
-            anchorRef={thinkingAnchorRef}
-            renderOption={renderThinkingOption}
-            presentation="push"
-          />
-        </>
+        <ComposerOptionControl
+          icon={ThinkingIcon}
+          surface="sheet"
+          label={t("agentControls.thinking.title")}
+          value={displayThinking}
+          disabled={disabled || !canSelectThinking}
+          accessibilityLabel={t("agentControls.thinking.selectWithValue", {
+            value: displayThinking,
+          })}
+          testID="agent-controls-thinking"
+          options={comboboxThinkingOptions}
+          selectedId={selectedThinkingOptionId ?? ""}
+          onSelect={handleSelectThinkingAndClose}
+          searchable={false}
+          title={t("agentControls.thinking.title")}
+          open={activeSheet === "thinking"}
+          onOpenChange={handleThinkingSheetOpenChange}
+          renderOption={renderThinkingOption}
+          presentation="push"
+        />
       ) : null}
 
       {modeControl ? <AgentModeControl {...modeControl} surface="sheet" /> : null}
+
+      {roleControl ? (
+        <AgentRoleControl
+          {...roleControl}
+          disabled={disabled}
+          surface="sheet"
+          onClose={onDropdownClose}
+        />
+      ) : null}
 
       {(features ?? []).map((feature) => (
         <SheetFeatureItem
@@ -1331,15 +1312,10 @@ function DesktopFeatureItem({
 }) {
   const { theme } = useUnistyles();
   const featureSelector: AgentControlSelector = `feature-${feature.id}`;
-  const featureAnchorRef = useRef<View>(null);
 
   const handleFeatureOpenChange = useMemo(
     () => handleOpenChange(featureSelector),
     [handleOpenChange, featureSelector],
-  );
-  const handleSelectPress = useCallback(
-    () => handleFeatureOpenChange(openSelector !== featureSelector),
-    [featureSelector, handleFeatureOpenChange, openSelector],
   );
 
   const handleTogglePress = useCallback(() => {
@@ -1393,39 +1369,23 @@ function DesktopFeatureItem({
   }
 
   if (feature.type === "select") {
-    const FeatureIcon = getAgentFeatureIcon(feature.icon);
     const selectedOption = feature.options.find((o) => o.id === feature.value);
     return (
-      <>
-        <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
-          <TooltipTrigger asChild triggerRefProp="ref">
-            <AgentControlTrigger
-              ref={featureAnchorRef}
-              icon={FeatureIcon}
-              surface="toolbar"
-              label={feature.label}
-              value={selectedOption?.label ?? feature.label}
-              open={openSelector === featureSelector}
-              disabled={disabled}
-              onPress={handleSelectPress}
-              accessibilityLabel={getFeatureTooltip(feature)}
-              testID={`agent-feature-${feature.id}`}
-            />
-          </TooltipTrigger>
-          <TooltipContent side="top" align="center" offset={8}>
-            <Text style={styles.tooltipText}>{getFeatureTooltip(feature)}</Text>
-          </TooltipContent>
-        </Tooltip>
-        <Combobox
-          options={comboboxOptions}
-          value={String(feature.value)}
-          onSelect={handleSelectOption}
-          open={openSelector === featureSelector}
-          onOpenChange={handleFeatureOpenChange}
-          anchorRef={featureAnchorRef}
-          desktopPlacement="top-start"
-        />
-      </>
+      <ComposerOptionControl
+        icon={getAgentFeatureIcon(feature.icon)}
+        surface="toolbar"
+        label={feature.label}
+        value={selectedOption?.label ?? feature.label}
+        disabled={disabled}
+        accessibilityLabel={getFeatureTooltip(feature)}
+        testID={`agent-feature-${feature.id}`}
+        hint={getFeatureTooltip(feature)}
+        options={comboboxOptions}
+        selectedId={String(feature.value)}
+        onSelect={handleSelectOption}
+        open={openSelector === featureSelector}
+        onOpenChange={handleFeatureOpenChange}
+      />
     );
   }
 
@@ -1448,6 +1408,8 @@ function SheetFeatureItem({
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const featureSelector: AgentControlSelector = `feature-${feature.id}`;
+  // A sheet toggle is a two-item list ("on"/"off"), so it anchors a combobox of
+  // its own; the desktop toggle flips in place and needs none of this.
   const featureAnchorRef = useRef<View>(null);
 
   const handleFeatureOpenChange = useMemo(
@@ -1514,33 +1476,24 @@ function SheetFeatureItem({
   }
 
   if (feature.type === "select") {
-    const FeatureIcon = getAgentFeatureIcon(feature.icon);
     const selectedOption = feature.options.find((o) => o.id === feature.value);
     return (
-      <>
-        <AgentControlTrigger
-          ref={featureAnchorRef}
-          icon={FeatureIcon}
-          surface="sheet"
-          label={feature.label}
-          value={selectedOption?.label ?? feature.label}
-          open={openSelector === featureSelector}
-          disabled={disabled}
-          onPress={handleSelectPress}
-          accessibilityLabel={getFeatureTooltip(feature)}
-          testID={`agent-feature-${feature.id}`}
-        />
-        <Combobox
-          options={comboboxOptions}
-          value={String(feature.value)}
-          onSelect={handleSelectOption}
-          open={openSelector === featureSelector}
-          onOpenChange={handleFeatureOpenChange}
-          anchorRef={featureAnchorRef}
-          presentation="push"
-          header={sheetHeader}
-        />
-      </>
+      <ComposerOptionControl
+        icon={getAgentFeatureIcon(feature.icon)}
+        surface="sheet"
+        label={feature.label}
+        value={selectedOption?.label ?? feature.label}
+        disabled={disabled}
+        accessibilityLabel={getFeatureTooltip(feature)}
+        testID={`agent-feature-${feature.id}`}
+        options={comboboxOptions}
+        selectedId={String(feature.value)}
+        onSelect={handleSelectOption}
+        open={openSelector === featureSelector}
+        onOpenChange={handleFeatureOpenChange}
+        header={sheetHeader}
+        presentation="push"
+      />
     );
   }
 
@@ -1873,6 +1826,7 @@ export function DraftAgentControls({
   isCompactLayout,
   selectedRole,
   onSelectRole,
+  roleNames,
 }: DraftAgentControlsProps) {
   const mappedThinkingOptions = useMemo<AgentControlOption[]>(() => {
     return toThinkingControlOptions(thinkingOptions);
@@ -1963,6 +1917,7 @@ export function DraftAgentControls({
         isCompactLayout={isCompactLayout}
         selectedRole={selectedRole}
         onSelectRole={onSelectRole}
+        roleNames={roleNames}
       />
     </>
   );
@@ -2011,9 +1966,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   modeBadgePressed: {
     backgroundColor: theme.colors.surface0,
-  },
-  roleBadgeActive: {
-    backgroundColor: theme.colors.surface2,
   },
   disabledBadge: {
     opacity: 0.5,

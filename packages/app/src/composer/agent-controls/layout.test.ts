@@ -12,18 +12,21 @@ describe("composer control layout", () => {
       showCarets: true,
       showThinkingLabel: true,
       showModeLabel: true,
+      showRoleLabel: true,
       aggregateFeatures: false,
     });
     expect(resolveComposerControlPresentation("condensed")).toEqual({
       showCarets: false,
       showThinkingLabel: false,
       showModeLabel: true,
+      showRoleLabel: true,
       aggregateFeatures: true,
     });
     expect(resolveComposerControlPresentation("tight")).toEqual({
       showCarets: false,
       showThinkingLabel: false,
       showModeLabel: false,
+      showRoleLabel: false,
       aggregateFeatures: true,
     });
   });
@@ -150,6 +153,30 @@ describe("composer control layout", () => {
           ...base.controls,
           features: [{ type: "select", label: "A much longer localized feature label" }],
         },
+      }),
+    ).toBe("condensed");
+  });
+
+  it("budgets the role picker only where the surface offers roles", () => {
+    const base = {
+      availableWidth: 430,
+      currentDensity: "condensed" as const,
+      controls: {
+        hasModel: true,
+        hasThinking: true,
+        hasMode: true,
+        features: [{ type: "toggle" as const }],
+        fontScale: 1,
+      },
+    };
+
+    // Without the picker the same width already restores full labels; the role
+    // control's value ("No role" / "Chief") has to fit before it can.
+    expect(resolveComposerControlDensity(base)).toBe("full");
+    expect(
+      resolveComposerControlDensity({
+        ...base,
+        controls: { ...base.controls, hasRole: true },
       }),
     ).toBe("condensed");
   });

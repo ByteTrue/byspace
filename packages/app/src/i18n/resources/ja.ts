@@ -161,13 +161,12 @@ export const ja: TranslationResources = {
   agentControls: {
     provider: {
       fallback: "プロバイダー",
-      select: "エージェントプロバイダーを選択",
+      selectWithValue: "エージェントプロバイダーを選択（{{value}}）",
     },
     thinking: {
       title: "思考",
       unknown: "不明",
       extraHigh: "非常に高い",
-      select: "思考オプションを選択",
       selectWithValue: "思考オプションを選択（{{value}}）",
     },
     model: {
@@ -181,6 +180,7 @@ export const ja: TranslationResources = {
     },
     role: {
       select: "Select agent role",
+      selectWithValue: "Select agent role ({{value}})",
       none: "No role",
       chief: "Chief",
     },
@@ -214,6 +214,7 @@ export const ja: TranslationResources = {
   chief: {
     switchHost: "ホストを切り替える",
     maximize: "フルページで開く",
+    open: "Chief を開く",
     close: "Chief を閉じる",
     retry: "再試行",
     noHomeWorkspace:

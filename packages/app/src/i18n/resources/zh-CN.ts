@@ -161,13 +161,12 @@ export const zhCN: TranslationResources = {
   agentControls: {
     provider: {
       fallback: "Provider",
-      select: "选择 Agent Provider",
+      selectWithValue: "选择 Agent Provider（{{value}}）",
     },
     thinking: {
       title: "Thinking",
       unknown: "未知",
       extraHigh: "Extra high",
-      select: "选择 thinking 选项",
       selectWithValue: "选择 thinking 选项（{{value}}）",
     },
     model: {
@@ -181,6 +180,7 @@ export const zhCN: TranslationResources = {
     },
     role: {
       select: "选择角色",
+      selectWithValue: "选择角色（{{value}}）",
       none: "无角色",
       chief: "Chief",
     },
@@ -214,6 +214,7 @@ export const zhCN: TranslationResources = {
   chief: {
     switchHost: "切换主机",
     maximize: "全屏打开",
+    open: "打开 Chief",
     close: "关闭 Chief",
     retry: "重试",
     noHomeWorkspace: "Chief 需要 daemon 的 Home workspace。请更新 BySpace daemon 后重试。",

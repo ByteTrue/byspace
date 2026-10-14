@@ -1,12 +1,14 @@
 import { memo, useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import { View } from "react-native";
-import { usePathname } from "expo-router";
+import { usePathname, useGlobalSearchParams } from "expo-router";
 import { useHosts } from "@/runtime/host-runtime";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useRouter } from "expo-router";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { buildHostAgentDetailRoute, parseServerIdFromPathname } from "@/utils/host-routes";
+import { isShowingChiefAgent } from "./chief-route";
 import { useSessionStore } from "@/stores/session-store";
+import { useHostAgentRoleNames } from "@/agent-controls/use-agent-roles";
 import { useChiefStore } from "./chief-store";
 import { useChiefAgent } from "./use-chief-agent";
 import { ChiefFab } from "./chief-fab";
@@ -60,6 +62,10 @@ export const ChiefPanelHost = memo(function ChiefPanelHost(): ReactElement | nul
   // Use the first connected host as the "current" host. The host switcher in
   // the floating window navigates to a different host root.
   const pathServerId = useMemo(() => parseServerIdFromPathname(pathname), [pathname]);
+  // A workspace route can be opened onto an agent (?open=agent:<id>), which is
+  // how the compact FAB navigates. The pathname alone cannot tell that apart
+  // from the workspace root.
+  const openIntentParam = useGlobalSearchParams<{ open?: string }>().open;
   const earliestOnlineServerId = getHostRuntimeStore().getEarliestOnlineHostServerId();
   const currentServerId = useMemo(() => {
     if (pathServerId && hosts.some((host) => host.serverId === pathServerId)) {
@@ -67,6 +73,12 @@ export const ChiefPanelHost = memo(function ChiefPanelHost(): ReactElement | nul
     }
     return earliestOnlineServerId ?? hosts[0]?.serverId ?? pathServerId;
   }, [pathServerId, earliestOnlineServerId, hosts]);
+  // The workspace route consumes ?open=agent:<id> and strips it from the URL, so
+  // the intent alone is not enough to keep the button off a compact screen: the
+  // agent the workspace screen ended up focusing is the durable signal.
+  const focusedAgentId = useSessionStore(
+    (state) => (currentServerId ? state.sessions[currentServerId]?.focusedAgentId : null) ?? null,
+  );
 
   // Resolve the Chief agent only once the window is open (or on compact
   // layouts where the FAB navigates straight to the agent page): the hook's
@@ -98,20 +110,24 @@ export const ChiefPanelHost = memo(function ChiefPanelHost(): ReactElement | nul
     useChiefStore.getState().requestRetry();
   }, []);
 
-  // Route suppression: don't show the floating window when the agent page is
-  // already showing this Chief agent.
+  // Route suppression: don't show the floating window (or its button, on
+  // compact) when the screen already shows this Chief agent full-page.
   const isOnChiefAgentPage = useMemo(() => {
     if (!agent || !currentServerId) return false;
-    return pathname.includes(`/agent/${agent.agentId}`);
-  }, [pathname, agent, currentServerId]);
+    return isShowingChiefAgent({
+      pathname,
+      openIntentParam,
+      focusedAgentId,
+      agentId: agent.agentId,
+    });
+  }, [pathname, openIntentParam, focusedAgentId, agent, currentServerId]);
 
-  // Feature gate: daemons without built-in agent roles have no Chief to
-  // open — hide the entry point entirely instead of showing a dead FAB.
-  const supportsAgentRoles = useSessionStore((state) =>
-    Boolean(state.sessions[currentServerId]?.serverInfo?.features?.agentRoles),
-  );
+  // Feature gate: a daemon that offers no built-in roles has no Chief to open,
+  // so hide the entry point instead of showing a dead FAB. The catalog, not the
+  // legacy boolean, is what says which roles exist.
+  const roleNames = useHostAgentRoleNames(currentServerId);
 
-  if (!currentServerId || isE2E || !supportsAgentRoles) return null;
+  if (!currentServerId || isE2E || !roleNames.includes("chief")) return null;
 
   const showWindow = isOpen && !isCompact && !isOnChiefAgentPage;
 
@@ -127,10 +143,14 @@ export const ChiefPanelHost = memo(function ChiefPanelHost(): ReactElement | nul
           onClose={close}
         />
       ) : null}
-      {!showWindow && !isOnChiefAgentPage ? (
+      {/* Kept mounted while the window is open: the button is the window's
+          toggle, and a control that walks away from under the pointer cannot be
+          clicked twice. It is hidden only where it would duplicate a full page. */}
+      {!isOnChiefAgentPage ? (
         <ChiefFab
           serverId={effectiveServerId}
           agentId={agent?.agentId ?? null}
+          isOpen={showWindow}
           onPress={handleFabPress}
         />
       ) : null}
