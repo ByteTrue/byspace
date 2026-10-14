@@ -140,6 +140,11 @@ The app chooses one delivery policy from `server_info.features.selectiveAgentTim
 - Legacy daemons keep globally streaming agent timelines. Visibility still triggers the existing
   authoritative catch-up, but the app does not issue selective-subscription RPCs.
 
+Visibility is published, not inferred from the workspace layout. The workspace screen registers its
+panes; a surface outside that layout registers itself, which `useVisibleAgentTimeline` does and the
+Chief floating window calls. An unregistered agent is neither subscribed nor caught up, and the agent
+screen state machine blocks first paint on that catch-up — so a chat rendered from one spins forever.
+
 This policy is owned by `viewed-timeline-sync.ts`; downstream reducers do not branch on daemon
 version.
 

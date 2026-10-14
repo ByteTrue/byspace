@@ -21,6 +21,7 @@ import { useHostChooser } from "@/hosts/host-chooser";
 import { buildHostAgentDetailRoute } from "@/utils/host-routes";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useTranslation } from "react-i18next";
+import { useVisibleAgentTimeline } from "@/timeline/use-visible-agent-timeline";
 import type { ChiefAgentInfo } from "./use-chief-agent";
 
 const stateStyles = StyleSheet.create((theme) => ({
@@ -76,6 +77,12 @@ function ChiefStateMessage({
 }
 
 function ChiefPaneContent({ serverId, agent }: { serverId: string; agent: ChiefAgentInfo }) {
+  // The workspace screen is the only other publisher of on-screen agents, and a
+  // selective daemon catches up nothing it was not told about. Without this the
+  // floating window shows an endless spinner: the pane's first-paint gate waits
+  // for an authoritative timeline that no subscription ever fetches. Maximizing
+  // "worked" because it lands on the workspace screen, which does register.
+  useVisibleAgentTimeline({ serverId, agentId: agent.agentId });
   const paneContextValue = useMemo<PaneContextValue>(
     () => ({
       serverId,
