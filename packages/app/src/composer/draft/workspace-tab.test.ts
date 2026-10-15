@@ -1,6 +1,10 @@
 import { describe, expect, test } from "vitest";
 
-import { shouldAllowEmptyDraftText, validateDraftSubmission } from "./workspace-tab-core";
+import {
+  buildDraftInitialValues,
+  shouldAllowEmptyDraftText,
+  validateDraftSubmission,
+} from "./workspace-tab-core";
 
 const baseComposerState = {
   providerDefinitions: [{ id: "codewhale" }],
@@ -67,5 +71,38 @@ describe("workspace draft empty text readiness", () => {
         attachments: [],
       }),
     ).toBe(false);
+  });
+});
+
+describe("buildDraftInitialValues", () => {
+  test("returns undefined when neither initialSetup nor defaultRole is given", () => {
+    expect(buildDraftInitialValues({ initialSetup: null })).toBeUndefined();
+  });
+
+  test("seeds the Chief role when defaultRole is provided for the Home workspace", () => {
+    expect(buildDraftInitialValues({ initialSetup: null, defaultRole: "chief" })).toEqual({
+      provider: undefined,
+      modeId: undefined,
+      model: undefined,
+      thinkingOptionId: undefined,
+      role: "chief",
+    });
+  });
+
+  test("lets an explicit initialSetup role win over defaultRole", () => {
+    expect(
+      buildDraftInitialValues({
+        initialSetup: {
+          cwd: "/tmp",
+          provider: "pi",
+          modeId: null,
+          model: null,
+          thinkingOptionId: null,
+          featureValues: {},
+          role: "researcher",
+        },
+        defaultRole: "chief",
+      }),
+    ).toMatchObject({ role: "researcher" });
   });
 });

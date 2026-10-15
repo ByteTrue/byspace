@@ -1,6 +1,7 @@
 export const BUILTIN_SIDEBAR_NAV_IDS = [
   "new-workspace",
   "history",
+  "chief",
   "search",
   "schedules",
   "tunnels",
@@ -46,6 +47,7 @@ export type SidebarNavItem = BuiltinSidebarNavItem;
 const BUILTIN_LABEL_KEYS: Record<BuiltinSidebarNavId, string> = {
   "new-workspace": "sidebar.actions.newWorkspace",
   history: "sidebar.sections.sessions",
+  chief: "chief.title",
   search: "sidebar.sections.search",
   schedules: "sidebar.sections.schedules",
   tunnels: "sidebar.sections.tunnels",
@@ -63,6 +65,7 @@ export function builtinSidebarNavLabelKey(id: BuiltinSidebarNavId): string {
 const BUILTIN_SHORTCUT_ACTIONS: Record<BuiltinSidebarNavId, string | null> = {
   "new-workspace": "new-workspace",
   history: null,
+  chief: null,
   search: "toggle-command-center",
   schedules: null,
   tunnels: null,
@@ -81,6 +84,7 @@ function isBuiltinSidebarNavId(key: string): key is BuiltinSidebarNavId {
  * A builtin absent from this map is always available.
  */
 export interface SidebarNavAvailability {
+  chief?: boolean;
   tunnels: boolean;
 }
 
@@ -96,7 +100,11 @@ export function filterUnavailableSidebarNavItems(
   items: readonly SidebarNavItem[],
   availability: SidebarNavAvailability,
 ): SidebarNavItem[] {
-  return items.filter((item) => item.id !== "tunnels" || availability.tunnels);
+  return items.filter((item) => {
+    if (item.id === "chief") return availability.chief !== false;
+    if (item.id === "tunnels") return availability.tunnels;
+    return true;
+  });
 }
 
 export function resolveSidebarNavItems(input: {

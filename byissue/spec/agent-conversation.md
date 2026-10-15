@@ -15,7 +15,7 @@ Agent pane 把时间线、工具调用、状态轨道和消息输入保持在同
 
 Desktop、split pane 和 compact 布局都保持这一垂直关系。左侧状态可以显示 task、subagent、plugin 或 diff；Stream 控件固定在同一行右侧。状态过长时先收缩或截断，不能把操作挤出可见区域。
 
-**发送键角落不让给任何浮层。** 消息框占据屏幕底部右角时，全局悬浮入口（Chief）按消息框的实测高度往上抬，不叠在发送键上；消息框居中且有最大内容宽度，所以窄于约 956px 的视口必然让位——这是几何，不是概率。两个浮层都锚定同一角落时，谁都不要靠 `zIndex` 解决问题。入口在 Chief 会话本身出现在屏幕上时不渲染；那条判据看的是屏幕实际选中了哪个 agent，不是路由字符串——`?open=` 是消费型意图，URL 里留不下状态。
+**Chief 走普通 Workspace 会话页，不设全局浮窗与右下角 FAB。** 入口位于侧栏左上角 `BySpace` 展开区（与 Search / Schedules / Tunnels 同级），点击直接导航至当前 Host 的 Home workspace（`byspace.home-workspace`）全屏页；桌面与移动端一致。Home workspace 下尚未创建会话或新建草稿 tab 时，角色默认预选 `chief`，空态居中展示三条开场建议按钮，点击即按正常草稿流创建会话并发送。
 
 ## 控件状态
 
@@ -25,7 +25,7 @@ Desktop、split pane 和 compact 布局都保持这一垂直关系。左侧状�
 - 扩展注入的 custom 消息（Pi `sendMessage`、OMP custom）渲染为带 `[customType]` 标签的独立通知卡，不与 agent 正文混排；`display: false` 的消息从时间线隐藏。该项由 `custom_timeline_messages` client capability 门控。
 - Archived 或 read-only stream 没有 active Composer，继续使用时间线内的 floating 返回底部操作。
 - Pane header 不为这组控件保留 host 或空白宽度。
-- **角色选择器只在 draft Composer 出现，默认「无角色」，且是列表不是开关。** 「无角色」是一个选项而非空态：未选角色不得让选择器消失。已运行的会话不能改角色——角色在创建时决定提示词注入，改它等于换一个 agent。
+- **角色选择器只在 draft Composer 出现，普通工作区默认「无角色」，Home workspace 默认预选 `Chief`，且是列表不是开关。** 「无角色」是一个选项而非空态：未选角色不得让选择器消失。已运行的会话不能改角色——角色在创建时决定提示词注入，改它等于换一个 agent。
 
 这些控件只调用 Agent stream 的现有 owner，不建立第二份 scroll、collapse 或 timeline 状态。
 

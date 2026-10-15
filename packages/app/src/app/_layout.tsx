@@ -49,7 +49,6 @@ import { WorkspaceSetupDialog } from "@/components/workspace-setup-dialog";
 import { WorkspaceShortcutTargetsSubscriber } from "@/components/workspace-shortcut-targets-subscriber";
 import { FloatingPanelPortalHost } from "@/components/ui/floating-panel-portal";
 import { HostChooserModal } from "@/hosts/host-chooser";
-import { ChiefPanelHost } from "@/chief/chief-panel-host";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import { HorizontalScrollProvider } from "@/contexts/horizontal-scroll-context";
@@ -678,7 +677,6 @@ function AppShell() {
         <AppWithSidebar>
           <WorkspaceRouteNavigationBridge />
           <RootStack />
-          <ChiefPanelHost />
         </AppWithSidebar>
       </HorizontalScrollProvider>
     </MobilePanelsProvider>

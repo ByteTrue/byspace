@@ -1,4 +1,21 @@
+import type { CreateAgentInitialValues } from "@/hooks/use-agent-form-state";
 import { resolveSubmissionReadiness } from "@/provider-selection/provider-selection";
+import type { WorkspaceDraftTabSetup } from "@/workspace-tabs/model";
+
+export function buildDraftInitialValues(input: {
+  initialSetup: WorkspaceDraftTabSetup | null;
+  defaultRole?: string;
+}): CreateAgentInitialValues | undefined {
+  const { initialSetup, defaultRole } = input;
+  if (!initialSetup && !defaultRole) return undefined;
+  return {
+    provider: initialSetup?.provider,
+    modeId: initialSetup?.modeId,
+    model: initialSetup?.model,
+    thinkingOptionId: initialSetup?.thinkingOptionId,
+    role: initialSetup?.role ?? defaultRole,
+  };
+}
 
 export interface WorkspaceDraftAutoSubmitConfig {
   provider: string;

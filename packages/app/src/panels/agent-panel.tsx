@@ -21,7 +21,6 @@ import {
   StyleSheet as RNStyleSheet,
   Text,
   View,
-  type LayoutChangeEvent,
   type PressableStateCallbackType,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -36,7 +35,6 @@ import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { Composer } from "@/composer";
 import { useWorkspaceHasDiffStat } from "@/composer/workspace-diff-stat";
-import { usePublishChiefFabClearance } from "@/chief/use-publish-chief-fab-clearance";
 import {
   composerPillStyles,
   resolveComposerTrackControlClearance,
@@ -1867,27 +1865,13 @@ function ActiveAgentComposer({
     ],
   );
 
-  // The composer owns the bottom-right corner, where the Chief entry sits.
-  const isPaneActive = useRetainedPanelActive();
-  const { frameRef: chiefFrameRef, reportLayout: reportChiefClearance } =
-    usePublishChiefFabClearance({
-      ownerId: `composer:${agentId}`,
-      active: isPaneActive,
-    });
   const inputAreaStyle = useMemo(
     () => [animatedStaticStyles.inputAreaWrapper, { paddingBottom: insets.bottom }],
     [insets.bottom],
   );
-  const handleInputAreaLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      onInputAreaLayout(event);
-      reportChiefClearance();
-    },
-    [onInputAreaLayout, reportChiefClearance],
-  );
 
   return (
-    <View ref={chiefFrameRef} style={inputAreaStyle} onLayout={handleInputAreaLayout}>
+    <View style={inputAreaStyle} onLayout={onInputAreaLayout}>
       <Composer
         agentId={agentId}
         serverId={serverId}

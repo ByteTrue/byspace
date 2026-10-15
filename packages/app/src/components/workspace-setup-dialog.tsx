@@ -7,7 +7,6 @@ import { createNameId } from "mnemonic-id";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { Composer } from "@/composer";
-import { usePublishChiefFabClearance } from "@/chief/use-publish-chief-fab-clearance";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { ICON_SIZE } from "@/styles/theme";
 import { useToast } from "@/contexts/toast-context";
@@ -420,18 +419,6 @@ export function WorkspaceSetupDialog() {
     [subtitleContent, t],
   );
 
-  // The sheet is presented over whatever screen is behind it, and the composer
-  // here is real, so the Chief entry has to clear it like any other.
-  const { frameRef: chiefFrameRef, reportLayout: reportChiefClearance } =
-    usePublishChiefFabClearance({
-      ownerId: "workspace-setup-sheet",
-      active: pendingWorkspaceSetup !== null,
-    });
-  const handleComposerFrameLayout = useCallback(
-    () => reportChiefClearance(),
-    [reportChiefClearance],
-  );
-
   if (!pendingWorkspaceSetup || !sourceDirectory) {
     return null;
   }
@@ -446,7 +433,7 @@ export function WorkspaceSetupDialog() {
       desktopMaxWidth={640}
     >
       <FileDropZone style={styles.section}>
-        <View ref={chiefFrameRef} style={styles.composerFrame} onLayout={handleComposerFrameLayout}>
+        <View style={styles.composerFrame}>
           <Composer
             agentId={`workspace-setup:${serverId}:${sourceDirectory}`}
             serverId={serverId}

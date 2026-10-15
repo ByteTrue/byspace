@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { HOME_WORKSPACE_LABEL } from "@/chief/home-workspace";
 import type { ProjectDescriptor, WorkspaceDescriptor } from "@/stores/session-store";
 import { buildWorkspaceStructureProjects, createProjectViewKey } from "./workspace-structure";
 
@@ -172,5 +173,34 @@ describe("buildWorkspaceStructureProjects", () => {
     expect(result.find((item) => item.projectKey === placementShapedKey)?.viewKey).toBe(
       placementShapedKey,
     );
+  });
+
+  test("excludes the daemon-managed Home workspace and its dedicated project shell", () => {
+    const result = buildWorkspaceStructureProjects({
+      sessions: [
+        {
+          serverId: "host-a",
+          projects: [
+            project({
+              id: "prj_home",
+              key: null,
+              root: "/Users/me/.byspace",
+              name: "BySpace-WorkSpace",
+            }),
+            project({ id: "prj_repo", key: "remote:github.com/acme/app", root: "/repos/app" }),
+          ],
+          workspaces: [
+            {
+              ...workspace("ws_home", "prj_home", "/Users/me/.byspace"),
+              labels: [HOME_WORKSPACE_LABEL],
+            },
+            workspace("ws_repo", "prj_repo", "/repos/app"),
+          ],
+        },
+      ],
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.workspaceKeys).toEqual(["host-a:ws_repo"]);
   });
 });

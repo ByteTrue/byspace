@@ -1,3 +1,4 @@
+import { isHomeWorkspace } from "@/chief/home-workspace";
 import type { ProjectDescriptor, WorkspaceDescriptor } from "@/stores/session-store";
 import { projectDisplayNameFromProjectId } from "@/utils/project-display-name";
 
@@ -47,11 +48,34 @@ export function buildWorkspaceStructureProjects(input: {
 }): WorkspaceStructureProject[] {
   const byProject = new Map<string, ProjectDraft>();
   const projectEntries: Array<{ serverId: string; project: ProjectDescriptor }> = [];
+  const workspacesByServer = new Map<string, WorkspaceDescriptor[]>();
   const keyCountsByServer = new Map<string, Map<string, number>>();
   const viewKeyByServerProjectId = new Map<string, Map<string, string>>();
 
   for (const session of input.sessions) {
+    const workspaces = Array.from(session.workspaces);
+    const homeProjectIds = new Set<string>();
+    const nonHomeProjectIds = new Set<string>();
+    for (const workspace of workspaces) {
+      if (isHomeWorkspace(workspace)) {
+        homeProjectIds.add(workspace.projectId);
+      } else {
+        nonHomeProjectIds.add(workspace.projectId);
+      }
+    }
+    workspacesByServer.set(
+      session.serverId,
+      workspaces.filter((workspace) => !isHomeWorkspace(workspace)),
+    );
+
     for (const project of session.projects) {
+      // The daemon-managed Home workspace has a dedicated top-level Chief nav
+      // entry; hide both it and its auto-materialized project shell from the
+      // regular project/workspace lists unless the user also keeps non-Home
+      // workspaces under that project.
+      if (homeProjectIds.has(project.projectId) && !nonHomeProjectIds.has(project.projectId)) {
+        continue;
+      }
       projectEntries.push({ serverId: session.serverId, project });
       const sharedKey = project.projectKey ?? null;
       if (sharedKey) {
@@ -80,7 +104,8 @@ export function buildWorkspaceStructureProjects(input: {
   }
 
   for (const session of input.sessions) {
-    for (const workspace of session.workspaces) {
+    const workspaces = workspacesByServer.get(session.serverId) ?? [];
+    for (const workspace of workspaces) {
       const viewKey = viewKeyByServerProjectId.get(session.serverId)?.get(workspace.projectId);
       if (!viewKey) continue;
       byProject.get(viewKey)?.workspaces.push({

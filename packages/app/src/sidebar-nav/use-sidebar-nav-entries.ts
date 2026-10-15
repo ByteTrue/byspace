@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import { usePathname, router } from "expo-router";
 import {
   ArrowRightLeft,
+  Bot,
   CalendarClock,
   History,
   Plus,
@@ -9,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
+import { openChiefWorkspace, useIsShowingChiefWorkspace } from "@/chief/home-workspace";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import {
@@ -39,6 +41,7 @@ export interface SidebarNavEntry {
 export const SIDEBAR_NAV_ICONS: Record<BuiltinSidebarNavId, LucideIcon> = {
   "new-workspace": Plus,
   history: History,
+  chief: Bot,
   search: Search,
   schedules: CalendarClock,
   tunnels: ArrowRightLeft,
@@ -48,6 +51,7 @@ export const SIDEBAR_NAV_ICONS: Record<BuiltinSidebarNavId, LucideIcon> = {
 export const SIDEBAR_NAV_TEST_IDS: Record<BuiltinSidebarNavId, string> = {
   "new-workspace": "sidebar-global-new-workspace",
   history: "sidebar-sessions",
+  chief: "sidebar-chief",
   search: "sidebar-search",
   schedules: "sidebar-schedules",
   tunnels: "sidebar-tunnels",
@@ -70,9 +74,11 @@ function useSidebarNavEntryMap(): Record<BuiltinSidebarNavId, SidebarNavEntry> {
 
   const newWorkspaceShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("new-workspace"));
   const historyShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("history"));
+  const chiefShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("chief"));
   const searchShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("search"));
   const schedulesShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("schedules"));
   const tunnelsShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("tunnels"));
+  const isShowingChief = useIsShowingChiefWorkspace(pathname);
 
   // Route without a host: the screen resolver owns the initial host. A known route serverId
   // would bypass that chain, so this entry must not carry the active workspace's host.
@@ -83,6 +89,10 @@ function useSidebarNavEntryMap(): Record<BuiltinSidebarNavId, SidebarNavEntry> {
   const onHistory = useCallback(() => {
     router.push(buildSessionsRoute());
   }, []);
+
+  const onChief = useCallback(() => {
+    void openChiefWorkspace(pathname);
+  }, [pathname]);
 
   const onSearch = useCallback(() => {
     setCommandCenterOpen(true);
@@ -114,6 +124,14 @@ function useSidebarNavEntryMap(): Record<BuiltinSidebarNavId, SidebarNavEntry> {
         isActive: pathname.includes("/sessions"),
         onSelect: onHistory,
       },
+      chief: {
+        id: "chief",
+        icon: SIDEBAR_NAV_ICONS.chief,
+        label: t(builtinSidebarNavLabelKey("chief")),
+        shortcutKeys: chiefShortcut,
+        isActive: isShowingChief,
+        onSelect: onChief,
+      },
       search: {
         id: "search",
         icon: SIDEBAR_NAV_ICONS.search,
@@ -141,8 +159,11 @@ function useSidebarNavEntryMap(): Record<BuiltinSidebarNavId, SidebarNavEntry> {
       },
     }),
     [
+      chiefShortcut,
       historyShortcut,
+      isShowingChief,
       newWorkspaceShortcut,
+      onChief,
       onHistory,
       onNewWorkspace,
       onSchedules,

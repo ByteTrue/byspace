@@ -3,6 +3,7 @@ import { router, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import {
   ArrowRightLeft,
+  Bot,
   CalendarClock,
   CircleDashed,
   Folder,
@@ -25,6 +26,7 @@ import { useKeyboardShortcutsAvailable } from "@/keyboard/availability";
 import { resolveShortcutKeysForAction } from "@/keyboard/keyboard-shortcuts";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import { usePanelStore } from "@/stores/panel-store";
+import { openChiefWorkspace, useChiefAvailable } from "@/chief/home-workspace";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import { useTunnelsAvailable } from "@/tunnels/availability";
 import { clearCommandCenterFocusRestoreElement } from "@/utils/command-center-focus-restore";
@@ -48,6 +50,9 @@ const ThemedHistory = withUnistyles(History, (theme) => ({
   color: theme.colors.foregroundMuted,
 }));
 const ThemedCalendarClock = withUnistyles(CalendarClock, (theme) => ({
+  color: theme.colors.foregroundMuted,
+}));
+const ThemedBot = withUnistyles(Bot, (theme) => ({
   color: theme.colors.foregroundMuted,
 }));
 const ThemedArrowRightLeft = withUnistyles(ArrowRightLeft, (theme) => ({
@@ -87,6 +92,10 @@ function HistoryIcon({ size }: CommandCenterIconProps) {
 
 function SchedulesIcon({ size }: CommandCenterIconProps) {
   return <ThemedCalendarClock size={size} strokeWidth={2.2} />;
+}
+
+function ChiefIcon({ size }: CommandCenterIconProps) {
+  return <ThemedBot size={size} strokeWidth={2.2} />;
 }
 
 function TunnelsIcon({ size }: CommandCenterIconProps) {
@@ -135,6 +144,7 @@ export function CommandCenterRootActions() {
   const groupMode = useSidebarViewStore((state) => state.groupMode);
   const setGroupMode = useSidebarViewStore((state) => state.setGroupMode);
   const isCompact = useIsCompactFormFactor();
+  const chiefAvailable = useChiefAvailable();
   const tunnelsAvailable = useTunnelsAvailable();
   const toggleMobileAgentList = usePanelStore((state) => state.toggleMobileAgentList);
   const toggleDesktopAgentList = usePanelStore((state) => state.toggleDesktopAgentList);
@@ -254,6 +264,28 @@ export function CommandCenterRootActions() {
           icon: SchedulesIcon,
         },
       },
+      ...(chiefAvailable
+        ? [
+            {
+              id: "chief",
+              group: "actions" as const,
+              groupRank: 0,
+              rank: 5,
+              keywords: ["chief", "assistant", "home", "chat"],
+              visibility: "always" as const,
+              run: () => {
+                clearCommandCenterFocusRestoreElement();
+                void openChiefWorkspace();
+              },
+              presentation: {
+                kind: "action" as const,
+                title: t("chief.title"),
+                sectionTitle: t("shell.commandCenter.actions"),
+                icon: ChiefIcon,
+              },
+            },
+          ]
+        : []),
       // Only offered while a connected host implements the tunnel RPCs; the
       // route itself would render the same "update this host" hint the sidebar
       // entry is absent for. Same gate as the sidebar list (tunnels/availability).
@@ -378,6 +410,7 @@ export function CommandCenterRootActions() {
     settingsRoute,
     shortcutPlatform,
     shortcutsAvailable,
+    chiefAvailable,
     t,
     toggleAgentList,
     tunnelsAvailable,

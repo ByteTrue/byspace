@@ -1,12 +1,10 @@
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { ReactElement, RefObject } from "react";
-import { useIsFocused } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Pressable, StyleSheet as RNStyleSheet, Text, View } from "react-native";
 import type { PressableStateCallbackType, StyleProp, ViewStyle } from "react-native";
-import { usePublishChiefFabClearance } from "@/chief/use-publish-chief-fab-clearance";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { createNameId } from "mnemonic-id";
@@ -2553,28 +2551,12 @@ export function NewWorkspaceScreen({
   });
 
   const screenHeaderLeft = useMemo(() => <SidebarMenuToggle />, []);
-  // This route stays mounted when the user backgrounds it, so it reports its
-  // composer to the Chief entry only while it is the visible screen.
-  const isScreenFocused = useIsFocused();
-  const { frameRef: chiefFrameRef, reportLayout: reportChiefClearance } =
-    usePublishChiefFabClearance({
-      ownerId: "new-workspace",
-      active: isScreenFocused,
-    });
-  const handleComposerFrameLayout = useCallback(
-    () => reportChiefClearance(),
-    [reportChiefClearance],
-  );
 
   return (
     <FileDropZone style={styles.container}>
       <ScreenHeader left={screenHeaderLeft} borderless />
       <View style={contentStyle}>
-        <View
-          ref={chiefFrameRef}
-          onLayout={handleComposerFrameLayout}
-          style={animatedStaticStyles.centered}
-        >
+        <View style={animatedStaticStyles.centered}>
           <KeyboardTranslateView>
             <View style={styles.composerTitleContainer}>
               <Text style={styles.composerTitle}>{t("newWorkspace.title")}</Text>

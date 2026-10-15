@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Keyboard, ScrollView, StyleSheet as RNStyleSheet, Text, View } from "react-native";
+import {
+  Keyboard,
+  Pressable,
+  ScrollView,
+  StyleSheet as RNStyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CHIEF_ROLE_NAME, isHomeWorkspace } from "@/chief/home-workspace";
 import { KeyboardTranslateView } from "@/components/keyboard-translate-view";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import invariant from "tiny-invariant";
@@ -13,7 +21,7 @@ import { COMPOSER_PILL_CLEARANCE } from "@/composer/pill-styles";
 import { AgentStreamView } from "@/agent-stream/view";
 import { composerWorkspaceAttachment } from "@/composer/attachments/workspace";
 import { useAgentInputDraft } from "@/composer/draft/input-draft";
-import type { CreateAgentInitialValues } from "@/hooks/use-agent-form-state";
+
 import { useDraftAgentCreateFlow, type DraftCreateAttempt } from "@/composer/draft/create-flow";
 import { resolveTurnPresentation, TURN_LIVENESS_IDLE } from "@/timeline/turn-liveness";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
@@ -28,6 +36,7 @@ import { requestWorkspaceDraftAgent } from "@/composer/draft/create-agent-reques
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { shouldAutoFocusWorkspaceDraftComposer } from "@/screens/workspace/workspace-draft-pane-focus";
 import {
+  buildDraftInitialValues,
   shouldAllowEmptyDraftText,
   validateDraftSubmission,
 } from "@/composer/draft/workspace-tab-core";
@@ -275,19 +284,6 @@ function buildDraftAgentSnapshot(input: {
   };
 }
 
-function buildDraftInitialValues(input: {
-  initialSetup: WorkspaceDraftTabSetup | null;
-}): CreateAgentInitialValues | undefined {
-  if (!input.initialSetup) return undefined;
-  return {
-    provider: input.initialSetup.provider,
-    modeId: input.initialSetup.modeId,
-    model: input.initialSetup.model,
-    thinkingOptionId: input.initialSetup.thinkingOptionId,
-    role: input.initialSetup.role,
-  };
-}
-
 /** The role to create the agent with: the pending submission wins because it is
  * what the user picked before the tab existed. */
 function resolveRoleForSubmit(input: {
@@ -330,6 +326,28 @@ function resolveImportPillPress(
   return onOpenImportSheet ?? null;
 }
 
+function DraftSuggestionChip({
+  prompt,
+  onSelect,
+}: {
+  prompt: string;
+  onSelect: (prompt: string) => void;
+}) {
+  const handlePress = useCallback(() => {
+    onSelect(prompt);
+  }, [onSelect, prompt]);
+  return (
+    <Pressable
+      onPress={handlePress}
+      style={styles.suggestionChip}
+      accessibilityRole="button"
+      accessibilityLabel={prompt}
+    >
+      <Text style={styles.suggestionChipText}>{prompt}</Text>
+    </Pressable>
+  );
+}
+
 export function WorkspaceDraftAgentTab({
   serverId,
   workspaceId,
@@ -347,16 +365,23 @@ export function WorkspaceDraftAgentTab({
   const workspaceFields = useWorkspaceFields(serverId, workspaceId, (w) => ({
     workspaceDirectory: w.workspaceDirectory,
     id: w.id,
+    labels: w.labels,
   }));
   const workspaceDirectory = workspaceFields?.workspaceDirectory || null;
+  const defaultRole = isHomeWorkspace(workspaceFields) ? CHIEF_ROLE_NAME : undefined;
   const draftSetup = initialSetup ?? null;
   const draftWorkingDirectory = resolveDraftWorkingDirectory({
     workspaceDirectory,
     initialSetup: draftSetup,
   });
-  const draftInitialValues = buildDraftInitialValues({
-    initialSetup: draftSetup,
-  });
+  const draftInitialValues = useMemo(
+    () =>
+      buildDraftInitialValues({
+        initialSetup: draftSetup,
+        defaultRole,
+      }),
+    [defaultRole, draftSetup],
+  );
   const draftStoreKey = useMemo(
     () =>
       buildDraftStoreKey({
@@ -639,6 +664,28 @@ export function WorkspaceDraftAgentTab({
     }),
     [composerState.agentControls, handleDropdownCloseFocus, isSubmitting],
   );
+  const isChiefRoleSelected = composerState.selectedRole === CHIEF_ROLE_NAME;
+  const chiefSuggestions = useMemo(
+    () =>
+      isChiefRoleSelected
+        ? [
+            t("chief.suggestions.whatCanYouDo"),
+            t("chief.suggestions.checkWorkspaces"),
+            t("chief.suggestions.recentActivity"),
+          ]
+        : [],
+    [isChiefRoleSelected, t],
+  );
+  const handleSuggestionPress = useCallback(
+    (prompt: string) => {
+      void handleCreateFromInput({
+        text: prompt,
+        attachments: draftInput.attachments,
+        cwd: composerState.workingDir,
+      });
+    },
+    [composerState.workingDir, draftInput.attachments, handleCreateFromInput],
+  );
   return (
     <FileDropZone style={styles.container}>
       <View style={styles.contentContainer}>
@@ -664,6 +711,20 @@ export function WorkspaceDraftAgentTab({
                 </View>
               ) : null}
             </View>
+            {chiefSuggestions.length > 0 ? (
+              <View style={styles.emptySuggestionsState}>
+                <Text style={styles.emptySuggestionsTitle}>{t("agentStream.empty")}</Text>
+                <View style={styles.emptySuggestions}>
+                  {chiefSuggestions.map((prompt) => (
+                    <DraftSuggestionChip
+                      key={prompt}
+                      prompt={prompt}
+                      onSelect={handleSuggestionPress}
+                    />
+                  ))}
+                </View>
+              </View>
+            ) : null}
           </ScrollView>
         )}
       </View>
@@ -728,12 +789,39 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
   },
   configScrollContent: {
+    flexGrow: 1,
     paddingHorizontal: theme.spacing[4],
     paddingTop: theme.spacing[4],
     paddingBottom: theme.spacing[6],
   },
   configSection: {
     gap: theme.spacing[3],
+  },
+  emptySuggestionsState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: theme.spacing[12],
+  },
+  emptySuggestionsTitle: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.foregroundMuted,
+  },
+  emptySuggestions: {
+    marginTop: theme.spacing[4],
+    gap: theme.spacing[2],
+    alignItems: "center",
+  },
+  suggestionChip: {
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.base,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+  },
+  suggestionChipText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.foreground,
   },
   importPillRow: {
     width: "100%",
