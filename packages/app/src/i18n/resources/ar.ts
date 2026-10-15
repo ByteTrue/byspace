@@ -212,6 +212,7 @@ export const ar: TranslationResources = {
     },
   },
   chief: {
+    title: "Chief",
     switchHost: "تبديل المضيف",
     maximize: "فتح في صفحة كاملة",
     open: "فتح Chief",

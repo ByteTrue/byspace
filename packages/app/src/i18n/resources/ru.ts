@@ -212,6 +212,7 @@ export const ru: TranslationResources = {
     },
   },
   chief: {
+    title: "Chief",
     switchHost: "Сменить хост",
     maximize: "Открыть на всю страницу",
     open: "Открыть Chief",

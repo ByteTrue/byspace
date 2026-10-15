@@ -15,8 +15,9 @@ import { describe, expect, it } from "vitest";
  * The scanner is intentionally simple: it walks the en.ts resource tree by
  * indentation and collects every `t("…")` literal under `packages/app/src`.
  * Plural suffixes (`_one`/`_other`) are folded to their stem because i18next
- * resolves those at runtime. Dynamic keys built with template literals cannot be
- * checked here and are the one known blind spot.
+ * resolves those at runtime. Dynamic keys built with template literals or by
+ * concatenating a prefix with a variable cannot be checked here and are the
+ * known blind spots.
  */
 
 interface ScanResult {
@@ -79,7 +80,7 @@ function scanUsedKeys(appSrc: string): Map<string, Set<string>> {
   });
   for (const file of files) {
     const text = readFileSync(file, "utf8");
-    for (const m of text.matchAll(/\bt\(\s*["']([w.-]+)["']/g)) {
+    for (const m of text.matchAll(/\bt\(\s*["']([\w.-]+)["'](?!\s*\+)/g)) {
       const set = used.get(m[1]) ?? new Set<string>();
       set.add(path.relative(appSrc, file));
       used.set(m[1], set);

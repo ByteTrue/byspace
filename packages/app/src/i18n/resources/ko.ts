@@ -212,6 +212,7 @@ export const ko: TranslationResources = {
     },
   },
   chief: {
+    title: "Chief",
     switchHost: "호스트 전환",
     maximize: "전체 페이지로 열기",
     open: "Chief 열기",

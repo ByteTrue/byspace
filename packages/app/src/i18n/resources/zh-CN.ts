@@ -212,6 +212,7 @@ export const zhCN: TranslationResources = {
     },
   },
   chief: {
+    title: "Chief",
     switchHost: "切换主机",
     maximize: "全屏打开",
     open: "打开 Chief",

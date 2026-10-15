@@ -212,6 +212,7 @@ export const es: TranslationResources = {
     },
   },
   chief: {
+    title: "Chief",
     switchHost: "Cambiar de host",
     maximize: "Abrir en página completa",
     open: "Abrir Chief",

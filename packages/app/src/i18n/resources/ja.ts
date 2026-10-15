@@ -212,6 +212,7 @@ export const ja: TranslationResources = {
     },
   },
   chief: {
+    title: "Chief",
     switchHost: "ホストを切り替える",
     maximize: "フルページで開く",
     open: "Chief を開く",

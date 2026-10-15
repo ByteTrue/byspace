@@ -214,6 +214,7 @@ export const fr: TranslationResources = {
     },
   },
   chief: {
+    title: "Chief",
     switchHost: "Changer d'hôte",
     maximize: "Ouvrir en page entière",
     open: "Ouvrir Chief",

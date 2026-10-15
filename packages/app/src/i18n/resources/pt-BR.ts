@@ -212,6 +212,7 @@ export const ptBR: TranslationResources = {
     },
   },
   chief: {
+    title: "Chief",
     switchHost: "Trocar de host",
     maximize: "Abrir em página completa",
     open: "Abrir o Chief",

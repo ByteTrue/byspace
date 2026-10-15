@@ -210,6 +210,7 @@ export const en = {
     },
   },
   chief: {
+    title: "Chief",
     switchHost: "Switch host",
     maximize: "Open in full page",
     open: "Open Chief",

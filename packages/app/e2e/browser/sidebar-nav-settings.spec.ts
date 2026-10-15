@@ -36,7 +36,7 @@ test.describe("Sidebar items in Appearance settings", () => {
     await test.step("the sidebar starts in the default shape", async () => {
       // New workspace and History are on the Workspaces header; the disclosure holds the rest.
       await expectHeaderNavOrder(page, HEADER_NAV_KEYS);
-      await expectSidebarOrder(page, ["search", "schedules", "tunnels"]);
+      await expectSidebarOrder(page, ["chief", "search", "schedules", "tunnels"]);
     });
 
     await test.step("the Sidebar section lists every item in the same order", async () => {
@@ -48,6 +48,7 @@ test.describe("Sidebar items in Appearance settings", () => {
       await expectSidebarNavSettingsOrder(page, [
         "new-workspace",
         "history",
+        "chief",
         "search",
         "schedules",
         "tunnels",
@@ -68,15 +69,16 @@ test.describe("Sidebar items in Appearance settings", () => {
       // They are placed by the header's layout, so a Move up/down there would do nothing.
       await expect(page.getByTestId("sidebar-nav-move-up-new-workspace")).toHaveCount(0);
       await expect(page.getByTestId("sidebar-nav-move-up-history")).toHaveCount(0);
+      await expect(page.getByTestId("sidebar-nav-move-up-chief")).toBeVisible();
       await expect(page.getByTestId("sidebar-nav-move-up-search")).toBeVisible();
     });
 
-    await test.step("Search cannot move up past the header items, and Schedules can lift above it", async () => {
-      // Search is first in the disclosure. The header items sit above it in this list but are not
+    await test.step("Chief cannot move up past the header items, and Schedules can lift above Search", async () => {
+      // Chief is first in the disclosure. The header items sit above it in this list but are not
       // part of its run, so there is nothing above it to trade places with.
       await expect(
         page
-          .getByTestId("sidebar-nav-item-search")
+          .getByTestId("sidebar-nav-item-chief")
           .getByRole("button", { name: "Move up", exact: true }),
       ).toBeDisabled();
 
@@ -84,6 +86,7 @@ test.describe("Sidebar items in Appearance settings", () => {
       await expectSidebarNavSettingsOrder(page, [
         "new-workspace",
         "history",
+        "chief",
         "schedules",
         "search",
         "tunnels",
@@ -91,7 +94,7 @@ test.describe("Sidebar items in Appearance settings", () => {
 
       await leaveSettings(page);
       await expectHeaderNavOrder(page, HEADER_NAV_KEYS);
-      await expectSidebarOrder(page, ["schedules", "search", "tunnels"]);
+      await expectSidebarOrder(page, ["chief", "schedules", "search", "tunnels"]);
     });
 
     await test.step("turning History off removes it from the header", async () => {
@@ -100,6 +103,7 @@ test.describe("Sidebar items in Appearance settings", () => {
       await expectStoredSidebarNav(page, [
         { key: "new-workspace", visible: true },
         { key: "history", visible: false },
+        { key: "chief", visible: true },
         { key: "schedules", visible: true },
         { key: "search", visible: true },
         { key: "tunnels", visible: true },
@@ -108,14 +112,14 @@ test.describe("Sidebar items in Appearance settings", () => {
       await leaveSettings(page);
       await expect(page.getByTestId("sidebar-sessions")).toHaveCount(0);
       await expectHeaderNavOrder(page, ["new-workspace"]);
-      await expectSidebarOrder(page, ["schedules", "search", "tunnels"]);
+      await expectSidebarOrder(page, ["chief", "schedules", "search", "tunnels"]);
     });
 
     await test.step("the sidebar keeps that shape across a reload", async () => {
       await page.reload();
       await expect(page.getByTestId("sidebar-sessions")).toHaveCount(0);
       await expectHeaderNavOrder(page, ["new-workspace"]);
-      await expectSidebarOrder(page, ["schedules", "search", "tunnels"]);
+      await expectSidebarOrder(page, ["chief", "schedules", "search", "tunnels"]);
     });
   });
 
@@ -123,6 +127,7 @@ test.describe("Sidebar items in Appearance settings", () => {
     await seedSidebarNavPreferences(page, [
       { key: "new-workspace", visible: false },
       { key: "history", visible: false },
+      { key: "chief", visible: false },
       { key: "search", visible: false },
       { key: "schedules", visible: false },
       { key: "tunnels", visible: false },
@@ -135,6 +140,7 @@ test.describe("Sidebar items in Appearance settings", () => {
     });
     await expectSidebarItemHidden(page, "new-workspace");
     await expectSidebarItemHidden(page, "history");
+    await expectSidebarItemHidden(page, "chief");
     await expectSidebarItemHidden(page, "search");
     await expectSidebarItemHidden(page, "schedules");
     await expectSidebarItemHidden(page, "tunnels");
@@ -155,6 +161,7 @@ test.describe("Compact sidebar with every nav item turned off", () => {
     await seedSidebarNavPreferences(page, [
       { key: "new-workspace", visible: false },
       { key: "history", visible: false },
+      { key: "chief", visible: false },
       { key: "search", visible: false },
       { key: "schedules", visible: false },
       { key: "tunnels", visible: false },
