@@ -7,6 +7,7 @@ import { createNameId } from "mnemonic-id";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { Composer } from "@/composer";
+import { usePublishChiefFabClearance } from "@/chief/use-publish-chief-fab-clearance";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { ICON_SIZE } from "@/styles/theme";
 import { useToast } from "@/contexts/toast-context";
@@ -419,6 +420,18 @@ export function WorkspaceSetupDialog() {
     [subtitleContent, t],
   );
 
+  // The sheet is presented over whatever screen is behind it, and the composer
+  // here is real, so the Chief entry has to clear it like any other.
+  const { frameRef: chiefFrameRef, reportLayout: reportChiefClearance } =
+    usePublishChiefFabClearance({
+      ownerId: "workspace-setup-sheet",
+      active: pendingWorkspaceSetup !== null,
+    });
+  const handleComposerFrameLayout = useCallback(
+    () => reportChiefClearance(),
+    [reportChiefClearance],
+  );
+
   if (!pendingWorkspaceSetup || !sourceDirectory) {
     return null;
   }
@@ -433,25 +446,27 @@ export function WorkspaceSetupDialog() {
       desktopMaxWidth={640}
     >
       <FileDropZone style={styles.section}>
-        <Composer
-          agentId={`workspace-setup:${serverId}:${sourceDirectory}`}
-          serverId={serverId}
-          isPaneFocused={true}
-          onSubmitMessage={handleCreateChatAgent}
-          isSubmitLoading={pendingAction === "chat"}
-          blurOnSubmit={true}
-          value={chatDraft.text}
-          onChangeText={chatDraft.editText}
-          textReplacement={chatDraft.textReplacement}
-          attachments={chatDraft.attachments}
-          onChangeAttachments={chatDraft.setAttachments}
-          cwd={sourceDirectory}
-          clearDraft={chatDraft.clear}
-          autoFocus
-          commandDraftConfig={composerState?.commandDraftConfig}
-          agentControls={agentControlsWithDisabled}
-          inputWrapperStyle={styles.composerInputWrapper}
-        />
+        <View ref={chiefFrameRef} style={styles.composerFrame} onLayout={handleComposerFrameLayout}>
+          <Composer
+            agentId={`workspace-setup:${serverId}:${sourceDirectory}`}
+            serverId={serverId}
+            isPaneFocused={true}
+            onSubmitMessage={handleCreateChatAgent}
+            isSubmitLoading={pendingAction === "chat"}
+            blurOnSubmit={true}
+            value={chatDraft.text}
+            onChangeText={chatDraft.editText}
+            textReplacement={chatDraft.textReplacement}
+            attachments={chatDraft.attachments}
+            onChangeAttachments={chatDraft.setAttachments}
+            cwd={sourceDirectory}
+            clearDraft={chatDraft.clear}
+            autoFocus
+            commandDraftConfig={composerState?.commandDraftConfig}
+            agentControls={agentControlsWithDisabled}
+            inputWrapperStyle={styles.composerInputWrapper}
+          />
+        </View>
       </FileDropZone>
 
       {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
@@ -476,6 +491,9 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[3],
     marginHorizontal: -theme.spacing[6],
     marginVertical: -theme.spacing[2],
+  },
+  composerFrame: {
+    width: "100%",
   },
   errorText: {
     fontSize: theme.fontSize.base,

@@ -1,12 +1,18 @@
 import { memo, useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import { View } from "react-native";
-import { usePathname } from "expo-router";
-import { useHosts } from "@/runtime/host-runtime";
+import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
+import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { useRouter } from "expo-router";
-import { getHostRuntimeStore } from "@/runtime/host-runtime";
-import { buildHostAgentDetailRoute, parseServerIdFromPathname } from "@/utils/host-routes";
+import {
+  buildHostAgentDetailRoute,
+  parseHostWorkspaceRouteFromPathname,
+  parseServerIdFromPathname,
+  parseWorkspaceOpenIntent,
+} from "@/utils/host-routes";
 import { useSessionStore } from "@/stores/session-store";
+import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
+import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import { isChiefSessionVisible } from "./chief-visibility";
 import { useChiefStore } from "./chief-store";
 import { useChiefAgent } from "./use-chief-agent";
 import { ChiefFab } from "./chief-fab";
@@ -40,8 +46,9 @@ function useIsE2E(): boolean {
  * Orchestrates the Chief FAB + floating window. Mounted once in the root
  * layout; renders on every screen.
  *
- * Route suppression: hidden when the current route shows the Chief agent
- * full-page (the floating copy would show the same session).
+ * Route suppression: the entry goes away wherever the Chief session is already
+ * the thing on screen — the maximized window and the compact tap both land on
+ * a workspace route showing it as a pane tab.
  *
  * E2E: hidden entirely — specs seed localStorage "@byspace:e2e" and the FAB
  * would otherwise intercept pointer events over the composer area.
@@ -98,12 +105,37 @@ export const ChiefPanelHost = memo(function ChiefPanelHost(): ReactElement | nul
     useChiefStore.getState().requestRetry();
   }, []);
 
-  // Route suppression: don't show the floating window when the agent page is
-  // already showing this Chief agent.
-  const isOnChiefAgentPage = useMemo(() => {
-    if (!agent || !currentServerId) return false;
-    return pathname.includes(`/agent/${agent.agentId}`);
-  }, [pathname, agent, currentServerId]);
+  const routeWorkspace = useMemo(() => parseHostWorkspaceRouteFromPathname(pathname), [pathname]);
+  const shownWorkspaceKey = useMemo(
+    () =>
+      routeWorkspace
+        ? buildWorkspaceTabPersistenceKey({
+            serverId: routeWorkspace.serverId,
+            workspaceId: routeWorkspace.workspaceId,
+          })
+        : null,
+    [routeWorkspace],
+  );
+  const shownLayout = useWorkspaceLayoutStore((state) =>
+    shownWorkspaceKey ? state.layoutByWorkspace[shownWorkspaceKey] : undefined,
+  );
+  // A tab that is on its way in: the route's own intent, before the layout has
+  // picked it up. Without this the entry flashes for a frame after maximizing.
+  const pendingOpenIntent = useGlobalSearchParams<{ open?: string }>().open;
+  const pendingAgentId = useMemo(() => {
+    const intent = parseWorkspaceOpenIntent(
+      typeof pendingOpenIntent === "string" ? pendingOpenIntent : null,
+    );
+    return intent?.kind === "agent" ? intent.agentId : null;
+  }, [pendingOpenIntent]);
+  const chiefAgentId = agent?.agentId ?? null;
+  const isChiefOnScreen =
+    (chiefAgentId !== null && pendingAgentId === chiefAgentId) ||
+    isChiefSessionVisible({
+      layout: shownLayout,
+      chiefAgentId,
+      focusedPaneOnly: isCompact,
+    });
 
   // Feature gate: daemons without built-in agent roles have no Chief to
   // open — hide the entry point entirely instead of showing a dead FAB.
@@ -113,7 +145,7 @@ export const ChiefPanelHost = memo(function ChiefPanelHost(): ReactElement | nul
 
   if (!currentServerId || isE2E || !supportsAgentRoles) return null;
 
-  const showWindow = isOpen && !isCompact && !isOnChiefAgentPage;
+  const showWindow = isOpen && !isCompact && !isChiefOnScreen;
 
   return (
     <View style={containerStyle} pointerEvents="box-none">
@@ -127,12 +159,8 @@ export const ChiefPanelHost = memo(function ChiefPanelHost(): ReactElement | nul
           onClose={close}
         />
       ) : null}
-      {!showWindow && !isOnChiefAgentPage ? (
-        <ChiefFab
-          serverId={effectiveServerId}
-          agentId={agent?.agentId ?? null}
-          onPress={handleFabPress}
-        />
+      {!showWindow && !isChiefOnScreen ? (
+        <ChiefFab serverId={effectiveServerId} agentId={chiefAgentId} onPress={handleFabPress} />
       ) : null}
     </View>
   );

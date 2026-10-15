@@ -21,6 +21,8 @@ import { useHostChooser } from "@/hosts/host-chooser";
 import { buildHostAgentDetailRoute } from "@/utils/host-routes";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useTranslation } from "react-i18next";
+import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
+import { resolveChiefFabWindowBottom, useChiefFabClearance } from "./chief-fab-clearance";
 import type { ChiefAgentInfo } from "./use-chief-agent";
 
 const stateStyles = StyleSheet.create((theme) => ({
@@ -130,6 +132,13 @@ export const ChiefFloatingWindow = memo(function ChiefFloatingWindow({
   const router = useRouter();
   const hosts = useHosts();
   const openHostChooser = useHostChooser();
+  // The window replaces the entry at the same corner, so it yields to the
+  // composer for the same reason the entry does.
+  const clearance = useChiefFabClearance();
+  const windowStyle = useMemo(
+    () => [styles.window, inlineUnistylesStyle({ bottom: resolveChiefFabWindowBottom(clearance) })],
+    [clearance],
+  );
 
   const hostLabel = useMemo(
     () => hosts.find((h) => h.serverId === serverId)?.label ?? serverId,
@@ -172,7 +181,7 @@ export const ChiefFloatingWindow = memo(function ChiefFloatingWindow({
   }, [openHostChooser, serverId, router, t]);
 
   return (
-    <View style={styles.window} testID="chief-floating-window">
+    <View style={windowStyle} testID="chief-floating-window">
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.statusDot} />
@@ -215,7 +224,6 @@ export const ChiefFloatingWindow = memo(function ChiefFloatingWindow({
 const styles = StyleSheet.create((theme) => ({
   window: {
     position: "absolute",
-    bottom: 80,
     right: 20,
     width: 420,
     height: 560,

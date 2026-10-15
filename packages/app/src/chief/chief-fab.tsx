@@ -1,8 +1,10 @@
-import { memo, type ReactElement } from "react";
+import { memo, useCallback, type ReactElement } from "react";
 import { Pressable, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Bot } from "lucide-react-native";
 import { useSessionStore } from "@/stores/session-store";
+import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
+import { resolveChiefFabBottom, useChiefFabClearance } from "./chief-fab-clearance";
 
 const ThemedBot = withUnistyles(Bot, (theme) => ({ color: theme.colors.foreground }));
 
@@ -32,6 +34,16 @@ export const ChiefFab = memo(function ChiefFab({
   onPress,
 }: ChiefFabProps): ReactElement {
   const dotColor = useSessionStore((state) => resolveAgentDot(state, serverId, agentId));
+  const clearance = useChiefFabClearance();
+  const positionStyle = inlineUnistylesStyle({ bottom: resolveChiefFabBottom(clearance) });
+  const pressableStyle = useCallback(
+    ({ pressed }: { pressed: boolean }) => [
+      styles.fab,
+      positionStyle,
+      pressed && styles.fabPressed,
+    ],
+    [positionStyle],
+  );
 
   return (
     <Pressable
@@ -49,15 +61,9 @@ export const ChiefFab = memo(function ChiefFab({
   );
 });
 
-const pressableStyle = ({ pressed }: { pressed: boolean }) => [
-  styles.fab,
-  pressed && styles.fabPressed,
-];
-
 const styles = StyleSheet.create((theme) => ({
   fab: {
     position: "absolute",
-    bottom: 20,
     right: 20,
     width: 48,
     height: 48,

@@ -49,8 +49,8 @@ created: 2026-10-10
 可推进（同目录 `issues/`）：
 
 - `issues/001-x-home-workspace-and-chief-role.md` — **已交付。** AgentRole 数据结构、Chief 提示词注入（复用 appendSystemPrompt 管道按角色追加）、Home workspace 自动确保。关键决策：只持久化角色名不持久化提示词文本，daemon 升级即热更新；未知角色静默降级。
-- `issues/002-o-chief-fab-and-floating-window.md` — FAB + 浮窗 UI（app）
-- `issues/003-o-chief-opening-suggestions.md` — 开场三条建议 + 空状态（app）
+- `issues/002-x-chief-fab-and-floating-window.md` — FAB + 浮窗 UI（app）
+- `issues/003-x-chief-opening-suggestions.md` — 开场三条建议 + 空状态（app）
 
 切片 1 不依赖切片 2（会话可从列表正常使用）；2 依赖 1 提供的 Chief 身份与 Home workspace；3 依赖 2。
 
