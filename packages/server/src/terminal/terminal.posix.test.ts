@@ -14,6 +14,7 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -128,6 +129,38 @@ afterEach(async () => {
 function trackSession(session: TerminalSession): TerminalSession {
   sessions.push(session);
   return session;
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForProcessDeath(pid: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!isProcessAlive(pid)) return true;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return !isProcessAlive(pid);
+}
+
+async function readPidFile(path: string, timeoutMs: number): Promise<number | null> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const parsed = Number.parseInt(readFileSync(path, "utf8").trim(), 10);
+      if (Number.isInteger(parsed) && parsed > 0) return parsed;
+    } catch {
+      // not written yet
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return null;
 }
 
 const DA_HELPER_SCRIPT = `process.stdin.setRawMode(true);
@@ -1271,6 +1304,88 @@ describe.skipIf(isPlatform("win32"))("terminal POSIX-only", () => {
       // Should not throw when trying to get state after kill
       const state = session.getState();
       expect(state).toBeDefined();
+    });
+
+    it("kills a descendant that outlives the shell", async () => {
+      // The shape BySpace's own service scripts have: a terminal runs a command
+      // that starts a long-lived descendant. That descendant traps SIGHUP, so
+      // when the shell dies it keeps running and is reparented to init.
+      //
+      // node-pty's kill() signals only the direct child (process.kill(this.pid)),
+      // so the descendant never receives anything and leaks — this is how 16
+      // daemon trees survived a worktree deletion for six days. The terminal must
+      // reach its descendants, and must escalate on them rather than on the shell
+      // alone: the shell dies promptly either way, so "did the shell exit" is the
+      // wrong gate for "is the tree gone".
+      const dir = mkdtempSync(join(tmpdir(), "byspace-terminal-descendant-"));
+      temporaryDirs.push(dir);
+      const pidFile = join(dir, "descendant.pid");
+      const descendantCode = [
+        'process.on("SIGHUP", () => {});',
+        `require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));`,
+        "setInterval(() => {}, 1000);",
+      ].join("");
+
+      const session = trackSession(
+        await createTerminal({
+          workspaceId: "ws-test",
+          cwd: dir,
+          command: "/bin/sh",
+          args: [
+            "-c",
+            `${JSON.stringify(process.execPath)} -e ${JSON.stringify(descendantCode)} & sleep 600`,
+          ],
+          env: { PS1: "$ " },
+        }),
+      );
+
+      const descendantPid = await readPidFile(pidFile, 5000);
+      expect(descendantPid).toBeTypeOf("number");
+      expect(isProcessAlive(descendantPid as number)).toBe(true);
+
+      await session.killAndWait();
+
+      expect(await waitForProcessDeath(descendantPid as number, 3000)).toBe(true);
+    });
+
+    it("kills a detached descendant that ignores SIGHUP", async () => {
+      // The hardest shape: a descendant that traps SIGHUP and moves itself into
+      // its own process group before it is orphaned. A group signal cannot reach
+      // it (it is no longer in the shell's group), so this is the case a plain
+      // group-kill fix would still leak. Pairing this with the group signal is
+      // why the fix uses both.
+      const dir = mkdtempSync(join(tmpdir(), "byspace-terminal-detached-"));
+      temporaryDirs.push(dir);
+      const pidFile = join(dir, "detached.pid");
+      const innerCode = 'process.on("SIGHUP", () => {}); setInterval(() => {}, 1000);';
+      const descendantCode = [
+        'process.on("SIGHUP", () => {});',
+        'const { spawn } = require("node:child_process");',
+        `const child = spawn(process.execPath, ["-e", ${JSON.stringify(innerCode)}], { detached: true, stdio: "ignore" });`,
+        "child.unref();",
+        `require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(child.pid));`,
+        "setInterval(() => {}, 1000);",
+      ].join("");
+
+      const session = trackSession(
+        await createTerminal({
+          workspaceId: "ws-test",
+          cwd: dir,
+          command: "/bin/sh",
+          args: [
+            "-c",
+            `${JSON.stringify(process.execPath)} -e ${JSON.stringify(descendantCode)} & sleep 600`,
+          ],
+          env: { PS1: "$ " },
+        }),
+      );
+
+      const detachedPid = await readPidFile(pidFile, 5000);
+      expect(detachedPid).toBeTypeOf("number");
+
+      await session.killAndWait();
+
+      expect(await waitForProcessDeath(detachedPid as number, 3000)).toBe(true);
     });
 
     it("send after kill is a no-op", async () => {

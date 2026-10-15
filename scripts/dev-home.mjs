@@ -118,11 +118,25 @@ export function resolveDevDaemonEndpoint(listen = process.env.BYSPACE_LISTEN || 
   return listen;
 }
 
+/**
+ * Whether this process is a BySpace workspace service.
+ *
+ * The runner injects BYSPACE_SERVICE_<NAME>_PORT for every peer of the workspace, so the daemon
+ * peer's port is present in every service in that workspace.
+ */
+export function isWorkspaceServiceProcess() {
+  return process.env.BYSPACE_SERVICE_DAEMON_PORT !== undefined;
+}
+
 export function configureDevBySpaceHome() {
   const seedHome = process.env.BYSPACE_DEV_SEED_HOME;
   const managedHome = process.env.BYSPACE_DEV_MANAGED_HOME === "1";
 
-  if (process.env.BYSPACE_HOME) {
+  // A service is its own daemon and owns a home inside the checkout it serves. It must not adopt
+  // the home of the daemon that spawned it: an inherited BYSPACE_HOME can point outside the
+  // worktree, which puts the pid lock out of reach of the worktree's deletion. The heartbeat
+  // then never sees the lock disappear, so the service outlives the worktree it was started for.
+  if (process.env.BYSPACE_HOME && !isWorkspaceServiceProcess()) {
     if (seedHome) {
       seedWorktreeBySpaceHome(seedHome, process.env.BYSPACE_HOME);
     }

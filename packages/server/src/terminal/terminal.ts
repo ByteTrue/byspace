@@ -11,6 +11,7 @@ import { writePrivateFileAtomicSync } from "../server/private-files.js";
 import { findExecutable } from "../executable-resolution/executable-resolution.js";
 import type { TerminalCell, TerminalState } from "@bytetrue/protocol/messages";
 import { TerminalInputModeTracker } from "@bytetrue/protocol/terminal-input-mode";
+import { listProcessTreePids } from "../utils/tree-kill.js";
 import { TerminalActivityTracker } from "./activity/terminal-activity-tracker.js";
 import type { TerminalBacklogResumption } from "./terminal-output-backlog.js";
 import type { TerminalActivity, TerminalActivityState } from "@bytetrue/protocol/terminal-activity";
@@ -1608,7 +1609,9 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
     if (!killed) {
       killed = true;
       if (!processExited) {
-        killPtyProcess();
+        // No second chance on this path, so it never waits. Callers that must
+        // know the tree is gone use killAndWait, which awaits the same walk.
+        void forceKillPtyProcessTree();
       }
       emitExit(buildExitInfo());
     }
@@ -1619,12 +1622,83 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
     void waitForProcessExit(1000).finally(disposeResources);
   }
 
-  function killPtyProcess(signal?: NodeJS.Signals): void {
+  /**
+   * Signal everything the shell started, not just the shell.
+   *
+   * node-pty's `kill()` is `process.kill(this.pid, signal)`, so nothing below the
+   * direct child ever hears it. Two escapes matter here:
+   *
+   * - An interactive shell has job control, so each command it runs gets its own
+   *   process group. A group signal aimed at the shell misses the command.
+   * - A command may detach (`detached: true`) and leave any group we could name.
+   *
+   * So walk the PPID tree instead. The walk runs against a snapshot, because the
+   * moment a parent exits its children are reparented to init and the link back
+   * to the shell is gone.
+   *
+   * What this cannot reach: a descendant already reparented before the kill
+   * (nothing links it to the shell any more), and anything that appears between
+   * the snapshot and the signal.
+   */
+  async function signalPtyProcessTree(signal: NodeJS.Signals): Promise<void> {
     if (process.platform === "win32") {
       ptyProcess.kill();
       return;
     }
-    ptyProcess.kill(signal);
+    // -0 is 0, and kill(0, signal) targets the daemon's own process group, so a
+    // pid we cannot trust must never reach process.kill.
+    if (ptyProcess.pid <= 0) {
+      ptyProcess.kill(signal);
+      return;
+    }
+    for (const pid of await listProcessTreePids(ptyProcess.pid)) {
+      try {
+        process.kill(pid, signal);
+      } catch {
+        // Already gone, or never ours.
+      }
+    }
+  }
+
+  /**
+   * Best-effort SIGKILL of the shell and everything below it, with no wait.
+   *
+   * The snapshot has to be taken before the shell is signalled: once it exits,
+   * its children are reparented to init and a walk from the shell finds nothing.
+   */
+  async function forceKillPtyProcessTree(): Promise<void> {
+    if (process.platform === "win32" || ptyProcess.pid <= 0) {
+      ptyProcess.kill();
+      return;
+    }
+    const pids = await listProcessTreePids(ptyProcess.pid);
+    ptyProcess.kill();
+    for (const pid of pids) {
+      if (pid === ptyProcess.pid) {
+        continue;
+      }
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        // Already gone, or never ours.
+      }
+    }
+  }
+
+  /** Whether any pid in a pre-signal snapshot is still alive. */
+  function hasLiveProcess(pids: number[], excludePid: number): boolean {
+    for (const pid of pids) {
+      if (pid === excludePid) {
+        continue;
+      }
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        // Gone.
+      }
+    }
+    return false;
   }
 
   function waitForProcessExit(timeoutMs: number): Promise<boolean> {
@@ -1663,19 +1737,29 @@ export async function createTerminal(options: CreateTerminalOptions): Promise<Te
       return;
     }
 
-    try {
-      killPtyProcess();
-    } catch {
-      // process may already be gone
-    }
+    // Snapshot before signalling: once the shell exits, its descendants are
+    // reparented to init and are no longer reachable from it.
+    const treePids =
+      process.platform === "win32" || ptyProcess.pid <= 0
+        ? []
+        : await listProcessTreePids(ptyProcess.pid);
 
+    await signalPtyProcessTree("SIGHUP");
+
+    // The shell's exit is the only one we can await, so it gates the escalation.
+    // It cannot be the whole condition: a descendant that traps SIGHUP outlives
+    // a shell that exits promptly, and reporting success there is exactly how
+    // the tree was leaking. So also escalate on any snapshot pid still alive.
     const exitedGracefully = await waitForProcessExit(gracefulTimeoutMs);
-    if (!exitedGracefully) {
-      try {
-        killPtyProcess("SIGKILL");
-      } catch {
-        // process may already be gone
+    if (!exitedGracefully || hasLiveProcess(treePids, ptyProcess.pid)) {
+      for (const pid of treePids) {
+        try {
+          process.kill(pid, "SIGKILL");
+        } catch {
+          // Already gone, or never ours.
+        }
       }
+      await signalPtyProcessTree("SIGKILL");
       await waitForProcessExit(forceTimeoutMs);
     }
 

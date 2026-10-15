@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
-import { terminateWithTreeKill } from "./tree-kill.js";
+import { listProcessTreePids, terminateWithTreeKill } from "./tree-kill.js";
 
 const pollIntervalMs = 50;
 
@@ -128,6 +128,41 @@ afterEach(async () => {
     await rm(tempDir, { recursive: true, force: true });
     tempDir = null;
   }
+});
+
+describe("listProcessTreePids", () => {
+  test.runIf(process.platform !== "win32")(
+    "reaches a descendant that started its own process group",
+    async () => {
+      tempDir = await mkdtemp(join(tmpdir(), "byspace-server-tree-list-"));
+      const childPidPath = join(tempDir, "descendant.pid");
+
+      // Exactly the escape the terminal kill ran into: a descendant that leaves
+      // the root's process group. A group signal cannot name it; the PPID walk can.
+      ownerProcess = spawnOwnerWithDescendant({
+        childPidPath,
+        detachedDescendant: true,
+      });
+      expect(ownerProcess.pid).toBeTypeOf("number");
+      await waitForFixtureReady(childPidPath);
+
+      const pids = await listProcessTreePids(ownerProcess.pid as number);
+
+      expect(pids[0]).toBe(ownerProcess.pid);
+      expect(pids).toContain(descendantPid);
+    },
+  );
+
+  test.runIf(process.platform !== "win32")("returns just the root for a leaf process", async () => {
+    ownerProcess = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000);"], {
+      stdio: "ignore",
+    });
+    expect(ownerProcess.pid).toBeTypeOf("number");
+
+    const pids = await listProcessTreePids(ownerProcess.pid as number);
+
+    expect(pids).toEqual([ownerProcess.pid]);
+  });
 });
 
 describe("terminateWithTreeKill", () => {

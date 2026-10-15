@@ -28,6 +28,81 @@ test("configureDevDaemonConfig writes valid daemon config with wildcard cors", (
   }
 });
 
+/**
+ * Restores the env keys a `configureDevBySpaceHome` case touches, so cases cannot leak into each other.
+ */
+function withDevHomeEnv(overrides, run) {
+  const keys = [
+    "BYSPACE_HOME",
+    "BYSPACE_LISTEN",
+    "BYSPACE_DEV_ROOT",
+    "BYSPACE_DEV_MANAGED_HOME",
+    "BYSPACE_DEV_SEED_HOME",
+    "BYSPACE_SERVICE_DAEMON_PORT",
+  ];
+  const previous = new Map(keys.map((key) => [key, process.env[key]]));
+  try {
+    for (const key of keys) {
+      delete process.env[key];
+    }
+    Object.assign(process.env, overrides);
+    return run();
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+}
+
+test("configureDevBySpaceHome gives a workspace service a home inside its own checkout", () => {
+  const checkoutRoot = mkdtempSync(join(tmpdir(), "dev-home-service-root-"));
+  const inheritedHome = mkdtempSync(join(tmpdir(), "dev-home-service-inherited-"));
+  try {
+    // The daemon that starts a worktree service passes its own BYSPACE_HOME down. The service
+    // must not adopt it: that home can sit outside the worktree, where the pid-lock heartbeat
+    // can never see the worktree disappear, so the service outlives it.
+    const resolvedHome = withDevHomeEnv(
+      {
+        BYSPACE_HOME: inheritedHome,
+        BYSPACE_DEV_ROOT: checkoutRoot,
+        BYSPACE_SERVICE_DAEMON_PORT: "57001",
+        BYSPACE_LISTEN: "0.0.0.0:57001",
+      },
+      () => configureDevBySpaceHome(),
+    );
+
+    assert.equal(resolvedHome, join(checkoutRoot, ".dev/byspace-home"));
+    assert.notEqual(resolvedHome, inheritedHome);
+  } finally {
+    rmSync(checkoutRoot, { recursive: true, force: true });
+    rmSync(inheritedHome, { recursive: true, force: true });
+  }
+});
+
+test("configureDevBySpaceHome still honors an inherited home for a non-service process", () => {
+  const checkoutRoot = mkdtempSync(join(tmpdir(), "dev-home-plain-root-"));
+  const inheritedHome = mkdtempSync(join(tmpdir(), "dev-home-plain-inherited-"));
+  try {
+    const resolvedHome = withDevHomeEnv(
+      {
+        BYSPACE_HOME: inheritedHome,
+        BYSPACE_DEV_ROOT: checkoutRoot,
+        BYSPACE_LISTEN: "127.0.0.1:6778",
+      },
+      () => configureDevBySpaceHome(),
+    );
+
+    assert.equal(resolvedHome, inheritedHome);
+  } finally {
+    rmSync(checkoutRoot, { recursive: true, force: true });
+    rmSync(inheritedHome, { recursive: true, force: true });
+  }
+});
+
 test("configureDevBySpaceHome initializes byspace home and daemon config when managed", () => {
   const tempHome = mkdtempSync(join(tmpdir(), "dev-home-"));
   const previousHome = process.env.BYSPACE_HOME;
