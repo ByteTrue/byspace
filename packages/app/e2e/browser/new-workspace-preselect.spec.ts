@@ -37,7 +37,7 @@ async function expectProjectPreselectedWithin(
   projectDisplayName: string,
   timeout: number,
 ): Promise<void> {
-  const projectPicker = page.getByRole("button", { name: "Workspace project" });
+  const projectPicker = page.getByRole("button", { name: "Workspace project", exact: true });
   await expect(projectPicker).toContainText(projectDisplayName, { timeout });
 }
 
@@ -45,7 +45,7 @@ async function expectAnyProjectPreselectedWithin(
   page: import("@playwright/test").Page,
   timeout: number,
 ): Promise<void> {
-  const projectPicker = page.getByRole("button", { name: "Workspace project" });
+  const projectPicker = page.getByRole("button", { name: "Workspace project", exact: true });
   await expect(projectPicker).toBeVisible({ timeout });
   await expect
     .poll(

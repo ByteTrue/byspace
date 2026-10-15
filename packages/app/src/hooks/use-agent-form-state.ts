@@ -37,6 +37,7 @@ import {
   type ProviderModelsByProvider,
 } from "@/provider-selection/resolve-agent-form";
 import type { MaterializedAgentProfile } from "@/agent-profiles";
+import { useHostAgentRoleNames } from "@/agent-controls/use-agent-roles";
 
 export type { FormInitialValues } from "@/provider-selection/resolve-agent-form";
 
@@ -78,6 +79,8 @@ export interface UseAgentFormStateResult {
   clearProviderSelectionFromUser: () => void;
   selectedRole: string;
   setRoleFromUser: (role: string) => void;
+  /** Built-in roles this host offers. Empty hides the role picker. */
+  roleNames: readonly string[];
   workingDirIsEmpty: boolean;
   persistFormPreferences: () => Promise<void>;
 }
@@ -150,6 +153,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
   const { serverId, initialValues, workingDir, isVisible = true, isCreateFlow = true } = options;
 
   const { preferences, isLoading: isPreferencesLoading, updatePreferences } = useFormPreferences();
+  const roleNames = useHostAgentRoleNames(serverId);
   const preferenceOverlayRef = useRef(new OptimisticFormPreferences(preferences));
 
   useEffect(() => {
@@ -508,6 +512,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
       clearProviderSelectionFromUser,
       selectedRole: formState.role,
       setRoleFromUser,
+      roleNames,
       workingDirIsEmpty,
       persistFormPreferences,
     }),
@@ -518,6 +523,7 @@ export function useAgentFormState(options: UseAgentFormStateOptions): UseAgentFo
       formState.model,
       formState.thinkingOptionId,
       formState.role,
+      roleNames,
       setRoleFromUser,
       workingDir,
       setModeFromUser,

@@ -161,13 +161,12 @@ export const ptBR: TranslationResources = {
   agentControls: {
     provider: {
       fallback: "Provedor",
-      select: "Selecionar provedor do agente",
+      selectWithValue: "Selecionar provedor do agente ({{value}})",
     },
     thinking: {
       title: "Raciocínio",
       unknown: "Desconhecido",
       extraHigh: "Extra alto",
-      select: "Selecionar opção de raciocínio",
       selectWithValue: "Selecionar opção de raciocínio ({{value}})",
     },
     model: {
@@ -181,6 +180,7 @@ export const ptBR: TranslationResources = {
     },
     role: {
       select: "Select agent role",
+      selectWithValue: "Select agent role ({{value}})",
       none: "No role",
       chief: "Chief",
     },
@@ -214,6 +214,7 @@ export const ptBR: TranslationResources = {
   chief: {
     switchHost: "Trocar de host",
     maximize: "Abrir em página completa",
+    open: "Abrir o Chief",
     close: "Fechar o Chief",
     retry: "Tentar novamente",
     noHomeWorkspace:

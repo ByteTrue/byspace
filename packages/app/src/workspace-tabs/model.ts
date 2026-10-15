@@ -8,6 +8,16 @@ export interface WorkspaceDraftTabSetup {
   modeId: string | null;
   model: string | null;
   thinkingOptionId: string | null;
+  /**
+   * Built-in agent role, or null for a plain agent. Optional because only the
+   * creation flow knows one: fork and slash-command drafts seed from an agent
+   * view that carries no role, and leaving it undefined there is honest.
+   *
+   * Carried through creation because the composer submits the role with the
+   * first message — dropping it here creates a plain agent while the picker
+   * still showed the role the user chose.
+   */
+  role?: string | null;
   featureValues: Record<string, unknown>;
 }
 

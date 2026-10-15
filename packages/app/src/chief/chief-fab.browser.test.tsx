@@ -59,7 +59,7 @@ describe("ChiefFab and the composer's send button", () => {
     // its send button lands in the same corner the entry claims.
     const viewportHeight = window.innerHeight;
     const composerTop = viewportHeight - 108;
-    mount(<ChiefFab serverId={null} agentId={null} onPress={noop} />);
+    mount(<ChiefFab serverId={null} agentId={null} isOpen={false} onPress={noop} />);
     expect(fabRect().bottom).toBeGreaterThan(composerTop);
 
     act(() => {
@@ -75,7 +75,7 @@ describe("ChiefFab and the composer's send button", () => {
     act(() => {
       useChiefFabClearanceStore.setState({ clearances: { "composer:agent-1": 108 } });
     });
-    mount(<ChiefFab serverId={null} agentId={null} onPress={noop} />);
+    mount(<ChiefFab serverId={null} agentId={null} isOpen={false} onPress={noop} />);
     const raised = fabRect().bottom;
 
     act(() => {

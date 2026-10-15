@@ -161,13 +161,12 @@ export const ru: TranslationResources = {
   agentControls: {
     provider: {
       fallback: "Провайдер",
-      select: "Выбрать провайдера агента",
+      selectWithValue: "Выбрать провайдера агента ({{value}})",
     },
     thinking: {
       title: "Рассуждения",
       unknown: "Неизвестно",
       extraHigh: "Очень высокий",
-      select: "Выбрать уровень рассуждений",
       selectWithValue: "Выбрать уровень рассуждений ({{value}})",
     },
     model: {
@@ -181,6 +180,7 @@ export const ru: TranslationResources = {
     },
     role: {
       select: "Select agent role",
+      selectWithValue: "Select agent role ({{value}})",
       none: "No role",
       chief: "Chief",
     },
@@ -214,6 +214,7 @@ export const ru: TranslationResources = {
   chief: {
     switchHost: "Сменить хост",
     maximize: "Открыть на всю страницу",
+    open: "Открыть Chief",
     close: "Закрыть Chief",
     retry: "Повторить",
     noHomeWorkspace:

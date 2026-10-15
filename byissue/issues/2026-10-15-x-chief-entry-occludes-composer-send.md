@@ -30,7 +30,7 @@ created: 2026-10-15
 - `packages/app/src/chief/use-publish-chief-fab-clearance.ts`（新）：把 ref + `onLayout` 给宿主；`active` 为假（retained panel 未激活）或测量为非正时不发布——`display: none` 的隐藏面板报 0，那不是"没有消息框"，是"没渲染"。
 - 发布方三处：会话页消息框（`agent-panel.tsx` 的 `ActiveAgentComposer`）、new workspace 屏（`new-workspace-screen.tsx`，只在路由聚焦时）、workspace setup 抽屉（`workspace-setup-dialog.tsx`）。
 - 消费方两处：FAB 与浮窗（`chief-fab.tsx`、`chief-floating-window.tsx`），动态 `bottom` 走 `inlineUnistylesStyle`（docs/unistyles.md 的动态像素规则）。
-- 抑制改为读布局（`chief-visibility.ts`）：当前 workspace 的布局里有 pane 的 focused tab 指向 Chief agent，就是"会话在屏幕上"。意图已被消费也没关系——tab 还在。仍保留 `?open=agent:{id}` 这一条，覆盖 tab 尚未落位的那一帧。
+- 抑制：**这一半由 085 先修掉了**（`chief-route.ts` 的 `isShowingChiefAgent`，读 `focusedAgentId` 加路由与意图）。合并时本 issue 删掉了自己那版 `chief-visibility.ts`——同一个问题不留两套机制。本 issue 因此只交付几何让位那一半。
 
 **有界简化（已知上限）：** 只处理"占住屏幕底部右角"的消息框；侧栏里的消息框（宽度不足、够不到角落）不触发让位，这是故意的（`resolveChiefFabClearance` 的重叠判定）。多 pane 时取最高的一条，不是并集。
 
@@ -40,7 +40,7 @@ created: 2026-10-15
 - **发布链路（真实 Chromium，`chief-fab-clearance.browser.test.tsx`）**：`usePublishChiefFabClearance` 走真实 `measureInWindow`，发布后入口让位，卸载后回到角落。
 - **重叠判定与存储语义（`chief-fab-clearance.test.ts`）**：窄视口让位、宽视口/左栏不触发、取最高、离场只清自己的 owner。
 - **入口渲染偏移（jsdom，`chief-fab.test.tsx`）**：`bottom` 随发布值变化。
-- **路由抑制（`chief-visibility.test.ts`）**：Chief tab 是屏幕上的会话时抑制；背景 tab、别的 agent 时不抑制；agent 未解析时不抑制。
+- **路由抑制**：走 085 的 `chief-route.test.ts`（5 条），本 issue 未另立。
 - 命令：`npx vitest run src/chief/`（28 passed）、`npx vitest run --project browser src/chief/`（4 passed）、`npm run lint`、`npm run typecheck`。
 
 **未覆盖：** 真实 app（`npm run dev:app` + dev daemon）里的手动截图。该环境 WebSocket 反复以 code 1000 断开、connectionStatus 停在 connecting，会话页渲染不出来——与 epic 005 issue 002 记录的同一限制。视觉复核留给真机/稳定连接环境。
@@ -55,6 +55,8 @@ created: 2026-10-15
 
 **回写位置：** 一条稳定产品行为毕业进 `byissue/spec/agent-conversation.md`（Chief 入口与消息框、会话页的关系）。发布方/消费方的实现路径留本 issue，不搬进 spec。
 
+**与主线的合并（2026-10-15）：** 远端 `085-x-ff`（10-14）已经独立修掉了"进入会话后入口不消失"这一半，用的是 `chief-route.ts` + `focusedAgentId`，并把入口改成浮窗打开时常驻（`isOpen`）。合并时本 issue 的抑制实现（`chief-visibility.ts`）作为重复机制删除，让位的那一半保留并与 085 的 `isOpen`/`makeFabStyle` 合并。两半现在共存：085 决定"该不该在"，本 issue 决定"站在哪"。
+
 **遗留：**
 
 - 真实 dev app 的手动截图复核没做（该环境 WebSocket 反复以 code 1000 断开，会话页渲染不出）。几何契约已覆盖同一事实，且浏览器测试跑的是真实引擎，不是 jsdom 近似。
@@ -63,6 +65,6 @@ created: 2026-10-15
 
 ## 执行记录
 
-- 新增 `chief-fab-clearance.ts`、`use-publish-chief-fab-clearance.ts`、`chief-visibility.ts` 及四个测试文件（含一个 browser 测试）。
+- 新增 `chief-fab-clearance.ts`、`use-publish-chief-fab-clearance.ts` 及四个测试文件（含两个 browser 测试）。
 - 改 `chief-fab.tsx`、`chief-floating-window.tsx`、`chief-panel-host.tsx`、`agent-panel.tsx`、`new-workspace-screen.tsx`、`workspace-setup-dialog.tsx`。
 - `E2E` 下隐藏入口的旧 hack 保留（`@byspace:e2e`）；本次没有动 e2e 可见性。

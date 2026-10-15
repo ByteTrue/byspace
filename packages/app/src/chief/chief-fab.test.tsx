@@ -40,7 +40,7 @@ describe("ChiefFab placement", () => {
 
   function renderFab(): HTMLElement {
     act(() => {
-      root?.render(<ChiefFab serverId={null} agentId={null} onPress={noop} />);
+      root?.render(<ChiefFab serverId={null} agentId={null} isOpen={false} onPress={noop} />);
     });
     const fab = container?.querySelector('[data-testid="chief-fab"]');
     if (!(fab instanceof HTMLElement)) {

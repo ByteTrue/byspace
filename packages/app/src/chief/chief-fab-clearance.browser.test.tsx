@@ -84,7 +84,7 @@ describe("the entry and a composer surface that owns the corner", () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    mount(<ChiefFab serverId={null} agentId={null} onPress={noop} />);
+    mount(<ChiefFab serverId={null} agentId={null} isOpen={false} onPress={noop} />);
 
     const fab = rectOf("chief-fab");
     expect(fab.bottom).toBeLessThanOrEqual(composer.top);
@@ -97,7 +97,7 @@ describe("the entry and a composer surface that owns the corner", () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    const raised = mount(<ChiefFab serverId={null} agentId={null} onPress={noop} />);
+    const raised = mount(<ChiefFab serverId={null} agentId={null} isOpen={false} onPress={noop} />);
 
     const entry = mounted.find((candidate) => candidate.container === raised);
     expect(entry).toBeDefined();

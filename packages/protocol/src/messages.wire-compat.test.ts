@@ -11,6 +11,29 @@ import {
   AgentTimelineEntryPayloadSchema,
 } from "./messages.js";
 
+test("a server_info role catalog round-trips and stays optional", () => {
+  const info = {
+    status: "server_info",
+    serverId: "role-server",
+    features: { agentRoleNames: ["chief", "researcher"] },
+  };
+  expect(ServerInfoStatusPayloadSchema.parse(info).features?.agentRoleNames).toEqual([
+    "chief",
+    "researcher",
+  ]);
+
+  // A daemon that predates the catalog sends only the boolean; a client that
+  // knows both must still parse it.
+  const legacy = {
+    status: "server_info",
+    serverId: "role-server",
+    features: { agentRoles: true },
+  };
+  const parsed = ServerInfoStatusPayloadSchema.parse(legacy);
+  expect(parsed.features?.agentRoles).toBe(true);
+  expect(parsed.features?.agentRoleNames).toBeUndefined();
+});
+
 test("terminal listings accept older rows and retain new per-terminal directories", () => {
   const response = {
     type: "list_terminals_response",

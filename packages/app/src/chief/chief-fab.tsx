@@ -2,6 +2,7 @@ import { memo, useCallback, type ReactElement } from "react";
 import { Pressable, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Bot } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/stores/session-store";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { resolveChiefFabBottom, useChiefFabClearance } from "./chief-fab-clearance";
@@ -11,6 +12,9 @@ const ThemedBot = withUnistyles(Bot, (theme) => ({ color: theme.colors.foregroun
 interface ChiefFabProps {
   serverId: string | null;
   agentId: string | null;
+  /** The floating window this button toggles. The button stays mounted while it
+   * is open, so open and close are the same target in the same place. */
+  isOpen: boolean;
   onPress: () => void;
 }
 
@@ -31,18 +35,16 @@ function resolveAgentDot(
 export const ChiefFab = memo(function ChiefFab({
   serverId,
   agentId,
+  isOpen,
   onPress,
 }: ChiefFabProps): ReactElement {
+  const { t } = useTranslation();
   const dotColor = useSessionStore((state) => resolveAgentDot(state, serverId, agentId));
   const clearance = useChiefFabClearance();
-  const positionStyle = inlineUnistylesStyle({ bottom: resolveChiefFabBottom(clearance) });
+  const placement = inlineUnistylesStyle({ bottom: resolveChiefFabBottom(clearance) });
   const pressableStyle = useCallback(
-    ({ pressed }: { pressed: boolean }) => [
-      styles.fab,
-      positionStyle,
-      pressed && styles.fabPressed,
-    ],
-    [positionStyle],
+    ({ pressed }: { pressed: boolean }) => makeFabStyle(isOpen, placement)({ pressed }),
+    [isOpen, placement],
   );
 
   return (
@@ -50,7 +52,7 @@ export const ChiefFab = memo(function ChiefFab({
       style={pressableStyle}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel="Open Chief"
+      accessibilityLabel={isOpen ? t("chief.close") : t("chief.open")}
       testID="chief-fab"
     >
       <ThemedBot size={22} />
@@ -60,6 +62,20 @@ export const ChiefFab = memo(function ChiefFab({
     </Pressable>
   );
 });
+
+/**
+ * Module scope so the memoized button gets one stable style function per open
+ * state, instead of a fresh closure on every parent render. The clearance rides
+ * in the same array, so yielding to a composer costs no second style pass.
+ */
+const makeFabStyle =
+  (isOpen: boolean, placement: object) =>
+  ({ pressed }: { pressed: boolean }) => [
+    styles.fab,
+    placement,
+    isOpen && styles.fabOpen,
+    pressed && styles.fabPressed,
+  ];
 
 const styles = StyleSheet.create((theme) => ({
   fab: {
@@ -76,8 +92,11 @@ const styles = StyleSheet.create((theme) => ({
     boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
     zIndex: 900,
   },
-  fabPressed: {
+  fabOpen: {
     backgroundColor: theme.colors.surface2,
+  },
+  fabPressed: {
+    backgroundColor: theme.colors.surface3,
   },
   dot: {
     position: "absolute",

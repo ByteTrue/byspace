@@ -1,6 +1,23 @@
 import { describe, expect, it } from "vitest";
 
-import { AGENT_ROLE_LABEL, stripReservedLabels } from "./agent-roles.js";
+import {
+  AGENT_ROLE_LABEL,
+  getAgentRole,
+  listAgentRoleNames,
+  stripReservedLabels,
+} from "./agent-roles.js";
+
+describe("listAgentRoleNames", () => {
+  it("advertises every role the daemon can resolve, in registry order", () => {
+    // The catalog is the client's only source of role names, so a name it
+    // advertises must resolve — otherwise the picker offers a role that
+    // silently degrades to a plain agent at creation.
+    const names = listAgentRoleNames();
+
+    expect(names).toContain("chief");
+    expect(names.every((name) => getAgentRole(name) !== null)).toBe(true);
+  });
+});
 
 describe("stripReservedLabels", () => {
   it("drops reserved identity keys and keeps other byspace.* labels", () => {

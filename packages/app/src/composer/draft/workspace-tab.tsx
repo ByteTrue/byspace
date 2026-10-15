@@ -69,6 +69,7 @@ interface AutoSubmitConfig {
   modeId: string | null;
   model: string | null;
   thinkingOptionId: string | null;
+  role: string | null;
   featureValues: Record<string, unknown>;
 }
 
@@ -78,6 +79,7 @@ function resolveAutoSubmitConfig(
     modeId?: string | null;
     model?: string | null;
     thinkingOptionId?: string | null;
+    role?: string | null;
     featureValues?: Record<string, unknown>;
   } | null,
 ): AutoSubmitConfig | null {
@@ -87,6 +89,7 @@ function resolveAutoSubmitConfig(
     modeId: pending.modeId ?? null,
     model: pending.model ?? null,
     thinkingOptionId: pending.thinkingOptionId ?? null,
+    role: pending.role ?? null,
     featureValues: pending.featureValues ?? {},
   };
 }
@@ -193,7 +196,10 @@ async function submitDraftCreateRequest(input: {
     thinkingOptionId:
       autoSubmitConfig?.thinkingOptionId ?? (composerState.effectiveThinkingOptionId || undefined),
     featureValues: autoSubmitConfig?.featureValues ?? composerState.featureValues,
-    ...(composerState.selectedRole ? { role: composerState.selectedRole } : {}),
+    // The pending submission carries the role the user picked on the creation
+    // screen; the composer's own state only knows it when the tab was seeded
+    // with initial values, which is the background-creation path.
+    ...resolveRoleForSubmit({ autoSubmitConfig, composerState }),
   });
 
   const attachmentsArray = Array.isArray(attachments) ? attachments : undefined;
@@ -278,7 +284,18 @@ function buildDraftInitialValues(input: {
     modeId: input.initialSetup.modeId,
     model: input.initialSetup.model,
     thinkingOptionId: input.initialSetup.thinkingOptionId,
+    role: input.initialSetup.role,
   };
+}
+
+/** The role to create the agent with: the pending submission wins because it is
+ * what the user picked before the tab existed. */
+function resolveRoleForSubmit(input: {
+  autoSubmitConfig: AutoSubmitConfig | null;
+  composerState: { selectedRole: string };
+}): { role: string } | Record<string, never> {
+  const role = input.autoSubmitConfig?.role ?? input.composerState.selectedRole;
+  return role ? { role } : {};
 }
 
 function resolveDraftWorkingDirectory(input: {

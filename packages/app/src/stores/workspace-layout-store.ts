@@ -182,6 +182,10 @@ const WorkspaceDraftTabSetupStorageSchema = z.strictObject({
   modeId: z.string().nullable(),
   model: z.string().nullable(),
   thinkingOptionId: z.string().nullable(),
+  // COMPAT(draftTabRole): added in v0.20.1. Absent in trees persisted by earlier
+  // versions, and the whole setup object is validated strictly, so this must stay
+  // optional or those trees fail to load.
+  role: z.string().nullable().optional(),
   featureValues: z.record(z.string(), z.union([z.boolean(), z.string(), z.null()])),
 });
 const WorkspaceTabTargetStorageSchema = z.discriminatedUnion("kind", [
