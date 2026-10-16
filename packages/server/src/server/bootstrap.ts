@@ -1058,6 +1058,7 @@ export async function createBySpaceDaemon(
 
   await ensureHomeWorkspaceUnlessDisabled({
     byspaceHome: config.byspaceHome,
+    serverId,
     workspaceRegistry,
     projectRegistry,
     provisioning: workspaceProvisioning,

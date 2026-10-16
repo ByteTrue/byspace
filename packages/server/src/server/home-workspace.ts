@@ -1,6 +1,9 @@
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
 import type { Logger } from "pino";
+
+import { deriveProjectKey } from "./project-key.js";
 
 import type {
   PersistedWorkspaceRecord,
@@ -53,6 +56,34 @@ export const HOME_PROJECT_NAME = "BySpace-WorkSpace";
  */
 export const HOME_WORKSPACE_LABEL = "byspace.home-workspace";
 
+/**
+ * Directory name of the Home workspace inside the BySpace home.
+ *
+ * The workspace's cwd must not be the BySpace home itself: that is the daemon's
+ * state root (config.json, agents/, projects/, schedules/, uploads/ and every
+ * worktree), so a session rooted there has the daemon's own files in its working
+ * set and writes its scratch output among them. Multica draws the same line by
+ * keeping its run root (its own `workspacesRoot`) apart from its state root.
+ * A subdirectory keeps the single home root BySpace already publishes.
+ */
+export const HOME_WORKSPACE_DIR_NAME = "chief";
+
+/** Absolute cwd of the Home workspace for a given BySpace home. */
+export function resolveHomeWorkspaceCwd(byspaceHome: string): string {
+  return path.join(path.resolve(byspaceHome), HOME_WORKSPACE_DIR_NAME);
+}
+
+/**
+ * True when a path is one this daemon published for Home before the current
+ * one. Releases before the `chief/` subdirectory rooted Home at the BySpace home
+ * itself, which is the daemon's state root. A record sitting on an older
+ * published path is ours to move; anything else is a path the user chose and is
+ * never touched. Moving Home again means adding the old location here.
+ */
+function isPreviousHomeWorkspaceCwd(byspaceHome: string, cwd: string): boolean {
+  return path.resolve(cwd) === path.resolve(byspaceHome);
+}
+
 export interface EnsureHomeWorkspaceResult {
   workspaceId: string;
   created: boolean;
@@ -60,6 +91,8 @@ export interface EnsureHomeWorkspaceResult {
 
 interface EnsureHomeWorkspaceDeps {
   byspaceHome: string;
+  /** Namespaces a local directory's project key; absent in single-host tests. */
+  serverId?: string;
   workspaceRegistry: WorkspaceRegistry;
   projectRegistry: ProjectRegistry;
   provisioning: {
@@ -81,9 +114,9 @@ interface EnsureHomeWorkspaceDeps {
 /**
  * Ensure the daemon-owned Home workspace exists — the workspace the built-in
  * assistant lives in. It is a plain directory workspace rooted at the BySpace
- * home directory, created through the same provisioning path as a user's
- * workspace.create without a projectId — which materializes a containing
- * project for `~/.byspace`. Idempotent: matches by
+ * home's `chief/` subdirectory, created through the same provisioning path as a
+ * user's workspace.create without a projectId — which materializes a containing
+ * project for that directory. Idempotent: matches by
  * the reserved label, including archived workspaces (an archived Home is left
  * alone; resurrecting it is a user action, not bootstrap's).
  *
@@ -96,14 +129,25 @@ interface EnsureHomeWorkspaceDeps {
  * for a first conversation before any project exists
  * (byissue/epics/005-o-chief-floating-assistant).
  *
- * Names are presentation, not identity: the title and the containing project's
- * name are re-applied on every boot, because releases change them. A record the
- * user renamed carries that rename and is never touched.
+ * Placement and names are presentation, not identity: the cwd, the title and the
+ * containing project's name are re-applied on every boot, because releases
+ * change them. A record the user renamed carries that rename and is never
+ * touched; a cwd the user chose is not one of the daemon's and is left alone.
  */
 export async function ensureHomeWorkspace(
   deps: EnsureHomeWorkspaceDeps,
 ): Promise<EnsureHomeWorkspaceResult | null> {
-  const homeCwd = path.resolve(deps.byspaceHome);
+  const homeCwd = resolveHomeWorkspaceCwd(deps.byspaceHome);
+  // The cwd has to exist before anything runs in it: provisioning probes it for
+  // a git root, and agent creation stats it. The state root existed by
+  // definition; the chief/ subdirectory does not.
+  try {
+    await mkdir(homeCwd, { recursive: true });
+  } catch (error) {
+    deps.logger.warn({ err: error, cwd: homeCwd }, "Failed to create home workspace directory");
+    return null;
+  }
+
   const existing = (await deps.workspaceRegistry.list()).find((workspace) =>
     workspace.labels?.includes(HOME_WORKSPACE_LABEL),
   );
@@ -111,8 +155,10 @@ export async function ensureHomeWorkspace(
     // Presentation is re-asserted on every boot, not only at creation, because
     // the names are the daemon's and releases change them. Records the user
     // renamed are recognized and left alone.
-    await ensureHomePresentation(deps, existing);
-    return { workspaceId: existing.workspaceId, created: false };
+    const settled = await ensureHomePresentation(deps, existing, homeCwd);
+    // A move replaces the record, so the id to report is the settled one; only
+    // when presentation was skipped is the caller's copy still current.
+    return { workspaceId: settled?.workspaceId ?? existing.workspaceId, created: false };
   }
 
   try {
@@ -120,7 +166,7 @@ export async function ensureHomeWorkspace(
       homeCwd,
       HOME_WORKSPACE_TITLE,
     );
-    await ensureHomePresentation(deps, workspace);
+    await ensureHomePresentation(deps, workspace, homeCwd);
     deps.logger.info(
       { workspaceId: workspace.workspaceId, cwd: homeCwd },
       "Home workspace ensured",
@@ -148,9 +194,10 @@ export async function ensureHomeWorkspaceUnlessDisabled(
 }
 
 /**
- * Bring the Home record's presentation up to date: the reserved label that
- * identifies it, the workspace title, and the containing project's name.
- * Best-effort — none of it is worth blocking boot over.
+ * Bring the Home record up to date: its cwd (releases move it out of the state
+ * root), the reserved label that identifies it, the workspace title, and the
+ * containing project's name. Best-effort — none of it is worth blocking boot
+ * over.
  *
  * Reads the record back before deciding: the caller's copy comes from an earlier
  * list, and a rename landing between the two must not be overwritten.
@@ -158,22 +205,110 @@ export async function ensureHomeWorkspaceUnlessDisabled(
 async function ensureHomePresentation(
   deps: EnsureHomeWorkspaceDeps,
   workspace: { workspaceId: string },
-): Promise<void> {
+  homeCwd: string,
+): Promise<PersistedWorkspaceRecord | null> {
   try {
     const records = await deps.workspaceRegistry.list();
     const record = records.find((w) => w.workspaceId === workspace.workspaceId);
-    if (!record) return;
+    if (!record) return null;
     // An archived Home is a user decision, not a stale record: leave it, and its
-    // name, untouched.
-    if (record.archivedAt) return;
-    await applyWorkspacePresentation(deps, record);
-    await applyProjectName(deps, { record, records });
+    // name and cwd, untouched.
+    if (record.archivedAt) return null;
+    const settled = await applyHomeCwd(deps, record, homeCwd);
+    await applyWorkspacePresentation(deps, settled);
+    await applyProjectName(deps, {
+      record: settled,
+      records: await deps.workspaceRegistry.list(),
+    });
+    return settled;
   } catch (error) {
     deps.logger.warn(
       { err: error, workspaceId: workspace.workspaceId },
       "Failed to load home workspace",
     );
+    return null;
   }
+}
+
+/**
+ * Re-point Home when an earlier release left it rooted at the BySpace home
+ * itself — the daemon's state root, where every daemon-owned file and every
+ * worktree sat in the assistant's working set.
+ *
+ * The record keeps its uuid. Its cwd is the daemon's for the same reason its
+ * title is: the user never chose it, and the path it names is the daemon's own
+ * publication. Agents stamped with the old cwd keep it — an agent's cwd is fixed
+ * at creation, and the workspace it belongs to is keyed by id, not by path — so
+ * an existing Chief session keeps running where it started until a new session
+ * picks up the new directory.
+ *
+ * The containing project moves with it when it is Home's alone: its rootPath is
+ * the directory the workspace runs in, and a project row still rooted at the old
+ * path would be watched, named and offered for the wrong directory.
+ *
+ * Returns the record to continue with. A cwd the daemon never published is the
+ * user's, and is returned untouched.
+ */
+async function applyHomeCwd(
+  deps: EnsureHomeWorkspaceDeps,
+  record: PersistedWorkspaceRecord,
+  homeCwd: string,
+): Promise<PersistedWorkspaceRecord> {
+  if (path.resolve(record.cwd) === homeCwd) return record;
+  if (!isPreviousHomeWorkspaceCwd(deps.byspaceHome, record.cwd)) return record;
+
+  const from = record.cwd;
+  const settled = await deps.workspaceRegistry.update(record.workspaceId, (current) => ({
+    ...current,
+    cwd: homeCwd,
+    // A directory workspace holds no worktree metadata; clearing it keeps a root
+    // from outliving the move.
+    worktreeRoot: null,
+    displayName: path.basename(homeCwd),
+    updatedAt: new Date().toISOString(),
+  }));
+  if (!settled) return record;
+
+  await followHomeProject(deps, { projectId: settled.projectId, homeCwd });
+  deps.logger.info(
+    { workspaceId: settled.workspaceId, from, to: homeCwd },
+    "Home workspace moved out of the BySpace home",
+  );
+  return settled;
+}
+
+/**
+ * Move the containing project to the cwd Home now runs in, when the project is
+ * Home's alone. A project the user also keeps other workspaces under is theirs;
+ * its root stays where they put it.
+ */
+async function followHomeProject(
+  deps: EnsureHomeWorkspaceDeps,
+  input: { projectId: string; homeCwd: string },
+): Promise<void> {
+  const project = await deps.projectRegistry.get(input.projectId);
+  if (!project || project.archivedAt) return;
+  if (!isPreviousHomeWorkspaceCwd(deps.byspaceHome, project.rootPath)) return;
+  const homesAlone =
+    (await deps.workspaceRegistry.list()).filter((w) => w.projectId === project.projectId)
+      .length === 1;
+  if (!homesAlone) return;
+
+  await deps.projectRegistry.update(project.projectId, (current) => ({
+    ...current,
+    rootPath: input.homeCwd,
+    displayName: path.basename(input.homeCwd),
+    // The key names the directory it was derived from; a moved root needs it
+    // re-derived, or the row keeps claiming the old path across hosts.
+    projectKey: deriveProjectKey({
+      rootPath: input.homeCwd,
+      remoteUrl: null,
+      worktreeRoot: null,
+      mainRepoRoot: null,
+      serverId: deps.serverId,
+    }),
+    updatedAt: new Date().toISOString(),
+  }));
 }
 
 /** True when a title is this daemon's rather than a name the user chose. */

@@ -17,6 +17,8 @@ Desktop、split pane 和 compact 布局都保持这一垂直关系。左侧状�
 
 **Chief 走普通 Workspace 会话页，不设全局浮窗与右下角 FAB。** 入口位于侧栏左上角 `BySpace` 展开区（与 Search / Schedules / Tunnels 同级），点击直接导航至当前 Host 的 Home workspace（`byspace.home-workspace`）全屏页；桌面与移动端一致。Home workspace 下尚未创建会话或新建草稿 tab 时，角色默认预选 `chief`，空态居中展示三条开场建议按钮，点击即按正常草稿流创建会话并发送。
 
+Home workspace 的 cwd 是 `$BYSPACE_HOME/chief`，不是 `$BYSPACE_HOME` 本身：后者是 daemon 的状态根（config、agents、projects、schedules、uploads 与全部 worktree），不该出现在 agent 的工作集里。daemon 启动时按保留 label 认 Home 记录，cwd 仍停在 daemon 早期发布过的路径时就地迁移，并同步其独占 project 的 rootPath；别的路径不动。已有 Chief 会话的 cwd 在创建时固定，迁移只影响新建会话。
+
 ## 控件状态
 
 - Active Agent 始终可以收起当前已展开的工具和 reasoning。
