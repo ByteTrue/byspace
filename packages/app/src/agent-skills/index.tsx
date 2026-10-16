@@ -8,6 +8,7 @@ import type { AgentSkillOperation, AgentSkillsStatus } from "@bytetrue/protocol/
 import type { TFunction } from "i18next";
 import { Button } from "@/components/ui/button";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { settingsStyles } from "@/styles/settings";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
@@ -35,8 +36,24 @@ function formatUpdateMessage(ops: readonly AgentSkillOperation[], t: TFunction):
     .join("\n");
 }
 
+/** Pending deletions are the app's to apply, so they do not make the card read as stale. */
+function visibleSkillsState(
+  status: AgentSkillsStatus | null,
+  maintenanceOps: readonly AgentSkillOperation[],
+): AgentSkillsStatus["state"] | null {
+  if (status?.state === "drift" && maintenanceOps.length === 0) return "up-to-date";
+  return status?.state ?? null;
+}
+
+function hasSelectedSkill(status: AgentSkillsStatus | null): boolean {
+  if (!status) return false;
+  if (status.selection.mode === "all") return status.available.length > 0;
+  return status.selection.skills.some((name) => status.available.includes(name));
+}
+
 export function AgentSkillsSection({ serverId }: { serverId: string }) {
   const { t } = useTranslation();
+  const isCompact = useIsCompactFormFactor();
   const skills = useAgentSkills(serverId);
   const refreshSkills = skills.refresh;
   const skillsConnected = skills.connected;
@@ -52,14 +69,8 @@ export function AgentSkillsSection({ serverId }: { serverId: string }) {
     () => skills.status?.ops.filter((op) => op.kind !== "delete") ?? [],
     [skills.status?.ops],
   );
-  const state =
-    skills.status?.state === "drift" && maintenanceOps.length === 0
-      ? "up-to-date"
-      : (skills.status?.state ?? null);
-  const hasSelected =
-    (skills.status?.selection.mode === "all" && skills.status.available.length > 0) ||
-    (skills.status?.selection.mode === "custom" &&
-      skills.status.selection.skills.some((name) => skills.status?.available.includes(name)));
+  const state = visibleSkillsState(skills.status, maintenanceOps);
+  const hasSelected = hasSelectedSkill(skills.status);
 
   const handleReconcile = useCallback(async () => {
     if (skills.isWorking) return;
@@ -73,6 +84,18 @@ export function AgentSkillsSection({ serverId }: { serverId: string }) {
     });
     if (confirmed) await skills.reconcile();
   }, [maintenanceOps, skills, t]);
+  // A first install is the moment the choice exists, and only one of the two
+  // paths may write the agent homes. Ask, rather than installing the whole
+  // bundle into every supported agent home because nobody was asked. A daemon
+  // too old to send selectionSaved keeps its pre-existing behavior.
+  const firstInstall = skills.status?.selectionSaved === false;
+  const handleInstall = useCallback(() => {
+    if (firstInstall) {
+      setIsChoosing(true);
+      return;
+    }
+    void skills.reconcile();
+  }, [firstInstall, skills]);
   const handleUninstall = useCallback(async () => {
     if (skills.isWorking) return;
     const confirmed = await confirmDialog({
@@ -152,12 +175,14 @@ export function AgentSkillsSection({ serverId }: { serverId: string }) {
               onPress={handleOpen}
               disabled={skills.status === null || skills.isWorking}
               accessibilityLabel={t("settings.host.skills.choose")}
-            />
+            >
+              {isCompact ? null : t("settings.host.skills.choose")}
+            </Button>
             {hasSelected ? (
               <SkillsActions
                 state={state}
                 isWorking={skills.isWorking}
-                onInstall={skills.reconcile}
+                onInstall={handleInstall}
                 onReconcile={handleReconcile}
                 onUninstall={handleUninstall}
               />
@@ -168,6 +193,14 @@ export function AgentSkillsSection({ serverId }: { serverId: string }) {
       {skills.status ? (
         <SkillSelectionSheet
           visible={isChoosing}
+          title={
+            firstInstall ? t("settings.host.skills.chooseFirst") : t("settings.host.skills.choose")
+          }
+          confirmLabel={
+            firstInstall
+              ? t("settings.host.skills.actions.install")
+              : t("settings.host.skills.actions.save")
+          }
           available={skills.status.available}
           selection={skills.status.selection}
           isSaving={skills.isWorking}

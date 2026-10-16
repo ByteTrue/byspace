@@ -9,7 +9,6 @@ interface Sandbox {
   sourceDir: string;
   agentsDir: string;
   claudeDir: string;
-  codexDir: string;
 }
 
 async function makeSandbox(): Promise<Sandbox> {
@@ -17,9 +16,8 @@ async function makeSandbox(): Promise<Sandbox> {
   const sourceDir = path.join(root, "bundle");
   const agentsDir = path.join(root, "home", ".agents", "skills");
   const claudeDir = path.join(root, "home", ".claude", "skills");
-  const codexDir = path.join(root, "home", ".codex", "skills");
   await fs.mkdir(sourceDir, { recursive: true });
-  return { root, sourceDir, agentsDir, claudeDir, codexDir };
+  return { root, sourceDir, agentsDir, claudeDir };
 }
 
 async function writeBundleSkill(
@@ -59,7 +57,6 @@ describe("syncSkills", () => {
       sourceDir: sandbox.sourceDir,
       agentsDir: sandbox.agentsDir,
       claudeDir: sandbox.claudeDir,
-      codexDir: sandbox.codexDir,
       skillNames: ["byspace"],
     });
 
@@ -75,11 +72,6 @@ describe("syncSkills", () => {
       "utf-8",
     );
     expect(claudeContent).toBe("new byspace content");
-    const codexContent = await fs.readFile(
-      path.join(sandbox.codexDir, "byspace", "SKILL.md"),
-      "utf-8",
-    );
-    expect(codexContent).toBe("new byspace content");
   });
 
   it("installs new bundled skills, including references/, when not present on disk", async () => {
@@ -92,7 +84,6 @@ describe("syncSkills", () => {
       sourceDir: sandbox.sourceDir,
       agentsDir: sandbox.agentsDir,
       claudeDir: sandbox.claudeDir,
-      codexDir: sandbox.codexDir,
       skillNames: ["byspace-committee"],
     });
 
@@ -102,12 +93,6 @@ describe("syncSkills", () => {
     expect(
       await fs.readFile(
         path.join(sandbox.agentsDir, "byspace-committee", "references", "roles.md"),
-        "utf-8",
-      ),
-    ).toBe("roles content");
-    expect(
-      await fs.readFile(
-        path.join(sandbox.codexDir, "byspace-committee", "references", "roles.md"),
         "utf-8",
       ),
     ).toBe("roles content");
@@ -132,7 +117,6 @@ describe("syncSkills", () => {
       sourceDir: sandbox.sourceDir,
       agentsDir: sandbox.agentsDir,
       claudeDir: sandbox.claudeDir,
-      codexDir: sandbox.codexDir,
       skillNames: ["byspace"],
     });
 
@@ -150,7 +134,6 @@ describe("syncSkills", () => {
       sourceDir: sandbox.sourceDir,
       agentsDir: sandbox.agentsDir,
       claudeDir: sandbox.claudeDir,
-      codexDir: sandbox.codexDir,
       skillNames: ["byspace"],
     });
 
@@ -161,7 +144,6 @@ describe("syncSkills", () => {
       sourceDir: sandbox.sourceDir,
       agentsDir: sandbox.agentsDir,
       claudeDir: sandbox.claudeDir,
-      codexDir: sandbox.codexDir,
       skillNames: ["byspace"],
     });
 
@@ -182,7 +164,6 @@ describe("syncSkills", () => {
       sourceDir: sandbox.sourceDir,
       agentsDir: sandbox.agentsDir,
       claudeDir: sandbox.claudeDir,
-      codexDir: sandbox.codexDir,
       skillNames: ["byspace"],
     });
 
@@ -215,7 +196,6 @@ describe("syncSkills", () => {
           sourceDir: sandbox.sourceDir,
           agentsDir: sandbox.agentsDir,
           claudeDir: sandbox.claudeDir,
-          codexDir: sandbox.codexDir,
           skillNames: ["byspace"],
         }),
       ).rejects.toThrow("Cannot sync through symbolic link");
@@ -238,7 +218,6 @@ describe("syncSkills", () => {
       sourceDir: sandbox.sourceDir,
       agentsDir: sandbox.agentsDir,
       claudeDir: sandbox.claudeDir,
-      codexDir: sandbox.codexDir,
       skillNames: ["byspace"],
     });
     expect(first.changedFiles).toBeGreaterThan(0);
@@ -247,7 +226,6 @@ describe("syncSkills", () => {
       sourceDir: sandbox.sourceDir,
       agentsDir: sandbox.agentsDir,
       claudeDir: sandbox.claudeDir,
-      codexDir: sandbox.codexDir,
       skillNames: ["byspace"],
     });
     expect(second.changedFiles).toBe(0);
@@ -262,7 +240,6 @@ describe("syncSkills", () => {
       sourceDir: sandbox.sourceDir,
       agentsDir: sandbox.agentsDir,
       claudeDir: sandbox.claudeDir,
-      codexDir: sandbox.codexDir,
       skillNames: ["byspace", "byspace-removed"],
       onSkillError: (name, error) => errors.push({ name, error }),
     });
@@ -285,7 +262,6 @@ describe("syncSkills", () => {
       sourceDir: sandbox.sourceDir,
       agentsDir: sandbox.agentsDir,
       claudeDir: sandbox.claudeDir,
-      codexDir: sandbox.codexDir,
       skillNames: ["byspace", "byspace-deprecated"],
     });
 
@@ -300,7 +276,6 @@ describe("syncSkills", () => {
       sourceDir: missingSourceDir,
       agentsDir: sandbox.agentsDir,
       claudeDir: sandbox.claudeDir,
-      codexDir: sandbox.codexDir,
       skillNames: ["byspace"],
       onSkillError: (skillName) => errors.push(skillName),
     });
@@ -320,7 +295,6 @@ describe("syncSkills", () => {
       sourceDir: sandbox.sourceDir,
       agentsDir: sandbox.agentsDir,
       claudeDir: sandbox.claudeDir,
-      codexDir: sandbox.codexDir,
       skillNames: ["byspace"],
       onSkillError: (skillName) => errors.push(skillName),
     });
@@ -341,25 +315,22 @@ describe("removeSkill", () => {
     await fs.rm(sandbox.root, { recursive: true, force: true });
   });
 
-  it("removes the skill from all three targets when present", async () => {
+  it("removes the skill from both targets when present", async () => {
     await writeBundleSkill(sandbox.sourceDir, "byspace", { "SKILL.md": "content" });
     await syncSkills({
       sourceDir: sandbox.sourceDir,
       agentsDir: sandbox.agentsDir,
       claudeDir: sandbox.claudeDir,
-      codexDir: sandbox.codexDir,
       skillNames: ["byspace"],
     });
 
     await removeSkill("byspace", {
       agentsDir: sandbox.agentsDir,
       claudeDir: sandbox.claudeDir,
-      codexDir: sandbox.codexDir,
     });
 
     await expect(fs.access(path.join(sandbox.agentsDir, "byspace"))).rejects.toThrow();
     await expect(fs.access(path.join(sandbox.claudeDir, "byspace"))).rejects.toThrow();
-    await expect(fs.access(path.join(sandbox.codexDir, "byspace"))).rejects.toThrow();
   });
 
   it("does not throw when targets are missing", async () => {
@@ -367,7 +338,6 @@ describe("removeSkill", () => {
       removeSkill("does-not-exist", {
         agentsDir: sandbox.agentsDir,
         claudeDir: sandbox.claudeDir,
-        codexDir: sandbox.codexDir,
       }),
     ).resolves.toBeUndefined();
   });

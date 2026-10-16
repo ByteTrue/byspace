@@ -18,6 +18,11 @@ import { beginSkillsTransaction, recoverInterruptedSkillTransactions } from "./t
 /** Everything the settings UI needs to render skills in one round trip. */
 export interface SkillsSnapshot extends SkillsStatus {
   selection: SkillSelection;
+  /**
+   * Whether the user has ever chosen a selection. A `false` here is what makes
+   * Install open the picker instead of installing the bundle wholesale.
+   */
+  selectionSaved: boolean;
 }
 
 export interface SkillsSaveResult extends SkillsSnapshot {
@@ -76,15 +81,18 @@ export function createSkillsController({
   }
 
   async function converge(apply: Converge): Promise<SkillsSnapshot> {
+    const targets = resolveTargets();
     const selection = await selectionStore.get();
-    await recoverInterruptedSkillTransactions(resolveTargets(), selection);
-    return { ...(await apply(resolveTargets(), selection)), selection };
+    await recoverInterruptedSkillTransactions(targets, selection);
+    const status = await apply(targets, selection);
+    return { ...status, selection, selectionSaved: await selectionStore.isSet() };
   }
 
   async function saveSelection(request: unknown): Promise<SkillsSaveResult> {
     const targets = resolveTargets();
     const next = coerceSkillSelection(request);
     const previous = await selectionStore.get();
+    const previouslySaved = await selectionStore.isSet();
     await recoverInterruptedSkillTransactions(targets, previous);
     const confirmed = new Set(
       coerceSkillNames(isRecord(request) ? request.confirmedRemovals : null),
@@ -100,6 +108,7 @@ export function createSkillsController({
         return {
           ...(await getSkillsStatus(targets, previous)),
           selection: previous,
+          selectionSaved: previouslySaved,
           confirmationRequired: { removals },
         };
       }
@@ -137,7 +146,7 @@ export function createSkillsController({
           // manifest stays behind so the next serialized operation retries
           // cleanup; reporting this save as failed would misstate its outcome.
         }
-        return { ...status, selection: next, confirmationRequired: null };
+        return { ...status, selection: next, selectionSaved: true, confirmationRequired: null };
       }
 
       // The frozen plan became incomplete while it was being applied. Put only

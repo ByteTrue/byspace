@@ -2259,7 +2259,7 @@ export const es: TranslationResources = {
         updateFallback: "Sincronice las habilidades incluidas con su máquina.",
         uninstallTitle: "¿Desinstalar las habilidadesBySpace?",
         uninstallMessage:
-          "Elimina todas las habilidades de orquestaciónBySpacede ~/.agents, ~/.claude, ~/.codex.",
+          "Elimina todas las habilidades de orquestaciónBySpacede ~/.agents y ~/.claude.",
         choose: "Elegir habilidades",
         chooseAll: "Todas las habilidades",
         chooseAllHint:
@@ -2268,7 +2268,7 @@ export const es: TranslationResources = {
         chooseEmpty: "Esta versión no incluye habilidades.",
         removeTitle: "¿Eliminar las habilidades deseleccionadas?",
         removeMessage:
-          "{{skills}} se eliminarán de ~/.agents, ~/.claude y ~/.codex. También se elimina todo lo que hayas añadido dentro de esas carpetas de habilidades.",
+          "{{skills}} se eliminarán de ~/.agents y ~/.claude. También se elimina todo lo que hayas añadido dentro de esas carpetas de habilidades.",
         saveFailed: "No se pudo guardar tu selección de habilidades.",
         statusFailed: "No se puede comprobar el estado de las habilidades de orquestación.",
         updateFailed: "No se pueden actualizar las habilidades de orquestación.",

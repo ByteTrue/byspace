@@ -6,7 +6,6 @@ export interface SkillSyncOptions {
   sourceDir: string;
   agentsDir: string;
   claudeDir: string;
-  codexDir: string;
   skillNames: readonly string[];
   onSkillError?: (skillName: string, error: unknown) => void;
 }
@@ -171,15 +170,10 @@ async function syncDirectoryFiles(srcDir: string, dstDir: string): Promise<numbe
 export interface RemoveSkillTargets {
   agentsDir: string;
   claudeDir: string;
-  codexDir: string;
 }
 
 export async function removeSkill(skillName: string, targets: RemoveSkillTargets): Promise<void> {
-  const paths = [
-    path.join(targets.agentsDir, skillName),
-    path.join(targets.claudeDir, skillName),
-    path.join(targets.codexDir, skillName),
-  ];
+  const paths = [path.join(targets.agentsDir, skillName), path.join(targets.claudeDir, skillName)];
   for (const p of paths) {
     await fs.rm(p, { recursive: true, force: true });
   }
@@ -204,11 +198,6 @@ export async function syncSkills(options: SkillSyncOptions): Promise<SkillSyncRe
       changedFiles += await syncDirectoryFiles(
         bundleSkillDir,
         path.join(options.claudeDir, skillName),
-      );
-
-      changedFiles += await syncDirectoryFiles(
-        bundleSkillDir,
-        path.join(options.codexDir, skillName),
       );
 
       processedSkills++;

@@ -5,6 +5,7 @@ import {
   cancelSkillSelection,
   chooseAllSkills,
   chooseCustomSkills,
+  clickInstall,
   expectInstalledSkills,
   expectSavedSelection,
   expectSkillFile,
@@ -31,6 +32,21 @@ const test = base.extend<{ skills: AgentSkillsSandbox }>({
 
 test.describe("Host agent skills", () => {
   test.describe.configure({ timeout: 120_000 });
+
+  test("asks which skills to install before the first install", async ({ page, skills }) => {
+    const chosen = skills.available.slice(0, 1);
+    await openAgentSkillsSettings(page, skills);
+
+    // Nothing is installed yet, so Install is the first point the user can say
+    // what they want. It asks instead of writing the whole bundle.
+    await clickInstall(page);
+
+    await chooseCustomSkills(page, chosen);
+    await saveSkillSelection(page);
+
+    await expectInstalledSkills(skills, chosen);
+    await expectSavedSelection(skills, { mode: "custom", skills: chosen });
+  });
 
   test("installs a custom selection, cancels a draft, then installs all skills", async ({
     page,
@@ -151,7 +167,9 @@ test.describe("Host agent skills", () => {
     await expectSavedSelection(skills, secondSelection);
   });
 
-  test("ignores agent config environment overrides", async ({ skills }) => {
+  test("keeps install paths under the daemon user's home, ignoring agent config overrides", async ({
+    skills,
+  }) => {
     await skills.install({ mode: "custom", skills: [skills.available[0]!] });
 
     await expect(

@@ -2233,15 +2233,16 @@ export const en = {
         updateFallback: "Sync bundled skills to this host.",
         uninstallTitle: "Uninstall BySpace skills?",
         uninstallMessage:
-          "Removes all BySpace orchestration skills from ~/.agents, ~/.claude, ~/.codex on this host.",
+          "Removes all BySpace orchestration skills from ~/.agents and ~/.claude on this host.",
         choose: "Choose skills",
+        chooseFirst: "Choose skills to install",
         chooseAll: "All skills",
         chooseAllHint: "Keep every bundled skill installed, including ones added later.",
         chooseList: "Bundled skills",
         chooseEmpty: "This host bundles no skills.",
         removeTitle: "Remove deselected skills?",
         removeMessage:
-          "{{skills}} will be deleted from ~/.agents, ~/.claude, and ~/.codex on this host. Anything you added inside those skill folders is deleted too.",
+          "{{skills}} will be deleted from ~/.agents and ~/.claude on this host. Anything you added inside those skill folders is deleted too.",
         saveFailed: "Could not save your skill selection.",
         actions: {
           install: "Install",

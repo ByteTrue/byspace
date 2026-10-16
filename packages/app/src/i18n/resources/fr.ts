@@ -2262,7 +2262,7 @@ export const fr: TranslationResources = {
         updateFallback: "Synchronisez les compétences regroupées sur votre machine.",
         uninstallTitle: "Désinstaller les compétencesBySpace?",
         uninstallMessage:
-          "Supprime toutes les compétences d'orchestrationBySpacede ~/.agents, ~/.claude, ~/.codex.",
+          "Supprime toutes les compétences d'orchestrationBySpacede ~/.agents et ~/.claude.",
         choose: "Choisir les compétences",
         chooseAll: "Toutes les compétences",
         chooseAllHint:
@@ -2271,7 +2271,7 @@ export const fr: TranslationResources = {
         chooseEmpty: "Cette version ne fournit aucune compétence.",
         removeTitle: "Supprimer les compétences décochées ?",
         removeMessage:
-          "{{skills}} seront supprimées de ~/.agents, ~/.claude et ~/.codex. Tout ce que vous avez ajouté dans ces dossiers de compétences est également supprimé.",
+          "{{skills}} seront supprimées de ~/.agents et ~/.claude. Tout ce que vous avez ajouté dans ces dossiers de compétences est également supprimé.",
         saveFailed: "Impossible d'enregistrer votre sélection de compétences.",
         statusFailed: "Impossible de vérifier l'état des compétences d'orchestration.",
         updateFailed: "Impossible de mettre à jour les compétences d'orchestration.",

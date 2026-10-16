@@ -41,13 +41,13 @@ describe("orchestration skill paths", () => {
     expect(resolveBundledSkillsDir(pathToFileURL(emittedModule))).toBe(catalog);
   });
 
-  it("keeps the original fixed managed directories under the daemon user's home", () => {
+  it("keeps the managed directories under the daemon user's home", () => {
     const home = os.homedir();
 
     expect(resolveSkillTargets()).toMatchObject({
       agentsDir: path.join(home, ".agents", "skills"),
       claudeDir: path.join(home, ".claude", "skills"),
-      codexDir: path.join(home, ".codex", "skills"),
+      retiredDirs: [path.join(home, ".codex", "skills")],
     });
   });
 });

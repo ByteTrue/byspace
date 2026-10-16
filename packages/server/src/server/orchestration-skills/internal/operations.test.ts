@@ -31,7 +31,7 @@ async function makeSandbox(): Promise<Sandbox> {
     sourceDir: path.join(root, "bundle"),
     agentsDir: path.join(root, "home", ".agents", "skills"),
     claudeDir: path.join(root, "home", ".claude", "skills"),
-    codexDir: path.join(root, "home", ".codex", "skills"),
+    retiredDirs: [path.join(root, "home", ".codex", "skills")],
   };
   await fs.mkdir(targets.sourceDir, { recursive: true });
   return { root, targets };
@@ -69,8 +69,21 @@ async function writeOnDiskSkillToAllTargets(
   await Promise.all([
     writeOnDiskSkill(targets.agentsDir, name, files),
     writeOnDiskSkill(targets.claudeDir, name, files),
-    writeOnDiskSkill(targets.codexDir, name, files),
   ]);
+}
+
+/** A retired agent home only counts as BySpace's when its manifest is there too. */
+async function writeRetiredSkillCopy(
+  targets: SkillTargets,
+  name: string,
+  files: Record<string, string>,
+): Promise<void> {
+  for (const root of targets.retiredDirs) {
+    await writeFiles(path.join(root, name), {
+      ...files,
+      ".byspace-managed-files.json": '{"version":1,"files":{}}',
+    });
+  }
 }
 
 async function writeCurrentBundle(sourceDir: string): Promise<void> {
@@ -87,9 +100,7 @@ async function pathExists(p: string): Promise<boolean> {
 
 async function installedIn(targets: SkillTargets, name: string): Promise<boolean[]> {
   return Promise.all(
-    [targets.agentsDir, targets.claudeDir, targets.codexDir].map((dir) =>
-      pathExists(path.join(dir, name)),
-    ),
+    [targets.agentsDir, targets.claudeDir].map((dir) => pathExists(path.join(dir, name))),
   );
 }
 
@@ -170,7 +181,6 @@ describe("getSkillsStatus", () => {
     await writeCurrentBundle(sandbox.targets.sourceDir);
     await writeOnDiskSkillToAllTargets(sandbox.targets, "byspace", { "SKILL.md": "byspace-v1" });
     await writeOnDiskSkillToAllTargets(sandbox.targets, "byspace-loop", { "SKILL.md": "loop-v1" });
-
     const status = await getSkillsStatus(sandbox.targets, ALL_SKILLS);
 
     expect(status).toEqual({
@@ -193,7 +203,7 @@ describe("getSkillsStatus", () => {
       "SKILL.md": "byspace-v1",
       "commands/local.md": "user command",
     });
-    await writeOnDiskSkill(sandbox.targets.codexDir, "byspace", {
+    await writeOnDiskSkill(sandbox.targets.agentsDir, "byspace", {
       "SKILL.md": "byspace-v1",
       "hooks/guard.sh": "user guard",
     });
@@ -212,7 +222,6 @@ describe("getSkillsStatus", () => {
     await writeCurrentBundle(sandbox.targets.sourceDir);
     await writeOnDiskSkill(sandbox.targets.agentsDir, "byspace", { "SKILL.md": "stale" });
     await writeOnDiskSkill(sandbox.targets.claudeDir, "byspace", { "SKILL.md": "byspace-v1" });
-    await writeOnDiskSkill(sandbox.targets.codexDir, "byspace", { "SKILL.md": "byspace-v1" });
     await writeOnDiskSkillToAllTargets(sandbox.targets, "byspace-loop", { "SKILL.md": "loop-v1" });
 
     const status = await getSkillsStatus(sandbox.targets, ALL_SKILLS);
@@ -227,8 +236,6 @@ describe("getSkillsStatus", () => {
     await writeOnDiskSkill(sandbox.targets.agentsDir, "byspace-loop", { "SKILL.md": "loop-v1" });
     await writeOnDiskSkill(sandbox.targets.claudeDir, "byspace", { "SKILL.md": "stale" });
     await writeOnDiskSkill(sandbox.targets.claudeDir, "byspace-loop", { "SKILL.md": "loop-v1" });
-    await writeOnDiskSkill(sandbox.targets.codexDir, "byspace", { "SKILL.md": "byspace-v1" });
-    await writeOnDiskSkill(sandbox.targets.codexDir, "byspace-loop", { "SKILL.md": "loop-v1" });
 
     const status = await getSkillsStatus(sandbox.targets, ALL_SKILLS);
 
@@ -262,7 +269,6 @@ describe("getSkillsStatus", () => {
     await writeCurrentBundle(sandbox.targets.sourceDir);
     await writeOnDiskSkill(sandbox.targets.agentsDir, "byspace", { "SKILL.md": "stale" });
     await writeOnDiskSkill(sandbox.targets.claudeDir, "byspace", { "SKILL.md": "byspace-v1" });
-    await writeOnDiskSkill(sandbox.targets.codexDir, "byspace", { "SKILL.md": "byspace-v1" });
     await writeOnDiskSkill(sandbox.targets.agentsDir, "byspace-chat", { "SKILL.md": "chat-old" });
 
     const status = await getSkillsStatus(sandbox.targets, ALL_SKILLS);
@@ -300,9 +306,9 @@ describe("custom skill selection", () => {
       available: ["byspace", "byspace-advisor", "byspace-loop"],
       installed: ["byspace", "byspace-loop"],
     });
-    expect(await installedIn(sandbox.targets, "byspace")).toEqual([true, true, true]);
-    expect(await installedIn(sandbox.targets, "byspace-loop")).toEqual([true, true, true]);
-    expect(await installedIn(sandbox.targets, "byspace-advisor")).toEqual([false, false, false]);
+    expect(await installedIn(sandbox.targets, "byspace")).toEqual([true, true]);
+    expect(await installedIn(sandbox.targets, "byspace-loop")).toEqual([true, true]);
+    expect(await installedIn(sandbox.targets, "byspace-advisor")).toEqual([false, false]);
   });
 
   it("reports up-to-date while an unselected bundled skill is absent", async () => {
@@ -324,9 +330,9 @@ describe("custom skill selection", () => {
     const status = await installSkills(sandbox.targets, only("byspace"));
 
     expect(status.state).toBe("up-to-date");
-    expect(await installedIn(sandbox.targets, "byspace")).toEqual([true, true, true]);
-    expect(await installedIn(sandbox.targets, "byspace-loop")).toEqual([false, false, false]);
-    expect(await installedIn(sandbox.targets, "byspace-advisor")).toEqual([false, false, false]);
+    expect(await installedIn(sandbox.targets, "byspace")).toEqual([true, true]);
+    expect(await installedIn(sandbox.targets, "byspace-loop")).toEqual([false, false]);
+    expect(await installedIn(sandbox.targets, "byspace-advisor")).toEqual([false, false]);
   });
 
   it("reports a delete op for a deselected skill before it is applied", async () => {
@@ -359,8 +365,8 @@ describe("custom skill selection", () => {
       available: ["byspace", "byspace-advisor", "byspace-loop"],
       installed: [],
     });
-    expect(await installedIn(sandbox.targets, "byspace")).toEqual([false, false, false]);
-    expect(await installedIn(sandbox.targets, "byspace-loop")).toEqual([false, false, false]);
+    expect(await installedIn(sandbox.targets, "byspace")).toEqual([false, false]);
+    expect(await installedIn(sandbox.targets, "byspace-loop")).toEqual([false, false]);
   });
 
   it("ignores selected names that the bundle does not ship", async () => {
@@ -372,7 +378,7 @@ describe("custom skill selection", () => {
       available: ["byspace", "byspace-advisor", "byspace-loop"],
       installed: ["byspace"],
     });
-    expect(await installedIn(sandbox.targets, "not-a-skill")).toEqual([false, false, false]);
+    expect(await installedIn(sandbox.targets, "not-a-skill")).toEqual([false, false]);
   });
 
   it("still deletes legacy skill names that are not selectable", async () => {
@@ -382,11 +388,7 @@ describe("custom skill selection", () => {
 
     await installSkills(sandbox.targets, only("byspace"));
 
-    expect(await installedIn(sandbox.targets, "byspace-orchestrator")).toEqual([
-      false,
-      false,
-      false,
-    ]);
+    expect(await installedIn(sandbox.targets, "byspace-orchestrator")).toEqual([false, false]);
   });
 });
 
@@ -401,7 +403,7 @@ describe("installSkills / updateSkills", () => {
     await fs.rm(sandbox.root, { recursive: true, force: true });
   });
 
-  it("installs from a clean machine, populates all three targets, and leaves user dirs alone", async () => {
+  it("installs from a clean machine, populates both targets, and leaves user dirs alone", async () => {
     await writeCurrentBundle(sandbox.targets.sourceDir);
     await writeOnDiskSkill(sandbox.targets.agentsDir, "unslop", { "SKILL.md": "user-unslop" });
 
@@ -418,9 +420,8 @@ describe("installSkills / updateSkills", () => {
         await fs.readFile(path.join(sandbox.targets.agentsDir, name, "SKILL.md"), "utf-8"),
       ).toBe(name === "byspace" ? "byspace-v1" : "loop-v1");
       expect(
-        await fs.readFile(path.join(sandbox.targets.codexDir, name, "SKILL.md"), "utf-8"),
+        await fs.readFile(path.join(sandbox.targets.claudeDir, name, "SKILL.md"), "utf-8"),
       ).toBe(name === "byspace" ? "byspace-v1" : "loop-v1");
-      expect(await pathExists(path.join(sandbox.targets.claudeDir, name))).toBe(true);
     }
     expect(
       await fs.readFile(path.join(sandbox.targets.agentsDir, "unslop", "SKILL.md"), "utf-8"),
@@ -432,7 +433,6 @@ describe("installSkills / updateSkills", () => {
     await writeOnDiskSkill(sandbox.targets.agentsDir, "byspace", { "SKILL.md": "stale" });
     await writeOnDiskSkill(sandbox.targets.agentsDir, "byspace-chat", { "SKILL.md": "chat-old" });
     await writeOnDiskSkill(sandbox.targets.claudeDir, "byspace-chat", { "SKILL.md": "chat-old" });
-    await writeOnDiskSkill(sandbox.targets.codexDir, "byspace-chat", { "SKILL.md": "chat-old" });
 
     const status = await updateSkills(sandbox.targets, ALL_SKILLS);
 
@@ -448,11 +448,7 @@ describe("installSkills / updateSkills", () => {
     expect(
       await fs.readFile(path.join(sandbox.targets.agentsDir, "byspace-loop", "SKILL.md"), "utf-8"),
     ).toBe("loop-v1");
-    for (const dir of [
-      sandbox.targets.agentsDir,
-      sandbox.targets.claudeDir,
-      sandbox.targets.codexDir,
-    ]) {
+    for (const dir of [sandbox.targets.agentsDir, sandbox.targets.claudeDir]) {
       expect(await pathExists(path.join(dir, "byspace-chat"))).toBe(true);
     }
   });
@@ -469,9 +465,9 @@ describe("installSkills / updateSkills", () => {
       "SKILL.md": "byspace-v1",
       "notes/local.md": "claude notes",
     });
-    await writeOnDiskSkill(sandbox.targets.codexDir, "byspace", {
+    await writeOnDiskSkill(sandbox.targets.claudeDir, "byspace", {
       "SKILL.md": "byspace-v1",
-      "prompts/local.md": "codex prompt",
+      "prompts/local.md": "claude prompt",
     });
 
     const status = await updateSkills(sandbox.targets, ALL_SKILLS);
@@ -497,10 +493,10 @@ describe("installSkills / updateSkills", () => {
     ).toBe("claude notes");
     expect(
       await fs.readFile(
-        path.join(sandbox.targets.codexDir, "byspace", "prompts", "local.md"),
+        path.join(sandbox.targets.claudeDir, "byspace", "prompts", "local.md"),
         "utf-8",
       ),
-    ).toBe("codex prompt");
+    ).toBe("claude prompt");
   });
 
   it("repairs secondary agent targets even when agents skills are current", async () => {
@@ -508,8 +504,6 @@ describe("installSkills / updateSkills", () => {
     await writeOnDiskSkill(sandbox.targets.agentsDir, "byspace", { "SKILL.md": "byspace-v1" });
     await writeOnDiskSkill(sandbox.targets.agentsDir, "byspace-loop", { "SKILL.md": "loop-v1" });
     await writeOnDiskSkill(sandbox.targets.claudeDir, "byspace", { "SKILL.md": "byspace-v1" });
-    await writeOnDiskSkill(sandbox.targets.codexDir, "byspace", { "SKILL.md": "byspace-v1" });
-    await writeOnDiskSkill(sandbox.targets.codexDir, "byspace-loop", { "SKILL.md": "loop-v1" });
 
     const status = await updateSkills(sandbox.targets, ALL_SKILLS);
 
@@ -555,7 +549,7 @@ describe("installSkills / updateSkills", () => {
       available: ["byspace", "byspace-loop"],
       installed: [],
     });
-    expect(await installedIn(sandbox.targets, "byspace")).toEqual([false, false, false]);
+    expect(await installedIn(sandbox.targets, "byspace")).toEqual([false, false]);
   });
 
   it("is idempotent — running install twice keeps state at up-to-date", async () => {
@@ -580,7 +574,7 @@ describe("uninstallSkills", () => {
     await fs.rm(sandbox.root, { recursive: true, force: true });
   });
 
-  it("removes every BySpace skill from all three targets and preserves user dirs", async () => {
+  it("removes every BySpace skill from both targets and preserves user dirs", async () => {
     await writeCurrentBundle(sandbox.targets.sourceDir);
     await installSkills(sandbox.targets, ALL_SKILLS);
     for (const name of ["unslop", "tdd", "devbox"]) {
@@ -591,7 +585,7 @@ describe("uninstallSkills", () => {
 
     expect(status.state).toBe("not-installed");
     for (const name of ["byspace", "byspace-loop", ...LEGACY_SKILL_NAMES]) {
-      expect(await installedIn(sandbox.targets, name)).toEqual([false, false, false]);
+      expect(await installedIn(sandbox.targets, name)).toEqual([false, false]);
     }
     for (const name of ["unslop", "tdd", "devbox"]) {
       expect(
@@ -608,19 +602,83 @@ describe("uninstallSkills", () => {
     expect(status.state).toBe("not-installed");
   });
 
-  it("cleans up legacy skill names that linger in agents, claude, and codex", async () => {
+  it("cleans up legacy skill names that linger in agents and claude", async () => {
     await writeCurrentBundle(sandbox.targets.sourceDir);
-    for (const dir of [
-      sandbox.targets.agentsDir,
-      sandbox.targets.claudeDir,
-      sandbox.targets.codexDir,
-    ]) {
+    for (const dir of [sandbox.targets.agentsDir, sandbox.targets.claudeDir]) {
       await writeOnDiskSkill(dir, "byspace-chat", { "SKILL.md": "chat-old" });
     }
 
     const status = await uninstallSkills(sandbox.targets, ALL_SKILLS);
 
     expect(status.state).toBe("not-installed");
-    expect(await installedIn(sandbox.targets, "byspace-chat")).toEqual([false, false, false]);
+    expect(await installedIn(sandbox.targets, "byspace-chat")).toEqual([false, false]);
+  });
+});
+
+describe("retired agent homes", () => {
+  let sandbox: Sandbox;
+
+  beforeEach(async () => {
+    sandbox = await makeSandbox();
+    await writeCurrentBundle(sandbox.targets.sourceDir);
+  });
+
+  afterEach(async () => {
+    await fs.rm(sandbox.root, { recursive: true, force: true });
+  });
+
+  async function retiredEntries(targets: SkillTargets): Promise<string[]> {
+    const entries = await fs.readdir(targets.retiredDirs[0]!, { withFileTypes: true });
+    return entries.map((entry) => entry.name).sort();
+  }
+
+  it("ignores copies in a retired home when reporting status", async () => {
+    await installSkills(sandbox.targets, ALL_SKILLS);
+    await writeRetiredSkillCopy(sandbox.targets, "byspace", { "SKILL.md": "byspace-v1" });
+
+    const status = await getSkillsStatus(sandbox.targets, ALL_SKILLS);
+
+    expect(status.state).toBe("up-to-date");
+    expect(status.ops).toEqual([]);
+    expect(status.installed).toEqual(["byspace", "byspace-loop"]);
+  });
+
+  it("removes its own copies from a retired home on the next convergence", async () => {
+    await installSkills(sandbox.targets, ALL_SKILLS);
+    await writeRetiredSkillCopy(sandbox.targets, "byspace", { "SKILL.md": "byspace-v1" });
+    await writeRetiredSkillCopy(sandbox.targets, "byspace-loop", { "SKILL.md": "loop-v1" });
+
+    await updateSkills(sandbox.targets, ALL_SKILLS);
+
+    await expect(fs.readdir(sandbox.targets.retiredDirs[0]!)).rejects.toThrow();
+  });
+
+  it("leaves a retired home in place when the user keeps their own skills in it", async () => {
+    await writeOnDiskSkill(sandbox.targets.retiredDirs[0]!, "unslop", { "SKILL.md": "user" });
+    await writeRetiredSkillCopy(sandbox.targets, "byspace", { "SKILL.md": "byspace-v1" });
+
+    await installSkills(sandbox.targets, ALL_SKILLS);
+
+    expect(await retiredEntries(sandbox.targets)).toEqual(["unslop"]);
+  });
+
+  it("leaves a same-named directory without the manifest alone", async () => {
+    await writeOnDiskSkill(sandbox.targets.retiredDirs[0]!, "byspace", { "SKILL.md": "mine" });
+
+    await installSkills(sandbox.targets, ALL_SKILLS);
+
+    expect(await retiredEntries(sandbox.targets)).toEqual(["byspace"]);
+    expect(
+      await fs.readFile(path.join(sandbox.targets.retiredDirs[0]!, "byspace", "SKILL.md"), "utf-8"),
+    ).toBe("mine");
+  });
+
+  it("clears a retired home on uninstall", async () => {
+    await installSkills(sandbox.targets, ALL_SKILLS);
+    await writeRetiredSkillCopy(sandbox.targets, "byspace", { "SKILL.md": "byspace-v1" });
+
+    await uninstallSkills(sandbox.targets, ALL_SKILLS);
+
+    await expect(fs.readdir(sandbox.targets.retiredDirs[0]!)).rejects.toThrow();
   });
 });

@@ -1750,6 +1750,11 @@ export const AgentSkillsStatusSchema = z.object({
   available: z.array(z.string()),
   installed: z.array(z.string()),
   selection: AgentSkillSelectionSchema,
+  // Whether the user has ever chosen a selection. `selection` cannot answer
+  // this: the default is also a valid saved value. A daemon that predates the
+  // field omits it, which reads as "unknown" — only an explicit `false` opens
+  // the picker before the first install.
+  selectionSaved: z.boolean().optional(),
 });
 export type AgentSkillsStatus = z.infer<typeof AgentSkillsStatusSchema>;
 

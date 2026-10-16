@@ -22,7 +22,7 @@ type AgentSkillsClient = Pick<
   "close" | "connect" | "getAgentSkillsStatus" | "saveAgentSkillsSelection"
 >;
 
-export type SkillTargetName = "agents" | "claude" | "codex";
+export type SkillTargetName = "agents" | "claude";
 
 export interface AgentSkillsSandbox {
   available: string[];
@@ -63,7 +63,6 @@ export async function startAgentSkillsSandbox(): Promise<AgentSkillsSandbox> {
   const targets = {
     agents: path.join(home, ".agents", "skills"),
     claude: path.join(home, ".claude", "skills"),
-    codex: path.join(home, ".codex", "skills"),
   };
 
   return {
@@ -142,6 +141,10 @@ export async function openSkillSelection(page: Page): Promise<void> {
   await expectSkillSelectionOpen(page);
 }
 
+export async function clickInstall(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Install", exact: true }).click();
+}
+
 export async function expectSkillSelectionOpen(page: Page): Promise<void> {
   await expect(page.getByRole("switch", { name: "All skills", exact: true })).toBeVisible();
 }
@@ -165,7 +168,9 @@ export async function chooseAllSkills(page: Page): Promise<void> {
 }
 
 export async function saveSkillSelection(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  // The footer button installs on a first run and saves afterwards, so the
+  // testID is what names it.
+  await page.getByTestId("skill-selection-save").click();
 }
 
 export async function cancelSkillSelection(page: Page): Promise<void> {

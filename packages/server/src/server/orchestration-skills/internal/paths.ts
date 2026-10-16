@@ -17,8 +17,11 @@ export function resolveBundledSkillsDir(moduleUrl: string | URL = import.meta.ur
 export function resolveSkillTargets(home: string = os.homedir()): SkillTargets {
   return {
     sourceDir: resolveBundledSkillsDir(),
+    // Codex reads ~/.agents/skills as a skill root, so it needs no directory of
+    // its own. Writing one planted a directory in the home of every user who
+    // installed the skills, including users who never run Codex.
     agentsDir: path.join(home, ".agents", "skills"),
     claudeDir: path.join(home, ".claude", "skills"),
-    codexDir: path.join(home, ".codex", "skills"),
+    retiredDirs: [path.join(home, ".codex", "skills")],
   };
 }

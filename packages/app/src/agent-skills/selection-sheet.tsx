@@ -20,6 +20,10 @@ const checkedIconMapping = (theme: Theme) => ({ color: theme.colors.accentForegr
 
 interface SkillSelectionSheetProps {
   visible: boolean;
+  /** Names the outcome: a first install is not the same action as editing one. */
+  title: string;
+  /** Likewise for the primary button: it installs on a first run, and saves after. */
+  confirmLabel: string;
   available: readonly string[];
   selection: SkillSelection;
   isSaving: boolean;
@@ -40,6 +44,8 @@ function isSkillSelected(draft: SkillSelection, name: string): boolean {
  */
 export function SkillSelectionSheet({
   visible,
+  title,
+  confirmLabel,
   available,
   selection,
   isSaving,
@@ -118,7 +124,7 @@ export function SkillSelectionSheet({
     onClose();
   }, [isSaving, onClose]);
 
-  const header = useMemo<SheetHeader>(() => ({ title: t("settings.host.skills.choose") }), [t]);
+  const header = useMemo<SheetHeader>(() => ({ title }), [title]);
 
   const footer = useMemo(
     () => (
@@ -138,13 +144,11 @@ export function SkillSelectionSheet({
           loading={isSaving}
           testID="skill-selection-save"
         >
-          {isSaving
-            ? t("settings.host.skills.actions.saving")
-            : t("settings.host.skills.actions.save")}
+          {isSaving ? t("settings.host.skills.actions.saving") : confirmLabel}
         </Button>
       </View>
     ),
-    [handleDismiss, handleSave, isSaving, t],
+    [confirmLabel, handleDismiss, handleSave, isSaving, t],
   );
 
   const allSkills = draft.mode === "all";

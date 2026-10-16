@@ -2214,7 +2214,7 @@ export const ar: TranslationResources = {
         updateTitle: "تحديث مهارات BySpace ؟",
         updateFallback: "مزامنة المهارات المجمعة لجهازك.",
         uninstallTitle: "إلغاء تثبيت مهارات BySpace ؟",
-        uninstallMessage: "يزيل جميع مهارات تنسيق BySpace من ~/.agents ، ~/.claude ، ~/.codex.",
+        uninstallMessage: "يزيل جميع مهارات تنسيق BySpace من ~/.agents و~/.claude.",
         choose: "اختيار المهارات",
         chooseAll: "كل المهارات",
         chooseAllHint: "أبقِ جميع المهارات المرفقة مثبتة، بما فيها ما يُضاف لاحقًا.",
@@ -2222,7 +2222,7 @@ export const ar: TranslationResources = {
         chooseEmpty: "لا تتضمن هذه النسخة أي مهارات.",
         removeTitle: "إزالة المهارات غير المحددة؟",
         removeMessage:
-          "سيتم حذف {{skills}} من ~/.agents و~/.claude و~/.codex. كما يُحذف كل ما أضفته داخل مجلدات المهارات تلك.",
+          "سيتم حذف {{skills}} من ~/.agents و~/.claude. كما يُحذف كل ما أضفته داخل مجلدات المهارات تلك.",
         saveFailed: "تعذر حفظ اختيار المهارات.",
         statusFailed: "غير قادر على التحقق من حالة مهارات التنسيق.",
         updateFailed: "غير قادر على تحديث مهارات التنسيق.",

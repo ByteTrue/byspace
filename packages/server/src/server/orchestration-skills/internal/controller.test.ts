@@ -37,7 +37,7 @@ async function makeHarness(selectionStore?: SkillSelectionStore): Promise<Harnes
     sourceDir: path.join(root, "bundle"),
     agentsDir: path.join(root, "home", ".agents", "skills"),
     claudeDir: path.join(root, "home", ".claude", "skills"),
-    codexDir: path.join(root, "home", ".codex", "skills"),
+    retiredDirs: [path.join(root, "home", ".codex", "skills")],
   };
   for (const name of BUNDLED_SKILLS) {
     await mkdir(path.join(targets.sourceDir, name), { recursive: true });
@@ -147,7 +147,7 @@ async function installedSkills(dir: string): Promise<string[]> {
 }
 
 async function installedEverywhere(targets: SkillTargets): Promise<string[][]> {
-  return Promise.all([targets.agentsDir, targets.claudeDir, targets.codexDir].map(installedSkills));
+  return Promise.all([targets.agentsDir, targets.claudeDir].map(installedSkills));
 }
 
 async function writeUserFile(
@@ -156,7 +156,7 @@ async function writeUserFile(
   relativePath: string,
   contents: string,
 ): Promise<void> {
-  for (const dir of [targets.agentsDir, targets.claudeDir, targets.codexDir]) {
+  for (const dir of [targets.agentsDir, targets.claudeDir]) {
     const file = path.join(dir, skill, relativePath);
     await mkdir(path.dirname(file), { recursive: true });
     await writeFile(file, contents);
@@ -169,7 +169,7 @@ async function readUserFile(
   relativePath: string,
 ): Promise<Array<string | null>> {
   return Promise.all(
-    [targets.agentsDir, targets.claudeDir, targets.codexDir].map((dir) =>
+    [targets.agentsDir, targets.claudeDir].map((dir) =>
       readFile(path.join(dir, skill, relativePath), "utf8").catch(() => null),
     ),
   );
@@ -178,7 +178,7 @@ async function readUserFile(
 /** Anything the transaction staged and failed to clean up sits beside the skills tree. */
 async function backupArtifacts(targets: SkillTargets): Promise<string[][]> {
   return Promise.all(
-    [targets.agentsDir, targets.claudeDir, targets.codexDir].map(async (dir) => {
+    [targets.agentsDir, targets.claudeDir].map(async (dir) => {
       const parentEntries = await readdir(path.dirname(dir)).catch(() => []);
       const rootEntries = await readdir(dir).catch(() => []);
       return [
@@ -211,7 +211,7 @@ async function blockAgentsDir(targets: SkillTargets): Promise<void> {
 }
 
 async function isInstalled(targets: SkillTargets, name: string): Promise<boolean> {
-  const dirs = [targets.agentsDir, targets.claudeDir, targets.codexDir];
+  const dirs = [targets.agentsDir, targets.claudeDir];
   const present = await Promise.all(
     dirs.map((dir) =>
       access(path.join(dir, name))
@@ -252,7 +252,7 @@ describe("skills controller", () => {
         selection: { mode: "custom", skills: ["byspace", "byspace-loop"] },
       },
     );
-    expect(await installedEverywhere(harness.targets)).toEqual([[], [], []]);
+    expect(await installedEverywhere(harness.targets)).toEqual([[], []]);
   });
 
   let harness: Harness;
@@ -276,7 +276,28 @@ describe("skills controller", () => {
       available: BUNDLED_SKILLS,
       installed: [],
       selection: { mode: "all" },
+      selectionSaved: true,
     });
+  });
+
+  it("reports selectionSaved false until a selection is written", async () => {
+    let saved = false;
+    const store: SkillSelectionStore = {
+      get: async () => ({ mode: "all" }),
+      set: async () => {
+        saved = true;
+        return { mode: "all" };
+      },
+      isSet: async () => saved,
+    };
+    const fresh = await makeHarness(store);
+
+    expect((await fresh.controller.status()).selectionSaved).toBe(false);
+
+    await fresh.controller.save({ mode: "custom", skills: ["byspace"] });
+
+    expect((await fresh.controller.status()).selectionSaved).toBe(true);
+    await rm(fresh.root, { recursive: true, force: true });
   });
 
   it("installs every bundled skill while the selection is all", async () => {
@@ -286,6 +307,7 @@ describe("skills controller", () => {
       available: BUNDLED_SKILLS,
       installed: BUNDLED_SKILLS,
       selection: { mode: "all" },
+      selectionSaved: true,
     });
     expect(await isInstalled(harness.targets, "byspace-advisor")).toBe(true);
   });
@@ -297,7 +319,6 @@ describe("skills controller", () => {
     await harness.controller.install();
 
     expect(await readUserFile(harness.targets, "byspace-loop", "notes/mine.md")).toEqual([
-      "keep this",
       "keep this",
       "keep this",
     ]);
@@ -315,6 +336,7 @@ describe("skills controller", () => {
       available: BUNDLED_SKILLS,
       installed: ["byspace", "byspace-loop"],
       selection: { mode: "custom", skills: ["byspace", "byspace-loop"] },
+      selectionSaved: true,
       confirmationRequired: null,
     });
     expect(await isInstalled(harness.targets, "byspace")).toBe(true);
@@ -348,6 +370,7 @@ describe("skills controller", () => {
       available: BUNDLED_SKILLS,
       installed: [],
       selection: { mode: "custom", skills: ["byspace"] },
+      selectionSaved: true,
     });
     expect(afterReinstall).toEqual({
       state: "up-to-date",
@@ -355,6 +378,7 @@ describe("skills controller", () => {
       available: BUNDLED_SKILLS,
       installed: ["byspace"],
       selection: { mode: "custom", skills: ["byspace"] },
+      selectionSaved: true,
     });
     expect(await isInstalled(harness.targets, "byspace")).toBe(true);
     expect(await isInstalled(harness.targets, "byspace-loop")).toBe(false);
@@ -375,6 +399,7 @@ describe("skills controller", () => {
       available: BUNDLED_SKILLS,
       installed: [],
       selection: { mode: "custom", skills: [] },
+      selectionSaved: true,
       confirmationRequired: null,
     });
     expect(await isInstalled(harness.targets, "byspace")).toBe(false);
@@ -391,6 +416,7 @@ describe("skills controller", () => {
       available: BUNDLED_SKILLS,
       installed: BUNDLED_SKILLS,
       selection: { mode: "all" },
+      selectionSaved: true,
       confirmationRequired: null,
     });
     expect(await isInstalled(harness.targets, "byspace-advisor")).toBe(true);
@@ -409,6 +435,7 @@ describe("skills controller", () => {
       available: BUNDLED_SKILLS,
       installed: ["byspace"],
       selection: { mode: "custom", skills: ["byspace"] },
+      selectionSaved: true,
     });
   });
 
@@ -426,6 +453,7 @@ describe("skills controller", () => {
       available: BUNDLED_SKILLS,
       installed: [],
       selection: { mode: "all" },
+      selectionSaved: true,
     });
   });
 
@@ -453,18 +481,17 @@ describe("skills controller", () => {
       available: BUNDLED_SKILLS,
       installed: ["byspace", "byspace-loop"],
       selection: { mode: "custom", skills: ["byspace", "byspace-loop"] },
+      selectionSaved: true,
     });
     expect(await installedEverywhere(readOnly.targets)).toEqual([
-      ["byspace", "byspace-loop"],
       ["byspace", "byspace-loop"],
       ["byspace", "byspace-loop"],
     ]);
     expect(await readUserFile(readOnly.targets, "byspace-loop", "notes/mine.md")).toEqual([
       "hand written",
       "hand written",
-      "hand written",
     ]);
-    expect(await backupArtifacts(readOnly.targets)).toEqual([[], [], []]);
+    expect(await backupArtifacts(readOnly.targets)).toEqual([[], []]);
     await rm(readOnly.root, { recursive: true, force: true });
   });
 
@@ -482,7 +509,6 @@ describe("skills controller", () => {
     await expect(save).rejects.toThrow("selection store is read-only");
 
     expect(await readUserFile(readOnly.targets, "byspace", "notes/concurrent.md")).toEqual([
-      "keep this",
       "keep this",
       "keep this",
     ]);
@@ -506,7 +532,6 @@ describe("skills controller", () => {
 
     await readOnly.controller.autoUpdate();
     expect(await readUserFile(readOnly.targets, "byspace-loop", "notes/concurrent.md")).toEqual([
-      "keep this",
       "keep this",
       "keep this",
     ]);
@@ -536,10 +561,8 @@ describe("skills controller", () => {
     expect(await readUserFile(readOnly.targets, "byspace-loop", "notes/before.md")).toEqual([
       "restore this",
       "restore this",
-      "restore this",
     ]);
     expect(await readUserFile(readOnly.targets, "byspace-loop", "notes/concurrent.md")).toEqual([
-      "keep this",
       "keep this",
       "keep this",
     ]);
@@ -564,7 +587,6 @@ describe("skills controller", () => {
     expect(await readUserFile(harness.targets, "byspace-loop", "notes/concurrent.md")).toEqual([
       "keep this",
       "keep this",
-      "keep this",
     ]);
     expect(await isInstalled(harness.targets, "byspace-loop")).toBe(true);
   });
@@ -578,11 +600,9 @@ describe("skills controller", () => {
       };
       const next: SkillSelection = { mode: "custom", skills: ["byspace"] };
       await harness.controller.save(previous);
-      const livePaths = [
-        harness.targets.agentsDir,
-        harness.targets.claudeDir,
-        harness.targets.codexDir,
-      ].map((root) => path.join(root, "byspace-loop"));
+      const livePaths = [harness.targets.agentsDir, harness.targets.claudeDir].map((root) =>
+        path.join(root, "byspace-loop"),
+      );
       for (const live of livePaths) await chmod(live, 0o700);
       const before = await Promise.all(livePaths.map(lstat));
 
@@ -593,7 +613,7 @@ describe("skills controller", () => {
 
       const after = await Promise.all(livePaths.map(lstat));
       expect(after.map((entry) => entry.ino)).toEqual(before.map((entry) => entry.ino));
-      expect(after.map((entry) => entry.mode & 0o777)).toEqual([0o700, 0o700, 0o700]);
+      expect(after.map((entry) => entry.mode & 0o777)).toEqual([0o700, 0o700]);
     },
   );
 
@@ -608,11 +628,11 @@ describe("skills controller", () => {
     const transaction = await beginSkillsTransaction(harness.targets, previous, next, [
       { kind: "delete", name: "byspace-loop" },
     ]);
-    const codexStage = (await readdir(harness.targets.codexDir)).find((entry) =>
+    const claudeStage = (await readdir(harness.targets.claudeDir)).find((entry) =>
       entry.startsWith(".byspace-skills-transaction-"),
     );
-    expect(codexStage).toBeDefined();
-    await rm(path.join(harness.targets.codexDir, codexStage!, "byspace-loop"), {
+    expect(claudeStage).toBeDefined();
+    await rm(path.join(harness.targets.claudeDir, claudeStage!, "byspace-loop"), {
       recursive: true,
       force: true,
     });
@@ -621,10 +641,9 @@ describe("skills controller", () => {
 
     expect(await readUserFile(harness.targets, "byspace-loop", "SKILL.md")).toEqual([
       "byspace-loop-v1",
-      "byspace-loop-v1",
       null,
     ]);
-    expect(await backupArtifacts(harness.targets)).toEqual([[], [], []]);
+    expect(await backupArtifacts(harness.targets)).toEqual([[], []]);
     await expect(harness.controller.status()).resolves.toMatchObject({ selection: previous });
   });
 
@@ -640,25 +659,24 @@ describe("skills controller", () => {
     const transaction = await beginSkillsTransaction(harness.targets, previous, next, [
       { kind: "delete", name: "byspace-loop" },
     ]);
-    const live = path.join(harness.targets.codexDir, "byspace-loop");
+    const live = path.join(harness.targets.claudeDir, "byspace-loop");
     await writeFile(live, "external replacement");
 
     await transaction.rollback();
 
     expect(await readFile(live, "utf8")).toBe("external replacement");
-    const recovered = (await readdir(harness.targets.codexDir)).find((entry) =>
+    const recovered = (await readdir(harness.targets.claudeDir)).find((entry) =>
       entry.startsWith(".byspace-skills-recovered-"),
     );
     expect(recovered).toBeDefined();
     expect(
-      await readFile(path.join(harness.targets.codexDir, recovered!, "notes", "mine.md"), "utf8"),
+      await readFile(path.join(harness.targets.claudeDir, recovered!, "notes", "mine.md"), "utf8"),
     ).toBe("keep this");
     expect(await readUserFile(harness.targets, "byspace-loop", "notes/mine.md")).toEqual([
       "keep this",
-      "keep this",
       null,
     ]);
-    expect(await backupArtifacts(harness.targets)).toEqual([[], [], []]);
+    expect(await backupArtifacts(harness.targets)).toEqual([[], []]);
     await expect(harness.controller.status()).resolves.toMatchObject({ selection: previous });
   });
 
@@ -674,7 +692,7 @@ describe("skills controller", () => {
     const transaction = await beginSkillsTransaction(harness.targets, previous, next, [
       { kind: "delete", name: "byspace-loop" },
     ]);
-    const live = path.join(harness.targets.codexDir, "byspace-loop");
+    const live = path.join(harness.targets.claudeDir, "byspace-loop");
     await mkdir(path.join(live, "notes"), { recursive: true });
     await writeFile(path.join(live, "SKILL.md"), "external skill");
     await writeFile(path.join(live, "notes", "mine.md"), "external notes");
@@ -683,17 +701,17 @@ describe("skills controller", () => {
 
     expect(await readFile(path.join(live, "SKILL.md"), "utf8")).toBe("external skill");
     expect(await readFile(path.join(live, "notes", "mine.md"), "utf8")).toBe("external notes");
-    const recovered = (await readdir(harness.targets.codexDir)).find((entry) =>
+    const recovered = (await readdir(harness.targets.claudeDir)).find((entry) =>
       entry.startsWith(".byspace-skills-recovered-byspace-loop-"),
     );
     expect(recovered).toBeDefined();
     expect(
-      await readFile(path.join(harness.targets.codexDir, recovered!, "SKILL.md"), "utf8"),
+      await readFile(path.join(harness.targets.claudeDir, recovered!, "SKILL.md"), "utf8"),
     ).toBe("byspace-loop-v1");
     expect(
-      await readFile(path.join(harness.targets.codexDir, recovered!, "notes", "mine.md"), "utf8"),
+      await readFile(path.join(harness.targets.claudeDir, recovered!, "notes", "mine.md"), "utf8"),
     ).toBe("staged notes");
-    expect(await backupArtifacts(harness.targets)).toEqual([[], [], []]);
+    expect(await backupArtifacts(harness.targets)).toEqual([[], []]);
     await expect(harness.controller.status()).resolves.toMatchObject({ selection: previous });
   });
 
@@ -713,7 +731,7 @@ describe("skills controller", () => {
     const replacedUpdate = path.join(harness.targets.agentsDir, "byspace");
     await rm(replacedUpdate, { recursive: true, force: true });
     await writeFile(replacedUpdate, "external update replacement");
-    const replacedAdd = path.join(harness.targets.codexDir, "byspace-advisor");
+    const replacedAdd = path.join(harness.targets.claudeDir, "byspace-advisor");
     await writeFile(replacedAdd, "external add replacement");
 
     await transaction.rollback();
@@ -731,9 +749,8 @@ describe("skills controller", () => {
     expect(await readUserFile(harness.targets, "byspace", "notes/mine.md")).toEqual([
       null,
       "keep this",
-      "keep this",
     ]);
-    expect(await backupArtifacts(harness.targets)).toEqual([[], [], []]);
+    expect(await backupArtifacts(harness.targets)).toEqual([[], []]);
     await expect(harness.controller.status()).resolves.toMatchObject({ selection: previous });
   });
 
@@ -775,7 +792,7 @@ describe("skills controller", () => {
 
     expect(await readFile(entry!.livePath, "utf8")).toBe("external replacement");
     expect(await readFile(path.join(recovered, "notes", "mine.md"), "utf8")).toBe("captured notes");
-    expect(await backupArtifacts(harness.targets)).toEqual([[], [], []]);
+    expect(await backupArtifacts(harness.targets)).toEqual([[], []]);
   });
 
   it("preserves a directory that replaces a captured file before recovery", async () => {
@@ -806,7 +823,7 @@ describe("skills controller", () => {
     expect(
       await readFile(path.join(path.dirname(harness.targets.agentsDir), recovered!), "utf8"),
     ).toBe("captured file");
-    expect(await backupArtifacts(harness.targets)).toEqual([[], [], []]);
+    expect(await backupArtifacts(harness.targets)).toEqual([[], []]);
   });
 
   it.skipIf(process.platform !== "linux")(
@@ -922,11 +939,7 @@ describe("skills controller", () => {
       const gated = createGatedUnwritableSelectionStore(previous);
       const readOnly = await makeHarness(gated.store);
       await readOnly.controller.install();
-      for (const root of [
-        readOnly.targets.agentsDir,
-        readOnly.targets.claudeDir,
-        readOnly.targets.codexDir,
-      ]) {
+      for (const root of [readOnly.targets.agentsDir, readOnly.targets.claudeDir]) {
         const notes = path.join(root, "byspace-loop", "notes");
         await mkdir(notes, { recursive: true });
         await writeFile(path.join(notes, "before.md"), "target");
@@ -942,11 +955,7 @@ describe("skills controller", () => {
       gated.failPersistence();
       await expect(save).rejects.toThrow("selection store is read-only");
 
-      for (const root of [
-        readOnly.targets.agentsDir,
-        readOnly.targets.claudeDir,
-        readOnly.targets.codexDir,
-      ]) {
+      for (const root of [readOnly.targets.agentsDir, readOnly.targets.claudeDir]) {
         const restored = path.join(root, "byspace-loop", "notes", "latest.md");
         expect((await lstat(restored)).isSymbolicLink()).toBe(true);
         expect(await readlink(restored)).toBe("before.md");
@@ -966,11 +975,7 @@ describe("skills controller", () => {
       const readOnly = await makeHarness(gated.store);
       await readOnly.controller.install();
       await writeUserFile(readOnly.targets, "byspace-loop", "hooks/run.sh", "#!/bin/sh\n");
-      for (const root of [
-        readOnly.targets.agentsDir,
-        readOnly.targets.claudeDir,
-        readOnly.targets.codexDir,
-      ]) {
+      for (const root of [readOnly.targets.agentsDir, readOnly.targets.claudeDir]) {
         await chmod(path.join(root, "byspace-loop", "hooks", "run.sh"), 0o751);
       }
 
@@ -983,11 +988,7 @@ describe("skills controller", () => {
       gated.failPersistence();
       await expect(save).rejects.toThrow("selection store is read-only");
 
-      for (const root of [
-        readOnly.targets.agentsDir,
-        readOnly.targets.claudeDir,
-        readOnly.targets.codexDir,
-      ]) {
+      for (const root of [readOnly.targets.agentsDir, readOnly.targets.claudeDir]) {
         const restored = await lstat(path.join(root, "byspace-loop", "hooks", "run.sh"));
         expect(restored.mode & 0o777).toBe(0o751);
       }
@@ -998,7 +999,7 @@ describe("skills controller", () => {
   it("leaves no backup artifacts behind after a successful save", async () => {
     await harness.controller.save({ mode: "custom", skills: ["byspace"] });
 
-    expect(await backupArtifacts(harness.targets)).toEqual([[], [], []]);
+    expect(await backupArtifacts(harness.targets)).toEqual([[], []]);
   });
 
   it.skipIf(process.platform === "win32")(
@@ -1025,7 +1026,7 @@ describe("skills controller", () => {
       expect(outcome.ok).toBe(true);
       expect(await gated.store.get()).toEqual(next);
       await blocked.controller.status();
-      expect(await backupArtifacts(blocked.targets)).toEqual([[], [], []]);
+      expect(await backupArtifacts(blocked.targets)).toEqual([[], []]);
       await rm(blocked.root, { recursive: true, force: true });
     },
   );
@@ -1057,11 +1058,7 @@ describe("skills controller", () => {
     await beginSkillsTransaction(harness.targets, previous, next, [
       { kind: "delete", name: "byspace-loop" },
     ]);
-    for (const root of [
-      harness.targets.agentsDir,
-      harness.targets.claudeDir,
-      harness.targets.codexDir,
-    ]) {
+    for (const root of [harness.targets.agentsDir, harness.targets.claudeDir]) {
       await rm(path.join(root, "byspace-loop"), { recursive: true, force: true });
     }
 
@@ -1070,9 +1067,8 @@ describe("skills controller", () => {
     expect(await readUserFile(harness.targets, "byspace-loop", "notes/mine.md")).toEqual([
       "hand written",
       "hand written",
-      "hand written",
     ]);
-    expect(await backupArtifacts(harness.targets)).toEqual([[], [], []]);
+    expect(await backupArtifacts(harness.targets)).toEqual([[], []]);
   });
 
   it("does not roll back an interrupted transaction after the selection committed", async () => {
@@ -1088,11 +1084,7 @@ describe("skills controller", () => {
     await beginSkillsTransaction(harness.targets, previous, next, [
       { kind: "delete", name: "byspace-loop" },
     ]);
-    for (const root of [
-      harness.targets.agentsDir,
-      harness.targets.claudeDir,
-      harness.targets.codexDir,
-    ]) {
+    for (const root of [harness.targets.agentsDir, harness.targets.claudeDir]) {
       await rm(path.join(root, "byspace-loop"), { recursive: true, force: true });
     }
     await harness.selectionStore.set(next);
@@ -1101,7 +1093,7 @@ describe("skills controller", () => {
 
     expect(snapshot.selection).toEqual(next);
     expect(await isInstalled(harness.targets, "byspace-loop")).toBe(false);
-    expect(await backupArtifacts(harness.targets)).toEqual([[], [], []]);
+    expect(await backupArtifacts(harness.targets)).toEqual([[], []]);
   });
 
   it("asks for confirmation naming the directories a save would delete", async () => {
@@ -1116,7 +1108,6 @@ describe("skills controller", () => {
 
     expect(result.confirmationRequired).toEqual({ removals: ["byspace-advisor"] });
     expect(await installedEverywhere(harness.targets)).toEqual([
-      ["byspace", "byspace-advisor", "byspace-loop"],
       ["byspace", "byspace-advisor", "byspace-loop"],
       ["byspace", "byspace-advisor", "byspace-loop"],
     ]);
@@ -1134,11 +1125,7 @@ describe("skills controller", () => {
 
     expect(result.confirmationRequired).toBeNull();
     expect(result.selection).toEqual({ mode: "custom", skills: ["byspace"] });
-    expect(await installedEverywhere(harness.targets)).toEqual([
-      ["byspace"],
-      ["byspace"],
-      ["byspace"],
-    ]);
+    expect(await installedEverywhere(harness.targets)).toEqual([["byspace"], ["byspace"]]);
   });
 
   it("asks again when another directory appears before the retry", async () => {
@@ -1155,7 +1142,6 @@ describe("skills controller", () => {
       removals: ["byspace-advisor", "byspace-chat", "byspace-loop"],
     });
     expect(await installedEverywhere(harness.targets)).toEqual([
-      ["byspace", "byspace-advisor", "byspace-chat", "byspace-loop"],
       ["byspace", "byspace-advisor", "byspace-chat", "byspace-loop"],
       ["byspace", "byspace-advisor", "byspace-chat", "byspace-loop"],
     ]);
@@ -1178,7 +1164,6 @@ describe("skills controller", () => {
     expect(await readUserFile(harness.targets, "byspace-chat", "notes/mine.md")).toEqual([
       "hand written",
       "hand written",
-      "hand written",
     ]);
   });
 
@@ -1186,11 +1171,7 @@ describe("skills controller", () => {
     const result = await harness.controller.save({ mode: "custom", skills: ["byspace"] });
 
     expect(result.confirmationRequired).toBeNull();
-    expect(await installedEverywhere(harness.targets)).toEqual([
-      ["byspace"],
-      ["byspace"],
-      ["byspace"],
-    ]);
+    expect(await installedEverywhere(harness.targets)).toEqual([["byspace"], ["byspace"]]);
   });
 
   it("preserves a regular file at a skill path when save convergence fails", async () => {
@@ -1224,17 +1205,14 @@ describe("skills controller", () => {
     ]);
 
     expect(saved.selection).toEqual({ mode: "custom", skills: ["byspace"] });
-    expect(await installedEverywhere(harness.targets)).toEqual([
-      ["byspace"],
-      ["byspace"],
-      ["byspace"],
-    ]);
+    expect(await installedEverywhere(harness.targets)).toEqual([["byspace"], ["byspace"]]);
     expect(await harness.controller.status()).toEqual({
       state: "up-to-date",
       ops: [],
       available: BUNDLED_SKILLS,
       installed: ["byspace"],
       selection: { mode: "custom", skills: ["byspace"] },
+      selectionSaved: true,
     });
   });
 
@@ -1248,6 +1226,7 @@ describe("skills controller", () => {
       available: BUNDLED_SKILLS,
       installed: ["byspace"],
       selection: { mode: "custom", skills: ["byspace"] },
+      selectionSaved: true,
     });
   });
 
@@ -1258,7 +1237,6 @@ describe("skills controller", () => {
     await harness.controller.update();
 
     expect(await readUserFile(harness.targets, "byspace-loop", "notes/mine.md")).toEqual([
-      "keep this",
       "keep this",
       "keep this",
     ]);

@@ -17,10 +17,10 @@ Skills give your agents reusable instructions for delegation, handoffs, and revi
 
 ## Installation
 
-- **In BySpace:** Open **Settings → your host → Agents → Orchestration skills** and choose which skills to install on that host.
+- **In BySpace:** Open **Settings → your host → Agents → Orchestration skills** and choose which skills to install on that host. Install asks which skills you want the first time, then remembers the selection.
 - **From the terminal:** Run `npx skills add ByteTrue/byspace` on the machine where your agents run.
 
-Use the same settings card to update or uninstall skills. The host also refreshes selected installed BySpace skills on startup.
+Use the same settings card to change the selection, update, or uninstall skills. Skills install into `~/.agents/skills` and `~/.claude/skills`; Codex reads the first of those, so it gets them without a separate copy. The host also refreshes selected installed BySpace skills on startup.
 
 ## `/byspace`, BySpace Reference
 

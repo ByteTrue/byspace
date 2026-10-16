@@ -2247,7 +2247,7 @@ export const ptBR: TranslationResources = {
         updateFallback: "Sincronize as skills incluídas com sua máquina.",
         uninstallTitle: "Desinstalar BySpace skills?",
         uninstallMessage:
-          "Remove todas as skills de orquestração do BySpace de ~/.agents, ~/.claude e ~/.codex.",
+          "Remove todas as skills de orquestração do BySpace de ~/.agents e ~/.claude.",
         choose: "Escolher skills",
         chooseAll: "Todas as skills",
         chooseAllHint:
@@ -2256,7 +2256,7 @@ export const ptBR: TranslationResources = {
         chooseEmpty: "Esta versão não inclui skills.",
         removeTitle: "Remover as skills desmarcadas?",
         removeMessage:
-          "{{skills}} serão excluídas de ~/.agents, ~/.claude e ~/.codex. Tudo o que você adicionou dentro dessas pastas de skills também é excluído.",
+          "{{skills}} serão excluídas de ~/.agents e ~/.claude. Tudo o que você adicionou dentro dessas pastas de skills também é excluído.",
         saveFailed: "Não foi possível salvar sua seleção de skills.",
         statusFailed: "Não foi possível verificar o status das skills de orquestração.",
         updateFailed: "Não foi possível atualizar as skills de orquestração.",

@@ -31,7 +31,12 @@ export interface SkillTargets {
   sourceDir: string;
   agentsDir: string;
   claudeDir: string;
-  codexDir: string;
+  /**
+   * Agent homes BySpace used to write and no longer does. That includes Codex,
+   * whose skill discovery also reads `~/.agents/skills`, so it needs no
+   * directory of its own. Copies there are removed on the next convergence.
+   */
+  retiredDirs: readonly string[];
 }
 
 // Names the bundle used to ship. They are never selectable, but every scan still
@@ -163,13 +168,12 @@ export async function getSkillsStatus(
 ): Promise<SkillsStatus> {
   const available = await listBundledSkills(targets.sourceDir);
   const names = managedSkillNames(available);
-  const [bundle, agentsDisk, claudeDisk, codexDisk] = await Promise.all([
+  const [bundle, agentsDisk, claudeDisk] = await Promise.all([
     hashSkills(targets.sourceDir, available),
     hashSkills(targets.agentsDir, names),
     hashSkills(targets.claudeDir, names),
-    hashSkills(targets.codexDir, names),
   ]);
-  const disks = [agentsDisk, claudeDisk, codexDisk];
+  const disks = [agentsDisk, claudeDisk];
   const ops = diff(bundle, disks, names, resolveDesiredSkills(selection, available));
   const installed = installedSkillNames(disks, names);
 
@@ -194,7 +198,6 @@ async function applySkills(
       sourceDir: targets.sourceDir,
       agentsDir: targets.agentsDir,
       claudeDir: targets.claudeDir,
-      codexDir: targets.codexDir,
       skillNames: writes,
     });
   }
@@ -204,9 +207,13 @@ async function applySkills(
     await removeSkill(op.name, {
       agentsDir: targets.agentsDir,
       claudeDir: targets.claudeDir,
-      codexDir: targets.codexDir,
     });
   }
+
+  // Retired agent homes are not part of the plan: they only ever lose copies,
+  // and the status scan no longer reports them. Cleaning them here means the
+  // first convergence after an upgrade takes the leftover directories away.
+  await removeRetiredSkillCopies(targets);
 
   return getSkillsStatus(targets, selection);
 }
@@ -236,6 +243,10 @@ export async function autoUpdateInstalledSkills(
   targets: SkillTargets,
   selection: SkillSelection,
 ): Promise<SkillsStatus> {
+  // Runs before the drift check: cleaning a retired agent home is not drift, so
+  // an installation that is already current would otherwise keep the leftover
+  // directories forever.
+  await removeRetiredSkillCopies(targets);
   const status = await getSkillsStatus(targets, selection);
   if (status.state !== "drift") return status;
   // Automatic maintenance may repair selected skills, but removal is an
@@ -252,8 +263,41 @@ export async function uninstallSkills(
     await removeSkill(name, {
       agentsDir: targets.agentsDir,
       claudeDir: targets.claudeDir,
-      codexDir: targets.codexDir,
     });
   }
+  await removeRetiredSkillCopies(targets);
   return getSkillsStatus(targets, selection);
+}
+
+/**
+ * Deletes BySpace's own copies under agent homes it no longer writes.
+ *
+ * Ownership is the managed-files manifest BySpace writes into every directory it
+ * creates, not the skill name. A stale copy from an older BySpace release named
+ * after a skill we ship now is still ours, and a user's own directory that
+ * happens to share a name is not. Like every other managed-directory removal in
+ * this module, the whole directory goes — including anything the user added
+ * inside it. The root goes only if that leaves it empty, so a retired home
+ * holding only the user's own skills survives.
+ */
+export async function removeRetiredSkillCopies(targets: SkillTargets): Promise<void> {
+  for (const root of targets.retiredDirs) {
+    const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      const skillDir = path.join(root, entry.name);
+      if (!entry.isDirectory()) continue;
+      if (!(await hasManagedFilesManifest(skillDir))) continue;
+      await fs.rm(skillDir, { recursive: true, force: true });
+    }
+    // rmdir fails on a non-empty directory, which is what keeps a retired home
+    // in place when the user keeps their own skills in it.
+    await fs.rmdir(root).catch(() => {});
+  }
+}
+
+async function hasManagedFilesManifest(skillDir: string): Promise<boolean> {
+  const manifest = await fs
+    .stat(path.join(skillDir, ".byspace-managed-files.json"))
+    .catch(() => null);
+  return manifest?.isFile() === true;
 }
