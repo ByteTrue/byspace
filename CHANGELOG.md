@@ -5,6 +5,21 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.20.1 - 2026-10-16
+
+### Changed
+
+- Chief moved into the sidebar's BySpace menu and opens the full-page Home workspace; the floating window and its button are gone
+- The new-workspace role control lists the roles the daemon offers, with "No role" leading, replacing the single-role toggle
+- The Home workspace now runs in `$BYSPACE_HOME/chief`, so the daemon's own files stay out of the assistant's working directory
+
+### Fixed
+
+- Fixed the agent role picked on the new-workspace screen being dropped on the foreground creation path
+- Fixed pi subagents launched from a codemode script rendering as Loading forever and opening blank
+- Fixed a terminal's process tree surviving the terminal closing and its worktree being archived
+- Fixed a workspace service daemon outliving the worktree it was started for
+
 ## 0.20.0 - 2026-10-13
 
 ### Added
