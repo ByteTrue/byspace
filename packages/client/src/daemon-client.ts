@@ -1327,6 +1327,9 @@ export class DaemonClient {
 
       this.transportCleanup = [
         transport.onOpen(() => {
+          if (this.transport !== transport) {
+            return;
+          }
           if (this.pendingGenericTransportErrorTimeout) {
             clearTimeout(this.pendingGenericTransportErrorTimeout);
             this.pendingGenericTransportErrorTimeout = null;
@@ -1335,6 +1338,9 @@ export class DaemonClient {
           this.sendHelloMessage();
         }),
         transport.onClose((event) => {
+          if (this.transport !== transport) {
+            return;
+          }
           this.resetConnectTimeout();
           if (this.pendingGenericTransportErrorTimeout) {
             clearTimeout(this.pendingGenericTransportErrorTimeout);
@@ -1344,6 +1350,8 @@ export class DaemonClient {
           if (reason) {
             this.lastErrorValue = reason;
           }
+          this.cleanupTransport();
+          this.transport = null;
           this.scheduleReconnect({
             reason,
             event: "TRANSPORT_CLOSE",
@@ -1351,6 +1359,9 @@ export class DaemonClient {
           });
         }),
         transport.onError((event) => {
+          if (this.transport !== transport) {
+            return;
+          }
           this.resetConnectTimeout();
           const reason = describeTransportError(event);
           const isGeneric = reason === "Transport error";
@@ -1363,10 +1374,12 @@ export class DaemonClient {
               this.pendingGenericTransportErrorTimeout = setTimeout(() => {
                 this.pendingGenericTransportErrorTimeout = null;
                 if (
-                  this.connectionState.status === "connected" ||
-                  this.connectionState.status === "connecting"
+                  this.transport === transport &&
+                  (this.connectionState.status === "connected" ||
+                    this.connectionState.status === "connecting")
                 ) {
                   this.lastErrorValue = reason;
+                  this.disposeTransport(1001, reason);
                   this.scheduleReconnect({
                     reason,
                     event: "TRANSPORT_ERROR",
@@ -1383,13 +1396,19 @@ export class DaemonClient {
             this.pendingGenericTransportErrorTimeout = null;
           }
           this.lastErrorValue = reason;
+          this.disposeTransport(1001, reason);
           this.scheduleReconnect({
             reason,
             event: "TRANSPORT_ERROR",
             reasonCode: "transport_error",
           });
         }),
-        transport.onMessage((data) => this.handleTransportMessage(data)),
+        transport.onMessage((data) => {
+          if (this.transport !== transport) {
+            return;
+          }
+          this.handleTransportMessage(data);
+        }),
       ];
     } catch (error) {
       this.resetConnectTimeout();
@@ -6091,6 +6110,7 @@ export class DaemonClient {
     }
 
     this.providerSnapshotUpdates.pause();
+    this.stopLivenessHeartbeat();
 
     // Clear all pending waiters and queued sends since the connection was lost
     // and responses from the previous connection will never arrive.

@@ -437,7 +437,7 @@ export interface SessionOptions {
   clientCapabilities?: Record<string, unknown> | null;
   onMessage: (msg: SessionOutboundMessage) => void;
   onMessageToSource?: (source: object, msg: SessionOutboundMessage) => void;
-  onBinaryMessage?: (frame: Uint8Array) => void;
+  onBinaryMessage?: (frame: Uint8Array) => boolean | void;
   onBinaryMessageToSource?: (source: object, frame: Uint8Array) => Promise<void>;
   getTransportBufferedAmount?: () => number | null;
   onLifecycleIntent?: (intent: SessionLifecycleIntent) => void;
@@ -601,7 +601,7 @@ export class Session {
   private readonly onMessageToSource:
     | ((source: object, msg: SessionOutboundMessage) => void)
     | null;
-  private readonly onBinaryMessage: ((frame: Uint8Array) => void) | null;
+  private readonly onBinaryMessage: ((frame: Uint8Array) => boolean | void) | null;
   private readonly onBinaryMessageToSource:
     | ((source: object, frame: Uint8Array) => Promise<void>)
     | null;
@@ -1057,6 +1057,11 @@ export class Session {
 
   handleTransportUnavailable(): void {
     this.terminalController.handleTransportUnavailable();
+    this.tunnelSession.handleTransportUnavailable();
+  }
+
+  handleTransportResumed(): void {
+    this.tunnelSession.handleTransportResumed();
   }
 
   private replaceAgentTimelineSubscription(source: object | undefined, agentIds: string[]): void {
@@ -7654,14 +7659,15 @@ export class Session {
       : { ...message, payload: { ...message.payload, snapshot: legacySnapshot } };
   }
 
-  private emitBinary(frame: Uint8Array): void {
+  private emitBinary(frame: Uint8Array): boolean {
     if (!this.onBinaryMessage) {
-      return;
+      return false;
     }
     try {
-      this.onBinaryMessage(frame);
+      return this.onBinaryMessage(frame) !== false;
     } catch (error) {
       this.sessionLogger.error({ err: error }, "Failed to emit binary frame");
+      return false;
     }
   }
 

@@ -443,6 +443,7 @@ async function attachEncryptedSocket(
     const encryptedSocket = createEncryptedRelaySocket({
       channel,
       emitter,
+      getTransportReadyState: () => socket.readyState,
       getTransportBufferedAmount: () => socket.bufferedAmount,
       terminateTransport: () => socket.terminate(),
     });

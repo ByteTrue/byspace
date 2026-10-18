@@ -6169,3 +6169,53 @@ test("wire snapshot callers own expansion and receive hash references unchanged"
   );
   expect(await request).toEqual(body);
 });
+
+test("non-generic transport error followed by close schedules reconnect once with baseDelayMs", async () => {
+  useHeartbeatClock();
+  try {
+    const first = createMockTransport();
+    const second = createMockTransport();
+    const transports = [first, second];
+    let transportIndex = 0;
+    const client = new DaemonClient({
+      url: "ws://test",
+      clientId: "clsk_error_then_close",
+      reconnect: { enabled: true, baseDelayMs: 250, maxDelayMs: 5_000 },
+      transportFactory: () => {
+        const next = transports[transportIndex];
+        if (!next) throw new Error("unexpected extra reconnect");
+        transportIndex += 1;
+        return next.transport;
+      },
+    });
+    clients.push(client);
+
+    const statuses: string[] = [];
+    const connected = client.connect();
+    first.triggerOpen();
+    await connected;
+
+    client.subscribeConnectionStatus((state) => {
+      statuses.push(state.status);
+    });
+    statuses.length = 0;
+
+    // Simulate Node ws emitting an ECONNRESET error followed immediately by close.
+    first.triggerError(new Error("read ECONNRESET"));
+    first.triggerClose({ code: 1006, reason: "abnormal closure" });
+
+    expect(statuses).toEqual(["disconnected"]);
+
+    // First retry must fire at baseDelayMs (250ms), not doubled to 500ms.
+    await vi.advanceTimersByTimeAsync(249);
+    expect(transportIndex).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(transportIndex).toBe(2);
+    expect(client.getConnectionState().status).toBe("connecting");
+
+    second.triggerOpen();
+    expect(client.getConnectionState().status).toBe("connected");
+  } finally {
+    vi.useRealTimers();
+  }
+});

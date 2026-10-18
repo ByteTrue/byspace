@@ -28,6 +28,6 @@
 - **对比 Tailscale**：打洞成功时 P2P 直连 1×RTT，物理上优于任何 relay 架构；但打洞失败退化为 DERP 中继后与我们的 relay 模式同构（4×RTT，国内 DERP 也在海外），还要 L3 全网暴露 + 客户端安装。**Owner 网络 = 打洞永远不成功 → Tailscale 的核心优势拿不到，成本全在**，结论是 relay 架构对该环境更优。
 - **keep-alive 很重要**：浏览器 fetch 默认复用连接，正常调试无感；短连接工具（每次新建 TCP）在公网上每请求多 ~1 个 RTT 的 open RPC 开销。
 - **自托管 relay 是延迟正解**：部署在 A 机或同城（自托管镜像 = web + relay 一体），延迟回落到局域网/同城级，吞吐顶到带宽上限。官方 relay 适合轻量查看，不适合高频调试与大文件。
-- **已知的稳定性行为**：断线后 daemon 自动重连（relay 杀掉重启后 e2e 验证恢复）；tunnels.json 持久化 + boot 恢复。中断时**进行中的 TCP 连接会断**（HMR WS、上传中的请求需上层重试）——浏览器 fetch 会自动重试故多数无感，若未来有痛点再做会话保持。
+- **已知的稳定性行为**：断线后 daemon 自动重连（relay 杀掉重启后 e2e 验证恢复）；tunnels.json 持久化 + boot 恢复。短时闪断（宽限期内）在途 TCP 流通过两端 `socket.pause()` 背压 + 有界帧缓存与 `listTunnels` 对账实现无损续传（连 LLM SSE 长流都不会断或丢块），闪断窗口内的新连接也会等待重连完成；只有断连超出宽限期或对端进程重启丢失 Session 时，在途 TCP 流才会被主动销毁。
 
 **相关：** issue 062（`byissue/issues/062-x-daemon-tunnel.md`）、063（实验性门控 + 自托管 relay 文档化）；`byissue/spec/connection.md`「Daemon 隧道」节；性能探针脚本的量法可参考 062 执行记录（临时脚本，未入库：双 daemon + `/small` 1KB、`/large` 5MiB、fresh-connection 对照无隧道基线）。

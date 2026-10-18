@@ -130,11 +130,13 @@ describe("tunnel hardening (deny paths and reconnect)", () => {
     });
     await manager.start();
     try {
+      await waitForForwardConnected(manager);
       const forward = manager.getStatus()[0];
       await expect(fetch(`http://127.0.0.1:${forward.localPort}/x`)).rejects.toThrow();
       // getStatus() returns fresh snapshots; re-read after the denial.
       const after = manager.getStatus()[0];
-      expect(after.state === "error" || after.lastError !== null).toBe(true);
+      expect(after.state).toBe("error");
+      expect(after.lastError).toContain("allowlist");
     } finally {
       await manager.stop();
     }
@@ -207,4 +209,66 @@ describe("tunnel hardening (deny paths and reconnect)", () => {
       await manager.stop();
     }
   }, 60_000);
+
+  it("tears down in-flight local streams when the peer stays down past disconnectGraceMs", async () => {
+    // Slow TCP server on D2's port: accepts and holds the stream open without replying.
+    const hangingServer = net.createServer(() => {
+      // Hold connection open indefinitely.
+    });
+    let hangingPort = 0;
+    await new Promise<void>((resolve) => {
+      hangingServer.listen(0, "127.0.0.1", () => {
+        hangingPort = (hangingServer.address() as net.AddressInfo).port;
+        resolve();
+      });
+    });
+
+    const manager = new TunnelManager({
+      config: {
+        peerId: d2ServerId,
+        url: relayClientUrl(),
+        password: D2_PASSWORD,
+        daemonPublicKeyB64: d2KeyPairB64,
+        forwards: [{ remotePort: servicePort, label: "svc-grace" }],
+      },
+      disconnectGraceMs: 400,
+      logger,
+    });
+    void hangingPort;
+    await manager.start();
+    try {
+      await waitForForwardConnected(manager);
+      const forward = manager.getStatus()[0];
+
+      const closeRelayAfterOpen = (): void => {
+        setTimeout(() => {
+          void relay.close();
+        }, 300);
+      };
+
+      // Open a raw TCP stream through the tunnel and keep it open (no HTTP request sent yet).
+      const socketClosed = new Promise<void>((resolve) => {
+        const clientSocket = net.connect(
+          { host: "127.0.0.1", port: forward.localPort as number },
+          closeRelayAfterOpen,
+        );
+        clientSocket.on("close", () => resolve());
+        clientSocket.on("error", () => resolve());
+      });
+
+      const startedAt = Date.now();
+      await socketClosed;
+      const elapsed = Date.now() - startedAt;
+      expect(elapsed).toBeLessThan(5_000);
+    } finally {
+      await manager.stop();
+      hangingServer.close();
+      // Re-open relay on the same port so afterAll cleanup is happy.
+      const reopened = createNodeRelayServer({ port: relayPort, host: "127.0.0.1" });
+      await new Promise<void>((resolve) => {
+        reopened.server.listen(relayPort, "127.0.0.1", () => resolve());
+      });
+      relay = reopened;
+    }
+  }, 30_000);
 });

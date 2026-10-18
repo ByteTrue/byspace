@@ -1023,8 +1023,8 @@ export class DaemonWebSocketServer {
     }
   }
 
-  private sendBinaryToClient(ws: WebSocketLike, frame: Uint8Array): void {
-    this.sendFrameToClient(ws, frame, outboundFrameByteLength(frame), () => {
+  private sendBinaryToClient(ws: WebSocketLike, frame: Uint8Array): boolean {
+    return this.sendFrameToClient(ws, frame, outboundFrameByteLength(frame), () => {
       this.runtimeMetrics.recordOutboundBinaryFrame(ws.bufferedAmount);
     });
   }
@@ -1051,7 +1051,7 @@ export class DaemonWebSocketServer {
     frame: string | Uint8Array,
     frameBytes: number,
     recordSent: () => void,
-  ): void {
+  ): boolean {
     try {
       const sent = sendBoundedPhysicalFrame({
         socket: ws,
@@ -1060,8 +1060,10 @@ export class DaemonWebSocketServer {
         onHighWater: () => this.closeAtOutboundHighWater(ws),
       });
       if (sent) recordSent();
+      return sent;
     } catch (err) {
       this.logger.warn({ err }, "ws_send_failed");
+      return false;
     }
   }
 
@@ -1118,10 +1120,14 @@ export class DaemonWebSocketServer {
     this.sendMessageToSockets(connection.sockets, message);
   }
 
-  private sendBinaryToConnection(connection: SessionConnection, frame: Uint8Array): void {
+  private sendBinaryToConnection(connection: SessionConnection, frame: Uint8Array): boolean {
+    let delivered = false;
     for (const ws of connection.sockets) {
-      this.sendBinaryToClient(ws, frame);
+      if (this.sendBinaryToClient(ws, frame)) {
+        delivered = true;
+      }
     }
+    return delivered;
   }
 
   private async attachSocket(
@@ -1221,9 +1227,9 @@ export class DaemonWebSocketServer {
       },
       onBinaryMessage: (frame) => {
         if (!connection) {
-          return;
+          return false;
         }
-        this.sendBinaryToConnection(connection, frame);
+        return this.sendBinaryToConnection(connection, frame);
       },
       onBinaryMessageToSource: async (source, frame) => {
         if (!connection || !connection.sockets.has(source as WebSocketLike)) {
@@ -1452,6 +1458,7 @@ export class DaemonWebSocketServer {
     this.sessions.set(ws, existing);
     pending.identity.sessionId = existing.session.getSessionId();
     this.sendToClient(ws, this.createServerInfoMessage(existing.session));
+    existing.session.handleTransportResumed();
     pending.connectionLogger.info(
       {
         ...toConnectionLogFields(pending.identity),

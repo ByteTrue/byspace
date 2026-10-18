@@ -70,21 +70,27 @@ export function createEncryptedTransport(
     emitHandlers(messageHandlers, data, data instanceof ArrayBuffer);
   };
 
+  let lastSyncSendError: unknown = null;
   const relayTransport: RelayTransport = {
     send: (data) => {
-      if (typeof data === "string") {
-        base.send(data);
-        return;
+      try {
+        if (typeof data === "string") {
+          base.send(data);
+          return;
+        }
+        if (ArrayBuffer.isView(data)) {
+          base.send(normalizeTransportPayload(data));
+          return;
+        }
+        if (data instanceof ArrayBuffer) {
+          base.send(data);
+          return;
+        }
+        base.send(String(data));
+      } catch (error) {
+        lastSyncSendError = error;
+        throw error;
       }
-      if (ArrayBuffer.isView(data)) {
-        base.send(normalizeTransportPayload(data));
-        return;
-      }
-      if (data instanceof ArrayBuffer) {
-        base.send(data);
-        return;
-      }
-      base.send(String(data));
     },
     close: (code?: number, reason?: string) => base.close(code, reason),
     onmessage: null,
@@ -127,12 +133,18 @@ export function createEncryptedTransport(
 
   return {
     send: (data) => {
-      if (!channel) {
+      if (!channel || closed || !channel.isOpen()) {
         throw new Error("Encrypted channel not ready");
       }
+      lastSyncSendError = null;
       void channel.send(normalizeTransportPayload(data)).catch((error) => {
         emitError(error);
       });
+      if (lastSyncSendError !== null) {
+        const error = lastSyncSendError;
+        lastSyncSendError = null;
+        throw error;
+      }
     },
     close: (code?: number, reason?: string) => {
       if (channel) {

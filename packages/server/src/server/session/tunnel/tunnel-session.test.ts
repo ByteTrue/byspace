@@ -225,4 +225,32 @@ describe("TunnelSession (target side)", () => {
     expect(response.payload.entries[0].remotePort).toBe(echoPort);
     expect(response.payload.entries[0].state).toBe("connected");
   });
+
+  it("pauses target sockets and buffers downstream frames while transport is unavailable, flushing in order on resume", async () => {
+    const h = createHarness({ allowedPorts: [echoPort], passwordSet: true });
+    await h.session.handleOpenRequest(openRequest(echoPort));
+    const tunnelId = h.openResponse()?.payload.tunnelId ?? "";
+
+    // Detach transport before sending upstream request so the echo response arrives while unavailable.
+    h.session.handleTransportUnavailable();
+    h.session.handleBinaryFrame({
+      opcode: TunnelFrameOpcode.DataUpstream,
+      tunnelId,
+      payload: new TextEncoder().encode(
+        "GET /buffered HTTP/1.1\r\nHost: t\r\nConnection: close\r\n\r\n",
+      ),
+    });
+
+    // While transport is unavailable, no binary frames are emitted to the host.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(h.binaryFrames.length).toBe(0);
+
+    // Resuming transport flushes any buffered frames and resumes the target socket.
+    h.session.handleTransportResumed();
+    await vi.waitFor(() => {
+      const text = collectDownstreamText(h.binaryFrames);
+      expect(text).toContain("HTTP/1.1 200");
+      expect(text).toContain("echo:/buffered");
+    });
+  });
 });

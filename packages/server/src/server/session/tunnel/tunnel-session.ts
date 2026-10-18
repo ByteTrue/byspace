@@ -33,7 +33,7 @@ import type {
  */
 export interface TunnelSessionHost {
   emit(msg: SessionOutboundMessage): void;
-  emitBinary(frame: Uint8Array): void;
+  emitBinary(frame: Uint8Array): boolean | void;
 }
 
 export interface OutboundTunnelStatus {
@@ -89,6 +89,21 @@ interface InboundTunnel {
   closeReason: string | null;
 }
 
+const MAX_PENDING_DOWNSTREAM_BYTES = 16 * 1024 * 1024;
+const CLOSE_DRAIN_TIMEOUT_MS = 5_000;
+
+function gracefulCloseSocket(socket: net.Socket): void {
+  if (socket.destroyed) return;
+  const timer = setTimeout(() => {
+    if (!socket.destroyed) {
+      socket.destroy();
+    }
+  }, CLOSE_DRAIN_TIMEOUT_MS);
+  timer.unref?.();
+  socket.once("close", () => clearTimeout(timer));
+  socket.end();
+}
+
 let tunnelIdCounter = 0;
 
 export class TunnelSession {
@@ -100,6 +115,13 @@ export class TunnelSession {
   private readonly logger: pino.Logger;
   private readonly tunnels = new Map<string, InboundTunnel>();
   private readonly outbound: TunnelOutboundController | null;
+  private transportAvailable = true;
+  private pendingDownstreamFrames: Array<{
+    tunnelId: string;
+    opcode: TunnelFrameOpcode;
+    frame: Uint8Array;
+  }> = [];
+  private pendingDownstreamBytes = 0;
 
   constructor(options: TunnelSessionOptions) {
     this.host = options.host;
@@ -176,6 +198,13 @@ export class TunnelSession {
     const tunnelId = `tun-${Date.now().toString(36)}-${(tunnelIdCounter += 1)}`;
     try {
       const socket = await this.connectTarget(remotePort);
+      if (!this.transportAvailable) {
+        // Peer disconnected while connectTarget was in flight; tunnel.open.response
+        // cannot be delivered and D1 already rejected its openTunnel waiter.
+        socket.destroy();
+        return;
+      }
+
       const tunnel: InboundTunnel = {
         tunnelId,
         socket,
@@ -194,6 +223,7 @@ export class TunnelSession {
       socket.on("close", () => this.closeTunnel(tunnelId, "target closed"));
       socket.on("error", (error: Error) => this.closeTunnel(tunnelId, error.message));
 
+      this.logger.info({ tunnelId, remotePort }, "Tunnel open granted");
       this.host.emit({
         type: "tunnel.open.response",
         payload: { requestId, tunnelId, remotePort, allowed: true },
@@ -370,31 +400,139 @@ export class TunnelSession {
     }
   }
 
+  /**
+   * Session WebSocket detached (entering reconnect grace period): pause target
+   * sockets so TCP backpressure holds upstream services, and buffer any
+   * in-flight downstream/close frames until the peer resumes.
+   */
+  handleTransportUnavailable(): void {
+    if (!this.transportAvailable) return;
+    this.transportAvailable = false;
+    for (const tunnel of this.tunnels.values()) {
+      tunnel.socket?.pause();
+    }
+    if (this.tunnels.size > 0) {
+      this.logger.info(
+        { activeTunnels: this.tunnels.size },
+        "Tunnel transport unavailable; paused target sockets",
+      );
+    }
+  }
+
+  /**
+   * Session WebSocket reattached within the reconnect grace period: flush
+   * buffered downstream frames in order and resume live target sockets.
+   */
+  handleTransportResumed(): void {
+    this.transportAvailable = true;
+    if (this.pendingDownstreamFrames.length > 0) {
+      const queued = this.pendingDownstreamFrames;
+      const queuedBytes = this.pendingDownstreamBytes;
+      this.pendingDownstreamFrames = [];
+      this.pendingDownstreamBytes = 0;
+      this.logger.info(
+        { frames: queued.length, bytes: queuedBytes },
+        "Flushing buffered downstream tunnel frames after session resume",
+      );
+      for (let i = 0; i < queued.length; i += 1) {
+        const entry = queued[i];
+        if (!entry) continue;
+        if (this.host.emitBinary(entry.frame) === false) {
+          const remaining = queued.slice(i);
+          this.pendingDownstreamFrames = remaining.concat(this.pendingDownstreamFrames);
+          this.pendingDownstreamBytes = this.pendingDownstreamFrames.reduce(
+            (sum, item) => sum + item.frame.byteLength,
+            0,
+          );
+          this.handleTransportUnavailable();
+          return;
+        }
+      }
+    }
+    for (const tunnel of this.tunnels.values()) {
+      if (tunnel.state === "connected" && tunnel.socket && !tunnel.socket.destroyed) {
+        tunnel.socket.resume();
+      }
+    }
+  }
+
   /** Session teardown: destroy every target socket. */
   cleanup(): void {
+    this.pendingDownstreamFrames = [];
+    this.pendingDownstreamBytes = 0;
     for (const tunnel of this.tunnels.values()) {
       this.closeTunnel(tunnel.tunnelId, "session closed");
     }
+    this.pendingDownstreamFrames = [];
+    this.pendingDownstreamBytes = 0;
+    this.transportAvailable = true;
   }
 
   private handleCloseFrame(frame: TunnelCloseFrame): void {
-    this.closeTunnel(frame.tunnelId, "peer closed");
+    this.closeTunnel(frame.tunnelId, "peer closed", { notifyPeer: false, graceful: true });
   }
 
-  private closeTunnel(tunnelId: string, reason: string): void {
+  private closeTunnel(
+    tunnelId: string,
+    reason: string,
+    options?: { notifyPeer?: boolean; graceful?: boolean },
+  ): void {
     const tunnel = this.tunnels.get(tunnelId);
     if (!tunnel) return;
+    this.tunnels.delete(tunnelId);
     if (tunnel.state !== "closed") {
       tunnel.state = "closed";
       tunnel.closeReason = reason;
-      this.sendFrame(tunnelId, TunnelFrameOpcode.Close);
+      if (options?.notifyPeer !== false) {
+        this.sendFrame(tunnelId, TunnelFrameOpcode.Close);
+      }
     }
-    tunnel.socket?.destroy();
-    this.tunnels.delete(tunnelId);
+    if (tunnel.socket) {
+      if (options?.graceful) {
+        gracefulCloseSocket(tunnel.socket);
+      } else {
+        tunnel.socket.destroy();
+      }
+    }
+  }
+
+  private dropQueuedDownstreamForTunnel(tunnelId: string): void {
+    if (this.pendingDownstreamFrames.length === 0) return;
+    const kept: typeof this.pendingDownstreamFrames = [];
+    let bytes = 0;
+    for (const entry of this.pendingDownstreamFrames) {
+      if (entry.tunnelId === tunnelId && entry.opcode === TunnelFrameOpcode.DataDownstream) {
+        continue;
+      }
+      kept.push(entry);
+      bytes += entry.frame.byteLength;
+    }
+    this.pendingDownstreamFrames = kept;
+    this.pendingDownstreamBytes = bytes;
   }
 
   private sendFrame(tunnelId: string, opcode: TunnelFrameOpcode, payload?: Uint8Array): void {
-    this.host.emitBinary(encodeTunnelFrame({ opcode, tunnelId, payload }));
+    const frame = encodeTunnelFrame({ opcode, tunnelId, payload });
+    if (this.transportAvailable) {
+      if (this.host.emitBinary(frame) !== false) {
+        return;
+      }
+      this.handleTransportUnavailable();
+    }
+    if (
+      opcode !== TunnelFrameOpcode.Close &&
+      this.pendingDownstreamBytes + frame.byteLength > MAX_PENDING_DOWNSTREAM_BYTES
+    ) {
+      this.logger.warn(
+        { tunnelId, bufferedBytes: this.pendingDownstreamBytes },
+        "Tunnel downstream buffer exceeded while peer disconnected; closing tunnel",
+      );
+      this.dropQueuedDownstreamForTunnel(tunnelId);
+      this.closeTunnel(tunnelId, "downstream buffer overflow while peer disconnected");
+      return;
+    }
+    this.pendingDownstreamFrames.push({ tunnelId, opcode, frame });
+    this.pendingDownstreamBytes += frame.byteLength;
   }
 
   private connectTarget(remotePort: number): Promise<net.Socket> {

@@ -136,6 +136,15 @@ afterAll(async () => {
   await relay?.close().catch(() => undefined);
 });
 
+async function restartRelayInPlace(): Promise<void> {
+  await relay.close();
+  const reopened = createNodeRelayServer({ port: relayPort, host: "127.0.0.1" });
+  await new Promise<void>((resolve) => {
+    reopened.server.listen(relayPort, "127.0.0.1", () => resolve());
+  });
+  relay = reopened;
+}
+
 describe("tunnel streaming", () => {
   it("delivers chunks as they are produced, not coalesced at the end", async () => {
     const forward = manager.getStatus()[0];
@@ -175,5 +184,39 @@ describe("tunnel streaming", () => {
     const span = lastArrival - firstArrival;
     const expectedSpan = CHUNK_INTERVAL_MS * (CHUNK_COUNT - 1);
     expect(span).toBeGreaterThan(expectedSpan * 0.5);
+  }, 60_000);
+
+  it("preserves an active SSE stream across a mid-stream relay restart without losing chunks", async () => {
+    const forward = manager.getStatus()[0];
+    expect(forward.localPort).not.toBeNull();
+
+    let body = "";
+    let restartedRelay = false;
+
+    await new Promise<void>((resolve, reject) => {
+      const socket = net.connect({ host: "127.0.0.1", port: forward.localPort as number }, () => {
+        socket.write(
+          `GET /stream-reconnect HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n`,
+        );
+      });
+      socket.on("data", (chunk: Buffer) => {
+        body += chunk.toString("utf8");
+        if (!restartedRelay && body.includes("data: chunk-2")) {
+          restartedRelay = true;
+          void restartRelayInPlace().catch(reject);
+        }
+      });
+      socket.on("end", () => resolve());
+      socket.on("error", reject);
+      socket.setTimeout(30_000, () => {
+        socket.destroy();
+        reject(new Error("stream timed out across relay restart"));
+      });
+    });
+
+    expect(restartedRelay).toBe(true);
+    for (let i = 1; i <= CHUNK_COUNT; i += 1) {
+      expect(body).toContain(`data: chunk-${i}`);
+    }
   }, 60_000);
 });

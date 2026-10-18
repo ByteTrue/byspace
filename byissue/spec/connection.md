@@ -23,7 +23,7 @@ App 与 Relay 的地址按发布通道选择；用户的自定义配置始终优
 - **relay 归属**：隧道走 D2 pairing offer 携带的 `relayPublicEndpoint`（自托管 relay 用户的流量天然走自己的 relay，与 app 客户端同一条信任模型——E2EE 不依赖 relay）。
 - **生命周期**：daemon 级常驻（`tunnels.json` 持久化，boot 恢复），内嵌客户端复用 DaemonClient 重连；app 不在线时隧道照常工作。
 - **交互面**：app 的 `/tunnels` 独立路由（类比 Schedules）——添加隧道（从已配对 Host 里选对端 + 密码 + 端口，未配对时可粘 pairing offer）、outbound/inbound 列表、白名单 GUI。入口是侧栏 BySpace 菜单里的 Tunnels 行（内置导航项，可在 Appearance 里排序/隐藏），命令中心保留同名动作。
-- **流式原样透传**：隧道转发裸 TCP，两端都是 `socket.on("data") → 帧` 与 `socket.write(payload)` 直通，不聚合、不缓冲，也没有额外的等待窗口——SSE / chunked 这类逐块响应在客户端按产生节奏到达（`tunnel-streaming.e2e.test.ts` 用到达时间跨度钉住，而不是断言最终 body，因为缓冲实现也能凑齐全部字节）。
+- **流式原样透传与闪断无损续传**：已连接状态下两端都是 `socket.on("data") → 帧` 与 `socket.write(payload)` 直通，不聚合、不缓冲，也没有额外的等待窗口——SSE / chunked 这类逐块响应在客户端按产生节奏到达（`tunnel-streaming.e2e.test.ts` 用到达时间跨度钉住）。当底层 WebSocket 发生短时闪断时，依托服务端 Session 重连宽限期，两端暂停 TCP 读取（施加背压）并有界缓存途中帧，重连恢复时按序续传并对账存活流；重连窗口内新到达的本地连接挂起等待重连而非立即拒绝，超出宽限期则主动销毁本地流避免死挂。
 - **范围边界**：手动互导 offer，无 relay 成员网络；不做 agent 工具跨机与反向隧道；不尝试 NAT 打洞，流量一律经 relay（owner 网络环境下打洞从未成功，架构取向是稳定优先于延迟；自托管 relay 就近部署是延迟正解，实测见 [notes/008](../notes/008-tunnel-performance-and-relay-vs-p2p.md)）。
 
 ## 托管部署
