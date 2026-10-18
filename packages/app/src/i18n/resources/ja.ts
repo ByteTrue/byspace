@@ -212,14 +212,6 @@ export const ja: TranslationResources = {
     },
   },
   chief: {
-    title: "Chief",
-    switchHost: "ホストを切り替える",
-    maximize: "フルページで開く",
-    open: "Chief を開く",
-    close: "Chief を閉じる",
-    retry: "再試行",
-    noHomeWorkspace:
-      "Chief には daemon の Home ワークスペースが必要です。BySpace daemon を更新してから再試行してください。",
     suggestions: {
       whatCanYouDo: "あなたに何ができる？",
       checkWorkspaces: "ワークスペースを確認して",

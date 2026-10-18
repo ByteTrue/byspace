@@ -212,14 +212,6 @@ export const ptBR: TranslationResources = {
     },
   },
   chief: {
-    title: "Chief",
-    switchHost: "Trocar de host",
-    maximize: "Abrir em página completa",
-    open: "Abrir o Chief",
-    close: "Fechar o Chief",
-    retry: "Tentar novamente",
-    noHomeWorkspace:
-      "O Chief precisa do workspace Home do daemon. Atualize seu daemon BySpace e tente novamente.",
     suggestions: {
       whatCanYouDo: "O que você pode fazer?",
       checkWorkspaces: "Verifique meus workspaces",

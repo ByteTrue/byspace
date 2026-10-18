@@ -1,7 +1,6 @@
 export const BUILTIN_SIDEBAR_NAV_IDS = [
   "new-workspace",
   "history",
-  "chief",
   "search",
   "schedules",
   "tunnels",
@@ -26,12 +25,11 @@ export function isHeaderSidebarNavId(id: BuiltinSidebarNavId): id is HeaderSideb
 /**
  * The entries the BySpace menu holds, in the user's stored order.
  *
- * Chief lives in its own permanent button on the sidebar's top row, and New workspace + History
- * live on the Workspaces header, so none of the three is inside the dropdown menu or reorderable
- * within it.
+ * New workspace + History live on the Workspaces header, so neither is inside the dropdown menu
+ * or reorderable within it.
  */
 export function isMenuSidebarNavId(id: BuiltinSidebarNavId): boolean {
-  return id !== "chief" && !isHeaderSidebarNavId(id);
+  return !isHeaderSidebarNavId(id);
 }
 
 /** Persisted shape. Array order is the display order. */
@@ -52,7 +50,6 @@ export type SidebarNavItem = BuiltinSidebarNavItem;
 const BUILTIN_LABEL_KEYS: Record<BuiltinSidebarNavId, string> = {
   "new-workspace": "sidebar.actions.newWorkspace",
   history: "sidebar.sections.sessions",
-  chief: "chief.title",
   search: "sidebar.sections.search",
   schedules: "sidebar.sections.schedules",
   tunnels: "sidebar.sections.tunnels",
@@ -70,7 +67,6 @@ export function builtinSidebarNavLabelKey(id: BuiltinSidebarNavId): string {
 const BUILTIN_SHORTCUT_ACTIONS: Record<BuiltinSidebarNavId, string | null> = {
   "new-workspace": "new-workspace",
   history: null,
-  chief: "chief",
   search: "toggle-command-center",
   schedules: null,
   tunnels: null,
@@ -89,7 +85,6 @@ function isBuiltinSidebarNavId(key: string): key is BuiltinSidebarNavId {
  * A builtin absent from this map is always available.
  */
 export interface SidebarNavAvailability {
-  chief?: boolean;
   tunnels: boolean;
 }
 
@@ -106,7 +101,6 @@ export function filterUnavailableSidebarNavItems(
   availability: SidebarNavAvailability,
 ): SidebarNavItem[] {
   return items.filter((item) => {
-    if (item.id === "chief") return availability.chief !== false;
     if (item.id === "tunnels") return availability.tunnels;
     return true;
   });

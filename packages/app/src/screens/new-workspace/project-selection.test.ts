@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { HOME_PROJECT_VIEW_KEY } from "@/chief/home-workspace";
 import { filterWorkspaceProjectsForHost, type HostProjectListItem } from "@/projects/host-projects";
 import {
   createManualProjectSelectionContextKey,
@@ -489,6 +490,35 @@ describe("reconcileProjectSelection", () => {
     });
 
     expect(reconcileProjectSelection(current, selectableContext).project).toBe(fallback);
+  });
+
+  it("never offers the Chief project as a place to create a workspace", () => {
+    const chief: HostProjectListItem = {
+      viewKey: HOME_PROJECT_VIEW_KEY,
+      projectKey: null,
+      projectName: "BySpace-WorkSpace",
+      projectKind: "directory",
+      iconWorkingDir: "/home/me/.byspace/chief",
+      hosts: [
+        {
+          serverId: "host-a",
+          projectId: "prj_home",
+          iconWorkingDir: "/home/me/.byspace/chief",
+          worktreeSupport: "unsupported",
+        },
+      ],
+      workspaceKeys: ["host-a:ws_home"],
+    };
+
+    // `allowAllProjects` says the host can host several workspaces per directory, which would
+    // otherwise make this project eligible; the Chief project is still out of reach on purpose.
+    expect(
+      filterWorkspaceProjectsForHost({
+        projects: [chief],
+        serverId: "host-a",
+        allowAllProjects: true,
+      }),
+    ).toEqual([]);
   });
 
   it("does not equate projects without a persisted project key", () => {

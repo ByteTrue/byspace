@@ -53,13 +53,6 @@ describe("filterUnavailableSidebarNavItems", () => {
     expect(filtered).toEqual(items.filter((item) => item.id !== "tunnels"));
   });
 
-  it("drops chief when no connected host offers the chief role", () => {
-    const items = resolveSidebarNavItems({ preferences: [] });
-    const filtered = filterUnavailableSidebarNavItems(items, { chief: false, tunnels: true });
-    expect(filtered.map((item) => item.id)).not.toContain("chief");
-    expect(filtered).toEqual(items.filter((item) => item.id !== "chief"));
-  });
-
   it("drops a hidden tunnels entry too, rather than only reordering it", () => {
     const all = resolveSidebarNavItems({ preferences: [] });
     const preferences = setSidebarNavItemVisible({
@@ -140,8 +133,8 @@ describe("moveSidebarNavItem", () => {
 
   it("steps over the fixed items rather than past them", () => {
     const all = resolveSidebarNavItems({ preferences: [] });
-    // Search is the first menu item (New workspace, History, and Chief have fixed slots outside
-    // the menu). Moving it up cannot leave the menu, so it stays put.
+    // Search is the first menu item (New workspace and History have fixed slots outside the
+    // menu). Moving it up cannot leave the menu, so it stays put.
     const preferences = moveSidebarNavItem({
       items: all,
       key: "search",
@@ -151,9 +144,9 @@ describe("moveSidebarNavItem", () => {
     expect(preferences.map((preference) => preference.key)).toEqual(all.map((item) => item.key));
   });
 
-  it("refuses to move a fixed header or top-row item", () => {
+  it("refuses to move a fixed header item", () => {
     const all = resolveSidebarNavItems({ preferences: [] });
-    for (const key of ["history", "chief"] as const) {
+    for (const key of ["history"] as const) {
       const preferences = moveSidebarNavItem({
         items: all,
         key,

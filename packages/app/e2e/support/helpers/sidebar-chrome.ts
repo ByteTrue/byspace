@@ -104,18 +104,13 @@ export async function closeTopLevelNavMenu(page: Page): Promise<void> {
   await expect(navMenuSurface(page)).toHaveCount(0);
 }
 
-const NON_MENU_NAV_TEST_IDS = new Set([
-  "sidebar-global-new-workspace",
-  "sidebar-sessions",
-  "sidebar-chief",
-]);
+const NON_MENU_NAV_TEST_IDS = new Set(["sidebar-global-new-workspace", "sidebar-sessions"]);
 
 /**
  * Clicks a top-level destination, opening the menu only when the destination actually lives inside
- * the BySpace menu. Chief (top row) and New workspace + History (Workspaces header) are outside the
- * menu — during initial skeleton load the header buttons mount after the first workspace list
- * response, so opening the floating menu while waiting for them would cover them with the menu's
- * backdrop.
+ * the BySpace menu. New workspace + History (Workspaces header) are outside the menu — during
+ * initial skeleton load the header buttons mount after the first workspace list response, so
+ * opening the floating menu while waiting for them would cover them with the menu's backdrop.
  */
 export async function clickTopLevelNavItem(page: Page, testID: string): Promise<void> {
   if (!NON_MENU_NAV_TEST_IDS.has(testID) && !(await isVisible(topLevelNavItem(page, testID)))) {

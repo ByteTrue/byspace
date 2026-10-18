@@ -35,6 +35,7 @@ import type { SidebarSurfaceBackdrop } from "@/styles/surface-backdrop";
 import { getSidebarRowBackdrop } from "@/components/sidebar/sidebar-row-backdrop";
 import { type GestureType } from "react-native-gesture-handler";
 import { WorkspaceRenameModal } from "@/components/workspace-rename-modal";
+import { isHomeProjectViewKey, isHomeWorkspace } from "@/chief/home-workspace";
 import { useWorkspaceClipboardActions } from "@/hooks/use-workspace-clipboard-actions";
 import * as Clipboard from "expo-clipboard";
 import { ExternalLink, Settings, MoreVertical, Plus, Trash2 } from "lucide-react-native";
@@ -585,6 +586,7 @@ function WorkspaceRowRightGroup({
   onRenameWithAgent,
   isPinned,
   onTogglePin,
+  isFixedActionRow = false,
 }: {
   workspace: SidebarWorkspaceEntry;
   backdrop: SidebarSurfaceBackdrop;
@@ -606,6 +608,7 @@ function WorkspaceRowRightGroup({
   onRenameWithAgent?: () => void;
   isPinned?: boolean;
   onTogglePin?: () => void;
+  isFixedActionRow?: boolean;
 }) {
   const { t } = useTranslation();
   const trailing = useSidebarWorkspaceTrailing();
@@ -660,6 +663,7 @@ function WorkspaceRowRightGroup({
                 archiveShortcutKeys={archiveShortcutKeys}
                 isPinned={isPinned}
                 onTogglePin={onTogglePin}
+                isFixedActionRow={isFixedActionRow}
               />
             ) : null}
           </SidebarWorkspaceTrailingActionOverlay>
@@ -1103,6 +1107,7 @@ function WorkspaceRowInner({
               archiveShortcutKeys={archiveShortcutKeys}
               isPinned={isPinned}
               onTogglePin={onTogglePin}
+              isFixedActionRow={isHomeWorkspace(workspace)}
               disabled={isArchiving}
               aria-selected={selected}
               accessibilityRole="button"
@@ -1154,6 +1159,7 @@ function WorkspaceRowInner({
                   onMarkAsUnread={onMarkAsUnread}
                   isPinned={isPinned}
                   onTogglePin={onTogglePin}
+                  isFixedActionRow={isHomeWorkspace(workspace)}
                 />
               </SidebarWorkspaceRowContent>
             </SidebarWorkspaceContextMenu>
@@ -1201,6 +1207,10 @@ function WorkspaceRowWithMenu({
   reserveIdleStatusIndicatorSpace?: boolean;
   isCreating?: boolean;
 }) {
+  // Derived from the workspace itself rather than threaded down from the project block: this row
+  // is also reached from the status/label groups and from the Pinned section, where no project
+  // block is in scope and a prop would simply be absent.
+  const isFixedActionRow = isHomeWorkspace(workspace);
   const { t } = useTranslation();
   const toast = useToast();
   const [isHidingWorkspace, setIsHidingWorkspace] = useState(false);
@@ -1268,7 +1278,7 @@ function WorkspaceRowWithMenu({
   const handleTogglePin = useCallback(() => {
     onToggleWorkspacePin(workspace);
   }, [onToggleWorkspacePin, workspace]);
-  const onTogglePin = canPin ? handleTogglePin : undefined;
+  const onTogglePin = canPin && !isFixedActionRow ? handleTogglePin : undefined;
 
   const archiveShortcutKeys = useShortcutKeys("archive-workspace");
   const { hasClearableAttention, canMarkUnread, clearAttention, markUnread } =
@@ -1290,7 +1300,7 @@ function WorkspaceRowWithMenu({
   useKeyboardActionHandler({
     handlerId: `workspace-archive-${workspace.workspaceKey}`,
     actions: ["workspace.archive"],
-    enabled: selected && !isArchiving,
+    enabled: selected && !isArchiving && !isFixedActionRow,
     priority: 0,
     handle: () => {
       handleArchive();
@@ -1319,15 +1329,17 @@ function WorkspaceRowWithMenu({
         archiveLabel={t("sidebar.workspace.actions.archive")}
         archiveStatus={isArchiving ? "pending" : "idle"}
         archivePendingLabel={t("sidebar.workspace.actions.archiving")}
-        onArchive={handleArchive}
+        onArchive={isFixedActionRow ? undefined : handleArchive}
         onCopyBranchName={canCopyBranchName ? handleCopyBranchName : undefined}
         onCopyPath={handleCopyPath}
-        onRename={handleOpenRename}
-        onRenameWithAgent={supportsAgentRename ? handleRenameWithAgent : undefined}
+        onRename={isFixedActionRow ? undefined : handleOpenRename}
+        onRenameWithAgent={
+          supportsAgentRename && !isFixedActionRow ? handleRenameWithAgent : undefined
+        }
         onMarkAsRead={hasClearableAttention ? handleMarkAsRead : undefined}
         onMarkAsUnread={canMarkUnread ? handleMarkAsUnread : undefined}
-        archiveShortcutKeys={selected ? archiveShortcutKeys : null}
-        isPinned={isPinned}
+        archiveShortcutKeys={selected && !isFixedActionRow ? archiveShortcutKeys : null}
+        isPinned={isPinned && !isFixedActionRow}
         onTogglePin={onTogglePin}
         reserveIdleStatusIndicatorSpace={reserveIdleStatusIndicatorSpace}
       />
@@ -1593,6 +1605,10 @@ function ProjectBlock({
     [project, supportsMultiplicityByServerId, preferredServerIdsByProjectViewKey],
   );
 
+  // The Chief project is the daemon's own: its Home workspaces are re-titled and re-pathed on
+  // every boot, so nothing user-editable is offered on the project row or on its rows.
+  const isFixedActionRow = isHomeProjectViewKey(project.viewKey);
+
   const active = isProjectSelectedByRoute({
     selection: activeWorkspaceSelection,
     project,
@@ -1776,7 +1792,9 @@ function ProjectBlock({
         hostLabelByServerId={hostLabelByServerId}
         selected={false}
         worktreeTarget={
-          rowModel.trailingAction.kind === "new_workspace" ? rowModel.trailingAction.target : null
+          !isFixedActionRow && rowModel.trailingAction.kind === "new_workspace"
+            ? rowModel.trailingAction.target
+            : null
         }
         isProjectActive={active}
         onWorkspacePress={onWorkspacePress}
@@ -1785,7 +1803,9 @@ function ProjectBlock({
         isDragging={isDragging}
         isArchiving={isRemovingProject}
         menuController={null}
-        onRemoveProject={handleRemoveProject}
+        // The Chief project holds the daemon's own Home workspaces: there is nothing to
+        // configure and nothing a removal could mean, so its kebab and context menu are gone.
+        onRemoveProject={isFixedActionRow ? undefined : handleRemoveProject}
         removeProjectStatus={isRemovingProject ? "pending" : "idle"}
         dragHandleProps={dragHandleProps}
       />
@@ -2418,24 +2438,43 @@ function ProjectModeList({
     ],
   );
 
-  const projectBody =
-    projects.length === 0 ? (
+  // The Chief project is a fixed first row, not a draggable one: it is the daemon's own project,
+  // and its position is what makes the per-host Home rows findable. Rendering it outside the
+  // drag list is what keeps both true — no sortable handle, and a slot no reorder can claim.
+  const homeProject = unpinnedProjects.find((project) => isHomeProjectViewKey(project.viewKey));
+  const draggableProjects = unpinnedProjects.filter(
+    (project) => !isHomeProjectViewKey(project.viewKey),
+  );
+
+  const draggableProjectList = (data: SidebarProjectEntry[]) => (
+    <DraggableList
+      testID="sidebar-project-list"
+      data={data}
+      keyExtractor={projectViewKeyExtractor}
+      renderItem={renderProject}
+      onDragEnd={handleProjectDragEnd}
+      extraData={activeWorkspaceSelectionKey(activeWorkspaceSelection)}
+      scrollEnabled={false}
+      useDragHandle
+      simultaneousGestureRef={parentGestureRef}
+      gestureHostPresented={dragGestureHostActive}
+      containerStyle={styles.projectListContainer}
+    />
+  );
+
+  let projectBody = draggableProjectList(draggableProjects);
+  if (projects.length === 0) {
+    projectBody = (
       <SidebarProjectEmptyState onAddProject={onAddProject} onImportSession={onImportSession} />
-    ) : (
-      <DraggableList
-        testID="sidebar-project-list"
-        data={unpinnedProjects}
-        keyExtractor={projectViewKeyExtractor}
-        renderItem={renderProject}
-        onDragEnd={handleProjectDragEnd}
-        extraData={activeWorkspaceSelectionKey(activeWorkspaceSelection)}
-        scrollEnabled={false}
-        useDragHandle
-        simultaneousGestureRef={parentGestureRef}
-        gestureHostPresented={dragGestureHostActive}
-        containerStyle={styles.projectListContainer}
-      />
     );
+  } else if (homeProject) {
+    projectBody = (
+      <>
+        {renderProjectBlock(homeProject, { drag: noop, isDragging: false })}
+        {draggableProjects.length > 0 ? draggableProjectList(draggableProjects) : null}
+      </>
+    );
+  }
 
   const content = (
     <>

@@ -38,15 +38,25 @@
 
 - 桌面固定侧栏的左上角始终是折叠按钮（`menu-button`），它占据第一行的最左侧；侧栏收起后同一按钮由内容标题栏渲染在同一像素（`x=11, y=4.5`），因此展开/收起不移动指针目标。
 - 对齐的是**看得见的图标**，不是按钮的外框：折叠按钮是 26px 外框居中一个 16px 图标，图标天然在框内缩 5px；而各行图标在内缩 8px 处（图标轨 `x=16`）。共用的 `leadingToggle` 负边距按「图标轨 − 外框内缩 − 宿主行内缩」算出，让两个 host 的折叠按钮图标都落在 `x=16`，与 workspace 行的图标同在一条基准线上。若改成对齐外框，图标会偏左 3px。
-- **侧栏第一行顶栏采用双按钮布局（`[◧] [BySpace ⌄] ── [🤖 Chief ●]`）**：左侧为折叠按钮与紧凑左对齐的 `BySpace` 菜单触发器（标题与翻转箭头并排），右侧常驻 `Chief` 胶囊按钮（带 `Bot` 图标、`Chief` 标签、选中高亮与 Home workspace 实时运行/待处理状态指示灯，零纵向空间增量）。移动端抽屉顶行同样为 `[BySpace ⌄] ── [🤖 Chief ●] [✕]`，点击 `Chief` 自动关闭抽屉并进入 Home workspace。
-- **`BySpace` 点开后是悬浮下拉菜单，不是就地展开**：低频与扩展导航项（默认 Search / Schedules / Tunnels）由菜单引擎（`docs/menus.md`）渲染成普通 `MenuItem`，锚在该按钮下方，因此打开与关闭都不移动 Workspace 列表。顺序与显隐沿用 Appearance → Sidebar 设置；菜单内没有可见项时 `BySpace` 按钮与菜单一起不渲染（判据只数菜单内的项，Chief 与 New workspace / History 不参与）。选中一项后菜单关闭并导航；当前所在页由该行的勾标出（勾只在行渲染时才画，所以折叠态不付出成本）。入口零开销：项只在本菜单打开时才解析。daemon 自动确保的 Home workspace（`byspace.home-workspace`）及其独占的项目壳不在下方项目/工作区列表与新建工作区项目选择器中重复列出，由侧栏顶行右侧 `Chief` 按钮、全局快捷键（`⌘J` / `Ctrl+J`）及 Command Center 动作进入。
-- **Chief、New workspace 与 History 不在菜单里**：`Chief` 固定在侧栏第一行右侧，`New workspace` 与 `History` 是 `Workspaces` 标题行右侧的两个图标按钮（与排序、显示偏好同排同形，28pt），均一次点击即达。位置由版面固定，Appearance → Sidebar 因此不对这三项提供 Move up/down，但保留可见性开关——关掉即从对应槽位消失。
+- **顶栏只有折叠按钮与 `BySpace` 菜单触发器**（`[◧] [BySpace ⌄]`）。Chief 不是导航项，没有顶栏按钮，也没有 `⌘J` / Command Center 动作——它是侧栏第一条项目（见下）。移动端抽屉顶行是 `[BySpace ⌄] ── [✕]`。
+- **`BySpace` 点开后是悬浮下拉菜单，不是就地展开**：低频与扩展导航项（默认 Search / Schedules / Tunnels）由菜单引擎（`docs/menus.md`）渲染成普通 `MenuItem`，锚在该按钮下方，因此打开与关闭都不移动 Workspace 列表。顺序与显隐沿用 Appearance → Sidebar 设置；菜单内没有可见项时 `BySpace` 按钮与菜单一起不渲染。选中一项后菜单关闭并导航；当前所在页由该行的勾标出（勾只在行渲染时才画，所以折叠态不付出成本）。入口零开销：项只在本菜单打开时才解析。
+- **New workspace 与 History 不在菜单里**：两者是 `Workspaces` 标题行右侧的两个图标按钮（与排序、显示偏好同排同形，28pt），一次点击即达。位置由版面固定，Appearance → Sidebar 因此不对这两项提供 Move up/down，但保留可见性开关——关掉即从对应槽位消失。
 - `Workspaces` 标题行在**零项目时也渲染**（这两个导航项与列表内容无关），此时排序与显示偏好两个列表控制隐藏。侧栏收到最小宽度 200pt 时标题截断，四个按钮不压缩。
 - 标题行的按钮在 **Compact 侧栏同样一次点击即达**（它们不参与折叠），且与菜单项一样在选中后必须关闭面板——否则选完 History 后，面板正盖在刚导航到的那一页上。
 - Explorer 折叠按钮固定窗口右上角：dock 打开时由 dock 自己的标签栏承载，关闭时由内容标题栏承载。打开或关闭 Explorer 不移动指针目标。
 - 菜单项在打开前不可见，所以「当前所在页」不在侧栏常显高亮；标题行的两个按钮始终在位，History 所在页由字形颜色（而非背景块）标出，与旁边的工具按钮保持同一族。
 - **Compact 侧栏用同一个菜单**：面板头部一行是 `BySpace` 按钮 + 关闭按钮，菜单默认关闭，因此手机上面板不再被导航项占满。菜单表面被 portal 到 overlay root、并不在面板内，而面板本身是 retained（`display: none` 保活），所以 shell 必须在 `active` 变假时显式关闭菜单（`useSidebarNavMenuOpen`），否则它会活过面板、下次打开时还悬浮在那里。关闭按钮不参与菜单、始终在位，也是 e2e 判定「面板已开」的标记。
 
+## Chief 项目
+
+- **每条 host 一个 Home workspace，侧栏里合成一条固定首位的项目。** 每个 daemon 给自己建一个 Home workspace（label `byspace.home-workspace`，cwd `$BYSPACE_HOME/chief`）及其项目壳；app 在结构层把这条项目的 viewKey 改写成保留值 `home:chief`，于是 N 台 host 的 Home 合并成一个带多条 host placement 的项目。行标题仍是 `Chief`，多 host 时按常规则自动出行内 host badge。daemon 侧落盘的 host-scoped `projectKey` 保持不变，合并只是呈现层的改写。
+- **位置是常量，不是偏好。** 它排在项目模式的第一位，不参与 `applyStoredOrdering`、拖拽排序与 Sort projects；status / label 模式下不特殊化（那两个视图的价值是按状态/标签排）。Host / Project / Label 筛选照常作用于它。
+- **交互全禁。** 项目行没有 kebab、没有右键菜单、没有新建 workspace 按钮，工作区行没有 rename / archive / pin / label / 拖拽。Home 的标题、cwd 与项目名每次启动都由 daemon 重新断言，可编辑只会产生「改了又变回去」的假象。它也不出现在新建工作区的项目选择器里。
+- **离线 host 的行保留并降灰。** 断开的机器仍属于用户，隐藏会让它看起来像被删掉了；dim 是全部信号。
+- 判定 Home 项目的条件是「带 label 的 workspace 所在项目，且该项目下没有非 Home 的 workspace」。用户把 `~/.byspace` 当普通项目添加、又在里面建了自己的 workspace 时，那条项目是用户的，仍是普通行。
+- 已知上限：合并后的 viewKey 跨 host，凡是把 viewKey 当唯一路由判据的地方都必须落到 placement 的 `serverId`（行点击已如此）。升级触发：出现第二个需要跨 host 唯一的保留项目时，把改写抽成通用机制。
+
 ## 历史证据
 
 - [Epic 002 交付记录](../epics/002-x-retained-capabilities-delivery/spec.md)
+- [Chief 按 host 可见（issue 2026-10-18）](../issues/2026-10-18-o-chief-per-host-sidebar-project.md)

@@ -2,7 +2,6 @@ import { useCallback, useMemo } from "react";
 import { usePathname, router } from "expo-router";
 import {
   ArrowRightLeft,
-  Bot,
   CalendarClock,
   History,
   Plus,
@@ -10,7 +9,6 @@ import {
   type LucideIcon,
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { openChiefWorkspace, useIsShowingChiefWorkspace } from "@/chief/home-workspace";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
 import { useKeyboardShortcutsStore } from "@/stores/keyboard-shortcuts-store";
 import {
@@ -41,7 +39,6 @@ export interface SidebarNavEntry {
 export const SIDEBAR_NAV_ICONS: Record<BuiltinSidebarNavId, LucideIcon> = {
   "new-workspace": Plus,
   history: History,
-  chief: Bot,
   search: Search,
   schedules: CalendarClock,
   tunnels: ArrowRightLeft,
@@ -51,13 +48,12 @@ export const SIDEBAR_NAV_ICONS: Record<BuiltinSidebarNavId, LucideIcon> = {
 export const SIDEBAR_NAV_TEST_IDS: Record<BuiltinSidebarNavId, string> = {
   "new-workspace": "sidebar-global-new-workspace",
   history: "sidebar-sessions",
-  chief: "sidebar-chief",
   search: "sidebar-search",
   schedules: "sidebar-schedules",
   tunnels: "sidebar-tunnels",
 };
 
-type MenuSidebarNavId = Exclude<BuiltinSidebarNavId, "new-workspace" | "history" | "chief">;
+type MenuSidebarNavId = Exclude<BuiltinSidebarNavId, "new-workspace" | "history">;
 
 /**
  * The entries the app menu holds: the stored order, minus the fixed top-row and header buttons.
@@ -137,35 +133,6 @@ export function useSidebarNavMenuEntries(): SidebarNavEntry[] {
         .map((item) => entriesById[item.id]),
     [items, entriesById],
   );
-}
-
-/**
- * The top-row Chief button's entry, or `null` when no connected host offers the Chief role or the
- * user switched Chief off in Appearance settings.
- */
-export function useSidebarChiefNavEntry(): SidebarNavEntry | null {
-  const { items } = useSidebarNavItems();
-  const { t } = useTranslation();
-  const pathname = usePathname();
-  const chiefShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("chief"));
-  const isShowingChief = useIsShowingChiefWorkspace(pathname);
-
-  const onChief = useCallback(() => {
-    void openChiefWorkspace(pathname);
-  }, [pathname]);
-
-  return useMemo(() => {
-    const visible = items.some((item) => item.id === "chief" && item.visible);
-    if (!visible) return null;
-    return {
-      id: "chief",
-      icon: SIDEBAR_NAV_ICONS.chief,
-      label: t(builtinSidebarNavLabelKey("chief")),
-      shortcutKeys: chiefShortcut,
-      isActive: isShowingChief,
-      onSelect: onChief,
-    };
-  }, [chiefShortcut, isShowingChief, items, onChief, t]);
 }
 
 /**

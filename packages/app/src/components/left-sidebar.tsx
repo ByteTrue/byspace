@@ -30,7 +30,6 @@ import {
 } from "@/components/sidebar-resize-handle-layout";
 import { HostPicker } from "@/components/hosts/host-picker";
 import { SidebarDisplayPreferencesMenu } from "@/components/sidebar/display-preferences/menu";
-import { SidebarChiefButton } from "@/components/sidebar/sidebar-chief-button";
 import { SidebarNavMenu } from "@/components/sidebar/sidebar-nav-menu";
 import {
   SIDEBAR_NAV_TEST_IDS,
@@ -576,7 +575,6 @@ function MobileSidebar({
           <View style={styles.compactTopRow}>
             <SidebarNavMenu panelActive={active} onBeforeNavigate={closeSidebar} />
             <View style={styles.topRowRight}>
-              <SidebarChiefButton onBeforeNavigate={closeSidebar} />
               <Pressable
                 style={styles.mobileCloseButton}
                 onPress={closeSidebar}
@@ -748,9 +746,6 @@ function DesktopSidebar({
           <View style={styles.sidebarTopRow}>
             <SidebarMenuToggle host="sidebar" tooltipSide="bottom" />
             <SidebarNavMenu panelActive={active} />
-            <View style={styles.topRowRight}>
-              <SidebarChiefButton />
-            </View>
           </View>
         </View>
 

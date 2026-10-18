@@ -4,6 +4,7 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HOME_PROJECT_VIEW_KEY } from "@/chief/home-workspace";
 import type { ProjectHostEntry, ProjectSummary, WorkspaceSummary } from "@/utils/projects";
 import type { ProjectHostError, UseProjectsResult } from "@/hooks/use-projects";
 
@@ -383,6 +384,36 @@ describe("ProjectsScreen", () => {
 
     expect(container?.textContent).not.toContain("Host A");
     expect(container?.textContent).toContain("Host B");
+  });
+
+  it("omits the daemon's Home project, which has no settings a user can change", () => {
+    setProjectsState({
+      projects: [
+        project({
+          viewKey: HOME_PROJECT_VIEW_KEY,
+          projectName: "BySpace-WorkSpace",
+          hosts: [
+            hostEntry({
+              serverId: "host-a",
+              projectId: "prj_home",
+              projectName: "BySpace-WorkSpace",
+            }),
+          ],
+        }),
+        project({
+          viewKey: "remote:github.com/acme/app",
+          projectName: "acme/app",
+          hosts: [hostEntry({ serverId: "host-a", projectId: "prj_app", projectName: "acme/app" })],
+        }),
+      ],
+    });
+
+    render("host-a");
+
+    // The sidebar row is disabled for the same reason; a settings screen offering default-host
+    // and removal would be the other door into the daemon's own project.
+    expect(container?.textContent).not.toContain("BySpace-WorkSpace");
+    expect(container?.textContent).toContain("acme/app");
   });
 
   it("does not include the word 'checkout' anywhere in the rendered tree", () => {

@@ -210,14 +210,6 @@ export const en = {
     },
   },
   chief: {
-    title: "Chief",
-    switchHost: "Switch host",
-    maximize: "Open in full page",
-    open: "Open Chief",
-    close: "Close Chief",
-    retry: "Retry",
-    noHomeWorkspace:
-      "Chief needs the daemon's Home workspace. Update your BySpace daemon and try again.",
     suggestions: {
       whatCanYouDo: "What can you do?",
       checkWorkspaces: "Check my workspaces",

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { HOME_PROJECT_VIEW_KEY, HOME_WORKSPACE_LABEL } from "@/chief/home-workspace";
 import { createProjectViewKey } from "@/projects/workspace-structure";
 
 import type { DaemonClient } from "@bytetrue/client/internal/daemon-client";
@@ -49,6 +50,7 @@ function createWorkspace(
     statusEnteredAt: null,
     diffStat: input.diffStat ?? null,
     scripts: input.scripts ?? [],
+    ...(input.labels ? { labels: input.labels } : {}),
   };
 }
 
@@ -503,6 +505,32 @@ describe("workspace structure composition", () => {
       equivalenceViewKey("project-a"),
     ]);
     expect(after).not.toEqual(before);
+  });
+
+  it("keeps the Home project first whatever the stored order says", () => {
+    const home = createWorkspace({
+      id: "workspace-home",
+      projectId: "project-home",
+      projectDisplayName: "BySpace-WorkSpace",
+      labels: [HOME_WORKSPACE_LABEL],
+    });
+    const workspaceB = createWorkspace({
+      id: "workspace-b",
+      projectId: "project-b",
+      projectDisplayName: "Project B",
+    });
+    initializeWorkspaces([home, workspaceB]);
+
+    const composed = snapshotStructure(SERVER_ID, {
+      ...emptySidebarOrder(),
+      projectOrder: [equivalenceViewKey("project-b"), HOME_PROJECT_VIEW_KEY],
+    });
+
+    // Stored order is applied to everything else; the Chief project is a fixed first slot.
+    expect(composed.projects.map((project) => project.viewKey)).toEqual([
+      HOME_PROJECT_VIEW_KEY,
+      equivalenceViewKey("project-b"),
+    ]);
   });
 });
 

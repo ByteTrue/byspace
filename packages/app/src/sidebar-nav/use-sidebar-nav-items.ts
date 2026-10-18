@@ -1,5 +1,4 @@
 import { useCallback, useMemo } from "react";
-import { useChiefAvailable } from "@/chief/home-workspace";
 import { useAppSettings } from "@/hooks/use-settings";
 import { useTunnelsAvailable } from "@/tunnels/availability";
 import {
@@ -20,16 +19,14 @@ export interface UseSidebarNavItemsReturn {
 export function useSidebarNavItems(): UseSidebarNavItemsReturn {
   const { settings, updateSettings } = useAppSettings();
   const preferences = settings.sidebarNavItems;
-  const chiefAvailable = useChiefAvailable();
   const tunnelsAvailable = useTunnelsAvailable();
 
   const items = useMemo(
     () =>
       filterUnavailableSidebarNavItems(resolveSidebarNavItems({ preferences }), {
-        chief: chiefAvailable,
         tunnels: tunnelsAvailable,
       }),
-    [chiefAvailable, preferences, tunnelsAvailable],
+    [preferences, tunnelsAvailable],
   );
 
   const setVisible = useCallback(

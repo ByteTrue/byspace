@@ -1,3 +1,4 @@
+import { isHomeProjectViewKey } from "@/chief/home-workspace";
 import type { WorkspaceDescriptor } from "@/stores/session-store";
 import type {
   WorkspaceStructureHostPlacement,
@@ -132,17 +133,26 @@ export function canCreateWorkspaceForHostProject(input: {
   return input.allowAllProjects || host.worktreeSupport !== "unsupported";
 }
 
+/**
+ * The projects a new workspace may be created under on this host.
+ *
+ * The Chief project is absent on purpose: each host carries exactly one Home workspace, created
+ * by its daemon, and a second workspace under that project would be an ordinary workspace wearing
+ * the daemon's project shell.
+ */
 export function filterWorkspaceProjectsForHost(input: {
   projects: readonly HostProjectListItem[];
   serverId: string;
   allowAllProjects: boolean;
 }): HostProjectListItem[] {
-  return input.projects.filter((project) =>
-    canCreateWorkspaceForHostProject({
-      project,
-      serverId: input.serverId,
-      allowAllProjects: input.allowAllProjects,
-    }),
+  return input.projects.filter(
+    (project) =>
+      !isHomeProjectViewKey(project.viewKey) &&
+      canCreateWorkspaceForHostProject({
+        project,
+        serverId: input.serverId,
+        allowAllProjects: input.allowAllProjects,
+      }),
   );
 }
 

@@ -212,14 +212,6 @@ export const ru: TranslationResources = {
     },
   },
   chief: {
-    title: "Chief",
-    switchHost: "Сменить хост",
-    maximize: "Открыть на всю страницу",
-    open: "Открыть Chief",
-    close: "Закрыть Chief",
-    retry: "Повторить",
-    noHomeWorkspace:
-      "Для Chief требуется рабочее пространство Home демона. Обновите демон BySpace и повторите попытку.",
     suggestions: {
       whatCanYouDo: "Что ты умеешь?",
       checkWorkspaces: "Проверь мои рабочие пространства",

@@ -1,4 +1,4 @@
-import { isHomeWorkspace } from "@/chief/home-workspace";
+import { HOME_PROJECT_VIEW_KEY, isHomeWorkspace } from "@/chief/home-workspace";
 import type { ProjectDescriptor, WorkspaceDescriptor } from "@/stores/session-store";
 import { projectDisplayNameFromProjectId } from "@/utils/project-display-name";
 
@@ -47,13 +47,20 @@ export function buildWorkspaceStructureProjects(input: {
   sessions: WorkspaceStructureSession[];
 }): WorkspaceStructureProject[] {
   const byProject = new Map<string, ProjectDraft>();
-  const projectEntries: Array<{ serverId: string; project: ProjectDescriptor }> = [];
+  const projectEntries: Array<{
+    serverId: string;
+    project: ProjectDescriptor;
+    isHomeProject: boolean;
+  }> = [];
   const workspacesByServer = new Map<string, WorkspaceDescriptor[]>();
   const keyCountsByServer = new Map<string, Map<string, number>>();
   const viewKeyByServerProjectId = new Map<string, Map<string, string>>();
 
   for (const session of input.sessions) {
     const workspaces = Array.from(session.workspaces);
+    // The project a host's Home workspace belongs to is that host's Home project: a
+    // directory workspace without a projectId materializes one of its own, and the
+    // label is the only field that survives renames of either.
     const homeProjectIds = new Set<string>();
     const nonHomeProjectIds = new Set<string>();
     for (const workspace of workspaces) {
@@ -63,21 +70,18 @@ export function buildWorkspaceStructureProjects(input: {
         nonHomeProjectIds.add(workspace.projectId);
       }
     }
-    workspacesByServer.set(
-      session.serverId,
-      workspaces.filter((workspace) => !isHomeWorkspace(workspace)),
-    );
+    workspacesByServer.set(session.serverId, workspaces);
 
     for (const project of session.projects) {
-      // The daemon-managed Home workspace has a dedicated top-level Chief nav
-      // entry; hide both it and its auto-materialized project shell from the
-      // regular project/workspace lists unless the user also keeps non-Home
-      // workspaces under that project.
-      if (homeProjectIds.has(project.projectId) && !nonHomeProjectIds.has(project.projectId)) {
-        continue;
-      }
-      projectEntries.push({ serverId: session.serverId, project });
-      const sharedKey = project.projectKey ?? null;
+      // Only a project the daemon created for Home and nobody else shares it: a directory
+      // workspace without a projectId materializes one, and if the user also keeps their own
+      // workspaces under that same directory the project is theirs and stays a normal row.
+      const isHomeProject =
+        homeProjectIds.has(project.projectId) && !nonHomeProjectIds.has(project.projectId);
+      projectEntries.push({ serverId: session.serverId, project, isHomeProject });
+      // Home projects never group by their persisted key: that key carries the host, so
+      // two machines' Homes would land in two rows. HOME_PROJECT_VIEW_KEY replaces it.
+      const sharedKey = isHomeProject ? null : (project.projectKey ?? null);
       if (sharedKey) {
         const counts = getOrCreate(keyCountsByServer, session.serverId, () => new Map());
         counts.set(sharedKey, (counts.get(sharedKey) ?? 0) + 1);
@@ -89,13 +93,14 @@ export function buildWorkspaceStructureProjects(input: {
     projectEntries.flatMap(({ project }) => (project.projectKey ? [project.projectKey] : [])),
   );
 
-  for (const { serverId, project } of projectEntries) {
+  for (const { serverId, project, isHomeProject } of projectEntries) {
     const viewKey = addProjectToView({
       byProject,
       keyCountsByServer,
       allocatedViewKeys,
       serverId,
       project,
+      isHomeProject,
     });
     getOrCreate(viewKeyByServerProjectId, serverId, () => new Map()).set(
       project.projectId,
@@ -172,14 +177,20 @@ function addProjectToView(input: {
   allocatedViewKeys: Set<string>;
   serverId: string;
   project: ProjectDescriptor;
+  isHomeProject: boolean;
 }): string {
-  const { byProject, keyCountsByServer, serverId, project } = input;
-  const sharedKey = project.projectKey ?? null;
+  const { byProject, keyCountsByServer, serverId, project, isHomeProject } = input;
+  const sharedKey = isHomeProject ? null : (project.projectKey ?? null);
   const canUseSharedKey =
     sharedKey !== null && keyCountsByServer.get(serverId)?.get(sharedKey) === 1;
-  const viewKey = canUseSharedKey
-    ? createProjectViewKey({ kind: "equivalence", projectKey: sharedKey })
-    : allocatePlacementViewKey(input.allocatedViewKeys, serverId, project.projectId);
+  let viewKey: string;
+  if (isHomeProject) {
+    viewKey = HOME_PROJECT_VIEW_KEY;
+  } else if (canUseSharedKey) {
+    viewKey = createProjectViewKey({ kind: "equivalence", projectKey: sharedKey });
+  } else {
+    viewKey = allocatePlacementViewKey(input.allocatedViewKeys, serverId, project.projectId);
+  }
   const placement: WorkspaceStructureHostPlacement = {
     serverId,
     projectId: project.projectId,

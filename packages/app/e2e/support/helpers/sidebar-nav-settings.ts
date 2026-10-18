@@ -13,7 +13,6 @@ const APP_SETTINGS_KEY = "@byspace:app-settings";
 const SHELL_ROW_TEST_IDS = {
   "new-workspace": "sidebar-global-new-workspace",
   history: "sidebar-sessions",
-  chief: "sidebar-chief",
   search: "sidebar-search",
   schedules: "sidebar-schedules",
   tunnels: "sidebar-tunnels",
@@ -38,7 +37,6 @@ function itemLabel(key: SidebarNavKey): string {
   return {
     "new-workspace": "New workspace",
     history: "History",
-    chief: "Chief",
     search: "Search",
     schedules: "Schedules",
     tunnels: "Tunnels",

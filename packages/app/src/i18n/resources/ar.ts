@@ -212,14 +212,6 @@ export const ar: TranslationResources = {
     },
   },
   chief: {
-    title: "Chief",
-    switchHost: "تبديل المضيف",
-    maximize: "فتح في صفحة كاملة",
-    open: "فتح Chief",
-    close: "إغلاق Chief",
-    retry: "إعادة المحاولة",
-    noHomeWorkspace:
-      "يحتاج Chief إلى مساحة عمل Home الخاصة بالـ daemon. حدّث BySpace daemon ثم أعد المحاولة.",
     suggestions: {
       whatCanYouDo: "ما الذي يمكنك فعله؟",
       checkWorkspaces: "تحقق من مساحات عملي",

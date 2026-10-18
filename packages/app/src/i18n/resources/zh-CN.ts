@@ -212,13 +212,6 @@ export const zhCN: TranslationResources = {
     },
   },
   chief: {
-    title: "Chief",
-    switchHost: "切换主机",
-    maximize: "全屏打开",
-    open: "打开 Chief",
-    close: "关闭 Chief",
-    retry: "重试",
-    noHomeWorkspace: "Chief 需要 daemon 的 Home workspace。请更新 BySpace daemon 后重试。",
     suggestions: {
       whatCanYouDo: "你能帮我做什么？",
       checkWorkspaces: "看看我的工作区",

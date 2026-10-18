@@ -214,14 +214,6 @@ export const fr: TranslationResources = {
     },
   },
   chief: {
-    title: "Chief",
-    switchHost: "Changer d'hôte",
-    maximize: "Ouvrir en page entière",
-    open: "Ouvrir Chief",
-    close: "Fermer Chief",
-    retry: "Réessayer",
-    noHomeWorkspace:
-      "Chief nécessite l'espace de travail Home du daemon. Mettez à jour votre daemon BySpace puis réessayez.",
     suggestions: {
       whatCanYouDo: "Que peux-tu faire pour moi ?",
       checkWorkspaces: "Vérifie mes espaces de travail",

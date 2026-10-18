@@ -83,6 +83,7 @@ function source(gitActions: GitActions): {
         canPin: false,
         canShowSetup: false,
       },
+      isHome: false,
       activeTabKind: null,
       activeTabIndex: -1,
       activeTabCount: 0,
@@ -190,6 +191,27 @@ describe("workspace command center contributions", () => {
     expect(contributions.some((item) => item.id.startsWith("pane:"))).toBe(false);
     expect(contributions.some((item) => item.id === "workspace:rename")).toBe(true);
     expect(contributions.some((item) => item.id === "workspace:copy-path")).toBe(true);
+  });
+
+  it("omits pin and rename for the daemon's Home workspace, keeping copy", () => {
+    const fixture = source({ primary: null, secondary: [], menu: [] });
+    fixture.value.capabilities = {
+      canSplitPanes: false,
+      isGit: false,
+      canPin: true,
+      canShowSetup: false,
+    };
+    fixture.value.isHome = true;
+
+    const contributions = buildWorkspaceCommandCenterContributions(fixture.value);
+    const ids = contributions.map((item) => item.id);
+
+    // Both are write paths the daemon would undo on next boot; copy still describes the workspace
+    // and stays. `canPin: true` is deliberate: the host does support pinning, this one workspace
+    // just does not accept it.
+    expect(ids).not.toContain("workspace:pin");
+    expect(ids).not.toContain("workspace:rename");
+    expect(ids).toContain("workspace:copy-path");
   });
 
   it("dispatches every tab and pane command to the workspace scope", () => {

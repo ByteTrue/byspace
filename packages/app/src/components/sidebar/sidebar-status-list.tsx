@@ -17,6 +17,7 @@ import {
   type PressableStateCallbackType,
 } from "react-native";
 import type { GestureType } from "react-native-gesture-handler";
+import { isHomeWorkspace } from "@/chief/home-workspace";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import {
@@ -666,7 +667,11 @@ function StatusWorkspaceRowWithMenu({
   const handleTogglePin = useCallback(() => {
     onToggleWorkspacePin(workspace);
   }, [onToggleWorkspacePin, workspace]);
-  const onTogglePin = canPin ? handleTogglePin : undefined;
+  // Status/label groups and the Pinned section render the same row without a project block above
+  // it, so the fixed-row rule is read from the workspace's own Home label here. Without it the
+  // Home workspace is archivable and renamable again as soon as the sidebar leaves project mode.
+  const isFixedActionRow = isHomeWorkspace(workspace);
+  const onTogglePin = canPin && !isFixedActionRow ? handleTogglePin : undefined;
 
   const archiveShortcutKeys = useShortcutKeys("archive-workspace");
   const { hasClearableAttention, canMarkUnread, clearAttention, markUnread } =
@@ -688,7 +693,7 @@ function StatusWorkspaceRowWithMenu({
   useKeyboardActionHandler({
     handlerId: `workspace-archive-${workspace.workspaceKey}`,
     actions: ["workspace.archive"],
-    enabled: selected && !isArchiving,
+    enabled: selected && !isArchiving && !isFixedActionRow,
     priority: 0,
     handle: () => {
       handleArchive();
@@ -712,14 +717,14 @@ function StatusWorkspaceRowWithMenu({
         archiveLabel={t("sidebar.workspace.actions.archive")}
         archiveStatus={isArchiving ? "pending" : "idle"}
         archivePendingLabel={t("sidebar.workspace.actions.archiving")}
-        onArchive={handleArchive}
+        onArchive={isFixedActionRow ? undefined : handleArchive}
         onCopyBranchName={workspace.projectKind === "git" ? handleCopyBranchName : undefined}
         onCopyPath={handleCopyPath}
-        onRename={handleOpenRename}
+        onRename={isFixedActionRow ? undefined : handleOpenRename}
         onMarkAsRead={hasClearableAttention ? handleMarkAsRead : undefined}
         onMarkAsUnread={canMarkUnread ? handleMarkAsUnread : undefined}
-        archiveShortcutKeys={selected ? archiveShortcutKeys : null}
-        isPinned={isPinned}
+        archiveShortcutKeys={selected && !isFixedActionRow ? archiveShortcutKeys : null}
+        isPinned={isPinned && !isFixedActionRow}
         onTogglePin={onTogglePin}
         reserveIdleStatusIndicatorSpace={reserveIdleStatusIndicatorSpace}
         inStatusGroup={inStatusGroup}
@@ -908,6 +913,7 @@ function StatusWorkspaceRowInnerContent({
               archiveShortcutKeys={archiveShortcutKeys}
               isPinned={isPinned}
               onTogglePin={onTogglePin}
+              isFixedActionRow={isHomeWorkspace(workspace)}
               disabled={isArchiving}
               accessibilityRole="button"
               accessibilityState={accessibilityState}

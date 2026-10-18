@@ -3,6 +3,7 @@ import type {
   SidebarProjectEntry,
   SidebarWorkspaceEntry,
 } from "@/hooks/use-sidebar-workspaces-list";
+import { HOME_PROJECT_VIEW_KEY } from "@/chief/home-workspace";
 import { getProjectSortTier, sortProjectsByRules } from "./sidebar-sort-projects";
 
 function makeWorkspace(overrides: Partial<SidebarWorkspaceEntry> = {}): SidebarWorkspaceEntry {
@@ -131,6 +132,23 @@ describe("sidebar-sort-projects", () => {
       // Tier 3: 无 workspace 的项目，按首字母 A-Z
       "Charlie (Empty)",
       "Yankee (Empty)",
+    ]);
+  });
+
+  it("keeps the fixed Chief project first without sorting it", () => {
+    const entries = new Map<string, SidebarWorkspaceEntry>();
+    const chief = {
+      ...makeProject(HOME_PROJECT_VIEW_KEY, "BySpace-WorkSpace", []),
+      projectKind: "directory" as const,
+    };
+    const unsorted = [makeProject("p-b", "Bravo", []), chief, makeProject("p-a", "Alpha", [])];
+
+    // This order is what the caller persists as the project order, so the Chief project has to
+    // be in it — at the head, where no alphabet decides its place.
+    expect(sortProjectsByRules(unsorted, entries).map((p) => p.projectName)).toEqual([
+      "BySpace-WorkSpace",
+      "Alpha",
+      "Bravo",
     ]);
   });
 });

@@ -64,7 +64,6 @@ import { registerWorkspaceRouteNavigationRef } from "@/navigation/workspace-rout
 import { ThemedStack } from "@/navigation/themed-stack";
 import { legacyFavoriteProfileMigration } from "@/agent-profiles/migration";
 import { useActiveWorktreeNewAction } from "@/hooks/use-active-worktree-new-action";
-import { useGlobalChiefAction } from "@/hooks/use-global-chief-action";
 import { useGlobalNewWorkspaceAction } from "@/hooks/use-global-new-workspace-action";
 import { useLatchedBoolean } from "@/hooks/use-latched-boolean";
 import { useFaviconStatus } from "@/hooks/use-favicon-status";
@@ -422,7 +421,6 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
 
   useActiveWorktreeNewAction();
   useGlobalNewWorkspaceAction();
-  useGlobalChiefAction(pathname);
 
   const appContentMinimumWidth = resolveDesktopAppContentMinimum({
     isSettingsRoute: pathname.includes("/settings"),

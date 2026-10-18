@@ -1,12 +1,32 @@
 import { describe, expect, it } from "vitest";
 import {
-  deriveHomeWorkspaceStatusBucket,
-  findHomeWorkspaceId,
-  hasHostChiefRole,
+  findHomeWorkspace,
+  HOME_PROJECT_VIEW_KEY,
   HOME_WORKSPACE_LABEL,
+  isHomeProjectViewKey,
   isHomeWorkspace,
-  resolveChiefTargetServerId,
 } from "./home-workspace";
+import type { WorkspaceDescriptor } from "@/stores/session-store";
+
+function workspace(id: string, labels?: string[]): WorkspaceDescriptor {
+  return {
+    id,
+    projectId: "prj",
+    projectDisplayName: "app",
+    projectCustomName: null,
+    projectRootPath: "/app",
+    workspaceDirectory: "/app",
+    projectKind: "directory",
+    workspaceKind: "local_checkout",
+    name: "chief",
+    status: "done",
+    statusEnteredAt: null,
+    archivingAt: null,
+    diffStat: null,
+    scripts: [],
+    ...(labels ? { labels } : {}),
+  };
+}
 
 describe("isHomeWorkspace", () => {
   it("matches only the reserved byspace.home-workspace label", () => {
@@ -19,82 +39,45 @@ describe("isHomeWorkspace", () => {
   });
 });
 
-describe("hasHostChiefRole", () => {
-  it("detects chief in agentRoleNames or legacy agentRoles boolean", () => {
-    expect(hasHostChiefRole({ agentRoleNames: ["chief", "researcher"] })).toBe(true);
-    expect(hasHostChiefRole({ agentRoleNames: ["researcher"] })).toBe(false);
-    expect(hasHostChiefRole({ agentRoles: true })).toBe(true);
-    expect(hasHostChiefRole({ agentRoles: false })).toBe(false);
-    expect(hasHostChiefRole(undefined)).toBe(false);
+describe("isHomeProjectViewKey", () => {
+  it("matches only the reserved project view key", () => {
+    expect(isHomeProjectViewKey(HOME_PROJECT_VIEW_KEY)).toBe(true);
+    expect(isHomeProjectViewKey("remote:github.com/acme/app")).toBe(false);
+    expect(isHomeProjectViewKey(null)).toBe(false);
   });
 });
 
-describe("findHomeWorkspaceId", () => {
-  it("returns the id of the workspace carrying the reserved label", () => {
-    const id = findHomeWorkspaceId([
-      { id: "wks_repo", labels: [] },
-      { id: "wks_home", labels: [HOME_WORKSPACE_LABEL] },
+describe("every renderer asks one question", () => {
+  // The sidebar reaches a workspace row from three places: its project block, the status/label
+  // groups, and the Pinned section. Only the first has a project in scope, so the fixed-row rule
+  // has to be answerable from the workspace alone — the row, the global pin shortcut, the global
+  // rename dialog and the command center all call `isHomeWorkspace(descriptor)`.
+  it("answers from the workspace descriptor, which every surface holds", () => {
+    const descriptor = workspace("wks_home", [HOME_WORKSPACE_LABEL]);
+    expect(isHomeWorkspace(descriptor)).toBe(true);
+  });
+
+  it("does not depend on a project view key", () => {
+    // A row rendered outside its project block still has to be recognised, and the project key is
+    // the one field that changes between renderers (the merged Home project rewrites it).
+    const descriptor = workspace("wks_home", [HOME_WORKSPACE_LABEL]);
+    expect(isHomeWorkspace(descriptor)).toBe(true);
+    expect(isHomeProjectViewKey(HOME_PROJECT_VIEW_KEY)).toBe(true);
+    expect(isHomeProjectViewKey(descriptor.projectId)).toBe(false);
+  });
+});
+
+describe("findHomeWorkspace", () => {
+  it("returns the workspace carrying the reserved label", () => {
+    const home = findHomeWorkspace([
+      workspace("wks_repo"),
+      workspace("wks_home", [HOME_WORKSPACE_LABEL]),
     ]);
-    expect(id).toBe("wks_home");
+    expect(home?.id).toBe("wks_home");
   });
 
   it("returns null when no workspace carries the reserved label", () => {
-    expect(findHomeWorkspaceId([{ id: "wks_repo", labels: ["custom"] }])).toBeNull();
-    expect(findHomeWorkspaceId(null)).toBeNull();
-  });
-});
-
-describe("resolveChiefTargetServerId", () => {
-  it("prefers the current route host when it is registered and supports chief", () => {
-    expect(
-      resolveChiefTargetServerId({
-        pathname: "/h/srv_b/workspace/wks_1",
-        hostServerIds: ["srv_a", "srv_b"],
-        earliestOnlineServerId: "srv_a",
-        isChiefSupported: () => true,
-      }),
-    ).toBe("srv_b");
-  });
-
-  it("falls back to the earliest online host that supports chief", () => {
-    expect(
-      resolveChiefTargetServerId({
-        pathname: "/tunnels",
-        hostServerIds: ["srv_old", "srv_new"],
-        earliestOnlineServerId: "srv_old",
-        isChiefSupported: (id) => id === "srv_new",
-      }),
-    ).toBe("srv_new");
-  });
-});
-
-describe("deriveHomeWorkspaceStatusBucket", () => {
-  it("returns done when workspace is absent or idle without active root agent activity", () => {
-    expect(deriveHomeWorkspaceStatusBucket({ workspace: null })).toBe("done");
-    expect(
-      deriveHomeWorkspaceStatusBucket({
-        workspace: { id: "wks_home", status: "done" },
-      }),
-    ).toBe("done");
-  });
-
-  it("prefers the workspace status when not done, otherwise falls back to root agent activity", () => {
-    expect(
-      deriveHomeWorkspaceStatusBucket({
-        workspace: { id: "wks_home", status: "needs_input" },
-        workspaceAgentActivity: new Map([
-          ["wks_home", { status: "running", enteredAt: new Date(1000) }],
-        ]),
-      }),
-    ).toBe("needs_input");
-
-    expect(
-      deriveHomeWorkspaceStatusBucket({
-        workspace: { id: "wks_home", status: "done" },
-        workspaceAgentActivity: new Map([
-          ["wks_home", { status: "running", enteredAt: new Date(1000) }],
-        ]),
-      }),
-    ).toBe("running");
+    expect(findHomeWorkspace([workspace("wks_repo", ["custom"])])).toBeNull();
+    expect(findHomeWorkspace(null)).toBeNull();
   });
 });

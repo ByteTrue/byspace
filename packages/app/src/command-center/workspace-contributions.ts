@@ -122,6 +122,11 @@ export interface WorkspaceCommandCenterSource {
   currentBranch: string | null;
   isPinned: boolean;
   /**
+   * The daemon's Home workspace. It can be copied from but not managed: its title and directory
+   * are re-asserted on every boot, so pin and rename are omitted rather than shown and failing.
+   */
+  isHome: boolean;
+  /**
    * The host's label catalog, each entry told whether the current workspace carries it. Null
    * before the catalog has loaded — omits the whole group rather than showing it empty.
    */
@@ -572,7 +577,7 @@ export function buildWorkspaceCommandCenterContributions(
     contributions.push(buildGitContribution(source, action, 100 + index, "query"));
   }
 
-  if (source.capabilities.canPin) {
+  if (source.capabilities.canPin && !source.isHome) {
     contributions.push(
       buildWorkspaceAction({
         source,
@@ -588,17 +593,21 @@ export function buildWorkspaceCommandCenterContributions(
     );
   }
 
+  if (!source.isHome) {
+    contributions.push(
+      buildWorkspaceAction({
+        source,
+        id: "workspace:rename",
+        rank: 21,
+        title: source.labels.rename,
+        keywords: ["rename", "title", "name", "label"],
+        icon: source.icons.rename,
+        action: { id: "workspace.rename", scope: "workspace" },
+        visibility: "query",
+      }),
+    );
+  }
   contributions.push(
-    buildWorkspaceAction({
-      source,
-      id: "workspace:rename",
-      rank: 21,
-      title: source.labels.rename,
-      keywords: ["rename", "title", "name", "label"],
-      icon: source.icons.rename,
-      action: { id: "workspace.rename", scope: "workspace" },
-      visibility: "query",
-    }),
     buildWorkspaceCallback({
       source,
       id: "workspace:copy-path",

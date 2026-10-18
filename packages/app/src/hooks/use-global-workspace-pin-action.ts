@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { isHomeWorkspace } from "@/chief/home-workspace";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import { useSidebarWorkspacePinController } from "@/hooks/use-sidebar-workspace-pin";
 import type { KeyboardActionId } from "@/keyboard/keyboard-action-dispatcher";
@@ -30,12 +31,15 @@ export function useGlobalWorkspacePinAction() {
   const fields = useWorkspaceFields(serverId, routeWorkspaceId, (workspace) => ({
     id: workspace.id,
     pinnedAt: workspace.pinnedAt ?? null,
+    // The cached descriptor's own label, not a sidebar row: the sidebar can be collapsed, be in
+    // the status/label mode, or not be rendered at all when the shortcut fires.
+    isHome: isHomeWorkspace(workspace),
   }));
   const canPin = useHostFeature(serverId, "workspacePinning");
   const togglePin = useSidebarWorkspacePinController();
 
   const handle = useCallback(() => {
-    if (!serverId || !fields || !canPin) {
+    if (!serverId || !fields || !canPin || fields.isHome) {
       return false;
     }
     const workspaceKey = buildWorkspaceTabPersistenceKey({
@@ -57,7 +61,7 @@ export function useGlobalWorkspacePinAction() {
   useKeyboardActionHandler({
     handlerId: "workspace-pin-global",
     actions: WORKSPACE_PIN_ACTIONS,
-    enabled: serverId !== null && fields !== null && canPin,
+    enabled: serverId !== null && fields !== null && canPin && !fields?.isHome,
     priority: 0,
     handle,
   });

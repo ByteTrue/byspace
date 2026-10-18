@@ -31,6 +31,7 @@ import { useWorkspaceClipboardActions } from "@/hooks/use-workspace-clipboard-ac
 import { useToast } from "@/contexts/toast-context";
 import { type ShortcutOverrides } from "@/keyboard/keyboard-shortcuts";
 import { useKeyboardActionDispatcher } from "@/keyboard/keyboard-action-dispatcher-context";
+import { isHomeWorkspace } from "@/chief/home-workspace";
 import { useHostFeature } from "@/runtime/host-features";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { useWorkspaceDirectory, useWorkspaceFields } from "@/stores/session-store-hooks";
@@ -187,6 +188,10 @@ export function useWorkspaceCommandCenterActions(): void {
     pinnedAt: workspace.pinnedAt ?? null,
     labels: workspace.labels ?? [],
   }));
+  // Its own projection rather than a field on the one above: the palette is reachable from
+  // anywhere the route points, so the Home rule has to come from the descriptor — neither a
+  // sidebar row nor a project block is necessarily on screen.
+  const isHome = useWorkspaceFields(serverId, workspaceId, isHomeWorkspace) === true;
   const cwd = useWorkspaceDirectory(serverId, workspaceId);
   const currentBranch = fields?.currentBranch ?? null;
   const isPinned = fields?.pinnedAt != null;
@@ -290,6 +295,7 @@ export function useWorkspaceCommandCenterActions(): void {
         activeTabCount: focusedTabs.length,
         currentBranch,
         isPinned,
+        isHome,
         labelCatalog,
         dispatch: (action) => {
           clearCommandCenterFocusRestoreElement();
@@ -313,6 +319,7 @@ export function useWorkspaceCommandCenterActions(): void {
       isCompact,
       isGit,
       isPinned,
+      isHome,
       keyboardActionDispatcher,
       labelCatalog,
       overrides,

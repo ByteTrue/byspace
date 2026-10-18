@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isHomeWorkspace } from "@/chief/home-workspace";
 import { WorkspaceRenameModal } from "@/components/workspace-rename-modal";
 import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionId } from "@/keyboard/keyboard-action-dispatcher";
@@ -26,6 +27,9 @@ export function WorkspaceRenameHost() {
     id: workspace.id,
     name: workspace.name,
     title: workspace.title ?? null,
+    // Read from the cached descriptor, not from a row: the dialog opens on the active workspace
+    // whether or not its sidebar row is on screen.
+    isHome: isHomeWorkspace(workspace),
   }));
   const [isOpen, setIsOpen] = useState(false);
   const openFrameRef = useRef<number | null>(null);
@@ -44,7 +48,7 @@ export function WorkspaceRenameHost() {
   // lands the dialog behind it, and on web the palette's teardown steals focus back from the
   // input. Wait a frame. (The caller has already cleared the focus-restore element.)
   const handle = useCallback(() => {
-    if (!fields) return false;
+    if (!fields || fields.isHome) return false;
     cancelPendingOpen();
     openFrameRef.current = requestAnimationFrame(() => {
       openFrameRef.current = null;
@@ -67,7 +71,7 @@ export function WorkspaceRenameHost() {
   useKeyboardActionHandler({
     handlerId: "workspace-rename-global",
     actions: WORKSPACE_RENAME_ACTIONS,
-    enabled: serverId !== null && fields !== null,
+    enabled: serverId !== null && fields !== null && !fields?.isHome,
     priority: 0,
     handle,
   });

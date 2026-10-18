@@ -3,6 +3,7 @@ import { Pressable, Text, View, type PressableStateCallbackType } from "react-na
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { ChevronRight } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
+import { isHomeProjectViewKey } from "@/chief/home-workspace";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useProjects, type ProjectHostError } from "@/hooks/use-projects";
@@ -26,11 +27,16 @@ export default function ProjectsScreen({ serverId }: ProjectsScreenProps) {
   const { projects, hostErrors, isLoading } = useProjects();
   const hostProjects = useMemo<HostProject[]>(
     () =>
-      projects.flatMap((project) =>
-        project.hosts
-          .filter((host) => host.serverId === serverId)
-          .map((host) => ({ project, host })),
-      ),
+      projects
+        // The Chief project is the daemon's own Home: its settings screen offers default-host and
+        // removal, neither of which means anything for a workspace the daemon re-creates on boot.
+        // The sidebar row is disabled for the same reason; this is the other way in.
+        .filter((project) => !isHomeProjectViewKey(project.viewKey))
+        .flatMap((project) =>
+          project.hosts
+            .filter((host) => host.serverId === serverId)
+            .map((host) => ({ project, host })),
+        ),
     [projects, serverId],
   );
   const scopedErrors = hostErrors.filter((error) => error.serverId === serverId);

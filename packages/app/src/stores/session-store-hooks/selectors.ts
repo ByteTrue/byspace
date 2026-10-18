@@ -1,4 +1,5 @@
 import equal from "fast-deep-equal";
+import { isHomeProjectViewKey } from "@/chief/home-workspace";
 import {
   buildWorkspaceStructureProjects,
   type WorkspaceStructure,
@@ -273,7 +274,22 @@ export function composeWorkspaceStructure(input: {
     getKey: (project) => project.viewKey,
   });
 
-  return { projects: orderedProjects };
+  return { projects: hoistHomeProject(orderedProjects) };
+}
+
+/**
+ * Move the Chief project to the front.
+ *
+ * It is a fixed slot, not a preference: the project holds every host's Home workspace, and the
+ * rows under it are the only way into a machine's assistant. Stored order, drag order and the
+ * Sort action all stay out of its way because this runs after them.
+ */
+function hoistHomeProject(
+  projects: readonly WorkspaceStructureProject[],
+): WorkspaceStructureProject[] {
+  const index = projects.findIndex((project) => isHomeProjectViewKey(project.viewKey));
+  if (index <= 0) return projects as WorkspaceStructureProject[];
+  return [projects[index], ...projects.slice(0, index), ...projects.slice(index + 1)];
 }
 
 export function selectWorkspaceKeys(state: SessionsSnapshot, serverId: string | null): string[] {

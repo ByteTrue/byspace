@@ -16,6 +16,7 @@ import {
   type SidebarWorkspaceTrailing,
 } from "@/components/sidebar/workspace-trailing";
 import { useAppSettings } from "@/hooks/use-settings";
+import { useHostRuntimeConnectionStatus } from "@/runtime/host-runtime";
 import type { Theme } from "@/styles/theme";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { getStatusDotColor } from "@/utils/status-dot-color";
@@ -125,6 +126,10 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   const {
     settings: { workspaceTitleSource },
   } = useAppSettings();
+  // A host that is not connected keeps its rows: a machine you cannot reach right now is still a
+  // machine you own, and hiding it would make it look deleted. Dimming is the whole signal.
+  const connectionStatus = useHostRuntimeConnectionStatus(workspace.serverId);
+  const isHostDisconnected = connectionStatus === "offline" || connectionStatus === "error";
   const workspaceLabel = resolveSidebarWorkspacePrimaryLabel({ workspace, workspaceTitleSource });
   // The workspace carries label names; their colors live in its host's catalog, so the row is
   // where the two meet — the meta line is handed finished definitions.
@@ -139,7 +144,9 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   );
 
   return (
-    <View style={styles.workspaceRowContent}>
+    <View
+      style={[styles.workspaceRowContent, isHostDisconnected && styles.workspaceRowDisconnected]}
+    >
       <View style={styles.workspaceRowMain}>
         {leadingProjectName ? (
           <ProjectStatusIndicator
@@ -452,6 +459,9 @@ export function SidebarWorkspaceTrailingActionOverlay({
 const styles = StyleSheet.create((theme) => ({
   workspaceRowContent: {
     position: "relative",
+  },
+  workspaceRowDisconnected: {
+    opacity: 0.55,
   },
   workspaceRowMain: {
     flexDirection: "row",

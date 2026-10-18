@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { HOME_WORKSPACE_LABEL } from "@/chief/home-workspace";
+import { HOME_PROJECT_VIEW_KEY, HOME_WORKSPACE_LABEL } from "@/chief/home-workspace";
 import type { ProjectDescriptor, WorkspaceDescriptor } from "@/stores/session-store";
 import { buildWorkspaceStructureProjects, createProjectViewKey } from "./workspace-structure";
 
@@ -175,7 +175,7 @@ describe("buildWorkspaceStructureProjects", () => {
     );
   });
 
-  test("excludes the daemon-managed Home workspace and its dedicated project shell", () => {
+  test("keeps the Home project and its workspace, keyed by the reserved home view key", () => {
     const result = buildWorkspaceStructureProjects({
       sessions: [
         {
@@ -200,7 +200,87 @@ describe("buildWorkspaceStructureProjects", () => {
       ],
     });
 
+    const home = result.find((item) => item.viewKey === HOME_PROJECT_VIEW_KEY);
+    expect(home?.workspaceKeys).toEqual(["host-a:ws_home"]);
+    expect(home?.projectName).toBe("BySpace-WorkSpace");
+    expect(result.find((item) => item.viewKey !== HOME_PROJECT_VIEW_KEY)?.workspaceKeys).toEqual([
+      "host-a:ws_repo",
+    ]);
+  });
+
+  test("merges every host's Home into one project even though their keys are host-scoped", () => {
+    const result = buildWorkspaceStructureProjects({
+      sessions: [
+        {
+          serverId: "host-a",
+          projects: [
+            project({
+              id: "prj_home_a",
+              key: "host:host-a:/Users/me/.byspace/chief",
+              root: "/Users/me/.byspace/chief",
+              name: "BySpace-WorkSpace",
+            }),
+          ],
+          workspaces: [
+            {
+              ...workspace("ws_home_a", "prj_home_a", "/Users/me/.byspace/chief"),
+              labels: [HOME_WORKSPACE_LABEL],
+            },
+          ],
+        },
+        {
+          serverId: "host-b",
+          projects: [
+            project({
+              id: "prj_home_b",
+              key: "host:host-b:/home/me/.byspace/chief",
+              root: "/home/me/.byspace/chief",
+              name: "BySpace-WorkSpace",
+            }),
+          ],
+          workspaces: [
+            {
+              ...workspace("ws_home_b", "prj_home_b", "/home/me/.byspace/chief"),
+              labels: [HOME_WORKSPACE_LABEL],
+            },
+          ],
+        },
+      ],
+    });
+
     expect(result).toHaveLength(1);
-    expect(result[0]?.workspaceKeys).toEqual(["host-a:ws_repo"]);
+    expect(result[0]).toMatchObject({
+      viewKey: HOME_PROJECT_VIEW_KEY,
+      projectKey: null,
+      hosts: [
+        { serverId: "host-a", projectId: "prj_home_a" },
+        { serverId: "host-b", projectId: "prj_home_b" },
+      ],
+      workspaceKeys: ["host-a:ws_home_a", "host-b:ws_home_b"],
+    });
+  });
+
+  test("leaves a project the user shares with Home as an ordinary project", () => {
+    const result = buildWorkspaceStructureProjects({
+      sessions: [
+        {
+          serverId: "host-a",
+          projects: [
+            project({ id: "prj_shared", key: null, root: "/Users/me/.byspace", name: "mine" }),
+          ],
+          workspaces: [
+            {
+              ...workspace("ws_home", "prj_shared", "/Users/me/.byspace"),
+              labels: [HOME_WORKSPACE_LABEL],
+            },
+            workspace("ws_mine", "prj_shared", "/Users/me/.byspace"),
+          ],
+        },
+      ],
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.viewKey).not.toBe(HOME_PROJECT_VIEW_KEY);
+    expect(result[0]?.workspaceKeys).toEqual(["host-a:ws_home", "host-a:ws_mine"]);
   });
 });

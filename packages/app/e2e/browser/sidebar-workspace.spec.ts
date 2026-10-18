@@ -311,9 +311,8 @@ test.describe("Workspace menu visibility", () => {
       await openMobileAgentSidebar(page);
       await expectMobileAgentSidebarVisible(page);
 
-      // Chief sits on the top row and New workspace + History sit on the Workspaces header, so
-      // all three are on screen from the start without opening the BySpace menu.
-      await expect(page.getByTestId("sidebar-chief")).toHaveCount(1);
+      // New workspace + History sit on the Workspaces header, so both are on screen from the
+      // start without opening the BySpace menu.
       await expect(page.getByTestId("sidebar-global-new-workspace")).toHaveCount(1);
       await expect(page.getByTestId("sidebar-sessions")).toHaveCount(1);
 
@@ -342,12 +341,13 @@ test.describe("Workspace menu visibility", () => {
         await expect(page.getByTestId(testID)).toHaveCount(1);
       }
 
-      // The BySpace menu trigger sits on the left of the top row while Chief sits to its right.
+      // The BySpace menu trigger owns the left of the top row; the panel's close button keeps the
+      // right rail, which is what this row has to keep clear for it.
       const triggerBox = await trigger.boundingBox();
-      const chiefBox = await page.getByTestId("sidebar-chief").boundingBox();
+      const closeBox = await page.getByTestId("sidebar-close").boundingBox();
       expect(triggerBox).not.toBeNull();
-      expect(chiefBox).not.toBeNull();
-      expect(chiefBox!.x).toBeGreaterThanOrEqual(triggerBox!.x + triggerBox!.width);
+      expect(closeBox).not.toBeNull();
+      expect(closeBox!.x).toBeGreaterThanOrEqual(triggerBox!.x + triggerBox!.width);
 
       // Choosing a destination closes the panel behind it. Search opens the command center in
       // place rather than navigating, which is what makes the panel's own dismissal measurable.
@@ -530,12 +530,11 @@ test.describe("Half-screen desktop layout", () => {
     await gotoAppShell(page);
 
     await expect(pinnedSidebar(page)).toBeVisible();
-    // The menu starts closed. Chief (top row) and New workspace + History (Workspaces header)
-    // are not part of it and are on screen from the start.
+    // The menu starts closed. New workspace + History (Workspaces header) are not part of it
+    // and are on screen from the start.
     for (const testID of ["sidebar-search", "sidebar-schedules"]) {
       await expect(page.getByTestId(testID)).toHaveCount(0);
     }
-    await expect(page.getByTestId("sidebar-chief")).toHaveCount(1);
     await expect(page.getByTestId("sidebar-global-new-workspace")).toHaveCount(1);
     await expect(page.getByTestId("sidebar-sessions")).toHaveCount(1);
 
@@ -571,14 +570,9 @@ test.describe("Half-screen desktop layout", () => {
     expect(Math.abs(secondItemBox!.height - firstItemBox!.height)).toBeLessThanOrEqual(1);
 
     // The app menu trigger sits on the left of the top row with its chevron hugging its right
-    // edge, while the permanent Chief button sits on the right side of the same row.
+    // edge.
     const triggerBox = await trigger.boundingBox();
-    const chiefBox = await page.getByTestId("sidebar-chief").boundingBox();
     expect(triggerBox).not.toBeNull();
-    expect(chiefBox).not.toBeNull();
-    expect(chiefBox!.x).toBeGreaterThanOrEqual(triggerBox!.x + triggerBox!.width);
-    expect(chiefBox!.y).toBeLessThan(triggerBox!.y + triggerBox!.height);
-    expect(chiefBox!.y + chiefBox!.height).toBeGreaterThan(triggerBox!.y);
 
     const chevronBox = await trigger.locator("svg").first().boundingBox();
     expect(chevronBox).not.toBeNull();

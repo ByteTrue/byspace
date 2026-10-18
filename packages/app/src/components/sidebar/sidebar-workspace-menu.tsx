@@ -102,6 +102,11 @@ export interface SidebarWorkspaceMenuProps {
   isPinned?: boolean;
   onTogglePin?: () => void;
   /**
+   * The row is the daemon's own Home workspace: it can be copied from but not written to. The
+   * labels submenu is the one write path that does not arrive as a callback, so it needs a flag.
+   */
+  isFixedActionRow?: boolean;
+  /**
    * Lifted so the row that reveals the kebab can keep it mounted while its menu is up. See
    * `useOpenKebabMenuVisibility`.
    */
@@ -149,6 +154,7 @@ function SidebarWorkspaceMenuItems({
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
+  isFixedActionRow,
 }: SidebarWorkspaceMenuItemsProps & { surface: MenuSurface }): ReactNode {
   const { t } = useTranslation();
   const archiveTrailing = useMemo(
@@ -232,7 +238,7 @@ function SidebarWorkspaceMenuItems({
           {isPinned ? t("sidebar.workspace.actions.unpin") : t("sidebar.workspace.actions.pin")}
         </WorkspaceMenuItem>
       ) : null}
-      {serverId && workspaceId ? (
+      {serverId && workspaceId && !isFixedActionRow ? (
         <DropdownMenuSubTrigger
           id={WORKSPACE_LABEL_PAGE_ID}
           leading={labelLeading}
@@ -276,6 +282,7 @@ export function SidebarWorkspaceMenu({
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
+  isFixedActionRow,
   open,
   onOpenChange,
 }: SidebarWorkspaceMenuProps) {
@@ -322,6 +329,7 @@ export function SidebarWorkspaceMenu({
           archiveShortcutKeys={archiveShortcutKeys}
           isPinned={isPinned}
           onTogglePin={onTogglePin}
+          isFixedActionRow={isFixedActionRow}
         />
       </DropdownMenuContent>
     </DropdownMenu>
@@ -355,6 +363,7 @@ export function SidebarWorkspaceContextMenu({
   archiveShortcutKeys,
   isPinned,
   onTogglePin,
+  isFixedActionRow,
   accessibilityLabel,
   highlightStyle,
   ...triggerProps
@@ -435,6 +444,7 @@ export function SidebarWorkspaceContextMenu({
           archiveShortcutKeys={archiveShortcutKeys}
           isPinned={isPinned}
           onTogglePin={onTogglePin}
+          isFixedActionRow={isFixedActionRow}
         />
       </ContextMenuContent>
     </ContextMenu>
