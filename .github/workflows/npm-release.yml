@@ -191,18 +191,37 @@ jobs:
       - name: Publish stable
         if: ${{ !contains(needs.context.outputs.version, '-') && steps.registry.outputs.published != 'true' }}
         run: npm publish "dist/npm/bytetrue-byspace-${{ needs.context.outputs.version }}.tgz" --access public --provenance
-      - name: Verify dist-tag
+      - name: Verify version and dist-tag
         env:
           VERSION: ${{ needs.context.outputs.version }}
         run: |
           set -euo pipefail
           if [[ "$VERSION" == *-* ]]; then tag=beta; else tag=latest; fi
-          for _ in {1..60}; do
-            actual="$(npm view "@bytetrue/byspace@$tag" version 2>/dev/null || true)"
-            [[ "$actual" == "$VERSION" ]] && exit 0
+
+          # Two independent facts have to become visible, and they propagate on
+          # different clocks: the immutable version document (proof the publish
+          # landed) and the mutable dist-tag pointing at it. Polling the dist-tag
+          # alone reported "did not resolve" for what was only CDN lag — a 5-minute
+          # window lost to ~2 minutes of it already. One 15-minute budget covers
+          # both, and the failure line names whichever fact is actually missing.
+          deadline=$(( SECONDS + 900 ))
+          version_status=""
+          actual=""
+          while (( SECONDS < deadline )); do
+            version_status="$(curl -sS -o /dev/null -w '%{http_code}' \
+              "https://registry.npmjs.org/@bytetrue%2Fbyspace/$VERSION" || true)"
+            if [[ "$version_status" == "200" ]]; then
+              actual="$(npm view "@bytetrue/byspace@$tag" version 2>/dev/null || true)"
+              [[ "$actual" == "$VERSION" ]] && exit 0
+            fi
             sleep 5
           done
-          echo "@bytetrue/byspace@$tag did not resolve to $VERSION" >&2
+
+          if [[ "$version_status" != "200" ]]; then
+            echo "@bytetrue/byspace@$VERSION never appeared on the registry (last HTTP $version_status): the publish did not land." >&2
+          else
+            echo "@bytetrue/byspace@$VERSION is published, but the '$tag' dist-tag still points at '${actual:-nothing}': the tag did not propagate." >&2
+          fi
           exit 1
       - name: Revalidate tag and attach npm tarball
         env:
