@@ -5,6 +5,24 @@
      release and must find only versioned, dated headings. Move content under
      the next version heading when cutting a release. -->
 
+## 0.20.2 - 2026-10-18
+
+### Added
+
+- The sidebar's first project now holds every host's Chief, one `Chief` workspace row per machine, with a host badge once there is more than one
+
+### Changed
+
+- Chief left the top row: the capsule button, `Cmd+J`, the command center action and the Appearance setting are gone, and the sidebar project is the only entry point
+- The Chief project cannot be renamed, archived, pinned, dragged, reordered, or opened from Settings → Projects
+- Installing orchestration skills now asks which ones to install on the first run instead of writing the whole bundle
+- Orchestration skills install to `~/.agents/skills` and `~/.claude/skills` only, and copies BySpace left in `~/.codex/skills` are removed
+- The `BySpace` menu opens as a floating dropdown instead of expanding in place, so the workspace list no longer moves
+
+### Fixed
+
+- Fixed the Chief row becoming editable again in status and label grouping, from the Pinned section, and through the pin and rename shortcuts
+
 ## 0.20.1 - 2026-10-16
 
 ### Changed
