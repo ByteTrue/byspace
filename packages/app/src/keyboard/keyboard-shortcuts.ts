@@ -152,6 +152,7 @@ export const SHORTCUT_HELP_ROW_ORDER: Record<ShortcutSectionId, readonly string[
   general: [
     "toggle-command-center",
     "search-files",
+    "chief",
     "show-shortcuts",
     "toggle-settings",
     "cycle-theme",
@@ -220,6 +221,7 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "workspace-pane-close": "settings.shortcuts.help.closePane",
   "workspace-terminal-new": "settings.shortcuts.help.newTerminal",
   "search-files": "settings.shortcuts.help.searchFiles",
+  chief: "chief.title",
   "toggle-command-center": "settings.shortcuts.help.toggleCommandCenter",
   "show-shortcuts": "settings.shortcuts.help.showKeyboardShortcuts",
   "toggle-left-sidebar": "settings.shortcuts.help.toggleLeftSidebar",
@@ -696,6 +698,30 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "workspace-terminal-new",
       section: "tabs-panes",
       label: "New terminal",
+    },
+  },
+
+  // --- Chief ---
+  {
+    id: "chief-open-cmd-j-mac",
+    action: "chief.open",
+    combo: "Cmd+J",
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "chief",
+      section: "general",
+      label: "Chief",
+    },
+  },
+  {
+    id: "chief-open-ctrl-j-non-mac",
+    action: "chief.open",
+    combo: "Ctrl+J",
+    when: { mac: false, commandCenter: false, terminal: false },
+    help: {
+      id: "chief",
+      section: "general",
+      label: "Chief",
     },
   },
 

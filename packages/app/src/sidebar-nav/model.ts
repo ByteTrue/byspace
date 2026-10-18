@@ -12,10 +12,9 @@ export type BuiltinSidebarNavId = (typeof BUILTIN_SIDEBAR_NAV_IDS)[number];
  * The items the Workspaces header carries as its own icon buttons.
  *
  * They are still builtins — same labels, same routes, same visibility switches — but their place
- * is fixed by the surface that draws them rather than by the disclosure's order, so the Sidebar
- * section in Appearance offers no Move up/down for them. Folding them into the BySpace menu put
- * the two most-used destinations behind a click, which is the cost the disclosure was supposed to
- * pay for the two least-used ones.
+ * is fixed by the surface that draws them rather than by the menu's order, so the Sidebar section
+ * in Appearance offers no Move up/down for them. Folding them into the BySpace menu put the two
+ * most-used destinations behind a click.
  */
 export const HEADER_SIDEBAR_NAV_IDS = ["new-workspace", "history"] as const;
 export type HeaderSidebarNavId = (typeof HEADER_SIDEBAR_NAV_IDS)[number];
@@ -24,9 +23,15 @@ export function isHeaderSidebarNavId(id: BuiltinSidebarNavId): id is HeaderSideb
   return (HEADER_SIDEBAR_NAV_IDS as readonly string[]).includes(id);
 }
 
-/** The entries that remain inside the BySpace disclosure, in the user's stored order. */
-export function isDisclosureSidebarNavId(id: BuiltinSidebarNavId): boolean {
-  return !isHeaderSidebarNavId(id);
+/**
+ * The entries the BySpace menu holds, in the user's stored order.
+ *
+ * Chief lives in its own permanent button on the sidebar's top row, and New workspace + History
+ * live on the Workspaces header, so none of the three is inside the dropdown menu or reorderable
+ * within it.
+ */
+export function isMenuSidebarNavId(id: BuiltinSidebarNavId): boolean {
+  return id !== "chief" && !isHeaderSidebarNavId(id);
 }
 
 /** Persisted shape. Array order is the display order. */
@@ -65,7 +70,7 @@ export function builtinSidebarNavLabelKey(id: BuiltinSidebarNavId): string {
 const BUILTIN_SHORTCUT_ACTIONS: Record<BuiltinSidebarNavId, string | null> = {
   "new-workspace": "new-workspace",
   history: null,
-  chief: null,
+  chief: "chief",
   search: "toggle-command-center",
   schedules: null,
   tunnels: null,
@@ -176,7 +181,7 @@ export function setSidebarNavItemVisible(input: {
 }
 
 /**
- * Moves one entry within the disclosure's run.
+ * Moves one entry within the app menu's run.
  *
  * The header's items keep their slots, so an "up" that would have stepped past one of them lands
  * where it would have without them. That matters because the user cannot see the header items in
@@ -189,7 +194,7 @@ export function moveSidebarNavItem(input: {
   direction: "up" | "down";
   previous: readonly SidebarNavPreference[];
 }): SidebarNavPreference[] {
-  const reorderable = input.items.filter((item) => !isHeaderSidebarNavId(item.id));
+  const reorderable = input.items.filter((item) => isMenuSidebarNavId(item.id));
   const from = reorderable.findIndex((item) => item.key === input.key);
   const to = input.direction === "up" ? from - 1 : from + 1;
   const canMove = from !== -1 && to >= 0 && to < reorderable.length;
@@ -202,7 +207,7 @@ export function moveSidebarNavItem(input: {
 
   let cursor = 0;
   const items = input.items.map((item) =>
-    isHeaderSidebarNavId(item.id) ? item : reordered[cursor++],
+    !isMenuSidebarNavId(item.id) ? item : reordered[cursor++],
   );
   return toPreferences(items, input.previous);
 }

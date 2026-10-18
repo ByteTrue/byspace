@@ -125,7 +125,7 @@ describe("setSidebarNavItemVisible", () => {
 });
 
 describe("moveSidebarNavItem", () => {
-  it("moves a disclosure item up within the disclosure", () => {
+  it("moves a menu item up within the menu", () => {
     const all = resolveSidebarNavItems({ preferences: [] });
     // Schedules starts below Search; moving it up swaps the two.
     const preferences = moveSidebarNavItem({
@@ -138,28 +138,30 @@ describe("moveSidebarNavItem", () => {
     expect(keys.indexOf("schedules")).toBeLessThan(keys.indexOf("search"));
   });
 
-  it("steps over the header items rather than past them", () => {
+  it("steps over the fixed items rather than past them", () => {
     const all = resolveSidebarNavItems({ preferences: [] });
-    // Chief is the first disclosure item. Moving it up cannot leave the disclosure, so it stays
-    // put instead of trading places with an entry the user cannot see in this list.
+    // Search is the first menu item (New workspace, History, and Chief have fixed slots outside
+    // the menu). Moving it up cannot leave the menu, so it stays put.
     const preferences = moveSidebarNavItem({
       items: all,
-      key: "chief",
+      key: "search",
       direction: "up",
       previous: [],
     });
     expect(preferences.map((preference) => preference.key)).toEqual(all.map((item) => item.key));
   });
 
-  it("refuses to move a header item", () => {
+  it("refuses to move a fixed header or top-row item", () => {
     const all = resolveSidebarNavItems({ preferences: [] });
-    const preferences = moveSidebarNavItem({
-      items: all,
-      key: "history",
-      direction: "down",
-      previous: [],
-    });
-    expect(preferences.map((preference) => preference.key)).toEqual(all.map((item) => item.key));
+    for (const key of ["history", "chief"] as const) {
+      const preferences = moveSidebarNavItem({
+        items: all,
+        key,
+        direction: "down",
+        previous: [],
+      });
+      expect(preferences.map((preference) => preference.key)).toEqual(all.map((item) => item.key));
+    }
   });
 });
 

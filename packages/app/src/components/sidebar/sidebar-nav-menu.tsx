@@ -1,144 +1,222 @@
-import { useMemo, type ReactElement } from "react";
-import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
+import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight } from "lucide-react-native";
+import { ChevronDown, ChevronUp } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { isWeb } from "@/constants/platform";
-import { ICON_SIZE } from "@/styles/theme";
+import {
+  MenuItem,
+  MenuRoot,
+  MenuSurface,
+  MenuTrigger,
+  type MenuTriggerState,
+} from "@/components/ui/menu";
+import { Shortcut } from "@/components/ui/shortcut";
 import { HEADER_CONTROL_HEIGHT } from "@/components/ui/control-geometry";
-import { isDisclosureSidebarNavId } from "@/sidebar-nav/model";
+import { isMenuSidebarNavId } from "@/sidebar-nav/model";
 import { useSidebarNavItems } from "@/sidebar-nav/use-sidebar-nav-items";
+import {
+  SIDEBAR_NAV_TEST_IDS,
+  useSidebarNavMenuEntries,
+  type SidebarNavEntry,
+} from "@/sidebar-nav/use-sidebar-nav-entries";
 import { sidebarLabelStyles } from "@/styles/sidebar";
-import type { Theme } from "@/styles/theme";
+import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
-
 const TRIGGER_TEST_ID = "sidebar-nav-menu-trigger";
 const LABEL_TEST_ID = "sidebar-nav-menu-label";
+const MENU_TEST_ID = "sidebar-nav-menu";
 
-/** Hoisted: it closes over nothing, so it must not be recreated per render. */
-function triggerButtonStyle({ hovered }: PressableStateCallbackType & { hovered?: boolean }) {
-  return [styles.button, Boolean(hovered) && styles.buttonHovered];
-}
+/** The item's 16pt leading slot, with the hair of room the display-preferences options leave. */
+const ITEM_ICON_SIZE = 14;
 
-interface SidebarNavMenuTriggerProps {
-  expanded: boolean;
-  onToggle: () => void;
+interface SidebarNavMenuProps {
+  /**
+   * The shell's own "this sidebar is showing" flag. See `useSidebarNavMenuOpen`.
+   */
+  panelActive: boolean;
+  /** Runs before an entry's own navigation, for shells whose panel has to get out of the way. */
+  onBeforeNavigate?: () => void;
 }
 
 /**
- * The BySpace button: the pinned sidebar's app menu, filling the rest of the collapse toggle's
- * row.
+ * The BySpace button: the sidebar's compact app-menu trigger on the left side of the top row,
+ * with its entries on a floating surface anchored under it while the permanent Chief button sits
+ * on the row's right edge.
  *
- * It is not a nav row, and deliberately does not pretend to be one. Sharing the row with the
- * corner toggle pushes its leading edge past the icon rail the rows below sit on, so a leading
- * chevron could never line up with them. This is a title-bar shape instead: the label centred on
- * the sidebar, the disclosure chevron pinned to the row's right edge.
- *
- * The label is a layer of its own rather than a child of the button: centring it inside the button
- * would centre it on the space the corner control leaves over, which is not the sidebar's centre.
- *
- * Renders nothing when every entry is hidden, matching the rows' "no items, no group".
+ * Renders nothing when the menu holds no visible entry, matching the "no items, no control" rule
+ * the header buttons follow.
  */
-export function SidebarNavMenuTrigger({
-  expanded,
-  onToggle,
-}: SidebarNavMenuTriggerProps): ReactElement | null {
+export function SidebarNavMenu({
+  panelActive,
+  onBeforeNavigate,
+}: SidebarNavMenuProps): ReactElement | null {
   const { t } = useTranslation();
-  // Only the count matters here, so read the preference rather than resolving every entry —
-  // that would subscribe to four shortcuts and look up the active workspace on every render. The
-  // count is of the entries this button reveals, not of the whole nav: New workspace and History
-  // are visible whether or not the disclosure is open, so counting them would keep a trigger that
-  // opens onto nothing.
-  const items = useSidebarNavItems().items;
-  const ThemedChevron = useMemo(
-    () => withUnistyles(expanded ? ChevronDown : ChevronRight),
-    [expanded],
-  );
+  const { open, setOpen } = useSidebarNavMenuOpen(panelActive);
   const label = t("sidebar.appMenu.label");
-  const accessibilityState = useMemo(() => ({ expanded }), [expanded]);
 
-  // React Native Web does not map `accessibilityState.expanded` to the ARIA attribute, so a
-  // disclosure would announce as a plain button. Set it explicitly, as `HeaderToggleButton` does.
-  const ariaExpandedProps = isWeb
-    ? ({ "aria-expanded": expanded } as Record<string, boolean>)
-    : null;
+  // Only the count matters for whether the button exists, so read the preference rather than
+  // resolving every entry — that would subscribe to four shortcuts and look up the active
+  // workspace on every render. The count is of the entries this button reveals, not of the whole
+  // nav: New workspace and History are on the Workspaces header and are visible either way, so
+  // counting them would keep a trigger that opens onto nothing.
+  const items = useSidebarNavItems().items;
+  const hasEntries = items.some((item) => item.visible && isMenuSidebarNavId(item.id));
 
-  if (!items.some((item) => item.visible && isDisclosureSidebarNavId(item.id))) return null;
+  // Resolved inside the surface, so the labels, icons and shortcuts it needs are read only while
+  // the menu is open.
+  const popover = useMemo(
+    () =>
+      open && hasEntries ? <SidebarNavMenuSurface onBeforeNavigate={onBeforeNavigate} /> : null,
+    [hasEntries, onBeforeNavigate, open],
+  );
+
+  if (!hasEntries) return null;
 
   return (
-    <>
-      <Pressable
-        onPress={onToggle}
-        testID={TRIGGER_TEST_ID}
-        accessible
-        accessibilityRole="button"
-        accessibilityLabel={label}
-        accessibilityState={accessibilityState}
-        {...ariaExpandedProps}
-        style={triggerButtonStyle}
-      >
-        {({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => (
+    <MenuRoot open={open} onOpenChange={setOpen}>
+      <SidebarNavMenuTrigger label={label} open={open} />
+      {popover}
+    </MenuRoot>
+  );
+}
+
+function SidebarNavMenuTrigger({ label, open }: { label: string; open: boolean }) {
+  const ThemedChevron = useMemo(() => withUnistyles(open ? ChevronUp : ChevronDown), [open]);
+  const triggerStyle = useCallback(
+    ({ hovered, open: isOpen }: MenuTriggerState) => [
+      styles.button,
+      (hovered || isOpen) && styles.buttonHovered,
+    ],
+    [],
+  );
+
+  return (
+    <MenuTrigger
+      testID={TRIGGER_TEST_ID}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={triggerStyle}
+    >
+      {({ hovered }) => (
+        <>
+          <Text testID={LABEL_TEST_ID} numberOfLines={1} style={sidebarLabelStyles.title}>
+            {label}
+          </Text>
           <View pointerEvents="none" style={styles.chevronSlot}>
             <ThemedChevron
-              size={ICON_SIZE.md}
-              uniProps={hovered ? foregroundColorMapping : foregroundMutedColorMapping}
+              size={ICON_SIZE.sm}
+              uniProps={hovered || open ? foregroundColorMapping : foregroundMutedColorMapping}
             />
           </View>
-        )}
-      </Pressable>
-      <View pointerEvents="none" aria-hidden style={styles.labelLayer}>
-        <Text
-          testID={LABEL_TEST_ID}
-          numberOfLines={1}
-          style={[sidebarLabelStyles.title, styles.label]}
-        >
-          {label}
-        </Text>
-      </View>
-    </>
+        </>
+      )}
+    </MenuTrigger>
   );
+}
+
+/**
+ * The menu's own contents: the destinations the header does not carry, in the user's order.
+ *
+ * Split out from the trigger so the entries are resolved only while the surface exists.
+ */
+function SidebarNavMenuSurface({
+  onBeforeNavigate,
+}: {
+  onBeforeNavigate?: () => void;
+}): ReactElement {
+  const entries = useSidebarNavMenuEntries();
+
+  return (
+    <MenuSurface align="start" offset={6} testID={MENU_TEST_ID}>
+      {entries.map((entry) => (
+        <SidebarNavMenuItem key={entry.id} entry={entry} onBeforeNavigate={onBeforeNavigate} />
+      ))}
+    </MenuSurface>
+  );
+}
+
+function SidebarNavMenuItem({
+  entry,
+  onBeforeNavigate,
+}: {
+  entry: SidebarNavEntry;
+  onBeforeNavigate?: () => void;
+}): ReactElement {
+  const ThemedIcon = useMemo(() => withUnistyles(entry.icon), [entry.icon]);
+  const leading = useMemo(
+    () => <ThemedIcon size={ITEM_ICON_SIZE} uniProps={foregroundMutedColorMapping} />,
+    [ThemedIcon],
+  );
+  // Memoized so the trailing shortcut, which reads the live keybinding, is not rebuilt on every
+  // render of the surface's measurement passes.
+  const trailing = useMemo(
+    () => (entry.shortcutKeys ? <Shortcut chord={entry.shortcutKeys} /> : undefined),
+    [entry.shortcutKeys],
+  );
+  const handleSelect = useCallback(() => {
+    onBeforeNavigate?.();
+    entry.onSelect();
+  }, [entry, onBeforeNavigate]);
+
+  return (
+    <MenuItem
+      testID={SIDEBAR_NAV_TEST_IDS[entry.id]}
+      // The current page is marked with a check, as it is anywhere else a menu holds a set of
+      // destinations. It costs nothing: the check is drawn only when the row is.
+      selected={entry.isActive}
+      leading={leading}
+      trailing={trailing}
+      onSelect={handleSelect}
+    >
+      {entry.label}
+    </MenuItem>
+  );
+}
+
+/**
+ * Open state for the app menu, closed again whenever its shell stops showing.
+ *
+ * Neither shell unmounts when it closes — both are retained behind `display: none` so their scroll
+ * and list state survive — while the menu's own surface is portalled into the overlay root, which
+ * is not inside the panel. Without this the menu would outlive its trigger: left floating over the
+ * page with nothing under it to anchor to, then still open on every later visit.
+ *
+ * Taking the flag here rather than letting each shell reset itself encodes the rule once, and
+ * gives both the same first impression: closed.
+ */
+function useSidebarNavMenuOpen(panelActive: boolean): {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+} {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!panelActive) setOpen(false);
+  }, [panelActive]);
+
+  return { open, setOpen };
 }
 
 const styles = StyleSheet.create((theme) => ({
   button: {
-    position: "relative",
-    flex: 1,
-    minWidth: 0,
     height: HEADER_CONTROL_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: theme.spacing[1],
     paddingHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius.md,
     userSelect: "none",
+    flexShrink: 1,
+    minWidth: 0,
   },
   buttonHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
-  /**
-   * Spans the corner row, so the label centres on the sidebar rather than on the button. Absolute,
-   * so it takes no room in the row and the button keeps its own box for the hover pill.
-   */
-  labelLayer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    justifyContent: "center",
-    paddingHorizontal: theme.spacing[6],
-  },
-  label: {
-    textAlign: "center",
-  },
   chevronSlot: {
-    position: "absolute",
-    right: theme.spacing[2],
-    top: 0,
-    bottom: 0,
     justifyContent: "center",
     alignItems: "center",
+    flexShrink: 0,
   },
 }));

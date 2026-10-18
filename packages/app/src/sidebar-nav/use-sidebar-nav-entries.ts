@@ -17,7 +17,7 @@ import {
   builtinSidebarNavLabelKey,
   builtinSidebarNavShortcutAction,
   HEADER_SIDEBAR_NAV_IDS,
-  isHeaderSidebarNavId,
+  isMenuSidebarNavId,
   type BuiltinSidebarNavId,
 } from "@/sidebar-nav/model";
 import { useSidebarNavItems } from "@/sidebar-nav/use-sidebar-nav-items";
@@ -47,7 +47,7 @@ export const SIDEBAR_NAV_ICONS: Record<BuiltinSidebarNavId, LucideIcon> = {
   tunnels: ArrowRightLeft,
 };
 
-/** testIDs for the compact sidebar rows. The desktop menu renders the same ids on its items. */
+/** testIDs for the nav entries. The app menu and the header buttons render the same ids. */
 export const SIDEBAR_NAV_TEST_IDS: Record<BuiltinSidebarNavId, string> = {
   "new-workspace": "sidebar-global-new-workspace",
   history: "sidebar-sessions",
@@ -57,42 +57,23 @@ export const SIDEBAR_NAV_TEST_IDS: Record<BuiltinSidebarNavId, string> = {
   tunnels: "sidebar-tunnels",
 };
 
+type MenuSidebarNavId = Exclude<BuiltinSidebarNavId, "new-workspace" | "history" | "chief">;
+
 /**
- * The one source for the top-level navigation entries — New workspace, History, Search,
- * Schedules, Tunnels — in the user's order and visibility.
+ * The entries the app menu holds: the stored order, minus the fixed top-row and header buttons.
  *
- * Three surfaces render these: the Workspaces header's icon buttons, the compact sidebar's rows,
- * and the desktop sidebar's BySpace menu. They differ in presentation only, so label, icon,
- * shortcut badge, active state, and the press target are resolved once here. Every hook below is
- * called unconditionally for every builtin, so the order stays fixed while the returned list
- * tracks the preference.
+ * Only called by `SidebarNavMenuSurface` while the menu is open, so the closed trigger does not
+ * subscribe to menu-item shortcuts.
  */
-function useSidebarNavEntryMap(): Record<BuiltinSidebarNavId, SidebarNavEntry> {
+export function useSidebarNavMenuEntries(): SidebarNavEntry[] {
+  const { items } = useSidebarNavItems();
   const { t } = useTranslation();
   const pathname = usePathname();
   const setCommandCenterOpen = useKeyboardShortcutsStore((state) => state.setCommandCenterOpen);
 
-  const newWorkspaceShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("new-workspace"));
-  const historyShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("history"));
-  const chiefShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("chief"));
   const searchShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("search"));
   const schedulesShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("schedules"));
   const tunnelsShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("tunnels"));
-  const isShowingChief = useIsShowingChiefWorkspace(pathname);
-
-  // Route without a host: the screen resolver owns the initial host. A known route serverId
-  // would bypass that chain, so this entry must not carry the active workspace's host.
-  const onNewWorkspace = useCallback(() => {
-    router.push(buildNewWorkspaceRoute());
-  }, []);
-
-  const onHistory = useCallback(() => {
-    router.push(buildSessionsRoute());
-  }, []);
-
-  const onChief = useCallback(() => {
-    void openChiefWorkspace(pathname);
-  }, [pathname]);
 
   const onSearch = useCallback(() => {
     setCommandCenterOpen(true);
@@ -106,32 +87,8 @@ function useSidebarNavEntryMap(): Record<BuiltinSidebarNavId, SidebarNavEntry> {
     router.push(buildTunnelsRoute());
   }, []);
 
-  const resolved = useMemo<Record<BuiltinSidebarNavId, SidebarNavEntry>>(
+  const entriesById = useMemo<Record<MenuSidebarNavId, SidebarNavEntry>>(
     () => ({
-      "new-workspace": {
-        id: "new-workspace",
-        icon: SIDEBAR_NAV_ICONS["new-workspace"],
-        label: t(builtinSidebarNavLabelKey("new-workspace")),
-        shortcutKeys: newWorkspaceShortcut,
-        isActive: false,
-        onSelect: onNewWorkspace,
-      },
-      history: {
-        id: "history",
-        icon: SIDEBAR_NAV_ICONS.history,
-        label: t(builtinSidebarNavLabelKey("history")),
-        shortcutKeys: historyShortcut,
-        isActive: pathname.includes("/sessions"),
-        onSelect: onHistory,
-      },
-      chief: {
-        id: "chief",
-        icon: SIDEBAR_NAV_ICONS.chief,
-        label: t(builtinSidebarNavLabelKey("chief")),
-        shortcutKeys: chiefShortcut,
-        isActive: isShowingChief,
-        onSelect: onChief,
-      },
       search: {
         id: "search",
         icon: SIDEBAR_NAV_ICONS.search,
@@ -159,13 +116,6 @@ function useSidebarNavEntryMap(): Record<BuiltinSidebarNavId, SidebarNavEntry> {
       },
     }),
     [
-      chiefShortcut,
-      historyShortcut,
-      isShowingChief,
-      newWorkspaceShortcut,
-      onChief,
-      onHistory,
-      onNewWorkspace,
       onSchedules,
       onSearch,
       onTunnels,
@@ -177,26 +127,45 @@ function useSidebarNavEntryMap(): Record<BuiltinSidebarNavId, SidebarNavEntry> {
     ],
   );
 
-  return resolved;
-}
-
-/**
- * Visibility, resolved the same way for every surface: an item the user switched off is absent
- * everywhere it could have appeared.
- */
-function useVisibleSidebarNavEntries(): SidebarNavEntry[] {
-  const { items } = useSidebarNavItems();
-  const entriesById = useSidebarNavEntryMap();
   return useMemo(
-    () => items.filter((item) => item.visible).map((item) => entriesById[item.id]),
+    () =>
+      items
+        .filter(
+          (item): item is typeof item & { id: MenuSidebarNavId } =>
+            item.visible && isMenuSidebarNavId(item.id),
+        )
+        .map((item) => entriesById[item.id]),
     [items, entriesById],
   );
 }
 
-/** What the BySpace disclosure reveals: the stored order, minus the two the header owns. */
-export function useSidebarNavDisclosureEntries(): SidebarNavEntry[] {
-  const entries = useVisibleSidebarNavEntries();
-  return useMemo(() => entries.filter((entry) => !isHeaderSidebarNavId(entry.id)), [entries]);
+/**
+ * The top-row Chief button's entry, or `null` when no connected host offers the Chief role or the
+ * user switched Chief off in Appearance settings.
+ */
+export function useSidebarChiefNavEntry(): SidebarNavEntry | null {
+  const { items } = useSidebarNavItems();
+  const { t } = useTranslation();
+  const pathname = usePathname();
+  const chiefShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("chief"));
+  const isShowingChief = useIsShowingChiefWorkspace(pathname);
+
+  const onChief = useCallback(() => {
+    void openChiefWorkspace(pathname);
+  }, [pathname]);
+
+  return useMemo(() => {
+    const visible = items.some((item) => item.id === "chief" && item.visible);
+    if (!visible) return null;
+    return {
+      id: "chief",
+      icon: SIDEBAR_NAV_ICONS.chief,
+      label: t(builtinSidebarNavLabelKey("chief")),
+      shortcutKeys: chiefShortcut,
+      isActive: isShowingChief,
+      onSelect: onChief,
+    };
+  }, [chiefShortcut, isShowingChief, items, onChief, t]);
 }
 
 /**
@@ -208,7 +177,43 @@ export function useSidebarNavDisclosureEntries(): SidebarNavEntry[] {
  */
 export function useSidebarHeaderNavEntries(): SidebarNavEntry[] {
   const { items } = useSidebarNavItems();
-  const entriesById = useSidebarNavEntryMap();
+  const { t } = useTranslation();
+  const pathname = usePathname();
+  const newWorkspaceShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("new-workspace"));
+  const historyShortcut = useShortcutKeys(builtinSidebarNavShortcutAction("history"));
+
+  // Route without a host: the screen resolver owns the initial host. A known route serverId
+  // would bypass that chain, so this entry must not carry the active workspace's host.
+  const onNewWorkspace = useCallback(() => {
+    router.push(buildNewWorkspaceRoute());
+  }, []);
+
+  const onHistory = useCallback(() => {
+    router.push(buildSessionsRoute());
+  }, []);
+
+  const entriesById = useMemo<Record<(typeof HEADER_SIDEBAR_NAV_IDS)[number], SidebarNavEntry>>(
+    () => ({
+      "new-workspace": {
+        id: "new-workspace",
+        icon: SIDEBAR_NAV_ICONS["new-workspace"],
+        label: t(builtinSidebarNavLabelKey("new-workspace")),
+        shortcutKeys: newWorkspaceShortcut,
+        isActive: false,
+        onSelect: onNewWorkspace,
+      },
+      history: {
+        id: "history",
+        icon: SIDEBAR_NAV_ICONS.history,
+        label: t(builtinSidebarNavLabelKey("history")),
+        shortcutKeys: historyShortcut,
+        isActive: pathname.includes("/sessions"),
+        onSelect: onHistory,
+      },
+    }),
+    [historyShortcut, newWorkspaceShortcut, onHistory, onNewWorkspace, pathname, t],
+  );
+
   return useMemo(() => {
     const visible = new Set(items.filter((item) => item.visible).map((item) => item.id));
     return HEADER_SIDEBAR_NAV_IDS.filter((id) => visible.has(id)).map((id) => entriesById[id]);

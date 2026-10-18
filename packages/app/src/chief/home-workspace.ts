@@ -1,11 +1,13 @@
 import { resolveAgentRoleNames } from "@/agent-controls/roles";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { navigateToWorkspace } from "@/stores/navigation-active-workspace-store";
-import { useSessionStore } from "@/stores/session-store";
+import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
 import {
   parseHostWorkspaceRouteFromPathname,
   parseServerIdFromPathname,
 } from "@/utils/host-routes";
+import { aggregateSidebarStateBuckets, type SidebarStateBucket } from "@/utils/sidebar-agent-state";
+import type { WorkspaceAgentActivity } from "@/utils/workspace-agent-activity";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";
 
 /** Reserved label the daemon stamps on its Home workspace. */
@@ -107,6 +109,75 @@ export function useIsShowingChiefWorkspace(pathname: string): boolean {
     });
     const workspace = key ? workspaces?.get(key) : undefined;
     return isHomeWorkspace(workspace);
+  });
+}
+
+export function deriveHomeWorkspaceStatusBucket(input: {
+  workspace: Pick<WorkspaceDescriptor, "id" | "status"> | null | undefined;
+  workspaceAgentActivity?: ReadonlyMap<string, Pick<WorkspaceAgentActivity, "status">>;
+}): SidebarStateBucket {
+  if (!input.workspace) return "done";
+  if (input.workspace.status !== "done") {
+    return input.workspace.status;
+  }
+  const rootAgentActivity = input.workspaceAgentActivity?.get(input.workspace.id);
+  if (rootAgentActivity && rootAgentActivity.status !== "done") {
+    return rootAgentActivity.status;
+  }
+  return "done";
+}
+
+interface CachedSessionHomeStatus {
+  workspaces: ReadonlyMap<string, WorkspaceDescriptor>;
+  workspaceAgentActivity: ReadonlyMap<string, WorkspaceAgentActivity>;
+  bucket: SidebarStateBucket | null;
+}
+
+const sessionHomeStatusCache = new WeakMap<object, CachedSessionHomeStatus>();
+
+function selectSessionHomeStatusBucket(session: {
+  workspaces: ReadonlyMap<string, WorkspaceDescriptor>;
+  workspaceAgentActivity: ReadonlyMap<string, WorkspaceAgentActivity>;
+}): SidebarStateBucket | null {
+  const cached = sessionHomeStatusCache.get(session.workspaces);
+  if (
+    cached &&
+    cached.workspaces === session.workspaces &&
+    cached.workspaceAgentActivity === session.workspaceAgentActivity
+  ) {
+    return cached.bucket;
+  }
+
+  let bucket: SidebarStateBucket | null = null;
+  for (const workspace of session.workspaces.values()) {
+    if (isHomeWorkspace(workspace)) {
+      bucket = deriveHomeWorkspaceStatusBucket({
+        workspace,
+        workspaceAgentActivity: session.workspaceAgentActivity,
+      });
+      break;
+    }
+  }
+
+  sessionHomeStatusCache.set(session.workspaces, {
+    workspaces: session.workspaces,
+    workspaceAgentActivity: session.workspaceAgentActivity,
+    bucket,
+  });
+  return bucket;
+}
+
+export function useChiefWorkspaceStatusBucket(): SidebarStateBucket {
+  return useSessionStore((state) => {
+    const buckets: SidebarStateBucket[] = [];
+    for (const session of Object.values(state.sessions)) {
+      if (!session) continue;
+      const bucket = selectSessionHomeStatusBucket(session);
+      if (bucket) {
+        buckets.push(bucket);
+      }
+    }
+    return aggregateSidebarStateBuckets(buckets);
   });
 }
 

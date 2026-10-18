@@ -282,6 +282,8 @@ export function CommandCenterRootActions() {
                 title: t("chief.title"),
                 sectionTitle: t("shell.commandCenter.actions"),
                 icon: ChiefIcon,
+                shortcutKeys:
+                  resolveShortcutKeysForAction("chief", overrides, shortcutPlatform) ?? undefined,
               },
             },
           ]

@@ -211,6 +211,18 @@ describe("keyboard-shortcuts", () => {
       action: "agent.new",
     },
     {
+      name: "matches Cmd+J to open Chief on mac",
+      event: { key: "j", code: "KeyJ", metaKey: true },
+      context: { isMac: true, commandCenterOpen: false },
+      action: "chief.open",
+    },
+    {
+      name: "matches Ctrl+J to open Chief on non-mac",
+      event: { key: "j", code: "KeyJ", ctrlKey: true },
+      context: { isMac: false, commandCenterOpen: false, focusScope: "other" },
+      action: "chief.open",
+    },
+    {
       name: "matches Ctrl+K for command center on non-mac",
       event: { key: "k", code: "KeyK", ctrlKey: true },
       context: { isMac: false },
@@ -404,6 +416,11 @@ describe("keyboard-shortcuts", () => {
       name: "does not match Ctrl+T on mac (Cmd only)",
       event: { key: "t", code: "KeyT", ctrlKey: true },
       context: { isMac: true },
+    },
+    {
+      name: "does not match Ctrl+J for Chief on non-mac in terminal",
+      event: { key: "j", code: "KeyJ", ctrlKey: true },
+      context: { isMac: false, focusScope: "terminal" },
     },
     {
       name: "does not match Ctrl+K for command center on non-mac in terminal",

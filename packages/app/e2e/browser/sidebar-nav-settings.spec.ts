@@ -34,9 +34,11 @@ test.describe("Sidebar items in Appearance settings", () => {
     await gotoAppShell(page);
 
     await test.step("the sidebar starts in the default shape", async () => {
-      // New workspace and History are on the Workspaces header; the disclosure holds the rest.
+      // Chief sits on the top row, New workspace and History sit on the Workspaces header, and
+      // the BySpace menu holds the rest.
+      await expect(page.getByTestId("sidebar-chief")).toBeVisible();
       await expectHeaderNavOrder(page, HEADER_NAV_KEYS);
-      await expectSidebarOrder(page, ["chief", "search", "schedules", "tunnels"]);
+      await expectSidebarOrder(page, ["search", "schedules", "tunnels"]);
     });
 
     await test.step("the Sidebar section lists every item in the same order", async () => {
@@ -58,27 +60,33 @@ test.describe("Sidebar items in Appearance settings", () => {
         label: "History",
         visible: true,
       });
-      // Items with a keyboard shortcut badge it next to their name. Chords render
-      // with Ctrl off macOS, which is what the browser project runs on.
+      // Items with a keyboard shortcut badge it next to their name.
+      const modPrefix = process.platform === "darwin" ? "⌘" : "Ctrl+";
       await expect(
-        page.getByTestId("sidebar-nav-item-new-workspace").getByText("Ctrl+N", { exact: true }),
+        page
+          .getByTestId("sidebar-nav-item-new-workspace")
+          .getByText(`${modPrefix}N`, { exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByTestId("sidebar-nav-item-chief").getByText(`${modPrefix}J`, { exact: true }),
       ).toBeVisible();
     });
 
-    await test.step("the header items offer no reorder control", async () => {
-      // They are placed by the header's layout, so a Move up/down there would do nothing.
+    await test.step("the fixed top-row and header items offer no reorder control", async () => {
+      // They are placed by the shell's layout, so a Move up/down there would do nothing.
       await expect(page.getByTestId("sidebar-nav-move-up-new-workspace")).toHaveCount(0);
       await expect(page.getByTestId("sidebar-nav-move-up-history")).toHaveCount(0);
-      await expect(page.getByTestId("sidebar-nav-move-up-chief")).toBeVisible();
+      await expect(page.getByTestId("sidebar-nav-move-up-chief")).toHaveCount(0);
       await expect(page.getByTestId("sidebar-nav-move-up-search")).toBeVisible();
+      await expect(page.getByTestId("sidebar-nav-move-up-schedules")).toBeVisible();
     });
 
-    await test.step("Chief cannot move up past the header items, and Schedules can lift above Search", async () => {
-      // Chief is first in the disclosure. The header items sit above it in this list but are not
-      // part of its run, so there is nothing above it to trade places with.
+    await test.step("Search cannot move up past the fixed items, and Schedules can lift above Search", async () => {
+      // Search is first in the BySpace menu. The fixed items sit above it in this list but are
+      // not part of its run, so there is nothing above it to trade places with.
       await expect(
         page
-          .getByTestId("sidebar-nav-item-chief")
+          .getByTestId("sidebar-nav-item-search")
           .getByRole("button", { name: "Move up", exact: true }),
       ).toBeDisabled();
 
@@ -94,7 +102,7 @@ test.describe("Sidebar items in Appearance settings", () => {
 
       await leaveSettings(page);
       await expectHeaderNavOrder(page, HEADER_NAV_KEYS);
-      await expectSidebarOrder(page, ["chief", "schedules", "search", "tunnels"]);
+      await expectSidebarOrder(page, ["schedules", "search", "tunnels"]);
     });
 
     await test.step("turning History off removes it from the header", async () => {
@@ -112,14 +120,14 @@ test.describe("Sidebar items in Appearance settings", () => {
       await leaveSettings(page);
       await expect(page.getByTestId("sidebar-sessions")).toHaveCount(0);
       await expectHeaderNavOrder(page, ["new-workspace"]);
-      await expectSidebarOrder(page, ["chief", "schedules", "search", "tunnels"]);
+      await expectSidebarOrder(page, ["schedules", "search", "tunnels"]);
     });
 
     await test.step("the sidebar keeps that shape across a reload", async () => {
       await page.reload();
       await expect(page.getByTestId("sidebar-sessions")).toHaveCount(0);
       await expectHeaderNavOrder(page, ["new-workspace"]);
-      await expectSidebarOrder(page, ["chief", "schedules", "search", "tunnels"]);
+      await expectSidebarOrder(page, ["schedules", "search", "tunnels"]);
     });
   });
 

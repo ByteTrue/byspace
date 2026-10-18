@@ -7,9 +7,8 @@ const APP_SETTINGS_KEY = "@byspace:app-settings";
 
 /**
  * Persisted nav key -> the testID the app shell renders that item with. Mirrors the app's
- * `SIDEBAR_NAV_TEST_IDS`; the desktop shell renders them under the BySpace button, the
- * compact shell directly, and both keep the same ids so this table does not care which is
- * showing.
+ * `SIDEBAR_NAV_TEST_IDS`; the shell renders them on the Workspaces header or inside the BySpace
+ * menu, and both keep the same ids so this table does not care which is showing.
  */
 const SHELL_ROW_TEST_IDS = {
   "new-workspace": "sidebar-global-new-workspace",
@@ -110,17 +109,16 @@ export async function expectSidebarNavSettingsOrder(
 }
 
 /**
- * The order of the entries inside the BySpace disclosure.
+ * The order of the entries inside the BySpace menu.
  *
  * New workspace and History are deliberately not accepted here: they live on the Workspaces
- * header, which sits *below* the disclosure, so including them would compare two columns that are
- * not one list. Use `expectHeaderNavOrder` for those.
+ * header, which sits *below* the menu, so including them would compare two columns that are not
+ * one list. Use `expectHeaderNavOrder` for those.
  */
 export async function expectSidebarOrder(page: Page, keys: SidebarNavKey[]): Promise<void> {
-  // The desktop shell keeps these inside the BySpace menu; the compact shell renders rows.
   await openTopLevelNavMenu(page);
   try {
-    await expectVerticalOrder(keys, (key) => shellRow(page, key), "app shell sidebar rows");
+    await expectVerticalOrder(keys, (key) => shellRow(page, key), "app shell sidebar items");
   } finally {
     await closeTopLevelNavMenu(page);
   }

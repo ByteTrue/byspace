@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  deriveHomeWorkspaceStatusBucket,
   findHomeWorkspaceId,
   hasHostChiefRole,
   HOME_WORKSPACE_LABEL,
@@ -64,5 +65,36 @@ describe("resolveChiefTargetServerId", () => {
         isChiefSupported: (id) => id === "srv_new",
       }),
     ).toBe("srv_new");
+  });
+});
+
+describe("deriveHomeWorkspaceStatusBucket", () => {
+  it("returns done when workspace is absent or idle without active root agent activity", () => {
+    expect(deriveHomeWorkspaceStatusBucket({ workspace: null })).toBe("done");
+    expect(
+      deriveHomeWorkspaceStatusBucket({
+        workspace: { id: "wks_home", status: "done" },
+      }),
+    ).toBe("done");
+  });
+
+  it("prefers the workspace status when not done, otherwise falls back to root agent activity", () => {
+    expect(
+      deriveHomeWorkspaceStatusBucket({
+        workspace: { id: "wks_home", status: "needs_input" },
+        workspaceAgentActivity: new Map([
+          ["wks_home", { status: "running", enteredAt: new Date(1000) }],
+        ]),
+      }),
+    ).toBe("needs_input");
+
+    expect(
+      deriveHomeWorkspaceStatusBucket({
+        workspace: { id: "wks_home", status: "done" },
+        workspaceAgentActivity: new Map([
+          ["wks_home", { status: "running", enteredAt: new Date(1000) }],
+        ]),
+      }),
+    ).toBe("running");
   });
 });

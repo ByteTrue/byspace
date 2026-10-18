@@ -30,14 +30,13 @@ import {
 } from "@/components/sidebar-resize-handle-layout";
 import { HostPicker } from "@/components/hosts/host-picker";
 import { SidebarDisplayPreferencesMenu } from "@/components/sidebar/display-preferences/menu";
-import { SidebarNavRows } from "@/components/sidebar/sidebar-nav-rows";
-import { SidebarNavMenuTrigger } from "@/components/sidebar/sidebar-nav-menu";
+import { SidebarChiefButton } from "@/components/sidebar/sidebar-chief-button";
+import { SidebarNavMenu } from "@/components/sidebar/sidebar-nav-menu";
 import {
   SIDEBAR_NAV_TEST_IDS,
   useSidebarHeaderNavEntries,
   type SidebarNavEntry,
 } from "@/sidebar-nav/use-sidebar-nav-entries";
-import { useSidebarNavDisclosure } from "@/sidebar-nav/use-sidebar-nav-disclosure";
 import { SidebarMenuToggle } from "@/components/headers/menu-header";
 import { SidebarHelpMenu } from "@/components/sidebar/sidebar-help-menu";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
@@ -544,7 +543,6 @@ function MobileSidebar({
 }: MobileSidebarProps) {
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const { gesture: closeGesture, gestureRef: closeGestureRef } = useCloseAgentListGesture();
-  const navDisclosure = useSidebarNavDisclosure(active);
 
   const handleWorkspacePress = useCallback(() => {
     closeSidebar();
@@ -576,33 +574,30 @@ function MobileSidebar({
       <View style={styles.sidebarContent} pointerEvents="auto">
         <View style={styles.compactHeaderArea}>
           <View style={styles.compactTopRow}>
-            <SidebarNavMenuTrigger
-              expanded={navDisclosure.expanded}
-              onToggle={navDisclosure.toggle}
-            />
-            <Pressable
-              style={styles.mobileCloseButton}
-              onPress={closeSidebar}
-              testID="sidebar-close"
-              nativeID="sidebar-close"
-              accessible
-              accessibilityRole="button"
-              accessibilityLabel={labels.closeSidebar}
-              hitSlop={8}
-            >
-              {({ hovered, pressed }) => (
-                <X
-                  size={theme.iconSize.md}
-                  color={
-                    hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted
-                  }
-                />
-              )}
-            </Pressable>
+            <SidebarNavMenu panelActive={active} onBeforeNavigate={closeSidebar} />
+            <View style={styles.topRowRight}>
+              <SidebarChiefButton onBeforeNavigate={closeSidebar} />
+              <Pressable
+                style={styles.mobileCloseButton}
+                onPress={closeSidebar}
+                testID="sidebar-close"
+                nativeID="sidebar-close"
+                accessible
+                accessibilityRole="button"
+                accessibilityLabel={labels.closeSidebar}
+                hitSlop={8}
+              >
+                {({ hovered, pressed }) => (
+                  <X
+                    size={theme.iconSize.md}
+                    color={
+                      hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted
+                    }
+                  />
+                )}
+              </Pressable>
+            </View>
           </View>
-          {navDisclosure.expanded ? (
-            <SidebarNavRows style={styles.compactNavRows} onBeforeNavigate={closeSidebar} />
-          ) : null}
         </View>
 
         {isInitialLoad && !hasActiveHostFilter ? (
@@ -740,7 +735,6 @@ function DesktopSidebar({
     () => [styles.desktopSidebarBorder, { flex: 1, paddingTop: insetsTop }],
     [insetsTop],
   );
-  const navDisclosure = useSidebarNavDisclosure(active);
   return (
     <Animated.View
       accessibilityElementsHidden={!active}
@@ -750,25 +744,14 @@ function DesktopSidebar({
       style={desktopSidebarStyle}
     >
       <View style={desktopSidebarBorderStyle}>
-        <View
-          style={[
-            styles.sidebarHeaderArea,
-            navDisclosure.expanded ? styles.sidebarHeaderAreaExpanded : undefined,
-          ]}
-        >
+        <View style={styles.sidebarHeaderArea}>
           <View style={styles.sidebarTopRow}>
             <SidebarMenuToggle host="sidebar" tooltipSide="bottom" />
-            <SidebarNavMenuTrigger
-              expanded={navDisclosure.expanded}
-              onToggle={navDisclosure.toggle}
-            />
+            <SidebarNavMenu panelActive={active} />
+            <View style={styles.topRowRight}>
+              <SidebarChiefButton />
+            </View>
           </View>
-          {navDisclosure.expanded ? (
-            <SidebarNavRows
-              style={styles.expandedNavRows}
-              onBeforeNavigate={navDisclosure.collapse}
-            />
-          ) : null}
         </View>
 
         {isInitialLoad && !hasActiveHostFilter ? (
@@ -1067,15 +1050,11 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 0,
   },
   /**
-   * The compact sidebar's header: the BySpace button beside the close button, then whatever the
-   * button has revealed.
+   * The compact sidebar's header: the BySpace button beside the close button.
    *
    * The same shape as the pinned sidebar's corner row, with the close button where the collapse
-   * toggle sits. No horizontal padding here, so the revealed rows keep the inset they already
-   * own — adding one would step them a further `spacing[2]` inward and off the button's own rail.
-   *
-   * The rows no longer show on their own — that is the point of the button — but the close button
-   * is not part of that disclosure, so it always stays put.
+   * toggle sits. No padding of its own: each child owns its inset, so the button and the list
+   * below it put their left edges on the same rail.
    */
   compactHeaderArea: {
     paddingTop: theme.spacing[2],
@@ -1089,17 +1068,16 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     paddingHorizontal: theme.spacing[2],
   },
-  compactNavRows: {
-    gap: 2,
-    paddingTop: theme.spacing[1],
+  topRowRight: {
+    marginLeft: "auto",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    flexShrink: 0,
   },
   mobileCloseButton: {
     // The 16px X paints farther inside its 32px hit target than the 14px Settings2 glyph.
     // This optical inset puts their painted right edges on the same sidebar rail.
-    //
-    // `marginLeft: "auto"` keeps it there when the BySpace button is absent (every nav entry
-    // hidden), which would otherwise leave this the only child of a left-aligned row.
-    marginLeft: "auto",
     marginRight: 1.5,
     width: 32,
     height: 32,
@@ -1114,30 +1092,13 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surfaceSidebar,
   },
   /**
-   * The pinned sidebar's header area: the corner row (toggle + app menu), then whatever the
-   * app menu has revealed. The bottom hairline belongs to the whole area rather than to the top
-   * row, so the app menu and its entries read as one group.
-   *
-   * No horizontal padding of its own — each child owns its inset. That is what lets the corner
-   * row and the revealed rows put their left edges on the same `spacing[2]` rail.
+   * The pinned sidebar's header area: the corner row (toggle + app menu). No horizontal padding
+   * of its own — each child owns its inset, so the corner row and the workspace rows below put
+   * their left edges on the same rail.
    */
   sidebarHeaderArea: {
     borderBottomWidth: theme.borderWidth[1],
     borderBottomColor: theme.colors.border,
-  },
-  // Bottom breathing room for the revealed nav rows; the collapsed top row must stay
-  // flush with the hairline so it totals `HEADER_INNER_HEIGHT` + hairline like ScreenHeader.
-  sidebarHeaderAreaExpanded: {
-    paddingBottom: theme.spacing[2],
-  },
-  /**
-   * The gap between the revealed nav rows and the header area's hairline lives on the rows
-   * group, not on the header area: collapsed, the rows are absent and the hairline has to sit
-   * directly under the corner row so it lands on the same line as the content header's
-   * hairline (HEADER_INNER_HEIGHT in total, same as ScreenHeader).
-   */
-  expandedNavRows: {
-    paddingBottom: theme.spacing[2],
   },
   /**
    * The corner row: the collapse toggle and the app menu side by side.
@@ -1146,10 +1107,9 @@ const styles = StyleSheet.create((theme) => ({
    * leaves the toggle on the same pixel in both hosts — and that pixel is the sidebar's row rail,
    * where every row below starts.
    *
-   * The box model also mirrors `ScreenHeader`: the row plus the header area's hairline adds up to
+   * The box model mirrors `ScreenHeader`: the row plus the header area's hairline adds up to
    * `HEADER_INNER_HEIGHT`, leaving the same 35px content box a content header centers in, so the
-   * two hairlines stay on one line while the app menu is collapsed. Expanded, the revealed rows
-   * push the hairline down and own the spacing above it (`expandedNavRows`).
+   * two hairlines stay on one line. The app menu floating on top of the list does not touch it.
    */
   sidebarTopRow: {
     height: HEADER_INNER_HEIGHT - theme.borderWidth[1],

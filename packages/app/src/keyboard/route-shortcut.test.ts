@@ -33,6 +33,7 @@ describe("routeKeyboardShortcut — dispatch passthroughs", () => {
     ["workspace.tab.target.changes", { id: "workspace.tab.target.changes", scope: "workspace" }],
     ["workspace.tab.target.files", { id: "workspace.tab.target.files", scope: "workspace" }],
     ["workspace.new", { id: "workspace.new", scope: "sidebar" }],
+    ["chief.open", { id: "chief.open", scope: "sidebar" }],
     ["workspace.project.pick", { id: "workspace.project.pick", scope: "workspace" }],
     ["workspace.archive", { id: "workspace.archive", scope: "sidebar" }],
     ["workspace.pin", { id: "workspace.pin", scope: "sidebar" }],

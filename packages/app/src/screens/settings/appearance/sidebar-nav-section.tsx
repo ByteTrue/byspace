@@ -22,7 +22,7 @@ import { SettingsSection } from "@/components/settings/headings/settings-section
 import {
   builtinSidebarNavLabelKey,
   builtinSidebarNavShortcutAction,
-  isHeaderSidebarNavId,
+  isMenuSidebarNavId,
   type BuiltinSidebarNavId,
   type SidebarNavItem,
 } from "@/sidebar-nav/model";
@@ -89,10 +89,10 @@ function SidebarNavRow({
 }: SidebarNavRowProps): ReactElement {
   const { t } = useTranslation();
   const label = navItemLabel(t, item);
-  // The two the Workspaces header owns have a place the layout decides, not the user, so a
-  // reorder control on their rows would be a control that does nothing. Visibility still
-  // applies — switching them off removes them from the header.
-  const reorderable = !isHeaderSidebarNavId(item.id);
+  // The items the top row and Workspaces header own have a place the layout decides, not the
+  // user, so a reorder control on their rows would be a control that does nothing. Visibility
+  // still applies — switching them off removes them from their slot.
+  const reorderable = isMenuSidebarNavId(item.id);
 
   const handleMoveUp = useCallback(() => onMove(item.key, "up"), [item.key, onMove]);
   const handleMoveDown = useCallback(() => onMove(item.key, "down"), [item.key, onMove]);
@@ -156,7 +156,7 @@ export function SidebarNavSection(): ReactElement {
   // list but hold no reorder control, and counting them would leave the first reorderable row's
   // Move up enabled at the top of a run it cannot move within.
   const reorderableKeys = useMemo(
-    () => items.filter((item) => !isHeaderSidebarNavId(item.id)).map((item) => item.key),
+    () => items.filter((item) => isMenuSidebarNavId(item.id)).map((item) => item.key),
     [items],
   );
 
