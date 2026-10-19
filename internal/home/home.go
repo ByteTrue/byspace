@@ -1,6 +1,7 @@
 package home
 
 import (
+	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
@@ -13,10 +14,17 @@ import (
 )
 
 const (
-	ServerIDFilename = "server-id"
-	KeyPairFilename  = "daemon-keypair.json"
-	PIDFilename      = "byspace.pid"
+	ServerIDFilename  = "server-id"
+	KeyPairFilename   = "daemon-keypair.json"
+	VAPIDKeysFilename = "web-push-keys.json"
+	PIDFilename       = "byspace.pid"
 )
+
+// VAPIDKeys holds P-256 Web Push VAPID keys encoded as unpadded base64url.
+type VAPIDKeys struct {
+	PublicKey  string `json:"publicKey"`
+	PrivateKey string `json:"privateKey"`
+}
 
 type storedKeyPair struct {
 	V            int    `json:"v"`
@@ -149,4 +157,37 @@ func LoadOrCreateKeyPair(homeDir string) (e2ee.KeyPair, string, error) {
 		return e2ee.KeyPair{}, "", err
 	}
 	return kp, pubB64, nil
+}
+
+// LoadOrCreateVAPIDKeys loads or generates $BYSPACE_HOME/web-push-keys.json
+// using a P-256 keypair (65-byte uncompressed public point + 32-byte private key in base64url).
+func LoadOrCreateVAPIDKeys(homeDir string) (VAPIDKeys, error) {
+	vpPath := filepath.Join(homeDir, VAPIDKeysFilename)
+	if raw, err := os.ReadFile(vpPath); err == nil {
+		var stored VAPIDKeys
+		if json.Unmarshal(raw, &stored) == nil {
+			pubBytes, err1 := base64.RawURLEncoding.DecodeString(stored.PublicKey)
+			privBytes, err2 := base64.RawURLEncoding.DecodeString(stored.PrivateKey)
+			if err1 == nil && err2 == nil && len(pubBytes) == 65 && pubBytes[0] == 0x04 && len(privBytes) == 32 {
+				return stored, nil
+			}
+		}
+	}
+
+	priv, err := ecdh.P256().GenerateKey(rand.Reader)
+	if err != nil {
+		return VAPIDKeys{}, err
+	}
+	keys := VAPIDKeys{
+		PublicKey:  base64.RawURLEncoding.EncodeToString(priv.PublicKey().Bytes()),
+		PrivateKey: base64.RawURLEncoding.EncodeToString(priv.Bytes()),
+	}
+	payload, err := json.MarshalIndent(keys, "", "  ")
+	if err != nil {
+		return VAPIDKeys{}, err
+	}
+	if err := WriteAtomic(vpPath, append(payload, '\n'), 0o600); err != nil {
+		return VAPIDKeys{}, err
+	}
+	return keys, nil
 }

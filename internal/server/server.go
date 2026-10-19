@@ -100,6 +100,7 @@ type Server struct {
 	version      string
 	keyPair      e2ee.KeyPair
 	pubKeyB64    string
+	vapidKeys    home.VAPIDKeys
 	store        *store.Store
 	schedules    *schedule.Service
 	webUI        *webui.Handler
@@ -130,6 +131,7 @@ func New(opts Options) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	vapidKeys, _ := home.LoadOrCreateVAPIDKeys(homeDir)
 	ver := strings.TrimSpace(opts.Version)
 	if ver == "" {
 		ver = "0.20.2-go"
@@ -146,6 +148,7 @@ func New(opts Options) (*Server, error) {
 		version:           ver,
 		keyPair:           kp,
 		pubKeyB64:         pubB64,
+		vapidKeys:         vapidKeys,
 		store:             store.New(homeDir),
 		webUI:             ui,
 		piCommand:         opts.PiCommand,
@@ -552,13 +555,15 @@ func (s *Server) handleTextFrame(ctx context.Context, sink frameSink, raw []byte
 func (s *Server) buildServerInfoPayload() map[string]any {
 	hostname, _ := os.Hostname()
 	return map[string]any{
-		"status":         "server_info",
-		"serverId":       s.serverID,
-		"hostname":       hostname,
-		"version":        s.version,
-		"permissions":    ownerPermissions,
-		"desktopManaged": false,
+		"status":           "server_info",
+		"serverId":         s.serverID,
+		"hostname":         hostname,
+		"version":          s.version,
+		"permissions":      ownerPermissions,
+		"desktopManaged":   false,
+		"webPushPublicKey": s.vapidKeys.PublicKey,
 		"features": map[string]any{
+			"webPush":                      s.vapidKeys.PublicKey != "",
 			"agentRequestReceipts":         true,
 			"hubAgentRpc":                  true,
 			"directorySync":                true,

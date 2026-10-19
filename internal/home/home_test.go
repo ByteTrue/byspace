@@ -45,4 +45,13 @@ func TestHomeServerIDAndKeyPairPersistence(t *testing.T) {
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("expected 0600 keypair file mode, got %o", info.Mode().Perm())
 	}
+
+	vk1, err := LoadOrCreateVAPIDKeys(h)
+	if err != nil || vk1.PublicKey == "" || vk1.PrivateKey == "" {
+		t.Fatalf("expected valid VAPID keys, got %+v (%v)", vk1, err)
+	}
+	vk2, err := LoadOrCreateVAPIDKeys(h)
+	if err != nil || vk1 != vk2 {
+		t.Fatalf("expected persisted VAPID keys to reload identically")
+	}
 }
