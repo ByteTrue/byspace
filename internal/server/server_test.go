@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -496,5 +498,60 @@ func TestServerFileExplorerPiSessionImportAndTerminalRPC(t *testing.T) {
 	pairURL, _ := pairResp["url"].(string)
 	if !strings.Contains(pairURL, "#offer=") {
 		t.Fatalf("expected #offer= in pairing response: %+v", pairResp)
+	}
+
+	// 7. File download token -> HTTP /api/files/download
+	dlReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":      "file_download_token_request",
+			"requestId": "req_dl_1",
+			"cwd":       workDir,
+			"path":      "hello.go",
+		},
+	})
+	_ = ws.Write(ctx, websocket.MessageText, dlReq)
+	dlResp := readUntilSessionType(t, ctx, ws, "file_download_token_response", "")
+	dlTok, _ := dlResp["token"].(string)
+	if !strings.HasPrefix(dlTok, "dl_") {
+		t.Fatalf("expected dl_ token, got %+v", dlResp)
+	}
+	httpResp, err := http.Get(ts.URL + "/api/files/download?token=" + dlTok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dlBody, _ := io.ReadAll(httpResp.Body)
+	_ = httpResp.Body.Close()
+	if httpResp.StatusCode != http.StatusOK || string(dlBody) != "package main\n" {
+		t.Fatalf("unexpected download response (%d): %q", httpResp.StatusCode, string(dlBody))
+	}
+
+	// 8. Workspace label persistence
+	lblAssignReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":        "workspace.label.assignment.set.request",
+			"requestId":   "req_lbl_1",
+			"workspaceId": "wks_test",
+			"label":       map[string]any{"name": "core", "color": "green"},
+			"assigned":    true,
+		},
+	})
+	_ = ws.Write(ctx, websocket.MessageText, lblAssignReq)
+	_ = readUntilSessionType(t, ctx, ws, "workspace.label.assignment.set.response", "")
+
+	lblListReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":      "workspace.label.list.request",
+			"requestId": "req_lbl_list",
+			"subscribe": map[string]any{"subscriptionId": "sub_1"},
+		},
+	})
+	_ = ws.Write(ctx, websocket.MessageText, lblListReq)
+	lblListResp := readUntilSessionType(t, ctx, ws, "workspace.label.list.response", "")
+	lbls, _ := lblListResp["labels"].([]any)
+	if len(lbls) != 1 {
+		t.Fatalf("expected 1 persisted label, got %+v", lblListResp)
 	}
 }

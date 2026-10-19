@@ -89,8 +89,16 @@ func TestGitCheckoutStatusAndCommits(t *testing.T) {
 	}
 
 	diffFiles, err := GetWorkingDiff(ctx, tmp)
-	if err != nil || len(diffFiles) != 1 || diffFiles[0].Path != "README.md" {
+	if err != nil || len(diffFiles) != 1 || diffFiles[0].Path != "README.md" || len(diffFiles[0].Hunks) != 1 {
 		t.Fatalf("unexpected working diff: %+v (%v)", diffFiles, err)
+	}
+	if len(diffFiles[0].Hunks[0].Lines) < 3 {
+		t.Fatalf("expected hunk lines with header/remove/add, got %+v", diffFiles[0].Hunks[0].Lines)
+	}
+
+	commitDiff, err := GetCommitFileDiff(ctx, tmp, commits[0].Sha, "README.md")
+	if err != nil || commitDiff == nil || commitDiff.Path != "README.md" || !commitDiff.IsNew {
+		t.Fatalf("unexpected commit file diff: %+v (%v)", commitDiff, err)
 	}
 
 	if err := DiscardChanges(ctx, tmp); err != nil {

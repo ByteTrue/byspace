@@ -3,8 +3,10 @@ package workspace
 import (
 	"bytes"
 	"context"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -46,24 +48,20 @@ type Commit struct {
 }
 
 type DiffLine struct {
-	Type    string `json:"type"` // "context" | "add" | "del"
+	Type    string `json:"type"` // "add" | "remove" | "context" | "header"
 	Content string `json:"content"`
-	OldLine *int   `json:"oldLine,omitempty"`
-	NewLine *int   `json:"newLine,omitempty"`
 }
 
 type DiffHunk struct {
 	OldStart int        `json:"oldStart"`
-	OldLines int        `json:"oldLines"`
+	OldCount int        `json:"oldCount"`
 	NewStart int        `json:"newStart"`
-	NewLines int        `json:"newLines"`
-	Header   string     `json:"header"`
+	NewCount int        `json:"newCount"`
 	Lines    []DiffLine `json:"lines"`
 }
 
 type ParsedDiffFile struct {
 	Path      string     `json:"path"`
-	OldPath   string     `json:"oldPath,omitempty"`
 	IsNew     bool       `json:"isNew"`
 	IsDeleted bool       `json:"isDeleted"`
 	Additions int        `json:"additions"`
@@ -227,33 +225,181 @@ func ListWorktrees(ctx context.Context, repoCwd string) ([]WorktreeEntry, error)
 	return list, nil
 }
 
-// GetWorkingDiff computes modified files and line counts against HEAD.
-func GetWorkingDiff(ctx context.Context, cwd string) ([]ParsedDiffFile, error) {
-	out, err := runGit(ctx, cwd, "diff", "--numstat", "HEAD")
-	if err != nil {
-		return []ParsedDiffFile{}, nil
+var hunkHeaderRe = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
+
+// ParseUnifiedDiff parses a git unified diff output into structured ParsedDiffFile entries with hunks and lines.
+func ParseUnifiedDiff(diffText string) []ParsedDiffFile {
+	if strings.TrimSpace(diffText) == "" {
+		return []ParsedDiffFile{}
 	}
-	if out == "" {
-		return []ParsedDiffFile{}, nil
-	}
-	lines := strings.Split(out, "\n")
-	files := make([]ParsedDiffFile, 0, len(lines))
-	for _, line := range lines {
-		parts := strings.Split(line, "\t")
-		if len(parts) < 3 {
+	rawSections := strings.Split("\n"+diffText, "\ndiff --git ")
+	files := make([]ParsedDiffFile, 0, len(rawSections))
+
+	for _, sec := range rawSections[1:] {
+		lines := strings.Split(sec, "\n")
+		if len(lines) == 0 {
 			continue
 		}
-		adds, _ := strconv.Atoi(parts[0])
-		dels, _ := strconv.Atoi(parts[1])
+		isNew := strings.Contains(sec, "\nnew file mode") || strings.Contains(sec, "\n--- /dev/null")
+		isDeleted := strings.Contains(sec, "\ndeleted file mode") || strings.Contains(sec, "\n+++ /dev/null")
+		filePath := extractDiffFilePath(lines)
+
+		hunks := make([]DiffHunk, 0)
+		var curHunk *DiffHunk
+		additions := 0
+		deletions := 0
+
+		for _, line := range lines[1:] {
+			if strings.HasPrefix(line, "index ") ||
+				strings.HasPrefix(line, "--- ") ||
+				strings.HasPrefix(line, "+++ ") ||
+				strings.HasPrefix(line, "new file mode") ||
+				strings.HasPrefix(line, "deleted file mode") {
+				continue
+			}
+			if m := hunkHeaderRe.FindStringSubmatch(line); m != nil {
+				if curHunk != nil {
+					hunks = append(hunks, *curHunk)
+				}
+				oldStart, _ := strconv.Atoi(m[1])
+				oldCount := 1
+				if m[2] != "" {
+					oldCount, _ = strconv.Atoi(m[2])
+				}
+				newStart, _ := strconv.Atoi(m[3])
+				newCount := 1
+				if m[4] != "" {
+					newCount, _ = strconv.Atoi(m[4])
+				}
+				curHunk = &DiffHunk{
+					OldStart: oldStart,
+					OldCount: oldCount,
+					NewStart: newStart,
+					NewCount: newCount,
+					Lines: []DiffLine{
+						{Type: "header", Content: m[0]},
+					},
+				}
+				continue
+			}
+			if curHunk == nil {
+				continue
+			}
+			if strings.HasPrefix(line, "+") {
+				curHunk.Lines = append(curHunk.Lines, DiffLine{Type: "add", Content: line[1:]})
+				additions++
+			} else if strings.HasPrefix(line, "-") {
+				curHunk.Lines = append(curHunk.Lines, DiffLine{Type: "remove", Content: line[1:]})
+				deletions++
+			} else if strings.HasPrefix(line, " ") {
+				curHunk.Lines = append(curHunk.Lines, DiffLine{Type: "context", Content: line[1:]})
+			}
+		}
+		if curHunk != nil {
+			hunks = append(hunks, *curHunk)
+		}
+
 		files = append(files, ParsedDiffFile{
-			Path:      parts[2],
-			Additions: adds,
-			Deletions: dels,
-			Hunks:     []DiffHunk{},
+			Path:      filePath,
+			IsNew:     isNew,
+			IsDeleted: isDeleted,
+			Additions: additions,
+			Deletions: deletions,
+			Hunks:     hunks,
 			Status:    "ok",
 		})
 	}
+	return files
+}
+
+func extractDiffFilePath(lines []string) string {
+	first := lines[0]
+	if idx := strings.Index(first, " b/"); idx != -1 && strings.HasPrefix(first, "a/") {
+		return first[idx+3:]
+	}
+	for _, l := range lines {
+		if after, ok := strings.CutPrefix(l, "+++ b/"); ok {
+			return strings.TrimSpace(after)
+		}
+		if after, ok := strings.CutPrefix(l, "--- a/"); ok {
+			return strings.TrimSpace(after)
+		}
+	}
+	parts := strings.Fields(first)
+	if len(parts) >= 2 {
+		return strings.TrimPrefix(parts[len(parts)-1], "b/")
+	}
+	return "unknown"
+}
+
+// GetWorkingDiff computes modified and untracked files with full unified diff hunks against HEAD.
+func GetWorkingDiff(ctx context.Context, cwd string) ([]ParsedDiffFile, error) {
+	patch, err := runGit(ctx, cwd, "diff", "--no-color", "HEAD")
+	if err != nil {
+		patch, _ = runGit(ctx, cwd, "diff", "--no-color")
+	}
+	files := ParseUnifiedDiff(patch)
+	seen := make(map[string]bool, len(files))
+	for _, f := range files {
+		seen[f.Path] = true
+	}
+
+	untrackedOut, err := runGit(ctx, cwd, "ls-files", "--others", "--exclude-standard")
+	if err == nil && untrackedOut != "" {
+		for _, rel := range strings.Split(untrackedOut, "\n") {
+			rel = strings.TrimSpace(rel)
+			if rel == "" || seen[rel] {
+				continue
+			}
+			absPath := filepath.Join(cwd, rel)
+			raw, readErr := os.ReadFile(absPath)
+			if readErr != nil || len(raw) > 256*1024 || bytes.IndexByte(raw, 0) != -1 {
+				continue
+			}
+			contentLines := strings.Split(strings.TrimSuffix(string(raw), "\n"), "\n")
+			diffLines := make([]DiffLine, 0, len(contentLines)+1)
+			diffLines = append(diffLines, DiffLine{
+				Type:    "header",
+				Content: "@@ -0,0 +1," + strconv.Itoa(len(contentLines)) + " @@",
+			})
+			for _, cl := range contentLines {
+				diffLines = append(diffLines, DiffLine{Type: "add", Content: cl})
+			}
+			files = append(files, ParsedDiffFile{
+				Path:      rel,
+				IsNew:     true,
+				Additions: len(contentLines),
+				Deletions: 0,
+				Hunks: []DiffHunk{
+					{
+						OldStart: 0,
+						OldCount: 0,
+						NewStart: 1,
+						NewCount: len(contentLines),
+						Lines:    diffLines,
+					},
+				},
+				Status: "ok",
+			})
+		}
+	}
+	if files == nil {
+		files = []ParsedDiffFile{}
+	}
 	return files, nil
+}
+
+// GetCommitFileDiff returns the parsed unified diff for a single file in a specific commit.
+func GetCommitFileDiff(ctx context.Context, cwd, sha, relPath string) (*ParsedDiffFile, error) {
+	patch, err := runGit(ctx, cwd, "show", "--no-color", "--format=", sha, "--", relPath)
+	if err != nil || strings.TrimSpace(patch) == "" {
+		return nil, err
+	}
+	parsed := ParseUnifiedDiff(patch)
+	if len(parsed) == 0 {
+		return nil, nil
+	}
+	return &parsed[0], nil
 }
 
 // CommitAll stages all changes and commits them with the given message.

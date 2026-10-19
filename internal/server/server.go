@@ -54,6 +54,14 @@ type managedPi struct {
 	session *pi.Session
 }
 
+type downloadTokenEntry struct {
+	absPath   string
+	fileName  string
+	mimeType  string
+	size      int64
+	expiresAt time.Time
+}
+
 type frameSink interface {
 	SendText(ctx context.Context, text string) error
 	SendBinary(ctx context.Context, data []byte) error
@@ -102,6 +110,7 @@ type Server struct {
 	agents            map[string]*managedPi
 	terminals         map[uint8]*terminal.Session
 	terminalSlotsByID map[string]uint8
+	downloadTokens    map[string]downloadTokenEntry
 	clients           map[frameSink]bool
 	cachedPiModels    []pi.CatalogModel
 	cachedPiCommands  []pi.SlashCommand
@@ -144,6 +153,7 @@ func New(opts Options) (*Server, error) {
 		agents:            make(map[string]*managedPi),
 		terminals:         make(map[uint8]*terminal.Session),
 		terminalSlotsByID: make(map[string]uint8),
+		downloadTokens:    make(map[string]downloadTokenEntry),
 		clients:           make(map[frameSink]bool),
 	}
 	srv.schedules = schedule.NewService(homeDir, srv.executeScheduledPiRun)
@@ -181,14 +191,39 @@ func (s *Server) Close() error {
 
 // ServeHTTP handles /health, /ws, and embedded/external Web UI routes.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/health" {
+	if r.URL.Path == "/health" || r.URL.Path == "/api/health" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"status":   "ok",
-			"serverId": s.serverID,
-			"version":  s.version,
+			"status":    "ok",
+			"serverId":  s.serverID,
+			"version":   s.version,
+			"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
 		})
+		return
+	}
+
+	if r.URL.Path == "/api/status" {
+		hostname, _ := os.Hostname()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status":   "server_info",
+			"serverId": s.serverID,
+			"hostname": hostname,
+			"version":  s.version,
+			"listen":   r.Host,
+		})
+		return
+	}
+
+	if r.URL.Path == "/api/files/download" {
+		s.handleHTTPFileDownload(w, r)
+		return
+	}
+
+	if r.URL.Path == "/api/terminal-activity" || r.URL.Path == "/api/subagent-report" {
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
@@ -650,14 +685,7 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 	case "get_daemon_config_request":
 		_ = sendSessionMsg(ctx, sink, "get_daemon_config_response", map[string]any{
 			"requestId": base.RequestID,
-			"config": map[string]any{
-				"mcp": map[string]any{
-					"enabled":          true,
-					"injectIntoAgents": true,
-				},
-				"providers":          map[string]any{},
-				"metadataGeneration": map[string]any{"providers": []any{}},
-			},
+			"config":    s.store.LoadDaemonConfig(),
 		})
 
 	case "list_available_providers_request":

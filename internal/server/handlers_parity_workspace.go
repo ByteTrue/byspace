@@ -6,6 +6,8 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +15,8 @@ import (
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/home"
+	"github.com/ByteTrue/byspace/internal/store"
+	"github.com/ByteTrue/byspace/internal/terminal"
 	"github.com/ByteTrue/byspace/internal/workspace"
 )
 
@@ -208,10 +212,21 @@ func (s *Server) handleProjectIcon(ctx context.Context, sink frameSink, msgType 
 	switch msgType {
 	case "project.icon.set.request":
 		var req struct {
-			RequestID string `json:"requestId"`
-			ProjectID string `json:"projectId"`
+			RequestID string         `json:"requestId"`
+			ProjectID string         `json:"projectId"`
+			Source    map[string]any `json:"source"`
 		}
 		_ = json.Unmarshal(raw, &req)
+		srcType, _ := req.Source["type"].(string)
+		if srcType == "upload" {
+			dataStr, _ := req.Source["data"].(string)
+			_ = s.store.SaveProjectIcon(req.ProjectID, map[string]any{
+				"data":     dataStr,
+				"mimeType": "image/png",
+			})
+		} else {
+			_ = s.store.SaveProjectIcon(req.ProjectID, nil)
+		}
 		_ = sendSessionMsg(ctx, sink, "project.icon.set.response", map[string]any{
 			"requestId": req.RequestID,
 			"projectId": req.ProjectID,
@@ -224,10 +239,11 @@ func (s *Server) handleProjectIcon(ctx context.Context, sink frameSink, msgType 
 			ProjectID string `json:"projectId"`
 		}
 		_ = json.Unmarshal(raw, &req)
+		icon := s.store.LoadProjectIcon(req.ProjectID)
 		_ = sendSessionMsg(ctx, sink, "project.icon.get.response", map[string]any{
 			"requestId": req.RequestID,
 			"projectId": req.ProjectID,
-			"icon":      nil,
+			"icon":      icon,
 			"error":     nil,
 		})
 	case "project_icon_request":
@@ -236,10 +252,18 @@ func (s *Server) handleProjectIcon(ctx context.Context, sink frameSink, msgType 
 			Cwd       string `json:"cwd"`
 		}
 		_ = json.Unmarshal(raw, &req)
+		var icon map[string]any
+		projects, _ := s.store.ListProjects()
+		for _, p := range projects {
+			if p.RootPath == req.Cwd {
+				icon = s.store.LoadProjectIcon(p.ProjectID)
+				break
+			}
+		}
 		_ = sendSessionMsg(ctx, sink, "project_icon_response", map[string]any{
 			"requestId": req.RequestID,
 			"cwd":       req.Cwd,
-			"icon":      nil,
+			"icon":      icon,
 			"error":     nil,
 		})
 	}
@@ -498,26 +522,30 @@ func (s *Server) handleWorkspaceLabels(ctx context.Context, sink frameSink, msgT
 
 	switch msgType {
 	case "workspace.label.list.request":
+		labels, _ := s.store.ListLabels()
 		_ = sendSessionMsg(ctx, sink, "workspace.label.list.response", map[string]any{
 			"requestId": base.RequestID,
-			"labels":    []any{},
+			"labels":    labels,
 			"sync": map[string]any{
 				"mode":       "snapshot",
 				"generation": "gen_1",
-				"headSeq":    0,
+				"headSeq":    len(labels),
 				"removals":   []any{},
 			},
 		})
 	case "workspace.label.assignment.set.request":
 		var req struct {
-			RequestID string         `json:"requestId"`
-			Label     map[string]any `json:"label"`
+			RequestID   string                `json:"requestId"`
+			WorkspaceID string                `json:"workspaceId"`
+			Label       store.LabelDefinition `json:"label"`
+			Assigned    bool                  `json:"assigned"`
 		}
 		_ = json.Unmarshal(raw, &req)
+		wsLabels, _ := s.store.SetWorkspaceLabelAssignment(req.WorkspaceID, req.Label, req.Assigned)
 		_ = sendSessionMsg(ctx, sink, "workspace.label.assignment.set.response", map[string]any{
 			"requestId":       req.RequestID,
 			"label":           req.Label,
-			"workspaceLabels": []string{},
+			"workspaceLabels": wsLabels,
 		})
 	case "workspace.label.update.request":
 		var req struct {
@@ -527,28 +555,33 @@ func (s *Server) handleWorkspaceLabels(ctx context.Context, sink frameSink, msgT
 			Color     string `json:"color"`
 		}
 		_ = json.Unmarshal(raw, &req)
-		name := req.NewName
-		if name == "" {
-			name = req.Name
-		}
-		col := req.Color
-		if col == "" {
-			col = "blue"
-		}
+		updatedDef, affected, _ := s.store.UpdateLabel(req.Name, req.NewName, req.Color)
 		_ = sendSessionMsg(ctx, sink, "workspace.label.update.response", map[string]any{
 			"requestId":              req.RequestID,
-			"label":                  map[string]any{"name": name, "color": col},
-			"affectedWorkspaceCount": 0,
+			"label":                  updatedDef,
+			"affectedWorkspaceCount": affected,
 		})
 	case "workspace.label.delete.request":
+		var req struct {
+			RequestID string `json:"requestId"`
+			Name      string `json:"name"`
+		}
+		_ = json.Unmarshal(raw, &req)
+		affected := s.store.DeleteLabel(req.Name)
 		_ = sendSessionMsg(ctx, sink, "workspace.label.delete.response", map[string]any{
-			"requestId":              base.RequestID,
-			"affectedWorkspaceCount": 0,
+			"requestId":              req.RequestID,
+			"affectedWorkspaceCount": affected,
 		})
 	case "workspace.label.delete.inspect.request":
+		var req struct {
+			RequestID string `json:"requestId"`
+			Name      string `json:"name"`
+		}
+		_ = json.Unmarshal(raw, &req)
+		affected := s.store.InspectLabelUsage(req.Name)
 		_ = sendSessionMsg(ctx, sink, "workspace.label.delete.inspect.response", map[string]any{
-			"requestId":              base.RequestID,
-			"affectedWorkspaceCount": 0,
+			"requestId":              req.RequestID,
+			"affectedWorkspaceCount": affected,
 		})
 	}
 }
@@ -642,20 +675,89 @@ func (s *Server) handleWorkspaceScripts(ctx context.Context, sink frameSink, msg
 		ScriptName  string `json:"scriptName"`
 	}
 	_ = json.Unmarshal(raw, &req)
+
+	var wsCwd string
+	workspaces, _ := s.store.ListWorkspaces()
+	for _, w := range workspaces {
+		if w.WorkspaceID == req.WorkspaceID {
+			wsCwd = w.Cwd
+			break
+		}
+	}
+
+	readScripts := func() []map[string]any {
+		if wsCwd == "" {
+			return []map[string]any{}
+		}
+		b, err := os.ReadFile(filepath.Join(wsCwd, "byspace.json"))
+		if err != nil {
+			return []map[string]any{}
+		}
+		var cfg struct {
+			Scripts map[string]any `json:"scripts"`
+		}
+		if json.Unmarshal(b, &cfg) != nil || cfg.Scripts == nil {
+			return []map[string]any{}
+		}
+		out := make([]map[string]any, 0, len(cfg.Scripts))
+		for name, val := range cfg.Scripts {
+			cmdStr := ""
+			switch v := val.(type) {
+			case string:
+				cmdStr = v
+			case map[string]any:
+				cmdStr, _ = v["command"].(string)
+			}
+			if cmdStr == "" {
+				continue
+			}
+			out = append(out, map[string]any{
+				"name":    name,
+				"command": cmdStr,
+				"status":  "stopped",
+			})
+		}
+		return out
+	}
+
 	switch msgType {
 	case "start_workspace_script_request":
+		var termID any
+		if wsCwd != "" {
+			for _, sc := range readScripts() {
+				if sc["name"] == req.ScriptName {
+					cmdStr, _ := sc["command"].(string)
+					s.mu.Lock()
+					slot := uint8(len(s.terminals) + 1)
+					tid := fmt.Sprintf("term_%d", slot)
+					if sess, err := terminal.StartSession(terminal.StartOptions{
+						ID:          tid,
+						Name:        req.ScriptName,
+						Cwd:         wsCwd,
+						WorkspaceID: req.WorkspaceID,
+					}); err == nil {
+						s.terminals[slot] = sess
+						s.terminalSlotsByID[tid] = slot
+						_ = sess.WriteInput([]byte(cmdStr + "\n"))
+						termID = tid
+					}
+					s.mu.Unlock()
+					break
+				}
+			}
+		}
 		_ = sendSessionMsg(ctx, sink, "start_workspace_script_response", map[string]any{
 			"requestId":   req.RequestID,
 			"workspaceId": req.WorkspaceID,
 			"scriptName":  req.ScriptName,
-			"terminalId":  nil,
+			"terminalId":  termID,
 			"error":       nil,
 		})
 	case "workspace.script.list.request":
 		_ = sendSessionMsg(ctx, sink, "workspace.script.list.response", map[string]any{
 			"requestId":   req.RequestID,
 			"workspaceId": req.WorkspaceID,
-			"scripts":     []any{},
+			"scripts":     readScripts(),
 			"error":       nil,
 		})
 	case "workspace.script.start.request":
@@ -765,11 +867,21 @@ func (s *Server) handleFileExtraOps(ctx context.Context, sink frameSink, msgType
 		var b [12]byte
 		_, _ = rand.Read(b[:])
 		tok := "dl_" + hex.EncodeToString(b[:])
+		fileName := filepath.Base(req.Path)
+		s.mu.Lock()
+		s.downloadTokens[tok] = downloadTokenEntry{
+			absPath:   filepath.Join(req.Cwd, req.Path),
+			fileName:  fileName,
+			mimeType:  fc.MimeType,
+			size:      fc.Size,
+			expiresAt: time.Now().Add(5 * time.Minute),
+		}
+		s.mu.Unlock()
 		_ = sendSessionMsg(ctx, sink, "file_download_token_response", map[string]any{
 			"cwd":       req.Cwd,
 			"path":      req.Path,
 			"token":     tok,
-			"fileName":  filepath.Base(req.Path),
+			"fileName":  fileName,
 			"mimeType":  fc.MimeType,
 			"size":      fc.Size,
 			"error":     nil,
@@ -816,4 +928,34 @@ func (s *Server) handleFileExtraOps(ctx context.Context, sink frameSink, msgType
 			"error": nil,
 		})
 	}
+}
+
+func (s *Server) handleHTTPFileDownload(w http.ResponseWriter, r *http.Request) {
+	tok := strings.TrimSpace(r.URL.Query().Get("token"))
+	if tok == "" {
+		http.Error(w, `{"error":"Missing download token"}`, http.StatusBadRequest)
+		return
+	}
+	s.mu.Lock()
+	entry, ok := s.downloadTokens[tok]
+	if ok {
+		delete(s.downloadTokens, tok)
+	}
+	s.mu.Unlock()
+
+	if !ok || time.Now().After(entry.expiresAt) {
+		http.Error(w, `{"error":"Invalid or expired token"}`, http.StatusForbidden)
+		return
+	}
+	data, err := os.ReadFile(entry.absPath)
+	if err != nil {
+		http.Error(w, `{"error":"File not found"}`, http.StatusNotFound)
+		return
+	}
+	safeName := strings.NewReplacer(`"`, "_", "\r", "_", "\n", "_").Replace(entry.fileName)
+	w.Header().Set("Content-Type", entry.mimeType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, safeName))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }

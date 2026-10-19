@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -45,12 +46,17 @@ func (s *Server) handleGitParityOps(ctx context.Context, sink frameSink, msgType
 			Path      string `json:"path"`
 		}
 		_ = json.Unmarshal(raw, &req)
+		diffFile, err := workspace.GetCommitFileDiff(ctx, req.Cwd, req.Sha, req.Path)
+		var errObj any
+		if err != nil {
+			errObj = checkoutErr(err.Error())
+		}
 		_ = sendSessionMsg(ctx, sink, "checkout.commits.file_diff.response", map[string]any{
 			"cwd":       req.Cwd,
 			"sha":       req.Sha,
 			"path":      req.Path,
-			"file":      nil,
-			"error":     nil,
+			"file":      diffFile,
+			"error":     errObj,
 			"requestId": req.RequestID,
 		})
 
@@ -244,9 +250,10 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 
 	switch msgType {
 	case "checkout_pr_status_request":
+		prStatus, _ := workspace.GetPRStatus(ctx, base.Cwd)
 		_ = sendSessionMsg(ctx, sink, "checkout_pr_status_response", map[string]any{
 			"cwd":                   base.Cwd,
-			"status":                nil,
+			"status":                prStatus,
 			"githubFeaturesEnabled": true,
 			"authState":             map[string]any{"status": "authenticated"},
 			"forge":                 "github",
@@ -255,20 +262,48 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 		})
 
 	case "checkout_pr_create_request":
+		var req struct {
+			RequestID string `json:"requestId"`
+			Cwd       string `json:"cwd"`
+			Title     string `json:"title"`
+			Body      string `json:"body"`
+			Base      string `json:"base"`
+			Draft     bool   `json:"draft"`
+		}
+		_ = json.Unmarshal(raw, &req)
+		prURL, prNum, err := workspace.CreatePR(ctx, req.Cwd, req.Title, req.Body, req.Base, req.Draft)
+		var urlVal any
+		var errObj any
+		if err != nil {
+			errObj = checkoutErr(err.Error())
+		} else if prURL != "" {
+			urlVal = prURL
+		}
 		_ = sendSessionMsg(ctx, sink, "checkout_pr_create_response", map[string]any{
-			"cwd":       base.Cwd,
-			"url":       nil,
-			"number":    nil,
-			"error":     checkoutErr("PR creation requires gh CLI"),
-			"requestId": base.RequestID,
+			"cwd":       req.Cwd,
+			"url":       urlVal,
+			"number":    prNum,
+			"error":     errObj,
+			"requestId": req.RequestID,
 		})
 
 	case "checkout_pr_merge_request":
+		var req struct {
+			RequestID string `json:"requestId"`
+			Cwd       string `json:"cwd"`
+			Method    string `json:"method"`
+		}
+		_ = json.Unmarshal(raw, &req)
+		err := workspace.MergePR(ctx, req.Cwd, req.Method)
+		var errObj any
+		if err != nil {
+			errObj = checkoutErr(err.Error())
+		}
 		_ = sendSessionMsg(ctx, sink, "checkout_pr_merge_response", map[string]any{
-			"cwd":       base.Cwd,
-			"success":   true,
-			"error":     nil,
-			"requestId": base.RequestID,
+			"cwd":       req.Cwd,
+			"success":   err == nil,
+			"error":     errObj,
+			"requestId": req.RequestID,
 		})
 
 	case "pull_request_timeline_request":
@@ -284,12 +319,17 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 		})
 
 	case "checkout.forge.set_auto_merge.request", "checkout.github.set_auto_merge.request":
+		err := workspace.SetAutoMerge(ctx, base.Cwd, base.Enabled)
+		var errObj any
+		if err != nil {
+			errObj = checkoutErr(err.Error())
+		}
 		respType := strings.TrimSuffix(msgType, ".request") + ".response"
 		_ = sendSessionMsg(ctx, sink, respType, map[string]any{
 			"cwd":       base.Cwd,
 			"enabled":   base.Enabled,
-			"success":   true,
-			"error":     nil,
+			"success":   err == nil,
+			"error":     errObj,
 			"requestId": base.RequestID,
 		})
 
@@ -317,10 +357,28 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 		})
 
 	case "workspace.github.search_repositories.request":
+		var req struct {
+			RequestID string `json:"requestId"`
+			Query     string `json:"query"`
+			Limit     int    `json:"limit"`
+		}
+		_ = json.Unmarshal(raw, &req)
+		repos, available := workspace.SearchGitHubRepos(ctx, req.Query, req.Limit)
+		if !available {
+			_ = sendSessionMsg(ctx, sink, "workspace.github.search_repositories.response", map[string]any{
+				"status":       "unavailable",
+				"requestId":    req.RequestID,
+				"repositories": []any{},
+				"reason":       "gh_missing",
+				"available":    false,
+				"error":        "GitHub CLI (gh) is not installed",
+			})
+			return
+		}
 		_ = sendSessionMsg(ctx, sink, "workspace.github.search_repositories.response", map[string]any{
 			"status":       "success",
-			"requestId":    base.RequestID,
-			"repositories": []any{},
+			"requestId":    req.RequestID,
+			"repositories": repos,
 			"available":    true,
 			"error":        nil,
 		})
@@ -411,10 +469,20 @@ func (s *Server) handleTerminalParityOps(ctx context.Context, sink frameSink, ms
 		})
 
 	case "capture_terminal_request":
+		s.mu.Lock()
+		slot, ok := s.terminalSlotsByID[base.TerminalID]
+		var sess = s.terminals[slot]
+		s.mu.Unlock()
+		lines := []string{}
+		if ok && sess != nil {
+			if res := sess.ResumeSince(0); res != nil && res.Data != "" {
+				lines = strings.Split(strings.TrimRight(res.Data, "\r\n"), "\n")
+			}
+		}
 		_ = sendSessionMsg(ctx, sink, "capture_terminal_response", map[string]any{
 			"terminalId": base.TerminalID,
-			"lines":      []string{},
-			"totalLines": 0,
+			"lines":      lines,
+			"totalLines": len(lines),
 			"requestId":  base.RequestID,
 		})
 
@@ -615,15 +683,21 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 
 	switch msgType {
 	case "agent.skills.get_status.request", "agent.skills.reconcile.request", "agent.skills.uninstall.request":
+		avail, inst := scanLocalSkills()
+		cfg := s.store.LoadDaemonConfig()
+		sel, ok := cfg["skillsSelection"].(map[string]any)
+		if !ok || sel == nil {
+			sel = map[string]any{"mode": "all"}
+		}
 		respType := strings.TrimSuffix(msgType, ".request") + ".response"
 		_ = sendSessionMsg(ctx, sink, respType, map[string]any{
 			"requestId":      base.RequestID,
 			"state":          "up-to-date",
 			"ops":            []any{},
-			"available":      []string{},
-			"installed":      []string{},
-			"selection":      map[string]any{"mode": "all"},
-			"selectionSaved": true,
+			"available":      avail,
+			"installed":      inst,
+			"selection":      sel,
+			"selectionSaved": ok,
 		})
 
 	case "agent.skills.save_selection.request":
@@ -636,12 +710,14 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		if sel == nil {
 			sel = map[string]any{"mode": "all"}
 		}
+		_ = s.store.SaveDaemonConfig(map[string]any{"skillsSelection": sel})
+		avail, inst := scanLocalSkills()
 		_ = sendSessionMsg(ctx, sink, "agent.skills.save_selection.response", map[string]any{
 			"requestId":            req.RequestID,
 			"state":                "up-to-date",
 			"ops":                  []any{},
-			"available":            []string{},
-			"installed":            []string{},
+			"available":            avail,
+			"installed":            inst,
 			"selection":            sel,
 			"selectionSaved":       true,
 			"confirmationRequired": nil,
@@ -657,6 +733,7 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		if sel == nil {
 			sel = map[string]any{"mode": "all"}
 		}
+		_ = s.store.SaveDaemonConfig(map[string]any{"skillsSelection": sel})
 		_ = sendSessionMsg(ctx, sink, "agent.skills.import_legacy_selection.response", map[string]any{
 			"requestId": req.RequestID,
 			"imported":  true,
@@ -682,16 +759,15 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		})
 
 	case "set_daemon_config_request":
+		var req struct {
+			RequestID string         `json:"requestId"`
+			Config    map[string]any `json:"config"`
+		}
+		_ = json.Unmarshal(raw, &req)
+		updated := s.store.SaveDaemonConfig(req.Config)
 		_ = sendSessionMsg(ctx, sink, "set_daemon_config_response", map[string]any{
-			"requestId": base.RequestID,
-			"config": map[string]any{
-				"mcp": map[string]any{
-					"enabled":          true,
-					"injectIntoAgents": true,
-				},
-				"providers":          map[string]any{},
-				"metadataGeneration": map[string]any{"providers": []any{}},
-			},
+			"requestId": req.RequestID,
+			"config":    updated,
 		})
 
 	case "daemon.config.reload.request":
@@ -818,4 +894,27 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		"audio_played":
 		return
 	}
+}
+
+func scanLocalSkills() ([]string, []string) {
+	bundled := []string{
+		"byspace",
+		"byspace-advisor",
+		"byspace-committee",
+		"byspace-handoff",
+		"byspace-help",
+		"byspace-project-setup",
+	}
+	userHome, err := os.UserHomeDir()
+	if err != nil {
+		return bundled, []string{}
+	}
+	agentsSkillsDir := filepath.Join(userHome, ".agents", "skills")
+	installed := make([]string, 0, len(bundled))
+	for _, name := range bundled {
+		if _, err := os.Stat(filepath.Join(agentsSkillsDir, name, "SKILL.md")); err == nil {
+			installed = append(installed, name)
+		}
+	}
+	return bundled, installed
 }

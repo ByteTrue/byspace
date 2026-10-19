@@ -470,3 +470,252 @@ func writeJSONArray[T any](filePath string, records []T) error {
 	}
 	return home.WriteAtomic(filePath, append(b, '\n'), 0o600)
 }
+
+// LabelDefinition represents a persisted workspace label in $BYSPACE_HOME/projects/labels.json.
+type LabelDefinition struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
+func (s *Store) labelsPath() string {
+	return filepath.Join(s.homeDir, "projects", "labels.json")
+}
+
+// ListLabels returns all persisted workspace label definitions.
+func (s *Store) ListLabels() ([]LabelDefinition, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return readJSONArray[LabelDefinition](s.labelsPath())
+}
+
+// SetWorkspaceLabelAssignment assigns or removes a label from a workspace and ensures the label exists in the catalog.
+func (s *Store) SetWorkspaceLabelAssignment(workspaceID string, lbl LabelDefinition, assigned bool) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if lbl.Color == "" {
+		lbl.Color = "blue"
+	}
+	labels, _ := readJSONArray[LabelDefinition](s.labelsPath())
+	found := false
+	for i := range labels {
+		if labels[i].Name == lbl.Name {
+			labels[i].Color = lbl.Color
+			found = true
+			break
+		}
+	}
+	if !found && lbl.Name != "" {
+		labels = append(labels, lbl)
+	}
+	_ = writeJSONArray(s.labelsPath(), labels)
+
+	workspaces, err := readJSONArray[WorkspaceRecord](s.workspacesPath())
+	if err != nil {
+		return []string{}, err
+	}
+	var updatedLabels []string
+	for i := range workspaces {
+		if workspaces[i].WorkspaceID == workspaceID {
+			cur := workspaces[i].Labels
+			next := make([]string, 0, len(cur)+1)
+			has := false
+			for _, name := range cur {
+				if name == lbl.Name {
+					has = true
+					if assigned {
+						next = append(next, name)
+					}
+				} else {
+					next = append(next, name)
+				}
+			}
+			if assigned && !has && lbl.Name != "" {
+				next = append(next, lbl.Name)
+			}
+			workspaces[i].Labels = next
+			updatedLabels = next
+			break
+		}
+	}
+	_ = writeJSONArray(s.workspacesPath(), workspaces)
+	if updatedLabels == nil {
+		updatedLabels = []string{}
+	}
+	return updatedLabels, nil
+}
+
+// UpdateLabel updates a label's name and/or color across the catalog and all workspaces.
+func (s *Store) UpdateLabel(name, newName, color string) (LabelDefinition, int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	targetName := strings.TrimSpace(newName)
+	if targetName == "" {
+		targetName = name
+	}
+	targetColor := strings.TrimSpace(color)
+	if targetColor == "" {
+		targetColor = "blue"
+	}
+
+	labels, _ := readJSONArray[LabelDefinition](s.labelsPath())
+	updatedDef := LabelDefinition{Name: targetName, Color: targetColor}
+	found := false
+	for i := range labels {
+		if labels[i].Name == name {
+			if strings.TrimSpace(color) == "" {
+				updatedDef.Color = labels[i].Color
+			}
+			labels[i] = updatedDef
+			found = true
+			break
+		}
+	}
+	if !found {
+		labels = append(labels, updatedDef)
+	}
+	_ = writeJSONArray(s.labelsPath(), labels)
+
+	workspaces, _ := readJSONArray[WorkspaceRecord](s.workspacesPath())
+	affected := 0
+	for i := range workspaces {
+		changed := false
+		for j, ln := range workspaces[i].Labels {
+			if ln == name {
+				workspaces[i].Labels[j] = targetName
+				changed = true
+			}
+		}
+		if changed {
+			affected++
+		}
+	}
+	if affected > 0 {
+		_ = writeJSONArray(s.workspacesPath(), workspaces)
+	}
+	return updatedDef, affected, nil
+}
+
+// InspectLabelUsage counts how many workspaces currently carry the given label name.
+func (s *Store) InspectLabelUsage(name string) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	workspaces, _ := readJSONArray[WorkspaceRecord](s.workspacesPath())
+	count := 0
+	for _, w := range workspaces {
+		for _, ln := range w.Labels {
+			if ln == name {
+				count++
+				break
+			}
+		}
+	}
+	return count
+}
+
+// DeleteLabel removes a label from the catalog and strips it from all workspaces.
+func (s *Store) DeleteLabel(name string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	labels, _ := readJSONArray[LabelDefinition](s.labelsPath())
+	nextLabels := make([]LabelDefinition, 0, len(labels))
+	for _, l := range labels {
+		if l.Name != name {
+			nextLabels = append(nextLabels, l)
+		}
+	}
+	_ = writeJSONArray(s.labelsPath(), nextLabels)
+
+	workspaces, _ := readJSONArray[WorkspaceRecord](s.workspacesPath())
+	affected := 0
+	for i := range workspaces {
+		next := make([]string, 0, len(workspaces[i].Labels))
+		removed := false
+		for _, ln := range workspaces[i].Labels {
+			if ln == name {
+				removed = true
+			} else {
+				next = append(next, ln)
+			}
+		}
+		if removed {
+			workspaces[i].Labels = next
+			affected++
+		}
+	}
+	if affected > 0 {
+		_ = writeJSONArray(s.workspacesPath(), workspaces)
+	}
+	return affected
+}
+
+// LoadDaemonConfig reads $BYSPACE_HOME/config.json and merges defaults.
+func (s *Store) LoadDaemonConfig() map[string]any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	cfg := map[string]any{
+		"mcp": map[string]any{
+			"enabled":          true,
+			"injectIntoAgents": true,
+		},
+		"providers":          map[string]any{},
+		"metadataGeneration": map[string]any{"providers": []any{}},
+	}
+	b, err := os.ReadFile(filepath.Join(s.homeDir, "config.json"))
+	if err != nil {
+		return cfg
+	}
+	var disk map[string]any
+	if json.Unmarshal(b, &disk) == nil {
+		for k, v := range disk {
+			cfg[k] = v
+		}
+	}
+	return cfg
+}
+
+// SaveDaemonConfig merges patch into $BYSPACE_HOME/config.json and returns the resulting config.
+func (s *Store) SaveDaemonConfig(patch map[string]any) map[string]any {
+	cur := s.LoadDaemonConfig()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, v := range patch {
+		cur[k] = v
+	}
+	b, _ := json.MarshalIndent(cur, "", "  ")
+	_ = home.WriteAtomic(filepath.Join(s.homeDir, "config.json"), append(b, '\n'), 0o600)
+	return cur
+}
+
+// SaveProjectIcon persists a custom project icon under $BYSPACE_HOME/projects/icons/<projectId>.json.
+func (s *Store) SaveProjectIcon(projectID string, icon map[string]any) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := filepath.Join(s.homeDir, "projects", "icons", projectID+".json")
+	if icon == nil {
+		_ = os.Remove(p)
+		return nil
+	}
+	b, err := json.MarshalIndent(icon, "", "  ")
+	if err != nil {
+		return err
+	}
+	return home.WriteAtomic(p, append(b, '\n'), 0o600)
+}
+
+// LoadProjectIcon reads a custom project icon if present.
+func (s *Store) LoadProjectIcon(projectID string) map[string]any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	p := filepath.Join(s.homeDir, "projects", "icons", projectID+".json")
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return nil
+	}
+	var out map[string]any
+	if json.Unmarshal(b, &out) != nil {
+		return nil
+	}
+	return out
+}
