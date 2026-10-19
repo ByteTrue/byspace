@@ -124,6 +124,7 @@ import type {
   AgentSkillSelection,
   AgentSkillsStatus,
   AgentSkillsSaveResult,
+  AgentSkillTargets,
   HubRelationshipStatus,
 } from "@bytetrue/protocol/messages";
 import type {
@@ -4882,8 +4883,13 @@ export class DaemonClient {
     });
   }
 
+  /**
+   * Omitting `targets` keeps whatever the daemon already stores, which is how a
+   * caller that predates install targets avoids narrowing the install to none.
+   */
   async saveAgentSkillsSelection(
     selection: AgentSkillSelection,
+    targets?: AgentSkillTargets,
     confirmedRemovals?: readonly string[],
   ): Promise<AgentSkillsSaveResult> {
     const requestId = this.createRequestId();
@@ -4892,6 +4898,7 @@ export class DaemonClient {
         type: "agent.skills.save_selection.request",
         requestId,
         selection,
+        ...(targets ? { targets: [...targets] } : {}),
         ...(confirmedRemovals ? { confirmedRemovals: [...confirmedRemovals] } : {}),
       },
       responseType: "agent.skills.save_selection.response",

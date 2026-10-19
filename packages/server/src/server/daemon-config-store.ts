@@ -25,7 +25,7 @@ import {
   TERMINAL_AGENT_HOOK_LEGACY_GLOBAL_PROVIDER_IDS,
   TERMINAL_AGENT_HOOK_PROVIDER_IDS,
 } from "@bytetrue/protocol/messages";
-import type { AgentSkillSelection } from "@bytetrue/protocol/messages";
+import type { AgentSkillSelection, AgentSkillTargets } from "@bytetrue/protocol/messages";
 
 export type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@bytetrue/protocol/messages";
 
@@ -246,6 +246,7 @@ const RELOADABLE_PATHS = [
   "agents.catalogRefreshTimeoutMs",
   "agents.metadataGeneration",
   "agents.skills.selection",
+  "agents.skills.targets",
   "pluginsEnabled",
 ] as const;
 
@@ -273,6 +274,7 @@ const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
   ["agents.catalogRefreshTimeoutMs", "catalogRefreshTimeoutMs"],
   ["agents.metadataGeneration", "metadataGeneration"],
   ["agents.skills.selection", "skills.selection"],
+  ["agents.skills.targets", "skills.targets"],
   ["pluginsEnabled", "pluginsEnabled"],
 ]);
 
@@ -592,6 +594,10 @@ export class DaemonConfigStore {
     return this.applySupportedPatch({ skills: { selection } });
   }
 
+  public setAgentSkillTargets(targets: AgentSkillTargets): MutableDaemonConfig {
+    return this.applySupportedPatch({ skills: { targets } });
+  }
+
   private assertRelayPatchMutable(parsedPatch: SupportedMutableConfigPatch): void {
     if (parsedPatch.relay?.enabled !== undefined && !this.relayEnabledMutable) {
       throw new Error(
@@ -641,8 +647,18 @@ export class DaemonConfigStore {
     });
     const removedProviders = Array.from(new Set(removeProviders));
     const merged = deepMerge(this.current, configPatch);
-    if (parsedPatch.skills?.selection !== undefined) {
-      merged.skills = { selection: parsedPatch.skills.selection };
+    if (parsedPatch.skills !== undefined) {
+      // Selection and targets are written by their own setter and never through
+      // the generic patch, so a nullish field means "keep the stored value".
+      merged.skills = {
+        ...this.current.skills,
+        ...(parsedPatch.skills.selection !== undefined
+          ? { selection: parsedPatch.skills.selection }
+          : {}),
+        ...(parsedPatch.skills.targets !== undefined
+          ? { targets: parsedPatch.skills.targets }
+          : {}),
+      };
     }
     if (parsedPatch.plugins !== undefined) merged.plugins = parsedPatch.plugins;
     const next = MutableDaemonConfigSchema.parse(
@@ -1062,8 +1078,13 @@ function mergeMutableAgentPatch(
     };
   }
 
-  if (patch.skills?.selection !== undefined) {
-    next["skills"] = { selection: patch.skills.selection };
+  if (patch.skills !== undefined) {
+    const stored = isRecord(persistedAgents?.skills) ? persistedAgents.skills : {};
+    next["skills"] = {
+      ...stored,
+      ...(patch.skills.selection !== undefined ? { selection: patch.skills.selection } : {}),
+      ...(patch.skills.targets !== undefined ? { targets: patch.skills.targets } : {}),
+    };
   }
 
   return Object.keys(next).length > 0 ? (next as PersistedConfig["agents"]) : undefined;

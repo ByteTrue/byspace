@@ -2212,6 +2212,12 @@ export const ar: TranslationResources = {
         chooseAllHint: "أبقِ جميع المهارات المرفقة مثبتة، بما فيها ما يُضاف لاحقًا.",
         chooseList: "المهارات المرفقة",
         chooseEmpty: "لا تتضمن هذه النسخة أي مهارات.",
+        targetsTitle: "مواقع التثبيت",
+        targetsEmpty: "اختر موقع تثبيت واحدًا على الأقل.",
+        targets: {
+          agents: "يستخدمه Codex وPi ووكلاء آخرون يقرؤون مجلد المهارات المشترك.",
+          claude: "يستخدمه Claude Code.",
+        },
         removeTitle: "إزالة المهارات غير المحددة؟",
         removeMessage:
           "سيتم حذف {{skills}} من ~/.agents و~/.claude. كما يُحذف كل ما أضفته داخل مجلدات المهارات تلك.",

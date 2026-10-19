@@ -1,4 +1,4 @@
-import type { AgentSkillSelection } from "@bytetrue/protocol/messages";
+import type { AgentSkillSelection, AgentSkillTargets } from "@bytetrue/protocol/messages";
 
 import type { DaemonConfigStore } from "../daemon-config-store.js";
 import {
@@ -16,6 +16,8 @@ export interface OrchestrationSkills {
   uninstall(): Promise<SkillsSnapshot>;
   saveSelection(
     selection: AgentSkillSelection,
+    /** Absent keeps the stored targets: an old app never knew about them. */
+    targets: AgentSkillTargets | undefined,
     confirmedRemovals?: readonly string[],
   ): Promise<SkillsSaveResult>;
   importLegacySelectionIfUnset(selection: AgentSkillSelection): Promise<{
@@ -37,8 +39,12 @@ export function createOrchestrationSkills(
     getStatus: () => controller.status(),
     reconcile: () => controller.update(),
     uninstall: () => controller.uninstall(),
-    saveSelection: (selection, confirmedRemovals = []) =>
-      controller.save({ ...selection, confirmedRemovals }),
+    saveSelection: (selection, targets, confirmedRemovals = []) =>
+      controller.save({
+        selection,
+        ...(targets !== undefined ? { targets } : {}),
+        confirmedRemovals,
+      }),
     importLegacySelectionIfUnset: (selection) => controller.importLegacySelectionIfUnset(selection),
     autoUpdate: () => controller.autoUpdate(),
   };

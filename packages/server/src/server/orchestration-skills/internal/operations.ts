@@ -1,18 +1,34 @@
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { AgentSkillSelection } from "@bytetrue/protocol/messages";
+import {
+  AGENT_SKILL_TARGET_IDS,
+  type AgentSkillSelection,
+  type AgentSkillTargetId,
+} from "@bytetrue/protocol/messages";
 import { listFilesRecursive, removeSkill, syncSkills } from "./sync.js";
 
 export type SkillsState = "not-installed" | "up-to-date" | "drift";
 
-export type SkillOp =
-  | { kind: "add"; name: string }
-  | { kind: "update"; name: string }
-  | { kind: "delete"; name: string };
+export interface SkillOp {
+  kind: "add" | "update" | "delete";
+  name: string;
+  /**
+   * Agent homes this operation writes into, or deletes from. A skill can be
+   * installed in one home and removed from another in the same convergence, so
+   * the targets belong to the operation rather than to the convergence.
+   */
+  targets: AgentSkillTargetId[];
+}
 
 /** What the user asked to have installed. `all` follows the bundle as it grows. */
 export type SkillSelection = AgentSkillSelection;
+
+/** The agent homes this daemon can write, and the subset the selection uses. */
+export interface SkillTargetsStatus {
+  available: AgentSkillTargetId[];
+  selected: AgentSkillTargetId[];
+}
 
 export interface SkillsStatus {
   state: SkillsState;
@@ -25,6 +41,7 @@ export interface SkillsStatus {
    * there is anything on disk to delete — this can.
    */
   installed: string[];
+  targets: SkillTargetsStatus;
 }
 
 export interface SkillTargets {
@@ -53,6 +70,29 @@ export const LEGACY_SKILL_NAMES = [
   "byspace-orchestrator",
   "byspace-plugin",
 ] as const;
+
+export interface SkillHome {
+  id: AgentSkillTargetId;
+  dir: string;
+}
+
+/** The homes BySpace manages, in protocol order. Both are always scannable. */
+export function skillHomes(targets: SkillTargets): SkillHome[] {
+  return [
+    { id: "agents", dir: targets.agentsDir },
+    { id: "claude", dir: targets.claudeDir },
+  ];
+}
+
+/** Canonical order, deduplicated. An empty selection is a valid "write nowhere". */
+export function resolveSelectedSkillTargets(
+  targets: readonly AgentSkillTargetId[] | undefined,
+): AgentSkillTargetId[] {
+  const requested = new Set(targets);
+  return AGENT_SKILL_TARGET_IDS.filter((id) => requested.has(id));
+}
+
+const ALL_SKILL_TARGETS: readonly AgentSkillTargetId[] = AGENT_SKILL_TARGET_IDS;
 
 type SkillFiles = Map<string, string>;
 type TargetSkills = Map<string, SkillFiles>;
@@ -113,25 +153,34 @@ async function hashSkills(rootDir: string, names: readonly string[]): Promise<Ta
 
 function diff(
   bundle: TargetSkills,
+  homes: readonly SkillHome[],
   disks: readonly TargetSkills[],
   names: readonly string[],
   desired: ReadonlySet<string>,
+  selected: ReadonlySet<AgentSkillTargetId>,
 ): SkillOp[] {
   const ops: SkillOp[] = [];
   for (const name of names) {
     const b = desired.has(name) ? bundle.get(name) : undefined;
-    const targetFiles = disks.map((disk) => disk.get(name));
-    const installedTargets = targetFiles.filter(
-      (files): files is SkillFiles => files !== undefined,
-    );
-    if (b) {
-      const missingTargets = installedTargets.length < disks.length;
-      const changedTargets = installedTargets.some((files) => !bundleFilesMatch(b, files));
-      if (missingTargets) ops.push({ kind: "add", name });
-      else if (changedTargets) ops.push({ kind: "update", name });
-    } else if (installedTargets.length > 0) {
-      ops.push({ kind: "delete", name });
-    }
+    const missing: AgentSkillTargetId[] = [];
+    const changed: AgentSkillTargetId[] = [];
+    const unexpected: AgentSkillTargetId[] = [];
+    homes.forEach((home, index) => {
+      const files = disks[index]!.get(name);
+      if (b && selected.has(home.id)) {
+        if (files === undefined) missing.push(home.id);
+        else if (!bundleFilesMatch(b, files)) changed.push(home.id);
+        return;
+      }
+      // A copy in a home the selection no longer targets is unwanted, whether
+      // the skill stays installed elsewhere or was dropped from the bundle.
+      if (files !== undefined) unexpected.push(home.id);
+    });
+    // Deletion first: the app reports pending removals separately, and a skill
+    // can be installed in one home while being removed from another.
+    if (unexpected.length > 0) ops.push({ kind: "delete", name, targets: unexpected });
+    if (missing.length > 0) ops.push({ kind: "add", name, targets: missing });
+    else if (changed.length > 0) ops.push({ kind: "update", name, targets: changed });
   }
   ops.sort((a, b) => compareStrings(a.name, b.name));
   return ops;
@@ -165,49 +214,64 @@ function compareStrings(a: string, b: string): number {
 export async function getSkillsStatus(
   targets: SkillTargets,
   selection: SkillSelection,
+  selectedTargets: readonly AgentSkillTargetId[] = ALL_SKILL_TARGETS,
 ): Promise<SkillsStatus> {
   const available = await listBundledSkills(targets.sourceDir);
   const names = managedSkillNames(available);
-  const [bundle, agentsDisk, claudeDisk] = await Promise.all([
+  const homes = skillHomes(targets);
+  const selected = resolveSelectedSkillTargets(selectedTargets);
+  const [bundle, ...disks] = await Promise.all([
     hashSkills(targets.sourceDir, available),
-    hashSkills(targets.agentsDir, names),
-    hashSkills(targets.claudeDir, names),
+    ...homes.map((home) => hashSkills(home.dir, names)),
   ]);
-  const disks = [agentsDisk, claudeDisk];
-  const ops = diff(bundle, disks, names, resolveDesiredSkills(selection, available));
+  const ops = diff(
+    bundle,
+    homes,
+    disks,
+    names,
+    resolveDesiredSkills(selection, available),
+    new Set(selected),
+  );
   const installed = installedSkillNames(disks, names);
+  const targetsStatus: SkillTargetsStatus = {
+    available: homes.map((home) => home.id),
+    selected,
+  };
 
   if (!hasInstalledBySpaceSkill(disks))
-    return { state: "not-installed", ops, available, installed };
-  if (ops.length === 0) return { state: "up-to-date", ops, available, installed };
-  return { state: "drift", ops, available, installed };
+    return { state: "not-installed", ops, available, installed, targets: targetsStatus };
+  if (ops.length === 0)
+    return { state: "up-to-date", ops, available, installed, targets: targetsStatus };
+  return { state: "drift", ops, available, installed, targets: targetsStatus };
 }
 
 async function applySkills(
   targets: SkillTargets,
   selection: SkillSelection,
+  selectedTargets: readonly AgentSkillTargetId[] = ALL_SKILL_TARGETS,
   initialStatus?: SkillsStatus,
 ): Promise<SkillsStatus> {
-  const status = initialStatus ?? (await getSkillsStatus(targets, selection));
+  const status = initialStatus ?? (await getSkillsStatus(targets, selection, selectedTargets));
+  const dirs = new Map(skillHomes(targets).map((home) => [home.id, home.dir] as const));
 
-  const writes = status.ops
-    .filter((op) => op.kind === "add" || op.kind === "update")
-    .map((op) => op.name);
+  const writes = status.ops.filter((op) => op.kind === "add" || op.kind === "update");
   if (writes.length > 0) {
+    const targetDirs = resolveSelectedSkillTargets(selectedTargets)
+      .map((id) => dirs.get(id))
+      .filter((dir): dir is string => dir !== undefined);
     await syncSkills({
       sourceDir: targets.sourceDir,
-      agentsDir: targets.agentsDir,
-      claudeDir: targets.claudeDir,
-      skillNames: writes,
+      targetDirs,
+      skillNames: [...new Set(writes.map((op) => op.name))],
     });
   }
 
   for (const op of status.ops) {
     if (op.kind !== "delete") continue;
-    await removeSkill(op.name, {
-      agentsDir: targets.agentsDir,
-      claudeDir: targets.claudeDir,
-    });
+    await removeSkill(
+      op.name,
+      op.targets.map((id) => dirs.get(id)).filter((dir): dir is string => dir !== undefined),
+    );
   }
 
   // Retired agent homes are not part of the plan: they only ever lose copies,
@@ -215,24 +279,26 @@ async function applySkills(
   // first convergence after an upgrade takes the leftover directories away.
   await removeRetiredSkillCopies(targets);
 
-  return getSkillsStatus(targets, selection);
+  return getSkillsStatus(targets, selection, selectedTargets);
 }
 
 export async function installSkills(
   targets: SkillTargets,
   selection: SkillSelection,
+  selectedTargets: readonly AgentSkillTargetId[] = ALL_SKILL_TARGETS,
   /** Apply exactly this plan instead of rescanning, so a confirmed plan is the applied plan. */
   plan?: SkillsStatus,
 ): Promise<SkillsStatus> {
-  return applySkills(targets, selection, plan);
+  return applySkills(targets, selection, selectedTargets, plan);
 }
 
 export async function updateSkills(
   targets: SkillTargets,
   selection: SkillSelection,
+  selectedTargets: readonly AgentSkillTargetId[] = ALL_SKILL_TARGETS,
 ): Promise<SkillsStatus> {
-  const status = await getSkillsStatus(targets, selection);
-  return applySkills(targets, selection, nonDestructivePlan(status));
+  const status = await getSkillsStatus(targets, selection, selectedTargets);
+  return applySkills(targets, selection, selectedTargets, nonDestructivePlan(status));
 }
 
 function nonDestructivePlan(status: SkillsStatus): SkillsStatus {
@@ -242,31 +308,33 @@ function nonDestructivePlan(status: SkillsStatus): SkillsStatus {
 export async function autoUpdateInstalledSkills(
   targets: SkillTargets,
   selection: SkillSelection,
+  selectedTargets: readonly AgentSkillTargetId[] = ALL_SKILL_TARGETS,
 ): Promise<SkillsStatus> {
   // Runs before the drift check: cleaning a retired agent home is not drift, so
   // an installation that is already current would otherwise keep the leftover
   // directories forever.
   await removeRetiredSkillCopies(targets);
-  const status = await getSkillsStatus(targets, selection);
+  const status = await getSkillsStatus(targets, selection, selectedTargets);
   if (status.state !== "drift") return status;
   // Automatic maintenance may repair selected skills, but removal is an
   // interactive operation because managed directories can contain user files.
-  return applySkills(targets, selection, nonDestructivePlan(status));
+  return applySkills(targets, selection, selectedTargets, nonDestructivePlan(status));
 }
 
 export async function uninstallSkills(
   targets: SkillTargets,
   selection: SkillSelection,
+  selectedTargets: readonly AgentSkillTargetId[] = ALL_SKILL_TARGETS,
 ): Promise<SkillsStatus> {
   const available = await listBundledSkills(targets.sourceDir);
+  // Uninstall is the "remove everything BySpace put on this host" action, so it
+  // sweeps every managed home even the ones the selection does not target.
+  const dirs = skillHomes(targets).map((home) => home.dir);
   for (const name of managedSkillNames(available)) {
-    await removeSkill(name, {
-      agentsDir: targets.agentsDir,
-      claudeDir: targets.claudeDir,
-    });
+    await removeSkill(name, dirs);
   }
   await removeRetiredSkillCopies(targets);
-  return getSkillsStatus(targets, selection);
+  return getSkillsStatus(targets, selection, selectedTargets);
 }
 
 /**

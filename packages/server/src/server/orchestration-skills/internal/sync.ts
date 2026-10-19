@@ -4,8 +4,8 @@ import path from "node:path";
 
 export interface SkillSyncOptions {
   sourceDir: string;
-  agentsDir: string;
-  claudeDir: string;
+  /** Agent homes this run writes into. Turning a home off means leaving it out. */
+  targetDirs: readonly string[];
   skillNames: readonly string[];
   onSkillError?: (skillName: string, error: unknown) => void;
 }
@@ -167,15 +167,9 @@ async function syncDirectoryFiles(srcDir: string, dstDir: string): Promise<numbe
   return changed;
 }
 
-export interface RemoveSkillTargets {
-  agentsDir: string;
-  claudeDir: string;
-}
-
-export async function removeSkill(skillName: string, targets: RemoveSkillTargets): Promise<void> {
-  const paths = [path.join(targets.agentsDir, skillName), path.join(targets.claudeDir, skillName)];
-  for (const p of paths) {
-    await fs.rm(p, { recursive: true, force: true });
+export async function removeSkill(skillName: string, targetDirs: readonly string[]): Promise<void> {
+  for (const targetDir of targetDirs) {
+    await fs.rm(path.join(targetDir, skillName), { recursive: true, force: true });
   }
 }
 
@@ -190,15 +184,9 @@ export async function syncSkills(options: SkillSyncOptions): Promise<SkillSyncRe
     if (!bundleStat?.isDirectory()) continue;
 
     try {
-      changedFiles += await syncDirectoryFiles(
-        bundleSkillDir,
-        path.join(options.agentsDir, skillName),
-      );
-
-      changedFiles += await syncDirectoryFiles(
-        bundleSkillDir,
-        path.join(options.claudeDir, skillName),
-      );
+      for (const targetDir of options.targetDirs) {
+        changedFiles += await syncDirectoryFiles(bundleSkillDir, path.join(targetDir, skillName));
+      }
 
       processedSkills++;
     } catch (error) {

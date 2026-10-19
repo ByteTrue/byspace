@@ -16,6 +16,7 @@ import path from "node:path";
 
 import {
   listManagedSkillNames,
+  skillHomes,
   type SkillOp,
   type SkillSelection,
   type SkillTargets,
@@ -134,7 +135,7 @@ async function validateEntries(
   entries: CapturedDirectory[],
 ): Promise<boolean> {
   const names = new Set(await listManagedSkillNames(targets.sourceDir));
-  const roots = [targets.agentsDir, targets.claudeDir];
+  const roots = skillHomes(targets).map((home) => home.dir);
   return entries.every((entry) => {
     const rootIndex = roots.findIndex((root) => path.dirname(entry.livePath) === root);
     if (rootIndex === -1) return false;
@@ -441,7 +442,7 @@ async function restore(
 }
 
 function transactionParents(targets: SkillTargets): string[] {
-  return [...new Set([targets.agentsDir, targets.claudeDir].map((root) => path.dirname(root)))];
+  return [...new Set(skillHomes(targets).map((home) => path.dirname(home.dir)))];
 }
 
 /**
@@ -489,15 +490,30 @@ export async function beginSkillsTransaction(
   nextSelection: SkillSelection,
   ops: readonly SkillOp[],
 ): Promise<SkillsTransaction> {
-  const roots = [targets.agentsDir, targets.claudeDir];
+  const homes = skillHomes(targets);
+  const roots = homes.map((home) => home.dir);
   const seenRoots = new Set<string>();
-  const uniqueRoots: Array<{ root: string; rootIndex: number }> = [];
+  const uniqueRoots: Array<{ root: string; rootIndex: number } | null> = [];
   for (const [rootIndex, root] of roots.entries()) {
     const identity = await realpath(root).catch(() => path.resolve(root));
-    if (seenRoots.has(identity)) continue;
+    if (seenRoots.has(identity)) {
+      // Two agent homes can be the same directory through symlinks or mounts.
+      // The first occurrence captures it; the duplicate must not capture it
+      // again under a second backup path.
+      uniqueRoots.push(null);
+      continue;
+    }
     seenRoots.add(identity);
     uniqueRoots.push({ root, rootIndex });
   }
+  // Only the homes an operation names are captured: staging a home it does not
+  // touch would let rollback restore a stale copy over a live one.
+  const captureRoots = (op: SkillOp) => {
+    const entries = homes
+      .map((home, index) => (op.targets.includes(home.id) ? uniqueRoots[index] : null))
+      .filter((entry): entry is { root: string; rootIndex: number } => entry !== null);
+    return [...new Set(entries)];
+  };
   // Staged next to the skills tree rather than inside it: same filesystem, so a
   // restore is a local copy, and never a directory a skill scan walks into.
   const transactionDir = path.join(path.dirname(roots[0]!), `${TRANSACTION_PREFIX}${randomUUID()}`);
@@ -518,8 +534,8 @@ export async function beginSkillsTransaction(
   });
 
   try {
-    for (const { root, rootIndex } of uniqueRoots) {
-      for (const op of ops) {
+    for (const op of ops) {
+      for (const { root, rootIndex } of captureRoots(op)) {
         const name = op.name;
         const livePath = path.join(root, name);
         const liveInfo = await lstat(livePath).catch(() => null);

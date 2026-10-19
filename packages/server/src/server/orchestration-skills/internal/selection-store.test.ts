@@ -53,6 +53,42 @@ describe("daemon agent skill selection", () => {
     expect(loadPersistedConfig(root).agents?.skills?.selection).toEqual({ mode: "all" });
   });
 
+  it("defaults missing targets to every managed home without persisting them", async () => {
+    const { root, store } = await createStore();
+
+    expect(await store.getTargets()).toEqual(["agents", "claude"]);
+    expect(loadPersistedConfig(root).agents?.skills).toBeUndefined();
+  });
+
+  it("persists targets beside the selection under agents.skills.targets", async () => {
+    const { config, root, store } = await createStore();
+
+    await store.set({ mode: "custom", skills: ["byspace"] }, ["claude", "claude"]);
+
+    expect(config.get().skills?.targets).toEqual(["claude"]);
+    expect(loadPersistedConfig(root).agents?.skills).toEqual({
+      selection: { mode: "custom", skills: ["byspace"] },
+      targets: ["claude"],
+    });
+  });
+
+  it("keeps the stored targets when only a selection is written", async () => {
+    const { store } = await createStore();
+    await store.set({ mode: "all" }, ["agents"]);
+
+    await store.set({ mode: "custom", skills: ["byspace"] });
+
+    expect(await store.getTargets()).toEqual(["agents"]);
+  });
+
+  it("drops target ids this daemon does not manage", async () => {
+    const { store } = await createStore();
+
+    await store.set({ mode: "all" }, ["codex", "claude"] as never);
+
+    expect(await store.getTargets()).toEqual(["claude"]);
+  });
+
   it("does not expose selection through the generic config patch path", async () => {
     const { config, root, store } = await createStore();
 

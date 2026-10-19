@@ -1536,6 +1536,8 @@ export class DaemonWebSocketServer {
         pluginTimelineItems: true,
         // COMPAT(skillManagement): added in v0.4.0, remove gate after 2027-08-16.
         skillManagement: true,
+        // COMPAT(skillInstallTargets): added in v0.20.3, remove gate after 2027-10-19.
+        skillInstallTargets: true,
         // COMPAT(agentRoles): added in v0.20.0, remove gate after 2027-04-13.
         // Kept for clients released before agentRoleNames existed, which read
         // it as "this daemon has roles".

@@ -6,13 +6,16 @@ import {
   chooseAllSkills,
   chooseCustomSkills,
   clickInstall,
+  expectInstalledIn,
   expectInstalledSkills,
   expectSavedSelection,
+  expectSavedTargets,
   expectSkillFile,
   openAgentSkillsSettings,
   openSkillSelection,
   saveSkillSelection,
   startAgentSkillsSandbox,
+  toggleInstallTarget,
   toggleSkill,
   type AgentSkillsSandbox,
 } from "../support/helpers/agent-skills";
@@ -73,6 +76,55 @@ test.describe("Host agent skills", () => {
     await saveSkillSelection(page);
     await expectSavedSelection(skills, { mode: "all" });
     await expectInstalledSkills(skills, skills.available);
+  });
+
+  test("installs into the chosen locations and clears the ones switched off", async ({
+    page,
+    skills,
+  }) => {
+    await skills.install({ mode: "all" });
+    await openAgentSkillsSettings(page, skills);
+    await openSkillSelection(page);
+
+    // Turning a location off must not change which skills are selected; it only
+    // narrows where they are written, and the claude copies go away.
+    await toggleInstallTarget(page, "claude");
+    const warning = answerNextRemovalWarning(page, "accept");
+    await saveSkillSelection(page);
+    await warning;
+
+    await expectSavedTargets(skills, ["agents"]);
+    await expectInstalledIn(skills, "agents", skills.available);
+    await expectInstalledIn(skills, "claude", []);
+    await expectSavedSelection(skills, { mode: "all" });
+
+    // Switching it back on writes the same selection into the second home, and
+    // because the selection did not shrink, nothing needs confirming.
+    await openSkillSelection(page);
+    await toggleInstallTarget(page, "claude");
+    await saveSkillSelection(page);
+
+    await expectSavedTargets(skills, ["agents", "claude"]);
+    await expectInstalledIn(skills, "claude", skills.available);
+    await expectInstalledSkills(skills, skills.available);
+    await expectSavedSelection(skills, { mode: "all" });
+  });
+
+  test("refuses to save with no install location selected", async ({ page, skills }) => {
+    await skills.install({ mode: "all" });
+    await openAgentSkillsSettings(page, skills);
+    await openSkillSelection(page);
+
+    await toggleInstallTarget(page, "agents");
+    await toggleInstallTarget(page, "claude");
+
+    await expect(page.getByTestId("skill-selection-save")).toBeDisabled();
+
+    // Turning one back on restores the action and keeps the previous targets.
+    await toggleInstallTarget(page, "claude");
+    await expect(page.getByTestId("skill-selection-save")).toBeEnabled();
+    await cancelSkillSelection(page);
+    await expectSavedTargets(skills, ["agents", "claude"]);
   });
 
   test("dismisses and then accepts removal confirmation", async ({ page, skills }) => {
@@ -156,8 +208,18 @@ test.describe("Host agent skills", () => {
     const firstSelection = { mode: "custom" as const, skills: [skills.available[0]!] };
     const secondSelection = { mode: "custom" as const, skills: [skills.available[1]!] };
 
-    const first = skills.client.saveAgentSkillsSelection(firstSelection, skills.available);
-    const second = skills.client.saveAgentSkillsSelection(secondSelection, skills.available);
+    // Both saves start from a different selection, so the second one removes the
+    // first one's skill. Pre-confirming keeps this test about ordering.
+    const first = skills.client.saveAgentSkillsSelection(
+      firstSelection,
+      ["agents", "claude"],
+      skills.available,
+    );
+    const second = skills.client.saveAgentSkillsSelection(
+      secondSelection,
+      ["agents", "claude"],
+      skills.available,
+    );
     await expect(Promise.all([first, second])).resolves.toMatchObject([
       { confirmationRequired: null, selection: firstSelection },
       { confirmationRequired: null, selection: secondSelection },
@@ -187,8 +249,9 @@ test.describe("Host agent skills", () => {
   });
 });
 
-function allSkillsCard(page: Parameters<typeof openSkillSelection>[0]) {
-  return page.getByTestId("skill-selection-all-card");
+/** The block that sits immediately above the "Bundled skills" label. */
+function installTargetsCard(page: Parameters<typeof openSkillSelection>[0]) {
+  return page.getByTestId("skill-selection-targets-card");
 }
 
 function skillListCard(page: Parameters<typeof openSkillSelection>[0]) {
@@ -211,7 +274,7 @@ test.describe("Agent skills sheet inset", () => {
       await waitForSettledPosition(page.getByTestId("skill-selection-sheet"));
 
       expect({
-        aboveLabel: await readVerticalGap(allSkillsCard(page), bundledSkillsLabel(page)),
+        aboveLabel: await readVerticalGap(installTargetsCard(page), bundledSkillsLabel(page)),
         belowLabel: await readVerticalGap(bundledSkillsLabel(page), skillListCard(page)),
       }).toEqual({ aboveLabel: 16, belowLabel: 12 });
     });
@@ -225,7 +288,7 @@ test.describe("Agent skills sheet inset", () => {
       await openSkillSelection(page);
 
       expect({
-        aboveLabel: await readVerticalGap(allSkillsCard(page), bundledSkillsLabel(page)),
+        aboveLabel: await readVerticalGap(installTargetsCard(page), bundledSkillsLabel(page)),
         belowLabel: await readVerticalGap(bundledSkillsLabel(page), skillListCard(page)),
       }).toEqual({ aboveLabel: 16, belowLabel: 12 });
     });

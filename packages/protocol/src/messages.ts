@@ -223,6 +223,17 @@ export const AgentSkillSelectionSchema = z.discriminatedUnion("mode", [
 ]);
 export type AgentSkillSelection = z.infer<typeof AgentSkillSelectionSchema>;
 
+/**
+ * Agent homes a selection may target. `agents` is `~/.agents/skills`, which Codex
+ * and Pi also read as a skill root; `claude` is `~/.claude/skills`. Both are
+ * always advertised by a daemon that supports picking them.
+ */
+export const AGENT_SKILL_TARGET_IDS = ["agents", "claude"] as const;
+export const AgentSkillTargetIdSchema = z.enum(AGENT_SKILL_TARGET_IDS);
+export type AgentSkillTargetId = z.infer<typeof AgentSkillTargetIdSchema>;
+export const AgentSkillTargetsSchema = z.array(AgentSkillTargetIdSchema);
+export type AgentSkillTargets = z.infer<typeof AgentSkillTargetsSchema>;
+
 export const TERMINAL_AGENT_HOOK_PROVIDER_IDS = ["claude", "codex", "opencode", "pi"] as const;
 // COMPAT(terminalAgentHookProviders): added in v0.7.1, remove after 2027-09-01; providers covered by the former global switch.
 export const TERMINAL_AGENT_HOOK_LEGACY_GLOBAL_PROVIDER_IDS = [
@@ -279,7 +290,15 @@ export const MutableDaemonConfigSchema = z
     // pre-config behavior.
     terminalDefaultShell: z.string().min(1).nullish(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
-    skills: z.object({ selection: AgentSkillSelectionSchema.optional() }).strict().optional(),
+    // COMPAT(skillInstallTargets): added in v0.20.3, remove after 2027-10-19.
+    skills: z
+      .object({
+        selection: AgentSkillSelectionSchema.optional(),
+        // Absent means both targets, which is what every older daemon did.
+        targets: AgentSkillTargetsSchema.optional(),
+      })
+      .strict()
+      .optional(),
     pluginsEnabled: z.boolean().optional(),
     plugins: z.record(PluginIdSchema, PluginSourceSchema).optional(),
     // COMPAT(daemonNetworkConfig): added in v0.14.3; old daemons omit both fields.
@@ -1755,6 +1774,17 @@ export const AgentSkillsStatusSchema = z.object({
   // field omits it, which reads as "unknown" — only an explicit `false` opens
   // the picker before the first install.
   selectionSaved: z.boolean().optional(),
+  // Every agent home this daemon can install into, so the picker's target list
+  // is the daemon's answer rather than the app's assumption. Absence is the
+  // compat signal: a daemon that predates target selection omits it, and the
+  // picker hides its location rows.
+  // COMPAT(skillInstallTargets): added in v0.20.3, remove after 2027-10-19.
+  targets: z
+    .object({
+      available: AgentSkillTargetsSchema,
+      selected: AgentSkillTargetsSchema,
+    })
+    .optional(),
 });
 export type AgentSkillsStatus = z.infer<typeof AgentSkillsStatusSchema>;
 
@@ -1784,6 +1814,10 @@ export const AgentSkillsSaveSelectionRequestSchema = z
     type: z.literal("agent.skills.save_selection.request"),
     requestId: z.string(),
     selection: AgentSkillSelectionSchema,
+    // Absent keeps the daemon's current targets, so an old app that never knew
+    // about targets cannot silently narrow an install.
+    // COMPAT(skillInstallTargets): added in v0.20.3, remove after 2027-10-19.
+    targets: AgentSkillTargetsSchema.optional(),
     confirmedRemovals: z.array(z.string()).optional(),
   })
   .strict();
@@ -3741,6 +3775,8 @@ export const ServerInfoStatusPayloadSchema = z
         pluginTimelineItems: z.boolean().optional(),
         // COMPAT(skillManagement): added in v0.4.0, remove gate after 2027-08-16.
         skillManagement: z.boolean().optional(),
+        // COMPAT(skillInstallTargets): added in v0.20.3, remove gate after 2027-10-19.
+        skillInstallTargets: z.boolean().optional(),
         // COMPAT(projectSetupSkill): added in v0.7.1, remove gate after 2027-09-15.
         projectSetupSkill: z.boolean().optional(),
         // COMPAT(terminalAgentHookProviders): added in v0.7.1, remove gate after 2027-09-01.

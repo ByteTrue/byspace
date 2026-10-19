@@ -2258,6 +2258,13 @@ export const es: TranslationResources = {
           "Mantén instaladas todas las habilidades incluidas, también las que se agreguen después.",
         chooseList: "Habilidades incluidas",
         chooseEmpty: "Esta versión no incluye habilidades.",
+        targetsTitle: "Ubicaciones de instalación",
+        targetsEmpty: "Elige al menos una ubicación de instalación.",
+        targets: {
+          agents:
+            "Lo usan Codex, Pi y otros agentes que leen la carpeta de habilidades compartida.",
+          claude: "Lo usa Claude Code.",
+        },
         removeTitle: "¿Eliminar las habilidades deseleccionadas?",
         removeMessage:
           "{{skills}} se eliminarán de ~/.agents y ~/.claude. También se elimina todo lo que hayas añadido dentro de esas carpetas de habilidades.",

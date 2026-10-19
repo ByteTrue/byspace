@@ -17,6 +17,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import type { AgentSkillTargetId } from "@bytetrue/protocol/messages";
+
 import type { SkillSelection, SkillTargets } from "./operations";
 import type { SkillSelectionStore } from "./selection-store";
 import { createSkillsController, type SkillsController } from "./controller";
@@ -30,6 +32,7 @@ interface Harness {
 }
 
 const BUNDLED_SKILLS = ["byspace", "byspace-advisor", "byspace-loop"];
+const ALL_HOMES = { available: ["agents", "claude"], selected: ["agents", "claude"] } as const;
 
 async function makeHarness(selectionStore?: SkillSelectionStore): Promise<Harness> {
   const root = await mkdtemp(path.join(os.tmpdir(), "byspace-skills-controller-"));
@@ -44,12 +47,15 @@ async function makeHarness(selectionStore?: SkillSelectionStore): Promise<Harnes
     await writeFile(path.join(targets.sourceDir, name, "SKILL.md"), `${name}-v1`);
   }
   let selection: SkillSelection = { mode: "all" };
+  let targetsSelection: AgentSkillTargetId[] = ["agents", "claude"];
   const store =
     selectionStore ??
     ({
       get: async () => selection,
-      set: async (next: unknown) => {
+      getTargets: async () => targetsSelection,
+      set: async (next: unknown, nextTargets?: unknown) => {
         selection = next as SkillSelection;
+        if (nextTargets !== undefined) targetsSelection = nextTargets as AgentSkillTargetId[];
         return selection;
       },
       isSet: async () => true,
@@ -73,6 +79,7 @@ async function makeHarness(selectionStore?: SkillSelectionStore): Promise<Harnes
 function createUnwritableSelectionStore(initial: SkillSelection): SkillSelectionStore {
   return {
     get: async () => initial,
+    getTargets: async () => ["agents", "claude"],
     isSet: async () => true,
     set: async () => {
       throw new Error("selection store is read-only");
@@ -96,6 +103,7 @@ function createGatedUnwritableSelectionStore(initial: SkillSelection): {
   return {
     store: {
       get: async () => initial,
+      getTargets: async () => ["agents", "claude"],
       isSet: async () => true,
       set: async () => {
         markStarted();
@@ -125,6 +133,7 @@ function createGatedSelectionStore(initial: SkillSelection): {
   return {
     store: {
       get: async () => current,
+      getTargets: async () => ["agents", "claude"],
       isSet: async () => true,
       set: async (selection) => {
         markStarted();
@@ -228,6 +237,7 @@ describe("skills controller", () => {
     let explicit = false;
     const store: SkillSelectionStore = {
       get: async () => current,
+      getTargets: async () => ["agents", "claude"],
       set: async (selection) => {
         current = selection as SkillSelection;
         explicit = true;
@@ -277,6 +287,7 @@ describe("skills controller", () => {
       installed: [],
       selection: { mode: "all" },
       selectionSaved: true,
+      targets: ALL_HOMES,
     });
   });
 
@@ -284,6 +295,7 @@ describe("skills controller", () => {
     let saved = false;
     const store: SkillSelectionStore = {
       get: async () => ({ mode: "all" }),
+      getTargets: async () => ["agents", "claude"],
       set: async () => {
         saved = true;
         return { mode: "all" };
@@ -308,6 +320,7 @@ describe("skills controller", () => {
       installed: BUNDLED_SKILLS,
       selection: { mode: "all" },
       selectionSaved: true,
+      targets: ALL_HOMES,
     });
     expect(await isInstalled(harness.targets, "byspace-advisor")).toBe(true);
   });
@@ -337,6 +350,7 @@ describe("skills controller", () => {
       installed: ["byspace", "byspace-loop"],
       selection: { mode: "custom", skills: ["byspace", "byspace-loop"] },
       selectionSaved: true,
+      targets: ALL_HOMES,
       confirmationRequired: null,
     });
     expect(await isInstalled(harness.targets, "byspace")).toBe(true);
@@ -371,6 +385,7 @@ describe("skills controller", () => {
       installed: [],
       selection: { mode: "custom", skills: ["byspace"] },
       selectionSaved: true,
+      targets: ALL_HOMES,
     });
     expect(afterReinstall).toEqual({
       state: "up-to-date",
@@ -379,6 +394,7 @@ describe("skills controller", () => {
       installed: ["byspace"],
       selection: { mode: "custom", skills: ["byspace"] },
       selectionSaved: true,
+      targets: ALL_HOMES,
     });
     expect(await isInstalled(harness.targets, "byspace")).toBe(true);
     expect(await isInstalled(harness.targets, "byspace-loop")).toBe(false);
@@ -400,6 +416,7 @@ describe("skills controller", () => {
       installed: [],
       selection: { mode: "custom", skills: [] },
       selectionSaved: true,
+      targets: ALL_HOMES,
       confirmationRequired: null,
     });
     expect(await isInstalled(harness.targets, "byspace")).toBe(false);
@@ -417,6 +434,7 @@ describe("skills controller", () => {
       installed: BUNDLED_SKILLS,
       selection: { mode: "all" },
       selectionSaved: true,
+      targets: ALL_HOMES,
       confirmationRequired: null,
     });
     expect(await isInstalled(harness.targets, "byspace-advisor")).toBe(true);
@@ -436,6 +454,7 @@ describe("skills controller", () => {
       installed: ["byspace"],
       selection: { mode: "custom", skills: ["byspace"] },
       selectionSaved: true,
+      targets: ALL_HOMES,
     });
   });
 
@@ -454,6 +473,7 @@ describe("skills controller", () => {
       installed: [],
       selection: { mode: "all" },
       selectionSaved: true,
+      targets: ALL_HOMES,
     });
   });
 
@@ -482,6 +502,7 @@ describe("skills controller", () => {
       installed: ["byspace", "byspace-loop"],
       selection: { mode: "custom", skills: ["byspace", "byspace-loop"] },
       selectionSaved: true,
+      targets: ALL_HOMES,
     });
     expect(await installedEverywhere(readOnly.targets)).toEqual([
       ["byspace", "byspace-loop"],
@@ -578,7 +599,7 @@ describe("skills controller", () => {
     await harness.controller.save(previous);
 
     const transaction = await beginSkillsTransaction(harness.targets, previous, next, [
-      { kind: "delete", name: "byspace-loop" },
+      { kind: "delete", name: "byspace-loop", targets: ["agents", "claude"] },
     ]);
 
     expect(await isInstalled(harness.targets, "byspace-loop")).toBe(false);
@@ -607,7 +628,7 @@ describe("skills controller", () => {
       const before = await Promise.all(livePaths.map(lstat));
 
       const transaction = await beginSkillsTransaction(harness.targets, previous, next, [
-        { kind: "delete", name: "byspace-loop" },
+        { kind: "delete", name: "byspace-loop", targets: ["agents", "claude"] },
       ]);
       await transaction.rollback();
 
@@ -626,7 +647,7 @@ describe("skills controller", () => {
     await harness.controller.save(previous);
 
     const transaction = await beginSkillsTransaction(harness.targets, previous, next, [
-      { kind: "delete", name: "byspace-loop" },
+      { kind: "delete", name: "byspace-loop", targets: ["agents", "claude"] },
     ]);
     const claudeStage = (await readdir(harness.targets.claudeDir)).find((entry) =>
       entry.startsWith(".byspace-skills-transaction-"),
@@ -657,7 +678,7 @@ describe("skills controller", () => {
     await writeUserFile(harness.targets, "byspace-loop", "notes/mine.md", "keep this");
 
     const transaction = await beginSkillsTransaction(harness.targets, previous, next, [
-      { kind: "delete", name: "byspace-loop" },
+      { kind: "delete", name: "byspace-loop", targets: ["agents", "claude"] },
     ]);
     const live = path.join(harness.targets.claudeDir, "byspace-loop");
     await writeFile(live, "external replacement");
@@ -690,7 +711,7 @@ describe("skills controller", () => {
     await writeUserFile(harness.targets, "byspace-loop", "notes/mine.md", "staged notes");
 
     const transaction = await beginSkillsTransaction(harness.targets, previous, next, [
-      { kind: "delete", name: "byspace-loop" },
+      { kind: "delete", name: "byspace-loop", targets: ["agents", "claude"] },
     ]);
     const live = path.join(harness.targets.claudeDir, "byspace-loop");
     await mkdir(path.join(live, "notes"), { recursive: true });
@@ -725,8 +746,8 @@ describe("skills controller", () => {
     await writeUserFile(harness.targets, "byspace", "notes/mine.md", "keep this");
 
     const transaction = await beginSkillsTransaction(harness.targets, previous, next, [
-      { kind: "update", name: "byspace" },
-      { kind: "add", name: "byspace-advisor" },
+      { kind: "update", name: "byspace", targets: ["agents", "claude"] },
+      { kind: "add", name: "byspace-advisor", targets: ["agents", "claude"] },
     ]);
     const replacedUpdate = path.join(harness.targets.agentsDir, "byspace");
     await rm(replacedUpdate, { recursive: true, force: true });
@@ -764,7 +785,7 @@ describe("skills controller", () => {
     await writeUserFile(harness.targets, "byspace", "notes/mine.md", "captured notes");
 
     await beginSkillsTransaction(harness.targets, previous, next, [
-      { kind: "update", name: "byspace" },
+      { kind: "update", name: "byspace", targets: ["agents", "claude"] },
     ]);
     const transactionParent = path.dirname(harness.targets.agentsDir);
     const transactionName = (await readdir(transactionParent)).find((entry) =>
@@ -807,7 +828,7 @@ describe("skills controller", () => {
     await writeFile(live, "captured file");
 
     await beginSkillsTransaction(harness.targets, previous, next, [
-      { kind: "update", name: "byspace" },
+      { kind: "update", name: "byspace", targets: ["agents", "claude"] },
     ]);
     await rm(live, { force: true });
     await mkdir(live, { recursive: true });
@@ -872,7 +893,7 @@ describe("skills controller", () => {
       await symlink(path.relative(harness.targets.claudeDir, shared), live, "dir");
 
       const transaction = await beginSkillsTransaction(harness.targets, previous, next, [
-        { kind: "delete", name: "byspace-loop" },
+        { kind: "delete", name: "byspace-loop", targets: ["agents", "claude"] },
       ]);
       await transaction.rollback();
 
@@ -1056,7 +1077,7 @@ describe("skills controller", () => {
     await harness.controller.save(previous);
     await writeUserFile(harness.targets, "byspace-loop", "notes/mine.md", "hand written");
     await beginSkillsTransaction(harness.targets, previous, next, [
-      { kind: "delete", name: "byspace-loop" },
+      { kind: "delete", name: "byspace-loop", targets: ["agents", "claude"] },
     ]);
     for (const root of [harness.targets.agentsDir, harness.targets.claudeDir]) {
       await rm(path.join(root, "byspace-loop"), { recursive: true, force: true });
@@ -1082,7 +1103,7 @@ describe("skills controller", () => {
     };
     await harness.controller.save(previous);
     await beginSkillsTransaction(harness.targets, previous, next, [
-      { kind: "delete", name: "byspace-loop" },
+      { kind: "delete", name: "byspace-loop", targets: ["agents", "claude"] },
     ]);
     for (const root of [harness.targets.agentsDir, harness.targets.claudeDir]) {
       await rm(path.join(root, "byspace-loop"), { recursive: true, force: true });
@@ -1213,6 +1234,7 @@ describe("skills controller", () => {
       installed: ["byspace"],
       selection: { mode: "custom", skills: ["byspace"] },
       selectionSaved: true,
+      targets: ALL_HOMES,
     });
   });
 
@@ -1227,6 +1249,7 @@ describe("skills controller", () => {
       installed: ["byspace"],
       selection: { mode: "custom", skills: ["byspace"] },
       selectionSaved: true,
+      targets: ALL_HOMES,
     });
   });
 

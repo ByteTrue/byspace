@@ -2234,6 +2234,12 @@ export const ja: TranslationResources = {
           "後から追加されるものも含め、バンドルされたスキルをすべてインストールしたままにします。",
         chooseList: "バンドルされたスキル",
         chooseEmpty: "このビルドにはスキルが含まれていません。",
+        targetsTitle: "インストール先",
+        targetsEmpty: "インストール先を 1 つ以上選択してください。",
+        targets: {
+          agents: "Codex、Pi、その他共有スキルフォルダーを読むエージェントが使用します。",
+          claude: "Claude Code が使用します。",
+        },
         removeTitle: "選択を外したスキルを削除しますか？",
         removeMessage:
           "{{skills}} を ~/.agents、~/.claude から削除します。それらのスキルフォルダー内に追加したものもすべて削除されます。",

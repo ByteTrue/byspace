@@ -9,6 +9,7 @@ import type { TFunction } from "i18next";
 import { Button } from "@/components/ui/button";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { useIsCompactFormFactor } from "@/constants/layout";
+import { useHostFeature } from "@/runtime/host-features";
 import { settingsStyles } from "@/styles/settings";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
@@ -54,6 +55,9 @@ function hasSelectedSkill(status: AgentSkillsStatus | null): boolean {
 export function AgentSkillsSection({ serverId }: { serverId: string }) {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
+  // Locations are a per-host capability: an older host keeps writing every home
+  // and the picker shows no location rows rather than a switch that does nothing.
+  const supportsTargets = useHostFeature(serverId, "skillInstallTargets");
   const skills = useAgentSkills(serverId);
   const refreshSkills = skills.refresh;
   const skillsConnected = skills.connected;
@@ -203,6 +207,7 @@ export function AgentSkillsSection({ serverId }: { serverId: string }) {
           }
           available={skills.status.available}
           selection={skills.status.selection}
+          targets={supportsTargets ? (skills.status.targets ?? null) : null}
           isSaving={skills.isWorking}
           onSave={skills.saveSelection}
           onClose={handleClose}

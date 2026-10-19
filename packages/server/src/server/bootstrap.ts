@@ -200,6 +200,7 @@ import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
 import type {
   AgentProfile,
   AgentSkillSelection,
+  AgentSkillTargets,
   FirstAgentContext,
   PluginSource,
   TerminalAgentHookSettings,
@@ -450,6 +451,7 @@ export interface BySpaceDaemonConfig {
   terminalDefaultShell?: string;
   agentProfiles?: AgentProfile[];
   skillSelection?: AgentSkillSelection;
+  skillTargets?: AgentSkillTargets;
   pluginsEnabled?: boolean;
   plugins?: Record<string, PluginSource>;
   staticDir: string;
@@ -631,7 +633,10 @@ function createInitialMutableDaemonConfig(
     appendSystemPrompt: config.appendSystemPrompt ?? "",
     pluginsEnabled: config.pluginsEnabled ?? false,
     plugins: config.plugins ?? {},
-    skills: { selection: config.skillSelection },
+    skills: {
+      selection: config.skillSelection,
+      targets: config.skillTargets,
+    },
     network: createNetworkView(config),
     auth: { passwordSet: config.auth?.password !== undefined },
     tunnel: createTunnelView(config),

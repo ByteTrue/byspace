@@ -20,6 +20,19 @@ function only(...skills: string[]): SkillSelection {
   return { mode: "custom", skills };
 }
 
+const BOTH_TARGETS = {
+  available: ["agents", "claude"],
+  selected: ["agents", "claude"],
+} as const;
+
+function op(
+  kind: "add" | "update" | "delete",
+  name: string,
+  targets: readonly ("agents" | "claude")[] = ["agents", "claude"],
+) {
+  return { kind, name, targets: [...targets] };
+}
+
 interface Sandbox {
   root: string;
   targets: SkillTargets;
@@ -121,10 +134,7 @@ describe("getSkillsStatus", () => {
     const status = await getSkillsStatus(sandbox.targets, ALL_SKILLS);
 
     expect(status.state).toBe("not-installed");
-    expect(status.ops).toEqual([
-      { kind: "add", name: "byspace" },
-      { kind: "add", name: "byspace-loop" },
-    ]);
+    expect(status.ops).toEqual([op("add", "byspace"), op("add", "byspace-loop")]);
   });
 
   it("reports every bundled skill as available", async () => {
@@ -147,10 +157,8 @@ describe("getSkillsStatus", () => {
     // `add` means "missing from at least one target", so it cannot answer
     // "is there a directory here to delete". `installed` answers that.
     expect(status.installed).toEqual(["byspace"]);
-    expect(status.ops).toEqual([
-      { kind: "add", name: "byspace" },
-      { kind: "add", name: "byspace-loop" },
-    ]);
+    // The claude copy already matches, so only the missing agents copy is planned.
+    expect(status.ops).toEqual([op("add", "byspace", ["agents"]), op("add", "byspace-loop")]);
   });
 
   it("reports legacy skill directories left on disk as installed", async () => {
@@ -171,10 +179,7 @@ describe("getSkillsStatus", () => {
     const status = await getSkillsStatus(sandbox.targets, ALL_SKILLS);
 
     expect(status.state).toBe("not-installed");
-    expect(status.ops).toEqual([
-      { kind: "add", name: "byspace" },
-      { kind: "add", name: "byspace-loop" },
-    ]);
+    expect(status.ops).toEqual([op("add", "byspace"), op("add", "byspace-loop")]);
   });
 
   it("returns up-to-date when every bundled skill matches on disk", async () => {
@@ -188,6 +193,7 @@ describe("getSkillsStatus", () => {
       ops: [],
       available: ["byspace", "byspace-loop"],
       installed: ["byspace", "byspace-loop"],
+      targets: BOTH_TARGETS,
     });
   });
 
@@ -215,6 +221,7 @@ describe("getSkillsStatus", () => {
       ops: [],
       available: ["byspace", "byspace-loop"],
       installed: ["byspace", "byspace-loop"],
+      targets: BOTH_TARGETS,
     });
   });
 
@@ -227,7 +234,7 @@ describe("getSkillsStatus", () => {
     const status = await getSkillsStatus(sandbox.targets, ALL_SKILLS);
 
     expect(status.state).toBe("drift");
-    expect(status.ops).toEqual([{ kind: "update", name: "byspace" }]);
+    expect(status.ops).toEqual([op("update", "byspace", ["agents"])]);
   });
 
   it("returns drift when a secondary agent target is stale", async () => {
@@ -240,7 +247,7 @@ describe("getSkillsStatus", () => {
     const status = await getSkillsStatus(sandbox.targets, ALL_SKILLS);
 
     expect(status.state).toBe("drift");
-    expect(status.ops).toEqual([{ kind: "update", name: "byspace" }]);
+    expect(status.ops).toEqual([op("update", "byspace", ["claude"])]);
   });
 
   it("returns drift with add ops for the bundled skills missing from disk", async () => {
@@ -250,7 +257,7 @@ describe("getSkillsStatus", () => {
     const status = await getSkillsStatus(sandbox.targets, ALL_SKILLS);
 
     expect(status.state).toBe("drift");
-    expect(status.ops).toEqual([{ kind: "add", name: "byspace-loop" }]);
+    expect(status.ops).toEqual([op("add", "byspace-loop")]);
   });
 
   it("returns drift with a delete op for a legacy skill name still on disk", async () => {
@@ -262,7 +269,7 @@ describe("getSkillsStatus", () => {
     const status = await getSkillsStatus(sandbox.targets, ALL_SKILLS);
 
     expect(status.state).toBe("drift");
-    expect(status.ops).toEqual([{ kind: "delete", name: "byspace-chat" }]);
+    expect(status.ops).toEqual([op("delete", "byspace-chat", ["agents"])]);
   });
 
   it("emits add + update + delete ops sorted by name when state is mixed", async () => {
@@ -275,10 +282,67 @@ describe("getSkillsStatus", () => {
 
     expect(status.state).toBe("drift");
     expect(status.ops).toEqual([
-      { kind: "update", name: "byspace" },
-      { kind: "delete", name: "byspace-chat" },
-      { kind: "add", name: "byspace-loop" },
+      op("update", "byspace", ["agents"]),
+      op("delete", "byspace-chat", ["agents"]),
+      op("add", "byspace-loop"),
     ]);
+  });
+});
+
+describe("install targets", () => {
+  let sandbox: Sandbox;
+
+  beforeEach(async () => {
+    sandbox = await makeSandbox();
+    await writeCurrentBundle(sandbox.targets.sourceDir);
+  });
+
+  afterEach(async () => {
+    await fs.rm(sandbox.root, { recursive: true, force: true });
+  });
+
+  it("installs only into the selected homes", async () => {
+    const status = await installSkills(sandbox.targets, ALL_SKILLS, ["claude"]);
+
+    expect(status).toEqual({
+      state: "up-to-date",
+      ops: [],
+      available: ["byspace", "byspace-loop"],
+      installed: ["byspace", "byspace-loop"],
+      targets: { available: ["agents", "claude"], selected: ["claude"] },
+    });
+    expect(await installedIn(sandbox.targets, "byspace")).toEqual([false, true]);
+    expect(await installedIn(sandbox.targets, "byspace-loop")).toEqual([false, true]);
+  });
+
+  it("reports a copy in a home that is no longer selected as a delete, and keeps the selected copy", async () => {
+    await installSkills(sandbox.targets, ALL_SKILLS);
+
+    const before = await getSkillsStatus(sandbox.targets, ALL_SKILLS, ["agents"]);
+    expect(before.state).toBe("drift");
+    expect(before.ops).toEqual([
+      op("delete", "byspace", ["claude"]),
+      op("delete", "byspace-loop", ["claude"]),
+    ]);
+
+    const after = await installSkills(sandbox.targets, ALL_SKILLS, ["agents"]);
+
+    expect(after.state).toBe("up-to-date");
+    expect(await installedIn(sandbox.targets, "byspace")).toEqual([true, false]);
+    expect(await installedIn(sandbox.targets, "byspace-loop")).toEqual([true, false]);
+  });
+
+  it("keeps an updated skill in its selected home while removing it from the deselected one", async () => {
+    await installSkills(sandbox.targets, ALL_SKILLS);
+    await writeOnDiskSkill(sandbox.targets.claudeDir, "byspace", { "SKILL.md": "stale" });
+
+    const status = await installSkills(sandbox.targets, ALL_SKILLS, ["agents"]);
+
+    expect(status.state).toBe("up-to-date");
+    expect(await installedIn(sandbox.targets, "byspace")).toEqual([true, false]);
+    expect(
+      await fs.readFile(path.join(sandbox.targets.agentsDir, "byspace", "SKILL.md"), "utf-8"),
+    ).toBe("byspace-v1");
   });
 });
 
@@ -305,6 +369,7 @@ describe("custom skill selection", () => {
       ops: [],
       available: ["byspace", "byspace-advisor", "byspace-loop"],
       installed: ["byspace", "byspace-loop"],
+      targets: BOTH_TARGETS,
     });
     expect(await installedIn(sandbox.targets, "byspace")).toEqual([true, true]);
     expect(await installedIn(sandbox.targets, "byspace-loop")).toEqual([true, true]);
@@ -321,6 +386,7 @@ describe("custom skill selection", () => {
       ops: [],
       available: ["byspace", "byspace-advisor", "byspace-loop"],
       installed: ["byspace"],
+      targets: BOTH_TARGETS,
     });
   });
 
@@ -341,7 +407,7 @@ describe("custom skill selection", () => {
     const status = await getSkillsStatus(sandbox.targets, only("byspace", "byspace-advisor"));
 
     expect(status.state).toBe("drift");
-    expect(status.ops).toEqual([{ kind: "delete", name: "byspace-loop" }]);
+    expect(status.ops).toEqual([op("delete", "byspace-loop")]);
   });
 
   it("leaves unrelated user skills untouched", async () => {
@@ -364,6 +430,7 @@ describe("custom skill selection", () => {
       ops: [],
       available: ["byspace", "byspace-advisor", "byspace-loop"],
       installed: [],
+      targets: BOTH_TARGETS,
     });
     expect(await installedIn(sandbox.targets, "byspace")).toEqual([false, false]);
     expect(await installedIn(sandbox.targets, "byspace-loop")).toEqual([false, false]);
@@ -377,6 +444,7 @@ describe("custom skill selection", () => {
       ops: [],
       available: ["byspace", "byspace-advisor", "byspace-loop"],
       installed: ["byspace"],
+      targets: BOTH_TARGETS,
     });
     expect(await installedIn(sandbox.targets, "not-a-skill")).toEqual([false, false]);
   });
@@ -414,6 +482,7 @@ describe("installSkills / updateSkills", () => {
       ops: [],
       available: ["byspace", "byspace-loop"],
       installed: ["byspace", "byspace-loop"],
+      targets: BOTH_TARGETS,
     });
     for (const name of ["byspace", "byspace-loop"]) {
       expect(
@@ -438,9 +507,10 @@ describe("installSkills / updateSkills", () => {
 
     expect(status).toEqual({
       state: "drift",
-      ops: [{ kind: "delete", name: "byspace-chat" }],
+      ops: [op("delete", "byspace-chat")],
       available: ["byspace", "byspace-loop"],
       installed: ["byspace", "byspace-chat", "byspace-loop"],
+      targets: BOTH_TARGETS,
     });
     expect(
       await fs.readFile(path.join(sandbox.targets.agentsDir, "byspace", "SKILL.md"), "utf-8"),
@@ -478,6 +548,7 @@ describe("installSkills / updateSkills", () => {
       ops: [],
       available: ["byspace", "byspace-loop"],
       installed: ["byspace", "byspace-loop"],
+      targets: BOTH_TARGETS,
     });
     expect(
       await fs.readFile(
@@ -542,12 +613,10 @@ describe("installSkills / updateSkills", () => {
 
     expect(status).toEqual({
       state: "not-installed",
-      ops: [
-        { kind: "add", name: "byspace" },
-        { kind: "add", name: "byspace-loop" },
-      ],
+      ops: [op("add", "byspace"), op("add", "byspace-loop")],
       available: ["byspace", "byspace-loop"],
       installed: [],
+      targets: BOTH_TARGETS,
     });
     expect(await installedIn(sandbox.targets, "byspace")).toEqual([false, false]);
   });

@@ -2246,6 +2246,12 @@ export const ptBR: TranslationResources = {
           "Mantenha instaladas todas as skills incluídas, inclusive as adicionadas depois.",
         chooseList: "Skills incluídas",
         chooseEmpty: "Esta versão não inclui skills.",
+        targetsTitle: "Locais de instalação",
+        targetsEmpty: "Escolha pelo menos um local de instalação.",
+        targets: {
+          agents: "Usado por Codex, Pi e outros agentes que leem a pasta de skills compartilhada.",
+          claude: "Usado pelo Claude Code.",
+        },
         removeTitle: "Remover as skills desmarcadas?",
         removeMessage:
           "{{skills}} serão excluídas de ~/.agents e ~/.claude. Tudo o que você adicionou dentro dessas pastas de skills também é excluído.",

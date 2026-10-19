@@ -2221,6 +2221,12 @@ export const ko: TranslationResources = {
         chooseAllHint: "나중에 추가되는 항목을 포함하여 모든 번들 스킬을 설치된 상태로 유지합니다.",
         chooseList: "번들 스킬",
         chooseEmpty: "이 빌드에는 번들 스킬이 없습니다.",
+        targetsTitle: "설치 위치",
+        targetsEmpty: "설치할 위치를 하나 이상 선택하세요.",
+        targets: {
+          agents: "Codex, Pi 및 공유 스킬 폴더를 읽는 다른 에이전트가 사용합니다.",
+          claude: "Claude Code가 사용합니다.",
+        },
         removeTitle: "선택 해제한 스킬을 제거할까요?",
         removeMessage:
           "{{skills}}는 ~/.agents 및 ~/.claude에서 삭제됩니다. 해당 스킬 폴더 안에 추가한 모든 항목도 삭제됩니다.",

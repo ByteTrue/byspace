@@ -5,6 +5,7 @@ import type {
   AgentSkillSelection,
   AgentSkillsSaveResult,
   AgentSkillsStatus,
+  AgentSkillTargets,
 } from "@bytetrue/protocol/messages";
 import { useToast } from "@/contexts/toast-context";
 import { useFetchQuery } from "@/data/query";
@@ -66,11 +67,16 @@ export function useAgentSkills(serverId: string) {
   const save = useMutation<
     AgentSkillsSaveResult,
     Error,
-    { selection: AgentSkillSelection; confirmedRemovals: readonly string[] }
+    {
+      selection: AgentSkillSelection;
+      /** Absent when the host predates install targets. */
+      targets: AgentSkillTargets | undefined;
+      confirmedRemovals: readonly string[];
+    }
   >({
-    mutationFn: async ({ selection, confirmedRemovals }) => {
+    mutationFn: async ({ selection, targets, confirmedRemovals }) => {
       if (!client) throw new Error(t("settings.host.skills.unavailable"));
-      return client.saveAgentSkillsSelection(selection, confirmedRemovals);
+      return client.saveAgentSkillsSelection(selection, targets, confirmedRemovals);
     },
     onSuccess: setStatus,
     onError: (error) => report(t("settings.host.skills.saveSelectionFailed"), error),
@@ -90,8 +96,11 @@ export function useAgentSkills(serverId: string) {
     await uninstallAsync().catch(() => undefined);
   }, [uninstallAsync]);
   const saveSelection = useCallback(
-    (selection: AgentSkillSelection, confirmedRemovals: readonly string[] = []) =>
-      saveAsync({ selection, confirmedRemovals }),
+    (
+      selection: AgentSkillSelection,
+      targets: AgentSkillTargets | undefined,
+      confirmedRemovals: readonly string[] = [],
+    ) => saveAsync({ selection, targets, confirmedRemovals }),
     [saveAsync],
   );
   return {
