@@ -677,8 +677,18 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		})
 
 	case "agent.timeline.set_subscription.request":
+		var req struct {
+			RequestID string   `json:"requestId"`
+			AgentIDs  []string `json:"agentIds"`
+		}
+		_ = json.Unmarshal(raw, &req)
+		ids := req.AgentIDs
+		if ids == nil {
+			ids = []string{}
+		}
 		_ = sendSessionMsg(ctx, sink, "agent.timeline.set_subscription.response", map[string]any{
 			"requestId": base.RequestID,
+			"agentIds":  ids,
 		})
 
 	case "daemon.get_status.request":
@@ -1268,15 +1278,34 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 	entries := make([]map[string]any, 0, len(records))
 	for _, rec := range records {
 		agentPayload := s.buildAgentSnapshotPayload(rec)
-		var projectPlacement any
+		projKey := rec.Cwd
+		projName := filepath.Base(rec.Cwd)
+		wsName := projName
+		var branch any
 		if ws, ok := wsByID[rec.WorkspaceID]; ok {
+			wsName = ws.DisplayName
+			if ws.Branch != nil {
+				branch = *ws.Branch
+			}
 			if prj, ok := prjByID[ws.ProjectID]; ok {
-				projectPlacement = buildWorkspaceDescriptor(ws, prj)
+				projKey = prj.RootPath
+				projName = prj.DisplayName
 			}
 		}
 		entries = append(entries, map[string]any{
-			"agent":            agentPayload,
-			"projectPlacement": projectPlacement,
+			"agent": agentPayload,
+			"project": map[string]any{
+				"projectKey":    projKey,
+				"projectName":   projName,
+				"workspaceName": wsName,
+				"checkout": map[string]any{
+					"cwd":                    rec.Cwd,
+					"isGit":                  true,
+					"currentBranch":          branch,
+					"remoteUrl":              nil,
+					"isBySpaceOwnedWorktree": false,
+				},
+			},
 		})
 	}
 
@@ -1679,6 +1708,11 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		nowStr := time.Now().UTC().Format(time.RFC3339Nano)
 		switch evType {
 		case "turn_start":
+			s.mu.Lock()
+			mp.record.LastStatus = "running"
+			mp.record.UpdatedAt = nowStr
+			recStartCopy := mp.record
+			s.mu.Unlock()
 			s.broadcastSessionMsg("agent_stream", map[string]any{
 				"agentId":   rec.ID,
 				"provider":  rec.Provider,
@@ -1687,6 +1721,11 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 					"type":     "turn_started",
 					"provider": rec.Provider,
 				},
+			})
+			s.broadcastSessionMsg("status", map[string]any{
+				"status":  "agent_updated",
+				"agentId": rec.ID,
+				"agent":   s.buildAgentSnapshotPayload(recStartCopy),
 			})
 		case "message_end":
 			if txt := sess.LastAssistantText(); txt != "" {
@@ -1759,6 +1798,11 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 					},
 				})
 			}
+			s.broadcastSessionMsg("status", map[string]any{
+				"status":  "agent_updated",
+				"agentId": rec.ID,
+				"agent":   s.buildAgentSnapshotPayload(recCopy),
+			})
 		}
 	})
 

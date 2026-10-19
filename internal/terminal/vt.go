@@ -19,25 +19,25 @@ type Cell struct {
 	Bold bool   `json:"bold,omitempty"`
 }
 
-// Row represents a single terminal screen row.
-type Row struct {
-	Cells   []Cell `json:"cells"`
-	Wrapped bool   `json:"wrapped,omitempty"`
+// Cursor represents the terminal cursor position and visibility in TerminalStateSchema.
+type Cursor struct {
+	Row    int  `json:"row"`
+	Col    int  `json:"col"`
+	Hidden bool `json:"hidden,omitempty"`
 }
 
-// StateSnapshot mirrors the structured TerminalState snapshot sent via OpcodeSnapshot (0x04).
+// StateSnapshot mirrors TerminalStateSchema in @bytetrue/protocol/messages sent via OpcodeSnapshot (0x04).
 type StateSnapshot struct {
-	Rows            int    `json:"rows"`
-	Cols            int    `json:"cols"`
-	CursorX         int    `json:"cursorX"`
-	CursorY         int    `json:"cursorY"`
-	CursorVisible   bool   `json:"cursorVisible"`
-	AlternateScreen bool   `json:"alternateScreen"`
-	BracketedPaste  bool   `json:"bracketedPaste"`
-	ApplicationKeys bool   `json:"applicationKeys"`
-	MouseTracking   bool   `json:"mouseTracking"`
-	ReplayPreamble  string `json:"replayPreamble,omitempty"`
-	Lines           []Row  `json:"lines"`
+	Rows            int      `json:"rows"`
+	Cols            int      `json:"cols"`
+	Grid            [][]Cell `json:"grid"`
+	Scrollback      [][]Cell `json:"scrollback"`
+	Cursor          Cursor   `json:"cursor"`
+	AlternateScreen bool     `json:"-"`
+	BracketedPaste  bool     `json:"-"`
+	ApplicationKeys bool     `json:"-"`
+	MouseTracking   bool     `json:"-"`
+	ReplayPreamble  string   `json:"-"`
 }
 
 // VTGrid maintains a lightweight pure-Go virtual terminal screen buffer and input mode tracker.
@@ -274,24 +274,27 @@ func (v *VTGrid) Snapshot(slot uint8) (StateSnapshot, []byte) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
-	rows := make([]Row, v.rows)
+	grid := make([][]Cell, v.rows)
 	for r := 0; r < v.rows; r++ {
 		cells := make([]Cell, v.cols)
 		copy(cells, v.grid[r])
-		rows[r] = Row{Cells: cells}
+		grid[r] = cells
 	}
 	snap := StateSnapshot{
-		Rows:            v.rows,
-		Cols:            v.cols,
-		CursorX:         v.cursorX,
-		CursorY:         v.cursorY,
-		CursorVisible:   v.cursorVisible,
+		Rows:       v.rows,
+		Cols:       v.cols,
+		Grid:       grid,
+		Scrollback: [][]Cell{},
+		Cursor: Cursor{
+			Row:    v.cursorY,
+			Col:    v.cursorX,
+			Hidden: !v.cursorVisible,
+		},
 		AlternateScreen: v.alternateScreen,
 		BracketedPaste:  v.bracketedPaste,
 		ApplicationKeys: v.applicationKeys,
 		MouseTracking:   v.mouseTracking,
 		ReplayPreamble:  v.replayPreambleLocked(),
-		Lines:           rows,
 	}
 	payload, _ := json.Marshal(snap)
 	return snap, EncodeFrame(OpcodeSnapshot, slot, payload)

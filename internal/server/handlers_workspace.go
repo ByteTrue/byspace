@@ -281,6 +281,7 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 	entries := make([]map[string]any, 0, len(sessions))
 	for _, sess := range sessions {
 		entries = append(entries, map[string]any{
+			"providerId":         "pi",
 			"provider":           "pi",
 			"providerLabel":      "Pi",
 			"providerHandleId":   sess.ProviderHandleID,
@@ -295,6 +296,7 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 	if claudeSessions, err := providers.ListClaudeSessions("", req.Cwd, req.Limit); err == nil {
 		for _, cs := range claudeSessions {
 			entries = append(entries, map[string]any{
+				"providerId":         "claude",
 				"provider":           "claude",
 				"providerLabel":      "Claude Code",
 				"providerHandleId":   cs.ProviderHandleID,
@@ -459,13 +461,14 @@ func (s *Server) handleCreateTerminal(ctx context.Context, sink frameSink, raw j
 	s.terminalSlotsByID[termID] = slot
 	s.mu.Unlock()
 
+	nowMs := time.Now().UnixMilli()
 	_ = sendSessionMsg(ctx, sink, "create_terminal_response", map[string]any{
 		"terminal": map[string]any{
 			"id":          sess.ID,
 			"name":        sess.Name,
 			"cwd":         sess.Cwd,
 			"workspaceId": sess.WorkspaceID,
-			"activity":    map[string]any{"state": sess.Activity()},
+			"activity":    map[string]any{"state": sess.Activity(), "changedAt": nowMs},
 		},
 		"error":     nil,
 		"requestId": req.RequestID,
@@ -480,6 +483,7 @@ func (s *Server) handleListTerminals(ctx context.Context, sink frameSink, raw js
 	}
 	_ = json.Unmarshal(raw, &req)
 
+	nowMs := time.Now().UnixMilli()
 	s.mu.Lock()
 	list := make([]map[string]any, 0, len(s.terminals))
 	for _, t := range s.terminals {
@@ -491,7 +495,7 @@ func (s *Server) handleListTerminals(ctx context.Context, sink frameSink, raw js
 			"name":        t.Name,
 			"cwd":         t.Cwd,
 			"workspaceId": t.WorkspaceID,
-			"activity":    map[string]any{"state": t.Activity()},
+			"activity":    map[string]any{"state": t.Activity(), "changedAt": nowMs},
 		})
 	}
 	s.mu.Unlock()
@@ -538,20 +542,19 @@ func (s *Server) handleSubscribeTerminal(ctx context.Context, sink frameSink, ra
 		"requestId":  req.RequestID,
 	})
 
-	if req.InitialSnapshot == "state" && sess.VT() != nil {
+	if sess.VT() != nil {
 		_, snapFrame := sess.VT().Snapshot(slot)
 		_ = sink.SendBinary(ctx, snapFrame)
-	} else {
-		var replay strings.Builder
-		if sess.VT() != nil {
-			replay.WriteString(sess.VT().ReplayPreamble())
-		}
-		if res := sess.ResumeSince(0); res != nil && res.Data != "" {
-			replay.WriteString(res.Data)
-		}
-		if replay.Len() > 0 {
-			_ = sink.SendBinary(ctx, terminal.EncodeFrame(terminal.OpcodeOutput, slot, []byte(replay.String())))
-		}
+	}
+	var replay strings.Builder
+	if sess.VT() != nil {
+		replay.WriteString(sess.VT().ReplayPreamble())
+	}
+	if res := sess.ResumeSince(0); res != nil && res.Data != "" {
+		replay.WriteString(res.Data)
+	}
+	if replay.Len() > 0 {
+		_ = sink.SendBinary(ctx, terminal.EncodeFrame(terminal.OpcodeOutput, slot, []byte(replay.String())))
 	}
 
 	sess.Subscribe(func(ev terminal.OutputEvent) {

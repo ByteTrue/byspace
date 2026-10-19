@@ -725,13 +725,16 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		state, ops, avail, inst := ReconcileSkills(sel, targets, uninstall)
 		respType := strings.TrimSuffix(msgType, ".request") + ".response"
 		_ = sendSessionMsg(ctx, sink, respType, map[string]any{
-			"requestId":      base.RequestID,
-			"state":          state,
-			"ops":            ops,
-			"available":      avail,
-			"installed":      inst,
-			"selection":      sel,
-			"targets":        targets,
+			"requestId": base.RequestID,
+			"state":     state,
+			"ops":       ops,
+			"available": avail,
+			"installed": inst,
+			"selection": sel,
+			"targets": map[string]any{
+				"available": []string{"agents", "claude"},
+				"selected":  targets,
+			},
 			"selectionSaved": ok,
 		})
 
@@ -756,13 +759,16 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		})
 		state, ops, avail, inst := ReconcileSkills(sel, targets, false)
 		_ = sendSessionMsg(ctx, sink, "agent.skills.save_selection.response", map[string]any{
-			"requestId":            req.RequestID,
-			"state":                state,
-			"ops":                  ops,
-			"available":            avail,
-			"installed":            inst,
-			"selection":            sel,
-			"targets":              targets,
+			"requestId": req.RequestID,
+			"state":     state,
+			"ops":       ops,
+			"available": avail,
+			"installed": inst,
+			"selection": sel,
+			"targets": map[string]any{
+				"available": []string{"agents", "claude"},
+				"selected":  targets,
+			},
 			"selectionSaved":       true,
 			"confirmationRequired": nil,
 		})

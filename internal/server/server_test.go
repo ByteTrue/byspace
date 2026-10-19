@@ -590,8 +590,9 @@ func TestServerFileExplorerPiSessionImportAndTerminalRPC(t *testing.T) {
 	})
 	_ = ws.Write(ctx, websocket.MessageText, skReq)
 	skResp := readUntilSessionType(t, ctx, ws, "agent.skills.save_selection.response", "")
-	skTargets, _ := skResp["targets"].([]any)
-	if len(skTargets) != 1 || skTargets[0] != "agents" {
-		t.Fatalf("expected targets=[agents] in skills save response: %+v", skResp)
+	skTargetsObj, _ := skResp["targets"].(map[string]any)
+	skSelected, _ := skTargetsObj["selected"].([]any)
+	if len(skSelected) != 1 || skSelected[0] != "agents" {
+		t.Fatalf("expected targets.selected=[agents] in skills save response: %+v", skResp)
 	}
 }

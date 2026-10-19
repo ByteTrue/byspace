@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/store"
@@ -132,6 +133,7 @@ func (s *Server) handleHTTPSubagentReport(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) broadcastTerminalsChanged(cwd, workspaceID string) {
+	nowMs := time.Now().UnixMilli()
 	s.mu.Lock()
 	list := make([]map[string]any, 0, len(s.terminals))
 	for _, t := range s.terminals {
@@ -143,7 +145,7 @@ func (s *Server) broadcastTerminalsChanged(cwd, workspaceID string) {
 			"name":        t.Name,
 			"cwd":         t.Cwd,
 			"workspaceId": t.WorkspaceID,
-			"activity":    map[string]any{"state": t.Activity()},
+			"activity":    map[string]any{"state": t.Activity(), "changedAt": nowMs},
 		})
 	}
 	s.mu.Unlock()
