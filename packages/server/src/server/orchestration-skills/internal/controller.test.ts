@@ -886,7 +886,7 @@ describe("skills controller", () => {
           (await lstat(harness.targets.claudeDir)).dev,
         );
         const transaction = await beginSkillsTransaction(harness.targets, previous, next, [
-          { kind: "delete", name: "byspace-loop" },
+          { kind: "delete", name: "byspace-loop", targets: ["agents", "claude"] },
         ]);
 
         expect(await isInstalled(harness.targets, "byspace-loop")).toBe(false);
