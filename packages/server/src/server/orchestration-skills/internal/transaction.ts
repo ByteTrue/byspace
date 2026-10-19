@@ -14,13 +14,17 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 
+import { AGENT_SKILL_TARGET_IDS, type AgentSkillTargetId } from "@bytetrue/protocol/messages";
 import {
   listManagedSkillNames,
+  skillHomes,
   type SkillOp,
   type SkillSelection,
   type SkillTargets,
 } from "./operations.js";
 import { listFilesRecursive } from "./sync.js";
+
+const ALL_SKILL_TARGETS: readonly AgentSkillTargetId[] = AGENT_SKILL_TARGET_IDS;
 
 export interface SkillsTransaction {
   /** Convergence stuck. Drop the staged copies. */
@@ -41,6 +45,13 @@ interface TransactionManifest {
   phase: "capturing" | "converging";
   previousSelection: SkillSelection;
   nextSelection: SkillSelection;
+  /**
+   * The homes the save was moving between. A targets-only save leaves the
+   * selection identical on both sides, so recovery cannot use the selection to
+   * decide whether the convergence committed.
+   */
+  previousTargets: AgentSkillTargetId[];
+  nextTargets: AgentSkillTargetId[];
   entries: CapturedDirectory[];
 }
 
@@ -92,6 +103,9 @@ async function readManifest(transactionDir: string): Promise<TransactionManifest
   if (!isSkillSelection(manifest.previousSelection) || !isSkillSelection(manifest.nextSelection)) {
     return null;
   }
+  if (!isSkillTargets(manifest.previousTargets) || !isSkillTargets(manifest.nextTargets)) {
+    return null;
+  }
   if (!Array.isArray(manifest.entries)) return null;
   const validEntries = manifest.entries.every(
     (entry) =>
@@ -107,6 +121,8 @@ async function readManifest(transactionDir: string): Promise<TransactionManifest
     phase: manifest.phase,
     previousSelection: manifest.previousSelection,
     nextSelection: manifest.nextSelection,
+    previousTargets: manifest.previousTargets,
+    nextTargets: manifest.nextTargets,
     entries,
   };
 }
@@ -117,6 +133,17 @@ async function writeManifest(transactionDir: string, manifest: TransactionManife
     `${JSON.stringify(manifest, null, 2)}\n`,
     "utf8",
   );
+}
+
+function isSkillTargets(value: unknown): value is AgentSkillTargetId[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function targetsEqual(
+  left: readonly AgentSkillTargetId[],
+  right: readonly AgentSkillTargetId[],
+): boolean {
+  return left.length === right.length && left.every((id, index) => id === right[index]);
 }
 
 function selectionsEqual(left: SkillSelection, right: SkillSelection): boolean {
@@ -134,7 +161,7 @@ async function validateEntries(
   entries: CapturedDirectory[],
 ): Promise<boolean> {
   const names = new Set(await listManagedSkillNames(targets.sourceDir));
-  const roots = [targets.agentsDir, targets.claudeDir];
+  const roots = skillHomes(targets).map((home) => home.dir);
   return entries.every((entry) => {
     const rootIndex = roots.findIndex((root) => path.dirname(entry.livePath) === root);
     if (rootIndex === -1) return false;
@@ -441,7 +468,7 @@ async function restore(
 }
 
 function transactionParents(targets: SkillTargets): string[] {
-  return [...new Set([targets.agentsDir, targets.claudeDir].map((root) => path.dirname(root)))];
+  return [...new Set(skillHomes(targets).map((home) => path.dirname(home.dir)))];
 }
 
 /**
@@ -454,6 +481,7 @@ function transactionParents(targets: SkillTargets): string[] {
 export async function recoverInterruptedSkillTransactions(
   targets: SkillTargets,
   committedSelection: SkillSelection,
+  committedTargets: readonly AgentSkillTargetId[] = ALL_SKILL_TARGETS,
 ): Promise<void> {
   for (const parent of transactionParents(targets)) {
     const entries = await readdir(parent).catch(() => []);
@@ -463,11 +491,17 @@ export async function recoverInterruptedSkillTransactions(
       const manifest = await readManifest(transactionDir);
       if (!manifest) continue;
       if (!(await validateEntries(targets, transactionDir, manifest.entries))) continue;
-      if (selectionsEqual(committedSelection, manifest.nextSelection)) {
+      if (
+        selectionsEqual(committedSelection, manifest.nextSelection) &&
+        targetsEqual(committedTargets, manifest.nextTargets)
+      ) {
         await discardTransaction(transactionDir, manifest.entries);
         continue;
       }
-      if (!selectionsEqual(committedSelection, manifest.previousSelection)) {
+      if (
+        !selectionsEqual(committedSelection, manifest.previousSelection) ||
+        !targetsEqual(committedTargets, manifest.previousTargets)
+      ) {
         throw new Error(
           `Cannot safely recover interrupted skills transaction at ${transactionDir}`,
         );
@@ -488,20 +522,49 @@ export async function beginSkillsTransaction(
   previousSelection: SkillSelection,
   nextSelection: SkillSelection,
   ops: readonly SkillOp[],
+  /** Committed homes, so recovery can tell a finished targets-only save from an interrupted one. */
+  selections: {
+    previousTargets?: readonly AgentSkillTargetId[];
+    nextTargets?: readonly AgentSkillTargetId[];
+  } = {},
 ): Promise<SkillsTransaction> {
-  const roots = [targets.agentsDir, targets.claudeDir];
+  const homes = skillHomes(targets);
+  const roots = homes.map((home) => home.dir);
   const seenRoots = new Set<string>();
-  const uniqueRoots: Array<{ root: string; rootIndex: number }> = [];
+  const uniqueRoots: Array<{ root: string; rootIndex: number; identity: string }> = [];
   for (const [rootIndex, root] of roots.entries()) {
     const identity = await realpath(root).catch(() => path.resolve(root));
-    if (seenRoots.has(identity)) continue;
+    if (seenRoots.has(identity)) {
+      // Two agent homes can be the same directory through symlinks or mounts. It
+      // is captured once, under the first home that names it — and a later home
+      // that resolves to the same path reuses that capture instead of being
+      // dropped, so an op naming only the second home still has a backup.
+      const first = uniqueRoots.find((entry) => entry.identity === identity);
+      if (first) uniqueRoots.push(first);
+      continue;
+    }
     seenRoots.add(identity);
-    uniqueRoots.push({ root, rootIndex });
+    uniqueRoots.push({ root, rootIndex, identity });
   }
+  // Only the homes an operation names are captured: staging a home it does not
+  // touch would let rollback restore a stale copy over a live one.
+  const captureRoots = (op: SkillOp) => {
+    const entries = homes
+      .map((home, index) => (op.targets.includes(home.id) ? uniqueRoots[index] : undefined))
+      .filter(
+        (entry): entry is { root: string; rootIndex: number; identity: string } =>
+          entry !== undefined,
+      );
+    return [...new Set(entries)];
+  };
   // Staged next to the skills tree rather than inside it: same filesystem, so a
   // restore is a local copy, and never a directory a skill scan walks into.
   const transactionDir = path.join(path.dirname(roots[0]!), `${TRANSACTION_PREFIX}${randomUUID()}`);
   const entries: CapturedDirectory[] = [];
+  const manifestTargets = {
+    previousTargets: [...(selections.previousTargets ?? ALL_SKILL_TARGETS)],
+    nextTargets: [...(selections.nextTargets ?? ALL_SKILL_TARGETS)],
+  } satisfies Pick<TransactionManifest, "previousTargets" | "nextTargets">;
 
   async function discard(): Promise<void> {
     await discardTransaction(transactionDir, entries);
@@ -514,12 +577,13 @@ export async function beginSkillsTransaction(
     phase: "capturing",
     previousSelection,
     nextSelection,
+    ...manifestTargets,
     entries: [],
   });
 
   try {
-    for (const { root, rootIndex } of uniqueRoots) {
-      for (const op of ops) {
+    for (const op of ops) {
+      for (const { root, rootIndex } of captureRoots(op)) {
         const name = op.name;
         const livePath = path.join(root, name);
         const liveInfo = await lstat(livePath).catch(() => null);
@@ -551,6 +615,7 @@ export async function beginSkillsTransaction(
       phase: "converging",
       previousSelection,
       nextSelection,
+      ...manifestTargets,
       entries,
     });
   } catch (error) {
@@ -580,6 +645,7 @@ export async function beginSkillsTransaction(
       phase: "converging",
       previousSelection,
       nextSelection,
+      ...manifestTargets,
       entries,
     });
     await discard();
@@ -595,6 +661,7 @@ export async function beginSkillsTransaction(
         phase: "converging",
         previousSelection,
         nextSelection,
+        ...manifestTargets,
         entries,
       });
       await discard();

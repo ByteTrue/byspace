@@ -2261,6 +2261,13 @@ export const fr: TranslationResources = {
           "Gardez installées toutes les compétences fournies, y compris celles ajoutées plus tard.",
         chooseList: "Compétences fournies",
         chooseEmpty: "Cette version ne fournit aucune compétence.",
+        targetsTitle: "Emplacements d'installation",
+        targetsEmpty: "Choisissez au moins un emplacement d'installation.",
+        targets: {
+          agents:
+            "Utilisé par Codex, Pi et les autres agents qui lisent le dossier de compétences partagé.",
+          claude: "Utilisé par Claude Code.",
+        },
         removeTitle: "Supprimer les compétences décochées ?",
         removeMessage:
           "{{skills}} seront supprimées de ~/.agents et ~/.claude. Tout ce que vous avez ajouté dans ces dossiers de compétences est également supprimé.",

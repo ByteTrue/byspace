@@ -1942,7 +1942,7 @@ export class Session {
         );
       case "agent.skills.save_selection.request":
         return this.orchestrationSkills
-          .saveSelection(msg.selection, msg.confirmedRemovals)
+          .saveSelection(msg.selection, msg.targets, msg.confirmedRemovals)
           .then((result) => {
             this.emit({
               type: "agent.skills.save_selection.response",

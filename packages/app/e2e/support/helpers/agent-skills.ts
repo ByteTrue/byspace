@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { expect, type Dialog, type Page } from "@playwright/test";
 import type { DaemonClient as InternalDaemonClient } from "@bytetrue/client/internal/daemon-client";
-import type { AgentSkillSelection } from "@bytetrue/protocol/messages";
+import type { AgentSkillSelection, AgentSkillTargets } from "@bytetrue/protocol/messages";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
 import { gotoAppShell, openSettings } from "./app";
 import { connectDaemonClient } from "./daemon-client-loader";
@@ -23,6 +23,9 @@ type AgentSkillsClient = Pick<
 >;
 
 export type SkillTargetName = "agents" | "claude";
+
+/** Every agent home the daemon can write, which is what these specs assume. */
+const EVERY_INSTALL_TARGET: AgentSkillTargets = ["agents", "claude"];
 
 export interface AgentSkillsSandbox {
   available: string[];
@@ -80,7 +83,7 @@ export async function startAgentSkillsSandbox(): Promise<AgentSkillsSandbox> {
       await mkdir(targets.agents, { recursive: true });
     },
     install: async (selection) => {
-      const result = await client.saveAgentSkillsSelection(selection, available);
+      const result = await client.saveAgentSkillsSelection(selection, EVERY_INSTALL_TARGET);
       if (result.confirmationRequired) {
         throw new Error(`Unexpected removal confirmation: ${result.confirmationRequired.removals}`);
       }
@@ -160,6 +163,16 @@ export async function chooseCustomSkills(page: Page, selected: string[]): Promis
   await expectSkillChoices(page, selected);
 }
 
+/** Install-location rows are named by the directory they write, like the UI. */
+export const SKILL_TARGET_DIRS: Record<SkillTargetName, string> = {
+  agents: "~/.agents/skills",
+  claude: "~/.claude/skills",
+};
+
+export async function toggleInstallTarget(page: Page, target: SkillTargetName): Promise<void> {
+  await page.getByRole("checkbox", { name: SKILL_TARGET_DIRS[target], exact: true }).click();
+}
+
 export async function chooseAllSkills(page: Page): Promise<void> {
   const all = page.getByRole("switch", { name: "All skills", exact: true });
   await expect(all).not.toBeChecked();
@@ -198,9 +211,26 @@ export async function expectInstalledSkills(
   sandbox: AgentSkillsSandbox,
   expected: string[],
 ): Promise<void> {
-  for (const directory of Object.values(sandbox.targets)) {
-    await expect.poll(() => readInstalledSkills(directory)).toEqual([...expected].sort());
+  for (const target of Object.keys(sandbox.targets) as SkillTargetName[]) {
+    await expectInstalledIn(sandbox, target, expected);
   }
+}
+
+export async function expectInstalledIn(
+  sandbox: AgentSkillsSandbox,
+  target: SkillTargetName,
+  expected: string[],
+): Promise<void> {
+  await expect
+    .poll(() => readInstalledSkills(sandbox.targets[target]))
+    .toEqual([...expected].sort());
+}
+
+export async function expectSavedTargets(
+  sandbox: AgentSkillsSandbox,
+  expected: SkillTargetName[],
+): Promise<void> {
+  await expect.poll(async () => (await sandbox.getStatus()).targets?.selected).toEqual(expected);
 }
 
 export async function expectSavedSelection(
@@ -231,7 +261,9 @@ export async function expectSkillChoices(page: Page, selected: string[]): Promis
 }
 
 async function listSkillChoices(page: Page): Promise<string[]> {
+  // Scoped to the skill list: the install-location rows are checkboxes too.
   return page
+    .getByTestId("skill-selection-list-card")
     .getByRole("checkbox")
     .evaluateAll((elements) =>
       elements

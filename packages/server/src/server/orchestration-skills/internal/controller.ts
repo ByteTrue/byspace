@@ -1,7 +1,9 @@
+import type { AgentSkillOperation, AgentSkillTargetId } from "@bytetrue/protocol/messages";
 import {
   autoUpdateInstalledSkills,
   getSkillsStatus,
   installSkills,
+  type SkillOp,
   type SkillSelection,
   type SkillsStatus,
   type SkillTargets,
@@ -11,12 +13,18 @@ import {
 import {
   coerceSkillNames,
   coerceSkillSelection,
+  coerceSkillTargets,
   type SkillSelectionStore,
 } from "./selection-store.js";
 import { beginSkillsTransaction, recoverInterruptedSkillTransactions } from "./transaction.js";
 
 /** Everything the settings UI needs to render skills in one round trip. */
-export interface SkillsSnapshot extends SkillsStatus {
+export interface SkillsSnapshot extends Omit<SkillsStatus, "ops"> {
+  /**
+   * Wire shape: the operation's target homes stay internal. The selection's
+   * `targets` already tells the client where the next convergence writes.
+   */
+  ops: AgentSkillOperation[];
   selection: SkillSelection;
   /**
    * Whether the user has ever chosen a selection. A `false` here is what makes
@@ -46,11 +54,27 @@ export interface SkillsController {
   }>;
 }
 
-type Converge = (targets: SkillTargets, selection: SkillSelection) => Promise<SkillsStatus>;
+type Converge = (
+  targets: SkillTargets,
+  selection: SkillSelection,
+  selectedTargets: readonly AgentSkillTargetId[],
+) => Promise<SkillsStatus>;
 const MAX_SAVE_ATTEMPTS = 3;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function wireOps(ops: readonly SkillOp[]): AgentSkillOperation[] {
+  return ops.map(({ kind, name }) => ({ kind, name }));
+}
+
+function snapshot(
+  status: SkillsStatus,
+  selection: SkillSelection,
+  selectionSaved: boolean,
+): SkillsSnapshot {
+  return { ...status, ops: wireOps(status.ops), selection, selectionSaved };
 }
 
 /**
@@ -83,17 +107,29 @@ export function createSkillsController({
   async function converge(apply: Converge): Promise<SkillsSnapshot> {
     const targets = resolveTargets();
     const selection = await selectionStore.get();
-    await recoverInterruptedSkillTransactions(targets, selection);
-    const status = await apply(targets, selection);
-    return { ...status, selection, selectionSaved: await selectionStore.isSet() };
+    const selectedTargets = await selectionStore.getTargets();
+    await recoverInterruptedSkillTransactions(targets, selection, selectedTargets);
+    const status = await apply(targets, selection, selectedTargets);
+    return snapshot(status, selection, await selectionStore.isSet());
   }
 
   async function saveSelection(request: unknown): Promise<SkillsSaveResult> {
     const targets = resolveTargets();
-    const next = coerceSkillSelection(request);
+    // Two shapes are accepted: `{ selection, targets?, confirmedRemovals? }` from
+    // the RPC facade, and a bare selection (with optional confirmedRemovals)
+    // from callers that predate the wrapper.
+    const wrapped = isRecord(request) && request.mode === undefined;
+    const next = coerceSkillSelection(wrapped ? request.selection : request);
+    // A request that does not name targets keeps the saved ones, so an app
+    // release that predates target selection cannot narrow an install.
+    const nextTargets =
+      wrapped && request.targets !== undefined
+        ? coerceSkillTargets(request.targets)
+        : await selectionStore.getTargets();
     const previous = await selectionStore.get();
+    const previousTargets = await selectionStore.getTargets();
     const previouslySaved = await selectionStore.isSet();
-    await recoverInterruptedSkillTransactions(targets, previous);
+    await recoverInterruptedSkillTransactions(targets, previous, previousTargets);
     const confirmed = new Set(
       coerceSkillNames(isRecord(request) ? request.confirmedRemovals : null),
     );
@@ -101,14 +137,16 @@ export function createSkillsController({
     // The plan comes from a scan taken here, inside the queue, and is the exact
     // plan applied below. Deciding what will be deleted from an older snapshot
     // leaves a window for a directory to appear and be deleted unannounced.
-    let plan = await getSkillsStatus(targets, next);
+    let plan = await getSkillsStatus(targets, next, nextTargets);
     for (let attempt = 0; attempt < MAX_SAVE_ATTEMPTS; attempt += 1) {
       const removals = plan.ops.filter((op) => op.kind === "delete").map((op) => op.name);
       if (removals.some((name) => !confirmed.has(name))) {
         return {
-          ...(await getSkillsStatus(targets, previous)),
-          selection: previous,
-          selectionSaved: previouslySaved,
+          ...snapshot(
+            await getSkillsStatus(targets, previous, previousTargets),
+            previous,
+            previouslySaved,
+          ),
           confirmationRequired: { removals },
         };
       }
@@ -116,10 +154,13 @@ export function createSkillsController({
       // Capture only paths this frozen plan can mutate. Capturing every managed
       // path would make rollback delete a new external directory that appeared
       // after the scan merely because it was absent from the snapshot.
-      const transaction = await beginSkillsTransaction(targets, previous, next, plan.ops);
+      const transaction = await beginSkillsTransaction(targets, previous, next, plan.ops, {
+        previousTargets,
+        nextTargets,
+      });
       let status: SkillsStatus;
       try {
-        status = await installSkills(targets, next, {
+        status = await installSkills(targets, next, nextTargets, {
           ...plan,
           // beginSkillsTransaction atomically staged these directories. Running
           // removeSkill afterward would delete a path another writer recreated.
@@ -134,7 +175,7 @@ export function createSkillsController({
       // state; zero remaining operations is the invariant, not the label.
       if (status.ops.length === 0) {
         try {
-          await selectionStore.set(next);
+          await selectionStore.set(next, nextTargets);
         } catch (error) {
           await transaction.rollback();
           throw error;
@@ -146,14 +187,17 @@ export function createSkillsController({
           // manifest stays behind so the next serialized operation retries
           // cleanup; reporting this save as failed would misstate its outcome.
         }
-        return { ...status, selection: next, selectionSaved: true, confirmationRequired: null };
+        return {
+          ...snapshot(status, next, true),
+          confirmationRequired: null,
+        };
       }
 
       // The frozen plan became incomplete while it was being applied. Put only
       // its mutations back, rescan, and either request confirmation for a new
       // deletion or retry harmless additions/updates from the fresh plan.
       await transaction.rollback();
-      plan = await getSkillsStatus(targets, next);
+      plan = await getSkillsStatus(targets, next, nextTargets);
     }
 
     throw new Error("Skills changed repeatedly while the selection was being saved");
@@ -163,7 +207,7 @@ export function createSkillsController({
     if (await selectionStore.isSet()) {
       return { imported: false, selection: await selectionStore.get() };
     }
-    const imported = await selectionStore.set(selection);
+    const imported = await selectionStore.set(selection, await selectionStore.getTargets());
     return { imported: true, selection: imported };
   }
 

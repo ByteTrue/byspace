@@ -656,6 +656,16 @@
                   "additionalProperties": false
                 }
               ]
+            },
+            "targets": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "agents",
+                  "claude"
+                ]
+              }
             }
           },
           "additionalProperties": false

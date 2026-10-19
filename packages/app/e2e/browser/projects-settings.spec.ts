@@ -238,7 +238,11 @@ test.describe("Projects settings", () => {
     try {
       const initialSave = await client.saveAgentSkillsSelection(selection);
       if (initialSave.confirmationRequired) {
-        await client.saveAgentSkillsSelection(selection, initialSave.confirmationRequired.removals);
+        await client.saveAgentSkillsSelection(
+          selection,
+          undefined,
+          initialSave.confirmationRequired.removals,
+        );
       }
 
       await openProjects(page);

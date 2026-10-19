@@ -12,6 +12,7 @@ import {
   LogLevelSchema,
   type PersistedConfig,
 } from "./persisted-config.js";
+import type { AgentSkillSelection, AgentSkillTargets } from "@bytetrue/protocol/messages";
 import type {
   AgentProviderRuntimeSettingsMap,
   ProviderOverride,
@@ -535,6 +536,7 @@ function resolveStaticLoadConfigSettings(
     // null in the persisted file means "auto"; the daemon config omits it so
     // MutableDaemonConfig keeps the absent = auto semantics.
     terminalDefaultShell: persisted.daemon?.terminalDefaultShell ?? undefined,
+    ...resolveSkillConfig(persisted),
     hostnames: mergeHostnames([
       persisted.daemon?.hostnames,
       parseHostnamesEnv(env.BYSPACE_HOSTNAMES ?? env.BYSPACE_ALLOWED_HOSTS),
@@ -542,6 +544,17 @@ function resolveStaticLoadConfigSettings(
     ]),
     trustedProxies: resolveTrustedProxiesConfig(env, persisted),
     appBaseUrl: resolveAppBaseUrl(env, persisted, hostedAppBaseUrl),
+  };
+}
+
+/** Selection and target homes travel together: one without the other is a half answer. */
+function resolveSkillConfig(persisted: PersistedConfig): {
+  skillSelection: AgentSkillSelection | undefined;
+  skillTargets: AgentSkillTargets | undefined;
+} {
+  return {
+    skillSelection: persisted.agents?.skills?.selection,
+    skillTargets: persisted.agents?.skills?.targets,
   };
 }
 
@@ -588,6 +601,8 @@ export function resolveConfigFromPersisted(
     hostnames,
     trustedProxies,
     appBaseUrl,
+    skillSelection,
+    skillTargets,
   } = resolveStaticLoadConfigSettings(env, cli, persisted, hostedAppBaseUrl);
 
   const relay = resolveRelayConfig({
@@ -628,7 +643,8 @@ export function resolveConfigFromPersisted(
     terminalProfiles,
     terminalDefaultShell,
     agentProfiles,
-    skillSelection: persisted.agents?.skills?.selection,
+    skillSelection,
+    skillTargets,
     pluginsEnabled: persisted.pluginsEnabled ?? false,
     plugins: persisted.plugins,
     mcpDebug: env.MCP_DEBUG === "1",

@@ -2,6 +2,7 @@ import path from "node:path";
 import { readFileSync } from "node:fs";
 import type {
   AgentSkillSelection,
+  AgentSkillTargets,
   AgentSkillsSaveResult,
   AgentSkillsStatus,
 } from "@bytetrue/protocol/messages";
@@ -49,6 +50,7 @@ export interface SeedDaemonClient {
   getAgentSkillsStatus(): Promise<AgentSkillsStatus>;
   saveAgentSkillsSelection(
     selection: AgentSkillSelection,
+    targets?: AgentSkillTargets,
     confirmedRemovals?: readonly string[],
   ): Promise<AgentSkillsSaveResult>;
   fetchWorkspaces(options?: { filter?: { projectId?: string } }): Promise<{

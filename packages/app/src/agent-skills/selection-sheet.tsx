@@ -13,6 +13,9 @@ import { confirmDialog } from "@/utils/confirm-dialog";
 import type {
   AgentSkillSelection as SkillSelection,
   AgentSkillsSaveResult as SkillsSaveResult,
+  AgentSkillsStatus,
+  AgentSkillTargetId,
+  AgentSkillTargets,
 } from "@bytetrue/protocol/messages";
 
 const ThemedCheck = withUnistyles(Check);
@@ -26,16 +29,35 @@ interface SkillSelectionSheetProps {
   confirmLabel: string;
   available: readonly string[];
   selection: SkillSelection;
+  /** Null when the host predates target selection: the rows are then hidden. */
+  targets: AgentSkillTargetsStatus | null;
   isSaving: boolean;
   onSave: (
     selection: SkillSelection,
+    /** Absent when the host predates install targets, which keeps its stored ones. */
+    targets: AgentSkillTargets | undefined,
     confirmedRemovals?: readonly string[],
   ) => Promise<SkillsSaveResult>;
   onClose: () => void;
 }
 
+type AgentSkillTargetsStatus = NonNullable<AgentSkillsStatus["targets"]>;
+
 function isSkillSelected(draft: SkillSelection, name: string): boolean {
   return draft.mode === "all" || draft.skills.includes(name);
+}
+
+/** Target labels are paths, so they read as locations rather than as names. */
+const SKILL_TARGET_DIRS: Record<AgentSkillTargetId, string> = {
+  agents: "~/.agents/skills",
+  claude: "~/.claude/skills",
+};
+
+function toggleTarget(
+  draft: readonly AgentSkillTargetId[],
+  id: AgentSkillTargetId,
+): AgentSkillTargetId[] {
+  return draft.includes(id) ? draft.filter((entry) => entry !== id) : [...draft, id];
 }
 
 /**
@@ -48,12 +70,16 @@ export function SkillSelectionSheet({
   confirmLabel,
   available,
   selection,
+  targets,
   isSaving,
   onSave,
   onClose,
 }: SkillSelectionSheetProps) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState<SkillSelection>(selection);
+  const [draftTargets, setDraftTargets] = useState<AgentSkillTargetId[]>([
+    ...(targets?.selected ?? []),
+  ]);
   const [saveError, setSaveError] = useState<string | null>(null);
   const wasVisible = useRef(visible);
 
@@ -64,8 +90,9 @@ export function SkillSelectionSheet({
     wasVisible.current = visible;
     if (!opening) return;
     setDraft(selection);
+    setDraftTargets([...(targets?.selected ?? [])]);
     setSaveError(null);
-  }, [selection, visible]);
+  }, [selection, targets, visible]);
 
   const handleToggleAll = useCallback(
     (nextAll: boolean) => {
@@ -86,6 +113,10 @@ export function SkillSelectionSheet({
     });
   }, []);
 
+  const handleToggleTarget = useCallback((id: AgentSkillTargetId) => {
+    setDraftTargets((current) => toggleTarget(current, id));
+  }, []);
+
   const handleSave = useCallback(() => {
     void (async () => {
       setSaveError(null);
@@ -93,7 +124,7 @@ export function SkillSelectionSheet({
         // The host refuses a save that would delete directories it was not told
         // about, and answers with the names it found when it looked. Asking it
         // is the only way the question and the deletion cannot drift apart.
-        const attempt = await onSave(draft);
+        const attempt = await onSave(draft, targets === null ? undefined : draftTargets);
         if (attempt.confirmationRequired) {
           const confirmed = await confirmDialog({
             title: t("settings.host.skills.removeTitle"),
@@ -104,7 +135,11 @@ export function SkillSelectionSheet({
             destructive: true,
           });
           if (!confirmed) return;
-          const retry = await onSave(draft, attempt.confirmationRequired.removals);
+          const retry = await onSave(
+            draft,
+            targets === null ? undefined : draftTargets,
+            attempt.confirmationRequired.removals,
+          );
           // Something else changed the directories again while the dialog was
           // up. Ask about the new list rather than deleting it unannounced.
           if (retry.confirmationRequired) {
@@ -117,12 +152,16 @@ export function SkillSelectionSheet({
         setSaveError(t("settings.host.skills.saveFailed"));
       }
     })();
-  }, [draft, onClose, onSave, t]);
+  }, [draft, draftTargets, onClose, onSave, t, targets]);
 
   const handleDismiss = useCallback(() => {
     if (isSaving) return;
     onClose();
   }, [isSaving, onClose]);
+
+  // Turning off every home installs nothing, so Save would silently become
+  // "uninstall and keep the preference". Block it and say why instead.
+  const noTargets = targets !== null && draftTargets.length === 0;
 
   const header = useMemo<SheetHeader>(() => ({ title }), [title]);
 
@@ -142,13 +181,14 @@ export function SkillSelectionSheet({
           variant="default"
           onPress={handleSave}
           loading={isSaving}
+          disabled={noTargets}
           testID="skill-selection-save"
         >
           {isSaving ? t("settings.host.skills.actions.saving") : confirmLabel}
         </Button>
       </View>
     ),
-    [confirmLabel, handleDismiss, handleSave, isSaving, t],
+    [confirmLabel, handleDismiss, handleSave, isSaving, noTargets, t],
   );
 
   const allSkills = draft.mode === "all";
@@ -177,6 +217,27 @@ export function SkillSelectionSheet({
         </View>
       </View>
 
+      {targets !== null ? (
+        <SettingsSection title={t("settings.host.skills.targetsTitle")} flush>
+          <View style={settingsStyles.card} testID="skill-selection-targets-card">
+            {targets.available.map((id, index) => (
+              <SkillTargetRow
+                key={id}
+                id={id}
+                checked={draftTargets.includes(id)}
+                disabled={isSaving}
+                withBorder={index > 0}
+                hint={t(`settings.host.skills.targets.${id}`)}
+                onToggle={handleToggleTarget}
+              />
+            ))}
+          </View>
+          {noTargets ? (
+            <Text style={settingsStyles.rowHint}>{t("settings.host.skills.targetsEmpty")}</Text>
+          ) : null}
+        </SettingsSection>
+      ) : null}
+
       {/* The sheet body already spaces its blocks apart, so the section owns
           only the gap between its label and the list the label names. */}
       <SettingsSection title={t("settings.host.skills.chooseList")} flush>
@@ -202,6 +263,63 @@ export function SkillSelectionSheet({
 
       {saveError ? <Text style={settingsStyles.rowError}>{saveError}</Text> : null}
     </AdaptiveModalSheet>
+  );
+}
+
+interface SkillTargetRowProps {
+  id: AgentSkillTargetId;
+  checked: boolean;
+  disabled: boolean;
+  withBorder: boolean;
+  hint: string;
+  onToggle: (id: AgentSkillTargetId) => void;
+}
+
+/** A location row: the label is the directory, so it needs no translation. */
+function SkillTargetRow({
+  id,
+  checked,
+  disabled,
+  withBorder,
+  hint,
+  onToggle,
+}: SkillTargetRowProps) {
+  const handlePress = useCallback(() => onToggle(id), [id, onToggle]);
+  const rowStyle = useMemo(
+    () => [
+      settingsStyles.row,
+      withBorder ? settingsStyles.rowBorder : null,
+      styles.checkboxRow,
+      disabled ? styles.disabledRow : null,
+    ],
+    [disabled, withBorder],
+  );
+  const boxStyle = useMemo(
+    () => [styles.checkbox, checked ? styles.checkboxChecked : null],
+    [checked],
+  );
+  const accessibilityState = useMemo(() => ({ checked, disabled }), [checked, disabled]);
+
+  return (
+    <Pressable
+      style={rowStyle}
+      onPress={handlePress}
+      disabled={disabled}
+      accessibilityRole="checkbox"
+      accessibilityLabel={SKILL_TARGET_DIRS[id]}
+      accessibilityHint={hint}
+      accessibilityState={accessibilityState}
+      aria-checked={checked}
+      testID={`skill-selection-target-${id}`}
+    >
+      <View style={boxStyle}>
+        {checked ? <ThemedCheck size={14} uniProps={checkedIconMapping} /> : null}
+      </View>
+      <View style={styles.targetText}>
+        <Text style={settingsStyles.rowTitle}>{SKILL_TARGET_DIRS[id]}</Text>
+        <Text style={settingsStyles.rowHint}>{hint}</Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -266,6 +384,10 @@ const styles = StyleSheet.create((theme) => ({
   checkboxRow: {
     justifyContent: "flex-start",
     gap: theme.spacing[3],
+  },
+  targetText: {
+    flex: 1,
+    gap: theme.spacing[1],
   },
   disabledRow: {
     opacity: theme.opacity[50],

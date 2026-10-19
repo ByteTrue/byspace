@@ -468,6 +468,7 @@ test("routes host-scoped agent skills requests through the daemon owner", async 
 
   expect(orchestrationSkills.saveSelection).toHaveBeenCalledWith(
     { mode: "custom", skills: ["byspace"] },
+    undefined,
     ["byspace-loop"],
   );
   expect(messages).toContainEqual({

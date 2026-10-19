@@ -2232,6 +2232,12 @@ export const en = {
         chooseAllHint: "Keep every bundled skill installed, including ones added later.",
         chooseList: "Bundled skills",
         chooseEmpty: "This host bundles no skills.",
+        targetsTitle: "Install locations",
+        targetsEmpty: "Pick at least one location to install into.",
+        targets: {
+          agents: "Read by Codex, Pi, and other agents that use the shared skills folder.",
+          claude: "Read by Claude Code.",
+        },
         removeTitle: "Remove deselected skills?",
         removeMessage:
           "{{skills}} will be deleted from ~/.agents and ~/.claude on this host. Anything you added inside those skill folders is deleted too.",

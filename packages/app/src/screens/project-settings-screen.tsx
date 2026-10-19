@@ -1205,10 +1205,13 @@ function ProjectSetupAgentCard({
         status.selection.mode === "custom" &&
         !status.selection.skills.includes(PROJECT_SETUP_SKILL_NAME)
       ) {
-        const saved = await client.saveAgentSkillsSelection({
-          mode: "custom",
-          skills: [...status.selection.skills, PROJECT_SETUP_SKILL_NAME],
-        });
+        const saved = await client.saveAgentSkillsSelection(
+          {
+            mode: "custom",
+            skills: [...status.selection.skills, PROJECT_SETUP_SKILL_NAME],
+          },
+          status.targets?.selected,
+        );
         if (saved.confirmationRequired) {
           throw new Error(t("settings.host.skills.updateFailed"));
         }

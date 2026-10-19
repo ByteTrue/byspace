@@ -18,6 +18,7 @@ is not a supported peer. There is no shim for it. See
 A schema change must not break parsing in either direction. An old app still parses messages from a new daemon. A new daemon still parses messages from an old app.
 
 - New fields are `.optional()` with a sensible default.
+- Put the new field where an old client is willing to read it. A shipped client parses with the schema it shipped with, and a `.strict()` object rejects the whole message over one unknown key — so nesting a field inside a strict object breaks that client even though the field itself is optional. `MutableDaemonConfigSchema.skills` is strict for this reason: install targets live in the top-level `skillTargets`, which an old client drops as an unknown key, instead of `skills.targets`, which makes it reject every message carrying the daemon config, `daemon_config_changed` included. When the container has to change, add a sibling field rather than widen the strict one.
 - Never flip optional to required, remove a field, or narrow a type. `string` to `enum` and nullable to non-null are both narrowing.
 - A field you stop sending stays accepted. You stop writing it, you don't stop reading it.
 - Wire schemas are pure structural declarations. No `.transform()`, `.catch()`, or `.preprocess()` on WebSocket message schemas — normalization happens in an explicit pass after validation. The reason is in [protocol-validation.md](protocol-validation.md): inbound validators are generated, and the generator only compiles pure schemas.

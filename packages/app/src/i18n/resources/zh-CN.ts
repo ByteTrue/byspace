@@ -2189,6 +2189,12 @@ export const zhCN: TranslationResources = {
         chooseAllHint: "保持安装所有内置 skills，包括以后新增的。",
         chooseList: "内置 skills",
         chooseEmpty: "此版本未内置 skills。",
+        targetsTitle: "安装位置",
+        targetsEmpty: "至少选择一个安装位置。",
+        targets: {
+          agents: "Codex、Pi 及其他读取共享 skills 目录的 agent 会使用。",
+          claude: "Claude Code 会使用。",
+        },
         removeTitle: "移除取消勾选的 skills？",
         removeMessage:
           "将从 ~/.agents、~/.claude 中删除 {{skills}}。你在这些 skill 文件夹里添加的内容也会一并删除。",
