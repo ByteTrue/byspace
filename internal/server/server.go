@@ -1,0 +1,1405 @@
+package server
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/coder/websocket"
+
+	"github.com/ByteTrue/byspace/internal/agent/pi"
+	"github.com/ByteTrue/byspace/internal/e2ee"
+	"github.com/ByteTrue/byspace/internal/home"
+	"github.com/ByteTrue/byspace/internal/store"
+	"github.com/ByteTrue/byspace/internal/terminal"
+	"github.com/ByteTrue/byspace/internal/webui"
+)
+
+const WSProtocolVersion = 1
+
+var ownerPermissions = []string{
+	"daemon.read",
+	"daemon.manage",
+	"tunnel.manage",
+	"access.manage",
+	"workspace.read",
+	"workspace.write",
+	"workspace.manage",
+	"automation.manage",
+	"hub.execute",
+}
+
+// Options configures the Go BySpace daemon server.
+type Options struct {
+	HomeDir   string
+	Version   string
+	WebDir    string
+	WebUI     *webui.Handler
+	PiCommand string
+}
+
+type managedPi struct {
+	record  store.AgentRecord
+	session *pi.Session
+}
+
+type frameSink interface {
+	SendText(ctx context.Context, text string) error
+	SendBinary(ctx context.Context, data []byte) error
+	Close(code websocket.StatusCode, reason string) error
+}
+
+type wsSink struct {
+	ws      *websocket.Conn
+	writeMu sync.Mutex
+}
+
+func (w *wsSink) SendText(ctx context.Context, text string) error {
+	w.writeMu.Lock()
+	defer w.writeMu.Unlock()
+	wctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return w.ws.Write(wctx, websocket.MessageText, []byte(text))
+}
+
+func (w *wsSink) SendBinary(ctx context.Context, data []byte) error {
+	w.writeMu.Lock()
+	defer w.writeMu.Unlock()
+	wctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return w.ws.Write(wctx, websocket.MessageBinary, data)
+}
+
+func (w *wsSink) Close(code websocket.StatusCode, reason string) error {
+	return w.ws.Close(code, reason)
+}
+
+// Server is the unified BySpace HTTP + WebSocket daemon server.
+type Server struct {
+	homeDir   string
+	serverID  string
+	version   string
+	keyPair   e2ee.KeyPair
+	pubKeyB64 string
+	store     *store.Store
+	webUI     *webui.Handler
+	piCommand string
+
+	mu        sync.Mutex
+	agents    map[string]*managedPi
+	terminals map[uint8]*terminal.Session
+	clients   map[frameSink]bool
+}
+
+// New creates and initializes a BySpace daemon Server rooted at opts.HomeDir.
+func New(opts Options) (*Server, error) {
+	homeDir, err := home.Resolve(opts.HomeDir)
+	if err != nil {
+		return nil, err
+	}
+	serverID, err := home.GetOrCreateServerID(homeDir)
+	if err != nil {
+		return nil, err
+	}
+	kp, pubB64, err := home.LoadOrCreateKeyPair(homeDir)
+	if err != nil {
+		return nil, err
+	}
+	ver := strings.TrimSpace(opts.Version)
+	if ver == "" {
+		ver = "0.20.2-go"
+	}
+	ui := opts.WebUI
+	if ui == nil {
+		ui = webui.NewHandler(opts.WebDir)
+	}
+
+	return &Server{
+		homeDir:   homeDir,
+		serverID:  serverID,
+		version:   ver,
+		keyPair:   kp,
+		pubKeyB64: pubB64,
+		store:     store.New(homeDir),
+		webUI:     ui,
+		piCommand: opts.PiCommand,
+		agents:    make(map[string]*managedPi),
+		terminals: make(map[uint8]*terminal.Session),
+		clients:   make(map[frameSink]bool),
+	}, nil
+}
+
+func (s *Server) ServerID() string     { return s.serverID }
+func (s *Server) PublicKeyB64() string { return s.pubKeyB64 }
+func (s *Server) HomeDir() string      { return s.homeDir }
+func (s *Server) Store() *store.Store  { return s.store }
+
+// Close shuts down any live Pi agent subprocesses and PTY sessions.
+func (s *Server) Close() error {
+	s.mu.Lock()
+	agents := make([]*managedPi, 0, len(s.agents))
+	for _, a := range s.agents {
+		agents = append(agents, a)
+	}
+	terms := make([]*terminal.Session, 0, len(s.terminals))
+	for _, t := range s.terminals {
+		terms = append(terms, t)
+	}
+	s.mu.Unlock()
+
+	for _, a := range agents {
+		if a.session != nil {
+			_ = a.session.Close()
+		}
+	}
+	for _, t := range terms {
+		_ = t.Close()
+	}
+	return nil
+}
+
+// ServeHTTP handles /health, /ws, and embedded/external Web UI routes.
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/health" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status":   "ok",
+			"serverId": s.serverID,
+			"version":  s.version,
+		})
+		return
+	}
+
+	if r.URL.Path == "/ws" {
+		s.handleDirectWS(w, r)
+		return
+	}
+
+	if s.webUI != nil && s.webUI.TryServe(w, r) {
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusNotFound)
+	_, _ = w.Write([]byte("Not found"))
+}
+
+func (s *Server) handleDirectWS(w http.ResponseWriter, r *http.Request) {
+	ws, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		InsecureSkipVerify: true,
+	})
+	if err != nil {
+		return
+	}
+	ws.SetReadLimit(64 * 1024 * 1024)
+
+	sink := &wsSink{ws: ws}
+	s.serveSessionOnSink(r.Context(), sink, func(ctx context.Context) (e2ee.Frame, error) {
+		msgType, data, err := ws.Read(ctx)
+		if err != nil {
+			return e2ee.Frame{}, err
+		}
+		return e2ee.Frame{
+			Data:     data,
+			IsBinary: msgType == websocket.MessageBinary,
+		}, nil
+	})
+}
+
+// ConnectRelay maintains a v2 server-control connection to a Relay and spawns E2EE
+// server-data sessions whenever a client connects.
+func (s *Server) ConnectRelay(ctx context.Context, relayWSURL string) error {
+	u, err := url.Parse(relayWSURL)
+	if err != nil {
+		return err
+	}
+	q := u.Query()
+	q.Set("serverId", s.serverID)
+	q.Set("role", "server")
+	q.Set("v", "2")
+	u.RawQuery = q.Encode()
+
+	ctrlWS, _, err := websocket.Dial(ctx, u.String(), nil)
+	if err != nil {
+		return err
+	}
+	defer ctrlWS.CloseNow()
+
+	activeData := make(map[string]context.CancelFunc)
+	var dataMu sync.Mutex
+	defer func() {
+		dataMu.Lock()
+		for _, cancel := range activeData {
+			cancel()
+		}
+		dataMu.Unlock()
+	}()
+
+	spawnData := func(cid string) {
+		if cid == "" {
+			return
+		}
+		dataMu.Lock()
+		if prev, ok := activeData[cid]; ok {
+			prev()
+		}
+		dctx, cancel := context.WithCancel(ctx)
+		activeData[cid] = cancel
+		dataMu.Unlock()
+
+		go func() {
+			defer func() {
+				dataMu.Lock()
+				delete(activeData, cid)
+				dataMu.Unlock()
+			}()
+			_ = s.serveRelayDataConn(dctx, relayWSURL, cid)
+		}()
+	}
+
+	for {
+		_, data, err := ctrlWS.Read(ctx)
+		if err != nil {
+			return err
+		}
+		var evt struct {
+			Type          string   `json:"type"`
+			ConnectionID  string   `json:"connectionId"`
+			ConnectionIDs []string `json:"connectionIds"`
+		}
+		if json.Unmarshal(data, &evt) != nil {
+			continue
+		}
+		switch evt.Type {
+		case "sync":
+			for _, cid := range evt.ConnectionIDs {
+				spawnData(cid)
+			}
+		case "connected":
+			spawnData(evt.ConnectionID)
+		case "disconnected":
+			dataMu.Lock()
+			if cancel, ok := activeData[evt.ConnectionID]; ok {
+				cancel()
+				delete(activeData, evt.ConnectionID)
+			}
+			dataMu.Unlock()
+		}
+	}
+}
+
+type e2eeSinkAdapter struct {
+	ctx  context.Context
+	raw  *wsSink
+	sess *e2ee.DaemonSession
+}
+
+func (a *e2eeSinkAdapter) SendText(_ context.Context, text string) error {
+	return a.sess.Send(e2ee.Frame{Data: []byte(text), IsBinary: false})
+}
+
+func (a *e2eeSinkAdapter) SendBinary(_ context.Context, data []byte) error {
+	return a.sess.Send(e2ee.Frame{Data: data, IsBinary: true})
+}
+
+func (a *e2eeSinkAdapter) Close(code websocket.StatusCode, reason string) error {
+	return a.raw.Close(code, reason)
+}
+
+type rawTransportAdapter struct {
+	ctx context.Context
+	raw *wsSink
+}
+
+func (r *rawTransportAdapter) SendText(text string) error {
+	return r.raw.SendText(r.ctx, text)
+}
+
+func (r *rawTransportAdapter) SendBinary(data []byte) error {
+	return r.raw.SendBinary(r.ctx, data)
+}
+
+func (r *rawTransportAdapter) Close(code int, reason string) error {
+	return r.raw.Close(websocket.StatusCode(code), reason)
+}
+
+func (s *Server) serveRelayDataConn(ctx context.Context, relayWSURL, cid string) error {
+	u, err := url.Parse(relayWSURL)
+	if err != nil {
+		return err
+	}
+	q := u.Query()
+	q.Set("serverId", s.serverID)
+	q.Set("role", "server")
+	q.Set("v", "2")
+	q.Set("connectionId", cid)
+	u.RawQuery = q.Encode()
+
+	ws, _, err := websocket.Dial(ctx, u.String(), nil)
+	if err != nil {
+		return err
+	}
+	defer ws.CloseNow()
+	ws.SetReadLimit(64 * 1024 * 1024)
+
+	rawSink := &wsSink{ws: ws}
+	e2eeSess := e2ee.NewDaemonSession(&rawTransportAdapter{ctx: ctx, raw: rawSink}, s.keyPair)
+	adapter := &e2eeSinkAdapter{ctx: ctx, raw: rawSink, sess: e2eeSess}
+
+	s.serveSessionOnSink(ctx, adapter, func(rctx context.Context) (e2ee.Frame, error) {
+		for {
+			msgType, data, err := ws.Read(rctx)
+			if err != nil {
+				return e2ee.Frame{}, err
+			}
+			plain, err := e2eeSess.Receive(e2ee.Frame{
+				Data:     data,
+				IsBinary: msgType == websocket.MessageBinary,
+			})
+			if err != nil {
+				_ = rawSink.Close(websocket.StatusInternalError, err.Error())
+				return e2ee.Frame{}, err
+			}
+			if plain != nil {
+				return *plain, nil
+			}
+		}
+	})
+	return nil
+}
+
+func (s *Server) serveSessionOnSink(
+	ctx context.Context,
+	sink frameSink,
+	readNext func(context.Context) (e2ee.Frame, error),
+) {
+	s.mu.Lock()
+	s.clients[sink] = false
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.clients, sink)
+		s.mu.Unlock()
+	}()
+
+	for {
+		frame, err := readNext(ctx)
+		if err != nil {
+			return
+		}
+		if frame.IsBinary {
+			s.handleBinaryFrame(ctx, sink, frame.Data)
+			continue
+		}
+		s.handleTextFrame(ctx, sink, frame.Data)
+	}
+}
+
+func (s *Server) handleBinaryFrame(ctx context.Context, sink frameSink, raw []byte) {
+	tf, err := terminal.DecodeFrame(raw)
+	if err != nil {
+		return
+	}
+	switch tf.Opcode {
+	case terminal.OpcodeInput:
+		sess := s.ensureTerminalSlot(tf.Slot, sink)
+		if sess != nil {
+			_ = sess.WriteInput(tf.Payload)
+		}
+	case terminal.OpcodeResize:
+		rsz, err := terminal.DecodeResizePayload(tf.Payload)
+		if err == nil {
+			sess := s.ensureTerminalSlot(tf.Slot, sink)
+			if sess != nil {
+				_ = sess.Resize(uint16(rsz.Rows), uint16(rsz.Cols))
+			}
+		}
+	}
+	_ = ctx
+}
+
+func (s *Server) ensureTerminalSlot(slot uint8, sink frameSink) *terminal.Session {
+	s.mu.Lock()
+	sess, ok := s.terminals[slot]
+	s.mu.Unlock()
+	if ok {
+		return sess
+	}
+
+	cwd, _ := os.Getwd()
+	created, err := terminal.StartSession(terminal.StartOptions{
+		ID:   fmt.Sprintf("term_%d", slot),
+		Name: fmt.Sprintf("Terminal %d", slot+1),
+		Cwd:  cwd,
+	})
+	if err != nil {
+		return nil
+	}
+
+	s.mu.Lock()
+	if existing, ok := s.terminals[slot]; ok {
+		s.mu.Unlock()
+		_ = created.Close()
+		return existing
+	}
+	s.terminals[slot] = created
+	s.mu.Unlock()
+
+	created.Subscribe(func(ev terminal.OutputEvent) {
+		outFrame := terminal.EncodeFrame(terminal.OpcodeOutput, slot, ev.Data)
+		_ = sink.SendBinary(context.Background(), outFrame)
+	})
+	return created
+}
+
+func (s *Server) handleTextFrame(ctx context.Context, sink frameSink, raw []byte) {
+	var envelope struct {
+		Type            string          `json:"type"`
+		ClientID        string          `json:"clientId"`
+		ProtocolVersion int             `json:"protocolVersion"`
+		AppVersion      string          `json:"appVersion"`
+		Message         json.RawMessage `json:"message"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return
+	}
+
+	switch envelope.Type {
+	case "ping":
+		_ = sendJSON(ctx, sink, map[string]any{"type": "pong"})
+	case "recording_state":
+		return
+	case "hello":
+		if envelope.ProtocolVersion != WSProtocolVersion {
+			_ = sink.Close(4400, "Incompatible protocol version")
+			return
+		}
+		if strings.TrimSpace(envelope.ClientID) == "" {
+			_ = sink.Close(4402, "Invalid hello")
+			return
+		}
+		s.mu.Lock()
+		s.clients[sink] = true
+		s.mu.Unlock()
+		_ = sendSessionMsg(ctx, sink, "status", s.buildServerInfoPayload())
+	case "session":
+		s.handleSessionMessage(ctx, sink, envelope.Message)
+	}
+}
+
+func (s *Server) buildServerInfoPayload() map[string]any {
+	hostname, _ := os.Hostname()
+	return map[string]any{
+		"status":         "server_info",
+		"serverId":       s.serverID,
+		"hostname":       hostname,
+		"version":        s.version,
+		"permissions":    ownerPermissions,
+		"desktopManaged": false,
+		"features": map[string]any{
+			"agentRequestReceipts":         true,
+			"hubAgentRpc":                  true,
+			"directorySync":                true,
+			"workspaceSetupRun":            true,
+			"providersSnapshot":            true,
+			"providersSnapshotCwd":         true,
+			"daemonStatusRpc":              true,
+			"daemonConfigReload":           true,
+			"relayConfig":                  true,
+			"pushTokenRevocation":          true,
+			"plugins":                      true,
+			"pluginManagement":             true,
+			"skillManagement":              true,
+			"agentRoles":                   true,
+			"agentRoleNames":               []string{},
+			"daemonTunnels":                true,
+			"projectSetupSkill":            true,
+			"terminalAgentHookProviders":   true,
+			"terminalShellConfig":          true,
+			"terminal-restore-modes":       true,
+			"terminal-input-mode-replay":   true,
+			"terminal-size-ownership":      true,
+			"workspaceTerminals":           true,
+			"rewind":                       true,
+			"agentTimelinePromptIndex":     true,
+			"agentHistorySearch":           true,
+			"checkoutRefresh":              true,
+			"workspaceAgentRename":         true,
+			"workspaceMultiplicity":        true,
+			"projectRemove":                true,
+			"projectAdd":                   true,
+			"projectList":                  true,
+			"worktreeRestore":              true,
+			"workspaceRecovery":            true,
+			"workspaceFileEditing":         true,
+			"providerUsageList":            true,
+			"agentDetach":                  true,
+			"agentThinkingUpdate":          true,
+			"daemonDiagnostics":            true,
+			"daemonSelfUpdate":             true,
+			"agentForkContext":             true,
+			"agentForkContextCursor":       true,
+			"providerSubagents":            true,
+			"providerSubagentNesting":      true,
+			"workspacePinning":             true,
+			"workspaceMarkUnread":          true,
+			"projectCreateDirectory":       true,
+			"commitsList":                  true,
+			"commitBaseClassification":     true,
+			"providerRemoval":              true,
+			"importSessionWorkspaceTarget": true,
+			"importSessionSearch":          true,
+			"selectiveAgentTimeline":       true,
+			"explicitEventSubscriptions":   true,
+			"canonicalSubmittedPrompts":    true,
+			"stableProjectIdentity":        true,
+			"workspaceScriptManagement":    true,
+			"projectCustomIcon":            true,
+			"fsEntryOps":                   true,
+			"fsEntryDuplicate":             true,
+			"checkoutDiscardChanges":       true,
+			"agentProfiles":                true,
+			"agentConfigApply":             true,
+			"daemonNetworkConfig":          true,
+			"daemonServiceInstall":         true,
+		},
+	}
+}
+
+func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var base struct {
+		Type      string `json:"type"`
+		RequestID string `json:"requestId"`
+	}
+	if err := json.Unmarshal(raw, &base); err != nil {
+		return
+	}
+
+	switch base.Type {
+	case "ping":
+		var ping struct {
+			RequestID    string `json:"requestId"`
+			ClientSentAt int64  `json:"clientSentAt"`
+		}
+		_ = json.Unmarshal(raw, &ping)
+		now := time.Now().UnixMilli()
+		_ = sendSessionMsg(ctx, sink, "pong", map[string]any{
+			"requestId":        ping.RequestID,
+			"clientSentAt":     ping.ClientSentAt,
+			"serverReceivedAt": now,
+			"serverSentAt":     now,
+		})
+
+	case "client_heartbeat":
+		return
+
+	case "session.events.set_subscription.request":
+		_ = sendSessionMsg(ctx, sink, "session.events.set_subscription.response", map[string]any{
+			"requestId": base.RequestID,
+		})
+
+	case "agent.timeline.set_subscription.request":
+		_ = sendSessionMsg(ctx, sink, "agent.timeline.set_subscription.response", map[string]any{
+			"requestId": base.RequestID,
+		})
+
+	case "daemon.get_status.request":
+		hostname, _ := os.Hostname()
+		_ = sendSessionMsg(ctx, sink, "daemon.get_status.response", map[string]any{
+			"requestId":    base.RequestID,
+			"serverId":     s.serverID,
+			"hostname":     hostname,
+			"version":      s.version,
+			"publicKeyB64": s.pubKeyB64,
+			"pid":          os.Getpid(),
+		})
+
+	case "get_daemon_config_request":
+		_ = sendSessionMsg(ctx, sink, "get_daemon_config_response", map[string]any{
+			"requestId": base.RequestID,
+			"config":    map[string]any{},
+		})
+
+	case "list_available_providers_request":
+		_ = sendSessionMsg(ctx, sink, "list_available_providers_response", map[string]any{
+			"requestId": base.RequestID,
+			"providers": []map[string]any{
+				{"id": "pi", "label": "Pi", "available": true},
+			},
+		})
+
+	case "get_providers_snapshot_request":
+		_ = sendSessionMsg(ctx, sink, "get_providers_snapshot_response", map[string]any{
+			"requestId": base.RequestID,
+			"providers": map[string]any{
+				"pi": map[string]any{
+					"available": true,
+					"models":    []any{},
+					"modes":     []any{},
+					"features":  []any{},
+				},
+			},
+		})
+
+	case "project.list.request":
+		s.handleProjectList(ctx, sink, base.RequestID)
+
+	case "fetch_workspaces_request":
+		s.handleFetchWorkspaces(ctx, sink, raw)
+
+	case "workspace.create.request":
+		s.handleWorkspaceCreate(ctx, sink, raw)
+
+	case "fetch_agents_request", "fetch_agent_history_request":
+		s.handleFetchAgents(ctx, sink, base.Type, raw)
+
+	case "fetch_agent_request":
+		var req struct {
+			RequestID string `json:"requestId"`
+			AgentID   string `json:"agentId"`
+		}
+		_ = json.Unmarshal(raw, &req)
+		agentPayload := s.getAgentPayload(req.AgentID)
+		_ = sendSessionMsg(ctx, sink, "fetch_agent_response", map[string]any{
+			"requestId": req.RequestID,
+			"agent":     agentPayload,
+		})
+
+	case "create_agent_request":
+		s.handleCreateAgent(ctx, sink, raw)
+
+	case "send_agent_message_request":
+		s.handleSendAgentMessage(ctx, sink, raw)
+
+	case "fetch_agent_timeline_request":
+		s.handleFetchAgentTimeline(ctx, sink, raw)
+
+	case "wait_for_finish_request":
+		s.handleWaitForFinish(ctx, sink, raw)
+
+	case "cancel_agent_request":
+		var req struct {
+			RequestID string `json:"requestId"`
+			AgentID   string `json:"agentId"`
+		}
+		_ = json.Unmarshal(raw, &req)
+		s.mu.Lock()
+		mp := s.agents[req.AgentID]
+		s.mu.Unlock()
+		if mp != nil && mp.session != nil {
+			_ = mp.session.Abort(ctx)
+		}
+		_ = sendSessionMsg(ctx, sink, "status", map[string]any{
+			"status":    "agent_cancelled",
+			"agentId":   req.AgentID,
+			"requestId": req.RequestID,
+		})
+	}
+}
+
+func (s *Server) handleProjectList(ctx context.Context, sink frameSink, requestID string) {
+	projects, _ := s.store.ListProjects()
+	descriptors := make([]map[string]any, 0, len(projects))
+	for _, p := range projects {
+		if p.ArchivedAt != nil {
+			continue
+		}
+		descriptors = append(descriptors, buildProjectDescriptor(p))
+	}
+	_ = sendSessionMsg(ctx, sink, "project.list.response", map[string]any{
+		"requestId": requestID,
+		"projects":  descriptors,
+	})
+}
+
+func (s *Server) handleFetchWorkspaces(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID string `json:"requestId"`
+		Subscribe *struct {
+			SubscriptionID string `json:"subscriptionId"`
+		} `json:"subscribe"`
+	}
+	_ = json.Unmarshal(raw, &req)
+
+	projects, _ := s.store.ListProjects()
+	workspaces, _ := s.store.ListWorkspaces()
+
+	prjByID := make(map[string]store.ProjectRecord, len(projects))
+	wsCountByPrj := make(map[string]int)
+	for _, p := range projects {
+		prjByID[p.ProjectID] = p
+	}
+
+	entries := make([]map[string]any, 0, len(workspaces))
+	for _, ws := range workspaces {
+		if ws.ArchivedAt != nil {
+			continue
+		}
+		prj, ok := prjByID[ws.ProjectID]
+		if !ok || prj.ArchivedAt != nil {
+			continue
+		}
+		wsCountByPrj[ws.ProjectID]++
+		entries = append(entries, buildWorkspaceDescriptor(ws, prj))
+	}
+
+	emptyProjects := make([]map[string]any, 0)
+	for _, p := range projects {
+		if p.ArchivedAt == nil && wsCountByPrj[p.ProjectID] == 0 {
+			emptyProjects = append(emptyProjects, buildProjectDescriptor(p))
+		}
+	}
+
+	payload := map[string]any{
+		"requestId":     req.RequestID,
+		"entries":       entries,
+		"emptyProjects": emptyProjects,
+		"pageInfo": map[string]any{
+			"nextCursor": nil,
+			"prevCursor": nil,
+			"hasMore":    false,
+		},
+	}
+	if req.Subscribe != nil && req.Subscribe.SubscriptionID != "" {
+		payload["subscriptionId"] = req.Subscribe.SubscriptionID
+	}
+	_ = sendSessionMsg(ctx, sink, "fetch_workspaces_response", payload)
+}
+
+func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID string  `json:"requestId"`
+		Title     *string `json:"title"`
+		Source    struct {
+			Kind string `json:"kind"`
+			Path string `json:"path"`
+		} `json:"source"`
+	}
+	_ = json.Unmarshal(raw, &req)
+	prj, ws, err := s.store.EnsureWorkspaceForCwd(req.Source.Path)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "workspace.create.response", map[string]any{
+			"requestId":       req.RequestID,
+			"workspace":       nil,
+			"setupTerminalId": nil,
+			"error":           err.Error(),
+		})
+		return
+	}
+	if req.Title != nil && strings.TrimSpace(*req.Title) != "" {
+		ws.Title = req.Title
+		_ = s.store.UpsertWorkspace(ws)
+	}
+	_ = sendSessionMsg(ctx, sink, "workspace.create.response", map[string]any{
+		"requestId":       req.RequestID,
+		"workspace":       buildWorkspaceDescriptor(ws, prj),
+		"setupTerminalId": nil,
+		"error":           nil,
+	})
+}
+
+func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType string, raw json.RawMessage) {
+	var req struct {
+		RequestID string `json:"requestId"`
+		Subscribe *struct {
+			SubscriptionID string `json:"subscriptionId"`
+		} `json:"subscribe"`
+	}
+	_ = json.Unmarshal(raw, &req)
+
+	records, _ := s.store.ListAgents()
+	projects, _ := s.store.ListProjects()
+	workspaces, _ := s.store.ListWorkspaces()
+
+	prjByID := make(map[string]store.ProjectRecord, len(projects))
+	for _, p := range projects {
+		prjByID[p.ProjectID] = p
+	}
+	wsByID := make(map[string]store.WorkspaceRecord, len(workspaces))
+	for _, w := range workspaces {
+		wsByID[w.WorkspaceID] = w
+	}
+
+	entries := make([]map[string]any, 0, len(records))
+	for _, rec := range records {
+		if rec.ArchivedAt != nil && reqType == "fetch_agents_request" {
+			continue
+		}
+		agentPayload := s.buildAgentSnapshotPayload(rec)
+		var projectPlacement any
+		if ws, ok := wsByID[rec.WorkspaceID]; ok {
+			if prj, ok := prjByID[ws.ProjectID]; ok {
+				projectPlacement = buildWorkspaceDescriptor(ws, prj)
+			}
+		}
+		entries = append(entries, map[string]any{
+			"agent":            agentPayload,
+			"projectPlacement": projectPlacement,
+		})
+	}
+
+	respType := "fetch_agents_response"
+	if reqType == "fetch_agent_history_request" {
+		respType = "fetch_agent_history_response"
+	}
+	payload := map[string]any{
+		"requestId": req.RequestID,
+		"entries":   entries,
+		"pageInfo": map[string]any{
+			"nextCursor": nil,
+			"prevCursor": nil,
+			"hasMore":    false,
+		},
+	}
+	if req.Subscribe != nil && req.Subscribe.SubscriptionID != "" {
+		payload["subscriptionId"] = req.Subscribe.SubscriptionID
+	}
+	_ = sendSessionMsg(ctx, sink, respType, payload)
+}
+
+func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID     string  `json:"requestId"`
+		WorkspaceID   string  `json:"workspaceId"`
+		InitialPrompt *string `json:"initialPrompt"`
+		Config        struct {
+			Provider         string  `json:"provider"`
+			Cwd              string  `json:"cwd"`
+			Title            *string `json:"title"`
+			Model            *string `json:"model"`
+			ThinkingOptionID *string `json:"thinkingOptionId"`
+			ModeID           *string `json:"modeId"`
+		} `json:"config"`
+	}
+	if err := json.Unmarshal(raw, &req); err != nil {
+		return
+	}
+
+	cwd := strings.TrimSpace(req.Config.Cwd)
+	if cwd == "" {
+		cwd, _ = os.Getwd()
+	}
+	absCwd, err := filepath.Abs(cwd)
+	if err == nil {
+		cwd = absCwd
+	}
+
+	_, ws, err := s.store.EnsureWorkspaceForCwd(cwd)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "status", map[string]any{
+			"status":    "agent_create_failed",
+			"requestId": req.RequestID,
+			"error":     err.Error(),
+		})
+		return
+	}
+
+	provider := strings.TrimSpace(req.Config.Provider)
+	if provider == "" {
+		provider = "pi"
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	agentID := newAgentID()
+	title := req.Config.Title
+	if title == nil && req.InitialPrompt != nil {
+		trimmed := strings.TrimSpace(*req.InitialPrompt)
+		if trimmed != "" {
+			if len(trimmed) > 60 {
+				trimmed = trimmed[:60]
+			}
+			title = &trimmed
+		}
+	}
+
+	rec := store.AgentRecord{
+		ID:          agentID,
+		Provider:    provider,
+		Cwd:         cwd,
+		WorkspaceID: ws.WorkspaceID,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		Title:       title,
+		Labels:      map[string]string{},
+		LastStatus:  "idle",
+		Config: &store.AgentConfig{
+			Model:            req.Config.Model,
+			ThinkingOptionID: req.Config.ThinkingOptionID,
+			ModeID:           req.Config.ModeID,
+		},
+	}
+
+	mp, err := s.startOrGetPiAgent(rec)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "status", map[string]any{
+			"status":    "agent_create_failed",
+			"requestId": req.RequestID,
+			"error":     err.Error(),
+		})
+		return
+	}
+
+	if err := s.store.UpsertAgent(mp.record); err != nil {
+		_ = sendSessionMsg(ctx, sink, "status", map[string]any{
+			"status":    "agent_create_failed",
+			"requestId": req.RequestID,
+			"error":     err.Error(),
+		})
+		return
+	}
+
+	if req.InitialPrompt != nil && strings.TrimSpace(*req.InitialPrompt) != "" {
+		_ = mp.session.Prompt(ctx, *req.InitialPrompt, nil)
+		mp.record.LastStatus = mp.session.Status()
+		mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		_ = s.store.UpsertAgent(mp.record)
+	}
+
+	_ = sendSessionMsg(ctx, sink, "status", map[string]any{
+		"status":    "agent_created",
+		"agentId":   agentID,
+		"requestId": req.RequestID,
+		"agent":     s.buildAgentSnapshotPayload(mp.record),
+	})
+}
+
+func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID string `json:"requestId"`
+		AgentID   string `json:"agentId"`
+		Text      string `json:"text"`
+	}
+	_ = json.Unmarshal(raw, &req)
+
+	mp, err := s.ensureAgentLoaded(req.AgentID)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "send_agent_message_response", map[string]any{
+			"requestId": req.RequestID,
+			"agentId":   req.AgentID,
+			"accepted":  false,
+			"error":     err.Error(),
+		})
+		return
+	}
+
+	if err := mp.session.Prompt(ctx, req.Text, nil); err != nil {
+		_ = sendSessionMsg(ctx, sink, "send_agent_message_response", map[string]any{
+			"requestId": req.RequestID,
+			"agentId":   req.AgentID,
+			"accepted":  false,
+			"error":     err.Error(),
+		})
+		return
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	mp.record.UpdatedAt = now
+	mp.record.LastUserMessageAt = &now
+	mp.record.LastStatus = mp.session.Status()
+	_ = s.store.UpsertAgent(mp.record)
+
+	_ = sendSessionMsg(ctx, sink, "send_agent_message_response", map[string]any{
+		"requestId": req.RequestID,
+		"agentId":   req.AgentID,
+		"accepted":  true,
+		"error":     nil,
+	})
+}
+
+func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID  string `json:"requestId"`
+		AgentID    string `json:"agentId"`
+		Direction  string `json:"direction"`
+		Projection string `json:"projection"`
+	}
+	_ = json.Unmarshal(raw, &req)
+
+	direction := req.Direction
+	if direction == "" {
+		direction = "tail"
+	}
+	projection := req.Projection
+	if projection == "" {
+		projection = "projected"
+	}
+
+	mp, err := s.ensureAgentLoaded(req.AgentID)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "fetch_agent_timeline_response", map[string]any{
+			"requestId":   req.RequestID,
+			"agentId":     req.AgentID,
+			"direction":   direction,
+			"projection":  projection,
+			"epoch":       "ep_1",
+			"reset":       false,
+			"staleCursor": false,
+			"gap":         false,
+			"entries":     []any{},
+			"error":       err.Error(),
+		})
+		return
+	}
+
+	tl := mp.session.Timeline()
+	entries := make([]map[string]any, 0, len(tl))
+	for _, e := range tl {
+		entries = append(entries, map[string]any{
+			"provider":  mp.record.Provider,
+			"item":      e.Item,
+			"timestamp": e.Timestamp,
+			"seqStart":  e.Seq,
+			"seqEnd":    e.Seq,
+			"sourceSeqRanges": []map[string]any{
+				{"startSeq": e.Seq, "endSeq": e.Seq},
+			},
+			"turnId":    e.TurnID,
+			"collapsed": []string{},
+		})
+	}
+
+	var startCursor, endCursor any
+	if len(tl) > 0 {
+		startCursor = map[string]any{"epoch": "ep_1", "seq": tl[0].Seq}
+		endCursor = map[string]any{"epoch": "ep_1", "seq": tl[len(tl)-1].Seq}
+	}
+
+	_ = sendSessionMsg(ctx, sink, "fetch_agent_timeline_response", map[string]any{
+		"requestId":   req.RequestID,
+		"agentId":     req.AgentID,
+		"agent":       s.buildAgentSnapshotPayload(mp.record),
+		"direction":   direction,
+		"projection":  projection,
+		"epoch":       "ep_1",
+		"reset":       false,
+		"staleCursor": false,
+		"gap":         false,
+		"window": map[string]any{
+			"minSeq": 1,
+			"maxSeq": len(tl),
+		},
+		"startCursor": startCursor,
+		"endCursor":   endCursor,
+		"hasOlder":    false,
+		"hasNewer":    false,
+		"entries":     entries,
+		"error":       nil,
+	})
+}
+
+func (s *Server) handleWaitForFinish(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID string `json:"requestId"`
+		AgentID   string `json:"agentId"`
+		TimeoutMs int    `json:"timeoutMs"`
+	}
+	_ = json.Unmarshal(raw, &req)
+
+	mp, err := s.ensureAgentLoaded(req.AgentID)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "wait_for_finish_response", map[string]any{
+			"requestId": req.RequestID,
+			"status":    "error",
+			"final":     nil,
+			"error":     err.Error(),
+		})
+		return
+	}
+
+	wctx := ctx
+	var cancel context.CancelFunc
+	if req.TimeoutMs > 0 {
+		wctx, cancel = context.WithTimeout(ctx, time.Duration(req.TimeoutMs)*time.Millisecond)
+		defer cancel()
+	}
+
+	if err := mp.session.WaitForFinish(wctx); err != nil {
+		_ = sendSessionMsg(ctx, sink, "wait_for_finish_response", map[string]any{
+			"requestId": req.RequestID,
+			"status":    "timeout",
+			"final":     nil,
+			"error":     err.Error(),
+		})
+		return
+	}
+
+	mp.record.LastStatus = mp.session.Status()
+	mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	_ = s.store.UpsertAgent(mp.record)
+
+	finalText := mp.session.LastAssistantText()
+	_ = sendSessionMsg(ctx, sink, "wait_for_finish_response", map[string]any{
+		"requestId": req.RequestID,
+		"status":    "completed",
+		"final": map[string]any{
+			"agentId":       req.AgentID,
+			"status":        mp.record.LastStatus,
+			"assistantText": finalText,
+		},
+		"error": nil,
+	})
+}
+
+func (s *Server) ensureAgentLoaded(agentID string) (*managedPi, error) {
+	s.mu.Lock()
+	if mp, ok := s.agents[agentID]; ok {
+		s.mu.Unlock()
+		return mp, nil
+	}
+	s.mu.Unlock()
+
+	rec, err := s.store.GetAgent(agentID)
+	if err != nil {
+		return nil, err
+	}
+	if rec == nil {
+		return nil, fmt.Errorf("agent not found: %s", agentID)
+	}
+	return s.startOrGetPiAgent(*rec)
+}
+
+func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
+	s.mu.Lock()
+	if existing, ok := s.agents[rec.ID]; ok {
+		s.mu.Unlock()
+		return existing, nil
+	}
+	s.mu.Unlock()
+
+	var model, thinking string
+	if rec.Config != nil {
+		if rec.Config.Model != nil {
+			model = *rec.Config.Model
+		}
+		if rec.Config.ThinkingOptionID != nil {
+			thinking = *rec.Config.ThinkingOptionID
+		}
+	}
+
+	sess, err := pi.StartSession(pi.LaunchOptions{
+		Command:          s.piCommand,
+		Cwd:              rec.Cwd,
+		Model:            model,
+		ThinkingOptionID: thinking,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	mp := &managedPi{
+		record:  rec,
+		session: sess,
+	}
+
+	s.mu.Lock()
+	s.agents[rec.ID] = mp
+	s.mu.Unlock()
+
+	sess.OnEvent(func(ev map[string]any) {
+		evType, _ := ev["type"].(string)
+		if evType == "agent_end" || evType == "agent_settled" || evType == "process_exit" {
+			s.mu.Lock()
+			mp.record.LastStatus = sess.Status()
+			mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+			recCopy := mp.record
+			s.mu.Unlock()
+			_ = s.store.UpsertAgent(recCopy)
+		}
+		s.broadcastSessionMsg("agent_stream", map[string]any{
+			"agentId":   rec.ID,
+			"provider":  rec.Provider,
+			"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
+			"event":     ev,
+		})
+	})
+
+	return mp, nil
+}
+
+func (s *Server) broadcastSessionMsg(msgType string, payload any) {
+	s.mu.Lock()
+	sinks := make([]frameSink, 0, len(s.clients))
+	for sink, handshaked := range s.clients {
+		if handshaked {
+			sinks = append(sinks, sink)
+		}
+	}
+	s.mu.Unlock()
+
+	ctx := context.Background()
+	for _, sink := range sinks {
+		_ = sendSessionMsg(ctx, sink, msgType, payload)
+	}
+}
+
+func (s *Server) getAgentPayload(agentID string) any {
+	s.mu.Lock()
+	mp, ok := s.agents[agentID]
+	s.mu.Unlock()
+	if ok {
+		mp.record.LastStatus = mp.session.Status()
+		return s.buildAgentSnapshotPayload(mp.record)
+	}
+	rec, err := s.store.GetAgent(agentID)
+	if err != nil || rec == nil {
+		return nil
+	}
+	return s.buildAgentSnapshotPayload(*rec)
+}
+
+func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any {
+	status := rec.LastStatus
+	s.mu.Lock()
+	if mp, ok := s.agents[rec.ID]; ok && mp.session != nil {
+		status = mp.session.Status()
+	}
+	s.mu.Unlock()
+	if status == "" {
+		status = "closed"
+	}
+
+	var model, thinking, modeID any
+	if rec.Config != nil {
+		model = rec.Config.Model
+		thinking = rec.Config.ThinkingOptionID
+		modeID = rec.Config.ModeID
+	}
+
+	labels := rec.Labels
+	if labels == nil {
+		labels = map[string]string{}
+	}
+
+	return map[string]any{
+		"id":                        rec.ID,
+		"provider":                  rec.Provider,
+		"cwd":                       rec.Cwd,
+		"workspaceId":               rec.WorkspaceID,
+		"model":                     model,
+		"thinkingOptionId":          thinking,
+		"effectiveThinkingOptionId": thinking,
+		"createdAt":                 rec.CreatedAt,
+		"updatedAt":                 rec.UpdatedAt,
+		"lastUserMessageAt":         rec.LastUserMessageAt,
+		"status":                    status,
+		"activeTurn":                nil,
+		"capabilities": map[string]any{
+			"canCancel":           true,
+			"canSelectModel":      true,
+			"canSelectThinking":   true,
+			"supportsImages":      true,
+			"supportsAttachments": true,
+		},
+		"currentModeId":      modeID,
+		"availableModes":     []any{},
+		"features":           []any{},
+		"pendingPermissions": []any{},
+		"persistence":        rec.Persistence,
+		"title":              rec.Title,
+		"labels":             labels,
+		"requiresAttention":  rec.RequiresAttention,
+		"attentionReason":    rec.AttentionReason,
+		"attentionTimestamp": rec.AttentionTimestamp,
+	}
+}
+
+func buildProjectDescriptor(p store.ProjectRecord) map[string]any {
+	displayName := p.DisplayName
+	if p.CustomName != nil && strings.TrimSpace(*p.CustomName) != "" {
+		displayName = strings.TrimSpace(*p.CustomName)
+	}
+	out := map[string]any{
+		"projectId":                 p.ProjectID,
+		"projectDisplayName":        displayName,
+		"projectCustomName":         p.CustomName,
+		"projectCustomIconRevision": p.CustomIconRevision,
+		"projectIconRevision":       nil,
+		"projectRootPath":           p.RootPath,
+		"projectKind":               p.Kind,
+	}
+	if p.ProjectKey != nil {
+		out["projectKey"] = *p.ProjectKey
+	}
+	return out
+}
+
+func buildWorkspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord) map[string]any {
+	name := ws.DisplayName
+	if ws.Title != nil && strings.TrimSpace(*ws.Title) != "" {
+		name = strings.TrimSpace(*ws.Title)
+	} else if ws.Branch != nil && strings.TrimSpace(*ws.Branch) != "" {
+		name = strings.TrimSpace(*ws.Branch)
+	}
+	projectDisplayName := prj.DisplayName
+	if prj.CustomName != nil && strings.TrimSpace(*prj.CustomName) != "" {
+		projectDisplayName = strings.TrimSpace(*prj.CustomName)
+	}
+	return map[string]any{
+		"id":                        ws.WorkspaceID,
+		"projectId":                 prj.ProjectID,
+		"projectDisplayName":        projectDisplayName,
+		"projectCustomName":         prj.CustomName,
+		"projectCustomIconRevision": prj.CustomIconRevision,
+		"projectIconRevision":       nil,
+		"projectRootPath":           prj.RootPath,
+		"workspaceDirectory":        ws.Cwd,
+		"worktreeSlug":              filepath.Base(ws.Cwd),
+		"projectKind":               prj.Kind,
+		"workspaceKind":             ws.Kind,
+		"name":                      name,
+		"title":                     ws.Title,
+		"pinnedAt":                  ws.PinnedAt,
+		"archivingAt":               nil,
+		"status":                    "done",
+		"statusEnteredAt":           ws.CreatedAt,
+		"activityAt":                ws.UpdatedAt,
+		"diffStat": map[string]any{
+			"additions": 0,
+			"deletions": 0,
+		},
+		"scripts": []any{},
+		"gitRuntime": map[string]any{
+			"currentBranch":          ws.Branch,
+			"remoteUrl":              nil,
+			"isBySpaceOwnedWorktree": ws.IsBySpaceOwnedWorktree,
+			"isDirty":                false,
+			"aheadBehind":            nil,
+			"aheadOfOrigin":          nil,
+			"behindOfOrigin":         nil,
+		},
+		"githubRuntime": nil,
+	}
+}
+
+func newAgentID() string {
+	var b [8]byte
+	_, _ = rand.Read(b[:])
+	return "agt_" + hex.EncodeToString(b[:])
+}
+
+func sendSessionMsg(ctx context.Context, sink frameSink, msgType string, payload any) error {
+	return sendJSON(ctx, sink, map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":    msgType,
+			"payload": payload,
+		},
+	})
+}
+
+func sendJSON(ctx context.Context, sink frameSink, v any) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	return sink.SendText(ctx, string(b))
+}

@@ -90,3 +90,10 @@ packages/protocol/src/generated/validation/*.aot.ts
 packages/desktop/.cache/
 packages/desktop/src-tauri/resources/managed-runtime/
 app.json
+
+# Go single-binary build & embedded web assets
+/byspace
+/bin/
+!internal/webui/dist/
+internal/webui/dist/*
+!internal/webui/dist/.keep
