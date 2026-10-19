@@ -27,9 +27,14 @@ func TestCLIVersionHelpLsRunAndLogs(t *testing.T) {
 	fakePi := filepath.Join(tmp, "fake-pi.sh")
 	script := `#!/bin/sh
 while read line; do
+  req_id=$(echo "$line" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+  [ -z "$req_id" ] && req_id="req_1"
   case "$line" in
+    *'"type":"get_state"'*)
+      echo "{\"type\":\"response\",\"id\":\"$req_id\",\"command\":\"get_state\",\"success\":true,\"data\":{\"sessionId\":\"sess_cli_1\",\"thinkingLevel\":\"medium\",\"isStreaming\":false,\"isCompacting\":false,\"messageCount\":0,\"pendingMessageCount\":0}}"
+      ;;
     *'"type":"prompt"'*)
-      echo '{"type":"response","id":"req_1","command":"prompt","success":true,"data":{"agentInvoked":true}}'
+      echo "{\"type\":\"response\",\"id\":\"$req_id\",\"command\":\"prompt\",\"success\":true,\"data\":{\"agentInvoked\":true}}"
       echo '{"type":"agent_start"}'
       echo '{"type":"turn_start"}'
       echo '{"type":"message_start","message":{"role":"assistant","content":[]}}'

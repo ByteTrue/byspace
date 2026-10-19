@@ -22,21 +22,26 @@ func writeFakePiScript(t *testing.T, dir string) string {
 	scriptPath := filepath.Join(dir, "fake-pi.sh")
 	script := `#!/bin/sh
 while read line; do
+  req_id=$(echo "$line" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+  [ -z "$req_id" ] && req_id="req_1"
   case "$line" in
+    *'"type":"get_state"'*)
+      echo "{\"type\":\"response\",\"id\":\"$req_id\",\"command\":\"get_state\",\"success\":true,\"data\":{\"sessionId\":\"sess_fake_1\",\"sessionFile\":\"$0.jsonl\",\"thinkingLevel\":\"medium\",\"isStreaming\":false,\"isCompacting\":false,\"messageCount\":0,\"pendingMessageCount\":0}}"
+      ;;
     *'"type":"get_available_models"'*)
-      echo '{"type":"response","id":"req_1","command":"get_available_models","success":true,"data":{"models":[{"provider":"anthropic","id":"claude-sonnet-4-5","name":"Claude Sonnet 4.5","reasoning":true}]}}'
+      echo "{\"type\":\"response\",\"id\":\"$req_id\",\"command\":\"get_available_models\",\"success\":true,\"data\":{\"models\":[{\"provider\":\"anthropic\",\"id\":\"claude-sonnet-4-5\",\"name\":\"Claude Sonnet 4.5\",\"reasoning\":true}]}}"
       ;;
     *'"type":"get_commands"'*)
-      echo '{"type":"response","id":"req_2","command":"get_commands","success":true,"data":{"commands":[{"name":"compact","source":"prompt"}]}}'
+      echo "{\"type\":\"response\",\"id\":\"$req_id\",\"command\":\"get_commands\",\"success\":true,\"data\":{\"commands\":[{\"name\":\"compact\",\"source\":\"prompt\"}]}}"
       ;;
     *'"type":"set_model"'*)
-      echo '{"type":"response","id":"req_1","command":"set_model","success":true,"data":{"provider":"anthropic","id":"claude-sonnet-4-5"}}'
+      echo "{\"type\":\"response\",\"id\":\"$req_id\",\"command\":\"set_model\",\"success\":true,\"data\":{\"provider\":\"anthropic\",\"id\":\"claude-sonnet-4-5\"}}"
       ;;
     *'"type":"set_thinking_level"'*)
-      echo '{"type":"response","id":"req_1","command":"set_thinking_level","success":true,"data":{}}'
+      echo "{\"type\":\"response\",\"id\":\"$req_id\",\"command\":\"set_thinking_level\",\"success\":true,\"data\":{}}"
       ;;
     *'"type":"prompt"'*)
-      echo '{"type":"response","id":"req_1","command":"prompt","success":true,"data":{"agentInvoked":true}}'
+      echo "{\"type\":\"response\",\"id\":\"$req_id\",\"command\":\"prompt\",\"success\":true,\"data\":{\"agentInvoked\":true}}"
       echo '{"type":"agent_start"}'
       echo '{"type":"turn_start"}'
       echo '{"type":"message_start","message":{"role":"assistant","content":[]}}'

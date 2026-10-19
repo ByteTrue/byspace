@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/agent/jsonl"
 )
+
+var leadingMagicTagRe = regexp.MustCompile(`^§\d+§\s*`)
 
 // ImageContent represents a base64 image block passed to Pi RPC prompt/steer.
 type ImageContent struct {
@@ -227,10 +230,11 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 					if s.activeTextIdx < 0 || s.activeTextIdx >= len(s.timeline) {
 						s.activeTextIdx = s.appendItemLocked(TimelineItem{
 							Type: "assistant_message",
-							Text: delta,
+							Text: leadingMagicTagRe.ReplaceAllString(delta, ""),
 						})
 					} else {
-						s.timeline[s.activeTextIdx].Item.Text += delta
+						combined := s.timeline[s.activeTextIdx].Item.Text + delta
+						s.timeline[s.activeTextIdx].Item.Text = leadingMagicTagRe.ReplaceAllString(combined, "")
 					}
 				}
 			case "thinking_delta":

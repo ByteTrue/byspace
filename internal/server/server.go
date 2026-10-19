@@ -1387,8 +1387,14 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 			thinking = *rec.Config.ThinkingOptionID
 		}
 	}
-	if rec.Persistence != nil && rec.Persistence.SessionID != "" {
-		sessionPath = rec.Persistence.SessionID
+	if rec.Persistence != nil {
+		if nh, ok := rec.Persistence.NativeHandle.(string); ok && nh != "" {
+			sessionPath = nh
+		} else if rec.Persistence.SessionID != "" {
+			if _, statErr := os.Stat(rec.Persistence.SessionID); statErr == nil {
+				sessionPath = rec.Persistence.SessionID
+			}
+		}
 	}
 
 	sess, err := pi.StartSession(pi.LaunchOptions{
@@ -1402,6 +1408,12 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		return nil, err
 	}
 
+	if sessionPath != "" {
+		if restored, loadErr := pi.LoadTimelineFromJSONL(sessionPath); loadErr == nil && len(restored) > 0 {
+			sess.SeedTimeline(restored)
+		}
+	}
+
 	mp := &managedPi{
 		record:  rec,
 		session: sess,
@@ -1410,6 +1422,10 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 	s.mu.Lock()
 	s.agents[rec.ID] = mp
 	s.mu.Unlock()
+
+	if rec.Persistence == nil {
+		go s.syncPiPersistence(mp)
+	}
 
 	sess.OnEvent(func(ev map[string]any) {
 		evType, _ := ev["type"].(string)
@@ -1449,6 +1465,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 			s.mu.Unlock()
 			_ = s.store.UpsertAgent(recCopy)
 			if evType == "agent_end" {
+				go s.syncPiPersistence(mp)
 				s.broadcastSessionMsg("agent_stream", map[string]any{
 					"agentId":   rec.ID,
 					"provider":  rec.Provider,
@@ -1463,6 +1480,31 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 	})
 
 	return mp, nil
+}
+
+func (s *Server) syncPiPersistence(mp *managedPi) {
+	if mp == nil || mp.session == nil {
+		return
+	}
+	sctx, scancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer scancel()
+	st, err := mp.session.GetState(sctx)
+	if err != nil || st == nil || (st.SessionID == "" && st.SessionFile == "") {
+		return
+	}
+	sid := st.SessionID
+	if sid == "" && st.SessionFile != "" {
+		sid = st.SessionFile
+	}
+	s.mu.Lock()
+	mp.record.Persistence = &store.AgentPersistenceHandle{
+		Provider:     "pi",
+		SessionID:    sid,
+		NativeHandle: st.SessionFile,
+	}
+	recCopy := mp.record
+	s.mu.Unlock()
+	_ = s.store.UpsertAgent(recCopy)
 }
 
 func (s *Server) broadcastSessionMsg(msgType string, payload any) {
