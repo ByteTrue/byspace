@@ -646,6 +646,18 @@ func (s *Server) handleScheduleMessage(ctx context.Context, sink frameSink, msgT
 			"schedule":  sched.ToSummary(),
 			"error":     nil,
 		})
+
+	case "schedule/update":
+		sched, err := s.schedules.Inspect(schedID)
+		if err != nil {
+			emitErr(err)
+			return
+		}
+		_ = sendSessionMsg(ctx, sink, "schedule/update/response", map[string]any{
+			"requestId": base.RequestID,
+			"schedule":  sched.ToSummary(),
+			"error":     nil,
+		})
 	}
 }
 

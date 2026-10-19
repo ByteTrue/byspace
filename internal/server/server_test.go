@@ -452,4 +452,49 @@ func TestServerFileExplorerPiSessionImportAndTerminalRPC(t *testing.T) {
 	if len(runsList) != 1 {
 		t.Fatalf("expected 1 schedule run log, got %+v", logsResp)
 	}
+
+	// 6. Parity RPCs: project.add, directory_suggestions, file.upload, skills, pairing offer
+	addPrjReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":      "project.add.request",
+			"requestId": "req_prj_add",
+			"cwd":       workDir,
+		},
+	})
+	_ = ws.Write(ctx, websocket.MessageText, addPrjReq)
+	addPrjResp := readUntilSessionType(t, ctx, ws, "project.add.response", "")
+	if addPrjResp["project"] == nil {
+		t.Fatalf("expected project descriptor in project.add.response: %+v", addPrjResp)
+	}
+
+	upReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":      "file.upload.request",
+			"requestId": "req_up_1",
+			"name":      "note.txt",
+			"mimeType":  "text/plain",
+			"data":      base64.StdEncoding.EncodeToString([]byte("uploaded")),
+		},
+	})
+	_ = ws.Write(ctx, websocket.MessageText, upReq)
+	upResp := readUntilSessionType(t, ctx, ws, "file.upload.response", "")
+	if upResp["file"] == nil {
+		t.Fatalf("expected uploaded file in file.upload.response: %+v", upResp)
+	}
+
+	pairReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":      "daemon.get_pairing_offer.request",
+			"requestId": "req_pair_1",
+		},
+	})
+	_ = ws.Write(ctx, websocket.MessageText, pairReq)
+	pairResp := readUntilSessionType(t, ctx, ws, "daemon.get_pairing_offer.response", "")
+	pairURL, _ := pairResp["url"].(string)
+	if !strings.Contains(pairURL, "#offer=") {
+		t.Fatalf("expected #offer= in pairing response: %+v", pairResp)
+	}
 }

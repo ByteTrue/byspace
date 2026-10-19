@@ -344,3 +344,26 @@ func DeleteEntry(root, relPath string) error {
 	}
 	return os.RemoveAll(absTarget)
 }
+
+// DuplicateEntry copies a file within the same parent directory with a "-copy" suffix.
+func DuplicateEntry(root, relPath string) (string, error) {
+	absSrc, normSrc, err := resolveScopedPath(root, relPath)
+	if err != nil {
+		return "", err
+	}
+	raw, err := os.ReadFile(absSrc)
+	if err != nil {
+		return "", err
+	}
+	ext := filepath.Ext(normSrc)
+	stem := strings.TrimSuffix(normSrc, ext)
+	dstRel := stem + "-copy" + ext
+	absDst, normDst, err := resolveScopedPath(root, dstRel)
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(absDst, raw, 0o644); err != nil {
+		return "", err
+	}
+	return normDst, nil
+}

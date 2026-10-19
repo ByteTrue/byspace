@@ -896,7 +896,8 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		"schedule/pause",
 		"schedule/resume",
 		"schedule/delete",
-		"schedule/run-once":
+		"schedule/run-once",
+		"schedule/update":
 		s.handleScheduleMessage(ctx, sink, base.Type, raw)
 
 	case "agent_permission_response":
@@ -919,6 +920,149 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 
 	case "diagnostics.request":
 		s.handleDiagnostics(ctx, sink, raw)
+
+	case "project.add.request":
+		s.handleProjectAdd(ctx, sink, raw)
+
+	case "project.create_directory.request":
+		s.handleProjectCreateDirectory(ctx, sink, raw)
+
+	case "project.rename.request":
+		s.handleProjectRename(ctx, sink, raw)
+
+	case "project.remove.request":
+		s.handleProjectRemove(ctx, sink, raw)
+
+	case "project.icon.set.request", "project.icon.get.request", "project_icon_request":
+		s.handleProjectIcon(ctx, sink, base.Type, raw)
+
+	case "open_project_request":
+		s.handleOpenProject(ctx, sink, raw)
+
+	case "directory_suggestions_request":
+		s.handleDirectorySuggestions(ctx, sink, raw)
+
+	case "archive_workspace_request", "byspace_worktree_archive_request":
+		s.handleArchiveWorkspace(ctx, sink, base.Type, raw)
+
+	case "workspace.title.set.request":
+		s.handleWorkspaceTitleSet(ctx, sink, raw)
+
+	case "workspace.pin.set.request":
+		s.handleWorkspacePinSet(ctx, sink, raw)
+
+	case "workspace.clear_attention.request", "workspace.mark_unread.request":
+		s.handleWorkspaceAttention(ctx, sink, base.Type, raw)
+
+	case "workspace.label.list.request",
+		"workspace.label.assignment.set.request",
+		"workspace.label.update.request",
+		"workspace.label.delete.request",
+		"workspace.label.delete.inspect.request":
+		s.handleWorkspaceLabels(ctx, sink, base.Type, raw)
+
+	case "workspace.recovery.inspect.request", "workspace.recovery.restore.request":
+		s.handleWorkspaceRecovery(ctx, sink, base.Type, raw)
+
+	case "read_project_config_request", "write_project_config_request":
+		s.handleProjectConfig(ctx, sink, base.Type, raw)
+
+	case "start_workspace_script_request",
+		"workspace.script.list.request",
+		"workspace.script.start.request",
+		"workspace.script.stop.request":
+		s.handleWorkspaceScripts(ctx, sink, base.Type, raw)
+
+	case "list_available_editors_request", "open_in_editor_request":
+		s.handleEditors(ctx, sink, base.Type, raw)
+
+	case "fs.entry.duplicate.request", "file_download_token_request", "file.upload.request":
+		s.handleFileExtraOps(ctx, sink, base.Type, raw)
+
+	case "unsubscribe_checkout_diff_request",
+		"checkout.refresh.request",
+		"checkout.commits.file_diff.request",
+		"validate_branch_request",
+		"branch_suggestions_request",
+		"checkout_switch_branch_request",
+		"checkout.rename_branch.request",
+		"checkout_push_request",
+		"checkout_pull_request",
+		"checkout_merge_request",
+		"checkout_merge_from_base_request",
+		"stash_list_request",
+		"stash_save_request",
+		"stash_pop_request":
+		s.handleGitParityOps(ctx, sink, base.Type, raw)
+
+	case "checkout_pr_status_request",
+		"checkout_pr_create_request",
+		"checkout_pr_merge_request",
+		"pull_request_timeline_request",
+		"checkout.forge.set_auto_merge.request",
+		"checkout.github.set_auto_merge.request",
+		"checkout.forge.get_check_details.request",
+		"checkout.github.get_check_details.request",
+		"forge.search.request",
+		"github_search_request",
+		"workspace.github.search_repositories.request",
+		"project.github.clone.request":
+		s.handleForgeParityOps(ctx, sink, base.Type, raw)
+
+	case "subscribe_terminals_request",
+		"unsubscribe_terminals_request",
+		"unsubscribe_terminal_request",
+		"terminal_input",
+		"kill_terminal_request",
+		"capture_terminal_request",
+		"terminal.rename.request":
+		s.handleTerminalParityOps(ctx, sink, base.Type, raw)
+
+	case "clear_agent_attention",
+		"refresh_agent_request",
+		"close_items_request",
+		"agent.detach.request",
+		"agent.rewind.request",
+		"agent.fork_context.request",
+		"agent.timeline.list_prompts.request",
+		"agent.timeline.append.request",
+		"set_agent_feature_request",
+		"abort_request":
+		s.handleAgentParityOps(ctx, sink, base.Type, raw)
+
+	case "agent.skills.get_status.request",
+		"agent.skills.reconcile.request",
+		"agent.skills.uninstall.request",
+		"agent.skills.save_selection.request",
+		"agent.skills.import_legacy_selection.request",
+		"provider.usage.list.request",
+		"provider_diagnostic_request",
+		"set_daemon_config_request",
+		"daemon.config.reload.request",
+		"daemon.update.request",
+		"restart_server_request",
+		"shutdown_server_request",
+		"tunnel.list.request",
+		"tunnel.open.request",
+		"tunnel.close.request",
+		"tunnel.stats.request",
+		"tunnel.create.request",
+		"tunnel.remove.request",
+		"hub.management.daemon.connect.request",
+		"hub.management.daemon.get_status.request",
+		"hub.management.daemon.disconnect.request",
+		"hub.management.daemon.permissions.update.request",
+		"hub.execution.agent.validate.request",
+		"hub.execution.agent.create.request",
+		"hub.execution.control.request",
+		"set_voice_mode",
+		"dictation_stream_start",
+		"dictation_stream_chunk",
+		"dictation_stream_finish",
+		"dictation_stream_cancel",
+		"voice_audio_chunk",
+		"audio_played":
+		s.handleSystemParityOps(ctx, sink, base.Type, raw)
 	}
 }
 

@@ -273,3 +273,117 @@ func DiscardChanges(ctx context.Context, cwd string) error {
 	_, err := runGit(ctx, cwd, "clean", "-fd")
 	return err
 }
+
+// SwitchBranch checks out an existing or new git branch.
+func SwitchBranch(ctx context.Context, cwd, branch string, create bool) error {
+	if create {
+		_, err := runGit(ctx, cwd, "checkout", "-b", branch)
+		return err
+	}
+	_, err := runGit(ctx, cwd, "checkout", branch)
+	return err
+}
+
+// RenameBranch renames the current branch to newName.
+func RenameBranch(ctx context.Context, cwd, newName string) (string, error) {
+	if _, err := runGit(ctx, cwd, "branch", "-m", newName); err != nil {
+		return "", err
+	}
+	cur, _ := runGit(ctx, cwd, "rev-parse", "--abbrev-ref", "HEAD")
+	return cur, nil
+}
+
+// ValidateBranch checks whether refName resolves to a valid git ref.
+func ValidateBranch(ctx context.Context, cwd, refName string) (bool, string, bool) {
+	resolved, err := runGit(ctx, cwd, "rev-parse", "--verify", refName)
+	if err != nil || resolved == "" {
+		return false, "", false
+	}
+	isRemote := strings.HasPrefix(refName, "origin/") || strings.HasPrefix(refName, "refs/remotes/")
+	return true, resolved, isRemote
+}
+
+// ListBranches returns local branch names for cwd.
+func ListBranches(ctx context.Context, cwd string) []string {
+	out, err := runGit(ctx, cwd, "for-each-ref", "--format=%(refname:short)", "refs/heads")
+	if err != nil || out == "" {
+		return []string{}
+	}
+	var branches []string
+	for _, b := range strings.Split(out, "\n") {
+		if trimmed := strings.TrimSpace(b); trimmed != "" {
+			branches = append(branches, trimmed)
+		}
+	}
+	if branches == nil {
+		branches = []string{}
+	}
+	return branches
+}
+
+// Push runs `git push`.
+func Push(ctx context.Context, cwd string) error {
+	_, err := runGit(ctx, cwd, "push")
+	return err
+}
+
+// Pull runs `git pull`.
+func Pull(ctx context.Context, cwd string) error {
+	_, err := runGit(ctx, cwd, "pull")
+	return err
+}
+
+// Merge runs `git merge <ref>`.
+func Merge(ctx context.Context, cwd, ref string) error {
+	if strings.TrimSpace(ref) == "" {
+		ref = "main"
+	}
+	_, err := runGit(ctx, cwd, "merge", ref)
+	return err
+}
+
+type StashEntry struct {
+	Index     int     `json:"index"`
+	Message   string  `json:"message"`
+	Branch    *string `json:"branch"`
+	IsBySpace bool    `json:"isBySpace"`
+}
+
+// StashList returns git stash entries.
+func StashList(ctx context.Context, cwd string) []StashEntry {
+	out, err := runGit(ctx, cwd, "stash", "list", "--format=%gd\x1f%gs")
+	if err != nil || out == "" {
+		return []StashEntry{}
+	}
+	lines := strings.Split(out, "\n")
+	entries := make([]StashEntry, 0, len(lines))
+	for idx, line := range lines {
+		parts := strings.SplitN(line, "\x1f", 2)
+		msg := line
+		if len(parts) == 2 {
+			msg = parts[1]
+		}
+		entries = append(entries, StashEntry{
+			Index:     idx,
+			Message:   msg,
+			Branch:    nil,
+			IsBySpace: strings.Contains(msg, "byspace"),
+		})
+	}
+	return entries
+}
+
+// StashSave runs `git stash push -u -m <message>`.
+func StashSave(ctx context.Context, cwd, message string) error {
+	if strings.TrimSpace(message) == "" {
+		message = "byspace stash"
+	}
+	_, err := runGit(ctx, cwd, "stash", "push", "-u", "-m", message)
+	return err
+}
+
+// StashPop runs `git stash pop`.
+func StashPop(ctx context.Context, cwd string) error {
+	_, err := runGit(ctx, cwd, "stash", "pop")
+	return err
+}

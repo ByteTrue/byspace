@@ -85,6 +85,7 @@ type AgentRecord struct {
 	Provider           string                  `json:"provider"`
 	Cwd                string                  `json:"cwd"`
 	WorkspaceID        string                  `json:"workspaceId,omitempty"`
+	ParentAgentID      *string                 `json:"parentAgentId,omitempty"`
 	CreatedAt          string                  `json:"createdAt"`
 	UpdatedAt          string                  `json:"updatedAt"`
 	LastActivityAt     string                  `json:"lastActivityAt,omitempty"`
