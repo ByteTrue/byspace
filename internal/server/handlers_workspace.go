@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/agent/pi"
+	"github.com/ByteTrue/byspace/internal/agent/providers"
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/terminal"
 	"github.com/ByteTrue/byspace/internal/workspace"
@@ -102,6 +103,7 @@ func (s *Server) handleFileSubscribe(ctx context.Context, sink frameSink, raw js
 	}
 	_ = json.Unmarshal(raw, &req)
 	ver := workspace.StatFileVersion(req.Cwd, req.Path)
+	s.RegisterFileSubscription(req.SubscriptionID, sink, req.Cwd, req.Path, ver.Revision)
 	_ = sendSessionMsg(ctx, sink, "fs.file.subscribe.response", map[string]any{
 		"subscriptionId": req.SubscriptionID,
 		"initial":        ver,
@@ -115,6 +117,7 @@ func (s *Server) handleFileUnsubscribe(ctx context.Context, sink frameSink, raw 
 		SubscriptionID string `json:"subscriptionId"`
 	}
 	_ = json.Unmarshal(raw, &req)
+	s.UnregisterFileSubscription(req.SubscriptionID)
 	_ = sendSessionMsg(ctx, sink, "fs.file.unsubscribe.response", map[string]any{
 		"subscriptionId": req.SubscriptionID,
 		"requestId":      req.RequestID,
@@ -289,6 +292,21 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 		})
 	}
 
+	if claudeSessions, err := providers.ListClaudeSessions("", req.Cwd, req.Limit); err == nil {
+		for _, cs := range claudeSessions {
+			entries = append(entries, map[string]any{
+				"provider":           "claude",
+				"providerLabel":      "Claude Code",
+				"providerHandleId":   cs.ProviderHandleID,
+				"cwd":                cs.Cwd,
+				"title":              cs.Title,
+				"firstPromptPreview": cs.FirstPromptPreview,
+				"lastPromptPreview":  cs.LastPromptPreview,
+				"lastActivityAt":     cs.LastActivityAt,
+			})
+		}
+	}
+
 	_ = sendSessionMsg(ctx, sink, "fetch_recent_provider_sessions_response", map[string]any{
 		"requestId": req.RequestID,
 		"entries":   entries,
@@ -447,7 +465,7 @@ func (s *Server) handleCreateTerminal(ctx context.Context, sink frameSink, raw j
 			"name":        sess.Name,
 			"cwd":         sess.Cwd,
 			"workspaceId": sess.WorkspaceID,
-			"activity":    nil,
+			"activity":    map[string]any{"state": sess.Activity()},
 		},
 		"error":     nil,
 		"requestId": req.RequestID,
@@ -473,7 +491,7 @@ func (s *Server) handleListTerminals(ctx context.Context, sink frameSink, raw js
 			"name":        t.Name,
 			"cwd":         t.Cwd,
 			"workspaceId": t.WorkspaceID,
-			"activity":    nil,
+			"activity":    map[string]any{"state": t.Activity()},
 		})
 	}
 	s.mu.Unlock()
@@ -490,8 +508,9 @@ func (s *Server) handleListTerminals(ctx context.Context, sink frameSink, raw js
 
 func (s *Server) handleSubscribeTerminal(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID  string `json:"requestId"`
-		TerminalID string `json:"terminalId"`
+		RequestID       string `json:"requestId"`
+		TerminalID      string `json:"terminalId"`
+		InitialSnapshot string `json:"initialSnapshot"`
 	}
 	_ = json.Unmarshal(raw, &req)
 
@@ -512,15 +531,31 @@ func (s *Server) handleSubscribeTerminal(ctx context.Context, sink frameSink, ra
 		return
 	}
 
-	sess.Subscribe(func(ev terminal.OutputEvent) {
-		outFrame := terminal.EncodeFrame(terminal.OpcodeOutput, slot, ev.Data)
-		_ = sink.SendBinary(context.Background(), outFrame)
-	})
-
 	_ = sendSessionMsg(ctx, sink, "subscribe_terminal_response", map[string]any{
 		"terminalId": req.TerminalID,
 		"slot":       slot,
 		"error":      nil,
 		"requestId":  req.RequestID,
+	})
+
+	if req.InitialSnapshot == "state" && sess.VT() != nil {
+		_, snapFrame := sess.VT().Snapshot(slot)
+		_ = sink.SendBinary(ctx, snapFrame)
+	} else {
+		var replay strings.Builder
+		if sess.VT() != nil {
+			replay.WriteString(sess.VT().ReplayPreamble())
+		}
+		if res := sess.ResumeSince(0); res != nil && res.Data != "" {
+			replay.WriteString(res.Data)
+		}
+		if replay.Len() > 0 {
+			_ = sink.SendBinary(ctx, terminal.EncodeFrame(terminal.OpcodeOutput, slot, []byte(replay.String())))
+		}
+	}
+
+	sess.Subscribe(func(ev terminal.OutputEvent) {
+		outFrame := terminal.EncodeFrame(terminal.OpcodeOutput, slot, ev.Data)
+		_ = sink.SendBinary(context.Background(), outFrame)
 	})
 }

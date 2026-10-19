@@ -1,6 +1,9 @@
 package terminal
 
 import (
+	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"os"
 	"os/exec"
 	"sync"
@@ -15,32 +18,38 @@ type OutputEvent struct {
 
 // Session manages a live PTY process, its output backlog, and active subscribers.
 type Session struct {
-	ID          string
-	Name        string
-	Cwd         string
-	WorkspaceID string
+	ID            string
+	Name          string
+	Cwd           string
+	WorkspaceID   string
+	ActivityToken string
 
-	mu          sync.Mutex
-	cmd         *exec.Cmd
-	ptmx        *os.File
-	revision    int64
-	backlog     *Backlog
-	subscribers map[int]func(OutputEvent)
-	nextSubID   int
-	closed      bool
-	done        chan struct{}
+	mu               sync.Mutex
+	cmd              *exec.Cmd
+	ptmx             *os.File
+	revision         int64
+	activityState    string // "idle" | "working"
+	onActivityChange func(string)
+	vt               *VTGrid
+	backlog          *Backlog
+	subscribers      map[int]func(OutputEvent)
+	nextSubID        int
+	closed           bool
+	done             chan struct{}
 }
 
 type StartOptions struct {
-	ID          string
-	Name        string
-	Cwd         string
-	WorkspaceID string
-	Command     string
-	Args        []string
-	Env         []string
-	Rows        uint16
-	Cols        uint16
+	ID               string
+	Name             string
+	Cwd              string
+	WorkspaceID      string
+	ActivityToken    string
+	OnActivityChange func(string)
+	Command          string
+	Args             []string
+	Env              []string
+	Rows             uint16
+	Cols             uint16
 }
 
 func StartSession(opts StartOptions) (*Session, error) {
@@ -66,10 +75,20 @@ func StartSession(opts StartOptions) (*Session, error) {
 		cmd.Dir = opts.Cwd
 	}
 	if len(opts.Env) > 0 {
-		cmd.Env = opts.Env
+		cmd.Env = append([]string(nil), opts.Env...)
 	} else {
 		cmd.Env = os.Environ()
 	}
+	actToken := opts.ActivityToken
+	if actToken == "" {
+		var b [12]byte
+		_, _ = rand.Read(b[:])
+		actToken = hex.EncodeToString(b[:])
+	}
+	if opts.ID != "" {
+		cmd.Env = append(cmd.Env, "BYSPACE_TERMINAL_ID="+opts.ID)
+	}
+	cmd.Env = append(cmd.Env, "BYSPACE_TERMINAL_ACTIVITY_TOKEN="+actToken)
 
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{
 		Rows: rows,
@@ -80,15 +99,19 @@ func StartSession(opts StartOptions) (*Session, error) {
 	}
 
 	s := &Session{
-		ID:          opts.ID,
-		Name:        opts.Name,
-		Cwd:         opts.Cwd,
-		WorkspaceID: opts.WorkspaceID,
-		cmd:         cmd,
-		ptmx:        ptmx,
-		backlog:     NewBacklog(MaxBacklogChars),
-		subscribers: make(map[int]func(OutputEvent)),
-		done:        make(chan struct{}),
+		ID:               opts.ID,
+		Name:             opts.Name,
+		Cwd:              opts.Cwd,
+		WorkspaceID:      opts.WorkspaceID,
+		ActivityToken:    actToken,
+		cmd:              cmd,
+		ptmx:             ptmx,
+		activityState:    "idle",
+		onActivityChange: opts.OnActivityChange,
+		vt:               NewVTGrid(int(rows), int(cols)),
+		backlog:          NewBacklog(MaxBacklogChars),
+		subscribers:      make(map[int]func(OutputEvent)),
+		done:             make(chan struct{}),
 	}
 
 	go s.readLoop()
@@ -102,6 +125,13 @@ func (s *Session) readLoop() {
 		n, err := s.ptmx.Read(buf)
 		if n > 0 {
 			chunk := append([]byte(nil), buf[:n]...)
+			// Detect OSC 633 ;C (command start) and ;D (command finished) sequences
+			if bytes.Contains(chunk, []byte("\x1b]633;D")) {
+				s.SetActivity("idle")
+			} else if bytes.Contains(chunk, []byte("\x1b]633;C")) {
+				s.SetActivity("working")
+			}
+			s.vt.Write(chunk)
 			s.mu.Lock()
 			s.revision++
 			rev := s.revision
@@ -143,7 +173,12 @@ func (s *Session) Resize(rows, cols uint16) error {
 	if closed || ptmx == nil {
 		return os.ErrClosed
 	}
+	s.vt.Resize(int(rows), int(cols))
 	return pty.Setsize(ptmx, &pty.Winsize{Rows: rows, Cols: cols})
+}
+
+func (s *Session) VT() *VTGrid {
+	return s.vt
 }
 
 func (s *Session) Subscribe(fn func(OutputEvent)) (unsubscribe func(), currentRevision int64) {
@@ -163,6 +198,33 @@ func (s *Session) Subscribe(fn func(OutputEvent)) (unsubscribe func(), currentRe
 
 func (s *Session) ResumeSince(revision int64) *Resumption {
 	return s.backlog.Since(revision)
+}
+
+func (s *Session) Activity() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.activityState == "" {
+		return "idle"
+	}
+	return s.activityState
+}
+
+func (s *Session) SetActivity(state string) bool {
+	if state != "idle" && state != "working" {
+		return false
+	}
+	s.mu.Lock()
+	if s.activityState == state {
+		s.mu.Unlock()
+		return false
+	}
+	s.activityState = state
+	cb := s.onActivityChange
+	s.mu.Unlock()
+	if cb != nil {
+		cb(state)
+	}
+	return true
 }
 
 func (s *Session) Close() error {

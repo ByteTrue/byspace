@@ -6,6 +6,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -169,15 +172,17 @@ func (r *sessionRoom) dropBufferedFrames(cid string) {
 
 // Options configures a Relay HTTP/WebSocket handler.
 type Options struct {
-	WebDir string
-	WebUI  *webui.Handler
+	WebDir      string
+	WebUI       *webui.Handler
+	UpstreamURL string
 }
 
 // Server implements the BySpace Relay HTTP and WebSocket protocol (v1 and v2).
 type Server struct {
-	mu    sync.Mutex
-	rooms map[string]*sessionRoom
-	webUI *webui.Handler
+	mu           sync.Mutex
+	rooms        map[string]*sessionRoom
+	webUI        *webui.Handler
+	cutoverProxy http.Handler
 }
 
 // NewServer creates a new Relay Server instance.
@@ -186,9 +191,20 @@ func NewServer(opts Options) *Server {
 	if ui == nil {
 		ui = webui.NewHandler(opts.WebDir)
 	}
+	upstream := strings.TrimSpace(opts.UpstreamURL)
+	if upstream == "" {
+		upstream = strings.TrimSpace(os.Getenv("BYSPACE_RELAY_UPSTREAM"))
+	}
+	var proxy http.Handler
+	if upstream != "" {
+		if target, err := url.Parse(upstream); err == nil && target.Host != "" {
+			proxy = httputil.NewSingleHostReverseProxy(target)
+		}
+	}
 	return &Server{
-		rooms: make(map[string]*sessionRoom),
-		webUI: ui,
+		rooms:        make(map[string]*sessionRoom),
+		webUI:        ui,
+		cutoverProxy: proxy,
 	}
 }
 
@@ -222,6 +238,10 @@ func randomID16() string {
 
 // ServeHTTP handles /health, /ws, and optional static web UI routes.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if s.cutoverProxy != nil {
+		s.cutoverProxy.ServeHTTP(w, r)
+		return
+	}
 	if r.URL.Path == "/health" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)

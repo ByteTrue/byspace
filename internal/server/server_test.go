@@ -554,4 +554,44 @@ func TestServerFileExplorerPiSessionImportAndTerminalRPC(t *testing.T) {
 	if len(lbls) != 1 {
 		t.Fatalf("expected 1 persisted label, got %+v", lblListResp)
 	}
+
+	// 9. File subscription + live PollSubscriptionsOnce -> fs.file.update
+	fSubReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":           "fs.file.subscribe.request",
+			"requestId":      "req_fsub_1",
+			"subscriptionId": "fsub_1",
+			"cwd":            workDir,
+			"path":           "hello.go",
+		},
+	})
+	_ = ws.Write(ctx, websocket.MessageText, fSubReq)
+	_ = readUntilSessionType(t, ctx, ws, "fs.file.subscribe.response", "")
+
+	if err := os.WriteFile(filepath.Join(workDir, "hello.go"), []byte("package main\n// updated\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv.PollSubscriptionsOnce(ctx)
+	fUpd := readUntilSessionType(t, ctx, ws, "fs.file.update", "")
+	if fUpd["subscriptionId"] != "fsub_1" {
+		t.Fatalf("unexpected fs.file.update payload: %+v", fUpd)
+	}
+
+	// 10. Skills save_selection with targets (2026-10-19-x-ff-skill-install-targets parity)
+	skReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":      "agent.skills.save_selection.request",
+			"requestId": "req_sk_1",
+			"selection": map[string]any{"mode": "all"},
+			"targets":   []string{"agents"},
+		},
+	})
+	_ = ws.Write(ctx, websocket.MessageText, skReq)
+	skResp := readUntilSessionType(t, ctx, ws, "agent.skills.save_selection.response", "")
+	skTargets, _ := skResp["targets"].([]any)
+	if len(skTargets) != 1 || skTargets[0] != "agents" {
+		t.Fatalf("expected targets=[agents] in skills save response: %+v", skResp)
+	}
 }

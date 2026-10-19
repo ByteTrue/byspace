@@ -327,6 +327,7 @@ func runPairCmd(version string, args []string, stdout io.Writer) error {
 	relayEndpoint := fs.String("relay", os.Getenv("BYSPACE_RELAY_ENDPOINT"), "relay host:port")
 	useTLS := fs.Bool("tls", true, "use TLS for relay")
 	appURL := fs.String("app-url", os.Getenv("BYSPACE_APP_BASE_URL"), "web app base URL")
+	showQR := fs.Bool("qr", false, "render ASCII QR code in terminal")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -341,6 +342,9 @@ func runPairCmd(version string, args []string, stdout io.Writer) error {
 	defer srv.Close()
 
 	url := srv.BuildPairingOfferURL(*relayEndpoint, *useTLS, *appURL)
+	if *showQR {
+		fmt.Fprintln(stdout, server.RenderASCIIQRCode(url))
+	}
 	fmt.Fprintln(stdout, url)
 	return nil
 }

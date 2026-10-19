@@ -28,6 +28,11 @@ func (s *Server) handleGitParityOps(ctx context.Context, sink frameSink, msgType
 
 	switch msgType {
 	case "unsubscribe_checkout_diff_request":
+		var req struct {
+			SubscriptionID string `json:"subscriptionId"`
+		}
+		_ = json.Unmarshal(raw, &req)
+		s.UnregisterDiffSubscription(req.SubscriptionID)
 		return
 
 	case "checkout.refresh.request":
@@ -251,12 +256,13 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 	switch msgType {
 	case "checkout_pr_status_request":
 		prStatus, _ := workspace.GetPRStatus(ctx, base.Cwd)
+		forge := workspace.DetectForge(ctx, base.Cwd)
 		_ = sendSessionMsg(ctx, sink, "checkout_pr_status_response", map[string]any{
 			"cwd":                   base.Cwd,
 			"status":                prStatus,
 			"githubFeaturesEnabled": true,
 			"authState":             map[string]any{"status": "authenticated"},
-			"forge":                 "github",
+			"forge":                 forge,
 			"error":                 nil,
 			"requestId":             base.RequestID,
 		})
@@ -576,6 +582,24 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 		})
 
 	case "agent.rewind.request":
+		var req struct {
+			RequestID string `json:"requestId"`
+			AgentID   string `json:"agentId"`
+			Mode      string `json:"mode"` // "conversation" | "code" | "both"
+			Seq       int    `json:"seq"`
+		}
+		_ = json.Unmarshal(raw, &req)
+		if mp, err := s.ensureAgentLoaded(req.AgentID); err == nil {
+			if req.Mode == "code" || req.Mode == "both" {
+				_ = workspace.DiscardChanges(ctx, mp.record.Cwd)
+			}
+			if (req.Mode == "conversation" || req.Mode == "both") && req.Seq > 0 {
+				tl := mp.session.Timeline()
+				if req.Seq < len(tl) {
+					mp.session.SeedTimeline(tl[:req.Seq])
+				}
+			}
+		}
 		_ = sendSessionMsg(ctx, sink, "agent.rewind.response", map[string]any{
 			"requestId": base.RequestID,
 			"agentId":   base.AgentID,
@@ -683,20 +707,31 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 
 	switch msgType {
 	case "agent.skills.get_status.request", "agent.skills.reconcile.request", "agent.skills.uninstall.request":
-		avail, inst := scanLocalSkills()
 		cfg := s.store.LoadDaemonConfig()
 		sel, ok := cfg["skillsSelection"].(map[string]any)
 		if !ok || sel == nil {
 			sel = map[string]any{"mode": "all"}
 		}
+		targets := []string{"agents", "claude"}
+		if rawT, hasT := cfg["skillTargets"].([]any); hasT && len(rawT) > 0 {
+			targets = nil
+			for _, it := range rawT {
+				if s, ok := it.(string); ok {
+					targets = append(targets, s)
+				}
+			}
+		}
+		uninstall := msgType == "agent.skills.uninstall.request"
+		state, ops, avail, inst := ReconcileSkills(sel, targets, uninstall)
 		respType := strings.TrimSuffix(msgType, ".request") + ".response"
 		_ = sendSessionMsg(ctx, sink, respType, map[string]any{
 			"requestId":      base.RequestID,
-			"state":          "up-to-date",
-			"ops":            []any{},
+			"state":          state,
+			"ops":            ops,
 			"available":      avail,
 			"installed":      inst,
 			"selection":      sel,
+			"targets":        targets,
 			"selectionSaved": ok,
 		})
 
@@ -704,21 +739,30 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		var req struct {
 			RequestID string         `json:"requestId"`
 			Selection map[string]any `json:"selection"`
+			Targets   []string       `json:"targets"`
 		}
 		_ = json.Unmarshal(raw, &req)
 		sel := req.Selection
 		if sel == nil {
 			sel = map[string]any{"mode": "all"}
 		}
-		_ = s.store.SaveDaemonConfig(map[string]any{"skillsSelection": sel})
-		avail, inst := scanLocalSkills()
+		targets := req.Targets
+		if len(targets) == 0 {
+			targets = []string{"agents", "claude"}
+		}
+		_ = s.store.SaveDaemonConfig(map[string]any{
+			"skillsSelection": sel,
+			"skillTargets":    targets,
+		})
+		state, ops, avail, inst := ReconcileSkills(sel, targets, false)
 		_ = sendSessionMsg(ctx, sink, "agent.skills.save_selection.response", map[string]any{
 			"requestId":            req.RequestID,
-			"state":                "up-to-date",
-			"ops":                  []any{},
+			"state":                state,
+			"ops":                  ops,
 			"available":            avail,
 			"installed":            inst,
 			"selection":            sel,
+			"targets":              targets,
 			"selectionSaved":       true,
 			"confirmationRequired": nil,
 		})

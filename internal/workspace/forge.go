@@ -10,10 +10,10 @@ import (
 	"time"
 )
 
-func runGH(ctx context.Context, cwd string, args ...string) (string, error) {
+func runForgeCLI(ctx context.Context, bin, cwd string, args ...string) (string, error) {
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(cctx, "gh", args...)
+	cmd := exec.CommandContext(cctx, bin, args...)
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
@@ -26,9 +26,60 @@ func runGH(ctx context.Context, cwd string, args ...string) (string, error) {
 	return strings.TrimSpace(out.String()), nil
 }
 
-// GetPRStatus queries `gh pr view` for the active branch in cwd.
-// Returns (nil, nil) if `gh` is unavailable or no PR exists for the current branch.
+func runGH(ctx context.Context, cwd string, args ...string) (string, error) {
+	return runForgeCLI(ctx, "gh", cwd, args...)
+}
+
+// DetectForge inspects the origin remote URL to classify the git forge ("github", "gitlab", or "gitea").
+func DetectForge(ctx context.Context, cwd string) string {
+	remote, err := runGit(ctx, cwd, "remote", "get-url", "origin")
+	if err != nil || remote == "" {
+		return "github"
+	}
+	lower := strings.ToLower(remote)
+	if strings.Contains(lower, "gitlab") {
+		return "gitlab"
+	}
+	if strings.Contains(lower, "gitea") || strings.Contains(lower, "codeberg") {
+		return "gitea"
+	}
+	return "github"
+}
+
+// GetPRStatus queries `gh pr view` (or `glab mr view`) for the active branch in cwd.
+// Returns (nil, nil) if the forge CLI is unavailable or no PR/MR exists for the current branch.
 func GetPRStatus(ctx context.Context, cwd string) (map[string]any, error) {
+	forge := DetectForge(ctx, cwd)
+	if forge == "gitlab" {
+		raw, err := runForgeCLI(ctx, "glab", cwd, "mr", "view", "-F", "json")
+		if err != nil || raw == "" {
+			return nil, nil
+		}
+		var data map[string]any
+		if json.Unmarshal([]byte(raw), &data) != nil {
+			return nil, nil
+		}
+		iid, _ := data["iid"].(float64)
+		if iid <= 0 {
+			return nil, nil
+		}
+		title, _ := data["title"].(string)
+		url, _ := data["web_url"].(string)
+		state, _ := data["state"].(string)
+		return map[string]any{
+			"number":         int(iid),
+			"title":          title,
+			"url":            url,
+			"state":          strings.ToLower(state),
+			"isDraft":        false,
+			"headRefName":    data["source_branch"],
+			"baseRefName":    data["target_branch"],
+			"updatedAt":      time.Now().UTC().Format(time.RFC3339Nano),
+			"mergeable":      "UNKNOWN",
+			"reviewDecision": nil,
+			"checks":         []any{},
+		}, nil
+	}
 	raw, err := runGH(ctx, cwd, "pr", "view", "--json", "number,title,url,state,isDraft,mergeable,reviewDecision,headRefName,baseRefName,updatedAt")
 	if err != nil || raw == "" {
 		return nil, nil

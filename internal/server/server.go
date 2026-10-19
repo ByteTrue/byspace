@@ -17,6 +17,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/ByteTrue/byspace/internal/agent/pi"
+	"github.com/ByteTrue/byspace/internal/agent/providers"
 	"github.com/ByteTrue/byspace/internal/e2ee"
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/schedule"
@@ -51,7 +52,7 @@ type Options struct {
 
 type managedPi struct {
 	record  store.AgentRecord
-	session *pi.Session
+	session providers.ManagedSession
 }
 
 type downloadTokenEntry struct {
@@ -112,6 +113,8 @@ type Server struct {
 	terminals         map[uint8]*terminal.Session
 	terminalSlotsByID map[string]uint8
 	downloadTokens    map[string]downloadTokenEntry
+	fileSubs          map[string]fileSubscription
+	diffSubs          map[string]diffSubscription
 	clients           map[frameSink]bool
 	cachedPiModels    []pi.CatalogModel
 	cachedPiCommands  []pi.SlashCommand
@@ -157,6 +160,8 @@ func New(opts Options) (*Server, error) {
 		terminals:         make(map[uint8]*terminal.Session),
 		terminalSlotsByID: make(map[string]uint8),
 		downloadTokens:    make(map[string]downloadTokenEntry),
+		fileSubs:          make(map[string]fileSubscription),
+		diffSubs:          make(map[string]diffSubscription),
 		clients:           make(map[frameSink]bool),
 	}
 	srv.schedules = schedule.NewService(homeDir, srv.executeScheduledPiRun)
@@ -225,8 +230,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.URL.Path == "/api/terminal-activity" || r.URL.Path == "/api/subagent-report" {
-		w.WriteHeader(http.StatusNoContent)
+	if r.URL.Path == "/api/terminal-activity" {
+		s.handleHTTPTerminalActivity(w, r)
+		return
+	}
+
+	if r.URL.Path == "/api/subagent-report" {
+		s.handleHTTPSubagentReport(w, r)
 		return
 	}
 
@@ -564,6 +574,7 @@ func (s *Server) buildServerInfoPayload() map[string]any {
 		"webPushPublicKey": s.vapidKeys.PublicKey,
 		"features": map[string]any{
 			"webPush":                      s.vapidKeys.PublicKey != "",
+			"skillInstallTargets":          true,
 			"agentRequestReceipts":         true,
 			"hubAgentRpc":                  true,
 			"directorySync":                true,
@@ -699,9 +710,7 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 			"requestId": base.RequestID,
 			"fetchedAt": now,
 			"error":     nil,
-			"providers": []map[string]any{
-				{"provider": "pi", "available": true, "error": nil},
-			},
+			"providers": providers.BuildAvailableProviders(s.piCommand),
 		})
 
 	case "get_providers_snapshot_request":
@@ -715,19 +724,7 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		respPayload := map[string]any{
 			"requestId":   base.RequestID,
 			"generatedAt": now,
-			"entries": []map[string]any{
-				{
-					"provider":    "pi",
-					"label":       "Pi",
-					"status":      "ready",
-					"enabled":     true,
-					"source":      "builtin",
-					"fetchedAt":   now,
-					"models":      models,
-					"modes":       []any{},
-					"description": "Pi coding agent",
-				},
-			},
+			"entries":     providers.BuildSnapshotEntries(models, s.piCommand),
 		}
 		if strings.TrimSpace(req.Cwd) != "" {
 			respPayload["cwd"] = req.Cwd
@@ -745,32 +742,64 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		})
 
 	case "list_provider_models_request":
+		var req struct {
+			RequestID string `json:"requestId"`
+			Provider  string `json:"provider"`
+		}
+		_ = json.Unmarshal(raw, &req)
+		prov := strings.TrimSpace(req.Provider)
+		if prov == "" {
+			prov = "pi"
+		}
 		now := time.Now().UTC().Format(time.RFC3339Nano)
-		models := s.probeOrCachedPiModels(ctx)
+		var models []pi.CatalogModel
+		if prov == "pi" {
+			models = s.probeOrCachedPiModels(ctx)
+		} else {
+			models = providers.GetProviderSpec(prov).Models
+		}
 		_ = sendSessionMsg(ctx, sink, "list_provider_models_response", map[string]any{
 			"requestId": base.RequestID,
-			"provider":  "pi",
+			"provider":  prov,
 			"models":    models,
 			"error":     nil,
 			"fetchedAt": now,
 		})
 
 	case "list_provider_modes_request":
+		var req struct {
+			RequestID string `json:"requestId"`
+			Provider  string `json:"provider"`
+		}
+		_ = json.Unmarshal(raw, &req)
+		prov := strings.TrimSpace(req.Provider)
+		if prov == "" {
+			prov = "pi"
+		}
 		now := time.Now().UTC().Format(time.RFC3339Nano)
 		_ = sendSessionMsg(ctx, sink, "list_provider_modes_response", map[string]any{
 			"requestId": base.RequestID,
-			"provider":  "pi",
-			"modes":     []any{},
+			"provider":  prov,
+			"modes":     providers.GetProviderSpec(prov).Modes,
 			"error":     nil,
 			"fetchedAt": now,
 		})
 
 	case "list_provider_features_request":
+		var req struct {
+			RequestID string `json:"requestId"`
+			Provider  string `json:"provider"`
+		}
+		_ = json.Unmarshal(raw, &req)
+		prov := strings.TrimSpace(req.Provider)
+		if prov == "" {
+			prov = "pi"
+		}
 		now := time.Now().UTC().Format(time.RFC3339Nano)
 		_ = sendSessionMsg(ctx, sink, "list_provider_features_response", map[string]any{
 			"requestId": base.RequestID,
-			"provider":  "pi",
-			"features":  []any{},
+			"provider":  prov,
+			"features":  providers.GetProviderSpec(prov).Features,
 			"error":     nil,
 			"fetchedAt": now,
 		})
@@ -1202,14 +1231,28 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 
 func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType string, raw json.RawMessage) {
 	var req struct {
-		RequestID string `json:"requestId"`
-		Subscribe *struct {
+		RequestID   string         `json:"requestId"`
+		SearchQuery string         `json:"searchQuery"`
+		Filter      map[string]any `json:"filter"`
+		Sort        string         `json:"sort"`
+		Limit       int            `json:"limit"`
+		Cursor      string         `json:"cursor"`
+		Subscribe   *struct {
 			SubscriptionID string `json:"subscriptionId"`
 		} `json:"subscribe"`
 	}
 	_ = json.Unmarshal(raw, &req)
 
-	records, _ := s.store.ListAgents()
+	allRecords, _ := s.store.ListAgents()
+	activeOrHist := make([]store.AgentRecord, 0, len(allRecords))
+	for _, rec := range allRecords {
+		if rec.ArchivedAt != nil && reqType == "fetch_agents_request" {
+			continue
+		}
+		activeOrHist = append(activeOrHist, rec)
+	}
+	records, hasMore, nextCursor := FilterAndSortAgents(activeOrHist, req.SearchQuery, req.Filter, req.Sort, req.Limit, req.Cursor)
+
 	projects, _ := s.store.ListProjects()
 	workspaces, _ := s.store.ListWorkspaces()
 
@@ -1224,9 +1267,6 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 
 	entries := make([]map[string]any, 0, len(records))
 	for _, rec := range records {
-		if rec.ArchivedAt != nil && reqType == "fetch_agents_request" {
-			continue
-		}
 		agentPayload := s.buildAgentSnapshotPayload(rec)
 		var projectPlacement any
 		if ws, ok := wsByID[rec.WorkspaceID]; ok {
@@ -1248,9 +1288,9 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 		"requestId": req.RequestID,
 		"entries":   entries,
 		"pageInfo": map[string]any{
-			"nextCursor": nil,
+			"nextCursor": nextCursor,
 			"prevCursor": nil,
-			"hasMore":    false,
+			"hasMore":    hasMore,
 		},
 	}
 	if req.Subscribe != nil && req.Subscribe.SubscriptionID != "" {
@@ -1576,10 +1616,13 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 	}
 	s.mu.Unlock()
 
-	var model, thinking, sessionPath string
+	var model, modeID, thinking, sessionPath string
 	if rec.Config != nil {
 		if rec.Config.Model != nil {
 			model = *rec.Config.Model
+		}
+		if rec.Config.ModeID != nil {
+			modeID = *rec.Config.ModeID
 		}
 		if rec.Config.ThinkingOptionID != nil {
 			thinking = *rec.Config.ThinkingOptionID
@@ -1595,18 +1638,24 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		}
 	}
 
-	sess, err := pi.StartSession(pi.LaunchOptions{
-		Command:          s.piCommand,
+	var cmdOverride string
+	if rec.Provider == "pi" || rec.Provider == "" {
+		cmdOverride = s.piCommand
+	}
+	sess, err := providers.StartProviderSession(providers.LaunchConfig{
+		Provider:         rec.Provider,
+		CommandOverride:  cmdOverride,
 		Cwd:              rec.Cwd,
 		Model:            model,
+		ModeID:           modeID,
 		ThinkingOptionID: thinking,
-		Session:          sessionPath,
+		SessionHandle:    sessionPath,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	if sessionPath != "" {
+	if sessionPath != "" && (rec.Provider == "pi" || rec.Provider == "") {
 		if restored, loadErr := pi.LoadTimelineFromJSONL(sessionPath); loadErr == nil && len(restored) > 0 {
 			sess.SeedTimeline(restored)
 		}

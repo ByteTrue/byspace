@@ -437,12 +437,18 @@ func (s *Server) handleBySpaceWorktreeList(ctx context.Context, sink frameSink, 
 
 func (s *Server) handleSubscribeCheckoutDiff(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID      string `json:"requestId"`
-		SubscriptionID string `json:"subscriptionId"`
-		Cwd            string `json:"cwd"`
+		RequestID      string         `json:"requestId"`
+		SubscriptionID string         `json:"subscriptionId"`
+		Cwd            string         `json:"cwd"`
+		Compare        map[string]any `json:"compare"`
 	}
 	_ = json.Unmarshal(raw, &req)
 	files, _ := workspace.GetWorkingDiff(ctx, req.Cwd)
+	cmp := req.Compare
+	if cmp == nil {
+		cmp = map[string]any{"mode": "working"}
+	}
+	s.RegisterDiffSubscription(req.SubscriptionID, sink, req.Cwd, cmp, files)
 	_ = sendSessionMsg(ctx, sink, "subscribe_checkout_diff_response", map[string]any{
 		"subscriptionId": req.SubscriptionID,
 		"cwd":            req.Cwd,
@@ -905,10 +911,11 @@ func (s *Server) handleGetPairingOffer(ctx context.Context, sink frameSink, raw 
 	}
 	_ = json.Unmarshal(raw, &req)
 	offerURL := s.BuildPairingOfferURL("", true, "")
+	qr := RenderASCIIQRCode(offerURL)
 	_ = sendSessionMsg(ctx, sink, "daemon.get_pairing_offer.response", map[string]any{
 		"requestId":    req.RequestID,
 		"url":          offerURL,
-		"qr":           nil,
+		"qr":           qr,
 		"relayEnabled": true,
 	})
 }
