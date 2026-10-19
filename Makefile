@@ -12,6 +12,7 @@ build-web:
 	npm run build:daemon-web-ui
 	rm -rf internal/webui/dist/*
 	cp -R packages/server/dist/server/web-ui/. internal/webui/dist/
+	find internal/webui/dist/_expo -name "*.js" -size +1M -delete
 	touch internal/webui/dist/.keep
 
 ## build-full: Build the web UI and embed it into the single Go binary

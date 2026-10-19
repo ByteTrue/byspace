@@ -1,0 +1,284 @@
+package cli
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"strings"
+	"time"
+)
+
+func runHeartbeatCmd(args []string, stdout io.Writer) error {
+	if len(args) == 0 {
+		return errors.New("usage: byspace heartbeat <create|list|delete> [options]")
+	}
+	sub := args[0]
+	rest := args[1:]
+
+	switch sub {
+	case "create":
+		fs := flag.NewFlagSet("heartbeat create", flag.ContinueOnError)
+		addr := fs.String("addr", defaultListenAddr(), "daemon address")
+		cronExpr := fs.String("cron", "", "cron expression (e.g. */10 * * * *)")
+		everyMs := fs.Int64("every", 60000, "interval in ms when --cron is not set")
+		tz := fs.String("timezone", "UTC", "cron timezone")
+		name := fs.String("name", "", "schedule name")
+		maxRuns := fs.Int("max-runs", 0, "optional maximum number of runs")
+		cwd := fs.String("cwd", "", "working directory for target agent")
+		agentID := fs.String("agent-id", os.Getenv("BYSPACE_AGENT_ID"), "existing target agent ID")
+		asJSON := fs.Bool("json", false, "output JSON")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		prompt := strings.TrimSpace(strings.Join(fs.Args(), " "))
+		if prompt == "" {
+			return errors.New("usage: byspace heartbeat create [options] <prompt>")
+		}
+
+		var cadence map[string]any
+		if strings.TrimSpace(*cronExpr) != "" {
+			cadence = map[string]any{
+				"type":       "cron",
+				"expression": strings.TrimSpace(*cronExpr),
+				"timezone":   *tz,
+			}
+		} else {
+			cadence = map[string]any{
+				"type":    "every",
+				"everyMs": *everyMs,
+			}
+		}
+
+		var target map[string]any
+		if strings.TrimSpace(*agentID) != "" {
+			target = map[string]any{
+				"type":    "agent",
+				"agentId": strings.TrimSpace(*agentID),
+			}
+		} else {
+			workCwd := strings.TrimSpace(*cwd)
+			if workCwd == "" {
+				workCwd, _ = os.Getwd()
+			}
+			target = map[string]any{
+				"type": "new-agent",
+				"config": map[string]any{
+					"provider": "pi",
+					"cwd":      workCwd,
+				},
+			}
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		ws, err := dialDaemonWS(ctx, *addr)
+		if err != nil {
+			return err
+		}
+		defer ws.CloseNow()
+
+		reqMsg := map[string]any{
+			"type":      "schedule/create",
+			"requestId": "req_hb_create",
+			"prompt":    prompt,
+			"cadence":   cadence,
+			"target":    target,
+		}
+		if strings.TrimSpace(*name) != "" {
+			reqMsg["name"] = strings.TrimSpace(*name)
+		}
+		if *maxRuns > 0 {
+			reqMsg["maxRuns"] = *maxRuns
+		}
+
+		if err := sendSessionReq(ctx, ws, reqMsg); err != nil {
+			return err
+		}
+		payload, err := waitSessionResp(ctx, ws, "schedule/create/response", "")
+		if err != nil {
+			return err
+		}
+		if *asJSON {
+			b, _ := json.MarshalIndent(payload["schedule"], "", "  ")
+			fmt.Fprintln(stdout, string(b))
+			return nil
+		}
+		sched, _ := payload["schedule"].(map[string]any)
+		fmt.Fprintf(stdout, "%v\n", sched["id"])
+		return nil
+
+	case "list", "ls":
+		fs := flag.NewFlagSet("heartbeat list", flag.ContinueOnError)
+		addr := fs.String("addr", defaultListenAddr(), "daemon address")
+		asJSON := fs.Bool("json", false, "output JSON")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		ws, err := dialDaemonWS(ctx, *addr)
+		if err != nil {
+			return err
+		}
+		defer ws.CloseNow()
+
+		if err := sendSessionReq(ctx, ws, map[string]any{
+			"type":      "schedule/list",
+			"requestId": "req_hb_list",
+		}); err != nil {
+			return err
+		}
+		payload, err := waitSessionResp(ctx, ws, "schedule/list/response", "")
+		if err != nil {
+			return err
+		}
+		if *asJSON {
+			b, _ := json.MarshalIndent(payload["schedules"], "", "  ")
+			fmt.Fprintln(stdout, string(b))
+			return nil
+		}
+		schedules, _ := payload["schedules"].([]any)
+		for _, raw := range schedules {
+			s, _ := raw.(map[string]any)
+			fmt.Fprintf(stdout, "%v\t%v\t%v\n", s["id"], s["status"], s["prompt"])
+		}
+		return nil
+
+	case "delete", "rm":
+		fs := flag.NewFlagSet("heartbeat delete", flag.ContinueOnError)
+		addr := fs.String("addr", defaultListenAddr(), "daemon address")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		if fs.NArg() < 1 {
+			return errors.New("usage: byspace heartbeat delete [options] <schedule-id>")
+		}
+		schedID := fs.Arg(0)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		ws, err := dialDaemonWS(ctx, *addr)
+		if err != nil {
+			return err
+		}
+		defer ws.CloseNow()
+
+		if err := sendSessionReq(ctx, ws, map[string]any{
+			"type":       "schedule/delete",
+			"requestId":  "req_hb_del",
+			"scheduleId": schedID,
+		}); err != nil {
+			return err
+		}
+		_, err = waitSessionResp(ctx, ws, "schedule/delete/response", "")
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "deleted %s\n", schedID)
+		return nil
+
+	default:
+		return fmt.Errorf("unknown heartbeat subcommand %q", sub)
+	}
+}
+
+func runWorktreeCmd(args []string, stdout io.Writer) error {
+	if len(args) == 0 {
+		return errors.New("usage: byspace worktree <create|list> [options]")
+	}
+	sub := args[0]
+	rest := args[1:]
+
+	switch sub {
+	case "create":
+		fs := flag.NewFlagSet("worktree create", flag.ContinueOnError)
+		addr := fs.String("addr", defaultListenAddr(), "daemon address")
+		cwd := fs.String("cwd", "", "repository directory")
+		baseRef := fs.String("base", "", "base git ref")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		if fs.NArg() < 1 {
+			return errors.New("usage: byspace worktree create [options] <slug>")
+		}
+		slug := fs.Arg(0)
+		workCwd := strings.TrimSpace(*cwd)
+		if workCwd == "" {
+			workCwd, _ = os.Getwd()
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		ws, err := dialDaemonWS(ctx, *addr)
+		if err != nil {
+			return err
+		}
+		defer ws.CloseNow()
+
+		if err := sendSessionReq(ctx, ws, map[string]any{
+			"type":         "create_byspace_worktree_request",
+			"requestId":    "req_wt_create",
+			"cwd":          workCwd,
+			"worktreeSlug": slug,
+			"refName":      *baseRef,
+		}); err != nil {
+			return err
+		}
+		payload, err := waitSessionResp(ctx, ws, "create_byspace_worktree_response", "")
+		if err != nil {
+			return err
+		}
+		if errStr, _ := payload["error"].(string); errStr != "" {
+			return errors.New(errStr)
+		}
+		wsObj, _ := payload["workspace"].(map[string]any)
+		fmt.Fprintf(stdout, "%v\t%v\n", wsObj["id"], wsObj["workspaceDirectory"])
+		return nil
+
+	case "list", "ls":
+		fs := flag.NewFlagSet("worktree list", flag.ContinueOnError)
+		addr := fs.String("addr", defaultListenAddr(), "daemon address")
+		cwd := fs.String("cwd", "", "repository directory")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		workCwd := strings.TrimSpace(*cwd)
+		if workCwd == "" {
+			workCwd, _ = os.Getwd()
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		ws, err := dialDaemonWS(ctx, *addr)
+		if err != nil {
+			return err
+		}
+		defer ws.CloseNow()
+
+		if err := sendSessionReq(ctx, ws, map[string]any{
+			"type":      "byspace_worktree_list_request",
+			"requestId": "req_wt_list",
+			"cwd":       workCwd,
+		}); err != nil {
+			return err
+		}
+		payload, err := waitSessionResp(ctx, ws, "byspace_worktree_list_response", "")
+		if err != nil {
+			return err
+		}
+		wts, _ := payload["worktrees"].([]any)
+		for _, raw := range wts {
+			w, _ := raw.(map[string]any)
+			fmt.Fprintf(stdout, "%v\t%v\n", w["branch"], w["worktreePath"])
+		}
+		return nil
+
+	default:
+		return fmt.Errorf("unknown worktree subcommand %q", sub)
+	}
+}

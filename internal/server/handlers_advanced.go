@@ -26,8 +26,8 @@ func (s *Server) probeOrCachedPiModels(ctx context.Context) []pi.CatalogModel {
 	pctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	models, cmds, err := pi.ProbeCatalog(pctx, pi.LaunchOptions{Command: s.piCommand})
-	if err != nil {
-		return []pi.CatalogModel{}
+	if err != nil || len(models) == 0 {
+		models = pi.DefaultFallbackModels()
 	}
 
 	s.mu.Lock()

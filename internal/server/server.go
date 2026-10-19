@@ -129,6 +129,7 @@ func New(opts Options) (*Server, error) {
 	if ui == nil {
 		ui = webui.NewHandler(opts.WebDir)
 	}
+	ui = ui.WithConnectionHint("BySpace")
 
 	srv := &Server{
 		homeDir:           homeDir,
@@ -631,6 +632,7 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 
 	case "daemon.get_status.request":
 		hostname, _ := os.Hostname()
+		exe, _ := os.Executable()
 		_ = sendSessionMsg(ctx, sink, "daemon.get_status.response", map[string]any{
 			"requestId":    base.RequestID,
 			"serverId":     s.serverID,
@@ -638,26 +640,46 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 			"version":      s.version,
 			"publicKeyB64": s.pubKeyB64,
 			"pid":          os.Getpid(),
+			"nodePath":     exe,
+			"listen":       nil,
+			"providers": []map[string]any{
+				{"provider": "pi", "available": true, "error": nil},
+			},
 		})
 
 	case "get_daemon_config_request":
 		_ = sendSessionMsg(ctx, sink, "get_daemon_config_response", map[string]any{
 			"requestId": base.RequestID,
-			"config":    map[string]any{},
+			"config": map[string]any{
+				"mcp": map[string]any{
+					"enabled":          true,
+					"injectIntoAgents": true,
+				},
+				"providers":          map[string]any{},
+				"metadataGeneration": map[string]any{"providers": []any{}},
+			},
 		})
 
 	case "list_available_providers_request":
+		now := time.Now().UTC().Format(time.RFC3339Nano)
 		_ = sendSessionMsg(ctx, sink, "list_available_providers_response", map[string]any{
 			"requestId": base.RequestID,
+			"fetchedAt": now,
+			"error":     nil,
 			"providers": []map[string]any{
-				{"id": "pi", "label": "Pi", "available": true},
+				{"provider": "pi", "available": true, "error": nil},
 			},
 		})
 
 	case "get_providers_snapshot_request":
+		var req struct {
+			RequestID string `json:"requestId"`
+			Cwd       string `json:"cwd"`
+		}
+		_ = json.Unmarshal(raw, &req)
 		now := time.Now().UTC().Format(time.RFC3339Nano)
 		models := s.probeOrCachedPiModels(ctx)
-		_ = sendSessionMsg(ctx, sink, "get_providers_snapshot_response", map[string]any{
+		respPayload := map[string]any{
 			"requestId":   base.RequestID,
 			"generatedAt": now,
 			"entries": []map[string]any{
@@ -673,7 +695,11 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 					"description": "Pi coding agent",
 				},
 			},
-		})
+		}
+		if strings.TrimSpace(req.Cwd) != "" {
+			respPayload["cwd"] = req.Cwd
+		}
+		_ = sendSessionMsg(ctx, sink, "get_providers_snapshot_response", respPayload)
 
 	case "refresh_providers_snapshot_request":
 		s.mu.Lock()
@@ -765,7 +791,7 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		}
 		_ = sendSessionMsg(ctx, sink, "terminal.shell.detect.response", map[string]any{
 			"requestId":       base.RequestID,
-			"shells":          []map[string]any{{"path": sh, "label": filepath.Base(sh)}},
+			"shells":          []map[string]any{{"path": sh, "name": filepath.Base(sh)}},
 			"resolvedDefault": sh,
 			"error":           nil,
 		})
@@ -1125,19 +1151,27 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		return
 	}
 
-	if req.InitialPrompt != nil && strings.TrimSpace(*req.InitialPrompt) != "" {
-		_ = mp.session.Prompt(ctx, *req.InitialPrompt, nil)
-		mp.record.LastStatus = mp.session.Status()
-		mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		_ = s.store.UpsertAgent(mp.record)
-	}
-
 	_ = sendSessionMsg(ctx, sink, "status", map[string]any{
 		"status":    "agent_created",
 		"agentId":   agentID,
 		"requestId": req.RequestID,
 		"agent":     s.buildAgentSnapshotPayload(mp.record),
 	})
+
+	if req.InitialPrompt != nil && strings.TrimSpace(*req.InitialPrompt) != "" {
+		promptText := *req.InitialPrompt
+		go func() {
+			pctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			_ = mp.session.Prompt(pctx, promptText, nil)
+			s.mu.Lock()
+			mp.record.LastStatus = mp.session.Status()
+			mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+			recCopy := mp.record
+			s.mu.Unlock()
+			_ = s.store.UpsertAgent(recCopy)
+		}()
+	}
 }
 
 func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw json.RawMessage) {
@@ -1252,8 +1286,9 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 		"staleCursor": false,
 		"gap":         false,
 		"window": map[string]any{
-			"minSeq": 1,
-			"maxSeq": len(tl),
+			"minSeq":  1,
+			"maxSeq":  len(tl),
+			"nextSeq": len(tl) + 1,
 		},
 		"startCursor": startCursor,
 		"endCursor":   endCursor,
@@ -1378,20 +1413,53 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 
 	sess.OnEvent(func(ev map[string]any) {
 		evType, _ := ev["type"].(string)
-		if evType == "agent_end" || evType == "agent_settled" || evType == "process_exit" {
+		nowStr := time.Now().UTC().Format(time.RFC3339Nano)
+		switch evType {
+		case "turn_start":
+			s.broadcastSessionMsg("agent_stream", map[string]any{
+				"agentId":   rec.ID,
+				"provider":  rec.Provider,
+				"timestamp": nowStr,
+				"event": map[string]any{
+					"type":     "turn_started",
+					"provider": rec.Provider,
+				},
+			})
+		case "message_end":
+			if txt := sess.LastAssistantText(); txt != "" {
+				s.broadcastSessionMsg("agent_stream", map[string]any{
+					"agentId":   rec.ID,
+					"provider":  rec.Provider,
+					"timestamp": nowStr,
+					"event": map[string]any{
+						"type":     "timeline",
+						"provider": rec.Provider,
+						"item": map[string]any{
+							"type": "assistant_message",
+							"text": txt,
+						},
+					},
+				})
+			}
+		case "agent_end", "agent_settled", "process_exit":
 			s.mu.Lock()
 			mp.record.LastStatus = sess.Status()
-			mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+			mp.record.UpdatedAt = nowStr
 			recCopy := mp.record
 			s.mu.Unlock()
 			_ = s.store.UpsertAgent(recCopy)
+			if evType == "agent_end" {
+				s.broadcastSessionMsg("agent_stream", map[string]any{
+					"agentId":   rec.ID,
+					"provider":  rec.Provider,
+					"timestamp": nowStr,
+					"event": map[string]any{
+						"type":     "turn_completed",
+						"provider": rec.Provider,
+					},
+				})
+			}
 		}
-		s.broadcastSessionMsg("agent_stream", map[string]any{
-			"agentId":   rec.ID,
-			"provider":  rec.Provider,
-			"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
-			"event":     ev,
-		})
 	})
 
 	return mp, nil
@@ -1465,11 +1533,17 @@ func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any
 		"status":                    status,
 		"activeTurn":                nil,
 		"capabilities": map[string]any{
-			"canCancel":           true,
-			"canSelectModel":      true,
-			"canSelectThinking":   true,
-			"supportsImages":      true,
-			"supportsAttachments": true,
+			"supportsStreaming":          true,
+			"supportsSessionPersistence": true,
+			"supportsDynamicModes":       false,
+			"supportsMcpServers":         true,
+			"supportsReasoningStream":    true,
+			"supportsToolInvocations":    true,
+			"canCancel":                  true,
+			"canSelectModel":             true,
+			"canSelectThinking":          true,
+			"supportsImages":             true,
+			"supportsAttachments":        true,
 		},
 		"currentModeId":      modeID,
 		"availableModes":     []any{},
@@ -1489,14 +1563,17 @@ func buildProjectDescriptor(p store.ProjectRecord) map[string]any {
 	if p.CustomName != nil && strings.TrimSpace(*p.CustomName) != "" {
 		displayName = strings.TrimSpace(*p.CustomName)
 	}
+	projectKind := p.Kind
+	if projectKind != "git" && projectKind != "non_git" && projectKind != "directory" {
+		projectKind = "git"
+	}
 	out := map[string]any{
 		"projectId":                 p.ProjectID,
 		"projectDisplayName":        displayName,
 		"projectCustomName":         p.CustomName,
 		"projectCustomIconRevision": p.CustomIconRevision,
-		"projectIconRevision":       nil,
 		"projectRootPath":           p.RootPath,
-		"projectKind":               p.Kind,
+		"projectKind":               projectKind,
 	}
 	if p.ProjectKey != nil {
 		out["projectKey"] = *p.ProjectKey
@@ -1515,18 +1592,27 @@ func buildWorkspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord)
 	if prj.CustomName != nil && strings.TrimSpace(*prj.CustomName) != "" {
 		projectDisplayName = strings.TrimSpace(*prj.CustomName)
 	}
+	projectKind := prj.Kind
+	if projectKind != "git" && projectKind != "non_git" && projectKind != "directory" {
+		projectKind = "git"
+	}
+	workspaceKind := ws.Kind
+	switch workspaceKind {
+	case "directory", "local_checkout", "checkout", "worktree":
+	default:
+		workspaceKind = "local_checkout"
+	}
 	return map[string]any{
 		"id":                        ws.WorkspaceID,
 		"projectId":                 prj.ProjectID,
 		"projectDisplayName":        projectDisplayName,
 		"projectCustomName":         prj.CustomName,
 		"projectCustomIconRevision": prj.CustomIconRevision,
-		"projectIconRevision":       nil,
 		"projectRootPath":           prj.RootPath,
 		"workspaceDirectory":        ws.Cwd,
 		"worktreeSlug":              filepath.Base(ws.Cwd),
-		"projectKind":               prj.Kind,
-		"workspaceKind":             ws.Kind,
+		"projectKind":               projectKind,
+		"workspaceKind":             workspaceKind,
 		"name":                      name,
 		"title":                     ws.Title,
 		"pinnedAt":                  ws.PinnedAt,

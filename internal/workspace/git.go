@@ -132,7 +132,7 @@ func GetCheckoutStatus(ctx context.Context, cwd, requestID string) CheckoutStatu
 		IsDirty:                &dirty,
 		HasRemote:              hasRemote,
 		RemoteURL:              remotePtr,
-		IsBySpaceOwnedWorktree: strings.Contains(absCwd, ".byspace/worktrees"),
+		IsBySpaceOwnedWorktree: false,
 		RequestID:              requestID,
 	}
 }

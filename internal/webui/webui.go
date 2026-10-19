@@ -1,7 +1,11 @@
 package webui
 
 import (
+	"bytes"
+	"compress/gzip"
 	"embed"
+	"encoding/json"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -39,7 +43,20 @@ var contentTypes = map[string]string{
 // Handler serves the BySpace web UI from an external directory (if provided and valid)
 // or from the Go-embedded dist/ filesystem (if built with assets).
 type Handler struct {
-	fsys fs.FS
+	fsys                 fs.FS
+	injectConnectionHint bool
+	label                string
+}
+
+// WithConnectionHint enables injecting window.__BYSPACE_INITIAL_DAEMON_CONNECTION__ into index.html
+// so that same-origin browser clients automatically connect to the serving daemon port.
+func (h *Handler) WithConnectionHint(label string) *Handler {
+	if h == nil {
+		return nil
+	}
+	h.injectConnectionHint = true
+	h.label = label
+	return h
 }
 
 // NewHandler resolves a web UI asset source: explicit dir wins, then embedded dist/.
@@ -115,7 +132,19 @@ func (h *Handler) TryServe(w http.ResponseWriter, r *http.Request) bool {
 
 	data, err := fs.ReadFile(h.fsys, finalFile)
 	if err != nil {
-		return false
+		if gzBytes, gzErr := fs.ReadFile(h.fsys, resolvedFile+".gz"); gzErr == nil {
+			if zr, zErr := gzip.NewReader(bytes.NewReader(gzBytes)); zErr == nil {
+				data, err = io.ReadAll(zr)
+				_ = zr.Close()
+			}
+		}
+		if err != nil {
+			return false
+		}
+	}
+
+	if isIndex && h.injectConnectionHint {
+		data = injectDaemonConnectionHint(data, r, h.label)
 	}
 
 	w.Header().Set("Content-Type", getContentType(resolvedFile))
@@ -147,6 +176,8 @@ func (h *Handler) resolveTarget(requestPath string) (string, bool) {
 		} else {
 			return rel, strings.EqualFold(path.Base(rel), "index.html")
 		}
+	} else if hasFile(h.fsys, rel+".br") || hasFile(h.fsys, rel+".gz") {
+		return rel, false
 	}
 
 	if hasFile(h.fsys, "index.html") {
@@ -184,4 +215,31 @@ func setCacheHeaders(w http.ResponseWriter, isIndex bool, resolvedFile string) {
 	} else {
 		w.Header().Set("Cache-Control", "no-cache")
 	}
+}
+
+func injectDaemonConnectionHint(htmlBytes []byte, r *http.Request, label string) []byte {
+	host := r.Host
+	useTLS := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	hint := map[string]any{
+		"listen": host,
+		"useTls": useTLS,
+		"label":  label,
+	}
+	b, err := json.Marshal(hint)
+	if err != nil {
+		return htmlBytes
+	}
+	safeJSON := strings.NewReplacer(
+		"<", `\u003C`,
+		">", `\u003E`,
+		"&", `\u0026`,
+	).Replace(string(b))
+
+	script := "<script>window.__BYSPACE_INITIAL_DAEMON_CONNECTION__=" + safeJSON + "</script>"
+	htmlStr := string(htmlBytes)
+	lower := strings.ToLower(htmlStr)
+	if idx := strings.Index(lower, "</head>"); idx != -1 {
+		return []byte(htmlStr[:idx] + script + htmlStr[idx:])
+	}
+	return []byte(script + htmlStr)
 }

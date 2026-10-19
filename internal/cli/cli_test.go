@@ -102,4 +102,28 @@ done
 	if !strings.Contains(out.String(), `"name":"list_agents"`) || !strings.Contains(out.String(), `say hi`) {
 		t.Fatalf("unexpected mcp-bridge output: %s", out.String())
 	}
+
+	// 7. byspace heartbeat create / list / delete
+	out.Reset()
+	errOut.Reset()
+	if code := Main("0.20.2-go", []string{"heartbeat", "create", "--addr", addr, "--cron", "*/10 * * * *", "--name", "Check CI", "check status"}, &out, &errOut); code != 0 {
+		t.Fatalf("heartbeat create failed (%d): %s", code, errOut.String())
+	}
+	schedID := strings.TrimSpace(out.String())
+	if schedID == "" {
+		t.Fatal("expected schedule ID from heartbeat create")
+	}
+
+	out.Reset()
+	if code := Main("0.20.2-go", []string{"heartbeat", "list", "--addr", addr}, &out, &errOut); code != 0 {
+		t.Fatalf("heartbeat list failed (%d): %s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), schedID) || !strings.Contains(out.String(), "check status") {
+		t.Fatalf("unexpected heartbeat list output: %q", out.String())
+	}
+
+	out.Reset()
+	if code := Main("0.20.2-go", []string{"heartbeat", "delete", "--addr", addr, schedID}, &out, &errOut); code != 0 {
+		t.Fatalf("heartbeat delete failed (%d): %s", code, errOut.String())
+	}
 }

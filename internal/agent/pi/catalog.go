@@ -10,6 +10,8 @@ type CatalogModel struct {
 	ID                      string           `json:"id"`
 	Label                   string           `json:"label"`
 	Provider                string           `json:"provider"`
+	IsDefault               bool             `json:"isDefault,omitempty"`
+	IsSelectable            bool             `json:"isSelectable,omitempty"`
 	ThinkingOptions         []ThinkingOption `json:"thinkingOptions,omitempty"`
 	DefaultThinkingOptionID string           `json:"defaultThinkingOptionId,omitempty"`
 }
@@ -56,9 +58,11 @@ func ProbeCatalog(ctx context.Context, opts LaunchOptions) ([]CatalogModel, []Sl
 			label = fullID
 		}
 		cm := CatalogModel{
-			ID:       fullID,
-			Label:    label,
-			Provider: "pi",
+			ID:           fullID,
+			Label:        label,
+			Provider:     "pi",
+			IsDefault:    len(out) == 0,
+			IsSelectable: true,
 		}
 		if m.Reasoning {
 			cm.ThinkingOptions = defaultThinkingOptions
@@ -67,6 +71,21 @@ func ProbeCatalog(ctx context.Context, opts LaunchOptions) ([]CatalogModel, []Sl
 		out = append(out, cm)
 	}
 	return out, cmds, nil
+}
+
+// DefaultFallbackModels returns a default selectable Pi model when live probing returns empty.
+func DefaultFallbackModels() []CatalogModel {
+	return []CatalogModel{
+		{
+			ID:                      "default",
+			Label:                   "Pi Default",
+			Provider:                "pi",
+			IsDefault:               true,
+			IsSelectable:            true,
+			ThinkingOptions:         defaultThinkingOptions,
+			DefaultThinkingOptionID: "medium",
+		},
+	}
 }
 
 // SplitModelID splits a combined "provider/modelId" string into its two parts.

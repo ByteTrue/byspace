@@ -45,6 +45,10 @@ const usageText = `byspace — single-binary AI coding agent host, web workbench
                                   print an agent's timeline transcript
   byspace wait [--addr host:port] [--timeout <ms>] <agent-id>
                                   wait for an agent's active turn to finish
+  byspace heartbeat <create|list|delete> [options]
+                                  manage scheduled Pi agent runs and heartbeats
+  byspace worktree <create|list> [options]
+                                  create and list git worktree workspaces
   byspace daemon status [--addr host:port] [--home <dir>]
                                   check daemon health and identity
   byspace mcp-bridge              run the self-hosted stdio MCP bridge for child agents
@@ -116,6 +120,18 @@ func Main(version string, args []string, stdout, stderr io.Writer) int {
 	case "daemon":
 		if err := runDaemonCmd(rest, stdout); err != nil {
 			fmt.Fprintln(stderr, "byspace daemon:", err)
+			return 1
+		}
+		return 0
+	case "heartbeat", "schedule":
+		if err := runHeartbeatCmd(rest, stdout); err != nil {
+			fmt.Fprintf(stderr, "byspace %s: %v\n", cmd, err)
+			return 1
+		}
+		return 0
+	case "worktree":
+		if err := runWorktreeCmd(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace worktree:", err)
 			return 1
 		}
 		return 0
@@ -623,7 +639,11 @@ func dialDaemonWS(ctx context.Context, addr string) (*websocket.Conn, error) {
 		wsURL = strings.TrimPrefix(wsURL, "https://")
 		wsURL = "ws://" + strings.TrimRight(wsURL, "/") + "/ws"
 	}
-	ws, _, err := websocket.Dial(ctx, wsURL, nil)
+	ws, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		HTTPClient: &http.Client{
+			Transport: &http.Transport{Proxy: nil},
+		},
+	})
 	if err != nil {
 		return nil, err
 	}

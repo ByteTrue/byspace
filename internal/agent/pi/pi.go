@@ -117,7 +117,7 @@ func BuildLaunchArgs(opts LaunchOptions) (string, []string) {
 	if len(opts.ExtraArgs) > 0 {
 		argv = append(argv, opts.ExtraArgs...)
 	}
-	if opts.Model != "" {
+	if opts.Model != "" && opts.Model != "default" {
 		argv = append(argv, "--model", opts.Model)
 	}
 	if opts.ThinkingOptionID != "" {
