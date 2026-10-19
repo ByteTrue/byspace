@@ -332,6 +332,20 @@ describe("install targets", () => {
     expect(await installedIn(sandbox.targets, "byspace-loop")).toEqual([true, false]);
   });
 
+  it("names the modified homes on an add op, so a rollback can restore them", async () => {
+    await writeCurrentBundle(sandbox.targets.sourceDir);
+    // agents has no copy; claude has one the user edited. A single op has to
+    // carry both homes, because convergence rewrites both.
+    await writeOnDiskSkill(sandbox.targets.claudeDir, "byspace", { "SKILL.md": "stale" });
+
+    const status = await getSkillsStatus(sandbox.targets, ALL_SKILLS);
+
+    expect(status.ops).toEqual([
+      op("add", "byspace", ["agents", "claude"]),
+      op("add", "byspace-loop"),
+    ]);
+  });
+
   it("keeps an updated skill in its selected home while removing it from the deselected one", async () => {
     await installSkills(sandbox.targets, ALL_SKILLS);
     await writeOnDiskSkill(sandbox.targets.claudeDir, "byspace", { "SKILL.md": "stale" });

@@ -290,15 +290,14 @@ export const MutableDaemonConfigSchema = z
     // pre-config behavior.
     terminalDefaultShell: z.string().min(1).nullish(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
+    skills: z.object({ selection: AgentSkillSelectionSchema.optional() }).strict().optional(),
+    // Which agent homes a convergence writes. Top-level rather than a sibling of
+    // `skills.selection`, because that object is `.strict()` in every client
+    // already in the field: a nested field would make an old client reject the
+    // whole daemon config message. The top-level object is passthrough, so an
+    // unknown key is dropped.
     // COMPAT(skillInstallTargets): added in v0.20.3, remove after 2027-10-19.
-    skills: z
-      .object({
-        selection: AgentSkillSelectionSchema.optional(),
-        // Absent means both targets, which is what every older daemon did.
-        targets: AgentSkillTargetsSchema.optional(),
-      })
-      .strict()
-      .optional(),
+    skillTargets: AgentSkillTargetsSchema.optional(),
     pluginsEnabled: z.boolean().optional(),
     plugins: z.record(PluginIdSchema, PluginSourceSchema).optional(),
     // COMPAT(daemonNetworkConfig): added in v0.14.3; old daemons omit both fields.
@@ -368,6 +367,8 @@ export const MutableDaemonConfigPatchSchema = z
     // terminal.shell.detect RPC and the terminalShellConfig feature gate.
     terminalDefaultShell: z.string().min(1).nullish(),
     agentProfiles: z.array(AgentProfileSchema).optional(),
+    // COMPAT(skillInstallTargets): added in v0.20.3, remove after 2027-10-19.
+    skillTargets: AgentSkillTargetsSchema.optional(),
     pluginsEnabled: z.boolean().optional(),
     plugins: z.record(PluginIdSchema, PluginSourceSchema).optional(),
     // COMPAT(daemonNetworkConfig): added in v0.14.3; old daemons drop these patches.

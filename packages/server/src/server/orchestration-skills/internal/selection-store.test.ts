@@ -65,7 +65,7 @@ describe("daemon agent skill selection", () => {
 
     await store.set({ mode: "custom", skills: ["byspace"] }, ["claude", "claude"]);
 
-    expect(config.get().skills?.targets).toEqual(["claude"]);
+    expect(config.get().skillTargets).toEqual(["claude"]);
     expect(loadPersistedConfig(root).agents?.skills).toEqual({
       selection: { mode: "custom", skills: ["byspace"] },
       targets: ["claude"],

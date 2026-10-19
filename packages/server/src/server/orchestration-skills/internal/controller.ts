@@ -108,7 +108,7 @@ export function createSkillsController({
     const targets = resolveTargets();
     const selection = await selectionStore.get();
     const selectedTargets = await selectionStore.getTargets();
-    await recoverInterruptedSkillTransactions(targets, selection);
+    await recoverInterruptedSkillTransactions(targets, selection, selectedTargets);
     const status = await apply(targets, selection, selectedTargets);
     return snapshot(status, selection, await selectionStore.isSet());
   }
@@ -127,8 +127,9 @@ export function createSkillsController({
         ? coerceSkillTargets(request.targets)
         : await selectionStore.getTargets();
     const previous = await selectionStore.get();
+    const previousTargets = await selectionStore.getTargets();
     const previouslySaved = await selectionStore.isSet();
-    await recoverInterruptedSkillTransactions(targets, previous);
+    await recoverInterruptedSkillTransactions(targets, previous, previousTargets);
     const confirmed = new Set(
       coerceSkillNames(isRecord(request) ? request.confirmedRemovals : null),
     );
@@ -142,7 +143,7 @@ export function createSkillsController({
       if (removals.some((name) => !confirmed.has(name))) {
         return {
           ...snapshot(
-            await getSkillsStatus(targets, previous, await selectionStore.getTargets()),
+            await getSkillsStatus(targets, previous, previousTargets),
             previous,
             previouslySaved,
           ),
@@ -153,7 +154,10 @@ export function createSkillsController({
       // Capture only paths this frozen plan can mutate. Capturing every managed
       // path would make rollback delete a new external directory that appeared
       // after the scan merely because it was absent from the snapshot.
-      const transaction = await beginSkillsTransaction(targets, previous, next, plan.ops);
+      const transaction = await beginSkillsTransaction(targets, previous, next, plan.ops, {
+        previousTargets,
+        nextTargets,
+      });
       let status: SkillsStatus;
       try {
         status = await installSkills(targets, next, nextTargets, {

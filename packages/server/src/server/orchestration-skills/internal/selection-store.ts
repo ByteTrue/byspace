@@ -12,6 +12,10 @@ export type SkillSelection = AgentSkillSelection;
 export interface SkillSelectionStore {
   get(): Promise<SkillSelection>;
   getTargets(): Promise<AgentSkillTargetId[]>;
+  /**
+   * Writes selection and targets in one persisted patch, so a crash or a failed
+   * write cannot leave the selection saved without the homes it was saved with.
+   */
   set(selection: unknown, targets?: unknown): Promise<SkillSelection>;
   isSet(): Promise<boolean>;
 }
@@ -58,19 +62,21 @@ export function coerceSkillTargets(value: unknown): AgentSkillTargetId[] {
 }
 
 export function createSkillSelectionStore(
-  configStore: Pick<DaemonConfigStore, "get" | "setAgentSkillSelection" | "setAgentSkillTargets">,
+  configStore: Pick<DaemonConfigStore, "get" | "setAgentSkillSelectionAndTargets">,
 ): SkillSelectionStore {
   return {
     async get() {
       return coerceSkillSelection(configStore.get().skills?.selection);
     },
     async getTargets() {
-      return coerceSkillTargets(configStore.get().skills?.targets);
+      return coerceSkillTargets(configStore.get().skillTargets);
     },
     async set(selection, targets) {
       const parsed = coerceSkillSelection(selection);
-      configStore.setAgentSkillSelection(parsed);
-      if (targets !== undefined) configStore.setAgentSkillTargets(coerceSkillTargets(targets));
+      // One write either way: a caller that only names a selection keeps the
+      // stored targets rather than resetting them to the default.
+      const nextTargets = coerceSkillTargets(targets ?? configStore.get().skillTargets);
+      configStore.setAgentSkillSelectionAndTargets(parsed, nextTargets);
       return parsed;
     },
     async isSet() {

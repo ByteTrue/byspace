@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   AgentSkillsSaveSelectionRequestSchema,
+  MutableDaemonConfigSchema,
   ServerInfoStatusPayloadSchema,
   SessionInboundMessageSchema,
   SessionOutboundMessageSchema,
@@ -106,6 +108,28 @@ describe("agent skills protocol", () => {
 
     expect(parsed.type).toBe("agent.skills.save_selection.response");
     expect("payload" in parsed).toBe(true);
+  });
+
+  it("keeps targets out of the strict skills object so an old client still parses config", () => {
+    // Every shipped client parses `skills` with `.strict()`. A nested field would
+    // make it reject the whole daemon-config message, so the field is top-level.
+    expect(Object.keys(MutableDaemonConfigSchema.shape)).toContain("skillTargets");
+    const skillsShape = MutableDaemonConfigSchema.shape.skills;
+    expect(Object.keys(skillsShape.unwrap().shape)).toEqual(["selection"]);
+
+    const oldClientShape = z
+      .object({ skills: z.object({ selection: z.unknown().optional() }).strict().optional() })
+      .passthrough();
+    expect(
+      oldClientShape.safeParse({
+        skills: { selection: { mode: "all" } },
+        skillTargets: ["agents"],
+      }).success,
+    ).toBe(true);
+    expect(
+      oldClientShape.safeParse({ skills: { selection: { mode: "all" }, targets: ["agents"] } })
+        .success,
+    ).toBe(false);
   });
 
   it("advertises target selection as a capability an older daemon omits", () => {

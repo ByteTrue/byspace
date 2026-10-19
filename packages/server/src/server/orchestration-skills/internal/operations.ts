@@ -94,6 +94,23 @@ export function resolveSelectedSkillTargets(
 
 const ALL_SKILL_TARGETS: readonly AgentSkillTargetId[] = AGENT_SKILL_TARGET_IDS;
 
+async function resolveHomeAliases(
+  homes: readonly SkillHome[],
+): Promise<Map<AgentSkillTargetId, AgentSkillTargetId>> {
+  const ownerByIdentity = new Map<string, AgentSkillTargetId>();
+  const aliases = new Map<AgentSkillTargetId, AgentSkillTargetId>();
+  for (const home of homes) {
+    const identity = await fs.realpath(home.dir).catch(() => path.resolve(home.dir));
+    const owner = ownerByIdentity.get(identity);
+    if (owner === undefined) {
+      ownerByIdentity.set(identity, home.id);
+      continue;
+    }
+    aliases.set(home.id, owner);
+  }
+  return aliases;
+}
+
 type SkillFiles = Map<string, string>;
 type TargetSkills = Map<string, SkillFiles>;
 
@@ -151,6 +168,13 @@ async function hashSkills(rootDir: string, names: readonly string[]): Promise<Ta
   return out;
 }
 
+/**
+ * Homes that are the same physical directory, mapped to the first home that owns
+ * it. Turning one off must not delete the other's copies, so a delete never
+ * targets a home that shares its directory with a home still being written.
+ */
+type SkillHomeAliases = ReadonlyMap<AgentSkillTargetId, AgentSkillTargetId>;
+
 function diff(
   bundle: TargetSkills,
   homes: readonly SkillHome[],
@@ -158,6 +182,7 @@ function diff(
   names: readonly string[],
   desired: ReadonlySet<string>,
   selected: ReadonlySet<AgentSkillTargetId>,
+  aliases: SkillHomeAliases,
 ): SkillOp[] {
   const ops: SkillOp[] = [];
   for (const name of names) {
@@ -173,14 +198,23 @@ function diff(
         return;
       }
       // A copy in a home the selection no longer targets is unwanted, whether
-      // the skill stays installed elsewhere or was dropped from the bundle.
-      if (files !== undefined) unexpected.push(home.id);
+      // the skill stays installed elsewhere or was dropped from the bundle —
+      // unless that home is the same directory as one still being written, in
+      // which case deleting it would take the surviving copy with it.
+      if (files !== undefined && !(aliases.get(home.id) && selected.has(aliases.get(home.id)!))) {
+        unexpected.push(home.id);
+      }
     });
     // Deletion first: the app reports pending removals separately, and a skill
     // can be installed in one home while being removed from another.
     if (unexpected.length > 0) ops.push({ kind: "delete", name, targets: unexpected });
-    if (missing.length > 0) ops.push({ kind: "add", name, targets: missing });
-    else if (changed.length > 0) ops.push({ kind: "update", name, targets: changed });
+    // An add carries the modified homes too: applySkills rewrites every home the
+    // op names, so the op must name every home whose current bytes it replaces.
+    // Otherwise a rollback cannot restore the ones it silently overwrote.
+    const writes = [...missing, ...changed];
+    if (writes.length > 0) {
+      ops.push({ kind: missing.length > 0 ? "add" : "update", name, targets: writes });
+    }
   }
   ops.sort((a, b) => compareStrings(a.name, b.name));
   return ops;
@@ -220,6 +254,7 @@ export async function getSkillsStatus(
   const names = managedSkillNames(available);
   const homes = skillHomes(targets);
   const selected = resolveSelectedSkillTargets(selectedTargets);
+  const aliases = await resolveHomeAliases(homes);
   const [bundle, ...disks] = await Promise.all([
     hashSkills(targets.sourceDir, available),
     ...homes.map((home) => hashSkills(home.dir, names)),
@@ -231,6 +266,7 @@ export async function getSkillsStatus(
     names,
     resolveDesiredSkills(selection, available),
     new Set(selected),
+    aliases,
   );
   const installed = installedSkillNames(disks, names);
   const targetsStatus: SkillTargetsStatus = {
@@ -253,25 +289,24 @@ async function applySkills(
 ): Promise<SkillsStatus> {
   const status = initialStatus ?? (await getSkillsStatus(targets, selection, selectedTargets));
   const dirs = new Map(skillHomes(targets).map((home) => [home.id, home.dir] as const));
+  const dirsFor = (ids: readonly AgentSkillTargetId[]) =>
+    ids.map((id) => dirs.get(id)).filter((dir): dir is string => dir !== undefined);
 
-  const writes = status.ops.filter((op) => op.kind === "add" || op.kind === "update");
-  if (writes.length > 0) {
-    const targetDirs = resolveSelectedSkillTargets(selectedTargets)
-      .map((id) => dirs.get(id))
-      .filter((dir): dir is string => dir !== undefined);
+  // One sync per op rather than one sync over every selected home: the homes
+  // written must be exactly the homes the op names, because the transaction
+  // only captured those. A wider write would overwrite bytes nothing backed up.
+  for (const op of status.ops) {
+    if (op.kind === "delete") continue;
     await syncSkills({
       sourceDir: targets.sourceDir,
-      targetDirs,
-      skillNames: [...new Set(writes.map((op) => op.name))],
+      targetDirs: dirsFor(op.targets),
+      skillNames: [op.name],
     });
   }
 
   for (const op of status.ops) {
     if (op.kind !== "delete") continue;
-    await removeSkill(
-      op.name,
-      op.targets.map((id) => dirs.get(id)).filter((dir): dir is string => dir !== undefined),
-    );
+    await removeSkill(op.name, dirsFor(op.targets));
   }
 
   // Retired agent homes are not part of the plan: they only ever lose copies,

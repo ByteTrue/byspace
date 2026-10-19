@@ -516,6 +516,28 @@ describe("skills controller", () => {
     await rm(readOnly.root, { recursive: true, force: true });
   });
 
+  it("restores a modified home that the plan only mentioned as a side effect", async () => {
+    const selection: SkillSelection = { mode: "custom", skills: ["byspace"] };
+    const gated = createGatedUnwritableSelectionStore(selection);
+    const readOnly = await makeHarness(gated.store);
+    await readOnly.controller.install();
+
+    // agents loses its copy, claude keeps an edited one. Convergence has to
+    // rewrite claude to install everything, so the plan names both homes.
+    await rm(path.join(readOnly.targets.agentsDir, "byspace"), { recursive: true, force: true });
+    await writeFile(path.join(readOnly.targets.claudeDir, "byspace", "SKILL.md"), "user edit");
+
+    const save = readOnly.controller.save({ mode: "all" });
+    await gated.persistenceStarted;
+    gated.failPersistence();
+    await expect(save).rejects.toThrow("selection store is read-only");
+
+    expect(
+      await readFile(path.join(readOnly.targets.claudeDir, "byspace", "SKILL.md"), "utf8"),
+    ).toBe("user edit");
+    await rm(readOnly.root, { recursive: true, force: true });
+  });
+
   it("preserves files added by another writer before rollback", async () => {
     const selection: SkillSelection = { mode: "custom", skills: ["byspace"] };
     const gated = createGatedUnwritableSelectionStore(selection);
@@ -947,6 +969,31 @@ describe("skills controller", () => {
 
       expect(result.confirmationRequired).toBeNull();
       expect(await isInstalled(harness.targets, "byspace-loop")).toBe(false);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "saves when the only home to change is the second of two aliased roots",
+    async () => {
+      await harness.controller.install();
+      await rm(harness.targets.claudeDir, { recursive: true, force: true });
+      await symlink(
+        path.relative(path.dirname(harness.targets.claudeDir), harness.targets.agentsDir),
+        harness.targets.claudeDir,
+        "dir",
+      );
+
+      // claude resolves to agents, so dropping only claude leaves nothing to
+      // delete on disk — but the op still names a home, and it must not look
+      // like a plan nothing could act on.
+      const result = await harness.controller.save({
+        selection: { mode: "all" },
+        targets: ["agents"],
+        confirmedRemovals: ["byspace", "byspace-advisor", "byspace-loop"],
+      });
+
+      expect(result.confirmationRequired).toBeNull();
+      expect(result.targets?.selected).toEqual(["agents"]);
     },
   );
 

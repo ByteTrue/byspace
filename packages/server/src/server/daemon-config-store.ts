@@ -54,6 +54,8 @@ interface SupportedMutableConfigPatch {
   terminalDefaultShell?: MutableDaemonConfig["terminalDefaultShell"] | null;
   agentProfiles?: MutableDaemonConfig["agentProfiles"];
   skills?: MutableDaemonConfig["skills"];
+  // Kept apart from `skills` on the wire, which an old client parses strictly.
+  skillTargets?: MutableDaemonConfig["skillTargets"];
   pluginsEnabled?: boolean;
   plugins?: MutableDaemonConfig["plugins"];
   // COMPAT(daemonNetworkConfig): added in v0.14.3.
@@ -274,7 +276,7 @@ const PERSISTED_TO_MUTABLE_PATH = new Map<string, string>([
   ["agents.catalogRefreshTimeoutMs", "catalogRefreshTimeoutMs"],
   ["agents.metadataGeneration", "metadataGeneration"],
   ["agents.skills.selection", "skills.selection"],
-  ["agents.skills.targets", "skills.targets"],
+  ["agents.skills.targets", "skillTargets"],
   ["pluginsEnabled", "pluginsEnabled"],
 ]);
 
@@ -594,8 +596,15 @@ export class DaemonConfigStore {
     return this.applySupportedPatch({ skills: { selection } });
   }
 
-  public setAgentSkillTargets(targets: AgentSkillTargets): MutableDaemonConfig {
-    return this.applySupportedPatch({ skills: { targets } });
+  /**
+   * One call so a save cannot persist a selection without its targets: two
+   * writes would leave the file half-updated when the second one throws.
+   */
+  public setAgentSkillSelectionAndTargets(
+    selection: AgentSkillSelection,
+    targets: AgentSkillTargets,
+  ): MutableDaemonConfig {
+    return this.applySupportedPatch({ skills: { selection }, skillTargets: targets });
   }
 
   private assertRelayPatchMutable(parsedPatch: SupportedMutableConfigPatch): void {
@@ -648,18 +657,11 @@ export class DaemonConfigStore {
     const removedProviders = Array.from(new Set(removeProviders));
     const merged = deepMerge(this.current, configPatch);
     if (parsedPatch.skills !== undefined) {
-      // Selection and targets are written by their own setter and never through
+      // Selection and targets are written by their own setters and never through
       // the generic patch, so a nullish field means "keep the stored value".
-      merged.skills = {
-        ...this.current.skills,
-        ...(parsedPatch.skills.selection !== undefined
-          ? { selection: parsedPatch.skills.selection }
-          : {}),
-        ...(parsedPatch.skills.targets !== undefined
-          ? { targets: parsedPatch.skills.targets }
-          : {}),
-      };
+      merged.skills = { ...this.current.skills, ...parsedPatch.skills };
     }
+    if (parsedPatch.skillTargets !== undefined) merged.skillTargets = parsedPatch.skillTargets;
     if (parsedPatch.plugins !== undefined) merged.plugins = parsedPatch.plugins;
     const next = MutableDaemonConfigSchema.parse(
       omitMetadataGenerationProvidersFromConfig(
@@ -1050,6 +1052,7 @@ function mergeMutableAgentPatch(
     patch.providers === undefined &&
     patch.metadataGeneration === undefined &&
     patch.skills === undefined &&
+    patch.skillTargets === undefined &&
     removeProviders.length === 0
   ) {
     return persistedAgents;
@@ -1078,16 +1081,26 @@ function mergeMutableAgentPatch(
     };
   }
 
-  if (patch.skills !== undefined) {
-    const stored = isRecord(persistedAgents?.skills) ? persistedAgents.skills : {};
-    next["skills"] = {
-      ...stored,
-      ...(patch.skills.selection !== undefined ? { selection: patch.skills.selection } : {}),
-      ...(patch.skills.targets !== undefined ? { targets: patch.skills.targets } : {}),
-    };
-  }
+  const skills = mergeMutableSkillsPatch(
+    isRecord(persistedAgents?.skills) ? persistedAgents.skills : undefined,
+    patch,
+  );
+  if (skills !== undefined) next["skills"] = skills;
 
   return Object.keys(next).length > 0 ? (next as PersistedConfig["agents"]) : undefined;
+}
+
+/** On disk targets sit with the selection; only the wire shape splits them. */
+function mergeMutableSkillsPatch(
+  persistedSkills: Record<string, unknown> | undefined,
+  patch: Omit<SupportedMutableConfigPatch, "removeProviders">,
+): Record<string, unknown> | undefined {
+  if (patch.skills === undefined && patch.skillTargets === undefined) return undefined;
+  return {
+    ...(isRecord(persistedSkills) ? persistedSkills : {}),
+    ...patch.skills,
+    ...(patch.skillTargets !== undefined ? { targets: patch.skillTargets } : {}),
+  };
 }
 
 const legacyGlobalTerminalAgentHookProviderIds = new Set<string>(

@@ -13,6 +13,7 @@ import { confirmDialog } from "@/utils/confirm-dialog";
 import type {
   AgentSkillSelection as SkillSelection,
   AgentSkillsSaveResult as SkillsSaveResult,
+  AgentSkillsStatus,
   AgentSkillTargetId,
   AgentSkillTargets,
 } from "@bytetrue/protocol/messages";
@@ -40,10 +41,7 @@ interface SkillSelectionSheetProps {
   onClose: () => void;
 }
 
-interface AgentSkillTargetsStatus {
-  available: readonly AgentSkillTargetId[];
-  selected: readonly AgentSkillTargetId[];
-}
+type AgentSkillTargetsStatus = NonNullable<AgentSkillsStatus["targets"]>;
 
 function isSkillSelected(draft: SkillSelection, name: string): boolean {
   return draft.mode === "all" || draft.skills.includes(name);

@@ -633,10 +633,8 @@ function createInitialMutableDaemonConfig(
     appendSystemPrompt: config.appendSystemPrompt ?? "",
     pluginsEnabled: config.pluginsEnabled ?? false,
     plugins: config.plugins ?? {},
-    skills: {
-      selection: config.skillSelection,
-      targets: config.skillTargets,
-    },
+    skills: { selection: config.skillSelection },
+    skillTargets: config.skillTargets,
     network: createNetworkView(config),
     auth: { passwordSet: config.auth?.password !== undefined },
     tunnel: createTunnelView(config),
