@@ -257,3 +257,121 @@ func TestServerOverRelayE2EEHandshake(t *testing.T) {
 		t.Fatalf("unexpected decrypted server_info: %s", string(plainInfo))
 	}
 }
+
+func TestServerFileExplorerPiSessionImportAndTerminalRPC(t *testing.T) {
+	tmp := t.TempDir()
+	fakePi := writeFakePiScript(t, tmp)
+	workDir := filepath.Join(tmp, "repo")
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workDir, "hello.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	piSessDir := filepath.Join(tmp, "pi-sessions")
+	if err := os.MkdirAll(piSessDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sessFile := filepath.Join(piSessDir, "hist.jsonl")
+	jsonlContent := strings.Join([]string{
+		`{"type":"session","id":"sess_import_1","cwd":"` + workDir + `","timestamp":"2026-04-20T02:00:00.000Z"}`,
+		`{"type":"session_info","name":"Imported Pi Chat"}`,
+		`{"type":"message","timestamp":"2026-04-20T02:01:00.000Z","message":{"role":"user","content":"Previous prompt"}}`,
+		`{"type":"message","timestamp":"2026-04-20T02:01:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Previous answer"}]}}`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(sessFile, []byte(jsonlContent), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	srv, err := New(Options{
+		HomeDir:      filepath.Join(tmp, "home"),
+		Version:      "0.20.2-test",
+		PiCommand:    fakePi,
+		PiSessionDir: piSessDir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+	ws, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ws.CloseNow()
+
+	_ = ws.Write(ctx, websocket.MessageText, []byte(`{"type":"hello","clientId":"cli_2","protocolVersion":1}`))
+	_ = readUntilSessionType(t, ctx, ws, "status", "server_info")
+
+	// 1. File explorer read file
+	feReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":      "file_explorer_request",
+			"requestId": "req_fe_1",
+			"cwd":       workDir,
+			"path":      "hello.go",
+			"mode":      "file",
+		},
+	})
+	_ = ws.Write(ctx, websocket.MessageText, feReq)
+	feResp := readUntilSessionType(t, ctx, ws, "file_explorer_response", "")
+	fileMap, _ := feResp["file"].(map[string]any)
+	if fileMap["content"] != "package main\n" {
+		t.Fatalf("unexpected file explorer content: %+v", feResp)
+	}
+
+	// 2. Discover recent Pi sessions
+	recReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":      "fetch_recent_provider_sessions_request",
+			"requestId": "req_rec_1",
+			"cwd":       workDir,
+		},
+	})
+	_ = ws.Write(ctx, websocket.MessageText, recReq)
+	recResp := readUntilSessionType(t, ctx, ws, "fetch_recent_provider_sessions_response", "")
+	recEntries, _ := recResp["entries"].([]any)
+	if len(recEntries) != 1 {
+		t.Fatalf("expected 1 recent Pi session, got %+v", recResp)
+	}
+
+	// 3. Import Pi session and verify restored timeline
+	impReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":             "import_agent_request",
+			"requestId":        "req_imp_1",
+			"provider":         "pi",
+			"providerHandleId": sessFile,
+			"cwd":              workDir,
+		},
+	})
+	_ = ws.Write(ctx, websocket.MessageText, impReq)
+	impCreated := readUntilSessionType(t, ctx, ws, "status", "agent_created")
+	impAgentID, _ := impCreated["agentId"].(string)
+
+	tlReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":      "fetch_agent_timeline_request",
+			"requestId": "req_tl_imp",
+			"agentId":   impAgentID,
+		},
+	})
+	_ = ws.Write(ctx, websocket.MessageText, tlReq)
+	tlResp := readUntilSessionType(t, ctx, ws, "fetch_agent_timeline_response", "")
+	tlEntries, _ := tlResp["entries"].([]any)
+	if len(tlEntries) != 2 {
+		t.Fatalf("expected 2 restored timeline entries, got %d: %+v", len(tlEntries), tlEntries)
+	}
+}

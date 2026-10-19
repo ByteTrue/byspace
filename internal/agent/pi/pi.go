@@ -409,6 +409,14 @@ func (s *Session) Timeline() []TimelineEntry {
 	return out
 }
 
+// SeedTimeline populates the session timeline from a restored .jsonl history file.
+func (s *Session) SeedTimeline(entries []TimelineEntry) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.timeline = make([]TimelineEntry, len(entries))
+	copy(s.timeline, entries)
+}
+
 // LastAssistantText returns the text of the most recent assistant_message in the timeline.
 func (s *Session) LastAssistantText() string {
 	s.mu.Lock()

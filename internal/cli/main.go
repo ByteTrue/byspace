@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/ByteTrue/byspace/internal/daemon"
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/relay"
 	"github.com/ByteTrue/byspace/internal/server"
@@ -490,32 +492,58 @@ func runDaemonCmd(args []string, stdout io.Writer) error {
 		sub = args[0]
 		rest = args[1:]
 	}
-	if sub != "status" {
+
+	switch sub {
+	case "status":
+		fs := flag.NewFlagSet("daemon status", flag.ContinueOnError)
+		addr := fs.String("addr", defaultListenAddr(), "daemon address")
+		homeDir := fs.String("home", "", "byspace home directory")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+
+		if st, err := probeHealth(*addr); err == nil {
+			fmt.Fprintf(stdout, "running  addr=%s  serverId=%s  version=%s\n", *addr, st.ServerID, st.Version)
+			return nil
+		}
+
+		resolvedHome, err := home.Resolve(*homeDir)
+		if err != nil {
+			return err
+		}
+		srvID, _ := home.GetOrCreateServerID(resolvedHome)
+		fmt.Fprintf(stdout, "stopped  home=%s  serverId=%s\n", resolvedHome, srvID)
+		return nil
+
+	case "print-plist":
+		exe, _ := os.Executable()
+		fmt.Fprint(stdout, daemon.RenderLaunchdPlist(exe, []string{"serve"}, daemon.CarriedEnviron(), ""))
+		return nil
+
+	case "print-unit":
+		exe, _ := os.Executable()
+		fmt.Fprint(stdout, daemon.RenderSystemdUnit(exe, []string{"serve"}, daemon.CarriedEnviron()))
+		return nil
+
+	default:
 		return fmt.Errorf("unsupported daemon subcommand %q", sub)
 	}
-
-	fs := flag.NewFlagSet("daemon status", flag.ContinueOnError)
-	addr := fs.String("addr", defaultListenAddr(), "daemon address")
-	homeDir := fs.String("home", "", "byspace home directory")
-	if err := fs.Parse(rest); err != nil {
-		return err
-	}
-
-	if st, err := probeHealth(*addr); err == nil {
-		fmt.Fprintf(stdout, "running  addr=%s  serverId=%s  version=%s\n", *addr, st.ServerID, st.Version)
-		return nil
-	}
-
-	resolvedHome, err := home.Resolve(*homeDir)
-	if err != nil {
-		return err
-	}
-	srvID, _ := home.GetOrCreateServerID(resolvedHome)
-	fmt.Fprintf(stdout, "stopped  home=%s  serverId=%s\n", resolvedHome, srvID)
-	return nil
 }
 
-func runMCPBridge(_ []string, stdin io.Reader, stdout io.Writer) error {
+func runMCPBridge(args []string, stdin io.Reader, stdout io.Writer) error {
+	fs := flag.NewFlagSet("mcp-bridge", flag.ContinueOnError)
+	addr := fs.String("addr", defaultListenAddr(), "daemon HTTP address")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	endpoint := *addr
+	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+		endpoint = "http://" + endpoint
+	}
+	endpoint = strings.TrimRight(endpoint, "/") + "/mcp/agents"
+	httpClient := &http.Client{Timeout: 60 * time.Second}
+
 	dec := json.NewDecoder(stdin)
 	enc := json.NewEncoder(stdout)
 	for {
@@ -526,6 +554,23 @@ func runMCPBridge(_ []string, stdin io.Reader, stdout io.Writer) error {
 			}
 			return err
 		}
+
+		bodyBytes, err := json.Marshal(req)
+		if err != nil {
+			continue
+		}
+		resp, err := httpClient.Post(endpoint, "application/json", bytes.NewReader(bodyBytes))
+		if err == nil {
+			var out map[string]any
+			if json.NewDecoder(resp.Body).Decode(&out) == nil {
+				_ = resp.Body.Close()
+				_ = enc.Encode(out)
+				continue
+			}
+			_ = resp.Body.Close()
+		}
+
+		// Offline fallback if daemon is unreachable
 		method, _ := req["method"].(string)
 		id := req["id"]
 		switch method {

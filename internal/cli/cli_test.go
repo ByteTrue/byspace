@@ -89,4 +89,17 @@ done
 	if !strings.Contains(out.String(), "running") || !strings.Contains(out.String(), srv.ServerID()) {
 		t.Fatalf("unexpected daemon status output: %q", out.String())
 	}
+
+	// 6. byspace mcp-bridge --addr ... (tools/list + tools/call list_agents)
+	mcpIn := strings.NewReader(
+		`{"jsonrpc":"2.0","id":1,"method":"tools/list"}` + "\n" +
+			`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_agents","arguments":{}}}` + "\n",
+	)
+	out.Reset()
+	if err := runMCPBridge([]string{"--addr", addr}, mcpIn, &out); err != nil {
+		t.Fatalf("mcp-bridge failed: %v", err)
+	}
+	if !strings.Contains(out.String(), `"name":"list_agents"`) || !strings.Contains(out.String(), `say hi`) {
+		t.Fatalf("unexpected mcp-bridge output: %s", out.String())
+	}
 }

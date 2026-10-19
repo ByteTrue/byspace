@@ -40,11 +40,12 @@ var ownerPermissions = []string{
 
 // Options configures the Go BySpace daemon server.
 type Options struct {
-	HomeDir   string
-	Version   string
-	WebDir    string
-	WebUI     *webui.Handler
-	PiCommand string
+	HomeDir      string
+	Version      string
+	WebDir       string
+	WebUI        *webui.Handler
+	PiCommand    string
+	PiSessionDir string
 }
 
 type managedPi struct {
@@ -85,19 +86,21 @@ func (w *wsSink) Close(code websocket.StatusCode, reason string) error {
 
 // Server is the unified BySpace HTTP + WebSocket daemon server.
 type Server struct {
-	homeDir   string
-	serverID  string
-	version   string
-	keyPair   e2ee.KeyPair
-	pubKeyB64 string
-	store     *store.Store
-	webUI     *webui.Handler
-	piCommand string
+	homeDir      string
+	serverID     string
+	version      string
+	keyPair      e2ee.KeyPair
+	pubKeyB64    string
+	store        *store.Store
+	webUI        *webui.Handler
+	piCommand    string
+	piSessionDir string
 
-	mu        sync.Mutex
-	agents    map[string]*managedPi
-	terminals map[uint8]*terminal.Session
-	clients   map[frameSink]bool
+	mu                sync.Mutex
+	agents            map[string]*managedPi
+	terminals         map[uint8]*terminal.Session
+	terminalSlotsByID map[string]uint8
+	clients           map[frameSink]bool
 }
 
 // New creates and initializes a BySpace daemon Server rooted at opts.HomeDir.
@@ -124,17 +127,19 @@ func New(opts Options) (*Server, error) {
 	}
 
 	return &Server{
-		homeDir:   homeDir,
-		serverID:  serverID,
-		version:   ver,
-		keyPair:   kp,
-		pubKeyB64: pubB64,
-		store:     store.New(homeDir),
-		webUI:     ui,
-		piCommand: opts.PiCommand,
-		agents:    make(map[string]*managedPi),
-		terminals: make(map[uint8]*terminal.Session),
-		clients:   make(map[frameSink]bool),
+		homeDir:           homeDir,
+		serverID:          serverID,
+		version:           ver,
+		keyPair:           kp,
+		pubKeyB64:         pubB64,
+		store:             store.New(homeDir),
+		webUI:             ui,
+		piCommand:         opts.PiCommand,
+		piSessionDir:      opts.PiSessionDir,
+		agents:            make(map[string]*managedPi),
+		terminals:         make(map[uint8]*terminal.Session),
+		terminalSlotsByID: make(map[string]uint8),
+		clients:           make(map[frameSink]bool),
 	}, nil
 }
 
@@ -182,6 +187,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if r.URL.Path == "/ws" {
 		s.handleDirectWS(w, r)
+		return
+	}
+
+	if r.URL.Path == "/mcp/agents" || strings.HasPrefix(r.URL.Path, "/mcp/") {
+		s.handleMCPHTTP(w, r)
 		return
 	}
 
@@ -639,16 +649,113 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		})
 
 	case "get_providers_snapshot_request":
+		now := time.Now().UTC().Format(time.RFC3339Nano)
 		_ = sendSessionMsg(ctx, sink, "get_providers_snapshot_response", map[string]any{
-			"requestId": base.RequestID,
-			"providers": map[string]any{
-				"pi": map[string]any{
-					"available": true,
-					"models":    []any{},
-					"modes":     []any{},
-					"features":  []any{},
+			"requestId":   base.RequestID,
+			"generatedAt": now,
+			"entries": []map[string]any{
+				{
+					"provider":    "pi",
+					"label":       "Pi",
+					"status":      "ready",
+					"enabled":     true,
+					"source":      "builtin",
+					"fetchedAt":   now,
+					"models":      []any{},
+					"modes":       []any{},
+					"description": "Pi coding agent",
 				},
 			},
+		})
+
+	case "refresh_providers_snapshot_request":
+		_ = sendSessionMsg(ctx, sink, "refresh_providers_snapshot_response", map[string]any{
+			"requestId":    base.RequestID,
+			"acknowledged": true,
+		})
+
+	case "list_provider_models_request":
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		_ = sendSessionMsg(ctx, sink, "list_provider_models_response", map[string]any{
+			"requestId": base.RequestID,
+			"provider":  "pi",
+			"models":    []any{},
+			"error":     nil,
+			"fetchedAt": now,
+		})
+
+	case "list_provider_modes_request":
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		_ = sendSessionMsg(ctx, sink, "list_provider_modes_response", map[string]any{
+			"requestId": base.RequestID,
+			"provider":  "pi",
+			"modes":     []any{},
+			"error":     nil,
+			"fetchedAt": now,
+		})
+
+	case "list_provider_features_request":
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		_ = sendSessionMsg(ctx, sink, "list_provider_features_response", map[string]any{
+			"requestId": base.RequestID,
+			"provider":  "pi",
+			"features":  []any{},
+			"error":     nil,
+			"fetchedAt": now,
+		})
+
+	case "file_explorer_request":
+		s.handleFileExplorer(ctx, sink, raw)
+
+	case "fs.file.subscribe.request":
+		s.handleFileSubscribe(ctx, sink, raw)
+
+	case "fs.file.unsubscribe.request":
+		s.handleFileUnsubscribe(ctx, sink, raw)
+
+	case "fs.file.write.request":
+		s.handleFileWrite(ctx, sink, raw)
+
+	case "fs.entry.create.request":
+		s.handleFileEntryCreate(ctx, sink, raw)
+
+	case "fs.entry.rename.request":
+		s.handleFileEntryRename(ctx, sink, raw)
+
+	case "fs.entry.delete.request":
+		s.handleFileEntryDelete(ctx, sink, raw)
+
+	case "checkout_status_request":
+		s.handleCheckoutStatus(ctx, sink, raw)
+
+	case "checkout.commits.list.request":
+		s.handleCheckoutCommitsList(ctx, sink, raw)
+
+	case "fetch_recent_provider_sessions_request":
+		s.handleFetchRecentProviderSessions(ctx, sink, raw)
+
+	case "import_agent_request", "resume_agent_request":
+		s.handleImportAgent(ctx, sink, raw)
+
+	case "create_terminal_request":
+		s.handleCreateTerminal(ctx, sink, raw)
+
+	case "list_terminals_request":
+		s.handleListTerminals(ctx, sink, raw)
+
+	case "subscribe_terminal_request":
+		s.handleSubscribeTerminal(ctx, sink, raw)
+
+	case "terminal.shell.detect.request":
+		sh := os.Getenv("SHELL")
+		if sh == "" {
+			sh = "/bin/sh"
+		}
+		_ = sendSessionMsg(ctx, sink, "terminal.shell.detect.response", map[string]any{
+			"requestId":       base.RequestID,
+			"shells":          []map[string]any{{"path": sh, "label": filepath.Base(sh)}},
+			"resolvedDefault": sh,
+			"error":           nil,
 		})
 
 	case "project.list.request":
@@ -1175,7 +1282,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 	}
 	s.mu.Unlock()
 
-	var model, thinking string
+	var model, thinking, sessionPath string
 	if rec.Config != nil {
 		if rec.Config.Model != nil {
 			model = *rec.Config.Model
@@ -1184,12 +1291,16 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 			thinking = *rec.Config.ThinkingOptionID
 		}
 	}
+	if rec.Persistence != nil && rec.Persistence.SessionID != "" {
+		sessionPath = rec.Persistence.SessionID
+	}
 
 	sess, err := pi.StartSession(pi.LaunchOptions{
 		Command:          s.piCommand,
 		Cwd:              rec.Cwd,
 		Model:            model,
 		ThinkingOptionID: thinking,
+		Session:          sessionPath,
 	})
 	if err != nil {
 		return nil, err
