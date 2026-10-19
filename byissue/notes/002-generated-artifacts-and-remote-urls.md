@@ -48,6 +48,15 @@ test("matches the committed file", () => {
 
 **漂移测试要证明它真的会失败**——注入一个手改字段，确认测试红，再重新生成确认绿。没验证过会失败的漂移测试等于没有。
 
+### 忘了重生成时，下游报的不是这个文件
+
+改了 schema 定义、没跑生成器，本地全套 typecheck / lint / 单测 / e2e 常常全绿，因为没人构建这个文件。CI 上会同时挂两处，都看不出跟 schema 有关：
+
+1. drift 测试红——这个还算明显。
+2. `release-package` job 报 `Source worktree is not clean: <repo>`（`scripts/package-bytetrue-baseline.mjs`）。构建过程重新生成了这个已跟踪文件，把工作区弄脏，打包脚本拒绝打包一个不干净的树。
+
+所以看到打包脚本抱怨脏树、而 `git status` 又干净时，先想构建会改写哪些已跟踪的生成物。改 `PersistedConfigSchema` 之后的动作固定是：`npm run --workspace=@bytetrue/server generate:config-schema`，然后提交 `packages/app/public/schemas/byspace.config.v1.json`。
+
 ## 外部 URL 的改名陷阱
 
 **2026-09 的全仓 `paseo` → `byspace` 改名踩到三次，全部是同一类错误：改了字符串，没验证目标。**
