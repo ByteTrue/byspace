@@ -49,8 +49,10 @@ const usageText = `byspace — single-binary AI coding agent host, web workbench
                                   manage scheduled Pi agent runs and heartbeats
   byspace worktree <create|list> [options]
                                   create and list git worktree workspaces
-  byspace daemon status [--addr host:port] [--home <dir>]
-                                  check daemon health and identity
+  byspace pair [--home <dir>] [--relay <host:port>] [--app-url <url>]
+                                  print a remote pairing offer URL (#offer=...)
+  byspace daemon <status|start|stop|restart|print-plist|print-unit> [options]
+                                  manage daemon lifecycle and service definitions
   byspace mcp-bridge              run the self-hosted stdio MCP bridge for child agents
   byspace version                 print version
 `
@@ -135,6 +137,12 @@ func Main(version string, args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		return 0
+	case "pair":
+		if err := runPairCmd(version, rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace pair:", err)
+			return 1
+		}
+		return 0
 	case "mcp-bridge":
 		if err := runMCPBridge(rest, os.Stdin, stdout); err != nil {
 			fmt.Fprintln(stderr, "byspace mcp-bridge:", err)
@@ -171,6 +179,10 @@ func runServe(version string, args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+
+	myPID := os.Getpid()
+	_ = daemon.WritePID(srv.HomeDir(), myPID)
+	defer daemon.RemovePID(srv.HomeDir(), myPID)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -485,7 +497,10 @@ func probeHealth(addr string) (*healthStatus, error) {
 	if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
 		u = "http://" + u
 	}
-	client := &http.Client{Timeout: 2 * time.Second}
+	client := &http.Client{
+		Timeout:   2 * time.Second,
+		Transport: &http.Transport{Proxy: nil},
+	}
 	resp, err := client.Get(strings.TrimRight(u, "/") + "/health")
 	if err != nil {
 		return nil, err
@@ -530,6 +545,73 @@ func runDaemonCmd(args []string, stdout io.Writer) error {
 		srvID, _ := home.GetOrCreateServerID(resolvedHome)
 		fmt.Fprintf(stdout, "stopped  home=%s  serverId=%s\n", resolvedHome, srvID)
 		return nil
+
+	case "start":
+		fs := flag.NewFlagSet("daemon start", flag.ContinueOnError)
+		addr := fs.String("addr", defaultListenAddr(), "daemon listen address")
+		homeDir := fs.String("home", "", "byspace home directory")
+		relayURL := fs.String("relay", os.Getenv("BYSPACE_RELAY_URL"), "optional relay URL")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		resolvedHome, err := home.Resolve(*homeDir)
+		if err != nil {
+			return err
+		}
+		if st, err := probeHealth(*addr); err == nil {
+			fmt.Fprintf(stdout, "already running  addr=%s  serverId=%s\n", *addr, st.ServerID)
+			return nil
+		}
+		pid, err := daemon.StartBackground("", resolvedHome, *addr, *relayURL)
+		if err != nil {
+			return err
+		}
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			if st, err := probeHealth(*addr); err == nil {
+				fmt.Fprintf(stdout, "started  pid=%d  addr=%s  serverId=%s\n", pid, *addr, st.ServerID)
+				return nil
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		fmt.Fprintf(stdout, "started  pid=%d  addr=%s\n", pid, *addr)
+		return nil
+
+	case "stop":
+		fs := flag.NewFlagSet("daemon stop", flag.ContinueOnError)
+		homeDir := fs.String("home", "", "byspace home directory")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		resolvedHome, err := home.Resolve(*homeDir)
+		if err != nil {
+			return err
+		}
+		pid, stopped, err := daemon.StopRunning(resolvedHome)
+		if err != nil {
+			return err
+		}
+		if stopped {
+			fmt.Fprintf(stdout, "stopped  pid=%d  home=%s\n", pid, resolvedHome)
+		} else {
+			fmt.Fprintf(stdout, "not running  home=%s\n", resolvedHome)
+		}
+		return nil
+
+	case "restart":
+		fs := flag.NewFlagSet("daemon restart", flag.ContinueOnError)
+		addr := fs.String("addr", defaultListenAddr(), "daemon listen address")
+		homeDir := fs.String("home", "", "byspace home directory")
+		relayURL := fs.String("relay", os.Getenv("BYSPACE_RELAY_URL"), "optional relay URL")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		resolvedHome, err := home.Resolve(*homeDir)
+		if err != nil {
+			return err
+		}
+		_, _, _ = daemon.StopRunning(resolvedHome)
+		return runDaemonCmd([]string{"start", "--addr", *addr, "--home", resolvedHome, "--relay", *relayURL}, stdout)
 
 	case "print-plist":
 		exe, _ := os.Executable()

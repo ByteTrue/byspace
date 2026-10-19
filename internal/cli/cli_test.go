@@ -131,4 +131,13 @@ done
 	if code := Main("0.20.2-go", []string{"heartbeat", "delete", "--addr", addr, schedID}, &out, &errOut); code != 0 {
 		t.Fatalf("heartbeat delete failed (%d): %s", code, errOut.String())
 	}
+
+	// 8. byspace pair --home ...
+	out.Reset()
+	if code := Main("0.20.2-go", []string{"pair", "--home", homeDir, "--app-url", "https://app.byspace.cc.cd"}, &out, &errOut); code != 0 {
+		t.Fatalf("pair failed (%d): %s", code, errOut.String())
+	}
+	if !strings.HasPrefix(strings.TrimSpace(out.String()), "https://app.byspace.cc.cd/#offer=") {
+		t.Fatalf("unexpected pair output: %q", out.String())
+	}
 }

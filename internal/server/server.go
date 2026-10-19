@@ -898,6 +898,27 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		"schedule/delete",
 		"schedule/run-once":
 		s.handleScheduleMessage(ctx, sink, base.Type, raw)
+
+	case "agent_permission_response":
+		s.handleAgentPermissionResponse(ctx, sink, raw)
+
+	case "agent.provider_subagents.list.request":
+		s.handleProviderSubagentsList(ctx, sink, raw)
+
+	case "agent.provider_subagents.timeline.get.request":
+		s.handleProviderSubagentTimeline(ctx, sink, raw)
+
+	case "daemon.get_pairing_offer.request":
+		s.handleGetPairingOffer(ctx, sink, raw)
+
+	case "register_push_token":
+		s.handleRegisterPushToken(raw)
+
+	case "push.unregister.request":
+		s.handlePushUnregister(ctx, sink, raw)
+
+	case "diagnostics.request":
+		s.handleDiagnostics(ctx, sink, raw)
 	}
 }
 
@@ -1457,6 +1478,42 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 					},
 				})
 			}
+		case "tool_execution_start", "tool_execution_end":
+			tl := sess.Timeline()
+			for i := len(tl) - 1; i >= 0; i-- {
+				if tl[i].Item.Type == "tool_call" {
+					s.broadcastSessionMsg("agent_stream", map[string]any{
+						"agentId":   rec.ID,
+						"provider":  rec.Provider,
+						"timestamp": nowStr,
+						"event": map[string]any{
+							"type":     "timeline",
+							"provider": rec.Provider,
+							"item":     tl[i].Item,
+						},
+					})
+					break
+				}
+			}
+			for _, sub := range sess.ListSubagents(rec.ID) {
+				s.broadcastSessionMsg("agent.provider_subagents.update", map[string]any{
+					"kind":     "upsert",
+					"subagent": sub,
+				})
+			}
+		case "extension_ui_request":
+			if perm := pi.MapExtensionUIRequestToPermission(ev); perm != nil {
+				s.broadcastSessionMsg("agent_stream", map[string]any{
+					"agentId":   rec.ID,
+					"provider":  rec.Provider,
+					"timestamp": nowStr,
+					"event": map[string]any{
+						"type":     "permission_requested",
+						"provider": rec.Provider,
+						"request":  perm,
+					},
+				})
+			}
 		case "agent_end", "agent_settled", "process_exit":
 			s.mu.Lock()
 			mp.record.LastStatus = sess.Status()
@@ -1540,9 +1597,11 @@ func (s *Server) getAgentPayload(agentID string) any {
 
 func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any {
 	status := rec.LastStatus
+	pendingPerms := []map[string]any{}
 	s.mu.Lock()
 	if mp, ok := s.agents[rec.ID]; ok && mp.session != nil {
 		status = mp.session.Status()
+		pendingPerms = mp.session.PendingPermissions()
 	}
 	s.mu.Unlock()
 	if status == "" {
@@ -1590,7 +1649,7 @@ func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any
 		"currentModeId":      modeID,
 		"availableModes":     []any{},
 		"features":           []any{},
-		"pendingPermissions": []any{},
+		"pendingPermissions": pendingPerms,
 		"persistence":        rec.Persistence,
 		"title":              rec.Title,
 		"labels":             labels,

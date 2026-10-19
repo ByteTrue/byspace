@@ -246,6 +246,7 @@ func LoadTimelineFromJSONL(filePath string) ([]TimelineEntry, error) {
 
 	var entries []TimelineEntry
 	toolIndexByID := make(map[string]int)
+	toolArgsByID := make(map[string]any)
 	appendEntry := func(ts string, item TimelineItem) int {
 		if ts == "" {
 			ts = time.Now().UTC().Format(time.RFC3339Nano)
@@ -311,15 +312,17 @@ func LoadTimelineFromJSONL(filePath string) ([]TimelineEntry, error) {
 				case "toolCall":
 					callID, _ := block["id"].(string)
 					name, _ := block["name"].(string)
+					args := block["arguments"]
+					if callID != "" {
+						toolArgsByID[callID] = args
+					}
 					idx := appendEntry(ts, TimelineItem{
 						Type:   "tool_call",
 						CallID: callID,
 						Name:   name,
 						Status: "completed",
-						Detail: map[string]any{
-							"type":  "unknown",
-							"input": block["arguments"],
-						},
+						Detail: BuildToolCallDetail(name, args, nil),
+						Error:  nil,
 					})
 					if callID != "" {
 						toolIndexByID[callID] = idx
@@ -328,18 +331,20 @@ func LoadTimelineFromJSONL(filePath string) ([]TimelineEntry, error) {
 			}
 		case "toolResult":
 			callID, _ := msg["toolCallId"].(string)
+			toolName, _ := msg["toolName"].(string)
 			isErr, _ := msg["isError"].(bool)
 			if idx, ok := toolIndexByID[callID]; ok && idx >= 0 && idx < len(entries) {
+				if toolName == "" {
+					toolName = entries[idx].Item.Name
+				}
 				if isErr {
 					entries[idx].Item.Status = "failed"
-					entries[idx].Item.Error = msg["content"]
+					entries[idx].Item.Error = extractResultText(msg)
 				} else {
 					entries[idx].Item.Status = "completed"
+					entries[idx].Item.Error = nil
 				}
-				entries[idx].Item.Detail = map[string]any{
-					"type":   "unknown",
-					"output": msg["content"],
-				}
+				entries[idx].Item.Detail = BuildToolCallDetail(toolName, toolArgsByID[callID], msg)
 			}
 		}
 	}

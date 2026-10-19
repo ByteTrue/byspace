@@ -3,10 +3,17 @@
 package daemon
 
 import (
+	"fmt"
 	"html"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
+	"time"
+
+	"github.com/ByteTrue/byspace/internal/home"
 )
 
 const (
@@ -113,4 +120,107 @@ func RenderSystemdUnit(exe string, args, env []string) string {
 func unitQuote(s string) string {
 	s = strings.NewReplacer(`\`, `\\`, `"`, `\"`, "%", "%%", "\n", " ").Replace(s)
 	return `"` + s + `"`
+}
+
+// PIDPath returns $BYSPACE_HOME/byspace.pid.
+func PIDPath(homeDir string) string {
+	return filepath.Join(homeDir, home.PIDFilename)
+}
+
+// LogPath returns $BYSPACE_HOME/daemon.log.
+func LogPath(homeDir string) string {
+	return filepath.Join(homeDir, "daemon.log")
+}
+
+// WritePID atomically records the daemon process ID in $BYSPACE_HOME/byspace.pid.
+func WritePID(homeDir string, pid int) error {
+	return home.WriteAtomic(PIDPath(homeDir), []byte(strconv.Itoa(pid)+"\n"), 0o600)
+}
+
+// RemovePID deletes $BYSPACE_HOME/byspace.pid if it matches the given pid (or if pid <= 0).
+func RemovePID(homeDir string, expectedPID int) {
+	p := PIDPath(homeDir)
+	if expectedPID > 0 {
+		if cur, alive := ReadPID(homeDir); alive && cur != expectedPID {
+			return
+		}
+	}
+	_ = os.Remove(p)
+}
+
+// ReadPID reads $BYSPACE_HOME/byspace.pid and checks whether the process is alive.
+func ReadPID(homeDir string) (int, bool) {
+	b, err := os.ReadFile(PIDPath(homeDir))
+	if err != nil {
+		return 0, false
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil || pid <= 0 {
+		return 0, false
+	}
+	if err := syscall.Kill(pid, 0); err != nil {
+		return pid, false
+	}
+	return pid, true
+}
+
+// StopRunning sends SIGTERM to the PID recorded in $BYSPACE_HOME/byspace.pid and waits up to 5s.
+func StopRunning(homeDir string) (int, bool, error) {
+	pid, alive := ReadPID(homeDir)
+	if !alive {
+		RemovePID(homeDir, 0)
+		return 0, false, nil
+	}
+	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
+		return pid, false, err
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := syscall.Kill(pid, 0); err != nil {
+			RemovePID(homeDir, pid)
+			return pid, true, nil
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	_ = syscall.Kill(pid, syscall.SIGKILL)
+	RemovePID(homeDir, pid)
+	return pid, true, nil
+}
+
+// StartBackground spawns `byspace serve` detached in the background, logging to $BYSPACE_HOME/daemon.log.
+func StartBackground(exePath, homeDir, addr, relayURL string) (int, error) {
+	if pid, alive := ReadPID(homeDir); alive {
+		return pid, nil
+	}
+	if exePath == "" {
+		var err error
+		exePath, err = os.Executable()
+		if err != nil {
+			return 0, err
+		}
+	}
+	if err := os.MkdirAll(homeDir, 0o700); err != nil {
+		return 0, err
+	}
+	logFile, err := os.OpenFile(LogPath(homeDir), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		return 0, err
+	}
+	defer logFile.Close()
+
+	args := []string{"serve", "--addr", addr, "--home", homeDir}
+	if strings.TrimSpace(relayURL) != "" {
+		args = append(args, "--relay", strings.TrimSpace(relayURL))
+	}
+	cmd := exec.Command(exePath, args...)
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	cmd.Stdin = nil
+	if err := cmd.Start(); err != nil {
+		return 0, fmt.Errorf("spawn background daemon: %w", err)
+	}
+	pid := cmd.Process.Pid
+	_ = WritePID(homeDir, pid)
+	_ = cmd.Process.Release()
+	return pid, nil
 }

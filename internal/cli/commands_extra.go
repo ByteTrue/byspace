@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/ByteTrue/byspace/internal/server"
 )
 
 func runHeartbeatCmd(args []string, stdout io.Writer) error {
@@ -281,4 +283,28 @@ func runWorktreeCmd(args []string, stdout io.Writer) error {
 	default:
 		return fmt.Errorf("unknown worktree subcommand %q", sub)
 	}
+}
+
+func runPairCmd(version string, args []string, stdout io.Writer) error {
+	fs := flag.NewFlagSet("pair", flag.ContinueOnError)
+	homeDir := fs.String("home", "", "byspace home directory")
+	relayEndpoint := fs.String("relay", os.Getenv("BYSPACE_RELAY_ENDPOINT"), "relay host:port")
+	useTLS := fs.Bool("tls", true, "use TLS for relay")
+	appURL := fs.String("app-url", os.Getenv("BYSPACE_APP_BASE_URL"), "web app base URL")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	srv, err := server.New(server.Options{
+		HomeDir: *homeDir,
+		Version: version,
+	})
+	if err != nil {
+		return err
+	}
+	defer srv.Close()
+
+	url := srv.BuildPairingOfferURL(*relayEndpoint, *useTLS, *appURL)
+	fmt.Fprintln(stdout, url)
+	return nil
 }

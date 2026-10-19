@@ -73,6 +73,25 @@ type TimelineItem struct {
 	Error  any    `json:"error,omitempty"`
 }
 
+// MarshalJSON ensures tool_call items always serialize "error": null when Error is nil,
+// matching ToolCallRunningPayloadSchema / ToolCallCompletedPayloadSchema in @bytetrue/protocol.
+func (i TimelineItem) MarshalJSON() ([]byte, error) {
+	if i.Type == "tool_call" {
+		return json.Marshal(map[string]any{
+			"type":   i.Type,
+			"callId": i.CallID,
+			"name":   i.Name,
+			"status": i.Status,
+			"detail": i.Detail,
+			"error":  i.Error,
+		})
+	}
+	return json.Marshal(map[string]any{
+		"type": i.Type,
+		"text": i.Text,
+	})
+}
+
 // TimelineEntry wraps a TimelineItem with sequence and timestamp metadata.
 type TimelineEntry struct {
 	Seq       int          `json:"seq"`
@@ -165,18 +184,21 @@ func hasApproveFlag(argv []string) bool {
 type Session struct {
 	proc *jsonl.Process
 
-	mu               sync.Mutex
-	status           string // "idle" | "running" | "error" | "closed"
-	lastError        string
-	turnCounter      int
-	activeTurnID     string
-	timeline         []TimelineEntry
-	activeTextIdx    int
-	activeThinkIdx   int
-	toolIndexByID    map[string]int
-	finishWaiters    []chan error
-	eventSubscribers map[int]func(map[string]any)
-	nextSubID        int
+	mu                 sync.Mutex
+	status             string // "idle" | "running" | "error" | "closed"
+	lastError          string
+	turnCounter        int
+	activeTurnID       string
+	timeline           []TimelineEntry
+	activeTextIdx      int
+	activeThinkIdx     int
+	toolIndexByID      map[string]int
+	toolArgsByID       map[string]any
+	pendingPermissions map[string]map[string]any
+	subagents          map[string]SubagentDescriptor
+	finishWaiters      []chan error
+	eventSubscribers   map[int]func(map[string]any)
+	nextSubID          int
 }
 
 // StartSession launches a Pi RPC subprocess and initializes timeline tracking.
@@ -193,12 +215,15 @@ func StartSession(opts LaunchOptions) (*Session, error) {
 	}
 
 	s := &Session{
-		proc:             proc,
-		status:           "idle",
-		activeTextIdx:    -1,
-		activeThinkIdx:   -1,
-		toolIndexByID:    make(map[string]int),
-		eventSubscribers: make(map[int]func(map[string]any)),
+		proc:               proc,
+		status:             "idle",
+		activeTextIdx:      -1,
+		activeThinkIdx:     -1,
+		toolIndexByID:      make(map[string]int),
+		toolArgsByID:       make(map[string]any),
+		pendingPermissions: make(map[string]map[string]any),
+		subagents:          make(map[string]SubagentDescriptor),
+		eventSubscribers:   make(map[int]func(map[string]any)),
 	}
 	proc.OnEvent(s.handleRawEvent)
 	return s, nil
@@ -271,15 +296,16 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 	case "tool_execution_start":
 		callID, _ := ev["toolCallId"].(string)
 		toolName, _ := ev["toolName"].(string)
+		if callID != "" {
+			s.toolArgsByID[callID] = ev["args"]
+		}
 		idx := s.appendItemLocked(TimelineItem{
 			Type:   "tool_call",
 			CallID: callID,
 			Name:   toolName,
 			Status: "running",
-			Detail: map[string]any{
-				"type":  "unknown",
-				"input": ev["args"],
-			},
+			Detail: BuildToolCallDetail(toolName, ev["args"], nil),
+			Error:  nil,
 		})
 		if callID != "" {
 			s.toolIndexByID[callID] = idx
@@ -293,26 +319,39 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		if isErr {
 			status = "failed"
 		}
+		args := s.toolArgsByID[callID]
+		detail := BuildToolCallDetail(toolName, args, ev["result"])
 		if idx, ok := s.toolIndexByID[callID]; ok && idx >= 0 && idx < len(s.timeline) {
 			s.timeline[idx].Item.Status = status
-			s.timeline[idx].Item.Detail = map[string]any{
-				"type":   "unknown",
-				"output": ev["result"],
-			}
+			s.timeline[idx].Item.Detail = detail
 			if isErr {
-				s.timeline[idx].Item.Error = ev["result"]
+				s.timeline[idx].Item.Error = extractResultText(ev["result"])
 			}
 		} else {
+			var errVal any
+			if isErr {
+				errVal = extractResultText(ev["result"])
+			}
 			s.appendItemLocked(TimelineItem{
 				Type:   "tool_call",
 				CallID: callID,
 				Name:   toolName,
 				Status: status,
-				Detail: map[string]any{
-					"type":   "unknown",
-					"output": ev["result"],
-				},
+				Detail: detail,
+				Error:  errVal,
 			})
+		}
+		if strings.HasPrefix(toolName, "subagent") {
+			for _, sub := range ParseSubagentDetails(callID, args, ev["result"]) {
+				s.upsertSubagentLocked(sub)
+			}
+		}
+
+	case "extension_ui_request":
+		if perm := MapExtensionUIRequestToPermission(ev); perm != nil {
+			if id, _ := perm["id"].(string); id != "" {
+				s.pendingPermissions[id] = perm
+			}
 		}
 
 	case "agent_end", "agent_settled":
@@ -561,6 +600,78 @@ func (s *Session) GetCommands(ctx context.Context) ([]SlashCommand, error) {
 		return nil, err
 	}
 	return wrapper.Commands, nil
+}
+
+func (s *Session) upsertSubagentLocked(sub SubagentDescriptor) {
+	if existing, ok := s.subagents[sub.ID]; ok {
+		sub.CreatedAt = existing.CreatedAt
+		if sub.Title == nil {
+			sub.Title = existing.Title
+		}
+		if sub.Description == nil {
+			sub.Description = existing.Description
+		}
+		if sub.ToolCallID == nil {
+			sub.ToolCallID = existing.ToolCallID
+		}
+		if sub.SessionID == "" {
+			sub.SessionID = existing.SessionID
+		}
+		if sub.SessionFile == "" {
+			sub.SessionFile = existing.SessionFile
+		}
+	}
+	s.subagents[sub.ID] = sub
+}
+
+// PendingPermissions returns a snapshot of currently pending extension_ui_request permissions.
+func (s *Session) PendingPermissions() []map[string]any {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]map[string]any, 0, len(s.pendingPermissions))
+	for _, p := range s.pendingPermissions {
+		out = append(out, p)
+	}
+	return out
+}
+
+// RespondToPermission resolves a pending extension_ui_request and writes extension_ui_response to Pi stdin.
+func (s *Session) RespondToPermission(requestID string, resp map[string]any) error {
+	s.mu.Lock()
+	req, ok := s.pendingPermissions[requestID]
+	if ok {
+		delete(s.pendingPermissions, requestID)
+	}
+	s.mu.Unlock()
+	if !ok {
+		req = map[string]any{"id": requestID}
+	}
+	uiResp := BuildExtensionUIResponse(requestID, req, resp)
+	return s.proc.SendRaw(uiResp)
+}
+
+// ListSubagents returns all tracked subagents for this Pi session, stamped with parentAgentID.
+func (s *Session) ListSubagents(parentAgentID string) []SubagentDescriptor {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]SubagentDescriptor, 0, len(s.subagents))
+	for _, sub := range s.subagents {
+		sub.ParentAgentID = parentAgentID
+		out = append(out, sub)
+	}
+	return out
+}
+
+// GetSubagent looks up a tracked subagent by ID.
+func (s *Session) GetSubagent(parentAgentID, subagentID string) (SubagentDescriptor, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sub, ok := s.subagents[subagentID]
+	if !ok {
+		return SubagentDescriptor{}, false
+	}
+	sub.ParentAgentID = parentAgentID
+	return sub, true
 }
 
 // Close shuts down the underlying Pi subprocess.

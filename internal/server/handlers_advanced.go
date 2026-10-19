@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/agent/pi"
+	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/schedule"
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/workspace"
@@ -702,4 +704,268 @@ func (s *Server) executeScheduledPiRun(ctx context.Context, sched schedule.Store
 		WorkspaceID: &wsID,
 		Output:      &out,
 	}, nil
+}
+
+func (s *Server) handleAgentPermissionResponse(ctx context.Context, _ frameSink, raw json.RawMessage) {
+	var req struct {
+		AgentID   string         `json:"agentId"`
+		RequestID string         `json:"requestId"`
+		Response  map[string]any `json:"response"`
+	}
+	_ = json.Unmarshal(raw, &req)
+	if req.AgentID == "" || req.RequestID == "" {
+		return
+	}
+	mp, err := s.ensureAgentLoaded(req.AgentID)
+	if err != nil {
+		return
+	}
+	_ = mp.session.RespondToPermission(req.RequestID, req.Response)
+	s.broadcastSessionMsg("agent_stream", map[string]any{
+		"agentId":   req.AgentID,
+		"provider":  mp.record.Provider,
+		"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
+		"event": map[string]any{
+			"type":       "permission_resolved",
+			"provider":   mp.record.Provider,
+			"requestId":  req.RequestID,
+			"resolution": req.Response,
+		},
+	})
+}
+
+func (s *Server) handleProviderSubagentsList(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID     string `json:"requestId"`
+		ParentAgentID string `json:"parentAgentId"`
+	}
+	_ = json.Unmarshal(raw, &req)
+	mp, err := s.ensureAgentLoaded(req.ParentAgentID)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "agent.provider_subagents.list.response", map[string]any{
+			"requestId":     req.RequestID,
+			"parentAgentId": req.ParentAgentID,
+			"subagents":     []any{},
+			"error":         err.Error(),
+		})
+		return
+	}
+	subs := mp.session.ListSubagents(req.ParentAgentID)
+	_ = sendSessionMsg(ctx, sink, "agent.provider_subagents.list.response", map[string]any{
+		"requestId":     req.RequestID,
+		"parentAgentId": req.ParentAgentID,
+		"subagents":     subs,
+		"error":         nil,
+	})
+}
+
+func (s *Server) handleProviderSubagentTimeline(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID     string `json:"requestId"`
+		ParentAgentID string `json:"parentAgentId"`
+		SubagentID    string `json:"subagentId"`
+		Direction     string `json:"direction"`
+	}
+	_ = json.Unmarshal(raw, &req)
+	dir := req.Direction
+	if dir == "" {
+		dir = "tail"
+	}
+
+	mp, err := s.ensureAgentLoaded(req.ParentAgentID)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "agent.provider_subagents.timeline.get.response", map[string]any{
+			"requestId":     req.RequestID,
+			"parentAgentId": req.ParentAgentID,
+			"subagentId":    req.SubagentID,
+			"provider":      nil,
+			"direction":     dir,
+			"epoch":         "",
+			"reset":         false,
+			"staleCursor":   false,
+			"gap":           false,
+			"window":        map[string]any{"minSeq": 0, "maxSeq": 0, "nextSeq": 0},
+			"hasOlder":      false,
+			"hasNewer":      false,
+			"rows":          []any{},
+			"error":         err.Error(),
+		})
+		return
+	}
+
+	sub, ok := mp.session.GetSubagent(req.ParentAgentID, req.SubagentID)
+	if !ok {
+		_ = sendSessionMsg(ctx, sink, "agent.provider_subagents.timeline.get.response", map[string]any{
+			"requestId":     req.RequestID,
+			"parentAgentId": req.ParentAgentID,
+			"subagentId":    req.SubagentID,
+			"provider":      nil,
+			"direction":     dir,
+			"epoch":         "",
+			"reset":         false,
+			"staleCursor":   false,
+			"gap":           false,
+			"window":        map[string]any{"minSeq": 0, "maxSeq": 0, "nextSeq": 0},
+			"hasOlder":      false,
+			"hasNewer":      false,
+			"rows":          []any{},
+			"error":         "Provider subagent not found",
+		})
+		return
+	}
+
+	var entries []pi.TimelineEntry
+	if file := pi.LocateSubagentSessionFile(sub, s.piSessionDir); file != "" {
+		entries, _ = pi.LoadTimelineFromJSONL(file)
+	}
+	rows := make([]map[string]any, 0, len(entries))
+	for _, e := range entries {
+		rows = append(rows, map[string]any{
+			"item":      e.Item,
+			"timestamp": e.Timestamp,
+			"seq":       e.Seq,
+		})
+	}
+	minSeq := 0
+	if len(rows) > 0 {
+		minSeq = 1
+	}
+
+	_ = sendSessionMsg(ctx, sink, "agent.provider_subagents.timeline.get.response", map[string]any{
+		"requestId":     req.RequestID,
+		"parentAgentId": req.ParentAgentID,
+		"subagentId":    req.SubagentID,
+		"provider":      "pi",
+		"direction":     dir,
+		"epoch":         "ep_sub_1",
+		"reset":         false,
+		"staleCursor":   false,
+		"gap":           false,
+		"window": map[string]any{
+			"minSeq":  minSeq,
+			"maxSeq":  len(rows),
+			"nextSeq": len(rows) + 1,
+		},
+		"hasOlder": false,
+		"hasNewer": false,
+		"rows":     rows,
+		"error":    nil,
+	})
+}
+
+// BuildPairingOfferURL constructs a ConnectionOfferV2 fragment URL (#offer=<base64url>).
+func (s *Server) BuildPairingOfferURL(relayEndpoint string, useTLS bool, appBaseURL string) string {
+	ep := strings.TrimSpace(relayEndpoint)
+	if ep == "" {
+		ep = strings.TrimSpace(os.Getenv("BYSPACE_RELAY_ENDPOINT"))
+	}
+	if ep == "" {
+		ep = "relay.byspace.cc.cd:443"
+		useTLS = true
+	}
+	baseURL := strings.TrimSpace(appBaseURL)
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(os.Getenv("BYSPACE_APP_BASE_URL"))
+	}
+	if baseURL == "" {
+		baseURL = "https://app.byspace.cc.cd"
+	}
+
+	hostname, _ := os.Hostname()
+	offer := map[string]any{
+		"v":                  2,
+		"serverId":           s.serverID,
+		"daemonPublicKeyB64": s.pubKeyB64,
+		"relay": map[string]any{
+			"endpoint": ep,
+			"useTls":   useTLS,
+		},
+		"hostname": hostname,
+	}
+	b, _ := json.Marshal(offer)
+	encoded := base64.RawURLEncoding.EncodeToString(b)
+	return strings.TrimRight(baseURL, "/") + "/#offer=" + encoded
+}
+
+func (s *Server) handleGetPairingOffer(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID string `json:"requestId"`
+	}
+	_ = json.Unmarshal(raw, &req)
+	offerURL := s.BuildPairingOfferURL("", true, "")
+	_ = sendSessionMsg(ctx, sink, "daemon.get_pairing_offer.response", map[string]any{
+		"requestId":    req.RequestID,
+		"url":          offerURL,
+		"qr":           nil,
+		"relayEnabled": true,
+	})
+}
+
+func (s *Server) handleRegisterPushToken(raw json.RawMessage) {
+	var req struct {
+		Token string `json:"token"`
+	}
+	_ = json.Unmarshal(raw, &req)
+	tok := strings.TrimSpace(req.Token)
+	if tok == "" {
+		return
+	}
+	tokensPath := filepath.Join(s.homeDir, "push-tokens.json")
+	var tokens []string
+	if b, err := os.ReadFile(tokensPath); err == nil {
+		_ = json.Unmarshal(b, &tokens)
+	}
+	for _, existing := range tokens {
+		if existing == tok {
+			return
+		}
+	}
+	tokens = append(tokens, tok)
+	out, _ := json.MarshalIndent(tokens, "", "  ")
+	_ = home.WriteAtomic(tokensPath, append(out, '\n'), 0o600)
+}
+
+func (s *Server) handlePushUnregister(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID string `json:"requestId"`
+		Token     string `json:"token"`
+	}
+	_ = json.Unmarshal(raw, &req)
+	tok := strings.TrimSpace(req.Token)
+	tokensPath := filepath.Join(s.homeDir, "push-tokens.json")
+	var tokens []string
+	if b, err := os.ReadFile(tokensPath); err == nil {
+		_ = json.Unmarshal(b, &tokens)
+	}
+	next := tokens[:0]
+	for _, existing := range tokens {
+		if existing != tok {
+			next = append(next, existing)
+		}
+	}
+	out, _ := json.MarshalIndent(next, "", "  ")
+	_ = home.WriteAtomic(tokensPath, append(out, '\n'), 0o600)
+	_ = sendSessionMsg(ctx, sink, "push.unregister.response", map[string]any{
+		"requestId": req.RequestID,
+	})
+}
+
+func (s *Server) handleDiagnostics(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID string `json:"requestId"`
+	}
+	_ = json.Unmarshal(raw, &req)
+	logPath := filepath.Join(s.homeDir, "daemon.log")
+	var logTail string
+	if b, err := os.ReadFile(logPath); err == nil {
+		if len(b) > 8192 {
+			b = b[len(b)-8192:]
+		}
+		logTail = string(b)
+	}
+	diag := "Daemon log tail (" + s.version + "):\n" + logTail
+	_ = sendSessionMsg(ctx, sink, "diagnostics.response", map[string]any{
+		"requestId":  req.RequestID,
+		"diagnostic": diag,
+	})
 }

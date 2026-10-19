@@ -175,3 +175,50 @@ func TestListImportableSessionsAndLoadTimelineFromJSONL(t *testing.T) {
 		t.Fatalf("unexpected entry 3: %+v", entries[3])
 	}
 }
+
+func TestStructuredToolDetailsPermissionsAndSubagents(t *testing.T) {
+	bashDetail := BuildToolCallDetail("bash", map[string]any{"command": "go test ./..."}, "ok\n")
+	if bashDetail["type"] != "shell" || bashDetail["command"] != "go test ./..." || bashDetail["output"] != "ok\n" {
+		t.Fatalf("unexpected bash detail: %+v", bashDetail)
+	}
+
+	editDetail := BuildToolCallDetail("edit", map[string]any{
+		"path":    "main.go",
+		"oldText": "v1",
+		"newText": "v2",
+	}, nil)
+	if editDetail["type"] != "edit" || editDetail["filePath"] != "main.go" || editDetail["oldString"] != "v1" || editDetail["newString"] != "v2" {
+		t.Fatalf("unexpected edit detail: %+v", editDetail)
+	}
+
+	perm := MapExtensionUIRequestToPermission(map[string]any{
+		"type":    "extension_ui_request",
+		"id":      "ui_1",
+		"method":  "select",
+		"title":   "Pick a branch",
+		"options": []any{"main", "refactor/go"},
+	})
+	if perm == nil || perm["id"] != "ui_1" || perm["kind"] != "question" {
+		t.Fatalf("unexpected mapped permission: %+v", perm)
+	}
+
+	uiResp := BuildExtensionUIResponse("ui_1", perm, map[string]any{
+		"behavior": "allow",
+		"updatedInput": map[string]any{
+			"answers": map[string]any{"Answer": "refactor/go"},
+		},
+	})
+	if uiResp["value"] != "refactor/go" {
+		t.Fatalf("unexpected extension_ui_response: %+v", uiResp)
+	}
+
+	subs := ParseSubagentDetails("tc_sub_1", map[string]any{"agent": "reviewer", "task": "Review diff"}, map[string]any{
+		"id":          "sub_01",
+		"status":      "completed",
+		"sessionId":   "sess_child_01",
+		"sessionFile": "/tmp/child.jsonl",
+	})
+	if len(subs) != 1 || subs[0].ID != "sub_01" || subs[0].Status != "completed" || subs[0].SessionFile != "/tmp/child.jsonl" {
+		t.Fatalf("unexpected parsed subagents: %+v", subs)
+	}
+}
