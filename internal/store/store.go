@@ -372,6 +372,55 @@ func (s *Store) UpsertAgent(record AgentRecord) error {
 	return home.WriteAtomic(target, append(b, '\n'), 0o600)
 }
 
+// DeleteAgent removes an agent record from $BYSPACE_HOME/agents/**/*.json.
+func (s *Store) DeleteAgent(agentID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	base := s.agentsBaseDir()
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	targetName := agentID + ".json"
+	for _, entry := range entries {
+		full := filepath.Join(base, entry.Name())
+		if !entry.IsDir() && entry.Name() == targetName {
+			_ = os.Remove(full)
+			continue
+		}
+		if entry.IsDir() {
+			_ = os.Remove(filepath.Join(full, targetName))
+		}
+	}
+	return nil
+}
+
+// ArchiveWorkspace sets ArchivedAt on a workspace record and returns the updated record.
+func (s *Store) ArchiveWorkspace(workspaceID, archivedAt string) (*WorkspaceRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	list, err := readJSONArray[WorkspaceRecord](s.workspacesPath())
+	if err != nil {
+		return nil, err
+	}
+	for i := range list {
+		if list[i].WorkspaceID == workspaceID {
+			list[i].ArchivedAt = &archivedAt
+			list[i].UpdatedAt = archivedAt
+			if err := writeJSONArray(s.workspacesPath(), list); err != nil {
+				return nil, err
+			}
+			cp := list[i]
+			return &cp, nil
+		}
+	}
+	return nil, nil
+}
+
 // ProjectDirNameFromCwd mirrors projectDirNameFromCwd in packages/server/src/server/agent/agent-storage.ts.
 func ProjectDirNameFromCwd(cwd string) string {
 	trimmed := strings.TrimRight(cwd, `/\`)

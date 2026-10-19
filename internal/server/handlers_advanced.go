@@ -1,0 +1,705 @@
+package server
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/ByteTrue/byspace/internal/agent/pi"
+	"github.com/ByteTrue/byspace/internal/schedule"
+	"github.com/ByteTrue/byspace/internal/store"
+	"github.com/ByteTrue/byspace/internal/workspace"
+)
+
+func (s *Server) probeOrCachedPiModels(ctx context.Context) []pi.CatalogModel {
+	s.mu.Lock()
+	if s.cachedPiModels != nil {
+		out := s.cachedPiModels
+		s.mu.Unlock()
+		return out
+	}
+	s.mu.Unlock()
+
+	pctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	models, cmds, err := pi.ProbeCatalog(pctx, pi.LaunchOptions{Command: s.piCommand})
+	if err != nil {
+		return []pi.CatalogModel{}
+	}
+
+	s.mu.Lock()
+	s.cachedPiModels = models
+	s.cachedPiCommands = cmds
+	s.mu.Unlock()
+	return models
+}
+
+func (s *Server) handleSetAgentModel(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID string  `json:"requestId"`
+		AgentID   string  `json:"agentId"`
+		ModelID   *string `json:"modelId"`
+	}
+	_ = json.Unmarshal(raw, &req)
+
+	mp, err := s.ensureAgentLoaded(req.AgentID)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "set_agent_model_response", map[string]any{
+			"requestId": req.RequestID,
+			"agentId":   req.AgentID,
+			"accepted":  false,
+			"error":     err.Error(),
+		})
+		return
+	}
+
+	if req.ModelID != nil && strings.TrimSpace(*req.ModelID) != "" {
+		prov, mod := pi.SplitModelID(*req.ModelID)
+		if _, err := mp.session.SetModel(ctx, prov, mod); err != nil {
+			_ = sendSessionMsg(ctx, sink, "set_agent_model_response", map[string]any{
+				"requestId": req.RequestID,
+				"agentId":   req.AgentID,
+				"accepted":  false,
+				"error":     err.Error(),
+			})
+			return
+		}
+	}
+
+	s.mu.Lock()
+	if mp.record.Config == nil {
+		mp.record.Config = &store.AgentConfig{}
+	}
+	mp.record.Config.Model = req.ModelID
+	mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	recCopy := mp.record
+	s.mu.Unlock()
+	_ = s.store.UpsertAgent(recCopy)
+
+	_ = sendSessionMsg(ctx, sink, "set_agent_model_response", map[string]any{
+		"requestId": req.RequestID,
+		"agentId":   req.AgentID,
+		"accepted":  true,
+		"error":     nil,
+	})
+}
+
+func (s *Server) handleSetAgentThinking(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID        string  `json:"requestId"`
+		AgentID          string  `json:"agentId"`
+		ThinkingOptionID *string `json:"thinkingOptionId"`
+	}
+	_ = json.Unmarshal(raw, &req)
+
+	mp, err := s.ensureAgentLoaded(req.AgentID)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "set_agent_thinking_response", map[string]any{
+			"requestId": req.RequestID,
+			"agentId":   req.AgentID,
+			"accepted":  false,
+			"error":     err.Error(),
+		})
+		return
+	}
+
+	if req.ThinkingOptionID != nil && strings.TrimSpace(*req.ThinkingOptionID) != "" {
+		if err := mp.session.SetThinkingLevel(ctx, *req.ThinkingOptionID); err != nil {
+			_ = sendSessionMsg(ctx, sink, "set_agent_thinking_response", map[string]any{
+				"requestId": req.RequestID,
+				"agentId":   req.AgentID,
+				"accepted":  false,
+				"error":     err.Error(),
+			})
+			return
+		}
+	}
+
+	s.mu.Lock()
+	if mp.record.Config == nil {
+		mp.record.Config = &store.AgentConfig{}
+	}
+	mp.record.Config.ThinkingOptionID = req.ThinkingOptionID
+	mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	recCopy := mp.record
+	s.mu.Unlock()
+	_ = s.store.UpsertAgent(recCopy)
+
+	_ = sendSessionMsg(ctx, sink, "set_agent_thinking_response", map[string]any{
+		"requestId": req.RequestID,
+		"agentId":   req.AgentID,
+		"accepted":  true,
+		"error":     nil,
+	})
+}
+
+func (s *Server) handleSetAgentMode(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID string `json:"requestId"`
+		AgentID   string `json:"agentId"`
+		ModeID    string `json:"modeId"`
+	}
+	_ = json.Unmarshal(raw, &req)
+
+	mp, err := s.ensureAgentLoaded(req.AgentID)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "set_agent_mode_response", map[string]any{
+			"requestId": req.RequestID,
+			"agentId":   req.AgentID,
+			"accepted":  false,
+			"error":     err.Error(),
+		})
+		return
+	}
+
+	s.mu.Lock()
+	if mp.record.Config == nil {
+		mp.record.Config = &store.AgentConfig{}
+	}
+	modeCopy := req.ModeID
+	mp.record.Config.ModeID = &modeCopy
+	mp.record.LastModeID = &modeCopy
+	mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	recCopy := mp.record
+	s.mu.Unlock()
+	_ = s.store.UpsertAgent(recCopy)
+
+	_ = sendSessionMsg(ctx, sink, "set_agent_mode_response", map[string]any{
+		"requestId": req.RequestID,
+		"agentId":   req.AgentID,
+		"accepted":  true,
+		"error":     nil,
+	})
+}
+
+func (s *Server) handleAgentConfigApply(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID string `json:"requestId"`
+		AgentID   string `json:"agentId"`
+		Config    struct {
+			ModelID          *string `json:"modelId"`
+			ModeID           *string `json:"modeId"`
+			ThinkingOptionID *string `json:"thinkingOptionId"`
+		} `json:"config"`
+	}
+	_ = json.Unmarshal(raw, &req)
+
+	mp, err := s.ensureAgentLoaded(req.AgentID)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "agent.config.apply.response", map[string]any{
+			"requestId": req.RequestID,
+			"agentId":   req.AgentID,
+			"accepted":  false,
+			"error":     err.Error(),
+		})
+		return
+	}
+
+	if req.Config.ModelID != nil && strings.TrimSpace(*req.Config.ModelID) != "" {
+		prov, mod := pi.SplitModelID(*req.Config.ModelID)
+		_, _ = mp.session.SetModel(ctx, prov, mod)
+	}
+	if req.Config.ThinkingOptionID != nil && strings.TrimSpace(*req.Config.ThinkingOptionID) != "" {
+		_ = mp.session.SetThinkingLevel(ctx, *req.Config.ThinkingOptionID)
+	}
+
+	s.mu.Lock()
+	if mp.record.Config == nil {
+		mp.record.Config = &store.AgentConfig{}
+	}
+	if req.Config.ModelID != nil {
+		mp.record.Config.Model = req.Config.ModelID
+	}
+	if req.Config.ModeID != nil {
+		mp.record.Config.ModeID = req.Config.ModeID
+		mp.record.LastModeID = req.Config.ModeID
+	}
+	if req.Config.ThinkingOptionID != nil {
+		mp.record.Config.ThinkingOptionID = req.Config.ThinkingOptionID
+	}
+	mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	recCopy := mp.record
+	s.mu.Unlock()
+	_ = s.store.UpsertAgent(recCopy)
+
+	_ = sendSessionMsg(ctx, sink, "agent.config.apply.response", map[string]any{
+		"requestId": req.RequestID,
+		"agentId":   req.AgentID,
+		"accepted":  true,
+		"error":     nil,
+	})
+}
+
+func (s *Server) handleDeleteAgent(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID string `json:"requestId"`
+		AgentID   string `json:"agentId"`
+	}
+	_ = json.Unmarshal(raw, &req)
+
+	s.mu.Lock()
+	mp := s.agents[req.AgentID]
+	delete(s.agents, req.AgentID)
+	s.mu.Unlock()
+	if mp != nil && mp.session != nil {
+		_ = mp.session.Close()
+	}
+	_ = s.store.DeleteAgent(req.AgentID)
+
+	_ = sendSessionMsg(ctx, sink, "agent_deleted", map[string]any{
+		"agentId":   req.AgentID,
+		"requestId": req.RequestID,
+	})
+}
+
+func (s *Server) handleArchiveAgent(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID string `json:"requestId"`
+		AgentID   string `json:"agentId"`
+	}
+	_ = json.Unmarshal(raw, &req)
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	s.mu.Lock()
+	mp := s.agents[req.AgentID]
+	delete(s.agents, req.AgentID)
+	s.mu.Unlock()
+
+	if mp != nil && mp.session != nil {
+		_ = mp.session.Close()
+	}
+	if rec, _ := s.store.GetAgent(req.AgentID); rec != nil {
+		rec.ArchivedAt = &now
+		rec.UpdatedAt = now
+		rec.LastStatus = "closed"
+		_ = s.store.UpsertAgent(*rec)
+	}
+
+	_ = sendSessionMsg(ctx, sink, "agent_archived", map[string]any{
+		"agentId":    req.AgentID,
+		"archivedAt": now,
+		"requestId":  req.RequestID,
+	})
+}
+
+func (s *Server) handleUpdateAgent(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID string            `json:"requestId"`
+		AgentID   string            `json:"agentId"`
+		Name      *string           `json:"name"`
+		Labels    map[string]string `json:"labels"`
+	}
+	_ = json.Unmarshal(raw, &req)
+
+	rec, _ := s.store.GetAgent(req.AgentID)
+	if rec == nil {
+		_ = sendSessionMsg(ctx, sink, "update_agent_response", map[string]any{
+			"requestId": req.RequestID,
+			"agentId":   req.AgentID,
+			"accepted":  false,
+			"error":     "Agent not found",
+		})
+		return
+	}
+
+	if req.Name != nil {
+		rec.Title = req.Name
+	}
+	if req.Labels != nil {
+		rec.Labels = req.Labels
+	}
+	rec.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	_ = s.store.UpsertAgent(*rec)
+
+	s.mu.Lock()
+	if mp, ok := s.agents[req.AgentID]; ok {
+		mp.record = *rec
+	}
+	s.mu.Unlock()
+
+	_ = sendSessionMsg(ctx, sink, "update_agent_response", map[string]any{
+		"requestId": req.RequestID,
+		"agentId":   req.AgentID,
+		"accepted":  true,
+		"error":     nil,
+	})
+}
+
+func (s *Server) handleListCommands(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID string `json:"requestId"`
+		AgentID   string `json:"agentId"`
+	}
+	_ = json.Unmarshal(raw, &req)
+
+	var cmds []pi.SlashCommand
+	if req.AgentID != "" {
+		if mp, err := s.ensureAgentLoaded(req.AgentID); err == nil && mp.session != nil {
+			cmds, _ = mp.session.GetCommands(ctx)
+		}
+	}
+	if cmds == nil {
+		cmds = []pi.SlashCommand{}
+	}
+
+	_ = sendSessionMsg(ctx, sink, "list_commands_response", map[string]any{
+		"agentId":   req.AgentID,
+		"commands":  cmds,
+		"error":     nil,
+		"requestId": req.RequestID,
+	})
+}
+
+func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID    string `json:"requestId"`
+		Cwd          string `json:"cwd"`
+		WorktreeSlug string `json:"worktreeSlug"`
+		RefName      string `json:"refName"`
+	}
+	_ = json.Unmarshal(raw, &req)
+
+	wtBase := filepath.Join(s.homeDir, "worktrees")
+	wtPath, branch, err := workspace.CreateWorktree(ctx, req.Cwd, wtBase, req.WorktreeSlug, req.RefName)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "create_byspace_worktree_response", map[string]any{
+			"workspace":       nil,
+			"error":           err.Error(),
+			"setupTerminalId": nil,
+			"requestId":       req.RequestID,
+		})
+		return
+	}
+
+	prj, _, err := s.store.EnsureWorkspaceForCwd(req.Cwd)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "create_byspace_worktree_response", map[string]any{
+			"workspace":       nil,
+			"error":           err.Error(),
+			"setupTerminalId": nil,
+			"requestId":       req.RequestID,
+		})
+		return
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	repoRoot := prj.RootPath
+	wsRec := store.WorkspaceRecord{
+		WorkspaceID:            store.NewWorkspaceID(),
+		ProjectID:              prj.ProjectID,
+		Cwd:                    wtPath,
+		Kind:                   "worktree",
+		DisplayName:            branch,
+		Branch:                 &branch,
+		WorktreeRoot:           &wtPath,
+		MainRepoRoot:           &repoRoot,
+		IsBySpaceOwnedWorktree: true,
+		CreatedAt:              now,
+		UpdatedAt:              now,
+	}
+	_ = s.store.UpsertWorkspace(wsRec)
+
+	desc := buildWorkspaceDescriptor(wsRec, prj)
+	_ = sendSessionMsg(ctx, sink, "create_byspace_worktree_response", map[string]any{
+		"workspace":       desc,
+		"error":           nil,
+		"setupTerminalId": nil,
+		"requestId":       req.RequestID,
+	})
+}
+
+func (s *Server) handleBySpaceWorktreeList(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID string `json:"requestId"`
+		Cwd       string `json:"cwd"`
+	}
+	_ = json.Unmarshal(raw, &req)
+	wts, err := workspace.ListWorktrees(ctx, req.Cwd)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "byspace_worktree_list_response", map[string]any{
+			"worktrees": []any{},
+			"error":     map[string]any{"code": "git_error", "message": err.Error()},
+			"requestId": req.RequestID,
+		})
+		return
+	}
+	_ = sendSessionMsg(ctx, sink, "byspace_worktree_list_response", map[string]any{
+		"worktrees": wts,
+		"error":     nil,
+		"requestId": req.RequestID,
+	})
+}
+
+func (s *Server) handleSubscribeCheckoutDiff(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID      string `json:"requestId"`
+		SubscriptionID string `json:"subscriptionId"`
+		Cwd            string `json:"cwd"`
+	}
+	_ = json.Unmarshal(raw, &req)
+	files, _ := workspace.GetWorkingDiff(ctx, req.Cwd)
+	_ = sendSessionMsg(ctx, sink, "subscribe_checkout_diff_response", map[string]any{
+		"subscriptionId": req.SubscriptionID,
+		"cwd":            req.Cwd,
+		"files":          files,
+		"error":          nil,
+		"requestId":      req.RequestID,
+	})
+}
+
+func (s *Server) handleCheckoutCommit(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID string `json:"requestId"`
+		Cwd       string `json:"cwd"`
+		Message   string `json:"message"`
+	}
+	_ = json.Unmarshal(raw, &req)
+	err := workspace.CommitAll(ctx, req.Cwd, req.Message)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "checkout_commit_response", map[string]any{
+			"cwd":       req.Cwd,
+			"success":   false,
+			"error":     map[string]any{"code": "git_error", "message": err.Error()},
+			"requestId": req.RequestID,
+		})
+		return
+	}
+	_ = sendSessionMsg(ctx, sink, "checkout_commit_response", map[string]any{
+		"cwd":       req.Cwd,
+		"success":   true,
+		"error":     nil,
+		"requestId": req.RequestID,
+	})
+}
+
+func (s *Server) handleCheckoutDiscardChanges(ctx context.Context, sink frameSink, raw json.RawMessage) {
+	var req struct {
+		RequestID string `json:"requestId"`
+		Cwd       string `json:"cwd"`
+	}
+	_ = json.Unmarshal(raw, &req)
+	err := workspace.DiscardChanges(ctx, req.Cwd)
+	if err != nil {
+		_ = sendSessionMsg(ctx, sink, "checkout.discard_changes.response", map[string]any{
+			"cwd":       req.Cwd,
+			"success":   false,
+			"error":     map[string]any{"code": "git_error", "message": err.Error()},
+			"requestId": req.RequestID,
+		})
+		return
+	}
+	_ = sendSessionMsg(ctx, sink, "checkout.discard_changes.response", map[string]any{
+		"cwd":       req.Cwd,
+		"success":   true,
+		"error":     nil,
+		"requestId": req.RequestID,
+	})
+}
+
+func (s *Server) handleScheduleMessage(ctx context.Context, sink frameSink, msgType string, raw json.RawMessage) {
+	var base struct {
+		RequestID  string `json:"requestId"`
+		ScheduleID string `json:"scheduleId"`
+		ID         string `json:"id"`
+	}
+	_ = json.Unmarshal(raw, &base)
+	schedID := base.ScheduleID
+	if schedID == "" {
+		schedID = base.ID
+	}
+
+	emitErr := func(err error) {
+		_ = sendSessionMsg(ctx, sink, "rpc_error", map[string]any{
+			"requestId":   base.RequestID,
+			"requestType": msgType,
+			"error":       err.Error(),
+			"code":        "schedule_request_failed",
+		})
+	}
+
+	switch msgType {
+	case "schedule/create":
+		var req struct {
+			RequestID   string           `json:"requestId"`
+			Name        *string          `json:"name"`
+			Prompt      string           `json:"prompt"`
+			Cadence     schedule.Cadence `json:"cadence"`
+			Target      schedule.Target  `json:"target"`
+			MaxRuns     *int             `json:"maxRuns"`
+			ExpiresAt   *string          `json:"expiresAt"`
+			RunOnCreate bool             `json:"runOnCreate"`
+		}
+		if err := json.Unmarshal(raw, &req); err != nil {
+			emitErr(err)
+			return
+		}
+		if req.Target.Type == "self" {
+			req.Target.Type = "agent"
+		}
+		created, err := s.schedules.Create(ctx, schedule.CreateInput{
+			Name:        req.Name,
+			Prompt:      req.Prompt,
+			Cadence:     req.Cadence,
+			Target:      req.Target,
+			MaxRuns:     req.MaxRuns,
+			ExpiresAt:   req.ExpiresAt,
+			RunOnCreate: req.RunOnCreate,
+		})
+		if err != nil {
+			emitErr(err)
+			return
+		}
+		_ = sendSessionMsg(ctx, sink, "schedule/create/response", map[string]any{
+			"requestId": req.RequestID,
+			"schedule":  created.ToSummary(),
+			"error":     nil,
+		})
+
+	case "schedule/list":
+		list, err := s.schedules.List()
+		if err != nil {
+			emitErr(err)
+			return
+		}
+		summaries := make([]schedule.Summary, 0, len(list))
+		for _, item := range list {
+			summaries = append(summaries, item.ToSummary())
+		}
+		_ = sendSessionMsg(ctx, sink, "schedule/list/response", map[string]any{
+			"requestId": base.RequestID,
+			"schedules": summaries,
+			"error":     nil,
+		})
+
+	case "schedule/inspect":
+		sched, err := s.schedules.Inspect(schedID)
+		if err != nil {
+			emitErr(err)
+			return
+		}
+		_ = sendSessionMsg(ctx, sink, "schedule/inspect/response", map[string]any{
+			"requestId": base.RequestID,
+			"schedule":  sched,
+			"error":     nil,
+		})
+
+	case "schedule/logs":
+		runs, err := s.schedules.Logs(schedID)
+		if err != nil {
+			emitErr(err)
+			return
+		}
+		_ = sendSessionMsg(ctx, sink, "schedule/logs/response", map[string]any{
+			"requestId": base.RequestID,
+			"runs":      runs,
+			"error":     nil,
+		})
+
+	case "schedule/pause":
+		sched, err := s.schedules.Pause(schedID)
+		if err != nil {
+			emitErr(err)
+			return
+		}
+		_ = sendSessionMsg(ctx, sink, "schedule/pause/response", map[string]any{
+			"requestId": base.RequestID,
+			"schedule":  sched.ToSummary(),
+			"error":     nil,
+		})
+
+	case "schedule/resume":
+		sched, err := s.schedules.Resume(schedID)
+		if err != nil {
+			emitErr(err)
+			return
+		}
+		_ = sendSessionMsg(ctx, sink, "schedule/resume/response", map[string]any{
+			"requestId": base.RequestID,
+			"schedule":  sched.ToSummary(),
+			"error":     nil,
+		})
+
+	case "schedule/delete":
+		if err := s.schedules.Delete(schedID); err != nil {
+			emitErr(err)
+			return
+		}
+		_ = sendSessionMsg(ctx, sink, "schedule/delete/response", map[string]any{
+			"requestId":  base.RequestID,
+			"scheduleId": schedID,
+			"error":      nil,
+		})
+
+	case "schedule/run-once":
+		sched, err := s.schedules.RunOnce(ctx, schedID)
+		if err != nil {
+			emitErr(err)
+			return
+		}
+		_ = sendSessionMsg(ctx, sink, "schedule/run-once/response", map[string]any{
+			"requestId": base.RequestID,
+			"schedule":  sched.ToSummary(),
+			"error":     nil,
+		})
+	}
+}
+
+func (s *Server) executeScheduledPiRun(ctx context.Context, sched schedule.StoredSchedule) (schedule.ExecutionResult, error) {
+	if sched.Target.Type == "agent" && sched.Target.AgentID != "" {
+		mp, err := s.ensureAgentLoaded(sched.Target.AgentID)
+		if err != nil {
+			return schedule.ExecutionResult{}, err
+		}
+		if err := mp.session.Prompt(ctx, sched.Prompt, nil); err != nil {
+			return schedule.ExecutionResult{}, err
+		}
+		_ = mp.session.WaitForFinish(ctx)
+		agtID := sched.Target.AgentID
+		out := mp.session.LastAssistantText()
+		return schedule.ExecutionResult{
+			AgentID: &agtID,
+			Output:  &out,
+		}, nil
+	}
+
+	cwd, _ := os.Getwd()
+	if sched.Target.Config != nil && sched.Target.Config.Cwd != "" {
+		cwd = sched.Target.Config.Cwd
+	}
+	_, ws, err := s.store.EnsureWorkspaceForCwd(cwd)
+	if err != nil {
+		return schedule.ExecutionResult{}, err
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	agentID := newAgentID()
+	rec := store.AgentRecord{
+		ID:          agentID,
+		Provider:    "pi",
+		Cwd:         cwd,
+		WorkspaceID: ws.WorkspaceID,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		Title:       sched.Name,
+		Labels:      map[string]string{},
+		LastStatus:  "idle",
+	}
+	mp, err := s.startOrGetPiAgent(rec)
+	if err != nil {
+		return schedule.ExecutionResult{}, err
+	}
+	_ = s.store.UpsertAgent(mp.record)
+	if err := mp.session.Prompt(ctx, sched.Prompt, nil); err != nil {
+		return schedule.ExecutionResult{AgentID: &agentID}, err
+	}
+	_ = mp.session.WaitForFinish(ctx)
+	out := mp.session.LastAssistantText()
+	wsID := ws.WorkspaceID
+	return schedule.ExecutionResult{
+		AgentID:     &agentID,
+		WorkspaceID: &wsID,
+		Output:      &out,
+	}, nil
+}

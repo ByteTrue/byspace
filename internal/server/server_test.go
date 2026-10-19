@@ -23,6 +23,18 @@ func writeFakePiScript(t *testing.T, dir string) string {
 	script := `#!/bin/sh
 while read line; do
   case "$line" in
+    *'"type":"get_available_models"'*)
+      echo '{"type":"response","id":"req_1","command":"get_available_models","success":true,"data":{"models":[{"provider":"anthropic","id":"claude-sonnet-4-5","name":"Claude Sonnet 4.5","reasoning":true}]}}'
+      ;;
+    *'"type":"get_commands"'*)
+      echo '{"type":"response","id":"req_2","command":"get_commands","success":true,"data":{"commands":[{"name":"compact","source":"prompt"}]}}'
+      ;;
+    *'"type":"set_model"'*)
+      echo '{"type":"response","id":"req_1","command":"set_model","success":true,"data":{"provider":"anthropic","id":"claude-sonnet-4-5"}}'
+      ;;
+    *'"type":"set_thinking_level"'*)
+      echo '{"type":"response","id":"req_1","command":"set_thinking_level","success":true,"data":{}}'
+      ;;
     *'"type":"prompt"'*)
       echo '{"type":"response","id":"req_1","command":"prompt","success":true,"data":{"agentInvoked":true}}'
       echo '{"type":"agent_start"}'
@@ -373,5 +385,66 @@ func TestServerFileExplorerPiSessionImportAndTerminalRPC(t *testing.T) {
 	tlEntries, _ := tlResp["entries"].([]any)
 	if len(tlEntries) != 2 {
 		t.Fatalf("expected 2 restored timeline entries, got %d: %+v", len(tlEntries), tlEntries)
+	}
+
+	// 4. Probe Pi models via list_provider_models_request
+	modReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":      "list_provider_models_request",
+			"requestId": "req_mod_1",
+			"provider":  "pi",
+		},
+	})
+	_ = ws.Write(ctx, websocket.MessageText, modReq)
+	modResp := readUntilSessionType(t, ctx, ws, "list_provider_models_response", "")
+	modelsList, _ := modResp["models"].([]any)
+	if len(modelsList) != 1 {
+		t.Fatalf("expected 1 probed Pi model, got %+v", modResp)
+	}
+
+	// 5. Schedule create with runOnCreate -> triggers Pi agent run and records output
+	schedReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":        "schedule/create",
+			"requestId":   "req_sched_1",
+			"name":        "Heartbeat",
+			"prompt":      "Check status",
+			"runOnCreate": true,
+			"cadence": map[string]any{
+				"type":    "every",
+				"everyMs": 60000,
+			},
+			"target": map[string]any{
+				"type": "new-agent",
+				"config": map[string]any{
+					"provider": "pi",
+					"cwd":      workDir,
+				},
+			},
+		},
+	})
+	_ = ws.Write(ctx, websocket.MessageText, schedReq)
+	schedResp := readUntilSessionType(t, ctx, ws, "schedule/create/response", "")
+	schedObj, _ := schedResp["schedule"].(map[string]any)
+	schedID, _ := schedObj["id"].(string)
+	if schedID == "" {
+		t.Fatalf("expected schedule id in response: %+v", schedResp)
+	}
+
+	logsReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":       "schedule/logs",
+			"requestId":  "req_sched_logs",
+			"scheduleId": schedID,
+		},
+	})
+	_ = ws.Write(ctx, websocket.MessageText, logsReq)
+	logsResp := readUntilSessionType(t, ctx, ws, "schedule/logs/response", "")
+	runsList, _ := logsResp["runs"].([]any)
+	if len(runsList) != 1 {
+		t.Fatalf("expected 1 schedule run log, got %+v", logsResp)
 	}
 }

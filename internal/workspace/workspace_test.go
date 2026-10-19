@@ -87,4 +87,31 @@ func TestGitCheckoutStatusAndCommits(t *testing.T) {
 	if err != nil || len(commits) != 1 || commits[0].Subject != "initial commit" {
 		t.Fatalf("unexpected commits: %+v (%v)", commits, err)
 	}
+
+	diffFiles, err := GetWorkingDiff(ctx, tmp)
+	if err != nil || len(diffFiles) != 1 || diffFiles[0].Path != "README.md" {
+		t.Fatalf("unexpected working diff: %+v (%v)", diffFiles, err)
+	}
+
+	if err := DiscardChanges(ctx, tmp); err != nil {
+		t.Fatal(err)
+	}
+	stClean := GetCheckoutStatus(ctx, tmp, "req_3")
+	if stClean.IsDirty == nil || *stClean.IsDirty {
+		t.Fatalf("expected clean repo after DiscardChanges")
+	}
+
+	wtBase := t.TempDir()
+	wtPath, branch, err := CreateWorktree(ctx, tmp, wtBase, "feat-go", "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if branch != "feat-go" || wtPath == "" {
+		t.Fatalf("unexpected worktree result: path=%s branch=%s", wtPath, branch)
+	}
+
+	wts, err := ListWorktrees(ctx, tmp)
+	if err != nil || len(wts) < 2 {
+		t.Fatalf("expected at least 2 worktrees, got %+v (%v)", wts, err)
+	}
 }

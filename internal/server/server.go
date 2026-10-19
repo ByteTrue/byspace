@@ -19,6 +19,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/agent/pi"
 	"github.com/ByteTrue/byspace/internal/e2ee"
 	"github.com/ByteTrue/byspace/internal/home"
+	"github.com/ByteTrue/byspace/internal/schedule"
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/terminal"
 	"github.com/ByteTrue/byspace/internal/webui"
@@ -92,6 +93,7 @@ type Server struct {
 	keyPair      e2ee.KeyPair
 	pubKeyB64    string
 	store        *store.Store
+	schedules    *schedule.Service
 	webUI        *webui.Handler
 	piCommand    string
 	piSessionDir string
@@ -101,6 +103,8 @@ type Server struct {
 	terminals         map[uint8]*terminal.Session
 	terminalSlotsByID map[string]uint8
 	clients           map[frameSink]bool
+	cachedPiModels    []pi.CatalogModel
+	cachedPiCommands  []pi.SlashCommand
 }
 
 // New creates and initializes a BySpace daemon Server rooted at opts.HomeDir.
@@ -126,7 +130,7 @@ func New(opts Options) (*Server, error) {
 		ui = webui.NewHandler(opts.WebDir)
 	}
 
-	return &Server{
+	srv := &Server{
 		homeDir:           homeDir,
 		serverID:          serverID,
 		version:           ver,
@@ -140,7 +144,9 @@ func New(opts Options) (*Server, error) {
 		terminals:         make(map[uint8]*terminal.Session),
 		terminalSlotsByID: make(map[string]uint8),
 		clients:           make(map[frameSink]bool),
-	}, nil
+	}
+	srv.schedules = schedule.NewService(homeDir, srv.executeScheduledPiRun)
+	return srv, nil
 }
 
 func (s *Server) ServerID() string     { return s.serverID }
@@ -650,6 +656,7 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 
 	case "get_providers_snapshot_request":
 		now := time.Now().UTC().Format(time.RFC3339Nano)
+		models := s.probeOrCachedPiModels(ctx)
 		_ = sendSessionMsg(ctx, sink, "get_providers_snapshot_response", map[string]any{
 			"requestId":   base.RequestID,
 			"generatedAt": now,
@@ -661,7 +668,7 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 					"enabled":     true,
 					"source":      "builtin",
 					"fetchedAt":   now,
-					"models":      []any{},
+					"models":      models,
 					"modes":       []any{},
 					"description": "Pi coding agent",
 				},
@@ -669,6 +676,10 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		})
 
 	case "refresh_providers_snapshot_request":
+		s.mu.Lock()
+		s.cachedPiModels = nil
+		s.mu.Unlock()
+		_ = s.probeOrCachedPiModels(ctx)
 		_ = sendSessionMsg(ctx, sink, "refresh_providers_snapshot_response", map[string]any{
 			"requestId":    base.RequestID,
 			"acknowledged": true,
@@ -676,10 +687,11 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 
 	case "list_provider_models_request":
 		now := time.Now().UTC().Format(time.RFC3339Nano)
+		models := s.probeOrCachedPiModels(ctx)
 		_ = sendSessionMsg(ctx, sink, "list_provider_models_response", map[string]any{
 			"requestId": base.RequestID,
 			"provider":  "pi",
-			"models":    []any{},
+			"models":    models,
 			"error":     nil,
 			"fetchedAt": now,
 		})
@@ -811,6 +823,55 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 			"agentId":   req.AgentID,
 			"requestId": req.RequestID,
 		})
+
+	case "set_agent_model_request":
+		s.handleSetAgentModel(ctx, sink, raw)
+
+	case "set_agent_thinking_request":
+		s.handleSetAgentThinking(ctx, sink, raw)
+
+	case "set_agent_mode_request":
+		s.handleSetAgentMode(ctx, sink, raw)
+
+	case "agent.config.apply.request":
+		s.handleAgentConfigApply(ctx, sink, raw)
+
+	case "delete_agent_request":
+		s.handleDeleteAgent(ctx, sink, raw)
+
+	case "archive_agent_request":
+		s.handleArchiveAgent(ctx, sink, raw)
+
+	case "update_agent_request":
+		s.handleUpdateAgent(ctx, sink, raw)
+
+	case "list_commands_request":
+		s.handleListCommands(ctx, sink, raw)
+
+	case "create_byspace_worktree_request":
+		s.handleCreateBySpaceWorktree(ctx, sink, raw)
+
+	case "byspace_worktree_list_request":
+		s.handleBySpaceWorktreeList(ctx, sink, raw)
+
+	case "subscribe_checkout_diff_request":
+		s.handleSubscribeCheckoutDiff(ctx, sink, raw)
+
+	case "checkout_commit_request":
+		s.handleCheckoutCommit(ctx, sink, raw)
+
+	case "checkout.discard_changes.request":
+		s.handleCheckoutDiscardChanges(ctx, sink, raw)
+
+	case "schedule/create",
+		"schedule/list",
+		"schedule/inspect",
+		"schedule/logs",
+		"schedule/pause",
+		"schedule/resume",
+		"schedule/delete",
+		"schedule/run-once":
+		s.handleScheduleMessage(ctx, sink, base.Type, raw)
 	}
 }
 
