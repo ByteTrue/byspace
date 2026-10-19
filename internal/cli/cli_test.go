@@ -140,4 +140,29 @@ done
 	if !strings.HasPrefix(strings.TrimSpace(out.String()), "https://app.byspace.cc.cd/#offer=") {
 		t.Fatalf("unexpected pair output: %q", out.String())
 	}
+
+	// 9. CLI parity command groups: project ls, workspace ls, provider ls
+	out.Reset()
+	if code := Main("0.20.2-go", []string{"project", "ls", "--addr", addr}, &out, &errOut); code != 0 {
+		t.Fatalf("project ls failed (%d): %s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "prj_") {
+		t.Fatalf("expected prj_ in project ls output: %q", out.String())
+	}
+
+	out.Reset()
+	if code := Main("0.20.2-go", []string{"workspace", "ls", "--addr", addr}, &out, &errOut); code != 0 {
+		t.Fatalf("workspace ls failed (%d): %s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "wks_") {
+		t.Fatalf("expected wks_ in workspace ls output: %q", out.String())
+	}
+
+	out.Reset()
+	if code := Main("0.20.2-go", []string{"provider", "ls", "--addr", addr}, &out, &errOut); code != 0 {
+		t.Fatalf("provider ls failed (%d): %s", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), `"provider": "pi"`) {
+		t.Fatalf("expected pi in provider ls output: %q", out.String())
+	}
 }

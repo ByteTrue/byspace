@@ -184,6 +184,42 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 		fmt.Fprintf(stdout, "deleted %s\n", schedID)
 		return nil
 
+	case "inspect", "logs", "pause", "resume", "run-once":
+		fs := flag.NewFlagSet("schedule "+sub, flag.ContinueOnError)
+		addr := fs.String("addr", defaultListenAddr(), "daemon address")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		if fs.NArg() < 1 {
+			return fmt.Errorf("usage: byspace schedule %s <schedule-id>", sub)
+		}
+		schedID := fs.Arg(0)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		ws, err := dialDaemonWS(ctx, *addr)
+		if err != nil {
+			return err
+		}
+		defer ws.CloseNow()
+
+		reqType := "schedule/" + sub
+		respType := reqType + "/response"
+		if err := sendSessionReq(ctx, ws, map[string]any{
+			"type":       reqType,
+			"requestId":  "req_hb_" + sub,
+			"scheduleId": schedID,
+		}); err != nil {
+			return err
+		}
+		resp, err := waitSessionResp(ctx, ws, respType, "")
+		if err != nil {
+			return err
+		}
+		b, _ := json.MarshalIndent(resp, "", "  ")
+		fmt.Fprintln(stdout, string(b))
+		return nil
+
 	default:
 		return fmt.Errorf("unknown heartbeat subcommand %q", sub)
 	}

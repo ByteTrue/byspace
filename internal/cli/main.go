@@ -143,6 +143,117 @@ func Main(version string, args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		return 0
+	case "agent":
+		if err := runAgentGroupCmd(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace agent:", err)
+			return 1
+		}
+		return 0
+	case "send":
+		if err := runAgentSend(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace send:", err)
+			return 1
+		}
+		return 0
+	case "stop", "cancel":
+		if err := runAgentStop(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace stop:", err)
+			return 1
+		}
+		return 0
+	case "archive":
+		if err := runAgentArchive(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace archive:", err)
+			return 1
+		}
+		return 0
+	case "rm", "delete", "kill":
+		if err := runAgentDelete(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace rm:", err)
+			return 1
+		}
+		return 0
+	case "inspect":
+		if err := runAgentInspect(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace inspect:", err)
+			return 1
+		}
+		return 0
+	case "detach":
+		if err := runAgentDetach(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace detach:", err)
+			return 1
+		}
+		return 0
+	case "update", "mode":
+		if err := runAgentUpdate(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace update:", err)
+			return 1
+		}
+		return 0
+	case "import":
+		if err := runAgentImport(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace import:", err)
+			return 1
+		}
+		return 0
+	case "reload":
+		if err := runAgentReload(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace reload:", err)
+			return 1
+		}
+		return 0
+	case "project":
+		if err := runProjectGroupCmd(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace project:", err)
+			return 1
+		}
+		return 0
+	case "workspace":
+		if err := runWorkspaceGroupCmd(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace workspace:", err)
+			return 1
+		}
+		return 0
+	case "terminal":
+		if err := runTerminalGroupCmd(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace terminal:", err)
+			return 1
+		}
+		return 0
+	case "provider":
+		if err := runProviderGroupCmd(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace provider:", err)
+			return 1
+		}
+		return 0
+	case "script":
+		if err := runScriptGroupCmd(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace script:", err)
+			return 1
+		}
+		return 0
+	case "permit":
+		if err := runPermitGroupCmd(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace permit:", err)
+			return 1
+		}
+		return 0
+	case "clone":
+		if err := runCloneCmd(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace clone:", err)
+			return 1
+		}
+		return 0
+	case "open":
+		if err := runOpenCmd(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace open:", err)
+			return 1
+		}
+		return 0
+	case "hooks", "onboard":
+		fmt.Fprintf(stdout, "%s: ready\n", cmd)
+		return 0
 	case "mcp-bridge":
 		if err := runMCPBridge(rest, os.Stdin, stdout); err != nil {
 			fmt.Fprintln(stderr, "byspace mcp-bridge:", err)
