@@ -13,7 +13,38 @@ import (
 	"github.com/ByteTrue/byspace/internal/agent/jsonl"
 )
 
-var leadingMagicTagRe = regexp.MustCompile(`^§\d+§\s*`)
+var leadingMagicTagRe = regexp.MustCompile(`^§[0-9]+§[ \t]*`)
+
+// stripLeadingSectionTag removes a leading "§<digits>§ " prefix if present.
+// It returns (cleaned, true) only while s is still an unclosed prefix like "§" or "§12".
+func stripLeadingSectionTag(s string) (string, bool) {
+	const prefix = "§"
+	if !strings.HasPrefix(s, prefix) {
+		return s, false
+	}
+	rest := s[len(prefix):]
+	if rest == "" {
+		return "", true
+	}
+	i := 0
+	for i < len(rest) && rest[i] >= '0' && rest[i] <= '9' {
+		i++
+	}
+	if i == 0 {
+		return s, false
+	}
+	if i == len(rest) {
+		return "", true
+	}
+	if !strings.HasPrefix(rest[i:], prefix) {
+		return s, false
+	}
+	after := rest[i+len(prefix):]
+	if len(after) > 0 && after[0] == ' ' {
+		after = after[1:]
+	}
+	return after, false
+}
 
 // ImageContent represents a base64 image block passed to Pi RPC prompt/steer.
 type ImageContent struct {
@@ -278,30 +309,33 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 					if s.activeMessageID == "" {
 						s.activeMessageID = fmt.Sprintf("msg_%d_%d", s.turnCounter, len(s.timeline)+1)
 					}
-					var prevText string
 					if s.activeTextIdx < 0 || s.activeTextIdx >= len(s.timeline) {
 						s.activeTextIdx = s.appendItemWithSeqLocked(0, TimelineItem{
 							Type:      "assistant_message",
-							Text:      delta,
+							Text:      "",
 							MessageID: s.activeMessageID,
 						})
+					}
+					var emitDelta string
+					if !s.streamedInTurn {
+						combined := s.timeline[s.activeTextIdx].Item.Text + delta
+						cleaned, incomplete := stripLeadingSectionTag(combined)
+						if incomplete {
+							s.timeline[s.activeTextIdx].Item.Text = combined
+							break
+						}
+						s.timeline[s.activeTextIdx].Item.Text = cleaned
+						emitDelta = cleaned
+						if cleaned != "" {
+							s.streamedInTurn = true
+						}
 					} else {
-						prevText = s.timeline[s.activeTextIdx].Item.Text
+						if s.timeline[s.activeTextIdx].Item.Text == "" && strings.HasPrefix(delta, " ") {
+							delta = delta[1:]
+						}
 						s.timeline[s.activeTextIdx].Item.Text += delta
+						emitDelta = delta
 					}
-					curRaw := s.timeline[s.activeTextIdx].Item.Text
-					// Hold back split magic-context prefix chunks (e.g. "§", "§10") until the closing "§ " arrives
-					if strings.HasPrefix(curRaw, "§") && len(curRaw) < 10 && !leadingMagicTagRe.MatchString(curRaw) {
-						break
-					}
-					cleanedFull := leadingMagicTagRe.ReplaceAllString(curRaw, "")
-					s.timeline[s.activeTextIdx].Item.Text = cleanedFull
-					prevCleaned := leadingMagicTagRe.ReplaceAllString(prevText, "")
-					if strings.HasPrefix(prevText, "§") && len(prevText) < 10 && !leadingMagicTagRe.MatchString(prevText) {
-						prevCleaned = ""
-					}
-					emitDelta := strings.TrimPrefix(cleanedFull, prevCleaned)
-					s.streamedInTurn = true
 					if emitDelta != "" {
 						s.streamSeq++
 						seq := s.streamSeq
@@ -310,7 +344,7 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 						}
 						s.timeline[s.activeTextIdx].SeqEnd = seq
 						extraEvents = append(extraEvents, map[string]any{
-							"type":   "stream_timeline",
+							"type":   "byspace_stream_timeline",
 							"seq":    seq,
 							"turnId": s.activeTurnID,
 							"item": TimelineItem{
@@ -335,7 +369,7 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 						s.timeline[s.activeThinkIdx].SeqEnd = seq
 					}
 					extraEvents = append(extraEvents, map[string]any{
-						"type":   "stream_timeline",
+						"type":   "byspace_stream_timeline",
 						"seq":    seq,
 						"turnId": s.activeTurnID,
 						"item": TimelineItem{
@@ -352,21 +386,38 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		if msg, ok := ev["message"].(map[string]any); ok {
 			role, _ := msg["role"].(string)
 			if role == "assistant" {
-				if !s.streamedInTurn && s.activeTextIdx < 0 {
-					if text := leadingMagicTagRe.ReplaceAllString(extractAssistantText(msg), ""); text != "" {
-						msgID := fmt.Sprintf("msg_%d_%d", s.turnCounter, len(s.timeline)+1)
+				if !s.streamedInTurn {
+					rawText := extractAssistantText(msg)
+					cleaned, _ := stripLeadingSectionTag(rawText)
+					if cleaned != "" {
+						msgID := s.activeMessageID
+						if msgID == "" {
+							msgID = fmt.Sprintf("msg_%d_%d", s.turnCounter, len(s.timeline)+1)
+						}
 						s.streamSeq++
-						idx := s.appendItemWithSeqLocked(s.streamSeq, TimelineItem{
-							Type:      "assistant_message",
-							Text:      text,
-							MessageID: msgID,
-						})
-						extraEvents = append(extraEvents, map[string]any{
-							"type":   "stream_timeline",
-							"seq":    s.timeline[idx].SeqEnd,
-							"turnId": s.activeTurnID,
-							"item":   s.timeline[idx].Item,
-						})
+						if s.activeTextIdx >= 0 && s.activeTextIdx < len(s.timeline) {
+							s.timeline[s.activeTextIdx].Item.Text = cleaned
+							s.timeline[s.activeTextIdx].Seq = s.streamSeq
+							s.timeline[s.activeTextIdx].SeqEnd = s.streamSeq
+							extraEvents = append(extraEvents, map[string]any{
+								"type":   "byspace_stream_timeline",
+								"seq":    s.streamSeq,
+								"turnId": s.activeTurnID,
+								"item":   s.timeline[s.activeTextIdx].Item,
+							})
+						} else {
+							idx := s.appendItemWithSeqLocked(s.streamSeq, TimelineItem{
+								Type:      "assistant_message",
+								Text:      cleaned,
+								MessageID: msgID,
+							})
+							extraEvents = append(extraEvents, map[string]any{
+								"type":   "byspace_stream_timeline",
+								"seq":    s.timeline[idx].SeqEnd,
+								"turnId": s.activeTurnID,
+								"item":   s.timeline[idx].Item,
+							})
+						}
 					}
 				}
 				s.activeTextIdx = -1
@@ -398,7 +449,7 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			s.toolIndexByID[callID] = idx
 		}
 		extraEvents = append(extraEvents, map[string]any{
-			"type":   "stream_timeline",
+			"type":   "byspace_stream_timeline",
 			"seq":    s.timeline[idx].SeqEnd,
 			"turnId": s.activeTurnID,
 			"item":   s.timeline[idx].Item,
@@ -413,7 +464,7 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			s.streamSeq++
 			s.timeline[idx].SeqEnd = s.streamSeq
 			extraEvents = append(extraEvents, map[string]any{
-				"type":   "stream_timeline",
+				"type":   "byspace_stream_timeline",
 				"seq":    s.streamSeq,
 				"turnId": s.activeTurnID,
 				"item":   s.timeline[idx].Item,
@@ -455,7 +506,7 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			})
 		}
 		extraEvents = append(extraEvents, map[string]any{
-			"type":   "stream_timeline",
+			"type":   "byspace_stream_timeline",
 			"seq":    s.streamSeq,
 			"turnId": s.activeTurnID,
 			"item":   s.timeline[targetIdx].Item,
@@ -479,13 +530,14 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			finishedTurnID := s.activeTurnID
 			s.status = "idle"
 			s.activeTurnID = ""
+			s.turnStartedAt = ""
 			s.activeTextIdx = -1
 			s.activeThinkIdx = -1
 			s.activeMessageID = ""
 			s.streamedInTurn = false
 			s.notifyFinishLocked(nil)
 			extraEvents = append(extraEvents, map[string]any{
-				"type":   "turn_end",
+				"type":   "byspace_turn_completed",
 				"turnId": finishedTurnID,
 			})
 		}
@@ -679,11 +731,11 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 
 	for _, fn := range subs {
 		fn(map[string]any{
-			"type":   "turn_start_accepted",
+			"type":   "byspace_turn_started",
 			"turnId": turnID,
 		})
 		fn(map[string]any{
-			"type":   "stream_timeline",
+			"type":   "byspace_stream_timeline",
 			"seq":    seq,
 			"turnId": turnID,
 			"item":   userItem,

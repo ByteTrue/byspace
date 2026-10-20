@@ -1815,7 +1815,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		nowStr := time.Now().UTC().Format(time.RFC3339Nano)
 		isPi := rec.Provider == "pi" || rec.Provider == "" || rec.Provider == "omp"
 		switch evType {
-		case "turn_start_accepted":
+		case "byspace_turn_started":
 			turnID, _ := ev["turnId"].(string)
 			s.mu.Lock()
 			mp.record.LastStatus = "running"
@@ -1853,7 +1853,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				s.broadcastAgentUpdate(recStartCopy)
 			}
 
-		case "stream_timeline":
+		case "byspace_stream_timeline":
 			seq, _ := ev["seq"].(int)
 			turnID, _ := ev["turnId"].(string)
 			s.broadcastSessionMsg("agent_stream", map[string]any{
@@ -1937,7 +1937,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				})
 			}
 
-		case "turn_end":
+		case "byspace_turn_completed":
 			turnID, _ := ev["turnId"].(string)
 			s.mu.Lock()
 			mp.record.LastStatus = "idle"
