@@ -33,7 +33,20 @@
 | `provider.usage.list`         | 8 家厂商真实抓取                       | 返回空数组                                                  |
 | `hub.*`                       | Hub 远控                               | `not_connected` 占位                                        |
 
-### 未审计（本批剩余 69 文件）
+| `workspace-git-service.ts` | 3601 | **PARTIAL** → 已补推送 | Go 有 `internal/workspace/git.go` 的读侧（status/diff/commits/forge）与 `runtime_services.go` 的文件+diff 订阅，但**从不广播 `workspace_update` / `checkout_status_update`**。前端 `workspace-directory-reconciliation.ts` 与 `session-context.tsx` 都在监听这两个消息，收不到就只在全量拉取时才更新。已补：工作区增/改/归档、worktree 创建、git 状态变化时主动推送。仍缺：观察目标的重连自愈相位、LRU 缓存层、并发限流。 |
+
+### 工具盲区（本轮发现并修掉）
+
+`go-emit-parity.mjs` 对 `payload: z.discriminatedUnion(...)` 的消息标为 opaque 后**整条跳过**，
+于是 `workspace_update` 这种「payload 是联合体」的消息即使从未发送也不会被报出来。
+已改为：opaque 只跳过**字段**比对，仍然检查**是否发送过**。补上后立刻暴露 4 条 NEVER_SENT。
+
+同时修掉解析器的两个盲区：
+
+- 标识符参数（`sendSessionMsg(..., respType, ...)`）被 `slice(1,-1)` 切成 `espTy`，导致所有 `respType` 派生的响应都识别不到
+- 同一分支内 `if` 二次赋值 `respType` 时只认第一个（`github_search_response` 被误报）；顺手把该处代码改成两个显式调用，静态可见
+
+### 未审计（本批剩余 68 文件）
 
 按行数排序，下一轮从这里继续：
 

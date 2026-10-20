@@ -413,17 +413,19 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 		for _, k := range forgeSearchReq.Kinds {
 			wantKinds[strings.ToLower(k)] = true
 		}
-		respType := "forge.search.response"
-		if msgType == "github_search_request" {
-			respType = "github_search_response"
-		}
-		_ = sendSessionMsg(ctx, sink, respType, map[string]any{
+		searchPayload := map[string]any{
 			"items":                 []any{},
 			"githubFeaturesEnabled": true,
 			"authState":             map[string]any{"status": "authenticated"},
 			"error":                 nil,
 			"requestId":             base.RequestID,
-		})
+		}
+		// 两个响应类型分别出现，而不是用 respType 变量派生：静态对账工具要看得见。
+		if msgType == "github_search_request" {
+			_ = sendSessionMsg(ctx, sink, "github_search_response", searchPayload)
+		} else {
+			_ = sendSessionMsg(ctx, sink, "forge.search.response", searchPayload)
+		}
 
 	case "workspace.github.search_repositories.request":
 		var req struct {

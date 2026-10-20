@@ -26,6 +26,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/terminal"
 	"github.com/ByteTrue/byspace/internal/webui"
+	"github.com/ByteTrue/byspace/internal/workspace"
 )
 
 const WSProtocolVersion = 1
@@ -1419,6 +1420,8 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 		"error":              nil,
 		"errorCode":          nil,
 	}
+	s.broadcastWorkspaceUpsert(ws, prj)
+	s.broadcastCheckoutStatusUpdate(ctx, ws.Cwd)
 	if req.FirstAgentContext != nil {
 		respPayload["firstAgentContext"] = req.FirstAgentContext
 	}
@@ -2943,6 +2946,42 @@ func (s *Server) directorySyncMetadata(mode string) map[string]any {
 	}
 }
 
+// broadcastWorkspaceUpsert tells connected clients that one workspace changed.
+//
+// The app maintains a directory replica and applies these deltas; without them the sidebar
+// only changes on a full fetch, so an archived or newly created workspace lingers until reload.
+func (s *Server) broadcastWorkspaceUpsert(ws store.WorkspaceRecord, prj store.ProjectRecord) {
+	if ws.ArchivedAt != nil {
+		s.broadcastSessionMsg("workspace_update", map[string]any{
+			"kind":        "remove",
+			"id":          ws.WorkspaceID,
+			"projectId":   ws.ProjectID,
+			"archivedAt":  ws.ArchivedAt,
+			"projectRoot": prj.RootPath,
+		})
+		return
+	}
+	catalog := s.store.LoadLabelCatalog()
+	s.broadcastSessionMsg("workspace_update", map[string]any{
+		"kind":       "upsert",
+		"workspace":  buildWorkspaceDescriptor(ws, prj),
+		"generation": catalog.Generation,
+		"seq":        catalog.HeadSeq + 1,
+	})
+}
+
+// broadcastCheckoutStatusUpdate pushes a fresh git status for one checkout.
+//
+// The app subscribes to this and patches its query cache; polling `checkout_status_request`
+// instead would mean every open workspace re-reads git on a timer.
+func (s *Server) broadcastCheckoutStatusUpdate(ctx context.Context, cwd string) {
+	if strings.TrimSpace(cwd) == "" {
+		return
+	}
+	st := workspace.GetCheckoutStatus(ctx, cwd, "")
+	s.broadcastSessionMsg("checkout_status_update", st)
+}
+
 // providerSnapshotHash fingerprints a provider catalog so the client can tell an unchanged
 // snapshot from a rebuilt one, and so `ifNoneMatch` has something stable to compare against.
 func providerSnapshotHash(entries []map[string]any) string {
@@ -2987,4 +3026,15 @@ func directorySyncSeq(updatedAt string) int64 {
 		return 1
 	}
 	return seq
+}
+
+// projectForWorkspace returns the project record that owns a workspace.
+func (s *Server) projectForWorkspace(projectID string) (store.ProjectRecord, bool) {
+	projects, _ := s.store.ListProjects()
+	for _, prj := range projects {
+		if prj.ProjectID == projectID {
+			return prj, true
+		}
+	}
+	return store.ProjectRecord{}, false
 }

@@ -412,6 +412,8 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 		UpdatedAt:              now,
 	}
 	_ = s.store.UpsertWorkspace(wsRec)
+	s.broadcastWorkspaceUpsert(wsRec, prj)
+	s.broadcastCheckoutStatusUpdate(ctx, wsRec.Cwd)
 
 	desc := buildWorkspaceDescriptor(wsRec, prj)
 	_ = sendSessionMsg(ctx, sink, "create_byspace_worktree_response", map[string]any{

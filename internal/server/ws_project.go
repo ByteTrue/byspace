@@ -423,6 +423,17 @@ func (s *Server) handleArchiveWorkspace(ctx context.Context, sink frameSink, msg
 		WorkspaceID string `json:"workspaceId"`
 	}
 	_ = json.Unmarshal(raw, &req)
+	// Capture the record before archiving so the removal delta can name its project.
+	var archived store.WorkspaceRecord
+	hasArchived := false
+	if list, _ := s.store.ListWorkspaces(); true {
+		for _, w := range list {
+			if w.WorkspaceID == req.WorkspaceID {
+				archived, hasArchived = w, true
+				break
+			}
+		}
+	}
 	if _, err := s.store.ArchiveWorkspace(req.WorkspaceID, now); err != nil {
 		_ = sendSessionMsg(ctx, sink, "archive_workspace_response", map[string]any{
 			"requestId":   req.RequestID,
@@ -434,6 +445,12 @@ func (s *Server) handleArchiveWorkspace(ctx context.Context, sink frameSink, msg
 			"error":          err.Error(),
 		})
 		return
+	}
+	if hasArchived {
+		archived.ArchivedAt = &now
+		if prj, ok := s.projectForWorkspace(archived.ProjectID); ok {
+			s.broadcastWorkspaceUpsert(archived, prj)
+		}
 	}
 	_ = sendSessionMsg(ctx, sink, "archive_workspace_response", map[string]any{
 		"requestId":      req.RequestID,
@@ -462,6 +479,9 @@ func (s *Server) handleWorkspaceTitleSet(ctx context.Context, sink frameSink, ra
 			w.Title = next
 			w.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 			_ = s.store.UpsertWorkspace(w)
+			if prj, ok := s.projectForWorkspace(w.ProjectID); ok {
+				s.broadcastWorkspaceUpsert(w, prj)
+			}
 			_ = sendSessionMsg(ctx, sink, "workspace.title.set.response", map[string]any{
 				"requestId":   req.RequestID,
 				"workspaceId": req.WorkspaceID,
@@ -499,6 +519,9 @@ func (s *Server) handleWorkspacePinSet(ctx context.Context, sink frameSink, raw 
 			w.PinnedAt = pinnedAt
 			w.UpdatedAt = now
 			_ = s.store.UpsertWorkspace(w)
+			if prj, ok := s.projectForWorkspace(w.ProjectID); ok {
+				s.broadcastWorkspaceUpsert(w, prj)
+			}
 			_ = sendSessionMsg(ctx, sink, "workspace.pin.set.response", map[string]any{
 				"requestId":   req.RequestID,
 				"workspaceId": req.WorkspaceID,

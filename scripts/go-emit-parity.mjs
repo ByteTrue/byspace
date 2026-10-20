@@ -20,6 +20,8 @@
  *   静态拿不到字段；同一类型有多个发送分支（正常 / notModified / error）时按并集判断，
  *   仍可能报出实际存在的字段。
  * - **假阴性**：字段值来自循环里构造的切片（`entries[]`）、或经接口/泛型传递时，检测不到。
+ * - **假阴性**：同一 switch 分支内用 `respType := "a"; if x { respType = "b" }` 派生响应名时，
+ *   目前只识别第一个，"b" 会被误报成 NEVER_SENT。遇到时人工核对再改脚本。
  *
  * 因此输出里每条都值得人工确认，但**不能因为怀疑假阳性就不看**。
  *
@@ -87,6 +89,7 @@ const DEFERRED_TYPES = new Map([
   ["agent_status", "状态变更统一走 agent_update"],
   ["agent_attention_required", "通知走 agent_update + web push，未单独发此消息"],
   ["terminal_attention_required", "终端注意提醒未实现"],
+  ["activity_log", "唯一消费者是语音中止失败的 toast，语音功能本身未实现"],
   ["terminal_stream_exit", "PTY 退出走二进制帧 OpcodeExit，未额外发文本消息"],
   ["agent.timeline.replacement", "epoch 变化时客户端在重连时全量拉取，未单独广播（见 Issue）"],
   ["daemon.update.progress", "daemon 自更新未实现"],
@@ -264,8 +267,10 @@ export function goEmitSites(root = ROOT, fnIndex = goFunctionIndex(root)) {
           /^respType$|^msgType$|^respName$/.test(a.trim()),
       );
       if (!typeArg) continue;
-      let type = typeArg.replace(/\s+/g, "").slice(1, -1);
-      if (!typeArg.trim().startsWith('"')) {
+      // 字面量参数才剥引号；`respType` 这类标识符剥了会变成 `espTy`。
+      const isLiteralArg = typeArg.trim().startsWith('"');
+      let type = isLiteralArg ? typeArg.replace(/\s+/g, "").slice(1, -1) : typeArg.trim();
+      if (!isLiteralArg) {
         // `strings.TrimSuffix(msgType, ".request") + ".response"`：从所在分支里收集
         // 所有 `case "a.request", "b.request":` 的字面量，逐个映射成 .response。
         {
@@ -603,8 +608,16 @@ export function runAudit({ schemas, members, emits, structTags }) {
     const type = schema.key;
     if (CLIENT_ONLY.has(type)) continue;
 
-    if (schema.opaque) continue;
+    // payload 是 discriminatedUnion / passthrough 时字段没法静态比，
+    // 但**发没发**是一个独立且能确定的问题。跳过字段检查不等于跳过存在性检查。
     const lit = literals.get(type);
+    if (schema.opaque) {
+      const sentHere = emits.perSite.some((x) => x.type === type);
+      if (!lit && !sentHere && !dynamic.has(type) && !DEFERRED_TYPES.has(type)) {
+        neverSent.push({ type, fields: [] });
+      }
+      continue;
+    }
     if (lit) {
       const deferred = DEFERRED_FIELDS.get(type) ?? new Set();
       const sites = emits.perSite.filter((x) => x.type === type);
