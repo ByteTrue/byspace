@@ -810,3 +810,41 @@ func (s *Store) LoadProjectIcon(projectID string) map[string]any {
 	}
 	return out
 }
+
+// TimelinePath returns where the BySpace-owned timeline snapshot for an agent lives.
+// pi's own .jsonl only contains messages pi actually processed, so anything the user sent
+// while pi was starting, busy or dead would vanish on reload. This snapshot is the source
+// of truth for "what the user sent", and pi's .jsonl is the fallback for old agents.
+func (s *Store) TimelinePath(agentID string) string {
+	return filepath.Join(s.homeDir, "agents", "timelines", agentID+".json")
+}
+
+// SaveAgentTimeline atomically persists a timeline snapshot.
+func (s *Store) SaveAgentTimeline(agentID string, entries any) error {
+	if strings.TrimSpace(agentID) == "" {
+		return nil
+	}
+	p := s.TimelinePath(agentID)
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		return err
+	}
+	b, err := json.Marshal(entries)
+	if err != nil {
+		return err
+	}
+	return home.WriteAtomic(p, append(b, '\n'), 0o600)
+}
+
+// LoadAgentTimeline reads a persisted timeline snapshot, if any.
+func (s *Store) LoadAgentTimeline(agentID string) ([]map[string]any, bool) {
+	p := s.TimelinePath(agentID)
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return nil, false
+	}
+	var rows []map[string]any
+	if json.Unmarshal(b, &rows) != nil {
+		return nil, false
+	}
+	return rows, true
+}
