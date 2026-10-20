@@ -175,3 +175,49 @@ Go 版真正的偏差是**没有这两件事**：
 「消息消失」不是缺持久化，而是 **runtime 没在该回收时回收**：pi 根本没收到第二条消息，
 所以它的会话文件里也没有——Node 同样不会把它变出来，差别在于 Node 不会让「发送成功」
 的假象成立。所以修的是生命周期，不是存储。
+
+## 第六轮：新会话发不出第二条消息（用户实测）
+
+现象：新建 agent 后第一轮正常，**第二条消息永远没有结果**，`Stop agent` 一直亮着。
+
+### 根因：把 Node 的三态返回压成了二态
+
+`packages/app` 的 `sendBehavior` 默认是 `"steer"`（`use-settings/storage.ts:148`），
+所以**每一条消息**都带 `activeTurnBehavior: "steer"`，包括上一轮已经结束的时候。
+
+Node 在 `agent-manager.ts:2867 steerOrReplaceActiveTurn` 里第一件事是：
+
+```ts
+const expectedTurnId = agent.activeForegroundTurnId ?? agent.activeTurnId;
+if (!expectedTurnId) {
+  return { status: "inactive" }; // ← 没有活跃轮次，交给调用方开新轮次
+}
+```
+
+Go 版把这段压成了「有 steer 就直接 steer」。pi 对没有活跃轮次的 `steer` 照收不误，
+把它当排队的后续消息——它**永远不会变成一轮 turn**：没有 `turn_started`、没有文本、
+没有 `turn_completed`。于是消息消失、转圈不止。
+
+### 修法
+
+```go
+if wantSteer {
+    if turnID, _ := mp.session.ActiveTurn(); turnID != "" {
+        promptErr = mp.session.Steer(ctx, text, images)
+    } else {
+        promptErr = mp.session.Prompt(ctx, text, images)  // Node 的 "inactive" 分支
+    }
+} else {
+    promptErr = mp.session.Prompt(ctx, text, images)
+}
+```
+
+守卫：`TestSecondMessageAfterTurnCompleted` —— 首轮结束后带
+`activeTurnBehavior:"steer"` 发第二条，必须看到第二个 `turn_completed`。
+已验证该测试在未修复时会失败（`second turn: read failed: context deadline exceeded`）。
+
+### 为什么之前的检查没抓到
+
+`scripts/browser-conformance.mjs` 只检查页面结构与 payload 形状，**不发消息**；
+pi 的多步 conformance 测试是从已有 agent 连发两轮，走的是 `Prompt` 而非 `Steer`。
+两者都绕开了「默认 steer + 无活跃轮次」这条真实路径。
