@@ -24,6 +24,14 @@ superseded-by: ""
 - **不做桌面壳。** 桌面与原生移动已在 issue 025 退役，不因换语言复活。当前四副面孔：`serve` / `web` / `relay` / CLI。
 - **行为必须翻译，不许发明。** 见下方「已知的偏离坑」。
 
+## 目录布局
+
+Go 用标准布局，不发明：`cmd/<binary>/main.go` 是入口，`internal/` 是私有实现。这是所有「一个二进制 + 一个前端」的 Go 项目的共同形状——coder/coder 用 `cmd/` + `site/`，gitea 用 `cmd/` + `web_src/`，pocketbase 用 `cmd/` + `ui/`，grafana 用 `pkg/` + `public/`。magpie 不适用：它的前端是手写 vanilla JS 直接躺在 `internal/gui/assets`，没有构建链，我们的 Expo 前端学不了。
+
+过渡期的唯一事实：`packages/` 是 Node 实现（现行发布主体），`cmd/` + `internal/` 是 Go 实现。两者不互相 import，只在 `internal/webui/dist` 交接——`make build-web` 把 `packages/server/dist/server/web-ui` 拷进去再 `//go:embed`。
+
+最终形态（Go 转正、Node 退役时）：`packages/app` → `web/`，`packages/{server,cli,client,relay}` 删除，协议包留作 `packages/protocol` 或 `protocol/`。**这一步不在过渡期做**，因为现在移动会同时打断 Node 的发布流水线和 Expo 的构建配置，收益为零。
+
 ## 背景（已知的偏离坑）
 
 这条约束不是抽象的：实现过程中出现过六次「翻译不下去就自创实现」的情况，每次都由 owner 在实测中发现：
