@@ -775,3 +775,128 @@ func TestWorkspaceCreateReportsSkippedSetup(t *testing.T) {
 		return
 	}
 }
+
+// TestArchiveWorkspaceStopsItsAgents pins archiveWorkspaceContents from
+// workspace-archive-service.ts: archiving a workspace must stop its agents and archive their
+// records, not just flip a flag on the workspace.
+//
+// Leaving them running means an agent keeps consuming tokens against a workspace the user
+// just removed from the sidebar, and its PTYs stay open.
+func TestArchiveWorkspaceStopsItsAgents(t *testing.T) {
+	tmp := t.TempDir()
+	fakePi := writeFaithfulFakePi(t)
+	workDir := filepath.Join(tmp, "project")
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	srv, err := New(Options{HomeDir: filepath.Join(tmp, "home"), Version: "0.20.2-test", PiCommand: fakePi})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	ws, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ws.CloseNow()
+	if err := ws.Write(ctx, websocket.MessageText, []byte(`{"type":"hello","clientId":"arch","protocolVersion":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	readUntilSessionType(t, ctx, ws, "status", "server_info")
+
+	send := func(msg map[string]any) {
+		b, _ := json.Marshal(map[string]any{"type": "session", "message": msg})
+		if err := ws.Write(ctx, websocket.MessageText, b); err != nil {
+			t.Fatal(err)
+		}
+	}
+	send(map[string]any{
+		"type": "workspace.create.request", "requestId": "wc",
+		"source": map[string]any{"kind": "directory", "path": workDir},
+	})
+
+	var workspaceID string
+	deadline := time.Now().Add(6 * time.Second)
+	for time.Now().Before(deadline) && workspaceID == "" {
+		rctx, rc := context.WithTimeout(ctx, 2*time.Second)
+		_, data, readErr := ws.Read(rctx)
+		rc()
+		if readErr != nil {
+			break
+		}
+		var env struct {
+			Message struct {
+				Type    string         `json:"type"`
+				Payload map[string]any `json:"payload"`
+			} `json:"message"`
+		}
+		if json.Unmarshal(data, &env) != nil {
+			continue
+		}
+		if env.Message.Type == "workspace.create.response" {
+			if wsObj, ok := env.Message.Payload["workspace"].(map[string]any); ok {
+				workspaceID, _ = wsObj["id"].(string)
+			}
+		}
+	}
+	if workspaceID == "" {
+		t.Fatal("workspace was never created")
+	}
+
+	send(map[string]any{
+		"type": "create_agent_request", "requestId": "ac",
+		"config": map[string]any{"provider": "pi", "cwd": workDir, "workspaceId": workspaceID},
+	})
+	var agentID string
+	deadline = time.Now().Add(6 * time.Second)
+	for time.Now().Before(deadline) && agentID == "" {
+		rctx, rc := context.WithTimeout(ctx, 2*time.Second)
+		_, data, readErr := ws.Read(rctx)
+		rc()
+		if readErr != nil {
+			break
+		}
+		var env struct {
+			Message struct {
+				Type    string         `json:"type"`
+				Payload map[string]any `json:"payload"`
+			} `json:"message"`
+		}
+		if json.Unmarshal(data, &env) != nil {
+			continue
+		}
+		if env.Message.Type == "status" && env.Message.Payload["status"] == "agent_created" {
+			agentID, _ = env.Message.Payload["agentId"].(string)
+		}
+	}
+	if agentID == "" {
+		t.Fatal("agent was never created")
+	}
+
+	send(map[string]any{
+		"type": "archive_workspace_request", "requestId": "ar", "workspaceId": workspaceID,
+	})
+
+	// The agent must be archived and its runtime released.
+	archiveDeadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(archiveDeadline) {
+		rec, getErr := srv.store.GetAgent(agentID)
+		stillRunning := false
+		srv.mu.Lock()
+		if _, ok := srv.agents[agentID]; ok {
+			stillRunning = true
+		}
+		srv.mu.Unlock()
+		if getErr == nil && rec != nil && rec.ArchivedAt != nil && !stillRunning {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	rec, _ := srv.store.GetAgent(agentID)
+	t.Fatalf("agent was not torn down by workspace archive: record=%+v", rec)
+}

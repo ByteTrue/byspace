@@ -448,6 +448,7 @@ func (s *Server) handleArchiveWorkspace(ctx context.Context, sink frameSink, msg
 	}
 	if hasArchived {
 		archived.ArchivedAt = &now
+		s.archiveWorkspaceContents(ctx, req.WorkspaceID, now)
 		if prj, ok := s.projectForWorkspace(archived.ProjectID); ok {
 			s.broadcastWorkspaceUpsert(archived, prj)
 		}
@@ -1081,4 +1082,73 @@ func (s *Server) pushLabelUpdate(previousName string, label store.LabelDefinitio
 	if update != nil {
 		s.broadcastSessionMsg("workspace.label.update", update)
 	}
+}
+
+// archiveWorkspaceContents tears down everything that belongs to a workspace.
+//
+// Ported from archiveWorkspaceContents in workspace-archive-service.ts. Archiving only the
+// workspace record leaves its agents running: they keep consuming tokens against a workspace
+// the user just removed from the sidebar, and their terminals keep holding PTYs.
+func (s *Server) archiveWorkspaceContents(ctx context.Context, workspaceID, archivedAt string) {
+	agents, _ := s.store.ListAgents()
+
+	s.mu.Lock()
+	type liveAgent struct {
+		id     string
+		sess   interface{ Close() error }
+		record store.AgentRecord
+	}
+	var toClose []liveAgent
+	for _, rec := range agents {
+		if rec.WorkspaceID != workspaceID {
+			continue
+		}
+		if mp, ok := s.agents[rec.ID]; ok && mp.session != nil {
+			toClose = append(toClose, liveAgent{id: rec.ID, sess: mp.session, record: mp.record})
+			delete(s.agents, rec.ID)
+		}
+	}
+	// Terminals are keyed by slot and carry their owning workspace.
+	var termSlots []uint8
+	var closedTerms []*terminal.Session
+	for slot, term := range s.terminals {
+		if term == nil || term.WorkspaceID != workspaceID {
+			continue
+		}
+		termSlots = append(termSlots, slot)
+		closedTerms = append(closedTerms, term)
+	}
+	s.mu.Unlock()
+
+	for _, la := range toClose {
+		_ = la.sess.Close()
+		rec := la.record
+		rec.ArchivedAt = &archivedAt
+		rec.UpdatedAt = archivedAt
+		rec.LastStatus = "closed"
+		_ = s.store.UpsertAgent(rec)
+		s.broadcastAgentUpdate(rec)
+	}
+
+	for i, slot := range termSlots {
+		_ = closedTerms[i].Close()
+		s.mu.Lock()
+		delete(s.terminals, slot)
+		s.mu.Unlock()
+	}
+	if len(termSlots) > 0 {
+		s.broadcastTerminalsChanged("", workspaceID)
+	}
+
+	// Records that were already stopped still need archiving.
+	for _, rec := range agents {
+		if rec.WorkspaceID != workspaceID || rec.ArchivedAt != nil {
+			continue
+		}
+		rec.ArchivedAt = &archivedAt
+		rec.UpdatedAt = archivedAt
+		_ = s.store.UpsertAgent(rec)
+		s.broadcastAgentUpdate(rec)
+	}
+	_ = ctx
 }

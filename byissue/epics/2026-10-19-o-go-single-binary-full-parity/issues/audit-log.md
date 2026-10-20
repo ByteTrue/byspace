@@ -51,7 +51,9 @@
 | `worktree-bootstrap.ts` | 1101 | **PARTIAL** → 已补核心 | **创建工作区/worktree 后从不跑 setup**——`setupTerminalId` 恒为 nil，`byspace.json` 的 setup 命令在新 worktree 里永远不执行，导致「新建的 worktree 看起来就绪，但第一条命令就失败」。已补：`workspace.create` 与 `create_byspace_worktree` 都异步启动 setup 并流式上报进度；无 setup 命令时在 `setupSkippedReason` 里说明。测试 `TestWorkspaceCreateRunsSetup` / `TestWorkspaceCreateReportsSkippedSetup`。仍缺：`runtimeEnv` 解析（worktree 专属环境变量注入终端）、失败时清理、`runWorktreeAutoTerminals`、脚本生命周期的 port/proxy 部分。 |
 | `worktree-session.ts` | 929 | **PARTIAL** | worktree 会话级操作大多走 `internal/workspace/git.go`；缺自动终端与脚本 teardown。 |
 
-### 未审计（本批剩余 65 文件）
+| `workspace-archive-service.ts` | 643 | **PARTIAL** → 已补核心 | **归档工作区时不停它的 agent、不关它的终端**——只把工作区记录的 `archivedAt` 翻了一下。归档掉的 agent 仍在跑并继续消耗 token，PTY 也一直占着。已补 `archiveWorkspaceContents`：关闭该工作区的全部 agent 运行时、杀掉其终端、归档 agent 记录并广播。测试 `TestArchiveWorkspaceStopsItsAgents`（已验证移除修复即失败）。仍缺：按引用计数判断目录是否可删（`isDirectoryUnreferenced`）、`archiveByScope` 的批量语义。 |
+
+### 未审计（本批剩余 64 文件）
 
 按行数排序，下一轮从这里继续：
 
