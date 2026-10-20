@@ -390,6 +390,33 @@ func (s *Server) ConnectRelay(ctx context.Context, relayWSURL string) error {
 	}
 	defer ctrlWS.CloseNow()
 
+	// A relay that vanishes without a FIN leaves the socket half-open: `Read` never returns and
+	// `Close` never arrives, so the daemon believes it is still reachable while phones time out.
+	// Protocol pings detect that, and an unanswered ping for 30s forces a reconnect.
+	// Cloudflare answers ping at the edge without waking the hibernated Durable Object, so this
+	// does not bill DO CPU.
+	pingCtx, stopPing := context.WithCancel(ctx)
+	defer stopPing()
+	lastSeen := time.Now()
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-pingCtx.Done():
+				return
+			case <-ticker.C:
+				if time.Since(lastSeen) > 30*time.Second {
+					ctrlWS.CloseNow()
+					return
+				}
+				pctx, cancel := context.WithTimeout(pingCtx, 5*time.Second)
+				_ = ctrlWS.Ping(pctx)
+				cancel()
+			}
+		}
+	}()
+
 	activeData := make(map[string]context.CancelFunc)
 	var dataMu sync.Mutex
 	defer func() {
@@ -427,6 +454,7 @@ func (s *Server) ConnectRelay(ctx context.Context, relayWSURL string) error {
 		if err != nil {
 			return err
 		}
+		lastSeen = time.Now()
 		var evt struct {
 			Type          string   `json:"type"`
 			ConnectionID  string   `json:"connectionId"`

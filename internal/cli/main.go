@@ -325,13 +325,21 @@ func runServe(version string, args []string, stdout io.Writer) error {
 	defer stop()
 
 	if strings.TrimSpace(*relayURL) != "" {
+		// Linear backoff to 30s, matching relay-transport.ts. A fixed 2s retry hammers a relay
+		// that is down for a while and gives no signal that the outage is long.
 		go func() {
+			attempt := 0
 			for ctx.Err() == nil {
 				_ = srv.ConnectRelay(ctx, *relayURL)
+				attempt++
+				delay := time.Duration(attempt) * time.Second
+				if delay > 30*time.Second {
+					delay = 30 * time.Second
+				}
 				select {
 				case <-ctx.Done():
 					return
-				case <-time.After(2 * time.Second):
+				case <-time.After(delay):
 				}
 			}
 		}()

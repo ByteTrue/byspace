@@ -68,7 +68,11 @@
 | `web-ui.ts` | 271 | **PORTED** | gzip/br 内容协商、SPA 回退、连接提示注入、缓存头均已对齐。 |
 | `tunnel-manager.ts` | 567 | **MISSING** | 完整 TCP 端口转发子系统（每端口一个 listener + relay 流复用 + 断连宽限）。Go 的 `tunnel.*` 只是 `not_connected` 占位。**暂不实现**：验证需要两台机器，owner 明确说当前不具备条件，盲写风险高于收益。 |
 
-### 未审计（本批剩余 53 文件）
+| `relay-transport.ts` | 554 | **PARTIAL** → 已补 | 缺两件事：**keepalive**（Node 每 10s ping，30s 无应答即判定 half-open 并强制重连——否则中继悄悄消失时 `Read` 永不返回、`Close` 永不到达，daemon 以为自己还连着而手机一直超时）、**退避**（Node 线性退避到 30s，Go 固定 2s 会一直捶一个挂掉的中继）。均已补。 |
+| `workspace-registry.ts` | 714 | **PORTED** | 记录投影与命名规则（title 优先、否则 displayName）已在 `buildWorkspaceDescriptor` 与 `buildProjectDescriptor` 对齐。 |
+| `workspace-directory.ts` | 721 | **PARTIAL** → 已补 | `resolveWorkspaceRootAgent` 缺失：子代理会话应归组到发起对话的根 agent，跨工作区时停在边界，遇环返回 nil。已补 `internal/server/agent_tree.go` + 4 测试。同时修正 parent 关系的存储位置——共享词表用 label `byspace.parent-agent-id`，Go 原本存在私有字段里。 |
+
+### 未审计（本批剩余 50 文件）
 
 按行数排序，下一轮从这里继续：
 
