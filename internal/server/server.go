@@ -1512,7 +1512,7 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 			}
 		}
 	}
-	records, hasMore, nextCursor := FilterAndSortAgents(activeOrHist, searchQuery, req.Filter, sortField, limit, cursor)
+	records, hasMore, nextCursor := s.filterAndSortAgents(activeOrHist, searchQuery, req.Filter, sortField, limit, cursor)
 
 	projects, _ := s.store.ListProjects()
 	workspaces, _ := s.store.ListWorkspaces()

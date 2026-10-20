@@ -328,7 +328,7 @@ func RenderASCIIQRCode(data string) (string, error) {
 }
 
 // FilterAndSortAgents applies searchQuery, status/provider/workspaceId/labels filtering, sorting, and cursor pagination.
-func FilterAndSortAgents(records []store.AgentRecord, searchQuery string, filter map[string]any, sortField string, limit int, cursor string) ([]store.AgentRecord, bool, *string) {
+func (s *Server) filterAndSortAgents(records []store.AgentRecord, searchQuery string, filter map[string]any, sortField string, limit int, cursor string) ([]store.AgentRecord, bool, *string) {
 	q := strings.ToLower(strings.TrimSpace(searchQuery))
 	var wsFilter, provFilter, statusFilter string
 	if filter != nil {
@@ -348,16 +348,16 @@ func FilterAndSortAgents(records []store.AgentRecord, searchQuery string, filter
 		if statusFilter != "" && r.LastStatus != statusFilter {
 			continue
 		}
-		if q != "" {
-			title := ""
-			if r.Title != nil {
-				title = strings.ToLower(*r.Title)
-			}
-			if !strings.Contains(title, q) && !strings.Contains(strings.ToLower(r.Cwd), q) && !strings.Contains(strings.ToLower(r.ID), q) {
-				continue
-			}
-		}
 		filtered = append(filtered, r)
+	}
+
+	// Ranked search over the four names a session carries (workspace, title, branch, project),
+	// replacing a plain substring test: containment cannot answer "stripe main" across two
+	// different fields, and gives no relevance order to merge several hosts' pages by.
+	if q != "" {
+		filtered = rankAgentsBySearch(filtered, q, func(rec store.AgentRecord) map[string]any {
+			return s.buildProjectPlacementForRecord(rec)
+		})
 	}
 
 	switch sortField {

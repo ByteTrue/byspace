@@ -53,7 +53,11 @@
 
 | `workspace-archive-service.ts` | 643 | **PARTIAL** → 已补核心 | **归档工作区时不停它的 agent、不关它的终端**——只把工作区记录的 `archivedAt` 翻了一下。归档掉的 agent 仍在跑并继续消耗 token，PTY 也一直占着。已补 `archiveWorkspaceContents`：关闭该工作区的全部 agent 运行时、杀掉其终端、归档 agent 记录并广播。测试 `TestArchiveWorkspaceStopsItsAgents`（已验证移除修复即失败）。仍缺：按引用计数判断目录是否可删（`isDirectoryUnreferenced`）、`archiveByScope` 的批量语义。 |
 
-### 未审计（本批剩余 64 文件）
+| `agent-history-search.ts` | 188 | **MISSING** → 已补 | 历史搜索是**分词 + 六级 tier + 字段优先级**的相关性排序（workspace > title > branch > project，每 token 必须命中，可跨字段）。Go 只有「标题/cwd/ID 子串包含」——多词查询搜不到、无相关性排序、无法与多主机分页结果合并。已按 Node 重写：`internal/server/history_search.go` + `match.TokenizeQuery`，`filterAndSortAgents` 改为走它。4 个测试覆盖跨字段、排序、容错、空查询。 |
+| `resolve-workspace-id-for-path.ts` | 46 | **MISSING** → 已补 | 按路径解析工作区：精确匹配优先，否则**最深**的包含工作区，且**永不匹配 home 目录**（否则吞掉所有路径）。Go 只有精确字符串比较，传 worktree 子目录时找不到。已补 `store.ResolveWorkspaceIDForPath` + 5 个断言。 |
+| `persisted-config.ts` | 521 | **PARTIAL** | Go 读写 `{version,daemon:{...}}` 结构已对齐；缺 schema 校验与迁移路径。 |
+
+### 未审计（本批剩余 61 文件）
 
 按行数排序，下一轮从这里继续：
 

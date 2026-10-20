@@ -402,7 +402,9 @@ func (s *Server) handleArchiveWorkspace(ctx context.Context, sink frameSink, msg
 		_ = json.Unmarshal(raw, &req)
 		workspaces, _ := s.store.ListWorkspaces()
 		for _, w := range workspaces {
-			if w.Cwd == req.WorktreePath {
+			// Exact match first, then the deepest enclosing workspace — a caller may pass a
+			// subdirectory of the worktree.
+			if w.Cwd == req.WorktreePath || s.store.ResolveWorkspaceIDForPath(req.WorktreePath) == w.WorkspaceID {
 				_, _ = s.store.ArchiveWorkspace(w.WorkspaceID, now)
 			}
 		}

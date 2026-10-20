@@ -297,3 +297,18 @@ func abs(v int) int {
 func min3(a, b, c int) int {
 	return min(a, min(b, c))
 }
+
+// TokenizeQuery splits a free-text query into lowercase tokens.
+//
+// Tiers are computed per token rather than per query: a query mixes long words that can absorb
+// a typo with short ones that cannot.
+func TokenizeQuery(query string) []string {
+	fields := strings.Fields(strings.ToLower(strings.TrimSpace(query)))
+	out := make([]string, 0, len(fields))
+	for _, f := range fields {
+		if f != "" {
+			out = append(out, f)
+		}
+	}
+	return out
+}

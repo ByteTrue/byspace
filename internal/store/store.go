@@ -1079,3 +1079,48 @@ func (s *Store) BackfillProjectKeys() int {
 	}
 	return changed
 }
+
+// ResolveWorkspaceIDForPath maps a bare filesystem path to one workspace.
+//
+// Ported from resolve-workspace-id-for-path.ts. Callers pass a path with no id (archive-by-path,
+// auto-archive-after-merge, the MCP archive tool), and the rule is: an exact directory match
+// wins, otherwise the **deepest** enclosing workspace, and never the user's home directory
+// (which would swallow every path).
+func (s *Store) ResolveWorkspaceIDForPath(cwd string) string {
+	list, err := s.ListWorkspaces()
+	if err != nil || strings.TrimSpace(cwd) == "" {
+		return ""
+	}
+	resolved := filepath.Clean(cwd)
+
+	for _, ws := range list {
+		if filepath.Clean(ws.Cwd) == resolved {
+			return ws.WorkspaceID
+		}
+	}
+
+	homeDir, _ := os.UserHomeDir()
+	bestLen := 0
+	bestID := ""
+	for _, ws := range list {
+		if ws.ArchivedAt != nil {
+			continue
+		}
+		wsCwd := filepath.Clean(ws.Cwd)
+		if homeDir != "" && wsCwd == filepath.Clean(homeDir) {
+			continue
+		}
+		prefix := wsCwd
+		if !strings.HasSuffix(prefix, string(filepath.Separator)) {
+			prefix += string(filepath.Separator)
+		}
+		if !strings.HasPrefix(resolved, prefix) {
+			continue
+		}
+		if len(wsCwd) > bestLen {
+			bestLen = len(wsCwd)
+			bestID = ws.WorkspaceID
+		}
+	}
+	return bestID
+}

@@ -59,3 +59,43 @@ func TestStoreProjectWorkspaceAndAgentRoundTrip(t *testing.T) {
 		t.Fatalf("unexpected sanitized dir: %q", got)
 	}
 }
+
+// resolve-workspace-id-for-path.ts: exact match wins, otherwise the deepest enclosing
+// workspace, and the home directory must never match (it would swallow every path).
+func TestResolveWorkspaceIDForPath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	s := New(t.TempDir())
+
+	mk := func(id, cwd string) {
+		if err := s.UpsertWorkspace(WorkspaceRecord{
+			WorkspaceID: id, ProjectID: "p", Cwd: cwd, Kind: "directory",
+			DisplayName: id, CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z",
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk("ws-outer", filepath.Join(home, "work"))
+	mk("ws-inner", filepath.Join(home, "work", "repo"))
+	mk("ws-home", home)
+
+	if got := s.ResolveWorkspaceIDForPath(filepath.Join(home, "work", "repo")); got != "ws-inner" {
+		t.Fatalf("exact match: got %q, want ws-inner", got)
+	}
+	if got := s.ResolveWorkspaceIDForPath(filepath.Join(home, "work", "repo", "src")); got != "ws-inner" {
+		t.Fatalf("deepest enclosing: got %q, want ws-inner", got)
+	}
+	if got := s.ResolveWorkspaceIDForPath(filepath.Join(home, "work", "other")); got != "ws-outer" {
+		t.Fatalf("outer enclosing: got %q, want ws-outer", got)
+	}
+	if got := s.ResolveWorkspaceIDForPath(filepath.Join(home, "unrelated")); got != "" {
+		t.Fatalf("no enclosing workspace: got %q, want empty", got)
+	}
+	if got := s.ResolveWorkspaceIDForPath(home); got != "ws-home" {
+		// An exact match on home is legitimate; the exclusion only applies to prefix matching.
+		t.Fatalf("exact home match: got %q, want ws-home", got)
+	}
+	if got := s.ResolveWorkspaceIDForPath(filepath.Join(home, "elsewhere")); got != "" {
+		t.Fatalf("home must not act as a prefix: got %q, want empty", got)
+	}
+}
