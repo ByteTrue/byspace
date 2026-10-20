@@ -16,6 +16,8 @@ type ManagedSession interface {
 	Status() string
 	Timeline() []pi.TimelineEntry
 	SeedTimeline(entries []pi.TimelineEntry)
+	StreamSeq() int
+	ActiveTurn() (string, string)
 	LastAssistantText() string
 	SetNextClientMessageID(id string)
 	Prompt(ctx context.Context, message string, images []pi.ImageContent) error

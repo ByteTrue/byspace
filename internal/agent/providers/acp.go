@@ -508,6 +508,21 @@ func (s *ACPSession) SeedTimeline(entries []pi.TimelineEntry) {
 
 func (s *ACPSession) SetNextClientMessageID(_ string) {}
 
+func (s *ACPSession) StreamSeq() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.timeline)
+}
+
+func (s *ACPSession) ActiveTurn() (string, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.status != "running" {
+		return "", ""
+	}
+	return s.activeTurnID, ""
+}
+
 func (s *ACPSession) LastAssistantText() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()

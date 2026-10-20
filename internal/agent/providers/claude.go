@@ -338,6 +338,21 @@ func (s *ClaudeSession) LastAssistantText() string {
 
 func (s *ClaudeSession) SetNextClientMessageID(_ string) {}
 
+func (s *ClaudeSession) StreamSeq() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.timeline)
+}
+
+func (s *ClaudeSession) ActiveTurn() (string, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.status != "running" {
+		return "", ""
+	}
+	return s.activeTurnID, ""
+}
+
 func (s *ClaudeSession) Prompt(_ context.Context, message string, _ []pi.ImageContent) error {
 	s.mu.Lock()
 	s.turnCounter++

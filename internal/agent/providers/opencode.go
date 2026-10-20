@@ -114,6 +114,21 @@ func (s *OpenCodeSession) SeedTimeline(entries []pi.TimelineEntry) {
 
 func (s *OpenCodeSession) SetNextClientMessageID(_ string) {}
 
+func (s *OpenCodeSession) StreamSeq() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.timeline)
+}
+
+func (s *OpenCodeSession) ActiveTurn() (string, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.status != "running" {
+		return "", ""
+	}
+	return s.activeTurnID, ""
+}
+
 func (s *OpenCodeSession) LastAssistantText() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()

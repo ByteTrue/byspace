@@ -96,6 +96,14 @@ func GetCheckoutStatus(ctx context.Context, cwd, requestID string) CheckoutStatu
 	if err != nil {
 		absCwd = cwd
 	}
+	if strings.HasSuffix(filepath.Clean(absCwd), string(filepath.Separator)+"chief") {
+		return CheckoutStatus{
+			Cwd:       cwd,
+			IsGit:     false,
+			HasRemote: false,
+			RequestID: requestID,
+		}
+	}
 	topLevel, err := runGit(ctx, absCwd, "rev-parse", "--show-toplevel")
 	if err != nil || topLevel == "" {
 		return CheckoutStatus{

@@ -406,6 +406,21 @@ func (s *CodexSession) SeedTimeline(entries []pi.TimelineEntry) {
 
 func (s *CodexSession) SetNextClientMessageID(_ string) {}
 
+func (s *CodexSession) StreamSeq() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.timeline)
+}
+
+func (s *CodexSession) ActiveTurn() (string, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.status != "running" {
+		return "", ""
+	}
+	return s.activeTurnID, ""
+}
+
 func (s *CodexSession) LastAssistantText() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()

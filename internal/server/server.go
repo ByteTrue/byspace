@@ -1588,22 +1588,37 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 
 	allTL := mp.session.Timeline()
 	filteredTL := allTL
-	if direction == "after" {
-		// Live deltas are already delivered in real time over agent_stream;
-		// returning them again on catch-up after-fetches would duplicate entries.
-		filteredTL = []pi.TimelineEntry{}
+	if direction == "after" && req.Cursor != nil {
+		filteredTL = make([]pi.TimelineEntry, 0, len(allTL))
+		for _, e := range allTL {
+			end := e.SeqEnd
+			if end < e.Seq {
+				end = e.Seq
+			}
+			if end > req.Cursor.Seq {
+				filteredTL = append(filteredTL, e)
+			}
+		}
 	}
 
 	entries := make([]map[string]any, 0, len(filteredTL))
 	for _, e := range filteredTL {
+		startSeq := e.Seq
+		if startSeq <= 0 {
+			startSeq = 1
+		}
+		endSeq := e.SeqEnd
+		if endSeq < startSeq {
+			endSeq = startSeq
+		}
 		entries = append(entries, map[string]any{
 			"provider":  mp.record.Provider,
 			"item":      e.Item,
 			"timestamp": e.Timestamp,
-			"seqStart":  e.Seq,
-			"seqEnd":    e.Seq,
+			"seqStart":  startSeq,
+			"seqEnd":    endSeq,
 			"sourceSeqRanges": []map[string]any{
-				{"startSeq": e.Seq, "endSeq": e.Seq},
+				{"startSeq": startSeq, "endSeq": endSeq},
 			},
 			"turnId":    e.TurnID,
 			"collapsed": []string{},
@@ -1612,13 +1627,26 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 
 	var startCursor, endCursor any
 	if len(filteredTL) > 0 {
-		startCursor = map[string]any{"epoch": s.epoch, "seq": filteredTL[0].Seq}
-		endCursor = map[string]any{"epoch": s.epoch, "seq": filteredTL[len(filteredTL)-1].Seq}
+		firstStart := filteredTL[0].Seq
+		if firstStart <= 0 {
+			firstStart = 1
+		}
+		lastEnd := filteredTL[len(filteredTL)-1].SeqEnd
+		if lastEnd < filteredTL[len(filteredTL)-1].Seq {
+			lastEnd = filteredTL[len(filteredTL)-1].Seq
+		}
+		startCursor = map[string]any{"epoch": s.epoch, "seq": firstStart}
+		endCursor = map[string]any{"epoch": s.epoch, "seq": lastEnd}
 	}
+	streamMax := mp.session.StreamSeq()
 	var minSeq, maxSeq any
 	if len(allTL) > 0 {
-		minSeq = allTL[0].Seq
-		maxSeq = allTL[len(allTL)-1].Seq
+		minSeq = 1
+		if streamMax > 0 {
+			maxSeq = streamMax
+		} else {
+			maxSeq = len(allTL)
+		}
 	}
 
 	_ = sendSessionMsg(ctx, sink, "fetch_agent_timeline_response", map[string]any{
@@ -1634,7 +1662,7 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 		"window": map[string]any{
 			"minSeq":  minSeq,
 			"maxSeq":  maxSeq,
-			"nextSeq": len(allTL) + 1,
+			"nextSeq": streamMax + 1,
 		},
 		"startCursor": startCursor,
 		"endCursor":   endCursor,
@@ -1826,11 +1854,14 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 			}
 
 		case "stream_timeline":
+			seq, _ := ev["seq"].(int)
 			turnID, _ := ev["turnId"].(string)
 			s.broadcastSessionMsg("agent_stream", map[string]any{
 				"agentId":   rec.ID,
 				"provider":  rec.Provider,
 				"timestamp": nowStr,
+				"seq":       seq,
+				"epoch":     s.epoch,
 				"event": map[string]any{
 					"type":     "timeline",
 					"provider": rec.Provider,
@@ -2022,10 +2053,21 @@ func (s *Server) getAgentPayload(agentID string) any {
 func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any {
 	status := rec.LastStatus
 	pendingPerms := []map[string]any{}
+	var activeTurn any
 	s.mu.Lock()
 	if mp, ok := s.agents[rec.ID]; ok && mp.session != nil {
 		status = mp.session.Status()
 		pendingPerms = mp.session.PendingPermissions()
+		if tid, startedAt := mp.session.ActiveTurn(); tid != "" && status == "running" {
+			var sa any
+			if startedAt != "" {
+				sa = startedAt
+			}
+			activeTurn = map[string]any{
+				"turnId":    tid,
+				"startedAt": sa,
+			}
+		}
 	}
 	s.mu.Unlock()
 	if status == "" {
@@ -2056,7 +2098,7 @@ func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any
 		"updatedAt":                 rec.UpdatedAt,
 		"lastUserMessageAt":         rec.LastUserMessageAt,
 		"status":                    status,
-		"activeTurn":                nil,
+		"activeTurn":                activeTurn,
 		"capabilities": map[string]any{
 			"supportsStreaming":          true,
 			"supportsSessionPersistence": true,
@@ -2174,6 +2216,13 @@ func buildWorkspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord)
 	labels := ws.Labels
 	if labels == nil {
 		labels = []string{}
+	}
+	for _, lbl := range labels {
+		if lbl == store.HomeWorkspaceLabel {
+			projectKind = "non_git"
+			workspaceKind = "directory"
+			break
+		}
 	}
 	var gitRuntime any
 	if workspaceKind != "directory" && projectKind == "git" {

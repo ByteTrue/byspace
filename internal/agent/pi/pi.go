@@ -24,15 +24,16 @@ type ImageContent struct {
 
 // Model describes a Pi model entry returned by get_available_models or get_state.
 type Model struct {
-	Provider      string         `json:"provider"`
-	ID            string         `json:"id"`
-	Name          string         `json:"name,omitempty"`
-	Reasoning     bool           `json:"reasoning,omitempty"`
-	ContextWindow int            `json:"contextWindow,omitempty"`
-	MaxTokens     int            `json:"maxTokens,omitempty"`
-	API           string         `json:"api,omitempty"`
-	BaseURL       string         `json:"baseUrl,omitempty"`
-	Cost          map[string]any `json:"cost,omitempty"`
+	Provider         string             `json:"provider"`
+	ID               string             `json:"id"`
+	Name             string             `json:"name,omitempty"`
+	Reasoning        bool               `json:"reasoning,omitempty"`
+	ThinkingLevelMap map[string]*string `json:"thinkingLevelMap,omitempty"`
+	ContextWindow    int                `json:"contextWindow,omitempty"`
+	MaxTokens        int                `json:"maxTokens,omitempty"`
+	API              string             `json:"api,omitempty"`
+	BaseURL          string             `json:"baseUrl,omitempty"`
+	Cost             map[string]any     `json:"cost,omitempty"`
 }
 
 // SessionState mirrors PiSessionState in packages/server/src/server/agent/providers/pi/rpc-types.ts.
@@ -104,6 +105,7 @@ func (i TimelineItem) MarshalJSON() ([]byte, error) {
 // TimelineEntry wraps a TimelineItem with sequence and timestamp metadata.
 type TimelineEntry struct {
 	Seq       int          `json:"seq"`
+	SeqEnd    int          `json:"seqEnd,omitempty"`
 	TurnID    string       `json:"turnId,omitempty"`
 	Timestamp string       `json:"timestamp"`
 	Item      TimelineItem `json:"item"`
@@ -197,7 +199,9 @@ type Session struct {
 	status              string // "idle" | "running" | "error" | "closed"
 	lastError           string
 	turnCounter         int
+	streamSeq           int
 	activeTurnID        string
+	turnStartedAt       string
 	activeMessageID     string
 	nextClientMessageID string
 	streamedInTurn      bool
@@ -276,7 +280,7 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 					}
 					var prevText string
 					if s.activeTextIdx < 0 || s.activeTextIdx >= len(s.timeline) {
-						s.activeTextIdx = s.appendItemLocked(TimelineItem{
+						s.activeTextIdx = s.appendItemWithSeqLocked(0, TimelineItem{
 							Type:      "assistant_message",
 							Text:      delta,
 							MessageID: s.activeMessageID,
@@ -299,7 +303,12 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 					emitDelta := strings.TrimPrefix(cleanedFull, prevCleaned)
 					s.streamedInTurn = true
 					if emitDelta != "" {
-						seq := s.timeline[s.activeTextIdx].Seq
+						s.streamSeq++
+						seq := s.streamSeq
+						if s.timeline[s.activeTextIdx].Seq == 0 {
+							s.timeline[s.activeTextIdx].Seq = seq
+						}
+						s.timeline[s.activeTextIdx].SeqEnd = seq
 						extraEvents = append(extraEvents, map[string]any{
 							"type":   "stream_timeline",
 							"seq":    seq,
@@ -314,15 +323,17 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 				}
 			case "thinking_delta":
 				if delta != "" {
+					s.streamSeq++
+					seq := s.streamSeq
 					if s.activeThinkIdx < 0 || s.activeThinkIdx >= len(s.timeline) {
-						s.activeThinkIdx = s.appendItemLocked(TimelineItem{
+						s.activeThinkIdx = s.appendItemWithSeqLocked(seq, TimelineItem{
 							Type: "reasoning",
 							Text: delta,
 						})
 					} else {
 						s.timeline[s.activeThinkIdx].Item.Text += delta
+						s.timeline[s.activeThinkIdx].SeqEnd = seq
 					}
-					seq := s.timeline[s.activeThinkIdx].Seq
 					extraEvents = append(extraEvents, map[string]any{
 						"type":   "stream_timeline",
 						"seq":    seq,
@@ -344,14 +355,15 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 				if !s.streamedInTurn && s.activeTextIdx < 0 {
 					if text := leadingMagicTagRe.ReplaceAllString(extractAssistantText(msg), ""); text != "" {
 						msgID := fmt.Sprintf("msg_%d_%d", s.turnCounter, len(s.timeline)+1)
-						idx := s.appendItemLocked(TimelineItem{
+						s.streamSeq++
+						idx := s.appendItemWithSeqLocked(s.streamSeq, TimelineItem{
 							Type:      "assistant_message",
 							Text:      text,
 							MessageID: msgID,
 						})
 						extraEvents = append(extraEvents, map[string]any{
 							"type":   "stream_timeline",
-							"seq":    s.timeline[idx].Seq,
+							"seq":    s.timeline[idx].SeqEnd,
 							"turnId": s.activeTurnID,
 							"item":   s.timeline[idx].Item,
 						})
@@ -373,7 +385,8 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		s.activeTextIdx = -1
 		s.activeThinkIdx = -1
 		s.activeMessageID = ""
-		idx := s.appendItemLocked(TimelineItem{
+		s.streamSeq++
+		idx := s.appendItemWithSeqLocked(s.streamSeq, TimelineItem{
 			Type:   "tool_call",
 			CallID: callID,
 			Name:   toolName,
@@ -386,10 +399,26 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		}
 		extraEvents = append(extraEvents, map[string]any{
 			"type":   "stream_timeline",
-			"seq":    s.timeline[idx].Seq,
+			"seq":    s.timeline[idx].SeqEnd,
 			"turnId": s.activeTurnID,
 			"item":   s.timeline[idx].Item,
 		})
+
+	case "tool_execution_update":
+		callID, _ := ev["toolCallId"].(string)
+		toolName, _ := ev["toolName"].(string)
+		if idx, ok := s.toolIndexByID[callID]; ok && idx >= 0 && idx < len(s.timeline) {
+			args := s.toolArgsByID[callID]
+			s.timeline[idx].Item.Detail = BuildToolCallDetail(toolName, args, ev["partialResult"])
+			s.streamSeq++
+			s.timeline[idx].SeqEnd = s.streamSeq
+			extraEvents = append(extraEvents, map[string]any{
+				"type":   "stream_timeline",
+				"seq":    s.streamSeq,
+				"turnId": s.activeTurnID,
+				"item":   s.timeline[idx].Item,
+			})
+		}
 
 	case "tool_execution_end":
 		callID, _ := ev["toolCallId"].(string)
@@ -401,10 +430,12 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		}
 		args := s.toolArgsByID[callID]
 		detail := BuildToolCallDetail(toolName, args, ev["result"])
+		s.streamSeq++
 		var targetIdx int
 		if idx, ok := s.toolIndexByID[callID]; ok && idx >= 0 && idx < len(s.timeline) {
 			s.timeline[idx].Item.Status = status
 			s.timeline[idx].Item.Detail = detail
+			s.timeline[idx].SeqEnd = s.streamSeq
 			if isErr {
 				s.timeline[idx].Item.Error = extractResultText(ev["result"])
 			}
@@ -414,7 +445,7 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			if isErr {
 				errVal = extractResultText(ev["result"])
 			}
-			targetIdx = s.appendItemLocked(TimelineItem{
+			targetIdx = s.appendItemWithSeqLocked(s.streamSeq, TimelineItem{
 				Type:   "tool_call",
 				CallID: callID,
 				Name:   toolName,
@@ -425,7 +456,7 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		}
 		extraEvents = append(extraEvents, map[string]any{
 			"type":   "stream_timeline",
-			"seq":    s.timeline[targetIdx].Seq,
+			"seq":    s.streamSeq,
 			"turnId": s.activeTurnID,
 			"item":   s.timeline[targetIdx].Item,
 		})
@@ -500,9 +531,14 @@ func extractAssistantText(msg map[string]any) string {
 }
 
 func (s *Session) appendItemLocked(item TimelineItem) int {
-	seq := len(s.timeline) + 1
+	s.streamSeq++
+	return s.appendItemWithSeqLocked(s.streamSeq, item)
+}
+
+func (s *Session) appendItemWithSeqLocked(seq int, item TimelineItem) int {
 	entry := TimelineEntry{
 		Seq:       seq,
+		SeqEnd:    seq,
 		TurnID:    s.activeTurnID,
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
 		Item:      item,
@@ -556,6 +592,36 @@ func (s *Session) SeedTimeline(entries []TimelineEntry) {
 	defer s.mu.Unlock()
 	s.timeline = make([]TimelineEntry, len(entries))
 	copy(s.timeline, entries)
+	maxSeq := 0
+	for i := range s.timeline {
+		if s.timeline[i].SeqEnd < s.timeline[i].Seq {
+			s.timeline[i].SeqEnd = s.timeline[i].Seq
+		}
+		if s.timeline[i].SeqEnd > maxSeq {
+			maxSeq = s.timeline[i].SeqEnd
+		}
+		if s.timeline[i].Item.Type == "user_message" {
+			s.turnCounter++
+		}
+	}
+	s.streamSeq = maxSeq
+}
+
+// StreamSeq returns the highest emitted sequence number.
+func (s *Session) StreamSeq() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.streamSeq
+}
+
+// ActiveTurn returns the active turnId and startedAt ISO timestamp when status is "running".
+func (s *Session) ActiveTurn() (string, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.status != "running" || s.activeTurnID == "" {
+		return "", ""
+	}
+	return s.activeTurnID, s.turnStartedAt
 }
 
 // LastAssistantText returns the text of the most recent assistant_message in the timeline.
@@ -582,6 +648,7 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	s.mu.Lock()
 	s.turnCounter++
 	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
+	s.turnStartedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	s.activeTextIdx = -1
 	s.activeThinkIdx = -1
 	s.activeMessageID = ""
@@ -601,7 +668,7 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 		ClientMessageID: clientMsgID,
 	}
 	idx := s.appendItemLocked(userItem)
-	seq := s.timeline[idx].Seq
+	seq := s.timeline[idx].SeqEnd
 	turnID := s.activeTurnID
 
 	subs := make([]func(map[string]any), 0, len(s.eventSubscribers))
