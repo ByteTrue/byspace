@@ -26,6 +26,8 @@ BySpace 此前由 Node/TypeScript 多包工作区（`packages/server`、`package
 3. **100% 功能等价（Zero Exclusion, No Hollow Stubs）**：Node 版拥有的全部功能（包括全部内建与自定义 Agent 客户端宿主、终端 VT 快照与 Hooks、多 Forge 集成、文件/Git 实时监听、Service Proxy 与 Tunnels、8 家厂商配额抓取、Skills 事务同步与多目标安装、Web Push RFC 8291 加密投递、交互式 CLI）均在 Go 版中完整、真实地实现。
 
 - 关联 Project Spec：`byissue/spec/index.md`、`agent-conversation.md`、`terminal.md`、`workspace.md`、`connection.md`、`notifications.md`。
+- 灵感来源与边界：`byissue/talks/008-go-rewrite-architecture-inspiration.md`
+- 架构决策：`byissue/decisions/004-go-single-binary-architecture.md` —— 架构形状学 magpie，每处能力的行为逐条翻译 Node；不许发明。
 
 ---
 
