@@ -575,73 +575,88 @@ func (s *Server) buildServerInfoPayload() map[string]any {
 		"desktopManaged":   false,
 		"webPushPublicKey": s.vapidKeys.PublicKey,
 		"features": map[string]any{
-			"webPush":                      s.vapidKeys.PublicKey != "",
-			"skillInstallTargets":          true,
-			"agentRoles":                   true,
-			"agentRoleNames":               []string{"chief"},
-			"agentRequestReceipts":         true,
-			"hubAgentRpc":                  true,
-			"directorySync":                true,
-			"workspaceSetupRun":            true,
-			"providersSnapshot":            true,
-			"providersSnapshotCwd":         true,
-			"daemonStatusRpc":              true,
-			"daemonConfigReload":           true,
-			"relayConfig":                  true,
-			"pushTokenRevocation":          true,
-			"plugins":                      true,
-			"pluginManagement":             true,
-			"skillManagement":              true,
-			"daemonTunnels":                true,
-			"projectSetupSkill":            true,
-			"terminalAgentHookProviders":   true,
-			"terminalShellConfig":          true,
-			"terminal-restore-modes":       true,
-			"terminal-input-mode-replay":   true,
-			"terminal-size-ownership":      true,
-			"workspaceTerminals":           true,
-			"rewind":                       true,
-			"agentTimelinePromptIndex":     true,
-			"agentHistorySearch":           true,
-			"checkoutRefresh":              true,
-			"workspaceAgentRename":         true,
-			"workspaceMultiplicity":        true,
-			"projectRemove":                true,
-			"projectAdd":                   true,
-			"projectList":                  true,
-			"worktreeRestore":              true,
-			"workspaceRecovery":            true,
-			"workspaceFileEditing":         true,
-			"providerUsageList":            true,
-			"agentDetach":                  true,
-			"agentThinkingUpdate":          true,
-			"daemonDiagnostics":            true,
-			"daemonSelfUpdate":             true,
-			"agentForkContext":             true,
-			"agentForkContextCursor":       true,
-			"providerSubagents":            true,
-			"providerSubagentNesting":      true,
-			"workspacePinning":             true,
-			"workspaceMarkUnread":          true,
-			"projectCreateDirectory":       true,
-			"commitsList":                  true,
-			"commitBaseClassification":     true,
-			"providerRemoval":              true,
-			"importSessionWorkspaceTarget": true,
-			"importSessionSearch":          true,
-			"selectiveAgentTimeline":       true,
-			"explicitEventSubscriptions":   true,
-			"canonicalSubmittedPrompts":    true,
-			"stableProjectIdentity":        true,
-			"workspaceScriptManagement":    true,
-			"projectCustomIcon":            true,
-			"fsEntryOps":                   true,
-			"fsEntryDuplicate":             true,
-			"checkoutDiscardChanges":       true,
-			"agentProfiles":                true,
-			"agentConfigApply":             true,
-			"daemonNetworkConfig":          true,
-			"daemonServiceInstall":         true,
+			"webPush":                         s.vapidKeys.PublicKey != "",
+			"skillInstallTargets":             true,
+			"agentRoles":                      true,
+			"agentRoleNames":                  []string{"chief"},
+			"agentRequestReceipts":            true,
+			"hubAgentRpc":                     true,
+			"hubRelationship":                 true,
+			"directorySync":                   true,
+			"workspaceLabels":                 true,
+			"workspaceSetupRun":               true,
+			"providersSnapshot":               true,
+			"providersSnapshotCwd":            true,
+			"checkoutForgeSetAutoMerge":       true,
+			"checkoutGithubSetAutoMerge":      true,
+			"githubCheckDetails":              true,
+			"forgeCheckDetails":               true,
+			"forgeSearch":                     true,
+			"forgeProviders":                  true,
+			"projectGithubClone":              true,
+			"workspaceGithubRepositorySearch": true,
+			"daemonStatusRpc":                 true,
+			"daemonConfigReload":              true,
+			"relayConfig":                     true,
+			"pushTokenRevocation":             true,
+			"plugins":                         true,
+			"pluginManagement":                true,
+			"pluginGitManagement":             true,
+			"pluginLogs":                      true,
+			"pluginThemes":                    true,
+			"pluginSettings":                  true,
+			"pluginTimelineItems":             true,
+			"skillManagement":                 true,
+			"daemonTunnels":                   true,
+			"projectSetupSkill":               true,
+			"terminalAgentHookProviders":      true,
+			"terminalShellConfig":             true,
+			"terminal-restore-modes":          true,
+			"terminal-input-mode-replay":      true,
+			"terminal-size-ownership":         true,
+			"workspaceTerminals":              true,
+			"rewind":                          true,
+			"agentTimelinePromptIndex":        true,
+			"agentHistorySearch":              true,
+			"checkoutRefresh":                 true,
+			"workspaceAgentRename":            true,
+			"workspaceMultiplicity":           true,
+			"projectRemove":                   true,
+			"projectAdd":                      true,
+			"projectList":                     true,
+			"worktreeRestore":                 true,
+			"workspaceRecovery":               true,
+			"workspaceFileEditing":            true,
+			"providerUsageList":               true,
+			"agentDetach":                     true,
+			"agentThinkingUpdate":             true,
+			"daemonDiagnostics":               true,
+			"daemonSelfUpdate":                true,
+			"agentForkContext":                true,
+			"agentForkContextCursor":          true,
+			"providerSubagents":               true,
+			"providerSubagentNesting":         true,
+			"workspacePinning":                true,
+			"workspaceMarkUnread":             true,
+			"projectCreateDirectory":          true,
+			"commitsList":                     true,
+			"commitBaseClassification":        true,
+			"providerRemoval":                 true,
+			"importSessionWorkspaceTarget":    true,
+			"importSessionSearch":             true,
+			"selectiveAgentTimeline":          true,
+			"explicitEventSubscriptions":      true,
+			"canonicalSubmittedPrompts":       true,
+			"stableProjectIdentity":           true,
+			"workspaceScriptManagement":       true,
+			"projectCustomIcon":               true,
+			"fsEntryOps":                      true,
+			"fsEntryDuplicate":                true,
+			"checkoutDiscardChanges":          true,
+			"agentProfiles":                   true,
+			"agentConfigApply":                true,
+			"daemonNetworkConfig":             true,
+			"daemonServiceInstall":            true,
 		},
 	}
 }
@@ -891,9 +906,15 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		}
 		_ = json.Unmarshal(raw, &req)
 		agentPayload := s.getAgentPayload(req.AgentID)
+		var projectPlacement any
+		if rec, _ := s.store.GetAgent(req.AgentID); rec != nil {
+			projectPlacement = s.buildProjectPlacementForRecord(*rec)
+		}
 		_ = sendSessionMsg(ctx, sink, "fetch_agent_response", map[string]any{
 			"requestId": req.RequestID,
 			"agent":     agentPayload,
+			"project":   projectPlacement,
+			"error":     nil,
 		})
 
 	case "create_agent_request":
@@ -1338,12 +1359,15 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		WorkspaceID   string  `json:"workspaceId"`
 		InitialPrompt *string `json:"initialPrompt"`
 		Config        struct {
-			Provider         string  `json:"provider"`
-			Cwd              string  `json:"cwd"`
-			Title            *string `json:"title"`
-			Model            *string `json:"model"`
-			ThinkingOptionID *string `json:"thinkingOptionId"`
-			ModeID           *string `json:"modeId"`
+			Provider         string            `json:"provider"`
+			Cwd              string            `json:"cwd"`
+			Title            *string           `json:"title"`
+			Model            *string           `json:"model"`
+			ThinkingOptionID *string           `json:"thinkingOptionId"`
+			ModeID           *string           `json:"modeId"`
+			Role             *string           `json:"role"`
+			SystemPrompt     *string           `json:"systemPrompt"`
+			Labels           map[string]string `json:"labels"`
 		} `json:"config"`
 	}
 	if err := json.Unmarshal(raw, &req); err != nil {
@@ -1386,6 +1410,16 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		}
 	}
 
+	agentLabels := map[string]string{}
+	for k, v := range req.Config.Labels {
+		if !strings.HasPrefix(k, "byspace.") {
+			agentLabels[k] = v
+		}
+	}
+	if req.Config.Role != nil && strings.TrimSpace(*req.Config.Role) != "" {
+		agentLabels["byspace.agent-role"] = strings.TrimSpace(*req.Config.Role)
+	}
+
 	rec := store.AgentRecord{
 		ID:          agentID,
 		Provider:    provider,
@@ -1394,12 +1428,15 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		CreatedAt:   now,
 		UpdatedAt:   now,
 		Title:       title,
-		Labels:      map[string]string{},
+		Labels:      agentLabels,
 		LastStatus:  "idle",
+		LastModeID:  req.Config.ModeID,
 		Config: &store.AgentConfig{
 			Model:            req.Config.Model,
 			ThinkingOptionID: req.Config.ThinkingOptionID,
 			ModeID:           req.Config.ModeID,
+			Role:             req.Config.Role,
+			SystemPrompt:     req.Config.SystemPrompt,
 		},
 	}
 
@@ -1914,6 +1951,9 @@ func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any
 			"supportsMcpServers":         true,
 			"supportsReasoningStream":    true,
 			"supportsToolInvocations":    true,
+			"supportsRewindConversation": true,
+			"supportsRewindFiles":        true,
+			"supportsRewindBoth":         true,
 			"canCancel":                  true,
 			"canSelectModel":             true,
 			"canSelectThinking":          true,
@@ -1921,15 +1961,55 @@ func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any
 			"supportsAttachments":        true,
 		},
 		"currentModeId":      modeID,
-		"availableModes":     []any{},
-		"features":           []any{},
+		"availableModes":     providers.GetProviderSpec(rec.Provider).Modes,
+		"features":           providers.GetProviderSpec(rec.Provider).Features,
 		"pendingPermissions": pendingPerms,
 		"persistence":        rec.Persistence,
 		"title":              rec.Title,
 		"labels":             labels,
+		"archivedAt":         rec.ArchivedAt,
 		"requiresAttention":  rec.RequiresAttention,
 		"attentionReason":    rec.AttentionReason,
 		"attentionTimestamp": rec.AttentionTimestamp,
+	}
+}
+
+func (s *Server) buildProjectPlacementForRecord(rec store.AgentRecord) map[string]any {
+	projects, _ := s.store.ListProjects()
+	workspaces, _ := s.store.ListWorkspaces()
+	prjByID := make(map[string]store.ProjectRecord, len(projects))
+	for _, p := range projects {
+		prjByID[p.ProjectID] = p
+	}
+	wsByID := make(map[string]store.WorkspaceRecord, len(workspaces))
+	for _, w := range workspaces {
+		wsByID[w.WorkspaceID] = w
+	}
+	projKey := rec.Cwd
+	projName := filepath.Base(rec.Cwd)
+	wsName := projName
+	var branch any
+	if ws, ok := wsByID[rec.WorkspaceID]; ok {
+		wsName = ws.DisplayName
+		if ws.Branch != nil {
+			branch = *ws.Branch
+		}
+		if prj, ok := prjByID[ws.ProjectID]; ok {
+			projKey = prj.RootPath
+			projName = prj.DisplayName
+		}
+	}
+	return map[string]any{
+		"projectKey":    projKey,
+		"projectName":   projName,
+		"workspaceName": wsName,
+		"checkout": map[string]any{
+			"cwd":                    rec.Cwd,
+			"isGit":                  true,
+			"currentBranch":          branch,
+			"remoteUrl":              nil,
+			"isBySpaceOwnedWorktree": false,
+		},
 	}
 }
 
@@ -1981,7 +2061,19 @@ func buildWorkspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord)
 	if labels == nil {
 		labels = []string{}
 	}
-	return map[string]any{
+	var gitRuntime any
+	if workspaceKind != "directory" && projectKind == "git" {
+		gitRuntime = map[string]any{
+			"currentBranch":          ws.Branch,
+			"remoteUrl":              nil,
+			"isBySpaceOwnedWorktree": ws.IsBySpaceOwnedWorktree,
+			"isDirty":                false,
+			"aheadBehind":            nil,
+			"aheadOfOrigin":          nil,
+			"behindOfOrigin":         nil,
+		}
+	}
+	out := map[string]any{
 		"id":                        ws.WorkspaceID,
 		"projectId":                 prj.ProjectID,
 		"projectDisplayName":        projectDisplayName,
@@ -1989,7 +2081,6 @@ func buildWorkspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord)
 		"projectCustomIconRevision": prj.CustomIconRevision,
 		"projectRootPath":           prj.RootPath,
 		"workspaceDirectory":        ws.Cwd,
-		"worktreeSlug":              filepath.Base(ws.Cwd),
 		"projectKind":               projectKind,
 		"workspaceKind":             workspaceKind,
 		"name":                      name,
@@ -1998,24 +2089,29 @@ func buildWorkspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord)
 		"pinnedAt":                  ws.PinnedAt,
 		"archivingAt":               nil,
 		"status":                    "done",
-		"statusEnteredAt":           ws.CreatedAt,
-		"activityAt":                ws.UpdatedAt,
-		"diffStat": map[string]any{
-			"additions": 0,
-			"deletions": 0,
+		"statusEnteredAt":           nil,
+		"activityAt":                nil,
+		"diffStat":                  nil,
+		"scripts":                   []any{},
+		"gitRuntime":                gitRuntime,
+		"githubRuntime":             nil,
+		"project": map[string]any{
+			"projectKey":    prj.ProjectID,
+			"projectName":   projectDisplayName,
+			"workspaceName": name,
+			"checkout": map[string]any{
+				"cwd":                    ws.Cwd,
+				"isGit":                  projectKind == "git",
+				"currentBranch":          ws.Branch,
+				"remoteUrl":              nil,
+				"isBySpaceOwnedWorktree": ws.IsBySpaceOwnedWorktree,
+			},
 		},
-		"scripts": []any{},
-		"gitRuntime": map[string]any{
-			"currentBranch":          ws.Branch,
-			"remoteUrl":              nil,
-			"isBySpaceOwnedWorktree": ws.IsBySpaceOwnedWorktree,
-			"isDirty":                false,
-			"aheadBehind":            nil,
-			"aheadOfOrigin":          nil,
-			"behindOfOrigin":         nil,
-		},
-		"githubRuntime": nil,
 	}
+	if ws.IsBySpaceOwnedWorktree {
+		out["worktreeSlug"] = filepath.Base(ws.Cwd)
+	}
+	return out
 }
 
 func newAgentID() string {

@@ -734,8 +734,24 @@ func (s *Store) LoadDaemonConfig() map[string]any {
 			"enabled":          true,
 			"injectIntoAgents": true,
 		},
-		"providers":          map[string]any{},
-		"metadataGeneration": map[string]any{"providers": []any{}},
+		"providers":                map[string]any{},
+		"metadataGeneration":       map[string]any{"providers": []any{}},
+		"autoArchiveAfterMerge":    false,
+		"enableTerminalAgentHooks": false,
+		"terminalAgentHooks":       map[string]bool{},
+		"appendSystemPrompt":       "",
+		"agentProfiles":            []any{},
+		"network": map[string]any{
+			"allowLanAccess": false,
+			"tcpPort":        6778,
+		},
+		"auth": map[string]any{
+			"passwordSet": false,
+		},
+		"tunnel": map[string]any{
+			"enabled":      false,
+			"allowedPorts": []int{},
+		},
 	}
 	b, err := os.ReadFile(filepath.Join(s.homeDir, "config.json"))
 	if err != nil {

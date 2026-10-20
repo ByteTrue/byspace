@@ -35,9 +35,12 @@ type ManagedSession interface {
 
 // ModeDefinition describes a selectable provider mode (e.g. plan, default, auto, build).
 type ModeDefinition struct {
-	ID          string `json:"id"`
-	Label       string `json:"label"`
-	Description string `json:"description,omitempty"`
+	ID           string `json:"id"`
+	Label        string `json:"label"`
+	Description  string `json:"description,omitempty"`
+	Icon         string `json:"icon,omitempty"`
+	ColorTier    string `json:"colorTier,omitempty"`
+	IsUnattended bool   `json:"isUnattended,omitempty"`
 }
 
 // FeatureDefinition describes a provider toggle/select feature.
@@ -51,15 +54,16 @@ type FeatureDefinition struct {
 
 // ProviderSpec defines a built-in or custom agent provider.
 type ProviderSpec struct {
-	ID          string
-	Label       string
-	Description string
-	Binary      string
-	DefaultArgs []string
-	Protocol    string // "pi-rpc" | "claude-stream" | "codex-rpc" | "acp" | "opencode-http"
-	Modes       []ModeDefinition
-	Features    []FeatureDefinition
-	Models      []pi.CatalogModel
+	ID            string
+	Label         string
+	Description   string
+	Binary        string
+	DefaultArgs   []string
+	Protocol      string // "pi-rpc" | "claude-stream" | "codex-rpc" | "acp" | "opencode-http"
+	DefaultModeID any
+	Modes         []ModeDefinition
+	Features      []FeatureDefinition
+	Models        []pi.CatalogModel
 }
 
 var builtinThinkingOptions = []pi.ThinkingOption{
@@ -75,18 +79,19 @@ var builtinThinkingOptions = []pi.ThinkingOption{
 // via "+ Add provider" in config.json (extends: "acp" | <builtin>).
 var BuiltinProviders = []ProviderSpec{
 	{
-		ID:          "claude",
-		Label:       "Claude",
-		Description: "Anthropic's official CLI for Claude models",
-		Binary:      "claude",
-		DefaultArgs: []string{"-p", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose"},
-		Protocol:    "claude-stream",
+		ID:            "claude",
+		Label:         "Claude",
+		Description:   "Anthropic's official CLI for Claude models",
+		Binary:        "claude",
+		DefaultArgs:   []string{"-p", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose"},
+		Protocol:      "claude-stream",
+		DefaultModeID: "default",
 		Modes: []ModeDefinition{
-			{ID: "plan", Label: "Plan Mode", Description: "Analyze the codebase without executing tools or edits"},
-			{ID: "default", Label: "Always Ask", Description: "Prompts for permission the first time a tool is used"},
-			{ID: "acceptEdits", Label: "Accept File Edits", Description: "Automatically approves edit-focused tools without prompting"},
-			{ID: "auto", Label: "Auto mode", Description: "Uses a model classifier to review permission prompts automatically"},
-			{ID: "bypassPermissions", Label: "Bypass", Description: "Skip all permission prompts (use with caution)"},
+			{ID: "plan", Label: "Plan Mode", Description: "Analyze the codebase without executing tools or edits", Icon: "ShieldEllipsis", ColorTier: "planning"},
+			{ID: "default", Label: "Always Ask", Description: "Prompts for permission the first time a tool is used", Icon: "Shield", ColorTier: "safe"},
+			{ID: "acceptEdits", Label: "Accept File Edits", Description: "Automatically approves edit-focused tools without prompting", Icon: "ShieldPlus", ColorTier: "moderate"},
+			{ID: "auto", Label: "Auto mode", Description: "Uses a model classifier to review permission prompts automatically", Icon: "ShieldCheck", ColorTier: "moderate"},
+			{ID: "bypassPermissions", Label: "Bypass", Description: "Skip all permission prompts (use with caution)", Icon: "ShieldOff", ColorTier: "dangerous", IsUnattended: true},
 		},
 		Features: []FeatureDefinition{
 			{ID: "fast", Label: "Fast Mode", Kind: "toggle", DefaultValue: false},
@@ -98,16 +103,17 @@ var BuiltinProviders = []ProviderSpec{
 		},
 	},
 	{
-		ID:          "codex",
-		Label:       "Codex",
-		Description: "OpenAI's lightweight coding agent that runs in your terminal",
-		Binary:      "codex",
-		DefaultArgs: []string{"app-server"},
-		Protocol:    "codex-rpc",
+		ID:            "codex",
+		Label:         "Codex",
+		Description:   "OpenAI's lightweight coding agent that runs in your terminal",
+		Binary:        "codex",
+		DefaultArgs:   []string{"app-server"},
+		Protocol:      "codex-rpc",
+		DefaultModeID: "auto",
 		Modes: []ModeDefinition{
-			{ID: "auto", Label: "Default Permissions", Description: "Edit files and run commands with Codex's default approval flow."},
-			{ID: "auto-review", Label: "Auto-review", Description: "Same workspace-write permissions as Default, routed through auto-reviewer."},
-			{ID: "full-access", Label: "Full Access", Description: "Edit files, run commands, and access the network without additional prompts."},
+			{ID: "auto", Label: "Default Permissions", Description: "Edit files and run commands with Codex's default approval flow.", Icon: "Shield", ColorTier: "moderate"},
+			{ID: "auto-review", Label: "Auto-review", Description: "Same workspace-write permissions as Default, routed through auto-reviewer.", Icon: "ShieldCheck", ColorTier: "moderate"},
+			{ID: "full-access", Label: "Full Access", Description: "Edit files, run commands, and access the network without additional prompts.", Icon: "ShieldOff", ColorTier: "dangerous", IsUnattended: true},
 		},
 		Features: []FeatureDefinition{
 			{ID: "fast", Label: "Fast Mode", Kind: "toggle", DefaultValue: false},
@@ -118,16 +124,17 @@ var BuiltinProviders = []ProviderSpec{
 		},
 	},
 	{
-		ID:          "copilot",
-		Label:       "Copilot",
-		Description: "GitHub's AI pair programmer with agentic capabilities",
-		Binary:      "copilot",
-		DefaultArgs: []string{"--acp"},
-		Protocol:    "acp",
+		ID:            "copilot",
+		Label:         "Copilot",
+		Description:   "GitHub's AI pair programmer with agentic capabilities",
+		Binary:        "copilot",
+		DefaultArgs:   []string{"--acp"},
+		Protocol:      "acp",
+		DefaultModeID: "https://agentclientprotocol.com/protocol/session-modes#agent",
 		Modes: []ModeDefinition{
-			{ID: "https://agentclientprotocol.com/protocol/session-modes#agent", Label: "Agent", Description: "Default agent mode for conversational interactions"},
-			{ID: "https://agentclientprotocol.com/protocol/session-modes#plan", Label: "Plan", Description: "Plan mode for creating and executing multi-step plans"},
-			{ID: "allow-all", Label: "Allow All", Description: "Automatically approves all Copilot tool, path, and URL requests."},
+			{ID: "https://agentclientprotocol.com/protocol/session-modes#agent", Label: "Agent", Description: "Default agent mode for conversational interactions", Icon: "Shield", ColorTier: "moderate"},
+			{ID: "https://agentclientprotocol.com/protocol/session-modes#plan", Label: "Plan", Description: "Plan mode for creating and executing multi-step plans", Icon: "ShieldEllipsis", ColorTier: "planning"},
+			{ID: "allow-all", Label: "Allow All", Description: "Automatically approves all Copilot tool, path, and URL requests.", Icon: "ShieldOff", ColorTier: "dangerous", IsUnattended: true},
 		},
 		Features: []FeatureDefinition{},
 		Models: []pi.CatalogModel{
@@ -136,15 +143,16 @@ var BuiltinProviders = []ProviderSpec{
 		},
 	},
 	{
-		ID:          "opencode",
-		Label:       "OpenCode",
-		Description: "Open-source coding assistant with multi-provider model support",
-		Binary:      "opencode",
-		DefaultArgs: []string{"serve"},
-		Protocol:    "opencode-http",
+		ID:            "opencode",
+		Label:         "OpenCode",
+		Description:   "Open-source coding assistant with multi-provider model support",
+		Binary:        "opencode",
+		DefaultArgs:   []string{"serve"},
+		Protocol:      "opencode-http",
+		DefaultModeID: nil,
 		Modes: []ModeDefinition{
-			{ID: "build", Label: "Build", Description: "Default mode with full tool access for building and editing"},
-			{ID: "plan", Label: "Plan", Description: "Read-only planning mode that avoids file edits"},
+			{ID: "build", Label: "Build", Description: "Default mode with full tool access for building and editing", Icon: "Shield", ColorTier: "moderate"},
+			{ID: "plan", Label: "Plan", Description: "Read-only planning mode that avoids file edits", Icon: "ShieldEllipsis", ColorTier: "planning"},
 		},
 		Features: []FeatureDefinition{},
 		Models: []pi.CatalogModel{
@@ -163,16 +171,17 @@ var BuiltinProviders = []ProviderSpec{
 		Models:      pi.DefaultFallbackModels(),
 	},
 	{
-		ID:          "omp",
-		Label:       "Oh My Pi",
-		Description: "Multi-provider coding agent with native approvals, host tools, and subagents",
-		Binary:      "omp",
-		DefaultArgs: []string{"--mode", "rpc"},
-		Protocol:    "pi-rpc",
+		ID:            "omp",
+		Label:         "Oh My Pi",
+		Description:   "Multi-provider coding agent with native approvals, host tools, and subagents",
+		Binary:        "omp",
+		DefaultArgs:   []string{"--mode", "rpc"},
+		Protocol:      "pi-rpc",
+		DefaultModeID: "full",
 		Modes: []ModeDefinition{
-			{ID: "full", Label: "Full Access", Description: "Launches OMP with yolo approval mode so tools run without prompts."},
-			{ID: "write", Label: "Write Approval", Description: "Launches OMP with write approval mode — reads are free, writes require approval."},
-			{ID: "ask", Label: "Always Ask", Description: "Launches OMP with always-ask approval mode for write and exec tools."},
+			{ID: "full", Label: "Full Access", Description: "Launches OMP with yolo approval mode so tools run without prompts.", Icon: "ShieldOff", ColorTier: "dangerous", IsUnattended: true},
+			{ID: "write", Label: "Write Approval", Description: "Launches OMP with write approval mode — reads are free, writes require approval.", Icon: "ShieldAlert", ColorTier: "moderate"},
+			{ID: "ask", Label: "Always Ask", Description: "Launches OMP with always-ask approval mode for write and exec tools.", Icon: "Shield", ColorTier: "safe"},
 		},
 		Features: []FeatureDefinition{},
 		Models: []pi.CatalogModel{
@@ -300,15 +309,16 @@ func BuildSnapshotEntries(piModels []pi.CatalogModel, piCommandOverride string, 
 			models = []pi.CatalogModel{}
 		}
 		entries = append(entries, map[string]any{
-			"provider":    spec.ID,
-			"label":       spec.Label,
-			"status":      status,
-			"enabled":     enabled,
-			"source":      "builtin",
-			"fetchedAt":   now,
-			"models":      models,
-			"modes":       spec.Modes,
-			"description": spec.Description,
+			"provider":      spec.ID,
+			"label":         spec.Label,
+			"status":        status,
+			"enabled":       enabled,
+			"source":        "builtin",
+			"fetchedAt":     now,
+			"defaultModeId": spec.DefaultModeID,
+			"models":        models,
+			"modes":         spec.Modes,
+			"description":   spec.Description,
 		})
 	}
 
