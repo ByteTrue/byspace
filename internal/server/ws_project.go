@@ -428,15 +428,19 @@ func (s *Server) handleArchiveWorkspace(ctx context.Context, sink frameSink, msg
 			"requestId":   req.RequestID,
 			"workspaceId": req.WorkspaceID,
 			"archivedAt":  nil,
-			"error":       err.Error(),
+			// Archiving can succeed at the registry level while the directory delete fails;
+			// the client reports that separately from a hard error.
+			"directoryError": nil,
+			"error":          err.Error(),
 		})
 		return
 	}
 	_ = sendSessionMsg(ctx, sink, "archive_workspace_response", map[string]any{
-		"requestId":   req.RequestID,
-		"workspaceId": req.WorkspaceID,
-		"archivedAt":  now,
-		"error":       nil,
+		"requestId":      req.RequestID,
+		"workspaceId":    req.WorkspaceID,
+		"archivedAt":     now,
+		"directoryError": nil,
+		"error":          nil,
 	})
 }
 
@@ -799,21 +803,30 @@ func (s *Server) handleWorkspaceScripts(ctx context.Context, sink frameSink, msg
 			"error":       nil,
 		})
 	case "workspace.script.start.request":
+		script, err := s.startWorkspaceScript(ctx, req.WorkspaceID, req.ScriptName)
+		var errText any
+		if err != nil {
+			errText = err.Error()
+		}
 		_ = sendSessionMsg(ctx, sink, "workspace.script.start.response", map[string]any{
 			"requestId":   req.RequestID,
 			"workspaceId": req.WorkspaceID,
 			"scriptName":  req.ScriptName,
-			"script":      nil,
-			"error":       nil,
+			"script":      script,
+			"error":       errText,
 		})
+		s.broadcastScriptStatus(req.WorkspaceID)
 	case "workspace.script.stop.request":
+		s.stopWorkspaceScript(req.WorkspaceID, req.ScriptName)
+		script := s.workspaceScriptSnapshot(req.WorkspaceID, req.ScriptName)
 		_ = sendSessionMsg(ctx, sink, "workspace.script.stop.response", map[string]any{
 			"requestId":   req.RequestID,
 			"workspaceId": req.WorkspaceID,
 			"scriptName":  req.ScriptName,
-			"script":      nil,
+			"script":      script,
 			"error":       nil,
 		})
+		s.broadcastScriptStatus(req.WorkspaceID)
 	}
 }
 

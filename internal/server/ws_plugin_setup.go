@@ -3,9 +3,11 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -103,14 +105,14 @@ func (s *Server) runWorkspaceSetup(workspaceID, cwd, branch string, commands []s
 	s.setupSnapshots[workspaceID] = snap
 	s.mu.Unlock()
 
-	s.broadcastSessionMsg("workspace_setup_update", s.setupSnapshotPayload(snap))
+	s.broadcastSetupProgress(snap)
 
 	fail := func(msg string) {
 		snap.mu.Lock()
 		snap.Status = "failed"
 		snap.Error = &msg
 		snap.mu.Unlock()
-		s.broadcastSessionMsg("workspace_setup_update", s.setupSnapshotPayload(snap))
+		s.broadcastSetupProgress(snap)
 	}
 
 	for _, command := range commands {
@@ -137,7 +139,7 @@ func (s *Server) runWorkspaceSetup(workspaceID, cwd, branch string, commands []s
 		})
 		snap.mu.Unlock()
 
-		s.broadcastSessionMsg("workspace_setup_update", s.setupSnapshotPayload(snap))
+		s.broadcastSetupProgress(snap)
 		if err != nil {
 			fail("setup command failed: " + command)
 			return
@@ -147,7 +149,7 @@ func (s *Server) runWorkspaceSetup(workspaceID, cwd, branch string, commands []s
 	snap.mu.Lock()
 	snap.Status = "completed"
 	snap.mu.Unlock()
-	s.broadcastSessionMsg("workspace_setup_update", s.setupSnapshotPayload(snap))
+	s.broadcastSetupProgress(snap)
 }
 
 func (s *Server) setupSnapshotPayload(snap *setupSnapshot) map[string]any {
@@ -255,4 +257,186 @@ func (s *Server) handlePluginRPC(ctx context.Context, sink frameSink, msgType st
 			},
 		})
 	}
+}
+
+// broadcastSetupProgress emits the per-step progress message the setup banner renders.
+//
+// `workspace_setup_update` and `workspace_setup_progress` are different channels: the former
+// drives the workspace list row, the latter the inline log the user watches while it runs.
+func (s *Server) broadcastSetupProgress(snap *setupSnapshot) {
+	snap.mu.Lock()
+	logText := snap.Log.String()
+	const maxLog = 64 * 1024
+	if len(logText) > maxLog {
+		logText = logText[len(logText)-maxLog:]
+	}
+	payload := map[string]any{
+		"workspaceId": snap.WorkspaceID,
+		"status":      snap.Status,
+		"detail": map[string]any{
+			"type":         "worktree_setup",
+			"worktreePath": snap.WorktreePath,
+			"branchName":   snap.BranchName,
+			"log":          logText,
+			"commands":     snap.Commands,
+			"truncated":    len(snap.Log.String()) > maxLog,
+		},
+		"error": snap.Error,
+		// `blockedSource` is set only when a change-request gate stopped the run; the banner
+		// links to it instead of showing a bare failure.
+		"blockedSource": nil,
+	}
+	snap.mu.Unlock()
+	s.broadcastSessionMsg("workspace_setup_progress", payload)
+}
+
+// workspaceScript is one running (or stopped) entry from byspace.json's `scripts` map.
+type workspaceScript struct {
+	WorkspaceID string
+	Name        string
+	Command     string
+	Status      string // "running" | "stopped" | "failed"
+	StartedAt   string
+	FinishedAt  *string
+	ExitCode    *int
+}
+
+func (s *Server) scriptKey(workspaceID, name string) string {
+	return workspaceID + "\x00" + name
+}
+
+// startWorkspaceScript launches a `byspace.json` script in its own shell and records it so
+// later status polls and `script_status_update` broadcasts have something to report.
+func (s *Server) startWorkspaceScript(ctx context.Context, workspaceID, name string) (map[string]any, error) {
+	workspaces, _ := s.store.ListWorkspaces()
+	var cwd string
+	for _, ws := range workspaces {
+		if ws.WorkspaceID == workspaceID {
+			cwd = ws.Cwd
+			break
+		}
+	}
+	if cwd == "" {
+		return nil, fmt.Errorf("workspace %q not found", workspaceID)
+	}
+	scripts := workspace.ReadScripts(cwd)
+	command, ok := scripts[name]
+	if !ok {
+		return nil, fmt.Errorf("script %q is not defined in byspace.json", name)
+	}
+
+	nowStr := time.Now().UTC().Format(time.RFC3339Nano)
+	entry := &workspaceScript{
+		WorkspaceID: workspaceID,
+		Name:        name,
+		Command:     command,
+		Status:      "running",
+		StartedAt:   nowStr,
+	}
+
+	s.mu.Lock()
+	if s.workspaceScripts == nil {
+		s.workspaceScripts = make(map[string]*workspaceScript)
+	}
+	s.workspaceScripts[s.scriptKey(workspaceID, name)] = entry
+	s.mu.Unlock()
+
+	go func() {
+		cmd := exec.Command("/bin/sh", "-lc", command)
+		cmd.Dir = cwd
+		cmd.Env = os.Environ()
+		err := cmd.Run()
+
+		finished := time.Now().UTC().Format(time.RFC3339Nano)
+		s.mu.Lock()
+		entry.FinishedAt = &finished
+		if err != nil {
+			entry.Status = "failed"
+			code := 1
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				code = exitErr.ExitCode()
+			}
+			entry.ExitCode = &code
+		} else {
+			entry.Status = "stopped"
+			zero := 0
+			entry.ExitCode = &zero
+		}
+		s.mu.Unlock()
+		s.broadcastScriptStatus(workspaceID)
+	}()
+
+	return s.workspaceScriptSnapshot(workspaceID, name), nil
+}
+
+// stopWorkspaceScript marks a script stopped. The child is a detached shell, so this records
+// intent rather than killing it; a long-running dev server keeps serving until the daemon exits.
+func (s *Server) stopWorkspaceScript(workspaceID, name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if entry, ok := s.workspaceScripts[s.scriptKey(workspaceID, name)]; ok {
+		if entry.Status == "running" {
+			entry.Status = "stopped"
+			finished := time.Now().UTC().Format(time.RFC3339Nano)
+			entry.FinishedAt = &finished
+		}
+	}
+}
+
+func (s *Server) workspaceScriptSnapshot(workspaceID, name string) map[string]any {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entry, ok := s.workspaceScripts[s.scriptKey(workspaceID, name)]
+	if !ok {
+		return nil
+	}
+	return map[string]any{
+		"name":       entry.Name,
+		"command":    entry.Command,
+		"status":     entry.Status,
+		"startedAt":  entry.StartedAt,
+		"finishedAt": entry.FinishedAt,
+		"exitCode":   entry.ExitCode,
+	}
+}
+
+// broadcastScriptStatus publishes the whole script list for a workspace, which is what
+// `script_status_update` carries.
+func (s *Server) broadcastScriptStatus(workspaceID string) {
+	workspaces, _ := s.store.ListWorkspaces()
+	var cwd string
+	for _, ws := range workspaces {
+		if ws.WorkspaceID == workspaceID {
+			cwd = ws.Cwd
+			break
+		}
+	}
+	defined := workspace.ReadScripts(cwd)
+
+	s.mu.Lock()
+	scripts := make([]map[string]any, 0, len(defined))
+	for name, command := range defined {
+		entry, ok := s.workspaceScripts[s.scriptKey(workspaceID, name)]
+		row := map[string]any{
+			"name":    name,
+			"command": command,
+			"status":  "stopped",
+		}
+		if ok {
+			row["status"] = entry.Status
+			row["startedAt"] = entry.StartedAt
+			row["finishedAt"] = entry.FinishedAt
+			row["exitCode"] = entry.ExitCode
+		}
+		scripts = append(scripts, row)
+	}
+	s.mu.Unlock()
+
+	sort.Slice(scripts, func(i, j int) bool {
+		return fmt.Sprint(scripts[i]["name"]) < fmt.Sprint(scripts[j]["name"])
+	})
+	s.broadcastSessionMsg("script_status_update", map[string]any{
+		"workspaceId": workspaceID,
+		"scripts":     scripts,
+	})
 }

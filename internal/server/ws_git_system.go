@@ -90,9 +90,12 @@ func (s *Server) handleGitParityOps(ctx context.Context, sink frameSink, msgType
 	case "branch_suggestions_request":
 		branches := workspace.ListBranches(ctx, base.Cwd)
 		_ = sendSessionMsg(ctx, sink, "branch_suggestions_response", map[string]any{
-			"branches":  branches,
-			"error":     nil,
-			"requestId": base.RequestID,
+			"branches": branches,
+			// The picker annotates each row with ahead/behind and last-commit info; without
+			// branchDetails those annotations silently disappear.
+			"branchDetails": []any{},
+			"error":         nil,
+			"requestId":     base.RequestID,
 		})
 
 	case "checkout_switch_branch_request":
@@ -714,6 +717,7 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 				"attachment":        nil,
 				"itemCount":         0,
 				"boundaryMessageId": nil,
+				"boundaryCursor":    nil,
 				"error":             err.Error(),
 			})
 			return
@@ -1003,6 +1007,7 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			"requestId": base.RequestID,
 			"peerId":    base.PeerID,
 			"ok":        true,
+			"error":     nil,
 		})
 
 	case "tunnel.remove.request":
@@ -1010,6 +1015,7 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			"requestId": base.RequestID,
 			"peerId":    base.PeerID,
 			"ok":        true,
+			"error":     nil,
 		})
 
 	case "hub.management.daemon.connect.request",
@@ -1026,6 +1032,7 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		}
 		_ = json.Unmarshal(raw, &hubReq)
 		respType := strings.TrimSuffix(msgType, ".request") + ".response"
+		// Hub 远程托管尚未实现：如实报告未连接，不伪造已连状态。
 		_ = sendSessionMsg(ctx, sink, respType, map[string]any{
 			"requestId": base.RequestID,
 			"status": map[string]any{
@@ -1035,6 +1042,7 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 				"connectedAt": nil,
 				"lastError":   nil,
 			},
+			"warning": nil,
 		})
 
 	case "hub.execution.agent.validate.request":
@@ -1088,7 +1096,12 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			"enabled":   false,
 			"agentId":   nil,
 			"accepted":  false,
-			"error":     "Voice mode is not enabled",
+			// The client distinguishes "this build has no voice" from "retry might work" and
+			// lists which models are missing, so the refusal has to carry all three.
+			"reasonCode":      "voice_unsupported",
+			"retryable":       false,
+			"missingModelIds": []string{},
+			"error":           "Voice mode is not enabled",
 		})
 
 	case "dictation_stream_start",

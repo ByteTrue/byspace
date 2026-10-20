@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"strings"
@@ -508,4 +509,73 @@ func imageBlocksForOpenCode(images []sdk.ImageContent) []map[string]any {
 		})
 	}
 	return blocks
+}
+
+// BuildCompactSnapshot dedupes thinking option sets so the catalog can be sent without
+// repeating the same 7-entry option list on every model of a provider.
+//
+// Mirrors CompactProviderSnapshotSchema: models drop `provider` (inherited from the entry) and
+// `thinkingOptions` (replaced by an index into `thinkingSets`). The app's provider cache reads
+// compactSnapshot and rehydrates it; without it every snapshot re-downloads full option lists.
+func BuildCompactSnapshot(entries []map[string]any) map[string]any {
+	thinkingSets := make([]map[string]any, 0)
+	index := make(map[string]int)
+
+	compactEntries := make([]map[string]any, 0, len(entries))
+	for _, entry := range entries {
+		out := make(map[string]any, len(entry))
+		for k, v := range entry {
+			if k == "models" {
+				continue
+			}
+			out[k] = v
+		}
+		models, _ := entry["models"].([]pi.CatalogModel)
+		if len(models) > 0 {
+			compact := make([]map[string]any, 0, len(models))
+			for _, model := range models {
+				m := map[string]any{
+					"id":           model.ID,
+					"label":        model.Label,
+					"isSelectable": model.IsSelectable,
+					"isDefault":    model.IsDefault,
+				}
+				if model.Description != "" {
+					m["description"] = model.Description
+				}
+				if len(model.Metadata) > 0 {
+					m["metadata"] = model.Metadata
+				}
+				if len(model.ThinkingOptions) > 0 {
+					key := thinkingSetKey(model.ThinkingOptions, model.DefaultThinkingOptionID)
+					idx, ok := index[key]
+					if !ok {
+						idx = len(thinkingSets)
+						index[key] = idx
+						thinkingSets = append(thinkingSets, map[string]any{
+							"options":         model.ThinkingOptions,
+							"defaultOptionId": model.DefaultThinkingOptionID,
+						})
+					}
+					m["thinkingSet"] = idx
+				}
+				compact = append(compact, m)
+			}
+			out["models"] = compact
+		}
+		compactEntries = append(compactEntries, out)
+	}
+
+	return map[string]any{
+		"entries":      compactEntries,
+		"thinkingSets": thinkingSets,
+	}
+}
+
+func thinkingSetKey(options []pi.ThinkingOption, defaultID string) string {
+	b, err := json.Marshal(options)
+	if err != nil {
+		return defaultID
+	}
+	return defaultID + "|" + string(b)
 }

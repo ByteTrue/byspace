@@ -172,9 +172,13 @@ func TestServerDirectWebSocketAndPiAgentLifecycle(t *testing.T) {
 	if waitResp["status"] != "completed" {
 		t.Fatalf("expected completed wait_for_finish_response, got %+v", waitResp)
 	}
+	// WaitForFinishResponseSchema: `final` is the agent snapshot, `lastMessage` the text.
 	finalMap, _ := waitResp["final"].(map[string]any)
-	if finalMap["assistantText"] != "Pi reply from Go daemon!" {
-		t.Fatalf("unexpected final assistantText: %+v", finalMap)
+	if finalMap["id"] == nil || finalMap["provider"] != "pi" {
+		t.Fatalf("expected final to be an agent snapshot, got %+v", finalMap)
+	}
+	if waitResp["lastMessage"] != "Pi reply from Go daemon!" {
+		t.Fatalf("unexpected lastMessage: %+v", waitResp["lastMessage"])
 	}
 
 	// 4. Fetch timeline

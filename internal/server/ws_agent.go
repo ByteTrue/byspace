@@ -373,10 +373,12 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 	wtPath, branch, err := workspace.CreateWorktree(ctx, req.Cwd, wtBase, req.WorktreeSlug, req.RefName)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "create_byspace_worktree_response", map[string]any{
-			"workspace":       nil,
-			"error":           err.Error(),
-			"setupTerminalId": nil,
-			"requestId":       req.RequestID,
+			"workspace":          nil,
+			"error":              err.Error(),
+			"errorCode":          "worktree_create_failed",
+			"setupTerminalId":    nil,
+			"setupSkippedReason": nil,
+			"requestId":          req.RequestID,
 		})
 		return
 	}
@@ -384,10 +386,12 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 	prj, _, err := s.store.EnsureWorkspaceForCwd(req.Cwd)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "create_byspace_worktree_response", map[string]any{
-			"workspace":       nil,
-			"error":           err.Error(),
-			"setupTerminalId": nil,
-			"requestId":       req.RequestID,
+			"workspace":          nil,
+			"error":              err.Error(),
+			"errorCode":          "project_register_failed",
+			"setupTerminalId":    nil,
+			"setupSkippedReason": nil,
+			"requestId":          req.RequestID,
 		})
 		return
 	}
@@ -411,10 +415,12 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 
 	desc := buildWorkspaceDescriptor(wsRec, prj)
 	_ = sendSessionMsg(ctx, sink, "create_byspace_worktree_response", map[string]any{
-		"workspace":       desc,
-		"error":           nil,
-		"setupTerminalId": nil,
-		"requestId":       req.RequestID,
+		"workspace":          desc,
+		"error":              nil,
+		"errorCode":          nil,
+		"setupTerminalId":    nil,
+		"setupSkippedReason": nil,
+		"requestId":          req.RequestID,
 	})
 }
 
@@ -747,16 +753,24 @@ func (s *Server) handleAgentPermissionResponse(ctx context.Context, _ frameSink,
 		return
 	}
 	_ = mp.session.RespondToPermission(req.RequestID, req.Response)
+	nowStr := time.Now().UTC().Format(time.RFC3339Nano)
 	s.broadcastSessionMsg("agent_stream", map[string]any{
 		"agentId":   req.AgentID,
 		"provider":  mp.record.Provider,
-		"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
+		"timestamp": nowStr,
 		"event": map[string]any{
 			"type":       "permission_resolved",
 			"provider":   mp.record.Provider,
 			"requestId":  req.RequestID,
 			"resolution": req.Response,
 		},
+	})
+	// The permission store keys off this dedicated message; the stream event only updates the
+	// inline card.
+	s.broadcastSessionMsg("agent_permission_resolved", map[string]any{
+		"agentId":    req.AgentID,
+		"requestId":  req.RequestID,
+		"resolution": req.Response,
 	})
 }
 

@@ -43,3 +43,39 @@ func ReadSetupCommands(cwd string) []string {
 	}
 	return nil
 }
+
+// ReadScripts extracts the `scripts` map from <cwd>/byspace.json.
+//
+// Shape follows the workspace-script config already used by the service proxy:
+// `"scripts": {"dev": "vite", "test": "vitest run"}`.
+func ReadScripts(cwd string) map[string]string {
+	if strings.TrimSpace(cwd) == "" {
+		return nil
+	}
+	raw, err := os.ReadFile(filepath.Join(cwd, "byspace.json"))
+	if err != nil {
+		return nil
+	}
+	var cfg struct {
+		Scripts map[string]json.RawMessage `json:"scripts"`
+	}
+	if json.Unmarshal(raw, &cfg) != nil {
+		return nil
+	}
+	out := make(map[string]string, len(cfg.Scripts))
+	for name, value := range cfg.Scripts {
+		var command string
+		if json.Unmarshal(value, &command) == nil && strings.TrimSpace(command) != "" {
+			out[name] = command
+			continue
+		}
+		// `"scripts": {"dev": {"command": "vite"}}`
+		var obj struct {
+			Command string `json:"command"`
+		}
+		if json.Unmarshal(value, &obj) == nil && strings.TrimSpace(obj.Command) != "" {
+			out[name] = obj.Command
+		}
+	}
+	return out
+}

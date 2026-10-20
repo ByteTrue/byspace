@@ -498,11 +498,11 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if finalMap, ok := waitResp["final"].(map[string]any); ok {
-		if text, _ := finalMap["assistantText"].(string); text != "" {
-			fmt.Fprintln(stdout, text)
-			return nil
-		}
+	// `lastMessage` carries the assistant's final text; `final` is the full agent snapshot
+	// (protocol contract), so read the text from the dedicated field.
+	if text, _ := waitResp["lastMessage"].(string); strings.TrimSpace(text) != "" {
+		fmt.Fprintln(stdout, text)
+		return nil
 	}
 	fmt.Fprintln(stdout, agentID)
 	return nil

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -123,6 +124,7 @@ type Server struct {
 	corsMu            sync.RWMutex
 	corsCache         []string
 	setupSnapshots    map[string]*setupSnapshot
+	workspaceScripts  map[string]*workspaceScript
 	idempotentAgents  map[string]string
 	cachedPiModels    []pi.CatalogModel
 	cachedPiCommands  []pi.SlashCommand
@@ -180,6 +182,7 @@ func New(opts Options) (*Server, error) {
 		terminalSlotsByID: make(map[string]uint8),
 		downloadTokens:    make(map[string]downloadTokenEntry),
 		setupSnapshots:    make(map[string]*setupSnapshot),
+		workspaceScripts:  make(map[string]*workspaceScript),
 		idempotentAgents:  make(map[string]string),
 		fileSubs:          make(map[string]fileSubscription),
 		diffSubs:          make(map[string]diffSubscription),
@@ -803,10 +806,19 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		models := s.probeOrCachedPiModels(ctx)
 		cfg := s.store.LoadDaemonConfig()
 		customProvs, _ := cfg["providers"].(map[string]any)
+		entries := providers.BuildSnapshotEntries(models, s.piCommand, customProvs)
 		respPayload := map[string]any{
 			"requestId":   base.RequestID,
 			"generatedAt": now,
-			"entries":     providers.BuildSnapshotEntries(models, s.piCommand, customProvs),
+			"entries":     entries,
+			// snapshotHash lets the client skip re-applying an identical catalog and is what
+			// `ifNoneMatch` compares against on the next call.
+			"snapshotHash": providerSnapshotHash(entries),
+			// fetchedAt drives the "last refreshed" line in the providers sheet.
+			"fetchedAt": providerFetchedAt(entries, now),
+			// compactSnapshot is the same catalog with thinking option lists deduped; the
+			// app's provider cache reads it to avoid re-downloading identical option sets.
+			"compactSnapshot": providers.BuildCompactSnapshot(entries),
 		}
 		if strings.TrimSpace(req.Cwd) != "" {
 			respPayload["cwd"] = req.Cwd
@@ -817,7 +829,21 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		s.mu.Lock()
 		s.cachedPiModels = nil
 		s.mu.Unlock()
-		_ = s.probeOrCachedPiModels(ctx)
+		models := s.probeOrCachedPiModels(ctx)
+		cfg := s.store.LoadDaemonConfig()
+		customProvs, _ := cfg["providers"].(map[string]any)
+		entries := providers.BuildSnapshotEntries(models, s.piCommand, customProvs)
+		nowStr := time.Now().UTC().Format(time.RFC3339Nano)
+		// The providers sheet subscribes to providers_snapshot_update and swaps its cached
+		// catalog on this message; sending only the response left open sheets stale.
+		s.broadcastSessionMsg("providers_snapshot_update", map[string]any{
+			"cwd":             nil,
+			"generatedAt":     nowStr,
+			"entries":         entries,
+			"snapshotHash":    providerSnapshotHash(entries),
+			"fetchedAt":       providerFetchedAt(entries, nowStr),
+			"compactSnapshot": providers.BuildCompactSnapshot(entries),
+		})
 		_ = sendSessionMsg(ctx, sink, "refresh_providers_snapshot_response", map[string]any{
 			"requestId":    base.RequestID,
 			"acknowledged": true,
@@ -933,12 +959,21 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		if sh == "" {
 			sh = "/bin/sh"
 		}
-		_ = sendSessionMsg(ctx, sink, "terminal.shell.detect.response", map[string]any{
+		shellDetectPayload := map[string]any{
 			"requestId":       base.RequestID,
 			"shells":          []map[string]any{{"path": sh, "name": filepath.Base(sh)}},
 			"resolvedDefault": sh,
 			"error":           nil,
-		})
+		}
+		// `configured` is the explicit daemon.terminalDefaultShell; absent in auto mode.
+		if cfg := s.store.LoadDaemonConfig(); cfg != nil {
+			if daemon, ok := cfg["daemon"].(map[string]any); ok {
+				if v, ok := daemon["terminalDefaultShell"].(string); ok && strings.TrimSpace(v) != "" {
+					shellDetectPayload["configured"] = v
+				}
+			}
+		}
+		_ = sendSessionMsg(ctx, sink, "terminal.shell.detect.response", shellDetectPayload)
 
 	case "project.list.request":
 		s.handleProjectList(ctx, sink, base.RequestID)
@@ -994,6 +1029,18 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		if mp != nil && mp.session != nil {
 			_ = mp.session.Abort(ctx)
 		}
+		s.mu.Lock()
+		var agentSnapshot any
+		if mp2 := s.agents[req.AgentID]; mp2 != nil {
+			agentSnapshot = s.buildAgentSnapshotPayload(mp2.record)
+		}
+		s.mu.Unlock()
+		_ = sendSessionMsg(ctx, sink, "cancel_agent_response", map[string]any{
+			"requestId": req.RequestID,
+			"agentId":   req.AgentID,
+			"agent":     agentSnapshot,
+			"error":     nil,
+		})
 		_ = sendSessionMsg(ctx, sink, "status", map[string]any{
 			"status":    "agent_cancelled",
 			"agentId":   req.AgentID,
@@ -1246,6 +1293,7 @@ func (s *Server) handleProjectList(ctx context.Context, sink frameSink, requestI
 	_ = sendSessionMsg(ctx, sink, "project.list.response", map[string]any{
 		"requestId": requestID,
 		"projects":  descriptors,
+		"sync":      s.directorySyncMetadata("snapshot"),
 	})
 }
 
@@ -1296,6 +1344,7 @@ func (s *Server) handleFetchWorkspaces(ctx context.Context, sink frameSink, raw 
 			"prevCursor": nil,
 			"hasMore":    false,
 		},
+		"sync": s.directorySyncMetadata("snapshot"),
 	}
 	if req.Subscribe != nil && req.Subscribe.SubscriptionID != "" {
 		payload["subscriptionId"] = req.Subscribe.SubscriptionID
@@ -1329,10 +1378,12 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 		_ = s.store.UpsertWorkspace(ws)
 	}
 	respPayload := map[string]any{
-		"requestId":       req.RequestID,
-		"workspace":       buildWorkspaceDescriptor(ws, prj),
-		"setupTerminalId": nil,
-		"error":           nil,
+		"requestId":          req.RequestID,
+		"workspace":          buildWorkspaceDescriptor(ws, prj),
+		"setupTerminalId":    nil,
+		"setupSkippedReason": nil,
+		"error":              nil,
+		"errorCode":          nil,
 	}
 	if req.FirstAgentContext != nil {
 		respPayload["firstAgentContext"] = req.FirstAgentContext
@@ -1440,7 +1491,7 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 				projName = prj.DisplayName
 			}
 		}
-		entries = append(entries, map[string]any{
+		entry := map[string]any{
 			"agent": agentPayload,
 			"project": map[string]any{
 				"projectKey":    projKey,
@@ -1455,7 +1506,15 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 					"mainRepoRoot":           nil,
 				},
 			},
-		})
+		}
+		// searchScore / searchMatches let the client highlight the matched span; syncSeq is the
+		// per-entry cursor the directory replica advances on change.
+		if searchQuery != "" {
+			entry["searchScore"] = 0
+			entry["searchMatches"] = []any{}
+		}
+		entry["syncSeq"] = directorySyncSeq(rec.UpdatedAt)
+		entries = append(entries, entry)
 	}
 
 	respType := "fetch_agents_response"
@@ -1471,8 +1530,13 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 			"hasMore":    hasMore,
 		},
 	}
+	payload["subscriptionId"] = nil
 	if req.Subscribe != nil && req.Subscribe.SubscriptionID != "" {
 		payload["subscriptionId"] = req.Subscribe.SubscriptionID
+	}
+	payload["sync"] = s.directorySyncMetadata("snapshot")
+	if reqType == "fetch_agent_history_request" {
+		payload["searchTruncated"] = false
 	}
 	_ = sendSessionMsg(ctx, sink, respType, payload)
 }
@@ -1750,7 +1814,7 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 		AgentID     string `json:"agentId"`
 		Direction   string `json:"direction"`
 		Projection  string `json:"projection"`
-		MergeWindow int    `json:"mergeWindow"`
+		MergeWindow bool   `json:"mergeWindow"`
 		Cursor      *struct {
 			Epoch string `json:"epoch"`
 			Seq   int    `json:"seq"`
@@ -1870,6 +1934,7 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 		"endCursor":   endCursor,
 		"hasOlder":    false,
 		"hasNewer":    false,
+		"mergeWindow": req.MergeWindow,
 		"entries":     entries,
 		"error":       nil,
 	})
@@ -1890,6 +1955,8 @@ func (s *Server) handleWaitForFinish(ctx context.Context, sink frameSink, raw js
 			"status":    "error",
 			"final":     nil,
 			"error":     err.Error(),
+			// lastMessage is the assistant's final text; CLI `byspace wait` prints it.
+			"lastMessage": nil,
 		})
 		return
 	}
@@ -1903,10 +1970,11 @@ func (s *Server) handleWaitForFinish(ctx context.Context, sink frameSink, raw js
 
 	if err := mp.session.WaitForFinish(wctx); err != nil {
 		_ = sendSessionMsg(ctx, sink, "wait_for_finish_response", map[string]any{
-			"requestId": req.RequestID,
-			"status":    "timeout",
-			"final":     nil,
-			"error":     err.Error(),
+			"requestId":   req.RequestID,
+			"status":      "timeout",
+			"final":       nil,
+			"error":       err.Error(),
+			"lastMessage": mp.session.LastAssistantText(),
 		})
 		return
 	}
@@ -1919,12 +1987,11 @@ func (s *Server) handleWaitForFinish(ctx context.Context, sink frameSink, raw js
 	_ = sendSessionMsg(ctx, sink, "wait_for_finish_response", map[string]any{
 		"requestId": req.RequestID,
 		"status":    "completed",
-		"final": map[string]any{
-			"agentId":       req.AgentID,
-			"status":        mp.record.LastStatus,
-			"assistantText": finalText,
-		},
-		"error": nil,
+		// `final` is the full agent snapshot, not an ad-hoc summary: clients merge it into
+		// their agent map, and `lastMessage` is what `byspace wait` prints.
+		"final":       s.buildAgentSnapshotPayload(mp.record),
+		"error":       nil,
+		"lastMessage": finalText,
 	})
 }
 
@@ -2141,6 +2208,10 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 
 		case "extension_ui_request":
 			if perm := pi.MapExtensionUIRequestToPermission(ev); perm != nil {
+				// Two consumers: the timeline renders an inline card from the agent_stream
+				// event, and the permission modal listens for the dedicated
+				// agent_permission_request message. Sending only the former left the modal
+				// empty — `ask_user` prompts never appeared.
 				s.broadcastSessionMsg("agent_stream", map[string]any{
 					"agentId":   rec.ID,
 					"provider":  rec.Provider,
@@ -2150,6 +2221,10 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 						"provider": rec.Provider,
 						"request":  perm,
 					},
+				})
+				s.broadcastSessionMsg("agent_permission_request", map[string]any{
+					"agentId": rec.ID,
+					"request": perm,
 				})
 			}
 
@@ -2440,6 +2515,17 @@ func buildProjectDescriptor(p store.ProjectRecord) map[string]any {
 		"projectCustomIconRevision": p.CustomIconRevision,
 		"projectRootPath":           p.RootPath,
 		"projectKind":               projectKind,
+		// projectIconRevision separates the built-in icon from a custom one so the sidebar
+		// knows whether to fetch /projects/icons/<id>.json. Optional (not nullable): only set
+		// when there is a custom icon, otherwise the key is omitted.
+		"projectIconRevision": nil,
+		// syncSeq is the per-record cursor the directory replica advances on each change.
+		"syncSeq": directorySyncSeq(p.UpdatedAt),
+	}
+	if p.CustomIconRevision != nil && strings.TrimSpace(*p.CustomIconRevision) != "" {
+		out["projectIconRevision"] = *p.CustomIconRevision
+	} else {
+		delete(out, "projectIconRevision")
 	}
 	if p.ProjectKey != nil {
 		out["projectKey"] = *p.ProjectKey
@@ -2809,4 +2895,62 @@ func (s *Server) captureFinalUsage(mp *managedPi, sess providers.ManagedSession)
 	recCopy := mp.record
 	s.mu.Unlock()
 	s.broadcastAgentUpdate(recCopy)
+}
+
+// directorySyncMetadata is the cursor the client uses to detect a stale directory replica.
+// It is checked against the same counters that drive incremental updates.
+func (s *Server) directorySyncMetadata(mode string) map[string]any {
+	catalog := s.store.LoadLabelCatalog()
+	return map[string]any{
+		"generation": catalog.Generation,
+		"headSeq":    catalog.HeadSeq,
+		"mode":       mode,
+		"removals":   []any{},
+	}
+}
+
+// providerSnapshotHash fingerprints a provider catalog so the client can tell an unchanged
+// snapshot from a rebuilt one, and so `ifNoneMatch` has something stable to compare against.
+func providerSnapshotHash(entries []map[string]any) string {
+	b, err := json.Marshal(entries)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(b)
+	return "psh_" + hex.EncodeToString(sum[:8])
+}
+
+// providerFetchedAt builds the per-provider timestamp map the providers sheet renders as
+// "last refreshed", taking each entry's own fetchedAt.
+func providerFetchedAt(entries []map[string]any, fallback string) map[string]string {
+	out := make(map[string]string, len(entries))
+	for _, entry := range entries {
+		provider, _ := entry["provider"].(string)
+		if provider == "" {
+			continue
+		}
+		if ts, ok := entry["fetchedAt"].(string); ok && ts != "" {
+			out[provider] = ts
+			continue
+		}
+		out[provider] = fallback
+	}
+	return out
+}
+
+// directorySyncSeq turns a record's updatedAt into the positive cursor the directory replica
+// compares; zero would be rejected by the schema (`positive()`).
+//
+// Milliseconds, not nanoseconds: the protocol validates `int` against JavaScript's safe integer
+// range (2^53-1 ≈ 9e15), and UnixNano is ~1.7e18 — every response would fail validation.
+func directorySyncSeq(updatedAt string) int64 {
+	t, err := time.Parse(time.RFC3339Nano, updatedAt)
+	if err != nil {
+		return 1
+	}
+	seq := t.UnixMilli()
+	if seq <= 0 {
+		return 1
+	}
+	return seq
 }

@@ -338,6 +338,11 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 	_ = sendSessionMsg(ctx, sink, "fetch_recent_provider_sessions_response", map[string]any{
 		"requestId": req.RequestID,
 		"entries":   entries,
+		// The import picker shows "N already imported" and per-provider failures beside the
+		// list; both keys were missing entirely.
+		"filteredAlreadyImportedCount": 0,
+		"providerErrors":               []any{},
+		"error":                        nil,
 	})
 }
 

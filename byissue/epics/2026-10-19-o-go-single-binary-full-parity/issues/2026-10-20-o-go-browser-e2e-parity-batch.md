@@ -308,3 +308,73 @@ pi 的多步 conformance 测试是从已有 agent 连发两轮，走的是 `Prom
 
 hover 浮层的具体文案（`556k / 1m tokens`、`Session cost`）没有用 bsk 触发成功——
 `hover` 到 SVG 环上没能让 React 的浮层出现。数据链路已验证到组件 props，浮层属于纯展示。
+
+## 第十轮：出站字段对账器（新增 `scripts/go-emit-parity.mjs`）
+
+用户要求「有没有类似的东西可以自动化扫描」。已有的 `go-parity-audit.mjs` 只查**入站**字段，
+出站方向完全没有检查——而上下文用量环、标签增量同步、权限弹窗这些都是出站字段漏发。
+
+### 工具
+
+以 `packages/protocol` 的 219 个出站类型为契约，逐类型核对 Go 实际发送的字段。三档判定：
+
+| 判定         | 含义                                          |
+| ------------ | --------------------------------------------- |
+| MISSING      | 必填字段没发（会阻断）                        |
+| OPTIONAL_GAP | 可选字段没发（界面特性静默缺失）              |
+| NEVER_SENT   | 协议有、Go 从未发送（需确认是未实现还是漏了） |
+| UNVERIFIED   | payload 是变量，静态不可判定，需人工          |
+
+**关键能力：递归下钻。** 已在真实回归上验证——把 `payload["lastUsage"] = rec.Usage` 删掉，
+脚本报出来；`lastUsage` 埋在 `agent` 里，顶层字段全对，只有下钻才看得见。
+
+### 过程中修复的解析器缺陷（都是它自己的假阳性）
+
+1. payload 是 `{type, payload:{...}}` 两层，一开始把 `payload` 当成了字段名
+2. 单行 `payload: z.object({ requestId: z.string() })` 漏解析
+3. Go 行注释打断 key 检测
+4. 一个类型多个发送分支（正常 / notModified / error）时，应按并集判断
+5. `respPayload := map[string]any{...}` 变量型 payload 不追溯
+6. builder 调用（`s.buildAgentSnapshotPayload(rec)`）的字段在函数体里，要跟进去
+7. `strings.TrimSuffix(msgType, ".request")` 派生响应名时要从 case 分支取字面量
+
+### 由它抓出并修掉的真实缺口
+
+| 缺口                                                                              | 影响                                                                                                                   |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `agent_permission_request` / `agent_permission_resolved` 从未发送                 | **`ask_user` 弹窗永远不出现** — 只发了 agent_stream 里的内联卡片，而模态框监听的是独立消息                             |
+| `cancel_agent_response` 从未发送                                                  | 客户端拿不到取消回执                                                                                                   |
+| `providers_snapshot_update` 从未发送                                              | 打开着的 providers 页永远显示旧目录                                                                                    |
+| `workspace_setup_progress` 从未发送                                               | setup 日志不实时刷新                                                                                                   |
+| `script_status_update` 从未发送                                                   | `workspace.script.*` 返回 `script: nil`，是占位实现；补了真实脚本运行 + 状态广播                                       |
+| `workspace.label.*` / `fetch_agents_response` / `project.list.response` 缺 `sync` | 目录副本无法判断是否过期                                                                                               |
+| `wait_for_finish_response.final` 结构错误                                         | 发的是 `{agentId,status,assistantText}`，协议要求完整 agent 快照；`lastMessage` 缺失导致 `byspace run` 只打印 agent id |
+
+### 自己引入又被自己抓到的两个 bug
+
+- `syncSeq` 用 `UnixNano()`（~1.7e18）超出 JS 安全整数范围（2^53-1 ≈ 9e15），
+  **整个 `fetch_agents_response` 校验失败**。改毫秒。
+- `projectIconRevision` 是 optional 不是 nullable，发 `null` 让 `project.list.response` 失败。
+  改成有值才发。
+
+这两个是 `audit:browser` 抓到的，说明三个工具是互补的：静态对账保证「字段发全」，
+浏览器验证保证「值合法」。
+
+### 豁免清单（显式写明归属，不用 `_ =` 假装）
+
+`DEFERRED_TYPES` 记录 21 个未实现子系统的出站消息：Hub 远控、plugin 运行时、
+语音/听写、artifact、daemon 自更新等。每条都有理由注释，避免豁免清单变成掩盖缺口的垃圾桶。
+
+### 验证
+
+```
+go-emit-parity:  MISSING 0  OPTIONAL_GAP 0  NEVER_SENT 0
+go-parity-audit: 出站字段 0  未路由 0           （入站 47 条，多为 hub/plugin）
+audit:browser:   10/10
+go test ./...:   all pass
+```
+
+### 局限（写进脚本头部注释）
+
+- 假阳性：变量型 payload、多发送分支按并集判断
+- 假阴性：循环里构造的切片、经接口传递的字段
