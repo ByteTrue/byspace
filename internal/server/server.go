@@ -30,6 +30,16 @@ import (
 
 const WSProtocolVersion = 1
 
+// WebSocket close codes, matching archive/.../websocket-server.ts so a client that
+// distinguishes "took too long to say hello" from "version mismatch" keeps working.
+const (
+	wsCloseHelloTimeout      = 4001
+	wsCloseInvalidHello      = 4002
+	wsCloseIncompatibleProto = 4003
+	wsCloseServerShutdown    = 1001
+	wsHelloTimeout           = 15 * time.Second
+)
+
 var ownerPermissions = []string{
 	"daemon.read",
 	"daemon.manage",
@@ -213,7 +223,18 @@ func (s *Server) Close() error {
 	for _, t := range s.terminals {
 		terms = append(terms, t)
 	}
+	sinks := make([]frameSink, 0, len(s.clients))
+	for sink := range s.clients {
+		sinks = append(sinks, sink)
+	}
 	s.mu.Unlock()
+
+	// Tell connected clients why the socket is going away before the process exits, so the
+	// app shows "host shut down" instead of a silent disconnect it retries forever.
+	// Fire and forget: Close writes a frame and blocks if the peer is not reading.
+	for _, sink := range sinks {
+		go func(sk frameSink) { _ = sk.Close(wsCloseServerShutdown, "Server shutting down") }(sink)
+	}
 
 	for _, a := range agents {
 		if a.session != nil {
@@ -495,6 +516,19 @@ func (s *Server) serveSessionOnSink(
 		s.mu.Unlock()
 	}()
 
+	// A socket that never sends `hello` holds a connection slot and a goroutine forever.
+	// Node closes it after 15s with 4001; without the same deadline a half-open client (a
+	// browser tab suspended before the handshake) accumulates until the daemon restarts.
+	helloDeadline := time.AfterFunc(wsHelloTimeout, func() {
+		s.mu.Lock()
+		greeted := s.clients[sink]
+		s.mu.Unlock()
+		if !greeted {
+			_ = sink.Close(wsCloseHelloTimeout, "Timed out waiting for hello")
+		}
+	})
+	defer helloDeadline.Stop()
+
 	for {
 		frame, err := readNext(ctx)
 		if err != nil {
@@ -584,11 +618,11 @@ func (s *Server) handleTextFrame(ctx context.Context, sink frameSink, raw []byte
 		return
 	case "hello":
 		if envelope.ProtocolVersion != WSProtocolVersion {
-			_ = sink.Close(4400, "Incompatible protocol version")
+			_ = sink.Close(wsCloseIncompatibleProto, "Incompatible protocol version")
 			return
 		}
 		if strings.TrimSpace(envelope.ClientID) == "" {
-			_ = sink.Close(4402, "Invalid hello")
+			_ = sink.Close(wsCloseInvalidHello, "Invalid hello")
 			return
 		}
 		s.mu.Lock()
