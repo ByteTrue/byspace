@@ -383,6 +383,9 @@ func (s *Server) stopWorkspaceScript(workspaceID, name string) {
 	}
 }
 
+// workspaceScriptSnapshot renders one script in the shape WorkspaceScriptPayloadSchema
+// requires. Field names and the lifecycle/health enums are part of the wire contract; sending
+// `name`/`status` instead makes the whole response fail client-side validation.
 func (s *Server) workspaceScriptSnapshot(workspaceID, name string) map[string]any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -390,13 +393,29 @@ func (s *Server) workspaceScriptSnapshot(workspaceID, name string) map[string]an
 	if !ok {
 		return nil
 	}
+	return workspaceScriptPayload(entry)
+}
+
+// workspaceScriptPayload maps an entry onto WorkspaceScriptPayloadSchema.
+func workspaceScriptPayload(entry *workspaceScript) map[string]any {
+	lifecycle := "stopped"
+	if entry.Status == "running" {
+		lifecycle = "running"
+	}
 	return map[string]any{
-		"name":       entry.Name,
-		"command":    entry.Command,
-		"status":     entry.Status,
-		"startedAt":  entry.StartedAt,
-		"finishedAt": entry.FinishedAt,
+		"scriptName": entry.Name,
+		"type":       "script",
+		// hostname/port exist for the service-proxy route; scripts run without one.
+		"hostname":       "",
+		"port":           nil,
+		"localProxyUrl":  nil,
+		"publicProxyUrl": nil,
+		"proxyUrl":       nil,
+		"lifecycle":      lifecycle,
+		// Health is only meaningful once a service route exists and is being probed.
+		"health":     nil,
 		"exitCode":   entry.ExitCode,
+		"terminalId": nil,
 	}
 }
 
@@ -417,16 +436,14 @@ func (s *Server) broadcastScriptStatus(workspaceID string) {
 	scripts := make([]map[string]any, 0, len(defined))
 	for name, command := range defined {
 		entry, ok := s.workspaceScripts[s.scriptKey(workspaceID, name)]
-		row := map[string]any{
-			"name":    name,
-			"command": command,
-			"status":  "stopped",
-		}
+		row := workspaceScriptPayload(&workspaceScript{
+			WorkspaceID: workspaceID,
+			Name:        name,
+			Command:     command,
+			Status:      "stopped",
+		})
 		if ok {
-			row["status"] = entry.Status
-			row["startedAt"] = entry.StartedAt
-			row["finishedAt"] = entry.FinishedAt
-			row["exitCode"] = entry.ExitCode
+			row = workspaceScriptPayload(entry)
 		}
 		scripts = append(scripts, row)
 	}

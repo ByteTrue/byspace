@@ -59,7 +59,10 @@
 
 | `checkout-diff-manager.ts` | 413 | **MISSING** → 已补 | **文件订阅与 diff 订阅的轮询从未启动**：`PollSubscriptionsOnce` 只有测试里手动调用过，`New()` 里没有任何 goroutine 驱动它。于是「编辑器里订阅了文件」和「diff 面板订阅了变更」在真实运行中**永远收不到推送**。已补 `startSubscriptionPoller`（1s 周期），`Close()` 时停止。测试 `TestFileSubscriptionFiresWithoutManualPoll`（已验证移除轮询即失败）。差异：Node 用文件系统 watcher + 150ms 防抖，Go 用 1s 轮询——更省依赖，延迟略高。 |
 
-### 未审计（本批剩余 60 文件）
+| `workspace-script-runtime-store.ts` | — | **MISSING** → 已修字段 | 脚本 payload 的**字段名全错**：协议要 `scriptName`/`type`/`hostname`/`port`/`lifecycle`(running\|stopped)/`health`，Go 发的是 `name`/`command`/`status`。整个 `workspace.script.start.response` 与 `script_status_update` 客户端校验失败，脚本面板什么都不显示。已按 schema 重写并加测试。仍缺：端口分配与 proxy 路由（见 service-proxy）。 |
+| `daemon-config-store.ts` | 1199 | **PORTED** | `agentProfiles` 经 `set_daemon_config` 透传即可；前端选择器把 profile 展开成具体 provider/model/mode，daemon 只存不解释。 |
+
+### 未审计（本批剩余 58 文件）
 
 按行数排序，下一轮从这里继续：
 
