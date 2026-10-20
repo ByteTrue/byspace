@@ -30,7 +30,11 @@ Go 用标准布局，不发明：`cmd/<binary>/main.go` 是入口，`internal/` 
 
 过渡期的唯一事实：`packages/` 是 Node 实现（现行发布主体），`cmd/` + `internal/` 是 Go 实现。两者不互相 import，只在 `internal/webui/dist` 交接——`make build-web` 把 `packages/server/dist/server/web-ui` 拷进去再 `//go:embed`。
 
-最终形态（Go 转正、Node 退役时）：`packages/app` → `web/`，`packages/{server,cli,client,relay}` 删除，协议包留作 `packages/protocol` 或 `protocol/`。**这一步不在过渡期做**，因为现在移动会同时打断 Node 的发布流水线和 Expo 的构建配置，收益为零。
+Node 侧的 daemon 实现已移入 `archive/`（见 `archive/README.md`）：`archive/packages/{server,cli}`、`archive/packages/relay`（只含服务端）、`archive/scripts`、`archive/packages/app-e2e`。它们**不参与构建**，只作为 Go 翻译时的对照物。
+
+`packages/` 现在只剩前端与共享协议：`app`、`client`、`protocol`、`highlight`，以及 `relay` 的 E2EE 原语（`crypto`/`encrypted-channel`/`e2ee`/`base64`/`types`）——`packages/client` 直接依赖 `@bytetrue/relay/e2ee`，归档的是 relay 的服务端而不是加密层。
+
+最终形态（Go 转正时）：`packages/app` → `web/`，`packages/{client,protocol,highlight,relay}` 作为它的构建依赖一并搬入。**这一步留到真正切换时做**，因为现在搬 Expo 的 workspace 边界只会换来一次大 diff。
 
 ## 背景（已知的偏离坑）
 

@@ -15,11 +15,9 @@ BINARY  := bin/byspace
 build:
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/byspace
 
-## build-web: 导出 Expo Web，预压缩资产放进 internal/webui/dist 供 //go:embed
+## build-web: 导出 Expo Web，预压缩资产直接写进 internal/webui/dist 供 //go:embed
 build-web:
 	npm run build:daemon-web-ui
-	rm -rf internal/webui/dist/*
-	cp -R packages/server/dist/server/web-ui/. internal/webui/dist/
 	find internal/webui/dist/_expo -name "*.js" -size +1M -delete
 	touch internal/webui/dist/.keep
 

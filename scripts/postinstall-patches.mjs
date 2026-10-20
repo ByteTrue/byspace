@@ -35,9 +35,9 @@ const patchedPackages = [
     patchPrefix: "react-native-svg+",
   },
   {
-    nodeModulesPath: "packages/server/node_modules/@opencode-ai/sdk",
+    nodeModulesPath: "archive/packages/server/node_modules/@opencode-ai/sdk",
     patchPrefix: "@opencode-ai+sdk+",
-    cwd: "packages/server",
+    cwd: "archive/packages/server",
   },
 ];
 
