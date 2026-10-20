@@ -407,3 +407,28 @@ func (s *Server) providerSnapshotTag() string {
 	h := sha256.Sum256([]byte(s.serverID + "|" + fmt.Sprint(models) + "|" + s.version))
 	return "wp_" + hex.EncodeToString(h[:8])
 }
+
+// subscriptionPollInterval is how often file and git-diff subscriptions are re-checked.
+//
+// The node daemon uses filesystem watchers with a 150ms debounce, which is more responsive but
+// needs a native watcher per platform. Polling a cheap fingerprint keeps the behaviour without
+// that dependency; 1s is well under human perception for "the file I just changed".
+const subscriptionPollInterval = time.Second
+
+// startSubscriptionPoller runs PollSubscriptionsOnce until the server closes.
+func (s *Server) startSubscriptionPoller() {
+	go func() {
+		ticker := time.NewTicker(subscriptionPollInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-s.pollStop:
+				return
+			case <-ticker.C:
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				s.PollSubscriptionsOnce(ctx)
+				cancel()
+			}
+		}
+	}()
+}

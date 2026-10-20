@@ -57,7 +57,9 @@
 | `resolve-workspace-id-for-path.ts` | 46 | **MISSING** → 已补 | 按路径解析工作区：精确匹配优先，否则**最深**的包含工作区，且**永不匹配 home 目录**（否则吞掉所有路径）。Go 只有精确字符串比较，传 worktree 子目录时找不到。已补 `store.ResolveWorkspaceIDForPath` + 5 个断言。 |
 | `persisted-config.ts` | 521 | **PARTIAL** | Go 读写 `{version,daemon:{...}}` 结构已对齐；缺 schema 校验与迁移路径。 |
 
-### 未审计（本批剩余 61 文件）
+| `checkout-diff-manager.ts` | 413 | **MISSING** → 已补 | **文件订阅与 diff 订阅的轮询从未启动**：`PollSubscriptionsOnce` 只有测试里手动调用过，`New()` 里没有任何 goroutine 驱动它。于是「编辑器里订阅了文件」和「diff 面板订阅了变更」在真实运行中**永远收不到推送**。已补 `startSubscriptionPoller`（1s 周期），`Close()` 时停止。测试 `TestFileSubscriptionFiresWithoutManualPoll`（已验证移除轮询即失败）。差异：Node 用文件系统 watcher + 150ms 防抖，Go 用 1s 轮询——更省依赖，延迟略高。 |
+
+### 未审计（本批剩余 60 文件）
 
 按行数排序，下一轮从这里继续：
 

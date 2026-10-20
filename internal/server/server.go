@@ -132,6 +132,7 @@ type Server struct {
 	fileSubs          map[string]fileSubscription
 	diffSubs          map[string]diffSubscription
 	clients           map[frameSink]bool
+	pollStop          chan struct{}
 	corsMu            sync.RWMutex
 	corsCache         []string
 	setupSnapshots    map[string]*setupSnapshot
@@ -203,6 +204,7 @@ func New(opts Options) (*Server, error) {
 		fileSubs:          make(map[string]fileSubscription),
 		diffSubs:          make(map[string]diffSubscription),
 		clients:           make(map[frameSink]bool),
+		pollStop:          make(chan struct{}),
 	}
 	srv.schedules = schedule.NewService(homeDir, srv.executeScheduledPiRun)
 	go func() {
@@ -210,6 +212,11 @@ func New(opts Options) (*Server, error) {
 		defer cancel()
 		_ = srv.probeOrCachedPiModels(pctx)
 	}()
+
+	// Nothing else drives file and git-diff subscriptions. Without this loop they are
+	// registered and then never fire, so an open editor never sees a file change made by an
+	// agent, and the diff panel never refreshes.
+	srv.startSubscriptionPoller()
 	return srv, nil
 }
 
@@ -220,6 +227,12 @@ func (s *Server) Store() *store.Store  { return s.store }
 
 // Close shuts down any live Pi agent subprocesses and PTY sessions.
 func (s *Server) Close() error {
+	// Stop the subscription poller before tearing down state it reads.
+	select {
+	case <-s.pollStop:
+	default:
+		close(s.pollStop)
+	}
 	s.mu.Lock()
 	agents := make([]*managedPi, 0, len(s.agents))
 	for _, a := range s.agents {

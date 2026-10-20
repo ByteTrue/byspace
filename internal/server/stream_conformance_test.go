@@ -900,3 +900,97 @@ func TestArchiveWorkspaceStopsItsAgents(t *testing.T) {
 	rec, _ := srv.store.GetAgent(agentID)
 	t.Fatalf("agent was not torn down by workspace archive: record=%+v", rec)
 }
+
+// TestFileSubscriptionFiresWithoutManualPoll pins that the poller is actually running.
+//
+// PollSubscriptionsOnce existed but nothing called it outside tests, so a subscribed editor
+// never received fs.file.update: an agent editing a file left the open buffer stale forever.
+func TestFileSubscriptionFiresWithoutManualPoll(t *testing.T) {
+	tmp := t.TempDir()
+	fakePi := writeFaithfulFakePi(t)
+	workDir := filepath.Join(tmp, "project")
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	watched := filepath.Join(workDir, "watched.txt")
+	if err := os.WriteFile(watched, []byte("one"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	srv, err := New(Options{HomeDir: filepath.Join(tmp, "home"), Version: "0.20.2-test", PiCommand: fakePi})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	ws, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ws.CloseNow()
+	if err := ws.Write(ctx, websocket.MessageText, []byte(`{"type":"hello","clientId":"filesub","protocolVersion":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	readUntilSessionType(t, ctx, ws, "status", "server_info")
+
+	subReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type": "fs.file.subscribe.request", "requestId": "sub1",
+			"subscriptionId": "fs-1",
+			"cwd":            workDir, "path": "watched.txt",
+		},
+	})
+	if err := ws.Write(ctx, websocket.MessageText, subReq); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for the subscribe response, then change the file. No manual poll call.
+	for {
+		rctx, rc := context.WithTimeout(ctx, 5*time.Second)
+		_, data, readErr := ws.Read(rctx)
+		rc()
+		if readErr != nil {
+			t.Fatalf("no subscribe response: %v", readErr)
+		}
+		var env struct {
+			Message struct {
+				Type string `json:"type"`
+			} `json:"message"`
+		}
+		if json.Unmarshal(data, &env) != nil {
+			continue
+		}
+		if env.Message.Type == "fs.file.subscribe.response" {
+			break
+		}
+	}
+	if err := os.WriteFile(watched, []byte("two"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		rctx, rc := context.WithTimeout(ctx, 2*time.Second)
+		_, data, readErr := ws.Read(rctx)
+		rc()
+		if readErr != nil {
+			break
+		}
+		var env struct {
+			Message struct {
+				Type string `json:"type"`
+			} `json:"message"`
+		}
+		if json.Unmarshal(data, &env) != nil {
+			continue
+		}
+		if env.Message.Type == "fs.file.update" {
+			return
+		}
+	}
+	t.Fatal("fs.file.update never arrived: the subscription poller is not running")
+}
