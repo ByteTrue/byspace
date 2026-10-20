@@ -2133,8 +2133,33 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				mp.record.LastStatus = sess.Status()
 				mp.record.UpdatedAt = nowStr
 				recCopy := mp.record
+				// Drop the dead runtime so the next send/resume rebuilds it from
+				// persistence instead of writing into a closed pipe. Node does this by
+				// closing the agent when the provider session dies.
+				delete(s.agents, rec.ID)
 				s.mu.Unlock()
 				_ = s.store.UpsertAgent(recCopy)
+				if evType == "process_exit" {
+					// A provider that dies mid-run ends the turn in `turn_failed`, not
+					// `turn_completed`: the client must surface the failure instead of
+					// waiting forever for output that will never arrive.
+					reason := "provider process exited"
+					if mp.session != nil {
+						if detail := mp.session.LastError(); detail != "" {
+							reason = detail
+						}
+					}
+					s.broadcastSessionMsg("agent_stream", map[string]any{
+						"agentId":   rec.ID,
+						"provider":  rec.Provider,
+						"timestamp": nowStr,
+						"event": map[string]any{
+							"type":     "turn_failed",
+							"provider": rec.Provider,
+							"error":    reason,
+						},
+					})
+				}
 				if evType == "agent_end" {
 					go s.syncPiPersistence(mp)
 					s.broadcastSessionMsg("agent_stream", map[string]any{

@@ -136,3 +136,42 @@ Epic 的实现阶段只做到「协议 Schema 校验通过 + 单元测试绿」�
 `file.upload.request.modifiedAt`（写回 mtime）、`forge.search.request.kinds`（种别过滤）、
 `create_agent_request.idempotencyKey`（重试去重，命中直接回既有 agent）、
 `callerAgentId`（落 `parentAgentId`）、`autoArchive`（落 `byspace.auto-archive` 标签）。
+
+## 第五轮：撤回自创设计，改为对齐 Node 的 failure 语义
+
+用户指出第四轮的修法方向错了：_「我们的前端大部分情况下是不需要做改动的，因为 node 版本
+不会有这些问题，那就是 go 版本的实现没有对齐 node 版本」_。
+
+核对 Node 后确认：**Node 没有 timeline 磁盘快照**。
+
+- `InMemoryAgentTimelineStore` 纯内存；
+- `toStoredAgentRecord` 落盘的只有 agent 元数据，没有 timeline 行；
+- 刷新后的历史由 `hydrateTimelineFromProvider` 从 **provider 自己的会话文件**重建；
+- provider 进程死掉时走 `closeAgent` → `closeAgentRuntime`，把 runtime 从
+  `this.agents` 摘掉，并 `persistSnapshot` 落元数据；
+- 轮次失败不是 `turn_completed`，而是 `turn_failed` + `finalizeForegroundTurn`
+  （`agent-manager.ts:2600`）。
+
+Go 版真正的偏差是**没有这两件事**：
+
+1. `process_exit` 只把记录状态写成 `closed`，**runtime 仍留在 `s.agents` 里**。
+   下一次发送写进一个已关闭的管道 → 没有响应、没有事件 → 前端永久转圈。
+   而 pi 没收到 prompt 就不会写自己的 `.jsonl`，刷新后那条消息自然不存在。
+2. 进程死亡发的是 `turn_completed`（我在第四轮还强化了这一点），而不是 `turn_failed`。
+
+修法（对齐 Node，不引入新存储）：
+
+- `process_exit` 时 `delete(s.agents, agentID)`，下次 `ensureAgentLoaded` 走
+  `resume_agent` 路径从持久化重建 runtime（对应 Node 的 close + resume）。
+- `process_exit` 广播 `turn_failed`（带 provider 的 `lastError`），不再伪装成成功结束。
+- 回滚第四轮新增的 `agents/timelines/*.json` 与 `store.SaveAgentTimeline`。
+
+守卫：`TestProcessExitFailsTurnAndReleasesRuntime` —— 假 pi 收下 prompt 立即退出，断言
+① 不得出现 `turn_completed` ② 必须出现 `turn_failed` ③ runtime 必须已从
+`s.agents` 摘除（否则下次发送继续写死管道）。
+
+### 结论
+
+「消息消失」不是缺持久化，而是 **runtime 没在该回收时回收**：pi 根本没收到第二条消息，
+所以它的会话文件里也没有——Node 同样不会把它变出来，差别在于 Node 不会让「发送成功」
+的假象成立。所以修的是生命周期，不是存储。

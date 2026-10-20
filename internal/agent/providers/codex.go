@@ -406,6 +406,10 @@ func (s *CodexSession) SeedTimeline(entries []pi.TimelineEntry) {
 
 func (s *CodexSession) SetNextClientMessageID(_ string) {}
 
+func (s *CodexSession) LastError() string {
+	return ""
+}
+
 func (s *CodexSession) StreamSeq() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()

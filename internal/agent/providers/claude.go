@@ -338,6 +338,10 @@ func (s *ClaudeSession) LastAssistantText() string {
 
 func (s *ClaudeSession) SetNextClientMessageID(_ string) {}
 
+func (s *ClaudeSession) LastError() string {
+	return ""
+}
+
 func (s *ClaudeSession) StreamSeq() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()

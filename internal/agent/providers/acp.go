@@ -508,6 +508,10 @@ func (s *ACPSession) SeedTimeline(entries []pi.TimelineEntry) {
 
 func (s *ACPSession) SetNextClientMessageID(_ string) {}
 
+func (s *ACPSession) LastError() string {
+	return ""
+}
+
 func (s *ACPSession) StreamSeq() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()

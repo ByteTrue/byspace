@@ -17,6 +17,7 @@ type ManagedSession interface {
 	Timeline() []pi.TimelineEntry
 	SeedTimeline(entries []pi.TimelineEntry)
 	StreamSeq() int
+	LastError() string
 	ActiveTurn() (string, string)
 	LastAssistantText() string
 	SetNextClientMessageID(id string)

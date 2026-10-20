@@ -274,3 +274,113 @@ func TestStreamConformanceMultiStepTurn(t *testing.T) {
 		t.Fatalf("expected a running agent_update during the turn, got only %v", statuses)
 	}
 }
+
+// TestProcessExitFailsTurnAndReleasesRuntime pins the Node-aligned recovery path:
+// when the provider dies mid-turn the daemon must (a) end the turn as `turn_failed`
+// so the client stops waiting, and (b) drop the dead runtime so the next send
+// rebuilds it from persistence instead of writing into a closed pipe.
+func TestProcessExitFailsTurnAndReleasesRuntime(t *testing.T) {
+	tmp := t.TempDir()
+	dying := filepath.Join(tmp, "dying-pi.sh")
+	// First prompt accepted, then the process exits without any turn events.
+	script := `#!/bin/sh
+read -r line || exit 0
+case "$line" in
+  *'"type":"prompt"'*) exit 1 ;;
+esac
+`
+	if err := os.WriteFile(dying, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	workDir := filepath.Join(tmp, "project")
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	srv, err := New(Options{HomeDir: filepath.Join(tmp, "home"), Version: "0.20.2-test", PiCommand: dying})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ws, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ws.CloseNow()
+	if err := ws.Write(ctx, websocket.MessageText, []byte(`{"type":"hello","clientId":"exit","protocolVersion":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	readUntilSessionType(t, ctx, ws, "status", "server_info")
+
+	createReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type": "create_agent_request", "requestId": "ex1",
+			"initialPrompt": "will kill the provider",
+			"config":        map[string]any{"provider": "pi", "cwd": workDir},
+		},
+	})
+	if err := ws.Write(ctx, websocket.MessageText, createReq); err != nil {
+		t.Fatal(err)
+	}
+
+	var agentID string
+	var sawTurnFailed, sawTurnCompleted bool
+	deadline := time.Now().Add(6 * time.Second)
+	for time.Now().Before(deadline) {
+		rctx, rc := context.WithTimeout(ctx, 2*time.Second)
+		_, data, readErr := ws.Read(rctx)
+		rc()
+		if readErr != nil {
+			break
+		}
+		var env struct {
+			Message struct {
+				Type    string         `json:"type"`
+				Payload map[string]any `json:"payload"`
+			} `json:"message"`
+		}
+		if json.Unmarshal(data, &env) != nil {
+			continue
+		}
+		p := env.Message.Payload
+		if env.Message.Type == "status" && p["status"] == "agent_created" {
+			agentID, _ = p["agentId"].(string)
+		}
+		if env.Message.Type == "agent_stream" {
+			event, _ := p["event"].(map[string]any)
+			switch event["type"] {
+			case "turn_failed":
+				sawTurnFailed = true
+			case "turn_completed":
+				sawTurnCompleted = true
+			}
+		}
+		if sawTurnFailed {
+			break
+		}
+	}
+
+	if agentID == "" {
+		t.Fatal("agent was never created")
+	}
+	if sawTurnCompleted {
+		t.Fatal("provider died mid-turn but the turn reported success")
+	}
+	if !sawTurnFailed {
+		t.Fatal("provider died mid-turn but no turn_failed was emitted; the client would wait forever")
+	}
+
+	// The dead runtime must be gone, otherwise the next prompt writes into a closed pipe.
+	srv.mu.Lock()
+	_, stillRegistered := srv.agents[agentID]
+	srv.mu.Unlock()
+	if stillRegistered {
+		t.Fatal("dead provider runtime is still registered; the next send would fail silently")
+	}
+}

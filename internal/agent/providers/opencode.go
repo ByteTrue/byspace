@@ -114,6 +114,10 @@ func (s *OpenCodeSession) SeedTimeline(entries []pi.TimelineEntry) {
 
 func (s *OpenCodeSession) SetNextClientMessageID(_ string) {}
 
+func (s *OpenCodeSession) LastError() string {
+	return ""
+}
+
 func (s *OpenCodeSession) StreamSeq() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()

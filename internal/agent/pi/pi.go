@@ -665,6 +665,13 @@ func (s *Session) SeedTimeline(entries []TimelineEntry) {
 	s.streamSeq = maxSeq
 }
 
+// LastError returns the provider's last fatal error message, if any.
+func (s *Session) LastError() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastError
+}
+
 // StreamSeq returns the highest emitted sequence number.
 func (s *Session) StreamSeq() int {
 	s.mu.Lock()
