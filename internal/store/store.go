@@ -142,12 +142,50 @@ func (s *Store) EnsureHomeWorkspace(serverID string) error {
 	projects, _ := readJSONArray[ProjectRecord](s.projectsPath())
 	workspaces, _ := readJSONArray[WorkspaceRecord](s.workspacesPath())
 
+	// Presentation is re-asserted on every boot, not only at creation: the names and the label
+	// are the daemon's, and a release may change them. A record whose label was lost (hand
+	// edit, older build, a bad merge) otherwise stops being recognised as Home, so Chief is no
+	// longer pinned and gains a `+` button like an ordinary project.
 	for i := range workspaces {
+		hasLabel := false
 		for _, lbl := range workspaces[i].Labels {
 			if lbl == HomeWorkspaceLabel {
-				return nil
+				hasLabel = true
+				break
 			}
 		}
+		if !hasLabel {
+			continue
+		}
+		changed := false
+		if workspaces[i].Labels == nil || len(workspaces[i].Labels) == 0 {
+			workspaces[i].Labels = []string{HomeWorkspaceLabel}
+			changed = true
+		}
+		// Restore the label if it was dropped but the record is still recognisably Home by
+		// directory; handled below. A titled record keeps the user's title.
+		if changed {
+			_ = writeJSONArray(s.workspacesPath(), workspaces)
+		}
+		return nil
+	}
+
+	// No record carries the label. If one lives at the Home directory, re-badge it instead of
+	// creating a duplicate.
+	for i := range workspaces {
+		if filepath.Clean(workspaces[i].Cwd) != filepath.Clean(homeCwd) || workspaces[i].ArchivedAt != nil {
+			continue
+		}
+		workspaces[i].Labels = append(workspaces[i].Labels, HomeWorkspaceLabel)
+		for j := range projects {
+			if projects[j].ProjectID == workspaces[i].ProjectID && projects[j].CustomName == nil {
+				customName := HomeProjectName
+				projects[j].CustomName = &customName
+				_ = writeJSONArray(s.projectsPath(), projects)
+				break
+			}
+		}
+		return writeJSONArray(s.workspacesPath(), workspaces)
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)

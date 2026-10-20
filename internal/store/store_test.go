@@ -99,3 +99,70 @@ func TestResolveWorkspaceIDForPath(t *testing.T) {
 		t.Fatalf("home must not act as a prefix: got %q, want empty", got)
 	}
 }
+
+// home-workspace.ts re-asserts Home presentation on every boot. A record that lost its label
+// stops being recognised, so Chief is no longer pinned and gains a `+` button like an ordinary
+// project. Re-badging the existing record also avoids creating a duplicate Home workspace.
+func TestEnsureHomeWorkspaceRestoresLostLabel(t *testing.T) {
+	s := New(t.TempDir())
+	if err := s.EnsureHomeWorkspace("srv_x"); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := s.ListWorkspaces()
+	if len(list) != 1 {
+		t.Fatalf("expected one workspace, got %d", len(list))
+	}
+	homeID := list[0].WorkspaceID
+
+	// Simulate a record whose label was dropped.
+	stripped := list[0]
+	stripped.Labels = nil
+	if err := s.UpsertWorkspace(stripped); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.EnsureHomeWorkspace("srv_x"); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := s.ListWorkspaces()
+	if len(after) != 1 {
+		t.Fatalf("must re-badge the existing record, not create a duplicate: got %d", len(after))
+	}
+	if after[0].WorkspaceID != homeID {
+		t.Fatalf("workspace id changed: %s -> %s", homeID, after[0].WorkspaceID)
+	}
+	hasLabel := false
+	for _, lbl := range after[0].Labels {
+		if lbl == HomeWorkspaceLabel {
+			hasLabel = true
+		}
+	}
+	if !hasLabel {
+		t.Fatalf("label was not restored: %+v", after[0].Labels)
+	}
+}
+
+// A healthy Home workspace is left alone, and a user-set title survives a boot.
+func TestEnsureHomeWorkspacePreservesUserTitle(t *testing.T) {
+	s := New(t.TempDir())
+	if err := s.EnsureHomeWorkspace("srv_x"); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := s.ListWorkspaces()
+	custom := "My Chief"
+	rec := list[0]
+	rec.Title = &custom
+	if err := s.UpsertWorkspace(rec); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.EnsureHomeWorkspace("srv_x"); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := s.ListWorkspaces()
+	if after[0].Title == nil || *after[0].Title != custom {
+		t.Fatalf("user title was overwritten: %v", after[0].Title)
+	}
+	if len(after) != 1 {
+		t.Fatalf("expected one workspace, got %d", len(after))
+	}
+}

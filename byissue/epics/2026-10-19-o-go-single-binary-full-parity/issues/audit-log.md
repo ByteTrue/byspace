@@ -63,7 +63,12 @@
 
 | `pid-lock.ts` | 364 | **PARTIAL** → 已补 | Node 的锁是 JSON（pid/startedAt/hostname/uid/listen/heartbeat）+ 30s 心跳 + **5 分钟陈旧回收**。Go 只写裸 PID：崩溃后 pid 被无关进程复用时，`IsStale` 无从判断，锁会一直挡住重启。已补 `PIDLockInfo`/`ReadPIDLock`/`IsStale`/`TouchPIDLock`，`serve` 启动时检查并拒绝重复实例，30s 心跳；旧格式（裸整数）仍可读。4 个测试覆盖往返、旧格式、死 pid、过期心跳。 |
 
-### 未审计（本批剩余 57 文件）
+| `config.ts` | 812 | **PARTIAL** → 已补安全项 | Node 支持 30 个环境变量，Go 缺关键几个。已补：**Host 白名单**（`BYSPACE_HOSTNAMES`/`BYSPACE_ALLOWED_HOSTS` + `config.daemon.hostnames`），挡 DNS rebinding —— 绑定 loopback 的 daemon 仍可被 `evil.example` 解析到 127.0.0.1 后访问，Host 头是唯一信号。实测伪造 Host 返回 403，`127.0.0.1`/`localhost`/机器名正常。仍缺：`BYSPACE_PASSWORD` 密码鉴权、`BYSPACE_TRUSTED_PROXIES`、git 并发限流、`BYSPACE_LOG_*` 日志级别、relay TLS 覆盖。 |
+| `home-workspace.ts` | 391 | **PARTIAL** → 已补 | Node **每次启动都重新断言** Home 的展示属性；Go 发现已存在就 `return nil`。label 一旦丢失（手改、旧版本、合并出错），Chief 就不再置顶、还多出 `+` 按钮。已补：按 cwd 重新打标而非新建重复记录，用户自设标题保留。2 个测试。 |
+| `web-ui.ts` | 271 | **PORTED** | gzip/br 内容协商、SPA 回退、连接提示注入、缓存头均已对齐。 |
+| `tunnel-manager.ts` | 567 | **MISSING** | 完整 TCP 端口转发子系统（每端口一个 listener + relay 流复用 + 断连宽限）。Go 的 `tunnel.*` 只是 `not_connected` 占位。**暂不实现**：验证需要两台机器，owner 明确说当前不具备条件，盲写风险高于收益。 |
+
+### 未审计（本批剩余 53 文件）
 
 按行数排序，下一轮从这里继续：
 

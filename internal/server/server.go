@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -133,6 +134,7 @@ type Server struct {
 	diffSubs          map[string]diffSubscription
 	clients           map[frameSink]bool
 	pollStop          chan struct{}
+	allowedHostnames  []string
 	corsMu            sync.RWMutex
 	corsCache         []string
 	setupSnapshots    map[string]*setupSnapshot
@@ -206,6 +208,9 @@ func New(opts Options) (*Server, error) {
 		clients:           make(map[frameSink]bool),
 		pollStop:          make(chan struct{}),
 	}
+	// BYSPACE_HOSTNAMES / BYSPACE_ALLOWED_HOSTS accept a comma-separated allow-list, and
+	// config.daemon.hostnames takes precedence when present.
+	srv.allowedHostnames = resolveAllowedHostnames(st)
 	srv.schedules = schedule.NewService(homeDir, srv.executeScheduledPiRun)
 	go func() {
 		pctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -274,6 +279,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// cross-origin browser sessions (Metro dev server, hosted PWA against a LAN daemon)
 	// are exactly what E2E and self-hosting rely on.
 	if s.applyCORS(w, r) {
+		return
+	}
+	// DNS-rebinding guard: a browser page on evil.example that resolves to 127.0.0.1 sends
+	// Host: evil.example, which a loopback-only daemon would otherwise accept. Reject any Host
+	// that is not loopback, the configured allow-list, or an IP literal.
+	if !s.hostAllowed(r.Host) {
+		http.Error(w, "Forbidden host", http.StatusForbidden)
 		return
 	}
 
@@ -3065,4 +3077,99 @@ func (s *Server) projectForWorkspace(projectID string) (store.ProjectRecord, boo
 		}
 	}
 	return store.ProjectRecord{}, false
+}
+
+// hostAllowed decides whether a request's Host header may be served.
+//
+// Ported from the hostnames allow-list in config.ts. A daemon bound to loopback is still
+// reachable by name from a browser: DNS rebinding points evil.example at 127.0.0.1 and the
+// request arrives with Host: evil.example. Loopback literals and the operator's configured
+// hostnames are the only Hosts that should be accepted.
+func (s *Server) hostAllowed(hostHeader string) bool {
+	host := hostHeader
+	if h, _, err := net.SplitHostPort(hostHeader); err == nil {
+		host = h
+	}
+	host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
+	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "" {
+		return true
+	}
+
+	// IP literals are unambiguous: the browser cannot rebind an IP.
+	if ip := net.ParseIP(host); ip != nil {
+		return true
+	}
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return true
+	}
+
+	s.mu.Lock()
+	allowed := append([]string(nil), s.allowedHostnames...)
+	s.mu.Unlock()
+	for _, entry := range allowed {
+		entry = strings.ToLower(strings.TrimSpace(entry))
+		if entry == "" {
+			continue
+		}
+		// "*" keeps the daemon usable behind an arbitrary reverse proxy; it is the
+		// operator's explicit choice, not a default.
+		if entry == "*" || entry == host {
+			return true
+		}
+		// Support a leading-dot suffix rule (".example.com").
+		if strings.HasPrefix(entry, ".") && strings.HasSuffix(host, entry) {
+			return true
+		}
+	}
+
+	// No allow-list configured: accept machine hostnames so `http://my-laptop.local:6777`
+	// keeps working, but still reject unrelated names.
+	if len(allowed) == 0 {
+		if machine, err := os.Hostname(); err == nil {
+			machine = strings.ToLower(machine)
+			if host == machine || host == machine+".local" {
+				return true
+			}
+		}
+		return false
+	}
+	return false
+}
+
+// resolveAllowedHostnames merges the persisted hostnames config with the environment.
+//
+// The env var wins when set, matching the precedence the node daemon documents: an operator
+// launching the container with BYSPACE_HOSTNAMES expects it to apply, not to be overridden by
+// whatever an old config.json happens to hold.
+func resolveAllowedHostnames(st *store.Store) []string {
+	split := func(raw string) []string {
+		out := make([]string, 0, 4)
+		for _, part := range strings.Split(raw, ",") {
+			if trimmed := strings.TrimSpace(part); trimmed != "" {
+				out = append(out, trimmed)
+			}
+		}
+		return out
+	}
+
+	for _, key := range []string{"BYSPACE_HOSTNAMES", "BYSPACE_ALLOWED_HOSTS"} {
+		if raw := strings.TrimSpace(os.Getenv(key)); raw != "" {
+			return split(raw)
+		}
+	}
+	if cfg := st.LoadDaemonConfig(); cfg != nil {
+		if daemon, ok := cfg["daemon"].(map[string]any); ok {
+			if list, ok := daemon["hostnames"].([]any); ok {
+				out := make([]string, 0, len(list))
+				for _, item := range list {
+					if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+						out = append(out, strings.TrimSpace(s))
+					}
+				}
+				return out
+			}
+		}
+	}
+	return nil
 }
