@@ -12,16 +12,22 @@ import (
 )
 
 func TestBuiltinProvidersCatalog(t *testing.T) {
-	if len(BuiltinProviders) != 10 {
-		t.Fatalf("expected 10 built-in providers, got %d", len(BuiltinProviders))
+	if len(BuiltinProviders) != 6 {
+		t.Fatalf("expected 6 core built-in providers, got %d", len(BuiltinProviders))
 	}
-	snaps := BuildSnapshotEntries(nil, "/bin/sh")
-	if len(snaps) != 10 {
-		t.Fatalf("expected 10 snapshot entries, got %d", len(snaps))
+	snaps := BuildSnapshotEntries(nil, "/bin/sh", nil)
+	if len(snaps) != 6 {
+		t.Fatalf("expected 6 default snapshot entries, got %d", len(snaps))
+	}
+	snapsWithCustom := BuildSnapshotEntries(nil, "/bin/sh", map[string]any{
+		"cursor": map[string]any{"extends": "acp", "label": "Cursor", "enabled": true},
+	})
+	if len(snapsWithCustom) != 7 {
+		t.Fatalf("expected 7 snapshot entries with opt-in custom provider, got %d", len(snapsWithCustom))
 	}
 	avail := BuildAvailableProviders("/bin/sh")
-	if len(avail) != 10 {
-		t.Fatalf("expected 10 available provider entries, got %d", len(avail))
+	if len(avail) != 6 {
+		t.Fatalf("expected 6 available provider entries, got %d", len(avail))
 	}
 }
 

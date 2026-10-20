@@ -69,32 +69,24 @@ var builtinThinkingOptions = []pi.ThinkingOption{
 	{ID: "high", Label: "High"},
 }
 
-// BuiltinProviders lists all 10 built-in agent providers supported by BySpace.
+// BuiltinProviders lists the 6 core built-in agent providers matching AGENT_PROVIDER_DEFINITIONS
+// in @bytetrue/protocol/provider-manifest (Claude, Codex, Copilot, OpenCode, Pi, Oh My Pi).
+// Additional ACP or derived providers (Cursor, Kimi, Kiro, Trae, Z.AI, Qwen, etc.) are opt-in
+// via "+ Add provider" in config.json (extends: "acp" | <builtin>).
 var BuiltinProviders = []ProviderSpec{
 	{
-		ID:          "pi",
-		Label:       "Pi",
-		Description: "Pi coding agent",
-		Binary:      "pi",
-		DefaultArgs: []string{"--mode", "rpc", "--approve"},
-		Protocol:    "pi-rpc",
-		Modes:       []ModeDefinition{},
-		Features:    []FeatureDefinition{},
-		Models:      pi.DefaultFallbackModels(),
-	},
-	{
 		ID:          "claude",
-		Label:       "Claude Code",
-		Description: "Anthropic Claude Code CLI agent",
+		Label:       "Claude",
+		Description: "Anthropic's official CLI for Claude models",
 		Binary:      "claude",
 		DefaultArgs: []string{"-p", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose"},
 		Protocol:    "claude-stream",
 		Modes: []ModeDefinition{
-			{ID: "default", Label: "Default", Description: "Prompts for permission on first use of each tool"},
-			{ID: "acceptEdits", Label: "Accept Edits", Description: "Automatically accepts file edit permissions for the session"},
-			{ID: "plan", Label: "Plan Mode", Description: "Claude can analyze and plan but cannot modify files or execute commands"},
-			{ID: "auto", Label: "Auto", Description: "Uses a background safety classifier to review actions before execution"},
-			{ID: "bypassPermissions", Label: "Bypass Permissions", Description: "Skips all permission prompts"},
+			{ID: "plan", Label: "Plan Mode", Description: "Analyze the codebase without executing tools or edits"},
+			{ID: "default", Label: "Always Ask", Description: "Prompts for permission the first time a tool is used"},
+			{ID: "acceptEdits", Label: "Accept File Edits", Description: "Automatically approves edit-focused tools without prompting"},
+			{ID: "auto", Label: "Auto mode", Description: "Uses a model classifier to review permission prompts automatically"},
+			{ID: "bypassPermissions", Label: "Bypass", Description: "Skip all permission prompts (use with caution)"},
 		},
 		Features: []FeatureDefinition{
 			{ID: "fast", Label: "Fast Mode", Kind: "toggle", DefaultValue: false},
@@ -108,15 +100,14 @@ var BuiltinProviders = []ProviderSpec{
 	{
 		ID:          "codex",
 		Label:       "Codex",
-		Description: "OpenAI Codex CLI agent",
+		Description: "OpenAI's lightweight coding agent that runs in your terminal",
 		Binary:      "codex",
 		DefaultArgs: []string{"app-server"},
 		Protocol:    "codex-rpc",
 		Modes: []ModeDefinition{
-			{ID: "auto", Label: "Auto", Description: "Balanced autonomous execution with safety checks"},
-			{ID: "plan", Label: "Plan", Description: "Read-only planning mode before execution"},
-			{ID: "auto-review", Label: "Auto Review", Description: "Autonomous execution with review checkpoints"},
-			{ID: "full-access", Label: "Full Access", Description: "Unrestricted command and file execution"},
+			{ID: "auto", Label: "Default Permissions", Description: "Edit files and run commands with Codex's default approval flow."},
+			{ID: "auto-review", Label: "Auto-review", Description: "Same workspace-write permissions as Default, routed through auto-reviewer."},
+			{ID: "full-access", Label: "Full Access", Description: "Edit files, run commands, and access the network without additional prompts."},
 		},
 		Features: []FeatureDefinition{
 			{ID: "fast", Label: "Fast Mode", Kind: "toggle", DefaultValue: false},
@@ -127,42 +118,9 @@ var BuiltinProviders = []ProviderSpec{
 		},
 	},
 	{
-		ID:          "opencode",
-		Label:       "OpenCode",
-		Description: "OpenCode AI coding agent",
-		Binary:      "opencode",
-		DefaultArgs: []string{"serve"},
-		Protocol:    "opencode-http",
-		Modes: []ModeDefinition{
-			{ID: "build", Label: "Build", Description: "Default build and implementation mode"},
-			{ID: "plan", Label: "Plan", Description: "Read-only architecture and planning mode"},
-		},
-		Features: []FeatureDefinition{},
-		Models: []pi.CatalogModel{
-			{ID: "anthropic/claude-sonnet-4-5", Label: "Claude Sonnet 4.5", Provider: "opencode", IsDefault: true, IsSelectable: true, ThinkingOptions: builtinThinkingOptions, DefaultThinkingOptionID: "medium"},
-		},
-	},
-	{
-		ID:          "omp",
-		Label:       "Oh My Pi",
-		Description: "Oh My Pi coding agent",
-		Binary:      "omp",
-		DefaultArgs: []string{"--mode", "rpc"},
-		Protocol:    "pi-rpc",
-		Modes: []ModeDefinition{
-			{ID: "full", Label: "Full", Description: "Approve all tool invocations automatically"},
-			{ID: "write", Label: "Write", Description: "Allow file writes while prompting for shell commands"},
-			{ID: "ask", Label: "Ask", Description: "Prompt before tool execution"},
-		},
-		Features: []FeatureDefinition{},
-		Models: []pi.CatalogModel{
-			{ID: "default", Label: "OMP Default", Provider: "omp", IsDefault: true, IsSelectable: true, ThinkingOptions: builtinThinkingOptions, DefaultThinkingOptionID: "medium"},
-		},
-	},
-	{
 		ID:          "copilot",
-		Label:       "GitHub Copilot",
-		Description: "GitHub Copilot ACP agent",
+		Label:       "Copilot",
+		Description: "GitHub's AI pair programmer with agentic capabilities",
 		Binary:      "copilot",
 		DefaultArgs: []string{"--acp"},
 		Protocol:    "acp",
@@ -178,71 +136,101 @@ var BuiltinProviders = []ProviderSpec{
 		},
 	},
 	{
+		ID:          "opencode",
+		Label:       "OpenCode",
+		Description: "Open-source coding assistant with multi-provider model support",
+		Binary:      "opencode",
+		DefaultArgs: []string{"serve"},
+		Protocol:    "opencode-http",
+		Modes: []ModeDefinition{
+			{ID: "build", Label: "Build", Description: "Default mode with full tool access for building and editing"},
+			{ID: "plan", Label: "Plan", Description: "Read-only planning mode that avoids file edits"},
+		},
+		Features: []FeatureDefinition{},
+		Models: []pi.CatalogModel{
+			{ID: "anthropic/claude-sonnet-4-5", Label: "Claude Sonnet 4.5", Provider: "opencode", IsDefault: true, IsSelectable: true, ThinkingOptions: builtinThinkingOptions, DefaultThinkingOptionID: "medium"},
+		},
+	},
+	{
+		ID:          "pi",
+		Label:       "Pi",
+		Description: "Minimal terminal-based coding agent with multi-provider LLM support",
+		Binary:      "pi",
+		DefaultArgs: []string{"--mode", "rpc", "--approve"},
+		Protocol:    "pi-rpc",
+		Modes:       []ModeDefinition{},
+		Features:    []FeatureDefinition{},
+		Models:      pi.DefaultFallbackModels(),
+	},
+	{
+		ID:          "omp",
+		Label:       "Oh My Pi",
+		Description: "Multi-provider coding agent with native approvals, host tools, and subagents",
+		Binary:      "omp",
+		DefaultArgs: []string{"--mode", "rpc"},
+		Protocol:    "pi-rpc",
+		Modes: []ModeDefinition{
+			{ID: "full", Label: "Full Access", Description: "Launches OMP with yolo approval mode so tools run without prompts."},
+			{ID: "write", Label: "Write Approval", Description: "Launches OMP with write approval mode — reads are free, writes require approval."},
+			{ID: "ask", Label: "Always Ask", Description: "Launches OMP with always-ask approval mode for write and exec tools."},
+		},
+		Features: []FeatureDefinition{},
+		Models: []pi.CatalogModel{
+			{ID: "default", Label: "OMP Default", Provider: "omp", IsDefault: true, IsSelectable: true, ThinkingOptions: builtinThinkingOptions, DefaultThinkingOptionID: "medium"},
+		},
+	},
+}
+
+// ACPPresets defines known ACP preset specifications when a user adds them via "+ Add provider"
+// or launches an agent with their provider ID.
+var ACPPresets = map[string]ProviderSpec{
+	"cursor": {
 		ID:          "cursor",
 		Label:       "Cursor",
 		Description: "Cursor ACP agent",
 		Binary:      "cursor-agent",
 		DefaultArgs: []string{"--acp"},
 		Protocol:    "acp",
-		Modes: []ModeDefinition{
-			{ID: "agent", Label: "Agent", Description: "Cursor agent mode"},
-			{ID: "plan", Label: "Plan", Description: "Cursor plan mode"},
-		},
-		Features: []FeatureDefinition{
-			{ID: "fast", Label: "Fast", Kind: "toggle", DefaultValue: false},
-		},
-		Models: []pi.CatalogModel{
-			{ID: "default", Label: "Cursor Default", Provider: "cursor", IsDefault: true, IsSelectable: true},
-		},
+		Modes:       []ModeDefinition{{ID: "agent", Label: "Agent"}, {ID: "plan", Label: "Plan"}},
+		Features:    []FeatureDefinition{{ID: "fast", Label: "Fast", Kind: "toggle", DefaultValue: false}},
+		Models:      []pi.CatalogModel{{ID: "default", Label: "Cursor Default", Provider: "cursor", IsDefault: true, IsSelectable: true}},
 	},
-	{
+	"kimi": {
 		ID:          "kimi",
 		Label:       "Kimi",
 		Description: "Kimi Code ACP agent",
 		Binary:      "kimi",
 		DefaultArgs: []string{"--acp"},
 		Protocol:    "acp",
-		Modes: []ModeDefinition{
-			{ID: "agent", Label: "Agent", Description: "Kimi agent mode"},
-		},
-		Features: []FeatureDefinition{},
-		Models: []pi.CatalogModel{
-			{ID: "kimi-k2.5", Label: "Kimi K2.5", Provider: "kimi", IsDefault: true, IsSelectable: true, ThinkingOptions: builtinThinkingOptions, DefaultThinkingOptionID: "medium"},
-		},
+		Modes:       []ModeDefinition{{ID: "agent", Label: "Agent"}},
+		Features:    []FeatureDefinition{},
+		Models:      []pi.CatalogModel{{ID: "kimi-k2.5", Label: "Kimi K2.5", Provider: "kimi", IsDefault: true, IsSelectable: true, ThinkingOptions: builtinThinkingOptions, DefaultThinkingOptionID: "medium"}},
 	},
-	{
+	"kiro": {
 		ID:          "kiro",
 		Label:       "Kiro",
 		Description: "Kiro ACP agent",
 		Binary:      "kiro-cli",
 		DefaultArgs: []string{"chat", "--acp"},
 		Protocol:    "acp",
-		Modes: []ModeDefinition{
-			{ID: "agent", Label: "Agent", Description: "Kiro agent mode"},
-		},
-		Features: []FeatureDefinition{},
-		Models: []pi.CatalogModel{
-			{ID: "default", Label: "Kiro Default", Provider: "kiro", IsDefault: true, IsSelectable: true},
-		},
+		Modes:       []ModeDefinition{{ID: "agent", Label: "Agent"}},
+		Features:    []FeatureDefinition{},
+		Models:      []pi.CatalogModel{{ID: "default", Label: "Kiro Default", Provider: "kiro", IsDefault: true, IsSelectable: true}},
 	},
-	{
+	"trae": {
 		ID:          "trae",
 		Label:       "Trae",
 		Description: "Trae ACP agent",
 		Binary:      "trae-cli",
 		DefaultArgs: []string{"acp"},
 		Protocol:    "acp",
-		Modes: []ModeDefinition{
-			{ID: "agent", Label: "Agent", Description: "Trae agent mode"},
-		},
-		Features: []FeatureDefinition{},
-		Models: []pi.CatalogModel{
-			{ID: "default", Label: "Trae Default", Provider: "trae", IsDefault: true, IsSelectable: true},
-		},
+		Modes:       []ModeDefinition{{ID: "agent", Label: "Agent"}},
+		Features:    []FeatureDefinition{},
+		Models:      []pi.CatalogModel{{ID: "default", Label: "Trae Default", Provider: "trae", IsDefault: true, IsSelectable: true}},
 	},
 }
 
-// GetProviderSpec returns the ProviderSpec for a given provider ID (or a generic ACP fallback for custom providers).
+// GetProviderSpec returns the ProviderSpec for a given provider ID (built-in, known ACP preset, or generic ACP fallback).
 func GetProviderSpec(providerID string) ProviderSpec {
 	id := strings.TrimSpace(providerID)
 	if id == "" {
@@ -252,6 +240,9 @@ func GetProviderSpec(providerID string) ProviderSpec {
 		if p.ID == id {
 			return p
 		}
+	}
+	if preset, ok := ACPPresets[id]; ok {
+		return preset
 	}
 	return ProviderSpec{
 		ID:          id,
@@ -281,30 +272,82 @@ func IsBinaryAvailable(spec ProviderSpec, piCommandOverride string) bool {
 	return err == nil
 }
 
-// BuildSnapshotEntries builds the `entries` array for `get_providers_snapshot_response`.
-func BuildSnapshotEntries(piModels []pi.CatalogModel, piCommandOverride string) []map[string]any {
+// BuildSnapshotEntries builds the `entries` array for `get_providers_snapshot_response`,
+// including the 6 built-in providers plus any custom/derived providers configured in config.json.
+func BuildSnapshotEntries(piModels []pi.CatalogModel, piCommandOverride string, customProviders map[string]any) []map[string]any {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	entries := make([]map[string]any, 0, len(BuiltinProviders))
+	entries := make([]map[string]any, 0, len(BuiltinProviders)+len(customProviders))
+	builtinSet := make(map[string]bool, len(BuiltinProviders))
+
 	for _, spec := range BuiltinProviders {
+		builtinSet[spec.ID] = true
 		avail := IsBinaryAvailable(spec, piCommandOverride)
-		status := "ready"
-		if !avail {
-			status = "unavailable"
+		enabled := avail && spec.ID != "omp"
+		if override, ok := customProviders[spec.ID].(map[string]any); ok {
+			if en, hasEn := override["enabled"].(bool); hasEn {
+				enabled = en
+			}
+		}
+		status := "unavailable"
+		if enabled && avail {
+			status = "ready"
 		}
 		models := spec.Models
 		if spec.ID == "pi" && len(piModels) > 0 {
 			models = piModels
 		}
+		if !enabled {
+			models = []pi.CatalogModel{}
+		}
 		entries = append(entries, map[string]any{
 			"provider":    spec.ID,
 			"label":       spec.Label,
 			"status":      status,
-			"enabled":     avail || spec.ID == "pi",
+			"enabled":     enabled,
 			"source":      "builtin",
 			"fetchedAt":   now,
 			"models":      models,
 			"modes":       spec.Modes,
 			"description": spec.Description,
+		})
+	}
+
+	// Append user-added custom/plugin providers (e.g. Cursor, Kimi, Kiro, Trae, Z.AI, etc.)
+	for id, rawCfg := range customProviders {
+		if builtinSet[id] {
+			continue
+		}
+		cfgMap, ok := rawCfg.(map[string]any)
+		if !ok {
+			continue
+		}
+		spec := GetProviderSpec(id)
+		label, _ := cfgMap["label"].(string)
+		if label == "" {
+			label = spec.Label
+		}
+		desc, _ := cfgMap["description"].(string)
+		if desc == "" {
+			desc = spec.Description
+		}
+		enabled := true
+		if en, hasEn := cfgMap["enabled"].(bool); hasEn {
+			enabled = en
+		}
+		status := "ready"
+		if !enabled {
+			status = "unavailable"
+		}
+		entries = append(entries, map[string]any{
+			"provider":    id,
+			"label":       label,
+			"status":      status,
+			"enabled":     enabled,
+			"source":      "custom",
+			"fetchedAt":   now,
+			"models":      spec.Models,
+			"modes":       spec.Modes,
+			"description": desc,
 		})
 	}
 	return entries

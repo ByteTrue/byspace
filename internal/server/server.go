@@ -731,10 +731,12 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		_ = json.Unmarshal(raw, &req)
 		now := time.Now().UTC().Format(time.RFC3339Nano)
 		models := s.probeOrCachedPiModels(ctx)
+		cfg := s.store.LoadDaemonConfig()
+		customProvs, _ := cfg["providers"].(map[string]any)
 		respPayload := map[string]any{
 			"requestId":   base.RequestID,
 			"generatedAt": now,
-			"entries":     providers.BuildSnapshotEntries(models, s.piCommand),
+			"entries":     providers.BuildSnapshotEntries(models, s.piCommand, customProvs),
 		}
 		if strings.TrimSpace(req.Cwd) != "" {
 			respPayload["cwd"] = req.Cwd
