@@ -145,6 +145,8 @@ func New(opts Options) (*Server, error) {
 	}
 	ui = ui.WithConnectionHint("BySpace")
 
+	st := store.New(homeDir)
+	_ = st.EnsureHomeWorkspace(serverID)
 	srv := &Server{
 		homeDir:           homeDir,
 		serverID:          serverID,
@@ -152,7 +154,7 @@ func New(opts Options) (*Server, error) {
 		keyPair:           kp,
 		pubKeyB64:         pubB64,
 		vapidKeys:         vapidKeys,
-		store:             store.New(homeDir),
+		store:             st,
 		webUI:             ui,
 		piCommand:         opts.PiCommand,
 		piSessionDir:      opts.PiSessionDir,
@@ -575,6 +577,8 @@ func (s *Server) buildServerInfoPayload() map[string]any {
 		"features": map[string]any{
 			"webPush":                      s.vapidKeys.PublicKey != "",
 			"skillInstallTargets":          true,
+			"agentRoles":                   true,
+			"agentRoleNames":               []string{"chief"},
 			"agentRequestReceipts":         true,
 			"hubAgentRpc":                  true,
 			"directorySync":                true,
@@ -588,8 +592,6 @@ func (s *Server) buildServerInfoPayload() map[string]any {
 			"plugins":                      true,
 			"pluginManagement":             true,
 			"skillManagement":              true,
-			"agentRoles":                   true,
-			"agentRoleNames":               []string{},
 			"daemonTunnels":                true,
 			"projectSetupSkill":            true,
 			"terminalAgentHookProviders":   true,
@@ -1975,6 +1977,10 @@ func buildWorkspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord)
 	default:
 		workspaceKind = "local_checkout"
 	}
+	labels := ws.Labels
+	if labels == nil {
+		labels = []string{}
+	}
 	return map[string]any{
 		"id":                        ws.WorkspaceID,
 		"projectId":                 prj.ProjectID,
@@ -1988,6 +1994,7 @@ func buildWorkspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord)
 		"workspaceKind":             workspaceKind,
 		"name":                      name,
 		"title":                     ws.Title,
+		"labels":                    labels,
 		"pinnedAt":                  ws.PinnedAt,
 		"archivingAt":               nil,
 		"status":                    "done",

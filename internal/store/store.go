@@ -111,9 +111,84 @@ type Store struct {
 	homeDir string
 }
 
+const (
+	HomeWorkspaceLabel   = "byspace.home-workspace"
+	HomeWorkspaceTitle   = "Chief"
+	HomeProjectName      = "BySpace-WorkSpace"
+	HomeWorkspaceDirName = "chief"
+)
+
 // New creates a Store rooted at homeDir.
 func New(homeDir string) *Store {
 	return &Store{homeDir: homeDir}
+}
+
+// EnsureHomeWorkspace ensures the daemon-owned Chief home workspace ($BYSPACE_HOME/chief)
+// exists with the reserved "byspace.home-workspace" label and "BySpace-WorkSpace" project name.
+func (s *Store) EnsureHomeWorkspace(serverID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	homeCwd := filepath.Join(s.homeDir, HomeWorkspaceDirName)
+	if err := os.MkdirAll(homeCwd, 0o700); err != nil {
+		return err
+	}
+
+	projects, _ := readJSONArray[ProjectRecord](s.projectsPath())
+	workspaces, _ := readJSONArray[WorkspaceRecord](s.workspacesPath())
+
+	for i := range workspaces {
+		for _, lbl := range workspaces[i].Labels {
+			if lbl == HomeWorkspaceLabel {
+				return nil
+			}
+		}
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	customName := HomeProjectName
+	prjKey := "host:" + serverID + ":" + homeCwd
+	var prjID string
+	for i := range projects {
+		if projects[i].RootPath == homeCwd && projects[i].ArchivedAt == nil {
+			prjID = projects[i].ProjectID
+			if projects[i].CustomName == nil {
+				projects[i].CustomName = &customName
+				_ = writeJSONArray(s.projectsPath(), projects)
+			}
+			break
+		}
+	}
+	if prjID == "" {
+		prj := ProjectRecord{
+			ProjectID:   NewProjectID(),
+			RootPath:    homeCwd,
+			Kind:        "directory",
+			DisplayName: HomeWorkspaceDirName,
+			ProjectKey:  &prjKey,
+			CustomName:  &customName,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+		projects = append(projects, prj)
+		_ = writeJSONArray(s.projectsPath(), projects)
+		prjID = prj.ProjectID
+	}
+
+	title := HomeWorkspaceTitle
+	ws := WorkspaceRecord{
+		WorkspaceID: NewWorkspaceID(),
+		ProjectID:   prjID,
+		Cwd:         homeCwd,
+		Kind:        "directory",
+		DisplayName: HomeWorkspaceDirName,
+		Title:       &title,
+		Labels:      []string{HomeWorkspaceLabel},
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	workspaces = append([]WorkspaceRecord{ws}, workspaces...)
+	return writeJSONArray(s.workspacesPath(), workspaces)
 }
 
 func (s *Store) projectsPath() string {
