@@ -286,11 +286,16 @@ func runServe(version string, args []string, stdout io.Writer) error {
 	}
 	defer srv.Close()
 
-	ln, err := net.Listen("tcp", *addr)
+	// BYSPACE_LISTEN accepts tcp, unix socket and windows named pipe forms; see
+	// daemon.ParseListenTarget for why sockets matter in restricted environments.
+	listenTarget, err := daemon.ParseListenTarget(*addr)
 	if err != nil {
 		return err
 	}
-
+	ln, err := listenTarget.Listen()
+	if err != nil {
+		return err
+	}
 	myPID := os.Getpid()
 	_ = daemon.WritePID(srv.HomeDir(), myPID)
 	defer daemon.RemovePID(srv.HomeDir(), myPID)
@@ -319,7 +324,7 @@ func runServe(version string, args []string, stdout io.Writer) error {
 		_ = httpSrv.Shutdown(sctx)
 	}()
 
-	fmt.Fprintf(stdout, "● byspace daemon (%s) listening on http://%s [serverId=%s]\n", version, ln.Addr().String(), srv.ServerID())
+	fmt.Fprintf(stdout, "● byspace daemon (%s) listening on %s [serverId=%s]\n", version, listenTarget.Address(), srv.ServerID())
 	err = httpSrv.Serve(ln)
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil

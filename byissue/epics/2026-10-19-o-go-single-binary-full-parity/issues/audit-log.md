@@ -46,7 +46,9 @@
 - 标识符参数（`sendSessionMsg(..., respType, ...)`）被 `slice(1,-1)` 切成 `espTy`，导致所有 `respType` 派生的响应都识别不到
 - 同一分支内 `if` 二次赋值 `respType` 时只认第一个（`github_search_response` 被误报）；顺手把该处代码改成两个显式调用，静态可见
 
-### 未审计（本批剩余 68 文件）
+| `bootstrap.ts` | 1883 | **PARTIAL** → 已补 | 启动流程。已补：`BYSPACE_LISTEN` 支持 unix socket / named pipe（Node 支持 6 种形式，Go 只做 TCP）、启动时清理废弃的 `agent-timelines` 目录。仍缺：managed helper process 台账对账（`reapStale`）、启动时 skills 维护、`terminalProfiles`/`agentProfiles` 从启动参数注入、trustedProxies。 |
+
+### 未审计（本批剩余 67 文件）
 
 按行数排序，下一轮从这里继续：
 

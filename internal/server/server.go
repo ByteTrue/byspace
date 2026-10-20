@@ -170,6 +170,11 @@ func New(opts Options) (*Server, error) {
 	st.SetServerID(serverID)
 	// E2E specs assert exact workspace counts, so the daemon-owned Chief workspace must be
 	// suppressible: with it present every count shifts by one.
+	// Node removes the pre-1.0 `agent-timelines` directory on every boot; it was superseded by
+	// provider-owned transcripts. Leaving it behind means old timeline files linger and can be
+	// picked up by nothing, but they do consume disk and confuse anyone inspecting the home.
+	_ = os.RemoveAll(filepath.Join(homeDir, "agent-timelines"))
+
 	// Existing homes may hold projects persisted before key derivation existed; without a key
 	// they cannot join a cross-host group.
 	_ = st.BackfillProjectKeys()
