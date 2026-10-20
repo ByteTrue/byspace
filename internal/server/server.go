@@ -1417,11 +1417,21 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 		ws.Title = req.Title
 		_ = s.store.UpsertWorkspace(ws)
 	}
+	// Same reason as the worktree path: opening a workspace that has never been set up
+	// must run its setup commands, otherwise the first command the user types fails.
+	setupCommands := workspace.ReadSetupCommands(ws.Cwd)
+	setupSkippedReason := any(nil)
+	if len(setupCommands) == 0 {
+		setupSkippedReason = "no setup commands configured"
+	} else {
+		go s.runWorkspaceSetup(ws.WorkspaceID, ws.Cwd, "", setupCommands)
+	}
+
 	respPayload := map[string]any{
 		"requestId":          req.RequestID,
 		"workspace":          buildWorkspaceDescriptor(ws, prj),
 		"setupTerminalId":    nil,
-		"setupSkippedReason": nil,
+		"setupSkippedReason": setupSkippedReason,
 		"error":              nil,
 		"errorCode":          nil,
 	}

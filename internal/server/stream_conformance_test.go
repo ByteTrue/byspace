@@ -621,3 +621,157 @@ func TestPairingQRHasFinderPatterns(t *testing.T) {
 		}
 	}
 }
+
+// TestWorkspaceCreateRunsSetup pins the bootstrap behaviour ported from
+// runAsyncWorktreeBootstrap: a workspace whose byspace.json declares setup commands must run
+// them, and report why when there are none.
+//
+// Without this a freshly created worktree looks ready but has no node_modules, so the first
+// command the user runs fails.
+func TestWorkspaceCreateRunsSetup(t *testing.T) {
+	tmp := t.TempDir()
+	fakePi := writeFaithfulFakePi(t)
+	workDir := filepath.Join(tmp, "project")
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(workDir, "setup-ran.txt")
+	manifest := `{"setup":"echo ready > setup-ran.txt"}`
+	if err := os.WriteFile(filepath.Join(workDir, "byspace.json"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	srv, err := New(Options{HomeDir: filepath.Join(tmp, "home"), Version: "0.20.2-test", PiCommand: fakePi})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	ws, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ws.CloseNow()
+	if err := ws.Write(ctx, websocket.MessageText, []byte(`{"type":"hello","clientId":"setup","protocolVersion":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	readUntilSessionType(t, ctx, ws, "status", "server_info")
+
+	createReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type":      "workspace.create.request",
+			"requestId": "wc1",
+			"source":    map[string]any{"kind": "directory", "path": workDir},
+		},
+	})
+	if err := ws.Write(ctx, websocket.MessageText, createReq); err != nil {
+		t.Fatal(err)
+	}
+
+	// The response must say setup is running (not "no setup commands configured").
+	var skipped any
+	deadline := time.Now().Add(6 * time.Second)
+	for time.Now().Before(deadline) {
+		rctx, rc := context.WithTimeout(ctx, 2*time.Second)
+		_, data, readErr := ws.Read(rctx)
+		rc()
+		if readErr != nil {
+			break
+		}
+		var env struct {
+			Message struct {
+				Type    string         `json:"type"`
+				Payload map[string]any `json:"payload"`
+			} `json:"message"`
+		}
+		if json.Unmarshal(data, &env) != nil {
+			continue
+		}
+		if env.Message.Type == "workspace.create.response" {
+			skipped = env.Message.Payload["setupSkippedReason"]
+			break
+		}
+	}
+	if skipped != nil {
+		t.Fatalf("expected setup to start, got setupSkippedReason=%v", skipped)
+	}
+
+	// And it must actually run.
+	runDeadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(runDeadline) {
+		if _, statErr := os.Stat(marker); statErr == nil {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatal("setup command never ran: setup-ran.txt was not created")
+}
+
+// A workspace whose manifest has no setup block must say so instead of silently doing nothing.
+func TestWorkspaceCreateReportsSkippedSetup(t *testing.T) {
+	tmp := t.TempDir()
+	fakePi := writeFaithfulFakePi(t)
+	workDir := filepath.Join(tmp, "plain")
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	srv, err := New(Options{HomeDir: filepath.Join(tmp, "home"), Version: "0.20.2-test", PiCommand: fakePi})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ws, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ws.CloseNow()
+	if err := ws.Write(ctx, websocket.MessageText, []byte(`{"type":"hello","clientId":"nosetup","protocolVersion":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	readUntilSessionType(t, ctx, ws, "status", "server_info")
+
+	createReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type": "workspace.create.request", "requestId": "wc2",
+			"source": map[string]any{"kind": "directory", "path": workDir},
+		},
+	})
+	if err := ws.Write(ctx, websocket.MessageText, createReq); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		rctx, rc := context.WithTimeout(ctx, 3*time.Second)
+		_, data, readErr := ws.Read(rctx)
+		rc()
+		if readErr != nil {
+			t.Fatalf("no workspace.create.response: %v", readErr)
+		}
+		var env struct {
+			Message struct {
+				Type    string         `json:"type"`
+				Payload map[string]any `json:"payload"`
+			} `json:"message"`
+		}
+		if json.Unmarshal(data, &env) != nil {
+			continue
+		}
+		if env.Message.Type != "workspace.create.response" {
+			continue
+		}
+		if env.Message.Payload["setupSkippedReason"] != "no setup commands configured" {
+			t.Fatalf("expected an explicit skip reason, got %v", env.Message.Payload["setupSkippedReason"])
+		}
+		return
+	}
+}

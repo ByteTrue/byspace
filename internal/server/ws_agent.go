@@ -415,13 +415,25 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 	s.broadcastWorkspaceUpsert(wsRec, prj)
 	s.broadcastCheckoutStatusUpdate(ctx, wsRec.Cwd)
 
+	// A fresh worktree has no node_modules and no .env, so setup has to run before the
+	// workspace is usable. Node starts it asynchronously and streams progress into the
+	// worktree_setup timeline item; without it a new worktree looks ready but every command
+	// inside it fails.
+	setupCommands := workspace.ReadSetupCommands(wtPath)
+	setupSkippedReason := any(nil)
+	if len(setupCommands) == 0 {
+		setupSkippedReason = "no setup commands configured"
+	} else {
+		go s.runWorkspaceSetup(wsRec.WorkspaceID, wtPath, branch, setupCommands)
+	}
+
 	desc := buildWorkspaceDescriptor(wsRec, prj)
 	_ = sendSessionMsg(ctx, sink, "create_byspace_worktree_response", map[string]any{
 		"workspace":          desc,
 		"error":              nil,
 		"errorCode":          nil,
 		"setupTerminalId":    nil,
-		"setupSkippedReason": nil,
+		"setupSkippedReason": setupSkippedReason,
 		"requestId":          req.RequestID,
 	})
 }

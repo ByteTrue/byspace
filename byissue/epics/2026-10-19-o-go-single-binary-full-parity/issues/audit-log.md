@@ -48,7 +48,10 @@
 
 | `bootstrap.ts` | 1883 | **PARTIAL** → 已补 | 启动流程。已补：`BYSPACE_LISTEN` 支持 unix socket / named pipe（Node 支持 6 种形式，Go 只做 TCP）、启动时清理废弃的 `agent-timelines` 目录。仍缺：managed helper process 台账对账（`reapStale`）、启动时 skills 维护、`terminalProfiles`/`agentProfiles` 从启动参数注入、trustedProxies。 |
 
-### 未审计（本批剩余 67 文件）
+| `worktree-bootstrap.ts` | 1101 | **PARTIAL** → 已补核心 | **创建工作区/worktree 后从不跑 setup**——`setupTerminalId` 恒为 nil，`byspace.json` 的 setup 命令在新 worktree 里永远不执行，导致「新建的 worktree 看起来就绪，但第一条命令就失败」。已补：`workspace.create` 与 `create_byspace_worktree` 都异步启动 setup 并流式上报进度；无 setup 命令时在 `setupSkippedReason` 里说明。测试 `TestWorkspaceCreateRunsSetup` / `TestWorkspaceCreateReportsSkippedSetup`。仍缺：`runtimeEnv` 解析（worktree 专属环境变量注入终端）、失败时清理、`runWorktreeAutoTerminals`、脚本生命周期的 port/proxy 部分。 |
+| `worktree-session.ts` | 929 | **PARTIAL** | worktree 会话级操作大多走 `internal/workspace/git.go`；缺自动终端与脚本 teardown。 |
+
+### 未审计（本批剩余 65 文件）
 
 按行数排序，下一轮从这里继续：
 
