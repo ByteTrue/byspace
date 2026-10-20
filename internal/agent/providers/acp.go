@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ByteTrue/byspace/internal/agent/pi"
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
 // ACPSession hosts any Agent Client Protocol (ACP) JSON-RPC 2.0 agent
@@ -38,9 +38,9 @@ type ACPSession struct {
 	activeTurnID       string
 	activeTextIdx      int
 	activeThinkIdx     int
-	timeline           []pi.TimelineEntry
+	timeline           []sdk.TimelineEntry
 	toolIndexByID      map[string]int
-	commands           []pi.SlashCommand
+	commands           []sdk.SlashCommand
 	pendingPermissions map[string]map[string]any
 	permissionRPCIDs   map[string]any
 	finishWaiters      []chan error
@@ -320,7 +320,7 @@ func (s *ACPSession) handleNotificationOrRequest(method string, rpcID any, msg m
 					name = strings.TrimLeft(name, "/")
 					desc, _ := m["description"].(string)
 					if name != "" {
-						s.commands = append(s.commands, pi.SlashCommand{
+						s.commands = append(s.commands, sdk.SlashCommand{
 							Name:        name,
 							Description: desc,
 							Source:      "acp",
@@ -349,7 +349,7 @@ func (s *ACPSession) handleNotificationOrRequest(method string, rpcID any, msg m
 		text := extractACPChunkText(upd)
 		if text != "" {
 			if s.activeTextIdx < 0 || s.activeTextIdx >= len(s.timeline) {
-				s.activeTextIdx = s.appendItemLocked(pi.TimelineItem{
+				s.activeTextIdx = s.appendItemLocked(sdk.TimelineItem{
 					Type: "assistant_message",
 					Text: text,
 				})
@@ -362,7 +362,7 @@ func (s *ACPSession) handleNotificationOrRequest(method string, rpcID any, msg m
 		text := extractACPChunkText(upd)
 		if text != "" {
 			if s.activeThinkIdx < 0 || s.activeThinkIdx >= len(s.timeline) {
-				s.activeThinkIdx = s.appendItemLocked(pi.TimelineItem{
+				s.activeThinkIdx = s.appendItemLocked(sdk.TimelineItem{
 					Type: "reasoning",
 					Text: text,
 				})
@@ -381,12 +381,12 @@ func (s *ACPSession) handleNotificationOrRequest(method string, rpcID any, msg m
 		if title == "" {
 			title = "tool"
 		}
-		idx := s.appendItemLocked(pi.TimelineItem{
+		idx := s.appendItemLocked(sdk.TimelineItem{
 			Type:   "tool_call",
 			CallID: callID,
 			Name:   title,
 			Status: "running",
-			Detail: pi.BuildToolCallDetail(strings.ToLower(title), upd["rawInput"], nil),
+			Detail: sdk.BuildToolCallDetail(strings.ToLower(title), upd["rawInput"], nil),
 			Error:  nil,
 		})
 		if callID != "" {
@@ -409,7 +409,7 @@ func (s *ACPSession) handleNotificationOrRequest(method string, rpcID any, msg m
 		}
 		if idx, ok := s.toolIndexByID[callID]; ok && idx >= 0 && idx < len(s.timeline) {
 			s.timeline[idx].Item.Status = normStatus
-			s.timeline[idx].Item.Detail = pi.BuildToolCallDetail(strings.ToLower(s.timeline[idx].Item.Name), upd["rawInput"], upd["rawOutput"])
+			s.timeline[idx].Item.Detail = sdk.BuildToolCallDetail(strings.ToLower(s.timeline[idx].Item.Name), upd["rawInput"], upd["rawOutput"])
 		}
 		extraEvents = append(extraEvents, map[string]any{
 			"type":       "tool_execution_end",
@@ -424,7 +424,7 @@ func (s *ACPSession) handleNotificationOrRequest(method string, rpcID any, msg m
 					name, _ := m["name"].(string)
 					desc, _ := m["description"].(string)
 					if name != "" {
-						s.commands = append(s.commands, pi.SlashCommand{
+						s.commands = append(s.commands, sdk.SlashCommand{
 							Name:        strings.TrimLeft(name, "/"),
 							Description: desc,
 							Source:      "acp",
@@ -465,9 +465,9 @@ func (s *ACPSession) copySubscribersLocked() []func(map[string]any) {
 	return subs
 }
 
-func (s *ACPSession) appendItemLocked(item pi.TimelineItem) int {
+func (s *ACPSession) appendItemLocked(item sdk.TimelineItem) int {
 	seq := len(s.timeline) + 1
-	s.timeline = append(s.timeline, pi.TimelineEntry{
+	s.timeline = append(s.timeline, sdk.TimelineEntry{
 		Seq:       seq,
 		TurnID:    s.activeTurnID,
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
@@ -491,18 +491,18 @@ func (s *ACPSession) Status() string {
 	return s.status
 }
 
-func (s *ACPSession) Timeline() []pi.TimelineEntry {
+func (s *ACPSession) Timeline() []sdk.TimelineEntry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]pi.TimelineEntry, len(s.timeline))
+	out := make([]sdk.TimelineEntry, len(s.timeline))
 	copy(out, s.timeline)
 	return out
 }
 
-func (s *ACPSession) SeedTimeline(entries []pi.TimelineEntry) {
+func (s *ACPSession) SeedTimeline(entries []sdk.TimelineEntry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.timeline = make([]pi.TimelineEntry, len(entries))
+	s.timeline = make([]sdk.TimelineEntry, len(entries))
 	copy(s.timeline, entries)
 }
 
@@ -538,14 +538,14 @@ func (s *ACPSession) LastAssistantText() string {
 	return ""
 }
 
-func (s *ACPSession) Prompt(ctx context.Context, message string, images []pi.ImageContent) error {
+func (s *ACPSession) Prompt(ctx context.Context, message string, images []sdk.ImageContent) error {
 	s.mu.Lock()
 	s.turnCounter++
 	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
 	s.status = "running"
 	s.activeTextIdx = -1
 	s.activeThinkIdx = -1
-	s.appendItemLocked(pi.TimelineItem{
+	s.appendItemLocked(sdk.TimelineItem{
 		Type: "user_message",
 		Text: message,
 	})
@@ -587,7 +587,7 @@ func (s *ACPSession) Prompt(ctx context.Context, message string, images []pi.Ima
 	return nil
 }
 
-func (s *ACPSession) Steer(ctx context.Context, message string, images []pi.ImageContent) error {
+func (s *ACPSession) Steer(ctx context.Context, message string, images []sdk.ImageContent) error {
 	return s.Prompt(ctx, message, images)
 }
 
@@ -617,17 +617,17 @@ func (s *ACPSession) WaitForFinish(ctx context.Context) error {
 	}
 }
 
-func (s *ACPSession) GetState(_ context.Context) (*pi.SessionState, error) {
+func (s *ACPSession) GetState(_ context.Context) (*sdk.SessionState, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return &pi.SessionState{
+	return &sdk.SessionState{
 		SessionID:     s.sessionID,
 		ThinkingLevel: s.thinking,
 		IsStreaming:   s.status == "running",
 	}, nil
 }
 
-func (s *ACPSession) SetModel(ctx context.Context, provider, modelID string) (*pi.Model, error) {
+func (s *ACPSession) SetModel(ctx context.Context, provider, modelID string) (*sdk.Model, error) {
 	s.mu.Lock()
 	s.model = modelID
 	sid := s.sessionID
@@ -637,7 +637,7 @@ func (s *ACPSession) SetModel(ctx context.Context, provider, modelID string) (*p
 		"configId":  "model",
 		"value":     modelID,
 	})
-	return &pi.Model{Provider: provider, ID: modelID, Name: modelID}, nil
+	return &sdk.Model{Provider: provider, ID: modelID, Name: modelID}, nil
 }
 
 func (s *ACPSession) SetThinkingLevel(ctx context.Context, level string) error {
@@ -653,10 +653,10 @@ func (s *ACPSession) SetThinkingLevel(ctx context.Context, level string) error {
 	return nil
 }
 
-func (s *ACPSession) GetCommands(_ context.Context) ([]pi.SlashCommand, error) {
+func (s *ACPSession) GetCommands(_ context.Context) ([]sdk.SlashCommand, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]pi.SlashCommand, len(s.commands))
+	out := make([]sdk.SlashCommand, len(s.commands))
 	copy(out, s.commands)
 	return out, nil
 }
@@ -698,12 +698,12 @@ func (s *ACPSession) RespondToPermission(requestID string, resp map[string]any) 
 	})
 }
 
-func (s *ACPSession) ListSubagents(_ string) []pi.SubagentDescriptor {
-	return []pi.SubagentDescriptor{}
+func (s *ACPSession) ListSubagents(_ string) []sdk.SubagentDescriptor {
+	return []sdk.SubagentDescriptor{}
 }
 
-func (s *ACPSession) GetSubagent(_, _ string) (pi.SubagentDescriptor, bool) {
-	return pi.SubagentDescriptor{}, false
+func (s *ACPSession) GetSubagent(_, _ string) (sdk.SubagentDescriptor, bool) {
+	return sdk.SubagentDescriptor{}, false
 }
 
 func (s *ACPSession) OnEvent(fn func(map[string]any)) func() {

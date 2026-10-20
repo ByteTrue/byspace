@@ -7,25 +7,6 @@ import (
 	"time"
 )
 
-// SubagentDescriptor mirrors ProviderSubagentDescriptorPayloadSchema in packages/protocol.
-type SubagentDescriptor struct {
-	ID               string  `json:"id"`
-	ParentAgentID    string  `json:"parentAgentId"`
-	ParentSubagentID *string `json:"parentSubagentId,omitempty"`
-	Provider         string  `json:"provider"`
-	Title            *string `json:"title"`
-	Description      *string `json:"description"`
-	Status           string  `json:"status"` // "running" | "completed" | "failed" | "canceled"
-	CreatedAt        string  `json:"createdAt"`
-	UpdatedAt        string  `json:"updatedAt"`
-	ToolCallID       *string `json:"toolCallId"`
-	Cwd              *string `json:"cwd,omitempty"`
-
-	// Internal pointer fields used for timeline recovery
-	SessionID   string `json:"-"`
-	SessionFile string `json:"-"`
-}
-
 func mapSubagentStatus(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "running", "pending", "starting":

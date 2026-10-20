@@ -3,28 +3,15 @@ package pi
 import (
 	"context"
 	"strings"
+
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
-// CatalogModel represents a BySpace-formatted AgentModelDefinition derived from Pi's model list.
-type CatalogModel struct {
-	ID                      string            `json:"id"`
-	Label                   string            `json:"label"`
-	Description             string            `json:"description,omitempty"`
-	Provider                string            `json:"provider"`
-	Metadata                map[string]string `json:"metadata,omitempty"`
-	IsDefault               bool              `json:"isDefault,omitempty"`
-	IsSelectable            bool              `json:"isSelectable,omitempty"`
-	ThinkingOptions         []ThinkingOption  `json:"thinkingOptions,omitempty"`
-	DefaultThinkingOptionID string            `json:"defaultThinkingOptionId,omitempty"`
-}
-
-// ThinkingOption represents a selectable reasoning level for a model.
-type ThinkingOption struct {
-	ID          string `json:"id"`
-	Label       string `json:"label"`
-	Description string `json:"description,omitempty"`
-	IsDefault   bool   `json:"isDefault,omitempty"`
-}
+// CatalogModel and ThinkingOption live in internal/agent/sdk; aliased for pi call sites.
+type (
+	CatalogModel   = sdk.CatalogModel
+	ThinkingOption = sdk.ThinkingOption
+)
 
 var allPiThinkingOptions = []ThinkingOption{
 	{ID: "off", Label: "Off", Description: "No extra reasoning"},

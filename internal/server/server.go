@@ -1322,20 +1322,35 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 	var req struct {
 		RequestID   string `json:"requestId"`
 		SearchQuery string `json:"searchQuery"`
+		Search      string `json:"search"`
 		Scope       string `json:"scope"`
 		Page        *struct {
 			Limit  int    `json:"limit"`
 			Cursor string `json:"cursor"`
 		} `json:"page"`
-		Filter    map[string]any `json:"filter"`
-		Sort      string         `json:"sort"`
-		Limit     int            `json:"limit"`
-		Cursor    string         `json:"cursor"`
+		Filter map[string]any `json:"filter"`
+		// `sort` is an array of {key, direction} in the protocol; a bare string is also accepted.
+		SortKeys []struct {
+			Key       string `json:"key"`
+			Direction string `json:"direction"`
+		} `json:"sort"`
+		Sort      string `json:"sortString"`
+		Limit     int    `json:"limit"`
+		Cursor    string `json:"cursor"`
 		Subscribe *struct {
 			SubscriptionID string `json:"subscriptionId"`
 		} `json:"subscribe"`
 	}
 	_ = json.Unmarshal(raw, &req)
+
+	searchQuery := req.SearchQuery
+	if strings.TrimSpace(searchQuery) == "" {
+		searchQuery = req.Search
+	}
+	sortField := req.Sort
+	if sortField == "" && len(req.SortKeys) > 0 {
+		sortField = req.SortKeys[0].Key
+	}
 
 	limit := req.Limit
 	cursor := req.Cursor
@@ -1372,7 +1387,7 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 			}
 		}
 	}
-	records, hasMore, nextCursor := FilterAndSortAgents(activeOrHist, req.SearchQuery, req.Filter, req.Sort, limit, cursor)
+	records, hasMore, nextCursor := FilterAndSortAgents(activeOrHist, searchQuery, req.Filter, sortField, limit, cursor)
 
 	projects, _ := s.store.ListProjects()
 	workspaces, _ := s.store.ListWorkspaces()

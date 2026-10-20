@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/agent/jsonl"
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
 var leadingMagicTagRe = regexp.MustCompile(`^§[0-9]+§[ \t]*`)
@@ -46,107 +47,19 @@ func stripLeadingSectionTag(s string) (string, bool) {
 	return after, false
 }
 
-// PromptImage is a base64 image payload attached to a prompt.
-type PromptImage struct {
-	Data     string `json:"data"`
-	MimeType string `json:"mimeType"`
-}
-
-// ImageContent represents a base64 image block passed to Pi RPC prompt/steer.
-type ImageContent struct {
-	Type     string `json:"type"`
-	Data     string `json:"data"`
-	MimeType string `json:"mimeType"`
-}
-
-// Model describes a Pi model entry returned by get_available_models or get_state.
-type Model struct {
-	Provider         string             `json:"provider"`
-	ID               string             `json:"id"`
-	Name             string             `json:"name,omitempty"`
-	Reasoning        bool               `json:"reasoning,omitempty"`
-	ThinkingLevelMap map[string]*string `json:"thinkingLevelMap,omitempty"`
-	ContextWindow    int                `json:"contextWindow,omitempty"`
-	MaxTokens        int                `json:"maxTokens,omitempty"`
-	API              string             `json:"api,omitempty"`
-	BaseURL          string             `json:"baseUrl,omitempty"`
-	Cost             map[string]any     `json:"cost,omitempty"`
-}
-
-// SessionState mirrors PiSessionState in packages/server/src/server/agent/providers/pi/rpc-types.ts.
-type SessionState struct {
-	Model                 *Model `json:"model,omitempty"`
-	ThinkingLevel         string `json:"thinkingLevel"`
-	IsStreaming           bool   `json:"isStreaming"`
-	IsCompacting          bool   `json:"isCompacting"`
-	AutoCompactionEnabled bool   `json:"autoCompactionEnabled,omitempty"`
-	SessionFile           string `json:"sessionFile,omitempty"`
-	SessionID             string `json:"sessionId"`
-	SessionName           string `json:"sessionName,omitempty"`
-	MessageCount          int    `json:"messageCount"`
-	PendingMessageCount   int    `json:"pendingMessageCount"`
-}
-
-// SessionStats mirrors PiSessionStats.
-type SessionStats struct {
-	Tokens map[string]int `json:"tokens,omitempty"`
-	Cost   float64        `json:"cost,omitempty"`
-}
-
-// SlashCommand mirrors PiRpcSlashCommand.
-type SlashCommand struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Source      string `json:"source"`
-}
-
-// TimelineItem represents a normalized BySpace timeline item (user_message, assistant_message, reasoning, tool_call).
-type TimelineItem struct {
-	Type            string `json:"type"`
-	Text            string `json:"text,omitempty"`
-	MessageID       string `json:"messageId,omitempty"`
-	ClientMessageID string `json:"clientMessageId,omitempty"`
-	CallID          string `json:"callId,omitempty"`
-	Name            string `json:"name,omitempty"`
-	Status          string `json:"status,omitempty"`
-	Detail          any    `json:"detail,omitempty"`
-	Error           any    `json:"error,omitempty"`
-}
-
-// MarshalJSON ensures tool_call items always serialize "error": null when Error is nil,
-// matching ToolCallRunningPayloadSchema / ToolCallCompletedPayloadSchema in @bytetrue/protocol.
-func (i TimelineItem) MarshalJSON() ([]byte, error) {
-	if i.Type == "tool_call" {
-		return json.Marshal(map[string]any{
-			"type":   i.Type,
-			"callId": i.CallID,
-			"name":   i.Name,
-			"status": i.Status,
-			"detail": i.Detail,
-			"error":  i.Error,
-		})
-	}
-	m := map[string]any{
-		"type": i.Type,
-		"text": i.Text,
-	}
-	if i.MessageID != "" {
-		m["messageId"] = i.MessageID
-	}
-	if i.ClientMessageID != "" {
-		m["clientMessageId"] = i.ClientMessageID
-	}
-	return json.Marshal(m)
-}
-
-// TimelineEntry wraps a TimelineItem with sequence and timestamp metadata.
-type TimelineEntry struct {
-	Seq       int          `json:"seq"`
-	SeqEnd    int          `json:"seqEnd,omitempty"`
-	TurnID    string       `json:"turnId,omitempty"`
-	Timestamp string       `json:"timestamp"`
-	Item      TimelineItem `json:"item"`
-}
+// The agent-facing types live in internal/agent/sdk so every provider shares one definition;
+// these aliases keep the pi-local spelling for call sites that predate the move.
+type (
+	ImageContent       = sdk.ImageContent
+	PromptImage        = sdk.PromptImage
+	Model              = sdk.Model
+	SessionState       = sdk.SessionState
+	SessionStats       = sdk.SessionStats
+	SlashCommand       = sdk.SlashCommand
+	TimelineItem       = sdk.TimelineItem
+	TimelineEntry      = sdk.TimelineEntry
+	SubagentDescriptor = sdk.SubagentDescriptor
+)
 
 // LaunchOptions configures how the Pi subprocess is started.
 type LaunchOptions struct {

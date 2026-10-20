@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ByteTrue/byspace/internal/agent/pi"
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
 // CodexSession hosts a `codex app-server` JSON-RPC 2.0 subprocess.
@@ -35,11 +35,11 @@ type CodexSession struct {
 	activeTurnID       string
 	activeTextIdx      int
 	activeThinkIdx     int
-	timeline           []pi.TimelineEntry
+	timeline           []sdk.TimelineEntry
 	toolIndexByID      map[string]int
 	pendingPermissions map[string]map[string]any
 	permissionRPCIDs   map[string]any
-	subagents          map[string]pi.SubagentDescriptor
+	subagents          map[string]sdk.SubagentDescriptor
 	finishWaiters      []chan error
 	eventSubscribers   map[int]func(map[string]any)
 	nextSubID          int
@@ -88,7 +88,7 @@ func StartCodexSession(cfg LaunchConfig, cmdOverride string) (*CodexSession, err
 		toolIndexByID:      make(map[string]int),
 		pendingPermissions: make(map[string]map[string]any),
 		permissionRPCIDs:   make(map[string]any),
-		subagents:          make(map[string]pi.SubagentDescriptor),
+		subagents:          make(map[string]sdk.SubagentDescriptor),
 		eventSubscribers:   make(map[int]func(map[string]any)),
 	}
 	go s.readLoop(stdout)
@@ -243,7 +243,7 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 		delta, _ := params["delta"].(string)
 		if delta != "" {
 			if s.activeTextIdx < 0 || s.activeTextIdx >= len(s.timeline) {
-				s.activeTextIdx = s.appendItemLocked(pi.TimelineItem{
+				s.activeTextIdx = s.appendItemLocked(sdk.TimelineItem{
 					Type: "assistant_message",
 					Text: delta,
 				})
@@ -256,7 +256,7 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 		delta, _ := params["delta"].(string)
 		if delta != "" {
 			if s.activeThinkIdx < 0 || s.activeThinkIdx >= len(s.timeline) {
-				s.activeThinkIdx = s.appendItemLocked(pi.TimelineItem{
+				s.activeThinkIdx = s.appendItemLocked(sdk.TimelineItem{
 					Type: "reasoning",
 					Text: delta,
 				})
@@ -271,12 +271,12 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 			itemID, _ := item["id"].(string)
 			if itemType == "commandExecution" {
 				cmdStr, _ := item["command"].(string)
-				idx := s.appendItemLocked(pi.TimelineItem{
+				idx := s.appendItemLocked(sdk.TimelineItem{
 					Type:   "tool_call",
 					CallID: itemID,
 					Name:   "bash",
 					Status: "running",
-					Detail: pi.BuildToolCallDetail("bash", map[string]any{"command": cmdStr}, nil),
+					Detail: sdk.BuildToolCallDetail("bash", map[string]any{"command": cmdStr}, nil),
 					Error:  nil,
 				})
 				if itemID != "" {
@@ -298,7 +298,7 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 			case "agentMessage":
 				txt, _ := item["text"].(string)
 				if txt != "" && s.activeTextIdx < 0 {
-					s.activeTextIdx = s.appendItemLocked(pi.TimelineItem{
+					s.activeTextIdx = s.appendItemLocked(sdk.TimelineItem{
 						Type: "assistant_message",
 						Text: txt,
 					})
@@ -309,7 +309,7 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 				cmdStr, _ := item["command"].(string)
 				if idx, ok := s.toolIndexByID[itemID]; ok && idx >= 0 && idx < len(s.timeline) {
 					s.timeline[idx].Item.Status = "completed"
-					s.timeline[idx].Item.Detail = pi.BuildToolCallDetail("bash", map[string]any{"command": cmdStr}, outStr)
+					s.timeline[idx].Item.Detail = sdk.BuildToolCallDetail("bash", map[string]any{"command": cmdStr}, outStr)
 				}
 				extraEvents = append(extraEvents, map[string]any{
 					"type":       "tool_execution_end",
@@ -363,9 +363,9 @@ func (s *CodexSession) handleNotificationOrRequest(method string, rpcID any, msg
 	}
 }
 
-func (s *CodexSession) appendItemLocked(item pi.TimelineItem) int {
+func (s *CodexSession) appendItemLocked(item sdk.TimelineItem) int {
 	seq := len(s.timeline) + 1
-	s.timeline = append(s.timeline, pi.TimelineEntry{
+	s.timeline = append(s.timeline, sdk.TimelineEntry{
 		Seq:       seq,
 		TurnID:    s.activeTurnID,
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
@@ -389,18 +389,18 @@ func (s *CodexSession) Status() string {
 	return s.status
 }
 
-func (s *CodexSession) Timeline() []pi.TimelineEntry {
+func (s *CodexSession) Timeline() []sdk.TimelineEntry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]pi.TimelineEntry, len(s.timeline))
+	out := make([]sdk.TimelineEntry, len(s.timeline))
 	copy(out, s.timeline)
 	return out
 }
 
-func (s *CodexSession) SeedTimeline(entries []pi.TimelineEntry) {
+func (s *CodexSession) SeedTimeline(entries []sdk.TimelineEntry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.timeline = make([]pi.TimelineEntry, len(entries))
+	s.timeline = make([]sdk.TimelineEntry, len(entries))
 	copy(s.timeline, entries)
 }
 
@@ -436,14 +436,14 @@ func (s *CodexSession) LastAssistantText() string {
 	return ""
 }
 
-func (s *CodexSession) Prompt(ctx context.Context, message string, images []pi.ImageContent) error {
+func (s *CodexSession) Prompt(ctx context.Context, message string, images []sdk.ImageContent) error {
 	s.mu.Lock()
 	s.turnCounter++
 	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
 	s.status = "running"
 	s.activeTextIdx = -1
 	s.activeThinkIdx = -1
-	s.appendItemLocked(pi.TimelineItem{
+	s.appendItemLocked(sdk.TimelineItem{
 		Type: "user_message",
 		Text: message,
 	})
@@ -459,7 +459,7 @@ func (s *CodexSession) Prompt(ctx context.Context, message string, images []pi.I
 	return err
 }
 
-func (s *CodexSession) Steer(ctx context.Context, message string, images []pi.ImageContent) error {
+func (s *CodexSession) Steer(ctx context.Context, message string, images []sdk.ImageContent) error {
 	return s.Prompt(ctx, message, images)
 }
 
@@ -489,21 +489,21 @@ func (s *CodexSession) WaitForFinish(ctx context.Context) error {
 	}
 }
 
-func (s *CodexSession) GetState(_ context.Context) (*pi.SessionState, error) {
+func (s *CodexSession) GetState(_ context.Context) (*sdk.SessionState, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return &pi.SessionState{
+	return &sdk.SessionState{
 		SessionID:     s.threadID,
 		ThinkingLevel: s.thinking,
 		IsStreaming:   s.status == "running",
 	}, nil
 }
 
-func (s *CodexSession) SetModel(_ context.Context, provider, modelID string) (*pi.Model, error) {
+func (s *CodexSession) SetModel(_ context.Context, provider, modelID string) (*sdk.Model, error) {
 	s.mu.Lock()
 	s.model = modelID
 	s.mu.Unlock()
-	return &pi.Model{Provider: provider, ID: modelID, Name: modelID}, nil
+	return &sdk.Model{Provider: provider, ID: modelID, Name: modelID}, nil
 }
 
 func (s *CodexSession) SetThinkingLevel(_ context.Context, level string) error {
@@ -513,8 +513,8 @@ func (s *CodexSession) SetThinkingLevel(_ context.Context, level string) error {
 	return nil
 }
 
-func (s *CodexSession) GetCommands(_ context.Context) ([]pi.SlashCommand, error) {
-	return []pi.SlashCommand{
+func (s *CodexSession) GetCommands(_ context.Context) ([]sdk.SlashCommand, error) {
+	return []sdk.SlashCommand{
 		{Name: "compact", Description: "Compact thread context", Source: "builtin"},
 	}, nil
 }
@@ -551,12 +551,12 @@ func (s *CodexSession) RespondToPermission(requestID string, resp map[string]any
 	})
 }
 
-func (s *CodexSession) ListSubagents(_ string) []pi.SubagentDescriptor {
-	return []pi.SubagentDescriptor{}
+func (s *CodexSession) ListSubagents(_ string) []sdk.SubagentDescriptor {
+	return []sdk.SubagentDescriptor{}
 }
 
-func (s *CodexSession) GetSubagent(_, _ string) (pi.SubagentDescriptor, bool) {
-	return pi.SubagentDescriptor{}, false
+func (s *CodexSession) GetSubagent(_, _ string) (sdk.SubagentDescriptor, bool) {
+	return sdk.SubagentDescriptor{}, false
 }
 
 func (s *CodexSession) OnEvent(fn func(map[string]any)) func() {

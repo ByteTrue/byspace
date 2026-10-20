@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ByteTrue/byspace/internal/agent/pi"
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
 // OpenCodeSession hosts an OpenCode agent via its HTTP/SSE server (`opencode serve`)
@@ -33,7 +33,7 @@ type OpenCodeSession struct {
 	thinking         string
 	turnCounter      int
 	activeTurnID     string
-	timeline         []pi.TimelineEntry
+	timeline         []sdk.TimelineEntry
 	finishWaiters    []chan error
 	eventSubscribers map[int]func(map[string]any)
 	nextSubID        int
@@ -97,18 +97,18 @@ func (s *OpenCodeSession) Status() string {
 	return s.status
 }
 
-func (s *OpenCodeSession) Timeline() []pi.TimelineEntry {
+func (s *OpenCodeSession) Timeline() []sdk.TimelineEntry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]pi.TimelineEntry, len(s.timeline))
+	out := make([]sdk.TimelineEntry, len(s.timeline))
 	copy(out, s.timeline)
 	return out
 }
 
-func (s *OpenCodeSession) SeedTimeline(entries []pi.TimelineEntry) {
+func (s *OpenCodeSession) SeedTimeline(entries []sdk.TimelineEntry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.timeline = make([]pi.TimelineEntry, len(entries))
+	s.timeline = make([]sdk.TimelineEntry, len(entries))
 	copy(s.timeline, entries)
 }
 
@@ -144,16 +144,16 @@ func (s *OpenCodeSession) LastAssistantText() string {
 	return ""
 }
 
-func (s *OpenCodeSession) Prompt(_ context.Context, message string, images []pi.ImageContent) error {
+func (s *OpenCodeSession) Prompt(_ context.Context, message string, images []sdk.ImageContent) error {
 	s.mu.Lock()
 	s.turnCounter++
 	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
 	s.status = "running"
-	s.timeline = append(s.timeline, pi.TimelineEntry{
+	s.timeline = append(s.timeline, sdk.TimelineEntry{
 		Seq:       len(s.timeline) + 1,
 		TurnID:    s.activeTurnID,
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
-		Item: pi.TimelineItem{
+		Item: sdk.TimelineItem{
 			Type: "user_message",
 			Text: message,
 		},
@@ -197,11 +197,11 @@ func (s *OpenCodeSession) Prompt(_ context.Context, message string, images []pi.
 
 		s.mu.Lock()
 		if replyText != "" {
-			s.timeline = append(s.timeline, pi.TimelineEntry{
+			s.timeline = append(s.timeline, sdk.TimelineEntry{
 				Seq:       len(s.timeline) + 1,
 				TurnID:    s.activeTurnID,
 				Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
-				Item: pi.TimelineItem{
+				Item: sdk.TimelineItem{
 					Type: "assistant_message",
 					Text: replyText,
 				},
@@ -231,7 +231,7 @@ func (s *OpenCodeSession) Prompt(_ context.Context, message string, images []pi.
 	return nil
 }
 
-func (s *OpenCodeSession) Steer(ctx context.Context, message string, images []pi.ImageContent) error {
+func (s *OpenCodeSession) Steer(ctx context.Context, message string, images []sdk.ImageContent) error {
 	return s.Prompt(ctx, message, images)
 }
 
@@ -262,21 +262,21 @@ func (s *OpenCodeSession) WaitForFinish(ctx context.Context) error {
 	}
 }
 
-func (s *OpenCodeSession) GetState(_ context.Context) (*pi.SessionState, error) {
+func (s *OpenCodeSession) GetState(_ context.Context) (*sdk.SessionState, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return &pi.SessionState{
+	return &sdk.SessionState{
 		SessionID:     s.sessionID,
 		ThinkingLevel: s.thinking,
 		IsStreaming:   s.status == "running",
 	}, nil
 }
 
-func (s *OpenCodeSession) SetModel(_ context.Context, provider, modelID string) (*pi.Model, error) {
+func (s *OpenCodeSession) SetModel(_ context.Context, provider, modelID string) (*sdk.Model, error) {
 	s.mu.Lock()
 	s.model = modelID
 	s.mu.Unlock()
-	return &pi.Model{Provider: provider, ID: modelID, Name: modelID}, nil
+	return &sdk.Model{Provider: provider, ID: modelID, Name: modelID}, nil
 }
 
 func (s *OpenCodeSession) SetThinkingLevel(_ context.Context, level string) error {
@@ -286,8 +286,8 @@ func (s *OpenCodeSession) SetThinkingLevel(_ context.Context, level string) erro
 	return nil
 }
 
-func (s *OpenCodeSession) GetCommands(_ context.Context) ([]pi.SlashCommand, error) {
-	return []pi.SlashCommand{
+func (s *OpenCodeSession) GetCommands(_ context.Context) ([]sdk.SlashCommand, error) {
+	return []sdk.SlashCommand{
 		{Name: "compact", Description: "Compact session", Source: "builtin"},
 	}, nil
 }
@@ -300,12 +300,12 @@ func (s *OpenCodeSession) RespondToPermission(_ string, _ map[string]any) error 
 	return nil
 }
 
-func (s *OpenCodeSession) ListSubagents(_ string) []pi.SubagentDescriptor {
-	return []pi.SubagentDescriptor{}
+func (s *OpenCodeSession) ListSubagents(_ string) []sdk.SubagentDescriptor {
+	return []sdk.SubagentDescriptor{}
 }
 
-func (s *OpenCodeSession) GetSubagent(_, _ string) (pi.SubagentDescriptor, bool) {
-	return pi.SubagentDescriptor{}, false
+func (s *OpenCodeSession) GetSubagent(_, _ string) (sdk.SubagentDescriptor, bool) {
+	return sdk.SubagentDescriptor{}, false
 }
 
 func (s *OpenCodeSession) OnEvent(fn func(map[string]any)) func() {

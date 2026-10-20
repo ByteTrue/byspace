@@ -1,198 +1,20 @@
 package pi
 
 import (
-	"fmt"
 	"strings"
+
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
-const QuestionResponseHeader = "Answer"
+const QuestionResponseHeader = sdk.QuestionResponseHeader
 
-// BuildToolCallDetail maps Pi tool arguments and results into BySpace's structured ToolCallDetail
-// (shell, read, edit, write, search, fetch, sub_agent, or unknown).
+// BuildToolCallDetail and ExtractResultText are shared provider vocabulary; the definition
+// lives in internal/agent/sdk. Aliased here because pi call sites read better unqualified.
 func BuildToolCallDetail(toolName string, args any, result any) map[string]any {
-	argsMap, _ := args.(map[string]any)
-	outText := extractResultText(result)
-
-	switch strings.TrimSpace(toolName) {
-	case "bash":
-		cmd, _ := argsMap["command"].(string)
-		if cmd == "" {
-			cmd = "(shell command)"
-		}
-		detail := map[string]any{
-			"type":    "shell",
-			"command": cmd,
-		}
-		if outText != "" {
-			detail["output"] = outText
-		}
-		if resMap, ok := result.(map[string]any); ok {
-			if details, ok := resMap["details"].(map[string]any); ok {
-				if code, ok := details["exitCode"].(float64); ok {
-					detail["exitCode"] = int(code)
-				}
-			}
-		}
-		return detail
-
-	case "read":
-		filePath, _ := argsMap["path"].(string)
-		if filePath == "" {
-			filePath, _ = argsMap["filePath"].(string)
-		}
-		if filePath == "" {
-			filePath = "(file)"
-		}
-		detail := map[string]any{
-			"type":     "read",
-			"filePath": filePath,
-		}
-		if outText != "" {
-			detail["content"] = outText
-		}
-		if off, ok := argsMap["offset"].(float64); ok {
-			detail["offset"] = int(off)
-		}
-		if lim, ok := argsMap["limit"].(float64); ok {
-			detail["limit"] = int(lim)
-		}
-		return detail
-
-	case "edit":
-		filePath, _ := argsMap["path"].(string)
-		if filePath == "" {
-			filePath, _ = argsMap["filePath"].(string)
-		}
-		if filePath == "" {
-			filePath = "(file)"
-		}
-		oldStr, _ := argsMap["oldText"].(string)
-		newStr, _ := argsMap["newText"].(string)
-		if editsArr, ok := argsMap["edits"].([]any); ok && len(editsArr) > 0 {
-			if first, ok := editsArr[0].(map[string]any); ok {
-				if oldStr == "" {
-					oldStr, _ = first["oldText"].(string)
-				}
-				if newStr == "" {
-					newStr, _ = first["newText"].(string)
-				}
-			}
-		}
-		detail := map[string]any{
-			"type":     "edit",
-			"filePath": filePath,
-		}
-		if oldStr != "" {
-			detail["oldString"] = oldStr
-		}
-		if newStr != "" {
-			detail["newString"] = newStr
-		}
-		return detail
-
-	case "write":
-		filePath, _ := argsMap["path"].(string)
-		if filePath == "" {
-			filePath, _ = argsMap["filePath"].(string)
-		}
-		if filePath == "" {
-			filePath = "(file)"
-		}
-		content, _ := argsMap["content"].(string)
-		detail := map[string]any{
-			"type":     "write",
-			"filePath": filePath,
-		}
-		if content != "" {
-			detail["content"] = content
-		}
-		return detail
-
-	case "web_search", "grep", "glob", "search":
-		query, _ := argsMap["query"].(string)
-		if query == "" {
-			query, _ = argsMap["pattern"].(string)
-		}
-		if query == "" {
-			query = toolName
-		}
-		detail := map[string]any{
-			"type":     "search",
-			"query":    query,
-			"toolName": toolName,
-		}
-		if outText != "" {
-			detail["content"] = outText
-		}
-		return detail
-
-	case "web_fetch":
-		u, _ := argsMap["url"].(string)
-		if u == "" {
-			u = "https://"
-		}
-		detail := map[string]any{
-			"type": "fetch",
-			"url":  u,
-		}
-		if outText != "" {
-			detail["result"] = outText
-		}
-		return detail
-
-	case "subagent":
-		agentRole, _ := argsMap["agent"].(string)
-		task, _ := argsMap["task"].(string)
-		detail := map[string]any{
-			"type":    "sub_agent",
-			"log":     outText,
-			"actions": []any{},
-		}
-		if agentRole != "" {
-			detail["subAgentType"] = agentRole
-		}
-		if task != "" {
-			detail["description"] = task
-		}
-		return detail
-
-	default:
-		return map[string]any{
-			"type":   "unknown",
-			"input":  args,
-			"output": result,
-		}
-	}
+	return sdk.BuildToolCallDetail(toolName, args, result)
 }
 
-func extractResultText(result any) string {
-	switch v := result.(type) {
-	case nil:
-		return ""
-	case string:
-		return v
-	case map[string]any:
-		if content, ok := v["content"].([]any); ok {
-			var parts []string
-			for _, block := range content {
-				if bm, ok := block.(map[string]any); ok {
-					if t, ok := bm["text"].(string); ok && t != "" {
-						parts = append(parts, t)
-					}
-				}
-			}
-			if len(parts) > 0 {
-				return strings.Join(parts, "\n")
-			}
-		}
-		if out, ok := v["output"].(string); ok {
-			return out
-		}
-		return fmt.Sprintf("%v", v)
-	default:
-		return fmt.Sprintf("%v", v)
-	}
-}
+func extractResultText(result any) string { return sdk.ExtractResultText(result) }
 
 // MapExtensionUIRequestToPermission converts a Pi extension_ui_request event into a BySpace
 // AgentPermissionRequest payload. Returns nil for non-interactive status notifications.

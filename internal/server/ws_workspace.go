@@ -347,6 +347,7 @@ func (s *Server) handleImportAgent(ctx context.Context, sink frameSink, raw json
 		Provider         string         `json:"provider"`
 		ProviderHandleID string         `json:"providerHandleId"`
 		Handle           string         `json:"handle"`
+		SessionID        string         `json:"sessionId"`
 		Overrides        map[string]any `json:"overrides"`
 		Cwd              string         `json:"cwd"`
 	}
@@ -354,6 +355,9 @@ func (s *Server) handleImportAgent(ctx context.Context, sink frameSink, raw json
 
 	if strings.TrimSpace(req.ProviderHandleID) == "" {
 		req.ProviderHandleID = req.Handle
+	}
+	if strings.TrimSpace(req.ProviderHandleID) == "" {
+		req.ProviderHandleID = req.SessionID
 	}
 	sessionFile := strings.TrimSpace(req.ProviderHandleID)
 	desc, err := pi.ParseSessionFile(sessionFile, time.Now())

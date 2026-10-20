@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/agent/jsonl"
-	"github.com/ByteTrue/byspace/internal/agent/pi"
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
 // ClaudeSession hosts a local `claude` CLI process in `--output-format stream-json --input-format stream-json` mode.
@@ -29,11 +29,11 @@ type ClaudeSession struct {
 	thinking           string
 	turnCounter        int
 	activeTurnID       string
-	timeline           []pi.TimelineEntry
+	timeline           []sdk.TimelineEntry
 	toolIndexByID      map[string]int
 	toolArgsByID       map[string]any
 	pendingPermissions map[string]map[string]any
-	subagents          map[string]pi.SubagentDescriptor
+	subagents          map[string]sdk.SubagentDescriptor
 	finishWaiters      []chan error
 	eventSubscribers   map[int]func(map[string]any)
 	nextSubID          int
@@ -80,7 +80,7 @@ func StartClaudeSession(cfg LaunchConfig, cmdOverride string) (*ClaudeSession, e
 		toolIndexByID:      make(map[string]int),
 		toolArgsByID:       make(map[string]any),
 		pendingPermissions: make(map[string]map[string]any),
-		subagents:          make(map[string]pi.SubagentDescriptor),
+		subagents:          make(map[string]sdk.SubagentDescriptor),
 		eventSubscribers:   make(map[int]func(map[string]any)),
 	}
 	if strings.HasSuffix(cfg.SessionHandle, ".jsonl") {
@@ -119,14 +119,14 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 					switch bType {
 					case "thinking":
 						if th, _ := block["thinking"].(string); th != "" {
-							s.appendItemLocked(pi.TimelineItem{
+							s.appendItemLocked(sdk.TimelineItem{
 								Type: "reasoning",
 								Text: th,
 							})
 						}
 					case "text":
 						if txt, _ := block["text"].(string); txt != "" {
-							s.appendItemLocked(pi.TimelineItem{
+							s.appendItemLocked(sdk.TimelineItem{
 								Type: "assistant_message",
 								Text: txt,
 							})
@@ -138,12 +138,12 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 						input := block["input"]
 						normName := strings.ToLower(name)
 						s.toolArgsByID[callID] = input
-						idx := s.appendItemLocked(pi.TimelineItem{
+						idx := s.appendItemLocked(sdk.TimelineItem{
 							Type:   "tool_call",
 							CallID: callID,
 							Name:   name,
 							Status: "running",
-							Detail: pi.BuildToolCallDetail(normName, input, nil),
+							Detail: sdk.BuildToolCallDetail(normName, input, nil),
 							Error:  nil,
 						})
 						if callID != "" {
@@ -167,7 +167,7 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 								}
 							}
 							tcCopy := callID
-							s.subagents[callID] = pi.SubagentDescriptor{
+							s.subagents[callID] = sdk.SubagentDescriptor{
 								ID:          callID,
 								Provider:    "claude",
 								Status:      "running",
@@ -200,7 +200,7 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 					if idx, ok := s.toolIndexByID[callID]; ok && idx >= 0 && idx < len(s.timeline) {
 						tName := strings.ToLower(s.timeline[idx].Item.Name)
 						s.timeline[idx].Item.Status = status
-						s.timeline[idx].Item.Detail = pi.BuildToolCallDetail(tName, s.toolArgsByID[callID], block["content"])
+						s.timeline[idx].Item.Detail = sdk.BuildToolCallDetail(tName, s.toolArgsByID[callID], block["content"])
 						if isErr {
 							s.timeline[idx].Item.Error = fmt.Sprint(block["content"])
 						}
@@ -250,7 +250,7 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 			s.sessionID = sid
 		}
 		if resTxt, ok := ev["result"].(string); ok && resTxt != "" && s.lastAssistantTextLocked() == "" {
-			s.appendItemLocked(pi.TimelineItem{
+			s.appendItemLocked(sdk.TimelineItem{
 				Type: "assistant_message",
 				Text: resTxt,
 			})
@@ -280,9 +280,9 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 	}
 }
 
-func (s *ClaudeSession) appendItemLocked(item pi.TimelineItem) int {
+func (s *ClaudeSession) appendItemLocked(item sdk.TimelineItem) int {
 	seq := len(s.timeline) + 1
-	s.timeline = append(s.timeline, pi.TimelineEntry{
+	s.timeline = append(s.timeline, sdk.TimelineEntry{
 		Seq:       seq,
 		TurnID:    s.activeTurnID,
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
@@ -315,18 +315,18 @@ func (s *ClaudeSession) Status() string {
 	return s.status
 }
 
-func (s *ClaudeSession) Timeline() []pi.TimelineEntry {
+func (s *ClaudeSession) Timeline() []sdk.TimelineEntry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]pi.TimelineEntry, len(s.timeline))
+	out := make([]sdk.TimelineEntry, len(s.timeline))
 	copy(out, s.timeline)
 	return out
 }
 
-func (s *ClaudeSession) SeedTimeline(entries []pi.TimelineEntry) {
+func (s *ClaudeSession) SeedTimeline(entries []sdk.TimelineEntry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.timeline = make([]pi.TimelineEntry, len(entries))
+	s.timeline = make([]sdk.TimelineEntry, len(entries))
 	copy(s.timeline, entries)
 }
 
@@ -357,12 +357,12 @@ func (s *ClaudeSession) ActiveTurn() (string, string) {
 	return s.activeTurnID, ""
 }
 
-func (s *ClaudeSession) Prompt(_ context.Context, message string, images []pi.ImageContent) error {
+func (s *ClaudeSession) Prompt(_ context.Context, message string, images []sdk.ImageContent) error {
 	s.mu.Lock()
 	s.turnCounter++
 	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
 	s.status = "running"
-	s.appendItemLocked(pi.TimelineItem{
+	s.appendItemLocked(sdk.TimelineItem{
 		Type: "user_message",
 		Text: message,
 	})
@@ -387,7 +387,7 @@ func (s *ClaudeSession) Prompt(_ context.Context, message string, images []pi.Im
 	})
 }
 
-func (s *ClaudeSession) Steer(ctx context.Context, message string, images []pi.ImageContent) error {
+func (s *ClaudeSession) Steer(ctx context.Context, message string, images []sdk.ImageContent) error {
 	return s.Prompt(ctx, message, images)
 }
 
@@ -423,10 +423,10 @@ func (s *ClaudeSession) WaitForFinish(ctx context.Context) error {
 	}
 }
 
-func (s *ClaudeSession) GetState(_ context.Context) (*pi.SessionState, error) {
+func (s *ClaudeSession) GetState(_ context.Context) (*sdk.SessionState, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return &pi.SessionState{
+	return &sdk.SessionState{
 		SessionID:     s.sessionID,
 		SessionFile:   s.sessionFile,
 		ThinkingLevel: s.thinking,
@@ -434,11 +434,11 @@ func (s *ClaudeSession) GetState(_ context.Context) (*pi.SessionState, error) {
 	}, nil
 }
 
-func (s *ClaudeSession) SetModel(_ context.Context, provider, modelID string) (*pi.Model, error) {
+func (s *ClaudeSession) SetModel(_ context.Context, provider, modelID string) (*sdk.Model, error) {
 	s.mu.Lock()
 	s.model = modelID
 	s.mu.Unlock()
-	return &pi.Model{Provider: provider, ID: modelID, Name: modelID}, nil
+	return &sdk.Model{Provider: provider, ID: modelID, Name: modelID}, nil
 }
 
 func (s *ClaudeSession) SetThinkingLevel(_ context.Context, level string) error {
@@ -448,8 +448,8 @@ func (s *ClaudeSession) SetThinkingLevel(_ context.Context, level string) error 
 	return nil
 }
 
-func (s *ClaudeSession) GetCommands(_ context.Context) ([]pi.SlashCommand, error) {
-	return []pi.SlashCommand{
+func (s *ClaudeSession) GetCommands(_ context.Context) ([]sdk.SlashCommand, error) {
+	return []sdk.SlashCommand{
 		{Name: "compact", Description: "Compact conversation history", Source: "builtin"},
 		{Name: "clear", Description: "Clear conversation context", Source: "builtin"},
 	}, nil
@@ -486,10 +486,10 @@ func (s *ClaudeSession) RespondToPermission(requestID string, resp map[string]an
 	})
 }
 
-func (s *ClaudeSession) ListSubagents(parentAgentID string) []pi.SubagentDescriptor {
+func (s *ClaudeSession) ListSubagents(parentAgentID string) []sdk.SubagentDescriptor {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]pi.SubagentDescriptor, 0, len(s.subagents))
+	out := make([]sdk.SubagentDescriptor, 0, len(s.subagents))
 	for _, sub := range s.subagents {
 		sub.ParentAgentID = parentAgentID
 		out = append(out, sub)
@@ -497,7 +497,7 @@ func (s *ClaudeSession) ListSubagents(parentAgentID string) []pi.SubagentDescrip
 	return out
 }
 
-func (s *ClaudeSession) GetSubagent(parentAgentID, subagentID string) (pi.SubagentDescriptor, bool) {
+func (s *ClaudeSession) GetSubagent(parentAgentID, subagentID string) (sdk.SubagentDescriptor, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sub, ok := s.subagents[subagentID]
@@ -525,7 +525,7 @@ func (s *ClaudeSession) Close() error {
 }
 
 // ListClaudeSessions discovers importable ~/.claude/projects/**/*.jsonl transcripts.
-func ListClaudeSessions(claudeDirOverride, cwdFilter string, limit int) ([]pi.ImportableSession, error) {
+func ListClaudeSessions(claudeDirOverride, cwdFilter string, limit int) ([]sdk.ImportableSession, error) {
 	root := strings.TrimSpace(claudeDirOverride)
 	if root == "" {
 		root = strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR"))
@@ -533,13 +533,13 @@ func ListClaudeSessions(claudeDirOverride, cwdFilter string, limit int) ([]pi.Im
 	if root == "" {
 		h, err := os.UserHomeDir()
 		if err != nil {
-			return []pi.ImportableSession{}, nil
+			return []sdk.ImportableSession{}, nil
 		}
 		root = filepath.Join(h, ".claude")
 	}
 	projectsDir := filepath.Join(root, "projects")
 	if _, err := os.Stat(projectsDir); err != nil {
-		return []pi.ImportableSession{}, nil
+		return []sdk.ImportableSession{}, nil
 	}
 	if limit <= 0 {
 		limit = 50
@@ -563,7 +563,7 @@ func ListClaudeSessions(claudeDirOverride, cwdFilter string, limit int) ([]pi.Im
 		return files[i].mtime.After(files[j].mtime)
 	})
 
-	out := make([]pi.ImportableSession, 0, limit)
+	out := make([]sdk.ImportableSession, 0, limit)
 	for _, f := range files {
 		if len(out) >= limit {
 			break
@@ -579,10 +579,12 @@ func ListClaudeSessions(claudeDirOverride, cwdFilter string, limit int) ([]pi.Im
 			title = "Claude Session"
 		}
 		titleCopy := title
-		out = append(out, pi.ImportableSession{
+		out = append(out, sdk.ImportableSession{
+			Provider:         "claude",
+			ProviderLabel:    "Claude Code",
 			ProviderHandleID: f.path,
 			Cwd:              cwd,
-			Title:            &titleCopy,
+			Title:            titleCopy,
 			LastActivityAt:   f.mtime.UTC().Format(time.RFC3339Nano),
 		})
 	}
@@ -590,19 +592,19 @@ func ListClaudeSessions(claudeDirOverride, cwdFilter string, limit int) ([]pi.Im
 }
 
 // LoadClaudeTimelineFromJSONL parses a Claude Code transcript file into TimelineEntry items.
-func LoadClaudeTimelineFromJSONL(filePath string) ([]pi.TimelineEntry, error) {
+func LoadClaudeTimelineFromJSONL(filePath string) ([]sdk.TimelineEntry, error) {
 	entries, _, _ := parseClaudeJSONLMeta(filePath, time.Now())
 	return entries, nil
 }
 
-func parseClaudeJSONLMeta(filePath string, fallbackTime time.Time) ([]pi.TimelineEntry, string, string) {
+func parseClaudeJSONLMeta(filePath string, fallbackTime time.Time) ([]sdk.TimelineEntry, string, string) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		return nil, "", ""
 	}
 	defer f.Close()
 
-	var entries []pi.TimelineEntry
+	var entries []sdk.TimelineEntry
 	var cwd, title string
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
@@ -629,10 +631,10 @@ func parseClaudeJSONLMeta(filePath string, fallbackTime time.Time) ([]pi.Timelin
 				if title == "" {
 					title = txt
 				}
-				entries = append(entries, pi.TimelineEntry{
+				entries = append(entries, sdk.TimelineEntry{
 					Seq:       len(entries) + 1,
 					Timestamp: ts,
-					Item:      pi.TimelineItem{Type: "user_message", Text: txt},
+					Item:      sdk.TimelineItem{Type: "user_message", Text: txt},
 				})
 			}
 		case "assistant":
@@ -644,10 +646,10 @@ func parseClaudeJSONLMeta(filePath string, fallbackTime time.Time) ([]pi.Timelin
 					}
 					if b["type"] == "text" {
 						if t, _ := b["text"].(string); t != "" {
-							entries = append(entries, pi.TimelineEntry{
+							entries = append(entries, sdk.TimelineEntry{
 								Seq:       len(entries) + 1,
 								Timestamp: ts,
-								Item:      pi.TimelineItem{Type: "assistant_message", Text: t},
+								Item:      sdk.TimelineItem{Type: "assistant_message", Text: t},
 							})
 						}
 					}

@@ -8,31 +8,32 @@ import (
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/agent/pi"
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
 
 // ManagedSession is the unified runtime interface implemented by every agent provider host
 // (Pi, OMP, Claude Code, Codex app-server, ACP family: Copilot/Cursor/Kimi/Kiro/Trae/Generic, and OpenCode).
 type ManagedSession interface {
 	Status() string
-	Timeline() []pi.TimelineEntry
-	SeedTimeline(entries []pi.TimelineEntry)
+	Timeline() []sdk.TimelineEntry
+	SeedTimeline(entries []sdk.TimelineEntry)
 	StreamSeq() int
 	LastError() string
 	ActiveTurn() (string, string)
 	LastAssistantText() string
 	SetNextClientMessageID(id string)
-	Prompt(ctx context.Context, message string, images []pi.ImageContent) error
-	Steer(ctx context.Context, message string, images []pi.ImageContent) error
+	Prompt(ctx context.Context, message string, images []sdk.ImageContent) error
+	Steer(ctx context.Context, message string, images []sdk.ImageContent) error
 	Abort(ctx context.Context) error
 	WaitForFinish(ctx context.Context) error
-	GetState(ctx context.Context) (*pi.SessionState, error)
-	SetModel(ctx context.Context, provider, modelID string) (*pi.Model, error)
+	GetState(ctx context.Context) (*sdk.SessionState, error)
+	SetModel(ctx context.Context, provider, modelID string) (*sdk.Model, error)
 	SetThinkingLevel(ctx context.Context, level string) error
-	GetCommands(ctx context.Context) ([]pi.SlashCommand, error)
+	GetCommands(ctx context.Context) ([]sdk.SlashCommand, error)
 	PendingPermissions() []map[string]any
 	RespondToPermission(requestID string, resp map[string]any) error
-	ListSubagents(parentAgentID string) []pi.SubagentDescriptor
-	GetSubagent(parentAgentID, subagentID string) (pi.SubagentDescriptor, bool)
+	ListSubagents(parentAgentID string) []sdk.SubagentDescriptor
+	GetSubagent(parentAgentID, subagentID string) (sdk.SubagentDescriptor, bool)
 	OnEvent(fn func(map[string]any)) func()
 	Close() error
 }
@@ -67,10 +68,10 @@ type ProviderSpec struct {
 	DefaultModeID any
 	Modes         []ModeDefinition
 	Features      []FeatureDefinition
-	Models        []pi.CatalogModel
+	Models        []sdk.CatalogModel
 }
 
-var builtinThinkingOptions = []pi.ThinkingOption{
+var builtinThinkingOptions = []sdk.ThinkingOption{
 	{ID: "off", Label: "Off"},
 	{ID: "low", Label: "Low"},
 	{ID: "medium", Label: "Medium"},
@@ -100,7 +101,7 @@ var BuiltinProviders = []ProviderSpec{
 		Features: []FeatureDefinition{
 			{ID: "fast", Label: "Fast Mode", Kind: "toggle", DefaultValue: false},
 		},
-		Models: []pi.CatalogModel{
+		Models: []sdk.CatalogModel{
 			{ID: "claude-sonnet-4-5", Label: "Claude Sonnet 4.5", Provider: "claude", IsDefault: true, IsSelectable: true, ThinkingOptions: builtinThinkingOptions, DefaultThinkingOptionID: "medium"},
 			{ID: "claude-opus-4-5", Label: "Claude Opus 4.5", Provider: "claude", IsSelectable: true, ThinkingOptions: builtinThinkingOptions, DefaultThinkingOptionID: "medium"},
 			{ID: "claude-haiku-4-5", Label: "Claude Haiku 4.5", Provider: "claude", IsSelectable: true},
@@ -122,7 +123,7 @@ var BuiltinProviders = []ProviderSpec{
 		Features: []FeatureDefinition{
 			{ID: "fast", Label: "Fast Mode", Kind: "toggle", DefaultValue: false},
 		},
-		Models: []pi.CatalogModel{
+		Models: []sdk.CatalogModel{
 			{ID: "gpt-5.3-codex", Label: "GPT-5.3 Codex", Provider: "codex", IsDefault: true, IsSelectable: true, ThinkingOptions: builtinThinkingOptions, DefaultThinkingOptionID: "medium"},
 			{ID: "gpt-5.2", Label: "GPT-5.2", Provider: "codex", IsSelectable: true, ThinkingOptions: builtinThinkingOptions, DefaultThinkingOptionID: "medium"},
 		},
@@ -141,7 +142,7 @@ var BuiltinProviders = []ProviderSpec{
 			{ID: "allow-all", Label: "Allow All", Description: "Automatically approves all Copilot tool, path, and URL requests.", Icon: "ShieldOff", ColorTier: "dangerous", IsUnattended: true},
 		},
 		Features: []FeatureDefinition{},
-		Models: []pi.CatalogModel{
+		Models: []sdk.CatalogModel{
 			{ID: "claude-sonnet-4.5", Label: "Claude Sonnet 4.5", Provider: "copilot", IsDefault: true, IsSelectable: true},
 			{ID: "gpt-5", Label: "GPT-5", Provider: "copilot", IsSelectable: true},
 		},
@@ -159,7 +160,7 @@ var BuiltinProviders = []ProviderSpec{
 			{ID: "plan", Label: "Plan", Description: "Read-only planning mode that avoids file edits", Icon: "ShieldEllipsis", ColorTier: "planning"},
 		},
 		Features: []FeatureDefinition{},
-		Models: []pi.CatalogModel{
+		Models: []sdk.CatalogModel{
 			{ID: "anthropic/claude-sonnet-4-5", Label: "Claude Sonnet 4.5", Provider: "opencode", IsDefault: true, IsSelectable: true, ThinkingOptions: builtinThinkingOptions, DefaultThinkingOptionID: "medium"},
 		},
 	},
@@ -188,7 +189,7 @@ var BuiltinProviders = []ProviderSpec{
 			{ID: "ask", Label: "Always Ask", Description: "Launches OMP with always-ask approval mode for write and exec tools.", Icon: "Shield", ColorTier: "safe"},
 		},
 		Features: []FeatureDefinition{},
-		Models: []pi.CatalogModel{
+		Models: []sdk.CatalogModel{
 			{ID: "default", Label: "OMP Default", Provider: "omp", IsDefault: true, IsSelectable: true, ThinkingOptions: builtinThinkingOptions, DefaultThinkingOptionID: "medium"},
 		},
 	},
@@ -206,7 +207,7 @@ var ACPPresets = map[string]ProviderSpec{
 		Protocol:    "acp",
 		Modes:       []ModeDefinition{{ID: "agent", Label: "Agent"}, {ID: "plan", Label: "Plan"}},
 		Features:    []FeatureDefinition{{ID: "fast", Label: "Fast", Kind: "toggle", DefaultValue: false}},
-		Models:      []pi.CatalogModel{{ID: "default", Label: "Cursor Default", Provider: "cursor", IsDefault: true, IsSelectable: true}},
+		Models:      []sdk.CatalogModel{{ID: "default", Label: "Cursor Default", Provider: "cursor", IsDefault: true, IsSelectable: true}},
 	},
 	"kimi": {
 		ID:          "kimi",
@@ -217,7 +218,7 @@ var ACPPresets = map[string]ProviderSpec{
 		Protocol:    "acp",
 		Modes:       []ModeDefinition{{ID: "agent", Label: "Agent"}},
 		Features:    []FeatureDefinition{},
-		Models:      []pi.CatalogModel{{ID: "kimi-k2.5", Label: "Kimi K2.5", Provider: "kimi", IsDefault: true, IsSelectable: true, ThinkingOptions: builtinThinkingOptions, DefaultThinkingOptionID: "medium"}},
+		Models:      []sdk.CatalogModel{{ID: "kimi-k2.5", Label: "Kimi K2.5", Provider: "kimi", IsDefault: true, IsSelectable: true, ThinkingOptions: builtinThinkingOptions, DefaultThinkingOptionID: "medium"}},
 	},
 	"kiro": {
 		ID:          "kiro",
@@ -228,7 +229,7 @@ var ACPPresets = map[string]ProviderSpec{
 		Protocol:    "acp",
 		Modes:       []ModeDefinition{{ID: "agent", Label: "Agent"}},
 		Features:    []FeatureDefinition{},
-		Models:      []pi.CatalogModel{{ID: "default", Label: "Kiro Default", Provider: "kiro", IsDefault: true, IsSelectable: true}},
+		Models:      []sdk.CatalogModel{{ID: "default", Label: "Kiro Default", Provider: "kiro", IsDefault: true, IsSelectable: true}},
 	},
 	"trae": {
 		ID:          "trae",
@@ -239,7 +240,7 @@ var ACPPresets = map[string]ProviderSpec{
 		Protocol:    "acp",
 		Modes:       []ModeDefinition{{ID: "agent", Label: "Agent"}},
 		Features:    []FeatureDefinition{},
-		Models:      []pi.CatalogModel{{ID: "default", Label: "Trae Default", Provider: "trae", IsDefault: true, IsSelectable: true}},
+		Models:      []sdk.CatalogModel{{ID: "default", Label: "Trae Default", Provider: "trae", IsDefault: true, IsSelectable: true}},
 	},
 }
 
@@ -266,7 +267,7 @@ func GetProviderSpec(providerID string) ProviderSpec {
 		Protocol:    "acp",
 		Modes:       []ModeDefinition{{ID: "agent", Label: "Agent"}},
 		Features:    []FeatureDefinition{},
-		Models: []pi.CatalogModel{
+		Models: []sdk.CatalogModel{
 			{ID: "default", Label: id + " Default", Provider: id, IsDefault: true, IsSelectable: true},
 		},
 	}
@@ -287,7 +288,7 @@ func IsBinaryAvailable(spec ProviderSpec, piCommandOverride string) bool {
 
 // BuildSnapshotEntries builds the `entries` array for `get_providers_snapshot_response`,
 // including the 6 built-in providers plus any custom/derived providers configured in config.json.
-func BuildSnapshotEntries(piModels []pi.CatalogModel, piCommandOverride string, customProviders map[string]any) []map[string]any {
+func BuildSnapshotEntries(piModels []sdk.CatalogModel, piCommandOverride string, customProviders map[string]any) []map[string]any {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	entries := make([]map[string]any, 0, len(BuiltinProviders)+len(customProviders))
 	builtinSet := make(map[string]bool, len(BuiltinProviders))
@@ -310,7 +311,7 @@ func BuildSnapshotEntries(piModels []pi.CatalogModel, piCommandOverride string, 
 			models = piModels
 		}
 		if !enabled {
-			models = []pi.CatalogModel{}
+			models = []sdk.CatalogModel{}
 		}
 		entries = append(entries, map[string]any{
 			"provider":      spec.ID,
@@ -427,7 +428,7 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 }
 
 // imageBlocksForClaude renders composer images as Anthropic stream-json base64 image blocks.
-func imageBlocksForClaude(images []pi.ImageContent) []map[string]any {
+func imageBlocksForClaude(images []sdk.ImageContent) []map[string]any {
 	blocks := make([]map[string]any, 0, len(images))
 	for _, img := range images {
 		if img.Data == "" {
@@ -450,7 +451,7 @@ func imageBlocksForClaude(images []pi.ImageContent) []map[string]any {
 }
 
 // imageBlocksForCodex renders composer images as codex app-server data-URL image inputs.
-func imageBlocksForCodex(images []pi.ImageContent) []map[string]any {
+func imageBlocksForCodex(images []sdk.ImageContent) []map[string]any {
 	blocks := make([]map[string]any, 0, len(images))
 	for _, img := range images {
 		if img.Data == "" {
@@ -469,7 +470,7 @@ func imageBlocksForCodex(images []pi.ImageContent) []map[string]any {
 }
 
 // imageBlocksForACP renders composer images as ACP prompt image blocks.
-func imageBlocksForACP(images []pi.ImageContent) []map[string]any {
+func imageBlocksForACP(images []sdk.ImageContent) []map[string]any {
 	blocks := make([]map[string]any, 0, len(images))
 	for _, img := range images {
 		if img.Data == "" {
@@ -489,7 +490,7 @@ func imageBlocksForACP(images []pi.ImageContent) []map[string]any {
 }
 
 // imageBlocksForOpenCode renders composer images as OpenCode file parts (data URLs).
-func imageBlocksForOpenCode(images []pi.ImageContent) []map[string]any {
+func imageBlocksForOpenCode(images []sdk.ImageContent) []map[string]any {
 	blocks := make([]map[string]any, 0, len(images))
 	for _, img := range images {
 		if img.Data == "" {
