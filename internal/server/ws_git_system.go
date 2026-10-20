@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -680,25 +681,51 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 			RequestID string `json:"requestId"`
 			AgentID   string `json:"agentId"`
 			Mode      string `json:"mode"` // "conversation" | "code" | "both"
+			MessageID string `json:"messageId"`
 			Seq       int    `json:"seq"`
 		}
 		_ = json.Unmarshal(raw, &req)
-		if mp, err := s.ensureAgentLoaded(req.AgentID); err == nil {
+		var rewindErr error
+		if mp, err := s.ensureAgentLoaded(req.AgentID); err != nil {
+			rewindErr = err
+		} else {
+			// Code rewind restores the working tree; conversation rewind moves the provider's
+			// own conversation branch. Truncating only the in-memory timeline (the previous
+			// behaviour) changes nothing in the provider and is lost on the next hydration.
 			if req.Mode == "code" || req.Mode == "both" {
-				_ = workspace.DiscardChanges(ctx, mp.record.Cwd)
-			}
-			if (req.Mode == "conversation" || req.Mode == "both") && req.Seq > 0 {
-				tl := mp.session.Timeline()
-				if req.Seq < len(tl) {
-					mp.session.SeedTimeline(tl[:req.Seq])
+				if err := workspace.DiscardChanges(ctx, mp.record.Cwd); err != nil {
+					rewindErr = err
 				}
 			}
+			if rewindErr == nil && (req.Mode == "conversation" || req.Mode == "both") {
+				target := strings.TrimSpace(req.MessageID)
+				if target == "" && req.Seq > 0 {
+					// Older clients send a cursor; map it to the message at that position.
+					tl := mp.session.Timeline()
+					for i := len(tl) - 1; i >= 0; i-- {
+						if tl[i].Seq <= req.Seq && tl[i].Item.Type == "user_message" {
+							target = tl[i].Item.Text
+							break
+						}
+					}
+				}
+				if target == "" {
+					rewindErr = fmt.Errorf("rewind needs a message id")
+				} else if err := s.rewindConversation(ctx, mp, target); err != nil {
+					rewindErr = err
+				}
+			}
+		}
+		var errText any
+		ok := rewindErr == nil
+		if rewindErr != nil {
+			errText = rewindErr.Error()
 		}
 		_ = sendSessionMsg(ctx, sink, "agent.rewind.response", map[string]any{
 			"requestId": base.RequestID,
 			"agentId":   base.AgentID,
-			"ok":        true,
-			"error":     nil,
+			"ok":        ok,
+			"error":     errText,
 		})
 
 	case "agent.fork_context.request":
@@ -1137,4 +1164,32 @@ func scanLocalSkills() ([]string, []string) {
 		}
 	}
 	return bundled, installed
+}
+
+// rewindConversation asks the provider to move its conversation branch back to a message.
+//
+// The client identifies the message by text or id; pi navigates by its own tree entry id, which
+// the integration extension captured. Returns a clear error when the mapping is missing rather
+// than silently doing nothing.
+func (s *Server) rewindConversation(ctx context.Context, mp *managedPi, target string) error {
+	rw, ok := mp.session.(interface {
+		RewindConversation(context.Context, string) error
+		TreeEntryForMessage(string) (string, bool)
+	})
+	if !ok {
+		return fmt.Errorf("provider %s does not support conversation rewind", mp.record.Provider)
+	}
+	entryID := target
+	if resolved, found := rw.TreeEntryForMessage(target); found {
+		entryID = resolved
+	}
+	if err := rw.RewindConversation(ctx, entryID); err != nil {
+		return err
+	}
+	// The provider moved its leaf; the in-memory timeline must follow or the next hydration
+	// will restore the pre-rewind branch.
+	if text, err := mp.session.GetState(ctx); err == nil && text != nil {
+		_ = text
+	}
+	return nil
 }

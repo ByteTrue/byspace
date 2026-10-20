@@ -352,6 +352,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDirectWS(w http.ResponseWriter, r *http.Request) {
+	// DNS-rebinding guard, on the WebSocket upgrade only — the same place the node daemon
+	// applies it (websocket-server.ts). Applying it to every HTTP request breaks the app: the
+	// web UI itself and its asset/API fetches are ordinary requests, and rejecting those makes
+	// the daemon look disconnected.
+	if !s.hostAllowed(r.Host) {
+		http.Error(w, "Forbidden host", http.StatusForbidden)
+		return
+	}
 	ws, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		InsecureSkipVerify: true,
 	})
@@ -3153,16 +3161,10 @@ func (s *Server) hostAllowed(hostHeader string) bool {
 		}
 	}
 
-	// No allow-list configured: accept machine hostnames so `http://my-laptop.local:6777`
-	// keeps working, but still reject unrelated names.
+	// No allow-list configured means "not restricted", which is the node default: the check
+	// exists for operators who opt in, not as a policy imposed on every install.
 	if len(allowed) == 0 {
-		if machine, err := os.Hostname(); err == nil {
-			machine = strings.ToLower(machine)
-			if host == machine || host == machine+".local" {
-				return true
-			}
-		}
-		return false
+		return true
 	}
 	return false
 }

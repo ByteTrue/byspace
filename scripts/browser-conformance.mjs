@@ -177,24 +177,50 @@ try {
   }
 
   // ---------------------------------------------------------------- 思考等级菜单
-  bsk(["navigate", BASE, "--session", session]);
-  sleep(2000);
-  snap = observe();
-  const newTabRef = refFor(snap, /button "New tab"/) ?? refFor(snap, /button "New Agent"/);
-  const agentTabRef = refFor(snap, /button "Agent"/);
-  if (newTabRef && agentTabRef) {
-    click(newTabRef);
-    sleep(400);
-    click(agentTabRef);
-    sleep(1500);
+  //
+  // 这一段的入口条件很脆：需要一个**空会话**的 composer。浏览器会恢复上次打开的路由
+  // （可能是刚刚的 settings 页），路径不同、渲染时机也不同。所以重试有限次，直到出现
+  // composer 为止，而不是假定一次点击就够。
+  let thinkingRef = null;
+  for (let attempt = 0; attempt < 3 && !thinkingRef; attempt += 1) {
+    bsk(["navigate", BASE, "--session", session], { allowFailure: true });
+    sleep(2200);
+    let s2 = observe();
+    // 抽屉里的 "New tab" 会展开一个菜单（Agent / Terminal 两个入口）。菜单有时已经展开，
+    // 有时需要先点开；两种情况下都要点 "Agent"，然后确认菜单收起。
+    if (!refFor(s2, /menuitem "Agent"/)) {
+      const newTab = refFor(s2, /button "New tab"/) ?? refFor(s2, /button "New Agent"/);
+      if (newTab) {
+        click(newTab);
+        sleep(700);
+        s2 = observe();
+      }
+    }
+    const agentItem = refFor(s2, /menuitem "Agent"/) ?? refFor(s2, /button "Agent"/);
+    if (agentItem) {
+      click(agentItem);
+      sleep(2200);
+      s2 = observe();
+    }
+    // 菜单遮罩如果还留着会把 composer 盖住；Escape 关掉再看。
+    if (refFor(s2, /button "Menu backdrop"/) || /occluded by L1/.test(s2)) {
+      bsk(["press", "Escape", "--session", session], { allowFailure: true });
+      sleep(700);
+      s2 = observe();
+    }
+    thinkingRef = refFor(s2, /button "Select thinking option/);
+    snap = s2;
+  }
+  if (!thinkingRef) {
+    failFast(
+      "Open thinking menu",
+      `no 'Select thinking option' button after 3 attempts\n--- snapshot ---\n${snap.slice(0, 700)}`,
+    );
   }
   snap = observe();
 
-  // 打开思考等级菜单。注意 composer 里的按钮文案是 "Select thinking option (…)"，
-  // 气泡里的 "Thinking" 是折叠区，点它什么也不会发生——之前脚本就是在这里空转了。
-  const thinkingRef = refFor(snap, /button "Select thinking option/);
-  if (!thinkingRef)
-    failFast("Open thinking menu", "no 'Select thinking option' button in snapshot");
+  // composer 里的按钮文案是 "Select thinking option (…)"；气泡里的 "Thinking" 是折叠区，
+  // 点它什么也不会发生。
   click(thinkingRef);
   sleep(700);
   snap = observe();

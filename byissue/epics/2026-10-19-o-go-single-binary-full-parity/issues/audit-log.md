@@ -72,6 +72,10 @@
 | `workspace-registry.ts` | 714 | **PORTED** | 记录投影与命名规则（title 优先、否则 displayName）已在 `buildWorkspaceDescriptor` 与 `buildProjectDescriptor` 对齐。 |
 | `workspace-directory.ts` | 721 | **PARTIAL** → 已补 | `resolveWorkspaceRootAgent` 缺失：子代理会话应归组到发起对话的根 agent，跨工作区时停在边界，遇环返回 nil。已补 `internal/server/agent_tree.go` + 4 测试。同时修正 parent 关系的存储位置——共享词表用 label `byspace.parent-agent-id`，Go 原本存在私有字段里。 |
 
+| `ws_git_system.go` / `pi/rewind` | — | **MISSING** → 已补 | `agent.rewind` 之前只是把内存 timeline 截断：provider 完全不知道，下次水合就把旧分支恢复回来。已按 Node 实现：生成 pi 集成扩展（`internal/agent/pi/extension.go`，移植自 `createPiBySpaceExtensionFile`），提供 entry capture（把用户消息映射到 pi 的树条目 id）与 tree navigation（`byspace_tree` 命令调用 `ctx.navigateTree`）。`agent.rewind.request` 现在走真实 provider 导航，失败会返回错误而不是假成功。 |
+| `server.go` listen | — | **MISSING** → 已补 | daemon 只绑一个 loopback 族：前端把 `127.0.0.1` 归一成 `localhost` 后浏览器可能解析到 `::1`，连接超时并表现为「未连接主机」。已补双栈绑定（`listen_dual.go`），`127.0.0.1`/`localhost`/`[::1]` 三种地址实测均可连。 |
+| `hostnames.ts` | — | **已修正实现** | 我最初把 Host 白名单加在 `ServeHTTP` 上，拦掉了静态资源和 API，导致整个前端「未连接」。Node 只在 **WebSocket 升级**时校验（`websocket-server.ts:737`），并且未配置白名单时默认不限制。已改到 `handleDirectWS`，默认放行。 |
+
 ### 未审计（本批剩余 50 文件）
 
 按行数排序，下一轮从这里继续：

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"os"
 	"testing"
 )
 
@@ -29,18 +28,12 @@ func TestHostAllowed(t *testing.T) {
 	}
 }
 
-// With no allow-list, the machine's own hostname stays reachable; unrelated names do not.
+// With no allow-list the daemon is not restricted: the check exists for operators who opt in,
+// not as a policy imposed on every install (the node daemon behaves the same way).
 func TestHostAllowedWithoutConfig(t *testing.T) {
 	srv := &Server{}
-	machine, err := os.Hostname()
-	if err != nil {
-		t.Skip("hostname unavailable")
-	}
-	if !srv.hostAllowed(machine) {
-		t.Fatalf("machine hostname %q should be allowed", machine)
-	}
-	if srv.hostAllowed("definitely-not-this-machine.example") {
-		t.Fatal("an unrelated hostname must be rejected when no allow-list is configured")
+	if !srv.hostAllowed("anything.example") {
+		t.Fatal("no allow-list means no restriction")
 	}
 }
 

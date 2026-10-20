@@ -410,14 +410,28 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 		if cmd == "" && spec.ID == "omp" {
 			cmd = "omp"
 		}
-		return pi.StartSession(pi.LaunchOptions{
+		// The integration extension is what makes rewind possible: pi exposes entry capture and
+		// tree navigation only through extensions, so without it `agent.rewind` has no way to
+		// reach the provider.
+		extPath, extCleanup, extErr := pi.WriteIntegrationExtension()
+		if extErr != nil {
+			extPath, extCleanup = "", func() {}
+		}
+		sess, err := pi.StartSession(pi.LaunchOptions{
 			Command:          cmd,
 			Cwd:              cfg.Cwd,
 			Env:              cfg.Env,
 			Model:            cfg.Model,
 			ThinkingOptionID: cfg.ThinkingOptionID,
 			Session:          cfg.SessionHandle,
+			ExtensionPaths:   []string{extPath},
 		})
+		if err != nil {
+			extCleanup()
+			return nil, err
+		}
+		sess.SetCleanup(extCleanup)
+		return sess, nil
 	case "claude-stream":
 		return StartClaudeSession(cfg, cmd)
 	case "codex-rpc":

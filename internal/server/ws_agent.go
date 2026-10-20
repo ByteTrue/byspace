@@ -25,11 +25,15 @@ func (s *Server) probeOrCachedPiModels(ctx context.Context) []pi.CatalogModel {
 	}
 	s.mu.Unlock()
 
-	pctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	// Probing spawns pi, which loads extensions; a cold or busy machine can exceed a short
+	// timeout. Ten seconds is still well under any user-visible wait, and a failure is NOT
+	// cached: caching the fallback pinned a placeholder model forever, so the real catalog
+	// never appeared for the rest of the daemon's life.
+	pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	models, cmds, err := pi.ProbeCatalog(pctx, pi.LaunchOptions{Command: s.piCommand})
 	if err != nil || len(models) == 0 {
-		models = pi.DefaultFallbackModels()
+		return pi.DefaultFallbackModels()
 	}
 
 	s.mu.Lock()

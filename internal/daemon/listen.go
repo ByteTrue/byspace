@@ -80,6 +80,12 @@ func ParseListenTarget(listen string) (ListenTarget, error) {
 func (t ListenTarget) Listen() (net.Listener, error) {
 	switch t.Kind {
 	case "tcp":
+		// `localhost` resolves to ::1 first on many systems while the browser then opens the
+		// socket over IPv4, or vice versa; Go's "tcp" with a literal binds one family only.
+		// Binding both loopback families keeps `http://localhost:<port>` working regardless.
+		if t.Host == "127.0.0.1" || t.Host == "::1" || t.Host == "localhost" {
+			return listenLoopbackDual(t.Port)
+		}
 		return net.Listen("tcp", net.JoinHostPort(t.Host, strconv.Itoa(t.Port)))
 	case "socket":
 		// Unix socket paths are length-capped by the OS (104 bytes on macOS, 108 on Linux)
@@ -140,4 +146,16 @@ func unixSocketPathLimit() int {
 		return 108
 	}
 	return 104
+}
+
+// listenLoopbackDual binds both loopback families when the OS supports it.
+//
+// A browser resolving "localhost" may pick IPv6 while the daemon is bound to IPv4 only, and the
+// failure looks like "the host is unreachable" rather than a connect error. Binding both removes
+// the guess. If the second family is unavailable (IPv6 disabled), the first still serves.
+func listenLoopbackDual(port int) (net.Listener, error) {
+	if ln, err := listenBothFamilies(port); err == nil {
+		return ln, nil
+	}
+	return net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 }

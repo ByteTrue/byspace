@@ -163,6 +163,9 @@ type Session struct {
 	toolArgsByID        map[string]any
 	pendingPermissions  map[string]map[string]any
 	subagents           map[string]SubagentDescriptor
+	commandWaiters      map[string]chan commandResult
+	treeEntries         map[string]string
+	cleanup             func()
 	finishWaiters       []chan error
 	eventSubscribers    map[int]func(map[string]any)
 	nextSubID           int
@@ -190,6 +193,8 @@ func StartSession(opts LaunchOptions) (*Session, error) {
 		toolArgsByID:       make(map[string]any),
 		pendingPermissions: make(map[string]map[string]any),
 		subagents:          make(map[string]SubagentDescriptor),
+		commandWaiters:     make(map[string]chan commandResult),
+		treeEntries:        make(map[string]string),
 		eventSubscribers:   make(map[int]func(map[string]any)),
 	}
 	proc.OnEvent(s.handleRawEvent)
@@ -438,6 +443,15 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		}
 
 	case "extension_ui_request":
+		// `ctx.ui.notify` is how an extension reports data back to its host: the integration
+		// extension uses it to deliver entry captures and tree-navigation results. Those are
+		// ours to consume, not user-facing UI requests.
+		if method, _ := ev["method"].(string); method == "notify" {
+			if message, _ := ev["message"].(string); message != "" {
+				s.handleExtensionNotification(message)
+			}
+			break
+		}
 		if perm := MapExtensionUIRequestToPermission(ev); perm != nil {
 			if id, _ := perm["id"].(string); id != "" {
 				s.pendingPermissions[id] = perm
@@ -937,5 +951,15 @@ func (s *Session) GetSubagent(parentAgentID, subagentID string) (SubagentDescrip
 
 // Close shuts down the underlying Pi subprocess.
 func (s *Session) Close() error {
-	return s.proc.Close()
+	err := s.proc.Close()
+	// The generated extension lives in a temp dir; leaving it behind leaks one directory per
+	// agent over a long-running daemon.
+	s.mu.Lock()
+	cleanup := s.cleanup
+	s.cleanup = nil
+	s.mu.Unlock()
+	if cleanup != nil {
+		cleanup()
+	}
+	return err
 }
