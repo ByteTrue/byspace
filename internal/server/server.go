@@ -151,8 +151,12 @@ func New(opts Options) (*Server, error) {
 	ui = ui.WithConnectionHint("BySpace")
 
 	st := store.New(homeDir)
+	st.SetServerID(serverID)
 	// E2E specs assert exact workspace counts, so the daemon-owned Chief workspace must be
 	// suppressible: with it present every count shifts by one.
+	// Existing homes may hold projects persisted before key derivation existed; without a key
+	// they cannot join a cross-host group.
+	_ = st.BackfillProjectKeys()
 	if strings.TrimSpace(os.Getenv("BYSPACE_DISABLE_HOME_WORKSPACE")) != "1" {
 		_ = st.EnsureHomeWorkspace(serverID)
 	}
@@ -2384,7 +2388,7 @@ func (s *Server) buildProjectPlacementForRecord(rec store.AgentRecord) map[strin
 			branch = *ws.Branch
 		}
 		if prj, ok := prjByID[ws.ProjectID]; ok {
-			projKey = prj.RootPath
+			projKey = projectIdentityKey(prj)
 			projName = prj.DisplayName
 		}
 	}
@@ -2494,7 +2498,7 @@ func buildWorkspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord)
 		"gitRuntime":                gitRuntime,
 		"githubRuntime":             nil,
 		"project": map[string]any{
-			"projectKey":    prj.ProjectID,
+			"projectKey":    projectIdentityKey(prj),
 			"projectName":   projectDisplayName,
 			"workspaceName": name,
 			"checkout": buildProjectCheckoutPayload(
@@ -2699,4 +2703,13 @@ func (s *Server) corsOrigins() []string {
 	s.corsCache = origins
 	s.corsMu.Unlock()
 	return origins
+}
+
+// projectIdentityKey is the grouping key the sidebar joins on: the derived remote/path identity,
+// falling back to the project id only when a record predates key derivation.
+func projectIdentityKey(prj store.ProjectRecord) string {
+	if prj.ProjectKey != nil && strings.TrimSpace(*prj.ProjectKey) != "" {
+		return *prj.ProjectKey
+	}
+	return prj.ProjectID
 }

@@ -105,12 +105,63 @@ Node 读的是 `persisted.daemon.<key>`（`archive/packages/server/src/server/co
 - `workspace-labels` 1/3 通过；另 2 个仍差 picker 的行渲染（后端已确认 list 与 update 都正确）。
 - Go 侧 `go test ./...` 全绿；`audit:browser` 10/10；`go-parity-audit` 出站 0 / 未路由 0。
 
+## 第八轮：按 Node 重写 directory_suggestions + projectKey
+
+用户要求「就按你说的做」，于是做了三件本该在翻译阶段就做对的事。
+
+### a. `directory_suggestions` 重写（新增 `internal/match` + `internal/dirstream`）
+
+原实现是「读一层目录 + prefix/contains 过滤」，且 `matchMode` 用了协议里不存在的
+`prefix`/`contains`（协议只有 `fuzzy`/`suffix`）。
+
+现在按 Node 重写：
+
+- `internal/match/text.go` ← `packages/protocol/src/search/text-match.ts`（351 行）：
+  六级 tier（exact / whole-word / prefix / word-start / substring / subsequence / fuzzy）、
+  `PolicyForToken` 的按长度分级容错、Damerau-Levenshtein 的预算剪枝、跨分隔符的 compact 匹配。
+- `internal/dirstream/{search,fs}.go` ← `archive/.../utils/directory-suggestions.ts`（777 行）：
+  多级树遍历 + round-robin、`node_modules`/`dist`/`target` 等构建目录跳过、gitignore 感知、
+  带 rank 的排序（matchTier → segmentIndex → matchOffset → fuzzyScore → depth → kind → path）、
+  path query 与 text query 两种语义、`suffix` 模式、精确路径检索不套 ignore 规则。
+
+**行为差异的实测**：`compo` 现在能命中 `packages/app/src/components`（之前只会看根目录一层）。
+
+### b. `projectKey` 派生（新增 `internal/projectkey`）
+
+`projectKey` 是侧边栏分组的身份：同一 remote 在两个主机上的 checkout 必须派生出相同的 key，
+否则它们是两个项目。之前我把 key 直接设成路径，跨主机分组从根本上不可能。
+
+按 `archive/.../server/project-key.ts` 移植：
+
+- remote 形式优先：`remote:<host>[/:<port>]/<path>`，GitHub 路径小写化，自建 forge 保留大小写
+- 子目录选择加 `#subdir:<relpath>`
+- 无 remote 时用 `<path>` 并加 `host:<serverId>:` 前缀，避免两台机器的本地项目撞名
+- 默认端口（443/80/22）不写进 key，非默认端口保留
+
+同时修了两处调用：
+
+- `project.create_directory` / `project.android.clone` / `workspace.create` 里的项目 key 都改走派生
+- 描述符里的 `project.projectKey` 之前发的是**内部 projectId**，现在发派生 key
+- 启动时 `BackfillProjectKeys()` 给缺 key 的旧记录回填（对齐 Node 的 boot reconciliation）
+
+### c. `project.add` / `create_directory` / `github.clone` 不该自动建工作区
+
+Node 走 `findOrCreateProjectForDirectory`（只建项目），Go 走 `EnsureWorkspaceForCwd`（项目+工作区）。
+新增 `FindOrCreateProjectForDirectory` 并把三个调用点改过去。
+
+## 验证（第八轮后）
+
+- `add-project-flow` **8/8**
+- `sidebar-project-grouping` **6/9**（跨主机同仓库、同仓库子目录跨主机、同主机两个 clone 均通过；
+  失败的 3 个是多主机重命名/建工作区/移除弹窗）
+- `sessions-empty` + `settings-navigation` + `workspace-lifecycle` **18/18**
+- `workspace-labels` **1/3**
+- `go test ./...` 全绿，新增 `internal/match`、`internal/dirstream`、`internal/projectkey` 共 20 个用例
+- `audit:browser` 10/10；`go-parity-audit` 出站 0 / 未路由 0
+
 ## 未完成，需要后续 Issue
 
-- **`directory_suggestions` 的实现与 Node 完全不同。** Node 的
-  `archive/packages/server/src/utils/directory-suggestions.ts` 是 777 行的模糊搜索引擎
-  （`scorePathMatch` 来自 `packages/protocol/src/search/text-match.ts`，351 行），支持
-  `fuzzy`/`suffix` 两种模式、gitignore 感知、多级遍历、相关性排序。Go 侧只有「读一层目录 +
-  prefix/contains 过滤」，且把 `matchMode` 的枚举值写错了（用了不存在的 `prefix`/`contains`，
-  协议只有 `fuzzy`/`suffix`）。这是**我发明而非翻译**的又一处，需要按 Node 重写。
-- `workspace-labels` 剩余 2 个用例的 picker 渲染问题需要单独定位。
+- `sidebar-project-grouping` 剩下 3 个多主机用例（重命名 / 从分组项目建工作区 / 多主机移除弹窗）。
+- `workspace-labels` 剩余 2 个用例的 picker 渲染。
+- `go-parity-audit` 报的 48 条入站字段缺口，主要集中在 `hub.*`（未实现）、`plugin.*`（无运行时）、
+  以及若干请求的可选能力字段。

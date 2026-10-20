@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/home"
+	"github.com/ByteTrue/byspace/internal/projectkey"
 )
 
 // ProjectRecord mirrors PersistedProjectRecord in packages/server/src/server/workspace-registry.ts.
@@ -107,8 +109,10 @@ type AgentRecord struct {
 
 // Store manages the file-backed JSON stores under $BYSPACE_HOME.
 type Store struct {
-	mu      sync.RWMutex
-	homeDir string
+	// serverID prefixes path-derived project keys so two hosts' local projects never collide.
+	serverID string
+	mu       sync.RWMutex
+	homeDir  string
 }
 
 const (
@@ -314,11 +318,14 @@ func (s *Store) EnsureWorkspaceForCwd(cwd string) (ProjectRecord, WorkspaceRecor
 		}
 	}
 	if matchedProject == nil {
+		repoRoot := gitRepoRoot(absCwd)
 		kind := "non_git"
-		if _, err := os.Stat(filepath.Join(absCwd, ".git")); err == nil {
+		remoteURL := ""
+		if repoRoot != "" {
 			kind = "git"
+			remoteURL = gitRemoteURL(absCwd)
 		}
-		prjKey := absCwd
+		prjKey := projectkey.Derive(absCwd, remoteURL, repoRoot, "", s.serverID)
 		newPrj := ProjectRecord{
 			ProjectID:   NewProjectID(),
 			RootPath:    absCwd,
@@ -338,6 +345,7 @@ func (s *Store) EnsureWorkspaceForCwd(cwd string) (ProjectRecord, WorkspaceRecor
 	if matchedProject.Kind == "git" {
 		wsKind = "local_checkout"
 	}
+	_ = gitRepoRoot(absCwd)
 	rootCopy := absCwd
 	newWS := WorkspaceRecord{
 		WorkspaceID:  NewWorkspaceID(),
@@ -354,6 +362,59 @@ func (s *Store) EnsureWorkspaceForCwd(cwd string) (ProjectRecord, WorkspaceRecor
 		return ProjectRecord{}, WorkspaceRecord{}, err
 	}
 	return *matchedProject, newWS, nil
+}
+
+// FindOrCreateProjectForDirectory returns the project that owns cwd, creating only the project.
+//
+// This is the split Node makes: `findOrCreateProjectForDirectory` adds a project, and a
+// workspace appears only when the user opens or creates one. Keeping the two together makes
+// "add project" silently produce an empty workspace, which the sidebar then shows as a
+// project with content the user never asked for.
+func (s *Store) FindOrCreateProjectForDirectory(cwd string) (ProjectRecord, error) {
+	absCwd, err := filepath.Abs(cwd)
+	if err != nil {
+		absCwd = cwd
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	baseName := filepath.Base(absCwd)
+	if baseName == "" || baseName == "/" || baseName == "." {
+		baseName = "project"
+	}
+
+	projects, err := s.ListProjects()
+	if err != nil {
+		return ProjectRecord{}, err
+	}
+	for i := range projects {
+		if projects[i].ArchivedAt == nil && projects[i].RootPath == absCwd {
+			return projects[i], nil
+		}
+	}
+
+	// A project's directory is not necessarily a repository root: `packages/app` inside a repo
+	// is a project too. Asking git for the containing root is what makes "root vs subdirectory"
+	// distinguishable in the derived key.
+	repoRoot := gitRepoRoot(absCwd)
+	kind := "non_git"
+	remoteURL := ""
+	if repoRoot != "" {
+		kind = "git"
+		remoteURL = gitRemoteURL(absCwd)
+	}
+	prjKey := projectkey.Derive(absCwd, remoteURL, repoRoot, "", s.serverID)
+	record := ProjectRecord{
+		ProjectID:   NewProjectID(),
+		RootPath:    absCwd,
+		Kind:        kind,
+		DisplayName: baseName,
+		ProjectKey:  &prjKey,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if err := s.UpsertProject(record); err != nil {
+		return ProjectRecord{}, err
+	}
+	return record, nil
 }
 
 // ListAgents scans $BYSPACE_HOME/agents/**/*.json and returns all stored agent records.
@@ -949,4 +1010,71 @@ func (s *Store) MutateLabelCatalog(mutate func(*LabelCatalog) (map[string]any, b
 	}
 	s.saveLabelCatalogLocked(catalog)
 	return catalog, update
+}
+
+// gitRemoteURL reads origin's URL for the repository at repoPath, or "" when there is none.
+func gitRemoteURL(repoPath string) string {
+	out, err := exec.Command("git", "-C", repoPath, "config", "--get", "remote.origin.url").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// SetServerID records the daemon's own identity for project-key derivation.
+func (s *Store) SetServerID(serverID string) {
+	s.mu.Lock()
+	s.serverID = serverID
+	s.mu.Unlock()
+}
+
+// gitRepoRoot returns the repository root that contains repoPath, or "" when it is not in a
+// repository. The value feeds project-key derivation: a repo root and one of its subdirectories
+// are different projects (`#subdir:` suffix), while being the root itself is not.
+func gitRepoRoot(repoPath string) string {
+	out, err := exec.Command("git", "-C", repoPath, "rev-parse", "--show-toplevel").Output()
+	if err == nil {
+		if root := strings.TrimSpace(string(out)); root != "" {
+			return root
+		}
+	}
+	// A directory holding a `.git` entry is a repository root even when the git binary is
+	// missing or the entry is a plain directory (worktrees, fixtures).
+	if _, statErr := os.Stat(filepath.Join(repoPath, ".git")); statErr == nil {
+		return repoPath
+	}
+	return ""
+}
+
+// BackfillProjectKeys re-derives projectKey for records that predate key derivation.
+//
+// Node reconciles persisted projects on boot: a record without a key cannot join a cross-host
+// group, so two checkouts of one repository show up as two projects until the key is filled in.
+// Doing it at startup means an existing home keeps working after an upgrade.
+func (s *Store) BackfillProjectKeys() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	projects, err := readJSONArray[ProjectRecord](s.projectsPath())
+	if err != nil {
+		return 0
+	}
+	changed := 0
+	for i := range projects {
+		if projects[i].ProjectKey != nil && strings.TrimSpace(*projects[i].ProjectKey) != "" {
+			continue
+		}
+		repoRoot := gitRepoRoot(projects[i].RootPath)
+		remoteURL := ""
+		if repoRoot != "" {
+			remoteURL = gitRemoteURL(projects[i].RootPath)
+		}
+		derived := projectkey.Derive(projects[i].RootPath, remoteURL, repoRoot, "", s.serverID)
+		projects[i].ProjectKey = &derived
+		changed++
+	}
+	if changed > 0 {
+		_ = writeJSONArray(s.projectsPath(), projects)
+	}
+	return changed
 }

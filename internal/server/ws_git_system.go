@@ -465,7 +465,8 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 			})
 			return
 		}
-		prj, _, err := s.store.EnsureWorkspaceForCwd(dst)
+		// Cloning registers a project; Node does not open a workspace for it either.
+		prj, err := s.store.FindOrCreateProjectForDirectory(dst)
 		if err != nil {
 			_ = sendSessionMsg(ctx, sink, "project.github.clone.response", map[string]any{
 				"requestId":    base.RequestID,

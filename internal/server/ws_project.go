@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ByteTrue/byspace/internal/dirstream"
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/terminal"
@@ -53,7 +54,8 @@ func (s *Server) handleProjectAdd(ctx context.Context, sink frameSink, raw json.
 		})
 		return
 	}
-	prj, _, err := s.store.EnsureWorkspaceForCwd(cwd)
+	// Add project creates a project, not a workspace (Node: findOrCreateProjectForDirectory).
+	prj, err := s.store.FindOrCreateProjectForDirectory(cwd)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "project.add.response", map[string]any{
 			"requestId": req.RequestID,
@@ -123,7 +125,8 @@ func (s *Server) handleProjectCreateDirectory(ctx context.Context, sink frameSin
 		})
 		return
 	}
-	prj, _, err := s.store.EnsureWorkspaceForCwd(target)
+	// Creating the directory registers a project; the workspace appears when the user opens it.
+	prj, err := s.store.FindOrCreateProjectForDirectory(target)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "project.create_directory.response", map[string]any{
 			"requestId":     req.RequestID,
@@ -309,6 +312,9 @@ func (s *Server) handleOpenProject(ctx context.Context, sink frameSink, raw json
 	})
 }
 
+// handleDirectorySuggestions ports DirectorySuggestionsRequest handling from
+// archive/packages/server/src/server/session.ts:4260. Everything that decides *what* to show
+// lives in internal/dirstream, which is a translation of utils/directory-suggestions.ts.
 func (s *Server) handleDirectorySuggestions(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
 		RequestID    string `json:"requestId"`
@@ -320,74 +326,66 @@ func (s *Server) handleDirectorySuggestions(ctx context.Context, sink frameSink,
 		MatchMode    string `json:"matchMode"`
 	}
 	_ = json.Unmarshal(raw, &req)
-	limit := req.Limit
-	if limit <= 0 || limit > 100 {
-		limit = 30
+
+	// With a cwd the search is workspace-scoped: relative paths, slash means path query, an
+	// empty query lists children, hidden dot-directories stay traversable, gitignore applies.
+	// Without one it browses the home directory in absolute form and only ranks shallowly.
+	workspaceCwd := strings.TrimSpace(req.Cwd)
+	searchesWorkspace := workspaceCwd != ""
+
+	opts := dirstream.Options{
+		Query: req.Query,
+		Limit: req.Limit,
 	}
-	includeFiles := req.IncludeFiles == nil || *req.IncludeFiles
-	includeDirs := req.IncludeDirs == nil || *req.IncludeDirs
-	matchMode := strings.ToLower(strings.TrimSpace(req.MatchMode))
-	if matchMode == "" {
-		matchMode = "prefix"
+	opts.IncludeDirectories = req.IncludeDirs == nil || *req.IncludeDirs
+	opts.IncludeFiles = req.IncludeFiles != nil && *req.IncludeFiles
+	switch strings.ToLower(strings.TrimSpace(req.MatchMode)) {
+	case "suffix":
+		opts.MatchMode = dirstream.ModeSuffix
+	case "fuzzy":
+		opts.MatchMode = dirstream.ModeFuzzy
 	}
 
-	baseDir := expandUserPath(req.Cwd)
-	if strings.TrimSpace(req.Cwd) == "" {
-		baseDir, _ = os.UserHomeDir()
-	}
-	queryPath := expandUserPath(req.Query)
-	searchDir := baseDir
-	prefix := ""
-	if strings.HasPrefix(strings.TrimSpace(req.Query), "/") || strings.HasPrefix(strings.TrimSpace(req.Query), "~") {
-		if info, err := os.Stat(queryPath); err == nil && info.IsDir() {
-			searchDir = queryPath
-		} else {
-			searchDir = filepath.Dir(queryPath)
-			prefix = strings.ToLower(filepath.Base(queryPath))
+	if searchesWorkspace {
+		opts.Root = expandUserPath(workspaceCwd)
+		opts.PathFormat = dirstream.FormatRelative
+		opts.PathQueryPolicy = dirstream.PolicySlashes
+		opts.BlankQueryBehavior = dirstream.BlankChildren
+		opts.TraversableHiddenDirectoryNames = dirstream.WorkspaceSearchHiddenDirectories
+		opts.RespectGitIgnore = true
+	} else {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			_ = sendSessionMsg(ctx, sink, "directory_suggestions_response", map[string]any{
+				"requestId":   req.RequestID,
+				"directories": []string{},
+				"entries":     []any{},
+				"error":       err.Error(),
+			})
+			return
 		}
-	} else if strings.TrimSpace(req.Query) != "" {
-		prefix = strings.ToLower(strings.TrimSpace(req.Query))
+		opts.Root = home
+		opts.PathFormat = dirstream.FormatAbsolute
+		opts.PathQueryPolicy = dirstream.PolicyRooted
+		opts.BlankQueryBehavior = dirstream.BlankNone
+		opts.RootAliases = []string{"~"}
+		opts.ConfidentResultScanThreshold = 5000
 	}
 
-	matches := func(name string) bool {
-		if matchMode == "contains" {
-			return strings.Contains(name, prefix)
+	entries := dirstream.Search(opts)
+	dirs := make([]string, 0, len(entries))
+	rows := make([]map[string]any, 0, len(entries))
+	for _, entry := range entries {
+		if entry.Kind == dirstream.KindDirectory {
+			dirs = append(dirs, entry.Path)
 		}
-		return strings.HasPrefix(name, prefix)
-	}
-	dirEntries, _ := os.ReadDir(searchDir)
-	dirs := make([]string, 0)
-	entries := make([]map[string]any, 0)
-	for _, de := range dirEntries {
-		name := de.Name()
-		if strings.HasPrefix(name, ".") && !strings.HasPrefix(prefix, ".") {
-			continue
-		}
-		if prefix != "" && !matches(strings.ToLower(name)) {
-			continue
-		}
-		fullPath := filepath.Join(searchDir, name)
-		if de.IsDir() {
-			if !includeDirs {
-				continue
-			}
-			dirs = append(dirs, fullPath)
-			entries = append(entries, map[string]any{"path": fullPath, "kind": "directory"})
-		} else {
-			if !includeFiles {
-				continue
-			}
-			entries = append(entries, map[string]any{"path": fullPath, "kind": "file"})
-		}
-		if len(entries) >= limit {
-			break
-		}
+		rows = append(rows, map[string]any{"path": entry.Path, "kind": string(entry.Kind)})
 	}
 
 	_ = sendSessionMsg(ctx, sink, "directory_suggestions_response", map[string]any{
 		"requestId":   req.RequestID,
 		"directories": dirs,
-		"entries":     entries,
+		"entries":     rows,
 		"error":       nil,
 	})
 }
