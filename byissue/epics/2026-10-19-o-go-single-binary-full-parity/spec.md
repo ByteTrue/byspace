@@ -55,7 +55,8 @@ BySpace 此前由 Node/TypeScript 多包工作区（`packages/server`、`package
 - [x] `issues/2026-10-19-x-multi-forge-auto-archive-setup-and-naming.md` — **Issue 004：多 Forge（GitHub/GitLab/Gitea）、PR 自动归档、Workspace Setup 脚本与 AI 自动命名**（`glab`/`tea`/REST 适配、PR Timeline 与 Check 详情、Merged PR 自动归档、Worktree `setup` 脚本流式执行、`metadataGeneration` 自动分支与标题生成）
 - [x] `issues/2026-10-19-x-service-proxy-tunnels-quotas-skills-and-push.md` — **Issue 005：Service Proxy、TCP Tunnels、8 厂商 Quota Fetcher、Skills 事务同步（含 `skillTargets`）与 Web Push RFC 8291 投递**（子域名反向代理、脚本健康监控、WebSocket/TCP 端口隧道、8 厂商实时用量抓取、Skills SHA-256 事务同步与 `agents|claude` 目标选择、RFC 8291 `aes128gcm` 加密推送、Bearer 密码鉴权与语义化权限、Hub 协议与自更新）
 - [x] `issues/2026-10-19-x-cli-interactive-qr-ssh-and-relay-cutover.md`
-- [ ] `issues/2026-10-20-o-go-browser-e2e-parity-batch.md` — **真机浏览器对齐修复**（流式时序、轮次存活、思考档位、Chief 置顶、多模态图片透传） — **Issue 006：CLI 交互式 `attach`、终端二维码、`onboard`/`hooks`、`ssh://` 隧道、统一格式化输出与 Relay 切流代理**（流式终端附着、ASCII QR 码渲染、SSH 自动端口转发、`--json/--yaml/--quiet` 表格渲染器、`BYSPACE_RELAY_UPSTREAM` 切流代理）
+- [ ] `issues/2026-10-20-o-go-browser-e2e-parity-batch.md`
+- [ ] `issues/2026-10-20-o-e2e-harness-on-go-daemon.md` — **E2E 套件换 Go daemon 宿主**（config.json 嵌套结构、CORS、`BYSPACE_DISABLE_HOME_WORKSPACE`、`project.create_directory` 字段名、label 增量同步；`directory_suggestions` 的模糊搜索仍未对齐） — **真机浏览器对齐修复**（流式时序、轮次存活、思考档位、Chief 置顶、多模态图片透传） — **Issue 006：CLI 交互式 `attach`、终端二维码、`onboard`/`hooks`、`ssh://` 隧道、统一格式化输出与 Relay 切流代理**（流式终端附着、ASCII QR 码渲染、SSH 自动端口转发、`--json/--yaml/--quiet` 表格渲染器、`BYSPACE_RELAY_UPSTREAM` 切流代理）
 
 ---
 

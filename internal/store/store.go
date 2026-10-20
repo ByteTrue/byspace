@@ -560,7 +560,7 @@ func (s *Store) labelsPath() string {
 func (s *Store) ListLabels() ([]LabelDefinition, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return readJSONArray[LabelDefinition](s.labelsPath())
+	return s.loadLabelCatalogLocked().Labels, nil
 }
 
 // SetWorkspaceLabelAssignment assigns or removes a label from a workspace and ensures the label exists in the catalog.
@@ -693,14 +693,15 @@ func (s *Store) InspectLabelUsage(name string) int {
 func (s *Store) DeleteLabel(name string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	labels, _ := readJSONArray[LabelDefinition](s.labelsPath())
-	nextLabels := make([]LabelDefinition, 0, len(labels))
-	for _, l := range labels {
+	catalog := s.loadLabelCatalogLocked()
+	nextLabels := make([]LabelDefinition, 0, len(catalog.Labels))
+	for _, l := range catalog.Labels {
 		if l.Name != name {
 			nextLabels = append(nextLabels, l)
 		}
 	}
-	_ = writeJSONArray(s.labelsPath(), nextLabels)
+	catalog.Labels = nextLabels
+	s.saveLabelCatalogLocked(catalog)
 
 	workspaces, _ := readJSONArray[WorkspaceRecord](s.workspacesPath())
 	affected := 0
@@ -725,11 +726,44 @@ func (s *Store) DeleteLabel(name string) int {
 	return affected
 }
 
-// LoadDaemonConfig reads $BYSPACE_HOME/config.json and merges defaults.
+// LoadDaemonConfig returns the flattened daemon config.
+//
+// On disk the file is `{"version": 1, "daemon": { ... }}` (PersistedConfigSchema in
+// archive/packages/server/src/server/persisted-config.ts). Node always reads
+// `persisted.daemon.<key>`; reading the root instead silently drops every user setting
+// (appendSystemPrompt, cors, terminalAgentHooks, ...). This merges `daemon` over the
+// defaults and keeps unknown keys so a round-trip through SaveDaemonConfig does not
+// erase sections the Go side does not model yet.
 func (s *Store) LoadDaemonConfig() map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	cfg := map[string]any{
+	cfg := daemonConfigDefaults()
+	b, err := os.ReadFile(filepath.Join(s.homeDir, "config.json"))
+	if err != nil {
+		return cfg
+	}
+	var disk map[string]any
+	if json.Unmarshal(b, &disk) != nil {
+		return cfg
+	}
+	// `daemon` is where every real setting lives. A root-level key is honoured only when
+	// `daemon` does not carry the same one, which keeps hand-written configs working.
+	for k, v := range disk {
+		if k == "version" || k == "daemon" {
+			continue
+		}
+		cfg[k] = v
+	}
+	if daemon, ok := disk["daemon"].(map[string]any); ok {
+		for k, v := range daemon {
+			cfg[k] = v
+		}
+	}
+	return cfg
+}
+
+func daemonConfigDefaults() map[string]any {
+	return map[string]any{
 		"mcp": map[string]any{
 			"enabled":          true,
 			"injectIntoAgents": true,
@@ -741,6 +775,7 @@ func (s *Store) LoadDaemonConfig() map[string]any {
 		"terminalAgentHooks":       map[string]bool{},
 		"appendSystemPrompt":       "",
 		"agentProfiles":            []any{},
+		"cors":                     map[string]any{"allowedOrigins": []any{}},
 		"network": map[string]any{
 			"allowLanAccess": false,
 			"tcpPort":        6778,
@@ -753,20 +788,10 @@ func (s *Store) LoadDaemonConfig() map[string]any {
 			"allowedPorts": []int{},
 		},
 	}
-	b, err := os.ReadFile(filepath.Join(s.homeDir, "config.json"))
-	if err != nil {
-		return cfg
-	}
-	var disk map[string]any
-	if json.Unmarshal(b, &disk) == nil {
-		for k, v := range disk {
-			cfg[k] = v
-		}
-	}
-	return cfg
 }
 
-// SaveDaemonConfig merges patch into $BYSPACE_HOME/config.json and returns the resulting config.
+// SaveDaemonConfig merges patch into the `daemon` section of $BYSPACE_HOME/config.json
+// and returns the resulting flattened config.
 func (s *Store) SaveDaemonConfig(patch map[string]any) map[string]any {
 	cur := s.LoadDaemonConfig()
 	s.mu.Lock()
@@ -774,9 +799,59 @@ func (s *Store) SaveDaemonConfig(patch map[string]any) map[string]any {
 	for k, v := range patch {
 		cur[k] = v
 	}
-	b, _ := json.MarshalIndent(cur, "", "  ")
-	_ = home.WriteAtomic(filepath.Join(s.homeDir, "config.json"), append(b, '\n'), 0o600)
+
+	cfgPath := filepath.Join(s.homeDir, "config.json")
+	disk := map[string]any{"version": 1, "daemon": map[string]any{}}
+	if b, err := os.ReadFile(cfgPath); err == nil {
+		var existing map[string]any
+		if json.Unmarshal(b, &existing) == nil {
+			disk = existing
+			if _, ok := disk["version"]; !ok {
+				disk["version"] = 1
+			}
+		}
+	}
+	daemon, _ := disk["daemon"].(map[string]any)
+	if daemon == nil {
+		daemon = map[string]any{}
+	}
+	for k, v := range patch {
+		daemon[k] = v
+	}
+	disk["daemon"] = daemon
+
+	b, _ := json.MarshalIndent(disk, "", "  ")
+	_ = home.WriteAtomic(cfgPath, append(b, '\n'), 0o600)
 	return cur
+}
+
+// CORSAllowedOrigins resolves the origins the daemon should answer cross-origin for:
+// `config.daemon.cors.allowedOrigins` plus the comma-separated BYSPACE_CORS_ORIGINS.
+func (s *Store) CORSAllowedOrigins() []string {
+	seen := map[string]bool{}
+	out := make([]string, 0)
+	add := func(origin string) {
+		trimmed := strings.TrimSpace(origin)
+		if trimmed == "" || seen[trimmed] {
+			return
+		}
+		seen[trimmed] = true
+		out = append(out, trimmed)
+	}
+
+	if cors, ok := s.LoadDaemonConfig()["cors"].(map[string]any); ok {
+		if origins, ok := cors["allowedOrigins"].([]any); ok {
+			for _, o := range origins {
+				if str, ok := o.(string); ok {
+					add(str)
+				}
+			}
+		}
+	}
+	for _, origin := range strings.Split(os.Getenv("BYSPACE_CORS_ORIGINS"), ",") {
+		add(origin)
+	}
+	return out
 }
 
 // SaveProjectIcon persists a custom project icon under $BYSPACE_HOME/projects/icons/<projectId>.json.
@@ -809,4 +884,69 @@ func (s *Store) LoadProjectIcon(projectID string) map[string]any {
 		return nil
 	}
 	return out
+}
+
+// LabelCatalog is the persisted label set plus the monotonic counters the client replica
+// needs. The app's host-replica applies `workspace.label.update` frames only when
+// `update.seq === cursor.afterSeq + 1` within the same generation, so both numbers have to
+// advance for every catalog mutation.
+type LabelCatalog struct {
+	Generation string            `json:"generation"`
+	HeadSeq    int               `json:"headSeq"`
+	Labels     []LabelDefinition `json:"labels"`
+}
+
+func (s *Store) labelCatalogPath() string {
+	return filepath.Join(s.homeDir, "projects", "labels.json")
+}
+
+// LoadLabelCatalog returns the catalog, bootstrapping a generation on first read.
+func (s *Store) LoadLabelCatalog() LabelCatalog {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.loadLabelCatalogLocked()
+}
+
+func (s *Store) loadLabelCatalogLocked() LabelCatalog {
+	b, err := os.ReadFile(s.labelCatalogPath())
+	if err != nil {
+		return LabelCatalog{Generation: "gen_1", HeadSeq: 0, Labels: []LabelDefinition{}}
+	}
+	// Older files were a bare array; the catalog shape is a superset that also reads those.
+	var catalog LabelCatalog
+	if json.Unmarshal(b, &catalog) == nil && catalog.Generation != "" {
+		if catalog.Labels == nil {
+			catalog.Labels = []LabelDefinition{}
+		}
+		return catalog
+	}
+	var legacy []LabelDefinition
+	if json.Unmarshal(b, &legacy) == nil {
+		return LabelCatalog{Generation: "gen_1", HeadSeq: len(legacy), Labels: legacy}
+	}
+	return LabelCatalog{Generation: "gen_1", HeadSeq: 0, Labels: []LabelDefinition{}}
+}
+
+func (s *Store) saveLabelCatalogLocked(catalog LabelCatalog) {
+	b, _ := json.MarshalIndent(catalog, "", "  ")
+	_ = home.WriteAtomic(s.labelCatalogPath(), append(b, '\n'), 0o600)
+}
+
+// MutateLabelCatalog applies a mutation and returns the catalog plus the update frame the
+// client replica should receive. The caller broadcasts the frame.
+func (s *Store) MutateLabelCatalog(mutate func(*LabelCatalog) (map[string]any, bool)) (LabelCatalog, map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	catalog := s.loadLabelCatalogLocked()
+	update, changed := mutate(&catalog)
+	if !changed {
+		return catalog, nil
+	}
+	catalog.HeadSeq++
+	if update != nil {
+		update["generation"] = catalog.Generation
+		update["seq"] = catalog.HeadSeq
+	}
+	s.saveLabelCatalogLocked(catalog)
+	return catalog, update
 }

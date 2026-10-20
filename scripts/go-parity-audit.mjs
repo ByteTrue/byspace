@@ -124,16 +124,56 @@ function goKnownKeys(goSource) {
 
 const IGNORED_FIELDS = new Set(["type", "requestId", "status"]);
 
+/**
+ * 找出 `case "<msg>":` 到下一个 `case ` 之间的源码切片。
+ *
+ * 这一步是必需的：早先的实现只检查「字段名在整份 Go 源码里出现过」。`parentPath` 恰好
+ * 出现在 `internal/workspace/files.go` 的一个函数签名里，于是
+ * `project.create_directory.request` 被判为已覆盖——而真正处理它的 handler 读的是
+ * `parentDirectory`。真实后果是「新建项目目录」永远建在 daemon 的 cwd 下。
+ */
+export function handlerScopeFor(goSource, messageType) {
+  const needle = `"${messageType}"`;
+  const blocks = [];
+  let idx = goSource.indexOf(needle);
+  while (idx !== -1) {
+    const lineStart = goSource.lastIndexOf("\n", idx) + 1;
+    const lineEnd = goSource.indexOf("\n", idx);
+    const line = goSource.slice(lineStart, lineEnd === -1 ? goSource.length : lineEnd);
+    // 只认 `case "<type>":` / `case "a", "<type>":` 这种分发行
+    if (/^\s*case\s/.test(line)) {
+      const nextCase = goSource.indexOf("\n\tcase ", lineEnd);
+      const scopeEnd = nextCase === -1 ? goSource.length : nextCase;
+      blocks.push(goSource.slice(lineStart, scopeEnd));
+    }
+    idx = goSource.indexOf(needle, idx + needle.length);
+  }
+
+  // `case "x": s.handleFoo(ctx, sink, raw)` 把真正的解析放在被调函数里，
+  // 所以要把这些 `handle*` 的函数体一并纳入作用域。
+  const dispatch = blocks.join("\n");
+  for (const call of dispatch.matchAll(/\bs\.(handle[A-Z]\w*)\(/g)) {
+    const fnName = call[1];
+    const fnStart = goSource.indexOf(`func (s *Server) ${fnName}(`);
+    if (fnStart === -1) continue;
+    const fnEnd = goSource.indexOf("\nfunc ", fnStart + 1);
+    blocks.push(goSource.slice(fnStart, fnEnd === -1 ? goSource.length : fnEnd));
+  }
+  return blocks.join("\n");
+}
+
 export function auditInbound(schemas, goSource, inboundMembers) {
   const handled = goHandledMessageTypes(goSource);
-  const known = goKnownKeys(goSource);
   const rows = [];
   for (const s of schemas) {
     if (s.kind !== "type") continue;
     if (!inboundMembers.has(s.schemaName)) continue;
     if (!handled.has(s.key)) continue; // 未路由的消息单独由路由覆盖率负责
     if (INTENTIONALLY_UNSUPPORTED.has(s.key)) continue;
-    const missing = s.fields.filter((f) => !IGNORED_FIELDS.has(f) && !known.has(f));
+
+    const scope = handlerScopeFor(goSource, s.key);
+    const scopeKeys = goKnownKeys(scope);
+    const missing = s.fields.filter((f) => !IGNORED_FIELDS.has(f) && !scopeKeys.has(f));
     if (missing.length) rows.push({ key: s.key, schemaName: s.schemaName, missing });
   }
   return rows.sort((a, b) => b.missing.length - a.missing.length);

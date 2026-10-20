@@ -117,6 +117,8 @@ type Server struct {
 	fileSubs          map[string]fileSubscription
 	diffSubs          map[string]diffSubscription
 	clients           map[frameSink]bool
+	corsMu            sync.RWMutex
+	corsCache         []string
 	setupSnapshots    map[string]*setupSnapshot
 	idempotentAgents  map[string]string
 	cachedPiModels    []pi.CatalogModel
@@ -149,7 +151,11 @@ func New(opts Options) (*Server, error) {
 	ui = ui.WithConnectionHint("BySpace")
 
 	st := store.New(homeDir)
-	_ = st.EnsureHomeWorkspace(serverID)
+	// E2E specs assert exact workspace counts, so the daemon-owned Chief workspace must be
+	// suppressible: with it present every count shifts by one.
+	if strings.TrimSpace(os.Getenv("BYSPACE_DISABLE_HOME_WORKSPACE")) != "1" {
+		_ = st.EnsureHomeWorkspace(serverID)
+	}
 	srv := &Server{
 		homeDir:           homeDir,
 		serverID:          serverID,
@@ -212,6 +218,15 @@ func (s *Server) Close() error {
 
 // ServeHTTP handles /health, /ws, and embedded/external Web UI routes.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// CORS mirrors archive/packages/server/src/server/bootstrap.ts: an allow-list from
+	// config.daemon.cors.allowedOrigins plus BYSPACE_CORS_ORIGINS, "*" honouring any
+	// origin, and preflight answering 204. The web app is normally same-origin, but
+	// cross-origin browser sessions (Metro dev server, hosted PWA against a LAN daemon)
+	// are exactly what E2E and self-hosting rely on.
+	if s.applyCORS(w, r) {
+		return
+	}
+
 	if r.URL.Path == "/health" || r.URL.Path == "/api/health" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -2644,4 +2659,44 @@ func (s *Server) rememberIdempotentAgent(key, agentID string) {
 	}
 	s.idempotentAgents[key] = agentID
 	s.mu.Unlock()
+}
+
+// applyCORS writes the allow-listed CORS headers and answers preflight requests.
+// It reports whether the request was fully handled.
+func (s *Server) applyCORS(w http.ResponseWriter, r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin != "" {
+		for _, allowed := range s.corsOrigins() {
+			if allowed == "*" || allowed == origin {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+				w.Header().Set("Vary", "Origin")
+				break
+			}
+		}
+	}
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return true
+	}
+	return false
+}
+
+// corsOrigins caches the resolved allow-list; config changes are rare and the
+// middleware runs on every request.
+func (s *Server) corsOrigins() []string {
+	s.corsMu.RLock()
+	if s.corsCache != nil {
+		defer s.corsMu.RUnlock()
+		return s.corsCache
+	}
+	s.corsMu.RUnlock()
+
+	origins := s.store.CORSAllowedOrigins()
+	s.corsMu.Lock()
+	s.corsCache = origins
+	s.corsMu.Unlock()
+	return origins
 }

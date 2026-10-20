@@ -78,11 +78,18 @@ func (s *Server) handleProjectAdd(ctx context.Context, sink frameSink, raw json.
 
 func (s *Server) handleProjectCreateDirectory(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID       string `json:"requestId"`
+		RequestID string `json:"requestId"`
+		// The protocol calls this `parentPath` (ProjectCreateDirectoryRequestMessageSchema);
+		// `parentDirectory` is accepted for older clients that predate the rename.
+		ParentPath      string `json:"parentPath"`
 		ParentDirectory string `json:"parentDirectory"`
 		Name            string `json:"name"`
 	}
 	_ = json.Unmarshal(raw, &req)
+	parentPath := strings.TrimSpace(req.ParentPath)
+	if parentPath == "" {
+		parentPath = req.ParentDirectory
+	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" || strings.ContainsAny(name, `/\`) {
 		_ = sendSessionMsg(ctx, sink, "project.create_directory.response", map[string]any{
@@ -94,7 +101,7 @@ func (s *Server) handleProjectCreateDirectory(ctx context.Context, sink frameSin
 		})
 		return
 	}
-	parent := expandUserPath(req.ParentDirectory)
+	parent := expandUserPath(parentPath)
 	target := filepath.Join(parent, name)
 	if _, err := os.Stat(target); err == nil {
 		_ = sendSessionMsg(ctx, sink, "project.create_directory.response", map[string]any{
@@ -548,14 +555,14 @@ func (s *Server) handleWorkspaceLabels(ctx context.Context, sink frameSink, msgT
 
 	switch msgType {
 	case "workspace.label.list.request":
-		labels, _ := s.store.ListLabels()
+		catalog := s.store.LoadLabelCatalog()
 		_ = sendSessionMsg(ctx, sink, "workspace.label.list.response", map[string]any{
 			"requestId": base.RequestID,
-			"labels":    labels,
+			"labels":    catalog.Labels,
 			"sync": map[string]any{
 				"mode":       "snapshot",
-				"generation": "gen_1",
-				"headSeq":    len(labels),
+				"generation": catalog.Generation,
+				"headSeq":    catalog.HeadSeq,
 				"removals":   []any{},
 			},
 		})
@@ -568,6 +575,11 @@ func (s *Server) handleWorkspaceLabels(ctx context.Context, sink frameSink, msgT
 		}
 		_ = json.Unmarshal(raw, &req)
 		wsLabels, _ := s.store.SetWorkspaceLabelAssignment(req.WorkspaceID, req.Label, req.Assigned)
+		// Assigning an unknown label creates it, which is how the picker's "create" page
+		// commits (one RPC, not two). The catalog must advance so other clients see the row.
+		if req.Assigned && req.Label.Name != "" {
+			s.pushLabelUpdate(req.Label.Name, req.Label, "upsert")
+		}
 		_ = sendSessionMsg(ctx, sink, "workspace.label.assignment.set.response", map[string]any{
 			"requestId":       req.RequestID,
 			"label":           req.Label,
@@ -582,6 +594,7 @@ func (s *Server) handleWorkspaceLabels(ctx context.Context, sink frameSink, msgT
 		}
 		_ = json.Unmarshal(raw, &req)
 		updatedDef, affected, _ := s.store.UpdateLabel(req.Name, req.NewName, req.Color)
+		s.pushLabelUpdate(req.Name, updatedDef, "upsert")
 		_ = sendSessionMsg(ctx, sink, "workspace.label.update.response", map[string]any{
 			"requestId":              req.RequestID,
 			"label":                  updatedDef,
@@ -594,6 +607,7 @@ func (s *Server) handleWorkspaceLabels(ctx context.Context, sink frameSink, msgT
 		}
 		_ = json.Unmarshal(raw, &req)
 		affected := s.store.DeleteLabel(req.Name)
+		s.pushLabelUpdate(req.Name, store.LabelDefinition{}, "remove")
 		_ = sendSessionMsg(ctx, sink, "workspace.label.delete.response", map[string]any{
 			"requestId":              req.RequestID,
 			"affectedWorkspaceCount": affected,
@@ -989,4 +1003,48 @@ func (s *Server) handleHTTPFileDownload(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(data)
+}
+
+// pushLabelUpdate advances the label catalog sequence and broadcasts the incremental frame.
+//
+// The app's host-replica only applies `workspace.label.update` when
+// `update.seq === cursor.afterSeq + 1` inside the same generation, so the catalog's headSeq
+// must be the authority for both the snapshot and every subsequent frame. Emitting a fixed
+// generation/seq — or skipping the update entirely — leaves every other connected client
+// showing stale labels until a full reload.
+func (s *Server) pushLabelUpdate(previousName string, label store.LabelDefinition, kind string) {
+	catalog, update := s.store.MutateLabelCatalog(func(c *store.LabelCatalog) (map[string]any, bool) {
+		switch kind {
+		case "remove":
+			next := make([]store.LabelDefinition, 0, len(c.Labels))
+			for _, l := range c.Labels {
+				if l.Name != previousName {
+					next = append(next, l)
+				}
+			}
+			c.Labels = next
+			return map[string]any{"kind": "remove", "name": previousName}, true
+		default:
+			replaced := false
+			for i := range c.Labels {
+				if c.Labels[i].Name == previousName || c.Labels[i].Name == label.Name {
+					c.Labels[i] = label
+					replaced = true
+					break
+				}
+			}
+			if !replaced {
+				c.Labels = append(c.Labels, label)
+			}
+			frame := map[string]any{"kind": "upsert", "label": label}
+			if previousName != "" && previousName != label.Name {
+				frame["previousName"] = previousName
+			}
+			return frame, true
+		}
+	})
+	_ = catalog
+	if update != nil {
+		s.broadcastSessionMsg("workspace.label.update", update)
+	}
 }
