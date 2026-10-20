@@ -384,3 +384,126 @@ esac
 		t.Fatal("dead provider runtime is still registered; the next send would fail silently")
 	}
 }
+
+// TestSecondMessageAfterTurnCompleted covers the reported bug "新会话永远发不出第二条消息".
+//
+// The app's default sendBehavior is "steer", so every send carries
+// activeTurnBehavior:"steer" — even when the previous turn already finished. Node's
+// steerOrReplaceActiveTurn returns {status:"inactive"} in that case and the caller starts a
+// normal turn; steering unconditionally sends `steer` to a provider with no live turn, which
+// pi accepts as a queued message that never becomes a turn, so the prompt vanishes.
+func TestSecondMessageAfterTurnCompleted(t *testing.T) {
+	tmp := t.TempDir()
+	// Echo provider: replies to every prompt with a message_end, using the real pi event order.
+	echoPi := filepath.Join(tmp, "echo-pi.sh")
+	script := `#!/bin/sh
+while read line; do
+  case "$line" in
+    *'"type":"steer"'*)
+      # A steer with no live turn must never be the path taken; make it observable.
+      echo '{"type":"response","id":"s","command":"steer","success":true,"data":{}}'
+      ;;
+    *'"type":"prompt"'*)
+      echo '{"type":"response","id":"p","command":"prompt","success":true,"data":{"agentInvoked":true}}'
+      echo '{"type":"agent_start"}'
+      echo '{"type":"turn_start"}'
+      echo '{"type":"message_start","message":{"role":"assistant","content":[]}}'
+      echo '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"ok"}}'
+      echo '{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}'
+      echo '{"type":"turn_end","message":{"role":"assistant"}}'
+      echo '{"type":"agent_end","willRetry":false}'
+      echo '{"type":"agent_settled"}'
+      ;;
+  esac
+done
+`
+	if err := os.WriteFile(echoPi, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	workDir := filepath.Join(tmp, "project")
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	srv, err := New(Options{HomeDir: filepath.Join(tmp, "home"), Version: "0.20.2-test", PiCommand: echoPi})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	ws, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ws.CloseNow()
+	if err := ws.Write(ctx, websocket.MessageText, []byte(`{"type":"hello","clientId":"second","protocolVersion":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	readUntilSessionType(t, ctx, ws, "status", "server_info")
+
+	createReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type": "create_agent_request", "requestId": "s1", "clientMessageId": "m1",
+			"initialPrompt": "first", "config": map[string]any{"provider": "pi", "cwd": workDir},
+		},
+	})
+	if err := ws.Write(ctx, websocket.MessageText, createReq); err != nil {
+		t.Fatal(err)
+	}
+
+	waitTurnCompleted := func(label string) string {
+		t.Helper()
+		deadline := time.Now().Add(6 * time.Second)
+		for time.Now().Before(deadline) {
+			rctx, rc := context.WithTimeout(ctx, 2*time.Second)
+			_, data, readErr := ws.Read(rctx)
+			rc()
+			if readErr != nil {
+				t.Fatalf("%s: read failed: %v", label, readErr)
+			}
+			var env struct {
+				Message struct {
+					Type    string         `json:"type"`
+					Payload map[string]any `json:"payload"`
+				} `json:"message"`
+			}
+			if json.Unmarshal(data, &env) != nil {
+				continue
+			}
+			if env.Message.Type != "agent_stream" {
+				continue
+			}
+			event, _ := env.Message.Payload["event"].(map[string]any)
+			switch event["type"] {
+			case "turn_completed":
+				id, _ := env.Message.Payload["agentId"].(string)
+				return id
+			case "turn_failed":
+				t.Fatalf("%s: turn failed: %v", label, event["error"])
+			}
+		}
+		t.Fatalf("%s: timed out waiting for turn_completed", label)
+		return ""
+	}
+
+	agentID := waitTurnCompleted("first turn")
+
+	// The app always sends activeTurnBehavior:"steer" (default sendBehavior), including when
+	// no turn is live. This must start a fresh turn instead of a no-op steer.
+	secondReq, _ := json.Marshal(map[string]any{
+		"type": "session",
+		"message": map[string]any{
+			"type": "send_agent_message_request", "requestId": "s2", "agentId": agentID,
+			"text": "second", "messageId": "m2", "activeTurnBehavior": "steer",
+		},
+	})
+	if err := ws.Write(ctx, websocket.MessageText, secondReq); err != nil {
+		t.Fatal(err)
+	}
+	waitTurnCompleted("second turn")
+}

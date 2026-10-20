@@ -1666,9 +1666,19 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 	}
 
 	mp.session.SetNextClientMessageID(clientMsgID)
+	// Node's steerOrReplaceActiveTurn returns {status:"inactive"} when the agent has no
+	// active turn, and the caller then starts a normal turn. Steering unconditionally
+	// would send `steer` to a provider whose turn already finished: pi accepts it as a
+	// queued message that never becomes a turn, so the user's second message silently
+	// disappears and the spinner never resolves.
 	var promptErr error
-	if strings.EqualFold(strings.TrimSpace(req.ActiveTurnBehavior), "steer") {
-		promptErr = mp.session.Steer(ctx, text, images)
+	wantSteer := strings.EqualFold(strings.TrimSpace(req.ActiveTurnBehavior), "steer")
+	if wantSteer {
+		if turnID, _ := mp.session.ActiveTurn(); turnID != "" {
+			promptErr = mp.session.Steer(ctx, text, images)
+		} else {
+			promptErr = mp.session.Prompt(ctx, text, images)
+		}
 	} else {
 		promptErr = mp.session.Prompt(ctx, text, images)
 	}
