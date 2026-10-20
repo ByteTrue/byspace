@@ -19,10 +19,12 @@ import (
 
 func (s *Server) handleFileExplorer(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID string `json:"requestId"`
-		Cwd       string `json:"cwd"`
-		Path      string `json:"path"`
-		Mode      string `json:"mode"` // "list" | "file"
+		RequestID    string `json:"requestId"`
+		Cwd          string `json:"cwd"`
+		Path         string `json:"path"`
+		Mode         string `json:"mode"` // "list" | "file"
+		AcceptBinary bool   `json:"acceptBinary"`
+		MaxBytes     int    `json:"maxBytes"`
 	}
 	_ = json.Unmarshal(raw, &req)
 
@@ -266,9 +268,11 @@ func (s *Server) handleCheckoutCommitsList(ctx context.Context, sink frameSink, 
 
 func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID string `json:"requestId"`
-		Cwd       string `json:"cwd"`
-		Limit     int    `json:"limit"`
+		RequestID string   `json:"requestId"`
+		Cwd       string   `json:"cwd"`
+		Limit     int      `json:"limit"`
+		Since     string   `json:"since"`
+		Providers []string `json:"providers"`
 	}
 	_ = json.Unmarshal(raw, &req)
 
@@ -276,6 +280,7 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 		SessionDir: s.piSessionDir,
 		Cwd:        req.Cwd,
 		Limit:      req.Limit,
+		Since:      req.Since,
 	})
 
 	entries := make([]map[string]any, 0, len(sessions))
@@ -317,13 +322,18 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 
 func (s *Server) handleImportAgent(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID        string `json:"requestId"`
-		Provider         string `json:"provider"`
-		ProviderHandleID string `json:"providerHandleId"`
-		Cwd              string `json:"cwd"`
+		RequestID        string         `json:"requestId"`
+		Provider         string         `json:"provider"`
+		ProviderHandleID string         `json:"providerHandleId"`
+		Handle           string         `json:"handle"`
+		Overrides        map[string]any `json:"overrides"`
+		Cwd              string         `json:"cwd"`
 	}
 	_ = json.Unmarshal(raw, &req)
 
+	if strings.TrimSpace(req.ProviderHandleID) == "" {
+		req.ProviderHandleID = req.Handle
+	}
 	sessionFile := strings.TrimSpace(req.ProviderHandleID)
 	desc, err := pi.ParseSessionFile(sessionFile, time.Now())
 	if err != nil || desc == nil {
@@ -515,6 +525,7 @@ func (s *Server) handleSubscribeTerminal(ctx context.Context, sink frameSink, ra
 		RequestID       string `json:"requestId"`
 		TerminalID      string `json:"terminalId"`
 		InitialSnapshot string `json:"initialSnapshot"`
+		Restore         *bool  `json:"restore"`
 	}
 	_ = json.Unmarshal(raw, &req)
 

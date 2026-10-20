@@ -100,7 +100,8 @@
     "release:patch": "npm run release:check && npm run version:all:patch && npm run release:push",
     "release:minor": "npm run release:check && npm run version:all:minor && npm run release:push",
     "release:major": "npm run release:check && npm run version:all:major && npm run release:push",
-    "icons:generate": "node scripts/generate-icons.mjs"
+    "icons:generate": "node scripts/generate-icons.mjs",
+    "audit:go-parity": "node scripts/go-parity-audit.mjs"
   },
   "devDependencies": {
     "@types/ws": "^8.5.14",

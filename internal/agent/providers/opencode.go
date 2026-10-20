@@ -140,7 +140,7 @@ func (s *OpenCodeSession) LastAssistantText() string {
 	return ""
 }
 
-func (s *OpenCodeSession) Prompt(_ context.Context, message string, _ []pi.ImageContent) error {
+func (s *OpenCodeSession) Prompt(_ context.Context, message string, images []pi.ImageContent) error {
 	s.mu.Lock()
 	s.turnCounter++
 	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
@@ -166,10 +166,10 @@ func (s *OpenCodeSession) Prompt(_ context.Context, message string, _ []pi.Image
 	}
 
 	go func() {
+		parts := []map[string]any{{"type": "text", "text": message}}
+		parts = append(parts, imageBlocksForOpenCode(images)...)
 		payload, _ := json.Marshal(map[string]any{
-			"parts": []map[string]any{
-				{"type": "text", "text": message},
-			},
+			"parts": parts,
 		})
 		resp, err := s.httpClient.Post(s.baseURL+"/session/"+sid+"/message", "application/json", bytes.NewReader(payload))
 		var replyText string

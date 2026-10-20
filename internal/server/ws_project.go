@@ -304,15 +304,24 @@ func (s *Server) handleOpenProject(ctx context.Context, sink frameSink, raw json
 
 func (s *Server) handleDirectorySuggestions(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID string `json:"requestId"`
-		Query     string `json:"query"`
-		Cwd       string `json:"cwd"`
-		Limit     int    `json:"limit"`
+		RequestID    string `json:"requestId"`
+		Query        string `json:"query"`
+		Cwd          string `json:"cwd"`
+		Limit        int    `json:"limit"`
+		IncludeFiles *bool  `json:"includeFiles"`
+		IncludeDirs  *bool  `json:"includeDirectories"`
+		MatchMode    string `json:"matchMode"`
 	}
 	_ = json.Unmarshal(raw, &req)
 	limit := req.Limit
 	if limit <= 0 || limit > 100 {
 		limit = 30
+	}
+	includeFiles := req.IncludeFiles == nil || *req.IncludeFiles
+	includeDirs := req.IncludeDirs == nil || *req.IncludeDirs
+	matchMode := strings.ToLower(strings.TrimSpace(req.MatchMode))
+	if matchMode == "" {
+		matchMode = "prefix"
 	}
 
 	baseDir := expandUserPath(req.Cwd)
@@ -333,6 +342,12 @@ func (s *Server) handleDirectorySuggestions(ctx context.Context, sink frameSink,
 		prefix = strings.ToLower(strings.TrimSpace(req.Query))
 	}
 
+	matches := func(name string) bool {
+		if matchMode == "contains" {
+			return strings.Contains(name, prefix)
+		}
+		return strings.HasPrefix(name, prefix)
+	}
 	dirEntries, _ := os.ReadDir(searchDir)
 	dirs := make([]string, 0)
 	entries := make([]map[string]any, 0)
@@ -341,14 +356,20 @@ func (s *Server) handleDirectorySuggestions(ctx context.Context, sink frameSink,
 		if strings.HasPrefix(name, ".") && !strings.HasPrefix(prefix, ".") {
 			continue
 		}
-		if prefix != "" && !strings.Contains(strings.ToLower(name), prefix) {
+		if prefix != "" && !matches(strings.ToLower(name)) {
 			continue
 		}
 		fullPath := filepath.Join(searchDir, name)
 		if de.IsDir() {
+			if !includeDirs {
+				continue
+			}
 			dirs = append(dirs, fullPath)
 			entries = append(entries, map[string]any{"path": fullPath, "kind": "directory"})
 		} else {
+			if !includeFiles {
+				continue
+			}
 			entries = append(entries, map[string]any{"path": fullPath, "kind": "file"})
 		}
 		if len(entries) >= limit {
@@ -368,8 +389,10 @@ func (s *Server) handleArchiveWorkspace(ctx context.Context, sink frameSink, msg
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	if msgType == "byspace_worktree_archive_request" {
 		var req struct {
-			RequestID    string `json:"requestId"`
-			WorktreePath string `json:"worktreePath"`
+			RequestID              string `json:"requestId"`
+			WorktreePath           string `json:"worktreePath"`
+			Scope                  string `json:"scope"`
+			DeleteWorktreeFromDisk bool   `json:"deleteWorktreeFromDisk"`
 		}
 		_ = json.Unmarshal(raw, &req)
 		workspaces, _ := s.store.ListWorkspaces()
@@ -377,6 +400,9 @@ func (s *Server) handleArchiveWorkspace(ctx context.Context, sink frameSink, msg
 			if w.Cwd == req.WorktreePath {
 				_, _ = s.store.ArchiveWorkspace(w.WorkspaceID, now)
 			}
+		}
+		if req.DeleteWorktreeFromDisk && strings.TrimSpace(req.WorktreePath) != "" {
+			_ = workspace.RemoveWorktreeFromDisk(ctx, req.WorktreePath)
 		}
 		_ = sendSessionMsg(ctx, sink, "byspace_worktree_archive_response", map[string]any{
 			"requestId":     req.RequestID,
@@ -890,10 +916,11 @@ func (s *Server) handleFileExtraOps(ctx context.Context, sink frameSink, msgType
 
 	case "file.upload.request":
 		var req struct {
-			RequestID string `json:"requestId"`
-			Name      string `json:"name"`
-			MimeType  string `json:"mimeType"`
-			Data      string `json:"data"`
+			RequestID  string   `json:"requestId"`
+			Name       string   `json:"name"`
+			MimeType   string   `json:"mimeType"`
+			Data       string   `json:"data"`
+			ModifiedAt *float64 `json:"modifiedAt"`
 		}
 		_ = json.Unmarshal(raw, &req)
 		decoded, err := base64.StdEncoding.DecodeString(req.Data)

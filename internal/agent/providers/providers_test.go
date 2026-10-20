@@ -3,12 +3,16 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/ByteTrue/byspace/internal/agent/pi"
 )
 
 func TestBuiltinProvidersCatalog(t *testing.T) {
@@ -231,5 +235,53 @@ func TestOpenCodeHTTPSession(t *testing.T) {
 	}
 	if got := sess.LastAssistantText(); got != "Hello from OpenCode HTTP server!" {
 		t.Fatalf("unexpected OpenCode reply: %q", got)
+	}
+}
+
+const tinyPNGBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+
+// every provider host must forward composer images, not just pi — this is the regression guard
+// for "images silently dropped for non-pi providers".
+func TestEveryProviderForwardsImageBlocks(t *testing.T) {
+	// Each provider has its own wire shape: anthropic uses image+source, codex a data URL,
+	// ACP image+data, and OpenCode a `file` part (its API models attachments as file parts).
+	cases := []struct {
+		name     string
+		blocks   []map[string]any
+		wantType string
+		wantKey  string
+	}{
+		{"claude", imageBlocksForClaude([]pi.ImageContent{{Type: "image", Data: tinyPNGBase64, MimeType: "image/png"}}), "image", "source"},
+		{"codex", imageBlocksForCodex([]pi.ImageContent{{Type: "image", Data: tinyPNGBase64, MimeType: "image/png"}}), "image", "url"},
+		{"acp", imageBlocksForACP([]pi.ImageContent{{Type: "image", Data: tinyPNGBase64, MimeType: "image/png"}}), "image", "data"},
+		{"opencode", imageBlocksForOpenCode([]pi.ImageContent{{Type: "image", Data: tinyPNGBase64, MimeType: "image/png"}}), "file", "mime"},
+	}
+	for _, tc := range cases {
+		if len(tc.blocks) != 1 {
+			t.Fatalf("%s: expected 1 image block, got %d", tc.name, len(tc.blocks))
+		}
+		if tc.blocks[0]["type"] != tc.wantType {
+			t.Fatalf("%s: expected type=%s, got %+v", tc.name, tc.wantType, tc.blocks[0])
+		}
+		if _, ok := tc.blocks[0][tc.wantKey]; !ok {
+			t.Fatalf("%s: expected key %q in %+v", tc.name, tc.wantKey, tc.blocks[0])
+		}
+		if !strings.Contains(fmt.Sprint(tc.blocks[0]), tinyPNGBase64) {
+			t.Fatalf("%s: base64 payload missing from %+v", tc.name, tc.blocks[0])
+		}
+	}
+}
+
+func TestImageBlocksSkipEmptyData(t *testing.T) {
+	images := []pi.ImageContent{{Type: "image", Data: "", MimeType: "image/png"}}
+	for name, build := range map[string]func([]pi.ImageContent) []map[string]any{
+		"claude":   imageBlocksForClaude,
+		"codex":    imageBlocksForCodex,
+		"acp":      imageBlocksForACP,
+		"opencode": imageBlocksForOpenCode,
+	} {
+		if got := build(images); len(got) != 0 {
+			t.Fatalf("%s: expected empty blocks for empty data, got %+v", name, got)
+		}
 	}
 }

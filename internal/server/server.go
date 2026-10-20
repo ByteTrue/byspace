@@ -117,6 +117,7 @@ type Server struct {
 	fileSubs          map[string]fileSubscription
 	diffSubs          map[string]diffSubscription
 	clients           map[frameSink]bool
+	setupSnapshots    map[string]*setupSnapshot
 	cachedPiModels    []pi.CatalogModel
 	cachedPiCommands  []pi.SlashCommand
 }
@@ -164,6 +165,7 @@ func New(opts Options) (*Server, error) {
 		terminals:         make(map[uint8]*terminal.Session),
 		terminalSlotsByID: make(map[string]uint8),
 		downloadTokens:    make(map[string]downloadTokenEntry),
+		setupSnapshots:    make(map[string]*setupSnapshot),
 		fileSubs:          make(map[string]fileSubscription),
 		diffSubs:          make(map[string]diffSubscription),
 		clients:           make(map[frameSink]bool),
@@ -696,8 +698,18 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		return
 
 	case "session.events.set_subscription.request":
+		var req struct {
+			RequestID string   `json:"requestId"`
+			Events    []string `json:"events"`
+		}
+		_ = json.Unmarshal(raw, &req)
+		events := req.Events
+		if events == nil {
+			events = []string{}
+		}
 		_ = sendSessionMsg(ctx, sink, "session.events.set_subscription.response", map[string]any{
-			"requestId": base.RequestID,
+			"requestId": req.RequestID,
+			"events":    events,
 		})
 
 	case "agent.timeline.set_subscription.request":
@@ -749,11 +761,21 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 
 	case "get_providers_snapshot_request":
 		var req struct {
-			RequestID string `json:"requestId"`
-			Cwd       string `json:"cwd"`
+			RequestID   string `json:"requestId"`
+			Cwd         string `json:"cwd"`
+			IfNoneMatch string `json:"ifNoneMatch"`
 		}
 		_ = json.Unmarshal(raw, &req)
 		now := time.Now().UTC().Format(time.RFC3339Nano)
+		if req.IfNoneMatch != "" && req.IfNoneMatch == s.providerSnapshotTag() {
+			_ = sendSessionMsg(ctx, sink, "get_providers_snapshot_response", map[string]any{
+				"requestId":   base.RequestID,
+				"generatedAt": now,
+				"notModified": true,
+				"entries":     []any{},
+			})
+			return
+		}
 		models := s.probeOrCachedPiModels(ctx)
 		cfg := s.store.LoadDaemonConfig()
 		customProvs, _ := cfg["providers"].(map[string]any)
@@ -1065,6 +1087,24 @@ func (s *Server) handleSessionMessage(ctx context.Context, sink frameSink, raw j
 		"workspace.label.delete.inspect.request":
 		s.handleWorkspaceLabels(ctx, sink, base.Type, raw)
 
+	case "workspace.setup.run.request", "workspace_setup_status_request":
+		s.handleWorkspaceSetupProject(ctx, sink, base.Type, raw)
+
+	case "plugin.list.request",
+		"plugin.catalog.get.request",
+		"plugin.logs.get.request",
+		"plugin.source.status.request",
+		"plugin.source.update.request",
+		"plugin.directory.inspect.request",
+		"plugin.directory.install.request",
+		"plugin.source.install.request",
+		"plugin.reload.request",
+		"plugin.enable.request",
+		"plugin.disable.request",
+		"plugin.remove.request",
+		"plugin.rpc.invoke.request":
+		s.handlePluginRPC(ctx, sink, base.Type, raw)
+
 	case "workspace.recovery.inspect.request", "workspace.recovery.restore.request":
 		s.handleWorkspaceRecovery(ctx, sink, base.Type, raw)
 
@@ -1241,9 +1281,10 @@ func (s *Server) handleFetchWorkspaces(ctx context.Context, sink frameSink, raw 
 
 func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID string  `json:"requestId"`
-		Title     *string `json:"title"`
-		Source    struct {
+		RequestID         string  `json:"requestId"`
+		Title             *string `json:"title"`
+		FirstAgentContext any     `json:"firstAgentContext"`
+		Source            struct {
 			Kind string `json:"kind"`
 			Path string `json:"path"`
 		} `json:"source"`
@@ -1263,37 +1304,73 @@ func (s *Server) handleWorkspaceCreate(ctx context.Context, sink frameSink, raw 
 		ws.Title = req.Title
 		_ = s.store.UpsertWorkspace(ws)
 	}
-	_ = sendSessionMsg(ctx, sink, "workspace.create.response", map[string]any{
+	respPayload := map[string]any{
 		"requestId":       req.RequestID,
 		"workspace":       buildWorkspaceDescriptor(ws, prj),
 		"setupTerminalId": nil,
 		"error":           nil,
-	})
+	}
+	if req.FirstAgentContext != nil {
+		respPayload["firstAgentContext"] = req.FirstAgentContext
+	}
+	_ = sendSessionMsg(ctx, sink, "workspace.create.response", respPayload)
 }
 
 func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType string, raw json.RawMessage) {
 	var req struct {
-		RequestID   string         `json:"requestId"`
-		SearchQuery string         `json:"searchQuery"`
-		Filter      map[string]any `json:"filter"`
-		Sort        string         `json:"sort"`
-		Limit       int            `json:"limit"`
-		Cursor      string         `json:"cursor"`
-		Subscribe   *struct {
+		RequestID   string `json:"requestId"`
+		SearchQuery string `json:"searchQuery"`
+		Scope       string `json:"scope"`
+		Page        *struct {
+			Limit  int    `json:"limit"`
+			Cursor string `json:"cursor"`
+		} `json:"page"`
+		Filter    map[string]any `json:"filter"`
+		Sort      string         `json:"sort"`
+		Limit     int            `json:"limit"`
+		Cursor    string         `json:"cursor"`
+		Subscribe *struct {
 			SubscriptionID string `json:"subscriptionId"`
 		} `json:"subscribe"`
 	}
 	_ = json.Unmarshal(raw, &req)
 
+	limit := req.Limit
+	cursor := req.Cursor
+	if req.Page != nil {
+		if req.Page.Limit > 0 {
+			limit = req.Page.Limit
+		}
+		if req.Page.Cursor != "" {
+			cursor = req.Page.Cursor
+		}
+	}
+	scope := strings.ToLower(strings.TrimSpace(req.Scope))
+	if scope == "" {
+		if reqType == "fetch_agent_history_request" {
+			scope = "archived"
+		} else {
+			scope = "active"
+		}
+	}
+
 	allRecords, _ := s.store.ListAgents()
 	activeOrHist := make([]store.AgentRecord, 0, len(allRecords))
 	for _, rec := range allRecords {
-		if rec.ArchivedAt != nil && reqType == "fetch_agents_request" {
-			continue
+		switch scope {
+		case "all":
+			activeOrHist = append(activeOrHist, rec)
+		case "archived":
+			if rec.ArchivedAt != nil {
+				activeOrHist = append(activeOrHist, rec)
+			}
+		default: // "active"
+			if rec.ArchivedAt == nil {
+				activeOrHist = append(activeOrHist, rec)
+			}
 		}
-		activeOrHist = append(activeOrHist, rec)
 	}
-	records, hasMore, nextCursor := FilterAndSortAgents(activeOrHist, req.SearchQuery, req.Filter, req.Sort, req.Limit, req.Cursor)
+	records, hasMore, nextCursor := FilterAndSortAgents(activeOrHist, req.SearchQuery, req.Filter, req.Sort, limit, cursor)
 
 	projects, _ := s.store.ListProjects()
 	workspaces, _ := s.store.ListWorkspaces()
@@ -1363,10 +1440,17 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 
 func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID       string  `json:"requestId"`
-		WorkspaceID     string  `json:"workspaceId"`
-		InitialPrompt   *string `json:"initialPrompt"`
-		ClientMessageID string  `json:"clientMessageId"`
+		RequestID       string            `json:"requestId"`
+		WorkspaceID     string            `json:"workspaceId"`
+		InitialPrompt   *string           `json:"initialPrompt"`
+		ClientMessageID string            `json:"clientMessageId"`
+		IdempotencyKey  string            `json:"idempotencyKey"`
+		CallerAgentID   string            `json:"callerAgentId"`
+		WorktreeName    string            `json:"worktreeName"`
+		OutputSchema    any               `json:"outputSchema"`
+		AutoArchive     any               `json:"autoArchive"`
+		Git             any               `json:"git"`
+		Env             map[string]string `json:"env"`
 		Images          []struct {
 			Data     string `json:"data"`
 			MimeType string `json:"mimeType"`
@@ -1508,13 +1592,14 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 
 func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID       string `json:"requestId"`
-		AgentID         string `json:"agentId"`
-		Text            string `json:"text"`
-		Prompt          string `json:"prompt"`
-		MessageID       string `json:"messageId"`
-		ClientMessageID string `json:"clientMessageId"`
-		Images          []struct {
+		RequestID          string `json:"requestId"`
+		AgentID            string `json:"agentId"`
+		Text               string `json:"text"`
+		Prompt             string `json:"prompt"`
+		MessageID          string `json:"messageId"`
+		ClientMessageID    string `json:"clientMessageId"`
+		ActiveTurnBehavior string `json:"activeTurnBehavior"`
+		Images             []struct {
 			Data     string `json:"data"`
 			MimeType string `json:"mimeType"`
 		} `json:"images"`
@@ -1557,12 +1642,18 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 	}
 
 	mp.session.SetNextClientMessageID(clientMsgID)
-	if err := mp.session.Prompt(ctx, text, images); err != nil {
+	var promptErr error
+	if strings.EqualFold(strings.TrimSpace(req.ActiveTurnBehavior), "steer") {
+		promptErr = mp.session.Steer(ctx, text, images)
+	} else {
+		promptErr = mp.session.Prompt(ctx, text, images)
+	}
+	if promptErr != nil {
 		_ = sendSessionMsg(ctx, sink, "send_agent_message_response", map[string]any{
 			"requestId": req.RequestID,
 			"agentId":   req.AgentID,
 			"accepted":  false,
-			"error":     err.Error(),
+			"error":     promptErr.Error(),
 		})
 		return
 	}
@@ -1584,11 +1675,12 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 
 func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID  string `json:"requestId"`
-		AgentID    string `json:"agentId"`
-		Direction  string `json:"direction"`
-		Projection string `json:"projection"`
-		Cursor     *struct {
+		RequestID   string `json:"requestId"`
+		AgentID     string `json:"agentId"`
+		Direction   string `json:"direction"`
+		Projection  string `json:"projection"`
+		MergeWindow int    `json:"mergeWindow"`
+		Cursor      *struct {
 			Epoch string `json:"epoch"`
 			Seq   int    `json:"seq"`
 		} `json:"cursor"`
@@ -1817,6 +1909,16 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 	if rec.Provider == "pi" || rec.Provider == "" {
 		cmdOverride = s.piCommand
 	}
+	var providerEnv []string
+	if rec.Config != nil && len(rec.Config.ProviderOptions) > 0 {
+		base := os.Environ()
+		for k, v := range rec.Config.ProviderOptions {
+			if str, ok := v.(string); ok {
+				base = append(base, k+"="+str)
+			}
+		}
+		providerEnv = base
+	}
 	sess, err := providers.StartProviderSession(providers.LaunchConfig{
 		Provider:         rec.Provider,
 		CommandOverride:  cmdOverride,
@@ -1825,6 +1927,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		ModeID:           modeID,
 		ThinkingOptionID: thinking,
 		SessionHandle:    sessionPath,
+		Env:              providerEnv,
 	})
 	if err != nil {
 		return nil, err

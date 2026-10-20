@@ -534,7 +534,7 @@ func (s *ACPSession) LastAssistantText() string {
 	return ""
 }
 
-func (s *ACPSession) Prompt(ctx context.Context, message string, _ []pi.ImageContent) error {
+func (s *ACPSession) Prompt(ctx context.Context, message string, images []pi.ImageContent) error {
 	s.mu.Lock()
 	s.turnCounter++
 	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
@@ -556,11 +556,11 @@ func (s *ACPSession) Prompt(ctx context.Context, message string, _ []pi.ImageCon
 	go func() {
 		pctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
+		promptBlocks := []map[string]any{{"type": "text", "text": message}}
+		promptBlocks = append(promptBlocks, imageBlocksForACP(images)...)
 		_, err := s.rpcCall(pctx, "session/prompt", map[string]any{
 			"sessionId": sid,
-			"prompt": []map[string]any{
-				{"type": "text", "text": message},
-			},
+			"prompt":    promptBlocks,
 		})
 		s.mu.Lock()
 		hadText := s.activeTextIdx >= 0

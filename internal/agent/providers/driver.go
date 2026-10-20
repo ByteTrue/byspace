@@ -424,3 +424,85 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 		return StartACPSession(cfg, spec, cmd)
 	}
 }
+
+// imageBlocksForClaude renders composer images as Anthropic stream-json base64 image blocks.
+func imageBlocksForClaude(images []pi.ImageContent) []map[string]any {
+	blocks := make([]map[string]any, 0, len(images))
+	for _, img := range images {
+		if img.Data == "" {
+			continue
+		}
+		mimeType := img.MimeType
+		if mimeType == "" {
+			mimeType = "image/png"
+		}
+		blocks = append(blocks, map[string]any{
+			"type": "image",
+			"source": map[string]any{
+				"type":       "base64",
+				"media_type": mimeType,
+				"data":       img.Data,
+			},
+		})
+	}
+	return blocks
+}
+
+// imageBlocksForCodex renders composer images as codex app-server data-URL image inputs.
+func imageBlocksForCodex(images []pi.ImageContent) []map[string]any {
+	blocks := make([]map[string]any, 0, len(images))
+	for _, img := range images {
+		if img.Data == "" {
+			continue
+		}
+		mimeType := img.MimeType
+		if mimeType == "" {
+			mimeType = "image/png"
+		}
+		blocks = append(blocks, map[string]any{
+			"type": "image",
+			"url":  "data:" + mimeType + ";base64," + img.Data,
+		})
+	}
+	return blocks
+}
+
+// imageBlocksForACP renders composer images as ACP prompt image blocks.
+func imageBlocksForACP(images []pi.ImageContent) []map[string]any {
+	blocks := make([]map[string]any, 0, len(images))
+	for _, img := range images {
+		if img.Data == "" {
+			continue
+		}
+		mimeType := img.MimeType
+		if mimeType == "" {
+			mimeType = "image/png"
+		}
+		blocks = append(blocks, map[string]any{
+			"type":     "image",
+			"data":     img.Data,
+			"mimeType": mimeType,
+		})
+	}
+	return blocks
+}
+
+// imageBlocksForOpenCode renders composer images as OpenCode file parts (data URLs).
+func imageBlocksForOpenCode(images []pi.ImageContent) []map[string]any {
+	blocks := make([]map[string]any, 0, len(images))
+	for _, img := range images {
+		if img.Data == "" {
+			continue
+		}
+		mimeType := img.MimeType
+		if mimeType == "" {
+			mimeType = "image/png"
+		}
+		blocks = append(blocks, map[string]any{
+			"type": "file",
+			"mime": mimeType,
+			"url":  "data:" + mimeType + ";base64," + img.Data,
+		})
+	}
+	return blocks
+}

@@ -50,6 +50,36 @@ Epic 的实现阶段只做到「协议 Schema 校验通过 + 单元测试绿」�
 7. 本文件同批：`send_agent_message_request` / `create_agent_request` 解析 `images` 与 `attachments`。图片编成 pi 的 `{type:"image",data,mimeType}` 块随 `prompt` 下发；非图片附件追加 `[Attached file: … at …]` 文本行让模型按路径读取。
    - 关键点：协议字段名是 `text`（不是 `prompt`）+ `images`/`attachments`，之前两个都没解析，所以图片被静默丢弃。
    - 单测 `TestPromptForwardsImageBlocksToPi` 断言 base64 与 mimeType 完整出现在发往 pi 的 `prompt` 帧里。
+8. 图片透传补齐到全部宿主（不只是 pi）。每个宿主的线上形状不同，不能共用一个 map：
+   - Claude：`{type:"image", source:{type:"base64", media_type, data}}`
+   - Codex：`{type:"image", url:"data:<mime>;base64,<data>"}`
+   - ACP：`{type:"image", data, mimeType}`
+   - OpenCode：`{type:"file", mime, url:"data:…"}`（它的 API 把附件建模成 file part）
+   - 守卫：`TestEveryProviderForwardsImageBlocks` + `TestImageBlocksSkipEmptyData`。
+9. 引入 `scripts/go-parity-audit.mjs` 与 CI 守卫（见上节），把「字段漏解析」类问题变成可执行断言。
+10. 按审计报告补齐的入站字段（全部接线，不是只加 struct）：
+
+- `send_agent_message_request.activeTurnBehavior` → `steer` 走 `Steer`，否则新开轮次
+- `create_agent_request`：`idempotencyKey`/`env`/`callerAgentId`/`worktreeName`/`outputSchema`/`git`/`autoArchive`；`env` 已透传到 provider 进程环境
+- `create_byspace_worktree_request`：`checkoutSource`/`githubPrNumber`/`nameContext`/`firstAgentContext`
+- `fetch_agents_request`：`scope`(active/archived/all) + `page{limit,cursor}`；`fetch_workspaces_request.page`、`fetch_agent_history_request.page`
+- `fetch_recent_provider_sessions_request.since`（按 mtime 过滤）
+- `directory_suggestions_request`：`includeFiles`/`includeDirectories`/`matchMode`(prefix|contains)
+- `capture_terminal_request`：`start`/`end`/`stripAnsi`（新增 `terminal.StripAnsi` + 单测）
+- `set_agent_feature_request`：`featureId`/`value` 落盘到 `config.featureValues` 并广播 `agent_update`
+- `checkout_commit_request.addAll`、`checkout.discard_changes.request.paths`、`checkout_pr_merge_request.mergeMethod`、`checkout_merge_request.strategy|requireCleanTarget`、`stash_pop_request.stashIndex`、`stash_list_request.byspaceOnly`
+- `byspace_worktree_archive_request.scope|deleteWorktreeFromDisk`（新增 `workspace.RemoveWorktreeFromDisk`）
+- `agent.fork_context.request.boundaryCursor`（按 seq 截断 timeline）、`resume_agent_request.handle|overrides`
+- `pull_request_timeline_request.repoOwner|repoName|prNumber`、`forge.search.request.kinds`、`project.github.clone.request.cloneProtocol`
+- `file_explorer_request.acceptBinary|maxBytes`、`file.upload.request.modifiedAt`
+- `subscribe_terminal_request.restore`、`session.events.set_subscription.request.events`、`hello.clientType|capabilities`
+- `get_providers_snapshot_request.ifNoneMatch`（命中回 `notModified`）
+- `hub.*` / `plugin.source.install.request` 的可选字段
+
+11. 新增真功能的未路由消息：
+
+- `workspace.setup.run.request` / `workspace_setup_status_request` → `internal/server/ws_plugin_setup.go` 执行 `byspace.json` 的 `setup` 命令（逐条 `/bin/sh -lc`，采集日志与退出码，广播 `workspace_setup_update`，快照可轮询）
+- `plugin.*` 共 13 条 → 只读端（list/catalog/logs/source.status/source.update）如实返回空目录；写端（install/enable/disable/reload/remove/rpc.invoke）明确回报 "plugin runtime is not available on this daemon build"，不假装成功
 
 ## 验证
 

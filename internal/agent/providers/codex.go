@@ -432,7 +432,7 @@ func (s *CodexSession) LastAssistantText() string {
 	return ""
 }
 
-func (s *CodexSession) Prompt(ctx context.Context, message string, _ []pi.ImageContent) error {
+func (s *CodexSession) Prompt(ctx context.Context, message string, images []pi.ImageContent) error {
 	s.mu.Lock()
 	s.turnCounter++
 	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
@@ -446,11 +446,11 @@ func (s *CodexSession) Prompt(ctx context.Context, message string, _ []pi.ImageC
 	tid := s.threadID
 	s.mu.Unlock()
 
+	input := []map[string]any{{"type": "text", "text": message}}
+	input = append(input, imageBlocksForCodex(images)...)
 	_, err := s.rpcCall(ctx, "turn/start", map[string]any{
 		"threadId": tid,
-		"input": []map[string]any{
-			{"type": "text", "text": message},
-		},
+		"input":    input,
 	})
 	return err
 }

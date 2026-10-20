@@ -90,3 +90,19 @@ func TestVTGridSnapshotModesAndAgentHooks(t *testing.T) {
 		t.Fatalf("failed to install agent hook: %q (%v)", hookPath, err)
 	}
 }
+
+func TestStripAnsi(t *testing.T) {
+	cases := map[string]string{
+		"":                                "",
+		"plain text":                      "plain text",
+		"\x1b[31mred\x1b[0m":              "red",
+		"\x1b]633;A\x07prompt$ ":          "prompt$ ",
+		"\x1b[?25lhidden cursor\x1b[?25h": "hidden cursor",
+		"a\x1b[1;32mb\x1b[0mc":            "abc",
+	}
+	for input, want := range cases {
+		if got := StripAnsi(input); got != want {
+			t.Errorf("StripAnsi(%q) = %q, want %q", input, got, want)
+		}
+	}
+}

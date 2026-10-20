@@ -507,3 +507,13 @@ func FilterAndSortAgents(records []store.AgentRecord, searchQuery string, filter
 	}
 	return filtered, hasMore, nextCursor
 }
+
+// providerSnapshotTag returns a stable ETag-style tag for the current provider snapshot,
+// so clients can skip re-downloading an unchanged catalog via `ifNoneMatch`.
+func (s *Server) providerSnapshotTag() string {
+	s.mu.Lock()
+	models := len(s.cachedPiModels)
+	s.mu.Unlock()
+	h := sha256.Sum256([]byte(s.serverID + "|" + fmt.Sprint(models) + "|" + s.version))
+	return "wp_" + hex.EncodeToString(h[:8])
+}

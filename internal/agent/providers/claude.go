@@ -353,7 +353,7 @@ func (s *ClaudeSession) ActiveTurn() (string, string) {
 	return s.activeTurnID, ""
 }
 
-func (s *ClaudeSession) Prompt(_ context.Context, message string, _ []pi.ImageContent) error {
+func (s *ClaudeSession) Prompt(_ context.Context, message string, images []pi.ImageContent) error {
 	s.mu.Lock()
 	s.turnCounter++
 	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
@@ -372,13 +372,13 @@ func (s *ClaudeSession) Prompt(_ context.Context, message string, _ []pi.ImageCo
 		fn(map[string]any{"type": "turn_start"})
 	}
 
+	content := []map[string]any{{"type": "text", "text": message}}
+	content = append(content, imageBlocksForClaude(images)...)
 	return s.proc.SendRaw(map[string]any{
 		"type": "user",
 		"message": map[string]any{
-			"role": "user",
-			"content": []map[string]any{
-				{"type": "text", "text": message},
-			},
+			"role":    "user",
+			"content": content,
 		},
 	})
 }

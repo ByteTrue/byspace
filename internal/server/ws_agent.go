@@ -332,8 +332,9 @@ func (s *Server) handleUpdateAgent(ctx context.Context, sink frameSink, raw json
 
 func (s *Server) handleListCommands(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID string `json:"requestId"`
-		AgentID   string `json:"agentId"`
+		RequestID   string         `json:"requestId"`
+		AgentID     string         `json:"agentId"`
+		DraftConfig map[string]any `json:"draftConfig"`
 	}
 	_ = json.Unmarshal(raw, &req)
 
@@ -357,10 +358,14 @@ func (s *Server) handleListCommands(ctx context.Context, sink frameSink, raw jso
 
 func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID    string `json:"requestId"`
-		Cwd          string `json:"cwd"`
-		WorktreeSlug string `json:"worktreeSlug"`
-		RefName      string `json:"refName"`
+		RequestID         string         `json:"requestId"`
+		Cwd               string         `json:"cwd"`
+		WorktreeSlug      string         `json:"worktreeSlug"`
+		RefName           string         `json:"refName"`
+		CheckoutSource    string         `json:"checkoutSource"`
+		GithubPrNumber    *int           `json:"githubPrNumber"`
+		NameContext       map[string]any `json:"nameContext"`
+		FirstAgentContext map[string]any `json:"firstAgentContext"`
 	}
 	_ = json.Unmarshal(raw, &req)
 
@@ -463,9 +468,11 @@ func (s *Server) handleCheckoutCommit(ctx context.Context, sink frameSink, raw j
 		RequestID string `json:"requestId"`
 		Cwd       string `json:"cwd"`
 		Message   string `json:"message"`
+		AddAll    *bool  `json:"addAll"`
 	}
 	_ = json.Unmarshal(raw, &req)
-	err := workspace.CommitAll(ctx, req.Cwd, req.Message)
+	addAll := req.AddAll == nil || *req.AddAll
+	err := workspace.CommitWithOptions(ctx, req.Cwd, req.Message, addAll)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "checkout_commit_response", map[string]any{
 			"cwd":       req.Cwd,
@@ -485,11 +492,12 @@ func (s *Server) handleCheckoutCommit(ctx context.Context, sink frameSink, raw j
 
 func (s *Server) handleCheckoutDiscardChanges(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID string `json:"requestId"`
-		Cwd       string `json:"cwd"`
+		RequestID string   `json:"requestId"`
+		Cwd       string   `json:"cwd"`
+		Paths     []string `json:"paths"`
 	}
 	_ = json.Unmarshal(raw, &req)
-	err := workspace.DiscardChanges(ctx, req.Cwd)
+	err := workspace.DiscardPaths(ctx, req.Cwd, req.Paths)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "checkout.discard_changes.response", map[string]any{
 			"cwd":       req.Cwd,

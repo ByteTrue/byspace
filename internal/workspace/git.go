@@ -541,3 +541,70 @@ func StashPop(ctx context.Context, cwd string) error {
 	_, err := runGit(ctx, cwd, "stash", "pop")
 	return err
 }
+
+// StashPopIndex pops a specific stash entry (`git stash pop stash@{n}`); index 0 = latest.
+func StashPopIndex(ctx context.Context, cwd string, index int) error {
+	if index <= 0 {
+		return StashPop(ctx, cwd)
+	}
+	_, err := runGit(ctx, cwd, "stash", "pop", "stash@{"+strconv.Itoa(index)+"}")
+	return err
+}
+
+// DiscardPaths reverts the given tracked paths and removes them if they were untracked.
+func DiscardPaths(ctx context.Context, cwd string, paths []string) error {
+	if len(paths) == 0 {
+		return DiscardChanges(ctx, cwd)
+	}
+	args := append([]string{"checkout", "--"}, paths...)
+	if _, err := runGit(ctx, cwd, args...); err != nil {
+		return err
+	}
+	cleanArgs := append([]string{"clean", "-fd", "--"}, paths...)
+	_, err := runGit(ctx, cwd, cleanArgs...)
+	return err
+}
+
+// CommitWithOptions commits staged changes, optionally staging everything first.
+func CommitWithOptions(ctx context.Context, cwd, message string, addAll bool) error {
+	if addAll {
+		if _, err := runGit(ctx, cwd, "add", "-A"); err != nil {
+			return err
+		}
+	}
+	_, err := runGit(ctx, cwd, "commit", "-m", message)
+	return err
+}
+
+// MergeStrategy merges a ref using the requested strategy ("merge" | "squash" | "rebase").
+func MergeStrategy(ctx context.Context, cwd, ref, strategy string) error {
+	if strings.TrimSpace(ref) == "" {
+		ref = "main"
+	}
+	switch strings.ToLower(strings.TrimSpace(strategy)) {
+	case "squash":
+		_, err := runGit(ctx, cwd, "merge", "--squash", ref)
+		return err
+	case "rebase":
+		_, err := runGit(ctx, cwd, "rebase", ref)
+		return err
+	default:
+		_, err := runGit(ctx, cwd, "merge", ref)
+		return err
+	}
+}
+
+// RemoveWorktreeFromDisk runs `git worktree remove --force <path>` against the owning repo.
+func RemoveWorktreeFromDisk(ctx context.Context, worktreePath string) error {
+	if strings.TrimSpace(worktreePath) == "" {
+		return nil
+	}
+	parent := filepath.Dir(worktreePath)
+	for dir := parent; dir != "/" && dir != "."; dir = filepath.Dir(dir) {
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			_, rmErr := runGit(ctx, dir, "worktree", "remove", "--force", worktreePath)
+			return rmErr
+		}
+	}
+	return os.RemoveAll(worktreePath)
+}

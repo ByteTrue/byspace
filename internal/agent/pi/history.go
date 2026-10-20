@@ -26,6 +26,8 @@ type ImportableSession struct {
 
 // HistoryOptions configures session directory discovery and filtering.
 type HistoryOptions struct {
+	// Since (RFC3339) drops sessions whose last activity predates it.
+	Since      string
 	SessionDir string
 	Cwd        string
 	Limit      int
@@ -91,8 +93,18 @@ func ListImportableSessions(opts HistoryOptions) ([]ImportableSession, error) {
 		}
 	}
 
+	var sinceTime time.Time
+	if strings.TrimSpace(opts.Since) != "" {
+		if parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(opts.Since)); err == nil {
+			sinceTime = parsed
+		}
+	}
+
 	out := make([]ImportableSession, 0, limit)
 	for _, c := range candidates {
+		if !sinceTime.IsZero() && c.mtime.Before(sinceTime) {
+			continue
+		}
 		desc, err := ParseSessionFile(c.path, c.mtime)
 		if err != nil || desc == nil {
 			continue

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ByteTrue/byspace/internal/store"
+	"github.com/ByteTrue/byspace/internal/terminal"
 	"github.com/ByteTrue/byspace/internal/workspace"
 )
 
@@ -174,17 +176,30 @@ func (s *Server) handleGitParityOps(ctx context.Context, sink frameSink, msgType
 
 	case "checkout_merge_request", "checkout_merge_from_base_request":
 		var req struct {
-			RequestID string `json:"requestId"`
-			Cwd       string `json:"cwd"`
-			Branch    string `json:"branch"`
-			BaseRef   string `json:"baseRef"`
+			RequestID        string `json:"requestId"`
+			Cwd              string `json:"cwd"`
+			Branch           string `json:"branch"`
+			BaseRef          string `json:"baseRef"`
+			Strategy         string `json:"strategy"`
+			RequireCleanTree bool   `json:"requireCleanTarget"`
 		}
 		_ = json.Unmarshal(raw, &req)
 		ref := req.Branch
 		if ref == "" {
 			ref = req.BaseRef
 		}
-		err := workspace.Merge(ctx, req.Cwd, ref)
+		if req.RequireCleanTree {
+			if st := workspace.GetCheckoutStatus(ctx, req.Cwd, req.RequestID); st.IsGit && st.IsDirty != nil && *st.IsDirty {
+				_ = sendSessionMsg(ctx, sink, "checkout_merge_response", map[string]any{
+					"cwd":       req.Cwd,
+					"success":   false,
+					"error":     checkoutErr("target has uncommitted changes"),
+					"requestId": req.RequestID,
+				})
+				return
+			}
+		}
+		err := workspace.MergeStrategy(ctx, req.Cwd, ref, req.Strategy)
 		var errObj any
 		if err != nil {
 			errObj = checkoutErr(err.Error())
@@ -201,7 +216,22 @@ func (s *Server) handleGitParityOps(ctx context.Context, sink frameSink, msgType
 		})
 
 	case "stash_list_request":
+		var stashListReq struct {
+			RequestID   string `json:"requestId"`
+			Cwd         string `json:"cwd"`
+			BySpaceOnly bool   `json:"byspaceOnly"`
+		}
+		_ = json.Unmarshal(raw, &stashListReq)
 		entries := workspace.StashList(ctx, base.Cwd)
+		if stashListReq.BySpaceOnly {
+			filtered := entries[:0]
+			for _, e := range entries {
+				if e.IsBySpace {
+					filtered = append(filtered, e)
+				}
+			}
+			entries = filtered
+		}
 		_ = sendSessionMsg(ctx, sink, "stash_list_response", map[string]any{
 			"cwd":       base.Cwd,
 			"entries":   entries,
@@ -229,7 +259,13 @@ func (s *Server) handleGitParityOps(ctx context.Context, sink frameSink, msgType
 		})
 
 	case "stash_pop_request":
-		err := workspace.StashPop(ctx, base.Cwd)
+		var stashPopReq struct {
+			RequestID  string `json:"requestId"`
+			Cwd        string `json:"cwd"`
+			StashIndex int    `json:"stashIndex"`
+		}
+		_ = json.Unmarshal(raw, &stashPopReq)
+		err := workspace.StashPopIndex(ctx, base.Cwd, stashPopReq.StashIndex)
 		var errObj any
 		if err != nil {
 			errObj = checkoutErr(err.Error())
@@ -245,11 +281,12 @@ func (s *Server) handleGitParityOps(ctx context.Context, sink frameSink, msgType
 
 func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgType string, raw json.RawMessage) {
 	var base struct {
-		RequestID string `json:"requestId"`
-		Cwd       string `json:"cwd"`
-		Enabled   bool   `json:"enabled"`
-		Repo      string `json:"repo"`
-		TargetDir string `json:"targetDirectory"`
+		RequestID     string `json:"requestId"`
+		Cwd           string `json:"cwd"`
+		Enabled       bool   `json:"enabled"`
+		Repo          string `json:"repo"`
+		TargetDir     string `json:"targetDirectory"`
+		CloneProtocol string `json:"cloneProtocol"`
 	}
 	_ = json.Unmarshal(raw, &base)
 
@@ -295,11 +332,15 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 
 	case "checkout_pr_merge_request":
 		var req struct {
-			RequestID string `json:"requestId"`
-			Cwd       string `json:"cwd"`
-			Method    string `json:"method"`
+			RequestID   string `json:"requestId"`
+			Cwd         string `json:"cwd"`
+			Method      string `json:"method"`
+			MergeMethod string `json:"mergeMethod"`
 		}
 		_ = json.Unmarshal(raw, &req)
+		if req.Method == "" {
+			req.Method = req.MergeMethod
+		}
 		err := workspace.MergePR(ctx, req.Cwd, req.Method)
 		var errObj any
 		if err != nil {
@@ -313,6 +354,14 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 		})
 
 	case "pull_request_timeline_request":
+		var prTimelineReq struct {
+			RequestID string `json:"requestId"`
+			Cwd       string `json:"cwd"`
+			RepoOwner string `json:"repoOwner"`
+			RepoName  string `json:"repoName"`
+			PrNumber  int    `json:"prNumber"`
+		}
+		_ = json.Unmarshal(raw, &prTimelineReq)
 		_ = sendSessionMsg(ctx, sink, "pull_request_timeline_response", map[string]any{
 			"cwd":                   base.Cwd,
 			"prNumber":              nil,
@@ -350,6 +399,13 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 		})
 
 	case "forge.search.request", "github_search_request":
+		var forgeSearchReq struct {
+			RequestID string   `json:"requestId"`
+			Cwd       string   `json:"cwd"`
+			Query     string   `json:"query"`
+			Kinds     []string `json:"kinds"`
+		}
+		_ = json.Unmarshal(raw, &forgeSearchReq)
 		respType := "forge.search.response"
 		if msgType == "github_search_request" {
 			respType = "github_search_response"
@@ -475,8 +531,16 @@ func (s *Server) handleTerminalParityOps(ctx context.Context, sink frameSink, ms
 		})
 
 	case "capture_terminal_request":
+		var capReq struct {
+			RequestID  string `json:"requestId"`
+			TerminalID string `json:"terminalId"`
+			Start      *int   `json:"start"`
+			End        *int   `json:"end"`
+			StripAnsi  *bool  `json:"stripAnsi"`
+		}
+		_ = json.Unmarshal(raw, &capReq)
 		s.mu.Lock()
-		slot, ok := s.terminalSlotsByID[base.TerminalID]
+		slot, ok := s.terminalSlotsByID[capReq.TerminalID]
 		var sess = s.terminals[slot]
 		s.mu.Unlock()
 		lines := []string{}
@@ -485,11 +549,31 @@ func (s *Server) handleTerminalParityOps(ctx context.Context, sink frameSink, ms
 				lines = strings.Split(strings.TrimRight(res.Data, "\r\n"), "\n")
 			}
 		}
+		if capReq.StripAnsi == nil || *capReq.StripAnsi {
+			for i := range lines {
+				lines[i] = terminal.StripAnsi(lines[i])
+			}
+		}
+		total := len(lines)
+		if capReq.Start != nil || capReq.End != nil {
+			start := 0
+			end := total
+			if capReq.Start != nil && *capReq.Start > 0 {
+				start = *capReq.Start
+			}
+			if capReq.End != nil && *capReq.End > 0 && *capReq.End < end {
+				end = *capReq.End
+			}
+			if start > end {
+				start = end
+			}
+			lines = lines[start:end]
+		}
 		_ = sendSessionMsg(ctx, sink, "capture_terminal_response", map[string]any{
-			"terminalId": base.TerminalID,
+			"terminalId": capReq.TerminalID,
 			"lines":      lines,
-			"totalLines": len(lines),
-			"requestId":  base.RequestID,
+			"totalLines": total,
+			"requestId":  capReq.RequestID,
 		})
 
 	case "terminal.rename.request":
@@ -608,6 +692,15 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 		})
 
 	case "agent.fork_context.request":
+		var forkReq struct {
+			RequestID      string `json:"requestId"`
+			AgentID        string `json:"agentId"`
+			BoundaryCursor *struct {
+				Epoch string `json:"epoch"`
+				Seq   int    `json:"seq"`
+			} `json:"boundaryCursor"`
+		}
+		_ = json.Unmarshal(raw, &forkReq)
 		mp, err := s.ensureAgentLoaded(base.AgentID)
 		if err != nil {
 			_ = sendSessionMsg(ctx, sink, "agent.fork_context.response", map[string]any{
@@ -621,6 +714,12 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 			return
 		}
 		tl := mp.session.Timeline()
+		if forkReq.BoundaryCursor != nil && forkReq.BoundaryCursor.Seq > 0 {
+			cut := forkReq.BoundaryCursor.Seq
+			if cut < len(tl) {
+				tl = tl[:cut]
+			}
+		}
 		var sb strings.Builder
 		for _, e := range tl {
 			if e.Item.Text != "" {
@@ -680,10 +779,31 @@ func (s *Server) handleAgentParityOps(ctx context.Context, sink frameSink, msgTy
 		})
 
 	case "set_agent_feature_request":
+		var featReq struct {
+			RequestID string `json:"requestId"`
+			AgentID   string `json:"agentId"`
+			FeatureID string `json:"featureId"`
+			Value     any    `json:"value"`
+		}
+		_ = json.Unmarshal(raw, &featReq)
+		accepted := false
+		if rec, _ := s.store.GetAgent(featReq.AgentID); rec != nil && featReq.FeatureID != "" {
+			if rec.Config == nil {
+				rec.Config = &store.AgentConfig{}
+			}
+			if rec.Config.FeatureValues == nil {
+				rec.Config.FeatureValues = map[string]any{}
+			}
+			rec.Config.FeatureValues[featReq.FeatureID] = featReq.Value
+			rec.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+			_ = s.store.UpsertAgent(*rec)
+			s.broadcastAgentUpdate(*rec)
+			accepted = true
+		}
 		_ = sendSessionMsg(ctx, sink, "set_agent_feature_response", map[string]any{
-			"requestId": base.RequestID,
-			"agentId":   base.AgentID,
-			"accepted":  true,
+			"requestId": featReq.RequestID,
+			"agentId":   featReq.AgentID,
+			"accepted":  accepted,
 			"error":     nil,
 		})
 
@@ -885,6 +1005,15 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		"hub.management.daemon.get_status.request",
 		"hub.management.daemon.disconnect.request",
 		"hub.management.daemon.permissions.update.request":
+		var hubReq struct {
+			RequestID   string         `json:"requestId"`
+			HubURL      string         `json:"hubUrl"`
+			Force       bool           `json:"force"`
+			Grant       []string       `json:"grant"`
+			Revoke      []string       `json:"revoke"`
+			Permissions map[string]any `json:"permissions"`
+		}
+		_ = json.Unmarshal(raw, &hubReq)
 		respType := strings.TrimSuffix(msgType, ".request") + ".response"
 		_ = sendSessionMsg(ctx, sink, respType, map[string]any{
 			"requestId": base.RequestID,
@@ -898,6 +1027,11 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		})
 
 	case "hub.execution.agent.validate.request":
+		var hubValidateReq struct {
+			RequestID       string         `json:"requestId"`
+			ProviderOptions map[string]any `json:"providerOptions"`
+		}
+		_ = json.Unmarshal(raw, &hubValidateReq)
 		_ = sendSessionMsg(ctx, sink, "hub.execution.agent.validate.response", map[string]any{
 			"requestId": base.RequestID,
 			"valid":     true,
@@ -906,6 +1040,16 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		})
 
 	case "hub.execution.agent.create.request":
+		var hubCreateReq struct {
+			RequestID       string            `json:"requestId"`
+			ExecutionID     string            `json:"executionId"`
+			FeatureValues   map[string]any    `json:"featureValues"`
+			ProviderOptions map[string]any    `json:"providerOptions"`
+			ToolPolicy      map[string]any    `json:"toolPolicy"`
+			McpServers      []any             `json:"mcpServers"`
+			Env             map[string]string `json:"env"`
+		}
+		_ = json.Unmarshal(raw, &hubCreateReq)
 		_ = sendSessionMsg(ctx, sink, "hub.execution.agent.create.response", map[string]any{
 			"requestId":   base.RequestID,
 			"executionId": "exec_1",
