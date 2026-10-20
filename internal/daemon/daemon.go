@@ -224,3 +224,18 @@ func StartBackground(exePath, homeDir, addr, relayURL string) (int, error) {
 	_ = cmd.Process.Release()
 	return pid, nil
 }
+
+// WaitForShutdown blocks until the daemon's pid file is gone or the address stops accepting
+// connections, whichever happens first.
+//
+// `restart` stops then starts; without this the replacement can lose the bind race against the
+// process that is still unwinding, leaving a "started" message and a dead port.
+func WaitForShutdown(homeDir, addr string, timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if pid, alive := ReadPID(homeDir); !alive || pid <= 0 {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}

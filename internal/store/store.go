@@ -98,6 +98,7 @@ type AgentRecord struct {
 	LastModeID         *string                 `json:"lastModeId,omitempty"`
 	Config             *AgentConfig            `json:"config,omitempty"`
 	RuntimeInfo        *AgentRuntimeInfo       `json:"runtimeInfo,omitempty"`
+	Usage              any                     `json:"lastUsage,omitempty"`
 	Persistence        *AgentPersistenceHandle `json:"persistence,omitempty"`
 	LastError          *string                 `json:"lastError,omitempty"`
 	RequiresAttention  bool                    `json:"requiresAttention,omitempty"`

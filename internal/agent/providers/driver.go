@@ -18,6 +18,7 @@ type ManagedSession interface {
 	Timeline() []sdk.TimelineEntry
 	SeedTimeline(entries []sdk.TimelineEntry)
 	StreamSeq() int
+	Usage(ctx context.Context) *sdk.AgentUsage
 	LastError() string
 	ActiveTurn() (string, string)
 	LastAssistantText() string

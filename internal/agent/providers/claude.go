@@ -342,6 +342,11 @@ func (s *ClaudeSession) LastError() string {
 	return ""
 }
 
+// Usage reports token/cost accounting when the provider exposes it.
+func (s *ClaudeSession) Usage(_ context.Context) *sdk.AgentUsage {
+	return nil
+}
+
 func (s *ClaudeSession) StreamSeq() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()

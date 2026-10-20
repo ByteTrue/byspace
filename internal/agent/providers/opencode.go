@@ -118,6 +118,11 @@ func (s *OpenCodeSession) LastError() string {
 	return ""
 }
 
+// Usage reports token/cost accounting when the provider exposes it.
+func (s *OpenCodeSession) Usage(_ context.Context) *sdk.AgentUsage {
+	return nil
+}
+
 func (s *OpenCodeSession) StreamSeq() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()

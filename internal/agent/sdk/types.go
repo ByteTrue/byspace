@@ -101,9 +101,31 @@ type SessionState struct {
 }
 
 // SessionStats carries token and cost accounting for a session.
+// Mirrors PiSessionStats in archive/.../pi/rpc-types.ts.
 type SessionStats struct {
-	Tokens map[string]int `json:"tokens,omitempty"`
-	Cost   float64        `json:"cost,omitempty"`
+	Tokens       map[string]int `json:"tokens,omitempty"`
+	Cost         float64        `json:"cost,omitempty"`
+	ContextUsage *ContextUsage  `json:"contextUsage,omitempty"`
+}
+
+// ContextUsage is how full the model's context window is.
+// Pointers because pi reports nulls for models with no window information.
+type ContextUsage struct {
+	Tokens        *int `json:"tokens"`
+	ContextWindow *int `json:"contextWindow"`
+	// Percent is fractional: pi reports 1.5405 for 1.5405% of the window.
+	Percent *float64 `json:"percent"`
+}
+
+// AgentUsage is what the composer renders: token counts, spend, and context fill.
+// Mirrors AgentUsageSchema in packages/protocol.
+type AgentUsage struct {
+	InputTokens             int     `json:"inputTokens,omitempty"`
+	CachedInputTokens       int     `json:"cachedInputTokens,omitempty"`
+	OutputTokens            int     `json:"outputTokens,omitempty"`
+	TotalCostUSD            float64 `json:"totalCostUsd,omitempty"`
+	ContextWindowMaxTokens  *int    `json:"contextWindowMaxTokens,omitempty"`
+	ContextWindowUsedTokens *int    `json:"contextWindowUsedTokens,omitempty"`
 }
 
 // SlashCommand is a command a provider exposes to the client.

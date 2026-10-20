@@ -55,6 +55,7 @@ type (
 	Model              = sdk.Model
 	SessionState       = sdk.SessionState
 	SessionStats       = sdk.SessionStats
+	AgentUsage         = sdk.AgentUsage
 	SlashCommand       = sdk.SlashCommand
 	TimelineItem       = sdk.TimelineItem
 	TimelineEntry      = sdk.TimelineEntry
@@ -758,6 +759,52 @@ func (s *Session) GetState(ctx context.Context) (*SessionState, error) {
 		return nil, err
 	}
 	return &st, nil
+}
+
+// GetSessionStats queries token and cost accounting for the session.
+// Older pi builds lack this command; callers fall back to GetState.
+func (s *Session) GetSessionStats(ctx context.Context) (*SessionStats, error) {
+	raw, err := s.proc.Request(ctx, map[string]any{"type": "get_session_stats"})
+	if err != nil {
+		return nil, err
+	}
+	var stats *SessionStats
+	if err := json.Unmarshal(raw, &stats); err != nil {
+		return nil, err
+	}
+	return stats, nil
+}
+
+// Usage returns the composer-facing usage snapshot for this session.
+func (s *Session) Usage(ctx context.Context) *AgentUsage {
+	stats, err := s.GetSessionStats(ctx)
+	if err != nil {
+		return nil
+	}
+	return usageFromStats(stats)
+}
+
+// usageFromStats converts session stats into the shape the composer renders, or nil when
+// there is nothing to show. Mirrors toAgentUsage in archive/.../pi/usage-poller.ts.
+func usageFromStats(st *SessionStats) *AgentUsage {
+	if st == nil {
+		return nil
+	}
+	usage := AgentUsage{
+		InputTokens:       st.Tokens["input"],
+		CachedInputTokens: st.Tokens["cacheRead"],
+		OutputTokens:      st.Tokens["output"],
+		TotalCostUSD:      st.Cost,
+	}
+	if st.ContextUsage != nil {
+		usage.ContextWindowMaxTokens = st.ContextUsage.ContextWindow
+		usage.ContextWindowUsedTokens = st.ContextUsage.Tokens
+	}
+	if usage.InputTokens == 0 && usage.CachedInputTokens == 0 && usage.OutputTokens == 0 &&
+		usage.TotalCostUSD == 0 && usage.ContextWindowMaxTokens == nil && usage.ContextWindowUsedTokens == nil {
+		return nil
+	}
+	return &usage
 }
 
 // GetAvailableModels queries Pi's model catalog.

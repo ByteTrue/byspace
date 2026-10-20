@@ -721,7 +721,13 @@ func runDaemonCmd(args []string, stdout io.Writer) error {
 		if err != nil {
 			return err
 		}
-		_, _, _ = daemon.StopRunning(resolvedHome)
+		if _, _, err := daemon.StopRunning(resolvedHome); err != nil {
+			return err
+		}
+		// Wait for the port to be released before starting. Without this the new process can
+		// lose the bind race against the one that is still shutting down, and `restart` reports
+		// success while nothing is listening.
+		daemon.WaitForShutdown(resolvedHome, *addr, 5*time.Second)
 		return runDaemonCmd([]string{"start", "--addr", *addr, "--home", resolvedHome, "--relay", *relayURL}, stdout)
 
 	case "print-plist":

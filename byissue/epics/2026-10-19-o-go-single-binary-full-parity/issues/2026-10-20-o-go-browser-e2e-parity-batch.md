@@ -264,3 +264,47 @@ pi 的多步 conformance 测试是从已有 agent 连发两轮，走的是 `Prom
 真正的风险不是「不会翻译」，而是**在翻译不下去时悄悄换成自创实现，并且不声明**。
 本轮之后，新增实现如果 Node 有对应物，必须指出对应文件；确实 Node 没有的，必须在 Issue
 里写明「这是新增设计」而不是混在翻译里。
+
+## 第九轮：上下文用量环不显示（用户实测）
+
+现象：composer 右下角的上下文用量环不见；回复过程中环出现但一直是 0%，hover 没有
+「Context window 56% used / 556k / 1m tokens / Session cost $67.58」的浮层。
+
+### 根因三层，逐层才是真因
+
+1. **Go 从没发过 `agent.lastUsage`** —— composer 读的就是这个字段，缺失时
+   `renderContextWindowMeter` 因 `hasData === false && !pending` 直接返回 null。
+2. 补上之后仍然是 0%：`ContextUsage.Percent` 我声明成 `int`，而 pi 返回 `1.5405`，
+   `json.Unmarshal` 整个 stats 帧失败 → `usageFromStats` 返回 nil。**这个失败是静默的**，
+   只有把错误打出来才看见 `cannot unmarshal number 1.5405 ... of type int`。
+3. 最后仍是 null：`get_session_stats` 在 pi 还在吐 token 时不应答，5s 超时。Node 的
+   `PiUsagePoller` 也是同一行为，所以它在 `completeTurn`（provider 静默之后）才取终值。
+
+### 修法
+
+- `sdk.SessionStats` 补 `ContextUsage{Tokens, ContextWindow *int, Percent *float64}`；
+  `sdk.AgentUsage` 对应 `AgentUsageSchema`。
+- `Session.GetSessionStats` + `usageFromStats` ← `archive/.../pi/usage-poller.ts:toAgentUsage`。
+- 轮次中每 3s 采样（对齐 PiUsagePoller 节奏），轮次结束停表；**终值采样放到
+  `captureFinalUsage`，带重试**，因为 provider 需要一点时间才肯应答。
+- `lastUsage` 是 optional 而非 nullable：无值时**省略 key**，发 `null` 会让
+  `fetch_agents_response` 整体校验失败（这个我第一版就犯了，被 `audit:browser` 抓到）。
+
+### 顺带修的 daemon 问题
+
+`daemon restart` 在旧进程还没释放端口时就拉起新进程，新进程 bind 失败但 CLI 仍报
+`started`。新增 `daemon.WaitForShutdown`，等 PID 文件消失再启动。
+
+### 验证
+
+- 真实浏览器：composer 出现 `Context window 7% used` 圆环（不再是空的 0%）。
+- WebSocket：`agent_update` 带
+  `{"inputTokens":216,"cachedInputTokens":15104,"outputTokens":39,"totalCostUsd":0.000202224,"contextWindowMaxTokens":1000000,"contextWindowUsedTokens":15359}`，
+  `fetch_agent_response` 同样带（已持久化）。
+- 新增 4 个单测锁住：分数 percent 能解、null 字段能解、空 stats 返回 nil、字段映射正确。
+- `audit:browser` 10/10，`go-parity-audit` 出站 0。
+
+### 仍未验证
+
+hover 浮层的具体文案（`556k / 1m tokens`、`Session cost`）没有用 bsk 触发成功——
+`hover` 到 SVG 环上没能让 React 的浮层出现。数据链路已验证到组件 props，浮层属于纯展示。

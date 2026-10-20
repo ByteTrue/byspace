@@ -18,6 +18,7 @@ import (
 
 	"github.com/ByteTrue/byspace/internal/agent/pi"
 	"github.com/ByteTrue/byspace/internal/agent/providers"
+	"github.com/ByteTrue/byspace/internal/agent/sdk"
 	"github.com/ByteTrue/byspace/internal/e2ee"
 	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/schedule"
@@ -53,6 +54,8 @@ type Options struct {
 type managedPi struct {
 	record  store.AgentRecord
 	session providers.ManagedSession
+	// usageStop closes the in-flight usage sampler for this turn.
+	usageStop chan struct{}
 }
 
 type downloadTokenEntry struct {
@@ -2027,6 +2030,9 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		switch evType {
 		case "byspace_turn_started":
 			turnID, _ := ev["turnId"].(string)
+			// Poll while the turn runs so the context ring fills as tokens accumulate,
+			// the same cadence as PiUsagePoller (every 3s).
+			mp.startUsagePolling(s, sess)
 			s.mu.Lock()
 			mp.record.LastStatus = "running"
 			mp.record.UpdatedAt = nowStr
@@ -2149,6 +2155,10 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 
 		case "byspace_turn_completed":
 			turnID, _ := ev["turnId"].(string)
+			mp.stopUsagePolling()
+			// pi does not answer get_session_stats while it is still producing tokens, so the
+			// final sample has to wait until the provider settles. captureFinalUsage retries.
+			go s.captureFinalUsage(mp, sess)
 			s.mu.Lock()
 			mp.record.LastStatus = "idle"
 			mp.record.UpdatedAt = nowStr
@@ -2324,7 +2334,7 @@ func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any
 		labels = map[string]string{}
 	}
 
-	return map[string]any{
+	payload := map[string]any{
 		"id":                        rec.ID,
 		"provider":                  rec.Provider,
 		"cwd":                       rec.Cwd,
@@ -2365,6 +2375,12 @@ func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any
 		"attentionReason":    rec.AttentionReason,
 		"attentionTimestamp": rec.AttentionTimestamp,
 	}
+	// lastUsage is optional (not nullable) in AgentSnapshotPayloadSchema: emitting null fails
+	// validation, so the key is omitted until the provider reports something.
+	if rec.Usage != nil {
+		payload["lastUsage"] = rec.Usage
+	}
+	return payload
 }
 
 func (s *Server) buildProjectPlacementForRecord(rec store.AgentRecord) map[string]any {
@@ -2712,4 +2728,85 @@ func projectIdentityKey(prj store.ProjectRecord) string {
 		return *prj.ProjectKey
 	}
 	return prj.ProjectID
+}
+
+// startUsagePolling samples the provider's token/cost accounting while a turn is in flight.
+//
+// The composer's context ring and session cost come from `agent.lastUsage`, which only exists
+// if the daemon keeps asking. Node runs PiUsagePoller on a 3s timer; doing it only at turn end
+// means the ring sits at 0% for the whole run and the hover tooltip has no data to show.
+func (mp *managedPi) startUsagePolling(s *Server, sess providers.ManagedSession) {
+	// pi emits one turn_started per model step (a tool-using turn has several), so this must
+	// be idempotent: restarting the ticker on every step means it never reaches its first tick
+	// when steps are short.
+	s.mu.Lock()
+	already := mp.usageStop != nil
+	s.mu.Unlock()
+	if already {
+		return
+	}
+	stop := make(chan struct{})
+	s.mu.Lock()
+	mp.usageStop = stop
+	s.mu.Unlock()
+	go func() {
+		ticker := time.NewTicker(3 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				uctx, ucancel := context.WithTimeout(context.Background(), 5*time.Second)
+				usage := sess.Usage(uctx)
+				ucancel()
+				if usage == nil {
+					continue
+				}
+				s.mu.Lock()
+				mp.record.Usage = usage
+				recCopy := mp.record
+				s.mu.Unlock()
+				s.broadcastAgentUpdate(recCopy)
+			}
+		}
+	}()
+}
+
+// stopUsagePolling ends the in-flight usage sampler; safe to call when none is running.
+func (mp *managedPi) stopUsagePolling() {
+	if mp.usageStop != nil {
+		close(mp.usageStop)
+		mp.usageStop = nil
+	}
+}
+
+// captureFinalUsage samples token/cost accounting once the provider has gone idle.
+//
+// pi rejects get_session_stats while it is still streaming, so this must run after agent_end
+// rather than at turn end. Mirrors PiUsagePoller.completeTurn in the node daemon.
+func (s *Server) captureFinalUsage(mp *managedPi, sess providers.ManagedSession) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	// Give the provider a moment to settle before asking; a retry covers a slow flush.
+	var usage *sdk.AgentUsage
+	for attempt := 0; attempt < 3; attempt++ {
+		usage = sess.Usage(ctx)
+		if usage != nil {
+			break
+		}
+		select {
+		case <-time.After(500 * time.Millisecond):
+		case <-ctx.Done():
+			return
+		}
+	}
+	if usage == nil {
+		return
+	}
+	s.mu.Lock()
+	mp.record.Usage = usage
+	recCopy := mp.record
+	s.mu.Unlock()
+	s.broadcastAgentUpdate(recCopy)
 }
