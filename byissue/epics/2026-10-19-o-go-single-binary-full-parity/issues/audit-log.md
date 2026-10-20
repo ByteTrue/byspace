@@ -17,7 +17,6 @@
 | `script-health-monitor.ts`           | 229  | **MISSING**        | 依赖 service-proxy，用于探测脚本存活并回调。Go 无对应。                                                                                                                                                                                                                                                  |
 | `workspace-service-port-registry.ts` | —    | **MISSING**        | 脚本端口分配/回收。`workspace.script.start` 现在直接跑命令，不分配端口。                                                                                                                                                                                                                                 |
 | `workspace-setup-runtime.ts`         | —    | **PARTIAL**        | Go 有 `internal/server/ws_plugin_setup.go` 跑 `byspace.json` 的 setup，但缺：阶段划分、`blocked` 状态与 `blockedSource`、change-request 门禁、`workspace_setup_progress` 的 `truncated` 之外的字段。                                                                                                     |
-| `workspace-script-runtime-store.ts`  | —    | **PARTIAL**        | Go 有 `workspaceScripts` 内存表 + `script_status_update`，但无持久化、无端口、无健康状态。                                                                                                                                                                                                               |
 | `daemon-config-store.ts`             | 1199 | **PARTIAL**        | Go `store.LoadDaemonConfig/SaveDaemonConfig` 读写嵌套 `{version,daemon:{...}}`；缺 `agentProfiles` 增删改查、`providers` 的 profiled 配置校验、迁移路径。                                                                                                                                                |
 | `session.ts`                         | 7773 | **PARTIAL**        | 158 个消息 case 全部路由（协议 171 条入站全覆盖），但深度不一。详见下方「session.ts 逐 case」。                                                                                                                                                                                                          |
 | `websocket-server.ts`                | 2771 | **PARTIAL** → 已补 | 连接生命周期。审计发现并修复：hello 超时（Node 15s/4001，Go 原本没有，半开连接会永久占坑）、shutdown 广播（Node 发 1001，Go 没有，重启时客户端只看到静默断开）、close code 数值对齐（Go 用 4400/4402，Node 用 4003/4002）。仍缺：外部会话 90s 宽限期重连（`externalSessionsByKey`）、运行指标 30s 刷写。 |
@@ -62,7 +61,9 @@
 | `workspace-script-runtime-store.ts` | — | **MISSING** → 已修字段 | 脚本 payload 的**字段名全错**：协议要 `scriptName`/`type`/`hostname`/`port`/`lifecycle`(running\|stopped)/`health`，Go 发的是 `name`/`command`/`status`。整个 `workspace.script.start.response` 与 `script_status_update` 客户端校验失败，脚本面板什么都不显示。已按 schema 重写并加测试。仍缺：端口分配与 proxy 路由（见 service-proxy）。 |
 | `daemon-config-store.ts` | 1199 | **PORTED** | `agentProfiles` 经 `set_daemon_config` 透传即可；前端选择器把 profile 展开成具体 provider/model/mode，daemon 只存不解释。 |
 
-### 未审计（本批剩余 58 文件）
+| `pid-lock.ts` | 364 | **PARTIAL** → 已补 | Node 的锁是 JSON（pid/startedAt/hostname/uid/listen/heartbeat）+ 30s 心跳 + **5 分钟陈旧回收**。Go 只写裸 PID：崩溃后 pid 被无关进程复用时，`IsStale` 无从判断，锁会一直挡住重启。已补 `PIDLockInfo`/`ReadPIDLock`/`IsStale`/`TouchPIDLock`，`serve` 启动时检查并拒绝重复实例，30s 心跳；旧格式（裸整数）仍可读。4 个测试覆盖往返、旧格式、死 pid、过期心跳。 |
+
+### 未审计（本批剩余 57 文件）
 
 按行数排序，下一轮从这里继续：
 

@@ -297,8 +297,29 @@ func runServe(version string, args []string, stdout io.Writer) error {
 		return err
 	}
 	myPID := os.Getpid()
-	_ = daemon.WritePID(srv.HomeDir(), myPID)
+	listenAddr := listenTarget.Address()
+	// The lock carries metadata and a heartbeat mtime: a bare pid cannot tell "running" from
+	// "crashed and this pid got recycled", which is what left stale locks blocking startup.
+	if existing, ok := daemon.ReadPIDLock(srv.HomeDir()); ok && !daemon.IsStale(srv.HomeDir(), existing) && existing.PID != myPID {
+		return fmt.Errorf("another byspace daemon is already running (pid %d, started %s)", existing.PID, existing.StartedAt)
+	}
+	_ = daemon.WritePIDLock(srv.HomeDir(), daemon.PIDLockInfo{PID: myPID, Listen: &listenAddr})
 	defer daemon.RemovePID(srv.HomeDir(), myPID)
+
+	heartbeatStop := make(chan struct{})
+	defer close(heartbeatStop)
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-heartbeatStop:
+				return
+			case <-ticker.C:
+				daemon.TouchPIDLock(srv.HomeDir())
+			}
+		}
+	}()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

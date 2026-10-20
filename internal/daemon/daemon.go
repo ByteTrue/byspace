@@ -3,6 +3,7 @@
 package daemon
 
 import (
+	"encoding/json"
 	"fmt"
 	"html"
 	"os"
@@ -132,9 +133,96 @@ func LogPath(homeDir string) string {
 	return filepath.Join(homeDir, "daemon.log")
 }
 
+// PIDLockInfo is the lock file's payload, matching pidLockInfoSchema in pid-lock.ts.
+//
+// The metadata is what makes a stale lock recoverable: a bare pid cannot distinguish "the
+// daemon is running" from "the daemon crashed and this pid was recycled by an unrelated
+// process". startedAt plus hostname plus a heartbeat mtime are enough to decide.
+type PIDLockInfo struct {
+	PID       int     `json:"pid"`
+	StartedAt string  `json:"startedAt"`
+	Hostname  string  `json:"hostname"`
+	UID       int     `json:"uid"`
+	Listen    *string `json:"listen"`
+	Heartbeat bool    `json:"heartbeat,omitempty"`
+}
+
+// PidLockStaleAfter is how long a lock may go without a heartbeat before it is reclaimed.
+// Node uses five minutes: well above an ordinary event-loop stall, so a busy daemon is not
+// mistaken for a dead one.
+const PidLockStaleAfter = 5 * time.Minute
+
 // WritePID atomically records the daemon process ID in $BYSPACE_HOME/byspace.pid.
+//
+// The older format was a bare integer; readers still accept it, so an existing home keeps
+// working after an upgrade.
 func WritePID(homeDir string, pid int) error {
-	return home.WriteAtomic(PIDPath(homeDir), []byte(strconv.Itoa(pid)+"\n"), 0o600)
+	return WritePIDLock(homeDir, PIDLockInfo{PID: pid})
+}
+
+// WritePIDLock records a lock with metadata and starts its heartbeat.
+func WritePIDLock(homeDir string, info PIDLockInfo) error {
+	if info.StartedAt == "" {
+		info.StartedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+	if info.Hostname == "" {
+		info.Hostname, _ = os.Hostname()
+	}
+	if info.UID == 0 {
+		info.UID = os.Getuid()
+	}
+	info.Heartbeat = true
+	b, err := json.Marshal(info)
+	if err != nil {
+		return err
+	}
+	return home.WriteAtomic(PIDPath(homeDir), append(b, '\n'), 0o600)
+}
+
+// ReadPIDLock parses the lock file, accepting both the JSON form and the legacy bare pid.
+func ReadPIDLock(homeDir string) (PIDLockInfo, bool) {
+	b, err := os.ReadFile(PIDPath(homeDir))
+	if err != nil {
+		return PIDLockInfo{}, false
+	}
+	trimmed := strings.TrimSpace(string(b))
+	if strings.HasPrefix(trimmed, "{") {
+		var info PIDLockInfo
+		if json.Unmarshal([]byte(trimmed), &info) == nil && info.PID > 0 {
+			return info, true
+		}
+		return PIDLockInfo{}, false
+	}
+	pid, convErr := strconv.Atoi(trimmed)
+	if convErr != nil || pid <= 0 {
+		return PIDLockInfo{}, false
+	}
+	return PIDLockInfo{PID: pid}, true
+}
+
+// IsStale reports whether a lock may be reclaimed.
+//
+// A lock is stale when its pid is not alive. If the pid *is* alive but the file has not been
+// touched within PidLockStaleAfter, the pid most likely belongs to a recycled process, so the
+// lock is stale too — unless the daemon is on a different host, where liveness cannot be
+// checked and only the heartbeat signals.
+func IsStale(homeDir string, info PIDLockInfo) bool {
+	alive := info.PID > 0 && syscall.Kill(info.PID, 0) == nil
+	if !alive {
+		return true
+	}
+	if st, err := os.Stat(PIDPath(homeDir)); err == nil {
+		if time.Since(st.ModTime()) > PidLockStaleAfter {
+			return true
+		}
+	}
+	return false
+}
+
+// TouchPIDLock refreshes the lock's heartbeat mtime so a running daemon is never reclaimed.
+func TouchPIDLock(homeDir string) {
+	now := time.Now()
+	_ = os.Chtimes(PIDPath(homeDir), now, now)
 }
 
 // RemovePID deletes $BYSPACE_HOME/byspace.pid if it matches the given pid (or if pid <= 0).
@@ -148,20 +236,16 @@ func RemovePID(homeDir string, expectedPID int) {
 	_ = os.Remove(p)
 }
 
-// ReadPID reads $BYSPACE_HOME/byspace.pid and checks whether the process is alive.
+// ReadPID reads the lock and checks whether the recorded process is alive.
 func ReadPID(homeDir string) (int, bool) {
-	b, err := os.ReadFile(PIDPath(homeDir))
-	if err != nil {
+	info, ok := ReadPIDLock(homeDir)
+	if !ok {
 		return 0, false
 	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
-	if err != nil || pid <= 0 {
-		return 0, false
+	if err := syscall.Kill(info.PID, 0); err != nil {
+		return info.PID, false
 	}
-	if err := syscall.Kill(pid, 0); err != nil {
-		return pid, false
-	}
-	return pid, true
+	return info.PID, true
 }
 
 // StopRunning sends SIGTERM to the PID recorded in $BYSPACE_HOME/byspace.pid and waits up to 5s.
