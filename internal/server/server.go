@@ -139,6 +139,7 @@ type Server struct {
 	corsCache         []string
 	setupSnapshots    map[string]*setupSnapshot
 	workspaceScripts  map[string]*workspaceScript
+	scriptPorts       *servicePortAllocator
 	idempotentAgents  map[string]string
 	cachedPiModels    []pi.CatalogModel
 	cachedPiCommands  []pi.SlashCommand
@@ -202,6 +203,7 @@ func New(opts Options) (*Server, error) {
 		downloadTokens:    make(map[string]downloadTokenEntry),
 		setupSnapshots:    make(map[string]*setupSnapshot),
 		workspaceScripts:  make(map[string]*workspaceScript),
+		scriptPorts:       newServicePortAllocator(),
 		idempotentAgents:  make(map[string]string),
 		fileSubs:          make(map[string]fileSubscription),
 		diffSubs:          make(map[string]diffSubscription),

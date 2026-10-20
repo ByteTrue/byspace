@@ -296,6 +296,8 @@ type workspaceScript struct {
 	Name        string
 	Command     string
 	Status      string // "running" | "stopped" | "failed"
+	IsService   bool
+	Port        int
 	StartedAt   string
 	FinishedAt  *string
 	ExitCode    *int
@@ -319,10 +321,23 @@ func (s *Server) startWorkspaceScript(ctx context.Context, workspaceID, name str
 	if cwd == "" {
 		return nil, fmt.Errorf("workspace %q not found", workspaceID)
 	}
-	scripts := workspace.ReadScripts(cwd)
-	command, ok := scripts[name]
+	configs := workspace.ReadScriptConfigs(cwd)
+	scriptCfg, ok := configs[name]
 	if !ok {
 		return nil, fmt.Errorf("script %q is not defined in byspace.json", name)
+	}
+	command := scriptCfg.Command
+
+	// A service script is told which port to bind. Without this the dev server picks its own
+	// and there is no stable URL to open; PORT/ WORKSPACE_SCRIPT_PORT are the names the
+	// node daemon injects.
+	port := 0
+	if scriptCfg.IsService() {
+		allocated, allocErr := s.scriptPorts.Allocate(workspaceID, name, scriptCfg.Port)
+		if allocErr != nil {
+			return nil, allocErr
+		}
+		port = allocated
 	}
 
 	nowStr := time.Now().UTC().Format(time.RFC3339Nano)
@@ -332,6 +347,8 @@ func (s *Server) startWorkspaceScript(ctx context.Context, workspaceID, name str
 		Command:     command,
 		Status:      "running",
 		StartedAt:   nowStr,
+		IsService:   scriptCfg.IsService(),
+		Port:        port,
 	}
 
 	s.mu.Lock()
@@ -345,6 +362,12 @@ func (s *Server) startWorkspaceScript(ctx context.Context, workspaceID, name str
 		cmd := exec.Command("/bin/sh", "-lc", command)
 		cmd.Dir = cwd
 		cmd.Env = os.Environ()
+		if port > 0 {
+			cmd.Env = append(cmd.Env,
+				fmt.Sprintf("PORT=%d", port),
+				fmt.Sprintf("WORKSPACE_SCRIPT_PORT=%d", port),
+			)
+		}
 		err := cmd.Run()
 
 		finished := time.Now().UTC().Format(time.RFC3339Nano)
@@ -402,12 +425,20 @@ func workspaceScriptPayload(entry *workspaceScript) map[string]any {
 	if entry.Status == "running" {
 		lifecycle = "running"
 	}
+	scriptType := "script"
+	var port any
+	if entry.IsService {
+		scriptType = "service"
+		if entry.Port > 0 {
+			port = entry.Port
+		}
+	}
 	return map[string]any{
 		"scriptName": entry.Name,
-		"type":       "script",
-		// hostname/port exist for the service-proxy route; scripts run without one.
+		"type":       scriptType,
+		// hostname/port describe the service route; a plain script has neither.
 		"hostname":       "",
-		"port":           nil,
+		"port":           port,
 		"localProxyUrl":  nil,
 		"publicProxyUrl": nil,
 		"proxyUrl":       nil,
