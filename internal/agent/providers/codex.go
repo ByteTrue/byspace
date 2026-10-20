@@ -404,6 +404,8 @@ func (s *CodexSession) SeedTimeline(entries []pi.TimelineEntry) {
 	copy(s.timeline, entries)
 }
 
+func (s *CodexSession) SetNextClientMessageID(_ string) {}
+
 func (s *CodexSession) LastAssistantText() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()

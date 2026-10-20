@@ -112,6 +112,8 @@ func (s *OpenCodeSession) SeedTimeline(entries []pi.TimelineEntry) {
 	copy(s.timeline, entries)
 }
 
+func (s *OpenCodeSession) SetNextClientMessageID(_ string) {}
+
 func (s *OpenCodeSession) LastAssistantText() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()

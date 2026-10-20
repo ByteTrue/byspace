@@ -506,6 +506,8 @@ func (s *ACPSession) SeedTimeline(entries []pi.TimelineEntry) {
 	copy(s.timeline, entries)
 }
 
+func (s *ACPSession) SetNextClientMessageID(_ string) {}
+
 func (s *ACPSession) LastAssistantText() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()

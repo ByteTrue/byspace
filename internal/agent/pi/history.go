@@ -3,6 +3,7 @@ package pi
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -247,6 +248,8 @@ func LoadTimelineFromJSONL(filePath string) ([]TimelineEntry, error) {
 	var entries []TimelineEntry
 	toolIndexByID := make(map[string]int)
 	toolArgsByID := make(map[string]any)
+	turnCounter := 0
+	var currentTurnID string
 	appendEntry := func(ts string, item TimelineItem) int {
 		if ts == "" {
 			ts = time.Now().UTC().Format(time.RFC3339Nano)
@@ -254,6 +257,7 @@ func LoadTimelineFromJSONL(filePath string) ([]TimelineEntry, error) {
 		seq := len(entries) + 1
 		entries = append(entries, TimelineEntry{
 			Seq:       seq,
+			TurnID:    currentTurnID,
 			Timestamp: ts,
 			Item:      item,
 		})
@@ -272,6 +276,7 @@ func LoadTimelineFromJSONL(filePath string) ([]TimelineEntry, error) {
 		if rec["type"] != "message" {
 			continue
 		}
+		rowID, _ := rec["id"].(string)
 		ts, _ := rec["timestamp"].(string)
 		msg, ok := rec["message"].(map[string]any)
 		if !ok {
@@ -281,9 +286,12 @@ func LoadTimelineFromJSONL(filePath string) ([]TimelineEntry, error) {
 		switch role {
 		case "user":
 			if txt := extractUserContentText(msg["content"]); txt != "" {
+				turnCounter++
+				currentTurnID = fmt.Sprintf("turn_%d", turnCounter)
 				appendEntry(ts, TimelineItem{
-					Type: "user_message",
-					Text: txt,
+					Type:      "user_message",
+					Text:      txt,
+					MessageID: rowID,
 				})
 			}
 		case "assistant":
@@ -305,8 +313,9 @@ func LoadTimelineFromJSONL(filePath string) ([]TimelineEntry, error) {
 				case "text":
 					if tx, _ := block["text"].(string); tx != "" {
 						appendEntry(ts, TimelineItem{
-							Type: "assistant_message",
-							Text: tx,
+							Type:      "assistant_message",
+							Text:      leadingMagicTagRe.ReplaceAllString(tx, ""),
+							MessageID: rowID,
 						})
 					}
 				case "toolCall":

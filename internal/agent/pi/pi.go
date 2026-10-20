@@ -64,13 +64,15 @@ type SlashCommand struct {
 
 // TimelineItem represents a normalized BySpace timeline item (user_message, assistant_message, reasoning, tool_call).
 type TimelineItem struct {
-	Type   string `json:"type"`
-	Text   string `json:"text,omitempty"`
-	CallID string `json:"callId,omitempty"`
-	Name   string `json:"name,omitempty"`
-	Status string `json:"status,omitempty"`
-	Detail any    `json:"detail,omitempty"`
-	Error  any    `json:"error,omitempty"`
+	Type            string `json:"type"`
+	Text            string `json:"text,omitempty"`
+	MessageID       string `json:"messageId,omitempty"`
+	ClientMessageID string `json:"clientMessageId,omitempty"`
+	CallID          string `json:"callId,omitempty"`
+	Name            string `json:"name,omitempty"`
+	Status          string `json:"status,omitempty"`
+	Detail          any    `json:"detail,omitempty"`
+	Error           any    `json:"error,omitempty"`
 }
 
 // MarshalJSON ensures tool_call items always serialize "error": null when Error is nil,
@@ -86,10 +88,17 @@ func (i TimelineItem) MarshalJSON() ([]byte, error) {
 			"error":  i.Error,
 		})
 	}
-	return json.Marshal(map[string]any{
+	m := map[string]any{
 		"type": i.Type,
 		"text": i.Text,
-	})
+	}
+	if i.MessageID != "" {
+		m["messageId"] = i.MessageID
+	}
+	if i.ClientMessageID != "" {
+		m["clientMessageId"] = i.ClientMessageID
+	}
+	return json.Marshal(m)
 }
 
 // TimelineEntry wraps a TimelineItem with sequence and timestamp metadata.
@@ -184,21 +193,24 @@ func hasApproveFlag(argv []string) bool {
 type Session struct {
 	proc *jsonl.Process
 
-	mu                 sync.Mutex
-	status             string // "idle" | "running" | "error" | "closed"
-	lastError          string
-	turnCounter        int
-	activeTurnID       string
-	timeline           []TimelineEntry
-	activeTextIdx      int
-	activeThinkIdx     int
-	toolIndexByID      map[string]int
-	toolArgsByID       map[string]any
-	pendingPermissions map[string]map[string]any
-	subagents          map[string]SubagentDescriptor
-	finishWaiters      []chan error
-	eventSubscribers   map[int]func(map[string]any)
-	nextSubID          int
+	mu                  sync.Mutex
+	status              string // "idle" | "running" | "error" | "closed"
+	lastError           string
+	turnCounter         int
+	activeTurnID        string
+	activeMessageID     string
+	nextClientMessageID string
+	streamedInTurn      bool
+	timeline            []TimelineEntry
+	activeTextIdx       int
+	activeThinkIdx      int
+	toolIndexByID       map[string]int
+	toolArgsByID        map[string]any
+	pendingPermissions  map[string]map[string]any
+	subagents           map[string]SubagentDescriptor
+	finishWaiters       []chan error
+	eventSubscribers    map[int]func(map[string]any)
+	nextSubID           int
 }
 
 // StartSession launches a Pi RPC subprocess and initializes timeline tracking.
@@ -231,6 +243,7 @@ func StartSession(opts LaunchOptions) (*Session, error) {
 
 func (s *Session) handleRawEvent(ev map[string]any) {
 	evType, _ := ev["type"].(string)
+	var extraEvents []map[string]any
 
 	s.mu.Lock()
 	switch evType {
@@ -242,8 +255,14 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		}
 
 	case "message_start":
-		s.activeTextIdx = -1
-		s.activeThinkIdx = -1
+		if msg, ok := ev["message"].(map[string]any); ok {
+			if role, _ := msg["role"].(string); role == "assistant" {
+				s.activeTextIdx = -1
+				s.activeThinkIdx = -1
+				s.streamedInTurn = false
+				s.activeMessageID = fmt.Sprintf("msg_%d_%d", s.turnCounter, len(s.timeline)+1)
+			}
+		}
 
 	case "message_update":
 		if ame, ok := ev["assistantMessageEvent"].(map[string]any); ok {
@@ -252,14 +271,45 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			switch ameType {
 			case "text_delta":
 				if delta != "" {
+					if s.activeMessageID == "" {
+						s.activeMessageID = fmt.Sprintf("msg_%d_%d", s.turnCounter, len(s.timeline)+1)
+					}
+					var prevText string
 					if s.activeTextIdx < 0 || s.activeTextIdx >= len(s.timeline) {
 						s.activeTextIdx = s.appendItemLocked(TimelineItem{
-							Type: "assistant_message",
-							Text: leadingMagicTagRe.ReplaceAllString(delta, ""),
+							Type:      "assistant_message",
+							Text:      delta,
+							MessageID: s.activeMessageID,
 						})
 					} else {
-						combined := s.timeline[s.activeTextIdx].Item.Text + delta
-						s.timeline[s.activeTextIdx].Item.Text = leadingMagicTagRe.ReplaceAllString(combined, "")
+						prevText = s.timeline[s.activeTextIdx].Item.Text
+						s.timeline[s.activeTextIdx].Item.Text += delta
+					}
+					curRaw := s.timeline[s.activeTextIdx].Item.Text
+					// Hold back split magic-context prefix chunks (e.g. "§", "§10") until the closing "§ " arrives
+					if strings.HasPrefix(curRaw, "§") && len(curRaw) < 10 && !leadingMagicTagRe.MatchString(curRaw) {
+						break
+					}
+					cleanedFull := leadingMagicTagRe.ReplaceAllString(curRaw, "")
+					s.timeline[s.activeTextIdx].Item.Text = cleanedFull
+					prevCleaned := leadingMagicTagRe.ReplaceAllString(prevText, "")
+					if strings.HasPrefix(prevText, "§") && len(prevText) < 10 && !leadingMagicTagRe.MatchString(prevText) {
+						prevCleaned = ""
+					}
+					emitDelta := strings.TrimPrefix(cleanedFull, prevCleaned)
+					s.streamedInTurn = true
+					if emitDelta != "" {
+						seq := s.timeline[s.activeTextIdx].Seq
+						extraEvents = append(extraEvents, map[string]any{
+							"type":   "stream_timeline",
+							"seq":    seq,
+							"turnId": s.activeTurnID,
+							"item": TimelineItem{
+								Type:      "assistant_message",
+								Text:      emitDelta,
+								MessageID: s.activeMessageID,
+							},
+						})
 					}
 				}
 			case "thinking_delta":
@@ -272,26 +322,47 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 					} else {
 						s.timeline[s.activeThinkIdx].Item.Text += delta
 					}
+					seq := s.timeline[s.activeThinkIdx].Seq
+					extraEvents = append(extraEvents, map[string]any{
+						"type":   "stream_timeline",
+						"seq":    seq,
+						"turnId": s.activeTurnID,
+						"item": TimelineItem{
+							Type: "reasoning",
+							Text: delta,
+						},
+					})
 				}
 			}
 		}
 
 	case "message_end":
-		// If the assistant message finished without streaming deltas (e.g. single block),
-		// ensure its final text is captured.
+		// Only handle assistant message_end; ignore user message_end so previous turns never leak.
 		if msg, ok := ev["message"].(map[string]any); ok {
 			role, _ := msg["role"].(string)
-			if role == "assistant" && s.activeTextIdx < 0 {
-				if text := extractAssistantText(msg); text != "" {
-					s.activeTextIdx = s.appendItemLocked(TimelineItem{
-						Type: "assistant_message",
-						Text: text,
-					})
+			if role == "assistant" {
+				if !s.streamedInTurn && s.activeTextIdx < 0 {
+					if text := leadingMagicTagRe.ReplaceAllString(extractAssistantText(msg), ""); text != "" {
+						msgID := fmt.Sprintf("msg_%d_%d", s.turnCounter, len(s.timeline)+1)
+						idx := s.appendItemLocked(TimelineItem{
+							Type:      "assistant_message",
+							Text:      text,
+							MessageID: msgID,
+						})
+						extraEvents = append(extraEvents, map[string]any{
+							"type":   "stream_timeline",
+							"seq":    s.timeline[idx].Seq,
+							"turnId": s.activeTurnID,
+							"item":   s.timeline[idx].Item,
+						})
+					}
 				}
+				s.activeTextIdx = -1
+				s.activeThinkIdx = -1
+				s.activeMessageID = ""
+				s.streamedInTurn = false
 			}
 		}
-		s.activeTextIdx = -1
-		s.activeThinkIdx = -1
 
 	case "tool_execution_start":
 		callID, _ := ev["toolCallId"].(string)
@@ -299,6 +370,9 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		if callID != "" {
 			s.toolArgsByID[callID] = ev["args"]
 		}
+		s.activeTextIdx = -1
+		s.activeThinkIdx = -1
+		s.activeMessageID = ""
 		idx := s.appendItemLocked(TimelineItem{
 			Type:   "tool_call",
 			CallID: callID,
@@ -310,6 +384,12 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		if callID != "" {
 			s.toolIndexByID[callID] = idx
 		}
+		extraEvents = append(extraEvents, map[string]any{
+			"type":   "stream_timeline",
+			"seq":    s.timeline[idx].Seq,
+			"turnId": s.activeTurnID,
+			"item":   s.timeline[idx].Item,
+		})
 
 	case "tool_execution_end":
 		callID, _ := ev["toolCallId"].(string)
@@ -321,18 +401,20 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		}
 		args := s.toolArgsByID[callID]
 		detail := BuildToolCallDetail(toolName, args, ev["result"])
+		var targetIdx int
 		if idx, ok := s.toolIndexByID[callID]; ok && idx >= 0 && idx < len(s.timeline) {
 			s.timeline[idx].Item.Status = status
 			s.timeline[idx].Item.Detail = detail
 			if isErr {
 				s.timeline[idx].Item.Error = extractResultText(ev["result"])
 			}
+			targetIdx = idx
 		} else {
 			var errVal any
 			if isErr {
 				errVal = extractResultText(ev["result"])
 			}
-			s.appendItemLocked(TimelineItem{
+			targetIdx = s.appendItemLocked(TimelineItem{
 				Type:   "tool_call",
 				CallID: callID,
 				Name:   toolName,
@@ -341,6 +423,12 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 				Error:  errVal,
 			})
 		}
+		extraEvents = append(extraEvents, map[string]any{
+			"type":   "stream_timeline",
+			"seq":    s.timeline[targetIdx].Seq,
+			"turnId": s.activeTurnID,
+			"item":   s.timeline[targetIdx].Item,
+		})
 		if strings.HasPrefix(toolName, "subagent") {
 			for _, sub := range ParseSubagentDetails(callID, args, ev["result"]) {
 				s.upsertSubagentLocked(sub)
@@ -356,12 +444,19 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 
 	case "agent_end", "agent_settled":
 		willRetry, _ := ev["willRetry"].(bool)
-		if !willRetry {
+		if !willRetry && s.status == "running" {
+			finishedTurnID := s.activeTurnID
 			s.status = "idle"
 			s.activeTurnID = ""
 			s.activeTextIdx = -1
 			s.activeThinkIdx = -1
+			s.activeMessageID = ""
+			s.streamedInTurn = false
 			s.notifyFinishLocked(nil)
+			extraEvents = append(extraEvents, map[string]any{
+				"type":   "turn_end",
+				"turnId": finishedTurnID,
+			})
 		}
 
 	case "process_exit":
@@ -380,6 +475,9 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 
 	for _, fn := range subs {
 		fn(ev)
+		for _, ex := range extraEvents {
+			fn(ex)
+		}
 	}
 }
 
@@ -472,17 +570,58 @@ func (s *Session) LastAssistantText() string {
 	return ""
 }
 
+// SetNextClientMessageID records the client-supplied message ID for deduplicating the next user prompt.
+func (s *Session) SetNextClientMessageID(id string) {
+	s.mu.Lock()
+	s.nextClientMessageID = strings.TrimSpace(id)
+	s.mu.Unlock()
+}
+
 // Prompt sends a user prompt to Pi and appends the user_message to the timeline.
 func (s *Session) Prompt(ctx context.Context, message string, images []ImageContent) error {
 	s.mu.Lock()
 	s.turnCounter++
 	s.activeTurnID = fmt.Sprintf("turn_%d", s.turnCounter)
+	s.activeTextIdx = -1
+	s.activeThinkIdx = -1
+	s.activeMessageID = ""
+	s.streamedInTurn = false
 	s.status = "running"
-	s.appendItemLocked(TimelineItem{
-		Type: "user_message",
-		Text: message,
-	})
+
+	clientMsgID := s.nextClientMessageID
+	s.nextClientMessageID = ""
+	msgID := clientMsgID
+	if msgID == "" {
+		msgID = fmt.Sprintf("user_%d_%d", s.turnCounter, len(s.timeline)+1)
+	}
+	userItem := TimelineItem{
+		Type:            "user_message",
+		Text:            message,
+		MessageID:       msgID,
+		ClientMessageID: clientMsgID,
+	}
+	idx := s.appendItemLocked(userItem)
+	seq := s.timeline[idx].Seq
+	turnID := s.activeTurnID
+
+	subs := make([]func(map[string]any), 0, len(s.eventSubscribers))
+	for _, fn := range s.eventSubscribers {
+		subs = append(subs, fn)
+	}
 	s.mu.Unlock()
+
+	for _, fn := range subs {
+		fn(map[string]any{
+			"type":   "turn_start_accepted",
+			"turnId": turnID,
+		})
+		fn(map[string]any{
+			"type":   "stream_timeline",
+			"seq":    seq,
+			"turnId": turnID,
+			"item":   userItem,
+		})
+	}
 
 	cmd := map[string]any{
 		"type":    "prompt",
@@ -491,8 +630,21 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	if len(images) > 0 {
 		cmd["images"] = images
 	}
-	_, err := s.proc.Request(ctx, cmd)
-	return err
+	go func() {
+		rctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		if _, err := s.proc.Request(rctx, cmd); err != nil {
+			s.mu.Lock()
+			if s.status == "running" {
+				s.status = "idle"
+				s.activeTurnID = ""
+				s.notifyFinishLocked(err)
+			}
+			s.mu.Unlock()
+		}
+	}()
+	_ = ctx
+	return nil
 }
 
 // Steer sends a steering message during an active turn.

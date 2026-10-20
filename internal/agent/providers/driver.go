@@ -17,6 +17,7 @@ type ManagedSession interface {
 	Timeline() []pi.TimelineEntry
 	SeedTimeline(entries []pi.TimelineEntry)
 	LastAssistantText() string
+	SetNextClientMessageID(id string)
 	Prompt(ctx context.Context, message string, images []pi.ImageContent) error
 	Steer(ctx context.Context, message string, images []pi.ImageContent) error
 	Abort(ctx context.Context) error

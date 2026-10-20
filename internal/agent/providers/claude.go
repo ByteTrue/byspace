@@ -336,6 +336,8 @@ func (s *ClaudeSession) LastAssistantText() string {
 	return s.lastAssistantTextLocked()
 }
 
+func (s *ClaudeSession) SetNextClientMessageID(_ string) {}
+
 func (s *ClaudeSession) Prompt(_ context.Context, message string, _ []pi.ImageContent) error {
 	s.mu.Lock()
 	s.turnCounter++

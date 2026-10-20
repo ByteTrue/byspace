@@ -99,6 +99,7 @@ type Server struct {
 	homeDir      string
 	serverID     string
 	version      string
+	epoch        string
 	keyPair      e2ee.KeyPair
 	pubKeyB64    string
 	vapidKeys    home.VAPIDKeys
@@ -151,6 +152,7 @@ func New(opts Options) (*Server, error) {
 		homeDir:           homeDir,
 		serverID:          serverID,
 		version:           ver,
+		epoch:             fmt.Sprintf("ep_%d", time.Now().UnixMilli()),
 		keyPair:           kp,
 		pubKeyB64:         pubB64,
 		vapidKeys:         vapidKeys,
@@ -167,6 +169,11 @@ func New(opts Options) (*Server, error) {
 		clients:           make(map[frameSink]bool),
 	}
 	srv.schedules = schedule.NewService(homeDir, srv.executeScheduledPiRun)
+	go func() {
+		pctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.probeOrCachedPiModels(pctx)
+	}()
 	return srv, nil
 }
 
@@ -1329,6 +1336,7 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 					"currentBranch":          branch,
 					"remoteUrl":              nil,
 					"isBySpaceOwnedWorktree": false,
+					"mainRepoRoot":           nil,
 				},
 			},
 		})
@@ -1355,10 +1363,11 @@ func (s *Server) handleFetchAgents(ctx context.Context, sink frameSink, reqType 
 
 func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID     string  `json:"requestId"`
-		WorkspaceID   string  `json:"workspaceId"`
-		InitialPrompt *string `json:"initialPrompt"`
-		Config        struct {
+		RequestID       string  `json:"requestId"`
+		WorkspaceID     string  `json:"workspaceId"`
+		InitialPrompt   *string `json:"initialPrompt"`
+		ClientMessageID string  `json:"clientMessageId"`
+		Config          struct {
 			Provider         string            `json:"provider"`
 			Cwd              string            `json:"cwd"`
 			Title            *string           `json:"title"`
@@ -1459,36 +1468,43 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		return
 	}
 
+	if req.InitialPrompt != nil && strings.TrimSpace(*req.InitialPrompt) != "" {
+		mp.session.SetNextClientMessageID(req.ClientMessageID)
+		_ = mp.session.Prompt(ctx, *req.InitialPrompt, nil)
+		s.mu.Lock()
+		mp.record.LastStatus = mp.session.Status()
+		mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		s.mu.Unlock()
+		_ = s.store.UpsertAgent(mp.record)
+	}
+
 	_ = sendSessionMsg(ctx, sink, "status", map[string]any{
 		"status":    "agent_created",
 		"agentId":   agentID,
 		"requestId": req.RequestID,
 		"agent":     s.buildAgentSnapshotPayload(mp.record),
 	})
-
-	if req.InitialPrompt != nil && strings.TrimSpace(*req.InitialPrompt) != "" {
-		promptText := *req.InitialPrompt
-		go func() {
-			pctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-			defer cancel()
-			_ = mp.session.Prompt(pctx, promptText, nil)
-			s.mu.Lock()
-			mp.record.LastStatus = mp.session.Status()
-			mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-			recCopy := mp.record
-			s.mu.Unlock()
-			_ = s.store.UpsertAgent(recCopy)
-		}()
-	}
+	s.broadcastAgentUpdate(mp.record)
 }
 
 func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID string `json:"requestId"`
-		AgentID   string `json:"agentId"`
-		Text      string `json:"text"`
+		RequestID       string `json:"requestId"`
+		AgentID         string `json:"agentId"`
+		Text            string `json:"text"`
+		Prompt          string `json:"prompt"`
+		MessageID       string `json:"messageId"`
+		ClientMessageID string `json:"clientMessageId"`
 	}
 	_ = json.Unmarshal(raw, &req)
+	text := req.Text
+	if text == "" {
+		text = req.Prompt
+	}
+	clientMsgID := req.MessageID
+	if clientMsgID == "" {
+		clientMsgID = req.ClientMessageID
+	}
 
 	mp, err := s.ensureAgentLoaded(req.AgentID)
 	if err != nil {
@@ -1501,7 +1517,8 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 		return
 	}
 
-	if err := mp.session.Prompt(ctx, req.Text, nil); err != nil {
+	mp.session.SetNextClientMessageID(clientMsgID)
+	if err := mp.session.Prompt(ctx, text, nil); err != nil {
 		_ = sendSessionMsg(ctx, sink, "send_agent_message_response", map[string]any{
 			"requestId": req.RequestID,
 			"agentId":   req.AgentID,
@@ -1516,6 +1533,7 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 	mp.record.LastUserMessageAt = &now
 	mp.record.LastStatus = mp.session.Status()
 	_ = s.store.UpsertAgent(mp.record)
+	s.broadcastAgentUpdate(mp.record)
 
 	_ = sendSessionMsg(ctx, sink, "send_agent_message_response", map[string]any{
 		"requestId": req.RequestID,
@@ -1531,12 +1549,20 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 		AgentID    string `json:"agentId"`
 		Direction  string `json:"direction"`
 		Projection string `json:"projection"`
+		Cursor     *struct {
+			Epoch string `json:"epoch"`
+			Seq   int    `json:"seq"`
+		} `json:"cursor"`
 	}
 	_ = json.Unmarshal(raw, &req)
 
 	direction := req.Direction
 	if direction == "" {
-		direction = "tail"
+		if req.Cursor != nil {
+			direction = "after"
+		} else {
+			direction = "tail"
+		}
 	}
 	projection := req.Projection
 	if projection == "" {
@@ -1550,7 +1576,7 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 			"agentId":     req.AgentID,
 			"direction":   direction,
 			"projection":  projection,
-			"epoch":       "ep_1",
+			"epoch":       s.epoch,
 			"reset":       false,
 			"staleCursor": false,
 			"gap":         false,
@@ -1560,9 +1586,16 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 		return
 	}
 
-	tl := mp.session.Timeline()
-	entries := make([]map[string]any, 0, len(tl))
-	for _, e := range tl {
+	allTL := mp.session.Timeline()
+	filteredTL := allTL
+	if direction == "after" {
+		// Live deltas are already delivered in real time over agent_stream;
+		// returning them again on catch-up after-fetches would duplicate entries.
+		filteredTL = []pi.TimelineEntry{}
+	}
+
+	entries := make([]map[string]any, 0, len(filteredTL))
+	for _, e := range filteredTL {
 		entries = append(entries, map[string]any{
 			"provider":  mp.record.Provider,
 			"item":      e.Item,
@@ -1578,9 +1611,14 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 	}
 
 	var startCursor, endCursor any
-	if len(tl) > 0 {
-		startCursor = map[string]any{"epoch": "ep_1", "seq": tl[0].Seq}
-		endCursor = map[string]any{"epoch": "ep_1", "seq": tl[len(tl)-1].Seq}
+	if len(filteredTL) > 0 {
+		startCursor = map[string]any{"epoch": s.epoch, "seq": filteredTL[0].Seq}
+		endCursor = map[string]any{"epoch": s.epoch, "seq": filteredTL[len(filteredTL)-1].Seq}
+	}
+	var minSeq, maxSeq any
+	if len(allTL) > 0 {
+		minSeq = allTL[0].Seq
+		maxSeq = allTL[len(allTL)-1].Seq
 	}
 
 	_ = sendSessionMsg(ctx, sink, "fetch_agent_timeline_response", map[string]any{
@@ -1589,14 +1627,14 @@ func (s *Server) handleFetchAgentTimeline(ctx context.Context, sink frameSink, r
 		"agent":       s.buildAgentSnapshotPayload(mp.record),
 		"direction":   direction,
 		"projection":  projection,
-		"epoch":       "ep_1",
+		"epoch":       s.epoch,
 		"reset":       false,
 		"staleCursor": false,
 		"gap":         false,
 		"window": map[string]any{
-			"minSeq":  1,
-			"maxSeq":  len(tl),
-			"nextSeq": len(tl) + 1,
+			"minSeq":  minSeq,
+			"maxSeq":  maxSeq,
+			"nextSeq": len(allTL) + 1,
 		},
 		"startCursor": startCursor,
 		"endCursor":   endCursor,
@@ -1747,8 +1785,10 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 	sess.OnEvent(func(ev map[string]any) {
 		evType, _ := ev["type"].(string)
 		nowStr := time.Now().UTC().Format(time.RFC3339Nano)
+		isPi := rec.Provider == "pi" || rec.Provider == "" || rec.Provider == "omp"
 		switch evType {
-		case "turn_start":
+		case "turn_start_accepted":
+			turnID, _ := ev["turnId"].(string)
 			s.mu.Lock()
 			mp.record.LastStatus = "running"
 			mp.record.UpdatedAt = nowStr
@@ -1761,33 +1801,53 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				"event": map[string]any{
 					"type":     "turn_started",
 					"provider": rec.Provider,
+					"turnId":   turnID,
 				},
 			})
-			s.broadcastSessionMsg("status", map[string]any{
-				"status":  "agent_updated",
-				"agentId": rec.ID,
-				"agent":   s.buildAgentSnapshotPayload(recStartCopy),
-			})
-		case "message_end":
-			if txt := sess.LastAssistantText(); txt != "" {
+			s.broadcastAgentUpdate(recStartCopy)
+
+		case "turn_start":
+			if !isPi {
+				s.mu.Lock()
+				mp.record.LastStatus = "running"
+				mp.record.UpdatedAt = nowStr
+				recStartCopy := mp.record
+				s.mu.Unlock()
 				s.broadcastSessionMsg("agent_stream", map[string]any{
 					"agentId":   rec.ID,
 					"provider":  rec.Provider,
 					"timestamp": nowStr,
 					"event": map[string]any{
-						"type":     "timeline",
+						"type":     "turn_started",
 						"provider": rec.Provider,
-						"item": map[string]any{
-							"type": "assistant_message",
-							"text": txt,
-						},
 					},
 				})
+				s.broadcastAgentUpdate(recStartCopy)
 			}
-		case "tool_execution_start", "tool_execution_end":
-			tl := sess.Timeline()
-			for i := len(tl) - 1; i >= 0; i-- {
-				if tl[i].Item.Type == "tool_call" {
+
+		case "stream_timeline":
+			turnID, _ := ev["turnId"].(string)
+			s.broadcastSessionMsg("agent_stream", map[string]any{
+				"agentId":   rec.ID,
+				"provider":  rec.Provider,
+				"timestamp": nowStr,
+				"event": map[string]any{
+					"type":     "timeline",
+					"provider": rec.Provider,
+					"turnId":   turnID,
+					"item":     ev["item"],
+				},
+			})
+			for _, sub := range sess.ListSubagents(rec.ID) {
+				s.broadcastSessionMsg("agent.provider_subagents.update", map[string]any{
+					"kind":     "upsert",
+					"subagent": sub,
+				})
+			}
+
+		case "message_end":
+			if !isPi {
+				if txt := sess.LastAssistantText(); txt != "" {
 					s.broadcastSessionMsg("agent_stream", map[string]any{
 						"agentId":   rec.ID,
 						"provider":  rec.Provider,
@@ -1795,18 +1855,43 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 						"event": map[string]any{
 							"type":     "timeline",
 							"provider": rec.Provider,
-							"item":     tl[i].Item,
+							"item": map[string]any{
+								"type": "assistant_message",
+								"text": txt,
+							},
 						},
 					})
-					break
 				}
 			}
-			for _, sub := range sess.ListSubagents(rec.ID) {
-				s.broadcastSessionMsg("agent.provider_subagents.update", map[string]any{
-					"kind":     "upsert",
-					"subagent": sub,
-				})
+
+		case "tool_execution_start", "tool_execution_end":
+			if !isPi {
+				tl := sess.Timeline()
+				for i := len(tl) - 1; i >= 0; i-- {
+					if tl[i].Item.Type == "tool_call" {
+						s.broadcastSessionMsg("agent_stream", map[string]any{
+							"agentId":   rec.ID,
+							"provider":  rec.Provider,
+							"timestamp": nowStr,
+							"seq":       tl[i].Seq,
+							"epoch":     "ep_1",
+							"event": map[string]any{
+								"type":     "timeline",
+								"provider": rec.Provider,
+								"item":     tl[i].Item,
+							},
+						})
+						break
+					}
+				}
+				for _, sub := range sess.ListSubagents(rec.ID) {
+					s.broadcastSessionMsg("agent.provider_subagents.update", map[string]any{
+						"kind":     "upsert",
+						"subagent": sub,
+					})
+				}
 			}
+
 		case "extension_ui_request":
 			if perm := pi.MapExtensionUIRequestToPermission(ev); perm != nil {
 				s.broadcastSessionMsg("agent_stream", map[string]any{
@@ -1820,30 +1905,50 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 					},
 				})
 			}
-		case "agent_end", "agent_settled", "process_exit":
+
+		case "turn_end":
+			turnID, _ := ev["turnId"].(string)
 			s.mu.Lock()
-			mp.record.LastStatus = sess.Status()
+			mp.record.LastStatus = "idle"
 			mp.record.UpdatedAt = nowStr
 			recCopy := mp.record
 			s.mu.Unlock()
 			_ = s.store.UpsertAgent(recCopy)
-			if evType == "agent_end" {
-				go s.syncPiPersistence(mp)
-				s.broadcastSessionMsg("agent_stream", map[string]any{
-					"agentId":   rec.ID,
-					"provider":  rec.Provider,
-					"timestamp": nowStr,
-					"event": map[string]any{
-						"type":     "turn_completed",
-						"provider": rec.Provider,
-					},
-				})
-			}
-			s.broadcastSessionMsg("status", map[string]any{
-				"status":  "agent_updated",
-				"agentId": rec.ID,
-				"agent":   s.buildAgentSnapshotPayload(recCopy),
+			go s.syncPiPersistence(mp)
+			s.broadcastSessionMsg("agent_stream", map[string]any{
+				"agentId":   rec.ID,
+				"provider":  rec.Provider,
+				"timestamp": nowStr,
+				"event": map[string]any{
+					"type":     "turn_completed",
+					"provider": rec.Provider,
+					"turnId":   turnID,
+				},
 			})
+			s.broadcastAgentUpdate(recCopy)
+
+		case "agent_end", "agent_settled", "process_exit":
+			if !isPi || evType == "process_exit" {
+				s.mu.Lock()
+				mp.record.LastStatus = sess.Status()
+				mp.record.UpdatedAt = nowStr
+				recCopy := mp.record
+				s.mu.Unlock()
+				_ = s.store.UpsertAgent(recCopy)
+				if evType == "agent_end" {
+					go s.syncPiPersistence(mp)
+					s.broadcastSessionMsg("agent_stream", map[string]any{
+						"agentId":   rec.ID,
+						"provider":  rec.Provider,
+						"timestamp": nowStr,
+						"event": map[string]any{
+							"type":     "turn_completed",
+							"provider": rec.Provider,
+						},
+					})
+				}
+				s.broadcastAgentUpdate(recCopy)
+			}
 		}
 	})
 
@@ -1873,6 +1978,14 @@ func (s *Server) syncPiPersistence(mp *managedPi) {
 	recCopy := mp.record
 	s.mu.Unlock()
 	_ = s.store.UpsertAgent(recCopy)
+}
+
+func (s *Server) broadcastAgentUpdate(rec store.AgentRecord) {
+	s.broadcastSessionMsg("agent_update", map[string]any{
+		"kind":    "upsert",
+		"agent":   s.buildAgentSnapshotPayload(rec),
+		"project": s.buildProjectPlacementForRecord(rec),
+	})
 }
 
 func (s *Server) broadcastSessionMsg(msgType string, payload any) {
@@ -2009,6 +2122,7 @@ func (s *Server) buildProjectPlacementForRecord(rec store.AgentRecord) map[strin
 			"currentBranch":          branch,
 			"remoteUrl":              nil,
 			"isBySpaceOwnedWorktree": false,
+			"mainRepoRoot":           nil,
 		},
 	}
 }
@@ -2104,7 +2218,8 @@ func buildWorkspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord)
 				"isGit":                  projectKind == "git",
 				"currentBranch":          ws.Branch,
 				"remoteUrl":              nil,
-				"isBySpaceOwnedWorktree": ws.IsBySpaceOwnedWorktree,
+				"isBySpaceOwnedWorktree": false,
+				"mainRepoRoot":           nil,
 			},
 		},
 	}
