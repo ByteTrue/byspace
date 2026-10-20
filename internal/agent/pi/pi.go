@@ -3,7 +3,6 @@ package pi
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -726,17 +725,9 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 		MessageID:       msgID,
 		ClientMessageID: clientMsgID,
 	}
-	alreadyClosed := s.status == "closed"
 	idx := s.appendItemLocked(userItem)
 	seq := s.timeline[idx].SeqEnd
 	turnID := s.activeTurnID
-	if alreadyClosed {
-		s.status = "closed"
-		s.activeTurnID = ""
-		s.notifyFinishLocked(errors.New("provider process is not running"))
-		s.mu.Unlock()
-		return errors.New("provider process is not running")
-	}
 
 	subs := make([]func(map[string]any), 0, len(s.eventSubscribers))
 	for _, fn := range s.eventSubscribers {
@@ -755,7 +746,6 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 			"turnId": turnID,
 			"item":   userItem,
 		})
-		fn(map[string]any{"type": "byspace_persist_timeline"})
 	}
 
 	cmd := map[string]any{

@@ -1957,11 +1957,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		return nil, err
 	}
 
-	if rows, ok := s.store.LoadAgentTimeline(rec.ID); ok && len(rows) > 0 {
-		if restored, convErr := timelineRowsToEntries(rows); convErr == nil && len(restored) > 0 {
-			sess.SeedTimeline(restored)
-		}
-	} else if sessionPath != "" && (rec.Provider == "pi" || rec.Provider == "") {
+	if sessionPath != "" && (rec.Provider == "pi" || rec.Provider == "") {
 		if restored, loadErr := pi.LoadTimelineFromJSONL(sessionPath); loadErr == nil && len(restored) > 0 {
 			sess.SeedTimeline(restored)
 		}
@@ -2022,9 +2018,6 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				})
 				s.broadcastAgentUpdate(recStartCopy)
 			}
-
-		case "byspace_persist_timeline":
-			s.persistTimeline(mp)
 
 		case "byspace_stream_timeline":
 			seq, _ := ev["seq"].(int)
@@ -2132,7 +2125,6 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 			// Emit turn_completed first, then the terminal snapshot. Clients key the
 			// "stop" affordance off turn_completed and read the snapshot for status, so
 			// the order matters: a trailing running snapshot would re-arm the spinner.
-			s.persistTimeline(mp)
 			s.broadcastAgentUpdate(recCopy)
 
 		case "agent_end", "agent_settled", "process_exit":
@@ -2143,19 +2135,6 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 				recCopy := mp.record
 				s.mu.Unlock()
 				_ = s.store.UpsertAgent(recCopy)
-				if evType == "process_exit" {
-					// pi died mid-turn: close the turn explicitly, otherwise the client
-					// keeps the stop affordance and the spinner forever.
-					s.broadcastSessionMsg("agent_stream", map[string]any{
-						"agentId":   rec.ID,
-						"provider":  rec.Provider,
-						"timestamp": nowStr,
-						"event": map[string]any{
-							"type":     "turn_completed",
-							"provider": rec.Provider,
-						},
-					})
-				}
 				if evType == "agent_end" {
 					go s.syncPiPersistence(mp)
 					s.broadcastSessionMsg("agent_stream", map[string]any{
@@ -2615,37 +2594,4 @@ func (s *Server) rememberIdempotentAgent(key, agentID string) {
 	}
 	s.idempotentAgents[key] = agentID
 	s.mu.Unlock()
-}
-
-// persistTimeline snapshots the in-memory timeline so a reload shows what the user sent even
-// when the provider process died before writing it to its own session file.
-func (s *Server) persistTimeline(mp *managedPi) {
-	if mp == nil || mp.session == nil || mp.record.ID == "" {
-		return
-	}
-	tl := mp.session.Timeline()
-	rows := make([]map[string]any, 0, len(tl))
-	for _, e := range tl {
-		rows = append(rows, map[string]any{
-			"seq":       e.Seq,
-			"seqEnd":    e.SeqEnd,
-			"turnId":    e.TurnID,
-			"timestamp": e.Timestamp,
-			"item":      e.Item,
-		})
-	}
-	_ = s.store.SaveAgentTimeline(mp.record.ID, rows)
-}
-
-// timelineRowsToEntries reverses persistTimeline's encoding.
-func timelineRowsToEntries(rows []map[string]any) ([]pi.TimelineEntry, error) {
-	b, err := json.Marshal(rows)
-	if err != nil {
-		return nil, err
-	}
-	var entries []pi.TimelineEntry
-	if err := json.Unmarshal(b, &entries); err != nil {
-		return nil, err
-	}
-	return entries, nil
 }

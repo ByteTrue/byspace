@@ -136,29 +136,3 @@ Epic 的实现阶段只做到「协议 Schema 校验通过 + 单元测试绿」�
 `file.upload.request.modifiedAt`（写回 mtime）、`forge.search.request.kinds`（种别过滤）、
 `create_agent_request.idempotencyKey`（重试去重，命中直接回既有 agent）、
 `callerAgentId`（落 `parentAgentId`）、`autoArchive`（落 `byspace.auto-archive` 标签）。
-
-## 第四轮：消息消失与永久转圈（用户实测发现）
-
-现象：_「第二句消息发完之后迟迟没有结果，刷新之后发送的记录直接没了」_。
-
-排查：`agt_866d7a7209df85c9` 的记录里 `lastStatus: closed`，而它指向的 pi `.jsonl` 里
-**根本没有那条 `hi`** —— pi 在收到 prompt 后直接退出了，消息从未被 pi 写盘。
-
-两个叠加的缺陷：
-
-1. **用户消息只活在内存和 pi 的 `.jsonl` 里**。pi 没写盘 → 刷新时 `ensureAgentLoaded`
-   回退到 pi 的 `.jsonl` → 用户发的内容凭空消失。
-2. **provider 中途死亡不上报轮次结束**。`process_exit` 只更新记录状态，没有发
-   `turn_completed`，前端就一直转圈。
-
-修法：
-
-- 新增 `$BYSPACE_HOME/agents/timelines/<agentId>.json` 快照（`store.SaveAgentTimeline` /
-  `LoadAgentTimeline`），在每条流式条目后与轮次结束时写入；加载时**优先用它**，
-  pi 的 `.jsonl` 退化为旧 agent 的兜底。这样「用户说了什么」不再依赖 provider 是否落盘。
-- `process_exit` 时补发 `turn_completed`，让客户端收起停止按钮与计时。
-- `Prompt` 在进程已 `closed` 时直接返回错误而不是把消息塞进内存假跑。
-
-守卫：`TestPromptSurvivesProviderDeath` —— 假 pi 收下 prompt 后立刻退出，断言
-① 用户消息仍然回显在流里 ② 必须收到 `turn_completed` ③ 重置 daemon 后
-`LoadAgentTimeline` 仍能读到那条消息。
