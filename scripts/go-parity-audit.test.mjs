@@ -20,3 +20,13 @@ test("fills every field of the outbound payloads it emits", () => {
   const rows = runAudit().outbound.map((r) => `${r.key}: ${r.missing.join(", ")}`);
   assert.deepEqual(rows, []);
 });
+
+test("parsed-but-ignored backlog does not grow silently", () => {
+  // 这批字段属于 hub.*/plugin.*/worktree 等尚未实现的子系统，暂列 advisory；
+  // 但数量只允许下降——涨了说明又加了 struct 却没接线。
+  const { ignored } = runAudit();
+  assert.ok(
+    ignored.length <= 28,
+    `parsed-but-ignored grew to ${ignored.length}: ${ignored.map((r) => r.field).join(", ")}`,
+  );
+});

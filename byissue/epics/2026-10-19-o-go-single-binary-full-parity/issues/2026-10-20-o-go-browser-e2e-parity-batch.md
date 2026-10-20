@@ -92,3 +92,47 @@ Epic 的实现阶段只做到「协议 Schema 校验通过 + 单元测试绿」�
 ## 关闭回写
 
 关闭时把「Schema 校验通过 ≠ 前端正确」这条教训写进 Epic 的验证要求。
+
+## 第三轮：把「靠人眼发现」换成两层自动体检
+
+用户的原话：_「思考等级、没有工具调用过程这种类似的问题你应该能帮我发现才对」_。
+这一轮的产出不是修某个 bug，而是补上发现机制——区分「代码能查的」与「只能跑的」。
+
+### L1/L2：静态对账（`scripts/go-parity-audit.mjs`）
+
+- **L1 字段存在**：协议有的字段，Go handler 的 struct 有没有接住。
+- **L2 字段被用**：接住了有没有真的读它。第一版只有 L1，写个 `Foo string \`json:"foo"\`` 就能骗过去，
+实际值被就地丢弃——`acceptBinary`、`maxBytes`、`modifiedAt` 当时就是这个状态。
+- L2 目前是 **advisory（不阻断 CI）**：它底下还挂着 hub._、plugin._ 与 worktree 选项这些尚未实现的子系统。
+  让它阻断只会逼人写 `_ = req.X` 骗过去。改为「数量只许下降」（测试里锁 `<= 28`）。
+- 阻断条件是 **字段没接住** 与 **消息没路由** —— 这两类能保证前端不会收到缺字段的 payload。
+
+### L3：浏览器体检（`scripts/browser-conformance.mjs`，`npm run audit:browser`）
+
+用 bsk 驱动真实 Chrome 跑 10 项断言。它第一轮就抓到 3 个真问题，其中一个是硬伤：
+
+| 抓到的                      | 根因                                                                                                                                | 影响                                                                        |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `Message validation failed` | `project.checkout` 是**三选一联合体**：非 git 变体禁止 `currentBranch` 为字符串；byspace worktree 变体要求 `mainRepoRoot` 是 string | `fetch_workspaces_response` 整包被前端拒收，回退旧缓存 → 侧边栏显示过期数据 |
+| 思考菜单检查空转            | 脚本点了气泡里的「Thinking」折叠区，而不是 composer 的 `Select thinking option`                                                     | 检查本身假绿                                                                |
+| OMP 状态检查假阴性          | 可访问性树折叠了行内状态文本                                                                                                        | 检查本身假绿                                                                |
+
+修法：新增 `buildProjectCheckoutPayload` 按三种变体分别构造（非 git 一律 `currentBranch: null`），
+并把 OMP/思考等级这类断言改成**读 daemon 的真实状态**而不是读 DOM 文案。
+
+现在实测输出：`thinking levels rendered: Off, Low, High, Max` —— 与 `deepseek-flash` 的
+`thinkingLevelMap` 完全一致（`minimal`/`medium`/`xhigh` 该模型不支持，`max` 支持且为默认）。
+
+### L3 覆盖边界（明确不假装）
+
+- **能自动发现**：协议字段缺失、payload 形状不符、菜单档位与 provider 状态不符、provider 目录内容。
+- **仍需人眼**：滚动卡顿、动画流畅度、真实拖拽手势、长时间会话的内存与连接稳定性。
+- 其余宿主（claude/codex/acp/opencode）的**流式事件时序**还没有等价 conformance 测试，
+  只有 pi 的多步工具轮次有（`internal/server/stream_conformance_test.go`）。
+
+### 本轮新增的 L2 接线
+
+`file_explorer_request.acceptBinary|maxBytes`（二进制降级 + 体积上限，`file_too_large`）、
+`file.upload.request.modifiedAt`（写回 mtime）、`forge.search.request.kinds`（种别过滤）、
+`create_agent_request.idempotencyKey`（重试去重，命中直接回既有 agent）、
+`callerAgentId`（落 `parentAgentId`）、`autoArchive`（落 `byspace.auto-archive` 标签）。

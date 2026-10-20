@@ -151,6 +151,46 @@ export function auditRouting(schemas, goSource, inboundMembers) {
   return missing.sort();
 }
 
+/**
+ * 第二层：字段接住了但没被用。
+ *
+ * 第一层只要求字段名在 Go 里出现过——一个 `Foo string `json:"foo"`` 就能骗过它，
+ * 然后这个值被解析进 struct 就地丢弃。这里按 json tag 反查 Go 标识符，要求它在
+ * 声明之外还被引用过（赋值 / 传给下游 / 出现在响应里）。
+ */
+/** 所有入站 request schema 的字段并集。 */
+export function inboundFieldUniverse(inboundMembers, schemas) {
+  const fields = new Set();
+  for (const s of schemas) {
+    if (!inboundMembers.has(s.schemaName)) continue;
+    for (const f of s.fields) fields.add(f);
+  }
+  return fields;
+}
+
+export function auditParsedButIgnored(goSource, fieldUniverse) {
+  const byTag = new Map();
+  for (const m of goSource.matchAll(/(\w+)\s+[\w[\]*. }]+?\s*`json:"([^",]+)(?:,[^"]*)?"`/g)) {
+    const [, ident, tag] = m;
+    if (!byTag.has(tag)) byTag.set(tag, new Set());
+    byTag.get(tag).add(ident);
+  }
+  const rows = [];
+  for (const [tag, idents] of byTag) {
+    // 只查入站请求字段；pi.Model / CatalogModel 这类纯数据载体是直接序列化回去的，
+    // 永远不会有 `.Field` 取值，查了也是噪音。
+    if (fieldUniverse && !fieldUniverse.has(tag)) continue;
+    for (const ident of idents) {
+      const uses = (goSource.match(new RegExp(`\\.${ident}\\b`, "g")) ?? []).length;
+      if (uses === 0) {
+        rows.push({ field: tag, ident });
+        break;
+      }
+    }
+  }
+  return rows.sort((a, b) => a.field.localeCompare(b.field));
+}
+
 export function auditOutbound(schemas, goSource) {
   const known = goKnownKeys(goSource);
   const inbound = goHandledMessageTypes(goSource);
@@ -179,6 +219,7 @@ export function runAudit(root = ROOT) {
     inbound: auditInbound(schemas, goSource, inboundMembers),
     outbound: auditOutbound(schemas, goSource),
     unrouted: auditRouting(schemas, goSource, inboundMembers),
+    ignored: auditParsedButIgnored(goSource, inboundFieldUniverse(inboundMembers, schemas)),
   };
 }
 
@@ -199,7 +240,14 @@ if (isMain) {
       console.log(`  [${r.kind}] ${r.key} (${r.missing.length}) -> ${r.missing.join(", ")}`);
     console.log(`\n== 未路由入站消息 (${report.unrouted.length}) ==`);
     for (const k of report.unrouted) console.log(`  ${k}`);
+    console.log(`\n== 解析了但从未使用 (${report.ignored.length}) — advisory，不阻断 ==`);
+    for (const r of report.ignored) console.log(`  ${r.field} (${r.ident})`);
   }
-  const failed = report.inbound.length + report.outbound.length + report.unrouted.length > 0;
+  const failed =
+    report.inbound.length +
+      report.outbound.length +
+      report.unrouted.length +
+      report.ignored.length >
+    0;
   process.exit(failed ? 1 : 0);
 }

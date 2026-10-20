@@ -940,6 +940,10 @@ func (s *Server) handleFileExtraOps(ctx context.Context, sink frameSink, msgType
 		}
 		dst := filepath.Join(uploadDir, safeName)
 		_ = os.WriteFile(dst, decoded, 0o600)
+		if req.ModifiedAt != nil && *req.ModifiedAt > 0 {
+			mtime := time.UnixMilli(int64(*req.ModifiedAt))
+			_ = os.Chtimes(dst, mtime, mtime)
+		}
 		var idBytes [8]byte
 		_, _ = rand.Read(idBytes[:])
 		_ = sendSessionMsg(ctx, sink, "file.upload.response", map[string]any{

@@ -72,6 +72,21 @@ func (s *Server) handleFileExplorer(ctx context.Context, sink frameSink, raw jso
 		return
 	}
 
+	if req.MaxBytes > 0 {
+		if info, statErr := os.Stat(filepath.Join(cwd, relPath)); statErr == nil && info.Size() > int64(req.MaxBytes) {
+			_ = sendSessionMsg(ctx, sink, "file_explorer_response", map[string]any{
+				"cwd":       cwd,
+				"path":      relPath,
+				"mode":      req.Mode,
+				"directory": nil,
+				"file":      nil,
+				"error":     "file exceeds maxBytes",
+				"errorCode": "file_too_large",
+				"requestId": req.RequestID,
+			})
+			return
+		}
+	}
 	fc, err := workspace.ReadFile(cwd, relPath)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "file_explorer_response", map[string]any{
@@ -84,6 +99,12 @@ func (s *Server) handleFileExplorer(ctx context.Context, sink frameSink, raw jso
 			"requestId": req.RequestID,
 		})
 		return
+	}
+	// acceptBinary=false means the client cannot render raw bytes: report it as binary
+	// without shipping a payload it would choke on.
+	if fc.Kind == "binary" && !req.AcceptBinary {
+		fc.Content = ""
+		fc.Encoding = "none"
 	}
 	_ = sendSessionMsg(ctx, sink, "file_explorer_response", map[string]any{
 		"cwd":       cwd,

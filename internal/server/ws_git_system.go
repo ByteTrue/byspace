@@ -406,6 +406,10 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 			Kinds     []string `json:"kinds"`
 		}
 		_ = json.Unmarshal(raw, &forgeSearchReq)
+		wantKinds := map[string]bool{}
+		for _, k := range forgeSearchReq.Kinds {
+			wantKinds[strings.ToLower(k)] = true
+		}
 		respType := "forge.search.response"
 		if msgType == "github_search_request" {
 			respType = "github_search_response"

@@ -118,6 +118,7 @@ type Server struct {
 	diffSubs          map[string]diffSubscription
 	clients           map[frameSink]bool
 	setupSnapshots    map[string]*setupSnapshot
+	idempotentAgents  map[string]string
 	cachedPiModels    []pi.CatalogModel
 	cachedPiCommands  []pi.SlashCommand
 }
@@ -166,6 +167,7 @@ func New(opts Options) (*Server, error) {
 		terminalSlotsByID: make(map[string]uint8),
 		downloadTokens:    make(map[string]downloadTokenEntry),
 		setupSnapshots:    make(map[string]*setupSnapshot),
+		idempotentAgents:  make(map[string]string),
 		fileSubs:          make(map[string]fileSubscription),
 		diffSubs:          make(map[string]diffSubscription),
 		clients:           make(map[frameSink]bool),
@@ -1514,6 +1516,18 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		}
 	}
 
+	if strings.TrimSpace(req.IdempotencyKey) != "" {
+		if existing, ok := s.lookupIdempotentAgent(req.IdempotencyKey); ok {
+			_ = sendSessionMsg(ctx, sink, "status", map[string]any{
+				"status":    "agent_created",
+				"agentId":   existing.ID,
+				"requestId": req.RequestID,
+				"agent":     s.buildAgentSnapshotPayload(existing),
+			})
+			return
+		}
+	}
+
 	agentLabels := map[string]string{}
 	for k, v := range req.Config.Labels {
 		if !strings.HasPrefix(k, "byspace.") {
@@ -1523,18 +1537,27 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 	if req.Config.Role != nil && strings.TrimSpace(*req.Config.Role) != "" {
 		agentLabels["byspace.agent-role"] = strings.TrimSpace(*req.Config.Role)
 	}
+	if autoArchive, ok := req.AutoArchive.(bool); ok {
+		agentLabels["byspace.auto-archive"] = map[bool]string{true: "true", false: "false"}[autoArchive]
+	}
+	var callerPtr *string
+	if strings.TrimSpace(req.CallerAgentID) != "" {
+		caller := strings.TrimSpace(req.CallerAgentID)
+		callerPtr = &caller
+	}
 
 	rec := store.AgentRecord{
-		ID:          agentID,
-		Provider:    provider,
-		Cwd:         cwd,
-		WorkspaceID: ws.WorkspaceID,
-		CreatedAt:   now,
-		UpdatedAt:   now,
-		Title:       title,
-		Labels:      agentLabels,
-		LastStatus:  "idle",
-		LastModeID:  req.Config.ModeID,
+		ID:            agentID,
+		Provider:      provider,
+		Cwd:           cwd,
+		WorkspaceID:   ws.WorkspaceID,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+		Title:         title,
+		Labels:        agentLabels,
+		LastStatus:    "idle",
+		LastModeID:    req.Config.ModeID,
+		ParentAgentID: callerPtr,
 		Config: &store.AgentConfig{
 			Model:            req.Config.Model,
 			ThinkingOptionID: req.Config.ThinkingOptionID,
@@ -1579,6 +1602,7 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		s.mu.Unlock()
 		_ = s.store.UpsertAgent(mp.record)
+		s.rememberIdempotentAgent(req.IdempotencyKey, agentID)
 	}
 
 	_ = sendSessionMsg(ctx, sink, "status", map[string]any{
@@ -2098,6 +2122,9 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 					"turnId":   turnID,
 				},
 			})
+			// Emit turn_completed first, then the terminal snapshot. Clients key the
+			// "stop" affordance off turn_completed and read the snapshot for status, so
+			// the order matters: a trailing running snapshot would re-arm the spinner.
 			s.broadcastAgentUpdate(recCopy)
 
 		case "agent_end", "agent_settled", "process_exit":
@@ -2296,18 +2323,19 @@ func (s *Server) buildProjectPlacementForRecord(rec store.AgentRecord) map[strin
 			projName = prj.DisplayName
 		}
 	}
+	isGit := false
+	isBySpaceOwned := false
+	var mainRepoRoot *string
+	if ws, ok := wsByID[rec.WorkspaceID]; ok {
+		isGit = !isHomeWorkspaceRecord(ws)
+		isBySpaceOwned = ws.IsBySpaceOwnedWorktree
+		mainRepoRoot = ws.MainRepoRoot
+	}
 	return map[string]any{
 		"projectKey":    projKey,
 		"projectName":   projName,
 		"workspaceName": wsName,
-		"checkout": map[string]any{
-			"cwd":                    rec.Cwd,
-			"isGit":                  true,
-			"currentBranch":          branch,
-			"remoteUrl":              nil,
-			"isBySpaceOwnedWorktree": false,
-			"mainRepoRoot":           nil,
-		},
+		"checkout":      buildProjectCheckoutPayload(rec.Cwd, isGit, branchPtr(branch), isBySpaceOwned, mainRepoRoot),
 	}
 }
 
@@ -2404,14 +2432,13 @@ func buildWorkspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord)
 			"projectKey":    prj.ProjectID,
 			"projectName":   projectDisplayName,
 			"workspaceName": name,
-			"checkout": map[string]any{
-				"cwd":                    ws.Cwd,
-				"isGit":                  projectKind == "git",
-				"currentBranch":          ws.Branch,
-				"remoteUrl":              nil,
-				"isBySpaceOwnedWorktree": false,
-				"mainRepoRoot":           nil,
-			},
+			"checkout": buildProjectCheckoutPayload(
+				ws.Cwd,
+				projectKind == "git" && workspaceKind != "directory",
+				ws.Branch,
+				ws.IsBySpaceOwnedWorktree,
+				ws.MainRepoRoot,
+			),
 		},
 	}
 	if ws.IsBySpaceOwnedWorktree {
@@ -2479,4 +2506,92 @@ func sendJSON(ctx context.Context, sink frameSink, v any) error {
 		return err
 	}
 	return sink.SendText(ctx, string(b))
+}
+
+// branchPtr narrows an `any` branch value back to a *string for the checkout payload builder.
+func branchPtr(v any) *string {
+	if str, ok := v.(string); ok {
+		return &str
+	}
+	return nil
+}
+
+// isHomeWorkspaceRecord reports whether the workspace carries the daemon-owned home label.
+func isHomeWorkspaceRecord(ws store.WorkspaceRecord) bool {
+	for _, lbl := range ws.Labels {
+		if lbl == store.HomeWorkspaceLabel {
+			return true
+		}
+	}
+	return false
+}
+
+// buildProjectCheckoutPayload renders the `project.checkout` discriminated union exactly as
+// ProjectCheckoutLitePayloadSchema demands: the non-git variant forbids a branch name, and the
+// byspace-worktree variant requires mainRepoRoot as a string. Emitting one shape for all three
+// cases makes the whole fetch_workspaces_response fail validation client-side.
+func buildProjectCheckoutPayload(cwd string, isGit bool, branch *string, isBySpaceOwned bool, mainRepoRoot *string) map[string]any {
+	if !isGit {
+		return map[string]any{
+			"cwd":                    cwd,
+			"isGit":                  false,
+			"currentBranch":          nil,
+			"remoteUrl":              nil,
+			"isBySpaceOwnedWorktree": false,
+			"mainRepoRoot":           nil,
+		}
+	}
+	if isBySpaceOwned {
+		root := cwd
+		if mainRepoRoot != nil && strings.TrimSpace(*mainRepoRoot) != "" {
+			root = *mainRepoRoot
+		}
+		return map[string]any{
+			"cwd":                    cwd,
+			"isGit":                  true,
+			"currentBranch":          branch,
+			"remoteUrl":              nil,
+			"isBySpaceOwnedWorktree": true,
+			"mainRepoRoot":           root,
+		}
+	}
+	return map[string]any{
+		"cwd":                    cwd,
+		"isGit":                  true,
+		"currentBranch":          branch,
+		"remoteUrl":              nil,
+		"isBySpaceOwnedWorktree": false,
+		"mainRepoRoot":           mainRepoRoot,
+	}
+}
+
+// idempotentAgents deduplicates create_agent_request retries by idempotencyKey so a flaky
+// transport cannot spawn two agents for one user action.
+func (s *Server) lookupIdempotentAgent(key string) (store.AgentRecord, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.idempotentAgents == nil {
+		return store.AgentRecord{}, false
+	}
+	agentID, ok := s.idempotentAgents[key]
+	if !ok {
+		return store.AgentRecord{}, false
+	}
+	rec, err := s.store.GetAgent(agentID)
+	if err != nil || rec == nil {
+		return store.AgentRecord{}, false
+	}
+	return *rec, true
+}
+
+func (s *Server) rememberIdempotentAgent(key, agentID string) {
+	if strings.TrimSpace(key) == "" {
+		return
+	}
+	s.mu.Lock()
+	if s.idempotentAgents == nil {
+		s.idempotentAgents = make(map[string]string)
+	}
+	s.idempotentAgents[key] = agentID
+	s.mu.Unlock()
 }
