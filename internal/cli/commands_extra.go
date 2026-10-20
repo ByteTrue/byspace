@@ -343,7 +343,11 @@ func runPairCmd(version string, args []string, stdout io.Writer) error {
 
 	url := srv.BuildPairingOfferURL(*relayEndpoint, *useTLS, *appURL)
 	if *showQR {
-		fmt.Fprintln(stdout, server.RenderASCIIQRCode(url))
+		qr, qrErr := server.RenderASCIIQRCode(url)
+		if qrErr != nil {
+			return qrErr
+		}
+		fmt.Fprintln(stdout, qr)
 	}
 	fmt.Fprintln(stdout, url)
 	return nil

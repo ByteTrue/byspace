@@ -221,3 +221,46 @@ if wantSteer {
 `scripts/browser-conformance.mjs` 只检查页面结构与 payload 形状，**不发消息**；
 pi 的多步 conformance 测试是从已有 agent 连发两轮，走的是 `Prompt` 而非 `Steer`。
 两者都绕开了「默认 steer + 无活跃轮次」这条真实路径。
+
+## 第七轮：一次"我发明过什么"的全面自查
+
+用户点出原则：
+
+> 架构按 magpie 的启发重新设计，但**各个能力的实现逻辑仍然是从 node 直接翻译过来的**。
+
+所以凡是「Node 没有这个行为，而我加了一个」的地方，都是缺陷。逐一核对本项目里我写过的
+非翻译实现，结论如下。
+
+### 已经造过、且已修正的
+
+| 位置             | 我发明的                            | Node 的实际逻辑                                                                    | 现状                               |
+| ---------------- | ----------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------- |
+| `agent timeline` | 落盘 `agents/timelines/*.json` 快照 | 纯内存 store；历史由 provider 会话文件重建                                         | 已回滚（`b76f6261c`）              |
+| `process_exit`   | 发 `turn_completed`                 | `turn_failed` + `finalizeForegroundTurn`                                           | 已改为 `turn_failed`               |
+| `process_exit`   | runtime 留在 `s.agents`             | `closeAgent` 摘除，下次 resume                                                     | 已摘除                             |
+| `steer`          | 有 `steer` 就无条件下发             | `steerOrReplaceActiveTurn` 先查活跃轮次，无则 `inactive` → 开新轮次                | 已按 node 分支处理                 |
+| `pairing QR`     | SHA-256 伪随机矩阵（扫不出来）      | `qrcode` npm 包，`type:"utf8", margin:4`                                           | 改用 `skip2/go-qrcode`，真 QR      |
+| `skills status`  | 硬编码 `up-to-date`、`ops:[]`       | `getSkillsStatus` 三态（`not-installed`/`up-to-date`/`drift`）+ 逐 op 的 `targets` | 重写为 `internal/server/skills.go` |
+
+### 复核后确认与 node 一致的
+
+- `internal/agent/pi/history.go`：`.jsonl` 解析对齐 `history-mapper.ts`。
+- `internal/workspace/git.go` diff 解析：对齐 node 的 unified diff → hunk 结构。
+- `internal/terminal/vt.go`：Node 用 `@xterm/headless`，Go 用纯 VT 网格；**这是架构替换不是逻辑发明**，
+  但要显式承认：行为等价性只覆盖了 DEC 私有模式的追踪与快照，未覆盖 xterm 的全部转义子集。
+- `internal/schedule`、`internal/store`、`internal/e2ee`、`internal/relay`：均按现有 node 语义移植。
+
+### 仍未验证是否等价，需要后续核对
+
+- `internal/server/ws_plugin_setup.go` 的 `workspace.setup.run`：Node 有
+  `workspace-setup-runtime.ts`，我按「读 byspace.json 的 setup、逐条执行、广播快照」实现，
+  但**没有逐行比对**它的阶段划分、`blocked` 状态与 `change_request` 分支。
+- `FilterAndSortAgents` 的排序与游标语义：Node 有独立 `pagination/` 模块，我只做了
+  `updated_at/created_at/title` 三种排序，未核对 `status_priority` 的完整定义。
+- `quota fetcher`：Node 有 8 家厂商抓取器，Go 侧目前返回空数组（未实现，不是发明）。
+
+### 结论
+
+真正的风险不是「不会翻译」，而是**在翻译不下去时悄悄换成自创实现，并且不声明**。
+本轮之后，新增实现如果 Node 有对应物，必须指出对应文件；确实 Node 没有的，必须在 Issue
+里写明「这是新增设计」而不是混在翻译里。

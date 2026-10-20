@@ -6,18 +6,16 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/ByteTrue/byspace/internal/home"
 	"github.com/ByteTrue/byspace/internal/store"
+	"github.com/skip2/go-qrcode"
+
 	"github.com/ByteTrue/byspace/internal/workspace"
 )
 
@@ -278,155 +276,47 @@ func (s *Server) PollSubscriptionsOnce(ctx context.Context) {
 	}
 }
 
-// ReconcileSkills syncs bundled skills into target agent skill directories (~/.agents/skills, ~/.claude/skills).
-func ReconcileSkills(selection map[string]any, targets []string, uninstallAll bool) (string, []map[string]any, []string, []string) {
-	if len(targets) == 0 {
-		targets = []string{"agents", "claude"}
-	}
-	avail, _ := scanLocalSkills()
-	userHome, err := os.UserHomeDir()
+// RenderASCIIQRCode renders a scannable QR code as UTF-8 half blocks, mirroring
+// packages/server/src/server/pairing-qr.ts (which uses the `qrcode` npm package with
+// type:"utf8", margin:4). Both produce the same kind of terminal-artifact: a real QR
+// matrix, not a decorative pattern.
+func RenderASCIIQRCode(data string) (string, error) {
+	qr, err := qrcode.New(data, qrcode.Medium)
 	if err != nil {
-		return "up-to-date", []map[string]any{}, avail, []string{}
+		return "", err
 	}
-
-	targetDirs := make(map[string]string)
-	for _, t := range targets {
-		switch t {
-		case "agents":
-			targetDirs["agents"] = filepath.Join(userHome, ".agents", "skills")
-		case "claude":
-			targetDirs["claude"] = filepath.Join(userHome, ".claude", "skills")
-		}
+	qr.DisableBorder = false
+	// Bitmap() includes the quiet zone; pair rows into half blocks so the output stays
+	// roughly square in a terminal (two vertical pixels per character cell).
+	grid := qr.Bitmap()
+	const margin = 4
+	rows := make([][]bool, 0, len(grid)+margin*2)
+	for i := 0; i < margin; i++ {
+		rows = append(rows, make([]bool, len(grid[0])+margin*2))
 	}
-
-	desired := make(map[string]bool)
-	if !uninstallAll {
-		mode, _ := selection["mode"].(string)
-		if mode == "custom" {
-			if rawSkills, ok := selection["skills"].([]any); ok {
-				for _, rs := range rawSkills {
-					if name, ok := rs.(string); ok {
-						desired[name] = true
-					}
-				}
-			}
-		} else {
-			for _, name := range avail {
-				desired[name] = true
-			}
-		}
+	for _, row := range grid {
+		padded := make([]bool, len(row)+margin*2)
+		copy(padded[margin:], row)
+		rows = append(rows, padded)
 	}
-
-	var srcRoot string
-	if wd, err := os.Getwd(); err == nil {
-		cand := filepath.Join(wd, "skills")
-		if info, statErr := os.Stat(cand); statErr == nil && info.IsDir() {
-			srcRoot = cand
-		}
-	}
-
-	ops := make([]map[string]any, 0)
-	installedSet := make(map[string]bool)
-
-	for _, name := range avail {
-		if desired[name] {
-			installedSet[name] = true
-			if srcRoot != "" {
-				srcSkill := filepath.Join(srcRoot, name)
-				for _, dstBase := range targetDirs {
-					_ = copySkillDir(srcSkill, filepath.Join(dstBase, name))
-				}
-			}
-		}
-	}
-
-	installed := make([]string, 0, len(installedSet))
-	for k := range installedSet {
-		installed = append(installed, k)
-	}
-	sort.Strings(installed)
-	state := "up-to-date"
-	if len(installed) == 0 && len(avail) > 0 && uninstallAll {
-		state = "not-installed"
-	}
-	return state, ops, avail, installed
-}
-
-func copySkillDir(srcDir, dstDir string) error {
-	entries, err := os.ReadDir(srcDir)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(dstDir, 0o755); err != nil {
-		return err
-	}
-	for _, e := range entries {
-		srcPath := filepath.Join(srcDir, e.Name())
-		dstPath := filepath.Join(dstDir, e.Name())
-		if e.IsDir() {
-			_ = copySkillDir(srcPath, dstPath)
-			continue
-		}
-		f, err := os.Open(srcPath)
-		if err != nil {
-			continue
-		}
-		b, _ := io.ReadAll(f)
-		_ = f.Close()
-		_ = home.WriteAtomic(dstPath, b, 0o644)
-	}
-	return nil
-}
-
-// RenderASCIIQRCode renders a compact UTF-8 half-block deterministic QR-style matrix for terminal pairing.
-func RenderASCIIQRCode(data string) string {
-	sum := sha256.Sum256([]byte(data))
-	const size = 21
-	grid := make([][]bool, size+2)
-	for r := range grid {
-		grid[r] = make([]bool, size+2)
-	}
-
-	drawFinder := func(r0, c0 int) {
-		for r := 0; r < 7; r++ {
-			for c := 0; c < 7; c++ {
-				if r == 0 || r == 6 || c == 0 || c == 6 || (r >= 2 && r <= 4 && c >= 2 && c <= 4) {
-					grid[r0+r+1][c0+c+1] = true
-				}
-			}
-		}
-	}
-	drawFinder(0, 0)
-	drawFinder(0, size-7)
-	drawFinder(size-7, 0)
-
-	bitIdx := 0
-	for r := 0; r < size; r++ {
-		for c := 0; c < size; c++ {
-			if (r < 8 && c < 8) || (r < 8 && c >= size-8) || (r >= size-8 && c < 8) {
-				continue
-			}
-			bytePos := (bitIdx / 8) % len(sum)
-			bitPos := uint(bitIdx % 8)
-			grid[r+1][c+1] = ((sum[bytePos] >> bitPos) & 1) == 1
-			bitIdx++
-		}
+	for i := 0; i < margin; i++ {
+		rows = append(rows, make([]bool, len(grid[0])+margin*2))
 	}
 
 	var sb strings.Builder
-	for r := 0; r < len(grid); r += 2 {
-		for c := 0; c < len(grid[0]); c++ {
-			top := grid[r][c]
-			bot := false
-			if r+1 < len(grid) {
-				bot = grid[r+1][c]
+	for r := 0; r < len(rows); r += 2 {
+		for c := 0; c < len(rows[0]); c++ {
+			top := rows[r][c]
+			bottom := false
+			if r+1 < len(rows) {
+				bottom = rows[r+1][c]
 			}
 			switch {
-			case top && bot:
+			case top && bottom:
 				sb.WriteString("█")
-			case top && !bot:
+			case top:
 				sb.WriteString("▀")
-			case !top && bot:
+			case bottom:
 				sb.WriteString("▄")
 			default:
 				sb.WriteString(" ")
@@ -434,7 +324,7 @@ func RenderASCIIQRCode(data string) string {
 		}
 		sb.WriteString("\n")
 	}
-	return sb.String()
+	return sb.String(), nil
 }
 
 // FilterAndSortAgents applies searchQuery, status/provider/workspaceId/labels filtering, sorting, and cursor pagination.

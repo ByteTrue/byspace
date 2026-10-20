@@ -919,11 +919,14 @@ func (s *Server) handleGetPairingOffer(ctx context.Context, sink frameSink, raw 
 	}
 	_ = json.Unmarshal(raw, &req)
 	offerURL := s.BuildPairingOfferURL("", true, "")
-	qr := RenderASCIIQRCode(offerURL)
+	var qrText any
+	if qr, qrErr := RenderASCIIQRCode(offerURL); qrErr == nil {
+		qrText = qr
+	}
 	_ = sendSessionMsg(ctx, sink, "daemon.get_pairing_offer.response", map[string]any{
 		"requestId":    req.RequestID,
 		"url":          offerURL,
-		"qr":           qr,
+		"qr":           qrText,
 		"relayEnabled": true,
 	})
 }

@@ -507,3 +507,117 @@ done
 	}
 	waitTurnCompleted("second turn")
 }
+
+// TestPairingQRHasFinderPatterns guards against rendering a decorative pattern instead of a
+// real QR code. Node uses the `qrcode` package; a matrix that merely hashes the URL looks
+// plausible in a terminal but no phone can decode it.
+//
+// A QR symbol always carries three 7x7 finder patterns (dark border, light ring, 3x3 dark
+// core) at the top-left, top-right and bottom-left corners of the data region, separated from
+// the edge by a quiet zone. A hash-derived matrix does not reproduce that geometry.
+func TestPairingQRHasFinderPatterns(t *testing.T) {
+	art, err := RenderASCIIQRCode("https://app.byspace.cc.cd/#offer=eyJ2IjoyfQ")
+	if err != nil {
+		t.Fatalf("QR render failed: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimRight(art, "\n"), "\n")
+	if len(lines) < 24 {
+		t.Fatalf("QR art has %d lines; a version-1 symbol needs >= 21 modules plus a quiet zone", len(lines))
+	}
+
+	// Reconstruct the module grid: each character encodes two vertically adjacent modules.
+	dark := map[rune][2]bool{
+		'█': {true, true},
+		'▀': {true, false},
+		'▄': {false, true},
+		' ': {false, false},
+	}
+	width := len([]rune(lines[0]))
+	grid := make([][]bool, 0, len(lines)*2)
+	for _, line := range lines {
+		top := make([]bool, width)
+		bottom := make([]bool, width)
+		for i, r := range []rune(line) {
+			px, ok := dark[r]
+			if !ok {
+				t.Fatalf("unexpected QR glyph %q", r)
+			}
+			top[i] = px[0]
+			bottom[i] = px[1]
+		}
+		grid = append(grid, top, bottom)
+	}
+
+	// Locate the first dark module: everything before it is the quiet zone.
+	top0, left0 := -1, -1
+	for r := 0; r < len(grid); r++ {
+		for c := 0; c < len(grid[r]); c++ {
+			if grid[r][c] {
+				top0, left0 = r, c
+				break
+			}
+		}
+		if top0 >= 0 {
+			break
+		}
+	}
+	if top0 < 0 {
+		t.Fatal("QR art contains no dark modules")
+	}
+	if top0 == 0 || left0 == 0 {
+		t.Fatal("QR art has no quiet zone around the symbol")
+	}
+
+	// Finder pattern at the origin: dark 7x7 border, light ring, solid 3x3 core.
+	expect := func(r, c int, want bool, label string) {
+		if top0+r >= len(grid) || left0+c >= width {
+			t.Fatalf("finder pattern %s runs past the symbol edge", label)
+		}
+		if grid[top0+r][left0+c] != want {
+			t.Fatalf("finder pattern %s: module (%d,%d) = %v, want %v", label, r, c, grid[top0+r][left0+c], want)
+		}
+	}
+	for i := 0; i < 7; i++ {
+		expect(0, i, true, "top border")
+		expect(6, i, true, "bottom border")
+		expect(i, 0, true, "left border")
+		expect(i, 6, true, "right border")
+	}
+	for i := 1; i < 6; i++ {
+		expect(1, i, false, "light ring")
+		expect(5, i, false, "light ring")
+		expect(i, 1, false, "light ring")
+		expect(i, 5, false, "light ring")
+	}
+	for r := 2; r <= 4; r++ {
+		for c := 2; c <= 4; c++ {
+			expect(r, c, true, "dark core")
+		}
+	}
+
+	// The same 7x7 block must be mirrored at the top-right corner of the data region.
+	// Trim the trailing quiet zone to find the data region's right edge.
+	rightEdge := -1
+	for c := width - 1; c >= 0; c-- {
+		found := false
+		for r := 0; r < len(grid); r++ {
+			if grid[r][c] {
+				found = true
+				break
+			}
+		}
+		if found {
+			rightEdge = c
+			break
+		}
+	}
+	if rightEdge < 0 {
+		t.Fatal("could not locate the right edge of the symbol")
+	}
+	for i := 0; i < 7; i++ {
+		if !grid[top0][rightEdge-6+i] {
+			t.Fatalf("top-right finder border missing at column %d", rightEdge-6+i)
+		}
+	}
+}

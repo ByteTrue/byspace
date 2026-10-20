@@ -845,20 +845,25 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 				}
 			}
 		}
-		uninstall := msgType == "agent.skills.uninstall.request"
-		state, ops, avail, inst := ReconcileSkills(sel, targets, uninstall)
+		sourceDir := resolveSkillsSourceDir()
+		userHome, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			userHome = ""
+		}
+		status := getSkillsStatus(sourceDir, userHome, sel, targets)
+		if msgType != "agent.skills.get_status.request" {
+			applySkillsStatus(sourceDir, userHome, status)
+			status = getSkillsStatus(sourceDir, userHome, sel, targets)
+		}
 		respType := strings.TrimSuffix(msgType, ".request") + ".response"
 		_ = sendSessionMsg(ctx, sink, respType, map[string]any{
-			"requestId": base.RequestID,
-			"state":     state,
-			"ops":       ops,
-			"available": avail,
-			"installed": inst,
-			"selection": sel,
-			"targets": map[string]any{
-				"available": []string{"agents", "claude"},
-				"selected":  targets,
-			},
+			"requestId":      base.RequestID,
+			"state":          status.State,
+			"ops":            status.Ops,
+			"available":      status.Available,
+			"installed":      status.Installed,
+			"selection":      sel,
+			"targets":        status.Targets,
 			"selectionSaved": ok,
 		})
 
@@ -881,18 +886,19 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 			"skillsSelection": sel,
 			"skillTargets":    targets,
 		})
-		state, ops, avail, inst := ReconcileSkills(sel, targets, false)
+		sourceDir := resolveSkillsSourceDir()
+		userHome, _ := os.UserHomeDir()
+		status := getSkillsStatus(sourceDir, userHome, sel, targets)
+		applySkillsStatus(sourceDir, userHome, status)
+		status = getSkillsStatus(sourceDir, userHome, sel, targets)
 		_ = sendSessionMsg(ctx, sink, "agent.skills.save_selection.response", map[string]any{
-			"requestId": req.RequestID,
-			"state":     state,
-			"ops":       ops,
-			"available": avail,
-			"installed": inst,
-			"selection": sel,
-			"targets": map[string]any{
-				"available": []string{"agents", "claude"},
-				"selected":  targets,
-			},
+			"requestId":            req.RequestID,
+			"state":                status.State,
+			"ops":                  status.Ops,
+			"available":            status.Available,
+			"installed":            status.Installed,
+			"selection":            sel,
+			"targets":              status.Targets,
 			"selectionSaved":       true,
 			"confirmationRequired": nil,
 		})
