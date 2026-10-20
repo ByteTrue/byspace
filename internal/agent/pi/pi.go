@@ -46,6 +46,12 @@ func stripLeadingSectionTag(s string) (string, bool) {
 	return after, false
 }
 
+// PromptImage is a base64 image payload attached to a prompt.
+type PromptImage struct {
+	Data     string `json:"data"`
+	MimeType string `json:"mimeType"`
+}
+
 // ImageContent represents a base64 image block passed to Pi RPC prompt/steer.
 type ImageContent struct {
 	Type     string `json:"type"`
@@ -747,7 +753,24 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 		"message": message,
 	}
 	if len(images) > 0 {
-		cmd["images"] = images
+		blocks := make([]map[string]any, 0, len(images))
+		for _, img := range images {
+			if img.Data == "" {
+				continue
+			}
+			mimeType := img.MimeType
+			if mimeType == "" {
+				mimeType = "image/png"
+			}
+			blocks = append(blocks, map[string]any{
+				"type":     "image",
+				"data":     img.Data,
+				"mimeType": mimeType,
+			})
+		}
+		if len(blocks) > 0 {
+			cmd["images"] = blocks
+		}
 	}
 	go func() {
 		rctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)

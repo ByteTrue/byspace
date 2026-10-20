@@ -222,3 +222,54 @@ func TestStructuredToolDetailsPermissionsAndSubagents(t *testing.T) {
 		t.Fatalf("unexpected parsed subagents: %+v", subs)
 	}
 }
+
+func TestPromptForwardsImageBlocksToPi(t *testing.T) {
+	tmp := t.TempDir()
+	fakePi := filepath.Join(tmp, "fake-pi-echo-images.sh")
+	// Echo back the raw prompt command line so the test can assert image blocks survived.
+	script := `#!/bin/sh
+while read line; do
+  case "$line" in
+    *'"type":"prompt"'*)
+      echo "{\"type\":\"response\",\"id\":\"r1\",\"command\":\"prompt\",\"success\":true,\"data\":{\"agentInvoked\":true}}"
+      echo '{"type":"agent_start"}'
+      echo '{"type":"turn_start"}'
+      echo '{"type":"message_start","message":{"role":"assistant","content":[]}}'
+      printf '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"ECHO:%s"}}\n' "$(printf '%s' "$line" | sed 's/"/\\"/g')"
+      echo '{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}'
+      echo '{"type":"agent_end","willRetry":false}'
+      echo '{"type":"agent_settled"}'
+      ;;
+  esac
+done
+`
+	if err := os.WriteFile(fakePi, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	sess, err := StartSession(LaunchOptions{Command: fakePi, Cwd: tmp})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sess.Close()
+
+	const b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+	if err := sess.Prompt(context.Background(), "what colour", []ImageContent{
+		{Type: "image", Data: b64, MimeType: "image/png"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.Now().Add(3 * time.Second)
+	var text string
+	for time.Now().Before(deadline) {
+		text = sess.LastAssistantText()
+		if strings.Contains(text, "ECHO:") {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !strings.Contains(text, `"type":"image"`) || !strings.Contains(text, b64) || !strings.Contains(text, `"mimeType":"image/png"`) {
+		t.Fatalf("image block was not forwarded to pi prompt: %s", text)
+	}
+}

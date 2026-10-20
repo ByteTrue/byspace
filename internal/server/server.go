@@ -1367,7 +1367,18 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 		WorkspaceID     string  `json:"workspaceId"`
 		InitialPrompt   *string `json:"initialPrompt"`
 		ClientMessageID string  `json:"clientMessageId"`
-		Config          struct {
+		Images          []struct {
+			Data     string `json:"data"`
+			MimeType string `json:"mimeType"`
+		} `json:"images"`
+		Attachments []struct {
+			Type     string `json:"type"`
+			FileName string `json:"fileName"`
+			Path     string `json:"path"`
+			MimeType string `json:"mimeType"`
+			Data     string `json:"data"`
+		} `json:"attachments"`
+		Config struct {
 			Provider         string            `json:"provider"`
 			Cwd              string            `json:"cwd"`
 			Title            *string           `json:"title"`
@@ -1470,7 +1481,15 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 
 	if req.InitialPrompt != nil && strings.TrimSpace(*req.InitialPrompt) != "" {
 		mp.session.SetNextClientMessageID(req.ClientMessageID)
-		_ = mp.session.Prompt(ctx, *req.InitialPrompt, nil)
+		createdImages := make([]pi.ImageContent, 0, len(req.Images))
+		for _, img := range req.Images {
+			if img.Data == "" {
+				continue
+			}
+			createdImages = append(createdImages, pi.ImageContent{Type: "image", Data: img.Data, MimeType: img.MimeType})
+		}
+		createdText := appendAttachmentHints(*req.InitialPrompt, req.Attachments)
+		_ = mp.session.Prompt(ctx, createdText, createdImages)
 		s.mu.Lock()
 		mp.record.LastStatus = mp.session.Status()
 		mp.record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
@@ -1495,6 +1514,17 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 		Prompt          string `json:"prompt"`
 		MessageID       string `json:"messageId"`
 		ClientMessageID string `json:"clientMessageId"`
+		Images          []struct {
+			Data     string `json:"data"`
+			MimeType string `json:"mimeType"`
+		} `json:"images"`
+		Attachments []struct {
+			Type     string `json:"type"`
+			FileName string `json:"fileName"`
+			Path     string `json:"path"`
+			MimeType string `json:"mimeType"`
+			Data     string `json:"data"`
+		} `json:"attachments"`
 	}
 	_ = json.Unmarshal(raw, &req)
 	text := req.Text
@@ -1505,6 +1535,15 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 	if clientMsgID == "" {
 		clientMsgID = req.ClientMessageID
 	}
+
+	images := make([]pi.ImageContent, 0, len(req.Images))
+	for _, img := range req.Images {
+		if img.Data == "" {
+			continue
+		}
+		images = append(images, pi.ImageContent{Type: "image", Data: img.Data, MimeType: img.MimeType})
+	}
+	text = appendAttachmentHints(text, req.Attachments)
 
 	mp, err := s.ensureAgentLoaded(req.AgentID)
 	if err != nil {
@@ -1518,7 +1557,7 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 	}
 
 	mp.session.SetNextClientMessageID(clientMsgID)
-	if err := mp.session.Prompt(ctx, text, nil); err != nil {
+	if err := mp.session.Prompt(ctx, text, images); err != nil {
 		_ = sendSessionMsg(ctx, sink, "send_agent_message_response", map[string]any{
 			"requestId": req.RequestID,
 			"agentId":   req.AgentID,
@@ -2276,6 +2315,43 @@ func buildWorkspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord)
 		out["worktreeSlug"] = filepath.Base(ws.Cwd)
 	}
 	return out
+}
+
+// appendAttachmentHints materializes non-image composer attachments as text references
+// so the model can read them from disk; oversized images ride the same path.
+func appendAttachmentHints(text string, attachments []struct {
+	Type     string `json:"type"`
+	FileName string `json:"fileName"`
+	Path     string `json:"path"`
+	MimeType string `json:"mimeType"`
+	Data     string `json:"data"`
+}) string {
+	if len(attachments) == 0 {
+		return text
+	}
+	lines := make([]string, 0, len(attachments))
+	for _, att := range attachments {
+		name := strings.TrimSpace(att.FileName)
+		if name == "" {
+			name = filepath.Base(att.Path)
+		}
+		if name == "" || name == "." {
+			name = "attachment"
+		}
+		switch {
+		case strings.TrimSpace(att.Path) != "":
+			lines = append(lines, fmt.Sprintf("[Attached file: %s (%s) at %s]", name, att.MimeType, att.Path))
+		case att.Type == "uploaded_file":
+			lines = append(lines, fmt.Sprintf("[Attached file: %s (%s)]", name, att.MimeType))
+		}
+	}
+	if len(lines) == 0 {
+		return text
+	}
+	if strings.TrimSpace(text) == "" {
+		return strings.Join(lines, "\n")
+	}
+	return text + "\n\n" + strings.Join(lines, "\n")
 }
 
 func newAgentID() string {
