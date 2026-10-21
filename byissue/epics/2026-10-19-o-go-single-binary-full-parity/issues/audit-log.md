@@ -450,6 +450,16 @@ live 记录只解析到 live 工作区，archived 记录可以解析到 archived
 
 在签发新 token 时清理：那是 map 唯一增长的时机，任意时刻集合都很小，为它加一个后台清扫器是多余的部件。
 
+### services/gitlab-service.ts | 1411 | **PARTIAL** → 已补 pipeline/approvals
+
+GitLab 分支的 `GetPRStatus` 返回 `checks: []` 且没有审批数，于是一个卡在失败 pipeline 或缺审批的 MR 看起来是就绪的——checkout 面板会给出一个 forge 随后拒绝的合并按钮，而失败的 pipeline 完全不可见。
+
+现在读 pipelines 与 approvals 两个端点。`mergeable` 在审批不足时是 `BLOCKED`、满足时 `MERGEABLE`、forge 不报要求时 `UNKNOWN`——猜 `BLOCKED` 会把可合并的 MR 藏起来。
+
+pipeline 状态映射到协议的封闭 check-status 枚举。未识别的 GitLab 状态变成 `pending` 而不是透传：客户端遇到枚举外的字符串会**拒绝整条消息**，一个新状态会让面板空白。
+
+`isDraft` 也读标题前缀了：不同 GitLab 版本对标志位的表示不一致，两种都检查。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
