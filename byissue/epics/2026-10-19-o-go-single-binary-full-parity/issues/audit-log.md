@@ -497,6 +497,16 @@ provider 可用性用的是 `exec.LookPath`，它返回 PATH 上**第一个**匹
 
 `ls` 默认也不再显示已归档的 agent（`-a` 恢复）：这个列表是用户正在做的东西，把所有跑完的 agent 列出来会让它读不了。
 
+### packages/cli/src/commands/agent/attach.ts | **MISSING** → 已补
+
+`byspace run` 启动任务后等整轮结束——对长任务这是错的形状：结束前用户什么都看不到，也没法去看别人起的 agent。
+
+`attach` 先回补 timeline（「到这里之前发生了什么」是读这次输出必需的上下文），然后跟随 agent 的流：助手文本按散文直接输出，其余内容带标记便于扫读。轮次结束或 Ctrl-C 退出。
+
+id 按前缀匹配——完整 id 很长，用户从 `ls` 复制到的在窄终端里是截断的。前缀匹配到多个时**报歧义而不是猜一个**：attach 到错的 agent 会显示错任务的内容，且没有任何迹象表明看错了。
+
+`--no-follow` 只打印历史后退出，给脚本和快速查看用。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
