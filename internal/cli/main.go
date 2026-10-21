@@ -37,7 +37,8 @@ const usageText = `byspace — single-binary AI coding agent host, web workbench
                                   serve the web workbench in a browser alongside the daemon
   byspace relay [--addr host:port] [--web-dir <dir>]
                                   run the high-performance E2EE WebSocket relay (default 0.0.0.0:8787)
-  byspace ls [--home <dir>] [--json]
+  byspace attach <agent-id>          stream a running agent's output
+  byspace ls [--home <dir>] [--json|--yaml|-q]
                                   list agents from $BYSPACE_HOME
   byspace run [--addr host:port] [--cwd <dir>] [--model <m>] [--thinking <l>] [--wait] <prompt>
                                   launch a Pi agent turn on the daemon
@@ -104,6 +105,12 @@ func Main(version string, args []string, stdout, stderr io.Writer) int {
 	case "run":
 		if err := runAgentPrompt(rest, stdout); err != nil {
 			fmt.Fprintln(stderr, "byspace run:", err)
+			return 1
+		}
+		return 0
+	case "attach":
+		if err := runAttach(rest, stdout); err != nil {
+			fmt.Fprintln(stderr, "byspace attach:", err)
 			return 1
 		}
 		return 0
