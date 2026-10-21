@@ -1051,15 +1051,32 @@ func defaultListenAddr() string {
 	return DefaultDevAddr
 }
 
+// dialDaemonWS connects to a daemon.
+//
+// When no explicit address was given, every recorded candidate is tried: a daemon may be listening
+// on a unix socket or on TCP, and the CLI cannot know which without asking. Trying only one meant a
+// command failed against a daemon that was plainly running.
 func dialDaemonWS(ctx context.Context, addr string) (*websocket.Conn, error) {
-	// BYSPACE_HOST lets one shell point every command at a different daemon without repeating
-	// --addr, which is what a script or a second checkout needs.
-	if strings.TrimSpace(addr) == "" || addr == defaultListenAddr() {
-		if host := strings.TrimSpace(os.Getenv("BYSPACE_HOST")); host != "" {
-			addr = host
+	candidates := daemonHostCandidates(addr)
+	if len(candidates) > 1 {
+		failures := make([]string, 0, len(candidates))
+		for _, candidate := range candidates {
+			ws, err := dialDaemonWSAt(ctx, candidate)
+			if err == nil {
+				return ws, nil
+			}
+			failures = append(failures, candidate+": "+err.Error())
 		}
+		return nil, fmt.Errorf("no daemon reachable at %s", strings.Join(failures, "; "))
 	}
+	if len(candidates) == 1 {
+		addr = candidates[0]
+	}
+	return dialDaemonWSAt(ctx, addr)
+}
 
+// dialDaemonWSAt connects to one address.
+func dialDaemonWSAt(ctx context.Context, addr string) (*websocket.Conn, error) {
 	// A unix socket address (an absolute path, or named pipe on Windows) has no host to dial.
 	// The daemon supports listening on one for restricted environments, and without this every
 	// command would fail to connect to a daemon that is plainly running.
