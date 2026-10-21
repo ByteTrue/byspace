@@ -956,6 +956,18 @@ Node 有一组 WebSocket 运行时计数器（`connectedAwaitingHello`、`helloR
 
 `WorkspaceProvisioningError` 的 `unknown_project` / `archived_project` 两个错误码在 Go 侧没有对应物——本项目不做「报错让调用方处理」，而是直接恢复。这是有意的行为差异，不是遗漏。
 
+### server/session/workspace-scripts/workspace-scripts-service.ts | 275 行 | **MISSING → 已补（脚本从未被停止）**
+
+`stopWorkspaceScript` 只把状态改成 `"stopped"`，**从不碰进程**。UI 报告脚本已停止，而它还在跑、还占着端口——下一次启动因端口已绑定而失败，旧的构建继续对外服务。
+
+现在进程记录在 entry 上，停止时发信号。**信号发给进程组而不是 shell**：`sleep 60`、`vite`、`npm run dev` 都是 shell 的子进程，只给 shell 发信号会把真正干活的那个留着——这一点是实测出来的，第一版修复后 `sleep 60` 依然活着。SIGTERM 先给脚本清理的机会，三秒后 SIGKILL，这样忽略 SIGTERM 的构建不会把端口占到会话结束。
+
+端到端验证：启动一个跑 `sleep 97` 的脚本，停止它，之后 `pgrep` 找不到该进程。
+
+### server/session/agent-updates + workspace-recovery | 435 + 264 行 | **PORTED（语义已覆盖）**
+
+`agent-updates-service.ts` 是 Node 内部的 `agent_updates` 订阅服务，**协议里没有这个消息类型**——Go 用 `agent.timeline.set_subscription` + `agent_update` 广播，语义等价。`workspace-recovery` 的 `inspect`/`restore` 对应 `workspace.recovery.*` 那批 RPC（已实现，`restore` 走取消归档那条路径，本轮补上了它的正确语义）。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
