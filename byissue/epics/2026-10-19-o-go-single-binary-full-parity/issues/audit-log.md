@@ -374,6 +374,18 @@ BySpace 创建的 worktree 不记录任何来源信息：diff 该跟哪个 base 
 | `spawn.ts` / `windows-command.ts`                                                                                                 | 124/104         | **PORTED（语义）** — 子进程环境剥离（`home.ExternalProcessEnv`）、进程组、Windows 的 ConPTY 与 PowerShell `-NoProfile` 都已处理。                                                                                                                                                                                                               |
 | `script-hostname.ts` / `build-metadata-prompt.ts` / `tool-call-parsers.ts` / `git-command-runtime-metrics.ts` / `ssh-hostname.ts` | 36/64/48/179/68 | 前两个依赖未实现的 service-proxy；`tool-call-parsers` 由各 provider 的 `BuildToolCallDetail` 覆盖；`git-command-runtime-metrics` 只写日志不进协议；`ssh-hostname` 属于 tunnel（DROPPED）。                                                                                                                                                      |
 
+### terminal/terminal-session-store.ts | 65 | **MISSING** → 已补
+
+daemon 重启后终端的 tab 全没了。进程和 scrollback 回不来（没法复活一个 shell），但 tab 本身可以——重新打开 app 应该看到刚才在用的终端，而不是一个空面板。
+
+只持久化元数据（id、cwd、workspace、name）：**故意不含 pty 句柄、scrollback 和子进程 pid**——恢复上一次运行的 pid 会让 UI 挂到一个并不存在的进程上。
+
+每次成员变化时写，与 `terminals_changed` 广播同一个位置；损坏的文件读作「没有 tab」，因为一个边文件坏了不该让 daemon 起不来。
+
+端到端验证：创建终端后 `$BYSPACE_HOME/terminal-sessions.json` 里有对应条目。
+
+**顺带补了一个缺口**：创建终端的路径从来没有调用过 `broadcastTerminalsChanged`，所以其他客户端看不到新 tab。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
