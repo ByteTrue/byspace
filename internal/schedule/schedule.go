@@ -398,6 +398,7 @@ func (s *Service) RunOnce(ctx context.Context, id string) (*StoredSchedule, erro
 		Status:       "running",
 	}
 
+	targetGone := false
 	if s.executor != nil {
 		res, execErr := s.executor(ctx, *sched)
 		endedStr := time.Now().UTC().Format(time.RFC3339Nano)
@@ -409,6 +410,13 @@ func (s *Service) RunOnce(ctx context.Context, id string) (*StoredSchedule, erro
 			runEntry.Status = "failed"
 			msg := execErr.Error()
 			runEntry.Error = &msg
+			// A target that no longer exists is permanent: retrying burns the schedule's budget
+			// until it expires, and every run fails the same way. Completion says what happened;
+			// failing forever does not.
+			var gone TargetGoneError
+			if errors.As(execErr, &gone) {
+				targetGone = true
+			}
 		} else {
 			runEntry.Status = "succeeded"
 		}
@@ -427,7 +435,10 @@ func (s *Service) RunOnce(ctx context.Context, id string) (*StoredSchedule, erro
 	latest.Runs = append(latest.Runs, runEntry)
 	latest.LastRunAt = &startedStr
 	latest.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	if latest.MaxRuns != nil && len(latest.Runs) >= *latest.MaxRuns {
+	if targetGone {
+		latest.Status = "completed"
+		latest.NextRunAt = nil
+	} else if latest.MaxRuns != nil && len(latest.Runs) >= *latest.MaxRuns {
 		latest.Status = "completed"
 		latest.NextRunAt = nil
 	} else if latest.Status == "active" {
@@ -438,3 +449,14 @@ func (s *Service) RunOnce(ctx context.Context, id string) (*StoredSchedule, erro
 	}
 	return latest, nil
 }
+
+// TargetGoneError reports that a schedule's target no longer exists.
+//
+// Ported from ScheduleTargetGoneError: the agent was deleted or archived, or a new-agent cwd was
+// removed. These are permanent, so the schedule completes instead of being retried until it
+// burns through its budget.
+type TargetGoneError struct {
+	Reason string
+}
+
+func (e TargetGoneError) Error() string { return e.Reason }
