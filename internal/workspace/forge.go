@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os/exec"
@@ -164,7 +165,88 @@ func CreatePR(ctx context.Context, cwd, title, body, base string, draft bool) (s
 }
 
 // MergePR runs `gh pr merge` on the current branch's PR.
+// MergeReadiness is why a pull request may or may not be merged right now.
+//
+// Ported from assertDirectPullRequestMergeReady. Without these guards the merge button is offered
+// whenever the branch has a PR, and the user finds out from gh's raw error — or, worse, merges in
+// a state the repository did not intend.
+type MergeReadiness struct {
+	Ready bool
+	// Reason is the user-facing explanation when Ready is false.
+	Reason string
+}
+
+// mergeStateAllowlist are the GitHub merge states that mean "safe to merge now".
+//
+// CLEAN is a mergeable branch with passing required checks. HAS_HOOKS means the same but with
+// hooks configured. Everything else (BLOCKED, BEHIND, DIRTY, DRAFT, UNSTABLE) needs the user to
+// act first, and GitHub would refuse anyway.
+var mergeStateAllowlist = map[string]bool{"CLEAN": true, "HAS_HOOKS": true}
+
+// CheckMergeReadiness asks GitHub whether a direct merge is allowed now.
+//
+// Returns Ready=true when the forge does not report the facts (a forge other than GitHub, or an
+// older CLI): refusing on missing information would block merging on every forge we cannot query.
+func CheckMergeReadiness(ctx context.Context, cwd, method string) MergeReadiness {
+	if _, err := exec.LookPath("gh"); err != nil {
+		return MergeReadiness{Ready: true}
+	}
+	raw, err := runGH(ctx, cwd, "pr", "view", "--json",
+		"mergeStateStatus,isInMergeQueue,autoMergeRequest,"+
+			"mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed")
+	if err != nil || strings.TrimSpace(raw) == "" {
+		return MergeReadiness{Ready: true}
+	}
+	var facts struct {
+		MergeStateStatus   *string `json:"mergeStateStatus"`
+		IsInMergeQueue     bool    `json:"isInMergeQueue"`
+		AutoMergeRequest   any     `json:"autoMergeRequest"`
+		MergeCommitAllowed bool    `json:"mergeCommitAllowed"`
+		SquashMergeAllowed bool    `json:"squashMergeAllowed"`
+		RebaseMergeAllowed bool    `json:"rebaseMergeAllowed"`
+	}
+	if json.Unmarshal([]byte(raw), &facts) != nil {
+		return MergeReadiness{Ready: true}
+	}
+
+	if facts.MergeStateStatus != nil && !mergeStateAllowlist[*facts.MergeStateStatus] {
+		return MergeReadiness{
+			Reason: "GitHub does not report this pull request as ready for direct merge (" +
+				*facts.MergeStateStatus + ")",
+		}
+	}
+	if facts.IsInMergeQueue {
+		return MergeReadiness{Reason: "Direct merge is not available because this pull request is in the merge queue"}
+	}
+	if facts.AutoMergeRequest != nil {
+		return MergeReadiness{Reason: "Direct merge is not available because auto-merge is already enabled"}
+	}
+	// The repository decides which methods exist; offering a disabled one means the button is
+	// there and the merge fails.
+	switch strings.ToLower(strings.TrimSpace(method)) {
+	case "squash":
+		if !facts.SquashMergeAllowed {
+			return MergeReadiness{Reason: "Direct merge is not available because squash merging is disabled"}
+		}
+	case "rebase":
+		if !facts.RebaseMergeAllowed {
+			return MergeReadiness{Reason: "Direct merge is not available because rebase merging is disabled"}
+		}
+	case "", "merge":
+		if !facts.MergeCommitAllowed {
+			return MergeReadiness{Reason: "Direct merge is not available because merge commits are disabled"}
+		}
+	}
+	return MergeReadiness{Ready: true}
+}
+
 func MergePR(ctx context.Context, cwd, method string) error {
+	// Checked here rather than only in the UI: the RPC is reachable directly, and the CLI calls
+	// it too.
+	if readiness := CheckMergeReadiness(ctx, cwd, method); !readiness.Ready {
+		return errors.New(readiness.Reason)
+	}
+
 	flag := "--merge"
 	switch strings.ToLower(strings.TrimSpace(method)) {
 	case "squash":
