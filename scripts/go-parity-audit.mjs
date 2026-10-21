@@ -23,6 +23,12 @@ const GO_PI_DIR = path.join(ROOT, "internal/agent/pi");
 
 /** 明确不打算实现的入站消息（语音/口述）。新增排除项必须在这里写明理由。 */
 const INTENTIONALLY_UNSUPPORTED = new Map([
+  // hub 与 plugin 是被决策移除的子系统（issue 025，446bc38a3d / a5c6bb6588），不是待办。
+  // 它们的字段永远不会被解析，所以放进这里并写明出处，而不是留在基线里假装是「还没做」。
+  ["hub.execution.agent.create.request", "hub was removed by decision (issue 025, 446bc38a3d)"],
+  ["hub.execution.agent.validate.request", "hub was removed by decision (issue 025)"],
+  ["hub.management.daemon.connect.request", "hub was removed by decision (issue 025)"],
+  ["plugin.rpc.invoke.request", "plugin runtime was removed by decision (issue 025, a5c6bb6588)"],
   [
     "audio_played",
     "voice was removed by decision (issue 025, 8d96875115); the message is logged and nothing is recorded",

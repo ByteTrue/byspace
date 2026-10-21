@@ -39,8 +39,9 @@ const STEPS = [
     name: "入站字段对账",
     run: ["node", ["scripts/go-parity-audit.mjs"]],
     why: "客户端发来的字段 Go 没接住 —— 该功能在界面上点了没反应。",
-    // 入站审计还有 47 条已知缺口（hub / plugin / 未实现的入站能力）。
-    // 不阻断，但**数字不许涨**：涨了说明新写的 handler 又漏字段了。
+    // 缺口现在是 0：hub 与 plugin 的字段登记在 INTENTIONALLY_UNSUPPORTED 里，因为它们是被
+    // 决策移除的子系统。基线保留在 0，所以任何新写的 handler 漏字段都会立刻让这一步变红——
+    // 这正是要的效果，不需要再加别的守卫。
     baseline: "inboundGaps",
   },
   {
