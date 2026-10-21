@@ -119,3 +119,40 @@
 **`PORTED-UNVERIFIED` 的 6 个文件全部是 quota 6 家**：实现照写、测试覆盖了参数解析与形状
 处理，但**没有真实凭据验证过端点的实际返回**。形状不符时返回「unexpected shape」而不是数字，
 这是安全的失败方式，也是为什么它们没有被标成 `PORTED`。
+
+## 批次 6 收尾：CLI flag 对账归零
+
+用脚本把 Node 每个命令的 `.option(...)` 集合与 Go 侧 `fs.*("name")` 集合求差，逐个补齐。
+最终 **有缺口的文件数：0**。
+
+补齐的 flag（按命令）：
+
+| 命令                     | 补上                                                                                                                                                                                                                                                                            |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `run`                    | `--provider` `--workspace` `--mode` `--title` `--role` `--label` `--env` `--wait-timeout` `--detach` `--background` `-d` `--output-schema` `--image` `--worktree-mode` `--worktree-slug` `--new-branch` `--base` `--branch` `--pr-number` `--new-workspace` `--forge`（5 → 23） |
+| `logs`                   | `-f`/`--follow` `--tail` `--since` `--filter`                                                                                                                                                                                                                                   |
+| `send`                   | `--prompt` `--prompt-file` `--image` `--no-wait`                                                                                                                                                                                                                                |
+| `terminal capture`       | `--start` `--end` `-S`/`--scrollback` `--ansi`                                                                                                                                                                                                                                  |
+| `terminal send-keys`     | `-l`/`--literal`                                                                                                                                                                                                                                                                |
+| `terminal create`        | `--workspace`                                                                                                                                                                                                                                                                   |
+| `permit`                 | `--input` `--interrupt`                                                                                                                                                                                                                                                         |
+| `schedule create`        | `--prompt` `--run-now` `--expires-in` `--model` `--mode` `--thinking`（9 → 15）                                                                                                                                                                                                 |
+| `schedule update`        | `--no-max-runs` `--no-expires-in`                                                                                                                                                                                                                                               |
+| `daemon start` / `serve` | `--foreground` `--relay-use-tls` `--no-inject-mcp` `--web-ui` `--no-web-ui`                                                                                                                                                                                                     |
+| `daemon stop`            | `--kill-timeout`                                                                                                                                                                                                                                                                |
+| `workspace create`       | `--path` `--project` `--title`                                                                                                                                                                                                                                                  |
+| `project rename`         | `--reset`                                                                                                                                                                                                                                                                       |
+| `daemon status`          | relay 状态（不在 flag 里，但同样是「Node 有、Go 没有」）                                                                                                                                                                                                                        |
+
+### 补 flag 时揪出的语义错误
+
+flag 只是入口，接上之后才暴露出实现本身的错误：
+
+| 缺陷                                               | 用户看到什么                                                                                                                    |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `run` 与 `schedule create` 硬编码 `provider: "pi"` | daemon 的默认 provider 被忽略；日程永远不可能指向别的 provider                                                                  |
+| `--wait-timeout 30m`                               | 上下文仍是固定 60 秒，flag 一分钟后就失效                                                                                       |
+| `wait_for_finish.lastMessage` 为空时打印 agent id  | 脚本拿到不透明字符串，分不清是回复还是失败                                                                                      |
+| `agent open` 被路由到 `inspect`                    | 问的是「这个 agent 在哪台 daemon 上」，答的却是整个 agent                                                                       |
+| `daemon stop` 对改名的二进制**不发信号**           | `ProcessMatches` 校验字面量 `"byspace serve"`，改名/符号链接后不匹配 → 只删锁不杀进程，报 `not running` 而 daemon 还在服务      |
+| 校验发生在拨号之后                                 | `--worktree-mode bogus`、`--label novalue`、`--input bad` 在 daemon 没跑时报 `connection refused`，把真正的错误藏在无关错误后面 |
