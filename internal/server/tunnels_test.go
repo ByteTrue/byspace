@@ -1,11 +1,13 @@
 package server
 
 import (
+	"context"
 	"io"
 	"net"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ByteTrue/byspace/internal/agentroles"
 	"github.com/ByteTrue/byspace/internal/store"
@@ -308,5 +310,33 @@ func TestEnsureUnarchivedAgentLoadedRejectsArchived(t *testing.T) {
 		t.Fatal("an archived agent must not load")
 	} else if !strings.Contains(err.Error(), "archived") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// A provider that accepts a prompt and never starts a turn leaves the client spinning with no way to
+// tell "working" from "hung". The timeout turns that wait into an actionable error.
+func TestWaitForRunStartTimesOut(t *testing.T) {
+	srv := newTunnelTestServer(t, nil)
+	// A very short deadline so the test does not wait a minute; the constant is what production uses.
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+
+	err := srv.waitForRunStart(ctx, "agt_missing", "pi")
+	if err == nil {
+		t.Fatal("an agent that never starts must time out")
+	}
+}
+
+// A turn that already finished must not be reported as a timeout: short turns complete before the
+// first poll.
+func TestWaitForRunStartAcceptsIdle(t *testing.T) {
+	srv := newTunnelTestServer(t, nil)
+	if err := srv.store.UpsertAgent(store.AgentRecord{
+		ID: "agt_idle", Provider: "pi", Cwd: "/tmp", LastStatus: "idle",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.waitForRunStart(context.Background(), "agt_idle", "pi"); err != nil {
+		t.Fatalf("an idle agent completed its turn, that is not a timeout: %v", err)
 	}
 }

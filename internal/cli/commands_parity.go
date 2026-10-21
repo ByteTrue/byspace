@@ -197,7 +197,10 @@ func runAgentArchive(args []string, stdout io.Writer) error {
 		return errors.New("usage: byspace archive [--force] [--addr host:port] <agent-id>")
 	}
 	agentID := fs.Arg(0)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// A longer budget than the other commands: cancelling a running turn waits for the provider to
+	// settle, which can take seconds on a large context. Ten seconds made `--force` fail with a
+	// timeout while the archive itself had already happened.
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	ws, err := dialDaemonWS(ctx, *addr)
 	if err != nil {
@@ -222,6 +225,8 @@ func runAgentArchive(args []string, stdout io.Writer) error {
 			return fmt.Errorf("%s is running; pass --force to interrupt it and archive", agentID)
 		}
 		// Cancel first so the archive does not race a turn that is still writing its transcript.
+		// A cancel that does not answer is not fatal: the archive below is what the caller asked
+		// for, and reporting a timeout while the agent got archived is the worst of both answers.
 		if err := sendSessionReq(ctx, ws, map[string]any{
 			"type":      "cancel_agent_request",
 			"requestId": "cli_arch_cancel",
@@ -237,7 +242,7 @@ func runAgentArchive(args []string, stdout io.Writer) error {
 		"requestId": "cli_arch_1",
 		"agentId":   agentID,
 	})
-	_, err = waitSessionResp(ctx, ws, "status", "agent_archived")
+	_, err = waitSessionResp(ctx, ws, "agent_archived", "")
 	if err != nil {
 		return err
 	}

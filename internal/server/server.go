@@ -2210,6 +2210,18 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 	}
 	text = appendAttachmentHints(text, req.Attachments)
 
+	// Sending a message to an archived agent unarchives it. Node does the same by default: the
+	// archive is a tidy-up, not a tombstone, and refusing would make "continue this conversation"
+	// fail with an error the user cannot act on. The finish-notification path is the one exception,
+	// and it does not go through here.
+	if record, readErr := s.store.GetAgent(req.AgentID); readErr == nil && record != nil && record.ArchivedAt != nil {
+		if unarchived, archiveErr := s.store.UnarchiveAgent(req.AgentID); archiveErr == nil && unarchived != nil {
+			// The client's sidebar still shows the agent as archived; without this broadcast the
+			// message is accepted and the row stays greyed out until a reload.
+			s.broadcastAgentUpdate(*unarchived)
+		}
+	}
+
 	mp, err := s.ensureAgentLoaded(req.AgentID)
 	if err != nil {
 		_ = sendSessionMsg(ctx, sink, "send_agent_message_response", map[string]any{
@@ -2246,6 +2258,21 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 			"error":     promptErr.Error(),
 		})
 		return
+	}
+
+	// A provider can accept the prompt and never start the turn. Without this wait the client shows
+	// "working" with no way to tell it apart from a hung agent, and the message appears to vanish.
+	// A steer has no new turn to wait for — the turn it joins is already running — so it is skipped.
+	if !wantSteer {
+		if startErr := s.waitForRunStart(ctx, req.AgentID, mp.record.Provider); startErr != nil {
+			_ = sendSessionMsg(ctx, sink, "send_agent_message_response", map[string]any{
+				"requestId": req.RequestID,
+				"agentId":   req.AgentID,
+				"accepted":  false,
+				"error":     startErr.Error(),
+			})
+			return
+		}
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
@@ -3801,4 +3828,62 @@ func (s *Server) ensureUnarchivedAgentLoaded(agentID string) (*managedPi, error)
 		return nil, fmt.Errorf("agent is archived: %s", agentID)
 	}
 	return mp, nil
+}
+
+// AgentRunStartTimeout bounds how long a prompt may be accepted without the provider starting a turn.
+//
+// Ported from AGENT_RUN_START_TIMEOUT_MS. A provider that swallows the prompt and never emits
+// turn_started leaves the client spinning with no way to tell "working" from "hung". The prompt itself
+// returns eventually, but the timeout is what turns the wait into an error the user can act on.
+const AgentRunStartTimeout = 60 * time.Second
+
+// waitForRunStart waits until the agent's status becomes running, or the timeout expires.
+//
+// Returns nil when the turn started (or already finished — a fast turn can complete inside the wait),
+// and an error naming the phase when it did not. Ported from waitForAgentRunStartWithTimeout: the
+// message includes "(phase: run start)" so a log reader can tell this apart from a turn that hung
+// mid-stream.
+func (s *Server) waitForRunStart(ctx context.Context, agentID, provider string) error {
+	deadline := time.Now().Add(AgentRunStartTimeout)
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+
+		// Read the runtime when it exists and the stored record otherwise: a prompt can be accepted
+		// for an agent that has not been loaded yet, and the record is where the daemon writes the
+		// status either way.
+		s.mu.Lock()
+		mp := s.agents[agentID]
+		status := ""
+		if mp != nil {
+			status = mp.record.LastStatus
+		}
+		s.mu.Unlock()
+		if status == "" {
+			if record, err := s.store.GetAgent(agentID); err == nil && record != nil {
+				status = record.LastStatus
+			}
+		}
+
+		// Running means the turn started. Idle means it already finished — a short turn can complete
+		// before the first tick, and treating that as a timeout would report failure for a successful
+		// run.
+		if status == "running" || status == "idle" {
+			return nil
+		}
+		// closed and error are terminal too: the turn is over, one way or another.
+		if status == "closed" || status == "error" {
+			return nil
+		}
+
+		if time.Now().After(deadline) {
+			return fmt.Errorf("%s run did not start within %d seconds (phase: run start)", provider, int(AgentRunStartTimeout.Seconds()))
+		}
+	}
 }

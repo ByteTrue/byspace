@@ -57,3 +57,46 @@ func TestBuildArchivedAgentRecordDoesNotMutate(t *testing.T) {
 		t.Fatalf("the input was mutated: %+v", original)
 	}
 }
+
+// Sending a message to an archived agent brings it back: the archive is a tidy-up, not a tombstone.
+func TestUnarchiveAgent(t *testing.T) {
+	store := New(t.TempDir())
+	archived := "2026-01-01T00:00:00Z"
+
+	if err := store.UpsertAgent(AgentRecord{
+		ID: "agt_1", Provider: "pi", Cwd: "/tmp", ArchivedAt: &archived, LastStatus: "idle",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	restored, err := store.UnarchiveAgent("agt_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored == nil || restored.ArchivedAt != nil {
+		t.Fatalf("not restored: %+v", restored)
+	}
+	// An archived agent was normalized to idle on the way in; leaving "closed" would make the
+	// sidebar show a dead agent until the first turn completed.
+	if restored.LastStatus != "idle" {
+		t.Fatalf("status = %q", restored.LastStatus)
+	}
+
+	// It persisted.
+	reloaded, err := store.GetAgent("agt_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.ArchivedAt != nil {
+		t.Fatal("unarchive did not persist")
+	}
+
+	// A second call is a no-op rather than an error: the caller cannot know whether the archive was
+	// still there.
+	if again, err := store.UnarchiveAgent("agt_1"); err != nil || again != nil {
+		t.Fatalf("second call: %+v %v", again, err)
+	}
+	if missing, err := store.UnarchiveAgent("agt_nope"); err != nil || missing != nil {
+		t.Fatalf("missing agent: %+v %v", missing, err)
+	}
+}

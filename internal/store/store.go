@@ -1346,3 +1346,32 @@ func gitCurrentBranch(repoPath string) (string, error) {
 	}
 	return strings.TrimSpace(string(out)), nil
 }
+
+// UnarchiveAgent clears an agent's archive marker.
+//
+// Returns the updated record, or nil when the agent is missing or was not archived. Ported from
+// unarchiveSnapshot: sending a message to an archived agent brings it back, because the archive is a
+// tidy-up rather than a tombstone.
+//
+// The status is reset to idle: an archived agent was normalized to idle on the way in (see
+// BuildArchivedAgentRecord), and leaving a stale "closed" would make the sidebar show a dead agent
+// until the first turn completed.
+func (s *Store) UnarchiveAgent(agentID string) (*AgentRecord, error) {
+	// The public accessors rather than lock-held variants: they take the lock themselves, and a
+	// *Locked variant called from here would deadlock on a non-reentrant mutex.
+	record, err := s.GetAgent(agentID)
+	if err != nil {
+		return nil, err
+	}
+	if record == nil || record.ArchivedAt == nil {
+		return nil, nil
+	}
+	updated := *record
+	updated.ArchivedAt = nil
+	updated.LastStatus = "idle"
+	updated.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	if err := s.UpsertAgent(updated); err != nil {
+		return nil, err
+	}
+	return &updated, nil
+}
