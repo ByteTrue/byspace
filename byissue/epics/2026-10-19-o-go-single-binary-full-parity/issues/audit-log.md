@@ -916,6 +916,19 @@ Node 有一组 WebSocket 运行时计数器（`connectedAwaitingHello`、`helloR
 | `codex-feature-definitions.ts`                                                                                   | **PORTED** — feature 定义（`Kind: "toggle"` 等）在 `driver.go` 的 `Features`。                                                                                                                                                                                                |
 | `diagnostic-utils.ts`                                                                                            | **PORTED** — provider 诊断（路径 + `--version` + 失败区分）在 `internal/execres` 与 `daemon status` 的 providers 列表。                                                                                                                                                       |
 
+### agent/providers/pi/** 剩余 | 3 文件 1091 行 | **PARTIAL → 已补两个消息角色\*\*
+
+`history-mapper.ts` 处理四种 message role，Go 处理三种。
+
+- **`bashExecution`**：pi 记录用户直接在终端里敲的 `!command`。不处理它，导入的会话会从提示词**直接跳到回复**，中间那条命令与输出完全消失——看起来像模型凭空作答。已补，映射成 `tool_call`/`bash` 卡片，`canceled` 映射为 `canceled` 状态。
+- **`custom`**：扩展自己追加的消息（BySpace 的 section 标记、pi-subagent 通知）。它没有客户端能渲染的 role，所以文本**故意跳过**，而不是渲染成没人打过的用户气泡——这与实时路径上 `IsSystemInjectedEnvelope` 的规则一致。
+
+`agent-subagents.ts` 与 `subagent-session-tailer.ts` 的子代理实时跟随已在 `internal/agent/pi/subagents.go`（此前那条）。
+
+### `omics/agent-hooks/claude` `codex` `opencode` | 8 文件 397 行 | **MISSING（已知）**
+
+只有 pi 的 hook 安装（`internal/terminal/vt.go` 的 `EnsureAgentHooksInstalled`，本轮补了 ownership 检查）。claude 的 `settings.json`、codex 的 `hooks.json`、opencode 的插件文件改写未移植——`byspace hooks <agent> <event>` 的 shim 已经能接受这些 provider 的事件（映射表齐全），缺的是**安装**那一步。与「只用 pi」的产品方向一致，已记在未完成清单。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
