@@ -426,6 +426,16 @@ approval 建模成 system note，提升为 review；Gitea 只有一个 comments 
 这重要的原因是调用方在把文本喂给**不能渲染终端的东西**——读构建输出的 agent、对提示符断言的测试
 ——切片边界上的半个行、文本中间的色码，都是错误输出而不是渲染细节。
 
+### server/file-upload/** | 220 | **MISSING\*\* → 已补（严重）
+
+`file.upload.request` 在协议里**只有元数据**（`fileName`/`mimeType`/`size`/`modifiedAt`），字节通过同一条 socket 上的二进制 `FileBegin`/`FileChunk`/`FileEnd` 帧传（0x10/0x11/0x12）。Go 读的是一个 schema 里根本不存在的 `data` 字段，文件名读的是 `name` 而不是 `fileName`。
+
+后果：**每一次上传都写成空文件**，文件名叫 `upload.bin`，而且响应说成功。三个失败同时静默。
+
+已实现帧编解码 + 上传状态机：按 requestId 的 begin/chunk/end 序列、每次上传一个暂存目录、陈旧上传定时器（客户端中途关标签页不会留下不断增长的目录）、文件名清洗（名字会成为路径组件）。相对声明长度短写会报错而不是成功——报成功等于交给用户一个截断的文件。
+
+顺带修了既有测试——它一直在断言我自己发明的形状。这也说明**测试断言了错误的东西时，测试反而是缺口的掩护**。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
