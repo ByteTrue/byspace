@@ -762,6 +762,33 @@ Node 用 `forge-manifest` 的 `cloudHosts`——一份**有界的精确列表**�
 | `provider-launch-config.ts`（274）                                                                                                                                                                                                                                                             | **PORTED** — `LaunchConfig`/`LaunchOptions` 与每 provider 的参数分流（含本轮修掉的 omp 分流）。                                                                                                                                              |
 | `create-agent-lifecycle-dispatch.ts`（273） / `agent-roles.ts`（93）                                                                                                                                                                                                                           | **PORTED** — 创建生命周期与 role（chief）在 `ws_agent.go`；`features.agentRoleNames` 已下发。                                                                                                                                                |
 
+### utils/path.ts | 190 | **MISSING → 已补路径等价比较**
+
+这条影响面比行数大得多：**daemon 里每一处路径比较都是字符串比较**。同一个目录可以是 `/tmp/x` 或 `/private/tmp/x`（macOS 上 `/tmp` 是符号链接）、带尾斜杠、带冗余 `.` 段、或在大小写不敏感的文件系统上大小写不同——每种写法都被当成不同的地方。
+
+可见症状是 `ResolveWorkspaceIDForPath` 报「这个目录没有归属」，然后调用方给它**新建第二个工作区**：侧边栏出现重复条目、agent 挂到「另一个」工作区上、diff 跟错树比。
+
+`internal/pathutil` 提供 `ExpandTilde`（先看 HOME，再退 `os.UserHomeDir`，所以有意的覆盖能生效）、`AreEquivalent`（先词法、再解析符号链接）、`EquivalenceMatcher`（预计算变体，用于对每个工作区循环）、`IsWithin` 带分隔符检查（`/repo/app` 不能声称包含 `/repo/application`）。不存在的路径回落到词法比较——realpath 失败不该让两个相同字符串变不等。
+
+端到端验证：通过符号链接访问的路径、带尾斜杠的路径都解析到同一个工作区 id。
+
+### terminal/ 的 worker 架构 | 1803+885+351+165 行 | **架构等价，非缺口**
+
+Node 把终端会话放进一个独立的 worker 进程（`worker-terminal-manager.ts` fork `terminal-worker-process.ts`，协议在 `terminal-worker-protocol.ts`），原因是 Node 单线程：PTY 读写的量和 `@xterm/headless` 的网格计算会把 daemon 的事件循环卡住，整个 RPC 层跟着停顿。
+
+Go 用 goroutine 与真实的 OS 线程处理 PTY 读写，没有事件循环可以被卡住，所以**不存在需要绕开的东西**。对应关系：
+
+- `terminal.ts`（1803）的会话与 VT 网格 → `internal/terminal/{pty,vt}.go`
+- `terminal-manager.ts`（501）的成员管理 → `internal/server` 的 `terminals` 表 + `broadcastTerminalsChanged`
+- `terminal-session-controller.ts`（1226）的 RPC 面 → `ws_workspace.go` 的终端 case
+- worker 的输入模式跟踪与 `replayPreamble` → `internal/terminal/vt.go:260` 已实现（重连时把 `?2004h`/`?1000h`/`?1049h` 这些模式重新推给前端）
+
+**判断**：机制不需要，语义都在。这条不列入未完成。
+
+### terminal/agent-hooks/{claude,codex}/** | 260 行 | **MISSING（已知）\*\*
+
+只有 pi 的 hook 安装（`internal/terminal/vt.go`）。claude 的 `settings.json` 与 codex 的 `hooks.json` 改写未移植——`byspace hooks <agent> <event>` 的 shim 已能接受这两个 provider 的事件（映射表齐全），缺的是**安装**那一步。已记在未完成清单。
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
