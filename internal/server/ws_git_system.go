@@ -601,9 +601,11 @@ func (s *Server) handleTerminalParityOps(ctx context.Context, sink frameSink, ms
 			case "input":
 				_ = sess.WriteInput([]byte(req.Message.Data))
 			case "resize":
-				if req.Message.Rows > 0 && req.Message.Cols > 0 {
-					_ = sess.Resize(req.Message.Rows, req.Message.Cols)
-				}
+				// Ownership matters when two clients watch one terminal: without it, opening
+				// the session on a phone shrinks the desktop shell to phone width.
+				owner := sinkOwnerToken(sink)
+				intent := terminal.SizeIntent(req.Message.Intent)
+				terminal.ApplySize(sess, owner, req.Message.Rows, req.Message.Cols, intent)
 			case "mouse":
 				// Mouse reporting is opt-in per application; forward as an SGR report so tools
 				// that enabled `?1000h`/`?1006h` receive clicks.
@@ -1347,4 +1349,13 @@ func resolveCloneURL(rawRepo, protocol string) (string, error) {
 		// The client always sends one; refusing keeps an ambiguous name from becoming a path.
 		return "", fmt.Errorf("clone protocol is required for owner/repo repository names")
 	}
+}
+
+// sinkOwnerToken identifies the connection that owns a terminal's size.
+//
+// The sink itself is the natural token: it is unique per connection and stable for its
+// lifetime, so "the client that claimed this terminal" survives multiple resize updates from
+// that same client.
+func sinkOwnerToken(sink frameSink) string {
+	return fmt.Sprintf("sink:%p", sink)
 }

@@ -220,8 +220,12 @@ func (s *Session) Resize(rows, cols uint16) error {
 	return pty.Setsize(ptmx, &pty.Winsize{Rows: rows, Cols: cols})
 }
 
-func (s *Session) VT() *VTGrid {
-	return s.vt
+func (s *Session) VT() *VTGrid { return s.vt }
+
+// Size reports the current grid dimensions.
+func (s *Session) Size() (rows, cols uint16) {
+	r, c := s.vt.Size()
+	return uint16(r), uint16(c)
 }
 
 func (s *Session) Subscribe(fn func(OutputEvent)) (unsubscribe func(), currentRevision int64) {

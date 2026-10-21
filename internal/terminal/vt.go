@@ -85,6 +85,13 @@ func (v *VTGrid) resetGridLocked() {
 }
 
 // Resize adjusts the virtual screen dimensions.
+// Size reports the grid dimensions under the write lock.
+func (v *VTGrid) Size() (rows, cols int) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.rows, v.cols
+}
+
 func (v *VTGrid) Resize(rows, cols int) {
 	if rows <= 0 || cols <= 0 {
 		return
