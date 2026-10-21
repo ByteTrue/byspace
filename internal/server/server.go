@@ -2960,13 +2960,18 @@ func (s *Server) buildAgentSnapshotPayload(rec store.AgentRecord) map[string]any
 	}
 
 	payload := map[string]any{
-		"id":                        rec.ID,
-		"provider":                  rec.Provider,
-		"cwd":                       rec.Cwd,
-		"workspaceId":               rec.WorkspaceID,
-		"model":                     model,
-		"thinkingOptionId":          thinking,
-		"effectiveThinkingOptionId": thinking,
+		"id":               rec.ID,
+		"provider":         rec.Provider,
+		"cwd":              rec.Cwd,
+		"workspaceId":      rec.WorkspaceID,
+		"model":            model,
+		"thinkingOptionId": thinking,
+		// The effective value is what the provider actually runs at, which may differ from the
+		// configured one: a provider that does not support the requested level falls back, and the
+		// runtime reports what it settled on. Showing the configured value claims a level the model
+		// is not using. Ported from resolveEffectiveThinkingOptionId: runtime wins, configured is the
+		// fallback.
+		"effectiveThinkingOptionId": effectiveThinkingOptionID(rec, thinking),
 		"createdAt":                 rec.CreatedAt,
 		"updatedAt":                 rec.UpdatedAt,
 		"lastUserMessageAt":         rec.LastUserMessageAt,
@@ -3740,4 +3745,60 @@ func filterSnapshotEntries(entries []map[string]any, wanted []string) []map[stri
 		}
 	}
 	return out
+}
+
+// effectiveThinkingOptionID reports the thinking level the agent is actually running at.
+//
+// Ported from resolveEffectiveThinkingOptionId. The distinction matters when a provider silently
+// clamps the request: `max` on a model that tops out at `high` runs at `high`, and the UI should say
+// so rather than showing a level that is not in effect. Runtime wins when it has said anything;
+// otherwise the configured value is the best available answer.
+func effectiveThinkingOptionID(rec store.AgentRecord, configured any) any {
+	if rec.RuntimeInfo != nil {
+		// Node's test is property presence (`"thinkingOptionId" in runtimeInfo`), which also
+		// distinguishes an explicit null. A *string cannot: JSON null and a missing key both
+		// unmarshal to nil. So an explicit null here falls back to the configured value rather than
+		// reporting null. The providers that write this field write it only when they know the
+		// level, so the divergent case does not arise in practice; it is noted rather than papered
+		// over with a custom unmarshaler for a case nothing produces.
+		if rec.RuntimeInfo.ThinkingOptionID != nil {
+			normalized := strings.TrimSpace(*rec.RuntimeInfo.ThinkingOptionID)
+			if normalized == "" {
+				return nil
+			}
+			return normalized
+		}
+	}
+	return configured
+}
+
+// ensureUnarchivedAgentLoaded loads an agent and confirms it was not archived meanwhile.
+//
+// Ported from ensureUnarchivedAgentLoaded. The check runs twice on purpose: an archive can land
+// between the first read and the load finishing, and the loaded agent would then be a running process
+// for a conversation the user just removed — spending tokens on work nobody will read. The second
+// check closes it again before returning the error.
+//
+// Callers that start a turn use this; callers that only read a record do not need it.
+func (s *Server) ensureUnarchivedAgentLoaded(agentID string) (*managedPi, error) {
+	if record, err := s.store.GetAgent(agentID); err == nil && record != nil && record.ArchivedAt != nil {
+		return nil, fmt.Errorf("agent is archived: %s", agentID)
+	}
+
+	mp, err := s.ensureAgentLoaded(agentID)
+	if err != nil {
+		return nil, err
+	}
+
+	// The second read is the point: it catches an archive that landed during the load.
+	if record, readErr := s.store.GetAgent(agentID); readErr == nil && record != nil && record.ArchivedAt != nil {
+		s.mu.Lock()
+		delete(s.agents, agentID)
+		s.mu.Unlock()
+		if mp.session != nil {
+			_ = mp.session.Close()
+		}
+		return nil, fmt.Errorf("agent is archived: %s", agentID)
+	}
+	return mp, nil
 }

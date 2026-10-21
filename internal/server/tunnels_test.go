@@ -258,3 +258,55 @@ func TestReservedLabelsCannotBeForged(t *testing.T) {
 		t.Fatal("an ordinary label was dropped")
 	}
 }
+
+// A provider that clamps the requested thinking level runs at the clamped one; showing the requested
+// value claims a level the model is not using.
+func TestEffectiveThinkingOptionPrefersRuntime(t *testing.T) {
+	runtimeLevel := "high"
+	configured := "max"
+
+	// Runtime wins.
+	got := effectiveThinkingOptionID(store.AgentRecord{
+		RuntimeInfo: &store.AgentRuntimeInfo{Provider: "pi", ThinkingOptionID: &runtimeLevel},
+	}, configured)
+	if got != "high" {
+		t.Fatalf("effective = %v, want high", got)
+	}
+
+	// No runtime opinion: the configured value is the best available answer.
+	got = effectiveThinkingOptionID(store.AgentRecord{RuntimeInfo: &store.AgentRuntimeInfo{Provider: "pi"}}, configured)
+	if got != "max" {
+		t.Fatalf("effective = %v, want max", got)
+	}
+	got = effectiveThinkingOptionID(store.AgentRecord{}, configured)
+	if got != "max" {
+		t.Fatalf("effective = %v, want max", got)
+	}
+
+	// An empty runtime value is "no level", not a level named "".
+	empty := "   "
+	got = effectiveThinkingOptionID(store.AgentRecord{
+		RuntimeInfo: &store.AgentRuntimeInfo{Provider: "pi", ThinkingOptionID: &empty},
+	}, configured)
+	if got != nil {
+		t.Fatalf("effective = %v, want nil", got)
+	}
+}
+
+// An archive can land between the first read and the load finishing. The loaded agent would then be
+// a running process for a conversation the user just removed, spending tokens on work nobody reads.
+func TestEnsureUnarchivedAgentLoadedRejectsArchived(t *testing.T) {
+	srv := newTunnelTestServer(t, nil)
+	archived := "2026-01-01T00:00:00Z"
+	record := store.AgentRecord{
+		ID: "agt_archived", Provider: "pi", Cwd: t.TempDir(), ArchivedAt: &archived, LastStatus: "idle",
+	}
+	if err := srv.store.UpsertAgent(record); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := srv.ensureUnarchivedAgentLoaded("agt_archived"); err == nil {
+		t.Fatal("an archived agent must not load")
+	} else if !strings.Contains(err.Error(), "archived") {
+		t.Fatalf("err = %v", err)
+	}
+}
