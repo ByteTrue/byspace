@@ -358,6 +358,41 @@ func LoadTimelineFromJSONL(filePath string) ([]TimelineEntry, error) {
 					}
 				}
 			}
+		case "bashExecution":
+			// `!command` typed by the user in the terminal is recorded by pi as its own message
+			// role. Without this the command and its output vanish from an imported session, and
+			// the transcript jumps from the prompt to a reply with no visible cause.
+			command, _ := msg["command"].(string)
+			output, _ := msg["output"].(string)
+			exitCode := -1
+			if code, isNumber := msg["exitCode"].(float64); isNumber {
+				exitCode = int(code)
+			}
+			cancelled, _ := msg["cancelled"].(bool)
+			status := "completed"
+			if cancelled {
+				status = "canceled"
+			}
+			timestamp, _ := msg["timestamp"].(float64)
+			entries = append(entries, sdk.TimelineEntry{
+				Item: sdk.TimelineItem{
+					Type:   "tool_call",
+					CallID: fmt.Sprintf("pi-bash-%.0f", timestamp),
+					Name:   "bash",
+					Status: status,
+					Detail: sdk.BuildToolCallDetail("bash", map[string]any{
+						"command":  command,
+						"output":   output,
+						"exitCode": exitCode,
+					}, nil),
+				},
+			})
+
+		case "custom":
+			// A custom message is whatever an extension appended (BySpace's own section tags,
+			// pi-subagent notices). It has no role a client can render, so its text is skipped
+			// rather than shown as a user bubble nobody typed.
+
 		case "toolResult":
 			callID, _ := msg["toolCallId"].(string)
 			toolName, _ := msg["toolName"].(string)
