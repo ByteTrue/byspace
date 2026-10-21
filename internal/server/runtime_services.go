@@ -41,14 +41,6 @@ type diffSubscription struct {
 	lastDigest string
 }
 
-type tunnelRecord struct {
-	PeerID    string `json:"peerId"`
-	Name      string `json:"name"`
-	LocalPort int    `json:"localPort"`
-	Enabled   bool   `json:"enabled"`
-	CreatedAt string `json:"createdAt"`
-}
-
 func isLoopbackAddr(remoteAddr string) bool {
 	if remoteAddr == "" {
 		return true

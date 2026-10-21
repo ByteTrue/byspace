@@ -28,6 +28,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/schedule"
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/terminal"
+	"github.com/ByteTrue/byspace/internal/tunnel"
 	"github.com/ByteTrue/byspace/internal/webui"
 	"github.com/ByteTrue/byspace/internal/workspace"
 )
@@ -172,6 +173,15 @@ type Server struct {
 	corsCache          []string
 	setupSnapshots     map[string]*setupSnapshot
 	workspaceScripts   map[string]*workspaceScript
+	// tunnels is the outbound (D1) registry, created on first use.
+	tunnels *tunnel.Registry
+	// tunnelTargetServer is the inbound (D2) handler, created on first use.
+	tunnelTargetServer *tunnel.Target
+	// tunnelStreamSinks maps an inbound stream id to the client that opened it, so downstream
+	// bytes return to that socket rather than being broadcast.
+	tunnelStreamSinks map[string]frameSink
+	// tunnelsEnabled is the experimental gate (issue 063). It starts closed.
+	tunnelsEnabled bool
 	// notifiedChildren records which (child, reason) pairs already prompted their parent.
 	notifiedChildren   map[string]bool
 	notifiedChildrenMu sync.Mutex
@@ -710,6 +720,25 @@ func (s *Server) handleBinaryFrame(ctx context.Context, sink frameSink, raw []by
 	// Terminal frames and file-transfer frames share the byte stream; they are discriminated by
 	// opcode. Trying the terminal decoder first dropped every upload silently, because a file
 	// frame carries a request id where the terminal decoder expects a slot.
+	// Tunnel frames come first: their opcodes (0x20..0x22) sit above both other families, and
+	// the terminal decoder would reject them as a bad slot — silently dropping every forwarded
+	// byte from a peer.
+	if len(raw) > 0 && tunnel.IsTunnelOpcode(raw[0]) {
+		frame, ok := tunnel.DecodeFrame(raw)
+		if !ok {
+			return
+		}
+		s.tunnelTarget().HandleFrame(frame, func(outgoing tunnel.Frame) error {
+			encoded, encodeErr := tunnel.EncodeFrame(outgoing.Opcode, outgoing.TunnelID, outgoing.Payload)
+			if encodeErr != nil {
+				return encodeErr
+			}
+			// The peer that opened this stream is the sink that must receive the bytes back.
+			return s.sendTunnelFrameToOpener(ctx, outgoing.TunnelID, encoded)
+		})
+		return
+	}
+
 	if len(raw) > 0 && terminal.IsFileTransferOpcode(terminal.Opcode(raw[0])) {
 		fileFrame, err := terminal.DecodeFileFrame(raw)
 		if err != nil {
@@ -871,8 +900,10 @@ func (s *Server) buildServerInfoPayload() map[string]any {
 			"pluginTimelineItems": false,
 			"skillManagement":     true,
 			// Tunnel is a delivered feature (issue 062) that the Go port has not picked up yet; the RPCs
-			// currently answer from stubs. See issues/2026-10-21-o-go-tunnel-parity.md.
-			"daemonTunnels":              false,
+			// Implemented: registry, relay client, target-side forwarding. The experimental gate
+			// (issue 063) still starts closed, so the UI shows the entry point and the feature is
+			// off until the operator opts in — which is the published behaviour.
+			"daemonTunnels":              true,
 			"projectSetupSkill":          true,
 			"terminalAgentHookProviders": true,
 			"terminalShellConfig":        true,

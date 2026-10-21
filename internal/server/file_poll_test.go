@@ -72,8 +72,9 @@ func TestFileSubscriptionUsesStampToSkipReads(t *testing.T) {
 
 // recordingSink counts the messages a subscription pushed.
 type recordingSink struct {
-	mu    sync.Mutex
-	texts []string
+	mu       sync.Mutex
+	texts    []string
+	binaries int
 }
 
 func (r *recordingSink) SendText(_ context.Context, text string) error {
@@ -83,7 +84,12 @@ func (r *recordingSink) SendText(_ context.Context, text string) error {
 	return nil
 }
 
-func (r *recordingSink) SendBinary(_ context.Context, _ []byte) error { return nil }
+func (r *recordingSink) SendBinary(_ context.Context, _ []byte) error {
+	r.mu.Lock()
+	r.binaries++
+	r.mu.Unlock()
+	return nil
+}
 
 func (r *recordingSink) Close(websocket.StatusCode, string) error { return nil }
 

@@ -1295,45 +1295,22 @@ func (s *Server) handleSystemParityOps(ctx context.Context, sink frameSink, msgT
 		return
 
 	case "tunnel.list.request":
-		_ = sendSessionMsg(ctx, sink, "tunnel.list.response", map[string]any{
-			"requestId": base.RequestID,
-			"entries":   []any{},
-		})
+		s.handleTunnelList(ctx, sink, base.RequestID)
 
 	case "tunnel.open.request":
-		_ = sendSessionMsg(ctx, sink, "tunnel.open.response", map[string]any{
-			"requestId":  base.RequestID,
-			"tunnelId":   base.TunnelID,
-			"remotePort": 0,
-			"allowed":    false,
-			"reason":     "Tunnel not configured",
-		})
+		s.handleTunnelOpen(ctx, sink, raw)
 
 	case "tunnel.close.request":
-		_ = sendSessionMsg(ctx, sink, "tunnel.close.response", map[string]any{
-			"requestId": base.RequestID,
-			"tunnelId":  base.TunnelID,
-		})
+		s.handleTunnelClose(ctx, sink, raw)
 
 	case "tunnel.stats.request":
-		_ = sendSessionMsg(ctx, sink, "tunnel.stats.response", map[string]any{
-			"requestId": base.RequestID,
-			"entries":   []any{},
-		})
+		s.handleTunnelStats(ctx, sink, base.RequestID)
 
 	case "tunnel.create.request":
-		_ = sendSessionMsg(ctx, sink, "tunnel.create.response", map[string]any{
-			"requestId": base.RequestID,
-			"peerId":    base.PeerID,
-			"ok":        true,
-		})
+		s.handleTunnelCreate(ctx, sink, raw)
 
 	case "tunnel.remove.request":
-		_ = sendSessionMsg(ctx, sink, "tunnel.remove.response", map[string]any{
-			"requestId": base.RequestID,
-			"peerId":    base.PeerID,
-			"ok":        true,
-		})
+		s.handleTunnelRemove(ctx, sink, raw)
 
 	case "hub.management.daemon.connect.request",
 		"hub.management.daemon.get_status.request",

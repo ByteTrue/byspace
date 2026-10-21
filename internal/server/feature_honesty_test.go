@@ -28,7 +28,6 @@ func TestDeclaredFeaturesAreImplemented(t *testing.T) {
 		"pluginTimelineItems": "plugin system retired by decision (issue 025)",
 	}
 	notYetPorted := map[string]string{
-		"daemonTunnels":    "tunnel is a delivered feature (issue 062) the Go port has not picked up",
 		"daemonSelfUpdate": "daemon self-update is not implemented",
 		"directorySync":    "cross-host directory sync is undecided product work",
 	}
@@ -61,7 +60,7 @@ func TestDeclaredFeaturesAreImplemented(t *testing.T) {
 	// And the features that ARE implemented must stay true, or the client disables working UI.
 	for _, name := range []string{
 		"workspaceLabels", "workspaceSetupRun", "providersSnapshot", "rewind",
-		"agentHistorySearch", "providerSubagents", "workspaceTerminals",
+		"agentHistorySearch", "providerSubagents", "workspaceTerminals", "daemonTunnels",
 	} {
 		if rawFeatures[name] != true {
 			t.Fatalf("feature %q should be true; the client would disable working UI", name)

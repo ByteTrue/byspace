@@ -77,3 +77,12 @@ func DecodeFrame(data []byte) (Frame, bool) {
 	}
 	return frame, true
 }
+
+// IsTunnelOpcode reports whether a first byte belongs to the tunnel family.
+//
+// The demultiplexer needs this before trying the other families: tunnel opcodes sit above the
+// terminal and file-transfer ranges, so a tunnel frame offered to the terminal decoder is rejected
+// as a bad slot and the bytes are dropped without a trace.
+func IsTunnelOpcode(opcode byte) bool {
+	return opcode == OpcodeDataUpstream || opcode == OpcodeDataDownstream || opcode == OpcodeClose
+}

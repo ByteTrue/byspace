@@ -1,0 +1,225 @@
+package server
+
+import (
+	"io"
+	"net"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/ByteTrue/byspace/internal/tunnel"
+)
+
+// startEchoPort runs a TCP service that echoes its input, standing in for the dev server a tunnel
+// exposes.
+func startEchoPort(t *testing.T) (int, func()) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		for {
+			conn, acceptErr := listener.Accept()
+			if acceptErr != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				_, _ = io.Copy(c, c)
+			}(conn)
+		}
+	}()
+	return listener.Addr().(*net.TCPAddr).Port, func() { _ = listener.Close() }
+}
+
+// newTunnelTestServer builds a Server whose config carries the given tunnel section.
+func newTunnelTestServer(t *testing.T, tunnelConfig map[string]any) *Server {
+	t.Helper()
+	deviceDir := t.TempDir()
+	srv, err := New(Options{HomeDir: filepath.Join(deviceDir, "home"), Version: "test", PiCommand: writeFaithfulFakePi(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Close() })
+	if tunnelConfig != nil {
+		srv.store.SaveDaemonConfig(map[string]any{"tunnel": tunnelConfig})
+	}
+	return srv
+}
+
+// The three gates all live server-side because a client can lie about all of them. Each denial
+// must name its gate: the UI shows the reason verbatim, and a bare refusal leaves the user
+// guessing which of the three closed.
+func TestTunnelOpenRefusedWhileGateClosed(t *testing.T) {
+	port, stop := startEchoPort(t)
+	defer stop()
+
+	srv := newTunnelTestServer(t, map[string]any{"allowedPorts": []any{float64(port)}})
+
+	result, err := srv.tunnelTarget().Open(port, func(tunnel.Frame) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Allowed {
+		t.Fatal("the gate starts closed, so the open must be refused")
+	}
+	if !strings.Contains(strings.ToLower(result.Reason), "disabled") {
+		t.Fatalf("the refusal should name the gate: %q", result.Reason)
+	}
+}
+
+// A host with no daemon password must refuse: an unauthenticated forwarder is an open proxy.
+func TestTunnelOpenRefusedWithoutPassword(t *testing.T) {
+	port, stop := startEchoPort(t)
+	defer stop()
+
+	srv := newTunnelTestServer(t, map[string]any{"allowedPorts": []any{float64(port)}})
+	srv.mu.Lock()
+	srv.tunnelsEnabled = true
+	srv.mu.Unlock()
+
+	result, _ := srv.tunnelTarget().Open(port, func(tunnel.Frame) error { return nil })
+	if result.Allowed {
+		t.Fatal("a host without a password must refuse")
+	}
+	if !strings.Contains(result.Reason, "password") {
+		t.Fatalf("the refusal should mention the password: %q", result.Reason)
+	}
+}
+
+// The allowlist is the third gate. An absent allowlist must deny everything rather than permit
+// everything — a missing config key is not consent.
+func TestTunnelAllowlistReadsConfig(t *testing.T) {
+	srv := newTunnelTestServer(t, map[string]any{"allowedPorts": []any{float64(3000), float64(3001)}})
+	got := tunnelAllowlist(srv.store.LoadDaemonConfig())
+	if len(got) != 2 || got[0] != 3000 || got[1] != 3001 {
+		t.Fatalf("allowlist = %v", got)
+	}
+	if got := tunnelAllowlist(map[string]any{}); got != nil {
+		t.Fatalf("absent allowlist = %v", got)
+	}
+	if got := tunnelAllowlist(nil); got != nil {
+		t.Fatalf("nil config = %v", got)
+	}
+}
+
+// End to end: a whitelisted port opens, downstream bytes reach the real service, and the echo
+// comes back as upstream frames.
+func TestTunnelOpenForwardsBytes(t *testing.T) {
+	port, stop := startEchoPort(t)
+	defer stop()
+
+	srv := newTunnelTestServer(t, map[string]any{"allowedPorts": []any{float64(port)}})
+	srv.mu.Lock()
+	srv.tunnelsEnabled = true
+	srv.mu.Unlock()
+	// A bcrypt-shaped hash satisfies the second gate without inventing a login.
+	srv.store.SaveDaemonConfig(map[string]any{
+		"auth":   map[string]any{"passwordHash": "$2a$12$abcdefghijklmnopqrstuv"},
+		"tunnel": map[string]any{"allowedPorts": []any{float64(port)}},
+	})
+
+	upstream := make(chan tunnel.Frame, 16)
+	result, err := srv.tunnelTarget().Open(port, func(frame tunnel.Frame) error {
+		select {
+		case upstream <- frame:
+		default:
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Allowed {
+		t.Fatalf("refused: %s", result.Reason)
+	}
+
+	srv.tunnelTarget().HandleFrame(tunnel.Frame{
+		Opcode:   tunnel.OpcodeDataDownstream,
+		TunnelID: result.TunnelID,
+		Payload:  []byte("hello"),
+	}, func(tunnel.Frame) error { return nil })
+
+	var echoed []byte
+	for len(echoed) < 5 {
+		frame := <-upstream
+		if frame.Opcode == tunnel.OpcodeDataUpstream {
+			echoed = append(echoed, frame.Payload...)
+		}
+	}
+	if string(echoed) != "hello" {
+		t.Fatalf("echoed %q", echoed)
+	}
+}
+
+// The peer list is what the client renders; a peer without a state would render blank.
+func TestTunnelListReportsConfiguredPeers(t *testing.T) {
+	srv := newTunnelTestServer(t, nil)
+	registry := srv.tunnelRegistry()
+	if err := registry.Add(tunnel.PeerConfig{
+		PeerID:   "peer-a",
+		URL:      "wss://relay.example.com",
+		Forwards: []tunnel.ForwardConfig{{RemotePort: 3000}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	statuses := registry.List()
+	if len(statuses) != 1 || statuses[0].PeerID != "peer-a" {
+		t.Fatalf("statuses = %+v", statuses)
+	}
+	if statuses[0].State == "" {
+		t.Fatal("a peer needs a state; the client renders it directly")
+	}
+}
+
+// Removing a peer must persist: a restart that resurrects it is a configuration the user cannot
+// delete.
+func TestTunnelRemovePersists(t *testing.T) {
+	srv := newTunnelTestServer(t, nil)
+	registry := srv.tunnelRegistry()
+	if err := registry.Add(tunnel.PeerConfig{
+		PeerID:   "peer-b",
+		URL:      "wss://relay.example.com",
+		Forwards: []tunnel.ForwardConfig{{RemotePort: 3001}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Remove("peer-b"); err != nil {
+		t.Fatal(err)
+	}
+	if len(registry.List()) != 0 {
+		t.Fatal("peer survived removal")
+	}
+}
+
+// Each inbound stream belongs to exactly one client: downstream bytes must return to the socket
+// that asked for the port, not to every connected client.
+func TestTunnelStreamOwnershipIsPerSink(t *testing.T) {
+	srv := newTunnelTestServer(t, nil)
+	first := &recordingSink{}
+	second := &recordingSink{}
+
+	srv.rememberTunnelStream("s1", first)
+	if err := srv.sendTunnelFrameToOpener(t.Context(), "s1", []byte("down")); err != nil {
+		t.Fatal(err)
+	}
+	if first.binaryCount() != 1 || second.binaryCount() != 0 {
+		t.Fatalf("first=%d second=%d", first.binaryCount(), second.binaryCount())
+	}
+
+	srv.forgetTunnelStream("s1")
+	if err := srv.sendTunnelFrameToOpener(t.Context(), "s1", []byte("late")); err != nil {
+		t.Fatal(err)
+	}
+	if first.binaryCount() != 1 {
+		t.Fatal("a frame for a closed stream must be dropped, not delivered")
+	}
+}
+
+// binaryCount reports how many binary frames the sink received.
+func (r *recordingSink) binaryCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.binaries
+}
