@@ -518,6 +518,19 @@ id 按前缀匹配——完整 id 很长，用户从 `ls` 复制到的在窄终�
 
 其余部分（detached spawn、PID 锁、优雅/强制关停、launchd/systemd unit 生成）Go 侧已有，见 `internal/daemon`。
 
+### commands/onboard.ts + commands/hooks.ts | 665+116 | **MISSING** → 已补
+
+两条命令都是**打印 `ready` 的占位实现**。
+
+`onboard` 现在一步写出可用配置：监听地址、relay（含自建端点——scheme 决定 TLS，缺端口时 443/80）、给独立托管 Web UI 用的 CORS origin、MCP 注入。所有 flag 可选，改一个 flag 再跑一次就是用户的修复方式。互相矛盾的 flag **报错而不是按优先级取一个**：静默挑一个会让用户拿到自己没要求的配置。
+
+`hooks` 是各 provider CLI 从自己的 hook 配置里跑的 shim——轮次开始/结束/需要用户输入时调用。没有它，终端会在 agent 正在里面干活时显示一个空闲 shell，正好和指示灯要表达的意思相反。事件到状态的映射覆盖 pi/claude/codex/opencode。不在 BySpace 终端里时**完全静默**，否则它会在用户自己的 shell 里每次回车都触发。
+
+验证时抓到两个自己写的 bug：
+
+- 把 `--mcp` 和 `--no-mcp` 注册到同一个 `*bool` 上，第二次注册会覆盖第一次的默认值，**静默把注入关掉**了；
+- 不读 stdin 会让 provider 的 hook 进程阻塞，所以即使不需要也把 payload 排空。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
