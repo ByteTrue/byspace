@@ -1824,11 +1824,14 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 			MimeType string `json:"mimeType"`
 		} `json:"images"`
 		Attachments []struct {
-			Type     string `json:"type"`
-			FileName string `json:"fileName"`
-			Path     string `json:"path"`
-			MimeType string `json:"mimeType"`
-			Data     string `json:"data"`
+			Type string `json:"type"`
+			// ContextKind marks an attachment as conversation history, which must precede the
+			// user's text rather than follow it.
+			ContextKind string `json:"contextKind"`
+			FileName    string `json:"fileName"`
+			Path        string `json:"path"`
+			MimeType    string `json:"mimeType"`
+			Data        string `json:"data"`
 		} `json:"attachments"`
 		Config struct {
 			Provider         string            `json:"provider"`
@@ -1994,11 +1997,14 @@ func (s *Server) handleSendAgentMessage(ctx context.Context, sink frameSink, raw
 			MimeType string `json:"mimeType"`
 		} `json:"images"`
 		Attachments []struct {
-			Type     string `json:"type"`
-			FileName string `json:"fileName"`
-			Path     string `json:"path"`
-			MimeType string `json:"mimeType"`
-			Data     string `json:"data"`
+			Type string `json:"type"`
+			// ContextKind marks an attachment as conversation history, which must precede the
+			// user's text rather than follow it.
+			ContextKind string `json:"contextKind"`
+			FileName    string `json:"fileName"`
+			Path        string `json:"path"`
+			MimeType    string `json:"mimeType"`
+			Data        string `json:"data"`
 		} `json:"attachments"`
 	}
 	_ = json.Unmarshal(raw, &req)
@@ -2984,18 +2990,26 @@ func buildWorkspaceDescriptor(ws store.WorkspaceRecord, prj store.ProjectRecord)
 
 // appendAttachmentHints materializes non-image composer attachments as text references
 // so the model can read them from disk; oversized images ride the same path.
+//
+// Attachments marked `contextKind: "chat_history"` are placed BEFORE the user's text, not after.
+// They are the conversation the user is referring to ("continue that thread"), and the
+// instruction that follows only makes sense once the history is in context. Ported from
+// buildAgentPrompt, which orders the blocks the same way.
 func appendAttachmentHints(text string, attachments []struct {
-	Type     string `json:"type"`
-	FileName string `json:"fileName"`
-	Path     string `json:"path"`
-	MimeType string `json:"mimeType"`
-	Data     string `json:"data"`
+	Type        string `json:"type"`
+	ContextKind string `json:"contextKind"`
+	FileName    string `json:"fileName"`
+	Path        string `json:"path"`
+	MimeType    string `json:"mimeType"`
+	Data        string `json:"data"`
 }) string {
 	if len(attachments) == 0 {
 		return text
 	}
-	lines := make([]string, 0, len(attachments))
+	historyLines := make([]string, 0, 2)
+	otherLines := make([]string, 0, len(attachments))
 	for _, att := range attachments {
+		isHistory := strings.TrimSpace(att.ContextKind) == "chat_history"
 		name := strings.TrimSpace(att.FileName)
 		if name == "" {
 			name = filepath.Base(att.Path)
@@ -3003,20 +3017,37 @@ func appendAttachmentHints(text string, attachments []struct {
 		if name == "" || name == "." {
 			name = "attachment"
 		}
+		var line string
 		switch {
 		case strings.TrimSpace(att.Path) != "":
-			lines = append(lines, fmt.Sprintf("[Attached file: %s (%s) at %s]", name, att.MimeType, att.Path))
+			line = fmt.Sprintf("[Attached file: %s (%s) at %s]", name, att.MimeType, att.Path)
 		case att.Type == "uploaded_file":
-			lines = append(lines, fmt.Sprintf("[Attached file: %s (%s)]", name, att.MimeType))
+			line = fmt.Sprintf("[Attached file: %s (%s)]", name, att.MimeType)
+		}
+		if line == "" {
+			continue
+		}
+		if isHistory {
+			historyLines = append(historyLines, line)
+		} else {
+			otherLines = append(otherLines, line)
 		}
 	}
-	if len(lines) == 0 {
+	if len(historyLines) == 0 && len(otherLines) == 0 {
 		return text
 	}
-	if strings.TrimSpace(text) == "" {
-		return strings.Join(lines, "\n")
+
+	parts := make([]string, 0, 3)
+	if len(historyLines) > 0 {
+		parts = append(parts, strings.Join(historyLines, "\n"))
 	}
-	return text + "\n\n" + strings.Join(lines, "\n")
+	if trimmed := strings.TrimSpace(text); trimmed != "" {
+		parts = append(parts, trimmed)
+	}
+	if len(otherLines) > 0 {
+		parts = append(parts, strings.Join(otherLines, "\n"))
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 func newAgentID() string {
