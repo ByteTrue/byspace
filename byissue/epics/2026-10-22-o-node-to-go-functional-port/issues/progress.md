@@ -23,14 +23,14 @@
 
 ## 批次 3：agent-hooks（448 行）
 
-| 文件                                                    | 结论 | Go 实现 | 测试 | 备注 |
-| ------------------------------------------------------- | ---- | ------- | ---- | ---- |
-| `terminal/agent-hooks/claude/claude.ts` (48)            | 待做 | —       | —    | —    |
-| `terminal/agent-hooks/claude/claude-settings.ts` (117)  | 待做 | —       | —    | —    |
-| `terminal/agent-hooks/codex/codex.ts` (32)              | 待做 | —       | —    | —    |
-| `terminal/agent-hooks/codex/codex-settings.ts` (143)    | 待做 | —       | —    | —    |
-| `terminal/agent-hooks/opencode/opencode.ts` (25)        | 待做 | —       | —    | —    |
-| `terminal/agent-hooks/opencode/opencode-plugin.ts` (83) | 待做 | —       | —    | —    |
+| 文件                                                    | 结论   | Go 实现                                          | 测试                        | 备注                                                   |
+| ------------------------------------------------------- | ------ | ------------------------------------------------ | --------------------------- | ------------------------------------------------------ |
+| `terminal/agent-hooks/claude/claude.ts` (48)            | PORTED | `internal/agenthooks/provider.go`、`registry.go` | `install_test.go`（8 用例） | 事件到状态映射、config-file 安装策略                   |
+| `terminal/agent-hooks/claude/claude-settings.ts` (117)  | PORTED | `internal/agenthooks/provider.go`                | `install_test.go`（8 用例） | JSON 合并：保留用户 hook、按 marker 过滤、坏文件不覆盖 |
+| `terminal/agent-hooks/codex/codex.ts` (32)              | PORTED | `internal/agenthooks/registry.go`                | `install_test.go`（8 用例） | 5 个事件（含 PermissionRequest → needs-input）         |
+| `terminal/agent-hooks/codex/codex-settings.ts` (143)    | PORTED | `internal/agenthooks/provider.go`                | `install_test.go`（8 用例） | 同 claude 的合并语义，写 `~/.codex/hooks.json`         |
+| `terminal/agent-hooks/opencode/opencode.ts` (25)        | PORTED | `internal/agenthooks/registry.go`                | `install_test.go`（8 用例） | 5 个 session/permission 事件                           |
+| `terminal/agent-hooks/opencode/opencode-plugin.ts` (83) | PORTED | `internal/agenthooks/plugin.go`                  | `install_test.go`（8 用例） | 插件文件安装、拒写非我所写的同名文件、报告串行化       |
 
 ## 批次 4：self-update 与 directory-sync（453 行）
 
