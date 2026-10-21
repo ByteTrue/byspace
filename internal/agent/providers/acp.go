@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -25,6 +26,10 @@ type ACPSession struct {
 
 	writeMu sync.Mutex
 	nextID  atomic.Int64
+
+	// acpTerminals holds the commands the agent asked the client to run (reverse terminal).
+	acpTerminals   map[string]*acpTerminal
+	acpTerminalsMu sync.Mutex
 
 	mu                 sync.Mutex
 	pending            map[int64]chan map[string]any
@@ -243,10 +248,23 @@ func (s *ACPSession) handleNotificationOrRequest(method string, rpcID any, msg m
 	params, _ := msg["params"].(map[string]any)
 	var extraEvents []map[string]any
 
+	// The reverse terminal family. Handled first so the main switch stays about session state.
+	if s.handleACPReverseTerminal(rpcID, method, params) {
+		return
+	}
+
 	switch method {
 	case "fs/read_text_file":
 		filePath, _ := params["path"].(string)
 		b, err := os.ReadFile(filePath)
+		if err == nil {
+			// `line` and `limit` are how an agent reads a window of a large file. Ignoring them
+			// returns the whole file: the agent believes it is looking at lines 100-120 while it
+			// has the first line, and a large file crosses the pipe in full.
+			if window := sliceLines(string(b), params); window != "" {
+				b = []byte(window)
+			}
+		}
 		if err != nil {
 			_ = s.sendJSON(map[string]any{
 				"jsonrpc": "2.0",
@@ -265,6 +283,11 @@ func (s *ACPSession) handleNotificationOrRequest(method string, rpcID any, msg m
 	case "fs/write_text_file":
 		filePath, _ := params["path"].(string)
 		content, _ := params["content"].(string)
+		// The parent directory may not exist yet — an agent writing a new module under a fresh
+		// package directory otherwise fails on a missing directory rather than creating it.
+		if dir := filepath.Dir(filePath); dir != "" && dir != "." {
+			_ = os.MkdirAll(dir, 0o755)
+		}
 		if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
 			_ = s.sendJSON(map[string]any{
 				"jsonrpc": "2.0",
@@ -734,4 +757,43 @@ func (s *ACPSession) Close() error {
 		_ = s.cmd.Process.Kill()
 	}
 	return nil
+}
+
+// sliceLines returns the requested window of `content`, or "" when no window was asked for.
+//
+// Ported from readTextFile. ACP line numbers are 1-based and `limit` counts lines, so an agent
+// asking for line 1 with limit 20 wants lines 1..20.
+func sliceLines(content string, params map[string]any) string {
+	line, hasLine := numericParam(params, "line")
+	limit, hasLimit := numericParam(params, "limit")
+	if !hasLine && !hasLimit {
+		return ""
+	}
+	lines := strings.Split(content, "\n")
+	start := 0
+	if hasLine && line > 1 {
+		start = line - 1
+	}
+	if start > len(lines) {
+		return ""
+	}
+	end := len(lines)
+	if hasLimit && limit > 0 && start+limit < end {
+		end = start + limit
+	}
+	return strings.Join(lines[start:end], "\n")
+}
+
+// numericParam reads a JSON number from params.
+func numericParam(params map[string]any, key string) (int, bool) {
+	switch value := params[key].(type) {
+	case float64:
+		return int(value), true
+	case int:
+		return value, true
+	case int64:
+		return int(value), true
+	default:
+		return 0, false
+	}
 }
