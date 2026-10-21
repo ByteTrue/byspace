@@ -329,3 +329,14 @@ func WaitForShutdown(homeDir, addr string, timeout time.Duration) {
 		time.Sleep(50 * time.Millisecond)
 	}
 }
+
+// ProcessAlive reports whether a pid is a live process we own.
+//
+// Used while waiting for a daemon to come up: a child that exited during startup will never
+// answer the health check, so reporting "started" on a timeout would be a lie.
+func ProcessAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	return syscall.Kill(pid, 0) == nil
+}

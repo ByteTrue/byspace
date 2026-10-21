@@ -732,16 +732,26 @@ func runDaemonCmd(args []string, stdout io.Writer) error {
 		if err != nil {
 			return err
 		}
-		deadline := time.Now().Add(3 * time.Second)
+		// Wait for the daemon to actually serve before reporting success.
+		//
+		// Reporting "started" on a timeout is worse than reporting failure: the PID file exists
+		// and the health check never answered, so the user believes the daemon is up and the
+		// next command times out with no clue why. The most common cause is a port already in
+		// use, which the child logs and exits from — so the log tail is the useful part of the
+		// message.
+		deadline := time.Now().Add(daemonStartTimeout)
 		for time.Now().Before(deadline) {
-			if st, err := probeHealth(*addr); err == nil {
+			if st, healthErr := probeHealth(*addr); healthErr == nil {
 				fmt.Fprintf(stdout, "started  pid=%d  addr=%s  serverId=%s\n", pid, *addr, st.ServerID)
 				return nil
 			}
+			if !daemon.ProcessAlive(pid) {
+				return fmt.Errorf("daemon exited during startup (pid %d); %s", pid, daemonLogTail(resolvedHome))
+			}
 			time.Sleep(50 * time.Millisecond)
 		}
-		fmt.Fprintf(stdout, "started  pid=%d  addr=%s\n", pid, *addr)
-		return nil
+		return fmt.Errorf("daemon did not become ready within %s (pid %d); %s",
+			daemonStartTimeout, pid, daemonLogTail(resolvedHome))
 
 	case "stop":
 		fs := flag.NewFlagSet("daemon stop", flag.ContinueOnError)
@@ -974,4 +984,27 @@ func waitSessionResp(ctx context.Context, ws *websocket.Conn, wantType, wantStat
 		}
 		return env.Message.Payload, nil
 	}
+}
+
+// daemonStartTimeout bounds how long `daemon start` waits for the health check.
+//
+// Longer than the old 3s: a cold start that writes a fresh PID lock and opens a socket can take
+// a moment on a loaded machine, and failing spuriously is its own kind of bug.
+const daemonStartTimeout = 15 * time.Second
+
+// daemonLogTail returns the last few lines of the daemon log, for an error message.
+func daemonLogTail(homeDir string) string {
+	raw, err := os.ReadFile(daemon.LogPath(homeDir))
+	if err != nil {
+		return "no daemon log yet"
+	}
+	lines := strings.Split(strings.TrimRight(string(raw), "\n"), "\n")
+	if len(lines) > 5 {
+		lines = lines[len(lines)-5:]
+	}
+	tail := strings.TrimSpace(strings.Join(lines, "\n"))
+	if tail == "" {
+		return "daemon log is empty"
+	}
+	return "last log lines:\n" + tail
 }
