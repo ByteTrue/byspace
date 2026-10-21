@@ -184,7 +184,10 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 
 | `resolve-worktree-creation-intent.ts` | 279 | **MISSING** → 已补 | `create_byspace_worktree_request` 的 `action` 与 `checkoutSource` 完全没解析，`refName` 被无条件当作「新分支的起点」，于是「检出已有分支」和「检出这个 PR」都变成了「从它开新分支」——分支名对，工作树内容错。已实现 `ResolveWorktreeIntent`（6 种组合 + 两个具名错误）、`ResolveChangeRequestCheckoutTarget`（gh/glab/tea 三家分别解析 head/base/cross-repo）、`checkoutExistingBranch`、`checkoutChangeRequest`（用 `refs/pull/<n>/head`，跨仓库 PR 也能检出）、`ResolveDefaultBranch`。端到端验证三条路径：branch-off 建 `feat-new`、checkout 检出 `existing-branch`、缺目标返回 `invalid_worktree_intent`。 |
 
-### 未审计（本批剩余 37 文件）
+| `worktree-branch-name-generator.ts` | 145 | **MISSING** → 已补 | 没有 slug 时工作区叫 `wt-mabc123`／分支叫 `wt-mabc123`——用户在侧边栏和 `git branch` 里看到这个名字直到任务结束。已实现 `internal/naming`：用短生命周期的 `pi --no-session` 生成标题与分支名（**不用 agent 自己的会话**，否则会往用户正在读的 transcript 里插一轮），返回后做归一化（小写、只留 `[a-z0-9-]`、压缩连字符、100 字符上限、禁止 `-` 开头——模型输出是不可信输入且要进 git 参数）。端到端：中文 prompt「修复登录页在 Safari 上的自动填充失效问题」→ 分支 `fix-safari-login-autofill`。命名失败**不阻断**创建工作区，回落到生成式 slug。4 个测试。 |
+| `workspace-auto-name.ts` | 141 | **PARTIAL** | 自动命名已在创建路径上生效（标题 + slug）；仍缺「创建后再命名」与 currentSelection 透传——后者只影响用哪个模型生成，已在 `metadataGeneration.model` 读取。 |
+
+### 未审计（本批剩余 35 文件）
 
 按行数排序，下一轮从这里继续：
 

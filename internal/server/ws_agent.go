@@ -11,6 +11,7 @@ import (
 
 	"github.com/ByteTrue/byspace/internal/agent/pi"
 	"github.com/ByteTrue/byspace/internal/home"
+	"github.com/ByteTrue/byspace/internal/naming"
 	"github.com/ByteTrue/byspace/internal/schedule"
 	"github.com/ByteTrue/byspace/internal/store"
 	"github.com/ByteTrue/byspace/internal/workspace"
@@ -388,8 +389,28 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 		GithubPrNumber    *int           `json:"githubPrNumber"`
 		NameContext       map[string]any `json:"nameContext"`
 		FirstAgentContext map[string]any `json:"firstAgentContext"`
+		// AutoTitle is filled from the naming model so the workspace is not named after its
+		// generated branch slug.
+		AutoTitle string
 	}
 	_ = json.Unmarshal(raw, &req)
+
+	// With no explicit slug, derive one from the prompt instead of shipping a timestamp slug
+	// the user would see in the sidebar and in `git branch` for the rest of the task.
+	if strings.TrimSpace(req.WorktreeSlug) == "" {
+		if seed := firstAgentContextSeed(req.FirstAgentContext); seed != "" {
+			nctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+			name, nameErr := naming.PiGenerator{Command: s.piCommand, Model: s.namingModel()}.Generate(nctx, seed)
+			cancel()
+			if nameErr == nil {
+				req.WorktreeSlug = name.Branch
+				if strings.TrimSpace(req.AutoTitle) == "" {
+					req.AutoTitle = name.Title
+				}
+			}
+			// A failed generation is not fatal: fall through to the generated slug.
+		}
+	}
 
 	wtBase := filepath.Join(s.homeDir, "worktrees")
 	intentInput := workspace.WorktreeIntentInput{
@@ -1102,4 +1123,33 @@ func (s *Server) broadcastTurnCanceled(rec store.AgentRecord, turnID, reason str
 			"reason":   reason,
 		},
 	})
+}
+
+// firstAgentContextSeed extracts the prompt text the naming model should read.
+func firstAgentContextSeed(ctx map[string]any) string {
+	if ctx == nil {
+		return ""
+	}
+	for _, key := range []string{"prompt", "text", "message", "initialPrompt"} {
+		if value, ok := ctx[key].(string); ok && strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+// namingModel returns the configured metadata-generation model, or "" for pi's default.
+func (s *Server) namingModel() string {
+	cfg := s.store.LoadDaemonConfig()
+	if cfg == nil {
+		return ""
+	}
+	meta, ok := cfg["metadataGeneration"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	if model, ok := meta["model"].(string); ok {
+		return strings.TrimSpace(model)
+	}
+	return ""
 }
