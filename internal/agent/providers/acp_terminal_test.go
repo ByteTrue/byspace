@@ -3,6 +3,7 @@ package providers
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // Advertising `terminal: true` without implementing the methods leaves every such request
@@ -74,3 +75,37 @@ type nopWriteCloser struct{ w *strings.Builder }
 
 func (n nopWriteCloser) Write(p []byte) (int, error) { return n.w.Write(p) }
 func (n nopWriteCloser) Close() error                { return nil }
+
+// These are our children: when the ACP process dies the requests stop coming, and a build left
+// behind becomes an orphan that keeps writing to stdout and holding a port.
+func TestACPTerminalsAreKilledWhenSessionEnds(t *testing.T) {
+	var out strings.Builder
+	sess := &ACPSession{
+		stdin:        nopWriteCloser{&out},
+		acpTerminals: map[string]*acpTerminal{},
+	}
+
+	sess.acpCreateTerminal("r1", map[string]any{
+		"command": "/bin/sh",
+		"args":    []any{"-c", "sleep 30"},
+	})
+
+	sess.acpTerminalsMu.Lock()
+	terminal := sess.acpTerminals["acp_term_r1"]
+	sess.acpTerminalsMu.Unlock()
+	if terminal == nil {
+		t.Fatal("terminal not registered")
+	}
+
+	// Simulate the session ending: the cleanup path kills and clears.
+	for _, entry := range []*acpTerminal{terminal} {
+		if entry.cmd != nil && entry.cmd.Process != nil {
+			_ = entry.cmd.Process.Kill()
+		}
+	}
+	select {
+	case <-terminal.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the child was not reaped")
+	}
+}

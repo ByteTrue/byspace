@@ -233,6 +233,22 @@ func (s *ACPSession) readLoop(stdout io.Reader) {
 		}
 	}
 
+	// Kill every command the agent asked us to run. These are OUR children: when the ACP
+	// process dies the requests stop coming, and a build or a test run left behind becomes an
+	// orphan that keeps writing to stdout and holding a port.
+	s.acpTerminalsMu.Lock()
+	orphans := make([]*acpTerminal, 0, len(s.acpTerminals))
+	for _, terminal := range s.acpTerminals {
+		orphans = append(orphans, terminal)
+	}
+	s.acpTerminals = make(map[string]*acpTerminal)
+	s.acpTerminalsMu.Unlock()
+	for _, terminal := range orphans {
+		if terminal.cmd != nil && terminal.cmd.Process != nil {
+			_ = terminal.cmd.Process.Kill()
+		}
+	}
+
 	s.mu.Lock()
 	s.closed = true
 	s.status = "closed"
