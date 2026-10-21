@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -360,6 +359,17 @@ func (s *Server) filterAndSortAgents(records []store.AgentRecord, searchQuery st
 		})
 	}
 
+	// The sort specification is part of the cursor contract; normalize it once so the encoder
+	// and the comparator cannot disagree.
+	effectiveSort := sortField
+	if effectiveSort != "created_at" && effectiveSort != "title" {
+		effectiveSort = "last_activity_at"
+	}
+	effectiveDirection := "desc"
+	if effectiveSort == "title" {
+		effectiveDirection = "asc"
+	}
+
 	switch sortField {
 	case "created_at":
 		sort.Slice(filtered, func(i, j int) bool { return filtered[i].CreatedAt > filtered[j].CreatedAt })
@@ -378,24 +388,70 @@ func (s *Server) filterAndSortAgents(records []store.AgentRecord, searchQuery st
 		sort.Slice(filtered, func(i, j int) bool { return filtered[i].UpdatedAt > filtered[j].UpdatedAt })
 	}
 
+	// The cursor names the sort key and the row it belongs to, so the next page continues from
+	// that row. An offset would shift whenever an agent finishes or a new one appears between
+	// fetches, which shows a duplicate and hides whatever fell into the gap.
+	sortSpec := []cursorSort{{Key: effectiveSort, Direction: effectiveDirection}}
+	keyOf := agentSortValue(effectiveSort)
+
 	startIdx := 0
 	if cursor != "" {
-		if n, err := strconv.Atoi(cursor); err == nil && n >= 0 && n < len(filtered) {
-			startIdx = n
+		decoded, err := decodeCursor(cursor, sortSpec)
+		if err != nil {
+			return []store.AgentRecord{}, false, nil
+		}
+		for i, rec := range filtered {
+			cmp := compareCursorValue(keyOf(rec), decoded.Values[effectiveSort], effectiveDirection)
+			if cmp < 0 || (cmp == 0 && rec.ID <= decoded.ID) {
+				continue
+			}
+			startIdx = i
+			break
+		}
+		if startIdx == 0 {
+			// The cursor row is no longer present (deleted, or filtered out): fall back to a
+			// scan for anything sorting after it rather than silently restarting at the top.
+			startIdx = len(filtered)
+			for i, rec := range filtered {
+				cmp := compareCursorValue(keyOf(rec), decoded.Values[effectiveSort], effectiveDirection)
+				if cmp > 0 || (cmp == 0 && rec.ID > decoded.ID) {
+					startIdx = i
+					break
+				}
+			}
 		}
 	}
 	if startIdx > 0 {
 		filtered = filtered[startIdx:]
 	}
+
 	hasMore := false
 	var nextCursor *string
 	if limit > 0 && len(filtered) > limit {
 		hasMore = true
-		nc := fmt.Sprintf("%d", startIdx+limit)
+		last := filtered[limit-1]
+		nc := encodeCursor(last.ID, map[string]any{effectiveSort: keyOf(last)}, sortSpec)
 		nextCursor = &nc
 		filtered = filtered[:limit]
 	}
 	return filtered, hasMore, nextCursor
+}
+
+// agentSortValue reads the value a sort key compares on.
+func agentSortValue(key string) func(store.AgentRecord) any {
+	switch key {
+	case "created_at":
+		return func(rec store.AgentRecord) any { return rec.CreatedAt }
+	case "title":
+		return func(rec store.AgentRecord) any {
+			if rec.Title == nil {
+				return nil
+			}
+			return *rec.Title
+		}
+	default:
+		return func(rec store.AgentRecord) any { return lastActivityOf(rec) }
+	}
 }
 
 // providerSnapshotTag returns a stable ETag-style tag for the current provider snapshot,
