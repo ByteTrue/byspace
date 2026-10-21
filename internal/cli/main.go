@@ -73,6 +73,19 @@ func Main(version string, args []string, stdout, stderr io.Writer) int {
 	cmd := args[0]
 	rest := args[1:]
 
+	// A bare path opens that project, the way `code .` does. Checked before the switch so the
+	// convenience applies to every invocation, and only for an existing directory so a typo
+	// still reports "unknown command" rather than a confusing open failure.
+	if !knownCommand(cmd) && isPathLikeArg(cmd) {
+		if resolved, resolveErr := resolveExistingDirectory(cmd); resolveErr == nil {
+			if err := runOpenCmd([]string{resolved}, stdout); err != nil {
+				fmt.Fprintln(stderr, "byspace open:", err)
+				return 1
+			}
+			return 0
+		}
+	}
+
 	switch cmd {
 	case "-h", "--help", "help":
 		fmt.Fprint(stdout, usageText)
