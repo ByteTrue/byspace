@@ -11,6 +11,12 @@ func All() []Fetcher {
 	return []Fetcher{
 		Codex{},
 		Zai{},
+		Claude{},
+		Copilot{},
+		Cursor{},
+		Grok{},
+		Kimi{},
+		MiniMax{},
 	}
 }
 

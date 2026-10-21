@@ -153,3 +153,39 @@ func fetchJSON(ctx context.Context, url string, headers map[string]string, out a
 	}
 	return resp.StatusCode, string(body), nil
 }
+
+// fetchJSONRequest performs the shared request and returns the raw body.
+//
+// Separate from fetchJSON because a provider can want the bytes without a declared shape — the
+// Claude endpoint carries a variable number of `seven_day_<model>` windows, which a fixed struct
+// would silently drop.
+func fetchJSONRequest(ctx context.Context, url string, headers map[string]string) ([]byte, int, error) {
+	cctx, cancel := context.WithTimeout(ctx, httpTimeout)
+	defer cancel()
+
+	request, err := http.NewRequestWithContext(cctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	for key, value := range headers {
+		request.Header.Set(key, value)
+	}
+	if request.Header.Get("Accept") == "" {
+		request.Header.Set("Accept", "application/json")
+	}
+
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer response.Body.Close()
+
+	body, readErr := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+	if readErr != nil {
+		return nil, response.StatusCode, readErr
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return body, response.StatusCode, fmt.Errorf("provider API returned %d", response.StatusCode)
+	}
+	return body, response.StatusCode, nil
+}
