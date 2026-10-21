@@ -2010,6 +2010,16 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 			// effort, a model provider, sandbox flags). It was absent from this struct, so every
 			// value the user set in the provider sheet was silently dropped at create time.
 			ProviderOptions map[string]any `json:"providerOptions"`
+			// ToolPolicy carries the BySpace tools the user pre-approved. Codex does not inherit an
+			// allow-list from us — each MCP server declares its own — so without this a pre-approved
+			// tool still prompts, and a sub-agent with nobody watching hangs on that prompt.
+			ToolPolicy *struct {
+				Preapproved []struct {
+					Kind   string `json:"kind"`
+					Server string `json:"server"`
+					Tool   string `json:"tool"`
+				} `json:"preapproved"`
+			} `json:"toolPolicy"`
 		} `json:"config"`
 	}
 	if err := json.Unmarshal(raw, &req); err != nil {
@@ -2172,6 +2182,7 @@ func (s *Server) handleCreateAgent(ctx context.Context, sink frameSink, raw json
 			Role:             req.Config.Role,
 			SystemPrompt:     req.Config.SystemPrompt,
 			ProviderOptions:  req.Config.ProviderOptions,
+			PreapprovedTools: storePreapprovedTools(req.Config.ToolPolicy),
 		},
 	}
 
@@ -2650,6 +2661,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		SessionHandle:    sessionPath,
 		Env:              providerEnv,
 		ProviderOptions:  providerOptionsOf(rec),
+		PreapprovedTools: mcpToolRefs(preapprovedToolsOf(rec)),
 		// Injected through the extension: pi has no launch flag for MCP, and without this the
 		// agent never sees the daemon's orchestration tools.
 		MCPServers:   s.piMCPServersFor(rec),
@@ -4183,4 +4195,48 @@ func draftModelFromConfig(draft map[string]any) string {
 		return strings.TrimSpace(model)
 	}
 	return ""
+}
+
+// preapprovedToolRefs reads the pre-approved MCP tool list from a create request.
+//
+// Only `kind: "mcp"` entries are kept: the schema admits other kinds, and a grant for something that is
+// not an MCP tool cannot be expressed in the provider's server config.
+func storePreapprovedTools(policy *struct {
+	Preapproved []struct {
+		Kind   string `json:"kind"`
+		Server string `json:"server"`
+		Tool   string `json:"tool"`
+	} `json:"preapproved"`
+}) []store.PreapprovedTool {
+	if policy == nil {
+		return nil
+	}
+	out := make([]store.PreapprovedTool, 0, len(policy.Preapproved))
+	for _, grant := range policy.Preapproved {
+		if grant.Kind != "" && grant.Kind != "mcp" {
+			continue
+		}
+		out = append(out, store.PreapprovedTool{Server: grant.Server, Tool: grant.Tool})
+	}
+	return out
+}
+
+// preapprovedToolsOf reads an agent's stored grants.
+func preapprovedToolsOf(rec store.AgentRecord) []store.PreapprovedTool {
+	if rec.Config == nil {
+		return nil
+	}
+	return rec.Config.PreapprovedTools
+}
+
+// mcpToolRefs converts stored grants into the provider-facing shape.
+func mcpToolRefs(tools []store.PreapprovedTool) []providers.McpToolRef {
+	if len(tools) == 0 {
+		return nil
+	}
+	out := make([]providers.McpToolRef, 0, len(tools))
+	for _, tool := range tools {
+		out = append(out, providers.McpToolRef{Server: tool.Server, Tool: tool.Tool})
+	}
+	return out
 }

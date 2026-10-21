@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/ByteTrue/byspace/internal/agent/pi"
 	"io"
 	"os"
 	"os/exec"
@@ -116,10 +117,17 @@ func StartCodexSession(cfg LaunchConfig, cmdOverride string) (*CodexSession, err
 			"threadId": cfg.SessionHandle,
 		})
 	} else {
-		res, err := s.rpcCall(ctx, "thread/start", map[string]any{
+		startParams := map[string]any{
 			"cwd":   cfg.Cwd,
 			"model": cfg.Model,
-		})
+		}
+		// Codex takes its provider settings and MCP servers as an inner `config` object. Without it a
+		// user's sandbox_mode / approval_policy never reached the process, and the BySpace MCP bridge
+		// was never registered — so the 37 orchestration tools did not exist for a Codex agent.
+		if inner := codexInnerConfig(cfg); len(inner) > 0 {
+			startParams["config"] = inner
+		}
+		res, err := s.rpcCall(ctx, "thread/start", startParams)
 		if err == nil {
 			if th, ok := res["thread"].(map[string]any); ok {
 				if tid, ok := th["id"].(string); ok {
@@ -838,4 +846,50 @@ func codexAgentUsage(params map[string]any) *sdk.AgentUsage {
 		return nil
 	}
 	return usage
+}
+
+// codexInnerConfig assembles the `config` object Codex's thread/start and thread/resume accept.
+//
+// Ported from buildCodexInnerConfig: the user's provider options, then the MCP servers, then the
+// pre-approved tool grants. Order matters — ApplyCodexToolPolicy reads the servers it must annotate, so
+// it has to run after they are in place.
+func codexInnerConfig(cfg LaunchConfig) map[string]any {
+	inner := make(map[string]any, len(cfg.ProviderOptions)+2)
+	for key, value := range cfg.ProviderOptions {
+		inner[key] = value
+	}
+
+	if len(cfg.MCPServers) > 0 {
+		servers := make(map[string]any, len(cfg.MCPServers))
+		for _, server := range cfg.MCPServers {
+			servers[server.Name] = codexMCPServerConfig(server)
+		}
+		inner["mcp_servers"] = servers
+	}
+
+	return ApplyCodexToolPolicy(inner, cfg.PreapprovedTools)
+}
+
+// codexMCPServerConfig renders one MCP server the way Codex expects it.
+//
+// Codex distinguishes a stdio server (a command) from a remote one (a url); sending both keys makes it
+// pick the command and ignore the url, so the shape is decided here rather than by whichever field the
+// provider happened to set.
+func codexMCPServerConfig(server pi.MCPConfig) map[string]any {
+	config := map[string]any{}
+	if command := strings.TrimSpace(server.Command); command != "" {
+		config["command"] = command
+		if len(server.Args) > 0 {
+			args := make([]any, 0, len(server.Args))
+			for _, arg := range server.Args {
+				args = append(args, arg)
+			}
+			config["args"] = args
+		}
+		return config
+	}
+	if url := strings.TrimSpace(server.URL); url != "" {
+		config["url"] = url
+	}
+	return config
 }

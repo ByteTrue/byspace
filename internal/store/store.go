@@ -33,6 +33,12 @@ type ProjectRecord struct {
 }
 
 // WorkspaceRecord mirrors PersistedWorkspaceRecord in packages/server/src/server/workspace-registry.ts.
+// PreapprovedTool names one MCP tool the user pre-approved.
+type PreapprovedTool struct {
+	Server string `json:"server"`
+	Tool   string `json:"tool"`
+}
+
 type WorkspaceRecord struct {
 	WorkspaceID string `json:"workspaceId"`
 	ProjectID   string `json:"projectId"`
@@ -82,9 +88,13 @@ type AgentConfig struct {
 	ThinkingOptionID *string        `json:"thinkingOptionId,omitempty"`
 	FeatureValues    map[string]any `json:"featureValues,omitempty"`
 	ProviderOptions  map[string]any `json:"providerOptions,omitempty"`
-	SystemPrompt     *string        `json:"systemPrompt,omitempty"`
-	Role             *string        `json:"role,omitempty"`
-	McpServers       map[string]any `json:"mcpServers,omitempty"`
+	// PreapprovedTools is the BySpace MCP tools the user allowed without a prompt. Stored with the
+	// agent because a resumed session must keep the same grants: re-prompting for a tool the user
+	// already allowed is how a delegated agent stalls.
+	PreapprovedTools []PreapprovedTool `json:"preapprovedTools,omitempty"`
+	SystemPrompt     *string           `json:"systemPrompt,omitempty"`
+	Role             *string           `json:"role,omitempty"`
+	McpServers       map[string]any    `json:"mcpServers,omitempty"`
 }
 
 // AgentRecord mirrors StoredAgentRecord in packages/server/src/server/agent/agent-storage.ts.

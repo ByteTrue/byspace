@@ -405,6 +405,9 @@ type LaunchConfig struct {
 	// (codex's sandbox_mode / approval_policy, opencode's model provider). Passed through to the
 	// adapter; it is not environment variables.
 	ProviderOptions map[string]any
+	// PreapprovedTools are the BySpace MCP tools the user allowed without a prompt. Codex needs them
+	// written into its own server config; a provider that inherits our allow-list ignores this.
+	PreapprovedTools []McpToolRef
 	// MCPServers are injected through the generated extension; pi has no launch flag for them.
 	MCPServers []pi.MCPConfig
 	// SystemPrompt is the daemon-side prompt appended to the provider's own.
