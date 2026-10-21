@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/coder/websocket"
 
@@ -56,6 +57,27 @@ func daemonHostCandidates(explicit string) []string {
 		out = append(out, candidate)
 	}
 	return out
+}
+
+// serverInfoByConn caches the server_info each connection received during its hello.
+//
+// The dial has to read that message to know the connection is alive, and throwing it away meant
+// `agent open` had no way to answer without inventing a request the protocol does not have.
+var serverInfoByConn sync.Map
+
+// rememberServerInfo records the hello answer for a connection.
+func rememberServerInfo(ws *websocket.Conn, info map[string]any) {
+	serverInfoByConn.Store(ws, info)
+}
+
+// serverInfoFor reads the cached hello answer.
+func serverInfoFor(ws *websocket.Conn) map[string]any {
+	if cached, ok := serverInfoByConn.Load(ws); ok {
+		if info, ok := cached.(map[string]any); ok {
+			return info
+		}
+	}
+	return nil
 }
 
 // dialDaemonAnyHost connects to the first candidate address that answers.

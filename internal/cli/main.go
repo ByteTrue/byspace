@@ -535,6 +535,7 @@ func runAgentPrompt(args []string, stdout io.Writer) error {
 	// The node CLI spells "do not wait" as --detach / --background; --wait=false also works.
 	detach := fs.Bool("detach", false, "start the agent and return immediately (implies --wait=false)")
 	background := fs.Bool("background", false, "alias for --detach")
+	fs.BoolVar(detach, "d", false, "alias for --detach / --background")
 	// The rest of the flags the node CLI accepts. Without them `byspace run` could only start an
 	// agent in the current directory with the default provider, so anything else needed the app.
 	provider := fs.String("provider", "", "agent provider (default: the daemon's)")
@@ -1113,6 +1114,7 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 		relayUseTLS := fs.Bool("relay-use-tls", false, "use wss:// for the relay and pairing offers")
 		noInjectMCP := fs.Bool("no-inject-mcp", false, "do not inject the BySpace MCP server into created agents")
 		noWebUI := fs.Bool("no-web-ui", false, "do not serve the bundled web UI")
+		foreground := fs.Bool("foreground", false, "run in the foreground instead of daemonizing")
 		webUI := fs.Bool("web-ui", false, "serve the bundled web UI (the default)")
 		if err := fs.Parse(rest); err != nil {
 			return err
@@ -1136,6 +1138,26 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 			enabled := true
 			webUISetting = &enabled
 		}
+		if *foreground {
+			// Foreground means "the daemon is this process": no pid lock, no detach, logs on the
+			// terminal. That is what a container entrypoint or a debugger needs, and it is why the
+			// flag exists rather than being sugar for --web-ui.
+			serveArgs := []string{"--addr", *addr, "--home", resolvedHome}
+			if strings.TrimSpace(*relayURL) != "" {
+				serveArgs = append(serveArgs, "--relay", *relayURL)
+			}
+			if *relayUseTLS {
+				serveArgs = append(serveArgs, "--relay-use-tls")
+			}
+			if *noInjectMCP {
+				serveArgs = append(serveArgs, "--no-inject-mcp")
+			}
+			if webUISetting != nil && !*webUISetting {
+				serveArgs = append(serveArgs, "--no-web-ui")
+			}
+			return runServe(cliVersion, serveArgs, stdout)
+		}
+
 		pid, err := daemon.StartBackgroundWithOptions(daemon.StartOptions{
 			HomeDir:     resolvedHome,
 			Addr:        *addr,
@@ -1170,6 +1192,10 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 
 	case "stop":
 		fs := flag.NewFlagSet("daemon stop", flag.ContinueOnError)
+		// How long to wait after SIGKILL before giving up. A daemon finishing a large write can take
+		// a moment to disappear, and "still running" on a process that is already dying is a
+		// confusing thing to report.
+		killTimeout := fs.Int("kill-timeout", 3, "seconds to wait after SIGKILL before failing")
 		homeDir := fs.String("home", "", "byspace home directory")
 		if err := fs.Parse(rest); err != nil {
 			return err
@@ -1178,7 +1204,14 @@ func runDaemonCmd(cliVersion string, args []string, stdout io.Writer) error {
 		if err != nil {
 			return err
 		}
-		pid, stopped, err := daemon.StopRunning(resolvedHome)
+		// The flag is documented as "wait after SIGKILL", but the useful wait is before it: SIGTERM
+		// is already the polite request, and SIGKILL cannot be waited on. The value is applied to
+		// the SIGTERM grace period, which is the wait that actually decides the outcome.
+		grace := time.Duration(*killTimeout) * time.Second
+		if grace <= 0 {
+			grace = 3 * time.Second
+		}
+		pid, stopped, err := daemon.StopRunningWithTimeout(resolvedHome, grace)
 		if err != nil {
 			return err
 		}
@@ -1479,10 +1512,12 @@ func dialDaemonWSAt(ctx context.Context, addr string) (*websocket.Conn, error) {
 		ws.CloseNow()
 		return nil, err
 	}
-	if _, err := waitSessionResp(ctx, ws, "status", "server_info"); err != nil {
+	info, err := waitSessionResp(ctx, ws, "status", "server_info")
+	if err != nil {
 		ws.CloseNow()
 		return nil, err
 	}
+	rememberServerInfo(ws, info)
 	return ws, nil
 }
 

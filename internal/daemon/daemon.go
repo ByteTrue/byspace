@@ -254,6 +254,14 @@ func ReadPID(homeDir string) (int, bool) {
 
 // StopRunning sends SIGTERM to the PID recorded in $BYSPACE_HOME/byspace.pid and waits up to 5s.
 func StopRunning(homeDir string) (int, bool, error) {
+	return StopRunningWithTimeout(homeDir, 5*time.Second)
+}
+
+// StopRunningWithTimeout stops the daemon, waiting up to `grace` for SIGTERM to take effect.
+//
+// The grace period is a parameter because a daemon finishing a large write needs longer than a
+// paused one, and a fixed wait reports "still running" for a process that is already dying.
+func StopRunningWithTimeout(homeDir string, grace time.Duration) (int, bool, error) {
 	pid, alive := ReadPID(homeDir)
 	if !alive {
 		RemovePID(homeDir, 0)
@@ -275,7 +283,10 @@ func StopRunning(homeDir string) (int, bool, error) {
 	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
 		return pid, false, err
 	}
-	deadline := time.Now().Add(5 * time.Second)
+	if grace <= 0 {
+		grace = 5 * time.Second
+	}
+	deadline := time.Now().Add(grace)
 	for time.Now().Before(deadline) {
 		if err := syscall.Kill(pid, 0); err != nil {
 			RemovePID(homeDir, pid)

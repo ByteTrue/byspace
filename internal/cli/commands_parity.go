@@ -72,7 +72,12 @@ func runAgentGroupCmd(args []string, stdout io.Writer) error {
 		return runAgentImport(rest, stdout)
 	case "reload", "refresh":
 		return runAgentReload(rest, stdout)
-	case "open", "attach":
+	case "open":
+		// `agent open` reports which daemon an agent lives on — the server id — so a script can
+		// talk to the right host. Routing it to inspect printed the whole agent instead, which
+		// answers a different question.
+		return runAgentOpen(rest, stdout)
+	case "attach":
 		return runAgentInspect(rest, stdout)
 	case "mode":
 		return runAgentMode(rest, stdout)
@@ -562,6 +567,12 @@ func runWorkspaceGroupCmd(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("workspace "+sub, flag.ContinueOnError)
 	addr := fs.String("addr", defaultListenAddr(), "daemon address")
 	asJSON := fs.Bool("json", false, "output JSON")
+	// `workspace create` flags. --path defaults to the positional argument (or the current
+	// directory), --project attaches the workspace to an existing project instead of creating one,
+	// and --title names it.
+	wsPath := fs.String("path", "", "local directory or source checkout (default: the positional argument)")
+	wsProject := fs.String("project", "", "existing project id")
+	wsTitle := fs.String("title", "", "workspace title")
 	if err := fs.Parse(rest); err != nil {
 		return err
 	}
@@ -595,11 +606,21 @@ func runWorkspaceGroupCmd(args []string, stdout io.Writer) error {
 		return nil
 
 	case "create":
-		cwd := fs.Arg(0)
+		cwd := strings.TrimSpace(*wsPath)
+		if cwd == "" {
+			cwd = fs.Arg(0)
+		}
 		if cwd == "" {
 			cwd, _ = os.Getwd()
 		}
-		_ = sendSessionReq(ctx, ws, map[string]any{"type": "workspace.create.request", "requestId": "cli_wc", "cwd": cwd})
+		createRequest := map[string]any{"type": "workspace.create.request", "requestId": "cli_wc", "cwd": cwd}
+		if project := strings.TrimSpace(*wsProject); project != "" {
+			createRequest["projectId"] = project
+		}
+		if title := strings.TrimSpace(*wsTitle); title != "" {
+			createRequest["title"] = title
+		}
+		_ = sendSessionReq(ctx, ws, createRequest)
 		resp, err := waitSessionResp(ctx, ws, "workspace.create.response", "")
 		if err != nil {
 			return err
@@ -1207,5 +1228,51 @@ func runAgentMode(args []string, stdout io.Writer) error {
 		return writeJSON(stdout, resp)
 	}
 	fmt.Fprintf(stdout, "%s → %s\n", agentID, modeID)
+	return nil
+}
+
+// runAgentOpen prints the server id an agent belongs to.
+//
+// Ported from commands/agent/open.ts. The node CLI defaults --server to the local daemon and prints
+// what the daemon reports, so a caller that already knows the host does not have to pass it.
+func runAgentOpen(args []string, stdout io.Writer) error {
+	fs := flag.NewFlagSet("agent open", flag.ContinueOnError)
+	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	serverFlag := fs.String("server", "", "server id (defaults to the local daemon)")
+	asJSON := fs.Bool("json", false, "output JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if explicit := strings.TrimSpace(*serverFlag); explicit != "" {
+		if *asJSON {
+			return writeJSON(stdout, map[string]any{"serverId": explicit})
+		}
+		fmt.Fprintln(stdout, explicit)
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ws, err := dialDaemonWS(ctx, *addr)
+	if err != nil {
+		return err
+	}
+	defer ws.CloseNow()
+
+	// The hello answer was captured during the dial; the protocol has no "ask again" message, and
+	// inventing one would be a wire change for a field already on hand.
+	info := serverInfoFor(ws)
+	if info == nil {
+		return errors.New("the daemon did not report a server id")
+	}
+	serverID, _ := info["serverId"].(string)
+	if strings.TrimSpace(serverID) == "" {
+		return errors.New("the daemon did not report a server id")
+	}
+	if *asJSON {
+		return writeJSON(stdout, map[string]any{"serverId": serverID})
+	}
+	fmt.Fprintln(stdout, serverID)
 	return nil
 }
