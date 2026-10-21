@@ -1,6 +1,9 @@
 package providers
 
 import (
+	"encoding/base64"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
@@ -77,5 +80,85 @@ func TestParentToolUseID(t *testing.T) {
 	}
 	if got := parentToolUseID(map[string]any{}); got != "" {
 		t.Fatalf("absent should be empty, got %q", got)
+	}
+}
+
+// A provider image arrives inline as base64; the conversation renders an image by path, so
+// without writing it out the model's image output is received and never displayed.
+func TestClaudeImageBlockIsMaterialized(t *testing.T) {
+	home := t.TempDir()
+	sess := &ClaudeSession{
+		status:             "running",
+		toolIndexByID:      map[string]int{},
+		toolArgsByID:       map[string]any{},
+		pendingPermissions: map[string]map[string]any{},
+		subagents:          map[string]sdk.SubagentDescriptor{},
+		eventSubscribers:   map[int]func(map[string]any){},
+		homeDir:            home,
+	}
+
+	payload := base64.StdEncoding.EncodeToString([]byte("fake-png-bytes"))
+	sess.handleRawEvent(map[string]any{
+		"type": "user",
+		"message": map[string]any{"content": []any{
+			map[string]any{"type": "image", "source": map[string]any{
+				"type": "base64", "media_type": "image/png", "data": payload,
+			}},
+		}},
+	})
+
+	timeline := sess.Timeline()
+	if len(timeline) != 1 || timeline[0].Item.Type != "assistant_message" {
+		t.Fatalf("expected one markdown item, got %+v", timeline)
+	}
+	text := timeline[0].Item.Text
+	if !strings.HasPrefix(text, "![") || !strings.Contains(text, "](") {
+		t.Fatalf("not markdown image syntax: %q", text)
+	}
+	start := strings.Index(text, "](") + 2
+	path := text[start : len(text)-1]
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("image was not written to %q: %v", path, err)
+	}
+	body, _ := os.ReadFile(path)
+	if string(body) != "fake-png-bytes" {
+		t.Fatalf("bytes differ: %q", body)
+	}
+}
+
+// A block with no data, or no home directory, must be skipped rather than producing a broken
+// image reference.
+func TestClaudeImageBlockSkipsUnusable(t *testing.T) {
+	sess := &ClaudeSession{
+		toolIndexByID:      map[string]int{},
+		toolArgsByID:       map[string]any{},
+		pendingPermissions: map[string]map[string]any{},
+		subagents:          map[string]sdk.SubagentDescriptor{},
+		eventSubscribers:   map[int]func(map[string]any){},
+	}
+
+	// No data.
+	sess.handleRawEvent(map[string]any{
+		"type": "user",
+		"message": map[string]any{"content": []any{
+			map[string]any{"type": "image", "source": map[string]any{"media_type": "image/png"}},
+		}},
+	})
+	if len(sess.Timeline()) != 0 {
+		t.Fatal("a data-less image must not produce an item")
+	}
+
+	// No home directory.
+	sess.handleRawEvent(map[string]any{
+		"type": "user",
+		"message": map[string]any{"content": []any{
+			map[string]any{"type": "image", "source": map[string]any{
+				"media_type": "image/png",
+				"data":       base64.StdEncoding.EncodeToString([]byte("x")),
+			}},
+		}},
+	})
+	if len(sess.Timeline()) != 0 {
+		t.Fatal("without a home directory the image must be skipped")
 	}
 }

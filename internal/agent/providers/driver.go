@@ -403,6 +403,9 @@ type LaunchConfig struct {
 	MCPServers []pi.MCPConfig
 	// SystemPrompt is the daemon-side prompt appended to the provider's own.
 	SystemPrompt string
+	// HomeDir is where materialised provider images land. Empty disables image output rather
+	// than writing somewhere arbitrary.
+	HomeDir string
 }
 
 // StartProviderSession launches the appropriate host session for any built-in or custom provider.

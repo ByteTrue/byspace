@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ByteTrue/byspace/internal/agent/imageout"
 	"github.com/ByteTrue/byspace/internal/agent/jsonl"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
@@ -36,7 +37,9 @@ type ClaudeSession struct {
 	subagents          map[string]sdk.SubagentDescriptor
 	finishWaiters      []chan error
 	eventSubscribers   map[int]func(map[string]any)
-	nextSubID          int
+	// homeDir is where materialised provider images land. Empty disables image output.
+	homeDir   string
+	nextSubID int
 }
 
 // StartClaudeSession launches a Claude Code stream-json subprocess.
@@ -82,6 +85,7 @@ func StartClaudeSession(cfg LaunchConfig, cmdOverride string) (*ClaudeSession, e
 		pendingPermissions: make(map[string]map[string]any),
 		subagents:          make(map[string]sdk.SubagentDescriptor),
 		eventSubscribers:   make(map[int]func(map[string]any)),
+		homeDir:            cfg.HomeDir,
 	}
 	if strings.HasSuffix(cfg.SessionHandle, ".jsonl") {
 		s.sessionFile = cfg.SessionHandle
@@ -216,7 +220,22 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 			if content, ok := msg["content"].([]any); ok {
 				for _, rawBlock := range content {
 					block, ok := rawBlock.(map[string]any)
-					if !ok || block["type"] != "tool_result" {
+					if !ok {
+						continue
+					}
+					if block["type"] == "image" {
+						// A provider image arrives inline as base64. The conversation renders an
+						// image by path, so it is written out and shown as markdown — otherwise
+						// the model's image output is received and never displayed.
+						if markdown := s.materializeImageBlockLocked(block); markdown != "" {
+							s.appendItemLocked(sdk.TimelineItem{
+								Type: "assistant_message",
+								Text: markdown,
+							})
+						}
+						continue
+					}
+					if block["type"] != "tool_result" {
 						continue
 					}
 					callID, _ := block["tool_use_id"].(string)
@@ -739,4 +758,30 @@ func (s *ClaudeSession) markSubagentActiveLocked(parentToolUseID string) *sdk.Su
 	s.subagents[parentToolUseID] = sub
 	descriptor := sub
 	return &descriptor
+}
+
+// materializeImageBlockLocked writes an inline provider image and returns markdown for it.
+// The caller holds s.mu.
+//
+// Returns "" when the block is not a usable image: a broken block must not stop the turn, and an
+// empty markdown image would render as a broken picture.
+func (s *ClaudeSession) materializeImageBlockLocked(block map[string]any) string {
+	source, _ := block["source"].(map[string]any)
+	data, _ := source["data"].(string)
+	mimeType, _ := source["media_type"].(string)
+	if data == "" {
+		return ""
+	}
+	if strings.TrimSpace(s.homeDir) == "" {
+		return ""
+	}
+	path, err := imageout.Materialize(s.homeDir, data, mimeType)
+	if err != nil {
+		return ""
+	}
+	alt := "Generated image"
+	if mimeType != "" {
+		alt = "Generated " + strings.TrimPrefix(mimeType, "image/") + " image"
+	}
+	return "![" + alt + "](" + path + ")"
 }

@@ -2382,6 +2382,7 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		// agent never sees the daemon's orchestration tools.
 		MCPServers:   s.piMCPServersFor(rec),
 		SystemPrompt: s.systemPromptFor(rec),
+		HomeDir:      s.homeDir,
 	})
 	if err != nil {
 		return nil, err
