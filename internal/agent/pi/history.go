@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"github.com/ByteTrue/byspace/internal/agent/advisor"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
 	"io/fs"
 	"os"
@@ -430,6 +431,18 @@ func LoadTimelineFromJSONL(filePath string) ([]TimelineEntry, error) {
 			// A custom message is whatever an extension appended (BySpace's own section tags,
 			// pi-subagent notices). It has no role a client can render, so its text is skipped
 			// rather than shown as a user bubble nobody typed.
+			//
+			// The exception is omp's advisor: its message carries notes with severities, which is a
+			// review the user needs to see. Skipping it made every advisor run invisible.
+			if card := advisorCardFromCustomMessage(msg); card != nil {
+				appendEntry(ts, TimelineItem{
+					Type:   "tool_call",
+					CallID: card.CallID,
+					Name:   card.Name,
+					Status: card.Status,
+					Detail: card.Detail,
+				})
+			}
 
 		case "toolResult":
 			callID, _ := msg["toolCallId"].(string)
@@ -478,4 +491,20 @@ func truncatePreview(s string) string {
 		return collapsed[:160]
 	}
 	return collapsed
+}
+
+// advisorCardFromCustomMessage renders omp's advisor message, or nil for any other custom message.
+//
+// Kept here rather than in the advisor package so the package stays free of the transcript's shape: the caller
+// knows which keys the record uses, the renderer knows what a review card looks like.
+func advisorCardFromCustomMessage(msg map[string]any) *advisor.Card {
+	customType, _ := msg["customType"].(string)
+	text, _ := msg["text"].(string)
+	details, _ := msg["details"].(map[string]any)
+	if details == nil {
+		if raw, ok := msg["details"].(map[string]any); ok {
+			details = raw
+		}
+	}
+	return advisor.MapMessage(customType, text, details)
 }
