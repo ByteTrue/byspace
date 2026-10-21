@@ -760,6 +760,14 @@ func lastAssistantTextFromTimeline(ctx context.Context, ws *websocket.Conn, agen
 func runLogs(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("logs", flag.ContinueOnError)
 	addr := fs.String("addr", defaultListenAddr(), "daemon address")
+	// The four flags the node CLI has. Without them `logs` could only dump everything once, which
+	// is the least useful form: the common case is watching a running agent or looking at the tail
+	// of a long one.
+	follow := fs.Bool("f", false, "stream new entries as they arrive")
+	fs.BoolVar(follow, "follow", false, "stream new entries as they arrive")
+	tail := fs.Int("tail", 0, "show only the last N entries")
+	since := fs.Duration("since", 0, "show entries from the last duration (e.g. 10m)")
+	filter := fs.String("filter", "", "show only entries whose text contains this")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -768,7 +776,14 @@ func runLogs(args []string, stdout io.Writer) error {
 	}
 	agentID := fs.Arg(0)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	budget := 10 * time.Second
+	if *follow {
+		// A follow has no natural end. The deadline still exists so Ctrl-C is not the only exit:
+		// an agent that never speaks again would otherwise leave the command waiting forever with
+		// no way to tell whether it is still connected.
+		budget = 24 * time.Hour
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
 
 	ws, err := dialDaemonWS(ctx, *addr)
@@ -790,22 +805,139 @@ func runLogs(args []string, stdout io.Writer) error {
 		return err
 	}
 	entries, _ := resp["entries"].([]any)
+
+	if *since > 0 {
+		entries = entriesSince(entries, time.Now().Add(-*since))
+	}
+	if *tail > 0 && len(entries) > *tail {
+		entries = entries[len(entries)-*tail:]
+	}
+	needle := strings.ToLower(strings.TrimSpace(*filter))
+	// The count is what a follower starts from: replaying everything again would duplicate the
+	// history the caller just read.
+	printed := 0
+	var lastSeq int64
 	for _, rawEntry := range entries {
 		entry, ok := rawEntry.(map[string]any)
 		if !ok {
 			continue
 		}
-		item, _ := entry["item"].(map[string]any)
-		itemType, _ := item["type"].(string)
-		text, _ := item["text"].(string)
-		name, _ := item["name"].(string)
-		if name != "" {
-			fmt.Fprintf(stdout, "[%s:%s] %s\n", itemType, name, text)
-		} else {
-			fmt.Fprintf(stdout, "[%s] %s\n", itemType, text)
+		if seq := entrySeq(entry); seq > lastSeq {
+			lastSeq = seq
+		}
+		if needle != "" && !entryMatches(entry, needle) {
+			continue
+		}
+		fmt.Fprintln(stdout, formatTimelineEntry(entry))
+		printed++
+	}
+
+	if !*follow {
+		return nil
+	}
+	// 0 means "from now"; the daemon decides what that is, so the cursor is the last seq we saw.
+	return followTimeline(ctx, ws, agentID, lastSeq, needle, stdout)
+}
+
+// entriesSince keeps entries stamped at or after a cutoff.
+func entriesSince(entries []any, cutoff time.Time) []any {
+	kept := make([]any, 0, len(entries))
+	for _, raw := range entries {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		stamp, _ := entry["timestamp"].(string)
+		parsed, err := time.Parse(time.RFC3339Nano, stamp)
+		if err != nil {
+			// An entry with no readable timestamp is kept: dropping it silently would hide a
+			// provider that stopped stamping, which is the more important problem.
+			kept = append(kept, raw)
+			continue
+		}
+		if !parsed.Before(cutoff) {
+			kept = append(kept, raw)
 		}
 	}
-	return nil
+	return kept
+}
+
+// entrySeq reads an entry's sequence number.
+func entrySeq(entry map[string]any) int64 {
+	switch value := entry["seq"].(type) {
+	case float64:
+		return int64(value)
+	case int64:
+		return value
+	case int:
+		return int64(value)
+	}
+	return 0
+}
+
+// entryMatches tests an entry against a lowercased needle.
+func entryMatches(entry map[string]any, needle string) bool {
+	return strings.Contains(strings.ToLower(formatTimelineEntry(entry)), needle)
+}
+
+// formatTimelineEntry renders one entry the way `logs` prints it.
+func formatTimelineEntry(entry map[string]any) string {
+	item, _ := entry["item"].(map[string]any)
+	itemType, _ := item["type"].(string)
+	text, _ := item["text"].(string)
+	name, _ := item["name"].(string)
+	if name != "" {
+		return fmt.Sprintf("[%s:%s] %s", itemType, name, text)
+	}
+	return fmt.Sprintf("[%s] %s", itemType, text)
+}
+
+// followTimeline streams entries after cursor until the connection ends.
+//
+// Polls `fetch_agent_timeline_request` with `direction: "after"` rather than waiting on a push
+// subscription: the request carries a cursor and the daemon answers with a delta, which needs no
+// additional protocol surface on a CLI that only reads.
+func followTimeline(ctx context.Context, ws *websocket.Conn, agentID string, cursor int64, needle string, stdout io.Writer) error {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+		}
+
+		if err := sendSessionReq(ctx, ws, map[string]any{
+			"type":        "fetch_agent_timeline_request",
+			"requestId":   "cli_follow",
+			"agentId":     agentID,
+			"direction":   "after",
+			"afterSeq":    cursor,
+			"windowAfter": cursor,
+		}); err != nil {
+			return nil
+		}
+		resp, err := waitSessionResp(ctx, ws, "fetch_agent_timeline_response", "")
+		if err != nil {
+			return nil
+		}
+		entries, _ := resp["entries"].([]any)
+		for _, rawEntry := range entries {
+			entry, ok := rawEntry.(map[string]any)
+			if !ok {
+				continue
+			}
+			seq := entrySeq(entry)
+			if seq <= cursor {
+				continue
+			}
+			cursor = seq
+			if needle != "" && !entryMatches(entry, needle) {
+				continue
+			}
+			fmt.Fprintln(stdout, formatTimelineEntry(entry))
+		}
+	}
 }
 
 func runWait(args []string, stdout io.Writer) error {

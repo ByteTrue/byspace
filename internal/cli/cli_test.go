@@ -204,3 +204,47 @@ func TestWaitBudgetDefaults(t *testing.T) {
 		t.Fatalf("explicit = %d", got)
 	}
 }
+
+// Three ways to supply the text, with a defined precedence: a file is what a script uses when the
+// message would blow past the shell's argument limit.
+func TestReadPromptTextPrecedence(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "prompt.txt")
+	if err := os.WriteFile(file, []byte("from file\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// The file wins over both other forms.
+	text, agent, err := readPromptText([]string{"agt_1", "positional"}, "from-flag", file)
+	if err != nil || text != "from file" || agent != "agt_1" {
+		t.Fatalf("text=%q agent=%q err=%v", text, agent, err)
+	}
+
+	// The flag wins over the positional argument.
+	text, agent, err = readPromptText([]string{"agt_1", "positional"}, "from-flag", "")
+	if err != nil || text != "from-flag" || agent != "agt_1" {
+		t.Fatalf("text=%q agent=%q err=%v", text, agent, err)
+	}
+
+	// Then the positional argument.
+	text, agent, err = readPromptText([]string{"agt_1", "two", "words"}, "", "")
+	if err != nil || text != "two words" || agent != "agt_1" {
+		t.Fatalf("text=%q agent=%q err=%v", text, agent, err)
+	}
+}
+
+// Every incomplete form has to name itself, or the user cannot tell which piece is missing.
+func TestReadPromptTextErrors(t *testing.T) {
+	if _, _, err := readPromptText(nil, "text", ""); err == nil {
+		t.Fatal("a flag without an agent must fail")
+	}
+	if _, _, err := readPromptText([]string{"agt_1"}, "", ""); err == nil {
+		t.Fatal("an agent without text must fail")
+	}
+	empty := filepath.Join(t.TempDir(), "empty.txt")
+	if err := os.WriteFile(empty, []byte("   \n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := readPromptText([]string{"agt_1"}, "", empty); err == nil {
+		t.Fatal("an empty file must fail")
+	}
+}

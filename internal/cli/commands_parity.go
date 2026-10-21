@@ -85,14 +85,36 @@ func runAgentSend(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("send", flag.ContinueOnError)
 	addr := fs.String("addr", defaultListenAddr(), "daemon address")
 	wait := fs.Bool("wait", false, "wait for turn completion")
+	// The flags the node CLI has. Without --image a message could only be text, so a user whose
+	// workflow is "send the screenshot to the agent" had to use the app.
+	promptFlag := fs.String("prompt", "", "message text (instead of the positional argument)")
+	promptFile := fs.String("prompt-file", "", "read the message from a file (or - for stdin)")
+	noWait := fs.Bool("no-wait", false, "do not wait even if a wait was requested")
+	var images multiFlag
+	fs.Var(&images, "image", "image file to attach (repeatable)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if fs.NArg() < 2 {
-		return errors.New("usage: byspace send [--addr host:port] [--wait] <agent-id> <prompt>")
+	if *noWait {
+		*wait = false
 	}
-	agentID := fs.Arg(0)
-	prompt := strings.Join(fs.Args()[1:], " ")
+
+	// Three ways to supply the text, in order of precedence: --prompt-file beats --prompt beats the
+	// positional argument. readPromptText resolves that and returns what came from where, so the
+	// usage error can mention the right form.
+	prompt, agentID, promptErr := readPromptText(fs.Args(), *promptFlag, *promptFile)
+	if promptErr != nil {
+		return promptErr
+	}
+
+	imageBlocks := make([]any, 0, len(images))
+	for _, path := range images {
+		data, mediaType, readErr := readImageForPrompt(path)
+		if readErr != nil {
+			return readErr
+		}
+		imageBlocks = append(imageBlocks, map[string]any{"data": data, "mimeType": mediaType})
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -102,12 +124,16 @@ func runAgentSend(args []string, stdout io.Writer) error {
 	}
 	defer ws.CloseNow()
 
-	_ = sendSessionReq(ctx, ws, map[string]any{
+	request := map[string]any{
 		"type":      "send_agent_message_request",
 		"requestId": "cli_send_1",
 		"agentId":   agentID,
 		"prompt":    prompt,
-	})
+	}
+	if len(imageBlocks) > 0 {
+		request["images"] = imageBlocks
+	}
+	_ = sendSessionReq(ctx, ws, request)
 	resp, err := waitSessionResp(ctx, ws, "send_agent_message_response", "")
 	if err != nil {
 		return err

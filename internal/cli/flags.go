@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -129,4 +130,49 @@ func reportRelayStatus(stdout io.Writer, homeFlag string) {
 		return
 	}
 	fmt.Fprintf(stdout, "relay     %s://%s\n", scheme, endpoint)
+}
+
+// readPromptText resolves the message text and agent id from the three input forms.
+//
+// Precedence: --prompt-file, then --prompt, then the positional argument. A file is what a script
+// uses when the message would blow past the shell's argument limit or contains quoting that is not
+// worth escaping; `-` reads stdin for a pipeline.
+func readPromptText(positional []string, promptFlag, promptFile string) (string, string, error) {
+	agentID := ""
+	if len(positional) > 0 {
+		agentID = positional[0]
+	}
+
+	if file := strings.TrimSpace(promptFile); file != "" {
+		if agentID == "" {
+			return "", "", errors.New("usage: byspace send --prompt-file <path> <agent-id>")
+		}
+		var raw []byte
+		var err error
+		if file == "-" {
+			raw, err = io.ReadAll(os.Stdin)
+		} else {
+			raw, err = os.ReadFile(file)
+		}
+		if err != nil {
+			return "", "", err
+		}
+		text := strings.TrimSpace(string(raw))
+		if text == "" {
+			return "", "", fmt.Errorf("%s is empty", file)
+		}
+		return text, agentID, nil
+	}
+
+	if text := strings.TrimSpace(promptFlag); text != "" {
+		if agentID == "" {
+			return "", "", errors.New("usage: byspace send --prompt <text> <agent-id>")
+		}
+		return text, agentID, nil
+	}
+
+	if agentID == "" || len(positional) < 2 {
+		return "", "", errors.New("usage: byspace send [options] <agent-id> <prompt>")
+	}
+	return strings.Join(positional[1:], " "), agentID, nil
 }
