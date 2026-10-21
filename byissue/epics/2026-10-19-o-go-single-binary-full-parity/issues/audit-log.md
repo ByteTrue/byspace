@@ -551,6 +551,19 @@ daemon 版本与 CLI 版本不一致时也会警告：版本不匹配的症状�
 | `run.ts` / `version.ts` / `index.ts` | 53+15+6 | **PORTED** — 入口、版本、退出码映射都在 `internal/cli/main.go`。                                                                                                                                                                                                                                                                                     |
 | `commands/*` 其余                    | —       | 已在上述条目逐项覆盖；本轮补了 `schedule update`、`workspace setup`，并核对了 `agent attach`/`agent mode`（都映射到已有实现）、`permit` 组（allow/deny/ls 齐全）、`project`/`terminal`/`script`/`provider` 组无缺口。                                                                                                                                |
 
+### cli.ts | 205 | **PORTED（全覆盖）**
+
+逐条核对顶层命令注册：
+
+```
+Node: archive attach clone delete import inspect logs ls reload restart run send status stop wait
+Go:   全部覆盖，另加 agent project workspace terminal script schedule heartbeat permit
+      provider worktree open pair onboard hooks mcp-bridge serve web relay print-plist print-unit
+```
+
+没有任何 Node 命令在 Go 里缺失；Go 侧还多出一批分组命令（这些在 Node 里是子命令或不存在）。
+`--json`/`--yaml`/`-q` 全局输出选项与路径直开（上一轮补）也在这里生效。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
