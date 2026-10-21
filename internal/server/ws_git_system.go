@@ -371,11 +371,14 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 	case "checkout_pr_status_request":
 		prStatus, _ := workspace.GetPRStatus(ctx, base.Cwd)
 		forge := workspace.DetectForge(ctx, base.Cwd)
+		prAuthState := workspace.ProbeForgeAuth(base.Cwd, forge)
 		_ = sendSessionMsg(ctx, sink, "checkout_pr_status_response", map[string]any{
-			"cwd":                   base.Cwd,
-			"status":                prStatus,
-			"githubFeaturesEnabled": true,
-			"authState":             map[string]any{"status": "authenticated"},
+			"cwd":    base.Cwd,
+			"status": prStatus,
+			// The legacy boolean is derived from the richer state rather than hardcoded: a client at the
+			// compat floor reads it, and `true` while unauthenticated sends it down a path that fails.
+			"githubFeaturesEnabled": prAuthState == workspace.ForgeAuthAuthenticated,
+			"authState":             string(prAuthState),
 			"forge":                 forge,
 			"error":                 nil,
 			"requestId":             base.RequestID,
@@ -507,15 +510,18 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 		if prNumber > 0 {
 			prNumberPayload = prNumber
 		}
+		prAuthState := workspace.ProbeForgeAuth(cwd, workspace.DetectForge(ctx, cwd))
 		_ = sendSessionMsg(ctx, sink, "pull_request_timeline_response", map[string]any{
-			"cwd":                   cwd,
-			"prNumber":              prNumberPayload,
-			"items":                 items,
-			"truncated":             truncated,
-			"error":                 timelineErrObj,
-			"requestId":             base.RequestID,
-			"githubFeaturesEnabled": true,
-			"authState":             map[string]any{"status": "authenticated"},
+			"cwd":       cwd,
+			"prNumber":  prNumberPayload,
+			"items":     items,
+			"truncated": truncated,
+			"error":     timelineErrObj,
+			"requestId": base.RequestID,
+			// The legacy boolean is derived from the richer state rather than hardcoded: a client at the
+			// compat floor reads it, and `true` while unauthenticated sends it down a path that fails.
+			"githubFeaturesEnabled": prAuthState == workspace.ForgeAuthAuthenticated,
+			"authState":             string(prAuthState),
 		})
 
 	case "checkout.forge.set_auto_merge.request", "checkout.github.set_auto_merge.request":
@@ -585,10 +591,13 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 			searchErrText = searchErr.Error()
 			items = []map[string]any{}
 		}
+		searchAuthState := workspace.ProbeForgeAuth(forgeSearchReq.Cwd, workspace.DetectForge(ctx, forgeSearchReq.Cwd))
 		searchPayload := map[string]any{
-			"items":                 items,
-			"githubFeaturesEnabled": true,
-			"authState":             map[string]any{"status": "authenticated"},
+			"items": items,
+			// The legacy boolean is derived from the richer state rather than hardcoded: a client at the
+			// compat floor reads it, and `true` while unauthenticated sends it down a path that fails.
+			"githubFeaturesEnabled": searchAuthState == workspace.ForgeAuthAuthenticated,
+			"authState":             string(searchAuthState),
 			"error":                 searchErrText,
 			"requestId":             base.RequestID,
 		}
