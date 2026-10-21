@@ -43,3 +43,13 @@ created: 2026-10-21
 - 已实现：`internal/terminal/vt.go` 的 `EnsureAgentHooksInstalled`、`internal/cli/hooks.go`
 - Node 实现：`archive/packages/server/src/terminal/agent-hooks/{claude,codex,opencode}/`（6 个文件）
 - 台账：同上 MISSING 表
+
+## 验收与关闭
+
+已关闭，但**验收条件未能全部满足**，如实记录：
+
+- 三家的安装器已实现并有 8 个测试（`internal/agenthooks`）：只增不删、按 owned marker 判断是否覆盖、失败如实报错。
+- `byspace hooks --install/--uninstall` 可调用。
+- **未验证**：在终端里真的跑 claude / codex / opencode 并观察侧栏状态。本机只装了 pi，没有另三家的 CLI。
+
+因此这条的结论是「实现完成、验收环境不足」，不是「全链路验证通过」。

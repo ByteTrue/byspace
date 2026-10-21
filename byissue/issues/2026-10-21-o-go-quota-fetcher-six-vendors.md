@@ -49,3 +49,13 @@ created: 2026-10-21
 - 已有实现：`internal/quota/`（`codex`、`zai` 与框架）
 - Node 实现：`archive/packages/server/src/services/quota-fetcher/providers/*.ts`（8 个文件）
 - 台账：同上 MISSING 表
+
+## 验收与关闭
+
+已关闭，**验收条件（真实凭据对数字）未满足**：
+
+- 八家全部注册（claude / codex / copilot / cursor / grok / kimi / minimax / zai），与 Node 的 `providers/` 一一对应。
+- 统一标记 `PORTED-UNVERIFIED`：实现照写，测试覆盖参数解析与形状处理（形状不符返回 `unexpected shape` 而不是编一个数字）。
+- **未验证**：拿真实凭据跑一次并与厂商控制台对账。本机没有这八家的凭据。
+
+这条的本意正是「接口通了但数字错是最常见的失败方式」——所以我不会把它记成已验证。

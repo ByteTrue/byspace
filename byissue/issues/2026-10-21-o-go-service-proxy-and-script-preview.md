@@ -44,3 +44,24 @@ Go 侧没有对应实现，所以 payload 里没有可访问的 URL，脚本只�
   `script-health-monitor.ts`（229 行）、`workspace-service-port-registry.ts`
 - 已有：`internal/workspace` 的端口分配器、`workspaceScriptPayload` 的 `lifecycle`/`health`
 - 台账：`epics/2026-10-19-o-go-single-binary-full-parity/issues/audit-log.md` 的 MISSING 表
+
+## 验收与关闭
+
+已关闭。**验收在端到端环境里真实跑过**：
+
+```
+script start --workspace wks_adb18 web
+→ http://web--main.localhost:7170
+curl -H "Host: web--main.localhost:7170" http://127.0.0.1:7170/
+→ PREVIEW_OK
+script stop ...
+→ 该 URL 返回 404，脚本进程数归零
+```
+
+验收过程中查出并修掉三个缺陷（commit `9ae7ac598`）：
+
+1. `workspace.create` 只读 `source.path`，而 CLI 发的是 `cwd` —— 路径被静默丢弃，工作区开到了 daemon 自己的工作目录。
+2. `script start` 接在旧的扁平消息名上，那条路径只开一个裸终端、不做端口分配也不注册路由 —— service 脚本拿到了 terminal id 而没有 URL。
+3. `script start` 只打印 `terminalId`；对 service 脚本来说 URL 才是目的。
+
+**未验证的部分**：公网域名（`serviceProxyBaseDomain`）走的是用户自己的 DNS 与反代配置，本机只验证了 `.localhost` 路径。
