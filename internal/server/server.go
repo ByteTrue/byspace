@@ -280,6 +280,13 @@ func New(opts Options) (*Server, error) {
 	// Nothing else drives file and git-diff subscriptions. Without this loop they are
 	// registered and then never fire, so an open editor never sees a file change made by an
 	// agent, and the diff panel never refreshes.
+	// Legacy agent records written before workspaceId existed have no owner, which makes them
+	// invisible: they appear in no workspace and History cannot restore them. Stamp them once
+	// here so nothing downstream needs a fallback.
+	if backfilled := srv.store.BackfillWorkspaceOwnership(); backfilled > 0 {
+		fmt.Fprintf(os.Stderr, "backfilled workspace ownership for %d agent record(s)\n", backfilled)
+	}
+
 	srv.startSubscriptionPoller()
 	// A relay configured in settings must connect at boot, not only when a CLI flag is passed.
 	srv.ApplyRelayConfig(context.Background())
