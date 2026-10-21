@@ -397,6 +397,10 @@ type LaunchConfig struct {
 	ThinkingOptionID string
 	SessionHandle    string
 	Env              []string
+	// MCPServers are injected through the generated extension; pi has no launch flag for them.
+	MCPServers []pi.MCPConfig
+	// SystemPrompt is the daemon-side prompt appended to the provider's own.
+	SystemPrompt string
 }
 
 // StartProviderSession launches the appropriate host session for any built-in or custom provider.
@@ -416,7 +420,10 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 		// The integration extension is what makes rewind possible: pi exposes entry capture and
 		// tree navigation only through extensions, so without it `agent.rewind` has no way to
 		// reach the provider.
-		extPath, extCleanup, extErr := pi.WriteIntegrationExtension()
+		extPath, extCleanup, extErr := pi.WriteIntegrationExtension(pi.ExtensionOptions{
+			MCPServers:   cfg.MCPServers,
+			SystemPrompt: cfg.SystemPrompt,
+		})
 		if extErr != nil {
 			extPath, extCleanup = "", func() {}
 		}

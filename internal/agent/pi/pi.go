@@ -167,6 +167,7 @@ type Session struct {
 	subagents           map[string]SubagentDescriptor
 	commandWaiters      map[string]chan commandResult
 	treeEntries         map[string]string
+	ready               bool
 	cleanup             func()
 	finishWaiters       []chan error
 	eventSubscribers    map[int]func(map[string]any)
@@ -200,6 +201,7 @@ func StartSession(opts LaunchOptions) (*Session, error) {
 		eventSubscribers:   make(map[int]func(map[string]any)),
 	}
 	proc.OnEvent(s.handleRawEvent)
+
 	return s, nil
 }
 
@@ -788,6 +790,17 @@ func (s *Session) WaitForFinish(ctx context.Context) error {
 }
 
 // GetState queries Pi's current session state.
+// Ready reports whether pi has finished starting up.
+//
+// pi does not answer get_state until its runtime is listening, and a request sent earlier sits
+// unread: the daemon's startup persistence sync ran ahead of the first prompt and left the stdio
+// queue stuck, so the agent accepted an initialPrompt and then produced nothing.
+func (s *Session) Ready() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ready
+}
+
 func (s *Session) GetState(ctx context.Context) (*SessionState, error) {
 	raw, err := s.proc.Request(ctx, map[string]any{"type": "get_state"})
 	if err != nil {
@@ -1003,4 +1016,27 @@ func (s *Session) Close() error {
 		cleanup()
 	}
 	return err
+}
+
+// readyTimeout bounds how long StartSession waits for pi's startup sequence. A cold start with
+// several extensions loading takes a moment; a minute is generous without hanging a request.
+const readyTimeout = 60 * time.Second
+
+// waitForReady blocks until pi has started its session.
+func (s *Session) waitForReady(timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		s.mu.Lock()
+		ready := s.ready
+		closed := s.status == "closed"
+		s.mu.Unlock()
+		if ready {
+			return nil
+		}
+		if closed {
+			return fmt.Errorf("pi exited during startup")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return fmt.Errorf("pi did not finish starting within %s", timeout)
 }

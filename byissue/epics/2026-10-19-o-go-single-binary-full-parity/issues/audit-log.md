@@ -180,7 +180,9 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 
 | `byspace-env.ts` | 92 | **MISSING** → 已补 | `RUNTIME_CONTROL_ENV_KEYS` 的剥离完全没实现。其中 `BYSPACE_PI_TERMINAL_HOOK_OWNER_PID` 是项目记忆里记过的真实故障源：Pi 扩展读到不属于自己的 pid 就认为自己是继承来的子进程，**一个 handler 都不注册**，终端从此永远不上报 running/idle。已实现 `home.ExternalProcessEnv`（overlay 之后再剥离，调用点无法把它塞回来），接到 PTY、agent JSONL 进程、setup 脚本三处 spawn 点。端到端验证：daemon 自身带 `BYSPACE_PI_TERMINAL_HOOK_OWNER_PID=4242` 启动，从它开的终端里 `echo` 出来是空的。4 个测试。 |
 
-### 未审计（本批剩余 39 文件）
+| `runtime-mcp-config.ts`（内联在 `providers/pi/agent.ts`） | ~60 | **MISSING** → 已补 | **内置 MCP 桥从未注入**：`byspace mcp-bridge`、`/mcp/agents` 和它背后 37 个工具都实现了，但没有任何东西把它们接到 agent 上——pi 没有 MCP 启动参数，只能通过扩展的 `pi.registerMcpServer` 注册。已在生成的扩展里注入（内置桥自举 `os.Executable()` + 用户配置的 server），并补了 daemon 侧的系统提示注入（`before_agent_start`）。`/mcp/agents` 现在用 per-run capability token 自鉴权。 |
+
+### 未审计（本批剩余 38 文件）
 
 按行数排序，下一轮从这里继续：
 
@@ -195,3 +197,24 @@ Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件�
 ## 批次 2-9
 
 未开始。范围见 Issue。
+
+## 未定位的缺陷：agent 创建后不产出任何响应
+
+`create_agent_request` 带 `initialPrompt` 时，浏览器和 CLI 都只看到：
+`turn_started` + 一条 `user_message` timeline，之后没有 `thinking`/`text_delta`/`tool_call`，
+也不会 `turn_completed`。daemon 侧 pi 子进程确实收到并写入了 `{"type":"prompt",...}`。
+
+已排除的假设（每条都实测过）：
+
+| 假设                 | 结论                                                                                |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| MCP 注入导致         | **否**。手动用完全相同的扩展 + 参数（含 MCP 桥）跑 pi，`text_delta`/`turn_end` 正常 |
+| 环境变量被剥离导致   | **否**。去掉剥离后同样复现；手动 `env -u BYSPACE_*` 跑 pi 正常                      |
+| stdin 是管道导致     | **否**。用 Node `spawn` + `stdio: pipe` 喂同样的 prompt，pi 正常响应                |
+| 进程组 kill 误伤     | **否**。残留进程检查显示 pi 组独立                                                  |
+| `get_state` 抢跑阻塞 | **是其中一个因素**（已修：启动持久化同步改为等 ready），但修完仍不复现成功          |
+| 后端/模型问题        | **否**。同样的 `bytetrueapi/deepseek-flash` 手动跑正常                              |
+
+**关键证据：该缺陷在 `8fd96541d`（本轮全部改动之前）同样复现**，所以它不是本轮引入的。
+
+下一步：对 `jsonl.Process` 的 stdout 解码加 trace，确认 pi 的 `message_update` 是否到达但被丢弃。

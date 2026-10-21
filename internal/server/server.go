@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -62,6 +63,9 @@ type Options struct {
 	WebUI        *webui.Handler
 	PiCommand    string
 	PiSessionDir string
+	// ListenAddr is the address the daemon bound to; the MCP bridge it injects into agents
+	// must call the same one.
+	ListenAddr string
 }
 
 type managedPi struct {
@@ -140,6 +144,10 @@ type Server struct {
 	// terminalUnsubscribers lets a socket detach from terminal output; without it every
 	// subscribe leaked a permanent callback.
 	terminalUnsubscribers map[frameSink]map[string][]func()
+	listenAddr            string
+	// capabilityToken authorizes an agent's own MCP bridge to /mcp/agents without the user's
+	// password, which the agent does not have.
+	capabilityToken string
 	// lastConfigSnapshot is the config as of the previous reload, so the next reload can say
 	// which paths changed.
 	lastConfigSnapshot map[string]any
@@ -193,8 +201,23 @@ func New(opts Options) (*Server, error) {
 	if strings.TrimSpace(os.Getenv("BYSPACE_DISABLE_HOME_WORKSPACE")) != "1" {
 		_ = st.EnsureHomeWorkspace(serverID)
 	}
+	capabilityToken := ""
+	if raw, err := os.ReadFile(filepath.Join(homeDir, "mcp-capability-token")); err == nil {
+		capabilityToken = strings.TrimSpace(string(raw))
+	} else {
+		// Per-daemon-run token: an agent's MCP bridge presents it instead of the user's
+		// password, and it stops working when the daemon restarts.
+		buf := make([]byte, 24)
+		if _, randErr := rand.Read(buf); randErr == nil {
+			capabilityToken = base64.RawURLEncoding.EncodeToString(buf)
+			_ = home.WriteAtomic(filepath.Join(homeDir, "mcp-capability-token"), []byte(capabilityToken+"\n"), 0o600)
+		}
+	}
+
 	srv := &Server{
 		homeDir:               homeDir,
+		listenAddr:            opts.ListenAddr,
+		capabilityToken:       capabilityToken,
 		serverID:              serverID,
 		version:               ver,
 		epoch:                 fmt.Sprintf("ep_%d", time.Now().UnixMilli()),
@@ -2288,6 +2311,10 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 		ThinkingOptionID: thinking,
 		SessionHandle:    sessionPath,
 		Env:              providerEnv,
+		// Injected through the extension: pi has no launch flag for MCP, and without this the
+		// agent never sees the daemon's orchestration tools.
+		MCPServers:   s.piMCPServersFor(rec),
+		SystemPrompt: s.systemPromptFor(rec),
 	})
 	if err != nil {
 		return nil, err
@@ -2309,7 +2336,18 @@ func (s *Server) startOrGetPiAgent(rec store.AgentRecord) (*managedPi, error) {
 	s.mu.Unlock()
 
 	if rec.Persistence == nil {
-		go s.syncPiPersistence(mp)
+		// Deferred slightly: the startup sync asks pi for its state, and pi does not answer
+		// before its runtime is listening. Sending it immediately left the stdio queue stuck
+		// and the agent never produced a turn.
+		go func() {
+			for i := 0; i < 100; i++ {
+				if ready, ok := sess.(interface{ Ready() bool }); !ok || ready.Ready() {
+					break
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+			s.syncPiPersistence(mp)
+		}()
 	}
 
 	sess.OnEvent(func(ev map[string]any) {

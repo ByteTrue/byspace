@@ -28,6 +28,15 @@ func (s *Server) handleMCPHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	// This endpoint is exempt from the global password middleware because an agent's own MCP
+	// bridge cannot know the user's password; it authorizes itself with the per-run capability
+	// token (or a password bearer, for callers that do have one).
+	if !IsAgentMCPRequestAuthorized(s.daemonPasswordHash(), s.capabilityToken, r.Header.Get("Authorization")) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":"Unauthorized"}`))
+		return
+	}
 	var req mcpRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON-RPC payload", http.StatusBadRequest)

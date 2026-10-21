@@ -280,6 +280,8 @@ func runServe(version string, args []string, stdout io.Writer) error {
 		HomeDir: *homeDir,
 		Version: version,
 		WebDir:  *webDir,
+		// The MCP bridge injected into agents must call back to this daemon's address.
+		ListenAddr: *addr,
 	})
 	if err != nil {
 		return err
@@ -782,6 +784,9 @@ func runDaemonCmd(args []string, stdout io.Writer) error {
 func runMCPBridge(args []string, stdin io.Reader, stdout io.Writer) error {
 	fs := flag.NewFlagSet("mcp-bridge", flag.ContinueOnError)
 	addr := fs.String("addr", defaultListenAddr(), "daemon HTTP address")
+	// The capability token authorizes this bridge to /mcp/agents without the user's password,
+	// which an agent process does not have.
+	token := fs.String("token", "", "daemon capability token")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -792,6 +797,10 @@ func runMCPBridge(args []string, stdin io.Reader, stdout io.Writer) error {
 	}
 	endpoint = strings.TrimRight(endpoint, "/") + "/mcp/agents"
 	httpClient := &http.Client{Timeout: 60 * time.Second}
+	authHeader := ""
+	if strings.TrimSpace(*token) != "" {
+		authHeader = "Bearer " + strings.TrimSpace(*token)
+	}
 
 	dec := json.NewDecoder(stdin)
 	enc := json.NewEncoder(stdout)
@@ -808,7 +817,17 @@ func runMCPBridge(args []string, stdin io.Reader, stdout io.Writer) error {
 		if err != nil {
 			continue
 		}
-		resp, err := httpClient.Post(endpoint, "application/json", bytes.NewReader(bodyBytes))
+		httpReq, reqErr := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(bodyBytes))
+		if reqErr != nil {
+			continue
+		}
+		httpReq.Header.Set("Content-Type", "application/json")
+		if authHeader != "" {
+			httpReq.Header.Set("Authorization", authHeader)
+		}
+		// No proxy: the bridge always talks to its own daemon over loopback.
+		httpClient.Transport = &http.Transport{Proxy: nil}
+		resp, err := httpClient.Do(httpReq)
 		if err == nil {
 			var out map[string]any
 			if json.NewDecoder(resp.Body).Decode(&out) == nil {
