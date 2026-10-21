@@ -105,6 +105,25 @@ function queryProviderSnapshot() {
   }
 }
 
+/**
+ * 确保侧栏可见。
+ *
+ * 应用会从存储恢复上次的会话视图（全屏），此时侧栏是收起的——快照里只有 "Open menu"。
+ * 侧栏的开合是浏览器恢复的状态，不是本脚本设置的，所以每个断言段之前都要先把它摆成
+ * 已知状态，否则失败信息只是在报「侧栏没开」，和被测行为无关。
+ */
+function ensureSidebarVisible() {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const snap = observe();
+    if (refFor(snap, /button "Close menu"/)) return snap;
+    const opener = refFor(snap, /button "Open menu"/);
+    if (!opener) return snap;
+    click(opener);
+    sleep(700);
+  }
+  return observe();
+}
+
 function failFast(name, message) {
   record(name, false, message);
   throw new Error(`${name}: ${message}`);
@@ -118,7 +137,7 @@ try {
   sleep(2500);
 
   // ---------------------------------------------------------------- 侧边栏结构
-  let snap = observe();
+  let snap = ensureSidebarVisible();
 
   expectContains("Sidebar lists the Chief home workspace", snap, ["BySpace-WorkSpace", "Chief"]);
 
@@ -135,7 +154,7 @@ try {
   expectAbsent("No stray +0 -0 on the home workspace", snap, ["+0 -0"]);
 
   // ---------------------------------------------------------------- Provider 目录
-  snap = observe();
+  snap = ensureSidebarVisible();
   const settingsRef = refFor(snap, /button "Settings"/);
   if (!settingsRef) failFast("Open settings", "no Settings button in snapshot");
   click(settingsRef);
@@ -185,7 +204,16 @@ try {
   for (let attempt = 0; attempt < 3 && !thinkingRef; attempt += 1) {
     bsk(["navigate", BASE, "--session", session], { allowFailure: true });
     sleep(2200);
-    let s2 = observe();
+    let s2 = ensureSidebarVisible();
+    // 侧栏打开后 composer 才没有被盖住。上一步把它打开，这里要把它关掉才能看到 composer。
+    for (let guard = 0; guard < 3; guard += 1) {
+      const closer = refFor(s2, /button "Close menu"/);
+      if (!closer) break;
+      click(closer);
+      sleep(700);
+      s2 = observe();
+    }
+
     // 抽屉里的 "New tab" 会展开一个菜单（Agent / Terminal 两个入口）。菜单有时已经展开，
     // 有时需要先点开；两种情况下都要点 "Agent"，然后确认菜单收起。
     if (!refFor(s2, /menuitem "Agent"/)) {
