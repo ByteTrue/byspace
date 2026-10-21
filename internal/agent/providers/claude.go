@@ -18,6 +18,7 @@ import (
 	"github.com/ByteTrue/byspace/internal/agent/replaytime"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
 	"github.com/ByteTrue/byspace/internal/agent/subagentlog"
+	"github.com/ByteTrue/byspace/internal/agent/tasknotify"
 	"github.com/ByteTrue/byspace/internal/agent/taskstate"
 )
 
@@ -140,7 +141,29 @@ func (s *ClaudeSession) handleRawEvent(ev map[string]any) {
 		if s.status != "running" {
 			s.status = "running"
 		}
+		// A background task's completion arrives as a USER message carrying a `<task-notification>` envelope, not
+		// as a tool result. Rendering it here is what makes the task visible; skipping it means the transcript
+		// simply stops where the user launched it.
 		if msg, ok := ev["message"].(map[string]any); ok {
+			if card := tasknotify.Map(msg["content"]); card != nil {
+				detail := card.Detail
+				detail["metadata"] = card.Metadata
+				idx := s.appendItemLocked(sdk.TimelineItem{
+					Type:   "tool_call",
+					CallID: card.CallID,
+					Name:   card.Name,
+					Status: card.Status,
+					Detail: detail,
+					Error:  card.Error,
+				})
+				extraEvents = append(extraEvents, map[string]any{
+					"type":   "byspace_stream_timeline",
+					"seq":    s.timeline[idx].SeqEnd,
+					"turnId": s.activeTurnID,
+					"item":   s.timeline[idx].Item,
+				})
+				break
+			}
 			if content, ok := msg["content"].([]any); ok {
 				for _, rawBlock := range content {
 					block, ok := rawBlock.(map[string]any)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/ByteTrue/byspace/internal/agent/advisor"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
+	"github.com/ByteTrue/byspace/internal/agent/systemnotice"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -428,6 +429,7 @@ func LoadTimelineFromJSONL(filePath string) ([]TimelineEntry, error) {
 			})
 
 		case "custom":
+			customText, _ := msg["text"].(string)
 			// A custom message is whatever an extension appended (BySpace's own section tags,
 			// pi-subagent notices). It has no role a client can render, so its text is skipped
 			// rather than shown as a user bubble nobody typed.
@@ -441,6 +443,14 @@ func LoadTimelineFromJSONL(filePath string) ([]TimelineEntry, error) {
 					Name:   card.Name,
 					Status: card.Status,
 					Detail: card.Detail,
+				})
+			} else if notice := systemnotice.Map(customText); notice != nil {
+				// omp's harness wraps its own messages in `<system-notice>`; without this the background job the
+				// user started finishes silently, or the raw envelope shows up in the transcript.
+				appendEntry(ts, TimelineItem{
+					Type:    "notification",
+					Level:   notice.Level,
+					Message: notice.Message,
 				})
 			}
 

@@ -21,6 +21,10 @@ type TimelineItem struct {
 	Status          string `json:"status,omitempty"`
 	Detail          any    `json:"detail,omitempty"`
 	Error           any    `json:"error,omitempty"`
+	// Level and Message are the notification item's fields. The protocol's notification schema requires both, and
+	// a notification without them fails validation — which drops the whole timeline response, not just that item.
+	Level   string `json:"level,omitempty"`
+	Message string `json:"message,omitempty"`
 }
 
 // MarshalJSON keeps tool_call items emitting `"error": null` when there is no error, which

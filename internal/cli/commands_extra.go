@@ -358,17 +358,33 @@ func runWorktreeCmd(args []string, stdout io.Writer) error {
 		fs := flag.NewFlagSet("worktree create", flag.ContinueOnError)
 		addr := fs.String("addr", defaultListenAddr(), "daemon address")
 		cwd := fs.String("cwd", "", "repository directory")
-		baseRef := fs.String("base", "", "base git ref")
+		mode := fs.String("mode", "", "branch-off | checkout-branch | checkout-pr")
+		newBranch := fs.String("new-branch", "", "branch to create (branch-off)")
+		baseRef := fs.String("base", "", "base git ref (branch-off)")
+		branch := fs.String("branch", "", "existing branch to check out (checkout-branch)")
+		prNumber := fs.String("pr", "", "pull request number to check out (checkout-pr)")
+		fs.StringVar(prNumber, "pr-number", "", "alias for --pr")
 		if err := fs.Parse(rest); err != nil {
 			return err
 		}
-		if fs.NArg() < 1 {
-			return errors.New("usage: byspace worktree create [options] <slug>")
+		slug := ""
+		if fs.NArg() > 0 {
+			slug = fs.Arg(0)
 		}
-		slug := fs.Arg(0)
 		workCwd := strings.TrimSpace(*cwd)
 		if workCwd == "" {
 			workCwd, _ = os.Getwd()
+		}
+		request, buildErr := buildWorktreeCreateRequest(worktreeCreateOptions{
+			Mode:      *mode,
+			Slug:      slug,
+			NewBranch: *newBranch,
+			Base:      *baseRef,
+			Branch:    *branch,
+			PRNumber:  *prNumber,
+		}, workCwd)
+		if buildErr != nil {
+			return buildErr
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -379,13 +395,9 @@ func runWorktreeCmd(args []string, stdout io.Writer) error {
 		}
 		defer ws.CloseNow()
 
-		if err := sendSessionReq(ctx, ws, map[string]any{
-			"type":         "create_byspace_worktree_request",
-			"requestId":    "req_wt_create",
-			"cwd":          workCwd,
-			"worktreeSlug": slug,
-			"refName":      *baseRef,
-		}); err != nil {
+		request["type"] = "create_byspace_worktree_request"
+		request["requestId"] = "req_wt_create"
+		if err := sendSessionReq(ctx, ws, request); err != nil {
 			return err
 		}
 		payload, err := waitSessionResp(ctx, ws, "create_byspace_worktree_response", "")
