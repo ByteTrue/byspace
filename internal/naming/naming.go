@@ -111,6 +111,8 @@ type PiGenerator struct {
 	Command string
 	// Model overrides the model; empty means pi's default.
 	Model string
+	// Overrides carries the project's own style instructions for each artifact.
+	Overrides ProjectOverrides
 }
 
 // Generate runs one non-interactive turn and parses the reply.
@@ -125,7 +127,7 @@ func (g PiGenerator) Generate(ctx context.Context, seed string) (Result, error) 
 	}
 	defer sess.Close()
 
-	if err := sess.Prompt(ctx, Prompt+seed, nil); err != nil {
+	if err := sess.Prompt(ctx, g.prompt(), nil); err != nil {
 		return Result{}, err
 	}
 	if err := sess.WaitForFinish(ctx); err != nil {
@@ -155,4 +157,31 @@ func cleanCommitMessage(reply string) string {
 		line = line[:200]
 	}
 	return line
+}
+
+// prompt renders the title/branch instruction with the project's style applied.
+func (g PiGenerator) prompt() string {
+	return stylePrompt(Prompt, g.Overrides.Style(ArtifactTitle), seedMarker)
+}
+
+// The markers separate each prompt's instruction from the material it is given. Inserting the project's style
+// ahead of the marker keeps the material last.
+const (
+	seedMarker = "Material:\n"
+	skipMarker = "Diff:\n"
+)
+
+// stylePrompt inserts a project's style block ahead of the material.
+//
+// Inserted rather than appended so the material stays last: a model that reads the seed and then an instruction
+// treats the instruction as part of what it was given.
+func stylePrompt(prompt, override, marker string) string {
+	if strings.TrimSpace(override) == "" {
+		return prompt
+	}
+	index := strings.Index(prompt, marker)
+	if index < 0 {
+		return prompt + "\n\nProject style:\n" + override
+	}
+	return prompt[:index] + "Project style:\n" + override + "\n\n" + prompt[index:]
 }

@@ -36,7 +36,7 @@ func (s *Server) scheduleWorkspaceAutoName(workspaceID, cwd, prompt string) {
 			return
 		}
 
-		generator := naming.PiGenerator{Command: s.piCommand, Model: s.namingModel()}
+		generator := naming.PiGenerator{Command: s.piCommand, Model: s.namingModel(), Overrides: naming.ReadProjectOverrides(cwd)}
 		generated, err := generator.Generate(ctx, namingSeed(prompt))
 		if err != nil || strings.TrimSpace(generated.Title) == "" {
 			// Nothing to do. The workspace keeps its derived name, which is what it would have had

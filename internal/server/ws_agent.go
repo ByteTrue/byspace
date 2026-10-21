@@ -469,7 +469,7 @@ func (s *Server) handleCreateBySpaceWorktree(ctx context.Context, sink frameSink
 	if strings.TrimSpace(req.WorktreeSlug) == "" {
 		if seed := firstAgentContextSeed(req.FirstAgentContext); seed != "" {
 			nctx, cancel := context.WithTimeout(ctx, 45*time.Second)
-			name, nameErr := naming.PiGenerator{Command: s.piCommand, Model: s.namingModel()}.Generate(nctx, seed)
+			name, nameErr := naming.PiGenerator{Command: s.piCommand, Model: s.namingModel(), Overrides: naming.ReadProjectOverrides(req.Cwd)}.Generate(nctx, seed)
 			cancel()
 			if nameErr == nil {
 				req.WorktreeSlug = name.Branch
@@ -685,7 +685,7 @@ func (s *Server) handleCheckoutCommit(ctx context.Context, sink frameSink, raw j
 		diff, diffErr := workspace.GetDiffSummaryForPrompt(ctx, req.Cwd)
 		if diffErr == nil && strings.TrimSpace(diff) != "" {
 			genCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
-			generated, genErr := naming.PiGenerator{Command: s.piCommand, Model: s.namingModel()}.GenerateCommitMessage(genCtx, diff)
+			generated, genErr := naming.PiGenerator{Command: s.piCommand, Model: s.namingModel(), Overrides: naming.ReadProjectOverrides(req.Cwd)}.GenerateCommitMessage(genCtx, diff)
 			cancel()
 			if genErr == nil {
 				message = generated

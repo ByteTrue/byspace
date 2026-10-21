@@ -50,7 +50,7 @@ type PRText struct {
 // Returns an error rather than an empty string so the caller can refuse the commit: git with an
 // empty -m opens an editor and hangs a daemon that has no terminal.
 func (g PiGenerator) GenerateCommitMessage(ctx context.Context, diff string) (string, error) {
-	reply, err := g.run(ctx, CommitMessagePrompt, diff)
+	reply, err := g.run(ctx, stylePrompt(CommitMessagePrompt, g.Overrides.Style(ArtifactCommitMessage), skipMarker), diff)
 	if err != nil {
 		return "", err
 	}
@@ -63,7 +63,7 @@ func (g PiGenerator) GenerateCommitMessage(ctx context.Context, diff string) (st
 
 // GeneratePRText asks the model for a pull request title and body.
 func (g PiGenerator) GeneratePRText(ctx context.Context, diff string) (PRText, error) {
-	reply, err := g.run(ctx, PRTextPrompt, diff)
+	reply, err := g.run(ctx, stylePrompt(PRTextPrompt, g.Overrides.Style(ArtifactPullRequest), skipMarker), diff)
 	if err != nil {
 		return PRText{}, err
 	}

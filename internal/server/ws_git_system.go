@@ -410,7 +410,7 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 		if prTitle == "" || prBody == "" {
 			if diff, diffErr := workspace.GetDiffSummaryForPrompt(ctx, req.Cwd); diffErr == nil && strings.TrimSpace(diff) != "" {
 				genCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-				generated, genErr := naming.PiGenerator{Command: s.piCommand, Model: s.namingModel()}.GeneratePRText(genCtx, diff)
+				generated, genErr := naming.PiGenerator{Command: s.piCommand, Model: s.namingModel(), Overrides: naming.ReadProjectOverrides(base.Cwd)}.GeneratePRText(genCtx, diff)
 				cancel()
 				if genErr == nil {
 					if prTitle == "" {
