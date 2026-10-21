@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ByteTrue/byspace/internal/agent/activity"
 	"github.com/ByteTrue/byspace/internal/agent/jsonl"
 	"github.com/ByteTrue/byspace/internal/agent/sdk"
 )
@@ -419,6 +420,11 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 		}
 		args := s.toolArgsByID[callID]
 		detail := BuildToolCallDetail(toolName, args, ev["result"])
+		// A command's stdout is whatever it printed — a build log, a minified bundle, a `cat` of a
+		// large file — and it travels to every client on every timeline fetch. Capping it here means
+		// the oversized body never reaches the transcript, so it is not re-sent on every fetch.
+		limitedDetail, limitedError := limitToolCall(detail, status, ev["result"], isErr)
+		detail = limitedDetail
 		s.streamSeq++
 		var targetIdx int
 		if idx, ok := s.toolIndexByID[callID]; ok && idx >= 0 && idx < len(s.timeline) {
@@ -426,13 +432,13 @@ func (s *Session) handleRawEvent(ev map[string]any) {
 			s.timeline[idx].Item.Detail = detail
 			s.timeline[idx].SeqEnd = s.streamSeq
 			if isErr {
-				s.timeline[idx].Item.Error = extractResultText(ev["result"])
+				s.timeline[idx].Item.Error = limitedError
 			}
 			targetIdx = idx
 		} else {
 			var errVal any
 			if isErr {
-				errVal = extractResultText(ev["result"])
+				errVal = limitedError
 			}
 			targetIdx = s.appendItemWithSeqLocked(s.streamSeq, TimelineItem{
 				Type:   "tool_call",
@@ -1048,4 +1054,40 @@ func (s *Session) waitForReady(timeout time.Duration) error {
 		time.Sleep(20 * time.Millisecond)
 	}
 	return fmt.Errorf("pi did not finish starting within %s", timeout)
+}
+
+// limitToolCall applies the timeline content limits to a freshly built tool call.
+//
+// The whole item goes through the limiter, not just the detail: a failed shell call keeps its stderr
+// in the item's error field, and that is the field with the largest realistic body — a failing build
+// writes everything there. Capping only the detail would bound stdout and leave stderr unbounded.
+//
+// Returns the detail and the error text, both possibly truncated.
+func limitToolCall(detail map[string]any, status string, result any, failed bool) (map[string]any, any) {
+	errorText := ""
+	if failed {
+		errorText = extractResultText(result)
+	}
+	if detail == nil {
+		return nil, errorText
+	}
+
+	item := map[string]any{"type": "tool_call", "detail": detail, "status": status}
+	if errorText != "" {
+		// The one error shape the limiter knows: an object with a content string, which is what a
+		// failed shell call produces.
+		item["error"] = map[string]any{"content": errorText}
+	}
+	limited := activity.LimitTimelineItemContent(item)
+
+	limitedDetail, ok := limited["detail"].(map[string]any)
+	if !ok {
+		limitedDetail = detail
+	}
+	if record, ok := limited["error"].(map[string]any); ok {
+		if content, ok := record["content"].(string); ok {
+			errorText = content
+		}
+	}
+	return limitedDetail, errorText
 }
