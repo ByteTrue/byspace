@@ -349,6 +349,18 @@ Windows 用 PowerShell 的 `-NoProfile -NonInteractive -ExecutionPolicy Bypass`�
 
 端到端验证：含算术展开的脚本仍然正常执行并写出结果。
 
+### utils/worktree-metadata.ts | 369 | **MISSING** → 已补
+
+BySpace 创建的 worktree 不记录任何来源信息：diff 该跟哪个 base 比、这个 worktree 来自哪个 PR，两者都没有——daemon 只能猜或者每次请求都去问 forge。
+
+文件放在 worktree 自己的 git 目录（`.git/worktrees/<name>/byspace/`），**不是工作树**：放在工作树里会出现在 `git status` 和用户正在看的每一个 diff 里。放在 worktree 而不是注册表里，也让它在注册表丢失或重建后仍然存在。
+
+创建时记录 `baseRefName`（显示名）与 `baseRef`（精确 ref）。「main」在本地分支、`origin/main`、`upstream/main` 之间是歧义的，而远端默认分支可能在 worktree 创建之后变更——精确 ref 才是让后来的 diff 可比的东西。
+
+损坏的或 v1 的文件读作「无元数据」而不是报错：worktree 仍然可用，因为一个小边文件坏了就让每个状态请求失败，比丢失 base-ref 提示更糟。
+
+**顺带修掉一个我自己引入的缺口**：三条 branch-off 路径里有两条没设 `BaseRef`，默认流程记录的是空值。
+
 ### server/ 顶层审计完成
 
 `archive/packages/server/src/server/*.ts` 共 68 个非测试文件已全部有结论。
