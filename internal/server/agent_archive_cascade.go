@@ -94,11 +94,10 @@ func (s *Server) cascadeArchiveChildren(parentID string) {
 			_ = mp.session.Close()
 		}
 
-		child.ArchivedAt = &now
-		child.UpdatedAt = now
-		child.LastStatus = "closed"
-		_ = s.store.UpsertAgent(*child)
-		s.broadcastAgentUpdate(*child)
+		archivedChild := store.BuildArchivedAgentRecord(*child, now)
+		*child = archivedChild
+		_ = s.store.UpsertAgent(archivedChild)
+		s.broadcastAgentUpdate(archivedChild)
 		s.broadcastSessionMsg("agent_archived", map[string]any{
 			"agentId":    child.ID,
 			"archivedAt": now,

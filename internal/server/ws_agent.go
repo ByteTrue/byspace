@@ -312,10 +312,10 @@ func (s *Server) handleArchiveAgent(ctx context.Context, sink frameSink, raw jso
 		_ = mp.session.Close()
 	}
 	if rec, _ := s.store.GetAgent(req.AgentID); rec != nil {
-		rec.ArchivedAt = &now
-		rec.UpdatedAt = now
-		rec.LastStatus = "closed"
-		_ = s.store.UpsertAgent(*rec)
+		// BuildArchivedAgentRecord normalizes the status and clears attention; writing the fields
+		// by hand is what left an archived agent with a permanent unread dot.
+		archived := store.BuildArchivedAgentRecord(*rec, now)
+		_ = s.store.UpsertAgent(archived)
 	}
 	// Archiving a conversation must not leave its subagents running: they would keep spending
 	// tokens and holding provider processes for a conversation the user removed.

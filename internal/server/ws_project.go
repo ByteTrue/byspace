@@ -1307,10 +1307,7 @@ func (s *Server) archiveWorkspaceContents(ctx context.Context, workspaceID, arch
 
 	for _, la := range toClose {
 		_ = la.sess.Close()
-		rec := la.record
-		rec.ArchivedAt = &archivedAt
-		rec.UpdatedAt = archivedAt
-		rec.LastStatus = "closed"
+		rec := store.BuildArchivedAgentRecord(la.record, archivedAt)
 		_ = s.store.UpsertAgent(rec)
 		s.broadcastAgentUpdate(rec)
 	}
