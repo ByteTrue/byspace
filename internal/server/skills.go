@@ -430,3 +430,64 @@ func copySkillDir(srcDir, dstDir string) error {
 		return os.WriteFile(target, data, 0o644)
 	})
 }
+
+// autoUpdateInstalledSkills repairs drift at startup, without destructive operations.
+//
+// Ported from autoUpdateInstalledSkills. The daemon ships the skills, so after an update every
+// installed copy is stale until someone re-saves the selection — and the user has no reason to
+// do that. Repairing on boot makes the shipped version the installed version.
+//
+// Removal is deliberately excluded: a managed directory can contain files the user put there,
+// so deleting is an interactive operation that requires them to confirm a plan. Repairing is not.
+func (s *Server) autoUpdateInstalledSkills() {
+	sourceDir := resolveSkillsSourceDir()
+	if sourceDir == "" {
+		return
+	}
+	userHome, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+
+	cfg := s.store.LoadDaemonConfig()
+	selection := map[string]any{}
+	targets := []string{"agents", "claude"}
+	if cfg != nil {
+		if stored, ok := cfg["skillsSelection"].(map[string]any); ok {
+			selection = stored
+		}
+		if stored, ok := cfg["skillTargets"].([]any); ok && len(stored) > 0 {
+			targets = make([]string, 0, len(stored))
+			for _, item := range stored {
+				if name, isString := item.(string); isString {
+					targets = append(targets, name)
+				}
+			}
+		}
+	}
+
+	status := getSkillsStatus(sourceDir, userHome, selection, targets)
+	if status.State != "drift" {
+		return
+	}
+
+	// Keep only the non-destructive operations.
+	repair := status
+	repair.Ops = make([]skillOp, 0, len(status.Ops))
+	for _, op := range status.Ops {
+		if op.Kind != "delete" {
+			repair.Ops = append(repair.Ops, op)
+		}
+	}
+	if len(repair.Ops) == 0 {
+		// Drift that is only about removals: leave it for the interactive path rather than
+		// reporting success for work that was not done.
+		return
+	}
+
+	if err := applySkillsStatus(sourceDir, userHome, repair); err != nil {
+		fmt.Fprintf(os.Stderr, "skills auto-update failed: %v\n", err)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "skills auto-updated (%d operation(s))\n", len(repair.Ops))
+}

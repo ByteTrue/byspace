@@ -295,6 +295,9 @@ func New(opts Options) (*Server, error) {
 	// app should show the terminal the user was using, with its original id so the client's saved
 	// layout still resolves.
 	srv.restorePersistedTerminals()
+	// The daemon ships the skills, so after an update every installed copy is stale until someone
+	// re-saves the selection — and the user has no reason to do that.
+	srv.autoUpdateInstalledSkills()
 	return srv, nil
 }
 
