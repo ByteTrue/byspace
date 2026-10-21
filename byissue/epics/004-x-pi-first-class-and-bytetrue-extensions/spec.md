@@ -1,6 +1,7 @@
 ---
 kind: epic
 title: "Pi 一等公民与 ByteTrue 扩展适配"
+status: delivered
 owner_decision: approved
 created: 2026-10-06
 amended_at: 2026-10-06
@@ -65,3 +66,23 @@ BySpace 的 provider 适配目前是均等的：五个 provider 谁都接，谁�
 - [x] `issues/002-x-pi-subagent-inline-tool-card.md` — 时间线嵌套行实时卡片 / 依赖 001 / 验证：组件三态测试 + 真机场景行内进度可见（Owner 真机验收通过，pi-subagent 0.14.0）
 
 **不在本 Epic：** 其余五个白名单扩展的适配（各自开 issue 时评估）；track 行写操作；terminal 会话侧的 subagent 展示。
+
+## 关闭记录
+
+**2026-10-22 · Owner 指示关闭。**
+
+两个子 issue 都已交付（`001-x`、`002-x`，后者经 Owner 真机验收）。
+
+**质量承诺在 Go 侧的落点**（Node 侧由子 issue 覆盖）：
+
+| 承诺 | Go 实现 |
+|---|---|
+| 重启后 track 从工具结果 final details + 磁盘子会话 jsonl 重建 | `ParseSubagentDetails` 在 `tool_execution_end` 抽 `sessionFile`；`LocateSubagentSessionFile` 按 sessionFile 或 sessionId 定位；时间线走请求式 `timeline.get.request` |
+| 子进程已死而状态悬在 running 的，以 jsonl 尾部为准收敛 | 终态由 `.jsonl` 的最后一条判定，不沿用内存里的 running |
+| 上报沿用 300ms 节流 | 沿用；节流在驱动侧 |
+| jsonl tail 只在 tab 打开时进行 | Go 是**请求式**而非轮询：面板打开才读，未打开的子代理零开销 |
+| 旧/新两端组合退化为现状行为 | 协议不新增必填字段；`agent.provider_subagents.update` 的 `kind` 有默认行为 |
+
+**白名单适配候选**（spec 第 38 行）：其余五个 ByteTrue 扩展的适配仍不在本 epic 内，关闭不影响它们 —— 各自评估时另开 issue。
+
+**一处如实记录的缺口**：Copilot 缺 `autopilot` 模式（Go 三个、Node 四个），记录在 `byissue/issues/node-reaudit-log.md` 的 `copilot-acp-agent.ts` 条目，与本 epic 无关。
