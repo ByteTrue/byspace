@@ -11,6 +11,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/ByteTrue/byspace/internal/agenthooks"
 )
 
 // `byspace hooks <agent> <event>` records agent hook activity.
@@ -73,8 +75,19 @@ func resolveHookTarget(env func(string) string) hookTarget {
 
 // runHooks posts one activity event.
 func runHooks(args []string, stdout io.Writer) error {
+	// `--install` / `--uninstall` act on the calling user's agent configuration; without one the
+	// command is the shim an installed hook runs. Two different jobs under one name because that is
+	// how the node CLI exposed it, and the hook command has to stay short.
+	for _, argument := range args {
+		switch argument {
+		case "--install":
+			return runHookInstall(stdout, false)
+		case "--uninstall":
+			return runHookInstall(stdout, true)
+		}
+	}
 	if len(args) < 2 {
-		return errors.New("usage: byspace hooks <agent> <event>")
+		return errors.New("usage: byspace hooks <agent> <event>  (or: byspace hooks --install|--uninstall)")
 	}
 	provider := strings.ToLower(strings.TrimSpace(args[0]))
 	event := strings.TrimSpace(args[1])
@@ -127,5 +140,33 @@ func runHooks(args []string, stdout io.Writer) error {
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	return nil
+}
+
+// runHookInstall installs or removes the hooks for every supported provider.
+//
+// One failing provider does not stop the others: a broken claude settings file must not prevent
+// codex hooks from working, and the report says which one failed and why.
+func runHookInstall(stdout io.Writer, uninstall bool) error {
+	action := "Installed"
+	results := agenthooks.InstallAll()
+	if uninstall {
+		action = "Removed"
+		results = agenthooks.UninstallAll()
+	}
+
+	failures := 0
+	for _, provider := range agenthooks.Providers {
+		err := results[provider.ID]
+		if err != nil {
+			failures++
+			fmt.Fprintf(stdout, "%s: failed — %v\n", provider.ID, err)
+			continue
+		}
+		fmt.Fprintf(stdout, "%s: %s\n", provider.ID, strings.ToLower(action))
+	}
+	if failures > 0 {
+		return fmt.Errorf("%d provider(s) failed", failures)
+	}
 	return nil
 }
