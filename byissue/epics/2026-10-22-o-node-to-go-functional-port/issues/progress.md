@@ -34,11 +34,11 @@
 
 ## 批次 4：self-update 与 directory-sync（453 行）
 
-| 文件                                                                   | 结论 | Go 实现 | 测试 | 备注 |
-| ---------------------------------------------------------------------- | ---- | ------- | ---- | ---- |
-| `server/session/daemon/daemon-self-update-session-controller.ts` (138) | 待做 | —       | —    | —    |
-| `server/directory-sync/internal/versioned-collection.ts` (141)         | 待做 | —       | —    | —    |
-| `server/directory-sync/*`                                              | 待做 | —       | —    | —    |
+| 文件                                                                   | 结论   | Go 实现                                                            | 测试                           | 备注                                                                                                                                                                                            |
+| ---------------------------------------------------------------------- | ------ | ------------------------------------------------------------------ | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server/session/daemon/daemon-self-update-session-controller.ts` (138) | PORTED | `internal/selfupdate/replace.go`、`internal/server/self_update.go` | `selfupdate_test.go`（6 用例） | 下载 release 并按平台替换自身二进制、原子 rename、并发拒绝、空载荷拒绝、只读目录在下载前就拒绝、符号链接按 realpath 替换。机制是架构替换（Node 走 `npm install -g`，Go 走自替换），语义契约相同 |
+| `server/directory-sync/internal/versioned-collection.ts` (141)         | 待做   | —                                                                  | —                              | —                                                                                                                                                                                               |
+| `server/directory-sync/*`                                              | 待做   | —                                                                  | —                              | —                                                                                                                                                                                               |
 
 ## 批次 5：quota 6 家（~1500 行）
 
