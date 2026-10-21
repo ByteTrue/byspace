@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ByteTrue/byspace/internal/home"
+	"github.com/ByteTrue/byspace/internal/pathutil"
 	"github.com/ByteTrue/byspace/internal/projectkey"
 )
 
@@ -1144,8 +1145,12 @@ func (s *Store) ResolveWorkspaceIDForPath(cwd string) string {
 	}
 	resolved := filepath.Clean(cwd)
 
+	// Exact match goes through path equivalence, not string equality: the same directory can
+	// arrive as /tmp/x or /private/tmp/x (macOS symlink), with a trailing separator, or with
+	// different case. A string comparison reports the path as unowned, and the caller creates a
+	// second workspace for a directory it already has one for.
 	for _, ws := range list {
-		if filepath.Clean(ws.Cwd) == resolved {
+		if pathutil.AreEquivalent(ws.Cwd, resolved) {
 			return ws.WorkspaceID
 		}
 	}

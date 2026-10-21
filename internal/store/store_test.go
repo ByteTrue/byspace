@@ -166,3 +166,34 @@ func TestEnsureHomeWorkspacePreservesUserTitle(t *testing.T) {
 		t.Fatalf("expected one workspace, got %d", len(after))
 	}
 }
+
+// The same directory can arrive as /tmp/x or /private/tmp/x (macOS symlink), with a trailing
+// separator, or with different case. A string comparison reports it unowned, and the caller then
+// creates a second workspace for a directory it already has one for.
+func TestResolveWorkspaceIDForPathIsSymlinkAware(t *testing.T) {
+	tmp := t.TempDir()
+	store := New(filepath.Join(tmp, "byspace"))
+
+	real := filepath.Join(tmp, "real")
+	if err := os.MkdirAll(real, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(tmp, "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skip("cannot create symlinks:", err)
+	}
+
+	_, ws, err := store.EnsureWorkspaceForCwd(real)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Resolving through the symlink must find the same workspace.
+	if got := store.ResolveWorkspaceIDForPath(link); got != ws.WorkspaceID {
+		t.Fatalf("symlinked path resolved to %q, want %q", got, ws.WorkspaceID)
+	}
+	// A trailing separator must not change the answer either.
+	if got := store.ResolveWorkspaceIDForPath(real + string(filepath.Separator)); got != ws.WorkspaceID {
+		t.Fatalf("trailing separator resolved to %q, want %q", got, ws.WorkspaceID)
+	}
+}
