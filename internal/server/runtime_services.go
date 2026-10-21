@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"time"
@@ -508,9 +509,11 @@ func (s *Server) startSubscriptionPoller() {
 			case <-s.pollStop:
 				return
 			case <-ticker.C:
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				s.PollSubscriptionsOnce(ctx)
-				cancel()
+				// A panic in one poll must not end the loop: the goroutine would die silently, the daemon
+				// would keep serving, and every subscription would stop updating with nothing to show for
+				// it. Node guards this with a liveness canary; Go polls on a timer, so the equivalent guard
+				// is to survive the tick.
+				s.runPollTick()
 			}
 		}
 	}()
@@ -536,17 +539,9 @@ func (s *Server) startWorkspacePlacementPoller() {
 			case <-s.pollStop:
 				return
 			case <-ticker.C:
-				ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-				s.reconcileAllWorkspacePlacements(ctx)
-				cancel()
-				// Checking for merged PRs rides the same slow tick: a forge call per workspace
-				// per minute would be abusive, and the user does not need archiving to happen
-				// faster than the sidebar refresh.
-				if s.autoArchiveEnabled() {
-					actx, acancel := context.WithTimeout(context.Background(), 120*time.Second)
-					s.runAutoArchivePass(actx)
-					acancel()
-				}
+				// Guarded for the same reason as the fast poll: a panic here would end the goroutine and
+				// workspace git facts would stop updating, silently.
+				s.runPlacementTick()
 			}
 		}
 	}()
@@ -639,4 +634,45 @@ func (s *Server) nextTerminalSlot() uint8 {
 		}
 	}
 	return 1
+}
+
+// runPollTick runs one subscription poll, surviving a panic.
+//
+// The recover is the whole point: without it a nil map or a closed channel deep inside the poll ends the
+// goroutine, and the symptom is subscriptions that quietly stop — no error, no log, nothing to search for.
+// Recovering logs instead, so the failure is at least visible in daemon.log.
+func (s *Server) runPollTick() {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			fmt.Fprintf(os.Stderr, "subscription poll panicked: %v\n%s\n", recovered, debug.Stack())
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	s.PollSubscriptionsOnce(ctx)
+}
+
+// runPlacementTick re-reads workspace git facts and archives merged worktrees, surviving a panic.
+//
+// One recover per tick rather than per step: the two steps share the same failure surface (a workspace record
+// read, a git call), and a panic in the first would otherwise skip the second for the rest of the process's
+// life without any indication.
+func (s *Server) runPlacementTick() {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			fmt.Fprintf(os.Stderr, "workspace placement poll panicked: %v\n%s\n", recovered, debug.Stack())
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	s.reconcileAllWorkspacePlacements(ctx)
+	cancel()
+
+	// Checking for merged PRs rides the same slow tick: a forge call per workspace per minute would be
+	// abusive, and the user does not need archiving to happen faster than the sidebar refresh.
+	if s.autoArchiveEnabled() {
+		actx, acancel := context.WithTimeout(context.Background(), 120*time.Second)
+		s.runAutoArchivePass(actx)
+		acancel()
+	}
 }
