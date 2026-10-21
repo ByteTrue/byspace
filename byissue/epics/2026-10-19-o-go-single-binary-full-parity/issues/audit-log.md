@@ -989,6 +989,21 @@ Node 有一组 WebSocket 运行时计数器（`connectedAwaitingHello`、`helloR
 
 验证时抓到自己一个错误：第一版用了 `direction: "head"`，协议只接受 `tail`/`before`/`after`——`WSOutboundMessageSchema` 当场拒绝，这正是出站校验存在的意义。
 
+### server/agent/agent-prompt.ts 的 setupFinishNotification | **MISSING → 已补**
+
+这条最值得记：**消息格式早就在 Go 里实现了，但从来没有人调用它**。`sdk.FormatSystemNotificationPrompt` 与 `IsSystemInjectedEnvelope` 一对函数躺在那里，前者零调用者。
+
+后果：创建子 agent 并等它的父 agent **无从得知子 agent 已经结束**。子 agent 是独立 agent、有自己的轮次，所以父 agent 只能反复轮询（浪费轮次），或者干脆凭空给一个结论。现在父 agent 会收到一个 system envelope，包含子 agent、原因（finished / errored）与子 agent 的**最后一条消息**——这样父 agent 不用去读子 agent 的完整 transcript 就能转述结果。
+
+刻意用 system envelope 包裹：不包裹的话它会渲染成用户气泡（人根本没打过那句话），与历史路径过滤 envelope 是同一个道理。
+
+边界与守卫：
+
+- 子 agent 最后一条消息上限 4000 字符——200 KB 的文件转储不能变成 200 KB 的父 prompt
+- 每个 (child, reason) 只通知一次：轮次完成后再进程退出会重复提示父 agent
+- 父 agent 已删除、已归档、或没有活着的 runtime 时跳过——为了送一条没人要的通知去加载一个 agent 更糟
+- 子 agent 中途死掉时以 `errored` 通知，否则父 agent 会永远等一个不会来的结果
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
