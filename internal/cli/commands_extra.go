@@ -33,11 +33,23 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 		maxRuns := fs.Int("max-runs", 0, "optional maximum number of runs")
 		cwd := fs.String("cwd", "", "working directory for target agent")
 		agentID := fs.String("agent-id", os.Getenv("BYSPACE_AGENT_ID"), "existing target agent ID")
+		// The flags the node CLI has on `schedule create`. --prompt is an alternative to the
+		// positional argument for a script that would rather not quote a long text; --run-now is
+		// how a user checks a new schedule without waiting for the first tick.
+		promptFlag := fs.String("prompt", "", "prompt text (instead of the positional argument)")
+		runNow := fs.Bool("run-now", false, "run once immediately after creating")
+		expiresIn := fs.String("expires-in", "", "stop scheduling after this duration (e.g. 7d)")
+		targetModel := fs.String("model", "", "model for a new target agent")
+		targetMode := fs.String("mode", "", "mode for a new target agent")
+		targetThinking := fs.String("thinking", "", "thinking level for a new target agent")
 		asJSON := fs.Bool("json", false, "output JSON")
 		if err := fs.Parse(rest); err != nil {
 			return err
 		}
-		prompt := strings.TrimSpace(strings.Join(fs.Args(), " "))
+		prompt := strings.TrimSpace(*promptFlag)
+		if prompt == "" {
+			prompt = strings.TrimSpace(strings.Join(fs.Args(), " "))
+		}
 		if prompt == "" {
 			return errors.New("usage: byspace heartbeat create [options] <prompt>")
 		}
@@ -77,13 +89,19 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 			if workCwd == "" {
 				workCwd, _ = os.Getwd()
 			}
-			target = map[string]any{
-				"type": "new-agent",
-				"config": map[string]any{
-					"provider": "pi",
-					"cwd":      workCwd,
-				},
+			// No hardcoded provider: the daemon's default is the right answer when the user did not
+			// name one, and pinning "pi" here meant a schedule could never target another provider.
+			newAgentConfig := map[string]any{"cwd": workCwd}
+			if strings.TrimSpace(*targetModel) != "" {
+				newAgentConfig["model"] = strings.TrimSpace(*targetModel)
 			}
+			if strings.TrimSpace(*targetMode) != "" {
+				newAgentConfig["modeId"] = strings.TrimSpace(*targetMode)
+			}
+			if strings.TrimSpace(*targetThinking) != "" {
+				newAgentConfig["thinkingOptionId"] = strings.TrimSpace(*targetThinking)
+			}
+			target = map[string]any{"type": "new-agent", "config": newAgentConfig}
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -103,6 +121,16 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 		}
 		if strings.TrimSpace(*name) != "" {
 			reqMsg["name"] = strings.TrimSpace(*name)
+		}
+		if *runNow {
+			reqMsg["runNow"] = true
+		}
+		if text := strings.TrimSpace(*expiresIn); text != "" {
+			duration, durationErr := duration.ParseDuration(text)
+			if durationErr != nil {
+				return durationErr
+			}
+			reqMsg["expiresAt"] = time.Now().UTC().Add(duration).Format(time.RFC3339)
 		}
 		if *maxRuns > 0 {
 			reqMsg["maxRuns"] = *maxRuns
@@ -204,6 +232,9 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 		every := fs.String("every", "", "interval: 90s / 15m / 2h / 1d, or a bare number of minutes")
 		name := fs.String("name", "", "schedule name")
 		maxRuns := fs.Int("max-runs", 0, "maximum number of runs (0 = unlimited)")
+		noMaxRuns := fs.Bool("no-max-runs", false, "clear the run limit")
+		expiresIn := fs.String("expires-in", "", "stop scheduling after this duration (e.g. 7d)")
+		noExpiresIn := fs.Bool("no-expires-in", false, "clear the expiry")
 		asJSON := fs.Bool("json", false, "output JSON")
 		if err := fs.Parse(rest); err != nil {
 			return err
@@ -233,9 +264,24 @@ func runHeartbeatCmd(args []string, stdout io.Writer) error {
 		if *name != "" {
 			payload["name"] = *name
 		}
-		if *maxRuns > 0 {
+		if *noMaxRuns {
+			// An explicit null is how the patch says "remove the limit"; omitting the key would
+			// leave the old value in place.
+			payload["maxRuns"] = nil
+		} else if *maxRuns > 0 {
 			payload["maxRuns"] = *maxRuns
 		}
+		switch {
+		case *noExpiresIn:
+			payload["expiresAt"] = nil
+		case strings.TrimSpace(*expiresIn) != "":
+			duration, durationErr := duration.ParseDuration(*expiresIn)
+			if durationErr != nil {
+				return durationErr
+			}
+			payload["expiresAt"] = time.Now().UTC().Add(duration).Format(time.RFC3339)
+		}
+
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		ws, err := dialDaemonWS(ctx, *addr)

@@ -941,8 +941,27 @@ func runPermitGroupCmd(args []string, stdout io.Writer) error {
 	fs := flag.NewFlagSet("permit "+sub, flag.ContinueOnError)
 	addr := fs.String("addr", defaultListenAddr(), "daemon address")
 	agentID := fs.String("agent", "", "agent ID")
+	// `--input` replaces the tool call's parameters before it runs, which is how a user narrows an
+	// over-broad command instead of denying it outright. `--interrupt` stops the agent after a
+	// denial — the difference between "not this time" and "stop, I need to rethink".
+	modifiedInput := fs.String("input", "", "modified tool input as JSON (allow only)")
+	interrupt := fs.Bool("interrupt", false, "stop the agent after denying")
 	if err := fs.Parse(rest); err != nil {
 		return err
+	}
+
+	// Both checks run before dialling: a bad --input or a nonsensical --interrupt is the user's
+	// mistake, and reporting "connection refused" instead hides it.
+	var permissionInput map[string]any
+	if text := strings.TrimSpace(*modifiedInput); text != "" {
+		if err := json.Unmarshal([]byte(text), &permissionInput); err != nil {
+			return fmt.Errorf("--input is not valid JSON: %w", err)
+		}
+	}
+	if *interrupt && sub != "deny" {
+		// "Stop after this denial" makes no sense on an allow: it would ask the agent to stop
+		// immediately after being permitted to continue.
+		return errors.New("--interrupt only applies to deny")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -988,16 +1007,24 @@ func runPermitGroupCmd(args []string, stdout io.Writer) error {
 		if sub == "deny" {
 			behavior = "deny"
 		}
+
+		response := map[string]any{"behavior": behavior}
+		if permissionInput != nil {
+			response["updatedInput"] = permissionInput
+		} else {
+			response["updatedInput"] = map[string]any{
+				"answers": map[string]any{"Answer": ans},
+			}
+		}
+		if *interrupt {
+			response["interrupt"] = true
+		}
+
 		_ = sendSessionReq(ctx, ws, map[string]any{
 			"type":      "agent_permission_response",
 			"agentId":   aid,
 			"requestId": reqID,
-			"response": map[string]any{
-				"behavior": behavior,
-				"updatedInput": map[string]any{
-					"answers": map[string]any{"Answer": ans},
-				},
-			},
+			"response":  response,
 		})
 		fmt.Fprintf(stdout, "%s %s\n", behavior, reqID)
 		return nil
