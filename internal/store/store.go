@@ -354,6 +354,45 @@ func (s *Store) EnsureWorkspaceForCwd(cwd string) (ProjectRecord, WorkspaceRecor
 		}
 	}
 
+	// An archived workspace at this path is the one the user means when they open it: bring it
+	// back rather than creating a second workspace for a directory that already has one. Without
+	// this, opening an archived workspace leaves the archive entry in place and adds a duplicate
+	// — the sidebar grows a second row for the same directory every time.
+	for i := range workspaces {
+		ws := workspaces[i]
+		if ws.ArchivedAt == nil || ws.Cwd != absCwd {
+			continue
+		}
+		var owningProject *ProjectRecord
+		for j := range projects {
+			if projects[j].ProjectID == ws.ProjectID {
+				owningProject = &projects[j]
+				break
+			}
+		}
+		if owningProject == nil {
+			// An orphaned workspace record whose project is gone: creating a fresh one is the
+			// only coherent answer.
+			continue
+		}
+		if owningProject.ArchivedAt != nil {
+			// The project itself is archived. Reopening a single workspace would leave it in an
+			// archived project that the sidebar does not render.
+			unarchivedProject := *owningProject
+			unarchivedProject.ArchivedAt = nil
+			unarchivedProject.UpdatedAt = now
+			if err := s.UpsertProject(unarchivedProject); err == nil {
+				*owningProject = unarchivedProject
+			}
+		}
+		ws.ArchivedAt = nil
+		ws.UpdatedAt = now
+		if err := s.UpsertWorkspace(ws); err != nil {
+			return ProjectRecord{}, WorkspaceRecord{}, err
+		}
+		return *owningProject, ws, nil
+	}
+
 	var matchedProject *ProjectRecord
 	for i := range projects {
 		if projects[i].ArchivedAt == nil && projects[i].RootPath == absCwd {
