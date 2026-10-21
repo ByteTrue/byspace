@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -77,12 +78,42 @@ type WorktreeEntry struct {
 	HeadSha      string `json:"headSha"`
 }
 
+// gitLocalTimeout bounds commands that only read local state.
+const gitLocalTimeout = 10 * time.Second
+
+// gitNetworkTimeout bounds commands that talk to a remote.
+//
+// A single timeout for everything made `git pull`/`fetch` fail after 5s on any real network —
+// and reported it as an opaque context deadline. The node daemon allows 120s for a fetch.
+const gitNetworkTimeout = 120 * time.Second
+
+// gitNetworkCommands need the longer budget and must never block on a credential prompt.
+var gitNetworkCommands = map[string]bool{
+	"pull":      true,
+	"fetch":     true,
+	"push":      true,
+	"clone":     true,
+	"ls-remote": true,
+}
+
 func runGit(ctx context.Context, cwd string, args ...string) (string, error) {
-	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	timeout := gitLocalTimeout
+	if len(args) > 0 && gitNetworkCommands[args[0]] {
+		timeout = gitNetworkTimeout
+	}
+	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(cctx, "git", args...)
 	cmd.Dir = cwd
-	cmd.Env = append(cmd.Environ(), "GIT_OPTIONAL_LOCKS=0", "LC_ALL=C")
+	// GIT_TERMINAL_PROMPT=0: a fetch against a repository that needs credentials would
+	// otherwise sit waiting for a prompt nobody can answer, until the timeout fires.
+	cmd.Env = append(cmd.Environ(),
+		"GIT_OPTIONAL_LOCKS=0",
+		"LC_ALL=C",
+		"GIT_TERMINAL_PROMPT=0",
+		// Never let git fall back to an interactive pager in a daemon context.
+		"GIT_PAGER=cat",
+	)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -779,4 +810,110 @@ func ResolveDefaultBranch(ctx context.Context, repoRoot string) (string, error) 
 		return strings.TrimSpace(out), nil
 	}
 	return "", fmt.Errorf("could not determine the default branch")
+}
+
+// GitRefChange describes one remote ref that moved between two snapshots.
+type GitRefChange struct {
+	Kind      string `json:"kind"` // "added" | "moved" | "deleted"
+	Ref       string `json:"ref"`
+	BeforeOID string `json:"beforeOid,omitempty"`
+	AfterOID  string `json:"afterOid,omitempty"`
+}
+
+// ReadRefs snapshots every ref in the repository, keyed by full refname.
+//
+// Ported from readWorkspaceGitRefs. The daemon needs before/after snapshots around a fetch to
+// tell "nothing changed" from "an agent created a branch", which is what decides whether the
+// branch list in the UI has to be refreshed.
+func ReadRefs(ctx context.Context, cwd string) (map[string]string, error) {
+	out, err := runGit(ctx, cwd, "for-each-ref", "--format=%(refname)%00%(objectname)")
+	if err != nil {
+		return nil, err
+	}
+	refs := make(map[string]string)
+	for _, line := range strings.Split(out, "\n") {
+		ref, oid, found := strings.Cut(line, "\x00")
+		if !found || !strings.HasPrefix(ref, "refs/") || oid == "" {
+			continue
+		}
+		refs[ref] = oid
+	}
+	return refs, nil
+}
+
+// DiffRefs compares two snapshots.
+//
+// Returns the remote-branch changes (what the user sees in a branch picker) and whether any
+// non-remote ref moved — a changed local branch or tag is a different kind of event and must not
+// be reported as "a remote branch moved".
+func DiffRefs(before, after map[string]string) ([]GitRefChange, bool) {
+	const remotePrefix = "refs/remotes/"
+	changes := make([]GitRefChange, 0, 4)
+	nonRemoteChanged := false
+
+	for ref, afterOID := range after {
+		if !strings.HasPrefix(ref, remotePrefix) {
+			if before[ref] != afterOID {
+				nonRemoteChanged = true
+			}
+			continue
+		}
+		name := strings.TrimPrefix(ref, remotePrefix)
+		beforeOID, existed := before[ref]
+		switch {
+		case !existed:
+			changes = append(changes, GitRefChange{Kind: "added", Ref: name, AfterOID: afterOID})
+		case beforeOID != afterOID:
+			changes = append(changes, GitRefChange{Kind: "moved", Ref: name, BeforeOID: beforeOID, AfterOID: afterOID})
+		}
+	}
+	for ref, beforeOID := range before {
+		if !strings.HasPrefix(ref, remotePrefix) {
+			continue
+		}
+		if _, stillThere := after[ref]; !stillThere {
+			changes = append(changes, GitRefChange{
+				Kind: "deleted", Ref: strings.TrimPrefix(ref, remotePrefix), BeforeOID: beforeOID,
+			})
+		}
+	}
+
+	// Stable order so the wire payload does not change on every run.
+	sort.Slice(changes, func(i, j int) bool {
+		if changes[i].Ref != changes[j].Ref {
+			return changes[i].Ref < changes[j].Ref
+		}
+		return changes[i].Kind < changes[j].Kind
+	})
+	return changes, nonRemoteChanged
+}
+
+// FetchRemote runs `git fetch origin --prune` and reports what changed.
+//
+// Ported from fetchWorkspaceGitRemote. The snapshots are taken around the fetch, and a failure
+// in either snapshot is reported alongside the fetch error rather than swallowed: without them
+// the caller cannot distinguish "the fetch worked and nothing moved" from "we could not tell".
+func FetchRemote(ctx context.Context, cwd string) ([]GitRefChange, bool, error) {
+	before, beforeErr := ReadRefs(ctx, cwd)
+
+	_, fetchErr := runGit(ctx, cwd, "fetch", "origin", "--prune")
+
+	after, afterErr := ReadRefs(ctx, cwd)
+
+	if beforeErr != nil || afterErr != nil {
+		if fetchErr != nil {
+			return nil, false, fetchErr
+		}
+		if beforeErr != nil {
+			return nil, false, beforeErr
+		}
+		return nil, false, afterErr
+	}
+
+	changes, nonRemote := DiffRefs(before, after)
+	if fetchErr != nil {
+		// Changes still describe reality: a partial fetch may have moved some refs.
+		return changes, nonRemote, fetchErr
+	}
+	return changes, nonRemote, nil
 }

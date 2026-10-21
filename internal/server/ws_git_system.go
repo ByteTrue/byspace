@@ -171,6 +171,18 @@ func (s *Server) handleGitParityOps(ctx context.Context, sink frameSink, msgType
 
 	case "checkout_pull_request":
 		err := workspace.Pull(ctx, base.Cwd)
+		// A pull can move remote-tracking branches. Push the new set so an open branch picker
+		// does not keep offering a branch that was pruned. `checkout_pull_response` has no
+		// field for it, so it travels as a separate update the client already understands.
+		if refs, nonRemote, fetchErr := workspace.FetchRemote(ctx, base.Cwd); fetchErr == nil && (len(refs) > 0 || nonRemote) {
+			_ = sendSessionMsg(ctx, sink, "branch_suggestions_response", map[string]any{
+				"requestId":     base.RequestID,
+				"branches":      listLocalBranches(ctx, base.Cwd),
+				"branchDetails": []any{},
+				"error":         nil,
+			})
+			s.broadcastCheckoutStatusUpdate(ctx, base.Cwd)
+		}
 		var errObj any
 		if err != nil {
 			errObj = checkoutErr(err.Error())
@@ -1362,4 +1374,13 @@ func resolveCloneURL(rawRepo, protocol string) (string, error) {
 // that same client.
 func sinkOwnerToken(sink frameSink) string {
 	return fmt.Sprintf("sink:%p", sink)
+}
+
+// listLocalBranches returns the repository's local branch names.
+func listLocalBranches(ctx context.Context, cwd string) []string {
+	branches := workspace.ListBranches(ctx, cwd)
+	if branches == nil {
+		return []string{}
+	}
+	return branches
 }
