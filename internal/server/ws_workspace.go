@@ -348,8 +348,14 @@ func (s *Server) handleFetchRecentProviderSessions(ctx context.Context, sink fra
 
 func (s *Server) handleImportAgent(ctx context.Context, sink frameSink, raw json.RawMessage) {
 	var req struct {
-		RequestID        string         `json:"requestId"`
-		Provider         string         `json:"provider"`
+		RequestID string `json:"requestId"`
+		// `providerId` is the protocol field; `provider` was my own name, so an imported
+		// session was always attributed to whatever the daemon defaults to.
+		ProviderId string `json:"providerId"`
+		Provider   string `json:"provider"`
+		// `workspaceId` places the imported agent in the workspace the user picked; dropping it
+		// left the agent unattached.
+		WorkspaceID      string         `json:"workspaceId"`
 		ProviderHandleID string         `json:"providerHandleId"`
 		Handle           string         `json:"handle"`
 		SessionID        string         `json:"sessionId"`
@@ -357,6 +363,9 @@ func (s *Server) handleImportAgent(ctx context.Context, sink frameSink, raw json
 		Cwd              string         `json:"cwd"`
 	}
 	_ = json.Unmarshal(raw, &req)
+	if strings.TrimSpace(req.Provider) == "" {
+		req.Provider = req.ProviderId
+	}
 
 	if strings.TrimSpace(req.ProviderHandleID) == "" {
 		req.ProviderHandleID = req.Handle

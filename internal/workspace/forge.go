@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/url"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -234,4 +236,92 @@ func SearchGitHubRepos(ctx context.Context, query string, limit int) ([]map[stri
 		})
 	}
 	return out, true
+}
+
+// SearchIssuesAndPullRequests searches issues and PRs in the repository's forge.
+//
+// `forge.search.request` is what the checkout panel's search box calls; it answered with an
+// empty list unconditionally, so search looked broken rather than unimplemented. Each forge has
+// its own CLI, and they disagree on flags, so each branch is explicit.
+func SearchIssuesAndPullRequests(ctx context.Context, cwd, query string, limit int) ([]map[string]any, error) {
+	if limit <= 0 || limit > 50 {
+		limit = 20
+	}
+	forge := DetectForge(ctx, cwd)
+	limitArg := strconv.Itoa(limit)
+
+	switch forge {
+	case "gitlab":
+		if _, err := exec.LookPath("glab"); err != nil {
+			return []map[string]any{}, fmt.Errorf("glab is not installed")
+		}
+		raw, err := runForgeCLI(ctx, "glab", cwd, "api",
+			fmt.Sprintf("projects/:id/search?scope=issues&search=%s&per_page=%s", url.QueryEscape(query), limitArg))
+		if err != nil {
+			return []map[string]any{}, err
+		}
+		return decodeForgeItems(raw, "title", "web_url")
+	case "gitea":
+		if _, err := exec.LookPath("tea"); err != nil {
+			return []map[string]any{}, fmt.Errorf("tea is not installed")
+		}
+		raw, err := runForgeCLI(ctx, "tea", cwd, "issues", "list", "--search", query, "--limit", limitArg, "--output", "json")
+		if err != nil {
+			return []map[string]any{}, err
+		}
+		return decodeForgeItems(raw, "title", "html_url")
+	default:
+		if _, err := exec.LookPath("gh"); err != nil {
+			return []map[string]any{}, fmt.Errorf("gh is not installed")
+		}
+		args := []string{"search", "prs", "--limit", limitArg,
+			"--json", "number,title,state,url,isPullRequest,updatedAt,author"}
+		if strings.TrimSpace(query) != "" {
+			args = append(args, query)
+		}
+		raw, err := runGH(ctx, cwd, args...)
+		if err != nil {
+			return []map[string]any{}, err
+		}
+		return decodeForgeItems(raw, "title", "url")
+	}
+}
+
+// decodeForgeItems normalizes the three CLIs' JSON into one item shape.
+func decodeForgeItems(raw, titleKey, urlKey string) ([]map[string]any, error) {
+	if strings.TrimSpace(raw) == "" {
+		return []map[string]any{}, nil
+	}
+	var items []map[string]any
+	if err := json.Unmarshal([]byte(raw), &items); err != nil {
+		return []map[string]any{}, err
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, it := range items {
+		title, _ := it[titleKey].(string)
+		url, _ := it[urlKey].(string)
+		if title == "" && url == "" {
+			continue
+		}
+		state, _ := it["state"].(string)
+		number := 0
+		switch n := it["number"].(type) {
+		case float64:
+			number = int(n)
+		case int:
+			number = n
+		}
+		kind := "issue"
+		if isPR, ok := it["isPullRequest"].(bool); ok && isPR {
+			kind = "pull_request"
+		}
+		out = append(out, map[string]any{
+			"title":  title,
+			"url":    url,
+			"state":  state,
+			"number": number,
+			"kind":   kind,
+		})
+	}
+	return out, nil
 }

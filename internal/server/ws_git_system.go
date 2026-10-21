@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -430,17 +431,26 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 			Cwd       string   `json:"cwd"`
 			Query     string   `json:"query"`
 			Kinds     []string `json:"kinds"`
+			Limit     int      `json:"limit"`
 		}
 		_ = json.Unmarshal(raw, &forgeSearchReq)
 		wantKinds := map[string]bool{}
 		for _, k := range forgeSearchReq.Kinds {
 			wantKinds[strings.ToLower(k)] = true
 		}
+		// The panel's search box calls this; answering with a fixed empty list made search look
+		// broken. Query the repository's forge and report failures instead of hiding them.
+		items, searchErr := workspace.SearchIssuesAndPullRequests(ctx, forgeSearchReq.Cwd, forgeSearchReq.Query, forgeSearchReq.Limit)
+		var searchErrText any
+		if searchErr != nil {
+			searchErrText = searchErr.Error()
+			items = []map[string]any{}
+		}
 		searchPayload := map[string]any{
-			"items":                 []any{},
+			"items":                 items,
 			"githubFeaturesEnabled": true,
 			"authState":             map[string]any{"status": "authenticated"},
-			"error":                 nil,
+			"error":                 searchErrText,
 			"requestId":             base.RequestID,
 		}
 		// 两个响应类型分别出现，而不是用 respType 变量派生：静态对账工具要看得见。
@@ -478,7 +488,21 @@ func (s *Server) handleForgeParityOps(ctx context.Context, sink frameSink, msgTy
 		})
 
 	case "project.github.clone.request":
-		repo := strings.TrimSpace(base.Repo)
+		// `owner/repo` needs a protocol to become a URL; a full remote URL is used as-is.
+		// Reading only the repo meant an owner/repo name was passed to git verbatim, which
+		// git cannot clone, and the target directory fell back to a daemon-owned path.
+		cloneURL, cloneErr := resolveCloneURL(base.Repo, base.CloneProtocol)
+		if cloneErr != nil {
+			_ = sendSessionMsg(ctx, sink, "project.github.clone.response", map[string]any{
+				"requestId":    base.RequestID,
+				"repo":         base.Repo,
+				"checkoutPath": nil,
+				"project":      nil,
+				"error":        cloneErr.Error(),
+			})
+			return
+		}
+		repo := cloneURL
 		dst := expandUserPath(base.TargetDir)
 		if dst == "" {
 			dst = filepath.Join(s.homeDir, "clones", filepath.Base(repo))
@@ -1275,4 +1299,41 @@ func (s *Server) rewindConversation(ctx context.Context, mp *managedPi, target s
 		_ = text
 	}
 	return nil
+}
+
+// validRepoSegment matches a GitHub owner or repository name.
+var validRepoSegment = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+
+// resolveCloneURL turns the request's `repo` into something git can clone.
+//
+// Ported from resolveGithubCloneTarget in session.ts. An `owner/repo` shorthand has no scheme,
+// so it needs the chosen protocol; a full remote URL is already complete. Validating the
+// segments matters because the value is interpolated into a URL passed to git.
+func resolveCloneURL(rawRepo, protocol string) (string, error) {
+	trimmed := strings.TrimSpace(rawRepo)
+	if trimmed == "" {
+		return "", fmt.Errorf("repository is required")
+	}
+	// A remote URL (https://…, git@host:…, ssh://…) is used verbatim.
+	if strings.Contains(trimmed, "://") || strings.HasPrefix(trimmed, "git@") {
+		return trimmed, nil
+	}
+	parts := strings.Split(trimmed, "/")
+	if len(parts) != 2 {
+		return "", fmt.Errorf("repository must use owner/repo format or be a git remote URL")
+	}
+	owner := parts[0]
+	name := strings.TrimSuffix(parts[1], ".git")
+	if !validRepoSegment.MatchString(owner) || !validRepoSegment.MatchString(name) {
+		return "", fmt.Errorf("repository contains invalid characters")
+	}
+	switch protocol {
+	case "ssh":
+		return fmt.Sprintf("git@github.com:%s/%s.git", owner, name), nil
+	case "https":
+		return fmt.Sprintf("https://github.com/%s/%s.git", owner, name), nil
+	default:
+		// The client always sends one; refusing keeps an ambiguous name from becoming a path.
+		return "", fmt.Errorf("clone protocol is required for owner/repo repository names")
+	}
 }
