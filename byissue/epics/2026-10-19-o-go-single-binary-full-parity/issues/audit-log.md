@@ -102,6 +102,21 @@ schema」）；`payloadText` 只截到分号，导致嵌套 key 的 null 检查�
 
 接入 CI（`Validate CI contracts`）并补 3 个测试。
 
+### 入站字段缺口：从 47 清到 42（本轮）
+
+`terminal_input` 是**真正的功能缺陷**：协议形状是 `{terminalId, message: {type, data}}`，
+Go 读的是顶层 `data`，于是 JSON 路径的按键、resize、鼠标事件全部静默丢弃（打字之所以还能用，
+是因为客户端优先走二进制帧）。已按协议解析 `input`/`resize`/`mouse`，并保留扁平 `data`
+作为旧 bundle 的兼容。端到端验证：发嵌套 `{type:"input", data:"echo NESTED_OK\r"}` 后
+`capture_terminal` 能读到 `NESTED_OK`。
+
+`terminal.rename.request` 完全没有解析请求体，返回成功但标题不变——已补。
+
+`fetch_agent_timeline_request.limit` 被忽略，翻页客户端每次都拿整段历史——已按窗口截断。
+
+`create_terminal_request.agentId` 未解析，开终端时回落到 daemon 的 cwd 而不是该 agent 的工作目录
+——已补（优先 agent.cwd，其次 workspace.cwd）。
+
 ### 未审计（本批剩余 45 文件）
 
 按行数排序，下一轮从这里继续：

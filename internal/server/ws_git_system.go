@@ -510,17 +510,50 @@ func (s *Server) handleTerminalParityOps(ctx context.Context, sink frameSink, ms
 		return
 
 	case "terminal_input":
+		// The wire shape is `{terminalId, message: {type, data|rows/cols|row/col/...}}` — the
+		// payload is a nested client message, not a flat `data`. Reading it flat meant every
+		// keystroke, resize and mouse event was silently dropped.
 		var req struct {
 			TerminalID string `json:"terminalId"`
-			Data       string `json:"data"`
+			Message    *struct {
+				Type   string `json:"type"`
+				Data   string `json:"data"`
+				Rows   uint16 `json:"rows"`
+				Cols   uint16 `json:"cols"`
+				Row    int    `json:"row"`
+				Col    int    `json:"col"`
+				Button int    `json:"button"`
+				Action string `json:"action"`
+				Intent string `json:"intent"`
+			} `json:"message"`
+			// Older clients sent a flat `data`; a cached bundle that predates the nested
+			// shape must still type into the terminal.
+			Data string `json:"data"`
 		}
 		_ = json.Unmarshal(raw, &req)
 		s.mu.Lock()
 		slot, ok := s.terminalSlotsByID[req.TerminalID]
 		var sess = s.terminals[slot]
 		s.mu.Unlock()
-		if ok && sess != nil {
+		if ok && sess != nil && req.Message == nil && req.Data != "" {
 			_ = sess.WriteInput([]byte(req.Data))
+			return
+		}
+		if ok && sess != nil && req.Message != nil {
+			switch req.Message.Type {
+			case "input":
+				_ = sess.WriteInput([]byte(req.Message.Data))
+			case "resize":
+				if req.Message.Rows > 0 && req.Message.Cols > 0 {
+					_ = sess.Resize(req.Message.Rows, req.Message.Cols)
+				}
+			case "mouse":
+				// Mouse reporting is opt-in per application; forward as an SGR report so tools
+				// that enabled `?1000h`/`?1006h` receive clicks.
+				seq := fmt.Sprintf("\x1b[<%d;%d;%d%s", req.Message.Button, req.Message.Col+1, req.Message.Row+1,
+					map[string]string{"down": "M", "up": "m", "move": "M"}[req.Message.Action])
+				_ = sess.WriteInput([]byte(seq))
+			}
 		}
 
 	case "kill_terminal_request":
@@ -588,6 +621,22 @@ func (s *Server) handleTerminalParityOps(ctx context.Context, sink frameSink, ms
 		})
 
 	case "terminal.rename.request":
+		// Without reading the name there is nothing to rename to; the response claimed success
+		// while the title stayed as it was.
+		var renameReq struct {
+			TerminalID string `json:"terminalId"`
+			Title      string `json:"title"`
+		}
+		_ = json.Unmarshal(raw, &renameReq)
+		if name := strings.TrimSpace(renameReq.Title); name != "" {
+			s.mu.Lock()
+			if slot, ok := s.terminalSlotsByID[renameReq.TerminalID]; ok {
+				if session := s.terminals[slot]; session != nil {
+					session.Name = name
+				}
+			}
+			s.mu.Unlock()
+		}
 		_ = sendSessionMsg(ctx, sink, "terminal.rename.response", map[string]any{
 			"requestId": base.RequestID,
 			"success":   true,
