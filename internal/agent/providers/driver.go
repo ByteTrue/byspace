@@ -437,6 +437,19 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 			if cmd == "" {
 				cmd = "omp"
 			}
+			// The mode is a launch argument, not a per-turn request: omp decides its approval posture
+			// at startup. Without this translation all three modes ran with omp's default behaviour,
+			// so "ask me before writing" silently became whatever that default is.
+			resolvedMode, modeArgs, modeErr := OmpModeArgs(cfg.ModeID)
+			if modeErr != nil {
+				return nil, modeErr
+			}
+			_ = resolvedMode
+			roleArgs := OmpModelRoleArgs(
+				stringOption(cfg.ProviderOptions, "smolModel"),
+				stringOption(cfg.ProviderOptions, "slowModel"),
+				stringOption(cfg.ProviderOptions, "planModel"),
+			)
 			sess, err := pi.StartSession(pi.LaunchOptions{
 				Command:            cmd,
 				Cwd:                cfg.Cwd,
@@ -446,6 +459,7 @@ func StartProviderSession(cfg LaunchConfig) (ManagedSession, error) {
 				Session:            cfg.SessionHandle,
 				AppendSystemPrompt: cfg.SystemPrompt,
 				NoApprove:          true,
+				ExtraArgs:          append(modeArgs, roleArgs...),
 			})
 			if err != nil {
 				return nil, err
@@ -656,4 +670,19 @@ func IsKnownProvider(id string) bool {
 	}
 	_, ok := ACPPresets[id]
 	return ok
+}
+
+// stringOption reads a string out of a provider options map.
+//
+// Absent, non-string and blank values all read as "": an option the user did not set must not become an
+// argument, and omp rejects `--smol ""`.
+func stringOption(options map[string]any, key string) string {
+	if options == nil {
+		return ""
+	}
+	value, ok := options[key].(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(value)
 }
