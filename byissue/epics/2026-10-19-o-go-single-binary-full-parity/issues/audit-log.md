@@ -622,6 +622,16 @@ daemon 给每个 agent 注入自己的 MCP server，那些工具能创建 agent�
 
 **顺带修了一个我自己引入的崩溃**：`IsToolEnabled` 把 nil 策略当作「启用」（对的），然后读 `policy.DisabledTools`（空指针解引用）。任何没有配置的 agent 发起的第一个工具调用都会让 daemon panic，CLI 测试抓到了——整条 mcp-bridge 往返返回空 result。单元测试只测了非 nil 的启用路径，所以漏了；现在有显式的 nil 用例。
 
+### agent/system-prompt.ts / agent-owner.ts 等小组件 | —
+
+| 文件                                                                                          | 结论                                                                                                                                                                         |
+| --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `system-prompt.ts`                                                                            | **PORTED** — `systemPromptFor` 按 `composeSystemPromptParts` 的语义拼接（trim、丢空、`\n\n` 连接），顺序是 agent 自己的 prompt → `daemon.appendSystemPrompt`，与 Node 一致。 |
+| `agent-owner.ts`                                                                              | **N/A** — 只有 `{kind: "daemon", daemonId, executionId}` 一种 owner，用于 Hub 远程执行；`hub.*` 是未实现子系统（权限表已就位），Go 侧 stub 返回 `exec_1`。                   |
+| `lifecycle-command.ts` / `agent-sdk-types.ts` / `agent-timeline-store-types.ts`               | **N/A** — 类型与常量定义，Go 用 struct 与字符串常量。                                                                                                                        |
+| `provider-notices.ts` / `provider-refresh-deadline.ts` / `structured-generation-providers.ts` | **PORTED** — provider 提示与刷新截止时间在 `catalog.go` 的重试逻辑里；结构化生成（命名）在 `internal/naming`。                                                               |
+| `stale-provider-session-error.ts`                                                             | **PORTED（语义）** — 「插件重载后会话失效」在 Go 里表现为 `process_exit` 摘除 runtime、下次发送走 resume（见 `process_exit` 那一条），不需要专门的 error 类型。              |
+
 ### server/ 顶层审计完成
 
 `claude`(15) `codex`(6) `pi`(11) `opencode`(9) 的实现都在 `internal/agent/providers/{claude,codex,acp,opencode}.go` 与
